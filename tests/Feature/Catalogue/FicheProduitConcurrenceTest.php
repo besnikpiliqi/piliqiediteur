@@ -97,7 +97,7 @@ class FicheProduitConcurrenceTest extends TestCase
         $this->croiser($laFicheDAbord, $geste === 'emettre' && array_key_exists('taux_tva', $saisie), $enregistrer, $autre, $concurrente);
 
         $this->assertInstanceOf(InvokedProcess::class, $concurrente);
-        $resultat = $concurrente->wait();
+        $resultat = $this->attendreLeProcessusConcurrent($concurrente);
         $this->assertTrue($resultat->successful(), $resultat->errorOutput());
         app(TenantContext::class)->set($magasin);
         $this->assertSame($saisie === ['nom' => 'Coque bleue'] ? ['Coque bleue', '20.00'] : ['Coque rouge', '5.50'], array_values(Produit::query()->findOrFail($produitId)->only(['nom', 'taux_tva'])));

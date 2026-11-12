@@ -2,6 +2,8 @@
 
 use App\Domain\CaisseSecurisee\Support\DeclencheursDeProtection;
 use App\Domain\Facturation\Support\GardesDeLaVente;
+use App\Domain\Facturation\Support\GardesDesClotures;
+use App\Domain\Stock\Support\GardesDuStock;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -60,10 +62,14 @@ return new class extends Migration
             // exemple). Nommé : le nom dérivé par Laravel dépasserait les 63
             // caractères d'un identifiant PostgreSQL.
             $table->index(['document_type', 'document_id', 'chaine', 'type'], 'enregistrements_fiscaux_document_index');
+
+            $table->unique(['magasin_id', 'id']);
         });
 
         DeclencheursDeProtection::ajoutSeul('enregistrements_fiscaux');
         GardesDeLaVente::poser('enregistrements_fiscaux');
+        GardesDesClotures::poser();
+        GardesDuStock::poserLAuteurDesMouvements();
     }
 
     public function down(): void
@@ -71,5 +77,7 @@ return new class extends Migration
         Schema::dropIfExists('enregistrements_fiscaux');
         DeclencheursDeProtection::retirer('enregistrements_fiscaux');
         GardesDeLaVente::retirer('enregistrements_fiscaux');
+        GardesDesClotures::retirer();
+        GardesDuStock::retirerLAuteurDesMouvements();
     }
 };

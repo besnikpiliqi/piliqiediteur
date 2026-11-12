@@ -2,6 +2,7 @@
 
 namespace App\Domain\Tenancy\Support;
 
+use App\Domain\CaisseSecurisee\Support\DeclencheursDeProtection;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -49,7 +50,7 @@ final class GardesDesIdentifiants
         $figees = implode(' OR ', array_map(static fn (string $colonne): string => "NEW.{$colonne} IS DISTINCT FROM OLD.{$colonne}", self::COLONNES_FIGEES));
 
         $connexion->unprepared("ALTER TABLE identifiants ADD CONSTRAINT identifiants_forme CHECK (identifiant ~ '^[1-9][0-9]{7}$')");
-        $connexion->unprepared('CREATE OR REPLACE FUNCTION garde_identifiants() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN '
+        $connexion->unprepared('CREATE OR REPLACE FUNCTION garde_identifiants() RETURNS trigger LANGUAGE plpgsql '.DeclencheursDeProtection::CHEMIN_DE_RECHERCHE.' AS $$ BEGIN '
             ."IF TG_OP IN ('DELETE', 'TRUNCATE') THEN RAISE EXCEPTION '%', ".LitteralSql::de(self::MESSAGE_EFFACEMENT).'; END IF; '
             ."IF TG_OP = 'INSERT' AND NEW.magasin_id IS NOT NULL AND ".self::DEMONSTRATION.' AND NOT '.self::COMPTE_DE_MEMBRE." THEN RAISE EXCEPTION '%', ".LitteralSql::de(self::MESSAGE_ENTRAINEMENT).'; END IF; '
             ."IF TG_OP = 'UPDATE' THEN "

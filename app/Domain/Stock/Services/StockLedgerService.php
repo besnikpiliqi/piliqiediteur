@@ -2,6 +2,8 @@
 
 namespace App\Domain\Stock\Services;
 
+use App\Domain\Achats\Models\FactureAchat;
+use App\Domain\Achats\Models\LigneAchat;
 use App\Domain\Authorization\OperateurCourant;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Facturation\Services\CalculateurLigne;
@@ -17,9 +19,11 @@ use InvalidArgumentException;
 use LogicException;
 
 /**
- * Point d'entrée UNIQUE pour toute modification de stock. Aucun autre
- * endroit du code ne doit écrire dans produits.stock_quantite ou dans
- * mouvements_stock directement. Les ventes, les avoirs, la validation des
+ * Point d'entrée UNIQUE pour toute modification de stock : il inscrit les
+ * mouvements du grand livre (mouvements_stock), et la base ajoute chacun
+ * au stock de son produit, seule à écrire produits.stock_quantite (voir
+ * GardesDuStock), puis il relit ce stock sous le verrou du produit. Les
+ * ventes, les avoirs, la validation des
  * factures d'achat et les avoirs fournisseur l'appellent par des listeners
  * de leurs événements ; la correction d'une facture d'achat déjà validée
  * l'appelle directement (voir ModifierFactureAchatAction), comme la
@@ -42,12 +46,21 @@ use LogicException;
  * son mouvement). Une réception corrigée après coup rejoue tout le grand
  * livre du produit (voir corrigerUneReception()).
  *
+ * Chaque mouvement est justifié par le document de son magasin que son
+ * type désigne, dans la limite de ce document, au nom de qui l'a fait :
+ * contrôlé ici sous le verrou du produit (voir ProvenanceDesMouvements),
+ * puis par la base (voir GardesDuStock). Aucun mouvement ne se passe de
+ * document.
+ *
  * Seul à voir chaque mouvement, il signale aussi le passage d'un produit
  * à son seuil d'alerte (voir StockPasseSousLeSeuilDAlerte).
  */
 class StockLedgerService
 {
-    public function __construct(private readonly CalculateurLigne $calculateur) {}
+    public function __construct(
+        private readonly CalculateurLigne $calculateur,
+        private readonly ProvenanceDesMouvements $provenance,
+    ) {}
 
     /**
      * Entrée d'une réception d'achat, au coût réellement payé (voir
@@ -284,8 +297,8 @@ class StockLedgerService
     }
 
     /**
-     * Enregistre un mouvement typé (vente, réception, retour client...) et
-     * met à jour le cache produits.stock_quantite de façon atomique. Un
+     * Enregistre un mouvement typé (vente, réception, retour client...),
+     * que la base ajoute au stock du produit dans la même transaction. Un
      * inventaire d'ouverture, qui entre à son coût saisi, passe par
      * entrerALInventaireDOuverture(), un retour fournisseur, qui sort au
      * coût de sa ligne d'achat, par retournerAuFournisseur(), une sortie de
@@ -295,7 +308,7 @@ class StockLedgerService
         Produit $produit,
         TypeMouvementStock $type,
         int $quantite,
-        ?Model $source = null,
+        Model $source,
         ?string $note = null,
     ): MouvementStock {
         $refus = match ($type) {
@@ -339,13 +352,15 @@ class StockLedgerService
     }
 
     /**
-     * Correction manuelle (inventaire physique, casse...) ou d'une
-     * réception ($source : la facture d'achat corrigée) : on part de la
-     * quantité cible plutôt que d'un delta, pour coller à l'usage ("j'ai
-     * compté 42 articles") plutôt qu'à une mécanique interne. Le sens de
-     * l'écart donne le type du mouvement (entrée ou sortie).
+     * Correction d'une réception ($source : la facture d'achat validée
+     * corrigée, voir corrigerUneReception()), seul ajustement qui existe :
+     * on part de la quantité cible du stock, et le sens de l'écart donne le
+     * type du mouvement (entrée ou sortie) ; après lui, ce que la facture
+     * a fait entrer égale ses lignes (voir ProvenanceDesMouvements). Un
+     * ajustement à la main (casse, perte, comptage) passera par un document
+     * numéroté à l'étape 7.
      */
-    public function ajuster(Produit $produit, int $quantiteCible, string $note, ?Model $source = null): MouvementStock
+    private function ajuster(Produit $produit, int $quantiteCible, string $note, Model $source): MouvementStock
     {
         $delta = $quantiteCible - $produit->stock_quantite;
 
@@ -365,31 +380,39 @@ class StockLedgerService
         Produit $produit,
         TypeMouvementStock $type,
         int $quantite,
-        ?Model $source,
+        Model $source,
         ?string $note,
         ?int $coutUnitaireHt = null,
     ): MouvementStock {
         return DB::transaction(function () use ($produit, $type, $quantite, $source, $note, $coutUnitaireHt) {
             $produitVerrouille = $this->verrouiller($produit);
+            $this->provenance->exiger($produitVerrouille, $type, $quantite, $source, $note);
+            $etaitEnAlerte = $produitVerrouille->enAlerteStock();
+            $instant = now();
 
-            $nouvelleQuantite = $produitVerrouille->stock_quantite + $type->variation($quantite);
-
-            $mouvement = MouvementStock::create([
+            // Un seul instant pour survenu_le et created_at, que la base
+            // exige égaux (voir GardesDuStock::poserLaProvenance()).
+            $mouvement = (new MouvementStock)->forceFill([
+                'created_at' => $instant,
+            ])->fill([
                 'produit_id' => $produitVerrouille->id,
                 'type' => $type,
                 'quantite' => $quantite,
                 'cout_unitaire_ht' => $coutUnitaireHt === null ? null : $this->calculateur->enDecimalAuDixMillieme($coutUnitaireHt),
-                'source_type' => $source?->getMorphClass(),
-                'source_id' => $source?->getKey(),
-                'survenu_le' => now(),
+                'source_type' => $source->getMorphClass(),
+                'source_id' => $source->getKey(),
+                'survenu_le' => $instant,
                 'cree_par' => app(OperateurCourant::class)->personnePosee()?->getKey(),
                 'note' => $note,
             ]);
+            $mouvement->save();
 
-            $etaitEnAlerte = $produitVerrouille->enAlerteStock();
-            $produitVerrouille->forceFill(['stock_quantite' => $nouvelleQuantite])->save();
-            $produit->setAttribute('stock_quantite', $nouvelleQuantite);
-            $produit->syncOriginalAttribute('stock_quantite');
+            // La base ajoute elle-même le mouvement au stock du produit
+            // (voir GardesDuStock) : le stock se relit, sous le même verrou.
+            $produitVerrouille->refresh();
+            $produit->setAttribute('stock_quantite', $produitVerrouille->stock_quantite);
+            $produit->setAttribute('dernier_mouvement_stock_id', $produitVerrouille->getAttribute('dernier_mouvement_stock_id'));
+            $produit->syncOriginalAttributes(['stock_quantite', 'dernier_mouvement_stock_id']);
 
             // Une seule alerte au passage du seuil, pas une à chaque vente
             // tant que le stock reste bas ; aucune pour le stock d'un
@@ -400,6 +423,57 @@ class StockLedgerService
 
             return $mouvement;
         });
+    }
+
+    /**
+     * Les lignes de chaque facture d'achat validée du produit (voir
+     * Produit::achatsValides()), au coût que chacune a réellement payé
+     * (voir LigneAchat::coutUnitaireHt()), de la réception la plus
+     * ancienne à la plus récente : ce que rejoue corrigerUneReception().
+     *
+     * @return array<int|string, list<array{quantite: int, cout_unitaire: int}>> chaque coût en dix-millièmes d'euro
+     */
+    public function lotsDesReceptions(Produit $produit): array
+    {
+        return $this->lotsDe($produit->achatsValides()->with('factureAchat')->get());
+    }
+
+    /**
+     * Les lots de ces lignes d'achat validées, déjà dans l'ordre des
+     * réceptions et leur facture chargée, par identifiant de facture.
+     *
+     * @param  iterable<LigneAchat>  $lignes
+     * @return array<int|string, list<array{quantite: int, cout_unitaire: int}>> chaque coût en dix-millièmes d'euro
+     */
+    public function lotsDe(iterable $lignes): array
+    {
+        $lots = [];
+
+        foreach ($lignes as $ligne) {
+            $lots[$ligne->facture_achat_id][] = ['quantite' => $ligne->quantite, 'cout_unitaire' => $ligne->coutUnitaireHt()];
+        }
+
+        return $lots;
+    }
+
+    /**
+     * Le coût moyen que le produit doit avoir, rejoué depuis tout son grand
+     * livre ($grandLivre, dans l'ordre) et les lots de ses achats validés
+     * (voir lotsDe()), comme ses entrées et ses corrections le calculent :
+     * celui de cmupRejoue() pour un produit qui suit son stock, le coût de
+     * sa dernière ligne achetée sinon ; null quand rien ne le donne (aucune
+     * entrée ni aucun achat). La vérification de l'intégrité le compare au
+     * coût moyen enregistré (voir VerificateurDuStock).
+     *
+     * @param  Collection<int, MouvementStock>  $grandLivre
+     * @param  array<int|string, list<array{quantite: int, cout_unitaire: int}>>  $lotsDesReceptions
+     * @return int|null en dix-millièmes d'euro
+     */
+    public function coutMoyenRejoue(Produit $produit, Collection $grandLivre, array $lotsDesReceptions): ?int
+    {
+        return $produit->suivi_stock
+            ? $this->cmupRejoue($produit, $grandLivre, (new FactureAchat)->getMorphClass(), $lotsDesReceptions)
+            : $this->coutDeLaDerniereLigneAchetee($lotsDesReceptions);
     }
 
     /**

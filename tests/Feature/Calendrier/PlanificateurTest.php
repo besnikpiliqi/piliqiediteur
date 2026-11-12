@@ -46,6 +46,7 @@ class PlanificateurTest extends TestCase
         ['app:expirer-invitations-cabinets', '45 * * * *'],
         ['app:purger-invitations-cabinets', '50 * * * *'],
         ['app:effacer-telechargements-de-documents', '55 * * * *'],
+        ['app:relancer-transmissions-pdp', '40 * * * *'],
     ];
 
     /**
@@ -120,6 +121,20 @@ class PlanificateurTest extends TestCase
                 $this->assertSame(0, $minuit->getTimestamp() % 3600, "{$territoire->value} : {$jour}");
                 $this->assertTrue($cloture->isDue($this->app), "{$territoire->value} : {$jour}");
             }
+        }
+    }
+
+    /**
+     * Chaque tâche planifiée écrit (clôtures, statuts, relances, journal
+     * des événements, purges) : aucune ne part tant que son passage
+     * précédent tourne encore, si bien qu'une clôture ou une relance
+     * longue n'est jamais doublée par la suivante (constat C92 des audits
+     * du 07/11/2026).
+     */
+    public function test_les_taches_du_calendrier_des_magasins_ne_se_chevauchent_pas(): void
+    {
+        foreach ($this->evenements() as $evenement) {
+            $this->assertTrue($evenement->withoutOverlapping, self::commande($evenement));
         }
     }
 

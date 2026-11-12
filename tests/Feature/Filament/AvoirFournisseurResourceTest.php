@@ -15,8 +15,6 @@ use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Facture;
-use App\Domain\Stock\Enums\TypeMouvementStock;
-use App\Domain\Stock\Services\StockLedgerService;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Magasin;
@@ -252,7 +250,7 @@ class AvoirFournisseurResourceTest extends TestCase
         $chargeur = Produit::factory()->create(['nom' => 'Chargeur', 'taux_tva' => 20, 'suivi_stock' => true]);
         $ecran = Produit::factory()->create(['nom' => 'Écran', 'taux_tva' => 20, 'suivi_stock' => true]);
         $factureAchat = $this->recevoir([[$cable, 5, '12.00'], [$chargeur, 3, '7.00'], [$ecran, 2, '30.00']]);
-        app(StockLedgerService::class)->enregistrer($chargeur, TypeMouvementStock::Vente, 3);
+        $this->sortirParUneVente($chargeur, 3);
         $page = Livewire::test(ViewFactureAchat::class, ['record' => $factureAchat->getRouteKey()])
             ->mountAction('creer_avoir_fournisseur');
         $this->assertSame(
@@ -300,7 +298,7 @@ class AvoirFournisseurResourceTest extends TestCase
         $retourneeEnEntier = $this->recevoir([[$chargeur, 3, '7.00']]);
         $this->retourner($retourneeEnEntier, 0, 3);
         $vendue = $this->recevoir([[$ecran, 2, '30.00']]);
-        app(StockLedgerService::class)->enregistrer($ecran, TypeMouvementStock::Vente, 2);
+        $this->sortirParUneVente($ecran, 2);
         $autreMagasin = $this->ouvrirUnAutreMagasin($magasin, ['nom' => 'Boutique de Lyon', 'code' => 'LYON1']);
         $lampe = Produit::factory()->create(['nom' => 'Lampe', 'taux_tva' => 20, 'suivi_stock' => true]);
         $factureDeLyon = $this->recevoir([[$lampe, 4, '9.00']]);

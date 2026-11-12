@@ -4,6 +4,7 @@ namespace Tests\Feature\CaisseSecurisee;
 
 use App\Domain\CaisseSecurisee\ModuleFiscal;
 use App\Domain\CaisseSecurisee\Services\SignataireFiscal;
+use App\Domain\CaisseSecurisee\Support\HorlogeDuSysteme;
 use App\Domain\Calendrier\Calendrier;
 use App\Domain\Calendrier\Connexions\FuseauParDefautDeLaBase;
 use App\Domain\Fichiers\AnalyseurDePdf;
@@ -60,16 +61,85 @@ class CommandesModuleFiscalTest extends TestCase
         $this->assertStringStartsWith('-----BEGIN PUBLIC KEY-----', $clePublique);
         $this->assertStringNotContainsString('PRIVATE', $clePublique);
         $this->assertStringContainsString("Empreinte (cle_id) : {$cleId}", $sortie);
-        $this->assertSame(1, preg_match('/^CAISSE_SECURISEE_CLE_PRIVEE=(\S+)$/m', $sortie, $ligne));
 
         config([
-            'caisse_securisee.cle_privee' => $ligne[1],
+            'caisse_securisee.cle_privee' => $this->clePriveeAffichee($sortie),
             'caisse_securisee.cles_publiques' => [$fichiers[0]->getFilename() => $clePublique],
         ]);
         $signataire = app(SignataireFiscal::class);
         $signature = $signataire->signer('contenu signé');
         $this->assertSame($cleId, $signataire->cleId());
         $this->assertSame(1, openssl_verify('contenu signé', base64_decode(strtr($signature, '-_', '+/')), $clePublique, OPENSSL_ALGO_SHA256));
+    }
+
+    /**
+     * La clé privée affichée par caisse:generer-cle, lue dans sa sortie
+     * avec ses fins de ligne, de Linux comme de Windows (« \r\n »).
+     */
+    private function clePriveeAffichee(string $sortie): string
+    {
+        $this->assertSame(1, preg_match('/^CAISSE_SECURISEE_CLE_PRIVEE=(\S+)\r?$/m', $sortie, $ligne), 'La sortie doit afficher la clé privée sur sa propre ligne.');
+
+        return $ligne[1];
+    }
+
+    /**
+     * Sous Windows, la sortie finit ses lignes par « \r\n » : la clé
+     * privée s'y lit de même, et elle signe un contenu que la clé publique
+     * épinglée vérifie (constat C43 des audits du 07/11/2026 : portabilité
+     * du test, exigence inchangée).
+     */
+    public function test_la_cle_privee_se_lit_dans_une_sortie_aux_fins_de_ligne_de_windows(): void
+    {
+        config(['caisse_securisee.dossier_cles_publiques' => $this->dossierDeClesTemporaire()]);
+        $this->assertSame(0, Artisan::call('caisse:generer-cle'));
+        $sortieWindows = str_replace("\n", "\r\n", Artisan::output());
+        $clePublique = File::files(config('caisse_securisee.dossier_cles_publiques'))[0];
+
+        config([
+            'caisse_securisee.cle_privee' => $this->clePriveeAffichee($sortieWindows),
+            'caisse_securisee.cles_publiques' => [$clePublique->getFilename() => $clePublique->getContents()],
+        ]);
+        $signataire = app(SignataireFiscal::class);
+
+        $this->assertTrue($signataire->verifier('contenu signé', $signataire->signer('contenu signé'), $this->cleIdDe($clePublique->getContents())));
+    }
+
+    /**
+     * Le diagnostic compare l'horloge de la machine à celle du serveur de
+     * base, corrigée de la moitié de l'aller-retour : alignée, la ligne est
+     * OK ; décalée de 2 secondes, elle échoue et dit comment la remettre à
+     * l'heure (constat C93 des audits du 07/11/2026).
+     */
+    public function test_le_diagnostic_controle_l_horloge_du_serveur_sur_celle_du_serveur_de_base(): void
+    {
+        $this->poserLHorlogeDuSysteme(0.0);
+        $this->assertSame(0, Artisan::call('caisse:diagnostiquer'));
+        $this->assertMatchesRegularExpression('/\| Horloge du serveur +\| OK +\| écart de -?0,0\d\d s avec le serveur de base/u', Artisan::output());
+
+        $this->poserLHorlogeDuSysteme(2.0);
+        $this->assertSame(1, Artisan::call('caisse:diagnostiquer'));
+        $sortie = Artisan::output();
+        $this->assertMatchesRegularExpression("/\\| Horloge du serveur +\\| ÉCHEC +\\| L'horloge de ce serveur s'écarte de 2,0\\d\\d s de celle du serveur de base/u", $sortie);
+        $this->assertStringContainsString("Synchronisez l'horloge de chaque machine qui écrit au registre fiscal (serveur web, travailleurs des files, planificateur) par NTP", $sortie);
+        $this->assertStringContainsString('Caisse sécurisée non opérationnelle : 1 contrôle(s) en échec.', $sortie);
+    }
+
+    /**
+     * L'horloge du système, décalée de ce nombre de secondes sur celle du
+     * serveur de base, que le test lit à chaque appel.
+     */
+    private function poserLHorlogeDuSysteme(float $decalage): void
+    {
+        $this->app->instance(HorlogeDuSysteme::class, new class($decalage) extends HorlogeDuSysteme
+        {
+            public function __construct(private readonly float $decalage) {}
+
+            public function secondes(): float
+            {
+                return (float) DB::scalar("select date_part('epoch', clock_timestamp())") + $this->decalage;
+            }
+        });
     }
 
     public function test_diagnostiquer_reussit_quand_la_cle_de_signature_est_epinglee(): void

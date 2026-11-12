@@ -17,8 +17,8 @@ return new class extends Migration
         Schema::create('paiement_allocations', function (Blueprint $table) {
             $table->id();
             $table->foreignId('magasin_id')->constrained('magasins')->restrictOnDelete();
-            $table->foreignId('paiement_id')->constrained('paiements')->restrictOnDelete();
-            $table->foreignId('facture_id')->constrained('factures')->restrictOnDelete();
+            $table->foreignId('paiement_id');
+            $table->foreignId('facture_id');
             $table->decimal('montant_alloue', 12, 2);
             $table->timestamps();
 
@@ -27,6 +27,9 @@ return new class extends Migration
             // pas une deuxième ligne d'allocation sur le même couple.
             $table->unique(['paiement_id', 'facture_id']);
             $table->index(['magasin_id', 'facture_id']);
+
+            $table->foreign(['magasin_id', 'paiement_id'])->references(['magasin_id', 'id'])->on('paiements')->restrictOnDelete();
+            $table->foreign(['magasin_id', 'facture_id'])->references(['magasin_id', 'id'])->on('factures')->restrictOnDelete();
         });
 
         DeclencheursDeProtection::ajoutSeul('paiement_allocations');

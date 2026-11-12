@@ -10,7 +10,7 @@ return new class extends Migration
     {
         Schema::create('fournisseurs', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('magasin_id')->constrained('magasins')->cascadeOnDelete();
+            $table->foreignId('magasin_id')->constrained('magasins')->restrictOnDelete();
             $table->string('nom', 150);
             // SIRET (établissement précis), pas SIREN : unique dans le
             // magasin, archivés compris (voir FournisseurResource).
@@ -31,6 +31,8 @@ return new class extends Migration
 
             $table->unique(['magasin_id', 'siret']);
             $table->index(['magasin_id', 'nom']);
+
+            $table->unique(['magasin_id', 'id']);
         });
     }
 

@@ -7,7 +7,7 @@ use App\Integrations\Ordre\AnnuaireTenuParLEditeur;
 use App\Integrations\Ordre\Contracts\AnnuaireDeLOrdre;
 use App\Integrations\Ordre\FauxAnnuaireDeLOrdre;
 use App\Integrations\Sirene\FauxRepertoireSirene;
-use App\Providers\VerificationServiceProvider;
+use App\Providers\FournisseursExternesServiceProvider;
 use Illuminate\Support\Facades\Http;
 use LogicException;
 use RuntimeException;
@@ -56,12 +56,12 @@ class AnnuaireDeLOrdreTest extends TestCase
     public function test_le_pilote_faux_de_l_ordre_est_refuse_en_production(): void
     {
         $this->app->detectEnvironment(fn (): string => 'production');
-        config(['services.sirene.pilote' => 'insee', 'services.rne.pilote' => 'inpi', 'services.recommande.pilote' => null, 'services.ordre.pilote' => 'faux']);
+        config(['services.sirene.pilote' => 'insee', 'services.rne.pilote' => 'inpi', 'services.recommande.pilote' => null, 'services.ordre.pilote' => 'faux', 'services.pdp.pilote' => null]);
 
-        $this->assertThrows(fn () => (new VerificationServiceProvider($this->app))->boot(), RuntimeException::class, 'Le fournisseur factice de « ordre » (pilote faux) ne sert jamais en production.');
+        $this->assertThrows(fn () => (new FournisseursExternesServiceProvider($this->app))->boot(), RuntimeException::class, 'Le fournisseur factice de « ordre » (pilote faux) ne sert jamais en production.');
 
         config(['services.ordre.pilote' => 'editeur']);
-        (new VerificationServiceProvider($this->app))->boot();
+        (new FournisseursExternesServiceProvider($this->app))->boot();
         $this->app->detectEnvironment(fn (): string => 'testing');
     }
 }

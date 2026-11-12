@@ -25,7 +25,7 @@ return new class extends Migration
             // et le panier d'un membre retiré du magasin s'abandonne à la
             // clôture de sa journée.
             $table->foreignId('user_id')->constrained('users')->restrictOnDelete();
-            $table->foreignId('client_id')->nullable()->constrained('clients')->nullOnDelete();
+            $table->foreignId('client_id')->nullable();
             // Le jeton de la vente en cours, créé par la page de la caisse
             // avec le panier, nouveau pour chaque vente.
             $table->uuid('jeton');
@@ -40,6 +40,8 @@ return new class extends Migration
             $table->timestamps();
 
             $table->unique(['magasin_id', 'user_id']);
+
+            $table->foreign(['magasin_id', 'client_id'])->references(['magasin_id', 'id'])->on('clients')->restrictOnDelete();
         });
     }
 

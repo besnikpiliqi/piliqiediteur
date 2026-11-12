@@ -62,9 +62,31 @@ use InvalidArgumentException;
  * Les déclencheurs disparaissent avec leur table ; sa fonction de refus se
  * retire par retirer() dans le down() de la migration, après la table, et
  * celle d'une colonne figée par retirerLaColonneFigee().
+ *
+ * Chaque fonction de garde de la base, ici et dans les autres classes de
+ * gardes (GardesDeLaVente, GardesDesDroits…), fixe son chemin de
+ * recherche (CHEMIN_DE_RECHERCHE) : elle s'exécute avec les droits de qui
+ * écrit, et sans lui PostgreSQL chercherait d'abord les tables
+ * temporaires de la session, qu'une table temporaire du même nom qu'une
+ * table lue par la garde (users, sequences_documents…) masquerait, lui
+ * faisant accepter ce qu'elle refuse. pg_catalog d'abord, les tables de
+ * PILIQI ensuite, les tables temporaires en dernier : nommer pg_temp à la
+ * fin est la seule façon de ne jamais les lire avant les vraies. Le
+ * retrait du droit TEMPORARY au compte de l'application vient en plus, à
+ * l'étape 15. Une garde ne verrouille (FOR UPDATE, FOR SHARE) aucune ligne
+ * d'une table en ajout seul : le compte de l'application n'aura pas le
+ * droit UPDATE que ces verrous exigent.
  */
 final class DeclencheursDeProtection
 {
+    /**
+     * La clause de chaque CREATE FUNCTION de garde, entre son langage et
+     * son corps.
+     *
+     * @var literal-string
+     */
+    public const CHEMIN_DE_RECHERCHE = 'SET search_path = pg_catalog, public, pg_temp';
+
     /**
      * @param  literal-string  $table
      */
@@ -179,11 +201,29 @@ final class DeclencheursDeProtection
         $poseRefusee = $poseeSeulementSi === null ? '1 = 0' : "OLD.{$colonne} IS NULL AND NEW.{$colonne} IS NOT NULL AND NOT ({$poseeSeulementSi})";
         $connexion = DB::connection();
 
-        $connexion->unprepared("CREATE OR REPLACE FUNCTION refus_{$table}_{$colonne}() RETURNS trigger LANGUAGE plpgsql AS \$\$ BEGIN "
+        $connexion->unprepared("CREATE OR REPLACE FUNCTION refus_{$table}_{$colonne}() RETURNS trigger LANGUAGE plpgsql ".self::CHEMIN_DE_RECHERCHE.' AS $$ BEGIN '
             ."IF OLD.{$colonne} IS NOT NULL AND (NEW.{$colonne} IS NULL OR (NEW.{$colonne} IS DISTINCT FROM OLD.{$colonne} AND {$remplacementRefuse})) "
             ."THEN RAISE EXCEPTION '%', TG_ARGV[0]; END IF; "
             ."IF {$poseRefusee} THEN RAISE EXCEPTION '%', TG_ARGV[1]; END IF; RETURN NEW; END \$\$");
         $connexion->unprepared("CREATE TRIGGER {$table}_{$colonne}_figee BEFORE UPDATE OF {$colonne} ON {$table} FOR EACH ROW EXECUTE FUNCTION refus_{$table}_{$colonne}('{$message}', '{$messageDeLaPose}')");
+    }
+
+    /**
+     * Une colonne entière qui ne descend jamais sous $minimum : une
+     * quantité d'articles (au moins 1), un compteur, une taille ou un délai
+     * (au moins 0) ; unsignedInteger() ne contraint rien sous PostgreSQL.
+     * Une valeur nulle reste permise là où la colonne l'est. La contrainte
+     * disparaît avec sa table.
+     *
+     * @param  literal-string  $table
+     * @param  literal-string  $colonne
+     */
+    public static function auMoins(string $table, string $colonne, int $minimum): void
+    {
+        self::verifierLeNom($table);
+        self::verifierLeNom($colonne);
+
+        DB::connection()->unprepared("ALTER TABLE {$table} ADD CONSTRAINT {$table}_{$colonne}_au_moins_{$minimum} CHECK ({$colonne} >= {$minimum})");
     }
 
     /**
@@ -267,7 +307,7 @@ final class DeclencheursDeProtection
             : "IF TG_OP = 'DELETE' THEN IF {$suppressionPermise} THEN RETURN OLD; END IF; END IF; ";
         $connexion = DB::connection();
 
-        $connexion->unprepared("CREATE OR REPLACE FUNCTION refus_{$table}() RETURNS trigger LANGUAGE plpgsql AS \$\$ BEGIN {$ligneExpireeEffacee}RAISE EXCEPTION '%', TG_ARGV[0]; END \$\$");
+        $connexion->unprepared("CREATE OR REPLACE FUNCTION refus_{$table}() RETURNS trigger LANGUAGE plpgsql ".self::CHEMIN_DE_RECHERCHE." AS \$\$ BEGIN {$ligneExpireeEffacee}RAISE EXCEPTION '%', TG_ARGV[0]; END \$\$");
 
         foreach ($refus as $operation => $message) {
             $portee = $operation === 'TRUNCATE' ? 'STATEMENT' : 'ROW';

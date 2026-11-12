@@ -67,7 +67,7 @@ class ProprietaireSansVenteConcurrenceTest extends TestCase
         app(AccepterLaTransmissionDeLaProprieteAction::class)->handle(User::query()->findOrFail($administrateurAvant), $jeton, self::MOT_DE_PASSE_CHOISI);
 
         $this->assertInstanceOf(InvokedProcess::class, $concurrente);
-        $refus = $concurrente->wait();
+        $refus = $this->attendreLeProcessusConcurrent($concurrente);
         $this->assertFalse($refus->successful(), 'La vente, passée après la transmission, aurait dû être refusée.');
         $this->assertStringContainsString(LecteurDesDroits::REFUS, $refus->errorOutput());
         $this->assertSame(RoleSociete::Proprietaire, User::query()->findOrFail($administrateurAvant)->role_societe);
@@ -84,7 +84,7 @@ class ProprietaireSansVenteConcurrenceTest extends TestCase
         $ticket = self::vendreAuComptant(User::query()->findOrFail($administrateurApres), Client::factory()->create(), [['produit_id' => $produitApres, 'quantite' => 1]], ModePaiement::Especes);
 
         $this->assertInstanceOf(InvokedProcess::class, $transmission);
-        $resultat = $transmission->wait();
+        $resultat = $this->attendreLeProcessusConcurrent($transmission);
         $this->assertTrue($resultat->successful(), $resultat->errorOutput());
         $this->assertSame(RoleSociete::Proprietaire, User::query()->findOrFail($administrateurApres)->role_societe);
         $vente = EnregistrementFiscal::withoutGlobalScope(MagasinScope::class)->where('magasin_id', $venduAvant)->where('chaine', ChaineFiscale::Vente->value)->sole();
@@ -151,7 +151,7 @@ class ProprietaireSansVenteConcurrenceTest extends TestCase
         });
 
         $this->assertInstanceOf(InvokedProcess::class, $concurrente);
-        $refus = $concurrente->wait();
+        $refus = $this->attendreLeProcessusConcurrent($concurrente);
         $this->assertFalse($refus->successful(), 'La vente, écrite pendant la transmission, aurait dû l\'attendre puis être refusée.');
         $this->assertStringContainsString(GardesDeLaVente::MESSAGE, $refus->errorOutput());
         $this->assertSame(RoleSociete::Proprietaire, User::query()->findOrFail($administrateurId)->role_societe);

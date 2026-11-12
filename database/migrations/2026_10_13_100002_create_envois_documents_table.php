@@ -1,5 +1,6 @@
 <?php
 
+use App\Domain\CaisseSecurisee\Support\DeclencheursDeProtection;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -16,7 +17,7 @@ return new class extends Migration
     {
         Schema::create('envois_documents', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('magasin_id')->constrained('magasins')->cascadeOnDelete();
+            $table->foreignId('magasin_id')->constrained('magasins')->restrictOnDelete();
             // Polymorphique : facture, devis, avoir ou reçu de paiement.
             $table->morphs('document');
             $table->string('destinataire', 254);
@@ -29,7 +30,7 @@ return new class extends Migration
             // Une explication pour le magasin, jamais le message technique
             // du serveur d'envoi (voir EnvoyerDocumentJob::failed()).
             $table->string('erreur')->nullable();
-            $table->foreignId('envoye_par')->nullable()->constrained('users')->nullOnDelete();
+            $table->foreignId('envoye_par')->nullable()->constrained('users')->restrictOnDelete();
             // Le nom de cette personne au moment de l'opération (voir
             // FigeLeNomDeSesAuteurs) : l'historique ne le relit jamais sur
             // son compte.
@@ -44,6 +45,8 @@ return new class extends Migration
             // caractères d'un identifiant PostgreSQL.
             $table->unique(['document_type', 'document_id', 'niveau_relance'], 'envois_documents_relance_unique');
         });
+
+        DeclencheursDeProtection::auMoins('envois_documents', 'niveau_relance', 0);
     }
 
     public function down(): void

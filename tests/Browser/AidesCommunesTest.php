@@ -196,3 +196,22 @@ test('le propriétaire dont les courriers ne sont pas parvenus voit refuser un P
     expect(app(TenantContext::class)->runAsSociete($societe, fn (): int => PieceVerification::query()->count()))->toBe(0)
         ->and(count($this->entreesDAudit($societe, ActionAuditee::PieceDeVerificationRefusee)))->toBe(1);
 });
+
+test('un geste sur un élément absent enregistre une capture au nom du test, que l’échec cite', function () {
+    $societe = $this->societeComplete();
+    $onglet = $this->seConnecter($societe->responsable);
+    $message = null;
+
+    try {
+        $onglet->geste(fn () => $onglet->element('#element-qui-n-existe-pas')->click(), 'le clic sur l’élément absent');
+    } catch (AssertionFailedError $echec) {
+        $message = $echec->getMessage();
+    }
+
+    expect($message)->toContain('Le clic sur l’élément absent a échoué sur')
+        ->and(preg_match('#Capture : (tests/Browser/Screenshots/(echec-[a-z0-9-]+)\.png)#', (string) $message, $capture))->toBe(1)
+        ->and($capture[2])->toContain('un-geste-sur-un-element-absent-enregistre-une-capture-au-nom-du-test')
+        ->and(File::exists(base_path($capture[1])))->toBeTrue();
+
+    File::delete(base_path($capture[1]));
+});

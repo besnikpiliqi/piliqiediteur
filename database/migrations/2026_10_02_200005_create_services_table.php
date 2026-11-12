@@ -18,7 +18,7 @@ return new class extends Migration
     {
         Schema::create('services', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('magasin_id')->constrained('magasins')->cascadeOnDelete();
+            $table->foreignId('magasin_id')->constrained('magasins')->restrictOnDelete();
             $table->string('nom', Service::LONGUEUR_MAXIMALE_NOM);
             // Clé de doublon calculée en PHP (voir Service::normaliserNom()),
             // que la base compare octet par octet.
@@ -50,6 +50,8 @@ return new class extends Migration
             $table->timestamps();
 
             $table->unique(['magasin_id', 'nom_normalise']);
+
+            $table->unique(['magasin_id', 'id']);
         });
     }
 

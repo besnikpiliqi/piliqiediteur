@@ -9,9 +9,12 @@ use App\Domain\Tenancy\Support\ValeursLues;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Exists;
+use LogicException;
 
 /**
  * À appliquer sur tout modèle appartenant à un magasin (Produit, Client,
@@ -30,6 +33,14 @@ use Illuminate\Validation\Rules\Exists;
  *
  * Un identifiant choisi dans un formulaire se valide avec
  * regleExisteDansLeMagasin(), jamais avec une règle « exists » nue.
+ *
+ * Une action qui reçoit une fiche déjà chargée (client, fournisseur) la
+ * relit avec relueDansLeMagasin() avant toute écriture : MagasinScope
+ * filtre les requêtes, jamais un objet reçu, que son appelant (tâche,
+ * commande, API) a pu charger dans un autre magasin ou dont il a pu
+ * changer le magasin_id en mémoire. En base, la clé composée
+ * (magasin_id, …) → (magasin_id, id) refuse de même une référence vers la
+ * fiche d'un autre magasin.
  *
  * Son magasin n'est jamais nul : magasin_id ne l'est jamais dans les
  * tables de ces modèles, sa clé étrangère vise un magasin, qu'aucun
@@ -65,6 +76,26 @@ trait BelongsToMagasin
     public function magasin(): BelongsTo
     {
         return $this->belongsTo(Magasin::class);
+    }
+
+    /**
+     * La fiche reçue, relue par sa clé dans le magasin actif (MagasinScope),
+     * fiches archivées comprises si le modèle s'archive : un document déjà
+     * rattaché à un client archivé depuis se modifie encore (voir
+     * EditFacture). Seule la fiche relue sert ensuite : ni le magasin_id
+     * qu'elle porte en mémoire, ni ses autres attributs ne sont crus.
+     *
+     * @throws LogicException avec $refus, quand la fiche n'est pas une fiche du magasin actif
+     */
+    public static function relueDansLeMagasin(self $fiche, string $refus): static
+    {
+        $requete = static::query();
+
+        if (in_array(SoftDeletes::class, class_uses_recursive(static::class), true)) {
+            $requete->withoutGlobalScope(SoftDeletingScope::class);
+        }
+
+        return $requete->whereKey($fiche->getKey())->first() ?? throw new LogicException($refus);
     }
 
     /**

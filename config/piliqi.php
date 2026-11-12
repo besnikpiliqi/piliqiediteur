@@ -32,6 +32,19 @@ return [
 
     'qpdf' => env('QPDF_BINAIRE', 'qpdf'),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Mandataires de confiance
+    |--------------------------------------------------------------------------
+    |
+    | Les adresses IP exactes, ou les plages CIDR étroites, du répartiteur de
+    | charge (PROXIES_DE_CONFIANCE, séparées par des virgules), dont
+    | l'application croit les en-têtes X-Forwarded-* (voir
+    | FaireConfianceAuxMandataires) : un mot-clé, une plage /0 ou une plage
+    | IPv6 qui porte des adresses IPv4 est ignoré.
+    |
+    */
+
     'proxies_de_confiance' => array_values(array_filter(array_map(trim(...), explode(',', (string) env('PROXIES_DE_CONFIANCE', ''))), static fn (string $adresse): bool => $adresse !== '')),
 
 ];

@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Domain\CaisseSecurisee\ModuleFiscal;
 use App\Domain\CaisseSecurisee\Services\SignataireFiscal;
+use App\Domain\CaisseSecurisee\Support\HorlogeDuSysteme;
 use App\Domain\Calendrier\Calendrier;
 use App\Domain\Calendrier\Connexions\FuseauParDefautDeLaBase;
 use App\Domain\Fichiers\AnalyseurDePdf;
@@ -45,6 +46,13 @@ use ZipArchive;
  * - le fuseau par défaut de la base, que les migrations fixent à UTC ; en
  *   échec, sa cause et la commande qui la corrige (voir
  *   FuseauParDefautDeLaBase) ;
+ * - l'horloge de la machine, comparée à celle du serveur de base, corrigée
+ *   de la moitié de l'aller-retour : au-delà d'une demi-seconde d'écart,
+ *   une opération horodatée sur une machine en retard après une autre
+ *   serait refusée (voir HorlogeRegressiveException) ; le diagnostic se
+ *   lance sur chaque machine qui écrit au registre fiscal (serveur web,
+ *   travailleurs des files, planificateur), chacune synchronisée par NTP
+ *   (décision de l'éditeur, Q-AUD5) ;
  * - les contrôles des fichiers reçus (lot FI, voir ControleDesFichiers) :
  *   l'extension gd, qui réenregistre les photos ; qpdf, qui lit les PDF
  *   (QPDF_BINAIRE), en version 11 au moins ; l'antivirus, qui doit
@@ -52,10 +60,16 @@ use ZipArchive;
  *   factice en production.
  */
 #[Signature('caisse:diagnostiquer')]
-#[Description('Vérifie que la caisse sécurisée peut signer et le journal d\'audit s\'inscrire, et que les fichiers reçus se contrôlent : extensions, génération d\'une clé, clés épinglées, clé de signature, clé du journal d\'audit, version du module fiscal, fuseaux de l\'application et de la base, gd, qpdf, antivirus')]
+#[Description('Vérifie que la caisse sécurisée peut signer et le journal d\'audit s\'inscrire, et que les fichiers reçus se contrôlent : extensions, génération d\'une clé, clés épinglées, clé de signature, clé du journal d\'audit, version du module fiscal, fuseaux de l\'application et de la base, horloge du serveur, gd, qpdf, antivirus')]
 class DiagnostiquerCaisseSecurisee extends Command
 {
-    public function handle(SignataireFiscal $signataire, Antivirus $antivirus): int
+    /**
+     * L'écart, en secondes, au-delà duquel l'horloge de la machine est en
+     * échec.
+     */
+    public const ECART_MAXIMAL_DE_L_HORLOGE = 0.5;
+
+    public function handle(SignataireFiscal $signataire, Antivirus $antivirus, HorlogeDuSysteme $horloge): int
     {
         $controles = [
             'Extension openssl' => fn (): string => $this->controlerOpenssl(),
@@ -67,6 +81,7 @@ class DiagnostiquerCaisseSecurisee extends Command
             'Version du module fiscal' => fn (): string => ModuleFiscal::VERSION,
             'Fuseau de l\'application' => fn (): string => $this->controlerLeFuseauDeLApplication(),
             'Fuseau par défaut de la base' => fn (): string => FuseauParDefautDeLaBase::exigerUtc(DB::connection()),
+            'Horloge du serveur' => fn (): string => $this->controlerLHorloge($horloge),
             'Extension gd' => fn (): string => $this->controlerGd(),
             'Analyseur des PDF (qpdf)' => fn (): string => $this->controlerQpdf(),
             'Antivirus' => fn (): string => $this->controlerLAntivirus($antivirus),
@@ -201,6 +216,25 @@ class DiagnostiquerCaisseSecurisee extends Command
         }
 
         return implode(', ', $cleIds);
+    }
+
+    /**
+     * L'écart entre l'horloge de la machine et celle du serveur de base,
+     * lue au milieu de l'aller-retour de la requête.
+     */
+    private function controlerLHorloge(HorlogeDuSysteme $horloge): string
+    {
+        $avant = $horloge->secondes();
+        $base = (float) DB::scalar("select date_part('epoch', clock_timestamp())");
+        $apres = $horloge->secondes();
+        $ecart = ($avant + $apres) / 2 - $base;
+        $ecartLu = number_format($ecart, 3, ',', ' ');
+
+        if (abs($ecart) > self::ECART_MAXIMAL_DE_L_HORLOGE) {
+            throw new RuntimeException("L'horloge de ce serveur s'écarte de {$ecartLu} s de celle du serveur de base (une demi-seconde au plus) : une opération horodatée sur une machine en retard, après une autre en avance, serait refusée par le registre fiscal. Synchronisez l'horloge de chaque machine qui écrit au registre fiscal (serveur web, travailleurs des files, planificateur) par NTP (timedatectl set-ntp true, ou chrony), puis relancez caisse:diagnostiquer sur chacune ; une horloge partie en avance ne se corrige jamais en réécrivant l'heure du registre : on attend que l'heure réelle la rattrape.");
+        }
+
+        return "écart de {$ecartLu} s avec le serveur de base (une demi-seconde au plus)";
     }
 
     private function controlerLeFuseauDeLApplication(): string

@@ -28,7 +28,7 @@ return new class extends Migration
         Schema::create('preuves_operation', function (Blueprint $table) {
             $table->id();
             $table->foreignId('magasin_id')->constrained('magasins')->restrictOnDelete();
-            $table->foreignId('facture_id')->constrained('factures')->restrictOnDelete();
+            $table->foreignId('facture_id');
             $table->string('type', 30);
             $table->string('reference', 100);
             $table->date('date_document')->nullable();
@@ -41,6 +41,8 @@ return new class extends Migration
             $table->timestamp('created_at');
 
             $table->index(['magasin_id', 'facture_id']);
+
+            $table->foreign(['magasin_id', 'facture_id'])->references(['magasin_id', 'id'])->on('factures')->restrictOnDelete();
         });
 
         DeclencheursDeProtection::ajoutSeul('preuves_operation');

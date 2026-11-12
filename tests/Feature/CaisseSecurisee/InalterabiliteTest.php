@@ -9,6 +9,7 @@ use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
+use App\Domain\Facturation\Actions\CloturerCaisseAction;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
@@ -19,9 +20,13 @@ use App\Domain\Facturation\Enums\NatureLigne;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\AvoirAllocation;
+use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Models\PaiementAllocation;
+use App\Domain\Facturation\Services\RecapitulatifDeCloture;
+use App\Domain\Facturation\Support\GardesDesClotures;
+use App\Domain\Facturation\Support\GardesDesDocumentsEmis;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
@@ -30,8 +35,8 @@ use Closure;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
@@ -202,6 +207,228 @@ class InalterabiliteTest extends TestCase
     }
 
     /**
+     * Une réécriture en base d'une facture émise, par une requête qui ne
+     * passe pas par le modèle.
+     *
+     * @return array<string, array{0: string, 1: mixed}>
+     */
+    public static function reecrituresEnBaseDUneFactureEmise(): array
+    {
+        return [
+            'total' => ['total_ttc', '1.00'],
+            'notes' => ['notes', 'Réécrite après coup'],
+            'nom du client figé' => ['client_nom', 'Autre nom'],
+            'nom figé de l\'auteur' => ['cree_par_nom', 'Quelqu\'un d\'autre'],
+            'numéro' => ['numero', 'TK-LYON1-2026-999999'],
+            'date d\'émission' => ['date_emission', self::enUtc('2020-01-01 00:00:00')],
+        ];
+    }
+
+    /**
+     * La base refuse elle-même de réécrire une facture émise, quel que soit
+     * le code qui écrit (voir GardesDesDocumentsEmis) : la ligne relue est
+     * identique.
+     */
+    #[DataProvider('reecrituresEnBaseDUneFactureEmise')]
+    public function test_la_base_refuse_de_reecrire_une_facture_emise(string $colonne, mixed $valeur): void
+    {
+        $facture = $this->emettre(Client::factory()->create());
+        $avant = $this->ligneEnBase('factures', $facture->id);
+
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('factures')->where('id', $facture->id)->update([$colonne => $valeur])), QueryException::class, GardesDesDocumentsEmis::refusDeModification('factures'));
+
+        $this->assertSame($avant, $this->ligneEnBase('factures', $facture->id));
+    }
+
+    /**
+     * Une facture émise, ni payée ni créditée (aucune clé ne la retient),
+     * ne se supprime pas, ni ses lignes ; ses lignes ne se réécrivent pas
+     * et aucune ne s'y ajoute.
+     */
+    public function test_la_base_refuse_de_supprimer_une_facture_emise_ou_de_toucher_a_ses_lignes(): void
+    {
+        $facture = $this->emettre(Client::factory()->create());
+        $ligne = $facture->lignes->sole();
+        $avant = $this->instantaneDesTables('factures', 'lignes_facture');
+        $refusSurUneLigne = GardesDesDocumentsEmis::refusSurUneLigne('lignes_facture');
+
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('factures')->where('id', $facture->id)->delete()), QueryException::class, GardesDesDocumentsEmis::refusDeSuppression('factures'));
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('lignes_facture')->where('id', $ligne->id)->delete()), QueryException::class, $refusSurUneLigne);
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('lignes_facture')->where('id', $ligne->id)->update(['montant_ttc' => '600.00'])), QueryException::class, $refusSurUneLigne);
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('lignes_facture')->where('id', $ligne->id)->update(['quantite' => 30])), QueryException::class, $refusSurUneLigne);
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('lignes_facture')->insert(Arr::except((array) DB::table('lignes_facture')->where('id', $ligne->id)->first(), ['id']))), QueryException::class, $refusSurUneLigne);
+
+        $this->assertSame($avant, $this->instantaneDesTables('factures', 'lignes_facture'));
+    }
+
+    /**
+     * Un avoir émis dont le crédit n'est imputé sur rien (aucune clé ne le
+     * retient) ne se supprime pas et ne se réécrit pas, ni ses lignes.
+     */
+    public function test_la_base_refuse_de_supprimer_ou_de_reecrire_un_avoir_emis_et_ses_lignes(): void
+    {
+        $client = Client::factory()->create();
+        $ticket = self::vendreAuComptant(self::auteur(), $client, [['produit_id' => $this->produit()->id, 'quantite' => 2]]);
+        $avoir = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [['ligne_facture_id' => $ticket->lignes->sole()->id, 'quantite' => 1]], 'Article abîmé');
+        $this->assertSame(0, DB::table('avoir_allocations')->where('avoir_id', $avoir->id)->count());
+        $ligne = $avoir->lignes->sole();
+        $avant = $this->instantaneDesTables('avoirs', 'lignes_avoir');
+        $refusSurUneLigne = GardesDesDocumentsEmis::refusSurUneLigne('lignes_avoir');
+
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('avoirs')->where('id', $avoir->id)->delete()), QueryException::class, GardesDesDocumentsEmis::refusDeSuppression('avoirs'));
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('avoirs')->where('id', $avoir->id)->update(['motif' => 'Réécrit après coup'])), QueryException::class, GardesDesDocumentsEmis::refusDeModification('avoirs'));
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('lignes_avoir')->where('id', $ligne->id)->update(['montant_ttc' => '1.00'])), QueryException::class, $refusSurUneLigne);
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('lignes_avoir')->where('id', $ligne->id)->delete()), QueryException::class, $refusSurUneLigne);
+
+        $this->assertSame($avant, $this->instantaneDesTables('avoirs', 'lignes_avoir'));
+    }
+
+    /**
+     * Ce qui suit encore un document émis s'écrit toujours en base : son
+     * statut de règlement, par une requête en masse comme celle des
+     * factures en retard ; un brouillon, sans numéro, se réécrit et se
+     * supprime avec ses lignes.
+     */
+    public function test_la_base_laisse_evoluer_le_statut_d_un_document_emis_et_ecrire_un_brouillon(): void
+    {
+        $facture = $this->emettre(Client::factory()->professionnel()->create());
+        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
+
+        DB::table('factures')->whereIn('id', [$facture->id])->update(['statut' => StatutFacture::EnRetard->value, 'updated_at' => self::enUtc('2026-10-09 09:00:00')]);
+        DB::table('factures')->where('id', $brouillon->id)->update(['notes' => 'Réécrite avant l\'émission']);
+        DB::table('lignes_facture')->where('facture_id', $brouillon->id)->update(['quantite' => 2]);
+        DB::table('factures')->where('id', $brouillon->id)->delete();
+
+        $this->assertSame(StatutFacture::EnRetard, $facture->fresh()?->statut);
+        $this->assertModelMissing($brouillon);
+        $this->assertSame(0, DB::table('lignes_facture')->where('facture_id', $brouillon->id)->count());
+    }
+
+    /**
+     * Une vente le 09/10 à 10 h, puis la clôture de sa journée le
+     * lendemain à 8 h : son ticket Z.
+     */
+    private function cloturerLaJourneeDu9Octobre(): ClotureCaisse
+    {
+        self::vendreAuComptant(self::auteur(), Client::factory()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 2]]);
+        $this->travelTo(self::aParis('2026-10-10 08:00:00'));
+
+        return app(CloturerCaisseAction::class)->handle(self::auteur(), app(TenantContext::class)->magasin(), '2026-10-09');
+    }
+
+    /**
+     * Une réécriture en base de chaque colonne d'un ticket Z, la valeur se
+     * fabriquant au moment du test (un autre magasin).
+     *
+     * @return array<string, array{0: string, 1: Closure(): mixed}>
+     */
+    public static function reecrituresDUnTicketZ(): array
+    {
+        return [
+            'total HT' => ['total_ht', static fn (): string => '1.00'],
+            'total de TVA' => ['total_tva', static fn (): string => '0.00'],
+            'total TTC' => ['total_ttc', static fn (): string => '1.00'],
+            'récapitulatif' => ['recapitulatif', static fn (): string => json_encode(RecapitulatifDeCloture::vide(), JSON_THROW_ON_ERROR)],
+            'numéro' => ['numero', static fn (): string => 'Z-LYON1-2026-999999'],
+            'instant de la clôture' => ['cloturee_a', static fn (): string => self::enUtc('2026-10-11 06:00:00')->format('Y-m-d H:i:s')],
+            'journée' => ['date_cloture', static fn (): string => '2026-10-08'],
+            'nombre de ventes' => ['nombre_ventes', static fn (): int => 0],
+            'nombre d\'avoirs' => ['nombre_avoirs', static fn (): int => 3],
+            'dernière séquence des ventes' => ['derniere_sequence_vente', static fn (): int => 99],
+            'dernière séquence des encaissements' => ['derniere_sequence_encaissement', static fn (): int => 99],
+            'magasin' => ['magasin_id', static fn (): int => Magasin::factory()->create()->id],
+            'nom figé de l\'auteur' => ['cree_par_nom', static fn (): string => 'Quelqu\'un d\'autre'],
+        ];
+    }
+
+    /**
+     * C24 : un ticket Z fait ne se réécrit, ne se supprime ni ne se vide
+     * par une requête directe : la base le refuse (voir
+     * DeclencheursDeProtection::ajoutSeul()), et la ligne relue est
+     * identique. Le contrôle différé du ticket Z (voir GardesDesClotures)
+     * est joué avant le vidage, comme à la validation de la transaction de
+     * la clôture : PostgreSQL ne vide pas une table qui attend encore un
+     * contrôle différé, que la transaction du test n'atteint jamais.
+     *
+     * @param  Closure(): mixed  $valeur
+     */
+    #[DataProvider('reecrituresDUnTicketZ')]
+    public function test_la_base_refuse_de_modifier_ou_de_supprimer_une_cloture_faite(string $colonne, Closure $valeur): void
+    {
+        $cloture = $this->cloturerLaJourneeDu9Octobre();
+        $nouvelleValeur = $valeur();
+        $avant = $this->ligneEnBase('clotures_caisse', $cloture->id);
+
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('clotures_caisse')->where('id', $cloture->id)->update([$colonne => $nouvelleValeur])), QueryException::class, 'clotures_caisse : table en ajout seul, modification refusée');
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('clotures_caisse')->where('id', $cloture->id)->delete()), QueryException::class, 'clotures_caisse : table en ajout seul, suppression refusée');
+        DB::statement('SET CONSTRAINTS '.GardesDesClotures::DECLENCHEUR.' IMMEDIATE');
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('clotures_caisse')->truncate()), QueryException::class, 'clotures_caisse : table en ajout seul, vidage refusé');
+
+        $this->assertSame($avant, $this->ligneEnBase('clotures_caisse', $cloture->id));
+    }
+
+    /**
+     * C25 : un ticket ou un avoir rattaché à son ticket Z n'en sort plus,
+     * ni vers aucun, ni vers un autre ; un ticket encore ouvert ne se
+     * rattache qu'au dernier ticket Z de son magasin, celui que la clôture
+     * vient d'écrire, jamais à un Z antérieur ; et jamais au ticket Z d'un
+     * magasin d'une autre société, que sa clé composée refuse aussi.
+     */
+    public function test_la_base_refuse_qu_un_document_sorte_de_son_ticket_z(): void
+    {
+        $magasin = app(TenantContext::class)->magasin();
+        $client = Client::factory()->create();
+        $ticket = self::vendreAuComptant(self::auteur(), $client, [['produit_id' => $this->produit()->id, 'quantite' => 2]]);
+        $avoir = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [['ligne_facture_id' => $ticket->lignes->sole()->id, 'quantite' => 1]], 'Article abîmé');
+        $this->travelTo(self::aParis('2026-10-10 08:00:00'));
+        $zDu9 = app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, '2026-10-09');
+        $this->travelTo(self::aParis('2026-10-11 08:00:00'));
+        $zDu10 = app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, '2026-10-10');
+        $this->travelTo(self::aParis('2026-10-11 10:00:00'));
+        $ticketOuvert = self::vendreAuComptant(self::auteur(), $client, [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
+        $zDAilleurs = $this->insererUnFauxTicketZ(Magasin::factory()->create(), '2026-10-10', 'Z-AILL-2026-000001', self::aParis('2026-10-11 00:00:30'));
+        $this->assertSame([$zDu9->id, $zDu9->id, null], [$ticket->fresh()?->cloture_caisse_id, $avoir->fresh()?->cloture_caisse_id, $ticketOuvert->fresh()?->cloture_caisse_id]);
+        $avant = $this->instantaneDesTables('factures', 'avoirs');
+
+        foreach ([['factures', $ticket->id], ['avoirs', $avoir->id]] as [$table, $id]) {
+            foreach ([null, $zDu10->id] as $autreTicketZ) {
+                $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table($table)->where('id', $id)->update(['cloture_caisse_id' => $autreTicketZ])), QueryException::class, "{$table}.cloture_caisse_id : valeur figée, changement refusé");
+            }
+        }
+
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('factures')->where('id', $ticketOuvert->id)->update(['cloture_caisse_id' => $zDu9->id])), QueryException::class, 'factures.cloture_caisse_id : valeur refusée sur cette ligne');
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('factures')->where('id', $ticketOuvert->id)->update(['cloture_caisse_id' => $zDAilleurs])), QueryException::class, 'factures.cloture_caisse_id : valeur refusée sur cette ligne');
+        $this->assertSame($avant, $this->instantaneDesTables('factures', 'avoirs'));
+
+        $this->retirerLeDeclencheur('factures', 'factures_cloture_caisse_id_figee');
+        $this->assertRefuseeParLaCleDuMagasin(fn () => DB::table('factures')->where('id', $ticketOuvert->id)->update(['cloture_caisse_id' => $zDAilleurs]), 'factures', 'cloture_caisse_id');
+    }
+
+    /**
+     * C26 : un ticket Z inséré directement, sans l'événement 50 que la
+     * clôture inscrit dans sa transaction, est refusé à la validation de
+     * la transaction (déclencheur de contrainte différé) ; le test force
+     * ce contrôle (SET CONSTRAINTS … IMMEDIATE), que sa transaction, jamais
+     * validée, n'atteindrait pas. Après une vraie clôture, le même contrôle
+     * passe.
+     */
+    public function test_la_base_refuse_un_ticket_z_sans_sa_cloture_signee(): void
+    {
+        $magasin = app(TenantContext::class)->magasin();
+        $verifierMaintenant = fn () => DB::statement('SET CONSTRAINTS clotures_caisse_signee IMMEDIATE');
+
+        $this->assertThrows($this->dansUnPointDeSauvegarde(function () use ($magasin, $verifierMaintenant): void {
+            $this->insererUnFauxTicketZ($magasin, '2026-10-09', 'Z-LYON1-2026-000001', self::aParis('2026-10-09 21:00:00'));
+            $verifierMaintenant();
+        }), QueryException::class, GardesDesClotures::REFUS_SANS_CLOTURE_SIGNEE);
+
+        $this->cloturerLaJourneeDu9Octobre();
+
+        $this->assertTrue($verifierMaintenant());
+        $this->assertSame(1, ClotureCaisse::query()->count());
+    }
+
+    /**
      * Le statut de règlement d'une facture émise suit encore ses paiements
      * et son échéance : partiellement payée, en retard (par la commande
      * planifiée, en masse), puis payée.
@@ -321,43 +548,36 @@ class InalterabiliteTest extends TestCase
     }
 
     /**
-     * @return array<string, array{string}>
-     */
-    public static function tablesDesDonneesFiscales(): array
-    {
-        return array_combine($tables = [
-            'factures',
-            'lignes_facture',
-            'avoirs',
-            'lignes_avoir',
-            'paiements',
-            'paiement_allocations',
-            'avoir_allocations',
-            'sequences_documents',
-            'transmissions_pdp',
-            'tetes_registre_fiscal',
-            'enregistrements_fiscaux',
-            'consultations_vies',
-            'preuves_operation',
-            'bordereaux_detaxe',
-        ], array_map(static fn (string $table): array => [$table], $tables));
-    }
-
-    /**
-     * Aucune donnée fiscale, vérifications VIES, preuves d'exonération et
-     * bordereaux de détaxe compris, ne disparaît avec son magasin : la clé
-     * magasin_id de chaque table refuse la suppression du magasin au lieu
-     * de la propager. Elle se lit dans le schéma, car supprimer un magasin
+     * Aucune donnée ne disparaît avec son magasin ni avec un compte : toute
+     * clé vers les magasins et toute clé vers les comptes refuse la
+     * suppression (restrict) au lieu de la propager (cascade) ou d'effacer
+     * la référence (set null). Un magasin ne se supprime jamais (voir le
+     * déclencheur de sa table), aucun code ne supprime un compte, et le nom
+     * de qui a fait un geste ne se perd pas. Elle se lit dans le catalogue,
+     * pour toutes les tables, présentes et futures : supprimer un magasin
      * qui a émis une facture échoue de toute façon par plusieurs clés à la
-     * fois (registre, séquences, clients) et par les déclencheurs ajout
-     * seul : l'échec ne dirait pas que chacune de ces clés refuse.
+     * fois et par les déclencheurs ajout seul, et l'échec ne dirait pas que
+     * chacune de ces clés refuse.
      */
-    #[DataProvider('tablesDesDonneesFiscales')]
-    public function test_la_cle_magasin_d_une_donnee_fiscale_refuse_la_suppression_du_magasin(string $table): void
+    public function test_aucune_cle_ne_propage_ni_n_efface_la_suppression_d_un_magasin_ou_d_un_compte(): void
     {
-        $cle = collect(Schema::getForeignKeys($table))->sole(static fn (array $cle): bool => $cle['columns'] === ['magasin_id']);
+        $cles = DB::select(<<<'SQL'
+            select s.relname as table_source, c.conname as nom, c.confdeltype as suppression, t.relname as cible
+              from pg_constraint c
+              join pg_class s on s.oid = c.conrelid
+              join pg_class t on t.oid = c.confrelid
+             where c.contype = 'f'
+               and c.connamespace = 'public'::regnamespace
+               and t.relname in ('magasins', 'users')
+             order by s.relname, c.conname
+            SQL);
+        $permissives = array_values(array_map(
+            static fn (object $cle): string => "{$cle->table_source} → {$cle->cible} ({$cle->nom}, {$cle->suppression})",
+            array_filter($cles, static fn (object $cle): bool => $cle->suppression !== 'r'),
+        ));
 
-        $this->assertSame(['magasins', ['id'], 'restrict'], [$cle['foreign_table'], $cle['foreign_columns'], $cle['on_delete']]);
+        $this->assertGreaterThan(90, count($cles), 'Le catalogue doit décrire les clés vers les magasins et les comptes.');
+        $this->assertSame([], $permissives, 'Ces clés propagent ou effacent la suppression d\'un magasin ou d\'un compte.');
     }
 
     /**

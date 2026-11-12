@@ -23,7 +23,6 @@ use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Facturation\Models\SequenceDocument;
 use App\Domain\Stock\Enums\TypeMouvementStock;
 use App\Domain\Stock\Models\MouvementStock;
-use App\Domain\Stock\Services\StockLedgerService;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Magasin;
@@ -786,7 +785,9 @@ class FactureAchatActionsTest extends TestCase
     public function test_sans_stock_a_ponderer_le_cmup_est_le_cout_de_la_reception(): void
     {
         $fournisseur = Fournisseur::factory()->create();
-        $venduAvantDEtreRecu = Produit::factory()->create(['cmup_ht' => 5, 'taux_tva' => 20, 'stock_quantite' => -2, 'suivi_stock' => true]);
+        $venduAvantDEtreRecu = Produit::factory()->create(['cmup_ht' => 5, 'taux_tva' => 20, 'suivi_stock' => true]);
+        self::vendreJusquAuStockNegatif($venduAvantDEtreRecu, 2);
+        $venduAvantDEtreRecu->refresh();
         $sansSuiviDeStock = Produit::factory()->create(['cmup_ht' => 5, 'taux_tva' => 20, 'suivi_stock' => false]);
 
         app(ValiderFactureAchatAction::class)->handle(self::auteur(), app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [
@@ -966,7 +967,7 @@ class FactureAchatActionsTest extends TestCase
         $factureAchat = app(ValiderFactureAchatAction::class)->handle(self::auteur(), app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [
             ['produit_id' => $produit->id, 'quantite' => 10, 'prix_unitaire_ht' => 5],
         ], ['date_facture' => '2026-01-15']));
-        app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::Vente, 9);
+        $this->sortirParUneVente($produit, 9);
 
         $factureAchat = app(ModifierFactureAchatAction::class)->handle(self::auteur(), $factureAchat, $fournisseur, [
             ['produit_id' => $produit->id, 'quantite' => 10, 'prix_unitaire_ht' => 6],
@@ -1118,7 +1119,7 @@ class FactureAchatActionsTest extends TestCase
         $produit = Produit::factory()->create(['cmup_ht' => 2, 'taux_tva' => 20, 'suivi_stock' => true]);
         $this->recevoir($fournisseur, [['produit_id' => $produit->id, 'quantite' => 10, 'prix_unitaire_ht' => 2]]);
         $seconde = $this->recevoir($fournisseur, [['produit_id' => $produit->id, 'quantite' => 10, 'prix_unitaire_ht' => 10]]);
-        app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::Vente, 10);
+        $this->sortirParUneVente($produit, 10);
         $this->assertSame(['6.0000', 10], [$produit->fresh()->cmup_ht, $produit->fresh()->stock_quantite]);
 
         $seconde = app(ModifierFactureAchatAction::class)->handle(self::auteur(), $seconde, $fournisseur, [
@@ -1327,11 +1328,11 @@ class FactureAchatActionsTest extends TestCase
             ['produit_id' => $produit->id, 'quantite' => 15, 'prix_unitaire_ht' => 4],
         ]);
 
-        app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::Vente, 4);
+        $vente = $this->sortirParUneVente($produit, 4);
 
         $grandLivre = $produit->mouvementsStock()->orderBy('id')->get();
         $this->assertSame(
-            [['reception_achat', 10, $factureAchat->id], ['ajustement_sortie', 5, $factureAchat->id], ['ajustement_entree', 10, $factureAchat->id], ['vente', 4, null]],
+            [['reception_achat', 10, $factureAchat->id], ['ajustement_sortie', 5, $factureAchat->id], ['ajustement_entree', 10, $factureAchat->id], ['vente', 4, $vente->source_id]],
             $grandLivre->map(fn (MouvementStock $mouvement): array => [$mouvement->type->value, $mouvement->quantite, $mouvement->source_id])->all(),
         );
         $this->assertSame(11, $grandLivre->sum(fn (MouvementStock $mouvement): int => $mouvement->type->variation($mouvement->quantite)));

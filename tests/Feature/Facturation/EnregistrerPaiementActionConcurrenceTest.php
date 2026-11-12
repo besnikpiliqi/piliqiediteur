@@ -82,7 +82,7 @@ class EnregistrerPaiementActionConcurrenceTest extends TestCase
         $premier = self::payer($clientId, $factureId, '60.00');
 
         $this->assertInstanceOf(InvokedProcess::class, $concurrente);
-        $resultat = $concurrente->wait();
+        $resultat = $this->attendreLeProcessusConcurrent($concurrente);
         $this->assertFalse($resultat->successful());
         $this->assertStringContainsString("Le montant imputé sur la facture {$ticket->numero} (60,00 €) dépasse ce qui en reste dû (40,00 €).", $resultat->errorOutput());
         $this->assertSame([$premier->id], Paiement::query()->pluck('id')->all());
@@ -106,7 +106,7 @@ class EnregistrerPaiementActionConcurrenceTest extends TestCase
         app(ContrePasserPaiementAction::class)->handle(self::auteur(), $errone, 'Saisi deux fois');
 
         $this->assertInstanceOf(InvokedProcess::class, $concurrente);
-        $resultat = $concurrente->wait();
+        $resultat = $this->attendreLeProcessusConcurrent($concurrente);
         $this->assertFalse($resultat->successful());
         $this->assertStringContainsString('Ce paiement a déjà été contre-passé.', $resultat->errorOutput());
         $this->assertSame(['-60.00', '60.00'], Paiement::query()->orderBy('montant')->pluck('montant')->all());
@@ -144,7 +144,7 @@ class EnregistrerPaiementActionConcurrenceTest extends TestCase
         $contrePassation = app(ContrePasserPaiementAction::class)->handle(self::auteur(), $paiementErrone, 'Saisi sur la mauvaise facture');
 
         $this->assertInstanceOf(InvokedProcess::class, $concurrente);
-        $resultat = $concurrente->wait();
+        $resultat = $this->attendreLeProcessusConcurrent($concurrente);
         $this->assertTrue($resultat->successful(), $resultat->errorOutput());
         $nouvelle = Facture::query()->whereKeyNot([$reprise->id, $rouverte->id])->sole();
         $this->assertSame(

@@ -11,9 +11,9 @@ return new class extends Migration
     {
         Schema::create('factures_achat', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('magasin_id')->constrained('magasins')->cascadeOnDelete();
-            $table->foreignId('fournisseur_id')->constrained('fournisseurs')->restrictOnDelete();
-            $table->foreignId('cree_par')->nullable()->constrained('users')->nullOnDelete();
+            $table->foreignId('magasin_id')->constrained('magasins')->restrictOnDelete();
+            $table->foreignId('fournisseur_id');
+            $table->foreignId('cree_par')->nullable()->constrained('users')->restrictOnDelete();
             // Le nom de cette personne au moment de l'opération (voir
             // FigeLeNomDeSesAuteurs) : l'historique ne le relit jamais sur
             // son compte.
@@ -84,6 +84,8 @@ return new class extends Migration
             $table->index(['magasin_id', 'tva_a_verifier']);
             $table->index(['magasin_id', 'piece_manquante']);
             $table->index(['magasin_id', 'statut', 'date_facture']);
+
+            $table->foreign(['magasin_id', 'fournisseur_id'])->references(['magasin_id', 'id'])->on('fournisseurs')->restrictOnDelete();
         });
 
         // Seule une société qui a des articles achète des marchandises

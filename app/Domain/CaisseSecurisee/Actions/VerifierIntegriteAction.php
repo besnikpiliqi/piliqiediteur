@@ -16,6 +16,7 @@ use App\Domain\CaisseSecurisee\Services\RapportIntegrite;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\CaisseSecurisee\Services\SignataireFiscal;
 use App\Domain\CaisseSecurisee\Services\VerificateurIntegrite;
+use App\Domain\Stock\Notifications\EcartDansLeStock;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Support\ValeursLues;
 use App\Models\User;
@@ -41,7 +42,9 @@ use Illuminate\Support\Facades\Log;
  * vérifie avec une clé épinglée ; sinon, s'il n'y en a jamais eu ou
  * qu'elle n'en note aucun, elle vérifie tout le registre, et s'inscrit
  * comme complète. Toute anomalie est en plus signalée au journal de
- * l'application (Log::critical), pour que l'éditeur intervienne.
+ * l'application (Log::critical), pour que l'éditeur intervienne ; un écart
+ * dans le stock (voir VerificateurDuStock) prévient aussi le propriétaire
+ * de la société, sans rien bloquer (décision de l'éditeur, Q-AUD1).
  *
  * Fermé par défaut : sans clé de signature, la vérification ne pourrait
  * pas s'inscrire au journal, elle est refusée avant de commencer.
@@ -123,6 +126,12 @@ class VerifierIntegriteAction
                     $rapport->anomalies(),
                 ),
             ]);
+        }
+
+        $ecartsDansLeStock = count(array_filter($rapport->anomalies(), static fn (AnomalieFiscale $anomalie): bool => $anomalie->controle === 'stock'));
+
+        if ($ecartsDansLeStock > 0) {
+            $magasin->societe?->proprietaire?->notify(new EcartDansLeStock($magasin, $ecartsDansLeStock));
         }
 
         return $rapport;

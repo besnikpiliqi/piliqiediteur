@@ -16,6 +16,7 @@ use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Stock\Notifications\EcartDansLeStock;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -132,7 +133,7 @@ class VerifierIntegriteActionTest extends TestCase
     {
         $magasin = $this->magasinActif();
         $ticket = $this->vendre();
-        DB::table('lignes_facture')->where('magasin_id', $magasin->id)->where('facture_id', $ticket->id)->update(['description' => 'Article réécrit']);
+        $this->falsifierMalgreLaGardeDesDocumentsEmis('lignes_facture', fn () => DB::table('lignes_facture')->where('magasin_id', $magasin->id)->where('facture_id', $ticket->id)->update(['description' => 'Article réécrit']));
         DB::table('sequences_documents')->where('magasin_id', $magasin->id)->where('type_document', 'ticket_caisse')->update(['prochain_numero' => 3]);
         Log::spy();
 
@@ -272,5 +273,30 @@ class VerifierIntegriteActionTest extends TestCase
         );
 
         $this->assertSame([[1, '260']], $this->journal());
+    }
+
+    /**
+     * Q-AUD1 (a) : un écart dans le stock trouvé par la vérification de
+     * chaque nuit prévient le propriétaire de la société, en plus de
+     * l'éditeur (journal de l'application) ; rien n'est bloqué, le magasin
+     * vend encore.
+     */
+    public function test_un_ecart_dans_le_stock_previent_le_proprietaire_sans_rien_bloquer(): void
+    {
+        $magasin = $this->magasinActif();
+        $produit = Produit::factory()->create(['reference' => 'CARNET', 'nom' => 'Carnet', 'prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => true, 'stock_quantite' => 5]);
+        $this->retirerLeDeclencheur('produits', 'produits_stock_par_le_grand_livre');
+        DB::table('produits')->where('id', $produit->id)->update(['stock_quantite' => 50]);
+        Log::spy();
+
+        $rapport = $this->verifier(true);
+
+        $this->assertFalse($rapport->estConforme());
+        Log::shouldHaveReceived('critical')->once();
+        $notification = $this->proprietaireDe($magasin)->notifications()->sole();
+        $this->assertSame(EcartDansLeStock::class, $notification->type);
+        $this->assertSame("{$magasin->nom} : Écart dans le stock", $notification->data['title']);
+        $this->vendre();
+        $this->assertSame(1, Facture::query()->whereNotNull('numero')->count());
     }
 }

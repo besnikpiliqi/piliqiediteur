@@ -10,8 +10,8 @@ return new class extends Migration
     {
         Schema::create('devis', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('magasin_id')->constrained('magasins')->cascadeOnDelete();
-            $table->foreignId('client_id')->constrained('clients')->restrictOnDelete();
+            $table->foreignId('magasin_id')->constrained('magasins')->restrictOnDelete();
+            $table->foreignId('client_id');
             // Le type du client (TypeClient), écrit à chaque enregistrement
             // du devis et repris par la facture qui en est tirée. Un devis
             // ne fige pas son client : il imprime sa fiche telle qu'elle
@@ -60,6 +60,9 @@ return new class extends Migration
             $table->unique(['magasin_id', 'numero']);
             $table->index(['magasin_id', 'statut']);
             $table->index(['magasin_id', 'client_id']);
+
+            $table->unique(['magasin_id', 'id']);
+            $table->foreign(['magasin_id', 'client_id'])->references(['magasin_id', 'id'])->on('clients')->restrictOnDelete();
         });
     }
 

@@ -41,7 +41,7 @@ return [
     /*
      | Le répertoire Sirene de l'INSEE, qui contrôle l'existence d'une
      | société et de ses établissements (voir InseeSirene et
-     | VerificationServiceProvider) : son pilote (insee, ou faux pour le
+     | FournisseursExternesServiceProvider) : son pilote (insee, ou faux pour le
      | développement et les tests, jamais en production), l'adresse de son
      | API, la clé d'intégration de l'éditeur (portail-api.insee.fr), et le
      | délai en secondes au-delà duquel il est tenu pour indisponible.
@@ -94,6 +94,16 @@ return [
      */
     'ordre' => [
         'pilote' => env('ORDRE_PILOTE', 'editeur'),
+    ],
+
+    /*
+     | La plateforme agréée de la facture électronique (voir
+     | PdpGatewayInterface et FournisseursExternesServiceProvider) : son
+     | pilote, faux seulement jusqu'au raccordement de SUPER PDP (étape 2 de
+     | la feuille de route), jamais en production ; sans valeur par défaut.
+     */
+    'pdp' => [
+        'pilote' => env('PDP_PILOTE'),
     ],
 
     /*

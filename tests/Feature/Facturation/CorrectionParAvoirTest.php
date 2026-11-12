@@ -69,6 +69,7 @@ class CorrectionParAvoirTest extends TestCase
     {
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'stock_quantite' => 10, 'suivi_stock' => true]);
+        $mouvementsAvant = $produit->mouvementsStock()->count();
         $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 4],
         ]);
@@ -77,6 +78,6 @@ class CorrectionParAvoirTest extends TestCase
 
         $this->assertModelMissing($brouillon);
         $this->assertSame(10, $produit->fresh()->stock_quantite);
-        $this->assertSame(0, $produit->mouvementsStock()->count());
+        $this->assertSame($mouvementsAvant, $produit->mouvementsStock()->count());
     }
 }

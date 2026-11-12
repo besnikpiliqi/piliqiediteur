@@ -266,7 +266,7 @@ class GestesPendantLaFermetureConcurrenceTest extends TestCase
         app(ChangerStatutCompteAction::class)->suspendre($this->proprietaireDe($magasin), $responsable);
 
         $this->assertInstanceOf(InvokedProcess::class, $concurrente);
-        $resultat = $concurrente->wait();
+        $resultat = $this->attendreLeProcessusConcurrent($concurrente);
         $this->assertTrue($resultat->failed(), $resultat->output());
         $this->assertStringContainsString(LecteurDesDroits::REFUS, $resultat->errorOutput());
         app(TenantContext::class)->set($magasin);
@@ -302,7 +302,7 @@ class GestesPendantLaFermetureConcurrenceTest extends TestCase
 
         $this->assertInstanceOf(InvokedProcess::class, $concurrente);
 
-        return $concurrente->wait();
+        return $this->attendreLeProcessusConcurrent($concurrente);
     }
 
     /**

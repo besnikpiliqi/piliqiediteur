@@ -1,6 +1,7 @@
 <?php
 
 use App\Domain\Achats\Support\GardesDesPiecesDuFournisseur;
+use App\Domain\CaisseSecurisee\Support\DeclencheursDeProtection;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -73,6 +74,8 @@ return new class extends Migration
             $table->index(['magasin_id', 'facture_achat_id']);
             $table->index(['magasin_id', 'avoir_fournisseur_id']);
         });
+
+        DeclencheursDeProtection::auMoins('pieces_fournisseur', 'taille', 0);
 
         GardesDesPiecesDuFournisseur::poser();
     }

@@ -51,7 +51,8 @@ use LogicException;
  *
  * Comme CreerDevisAction, elle reçoit le client déjà résolu par une
  * requête limitée au magasin, jamais un client_id brut venu du formulaire,
- * et note de nouveau son type, le régime de TVA du magasin et la nature de
+ * le relit dans le magasin actif avant toute écriture (voir
+ * BelongsToMagasin::relueDansLeMagasin()), et note de nouveau son type, le régime de TVA du magasin et la nature de
  * l'opération, avec lesquels les lignes se recalculent. Une remise ou un
  * prix dérogatoire que son auteur introduit exige qu'il soit autorisé à
  * accorder des remises et fixer les prix ; une ligne reprise telle quelle
@@ -95,6 +96,7 @@ class ModifierDevisAction
             }
 
             $this->lecteur->exiger($compte, 'update', $magasin, $devis);
+            $client = Client::relueDansLeMagasin($client, Client::REFUS_AUTRE_MAGASIN);
 
             return $this->operateur->pendant($compte, fn (): Devis => $this->modifier($compte, $magasin, $devis, $client, $lignes, $attributs));
         });

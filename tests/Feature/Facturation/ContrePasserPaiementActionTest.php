@@ -2,12 +2,18 @@
 
 namespace Tests\Feature\Facturation;
 
+use App\Domain\Achats\Actions\CreerAvoirFournisseurAction;
+use App\Domain\Achats\Actions\CreerFactureAchatAction;
+use App\Domain\Achats\Actions\EmettreAvoirFournisseurAction;
+use App\Domain\Achats\Actions\ModifierFactureAchatAction;
+use App\Domain\Achats\Actions\ValiderFactureAchatAction;
 use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\CaisseSecurisee\Services\VerificateurIntegrite;
 use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
+use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Facturation\Actions\CloturerCaisseAction;
 use App\Domain\Facturation\Actions\ContrePasserPaiementAction;
 use App\Domain\Facturation\Actions\CreerFactureAction;
@@ -16,6 +22,7 @@ use App\Domain\Facturation\Actions\EncaisserEnPlusieursModesAction;
 use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
 use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
 use App\Domain\Facturation\Actions\EnvoyerDocumentAction;
+use App\Domain\Facturation\Actions\FermerSaCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Jobs\EnvoyerDocumentJob;
@@ -23,9 +30,15 @@ use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Services\PartDeReglement;
+use App\Domain\Stock\Actions\CreerInventaireOuvertureAction;
+use App\Domain\Stock\Actions\ValiderInventaireOuvertureAction;
+use App\Domain\Tenancy\Actions\AnnulerCessionAction;
+use App\Domain\Tenancy\Actions\FermerMagasinAction;
+use App\Domain\Tenancy\Enums\MotifFermeture;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Scopes\MagasinScope;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\InterventionDeLEditeur;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Database\QueryException;
@@ -384,20 +397,31 @@ class ContrePasserPaiementActionTest extends TestCase
      * Le compte de l'application n'aura, en production, ni UPDATE ni
      * DELETE sur les tables en ajout seul (voir CLAUDE.md, étape 15) : or
      * PostgreSQL exige le droit de modifier pour un SELECT ... FOR UPDATE
-     * ou FOR SHARE. Aucune requête d'un paiement, d'un avoir ou d'une
-     * contre-passation ne verrouille donc une ligne de ces tables, que
+     * ou FOR SHARE. Aucune requête d'un paiement, d'un avoir, d'une
+     * contre-passation ou d'une clôture ne verrouille donc une ligne de ces
+     * tables, que
      * PostgreSQL désigne par leurs déclencheurs ; le verrou du registre
      * suffit à faire passer ces opérations une par une.
      */
     public function test_aucune_requete_ne_verrouille_une_ligne_d_une_table_en_ajout_seul(): void
     {
         $tablesEnAjoutSeul = collect(DB::select("select distinct c.relname as nom from pg_trigger t join pg_class c on c.oid = t.tgrelid where t.tgname like '%\\_ajout\\_seul\\_update'"))->pluck('nom')->sort()->values()->all();
-        $this->assertSame(['avoir_allocations', 'bordereaux_detaxe', 'changements_fin_exercice', 'consultations_vies', 'enregistrements_fiscaux', 'lignes_recu_paiement', 'paiement_allocations', 'paiements', 'preuves_operation', 'recus_paiement'], $tablesEnAjoutSeul);
+        $this->assertSame(['avoir_allocations', 'bordereaux_detaxe', 'changements_fin_exercice', 'clotures_caisse', 'clotures_caisse_personnelles', 'clotures_caisse_personnelles_factures', 'clotures_caisse_personnelles_paiements', 'consultations_vies', 'enregistrements_fiscaux', 'lignes_recu_paiement', 'mouvements_stock', 'paiement_allocations', 'paiements', 'preuves_operation', 'recus_paiement'], $tablesEnAjoutSeul);
         $verrous = [];
         DB::listen(static function (QueryExecuted $requete) use ($tablesEnAjoutSeul, &$verrous): void {
             $tables = implode('|', $tablesEnAjoutSeul);
+            // Une sous-requête (EXISTS, IN…) n'est pas verrouillée par le
+            // FOR UPDATE de la requête qui l'emploie : seules les tables de
+            // son FROM et de ses jointures le sont. Les parenthèses sont
+            // retirées, des plus intérieures aux plus extérieures, avant de
+            // chercher une table en ajout seul.
+            $sansSousRequetes = $requete->sql;
 
-            if (preg_match('/\bfor\s+(no\s+key\s+update|update|key\s+share|share)\b/i', $requete->sql) === 1 && preg_match('/\b(from|join)\s+"('.$tables.')"/i', $requete->sql) === 1) {
+            while (preg_match('/\([^()]*\)/', $sansSousRequetes) === 1) {
+                $sansSousRequetes = (string) preg_replace('/\([^()]*\)/', '', $sansSousRequetes);
+            }
+
+            if (preg_match('/\bfor\s+(no\s+key\s+update|update|key\s+share|share)\b/i', $sansSousRequetes) === 1 && preg_match('/\b(from|join)\s+"('.$tables.')"/i', $sansSousRequetes) === 1) {
                 $verrous[] = $requete->sql;
             }
         });
@@ -405,8 +429,48 @@ class ContrePasserPaiementActionTest extends TestCase
         ['ticket' => $ticket, 'bon' => $bon, 'errone' => $errone] = $this->paiementErroneQuiImputeDuCredit();
         $this->contrePasser($errone, 'Saisi sur le mauvais ticket');
         app(EncaisserEnPlusieursModesAction::class)->handle(self::auteur(), $ticket, [new PartDeReglement(ModePaiement::CarteBancaire, 3000)], [$bon->numero], Calendrier::deParis()->aujourdhui());
+        app(CloturerCaisseAction::class)->handle(self::auteur(), app(TenantContext::class)->magasin(), Calendrier::deParis()->aujourdhui());
+        $this->parcoursDuStockDUnAutreMagasin();
 
         $this->assertSame([], $verrous);
+    }
+
+    /**
+     * Les parcours qui écrivent le grand livre du stock, les relevés de
+     * caisse et les tickets Z, dans un autre magasin de la société, au
+     * nom de son responsable de test : inventaire d'ouverture, validation
+     * puis correction d'un achat, avoir fournisseur, vente et retour d'un
+     * produit suivi, fermeture de la caisse, clôture du jour, cession du
+     * magasin puis son annulation par la procédure de l'éditeur.
+     */
+    private function parcoursDuStockDUnAutreMagasin(): void
+    {
+        config(['editeur.operateurs' => [
+            'alice' => password_hash('secret-d-alice', PASSWORD_ARGON2ID, ['memory_cost' => 1024, 'time_cost' => 1, 'threads' => 1]),
+            'bruno' => password_hash('secret-de-bruno', PASSWORD_ARGON2ID, ['memory_cost' => 1024, 'time_cost' => 1, 'threads' => 1]),
+        ]]);
+        $magasin = $this->ouvrirUnAutreMagasin(app(TenantContext::class)->magasin(), ['nom' => 'Autre Boutique', 'code' => 'AUTR']);
+        app(TenantContext::class)->set($magasin);
+        $responsable = self::auteur();
+        app(ValiderInventaireOuvertureAction::class)->handle($responsable, app(CreerInventaireOuvertureAction::class)->handle($responsable, [
+            ['produit' => ['nom' => 'Stylo', 'reference' => 'STYLO', 'prix_vente_ttc' => '2.40', 'taux_tva' => '20'], 'quantite' => 6, 'cout_unitaire_ht' => '1.00'],
+        ]));
+        $carnet = Produit::factory()->create(['reference' => 'CARNET', 'prix_vente_ttc' => 6, 'taux_tva' => 20, 'suivi_stock' => true]);
+        $fournisseur = Fournisseur::factory()->create();
+        $achat = app(ValiderFactureAchatAction::class)->handle($responsable, app(CreerFactureAchatAction::class)->handle($responsable, $fournisseur, [
+            ['produit_id' => $carnet->id, 'quantite' => 10, 'prix_unitaire_ht' => '2'],
+        ], ['date_facture' => '2026-10-08']));
+        $achat = app(ModifierFactureAchatAction::class)->handle($responsable, $achat, $fournisseur, [['produit_id' => $carnet->id, 'quantite' => 9, 'prix_unitaire_ht' => '2']]);
+        app(EmettreAvoirFournisseurAction::class)->handle($responsable, app(CreerAvoirFournisseurAction::class)->handle($responsable, $achat, [['ligne_achat_id' => $achat->lignes()->sole()->id, 'quantite' => 1]], 'Abîmé'));
+        $ticket = self::vendreAuComptant($responsable, Client::factory()->create(), [['produit_id' => $carnet->id, 'quantite' => 3]]);
+        app(EnregistrerAvoirAction::class)->handle($responsable, $ticket->client()->firstOrFail(), [['ligne_facture_id' => $ticket->lignes()->sole()->id, 'quantite' => 1]], 'Retour');
+        app(FermerSaCaisseAction::class)->handle($responsable, $responsable);
+        app(CloturerCaisseAction::class)->handle($responsable, $magasin, Calendrier::deParis()->aujourdhui());
+        app(TenantContext::class)->clear();
+        app(FermerMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin->fresh() ?? $magasin, MotifFermeture::Cession, 'password', 'Autre Boutique');
+        $this->travelTo(self::aParis('2026-10-09 18:00:00'));
+        app(AnnulerCessionAction::class)->handle($magasin->fresh() ?? $magasin, new InterventionDeLEditeur('Cession saisie par erreur', 'DOSSIER-2026-0091', ['alice', 'bruno']));
+        $this->assertSame(9 - 1 - 3 + 1, app(TenantContext::class)->runAs($magasin, fn (): ?int => $carnet->fresh()?->stock_quantite));
     }
 
     /**

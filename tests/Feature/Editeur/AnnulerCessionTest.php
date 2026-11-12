@@ -7,9 +7,10 @@ use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Contacts\Models\Client;
 use App\Domain\Stock\Enums\TypeMouvementStock;
 use App\Domain\Stock\Models\MouvementStock;
-use App\Domain\Stock\Services\StockLedgerService;
+use App\Domain\Stock\Support\GardesDuStock;
 use App\Domain\Tenancy\Actions\AnnulerCessionAction;
 use App\Domain\Tenancy\Actions\FermerMagasinAction;
 use App\Domain\Tenancy\Actions\RouvrirMagasinAction;
@@ -20,7 +21,9 @@ use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\RegistreDesOperateurs;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\InterventionDeLEditeur;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Testing\PendingCommand;
 use LogicException;
 use Tests\TestCase;
@@ -83,7 +86,7 @@ class AnnulerCessionTest extends TestCase
         $stylo = $this->produitEnStock($autre, 'STYLO', 4, '1.25');
         $this->ceder($autre);
         $this->travelTo(self::aParis('2026-11-02 12:00:00'));
-        app(TenantContext::class)->runAs($autre, fn () => app(StockLedgerService::class)->ajuster($stylo->fresh(), 1, 'Mouvement après la cession'));
+        $this->ecrireUnMouvementApresLaCession($autre, $stylo);
 
         $this->assertThrows(fn () => app(AnnulerCessionAction::class)->handle($autre->fresh(), $this->editeur()), LogicException::class, AnnulerCessionAction::MESSAGE_OPERATION_POSTERIEURE);
         $this->assertTrue($autre->fresh()->aEteCede());
@@ -91,7 +94,7 @@ class AnnulerCessionTest extends TestCase
 
     /**
      * Une cession annulée, le magasin rouvert puis cédé de nouveau après
-     * une casse de trois carnets : la seconde annulation ne fait rentrer
+     * la vente de trois carnets : la seconde annulation ne fait rentrer
      * que les sept carnets de la dernière cession, au même coût, et non une
      * seconde fois les dix que la première annulation avait déjà rendus.
      */
@@ -103,7 +106,7 @@ class AnnulerCessionTest extends TestCase
         $this->travelTo(self::aParis('2026-11-02 11:00:00'));
         app(AnnulerCessionAction::class)->handle($magasin->fresh(), $this->editeur());
         app(RouvrirMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin->fresh(), 'password');
-        app(TenantContext::class)->runAs($magasin, fn () => app(StockLedgerService::class)->ajuster($carnet->fresh(), 7, 'Casse de trois carnets'));
+        app(TenantContext::class)->runAs($magasin, fn () => self::vendreAuComptant(self::responsableDeTest($magasin), Client::factory()->create(), [['produit_id' => $carnet->id, 'quantite' => 3]]));
         $this->travelTo(self::aParis('2026-11-02 12:00:00'));
         $this->ceder($magasin);
         $this->travelTo(self::aParis('2026-11-02 13:00:00'));
@@ -226,16 +229,35 @@ class AnnulerCessionTest extends TestCase
 
     /**
      * Un produit suivi en stock du magasin, à ce coût moyen, amené à cette
-     * quantité par un ajustement d'inventaire.
+     * quantité par l'inventaire d'ouverture de la fabrique.
      */
     private function produitEnStock(Magasin $magasin, string $reference, int $quantite, string $coutMoyen): Produit
     {
-        return app(TenantContext::class)->runAs($magasin, function () use ($reference, $quantite, $coutMoyen): Produit {
-            $produit = Produit::factory()->create(['reference' => $reference, 'cmup_ht' => $coutMoyen, 'suivi_stock' => true, 'seuil_alerte' => 0]);
-            app(StockLedgerService::class)->ajuster($produit, $quantite, 'Inventaire d\'ouverture');
+        return app(TenantContext::class)->runAs($magasin, fn (): Produit => Produit::factory()->create(['reference' => $reference, 'cmup_ht' => $coutMoyen, 'suivi_stock' => true, 'seuil_alerte' => 0, 'stock_quantite' => $quantite])->fresh() ?? throw new LogicException('Le produit en stock a disparu.'));
+    }
 
-            return $produit->fresh();
-        });
+    /**
+     * Un mouvement du grand livre écrit après la cession du magasin, comme
+     * le ferait un administrateur de la base : l'application n'en écrit
+     * aucun, et la base le refuse sans le document qui le justifie (preuve
+     * d'abord), puis le reçoit une fois sa garde levée le temps de la
+     * transaction du test.
+     */
+    private function ecrireUnMouvementApresLaCession(Magasin $magasin, Produit $produit): void
+    {
+        $mouvement = [
+            'magasin_id' => $magasin->id,
+            'produit_id' => $produit->id,
+            'type' => TypeMouvementStock::AjustementEntree->value,
+            'quantite' => 1,
+            'survenu_le' => now(),
+            'created_at' => now(),
+            'note' => 'Mouvement après la cession',
+        ];
+
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('mouvements_stock')->insert($mouvement)), QueryException::class, GardesDuStock::REFUS_SANS_JUSTIFICATIF);
+        $this->retirerLeDeclencheur('mouvements_stock', 'mouvements_stock_justifies');
+        DB::table('mouvements_stock')->insert($mouvement);
     }
 
     /**

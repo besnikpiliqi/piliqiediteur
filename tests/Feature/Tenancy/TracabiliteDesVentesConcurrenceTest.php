@@ -52,7 +52,7 @@ class TracabiliteDesVentesConcurrenceTest extends TestCase
         $venteDeLyon = self::vendreAuComptant($vendeur, Client::factory()->create(), [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes);
 
         $this->assertInstanceOf(InvokedProcess::class, $concurrente);
-        $resultat = $concurrente->wait();
+        $resultat = $this->attendreLeProcessusConcurrent($concurrente);
         $this->assertFalse($resultat->successful(), 'La vente de Villeurbanne aurait dû être refusée.');
         $this->assertStringContainsString('Fermez d\'abord votre caisse de Lyon : vous n\'encaissez que dans un magasin à la fois.', $resultat->errorOutput());
         $this->assertSame([[$venteDeLyon->id, $lyon->id]], Facture::withoutGlobalScope(MagasinScope::class)->get()->map(fn (Facture $vente): array => [$vente->id, $vente->magasin_id])->all());

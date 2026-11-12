@@ -2,7 +2,13 @@
 
 namespace Tests;
 
+use App\Domain\Achats\Actions\CreerAvoirFournisseurAction;
+use App\Domain\Achats\Actions\CreerFactureAchatAction;
+use App\Domain\Achats\Enums\StatutAvoirFournisseur;
+use App\Domain\Achats\Enums\StatutFactureAchat;
+use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Authorization\AutorisationsSociete;
+use App\Domain\Authorization\OperateurCourant;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Cabinets\Actions\AccepterLaDemandeDeLienAction;
 use App\Domain\Cabinets\Actions\AccepterLInvitationAction;
@@ -20,18 +26,32 @@ use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\CaisseSecurisee\Services\SignataireFiscal;
+use App\Domain\CaisseSecurisee\Support\HorlogeDuSysteme;
 use App\Domain\Calendrier\Calendrier;
+use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
+use App\Domain\Contacts\Models\Fournisseur;
+use App\Domain\Facturation\Actions\CreerAvoirAction;
+use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
+use App\Domain\Facturation\Enums\StatutAvoir;
+use App\Domain\Facturation\Enums\StatutFacture;
+use App\Domain\Facturation\Enums\TypeDocument;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\ApercuDuReglement;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\ConstructeurLigneDocument;
 use App\Domain\Facturation\Services\ContexteDeVente;
+use App\Domain\Facturation\Services\DocumentNumberingService;
 use App\Domain\Facturation\Services\PartDeReglement;
+use App\Domain\Facturation\Services\RecapitulatifDeCloture;
 use App\Domain\Facturation\Services\ReglementComptant;
+use App\Domain\Facturation\Support\GardesDesDocumentsEmis;
+use App\Domain\Stock\Enums\TypeMouvementStock;
+use App\Domain\Stock\Models\MouvementStock;
 use App\Domain\Stock\Services\ConfirmationVenteSansStock;
+use App\Domain\Stock\Services\StockLedgerService;
 use App\Domain\Tenancy\Actions\ChangerSonMotDePasseAction;
 use App\Domain\Tenancy\Actions\CorrigerSirenAction;
 use App\Domain\Tenancy\Actions\CreerAdministrateurAction;
@@ -63,8 +83,10 @@ use App\Domain\Tenancy\Models\VerificationSociete;
 use App\Domain\Tenancy\Services\ControleSirene;
 use App\Domain\Tenancy\Services\SiretsDesMagasins;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\CleDuModele;
 use App\Domain\Tenancy\Support\GardesDesDroits;
 use App\Domain\Tenancy\Support\InterventionDeLEditeur;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Integrations\EnvoiRecommande\Contracts\ServiceEnvoiRecommande;
 use App\Integrations\Ordre\Contracts\AnnuaireDeLOrdre;
 use App\Integrations\Ordre\FauxAnnuaireDeLOrdre;
@@ -81,9 +103,12 @@ use DateTimeImmutable;
 use DateTimeInterface;
 use DateTimeZone;
 use Filament\Facades\Filament;
+use Illuminate\Contracts\Process\ProcessResult;
+use Illuminate\Database\Connection;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Events\QueryExecuted;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
 use Illuminate\Foundation\Testing\Wormhole;
@@ -102,6 +127,7 @@ use InvalidArgumentException;
 use Laravel\SerializableClosure\SerializableClosure;
 use Livewire\Features\SupportTesting\Testable;
 use LogicException;
+use PDO;
 use Random\Engine\Xoshiro256StarStar;
 use Random\Randomizer;
 
@@ -176,6 +202,18 @@ abstract class TestCase extends BaseTestCase
         fake()->seed($this->graineDuTest());
         Str::createRandomStringsUsing(self::chainesAleatoiresSemees($this->graineDuTest()));
         Http::preventStrayRequests();
+        $this->app->instance(HorlogeDuSysteme::class, new class extends HorlogeDuSysteme
+        {
+            /**
+             * L'horloge du serveur de base, que la suite ne décale jamais
+             * (sous faketime non plus) : aucun test ne lit l'heure réelle de
+             * la machine (voir caisse:diagnostiquer).
+             */
+            public function secondes(): float
+            {
+                return (float) DB::scalar("select date_part('epoch', clock_timestamp())");
+            }
+        });
     }
 
     /**
@@ -870,18 +908,19 @@ abstract class TestCase extends BaseTestCase
      * (voir CreerAdministrateurAction), son mot de passe choisi : de tous
      * les magasins, ou de la sélection donnée, avec ces autorisations de
      * société et ces cases de magasin (le modèle de l'administrateur dans
-     * le type d'activité de la société à défaut).
+     * le type d'activité de la société à défaut), sous ce nom (tiré au
+     * hasard à défaut).
      *
      * @param  list<int>|null  $selection
      * @param  list<string>  $autorisationsSociete
      * @param  array<int|string, mixed>|null  $autorisationsMagasin
      */
-    protected function administrateur(Magasin $magasin, ?array $selection = null, array $autorisationsSociete = [], ?array $autorisationsMagasin = null): User
+    protected function administrateur(Magasin $magasin, ?array $selection = null, array $autorisationsSociete = [], ?array $autorisationsMagasin = null, ?string $nom = null): User
     {
         $compte = app(TenantContext::class)->runAs($magasin, fn (): User => app(CreerAdministrateurAction::class)->handle(
             $this->proprietaireDe($magasin),
             $magasin->societe()->firstOrFail(),
-            ['name' => fake()->name()],
+            ['name' => $nom ?? fake()->name()],
             $selection,
             $autorisationsMagasin ?? PermissionRegistry::modeleDeLAdministrateur($magasin->societe->type_activite),
             $autorisationsSociete,
@@ -1340,6 +1379,121 @@ abstract class TestCase extends BaseTestCase
     }
 
     /**
+     * Le document réel du magasin actif qui justifie un mouvement du grand
+     * livre de ce type pour ce produit, de $quantite articles (voir
+     * TypeMouvementStock::justificatif()), dans l'état que la base exige,
+     * sans faire bouger le stock : un test du grand livre appelle ensuite
+     * StockLedgerService lui-même, au nom de l'auteur de ce document (voir
+     * commeAuteurDuDocument()). Le brouillon naît de son action, au nom de
+     * $auteur (par défaut le responsable de test du magasin, qui vend et
+     * achète, quel que soit le compte connecté), puis se numérote et s'émet, ou se valide, comme
+     * son action le ferait, sans l'événement qui inscrirait le mouvement.
+     * Une vente est une facture émise ; un retour client, la ligne d'un
+     * avoir émis sur une vente dont les articles sont déjà sortis du stock
+     * (le mouvement de la vente est inscrit) ; une réception et
+     * l'ajustement qui la corrige, une facture d'achat validée au prix
+     * unitaire HT donné ; un retour au fournisseur, un avoir fournisseur
+     * émis sur une telle facture.
+     */
+    protected function justificatifDuStock(TypeMouvementStock $type, Produit $produit, int $quantite, string $prixUnitaireHt = '2', ?User $auteur = null): Model
+    {
+        $magasin = app(TenantContext::class)->magasin();
+        $auteur ??= self::responsableDeTest($magasin);
+        $maintenant = now();
+        $numero = fn (TypeDocument $document): string => app(DocumentNumberingService::class)->suivant($magasin, $document, $magasin->calendrier()->anneeDe($maintenant));
+
+        return match ($type) {
+            TypeMouvementStock::Vente => $this->venteEmiseSansMouvement($auteur, $produit, $quantite, $numero),
+            TypeMouvementStock::RetourClient => (function () use ($auteur, $produit, $quantite, $numero, $maintenant) {
+                $vente = $this->venteEmiseSansMouvement($auteur, $produit, $quantite, $numero);
+                $this->commeAuteurDuDocument(fn () => app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::Vente, $quantite, $vente), $auteur);
+                $avoir = app(CreerAvoirAction::class)->handle($auteur, ValeurRequise::de($vente->client, 'le client de la vente'), [['ligne_facture_id' => $vente->lignes->sole()->id, 'quantite' => $quantite]]);
+                $avoir->forceFill(['numero' => $numero(TypeDocument::Avoir), 'statut' => StatutAvoir::Emise, 'date_emission' => $maintenant])->save();
+
+                return $avoir->lignes()->sole();
+            })(),
+            TypeMouvementStock::ReceptionAchat, TypeMouvementStock::AjustementEntree, TypeMouvementStock::AjustementSortie => $this->achatValideSansMouvement($auteur, $produit, $quantite, $prixUnitaireHt, $numero),
+            TypeMouvementStock::RetourFournisseur => (function () use ($auteur, $produit, $quantite, $prixUnitaireHt, $numero, $maintenant) {
+                $achat = $this->achatValideSansMouvement($auteur, $produit, $quantite, $prixUnitaireHt, $numero);
+                $avoir = app(CreerAvoirFournisseurAction::class)->handle($auteur, $achat, [['ligne_achat_id' => $achat->lignes()->sole()->id, 'quantite' => $quantite]], 'Retour');
+                $avoir->forceFill(['numero' => $numero(TypeDocument::AvoirFournisseur), 'statut' => StatutAvoirFournisseur::Emise, 'date_emission' => $maintenant])->save();
+
+                return $avoir;
+            })(),
+            default => throw new LogicException("Le justificatif d'un mouvement {$type->value} se prépare par son action (inventaire d'ouverture, cession)."),
+        };
+    }
+
+    /**
+     * Un stock négatif, qui ne naît que d'une vente sans stock (voir
+     * ProduitFactory::REFUS_STOCK_NEGATIF) : $quantite articles du produit
+     * vendus au comptant au client comptoir par le responsable de test du
+     * magasin actif, toujours autorisé à vendre sans stock, l'avertissement
+     * confirmé. Statique : un processus concurrent l'appelle aussi.
+     */
+    protected static function vendreJusquAuStockNegatif(Produit $produit, int $quantite): Facture
+    {
+        $stockApres = (int) Produit::withTrashed()->whereKey($produit->getKey())->value('stock_quantite') - $quantite;
+
+        return self::vendreAuComptant(self::responsableDeTest(app(TenantContext::class)->magasin()), Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => $quantite]], confirmation: new ConfirmationVenteSansStock([CleDuModele::de($produit) => $stockApres]));
+    }
+
+    /**
+     * Une vente de $quantite articles du produit qui les fait sortir du
+     * stock : une facture émise par le responsable de test (voir
+     * justificatifDuStock()) et son mouvement du grand livre, comme son
+     * émission les inscrirait.
+     */
+    protected function sortirParUneVente(Produit $produit, int $quantite): MouvementStock
+    {
+        $vente = $this->justificatifDuStock(TypeMouvementStock::Vente, $produit, $quantite);
+
+        return $this->commeAuteurDuDocument(fn (): MouvementStock => app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::Vente, $quantite, $vente));
+    }
+
+    /**
+     * Le mouvement du grand livre inscrit au nom de l'auteur de son
+     * document ($auteur, le responsable de test du magasin par défaut),
+     * comme l'action du
+     * document le ferait (voir StockLedgerService et
+     * ProvenanceDesMouvements).
+     *
+     * @template T
+     *
+     * @param  Closure(): T  $mouvement
+     * @return T
+     */
+    protected function commeAuteurDuDocument(Closure $mouvement, ?User $auteur = null): mixed
+    {
+        return app(OperateurCourant::class)->pendant($auteur ?? self::responsableDeTest(app(TenantContext::class)->magasin()), $mouvement);
+    }
+
+    /**
+     * @param  Closure(TypeDocument): string  $numero
+     */
+    private function venteEmiseSansMouvement(User $auteur, Produit $produit, int $quantite, Closure $numero): Facture
+    {
+        $vente = app(CreerFactureAction::class)->handle($auteur, Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => $quantite]]);
+        $vente->forceFill(['numero' => $numero(TypeDocument::Facture), 'statut' => StatutFacture::Emise, 'date_emission' => now()])->save();
+
+        return $vente->load('lignes', 'client');
+    }
+
+    /**
+     * @param  Closure(TypeDocument): string  $numero
+     */
+    private function achatValideSansMouvement(User $auteur, Produit $produit, int $quantite, string $prixUnitaireHt, Closure $numero): FactureAchat
+    {
+        $achat = app(CreerFactureAchatAction::class)->handle($auteur, Fournisseur::factory()->create(), [
+            ['produit_id' => $produit->id, 'quantite' => $quantite, 'prix_unitaire_ht' => $prixUnitaireHt],
+        ], ['date_facture' => Calendrier::deParis()->aujourdhui()]);
+        $achat->forceFill(['numero' => $numero(TypeDocument::FactureAchat), 'statut' => StatutFactureAchat::Validee, 'date_validation' => now(), 'piece_manquante' => true])->save();
+        $produit->rattacherAuFournisseur($achat->fournisseur_id);
+
+        return $achat;
+    }
+
+    /**
      * Une vente à la caisse réglée d'un seul mode pour tout ce qui reste à
      * payer, une fois imputés le crédit du client et les bons d'avoir
      * présentés, comme la caisse le propose (voir
@@ -1520,6 +1674,29 @@ abstract class TestCase extends BaseTestCase
     }
 
     /**
+     * Le contenu entier de ces tables, tous magasins confondus, chaque ligne
+     * en JSON, dans un ordre stable : deux instantanés égaux disent qu'une
+     * opération refusée n'a rien écrit, ni ligne ajoutée, ni ligne changée,
+     * ni ligne effacée. Une table absente de la liste n'est pas vérifiée :
+     * chaque test y met toutes les tables qu'écrit le geste.
+     *
+     * @return array<string, list<string>>
+     */
+    protected function instantaneDesTables(string ...$tables): array
+    {
+        $instantane = [];
+
+        foreach ($tables as $table) {
+            $instantane[$table] = array_map(
+                static fn (object $ligne): string => (string) $ligne->ligne,
+                DB::select("select to_jsonb(t)::text as ligne from {$table} t order by 1"),
+            );
+        }
+
+        return $instantane;
+    }
+
+    /**
      * L'instant présent à l'horloge du serveur de base de données, en UTC à
      * la seconde : celle que lisent les déclencheurs qui ne laissent
      * effacer une ligne qu'une fois expirée (voir DeclencheursDeProtection).
@@ -1559,6 +1736,88 @@ abstract class TestCase extends BaseTestCase
     protected function retirerLeDeclencheur(string $table, string $declencheur): void
     {
         DB::unprepared("DROP TRIGGER {$declencheur} ON {$table}");
+    }
+
+    /**
+     * Un ticket Z écrit directement dans la base, sans la clôture de sa
+     * journée ni son événement 50 au journal des événements, comme le
+     * ferait un administrateur de la base : une journée à zéro, sans
+     * auteur, aux séquences nulles. Le déclencheur différé qui refuse un
+     * ticket Z sans sa clôture signée ne joue qu'à la validation de la
+     * transaction, que celle du test n'atteint jamais (voir
+     * InalterabiliteTest::test_la_base_refuse_un_ticket_z_sans_sa_cloture_signee()).
+     *
+     * @param  string  $journee  AAAA-MM-JJ
+     * @param  array<string, mixed>  $colonnes
+     */
+    protected function insererUnFauxTicketZ(Magasin $magasin, string $journee, string $numero, CarbonImmutable $clotureeA, array $colonnes = []): int
+    {
+        return DB::table('clotures_caisse')->insertGetId([
+            'magasin_id' => $magasin->id,
+            'numero' => $numero,
+            'date_cloture' => $journee,
+            'recapitulatif' => json_encode(RecapitulatifDeCloture::vide(), JSON_THROW_ON_ERROR),
+            'cloturee_a' => $clotureeA->utc()->format('Y-m-d H:i:s'),
+            'created_at' => $clotureeA,
+            'updated_at' => $clotureeA,
+            ...$colonnes,
+        ]);
+    }
+
+    /**
+     * L'écriture, faite dans un point de sauvegarde, est refusée par la clé
+     * composée qui garde cette référence dans son magasin (voir
+     * ReferencesEntreMagasinsEnBaseTest) : état 23503 et nom de la
+     * contrainte dans le message du pilote.
+     */
+    protected function assertRefuseeParLaCleDuMagasin(Closure $ecriture, string $table, string $colonne): void
+    {
+        try {
+            $this->dansUnPointDeSauvegarde($ecriture)();
+        } catch (QueryException $refus) {
+            $this->assertSame('23503', $refus->errorInfo[0] ?? null, $refus->getMessage());
+            $this->assertStringContainsString("\"{$table}_magasin_id_{$colonne}_foreign\"", (string) ($refus->errorInfo[2] ?? ''));
+
+            return;
+        }
+
+        $this->fail("La clé de {$table}.{$colonne} accepte une ligne d'un autre magasin.");
+    }
+
+    /**
+     * Retire la clé composée qui garde cette référence dans son magasin,
+     * comme le ferait le propriétaire des tables, pour fabriquer le temps
+     * d'un test une référence vers la ligne d'un autre magasin et éprouver
+     * ce qui doit la détecter ou l'ignorer. Le DDL de PostgreSQL est
+     * transactionnel : le retour en arrière de la transaction du test la
+     * rétablit. Le test prouve d'abord le refus de la base (voir
+     * assertRefuseeParLaCleDuMagasin()).
+     */
+    protected function falsifierMalgreLaCleDuMagasin(string $table, string $colonne): void
+    {
+        DB::unprepared("ALTER TABLE {$table} DROP CONSTRAINT {$table}_magasin_id_{$colonne}_foreign");
+    }
+
+    /**
+     * Fait cette écriture sur un document émis ou ses lignes malgré la
+     * garde de la base (voir GardesDesDocumentsEmis), comme le ferait le
+     * propriétaire des tables, pour éprouver ce qui doit la détecter :
+     * prouve d'abord que la garde la refuse, dans un point de sauvegarde,
+     * puis la retire le temps du test (le DDL est annulé avec la
+     * transaction du test) et fait l'écriture.
+     */
+    protected function falsifierMalgreLaGardeDesDocumentsEmis(string $table, Closure $ecriture): void
+    {
+        try {
+            $this->dansUnPointDeSauvegarde($ecriture)();
+            $this->fail("La garde des documents émis de {$table} accepte cette écriture.");
+        } catch (QueryException $refus) {
+            $this->assertSame('P0001', $refus->errorInfo[0] ?? null, $refus->getMessage());
+            $this->assertStringContainsString(GardesDesDocumentsEmis::nom($table).'()', $refus->getMessage());
+        }
+
+        $this->retirerLeDeclencheur($table, GardesDesDocumentsEmis::nom($table));
+        $ecriture();
     }
 
     /**
@@ -1687,28 +1946,122 @@ abstract class TestCase extends BaseTestCase
 
     /**
      * Attend que l'autre processus attende un verrou que tient le test, ou
-     * qu'il ait fini, dix secondes au plus. L'attente se lit dans
-     * pg_stat_activity par une connexion à part, hors de la transaction du
-     * test, fermée ensuite. Elle porte son propre nom : fermée sous celui
-     * de la connexion du test, elle effacerait du gestionnaire de
-     * transactions celles que l'opération du test a ouvertes.
+     * qu'il ait fini, $limite secondes au plus (dix par défaut) ; à la
+     * limite, un processus qui tourne encore sans attendre de verrou fait
+     * échouer le test, avec ce que fait la base : sinon le test, croyant
+     * l'opération concurrente arrêtée sur le verrou, deviendrait
+     * séquentiel sans le dire (constat C69 des audits du 07/11/2026).
+     * L'attente se lit dans pg_stat_activity par une connexion
+     * d'observation à part (voir observerLaBase()).
      */
-    protected function attendreQueLeProcessusAttendeUnVerrou(InvokedProcess $processus): void
+    protected function attendreQueLeProcessusAttendeUnVerrou(InvokedProcess $processus, int $limite = 10): void
     {
-        $observateur = DB::getDefaultConnection().'_observateur';
-        config(["database.connections.{$observateur}" => [...DB::connection()->getConfig(), 'name' => $observateur]]);
-        $limite = microtime(true) + 10;
+        $fin = hrtime(true) + $limite * 1_000_000_000;
 
-        try {
-            while ($processus->running() && microtime(true) < $limite) {
-                $attentes = DB::connection($observateur)->selectOne("select count(*) as nombre from pg_stat_activity where datname = current_database() and wait_event_type = 'Lock'")->nombre;
-
-                if ($attentes > 0) {
+        $this->observerLaBase(function (Connection $observation) use ($processus, $fin, $limite): void {
+            while ($processus->running()) {
+                if ((int) $observation->selectOne("select count(*) as nombre from pg_stat_activity where datname = current_database() and wait_event_type = 'Lock'")->nombre > 0) {
                     return;
+                }
+
+                if (hrtime(true) >= $fin) {
+                    $etat = self::lireLEtatDeLaBase($observation);
+                    $processus->stop(0);
+                    $this->fail("Au bout de {$limite} s, l'autre processus tourne sans attendre de verrou que tient le test : l'opération concurrente ne passerait pas après celle du test.\n{$etat}\nSortie de l'autre processus :\n".$processus->output().$processus->errorOutput());
                 }
 
                 usleep(20_000);
             }
+        });
+    }
+
+    /**
+     * Attend la fin de l'autre processus (voir
+     * demarrerUnProcessusConcurrent()), $limite secondes au plus, en le
+     * sondant ; à l'expiration, relève d'abord ce que fait la base (voir
+     * etatDeLaBase()), puis arrête l'autre processus et fait échouer le
+     * test avec ces lignes, sa sortie et la durée de chacune de ses étapes
+     * (amorçage, connexion, opération), qu'il écrit au fil de l'eau
+     * (constat C42 des audits du 07/11/2026 : un dépassement sans aucun
+     * diagnostic).
+     */
+    protected function attendreLeProcessusConcurrent(InvokedProcess $processus, int $limite = 60): ProcessResult
+    {
+        $fin = hrtime(true) + $limite * 1_000_000_000;
+
+        while ($processus->running()) {
+            if (hrtime(true) >= $fin) {
+                $etat = $this->etatDeLaBase();
+                $processus->stop(0);
+                $this->fail("L'autre processus n'a pas fini en {$limite} s.\n{$etat}\nSortie de l'autre processus :\n".$processus->output().$processus->errorOutput());
+            }
+
+            usleep(20_000);
+        }
+
+        return $processus->wait();
+    }
+
+    /**
+     * L'erreur sur laquelle l'autre processus a échoué, sans les lignes de
+     * ses étapes (amorçage, connexion à la base, opération) qu'il écrit
+     * avant elle sur sa sortie d'erreur (voir
+     * tests/Fixtures/processus-concurrent.php).
+     */
+    protected static function erreurDuProcessus(ProcessResult $resultat): string
+    {
+        return (string) preg_replace('/^(?:amorçage|connexion à la base|opération) : \d+ ms\n/mu', '', $resultat->errorOutput());
+    }
+
+    /**
+     * Ce que fait la base du test, lu par une connexion d'observation :
+     * chaque autre session (pid, état, attente, requête, processus qui la
+     * bloquent) et chaque verrou demandé et pas encore accordé.
+     */
+    protected function etatDeLaBase(): string
+    {
+        return $this->observerLaBase(self::lireLEtatDeLaBase(...));
+    }
+
+    private static function lireLEtatDeLaBase(Connection $observation): string
+    {
+        $sessions = $observation->select('select pid, state, wait_event_type, wait_event, pg_blocking_pids(pid)::text as bloquee_par, left(query, 300) as requete from pg_stat_activity where datname = current_database() and pid <> pg_backend_pid() order by pid');
+        $verrous = $observation->select('select pid, locktype, mode, relation::regclass::text as relation from pg_locks where not granted order by pid');
+        $lignes = ['Sessions de la base :'];
+
+        foreach ($sessions as $session) {
+            $lignes[] = "- pid {$session->pid}, état {$session->state}, attente ".($session->wait_event_type ?? 'aucune').'/'.($session->wait_event ?? '-').", bloquée par {$session->bloquee_par} : {$session->requete}";
+        }
+
+        $lignes[] = 'Verrous non accordés :';
+
+        foreach ($verrous as $verrou) {
+            $lignes[] = "- pid {$verrou->pid} attend un verrou {$verrou->locktype} {$verrou->mode}".($verrou->relation !== null ? " sur {$verrou->relation}" : '');
+        }
+
+        return implode("\n", $lignes);
+    }
+
+    /**
+     * Une lecture par une connexion d'observation à part, hors de la
+     * transaction du test, ouverte en 5 s au plus, puis fermée. Elle porte
+     * son propre nom : fermée sous celui de la connexion du test, elle
+     * effacerait du gestionnaire de transactions celles que l'opération du
+     * test a ouvertes.
+     *
+     * @template T
+     *
+     * @param  Closure(Connection): T  $lecture
+     * @return T
+     */
+    private function observerLaBase(Closure $lecture): mixed
+    {
+        $observateur = DB::getDefaultConnection().'_observateur';
+        $configuration = DB::connection()->getConfig();
+        config(["database.connections.{$observateur}" => [...$configuration, 'name' => $observateur, 'options' => [...($configuration['options'] ?? []), PDO::ATTR_TIMEOUT => 5]]]);
+
+        try {
+            return $lecture(DB::connection($observateur));
         } finally {
             DB::purge($observateur);
         }

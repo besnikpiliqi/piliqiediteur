@@ -5,7 +5,6 @@ namespace App\Domain\Achats\Actions;
 use App\Domain\Achats\Enums\StatutFactureAchat;
 use App\Domain\Achats\Exceptions\ConfirmationDesEcartsRequiseException;
 use App\Domain\Achats\Models\FactureAchat;
-use App\Domain\Achats\Models\LigneAchat;
 use App\Domain\Achats\Services\ConstructeurLigneAchat;
 use App\Domain\Achats\Services\MontantsDuFournisseur;
 use App\Domain\Achats\Services\PiecesDuFournisseur;
@@ -53,8 +52,9 @@ use LogicException;
  *
  * Comme CreerFactureAchatAction, elle reçoit le fournisseur déjà résolu par
  * une requête limitée au magasin, jamais un fournisseur_id brut venu du
- * formulaire ; elle le relit sous un verrou partagé, après la facture
- * d'achat : archivé depuis que l'écran l'a lu, ou par une requête
+ * formulaire ; elle le relit dans le magasin actif sous un verrou partagé,
+ * après la facture d'achat, et refuse celui d'un autre magasin, même déjà
+ * chargé ou avec son magasin_id changé en mémoire : archivé depuis que l'écran l'a lu, ou par une requête
  * simultanée qui passe avant ce verrou, il est vu ; archivé ensuite, il
  * attend la fin de la correction (voir ArchiverUneFicheAction). Quand une
  * ligne change le taux de TVA d'un produit, le
@@ -132,6 +132,7 @@ class ModifierFactureAchatAction
      * @param  list<PieceDeposee>  $pieces  les pièces du fournisseur ajoutées à la saisie (voir PiecesDuFournisseur)
      *
      * @throws AuthorizationException
+     * @throws LogicException quand le fournisseur n'est pas un fournisseur du magasin, ou que la facture d'achat n'est plus modifiable
      * @throws ConfirmationDesEcartsRequiseException
      * @throws FichierRefuseException quand une pièce est refusée par ses contrôles, avant toute écriture
      */
@@ -164,7 +165,8 @@ class ModifierFactureAchatAction
             $this->lecteur->exiger($compte, 'update', $magasin, $factureAchat);
 
             $estValidee = $factureAchat->statut === StatutFactureAchat::Validee;
-            $fournisseur = Fournisseur::withTrashed()->whereKey($fournisseur->getKey())->sharedLock()->firstOrFail();
+            $fournisseur = Fournisseur::withTrashed()->whereKey($fournisseur->getKey())->sharedLock()->first()
+                ?? throw new LogicException(Fournisseur::REFUS_AUTRE_MAGASIN);
 
             // Les produits que la réception a reçus et ceux que sa correction
             // reçoit, relus sous verrou avant d'être contrôlés : un archivage
@@ -244,30 +246,12 @@ class ModifierFactureAchatAction
                 $factureAchat,
                 in_array($produitId, $produitsAvant, true),
                 $quantitesApres->get($produitId, 0),
-                $this->lotsDesReceptions($produit),
+                $this->stockLedger->lotsDesReceptions($produit),
                 "Correction de la facture d'achat {$factureAchat->numero}",
             );
 
             $dernierAchat = $produit->dernierAchatValide();
             $produit->rattacherAuFournisseur($dernierAchat === null ? null : ValeurRequise::de($dernierAchat->factureAchat, 'la facture d\'achat du dernier achat validé')->fournisseur_id);
         }
-    }
-
-    /**
-     * Les lignes de chaque facture d'achat validée du produit, au coût que
-     * chacune a réellement payé (voir LigneAchat::coutUnitaireHt()), de la
-     * réception la plus ancienne à la plus récente.
-     *
-     * @return array<int, list<array{quantite: int, cout_unitaire: int}>> chaque coût en dix-millièmes d'euro
-     */
-    private function lotsDesReceptions(Produit $produit): array
-    {
-        $lots = [];
-
-        foreach ($produit->achatsValides()->with('factureAchat')->get() as $ligne) {
-            $lots[$ligne->facture_achat_id][] = ['quantite' => $ligne->quantite, 'cout_unitaire' => $ligne->coutUnitaireHt()];
-        }
-
-        return $lots;
     }
 }

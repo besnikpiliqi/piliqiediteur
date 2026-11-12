@@ -74,7 +74,7 @@ class BrouillonDeFactureConcurrenceTest extends TestCase
         self::faire($premier, $magasinId, $factureId, $produitId);
 
         $this->assertInstanceOf(InvokedProcess::class, $concurrente);
-        $resultat = $concurrente->wait();
+        $resultat = $this->attendreLeProcessusConcurrent($concurrente);
         $this->assertSame($refus !== null, $resultat->failed(), $resultat->errorOutput());
 
         if ($refus !== null) {

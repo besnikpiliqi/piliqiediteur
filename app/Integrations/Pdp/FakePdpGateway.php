@@ -10,17 +10,27 @@ use App\Integrations\Pdp\Contracts\PdpGatewayInterface;
 use App\Integrations\Pdp\Contracts\ResultatMandatPdp;
 use App\Integrations\Pdp\Contracts\ResultatSoumissionPdp;
 use App\Integrations\Pdp\Enums\StatutTransmissionPdp;
+use App\Integrations\Pdp\Models\TransmissionPdp;
 use Illuminate\Support\Str;
 
 /**
- * Passerelle factice : accepte tout instantanément. Permet de développer et
- * tester tout le pipeline (mandat, émission, transmission) sans dépendre
- * d'un réseau externe. L'implémentation SUPER PDP (étape 2 de la feuille
- * de route) la remplacera, en changeant uniquement le binding dans
- * PdpServiceProvider.
+ * Passerelle factice (pilote « faux », voir
+ * FournisseursExternesServiceProvider) : accepte tout instantanément, sans
+ * aucune requête, et garde chaque dépôt sous sa référence, comme la
+ * plateforme le ferait : un second dépôt sous la même référence rend le
+ * premier. Elle permet de développer et de tester tout le circuit (mandat,
+ * émission, transmission) ; l'implémentation SUPER PDP (étape 2 de la
+ * feuille de route) la remplacera, par un nouveau pilote.
  */
 class FakePdpGateway implements PdpGatewayInterface
 {
+    /**
+     * Les dépôts reçus, par référence.
+     *
+     * @var array<string, ResultatSoumissionPdp>
+     */
+    private array $depots = [];
+
     public function creerMandat(Magasin $magasin): ResultatMandatPdp
     {
         return new ResultatMandatPdp(
@@ -35,12 +45,17 @@ class FakePdpGateway implements PdpGatewayInterface
         // revoque_a) est gérée par RevokerMandatPdpAction.
     }
 
-    public function soumettreFacture(Facture $facture): ResultatSoumissionPdp
+    public function soumettreFacture(Facture $facture, string $referenceDepot): ResultatSoumissionPdp
     {
-        return new ResultatSoumissionPdp(
+        return $this->depots[$referenceDepot] ??= new ResultatSoumissionPdp(
             statut: StatutTransmissionPdp::Acceptee,
             transmissionExterneId: 'FAKE-TRANSMISSION-'.Str::uuid(),
             format: 'facturx',
         );
+    }
+
+    public function retrouverDepot(TransmissionPdp $transmission): ?ResultatSoumissionPdp
+    {
+        return $this->depots[$transmission->reference_depot] ?? null;
     }
 }

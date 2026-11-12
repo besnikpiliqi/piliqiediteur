@@ -17,7 +17,7 @@ use App\Integrations\Rne\RneIndisponibleException;
  * (voir AccepterLInvitationAction).
  *
  * Une implémentation factice (FauxRne) sert au développement et aux tests,
- * jamais en production (voir VerificationServiceProvider).
+ * jamais en production (voir FournisseursExternesServiceProvider).
  */
 interface RegistreNationalDesEntreprises
 {

@@ -57,7 +57,8 @@ use LogicException;
  *
  * Comme CreerFactureAction, elle reçoit le client déjà résolu par une
  * requête limitée au magasin, jamais un client_id brut venu du formulaire,
- * et note de nouveau son type, le régime de TVA de la société et la nature de
+ * le relit dans le magasin actif avant toute écriture (voir
+ * BelongsToMagasin::relueDansLeMagasin()), et note de nouveau son type, le régime de TVA de la société et la nature de
  * l'opération, avec lesquels les lignes se recalculent : un brouillon
  * réenregistré après que
  * son client a changé de type s'émet dans l'autre série, et celui
@@ -110,6 +111,7 @@ class ModifierFactureAction
             }
 
             $this->lecteur->exiger($compte, 'update', $magasin, $facture);
+            $client = Client::relueDansLeMagasin($client, Client::REFUS_AUTRE_MAGASIN);
 
             return $this->operateur->pendant($compte, fn (): Facture => $this->modifier($compte, $facture, $client, $lignes, $attributs));
         });

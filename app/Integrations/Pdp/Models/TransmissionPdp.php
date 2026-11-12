@@ -8,7 +8,15 @@ use App\Integrations\Pdp\Enums\StatutTransmissionPdp;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
+use Illuminate\Support\Str;
 
+/**
+ * Une transmission d'un document à la plateforme agréée (une facture
+ * aujourd'hui), avec l'historique de ses états (voir
+ * EvenementTransmissionPdp). Sa référence de dépôt est tirée à sa
+ * création et ne change plus : chaque reprise après une panne dépose sous
+ * elle (voir SubmitFactureToPdpJob).
+ */
 class TransmissionPdp extends Model
 {
     use BelongsToMagasin;
@@ -40,6 +48,7 @@ class TransmissionPdp extends Model
     {
         static::creating(function (TransmissionPdp $transmission) {
             $transmission->statut ??= StatutTransmissionPdp::Soumise;
+            $transmission->reference_depot = (string) Str::uuid();
         });
     }
 

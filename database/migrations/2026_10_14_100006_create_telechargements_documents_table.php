@@ -1,5 +1,6 @@
 <?php
 
+use App\Domain\CaisseSecurisee\Support\DeclencheursDeProtection;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -66,6 +67,9 @@ return new class extends Migration
             $table->index(['demande_par', 'created_at']);
             $table->index('expire_le');
         });
+
+        DeclencheursDeProtection::auMoins('telechargements_documents', 'nombre_documents', 0);
+        DeclencheursDeProtection::auMoins('telechargements_documents', 'taille', 0);
     }
 
     public function down(): void

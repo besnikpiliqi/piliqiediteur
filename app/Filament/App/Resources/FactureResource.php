@@ -373,14 +373,14 @@ class FactureResource extends Resource
                     ->visible(fn (Facture $record) => ! $record->relevantDeLeInvoicing()),
                 TextEntry::make('transmission_pdp_statut')
                     ->label('Statut de transmission au PDP')
-                    ->state(fn (Facture $record) => $record->transmissionsPdp->sortByDesc('soumise_le')->first()?->statut)
+                    ->state(fn (Facture $record) => $record->derniereTransmissionPdp()?->statut)
                     ->badge()
                     ->placeholder('Pas encore transmise')
                     ->visible(fn (Facture $record) => $record->relevantDeLeInvoicing()),
                 TextEntry::make('transmission_pdp_erreur')
-                    ->label('Détail')
-                    ->state(fn (Facture $record) => $record->transmissionsPdp->sortByDesc('soumise_le')->first()?->message_erreur)
-                    ->visible(fn (Facture $record) => filled($record->transmissionsPdp->sortByDesc('soumise_le')->first()?->message_erreur)),
+                    ->label('Explication')
+                    ->state(fn (Facture $record) => $record->derniereTransmissionPdp()?->message_erreur)
+                    ->visible(fn (Facture $record) => filled($record->derniereTransmissionPdp()?->message_erreur)),
             ]),
 
             InfolistSection::make('Avoirs émis')

@@ -18,7 +18,7 @@ class MandatPdpFactory extends Factory
     {
         return [
             'magasin_id' => Magasin::factory(),
-            'prestataire_pdp' => 'fake',
+            'prestataire_pdp' => 'faux',
             'statut' => StatutMandatPdp::Active,
             'perimetre' => 'both',
             'mandat_externe_id' => 'FAKE-MANDAT-'.fake()->uuid(),

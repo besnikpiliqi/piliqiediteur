@@ -43,10 +43,10 @@ class VerificateurIntegriteConcurrenceTest extends TestCase
         $venteConcurrente = null;
         DB::listen(function (QueryExecuted $requete) use (&$venteConcurrente, $magasinId, $clientId, $produitId): void {
             if ($venteConcurrente === null && str_contains($requete->sql, 'from "tetes_registre_fiscal"')) {
-                $venteConcurrente = $this->demarrerUnProcessusConcurrent(static function () use ($magasinId, $clientId, $produitId): void {
+                $venteConcurrente = $this->attendreLeProcessusConcurrent($this->demarrerUnProcessusConcurrent(static function () use ($magasinId, $clientId, $produitId): void {
                     app(TenantContext::class)->set(Magasin::query()->findOrFail($magasinId));
                     self::vendreAuComptant(self::auteur(), Client::query()->findOrFail($clientId), [['produit_id' => $produitId, 'quantite' => 1]], ModePaiement::Especes);
-                })->wait();
+                }));
             }
         });
 

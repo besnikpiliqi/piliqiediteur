@@ -17,8 +17,6 @@ use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Services\BaremePrixDeVente;
 use App\Domain\Contacts\Models\Fournisseur;
-use App\Domain\Stock\Enums\TypeMouvementStock;
-use App\Domain\Stock\Services\StockLedgerService;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Magasin;
@@ -707,6 +705,34 @@ class FactureAchatResourceTest extends TestCase
     }
 
     /**
+     * Une ligne forgée de moins d'un article (une demi-unité, zéro), que
+     * le formulaire laisse passer sans erreur de champ, est refusée par la
+     * saisie de la ligne, avec un message, sans rien créer (constat C97 des
+     * audits du 07/11/2026 : le test externe ne prouvait pas le refus).
+     */
+    public function test_une_ligne_forgee_de_moins_d_un_article_est_refusee_avec_un_message(): void
+    {
+        $this->connecterLeProprietaire();
+        $produit = Produit::factory()->create(['taux_tva' => 20]);
+
+        foreach (['0.5', '0'] as $quantite) {
+            Livewire::test(CreateFactureAchat::class)
+                ->fillForm([
+                    'fournisseur_id' => Fournisseur::factory()->create()->id,
+                    'date_facture' => '2026-01-15',
+                    'lignes' => [
+                        ['produit_id' => $produit->id, 'quantite' => $quantite, 'prix_unitaire_ht' => '20.00', 'taux_tva' => 20, 'remise_pourcentage' => 0],
+                    ],
+                ])
+                ->call('create')
+                ->assertHasNoFormErrors()
+                ->assertNotified("La quantité doit être un nombre entier d'articles, au moins 1.");
+
+            $this->assertSame(0, FactureAchat::query()->count(), "quantité {$quantite}");
+        }
+    }
+
+    /**
      * Un prix d'achat trop grand pour être lu (« 1e400 ») est refusé,
      * jamais enregistré à 0,00 € HT : il fausserait le coût moyen à la
      * validation.
@@ -1106,7 +1132,7 @@ class FactureAchatResourceTest extends TestCase
             ['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => 20],
             ['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => 20],
         ], ['date_facture' => '2026-01-15']));
-        app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::Vente, 4);
+        $this->sortirParUneVente($produit, 4);
         $component = Livewire::test(ListFacturesAchat::class)->mountTableAction('avoir_fournisseur', $factureAchat);
         $lignes = $component->get('mountedTableActionsData.0.lignes');
         $this->assertSame([5, 1], array_column(array_values($lignes), 'quantite'));

@@ -2,13 +2,18 @@
 
 namespace Tests\Feature\CaisseSecurisee;
 
+use App\Domain\Achats\Actions\CreerFactureAchatAction;
+use App\Domain\Achats\Actions\ValiderFactureAchatAction;
 use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
+use App\Domain\Contacts\Models\Fournisseur;
+use App\Domain\Facturation\Actions\CloturerCaisseAction;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
 use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
+use App\Domain\Facturation\Actions\FermerSaCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\TypePreuve;
 use App\Domain\Tenancy\Enums\TypePiece;
@@ -34,7 +39,7 @@ class ProtectionDesTablesTest extends TestCase
 {
     use RefreshDatabase;
 
-    private const EN_AJOUT_SEUL = ['changements_fin_exercice', 'consultations_vies', 'preuves_operation', 'bordereaux_detaxe', 'recus_paiement', 'paiements', 'paiement_allocations', 'lignes_recu_paiement', 'avoir_allocations', 'enregistrements_fiscaux'];
+    private const EN_AJOUT_SEUL = ['changements_fin_exercice', 'consultations_vies', 'preuves_operation', 'bordereaux_detaxe', 'recus_paiement', 'paiements', 'paiement_allocations', 'lignes_recu_paiement', 'avoir_allocations', 'enregistrements_fiscaux', 'clotures_caisse', 'clotures_caisse_personnelles', 'clotures_caisse_personnelles_factures', 'clotures_caisse_personnelles_paiements', 'mouvements_stock'];
 
     private const SANS_SUPPRESSION = ['societes', 'magasins', 'sirets_magasins', 'periodes_activite', 'tetes_journal_audit', 'pieces_verification', 'cabinets', 'liens_cabinet'];
 
@@ -120,7 +125,8 @@ class ProtectionDesTablesTest extends TestCase
      * (sa vérification, son code de courrier et son lien), une facture
      * réglée en partie après son émission puis corrigée par un avoir (le
      * paiement, son reçu et leurs lignes, les imputations, le registre
-     * fiscal), et, écrites directement, les lignes qu'aucune action ne fait
+     * fiscal), un achat validé (son mouvement du grand livre du stock), et,
+     * écrites directement, les lignes qu'aucune action ne fait
      * naître sans procédure de l'éditeur, sans fournisseur externe ou sans
      * requête d'un navigateur : une pièce de vérification déposée, un
      * changement légal de fin d'exercice, une consultation VIES, une preuve
@@ -142,9 +148,13 @@ class ProtectionDesTablesTest extends TestCase
         app(TenantContext::class)->set($magasin);
         $client = Client::factory()->professionnel()->create();
         $produit = Produit::factory()->create(['prix_vente_ttc' => 20, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $recu = Produit::factory()->create(['suivi_stock' => true]);
+        app(ValiderFactureAchatAction::class)->handle(self::auteur(), app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [['produit_id' => $recu->id, 'quantite' => 2, 'prix_unitaire_ht' => 2]], ['date_facture' => '2026-10-08']));
         $facture = app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), $client, [['produit_id' => $produit->id, 'quantite' => 3]]));
         app(EnregistrerPaiementAction::class)->handle(self::auteur(), $client, ['mode_paiement' => ModePaiement::Virement->value, 'montant' => '20.00', 'recu_le' => Calendrier::deParis()->aujourdhui()], [['facture_id' => $facture->id, 'montant' => '20.00']]);
         app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [['ligne_facture_id' => $facture->lignes->sole()->id, 'quantite' => 1]]);
+        $releve = app(FermerSaCaisseAction::class)->handle(self::auteur(), self::auteur());
+        $ticketZ = app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, Calendrier::deParis()->aujourdhui());
         $premiere = static fn (string $table, string $colonne, int $valeur): int => (int) DB::table($table)->where($colonne, $valeur)->min('id');
         $entreeAudit = (int) DB::table('journal_audit')->where('societe_id', $societe)->whereNull('expire_le')->min('id');
         $enregistrement = $premiere('enregistrements_fiscaux', 'magasin_id', $magasin->id);
@@ -163,6 +173,11 @@ class ProtectionDesTablesTest extends TestCase
             'lignes_recu_paiement' => ['lignes_recu_paiement', 'id', $premiere('lignes_recu_paiement', 'magasin_id', $magasin->id)],
             'avoir_allocations' => ['avoir_allocations', 'id', $premiere('avoir_allocations', 'magasin_id', $magasin->id)],
             'enregistrements_fiscaux' => ['enregistrements_fiscaux', 'id', $enregistrement],
+            'clotures_caisse' => ['clotures_caisse', 'id', (int) $ticketZ->id],
+            'clotures_caisse_personnelles' => ['clotures_caisse_personnelles', 'id', (int) $releve->id],
+            'clotures_caisse_personnelles_factures' => ['clotures_caisse_personnelles_factures', 'facture_id', (int) $facture->id],
+            'clotures_caisse_personnelles_paiements' => ['clotures_caisse_personnelles_paiements', 'paiement_id', $premiere('paiements', 'magasin_id', $magasin->id)],
+            'mouvements_stock' => ['mouvements_stock', 'id', $premiere('mouvements_stock', 'magasin_id', $magasin->id)],
             'societes' => ['societes', 'id', $societe],
             'magasins' => ['magasins', 'id', (int) $magasin->id],
             'sirets_magasins' => ['sirets_magasins', 'id', $premiere('sirets_magasins', 'magasin_id', $magasin->id)],

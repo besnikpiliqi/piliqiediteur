@@ -6,6 +6,7 @@ use App\Domain\Authorization\OperateurCourant;
 use App\Domain\CaisseSecurisee\Exceptions\HorlogeRegressiveException;
 use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
+use App\Domain\Facturation\Exceptions\TicketZNonSigneException;
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
 use App\Domain\Facturation\Services\JourneesDeCaisse;
@@ -75,7 +76,9 @@ class CloturerLesJourneesAction
     /**
      * Les journées du magasin actif encore à clôturer jusqu'au jour $jour
      * du calendrier compris, dans l'ordre : du lendemain de la dernière
-     * journée clôturée, ou du jour de la première vente, jusqu'à $jour,
+     * journée clôturée au registre fiscal (jamais dans la table des
+     * tickets Z, voir RegistreFiscal::derniereJourneeClotureeSansVerrou()),
+     * ou du jour de la première vente, jusqu'à $jour,
      * sans les jours qui ne tombent dans aucune de ses périodes d'activité
      * (voir JourneesDeCaisse) : un magasin fermé ne produit plus de ticket
      * Z, et aucun n'est produit pour ses jours de fermeture.
@@ -87,7 +90,7 @@ class CloturerLesJourneesAction
      */
     public function journeesEnAttente(string $jour): Collection
     {
-        return $this->journeesDeCaisse->aCloturer(app(TenantContext::class)->magasin(), $jour, ClotureCaisse::derniereJourneeCloturee());
+        return $this->journeesDeCaisse->aCloturer(app(TenantContext::class)->magasin(), $jour, $this->registre->derniereJourneeClotureeSansVerrou());
     }
 
     /**
@@ -109,26 +112,32 @@ class CloturerLesJourneesAction
         $this->verifierQueLeMagasinEstActif($magasin);
         $clotures = (new ClotureCaisse)->newCollection();
 
-        $demande = $this->actionsUniques->executerParEtapes(
-            $jeton,
-            ActionsUniques::CLOTURER_LA_JOURNEE,
-            ClotureCaisse::class,
-            $auteur,
-            ['jour' => $jour],
-            fn () => $this->registre->verrouiller($magasin),
-            function () use ($auteur, $magasin, $jour, $clotures): array {
-                $journees = $this->journeesEnAttente($jour);
+        try {
+            $demande = $this->actionsUniques->executerParEtapes(
+                $jeton,
+                ActionsUniques::CLOTURER_LA_JOURNEE,
+                ClotureCaisse::class,
+                $auteur,
+                ['jour' => $jour],
+                fn () => $this->registre->verrouiller($magasin),
+                function () use ($auteur, $magasin, $jour, $clotures): array {
+                    $journees = $this->journeesEnAttente($jour);
 
-                if ($journees->isEmpty()) {
-                    return [null, true];
-                }
+                    if ($journees->isEmpty()) {
+                        return [null, true];
+                    }
 
-                $cloture = $this->cloturerCaisse->handle($auteur, $magasin, $journees->first());
-                $clotures->push($cloture);
+                    $cloture = $this->cloturerCaisse->handle($auteur, $magasin, $journees->first());
+                    $clotures->push($cloture);
 
-                return [$cloture, $journees->count() === 1];
-            },
-        );
+                    return [$cloture, $journees->count() === 1];
+                },
+            );
+        } catch (TicketZNonSigneException $refus) {
+            $this->cloturerCaisse->signalerLeTicketZNonSigne($magasin, $refus);
+
+            throw $refus;
+        }
 
         if ($demande['deja_enregistree']) {
             return ['clotures' => new Collection($demande['resultat'] === null ? [] : [$demande['resultat']]), 'caisses_fermees' => new Collection];

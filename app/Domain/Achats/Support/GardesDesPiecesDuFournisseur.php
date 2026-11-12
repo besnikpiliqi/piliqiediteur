@@ -2,6 +2,7 @@
 
 namespace App\Domain\Achats\Support;
 
+use App\Domain\CaisseSecurisee\Support\DeclencheursDeProtection;
 use App\Domain\Tenancy\Support\LitteralSql;
 use Illuminate\Support\Facades\DB;
 
@@ -69,11 +70,11 @@ final class GardesDesPiecesDuFournisseur
         $connexion = DB::connection();
         $table = self::TABLE;
 
-        $connexion->unprepared('CREATE OR REPLACE FUNCTION garde_'.self::UN_SEUL_DOCUMENT."() RETURNS trigger LANGUAGE plpgsql AS \$\$ BEGIN IF (NEW.facture_achat_id IS NULL) = (NEW.avoir_fournisseur_id IS NULL) THEN RAISE EXCEPTION '%', ".self::message(self::UN_SEUL_DOCUMENT, self::REFUS_UN_SEUL_DOCUMENT).'; END IF; RETURN NEW; END $$');
+        $connexion->unprepared('CREATE OR REPLACE FUNCTION garde_'.self::UN_SEUL_DOCUMENT.'() RETURNS trigger LANGUAGE plpgsql '.DeclencheursDeProtection::CHEMIN_DE_RECHERCHE." AS \$\$ BEGIN IF (NEW.facture_achat_id IS NULL) = (NEW.avoir_fournisseur_id IS NULL) THEN RAISE EXCEPTION '%', ".self::message(self::UN_SEUL_DOCUMENT, self::REFUS_UN_SEUL_DOCUMENT).'; END IF; RETURN NEW; END $$');
         $connexion->unprepared('CREATE TRIGGER '.self::UN_SEUL_DOCUMENT." BEFORE INSERT ON {$table} FOR EACH ROW EXECUTE FUNCTION garde_".self::UN_SEUL_DOCUMENT.'()');
-        $connexion->unprepared('CREATE OR REPLACE FUNCTION garde_'.self::JAMAIS_MODIFIEES.'() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF '.self::MODIFICATION_REFUSEE." THEN RAISE EXCEPTION '%', ".self::message(self::JAMAIS_MODIFIEES, self::REFUS_MODIFICATION).'; END IF; RETURN NEW; END $$');
+        $connexion->unprepared('CREATE OR REPLACE FUNCTION garde_'.self::JAMAIS_MODIFIEES.'() RETURNS trigger LANGUAGE plpgsql '.DeclencheursDeProtection::CHEMIN_DE_RECHERCHE.' AS $$ BEGIN IF '.self::MODIFICATION_REFUSEE." THEN RAISE EXCEPTION '%', ".self::message(self::JAMAIS_MODIFIEES, self::REFUS_MODIFICATION).'; END IF; RETURN NEW; END $$');
         $connexion->unprepared('CREATE TRIGGER '.self::JAMAIS_MODIFIEES." BEFORE UPDATE ON {$table} FOR EACH ROW EXECUTE FUNCTION garde_".self::JAMAIS_MODIFIEES.'()');
-        $connexion->unprepared('CREATE OR REPLACE FUNCTION garde_'.self::EFFACEES_D_UN_BROUILLON_SEULEMENT.'() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN '
+        $connexion->unprepared('CREATE OR REPLACE FUNCTION garde_'.self::EFFACEES_D_UN_BROUILLON_SEULEMENT.'() RETURNS trigger LANGUAGE plpgsql '.DeclencheursDeProtection::CHEMIN_DE_RECHERCHE.' AS $$ BEGIN '
             .'PERFORM 1 FROM factures_achat WHERE id = OLD.facture_achat_id FOR SHARE; '
             .'IF '.self::DOCUMENT_QUI_N_EST_PAS_UN_BROUILLON." THEN RAISE EXCEPTION '%', ".self::message(self::EFFACEES_D_UN_BROUILLON_SEULEMENT, self::REFUS_EFFACEMENT).'; END IF; RETURN OLD; END $$');
         $connexion->unprepared('CREATE TRIGGER '.self::EFFACEES_D_UN_BROUILLON_SEULEMENT." BEFORE DELETE ON {$table} FOR EACH ROW EXECUTE FUNCTION garde_".self::EFFACEES_D_UN_BROUILLON_SEULEMENT.'()');

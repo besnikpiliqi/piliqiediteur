@@ -75,6 +75,7 @@ use Closure;
 use Database\Factories\MagasinFactory;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Queue;
@@ -120,6 +121,21 @@ class ActionsHorsEcranTest extends TestCase
      * autorisations par défaut.
      */
     private const CONSULTATIONS = ['exporter le journal des événements', 'vérifier l\'intégrité'];
+
+    /**
+     * Les gestes de vente, avec les autorisations qu'ils exigent de leur
+     * auteur dans le magasin.
+     *
+     * @var array<string, list<string>>
+     */
+    private const VENTES = [
+        'créer une facture' => [PermissionRegistry::FACTURE_CREATE],
+        'modifier une facture' => [PermissionRegistry::FACTURE_CREATE],
+        'émettre une facture' => [PermissionRegistry::FACTURE_EMETTRE],
+        'vendre à la caisse' => [PermissionRegistry::FACTURE_CREATE, PermissionRegistry::FACTURE_EMETTRE, PermissionRegistry::PAIEMENT_CREER],
+        'facturer un devis' => [PermissionRegistry::FACTURE_CREATE],
+        'enregistrer un paiement' => [PermissionRegistry::PAIEMENT_CREER],
+    ];
 
     /**
      * Les gestes des achats, qu'un client qui a des articles peut accorder
@@ -192,15 +208,28 @@ class ActionsHorsEcranTest extends TestCase
         $this->assertRefuseSansRienEcrire($geste, $sansDroit);
     }
 
+    /**
+     * L'auteur d'une autre société est refusé sans rien écrire. Pour un
+     * geste de vente, que le propriétaire ne fait jamais, même chez lui,
+     * l'attaquant est un administrateur de tous les magasins de sa société
+     * à qui toutes les autorisations de magasin sont cochées, vente
+     * comprise : il a le droit du geste chez lui (contrôle positif), et
+     * seule la barrière de la société le refuse ici. Pour les autres
+     * gestes, c'est le propriétaire de l'autre société, qui y a tous les
+     * droits.
+     */
     #[DataProvider('actions')]
     public function test_chaque_action_refuse_un_auteur_d_une_autre_societe_sans_rien_ecrire(string $nom, string $porte, bool $aVerifier): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique', 'a_verifier' => $aVerifier]);
         $geste = $this->geste($nom, $magasin);
-        $proprietaireDAilleurs = $this->proprietaireDe($this->ouvrirUneSociete(['nom' => 'Autre boutique']));
+        $ailleurs = $this->ouvrirUneSociete(['nom' => 'Autre boutique']);
+        $attaquant = array_key_exists($nom, self::VENTES)
+            ? $this->administrateurQuiVendChezLui($ailleurs, self::VENTES[$nom])
+            : $this->proprietaireDe($ailleurs);
         app(TenantContext::class)->set($magasin);
 
-        $this->assertRefuseSansRienEcrire($geste, $proprietaireDAilleurs);
+        $this->assertRefuseSansRienEcrire($geste, $attaquant);
     }
 
     #[DataProvider('actions')]
@@ -347,6 +376,27 @@ class ActionsHorsEcranTest extends TestCase
             'demander un nouveau courrier' => fn (User $auteur) => app(EnvoyerCodeDeConfirmationAction::class)->nouvelEnvoi($auteur, $societe),
             'déposer une pièce' => fn (User $auteur) => app(DeposerUnePieceAction::class)->handle($auteur, $societe, TypePiece::Kbis, new PieceDeposee('kbis.pdf', FichiersDeTest::pdf('Extrait Kbis'))),
         };
+    }
+
+    /**
+     * Un administrateur de tous les magasins de cette société, à qui le
+     * propriétaire a coché toutes les autorisations de magasin, vente
+     * comprise : il a, chez lui, chacune de ces autorisations.
+     *
+     * @param  list<string>  $autorisations
+     */
+    private function administrateurQuiVendChezLui(Magasin $chezLui, array $autorisations): User
+    {
+        $administrateur = $this->administrateur($chezLui, null, [], PermissionRegistry::pourLeType(TypeDActivite::Commerce));
+
+        foreach ($autorisations as $autorisation) {
+            $this->assertTrue(
+                app(TenantContext::class)->runAs($chezLui, fn (): bool => Gate::forUser($administrateur)->allows($autorisation)),
+                "L'administrateur d'ailleurs devrait avoir « {$autorisation} » dans son magasin.",
+            );
+        }
+
+        return $administrateur;
     }
 
     /**

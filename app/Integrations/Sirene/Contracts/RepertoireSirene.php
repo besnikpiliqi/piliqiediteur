@@ -16,7 +16,7 @@ use App\Integrations\Sirene\UniteSirene;
  * qui s'inscrit.
  *
  * Une implémentation factice (FauxRepertoireSirene) sert au développement
- * et aux tests, jamais en production (voir VerificationServiceProvider).
+ * et aux tests, jamais en production (voir FournisseursExternesServiceProvider).
  */
 interface RepertoireSirene
 {

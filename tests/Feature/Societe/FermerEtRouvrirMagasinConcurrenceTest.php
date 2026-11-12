@@ -16,7 +16,6 @@ use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Stock\Enums\TypeMouvementStock;
 use App\Domain\Stock\Models\MouvementStock;
-use App\Domain\Stock\Services\StockLedgerService;
 use App\Domain\Tenancy\Actions\ChoisirEtablissementPrincipalAction;
 use App\Domain\Tenancy\Actions\FermerMagasinAction;
 use App\Domain\Tenancy\Actions\RouvrirMagasinAction;
@@ -90,7 +89,7 @@ class FermerEtRouvrirMagasinConcurrenceTest extends TestCase
         $laVenteDAbord ? $vendre() : $fermer();
 
         $this->assertInstanceOf(InvokedProcess::class, $concurrente);
-        $resultat = $concurrente->wait();
+        $resultat = $this->attendreLeProcessusConcurrent($concurrente);
         $this->assertSame(! $laVenteDAbord, $resultat->failed(), $resultat->errorOutput());
         app(TenantContext::class)->set($magasin);
         $this->assertSame(StatutMagasin::Ferme, $magasin->fresh()->statut);
@@ -131,7 +130,7 @@ class FermerEtRouvrirMagasinConcurrenceTest extends TestCase
         self::fermer($magasinId);
 
         $this->assertInstanceOf(InvokedProcess::class, $concurrente);
-        $resultat = $concurrente->wait();
+        $resultat = $this->attendreLeProcessusConcurrent($concurrente);
         $this->assertTrue($resultat->failed());
         $this->assertStringContainsString('Ce magasin est fermé : seules la consultation et les téléchargements restent possibles.', $resultat->errorOutput());
         app(TenantContext::class)->set($magasin);
@@ -160,7 +159,7 @@ class FermerEtRouvrirMagasinConcurrenceTest extends TestCase
         app(FermerMagasinAction::class)->handle($proprietaire, $magasin->fresh(), MotifFermeture::Cession, 'password', 'Ma Boutique');
 
         $this->assertInstanceOf(InvokedProcess::class, $concurrente);
-        $resultat = $concurrente->wait();
+        $resultat = $this->attendreLeProcessusConcurrent($concurrente);
         $this->assertTrue($resultat->failed());
         $this->assertStringContainsString(RouvrirMagasinAction::MESSAGE_CEDE, $resultat->errorOutput());
         $cede = $magasin->fresh();
@@ -196,7 +195,7 @@ class FermerEtRouvrirMagasinConcurrenceTest extends TestCase
         app(RouvrirMagasinAction::class)->handle($proprietaire, $boutique->fresh(), self::MOT_DE_PASSE_CHOISI);
 
         $this->assertInstanceOf(InvokedProcess::class, $concurrente);
-        $resultat = $concurrente->wait();
+        $resultat = $this->attendreLeProcessusConcurrent($concurrente);
         $this->assertTrue($resultat->successful(), $resultat->errorOutput());
         $this->assertTrue($societe->fresh()->estValidee());
         $this->assertSame(1, PeriodeActivite::query()->where('magasin_id', $boutique->id)->count());
@@ -213,8 +212,7 @@ class FermerEtRouvrirMagasinConcurrenceTest extends TestCase
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $proprietaire = $this->proprietaireDe($magasin);
-        $produit = Produit::factory()->create(['cmup_ht' => 2, 'suivi_stock' => true, 'seuil_alerte' => 0]);
-        app(StockLedgerService::class)->ajuster($produit, 10, 'Inventaire d\'ouverture');
+        $produit = Produit::factory()->create(['cmup_ht' => 2, 'suivi_stock' => true, 'seuil_alerte' => 0, 'stock_quantite' => 10]);
         $factureAchat = app(CreerFactureAchatAction::class)->handle($proprietaire, Fournisseur::factory()->create(), [
             ['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => '2.00', 'taux_tva' => 20],
         ], ['date_facture' => '2026-01-15']);
@@ -231,7 +229,7 @@ class FermerEtRouvrirMagasinConcurrenceTest extends TestCase
         app(FermerMagasinAction::class)->handle($proprietaire, $magasin, MotifFermeture::Cession, 'password', 'Ma Boutique');
 
         $this->assertInstanceOf(InvokedProcess::class, $concurrente);
-        $resultat = $concurrente->wait();
+        $resultat = $this->attendreLeProcessusConcurrent($concurrente);
         $this->assertTrue($resultat->failed());
         $this->assertStringContainsString('Ce magasin est fermé : seules la consultation et les téléchargements restent possibles.', $resultat->errorOutput());
         app(TenantContext::class)->set($magasin);
@@ -248,8 +246,7 @@ class FermerEtRouvrirMagasinConcurrenceTest extends TestCase
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $proprietaire = $this->proprietaireDe($magasin);
-        $produit = Produit::factory()->create(['cmup_ht' => 2, 'suivi_stock' => true, 'seuil_alerte' => 0]);
-        app(StockLedgerService::class)->ajuster($produit, 10, 'Inventaire d\'ouverture');
+        $produit = Produit::factory()->create(['cmup_ht' => 2, 'suivi_stock' => true, 'seuil_alerte' => 0, 'stock_quantite' => 10]);
         $fournisseur = Fournisseur::factory()->create();
         $factureAchat = app(ValiderFactureAchatAction::class)->handle($proprietaire, app(CreerFactureAchatAction::class)->handle($proprietaire, $fournisseur, [
             ['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => '2.00', 'taux_tva' => 20],
@@ -274,13 +271,13 @@ class FermerEtRouvrirMagasinConcurrenceTest extends TestCase
         app(FermerMagasinAction::class)->handle($proprietaire, $magasin, MotifFermeture::Cession, 'password', 'Ma Boutique');
 
         $this->assertInstanceOf(InvokedProcess::class, $concurrente);
-        $resultat = $concurrente->wait();
+        $resultat = $this->attendreLeProcessusConcurrent($concurrente);
         $this->assertTrue($resultat->failed());
         $this->assertStringContainsString('Ce magasin est fermé : seules la consultation et les téléchargements restent possibles.', $resultat->errorOutput());
         app(TenantContext::class)->set($magasin);
         $this->assertSame([0, [5]], [$produit->fresh()->stock_quantite, $factureAchat->fresh()->lignes->pluck('quantite')->all()]);
         $this->assertSame(
-            [[TypeMouvementStock::AjustementEntree, 10], [TypeMouvementStock::ReceptionAchat, 5], [TypeMouvementStock::SortieCession, 15]],
+            [[TypeMouvementStock::InventaireOuverture, 10], [TypeMouvementStock::ReceptionAchat, 5], [TypeMouvementStock::SortieCession, 15]],
             MouvementStock::query()->where('produit_id', $produit->id)->orderBy('id')->get()->map(fn (MouvementStock $mouvement): array => [$mouvement->type, $mouvement->quantite])->all(),
         );
     }
@@ -305,7 +302,7 @@ class FermerEtRouvrirMagasinConcurrenceTest extends TestCase
         app(FermerMagasinAction::class)->handle($proprietaire, $magasin, MotifFermeture::Cession, 'password', 'Ma Boutique');
 
         $this->assertInstanceOf(InvokedProcess::class, $concurrente);
-        $resultat = $concurrente->wait();
+        $resultat = $this->attendreLeProcessusConcurrent($concurrente);
         $this->assertTrue($resultat->failed());
         $this->assertStringContainsString(ChoisirEtablissementPrincipalAction::MESSAGE_CEDE, $resultat->errorOutput());
         $this->assertSame([true, false], [$magasin->fresh()->aEteCede(), $magasin->fresh()->est_etablissement_principal]);

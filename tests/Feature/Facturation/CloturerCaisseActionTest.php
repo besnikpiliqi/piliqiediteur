@@ -28,6 +28,7 @@ use App\Domain\Facturation\Models\PanierCaisse;
 use App\Domain\Facturation\Services\EReportingDesParticuliers;
 use App\Domain\Facturation\Services\PanierDeCaisse;
 use App\Domain\Facturation\Services\PartDeReglement;
+use App\Domain\Facturation\Services\RecapitulatifDeCloture;
 use App\Domain\Facturation\Services\ReglementComptant;
 use App\Domain\Tenancy\Enums\MotifFermeture;
 use App\Domain\Tenancy\Models\Magasin;
@@ -481,9 +482,34 @@ class CloturerCaisseActionTest extends TestCase
             'encaissements' => ['especes' => 10000, 'carte_bancaire' => 12055, 'cheque' => 0, 'virement' => 5000, 'prelevement' => 0],
             'credit_avoir_impute' => 0,
             'grands_totaux' => ['perpetuel_reel' => 22055, 'perpetuel_absolu' => 32055],
+            'recapitulatif' => $cloture->fresh()?->recapitulatif,
+            'derniere_sequence_vente' => 5,
+            'derniere_sequence_encaissement' => 4,
         ], $evenement->contenuSigne()['donnees']['details']);
         $this->assertSame(['type' => 'cloture_caisse', 'id' => $cloture->id], $evenement->contenuSigne()['document']);
         $this->assertSame(['id' => self::auteur()->id, 'nom' => self::auteur()->name], $evenement->contenuSigne()['operateur']);
+    }
+
+    /**
+     * C28 : l'événement 50 signe tout le ticket Z, son récapitulatif tel
+     * qu'il est écrit, rubrique par rubrique et taux par taux, et les deux
+     * dernières séquences dont partent la clôture suivante et
+     * l'e-reporting.
+     */
+    public function test_l_evenement_50_signe_tout_le_recapitulatif_et_les_sequences(): void
+    {
+        $this->journeeDExemple();
+        $this->travelTo(self::aParis('2026-10-06 08:00:00'));
+
+        $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, '2026-10-05');
+
+        $details = self::evenementsDeCloture()->sole()->contenuSigne()['donnees']['details'];
+        $ticketZ = $cloture->fresh();
+        $this->assertSame($ticketZ?->recapitulatif, $details['recapitulatif']);
+        $this->assertSame([2000, 550], array_column($details['recapitulatif']['ventes_particuliers']['par_taux'], 'taux'));
+        $this->assertSame(1, $details['recapitulatif']['factures_professionnels']['nombre']);
+        $this->assertSame([5, 4], [$details['derniere_sequence_vente'], $details['derniere_sequence_encaissement']]);
+        $this->assertSame([$ticketZ?->derniere_sequence_vente, $ticketZ?->derniere_sequence_encaissement], [$details['derniere_sequence_vente'], $details['derniere_sequence_encaissement']]);
     }
 
     /**
@@ -507,6 +533,9 @@ class CloturerCaisseActionTest extends TestCase
             'encaissements' => ['especes' => 0, 'carte_bancaire' => 0, 'cheque' => 0, 'virement' => 0, 'prelevement' => 0],
             'credit_avoir_impute' => 0,
             'grands_totaux' => ['perpetuel_reel' => 0, 'perpetuel_absolu' => 0],
+            'recapitulatif' => RecapitulatifDeCloture::vide(),
+            'derniere_sequence_vente' => null,
+            'derniere_sequence_encaissement' => null,
         ], self::evenementsDeCloture()->sole()->contenuSigne()['donnees']['details']);
     }
 

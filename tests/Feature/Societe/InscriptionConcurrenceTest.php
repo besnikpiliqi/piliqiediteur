@@ -48,7 +48,7 @@ class InscriptionConcurrenceTest extends TestCase
         $premiere = app(CreerSocieteAction::class)->handle($siren, TypeDActivite::Commerce, 'premiere@exemple.fr', 'un-mot-de-passe-sur');
 
         $this->assertInstanceOf(InvokedProcess::class, $concurrente);
-        $resultat = $concurrente->wait();
+        $resultat = $this->attendreLeProcessusConcurrent($concurrente);
         $this->assertFalse($resultat->successful());
         $this->assertStringContainsString(CreerSocieteAction::MESSAGE_SIREN_PRIS, $resultat->errorOutput());
         $this->assertSame([$premiere->id], Societe::query()->where('siren', $siren)->pluck('id')->all());

@@ -9,7 +9,6 @@ use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Stock\Models\MouvementStock;
 use App\Domain\Stock\Services\ConfirmationVenteSansStock;
-use App\Domain\Stock\Services\StockLedgerService;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
@@ -53,7 +52,7 @@ class VenteSansStockConcurrenceTest extends TestCase
         self::vendreUnCable($premier, $produitId, null);
 
         $this->assertInstanceOf(InvokedProcess::class, $concurrente);
-        $resultat = $concurrente->wait();
+        $resultat = $this->attendreLeProcessusConcurrent($concurrente);
         $this->assertFalse($resultat->successful());
         $this->assertStringContainsString('Stock insuffisant : Câble USB, reste 0, demandé 1.', $resultat->errorOutput());
         $this->assertSame([(int) $premier->id], Facture::query()->whereNotNull('numero')->pluck('cree_par')->map(fn (mixed $id): int => (int) $id)->all());
@@ -79,7 +78,7 @@ class VenteSansStockConcurrenceTest extends TestCase
         self::vendreUnCable($premier, $produitId, -2);
 
         $this->assertInstanceOf(InvokedProcess::class, $concurrente);
-        $resultat = $concurrente->wait();
+        $resultat = $this->attendreLeProcessusConcurrent($concurrente);
         $this->assertTrue($resultat->successful(), $resultat->errorOutput());
         $this->assertSame(2, Facture::query()->whereNotNull('numero')->count());
         $this->assertSame([-2, -2], [$produit->fresh()->stock_quantite, -MouvementStock::query()->where('produit_id', $produitId)->where('type', 'vente')->sum('quantite')]);
@@ -89,15 +88,11 @@ class VenteSansStockConcurrenceTest extends TestCase
 
     /**
      * Un câble suivi en stock du magasin actif, amené à cette quantité par
-     * un ajustement d'inventaire.
+     * l'inventaire d'ouverture de la fabrique.
      */
     private function cableEnStock(int $stock): Produit
     {
-        $produit = Produit::factory()->create(['nom' => 'Câble USB', 'reference' => 'CABLE-USB', 'prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => true]);
-
-        if ($stock !== 0) {
-            app(StockLedgerService::class)->ajuster($produit, $stock, 'Inventaire d\'ouverture');
-        }
+        $produit = Produit::factory()->create(['nom' => 'Câble USB', 'reference' => 'CABLE-USB', 'prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => true, 'stock_quantite' => $stock]);
 
         return $produit->fresh();
     }

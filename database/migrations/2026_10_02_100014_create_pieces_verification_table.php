@@ -52,6 +52,8 @@ return new class extends Migration
             $table->index(['societe_id', 'effacee_le']);
         });
 
+        DeclencheursDeProtection::auMoins('pieces_verification', 'taille', 0);
+
         DeclencheursDeProtection::sansSuppression('pieces_verification');
     }
 

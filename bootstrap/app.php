@@ -15,6 +15,7 @@ use App\Console\Commands\PurgerJournalAudit;
 use App\Console\Commands\PurgerTraces;
 use App\Console\Commands\PurgerVerifications;
 use App\Console\Commands\RelancerFacturesImpayees;
+use App\Console\Commands\RelancerTransmissionsPdp;
 use App\Console\Commands\ReverifierSirene;
 use App\Console\Commands\SuivreEnvoisRecommandes;
 use App\Console\Commands\VerifierIntegriteFiscale;
@@ -59,6 +60,10 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->append(AjouterLesEnTetesDeSecurite::class);
     })
     ->withSchedule(function (Schedule $schedule): void {
+        // Chaque tâche écrit (clôtures, statuts, relances, journal des
+        // événements, purges) : aucune ne repart tant que son passage
+        // précédent tourne encore (withoutOverlapping, verrou de 24 heures
+        // au plus si un passage s'arrête net).
         // Les tâches du calendrier des magasins passent toutes les heures,
         // heure de Paris comme tous les horaires ci-dessous
         // (schedule_timezone, voir config/app.php), et ne traitent que ce
@@ -72,41 +77,41 @@ return Application::configure(basePath: dirname(__DIR__))
         // verrouille aucun registre. À la minute 15, une fois ces clôtures
         // terminées, le passage en retard des factures échues la veille de
         // leur magasin.
-        $schedule->command(ClotureAutomatiqueCaisse::class)->hourly();
-        $schedule->command(MarquerFacturesEnRetard::class)->hourlyAt(15);
+        $schedule->command(ClotureAutomatiqueCaisse::class)->hourly()->withoutOverlapping();
+        $schedule->command(MarquerFacturesEnRetard::class)->hourlyAt(15)->withoutOverlapping();
         // À la minute 30 : les devis envoyés dont la date de validité était
         // la veille de leur magasin expirent ; leur client ne peut plus les
         // accepter (voir ExpirerDevis).
-        $schedule->command(ExpirerDevis::class)->hourlyAt(30);
+        $schedule->command(ExpirerDevis::class)->hourlyAt(30)->withoutOverlapping();
         // À 3 h, une fois ces traitements de la nuit terminés : la
         // vérification de l'intégrité de la caisse sécurisée de chaque
         // magasin, incrémentale, complète une fois par mois à un jour
         // propre à chaque magasin (voir VerifierIntegriteFiscale).
-        $schedule->command(VerifierIntegriteFiscale::class)->dailyAt('03:00');
+        $schedule->command(VerifierIntegriteFiscale::class)->dailyAt('03:00')->withoutOverlapping();
         // À 3 h 30 : la vérification des chaînes du journal d'audit de
         // chaque société (voir VerifierJournalAudit).
-        $schedule->command(VerifierJournalAudit::class)->dailyAt('03:30');
+        $schedule->command(VerifierJournalAudit::class)->dailyAt('03:30')->withoutOverlapping();
         // À 4 h : les traces techniques (adresse IP et navigateur) dont la
         // durée de conservation est passée s'effacent (voir PurgerTraces),
         // puis les entrées expirées du journal d'audit, par le début de
         // chaque chaîne (voir PurgerJournalAudit).
-        $schedule->command(PurgerTraces::class)->dailyAt('04:00');
-        $schedule->command(PurgerJournalAudit::class)->dailyAt('04:15');
+        $schedule->command(PurgerTraces::class)->dailyAt('04:00')->withoutOverlapping();
+        $schedule->command(PurgerJournalAudit::class)->dailyAt('04:15')->withoutOverlapping();
         // À 4 h 20 : les données de vérification d'une société cinq ans
         // après la fin de la relation (voir PurgerVerifications).
-        $schedule->command(PurgerVerifications::class)->dailyAt('04:20');
+        $schedule->command(PurgerVerifications::class)->dailyAt('04:20')->withoutOverlapping();
         // À 4 h 30 : les jetons des demandes traitées depuis plus de 30
         // jours s'effacent (voir PurgerActionsTraitees).
-        $schedule->command(PurgerActionsTraitees::class)->dailyAt('04:30');
+        $schedule->command(PurgerActionsTraitees::class)->dailyAt('04:30')->withoutOverlapping();
         // À 4 h 45, les magasins de démonstration inactifs depuis trente
         // jours, ou d'une société validée ou close, se ferment (voir
         // FermerDemonstrationsInactives).
-        $schedule->command(FermerDemonstrationsInactives::class)->dailyAt('04:45');
+        $schedule->command(FermerDemonstrationsInactives::class)->dailyAt('04:45')->withoutOverlapping();
         // Chaque heure : les pièces de vérification qui atteindraient leurs
         // trente jours avant le passage suivant sans décision de l'éditeur,
         // et les copies restées d'un envoi abandonné ou d'un examen
         // interrompu, s'effacent (voir EffacerPiecesVerification).
-        $schedule->command(EffacerPiecesVerification::class)->hourly();
+        $schedule->command(EffacerPiecesVerification::class)->hourly()->withoutOverlapping();
         // Chaque heure : les demandes d'inscription expirées depuis 48
         // heures s'effacent (voir PurgerDemandesInscription), les
         // inscriptions sans code saisi trente jours après leur dernier
@@ -115,33 +120,38 @@ return Application::configure(basePath: dirname(__DIR__))
         // impossibles reprennent (voir ReverifierSirene) ; le premier du
         // mois, à 5 h, les sociétés validées et leurs magasins sont
         // revérifiés, sans rien bloquer.
-        $schedule->command(PurgerDemandesInscription::class)->hourly();
-        $schedule->command(CloreInscriptionsSansCode::class)->hourly();
-        $schedule->command(ReverifierSirene::class)->hourly();
+        $schedule->command(PurgerDemandesInscription::class)->hourly()->withoutOverlapping();
+        $schedule->command(CloreInscriptionsSansCode::class)->hourly()->withoutOverlapping();
+        $schedule->command(ReverifierSirene::class)->hourly()->withoutOverlapping();
         // Chaque heure aussi : le suivi des plis recommandés à code encore
         // en route, au cas où un rappel du prestataire se perdrait (voir
         // SuivreEnvoisRecommandes).
-        $schedule->command(SuivreEnvoisRecommandes::class)->hourly();
-        $schedule->command(ReverifierSirene::class, ['--toutes'])->monthlyOn(1, '05:00');
+        $schedule->command(SuivreEnvoisRecommandes::class)->hourly()->withoutOverlapping();
+        $schedule->command(ReverifierSirene::class, ['--toutes'])->monthlyOn(1, '05:00')->withoutOverlapping();
         // Les relances écrivent aux clients : toutes les heures, à la minute
         // 0, pour les seuls magasins qu'il est de 9 h à 11 h 59 à leur heure
         // locale, en matinée plutôt qu'en pleine nuit, et bien après le
         // passage en retard des factures de leur veille (voir
         // RelancerFacturesImpayees).
-        $schedule->command(RelancerFacturesImpayees::class)->hourly();
+        $schedule->command(RelancerFacturesImpayees::class)->hourly()->withoutOverlapping();
         // Chaque heure : les invitations et les demandes de lien des
         // cabinets d'expertise comptable restées 7 jours sans réponse
         // expirent, et les invitations d'un SIREN désormais inscrit
         // deviennent caduques (voir ExpirerInvitationsDesCabinets) ; les
         // invitations closes s'effacent 48 heures après leur fin, une
         // invitation refusée après 7 jours (voir PurgerInvitationsDesCabinets).
-        $schedule->command(ExpirerInvitationsDesCabinets::class)->hourlyAt(45);
-        $schedule->command(PurgerInvitationsDesCabinets::class)->hourlyAt(50);
+        $schedule->command(ExpirerInvitationsDesCabinets::class)->hourlyAt(45)->withoutOverlapping();
+        $schedule->command(PurgerInvitationsDesCabinets::class)->hourlyAt(50)->withoutOverlapping();
         // Chaque heure, hors de 2 h à 3 h : les téléchargements des
         // documents par période dont le lien a expiré, sept jours après
         // leur demande, s'effacent avec leur fichier (voir
         // EffacerTelechargementsDeDocuments).
-        $schedule->command(EffacerTelechargementsDeDocuments::class)->hourlyAt(55)->unlessBetween('02:00', '03:00');
+        $schedule->command(EffacerTelechargementsDeDocuments::class)->hourlyAt(55)->unlessBetween('02:00', '03:00')->withoutOverlapping();
+        // Chaque heure, hors de 2 h à 3 h : les factures que la plateforme
+        // agréée n'a pas reçues après toutes les tentatives automatiques
+        // sont relancées, sous la même référence de dépôt (voir
+        // RelancerTransmissionsPdp).
+        $schedule->command(RelancerTransmissionsPdp::class)->hourlyAt(40)->unlessBetween('02:00', '03:00')->withoutOverlapping();
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(

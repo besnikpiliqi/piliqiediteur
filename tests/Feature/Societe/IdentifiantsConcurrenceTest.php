@@ -97,7 +97,7 @@ class IdentifiantsConcurrenceTest extends TestCase
         $compte = app(CreerMembreAction::class)->handle($proprietaire, $magasin, ['name' => 'Paul Martin'], RoleMagasin::Vendeur, null, $jeton);
 
         $this->assertInstanceOf(InvokedProcess::class, $concurrente);
-        $resultat = $concurrente->wait();
+        $resultat = $this->attendreLeProcessusConcurrent($concurrente);
         $this->assertTrue($resultat->successful(), $resultat->errorOutput());
         $this->assertSame((string) $compte->id, $resultat->output());
         $this->assertSame(1, User::query()->where('societe_id', $magasin->societe_id)->where('name', 'Paul Martin')->count());
@@ -182,7 +182,7 @@ class IdentifiantsConcurrenceTest extends TestCase
     private function attendreLaReussite(?InvokedProcess $concurrente): void
     {
         $this->assertInstanceOf(InvokedProcess::class, $concurrente);
-        $resultat = $concurrente->wait();
+        $resultat = $this->attendreLeProcessusConcurrent($concurrente);
         $this->assertTrue($resultat->successful(), $resultat->errorOutput());
     }
 
@@ -192,7 +192,7 @@ class IdentifiantsConcurrenceTest extends TestCase
     private function attendreLEchec(?InvokedProcess $concurrente): string
     {
         $this->assertInstanceOf(InvokedProcess::class, $concurrente);
-        $resultat = $concurrente->wait();
+        $resultat = $this->attendreLeProcessusConcurrent($concurrente);
         $this->assertFalse($resultat->successful(), 'L\'opération concurrente aurait dû être refusée.');
 
         return $resultat->errorOutput();

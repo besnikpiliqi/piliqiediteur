@@ -24,7 +24,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('traces_evenements', function (Blueprint $table) {
-            $table->foreignId('enregistrement_fiscal_id')->primary()->constrained('enregistrements_fiscaux')->restrictOnDelete();
+            $table->foreignId('enregistrement_fiscal_id')->primary();
             $table->foreignId('magasin_id')->constrained('magasins')->restrictOnDelete();
             $table->string('ip', 45)->nullable();
             $table->string('agent_utilisateur', 255)->nullable();
@@ -32,6 +32,8 @@ return new class extends Migration
             $table->timestamp('created_at');
 
             $table->index(['magasin_id', 'expire_le']);
+
+            $table->foreign(['magasin_id', 'enregistrement_fiscal_id'])->references(['magasin_id', 'id'])->on('enregistrements_fiscaux')->restrictOnDelete();
         });
 
         DeclencheursDeProtection::effacementApresExpiration('traces_evenements');

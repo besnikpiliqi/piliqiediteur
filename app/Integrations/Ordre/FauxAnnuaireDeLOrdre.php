@@ -8,7 +8,7 @@ use App\Integrations\Sirene\FauxRepertoireSirene;
 /**
  * L'annuaire de l'Ordre des experts-comptables factice du développement et
  * des tests, automatique et sans aucune requête (voir
- * VerificationServiceProvider) : le cabinet de test du répertoire Sirene
+ * FournisseursExternesServiceProvider) : le cabinet de test du répertoire Sirene
  * factice (FauxRepertoireSirene::SIREN_CABINET) y est inscrit, sous le
  * n° NUMERO_DU_CABINET_DE_TEST, au conseil régional d'Île-de-France ;
  * toute autre société y est inconnue.

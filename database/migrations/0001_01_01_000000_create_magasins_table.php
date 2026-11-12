@@ -133,6 +133,8 @@ return new class extends Migration
             $table->index('statut');
         });
 
+        DeclencheursDeProtection::auMoins('magasins', 'delai_paiement_jours', 0);
+
         // Une seule démonstration et un seul établissement principal par
         // société.
         DB::statement('CREATE UNIQUE INDEX magasins_une_demonstration_par_societe ON magasins (societe_id) WHERE est_demonstration');

@@ -300,6 +300,69 @@ class RegistreFiscal
     }
 
     /**
+     * La dernière journée de caisse clôturée du magasin actif (AAAA-MM-JJ),
+     * null tant qu'aucune ne l'est, lue sur la ligne de tête de son
+     * registre sans la verrouiller : pour l'affichage (la caisse, la liste
+     * des clôtures) et pour lister les journées à clôturer, jamais dans la
+     * table des tickets Z, qu'une écriture directe tromperait. Une
+     * émission ou une clôture la relit sous le verrou (voir
+     * derniereJourneeCloturee()).
+     */
+    public function derniereJourneeClotureeSansVerrou(): ?string
+    {
+        return ValeursLues::texteOuNul(TeteRegistreFiscal::query()->value('derniere_journee_cloturee'));
+    }
+
+    /**
+     * La dernière clôture du jour signée au registre du magasin actif
+     * (événement 50, voir CloturerCaisseAction), lue sous le verrou de la
+     * transaction en cours, dans une requête qui le suit : sa journée, son
+     * numéro et les dernières séquences des chaînes des ventes et des
+     * encaissements qu'elle a comptées, dont la clôture suivante part.
+     * Null avant la première clôture. Jamais lue dans la table des
+     * tickets Z : seul le registre signé fait foi.
+     *
+     * @return array{journee: string, numero: string, derniere_sequence_vente: int|null, derniere_sequence_encaissement: int|null}|null
+     *
+     * @throws ModuleFiscalNonConfigureException
+     * @throws HorlogeRegressiveException
+     */
+    public function derniereClotureSignee(Magasin $magasin): ?array
+    {
+        $this->verrou($magasin);
+
+        $cloture = EnregistrementFiscal::query()
+            ->where('chaine', ChaineFiscale::Evenement->value)
+            ->where('type', (string) CodeEvenement::CloturePeriode->value)
+            ->orderByDesc('sequence')
+            ->first();
+
+        if ($cloture === null) {
+            return null;
+        }
+
+        $details = ValeursLues::tableauDe($cloture->donneesSignees(), 'details');
+
+        return [
+            'journee' => ValeursLues::texteDe($details, 'journee'),
+            'numero' => ValeursLues::texteDe($details, 'numero'),
+            'derniere_sequence_vente' => ValeursLues::entierOuNulDe($details, 'derniere_sequence_vente'),
+            'derniere_sequence_encaissement' => ValeursLues::entierOuNulDe($details, 'derniere_sequence_encaissement'),
+        ];
+    }
+
+    /**
+     * Vrai quand aucune transaction de l'application n'est ouverte (celle
+     * qui enveloppe un test ne compte pas, voir transactionsEnCours()) :
+     * ce qui s'inscrit maintenant au registre reste inscrit, quoi qu'il
+     * arrive ensuite à l'opération qui échoue.
+     */
+    public function horsDeToutTransaction(): bool
+    {
+        return $this->transactionsEnCours()->isEmpty();
+    }
+
+    /**
      * Note sur la ligne de verrou la journée que la transaction en cours
      * clôture (voir CloturerCaisseAction), sous le même verrou.
      *

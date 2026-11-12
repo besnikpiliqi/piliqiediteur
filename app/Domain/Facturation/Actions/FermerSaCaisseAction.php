@@ -144,8 +144,8 @@ class FermerSaCaisseAction
 
             $cloture = $this->releve($vendeur, $mode, $auteur, $jusquAu, $factures, $paiements);
             $cloture->save();
-            $cloture->factures()->attach($factures->modelKeys());
-            $cloture->paiements()->attach($paiements->modelKeys());
+            $cloture->factures()->attach($factures->modelKeys(), ['magasin_id' => $cloture->magasin_id]);
+            $cloture->paiements()->attach($paiements->modelKeys(), ['magasin_id' => $cloture->magasin_id]);
 
             return $cloture;
         });

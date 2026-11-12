@@ -69,7 +69,7 @@ use Tests\TestCase;
  * partir ce courrier au représentant légal et mène le propriétaire à la
  * liste de ses premières étapes. Un SIREN n'appartient qu'à une seule
  * société. Aucune requête ne sort des tests (répertoire, registre et
- * prestataire d'envoi factices, voir VerificationServiceProvider).
+ * prestataire d'envoi factices, voir FournisseursExternesServiceProvider).
  */
 class InscriptionSocieteTest extends TestCase
 {

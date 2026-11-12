@@ -69,7 +69,7 @@ class FactureAchatConcurrenceTest extends TestCase
         $laValidationDAbord ? $valider() : $supprimer();
 
         $this->assertInstanceOf(InvokedProcess::class, $concurrente);
-        $resultat = $concurrente->wait();
+        $resultat = $this->attendreLeProcessusConcurrent($concurrente);
         $this->assertTrue($resultat->failed(), $resultat->output());
         app(TenantContext::class)->set($magasin);
 

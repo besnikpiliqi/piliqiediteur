@@ -2,6 +2,12 @@
 
 namespace Tests\Feature\CaisseSecurisee;
 
+use App\Domain\Achats\Actions\CreerAvoirFournisseurAction;
+use App\Domain\Achats\Actions\CreerFactureAchatAction;
+use App\Domain\Achats\Actions\EmettreAvoirFournisseurAction;
+use App\Domain\Achats\Actions\ModifierFactureAchatAction;
+use App\Domain\Achats\Actions\ValiderFactureAchatAction;
+use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Authorization\OperateurCourant;
 use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
@@ -16,6 +22,8 @@ use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
+use App\Domain\Contacts\Models\Fournisseur;
+use App\Domain\Facturation\Actions\CloturerCaisseAction;
 use App\Domain\Facturation\Actions\ContrePasserPaiementAction;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
@@ -23,13 +31,21 @@ use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
 use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Models\Avoir;
+use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Models\PaiementAllocation;
+use App\Domain\Facturation\Support\GardesDesDocumentsEmis;
+use App\Domain\Stock\Actions\CreerInventaireOuvertureAction;
+use App\Domain\Stock\Actions\ValiderInventaireOuvertureAction;
+use App\Domain\Stock\Enums\TypeMouvementStock;
+use App\Domain\Stock\Services\StockLedgerService;
+use App\Domain\Stock\Support\GardesDuStock;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use Closure;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
@@ -43,7 +59,11 @@ use Tests\TestCase;
  * tête, documents, imputations et numérotation. Chaque falsification
  * passe par DB::table(), filtrée par magasin, comme le ferait un
  * administrateur de base malveillant ; celles d'une table en ajout seul
- * suppriment d'abord le déclencheur qui l'en empêcherait.
+ * suppriment d'abord le déclencheur qui l'en empêcherait, celles d'un
+ * document émis ou de ses lignes prouvent d'abord que sa garde la refuse
+ * puis la lèvent (voir TestCase::falsifierMalgreLaGardeDesDocumentsEmis()),
+ * et celles d'une référence vers un autre magasin font de même avec sa clé
+ * composée (voir TestCase::falsifierMalgreLaCleDuMagasin()).
  */
 class VerificateurIntegriteTest extends TestCase
 {
@@ -254,7 +274,7 @@ class VerificateurIntegriteTest extends TestCase
         $magasin = $this->magasinActif();
         $facture = app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->professionnel()->create(), [['produit_id' => $this->produit('VIS', 1)->id, 'quantite' => 1000]]));
 
-        DB::table('lignes_facture')->where('magasin_id', $magasin->id)->where('id', $facture->lignes->sole()->id)->update(['prix_unitaire_ht' => '0.833334']);
+        $this->falsifierMalgreLaGardeDesDocumentsEmis('lignes_facture', fn () => DB::table('lignes_facture')->where('magasin_id', $magasin->id)->where('id', $facture->lignes->sole()->id)->update(['prix_unitaire_ht' => '0.833334']));
 
         $this->assertSame([
             [90, "La facture {$facture->numero} ne correspond plus à ce qui a été signé à son émission (lignes)."],
@@ -267,7 +287,7 @@ class VerificateurIntegriteTest extends TestCase
         $documents = $this->activite();
         $ligne = $documents['ticket']->lignes->first();
 
-        DB::table('lignes_facture')->where('magasin_id', $magasin->id)->where('id', $ligne->id)->update(['montant_ttc' => '1.00']);
+        $this->falsifierMalgreLaGardeDesDocumentsEmis('lignes_facture', fn () => DB::table('lignes_facture')->where('magasin_id', $magasin->id)->where('id', $ligne->id)->update(['montant_ttc' => '1.00']));
 
         $this->assertSame([
             [90, 'Le ticket TK-LYON1-2026-000001 ne correspond plus à ce qui a été signé à son émission (lignes, ventilation).'],
@@ -294,7 +314,7 @@ class VerificateurIntegriteTest extends TestCase
         $magasin = $this->magasinActif();
         $documents = $this->activite();
 
-        DB::table('factures')->where('magasin_id', $magasin->id)->where('id', $documents['facture']->id)->update(['client_nom' => 'Nom réécrit']);
+        $this->falsifierMalgreLaGardeDesDocumentsEmis('factures', fn () => DB::table('factures')->where('magasin_id', $magasin->id)->where('id', $documents['facture']->id)->update(['client_nom' => 'Nom réécrit']));
 
         $this->assertSame([
             [90, 'La facture FAC-LYON1-2026-000001 ne correspond plus à ce qui a été signé à son émission (client).'],
@@ -311,7 +331,7 @@ class VerificateurIntegriteTest extends TestCase
         $magasin = $this->magasinActif();
         $documents = $this->activite();
 
-        DB::table('factures')->where('magasin_id', $magasin->id)->where('id', $documents['facture']->id)->update(['franchise_en_base' => true]);
+        $this->falsifierMalgreLaGardeDesDocumentsEmis('factures', fn () => DB::table('factures')->where('magasin_id', $magasin->id)->where('id', $documents['facture']->id)->update(['franchise_en_base' => true]));
 
         $this->assertSame([
             [90, 'La facture FAC-LYON1-2026-000001 ne correspond plus à ce qui a été signé à son émission (franchise_en_base).'],
@@ -321,16 +341,26 @@ class VerificateurIntegriteTest extends TestCase
     /**
      * Sous MagasinScope, un client_id réécrit vers la fiche d'un autre
      * magasin ne désigne plus aucun client : la facture et l'avoir sont
-     * signalés, et la vérification va jusqu'au bout.
+     * signalés, et la vérification va jusqu'au bout. La base refuse d'abord
+     * de réécrire un document émis, puis, sa garde levée, une telle
+     * référence (clé composée) ; le test la fabrique malgré elles, comme
+     * le propriétaire des tables, pour éprouver la détection.
      */
     public function test_un_client_d_un_autre_magasin_reecrit_en_base_est_detecte_sans_interrompre_la_verification(): void
     {
         $magasin = $this->magasinActif();
         $documents = $this->activite();
         $clientDAilleurs = app(TenantContext::class)->runAs(Magasin::factory()->create(['code' => 'AUTRE']), fn (): Client => Client::factory()->professionnel()->create());
+        $reecrireLaFacture = fn () => DB::table('factures')->where('magasin_id', $magasin->id)->where('id', $documents['facture']->id)->update(['client_id' => $clientDAilleurs->id]);
+        $reecrireLAvoir = fn () => DB::table('avoirs')->where('magasin_id', $magasin->id)->where('id', $documents['avoirSurFacture']->id)->update(['client_id' => $clientDAilleurs->id]);
 
-        DB::table('factures')->where('magasin_id', $magasin->id)->where('id', $documents['facture']->id)->update(['client_id' => $clientDAilleurs->id]);
-        DB::table('avoirs')->where('magasin_id', $magasin->id)->where('id', $documents['avoirSurFacture']->id)->update(['client_id' => $clientDAilleurs->id]);
+        foreach (['factures' => $reecrireLaFacture, 'avoirs' => $reecrireLAvoir] as $table => $reecrire) {
+            $this->assertThrows($this->dansUnPointDeSauvegarde($reecrire), QueryException::class, GardesDesDocumentsEmis::refusDeModification($table));
+            $this->retirerLeDeclencheur($table, GardesDesDocumentsEmis::nom($table));
+            $this->assertRefuseeParLaCleDuMagasin($reecrire, $table, 'client_id');
+            $this->falsifierMalgreLaCleDuMagasin($table, 'client_id');
+            $reecrire();
+        }
 
         $this->assertSame([
             [90, 'La facture FAC-LYON1-2026-000001 ne correspond plus à ce qui a été signé à son émission (client).'],
@@ -342,16 +372,22 @@ class VerificateurIntegriteTest extends TestCase
      * Sous MagasinScope, le client d'un paiement réécrit vers la fiche d'un
      * autre magasin ne désigne plus aucun client : le contenu du paiement,
      * qui l'exige (voir ValeurRequise), ne se relit plus ; le paiement est
-     * signalé, et la vérification va jusqu'au bout.
+     * signalé, et la vérification va jusqu'au bout. La base refuse d'abord
+     * une telle référence (clé composée), même le déclencheur de la table
+     * en ajout seul retiré ; le test la fabrique malgré elle, comme le
+     * propriétaire des tables, pour éprouver la détection.
      */
     public function test_un_paiement_dont_le_client_est_reecrit_vers_un_autre_magasin_est_signale_sans_interrompre_la_verification(): void
     {
         $magasin = $this->magasinActif();
         $documents = $this->activite();
         $clientDAilleurs = app(TenantContext::class)->runAs(Magasin::factory()->create(['code' => 'AUTRE']), fn (): Client => Client::factory()->professionnel()->create());
+        $reecrire = fn () => DB::table('paiements')->where('magasin_id', $magasin->id)->where('id', $documents['virement']->id)->update(['client_id' => $clientDAilleurs->id]);
 
         $this->retirerLeDeclencheur('paiements', 'paiements_ajout_seul_update');
-        DB::table('paiements')->where('magasin_id', $magasin->id)->where('id', $documents['virement']->id)->update(['client_id' => $clientDAilleurs->id]);
+        $this->assertRefuseeParLaCleDuMagasin($reecrire, 'paiements', 'client_id');
+        $this->falsifierMalgreLaCleDuMagasin('paiements', 'client_id');
+        $reecrire();
 
         $this->assertSame([
             [90, "Le paiement (identifiant interne {$documents['virement']->id}) ne se relit plus en base : Une valeur requise manque : le client du paiement."],
@@ -367,7 +403,7 @@ class VerificateurIntegriteTest extends TestCase
         $magasin = $this->magasinActif();
         $documents = $this->activite();
 
-        DB::table('factures')->where('magasin_id', $magasin->id)->where('id', $documents['facture']->id)->update(['date_emission' => null]);
+        $this->falsifierMalgreLaGardeDesDocumentsEmis('factures', fn () => DB::table('factures')->where('magasin_id', $magasin->id)->where('id', $documents['facture']->id)->update(['date_emission' => null]));
 
         $this->assertSame([
             [90, 'La facture FAC-LYON1-2026-000001 ne correspond plus à ce qui a été signé à son émission (date_emission).'],
@@ -381,7 +417,7 @@ class VerificateurIntegriteTest extends TestCase
         $magasin = $this->magasinActif();
         $documents = $this->activite();
 
-        DB::table('factures')->where('magasin_id', $magasin->id)->where('id', $documents['facture']->id)->update(['date_emission' => Instant::enBase(self::enUtc('2026-10-09 08:00:01'))]);
+        $this->falsifierMalgreLaGardeDesDocumentsEmis('factures', fn () => DB::table('factures')->where('magasin_id', $magasin->id)->where('id', $documents['facture']->id)->update(['date_emission' => Instant::enBase(self::enUtc('2026-10-09 08:00:01'))]));
 
         $this->assertSame([
             [90, 'La facture FAC-LYON1-2026-000001 ne correspond plus à ce qui a été signé à son émission (date_emission).'],
@@ -825,7 +861,7 @@ class VerificateurIntegriteTest extends TestCase
     {
         $magasin = $this->magasinActif();
         $documents = $this->activite();
-        DB::table('factures')->where('magasin_id', $magasin->id)->where('id', $documents['ticketAvecCredit']->id)->update(['numero' => 'TK-LYON1-2026-000025']);
+        $this->falsifierMalgreLaGardeDesDocumentsEmis('factures', fn () => DB::table('factures')->where('magasin_id', $magasin->id)->where('id', $documents['ticketAvecCredit']->id)->update(['numero' => 'TK-LYON1-2026-000025']));
 
         DB::table('sequences_documents')->where('magasin_id', $magasin->id)->where('type_document', 'ticket_caisse')->update(['prochain_numero' => 26]);
 
@@ -984,7 +1020,7 @@ class VerificateurIntegriteTest extends TestCase
         $magasin = $this->magasinActif();
         $documents = $this->activite();
 
-        DB::table('factures')->where('magasin_id', $magasin->id)->where('id', $documents['ticket']->id)->update(['date_emission' => Instant::enBase(self::enUtc('2025-12-31 12:00:00'))]);
+        $this->falsifierMalgreLaGardeDesDocumentsEmis('factures', fn () => DB::table('factures')->where('magasin_id', $magasin->id)->where('id', $documents['ticket']->id)->update(['date_emission' => Instant::enBase(self::enUtc('2025-12-31 12:00:00'))]));
 
         $this->assertSame([
             [90, 'Le ticket TK-LYON1-2026-000001 ne correspond plus à ce qui a été signé à son émission (date_emission).'],
@@ -1004,7 +1040,7 @@ class VerificateurIntegriteTest extends TestCase
         $magasin = $this->magasinActif();
         $documents = $this->activite();
         $pointsDeReprise = $this->verifier()->pointsDeReprise();
-        DB::table('lignes_facture')->where('magasin_id', $magasin->id)->where('id', $documents['ticket']->lignes->first()->id)->update(['montant_ttc' => '1.00']);
+        $this->falsifierMalgreLaGardeDesDocumentsEmis('lignes_facture', fn () => DB::table('lignes_facture')->where('magasin_id', $magasin->id)->where('id', $documents['ticket']->lignes->first()->id)->update(['montant_ttc' => '1.00']));
         $this->encaisser(Client::factory()->create(), [[$this->produit('THE', 8), 1]], ModePaiement::Especes);
 
         $reprise = $this->verifier($pointsDeReprise);
@@ -1324,7 +1360,7 @@ class VerificateurIntegriteTest extends TestCase
     {
         $magasinB = $this->magasinActif('LYON2');
         $documentsDeB = $this->activite();
-        DB::table('lignes_facture')->where('magasin_id', $magasinB->id)->where('id', $documentsDeB['ticket']->lignes->first()->id)->update(['montant_ttc' => '1.00']);
+        $this->falsifierMalgreLaGardeDesDocumentsEmis('lignes_facture', fn () => DB::table('lignes_facture')->where('magasin_id', $magasinB->id)->where('id', $documentsDeB['ticket']->lignes->first()->id)->update(['montant_ttc' => '1.00']));
         DB::table('sequences_documents')->where('magasin_id', $magasinB->id)->where('type_document', 'ticket_caisse')->update(['prochain_numero' => 9]);
         $magasinA = $this->magasinActif();
         $this->encaisser(Client::factory()->create(), [[$this->produit('THE', 8), 1]], ModePaiement::Especes);
@@ -1338,5 +1374,308 @@ class VerificateurIntegriteTest extends TestCase
             LogicException::class,
             'La vérification de l\'intégrité ne porte que sur le registre du magasin actif.',
         );
+    }
+
+    /**
+     * La journée du 09/10 de activite(), close le lendemain à 8 h : son
+     * ticket Z, Z-LYON1-2026-000001.
+     */
+    private function journeeClose(): ClotureCaisse
+    {
+        $this->activite();
+        $this->travelTo(self::aParis('2026-10-10 08:00:00'));
+
+        return app(CloturerCaisseAction::class)->handle(self::auteur(), app(TenantContext::class)->magasin(), '2026-10-09');
+    }
+
+    /**
+     * Ce que ferait un administrateur de base : réécrire un ticket Z en
+     * retirant le déclencheur qui l'interdit, après avoir prouvé que la
+     * base le refuse.
+     *
+     * @param  array<string, mixed>  $colonnes
+     */
+    private function falsifierLeTicketZ(ClotureCaisse $cloture, array $colonnes): void
+    {
+        $reecrire = fn (): int => DB::table('clotures_caisse')->where('magasin_id', $cloture->magasin_id)->where('id', $cloture->id)->update($colonnes);
+
+        $this->assertThrows($this->dansUnPointDeSauvegarde($reecrire), QueryException::class, 'clotures_caisse : table en ajout seul, modification refusée');
+
+        $this->retirerLeDeclencheur('clotures_caisse', 'clotures_caisse_ajout_seul_update');
+        $reecrire();
+    }
+
+    /**
+     * Deux journées closes, le 09/10 avec ses tickets, ses avoirs et sa
+     * facture, le 10/10 avec un ticket vendu le matin, se vérifient sans
+     * anomalie : chaque ticket Z est celui que signe sa clôture, et chaque
+     * ticket et chaque avoir à un particulier est rattaché au ticket Z de
+     * sa fenêtre signée.
+     */
+    public function test_des_journees_closes_ne_presentent_aucune_anomalie(): void
+    {
+        $magasin = $this->magasinActif();
+        $this->journeeClose();
+        $this->travelTo(self::aParis('2026-10-10 10:00:00'));
+        $this->encaisser(Client::factory()->create(), [[$this->produit('THE', 4), 1]], ModePaiement::Especes);
+        $this->travelTo(self::aParis('2026-10-11 08:00:00'));
+        app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, '2026-10-10');
+
+        $this->assertSame([], $this->anomalies($this->verifier()));
+    }
+
+    /**
+     * C24 : un ticket Z réécrit malgré son déclencheur ne correspond plus
+     * à sa clôture signée, et l'anomalie nomme les champs réécrits.
+     */
+    public function test_un_ticket_z_reecrit_malgre_son_declencheur_est_detecte(): void
+    {
+        $this->magasinActif();
+        $cloture = $this->journeeClose();
+
+        $this->falsifierLeTicketZ($cloture, ['nombre_ventes' => 0, 'total_ttc' => '0.00']);
+
+        $this->assertSame([
+            [90, 'Le ticket Z Z-LYON1-2026-000001 du 09/10/2026 ne correspond plus à sa clôture signée au journal des événements : nombre_ventes, total_ttc.'],
+        ], $this->anomalies($this->verifier()));
+    }
+
+    /**
+     * Une réécriture d'un seul champ du ticket Z que la clôture signe
+     * depuis C28 : le détail d'un taux du récapitulatif (son net
+     * inchangé), une séquence, le nom figé de son auteur.
+     *
+     * @return array<string, array{0: Closure(object): array<string, mixed>, 1: string}>
+     */
+    public static function reecrituresDUnChampDuTicketZ(): array
+    {
+        return [
+            'TVA d\'un taux du récapitulatif' => [static function (object $ticketZ): array {
+                $recapitulatif = json_decode((string) $ticketZ->recapitulatif, true, 512, JSON_THROW_ON_ERROR);
+                $recapitulatif['ventes_particuliers']['par_taux'][0]['tva']++;
+
+                return ['recapitulatif' => json_encode($recapitulatif, JSON_THROW_ON_ERROR)];
+            }, 'recapitulatif.ventes_particuliers.par_taux.0.tva'],
+            'dernière séquence des ventes' => [static fn (object $ticketZ): array => ['derniere_sequence_vente' => (int) $ticketZ->derniere_sequence_vente - 1], 'derniere_sequence_vente'],
+            'nom figé de son auteur' => [static fn (object $ticketZ): array => ['cree_par_nom' => 'Quelqu\'un d\'autre'], 'cree_par_nom'],
+        ];
+    }
+
+    /**
+     * C28 : tout le ticket Z est signé par sa clôture, et la moindre
+     * réécriture d'un champ se voit, nommée.
+     *
+     * @param  Closure(object): array<string, mixed>  $reecriture
+     */
+    #[DataProvider('reecrituresDUnChampDuTicketZ')]
+    public function test_chaque_champ_d_un_ticket_z_reecrit_seul_est_detecte(Closure $reecriture, string $champ): void
+    {
+        $this->magasinActif();
+        $cloture = $this->journeeClose();
+
+        $this->falsifierLeTicketZ($cloture, $reecriture(DB::table('clotures_caisse')->where('id', $cloture->id)->sole()));
+
+        $this->assertSame([
+            [90, "Le ticket Z Z-LYON1-2026-000001 du 09/10/2026 ne correspond plus à sa clôture signée au journal des événements : {$champ}."],
+        ], $this->anomalies($this->verifier()));
+    }
+
+    /**
+     * C24 : un ticket Z supprimé malgré son déclencheur laisse sa clôture
+     * signée désigner un ticket Z introuvable, et son numéro manque à la
+     * série des tickets Z.
+     */
+    public function test_un_ticket_z_supprime_est_detecte(): void
+    {
+        $magasin = $this->magasinActif();
+        $this->journeeClose();
+        $this->travelTo(self::aParis('2026-10-11 08:00:00'));
+        $ticketZ = app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, '2026-10-10');
+        $evenement = $this->enregistrementDe($ticketZ, ChaineFiscale::Evenement);
+        $supprimer = fn (): int => DB::table('clotures_caisse')->where('magasin_id', $magasin->id)->where('id', $ticketZ->id)->delete();
+        $this->assertThrows($this->dansUnPointDeSauvegarde($supprimer), QueryException::class, 'clotures_caisse : table en ajout seul, suppression refusée');
+
+        $this->retirerLeDeclencheur('clotures_caisse', 'clotures_caisse_ajout_seul_delete');
+        $supprimer();
+
+        $this->assertSame([
+            [90, "La clôture signée n° {$evenement->sequence} du journal des événements désigne un ticket Z introuvable (Z-LYON1-2026-000002)."],
+            [95, 'Série Z-LYON1-2026- : 1 numéro(s) attribué(s) sans document : Z-LYON1-2026-000002.'],
+        ], $this->anomalies($this->verifier()));
+    }
+
+    /**
+     * C26 : un ticket Z inséré par une requête directe n'a été signé par
+     * aucune clôture, et son numéro n'a été attribué par aucune.
+     */
+    public function test_un_ticket_z_ajoute_par_une_requete_directe_est_detecte(): void
+    {
+        $magasin = $this->magasinActif();
+        $this->journeeClose();
+
+        $this->insererUnFauxTicketZ($magasin, '2026-10-10', 'Z-LYON1-2026-000002', self::enUtc('2026-10-10 21:59:00'));
+
+        $this->assertSame([
+            [90, 'Le ticket Z Z-LYON1-2026-000002 du 10/10/2026 n\'a été signé par aucune clôture du journal des événements : il n\'a pas été écrit par la clôture de sa journée.'],
+            [95, 'Série Z-LYON1-2026- : Z-LYON1-2026-000002 hors des numéros qu\'elle a attribués (de Z-LYON1-2026-000001 à Z-LYON1-2026-000001).'],
+        ], $this->anomalies($this->verifier()));
+    }
+
+    /**
+     * C25 : un ticket détaché de son ticket Z malgré son déclencheur reste
+     * compté par la clôture signée de sa journée, et l'anomalie nomme le
+     * ticket et le ticket Z.
+     */
+    public function test_un_ticket_detache_de_son_ticket_z_est_detecte(): void
+    {
+        $this->magasinActif();
+        $this->journeeClose();
+        $ticket = Facture::query()->where('numero', 'TK-LYON1-2026-000001')->sole();
+        $detacher = fn (): int => DB::table('factures')->where('magasin_id', $ticket->magasin_id)->where('id', $ticket->id)->update(['cloture_caisse_id' => null]);
+        $this->assertThrows($this->dansUnPointDeSauvegarde($detacher), QueryException::class, 'factures.cloture_caisse_id : valeur figée, changement refusé');
+
+        $this->retirerLeDeclencheur('factures', 'factures_cloture_caisse_id_figee');
+        $detacher();
+
+        $this->assertSame([
+            [90, 'Le ticket TK-LYON1-2026-000001 n\'est rattaché à aucun ticket Z, alors que le ticket Z Z-LYON1-2026-000001, signé, le compte.'],
+        ], $this->anomalies($this->verifier()));
+    }
+
+    /**
+     * Un produit suivi reçu par une facture d'achat validée par son
+     * action, au nom du responsable de test : 10 articles à 2,00 € HT
+     * (C17, C22).
+     *
+     * @return array{0: Produit, 1: FactureAchat}
+     */
+    private function produitRecu(int $quantite = 10, string $prixUnitaireHt = '2', string $reference = 'CARNET'): array
+    {
+        $produit = Produit::factory()->create(['reference' => $reference, 'nom' => 'Carnet', 'cmup_ht' => $prixUnitaireHt, 'prix_vente_ttc' => 6, 'taux_tva' => 20, 'suivi_stock' => true]);
+        $achat = app(ValiderFactureAchatAction::class)->handle(self::auteur(), app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(['nom' => 'Papeterie Martin']), [
+            ['produit_id' => $produit->id, 'quantite' => $quantite, 'prix_unitaire_ht' => $prixUnitaireHt],
+        ], ['date_facture' => '2026-10-09']));
+
+        return [$produit->fresh() ?? $produit, $achat];
+    }
+
+    /**
+     * Les anomalies du rapport relevées par la partie « stock » de la
+     * vérification.
+     *
+     * @return list<string>
+     */
+    private function ecartsDuStock(): array
+    {
+        return array_values(array_map(static fn (AnomalieFiscale $anomalie): string => $anomalie->message, array_filter($this->verifier()->anomalies(), static fn (AnomalieFiscale $anomalie): bool => $anomalie->controle === 'stock')));
+    }
+
+    /**
+     * C17 : le stock d'un produit réécrit comme le ferait le propriétaire
+     * des tables (garde du stock levée le temps de la transaction du test,
+     * après la preuve de son refus) est relevé : 50 au lieu des 5 du grand
+     * livre. Sans anomalie avant.
+     */
+    public function test_un_stock_qui_ne_correspond_plus_a_son_grand_livre_est_releve(): void
+    {
+        $this->travelTo(self::aParis('2026-10-10 10:00:00'));
+        $this->magasinActif();
+        [$produit] = $this->produitRecu(5);
+        $this->assertSame([], $this->anomalies($this->verifier()));
+
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('produits')->where('id', $produit->id)->update(['stock_quantite' => 50])), QueryException::class, GardesDuStock::REFUS_STOCK_SANS_MOUVEMENT);
+        $this->retirerLeDeclencheur('produits', 'produits_stock_par_le_grand_livre');
+        DB::table('produits')->where('id', $produit->id)->update(['stock_quantite' => 50]);
+
+        $this->assertSame(['Le stock du produit CARNET (Carnet) est de 50 article(s), au lieu des 5 de son grand livre.'], $this->ecartsDuStock());
+    }
+
+    /**
+     * C17 : une facture d'achat « validée » et sa ligne insérées
+     * directement, avec un mouvement qui la désigne mais sans son entrée
+     * au journal d'audit, sont relevées.
+     */
+    public function test_un_achat_valide_sans_son_entree_au_journal_d_audit_est_releve(): void
+    {
+        $this->travelTo(self::aParis('2026-10-10 10:00:00'));
+        $this->magasinActif();
+        [$produit] = $this->produitRecu(5);
+        $achat = $this->justificatifDuStock(TypeMouvementStock::ReceptionAchat, $produit, 3);
+        $this->commeAuteurDuDocument(fn () => app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::ReceptionAchat, 3, $achat));
+
+        $this->assertSame(["La facture d'achat {$achat->getAttribute('numero')} a fait bouger le stock sans son entrée au journal d'audit : elle n'a pas été écrite par PILIQI."], $this->ecartsDuStock());
+    }
+
+    /**
+     * C19 : une ligne d'un achat validé réécrite comme le ferait le
+     * propriétaire des tables (contrôle différé de la cohérence levé, après
+     * la preuve de son refus) est relevée : elle n'est plus celle que le
+     * journal d'audit a inscrite, ni ce que ses mouvements ont fait entrer.
+     */
+    public function test_une_ligne_d_achat_valide_reecrite_est_relevee(): void
+    {
+        $this->travelTo(self::aParis('2026-10-10 10:00:00'));
+        $this->magasinActif();
+        [, $achat] = $this->produitRecu(5);
+        $ligne = $achat->lignes()->sole();
+        $this->assertThrows($this->dansUnPointDeSauvegarde(function () use ($ligne): void {
+            DB::table('lignes_achat')->where('id', $ligne->id)->update(['quantite' => 50]);
+            DB::statement('SET CONSTRAINTS '.GardesDuStock::COHERENCE_DES_LIGNES.' IMMEDIATE');
+        }), QueryException::class, GardesDuStock::REFUS_ACHAT_SANS_SON_STOCK);
+        DB::statement('SET CONSTRAINTS '.GardesDuStock::COHERENCE_DES_LIGNES.' DEFERRED');
+        $this->retirerLeDeclencheur('lignes_achat', GardesDuStock::COHERENCE_DES_LIGNES);
+
+        DB::table('lignes_achat')->where('id', $ligne->id)->update(['quantite' => 50]);
+
+        $this->assertSame([
+            "Les mouvements du produit #{$ligne->produit_id} venus de la facture d'achat #{$achat->id} font 5 article(s), au lieu des 50 de ses lignes.",
+            "Les lignes de la facture d'achat {$achat->numero} ne sont plus celles que le journal d'audit a inscrites : elles ont été réécrites en dehors de PILIQI.",
+        ], $this->ecartsDuStock());
+    }
+
+    /**
+     * C22 : le coût moyen puis le fournisseur d'un produit réécrits
+     * directement (aucune garde ne les tient : choix de la détection de
+     * nuit) sont relevés, chacun en nommant sa valeur attendue.
+     */
+    public function test_le_cout_moyen_et_le_fournisseur_reecrits_sont_releves(): void
+    {
+        $this->travelTo(self::aParis('2026-10-10 10:00:00'));
+        $this->magasinActif();
+        [$produit, $achat] = $this->produitRecu();
+        $autre = Fournisseur::factory()->create(['nom' => 'Grossiste Dupont']);
+
+        DB::table('produits')->where('id', $produit->id)->update(['cmup_ht' => '0.0100', 'fournisseur_id' => $autre->id]);
+
+        $this->assertSame([
+            'Le coût moyen du produit CARNET (Carnet) est de 0,0100 € au lieu de 2,0000 € que rejouent son grand livre et ses achats.',
+            "Le fournisseur du produit CARNET (Carnet) est #{$autre->id} au lieu de #{$achat->fournisseur_id}, celui de son dernier achat validé.",
+        ], $this->ecartsDuStock());
+    }
+
+    /**
+     * Contrôles positifs : une correction de prix, un retour au
+     * fournisseur, un produit sans suivi, un inventaire d'ouverture et un
+     * produit retiré de son seul achat, faits par leurs actions, ne
+     * présentent aucun écart.
+     */
+    public function test_les_parcours_legitimes_du_stock_ne_presentent_aucun_ecart(): void
+    {
+        $this->travelTo(self::aParis('2026-10-10 10:00:00'));
+        $this->magasinActif();
+        $inventaire = app(CreerInventaireOuvertureAction::class)->handle(self::auteur(), [['produit' => ['nom' => 'Stylo', 'reference' => 'STYLO', 'prix_vente_ttc' => '2.40', 'taux_tva' => '20'], 'quantite' => 6, 'cout_unitaire_ht' => '1.00']]);
+        app(ValiderInventaireOuvertureAction::class)->handle(self::auteur(), $inventaire);
+        [$produit, $achat] = $this->produitRecu();
+        $fournisseur = $achat->fournisseur()->firstOrFail();
+        $achat = app(ModifierFactureAchatAction::class)->handle(self::auteur(), $achat, $fournisseur, [['produit_id' => $produit->id, 'quantite' => 10, 'prix_unitaire_ht' => '3']]);
+        $avoir = app(CreerAvoirFournisseurAction::class)->handle(self::auteur(), $achat, [['ligne_achat_id' => $achat->lignes()->sole()->id, 'quantite' => 2]], 'Abîmé');
+        app(EmettreAvoirFournisseurAction::class)->handle(self::auteur(), $avoir);
+        $sansSuivi = Produit::factory()->create(['reference' => 'CABLE', 'cmup_ht' => '4', 'suivi_stock' => false]);
+        app(ValiderFactureAchatAction::class)->handle(self::auteur(), app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [['produit_id' => $sansSuivi->id, 'quantite' => 3, 'prix_unitaire_ht' => '4']], ['date_facture' => '2026-10-09']));
+        [$retire, $seulAchat] = $this->produitRecu(4, '2', 'AGENDA');
+        app(ModifierFactureAchatAction::class)->handle(self::auteur(), $seulAchat, $seulAchat->fournisseur()->firstOrFail(), [['produit_id' => $sansSuivi->id, 'quantite' => 1, 'prix_unitaire_ht' => '4']]);
+
+        $this->assertSame([0, '3.0000'], [$retire->fresh()?->stock_quantite, $produit->fresh()?->cmup_ht]);
+        $this->assertSame([], $this->ecartsDuStock());
     }
 }

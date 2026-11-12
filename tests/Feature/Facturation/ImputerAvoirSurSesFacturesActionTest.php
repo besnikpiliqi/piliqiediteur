@@ -17,8 +17,10 @@ use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\AvoirAllocation;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Support\GardesDesDocumentsEmis;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
@@ -313,7 +315,11 @@ class ImputerAvoirSurSesFacturesActionTest extends TestCase
 
     /**
      * Une facture d'un autre magasin n'est jamais imputée, même si son
-     * client_id, forcé en base, désigne le client de l'avoir.
+     * client_id, forcé en base, désigne le client de l'avoir. La base
+     * refuse d'abord de réécrire la facture émise, puis, sa garde levée,
+     * la référence au client d'un autre magasin (clé composée) ; le test
+     * la fabrique malgré elles, comme le propriétaire des tables, pour
+     * éprouver l'imputation.
      */
     public function test_le_credit_ne_regle_jamais_une_facture_d_un_autre_magasin_meme_avec_un_client_id_force(): void
     {
@@ -324,7 +330,12 @@ class ImputerAvoirSurSesFacturesActionTest extends TestCase
         $magasinB = Magasin::factory()->create(['code' => 'PARIS1']);
         app(TenantContext::class)->set($magasinB);
         $factureDeB = $this->factureDu('2026-10-02', Client::factory()->professionnel()->create(), 50);
-        DB::table('factures')->where('id', $factureDeB->id)->update(['client_id' => $dupont->id]);
+        $forcerLeClient = fn () => DB::table('factures')->where('id', $factureDeB->id)->update(['client_id' => $dupont->id]);
+        $this->assertThrows($this->dansUnPointDeSauvegarde($forcerLeClient), QueryException::class, GardesDesDocumentsEmis::refusDeModification('factures'));
+        $this->retirerLeDeclencheur('factures', GardesDesDocumentsEmis::nom('factures'));
+        $this->assertRefuseeParLaCleDuMagasin($forcerLeClient, 'factures', 'client_id');
+        $this->falsifierMalgreLaCleDuMagasin('factures', 'client_id');
+        $forcerLeClient();
         app(TenantContext::class)->set($magasinA);
 
         $avoir = $this->avoirTotalDu('2026-10-09', $f0);

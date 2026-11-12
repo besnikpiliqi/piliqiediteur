@@ -4,6 +4,7 @@ namespace App\Filament\App\Pages;
 
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\CaisseSecurisee\Exceptions\RefusFiscalException;
+use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
@@ -535,7 +536,7 @@ class Caisse extends Page implements HasForms
      */
     public function journeeCloturee(): ?string
     {
-        return ClotureCaisse::refusDUneVente(ValeursLues::instance(Filament::getTenant(), Magasin::class)->calendrier()->aujourdhui(), ClotureCaisse::derniereJourneeCloturee());
+        return ClotureCaisse::refusDUneVente(ValeursLues::instance(Filament::getTenant(), Magasin::class)->calendrier()->aujourdhui(), app(RegistreFiscal::class)->derniereJourneeClotureeSansVerrou());
     }
 
     /**

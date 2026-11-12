@@ -1,5 +1,6 @@
 <?php
 
+use App\Domain\Stock\Support\GardesDuStock;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -10,10 +11,10 @@ return new class extends Migration
     {
         Schema::create('mouvements_stock', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('magasin_id')->constrained('magasins')->cascadeOnDelete();
+            $table->foreignId('magasin_id')->constrained('magasins')->restrictOnDelete();
             // Le grand livre garde ses produits, archivés compris : une fiche
             // utilisée ne s'efface jamais.
-            $table->foreignId('produit_id')->constrained('produits')->restrictOnDelete();
+            $table->foreignId('produit_id');
             // vente, reception_achat, inventaire_ouverture,
             // retour_fournisseur, retour_client, ajustement_entree,
             // ajustement_sortie, sortie_cession, entree_annulation_cession
@@ -37,22 +38,30 @@ return new class extends Migration
             $table->decimal('cout_unitaire_ht', 14, 4)->nullable();
             $table->nullableMorphs('source');
             $table->timestamp('survenu_le');
-            $table->foreignId('cree_par')->nullable()->constrained('users')->nullOnDelete();
+            $table->foreignId('cree_par')->nullable()->constrained('users')->restrictOnDelete();
             // Le nom de cette personne au moment de l'opération (voir
             // FigeLeNomDeSesAuteurs) : l'historique ne le relit jamais sur
             // son compte.
             $table->string('cree_par_nom')->nullable();
             $table->text('note')->nullable();
-            // Ledger immuable : pas d'updated_at, un mouvement ne se
-            // modifie jamais, il se compense par un mouvement inverse.
+            // Grand livre en ajout seul : pas d'updated_at, un mouvement ne
+            // se modifie ni ne se supprime jamais, il se compense par un
+            // mouvement inverse ; la base le refuse, et tient elle-même le
+            // stock de chaque produit depuis ce grand livre (voir
+            // GardesDuStock, à la fin de up()).
             $table->timestamp('created_at');
 
             $table->index(['magasin_id', 'produit_id', 'survenu_le']);
+
+            $table->foreign(['magasin_id', 'produit_id'])->references(['magasin_id', 'id'])->on('produits')->restrictOnDelete();
         });
+
+        GardesDuStock::poser();
     }
 
     public function down(): void
     {
         Schema::dropIfExists('mouvements_stock');
+        GardesDuStock::retirer();
     }
 };

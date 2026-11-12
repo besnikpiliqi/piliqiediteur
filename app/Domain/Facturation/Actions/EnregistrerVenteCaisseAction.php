@@ -126,10 +126,6 @@ class EnregistrerVenteCaisseAction
                 $this->lecteur->exiger($vendeur, $autorisation, $magasin);
             }
 
-            if ((int) $client->magasin_id !== $magasin->getKey()) {
-                throw new LogicException('Ce client n\'est pas un client du magasin.');
-            }
-
             $facture = $this->emettreFacture->handle(
                 $vendeur,
                 $this->creerFacture->handle($vendeur, $client, $lignes),

@@ -136,7 +136,7 @@ class EnvoyerDocumentJobConcurrenceTest extends TestCase
         }
 
         $this->assertInstanceOf(InvokedProcess::class, $concurrente);
-        $resultat = $concurrente->wait();
+        $resultat = $this->attendreLeProcessusConcurrent($concurrente);
         $this->assertTrue($resultat->successful(), $resultat->errorOutput());
         app(TenantContext::class)->set($magasin);
         $envoi->refresh();
@@ -204,7 +204,7 @@ class EnvoyerDocumentJobConcurrenceTest extends TestCase
         }
 
         $this->assertInstanceOf(InvokedProcess::class, $concurrente);
-        $resultat = $concurrente->wait();
+        $resultat = $this->attendreLeProcessusConcurrent($concurrente);
         $this->assertTrue($resultat->successful(), $resultat->errorOutput());
         app(TenantContext::class)->set($magasin);
         $relance->refresh();
@@ -294,7 +294,7 @@ class EnvoyerDocumentJobConcurrenceTest extends TestCase
         $leDepartDAbord ? $partir() : $faire();
 
         $this->assertInstanceOf(InvokedProcess::class, $concurrente);
-        $resultat = $concurrente->wait();
+        $resultat = $this->attendreLeProcessusConcurrent($concurrente);
         $this->assertTrue($resultat->successful(), $resultat->errorOutput());
         app(TenantContext::class)->set($magasin->fresh());
         $this->verifierLeGeste($geste, $parametres);

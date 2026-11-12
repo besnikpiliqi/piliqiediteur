@@ -61,7 +61,7 @@ class ValiderLaSocieteConcurrenceTest extends TestCase
         $proprietaire = app(SaisirCodeDeConfirmationAction::class)->handle($siren, $code, (string) $inscrit->email, self::MOT_DE_PASSE_CHOISI, '', '192.0.2.10');
 
         $this->assertInstanceOf(InvokedProcess::class, $concurrente);
-        $resultat = $concurrente->wait();
+        $resultat = $this->attendreLeProcessusConcurrent($concurrente);
         $this->assertFalse($resultat->successful());
         $this->assertStringContainsString(SaisirCodeDeConfirmationAction::MESSAGE_CODE_FAUX, $resultat->errorOutput());
         $this->assertTrue($proprietaire->is($inscrit));
@@ -100,7 +100,7 @@ class ValiderLaSocieteConcurrenceTest extends TestCase
         $nouveau = app(CreerEtablissementAction::class)->handle($societe->proprietaire, $societe, ['nom' => 'Nouveau magasin', 'nic' => MagasinFactory::nicLibre($societe)]);
 
         $this->assertInstanceOf(InvokedProcess::class, $concurrente);
-        $resultat = $concurrente->wait();
+        $resultat = $this->attendreLeProcessusConcurrent($concurrente);
         $this->assertTrue($resultat->successful(), $resultat->errorOutput());
         $this->assertTrue($societe->fresh()->estValidee());
         $magasins = $societe->magasinsReels()->orderBy('id')->pluck('id')->all();

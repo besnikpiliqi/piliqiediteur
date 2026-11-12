@@ -67,9 +67,10 @@ class Produit extends Model
         'seuil_alerte',
     ];
 
-    // stock_quantite n'est volontairement PAS fillable : seul
-    // StockLedgerService est autorisé à la modifier, via les mouvements de
-    // stock. Toute autre écriture casserait la cohérence du ledger.
+    // stock_quantite n'est volontairement PAS fillable : la base seule
+    // l'écrit, en y ajoutant chaque mouvement du grand livre qu'inscrit
+    // StockLedgerService, et refuse toute autre écriture (voir
+    // GardesDuStock).
     // cmup_ht non plus : posé par la validation qui crée le produit, au
     // coût de sa ligne d'achat ou d'inventaire d'ouverture, puis recalculé
     // par StockLedgerService à chaque entrée achetée et à chaque retour au

@@ -88,7 +88,7 @@ class ImputerAvoirSurSesFacturesActionConcurrenceTest extends TestCase
         $premier = self::avoirTotal($dupontId, $premiereReprise->lignes()->sole()->id);
 
         $this->assertInstanceOf(InvokedProcess::class, $concurrente);
-        $resultat = $concurrente->wait();
+        $resultat = $this->attendreLeProcessusConcurrent($concurrente);
         $this->assertTrue($resultat->successful(), $resultat->errorOutput());
         $second = Avoir::query()->whereKeyNot($premier->id)->sole();
         $this->assertSame(

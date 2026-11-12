@@ -170,7 +170,7 @@ class TransmissionConcurrenceTest extends TestCase
         app(AccepterLaTransmissionDeLaProprieteAction::class)->handle($administrateur->refresh(), $jeton, self::MOT_DE_PASSE_CHOISI);
 
         $this->assertInstanceOf(InvokedProcess::class, $cloture);
-        $resultat = $cloture->wait();
+        $resultat = $this->attendreLeProcessusConcurrent($cloture);
         $this->assertTrue($resultat->successful(), $resultat->errorOutput());
         $this->assertTrue(Societe::query()->findOrFail($societeId)->estClose());
         $nouveau = User::query()->findOrFail($administrateur->id);
@@ -220,7 +220,7 @@ class TransmissionConcurrenceTest extends TestCase
     private function attendreLEchec(?InvokedProcess $concurrente): string
     {
         $this->assertInstanceOf(InvokedProcess::class, $concurrente);
-        $resultat = $concurrente->wait();
+        $resultat = $this->attendreLeProcessusConcurrent($concurrente);
         $this->assertFalse($resultat->successful(), 'L\'opération concurrente aurait dû être refusée.');
 
         return $resultat->errorOutput();

@@ -20,7 +20,6 @@ use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Stock\Enums\TypeMouvementStock;
-use App\Domain\Stock\Services\StockLedgerService;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\CategorieAudit;
 use App\Domain\Tenancy\Enums\RoleMagasin;
@@ -152,7 +151,7 @@ class AvoirFournisseurActionsTest extends TestCase
     {
         $produit = Produit::factory()->create(['nom' => 'Câble USB-C', 'taux_tva' => 20, 'suivi_stock' => true]);
         $factureAchat = $this->receptionnerAchat(Fournisseur::factory()->create(), $produit, 5);
-        app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::Vente, 2);
+        $this->sortirParUneVente($produit, 2);
         $produit->delete();
 
         $this->assertThrows(
@@ -241,7 +240,7 @@ class AvoirFournisseurActionsTest extends TestCase
     {
         $produit = Produit::factory()->create(['nom' => 'Câble USB-C', 'taux_tva' => 20, 'suivi_stock' => true]);
         $factureAchat = $this->recevoirEnDeuxLignes($produit);
-        app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::Vente, 4);
+        $this->sortirParUneVente($produit, 4);
         [$premiere, $seconde] = $factureAchat->lignes->all();
 
         $this->assertThrows(
@@ -266,13 +265,13 @@ class AvoirFournisseurActionsTest extends TestCase
     {
         $produit = Produit::factory()->create(['nom' => 'Câble USB-C', 'taux_tva' => 20, 'suivi_stock' => true]);
         $factureAchat = $this->recevoirEnDeuxLignes($produit);
-        app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::Vente, 4);
+        $this->sortirParUneVente($produit, 4);
         [$premiere, $seconde] = $factureAchat->lignes->all();
         $avoir = app(CreerAvoirFournisseurAction::class)->handle(self::auteur(), $factureAchat, [
             ['ligne_achat_id' => $premiere->id, 'quantite' => 3],
             ['ligne_achat_id' => $seconde->id, 'quantite' => 3],
         ]);
-        app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::Vente, 2);
+        $this->sortirParUneVente($produit, 2);
 
         $this->assertThrows(
             fn () => app(EmettreAvoirFournisseurAction::class)->handle(self::auteur(), $avoir),

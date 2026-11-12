@@ -21,8 +21,9 @@ use LogicException;
 
 /**
  * Crée un devis brouillon pour un client déjà résolu par une requête
- * limitée au magasin, jamais un client_id brut venu du formulaire, et note
- * le type de ce client, si le magasin vend en franchise de TVA, la nature
+ * limitée au magasin, jamais un client_id brut venu du formulaire, relu
+ * dans le magasin actif avant toute écriture (voir
+ * BelongsToMagasin::relueDansLeMagasin()), et note le type de ce client, si le magasin vend en franchise de TVA, la nature
  * de l'opération, que ce client et ce régime doivent permettre (voir
  * ContexteDeVente::pourEnregistrer()), et la livraison (voir
  * NoteSaNatureDOperation), que reprend la facture qui en est tirée (voir
@@ -55,7 +56,7 @@ class CreerDevisAction
      *
      * @throws AuthorizationException
      * @throws InvalidArgumentException quand les conditions de paiement sont trop longues pour le pied du PDF (voir PiedDePage)
-     * @throws LogicException quand le magasin est en lecture seule
+     * @throws LogicException quand le magasin est en lecture seule, ou que le client n'est pas un client du magasin
      */
     public function handle(User $auteur, Client $client, array $lignes, array $attributs = []): Devis
     {
@@ -65,6 +66,7 @@ class CreerDevisAction
             $magasin = app(TenantContext::class)->magasin();
             Magasin::query()->whereKey($magasin->getKey())->sharedLock()->firstOrFail()->verifierQuIlEstOuvert();
             $compte = $this->lecteur->exigerSousVerrou($auteur, 'create', $magasin, Devis::class);
+            $client = Client::relueDansLeMagasin($client, Client::REFUS_AUTRE_MAGASIN);
 
             return $this->operateur->pendant($compte, fn (): Devis => $this->creer($compte, $magasin, $client, $lignes, $attributs));
         });

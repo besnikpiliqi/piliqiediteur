@@ -38,7 +38,13 @@ use InvalidArgumentException;
  *   retire ;
  * - gérer les paramètres de la société (identité légale hors SIREN, siège,
  *   TVA, mois de fin d'exercice) : seulement avec tous les magasins (voir
- *   exigentTousLesMagasins()).
+ *   exigentTousLesMagasins()) ;
+ * - suivre la plateforme agréée dans les magasins de sa portée : être
+ *   prévenu d'une facture que la plateforme n'a pas reçue après toutes les
+ *   tentatives automatiques, et la relancer (voir
+ *   RelancerLaTransmissionAction), comme le propriétaire (décision de
+ *   l'éditeur, Q-AUD3) ; jamais précochée. Connecter la plateforme reste
+ *   au propriétaire seul.
  */
 final class AutorisationsSociete
 {
@@ -50,12 +56,14 @@ final class AutorisationsSociete
 
     public const ACCES_REDONNER = 'societe.acces.redonner';
 
+    public const PLATEFORME_SUIVRE = 'societe.plateforme.suivre';
+
     /**
      * @return list<string>
      */
     public static function toutes(): array
     {
-        return [self::MAGASINS_GERER, self::RESPONSABLES_NOMMER, self::PARAMETRES_GERER, self::ACCES_REDONNER];
+        return [self::MAGASINS_GERER, self::RESPONSABLES_NOMMER, self::PARAMETRES_GERER, self::ACCES_REDONNER, self::PLATEFORME_SUIVRE];
     }
 
     /**
@@ -87,21 +95,24 @@ final class AutorisationsSociete
      * Les autorisations qui restent permises quand la société est en
      * lecture seule (suspendue, résiliée, refusée ; voir ControleDesDroits) :
      * nommer et retirer les responsables, et redonner l'accès, car l'équipe
-     * reste gérable, ne serait-ce que pour couper un accès. Une société
-     * révoquée, en lecture seule totale, n'en garde aucune.
+     * reste gérable, ne serait-ce que pour couper un accès ; suivre la
+     * plateforme agréée, car la transmission des factures déjà émises
+     * continue jusqu'au bout. Une société révoquée, en lecture seule
+     * totale, n'en garde aucune.
      *
      * @return list<string>
      */
     public static function permisesEnLectureSeule(bool $societeRevoquee): array
     {
-        return $societeRevoquee ? [] : [self::RESPONSABLES_NOMMER, self::ACCES_REDONNER];
+        return $societeRevoquee ? [] : [self::RESPONSABLES_NOMMER, self::ACCES_REDONNER, self::PLATEFORME_SUIVRE];
     }
 
     /**
      * Le modèle des autorisations de société d'un nouvel administrateur :
      * gérer les magasins, décochable (voir CreerAdministrateurAction).
-     * Nommer et retirer les responsables, redonner l'accès et les
-     * paramètres de la société se cochent à la main : un responsable a tous
+     * Nommer et retirer les responsables, redonner l'accès, les
+     * paramètres de la société et le suivi de la plateforme agréée se
+     * cochent à la main : un responsable a tous
      * les droits de son magasin, et redonner l'accès d'un vendeur ou d'un
      * observateur ne se fait que si le propriétaire l'y autorise.
      *
@@ -145,6 +156,7 @@ final class AutorisationsSociete
             self::RESPONSABLES_NOMMER => 'Responsables : nommer et retirer les responsables de ses magasins, créer leur compte et leur redonner l\'accès (un responsable a tous les droits de son magasin)',
             self::PARAMETRES_GERER => 'Paramètres de la société : identité légale, siège, TVA et fin d\'exercice (avec tous les magasins)',
             self::ACCES_REDONNER => 'Accès : redonner l\'accès aux vendeurs et aux observateurs de ses magasins (la personne présente choisit son mot de passe ; absente, il redevient son identifiant)',
+            self::PLATEFORME_SUIVRE => 'Plateforme agréée : être prévenu d\'une facture de ses magasins que la plateforme n\'a pas reçue après toutes les tentatives automatiques, et la relancer',
         ];
     }
 }

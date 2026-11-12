@@ -89,6 +89,8 @@ return new class extends Migration
             $table->index('reference_envoi');
         });
 
+        DeclencheursDeProtection::auMoins('codes_confirmation', 'tentatives', 0);
+
         DB::statement('CREATE UNIQUE INDEX codes_confirmation_un_actif ON codes_confirmation (siren, motif) WHERE utilise_le IS NULL AND annule_le IS NULL');
 
         DeclencheursDeProtection::suppressionApresConservation('codes_confirmation', 'conserver_jusqu_au');

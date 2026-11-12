@@ -4,11 +4,13 @@ namespace Tests\Browser\Support;
 
 use App\Domain\Calendrier\Calendrier;
 use Closure;
+use Illuminate\Support\Str;
 use Pest\Browser\Api\PendingAwaitablePage;
 use Pest\Browser\Execution;
 use Pest\Browser\Playwright\Locator;
 use Pest\Browser\Playwright\Page;
 use Pest\Browser\Support\ComputeUrl;
+use Pest\TestSuite;
 use PHPUnit\Framework\Assert;
 use PHPUnit\Framework\ExpectationFailedException;
 
@@ -249,18 +251,41 @@ final class Navigation
      * Fait ce geste dans la page, puis attend qu'elle revienne au repos et
      * la vérifie (voir attendre()). Un geste impossible (un élément
      * introuvable, caché ou couvert) échoue en le nommant, et la page
-     * s'enregistre en image dans tests/Browser/Screenshots, que la CI garde.
+     * s'enregistre en image dans tests/Browser/Screenshots, que la CI garde,
+     * sous le nom du test courant (voir nomDeLaCapture()), que le message
+     * d'échec cite.
      */
     public function geste(Closure $geste, string $description = 'le geste'): self
     {
         try {
             $geste();
         } catch (ExpectationFailedException $exception) {
-            $this->page()->screenshot(true, 'echec-'.substr(md5($this->page()->url().$description), 0, 12));
-            Assert::fail(ucfirst($description).' a échoué sur '.$this->page()->url().' : '.$exception->getMessage());
+            $capture = self::nomDeLaCapture($this->page()->url().$description);
+            $this->page()->screenshot(true, $capture);
+            Assert::fail(ucfirst($description).' a échoué sur '.$this->page()->url().' : '.$exception->getMessage()."\nCapture : tests/Browser/Screenshots/{$capture}.png");
         }
 
         return $this->attendre()->verifier();
+    }
+
+    /**
+     * Le nom de la capture d'un geste en échec : « echec- », le nom du test
+     * courant et de son jeu de données, réduits à des lettres sans accent,
+     * des chiffres et des tirets, puis l'empreinte de l'adresse et du geste,
+     * qui distingue deux échecs d'un même test (constat C75 des audits du
+     * 07/11/2026).
+     */
+    public static function nomDeLaCapture(string $adresseEtGeste): string
+    {
+        $test = TestSuite::getInstance()->test;
+        $nom = match (true) {
+            $test === null => 'hors-test',
+            method_exists($test, 'getPrintableTestCaseMethodName') => $test->getPrintableTestCaseMethodName().' '.$test->dataSetAsStringWithData(),
+            default => $test->nameWithDataSet(),
+        };
+        $nom = trim((string) preg_replace('/[^a-z0-9]+/', '-', strtolower(Str::ascii($nom))), '-');
+
+        return 'echec-'.substr($nom, 0, 120).'-'.substr(md5($adresseEtGeste), 0, 12);
     }
 
     /**

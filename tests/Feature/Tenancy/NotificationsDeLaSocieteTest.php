@@ -11,7 +11,9 @@ use App\Domain\Facturation\Models\EnvoiDocument;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Notifications\EnvoiDocumentEchoue;
 use App\Domain\Facturation\Notifications\FacturesPasseesEnRetard;
+use App\Domain\Facturation\Notifications\TransmissionNonAboutie;
 use App\Domain\Facturation\Services\ArchiveDesDocuments;
+use App\Domain\Stock\Notifications\EcartDansLeStock;
 use App\Domain\Stock\Notifications\StockNegatif;
 use App\Domain\Stock\Notifications\StockSousLeSeuilDAlerte;
 use App\Domain\Tenancy\Enums\StatutDuTelechargement;
@@ -61,8 +63,10 @@ class NotificationsDeLaSocieteTest extends TestCase
             ResponsableNommeParUnAdministrateur::class => new ResponsableNommeParUnAdministrateur($administrateur, $responsable, $magasin),
             EnvoiDocumentEchoue::class => new EnvoiDocumentEchoue($envoi),
             FacturesPasseesEnRetard::class => new FacturesPasseesEnRetard($magasin, ['FAC-MABOUT-2026-000001']),
+            TransmissionNonAboutie::class => new TransmissionNonAboutie(Facture::factory()->create()),
             StockSousLeSeuilDAlerte::class => new StockSousLeSeuilDAlerte(Produit::factory()->create()),
             StockNegatif::class => new StockNegatif(Produit::factory()->create(), 'T-MABOUT-2026-000001'),
+            EcartDansLeStock::class => new EcartDansLeStock($magasin, 2),
             StockDuMagasinCede::class => new StockDuMagasinCede($magasin, '28.75', []),
             AvisDuTelechargementDesDocuments::class => new AvisDuTelechargementDesDocuments(app(TenantContext::class)->runAsSociete($societe, fn (): TelechargementDeDocuments => tap((new TelechargementDeDocuments)->forceFill([
                 'demande_par' => $proprietaire->id,

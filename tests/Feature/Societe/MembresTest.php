@@ -217,6 +217,29 @@ class MembresTest extends TestCase
     }
 
     /**
+     * « Modifier son rôle » est une action de la fiche d'un membre : le
+     * propriétaire la voit et l'ouvre sur la fiche d'un vendeur, jamais sur
+     * celle d'un administrateur (constat C45 des audits du 07/11/2026 : le
+     * balayage en navigateur, qui n'ouvre qu'une fiche par sorte
+     * d'adresse, doit ouvrir celle d'un membre pour la trouver).
+     */
+    public function test_modifier_son_role_s_ouvre_sur_la_fiche_d_un_membre_et_jamais_sur_celle_d_un_administrateur(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $proprietaire = $this->proprietaireDe($magasin);
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
+        $administrateur = $this->administrateur($magasin);
+        $this->dansLEspaceDeLaSociete($magasin->societe, $proprietaire);
+
+        Livewire::test(FicheDuMembre::class, ['record' => $vendeur->getRouteKey()])
+            ->assertActionVisible('modifierSonRole')
+            ->mountAction('modifierSonRole')
+            ->assertActionMounted('modifierSonRole');
+        Livewire::test(FicheDuMembre::class, ['record' => $administrateur->getRouteKey()])
+            ->assertActionHidden('modifierSonRole');
+    }
+
+    /**
      * Depuis la fiche d'un membre, le propriétaire change son rôle dans
      * son magasin, et le réintègre, retiré, avec le rôle qu'il choisit.
      */

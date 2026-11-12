@@ -22,8 +22,8 @@ return new class extends Migration
     {
         Schema::create('taux_avoirs_fournisseur', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('magasin_id')->constrained('magasins')->cascadeOnDelete();
-            $table->foreignId('avoir_fournisseur_id')->constrained('avoirs_fournisseur')->cascadeOnDelete();
+            $table->foreignId('magasin_id')->constrained('magasins')->restrictOnDelete();
+            $table->foreignId('avoir_fournisseur_id');
             $table->decimal('taux_tva', 5, 2);
             // La somme exacte des HT retenus de ses lignes.
             $table->decimal('base_ht', 12, 2);
@@ -35,7 +35,7 @@ return new class extends Migration
             $table->decimal('montant_tva_saisi', 12, 2)->nullable();
             // La confirmation d'un écart au-delà de la tolérance (voir la
             // migration create_taux_factures_achat_table).
-            $table->foreignId('ecart_confirme_par')->nullable()->constrained('users')->nullOnDelete();
+            $table->foreignId('ecart_confirme_par')->nullable()->constrained('users')->restrictOnDelete();
             $table->string('ecart_confirme_par_nom')->nullable();
             $table->dateTime('ecart_confirme_le')->nullable();
             $table->char('ecart_confirme_empreinte', 64)->nullable();
@@ -44,6 +44,8 @@ return new class extends Migration
 
             $table->unique(['avoir_fournisseur_id', 'taux_tva']);
             $table->index(['magasin_id', 'avoir_fournisseur_id']);
+
+            $table->foreign(['magasin_id', 'avoir_fournisseur_id'])->references(['magasin_id', 'id'])->on('avoirs_fournisseur')->cascadeOnDelete();
         });
     }
 

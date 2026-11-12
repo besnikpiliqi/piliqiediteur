@@ -103,6 +103,32 @@ class VerifierIntegriteFiscaleTest extends TestCase
     }
 
     /**
+     * C26 : un ticket Z ajouté par une requête directe, qu'aucune clôture
+     * n'a signé, fait échouer la vérification complète de la nuit, qui
+     * l'inscrit au journal des événements (JET 90) en nommant son numéro.
+     */
+    public function test_un_ticket_z_ajoute_par_une_requete_directe_fait_echouer_la_verification(): void
+    {
+        $this->travelTo(self::aParis('2026-10-02 03:00:00'));
+        $magasin = $this->magasinQuiAVendu(['nom' => 'Boutique Lefèvre']);
+        $this->insererUnFauxTicketZ($magasin, '2026-10-02', 'Z-LYON1-2026-000001', self::aParis('2026-10-02 02:00:00'));
+        $message = 'Le ticket Z Z-LYON1-2026-000001 du 02/10/2026 n\'a été signé par aucune clôture du journal des événements : il n\'a pas été écrit par la clôture de sa journée.';
+
+        $this->artisan('caisse:verifier', ['--complet' => true])
+            ->expectsOutputToContain("Boutique Lefèvre [90] {$message}")
+            ->assertFailed();
+
+        $this->assertSame([['controle' => 'cloture', 'message' => $message, 'cloture_id' => DB::table('clotures_caisse')->where('magasin_id', $magasin->id)->value('id'), 'numero' => 'Z-LYON1-2026-000001']], EnregistrementFiscal::query()
+            ->withoutGlobalScopes()
+            ->where('magasin_id', $magasin->id)
+            ->where('chaine', ChaineFiscale::Evenement->value)
+            ->where('type', '90')
+            ->get()
+            ->map(static fn (EnregistrementFiscal $anomalie): array => $anomalie->contenuSigne()['donnees']['details'])
+            ->all());
+    }
+
+    /**
      * Une clé retirée du dépôt rend suspect chaque enregistrement, ici
      * 105 : la vente, son encaissement et 103 événements. La sortie n'en
      * liste que cent, comme le journal des événements, jusqu'au 98e

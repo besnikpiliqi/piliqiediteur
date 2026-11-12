@@ -7,6 +7,7 @@ use App\Domain\Facturation\Actions\AjouterPreuveOperationAction;
 use App\Domain\Facturation\Actions\EmettreLaFactureRectificativeAction;
 use App\Domain\Facturation\Actions\FaireLAvoirDeRegularisationAction;
 use App\Domain\Facturation\Actions\NoterBordereauDetaxeAction;
+use App\Domain\Facturation\Actions\RelancerLaTransmissionAction;
 use App\Domain\Facturation\Enums\TypePreuve;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Facture;
@@ -18,6 +19,7 @@ use App\Filament\App\Resources\AvoirResource;
 use App\Filament\App\Resources\FactureResource;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use App\Filament\Concerns\PrendLeCalendrierDuMagasin;
+use App\Integrations\Pdp\Enums\StatutTransmissionPdp;
 use Filament\Actions;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
@@ -67,7 +69,34 @@ class ViewFacture extends ViewRecord
             $this->emettreLaFactureRectificative(),
             $this->ajouterUnePreuve(),
             $this->noterLeBordereauDeDetaxe(),
+            $this->relancerLaTransmission(),
         ];
+    }
+
+    /**
+     * « Relancer la transmission » d'une facture que la plateforme agréée
+     * n'a pas reçue après toutes les tentatives automatiques, pour le
+     * propriétaire et les administrateurs qui suivent la plateforme agréée
+     * (voir RelancerLaTransmissionAction) : la même transmission repart,
+     * sous la même référence de dépôt, sans jamais déposer deux fois la
+     * facture.
+     */
+    private function relancerLaTransmission(): Actions\Action
+    {
+        return Actions\Action::make('relancerLaTransmission')
+            ->label('Relancer la transmission')
+            ->icon('heroicon-o-arrow-path')
+            ->color('warning')
+            ->requiresConfirmation()
+            ->modalHeading('Relancer la transmission à la plateforme agréée')
+            ->modalDescription('La facture repart vers la plateforme agréée sous la même référence de dépôt : si la plateforme l\'a déjà reçue, elle n\'est pas déposée une seconde fois. PILIQI la relance aussi de lui-même chaque heure.')
+            ->visible(fn (Facture $record): bool => $record->derniereTransmissionPdp()?->statut === StatutTransmissionPdp::EchecTechnique
+                && RelancerLaTransmissionAction::permiseA(CompteConnecte::exiger(), $record))
+            ->action(fn (Facture $record) => static::executerSansCasser(function () use ($record): void {
+                app(RelancerLaTransmissionAction::class)->handle(CompteConnecte::exiger(), $record);
+
+                Notification::make()->title('La transmission est relancée.')->body('Son état se met à jour sur cette fiche dès que la plateforme a répondu.')->success()->send();
+            }));
     }
 
     /**

@@ -22,7 +22,6 @@ use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\VerificateurCaissesPersonnelles;
 use App\Domain\Stock\Enums\TypeMouvementStock;
 use App\Domain\Stock\Models\MouvementStock;
-use App\Domain\Stock\Services\StockLedgerService;
 use App\Domain\Tenancy\Actions\ChangerSiretAction;
 use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
 use App\Domain\Tenancy\Actions\ChoisirEtablissementPrincipalAction;
@@ -900,14 +899,18 @@ class FermerEtRouvrirMagasinTest extends TestCase
 
     /**
      * Un produit suivi en stock du magasin actif, à ce coût moyen, amené à
-     * cette quantité par un ajustement d'inventaire.
+     * cette quantité par l'inventaire d'ouverture de la fabrique, ou, en
+     * dessous de zéro, par une vente sans stock.
      */
     private function produitEnStock(string $reference, string $nom, int $quantite, string $coutMoyen): Produit
     {
-        $produit = Produit::factory()->create(['reference' => $reference, 'nom' => $nom, 'cmup_ht' => $coutMoyen, 'suivi_stock' => true, 'seuil_alerte' => 0]);
-        app(StockLedgerService::class)->ajuster($produit, $quantite, 'Inventaire d\'ouverture');
+        $produit = Produit::factory()->create(['reference' => $reference, 'nom' => $nom, 'cmup_ht' => $coutMoyen, 'suivi_stock' => true, 'seuil_alerte' => 0, 'stock_quantite' => max($quantite, 0)]);
 
-        return $produit;
+        if ($quantite < 0) {
+            self::vendreJusquAuStockNegatif($produit, -$quantite);
+        }
+
+        return $produit->fresh() ?? $produit;
     }
 
     /**

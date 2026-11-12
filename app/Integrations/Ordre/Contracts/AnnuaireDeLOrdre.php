@@ -14,7 +14,7 @@ use LogicException;
  * AnnuaireTenuParLEditeur), qui n'en lit rien et fait vérifier chaque
  * cabinet par l'éditeur, dans sa procédure. Une implémentation factice
  * (voir FauxAnnuaireDeLOrdre) sert au développement et aux tests, jamais en
- * production (voir VerificationServiceProvider). Aucune clé n'est dans le
+ * production (voir FournisseursExternesServiceProvider). Aucune clé n'est dans le
  * dépôt.
  */
 interface AnnuaireDeLOrdre

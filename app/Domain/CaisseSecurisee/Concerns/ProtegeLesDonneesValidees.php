@@ -21,11 +21,13 @@ use Illuminate\Database\Eloquent\Model;
  * Seules les écritures qui passent par le modèle sont arrêtées ici : un
  * update() ou un delete() en masse, DB::table() ou une requête brute ne
  * déclenchent aucun événement Eloquent. Sur les tables où l'on ne fait
- * qu'ajouter (paiements, imputations, registre fiscal), les déclencheurs
+ * qu'ajouter (paiements, imputations, registre fiscal, tickets Z), les déclencheurs
  * SQL les refusent (voir DeclencheursDeProtection::ajoutSeul()) ; sur les
  * factures, les avoirs et leurs lignes, dont le brouillon reste
- * modifiable, le contenu signé au registre fiscal à l'émission en révèle
- * les effets.
+ * modifiable, d'autres déclencheurs refusent de supprimer ou de réécrire
+ * un document émis, hors de ce qui le suit encore, et de toucher à ses
+ * lignes (voir GardesDesDocumentsEmis) ; le contenu signé au registre
+ * fiscal à l'émission révèle de toute façon ce qui aurait été altéré.
  */
 trait ProtegeLesDonneesValidees
 {

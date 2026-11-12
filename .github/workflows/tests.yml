@@ -392,8 +392,24 @@ jobs:
           npm ci
           npx playwright install --with-deps chromium
 
+      # Le rapport JUnit de la suite donne son résumé (tests réussis,
+      # échoués et sautés, chaque raison de saut) à la tâche, qui échoue si
+      # un test est sauté (voir tests/Qualite/resume-des-tests.php), et se
+      # garde en artefact.
       - name: Execute tests
-        run: php artisan test --parallel
+        run: php artisan test --parallel --log-junit storage/logs/junit.xml
+
+      - name: Résumé des tests
+        if: always()
+        run: php tests/Qualite/resume-des-tests.php storage/logs/junit.xml
+
+      - name: Garder le rapport des tests
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: junit-php-${{ matrix.php }}-postgresql-${{ matrix.postgres }}
+          path: storage/logs/junit.xml
+          if-no-files-found: ignore
 
       - name: Upload browser screenshots
         if: failure()

@@ -29,10 +29,12 @@ use App\Filament\App\Resources\PosteReconnuResource;
 use App\Filament\App\Resources\PosteReconnuResource\Pages\ListPostesReconnus;
 use App\Filament\Societe\Pages\TableauDeBord;
 use App\Http\Middleware\ExigerSonPropreMotDePasse;
+use App\Http\Middleware\FaireConfianceAuxMandataires;
 use Filament\Facades\Filament;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Contracts\Hashing\Hasher;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cookie;
 use Illuminate\Support\Facades\DB;
@@ -42,6 +44,7 @@ use Illuminate\Testing\TestResponse;
 use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
 use LogicException;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
@@ -336,6 +339,74 @@ class ConnexionParIdentifiantTest extends TestCase
         foreach (range(1, LimitationDesConnexions::ECHECS_PAR_SAISIE_ET_ADRESSE + 1) as $rang) {
             $this->assertSame(Connexion::MESSAGE_ECHEC, $this->erreurDeConnexion($essayer($suivi, $rang)), "essai {$rang}");
         }
+    }
+
+    /**
+     * @return array<string, array{string, list<string>}>
+     */
+    public static function listesTropLarges(): array
+    {
+        return [
+            'mot-clé PRIVATE_SUBNETS' => ['10.0.0.4', ['PRIVATE_SUBNETS']],
+            'mot-clé private_ranges' => ['10.0.0.5', ['private_ranges']],
+            'adresse IPv4 portée en IPv6' => ['::ffff:203.0.113.9', ['PRIVATE_SUBNETS']],
+            'adresse Teredo' => ['2001:0:4136:e378:8000:63bf:3fff:fdd2', ['private_ranges']],
+            'tout IPv4' => ['198.51.100.20', ['0.0.0.0/0']],
+            'tout IPv6' => ['2a01:e0a::1', ['::/0']],
+        ];
+    }
+
+    /**
+     * Seules une adresse IP valide et une plage CIDR étroite déclarées
+     * font croire un mandataire : un mot-clé (PRIVATE_SUBNETS,
+     * private_ranges), une plage /0 ou une plage IPv6 qui porte des
+     * adresses IPv4 ne valent rien, et changer d'adresse forgée à chaque
+     * essai ne contourne pas l'attente (constat C39 des audits du
+     * 07/11/2026).
+     *
+     * @param  list<string>  $declares
+     */
+    #[DataProvider('listesTropLarges')]
+    public function test_une_liste_de_mandataires_trop_large_ne_fait_croire_aucun_x_forwarded_for(string $connexion, array $declares): void
+    {
+        $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        config(['piliqi.proxies_de_confiance' => $declares]);
+        $instantane = $this->instantaneLivewire($this->get('/app/login')->assertOk()->getContent(), 'connexion');
+        $essayer = fn (string $saisie, int $rang): TestResponse => $this->withServerVariables(['REMOTE_ADDR' => $connexion])
+            ->withHeaders(['X-Forwarded-For' => "203.0.113.{$rang}"])
+            ->requeteLivewire($instantane, ['data.login' => $saisie, 'data.password' => 'pas-le-bon'], 'authenticate');
+
+        $saisie = $this->identifiantInconnu();
+        foreach (range(1, LimitationDesConnexions::ECHECS_PAR_SAISIE_ET_ADRESSE) as $rang) {
+            $this->assertSame(Connexion::MESSAGE_ECHEC, $this->erreurDeConnexion($essayer($saisie, $rang)), "essai {$rang}");
+        }
+        $this->assertSame(LimitationDesConnexions::message(60), $this->erreurDeConnexion($essayer($saisie, 99)));
+    }
+
+    /**
+     * Le mandataire lui-même : l'adresse transmise n'est crue que depuis
+     * une adresse ou une plage étroite déclarée ; une liste trop large
+     * laisse l'adresse de la connexion.
+     */
+    public function test_le_mandataire_ne_croit_que_les_adresses_et_plages_etroites_declarees(): void
+    {
+        $adresseVue = function (array $declares, string $connexion = '10.0.0.4'): string {
+            config(['piliqi.proxies_de_confiance' => $declares]);
+            $requete = Request::create('/', 'GET', server: ['REMOTE_ADDR' => $connexion, 'HTTP_X_FORWARDED_FOR' => '203.0.113.7']);
+
+            return (string) (new FaireConfianceAuxMandataires)->handle($requete, fn (Request $lue) => response((string) $lue->ip()))->getContent();
+        };
+
+        foreach ([['PRIVATE_SUBNETS'], ['private_ranges'], ['0.0.0.0/0'], ['10.0.0.0/0'], ['10.0.0.0/33'], ['10.0.0.0/x'], ['pas-une-adresse']] as $declares) {
+            $this->assertSame('10.0.0.4', $adresseVue($declares), implode(',', $declares));
+        }
+        foreach (['::/0', '::ffff:0:0/96', '::/96', '2002::/16', '2001::/32', '64:ff9b::/96', '64:ff9b:1::/48', '::/8'] as $plage) {
+            $this->assertSame('::ffff:10.0.0.4', $adresseVue([$plage], '::ffff:10.0.0.4'), $plage);
+        }
+
+        $this->assertSame('203.0.113.7', $adresseVue(['10.0.0.4']));
+        $this->assertSame('203.0.113.7', $adresseVue(['10.0.0.0/8']));
+        $this->assertSame('203.0.113.7', $adresseVue(['2a01:e0a::/32'], '2a01:e0a::1'));
     }
 
     /**

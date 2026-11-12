@@ -2,6 +2,7 @@
 
 namespace App\Domain\Facturation\Support;
 
+use App\Domain\CaisseSecurisee\Support\DeclencheursDeProtection;
 use App\Domain\Tenancy\Enums\RoleSociete;
 use App\Domain\Tenancy\Support\LitteralSql;
 use Illuminate\Support\Facades\DB;
@@ -105,7 +106,7 @@ final class GardesDeLaVente
                 ."ELSIF NOT ({$garde['vente']}) THEN RETURN NEW; END IF; ";
         $connexion = DB::connection();
 
-        $connexion->unprepared("CREATE OR REPLACE FUNCTION {$nom}() RETURNS trigger LANGUAGE plpgsql AS \$\$ BEGIN "
+        $connexion->unprepared("CREATE OR REPLACE FUNCTION {$nom}() RETURNS trigger LANGUAGE plpgsql ".DeclencheursDeProtection::CHEMIN_DE_RECHERCHE.' AS $$ BEGIN '
             ."IF NEW.{$auteur} IS NULL THEN RETURN NEW; END IF; "
             .$estUneVente
             ."PERFORM 1 FROM users WHERE id = NEW.{$auteur} FOR SHARE; "

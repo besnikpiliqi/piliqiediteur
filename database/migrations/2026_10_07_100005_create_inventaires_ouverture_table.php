@@ -11,13 +11,13 @@ return new class extends Migration
     {
         Schema::create('inventaires_ouverture', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('magasin_id')->constrained('magasins')->cascadeOnDelete();
-            $table->foreignId('cree_par')->nullable()->constrained('users')->nullOnDelete();
+            $table->foreignId('magasin_id')->constrained('magasins')->restrictOnDelete();
+            $table->foreignId('cree_par')->nullable()->constrained('users')->restrictOnDelete();
             // Le nom de cette personne au moment de l'opération (voir
             // FigeLeNomDeSesAuteurs) : l'historique ne le relit jamais sur
             // son compte.
             $table->string('cree_par_nom')->nullable();
-            $table->foreignId('valide_par')->nullable()->constrained('users')->nullOnDelete();
+            $table->foreignId('valide_par')->nullable()->constrained('users')->restrictOnDelete();
             $table->string('valide_par_nom')->nullable();
             // Attribué seulement à la validation (voir
             // ValiderInventaireOuvertureAction), dans la série INV du
@@ -35,6 +35,8 @@ return new class extends Migration
             $table->timestamps();
 
             $table->unique(['magasin_id', 'numero']);
+
+            $table->unique(['magasin_id', 'id']);
         });
 
         // Seule une société qui a des articles fait un inventaire

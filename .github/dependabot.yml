@@ -10,3 +10,38 @@ updates:
       github-actions:
         patterns:
           - "*"
+
+  # Les paquets de PHP et de Node, chaque semaine, vers la branche de
+  # travail (décision de l'éditeur du 09/11/2026, Q-AUD6) : les mises à
+  # jour mineures et correctives groupées par écosystème ; les versions
+  # majeures restent une décision de l'éditeur. Une demande de Dependabot
+  # ne se fusionne jamais telle quelle : sa mise à jour entre par un lot.
+  - package-ecosystem: "composer"
+    directory: "/"
+    target-branch: "claude/saas-invoice-editor-architecture-q6eizh"
+    schedule:
+      interval: "weekly"
+    groups:
+      composer:
+        update-types:
+          - "minor"
+          - "patch"
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - "version-update:semver-major"
+
+  - package-ecosystem: "npm"
+    directory: "/"
+    target-branch: "claude/saas-invoice-editor-architecture-q6eizh"
+    schedule:
+      interval: "weekly"
+    groups:
+      npm:
+        update-types:
+          - "minor"
+          - "patch"
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - "version-update:semver-major"

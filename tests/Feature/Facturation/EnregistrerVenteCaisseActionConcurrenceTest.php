@@ -85,7 +85,7 @@ class EnregistrerVenteCaisseActionConcurrenceTest extends TestCase
         $premiere = self::vendreLePanier($comptoirId, $tshirtId, $livreId);
 
         $this->assertInstanceOf(InvokedProcess::class, $concurrente);
-        $resultat = $concurrente->wait();
+        $resultat = $this->attendreLeProcessusConcurrent($concurrente);
         $this->assertTrue($resultat->successful(), $resultat->errorOutput());
         $seconde = Facture::query()->whereKeyNot($premiere->id)->sole();
         foreach ([$premiere, $seconde] as $ticket) {
@@ -128,7 +128,7 @@ class EnregistrerVenteCaisseActionConcurrenceTest extends TestCase
         $premiere = self::vendreVingtEuros($comptoirId, $produitId, 'AV-MABOUT-2026-000001');
 
         $this->assertInstanceOf(InvokedProcess::class, $concurrente);
-        $resultat = $concurrente->wait();
+        $resultat = $this->attendreLeProcessusConcurrent($concurrente);
         $this->assertFalse($resultat->successful());
         $this->assertStringContainsString('Ce bon d\'avoir est introuvable ou déjà utilisé.', $resultat->errorOutput());
         $this->assertSame([$ticket->id, $premiere->id], Facture::query()->orderBy('id')->pluck('id')->all());
@@ -166,7 +166,7 @@ class EnregistrerVenteCaisseActionConcurrenceTest extends TestCase
         $premiere = self::vendreVingtEuros($martinId, $produitId);
 
         $this->assertInstanceOf(InvokedProcess::class, $concurrente);
-        $resultat = $concurrente->wait();
+        $resultat = $this->attendreLeProcessusConcurrent($concurrente);
         $this->assertFalse($resultat->successful());
         $this->assertStringContainsString('Le total à payer a changé (crédit d\'avoir du client) : 12,00 € à répartir.', $resultat->errorOutput());
         $this->assertSame([$achatRendu->id, $premiere->id], Facture::query()->orderBy('id')->pluck('id')->all());

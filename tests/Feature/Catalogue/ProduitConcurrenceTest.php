@@ -42,9 +42,9 @@ class ProduitConcurrenceTest extends TestCase
         });
 
         $this->assertInstanceOf(InvokedProcess::class, $concurrente);
-        $resultat = $concurrente->wait();
+        $resultat = $this->attendreLeProcessusConcurrent($concurrente);
         $this->assertTrue($resultat->failed());
-        $this->assertSame(InvalidArgumentException::class.' : La référence « abc » est déjà celle d\'un autre produit.', $resultat->errorOutput());
+        $this->assertSame(InvalidArgumentException::class.' : La référence « abc » est déjà celle d\'un autre produit.', self::erreurDuProcessus($resultat));
         $this->assertSame(['ABC'], Produit::query()->pluck('reference')->all());
     }
 }

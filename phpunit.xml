@@ -42,6 +42,8 @@
         <env name="RNE_PILOTE" value="faux"/>
         <env name="RECOMMANDE_PILOTE" value="faux"/>
         <env name="ORDRE_PILOTE" value="faux"/>
+        <env name="PDP_PILOTE" value="faux"/>
+        <env name="APP_FAKER_LOCALE" value="fr_FR" force="true"/>
         <env name="ANTIVIRUS_PILOTE" value="factice"/>
         <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>

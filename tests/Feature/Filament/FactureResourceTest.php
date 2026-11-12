@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Filament;
 
+use App\Domain\Authorization\AutorisationsSociete;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
@@ -25,6 +26,7 @@ use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\NatureOperation;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Enums\TransportPar;
+use App\Domain\Facturation\Jobs\SubmitFactureToPdpJob;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\LigneFacture;
@@ -40,6 +42,7 @@ use App\Filament\App\Resources\FactureResource\Pages\CreateFacture;
 use App\Filament\App\Resources\FactureResource\Pages\EditFacture;
 use App\Filament\App\Resources\FactureResource\Pages\ListFactures;
 use App\Filament\App\Resources\FactureResource\Pages\ViewFacture;
+use App\Integrations\Pdp\Enums\StatutTransmissionPdp;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -48,6 +51,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
 use Illuminate\View\ViewException;
 use Livewire\Livewire;
@@ -1751,6 +1755,49 @@ class FactureResourceTest extends TestCase
         Livewire::test(ViewFacture::class, ['record' => $facture->getRouteKey()])
             ->assertSuccessful()
             ->assertSee('Acceptée par le PDP');
+    }
+
+    /**
+     * Une facture que la plateforme agréée n'a pas reçue après toutes les
+     * tentatives automatiques : sa fiche dit « Non transmise : incident
+     * technique » et l'explique ; le propriétaire et un administrateur qui
+     * suit la plateforme agréée la relancent, un responsable du magasin ne
+     * voit pas le bouton (décision de l'éditeur, Q-AUD3).
+     */
+    public function test_la_fiche_d_une_facture_non_transmise_explique_l_incident_et_propose_de_la_relancer(): void
+    {
+        $magasin = $this->completerIdentiteLegale($this->ouvrirUneSociete(['nom' => 'Ma Boutique']));
+        MandatPdp::factory()->create(['magasin_id' => $magasin->id]);
+        $responsable = $this->responsableDeTest($magasin);
+        $suitLaPlateforme = $this->administrateur($magasin, null, [AutorisationsSociete::PLATEFORME_SUIVRE]);
+        $this->actingAs($responsable);
+        Filament::setTenant($magasin);
+        Queue::fake();
+        $facture = $this->emettreFactureDepuisLePanneau(Client::factory()->professionnel()->create());
+        $facture->transmissionsPdp()->create([
+            'direction' => 'outbound',
+            'prestataire_pdp' => 'faux',
+            'statut' => StatutTransmissionPdp::EchecTechnique,
+            'message_erreur' => SubmitFactureToPdpJob::EXPLICATION_DE_L_ECHEC,
+            'soumise_le' => now(),
+        ]);
+
+        Livewire::test(ViewFacture::class, ['record' => $facture->getRouteKey()])
+            ->assertSee('Non transmise : incident technique')
+            ->assertSee("c'est un incident technique, pas un refus de la facture")
+            ->assertActionHidden('relancerLaTransmission');
+
+        foreach ([$this->proprietaireDe($magasin), $suitLaPlateforme] as $permis) {
+            Queue::fake();
+            $this->actingAs($permis);
+
+            Livewire::test(ViewFacture::class, ['record' => $facture->getRouteKey()])
+                ->assertActionVisible('relancerLaTransmission')
+                ->callAction('relancerLaTransmission')
+                ->assertNotified('La transmission est relancée.');
+
+            Queue::assertPushed(SubmitFactureToPdpJob::class, fn (SubmitFactureToPdpJob $job): bool => $job->factureId === $facture->id && $job->magasinId === $magasin->id);
+        }
     }
 
     /**

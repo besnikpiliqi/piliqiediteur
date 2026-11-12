@@ -10,7 +10,6 @@ use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Models\Avoir;
-use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\LigneAvoir;
 use App\Domain\Facturation\Models\LigneFacture;
@@ -44,7 +43,8 @@ use Illuminate\Support\Collection;
  * Ce que la clôture compte se lit dans le registre fiscal (voir
  * RegistreFiscal::enregistrementsJusquA()) : les enregistrements des
  * chaînes des ventes et des encaissements qui suivent ceux de la clôture
- * précédente (ses dernières séquences) et dont l'horodatage ne dépasse pas
+ * précédente (les dernières séquences que signe son événement 50) et dont
+ * l'horodatage ne dépasse pas
  * la fin de la journée du calendrier. Chaque document et chaque
  * paiement comptent ainsi dans une seule clôture, sans rien écrire sur
  * eux : un paiement ou une facture à un professionnel enregistrés après
@@ -84,18 +84,19 @@ class RecapitulatifDeCloture
      * @param  string  $journee  la journée clôturée, AAAA-MM-JJ
      * @param  EloquentCollection<int, Facture>  $tickets  les tickets de la journée
      * @param  EloquentCollection<int, Avoir>  $avoirsDeTickets  les avoirs du jour sur des tickets
-     * @param  ClotureCaisse|null  $precedente  la dernière clôture du magasin, null pour la première
+     * @param  int|null  $apresVente  la dernière séquence des ventes que signe la clôture précédente au registre (voir RegistreFiscal::derniereClotureSignee()), null quand elle n'en comptait aucune ou qu'il n'y en a pas
+     * @param  int|null  $apresEncaissement  de même pour les encaissements
      * @return array{recapitulatif: Recapitulatif, derniere_sequence_vente: int|null, derniere_sequence_encaissement: int|null}
      *
      * @throws ModuleFiscalNonConfigureException
      * @throws HorlogeRegressiveException
      */
-    public function etablir(Magasin $magasin, string $journee, EloquentCollection $tickets, EloquentCollection $avoirsDeTickets, ?ClotureCaisse $precedente): array
+    public function etablir(Magasin $magasin, string $journee, EloquentCollection $tickets, EloquentCollection $avoirsDeTickets, ?int $apresVente, ?int $apresEncaissement): array
     {
         $finDeLaJournee = $magasin->calendrier()->bornesDuJour($journee)[1]->subSecond();
-        $ventes = $this->registre->enregistrementsJusquA($magasin, ChaineFiscale::Vente, $precedente?->derniere_sequence_vente, $finDeLaJournee);
-        $encaissements = $this->registre->enregistrementsJusquA($magasin, ChaineFiscale::Encaissement, $precedente?->derniere_sequence_encaissement, $finDeLaJournee);
-        $derniereSequenceVente = $ventes->last()->sequence ?? $precedente?->derniere_sequence_vente;
+        $ventes = $this->registre->enregistrementsJusquA($magasin, ChaineFiscale::Vente, $apresVente, $finDeLaJournee);
+        $encaissements = $this->registre->enregistrementsJusquA($magasin, ChaineFiscale::Encaissement, $apresEncaissement, $finDeLaJournee);
+        $derniereSequenceVente = $ventes->last()->sequence ?? $apresVente;
 
         return [
             'recapitulatif' => [
@@ -108,7 +109,7 @@ class RecapitulatifDeCloture
                 'grands_totaux' => $this->registre->grandsTotauxApres($magasin, $derniereSequenceVente),
             ],
             'derniere_sequence_vente' => $derniereSequenceVente,
-            'derniere_sequence_encaissement' => $encaissements->last()->sequence ?? $precedente?->derniere_sequence_encaissement,
+            'derniere_sequence_encaissement' => $encaissements->last()->sequence ?? $apresEncaissement,
         ];
     }
 

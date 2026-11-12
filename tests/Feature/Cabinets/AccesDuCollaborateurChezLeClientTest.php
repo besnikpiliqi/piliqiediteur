@@ -18,6 +18,7 @@ use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Support\GardesDeLaVente;
+use App\Domain\Facturation\Support\GardesDesDocumentsEmis;
 use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
 use App\Domain\Tenancy\Enums\StatutSociete;
 use App\Domain\Tenancy\Enums\TypeDActivite;
@@ -177,11 +178,18 @@ class AccesDuCollaborateurChezLeClientTest extends TestCase
         $this->actingAs($collaborateur)->get(FactureResource::getUrl('index', tenant: $magasin))->assertOk();
     }
 
+    /**
+     * Attribuer en base un ticket émis à un compte du cabinet est refusé
+     * par la garde des documents émis, puis, celle-ci levée comme le
+     * ferait le propriétaire des tables, par la garde de la vente.
+     */
     public function test_la_base_refuse_une_vente_ou_un_encaissement_au_nom_d_un_compte_de_cabinet(): void
     {
         [$cabinet, $magasin, $collaborateur] = $this->collaborateurDUnClient();
         $brouillon = $this->ticketDuMagasin($magasin);
         $proprietaireDuCabinet = $this->proprietaireDuCabinet($cabinet);
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('factures')->where('id', $brouillon->id)->update(['cree_par' => $collaborateur->id])), QueryException::class, GardesDesDocumentsEmis::refusDeModification('factures'));
+        $this->retirerLeDeclencheur('factures', GardesDesDocumentsEmis::nom('factures'));
 
         foreach ([$collaborateur, $proprietaireDuCabinet] as $compte) {
             $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('factures')->where('id', $brouillon->id)->update(['cree_par' => $compte->id])), QueryException::class, GardesDeLaVente::MESSAGE);

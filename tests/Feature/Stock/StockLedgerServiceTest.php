@@ -2,10 +2,14 @@
 
 namespace Tests\Feature\Stock;
 
-use App\Domain\Achats\Models\AvoirFournisseur;
+use App\Domain\Achats\Actions\CreerFactureAchatAction;
+use App\Domain\Achats\Actions\ModifierFactureAchatAction;
+use App\Domain\Achats\Actions\ValiderFactureAchatAction;
 use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Stock\Enums\TypeMouvementStock;
 use App\Domain\Stock\Models\MouvementStock;
 use App\Domain\Stock\Notifications\StockSousLeSeuilDAlerte;
@@ -15,6 +19,7 @@ use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Filament\App\Resources\ProduitResource;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -37,8 +42,9 @@ class StockLedgerServiceTest extends TestCase
     public function test_une_reception_dachat_augmente_le_stock(): void
     {
         $produit = Produit::factory()->create(['stock_quantite' => 0]);
+        $achat = $this->justificatifDuStock(TypeMouvementStock::ReceptionAchat, $produit, 10);
 
-        app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::ReceptionAchat, 10);
+        $this->commeAuteurDuDocument(fn () => app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::ReceptionAchat, 10, $achat));
 
         $this->assertSame(10, $produit->fresh()->stock_quantite);
     }
@@ -46,8 +52,9 @@ class StockLedgerServiceTest extends TestCase
     public function test_une_vente_diminue_le_stock(): void
     {
         $produit = Produit::factory()->create(['stock_quantite' => 10]);
+        $vente = $this->justificatifDuStock(TypeMouvementStock::Vente, $produit, 3);
 
-        app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::Vente, 3);
+        $this->commeAuteurDuDocument(fn () => app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::Vente, 3, $vente));
 
         $this->assertSame(7, $produit->fresh()->stock_quantite);
     }
@@ -55,8 +62,9 @@ class StockLedgerServiceTest extends TestCase
     public function test_un_retour_fournisseur_diminue_le_stock(): void
     {
         $produit = Produit::factory()->create(['stock_quantite' => 10, 'cmup_ht' => 5]);
+        $avoir = $this->justificatifDuStock(TypeMouvementStock::RetourFournisseur, $produit, 4, '5');
 
-        app(StockLedgerService::class)->retournerAuFournisseur($produit, 4, 50000, AvoirFournisseur::factory()->create(), 'Retour');
+        $this->commeAuteurDuDocument(fn () => app(StockLedgerService::class)->retournerAuFournisseur($produit, 4, 50000, $avoir, 'Retour'));
 
         $this->assertSame(6, $produit->fresh()->stock_quantite);
     }
@@ -74,8 +82,11 @@ class StockLedgerServiceTest extends TestCase
         $quatreRetournes = $this->produitRecuDeuxFois();
         $stock = app(StockLedgerService::class);
 
-        $mouvement = $stock->retournerAuFournisseur($tousRetournes, 10, 100000, AvoirFournisseur::factory()->create(), 'Retour');
-        $stock->retournerAuFournisseur($quatreRetournes, 4, 100000, AvoirFournisseur::factory()->create(), 'Retour');
+        $avoirDeTous = $this->justificatifDuStock(TypeMouvementStock::RetourFournisseur, $tousRetournes, 10, '10');
+        $avoirDeQuatre = $this->justificatifDuStock(TypeMouvementStock::RetourFournisseur, $quatreRetournes, 4, '10');
+
+        $mouvement = $this->commeAuteurDuDocument(fn () => $stock->retournerAuFournisseur($tousRetournes, 10, 100000, $avoirDeTous, 'Retour'));
+        $this->commeAuteurDuDocument(fn () => $stock->retournerAuFournisseur($quatreRetournes, 4, 100000, $avoirDeQuatre, 'Retour'));
 
         $this->assertSame([10, '2.0000'], [$tousRetournes->fresh()->stock_quantite, $tousRetournes->fresh()->cmup_ht]);
         $this->assertSame([TypeMouvementStock::RetourFournisseur, 10, '10.0000'], [$mouvement->type, $mouvement->quantite, $mouvement->fresh()->cout_unitaire_ht]);
@@ -92,13 +103,17 @@ class StockLedgerServiceTest extends TestCase
     {
         $produit = Produit::factory()->create(['stock_quantite' => 0, 'cmup_ht' => 1]);
         $stock = app(StockLedgerService::class);
-        $stock->receptionner($produit, 3, 10000, FactureAchat::factory()->create(), 'Réception');
-        $reception = FactureAchat::factory()->create();
-        $stock->receptionner($produit, 3, 20000, $reception, 'Réception');
-        $stock->receptionner($produit, 1, 20000, $reception, 'Réception');
+        $premiereReception = $this->justificatifDuStock(TypeMouvementStock::ReceptionAchat, $produit, 3, '1');
+        $reception = $this->justificatifDuStock(TypeMouvementStock::ReceptionAchat, $produit, 4, '2');
+        $this->commeAuteurDuDocument(function () use ($stock, $produit, $premiereReception, $reception): void {
+            $stock->receptionner($produit, 3, 10000, $premiereReception, 'Réception');
+            $stock->receptionner($produit, 3, 20000, $reception, 'Réception');
+            $stock->receptionner($produit, 1, 20000, $reception, 'Réception');
+        });
         $this->assertSame('1.5714', $produit->fresh()->cmup_ht);
+        $avoir = $this->justificatifDuStock(TypeMouvementStock::RetourFournisseur, $produit, 1, '2');
 
-        $stock->retournerAuFournisseur($produit, 1, 20000, AvoirFournisseur::factory()->create(), 'Retour');
+        $this->commeAuteurDuDocument(fn () => $stock->retournerAuFournisseur($produit, 1, 20000, $avoir, 'Retour'));
 
         $this->assertSame([6, '1.5000'], [$produit->fresh()->stock_quantite, $produit->fresh()->cmup_ht]);
     }
@@ -110,9 +125,11 @@ class StockLedgerServiceTest extends TestCase
     public function test_un_retour_de_tout_le_stock_garde_le_cmup(): void
     {
         $produit = Produit::factory()->create(['stock_quantite' => 0, 'cmup_ht' => 3]);
-        app(StockLedgerService::class)->receptionner($produit, 5, 30000, FactureAchat::factory()->create(), 'Réception');
+        $reception = $this->justificatifDuStock(TypeMouvementStock::ReceptionAchat, $produit, 5, '3');
+        $this->commeAuteurDuDocument(fn () => app(StockLedgerService::class)->receptionner($produit, 5, 30000, $reception, 'Réception'));
+        $avoir = $this->justificatifDuStock(TypeMouvementStock::RetourFournisseur, $produit, 5, '3');
 
-        app(StockLedgerService::class)->retournerAuFournisseur($produit, 5, 30000, AvoirFournisseur::factory()->create(), 'Retour');
+        $this->commeAuteurDuDocument(fn () => app(StockLedgerService::class)->retournerAuFournisseur($produit, 5, 30000, $avoir, 'Retour'));
 
         $this->assertSame([0, '3.0000'], [$produit->fresh()->stock_quantite, $produit->fresh()->cmup_ht]);
     }
@@ -125,9 +142,11 @@ class StockLedgerServiceTest extends TestCase
     public function test_un_retour_qui_rendrait_la_valeur_du_stock_negative_la_ramene_a_zero(): void
     {
         $produit = $this->produitRecuDeuxFois();
-        app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::Vente, 15);
+        $vente = $this->justificatifDuStock(TypeMouvementStock::Vente, $produit, 15);
+        $this->commeAuteurDuDocument(fn () => app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::Vente, 15, $vente));
+        $avoir = $this->justificatifDuStock(TypeMouvementStock::RetourFournisseur, $produit, 4, '10');
 
-        app(StockLedgerService::class)->retournerAuFournisseur($produit, 4, 100000, AvoirFournisseur::factory()->create(), 'Retour');
+        $this->commeAuteurDuDocument(fn () => app(StockLedgerService::class)->retournerAuFournisseur($produit, 4, 100000, $avoir, 'Retour'));
 
         $this->assertSame([1, '0.0000'], [$produit->fresh()->stock_quantite, $produit->fresh()->cmup_ht]);
     }
@@ -139,21 +158,28 @@ class StockLedgerServiceTest extends TestCase
     public function test_un_retour_fournisseur_ne_s_enregistre_pas_comme_un_mouvement_ordinaire(): void
     {
         $produit = Produit::factory()->create(['stock_quantite' => 10]);
+        $mouvementsAvant = $produit->mouvementsStock()->count();
 
         $this->assertThrows(
-            fn () => app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::RetourFournisseur, 4),
+            fn () => app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::RetourFournisseur, 4, $this->justificatifDuStock(TypeMouvementStock::RetourFournisseur, $produit, 4)),
             InvalidArgumentException::class,
             'Un retour fournisseur passe par retournerAuFournisseur(), avec le coût de sa ligne d\'achat.',
         );
 
-        $this->assertSame([10, 0], [$produit->fresh()->stock_quantite, $produit->mouvementsStock()->count()]);
+        $this->assertSame([10, $mouvementsAvant], [$produit->fresh()->stock_quantite, $produit->mouvementsStock()->count()]);
     }
 
+    /**
+     * 7 en stock, 2 vendus : le retour de ces 2 articles par un avoir les
+     * fait rentrer.
+     */
     public function test_un_retour_client_augmente_le_stock(): void
     {
-        $produit = Produit::factory()->create(['stock_quantite' => 5]);
+        $produit = Produit::factory()->create(['stock_quantite' => 7]);
+        $ligneDAvoir = $this->justificatifDuStock(TypeMouvementStock::RetourClient, $produit, 2);
+        $this->assertSame(5, $produit->fresh()->stock_quantite);
 
-        app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::RetourClient, 2);
+        $this->commeAuteurDuDocument(fn () => app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::RetourClient, 2, $ligneDAvoir));
 
         $this->assertSame(7, $produit->fresh()->stock_quantite);
     }
@@ -162,17 +188,26 @@ class StockLedgerServiceTest extends TestCase
     {
         $produit = Produit::factory()->create(['stock_quantite' => 0]);
 
-        app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::ReceptionAchat, 5);
-        app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::Vente, 2);
+        $achat = $this->justificatifDuStock(TypeMouvementStock::ReceptionAchat, $produit, 5);
+        $vente = $this->justificatifDuStock(TypeMouvementStock::Vente, $produit, 2);
+
+        $this->commeAuteurDuDocument(fn () => app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::ReceptionAchat, 5, $achat));
+        $this->commeAuteurDuDocument(fn () => app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::Vente, 2, $vente));
 
         $this->assertSame(2, $produit->mouvementsStock()->count());
     }
 
+    /**
+     * Un ajustement, seul celui qui corrige une réception validée existe :
+     * 10 reçus, la facture d'achat corrigée à 7 ; l'écart part de la
+     * quantité cible.
+     */
     public function test_un_ajustement_calcule_le_delta_depuis_la_quantite_cible(): void
     {
-        $produit = Produit::factory()->create(['stock_quantite' => 10]);
+        $produit = Produit::factory()->create(['stock_quantite' => 0]);
+        $achat = $this->receptionValidee($produit, 10);
 
-        app(StockLedgerService::class)->ajuster($produit, 7, 'Inventaire physique');
+        $this->corrigerLaReception($achat, $produit, 7);
 
         $this->assertSame(7, $produit->fresh()->stock_quantite);
     }
@@ -184,11 +219,12 @@ class StockLedgerServiceTest extends TestCase
     public function test_un_ajustement_enregistre_son_sens_dans_le_grand_livre(): void
     {
         $produit = Produit::factory()->create();
-        $stock = app(StockLedgerService::class);
-        $stock->enregistrer($produit, TypeMouvementStock::ReceptionAchat, 10);
+        $achat = $this->receptionValidee($produit, 10);
 
-        $sortie = $stock->ajuster($produit, 7, 'Casse');
-        $entree = $stock->ajuster($produit, 12, 'Inventaire physique');
+        $this->corrigerLaReception($achat, $produit, 7);
+        $this->corrigerLaReception($achat, $produit, 12);
+        $sortie = MouvementStock::query()->where('produit_id', $produit->id)->where('type', TypeMouvementStock::AjustementSortie->value)->sole();
+        $entree = MouvementStock::query()->where('produit_id', $produit->id)->where('type', TypeMouvementStock::AjustementEntree->value)->sole();
 
         $this->assertSame([TypeMouvementStock::AjustementSortie, 3], [$sortie->type, $sortie->quantite]);
         $this->assertSame([TypeMouvementStock::AjustementEntree, 5], [$entree->type, $entree->quantite]);
@@ -201,7 +237,7 @@ class StockLedgerServiceTest extends TestCase
         $produit = Produit::factory()->create();
 
         $this->expectException(InvalidArgumentException::class);
-        app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::Vente, 0);
+        app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::Vente, 0, $produit);
     }
 
     /**
@@ -217,8 +253,9 @@ class StockLedgerServiceTest extends TestCase
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, null, ['name' => 'Vendeur', 'email' => 'vendeur@ma-boutique.fr']);
         $produit = Produit::factory()->create(['nom' => 'Câble USB-C', 'reference' => 'CAB-USBC', 'stock_quantite' => 7, 'seuil_alerte' => 5]);
+        $vente = $this->justificatifDuStock(TypeMouvementStock::Vente, $produit, 2, auteur: $vendeur);
 
-        app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::Vente, 2);
+        $this->commeAuteurDuDocument(fn () => app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::Vente, 2, $vente), $vendeur);
 
         $notification = $proprietaire->notifications()->sole();
         $this->assertSame(StockSousLeSeuilDAlerte::class, $notification->type);
@@ -246,8 +283,9 @@ class StockLedgerServiceTest extends TestCase
         ]);
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
         $produit = Produit::factory()->create(['stock_quantite' => 7, 'seuil_alerte' => 5]);
+        $vente = $this->justificatifDuStock(TypeMouvementStock::Vente, $produit, 2, auteur: $vendeur);
 
-        app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::Vente, 2);
+        $this->commeAuteurDuDocument(fn () => app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::Vente, 2, $vente), $vendeur);
 
         $this->assertSame(1, $administrateur->notifications()->count());
         $this->assertSame(1, $vendeurQuiGereLeStock->notifications()->count());
@@ -268,8 +306,9 @@ class StockLedgerServiceTest extends TestCase
         $vendeurQuiGereLeStock = $this->membre($magasin, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Commerce), PermissionRegistry::PRODUIT_AJUSTER_STOCK]);
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
         $produit = Produit::factory()->create(['stock_quantite' => 7, 'seuil_alerte' => 5]);
+        $vente = $this->justificatifDuStock(TypeMouvementStock::Vente, $produit, 2, auteur: $vendeur);
 
-        app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::Vente, 2);
+        $this->commeAuteurDuDocument(fn () => app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::Vente, 2, $vente), $vendeur);
 
         $this->assertSame(
             [1, 1, 1, 0, 0],
@@ -290,8 +329,9 @@ class StockLedgerServiceTest extends TestCase
         $responsableDAilleurs = $this->responsable($autreMagasin);
         app(TenantContext::class)->set($magasin);
         $produit = Produit::factory()->create(['stock_quantite' => 7, 'seuil_alerte' => 5]);
+        $vente = $this->justificatifDuStock(TypeMouvementStock::Vente, $produit, 2, auteur: $responsable);
 
-        app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::Vente, 2);
+        $this->commeAuteurDuDocument(fn () => app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::Vente, 2, $vente), $responsable);
 
         $this->assertSame([1, 1, 0], [$responsable->notifications()->count(), $coResponsable->notifications()->count(), $responsableDAilleurs->notifications()->count()]);
     }
@@ -308,10 +348,12 @@ class StockLedgerServiceTest extends TestCase
         $administrateurDAilleurs = $this->administrateur($magasin, [$autreMagasin->id]);
         $this->collaborateurDuCabinetLie($magasin);
         app(TenantContext::class)->set($magasin);
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
         $produit = Produit::factory()->create(['stock_quantite' => 7, 'seuil_alerte' => 5]);
         $avant = DB::table('notifications')->pluck('id')->all();
+        $vente = $this->justificatifDuStock(TypeMouvementStock::Vente, $produit, 2, auteur: $vendeur);
 
-        app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::Vente, 2);
+        $this->commeAuteurDuDocument(fn () => app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::Vente, 2, $vente), $vendeur);
 
         $destinataires = DB::table('notifications')->whereNotIn('id', $avant)->pluck('notifiable_id')->map(intval(...))->all();
         $this->assertSame([(int) $proprietaire->id], $destinataires);
@@ -329,12 +371,16 @@ class StockLedgerServiceTest extends TestCase
         $produit = Produit::factory()->create(['stock_quantite' => 5, 'seuil_alerte' => 5]);
         $stock = app(StockLedgerService::class);
 
-        $stock->enregistrer($produit, TypeMouvementStock::Vente, 1);
-        $stock->ajuster($produit, 2, 'Casse');
+        $ventes = [$this->justificatifDuStock(TypeMouvementStock::Vente, $produit, 1), $this->justificatifDuStock(TypeMouvementStock::Vente, $produit, 2)];
+        $achat = $this->justificatifDuStock(TypeMouvementStock::ReceptionAchat, $produit, 10);
+        $derniereVente = $this->justificatifDuStock(TypeMouvementStock::Vente, $produit, 12);
+
+        $this->commeAuteurDuDocument(fn () => $stock->enregistrer($produit, TypeMouvementStock::Vente, 1, $ventes[0]));
+        $this->commeAuteurDuDocument(fn () => $stock->enregistrer($produit, TypeMouvementStock::Vente, 2, $ventes[1]));
         $this->assertSame(0, $proprietaire->notifications()->count());
 
-        $stock->enregistrer($produit, TypeMouvementStock::ReceptionAchat, 10);
-        $stock->enregistrer($produit, TypeMouvementStock::Vente, 12);
+        $this->commeAuteurDuDocument(fn () => $stock->enregistrer($produit, TypeMouvementStock::ReceptionAchat, 10, $achat));
+        $this->commeAuteurDuDocument(fn () => $stock->enregistrer($produit, TypeMouvementStock::Vente, 12, $derniereVente));
 
         $this->assertSame('Plus aucun article en stock (référence '.$produit->reference.', seuil d\'alerte : 5).', $proprietaire->notifications()->sole()->data['body']);
     }
@@ -350,10 +396,12 @@ class StockLedgerServiceTest extends TestCase
         $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $produit = Produit::factory()->create(['reference' => 'CAB-USBC', 'stock_quantite' => 7, 'seuil_alerte' => 5]);
 
-        DB::transaction(function () use ($produit) {
-            app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::Vente, 2);
-            app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::Vente, 4);
-        });
+        $vente = $this->justificatifDuStock(TypeMouvementStock::Vente, $produit, 6);
+
+        $this->commeAuteurDuDocument(fn () => DB::transaction(function () use ($produit, $vente) {
+            app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::Vente, 2, $vente);
+            app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::Vente, 4, $vente);
+        }));
 
         $this->assertSame('Plus que 1 article(s) en stock (référence CAB-USBC, seuil d\'alerte : 5).', $proprietaire->notifications()->sole()->data['body']);
     }
@@ -368,10 +416,13 @@ class StockLedgerServiceTest extends TestCase
         $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $produit = Produit::factory()->create(['stock_quantite' => 6, 'seuil_alerte' => 5]);
 
-        DB::transaction(function () use ($produit) {
-            app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::Vente, 3);
-            app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::ReceptionAchat, 10);
-        });
+        $vente = $this->justificatifDuStock(TypeMouvementStock::Vente, $produit, 3);
+        $achat = $this->justificatifDuStock(TypeMouvementStock::ReceptionAchat, $produit, 10);
+
+        $this->commeAuteurDuDocument(fn () => DB::transaction(function () use ($produit, $vente, $achat) {
+            app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::Vente, 3, $vente);
+            app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::ReceptionAchat, 10, $achat);
+        }));
 
         $this->assertSame(13, $produit->fresh()->stock_quantite);
         $this->assertSame(0, $proprietaire->notifications()->count());
@@ -383,11 +434,13 @@ class StockLedgerServiceTest extends TestCase
         $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $produit = Produit::factory()->create(['stock_quantite' => 6, 'seuil_alerte' => 5]);
 
-        $this->assertThrows(fn () => DB::transaction(function () use ($produit) {
-            app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::Vente, 3);
+        $vente = $this->justificatifDuStock(TypeMouvementStock::Vente, $produit, 3);
+
+        $this->assertThrows(fn () => $this->commeAuteurDuDocument(fn () => DB::transaction(function () use ($produit, $vente) {
+            app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::Vente, 3, $vente);
 
             throw new RuntimeException('Vente abandonnée');
-        }), RuntimeException::class);
+        })), RuntimeException::class);
 
         $this->assertSame(6, $produit->fresh()->stock_quantite);
         $this->assertSame(0, $proprietaire->notifications()->count());
@@ -398,7 +451,7 @@ class StockLedgerServiceTest extends TestCase
         $produit = Produit::factory()->create(['suivi_stock' => false]);
 
         $this->expectException(\LogicException::class);
-        app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::Vente, 1);
+        app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::Vente, 1, $produit);
     }
 
     /**
@@ -407,9 +460,35 @@ class StockLedgerServiceTest extends TestCase
     private function produitRecuDeuxFois(): Produit
     {
         $produit = Produit::factory()->create(['stock_quantite' => 0, 'cmup_ht' => 2]);
-        app(StockLedgerService::class)->receptionner($produit, 10, 20000, FactureAchat::factory()->create(), 'Réception');
-        app(StockLedgerService::class)->receptionner($produit, 10, 100000, FactureAchat::factory()->create(), 'Réception');
+        $premiere = $this->justificatifDuStock(TypeMouvementStock::ReceptionAchat, $produit, 10, '2');
+        $seconde = $this->justificatifDuStock(TypeMouvementStock::ReceptionAchat, $produit, 10, '10');
+        $this->commeAuteurDuDocument(fn () => app(StockLedgerService::class)->receptionner($produit, 10, 20000, $premiere, 'Réception'));
+        $this->commeAuteurDuDocument(fn () => app(StockLedgerService::class)->receptionner($produit, 10, 100000, $seconde, 'Réception'));
 
         return $produit;
+    }
+
+    /**
+     * Une facture d'achat de $quantite articles à 2,00 € HT, validée par son
+     * action : sa réception fait entrer le produit en stock.
+     */
+    private function receptionValidee(Produit $produit, int $quantite): FactureAchat
+    {
+        return app(ValiderFactureAchatAction::class)->handle(self::auteur(), app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [
+            ['produit_id' => $produit->id, 'quantite' => $quantite, 'prix_unitaire_ht' => 2],
+        ], ['date_facture' => Calendrier::deParis()->aujourdhui()]));
+    }
+
+    /**
+     * La facture d'achat validée corrigée par son action à $quantite
+     * articles : l'ajustement du stock en suit l'écart.
+     */
+    private function corrigerLaReception(FactureAchat $achat, Produit $produit, int $quantite): void
+    {
+        $achat = $achat->fresh() ?? $achat;
+
+        app(ModifierFactureAchatAction::class)->handle(self::auteur(), $achat, ValeurRequise::de($achat->fournisseur, 'le fournisseur de l\'achat'), [
+            ['produit_id' => $produit->id, 'quantite' => $quantite, 'prix_unitaire_ht' => 2],
+        ]);
     }
 }

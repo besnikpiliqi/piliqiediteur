@@ -34,7 +34,7 @@ return new class extends Migration
         Schema::create('paiements', function (Blueprint $table) {
             $table->id();
             $table->foreignId('magasin_id')->constrained('magasins')->restrictOnDelete();
-            $table->foreignId('client_id')->constrained('clients')->restrictOnDelete();
+            $table->foreignId('client_id');
             $table->string('mode_paiement', 20);
             $table->decimal('montant', 12, 2);
             $table->string('reference', 100)->nullable();
@@ -45,12 +45,12 @@ return new class extends Migration
             // FigeLeNomDeSesAuteurs) : l'historique ne le relit jamais sur
             // son compte.
             $table->string('cree_par_nom')->nullable();
-            $table->foreignId('contre_passe_paiement_id')->nullable()->unique()->constrained('paiements')->restrictOnDelete();
+            $table->foreignId('contre_passe_paiement_id')->nullable()->unique();
             // Le reçu de paiement de l'encaissement fait après l'émission
             // dont il est une part, ou de la contre-passation (voir
             // RecusDePaiement) ; aucun pour un paiement reçu à l'émission,
             // que le document imprime lui-même.
-            $table->foreignId('recu_paiement_id')->nullable()->constrained('recus_paiement')->restrictOnDelete();
+            $table->foreignId('recu_paiement_id')->nullable();
             $table->timestamps();
 
             $table->index(['magasin_id', 'client_id']);
@@ -60,6 +60,11 @@ return new class extends Migration
             // enregistrement (relevé des encaissements du téléchargement
             // par période, voir DocumentsDeLaPeriode::paiementsVisibles()).
             $table->index(['magasin_id', 'created_at']);
+
+            $table->unique(['magasin_id', 'id']);
+            $table->foreign(['magasin_id', 'client_id'])->references(['magasin_id', 'id'])->on('clients')->restrictOnDelete();
+            $table->foreign(['magasin_id', 'contre_passe_paiement_id'])->references(['magasin_id', 'id'])->on('paiements')->restrictOnDelete();
+            $table->foreign(['magasin_id', 'recu_paiement_id'])->references(['magasin_id', 'id'])->on('recus_paiement')->restrictOnDelete();
         });
 
         DeclencheursDeProtection::ajoutSeul('paiements');

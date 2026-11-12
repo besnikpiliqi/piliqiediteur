@@ -259,7 +259,88 @@
                 "grands_totaux": {
                     "perpetuel_reel": 2400,
                     "perpetuel_absolu": 2400
-                }
+                },
+                "recapitulatif": {
+                    "ventes_particuliers": {
+                        "nombre": 1,
+                        "ht": 2212,
+                        "tva": 188,
+                        "ttc": 2400,
+                        "par_taux": [
+                            {
+                                "taux": 850,
+                                "ht": 2212,
+                                "tva": 188,
+                                "ttc": 2400
+                            }
+                        ]
+                    },
+                    "avoirs_particuliers": {
+                        "nombre": 0,
+                        "ht": 0,
+                        "tva": 0,
+                        "ttc": 0,
+                        "par_taux": []
+                    },
+                    "factures_professionnels": {
+                        "nombre": 0,
+                        "ht": 0,
+                        "tva": 0,
+                        "ttc": 0,
+                        "par_taux": []
+                    },
+                    "avoirs_professionnels": {
+                        "nombre": 0,
+                        "ht": 0,
+                        "tva": 0,
+                        "ttc": 0,
+                        "par_taux": []
+                    },
+                    "encaissements": [
+                        {
+                            "mode": "especes",
+                            "libelle": "Espèces",
+                            "paiements": 1,
+                            "contre_passations": 0,
+                            "montant": 2400
+                        },
+                        {
+                            "mode": "carte_bancaire",
+                            "libelle": "Carte bancaire",
+                            "paiements": 0,
+                            "contre_passations": 0,
+                            "montant": 0
+                        },
+                        {
+                            "mode": "cheque",
+                            "libelle": "Chèque",
+                            "paiements": 0,
+                            "contre_passations": 0,
+                            "montant": 0
+                        },
+                        {
+                            "mode": "virement",
+                            "libelle": "Virement",
+                            "paiements": 0,
+                            "contre_passations": 0,
+                            "montant": 0
+                        },
+                        {
+                            "mode": "prelevement",
+                            "libelle": "Prélèvement",
+                            "paiements": 0,
+                            "contre_passations": 0,
+                            "montant": 0
+                        }
+                    ],
+                    "credit_avoir_impute": 0,
+                    "grands_totaux": {
+                        "perpetuel_reel": 2400,
+                        "perpetuel_absolu": 2400
+                    }
+                },
+                "derniere_sequence_vente": 1,
+                "derniere_sequence_encaissement": 1
             }
         }
     },

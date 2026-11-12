@@ -48,6 +48,9 @@ class RecusDePaiement
 
     /**
      * Le reçu de l'encaissement qui commence, avant son premier paiement.
+     * Son client est une fiche relue dans le magasin actif par l'appelant
+     * (voir BelongsToMagasin::relueDansLeMagasin()), jamais un objet reçu
+     * tel quel.
      *
      * @param  string  $recuLe  AAAA-MM-JJ, le jour de l'encaissement dans le calendrier du magasin
      *

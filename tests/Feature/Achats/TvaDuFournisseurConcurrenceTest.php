@@ -49,7 +49,7 @@ class TvaDuFournisseurConcurrenceTest extends TestCase
         self::confirmer($magasinId, $factureId, $produitId);
 
         $this->assertInstanceOf(InvokedProcess::class, $concurrente);
-        $resultat = $concurrente->wait();
+        $resultat = $this->attendreLeProcessusConcurrent($concurrente);
         $this->assertTrue($resultat->successful(), $resultat->output().$resultat->errorOutput());
         app(TenantContext::class)->set($magasin);
         $facture = FactureAchat::query()->findOrFail($factureId);

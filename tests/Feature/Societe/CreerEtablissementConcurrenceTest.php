@@ -68,9 +68,9 @@ class CreerEtablissementConcurrenceTest extends TestCase
         $magasin = app(CreerEtablissementAction::class)->handle($societe->proprietaire()->firstOrFail(), $societe, ['nom' => 'Paris', 'code' => 'PARIS', 'nic' => $nicDuTest]);
 
         $this->assertInstanceOf(InvokedProcess::class, $processus);
-        $resultat = $processus->wait();
+        $resultat = $this->attendreLeProcessusConcurrent($processus);
         $this->assertTrue($resultat->failed());
-        $this->assertSame(ValidationException::class.' : '.$message, $resultat->errorOutput());
+        $this->assertSame(ValidationException::class.' : '.$message, self::erreurDuProcessus($resultat));
         $this->assertSame([$magasin->id], Magasin::query()->where('societe_id', $societeId)->pluck('id')->all());
     }
 }

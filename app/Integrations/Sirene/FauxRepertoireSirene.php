@@ -9,7 +9,7 @@ use App\Integrations\Sirene\Contracts\RepertoireSirene;
 
 /**
  * Le répertoire Sirene factice du développement et des tests, sans aucune
- * requête (voir VerificationServiceProvider) : toute entreprise d'un SIREN
+ * requête (voir FournisseursExternesServiceProvider) : toute entreprise d'un SIREN
  * valide y est active, une société par actions simplifiée, d'activité
  * 47.11B en NAFRev2 (une supérette), et tout
  * établissement d'un SIRET valide y est actif, rattaché à son SIREN, à

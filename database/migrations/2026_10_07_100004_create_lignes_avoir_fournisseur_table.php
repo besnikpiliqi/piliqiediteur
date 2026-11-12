@@ -1,5 +1,6 @@
 <?php
 
+use App\Domain\CaisseSecurisee\Support\DeclencheursDeProtection;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -10,18 +11,18 @@ return new class extends Migration
     {
         Schema::create('lignes_avoir_fournisseur', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('magasin_id')->constrained('magasins')->cascadeOnDelete();
-            $table->foreignId('avoir_fournisseur_id')->constrained('avoirs_fournisseur')->cascadeOnDelete();
+            $table->foreignId('magasin_id')->constrained('magasins')->restrictOnDelete();
+            $table->foreignId('avoir_fournisseur_id');
             // La ligne d'achat retournée, toujours : un avoir fournisseur ne
             // retourne qu'un produit d'une facture d'achat (voir
             // CreerAvoirFournisseurAction), qu'il ne modifie jamais. Comme
             // pour lignes_avoir, le reste de la ligne est une copie figée à
             // la création de l'avoir. restrictOnDelete : une ligne d'achat
             // retournée ne s'efface jamais sous son avoir.
-            $table->foreignId('ligne_achat_id')->constrained('lignes_achat')->restrictOnDelete();
+            $table->foreignId('ligne_achat_id');
             // Celui de la ligne d'achat retournée, archivé compris : une
             // fiche utilisée ne s'efface jamais.
-            $table->foreignId('produit_id')->constrained('produits')->restrictOnDelete();
+            $table->foreignId('produit_id');
             $table->string('description', 255);
             $table->string('reference', 60)->nullable();
             // Nombre entier d'articles (voir QuantiteEntiere).
@@ -46,7 +47,13 @@ return new class extends Migration
             $table->timestamps();
 
             $table->index(['magasin_id', 'avoir_fournisseur_id']);
+
+            $table->foreign(['magasin_id', 'avoir_fournisseur_id'])->references(['magasin_id', 'id'])->on('avoirs_fournisseur')->cascadeOnDelete();
+            $table->foreign(['magasin_id', 'ligne_achat_id'])->references(['magasin_id', 'id'])->on('lignes_achat')->restrictOnDelete();
+            $table->foreign(['magasin_id', 'produit_id'])->references(['magasin_id', 'id'])->on('produits')->restrictOnDelete();
         });
+
+        DeclencheursDeProtection::auMoins('lignes_avoir_fournisseur', 'quantite', 1);
     }
 
     public function down(): void

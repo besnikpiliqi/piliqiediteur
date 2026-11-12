@@ -37,6 +37,12 @@ class Client extends Model
      */
     public const NOM_COMPTOIR = 'Client comptoir';
 
+    /**
+     * Refus d'une action qui reçoit le client déjà chargé d'un autre
+     * magasin (voir BelongsToMagasin::relueDansLeMagasin()).
+     */
+    public const REFUS_AUTRE_MAGASIN = 'Ce client n\'est pas un client du magasin.';
+
     // magasin_id est volontairement absent : il est toujours dérivé du
     // TenantContext par le trait BelongsToMagasin, jamais du payload client.
     // est_comptoir aussi : seul CreerEtablissementAction le pose.

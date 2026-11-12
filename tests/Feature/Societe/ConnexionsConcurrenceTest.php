@@ -71,7 +71,7 @@ class ConnexionsConcurrenceTest extends TestCase
         });
 
         foreach ($processus as $unProcessus) {
-            $resultat = $unProcessus->wait();
+            $resultat = $this->attendreLeProcessusConcurrent($unProcessus);
             $this->assertTrue($resultat->successful(), $resultat->errorOutput());
         }
         $this->assertSame(self::PROCESSUS, $limitation->compteDe($cle));
@@ -108,7 +108,7 @@ class ConnexionsConcurrenceTest extends TestCase
         }
 
         foreach ($processus as $unProcessus) {
-            $resultat = $unProcessus->wait();
+            $resultat = $this->attendreLeProcessusConcurrent($unProcessus);
             $this->assertTrue($resultat->successful(), $resultat->errorOutput());
         }
         $limitation = app(LimitationDesConnexions::class);
@@ -144,14 +144,14 @@ class ConnexionsConcurrenceTest extends TestCase
 
                     fwrite(STDOUT, (string) Auth::guard('web')->user()?->getAuthPassword());
                 });
-                $concurrente->wait();
+                $this->attendreLeProcessusConcurrent($concurrente);
             }
         });
 
         app(RedonnerLAccesAction::class)->handle($responsable, $vendeur, true, 'un-mot-de-passe-solide', (string) Str::uuid());
 
         $this->assertInstanceOf(InvokedProcess::class, $concurrente);
-        $resultat = $concurrente->wait();
+        $resultat = $this->attendreLeProcessusConcurrent($concurrente);
         $this->assertTrue($resultat->successful(), $resultat->errorOutput());
         $empreinteDeLaSession = $resultat->output();
         $this->assertNotSame($vendeur->refresh()->getAuthPassword(), $empreinteDeLaSession);

@@ -12,6 +12,7 @@ use App\Domain\Facturation\Actions\FermerSaCaisseAction;
 use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\FacturesAEncaisserDeLaSociete;
+use App\Domain\Facturation\Support\GardesDesDocumentsEmis;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\Territoire;
 use App\Domain\Tenancy\Models\Magasin;
@@ -26,6 +27,7 @@ use App\Integrations\Sirene\FauxRepertoireSirene;
 use App\Models\User;
 use Database\Factories\MagasinFactory;
 use Database\Factories\SocieteFactory;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Livewire\Features\SupportTesting\Testable;
@@ -152,7 +154,9 @@ class HeuresDeLaSocieteTest extends TestCase
      * Le rapport du vérificateur, lu hors du magasin, dit l'heure d'un
      * magasin de la Guadeloupe et la nomme : un ticket de 2027 dont la date
      * d'émission recule, en base, au 31 décembre 2026 à 21:30, heure
-     * locale, n'est plus dans l'année de son numéro.
+     * locale, n'est plus dans l'année de son numéro. La base refuse d'abord
+     * de réécrire le ticket émis ; le test le falsifie malgré sa garde,
+     * comme le propriétaire des tables, pour éprouver le vérificateur.
      */
     public function test_le_verificateur_nomme_l_heure_d_un_magasin_d_outre_mer_dans_son_rapport(): void
     {
@@ -161,7 +165,10 @@ class HeuresDeLaSocieteTest extends TestCase
         $ticket = $this->vendreDans($magasin, self::responsableDeTest($magasin));
         $this->assertSame('TK-PTP1-2027-000001', $ticket->numero);
 
-        DB::table('factures')->where('magasin_id', $magasin->id)->where('id', $ticket->id)->update(['date_emission' => Instant::enBase(self::enUtc('2027-01-01 01:30:00'))]);
+        $reculer = fn () => DB::table('factures')->where('magasin_id', $magasin->id)->where('id', $ticket->id)->update(['date_emission' => Instant::enBase(self::enUtc('2027-01-01 01:30:00'))]);
+        $this->assertThrows($this->dansUnPointDeSauvegarde($reculer), QueryException::class, GardesDesDocumentsEmis::refusDeModification('factures'));
+        $this->retirerLeDeclencheur('factures', GardesDesDocumentsEmis::nom('factures'));
+        $reculer();
 
         $messages = array_map(static fn ($anomalie): string => $anomalie->message, app(VerificateurIntegrite::class)->verifier($magasin)->anomalies());
         $this->assertContains('Le ticket TK-PTP1-2027-000001 est numéroté dans l\'année 2027 mais émis le 31/12/2026 à 21:30:00 (heure de la Guadeloupe).', $messages);

@@ -1287,6 +1287,22 @@ class CaisseTest extends TestCase
     }
 
     /**
+     * C27 : la caisse lit la dernière journée clôturée sur le registre
+     * fiscal du magasin, jamais dans la table des tickets Z : un ticket Z
+     * du jour inséré directement, qu'aucune clôture n'a signé, ne la ferme
+     * pas.
+     */
+    public function test_un_ticket_z_inconnu_du_registre_ne_ferme_pas_la_caisse(): void
+    {
+        $magasin = $this->ouvrirLaCaisseDUnMagasin(self::aParis('2026-10-09 19:00:00'));
+        $this->insererUnFauxTicketZ($magasin, '2026-10-09', 'Z-MABOUT-2026-000001', self::aParis('2026-10-09 18:00:00'));
+
+        $caisse = Livewire::test(Caisse::class)->assertDontSee('est clôturée');
+
+        $this->assertNull($caisse->instance()->journeeCloturee());
+    }
+
+    /**
      * Tant que le magasin ne peut pas vendre, sa société étant encore en
      * cours de vérification, la caisse ne s'ouvre pas, et le domaine refuse
      * le ticket, sans rien enregistrer.

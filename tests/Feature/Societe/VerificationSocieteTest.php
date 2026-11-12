@@ -102,7 +102,7 @@ use Tests\TestCase;
  * le SIREN ; un seul nouveau courrier se demande, au plus tôt quinze jours
  * après le premier, puis l'éditeur traite le cas à la main, sur pièces.
  * Tous les prestataires sont les implémentations factices (voir
- * VerificationServiceProvider) : aucune requête ne part.
+ * FournisseursExternesServiceProvider) : aucune requête ne part.
  *
  * La porte de validation (aucune opération commerciale avant la
  * validation) est essayée dans PorteDeValidationTest ; la concurrence des

@@ -106,7 +106,7 @@ class ActionsUniquesCourseConcurrenceTest extends TestCase
      */
     private function pendantLAutreDemande(Closure $autre): Client
     {
-        $resultat = $this->demarrerUnProcessusConcurrent($autre)->wait();
+        $resultat = $this->attendreLeProcessusConcurrent($this->demarrerUnProcessusConcurrent($autre));
         $this->assertTrue($resultat->successful(), $resultat->errorOutput());
 
         return Client::factory()->create(['nom' => 'Client de la demande qui perd']);

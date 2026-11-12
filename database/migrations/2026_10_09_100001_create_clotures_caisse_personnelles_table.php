@@ -1,5 +1,6 @@
 <?php
 
+use App\Domain\CaisseSecurisee\Support\DeclencheursDeProtection;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
@@ -7,11 +8,18 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
+    /**
+     * Le relevé de caisse et ses deux liaisons, en ajout seul.
+     *
+     * @var list<literal-string>
+     */
+    private const TABLES = ['clotures_caisse_personnelles', 'clotures_caisse_personnelles_factures', 'clotures_caisse_personnelles_paiements'];
+
     public function up(): void
     {
         Schema::create('clotures_caisse_personnelles', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('magasin_id')->constrained('magasins')->cascadeOnDelete();
+            $table->foreignId('magasin_id')->constrained('magasins')->restrictOnDelete();
             // Le vendeur dont la caisse est fermée : tout membre qui vend ou
             // encaisse. Un compte n'est jamais supprimé.
             $table->foreignId('vendeur_id')->constrained('users')->restrictOnDelete();
@@ -64,7 +72,10 @@ return new class extends Migration
             // Nom explicite : celui que Laravel dériverait dépasse les 63
             // caractères d'un identifiant PostgreSQL.
             $table->index(['magasin_id', 'vendeur_id', 'cloturee_a'], 'ccp_magasin_vendeur_cloturee_a_index');
+            $table->unique(['magasin_id', 'id']);
         });
+
+        DeclencheursDeProtection::auMoins('clotures_caisse_personnelles', 'nombre_ventes', 0);
 
         $this->exigerUnAuteurSaufFermetureDOffice();
 
@@ -74,8 +85,16 @@ return new class extends Migration
             // brouillon émis après une fermeture est rattrapé par la
             // suivante (voir Facture::scopeNonFermeesParLeVendeur). Noms
             // de contraintes explicites pour la même raison que ci-dessus.
-            $table->foreignId('facture_id')->primary()->constrained('factures', 'id', 'ccp_factures_facture_foreign')->cascadeOnDelete();
-            $table->foreignId('cloture_caisse_personnelle_id')->constrained('clotures_caisse_personnelles', 'id', 'ccp_factures_cloture_foreign')->cascadeOnDelete();
+            // Une liaison reste dans le magasin de sa fermeture et de sa
+            // vente (clés composées), et ne disparaît ni avec l'une ni avec
+            // l'autre : une vente comptée est émise, et ni une vente émise
+            // ni une fermeture ne se suppriment.
+            $table->foreignId('magasin_id')->constrained('magasins')->restrictOnDelete();
+            $table->foreignId('facture_id')->primary();
+            $table->foreignId('cloture_caisse_personnelle_id');
+
+            $table->foreign(['magasin_id', 'facture_id'], 'ccp_factures_facture_foreign')->references(['magasin_id', 'id'])->on('factures')->restrictOnDelete();
+            $table->foreign(['magasin_id', 'cloture_caisse_personnelle_id'], 'ccp_factures_cloture_foreign')->references(['magasin_id', 'id'])->on('clotures_caisse_personnelles')->restrictOnDelete();
         });
 
         Schema::create('clotures_caisse_personnelles_paiements', function (Blueprint $table) {
@@ -83,9 +102,21 @@ return new class extends Migration
             // comprises : un paiement n'est compté que dans une seule (voir
             // Paiement::scopeNonFermesParLeVendeur). Un paiement ne se
             // supprime jamais (voir la migration des paiements).
-            $table->foreignId('paiement_id')->primary()->constrained('paiements', 'id', 'ccp_paiements_paiement_foreign')->restrictOnDelete();
-            $table->foreignId('cloture_caisse_personnelle_id')->constrained('clotures_caisse_personnelles', 'id', 'ccp_paiements_cloture_foreign')->cascadeOnDelete();
+            $table->foreignId('magasin_id')->constrained('magasins')->restrictOnDelete();
+            $table->foreignId('paiement_id')->primary();
+            $table->foreignId('cloture_caisse_personnelle_id');
+
+            $table->foreign(['magasin_id', 'paiement_id'], 'ccp_paiements_paiement_foreign')->references(['magasin_id', 'id'])->on('paiements')->restrictOnDelete();
+            $table->foreign(['magasin_id', 'cloture_caisse_personnelle_id'], 'ccp_paiements_cloture_foreign')->references(['magasin_id', 'id'])->on('clotures_caisse_personnelles')->restrictOnDelete();
         });
+
+        // Un relevé et ce qu'il compte ne se réécrivent ni ne se
+        // suppriment : ni son magasin, ni ses totaux (ce que doit contenir
+        // le tiroir), ni ses ventes et ses paiements (une liaison effacée
+        // les remettrait dans la fermeture suivante).
+        foreach (self::TABLES as $table) {
+            DeclencheursDeProtection::ajoutSeul($table);
+        }
     }
 
     /**
@@ -104,5 +135,9 @@ return new class extends Migration
         Schema::dropIfExists('clotures_caisse_personnelles_paiements');
         Schema::dropIfExists('clotures_caisse_personnelles_factures');
         Schema::dropIfExists('clotures_caisse_personnelles');
+
+        foreach (self::TABLES as $table) {
+            DeclencheursDeProtection::retirer($table);
+        }
     }
 };

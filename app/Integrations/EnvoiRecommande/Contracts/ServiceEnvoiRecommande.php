@@ -22,7 +22,7 @@ use App\Integrations\EnvoiRecommande\SuiviDEnvoi;
  * classe par prestataire, branchée sur le contrat de l'éditeur ; une
  * implémentation factice (FauxServiceEnvoiRecommande) sert au
  * développement et aux tests, jamais en production (voir
- * VerificationServiceProvider).
+ * FournisseursExternesServiceProvider).
  */
 interface ServiceEnvoiRecommande
 {

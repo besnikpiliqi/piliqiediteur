@@ -3,6 +3,7 @@
 namespace App\Domain\Tenancy\Support;
 
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\CaisseSecurisee\Support\DeclencheursDeProtection;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\RoleSociete;
 use App\Domain\Tenancy\Enums\TypeDActivite;
@@ -105,7 +106,7 @@ final class GardesDesDroits
             $table = self::TABLES[$garde];
             $quand = $garde === self::ROLES ? 'INSERT OR UPDATE OF '.self::COLONNES_DES_ROLES : 'INSERT OR UPDATE';
 
-            $connexion->unprepared("CREATE OR REPLACE FUNCTION garde_{$garde}() RETURNS trigger LANGUAGE plpgsql AS \$\$ BEGIN ".self::verrou($garde)." {$controles} RETURN NEW; END \$\$");
+            $connexion->unprepared("CREATE OR REPLACE FUNCTION garde_{$garde}() RETURNS trigger LANGUAGE plpgsql ".DeclencheursDeProtection::CHEMIN_DE_RECHERCHE.' AS $$ BEGIN '.self::verrou($garde)." {$controles} RETURN NEW; END \$\$");
             $connexion->unprepared("CREATE TRIGGER {$garde} BEFORE {$quand} ON {$table} FOR EACH ROW EXECUTE FUNCTION garde_{$garde}()");
         }
     }

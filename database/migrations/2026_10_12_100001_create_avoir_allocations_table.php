@@ -28,9 +28,9 @@ return new class extends Migration
         Schema::create('avoir_allocations', function (Blueprint $table) {
             $table->id();
             $table->foreignId('magasin_id')->constrained('magasins')->restrictOnDelete();
-            $table->foreignId('avoir_id')->constrained('avoirs')->restrictOnDelete();
-            $table->foreignId('facture_id')->constrained('factures')->restrictOnDelete();
-            $table->foreignId('paiement_id')->nullable()->constrained('paiements')->restrictOnDelete();
+            $table->foreignId('avoir_id');
+            $table->foreignId('facture_id');
+            $table->foreignId('paiement_id')->nullable();
             $table->decimal('montant_alloue', 12, 2);
             $table->timestamps();
 
@@ -40,6 +40,10 @@ return new class extends Migration
             // Le crédit d'avoir utilisé dans une période (relevé des
             // encaissements du téléchargement par période).
             $table->index(['magasin_id', 'created_at']);
+
+            $table->foreign(['magasin_id', 'avoir_id'])->references(['magasin_id', 'id'])->on('avoirs')->restrictOnDelete();
+            $table->foreign(['magasin_id', 'facture_id'])->references(['magasin_id', 'id'])->on('factures')->restrictOnDelete();
+            $table->foreign(['magasin_id', 'paiement_id'])->references(['magasin_id', 'id'])->on('paiements')->restrictOnDelete();
         });
 
         // Une émission n'impute un avoir qu'une fois sur une facture (deux

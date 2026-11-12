@@ -23,8 +23,11 @@ use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
+use Closure;
 use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
@@ -57,6 +60,60 @@ class FermerSaCaisseActionTest extends TestCase
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]);
         app(EmettreFactureAction::class)->handle(self::auteur(), $facture);
+    }
+
+    /**
+     * Un relevé de caisse et ses liaisons aux ventes et aux paiements qu'il
+     * compte ne se réécrivent ni ne se suppriment, même par une requête
+     * directe : ni son magasin (il passerait dans « Les caisses » d'un
+     * autre magasin), ni ses totaux (ce que doit contenir le tiroir), ni
+     * ses ventes (une liaison effacée les remettrait dans la fermeture
+     * suivante). Une liaison vers la vente d'un autre magasin est refusée
+     * par sa clé composée. Les lignes relues sont identiques.
+     */
+    public function test_la_base_refuse_de_reecrire_ou_de_supprimer_un_releve_de_caisse_et_ses_liaisons(): void
+    {
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
+        $vendeur = self::responsableDeTest($this->magasin);
+        $client = Client::factory()->create();
+        $this->emettreFacturePour($vendeur, $client);
+        $vente = Facture::query()->sole();
+        app(EnregistrerPaiementAction::class)->handle($vendeur, $client, ['mode_paiement' => ModePaiement::Especes->value, 'montant' => '120.00', 'recu_le' => '2026-10-09'], [['facture_id' => $vente->id, 'montant' => '120.00']]);
+        $releve = app(FermerSaCaisseAction::class)->handle($vendeur, $vendeur);
+        $ailleurs = Magasin::factory()->create();
+        $venteDAilleurs = app(TenantContext::class)->runAs($ailleurs, function () use ($ailleurs): Facture {
+            $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
+            $responsable = self::responsableDeTest($ailleurs);
+
+            return app(EmettreFactureAction::class)->handle($responsable, app(CreerFactureAction::class)->handle($responsable, Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]]));
+        });
+        $tables = ['clotures_caisse_personnelles', 'clotures_caisse_personnelles_factures', 'clotures_caisse_personnelles_paiements'];
+        $avant = $this->instantaneDesTables(...$tables);
+        $releves = fn () => DB::table('clotures_caisse_personnelles')->where('id', $releve->id);
+
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => $releves()->update(['magasin_id' => $ailleurs->id])), QueryException::class, 'clotures_caisse_personnelles : table en ajout seul, modification refusée');
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => $releves()->update(['total_ttc' => '0.00', 'reste_du' => '0.00'])), QueryException::class, 'clotures_caisse_personnelles : table en ajout seul, modification refusée');
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => $releves()->delete()), QueryException::class, 'clotures_caisse_personnelles : table en ajout seul, suppression refusée');
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('clotures_caisse_personnelles_factures')->where('facture_id', $vente->id)->delete()), QueryException::class, 'clotures_caisse_personnelles_factures : table en ajout seul, suppression refusée');
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('clotures_caisse_personnelles_paiements')->where('cloture_caisse_personnelle_id', $releve->id)->update(['cloture_caisse_personnelle_id' => $releve->id])), QueryException::class, 'clotures_caisse_personnelles_paiements : table en ajout seul, modification refusée');
+        $this->assertRefuseeParLaContrainte(fn () => DB::table('clotures_caisse_personnelles_factures')->insert(['magasin_id' => $this->magasin->id, 'facture_id' => $venteDAilleurs->id, 'cloture_caisse_personnelle_id' => $releve->id]), 'ccp_factures_facture_foreign');
+
+        $this->assertSame($avant, $this->instantaneDesTables(...$tables));
+    }
+
+    /**
+     * L'écriture, dans un point de sauvegarde, est refusée par cette clé
+     * étrangère (23503).
+     */
+    private function assertRefuseeParLaContrainte(Closure $ecriture, string $contrainte): void
+    {
+        try {
+            $this->dansUnPointDeSauvegarde($ecriture)();
+            $this->fail("La clé {$contrainte} accepte cette écriture.");
+        } catch (QueryException $refus) {
+            $this->assertSame('23503', $refus->errorInfo[0] ?? null, $refus->getMessage());
+            $this->assertStringContainsString("\"{$contrainte}\"", (string) ($refus->errorInfo[2] ?? ''));
+        }
     }
 
     public function test_agrege_toutes_les_ventes_du_vendeur_depuis_le_debut_de_la_journee(): void

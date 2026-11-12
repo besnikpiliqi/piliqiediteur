@@ -1,5 +1,6 @@
 <?php
 
+use App\Domain\CaisseSecurisee\Support\DeclencheursDeProtection;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -10,7 +11,7 @@ return new class extends Migration
     {
         Schema::create('clients', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('magasin_id')->constrained('magasins')->cascadeOnDelete();
+            $table->foreignId('magasin_id')->constrained('magasins')->restrictOnDelete();
             $table->string('nom', 150);
             $table->string('type_client', 20)->default('particulier');
             // Identifiants d'un professionnel, vides pour un particulier
@@ -48,7 +49,11 @@ return new class extends Migration
             $table->index(['magasin_id', 'nom']);
             $table->index(['magasin_id', 'type_client']);
             $table->unique(['magasin_id', 'est_comptoir']);
+
+            $table->unique(['magasin_id', 'id']);
         });
+
+        DeclencheursDeProtection::auMoins('clients', 'delai_paiement_jours', 0);
     }
 
     public function down(): void

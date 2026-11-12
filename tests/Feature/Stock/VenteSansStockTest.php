@@ -25,7 +25,6 @@ use App\Domain\Stock\Exceptions\StockInsuffisantException;
 use App\Domain\Stock\Models\MouvementStock;
 use App\Domain\Stock\Notifications\StockNegatif;
 use App\Domain\Stock\Services\ConfirmationVenteSansStock;
-use App\Domain\Stock\Services\StockLedgerService;
 use App\Domain\Tenancy\Actions\ModifierMembreAction;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\RoleMagasin;
@@ -368,15 +367,11 @@ class VenteSansStockTest extends TestCase
 
     /**
      * Un produit suivi du magasin actif, avec cette quantité en stock,
-     * amenée par un ajustement d'inventaire.
+     * entrée par l'inventaire d'ouverture de la fabrique.
      */
     private function produit(string $nom, int $stock): Produit
     {
-        $produit = Produit::factory()->create(['nom' => $nom, 'reference' => mb_strtoupper(str_replace(['â', ' '], ['a', '-'], $nom)), 'prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => true]);
-
-        if ($stock !== 0) {
-            app(StockLedgerService::class)->ajuster($produit, $stock, 'Inventaire d\'ouverture');
-        }
+        $produit = Produit::factory()->create(['nom' => $nom, 'reference' => mb_strtoupper(str_replace(['â', ' '], ['a', '-'], $nom)), 'prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => true, 'stock_quantite' => $stock]);
 
         return $produit->fresh();
     }

@@ -52,7 +52,7 @@ class FactureAchatArchivageConcurrenceTest extends TestCase
         $archivage = null;
         DB::connection()->beforeExecuting(function (string $requete) use (&$archivage, $magasinId, $produitId): void {
             if ($archivage === null && str_contains($requete, 'from "produits"') && str_ends_with($requete, 'for update')) {
-                $archivage = $this->demarrerUnProcessusConcurrent(static fn () => self::archiver(Produit::class, $magasinId, $produitId))->wait();
+                $archivage = $this->attendreLeProcessusConcurrent($this->demarrerUnProcessusConcurrent(static fn () => self::archiver(Produit::class, $magasinId, $produitId)));
             }
         });
 
@@ -117,7 +117,7 @@ class FactureAchatArchivageConcurrenceTest extends TestCase
 
         $this->assertInstanceOf(InvokedProcess::class, $archivage);
         $this->assertTrue($enAttente, 'L\'archivage du fournisseur n\'a pas attendu la fin du geste.');
-        $resultat = $archivage->wait();
+        $resultat = $this->attendreLeProcessusConcurrent($archivage);
         $this->assertTrue($resultat->successful(), $resultat->errorOutput());
         app(TenantContext::class)->set($magasin);
         $this->assertTrue(Fournisseur::withTrashed()->findOrFail($rattacheId)->trashed());
@@ -166,7 +166,7 @@ class FactureAchatArchivageConcurrenceTest extends TestCase
 
         $this->assertInstanceOf(InvokedProcess::class, $archivage);
         $this->assertTrue($enAttente, 'L\'archivage du produit n\'a pas attendu la fin de la correction.');
-        $resultat = $archivage->wait();
+        $resultat = $this->attendreLeProcessusConcurrent($archivage);
         $this->assertTrue($resultat->successful(), $resultat->errorOutput());
         app(TenantContext::class)->set($magasin);
         $archive = Produit::withTrashed()->findOrFail($produitId);

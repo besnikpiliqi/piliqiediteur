@@ -54,7 +54,7 @@ class EmettreEtEncaisserConcurrenceTest extends TestCase
         self::emettreEtEncaisser($magasinId, $factureId);
 
         $this->assertInstanceOf(InvokedProcess::class, $concurrente);
-        $resultat = $concurrente->wait();
+        $resultat = $this->attendreLeProcessusConcurrent($concurrente);
         $this->assertTrue($resultat->failed(), $resultat->output());
         app(TenantContext::class)->set($magasin);
         $facture = Facture::query()->findOrFail($factureId);

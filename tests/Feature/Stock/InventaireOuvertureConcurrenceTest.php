@@ -89,7 +89,7 @@ class InventaireOuvertureConcurrenceTest extends TestCase
         $laValidationDAbord ? $valider() : $vendre();
 
         $this->assertInstanceOf(InvokedProcess::class, $concurrente);
-        $resultat = $concurrente->wait();
+        $resultat = $this->attendreLeProcessusConcurrent($concurrente);
         $this->assertSame(! $laValidationDAbord, $resultat->failed(), $resultat->errorOutput());
         app(TenantContext::class)->set($magasin);
         $this->assertSame(1, Facture::query()->count());
@@ -139,7 +139,7 @@ class InventaireOuvertureConcurrenceTest extends TestCase
         $laValidationDAbord ? $valider() : $supprimer();
 
         $this->assertInstanceOf(InvokedProcess::class, $concurrente);
-        $resultat = $concurrente->wait();
+        $resultat = $this->attendreLeProcessusConcurrent($concurrente);
         $this->assertTrue($resultat->failed(), $resultat->output());
         app(TenantContext::class)->set($magasin);
 
@@ -192,7 +192,7 @@ class InventaireOuvertureConcurrenceTest extends TestCase
         $laSaisieDAbord ? $saisir() : $vendre();
 
         $this->assertInstanceOf(InvokedProcess::class, $concurrente);
-        $resultat = $concurrente->wait();
+        $resultat = $this->attendreLeProcessusConcurrent($concurrente);
         $this->assertSame(! $laSaisieDAbord, $resultat->failed(), $resultat->errorOutput());
         app(TenantContext::class)->set($magasin);
         $this->assertSame(1, Facture::query()->count());

@@ -10,12 +10,12 @@ return new class extends Migration
     {
         Schema::create('mandats_pdp', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('magasin_id')->unique()->constrained('magasins')->cascadeOnDelete();
+            $table->foreignId('magasin_id')->unique()->constrained('magasins')->restrictOnDelete();
             $table->string('prestataire_pdp', 60);
             $table->string('mandat_externe_id')->nullable();
             $table->string('statut', 20)->default('pending'); // pending, active, revoked, rejected
             $table->string('perimetre', 20)->default('both'); // send, receive, both
-            $table->foreignId('accorde_par')->nullable()->constrained('users')->nullOnDelete();
+            $table->foreignId('accorde_par')->nullable()->constrained('users')->restrictOnDelete();
             $table->string('consentement_ip', 45)->nullable();
             $table->string('consentement_user_agent', 255)->nullable();
             $table->timestamp('consentement_a')->nullable();

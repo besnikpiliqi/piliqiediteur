@@ -24,7 +24,9 @@ use App\Domain\Stock\Actions\CreerInventaireOuvertureAction;
 use App\Domain\Tenancy\Actions\CreerMembreAction;
 use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Carbon\CarbonImmutable;
@@ -206,14 +208,23 @@ abstract class TestCaseDuNavigateur extends TestCase
     protected function societeComplete(): SocieteDeTest
     {
         $this->travelTo(self::aParis('2026-03-09 08:00:00'));
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Boutique du Port', 'code' => 'PORT', 'siren' => SocieteFactory::sirenFictif()]);
+        // Des noms fixes, qui ne dépendent pas de la langue des noms tirés
+        // au hasard (constat C45 des audits du 07/11/2026) : dans la liste
+        // de l'équipe que le propriétaire trie par nom, le premier compte
+        // est un membre (Olive Bernard, l'observatrice), et le balayage,
+        // qui n'ouvre qu'une fiche par sorte d'adresse, ouvre la sienne,
+        // où se trouvent les actions d'un membre (« Modifier son rôle »).
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Boutique du Port', 'code' => 'PORT'], User::factory()->create([
+            'name' => 'Sophie Petit',
+            'societe_id' => Societe::factory()->state(['siren' => SocieteFactory::sirenFictif(), 'type_activite' => TypeDActivite::Commerce])->commeApresLInscription(),
+        ]));
         $this->completerIdentiteLegale($magasin);
         $autreMagasin = $this->ouvrirUnAutreMagasin($magasin, ['nom' => 'Boutique de la Gare', 'code' => 'GARE']);
         $proprietaire = $this->proprietaireDe($magasin);
         $this->choisirSonMotDePasse($proprietaire);
         $type = $magasin->societe->type_activite;
-        $administrateur = $this->administrateur($magasin, null, AutorisationsSociete::toutes());
-        $administrateurVendeur = $this->administrateur($magasin, null, [], [...PermissionRegistry::modeleDeLAdministrateur($type), ...PermissionRegistry::deVente()]);
+        $administrateur = $this->administrateur($magasin, null, AutorisationsSociete::toutes(), nom: 'Thomas Robert');
+        $administrateurVendeur = $this->administrateur($magasin, null, [], [...PermissionRegistry::modeleDeLAdministrateur($type), ...PermissionRegistry::deVente()], 'Xavier Garnier');
         $responsable = $this->membre($magasin, RoleMagasin::Responsable, identite: ['name' => 'Rose Martin']);
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, identite: ['name' => 'Victor Durand']);
         $observateur = $this->membre($magasin, RoleMagasin::Observateur, identite: ['name' => 'Olive Bernard']);

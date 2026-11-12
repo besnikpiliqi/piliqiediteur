@@ -535,6 +535,15 @@ class Facture extends Model implements DocumentEnvoyable
     }
 
     /**
+     * Sa dernière transmission à la plateforme agréée, celle dont l'état
+     * vaut pour la facture, lue dans ses transmissions chargées.
+     */
+    public function derniereTransmissionPdp(): ?TransmissionPdp
+    {
+        return $this->transmissionsPdp->where('direction', 'outbound')->sortByDesc('id')->first();
+    }
+
+    /**
      * Ses imputations de paiements, dans l'ordre où elles ont été
      * enregistrées (un paiement saisi par erreur, puis sa
      * contre-passation) : la base de données ne garantit aucun ordre sans

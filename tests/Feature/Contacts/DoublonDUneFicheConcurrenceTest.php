@@ -56,7 +56,7 @@ class DoublonDUneFicheConcurrenceTest extends TestCase
         );
 
         $this->assertInstanceOf(InvokedProcess::class, $creation);
-        $resultat = $creation->wait();
+        $resultat = $this->attendreLeProcessusConcurrent($creation);
         $this->assertTrue($resultat->successful(), $resultat->errorOutput());
         app(TenantContext::class)->set($magasin);
         $this->assertNull($fournisseur->fresh()->siret);

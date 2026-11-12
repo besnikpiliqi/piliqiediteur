@@ -4,6 +4,7 @@ namespace App\Domain\Facturation\Actions;
 
 use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\Authorization\OperateurCourant;
+use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
 use App\Domain\CaisseSecurisee\Exceptions\HorlogeRegressiveException;
 use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
@@ -11,6 +12,7 @@ use App\Domain\CaisseSecurisee\Services\InstantFiscal;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Calendrier\Calendrier;
 use App\Domain\Facturation\Enums\TypeDocument;
+use App\Domain\Facturation\Exceptions\TicketZNonSigneException;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\Facture;
@@ -20,9 +22,14 @@ use App\Domain\Facturation\Services\JourneesDeCaisse;
 use App\Domain\Facturation\Services\PanierDeCaisse;
 use App\Domain\Facturation\Services\RecapitulatifDeCloture;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Support\CleDuModele;
 use App\Models\User;
+use Closure;
 use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use LogicException;
 
 /**
@@ -47,13 +54,28 @@ use LogicException;
  * suivante s'il l'est après la clôture de cette journée ; le crédit
  * d'avoir imputé et les grands totaux perpétuels après le dernier document
  * qu'elle compte.
- * Puis elle s'inscrit au journal des événements (JET 50, clôture de
- * période), dans sa transaction et sous le verrou du registre, avec son
- * numéro, sa journée, ses nombres de tickets et d'avoirs, son net, ses
- * encaissements par mode, son crédit d'avoir imputé et ses grands totaux,
- * en centimes : manuelle, de minuit, rattrapée, à zéro ou dans le magasin
- * de démonstration, chaque clôture en inscrit une, et une clôture refusée
- * aucune.
+ * Son ticket Z s'écrit en une seule fois, déjà numéroté, dans une table
+ * en ajout seul. Puis elle s'inscrit au journal des événements (JET 50,
+ * clôture de période), dans sa transaction et sous le verrou du registre,
+ * qui signe tout le ticket Z : son numéro, sa journée, ses nombres de
+ * tickets et d'avoirs, son net, ses encaissements par mode, son crédit
+ * d'avoir imputé et ses grands totaux, en centimes, son récapitulatif
+ * entier tel qu'il est écrit et les dernières séquences des ventes et des
+ * encaissements qu'elle compte ; l'en-tête signe son auteur et son
+ * instant. Sans cet événement, la base refuse le ticket Z à la validation
+ * de la transaction (voir GardesDesClotures). Manuelle, de minuit,
+ * rattrapée, à zéro ou dans le magasin de démonstration, chaque clôture
+ * en inscrit une, et une clôture refusée aucune.
+ *
+ * La clôture précédente est la dernière clôture signée au registre (voir
+ * RegistreFiscal::derniereClotureSignee()), jamais la dernière ligne de la
+ * table des tickets Z : ce que compte la clôture part des séquences
+ * qu'elle a signées. Un ticket Z que le registre ne connaît pas (daté
+ * après la dernière journée qu'il a close, ou sans son événement 50) n'a
+ * pas été produit par une clôture : la clôture du magasin s'arrête (voir
+ * TicketZNonSigneException), l'éditeur est alerté au journal de
+ * l'application et l'anomalie s'inscrit au journal des événements (JET
+ * 90), jusqu'à ce que sa procédure le retire sur pièces.
  *
  * Les journées se clôturent une à une, dans l'ordre du calendrier des
  * journées de caisse (voir JourneesDeCaisse), et chacune une seule fois
@@ -115,12 +137,12 @@ class CloturerCaisseAction
      */
     public function handle(User $auteur, Magasin $magasin, string $journee): ClotureCaisse
     {
-        return DB::transaction(function () use ($auteur, $magasin, $journee): ClotureCaisse {
+        return $this->arreteeParUnTicketZNonSigne($magasin, fn (): ClotureCaisse => DB::transaction(function () use ($auteur, $magasin, $journee): ClotureCaisse {
             $instant = $this->registre->verrouiller($magasin);
             $compte = $this->lecteur->exigerSousVerrou($auteur, 'cloturer', $magasin, ClotureCaisse::class);
 
             return $this->operateur->pendant($compte, fn (): ClotureCaisse => $this->cloturer($compte, $magasin, $journee, $instant));
-        });
+        }));
     }
 
     /**
@@ -134,11 +156,62 @@ class CloturerCaisseAction
      */
     public function parLeSysteme(Magasin $magasin, string $journee): ClotureCaisse
     {
-        return DB::transaction(function () use ($magasin, $journee): ClotureCaisse {
+        return $this->arreteeParUnTicketZNonSigne($magasin, fn (): ClotureCaisse => DB::transaction(function () use ($magasin, $journee): ClotureCaisse {
             $instant = $this->registre->verrouiller($magasin);
 
             return $this->operateur->pendantLeSysteme(fn (): ClotureCaisse => $this->cloturer(null, $magasin, $journee, $instant));
+        }));
+    }
+
+    /**
+     * Signale un ticket Z non signé qui arrête la clôture : l'éditeur est
+     * alerté au journal de l'application, et l'anomalie s'inscrit au
+     * journal des événements du magasin (JET 90), dans sa propre
+     * transaction, au nom du système, quand plus aucune transaction de
+     * l'application n'est ouverte : celle de la clôture refusée est déjà
+     * annulée, et une transaction encore ouverte autour d'elle l'annulerait
+     * aussi. Son appelant le signale alors lui-même, une fois sa propre
+     * transaction finie (voir CloturerLesJourneesAction::parUnePersonne()).
+     *
+     * @throws ModuleFiscalNonConfigureException
+     * @throws HorlogeRegressiveException
+     */
+    public function signalerLeTicketZNonSigne(Magasin $magasin, TicketZNonSigneException $refus): void
+    {
+        if (! $this->registre->horsDeToutTransaction()) {
+            return;
+        }
+
+        Log::critical('Caisse sécurisée : un ticket Z que le registre fiscal ne connaît pas arrête la clôture du magasin.', [
+            'magasin_id' => $magasin->getKey(),
+            'cloture_id' => $refus->clotureId,
+            'numero' => $refus->numero,
+            'journee' => $refus->journee,
+        ]);
+
+        DB::transaction(function () use ($magasin, $refus): void {
+            $this->registre->verrouiller($magasin);
+            $this->operateur->pendantLeSysteme(fn () => $this->registre->journaliser($refus->anomalie()->code, $refus->anomalie()->details()));
         });
+    }
+
+    /**
+     * La clôture, que signale puis laisse échouer un ticket Z non signé
+     * (voir signalerLeTicketZNonSigne()).
+     *
+     * @param  Closure(): ClotureCaisse  $cloture
+     *
+     * @throws TicketZNonSigneException
+     */
+    private function arreteeParUnTicketZNonSigne(Magasin $magasin, Closure $cloture): ClotureCaisse
+    {
+        try {
+            return $cloture();
+        } catch (TicketZNonSigneException $refus) {
+            $this->signalerLeTicketZNonSigne($magasin, $refus);
+
+            throw $refus;
+        }
     }
 
     /**
@@ -148,18 +221,22 @@ class CloturerCaisseAction
      */
     private function cloturer(?User $compte, Magasin $magasin, string $journee, InstantFiscal $instant): ClotureCaisse
     {
-        $this->verifierQueLaJourneePeutEtreCloturee($magasin, $journee, $instant->jour(), $this->registre->derniereJourneeCloturee($magasin));
+        $derniereJournee = $this->registre->derniereJourneeCloturee($magasin);
+        $this->refuserUnTicketZNonSigne($derniereJournee);
+        $this->verifierQueLaJourneePeutEtreCloturee($magasin, $journee, $instant->jour(), $derniereJournee);
         $this->panierDeCaisse->abandonnerLesVentesOuvertesLe($journee);
 
         $ventes = Facture::query()->enAttenteDeCloture($instant->calendrier(), $journee)->lockForUpdate()->get();
         $avoirs = Avoir::query()->enAttenteDeCloture($instant->calendrier(), $journee)->lockForUpdate()->get();
-        $etabli = $this->recapitulatif->etablir($magasin, $journee, $ventes, $avoirs, ClotureCaisse::query()->orderByDesc('date_cloture')->first());
+        $precedente = $this->registre->derniereClotureSignee($magasin);
+        $etabli = $this->recapitulatif->etablir($magasin, $journee, $ventes, $avoirs, $precedente['derniere_sequence_vente'] ?? null, $precedente['derniere_sequence_encaissement'] ?? null);
         $recapitulatif = $etabli['recapitulatif'];
         $ventesNettes = $recapitulatif['ventes_particuliers'];
         $avoirsNets = $recapitulatif['avoirs_particuliers'];
         $net = ['ht' => $ventesNettes['ht'] + $avoirsNets['ht'], 'tva' => $ventesNettes['tva'] + $avoirsNets['tva'], 'ttc' => $ventesNettes['ttc'] + $avoirsNets['ttc']];
 
         $cloture = (new ClotureCaisse(['date_cloture' => $journee]))->forceFill([
+            'numero' => $this->numerotation->suivant($magasin, TypeDocument::ClotureCaisse, substr($journee, 0, 4)),
             'cree_par' => $compte?->getKey(),
             'nombre_ventes' => $ventes->count(),
             'nombre_avoirs' => $avoirs->count(),
@@ -169,18 +246,17 @@ class CloturerCaisseAction
             'recapitulatif' => $recapitulatif,
             'derniere_sequence_vente' => $etabli['derniere_sequence_vente'],
             'derniere_sequence_encaissement' => $etabli['derniere_sequence_encaissement'],
+            'cloturee_a' => $instant->utc,
         ]);
         $cloture->save();
 
-        $cloture->forceFill([
-            'numero' => $this->numerotation->suivant($magasin, TypeDocument::ClotureCaisse, substr($journee, 0, 4)),
-            'cloturee_a' => $instant->utc,
-        ])->save();
-
         // Seule écriture, avec le statut, encore faite sur des documents
         // émis : un update() en masse, qui ne passe pas par
-        // ProtegeLesDonneesValidees. L'étape des clôtures, calculées
-        // depuis le registre fiscal, la supprimera.
+        // ProtegeLesDonneesValidees, et que la garde des documents émis
+        // laisse passer (voir GardesDesDocumentsEmis) ; la base ne la
+        // permet que vers ce ticket Z, le dernier du magasin, puis la fige
+        // (voir GardesDesClotures). L'étape des clôtures, calculées depuis
+        // le registre fiscal, la supprimera.
         if ($ventes->isNotEmpty()) {
             Facture::query()
                 ->whereIn('id', $ventes->pluck('id'))
@@ -204,10 +280,48 @@ class CloturerCaisseAction
             'encaissements' => array_column($recapitulatif['encaissements'], 'montant', 'mode'),
             'credit_avoir_impute' => $recapitulatif['credit_avoir_impute'],
             'grands_totaux' => $recapitulatif['grands_totaux'],
+            'recapitulatif' => $recapitulatif,
+            'derniere_sequence_vente' => $etabli['derniere_sequence_vente'],
+            'derniere_sequence_encaissement' => $etabli['derniere_sequence_encaissement'],
         ], $cloture);
         $this->registre->noterLaJourneeCloturee($magasin, $journee);
 
         return $cloture;
+    }
+
+    /**
+     * Refuse de clôturer tant qu'un ticket Z du magasin actif n'a pas été
+     * produit par une clôture : daté après la dernière journée close au
+     * registre, ou sans l'événement 50 qui le signe. Lu sous le verrou du
+     * registre, sans verrouiller aucun ticket Z (table en ajout seul).
+     *
+     * @param  string|null  $derniereJournee  la dernière journée close au registre, AAAA-MM-JJ
+     *
+     * @throws TicketZNonSigneException
+     */
+    private function refuserUnTicketZNonSigne(?string $derniereJournee): void
+    {
+        $nonSigne = ClotureCaisse::query()
+            ->where(function (Builder $tickets) use ($derniereJournee): void {
+                $tickets->whereNotExists(fn (QueryBuilder $evenements) => $evenements
+                    ->selectRaw('1')
+                    ->from('enregistrements_fiscaux')
+                    ->whereColumn('enregistrements_fiscaux.magasin_id', 'clotures_caisse.magasin_id')
+                    ->where('enregistrements_fiscaux.chaine', ChaineFiscale::Evenement->value)
+                    ->where('enregistrements_fiscaux.type', (string) CodeEvenement::CloturePeriode->value)
+                    ->where('enregistrements_fiscaux.document_type', (new ClotureCaisse)->getMorphClass())
+                    ->whereColumn('enregistrements_fiscaux.document_id', 'clotures_caisse.id'));
+
+                if ($derniereJournee !== null) {
+                    $tickets->orWhere('date_cloture', '>', $derniereJournee);
+                }
+            })
+            ->orderBy('date_cloture')
+            ->first();
+
+        if ($nonSigne !== null) {
+            throw new TicketZNonSigneException(CleDuModele::de($nonSigne), (string) $nonSigne->numero, $nonSigne->date_cloture);
+        }
     }
 
     /**

@@ -6,6 +6,7 @@ use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Cabinets\Enums\EtatDuLien;
 use App\Domain\Cabinets\Enums\EtatInvitation;
 use App\Domain\Cabinets\Enums\OrigineDuLien;
+use App\Domain\CaisseSecurisee\Support\DeclencheursDeProtection;
 use App\Domain\Tenancy\Enums\RoleSociete;
 use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Support\LitteralSql;
@@ -96,7 +97,7 @@ final class GardesDesCabinets
         $moments = $colonnes === null ? 'INSERT' : "INSERT OR UPDATE OF {$colonnes}";
         $connexion = DB::connection();
 
-        $connexion->unprepared("CREATE OR REPLACE FUNCTION garde_{$garde}() RETURNS trigger LANGUAGE plpgsql AS \$\$ BEGIN {$controles} RETURN NEW; END \$\$");
+        $connexion->unprepared("CREATE OR REPLACE FUNCTION garde_{$garde}() RETURNS trigger LANGUAGE plpgsql ".DeclencheursDeProtection::CHEMIN_DE_RECHERCHE." AS \$\$ BEGIN {$controles} RETURN NEW; END \$\$");
         $connexion->unprepared("CREATE TRIGGER {$garde} BEFORE {$moments} ON {$table} FOR EACH ROW EXECUTE FUNCTION garde_{$garde}()");
     }
 

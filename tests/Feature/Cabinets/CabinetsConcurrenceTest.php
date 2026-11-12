@@ -530,7 +530,7 @@ class CabinetsConcurrenceTest extends TestCase
         $this->assertInstanceOf(InvokedProcess::class, $concurrente);
 
         try {
-            return $concurrente->wait();
+            return $this->attendreLeProcessusConcurrent($concurrente);
         } catch (Throwable $erreur) {
             $this->fail($erreur->getMessage());
         }

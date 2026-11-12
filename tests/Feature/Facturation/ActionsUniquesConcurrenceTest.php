@@ -53,7 +53,7 @@ class ActionsUniquesConcurrenceTest extends TestCase
         $ticket = self::vendreUnCable($vendeur, $produitId, $jeton);
 
         $this->assertInstanceOf(InvokedProcess::class, $concurrente);
-        $resultat = $concurrente->wait();
+        $resultat = $this->attendreLeProcessusConcurrent($concurrente);
         $this->assertTrue($resultat->successful(), $resultat->errorOutput());
         $this->assertSame((string) $ticket->id, $resultat->output());
         $this->assertSame([1, 1, 1], [Facture::query()->count(), Paiement::query()->count(), ActionTraitee::query()->count()]);

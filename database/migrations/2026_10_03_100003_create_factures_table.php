@@ -1,6 +1,9 @@
 <?php
 
+use App\Domain\CaisseSecurisee\Support\DeclencheursDeProtection;
 use App\Domain\Facturation\Support\GardesDeLaVente;
+use App\Domain\Facturation\Support\GardesDesClotures;
+use App\Domain\Facturation\Support\GardesDesDocumentsEmis;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -22,11 +25,11 @@ return new class extends Migration
             $table->id();
             // restrictOnDelete partout : une facture émise ne se réécrit ni
             // ne disparaît (art. 286 I-3° bis du CGI, voir
-            // ProtegeLesDonneesValidees), pas même par la suppression d'une
-            // fiche qu'elle référence.
+            // ProtegeLesDonneesValidees et, en base, GardesDesDocumentsEmis),
+            // pas même par la suppression d'une fiche qu'elle référence.
             $table->foreignId('magasin_id')->constrained('magasins')->restrictOnDelete();
-            $table->foreignId('client_id')->constrained('clients')->restrictOnDelete();
-            $table->foreignId('devis_id')->nullable()->constrained('devis')->restrictOnDelete();
+            $table->foreignId('client_id');
+            $table->foreignId('devis_id')->nullable();
             // La facture que rectifie une facture rectificative, émise après
             // la correction du SIREN de la société par l'éditeur (voir
             // EmettreLaFactureRectificativeAction) : une facture de son
@@ -71,7 +74,7 @@ return new class extends Migration
             // le n° que la facture copie (voir ControleNatureOperation).
             // Choisie dans le magasin de la facture, jamais reçue d'un
             // formulaire ; une preuve ne se supprime pas.
-            $table->foreignId('consultation_vies_id')->nullable()->constrained('consultations_vies')->restrictOnDelete();
+            $table->foreignId('consultation_vies_id')->nullable();
             // La copie du client prise à l'émission (voir FigeLeClient) :
             // nom, adresse et identifiants tels qu'ils s'impriment et se
             // signent au registre fiscal, que la fiche du client change ou
@@ -91,9 +94,12 @@ return new class extends Migration
             // l'e-reporting (voir CloturerCaisseAction) -- jamais renseignée
             // pour une facture à un professionnel (voir
             // Facture::scopeTickets()). Seule colonne, avec le statut, encore
-            // écrite sur une facture émise : l'étape des clôtures la
-            // supprimera.
-            $table->foreignId('cloture_caisse_id')->nullable()->constrained('clotures_caisse')->nullOnDelete();
+            // écrite sur une facture émise, une seule fois : posée par la
+            // clôture vers le ticket Z qu'elle vient d'écrire, le dernier
+            // de son magasin, puis figée (voir la fin de up()). L'étape des
+            // clôtures la supprimera : les documents d'un ticket Z se liront
+            // dans sa fenêtre signée du registre.
+            $table->foreignId('cloture_caisse_id')->nullable();
             // Qui a créé la facture : nécessaire pour restreindre la
             // visibilité d'un vendeur à ses propres ventes par défaut
             // (voir FacturePolicy et FACTURE_VIEW_TOUTES).
@@ -123,7 +129,8 @@ return new class extends Migration
             $table->timestamps();
             // PAS de softDeletes() ici, volontairement : une facture
             // numérotée ne se supprime jamais (obligation légale de
-            // conservation) ; une correction passe par un avoir.
+            // conservation), ce que la base refuse aussi (voir
+            // GardesDesDocumentsEmis) ; une correction passe par un avoir.
             // Un brouillon, sans numéro, se supprime définitivement (voir
             // FacturePolicy::delete()).
 
@@ -138,14 +145,23 @@ return new class extends Migration
             // Les ventes d'une période, tous clients (téléchargement par
             // période, voir DocumentsDeLaPeriode).
             $table->index(['magasin_id', 'date_emission']);
+
+            $table->foreign(['magasin_id', 'client_id'])->references(['magasin_id', 'id'])->on('clients')->restrictOnDelete();
+            $table->foreign(['magasin_id', 'devis_id'])->references(['magasin_id', 'id'])->on('devis')->restrictOnDelete();
+            $table->foreign(['magasin_id', 'consultation_vies_id'])->references(['magasin_id', 'id'])->on('consultations_vies')->restrictOnDelete();
+            $table->foreign(['magasin_id', 'cloture_caisse_id'])->references(['magasin_id', 'id'])->on('clotures_caisse')->restrictOnDelete();
         });
 
         GardesDeLaVente::poser('factures');
+        GardesDesDocumentsEmis::poser('factures');
+        DeclencheursDeProtection::colonneFigee('factures', 'cloture_caisse_id', poseeSeulementSi: GardesDesClotures::POSE_VERS_LE_DERNIER_TICKET_Z);
     }
 
     public function down(): void
     {
         Schema::dropIfExists('factures');
         GardesDeLaVente::retirer('factures');
+        GardesDesDocumentsEmis::retirer('factures');
+        DeclencheursDeProtection::retirerLaColonneFigee('factures', 'cloture_caisse_id');
     }
 };

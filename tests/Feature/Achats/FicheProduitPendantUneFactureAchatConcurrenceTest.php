@@ -81,7 +81,7 @@ class FicheProduitPendantUneFactureAchatConcurrenceTest extends TestCase
         $collegue = null;
         DB::listen(function (QueryExecuted $requete) use (&$collegue, $magasinId, $produitId, $modification): void {
             if ($collegue === null && str_contains($requete->sql, 'from "magasins"') && str_ends_with($requete->sql, 'for share')) {
-                $collegue = $this->demarrerUnProcessusConcurrent(static fn () => self::modifierLaFiche($magasinId, $produitId, $modification))->wait();
+                $collegue = $this->attendreLeProcessusConcurrent($this->demarrerUnProcessusConcurrent(static fn () => self::modifierLaFiche($magasinId, $produitId, $modification)));
             }
         });
 
@@ -121,7 +121,7 @@ class FicheProduitPendantUneFactureAchatConcurrenceTest extends TestCase
 
         $this->assertInstanceOf(InvokedProcess::class, $collegue);
         $this->assertTrue($enAttente, 'La modification du collègue n\'a pas attendu la fin de la facture.');
-        $resultat = $collegue->wait();
+        $resultat = $this->attendreLeProcessusConcurrent($collegue);
         $this->assertTrue($resultat->successful(), $resultat->errorOutput());
         app(TenantContext::class)->set($magasin);
         $this->assertSame(['Coque iPhone 15 noire', '18.00'], array_values(Produit::query()->findOrFail($produitId)->only(['nom', 'prix_vente_ttc'])));

@@ -27,7 +27,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('magasin_id')->constrained('magasins')->restrictOnDelete();
             // Le client des paiements, celui des documents réglés.
-            $table->foreignId('client_id')->constrained('clients')->restrictOnDelete();
+            $table->foreignId('client_id');
             // Sa référence stable, dans la série RP du magasin, de l'année
             // de son enregistrement dans le calendrier du magasin
             // (RP-LYON1-2026-000001, voir DocumentNumberingService).
@@ -50,6 +50,9 @@ return new class extends Migration
 
             $table->unique(['magasin_id', 'numero']);
             $table->index(['magasin_id', 'client_id']);
+
+            $table->unique(['magasin_id', 'id']);
+            $table->foreign(['magasin_id', 'client_id'])->references(['magasin_id', 'id'])->on('clients')->restrictOnDelete();
         });
 
         DeclencheursDeProtection::ajoutSeul('recus_paiement');

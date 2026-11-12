@@ -108,7 +108,7 @@ class MarquerFacturesEnRetardConcurrenceTest extends TestCase
         }
 
         $this->assertInstanceOf(InvokedProcess::class, $concurrente);
-        $resultat = $concurrente->wait();
+        $resultat = $this->attendreLeProcessusConcurrent($concurrente);
         $this->assertTrue($resultat->successful(), $resultat->errorOutput());
         app(TenantContext::class)->set($magasin);
         $this->assertSame([StatutFacture::Payee, StatutFacture::EnRetard], [$payee->fresh()->statut, $autre->fresh()->statut]);
@@ -185,7 +185,7 @@ class MarquerFacturesEnRetardConcurrenceTest extends TestCase
         $leRetardDAbord ? $marquer() : $faire();
 
         $this->assertInstanceOf(InvokedProcess::class, $concurrente);
-        $resultat = $concurrente->wait();
+        $resultat = $this->attendreLeProcessusConcurrent($concurrente);
         $this->assertTrue($resultat->successful(), $resultat->errorOutput());
         app(TenantContext::class)->set($magasin->fresh());
         $this->verifierLeGeste($geste, $parametres);
@@ -253,7 +253,7 @@ class MarquerFacturesEnRetardConcurrenceTest extends TestCase
         $leRetardDAbord ? $marquer() : $finir();
 
         $this->assertInstanceOf(InvokedProcess::class, $concurrente);
-        $resultat = $concurrente->wait();
+        $resultat = $this->attendreLeProcessusConcurrent($concurrente);
         $this->assertTrue($resultat->successful(), $resultat->errorOutput());
         $societe = Societe::query()->findOrFail($societe->id);
         $this->assertTrue($fin === 'saisirLeCode' ? $societe->estValidee() : $societe->estClose());

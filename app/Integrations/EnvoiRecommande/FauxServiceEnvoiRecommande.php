@@ -12,7 +12,7 @@ use Illuminate\Support\Str;
 
 /**
  * Le prestataire d'envoi factice du développement et des tests, sans
- * aucune requête (voir VerificationServiceProvider) : chaque courrier est
+ * aucune requête (voir FournisseursExternesServiceProvider) : chaque courrier est
  * noté, déposé, avec son PDF (voir envois()), et reste déposé tant qu'un
  * test ne le remet pas ou ne le retourne pas (voir remettre(),
  * retourner()).
@@ -25,7 +25,7 @@ use Illuminate\Support\Str;
  * sur le disque privé, dans DOSSIER_DES_COURRIERS, pour qu'on puisse le
  * lire et saisir son code ; le journal de l'application n'en note que le
  * chemin : ce prestataire ne sert jamais en production (voir
- * VerificationServiceProvider::boot()). Le cache des tests ne vit que le
+ * FournisseursExternesServiceProvider::boot()). Le cache des tests ne vit que le
  * temps d'un test.
  */
 class FauxServiceEnvoiRecommande implements ServiceEnvoiRecommande

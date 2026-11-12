@@ -48,6 +48,11 @@ use LogicException;
  * est alors refusée, ou après elle. Il doit pouvoir enregistrer une facture
  * d'achat, et, pour chaque ligne qui crée ou corrige un produit, le faire
  * au catalogue ; la facture l'enregistre comme auteur, avec son nom figé.
+ * Le fournisseur reçu est relu ensuite dans le magasin actif, avant toute
+ * écriture (voir BelongsToMagasin::relueDansLeMagasin()) : celui d'un
+ * autre magasin est refusé, même déjà chargé ou avec son magasin_id
+ * changé en mémoire. L'import des factures reçues de la plateforme
+ * agréée, qui reconnaît le fournisseur par son SIRET, passera par ici.
  *
  * Elle garde les montants qu'écrit la facture du fournisseur (décision de
  * l'éditeur du 02/11/2026, T1) : le PU HT et le HT de chaque ligne, la TVA
@@ -85,7 +90,7 @@ class CreerFactureAchatAction
      * @param  list<PieceDeposee>  $pieces  les pièces du fournisseur jointes à la saisie
      *
      * @throws AuthorizationException
-     * @throws LogicException quand le magasin est en lecture seule ou qu'une saisie à la main n'a pas la date de la facture du fournisseur
+     * @throws LogicException quand le magasin est en lecture seule, que le fournisseur n'est pas un fournisseur du magasin ou qu'une saisie à la main n'a pas la date de la facture du fournisseur
      * @throws ConfirmationDesEcartsRequiseException
      * @throws FichierRefuseException quand une pièce est refusée par ses contrôles, avant toute écriture
      */
@@ -100,6 +105,7 @@ class CreerFactureAchatAction
             Societe::verrouillerAvantSonJournalDAudit($magasin->societe_id);
             Magasin::query()->whereKey($magasin->getKey())->sharedLock()->firstOrFail()->verifierQuIlEstOuvert();
             $compte = $this->lecteur->exigerSousVerrou($auteur, 'create', $magasin, FactureAchat::class);
+            $fournisseur = Fournisseur::relueDansLeMagasin($fournisseur, Fournisseur::REFUS_AUTRE_MAGASIN);
 
             return $this->operateur->pendant($compte, function () use ($compte, $fournisseur, $lignes, $attributs, $montants, $pieces): FactureAchat {
                 $factureAchat = (new FactureAchat([...$attributs, 'fournisseur_id' => $fournisseur->getKey()]))->forceFill(['cree_par' => $compte->getKey()]);

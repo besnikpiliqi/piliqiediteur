@@ -438,6 +438,23 @@ class RegistreFiscalTest extends TestCase
         Log::shouldHaveReceived('critical')->once();
     }
 
+    /**
+     * Le risque que contrôle caisse:diagnostiquer : deux serveurs dont les
+     * horloges s'écartent de 300 ms écrivent au registre à cheval sur une
+     * seconde ; le second, en retard, horodate son écriture avant le
+     * dernier verrou, et elle est refusée (constat C93 des audits du
+     * 07/11/2026).
+     */
+    public function test_deux_serveurs_decales_de_300_ms_a_cheval_sur_une_seconde_refusent_la_seconde_ecriture(): void
+    {
+        $this->travelTo(self::aParis('2026-10-09 10:00:00')->addMilliseconds(100));
+        $this->magasinActif();
+        $this->enregistrer();
+        $this->travelTo(self::aParis('2026-10-09 09:59:59')->addMilliseconds(800));
+
+        $this->assertThrows(fn () => $this->enregistrer(), HorlogeRegressiveException::class, 'a déjà été verrouillé à 09/10/2026 08:00:00 UTC');
+    }
+
     public function test_un_verrou_sans_ecriture_fixe_aussi_l_heure_sous_laquelle_l_horloge_ne_recule_plus(): void
     {
         $this->travelTo(self::aParis('2026-10-09 10:00:05'));

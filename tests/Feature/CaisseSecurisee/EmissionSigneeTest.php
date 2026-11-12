@@ -728,13 +728,13 @@ class EmissionSigneeTest extends TestCase
         $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => true, 'stock_quantite' => 10]);
         $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 3]]);
         config(['caisse_securisee.cle_privee' => null]);
+        $avant = $this->instantaneDesTables('sequences_documents', 'mouvements_stock');
 
         $this->assertThrows(fn () => app(EmettreFactureAction::class)->handle(self::auteur(), $brouillon), ModuleFiscalNonConfigureException::class);
 
         $this->assertSame([StatutFacture::Brouillon, null, null], [$brouillon->fresh()->statut, $brouillon->fresh()->numero, $brouillon->fresh()->date_emission]);
-        $this->assertDatabaseCount('sequences_documents', 0);
+        $this->assertSame($avant, $this->instantaneDesTables('sequences_documents', 'mouvements_stock'));
         $this->assertSame(10, $produit->fresh()->stock_quantite);
-        $this->assertDatabaseCount('mouvements_stock', 0);
         $this->assertDatabaseCount('enregistrements_fiscaux', 0);
     }
 

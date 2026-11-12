@@ -69,7 +69,7 @@ class AdresseDeConnexionConcurrenceTest extends TestCase
         app(ConfirmerNouvelleAdresseAction::class)->handle($jetonDuPremier, $premier);
 
         $this->assertInstanceOf(InvokedProcess::class, $concurrente);
-        $resultat = $concurrente->wait();
+        $resultat = $this->attendreLeProcessusConcurrent($concurrente);
         $this->assertFalse($resultat->successful());
         $this->assertStringContainsString(ConfirmerNouvelleAdresseAction::MESSAGE_ADRESSE_INUTILISABLE, $resultat->errorOutput());
         $this->assertSame([self::ADRESSE, null], [$premier->refresh()->email, $second->refresh()->email]);
@@ -100,7 +100,7 @@ class AdresseDeConnexionConcurrenceTest extends TestCase
         $this->assertTrue(app(CloreLInscriptionAction::class)->cloreSansCode($societe->fresh(), self::aParis('2026-10-05 10:00:00')));
 
         $this->assertInstanceOf(InvokedProcess::class, $concurrente);
-        $resultat = $concurrente->wait();
+        $resultat = $this->attendreLeProcessusConcurrent($concurrente);
         $this->assertFalse($resultat->successful());
         $this->assertStringContainsString(DemanderUneNouvelleAdresseAction::MESSAGE_INSCRIPTION_CLOSE, $resultat->errorOutput());
         $proprietaire = User::query()->findOrFail($proprietaireId);

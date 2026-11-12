@@ -15,7 +15,6 @@ use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Domain\Tenancy\Concerns\FigeLeNomDeSesAuteurs;
 use App\Domain\Tenancy\Models\Magasin;
-use App\Domain\Tenancy\Support\CleDuModele;
 use App\Domain\Tenancy\Support\ValeursLues;
 use Database\Factories\ClotureCaisseFactory;
 use Illuminate\Database\Eloquent\Builder;
@@ -41,10 +40,18 @@ use UnexpectedValueException;
  * CloturerLesJourneesAction). Ce que l'e-reporting déclarera pour sa
  * journée se lit sur elle (voir EReportingDesParticuliers).
  *
- * Écrite une seule fois : numérotée en base, elle ne se modifie plus et ne
- * se supprime jamais (voir ProtegeLesDonneesValidees). PAS de SoftDeletes
- * ici, volontairement, pour un document fiscal au même titre qu'une
- * facture, dont la loi impose la conservation.
+ * Écrite une seule fois, déjà numérotée, par la clôture de sa journée,
+ * qui en signe tout le contenu au journal des événements (événement 50) :
+ * elle ne se modifie plus et ne se supprime jamais, ni par le modèle (voir
+ * ProtegeLesDonneesValidees) ni par une requête directe (table en ajout
+ * seul, et la base refuse un ticket Z sans sa clôture signée, voir
+ * GardesDesClotures). La dernière journée close, la clôture précédente et
+ * ce que compte une clôture se lisent au registre signé, jamais dans
+ * cette table (voir RegistreFiscal::derniereClotureSignee()), et la
+ * vérification de l'intégrité compare chaque ticket Z à sa clôture signée
+ * (voir VerificateurIntegrite). PAS de SoftDeletes ici, volontairement,
+ * pour un document fiscal au même titre qu'une facture, dont la loi
+ * impose la conservation.
  *
  * Sa journée (voir JourCivil) n'est jamais nulle : sa colonne ne l'est pas
  * en base.
@@ -88,11 +95,12 @@ class ClotureCaisse extends Model
     ];
 
     /**
-     * Numérotée en base : la clôture est faite.
+     * Enregistrée : la clôture est faite, son ticket Z s'écrit en une seule
+     * fois, déjà numéroté.
      */
     public function estValidee(): bool
     {
-        return $this->exists && $this->documentNumeroteEnBase(self::class, [CleDuModele::de($this)]);
+        return $this->exists;
     }
 
     protected function regleDInalterabilite(): string
@@ -278,18 +286,6 @@ class ClotureCaisse extends Model
     public function scopeDuJour(Builder $query, string $jour): Builder
     {
         return $query->where('date_cloture', $jour);
-    }
-
-    /**
-     * La dernière journée clôturée du magasin actif (AAAA-MM-JJ), null
-     * tant qu'aucune ne l'est, lue sans verrou : pour l'affichage et pour
-     * lister les journées à clôturer. Une émission ou une clôture la relit
-     * sous le verrou du registre fiscal (voir
-     * RegistreFiscal::derniereJourneeCloturee()).
-     */
-    public static function derniereJourneeCloturee(): ?string
-    {
-        return ValeursLues::texteOuNul(static::query()->max('date_cloture'));
     }
 
     /**

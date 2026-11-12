@@ -4,6 +4,8 @@ namespace Tests\Feature\Facturation;
 
 use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\Authorization\OperateurCourant;
+use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
+use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Models\Produit;
@@ -13,6 +15,7 @@ use App\Domain\Facturation\Actions\CloturerLesJourneesAction;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\FermerLesCaissesPersonnellesAction;
+use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\CalculateurLigne;
@@ -26,7 +29,9 @@ use App\Domain\Tenancy\Models\PeriodeActivite;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Exceptions;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use LogicException;
 use Mockery\MockInterface;
@@ -125,6 +130,68 @@ class CloturerLesJourneesActionTest extends TestCase
 
         $this->assertSame(['2026-10-05', '2026-10-06', '2026-10-08', '2026-10-09'], $clotures->map(fn (ClotureCaisse $cloture): string => $cloture->date_cloture)->all());
         $this->assertTrue(app(CloturerLesJourneesAction::class)->journeesEnAttente(Calendrier::deParis()->aujourdhui())->isEmpty());
+    }
+
+    /**
+     * C27 : un ticket Z inconnu du registre, daté après la dernière journée
+     * qu'il a clôturée, arrête la clôture du magasin au lieu de lui faire
+     * sauter des journées : refus qui le nomme, aucun ticket Z produit,
+     * l'éditeur alerté au journal de l'application et l'anomalie inscrite
+     * au journal des événements (JET 90).
+     */
+    public function test_un_ticket_z_inconnu_du_registre_arrete_la_cloture_au_lieu_de_la_desorganiser(): void
+    {
+        $magasin = $this->magasin();
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
+        $this->vendreUnTicket();
+        $this->travelTo(self::aParis('2026-10-06 00:00:30'));
+        $premier = app(CloturerLesJourneesAction::class)->parLeSysteme($magasin, '2026-10-05')->sole();
+        $numero = str_replace('-000001', '-000002', (string) $premier->numero);
+        $this->insererUnFauxTicketZ($magasin, '2026-10-07', $numero, self::aParis('2026-10-08 00:00:30'));
+        $this->travelTo(self::aParis('2026-10-09 00:00:30'));
+        $refus = "Le ticket Z {$numero} du 07/10/2026 n'a pas été produit par la clôture de sa journée : la clôture du magasin s'arrête jusqu'à l'examen de l'éditeur.";
+        Log::spy();
+
+        $this->assertThrows(fn () => app(CloturerLesJourneesAction::class)->parLeSysteme($magasin, '2026-10-08'), LogicException::class, $refus);
+
+        $this->assertSame(['2026-10-05', '2026-10-07'], ClotureCaisse::query()->orderBy('date_cloture')->get()->map(fn (ClotureCaisse $cloture): string => $cloture->date_cloture)->all());
+        Log::shouldHaveReceived('critical')->once();
+        $this->assertSame(
+            [['controle' => 'cloture', 'message' => $refus, 'cloture_id' => DB::table('clotures_caisse')->where('numero', $numero)->value('id'), 'numero' => $numero]],
+            EnregistrementFiscal::query()->where('chaine', ChaineFiscale::Evenement->value)->where('type', '90')->get()->map(fn (EnregistrementFiscal $anomalie): array => $anomalie->contenuSigne()['donnees']['details'])->all(),
+        );
+    }
+
+    /**
+     * C27 : la clôture précédente d'une clôture est la dernière clôture
+     * signée au registre, jamais la ligne de la table des tickets Z. Le
+     * ticket Z de la journée de la fermeture temporaire, dont un
+     * administrateur de la base a effacé les séquences (déclencheur
+     * retiré), ne fait pas recompter à la clôture de la réouverture le
+     * paiement du 05/10 qu'il avait déjà compté : seul celui du 09/10
+     * entre dans le ticket Z du 09/10 et dans ce que signe sa clôture.
+     */
+    public function test_la_precedente_d_une_cloture_est_celle_du_registre(): void
+    {
+        $magasin = $this->magasin();
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $vendre = fn (): Facture => self::vendreAuComptant(self::auteur(), Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]], ModePaiement::Especes);
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
+        $vendre();
+        PeriodeActivite::query()->where('magasin_id', $magasin->id)->sole()->forceFill(['fin' => self::aParis('2026-10-06 18:00:00'), 'motif_fin' => MotifFermeture::Temporaire])->save();
+        $this->travelTo(self::aParis('2026-10-07 00:00:30'));
+        $fermeture = app(CloturerLesJourneesAction::class)->parLeSysteme($magasin, '2026-10-06')->last();
+        $this->retirerLeDeclencheur('clotures_caisse', 'clotures_caisse_ajout_seul_update');
+        DB::table('clotures_caisse')->where('magasin_id', $magasin->id)->where('id', $fermeture->id)->update(['derniere_sequence_vente' => null, 'derniere_sequence_encaissement' => null]);
+        (new PeriodeActivite)->forceFill(['magasin_id' => $magasin->id, 'debut' => self::aParis('2026-10-09 09:00:00')])->save();
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
+        $vendre();
+        $this->travelTo(self::aParis('2026-10-10 00:00:30'));
+
+        $reouverture = app(CloturerLesJourneesAction::class)->parLeSysteme($magasin, '2026-10-09')->sole();
+
+        $this->assertSame(['especes', 1, 0, 1200], [$reouverture->encaissementsParMode()[0]['mode'], $reouverture->encaissementsParMode()[0]['paiements'], $reouverture->encaissementsParMode()[0]['contre_passations'], $reouverture->encaissementsParMode()[0]['montant']]);
+        $this->assertSame(1200, EnregistrementFiscal::query()->where('chaine', ChaineFiscale::Evenement->value)->where('type', '50')->orderByDesc('sequence')->first()?->contenuSigne()['donnees']['details']['encaissements']['especes']);
     }
 
     /**

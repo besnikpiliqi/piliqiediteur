@@ -3,6 +3,7 @@
 namespace App\Domain\Facturation\Services;
 
 use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
+use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\Calendrier\Calendrier;
 use App\Domain\Contacts\Enums\TypeClient;
@@ -23,6 +24,7 @@ use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Domain\Tenancy\Support\ValeursLues;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Query\Builder as QueryBuilder;
+use Illuminate\Database\Query\JoinClause;
 use Illuminate\Support\Collection;
 
 /**
@@ -187,23 +189,83 @@ class EReportingDesParticuliers
 
     /**
      * Les enregistrements de cette chaîne du registre du magasin de la
-     * clôture qu'elle compte : après la dernière séquence de la clôture
-     * précédente, jusqu'à la sienne.
+     * clôture qu'elle compte, dans la fenêtre que signe sa clôture au
+     * journal des événements (événement 50) : après la dernière séquence
+     * que signe la clôture précédente, jusqu'à la sienne. Jamais lus sur
+     * les lignes des tickets Z, qu'une écriture directe tromperait ; un
+     * ticket Z qu'aucune clôture n'a signé ne compte rien.
      *
      * @param  'derniere_sequence_vente'|'derniere_sequence_encaissement'  $derniereSequence
      */
     private static function enregistrementsDeLaCloture(QueryBuilder $enregistrements, ChaineFiscale $chaine, string $derniereSequence): QueryBuilder
     {
+        $evenementDeCloture = static fn (QueryBuilder $evenements, string $alias): QueryBuilder => $evenements
+            ->where("{$alias}.chaine", ChaineFiscale::Evenement->value)
+            ->where("{$alias}.type", (string) CodeEvenement::CloturePeriode->value);
+
         return $enregistrements
             ->from('enregistrements_fiscaux')
+            ->join('enregistrements_fiscaux as signee', fn (JoinClause $signee): JoinClause => $evenementDeCloture($signee
+                ->on('signee.magasin_id', '=', 'clotures_caisse.magasin_id')
+                ->where('signee.document_type', (new ClotureCaisse)->getMorphClass())
+                ->on('signee.document_id', '=', 'clotures_caisse.id'), 'signee'))
             ->whereColumn('enregistrements_fiscaux.magasin_id', 'clotures_caisse.magasin_id')
             ->where('enregistrements_fiscaux.chaine', $chaine->value)
-            ->whereColumn('enregistrements_fiscaux.sequence', '<=', "clotures_caisse.{$derniereSequence}")
-            ->where('enregistrements_fiscaux.sequence', '>', fn (QueryBuilder $precedente): QueryBuilder => $precedente
-                ->from('clotures_caisse as precedente')
-                ->selectRaw("coalesce(max(precedente.{$derniereSequence}), 0)")
-                ->whereColumn('precedente.magasin_id', 'clotures_caisse.magasin_id')
-                ->whereColumn('precedente.date_cloture', '<', 'clotures_caisse.date_cloture'));
+            ->whereRaw('enregistrements_fiscaux.sequence <= '.self::sequenceSignee('signee', $derniereSequence))
+            ->where('enregistrements_fiscaux.sequence', '>', fn (QueryBuilder $precedente): QueryBuilder => $evenementDeCloture($precedente
+                ->from('enregistrements_fiscaux')
+                ->selectRaw('coalesce('.self::sequenceSignee('enregistrements_fiscaux', $derniereSequence).', 0)')
+                ->whereColumn('enregistrements_fiscaux.magasin_id', 'signee.magasin_id')
+                ->whereColumn('enregistrements_fiscaux.sequence', '<', 'signee.sequence'), 'enregistrements_fiscaux')
+                ->orderByDesc('enregistrements_fiscaux.sequence')
+                ->limit(1));
+    }
+
+    /**
+     * L'expression SQL de la dernière séquence que signe l'événement de
+     * clôture $alias (derniere_sequence_vente ou
+     * derniere_sequence_encaissement de ses détails), ou NULL quand il
+     * n'en signe pas : un contenu qui n'est pas un objet JSON, ou une
+     * séquence qui n'est pas un entier, ne fait échouer aucune requête
+     * (la vérification de l'intégrité le signale).
+     *
+     * @param  'signee'|'enregistrements_fiscaux'  $alias  l'événement de la clôture, ou celui de la précédente, lu dans sa propre sous-requête
+     * @param  'derniere_sequence_vente'|'derniere_sequence_encaissement'  $derniereSequence
+     */
+    private static function sequenceSignee(string $alias, string $derniereSequence): string
+    {
+        $valeur = "(CASE WHEN {$alias}.contenu IS JSON OBJECT THEN {$alias}.contenu::jsonb #>> '{donnees,details,{$derniereSequence}}' END)";
+
+        return "(CASE WHEN {$valeur} ~ '^[0-9]{1,18}$' THEN {$valeur}::bigint END)";
+    }
+
+    /**
+     * La fenêtre de chaque chaîne que compte un ticket Z, telle que la
+     * signe sa clôture au journal des événements : la dernière séquence
+     * que signe la clôture précédente (null avant la première vente ou le
+     * premier encaissement) et la sienne. Un ticket Z qu'aucune clôture
+     * n'a signé ne compte rien.
+     *
+     * @return array{vente: array{0: int|null, 1: int|null}, encaissement: array{0: int|null, 1: int|null}}
+     */
+    private static function fenetreSignee(ClotureCaisse $cloture): array
+    {
+        $evenements = EnregistrementFiscal::query()
+            ->where('chaine', ChaineFiscale::Evenement->value)
+            ->where('type', (string) CodeEvenement::CloturePeriode->value);
+        $signee = (clone $evenements)->where('document_type', $cloture->getMorphClass())->where('document_id', $cloture->getKey())->first();
+
+        if ($signee === null) {
+            return ['vente' => [null, null], 'encaissement' => [null, null]];
+        }
+
+        $precedente = (clone $evenements)->where('sequence', '<', $signee->sequence)->orderByDesc('sequence')->first();
+        $sequence = static fn (?EnregistrementFiscal $evenement, string $champ): ?int => $evenement === null ? null : ValeursLues::entierOuNulDe(ValeursLues::tableauDe($evenement->donneesSignees(), 'details'), $champ);
+
+        return [
+            'vente' => [$sequence($precedente, 'derniere_sequence_vente'), $sequence($signee, 'derniere_sequence_vente')],
+            'encaissement' => [$sequence($precedente, 'derniere_sequence_encaissement'), $sequence($signee, 'derniere_sequence_encaissement')],
+        ];
     }
 
     /**
@@ -293,14 +355,10 @@ class EReportingDesParticuliers
      */
     private function encaissements(ClotureCaisse $cloture): array
     {
-        $precedente = ClotureCaisse::query()
-            ->where('magasin_id', $cloture->magasin_id)
-            ->where('date_cloture', '<', $cloture->date_cloture)
-            ->orderByDesc('date_cloture')
-            ->first();
+        $fenetre = self::fenetreSignee($cloture);
         $reglements = $this->sansLesReductions($this->reglements(
-            self::enregistrementsComptes(ChaineFiscale::Vente, $precedente?->derniere_sequence_vente, $cloture->derniere_sequence_vente),
-            self::enregistrementsComptes(ChaineFiscale::Encaissement, $precedente?->derniere_sequence_encaissement, $cloture->derniere_sequence_encaissement),
+            self::enregistrementsComptes(ChaineFiscale::Vente, ...$fenetre['vente']),
+            self::enregistrementsComptes(ChaineFiscale::Encaissement, ...$fenetre['encaissement']),
             $cloture->magasin->calendrier(),
         ));
         $tickets = self::declares(Facture::query())->whereKey(array_unique(array_column($reglements, 'facture_id')))->with('lignes')->get()->keyBy('id');

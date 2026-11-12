@@ -135,7 +135,9 @@ class SelecteurDeProduitsTest extends TestCase
         $magasin = $this->ouvrirLeMagasinEnTantQueResponsable();
         $enStock = Produit::factory()->create(['nom' => 'Câble USB', 'suivi_stock' => true, 'stock_quantite' => 4]);
         $epuise = Produit::factory()->create(['nom' => 'Chargeur', 'suivi_stock' => true, 'stock_quantite' => 0]);
-        $negatif = Produit::factory()->create(['nom' => 'Housse', 'suivi_stock' => true, 'stock_quantite' => -2]);
+        $negatif = Produit::factory()->create(['nom' => 'Housse', 'suivi_stock' => true]);
+        self::vendreJusquAuStockNegatif($negatif, 2);
+        $negatif->refresh();
         $sansSuivi = Produit::factory()->create(['nom' => 'Carte cadeau', 'suivi_stock' => false]);
 
         Livewire::test(SelecteurDeProduits::class)
@@ -167,7 +169,9 @@ class SelecteurDeProduitsTest extends TestCase
     {
         $magasin = $this->ouvrirLeMagasinEnTantQueResponsable();
         $epuise = Produit::factory()->create(['nom' => 'Chargeur', 'reference' => 'CHG-1', 'suivi_stock' => true, 'stock_quantite' => 0]);
-        $negatif = Produit::factory()->create(['nom' => 'Housse', 'reference' => 'HOU-1', 'suivi_stock' => true, 'stock_quantite' => -2]);
+        $negatif = Produit::factory()->create(['nom' => 'Housse', 'reference' => 'HOU-1', 'suivi_stock' => true]);
+        self::vendreJusquAuStockNegatif($negatif, 2);
+        $negatif->refresh();
         $refus = '« Chargeur » est épuisé : seule une personne autorisée à vendre sans stock peut le vendre.';
         $refusDuNegatif = '« Housse » est épuisé : seule une personne autorisée à vendre sans stock peut le vendre.';
 

@@ -38,6 +38,9 @@ return [
     'app/Domain/Facturation/Notifications/EnvoiDocumentEchoue.php' => [
         'action:voir' => ['lot' => 'NAV-2', 'tests' => []],
     ],
+    'app/Domain/Facturation/Notifications/TransmissionNonAboutie.php' => [
+        'action:voir' => ['lot' => 'NAV-2', 'tests' => []],
+    ],
     'app/Domain/Facturation/Notifications/FacturesPasseesEnRetard.php' => [
         'action:voir' => ['lot' => 'NAV-2', 'tests' => []],
     ],
@@ -1349,6 +1352,9 @@ return [
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le vendeur ouvre chaque page et chaque action du magasin sans erreur',
         ]],
         'action:relancer' => ['lot' => 'NAV-2', 'tests' => []],
+        'action:relancerLaTransmission' => ['lot' => 'NAV-2', 'tests' => [
+            'tests/Browser/Parcours/TransmissionALaPlateformeTest.php › le propriétaire relance la transmission d’une facture que la plateforme n’a pas reçue, et elle est acceptée',
+        ]],
         'action:telecharger_pdf' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur autorisé à vendre ouvre chaque page et chaque action du magasin sans erreur',

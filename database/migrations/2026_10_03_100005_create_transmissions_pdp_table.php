@@ -17,10 +17,18 @@ return new class extends Migration
             // mécanique de suivi et d'historique pour tous.
             $table->nullableMorphs('transmissible');
             $table->string('direction', 10); // outbound, inbound
+            // Le nom du pilote de la plateforme agréée (voir
+            // FournisseursExternesServiceProvider::pdpActive()).
             $table->string('prestataire_pdp', 60);
+            // La référence sous laquelle la facture est déposée, tirée à la
+            // création de la transmission (voir TransmissionPdp) et gardée
+            // à chaque reprise après une panne : la plateforme retrouve
+            // par elle un dépôt déjà reçu, et la même facture n'est jamais
+            // déposée deux fois (voir SubmitFactureToPdpJob).
+            $table->uuid('reference_depot')->unique();
             $table->string('transmission_externe_id')->nullable();
             $table->string('format', 10)->nullable(); // facturx (voir FakePdpGateway)
-            $table->string('statut', 20)->default('soumise');
+            $table->string('statut', 20)->default('soumise'); // voir StatutTransmissionPdp
             $table->string('chemin_fichier_archive')->nullable();
             $table->string('code_erreur', 60)->nullable();
             $table->text('message_erreur')->nullable();

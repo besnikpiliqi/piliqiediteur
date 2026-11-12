@@ -79,7 +79,7 @@ class PiecesDuFournisseurConcurrenceTest extends TestCase
         self::joindre($magasinId, $factureId, 'premiere.pdf');
 
         $this->assertInstanceOf(InvokedProcess::class, $concurrente);
-        $resultat = $concurrente->wait();
+        $resultat = $this->attendreLeProcessusConcurrent($concurrente);
         $this->assertTrue($resultat->failed(), $resultat->output());
         $this->assertStringContainsString(PiecesDuFournisseur::REFUS_TROP_DE_PIECES, $resultat->errorOutput());
         app(TenantContext::class)->set($magasin);
@@ -118,7 +118,7 @@ class PiecesDuFournisseurConcurrenceTest extends TestCase
         app(ValiderFactureAchatAction::class)->handle(self::auteur(), $factureAchat);
 
         $this->assertInstanceOf(InvokedProcess::class, $concurrente);
-        $refus = $concurrente->wait();
+        $refus = $this->attendreLeProcessusConcurrent($concurrente);
         $this->assertTrue($refus->failed(), 'L\'effacement, fait pendant la validation, aurait dû l\'attendre puis être refusé.');
         $this->assertStringContainsString('pieces_fournisseur_effacees_d_un_brouillon_seulement : une pièce du fournisseur ne s\'efface que d\'une facture d\'achat en brouillon', $refus->errorOutput());
         $this->assertSame(StatutFactureAchat::Validee, $factureAchat->fresh()->statut);

@@ -3,6 +3,7 @@
 namespace App\Domain\Tenancy\Support;
 
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\CaisseSecurisee\Support\DeclencheursDeProtection;
 use App\Domain\Tenancy\Enums\TypeDActivite;
 use Illuminate\Support\Facades\DB;
 
@@ -80,7 +81,7 @@ final class GardesDesTypesDActivite
         ));
         $connexion = DB::connection();
 
-        $connexion->unprepared("CREATE OR REPLACE FUNCTION garde_{$garde}() RETURNS trigger LANGUAGE plpgsql AS \$\$ BEGIN {$controles} RETURN NEW; END \$\$");
+        $connexion->unprepared("CREATE OR REPLACE FUNCTION garde_{$garde}() RETURNS trigger LANGUAGE plpgsql ".DeclencheursDeProtection::CHEMIN_DE_RECHERCHE." AS \$\$ BEGIN {$controles} RETURN NEW; END \$\$");
         $connexion->unprepared("CREATE TRIGGER {$garde} BEFORE INSERT OR UPDATE OF {$colonnes} ON {$table} FOR EACH ROW EXECUTE FUNCTION garde_{$garde}()");
     }
 

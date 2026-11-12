@@ -7,8 +7,7 @@ use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Facturation\Actions\CreerDevisAction;
-use App\Domain\Stock\Enums\TypeMouvementStock;
-use App\Domain\Stock\Services\StockLedgerService;
+use App\Domain\Stock\Services\ConfirmationVenteSansStock;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use Closure;
@@ -237,7 +236,7 @@ class ProduitTest extends TestCase
     public static function usagesDUnProduit(): array
     {
         return [
-            'grand livre du stock' => [static fn (Produit $produit) => app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::AjustementEntree, 3)],
+            'grand livre du stock' => [static fn (Produit $produit) => self::vendreAuComptant(self::auteur(), Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]], confirmation: new ConfirmationVenteSansStock([$produit->id => -1]))],
             'ligne d\'achat' => [static fn (Produit $produit) => app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1, 'prix_unitaire_ht' => 2]], ['date_facture' => '2026-01-15'])],
             'ligne de devis' => [static fn (Produit $produit) => app(CreerDevisAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]])],
         ];

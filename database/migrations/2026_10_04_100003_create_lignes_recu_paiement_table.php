@@ -21,8 +21,8 @@ return new class extends Migration
         Schema::create('lignes_recu_paiement', function (Blueprint $table) {
             $table->id();
             $table->foreignId('magasin_id')->constrained('magasins')->restrictOnDelete();
-            $table->foreignId('recu_paiement_id')->constrained('recus_paiement')->restrictOnDelete();
-            $table->foreignId('facture_id')->constrained('factures')->restrictOnDelete();
+            $table->foreignId('recu_paiement_id');
+            $table->foreignId('facture_id');
             // Ce que les paiements du reçu imputent sur le document, en
             // négatif pour une contre-passation.
             $table->decimal('montant', 12, 2);
@@ -39,6 +39,9 @@ return new class extends Migration
 
             $table->unique(['recu_paiement_id', 'facture_id']);
             $table->index(['magasin_id', 'facture_id']);
+
+            $table->foreign(['magasin_id', 'recu_paiement_id'])->references(['magasin_id', 'id'])->on('recus_paiement')->restrictOnDelete();
+            $table->foreign(['magasin_id', 'facture_id'])->references(['magasin_id', 'id'])->on('factures')->restrictOnDelete();
         });
 
         DeclencheursDeProtection::ajoutSeul('lignes_recu_paiement');

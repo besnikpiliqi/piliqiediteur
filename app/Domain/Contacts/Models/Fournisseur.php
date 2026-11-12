@@ -15,6 +15,12 @@ class Fournisseur extends Model
     /** @use HasFactory<FournisseurFactory> */
     use BelongsToMagasin, HasFactory, Proposable, SoftDeletes;
 
+    /**
+     * Refus d'une action qui reçoit le fournisseur déjà chargé d'un autre
+     * magasin (voir BelongsToMagasin::relueDansLeMagasin()).
+     */
+    public const REFUS_AUTRE_MAGASIN = 'Ce fournisseur n\'est pas un fournisseur du magasin.';
+
     protected $fillable = [
         'nom',
         'siret',

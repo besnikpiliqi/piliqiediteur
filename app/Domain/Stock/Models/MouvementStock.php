@@ -12,10 +12,12 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 
 /**
- * Ledger append-only. Ne jamais update() une ligne existante : pour
- * corriger un mouvement, on enregistre un mouvement inverse (voir
- * StockLedgerService::ajuster()). C'est ce qui garantit que
- * produits.stock_quantite est toujours reconstructible et auditable.
+ * Le grand livre du stock, en ajout seul : un mouvement ne se modifie ni
+ * ne se supprime, la base le refuse (voir GardesDuStock) ; pour corriger
+ * un mouvement, on enregistre un mouvement inverse (voir
+ * StockLedgerService::ajuster()). La base ajoute chaque mouvement inséré
+ * au stock de son produit (produits.stock_quantite), qui en est ainsi
+ * toujours la somme signée.
  */
 class MouvementStock extends Model
 {

@@ -7,7 +7,7 @@ use App\Integrations\Rne\Contracts\RegistreNationalDesEntreprises;
 
 /**
  * Le registre national des entreprises factice du développement et des
- * tests, sans aucune requête (voir VerificationServiceProvider) : toute
+ * tests, sans aucune requête (voir FournisseursExternesServiceProvider) : toute
  * entreprise y est une SAS au capital de 10 000 €, immatriculée au RCS de
  * Paris, présidée par Jeanne DUPONT, née en janvier 1980, en fonction
  * depuis le 1er janvier 2020, avec son siège au 1 rue de la République,

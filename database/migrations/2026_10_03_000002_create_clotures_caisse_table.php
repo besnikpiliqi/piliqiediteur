@@ -1,5 +1,6 @@
 <?php
 
+use App\Domain\CaisseSecurisee\Support\DeclencheursDeProtection;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -10,13 +11,16 @@ return new class extends Migration
     {
         Schema::create('clotures_caisse', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('magasin_id')->constrained('magasins')->cascadeOnDelete();
-            $table->foreignId('cree_par')->nullable()->constrained('users')->nullOnDelete();
+            $table->foreignId('magasin_id')->constrained('magasins')->restrictOnDelete();
+            $table->foreignId('cree_par')->nullable()->constrained('users')->restrictOnDelete();
             // Le nom de cette personne au moment de l'opération (voir
             // FigeLeNomDeSesAuteurs) : l'historique ne le relit jamais sur
             // son compte.
             $table->string('cree_par_nom')->nullable();
-            $table->string('numero', 40)->nullable();
+            // Numéroté avant même d'être écrit : un ticket Z s'insère en une
+            // seule fois, avec son numéro et l'instant de sa clôture (voir
+            // CloturerCaisseAction), et la table est en ajout seul.
+            $table->string('numero', 40);
             // La journée comptable clôturée, pas l'instant où le bouton a
             // été cliqué (voir cloturee_a) : une clôture peut être faite
             // le lendemain matin pour la veille (clôture manuelle en
@@ -47,24 +51,37 @@ return new class extends Migration
             // (voir RecapitulatifDeCloture).
             $table->unsignedBigInteger('derniere_sequence_vente')->nullable();
             $table->unsignedBigInteger('derniere_sequence_encaissement')->nullable();
-            $table->timestamp('cloturee_a')->nullable();
+            $table->timestamp('cloturee_a');
             $table->timestamps();
             // PAS de softDeletes() ici, volontairement : une clôture de
             // caisse est un document fiscal au même titre qu'une facture
             // (obligation de conservation), et l'e-reporting des ventes aux
             // particuliers de sa journée se lit sur elle (voir
-            // EReportingDesParticuliers).
+            // EReportingDesParticuliers). La table est en ajout seul : un
+            // ticket Z ne se modifie, ne se supprime ni ne se vide, et
+            // tout son contenu est signé par l'événement 50 de sa clôture
+            // au journal des événements, sans lequel la base refuse de
+            // l'enregistrer (voir GardesDesClotures, posé avec la table
+            // du registre).
 
             // Une seule clôture par jour et par magasin : la même journée
             // ne peut jamais être agrégée deux fois (voir
             // CloturerCaisseAction).
             $table->unique(['magasin_id', 'date_cloture']);
             $table->unique(['magasin_id', 'numero']);
+
+            $table->unique(['magasin_id', 'id']);
         });
+
+        DeclencheursDeProtection::auMoins('clotures_caisse', 'nombre_ventes', 0);
+        DeclencheursDeProtection::auMoins('clotures_caisse', 'nombre_avoirs', 0);
+
+        DeclencheursDeProtection::ajoutSeul('clotures_caisse');
     }
 
     public function down(): void
     {
         Schema::dropIfExists('clotures_caisse');
+        DeclencheursDeProtection::retirer('clotures_caisse');
     }
 };

@@ -68,7 +68,7 @@ class RegularisationDUneFactureConcurrenceTest extends TestCase
         $avoir = app(FaireLAvoirDeRegularisationAction::class)->handle($proprietaire, $facture);
 
         $this->assertInstanceOf(InvokedProcess::class, $concurrente);
-        $resultat = $concurrente->wait();
+        $resultat = $this->attendreLeProcessusConcurrent($concurrente);
         $this->assertTrue($resultat->failed());
         $this->assertStringContainsString(RegularisationDUneFacture::REFUS_AVOIR_DEJA_EMIS, $resultat->errorOutput());
         $this->assertSame([$avoir->id], Avoir::query()->pluck('id')->all());
@@ -93,7 +93,7 @@ class RegularisationDUneFactureConcurrenceTest extends TestCase
         $rectificative = app(EmettreLaFactureRectificativeAction::class)->handle($responsable, $facture);
 
         $this->assertInstanceOf(InvokedProcess::class, $concurrente);
-        $resultat = $concurrente->wait();
+        $resultat = $this->attendreLeProcessusConcurrent($concurrente);
         $this->assertTrue($resultat->failed());
         $this->assertStringContainsString(RegularisationDUneFacture::REFUS_RECTIFICATIVE_DEJA_EMISE, $resultat->errorOutput());
         $this->assertSame([$rectificative->id], Facture::query()->whereNotNull('facture_rectifiee_id')->pluck('id')->all());
@@ -127,7 +127,7 @@ class RegularisationDUneFactureConcurrenceTest extends TestCase
         $avoir = app(FaireLAvoirDeRegularisationAction::class)->handle($this->proprietaireDe($magasin), $facture->fresh());
 
         $this->assertInstanceOf(InvokedProcess::class, $concurrente);
-        $resultat = $concurrente->wait();
+        $resultat = $this->attendreLeProcessusConcurrent($concurrente);
         $this->assertTrue($resultat->successful(), $resultat->errorOutput());
         $rectificative = Facture::query()->whereNotNull('facture_rectifiee_id')->sole();
         $this->assertSame([[$rectificative->id, '240.00']], AvoirAllocation::query()->where('avoir_id', $avoir->id)->get()->map(fn (AvoirAllocation $allocation): array => [(int) $allocation->facture_id, $allocation->montant_alloue])->all());
@@ -162,7 +162,7 @@ class RegularisationDUneFactureConcurrenceTest extends TestCase
         $rectificative = app(EmettreLaFactureRectificativeAction::class)->handle(self::responsableDeTest($magasin), $facture->fresh());
 
         $this->assertInstanceOf(InvokedProcess::class, $concurrente);
-        $resultat = $concurrente->wait();
+        $resultat = $this->attendreLeProcessusConcurrent($concurrente);
         $this->assertTrue($resultat->successful(), $resultat->errorOutput());
         $this->assertSame(StatutFacture::EnAttenteDeRegularisation, $rectificative->statut);
         $avoir = Avoir::query()->sole();

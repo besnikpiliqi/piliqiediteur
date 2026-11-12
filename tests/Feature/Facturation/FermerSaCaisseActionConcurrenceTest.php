@@ -56,7 +56,7 @@ class FermerSaCaisseActionConcurrenceTest extends TestCase
         $premiere = app(FermerSaCaisseAction::class)->handle($vendeur, $vendeur);
 
         $this->assertInstanceOf(InvokedProcess::class, $concurrente);
-        $resultat = $concurrente->wait();
+        $resultat = $this->attendreLeProcessusConcurrent($concurrente);
         $this->assertTrue($resultat->successful(), $resultat->errorOutput());
         $seconde = ClotureCaissePersonnelle::query()->whereKeyNot($premiere->id)->sole();
         $this->assertSame([1, 0], [$premiere->fresh()->nombre_ventes, $seconde->nombre_ventes]);

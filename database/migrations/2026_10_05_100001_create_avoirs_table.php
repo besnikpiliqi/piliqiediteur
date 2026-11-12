@@ -1,5 +1,8 @@
 <?php
 
+use App\Domain\CaisseSecurisee\Support\DeclencheursDeProtection;
+use App\Domain\Facturation\Support\GardesDesClotures;
+use App\Domain\Facturation\Support\GardesDesDocumentsEmis;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -18,7 +21,7 @@ return new class extends Migration
             // regrouper des lignes de plusieurs factures du même client
             // (voir CreerAvoirAction). La facture d'origine de chaque ligne
             // est connue par lignes_avoir.ligne_facture_id.
-            $table->foreignId('client_id')->constrained('clients')->restrictOnDelete();
+            $table->foreignId('client_id');
             // Le type du client des tickets ou des factures que l'avoir
             // corrige (voir CreerAvoirAction), qui ne se mélangent jamais :
             // particulier pour des tickets de caisse, professionnel pour
@@ -60,9 +63,11 @@ return new class extends Migration
             // ventes de sa journée (voir CloturerCaisseAction) -- jamais
             // renseignée pour un avoir sur des factures, comme pour une
             // facture (voir factures.cloture_caisse_id). Seule colonne
-            // encore écrite sur un avoir émis : l'étape des clôtures la
-            // supprimera.
-            $table->foreignId('cloture_caisse_id')->nullable()->constrained('clotures_caisse')->nullOnDelete();
+            // encore écrite sur un avoir émis, une seule fois : posée par
+            // la clôture vers le ticket Z qu'elle vient d'écrire, le
+            // dernier de son magasin, puis figée (voir la fin de up()).
+            // L'étape des clôtures la supprimera.
+            $table->foreignId('cloture_caisse_id')->nullable();
             $table->foreignId('cree_par')->nullable()->constrained('users')->restrictOnDelete();
             // Le nom de cette personne au moment de l'opération (voir
             // FigeLeNomDeSesAuteurs) : l'historique ne le relit jamais sur
@@ -90,11 +95,20 @@ return new class extends Migration
             // Les avoirs d'une période, tous clients (téléchargement par
             // période, voir DocumentsDeLaPeriode).
             $table->index(['magasin_id', 'date_emission']);
+
+            $table->unique(['magasin_id', 'id']);
+            $table->foreign(['magasin_id', 'client_id'])->references(['magasin_id', 'id'])->on('clients')->restrictOnDelete();
+            $table->foreign(['magasin_id', 'cloture_caisse_id'])->references(['magasin_id', 'id'])->on('clotures_caisse')->restrictOnDelete();
         });
+
+        GardesDesDocumentsEmis::poser('avoirs');
+        DeclencheursDeProtection::colonneFigee('avoirs', 'cloture_caisse_id', poseeSeulementSi: GardesDesClotures::POSE_VERS_LE_DERNIER_TICKET_Z);
     }
 
     public function down(): void
     {
         Schema::dropIfExists('avoirs');
+        GardesDesDocumentsEmis::retirer('avoirs');
+        DeclencheursDeProtection::retirerLaColonneFigee('avoirs', 'cloture_caisse_id');
     }
 };

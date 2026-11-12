@@ -170,6 +170,6 @@ class GardesDesDroitsEnBaseConcurrenceTest extends TestCase
         $processus = $concurrente();
         $this->assertInstanceOf(InvokedProcess::class, $processus);
 
-        return $processus->wait();
+        return $this->attendreLeProcessusConcurrent($processus);
     }
 }

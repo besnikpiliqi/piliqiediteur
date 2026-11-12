@@ -11,13 +11,13 @@ return new class extends Migration
     {
         Schema::create('avoirs_fournisseur', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('magasin_id')->constrained('magasins')->cascadeOnDelete();
+            $table->foreignId('magasin_id')->constrained('magasins')->restrictOnDelete();
             // restrictOnDelete : une facture d'achat validée n'est de toute
             // façon jamais supprimable (voir FactureAchatPolicy), mais on ne
             // veut surtout pas qu'une suppression quelconque efface
             // silencieusement la trace d'un avoir fournisseur.
-            $table->foreignId('facture_achat_id')->constrained('factures_achat')->restrictOnDelete();
-            $table->foreignId('cree_par')->nullable()->constrained('users')->nullOnDelete();
+            $table->foreignId('facture_achat_id');
+            $table->foreignId('cree_par')->nullable()->constrained('users')->restrictOnDelete();
             // Le nom de cette personne au moment de l'opération (voir
             // FigeLeNomDeSesAuteurs) : l'historique ne le relit jamais sur
             // son compte.
@@ -62,6 +62,8 @@ return new class extends Migration
             $table->index(['magasin_id', 'tva_a_verifier']);
             $table->index(['magasin_id', 'piece_manquante']);
             $table->index(['magasin_id', 'statut', 'date_emission']);
+
+            $table->foreign(['magasin_id', 'facture_achat_id'])->references(['magasin_id', 'id'])->on('factures_achat')->restrictOnDelete();
         });
 
         // Seule une société qui a des articles reçoit un avoir fournisseur

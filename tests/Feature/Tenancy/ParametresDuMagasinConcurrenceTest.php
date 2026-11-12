@@ -93,7 +93,7 @@ class ParametresDuMagasinConcurrenceTest extends TestCase
         $lesParametresDAbord ? $regler() : $autre();
 
         $this->assertInstanceOf(InvokedProcess::class, $concurrente);
-        $resultat = $concurrente->wait();
+        $resultat = $this->attendreLeProcessusConcurrent($concurrente);
         $this->assertTrue($resultat->successful(), $resultat->errorOutput());
         app(TenantContext::class)->set($magasin);
         $this->assertSame(45, $magasin->fresh()->delai_paiement_jours);

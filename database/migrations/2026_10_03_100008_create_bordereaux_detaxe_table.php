@@ -25,7 +25,7 @@ return new class extends Migration
         Schema::create('bordereaux_detaxe', function (Blueprint $table) {
             $table->id();
             $table->foreignId('magasin_id')->constrained('magasins')->restrictOnDelete();
-            $table->foreignId('facture_id')->constrained('factures')->restrictOnDelete();
+            $table->foreignId('facture_id');
             $table->string('numero', 30);
             $table->foreignId('note_par')->nullable()->constrained('users')->restrictOnDelete();
             // Le nom de cette personne au moment de l'opération (voir
@@ -35,6 +35,8 @@ return new class extends Migration
             $table->timestamp('created_at');
 
             $table->index(['magasin_id', 'facture_id']);
+
+            $table->foreign(['magasin_id', 'facture_id'])->references(['magasin_id', 'id'])->on('factures')->restrictOnDelete();
         });
 
         DeclencheursDeProtection::ajoutSeul('bordereaux_detaxe');

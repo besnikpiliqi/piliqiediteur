@@ -1,5 +1,7 @@
 <?php
 
+use App\Domain\CaisseSecurisee\Support\DeclencheursDeProtection;
+use App\Domain\Stock\Support\GardesDuStock;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -10,8 +12,8 @@ return new class extends Migration
     {
         Schema::create('lignes_achat', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('magasin_id')->constrained('magasins')->cascadeOnDelete();
-            $table->foreignId('facture_achat_id')->constrained('factures_achat')->cascadeOnDelete();
+            $table->foreignId('magasin_id')->constrained('magasins')->restrictOnDelete();
+            $table->foreignId('facture_achat_id');
             // Le produit du catalogue que la ligne reçoit (voir
             // ConstructeurLigneAchat) : la traçabilité pour l'avoir
             // fournisseur (voir LigneAchat::quantiteRetournableRestante())
@@ -19,7 +21,7 @@ return new class extends Migration
             // fiche utilisée ne s'efface jamais. Vide seulement tant que la
             // ligne d'un brouillon garde la fiche d'un nouveau produit, pas
             // encore créé (voir nouveau_produit).
-            $table->foreignId('produit_id')->nullable()->constrained('produits')->restrictOnDelete();
+            $table->foreignId('produit_id')->nullable();
             // Fiche du produit que cette ligne d'un brouillon créera à la
             // validation (voir ConstructeurLigneAchat::creerLesNouveauxProduits()) ;
             // une ligne a toujours soit produit_id, soit nouveau_produit
@@ -50,11 +52,19 @@ return new class extends Migration
             $table->timestamps();
 
             $table->index(['magasin_id', 'facture_achat_id']);
+
+            $table->unique(['magasin_id', 'id']);
+            $table->foreign(['magasin_id', 'facture_achat_id'])->references(['magasin_id', 'id'])->on('factures_achat')->cascadeOnDelete();
+            $table->foreign(['magasin_id', 'produit_id'])->references(['magasin_id', 'id'])->on('produits')->restrictOnDelete();
         });
+
+        DeclencheursDeProtection::auMoins('lignes_achat', 'quantite', 1);
+        GardesDuStock::poserLaCoherenceDesAchats();
     }
 
     public function down(): void
     {
         Schema::dropIfExists('lignes_achat');
+        GardesDuStock::retirerLaCoherenceDesAchats();
     }
 };

@@ -74,10 +74,6 @@ class EnregistrerAvoirAction
             $this->registre->verrouiller($magasin);
             $compte = $this->lecteur->exigerSousVerrou($auteur, 'create', $magasin, Avoir::class);
 
-            if ((int) $client->magasin_id !== $magasin->getKey()) {
-                throw new LogicException('Ce client n\'est pas un client du magasin.');
-            }
-
             return $this->emettreAvoir->handle($compte, $this->creerAvoir->handle($compte, $client, $lignesSelectionnees, $motif));
         }));
     }

@@ -101,7 +101,7 @@ class TelechargementDesDocumentsConcurrenceTest extends TestCase
         self::demander($magasinId, $proprietaireId, $cle);
 
         $this->assertInstanceOf(InvokedProcess::class, $concurrente);
-        $resultat = $concurrente->wait();
+        $resultat = $this->attendreLeProcessusConcurrent($concurrente);
         $this->assertTrue($resultat->failed(), $resultat->output());
         $this->assertStringContainsString(DemanderLeTelechargementDesDocumentsAction::REFUS_PAR_HEURE, $resultat->errorOutput());
         $this->assertSame(
@@ -132,7 +132,7 @@ class TelechargementDesDocumentsConcurrenceTest extends TestCase
         $facture = app(TenantContext::class)->runAs($magasin, fn (): Facture => app(EmettreFactureAction::class)->handle($responsable, $brouillon));
 
         $this->assertInstanceOf(InvokedProcess::class, $concurrente);
-        $resultat = $concurrente->wait();
+        $resultat = $this->attendreLeProcessusConcurrent($concurrente);
         $this->assertTrue($resultat->successful(), $resultat->errorOutput());
         $this->assertSame([$ticket->numero], json_decode(trim($resultat->output()), true));
         $this->assertSame([$ticket->numero, $facture->numero], self::numerosDesVentes($magasinId, $proprietaireId));

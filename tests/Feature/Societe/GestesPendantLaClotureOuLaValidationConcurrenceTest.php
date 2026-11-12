@@ -136,7 +136,7 @@ class GestesPendantLaClotureOuLaValidationConcurrenceTest extends TestCase
         $leGesteDAbord ? $faire() : $refuser();
 
         $this->assertInstanceOf(InvokedProcess::class, $concurrente);
-        $resultat = $concurrente->wait();
+        $resultat = $this->attendreLeProcessusConcurrent($concurrente);
         $this->assertSame(! $leGesteDAbord, $resultat->failed(), $resultat->errorOutput());
         $this->assertTrue(Societe::query()->findOrFail($societeId)->estClose());
         app(TenantContext::class)->set($magasin->fresh());
@@ -186,7 +186,7 @@ class GestesPendantLaClotureOuLaValidationConcurrenceTest extends TestCase
         $laFactureDAbord ? $valider() : $saisir();
 
         $this->assertInstanceOf(InvokedProcess::class, $concurrente);
-        $resultat = $concurrente->wait();
+        $resultat = $this->attendreLeProcessusConcurrent($concurrente);
         $this->assertTrue($resultat->successful(), $resultat->errorOutput());
         $this->assertTrue(Societe::query()->findOrFail($societe->id)->estValidee());
         app(TenantContext::class)->set($magasin->fresh());
@@ -257,7 +257,7 @@ class GestesPendantLaClotureOuLaValidationConcurrenceTest extends TestCase
         $leGesteDAbord ? $faire() : $saisir();
 
         $this->assertInstanceOf(InvokedProcess::class, $concurrente);
-        $resultat = $concurrente->wait();
+        $resultat = $this->attendreLeProcessusConcurrent($concurrente);
         $this->assertTrue($resultat->successful(), $resultat->errorOutput());
         $this->assertTrue(Societe::query()->findOrFail($societe->id)->estValidee());
         app(TenantContext::class)->set($magasin->fresh());

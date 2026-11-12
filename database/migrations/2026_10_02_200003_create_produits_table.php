@@ -1,5 +1,7 @@
 <?php
 
+use App\Domain\CaisseSecurisee\Support\DeclencheursDeProtection;
+use App\Domain\Stock\Support\GardesDuStock;
 use App\Domain\Tenancy\Support\GardesDesTypesDActivite;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
@@ -11,10 +13,10 @@ return new class extends Migration
     {
         Schema::create('produits', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('magasin_id')->constrained('magasins')->cascadeOnDelete();
+            $table->foreignId('magasin_id')->constrained('magasins')->restrictOnDelete();
             // Celui de son dernier achat validé (voir Produit::fournisseur()),
             // même archivé depuis : une fiche utilisée ne s'efface jamais.
-            $table->foreignId('fournisseur_id')->nullable()->constrained('fournisseurs')->restrictOnDelete();
+            $table->foreignId('fournisseur_id')->nullable();
             $table->string('reference', 60);
             // Clé de doublon de la référence, calculée en PHP (voir
             // Produit::normaliserReference()) : « ABC » et « abc » sont la
@@ -39,11 +41,13 @@ return new class extends Migration
             // Toujours donné à la création : le taux par défaut dépend du
             // territoire du magasin (voir Magasin::tauxTvaParDefaut()).
             $table->decimal('taux_tva', 5, 2);
-            // Cache dénormalisé : la source de vérité est le ledger
-            // mouvements_stock. Ne JAMAIS écrire cette colonne ailleurs que
-            // dans StockLedgerService (voir app/Domain/Stock/Services).
-            // Entier : une quantité est toujours un nombre d'articles.
+            // La somme signée du grand livre (mouvements_stock), tenue par
+            // la base elle-même : chaque mouvement inséré l'ajoute ici et
+            // s'y note comme le dernier compté, et rien d'autre ne change
+            // ces deux colonnes (voir GardesDuStock). Entier : une quantité
+            // est toujours un nombre d'articles.
             $table->integer('stock_quantite')->default(0);
+            $table->unsignedBigInteger('dernier_mouvement_stock_id')->nullable();
             $table->boolean('suivi_stock')->default(true);
             $table->unsignedInteger('seuil_alerte')->default(0);
             $table->timestamps();
@@ -56,16 +60,23 @@ return new class extends Migration
             // sans tenir compte de la casse.
             $table->unique(['magasin_id', 'reference_normalisee']);
             $table->index(['magasin_id', 'code_barres']);
+
+            $table->unique(['magasin_id', 'id']);
+            $table->foreign(['magasin_id', 'fournisseur_id'])->references(['magasin_id', 'id'])->on('fournisseurs')->restrictOnDelete();
         });
+
+        DeclencheursDeProtection::auMoins('produits', 'seuil_alerte', 0);
 
         // Seule une société qui a des articles a des produits (voir
         // TypeDActivite::aDesArticles()).
         GardesDesTypesDActivite::poser(GardesDesTypesDActivite::PRODUITS);
+        GardesDuStock::poserLaNaissanceSansStock();
     }
 
     public function down(): void
     {
         GardesDesTypesDActivite::retirer(GardesDesTypesDActivite::PRODUITS);
         Schema::dropIfExists('produits');
+        GardesDuStock::retirerLaNaissanceSansStock();
     }
 };

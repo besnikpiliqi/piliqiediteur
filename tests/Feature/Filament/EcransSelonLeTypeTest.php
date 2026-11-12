@@ -121,7 +121,7 @@ class EcransSelonLeTypeTest extends TestCase
         $commerce = $this->ouvrirUneSociete(['nom' => 'Boutique']);
         $proprietaireDuCommerce = $this->proprietaireDe($commerce);
         $this->dansLeMagasin($commerce, $proprietaireDuCommerce);
-        Produit::factory()->create(['nom' => 'Housse', 'suivi_stock' => true, 'stock_quantite' => -2]);
+        self::vendreJusquAuStockNegatif(Produit::factory()->create(['nom' => 'Housse', 'suivi_stock' => true]), 2);
 
         $this->assertSame([true, true, true], [$proprietaireDuCommerce->can(PermissionRegistry::PRODUIT_VIEW), StockNegatifApercu::canView(), ValeurStockApercu::canView()]);
     }

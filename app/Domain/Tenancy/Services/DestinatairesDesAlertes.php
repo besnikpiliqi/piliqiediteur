@@ -53,4 +53,31 @@ final class DestinatairesDesAlertes
             ->filter(fn (User $compte): bool => $compte->peutOuvrir($magasin) && in_array($autorisation, $compte->autorisationsDans($magasin), true))
             ->values();
     }
+
+    /**
+     * Les comptes de la société du magasin qui ont cette autorisation de
+     * société (voir AutorisationsSociete) et ce magasin dans leur portée :
+     * le propriétaire, qui les a toutes, et les administrateurs à qui il
+     * l'a cochée ; jamais un compte suspendu, retiré ou qui n'a pas encore
+     * choisi son mot de passe (voir User::aLAutorisationDeSociete()), ni un
+     * compte d'une autre société.
+     *
+     * @return Collection<int, User>
+     */
+    public function autorisesDeSocieteDans(Magasin $magasin, string $autorisationDeSociete): Collection
+    {
+        return User::query()
+            ->with('societe')
+            ->where('societe_id', $magasin->societe_id)
+            ->where(fn ($comptes) => $comptes
+                ->where('role_societe', RoleSociete::Proprietaire->value)
+                ->orWhereIn('id', DB::table('autorisations_societe')
+                    ->where('societe_id', $magasin->societe_id)
+                    ->where('autorisation', $autorisationDeSociete)
+                    ->select('user_id')))
+            ->orderBy('id')
+            ->get()
+            ->filter(fn (User $compte): bool => $compte->aLAutorisationDeSociete($autorisationDeSociete) && $compte->administreLeMagasin($magasin))
+            ->values();
+    }
 }

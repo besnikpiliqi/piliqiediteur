@@ -1,5 +1,7 @@
 <?php
 
+use App\Domain\CaisseSecurisee\Support\DeclencheursDeProtection;
+use App\Domain\Stock\Support\GardesDuStock;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -10,13 +12,13 @@ return new class extends Migration
     {
         Schema::create('lignes_inventaire_ouverture', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('magasin_id')->constrained('magasins')->cascadeOnDelete();
-            $table->foreignId('inventaire_ouverture_id')->constrained('inventaires_ouverture')->cascadeOnDelete();
+            $table->foreignId('magasin_id')->constrained('magasins')->restrictOnDelete();
+            $table->foreignId('inventaire_ouverture_id');
             // Le produit que la ligne fait entrer en stock : un produit du
             // magasin jamais reçu, ou celui que la validation a créé depuis
             // la fiche de la ligne (voir nouveau_produit). Il reste lié,
             // archivé compris : une fiche utilisée ne s'efface jamais.
-            $table->foreignId('produit_id')->nullable()->constrained('produits')->restrictOnDelete();
+            $table->foreignId('produit_id')->nullable();
             // Fiche du produit que cette ligne d'un brouillon créera à la
             // validation (voir ValiderInventaireOuvertureAction) ; une
             // ligne a toujours soit produit_id, soit nouveau_produit (voir
@@ -45,11 +47,21 @@ return new class extends Migration
             $table->timestamps();
 
             $table->index(['magasin_id', 'inventaire_ouverture_id']);
+
+            $table->foreign(['magasin_id', 'inventaire_ouverture_id'])->references(['magasin_id', 'id'])->on('inventaires_ouverture')->cascadeOnDelete();
+            $table->foreign(['magasin_id', 'produit_id'])->references(['magasin_id', 'id'])->on('produits')->restrictOnDelete();
         });
+
+        DeclencheursDeProtection::auMoins('lignes_inventaire_ouverture', 'quantite', 1);
+
+        // Dernière table que lit la garde de la provenance de chaque
+        // mouvement du grand livre (voir GardesDuStock::poserLaProvenance()).
+        GardesDuStock::poserLaProvenance();
     }
 
     public function down(): void
     {
+        GardesDuStock::retirerLaProvenance();
         Schema::dropIfExists('lignes_inventaire_ouverture');
     }
 };

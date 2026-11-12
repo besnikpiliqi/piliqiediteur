@@ -21,7 +21,10 @@ use LogicException;
 
 /**
  * Crée une facture brouillon pour un client déjà résolu par une requête
- * limitée au magasin, jamais un client_id brut venu du formulaire. Le
+ * limitée au magasin, jamais un client_id brut venu du formulaire, et
+ * relu dans le magasin actif avant toute écriture (voir
+ * BelongsToMagasin::relueDansLeMagasin()) : celui d'un autre magasin est
+ * refusé, même déjà chargé ou avec son magasin_id changé en mémoire. Le
  * brouillon note le type de ce client, qui choisit sa série, et si le
  * magasin vend en franchise de TVA : l'un et l'autre se contrôlent à
  * l'émission (voir ContexteDeVente et EmettreFactureAction). Il note aussi
@@ -60,7 +63,7 @@ class CreerFactureAction
      *
      * @throws AuthorizationException quand l'auteur ne peut pas créer de facture, ou introduit une remise ou un prix sans y être autorisé
      * @throws InvalidArgumentException quand les conditions de paiement sont trop longues pour le pied du PDF (voir PiedDePage)
-     * @throws LogicException quand le magasin est en lecture seule
+     * @throws LogicException quand le magasin est en lecture seule, ou que le client n'est pas un client du magasin
      */
     public function handle(User $auteur, Client $client, array $lignes, array $attributs = []): Facture
     {
@@ -70,6 +73,7 @@ class CreerFactureAction
             $magasin = app(TenantContext::class)->magasin();
             Magasin::query()->whereKey($magasin->getKey())->sharedLock()->firstOrFail()->verifierQuIlEstOuvert();
             $compte = $this->lecteur->exigerSousVerrou($auteur, 'create', $magasin, Facture::class);
+            $client = Client::relueDansLeMagasin($client, Client::REFUS_AUTRE_MAGASIN);
 
             return $this->operateur->pendant($compte, fn (): Facture => $this->creer($compte, $client, $lignes, $attributs));
         });

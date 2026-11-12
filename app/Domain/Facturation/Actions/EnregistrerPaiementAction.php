@@ -72,7 +72,10 @@ use LogicException;
  * un vendeur sans « voir celles de toute l'équipe » n'encaisse que les
  * siennes). Il n'encaisse que dans un magasin à la fois (voir
  * VerificateurCaissesPersonnelles). C'est lui que le paiement enregistre
- * et que le registre signe.
+ * et que le registre signe. Le client reçu est relu ensuite dans le
+ * magasin actif, avant l'ouverture du reçu (voir
+ * BelongsToMagasin::relueDansLeMagasin()) : celui d'un autre magasin est
+ * refusé, même déjà chargé ou avec son magasin_id changé en mémoire.
  *
  * Le paiement demandé par une personne porte un jeton (R3, voir
  * ActionsUniques), cherché sous le verrou du registre : répété après une
@@ -150,9 +153,7 @@ class EnregistrerPaiementAction
             $compte = $this->lecteur->exigerSousVerrou($auteur, 'create', $magasin, Paiement::class);
             $this->caissesPersonnelles->refuserSiSaCaisseEstOuverteAilleurs($compte, $magasin);
 
-            if ((int) $client->magasin_id !== $magasin->getKey()) {
-                throw new LogicException('Ce client n\'est pas un client du magasin.');
-            }
+            $client = Client::relueDansLeMagasin($client, Client::REFUS_AUTRE_MAGASIN);
 
             return $this->operateur->pendant($compte, function () use ($compte, $magasin, $client, $donneesPaiement, $montant, $imputations, $bonsDAvoir, $recu, $aLEmission, $recuLe): Paiement {
                 $recuPropre = $recu === null && ! $aLEmission

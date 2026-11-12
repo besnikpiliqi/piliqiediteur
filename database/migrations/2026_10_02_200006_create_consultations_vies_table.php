@@ -30,7 +30,7 @@ return new class extends Migration
         Schema::create('consultations_vies', function (Blueprint $table) {
             $table->id();
             $table->foreignId('magasin_id')->constrained('magasins')->restrictOnDelete();
-            $table->foreignId('client_id')->constrained('clients')->restrictOnDelete();
+            $table->foreignId('client_id');
             $table->string('numero_tva', 20);
             $table->boolean('valide');
             $table->string('nom')->nullable();
@@ -45,6 +45,9 @@ return new class extends Migration
             $table->text('reponse');
 
             $table->index(['magasin_id', 'client_id', 'consultee_le']);
+
+            $table->unique(['magasin_id', 'id']);
+            $table->foreign(['magasin_id', 'client_id'])->references(['magasin_id', 'id'])->on('clients')->restrictOnDelete();
         });
 
         DeclencheursDeProtection::ajoutSeul('consultations_vies');

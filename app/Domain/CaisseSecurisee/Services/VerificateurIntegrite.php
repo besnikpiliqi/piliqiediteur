@@ -3,19 +3,24 @@
 namespace App\Domain\CaisseSecurisee\Services;
 
 use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
+use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
 use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\CaisseSecurisee\Models\TeteRegistreFiscal;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Calendrier\Casts\Instant;
+use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Facturation\Enums\TypeDocument;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\AvoirAllocation;
+use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Models\PaiementAllocation;
 use App\Domain\Facturation\Models\SequenceDocument;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\SaisieDecimale;
+use App\Domain\Stock\Services\VerificateurDuStock;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\ValeurSimple;
@@ -23,6 +28,7 @@ use App\Domain\Tenancy\Support\ValeursLues;
 use Closure;
 use ErrorException;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Database\Query\JoinClause;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
@@ -72,10 +78,17 @@ use ValueError;
  *    que chaque avoir émis a crédité, entre zéro et le sien : une
  *    imputation signée en règle dépasse ce qui restait dû si elle ne l'a
  *    pas relu sous le verrou du registre.
- * 3. La numérotation des tickets, des factures et des avoirs : continue
- *    dans chaque série et chaque année, de 1 au dernier numéro que la
- *    série a attribué, chaque numéro dans l'année de l'émission de son
- *    document.
+ * 3. La numérotation des tickets, des factures, des avoirs et des tickets
+ *    Z : continue dans chaque série et chaque année, de 1 au dernier
+ *    numéro que la série a attribué, chaque numéro dans l'année de
+ *    l'émission de son document (de la journée close, pour un ticket Z).
+ * 4. Les clôtures : chaque ticket Z est signé par exactement une clôture
+ *    du journal des événements (événement 50) dont la signature se
+ *    vérifie, et sa ligne est ce qu'elle signe, récapitulatif, séquences,
+ *    auteur et instant compris ; chaque clôture signée désigne un ticket
+ *    Z du magasin ; la ligne de tête note la journée de la dernière ; et
+ *    chaque ticket et chaque avoir à un particulier est rattaché au ticket
+ *    Z dont la fenêtre signée le compte, aucun autre document ne l'étant.
  *
  * Avec des points de reprise, ceux de la vérification précédente (voir
  * VerifierIntegriteAction), elle ne reprend chaque chaîne qu'après son
@@ -90,8 +103,10 @@ use ValueError;
  * vérifie : un enregistrement dont la signature ne se vérifie pas est relu,
  * et signalé de nouveau, par la reprise suivante, au lieu d'en devenir le
  * point de départ. La ligne de tête, la correspondance entre documents et
- * enregistrements, les montants imputés et la numérotation se vérifient
- * toujours entièrement.
+ * enregistrements, les montants imputés, les tickets Z, la numérotation
+ * et le stock (voir VerificateurDuStock : stock, achats, coûts moyens et
+ * fournisseurs rapprochés du grand livre et du journal d'audit) se
+ * vérifient toujours entièrement.
  *
  * Tout se lit en flux (par paquets) ou se compte en base : la mémoire
  * d'une vérification, complète ou non, ne grandit pas avec le registre.
@@ -104,8 +119,8 @@ use ValueError;
  * dans une même photo de la base (voir dansUnInstantaneCoherent()), sans
  * qu'une vente validée en cours de route n'y paraisse à moitié. Ce qui
  * s'inscrit pendant la vérification sera vérifié par la suivante. Les
- * clôtures de caisse et les archives ne sont pas encore vérifiées : leur
- * forme définitive attend les décisions de l'éditeur.
+ * archives ne sont pas encore vérifiées : elles viendront avec l'étape de
+ * la caisse sécurisée.
  *
  * Une imputation, telle qu'un contenu signé la donne (un identifiant ou un
  * montant illisible y vaut null) ou telle que la base la porte : celle
@@ -140,6 +155,16 @@ class VerificateurIntegrite
         'facture' => Facture::class,
         'avoir' => Avoir::class,
         'paiement' => Paiement::class,
+    ];
+
+    /**
+     * Le modèle des documents de chaque sorte de série de numérotation :
+     * les tickets et les factures, les avoirs, les tickets Z.
+     */
+    private const SERIES_NUMEROTEES = [
+        'facture' => Facture::class,
+        'avoir' => Avoir::class,
+        'cloture' => ClotureCaisse::class,
     ];
 
     /**
@@ -192,6 +217,7 @@ class VerificateurIntegrite
         private readonly SignataireFiscal $signataire,
         private readonly ContenuFiscal $contenuFiscal,
         private readonly CalculateurLigne $calculateur,
+        private readonly VerificateurDuStock $verificateurDuStock,
     ) {}
 
     /**
@@ -235,7 +261,12 @@ class VerificateurIntegrite
             $this->verifierLesEnregistrementsDesDocuments();
             $this->verifierLesImputations();
             $this->verifierLesMontantsImputes();
+            $this->verifierLesClotures();
             $this->verifierLaNumerotation();
+
+            foreach ($this->verificateurDuStock->anomalies($this->magasin) as $anomalie) {
+                $this->rapport->signaler($anomalie);
+            }
         });
 
         return $this->rapport;
@@ -638,6 +669,18 @@ class VerificateurIntegrite
 
         if ($dernierDuMagasin !== null && ($tete->version_module !== $dernierDuMagasin->version_module || $tete->cle_id !== $dernierDuMagasin->cle_id)) {
             $this->rapport->signaler(AnomalieFiscale::defaut('tete', 'La ligne de tête ne note pas la version du module et la clé du dernier enregistrement du registre.'));
+        }
+
+        $derniereCloture = $this->enregistrements()->where('chaine', ChaineFiscale::Evenement->value)->where('type', (string) CodeEvenement::CloturePeriode->value)->orderByDesc('sequence')->first();
+        $journeeSignee = $derniereCloture === null ? null : ValeursLues::valeurAu(self::decoder($derniereCloture->contenu), 'donnees', 'details', 'journee');
+        $journeeNotee = ValeursLues::texteOuNul($tete->getRawOriginal('derniere_journee_cloturee'));
+
+        if ($journeeSignee !== $journeeNotee) {
+            $this->rapport->signaler(AnomalieFiscale::defaut('tete', sprintf(
+                'La ligne de tête note comme dernière journée clôturée %s, alors que la dernière clôture signée au journal des événements %s.',
+                $journeeNotee === null ? 'aucune journée' : 'celle du '.Calendrier::afficherJour($journeeNotee, 'd/m/Y'),
+                is_string($journeeSignee) && Calendrier::jourValide($journeeSignee) !== null ? 'est celle du '.Calendrier::afficherJour($journeeSignee, 'd/m/Y') : ($derniereCloture === null ? 'n\'existe pas' : 'ne nomme pas de journée lisible'),
+            )));
         }
 
         $dernierVerrou = self::horodatageEnBase($tete->getRawOriginal('dernier_horodatage'));
@@ -1303,14 +1346,277 @@ class VerificateurIntegrite
     }
 
     // ---------------------------------------------------------------
+    // 4. Les clôtures
+    // ---------------------------------------------------------------
+
+    /**
+     * Chaque ticket Z du magasin est signé par exactement une clôture du
+     * journal des événements (événement 50) dont la signature se vérifie,
+     * et sa ligne est ce que cette clôture signe ; chaque clôture signée
+     * désigne un ticket Z du magasin. Chaque ticket et chaque avoir à un
+     * particulier est rattaché au ticket Z dont la fenêtre signée le
+     * compte, et aucun autre document ne l'est.
+     *
+     * Les clôtures se lisent par paquets, avec les tickets Z qu'elles
+     * désignent en une requête par paquet, jamais une par ticket Z ; ne se
+     * retiennent que leurs fenêtres, une par journée close (environ 3 650
+     * en dix ans).
+     */
+    private function verifierLesClotures(): void
+    {
+        $alias = (new ClotureCaisse)->getMorphClass();
+        $fenetres = [];
+        $signees = [];
+
+        $this->enregistrements()
+            ->where('chaine', ChaineFiscale::Evenement->value)
+            ->where('type', (string) CodeEvenement::CloturePeriode->value)
+            ->chunkById(200, function (Collection $clotures) use ($alias, &$fenetres, &$signees): void {
+                $ticketsZ = ClotureCaisse::query()
+                    ->toBase()
+                    ->whereIn('id', $clotures->where('document_type', $alias)->pluck('document_id')->filter()->values()->all())
+                    ->get()
+                    ->keyBy('id');
+
+                foreach ($clotures as $cloture) {
+                    $details = ValeursLues::valeurAu(self::decoder($cloture->contenu), 'donnees', 'details');
+                    $details = is_array($details) ? $details : [];
+                    $clotureId = $cloture->document_type === $alias ? ValeurSimple::enEntierOuNul($cloture->document_id) : null;
+                    $ticketZ = $clotureId === null ? null : $ticketsZ->get($clotureId);
+                    $numeroSigne = is_string($details['numero'] ?? null) ? $details['numero'] : null;
+                    $fenetres[] = ['fin' => is_int($details['derniere_sequence_vente'] ?? null) ? $details['derniere_sequence_vente'] : null, 'cloture_id' => $clotureId, 'numero' => $numeroSigne];
+
+                    if (! $ticketZ instanceof stdClass) {
+                        $this->rapport->signaler(AnomalieFiscale::defaut('cloture', sprintf(
+                            'La clôture signée n° %d du journal des événements désigne un ticket Z introuvable (%s).',
+                            $cloture->sequence,
+                            $numeroSigne ?? 'numéro illisible',
+                        ), ['chaine' => ChaineFiscale::Evenement->value, 'sequence' => $cloture->sequence]));
+
+                        continue;
+                    }
+
+                    $this->verifierLeTicketZ($ticketZ, $cloture, $details, isset($signees[$clotureId]));
+                    $signees[$clotureId] = true;
+                }
+            }, 'sequence');
+
+        $this->verifierLesTicketsZNonSignes($alias);
+        $this->verifierLesRattachementsAuxTicketsZ($fenetres);
+    }
+
+    /**
+     * Le ticket Z doit être ce que sa clôture signe : numéro, journée,
+     * nombres de tickets et d'avoirs, totaux en centimes, récapitulatif
+     * entier, dernières séquences, auteur et son nom figé, instant de la
+     * clôture ; et sa clôture, la seule à le signer, avec une signature
+     * qui se vérifie.
+     *
+     * @param  array<array-key, mixed>  $details  les détails signés de la clôture
+     */
+    private function verifierLeTicketZ(stdClass $ticketZ, EnregistrementFiscal $cloture, array $details, bool $dejaSigne): void
+    {
+        $libelle = self::libelleDuTicketZ($ticketZ);
+        $reference = ['cloture_id' => ValeurSimple::enEntier($ticketZ->id), 'numero' => ValeursLues::texteOuNul($ticketZ->numero)];
+
+        if ($dejaSigne) {
+            $this->rapport->signaler(AnomalieFiscale::defaut('cloture', "{$libelle} est signé par plusieurs clôtures du journal des événements, dont la n° {$cloture->sequence}.", $reference));
+        }
+
+        if (! $this->signatureValide($cloture)) {
+            $this->rapport->signaler(AnomalieFiscale::defaut('cloture', "{$libelle} n'est signé que par une clôture dont la signature ne se vérifie pas (n° {$cloture->sequence} du journal des événements).", $reference));
+        }
+
+        $contenu = self::decoder($cloture->contenu) ?? [];
+        $operateur = ValeursLues::valeurAu($contenu, 'operateur');
+        $recapitulatif = is_string($ticketZ->recapitulatif) ? self::decoder($ticketZ->recapitulatif) : null;
+        $ecarts = [];
+
+        foreach ([
+            'numero' => [$details['numero'] ?? null, ValeursLues::texteOuNul($ticketZ->numero)],
+            'date_cloture' => [$details['journee'] ?? null, ValeursLues::texteOuNul($ticketZ->date_cloture)],
+            'nombre_ventes' => [$details['nombre_ventes'] ?? null, ValeurSimple::enEntierOuNul($ticketZ->nombre_ventes)],
+            'nombre_avoirs' => [$details['nombre_avoirs'] ?? null, ValeurSimple::enEntierOuNul($ticketZ->nombre_avoirs)],
+            'total_ht' => [$details['total_ht'] ?? null, self::centimesLus($ticketZ->total_ht)],
+            'total_tva' => [$details['total_tva'] ?? null, self::centimesLus($ticketZ->total_tva)],
+            'total_ttc' => [$details['total_ttc'] ?? null, self::centimesLus($ticketZ->total_ttc)],
+        ] as $champ => [$signe, $enBase]) {
+            if ($signe !== $enBase) {
+                $ecarts[] = $champ;
+            }
+        }
+
+        $ecarts = [...$ecarts, ...self::cheminsQuiDifferent('recapitulatif', $details['recapitulatif'] ?? null, $recapitulatif)];
+
+        foreach ([
+            'derniere_sequence_vente' => [$details['derniere_sequence_vente'] ?? null, ValeurSimple::enEntierOuNul($ticketZ->derniere_sequence_vente)],
+            'derniere_sequence_encaissement' => [$details['derniere_sequence_encaissement'] ?? null, ValeurSimple::enEntierOuNul($ticketZ->derniere_sequence_encaissement)],
+            'cree_par' => [is_array($operateur) ? ($operateur['id'] ?? null) : null, ValeurSimple::enEntierOuNul($ticketZ->cree_par)],
+            'cree_par_nom' => [is_array($operateur) ? ($operateur['nom'] ?? null) : null, ValeursLues::texteOuNul($ticketZ->cree_par_nom)],
+            'cloturee_a' => [self::horodatageSigneEnBase($contenu['horodatage'] ?? null), self::horodatageEnBase($ticketZ->cloturee_a)],
+        ] as $champ => [$signe, $enBase]) {
+            if ($signe !== $enBase || ($champ === 'cloturee_a' && $enBase === null)) {
+                $ecarts[] = $champ;
+            }
+        }
+
+        if ($ecarts !== []) {
+            $this->rapport->signaler(AnomalieFiscale::defaut('cloture', "{$libelle} ne correspond plus à sa clôture signée au journal des événements : ".self::liste($ecarts).'.', $reference));
+        }
+    }
+
+    /**
+     * Les tickets Z du magasin qu'aucune clôture ne signe : ils n'ont pas
+     * été écrits par la clôture de leur journée.
+     *
+     * @param  string  $alias  l'alias des tickets Z (Relation::morphMap())
+     */
+    private function verifierLesTicketsZNonSignes(string $alias): void
+    {
+        ClotureCaisse::query()
+            ->toBase()
+            ->select(['id', 'numero', 'date_cloture'])
+            ->whereNotExists(fn (QueryBuilder $clotures): QueryBuilder => $clotures
+                ->selectRaw('1')
+                ->from('enregistrements_fiscaux')
+                ->whereColumn('enregistrements_fiscaux.magasin_id', 'clotures_caisse.magasin_id')
+                ->where('enregistrements_fiscaux.chaine', ChaineFiscale::Evenement->value)
+                ->where('enregistrements_fiscaux.type', (string) CodeEvenement::CloturePeriode->value)
+                ->where('enregistrements_fiscaux.document_type', $alias)
+                ->whereColumn('enregistrements_fiscaux.document_id', 'clotures_caisse.id'))
+            ->lazyById(500)
+            ->each(fn (stdClass $ticketZ) => $this->rapport->signaler(AnomalieFiscale::defaut(
+                'cloture',
+                self::libelleDuTicketZ($ticketZ).' n\'a été signé par aucune clôture du journal des événements : il n\'a pas été écrit par la clôture de sa journée.',
+                ['cloture_id' => ValeurSimple::enEntier($ticketZ->id), 'numero' => ValeursLues::texteOuNul($ticketZ->numero)],
+            )));
+    }
+
+    /**
+     * Chaque enregistrement de la chaîne des ventes désigne un document
+     * rattaché au ticket Z dont la fenêtre signée le compte (un ticket, ou
+     * un avoir à un particulier), ou à aucun (une facture ou un avoir à un
+     * professionnel, et ce qu'aucune clôture n'a encore compté). Les
+     * fenêtres se suivent dans l'ordre des clôtures : celle d'une clôture
+     * va de la dernière séquence des ventes que signe la précédente,
+     * exclue, à la sienne.
+     *
+     * @param  list<array{fin: int|null, cloture_id: int|null, numero: string|null}>  $fenetres  dans l'ordre du journal des événements
+     */
+    private function verifierLesRattachementsAuxTicketsZ(array $fenetres): void
+    {
+        $numeros = array_column($fenetres, 'numero', 'cloture_id');
+
+        $this->enregistrements()
+            ->toBase()
+            ->where('enregistrements_fiscaux.chaine', ChaineFiscale::Vente->value)
+            ->leftJoin('factures', fn (JoinClause $factures): JoinClause => $factures
+                ->on('factures.magasin_id', '=', 'enregistrements_fiscaux.magasin_id')
+                ->on('factures.id', '=', 'enregistrements_fiscaux.document_id')
+                ->where('enregistrements_fiscaux.document_type', 'facture'))
+            ->leftJoin('avoirs', fn (JoinClause $avoirs): JoinClause => $avoirs
+                ->on('avoirs.magasin_id', '=', 'enregistrements_fiscaux.magasin_id')
+                ->on('avoirs.id', '=', 'enregistrements_fiscaux.document_id')
+                ->where('enregistrements_fiscaux.document_type', 'avoir'))
+            ->select([
+                'enregistrements_fiscaux.id', 'enregistrements_fiscaux.sequence', 'enregistrements_fiscaux.type', 'enregistrements_fiscaux.document_id',
+                'factures.numero as facture_numero', 'factures.cloture_caisse_id as facture_cloture_caisse_id',
+                'avoirs.numero as avoir_numero', 'avoirs.cloture_caisse_id as avoir_cloture_caisse_id', 'avoirs.type_client as avoir_type_client',
+            ])
+            ->lazyById(1000, 'enregistrements_fiscaux.id', 'id')
+            ->each(function (stdClass $vente) use ($fenetres, $numeros): void {
+                $estUnAvoir = $vente->type === 'avoir';
+                $compteDansUnTicketZ = $vente->type === 'ticket' || ($estUnAvoir && $vente->avoir_type_client === TypeClient::Particulier->value);
+                $attendu = $compteDansUnTicketZ ? self::ticketZDeLaFenetre($fenetres, ValeurSimple::enEntier($vente->sequence)) : null;
+                $rattache = ValeurSimple::enEntierOuNul($estUnAvoir ? $vente->avoir_cloture_caisse_id : $vente->facture_cloture_caisse_id);
+
+                if ($attendu === $rattache) {
+                    return;
+                }
+
+                $documentId = ValeurSimple::enEntierOuNul($vente->document_id);
+                $libelle = self::libelleDuDocument($estUnAvoir ? 'avoir' : 'facture', $documentId, ValeursLues::texteOuNul($estUnAvoir ? $vente->avoir_numero : $vente->facture_numero));
+                $ticketZ = fn (int $clotureId): string => $numeros[$clotureId] ?? ValeursLues::texteOuNul(ClotureCaisse::query()->whereKey($clotureId)->value('numero')) ?? "(identifiant interne {$clotureId})";
+                $accord = str_starts_with($libelle, 'La ') ? 'e' : '';
+
+                $this->rapport->signaler(AnomalieFiscale::defaut('cloture', match (true) {
+                    $rattache === null => "{$libelle} n'est rattaché{$accord} à aucun ticket Z, alors que le ticket Z {$ticketZ((int) $attendu)}, signé, le compte.",
+                    $attendu === null => "{$libelle} est rattaché{$accord} au ticket Z {$ticketZ($rattache)}, alors qu'aucun ticket Z signé ne le compte.",
+                    default => "{$libelle} est rattaché{$accord} au ticket Z {$ticketZ($rattache)}, alors que le ticket Z {$ticketZ($attendu)}, signé, le compte.",
+                }, ['document' => $estUnAvoir ? 'avoir' : 'facture', 'document_id' => $documentId]));
+            });
+    }
+
+    /**
+     * Le ticket Z dont la fenêtre signée compte cet enregistrement de la
+     * chaîne des ventes : la première clôture dont la dernière séquence
+     * des ventes l'atteint (les fenêtres ne reculent jamais), ou aucun
+     * après la dernière.
+     *
+     * @param  list<array{fin: int|null, cloture_id: int|null, numero: string|null}>  $fenetres
+     */
+    private static function ticketZDeLaFenetre(array $fenetres, int $sequence): ?int
+    {
+        $bas = 0;
+        $haut = count($fenetres);
+
+        while ($bas < $haut) {
+            $milieu = intdiv($bas + $haut, 2);
+
+            if (($fenetres[$milieu]['fin'] ?? 0) >= $sequence) {
+                $haut = $milieu;
+            } else {
+                $bas = $milieu + 1;
+            }
+        }
+
+        return $fenetres[$bas]['cloture_id'] ?? null;
+    }
+
+    /**
+     * Les chemins (« recapitulatif.ventes_particuliers.par_taux.0.tva »)
+     * où deux valeurs diffèrent, en descendant dans les tableaux qu'elles
+     * ont toutes deux.
+     *
+     * @return list<string>
+     */
+    private static function cheminsQuiDifferent(string $chemin, mixed $signe, mixed $enBase): array
+    {
+        if (! is_array($signe) || ! is_array($enBase)) {
+            return $signe === $enBase ? [] : [$chemin];
+        }
+
+        $chemins = [];
+
+        foreach (array_unique([...array_keys($signe), ...array_keys($enBase)]) as $cle) {
+            $chemins = [...$chemins, ...(array_key_exists($cle, $signe) && array_key_exists($cle, $enBase)
+                ? self::cheminsQuiDifferent("{$chemin}.{$cle}", $signe[$cle], $enBase[$cle])
+                : ["{$chemin}.{$cle}"])];
+        }
+
+        return $chemins === [] && array_keys($signe) !== array_keys($enBase) ? [$chemin] : $chemins;
+    }
+
+    /**
+     * « Le ticket Z Z-LYON1-2026-000001 du 09/10/2026 ».
+     */
+    private static function libelleDuTicketZ(stdClass $ticketZ): string
+    {
+        $journee = ValeursLues::texteOuNul($ticketZ->date_cloture);
+
+        return 'Le ticket Z '.(ValeursLues::texteOuNul($ticketZ->numero) ?? '(sans numéro)').($journee === null ? '' : ' du '.Calendrier::afficherJour($journee, 'd/m/Y'));
+    }
+
+    // ---------------------------------------------------------------
     // 3. La numérotation
     // ---------------------------------------------------------------
 
     /**
-     * Dans chaque série (ticket, facture, avoir) et chaque année, les
-     * numéros vont de 1 au dernier numéro que la série a attribué (voir
+     * Dans chaque série (ticket, facture, avoir, ticket Z) et chaque année,
+     * les numéros vont de 1 au dernier numéro que la série a attribué (voir
      * DocumentNumberingService), chacun une seule fois, écrit comme la
-     * série l'écrit, dans l'année de l'émission de son document. Un numéro
+     * série l'écrit, dans l'année de l'émission de son document (de la
+     * journée close, pour un ticket Z). Un numéro
      * attribué puis disparu se voit donc aussi, même le dernier. Les
      * documents se lisent en flux, et de chaque série ne se retient que le
      * compte des numéros qu'elle a attribués : chaque numéro n'ayant qu'une
@@ -1321,21 +1627,25 @@ class VerificateurIntegrite
     {
         $series = SequenceDocument::query()
             ->where('magasin_id', $this->magasin->getKey())
-            ->whereIn('type_document', [TypeDocument::TicketCaisse->value, TypeDocument::Facture->value, TypeDocument::Avoir->value])
+            ->whereIn('type_document', [TypeDocument::TicketCaisse->value, TypeDocument::Facture->value, TypeDocument::Avoir->value, TypeDocument::ClotureCaisse->value])
             ->get();
 
-        foreach (['facture', 'avoir'] as $alias) {
+        foreach (array_keys(self::SERIES_NUMEROTEES) as $alias) {
             $seriesDuDocument = $series
-                ->filter(static fn (SequenceDocument $serie): bool => ($serie->type_document === TypeDocument::Avoir ? 'avoir' : 'facture') === $alias)
+                ->filter(static fn (SequenceDocument $serie): bool => match ($serie->type_document) {
+                    TypeDocument::Avoir => 'avoir',
+                    TypeDocument::ClotureCaisse => 'cloture',
+                    default => 'facture',
+                } === $alias)
                 ->keyBy(static fn (SequenceDocument $serie): string => $serie->prefixe)
                 ->all();
             $attribuesPresents = array_fill_keys(array_keys($seriesDuDocument), 0);
             $horsDeLaSerie = array_fill_keys(array_keys($seriesDuDocument), []);
 
-            self::MODELES[$alias]::query()
+            self::SERIES_NUMEROTEES[$alias]::query()
                 ->whereNotNull('numero')
                 ->toBase()
-                ->select(['id', 'numero', 'date_emission'])
+                ->select(['id', 'numero', $alias === 'cloture' ? 'date_cloture' : 'date_emission'])
                 ->lazyById(1000, 'numero')
                 ->each(function (stdClass $document) use ($alias, $seriesDuDocument, &$attribuesPresents, &$horsDeLaSerie): void {
                     $serieEtRang = $this->serieDuNumero(ValeursLues::texte($document->numero), $seriesDuDocument, $alias, ValeurSimple::enEntier($document->id));
@@ -1397,6 +1707,20 @@ class VerificateurIntegrite
      */
     private function verifierLAnneeDuNumero(SequenceDocument $serie, stdClass $document, string $alias): void
     {
+        if ($alias === 'cloture') {
+            $journee = ValeursLues::texteOuNul($document->date_cloture);
+
+            if ($serie->period_key !== '' && $journee !== null && substr($journee, 0, 4) !== $serie->period_key) {
+                $this->rapport->signaler(AnomalieFiscale::defaut('numerotation', sprintf(
+                    '%s est numéroté dans l\'année %s.',
+                    self::libelleDuTicketZ($document),
+                    $serie->period_key,
+                ), ['cloture_id' => ValeurSimple::enEntier($document->id), 'numero' => ValeursLues::texteOuNul($document->numero)]));
+            }
+
+            return;
+        }
+
         $emission = self::horodatageEnBase($document->date_emission);
 
         if ($serie->period_key === '' || $emission === null) {
@@ -1463,7 +1787,7 @@ class VerificateurIntegrite
         $manquants = [];
         $attendu = 1;
 
-        $numeros = self::MODELES[$alias]::query()
+        $numeros = self::SERIES_NUMEROTEES[$alias]::query()
             ->whereRaw('substr(numero, 1, ?) = ?', [strlen($serie->prefixe), $serie->prefixe])
             ->orderByRaw('length(numero)')
             ->orderBy('numero')

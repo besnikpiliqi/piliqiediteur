@@ -59,7 +59,10 @@ use LogicException;
  * Son auteur, relu en base, doit pouvoir créer un avoir dans le magasin
  * actif et voir chaque facture qu'il corrige (voir FacturePolicy::view() :
  * un vendeur sans « voir celles de toute l'équipe » ne corrige que les
- * siennes) ; c'est lui que l'avoir enregistre comme auteur.
+ * siennes) ; c'est lui que l'avoir enregistre comme auteur. Le client reçu
+ * est relu dans le magasin actif avant toute écriture (voir
+ * BelongsToMagasin::relueDansLeMagasin()) : celui d'un autre magasin est
+ * refusé, même déjà chargé ou avec son magasin_id changé en mémoire.
  *
  * L'avoir de régularisation d'une facture que désigne l'examen du SIREN de
  * la société se crée ici comme tout avoir, régularisation notée (voir
@@ -101,6 +104,7 @@ class CreerAvoirAction
         return DB::transaction(function () use ($auteur, $client, $lignesSelectionnees, $motif, $regularisation) {
             $magasin = app(TenantContext::class)->magasin();
             $compte = $this->lecteur->exiger($auteur, 'create', $magasin, Avoir::class);
+            $client = Client::relueDansLeMagasin($client, Client::REFUS_AUTRE_MAGASIN);
             $lignesDeLAvoir = [];
             $premiere = null;
 

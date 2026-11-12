@@ -11,6 +11,8 @@ use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Filament\App\Resources\ClotureCaisseResource;
+use App\Filament\App\Resources\ClotureCaisseResource\Pages\ViewClotureCaisse;
 use App\Filament\App\Resources\EReportingResource;
 use App\Filament\App\Resources\EReportingResource\Pages\ListEReporting;
 use App\Filament\App\Resources\EReportingResource\Pages\ViewEReporting;
@@ -94,6 +96,32 @@ class EReportingResourceTest extends TestCase
         $fiche->assertSee('E-reporting du 05/10/2026')
             ->assertSee($cloture->numero)
             ->assertSeeInOrder(['Aperçu de l\'e-reporting (non transmis)', 'Livraisons de biens', '20 %', '10,00 €', '2,00 €', 'Égal au net des ventes aux particuliers de la clôture.']);
+    }
+
+    /**
+     * Constat C2 de l'éditeur : le numéro de la clôture mène à sa fiche
+     * pour qui peut l'ouvrir. Un observateur qui voit les clôtures de toute
+     * l'équipe sans « voir (les siennes) » ouvre l'e-reporting, mais pas la
+     * fiche de la clôture : il en lit le numéro, sans lien qui le mènerait à
+     * un refus ; avec les deux cases, le lien ouvre la fiche.
+     */
+    public function test_le_numero_de_la_cloture_ne_mene_a_sa_fiche_que_pour_qui_peut_l_ouvrir(): void
+    {
+        $this->travelTo(self::aParis('2026-10-05 09:00:00'));
+        $magasin = $this->ouvrirLeMagasin();
+        $cloture = $this->journee($magasin, '2026-10-05', [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]]);
+        $ficheDeLaCloture = ClotureCaisseResource::getUrl('view', ['record' => $cloture]);
+
+        $this->actingAs($this->membre($magasin, RoleMagasin::Observateur, [PermissionRegistry::CLOTURE_CAISSE_VIEW_TOUTES]));
+        Livewire::test(ViewEReporting::class, ['record' => $cloture->getRouteKey()])
+            ->assertSee($cloture->numero)
+            ->assertDontSee($ficheDeLaCloture);
+        Livewire::test(ViewClotureCaisse::class, ['record' => $cloture->getRouteKey()])->assertForbidden();
+
+        $this->actingAs($this->membre($magasin, RoleMagasin::Observateur, [PermissionRegistry::CLOTURE_CAISSE_VIEW, PermissionRegistry::CLOTURE_CAISSE_VIEW_TOUTES]));
+        Livewire::test(ViewEReporting::class, ['record' => $cloture->getRouteKey()])
+            ->assertSee($ficheDeLaCloture);
+        Livewire::test(ViewClotureCaisse::class, ['record' => $cloture->getRouteKey()])->assertOk()->assertSee($cloture->numero);
     }
 
     /**

@@ -1062,8 +1062,12 @@ trait AjouteDesLignesDeVente
                     ->live(debounce: 300)
                     ->dehydrated(false)
                     ->visible(fn (): bool => self::servicesVendables()->exists()),
+                // Le service coché prend la teinte de la rangée choisie d'une
+                // fenêtre de sélection (constat C5, voir
+                // resources/css/rangees-choisies.css).
                 CheckboxList::make('services')
                     ->label('Services du magasin')
+                    ->extraAttributes(['class' => 'piliqi-liste-de-choix'])
                     ->options(fn (Get $get): array => self::servicesProposes($get('recherche'), $get('services')))
                     ->helperText(fn (): ?string => self::peutAccorderDesRemises() ? null : 'Les services dont le prix n\'est pas fixé ne sont pas proposés : demandez à un responsable.')
                     ->visible(fn (): bool => self::servicesVendables()->exists())

@@ -2098,6 +2098,39 @@ class CaisseTest extends TestCase
     }
 
     /**
+     * Constat C1 de l'éditeur, pour le refus d'un bon d'avoir : deux bons
+     * de 12,00 € présentés pour un panier de 12,00 €, le second est refusé
+     * au clic sur « Encaisser », le premier couvrant déjà tout. Le panier
+     * doublé, le second bon règle à son tour 12,00 € : son refus, devenu
+     * faux, ne s'affiche plus, et l'encaissement est accepté.
+     */
+    public function test_le_refus_d_un_bon_d_avoir_s_efface_quand_le_panier_le_rend_faux(): void
+    {
+        $this->ouvrirLaCaisseDUnMagasin();
+        $premier = $this->bonDAvoirDeDouzeEuros();
+        $second = $this->bonDAvoirDeDouzeEuros();
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $ligne = ['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 1, 'prix_unitaire_ttc' => 12, 'taux_tva' => 20, 'remise_pourcentage' => 0];
+        $caisse = Livewire::test(Caisse::class)->fillForm(['lignes' => [$ligne]]);
+        $this->presenterUnBonDAvoir($caisse, (string) $premier->numero);
+        $partDuSecond = $this->presenterUnBonDAvoir($caisse, (string) $second->numero);
+        $refus = sprintf(Avoir::BON_D_AVOIR_SANS_EMPLOI, $second->numero);
+
+        $caisse->call('encaisser')->assertHasFormErrors(["parts.{$partDuSecond}.bon"]);
+        $this->assertSame([$refus], $caisse->errors()->get("data.parts.{$partDuSecond}.bon"));
+        $this->assertSame(1, substr_count($caisse->html(), e($refus)));
+
+        $caisse->fillForm(['lignes' => [[...$ligne, 'quantite' => 2]]]);
+        $this->assertSame(0, substr_count($caisse->html(), 'n&#039;a plus rien à régler'));
+        $caisse->assertHasNoFormErrors();
+
+        $caisse->call('encaisser')->assertHasNoFormErrors();
+        $ticket = Facture::query()->where('total_ttc', '24.00')->sole();
+        $this->assertSame([StatutFacture::Payee, 2400], [$ticket->statut, $ticket->montantCrediteParAvoirEnCentimes()]);
+        $this->assertSame([0, 0], [$premier->fresh()->creditEnCentimes(), $second->fresh()->creditEnCentimes()]);
+    }
+
+    /**
      * À la caisse, le prélèvement n'est pas proposé, et une part par
      * prélèvement envoyée sans passer par la liste est refusée.
      */

@@ -10,6 +10,7 @@ use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\EReportingDesParticuliers;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\ValeurSimple;
+use App\Filament\App\FicheDUnDocument;
 use App\Filament\App\Resources\EReportingResource\Pages;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\Section as InfolistSection;
@@ -199,10 +200,14 @@ class EReportingResource extends Resource
         return $infolist->schema([
             InfolistSection::make('Journée')->schema([
                 TextEntry::make('date_cloture')->label('Journée clôturée')->jour(),
+                // Son numéro mène à la fiche de la clôture pour qui peut
+                // l'ouvrir : voir celles de toute l'équipe, qui ouvre cette
+                // page, ne suffit pas sans « voir (les siennes) » (constat
+                // C2, voir FicheDUnDocument et ClotureCaissePolicy::view()).
                 TextEntry::make('numero')
                     ->label('Clôture')
-                    ->url(fn (ClotureCaisse $record): string => ClotureCaisseResource::getUrl('view', ['record' => $record]))
-                    ->color('primary'),
+                    ->url(fn (ClotureCaisse $record): ?string => FicheDUnDocument::adresse($record))
+                    ->color(fn (ClotureCaisse $record): ?string => FicheDUnDocument::adresse($record) === null ? null : 'primary'),
             ])->columns(2),
             self::sectionDeLApercu(),
         ]);

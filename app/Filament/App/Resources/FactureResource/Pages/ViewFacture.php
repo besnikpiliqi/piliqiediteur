@@ -16,6 +16,8 @@ use App\Domain\Facturation\Services\PreuvesRequises;
 use App\Domain\Facturation\Services\RegularisationDUneFacture;
 use App\Domain\Tenancy\Support\CompteConnecte;
 use App\Domain\Tenancy\Support\ValeurSimple;
+use App\Domain\Tenancy\Support\ValeursLues;
+use App\Filament\App\FicheDUnDocument;
 use App\Filament\App\Resources\AvoirResource;
 use App\Filament\App\Resources\FactureResource;
 use App\Filament\Concerns\GereLesExceptionsMetier;
@@ -27,6 +29,7 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ViewRecord;
+use Illuminate\Contracts\Support\Htmlable;
 
 /**
  * La fiche d'une facture ou d'un ticket. Un brouillon s'y modifie
@@ -56,6 +59,19 @@ class ViewFacture extends ViewRecord
     use GereLesExceptionsMetier, PrendLeCalendrierDuMagasin;
 
     protected static string $resource = FactureResource::class;
+
+    /**
+     * « Ticket TK-PARIS-2026-000002 » ou « Facture FAC-PARIS-2026-000001 » :
+     * le document est nommé selon ce qu'il est (constat C2 de l'éditeur),
+     * « Ticket (brouillon) » ou « Facture (brouillon) » tant qu'il n'a pas
+     * de numéro.
+     */
+    public function getTitle(): string|Htmlable
+    {
+        $document = ValeursLues::instance($this->getRecord(), Facture::class);
+
+        return FicheDUnDocument::nature($document).' '.($document->numero ?? '(brouillon)');
+    }
 
     protected function getHeaderActions(): array
     {

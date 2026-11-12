@@ -606,7 +606,9 @@ return [
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le propriétaire du cabinet lié ouvre chaque page et chaque action du magasin de son client sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
         ]],
-        'lien:numero' => ['lot' => 'NAV-2', 'tests' => []],
+        'lien:numero' => ['lot' => 'NAV-2', 'tests' => [
+            'tests/Browser/Parcours/LiensVersLesDocumentsTest.php › chaque numéro de la fiche d’une clôture ouvre son document ; un vendeur n’y a en lien que les siens',
+        ]],
         'recherche' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur autorisé à vendre ouvre chaque page et chaque action du magasin sans erreur',
@@ -826,7 +828,9 @@ return [
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le propriétaire du cabinet lié ouvre chaque page et chaque action du magasin de son client sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
         ]],
-        'lien:numero' => ['lot' => 'NAV-2', 'tests' => []],
+        'lien:numero' => ['lot' => 'NAV-2', 'tests' => [
+            'tests/Browser/Parcours/LiensVersLesDocumentsTest.php › le numéro de la clôture sur la fiche de l’e-reporting ne mène à elle que pour qui peut l’ouvrir',
+        ]],
     ],
     'app/Filament/App/Resources/EReportingResource/Pages/ListEReporting.php' => [
         'page' => ['lot' => 'NAV-2', 'tests' => [
@@ -1089,7 +1093,9 @@ return [
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › l’observateur ouvre chaque page et chaque action du magasin sans erreur',
         ]],
-        'lien:numero' => ['lot' => 'NAV-3', 'tests' => []],
+        'lien:numero' => ['lot' => 'NAV-3', 'tests' => [
+            'tests/Browser/Parcours/LiensVersLesDocumentsTest.php › le responsable passe de l’avoir fournisseur à la facture d’achat qu’il crédite, et retour',
+        ]],
         'recherche' => ['lot' => 'NAV-3', 'tests' => [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur autorisé à vendre ouvre chaque page et chaque action du magasin sans erreur',
@@ -1272,10 +1278,19 @@ return [
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le vendeur ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › l’observateur ouvre chaque page et chaque action du magasin sans erreur',
         ]],
-        'lien:avoir.numero' => ['lot' => 'NAV-2', 'tests' => []],
-        'lien:facture_rectifiee' => ['lot' => 'NAV-2', 'tests' => []],
-        'lien:numero' => ['lot' => 'NAV-2', 'tests' => []],
-        'lien:rectificative' => ['lot' => 'NAV-2', 'tests' => []],
+        'lien:avoir.numero' => ['lot' => 'NAV-2', 'tests' => [
+            'tests/Browser/Parcours/LiensVersLesDocumentsTest.php › le responsable passe d’un document à l’autre par leurs numéros : avoir, ticket crédité, ticket réglé par le crédit',
+        ]],
+        'lien:facture_rectifiee' => ['lot' => 'NAV-2', 'tests' => [
+            'tests/Browser/Parcours/LiensVersLesDocumentsTest.php › la facture rectifiée et sa rectificative mènent l’une à l’autre ; le vendeur en lit le numéro, sans lien',
+        ]],
+        'lien:numero' => ['lot' => 'NAV-2', 'tests' => [
+            'tests/Browser/Parcours/LiensVersLesDocumentsTest.php › le responsable passe d’un document à l’autre par leurs numéros : avoir, ticket crédité, ticket réglé par le crédit',
+            'tests/Browser/Parcours/LiensVersLesDocumentsTest.php › un vendeur qui ne voit pas l’avoir de son ticket en lit le numéro, sans lien',
+        ]],
+        'lien:rectificative' => ['lot' => 'NAV-2', 'tests' => [
+            'tests/Browser/Parcours/LiensVersLesDocumentsTest.php › la facture rectifiée et sa rectificative mènent l’une à l’autre ; le vendeur en lit le numéro, sans lien',
+        ]],
         'recherche' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur autorisé à vendre ouvre chaque page et chaque action du magasin sans erreur',
@@ -1359,9 +1374,15 @@ return [
             'tests/Browser/Parcours/FicheDUneFactureTest.php › le responsable modifie puis émet un brouillon depuis sa fiche',
             'tests/Browser/Parcours/FicheDUneFactureTest.php › le vendeur modifie puis émet son brouillon depuis sa fiche',
             'tests/Browser/Parcours/FicheDUneFactureTest.php › « Modifier » et « Émettre » ne se montrent sur la fiche d’un brouillon qu’à qui peut le modifier et l’émettre',
+            'tests/Browser/Parcours/FicheDUneFactureTest.php › l’administrateur autorisé à vendre modifie puis émet un brouillon depuis sa fiche',
+            'tests/Browser/Parcours/FicheDUneFactureTest.php › le propriétaire modifie puis émet depuis sa fiche un brouillon du magasin de démonstration',
         ]],
         'action:emettre' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Parcours/EmettreEtEncaisserTest.php › l’administrateur autorisé à vendre émet un brouillon depuis sa fiche, sans l’encaisser',
+            'tests/Browser/Parcours/FicheDUneFactureTest.php › le responsable modifie puis émet un brouillon depuis sa fiche',
+            'tests/Browser/Parcours/FicheDUneFactureTest.php › le vendeur modifie puis émet son brouillon depuis sa fiche',
+            'tests/Browser/Parcours/FicheDUneFactureTest.php › l’administrateur autorisé à vendre modifie puis émet un brouillon depuis sa fiche',
+            'tests/Browser/Parcours/FicheDUneFactureTest.php › le propriétaire modifie puis émet depuis sa fiche un brouillon du magasin de démonstration',
         ]],
         'action:emettre_et_encaisser' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Parcours/EmettreEtEncaisserTest.php › le responsable ramène à zéro la part préremplie, et « Émettre et encaisser » émet le brouillon sans l’encaisser',
@@ -2083,6 +2104,7 @@ return [
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le vendeur d’entraînement ouvre chaque page et chaque action du magasin de démonstration sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le vendeur ouvre chaque page et chaque action du magasin sans erreur',
+            'tests/Browser/Parcours/RangeesChoisiesTest.php › chaque texte d’une rangée choisie se lit, stock épuisé et « À régulariser » compris ; le service coché aussi, pas les autorisations',
         ]],
         'champ:nouveau_service' => ['lot' => 'NAV-2', 'tests' => []],
         'champ:prix_unitaire_ttc' => ['lot' => 'NAV-2', 'tests' => []],

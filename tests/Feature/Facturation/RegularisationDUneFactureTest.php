@@ -286,13 +286,6 @@ class RegularisationDUneFactureTest extends TestCase
     }
 
     /**
-     * Une facture déjà régularisée ne se régularise plus : un second avoir
-     * de régularisation et une seconde rectificative sont refusés, et la
-     * facture rectifiée ne reçoit plus d'avoir ordinaire, un retour se
-     * faisant sur sa rectificative : sa fiche ne propose plus « Avoir », et
-     * « Nouvel avoir » refuse son numéro en le disant.
-     */
-    /**
      * Constat C2 de l'éditeur : la fiche de la facture régularisée mène à
      * sa facture rectificative, et celle de la rectificative à la facture
      * qu'elle rectifie, pour qui peut les voir ; un compte qui ne voit pas
@@ -315,6 +308,13 @@ class RegularisationDUneFactureTest extends TestCase
         $this->assertNull(FicheDUnDocument::adresse($facture));
     }
 
+    /**
+     * Une facture déjà régularisée ne se régularise plus : un second avoir
+     * de régularisation et une seconde rectificative sont refusés, et la
+     * facture rectifiée ne reçoit plus d'avoir ordinaire, un retour se
+     * faisant sur sa rectificative : sa fiche ne propose plus « Avoir », et
+     * « Nouvel avoir » refuse son numéro en le disant.
+     */
     public function test_une_facture_deja_regularisee_ne_se_regularise_plus(): void
     {
         [$magasin, $facture, $client] = $this->factureDUneSocieteCorrigee(quantite: 3);

@@ -235,9 +235,31 @@ class Caisse extends Page implements HasForms
 
         $this->suivreLeResteAPayer();
 
-        if ($this->getErrorBag()->has('data.parts')) {
-            $parts = ValeursLues::tableau($this->data['parts'] ?? []);
-            self::oublierLeRefusDevenuFaux($this, 'data.parts', self::ecartDesParts($parts, $this->apercuDuReglement($this->data['lignes'] ?? [], $this->data['client_id'] ?? null, self::bonsDesParts($parts)), true));
+        $this->oublierLesRefusDevenusFaux();
+    }
+
+    /**
+     * Les refus affichés sous les parts du règlement après un clic refusé,
+     * celui de leur écart comme celui de chaque bon d'avoir, recalculés
+     * sur le panier, le client et les parts tels qu'ils sont maintenant :
+     * chacun s'efface dès qu'il ne dit plus vrai (constat C1).
+     */
+    private function oublierLesRefusDevenusFaux(): void
+    {
+        $chemins = array_filter(array_keys($this->getErrorBag()->messages()), fn (string $chemin): bool => str_starts_with($chemin, 'data.parts'));
+
+        if ($chemins === []) {
+            return;
+        }
+
+        $parts = ValeursLues::tableau($this->data['parts'] ?? []);
+        $apercu = $this->apercuDuReglement($this->data['lignes'] ?? [], $this->data['client_id'] ?? null, self::bonsDesParts($parts));
+        self::oublierLeRefusDevenuFaux($this, 'data.parts', self::ecartDesParts($parts, $apercu, true));
+
+        foreach ($parts as $cle => $part) {
+            if (is_array($part) && ($part['mode'] ?? null) === self::PART_AVOIR) {
+                self::oublierLeRefusDevenuFaux($this, "data.parts.{$cle}.bon", self::refusDuBon($apercu, $part['bon'] ?? null));
+            }
         }
     }
 

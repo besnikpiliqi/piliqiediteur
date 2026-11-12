@@ -214,7 +214,9 @@ class AppServiceProvider extends ServiceProvider
 
     /**
      * La feuille écrite à la main qui teinte la rangée choisie d'une
-     * fenêtre de sélection et la ligne cochée d'une liste, dans les trois
+     * fenêtre de sélection, la ligne cochée d'une liste qui a des actions
+     * groupées et le service coché de la fenêtre « Ajouter un service »,
+     * seule liste à cocher marquée piliqi-liste-de-choix, dans les trois
      * panneaux (constat C5 de l'éditeur, voir
      * resources/css/rangees-choisies.css) : Filament la sert, après ses
      * propres feuilles, depuis la copie que « php artisan filament:assets »

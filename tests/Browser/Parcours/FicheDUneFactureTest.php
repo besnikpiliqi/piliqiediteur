@@ -78,6 +78,50 @@ test('le vendeur modifie puis émet son brouillon depuis sa fiche', function () 
     expect(app(TenantContext::class)->runAs($societe->magasin, fn (): StatutFacture => $brouillon->fresh()->statut))->toBe(StatutFacture::Emise);
 });
 
+test('l’administrateur autorisé à vendre modifie puis émet un brouillon depuis sa fiche', function () {
+    $societe = $this->societeComplete();
+    $brouillon = brouillonDuVendeur($societe->magasin);
+    $fiche = '/app/'.$societe->magasin->uuid.'/factures/'.$brouillon->id;
+    $onglet = $this->seConnecter($societe->administrateurVendeur)->aller($fiche)->voir('Brouillon (pas encore émise)');
+
+    $onglet->cliquerSurLeLien('Modifier')->attendreLaPage('/factures/'.$brouillon->id.'/edit$');
+    $onglet->aller($fiche)
+        ->cliquerSur('Émettre')
+        ->soumettre('Confirmer')
+        ->voir('Émise');
+
+    expect(app(TenantContext::class)->runAs($societe->magasin, fn (): StatutFacture => $brouillon->fresh()->statut))->toBe(StatutFacture::Emise)
+        ->and(actionsDeLaFiche($onglet, 'Modifier'))->toBe(0);
+});
+
+/*
+ * Le propriétaire, qui a toutes les autorisations dans le magasin de
+ * démonstration (décision de l'éditeur du 12/11/2026), y modifie et y
+ * émet depuis sa fiche le brouillon qu'il y a fait.
+ */
+test('le propriétaire modifie puis émet depuis sa fiche un brouillon du magasin de démonstration', function () {
+    $demonstration = $this->demonstration();
+    $proprietaire = $demonstration->proprietaire;
+    $brouillon = app(TenantContext::class)->runAs($demonstration->magasin, fn (): Facture => app(CreerFactureAction::class)->handle(
+        $proprietaire,
+        Client::query()->where('nom', 'Entreprise cliente de démonstration')->sole(),
+        [['produit_id' => Produit::query()->where('nom', 'Tasse en céramique')->sole()->id, 'quantite' => 1]],
+    ));
+    $fiche = '/app/'.$demonstration->magasin->uuid.'/factures/'.$brouillon->id;
+    $onglet = $this->seConnecter($proprietaire, panneau: 'societe')->aller($fiche)->voir('Brouillon (pas encore émise)');
+
+    $onglet->cliquerSurLeLien('Modifier')->attendreLaPage('/factures/'.$brouillon->id.'/edit$');
+    $onglet->aller($fiche)
+        ->cliquerSur('Émettre')
+        ->soumettre('Confirmer')
+        ->voir('Émise');
+
+    $emise = app(TenantContext::class)->runAs($demonstration->magasin, fn (): Facture => $brouillon->fresh());
+    expect($emise->statut)->toBe(StatutFacture::Emise)
+        ->and((string) $emise->numero)->toContain('-DEMO-')
+        ->and(actionsDeLaFiche($onglet, 'Modifier'))->toBe(0);
+});
+
 test('« Modifier » et « Émettre » ne se montrent sur la fiche d’un brouillon qu’à qui peut le modifier et l’émettre', function () {
     $societe = $this->societeComplete();
     $brouillon = brouillonDuVendeur($societe->magasin);

@@ -14,6 +14,7 @@ use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Resources\AvoirResource;
+use App\Filament\App\Resources\AvoirResource\Pages\ListAvoirs;
 use App\Filament\App\Resources\AvoirResource\Pages\ViewAvoir;
 use App\Filament\App\Resources\FactureResource;
 use App\Filament\App\Resources\FactureResource\Pages\ViewFacture;
@@ -120,6 +121,49 @@ class LiensVersLesDocumentsTest extends TestCase
         Livewire::test(ViewFacture::class, ['record' => $this->ticketDuResponsable->getRouteKey()])
             ->assertSee($this->avoir->numero)
             ->assertDontSee(AvoirResource::getUrl('view', ['record' => $this->avoir]));
+    }
+
+    /**
+     * La fiche d'un document est titrée selon ce qu'il est : « Ticket … »
+     * pour un ticket, « Facture … » pour une facture à un professionnel,
+     * et, tant qu'il n'a pas de numéro, « Facture (brouillon) ».
+     */
+    public function test_la_fiche_d_un_document_est_titree_selon_ce_qu_il_est(): void
+    {
+        $this->completerIdentiteLegale($this->magasin);
+        [$facture, $brouillon] = app(TenantContext::class)->runAs($this->magasin, function (): array {
+            $hotel = Client::factory()->professionnel()->create(['nom' => 'Hôtel des Pins']);
+            $lignes = [['produit_id' => Produit::query()->where('reference', 'BOUGIE')->sole()->id, 'quantite' => 1]];
+
+            return [
+                app(EmettreFactureAction::class)->handle($this->responsable, app(CreerFactureAction::class)->handle($this->responsable, $hotel, $lignes)),
+                app(CreerFactureAction::class)->handle($this->responsable, $hotel, $lignes),
+            ];
+        });
+        $this->dansLeMagasin($this->magasin, $this->responsable);
+
+        $titres = array_map(
+            fn (Facture $document): string => (string) Livewire::test(ViewFacture::class, ['record' => $document->getRouteKey()])->instance()->getTitle(),
+            [$this->ticketDuResponsable, $facture, $brouillon],
+        );
+
+        $this->assertSame(['Ticket '.$this->ticketDuResponsable->numero, 'Facture '.$facture->numero, 'Facture (brouillon)'], $titres);
+        $this->assertStringStartsWith('FAC-', (string) $facture->numero);
+    }
+
+    /**
+     * La liste des avoirs titre leur colonne comme leur fiche : « Documents
+     * crédités », un ticket n'étant pas une facture.
+     */
+    public function test_la_liste_des_avoirs_titre_ce_qu_ils_creditent_documents_credites(): void
+    {
+        $this->dansLeMagasin($this->magasin, $this->responsable);
+
+        Livewire::test(ListAvoirs::class)
+            ->assertCanSeeTableRecords([$this->avoir])
+            ->assertSee('Documents crédités')
+            ->assertDontSee('Factures créditées')
+            ->assertSee($this->ticketDuVendeur->numero);
     }
 
     /**

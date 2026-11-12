@@ -580,8 +580,10 @@ class AvoirResource extends Resource
             ->columns([
                 Tables\Columns\TextColumn::make('numero')->label('Numéro')->rechercheSansAccents(),
                 FactureResource::clientColumn(),
+                // Les tickets et les factures que l'avoir crédite, sous le
+                // même titre que sur sa fiche (constat C2).
                 Tables\Columns\TextColumn::make('factures_concernees')
-                    ->label('Factures créditées')
+                    ->label('Documents crédités')
                     ->state(fn (Avoir $record) => $record->facturesConcernees()->pluck('numero')->implode(', ')),
                 Tables\Columns\TextColumn::make('total_ttc')->label('Total TTC')->money('EUR')->sortable(),
                 Tables\Columns\TextColumn::make('motif')->limit(40)->toggleable(),

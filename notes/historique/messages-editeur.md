@@ -1824,3 +1824,23 @@ la on peut toujour passer en demonstration malgre que le premier magasin est ouv
 
 il affiche la date et les fichier reste toujours à telecharger. mais moi je suis tres frustrer avec toi ??? comment t as pu faire ca??
 
+## 193. 2026-11-12 01:11 UTC
+
+<!-- attach -->
+
+> Le droit est bien refusé : une fois la société validée, la règle interdit de rouvrir la démonstration, et un clic sur le bouton est refusé.
+
+
+
+non non la magasin demo il marche quand meme
+
+## 194. 2026-11-12 01:12 UTC
+
+<!-- attach -->
+
+> C’est d’accord : je la remplis pour les 269 questions encore vides de l’onglet. Le travail est lancé.
+
+
+
+mais re rempli aussi celles que j ai remplis car tu m as propose meilleur, donc tu remplie meme les miennes
+

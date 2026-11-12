@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 12/11/2026 à 01:09 UTC par pilotage-sync.sh : « Rangement fait ; C10/C11 démonstration ; remplissage des réponses du professionnel lancé ».
+Mis à jour le 12/11/2026 à 01:13 UTC par pilotage-sync.sh : « Remplacement des 19 réponses de l'éditeur demandé ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

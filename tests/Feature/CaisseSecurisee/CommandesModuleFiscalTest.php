@@ -6,6 +6,7 @@ use App\Domain\CaisseSecurisee\ModuleFiscal;
 use App\Domain\CaisseSecurisee\Services\SignataireFiscal;
 use App\Domain\Calendrier\Calendrier;
 use App\Domain\Calendrier\Connexions\FuseauParDefautDeLaBase;
+use App\Domain\Fichiers\AnalyseurDePdf;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
@@ -113,6 +114,27 @@ class CommandesModuleFiscalTest extends TestCase
             ->expectsOutputToContain('L\'antivirus factice (ANTIVIRUS_PILOTE=factice) ne sert jamais en production')
             ->expectsOutputToContain('qpdf ne se lance pas (/chemin/qui/n/existe/pas/qpdf)')
             ->expectsOutputToContain('Caisse sécurisée non opérationnelle')
+            ->assertFailed();
+    }
+
+    /**
+     * qpdf 10, qu'ont encore Debian 11 et Ubuntu 22.04, ne donne pas la
+     * description JSON version 2 que lit l'analyse des PDF : le diagnostic
+     * exige qpdf 11 ou plus, et dit quoi faire ; un programme qui ne dit
+     * pas une version de qpdf (ici PHP lui-même) échoue de même.
+     */
+    public function test_le_diagnostic_exige_qpdf_11_ou_plus(): void
+    {
+        $this->assertSame(
+            [false, false, true, true, false],
+            array_map(AnalyseurDePdf::versionAdmise(...), ['qpdf version 10.1.0', 'qpdf version 9.1.1', 'qpdf version 11.0.0', "qpdf version 12.2.0\nRun qpdf --copyright", 'PHP 8.3.6 (cli)']),
+        );
+
+        config(['piliqi.qpdf' => PHP_BINARY]);
+
+        $this->artisan('caisse:diagnostiquer')
+            ->expectsOutputToContain('l\'analyse des PDF demande qpdf 11 ou plus')
+            ->expectsOutputToContain('Caisse sécurisée non opérationnelle : 1 contrôle(s) en échec.')
             ->assertFailed();
     }
 

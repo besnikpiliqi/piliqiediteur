@@ -6,6 +6,7 @@ use App\Domain\CaisseSecurisee\ModuleFiscal;
 use App\Domain\CaisseSecurisee\Services\SignataireFiscal;
 use App\Domain\Calendrier\Calendrier;
 use App\Domain\Calendrier\Connexions\FuseauParDefautDeLaBase;
+use App\Domain\Fichiers\AnalyseurDePdf;
 use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Support\Reglage;
 use App\Integrations\Antivirus\AntivirusFactice;
@@ -46,8 +47,9 @@ use ZipArchive;
  *   FuseauParDefautDeLaBase) ;
  * - les contrôles des fichiers reçus (lot FI, voir ControleDesFichiers) :
  *   l'extension gd, qui réenregistre les photos ; qpdf, qui lit les PDF
- *   (QPDF_BINAIRE) ; l'antivirus, qui doit reconnaître le fichier de test
- *   EICAR, et ne jamais être l'antivirus factice en production.
+ *   (QPDF_BINAIRE), en version 11 au moins ; l'antivirus, qui doit
+ *   reconnaître le fichier de test EICAR, et ne jamais être l'antivirus
+ *   factice en production.
  */
 #[Signature('caisse:diagnostiquer')]
 #[Description('Vérifie que la caisse sécurisée peut signer et le journal d\'audit s\'inscrire, et que les fichiers reçus se contrôlent : extensions, génération d\'une clé, clés épinglées, clé de signature, clé du journal d\'audit, version du module fiscal, fuseaux de l\'application et de la base, gd, qpdf, antivirus')]
@@ -109,7 +111,8 @@ class DiagnostiquerCaisseSecurisee extends Command
     }
 
     /**
-     * qpdf, qui lit en entier chaque PDF reçu (voir AnalyseurDePdf).
+     * qpdf, qui lit en entier chaque PDF reçu (voir AnalyseurDePdf), dans
+     * une version qui donne la description qu'il lit.
      */
     private function controlerQpdf(): string
     {
@@ -127,7 +130,13 @@ class DiagnostiquerCaisseSecurisee extends Command
             throw new RuntimeException("qpdf ne se lance pas ({$binaire}). Installez qpdf ou indiquez son chemin dans QPDF_BINAIRE : sans lui, tout PDF reçu est refusé.");
         }
 
-        return strtok(trim($processus->getOutput()), "\n") ?: $binaire;
+        $version = (string) strtok(trim($processus->getOutput()), "\n");
+
+        if (! AnalyseurDePdf::versionAdmise($version)) {
+            throw new RuntimeException("qpdf {$binaire} répond « {$version} » : l'analyse des PDF demande qpdf ".AnalyseurDePdf::VERSION_MINIMALE_DE_QPDF.' ou plus (sa description JSON version 2). Installez une version récente (README, point 4) : sans elle, tout PDF reçu est refusé.');
+        }
+
+        return $version;
     }
 
     /**

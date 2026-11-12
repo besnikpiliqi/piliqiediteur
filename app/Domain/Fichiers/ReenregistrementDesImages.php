@@ -37,12 +37,9 @@ final class ReenregistrementDesImages
 
     /**
      * Ce que GD occupe en mémoire par pixel, au plus (une image en vraies
-     * couleurs : quatre octets par pixel, plus ses lignes), et la marge
-     * laissée au reste de la requête.
+     * couleurs : quatre octets par pixel, plus ses lignes).
      */
     private const OCTETS_PAR_PIXEL = 5;
-
-    private const MARGE_EN_OCTETS = 64 * 1024 * 1024;
 
     /**
      * Le contenu réenregistré de cette photo de ce type.
@@ -62,7 +59,7 @@ final class ReenregistrementDesImages
             throw FichierRefuseException::pour($piece, RaisonDuRefus::ImageTropGrande);
         }
 
-        self::prevoirLaMemoire($taille[0] * $taille[1]);
+        MemoireDePhp::prevoir($taille[0] * $taille[1] * self::OCTETS_PAR_PIXEL);
         $image = self::sansAvertissement(fn (): GdImage|false => imagecreatefromstring($piece->contenu));
 
         if (! $image instanceof GdImage || imagesx($image) !== $taille[0] || imagesy($image) !== $taille[1]) {
@@ -203,7 +200,10 @@ final class ReenregistrementDesImages
     }
 
     /**
-     * L'image enregistrée par GD dans son format, sans métadonnée.
+     * L'image enregistrée par GD dans son format, sans métadonnée : un JPEG
+     * sans le commentaire qu'imagejpeg() y écrit d'office (voir
+     * sansCommentaire()) ; un PNG n'a que ses morceaux d'image (IHDR, pHYs,
+     * IDAT, IEND).
      */
     private static function enregistrer(GdImage $image, string $type): string
     {
@@ -222,23 +222,37 @@ final class ReenregistrementDesImages
             $contenu = (string) ob_get_clean();
         }
 
-        return $contenu;
+        return $type === 'image/jpeg' ? self::sansCommentaire($contenu) : $contenu;
     }
 
     /**
-     * Relève la mémoire permise à PHP, si elle ne suffit pas pour décoder
-     * une image de ce nombre de pixels (bornée plus haut) ; jamais ne la
-     * baisse.
+     * Ce JPEG sans ses segments de commentaire (COM, FF FE), comme celui
+     * qu'imagejpeg() écrit d'office (« CREATOR: gd-jpeg … ») : la photo
+     * conservée n'en porte aucun. Les segments se parcourent du début du
+     * fichier jusqu'à celui de l'image (SOS), chaque longueur contrôlée.
      */
-    private static function prevoirLaMemoire(int $pixels): void
+    private static function sansCommentaire(string $jpeg): string
     {
-        $limite = ini_get('memory_limit');
-        $permise = $limite === false || $limite === '' || $limite === '-1' ? -1 : ini_parse_quantity($limite);
-        $necessaire = memory_get_usage(true) + $pixels * self::OCTETS_PAR_PIXEL + self::MARGE_EN_OCTETS;
+        $longueur = strlen($jpeg);
+        $position = 2;
+        $sansCommentaire = substr($jpeg, 0, 2);
 
-        if ($permise !== -1 && $permise < $necessaire) {
-            ini_set('memory_limit', (string) $necessaire);
+        while ($position + 4 <= $longueur && $jpeg[$position] === "\xFF") {
+            $marqueur = ord($jpeg[$position + 1]);
+            $segment = self::entier($jpeg, $position + 2, 2, false);
+
+            if ($marqueur === 0xD9 || $marqueur === 0xDA || $segment < 2) {
+                break;
+            }
+
+            if ($marqueur !== 0xFE) {
+                $sansCommentaire .= substr($jpeg, $position, 2 + $segment);
+            }
+
+            $position += 2 + $segment;
         }
+
+        return $sansCommentaire.substr($jpeg, $position);
     }
 
     /**

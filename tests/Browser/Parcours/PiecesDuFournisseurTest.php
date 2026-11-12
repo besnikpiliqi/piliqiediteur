@@ -7,15 +7,22 @@ use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Achats\Services\PiecesDuFournisseur;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Fournisseur;
+use App\Domain\Fichiers\Exceptions\PieceBloqueeException;
 use App\Domain\Fichiers\PieceDeposee;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Http\Controllers\TelechargerUnePieceDuFournisseurController;
+use App\Integrations\Antivirus\AntivirusFactice;
+use App\Integrations\Antivirus\AntivirusInjoignableException;
+use App\Integrations\Antivirus\Contracts\Antivirus;
+use App\Integrations\Antivirus\ResultatDeLAntivirus;
 use App\Models\User;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Features\SupportFileUploads\FileUploadConfiguration;
 use Tests\Browser\Support\Navigation;
+use Tests\Browser\Support\SocieteDeTest;
 use Tests\Fixtures\FichiersDeTest;
 
 /*
@@ -90,20 +97,27 @@ function factureDuGrossiste(Magasin $magasin, User $responsable, array $pieces, 
 }
 
 /**
- * Télécharge, d'un clic sur son lien, la pièce de ce nom de la fiche
- * ouverte, et rend le fichier reçu.
+ * Télécharge, d'un clic sur son nom, la pièce de ce nom de la fiche
+ * ouverte (la fiche rend le fichier, que le navigateur enregistre sans la
+ * quitter, voir TelechargeLesPiecesDuFournisseur), et rend le fichier reçu.
  *
  * @return array{nom: string, type: string, taille: int, debut: string, contenu: string}
  */
 function telechargerLaPiece(Navigation $onglet, string $nom): array
 {
-    $onglet->geste(fn () => $onglet->page()->evaluate('(nom) => document.querySelector(`a[download="${nom}"]`).click()', $nom), 'le lien de la pièce « '.$nom.' »')
-        ->attendre()
-        ->verifier();
+    $onglet->cliquer(lienDeLaPiece($nom));
     $fichiers = $onglet->telechargements();
     expect($fichiers)->toHaveCount(1);
 
     return $fichiers[0];
+}
+
+/**
+ * Le sélecteur du lien de la pièce de ce nom, dans la fiche ouverte.
+ */
+function lienDeLaPiece(string $nom): string
+{
+    return 'a:text-is('.Navigation::texte($nom).')';
 }
 
 test('le responsable dépose la facture du fournisseur à la saisie, avec sa date, et la télécharge depuis la fiche', function () {
@@ -283,4 +297,196 @@ test('un PDF qui contient du code est refusé à l’ajout, pour chaque rôle qu
     }
 
     expect(count($this->entreesDAudit($societe->magasin->societe, ActionAuditee::PieceDuFournisseurRefusee)))->toBe(4);
+});
+
+/**
+ * Pour chaque rôle qui saisit les achats, un fichier qu'il dépose et que
+ * le contrôle des fichiers reçus refuse, avec le texte que le refus
+ * affiche : un PDF avec du JavaScript, un PDF où l'antivirus trouve une
+ * menace, un PDF suivi d'une archive derrière un faux « startxref », un
+ * PDF dont l'action lance un programme par un type écrit en référence
+ * indirecte.
+ *
+ * @return array<string, array{0: User, 1: string, 2: string}>
+ */
+function fichiersRefusesParRole(SocieteDeTest $societe): array
+{
+    $pdf = pdfDuFournisseur();
+    preg_match('/startxref\s+(\d+)\s+%%EOF\s*$/', $pdf, $table);
+
+    return [
+        'le propriétaire' => [$societe->proprietaire, FichiersDeTest::pdf('Facture', '/OpenAction << /S /JavaScript /JS (app.alert\\(1\\)) >>'), 'ce PDF contient du JavaScript'],
+        'l’administrateur sans la vente' => [$societe->administrateur, FichiersDeTest::pdf('Facture', '', ['<< /Length '.strlen(AntivirusFactice::fichierDeTest())." >>\nstream\n".AntivirusFactice::fichierDeTest()."\nendstream"]), 'l\'antivirus y a trouvé une menace'],
+        'l’administrateur autorisé à vendre' => [$societe->administrateurVendeur, $pdf.FichiersDeTest::archiveZip(['lisez-moi.js' => 'WScript.Echo(1);'])."startxref\n{$table[1]}\n%%EOF\n", 'ce PDF ne se lit pas en entier'],
+        'le responsable' => [$societe->responsable, FichiersDeTest::pdf('Facture', '', ['<< /Type /Annot /Subtype /Link /Rect [0 0 100 100] /A << /S 6 0 R /F (calc.exe) >> >>', '/Launch']), "ce PDF contient le lancement d'un programme"],
+    ];
+}
+
+test('un fichier refusé à la saisie d’une facture d’achat affiche son message pour chaque rôle qui saisit les achats, et rien n’est enregistré', function () {
+    $societe = $this->societeComplete();
+    $rang = 0;
+
+    foreach (fichiersRefusesParRole($societe) as $qui => [$compte, $contenu, $raison]) {
+        $rang++;
+        $onglet = $this->seConnecter($compte)
+            ->aller('/app/'.$societe->magasin->uuid.'/facture-achats/create')
+            ->choisirDansLaListe('Fournisseur', 'Grossiste du Nord')
+            ->remplir('N° de facture du fournisseur', 'REFUS-'.$rang)
+            ->remplir('Date de la facture du fournisseur', '2026-03-09')
+            ->envoyerLeFichier(pieceSurLePoste('facture-piegee.pdf', $contenu))
+            ->cliquerSur('Ajouter un produit')
+            ->choisirDansLaListe('Produit', 'Bougie parfumée')
+            ->remplir('Quantité reçue', '2')
+            ->remplir('Prix d\'achat HT', '5')
+            ->soumettre('Ajouter à la facture')
+            ->soumettre('Créer')
+            ->voir('Le fichier « facture-piegee.pdf » est refusé')
+            ->voir($raison);
+
+        expect([$qui, str_ends_with($onglet->chemin(), '/facture-achats/create'), app(TenantContext::class)->runAs($societe->magasin, fn (): int => FactureAchat::query()->where('numero_fournisseur', 'REFUS-'.$rang)->count())])
+            ->toBe([$qui, true, 0]);
+        $onglet->seDeconnecter();
+    }
+
+    expect(count($this->entreesDAudit($societe->magasin->societe, ActionAuditee::PieceDuFournisseurRefusee)))->toBe(4);
+});
+
+test('un fichier refusé à la modification d’un brouillon affiche son message pour chaque rôle qui saisit les achats, et rien n’est joint', function () {
+    $societe = $this->societeComplete();
+    $rang = 0;
+
+    foreach (fichiersRefusesParRole($societe) as $qui => [$compte, $contenu, $raison]) {
+        $rang++;
+        $brouillon = factureDuGrossiste($societe->magasin, $societe->responsable, [], false, 'BROUILLON-'.$rang);
+        $onglet = $this->seConnecter($compte)
+            ->aller('/app/'.$societe->magasin->uuid.'/facture-achats/'.$brouillon->getRouteKey().'/edit')
+            ->envoyerLeFichier(pieceSurLePoste('facture-piegee.pdf', $contenu))
+            ->soumettre('Sauvegarder')
+            ->voir('Le fichier « facture-piegee.pdf » est refusé')
+            ->voir($raison);
+
+        expect([$qui, app(TenantContext::class)->runAs($societe->magasin, fn (): array => [$brouillon->pieces()->count(), $brouillon->refresh()->piece_manquante])])->toBe([$qui, [0, true]]);
+        $onglet->seDeconnecter();
+    }
+
+    expect(count($this->entreesDAudit($societe->magasin->societe, ActionAuditee::PieceDuFournisseurRefusee)))->toBe(4);
+});
+
+test('un fichier refusé au remplacement d’une pièce affiche son message pour chaque rôle qui saisit les achats, et la pièce d’origine reste', function () {
+    $societe = $this->societeComplete();
+    $rang = 0;
+
+    foreach (fichiersRefusesParRole($societe) as $qui => [$compte, $contenu, $raison]) {
+        $rang++;
+        $brouillon = factureDuGrossiste($societe->magasin, $societe->responsable, [new PieceDeposee('facture-'.$rang.'.pdf', pdfDuFournisseur('Facture '.$rang))], false, 'BROUILLON-'.$rang);
+        $piece = app(TenantContext::class)->runAs($societe->magasin, fn () => $brouillon->pieces()->sole());
+        $onglet = $this->seConnecter($compte)
+            ->aller('/app/'.$societe->magasin->uuid.'/facture-achats/'.$brouillon->getRouteKey())
+            ->cliquerSur('Remplacer une pièce')
+            ->choisir('Pièce', $piece->uuid)
+            ->envoyerLeFichier(pieceSurLePoste('facture-piegee.pdf', $contenu))
+            ->soumettre('Remplacer')
+            ->voir('Le fichier « facture-piegee.pdf » est refusé')
+            ->voir($raison)
+            ->nePasVoir('Pièce remplacée.');
+
+        expect([$qui, app(TenantContext::class)->runAs($societe->magasin, fn (): array => $brouillon->pieces()->pluck('nom')->all())])->toBe([$qui, ['facture-'.$rang.'.pdf']]);
+        $onglet->seDeconnecter();
+    }
+
+    expect(count($this->entreesDAudit($societe->magasin->societe, ActionAuditee::PieceDuFournisseurRefusee)))->toBe(4);
+});
+
+test('un fichier refusé dans la fenêtre « Créer un avoir fournisseur » affiche son message pour chaque rôle qui saisit les achats, et aucun avoir n’est émis', function () {
+    $societe = $this->societeComplete();
+    $factureAchat = factureDuGrossiste($societe->magasin, $societe->responsable, [new PieceDeposee('facture.pdf', pdfDuFournisseur())], true);
+    $rang = 0;
+
+    foreach (fichiersRefusesParRole($societe) as $qui => [$compte, $contenu, $raison]) {
+        $rang++;
+        $onglet = $this->seConnecter($compte)
+            ->aller('/app/'.$societe->magasin->uuid.'/facture-achats/'.$factureAchat->getRouteKey())
+            ->cliquerSur('Créer un avoir fournisseur')
+            ->remplirLaLigne('lignes', 0, 'quantite', '1')
+            ->remplir('N° de l\'avoir du fournisseur', 'AV-REFUS-'.$rang)
+            ->remplir('Motif du retour', 'Bougie cassée')
+            ->envoyerLeFichier(pieceSurLePoste('note-piegee.pdf', $contenu))
+            ->soumettre('Émettre l\'avoir fournisseur')
+            ->voir('Le fichier « note-piegee.pdf » est refusé')
+            ->voir($raison);
+
+        expect([$qui, app(TenantContext::class)->runAs($societe->magasin, fn (): int => AvoirFournisseur::query()->where('numero_fournisseur', 'AV-REFUS-'.$rang)->count())])->toBe([$qui, 0]);
+        $onglet->seDeconnecter();
+    }
+
+    expect(count($this->entreesDAudit($societe->magasin->societe, ActionAuditee::PieceDuFournisseurRefusee)))->toBe(4);
+});
+
+test('une pièce que l’antivirus reconnaît au téléchargement ne se télécharge pas : un avis dit pourquoi à chaque rôle qui voit les achats, et la fiche la montre bloquée, sans lien', function () {
+    $societe = $this->societeComplete();
+    $comptes = [
+        'le propriétaire' => [$societe->proprietaire, 'app'],
+        'l’administrateur sans la vente' => [$societe->administrateur, 'app'],
+        'l’administrateur autorisé à vendre' => [$societe->administrateurVendeur, 'app'],
+        'le responsable' => [$societe->responsable, 'app'],
+        'l’observateur' => [$societe->observateur, 'app'],
+        'le collaborateur du cabinet lié' => [$societe->collaborateur, 'cabinet'],
+    ];
+    $pieces = array_map(fn (string $qui): PieceDeposee => new PieceDeposee('facture-'.array_search($qui, array_keys($comptes), true).'.pdf', pdfDuFournisseur('Facture de '.$qui)), array_keys($comptes));
+    $factureAchat = factureDuGrossiste($societe->magasin, $societe->responsable, $pieces, true);
+    $fiche = '/app/'.$societe->magasin->uuid.'/facture-achats/'.$factureAchat->getRouteKey();
+
+    $this->travelTo(self::aParis('2026-03-11 10:00:01'));
+    $this->app->instance(Antivirus::class, new class implements Antivirus
+    {
+        public function analyser(string $contenu): ResultatDeLAntivirus
+        {
+            throw new AntivirusInjoignableException('clamd est injoignable.');
+        }
+
+        public function description(): string
+        {
+            throw new AntivirusInjoignableException('clamd est injoignable.');
+        }
+    });
+    $this->seConnecter($societe->responsable)->aller($fiche)
+        ->cliquer(lienDeLaPiece('facture-0.pdf'))
+        ->voir('Cette pièce ne se télécharge pas')
+        ->voir(TelechargerUnePieceDuFournisseurController::ANTIVIRUS_INJOIGNABLE)
+        ->fermerLesAvis()
+        ->seDeconnecter();
+    expect(app(TenantContext::class)->runAs($societe->magasin, fn (): int => $factureAchat->pieces()->whereNotNull('bloquee_le')->count()))->toBe(0);
+
+    $this->app->instance(Antivirus::class, new class implements Antivirus
+    {
+        public function analyser(string $contenu): ResultatDeLAntivirus
+        {
+            return str_contains($contenu, 'Facture de ') ? ResultatDeLAntivirus::menace('Pdf.Exploit.Nouveau') : ResultatDeLAntivirus::sain();
+        }
+
+        public function description(): string
+        {
+            return 'antivirus des tests';
+        }
+    });
+    $rang = 0;
+
+    foreach ($comptes as $qui => [$compte, $panneau]) {
+        $onglet = $this->seConnecter($compte, panneau: $panneau)->aller($fiche);
+        expect([$qui, $onglet->element('text=Bloquée par l\'antivirus')->count(), $onglet->element(lienDeLaPiece('facture-'.$rang.'.pdf'))->count()])->toBe([$qui, $rang, 1]);
+
+        $onglet->cliquer(lienDeLaPiece('facture-'.$rang.'.pdf'))
+            ->voir('Cette pièce ne se télécharge pas')
+            ->voir(PieceBloqueeException::MESSAGE);
+        expect([$qui, $onglet->telechargements(), $onglet->element(lienDeLaPiece('facture-'.$rang.'.pdf'))->count(), $onglet->element('text=Bloquée par l\'antivirus')->count()])->toBe([$qui, [], 0, $rang + 1]);
+        $onglet->fermerLesAvis()->seDeconnecter();
+        $rang++;
+    }
+
+    $bloquee = app(TenantContext::class)->runAs($societe->magasin, fn () => $factureAchat->pieces()->where('nom', 'facture-0.pdf')->sole());
+    $this->tolerer(403, '/pieces-du-fournisseur/');
+    $this->seConnecter($societe->responsable)
+        ->aller('/app/'.$societe->magasin->uuid.'/pieces-du-fournisseur/'.$bloquee->uuid)
+        ->voir(PieceBloqueeException::MESSAGE);
+    expect(count($this->entreesDAudit($societe->magasin->societe, ActionAuditee::PieceDuFournisseurBloquee)))->toBe(6);
 });

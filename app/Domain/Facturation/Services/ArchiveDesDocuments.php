@@ -12,6 +12,7 @@ use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Fichiers\Exceptions\PieceBloqueeException;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Support\CleDuModele;
 use App\Integrations\Antivirus\AntivirusInjoignableException;
 use App\Models\User;
 use Illuminate\Support\Facades\File;
@@ -59,14 +60,17 @@ final class ArchiveDesDocuments
     ) {}
 
     /**
-     * Écrit l'archive de ces documents à ce chemin local.
+     * Écrit l'archive de ces documents à ce chemin local, et rend les
+     * identifiants des pièces du fournisseur qu'elle contient, que son lien
+     * revoit avant de la servir (voir TelechargerLesDocumentsController).
      *
      * @param  list<DocumentTrouve>  $documents
+     * @return list<int>
      *
      * @throws RuntimeException quand aucun document n'y entre ou que l'archive ne s'écrit pas
      * @throws AntivirusInjoignableException quand l'antivirus ne répond pas pour une pièce à analyser de nouveau
      */
-    public function ecrire(User $compte, array $documents, string $du, string $au, string $chemin): void
+    public function ecrire(User $compte, array $documents, string $du, string $au, string $chemin): array
     {
         $zip = new ZipArchive;
 
@@ -77,18 +81,23 @@ final class ArchiveDesDocuments
         $temporaire = storage_path('framework/cache/telechargement-'.Str::random(32));
         File::ensureDirectoryExists($temporaire);
         $noms = [];
+        $pieces = [];
 
         try {
             foreach (collect($documents)->groupBy(fn (DocumentTrouve $document): int => $document->magasinId) as $magasinId => $duMagasin) {
                 $magasin = Magasin::query()->findOrFail($magasinId);
 
-                $this->documents->dansLeMagasin($magasin, function () use ($compte, $magasin, $duMagasin, $du, $au, $zip, $temporaire, &$noms): void {
+                $this->documents->dansLeMagasin($magasin, function () use ($compte, $magasin, $duMagasin, $du, $au, $zip, $temporaire, &$noms, &$pieces): void {
                     foreach ($duMagasin as $document) {
-                        foreach ($this->fichiers($compte, $magasin, $document, $du, $au) as [$nom, $contenu]) {
+                        foreach ($this->fichiers($compte, $magasin, $document, $du, $au) as [$nom, $contenu, $piece]) {
                             $place = self::placeLibre($document->type->value.'/'.$document->mois().'/'.self::nomSur($nom), $noms);
                             $copie = $temporaire.'/'.count($noms);
                             File::put($copie, $contenu);
                             $zip->addFile($copie, $place);
+
+                            if ($piece !== null) {
+                                $pieces[] = $piece;
+                            }
                         }
                     }
                 });
@@ -104,31 +113,34 @@ final class ArchiveDesDocuments
         } finally {
             File::deleteDirectory($temporaire);
         }
+
+        return $pieces;
     }
 
     /**
-     * Les fichiers d'un document : chacun son nom et son contenu.
+     * Les fichiers d'un document : chacun son nom, son contenu, et
+     * l'identifiant de la pièce du fournisseur qu'il est, ou null.
      *
-     * @return list<array{0: string, 1: string}>
+     * @return list<array{0: string, 1: string, 2: int|null}>
      */
     private function fichiers(User $compte, Magasin $magasin, DocumentTrouve $document, string $du, string $au): array
     {
         return match ($document->type) {
-            TypeDeDocumentTelechargeable::Ventes => [[$document->numero.'.pdf', $this->factures->generer(Facture::query()->findOrFail($document->identifiant))->output()]],
-            TypeDeDocumentTelechargeable::AvoirsClients => [[$document->numero.'.pdf', $this->avoirs->generer(Avoir::query()->findOrFail($document->identifiant))->output()]],
+            TypeDeDocumentTelechargeable::Ventes => [[$document->numero.'.pdf', $this->factures->generer(Facture::query()->findOrFail($document->identifiant))->output(), null]],
+            TypeDeDocumentTelechargeable::AvoirsClients => [[$document->numero.'.pdf', $this->avoirs->generer(Avoir::query()->findOrFail($document->identifiant))->output(), null]],
             TypeDeDocumentTelechargeable::FacturesAchat => $this->piecesOuFiche($compte, FactureAchat::query()->findOrFail($document->identifiant)),
             TypeDeDocumentTelechargeable::AvoirsFournisseur => $this->piecesOuFiche($compte, AvoirFournisseur::query()->findOrFail($document->identifiant)),
-            TypeDeDocumentTelechargeable::Clotures => [[$document->numero.'.pdf', $this->clotures->generer(ClotureCaisse::query()->findOrFail($document->identifiant))->output()]],
-            TypeDeDocumentTelechargeable::Encaissements => [[$this->releves->nomFichier($magasin, $document->identifiant), $this->releves->generer($compte, $magasin, $document->identifiant, $du, $au)->output()]],
+            TypeDeDocumentTelechargeable::Clotures => [[$document->numero.'.pdf', $this->clotures->generer(ClotureCaisse::query()->findOrFail($document->identifiant))->output(), null]],
+            TypeDeDocumentTelechargeable::Encaissements => [[$this->releves->nomFichier($magasin, $document->identifiant), $this->releves->generer($compte, $magasin, $document->identifiant, $du, $au)->output(), null]],
         };
     }
 
     /**
      * Les pièces du fournisseur d'un achat que ce compte peut se faire
-     * servir, telles que conservées, ou sa fiche de saisie quand il n'en a
-     * aucune.
+     * servir, telles que conservées, chacune avec son identifiant, ou sa
+     * fiche de saisie quand il n'en a aucune.
      *
-     * @return list<array{0: string, 1: string}>
+     * @return list<array{0: string, 1: string, 2: int|null}>
      *
      * @throws AntivirusInjoignableException
      */
@@ -138,13 +150,13 @@ final class ArchiveDesDocuments
 
         foreach ($document->pieces()->get() as $piece) {
             try {
-                $servies[] = [$document->numero.' - '.$piece->nom, $this->pieces->contenuServable($compte, $piece)];
+                $servies[] = [$document->numero.' - '.$piece->nom, $this->pieces->contenuServable($compte, $piece), CleDuModele::de($piece)];
             } catch (PieceBloqueeException) {
                 continue;
             }
         }
 
-        return $servies !== [] ? $servies : [[$this->fiches->nomFichier($document), $this->fiches->generer($document)->output()]];
+        return $servies !== [] ? $servies : [[$this->fiches->nomFichier($document), $this->fiches->generer($document)->output(), null]];
     }
 
     /**

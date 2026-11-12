@@ -30,7 +30,8 @@ use Symfony\Component\HttpFoundation\HeaderUtils;
  *   et chiffres dont au moins une lettre (« rapport.2026 » garde son
  *   « .2026 ») ;
  * - les espaces au début et à la fin et les points finaux sont retirés, et
- *   la longueur est bornée à LONGUEUR_MAXIMALE caractères ;
+ *   la longueur est bornée à LONGUEUR_MAXIMALE_EN_OCTETS octets d'UTF-8,
+ *   coupée entre deux caractères ;
  * - un nom réservé de Windows (CON, PRN, AUX, NUL, COM1 à COM9, LPT1 à
  *   LPT9, seul ou suivi d'un point) est préfixé de « _ » ;
  * - « pièce » quand il ne reste rien ;
@@ -39,11 +40,13 @@ use Symfony\Component\HttpFoundation\HeaderUtils;
 final class NomDeFichier
 {
     /**
-     * La longueur maximale du nom de base, en caractères, sans
-     * l'extension : un nom de fichier tient en 255 octets, même rangé dans
-     * un ZIP derrière le numéro de son document.
+     * La longueur maximale du nom de base, en octets d'UTF-8, sans
+     * l'extension : un nom de fichier tient en 255 octets (la limite d'un
+     * nom sous Linux, macOS et Windows), même rangé dans un ZIP derrière le
+     * numéro de son document (« AF-ABCDEFGHIJ-2026-0000001 - », moins de
+     * 40 octets) et suivi de son extension.
      */
-    public const LONGUEUR_MAXIMALE = 100;
+    public const LONGUEUR_MAXIMALE_EN_OCTETS = 200;
 
     public const NOM_PAR_DEFAUT = 'pièce';
 
@@ -88,8 +91,8 @@ final class NomDeFichier
     /**
      * Un nom tel que reçu, comme il s'écrit dans un message : son seul nom
      * de base, sans caractère de contrôle, invisible ni de sens d'écriture,
-     * borné à LONGUEUR_MAXIMALE caractères ; « pièce » quand il n'en reste
-     * rien.
+     * borné à LONGUEUR_MAXIMALE_EN_OCTETS octets ; « pièce » quand il n'en
+     * reste rien.
      */
     public static function pourUnMessage(string $nomRecu): string
     {
@@ -152,12 +155,12 @@ final class NomDeFichier
 
     /**
      * Le nom sans espace au début ni à la fin, sans point final, borné à
-     * LONGUEUR_MAXIMALE caractères.
+     * LONGUEUR_MAXIMALE_EN_OCTETS octets d'UTF-8 sans couper un caractère.
      */
     private static function borner(string $nom): string
     {
         $nom = rtrim(trim($nom), '. ');
 
-        return rtrim(trim(mb_substr($nom, 0, self::LONGUEUR_MAXIMALE)), '. ');
+        return rtrim(trim(mb_strcut($nom, 0, self::LONGUEUR_MAXIMALE_EN_OCTETS, 'UTF-8')), '. ');
     }
 }

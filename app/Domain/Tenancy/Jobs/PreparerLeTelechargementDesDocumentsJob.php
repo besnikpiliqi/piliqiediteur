@@ -145,8 +145,8 @@ class PreparerLeTelechargementDesDocumentsJob implements ShouldBeUnique, ShouldQ
             $chemin = CleDuModele::de($societe).'/'.Str::random(40).'.'.$telechargement->format->value;
 
             try {
-                $this->ecrire($telechargement, $compte, $choisis, $chemin, $archive, $recapitulatif);
-                $this->marquerPret($telechargement, $societe, $compte, $choisis, $chemin, $magasins, $journal);
+                $pieces = $this->ecrire($telechargement, $compte, $choisis, $chemin, $archive, $recapitulatif);
+                $this->marquerPret($telechargement, $societe, $compte, $choisis, $pieces, $chemin, $magasins, $journal);
             } catch (Throwable $erreur) {
                 Storage::disk(self::DISQUE)->delete($chemin);
 
@@ -156,17 +156,19 @@ class PreparerLeTelechargementDesDocumentsJob implements ShouldBeUnique, ShouldQ
     }
 
     /**
-     * Dans une seule transaction : la demande prête, avec son fichier et
-     * les clés des documents qu'il contient, et son entrée au journal
-     * d'audit de la société ; la personne en est prévenue. Une demande qui n'est plus en préparation garde son état,
-     * et le fichier écrit s'efface.
+     * Dans une seule transaction : la demande prête, avec son fichier, les
+     * clés des documents qu'il contient et les identifiants de ses pièces
+     * du fournisseur, et son entrée au journal d'audit de la société ; la
+     * personne en est prévenue. Une demande qui n'est plus en préparation
+     * garde son état, et le fichier écrit s'efface.
      *
      * @param  list<DocumentTrouve>  $choisis
+     * @param  list<int>  $pieces
      * @param  Collection<int, Magasin>  $magasins
      */
-    private function marquerPret(TelechargementDeDocuments $telechargement, Societe $societe, User $compte, array $choisis, string $chemin, Collection $magasins, JournalAudit $journal): void
+    private function marquerPret(TelechargementDeDocuments $telechargement, Societe $societe, User $compte, array $choisis, array $pieces, string $chemin, Collection $magasins, JournalAudit $journal): void
     {
-        DB::transaction(function () use ($telechargement, $societe, $compte, $choisis, $chemin, $magasins, $journal): void {
+        DB::transaction(function () use ($telechargement, $societe, $compte, $choisis, $pieces, $chemin, $magasins, $journal): void {
             Societe::verrouillerAvantSonJournalDAudit(CleDuModele::de($societe));
             $relu = TelechargementDeDocuments::query()->whereKey($telechargement->getKey())->lockForUpdate()->firstOrFail();
 
@@ -179,6 +181,7 @@ class PreparerLeTelechargementDesDocumentsJob implements ShouldBeUnique, ShouldQ
             $relu->forceFill([
                 'statut' => StatutDuTelechargement::Pret,
                 'selection' => array_map(fn (DocumentTrouve $document): string => $document->cle(), $choisis),
+                'pieces' => $pieces,
                 'chemin' => $chemin,
                 'taille' => Storage::disk(self::DISQUE)->size($chemin),
                 'nombre_documents' => count($choisis),
@@ -217,12 +220,15 @@ class PreparerLeTelechargementDesDocumentsJob implements ShouldBeUnique, ShouldQ
     }
 
     /**
-     * Écrit le fichier de ces documents à ce chemin du disque : l'archive
-     * se compose d'abord dans un fichier local temporaire, effacé ensuite.
+     * Écrit le fichier de ces documents à ce chemin du disque, et rend les
+     * identifiants des pièces du fournisseur qu'il contient (aucune dans un
+     * CSV) : l'archive se compose d'abord dans un fichier local
+     * temporaire, effacé ensuite.
      *
      * @param  list<DocumentTrouve>  $choisis
+     * @return list<int>
      */
-    private function ecrire(TelechargementDeDocuments $telechargement, User $compte, array $choisis, string $chemin, ArchiveDesDocuments $archive, RecapitulatifDesDocuments $recapitulatif): void
+    private function ecrire(TelechargementDeDocuments $telechargement, User $compte, array $choisis, string $chemin, ArchiveDesDocuments $archive, RecapitulatifDesDocuments $recapitulatif): array
     {
         $du = (string) $telechargement->du;
         $au = (string) $telechargement->au;
@@ -230,13 +236,13 @@ class PreparerLeTelechargementDesDocumentsJob implements ShouldBeUnique, ShouldQ
         if ($telechargement->format === FormatDuTelechargement::Csv) {
             Storage::disk(self::DISQUE)->put($chemin, $recapitulatif->ecrire($compte, $choisis, $du, $au));
 
-            return;
+            return [];
         }
 
         $local = storage_path('framework/cache/telechargement-'.Str::random(32).'.zip');
 
         try {
-            $archive->ecrire($compte, $choisis, $du, $au, $local);
+            $pieces = $archive->ecrire($compte, $choisis, $du, $au, $local);
             $flux = fopen($local, 'rb');
 
             if ($flux === false) {
@@ -251,6 +257,8 @@ class PreparerLeTelechargementDesDocumentsJob implements ShouldBeUnique, ShouldQ
         } finally {
             File::delete($local);
         }
+
+        return $pieces;
     }
 
     /**

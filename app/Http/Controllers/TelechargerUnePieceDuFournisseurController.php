@@ -14,12 +14,15 @@ use Illuminate\Support\Facades\Gate;
 /**
  * Le téléchargement d'une pièce du fournisseur (voir PieceDuFournisseur),
  * par son adresse dans le panneau du magasin (voir AppPanelProvider) :
- * /app/{magasin}/pieces-du-fournisseur/{uuid}. L'adresse n'est jamais
- * devinable (un uuid tiré au hasard) et ne suffit pas : la pièce se
- * cherche dans le magasin de l'adresse seulement (MagasinScope, posé par
- * le panneau, voir BindTenantContextFromFilamentTenant), introuvable
- * ailleurs, et ne se sert qu'à qui peut voir son document, facture
- * d'achat ou avoir fournisseur (voir FactureAchatPolicy::view() et
+ * /app/{magasin}/pieces-du-fournisseur/{uuid}, celle du lien de la pièce
+ * dans la fiche de son document, ouvert dans un nouvel onglet (un simple
+ * clic passe par la fiche, voir TelechargeLesPiecesDuFournisseur).
+ * L'adresse n'est jamais devinable (un uuid tiré au hasard) et ne suffit
+ * pas : la pièce se cherche dans le magasin de l'adresse seulement
+ * (MagasinScope, posé par le panneau, voir
+ * BindTenantContextFromFilamentTenant), introuvable ailleurs, et ne se
+ * sert qu'à qui peut voir son document, facture d'achat ou avoir
+ * fournisseur (voir FactureAchatPolicy::view() et
  * AvoirFournisseurPolicy::view()), un compte du cabinet lié compris quand
  * le client lui accorde de voir les achats ; un magasin en lecture seule
  * la sert toujours.

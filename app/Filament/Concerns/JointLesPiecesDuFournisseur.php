@@ -118,10 +118,10 @@ trait JointLesPiecesDuFournisseur
 
     /**
      * La section des pièces d'une fiche : chacune avec son nom, qui la
-     * télécharge en pièce jointe (voir
-     * TelechargerUnePieceDuFournisseurController), sauf une pièce bloquée
-     * par l'antivirus, marquée comme telle, sa taille, et qui l'a jointe,
-     * quand.
+     * télécharge d'un clic sans quitter la fiche, un avis disant pourquoi
+     * quand elle ne se sert pas (voir TelechargeLesPiecesDuFournisseur),
+     * sauf une pièce bloquée par l'antivirus, marquée comme telle, sans
+     * lien ; sa taille, et qui l'a jointe, quand.
      */
     public static function sectionDesPieces(): InfolistSection
     {
@@ -132,16 +132,19 @@ trait JointLesPiecesDuFournisseur
                     ->hiddenLabel()
                     ->state(fn (FactureAchat|AvoirFournisseur $record) => $record->pieces()->get())
                     ->schema([
-                        // Un lien de téléchargement (attribut download) : le
-                        // navigateur enregistre le fichier sous son nom,
-                        // réécrit avec l'extension de son type, sans quitter
-                        // la fiche ; une pièce bloquée n'a pas de lien.
+                        // Un clic sur le nom appelle la fiche, qui rend le
+                        // fichier ou dit pourquoi il ne se sert pas (voir
+                        // TelechargeLesPiecesDuFournisseur) ; son adresse
+                        // (voir TelechargerUnePieceDuFournisseurController)
+                        // reste celle du lien, qui s'ouvre aussi dans un
+                        // nouvel onglet. Une pièce bloquée n'a pas de lien.
+                        // Le texte, chaque valeur échappée, s'affiche tel
+                        // quel : le nettoyage de html() retirerait l'appel.
                         TextEntry::make('nom')
                             ->label('Fichier')
                             ->state(fn (PieceDuFournisseur $record): HtmlString => new HtmlString($record->bloquee_le !== null
                                 ? e($record->nom).' <span class="font-medium text-danger-600 dark:text-danger-400">'.e(self::PIECE_BLOQUEE).'</span>'
-                                : '<a href="'.e(self::adresseDeLaPiece($record)).'" download="'.e($record->nom).'" class="text-primary-600 underline dark:text-primary-400">'.e($record->nom).'</a>'))
-                            ->html(),
+                                : '<a href="'.e(self::adresseDeLaPiece($record)).'" wire:click.prevent="telechargerUnePiece(\''.e($record->uuid).'\')" class="text-primary-600 underline dark:text-primary-400">'.e($record->nom).'</a>')),
                         TextEntry::make('taille')
                             ->label('Taille')
                             ->state(fn (PieceDuFournisseur $record): string => $record->tailleLisible()),

@@ -3,6 +3,7 @@
 namespace App\Filament\App\Resources\FactureAchatResource\Pages;
 
 use App\Filament\App\Resources\FactureAchatResource;
+use App\Filament\Concerns\TelechargeLesPiecesDuFournisseur;
 use Filament\Actions;
 use Filament\Resources\Pages\ViewRecord;
 
@@ -14,10 +15,13 @@ use Filament\Resources\Pages\ViewRecord;
  * orange, ce qui en a déjà été retourné (voir
  * FactureAchatResource::retoursDeLaLigne()). Les pièces du fournisseur
  * s'y ajoutent, et, sur un brouillon, s'y retirent ou s'y remplacent (voir
- * JointLesPiecesDuFournisseur).
+ * JointLesPiecesDuFournisseur) ; elles s'y téléchargent d'un clic sur leur
+ * nom (voir TelechargeLesPiecesDuFournisseur).
  */
 class ViewFactureAchat extends ViewRecord
 {
+    use TelechargeLesPiecesDuFournisseur;
+
     protected static string $resource = FactureAchatResource::class;
 
     protected function getHeaderActions(): array

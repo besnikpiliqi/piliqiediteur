@@ -76,17 +76,6 @@ function etreRefuseAvecSonIdentifiant(Navigation $onglet, User $compte, string $
 }
 
 /**
- * Ferme les avis affichés dans cet onglet (celui d'un accès redonné, à la
- * connexion suivante du compte), qui couvrent le menu du compte.
- */
-function fermerLesAvis(Navigation $onglet): Navigation
-{
-    $onglet->page()->evaluate('() => document.querySelectorAll(".fi-no-notification-close-btn").forEach((bouton) => bouton.click())');
-
-    return $onglet->attendre();
-}
-
-/**
  * Les badges de la ligne de ce poste, dans la liste des postes reconnus
  * affichée par cet onglet.
  *
@@ -158,7 +147,7 @@ test('dans l’espace du cabinet, avec des témoins de poste envoyés en tableau
 
         expect($onglet->chemin())->toStartWith('/cabinet/'.$cabinet->uuid)
             ->and(temoinsLisiblesParLaPage($onglet))->not->toContain('postes_connus[0]')->toContain('postes_reconnus[0]');
-        fermerLesAvis($onglet)->seDeconnecter();
+        $onglet->fermerLesAvis()->seDeconnecter();
     }
 });
 

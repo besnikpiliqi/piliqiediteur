@@ -52,6 +52,8 @@ use App\Domain\Tenancy\Notifications\AvisDuTelechargementDesDocuments;
 use App\Domain\Tenancy\Services\AffectationsDesMembres;
 use App\Domain\Tenancy\Services\PorteeDesDroits;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Http\Controllers\TelechargerLesDocumentsController;
+use App\Http\Controllers\TelechargerUnePieceDuFournisseurController;
 use App\Integrations\Antivirus\AntivirusInjoignableException;
 use App\Integrations\Antivirus\Contracts\Antivirus;
 use App\Integrations\Antivirus\ResultatDeLAntivirus;
@@ -62,6 +64,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Testing\TestResponse;
 use LogicException;
 use Tests\Fixtures\FichiersDeTest;
 use Tests\TestCase;
@@ -386,6 +389,60 @@ class TelechargementDesDocumentsTest extends TestCase
         $this->assertSame(0, PieceDuFournisseur::query()->whereNotNull('bloquee_le')->count());
         Notification::assertSentTo($proprietaire, AvisDuTelechargementDesDocuments::class, fn (AvisDuTelechargementDesDocuments $avis): bool => $avis->telechargement->is($echec));
         $this->assertSame(StatutDuTelechargement::Pret, $this->demander($proprietaire, FormatDuTelechargement::Csv)->statut);
+    }
+
+    /**
+     * Le lien d'un ZIP déjà préparé revoit les pièces du fournisseur qu'il
+     * contient avant chaque service (décisions de l'éditeur du 07/11/2026,
+     * lot FI) : une pièce bloquée depuis, à son téléchargement seul, ferme
+     * le fichier, qui se redemande sans elle ; plus de 24 heures après sa
+     * dernière analyse, une pièce repasse par l'antivirus, qui peut la
+     * bloquer alors ; un antivirus injoignable fait réessayer plus tard.
+     */
+    public function test_un_zip_prepare_ne_sert_plus_une_piece_bloquee_depuis_ni_sans_analyse_de_moins_de_24_heures(): void
+    {
+        Notification::fake();
+        $proprietaire = $this->proprietaireDe($this->magasin);
+        $achat = $this->documents['achatAvecPiece'];
+        $piece = PieceDuFournisseur::query()->where('facture_achat_id', $achat->id)->sole();
+        $telechargement = $this->demander($proprietaire, FormatDuTelechargement::Zip);
+        $this->assertSame([$piece->id], $telechargement->piecesContenues());
+        $this->telechargerEnTantQue($proprietaire, $telechargement->lien())->assertOk();
+
+        $this->travelTo(self::aParis('2026-03-12 12:00:00'));
+        $this->antivirusQuiReconnait(FichiersDeTest::pdf());
+        $this->telechargerEnTantQue($proprietaire, route('filament.app.pieces-du-fournisseur.telecharger', ['tenant' => $this->magasin, 'piece' => $piece->uuid]))->assertForbidden();
+        $this->assertNotNull($piece->refresh()->bloquee_le);
+
+        $this->telechargerEnTantQue($proprietaire, $telechargement->lien())->assertForbidden()->assertSeeText(TelechargerLesDocumentsController::PIECE_BLOQUEE);
+        $redemande = $this->demander($proprietaire, FormatDuTelechargement::Zip);
+        $this->assertSame([], $redemande->piecesContenues());
+        $this->assertArrayHasKey("achats/2026-03/{$achat->numero} - saisie PILIQI.pdf", $this->lireLeZip($redemande));
+        $this->telechargerEnTantQue($proprietaire, $redemande->lien())->assertOk();
+
+        $this->travelTo(self::aParis('2026-03-10 10:00:00'));
+        $bon = FichiersDeTest::pdf('Bon de livraison');
+        app(TenantContext::class)->runAs($this->magasin, fn () => app(JoindreDesPiecesAction::class)->handle($this->responsable, $achat, [new PieceDeposee('Bon de livraison.pdf', $bon)]));
+        $this->antivirusQuiReconnait('aucune menace');
+        $avecLeBon = $this->demander($proprietaire, FormatDuTelechargement::Zip);
+        $leBon = app(TenantContext::class)->runAs($this->magasin, fn (): PieceDuFournisseur => PieceDuFournisseur::query()->where('facture_achat_id', $achat->id)->whereNull('bloquee_le')->sole());
+        $this->assertSame([$leBon->id], $avecLeBon->piecesContenues());
+
+        $this->travelTo(self::aParis('2026-03-11 10:00:01'));
+        $this->antivirusInjoignable();
+        $this->telechargerEnTantQue($proprietaire, $avecLeBon->lien())->assertStatus(503)->assertHeader('Retry-After', '300')->assertSeeText(TelechargerUnePieceDuFournisseurController::ANTIVIRUS_INJOIGNABLE);
+        $this->assertNull($leBon->refresh()->bloquee_le);
+
+        $this->antivirusQuiReconnait('aucune menace');
+        $this->telechargerEnTantQue($proprietaire, $avecLeBon->lien())->assertOk();
+        $this->assertMemeInstant(self::aParis('2026-03-11 10:00:01'), $leBon->refresh()->analysee_le);
+
+        $this->travelTo(self::aParis('2026-03-12 10:00:02'));
+        $this->antivirusQuiReconnait($bon);
+        $this->telechargerEnTantQue($proprietaire, $avecLeBon->lien())->assertForbidden()->assertSeeText(TelechargerLesDocumentsController::PIECE_BLOQUEE);
+        $this->assertSame('Pdf.Exploit.Nouveau', $leBon->refresh()->menace);
+        $this->assertSame([$proprietaire->id, $proprietaire->id], array_map(fn ($entree): ?int => $entree->auteur_id, $this->entreesDAudit($this->magasin->societe, ActionAuditee::PieceDuFournisseurBloquee)));
+        Notification::assertSentToTimes($proprietaire, AvisDeLAntivirus::class, 2);
     }
 
     public function test_la_preparation_previent_la_personne_et_s_inscrit_au_journal_d_audit_de_la_societe(): void
@@ -726,6 +783,34 @@ class TelechargementDesDocumentsTest extends TestCase
                 return 'antivirus des tests';
             }
         });
+    }
+
+    private function antivirusInjoignable(): void
+    {
+        $this->app->instance(Antivirus::class, new class implements Antivirus
+        {
+            public function analyser(string $contenu): ResultatDeLAntivirus
+            {
+                throw new AntivirusInjoignableException('clamd est injoignable.');
+            }
+
+            public function description(): string
+            {
+                throw new AntivirusInjoignableException('clamd est injoignable.');
+            }
+        });
+    }
+
+    /**
+     * Une requête de ce compte, dans une session neuve, comme depuis son
+     * propre navigateur.
+     */
+    private function telechargerEnTantQue(User $compte, string $adresse): TestResponse
+    {
+        $this->flushSession();
+        app(TenantContext::class)->clear();
+
+        return $this->actingAs($compte)->get($adresse);
     }
 
     /**

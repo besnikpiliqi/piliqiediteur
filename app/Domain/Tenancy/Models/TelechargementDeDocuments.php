@@ -72,6 +72,7 @@ class TelechargementDeDocuments extends Model
         'piece_manquante_seulement' => 'boolean',
         'format' => FormatDuTelechargement::class,
         'selection' => 'array',
+        'pieces' => 'array',
         'statut' => StatutDuTelechargement::class,
         'nombre_documents' => 'integer',
         'taille' => 'integer',
@@ -176,6 +177,20 @@ class TelechargementDeDocuments extends Model
     public function clesChoisies(): array
     {
         return ValeursLues::textes($this->selection ?? []);
+    }
+
+    /**
+     * Les identifiants des pièces du fournisseur que le fichier prêt
+     * contient (voir ArchiveDesDocuments::ecrire()), tels que la
+     * préparation les a gardés : des entiers, que seul le code y écrit.
+     *
+     * @return list<int>
+     *
+     * @throws UnexpectedValueException une valeur qui n'est pas un entier
+     */
+    public function piecesContenues(): array
+    {
+        return ValeursLues::entiers($this->pieces ?? []);
     }
 
     public function estExpire(): bool

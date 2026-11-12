@@ -1102,6 +1102,7 @@ return [
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le propriétaire d’une société qui attend son code ouvre chaque page et chaque action du magasin de démonstration sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le responsable d’entraînement ouvre chaque page et chaque action du magasin de démonstration sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
+            'tests/Browser/Parcours/PiecesDuFournisseurTest.php › un fichier refusé à la saisie d’une facture d’achat affiche son message pour chaque rôle qui saisit les achats, et rien n’est enregistré',
         ]],
     ],
     'app/Filament/App/Resources/FactureAchatResource/Pages/EditFactureAchat.php' => [
@@ -1116,6 +1117,7 @@ return [
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le propriétaire d’une société qui attend son code ouvre chaque page et chaque action du magasin de démonstration sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le responsable d’entraînement ouvre chaque page et chaque action du magasin de démonstration sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
+            'tests/Browser/Parcours/PiecesDuFournisseurTest.php › un fichier refusé à la modification d’un brouillon affiche son message pour chaque rôle qui saisit les achats, et rien n’est joint',
         ]],
     ],
     'app/Filament/App/Resources/FactureAchatResource/Pages/ListFacturesAchat.php' => [
@@ -1143,6 +1145,7 @@ return [
         'action:creer_avoir_fournisseur' => ['lot' => 'NAV-3', 'tests' => [
             'tests/Browser/Parcours/TvaDesAchatsTest.php › le HT de la note d’avoir tapé aussitôt après la quantité reste tel quel, et la TVA proposée le suit',
             'tests/Browser/Parcours/TvaDesAchatsTest.php › le responsable crée un avoir fournisseur depuis la fiche d’une facture d’achat avec le HT et la TVA de la note d’avoir, et confirme leur écart',
+            'tests/Browser/Parcours/PiecesDuFournisseurTest.php › un fichier refusé dans la fenêtre « Créer un avoir fournisseur » affiche son message pour chaque rôle qui saisit les achats, et aucun avoir n’est émis',
         ]],
         'page' => ['lot' => 'NAV-3', 'tests' => [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action du magasin sans erreur',
@@ -1154,6 +1157,7 @@ return [
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le responsable d’entraînement ouvre chaque page et chaque action du magasin de démonstration sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › l’observateur ouvre chaque page et chaque action du magasin sans erreur',
+            'tests/Browser/Parcours/PiecesDuFournisseurTest.php › une pièce que l’antivirus reconnaît au téléchargement ne se télécharge pas : un avis dit pourquoi à chaque rôle qui voit les achats, et la fiche la montre bloquée, sans lien',
         ]],
     ],
     'app/Filament/App/Resources/FactureResource.php' => [
@@ -2094,6 +2098,7 @@ return [
         ]],
         'action:remplacer_une_piece' => ['lot' => 'NAV-3', 'tests' => [
             'tests/Browser/Parcours/PiecesDuFournisseurTest.php › sur un brouillon, le responsable remplace une pièce déposée par erreur puis la retire',
+            'tests/Browser/Parcours/PiecesDuFournisseurTest.php › un fichier refusé au remplacement d’une pièce affiche son message pour chaque rôle qui saisit les achats, et la pièce d’origine reste',
         ]],
         'action:retirer_une_piece' => ['lot' => 'NAV-3', 'tests' => [
             'tests/Browser/Parcours/PiecesDuFournisseurTest.php › sur un brouillon, le responsable remplace une pièce déposée par erreur puis la retire',
@@ -2383,9 +2388,7 @@ return [
     ],
     'app/Http/Controllers/TelechargerUnePieceDuFournisseurController.php' => [
         'page' => ['lot' => 'NAV-3', 'tests' => [
-            'tests/Browser/Parcours/PiecesDuFournisseurTest.php › chaque rôle qui voit les achats télécharge la pièce depuis la fiche sous son nom réécrit en .pdf, cabinet lié compris ; seul qui saisit les achats en ajoute',
-            'tests/Browser/Parcours/PiecesDuFournisseurTest.php › le responsable dépose la facture du fournisseur à la saisie, avec sa date, et la télécharge depuis la fiche',
-            'tests/Browser/Parcours/PiecesDuFournisseurTest.php › le responsable joint la note d’avoir du fournisseur dans la fenêtre de l’avoir',
+            'tests/Browser/Parcours/PiecesDuFournisseurTest.php › une pièce que l’antivirus reconnaît au téléchargement ne se télécharge pas : un avis dit pourquoi à chaque rôle qui voit les achats, et la fiche la montre bloquée, sans lien',
         ]],
     ],
     'app/Providers/Filament/AppPanelProvider.php' => [

@@ -61,22 +61,26 @@ class PdfDePiliqiTest extends TestCase
 
     /**
      * Un nom de client et une désignation qui contiennent du code
-     * s'impriment tels quels, comme du texte ; l'image locale qu'ils
-     * désignent n'est pas lue, et le PDF ne contient ni JavaScript ni
-     * action automatique.
+     * s'impriment tels quels, comme du texte ; l'image et le fichier de
+     * réglages locaux qu'ils désignent (une copie d'un .env, avec sa clé)
+     * ne sont pas lus, et le PDF ne contient ni JavaScript ni action
+     * automatique. Les deux fichiers se rangent dans le dossier temporaire
+     * du système sous un nom court : la désignation tient dans sa colonne
+     * où que soit le dépôt.
      */
     public function test_un_texte_dangereux_dans_un_document_reste_du_texte(): void
     {
-        $image = storage_path('framework/testing/image-secrete.png');
-        File::ensureDirectoryExists(dirname($image));
+        $image = (string) tempnam(sys_get_temp_dir(), 'img');
+        $reglages = (string) tempnam(sys_get_temp_dir(), 'env');
         File::put($image, FichiersDeTest::png());
+        File::put($reglages, "APP_KEY=base64:cle-secrete-de-piliqi\n");
         $client = '<script>app.alert(1)</script><img src="file://'.$image.'">';
-        $designation = '<link rel="stylesheet" href="file://'.base_path('.env').'"><span style="background:url(file://'.$image.')">Écran</span>';
+        $designation = '<link rel="stylesheet" href="file://'.$reglages.'"><span style="background:url(file://'.$image.')">Écran</span>';
 
         try {
             $pdf = app(DevisPdfGenerator::class)->generer($this->devisEnvoye($client, $designation))->output();
         } finally {
-            File::delete($image);
+            File::delete([$image, $reglages]);
         }
 
         $texte = implode(' ', array_merge(...array_map(fn (array $page): array => array_column($page['textes'], 'texte'), $this->pagesDuPdf($pdf))));
@@ -84,6 +88,7 @@ class PdfDePiliqiTest extends TestCase
         $this->assertStringContainsString('<link rel="stylesheet"', $texte);
         $this->assertStringNotContainsString('/Subtype /Image', $pdf, 'Aucune image n\'est chargée.');
         $this->assertStringNotContainsString('APP_KEY', $pdf);
+        $this->assertStringNotContainsString('cle-secrete-de-piliqi', $pdf);
         app(AnalyseurDePdf::class)->analyser(new PieceDeposee('devis.pdf', $pdf));
     }
 

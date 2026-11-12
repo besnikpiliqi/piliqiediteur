@@ -13,6 +13,7 @@ use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Fichiers\Enums\ContenuActif;
 use App\Domain\Fichiers\Enums\RaisonDuRefus;
 use App\Domain\Fichiers\Exceptions\FichierRefuseException;
+use App\Domain\Fichiers\Exceptions\PieceBloqueeException;
 use App\Domain\Fichiers\PieceDeposee;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\RoleMagasin;
@@ -21,12 +22,14 @@ use App\Domain\Tenancy\Notifications\AvisDeLAntivirus;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Resources\FactureAchatResource;
 use App\Filament\App\Resources\FactureAchatResource\Pages\ViewFactureAchat;
+use App\Http\Controllers\TelechargerUnePieceDuFournisseurController;
 use App\Integrations\Antivirus\AntivirusFactice;
 use App\Integrations\Antivirus\AntivirusInjoignableException;
 use App\Integrations\Antivirus\Contracts\Antivirus;
 use App\Integrations\Antivirus\ResultatDeLAntivirus;
 use App\Models\User;
 use Filament\Facades\Filament;
+use Filament\Notifications\Notification as FilamentNotification;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -34,6 +37,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Testing\TestResponse;
+use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
 use Symfony\Component\HttpFoundation\Response;
 use Tests\Fixtures\FichiersDeTest;
@@ -188,6 +192,59 @@ class PiecesRecuesTest extends TestCase
         Livewire::test(ViewFactureAchat::class, ['record' => $factureAchat->getRouteKey()])
             ->assertSee('Bloquée par l\'antivirus')
             ->assertDontSee(FactureAchatResource::adresseDeLaPiece($bloquee));
+    }
+
+    /**
+     * Un clic sur le nom d'une pièce, dans la fiche, la télécharge sans
+     * quitter la fiche, sous son nom réécrit ; un antivirus injoignable
+     * pour une analyse due, ou une menace qu'il reconnaît alors, ne la fait
+     * pas télécharger, et un avis dit pourquoi (la fiche montre ensuite la
+     * pièce bloquée, sans lien) ; seule une pièce du document de la fiche
+     * se sert, à qui peut voir ce document.
+     */
+    public function test_un_clic_sur_la_piece_dans_la_fiche_la_telecharge_ou_dit_pourquoi_elle_ne_se_sert_pas(): void
+    {
+        $factureAchat = $this->saisir([new PieceDeposee('Facture Grossiste.bat', FichiersDeTest::pdf())]);
+        $piece = $factureAchat->pieces()->sole();
+        $autre = $this->saisir([new PieceDeposee('autre.pdf', FichiersDeTest::pdf('autre'))])->pieces()->sole();
+        $this->actingAs($this->responsable);
+        Filament::setTenant($this->magasin);
+        $fiche = function () use ($factureAchat): Testable {
+            session()->forget('filament.notifications');
+
+            return Livewire::test(ViewFactureAchat::class, ['record' => $factureAchat->getRouteKey()]);
+        };
+        $refus = fn (string $raison): FilamentNotification => FilamentNotification::make()->title('Cette pièce ne se télécharge pas')->body($raison)->danger()->persistent();
+
+        $fiche()->call('telechargerUnePiece', $piece->uuid)->assertFileDownloaded('Facture Grossiste.pdf', FichiersDeTest::pdf(), 'application/pdf');
+        $fiche()->call('telechargerUnePiece', $autre->uuid)->assertNoFileDownloaded()->assertNotified($refus(ViewFactureAchat::PIECE_INTROUVABLE));
+        $fiche()->call('telechargerUnePiece', 'pas-un-uuid')->assertNoFileDownloaded()->assertNotified($refus(ViewFactureAchat::PIECE_INTROUVABLE));
+
+        $this->travelTo(self::aParis('2026-03-04 10:00:00'));
+        $this->app->instance(Antivirus::class, new class implements Antivirus
+        {
+            public function analyser(string $contenu): ResultatDeLAntivirus
+            {
+                throw new AntivirusInjoignableException('clamd est injoignable.');
+            }
+
+            public function description(): string
+            {
+                throw new AntivirusInjoignableException('clamd est injoignable.');
+            }
+        });
+        $fiche()->call('telechargerUnePiece', $piece->uuid)->assertNoFileDownloaded()->assertNotified($refus(TelechargerUnePieceDuFournisseurController::ANTIVIRUS_INJOIGNABLE));
+        $this->assertNull($piece->refresh()->bloquee_le);
+
+        $this->antivirusQuiCompte(ResultatDeLAntivirus::menace('Pdf.Exploit.Nouveau'));
+        $fiche()->call('telechargerUnePiece', $piece->uuid)->assertNoFileDownloaded()->assertNotified($refus(PieceBloqueeException::MESSAGE))
+            ->assertSee('Bloquée par l\'antivirus')
+            ->assertDontSee(FactureAchatResource::adresseDeLaPiece($piece));
+        $this->assertSame('Pdf.Exploit.Nouveau', $piece->refresh()->menace);
+        Notification::assertSentToTimes($this->proprietaireDe($this->magasin), AvisDeLAntivirus::class, 1);
+
+        $this->actingAs($this->membre($this->magasin, RoleMagasin::Vendeur));
+        $fiche()->assertForbidden();
     }
 
     /**

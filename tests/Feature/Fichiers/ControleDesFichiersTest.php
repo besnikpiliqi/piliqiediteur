@@ -14,9 +14,12 @@ use App\Integrations\Antivirus\AntivirusInjoignableException;
 use App\Integrations\Antivirus\Contracts\Antivirus;
 use App\Integrations\Antivirus\ResultatDeLAntivirus;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Process;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\Fixtures\FichiersDeTest;
 use Tests\TestCase;
+use ZipArchive;
 
 /**
  * Le contrôle de chaque fichier reçu (décisions de l'éditeur du 07/11/2026,
@@ -69,12 +72,51 @@ class ControleDesFichiersTest extends TestCase
         $this->assertSame($attendu, NomDeFichier::nettoyer($nomRecu, $type));
     }
 
-    public function test_un_nom_tres_long_est_borne_sans_perdre_son_extension(): void
+    /**
+     * La longueur se borne en octets, sans couper un caractère : un nom en
+     * caractères de deux, trois ou quatre octets (accents, idéogrammes,
+     * émojis) tient encore en 255 octets rangé dans un ZIP derrière le plus
+     * long numéro d'un document, qui s'extrait donc sous Linux et macOS.
+     */
+    public function test_un_nom_tres_long_est_borne_en_octets_sans_perdre_son_extension(): void
     {
-        $nom = NomDeFichier::nettoyer(str_repeat('é', 300).'.pdf', 'application/pdf');
+        $this->assertSame(str_repeat('é', NomDeFichier::LONGUEUR_MAXIMALE_EN_OCTETS / 2).'.pdf', NomDeFichier::nettoyer(str_repeat('é', 300).'.pdf', 'application/pdf'));
+        $this->assertSame(str_repeat('発票', 33).'.pdf', NomDeFichier::nettoyer(str_repeat('発票', 80).'.pdf', 'application/pdf'), 'Coupé entre deux caractères de trois octets.');
 
-        $this->assertSame(str_repeat('é', NomDeFichier::LONGUEUR_MAXIMALE).'.pdf', $nom);
-        $this->assertLessThanOrEqual(255, strlen($nom));
+        foreach ([str_repeat('é', 300), str_repeat('発票', 80), str_repeat('漢', 300), str_repeat('🧾', 100), 'a'.str_repeat('🧾', 100), str_repeat('x', 300)] as $nomRecu) {
+            $nom = NomDeFichier::nettoyer($nomRecu.'.jpeg', 'image/jpeg');
+            $entreeDuZip = 'AF-ABCDEFGHIJ-2026-0000001 - '.$nom;
+
+            $this->assertTrue(mb_check_encoding($nom, 'UTF-8'), $nomRecu);
+            $this->assertStringEndsWith('.jpg', $nom);
+            $this->assertLessThanOrEqual(NomDeFichier::LONGUEUR_MAXIMALE_EN_OCTETS + 4, strlen($nom));
+            $this->assertLessThanOrEqual(255, strlen($entreeDuZip), $nomRecu);
+            $this->assertLessThanOrEqual(NomDeFichier::LONGUEUR_MAXIMALE_EN_OCTETS, strlen(NomDeFichier::pourUnMessage($nomRecu)));
+        }
+    }
+
+    /**
+     * Rangée dans un ZIP derrière le numéro de son document, une pièce au
+     * nom d'idéogrammes s'extrait sous son nom.
+     */
+    public function test_une_piece_au_nom_d_ideogrammes_s_extrait_d_un_zip(): void
+    {
+        $nom = 'AF-ABCDEFGHIJ-2026-0000001 - '.NomDeFichier::nettoyer(str_repeat('発票', 80).'.pdf', 'application/pdf');
+        $dossier = sys_get_temp_dir().'/piliqi-test-'.bin2hex(random_bytes(8));
+        mkdir($dossier);
+        $archive = new ZipArchive;
+        $archive->open($dossier.'/archive.zip', ZipArchive::CREATE);
+        $archive->addFromString($nom, FichiersDeTest::pdf());
+        $archive->close();
+
+        try {
+            $archive->open($dossier.'/archive.zip');
+            $this->assertTrue($archive->extractTo($dossier.'/extrait'));
+            $archive->close();
+            $this->assertFileExists($dossier.'/extrait/'.$nom);
+        } finally {
+            File::deleteDirectory($dossier);
+        }
     }
 
     /**
@@ -107,6 +149,16 @@ class ControleDesFichiersTest extends TestCase
             'action à l\'affichage d\'une page' => [FichiersDeTest::pdf('x', '', ['<< /Type /Annot /Subtype /Widget /AA << /PO << /S /Named /N /Print >> >> >>']), [ContenuActif::ActionAutomatique]],
             'fichier joint exécutable' => [FichiersDeTest::pdf('x', '/Names << /EmbeddedFiles << /Names [(facture.exe) 5 0 R] >> >>', ['<< /Type /Filespec /F (facture.exe) /UF (facture.exe) /EF << /F 6 0 R >> >>', "<< /Type /EmbeddedFile /Subtype /application#2Fx-msdownload /Length 2 >>\nstream\nMZ\nendstream"]), [ContenuActif::FichierJoint]],
             'annotation de fichier joint' => [FichiersDeTest::pdf('x', '', ['<< /Type /Annot /Subtype /FileAttachment /FS (note.txt) >>']), [ContenuActif::FichierJoint]],
+            'lancement d\'un programme au type indirect' => [FichiersDeTest::pdf('x', '', ['<< /Type /Annot /Subtype /Link /Rect [0 0 100 100] /A << /S 6 0 R /F (calc.exe) >> >>', '/Launch']), [ContenuActif::LancementDeProgramme]],
+            'formulaire qui s\'envoie au type indirect' => [FichiersDeTest::pdf('x', '', ['<< /Type /Annot /Subtype /Widget /A << /S 6 0 R /F (https://exemple.test/vol) >> >>', '/SubmitForm']), [ContenuActif::EnvoiDeFormulaire]],
+            'lien vers un autre fichier au type indirect' => [FichiersDeTest::pdf('x', '', ['<< /Type /Annot /Subtype /Link /Rect [0 0 100 100] /A << /S 6 0 R /F (autre.pdf) /D [0 /Fit] >> >>', '/GoToR']), [ContenuActif::LienVersUnAutreFichier]],
+            'annotation d\'écran au type indirect' => [FichiersDeTest::pdf('x', '', ['<< /Type /Annot /Subtype 6 0 R /Rect [0 0 100 100] >>', '/Screen']), [ContenuActif::ContenuMultimedia]],
+            'annotation de son au type indirect' => [FichiersDeTest::pdf('x', '', ['<< /Type /Annot /Subtype 6 0 R /Rect [0 0 100 100] /Sound 7 0 R >>', '/Sound', "<< /Type /Sound /R 8000 /Length 0 >>\nstream\n\nendstream"]), [ContenuActif::ContenuMultimedia]],
+            'contenu 3D et son JavaScript' => [FichiersDeTest::pdf('x', '', [
+                '<< /Type /Annot /Subtype /3D /Rect [0 0 100 100] /3DD 6 0 R /3DA << /A /PO >> >>',
+                "<< /Type /3D /Subtype /U3D /OnInstantiate 7 0 R /Length 0 >>\nstream\n\nendstream",
+                "<< /Length 13 >>\nstream\napp.alert(1);\nendstream",
+            ]), [ContenuActif::JavaScript, ContenuActif::ContenuMultimedia]],
         ];
     }
 
@@ -210,6 +262,87 @@ class ControleDesFichiersTest extends TestCase
     }
 
     /**
+     * Un contenu glissé après la fin du PDF derrière un faux « startxref …
+     * %%EOF » qui renvoie à la table d'origine (un programme, une archive
+     * ZIP qui s'ouvrirait renommée), ou dans une mise à jour incrémentale
+     * hors de ses objets, n'est pas du PDF : chaque octet après la fin de
+     * la première version appartient à une vraie mise à jour.
+     */
+    public function test_un_contenu_glisse_apres_la_fin_ou_dans_une_mise_a_jour_est_refuse(): void
+    {
+        $pdf = FichiersDeTest::pdf();
+        preg_match('/startxref\s+(\d+)\s+%%EOF\s*$/', $pdf, $table);
+        $fauxStartxref = "startxref\n{$table[1]}\n%%EOF\n";
+        $archive = FichiersDeTest::archiveZip(['lisez-moi.js' => 'WScript.Echo("ouvert");']);
+
+        $refuses = [
+            'programme derrière un faux startxref' => $pdf."MZ\x90\x00\x03 @echo off\r\ncalc.exe\r\n".$fauxStartxref,
+            'archive derrière un faux startxref' => $pdf.$archive.$fauxStartxref,
+            'archive suivie d\'un %%EOF' => $pdf.$archive."\n%%EOF\n",
+            'archive avant les objets d\'une mise à jour' => FichiersDeTest::miseAJour($pdf, [5 => '<< /A 1 >>'], $archive."\n"),
+            'archive dans un commentaire' => FichiersDeTest::miseAJour($pdf, [5 => '<< /A 1 >>'], '%'.str_replace(["\r", "\n"], '', $archive)."\n"),
+            'objet que la table ne liste pas' => FichiersDeTest::miseAJour($pdf, [5 => '<< /A 1 >>'], "9 0 obj\n<< /B 2 >>\nendobj\n"),
+            'archive dans un objet remplacé ensuite' => FichiersDeTest::miseAJour(FichiersDeTest::miseAJour($pdf, [5 => "PK\x03\x04\x14\x00 archive"]), [5 => '<< /A 1 >>']),
+        ];
+
+        foreach ($refuses as $cas => $contenu) {
+            $this->assertSame(RaisonDuRefus::PdfIllisible, $this->refus('facture.pdf', $contenu)->raison, $cas);
+        }
+    }
+
+    /**
+     * Une vraie mise à jour incrémentale reste admise : table classique,
+     * lignes de commentaire, flux de table des objets, deux mises à jour
+     * de suite, mise à jour d'un PDF linéarisé ou rangé en flux d'objets.
+     */
+    public function test_une_vraie_mise_a_jour_incrementale_reste_admise(): void
+    {
+        $pdf = FichiersDeTest::pdf();
+        $annotation = '<< /Type /Annot /Subtype /Text /Rect [0 0 10 10] /Contents (endobj) >>';
+
+        $admis = [
+            'table classique' => FichiersDeTest::miseAJour($pdf, [5 => $annotation]),
+            'lignes de commentaire' => FichiersDeTest::miseAJour($pdf, [5 => $annotation], "% Mise à jour du 11/11/2026\n\n"),
+            'flux de table des objets' => FichiersDeTest::miseAJourParFlux($pdf, [5 => $annotation, 6 => "<< /Length 9 >>\nstream\nendstream\nendstream"]),
+            'deux mises à jour' => FichiersDeTest::miseAJour(FichiersDeTest::miseAJour($pdf, [5 => $annotation]), [6 => '<< /B 2 >>']),
+            'PDF linéarisé' => FichiersDeTest::miseAJour(FichiersDeTest::parQpdf($pdf, ['--linearize']), [50 => $annotation]),
+            'PDF en flux d\'objets' => FichiersDeTest::miseAJourParFlux(FichiersDeTest::parQpdf($pdf, ['--object-streams=generate']), [50 => $annotation]),
+        ];
+
+        foreach ($admis as $cas => $contenu) {
+            $this->assertSame('application/pdf', $this->controler('facture.pdf', $contenu)->type, $cas);
+        }
+    }
+
+    /**
+     * Sous la mémoire que PHP permet par défaut (128 Mo), dans un
+     * processus à part comme une requête : un PDF valide de dizaines de
+     * milliers d'objets se lit, la mémoire de sa description prévue ; un
+     * petit PDF dont les objets compressés donnent une description
+     * démesurée (au-delà de AnalyseurDePdf::SORTIE_MAXIMALE) est refusé
+     * comme illisible ; jamais une erreur fatale faute de mémoire.
+     */
+    public function test_un_pdf_de_dizaines_de_milliers_d_objets_se_lit_ou_se_refuse_sans_epuiser_la_memoire(): void
+    {
+        foreach ([
+            'accepté' => FichiersDeTest::pdfDAnnotations(50_000),
+            RaisonDuRefus::PdfIllisible->value => FichiersDeTest::pdfDObjetsCompresses(100_000),
+        ] as $attendu => $contenu) {
+            $this->assertLessThanOrEqual(ControleDesFichiers::TAILLE_MAXIMALE_EN_OCTETS, strlen($contenu));
+            $chemin = (string) tempnam(sys_get_temp_dir(), 'piliqi-test-');
+            file_put_contents($chemin, $contenu);
+
+            try {
+                $controle = Process::path(base_path())->timeout(120)->run([PHP_BINARY, '-d', 'memory_limit=128M', 'tests/Fixtures/controler-un-fichier.php', $chemin]);
+            } finally {
+                @unlink($chemin);
+            }
+
+            $this->assertSame([0, $attendu], [$controle->exitCode(), $controle->output()], $controle->errorOutput());
+        }
+    }
+
+    /**
      * Une photo est décodée et réenregistrée : les données ajoutées après
      * l'image, l'EXIF et sa position GPS disparaissent ; l'empreinte du
      * fichier reçu reste pour le journal d'audit.
@@ -224,6 +357,9 @@ class ControleDesFichiersTest extends TestCase
         $this->assertStringNotContainsString('Exif', $controle->contenu);
         $this->assertStringNotContainsString('PiliqiPhone', $controle->contenu);
         $this->assertStringNotContainsString('<?php', $controle->contenu);
+        $this->assertStringNotContainsString('CREATOR', $controle->contenu, 'Pas même le commentaire que GD écrit d\'office.');
+        $this->assertSame([], array_values(array_intersect(FichiersDeTest::segmentsJpeg($controle->contenu), [0xE1, 0xED, 0xFE])), 'Ni EXIF, ni XMP, ni IPTC, ni commentaire.');
+        $this->assertSame(0xDA, FichiersDeTest::segmentsJpeg($controle->contenu)[array_key_last(FichiersDeTest::segmentsJpeg($controle->contenu))]);
         $this->assertStringEndsWith("\xFF\xD9", $controle->contenu);
         $this->assertSame([hash('sha256', $recue), strlen($recue)], [$controle->empreinteRecue, $controle->tailleRecue]);
         $this->assertNotSame($controle->empreinteRecue, $controle->empreinte());
@@ -232,6 +368,7 @@ class ControleDesFichiersTest extends TestCase
         $png = $this->controler('capture.png', FichiersDeTest::png()."\x00\x00\x00\x00IEND donnees cachees");
         $this->assertSame('image/png', $png->type);
         $this->assertStringNotContainsString('donnees cachees', $png->contenu);
+        $this->assertSame(['IHDR', 'pHYs', 'IDAT', 'IEND'], FichiersDeTest::morceauxPng($png->contenu), 'Aucun morceau de texte ni de métadonnées.');
     }
 
     /**

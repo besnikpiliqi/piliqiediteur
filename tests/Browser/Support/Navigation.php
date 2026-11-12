@@ -483,6 +483,16 @@ final class Navigation
     }
 
     /**
+     * Ferme, par sa croix, chaque avis affiché : un avis qui reste jusqu'à
+     * ce qu'on le ferme (un accès redonné, une pièce qui ne se télécharge
+     * pas) couvre le menu du compte.
+     */
+    public function fermerLesAvis(): self
+    {
+        return $this->geste(fn () => $this->page()->evaluate('() => document.querySelectorAll(".fi-no-notification-close-btn").forEach((bouton) => bouton.click())'), 'la fermeture des avis');
+    }
+
+    /**
      * Se déconnecte par le menu du compte du panneau affiché, et attend la
      * page de connexion.
      */

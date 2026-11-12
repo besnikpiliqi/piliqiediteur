@@ -4,15 +4,19 @@ namespace App\Filament\App\Resources\AvoirFournisseurResource\Pages;
 
 use App\Filament\App\Resources\AvoirFournisseurResource;
 use App\Filament\App\Resources\FactureAchatResource;
+use App\Filament\Concerns\TelechargeLesPiecesDuFournisseur;
 use Filament\Resources\Pages\ViewRecord;
 
 /**
  * La fiche d'un avoir fournisseur émis : la note d'avoir du fournisseur
  * s'y ajoute en pièce, jamais ne s'en retire (voir
- * JointLesPiecesDuFournisseur).
+ * JointLesPiecesDuFournisseur), et s'y télécharge d'un clic sur son nom
+ * (voir TelechargeLesPiecesDuFournisseur).
  */
 class ViewAvoirFournisseur extends ViewRecord
 {
+    use TelechargeLesPiecesDuFournisseur;
+
     protected static string $resource = AvoirFournisseurResource::class;
 
     protected function getHeaderActions(): array

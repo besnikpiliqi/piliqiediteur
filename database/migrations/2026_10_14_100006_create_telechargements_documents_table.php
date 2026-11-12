@@ -10,9 +10,10 @@ use Illuminate\Support\Facades\Schema;
  * dans la société dont elle lit les documents, avec ce qui a été demandé
  * (magasins, période, types, origine des achats et seule marque « pièce du
  * fournisseur manquante », format, documents choisis, puis ceux que le
- * fichier contient), son état dans la file d'attente et, une fois prêt, son
- * fichier sur le disque privé « telechargements ». Le lien vaut sept jours, pour le
- * seul compte qui l'a demandé ; la demande et son fichier s'effacent
+ * fichier contient et ses pièces du fournisseur), son état dans la file
+ * d'attente et, une fois prêt, son fichier sur le disque privé
+ * « telechargements ». Le lien vaut sept jours, pour le seul compte qui
+ * l'a demandé ; la demande et son fichier s'effacent
  * ensuite (voir app:effacer-telechargements-de-documents) ; le journal
  * d'audit de la société en garde la trace.
  */
@@ -46,6 +47,11 @@ return new class extends Migration
             $table->boolean('piece_manquante_seulement');
             $table->string('format', 10);
             $table->json('selection');
+            // Une fois le fichier prêt, les identifiants des pièces du
+            // fournisseur qu'il contient (un ZIP), que son lien revoit avant
+            // de le servir : aucune bloquée depuis, aucune sans une analyse
+            // de moins de 24 heures (voir TelechargerLesDocumentsController).
+            $table->json('pieces')->nullable();
             $table->string('statut', 20);
             $table->unsignedInteger('nombre_documents')->nullable();
             $table->string('chemin')->nullable();

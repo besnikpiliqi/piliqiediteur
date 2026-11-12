@@ -2,15 +2,22 @@
 
 namespace App\Http\Controllers;
 
+use App\Domain\Achats\Models\PieceDuFournisseur;
+use App\Domain\Achats\Services\PiecesDuFournisseur;
 use App\Domain\Facturation\Services\DocumentsDeLaPeriode;
 use App\Domain\Fichiers\EnTetesDesFichiers;
+use App\Domain\Fichiers\Exceptions\PieceBloqueeException;
+use App\Domain\Fichiers\RevueAntivirus;
 use App\Domain\Tenancy\Enums\StatutDuTelechargement;
 use App\Domain\Tenancy\Jobs\PreparerLeTelechargementDesDocumentsJob;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Models\TelechargementDeDocuments;
+use App\Domain\Tenancy\Support\CleDuModele;
 use App\Domain\Tenancy\Support\ValeurRequise;
+use App\Integrations\Antivirus\AntivirusInjoignableException;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Storage;
@@ -33,9 +40,19 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  * type, ou celle des documents de toute l'équipe), un lien avec un cabinet
  * terminé ou une autorisation que le client lui retire, un compte suspendu
  * le ferment aussitôt. Une page en français dit pourquoi le fichier n'est
- * pas servi. Le fichier, qui peut contenir des pièces reçues, part comme
- * elles (voir EnTetesDesFichiers::fichierRecu()) : en pièce jointe, dans
- * un bac à sable, jamais gardé en cache.
+ * pas servi.
+ *
+ * Les pièces du fournisseur qu'un ZIP contient (voir
+ * TelechargementDeDocuments::piecesContenues()) se revoient avant chaque
+ * service, comme une pièce téléchargée seule (décision de l'éditeur du
+ * 07/11/2026, lot FI) : une pièce bloquée depuis la préparation ferme le
+ * fichier, qui se redemande sans elle ; une pièce dont la dernière analyse
+ * date de plus de 24 heures repasse par l'antivirus, qui peut la bloquer
+ * alors ; un antivirus injoignable fait réessayer plus tard (503).
+ *
+ * Le fichier, qui peut contenir des pièces reçues, part comme elles (voir
+ * EnTetesDesFichiers::fichierRecu()) : en pièce jointe, dans un bac à
+ * sable, jamais gardé en cache.
  */
 class TelechargerLesDocumentsController
 {
@@ -49,7 +66,9 @@ class TelechargerLesDocumentsController
 
     public const SANS_DROIT = 'Vous ne téléchargez plus les documents de ces magasins, ou vous ne voyez plus certains des documents de ce fichier : il ne vous est plus servi.';
 
-    public function __invoke(Request $requete, DocumentsDeLaPeriode $documents, string $telechargement): Response|StreamedResponse
+    public const PIECE_BLOQUEE = 'Une pièce du fournisseur de ce fichier a été bloquée par l\'antivirus depuis sa préparation : le fichier ne se sert plus. Demandez de nouveau les documents depuis la page « Télécharger les documents » : il se préparera sans elle.';
+
+    public function __invoke(Request $requete, DocumentsDeLaPeriode $documents, PiecesDuFournisseur $pieces, RevueAntivirus $revue, string $telechargement): Response|StreamedResponse
     {
         $compte = $requete->user();
         $trouve = $compte instanceof User ? TelechargementDeDocuments::duLienPour($compte, $telechargement)->first() : null;
@@ -77,7 +96,52 @@ class TelechargerLesDocumentsController
             return $this->indisponible(self::SANS_DROIT, 403);
         }
 
+        try {
+            $this->revoirLesPieces($compte, $trouve, $magasins, $documents, $pieces, $revue);
+        } catch (PieceBloqueeException) {
+            return $this->indisponible(self::PIECE_BLOQUEE, 403);
+        } catch (AntivirusInjoignableException $injoignable) {
+            report($injoignable);
+
+            return $this->indisponible(TelechargerUnePieceDuFournisseurController::ANTIVIRUS_INJOIGNABLE, 503)->header('Retry-After', '300');
+        }
+
         return Storage::disk(PreparerLeTelechargementDesDocumentsJob::DISQUE)->download(ValeurRequise::de($trouve->chemin, 'le fichier du téléchargement prêt'), $trouve->nomDuFichier(), EnTetesDesFichiers::fichierRecu($trouve->nomDuFichier(), $trouve->format->typeMime()));
+    }
+
+    /**
+     * Les pièces du fournisseur que contient le fichier, revues avant de le
+     * servir : aucune ne doit être bloquée ni introuvable, et chacune dont
+     * la dernière analyse date de plus de 24 heures repasse par
+     * l'antivirus, au nom de ce compte, dans le contexte de son magasin
+     * (voir PiecesDuFournisseur::contenuServable()). Une lecture hors du
+     * magasin courant, filtrée par les magasins du fichier, que les droits
+     * ont déjà contrôlés dans la société de la demande.
+     *
+     * @param  Collection<int, Magasin>  $magasins
+     *
+     * @throws PieceBloqueeException
+     * @throws AntivirusInjoignableException
+     */
+    private function revoirLesPieces(User $compte, TelechargementDeDocuments $telechargement, Collection $magasins, DocumentsDeLaPeriode $documents, PiecesDuFournisseur $pieces, RevueAntivirus $revue): void
+    {
+        $identifiants = $telechargement->piecesContenues();
+
+        if ($identifiants === []) {
+            return;
+        }
+
+        $contenues = PieceDuFournisseur::query()->withoutGlobalScopes()->whereIn('magasin_id', $magasins->modelKeys())->whereIn('id', $identifiants)->get();
+
+        if ($contenues->count() !== count(array_unique($identifiants)) || $contenues->contains(fn (PieceDuFournisseur $piece): bool => $piece->bloquee_le !== null)) {
+            throw new PieceBloqueeException;
+        }
+
+        $parMagasin = $magasins->keyBy(fn (Magasin $magasin): int => CleDuModele::de($magasin));
+
+        foreach ($contenues->filter(fn (PieceDuFournisseur $piece): bool => $revue->aRevoir($piece->analysee_le)) as $piece) {
+            $documents->dansLeMagasin($parMagasin->get($piece->magasin_id) ?? throw new PieceBloqueeException, fn (): string => $pieces->contenuServable($compte, $piece));
+        }
     }
 
     private function indisponible(string $message, int $statut): Response

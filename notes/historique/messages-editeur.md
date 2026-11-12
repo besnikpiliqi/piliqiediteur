@@ -2008,3 +2008,7 @@ UI fait quoi comme code ou fonction donc il cree quoi
 
 Ah donc UI c’est pas récent. Ca javais demander il y qq jours. Donc tu est arrivé à ça juste mtn
 
+## 215. 2026-11-12 22:09 UTC
+
+moi je t ai dit que tu mettes les decision dans la fiche "À faire vérifier par un professionnel" par rapport aux lois et reglemantaire. donc tu marque jamais attendre l avis du comptable. donc tu te base ce que t as mis comme decision et si "Réponse du professionnel" sera rempli alors tu prendra en compte cette case meme si cette case sera remplis apres la production du logiciel. car toi tu va  t occuper pour toujour du logiciel pour mettre à jours le logiciel par rapport se que je te ditcet aussi ce que tu vas trouver comme nessaisaires de facon automatique, donc mettre à jour les dependances etc etc. donc ce que je te dit la tu aplique partout mtn dans tout logiciel et tu modifie et regle ce que je te dit par rapport aux decisions
+

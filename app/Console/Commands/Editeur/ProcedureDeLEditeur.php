@@ -28,7 +28,8 @@ use LogicException;
  *   laisser dans l'historique : la procédure ne se lance donc que dans un
  *   terminal interactif (voir RegistreDesOperateurs) ; une procédure grave
  *   (la révocation d'une société, la libération d'un SIRET saisi par
- *   erreur, la correction d'un SIREN, l'annulation d'une cession, voir
+ *   erreur, la correction d'un SIREN, l'annulation d'une cession, le
+ *   retrait d'un ticket Z que rien ne signe, voir
  *   operateursExiges()) en exige deux, distincts, chacun authentifié par
  *   son propre secret ;
  * - elle s'inscrit, origine « éditeur », avec sa justification, sa pièce,

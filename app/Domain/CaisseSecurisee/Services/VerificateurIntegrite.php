@@ -104,9 +104,11 @@ use ValueError;
  * et signalé de nouveau, par la reprise suivante, au lieu d'en devenir le
  * point de départ. La ligne de tête, la correspondance entre documents et
  * enregistrements, les montants imputés, les tickets Z, la numérotation
- * et le stock (voir VerificateurDuStock : stock, achats, coûts moyens et
- * fournisseurs rapprochés du grand livre et du journal d'audit) se
- * vérifient toujours entièrement.
+ * le stock (voir VerificateurDuStock : stock, achats, coûts moyens et
+ * fournisseurs rapprochés du grand livre et du journal d'audit) et les
+ * références polymorphes des transmissions, des envois et des demandes
+ * déjà traitées (voir VerificateurDesReferences) se vérifient toujours
+ * entièrement.
  *
  * Tout se lit en flux (par paquets) ou se compte en base : la mémoire
  * d'une vérification, complète ou non, ne grandit pas avec le registre.
@@ -218,6 +220,7 @@ class VerificateurIntegrite
         private readonly ContenuFiscal $contenuFiscal,
         private readonly CalculateurLigne $calculateur,
         private readonly VerificateurDuStock $verificateurDuStock,
+        private readonly VerificateurDesReferences $verificateurDesReferences,
     ) {}
 
     /**
@@ -264,7 +267,7 @@ class VerificateurIntegrite
             $this->verifierLesClotures();
             $this->verifierLaNumerotation();
 
-            foreach ($this->verificateurDuStock->anomalies($this->magasin) as $anomalie) {
+            foreach ([...$this->verificateurDuStock->anomalies($this->magasin), ...$this->verificateurDesReferences->anomalies($this->magasin)] as $anomalie) {
                 $this->rapport->signaler($anomalie);
             }
         });

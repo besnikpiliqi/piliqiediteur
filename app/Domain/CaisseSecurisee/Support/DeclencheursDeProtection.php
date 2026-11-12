@@ -13,7 +13,9 @@ use InvalidArgumentException;
  * truncate() ou forceDelete() du constructeur de requêtes, requête
  * brute). Appelé dans le up() de la migration qui crée la table :
  * - ajoutSeul() : table où l'on ne fait qu'ajouter (art. 286 I-3° bis du
- *   CGI), ni modification, ni suppression, ni vidage ;
+ *   CGI), ni modification, ni suppression, ni vidage ; seule passe, si la
+ *   migration le dit, la suppression d'une ligne qui remplit une condition
+ *   (un ticket Z que rien ne signe, voir GardesDesClotures) ;
  * - sansSuppression() : table dont aucune ligne ne s'efface ; elle se
  *   modifie, et se marque supprimée (deleted_at) quand son modèle le
  *   prévoit, mais ne se vide pas ;
@@ -40,7 +42,10 @@ use InvalidArgumentException;
  *   n'a numéroté aucun document) ; si la migration le dit aussi, elle ne
  *   se pose que sur une ligne qui remplit une condition (la fin de la
  *   conservation des données de vérification d'une société, posée
- *   seulement à la fin de la relation) ; le reste de la ligne se modifie.
+ *   seulement à la fin de la relation), et ne s'efface que tant qu'une
+ *   condition sur l'ancienne ligne tient (le lien d'un document à un
+ *   ticket Z que rien ne signe, voir GardesDesClotures) ; le reste de la
+ *   ligne se modifie.
  *
  * Chaque protection est une fonction plpgsql de refus propre à la table
  * (refus_<table>), appelée avec son message par des déclencheurs BEFORE
@@ -89,14 +94,15 @@ final class DeclencheursDeProtection
 
     /**
      * @param  literal-string  $table
+     * @param  literal-string|null  $suppressionPermiseSi  une condition SQL sur la ligne effacée (OLD) sous laquelle sa suppression passe, null pour la refuser toujours
      */
-    public static function ajoutSeul(string $table): void
+    public static function ajoutSeul(string $table, ?string $suppressionPermiseSi = null): void
     {
         self::poser($table, 'ajout_seul', [
             'UPDATE' => "{$table} : table en ajout seul, modification refusée",
             'DELETE' => "{$table} : table en ajout seul, suppression refusée",
             'TRUNCATE' => "{$table} : table en ajout seul, vidage refusé",
-        ]);
+        ], suppressionAussiPermise: $suppressionPermiseSi);
     }
 
     /**
@@ -189,8 +195,9 @@ final class DeclencheursDeProtection
      * @param  literal-string  $colonne
      * @param  literal-string|null  $remplacableTantQue  une condition SQL sur l'ancienne ligne (OLD), tant que tient laquelle une valeur renseignée peut encore être remplacée par une autre (jamais effacée) ; null pour ne jamais la remplacer
      * @param  literal-string|null  $poseeSeulementSi  une condition SQL sur la nouvelle ligne (NEW), sans laquelle une valeur ne se pose pas sur la colonne nulle ; null pour la laisser se poser sur toute ligne
+     * @param  literal-string|null  $effacableSi  une condition SQL sur l'ancienne ligne (OLD), tant que tient laquelle une valeur renseignée peut encore s'effacer ; null pour ne jamais l'effacer
      */
-    public static function colonneFigee(string $table, string $colonne, ?string $remplacableTantQue = null, ?string $poseeSeulementSi = null): void
+    public static function colonneFigee(string $table, string $colonne, ?string $remplacableTantQue = null, ?string $poseeSeulementSi = null, ?string $effacableSi = null): void
     {
         self::verifierLeNom($table);
         self::verifierLeNom($colonne);
@@ -198,11 +205,12 @@ final class DeclencheursDeProtection
         $message = "{$table}.{$colonne} : valeur figée, changement refusé";
         $messageDeLaPose = "{$table}.{$colonne} : valeur refusée sur cette ligne";
         $remplacementRefuse = $remplacableTantQue === null ? '1 = 1' : "NOT ({$remplacableTantQue})";
+        $effacementRefuse = $effacableSi === null ? '1 = 1' : "NOT ({$effacableSi})";
         $poseRefusee = $poseeSeulementSi === null ? '1 = 0' : "OLD.{$colonne} IS NULL AND NEW.{$colonne} IS NOT NULL AND NOT ({$poseeSeulementSi})";
         $connexion = DB::connection();
 
         $connexion->unprepared("CREATE OR REPLACE FUNCTION refus_{$table}_{$colonne}() RETURNS trigger LANGUAGE plpgsql ".self::CHEMIN_DE_RECHERCHE.' AS $$ BEGIN '
-            ."IF OLD.{$colonne} IS NOT NULL AND (NEW.{$colonne} IS NULL OR (NEW.{$colonne} IS DISTINCT FROM OLD.{$colonne} AND {$remplacementRefuse})) "
+            ."IF OLD.{$colonne} IS NOT NULL AND ((NEW.{$colonne} IS NULL AND {$effacementRefuse}) OR (NEW.{$colonne} IS NOT NULL AND NEW.{$colonne} IS DISTINCT FROM OLD.{$colonne} AND {$remplacementRefuse})) "
             ."THEN RAISE EXCEPTION '%', TG_ARGV[0]; END IF; "
             ."IF {$poseRefusee} THEN RAISE EXCEPTION '%', TG_ARGV[1]; END IF; RETURN NEW; END \$\$");
         $connexion->unprepared("CREATE TRIGGER {$table}_{$colonne}_figee BEFORE UPDATE OF {$colonne} ON {$table} FOR EACH ROW EXECUTE FUNCTION refus_{$table}_{$colonne}('{$message}', '{$messageDeLaPose}')");
@@ -282,7 +290,8 @@ final class DeclencheursDeProtection
      * expiration ou après conservation, la fonction laisse passer la
      * suppression d'une ligne dont la colonne d'expiration, en UTC, est
      * passée à l'heure UTC du serveur, ou qui remplit l'autre condition de
-     * sa protection.
+     * sa protection ; pour une table en ajout seul, celle d'une ligne qui
+     * remplit sa condition, s'il y en a une.
      *
      * @param  literal-string  $table
      * @param  literal-string  $protection  le suffixe du nom des déclencheurs
@@ -298,11 +307,11 @@ final class DeclencheursDeProtection
             self::verifierLeNom($colonneDExpiration);
         }
 
-        $suppressionPermise = $colonneDExpiration === null ? null : implode(' OR ', array_filter([
-            '('.self::ligneExpiree("OLD.{$colonneDExpiration}").')',
+        $suppressionPermise = implode(' OR ', array_filter([
+            $colonneDExpiration === null ? null : '('.self::ligneExpiree("OLD.{$colonneDExpiration}").')',
             $suppressionAussiPermise === null ? null : "({$suppressionAussiPermise})",
         ]));
-        $ligneExpireeEffacee = $suppressionPermise === null
+        $ligneExpireeEffacee = $suppressionPermise === ''
             ? ''
             : "IF TG_OP = 'DELETE' THEN IF {$suppressionPermise} THEN RETURN OLD; END IF; END IF; ";
         $connexion = DB::connection();

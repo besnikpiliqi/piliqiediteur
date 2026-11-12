@@ -11,12 +11,14 @@ use App\Domain\Authorization\OperateurCourant;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Facturation\Enums\TypeDocument;
 use App\Domain\Facturation\Services\DocumentNumberingService;
+use App\Domain\Stock\Models\MouvementStock;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\ActionsUniques;
 use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -34,7 +36,12 @@ use LogicException;
  * quand deux validations tombent dans la même seconde : le dernier achat
  * d'un produit se choisit par lui (voir Produit::achatsValides()), et non
  * par l'instant de la validation, qui s'enregistre en UTC (voir
- * Instant).
+ * Instant). Et le repère de sa réception dans le grand livre du stock du
+ * magasin : son plus grand identifiant, lu sous le verrou de ses
+ * produits, qu'aucun mouvement d'un de ses produits ne peut donc suivre
+ * avant la fin de la validation ; le coût moyen rejoué place là une
+ * réception qui n'a pas fait entrer de stock (voir
+ * StockLedgerService::coutMoyenRejoue()).
  * Chacun de ses produits existants doit encore être au catalogue : une
  * réception ne se perd jamais en silence. Son fournisseur aussi : archivé
  * depuis la saisie, il ne deviendrait pas le fournisseur de ses produits
@@ -162,6 +169,7 @@ class ValiderFactureAchatAction
         $factureAchat->forceFill([
             'numero' => $numero,
             'rang_validation' => $this->numerotation->rangSuivant($factureAchat->magasin, TypeDocument::FactureAchat),
+            'repere_grand_livre' => ValeursLues::entier(MouvementStock::query()->max('id') ?? 0),
             'statut' => StatutFactureAchat::Validee,
             'date_validation' => $maintenant,
         ])->save();

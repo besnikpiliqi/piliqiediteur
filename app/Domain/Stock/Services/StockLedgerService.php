@@ -11,6 +11,7 @@ use App\Domain\Stock\Enums\TypeMouvementStock;
 use App\Domain\Stock\Events\StockPasseSousLeSeuilDAlerte;
 use App\Domain\Stock\Models\MouvementStock;
 use App\Domain\Tenancy\Support\CleDuModele;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use Closure;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
@@ -143,27 +144,27 @@ class StockLedgerService
      * correction n'entre en stock que s'il le suit, comme à la validation
      * d'une nouvelle réception (voir receptionner()).
      *
-     * Le coût : pour un produit qui suit son stock, le CMUP se recalcule en
-     * rejouant tout son grand livre (voir cmupRejoue()), chaque réception
-     * entrant au coût actuel de ses lignes et chaque retour au fournisseur
-     * sortant au coût de sa ligne d'achat. Les articles déjà vendus sont
-     * sortis à leur CMUP du moment et ne reviennent pas : 10 reçus à 2 €,
-     * 10 à 10 € (CMUP 6), 10 vendus, puis la seconde réception corrigée à
-     * 5 € -- le stock restant vaut 3,50 € l'article. Un produit qui ne suit
-     * pas son stock n'a pas de quantités à pondérer : il coûte sa dernière
-     * ligne achetée (voir coutDeLaDerniereLigneAchetee()).
+     * Le coût : pour un produit qui suit son stock, le coût moyen se
+     * rejoue sur toute son histoire réelle, comme si chaque réception
+     * avait été saisie juste dès le départ (voir coutMoyenRejoue()) : les
+     * articles déjà vendus sont sortis à leur CMUP du moment et ne
+     * reviennent pas -- 10 reçus à 2 €, 10 à 10 € (CMUP 6), 10 vendus, puis
+     * la seconde réception corrigée à 5 € : le stock restant vaut 3,50 €
+     * l'article. Un produit qui ne suit pas son stock n'a pas de quantités
+     * à pondérer : il coûte sa dernière ligne achetée (voir
+     * coutDeLaDerniereLigneAchetee()).
      *
-     * @param  array<int|string, list<array{quantite: int, cout_unitaire: int}>>  $lotsDesReceptions  les lignes de chaque réception du produit (par identifiant de sa source), de la plus ancienne à la plus récente, chaque coût en dix-millièmes d'euro
+     * @param  array<int|string, array{repere: int, lots: list<array{quantite: int, cout_unitaire: int}>}>  $receptions  chaque réception validée du produit (voir lotsDe())
      */
     public function corrigerUneReception(
         Produit $produit,
         Model $reception,
         bool $figuraitSurLaReception,
         int $quantiteRecue,
-        array $lotsDesReceptions,
+        array $receptions,
         string $note,
     ): void {
-        DB::transaction(function () use ($produit, $reception, $figuraitSurLaReception, $quantiteRecue, $lotsDesReceptions, $note) {
+        DB::transaction(function () use ($produit, $reception, $figuraitSurLaReception, $quantiteRecue, $receptions, $note) {
             $produitVerrouille = $this->verrouiller($produit);
             $grandLivre = $produitVerrouille->mouvementsStock()->orderBy('id')->get();
             $mouvementsDeLaReception = $grandLivre->filter(fn (MouvementStock $mouvement): bool => $this->vientDe($mouvement, $reception->getMorphClass(), CleDuModele::de($reception)));
@@ -180,8 +181,8 @@ class StockLedgerService
             }
 
             $cout = $produitVerrouille->suivi_stock
-                ? $this->cmupRejoue($produitVerrouille, $grandLivre, $reception->getMorphClass(), $lotsDesReceptions)
-                : $this->coutDeLaDerniereLigneAchetee($lotsDesReceptions);
+                ? $this->coutMoyenRejoue($produitVerrouille, $grandLivre, $receptions)
+                : $this->coutDeLaDerniereLigneAchetee($receptions);
 
             if ($cout !== null) {
                 $this->changerLeCmup($produit, $produitVerrouille, $cout);
@@ -426,12 +427,13 @@ class StockLedgerService
     }
 
     /**
-     * Les lignes de chaque facture d'achat validée du produit (voir
-     * Produit::achatsValides()), au coût que chacune a réellement payé
-     * (voir LigneAchat::coutUnitaireHt()), de la réception la plus
-     * ancienne à la plus récente : ce que rejoue corrigerUneReception().
+     * Chaque facture d'achat validée du produit (voir
+     * Produit::achatsValides()) : ses lignes au coût que chacune a
+     * réellement payé et son repère dans le grand livre (voir lotsDe()),
+     * de la réception la plus ancienne à la plus récente : ce que rejoue
+     * corrigerUneReception().
      *
-     * @return array<int|string, list<array{quantite: int, cout_unitaire: int}>> chaque coût en dix-millièmes d'euro
+     * @return array<int|string, array{repere: int, lots: list<array{quantite: int, cout_unitaire: int}>}> chaque coût en dix-millièmes d'euro
      */
     public function lotsDesReceptions(Produit $produit): array
     {
@@ -439,78 +441,99 @@ class StockLedgerService
     }
 
     /**
-     * Les lots de ces lignes d'achat validées, déjà dans l'ordre des
-     * réceptions et leur facture chargée, par identifiant de facture.
+     * Les réceptions de ces lignes d'achat validées, déjà dans l'ordre des
+     * validations et leur facture chargée, par identifiant de facture :
+     * le repère de la facture dans le grand livre du magasin à sa
+     * validation (voir ValiderFactureAchatAction), et ses lignes au coût
+     * que chacune a réellement payé (voir LigneAchat::coutUnitaireHt()).
      *
      * @param  iterable<LigneAchat>  $lignes
-     * @return array<int|string, list<array{quantite: int, cout_unitaire: int}>> chaque coût en dix-millièmes d'euro
+     * @return array<int|string, array{repere: int, lots: list<array{quantite: int, cout_unitaire: int}>}> chaque coût en dix-millièmes d'euro
      */
     public function lotsDe(iterable $lignes): array
     {
-        $lots = [];
+        $receptions = [];
 
         foreach ($lignes as $ligne) {
-            $lots[$ligne->facture_achat_id][] = ['quantite' => $ligne->quantite, 'cout_unitaire' => $ligne->coutUnitaireHt()];
+            $facture = ValeurRequise::de($ligne->factureAchat, 'la facture d\'achat validée de la ligne');
+            $receptions[$ligne->facture_achat_id]['repere'] = ValeurRequise::de($facture->repere_grand_livre, 'le repère de la facture d\'achat validée dans le grand livre');
+            $receptions[$ligne->facture_achat_id]['lots'][] = ['quantite' => $ligne->quantite, 'cout_unitaire' => $ligne->coutUnitaireHt()];
         }
 
-        return $lots;
+        return $receptions;
     }
 
     /**
-     * Le coût moyen que le produit doit avoir, rejoué depuis tout son grand
-     * livre ($grandLivre, dans l'ordre) et les lots de ses achats validés
-     * (voir lotsDe()), comme ses entrées et ses corrections le calculent :
-     * celui de cmupRejoue() pour un produit qui suit son stock, le coût de
-     * sa dernière ligne achetée sinon ; null quand rien ne le donne (aucune
-     * entrée ni aucun achat). La vérification de l'intégrité le compare au
-     * coût moyen enregistré (voir VerificateurDuStock).
+     * Le coût moyen que le produit doit avoir, rejoué sur toute son
+     * histoire réelle, jamais sur le suivi du stock que sa fiche porte
+     * aujourd'hui : son grand livre ($grandLivre, dans l'ordre) et ses
+     * réceptions validées (voir lotsDe()), comme ses entrées le
+     * calculent. Null quand rien ne le donne (aucune entrée ni aucun
+     * achat). La correction d'une réception d'un produit qui suit son
+     * stock le pose (voir corrigerUneReception()), et la vérification de
+     * l'intégrité le compare au coût moyen enregistré (voir
+     * coutsMoyensPossibles()).
      *
-     * @param  Collection<int, MouvementStock>  $grandLivre
-     * @param  array<int|string, list<array{quantite: int, cout_unitaire: int}>>  $lotsDesReceptions
-     * @return int|null en dix-millièmes d'euro
-     */
-    public function coutMoyenRejoue(Produit $produit, Collection $grandLivre, array $lotsDesReceptions): ?int
-    {
-        return $produit->suivi_stock
-            ? $this->cmupRejoue($produit, $grandLivre, (new FactureAchat)->getMorphClass(), $lotsDesReceptions)
-            : $this->coutDeLaDerniereLigneAchetee($lotsDesReceptions);
-    }
-
-    /**
-     * Le CMUP du produit si chaque réception avait été saisie juste dès le
-     * départ : le grand livre rejoué dans l'ordre, chaque réception entrée
-     * en stock entrant à sa place, au coût actuel de ses lignes, une ligne
-     * après l'autre comme à sa validation (voir receptionner()). Ses
-     * mouvements (ajustements de correction compris) disent toujours la
-     * quantité de ses lignes, puisque chaque correction les y ramène (voir
-     * corrigerUneReception()) ; une réception qui n'est jamais entrée en
-     * stock, ou dont le produit a été retiré, n'en a fait entrer aucun.
-     * L'entrée d'un inventaire d'ouverture entre à son coût saisi, gardé
-     * dans son mouvement, comme à sa validation (voir
-     * entrerALInventaireDOuverture()). Chaque retour au fournisseur sort au
-     * coût de sa ligne d'achat, gardé dans son mouvement, et recalcule le
-     * CMUP comme à son émission (voir retournerAuFournisseur()) ; les
-     * autres sorties et entrées ne changent pas le CMUP, et un stock vide
-     * ou négatif ne pèse rien.
+     * Le grand livre se rejoue dans l'ordre, comme si chaque réception
+     * avait été saisie juste dès le départ :
      *
-     * Le stock que le grand livre n'explique pas (aucun en pratique : seul
-     * ce service fait varier le stock, toujours par un mouvement) est
-     * valorisé au CMUP actuel. Sans aucune entrée à rejouer (réception ou
-     * inventaire d'ouverture), le coût est celui de la dernière ligne
-     * achetée, comme pour un produit qui ne suit pas son stock.
+     * - une réception qui a fait entrer du stock (le produit suivait son
+     *   stock à sa validation) entre à sa place, celle de son premier
+     *   mouvement, au coût actuel de ses lignes, une ligne après l'autre,
+     *   le coût moyen devenant la moyenne du stock en place et de chaque
+     *   ligne, pondérée par leurs quantités (voir receptionner()) ; ses
+     *   mouvements (ajustements de correction compris) disent toujours la
+     *   quantité de ses lignes, puisque chaque correction les y ramène ;
+     *   une réception dont le produit a été retiré n'en a fait entrer
+     *   aucun ;
+     * - une réception qui n'a fait entrer aucun stock (le produit ne
+     *   suivait pas son stock à sa validation, ou n'y a été ajouté qu'après
+     *   coup sans le suivre) fixe le coût moyen au coût de sa dernière
+     *   ligne, comme pour un produit qui ne suit pas son stock (voir
+     *   entrerAuCout()), à sa place dans l'histoire : avant le premier
+     *   mouvement qui suit son repère (voir ValiderFactureAchatAction) ;
+     * - l'entrée d'un inventaire d'ouverture et la rentrée d'une cession
+     *   annulée entrent à leur coût, gardé dans leur mouvement, comme une
+     *   réception (voir entrerAuCout()) ;
+     * - chaque retour au fournisseur sort au coût de sa ligne d'achat,
+     *   gardé dans son mouvement, et recalcule le coût moyen comme à son
+     *   émission (voir retournerAuFournisseur()) ;
+     * - les autres sorties et entrées ne changent pas le coût moyen, et un
+     *   stock vide ou négatif ne pèse rien.
+     *
+     * Le stock que le grand livre n'explique pas (aucun : un produit naît
+     * sans stock, et seul ce service le fait varier, toujours par un
+     * mouvement) serait valorisé au coût moyen actuel.
      *
      * @param  Collection<int, MouvementStock>  $grandLivre  dans l'ordre
-     * @param  array<int|string, list<array{quantite: int, cout_unitaire: int}>>  $lotsDesReceptions  chaque coût en dix-millièmes d'euro
+     * @param  array<int|string, array{repere: int, lots: list<array{quantite: int, cout_unitaire: int}>}>  $receptions  chaque coût en dix-millièmes d'euro
      * @return int|null en dix-millièmes d'euro
      */
-    private function cmupRejoue(Produit $produit, Collection $grandLivre, string $typeDeReception, array $lotsDesReceptions): ?int
+    public function coutMoyenRejoue(Produit $produit, Collection $grandLivre, array $receptions): ?int
     {
+        $typeDeReception = (new FactureAchat)->getMorphClass();
+        $entreesEnStock = [];
+
+        foreach ($grandLivre as $mouvement) {
+            if ($mouvement->source_type === $typeDeReception) {
+                $entreesEnStock[(string) $mouvement->source_id] = true;
+            }
+        }
+
+        $sansStock = array_values(array_filter($receptions, static fn (array $reception, int|string $receptionId): bool => ! isset($entreesEnStock[(string) $receptionId]), ARRAY_FILTER_USE_BOTH));
+        // Par repère, puis dans l'ordre des validations (tri stable).
+        usort($sansStock, static fn (array $une, array $autre): int => $une['repere'] <=> $autre['repere']);
         $stock = $produit->stock_quantite - $this->variationTotale($grandLivre);
         $cmup = $this->calculateur->enDixMilliemes($produit->cmup_ht);
         $receptionsVues = [];
-        $uneEntreeAPese = false;
+        $unCoutEstConnu = false;
 
         foreach ($grandLivre as $mouvement) {
+            while ($sansStock !== [] && $sansStock[0]['repere'] < $mouvement->id) {
+                $cmup = $this->coutDeSaDerniereLigne(array_shift($sansStock));
+                $unCoutEstConnu = true;
+            }
+
             $receptionId = $mouvement->source_type === $typeDeReception ? $mouvement->source_id : null;
 
             if ($receptionId === null) {
@@ -518,9 +541,9 @@ class StockLedgerService
                     $cmup = $this->calculateur->coutMoyenApresUneSortie(max($stock, 0), $cmup, $mouvement->quantite, $this->calculateur->enDixMilliemes($mouvement->cout_unitaire_ht)) ?? $cmup;
                 }
 
-                if ($mouvement->type === TypeMouvementStock::InventaireOuverture) {
+                if (in_array($mouvement->type, [TypeMouvementStock::InventaireOuverture, TypeMouvementStock::EntreeAnnulationCession], true)) {
                     $cmup = $this->cmupApresUneEntree($stock, $cmup, $mouvement->quantite, $this->calculateur->enDixMilliemes($mouvement->cout_unitaire_ht));
-                    $uneEntreeAPese = true;
+                    $unCoutEstConnu = true;
                 }
 
                 $stock += $mouvement->type->variation($mouvement->quantite);
@@ -534,35 +557,72 @@ class StockLedgerService
 
             $receptionsVues[$receptionId] = true;
             $quantite = $this->variationTotale($grandLivre->filter(fn (MouvementStock $autre): bool => $this->vientDe($autre, $typeDeReception, $receptionId)));
+            $lots = $receptions[$receptionId]['lots'] ?? [];
 
-            if ($quantite <= 0 || ($lotsDesReceptions[$receptionId] ?? []) === []) {
+            if ($quantite <= 0 || $lots === []) {
                 $stock += $quantite;
 
                 continue;
             }
 
-            foreach ($lotsDesReceptions[$receptionId] as $lot) {
+            foreach ($lots as $lot) {
                 $cmup = $this->cmupApresUneEntree($stock, $cmup, $lot['quantite'], $lot['cout_unitaire']);
                 $stock += $lot['quantite'];
             }
 
-            $uneEntreeAPese = true;
+            $unCoutEstConnu = true;
         }
 
-        return $uneEntreeAPese ? $cmup : $this->coutDeLaDerniereLigneAchetee($lotsDesReceptions);
+        foreach ($sansStock as $reception) {
+            $cmup = $this->coutDeSaDerniereLigne($reception);
+            $unCoutEstConnu = true;
+        }
+
+        return $unCoutEstConnu ? $cmup : null;
+    }
+
+    /**
+     * Les coûts moyens que le produit peut avoir, d'après son histoire :
+     * celui qu'elle rejoue (voir coutMoyenRejoue()) et, pour un produit
+     * qui ne suit pas son stock aujourd'hui, celui de sa dernière ligne
+     * achetée, que lui donne la correction d'une de ses réceptions faite
+     * sans suivi (voir corrigerUneReception()). Vide quand rien ne le
+     * donne. La vérification de l'intégrité y cherche le coût moyen
+     * enregistré (voir VerificateurDuStock).
+     *
+     * @param  Collection<int, MouvementStock>  $grandLivre  dans l'ordre
+     * @param  array<int|string, array{repere: int, lots: list<array{quantite: int, cout_unitaire: int}>}>  $receptions
+     * @return list<int> en dix-millièmes d'euro
+     */
+    public function coutsMoyensPossibles(Produit $produit, Collection $grandLivre, array $receptions): array
+    {
+        return array_values(array_unique(array_filter([
+            $this->coutMoyenRejoue($produit, $grandLivre, $receptions),
+            $produit->suivi_stock ? null : $this->coutDeLaDerniereLigneAchetee($receptions),
+        ], static fn (?int $cout): bool => $cout !== null)));
     }
 
     /**
      * Le coût de la dernière ligne de la réception la plus récente, en
      * dix-millièmes d'euro, null s'il n'y en a aucune.
      *
-     * @param  array<int|string, list<array{quantite: int, cout_unitaire: int}>>  $lotsDesReceptions
+     * @param  array<int|string, array{repere: int, lots: list<array{quantite: int, cout_unitaire: int}>}>  $receptions
      */
-    private function coutDeLaDerniereLigneAchetee(array $lotsDesReceptions): ?int
+    private function coutDeLaDerniereLigneAchetee(array $receptions): ?int
     {
-        $derniereReception = end($lotsDesReceptions);
+        return $receptions === [] ? null : $this->coutDeSaDerniereLigne($receptions[array_key_last($receptions)]);
+    }
 
-        return $derniereReception === false || $derniereReception === [] ? null : end($derniereReception)['cout_unitaire'];
+    /**
+     * Le coût de la dernière ligne d'une réception, en dix-millièmes
+     * d'euro : celui que prend un produit qui ne suit pas son stock (voir
+     * entrerAuCout()), ses lignes reçues une à une.
+     *
+     * @param  array{repere: int, lots: list<array{quantite: int, cout_unitaire: int}>}  $reception
+     */
+    private function coutDeSaDerniereLigne(array $reception): int
+    {
+        return $reception['lots'][array_key_last($reception['lots'])]['cout_unitaire'];
     }
 
     /**

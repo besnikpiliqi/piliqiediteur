@@ -61,8 +61,10 @@ return new class extends Migration
             // ticket Z ne se modifie, ne se supprime ni ne se vide, et
             // tout son contenu est signé par l'événement 50 de sa clôture
             // au journal des événements, sans lequel la base refuse de
-            // l'enregistrer (voir GardesDesClotures, posé avec la table
-            // du registre).
+            // l'enregistrer ; seul se retire, par la procédure de
+            // l'éditeur, un ticket Z que rien ne signe (voir
+            // GardesDesClotures, posées avec la table du registre, qu'elles
+            // lisent).
 
             // Une seule clôture par jour et par magasin : la même journée
             // ne peut jamais être agrégée deux fois (voir
@@ -75,13 +77,10 @@ return new class extends Migration
 
         DeclencheursDeProtection::auMoins('clotures_caisse', 'nombre_ventes', 0);
         DeclencheursDeProtection::auMoins('clotures_caisse', 'nombre_avoirs', 0);
-
-        DeclencheursDeProtection::ajoutSeul('clotures_caisse');
     }
 
     public function down(): void
     {
         Schema::dropIfExists('clotures_caisse');
-        DeclencheursDeProtection::retirer('clotures_caisse');
     }
 };

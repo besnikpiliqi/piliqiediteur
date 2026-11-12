@@ -241,7 +241,9 @@ class AnnulerCessionTest extends TestCase
      * le ferait un administrateur de la base : l'application n'en écrit
      * aucun, et la base le refuse sans le document qui le justifie (preuve
      * d'abord), puis le reçoit une fois sa garde levée le temps de la
-     * transaction du test.
+     * transaction du test, qui ne se validerait pas : sans auteur ni
+     * correction d'achat qui le justifie, la base le refuserait à la
+     * validation.
      */
     private function ecrireUnMouvementApresLaCession(Magasin $magasin, Produit $produit): void
     {
@@ -258,6 +260,7 @@ class AnnulerCessionTest extends TestCase
         $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('mouvements_stock')->insert($mouvement)), QueryException::class, GardesDuStock::REFUS_SANS_JUSTIFICATIF);
         $this->retirerLeDeclencheur('mouvements_stock', 'mouvements_stock_justifies');
         DB::table('mouvements_stock')->insert($mouvement);
+        $this->laBaseRefuseraCetEtatALaValidation();
     }
 
     /**

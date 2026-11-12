@@ -135,7 +135,7 @@ class ProprietaireSansVenteConcurrenceTest extends TestCase
         $vente = match ($table) {
             'factures' => ['magasin_id' => $magasinId, 'client_id' => $clientId, 'type_client' => TypeClient::Particulier->value, 'cree_par' => $administrateurId, 'created_at' => $instant, 'updated_at' => $instant],
             'paiements' => ['magasin_id' => $magasinId, 'client_id' => $clientId, 'mode_paiement' => ModePaiement::Especes->value, 'montant' => '12.00', 'recu_le' => '2026-10-09', 'cree_par' => $administrateurId, 'created_at' => $instant, 'updated_at' => $instant],
-            'enregistrements_fiscaux' => ['magasin_id' => $magasinId, 'chaine' => ChaineFiscale::Vente->value, 'sequence' => 1, 'type' => 'ticket', 'operateur_id' => $administrateurId, 'horodatage' => $instant, 'contenu' => '{}', 'signature' => 'signature', 'algorithme' => 'ES256', 'cle_id' => str_repeat('0', 64), 'version_module' => '1.5', 'created_at' => $instant],
+            'enregistrements_fiscaux' => ['magasin_id' => $magasinId, 'chaine' => ChaineFiscale::Vente->value, 'sequence' => 1, 'type' => 'ticket', 'operateur_id' => $administrateurId, 'horodatage' => $instant, 'contenu' => '{}', 'signature' => 'signature', 'algorithme' => 'ES256', 'cle_id' => str_repeat('0', 64), 'version_module' => '2.0', 'created_at' => $instant],
         };
         $concurrente = null;
         $this->concurrencerDesQueLaLigneEstVerrouillee('users', 'for update', static function () use ($table, $vente): void {

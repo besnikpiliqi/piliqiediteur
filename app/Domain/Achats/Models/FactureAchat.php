@@ -55,8 +55,9 @@ class FactureAchat extends Model
 
     protected $table = 'factures_achat';
 
-    // numero, rang_validation, statut, date_validation, totaux,
-    // tva_a_verifier, piece_manquante : jamais en mass assignment,
+    // numero, rang_validation, repere_grand_livre, statut,
+    // date_validation, totaux, tva_a_verifier, piece_manquante : jamais
+    // en mass assignment,
     // uniquement via ConstructeurLigneAchat, TvaDuFournisseur,
     // ValiderFactureAchatAction et PiecesDuFournisseur.
     protected $fillable = [
@@ -71,9 +72,9 @@ class FactureAchat extends Model
 
     /**
      * date_validation est l'instant de la validation, en UTC (voir
-     * Instant) ; rang_validation, son
-     * rang parmi les validations du magasin (voir
-     * ValiderFactureAchatAction).
+     * Instant) ; rang_validation, son rang parmi les validations du
+     * magasin, et repere_grand_livre, le dernier mouvement du grand livre
+     * du magasin à ce moment (voir ValiderFactureAchatAction).
      *
      * @return array<string, string>
      */
@@ -85,6 +86,7 @@ class FactureAchat extends Model
             'date_facture' => JourCivil::class,
             'date_validation' => Instant::class,
             'rang_validation' => 'integer',
+            'repere_grand_livre' => 'integer',
             'total_ht' => 'decimal:2',
             'total_tva' => 'decimal:2',
             'total_ttc' => 'decimal:2',

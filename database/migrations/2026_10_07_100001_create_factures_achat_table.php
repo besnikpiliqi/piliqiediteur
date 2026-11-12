@@ -1,5 +1,6 @@
 <?php
 
+use App\Domain\CaisseSecurisee\Support\DeclencheursDeProtection;
 use App\Domain\Tenancy\Support\GardesDesTypesDActivite;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
@@ -47,6 +48,15 @@ return new class extends Migration
             // achat validé d'un produit se choisit par lui (voir
             // Produit::achatsValides()).
             $table->unsignedBigInteger('rang_validation')->nullable();
+            // Le plus grand identifiant du grand livre du stock du magasin
+            // au moment de sa validation (0 s'il était vide), lu sous le
+            // verrou de ses produits (voir ValiderFactureAchatAction) :
+            // la place de sa réception dans l'histoire de chacun de ses
+            // produits, même de celui qu'elle n'a pas fait entrer en stock,
+            // faute de suivi, et dont elle fixe pourtant le coût moyen (voir
+            // StockLedgerService::coutMoyenRejoue()). Posé une fois, figé
+            // ensuite.
+            $table->unsignedBigInteger('repere_grand_livre')->nullable();
             $table->string('devise', 3)->default('EUR');
             $table->text('notes')->nullable();
             // Sommes exactes de ses taux (voir la migration
@@ -91,11 +101,13 @@ return new class extends Migration
         // Seule une société qui a des articles achète des marchandises
         // (voir TypeDActivite::aDesArticles()).
         GardesDesTypesDActivite::poser(GardesDesTypesDActivite::FACTURES_ACHAT);
+        DeclencheursDeProtection::colonneFigee('factures_achat', 'repere_grand_livre');
     }
 
     public function down(): void
     {
         GardesDesTypesDActivite::retirer(GardesDesTypesDActivite::FACTURES_ACHAT);
         Schema::dropIfExists('factures_achat');
+        DeclencheursDeProtection::retirerLaColonneFigee('factures_achat', 'repere_grand_livre');
     }
 };

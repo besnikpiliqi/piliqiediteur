@@ -1354,6 +1354,7 @@ return [
         'action:relancer' => ['lot' => 'NAV-2', 'tests' => []],
         'action:relancerLaTransmission' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Parcours/TransmissionALaPlateformeTest.php › le propriétaire relance la transmission d’une facture que la plateforme n’a pas reçue, et elle est acceptée',
+            'tests/Browser/Parcours/TransmissionALaPlateformeTest.php › l’administrateur qui suit la plateforme agréée relance la transmission d’une facture que la plateforme n’a pas reçue, et elle est acceptée',
         ]],
         'action:telecharger_pdf' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action du magasin sans erreur',

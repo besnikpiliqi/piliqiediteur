@@ -1,7 +1,5 @@
 <?php
 
-use App\Domain\CaisseSecurisee\Support\DeclencheursDeProtection;
-use App\Domain\Facturation\Support\GardesDesClotures;
 use App\Domain\Facturation\Support\GardesDesDocumentsEmis;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
@@ -65,7 +63,8 @@ return new class extends Migration
             // facture (voir factures.cloture_caisse_id). Seule colonne
             // encore écrite sur un avoir émis, une seule fois : posée par
             // la clôture vers le ticket Z qu'elle vient d'écrire, le
-            // dernier de son magasin, puis figée (voir la fin de up()).
+            // dernier de son magasin, puis figée, sauf pour se défaire d'un
+            // ticket Z que rien ne signe (voir GardesDesClotures).
             // L'étape des clôtures la supprimera.
             $table->foreignId('cloture_caisse_id')->nullable();
             $table->foreignId('cree_par')->nullable()->constrained('users')->restrictOnDelete();
@@ -102,13 +101,11 @@ return new class extends Migration
         });
 
         GardesDesDocumentsEmis::poser('avoirs');
-        DeclencheursDeProtection::colonneFigee('avoirs', 'cloture_caisse_id', poseeSeulementSi: GardesDesClotures::POSE_VERS_LE_DERNIER_TICKET_Z);
     }
 
     public function down(): void
     {
         Schema::dropIfExists('avoirs');
         GardesDesDocumentsEmis::retirer('avoirs');
-        DeclencheursDeProtection::retirerLaColonneFigee('avoirs', 'cloture_caisse_id');
     }
 };

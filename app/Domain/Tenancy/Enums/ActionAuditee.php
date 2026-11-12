@@ -45,6 +45,7 @@ enum ActionAuditee: string implements HasLabel
     case TerritoireCorrige = 'territoire_corrige';
     case SiretLibere = 'siret_libere';
     case CessionAnnulee = 'cession_annulee';
+    case TicketZNonSigneRetire = 'ticket_z_non_signe_retire';
     case FinExerciceChangee = 'fin_exercice_changee';
     case EtablissementPrincipalChoisi = 'etablissement_principal_choisi';
     case DemonstrationOuverte = 'demonstration_ouverte';
@@ -145,6 +146,7 @@ enum ActionAuditee: string implements HasLabel
             self::TerritoireCorrige => 'Territoire du magasin corrigé par l\'éditeur',
             self::SiretLibere => 'SIRET du magasin libéré par l\'éditeur',
             self::CessionAnnulee => 'Cession du magasin annulée par l\'éditeur',
+            self::TicketZNonSigneRetire => 'Ticket Z non signé retiré par l\'éditeur',
             self::FinExerciceChangee => 'Date de clôture de l\'exercice changée par l\'éditeur',
             self::EtablissementPrincipalChoisi => 'Établissement principal indiqué',
             self::DemonstrationOuverte => 'Magasin de démonstration ouvert',
@@ -327,6 +329,11 @@ enum ActionAuditee: string implements HasLabel
             // produits rentrés en stock et la valeur hors taxe de ce stock,
             // au coût de leur sortie (voir AnnulerCessionAction).
             self::CessionAnnulee => ['motif', 'produits_rentres', 'valeur_stock_rentre_ht'],
+            // Le ticket Z que rien ne signait, retiré par la procédure de
+            // l'éditeur : son numéro, sa journée et les documents qu'on y
+            // avait rattachés, détachés avant son retrait (voir
+            // RetirerUnTicketZNonSigneAction).
+            self::TicketZNonSigneRetire => ['numero', 'journee', 'documents_detaches'],
             // Le mois de fin d'exercice et la fin de l'exercice en cours,
             // avant et après le changement légal de la date de clôture, le
             // jour de la décision et l'expert-comptable de la société qui a

@@ -4,8 +4,11 @@ namespace Tests;
 
 use App\Domain\Achats\Actions\CreerAvoirFournisseurAction;
 use App\Domain\Achats\Actions\CreerFactureAchatAction;
-use App\Domain\Achats\Enums\StatutAvoirFournisseur;
-use App\Domain\Achats\Enums\StatutFactureAchat;
+use App\Domain\Achats\Actions\EmettreAvoirFournisseurAction;
+use App\Domain\Achats\Actions\ValiderFactureAchatAction;
+use App\Domain\Achats\Events\AvoirFournisseurEmis;
+use App\Domain\Achats\Events\FactureAchatValidee;
+use App\Domain\Achats\Models\AvoirFournisseur;
 use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Authorization\AutorisationsSociete;
 use App\Domain\Authorization\OperateurCourant;
@@ -33,17 +36,18 @@ use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Facturation\Actions\CreerAvoirAction;
 use App\Domain\Facturation\Actions\CreerFactureAction;
+use App\Domain\Facturation\Actions\EmettreAvoirAction;
+use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
-use App\Domain\Facturation\Enums\StatutAvoir;
-use App\Domain\Facturation\Enums\StatutFacture;
-use App\Domain\Facturation\Enums\TypeDocument;
+use App\Domain\Facturation\Events\AvoirEmis;
+use App\Domain\Facturation\Events\FactureEmise;
+use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\ApercuDuReglement;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\ConstructeurLigneDocument;
 use App\Domain\Facturation\Services\ContexteDeVente;
-use App\Domain\Facturation\Services\DocumentNumberingService;
 use App\Domain\Facturation\Services\PartDeReglement;
 use App\Domain\Facturation\Services\RecapitulatifDeCloture;
 use App\Domain\Facturation\Services\ReglementComptant;
@@ -110,11 +114,13 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Application;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
 use Illuminate\Foundation\Testing\Wormhole;
 use Illuminate\Process\InvokedProcess;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
@@ -128,6 +134,7 @@ use Laravel\SerializableClosure\SerializableClosure;
 use Livewire\Features\SupportTesting\Testable;
 use LogicException;
 use PDO;
+use PHPUnit\Framework\AssertionFailedError;
 use Random\Engine\Xoshiro256StarStar;
 use Random\Randomizer;
 
@@ -146,6 +153,13 @@ abstract class TestCase extends BaseTestCase
      * processus : aucune clé n'est jamais commitée.
      */
     private static ?string $cleDuJournalAuditDesTests = null;
+
+    /**
+     * Vrai pour un test de falsification qui laisse exprès un état que la
+     * base refuse à la validation de la transaction (voir
+     * laBaseRefuseraCetEtatALaValidation()).
+     */
+    private bool $etatRefuseALaValidation = false;
 
     /**
      * Chaque application de test signe avec la paire éphémère des tests,
@@ -214,6 +228,62 @@ abstract class TestCase extends BaseTestCase
                 return (float) DB::scalar("select date_part('epoch', clock_timestamp())");
             }
         });
+    }
+
+    /**
+     * La transaction d'un test RefreshDatabase n'est jamais validée : ses
+     * gardes différées (le ticket Z signé, l'auteur des mouvements du
+     * stock, la cohérence des achats et de leur stock, voir
+     * GardesDesClotures et GardesDuStock) ne joueraient jamais. Avant de
+     * l'annuler, la fin du test les fait jouer (SET CONSTRAINTS ALL
+     * IMMEDIATE), comme la validation le ferait : un test réussi ne laisse
+     * jamais un état que la base refuserait à la validation. Seul un test
+     * de falsification, qui le fabrique exprès, s'en dispense (voir
+     * laBaseRefuseraCetEtatALaValidation()). Une transaction déjà annulée
+     * par un refus attendu (état SQL 25P02) n'a plus rien à valider.
+     */
+    protected function tearDown(): void
+    {
+        try {
+            $this->faireJouerLesGardesDifferees();
+        } finally {
+            parent::tearDown();
+        }
+    }
+
+    /**
+     * Un test de falsification fabrique exprès un état que la base refuse
+     * à la validation de la transaction (un ticket Z sans sa clôture
+     * signée, un mouvement au nom d'un autre que l'auteur de son
+     * document…) : sa transaction, jamais validée, s'annule sans faire
+     * jouer les gardes différées.
+     */
+    protected function laBaseRefuseraCetEtatALaValidation(): void
+    {
+        $this->etatRefuseALaValidation = true;
+    }
+
+    /**
+     * @throws AssertionFailedError quand une garde différée refuse l'état que laisse le test
+     */
+    private function faireJouerLesGardesDifferees(): void
+    {
+        if ($this->etatRefuseALaValidation
+            || ! $this->status()->isSuccess()
+            || ! in_array(RefreshDatabase::class, class_uses_recursive(static::class), true)
+            || DB::connection()->transactionLevel() === 0) {
+            return;
+        }
+
+        try {
+            DB::connection()->statement('SET CONSTRAINTS ALL IMMEDIATE');
+        } catch (QueryException $refus) {
+            if (($refus->errorInfo[0] ?? null) === '25P02') {
+                return;
+            }
+
+            throw new AssertionFailedError('Le test laisse un état que la base refuserait à la validation de sa transaction : '.($refus->errorInfo[2] ?? $refus->getMessage()));
+        }
     }
 
     /**
@@ -1381,46 +1451,44 @@ abstract class TestCase extends BaseTestCase
     /**
      * Le document réel du magasin actif qui justifie un mouvement du grand
      * livre de ce type pour ce produit, de $quantite articles (voir
-     * TypeMouvementStock::justificatif()), dans l'état que la base exige,
-     * sans faire bouger le stock : un test du grand livre appelle ensuite
+     * TypeMouvementStock::justificatif()), émis ou validé par sa vraie
+     * action, au nom de $auteur (par défaut le responsable de test du
+     * magasin, qui vend et achète, quel que soit le compte connecté), avec
+     * tout ce que la base exige à la validation de la transaction (son
+     * enregistrement au registre fiscal, son entrée au journal d'audit),
+     * mais sans faire bouger le stock : l'événement dont l'écouteur
+     * inscrirait le mouvement est seul retenu pendant l'action (voir
+     * sansSonMouvement()), et un test du grand livre appelle ensuite
      * StockLedgerService lui-même, au nom de l'auteur de ce document (voir
-     * commeAuteurDuDocument()). Le brouillon naît de son action, au nom de
-     * $auteur (par défaut le responsable de test du magasin, qui vend et
-     * achète, quel que soit le compte connecté), puis se numérote et s'émet, ou se valide, comme
-     * son action le ferait, sans l'événement qui inscrirait le mouvement.
-     * Une vente est une facture émise ; un retour client, la ligne d'un
-     * avoir émis sur une vente dont les articles sont déjà sortis du stock
-     * (le mouvement de la vente est inscrit) ; une réception et
-     * l'ajustement qui la corrige, une facture d'achat validée au prix
+     * commeAuteurDuDocument()). Une vente est une facture émise ; un
+     * retour client, la ligne d'un avoir émis sur une vente dont les
+     * articles sont déjà sortis du stock (le mouvement de la vente est
+     * inscrit) ; une réception, une facture d'achat validée au prix
      * unitaire HT donné ; un retour au fournisseur, un avoir fournisseur
-     * émis sur une telle facture.
+     * émis sur une telle facture. Un ajustement ne se justifie que par la
+     * correction d'une facture d'achat validée (ModifierFactureAchatAction).
      */
     protected function justificatifDuStock(TypeMouvementStock $type, Produit $produit, int $quantite, string $prixUnitaireHt = '2', ?User $auteur = null): Model
     {
-        $magasin = app(TenantContext::class)->magasin();
-        $auteur ??= self::responsableDeTest($magasin);
-        $maintenant = now();
-        $numero = fn (TypeDocument $document): string => app(DocumentNumberingService::class)->suivant($magasin, $document, $magasin->calendrier()->anneeDe($maintenant));
+        $auteur ??= self::responsableDeTest(app(TenantContext::class)->magasin());
 
         return match ($type) {
-            TypeMouvementStock::Vente => $this->venteEmiseSansMouvement($auteur, $produit, $quantite, $numero),
-            TypeMouvementStock::RetourClient => (function () use ($auteur, $produit, $quantite, $numero, $maintenant) {
-                $vente = $this->venteEmiseSansMouvement($auteur, $produit, $quantite, $numero);
+            TypeMouvementStock::Vente => $this->venteEmiseSansMouvement($auteur, $produit, $quantite),
+            TypeMouvementStock::RetourClient => (function () use ($auteur, $produit, $quantite) {
+                $vente = $this->venteEmiseSansMouvement($auteur, $produit, $quantite);
                 $this->commeAuteurDuDocument(fn () => app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::Vente, $quantite, $vente), $auteur);
                 $avoir = app(CreerAvoirAction::class)->handle($auteur, ValeurRequise::de($vente->client, 'le client de la vente'), [['ligne_facture_id' => $vente->lignes->sole()->id, 'quantite' => $quantite]]);
-                $avoir->forceFill(['numero' => $numero(TypeDocument::Avoir), 'statut' => StatutAvoir::Emise, 'date_emission' => $maintenant])->save();
 
-                return $avoir->lignes()->sole();
+                return self::sansSonMouvement(AvoirEmis::class, fn (): Avoir => app(EmettreAvoirAction::class)->handle($auteur, $avoir))->lignes()->sole();
             })(),
-            TypeMouvementStock::ReceptionAchat, TypeMouvementStock::AjustementEntree, TypeMouvementStock::AjustementSortie => $this->achatValideSansMouvement($auteur, $produit, $quantite, $prixUnitaireHt, $numero),
-            TypeMouvementStock::RetourFournisseur => (function () use ($auteur, $produit, $quantite, $prixUnitaireHt, $numero, $maintenant) {
-                $achat = $this->achatValideSansMouvement($auteur, $produit, $quantite, $prixUnitaireHt, $numero);
+            TypeMouvementStock::ReceptionAchat => $this->achatValideSansMouvement($auteur, $produit, $quantite, $prixUnitaireHt),
+            TypeMouvementStock::RetourFournisseur => (function () use ($auteur, $produit, $quantite, $prixUnitaireHt) {
+                $achat = $this->achatValideSansMouvement($auteur, $produit, $quantite, $prixUnitaireHt);
                 $avoir = app(CreerAvoirFournisseurAction::class)->handle($auteur, $achat, [['ligne_achat_id' => $achat->lignes()->sole()->id, 'quantite' => $quantite]], 'Retour');
-                $avoir->forceFill(['numero' => $numero(TypeDocument::AvoirFournisseur), 'statut' => StatutAvoirFournisseur::Emise, 'date_emission' => $maintenant])->save();
 
-                return $avoir;
+                return self::sansSonMouvement(AvoirFournisseurEmis::class, fn (): AvoirFournisseur => app(EmettreAvoirFournisseurAction::class)->handle($auteur, $avoir));
             })(),
-            default => throw new LogicException("Le justificatif d'un mouvement {$type->value} se prépare par son action (inventaire d'ouverture, cession)."),
+            default => throw new LogicException("Le justificatif d'un mouvement {$type->value} se prépare par son action (correction d'un achat, inventaire d'ouverture, cession)."),
         };
     }
 
@@ -1469,28 +1537,51 @@ abstract class TestCase extends BaseTestCase
     }
 
     /**
-     * @param  Closure(TypeDocument): string  $numero
+     * Une facture de $quantite articles du produit émise par son action, au
+     * nom de $auteur, sans son mouvement de stock : l'avertissement d'une
+     * vente au-delà du stock est confirmé, comme la personne le ferait.
      */
-    private function venteEmiseSansMouvement(User $auteur, Produit $produit, int $quantite, Closure $numero): Facture
+    private function venteEmiseSansMouvement(User $auteur, Produit $produit, int $quantite): Facture
     {
-        $vente = app(CreerFactureAction::class)->handle($auteur, Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => $quantite]]);
-        $vente->forceFill(['numero' => $numero(TypeDocument::Facture), 'statut' => StatutFacture::Emise, 'date_emission' => now()])->save();
+        $brouillon = app(CreerFactureAction::class)->handle($auteur, Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => $quantite]]);
+        $stock = (int) Produit::withTrashed()->whereKey($produit->getKey())->value('stock_quantite');
+        $confirmation = $produit->suivi_stock && $stock < $quantite ? new ConfirmationVenteSansStock([CleDuModele::de($produit) => $stock - $quantite]) : null;
 
-        return $vente->load('lignes', 'client');
+        return self::sansSonMouvement(FactureEmise::class, fn (): Facture => app(EmettreFactureAction::class)->handle($auteur, $brouillon, confirmation: $confirmation))->load('lignes', 'client');
     }
 
     /**
-     * @param  Closure(TypeDocument): string  $numero
+     * Une facture d'achat de $quantite articles du produit au prix unitaire
+     * HT donné, saisie puis validée par ses actions, au nom de $auteur,
+     * sans son mouvement de stock ; le produit prend son fournisseur, comme
+     * l'écouteur de la validation le ferait.
      */
-    private function achatValideSansMouvement(User $auteur, Produit $produit, int $quantite, string $prixUnitaireHt, Closure $numero): FactureAchat
+    private function achatValideSansMouvement(User $auteur, Produit $produit, int $quantite, string $prixUnitaireHt): FactureAchat
     {
-        $achat = app(CreerFactureAchatAction::class)->handle($auteur, Fournisseur::factory()->create(), [
+        $brouillon = app(CreerFactureAchatAction::class)->handle($auteur, Fournisseur::factory()->create(), [
             ['produit_id' => $produit->id, 'quantite' => $quantite, 'prix_unitaire_ht' => $prixUnitaireHt],
         ], ['date_facture' => Calendrier::deParis()->aujourdhui()]);
-        $achat->forceFill(['numero' => $numero(TypeDocument::FactureAchat), 'statut' => StatutFactureAchat::Validee, 'date_validation' => now(), 'piece_manquante' => true])->save();
+        $achat = self::sansSonMouvement(FactureAchatValidee::class, fn (): FactureAchat => app(ValiderFactureAchatAction::class)->handle($auteur, $brouillon));
         $produit->rattacherAuFournisseur($achat->fournisseur_id);
 
         return $achat;
+    }
+
+    /**
+     * L'action d'un document, pendant laquelle seul l'événement dont un
+     * écouteur inscrirait son mouvement de stock est retenu : tout le
+     * reste (numéro, registre fiscal, journal d'audit) s'écrit comme en
+     * vrai.
+     *
+     * @template T
+     *
+     * @param  class-string  $evenement
+     * @param  Closure(): T  $action
+     * @return T
+     */
+    private static function sansSonMouvement(string $evenement, Closure $action): mixed
+    {
+        return Event::fakeFor($action, [$evenement]);
     }
 
     /**
@@ -1744,14 +1835,18 @@ abstract class TestCase extends BaseTestCase
      * ferait un administrateur de la base : une journée à zéro, sans
      * auteur, aux séquences nulles. Le déclencheur différé qui refuse un
      * ticket Z sans sa clôture signée ne joue qu'à la validation de la
-     * transaction, que celle du test n'atteint jamais (voir
-     * InalterabiliteTest::test_la_base_refuse_un_ticket_z_sans_sa_cloture_signee()).
+     * transaction (voir
+     * InalterabiliteTest::test_la_base_refuse_un_ticket_z_sans_sa_cloture_signee()) :
+     * le test qui le fabrique ne la fait pas jouer à sa fin (voir
+     * laBaseRefuseraCetEtatALaValidation()).
      *
      * @param  string  $journee  AAAA-MM-JJ
      * @param  array<string, mixed>  $colonnes
      */
     protected function insererUnFauxTicketZ(Magasin $magasin, string $journee, string $numero, CarbonImmutable $clotureeA, array $colonnes = []): int
     {
+        $this->laBaseRefuseraCetEtatALaValidation();
+
         return DB::table('clotures_caisse')->insertGetId([
             'magasin_id' => $magasin->id,
             'numero' => $numero,

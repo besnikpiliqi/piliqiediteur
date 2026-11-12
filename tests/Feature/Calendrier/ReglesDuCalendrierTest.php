@@ -70,6 +70,7 @@ class ReglesDuCalendrierTest extends TestCase
      */
     private const PARIS_PERMIS_DANS_UN_MAGASIN = [
         'app/Filament/App/Pages/Auth/ModifierProfil.php' => 'échéance du lien de l\'adresse de connexion du propriétaire : heure propre à un compte de la société, sur une page commune aux deux panneaux',
+        'app/Domain/Stock/Services/VerificateurDuStock.php' => 'horizon de conservation du journal d\'audit de la société, dont les entrées s\'effacent à une échéance comptée à l\'heure de Paris',
     ];
 
     /**

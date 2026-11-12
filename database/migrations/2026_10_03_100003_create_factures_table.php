@@ -1,8 +1,6 @@
 <?php
 
-use App\Domain\CaisseSecurisee\Support\DeclencheursDeProtection;
 use App\Domain\Facturation\Support\GardesDeLaVente;
-use App\Domain\Facturation\Support\GardesDesClotures;
 use App\Domain\Facturation\Support\GardesDesDocumentsEmis;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
@@ -96,7 +94,9 @@ return new class extends Migration
             // Facture::scopeTickets()). Seule colonne, avec le statut, encore
             // écrite sur une facture émise, une seule fois : posée par la
             // clôture vers le ticket Z qu'elle vient d'écrire, le dernier
-            // de son magasin, puis figée (voir la fin de up()). L'étape des
+            // de son magasin, puis figée, sauf pour se défaire d'un ticket Z
+            // que rien ne signe (voir GardesDesClotures, posées avec la
+            // table du registre, qu'elles lisent). L'étape des
             // clôtures la supprimera : les documents d'un ticket Z se liront
             // dans sa fenêtre signée du registre.
             $table->foreignId('cloture_caisse_id')->nullable();
@@ -154,7 +154,6 @@ return new class extends Migration
 
         GardesDeLaVente::poser('factures');
         GardesDesDocumentsEmis::poser('factures');
-        DeclencheursDeProtection::colonneFigee('factures', 'cloture_caisse_id', poseeSeulementSi: GardesDesClotures::POSE_VERS_LE_DERNIER_TICKET_Z);
     }
 
     public function down(): void
@@ -162,6 +161,5 @@ return new class extends Migration
         Schema::dropIfExists('factures');
         GardesDeLaVente::retirer('factures');
         GardesDesDocumentsEmis::retirer('factures');
-        DeclencheursDeProtection::retirerLaColonneFigee('factures', 'cloture_caisse_id');
     }
 };

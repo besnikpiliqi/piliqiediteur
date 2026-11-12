@@ -61,33 +61,64 @@ class TestsSautesTest extends TestCase
 
     /**
      * Le résumé de la CI compte les tests réussis, échoués et sautés, et
-     * chaque raison de saut ; en CI, un test sauté fait échouer la tâche.
+     * chaque raison de saut, sur les vrais rapports de PHPUnit : le
+     * rapport JUnit, qui écrit un saut sans sa raison, et le rapport
+     * TeamCity, qui la donne ; en CI, un test sauté fait échouer la tâche.
+     * Les rapports viennent d'une classe de tests jetable, écrite hors de
+     * tests/ et lancée par PHPUnit : deux tests sautés pour la raison
+     * permise, un réussi et un échoué ; puis d'une autre, sans saut.
      */
     public function test_le_resume_de_la_ci_compte_les_tests_et_echoue_sur_un_test_saute(): void
     {
         $dossier = storage_path('framework/testing/resume-des-tests-'.getmypid());
         File::ensureDirectoryExists($dossier);
         $this->beforeApplicationDestroyed(fn () => File::deleteDirectory($dossier));
-        File::put("{$dossier}/avec-saut.xml", '<?xml version="1.0"?><testsuites><testsuite name="s">'
-            .'<testcase name="a"/><testcase name="b"><failure>non</failure></testcase>'
-            .'<testcase name="c"><skipped message="Node.js est absent"/></testcase><testcase name="d"><skipped message="Node.js est absent"/></testcase>'
-            .'</testsuite></testsuites>');
-        File::put("{$dossier}/sans-saut.xml", '<?xml version="1.0"?><testsuites><testsuite name="s"><testcase name="a"/><testcase name="b"/></testsuite></testsuites>');
-        $resumer = fn (string $rapport): ProcessResult => Process::path(base_path())
+        $raison = self::RAISONS_PERMISES[0];
+        $avecSaut = $this->rapportsDePhpunit($dossier, 'AvecSautTest', [
+            'test_saute_une_fois(): void { $this->markTest'.'Skipped('.var_export($raison, true).'); }',
+            'test_saute_deux_fois(): void { $this->markTest'.'Skipped('.var_export($raison, true).'); }',
+            'test_reussi(): void { $this->assertTrue(true); }',
+            'test_echoue(): void { $this->assertTrue(false); }',
+        ]);
+        $sansSaut = $this->rapportsDePhpunit($dossier, 'SansSautTest', ['test_reussi(): void { $this->assertTrue(true); }']);
+        $this->assertStringContainsString('<skipped/>', File::get($avecSaut[0]));
+        $resumer = fn (string ...$rapports): ProcessResult => Process::path(base_path())
             ->env(['CI' => 'true', 'GITHUB_STEP_SUMMARY' => "{$dossier}/resume.md"])
-            ->run([PHP_BINARY, 'tests/Qualite/resume-des-tests.php', "{$dossier}/{$rapport}"]);
+            ->run([PHP_BINARY, 'tests/Qualite/resume-des-tests.php', ...$rapports]);
 
-        $avecSaut = $resumer('avec-saut.xml');
-        $this->assertSame(1, $avecSaut->exitCode());
-        $this->assertStringContainsString('2 test(s) sauté(s) en CI', $avecSaut->errorOutput());
+        $avecSautResume = $resumer(...$avecSaut);
+        $this->assertSame(1, $avecSautResume->exitCode());
+        $this->assertStringContainsString('2 test(s) sauté(s) en CI', $avecSautResume->errorOutput());
         $this->assertStringContainsString("| 1 | 1 | 2 |\n", File::get("{$dossier}/resume.md"));
-        $this->assertStringContainsString("| Node.js est absent | 2 |\n", File::get("{$dossier}/resume.md"));
+        $this->assertStringContainsString("| {$raison} | 2 |\n", File::get("{$dossier}/resume.md"));
 
         File::delete("{$dossier}/resume.md");
-        $sansSaut = $resumer('sans-saut.xml');
-        $this->assertSame(0, $sansSaut->exitCode());
-        $this->assertStringContainsString("| 2 | 0 | 0 |\n", File::get("{$dossier}/resume.md"));
-        $this->assertSame(1, $resumer('absent.xml')->exitCode());
+        $this->assertSame(0, $resumer(...$sansSaut)->exitCode());
+        $this->assertStringContainsString("| 1 | 0 | 0 |\n", File::get("{$dossier}/resume.md"));
+        $this->assertSame(1, $resumer("{$dossier}/absent.xml", $sansSaut[1])->exitCode());
+        $this->assertSame(1, $resumer($avecSaut[0])->exitCode());
+    }
+
+    /**
+     * Les rapports JUnit et TeamCity de PHPUnit sur une classe de tests
+     * jetable, écrite dans ce dossier avec ces méthodes.
+     *
+     * @param  list<string>  $methodes
+     * @return array{0: string, 1: string} le rapport JUnit, le rapport TeamCity
+     */
+    private function rapportsDePhpunit(string $dossier, string $classe, array $methodes): array
+    {
+        File::put("{$dossier}/{$classe}.php", "<?php\n\nclass {$classe} extends PHPUnit\\Framework\\TestCase\n{\n"
+            .implode("\n", array_map(static fn (string $methode): string => "    public function {$methode}", $methodes))
+            ."\n}\n");
+        Process::path(base_path())->run([
+            PHP_BINARY, 'vendor/bin/phpunit', '--no-configuration',
+            '--log-junit', "{$dossier}/{$classe}.xml",
+            '--log-teamcity', "{$dossier}/{$classe}.txt",
+            "{$dossier}/{$classe}.php",
+        ]);
+
+        return ["{$dossier}/{$classe}.xml", "{$dossier}/{$classe}.txt"];
     }
 
     /**

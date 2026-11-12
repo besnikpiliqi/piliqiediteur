@@ -8,6 +8,8 @@ use App\Domain\Achats\Models\AvoirFournisseur;
 use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Achats\Models\LigneAchat;
 use App\Domain\CaisseSecurisee\Services\AnomalieFiscale;
+use App\Domain\Calendrier\Calendrier;
+use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Stock\Enums\StatutInventaireOuverture;
@@ -16,8 +18,11 @@ use App\Domain\Stock\Models\InventaireOuverture;
 use App\Domain\Stock\Models\MouvementStock;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Domain\Tenancy\Support\ValeursLues;
+use Carbon\CarbonImmutable;
+use Carbon\CarbonInterval;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Query\Builder as QueryBuilder;
@@ -36,14 +41,15 @@ use stdClass;
  *   son grand livre ;
  * - chaque facture d'achat validée, inventaire d'ouverture validé et avoir
  *   fournisseur émis a son entrée au journal d'audit chaîné de la société,
- *   et ce que ses mouvements ont fait bouger de chaque produit égale ses
- *   lignes ;
+ *   tant qu'elle n'a pas pu s'effacer à son échéance, et ce que ses
+ *   mouvements ont fait bouger de chaque produit égale ses lignes ;
  * - les lignes de chaque facture d'achat validée sont celles que le
- *   journal d'audit a inscrites en dernier (validation, puis corrections) ;
- * - le coût moyen de chaque produit est celui que rejoue son grand livre
- *   avec les lignes de ses achats validés (voir
- *   StockLedgerService::coutMoyenRejoue()), et son fournisseur celui de
- *   son dernier achat validé.
+ *   journal d'audit a inscrites en dernier (validation, puis corrections),
+ *   tant qu'il en garde une ;
+ * - le coût moyen de chaque produit est l'un de ceux que donnent son grand
+ *   livre et ses achats validés, rejoués sur son histoire réelle (voir
+ *   StockLedgerService::coutsMoyensPossibles()), et son fournisseur celui
+ *   de son dernier achat validé.
  *
  * Le journal d'audit est une donnée de la société : il se lit filtré
  * explicitement par la société et par le magasin vérifié.
@@ -94,6 +100,13 @@ class VerificateurDuStock
     }
 
     /**
+     * Chaque facture d'achat validée, inventaire d'ouverture validé et
+     * avoir fournisseur émis a son entrée au journal d'audit, tant qu'elle
+     * n'a pas pu s'effacer à son échéance (voir PurgerJournalAudit), quand
+     * le document reste : seul est contrôlé un document validé ou émis
+     * après l'horizon de conservation de la catégorie de son entrée (voir
+     * horizonDeConservation()).
+     *
      * @return list<AnomalieFiscale>
      */
     private function documentsSansLeurAudit(Magasin $magasin): array
@@ -101,15 +114,17 @@ class VerificateurDuStock
         $anomalies = [];
 
         foreach ([
-            [FactureAchat::query()->where('statut', StatutFactureAchat::Validee->value), ActionAuditee::FactureAchatValidee, 'La facture d\'achat'],
-            [InventaireOuverture::query()->where('statut', StatutInventaireOuverture::Valide->value), ActionAuditee::InventaireOuvertureValide, 'L\'inventaire d\'ouverture'],
-            [AvoirFournisseur::query()->where('statut', StatutAvoirFournisseur::Emise->value), ActionAuditee::AvoirFournisseurEmis, 'L\'avoir fournisseur'],
-        ] as [$documents, $action, $libelle]) {
+            [FactureAchat::query()->where('statut', StatutFactureAchat::Validee->value), ActionAuditee::FactureAchatValidee, 'date_validation', 'La facture d\'achat'],
+            [InventaireOuverture::query()->where('statut', StatutInventaireOuverture::Valide->value), ActionAuditee::InventaireOuvertureValide, 'date_validation', 'L\'inventaire d\'ouverture'],
+            [AvoirFournisseur::query()->where('statut', StatutAvoirFournisseur::Emise->value), ActionAuditee::AvoirFournisseurEmis, 'date_emission', 'L\'avoir fournisseur'],
+        ] as [$documents, $action, $colonneDeLInstant, $libelle]) {
             $alias = $documents->getModel()->getMorphClass();
             $table = $documents->getModel()->getTable();
+            $horizon = self::horizonDeConservation($action);
 
             foreach ($documents->toBase()
                 ->select(["{$table}.id", "{$table}.numero"])
+                ->when($horizon !== null, fn (QueryBuilder $recents): QueryBuilder => $recents->where("{$table}.{$colonneDeLInstant}", '>', Instant::enBase(ValeurRequise::de($horizon, 'l\'horizon de conservation de son entrée'))))
                 ->whereNotExists(fn (QueryBuilder $audit): QueryBuilder => $this->entreesDAudit($audit, $magasin, $action)
                     ->where('journal_audit.cible_type', $alias)
                     ->whereColumn('journal_audit.cible_id', "{$table}.id"))
@@ -243,12 +258,12 @@ class VerificateurDuStock
                 }
 
                 $lignes = $achats->get($produit->getKey(), new Collection);
-                $cout = $this->stock->coutMoyenRejoue($produit, $grandsLivres->get($produit->getKey(), new Collection), $this->stock->lotsDe($lignes));
+                $couts = $this->stock->coutsMoyensPossibles($produit, $grandsLivres->get($produit->getKey(), new Collection), $this->stock->lotsDe($lignes));
                 $enBase = $this->calculateur->enDixMilliemes($produit->cmup_ht);
 
-                if ($cout !== null && $cout !== $enBase) {
+                if ($couts !== [] && ! in_array($enBase, $couts, true)) {
                     $anomalies[] = self::anomalie(
-                        'Le coût moyen du produit '.self::libelleDuProduit($produit).' est de '.self::enEuros($enBase).' au lieu de '.self::enEuros($cout).' que rejouent son grand livre et ses achats.',
+                        'Le coût moyen du produit '.self::libelleDuProduit($produit).' est de '.self::enEuros($enBase).' au lieu de '.implode(' ou ', array_map(self::enEuros(...), $couts)).' que rejouent son grand livre et ses achats.',
                         ['produit_id' => ValeurSimple::enEntier($produit->getKey())],
                     );
                 }
@@ -266,6 +281,29 @@ class VerificateurDuStock
         });
 
         return $anomalies;
+    }
+
+    /**
+     * L'instant avant lequel l'entrée au journal d'audit de cette action a
+     * pu s'effacer à son échéance : une entrée s'efface une fois passée la
+     * durée de conservation de sa catégorie, comptée à l'heure murale de
+     * Paris depuis son inscription (voir JournalAudit), qui suit la
+     * validation ou l'émission de son document dans la même transaction ;
+     * un jour de marge couvre les changements d'heure et les années
+     * bissextiles. Null pour une catégorie conservée jusqu'à la fin de la
+     * relation.
+     */
+    private static function horizonDeConservation(ActionAuditee $action): ?CarbonImmutable
+    {
+        $duree = $action->categorie()->dureeDeConservation();
+
+        if ($duree === null) {
+            return null;
+        }
+
+        $paris = Calendrier::deParis();
+
+        return $paris->decaler($paris->decaler(CarbonImmutable::now(), $duree->copy()->invert()), CarbonInterval::day());
     }
 
     /**

@@ -32,6 +32,7 @@ use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\ClotureCaisse;
+use App\Domain\Facturation\Models\EnvoiDocument;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Models\PaiementAllocation;
@@ -41,6 +42,7 @@ use App\Domain\Stock\Actions\ValiderInventaireOuvertureAction;
 use App\Domain\Stock\Enums\TypeMouvementStock;
 use App\Domain\Stock\Services\StockLedgerService;
 use App\Domain\Stock\Support\GardesDuStock;
+use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use Closure;
@@ -478,7 +480,7 @@ class VerificateurIntegriteTest extends TestCase
         $vente = $this->enregistrementDe($facture, ChaineFiscale::Vente);
         $contenu = json_decode($vente->contenu, true, flags: JSON_THROW_ON_ERROR);
 
-        $this->assertSame('1.5', $contenu['version_module']);
+        $this->assertSame('2.0', $contenu['version_module']);
         $this->assertSame(['assureur' => 'Mutuelle du Littoral', 'adresse' => '4 rue Paradis, 13001 Marseille', 'contrat' => 'RC-2026-118', 'couverture' => 'France métropolitaine'], $contenu['donnees']['contexte']['emetteur']['assurance']);
         $this->assertSame([], $this->anomalies($this->verifier()));
 
@@ -1505,6 +1507,37 @@ class VerificateurIntegriteTest extends TestCase
     }
 
     /**
+     * § 2.4 du lot AUD : une transmission à la plateforme agréée, un envoi
+     * et une demande déjà traitée, faits par leurs actions, désignent un
+     * document du magasin, sans anomalie ; réécrits comme le ferait un
+     * administrateur de la base pour désigner la facture d'un magasin
+     * d'une autre société, ou un document d'une nature inconnue, chacun
+     * est relevé.
+     */
+    public function test_une_reference_polymorphe_qui_sort_de_son_magasin_est_relevee(): void
+    {
+        $magasin = $this->magasinActif();
+        $facture = self::vendreAuComptant(self::auteur(), Client::factory()->create(), [['produit_id' => $this->produit('VIS', 2)->id, 'quantite' => 1]], jeton: '7a1c2e5d-0b3f-4c6a-9d8e-1f2a3b4c5d6e');
+        $transmission = $facture->transmissionsPdp()->create(['direction' => 'outbound', 'prestataire_pdp' => 'faux', 'statut' => 'soumise']);
+        $envoi = EnvoiDocument::factory()->create(['document_type' => $facture->getMorphClass(), 'document_id' => $facture->id]);
+        $action = DB::table('actions_traitees')->where('magasin_id', $magasin->id)->where('resultat_type', $facture->getMorphClass())->sole();
+        $ailleurs = Magasin::factory()->create(['code' => 'AILL']);
+        $factureDAilleurs = app(TenantContext::class)->runAs($ailleurs, fn (): Facture => Facture::factory()->create());
+        app(TenantContext::class)->set($magasin);
+        $this->assertSame([], $this->anomalies($this->verifier()));
+
+        DB::table('transmissions_pdp')->where('id', $transmission->id)->update(['transmissible_id' => $factureDAilleurs->id]);
+        DB::table('envois_documents')->where('id', $envoi->id)->update(['document_type' => 'inconnu']);
+        DB::table('actions_traitees')->where('id', $action->id)->update(['resultat_id' => $factureDAilleurs->id]);
+
+        $this->assertSame([
+            [90, "La transmission n° {$transmission->id} à la plateforme agréée désigne « facture » #{$factureDAilleurs->id}, qui n'est pas un document de ce magasin."],
+            [90, "L'envoi n° {$envoi->id} désigne « inconnu » #{$facture->id}, qui n'est pas un document d'un magasin."],
+            [90, "La demande déjà traitée n° {$action->id} désigne « facture » #{$factureDAilleurs->id}, qui n'est pas un document de ce magasin."],
+        ], $this->anomalies($this->verifier()));
+    }
+
+    /**
      * C26 : un ticket Z inséré par une requête directe n'a été signé par
      * aucune clôture, et son numéro n'a été attribué par aucune.
      */
@@ -1591,9 +1624,12 @@ class VerificateurIntegriteTest extends TestCase
     }
 
     /**
-     * C17 : une facture d'achat « validée » et sa ligne insérées
-     * directement, avec un mouvement qui la désigne mais sans son entrée
-     * au journal d'audit, sont relevées.
+     * C17 : une facture d'achat validée, avec un mouvement qui la désigne,
+     * dont l'entrée au journal d'audit a disparu (effacée comme le ferait
+     * le propriétaire des tables, après la preuve que la base refuse de
+     * l'effacer), est relevée. La base refuserait aussi ce mouvement à la
+     * validation de la transaction : son auteur n'est plus celui de la
+     * validation inscrite.
      */
     public function test_un_achat_valide_sans_son_entree_au_journal_d_audit_est_releve(): void
     {
@@ -1602,8 +1638,44 @@ class VerificateurIntegriteTest extends TestCase
         [$produit] = $this->produitRecu(5);
         $achat = $this->justificatifDuStock(TypeMouvementStock::ReceptionAchat, $produit, 3);
         $this->commeAuteurDuDocument(fn () => app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::ReceptionAchat, 3, $achat));
+        $entree = fn () => DB::table('journal_audit')->where('cible_type', $achat->getMorphClass())->where('cible_id', $achat->getKey())->where('action', ActionAuditee::FactureAchatValidee->value);
+        $this->assertSame(1, $entree()->count());
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => $entree()->delete()), QueryException::class, 'journal_audit : suppression refusée avant expiration');
+        $this->retirerLeDeclencheur('journal_audit', 'journal_audit_effacement_apres_expiration_delete');
+        $entree()->delete();
+        $this->laBaseRefuseraCetEtatALaValidation();
 
         $this->assertSame(["La facture d'achat {$achat->getAttribute('numero')} a fait bouger le stock sans son entrée au journal d'audit : elle n'a pas été écrite par PILIQI."], $this->ecartsDuStock());
+    }
+
+    /**
+     * Les entrées du journal d'audit d'un achat validé s'effacent à leur
+     * échéance (dix ans pour les opérations), quand les documents et leurs
+     * mouvements restent : un achat validé en mars 2014, dont la purge de
+     * janvier 2025 a effacé l'entrée, n'est pas relevé comme écrit hors de
+     * PILIQI, ni ses lignes ; un achat récent sans son entrée l'est
+     * toujours.
+     */
+    public function test_un_achat_dont_l_entree_d_audit_a_expire_et_a_ete_effacee_n_est_pas_releve(): void
+    {
+        $this->travelTo(self::aParis('2014-03-10 10:00:00'));
+        $this->magasinActif();
+        [$produit, $achat] = $this->produitRecu(5);
+        $this->assertSame([], $this->ecartsDuStock());
+        $this->travelTo(self::aParis('2025-01-02 10:00:00'));
+
+        $this->artisan('app:purger-journal-audit')->assertSuccessful();
+
+        $this->assertSame(0, DB::table('journal_audit')->where('cible_type', $achat->getMorphClass())->where('cible_id', $achat->getKey())->count());
+        $this->assertSame([], $this->ecartsDuStock());
+
+        $recent = $this->justificatifDuStock(TypeMouvementStock::ReceptionAchat, $produit, 3);
+        $this->commeAuteurDuDocument(fn () => app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::ReceptionAchat, 3, $recent));
+        $this->retirerLeDeclencheur('journal_audit', 'journal_audit_effacement_apres_expiration_delete');
+        DB::table('journal_audit')->where('cible_type', $recent->getMorphClass())->where('cible_id', $recent->getKey())->delete();
+        $this->laBaseRefuseraCetEtatALaValidation();
+
+        $this->assertSame(["La facture d'achat {$recent->getAttribute('numero')} a fait bouger le stock sans son entrée au journal d'audit : elle n'a pas été écrite par PILIQI."], $this->ecartsDuStock());
     }
 
     /**
@@ -1626,6 +1698,7 @@ class VerificateurIntegriteTest extends TestCase
         $this->retirerLeDeclencheur('lignes_achat', GardesDuStock::COHERENCE_DES_LIGNES);
 
         DB::table('lignes_achat')->where('id', $ligne->id)->update(['quantite' => 50]);
+        $this->laBaseRefuseraCetEtatALaValidation();
 
         $this->assertSame([
             "Les mouvements du produit #{$ligne->produit_id} venus de la facture d'achat #{$achat->id} font 5 article(s), au lieu des 50 de ses lignes.",
@@ -1655,9 +1728,15 @@ class VerificateurIntegriteTest extends TestCase
 
     /**
      * Contrôles positifs : une correction de prix, un retour au
-     * fournisseur, un produit sans suivi, un inventaire d'ouverture et un
-     * produit retiré de son seul achat, faits par leurs actions, ne
-     * présentent aucun écart.
+     * fournisseur, un produit sans suivi, un inventaire d'ouverture, un
+     * produit retiré de son seul achat, le suivi du stock coupé puis
+     * rétabli sur la fiche d'un produit, entre des achats à des coûts
+     * différents puis avec la correction d'un achat fait pendant le suivi,
+     * et le suivi décoché depuis la ligne d'une réception corrigée (le
+     * produit coûte alors son dernier achat), faits par leurs actions, ne
+     * présentent aucun écart : le coût moyen se rejoue sur l'histoire
+     * réelle du produit, chaque réception qui a fait entrer du stock
+     * pondérant le coût, chaque achat reçu sans suivi le fixant.
      */
     public function test_les_parcours_legitimes_du_stock_ne_presentent_aucun_ecart(): void
     {
@@ -1674,8 +1753,53 @@ class VerificateurIntegriteTest extends TestCase
         app(ValiderFactureAchatAction::class)->handle(self::auteur(), app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [['produit_id' => $sansSuivi->id, 'quantite' => 3, 'prix_unitaire_ht' => '4']], ['date_facture' => '2026-10-09']));
         [$retire, $seulAchat] = $this->produitRecu(4, '2', 'AGENDA');
         app(ModifierFactureAchatAction::class)->handle(self::auteur(), $seulAchat, $seulAchat->fournisseur()->firstOrFail(), [['produit_id' => $sansSuivi->id, 'quantite' => 1, 'prix_unitaire_ht' => '4']]);
+        [$suiviCoupe] = $this->produitRecu(10, '2', 'CAHIER');
+        $this->acheter($suiviCoupe, 10, '4');
+        $this->suivreLeStock($suiviCoupe, false);
+        [$suiviRetabli, $premierAchat] = $this->produitRecu(10, '2', 'CLASSEUR');
+        $this->suivreLeStock($suiviRetabli, false);
+        $this->acheter($suiviRetabli, 10, '4');
+        $this->suivreLeStock($suiviRetabli, true);
+        $this->acheter($suiviRetabli, 10, '6');
+        $this->suivreLeStock($sansSuivi, true);
+        $this->acheter($sansSuivi, 2, '7');
+        [$decocheALaCorrection] = $this->produitRecu(10, '2', 'CRAYON');
+        $secondAchat = $this->acheter($decocheALaCorrection, 10, '4');
+        app(ModifierFactureAchatAction::class)->handle(self::auteur(), $secondAchat, $secondAchat->fournisseur()->firstOrFail(), [['produit_id' => $decocheALaCorrection->id, 'produit' => ['suivi_stock' => false], 'quantite' => 5, 'prix_unitaire_ht' => '6']]);
 
         $this->assertSame([0, '3.0000'], [$retire->fresh()?->stock_quantite, $produit->fresh()?->cmup_ht]);
+        $this->assertSame([[20, '3.0000'], [20, '5.0000'], [2, '7.0000'], [15, '6.0000']], [
+            [$suiviCoupe->fresh()?->stock_quantite, $suiviCoupe->fresh()?->cmup_ht],
+            [$suiviRetabli->fresh()?->stock_quantite, $suiviRetabli->fresh()?->cmup_ht],
+            [$sansSuivi->fresh()?->stock_quantite, $sansSuivi->fresh()?->cmup_ht],
+            [$decocheALaCorrection->fresh()?->stock_quantite, $decocheALaCorrection->fresh()?->cmup_ht],
+        ]);
         $this->assertSame([], $this->ecartsDuStock());
+
+        app(ModifierFactureAchatAction::class)->handle(self::auteur(), $premierAchat->fresh() ?? $premierAchat, $premierAchat->fournisseur()->firstOrFail(), [['produit_id' => $suiviRetabli->id, 'quantite' => 10, 'prix_unitaire_ht' => '3']]);
+
+        $this->assertSame('5.0000', $suiviRetabli->fresh()?->cmup_ht);
+        $this->assertSame([], $this->ecartsDuStock());
+    }
+
+    /**
+     * Une facture d'achat de $quantite articles du produit au prix unitaire
+     * HT donné, saisie puis validée par ses actions.
+     */
+    private function acheter(Produit $produit, int $quantite, string $prixUnitaireHt): FactureAchat
+    {
+        return app(ValiderFactureAchatAction::class)->handle(self::auteur(), app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [
+            ['produit_id' => $produit->id, 'quantite' => $quantite, 'prix_unitaire_ht' => $prixUnitaireHt],
+        ], ['date_facture' => '2026-10-09']));
+    }
+
+    /**
+     * Le suivi du stock coché ou décoché sur la fiche du produit, comme
+     * l'écran des produits l'enregistre.
+     */
+    private function suivreLeStock(Produit $produit, bool $suivi): void
+    {
+        $fiche = $produit->fresh() ?? $produit;
+        $fiche->update(['suivi_stock' => $suivi]);
     }
 }

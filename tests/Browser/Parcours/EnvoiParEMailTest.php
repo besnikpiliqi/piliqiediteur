@@ -184,7 +184,7 @@ test('chaque compte qui relance une facture échue lit, depuis la liste comme de
     ])));
 
     foreach (['proprietaire', 'administrateur', 'administrateurVendeur', 'responsable', 'vendeur'] as $jour => $compte) {
-        $this->travelTo(self::aParis('2026-04-15 10:00:00')->addDays($jour));
+        $this->travelTo(self::aParis('2026-04-'.(15 + $jour).' 10:00:00'));
         $onglet = $this->seConnecter($societe->{$compte});
         $adresse = strtolower($compte).'.relance';
 

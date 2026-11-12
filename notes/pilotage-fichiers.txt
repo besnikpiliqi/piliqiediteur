@@ -211,3 +211,4 @@ reprises/lot-FI-commits-locaux.patch
 reprises/lot-FI-travail-non-commite.patch
 reprises/lot-FI-travail-non-commite-complet.patch
 demo/decision-demo.md
+a-trancher/surveiller-reponses-pro.py

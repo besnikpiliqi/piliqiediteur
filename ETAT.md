@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 12/11/2026 à 01:32 UTC par pilotage-sync.sh : « Note de la décision sur la démonstration ».
+Mis à jour le 12/11/2026 à 01:37 UTC par pilotage-sync.sh : « D69 : la colonne Réponse du professionnel fait foi, surveillée à chaque point de suivi ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

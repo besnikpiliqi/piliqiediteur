@@ -1876,3 +1876,15 @@ demo: aucune
 
 il faut supprimer ce qui se fait avec demo. peut etre il faut cherche avec son uuid tout ces fait
 
+## 198. 2026-11-12 01:36 UTC
+
+<!-- attach -->
+
+> Chaque case commencera par « Réponse préparée par Claude, d’après les textes officiels : ce n’est pas l’avis d’un professionnel. À faire confirmer par … », puis donnera la réponse, les sources, le degré de certitude et ce que PILIQI fait (conforme ou à corriger).
+
+> Vous n’aurez plus qu’à la faire confirmer.
+
+
+
+mais toi tu fait apres ton travail en se basant sur ce que tu me mets dans cette case et non que tu attend toujour comme jusqu à aujordhuoi. donc tu fait le code en se basant sur ces decision et si moi je change apres alors la tu fait à nouveau pour chaque modification de ma part. donc tu fait le code en se basant sur "Réponse préparée par Claude" et toi regarde au fur à mesure sur la case "Réponse du professionnel" afin que tu fait ce qui dit cette case mais peut etre je vais jamais changer mais toi tu regarde quand meme toujours cette case.
+

@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 12/11/2026 à 01:31 UTC par pilotage-sync.sh : « Décision : suppression de la démonstration à la validation (lot DEMO) ».
+Mis à jour le 12/11/2026 à 01:32 UTC par pilotage-sync.sh : « Note de la décision sur la démonstration ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

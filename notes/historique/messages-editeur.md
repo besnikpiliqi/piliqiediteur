@@ -1948,3 +1948,7 @@ donc cette colonne tu laisse vide car il faut remplire par l expert comptable ou
 
 mais ce sont plus mes reponse car tu va enleve et tu va mettre tes reponse (decision) à la place. donc mes decision tu va juste supprimer
 
+## 205. 2026-11-12 02:33 UTC
+
+donc tu va faire la meme chose dorenavant pour tes nouvelles questions que tu vas faire, tu les mets pareille avec tes decision et Onglet professionnel vide
+

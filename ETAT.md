@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 12/11/2026 à 02:26 UTC par pilotage-sync.sh : « Les 19 textes de l'éditeur seront supprimés du document ».
+Mis à jour le 12/11/2026 à 02:34 UTC par pilotage-sync.sh : « D73 : nouvelles questions avec décision appliquée sans attendre ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

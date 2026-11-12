@@ -1938,3 +1938,13 @@ tu fait rien pour le demo, laisse comme est mtn et juste tu autorise que le prop
 
 donc cette colonne tu laisse vide car il faut remplire par l expert comptable ou etc. mais tu mets  tes decision dans une colenne à part comme t as nomé toi "Réponse préparée et decidé par Claude"
 
+## 204. 2026-11-12 02:26 UTC
+
+<!-- attach -->
+
+> Vos textes du 11/11 sortiront de « Réponse du professionnel », pour la laisser vide. Ils restent cités mot pour mot dans l’onglet « Mes questions et vos réponses » (Q399 à Q417).
+
+
+
+mais ce sont plus mes reponse car tu va enleve et tu va mettre tes reponse (decision) à la place. donc mes decision tu va juste supprimer
+

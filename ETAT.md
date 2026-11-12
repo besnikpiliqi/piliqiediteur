@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 12/11/2026 à 02:23 UTC par pilotage-sync.sh : « D72 : colonne à part pour les décisions de Claude ».
+Mis à jour le 12/11/2026 à 02:26 UTC par pilotage-sync.sh : « Les 19 textes de l'éditeur seront supprimés du document ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -74,6 +74,7 @@ d8d2ee3 Contrôle les seuils de l'analyse statique par ses paramètres effectifs
  M app/Domain/Tenancy/Support/GardesDesTypesDActivite.php
  M app/Filament/App/Pages/Caisse.php
  M database/factories/ClotureCaisseFactory.php
+ M database/factories/ProduitFactory.php
  M database/migrations/0001_01_01_000000_create_magasins_table.php
  M database/migrations/2026_10_02_100013_create_codes_confirmation_table.php
  M database/migrations/2026_10_02_100014_create_pieces_verification_table.php
@@ -96,7 +97,6 @@ d8d2ee3 Contrôle les seuils de l'analyse statique par ses paramètres effectifs
  M database/migrations/2026_10_04_100002_create_paiement_allocations_table.php
  M database/migrations/2026_10_04_100003_create_lignes_recu_paiement_table.php
  M database/migrations/2026_10_05_100001_create_avoirs_table.php
- M database/migrations/2026_10_05_100002_create_lignes_avoir_table.php
 ```
 
 ## Dernière course de la chaîne

@@ -372,9 +372,9 @@ class FermerSaCaisseActionTest extends TestCase
      * Un paiement de 100,00 € en espèces saisi par erreur par le vendeur,
      * contre-passé par le propriétaire, puis le bon paiement de 10,00 € :
      * la contre-passation revient dans le relevé du vendeur (Espèces
-     * 10,00 €) ; le propriétaire, qui ne vend jamais, n'a pas de caisse,
-     * même après sa contre-passation ; le paiement d'un autre vendeur n'y
-     * figure pas.
+     * 10,00 €) ; le propriétaire, qui ne vend jamais dans un magasin réel,
+     * n'y a pas de caisse, même après sa contre-passation ; le paiement
+     * d'un autre vendeur n'y figure pas.
      */
     public function test_une_erreur_contre_passee_par_le_proprietaire_revient_dans_le_releve_du_vendeur(): void
     {

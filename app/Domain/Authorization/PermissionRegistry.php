@@ -20,8 +20,8 @@ use InvalidArgumentException;
  * propriétaire de la société les a toutes sauf celles de la vente (voir
  * deVente() et duProprietaire()) dans chacun de ses magasins réels : il
  * supervise et contrôle, et n'y vend jamais ; dans le magasin de
- * démonstration de sa société, il les a toutes, celles de la vente
- * comprises, et s'y entraîne à tout (voir
+ * démonstration de sa société, tant qu'il est ouvert, il les a toutes,
+ * celles de la vente comprises, et s'y entraîne à tout (voir
  * duProprietaireEnDemonstration()) ; un responsable les a toutes dans son
  * magasin, et un compte du cabinet d'expertise comptable lié celles que le
  * client accorde au cabinet dans chacun de ses magasins réels (voir
@@ -472,16 +472,20 @@ final class PermissionRegistry
 
     /**
      * Les autorisations du propriétaire dans le magasin de démonstration
-     * de sa société, sans case : toutes celles du type de la société (voir
-     * pourLeType()), celles de la vente comprises, dans l'ordre
-     * alphabétique (décision de l'éditeur du 12/11/2026). Il s'y entraîne à
-     * tout, comme un responsable : il ouvre la caisse, crée et émet des
-     * tickets et des factures, encaisse, vend sans stock, accorde des
-     * remises, utilise un bon d'avoir, ferme sa caisse et clôture la
-     * journée. La démonstration fermée, à la validation de la société ou
-     * faute d'opération, est en lecture seule et ne vend plus, pour lui
-     * comme pour tout compte (voir ControleDesDroits et
-     * Magasin::peutVendre()).
+     * de sa société, tant qu'il est ouvert, sans case : toutes celles du
+     * type de la société (voir pourLeType()), celles de la vente comprises,
+     * dans l'ordre alphabétique (décision de l'éditeur du 12/11/2026). Il
+     * s'y entraîne à tout, comme un responsable : il ouvre la caisse, crée
+     * et émet des tickets et des factures, encaisse, vend sans stock,
+     * accorde des remises, utilise un bon d'avoir, ferme sa caisse et
+     * clôture la journée. Fermée, à la validation de la société ou faute
+     * d'opération, la démonstration est en lecture seule et ne vend plus,
+     * pour lui comme pour tout compte (voir ControleDesDroits et
+     * Magasin::peutVendre()), et il n'y a plus que celles de
+     * duProprietaire() : il n'y tient plus de caisse, sinon pour fermer
+     * celle qu'il y aurait laissée ouverte (voir
+     * User::autorisationsEnregistreesDans() et
+     * ClotureCaissePersonnellePolicy::fermer()).
      *
      * @return list<string>
      */

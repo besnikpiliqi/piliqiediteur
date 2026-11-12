@@ -9,9 +9,10 @@ use App\Models\User;
 /**
  * Le magasin de démonstration d'une société inscrite qui attend le code de
  * son courrier, tel que les tests en navigateur le parcourent (voir
- * TestCaseDuNavigateur::demonstration()) : son propriétaire, qui ne vend
- * pas, et les comptes d'entraînement qu'il y crée, un responsable et un
- * vendeur. Chaque mot de passe est MOT_DE_PASSE_CHOISI.
+ * TestCaseDuNavigateur::demonstration()) : son propriétaire, qui y vend
+ * comme un responsable (le seul magasin où il vend), et les comptes
+ * d'entraînement qu'il y crée, un responsable et un vendeur. Chaque mot de
+ * passe est MOT_DE_PASSE_CHOISI.
  */
 final readonly class DemonstrationDeTest
 {

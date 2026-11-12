@@ -65,7 +65,8 @@ class EnregistrementFiscalResourceTest extends TestCase
 
     /**
      * Une vente au comptoir du responsable de test du magasin actif : le
-     * propriétaire connecté consulte le registre, mais ne vend jamais.
+     * propriétaire connecté consulte le registre, mais ne vend jamais dans
+     * un magasin réel.
      */
     private function vendre(int $quantite = 2): void
     {

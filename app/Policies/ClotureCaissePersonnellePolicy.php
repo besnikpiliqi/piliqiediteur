@@ -16,12 +16,14 @@ use App\Models\User;
  * consulte ses relevés (voir User::tientUneCaisseDans() et le docblock de
  * ClotureCaissePersonnelle), le responsable comme le vendeur, et un
  * administrateur à qui le propriétaire a coché la vente, et le
- * propriétaire dans le magasin de démonstration, le seul où il vend et
- * tient une caisse. Un compte qui n'est
+ * propriétaire dans le magasin de démonstration tant qu'il est ouvert, le
+ * seul où il vend et tient une caisse. Un compte qui n'est
  * plus autorisé à vendre ferme encore la caisse qu'il a laissée ouverte
  * dans le magasin (voir fermer()) : un vendeur dont on a décoché la vente,
  * un administrateur devenu propriétaire avec les ventes qu'il avait faites
- * comme administrateur. Qui peut clôturer la
+ * comme administrateur, le propriétaire dans la démonstration fermée ;
+ * une fois cette caisse fermée, il n'en ferme plus aucune, pas même à
+ * zéro. Qui peut clôturer la
  * journée (cloture_caisse.gerer) ferme aussi celle d'un autre vendeur du
  * magasin, pour lui (voir fermerLaCaisseDe()), depuis la page des relevés,
  * qui lui est donc ouverte même s'il ne vend ni n'encaisse ; et toute

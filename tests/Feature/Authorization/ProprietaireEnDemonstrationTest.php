@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Authorization;
 
+use App\Domain\Authorization\AutorisationsSociete;
 use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
@@ -14,6 +15,7 @@ use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\EncaisserEnPlusieursModesAction;
 use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
+use App\Domain\Facturation\Actions\FermerLesCaissesPersonnellesAction;
 use App\Domain\Facturation\Actions\FermerSaCaisseAction;
 use App\Domain\Facturation\Enums\ModeFermetureCaisse;
 use App\Domain\Facturation\Enums\ModePaiement;
@@ -44,6 +46,7 @@ use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
+use RuntimeException;
 use Tests\TestCase;
 
 /**
@@ -233,6 +236,96 @@ class ProprietaireEnDemonstrationTest extends TestCase
             $this->assertSame((int) $proprietaire->id, (int) self::vendreAuComptant($proprietaire, $this->comptoir(), $this->carnets(1))->cree_par);
             $this->assertSame(2, Facture::query()->count());
         });
+    }
+
+    /**
+     * Fermée à la validation de la société, la démonstration ne laisse au
+     * propriétaire que ses droits d'un magasin réel, sans la vente : il n'y
+     * tient plus de caisse, « Fermer ma caisse » ne s'y montre plus et
+     * aucun relevé à zéro ne s'y écrit, trois jours plus tard, à son nom.
+     */
+    public function test_dans_la_demonstration_fermee_le_proprietaire_ne_tient_plus_de_caisse_ni_n_y_ferme_un_releve_a_zero(): void
+    {
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
+        $societe = $this->inscrireUneSociete();
+        $this->creerLeMagasinDuSiege($societe);
+        $demonstration = app(OuvrirLaDemonstrationAction::class)->handle($societe->proprietaire, $societe);
+        $this->saisirLeCodeDuCourrier($societe);
+        $this->travelTo(self::aParis('2026-10-12 10:00:00'));
+
+        $proprietaire = $societe->proprietaire()->firstOrFail();
+        $fermee = $demonstration->fresh();
+
+        $this->assertSame(StatutMagasin::Ferme, $fermee->statut);
+        $this->assertEqualsCanonicalizing(PermissionRegistry::duProprietaire(TypeDActivite::Commerce), $proprietaire->autorisationsDans($fermee));
+        $this->assertFalse($proprietaire->tientUneCaisseDans($fermee));
+        $this->dansLeMagasin($fermee, $proprietaire);
+        Livewire::test(ListClotureCaissePersonnelles::class)->assertOk()->assertActionHidden('fermer_ma_caisse');
+        $this->assertThrows(fn () => app(FermerSaCaisseAction::class)->handle($proprietaire, $proprietaire), AuthorizationException::class);
+        $this->assertSame(0, ClotureCaissePersonnelle::query()->count());
+    }
+
+    /**
+     * Si la fermeture d'office de sa caisse a échoué à la fermeture de la
+     * démonstration, le propriétaire y ferme encore lui-même la caisse
+     * qu'il y a laissée ouverte, avec sa vente ; ensuite, il n'en ferme
+     * plus aucune.
+     */
+    public function test_dans_la_demonstration_fermee_le_proprietaire_ferme_encore_la_caisse_qu_il_y_a_laissee_ouverte(): void
+    {
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
+        $societe = $this->inscrireUneSociete();
+        $this->creerLeMagasinDuSiege($societe);
+        $demonstration = app(OuvrirLaDemonstrationAction::class)->handle($societe->proprietaire, $societe);
+        $proprietaire = $societe->proprietaire()->firstOrFail();
+        app(TenantContext::class)->runAs($demonstration, fn (): Facture => self::vendreAuComptant($proprietaire, $this->comptoir(), $this->carnets(1)));
+        $this->mock(FermerLesCaissesPersonnellesAction::class, fn ($fermeture) => $fermeture->shouldReceive('handle')->andThrow(new RuntimeException('Registre indisponible.')));
+
+        $this->saisirLeCodeDuCourrier($societe);
+        $this->travelTo(self::aParis('2026-10-12 10:00:00'));
+
+        $proprietaire = $societe->proprietaire()->firstOrFail();
+        $this->dansLeMagasin($demonstration->fresh(), $proprietaire);
+        $this->assertSame(StatutMagasin::Ferme, $demonstration->fresh()->statut);
+        $this->assertFalse($proprietaire->tientUneCaisseDans($demonstration->fresh()));
+        Livewire::test(ListClotureCaissePersonnelles::class)
+            ->assertActionVisible('fermer_ma_caisse')
+            ->callAction('fermer_ma_caisse')
+            ->assertHasNoActionErrors();
+
+        $releve = ClotureCaissePersonnelle::query()->sole();
+        $this->assertSame([(int) $proprietaire->id, ModeFermetureCaisse::Vendeur, 1], [(int) $releve->vendeur_id, $releve->mode_fermeture, $releve->nombre_ventes]);
+        Livewire::test(ListClotureCaissePersonnelles::class)->assertActionHidden('fermer_ma_caisse');
+    }
+
+    /**
+     * Les droits du propriétaire dans la démonstration suivent son
+     * statut, au journal des événements (JET 130) : la vente comprise à
+     * son ouverture, retirée à sa fermeture pour inactivité, rendue à sa
+     * réouverture ; ceux d'un administrateur de tous les magasins, que le
+     * statut ne change pas, ne s'y réinscrivent pas.
+     */
+    public function test_la_fermeture_et_la_reouverture_de_la_demonstration_s_inscrivent_aux_droits_du_proprietaire(): void
+    {
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
+        $societe = $this->inscrireUneSociete();
+        $reel = $this->creerLeMagasinDuSiege($societe);
+        $administrateur = $this->administrateur($reel, null, [AutorisationsSociete::MAGASINS_GERER]);
+        $demonstration = app(OuvrirLaDemonstrationAction::class)->handle($societe->proprietaire, $societe->fresh());
+        $proprietaire = $societe->proprietaire()->firstOrFail();
+
+        $this->travelTo(self::aParis('2026-11-09 10:00:00'));
+        $this->artisan('app:fermer-demonstrations-inactives')->assertSuccessful();
+        app(OuvrirLaDemonstrationAction::class)->handle($proprietaire, $societe->fresh());
+
+        $enDemonstration = PermissionRegistry::duProprietaireEnDemonstration(TypeDActivite::Commerce);
+        $horsDeLaVente = PermissionRegistry::duProprietaire(TypeDActivite::Commerce);
+        $modifications = collect($this->modificationsDesDroits($demonstration));
+        $this->assertSame(
+            [[null, $enDemonstration], [$enDemonstration, $horsDeLaVente], [$horsDeLaVente, $enDemonstration]],
+            $modifications->where('membre.id', $proprietaire->id)->map(fn (array $modification): array => [$modification['avant']['permissions'] ?? null, $modification['apres']['permissions']])->values()->all(),
+        );
+        $this->assertCount(1, $modifications->where('membre.id', $administrateur->id));
     }
 
     /**

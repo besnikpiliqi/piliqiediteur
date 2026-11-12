@@ -338,7 +338,7 @@ class EnvoieLesDocumentsTest extends TestCase
     /**
      * Une facture de 120,00 € TTC, émise par ce vendeur, sinon par le
      * responsable de test du magasin actif : le propriétaire connecté
-     * l'envoie et la relance, mais ne vend jamais.
+     * l'envoie et la relance, mais n'y vend jamais, le magasin étant réel.
      */
     private function emettreFacture(Client $client, ?User $vendeur = null): Facture
     {

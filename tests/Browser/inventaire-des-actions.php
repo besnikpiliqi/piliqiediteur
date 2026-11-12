@@ -2226,7 +2226,10 @@ return [
         'page' => ['lot' => 'NAV-4', 'tests' => []],
     ],
     'app/Filament/Societe/Pages/TableauDeBord.php' => [
-        'action:ouvrirLaDemonstration' => ['lot' => 'NAV-4', 'tests' => []],
+        'action:ouvrirLaDemonstration' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Parcours/OuvrirLaDemonstrationTest.php › le propriétaire ouvre le magasin de démonstration, dont la fenêtre dit qu’il y vend',
+            'tests/Browser/Parcours/OuvrirLaDemonstrationTest.php › l’administrateur rouvre le magasin de démonstration fermé faute d’opération, dont la fenêtre dit qu’il n’y vend que si la vente lui est cochée',
+        ]],
         'page' => ['lot' => 'NAV-4', 'tests' => [
             'tests/Browser/Balayage/BalayageDeLEspaceDeLaSocieteTest.php › le propriétaire d’une société qui attend son code ouvre chaque page et chaque action de l’espace de sa société sans erreur',
             'tests/Browser/Balayage/BalayageDeLEspaceDeLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action de l’espace de sa société sans erreur',

@@ -197,6 +197,7 @@ class MagasinDeDemonstrationTest extends TestCase
         Livewire::test(TableauDeBord::class)
             ->mountAction('ouvrirLaDemonstration')
             ->assertSee('vous y vendez, encaissez et clôturez comme pour de vrai, ce que vous ne faites jamais dans vos magasins réels ; pour y faire essayer la caisse à votre équipe, créez-y des comptes d\'entraînement : ils ne servent qu\'ici et sont retirés à la validation de votre société.')
+            ->assertDontSee('vous n\'y vendez que si le propriétaire vous a coché la vente')
             ->callMountedAction();
 
         $demonstration = $societe->demonstration()->sole();
@@ -212,6 +213,45 @@ class MagasinDeDemonstrationTest extends TestCase
         $this->assertSame(2, Facture::query()->count());
     }
 
+    /**
+     * Un administrateur de tous les magasins autorisé à les gérer rouvre la
+     * démonstration fermée pour inactivité : la fenêtre ne lui dit pas qu'il
+     * y vend, mais que son équipe y vend, avec les comptes d'entraînement
+     * qu'y créent le propriétaire et les responsables de ce magasin, et
+     * qu'il n'y vend que si le propriétaire lui a coché la vente ; sans
+     * elle, il n'y tient aucune caisse.
+     */
+    public function test_l_administrateur_qui_rouvre_la_demonstration_lit_qu_il_n_y_vend_que_si_la_vente_lui_est_cochee(): void
+    {
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
+        $societe = $this->inscrireUneSociete();
+        $reel = $this->creerLeMagasinDuSiege($societe);
+        $administrateur = $this->administrateur($reel, null, [AutorisationsSociete::MAGASINS_GERER]);
+        $demonstration = app(OuvrirLaDemonstrationAction::class)->handle($societe->proprietaire, $societe->fresh());
+        $this->travelTo(self::aParis('2026-11-09 10:00:00'));
+        $this->artisan('app:fermer-demonstrations-inactives')->assertSuccessful();
+        $this->dansLEspaceDeLaSociete($societe->fresh(), $administrateur);
+
+        Livewire::test(TableauDeBord::class)
+            ->assertActionVisible('ouvrirLaDemonstration')
+            ->mountAction('ouvrirLaDemonstration')
+            ->assertSee('votre équipe y vend, encaisse et clôture comme pour de vrai, avec les comptes d\'entraînement qu\'y créent le propriétaire et les responsables de ce magasin : ils ne servent qu\'ici et sont retirés à la validation de votre société ; vous n\'y vendez que si le propriétaire vous a coché la vente.')
+            ->assertDontSee('vous y vendez, encaissez et clôturez')
+            ->callMountedAction();
+
+        $rouverte = $demonstration->fresh();
+        $this->assertSame(StatutMagasin::Actif, $rouverte->statut);
+        $this->assertSame([], array_values(array_intersect(PermissionRegistry::deVente(), $administrateur->fresh()->autorisationsDans($rouverte))));
+        $this->assertFalse($administrateur->fresh()->tientUneCaisseDans($rouverte));
+    }
+
+    /**
+     * L'ouverture s'inscrit en JET 100, avec les droits du propriétaire,
+     * vente comprise (JET 130) ; la fin, à la validation, en JET 105, puis
+     * le statut fermé (JET 270), qui retire au propriétaire les
+     * autorisations de la vente qu'il n'y a que tant qu'elle est ouverte
+     * (JET 130, décision de l'éditeur du 12/11/2026).
+     */
     public function test_l_ouverture_et_la_fin_de_la_demonstration_s_inscrivent_en_jet_100_et_105(): void
     {
         $societe = $this->inscrireUneSociete();
@@ -220,9 +260,11 @@ class MagasinDeDemonstrationTest extends TestCase
 
         $this->saisirLeCodeDuCourrier($societe);
 
-        $this->assertSame(['260', '100', '130', '105', '270'], $this->codesDuJournal($demonstration));
+        $this->assertSame(['260', '100', '130', '105', '270', '130'], $this->codesDuJournal($demonstration));
         $statut = app(TenantContext::class)->runAs($demonstration, fn () => EnregistrementFiscal::query()->where('type', '270')->sole()->contenuSigne()['donnees']['details']);
         $this->assertSame(['parametre' => 'statut_magasin', 'magasin' => ['id' => $demonstration->id, 'nom' => 'Démonstration'], 'ancienne_valeur' => 'actif', 'nouvelle_valeur' => 'ferme'], $statut);
+        $fin = $this->modificationsDesDroits($demonstration)[1];
+        $this->assertSame([$societe->proprietaire->id, PermissionRegistry::duProprietaireEnDemonstration(TypeDActivite::Commerce), PermissionRegistry::duProprietaire(TypeDActivite::Commerce)], [$fin['membre']['id'], $fin['avant']['permissions'], $fin['apres']['permissions']]);
         $this->assertNotContains('100', $this->codesDuJournal($reel));
         $this->assertNotContains('105', $this->codesDuJournal($reel));
         // La facture d'achat fictive que saisit et valide l'ouverture (voir
@@ -475,7 +517,7 @@ class MagasinDeDemonstrationTest extends TestCase
 
         $this->assertSame([$demonstration->id, StatutMagasin::Actif], [$rouverte->id, $rouverte->statut]);
         $this->assertSame(2, PeriodeActivite::query()->where('magasin_id', $demonstration->id)->count());
-        $this->assertSame(['105', '270', '270', '100'], array_slice($this->codesDuJournal($demonstration), -4));
+        $this->assertSame(['105', '270', '130', '270', '130', '100'], array_slice($this->codesDuJournal($demonstration), -6));
         app(TenantContext::class)->runAs($demonstration, fn () => $this->assertSame(3, Produit::query()->count()));
     }
 

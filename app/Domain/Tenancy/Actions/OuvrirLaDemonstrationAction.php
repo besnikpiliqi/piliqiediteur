@@ -44,14 +44,17 @@ use Illuminate\Support\Facades\DB;
  * création, les droits implicites du propriétaire et des administrateurs
  * de tous les magasins dans ce magasin s'y inscrivent aussi (JET 130). Le
  * propriétaire y a toutes les autorisations, celles de la vente comprises,
- * et s'y entraîne à tout comme un responsable : c'est le seul magasin où il
- * vend (voir PermissionRegistry::duProprietaireEnDemonstration()).
+ * tant qu'il est ouvert, et s'y entraîne à tout comme un responsable :
+ * c'est le seul magasin où il vend (voir
+ * PermissionRegistry::duProprietaireEnDemonstration()).
  *
  * Déjà ouvert, il est rendu tel quel ; fermé après 30 jours sans opération
  * (voir app:fermer-demonstrations-inactives), il se rouvre, avec ses
  * données, tant que la société n'est ni validée ni close (nouvelle
- * période, JET 270 sur son statut et JET 100). Une fois la société
- * validée, il ne se rouvre jamais.
+ * période, JET 270 sur son statut, JET 130 des autorisations de la vente
+ * qu'il rend au propriétaire, voir
+ * JournalDesDroits::autourDuChangementDeStatut(), et JET 100). Une fois la
+ * société validée, il ne se rouvre jamais.
  */
 class OuvrirLaDemonstrationAction
 {
@@ -129,13 +132,15 @@ class OuvrirLaDemonstrationAction
                 return $verrouille;
             }
 
-            $verrouille->forceFill(['statut' => StatutMagasin::Actif, 'motif_fermeture' => null])->save();
-            $this->registre->journaliser(CodeEvenement::ParametreDeConformite, [
-                'parametre' => 'statut_magasin',
-                'magasin' => ['id' => $verrouille->getKey(), 'nom' => $verrouille->nom],
-                'ancienne_valeur' => StatutMagasin::Ferme->value,
-                'nouvelle_valeur' => StatutMagasin::Actif->value,
-            ]);
+            $this->journalDesDroits->autourDuChangementDeStatut($verrouille, function () use ($verrouille): void {
+                $verrouille->forceFill(['statut' => StatutMagasin::Actif, 'motif_fermeture' => null])->save();
+                $this->registre->journaliser(CodeEvenement::ParametreDeConformite, [
+                    'parametre' => 'statut_magasin',
+                    'magasin' => ['id' => $verrouille->getKey(), 'nom' => $verrouille->nom],
+                    'ancienne_valeur' => StatutMagasin::Ferme->value,
+                    'nouvelle_valeur' => StatutMagasin::Actif->value,
+                ]);
+            });
             $this->entrer($auteur, $verrouille, 'reouverture');
 
             return $verrouille;

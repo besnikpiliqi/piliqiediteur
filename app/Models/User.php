@@ -46,7 +46,8 @@ use Illuminate\Support\Str;
  *   société et dans chacun de ses magasins, sans case ni affectation, sauf
  *   celui de vendre, qu'il n'a dans aucun magasin réel (voir
  *   PermissionRegistry::duProprietaire()), seulement dans le magasin de
- *   démonstration (voir PermissionRegistry::duProprietaireEnDemonstration()) ;
+ *   démonstration tant qu'il est ouvert (voir
+ *   PermissionRegistry::duProprietaireEnDemonstration()) ;
  * - un administrateur, avec ses autorisations de société et sa portée
  *   (tous les magasins ou une sélection : ses affectations sans rôle, qui
  *   portent ses cases) ;
@@ -718,9 +719,9 @@ class User extends Authenticatable implements FilamentUser, HasTenants
      * magasin (voir autorisationsDans()), pas sur le droit d'agir du
      * moment : dans un magasin en lecture seule, où plus rien ne se vend,
      * chacun ferme toujours sa caisse et consulte ses relevés. Le
-     * propriétaire seulement dans le magasin de démonstration, le seul où
-     * il vend ; un administrateur seulement quand le propriétaire lui a
-     * coché la vente.
+     * propriétaire seulement dans le magasin de démonstration tant qu'il
+     * est ouvert, le seul où il vend ; un administrateur seulement quand le
+     * propriétaire lui a coché la vente.
      */
     public function tientUneCaisseDans(Magasin $magasin): bool
     {
@@ -827,10 +828,12 @@ class User extends Authenticatable implements FilamentUser, HasTenants
      *   sans regarder si le cabinet est vérifié, ce que contrôlent
      *   peutOuvrir() et ControleDesDroits, comme la lecture seule ;
      * - le propriétaire : toutes sauf celles de la vente dans chaque
-     *   magasin réel, où il ne vend jamais (voir
-     *   PermissionRegistry::duProprietaire()), et toutes, vente comprise,
-     *   dans le magasin de démonstration (voir
-     *   PermissionRegistry::duProprietaireEnDemonstration()) ;
+     *   magasin réel, où il ne vend jamais, comme dans le magasin de
+     *   démonstration fermé (voir PermissionRegistry::duProprietaire()), et
+     *   toutes, vente comprise, dans le magasin de démonstration tant qu'il
+     *   est ouvert (voir PermissionRegistry::duProprietaireEnDemonstration()) :
+     *   sa fermeture et sa réouverture s'inscrivent à son JET 130 (voir
+     *   JournalDesDroits::autourDuChangementDeStatut()) ;
      * - un administrateur : les cases de son affectation à ce magasin, ou
      *   de son affectation à tous les magasins ; rien s'il a les deux
      *   sortes d'affectations ;
@@ -851,7 +854,7 @@ class User extends Authenticatable implements FilamentUser, HasTenants
         $duType = PermissionRegistry::pourLeType($magasin->societe->type_activite);
 
         if ($this->estProprietaire()) {
-            return $magasin->est_demonstration
+            return $magasin->est_demonstration && ! $magasin->estFerme()
                 ? PermissionRegistry::duProprietaireEnDemonstration($magasin->societe->type_activite)
                 : PermissionRegistry::duProprietaire($magasin->societe->type_activite);
         }

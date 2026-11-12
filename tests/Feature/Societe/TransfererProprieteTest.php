@@ -73,7 +73,7 @@ use Tests\TestCase;
  * compte. L'ancien propriétaire en devient administrateur de tous les
  * magasins, avec toutes les autorisations sauf celles de la vente, que le
  * nouveau propriétaire peut lui cocher ; la société garde toujours un seul
- * propriétaire, qui ne vend jamais.
+ * propriétaire, qui ne vend jamais dans un magasin réel.
  */
 class TransfererProprieteTest extends TestCase
 {
@@ -100,6 +100,9 @@ class TransfererProprieteTest extends TestCase
 
         $this->dansLEspaceDeLaSociete($magasin->societe, $proprietaire);
         Livewire::test(FicheDuMembre::class, ['record' => $administrateur->getRouteKey()])
+            ->mountAction('transmettreLaPropriete')
+            ->assertSee('Il deviendra alors le propriétaire de la société, avec tous les droits sauf celui de vendre, hors du magasin de démonstration tant qu\'il est ouvert ; vous en deviendrez administrateur de tous les magasins, avec toutes les autorisations de magasin sauf celles de la vente');
+        Livewire::test(FicheDuMembre::class, ['record' => $administrateur->getRouteKey()])
             ->assertActionVisible('transmettreLaPropriete')
             ->callAction('transmettreLaPropriete', ['mot_de_passe' => self::MOT_DE_PASSE_DU_PROPRIETAIRE])
             ->assertHasNoActionErrors()
@@ -119,7 +122,7 @@ class TransfererProprieteTest extends TestCase
         $this->assertSame(RoleSociete::Proprietaire->value, $entree->nouvelles_valeurs['droits'][$administrateur->id]['role_societe']);
         $this->assertSame(RoleSociete::Administrateur->value, $entree->nouvelles_valeurs['droits'][$proprietaire->id]['role_societe']);
         Notification::assertSentTo($administrateur, AvisDeLEquipe::class, fn (AvisDeLEquipe $avis): bool => $avis->titre === 'Vous êtes propriétaire'
-            && str_contains($avis->texte, 'vous avez désormais tous les droits dans la société et dans chacun de ses magasins, sauf celui de vendre : le propriétaire supervise et contrôle.'));
+            && str_contains($avis->texte, 'vous avez désormais tous les droits dans la société et dans chacun de ses magasins, sauf celui de vendre, hors du magasin de démonstration tant qu\'il est ouvert : le propriétaire supervise et contrôle.'));
         Notification::assertSentTo($proprietaire, AvisDeLEquipe::class, fn (AvisDeLEquipe $avis): bool => $avis->titre === 'Propriété transmise'
             && str_contains($avis->texte, 'vous en êtes désormais administrateur de tous les magasins, avec toutes les autorisations de magasin sauf celles de la vente, que le nouveau propriétaire peut vous cocher, et toutes celles de la société.'));
     }
@@ -146,7 +149,7 @@ class TransfererProprieteTest extends TestCase
 
         $this->actingAs($administrateur)->get(route('filament.societe.transmission', ['jeton' => $jeton]))
             ->assertOk()
-            ->assertSee('En confirmant, vous devenez le propriétaire de la société');
+            ->assertSee('En confirmant, vous devenez le propriétaire de la société : vous aurez tous les droits dans la société et dans chacun de ses magasins, sauf celui de vendre, hors du magasin de démonstration tant qu\'il est ouvert, et votre adresse');
         Filament::setCurrentPanel(Filament::getPanel('societe'));
         Livewire::test(AccepterLaTransmission::class, ['jeton' => $jeton])
             ->fillForm(['mot_de_passe' => 'pas-le-bon'])

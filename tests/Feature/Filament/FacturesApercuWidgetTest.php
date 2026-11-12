@@ -211,7 +211,7 @@ class FacturesApercuWidgetTest extends TestCase
     /**
      * F1 du vendeur A (1 x 120,00 €), F2 du responsable de test (2 x
      * 40,00 €) et l'avoir d'un article de F2, le 14 octobre 2026 ; le
-     * propriétaire, qui ne vend jamais, lit le magasin.
+     * propriétaire, qui ne vend jamais dans un magasin réel, lit le magasin.
      *
      * @return array{magasin: Magasin, proprietaire: User, vendeur: User, f1: Facture, f2: Facture, avoir: Avoir}
      */

@@ -276,7 +276,7 @@ class TracabiliteDesVentesTest extends TestCase
 
     /**
      * Un ticket de 12,00 € TTC émis dans le magasin par son responsable de
-     * test, non réglé : le propriétaire ne vend jamais.
+     * test, non réglé : le propriétaire ne vend jamais dans un magasin réel.
      */
     private function vendreParLeResponsableDeTest(Magasin $magasin): Facture
     {

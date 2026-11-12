@@ -71,8 +71,8 @@ class DevisPolicyTest extends TestCase
 
     /**
      * Convertir un devis crée une facture : qui crée les factures, jamais
-     * le propriétaire, qui ne vend pas, ni un membre qui voit les devis
-     * sans vendre.
+     * le propriétaire, qui ne vend pas dans un magasin réel, ni un membre
+     * qui voit les devis sans vendre.
      */
     public function test_convertir_un_devis_exige_de_creer_les_factures(): void
     {

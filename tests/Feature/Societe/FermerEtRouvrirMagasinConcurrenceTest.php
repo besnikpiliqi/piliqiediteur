@@ -350,7 +350,7 @@ class FermerEtRouvrirMagasinConcurrenceTest extends TestCase
     /**
      * Le responsable de test du magasin, obtenu par le test avant de lancer
      * l'autre processus, vend un ticket de 12,00 € au comptoir : le
-     * propriétaire ne vend jamais.
+     * propriétaire ne vend jamais dans un magasin réel.
      */
     private static function vendre(int $magasinId, int $produitId): void
     {

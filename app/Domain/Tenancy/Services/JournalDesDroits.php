@@ -328,6 +328,50 @@ class JournalDesDroits
     {
         $this->registre->verrouiller($magasin);
 
+        foreach ($this->comptesSansAffectation($magasin) as $compte) {
+            $this->inscrireLeJet130(new Collection([$magasin]), $compte, [], [CleDuModele::de($magasin) => $compte->droitsDans($magasin)]);
+        }
+    }
+
+    /**
+     * Exécute ce changement du statut de ce magasin de démonstration (sa
+     * fermeture ou sa réouverture, voir FermerLaDemonstrationAction et
+     * OuvrirLaDemonstrationAction), qui le fait sur cette instance, puis
+     * inscrit à son JET 130 ce qu'il a changé aux droits de chaque personne
+     * qui y en a sans affectation, relus en base avant et après : le
+     * propriétaire n'y a les autorisations de la vente que tant qu'il est
+     * ouvert (voir User::autorisationsEnregistreesDans()). Le magasin doit
+     * être le magasin actif, sous le verrou de son registre, dans la
+     * transaction de l'appelant.
+     *
+     * @param  Closure(): void  $changement
+     *
+     * @throws ModuleFiscalNonConfigureException
+     * @throws HorlogeRegressiveException
+     */
+    public function autourDuChangementDeStatut(Magasin $demonstration, Closure $changement): void
+    {
+        $comptes = $this->comptesSansAffectation($demonstration);
+        $avant = $comptes->mapWithKeys(fn (User $compte): array => [CleDuModele::de($compte) => $compte->droitsDans($demonstration)])->all();
+
+        $changement();
+
+        foreach ($comptes as $compte) {
+            $this->inscrireLeJet130(new Collection([$demonstration]), $compte, [CleDuModele::de($demonstration) => $avant[CleDuModele::de($compte)]], [CleDuModele::de($demonstration) => $compte->droitsDans($demonstration)]);
+        }
+    }
+
+    /**
+     * Les personnes qui ont des droits dans ce magasin sans y être
+     * affectées, par identifiant : le propriétaire de la société, ses
+     * administrateurs de tous les magasins, hors comptes retirés, et, pour
+     * un magasin réel, les comptes du cabinet lié qui ont accès à la
+     * société.
+     *
+     * @return Collection<int, User>
+     */
+    private function comptesSansAffectation(Magasin $magasin): Collection
+    {
         $comptes = User::query()
             ->with('societe')
             ->where('societe_id', $magasin->societe_id)
@@ -339,11 +383,8 @@ class JournalDesDroits
             ->get();
 
         $lien = $magasin->est_demonstration ? null : LienCabinet::query()->withoutGlobalScope(SocieteScope::class)->where('societe_id', $magasin->societe_id)->where('etat', EtatDuLien::Actif->value)->first();
-        $duCabinet = $lien === null ? new Collection : $this->acces->comptesQuiOntAcces($lien);
 
-        foreach ($comptes->concat($duCabinet) as $compte) {
-            $this->inscrireLeJet130(new Collection([$magasin]), $compte, [], [CleDuModele::de($magasin) => $compte->droitsDans($magasin)]);
-        }
+        return $lien === null ? $comptes : $comptes->concat($this->acces->comptesQuiOntAcces($lien));
     }
 
     /**

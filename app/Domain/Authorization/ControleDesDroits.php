@@ -33,8 +33,9 @@ use App\Models\User;
  * à lui comme aux autres, et c'est par ses autorisations, toutes sans case
  * sauf celles de la vente, qu'il n'a dans aucun magasin réel (voir
  * PermissionRegistry::duProprietaire()), seulement dans le magasin de
- * démonstration (voir PermissionRegistry::duProprietaireEnDemonstration()),
- * qu'il passe les policies.
+ * démonstration tant qu'il est ouvert (voir
+ * PermissionRegistry::duProprietaireEnDemonstration()), qu'il passe les
+ * policies.
  *
  * Un compte qui ne peut pas agir n'a aucun droit, où que ce soit :
  * suspendu ou retiré (voir User::peutAgir()).
@@ -77,7 +78,7 @@ use App\Models\User;
  * (jamais ailleurs, propriétaire compris) ; oui s'il l'a dans ce magasin
  * (voir User::autorisationsDans() : pour le propriétaire, toutes sauf
  * celles de la vente dans un magasin réel, toutes dans le magasin de
- * démonstration ; toutes pour un responsable du magasin ; ses cases pour
+ * démonstration ouvert ; toutes pour un responsable du magasin ; ses cases pour
  * tout autre compte), sinon la question passe aux policies.
  * Quel que soit le compte, il refuse dans ce magasin :
  * - en lecture seule (voir Magasin::estEnLectureSeule()), tout ce qui n'y

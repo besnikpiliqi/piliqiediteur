@@ -269,7 +269,7 @@ class FacturePolicyTest extends TestCase
      * de détaxe (réponse (b) de l'éditeur à Q-V2), qu'on puisse émettre ou
      * non ; le comptable, qui voit tout sans cette autorisation, ne le peut
      * pas. La vente est émise par le responsable de test : le propriétaire
-     * ne vend jamais.
+     * ne vend jamais dans un magasin réel.
      */
     #[DataProvider('rolesQuiJustifientLesVentesDeLEquipe')]
     public function test_justifier_une_vente_selon_le_role(RoleMagasin $role, ?array $autorisations, bool $peutJustifier): void

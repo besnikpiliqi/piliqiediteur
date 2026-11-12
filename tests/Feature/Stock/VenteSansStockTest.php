@@ -50,11 +50,11 @@ use Tests\TestCase;
  * La vente au-delà du stock (R1) : refusée à qui n'est pas autorisé à
  * vendre sans stock dans le magasin ; pour qui l'est (les responsables
  * toujours, un vendeur ou un administrateur à qui on l'a cochée ; le
- * propriétaire, qui ne vend jamais, ne l'a pas), elle ne passe qu'après
- * l'avertissement confirmé, renouvelé si le stock a encore baissé ;
- * confirmée, elle rend le stock négatif, alerte, se journalise et reste
- * visible jusqu'à sa régularisation. Les ventes simultanées sont dans
- * VenteSansStockConcurrenceTest.
+ * propriétaire, qui ne vend jamais dans un magasin réel, ne l'y a pas),
+ * elle ne passe qu'après l'avertissement confirmé, renouvelé si le stock
+ * a encore baissé ; confirmée, elle rend le stock négatif, alerte, se
+ * journalise et reste visible jusqu'à sa régularisation. Les ventes
+ * simultanées sont dans VenteSansStockConcurrenceTest.
  */
 class VenteSansStockTest extends TestCase
 {
@@ -343,8 +343,8 @@ class VenteSansStockTest extends TestCase
      * Ni le modèle de l'administrateur, ni ceux du vendeur et de
      * l'observateur ne cochent « vendre sans stock » ; un cabinet lié ne
      * l'a jamais, ni par l'action qui règle ses autorisations, ni par une
-     * ligne écrite en base, et le propriétaire, qui ne vend jamais, non
-     * plus ; un responsable l'a toujours.
+     * ligne écrite en base, et le propriétaire, qui ne vend jamais dans un
+     * magasin réel, non plus ; un responsable l'a toujours.
      */
     public function test_vendre_sans_stock_n_est_precoche_dans_aucun_modele_et_jamais_accordee_a_un_cabinet_lie(): void
     {

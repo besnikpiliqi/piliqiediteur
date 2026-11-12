@@ -248,7 +248,12 @@ class TableauDeBord extends Dashboard
     /**
      * Ouvre, ou rouvre, le magasin de démonstration, puis y mène : le
      * bouton de l'étape de l'essai tant qu'il n'a jamais été ouvert, puis
-     * celui de la section de la démonstration quand il est fermé.
+     * celui de la section de la démonstration quand il est fermé. Sa
+     * fenêtre dit au propriétaire qu'il y vend, le seul magasin où il le
+     * fait, et à un administrateur de tous les magasins, qui l'ouvre aussi
+     * (voir SocietePolicy::ouvrirLaDemonstration()), que son équipe y vend
+     * avec des comptes d'entraînement qu'il ne crée pas, et qu'il n'y vend
+     * que si le propriétaire lui a coché la vente.
      */
     public function ouvrirLaDemonstrationAction(): Action
     {
@@ -257,7 +262,10 @@ class TableauDeBord extends Dashboard
             ->icon('heroicon-o-academic-cap')
             ->visible(fn (): bool => (auth()->user()?->can('ouvrirLaDemonstration', $this->societe()) ?? false) && $this->demonstration()?->statut !== StatutMagasin::Actif)
             ->requiresConfirmation()
-            ->modalDescription('Un magasin d\'entraînement, avec un catalogue fictif : vous y vendez, encaissez et clôturez comme pour de vrai, ce que vous ne faites jamais dans vos magasins réels ; pour y faire essayer la caisse à votre équipe, créez-y des comptes d\'entraînement : ils ne servent qu\'ici et sont retirés à la validation de votre société. Ses documents sont marqués « Démonstration — sans valeur », il n\'écrit à aucun client et ne transmet rien. Il se ferme à la validation de votre société, et rien n\'en passe à vos magasins réels.')
+            ->modalDescription(fn (): string => 'Un magasin d\'entraînement, avec un catalogue fictif : '.(CompteConnecte::exiger()->estProprietaire()
+                ? 'vous y vendez, encaissez et clôturez comme pour de vrai, ce que vous ne faites jamais dans vos magasins réels ; pour y faire essayer la caisse à votre équipe, créez-y des comptes d\'entraînement : ils ne servent qu\'ici et sont retirés à la validation de votre société.'
+                : 'votre équipe y vend, encaisse et clôture comme pour de vrai, avec les comptes d\'entraînement qu\'y créent le propriétaire et les responsables de ce magasin : ils ne servent qu\'ici et sont retirés à la validation de votre société ; vous n\'y vendez que si le propriétaire vous a coché la vente.')
+                .' Ses documents sont marqués « Démonstration — sans valeur », il n\'écrit à aucun client et ne transmet rien. Il se ferme à la validation de votre société, et rien n\'en passe à vos magasins réels.')
             ->action(function () {
                 $demonstration = null;
                 static::executerSansCasser(function () use (&$demonstration): void {

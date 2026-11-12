@@ -54,8 +54,8 @@ class PreuvesOperationTest extends TestCase
      * Le magasin de Lyon à l'identité légale complète et son propriétaire
      * connecté, le 9 octobre 2026 à 10 h 15 à Paris : il note les preuves
      * (il a « noter les preuves d'exonération et les bordereaux de
-     * détaxe »), mais ne vend jamais ; ses ventes se font par le
-     * responsable de test (voir venteEmise()).
+     * détaxe »), mais n'y vend jamais, le magasin étant réel ; ses ventes
+     * se font par le responsable de test (voir venteEmise()).
      */
     private function magasin(): Magasin
     {
@@ -537,10 +537,10 @@ class PreuvesOperationTest extends TestCase
     /**
      * Le bouton est réservé à qui est autorisé à noter les preuves
      * d'exonération et les bordereaux de détaxe (FacturePolicy::justifier(),
-     * réponse (b) de l'éditeur à Q-V2) : le propriétaire, qui ne vend pas,
-     * l'a ; un comptable, qui voit toutes les factures, ne l'a pas, ni un
-     * compte du cabinet lié, qui ne note jamais une preuve. Il n'apparaît
-     * pas non plus sur une vente en France.
+     * réponse (b) de l'éditeur à Q-V2) : le propriétaire, qui ne vend pas
+     * dans un magasin réel, l'a ; un comptable, qui voit toutes les
+     * factures, ne l'a pas, ni un compte du cabinet lié, qui ne note jamais
+     * une preuve. Il n'apparaît pas non plus sur une vente en France.
      */
     public function test_le_bouton_ajouter_une_preuve_est_reserve_a_qui_est_autorise_a_noter_les_preuves_d_une_vente_exoneree(): void
     {

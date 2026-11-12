@@ -269,7 +269,7 @@ class ActionsForgeesTest extends TestCase
 
     /**
      * Un ticket émis dans ce magasin par son responsable de test : le
-     * propriétaire ne vend jamais.
+     * propriétaire ne vend jamais dans un magasin réel.
      */
     private function vendreParLeResponsable(Magasin $magasin): Facture
     {

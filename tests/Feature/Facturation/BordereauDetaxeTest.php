@@ -50,8 +50,8 @@ class BordereauDetaxeTest extends TestCase
      * Le magasin de Lyon à l'identité légale complète et son propriétaire
      * connecté, le 9 octobre 2026 à 10 h 15 à Paris : il note les
      * bordereaux (il a « noter les preuves d'exonération et les bordereaux
-     * de détaxe »), mais ne vend jamais ; ses ventes se font par le
-     * responsable de test (voir emettre()).
+     * de détaxe »), mais n'y vend jamais, le magasin étant réel ; ses
+     * ventes se font par le responsable de test (voir emettre()).
      */
     private function magasin(): Magasin
     {
@@ -402,10 +402,10 @@ class BordereauDetaxeTest extends TestCase
      * Le bouton est réservé à qui est autorisé à noter les preuves
      * d'exonération et les bordereaux de détaxe (FacturePolicy::justifier(),
      * réponse (b) de l'éditeur à Q-V2), sur un ticket qui se détaxe : le
-     * propriétaire, qui ne vend pas, le voit ; pas sur une facture à un
-     * professionnel, ni pour un vendeur aux cases de l'ancien comptable de
-     * magasin, ni pour un compte du cabinet lié, qui ne note jamais un
-     * bordereau.
+     * propriétaire, qui ne vend pas dans un magasin réel, le voit ; pas sur
+     * une facture à un professionnel, ni pour un vendeur aux cases de
+     * l'ancien comptable de magasin, ni pour un compte du cabinet lié, qui
+     * ne note jamais un bordereau.
      */
     public function test_le_bouton_noter_le_bordereau_est_reserve_a_qui_est_autorise_a_noter_les_preuves_sur_un_ticket_detaxable(): void
     {

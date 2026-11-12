@@ -190,7 +190,7 @@ class AccepterLaTransmissionDeLaProprieteAction
         }
 
         $ancien->refresh()->notify(new AvisDeLEquipe($societe, 'Propriété transmise', "{$administrateur->name} a accepté la propriété de {$societe->getFilamentName()} : vous en êtes désormais administrateur de tous les magasins, avec toutes les autorisations de magasin sauf celles de la vente, que le nouveau propriétaire peut vous cocher, et toutes celles de la société. Vous vous connectez désormais avec votre identifiant."));
-        $administrateur->refresh()->notify(new AvisDeLEquipe($societe, 'Vous êtes propriétaire', "{$ancien->name} vous a transmis la propriété de {$societe->getFilamentName()} : vous avez désormais tous les droits dans la société et dans chacun de ses magasins, sauf celui de vendre : le propriétaire supervise et contrôle. Votre adresse {$administrateur->email} est désormais votre adresse de connexion.", nature: AvisDeLEquipe::ATTENTION));
+        $administrateur->refresh()->notify(new AvisDeLEquipe($societe, 'Vous êtes propriétaire', "{$ancien->name} vous a transmis la propriété de {$societe->getFilamentName()} : vous avez désormais tous les droits dans la société et dans chacun de ses magasins, sauf celui de vendre, hors du magasin de démonstration tant qu'il est ouvert : le propriétaire supervise et contrôle. Votre adresse {$administrateur->email} est désormais votre adresse de connexion.", nature: AvisDeLEquipe::ATTENTION));
     }
 
     /**

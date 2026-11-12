@@ -9,8 +9,10 @@ use Filament\Support\Contracts\HasLabel;
  * - le propriétaire, un seul par société (index unique partiel
  *   users_un_proprietaire_par_societe), qui supervise et contrôle : tous
  *   les droits dans la société et dans chacun de ses magasins, sans case
- *   ni affectation, sauf celui de vendre, qu'il n'a jamais (voir
- *   ControleDesDroits et PermissionRegistry::duProprietaire()) ;
+ *   ni affectation, sauf celui de vendre, qu'il n'a dans aucun magasin
+ *   réel, seulement dans le magasin de démonstration tant qu'il est
+ *   ouvert (voir ControleDesDroits, PermissionRegistry::duProprietaire()
+ *   et PermissionRegistry::duProprietaireEnDemonstration()) ;
  * - un administrateur, créé ou nommé par le propriétaire seul, avec sa
  *   portée (tous les magasins, présents et futurs, ou une sélection : ses
  *   affectations sans rôle) et les autorisations que le propriétaire coche

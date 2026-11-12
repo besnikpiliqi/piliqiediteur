@@ -33,7 +33,8 @@ use Tests\TestCase;
 
 /**
  * Les gestes qu'aucun compte ne fait jamais, pas même le propriétaire, qui
- * a pourtant tous les droits sauf celui de vendre : un document émis, un
+ * a pourtant tous les droits sauf celui de vendre hors du magasin de
+ * démonstration : un document émis, un
  * paiement, une clôture ou un relevé de caisse ne se modifie, ne se
  * supprime, ne se restaure ni ne se duplique ; un magasin et un compte ne
  * se suppriment jamais (CLAUDE.md, « Société ou magasin suspendu, fermé »

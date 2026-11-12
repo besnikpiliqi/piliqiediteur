@@ -69,7 +69,7 @@ class AccepterLaTransmission extends SimplePage
                     ->content(fn (): string => match (true) {
                         ! $this->estValable() => AccepterLaTransmissionDeLaProprieteAction::MESSAGE_LIEN,
                         $this->compte()->estDUnCabinet() => 'En confirmant, vous devenez le propriétaire du cabinet : vous gérerez ses collaborateurs, ses clients et ses liens, et votre adresse '.$this->compte()->email.' deviendra votre adresse de connexion.',
-                        default => 'En confirmant, vous devenez le propriétaire de la société : vous aurez tous les droits dans la société et dans chacun de ses magasins, sauf celui de vendre, et votre adresse '.$this->compte()->email.' deviendra votre adresse de connexion.',
+                        default => 'En confirmant, vous devenez le propriétaire de la société : vous aurez tous les droits dans la société et dans chacun de ses magasins, sauf celui de vendre, hors du magasin de démonstration tant qu\'il est ouvert, et votre adresse '.$this->compte()->email.' deviendra votre adresse de connexion.',
                     }),
                 TextInput::make('mot_de_passe')
                     ->label('Votre mot de passe')

@@ -12,16 +12,20 @@ use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Models\User;
+use Carbon\CarbonImmutable;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
 use LogicException;
 
 /**
- * Constate l'acceptation, verbale ou écrite, d'un devis par son client :
- * seule cette acceptation explicite, et non un simple envoi, permet de le
- * convertir en facture (voir CreerFactureDepuisDevisAction). Jamais une
- * fois sa date de validité dépassée, même avant que le devis soit passé à
- * « Expiré » dans la nuit (voir ExpirerLesDevisAction).
+ * Constate l'acceptation, verbale ou écrite, d'un devis par son client,
+ * avec son instant, que la facture qui en sortira imprime (le client
+ * peut aussi l'accepter lui-même par son lien, voir
+ * RepondreAuDevisEnLigneAction) : seule cette acceptation explicite, et
+ * non un simple envoi, permet de le transformer en facture (voir
+ * CreerFactureDepuisDevisAction). Jamais une fois sa date de validité
+ * dépassée, même avant que le devis soit passé à « Expiré » dans la nuit
+ * (voir ExpirerLesDevisAction).
  *
  * Dans une transaction, la ligne du magasin se relit sous un verrou
  * partagé (un magasin suspendu, fermé ou cédé, ou dont la société est en
@@ -66,7 +70,7 @@ class AccepterDevisAction
 
             $this->lecteur->exiger($compte, 'accepter', $magasin, $devis);
 
-            return $this->operateur->pendant($compte, fn (): Devis => tap($devis->forceFill(['statut' => StatutDevis::Accepte]))->save());
+            return $this->operateur->pendant($compte, fn (): Devis => tap($devis->forceFill(['statut' => StatutDevis::Accepte, 'accepte_le' => CarbonImmutable::now()]))->save());
         });
     }
 }

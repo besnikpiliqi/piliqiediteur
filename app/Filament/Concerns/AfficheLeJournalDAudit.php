@@ -112,6 +112,7 @@ trait AfficheLeJournalDAudit
         'editeur' => 'L\'éditeur',
         'systeme' => 'Le système',
         'autre_societe' => 'L\'autre société',
+        'client' => 'Un client, par son lien',
     ];
 
     /**

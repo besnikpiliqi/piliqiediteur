@@ -70,6 +70,8 @@ class JournalAudit
 
     private const ORIGINE_AUTRE_SOCIETE = 'autre_societe';
 
+    private const ORIGINE_CLIENT = 'client';
+
     /**
      * @param  User|null  $auteur  la personne qui fait l'action ; null pour le système et l'éditeur
      * @param  array<string, mixed>|null  $anciennesValeurs
@@ -108,6 +110,24 @@ class JournalAudit
     public function inscrireLeGesteDeLAutreSociete(ActionAuditee $action, ?array $anciennesValeurs, ?array $nouvellesValeurs, ?Model $cible = null): EntreeAudit
     {
         return $this->ecrire($action, self::ORIGINE_AUTRE_SOCIETE, null, null, $anciennesValeurs, $nouvellesValeurs, $cible, null);
+    }
+
+    /**
+     * Inscrit, au journal du magasin, la réponse qu'un client du magasin
+     * donne à un devis par son lien secret (voir
+     * RepondreAuDevisEnLigneAction) : le client n'a pas de compte,
+     * l'origine « client » le dit, et les valeurs portent ce qu'il a
+     * répondu ; son adresse IP et son navigateur vont dans la trace de
+     * l'entrée, comme pour tout visiteur (voir TraceDuVisiteur).
+     *
+     * @param  array<string, mixed>  $nouvellesValeurs
+     *
+     * @throws JournalAuditNonConfigureException
+     * @throws InvalidArgumentException quand une valeur n'est pas retenue par l'action
+     */
+    public function inscrireLaReponseDuClient(ActionAuditee $action, Magasin $magasin, array $nouvellesValeurs, Model $cible): EntreeAudit
+    {
+        return $this->ecrire($action, self::ORIGINE_CLIENT, null, $magasin, null, $nouvellesValeurs, $cible, null);
     }
 
     /**

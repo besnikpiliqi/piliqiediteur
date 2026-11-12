@@ -17,14 +17,20 @@ use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Facturation\Actions\CloturerCaisseAction;
 use App\Domain\Facturation\Actions\CreerDevisAction;
 use App\Domain\Facturation\Actions\CreerFactureAction;
+use App\Domain\Facturation\Actions\CreerFactureDepuisDevisAction;
+use App\Domain\Facturation\Actions\EmettreDevisAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
 use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
+use App\Domain\Facturation\Actions\EnvoyerDocumentAction;
 use App\Domain\Facturation\Actions\FermerSaCaisseAction;
+use App\Domain\Facturation\Actions\RepondreAuDevisEnLigneAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Enums\TypePreuve;
+use App\Domain\Facturation\Mail\DocumentMail;
 use App\Domain\Facturation\Models\BordereauDetaxe;
+use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\PanierCaisse;
 use App\Domain\Facturation\Models\PreuveOperation;
@@ -37,7 +43,9 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\Fixtures\FichiersDeTest;
 use Tests\TestCase;
@@ -167,7 +175,11 @@ class ReferencesEntreMagasinsEnBaseTest extends TestCase
         foreach ($this->referencesEntreMagasins() as $reference) {
             $table = $reference['table'];
             $colonne = self::colonneDe($reference);
-            $source = DB::table($table)->where('magasin_id', $magasinA->id)->orderBy($reference['cle'])->first();
+            // D'abord une ligne où la référence est déjà posée : une
+            // contrainte qui lie la colonne à d'autres (le numéro et le jour
+            // d'acceptation du devis d'origine d'une facture) refuserait
+            // sinon l'écriture avant que la clé ne soit éprouvée.
+            $source = DB::table($table)->where('magasin_id', $magasinA->id)->orderByRaw("{$colonne} is null")->orderBy($reference['cle'])->first();
             $this->assertNotNull($source, "La préparation n'écrit aucune ligne de {$table} dans le magasin A.");
             $actuelle = $source->{$colonne};
             $cle = [$reference['cle'] => $source->{$reference['cle']}];
@@ -235,7 +247,10 @@ class ReferencesEntreMagasinsEnBaseTest extends TestCase
      * facture en brouillon, la fermeture de la caisse du vendeur, puis la
      * clôture de la journée ; le surlendemain, un paiement de chacun des
      * deux tickets restés dus, chacun avec son reçu, que ni la caisse du
-     * vendeur ni une clôture n'a encore comptés, et un panier de la caisse en cours (une vente le vide). Ce qu'aucune
+     * vendeur ni une clôture n'a encore comptés, un panier de la caisse en
+     * cours (une vente le vide), puis les deux devis émis et envoyés par
+     * e-mail, chacun avec son lien de réponse : le client accepte en ligne
+     * celui du produit, transformé en facture brouillon. Ce qu'aucune
      * action n'écrit sans un service extérieur ou un écran (vérification
      * VIES, preuve d'exonération, bordereau de détaxe, trace technique,
      * panier de la caisse) est écrit directement, ou par sa fabrique.
@@ -271,15 +286,15 @@ class ReferencesEntreMagasinsEnBaseTest extends TestCase
                 app(EmettreAvoirFournisseurAction::class)->handle($auteur, app(CreerAvoirFournisseurAction::class)->handle($auteur, $achat, [['ligne_achat_id' => $ligneDuProduit->id, 'quantite' => 1]]));
                 app(CreerAvoirFournisseurAction::class)->handle($auteur, $achat, [['ligne_achat_id' => $ligneDuLivre->id, 'quantite' => 1]]);
                 $client = Client::factory()->create();
-                app(CreerDevisAction::class)->handle($auteur, $client, [['produit_id' => $produit->id, 'quantite' => 1]]);
-                app(CreerDevisAction::class)->handle($auteur, $client, [['service_id' => Service::query()->firstOrFail()->id, 'quantite' => 1]]);
+                $devisDuProduit = app(CreerDevisAction::class)->handle($auteur, $client, [['produit_id' => $produit->id, 'quantite' => 1]]);
+                $devisDuService = app(CreerDevisAction::class)->handle($auteur, $client, [['service_id' => Service::query()->firstOrFail()->id, 'quantite' => 1]]);
                 $professionnel = Client::factory()->professionnel()->create(['pays' => 'DE', 'numero_tva' => 'DE123456789']);
 
                 foreach ([self::enUtc('2026-10-09 12:32:10'), self::enUtc('2026-10-09 12:33:10')] as $consultee) {
                     Model::unguarded(fn (): Model => ConsultationVies::query()->create(['client_id' => $professionnel->id, 'numero_tva' => 'DE123456789', 'valide' => true, 'consultee_le' => $consultee, 'reponse' => '{"valid":true}']));
                 }
 
-                return [$client, $produit];
+                return [$client, $produit, $devisDuProduit, $devisDuService];
             });
         }
 
@@ -301,9 +316,12 @@ class ReferencesEntreMagasinsEnBaseTest extends TestCase
             }
         }
 
+        Mail::fake();
+
         foreach ($magasins as $magasin) {
             $this->travelTo(self::aParis('2026-10-11 10:00:00'));
-            app(TenantContext::class)->runAs($magasin, function () use ($ventes, $magasin): void {
+            [, , $devisDuProduit, $devisDuService] = $ventes[$magasin->id];
+            $jeton = app(TenantContext::class)->runAs($magasin, function () use ($ventes, $magasin, $devisDuProduit, $devisDuService): string {
                 [$client] = $ventes[$magasin->id];
                 $dus = Facture::query()->where('client_id', $client->id)->where('statut', StatutFacture::PartiellementPayee)->orderBy('id')->get();
                 $this->assertCount(2, $dus);
@@ -313,8 +331,36 @@ class ReferencesEntreMagasinsEnBaseTest extends TestCase
                 }
 
                 PanierCaisse::factory()->create(['user_id' => self::auteur()->id, 'client_id' => $client->id]);
+                $this->envoyerParEMail(app(EmettreDevisAction::class)->handle(self::auteur(), $devisDuService));
+
+                return $this->envoyerParEMail(app(EmettreDevisAction::class)->handle(self::auteur(), $devisDuProduit));
             });
+            app(RepondreAuDevisEnLigneAction::class)->accepter($jeton, 'Claire Martin', true);
+            app(TenantContext::class)->runAs($magasin, fn () => app(CreerFactureDepuisDevisAction::class)->handle(self::auteur(), $devisDuProduit));
         }
+    }
+
+    /**
+     * Envoie le devis par e-mail (la tâche d'envoi tourne aussitôt,
+     * QUEUE_CONNECTION=sync) et rend le jeton que porte le lien de réponse
+     * de l'e-mail parti.
+     */
+    private function envoyerParEMail(Devis $devis): string
+    {
+        $envoi = app(EnvoyerDocumentAction::class)->handle(self::auteur(), $devis, 'client@exemple.fr', null, (string) Str::uuid());
+        $jeton = null;
+
+        Mail::assertSent(DocumentMail::class, function (DocumentMail $mail) use ($envoi, &$jeton): bool {
+            if (! $mail->envoi->is($envoi) || preg_match('#/devis/([A-Za-z0-9]{64})"#', $mail->render(), $trouve) !== 1) {
+                return false;
+            }
+
+            $jeton = $trouve[1];
+
+            return true;
+        });
+
+        return (string) $jeton;
     }
 
     /**

@@ -9,7 +9,9 @@ use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Facturation\Actions\CloturerCaisseAction;
+use App\Domain\Facturation\Actions\CreerDevisAction;
 use App\Domain\Facturation\Actions\CreerFactureAction;
+use App\Domain\Facturation\Actions\EmettreDevisAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
 use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
@@ -39,7 +41,7 @@ class ProtectionDesTablesTest extends TestCase
 {
     use RefreshDatabase;
 
-    private const EN_AJOUT_SEUL = ['changements_fin_exercice', 'consultations_vies', 'preuves_operation', 'bordereaux_detaxe', 'recus_paiement', 'paiements', 'paiement_allocations', 'lignes_recu_paiement', 'avoir_allocations', 'enregistrements_fiscaux', 'clotures_caisse', 'clotures_caisse_personnelles', 'clotures_caisse_personnelles_factures', 'clotures_caisse_personnelles_paiements', 'mouvements_stock'];
+    private const EN_AJOUT_SEUL = ['changements_fin_exercice', 'consultations_vies', 'preuves_operation', 'bordereaux_detaxe', 'recus_paiement', 'paiements', 'paiement_allocations', 'lignes_recu_paiement', 'avoir_allocations', 'enregistrements_fiscaux', 'clotures_caisse', 'clotures_caisse_personnelles', 'clotures_caisse_personnelles_factures', 'clotures_caisse_personnelles_paiements', 'mouvements_stock', 'reponses_des_devis'];
 
     private const SANS_SUPPRESSION = ['societes', 'magasins', 'sirets_magasins', 'periodes_activite', 'tetes_journal_audit', 'pieces_verification', 'cabinets', 'liens_cabinet'];
 
@@ -161,6 +163,9 @@ class ProtectionDesTablesTest extends TestCase
         $dans365Jours = $this->maintenantSelonLaBase()->addHours(24 * 365);
         DB::table('traces_audit')->insert(['entree_audit_id' => $entreeAudit, 'societe_id' => $societe, 'ip' => '192.0.2.10', 'agent_utilisateur' => 'Navigateur de test', 'expire_le' => $dans365Jours, 'created_at' => now()]);
         DB::table('traces_evenements')->insert(['enregistrement_fiscal_id' => $enregistrement, 'magasin_id' => $magasin->id, 'ip' => '192.0.2.10', 'agent_utilisateur' => 'Navigateur de test', 'expire_le' => $dans365Jours, 'created_at' => now()]);
+        $devis = app(EmettreDevisAction::class)->handle(self::auteur(), app(CreerDevisAction::class)->handle(self::auteur(), $client, [['produit_id' => $produit->id, 'quantite' => 1]]));
+        $envoi = DB::table('envois_documents')->insertGetId(['magasin_id' => $magasin->id, 'document_type' => 'devis', 'document_id' => $devis->id, 'destinataire' => 'client@example.test', 'objet' => 'Devis', 'nature' => 'envoi', 'statut' => 'envoye', 'created_at' => now(), 'updated_at' => now()]);
+        $lienDuDevis = DB::table('liens_des_devis')->insertGetId(['magasin_id' => $magasin->id, 'devis_id' => $devis->id, 'envoi_document_id' => $envoi, 'jeton_hache' => str_repeat('c', 64), 'created_at' => now(), 'updated_at' => now()]);
 
         return [
             'changements_fin_exercice' => ['changements_fin_exercice', 'id', DB::table('changements_fin_exercice')->insertGetId(['societe_id' => $societe, 'ancien_mois' => 12, 'nouveau_mois' => 6, 'debut_exercice_en_cours' => '2026-01-01', 'fin_exercice_en_cours_avant' => '2026-12-31', 'fin_exercice_en_cours_apres' => '2026-12-31', 'decision_du' => '2026-10-01', 'piece_reference' => 'PV de l\'assemblée du 01/10/2026', 'duree_validee_par' => 'Cabinet Exemple', 'justification' => 'Changement légal de la date de clôture', 'operateur' => json_encode(['operateurs' => ['alice']]), 'created_at' => now()])],
@@ -178,6 +183,7 @@ class ProtectionDesTablesTest extends TestCase
             'clotures_caisse_personnelles_factures' => ['clotures_caisse_personnelles_factures', 'facture_id', (int) $facture->id],
             'clotures_caisse_personnelles_paiements' => ['clotures_caisse_personnelles_paiements', 'paiement_id', $premiere('paiements', 'magasin_id', $magasin->id)],
             'mouvements_stock' => ['mouvements_stock', 'id', $premiere('mouvements_stock', 'magasin_id', $magasin->id)],
+            'reponses_des_devis' => ['reponses_des_devis', 'id', DB::table('reponses_des_devis')->insertGetId(['magasin_id' => $magasin->id, 'devis_id' => $devis->id, 'lien_du_devis_id' => $lienDuDevis, 'reponse' => 'acceptation', 'signataire' => 'Claire Martin', 'empreinte_du_devis' => str_repeat('d', 64), 'created_at' => now()])],
             'societes' => ['societes', 'id', $societe],
             'magasins' => ['magasins', 'id', (int) $magasin->id],
             'sirets_magasins' => ['sirets_magasins', 'id', $premiere('sirets_magasins', 'magasin_id', $magasin->id)],

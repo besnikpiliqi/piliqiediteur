@@ -16,11 +16,15 @@ use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\EncaisserEnPlusieursModesAction;
 use App\Domain\Facturation\Actions\EnvoyerDocumentAction;
 use App\Domain\Facturation\Enums\ModePaiement;
+use App\Domain\Facturation\Enums\ReponseAuDevis;
 use App\Domain\Facturation\Enums\StatutEnvoi;
 use App\Domain\Facturation\Mail\DocumentMail;
+use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\EnvoiDocument;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\RecuPaiement;
+use App\Domain\Facturation\Models\ReponseDuDevis;
+use App\Domain\Facturation\Notifications\ReponseDuClientAuDevis;
 use App\Domain\Facturation\Services\PartDeReglement;
 use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Mail\AdresseChangeeMail;
@@ -110,6 +114,7 @@ class CourrielsReelsTest extends TestCase
         DocumentMail::class,
         AvisDeLEquipe::class,
         AvisDuCabinet::class,
+        ReponseDuClientAuDevis::class,
         AvisDeLAntivirus::class,
         LienPourChoisirSonMotDePasse::class,
     ];
@@ -208,7 +213,8 @@ class CourrielsReelsTest extends TestCase
 
     /**
      * Les avis qui partent aussi par e-mail, chacun à un compte dont c'est
-     * l'adresse, et le lien « Mot de passe oublié ».
+     * l'adresse, le lien « Mot de passe oublié » et l'avis de la réponse
+     * d'un client à un devis.
      */
     private function envoyerLesNotifications(): void
     {
@@ -219,6 +225,12 @@ class CourrielsReelsTest extends TestCase
             new AvisDuCabinet($magasin->societe, 'Essai de l\'avis du cabinet', 'Une demande de lien attend votre réponse.', parCourriel: true),
             new AvisDeLAntivirus($magasin->societe, 'Essai de l\'avis de l\'antivirus', 'Le fichier « essai.pdf » a été refusé.'),
             new LienPourChoisirSonMotDePasse('https://piliqi.test/app/password-reset/reset?token=essai', 60),
+            new ReponseDuClientAuDevis(
+                $magasin,
+                (new Devis)->forceFill(['id' => 1, 'numero' => 'DEV-ESSAI-2026-000001']),
+                (new ReponseDuDevis)->forceFill(['reponse' => ReponseAuDevis::Acceptation, 'signataire' => 'Claire Martin', 'created_at' => now()]),
+                [['produit' => 'Câble électrique tressé', 'demande' => 3, 'disponible' => 1]],
+            ),
         ];
 
         foreach ($avis as $notification) {

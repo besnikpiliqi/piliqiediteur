@@ -61,6 +61,12 @@ use Filament\Support\Contracts\HasLabel;
  *   séquence ou de numérotation (95) ou un autre défaut d'intégrité (90),
  *   puis l'opération de contrôle elle-même (280), dont les points de
  *   reprise servent de départ à la vérification incrémentale suivante.
+ * - La réponse d'un client à un devis par son lien secret, acceptation ou
+ *   refus, avec le numéro du devis et l'empreinte de la version à
+ *   laquelle il a répondu (voir RepondreAuDevisEnLigneAction) : code
+ *   propre à PILIQI (900), le dictionnaire NF525 n'en ayant aucun pour un
+ *   devis, document commercial qui n'entre ni dans les ventes ni dans les
+ *   clôtures.
  */
 enum CodeEvenement: int implements HasLabel
 {
@@ -81,6 +87,7 @@ enum CodeEvenement: int implements HasLabel
     case OperationDeControle = 280;
     case TransactionAbandonnee = 320;
     case LigneRetiree = 323;
+    case ReponseAUnDevis = 900;
 
     public function getLabel(): string
     {
@@ -102,6 +109,7 @@ enum CodeEvenement: int implements HasLabel
             self::OperationDeControle => 'Opération de contrôle (vérification de l\'intégrité)',
             self::TransactionAbandonnee => 'Vente abandonnée avant validation',
             self::LigneRetiree => 'Ligne retirée d\'une vente avant validation',
+            self::ReponseAUnDevis => 'Réponse d\'un client à un devis par son lien',
         };
     }
 

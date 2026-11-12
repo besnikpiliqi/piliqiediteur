@@ -103,6 +103,9 @@ enum ActionAuditee: string implements HasLabel
     case InventaireOuvertureValide = 'inventaire_ouverture_valide';
     case AvoirDeRegularisationEmis = 'avoir_de_regularisation_emis';
     case FactureRectificativeEmise = 'facture_rectificative_emise';
+    case DevisAccepteEnLigne = 'devis_accepte_en_ligne';
+    case DevisRefuseEnLigne = 'devis_refuse_en_ligne';
+    case LienDuDevisRetire = 'lien_du_devis_retire';
 
     /**
      * Les mots qui, dans un nom de champ (entre ses traits de soulignement,
@@ -204,6 +207,9 @@ enum ActionAuditee: string implements HasLabel
             self::InventaireOuvertureValide => 'Inventaire d\'ouverture validé',
             self::AvoirDeRegularisationEmis => 'Avoir de régularisation émis après la correction du SIREN',
             self::FactureRectificativeEmise => 'Facture rectificative émise après la correction du SIREN',
+            self::DevisAccepteEnLigne => 'Devis accepté en ligne par le client',
+            self::DevisRefuseEnLigne => 'Devis refusé en ligne par le client',
+            self::LienDuDevisRetire => 'Lien de réponse d\'un devis retiré',
         };
     }
 
@@ -449,6 +455,9 @@ enum ActionAuditee: string implements HasLabel
             // RegularisationDUneFacture).
             self::AvoirDeRegularisationEmis => ['avoir', 'facture', 'siren_correct', 'total_ttc'],
             self::FactureRectificativeEmise => ['facture', 'facture_rectifiee', 'total_ttc'],
+            self::DevisAccepteEnLigne => ['devis', 'signataire', 'empreinte_du_devis'],
+            self::DevisRefuseEnLigne => ['devis', 'motif', 'empreinte_du_devis'],
+            self::LienDuDevisRetire => ['devis'],
         };
     }
 }

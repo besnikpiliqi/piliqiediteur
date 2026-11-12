@@ -12,6 +12,7 @@ enum StatutDevis: string implements HasColor, HasLabel
     case Accepte = 'accepte';
     case Refuse = 'refuse';
     case Expire = 'expire';
+    case Converti = 'converti';
 
     /**
      * Un devis envoyé ou accepté repasse en brouillon quand on le modifie,
@@ -19,8 +20,11 @@ enum StatutDevis: string implements HasColor, HasLabel
      * engagé que sur la version qu'il a reçue, l'acceptation est effacée,
      * et la nouvelle version repart (voir EmettreDevisAction). Un devis
      * envoyé expire de lui-même une fois sa date de validité dépassée (voir
-     * ExpirerLesDevisAction). Refusé ou expiré, il reste tel quel ; accepté
-     * puis transformé en facture aussi (voir Devis::estModifiable()).
+     * ExpirerLesDevisAction). Refusé ou expiré, il reste tel quel. Accepté,
+     * il se transforme en facture (voir CreerFactureDepuisDevisAction) et
+     * reste alors figé ; il ne redevient « Accepté » que si le brouillon de
+     * cette facture est supprimé avant son émission (voir
+     * Facture::delete()) : une facture émise ne se supprime jamais.
      *
      * @return list<self>
      */
@@ -29,7 +33,8 @@ enum StatutDevis: string implements HasColor, HasLabel
         return match ($this) {
             self::Brouillon => [self::Envoye],
             self::Envoye => [self::Brouillon, self::Accepte, self::Refuse, self::Expire],
-            self::Accepte => [self::Brouillon],
+            self::Accepte => [self::Brouillon, self::Converti],
+            self::Converti => [self::Accepte],
             self::Refuse, self::Expire => [],
         };
     }
@@ -47,6 +52,7 @@ enum StatutDevis: string implements HasColor, HasLabel
             self::Accepte => 'Accepté',
             self::Refuse => 'Refusé',
             self::Expire => 'Expiré',
+            self::Converti => 'Transformé en facture',
         };
     }
 
@@ -56,6 +62,7 @@ enum StatutDevis: string implements HasColor, HasLabel
             self::Brouillon => 'gray',
             self::Envoye => 'info',
             self::Accepte => 'success',
+            self::Converti => 'primary',
             self::Refuse, self::Expire => 'danger',
         };
     }

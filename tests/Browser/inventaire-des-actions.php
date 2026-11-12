@@ -35,6 +35,9 @@ return [
     'app/Domain/Cabinets/Notifications/AvisDuCabinet.php' => [
         'action:voir' => ['lot' => 'NAV-5', 'tests' => []],
     ],
+    'app/Domain/Facturation/Notifications/ReponseDuClientAuDevis.php' => [
+        'action:voir' => ['lot' => 'NAV-2', 'tests' => []],
+    ],
     'app/Domain/Facturation/Notifications/EnvoiDocumentEchoue.php' => [
         'action:voir' => ['lot' => 'NAV-2', 'tests' => []],
     ],
@@ -682,7 +685,10 @@ return [
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le vendeur ouvre chaque page et chaque action du magasin sans erreur',
         ]],
-        'action:convertir' => ['lot' => 'NAV-2', 'tests' => []],
+        'action:convertir' => ['lot' => 'NAV-2', 'tests' => [
+            'tests/Browser/Parcours/ReponseAuDevisEnLigneTest.php › le vendeur transforme un devis accepté depuis la liste des devis',
+            'tests/Browser/Parcours/ReponseAuDevisEnLigneTest.php › le propriétaire et l’observateur voient « Transformer en facture » désactivé, avec son explication',
+        ]],
         'action:edit' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur autorisé à vendre ouvre chaque page et chaque action du magasin sans erreur',
@@ -752,6 +758,9 @@ return [
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le vendeur ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › l’observateur ouvre chaque page et chaque action du magasin sans erreur',
+        ]],
+        'lien:facture_transformee' => ['lot' => 'NAV-2', 'tests' => [
+            'tests/Browser/Parcours/ReponseAuDevisEnLigneTest.php › le responsable transforme un devis accepté depuis sa fiche et arrive sur la facture brouillon, qui dit d’où elle vient et mène au devis',
         ]],
     ],
     'app/Filament/App/Resources/DevisResource/Pages/CreateDevis.php' => [
@@ -823,6 +832,14 @@ return [
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le vendeur ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › l’observateur ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Parcours/PuHtExactTest.php › le propriétaire lit le PU HT tel qu’il est enregistré et la note de calcul sur la fiche et sur le PDF d’un devis envoyé à un professionnel',
+        ]],
+        'action:convertir' => ['lot' => 'NAV-2', 'tests' => [
+            'tests/Browser/Parcours/ReponseAuDevisEnLigneTest.php › le responsable transforme un devis accepté depuis sa fiche et arrive sur la facture brouillon, qui dit d’où elle vient et mène au devis',
+            'tests/Browser/Parcours/ReponseAuDevisEnLigneTest.php › le propriétaire et l’observateur voient « Transformer en facture » désactivé, avec son explication',
+            'tests/Browser/Parcours/ReponseAuDevisEnLigneTest.php › le propriétaire transforme un devis accepté dans le magasin de démonstration',
+        ]],
+        'action:retirer_le_lien' => ['lot' => 'NAV-2', 'tests' => [
+            'tests/Browser/Parcours/ReponseAuDevisEnLigneTest.php › le responsable retire le lien de réponse d’un devis envoyé, et le client ne peut plus répondre',
         ]],
     ],
     'app/Filament/App/Resources/EReportingResource.php' => [
@@ -1320,6 +1337,9 @@ return [
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le vendeur d’entraînement ouvre chaque page et chaque action du magasin de démonstration sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le vendeur ouvre chaque page et chaque action du magasin sans erreur',
+        ]],
+        'lien:devis_d_origine' => ['lot' => 'NAV-2', 'tests' => [
+            'tests/Browser/Parcours/ReponseAuDevisEnLigneTest.php › le responsable transforme un devis accepté depuis sa fiche et arrive sur la facture brouillon, qui dit d’où elle vient et mène au devis',
         ]],
     ],
     'app/Filament/App/Resources/FactureResource/Pages/CreateFacture.php' => [
@@ -2540,6 +2560,15 @@ return [
             'tests/Browser/Parcours/InscriptionDUneSocieteTest.php › une société s’inscrit, confirme son lien, saisit le code de son courrier et crée son premier magasin',
         ]],
     ],
+    'resources/views/devis/reponse.blade.php' => [
+        'lien:Télécharger le devis en PDF' => ['lot' => 'NAV-4', 'tests' => []],
+        'formulaire:{{ $actionAccepter }}' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Parcours/ReponseAuDevisEnLigneTest.php › le client accepte son devis en ligne en tapant son nom et en cochant « Bon pour accord », puis le lien ne vaut plus',
+        ]],
+        'formulaire:{{ $actionRefuser }}' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Parcours/ReponseAuDevisEnLigneTest.php › le client refuse son devis en ligne avec un motif, puis le lien ne vaut plus',
+        ]],
+    ],
     'resources/views/errors/404.blade.php' => [
         'lien:Revenir à l\'accueil' => ['lot' => 'NAV-4', 'tests' => []],
     ],
@@ -2721,5 +2750,17 @@ return [
         'page publique:/invitation-cabinet/{jeton}' => ['lot' => 'NAV-4', 'tests' => []],
         'page publique:/profil/adresse/{jeton}' => ['lot' => 'NAV-4', 'tests' => []],
         'page publique:/rattachement-cabinet/{jeton}' => ['lot' => 'NAV-4', 'tests' => []],
+        'formulaire:/devis/{jeton}/acceptation' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Parcours/ReponseAuDevisEnLigneTest.php › le client accepte son devis en ligne en tapant son nom et en cochant « Bon pour accord », puis le lien ne vaut plus',
+        ]],
+        'formulaire:/devis/{jeton}/refus' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Parcours/ReponseAuDevisEnLigneTest.php › le client refuse son devis en ligne avec un motif, puis le lien ne vaut plus',
+        ]],
+        'page publique:/devis/{jeton}' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Parcours/ReponseAuDevisEnLigneTest.php › le client accepte son devis en ligne en tapant son nom et en cochant « Bon pour accord », puis le lien ne vaut plus',
+            'tests/Browser/Parcours/ReponseAuDevisEnLigneTest.php › le client refuse son devis en ligne avec un motif, puis le lien ne vaut plus',
+            'tests/Browser/Parcours/ReponseAuDevisEnLigneTest.php › un lien faux, ou rendu caduc par un nouvel envoi, ne dit que « Ce lien n’est plus valable. »',
+        ]],
+        'page publique:/devis/{jeton}/pdf' => ['lot' => 'NAV-4', 'tests' => []],
     ],
 ];

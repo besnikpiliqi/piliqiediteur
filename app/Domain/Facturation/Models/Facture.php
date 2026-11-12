@@ -26,6 +26,7 @@ use App\Domain\Facturation\Contracts\DocumentEnvoyable;
 use App\Domain\Facturation\Enums\NatureEnvoi;
 use App\Domain\Facturation\Enums\NatureOperation;
 use App\Domain\Facturation\Enums\StatutAvoir;
+use App\Domain\Facturation\Enums\StatutDevis;
 use App\Domain\Facturation\Enums\StatutEnvoi;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Enums\TransportPar;
@@ -138,6 +139,7 @@ class Facture extends Model implements DocumentEnvoyable
         'livraison_date' => JourCivil::class,
         'transport_par' => TransportPar::class,
         'date_echeance' => JourCivil::class,
+        'devis_accepte_le' => JourCivil::class,
         'total_ht' => 'decimal:2',
         'total_tva' => 'decimal:2',
         'total_ttc' => 'decimal:2',
@@ -181,7 +183,10 @@ class Facture extends Model implements DocumentEnvoyable
      * une seule vente abandonnée s'inscrit pour un brouillon, avec les
      * montants qu'il a au moment de sa suppression, même modifié depuis le
      * chargement de cette instance, et une facture émise ne se supprime
-     * jamais.
+     * jamais. Le brouillon d'une facture transformée d'un devis rend à ce
+     * devis son statut « Accepté », relu sous son verrou : la
+     * transformation est abandonnée, et le devis peut de nouveau se
+     * transformer (voir CreerFactureDepuisDevisAction).
      *
      * @throws LogicException
      * @throws ModuleFiscalNonConfigureException
@@ -194,8 +199,17 @@ class Facture extends Model implements DocumentEnvoyable
                 ?? throw new LogicException(self::REFUS_INTROUVABLE);
 
             $this->setRawAttributes($enBase->getAttributes(), true);
+            $supprimee = parent::delete();
 
-            return parent::delete();
+            if ($this->devis_id !== null) {
+                $devis = Devis::query()->whereKey($this->devis_id)->lockForUpdate()->first();
+
+                if ($devis?->statut === StatutDevis::Converti) {
+                    $devis->forceFill(['statut' => StatutDevis::Accepte])->save();
+                }
+            }
+
+            return $supprimee;
         });
     }
 
@@ -248,6 +262,31 @@ class Facture extends Model implements DocumentEnvoyable
         return $this->estUneRectificative()
             ? $this->factureRectifiee()->firstOrFail()->copieClient()
             : CopieClient::depuisClient(ValeurRequise::de($this->client, 'le client de la facture'));
+    }
+
+    /**
+     * Le devis du même magasin d'après lequel la facture est établie, quand
+     * elle a été transformée d'un devis accepté (voir
+     * CreerFactureDepuisDevisAction) ; aucun sinon.
+     *
+     * @return BelongsTo<Devis, $this>
+     */
+    public function devis(): BelongsTo
+    {
+        return $this->belongsTo(Devis::class);
+    }
+
+    /**
+     * Ce que la fiche et le PDF disent du devis d'origine, depuis le numéro
+     * et le jour d'acceptation recopiés à la transformation et figés à
+     * l'émission : « Établie d'après le devis n° DEV-… accepté le
+     * JJ/MM/AAAA » ; null pour une facture qui ne vient pas d'un devis.
+     */
+    public function mentionDuDevis(): ?string
+    {
+        return $this->devis_numero === null || $this->devis_accepte_le === null
+            ? null
+            : "Établie d'après le devis n° {$this->devis_numero} accepté le ".Calendrier::afficherJour($this->devis_accepte_le, 'd/m/Y');
     }
 
     /**

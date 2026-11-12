@@ -118,6 +118,7 @@ class ModifierDevisAction
             'client_id' => $client->getKey(),
             ...$contexte->colonnes(),
             'statut' => StatutDevis::Brouillon,
+            'accepte_le' => null,
             'emetteur_fige' => null,
         ])->save();
         $devis->lignes()->delete();

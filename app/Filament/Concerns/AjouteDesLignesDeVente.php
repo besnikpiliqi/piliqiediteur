@@ -44,6 +44,7 @@ use Filament\Forms\Contracts\HasForms;
 use Filament\Forms\Get;
 use Filament\Forms\Set;
 use Filament\Notifications\Notification;
+use Filament\Resources\Pages\Page as ResourcePage;
 use Filament\Support\Enums\ActionSize;
 use Filament\Support\Enums\MaxWidth;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -347,6 +348,7 @@ trait AjouteDesLignesDeVente
                 ->required()
                 ->default(1)
                 ->saisieEnDirect()
+                ->helperText(fn (Get $get, HasForms $livewire): ?string => self::stockDUneLigneDeDevis($get, $livewire))
                 // Sans l'autorisation de fixer les prix, la ligne dont la
                 // quantité change prend le prix du catalogue d'aujourd'hui
                 // (Q1) : le prix d'une fiche changé depuis sa saisie, que
@@ -782,6 +784,51 @@ trait AjouteDesLignesDeVente
     public static function peutSaisirUneVente(): bool
     {
         return auth()->user()?->canAny([PermissionRegistry::FACTURE_CREATE, PermissionRegistry::DEVIS_CREATE, PermissionRegistry::DEVIS_UPDATE]) ?? false;
+    }
+
+    /**
+     * Sous la quantité d'une ligne de produit d'un devis : le stock
+     * disponible du magasin aujourd'hui, et un avertissement quand la
+     * quantité le dépasse (décision de l'éditeur du 02/11/2026, option
+     * « a ») ; le devis ne réserve rien, et l'émission de la facture qui en
+     * sortira contrôle le stock (voir VerificateurDeStock). Rien hors des
+     * pages d'un devis (une facture, la caisse, qui reprennent les mêmes
+     * lignes), ni pour un service ou un produit qui ne suit pas son stock.
+     * Les stocks de tous les produits du formulaire se lisent en une seule
+     * requête par requête de la page (voir calculUneFoisParRequete()) :
+     * autant de lectures du catalogue pour vingt lignes que pour une.
+     */
+    public static function stockDUneLigneDeDevis(Get $get, HasForms $livewire): ?string
+    {
+        $produitId = $get('produit_id');
+
+        if (! $livewire instanceof ResourcePage || $livewire->getModel() !== Devis::class || blank($produitId)) {
+            return null;
+        }
+
+        $identifiants = collect(ValeursLues::tableau($get('../../lignes') ?? []))
+            ->map(fn (mixed $ligne): mixed => is_array($ligne) ? ($ligne['produit_id'] ?? null) : null)
+            ->filter(fn (mixed $identifiant): bool => filled($identifiant))
+            ->map(fn (mixed $identifiant): int|string => ValeursLues::cleDeTableau($identifiant))
+            ->unique()
+            ->sort()
+            ->values()
+            ->all();
+        $stocks = self::calculUneFoisParRequete('stocks:'.implode(',', $identifiants), fn (): array => Produit::withTrashed()
+            ->whereKey($identifiants)
+            ->where('suivi_stock', true)
+            ->get(['id', 'stock_quantite'])
+            ->mapWithKeys(fn (Produit $produit): array => [$produit->getKey() => $produit->stock_quantite])
+            ->all());
+        $disponible = $stocks[ValeursLues::cleDeTableau($produitId)] ?? null;
+
+        if ($disponible === null) {
+            return null;
+        }
+
+        return ValeurSimple::enEntierOuNul($get('quantite')) > $disponible
+            ? "Stock disponible : {$disponible}. La quantité dépasse le stock : le devis ne réserve rien, la facture le contrôlera."
+            : "Stock disponible : {$disponible}.";
     }
 
     /**

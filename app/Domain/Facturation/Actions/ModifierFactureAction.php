@@ -135,6 +135,7 @@ class ModifierFactureAction
         $contexte = ContexteDeVente::pourEnregistrer($client, $facture->magasin, $facture->fill($attributs)->noterSaNatureDOperation($attributs));
         $document = $this->constructeurLigne->construireToutes($lignes, $contexte);
         $this->derogations->exiger($compte, $facture->lignes->map(fn (LigneFacture $ligne): array => $ligne->attributesToArray())->all(), $document->lignes, $contexte);
+        $this->derogations->exigerPourLesLignesDuDevis($compte, $facture, $document->lignes);
         $facture->forceFill(['client_id' => $client->getKey(), ...$contexte->colonnes()])->save();
 
         $facture->lignes()->delete();

@@ -267,6 +267,14 @@ class FactureResource extends Resource
                 // d'une facture régularisée.
                 // Chaque numéro de document de la fiche mène à sa fiche, pour
                 // qui peut la voir (constat C2, voir FicheDUnDocument).
+                // Le devis accepté d'où vient la facture, figé à
+                // l'émission, et un lien vers sa fiche pour qui peut la voir.
+                TextEntry::make('devis_d_origine')
+                    ->label('Devis d\'origine')
+                    ->state(fn (Facture $record): ?string => $record->mentionDuDevis())
+                    ->url(fn (Facture $record): ?string => FicheDUnDocument::adresse($record->devis))
+                    ->color(fn (Facture $record): ?string => FicheDUnDocument::adresse($record->devis) === null ? null : 'primary')
+                    ->visible(fn (Facture $record): bool => $record->devis_id !== null),
                 TextEntry::make('facture_rectifiee')
                     ->label('Rectifie la facture')
                     ->state(fn (Facture $record): ?string => $record->factureRectifiee?->numero)

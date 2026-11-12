@@ -45,6 +45,9 @@ return new class extends Migration
             $table->timestamps();
 
             $table->index(['magasin_id', 'statut']);
+            // La cible des clés composées des tables du magasin qui suivent
+            // un envoi (voir liens_des_devis).
+            $table->unique(['magasin_id', 'id']);
             // Jamais deux fois le même niveau de relance pour un document :
             // un envoi simple (niveau nul) peut, lui, se répéter. Nom
             // explicite : celui que Laravel dériverait dépasse les 63

@@ -14,6 +14,7 @@ use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\EnvoiDocument;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Models\LienDuDevis;
 use App\Domain\Facturation\Models\RecuPaiement;
 use App\Domain\Facturation\Notifications\EnvoiDocumentEchoue;
 use App\Domain\Facturation\Services\AvoirPdfGenerator;
@@ -190,10 +191,10 @@ class EnvoyerDocumentJob implements ShouldBeUnique, ShouldQueue
             return;
         }
 
-        $envoi->forceFill(['objet' => EnvoiDocument::objetPour($document, $envoi->niveau_relance)])->save();
+        $envoi->forceFill(['objet' => EnvoiDocument::objetPour($document, $envoi->nature, $envoi->niveau_relance)])->save();
 
         try {
-            Mail::to($envoi->destinataire)->send(new DocumentMail($envoi, $pdf, $generateur->nomFichier($document)));
+            Mail::to($envoi->destinataire)->send(new DocumentMail($envoi, $pdf, $generateur->nomFichier($document), $this->lienDeReponse($envoi, $document)));
         } catch (RfcComplianceException) {
             // Une adresse que le composant d'envoi refuse : aucune nouvelle
             // tentative n'y changera rien.
@@ -248,6 +249,28 @@ class EnvoyerDocumentJob implements ShouldBeUnique, ShouldQueue
         $delai = $this->backoff[$tentative - 1] ?? $this->backoff[array_key_last($this->backoff)];
         $envoi->forceFill(['derniere_erreur' => $cause->libelle(), 'prochaine_tentative_le' => now()->addSeconds($delai)])->save();
         $this->release($delai);
+    }
+
+    /**
+     * L'adresse du lien secret de l'envoi d'un devis (voir LienDuDevis),
+     * quand il vaut encore au départ de l'e-mail : un nouveau jeton, tiré
+     * à chaque tentative juste avant l'envoi, dont seule l'empreinte
+     * s'écrit, et que seul l'e-mail porte ; null pour tout autre envoi, ou
+     * un devis déjà accepté, refusé, expiré ou transformé, renvoyé tel que
+     * le client l'a reçu, sans lien.
+     */
+    private function lienDeReponse(EnvoiDocument $envoi, Facture|Devis|Avoir|RecuPaiement $document): ?string
+    {
+        $lien = $document instanceof Devis && $envoi->nature === NatureEnvoi::Envoi ? $envoi->lienDuDevis()->first() : null;
+
+        if ($lien === null || ! $lien->estValable($document)) {
+            return null;
+        }
+
+        $jeton = LienDuDevis::nouveauJeton();
+        $lien->forceFill(['jeton_hache' => LienDuDevis::empreinte($jeton)])->save();
+
+        return route('devis.reponse.afficher', ['jeton' => $jeton]);
     }
 
     /**

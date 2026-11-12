@@ -7,6 +7,7 @@ use App\Http\Controllers\ConfirmerInscriptionController;
 use App\Http\Controllers\ConfirmerNouvelleAdresseController;
 use App\Http\Controllers\RappelsDesPrestatairesController;
 use App\Http\Controllers\RattachementAuCabinetController;
+use App\Http\Controllers\ReponseAuDevisController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', fn () => to_route('filament.app.tenant'));
@@ -85,3 +86,24 @@ Route::get('/rattachement-cabinet/{jeton}', [RattachementAuCabinetController::cl
     ->where('jeton', '[A-Za-z0-9]{64}')
     ->middleware('throttle:30,1')
     ->name('cabinets.rattachement.afficher');
+
+// La réponse du client à un devis envoyé par e-mail, par le lien secret
+// de cet envoi, sans compte (voir ReponseAuDevisController) : ouvrir la
+// page ou le PDF n'écrit rien, un formulaire accepte, l'autre refuse. Les
+// essais sont limités par adresse IP, jetons faux compris.
+Route::get('/devis/{jeton}', [ReponseAuDevisController::class, 'afficher'])
+    ->where('jeton', '[A-Za-z0-9]{64}')
+    ->middleware('throttle:30,1')
+    ->name('devis.reponse.afficher');
+Route::get('/devis/{jeton}/pdf', [ReponseAuDevisController::class, 'pdf'])
+    ->where('jeton', '[A-Za-z0-9]{64}')
+    ->middleware('throttle:30,1')
+    ->name('devis.reponse.pdf');
+Route::post('/devis/{jeton}/acceptation', [ReponseAuDevisController::class, 'accepter'])
+    ->where('jeton', '[A-Za-z0-9]{64}')
+    ->middleware('throttle:10,1')
+    ->name('devis.reponse.accepter');
+Route::post('/devis/{jeton}/refus', [ReponseAuDevisController::class, 'refuser'])
+    ->where('jeton', '[A-Za-z0-9]{64}')
+    ->middleware('throttle:10,1')
+    ->name('devis.reponse.refuser');

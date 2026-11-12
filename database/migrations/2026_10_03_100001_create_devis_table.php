@@ -38,6 +38,13 @@ return new class extends Migration
             $table->string('numero', 40)->nullable();
             $table->string('statut', 20)->default('brouillon');
             $table->timestamp('date_emission')->nullable();
+            // L'instant où le client a accepté la version envoyée, constaté
+            // par le magasin (voir AccepterDevisAction) ou donné par le
+            // client en ligne (voir RepondreAuDevisEnLigneAction) ; effacé
+            // quand une modification repasse le devis en brouillon (voir
+            // ModifierDevisAction). La facture qui en est tirée imprime son
+            // jour (voir CreerFactureDepuisDevisAction).
+            $table->timestamp('accepte_le')->nullable();
             // L'émetteur que le devis a figé à son dernier envoi (voir
             // EmettreDevisAction et Emetteur::enTableau()) : la société et
             // le magasin tels qu'ils étaient alors, assurance

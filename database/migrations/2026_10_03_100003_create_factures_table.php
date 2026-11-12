@@ -4,6 +4,7 @@ use App\Domain\Facturation\Support\GardesDeLaVente;
 use App\Domain\Facturation\Support\GardesDesDocumentsEmis;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 /**
@@ -29,6 +30,15 @@ return new class extends Migration
             $table->foreignId('magasin_id')->constrained('magasins')->restrictOnDelete();
             $table->foreignId('client_id');
             $table->foreignId('devis_id')->nullable();
+            // D'après quel devis la facture est établie (voir
+            // CreerFactureDepuisDevisAction) : son numéro et le jour, au
+            // calendrier du magasin, de son acceptation, recopiés à la
+            // transformation et figés à l'émission, que la fiche et le PDF
+            // impriment (« Établie d'après le devis n° … accepté le … ») ;
+            // tous deux vides pour une facture qui ne vient pas d'un devis
+            // (contrainte factures_devis_d_origine).
+            $table->string('devis_numero', 40)->nullable();
+            $table->date('devis_accepte_le')->nullable();
             // La facture que rectifie une facture rectificative, émise après
             // la correction du SIREN de la société par l'éditeur (voir
             // EmettreLaFactureRectificativeAction) : une facture de son
@@ -152,6 +162,8 @@ return new class extends Migration
             $table->foreign(['magasin_id', 'consultation_vies_id'])->references(['magasin_id', 'id'])->on('consultations_vies')->restrictOnDelete();
             $table->foreign(['magasin_id', 'cloture_caisse_id'])->references(['magasin_id', 'id'])->on('clotures_caisse')->restrictOnDelete();
         });
+
+        DB::statement('ALTER TABLE factures ADD CONSTRAINT factures_devis_d_origine CHECK ((devis_id IS NULL AND devis_numero IS NULL AND devis_accepte_le IS NULL) OR (devis_id IS NOT NULL AND devis_numero IS NOT NULL AND devis_accepte_le IS NOT NULL))');
 
         GardesDeLaVente::poser('factures');
         GardesDesDocumentsEmis::poser('factures');

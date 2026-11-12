@@ -27,7 +27,10 @@ use LogicException;
 /**
  * L'e-mail qui porte un devis, une facture, un avoir ou un reçu de
  * paiement à son client, PDF en pièce jointe (voir EnvoyerDocumentJob). Il part de l'adresse du
- * logiciel, au nom du magasin, et les réponses vont au magasin.
+ * logiciel, au nom du magasin, et les réponses vont au magasin. Celui
+ * d'un devis envoyé porte le lien secret par lequel le client y répond en
+ * ligne (voir LienDuDevis) ; la confirmation de sa réponse lui renvoie le
+ * devis accepté ou refusé.
  *
  * Il présente le vendeur que son PDF imprime (voir
  * DocumentEnvoyable::emetteur()) : celui qu'une facture ou un avoir a
@@ -64,6 +67,7 @@ class DocumentMail extends Mailable
         public readonly EnvoiDocument $envoi,
         private readonly string $pdf,
         private readonly string $nomFichier,
+        private readonly ?string $lienDeReponse = null,
     ) {
         $this->document = $envoi->document ?? throw new LogicException('Le document de cet envoi n\'existe plus : l\'e-mail ne part pas.');
         $this->emetteur = $this->document->emetteur();
@@ -89,6 +93,7 @@ class DocumentMail extends Mailable
                 'nom' => $this->emetteur->nom,
                 'introduction' => $this->introduction(),
                 'paragraphes' => $this->paragraphesDuMessage(),
+                'lienDeReponse' => $this->lienDeReponse,
                 'coordonnees' => $this->coordonnees(),
             ],
         );
@@ -125,6 +130,8 @@ class DocumentMail extends Mailable
         $document = $this->document;
 
         return match (true) {
+            $document instanceof Devis && $this->envoi->nature === NatureEnvoi::Acceptation => "Nous avons bien reçu votre acceptation de notre devis {$document->numero} d'un montant de ".self::montant($document).'. Vous trouverez ci-joint le devis que vous avez accepté. Merci de votre confiance.',
+            $document instanceof Devis && $this->envoi->nature === NatureEnvoi::Refus => "Nous avons bien reçu votre refus de notre devis {$document->numero}. Vous trouverez ci-joint le devis concerné, pour mémoire.",
             $document instanceof RecuPaiement => $this->introductionDuRecu($document),
             $document instanceof Facture && ! $document->estPourUnProfessionnel() => "Veuillez trouver ci-joint votre ticket de caisse {$document->numero} d'un montant de ".self::montant($document).'.',
             $document instanceof Facture && $document->montantRestantEnCentimes() <= 0 => "Veuillez trouver ci-joint notre facture {$document->numero} d'un montant de ".self::montant($document).', déjà réglée.',

@@ -38,6 +38,7 @@ use App\Domain\Facturation\Actions\NoterBordereauDetaxeAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\NatureOperation;
 use App\Domain\Facturation\Enums\NatureRecuPaiement;
+use App\Domain\Facturation\Enums\ReponseAuDevis;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Enums\TypePreuve;
 use App\Domain\Facturation\Models\Avoir;
@@ -48,6 +49,7 @@ use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
 use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\EnvoiDocument;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Models\LienDuDevis;
 use App\Domain\Facturation\Models\LigneAvoir;
 use App\Domain\Facturation\Models\LigneDevis;
 use App\Domain\Facturation\Models\LigneFacture;
@@ -57,6 +59,7 @@ use App\Domain\Facturation\Models\PaiementAllocation;
 use App\Domain\Facturation\Models\PanierCaisse;
 use App\Domain\Facturation\Models\PreuveOperation;
 use App\Domain\Facturation\Models\RecuPaiement;
+use App\Domain\Facturation\Models\ReponseDuDevis;
 use App\Domain\Stock\Models\InventaireOuverture;
 use App\Domain\Stock\Models\LigneInventaireOuverture;
 use App\Domain\Stock\Models\MouvementStock;
@@ -158,12 +161,14 @@ class TenantIsolationTest extends TestCase
      * preuve d'exonération ou un bordereau de détaxe, que par la sienne, un
      * reçu de paiement et ses lignes, qu'avec leur encaissement, la TVA
      * d'un taux d'une facture d'achat ou d'un avoir fournisseur, qu'avec
-     * son document, et le jeton d'une demande traitée, que par
-     * ActionsUniques. ActionTraitee, Avoir, AvoirAllocation,
+     * son document, le jeton d'une demande traitée, que par
+     * ActionsUniques, et le lien d'un devis et la réponse du client, qu'avec
+     * l'envoi du devis et cette réponse. ActionTraitee, Avoir, AvoirAllocation,
      * BordereauDetaxe, ConsultationVies, EnregistrementFiscal,
-     * LigneRecuPaiement, Paiement, PaiementAllocation, PieceDuFournisseur,
-     * PreuveOperation, RecuPaiement, TauxAvoirFournisseur, TauxFactureAchat,
-     * TeteRegistreFiscal et TraceEvenement sont aussi dans modelesCrees(),
+     * LienDuDevis, LigneRecuPaiement, Paiement, PaiementAllocation,
+     * PieceDuFournisseur, PreuveOperation, RecuPaiement, ReponseDuDevis,
+     * TauxAvoirFournisseur, TauxFactureAchat, TeteRegistreFiscal et
+     * TraceEvenement sont aussi dans modelesCrees(),
      * écrits directement par ces tests (voir creerEnregistrement()).
      *
      * @var list<class-string<Model>>
@@ -175,6 +180,7 @@ class TenantIsolationTest extends TestCase
         BordereauDetaxe::class,
         ConsultationVies::class,
         EnregistrementFiscal::class,
+        LienDuDevis::class,
         LigneAchat::class,
         LigneAvoir::class,
         LigneAvoirFournisseur::class,
@@ -189,6 +195,7 @@ class TenantIsolationTest extends TestCase
         PosteReconnu::class,
         PreuveOperation::class,
         RecuPaiement::class,
+        ReponseDuDevis::class,
         TauxAvoirFournisseur::class,
         TauxFactureAchat::class,
         TeteRegistreFiscal::class,
@@ -236,7 +243,7 @@ class TenantIsolationTest extends TestCase
                 $modele,
                 static fn (array $attributs = []): Model => $modele::factory()->create($attributs),
             ]])
-            ->merge(collect([ActionTraitee::class, Avoir::class, AvoirAllocation::class, BordereauDetaxe::class, ConsultationVies::class, EnregistrementFiscal::class, LigneRecuPaiement::class, Paiement::class, PaiementAllocation::class, PieceDuFournisseur::class, PreuveOperation::class, RecuPaiement::class, TauxAvoirFournisseur::class, TauxFactureAchat::class, TeteRegistreFiscal::class, TraceEvenement::class])
+            ->merge(collect([ActionTraitee::class, Avoir::class, AvoirAllocation::class, BordereauDetaxe::class, ConsultationVies::class, EnregistrementFiscal::class, LienDuDevis::class, LigneRecuPaiement::class, Paiement::class, PaiementAllocation::class, PieceDuFournisseur::class, PreuveOperation::class, RecuPaiement::class, ReponseDuDevis::class, TauxAvoirFournisseur::class, TauxFactureAchat::class, TeteRegistreFiscal::class, TraceEvenement::class])
                 ->mapWithKeys(static fn (string $modele): array => [class_basename($modele) => [
                     $modele,
                     static fn (array $attributs = []): Model => self::creerEnregistrement($modele, $attributs),
@@ -855,6 +862,19 @@ class TenantIsolationTest extends TestCase
                 'montant_tva' => '2.00',
                 'montant_tva_calcule' => '2.00',
                 'ordre' => 0,
+            ],
+            LienDuDevis::class => [
+                'devis_id' => Devis::factory()->create()->getKey(),
+                'envoi_document_id' => EnvoiDocument::factory()->create()->getKey(),
+                'jeton_hache' => hash('sha256', Str::random(64)),
+            ],
+            ReponseDuDevis::class => [
+                'devis_id' => ($lien = self::creerEnregistrement(LienDuDevis::class))->devis_id,
+                'lien_du_devis_id' => $lien->getKey(),
+                'reponse' => ReponseAuDevis::Acceptation,
+                'signataire' => 'Claire Martin',
+                'empreinte_du_devis' => str_repeat('b', 64),
+                'created_at' => self::enUtc('2026-10-09 08:00:00'),
             ],
             TeteRegistreFiscal::class => [],
             TraceEvenement::class => [

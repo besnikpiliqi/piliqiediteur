@@ -15,6 +15,7 @@ use Database\Factories\EnvoiDocumentFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Support\Str;
 
@@ -93,17 +94,34 @@ class EnvoiDocument extends Model
      * L'objet de l'e-mail : le document, son numéro et le nom de son
      * émetteur, celui que l'e-mail présente et que son PDF imprime (voir
      * DocumentEnvoyable::emetteur() et DocumentMail), précédés du niveau
-     * pour une relance.
+     * pour une relance, ou de la réponse confirmée au client pour la
+     * confirmation de sa réponse en ligne à un devis.
      *
      * @param  Facture|Avoir|Devis|RecuPaiement  $document
      *
      * @throws DocumentSansEnregistrementSigneException
      */
-    public static function objetPour(DocumentEnvoyable $document, ?int $niveauRelance = null): string
+    public static function objetPour(DocumentEnvoyable $document, NatureEnvoi $nature = NatureEnvoi::Envoi, ?int $niveauRelance = null): string
     {
         $objet = "{$document->libelleDocument()} {$document->numero} — {$document->emetteur()->nom}";
 
-        return $niveauRelance === null ? $objet : "Relance n°{$niveauRelance} : {$objet}";
+        return match ($nature) {
+            NatureEnvoi::Envoi => $objet,
+            NatureEnvoi::Relance => "Relance n°{$niveauRelance} : {$objet}",
+            NatureEnvoi::Acceptation => "Acceptation enregistrée : {$objet}",
+            NatureEnvoi::Refus => "Refus enregistré : {$objet}",
+        };
+    }
+
+    /**
+     * Le lien secret de cet envoi, pour l'envoi d'un devis par e-mail
+     * (voir LienDuDevis).
+     *
+     * @return HasOne<LienDuDevis, $this>
+     */
+    public function lienDuDevis(): HasOne
+    {
+        return $this->hasOne(LienDuDevis::class);
     }
 
     /**

@@ -6,11 +6,15 @@ use App\Domain\Cabinets\Notifications\AvisDuCabinet;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Facturation\Enums\FormatDuTelechargement;
 use App\Domain\Facturation\Enums\OrigineDesAchats;
+use App\Domain\Facturation\Enums\ReponseAuDevis;
 use App\Domain\Facturation\Enums\TypeDeDocumentTelechargeable;
+use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\EnvoiDocument;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Models\ReponseDuDevis;
 use App\Domain\Facturation\Notifications\EnvoiDocumentEchoue;
 use App\Domain\Facturation\Notifications\FacturesPasseesEnRetard;
+use App\Domain\Facturation\Notifications\ReponseDuClientAuDevis;
 use App\Domain\Facturation\Notifications\TransmissionNonAboutie;
 use App\Domain\Facturation\Services\ArchiveDesDocuments;
 use App\Domain\Stock\Notifications\EcartDansLeStock;
@@ -64,6 +68,7 @@ class NotificationsDeLaSocieteTest extends TestCase
             EnvoiDocumentEchoue::class => new EnvoiDocumentEchoue($envoi),
             FacturesPasseesEnRetard::class => new FacturesPasseesEnRetard($magasin, ['FAC-MABOUT-2026-000001']),
             TransmissionNonAboutie::class => new TransmissionNonAboutie(Facture::factory()->create()),
+            ReponseDuClientAuDevis::class => new ReponseDuClientAuDevis($magasin, Devis::factory()->create(), (new ReponseDuDevis)->forceFill(['reponse' => ReponseAuDevis::Refus, 'created_at' => self::aParis('2026-11-12 10:00:00')]), []),
             StockSousLeSeuilDAlerte::class => new StockSousLeSeuilDAlerte(Produit::factory()->create()),
             StockNegatif::class => new StockNegatif(Produit::factory()->create(), 'T-MABOUT-2026-000001'),
             EcartDansLeStock::class => new EcartDansLeStock($magasin, 2),
@@ -90,7 +95,7 @@ class NotificationsDeLaSocieteTest extends TestCase
             $donnee = $proprietaire->notifications()->where('type', $classe)->sole()->data;
             $this->assertSame((int) $societe->id, (int) $donnee['societe_id'], $classe);
         }
-        foreach ([EnvoiDocumentEchoue::class, FacturesPasseesEnRetard::class, StockSousLeSeuilDAlerte::class, StockNegatif::class, StockDuMagasinCede::class, AvisDuTelechargementDesDocuments::class] as $classe) {
+        foreach ([EnvoiDocumentEchoue::class, FacturesPasseesEnRetard::class, StockSousLeSeuilDAlerte::class, StockNegatif::class, StockDuMagasinCede::class, AvisDuTelechargementDesDocuments::class, ReponseDuClientAuDevis::class] as $classe) {
             $this->assertSame((int) $magasin->id, (int) $proprietaire->notifications()->where('type', $classe)->sole()->data['magasin_id'], $classe);
         }
     }

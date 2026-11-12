@@ -14,6 +14,9 @@
         l'a réglée à son émission (voir ReglementsALEmission), à gauche des
         totaux, sur leur bande (voir documents/pdf/totaux).
 
+        La facture transformée d'un devis accepté dit d'après quel devis elle
+        est établie, sous ses dates (voir Facture::mentionDuDevis()).
+
         L'échéance s'imprime sur toute facture à un professionnel, même
         réglée à son émission (date à laquelle le règlement doit intervenir,
         art. L441-9 du Code de commerce) ; une vente à un particulier
@@ -39,6 +42,7 @@
             $facture->numero ?? 'Brouillon (non émise)',
             $facture->date_emission ? 'Émise le '.$facture->magasin->calendrier()->afficher($facture->date_emission, 'd/m/Y') : null,
             $avecEcheance ? 'Échéance le '.\App\Domain\Calendrier\Calendrier::afficherJour($facture->date_echeance, 'd/m/Y') : null,
+            $facture->mentionDuDevis(),
         ]),
     ])
 

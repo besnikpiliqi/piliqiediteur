@@ -20,6 +20,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\DB;
 use LogicException;
@@ -66,6 +67,7 @@ class Devis extends Model implements DocumentEnvoyable
         'livraison_date' => JourCivil::class,
         'transport_par' => TransportPar::class,
         'date_emission' => Instant::class,
+        'accepte_le' => Instant::class,
         'emetteur_fige' => 'array',
         'date_validite' => JourCivil::class,
         'total_ht' => 'decimal:2',
@@ -144,6 +146,142 @@ class Devis extends Model implements DocumentEnvoyable
         return $this->hasMany(Facture::class);
     }
 
+    /**
+     * Les liens secrets de ses envois par e-mail, un par envoi (voir
+     * LienDuDevis).
+     *
+     * @return HasMany<LienDuDevis, $this>
+     */
+    public function liens(): HasMany
+    {
+        return $this->hasMany(LienDuDevis::class);
+    }
+
+    /**
+     * La dernière réponse du client par un lien secret (voir
+     * ReponseDuDevis) ; elle ne vaut pour la version actuelle du devis que
+     * si elle suit son dernier envoi (voir reponseALaVersionEnvoyee()).
+     *
+     * @return HasOne<ReponseDuDevis, $this>
+     */
+    public function derniereReponse(): HasOne
+    {
+        return $this->hasOne(ReponseDuDevis::class)->latestOfMany();
+    }
+
+    /**
+     * La réponse en ligne du client à la version que le devis a envoyée en
+     * dernier, quand le devis l'a gardée : accepté ou refusé par elle, ou
+     * transformé en facture après elle ; null sinon (aucune réponse en
+     * ligne, ou un devis modifié et renvoyé depuis).
+     */
+    public function reponseALaVersionEnvoyee(): ?ReponseDuDevis
+    {
+        $reponse = $this->derniereReponse;
+
+        return $reponse !== null
+            && in_array($this->statut, [StatutDevis::Accepte, StatutDevis::Refuse, StatutDevis::Converti], true)
+            && $this->date_emission !== null
+            && $reponse->created_at->gte($this->date_emission)
+            ? $reponse
+            : null;
+    }
+
+    /**
+     * Le lien secret qui vaut encore pour ce devis, s'il en a un : celui de
+     * son dernier envoi par e-mail (voir LienDuDevis::estValable()).
+     */
+    public function lienValable(): ?LienDuDevis
+    {
+        $lien = $this->liens()->latest('id')->first();
+
+        return $lien !== null && $lien->jeton_hache !== null && $lien->estValable($this) ? $lien : null;
+    }
+
+    /**
+     * L'empreinte SHA-256 de la version du devis telle que son client la
+     * reçoit : son numéro, son envoi, sa validité, son client, son
+     * émetteur figé, sa nature d'opération, sa livraison, ses lignes et ses
+     * totaux, encodés en JSON une seule fois. La réponse en ligne du client
+     * la garde (voir ReponseDuDevis) : une version modifiée depuis a une
+     * autre empreinte.
+     */
+    public function empreinteDeSaVersion(): string
+    {
+        $lignes = $this->lignes()->get()->map(fn (LigneDevis $ligne): array => [
+            'produit_id' => $ligne->produit_id,
+            'service_id' => $ligne->service_id,
+            'nature' => $ligne->getRawOriginal('nature'),
+            'reference' => $ligne->reference,
+            'description' => $ligne->description,
+            'quantite' => $ligne->quantite,
+            'prix_unitaire_ht' => $ligne->getRawOriginal('prix_unitaire_ht'),
+            'prix_unitaire_ttc' => $ligne->getRawOriginal('prix_unitaire_ttc'),
+            'taux_tva' => $ligne->getRawOriginal('taux_tva'),
+            'remise_pourcentage' => $ligne->getRawOriginal('remise_pourcentage'),
+            'montant_ht' => $ligne->getRawOriginal('montant_ht'),
+            'montant_tva' => $ligne->getRawOriginal('montant_tva'),
+            'montant_ttc' => $ligne->getRawOriginal('montant_ttc'),
+        ])->all();
+
+        return hash('sha256', json_encode([
+            'magasin_id' => $this->magasin_id,
+            'numero' => $this->numero,
+            'date_emission' => $this->getRawOriginal('date_emission'),
+            'date_validite' => $this->getRawOriginal('date_validite'),
+            'client_id' => $this->client_id,
+            'type_client' => $this->getRawOriginal('type_client'),
+            'franchise_en_base' => (bool) $this->franchise_en_base,
+            'emetteur_fige' => $this->emetteur_fige,
+            'nature_operation' => $this->getRawOriginal('nature_operation'),
+            'livraison' => $this->only(['livraison_adresse', 'livraison_complement', 'livraison_code_postal', 'livraison_ville', 'livraison_pays', 'transport_par']),
+            'livraison_date' => $this->getRawOriginal('livraison_date'),
+            'conditions_paiement' => $this->conditions_paiement,
+            'notes' => $this->notes,
+            'lignes' => $lignes,
+            'total_ht' => $this->getRawOriginal('total_ht'),
+            'total_tva' => $this->getRawOriginal('total_tva'),
+            'total_ttc' => $this->getRawOriginal('total_ttc'),
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
+    }
+
+    /**
+     * Les lignes de produits suivis en stock dont la quantité dépasse le
+     * stock disponible du magasin aujourd'hui, une par produit, quantités
+     * des lignes d'un même produit additionnées : le devis ne réserve
+     * aucun stock (décision de l'éditeur du 02/11/2026), sa fiche et
+     * l'avis de son acceptation le signalent, et l'émission de la facture
+     * le contrôle (voir VerificateurDeStock).
+     *
+     * @return list<array{produit: string, demande: int, disponible: int}>
+     */
+    public function stocksInsuffisants(): array
+    {
+        $demandes = [];
+        $produits = [];
+
+        foreach ($this->lignes()->with('produit')->get() as $ligne) {
+            $produit = $ligne->produit;
+
+            if ($produit === null || ! $produit->suivi_stock) {
+                continue;
+            }
+
+            $demandes[$produit->getKey()] = ($demandes[$produit->getKey()] ?? 0) + $ligne->quantite;
+            $produits[$produit->getKey()] = $produit;
+        }
+
+        $manques = [];
+
+        foreach ($demandes as $id => $demande) {
+            if ($demande > $produits[$id]->stock_quantite) {
+                $manques[] = ['produit' => $produits[$id]->nom, 'demande' => $demande, 'disponible' => $produits[$id]->stock_quantite];
+            }
+        }
+
+        return $manques;
+    }
+
     public function libelleDocument(): string
     {
         return 'Devis';
@@ -194,8 +332,8 @@ class Devis extends Model implements DocumentEnvoyable
      * numéro (voir StatutDevis::transitionsAutorisees() et
      * ModifierDevisAction). Un devis refusé ou expiré reste tel quel : une
      * nouvelle proposition passe par un nouveau devis. Un devis transformé
-     * en facture (voir CreerFactureDepuisDevisAction) aussi : la facture
-     * reprend ses lignes et ses montants.
+     * en facture (voir CreerFactureDepuisDevisAction) aussi, figé : la
+     * facture reprend ses lignes et ses montants.
      */
     public function estModifiable(): bool
     {

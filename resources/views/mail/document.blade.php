@@ -10,6 +10,9 @@
     « *astérisques* » arrivent donc comme ils ont été écrits, jamais
     transformés en lien, en titre ou en italique. La version texte de
     l'e-mail retire ces balises (voir le gabarit text/layout de Laravel).
+
+    $lienDeReponse : le lien secret d'un devis envoyé, par lequel le client
+    l'accepte ou le refuse en ligne (voir LienDuDevis), null sinon.
 --}}
 <x-mail::layout>
 <x-slot:header>
@@ -30,6 +33,16 @@
 <p>{{ $paragraphe }}</p>
 
 @endforeach
+@if ($lienDeReponse)
+<p>Vous pouvez répondre à ce devis en ligne, sans compte : l'accepter en tapant votre nom et en cochant « Bon pour accord », ou le refuser.</p>
+
+<x-mail::button :url="$lienDeReponse">
+Répondre au devis
+</x-mail::button>
+
+<p>Ce lien vous est personnel : ne le transmettez pas. Il vaut jusqu'à la fin de la validité du devis et cesse de valoir dès votre réponse.</p>
+
+@endif
 <p>Cordialement,<br>
 {{ $nom }}</p>
 

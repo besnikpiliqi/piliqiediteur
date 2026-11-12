@@ -3,17 +3,23 @@
 namespace App\Filament\App\Resources;
 
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Facturation\Actions\AccepterDevisAction;
 use App\Domain\Facturation\Actions\CreerFactureDepuisDevisAction;
 use App\Domain\Facturation\Actions\EmettreDevisAction;
 use App\Domain\Facturation\Actions\RefuserDevisAction;
+use App\Domain\Facturation\Actions\RetirerLeLienDuDevisAction;
 use App\Domain\Facturation\Actions\SupprimerDevisAction;
+use App\Domain\Facturation\Enums\ReponseAuDevis;
 use App\Domain\Facturation\Enums\StatutDevis;
 use App\Domain\Facturation\Models\Devis;
+use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\PiedDePage;
 use App\Domain\Tenancy\Support\CompteConnecte;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Domain\Tenancy\Support\ValeursLues;
+use App\Filament\App\FicheDUnDocument;
 use App\Filament\App\Resources\DevisResource\Pages;
 use App\Filament\Concerns\AjouteDesLignesDeVente;
 use App\Filament\Concerns\ChoisitLaNatureDeLOperation;
@@ -21,6 +27,7 @@ use App\Filament\Concerns\EnvoieLesDocuments;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use App\Filament\Concerns\SupprimeEnMasseLigneParLigne;
 use Filament\Actions\DeleteAction;
+use Filament\Actions\MountableAction;
 use Filament\Forms\Components\Actions\Action;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Section;
@@ -32,6 +39,7 @@ use Filament\Forms\Set;
 use Filament\Infolists\Components\Section as InfolistSection;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Infolists\Infolist;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -115,7 +123,28 @@ class DevisResource extends Resource
                 TextEntry::make('date_emission')->label('Dernier envoi le')->dateTime('d/m/Y')->placeholder('—'),
                 TextEntry::make('date_validite')->label('Valide jusqu\'au')->jour()->placeholder('—'),
                 FactureResource::natureEntry(),
+                TextEntry::make('accepte_le')
+                    ->label('Accepté le')
+                    ->state(fn (Devis $record): ?string => $record->accepte_le === null ? null : $record->magasin->calendrier()->afficher($record->accepte_le, 'd/m/Y à H:i'))
+                    ->visible(fn (Devis $record): bool => $record->accepte_le !== null),
+                // La facture d'un devis transformé, et un lien vers sa fiche
+                // pour qui peut la voir (voir FicheDUnDocument).
+                TextEntry::make('facture_transformee')
+                    ->label('Transformé en facture')
+                    ->state(fn (Devis $record): ?string => $record->factures->first()?->numero ?? ($record->factures->isNotEmpty() ? 'Facture brouillon' : null))
+                    ->url(fn (Devis $record): ?string => FicheDUnDocument::adresse($record->factures->first()))
+                    ->color(fn (Devis $record): ?string => FicheDUnDocument::adresse($record->factures->first()) === null ? null : 'primary')
+                    ->visible(fn (Devis $record): bool => $record->factures->isNotEmpty()),
+                // Ce qu'un compte qui ne peut pas créer de facture lit sous le
+                // bouton désactivé « Transformer en facture ».
+                TextEntry::make('transformation_impossible')
+                    ->label('Transformation en facture')
+                    ->state(CreerFactureDepuisDevisAction::EXPLICATION_SANS_DROIT)
+                    ->visible(fn (Devis $record): bool => $record->statut === StatutDevis::Accepte && CompteConnecte::exiger()->cannot('convertir', $record)),
             ])->columns(3),
+
+            self::reponseEnLigneSection(),
+            self::stockSection(),
 
             FactureResource::livraisonSection(),
 
@@ -192,7 +221,7 @@ class DevisResource extends Resource
                     ->color('success')
                     ->requiresConfirmation()
                     ->visible(fn (Devis $record) => $record->statut === StatutDevis::Envoye && CompteConnecte::exiger()->can('accepter', $record))
-                    ->action(fn (Devis $record) => static::executerSansCasser(fn () => app(AccepterDevisAction::class)->handle(CompteConnecte::exiger(), $record))),
+                    ->action(fn (Devis $record) => static::executerSansCasser(fn () => self::avisDeLAcceptation(app(AccepterDevisAction::class)->handle(CompteConnecte::exiger(), $record)))),
                 Tables\Actions\Action::make('refuser')
                     ->label('Refuser')
                     ->icon('heroicon-o-x-circle')
@@ -200,22 +229,141 @@ class DevisResource extends Resource
                     ->requiresConfirmation()
                     ->visible(fn (Devis $record) => $record->statut === StatutDevis::Envoye && CompteConnecte::exiger()->can('refuser', $record))
                     ->action(fn (Devis $record) => static::executerSansCasser(fn () => app(RefuserDevisAction::class)->handle(CompteConnecte::exiger(), $record))),
-                Tables\Actions\Action::make('convertir')
-                    ->label('Convertir en facture')
-                    ->icon('heroicon-o-document-currency-euro')
-                    ->color('primary')
-                    ->requiresConfirmation()
-                    ->modalDescription('Une nouvelle facture brouillon sera créée avec les mêmes lignes que ce devis.')
-                    ->visible(fn (Devis $record) => $record->statut === StatutDevis::Accepte
-                        && $record->factures()->doesntExist()
-                        && CompteConnecte::exiger()->can('convertir', $record))
-                    ->action(fn (Devis $record) => static::executerSansCasser(fn () => app(CreerFactureDepuisDevisAction::class)->handle(CompteConnecte::exiger(), $record))),
+                self::actionTransformer(Tables\Actions\Action::make('convertir')),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
                     static::suppressionEnMasse(Devis::class, fn (Devis $devis) => app(SupprimerDevisAction::class)->handle(CompteConnecte::exiger(), $devis)),
                 ]),
             ]);
+    }
+
+    /**
+     * « Transformer en facture » (décision de l'éditeur du 02/11/2026),
+     * dans la liste et sur la fiche d'un devis accepté : une facture
+     * brouillon qui reprend exactement ses lignes, ses prix, ses remises et
+     * ses taux (voir CreerFactureDepuisDevisAction), puis la fiche de cette
+     * facture, à émettre. Pour qui ne peut pas créer de facture dans ce
+     * magasin (le propriétaire hors du magasin de démonstration, un
+     * administrateur ou un vendeur sans la vente, un observateur, un
+     * compte du cabinet lié), le bouton reste visible, désactivé, avec son
+     * explication, au lieu de disparaître.
+     */
+    public static function actionTransformer(MountableAction $action): MountableAction
+    {
+        return $action
+            ->label('Transformer en facture')
+            ->icon('heroicon-o-document-currency-euro')
+            ->color('primary')
+            ->requiresConfirmation()
+            ->modalHeading(fn (Devis $record): string => "Transformer le devis {$record->numero} en facture")
+            ->modalDescription('Une facture brouillon est créée avec exactement les lignes, les prix, les remises et les taux de ce devis accepté ; vous l\'émettez ensuite, et l\'émission contrôle le stock. Le devis reste, transformé et figé.')
+            ->modalSubmitActionLabel('Transformer en facture')
+            ->visible(fn (Devis $record): bool => $record->statut === StatutDevis::Accepte)
+            ->disabled(fn (Devis $record): bool => CompteConnecte::exiger()->cannot('convertir', $record))
+            ->tooltip(fn (Devis $record): ?string => CompteConnecte::exiger()->can('convertir', $record) ? null : CreerFactureDepuisDevisAction::EXPLICATION_SANS_DROIT)
+            ->action(function (Devis $record, MountableAction $action): void {
+                $facture = static::executerOuInterrompre(fn (): Facture => app(CreerFactureDepuisDevisAction::class)->handle(CompteConnecte::exiger(), $record));
+
+                Notification::make()->title("Le devis {$record->numero} est transformé en facture brouillon : vérifiez-la, puis émettez-la.")->success()->send();
+                $action->redirect(FactureResource::getUrl('view', ['record' => $facture]));
+            });
+    }
+
+    /**
+     * « Retirer le lien de réponse » : le client ne peut plus répondre en
+     * ligne au devis (voir RetirerLeLienDuDevisAction), pour qui peut
+     * l'envoyer, tant qu'un lien vaut encore.
+     */
+    public static function actionRetirerLeLien(MountableAction $action): MountableAction
+    {
+        return $action
+            ->label('Retirer le lien de réponse')
+            ->icon('heroicon-o-link-slash')
+            ->color('gray')
+            ->requiresConfirmation()
+            ->modalDescription('Le client ne pourra plus accepter ni refuser ce devis en ligne. Un nouvel envoi par e-mail lui donnera un nouveau lien.')
+            ->visible(fn (Devis $record): bool => CompteConnecte::exiger()->can('envoyer', $record) && $record->lienValable() !== null)
+            ->action(fn (Devis $record) => static::executerSansCasser(function () use ($record): void {
+                app(RetirerLeLienDuDevisAction::class)->handle(CompteConnecte::exiger(), $record);
+                Notification::make()->title('Le lien de réponse est retiré : le client ne peut plus répondre en ligne.')->success()->send();
+            }));
+    }
+
+    /**
+     * L'avis de l'acceptation constatée par le magasin : combien de
+     * produits du devis n'ont plus assez de stock, et lesquels (décision de
+     * l'éditeur du 02/11/2026, option « a »).
+     */
+    private static function avisDeLAcceptation(Devis $devis): void
+    {
+        $manques = $devis->stocksInsuffisants();
+
+        if ($manques === []) {
+            Notification::make()->title("Le devis {$devis->numero} est accepté.")->success()->send();
+
+            return;
+        }
+
+        Notification::make()
+            ->title("Le devis {$devis->numero} est accepté, mais ".(count($manques) === 1 ? '1 produit n\'a' : count($manques).' produits n\'ont').' plus assez de stock.')
+            ->body(implode(' ', array_map(fn (array $manque): string => "« {$manque['produit']} » : {$manque['demande']} demandé".($manque['demande'] > 1 ? 's' : '').", {$manque['disponible']} en stock.", $manques)))
+            ->warning()
+            ->persistent()
+            ->send();
+    }
+
+    /**
+     * La réponse du client par son lien secret (voir ReponseDuDevis), ou le
+     * lien qui attend encore sa réponse : à qui il est parti, jusqu'à quand
+     * il vaut.
+     */
+    private static function reponseEnLigneSection(): InfolistSection
+    {
+        return InfolistSection::make('Réponse en ligne du client')
+            ->schema([
+                TextEntry::make('reponse_en_ligne')
+                    ->hiddenLabel()
+                    ->state(function (Devis $record): string {
+                        $reponse = $record->reponseALaVersionEnvoyee();
+                        $calendrier = $record->magasin->calendrier();
+
+                        if ($reponse !== null) {
+                            $quand = $calendrier->afficher($reponse->created_at, 'd/m/Y à H:i');
+
+                            return $reponse->reponse === ReponseAuDevis::Acceptation
+                                ? "Accepté en ligne le {$quand} par « {$reponse->signataire} », avec la mention « Bon pour accord ». Empreinte du devis accepté : {$reponse->empreinte_du_devis}."
+                                : "Refusé en ligne le {$quand}".($reponse->motif === null ? '.' : ", motif : « {$reponse->motif} ».");
+                        }
+
+                        $lien = $record->lienValable();
+
+                        return 'Le client peut répondre en ligne par le lien envoyé à '.ValeurRequise::de($lien, 'le lien du devis')->envoi->destinataire
+                            .($record->date_validite === null ? '.' : ', jusqu\'au '.Calendrier::afficherJour($record->date_validite, 'd/m/Y').'.');
+                    }),
+            ])
+            ->visible(fn (Devis $record): bool => $record->reponseALaVersionEnvoyee() !== null || $record->lienValable() !== null);
+    }
+
+    /**
+     * Les produits du devis dont la quantité dépasse le stock du magasin
+     * aujourd'hui (voir Devis::stocksInsuffisants()), tant que sa facture
+     * n'est pas émise : le devis ne réserve rien, l'émission le contrôlera.
+     */
+    private static function stockSection(): InfolistSection
+    {
+        return InfolistSection::make('Stock')
+            ->schema([
+                TextEntry::make('stocks_insuffisants')
+                    ->hiddenLabel()
+                    ->color('warning')
+                    ->state(fn (Devis $record): array => array_map(fn (array $manque): string => "« {$manque['produit']} » : {$manque['demande']} demandé".($manque['demande'] > 1 ? 's' : '').", {$manque['disponible']} en stock.", $record->stocksInsuffisants()))
+                    ->listWithLineBreaks()
+                    ->helperText('La quantité dépasse le stock disponible : le devis ne réserve rien, et l\'émission de la facture contrôlera le stock.'),
+            ])
+            ->visible(fn (Devis $record): bool => in_array($record->statut, [StatutDevis::Brouillon, StatutDevis::Envoye, StatutDevis::Accepte, StatutDevis::Converti], true)
+                && $record->factures->every(fn (Facture $facture): bool => $facture->numero === null)
+                && $record->stocksInsuffisants() !== []);
     }
 
     /**

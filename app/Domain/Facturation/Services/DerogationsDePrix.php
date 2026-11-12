@@ -7,6 +7,8 @@ namespace App\Domain\Facturation\Services;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
+use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Models\LigneDevis;
 use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Domain\Tenancy\Support\ValeursLues;
@@ -33,7 +35,9 @@ use InvalidArgumentException;
  * produit, le service, la quantité, le prix, le taux ou la remise d'une
  * ligne dérogatoire en introduit une nouvelle. La conversion d'un devis,
  * qui recopie ses lignes sans les reconstruire (voir
- * CreerFactureDepuisDevisAction), garde de même l'accord donné au devis.
+ * CreerFactureDepuisDevisAction), garde de même l'accord donné au devis,
+ * et ses lignes ne changent ensuite qu'avec l'autorisation (voir
+ * exigerPourLesLignesDuDevis()).
  *
  * Contrôlé par les actions qui enregistrent les lignes d'une vente (voir
  * CreerFactureAction, par laquelle passe aussi une vente à la caisse,
@@ -62,6 +66,40 @@ class DerogationsDePrix
 
         if ($introduites !== [] && Gate::forUser($compte)->denies(PermissionRegistry::VENTE_REMISES_ET_PRIX)) {
             throw new AuthorizationException(implode(' ', $introduites));
+        }
+    }
+
+    /**
+     * Les lignes d'une facture transformée d'un devis accepté reprennent
+     * l'engagement pris envers le client (décision de l'éditeur du
+     * 02/11/2026) : comme une ligne remisée ou à un prix dérogatoire, une
+     * ligne reprise du devis ne se modifie (produit, service, quantité,
+     * prix, taux, remise) ni ne se retire qu'avec l'autorisation
+     * « accorder des remises et fixer le prix d'un service ». Chaque ligne
+     * du devis doit se retrouver telle quelle parmi les lignes à
+     * enregistrer ; ajouter une autre ligne reste permis, selon la règle
+     * de toute ligne (voir exiger()).
+     *
+     * @param  array<array-key, array<string, mixed>>  $lignesApres  les lignes construites à enregistrer (voir ConstructeurLigneDocument)
+     *
+     * @throws AuthorizationException
+     */
+    public function exigerPourLesLignesDuDevis(User $compte, Facture $facture, array $lignesApres): void
+    {
+        if ($facture->devis_id === null || Gate::forUser($compte)->allows(PermissionRegistry::VENTE_REMISES_ET_PRIX)) {
+            return;
+        }
+
+        $restantes = array_count_values(array_map($this->cle(...), $lignesApres));
+
+        foreach (LigneDevis::query()->where('devis_id', $facture->devis_id)->get() as $ligneDuDevis) {
+            $cle = $this->cle($ligneDuDevis->attributesToArray());
+
+            if (empty($restantes[$cle])) {
+                throw new AuthorizationException("Modifier ou retirer la ligne « {$ligneDuDevis->description} », reprise du devis {$facture->devis_numero} accepté par le client, ".self::AUTORISATION.'.');
+            }
+
+            $restantes[$cle]--;
         }
     }
 

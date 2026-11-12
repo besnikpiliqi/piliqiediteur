@@ -14,6 +14,7 @@ use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\EnvoiDocument;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Models\LienDuDevis;
 use App\Domain\Facturation\Models\RecuPaiement;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\ActionsUniques;
@@ -31,7 +32,9 @@ use LogicException;
 /**
  * Envoie un devis, une facture, un avoir ou un reçu de paiement (voir
  * RecusDePaiement) par e-mail, PDF en pièce jointe, ou relance une facture
- * échue et impayée. Le document est
+ * échue et impayée. Chaque envoi d'un devis porte son lien secret, par
+ * lequel le client l'accepte ou le refuse en ligne (voir LienDuDevis) : le
+ * nouveau lien rend caducs ceux des envois précédents. Le document est
  * vérifié et l'envoi noté ici (voir EnvoiDocument) ; l'e-mail lui-même
  * part en file d'attente une fois la transaction validée (voir
  * EnvoyerDocumentJob), pour qu'un serveur d'envoi lent ou indisponible ne
@@ -123,6 +126,13 @@ class EnvoyerDocumentAction
                 'envoye_par' => $expediteur->getKey(),
             ]);
 
+            // Un devis déjà accepté, refusé, expiré ou transformé repart tel
+            // que le client l'a reçu, sans lien : il n'attend plus de
+            // réponse.
+            if ($document instanceof Devis && $document->statut === StatutDevis::Envoye) {
+                (new LienDuDevis)->forceFill(['devis_id' => $document->getKey(), 'envoi_document_id' => $envoi->getKey()])->save();
+            }
+
             return $this->programmer($envoi, $expediteur);
         }));
     }
@@ -187,7 +197,7 @@ class EnvoyerDocumentAction
         $niveau = $facture->niveauDeRelanceAtteint() + 1;
         $attributs = [
             'destinataire' => $destinataire,
-            'objet' => EnvoiDocument::objetPour($facture, $niveau),
+            'objet' => EnvoiDocument::objetPour($facture, NatureEnvoi::Relance, $niveau),
             'message' => $facture->messageDeRelance(),
             'envoye_par' => $expediteur?->getKey(),
         ];

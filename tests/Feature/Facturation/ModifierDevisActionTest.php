@@ -100,8 +100,9 @@ class ModifierDevisActionTest extends TestCase
 
     /**
      * Un devis accepté se modifie comme un devis envoyé (K8) : il repasse
-     * en brouillon, son acceptation effacée, et ne se convertit plus en
-     * facture tant que son client n'a pas accepté la nouvelle version.
+     * en brouillon, son acceptation et son instant effacés, et ne se
+     * transforme plus en facture tant que son client n'a pas accepté la
+     * nouvelle version.
      */
     public function test_un_devis_accepte_modifie_repasse_en_brouillon_et_perd_son_acceptation(): void
     {
@@ -111,11 +112,11 @@ class ModifierDevisActionTest extends TestCase
 
         $modifie = app(ModifierDevisAction::class)->handle(self::auteur(), $devis, $client, [['produit_id' => $produit->id, 'quantite' => 2]]);
 
-        $this->assertSame([StatutDevis::Brouillon, $devis->numero, '120.00'], [$modifie->statut, $modifie->numero, $modifie->total_ttc]);
+        $this->assertSame([StatutDevis::Brouillon, $devis->numero, '120.00', null], [$modifie->statut, $modifie->numero, $modifie->total_ttc, $modifie->accepte_le]);
         $this->assertThrows(
             fn () => app(CreerFactureDepuisDevisAction::class)->handle(self::auteur(), $modifie),
             LogicException::class,
-            'Seul un devis accepté peut être converti en facture (statut actuel : [brouillon]).',
+            'Seul un devis accepté se transforme en facture : ce devis est « Brouillon ».',
         );
     }
 
@@ -181,6 +182,10 @@ class ModifierDevisActionTest extends TestCase
         $this->assertSame([StatutDevis::Envoye, '2026-10-08', '60.00'], [$devis->statut, $devis->date_validite, $devis->total_ttc]);
     }
 
+    /**
+     * Transformé en facture, le devis passe « Transformé en facture » et
+     * reste figé (décision de l'éditeur du 02/11/2026).
+     */
     public function test_un_devis_deja_converti_en_facture_nest_plus_modifiable(): void
     {
         $client = Client::factory()->create();
@@ -195,7 +200,7 @@ class ModifierDevisActionTest extends TestCase
         );
 
         $devis->refresh();
-        $this->assertSame([StatutDevis::Accepte, '60.00'], [$devis->statut, $devis->total_ttc]);
+        $this->assertSame([StatutDevis::Converti, '60.00'], [$devis->statut, $devis->total_ttc]);
     }
 
     private function envoyerUnDevis(Client $client, Produit $produit, ?string $dateValidite = null): Devis

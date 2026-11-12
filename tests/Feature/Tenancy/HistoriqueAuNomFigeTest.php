@@ -90,6 +90,7 @@ class HistoriqueAuNomFigeTest extends TestCase
         'postes_reconnus' => ['reconnu_par' => 'reconnu_par_nom', 'retire_par' => 'retire_par_nom'],
         'invitations_cabinet' => ['invitee_par' => 'invitee_par_nom', 'retiree_par' => 'retiree_par_nom'],
         'liens_cabinet' => ['demande_par' => 'demande_par_nom', 'repondu_par' => 'repondu_par_nom', 'termine_par' => 'termine_par_nom'],
+        'liens_des_devis' => ['retire_par' => 'retire_par_nom'],
         'clients_confies' => ['confie_par' => 'confie_par_nom'],
     ];
 

@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 12/11/2026 à 07:58 UTC par pilotage-sync.sh : « CI bb135db : hypothèse des 30 s écartée par l'essai ».
+Mis à jour le 12/11/2026 à 07:58 UTC par pilotage-sync.sh : « remplissage fini ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

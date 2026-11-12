@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 12/11/2026 à 00:54 UTC par pilotage-sync.sh : « Lot FI poussé, CI verte ».
+Mis à jour le 12/11/2026 à 01:09 UTC par pilotage-sync.sh : « Rangement fait ; C10/C11 démonstration ; remplissage des réponses du professionnel lancé ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -96,18 +96,28 @@ d8d2ee3 Contrôle les seuils de l'analyse statique par ses paramètres effectifs
  M database/migrations/2026_10_14_100003_create_paniers_caisse_table.php
  M database/migrations/2026_10_14_100004_create_traces_evenements_table.php
  M tests/Feature/Authorization/ActionsHorsEcranTest.php
- M tests/Feature/CaisseSecurisee/InalterabiliteTest.php
+ M tests/Feature/Cabinets/AccesDuCollaborateurChezLeClientTest.php
 ```
 
 ## Dernière course de la chaîne
 
-Course `wf_7ca7f9f7-b84`, étapes commencées (de la plus ancienne à la plus récente) :
+Course `wf_1d467e9e-93e`, étapes commencées (de la plus ancienne à la plus récente) :
 
 ```
-ranger:onglet1
-ranger:onglet-pro
-ranger:onglet3
-ranger:decisions
-ranger:notes
-controle
+CALC:implementation
+CALC:implementation-2
+CALC:relecture1
+CALC:relecture2
+CALC:correction
+CALC:poussee
+CALC:notes
+FI:implementation
+FI:implementation-2
+FI:relecture1
+FI:relecture2
+FI:correction
+FI:poussee
+FI:notes
+AUD:implementation
+AUD:implementation-2
 ```

@@ -1814,3 +1814,13 @@ ok continue le travail
 
 la on peut toujour passer en demonstration malgre que le premier magasin est ouvert et la societe confirmer par le code du courrier. la 2eme affiche toujour les téléchargements que j ai fait avec le demonstration que normalement ne doit pas existe et non afficher car c'est comme ca la regle, tout ce qui est fait ou creer sur demonstration ne doit jamais passer en magasin vrai quand la societe confirme avec le code. ou peut etre t as bien fait le code mais moi je dois faire peut etre qqch
 
+## 192. 2026-11-12 00:54 UTC
+
+<!-- attach -->
+
+> Si elle affiche une date, c’est un défaut et je le corrige. Dites-moi ce qu’elle affiche.
+
+
+
+il affiche la date et les fichier reste toujours à telecharger. mais moi je suis tres frustrer avec toi ??? comment t as pu faire ca??
+

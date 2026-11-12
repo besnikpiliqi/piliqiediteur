@@ -1,12 +1,13 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 12/11/2026 à 15:22 UTC par pilotage-sync.sh : « Course 237 : même échec ».
+Mis à jour le 12/11/2026 à 16:26 UTC par pilotage-sync.sh : « Passage PHP 8.5 / PostgreSQL 18 préparé ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
 Tête poussée : `d4a8247`. Commits locaux pas encore poussés :
 
 ```
+0b7e734 Écrit chaque jour de la relance en navigateur sans calcul sur un instant (CI)
 ```
 
 Derniers commits poussés :
@@ -37,6 +38,7 @@ c2455dd Passe Larastan au niveau 10 sans erreur : les valeurs lues sans type son
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
+ M CLAUDE.md
  M app/Domain/CaisseSecurisee/Enums/CodeEvenement.php
  M app/Domain/Facturation/Actions/AccepterDevisAction.php
  M app/Domain/Facturation/Actions/CreerFactureDepuisDevisAction.php
@@ -64,6 +66,7 @@ c2455dd Passe Larastan au niveau 10 sans erreur : les valeurs lues sans type son
  M resources/views/factures/pdf.blade.php
  M resources/views/mail/document.blade.php
  M routes/web.php
+ M tests/Browser/inventaire-des-actions.php
  M tests/Feature/CaisseSecurisee/ProtectionDesTablesTest.php
  M tests/Feature/Courriels/CourrielsReelsTest.php
  M tests/Feature/Facturation/ContrePasserPaiementActionTest.php
@@ -83,6 +86,7 @@ c2455dd Passe Larastan au niveau 10 sans erreur : les valeurs lues sans type son
 ?? resources/views/devis/reponse-enregistree.blade.php
 ?? resources/views/devis/reponse-invalide.blade.php
 ?? resources/views/devis/reponse.blade.php
+?? tests/Browser/Parcours/ReponseAuDevisEnLigneTest.php
 ?? tests/Feature/Facturation/ReponseAuDevisConcurrenceTest.php
 ?? tests/Feature/Facturation/ReponseAuDevisEnLigneTest.php
 ?? tests/Feature/Facturation/TransformerUnDevisEnFactureTest.php
@@ -93,7 +97,6 @@ c2455dd Passe Larastan au niveau 10 sans erreur : les valeurs lues sans type son
 Course `wf_1d467e9e-93e`, étapes commencées (de la plus ancienne à la plus récente) :
 
 ```
-AUD:implementation-3
 AUD:relecture1
 AUD:relecture2
 AUD:correction
@@ -118,4 +121,5 @@ ML:correction
 ML:poussee
 ML:notes
 DV:implementation
+DV:implementation-2
 ```

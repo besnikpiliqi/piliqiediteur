@@ -3,7 +3,7 @@
 # de travail de PILIQI dans un conteneur Claude Code (Ubuntu 24.04, root).
 #
 # Ce qu'il met en place, dans l'ordre :
-#   1. les paquets système qui manquent (PostgreSQL 16, faketime, tzdata, PHP 8.3
+#   1. les paquets système qui manquent (PostgreSQL 18, faketime, tzdata, PHP 8.5
 #      et ses extensions, Composer, git, unzip, curl) ;
 #   2. le cluster PostgreSQL « main » en UTF8 et C.UTF-8, démarré, port 5432 ;
 #   3. le mot de passe de la base de test locale dans ~/.profile
@@ -39,16 +39,20 @@ export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin${PATH:
 DEPOT="${PILIQI_DEPOT:-/home/user/piliqiediteur}"
 MAISON="${HOME:-/root}"
 PROFIL="$MAISON/.profile"
-VERSION_PG_PREFEREE=16
-VERSION_PHP_ATTENDUE=8.3
+VERSION_PG_PREFEREE=18
+VERSION_PHP_ATTENDUE=8.5
 ROLE_PG=piliqi
 BASE_PG=piliqi_test
 PORT_PG=5432
 VARIABLE_MDP=PILIQI_PG_MOT_DE_PASSE
 BRANCHE_TRAVAIL=claude/saas-invoice-editor-architecture-q6eizh
 LIGNES_EXCLUSION=('tests/Feature/Scratch*' 'tests/Feature/Scratch/')
-PAQUETS_PHP=(php8.3-cli php8.3-common php8.3-curl php8.3-gd php8.3-intl php8.3-mbstring
-             php8.3-pgsql php8.3-sqlite3 php8.3-xml php8.3-zip php8.3-readline php8.3-opcache)
+# PHP 8.5 et PostgreSQL 18 seulement (décision de l'éditeur du 12/11/2026) : PHP 8.5 vient du
+# dépôt ondrej/php (déjà dans l'image), PostgreSQL 18 du dépôt apt.postgresql.org (pgdg), ajouté
+# s'il manque ; l'opcache est intégré à PHP 8.5 (aucun paquet php8.5-opcache).
+PAQUETS_PHP=(php8.5-cli php8.5-common php8.5-curl php8.5-gd php8.5-intl php8.5-mbstring
+             php8.5-pgsql php8.5-sqlite3 php8.5-xml php8.5-zip php8.5-readline php8.5-pcov
+             php8.5-redis php8.5-igbinary php8.5-bcmath)
 FUSEAUX_REQUIS=(Europe/Paris America/Guadeloupe America/Martinique Indian/Reunion)
 
 aide() {
@@ -314,10 +318,8 @@ verifier() {
     version_php=$(php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;' 2>/dev/null)
     if [ "$version_php" = "$VERSION_PHP_ATTENDUE" ]; then
       ok "PHP $(php -r 'echo PHP_VERSION;' 2>/dev/null)"
-    elif php -r 'exit(version_compare(PHP_VERSION, "8.3.0", ">=") ? 0 : 1);' 2>/dev/null; then
-      attention "PHP $(php -r 'echo PHP_VERSION;') (l'ancien conteneur avait 8.3.6 ; composer.json exige ^8.3 ; la CI teste 8.3, 8.4 et 8.5)"
     else
-      manque "PHP $(php -r 'echo PHP_VERSION;') trop ancien : composer.json exige ^8.3 (apt-get install ${PAQUETS_PHP[*]})"
+      manque "PHP $(php -r 'echo PHP_VERSION;') n'est pas PHP 8.5 : composer.json exige ^8.5 et la CI ne teste que 8.5 (apt-get install ${PAQUETS_PHP[*]}, puis update-alternatives --set php /usr/bin/php8.5)"
     fi
     local lignes_ext requises absentes
     lignes_ext=$(extensions_php)
@@ -358,7 +360,7 @@ verifier() {
   local version_pg
   version_pg=$(version_pg_choisie)
   if [ -z "$version_pg" ]; then
-    manque "PostgreSQL absent (apt-get install postgresql-16)"
+    manque "PostgreSQL absent (dépôt apt.postgresql.org, puis apt-get install postgresql-18)"
   else
     if [ "$version_pg" = "$VERSION_PG_PREFEREE" ]; then
       ok "PostgreSQL $version_pg installé (comme l'ancien conteneur ; la CI teste 17, la production sera en 17 ou 18)"
@@ -569,7 +571,7 @@ installer_paquets() {
   etape "Paquets système"
   local paquets=()
   if [ -z "$(versions_pg_installees)" ]; then
-    if apt-cache show postgresql-16 >/dev/null 2>&1; then paquets+=(postgresql-16); else paquets+=(postgresql); fi
+    paquets+=(postgresql-18)
   fi
   command -v faketime >/dev/null 2>&1 || paquets+=(faketime)
   dpkg -s tzdata >/dev/null 2>&1 || paquets+=(tzdata)
@@ -583,12 +585,20 @@ installer_paquets() {
     return 0
   fi
   info "à installer : ${paquets[*]}"
+  if [ ! -f /etc/apt/sources.list.d/pgdg.list ]; then
+    en_root install -d /usr/share/postgresql-common/pgdg
+    en_root curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+      || echec "clé du dépôt apt.postgresql.org introuvable (réseau : www.postgresql.org)"
+    echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(. /etc/os-release && echo "$VERSION_CODENAME")-pgdg main" \
+      | en_root tee /etc/apt/sources.list.d/pgdg.list >/dev/null
+  fi
   en_root env DEBIAN_FRONTEND=noninteractive apt-get update -q >/dev/null \
     || echec "apt-get update a échoué : l'accès réseau de l'environnement doit autoriser archive.ubuntu.com et security.ubuntu.com"
   # LANG et LC_ALL en C.UTF-8 : le cluster que crée le paquet postgresql naît alors en C.UTF-8.
   en_root env DEBIAN_FRONTEND=noninteractive LANG=C.UTF-8 LC_ALL=C.UTF-8 \
     apt-get install -y -q --no-install-recommends "${paquets[@]}" >/dev/null \
     || echec "apt-get install ${paquets[*]} a échoué"
+  [ -x /usr/bin/php8.5 ] && en_root update-alternatives --set php /usr/bin/php8.5 >/dev/null
   ok "installés : ${paquets[*]}"
 }
 

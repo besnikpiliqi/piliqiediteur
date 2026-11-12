@@ -1,18 +1,19 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 11/11/2026 à 23:58 UTC par pilotage-sync.sh : « Point de suivi 23:58 UTC : réponses de l'éditeur dans l'onglet professionnel ».
+Mis à jour le 12/11/2026 à 00:15 UTC par pilotage-sync.sh : « Après le lot FI ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
-Tête poussée : `cba222d`. Commits locaux pas encore poussés :
+Tête poussée : `3dd8705`. Commits locaux pas encore poussés :
 
 ```
-5c67a15 Contrôle les fichiers reçus et sert les fichiers en sécurité (lot FI)
 ```
 
 Derniers commits poussés :
 
 ```
+3dd8705 Relecture du lot FI de la série 8
+5c67a15 Contrôle les fichiers reçus et sert les fichiers en sécurité (lot FI)
 cba222d Relecture du lot CALC de la série 8
 b21124f Calcule les montants sans virgule flottante et imprime le PU HT tel qu'il est enregistré (lot CALC)
 71a217a Passe à la méthode rapide : la suite une fois par lot, l'analyse statique et la mutation à la fin
@@ -31,40 +32,11 @@ c2455dd Passe Larastan au niveau 10 sans erreur : les valeurs lues sans type son
 6fcefd0 Lit comme absent un témoin de poste envoyé en tableau, au lieu d'une erreur 500 (lot TY1 4/n)
 d8d2ee3 Contrôle les seuils de l'analyse statique par ses paramètres effectifs (lot TY1 3/n)
 5946e69 Arrête les mutants survivants connus des calculs et des droits (lot TY1 2/n)
-2c55bad Ajoute le test d'empreinte de la caisse et des PDF (lot TY1 1/n)
-b93aeff Relecture du lot PG de la série 8
 ```
 
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
- M README.md
- M app/Console/Commands/DiagnostiquerCaisseSecurisee.php
- M app/Domain/Facturation/Services/ArchiveDesDocuments.php
- M app/Domain/Fichiers/AnalyseurDePdf.php
- M app/Domain/Fichiers/NomDeFichier.php
- M app/Domain/Fichiers/ReenregistrementDesImages.php
- M app/Domain/Tenancy/Jobs/PreparerLeTelechargementDesDocumentsJob.php
- M app/Domain/Tenancy/Models/TelechargementDeDocuments.php
- M app/Filament/App/Resources/AvoirFournisseurResource/Pages/ViewAvoirFournisseur.php
- M app/Filament/App/Resources/FactureAchatResource/Pages/ViewFactureAchat.php
- M app/Filament/Concerns/JointLesPiecesDuFournisseur.php
- M app/Http/Controllers/TelechargerLesDocumentsController.php
- M app/Http/Controllers/TelechargerUnePieceDuFournisseurController.php
- M database/migrations/2026_10_14_100006_create_telechargements_documents_table.php
- M tests/Browser/Parcours/PiecesDuFournisseurTest.php
- M tests/Browser/Parcours/TemoinsDePosteEnTableauTest.php
- M tests/Browser/Support/Navigation.php
- M tests/Browser/inventaire-des-actions.php
- M tests/Feature/CaisseSecurisee/CommandesModuleFiscalTest.php
- M tests/Feature/Facturation/TelechargementDesDocumentsTest.php
- M tests/Feature/Fichiers/ControleDesFichiersTest.php
- M tests/Feature/Fichiers/PdfDePiliqiTest.php
- M tests/Feature/Fichiers/PiecesRecuesTest.php
- M tests/Fixtures/FichiersDeTest.php
-?? app/Domain/Fichiers/MemoireDePhp.php
-?? app/Filament/Concerns/TelechargeLesPiecesDuFournisseur.php
-?? tests/Fixtures/controler-un-fichier.php
 ```
 
 ## Dernière course de la chaîne
@@ -84,4 +56,6 @@ FI:implementation-2
 FI:relecture1
 FI:relecture2
 FI:correction
+FI:poussee
+FI:notes
 ```

@@ -213,4 +213,5 @@ reprises/lot-FI-travail-non-commite-complet.patch
 demo/decision-demo.md
 a-trancher/surveiller-reponses-pro.py
 reprises/lot-AUD-travail-non-commite.patch
+reprises/lot-AUD-commits-locaux.patch
 reprises/args-chaine-rapide-2026-11-12.json

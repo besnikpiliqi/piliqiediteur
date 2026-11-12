@@ -1,12 +1,13 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 12/11/2026 à 04:06 UTC par pilotage-sync.sh : « Point de suivi 04:08 UTC ».
+Mis à jour le 12/11/2026 à 06:09 UTC par pilotage-sync.sh : « Point de suivi 06:10 UTC : AUD commité en local, correction en cours ; sauvegarde ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
 Tête poussée : `3dd8705`. Commits locaux pas encore poussés :
 
 ```
+484ddcd Corrige les constats des audits du 07/11/2026 : isolation, base, clôtures, stock, plateforme agréée et outillage (lot AUD)
 ```
 
 Derniers commits poussés :
@@ -37,66 +38,42 @@ d8d2ee3 Contrôle les seuils de l'analyse statique par ses paramètres effectifs
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
- M .env.example
- M .github/dependabot.yml
- M .github/workflows/tests.yml
- M CLAUDE.md
  M README.md
- M app/Console/Commands/DiagnostiquerCaisseSecurisee.php
- M app/Domain/Achats/Actions/CreerFactureAchatAction.php
- M app/Domain/Achats/Actions/ModifierFactureAchatAction.php
- M app/Domain/Achats/Support/GardesDesPiecesDuFournisseur.php
- M app/Domain/Authorization/AutorisationsSociete.php
- M app/Domain/Cabinets/Support/GardesDesCabinets.php
- M app/Domain/CaisseSecurisee/Actions/VerifierIntegriteAction.php
- M app/Domain/CaisseSecurisee/Concerns/ProtegeLesDonneesValidees.php
- M app/Domain/CaisseSecurisee/Exceptions/HorlogeRegressiveException.php
- M app/Domain/CaisseSecurisee/Services/RegistreFiscal.php
+ M app/Console/Commands/Editeur/ProcedureDeLEditeur.php
+ M app/Domain/Achats/Actions/ValiderFactureAchatAction.php
+ M app/Domain/Achats/Models/FactureAchat.php
+ M app/Domain/CaisseSecurisee/ModuleFiscal.php
  M app/Domain/CaisseSecurisee/Services/VerificateurIntegrite.php
  M app/Domain/CaisseSecurisee/Support/DeclencheursDeProtection.php
- M app/Domain/Catalogue/Models/Produit.php
- M app/Domain/Contacts/Models/Client.php
- M app/Domain/Contacts/Models/Fournisseur.php
- M app/Domain/Facturation/Actions/CloturerCaisseAction.php
- M app/Domain/Facturation/Actions/CloturerLesJourneesAction.php
- M app/Domain/Facturation/Actions/CreerAvoirAction.php
- M app/Domain/Facturation/Actions/CreerDevisAction.php
- M app/Domain/Facturation/Actions/CreerFactureAction.php
- M app/Domain/Facturation/Actions/EnregistrerAvoirAction.php
- M app/Domain/Facturation/Actions/EnregistrerPaiementAction.php
- M app/Domain/Facturation/Actions/EnregistrerVenteCaisseAction.php
- M app/Domain/Facturation/Actions/FermerSaCaisseAction.php
- M app/Domain/Facturation/Actions/ModifierDevisAction.php
- M app/Domain/Facturation/Actions/ModifierFactureAction.php
- M app/Domain/Facturation/Jobs/SubmitFactureToPdpJob.php
- M app/Domain/Facturation/Models/ClotureCaisse.php
- M app/Domain/Facturation/Models/Facture.php
- M app/Domain/Facturation/Services/EReportingDesParticuliers.php
- M app/Domain/Facturation/Services/RecapitulatifDeCloture.php
- M app/Domain/Facturation/Services/RecusDePaiement.php
- M app/Domain/Facturation/Support/GardesDeLaVente.php
- M app/Domain/Stock/Enums/TypeMouvementStock.php
- M app/Domain/Stock/Models/MouvementStock.php
+ M app/Domain/Facturation/Support/GardesDesClotures.php
  M app/Domain/Stock/Services/StockLedgerService.php
- M app/Domain/Tenancy/Actions/CreerMandatPdpAction.php
- M app/Domain/Tenancy/Concerns/BelongsToMagasin.php
- M app/Domain/Tenancy/Services/DestinatairesDesAlertes.php
- M app/Domain/Tenancy/Support/GardesDesDroits.php
- M app/Domain/Tenancy/Support/GardesDesIdentifiants.php
- M app/Domain/Tenancy/Support/GardesDesTypesDActivite.php
- M app/Filament/App/Pages/Caisse.php
- M app/Filament/App/Resources/FactureResource.php
- M app/Filament/App/Resources/FactureResource/Pages/ViewFacture.php
- M app/Http/Middleware/FaireConfianceAuxMandataires.php
- M app/Integrations/EnvoiRecommande/Contracts/ServiceEnvoiRecommande.php
- M app/Integrations/EnvoiRecommande/FauxServiceEnvoiRecommande.php
- M app/Integrations/Ordre/Contracts/AnnuaireDeLOrdre.php
- M app/Integrations/Ordre/FauxAnnuaireDeLOrdre.php
- M app/Integrations/Pdp/Contracts/PdpGatewayInterface.php
- M app/Integrations/Pdp/Enums/StatutTransmissionPdp.php
- M app/Integrations/Pdp/FakePdpGateway.php
- M app/Integrations/Pdp/Models/TransmissionPdp.php
- M app/Integrations/Rne/Contracts/RegistreNationalDesEntreprises.php
+ M app/Domain/Stock/Services/VerificateurDuStock.php
+ M app/Domain/Tenancy/Enums/ActionAuditee.php
+ M database/factories/ClotureCaisseFactory.php
+ M database/migrations/2026_10_03_000002_create_clotures_caisse_table.php
+ M database/migrations/2026_10_03_100003_create_factures_table.php
+ M database/migrations/2026_10_05_100001_create_avoirs_table.php
+ M database/migrations/2026_10_07_100001_create_factures_achat_table.php
+ M tests/Browser/Parcours/TransmissionALaPlateformeTest.php
+ M tests/Browser/inventaire-des-actions.php
+ M tests/Feature/Authorization/ProprietaireSansVenteConcurrenceTest.php
+ M tests/Feature/CaisseSecurisee/VerificateurIntegriteTest.php
+ M tests/Feature/Editeur/AnnulerCessionTest.php
+ M tests/Feature/Filament/EnregistrementFiscalResourceTest.php
+ M tests/Fixtures/contenu-signe/jour.json
+ M tests/Fixtures/contenu-signe/nouvel-an.json
+ M tests/Fixtures/contenu-signe/nuit-d-ete.json
+ M tests/Fixtures/contenu-signe/nuit-d-hiver.json
+ M tests/Fixtures/contenu-signe/outre-mer.json
+ M tests/Fixtures/contenu-signe/premier-passage.json
+ M tests/Fixtures/contenu-signe/second-passage.json
+ M tests/Fixtures/empreinte-de-la-caisse/journal-des-evenements.txt
+ M tests/Fixtures/empreinte-de-la-caisse/registre.txt
+ M tests/TestCase.php
+?? app/Console/Commands/Editeur/RetirerUnTicketZNonSigne.php
+?? app/Domain/CaisseSecurisee/Services/VerificateurDesReferences.php
+?? app/Domain/Facturation/Actions/RetirerUnTicketZNonSigneAction.php
+?? tests/Feature/Editeur/RetirerUnTicketZNonSigneTest.php
 ```
 
 ## Dernière course de la chaîne
@@ -121,4 +98,7 @@ FI:notes
 AUD:implementation
 AUD:implementation-2
 AUD:implementation-3
+AUD:relecture1
+AUD:relecture2
+AUD:correction
 ```

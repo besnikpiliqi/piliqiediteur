@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 12/11/2026 à 16:26 UTC par pilotage-sync.sh : « Passage PHP 8.5 / PostgreSQL 18 préparé ».
+Mis à jour le 12/11/2026 à 16:27 UTC par pilotage-sync.sh : « Point de suivi de 16 h 25 UTC ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

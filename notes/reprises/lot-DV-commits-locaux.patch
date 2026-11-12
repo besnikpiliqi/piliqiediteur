@@ -1,0 +1,38 @@
+From 0b7e7341ea29b28411624a8982b08ae0247318c4 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Thu, 12 Nov 2026 15:32:18 +0000
+Subject: [PATCH] =?UTF-8?q?=C3=89crit=20chaque=20jour=20de=20la=20relance?=
+ =?UTF-8?q?=20en=20navigateur=20sans=20calcul=20sur=20un=20instant=20(CI)?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- La CI de d4a8247 échouait sur ReglesDuCalendrierTest (« calcul en jours
+  sur un instant ») : tests/Browser/Parcours/EnvoiParEMailTest.php
+  décalait l'instant de chaque compte par addDays(). Chaque jour s'écrit
+  désormais avec son fuseau (self::aParis('2026-04-'.(15 + $jour).' 10:00:00')),
+  les mêmes jours qu'avant.
+- Aucun test réécrit hors de ce détail ; ReglesDuCalendrierTest au code 0.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01K3593fBCSfG8EcbWrZryb6
+---
+ tests/Browser/Parcours/EnvoiParEMailTest.php | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/tests/Browser/Parcours/EnvoiParEMailTest.php b/tests/Browser/Parcours/EnvoiParEMailTest.php
+index 275cf22..42d3e68 100644
+--- a/tests/Browser/Parcours/EnvoiParEMailTest.php
++++ b/tests/Browser/Parcours/EnvoiParEMailTest.php
+@@ -184,7 +184,7 @@ function envoyerDepuisLaFiche(Navigation $onglet, object $societe, string $liste
+     ])));
+ 
+     foreach (['proprietaire', 'administrateur', 'administrateurVendeur', 'responsable', 'vendeur'] as $jour => $compte) {
+-        $this->travelTo(self::aParis('2026-04-15 10:00:00')->addDays($jour));
++        $this->travelTo(self::aParis('2026-04-'.(15 + $jour).' 10:00:00'));
+         $onglet = $this->seConnecter($societe->{$compte});
+         $adresse = strtolower($compte).'.relance';
+ 
+-- 
+2.43.0
+

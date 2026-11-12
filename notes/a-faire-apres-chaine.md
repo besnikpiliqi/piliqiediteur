@@ -44,3 +44,4 @@
 
 ## Lot VER (décision de l'éditeur du 12/11/2026 vers 14 h 30 UTC) : seulement PHP 8.5 et PostgreSQL 18
 - Voir historique/DIRECTIVES.md (même date) : CI réduite à PHP 8.5 × PostgreSQL 18 ; composer.json ^8.5 ; CLAUDE.md, README ; d'abord installer PHP 8.5 et PostgreSQL 18 dans le conteneur (installer-session.sh), chaîne arrêtée.
+- 12/11 16 h 35 UTC : l'éditeur veut que le lot VER attende la fin de toute la chaîne. Préparé : commit e389c22 (worktree scratchpad/ver-wt, branche locale ver-dernieres-versions, sur 0b7e734 ; suite PHP 8.5 + PG18 : 6 379 tests, code 0). À la fin de la chaîne : rejouer e389c22 sur la tête finale (corriger les nouvelles mentions de 8.3/17 éventuelles), suite complète sous PHP 8.5 + PG18 (cluster 18 sur le port 5433, DB_PORT=5433), envoyer, puis basculer le conteneur (php → 8.5, PG16 arrêté et retiré, PG18 sur 5432, base piliqi) ; installer-session.sh est déjà à 8.5/18.

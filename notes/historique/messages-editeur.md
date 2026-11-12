@@ -1988,3 +1988,11 @@ Continue
 
 Fais le passage
 
+## 211. 2026-11-12 17:26 UTC
+
+« Le lot DV travaille encore avec les anciennes versions. Si je change les versions sous lui, ses tests tombent.
+
+
+
+* Si j’envoie mes changements pendant qu’il travaille, son propre envoi sera refusé. » non non tu arrêtes pas. Laisse finir tout après tu peux faire ce que tu veux. C’est pas obligé de passer mtn
+

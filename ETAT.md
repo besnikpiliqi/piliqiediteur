@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 12/11/2026 à 16:27 UTC par pilotage-sync.sh : « Point de suivi de 16 h 25 UTC ».
+Mis à jour le 12/11/2026 à 17:26 UTC par pilotage-sync.sh : « Le passage attend la fin de la chaîne ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -72,6 +72,8 @@ c2455dd Passe Larastan au niveau 10 sans erreur : les valeurs lues sans type son
  M tests/Feature/Facturation/ContrePasserPaiementActionTest.php
  M tests/Feature/Facturation/ModifierDevisActionTest.php
  M tests/Feature/Tenancy/HistoriqueAuNomFigeTest.php
+ M tests/Feature/Tenancy/NotificationsDeLaSocieteTest.php
+ M tests/Feature/Tenancy/ReferencesEntreMagasinsEnBaseTest.php
  M tests/Feature/Tenancy/TenantIsolationTest.php
 ?? app/Domain/Facturation/Actions/RepondreAuDevisEnLigneAction.php
 ?? app/Domain/Facturation/Actions/RetirerLeLienDuDevisAction.php

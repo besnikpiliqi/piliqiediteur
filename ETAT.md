@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 12/11/2026 à 19:35 UTC par pilotage-sync.sh : « DV envoyé, CI verte ; EC2 en cours ».
+Mis à jour le 12/11/2026 à 20:26 UTC par pilotage-sync.sh : « Point de suivi 20:26 : EC2 en cours, sauvegarde ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -41,42 +41,62 @@ c2455dd Passe Larastan au niveau 10 sans erreur : les valeurs lues sans type son
  M app/Domain/Authorization/PermissionRegistry.php
  M app/Domain/Cabinets/Actions/AccepterLInvitationAction.php
  M app/Domain/Cabinets/Actions/AccepterLaDemandeDeLienAction.php
+ M app/Domain/Cabinets/Actions/MettreFinAuLienAction.php
+ M app/Domain/Cabinets/Actions/ReglerLesAutorisationsDuCabinetAction.php
+ M app/Domain/Cabinets/Actions/RepondreAUneDemandeDeLien.php
+ M app/Domain/Cabinets/Enums/EtatDuLien.php
+ M app/Domain/Cabinets/Enums/MotifDeFinDuLien.php
+ M app/Domain/Cabinets/Enums/OrigineDuLien.php
  M app/Domain/Cabinets/Mail/DemandeDeRattachementMail.php
  M app/Domain/Cabinets/Mail/InvitationDuCabinetMail.php
+ M app/Domain/Cabinets/Models/LienCabinet.php
+ M app/Domain/Cabinets/Services/AccesDesCabinets.php
+ M app/Domain/Cabinets/Services/RechercheDesCabinets.php
+ M app/Domain/Cabinets/Services/TableauDeBordDesClients.php
  M app/Domain/Cabinets/Support/GardesDesCabinets.php
+ M app/Domain/Cabinets/Support/IdentiteDansLeJournal.php
+ M app/Domain/Facturation/Support/GardesDeLaVente.php
+ M app/Domain/Tenancy/Actions/ChangerStatutCompteAction.php
+ M app/Domain/Tenancy/Actions/RedonnerLAccesAction.php
+ M app/Domain/Tenancy/Enums/ActionAuditee.php
+ M app/Domain/Tenancy/Enums/RoleSociete.php
  M app/Domain/Tenancy/Enums/TypeDActivite.php
+ M app/Domain/Tenancy/Models/Affectation.php
  M app/Domain/Tenancy/Models/Societe.php
+ M app/Domain/Tenancy/Services/CreationDesComptes.php
+ M app/Domain/Tenancy/Services/JournalDesDroits.php
+ M app/Domain/Tenancy/Services/PorteeDesDroits.php
+ M app/Domain/Tenancy/Services/PostesReconnus.php
+ M app/Domain/Tenancy/Services/SuiviDesConnexions.php
+ M app/Domain/Tenancy/Support/GardesDesDroits.php
  M app/Filament/App/Pages/Auth/ChoisirSonMotDePasse.php
  M app/Filament/App/Pages/Auth/InscriptionSociete.php
  M app/Filament/App/Pages/Auth/PageDuLien.php
+ M app/Filament/Cabinet/Resources/ClientDuCabinetResource.php
  M app/Filament/Cabinet/Resources/ClientDuCabinetResource/Pages/FicheDuClient.php
+ M app/Filament/Concerns/AfficheLeJournalDAudit.php
  M app/Filament/Societe/Pages/CabinetComptable.php
  M app/Filament/Societe/Pages/RattachementDUnCabinet.php
  M app/Filament/Societe/Pages/TableauDeBord.php
+ M app/Filament/Societe/Resources/MembreResource.php
+ M app/Filament/Societe/Resources/MembreResource/Pages/FicheDuMembre.php
  M app/Http/Controllers/AccepterLInvitationDuCabinetController.php
+ M app/Models/User.php
+ M app/Policies/LienCabinetPolicy.php
+ M app/Providers/AppServiceProvider.php
+ M database/migrations/0001_01_01_000001_create_users_table.php
+ M database/migrations/2026_10_02_100023_create_liens_cabinet_table.php
  M database/migrations/2026_10_02_100024_create_autorisations_cabinet_table.php
  M resources/views/cabinets/invitation.blade.php
  M resources/views/code/saisir.blade.php
  M resources/views/filament/societe/pages/rattachement-d-un-cabinet.blade.php
  M resources/views/filament/societe/pages/verification-societe.blade.php
+ M routes/web.php
  M tests/Feature/Authorization/GardesDesCabinetsEnBaseTest.php
+ M tests/Feature/Authorization/GardesDesDroitsEnBaseTest.php
  M tests/Feature/Cabinets/AccepterLInvitationTest.php
  M tests/Feature/Cabinets/AutorisationsDuCabinetTest.php
- M tests/Feature/Cabinets/InvitationsTest.php
- M tests/Feature/Cabinets/TableauDeBordDuCabinetTest.php
- M tests/Feature/Filament/FacturesAEncaisserTest.php
- M tests/Feature/Filament/ModifierProfilTest.php
- M tests/Feature/Filament/TelechargerLesDocumentsTest.php
- M tests/Feature/Societe/CabinetComptableTest.php
- M tests/Feature/Societe/ConnexionParIdentifiantTest.php
- M tests/Feature/Societe/InscriptionSocieteTest.php
- M tests/Feature/Societe/PageDuLienTest.php
- M tests/Feature/Societe/PanneauSocieteTest.php
- M tests/Feature/Societe/TypeDActiviteTest.php
- M tests/Feature/Societe/VerificationSocieteTest.php
- M tests/TestCase.php
-?? resources/views/components/
-?? tests/Feature/Cabinets/CabinetSuspenduTest.php
+ M tests/Feature/Cabinets/CollaborateursTest.php
 ```
 
 ## Dernière course de la chaîne
@@ -84,7 +104,6 @@ c2455dd Passe Larastan au niveau 10 sans erreur : les valeurs lues sans type son
 Course `wf_1d467e9e-93e`, étapes commencées (de la plus ancienne à la plus récente) :
 
 ```
-DEMO:relecture1
 DEMO:relecture2
 DEMO:correction
 DEMO:poussee
@@ -109,4 +128,5 @@ DV:correction
 DV:poussee
 DV:notes
 EC2:implementation
+EC2:implementation-2
 ```

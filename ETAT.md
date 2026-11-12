@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 12/11/2026 à 02:08 UTC par pilotage-sync.sh : « D70 : démonstration gardée, réservée au propriétaire qui peut tout y faire ».
+Mis à jour le 12/11/2026 à 02:09 UTC par pilotage-sync.sh : « Courses relancées après l'arrêt par l'éditeur ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

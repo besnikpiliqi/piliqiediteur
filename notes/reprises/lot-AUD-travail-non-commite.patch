@@ -2059,10 +2059,10 @@ index 87cc06e..d06c460 100644
              // tant que le stock reste bas ; aucune pour le stock d'un
 diff --git a/app/Domain/Stock/Support/GardesDuStock.php b/app/Domain/Stock/Support/GardesDuStock.php
 new file mode 100644
-index 0000000..516fa2c
+index 0000000..a53886f
 --- /dev/null
 +++ b/app/Domain/Stock/Support/GardesDuStock.php
-@@ -0,0 +1,100 @@
+@@ -0,0 +1,154 @@
 +<?php
 +
 +namespace App\Domain\Stock\Support;
@@ -2101,6 +2101,20 @@ index 0000000..516fa2c
 +     */
 +    public const REFUS_STOCK_SANS_MOUVEMENT = 'produits.stock_quantite : le stock ne change que par un mouvement du grand livre, modification refusée';
 +
++    /**
++     * Le message du refus d'un achat validé dont les lignes ne sont plus
++     * ce que ses mouvements ont fait entrer en stock.
++     */
++    public const REFUS_ACHAT_SANS_SON_STOCK = 'lignes_achat : les lignes de cet achat validé et ses mouvements du grand livre ne concordent plus, refusé';
++
++    /**
++     * Les déclencheurs différés de la cohérence des achats, que SET
++     * CONSTRAINTS désigne.
++     */
++    public const COHERENCE_DES_LIGNES = 'lignes_achat_stock_coherent';
++
++    public const COHERENCE_DES_MOUVEMENTS = 'mouvements_stock_achat_coherent';
++
 +    public static function poser(): void
 +    {
 +        $connexion = DB::connection();
@@ -2129,6 +2143,46 @@ index 0000000..516fa2c
 +            .'OR NEW.stock_quantite IS DISTINCT FROM OLD.stock_quantite + '.self::variation('dernier').' '
 +            ."THEN RAISE EXCEPTION '%', TG_ARGV[0]; END IF; RETURN NEW; END \$\$");
 +        $connexion->unprepared("CREATE TRIGGER produits_stock_par_le_grand_livre BEFORE UPDATE OF stock_quantite, dernier_mouvement_stock_id ON produits FOR EACH ROW EXECUTE FUNCTION refus_stock_sans_mouvement('".self::REFUS_STOCK_SANS_MOUVEMENT."')");
++    }
++
++    /**
++     * La cohérence d'un achat validé et de son stock, contrôlée à la
++     * validation de chaque transaction qui écrit une ligne d'achat ou un
++     * mouvement dont la source est un achat (déclencheurs de contrainte
++     * différés) : pour chaque produit qu'un achat a fait entrer en stock,
++     * le net de ses mouvements venus de cet achat (réception et
++     * ajustements de correction) égale la somme de ses lignes de l'achat
++     * validé (zéro s'il n'y figure plus). La validation et la correction
++     * d'un achat écrivent lignes et mouvements dans la même transaction ;
++     * une ligne réécrite seule est refusée. Un produit que l'achat n'a
++     * jamais fait entrer en stock (sans suivi à sa réception) n'est pas
++     * contrôlé. Posée dans la migration de création de lignes_achat,
++     * dernière table qu'elle lit, et retirée dans son down().
++     */
++    public static function poserLaCoherenceDesAchats(): void
++    {
++        $connexion = DB::connection();
++
++        $connexion->unprepared('CREATE OR REPLACE FUNCTION refus_achat_sans_son_stock() RETURNS trigger LANGUAGE plpgsql '.DeclencheursDeProtection::CHEMIN_DE_RECHERCHE.' AS $$ DECLARE achat bigint; magasin bigint; BEGIN '
++            ."IF TG_TABLE_NAME = 'lignes_achat' THEN "
++            ."IF TG_OP = 'DELETE' THEN achat := OLD.facture_achat_id; magasin := OLD.magasin_id; ELSE achat := NEW.facture_achat_id; magasin := NEW.magasin_id; END IF; "
++            ."ELSIF NEW.source_type IS DISTINCT FROM 'facture_achat' THEN RETURN NULL; "
++            .'ELSE achat := NEW.source_id; magasin := NEW.magasin_id; END IF; '
++            .'IF EXISTS (SELECT 1 FROM (SELECT m.produit_id, sum('.self::variation('m').") AS net FROM mouvements_stock m WHERE m.magasin_id = magasin AND m.source_type = 'facture_achat' AND m.source_id = achat GROUP BY m.produit_id) mouvements "
++            ."WHERE mouvements.net <> coalesce((SELECT sum(l.quantite) FROM lignes_achat l JOIN factures_achat f ON f.magasin_id = l.magasin_id AND f.id = l.facture_achat_id WHERE l.magasin_id = magasin AND l.facture_achat_id = achat AND l.produit_id = mouvements.produit_id AND f.statut = 'validee'), 0)) "
++            ."THEN RAISE EXCEPTION '%', TG_ARGV[0]; END IF; RETURN NULL; END \$\$");
++
++        foreach ([self::COHERENCE_DES_LIGNES => 'INSERT OR UPDATE OR DELETE ON lignes_achat', self::COHERENCE_DES_MOUVEMENTS => 'INSERT ON mouvements_stock'] as $nom => $evenements) {
++            $connexion->unprepared("CREATE CONSTRAINT TRIGGER {$nom} AFTER {$evenements} DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION refus_achat_sans_son_stock('".self::REFUS_ACHAT_SANS_SON_STOCK."')");
++        }
++    }
++
++    public static function retirerLaCoherenceDesAchats(): void
++    {
++        $connexion = DB::connection();
++
++        $connexion->unprepared('DROP TRIGGER IF EXISTS '.self::COHERENCE_DES_MOUVEMENTS.' ON mouvements_stock');
++        $connexion->unprepared('DROP FUNCTION IF EXISTS refus_achat_sans_son_stock()');
 +    }
 +
 +    public static function retirer(): void
@@ -3197,17 +3251,18 @@ index 6abe385..97baf4c 100644
  
          // Seule une société qui a des articles achète des marchandises
 diff --git a/database/migrations/2026_10_07_100002_create_lignes_achat_table.php b/database/migrations/2026_10_07_100002_create_lignes_achat_table.php
-index d9e0c17..82be20a 100644
+index d9e0c17..38bde15 100644
 --- a/database/migrations/2026_10_07_100002_create_lignes_achat_table.php
 +++ b/database/migrations/2026_10_07_100002_create_lignes_achat_table.php
-@@ -1,5 +1,6 @@
+@@ -1,5 +1,7 @@
  <?php
  
 +use App\Domain\CaisseSecurisee\Support\DeclencheursDeProtection;
++use App\Domain\Stock\Support\GardesDuStock;
  use Illuminate\Database\Migrations\Migration;
  use Illuminate\Database\Schema\Blueprint;
  use Illuminate\Support\Facades\Schema;
-@@ -10,8 +11,8 @@ public function up(): void
+@@ -10,8 +12,8 @@ public function up(): void
      {
          Schema::create('lignes_achat', function (Blueprint $table) {
              $table->id();
@@ -3218,7 +3273,7 @@ index d9e0c17..82be20a 100644
              // Le produit du catalogue que la ligne reçoit (voir
              // ConstructeurLigneAchat) : la traçabilité pour l'avoir
              // fournisseur (voir LigneAchat::quantiteRetournableRestante())
-@@ -19,7 +20,7 @@ public function up(): void
+@@ -19,7 +21,7 @@ public function up(): void
              // fiche utilisée ne s'efface jamais. Vide seulement tant que la
              // ligne d'un brouillon garde la fiche d'un nouveau produit, pas
              // encore créé (voir nouveau_produit).
@@ -3227,7 +3282,7 @@ index d9e0c17..82be20a 100644
              // Fiche du produit que cette ligne d'un brouillon créera à la
              // validation (voir ConstructeurLigneAchat::creerLesNouveauxProduits()) ;
              // une ligne a toujours soit produit_id, soit nouveau_produit
-@@ -50,7 +51,13 @@ public function up(): void
+@@ -50,11 +52,19 @@ public function up(): void
              $table->timestamps();
  
              $table->index(['magasin_id', 'facture_achat_id']);
@@ -3238,9 +3293,15 @@ index d9e0c17..82be20a 100644
          });
 +
 +        DeclencheursDeProtection::auMoins('lignes_achat', 'quantite', 1);
++        GardesDuStock::poserLaCoherenceDesAchats();
      }
  
      public function down(): void
+     {
+         Schema::dropIfExists('lignes_achat');
++        GardesDuStock::retirerLaCoherenceDesAchats();
+     }
+ };
 diff --git a/database/migrations/2026_10_07_100003_create_avoirs_fournisseur_table.php b/database/migrations/2026_10_07_100003_create_avoirs_fournisseur_table.php
 index a1ab8d6..269013e 100644
 --- a/database/migrations/2026_10_07_100003_create_avoirs_fournisseur_table.php
@@ -5319,16 +5380,17 @@ index b3bd786..ed9b7cd 100644
       * cours de vérification, la caisse ne s'ouvre pas, et le domaine refuse
 diff --git a/tests/Feature/Stock/GrandLivreEnBaseTest.php b/tests/Feature/Stock/GrandLivreEnBaseTest.php
 new file mode 100644
-index 0000000..736d408
+index 0000000..b60a891
 --- /dev/null
 +++ b/tests/Feature/Stock/GrandLivreEnBaseTest.php
-@@ -0,0 +1,235 @@
+@@ -0,0 +1,271 @@
 +<?php
 +
 +namespace Tests\Feature\Stock;
 +
 +use App\Domain\Achats\Actions\CreerAvoirFournisseurAction;
 +use App\Domain\Achats\Actions\CreerFactureAchatAction;
++use App\Domain\Achats\Actions\ModifierFactureAchatAction;
 +use App\Domain\Achats\Actions\ValiderFactureAchatAction;
 +use App\Domain\Achats\Models\FactureAchat;
 +use App\Domain\Catalogue\Models\Produit;
@@ -5420,7 +5482,10 @@ index 0000000..736d408
 +
 +    /**
 +     * C08 : un mouvement du grand livre ne se réécrit, ne se supprime ni ne
-+     * se vide par une requête directe, et la ligne relue est identique.
++     * se vide par une requête directe, et la ligne relue est identique. Les
++     * contrôles différés de l'achat sont joués avant le vidage, comme à la
++     * validation de sa transaction : PostgreSQL ne vide pas une table qui
++     * attend encore un contrôle différé.
 +     *
 +     * @param  Closure(): mixed  $valeur
 +     */
@@ -5433,6 +5498,7 @@ index 0000000..736d408
 +
 +        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('mouvements_stock')->where('id', $mouvement->id)->update([$colonne => $nouvelleValeur])), QueryException::class, 'mouvements_stock : table en ajout seul, modification refusée');
 +        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('mouvements_stock')->where('id', $mouvement->id)->delete()), QueryException::class, 'mouvements_stock : table en ajout seul, suppression refusée');
++        DB::statement('SET CONSTRAINTS ALL IMMEDIATE');
 +        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('mouvements_stock')->truncate()), QueryException::class, 'mouvements_stock : table en ajout seul, vidage refusé');
 +
 +        $this->assertSame($avant, self::ligne('mouvements_stock', $mouvement->id));
@@ -5556,6 +5622,37 @@ index 0000000..736d408
 +        }
 +
 +        $this->assertSame($avant, $this->instantaneDesTables(...array_keys($lignes)));
++    }
++
++    /**
++     * C19 : une ligne d'un achat validé ne se réécrit pas sans corriger le
++     * stock : la base la refuse à la validation de la transaction (le test
++     * force ce contrôle différé, que sa transaction n'atteint jamais, puis
++     * le diffère de nouveau) ; la correction de l'achat par son action, qui
++     * écrit la ligne et l'ajustement du stock ensemble, passe.
++     */
++    public function test_une_ligne_d_un_achat_valide_ne_se_reecrit_pas_sans_son_stock(): void
++    {
++        $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => true]);
++        $achat = $this->receptionner($produit, 5);
++        $ligne = $achat->lignes->sole();
++        $mode = fn (string $mode): bool => DB::statement('SET CONSTRAINTS '.GardesDuStock::COHERENCE_DES_LIGNES.', '.GardesDuStock::COHERENCE_DES_MOUVEMENTS." {$mode}");
++        $controler = fn (): bool => $mode('IMMEDIATE');
++        $this->assertTrue($controler());
++
++        $this->assertThrows($this->dansUnPointDeSauvegarde(function () use ($ligne, $controler): void {
++            DB::table('lignes_achat')->where('id', $ligne->id)->update(['quantite' => 50]);
++            $controler();
++        }), QueryException::class, GardesDuStock::REFUS_ACHAT_SANS_SON_STOCK);
++        $this->assertSame([5, 5], [(int) DB::table('lignes_achat')->where('id', $ligne->id)->value('quantite'), $produit->fresh()?->stock_quantite]);
++        $mode('DEFERRED');
++
++        app(ModifierFactureAchatAction::class)->handle(self::auteur(), $achat->fresh() ?? $achat, $this->fournisseur, [
++            ['produit_id' => $produit->id, 'quantite' => 8, 'prix_unitaire_ht' => 2],
++        ]);
++
++        $this->assertTrue($controler());
++        $this->assertSame(8, $produit->fresh()?->stock_quantite);
 +    }
 +}
 diff --git a/tests/Feature/Tenancy/ReferencesEntreMagasinsEnBaseTest.php b/tests/Feature/Tenancy/ReferencesEntreMagasinsEnBaseTest.php

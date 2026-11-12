@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 12/11/2026 à 01:44 UTC par pilotage-sync.sh : « Réponses détaillées demandées ».
+Mis à jour le 12/11/2026 à 02:01 UTC par pilotage-sync.sh : « Point de suivi 02:05 UTC ; lot DEMO prêt ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -46,6 +46,7 @@ d8d2ee3 Contrôle les seuils de l'analyse statique par ses paramètres effectifs
  M app/Domain/CaisseSecurisee/Services/RegistreFiscal.php
  M app/Domain/CaisseSecurisee/Services/VerificateurIntegrite.php
  M app/Domain/CaisseSecurisee/Support/DeclencheursDeProtection.php
+ M app/Domain/Catalogue/Models/Produit.php
  M app/Domain/Contacts/Models/Client.php
  M app/Domain/Contacts/Models/Fournisseur.php
  M app/Domain/Facturation/Actions/CloturerCaisseAction.php
@@ -64,12 +65,18 @@ d8d2ee3 Contrôle les seuils de l'analyse statique par ses paramètres effectifs
  M app/Domain/Facturation/Services/RecapitulatifDeCloture.php
  M app/Domain/Facturation/Services/RecusDePaiement.php
  M app/Domain/Facturation/Support/GardesDeLaVente.php
+ M app/Domain/Stock/Enums/TypeMouvementStock.php
+ M app/Domain/Stock/Models/MouvementStock.php
+ M app/Domain/Stock/Services/StockLedgerService.php
  M app/Domain/Tenancy/Concerns/BelongsToMagasin.php
  M app/Domain/Tenancy/Support/GardesDesDroits.php
  M app/Domain/Tenancy/Support/GardesDesIdentifiants.php
  M app/Domain/Tenancy/Support/GardesDesTypesDActivite.php
  M app/Filament/App/Pages/Caisse.php
  M database/factories/ClotureCaisseFactory.php
+ M database/migrations/0001_01_01_000000_create_magasins_table.php
+ M database/migrations/2026_10_02_100013_create_codes_confirmation_table.php
+ M database/migrations/2026_10_02_100014_create_pieces_verification_table.php
  M database/migrations/2026_10_02_100018_create_mandats_pdp_table.php
  M database/migrations/2026_10_02_200001_create_clients_table.php
  M database/migrations/2026_10_02_200002_create_fournisseurs_table.php
@@ -90,13 +97,6 @@ d8d2ee3 Contrôle les seuils de l'analyse statique par ses paramètres effectifs
  M database/migrations/2026_10_04_100003_create_lignes_recu_paiement_table.php
  M database/migrations/2026_10_05_100001_create_avoirs_table.php
  M database/migrations/2026_10_05_100002_create_lignes_avoir_table.php
- M database/migrations/2026_10_07_100001_create_factures_achat_table.php
- M database/migrations/2026_10_07_100002_create_lignes_achat_table.php
- M database/migrations/2026_10_07_100003_create_avoirs_fournisseur_table.php
- M database/migrations/2026_10_07_100004_create_lignes_avoir_fournisseur_table.php
- M database/migrations/2026_10_07_100005_create_inventaires_ouverture_table.php
- M database/migrations/2026_10_07_100006_create_lignes_inventaire_ouverture_table.php
- M database/migrations/2026_10_07_100007_create_taux_factures_achat_table.php
 ```
 
 ## Dernière course de la chaîne

@@ -1914,3 +1914,17 @@ je pense laisser tombre pour le demo car tu me parle des loi exigant. donc demo 
 
 je pense laisser tombre pour le demo car tu me parle des loi exigant. donc demo est accesible que pour le propritaire car ne demo on peut pas creer des membres et les memebre se creer juste pour les magasin de vrai. et comme j ai interdi que le proprietaire ne fait pas des facture alors dans ce cas la en demo je peut rien faire. mais la c est pas bon car en demo avec ces interdiction alors le demo sert rien car on peut rien faire en tant proprietaire. dans ce cas la on garde le demo  peut etre pour toujours car la loi exige. mais le proprietaire doit pouvour faire tout dans un compte demo car sinon comment il va s entrainer  si fait pas des facture et tout le reste.
 
+## 202. 2026-11-12 02:13 UTC
+
+<!-- attach -->
+
+> Elle est réservée au propriétaire. Les comptes d’entraînement disparaissent, et aucun administrateur ni membre n’y entre. Les membres ne se créent que dans les magasins réels.
+
+> Dans la démonstration, le propriétaire peut tout faire : tickets, factures, devis, encaissements, avoirs, caisse, clôtures, achats. C’est la seule exception à « le propriétaire ne vend jamais ». Dans les magasins réels, il ne vend toujours pas, et la base de données continuera de le refuser.
+
+> La correction des 9 boutons affichés sans droit reste dans ce lot.
+
+
+
+tu fait rien pour le demo, laisse comme est mtn et juste tu autorise que le proprietaire puisse faire tout dans le compte demo, vendre et tout tout les autorisation qui existe. donc les button tu laisse car les button s affiche uniquement quand on est sur le compte demo
+

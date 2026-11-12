@@ -85,6 +85,7 @@ Ce fichier est le point d'entrée. Il remplace, pour la reprise, `PASSATION-2026
 ## 7. Sauvegardes depuis cette passation
 
 Les correctifs sont remplacés à chaque sauvegarde : seule la première ligne, la plus récente, vaut.
+- 12/11 08 h 10 UTC — lot DEMO : commit local d23eb96 (base bb135db, AUD poussé), relectures en cours ; `reprises/lot-DEMO-commits-locaux.patch` 222901 octets, SHA-256 `9cc9b3147cb10d8dd8c629f5c07e19c2e01123a1647ac2cc66f9c3c47306bff8` ; aucun travail non commité ; arbre 168005a4.
 - 12/11 06 h 08 UTC — lot AUD : commit local 484ddcd (implémentation finie, suite PostgreSQL passée), agent `AUD:correction` en cours après les deux relectures ; `reprises/lot-AUD-commits-locaux.patch` 929725 octets, SHA-256 `25929c2eed7676ee272a444f5226378e7de49cb9348d1f36439e6562ce6e6b38` ; 36 entrées non commitées, `reprises/lot-AUD-travail-non-commite.patch` 207569 octets, SHA-256 `8f49db43ff66db14017968e3b0d192ebd57a76ebd9c4e825a4c5f184c08d35c8` ; base 3dd8705 ; arbre d4a8276d.
 - 12/11 04 h 05 UTC — lot AUD : partie 6 en cours, aucun commit local ; 228 entrées non commitées, `reprises/lot-AUD-travail-non-commite.patch` 908627 octets, SHA-256 `6b4b324868c3dc22cb63d4fbe5f74046460632e5944484579710da3f31f29856` ; base 3dd8705 ; arbre 28a98d8f.
 - 12/11 02 h 00 UTC — lot AUD : partie 2 en cours (agent `AUD:implementation-2`), aucun commit local ; 103 entrées non commitées, `reprises/lot-AUD-travail-non-commite.patch` 388537 octets, SHA-256 `258b5db3ce5681bc086720c28d1fbea165dd56787e672fd82043ef2c2c8a4bc1` ; base 3dd8705 ; arbre 2b7d50a9.

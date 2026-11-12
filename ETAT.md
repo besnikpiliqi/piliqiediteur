@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 12/11/2026 à 07:58 UTC par pilotage-sync.sh : « remplissage fini ».
+Mis à jour le 12/11/2026 à 08:09 UTC par pilotage-sync.sh : « point de suivi 08:25 ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -45,7 +45,6 @@ c2455dd Passe Larastan au niveau 10 sans erreur : les valeurs lues sans type son
 Course `wf_1d467e9e-93e`, étapes commencées (de la plus ancienne à la plus récente) :
 
 ```
-CALC:implementation
 CALC:implementation-2
 CALC:relecture1
 CALC:relecture2
@@ -70,4 +69,5 @@ AUD:notes
 DEMO:implementation
 DEMO:relecture1
 DEMO:relecture2
+DEMO:correction
 ```

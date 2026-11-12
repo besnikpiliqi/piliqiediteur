@@ -1,19 +1,20 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 12/11/2026 à 18:26 UTC par pilotage-sync.sh : « Point de suivi de 18 h 25 UTC : sauvegarde DV ».
+Mis à jour le 12/11/2026 à 18:48 UTC par pilotage-sync.sh : « Après le lot DV ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
-Tête poussée : `d4a8247`. Commits locaux pas encore poussés :
+Tête poussée : `b10d2e8`. Commits locaux pas encore poussés :
 
 ```
-496da9c Laisse le client répondre à son devis en ligne et transformer un devis accepté en facture (lot DV)
-0b7e734 Écrit chaque jour de la relance en navigateur sans calcul sur un instant (CI)
 ```
 
 Derniers commits poussés :
 
 ```
+b10d2e8 Relecture du lot DV du devis en ligne
+496da9c Laisse le client répondre à son devis en ligne et transformer un devis accepté en facture (lot DV)
+0b7e734 Écrit chaque jour de la relance en navigateur sans calcul sur un instant (CI)
 d4a8247 Relecture du lot ML des e-mails vérifiés
 0ad0710 Vérifie les e-mails sur Mailtrap et explique chaque échec d'envoi (lot ML)
 8feeb83 Relecture du lot UI des écrans
@@ -31,35 +32,11 @@ b21124f Calcule les montants sans virgule flottante et imprime le PU HT tel qu'i
 5dc11a1 Relecture du lot TY2 de l’analyse statique
 b9dd057 Vérifie les types que donnaient les commentaires en ligne, et refuse ces commentaires au contrôle des seuils (lot TY2, types en ligne)
 c2455dd Passe Larastan au niveau 10 sans erreur : les valeurs lues sans type sont vérifiées (lot TY2, niveaux 9 et 10)
-9f46860 Relecture du lot TY1 de l’analyse statique
-8546296 Couvre les lignes retouchées par le typage et retire une fonction sans appelant (lot TY1 12/n)
-5ff0152 Type les valeurs requises des écrans, et passe Larastan au niveau 8 (lot TY1 11/n)
 ```
 
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
- M app/Domain/Facturation/Actions/EnvoyerDocumentAction.php
- M app/Domain/Facturation/Actions/RepondreAuDevisEnLigneAction.php
- M app/Domain/Facturation/Enums/NatureEnvoi.php
- M app/Domain/Facturation/Jobs/EnvoyerDocumentJob.php
- M app/Domain/Facturation/Models/Devis.php
- M app/Domain/Facturation/Models/LienDuDevis.php
- M app/Domain/Facturation/Notifications/ReponseDuClientAuDevis.php
- M app/Filament/App/Resources/DevisResource.php
- M app/Filament/App/Resources/FactureResource.php
- M app/Filament/Concerns/AjouteDesLignesDeVente.php
- M app/Filament/Concerns/EnvoieLesDocuments.php
- M app/Http/Controllers/ReponseAuDevisController.php
- M app/Providers/AppServiceProvider.php
- M database/migrations/2026_10_14_100007_create_liens_des_devis_table.php
- M resources/views/devis/reponse.blade.php
- M routes/web.php
- M tests/Browser/Parcours/ReponseAuDevisEnLigneTest.php
- M tests/Browser/inventaire-des-actions.php
- M tests/Feature/Facturation/EnvoyerDocumentJobTest.php
- M tests/Feature/Facturation/ReponseAuDevisEnLigneTest.php
- M tests/Feature/Facturation/TransformerUnDevisEnFactureTest.php
 ```
 
 ## Dernière course de la chaîne
@@ -67,8 +44,6 @@ c2455dd Passe Larastan au niveau 10 sans erreur : les valeurs lues sans type son
 Course `wf_1d467e9e-93e`, étapes commencées (de la plus ancienne à la plus récente) :
 
 ```
-AUD:poussee
-AUD:notes
 DEMO:implementation
 DEMO:relecture1
 DEMO:relecture2
@@ -92,4 +67,6 @@ DV:implementation-2
 DV:relecture1
 DV:relecture2
 DV:correction
+DV:poussee
+DV:notes
 ```

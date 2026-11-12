@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 12/11/2026 à 01:37 UTC par pilotage-sync.sh : « Vérification juridique du mode école : archive puis purge ».
+Mis à jour le 12/11/2026 à 01:44 UTC par pilotage-sync.sh : « Réponses détaillées demandées ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

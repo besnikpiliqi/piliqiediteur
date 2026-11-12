@@ -1888,3 +1888,21 @@ il faut supprimer ce qui se fait avec demo. peut etre il faut cherche avec son u
 
 mais toi tu fait apres ton travail en se basant sur ce que tu me mets dans cette case et non que tu attend toujour comme jusqu à aujordhuoi. donc tu fait le code en se basant sur ces decision et si moi je change apres alors la tu fait à nouveau pour chaque modification de ma part. donc tu fait le code en se basant sur "Réponse préparée par Claude" et toi regarde au fur à mesure sur la case "Réponse du professionnel" afin que tu fait ce qui dit cette case mais peut etre je vais jamais changer mais toi tu regarde quand meme toujours cette case.
 
+## 199. 2026-11-12 01:43 UTC
+
+<!-- attach -->
+
+> Quand
+
+> 
+
+>     La préparation des 19 réponses est en cours.
+
+>     Je les écrirai dans le document dès que le remplissage des 269 autres cases sera fini : les deux ne doivent pas écrire en même temps dans le même onglet.
+
+>     Je vous préviendrai quand tout l’onglet sera rempli.
+
+
+
+qunad tu remplis alors n ecris pas tres courte les phrases car je veux comprendre tes decision en detaillant un peu
+

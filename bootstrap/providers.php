@@ -2,6 +2,7 @@
 
 use App\Providers\AntivirusServiceProvider;
 use App\Providers\AppServiceProvider;
+use App\Providers\CourrielsServiceProvider;
 use App\Providers\EventServiceProvider;
 use App\Providers\Filament\AppPanelProvider;
 use App\Providers\Filament\CabinetPanelProvider;
@@ -18,4 +19,5 @@ return [
     TenancyServiceProvider::class,
     FournisseursExternesServiceProvider::class,
     AntivirusServiceProvider::class,
+    CourrielsServiceProvider::class,
 ];

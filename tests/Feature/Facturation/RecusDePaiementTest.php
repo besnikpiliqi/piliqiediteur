@@ -461,7 +461,7 @@ class RecusDePaiementTest extends TestCase
     /**
      * Sur la fiche de la facture, « Envoyer le reçu » d'un encaissement
      * l'envoie à l'adresse du client, préremplie, avec le message saisi :
-     * l'écran dit l'envoi programmé, et l'e-mail part avec le PDF du reçu.
+     * l'écran dit l'envoi demandé, et l'e-mail part avec le PDF du reçu.
      */
     public function test_la_fiche_de_la_facture_envoie_le_recu_d_un_encaissement_au_client(): void
     {
@@ -476,7 +476,7 @@ class RecusDePaiementTest extends TestCase
             ->assertInfolistActionVisible('allocationsPaiement.0.envoyer_recuAction', 'envoyer_recu')
             ->callInfolistAction('allocationsPaiement.0.envoyer_recuAction', 'envoyer_recu', ['message' => 'Merci pour votre règlement.'])
             ->assertHasNoInfolistActionErrors()
-            ->assertNotified('Envoi à compta@atelier.fr programmé');
+            ->assertNotified('Envoi à compta@atelier.fr demandé : il part dans quelques secondes');
 
         $envoi = EnvoiDocument::query()->sole();
         $this->assertSame(['recu_paiement', RecuPaiement::query()->sole()->id, 'compta@atelier.fr', StatutEnvoi::Envoye], [$envoi->document_type, (int) $envoi->document_id, $envoi->destinataire, $envoi->statut]);

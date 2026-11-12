@@ -249,13 +249,13 @@ class InviterUneEntrepriseAction
     }
 
     /**
-     * L'e-mail de la demande à l'adresse saisie, et l'avis au propriétaire
-     * de la société, dans sa cloche seulement, avec le lien vers sa page de
-     * rattachement.
+     * L'avis au propriétaire de la société, dans sa cloche seulement, avec
+     * le lien vers sa page de rattachement, puis l'e-mail de la demande à
+     * l'adresse saisie : un e-mail qui ne part pas (voir
+     * EnvoiDesLiensDesCabinets) laisse l'avis dans sa cloche.
      */
     private function envoyerLaDemande(int $lienId, string $email, #[SensitiveParameter] string $jeton): void
     {
-        $this->envoi->envoyerLaDemande($lienId, $email, $jeton);
         $lien = LienCabinet::query()->withoutGlobalScope(SocieteScope::class)->findOrFail($lienId);
         $client = Societe::query()->findOrFail($lien->societe_id);
         $cabinet = Societe::query()->findOrFail($lien->cabinet_id);
@@ -267,6 +267,7 @@ class InviterUneEntrepriseAction
             RattachementDUnCabinet::getUrl(['lien' => $lien->uuid], panel: 'societe', tenant: $client),
             'Répondre',
         ));
+        $this->envoi->envoyerLaDemande($lienId, $email, $jeton);
     }
 
     /**

@@ -1063,8 +1063,8 @@ class FactureResource extends Resource
                 $envoi = app(EnvoyerDocumentAction::class)->handle(CompteConnecte::exiger(), self::recuDe($record), ValeurSimple::enTexte($data['destinataire']), ValeurSimple::enTexteOuNul($data['message'] ?? null), ValeurSimple::enTexteOuNul($data['jeton']));
 
                 Notification::make()
-                    ->title("Envoi à {$envoi->destinataire} programmé")
-                    ->body('Le reçu de paiement part par e-mail, PDF en pièce jointe.')
+                    ->title(self::envoiDemande($envoi))
+                    ->body('Le reçu de paiement part par e-mail, PDF en pièce jointe ; s\'il ne part pas, vous en serez prévenu.')
                     ->success()
                     ->send();
             }));

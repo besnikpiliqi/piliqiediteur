@@ -29,7 +29,9 @@ use App\Domain\Tenancy\Enums\FormeJuridique;
 use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\Reglage;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
@@ -64,6 +66,37 @@ class FacturePdfGeneratorTest extends TestCase
 
         $this->assertStringStartsWith('%PDF', $contenu);
         $this->assertGreaterThan(500, strlen($contenu));
+    }
+
+    /**
+     * Un PDF n'embarque que les caractères qu'il emploie de ses polices
+     * (choix du lot ML, contestable par l'éditeur) : une page pèse moins de
+     * 150 Ko, au lieu d'environ 880 Ko avec DejaVu Sans entière, se lit en
+     * entier (qpdf, que PILIQI demande déjà), et garde ses textes, accents
+     * compris.
+     */
+    public function test_un_pdf_d_une_page_pese_moins_de_150_ko_et_garde_ses_textes(): void
+    {
+        app(TenantContext::class)->set(Magasin::factory()->create());
+        $produit = Produit::factory()->create(['nom' => 'Câble électrique tressé', 'prix_vente_ttc' => 50.40, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $facture = app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [
+            ['produit_id' => $produit->id, 'quantite' => 2],
+        ]));
+
+        $contenu = app(FacturePdfGenerator::class)->generer($facture)->output();
+
+        $this->assertLessThan(150 * 1024, strlen($contenu));
+        $fichier = (string) tempnam(sys_get_temp_dir(), 'pdf-');
+        file_put_contents($fichier, $contenu);
+        $verification = Process::run([Reglage::texte('piliqi.qpdf'), '--check', $fichier]);
+        unlink($fichier);
+        $this->assertSame(0, $verification->exitCode(), $verification->output().$verification->errorOutput());
+        $pages = $this->pagesDuPdf($contenu);
+        $this->assertCount(1, $pages);
+        $textes = implode("\n", array_column($pages[0]['textes'], 'texte'));
+        $this->assertStringContainsString((string) $facture->numero, $textes);
+        $this->assertStringContainsString('Câble électrique tressé', $textes);
+        $this->assertStringContainsString('Page 1 sur 1', $textes);
     }
 
     /**

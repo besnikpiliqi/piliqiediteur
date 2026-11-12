@@ -15,8 +15,11 @@ use App\Domain\Tenancy\Services\FournisseurDesComptes;
 use App\Domain\Tenancy\Support\Reglage;
 use App\Domain\Tenancy\Support\RegleDuMotDePasse;
 use App\Domain\Tenancy\Support\ValeurSimple;
+use App\Integrations\Courriel\CourrielNonParti;
+use App\Integrations\Courriel\EnvoiImmediat;
 use App\Integrations\Sirene\UniteSirene;
 use App\Models\User;
+use Closure;
 use DanHarrin\LivewireRateLimiting\Exceptions\TooManyRequestsException;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Component;
@@ -24,6 +27,7 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Get;
 use Filament\Http\Responses\Auth\Contracts\RegistrationResponse;
+use Filament\Notifications\Notification;
 use Filament\Pages\Auth\Register;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Support\Facades\Hash;
@@ -170,11 +174,10 @@ class InscriptionSociete extends Register
 
         if (FournisseurDesComptes::proprietaireDeLAdresse($email) !== null) {
             $panneau = Filament::getPanel('app');
-            Mail::to($email)->send(new CompteExistantMail(
+            $this->envoyerOuDireQueRienNEstParti(fn () => Mail::to($email)->send(new CompteExistantMail(
                 self::adresseDeLApplication($panneau->generateRouteName('auth.login')),
                 self::adresseDeLApplication($panneau->generateRouteName('auth.password-reset.request')),
-            ));
-            $this->terminer();
+            )));
 
             return null;
         }
@@ -193,10 +196,35 @@ class InscriptionSociete extends Register
             'expire_le' => now()->addHours(DemandeInscription::DUREE_DE_VALIDITE_EN_HEURES),
         ]))->save();
 
-        Mail::to($email)->send(new DemandeInscriptionMail(self::lienDeConfirmation($jeton), $demande->expire_le, $type));
-        $this->terminer();
+        if (! $this->envoyerOuDireQueRienNEstParti(fn () => Mail::to($email)->send(new DemandeInscriptionMail(self::lienDeConfirmation($jeton), $demande->expire_le, $type)))) {
+            $demande->delete();
+        }
 
         return null;
+    }
+
+    /**
+     * L'e-mail part aussitôt, et la page dit que le lien est envoyé ; un
+     * serveur d'envoi qui le refuse ou se tait (dans le délai MAIL_TIMEOUT)
+     * laisse le formulaire rempli, et la page le dit en français, sans
+     * erreur 500 (voir EnvoiImmediat). Le message est le même pour une
+     * adresse déjà utilisée et pour une nouvelle : il ne révèle rien.
+     *
+     * @param  Closure(): mixed  $envoi
+     */
+    private function envoyerOuDireQueRienNEstParti(Closure $envoi): bool
+    {
+        try {
+            EnvoiImmediat::exiger('L\'e-mail de confirmation', $envoi);
+        } catch (CourrielNonParti $refus) {
+            Notification::make()->title($refus->getMessage())->danger()->send();
+
+            return false;
+        }
+
+        $this->terminer();
+
+        return true;
     }
 
     /**

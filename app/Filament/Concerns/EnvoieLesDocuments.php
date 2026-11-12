@@ -4,6 +4,7 @@ namespace App\Filament\Concerns;
 
 use App\Domain\CaisseSecurisee\Exceptions\DocumentSansEnregistrementSigneException;
 use App\Domain\Facturation\Actions\EnvoyerDocumentAction;
+use App\Domain\Facturation\Enums\StatutEnvoi;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\EnvoiDocument;
@@ -156,23 +157,27 @@ trait EnvoieLesDocuments
     /**
      * Chaque envoi et chaque relance du document, du plus récent au plus
      * ancien, aboutis ou non, avec le nom de la personne qui l'a demandé
-     * tel qu'il était ce jour-là.
+     * tel qu'il était ce jour-là, et le détail de son résultat (voir
+     * EnvoiDocument::detail()). Tant qu'un envoi attend, la fiche se relit
+     * toutes les 5 secondes (wire:poll), sans rechargement : le résultat
+     * s'y affiche dès qu'il est connu ; ensuite, plus rien ne se relit.
      */
     public static function envoisSection(): Section
     {
         return Section::make('Envois')
             ->visible(fn (Facture|Avoir|Devis|RecuPaiement $record): bool => $record->envois()->exists())
+            ->extraAttributes(fn (Facture|Avoir|Devis|RecuPaiement $record): array => $record->envois()->where('statut', StatutEnvoi::EnAttente)->exists() ? ['wire:poll.5s' => ''] : [])
             ->schema([
                 RepeatableEntry::make('envois')
                     ->label('')
-                    ->state(fn (Facture|Avoir|Devis|RecuPaiement $record) => $record->envois()->latest('id')->get())
+                    ->state(fn (Facture|Avoir|Devis|RecuPaiement $record) => $record->envois()->with('magasin')->latest('id')->get())
                     ->schema([
                         TextEntry::make('created_at')->label('Date')->state(fn (EnvoiDocument $record) => $record->envoye_le ?? $record->created_at)->dateTime('d/m/Y à H:i'),
                         TextEntry::make('destinataire')->label('Destinataire')->state(fn (EnvoiDocument $record) => $record->destinataire),
                         TextEntry::make('nature')->label('Nature')->state(fn (EnvoiDocument $record) => $record->nature)->badge(),
                         TextEntry::make('niveau_relance')->label('Niveau')->state(fn (EnvoiDocument $record) => $record->niveau_relance)->prefix('n°')->placeholder('—'),
                         TextEntry::make('statut')->label('Statut')->state(fn (EnvoiDocument $record) => $record->statut)->badge(),
-                        TextEntry::make('erreur')->label('Erreur')->state(fn (EnvoiDocument $record) => $record->erreur)->placeholder('—'),
+                        TextEntry::make('detail')->label('Détail')->state(fn (EnvoiDocument $record): ?string => $record->detail())->placeholder('—'),
                         TextEntry::make('envoye_par_nom')->label('Demandé par')->state(fn (EnvoiDocument $record) => $record->envoye_par_nom)->placeholder('Relance automatique'),
                     ])
                     ->columns(7),
@@ -201,16 +206,26 @@ trait EnvoieLesDocuments
 
     /**
      * Le document de la fiche est relu : son statut (« Envoyée ») et sa
-     * section « Envois » se mettent à jour sans recharger la page.
+     * section « Envois » montrent la demande aussitôt ; l'e-mail part
+     * ensuite par la file d'attente, et la section, qui se relit seule
+     * tant qu'il attend (voir envoisSection()), en montre le résultat.
      */
     private static function confirmerLEnvoi(EnvoiDocument $envoi, Model $document): void
     {
         $document->refresh();
 
         Notification::make()
-            ->title("Envoi à {$envoi->destinataire} programmé")
-            ->body('Il apparaît dans la section « Envois » de la fiche, avec son résultat.')
+            ->title(self::envoiDemande($envoi).' ; son résultat s\'affiche dans « Envois »')
             ->success()
             ->send();
+    }
+
+    /**
+     * Ce que dit l'écran d'un envoi demandé : il part par la file
+     * d'attente, dans quelques secondes, et non au moment du clic.
+     */
+    private static function envoiDemande(EnvoiDocument $envoi): string
+    {
+        return "Envoi à {$envoi->destinataire} demandé : il part dans quelques secondes";
     }
 }

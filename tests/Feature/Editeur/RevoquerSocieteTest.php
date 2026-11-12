@@ -58,6 +58,7 @@ use Illuminate\Notifications\ChannelManager;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Testing\PendingCommand;
 use LogicException;
@@ -425,6 +426,7 @@ class RevoquerSocieteTest extends TestCase
         $this->prouverLaRemiseDuCourrierDeRevocation($cabinet);
         $this->mettreLaMessagerieEnPanne();
         Exceptions::fake();
+        Log::spy();
 
         $revocation = app(RevoquerSocieteAction::class)->handle($cabinet->fresh(), $this->editeur());
 
@@ -437,7 +439,7 @@ class RevoquerSocieteTest extends TestCase
         $this->assertNull(collect($this->modificationsDesDroits($second))->where('membre.id', $this->proprietaireDuCabinet($cabinet)->id)->last()['apres']);
         $this->assertContains('Lien avec votre cabinet terminé', $this->proprietaireDe($second)->notifications()->get()->pluck('data.title')->all());
         $this->assertContains('Votre société est révoquée', $this->proprietaireDuCabinet($cabinet)->notifications()->get()->pluck('data.title')->all());
-        Exceptions::assertReported(TransportException::class);
+        Log::shouldHaveReceived('critical')->withArgs(fn (string $message): bool => str_starts_with($message, 'L\'e-mail de la notification '))->atLeast()->once();
     }
 
     /**
@@ -455,13 +457,14 @@ class RevoquerSocieteTest extends TestCase
         $this->prouverLaRemiseDuCourrierDeRevocation($magasin->societe);
         $this->mettreLaMessagerieEnPanne();
         Exceptions::fake();
+        Log::spy();
 
         app(RevoquerSocieteAction::class)->handle($magasin->societe->fresh(), $this->editeur());
 
         $this->assertSame(EtatDuLien::Termine, $lien->fresh()->etat);
         $this->assertSame(1, app(TenantContext::class)->runAs($magasin->fresh(), fn (): int => ClotureCaissePersonnelle::query()->count()));
         $this->assertContains('Votre société est révoquée', $this->proprietaireDe($magasin)->notifications()->get()->pluck('data.title')->all());
-        Exceptions::assertReported(TransportException::class);
+        Log::shouldHaveReceived('critical')->withArgs(fn (string $message): bool => str_starts_with($message, 'L\'e-mail de la notification '))->atLeast()->once();
     }
 
     /**

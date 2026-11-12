@@ -18,6 +18,7 @@ use App\Console\Commands\RelancerFacturesImpayees;
 use App\Console\Commands\RelancerTransmissionsPdp;
 use App\Console\Commands\ReverifierSirene;
 use App\Console\Commands\SuivreEnvoisRecommandes;
+use App\Console\Commands\SurveillerLaFileDAttente;
 use App\Console\Commands\VerifierIntegriteFiscale;
 use App\Console\Commands\VerifierJournalAudit;
 use App\Http\Middleware\AjouterLesEnTetesDeSecurite;
@@ -152,6 +153,11 @@ return Application::configure(basePath: dirname(__DIR__))
         // sont relancées, sous la même référence de dépôt (voir
         // RelancerTransmissionsPdp).
         $schedule->command(RelancerTransmissionsPdp::class)->hourlyAt(40)->unlessBetween('02:00', '03:00')->withoutOverlapping();
+        // Toutes les 5 minutes : la file d'attente qui ne part plus (aucun
+        // travailleur, ou un travailleur arrêté en route) s'écrit au journal
+        // au niveau critique et prévient l'éditeur, une fois par incident
+        // (voir SurveillerLaFileDAttente). Elle ne fait que lire.
+        $schedule->command(SurveillerLaFileDAttente::class)->everyFiveMinutes()->withoutOverlapping();
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(

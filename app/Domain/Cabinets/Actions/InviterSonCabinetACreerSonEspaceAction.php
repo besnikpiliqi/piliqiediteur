@@ -12,6 +12,8 @@ use App\Domain\Tenancy\Services\JournalDesDroits;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\CleDuModele;
 use App\Domain\Tenancy\Support\ValeursLues;
+use App\Integrations\Courriel\CourrielNonParti;
+use App\Integrations\Courriel\EnvoiImmediat;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\Mail;
@@ -46,6 +48,7 @@ class InviterSonCabinetACreerSonEspaceAction
      * @throws AuthorizationException
      * @throws ValidationException
      * @throws LogicException
+     * @throws CourrielNonParti quand le serveur d'envoi refuse l'e-mail ou se tait : rien n'est compté ni inscrit
      */
     public function handle(User $auteur, Societe $client, string $email): void
     {
@@ -57,10 +60,10 @@ class InviterSonCabinetACreerSonEspaceAction
             throw new LogicException(self::MESSAGE_TROP);
         }
 
-        Mail::to($email)->send(new InvitationACreerUnEspaceMail(
+        EnvoiImmediat::exiger('L\'e-mail d\'invitation', fn () => Mail::to($email)->send(new InvitationACreerUnEspaceMail(
             route('filament.app.auth.register', ['type' => TypeDActivite::Cabinet->value]),
             $client->getFilamentName(),
-        ));
+        )));
         $this->debit->compter($auteurRelu);
         app(TenantContext::class)->runAsSociete($client, fn () => $this->journalAudit->inscrire(ActionAuditee::EspaceCabinetSuggere, $auteurRelu, null, null, ['envoye' => true], $client));
     }

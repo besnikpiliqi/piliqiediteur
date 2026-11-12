@@ -9,6 +9,8 @@ use App\Domain\Tenancy\Services\DebitDesEmails;
 use App\Domain\Tenancy\Support\Reglage;
 use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Domain\Tenancy\Support\ValeursLues;
+use App\Integrations\Courriel\CourrielNonParti;
+use App\Integrations\Courriel\EnvoiImmediat;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
@@ -109,15 +111,19 @@ class DemanderUneNouvelleAdresseAction
      * Envoie le lien de ce jeton à l'adresse en attente du compte, et le
      * compte au débit de ses e-mails. Le message dit s'il remplacera une
      * adresse de connexion, ou s'il faut le suivre connecté au compte, qui
-     * n'en a encore aucune.
+     * n'en a encore aucune. Un serveur d'envoi qui le refuse ou se tait
+     * lève CourrielNonParti, qui dit pourquoi, sans erreur 500 : dans la
+     * transaction de la demande, rien n'en reste.
+     *
+     * @throws CourrielNonParti
      */
     public function envoyer(User $compte, string $jeton): void
     {
-        Mail::to((string) $compte->nouvelle_adresse)->send(new ConfirmationNouvelleAdresseMail(
+        EnvoiImmediat::exiger('L\'e-mail qui confirme votre nouvelle adresse', fn () => Mail::to((string) $compte->nouvelle_adresse)->send(new ConfirmationNouvelleAdresseMail(
             rtrim(Reglage::texte('app.url'), '/').route('profil.adresse.afficher', ['jeton' => $jeton], absolute: false),
             Calendrier::deParis()->afficher(ValeurRequise::de($compte->nouvelle_adresse_expire_le, 'l\'échéance du lien de la nouvelle adresse'), 'd/m/Y à H:i'),
             premiereAdresse: ! $compte->aUneAdresseDeConnexion(),
-        ));
+        )), 'Votre adresse ne change pas : réessayez dans quelques minutes.');
         $this->debit->compter($compte);
     }
 }

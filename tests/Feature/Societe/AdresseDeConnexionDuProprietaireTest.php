@@ -20,6 +20,7 @@ use App\Filament\App\Pages\Auth\Connexion;
 use App\Filament\App\Pages\Auth\DemandeDeLien;
 use App\Filament\App\Pages\Auth\ModifierProfil;
 use App\Filament\Societe\Pages\TableauDeBord;
+use App\Integrations\Courriel\CourrielNonParti;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Mail\Events\MessageSending;
@@ -164,7 +165,7 @@ class AdresseDeConnexionDuProprietaireTest extends TestCase
         $reponse->assertRedirect(TableauDeBord::getUrl(panel: 'societe', tenant: $societe));
         $this->assertAuthenticatedAs($proprietaire);
         $this->assertTrue($societe->fresh()->estValidee());
-        Exceptions::assertReported(TransportException::class);
+        Exceptions::assertReported(CourrielNonParti::class);
         $this->assertSame([null, null, null], [$proprietaire->email, $proprietaire->nouvelle_adresse, $proprietaire->nouvelle_adresse_jeton_hache]);
         $avis = collect(session('filament.notifications'))->sole();
         $this->assertStringContainsString('Le lien de confirmation n\'a pas pu être envoyé à '.self::ADRESSE_CHOISIE, $avis['body']);

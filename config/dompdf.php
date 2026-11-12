@@ -15,6 +15,13 @@
 | storage/. Les images des gabarits (le QR code d'un courrier) y sont
 | écrites en data:, sans fichier.
 |
+| Choix de Claude appliqué par le lot ML (constat de l'éditeur du
+| 02/11/2026, que l'éditeur peut contester) : chaque PDF n'embarque que les
+| caractères qu'il emploie de ses polices (enable_font_subsetting), et non
+| DejaVu Sans entière : une page passe d'environ 880 Ko à quelques dizaines
+| de Ko, et l'e-mail qui la porte d'autant, sans rien changer à
+| l'apparence ni au texte du document.
+|
 */
 
 return [
@@ -36,7 +43,7 @@ return [
         ],
         'artifactPathValidation' => null,
         'log_output_file' => null,
-        'enable_font_subsetting' => false,
+        'enable_font_subsetting' => true,
         'pdf_backend' => 'CPDF',
         'default_media_type' => 'screen',
         'default_paper_size' => 'a4',

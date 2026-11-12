@@ -17,6 +17,8 @@ use App\Domain\Tenancy\Services\PorteeDesDroits;
 use App\Domain\Tenancy\Support\CleDuModele;
 use App\Domain\Tenancy\Support\MotDePasseRedemande;
 use App\Domain\Tenancy\Support\Reglage;
+use App\Integrations\Courriel\CourrielNonParti;
+use App\Integrations\Courriel\EnvoiImmediat;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Collection;
@@ -266,7 +268,12 @@ class DemanderLaTransmissionDeLaProprieteAction
     /**
      * Le courriel du lien à l'adresse de la demande, sans le lien quand
      * cette adresse est déjà l'adresse de connexion du propriétaire d'une
-     * autre société ; l'administrateur en est prévenu dans sa cloche.
+     * autre société ; l'administrateur en est prévenu dans sa cloche. Un
+     * serveur d'envoi qui le refuse ou se tait lève CourrielNonParti, qui
+     * le dit à l'écran, sans erreur 500 : la demande reste en attente, et
+     * son lien se renvoie (voir renvoyerLeLien()).
+     *
+     * @throws CourrielNonParti
      */
     private function envoyer(User $auteur, Societe $societe, TransmissionPropriete $demande, string $jeton): void
     {
@@ -275,12 +282,12 @@ class DemanderLaTransmissionDeLaProprieteAction
             ? rtrim(Reglage::texte('app.url'), '/').route($societe->estUnCabinet() ? 'filament.cabinet.transmission' : 'filament.societe.transmission', ['jeton' => $jeton], absolute: false)
             : null;
 
-        Mail::to($demande->adresse)->send(new TransmissionDeLaProprieteMail(
+        EnvoiImmediat::exiger('L\'e-mail de la transmission de la propriété', fn () => Mail::to($demande->adresse)->send(new TransmissionDeLaProprieteMail(
             $lien,
             $societe->getFilamentName(),
             $auteur->name,
             Calendrier::deParis()->afficher($demande->expire_le, 'd/m/Y à H:i'),
-        ));
+        )), 'La demande reste en attente : renvoyez son lien dans quelques minutes, ou annulez-la.');
         $this->debit->compter($auteur);
 
         User::query()->whereKey($demande->destinataire_id)->firstOrFail()->notify(new AvisDeLEquipe(

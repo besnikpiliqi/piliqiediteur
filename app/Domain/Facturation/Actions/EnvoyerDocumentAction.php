@@ -206,6 +206,9 @@ class EnvoyerDocumentAction
                 ...$attributs,
                 'statut' => StatutEnvoi::EnAttente,
                 'erreur' => null,
+                'tentatives' => 0,
+                'derniere_erreur' => null,
+                'prochaine_tentative_le' => null,
                 'envoye_le' => null,
                 // La date de la nouvelle tentative : celle que montre la
                 // fiche, et qui compte pour « une relance par jour ».

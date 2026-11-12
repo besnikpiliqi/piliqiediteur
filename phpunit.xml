@@ -15,6 +15,12 @@
             <directory>tests/Browser</directory>
         </testsuite>
     </testsuites>
+    <!-- Le groupe courriels-reels envoie de vrais e-mails à la boîte de test de Mailtrap : jamais dans la suite ni en CI, seulement à la demande (voir le README). -->
+    <groups>
+        <exclude>
+            <group>courriels-reels</group>
+        </exclude>
+    </groups>
     <source>
         <include>
             <directory>app</directory>

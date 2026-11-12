@@ -28,8 +28,14 @@ return new class extends Migration
             $table->unsignedSmallInteger('niveau_relance')->nullable();
             $table->string('statut', 20)->default('en_attente'); // en_attente, envoye, echec
             // Une explication pour le magasin, jamais le message technique
-            // du serveur d'envoi (voir EnvoyerDocumentJob::failed()).
-            $table->string('erreur')->nullable();
+            // du serveur d'envoi (voir CauseDEchecDEnvoi).
+            $table->string('erreur', 500)->nullable();
+            // Les tentatives d'envoi déjà commencées, la cause traduite de
+            // la dernière qui a échoué et l'heure de la suivante, que montre
+            // la fiche tant que l'envoi attend (voir EnvoyerDocumentJob).
+            $table->unsignedSmallInteger('tentatives')->default(0);
+            $table->string('derniere_erreur')->nullable();
+            $table->timestamp('prochaine_tentative_le')->nullable();
             $table->foreignId('envoye_par')->nullable()->constrained('users')->restrictOnDelete();
             // Le nom de cette personne au moment de l'opération (voir
             // FigeLeNomDeSesAuteurs) : l'historique ne le relit jamais sur
@@ -47,6 +53,7 @@ return new class extends Migration
         });
 
         DeclencheursDeProtection::auMoins('envois_documents', 'niveau_relance', 0);
+        DeclencheursDeProtection::auMoins('envois_documents', 'tentatives', 0);
     }
 
     public function down(): void

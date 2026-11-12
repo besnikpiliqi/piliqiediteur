@@ -11,6 +11,7 @@ use App\Domain\Tenancy\Services\JetonsDuLien;
 use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\CleDuModele;
+use App\Integrations\Courriel\EnvoiImmediat;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Contracts\Auth\Authenticatable;
@@ -125,7 +126,9 @@ class ConfirmerNouvelleAdresseAction
         $compte->refresh();
 
         if ($resultat['ancienne'] !== null) {
-            Mail::to($resultat['ancienne'])->send(new AdresseChangeeMail($compte->name, Calendrier::deParis()->afficher(now(), 'd/m/Y à H:i')));
+            // L'adresse a déjà changé : un serveur d'envoi en panne ne fait
+            // que priver l'ancienne de son avis, ce que dit le journal.
+            EnvoiImmediat::essayer('L\'avis à l\'ancienne adresse de connexion', fn () => Mail::to($resultat['ancienne'])->send(new AdresseChangeeMail($compte->name, Calendrier::deParis()->afficher(now(), 'd/m/Y à H:i'))));
         }
 
         return $compte;

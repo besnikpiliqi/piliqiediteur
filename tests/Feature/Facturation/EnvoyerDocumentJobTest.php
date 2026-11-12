@@ -39,6 +39,7 @@ use Carbon\Carbon;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Mail\Mailables\Attachment;
+use Illuminate\Queue\MaxAttemptsExceededException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Mail;
@@ -46,6 +47,9 @@ use Illuminate\Support\Facades\Queue;
 use LogicException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Symfony\Component\Mailer\Exception\TransportException;
+use Symfony\Component\Mailer\Exception\UnexpectedResponseException;
+use Symfony\Component\Mailer\Exception\UnsupportedSchemeException;
+use Symfony\Component\Mailer\Transport\Dsn;
 use Tests\TestCase;
 use UnexpectedValueException;
 
@@ -411,8 +415,11 @@ class EnvoyerDocumentJobTest extends TestCase
     /**
      * Toutes les tentatives ont échoué : l'envoi passe en échec avec une
      * explication pour le magasin -- jamais la réponse du serveur, qui
-     * peut contenir un identifiant -- et l'expéditeur est prévenu, dans
-     * une notification qui nomme le magasin.
+     * contient l'identifiant SMTP de la plateforme -- et l'expéditeur est
+     * prévenu, dans une notification qui nomme le magasin ; des
+     * identifiants refusés tiennent à la plateforme, jamais à l'adresse du
+     * destinataire : le propriétaire, qui peut prévenir l'éditeur, l'est
+     * aussi.
      */
     public function test_un_echec_passe_l_envoi_en_echec_et_previent_l_expediteur(): void
     {
@@ -421,20 +428,143 @@ class EnvoyerDocumentJobTest extends TestCase
         $this->actingAs($vendeur);
         $facture = $this->emettreFacture(Client::factory()->professionnel()->create());
         $envoi = EnvoiDocument::factory()->for($facture, 'document')->create(['destinataire' => 'compta@client.fr', 'envoye_par' => $vendeur->id]);
-        Mail::shouldReceive('to')->andThrow(new TransportException('535 Authentication failed for smtp-user@editeur.example'));
+        Mail::shouldReceive('to')->andThrow(self::identifiantsRefuses());
 
-        $this->assertThrows(fn () => EnvoyerDocumentJob::dispatchSync($magasin->id, $envoi->id), TransportException::class);
+        $this->derniereTentative($magasin, $envoi)->handle();
 
         $envoi->refresh();
         $this->assertSame(StatutEnvoi::Echec, $envoi->statut);
-        $this->assertSame('Le serveur d\'envoi des e-mails n\'a pas accepté le message : vérifiez l\'adresse du destinataire, puis renvoyez-le.', $envoi->erreur);
+        $this->assertSame('L\'e-mail n\'est pas parti : le serveur d\'envoi a refusé les identifiants de la plateforme, un incident de la plateforme, sans rapport avec l\'adresse du destinataire. Prévenez l\'éditeur ; une fois le service rétabli, renvoyez-le.', $envoi->erreur);
         $notification = $vendeur->notifications()->sole();
         $this->assertSame(EnvoiDocumentEchoue::class, $notification->type);
         $this->assertSame("Ma Boutique : Échec de l'envoi : Facture {$facture->numero}", $notification->data['title']);
         $this->assertStringContainsString('L\'e-mail à compta@client.fr n\'est pas parti.', $notification->data['body']);
         $this->assertStringNotContainsString('smtp-user', $notification->data['body']);
         $this->assertSame($magasin->id, $notification->data['magasin_id']);
+        $this->assertSame($notification->data['body'], $this->proprietaireDe($magasin)->notifications()->sole()->data['body']);
+    }
+
+    /**
+     * Chaque refus du serveur d'envoi, tel que le lève le transport SMTP de
+     * Symfony, se dit au magasin par sa cause, sur l'envoi et dans la
+     * notification, sans l'identifiant SMTP que porte le message du
+     * serveur ; une adresse refusée échoue dès la première tentative.
+     *
+     * @param  callable(): \Throwable  $refus
+     */
+    #[DataProvider('refusDuServeurDEnvoi')]
+    public function test_chaque_refus_du_serveur_se_dit_par_sa_cause_sans_l_identifiant(callable $refus, int $tentative, string $erreur): void
+    {
+        $magasin = $this->magasinAvecProprietaire('Ma Boutique');
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
+        $this->actingAs($vendeur);
+        $envoi = EnvoiDocument::factory()->for($this->emettreFacture(Client::factory()->create()), 'document')->create(['destinataire' => 'client@exemple.fr', 'envoye_par' => $vendeur->id]);
+        Mail::shouldReceive('to')->andThrow($refus());
+        $job = (new EnvoyerDocumentJob($magasin->id, $envoi->id))->withFakeQueueInteractions();
+        $job->job->attempts = $tentative;
+
+        $job->handle();
+
+        $job->assertNotReleased();
+        $envoi->refresh();
+        $this->assertSame(StatutEnvoi::Echec, $envoi->statut);
+        $this->assertSame($erreur, $envoi->erreur);
+        $this->assertStringContainsString($erreur, $vendeur->notifications()->sole()->data['body']);
+        $this->assertStringNotContainsString('smtp-user', (string) $envoi->erreur);
+    }
+
+    /**
+     * @return array<string, array{callable(): \Throwable, int, string}>
+     */
+    public static function refusDuServeurDEnvoi(): array
+    {
+        return [
+            'identifiants refusés (535)' => [self::identifiantsRefuses(...), 3, 'L\'e-mail n\'est pas parti : le serveur d\'envoi a refusé les identifiants de la plateforme, un incident de la plateforme, sans rapport avec l\'adresse du destinataire. Prévenez l\'éditeur ; une fois le service rétabli, renvoyez-le.'],
+            'serveur muet' => [fn () => new TransportException('Connection to "sandbox.smtp.mailtrap.io:2525" timed out.'), 3, 'L\'e-mail n\'est pas parti : le serveur d\'envoi ne répond pas, à chaque tentative. Plus tard, renvoyez-le ; si cela se répète, prévenez l\'éditeur.'],
+            'connexion chiffrée refusée' => [fn () => new TransportException('Unable to connect with STARTTLS: stream_socket_enable_crypto(): SSL operation failed with code 1. OpenSSL Error messages: error:0A000086:SSL routines::certificate verify failed'), 3, 'L\'e-mail n\'est pas parti : la connexion chiffrée au serveur d\'envoi a échoué, un incident de la plateforme, sans rapport avec l\'adresse du destinataire. Prévenez l\'éditeur ; une fois le service rétabli, renvoyez-le.'],
+            'MAIL_SCHEME=tls' => [fn () => new UnsupportedSchemeException(new Dsn('tls', 'sandbox.smtp.mailtrap.io')), 3, 'L\'e-mail n\'est pas parti : le chiffrement du serveur d\'envoi est mal réglé, un incident de la plateforme, sans rapport avec l\'adresse du destinataire. Prévenez l\'éditeur ; une fois le service rétabli, renvoyez-le.'],
+            'destinataire refusé (550), dès la première tentative' => [fn () => new UnexpectedResponseException('Expected response code "250/251/252" but got code "550", with message "550 5.1.1 <client@exemple.fr>: Recipient address rejected: User unknown".', 550), 1, 'Le serveur d\'envoi des e-mails a refusé une adresse de ce message : vérifiez l\'adresse du destinataire, puis renvoyez-le ; si elle est juste, prévenez l\'éditeur.'],
+        ];
+    }
+
+    /**
+     * Rythme des tentatives d'un envoi demandé par une personne (décision
+     * de l'éditeur du 02/11/2026) : la première aussitôt, la deuxième 30
+     * secondes après, la troisième 2 minutes après. Une tentative ratée
+     * laisse l'envoi en attente, avec la cause traduite et l'heure de la
+     * suivante ; la troisième le fait échouer, en le disant à qui l'a
+     * demandé et au propriétaire.
+     */
+    public function test_un_serveur_muet_fait_trois_tentatives_a_trente_secondes_puis_deux_minutes_d_ecart(): void
+    {
+        $this->travelTo(self::aParis('2026-11-12 10:00:00'));
+        $magasin = $this->magasinAvecProprietaire('Ma Boutique');
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
+        $this->actingAs($vendeur);
+        $envoi = EnvoiDocument::factory()->for($this->emettreFacture(Client::factory()->create()), 'document')->create(['destinataire' => 'client@exemple.fr', 'envoye_par' => $vendeur->id]);
+        Mail::shouldReceive('to')->andThrow(new TransportException('Connection to "sandbox.smtp.mailtrap.io:2525" timed out.'));
+
+        foreach ([[1, 30, self::aParis('2026-11-12 10:00:30')], [2, 120, self::aParis('2026-11-12 10:02:30')]] as [$tentative, $delai, $suivante]) {
+            $job = (new EnvoyerDocumentJob($magasin->id, $envoi->id))->withFakeQueueInteractions();
+            $job->job->attempts = $tentative;
+
+            $job->handle();
+
+            $job->assertReleased($delai);
+            $envoi->refresh();
+            $this->assertSame(StatutEnvoi::EnAttente, $envoi->statut);
+            $this->assertSame($tentative, $envoi->tentatives);
+            $this->assertSame('le serveur d\'envoi ne répond pas', $envoi->derniere_erreur);
+            $this->assertEquals($suivante, $envoi->prochaine_tentative_le);
+            $this->assertSame(0, $vendeur->notifications()->count());
+            $this->travelTo($suivante);
+        }
+
+        $this->derniereTentative($magasin, $envoi)->handle();
+
+        $envoi->refresh();
+        $this->assertSame(StatutEnvoi::Echec, $envoi->statut);
+        $this->assertSame(3, $envoi->tentatives);
+        $this->assertNull($envoi->prochaine_tentative_le);
+        $this->assertStringStartsWith('L\'e-mail n\'est pas parti : le serveur d\'envoi ne répond pas', (string) $envoi->erreur);
+        $this->assertSame(1, $vendeur->notifications()->count());
+        $this->assertSame(1, $this->proprietaireDe($magasin)->notifications()->count());
+    }
+
+    /**
+     * Un envoi déjà en échec ne repart jamais, même par un rejeu de sa
+     * tâche (`php artisan queue:retry`) : rien ne part, et son statut et
+     * son erreur restent ceux que le magasin a lus.
+     */
+    public function test_un_envoi_en_echec_ne_repart_pas_quand_sa_tache_est_rejouee(): void
+    {
+        Mail::fake();
+        $magasin = $this->magasinAvecProprietaire('Ma Boutique');
+        $envoi = EnvoiDocument::factory()->for($this->emettreFacture(Client::factory()->create()), 'document')->create(['destinataire' => 'client@exemple.fr']);
+        $envoi->forceFill(['statut' => StatutEnvoi::Echec, 'erreur' => 'Le serveur d\'envoi ne répond pas.'])->save();
+
+        (new EnvoyerDocumentJob($magasin->id, $envoi->id))->handle();
+        (new EnvoyerDocumentJob($magasin->id, $envoi->id))->failed(new TransportException('Connection to "127.0.0.1:2525" timed out.'));
+
+        Mail::assertNothingSent();
+        $envoi->refresh();
+        $this->assertSame(StatutEnvoi::Echec, $envoi->statut);
+        $this->assertSame('Le serveur d\'envoi ne répond pas.', $envoi->erreur);
         $this->assertSame(0, $this->proprietaireDe($magasin)->notifications()->count());
+    }
+
+    /**
+     * La durée maximale d'une tentative dépasse le délai d'envoi
+     * (MAIL_TIMEOUT), et reste sous les 60 secondes de `queue:listen` et le
+     * délai de reprise d'une tâche réservée.
+     */
+    public function test_une_tentative_dure_plus_que_le_delai_d_envoi_et_moins_que_la_file_d_attente(): void
+    {
+        $job = new EnvoyerDocumentJob(1, 1);
+
+        $this->assertGreaterThan(config('mail.mailers.smtp.timeout'), $job->timeout);
+        $this->assertLessThan(60, $job->timeout);
+        $this->assertLessThan(config('queue.connections.database.retry_after'), $job->timeout);
     }
 
     /**
@@ -447,13 +577,13 @@ class EnvoyerDocumentJobTest extends TestCase
         $facture = $this->emettreFacture(Client::factory()->create());
         $envoi = EnvoiDocument::factory()->for($facture, 'document')->relance(2)->create(['destinataire' => 'client@exemple.fr']);
 
-        (new EnvoyerDocumentJob($magasin->id, $envoi->id))->failed(new TransportException('Connexion refusée'));
+        (new EnvoyerDocumentJob($magasin->id, $envoi->id))->failed(new MaxAttemptsExceededException(EnvoyerDocumentJob::class.' has been attempted too many times.'));
 
         $notification = $this->proprietaireDe($magasin)->notifications()->sole();
         $this->assertStringContainsString('La relance n°2 à client@exemple.fr n\'est pas partie.', $notification->data['body']);
         $envoi->refresh();
         $this->assertSame(StatutEnvoi::Echec, $envoi->statut);
-        $this->assertSame('Le serveur d\'envoi des e-mails n\'a pas accepté le message : vérifiez l\'adresse du destinataire, puis relancez la facture (la relance n°2 repartira).', $envoi->erreur);
+        $this->assertSame('L\'e-mail n\'est pas parti : l\'envoi a été interrompu avant d\'aboutir, à chaque tentative. Plus tard, relancez la facture (la relance n°2 repartira) ; si cela se répète, prévenez l\'éditeur.', $envoi->erreur);
     }
 
     /**
@@ -566,7 +696,8 @@ class EnvoyerDocumentJobTest extends TestCase
 
     /**
      * L'échec d'un envoi demandé par un administrateur, qui ouvre toujours
-     * le magasin, le prévient lui, pas le propriétaire.
+     * le magasin, le prévient lui, pas le propriétaire, quand il tient au
+     * message lui-même (une adresse refusée).
      */
     public function test_l_echec_d_un_envoi_d_un_administrateur_le_previent_lui(): void
     {
@@ -574,8 +705,9 @@ class EnvoyerDocumentJobTest extends TestCase
         $administrateur = $this->administrateur($magasin);
         $facture = $this->emettreFacture(Client::factory()->create());
         $envoi = EnvoiDocument::factory()->for($facture, 'document')->create(['destinataire' => 'client@exemple.fr', 'envoye_par' => $administrateur->id]);
+        Mail::shouldReceive('to')->andThrow(new UnexpectedResponseException('Expected response code "250/251/252" but got code "550", with message "550 5.1.1 User unknown".', 550));
 
-        (new EnvoyerDocumentJob($magasin->id, $envoi->id))->failed(new TransportException('Connexion refusée'));
+        (new EnvoyerDocumentJob($magasin->id, $envoi->id))->handle();
 
         $this->assertSame(EnvoiDocumentEchoue::class, $administrateur->notifications()->sole()->type);
         $this->assertSame(0, $this->proprietaireDe($magasin)->notifications()->count());
@@ -740,6 +872,26 @@ class EnvoyerDocumentJobTest extends TestCase
             'montant' => $montant,
             'recu_le' => Calendrier::deParis()->aujourdhui(),
         ], [['facture_id' => $facture->id, 'montant' => $montant]]);
+    }
+
+    /**
+     * La troisième et dernière tentative de l'envoi.
+     */
+    private function derniereTentative(Magasin $magasin, EnvoiDocument $envoi): EnvoyerDocumentJob
+    {
+        $job = (new EnvoyerDocumentJob($magasin->id, $envoi->id))->withFakeQueueInteractions();
+        $job->job->attempts = 3;
+
+        return $job;
+    }
+
+    /**
+     * Le refus des identifiants tel que le lève le transport SMTP de
+     * Symfony, avec l'identifiant de la plateforme.
+     */
+    private static function identifiantsRefuses(): TransportException
+    {
+        return new TransportException('Failed to authenticate on SMTP server with username "smtp-user" using the following authenticators: "LOGIN", "PLAIN", "CRAM-MD5". Authenticator "LOGIN" returned "Expected response code "235" but got code "535", with message "535 5.7.8 Authentication failed".".', 535);
     }
 
     private function contenuDe(Attachment $pieceJointe): string

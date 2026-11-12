@@ -1400,6 +1400,8 @@ return [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur autorisé à vendre ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur sans la vente ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
+            'tests/Browser/Parcours/EnvoiParEMailTest.php › chaque compte qui envoie la facture lit que l’envoi est demandé, puis son résultat dans « Envois »',
+            'tests/Browser/Parcours/EnvoiParEMailTest.php › un serveur d’envoi muet se lit dans « Envois » avec l’heure de la tentative suivante, puis le résultat s’affiche sans rechargement',
         ]],
         'action:faireLAvoirDeRegularisation' => ['lot' => 'NAV-2', 'tests' => []],
         'action:noter_bordereau_detaxe' => ['lot' => 'NAV-2', 'tests' => [

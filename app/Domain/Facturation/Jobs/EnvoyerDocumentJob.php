@@ -24,6 +24,7 @@ use App\Domain\Tenancy\Concerns\WithTenantContext;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\ValeurRequise;
+use App\Integrations\Courriel\CauseDEchecDEnvoi;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Bus\Queueable;
@@ -34,9 +35,11 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Notification;
 use Symfony\Component\Mailer\Exception\TransportExceptionInterface;
+use Symfony\Component\Mailer\Exception\UnsupportedSchemeException;
 use Symfony\Component\Mime\Exception\RfcComplianceException;
 use Throwable;
 use UnexpectedValueException;
@@ -80,9 +83,25 @@ use UnexpectedValueException;
  * prévenu. Une relance automatique, que personne n'a demandée, n'en
  * dépend pas.
  *
- * Idempotent : un envoi déjà envoyé ne repart jamais, même si le job est
- * rejoué. ShouldBeUnique : jamais deux exécutions du même envoi en
- * parallèle. Le PDF est généré à chaque tentative depuis le document tel
+ * Idempotent : seul un envoi en attente part ; un envoi déjà envoyé ou
+ * déjà en échec ne repart jamais, même si le job est rejoué (par
+ * `php artisan queue:retry`, par exemple : un document se renvoie par
+ * « Envoyer par e-mail », qui crée un nouvel envoi). ShouldBeUnique :
+ * jamais deux exécutions du même envoi en parallèle.
+ *
+ * Un serveur d'envoi qui refuse ou ne répond pas (voir CauseDEchecDEnvoi)
+ * laisse l'envoi en attente, avec sa tentative, la cause traduite et
+ * l'heure de la suivante, que montre la fiche du document ; trois
+ * tentatives en tout, la première aussitôt, la deuxième 30 secondes après,
+ * la troisième 2 minutes après (décision de l'éditeur du 02/11/2026) :
+ * l'échec définitif se connaît environ trois minutes après la demande.
+ * Une adresse refusée échoue aussitôt, sans nouvelle tentative. Le texte
+ * du serveur, qui peut porter l'identifiant SMTP de la plateforme, ne
+ * s'écrit nulle part : ni sur l'envoi, ni dans la notification, ni au
+ * journal, où une cause qui tient à la plateforme s'inscrit au niveau
+ * critique. Une tentative dure au plus $timeout secondes.
+ *
+ * Le PDF est généré à chaque tentative depuis le document tel
  * qu'il est enregistré : une facture ou un avoir figés à leur émission,
  * avec l'émetteur qu'ils ont signé, quoi que soit devenu le magasin (voir
  * FacturePdfGenerator et FigeSonEmetteur), un devis dans la version émise
@@ -101,11 +120,23 @@ class EnvoyerDocumentJob implements ShouldBeUnique, ShouldQueue
     public int $tries = 3;
 
     /**
-     * Un serveur d'envoi indisponible l'est souvent quelques minutes.
+     * Le délai avant la deuxième, puis avant la troisième tentative, en
+     * secondes (décision de l'éditeur du 02/11/2026).
      *
      * @var list<int>
      */
-    public array $backoff = [60, 600];
+    public array $backoff = [30, 120];
+
+    /**
+     * La durée maximale d'une tentative, en secondes : plus que le délai
+     * d'envoi (MAIL_TIMEOUT, 10 secondes par défaut) et la fabrication du
+     * PDF, moins que les 60 secondes de `php artisan queue:listen` et que
+     * le délai de reprise d'une tâche réservée (retry_after, 90 secondes).
+     * Elle n'agit qu'avec l'extension pcntl (Linux, en production) : sous
+     * Windows, qui n'en a pas, seul MAIL_TIMEOUT empêche queue:listen de
+     * couper la tâche.
+     */
+    public int $timeout = 45;
 
     public function __construct(
         public readonly int $magasinId,
@@ -123,9 +154,11 @@ class EnvoyerDocumentJob implements ShouldBeUnique, ShouldQueue
 
         $envoi = EnvoiDocument::query()->findOrFail($this->envoiId);
 
-        if ($envoi->statut === StatutEnvoi::Envoye) {
+        if ($envoi->statut !== StatutEnvoi::EnAttente) {
             return;
         }
+
+        $envoi->forceFill(['tentatives' => $this->attempts(), 'prochaine_tentative_le' => null])->touch();
 
         $document = DB::transaction(fn (): Facture|Devis|Avoir|RecuPaiement|null => $this->relireAvantLeDepart($envoi));
 
@@ -161,13 +194,47 @@ class EnvoyerDocumentJob implements ShouldBeUnique, ShouldQueue
             $this->echouer($envoi, "Une adresse e-mail n'est pas valide (celle du destinataire, ou celle du magasin, à laquelle le client répond) : corrigez-la, puis {$this->consigne($envoi)}.");
 
             return;
+        } catch (TransportExceptionInterface|UnsupportedSchemeException $erreur) {
+            $this->constaterLeRefusDuServeur($envoi, CauseDEchecDEnvoi::de($erreur));
+
+            return;
         }
 
         $envoi->forceFill([
             'statut' => StatutEnvoi::Envoye,
             'envoye_le' => now(),
             'erreur' => null,
+            'derniere_erreur' => null,
         ])->save();
+    }
+
+    /**
+     * Le serveur d'envoi a refusé l'e-mail ou n'a pas répondu : une cause
+     * qui tient à la plateforme s'inscrit au journal au niveau critique,
+     * sans le texte du serveur ; l'envoi attend sa tentative suivante, la
+     * cause et l'heure notées pour la fiche, ou, après la dernière, ou pour
+     * une adresse refusée, échoue en le disant.
+     */
+    private function constaterLeRefusDuServeur(EnvoiDocument $envoi, CauseDEchecDEnvoi $cause): void
+    {
+        $tentative = $this->attempts();
+        $contexte = ['envoi_id' => $envoi->getKey(), 'magasin_id' => $envoi->magasin_id, 'cause' => $cause->value, 'tentative' => $tentative];
+
+        if ($cause->tientALaPlateforme()) {
+            Log::critical("Un e-mail d'un document n'est pas parti : {$cause->libelle()}.", $contexte);
+        } else {
+            Log::warning("Un e-mail d'un document n'est pas parti : {$cause->libelle()}.", $contexte);
+        }
+
+        if (! $cause->vautUneNouvelleTentative() || $tentative >= $this->tries) {
+            $this->echouer($envoi, $cause->messagePourLeMagasin($this->consigne($envoi)), cause: $cause);
+
+            return;
+        }
+
+        $delai = $this->backoff[$tentative - 1] ?? $this->backoff[array_key_last($this->backoff)];
+        $envoi->forceFill(['derniere_erreur' => $cause->libelle(), 'prochaine_tentative_le' => now()->addSeconds($delai)])->save();
+        $this->release($delai);
     }
 
     /**
@@ -265,11 +332,13 @@ class EnvoyerDocumentJob implements ShouldBeUnique, ShouldQueue
     }
 
     /**
-     * Toutes les tentatives ont échoué : l'envoi passe en échec, avec une
-     * explication pour le magasin -- jamais le message technique du
-     * serveur d'envoi, qui peut contenir des identifiants ou des adresses
-     * (il reste dans la table des jobs échoués) --, et celui qui l'a
-     * demandé en est prévenu.
+     * Toutes les tentatives ont échoué sur une erreur que handle() n'a pas
+     * constatée elle-même : une tâche coupée par son délai ou par le
+     * travailleur (tentatives épuisées), ou une erreur inattendue. Un envoi
+     * encore en attente passe en échec, avec la cause traduite pour le
+     * magasin -- jamais le message technique, qui reste dans la table des
+     * jobs échoués --, et celui qui l'a demandé en est prévenu ; un envoi
+     * déjà envoyé ou déjà en échec ne change pas.
      */
     public function failed(?Throwable $exception): void
     {
@@ -277,14 +346,14 @@ class EnvoyerDocumentJob implements ShouldBeUnique, ShouldQueue
 
         $envoi = EnvoiDocument::query()->find($this->envoiId);
 
-        if ($envoi === null || $envoi->statut === StatutEnvoi::Envoye) {
+        if ($envoi === null || $envoi->statut !== StatutEnvoi::EnAttente) {
             return;
         }
 
-        $this->echouer($envoi, match (true) {
-            $exception instanceof TransportExceptionInterface => "Le serveur d'envoi des e-mails n'a pas accepté le message : vérifiez l'adresse du destinataire, puis {$this->consigne($envoi)}.",
-            default => "Une erreur inattendue a empêché l'envoi : {$this->consigne($envoi)}, et contactez le support si elle se répète.",
-        });
+        $cause = $exception === null ? CauseDEchecDEnvoi::Inattendue : CauseDEchecDEnvoi::de($exception);
+        Log::critical("Un e-mail d'un document n'est pas parti : {$cause->libelle()}.", ['envoi_id' => $envoi->getKey(), 'magasin_id' => $envoi->magasin_id, 'cause' => $cause->value]);
+
+        $this->echouer($envoi, $cause->messagePourLeMagasin($this->consigne($envoi)), cause: $cause);
     }
 
     /**
@@ -349,13 +418,25 @@ class EnvoyerDocumentJob implements ShouldBeUnique, ShouldQueue
     }
 
     /**
+     * L'envoi passe en échec, et qui doit le savoir en est prévenu : celui
+     * que désigne aPrevenir(), et, quand l'échec tient à la plateforme (le
+     * serveur d'envoi, voir CauseDEchecDEnvoi), aussi le propriétaire de la
+     * société, qui peut prévenir l'éditeur (décision de l'éditeur du
+     * 02/11/2026).
+     *
      * @param  Collection<int, User>|null  $aPrevenir  qui prévenir, à défaut de celui que désigne aPrevenir()
+     * @param  CauseDEchecDEnvoi|null  $cause  la cause, quand l'e-mail n'est pas parti faute d'être accepté par le serveur d'envoi
      */
-    private function echouer(EnvoiDocument $envoi, string $erreur, ?Collection $aPrevenir = null): void
+    private function echouer(EnvoiDocument $envoi, string $erreur, ?Collection $aPrevenir = null, ?CauseDEchecDEnvoi $cause = null): void
     {
-        $envoi->forceFill(['statut' => StatutEnvoi::Echec, 'erreur' => $erreur])->save();
+        $envoi->forceFill(['statut' => StatutEnvoi::Echec, 'erreur' => $erreur, 'derniere_erreur' => $cause?->libelle(), 'prochaine_tentative_le' => null])->save();
+        $destinataires = $aPrevenir ?? $this->aPrevenir($envoi);
 
-        Notification::send($aPrevenir ?? $this->aPrevenir($envoi), new EnvoiDocumentEchoue($envoi));
+        if ($cause?->tientALaPlateforme() === true) {
+            $destinataires = $destinataires->push(ValeurRequise::de($envoi->magasin->societe->proprietaire, 'le propriétaire de la société'))->unique(fn (User $compte): int => $compte->getKey());
+        }
+
+        Notification::send($destinataires, new EnvoiDocumentEchoue($envoi));
     }
 
     /**

@@ -38,7 +38,7 @@ use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Queue;
 use InvalidArgumentException;
 use LogicException;
-use Symfony\Component\Mailer\Exception\TransportException;
+use Symfony\Component\Mailer\Exception\UnexpectedResponseException;
 use Tests\TestCase;
 
 class EnvoyerDocumentActionTest extends TestCase
@@ -356,8 +356,8 @@ class EnvoyerDocumentActionTest extends TestCase
         $magasin = $this->magasin();
         $facture = $this->emettreFactureEchueLe(Client::factory()->create(), '2026-09-30');
         $expediteur = $this->responsable($magasin);
-        Mail::shouldReceive('to')->andThrow(new TransportException('550 Mailbox unavailable'));
-        $this->assertThrows(fn () => app(EnvoyerDocumentAction::class)->relancer(self::auteur(), $facture, 'erreur@exemple.fr'), TransportException::class);
+        Mail::shouldReceive('to')->andThrow(new UnexpectedResponseException('Expected response code "250/251/252" but got code "550", with message "550 5.1.1 Mailbox unavailable".', 550));
+        app(EnvoyerDocumentAction::class)->relancer(self::auteur(), $facture, 'erreur@exemple.fr');
         $enEchec = $facture->envois()->sole();
         $this->assertSame(StatutEnvoi::Echec, $enEchec->statut);
         $this->assertSame(0, $facture->fresh()->niveauDeRelanceAtteint());

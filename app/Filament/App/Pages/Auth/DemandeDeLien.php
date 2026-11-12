@@ -22,7 +22,10 @@ use Illuminate\Support\Facades\Password;
  * perdu s'y redonne par qui gère le compte (voir RedonnerLAccesAction).
  * La réponse est toujours la même, que
  * l'adresse soit celle d'un propriétaire ou non, qu'un lien vienne ou non
- * de partir : elle ne révèle rien.
+ * de partir : elle ne révèle rien. Un serveur d'envoi en panne n'y change
+ * rien et ne donne jamais une erreur 500 : le lien ne part pas, le journal
+ * de l'application le dit (voir CanalDesCourriels), et la personne le
+ * redemande plus tard.
  */
 class DemandeDeLien extends RequestPasswordReset
 {

@@ -14,6 +14,7 @@ use App\Domain\Facturation\Actions\EmettreAvoirAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Enums\NatureEnvoi;
 use App\Domain\Facturation\Enums\StatutDevis;
+use App\Domain\Facturation\Enums\StatutEnvoi;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Mail\DocumentMail;
 use App\Domain\Facturation\Models\EnvoiDocument;
@@ -59,7 +60,7 @@ class EnvoieLesDocumentsTest extends TestCase
             ->setTableActionData(['destinataire' => 'direction@client.fr', 'message' => 'Merci de votre confiance.'])
             ->callMountedTableAction()
             ->assertHasNoTableActionErrors()
-            ->assertNotified('Envoi à direction@client.fr programmé');
+            ->assertNotified('Envoi à direction@client.fr demandé : il part dans quelques secondes ; son résultat s\'affiche dans « Envois »');
 
         Mail::assertSent(DocumentMail::class, fn (DocumentMail $mail): bool => $mail->hasTo('direction@client.fr'));
         $this->assertSame(StatutFacture::Envoyee, $facture->fresh()->statut);
@@ -163,6 +164,70 @@ class EnvoieLesDocumentsTest extends TestCase
 
         Livewire::test(ViewFacture::class, ['record' => $facture->getRouteKey()])
             ->assertSeeInOrder(['Envois', 'ancien@client.fr', 'Échec', 'Le serveur d&#039;envoi des e-mails n&#039;a pas accepté le message.'], escape: false);
+    }
+
+    /**
+     * Tant qu'un envoi attend, la fiche d'une facture, d'un devis ou d'un
+     * avoir se relit seule toutes les 5 secondes et montre son résultat
+     * dès qu'il est connu, sans rechargement ; ensuite, plus rien ne se
+     * relit.
+     */
+    public function test_la_fiche_se_relit_seule_tant_qu_un_envoi_attend(): void
+    {
+        $this->connecterLeProprietaire();
+        $facture = $this->emettreFacture(Client::factory()->create());
+        $devis = app(CreerDevisAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
+        $avoir = app(EmettreAvoirAction::class)->handle(self::auteur(), app(CreerAvoirAction::class)->handle(self::auteur(), $facture->client, [['ligne_facture_id' => $facture->lignes->first()->id, 'quantite' => 1]]));
+        $envoi = EnvoiDocument::factory()->for($facture, 'document')->create(['destinataire' => 'client@exemple.fr']);
+        EnvoiDocument::factory()->for($devis, 'document')->create();
+        EnvoiDocument::factory()->for($avoir, 'document')->create();
+
+        Livewire::test(ViewDevis::class, ['record' => $devis->getRouteKey()])->assertSeeHtml('wire:poll.5s');
+        Livewire::test(ViewAvoir::class, ['record' => $avoir->getRouteKey()])->assertSeeHtml('wire:poll.5s');
+        $fiche = Livewire::test(ViewFacture::class, ['record' => $facture->getRouteKey()])
+            ->assertSeeHtml('wire:poll.5s')
+            ->assertSeeInOrder(['Envois', 'client@exemple.fr', 'En attente']);
+        $envoi->forceFill(['statut' => StatutEnvoi::Envoye, 'envoye_le' => now()])->save();
+
+        $fiche->call('$refresh')
+            ->assertDontSeeHtml('wire:poll')
+            ->assertSeeHtmlInOrder(['Envois', 'client@exemple.fr', 'Envoyé']);
+    }
+
+    /**
+     * Une tentative ratée se lit sur la fiche : la cause, puis l'heure de
+     * la tentative suivante, à l'heure du magasin.
+     */
+    public function test_la_fiche_dit_la_cause_d_une_tentative_ratee_et_l_heure_de_la_suivante(): void
+    {
+        $this->travelTo(self::aParis('2026-11-12 10:00:00'));
+        $this->connecterLeProprietaire();
+        $facture = $this->emettreFacture(Client::factory()->create());
+        $envoi = EnvoiDocument::factory()->for($facture, 'document')->create();
+        $envoi->forceFill(['tentatives' => 2, 'derniere_erreur' => 'le serveur d\'envoi ne répond pas', 'prochaine_tentative_le' => self::aParis('2026-11-12 10:02:30')])->save();
+
+        Livewire::test(ViewFacture::class, ['record' => $facture->getRouteKey()])
+            ->assertSeeInOrder(['En attente', 'Le serveur d&#039;envoi ne répond pas, nouvelle tentative vers 10:02.'], escape: false)
+            ->assertDontSee(EnvoiDocument::MESSAGE_ATTENTE_PROLONGEE);
+    }
+
+    /**
+     * Un envoi qui attend depuis plus de 2 minutes, sans tentative en
+     * cours ni prévue (aucun travailleur ne prend la file d'attente), le
+     * dit sur la fiche ; avant, rien.
+     */
+    public function test_un_envoi_qui_attend_depuis_plus_de_deux_minutes_le_dit_sur_la_fiche(): void
+    {
+        $this->travelTo(self::aParis('2026-11-12 10:00:00'));
+        $this->connecterLeProprietaire();
+        $facture = $this->emettreFacture(Client::factory()->create());
+        EnvoiDocument::factory()->for($facture, 'document')->create();
+        $avis = 'L&#039;envoi attend encore : il partira dès que le service d&#039;envoi reprendra ; sinon vous serez prévenu.';
+
+        $this->travelTo(self::aParis('2026-11-12 10:01:59'));
+        Livewire::test(ViewFacture::class, ['record' => $facture->getRouteKey()])->assertDontSeeHtml($avis);
+        $this->travelTo(self::aParis('2026-11-12 10:02:01'));
+        Livewire::test(ViewFacture::class, ['record' => $facture->getRouteKey()])->assertSeeHtml($avis);
     }
 
     public function test_relancer_une_facture_echue_depuis_sa_fiche(): void

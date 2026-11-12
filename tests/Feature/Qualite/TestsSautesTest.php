@@ -17,13 +17,17 @@ use Tests\TestCase;
 class TestsSautesTest extends TestCase
 {
     /**
-     * Les seules raisons permises de sauter un test, chacune absente en CI
-     * (Node.js y est installé).
+     * Les seules raisons permises de sauter un test, chacune absente en CI :
+     * Node.js y est installé, et le groupe courriels-reels, qui demande la
+     * boîte de test de Mailtrap, n'y est jamais lancé (phpunit.xml).
      *
      * @var list<string>
      */
     private const RAISONS_PERMISES = [
         'Node.js est absent : le script de l\'avis ne se rejoue pas.',
+        'Groupe courriels-reels : MAILTRAP_API_TOKEN et MAILTRAP_INBOX_ID manquent.',
+        'Groupe courriels-reels : MAILTRAP_API_TOKEN manque.',
+        'Groupe courriels-reels : MAILTRAP_INBOX_ID manque.',
     ];
 
     public function test_un_test_ne_se_saute_que_pour_une_raison_permise(): void

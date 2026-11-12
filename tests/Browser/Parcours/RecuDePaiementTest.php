@@ -75,7 +75,7 @@ test('le responsable télécharge le reçu du virement reçu après l’émissio
     $onglet->cliquerSur('Envoyer le reçu')
         ->remplir('Destinataire', 'compta@hotel-des-pins.fr')
         ->soumettre('Envoyer')
-        ->voir('Envoi à compta@hotel-des-pins.fr programmé');
+        ->voir('Envoi à compta@hotel-des-pins.fr demandé : il part dans quelques secondes');
 
     $envoi = app(TenantContext::class)->runAs($societe->magasin, fn (): EnvoiDocument => EnvoiDocument::query()->where('document_type', 'recu_paiement')->sole());
     expect([$envoi->destinataire, $envoi->statut, (int) $envoi->document_id])

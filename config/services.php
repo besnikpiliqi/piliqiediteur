@@ -124,6 +124,20 @@ return [
         ],
     ],
 
+    /*
+     | La boîte de test de Mailtrap (« Email Sandbox »), où le transport
+     | d'envoi « mailtrap » (MAIL_MAILER=mailtrap, voir config/mail.php et
+     | TransportMailtrap) dépose chaque e-mail par l'API HTTPS : le jeton
+     | d'API de l'éditeur (MAILTRAP_API_TOKEN, onglet « API Tokens » de son
+     | compte Mailtrap) et le numéro de la boîte (MAILTRAP_INBOX_ID, dans
+     | l'adresse de sa page). Des secrets de l'environnement, jamais du
+     | dépôt, d'un journal ni d'un message d'erreur.
+     */
+    'mailtrap' => [
+        'jeton' => env('MAILTRAP_API_TOKEN'),
+        'boite' => env('MAILTRAP_INBOX_ID'),
+    ],
+
     'slack' => [
         'notifications' => [
             'bot_user_oauth_token' => env('SLACK_BOT_USER_OAUTH_TOKEN'),

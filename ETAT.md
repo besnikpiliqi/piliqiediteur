@@ -1,18 +1,19 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 12/11/2026 à 08:09 UTC par pilotage-sync.sh : « point de suivi 08:25 ».
+Mis à jour le 12/11/2026 à 08:41 UTC par pilotage-sync.sh : « Après le lot DEMO ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
-Tête poussée : `bb135db`. Commits locaux pas encore poussés :
+Tête poussée : `b12a835`. Commits locaux pas encore poussés :
 
 ```
-d23eb96 Laisse le propriétaire tout faire dans le magasin de démonstration (lot DEMO)
 ```
 
 Derniers commits poussés :
 
 ```
+b12a835 Relecture du lot DEMO de la démonstration
+d23eb96 Laisse le propriétaire tout faire dans le magasin de démonstration (lot DEMO)
 bb135db Relecture du lot AUD de la série 8
 484ddcd Corrige les constats des audits du 07/11/2026 : isolation, base, clôtures, stock, plateforme agréée et outillage (lot AUD)
 3dd8705 Relecture du lot FI de la série 8
@@ -31,8 +32,6 @@ c2455dd Passe Larastan au niveau 10 sans erreur : les valeurs lues sans type son
 97c16bc Type les écrans, les commandes et la configuration, et passe Larastan au niveau 7 (lot TY1 8/n)
 430539c Type les ventes, les achats, la caisse et le stock (Larastan niveau 7, lot TY1 7/n)
 0e5cf71 Type les lectures des droits, de la société et des cabinets (Larastan niveau 7, lot TY1 6/n)
-8b3b731 Étend l'analyse statique à tout le code de l'application hors des tests (lot TY1 5/n)
-6fcefd0 Lit comme absent un témoin de poste envoyé en tableau, au lieu d'une erreur 500 (lot TY1 4/n)
 ```
 
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
@@ -45,8 +44,6 @@ c2455dd Passe Larastan au niveau 10 sans erreur : les valeurs lues sans type son
 Course `wf_1d467e9e-93e`, étapes commencées (de la plus ancienne à la plus récente) :
 
 ```
-CALC:implementation-2
-CALC:relecture1
 CALC:relecture2
 CALC:correction
 CALC:poussee
@@ -70,4 +67,6 @@ DEMO:implementation
 DEMO:relecture1
 DEMO:relecture2
 DEMO:correction
+DEMO:poussee
+DEMO:notes
 ```

@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 12/11/2026 à 14:46 UTC par pilotage-sync.sh : « Après le lot ML ».
+Mis à jour le 12/11/2026 à 15:18 UTC par pilotage-sync.sh : « CI de d4a8247 : un échec de la règle du calendrier ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -37,6 +37,53 @@ c2455dd Passe Larastan au niveau 10 sans erreur : les valeurs lues sans type son
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
+ M app/Domain/CaisseSecurisee/Enums/CodeEvenement.php
+ M app/Domain/Facturation/Actions/AccepterDevisAction.php
+ M app/Domain/Facturation/Actions/CreerFactureDepuisDevisAction.php
+ M app/Domain/Facturation/Actions/EnvoyerDocumentAction.php
+ M app/Domain/Facturation/Actions/ModifierDevisAction.php
+ M app/Domain/Facturation/Actions/ModifierFactureAction.php
+ M app/Domain/Facturation/Enums/NatureEnvoi.php
+ M app/Domain/Facturation/Enums/StatutDevis.php
+ M app/Domain/Facturation/Jobs/EnvoyerDocumentJob.php
+ M app/Domain/Facturation/Mail/DocumentMail.php
+ M app/Domain/Facturation/Models/Devis.php
+ M app/Domain/Facturation/Models/EnvoiDocument.php
+ M app/Domain/Facturation/Models/Facture.php
+ M app/Domain/Facturation/Services/DerogationsDePrix.php
+ M app/Domain/Tenancy/Enums/ActionAuditee.php
+ M app/Domain/Tenancy/Services/JournalAudit.php
+ M app/Filament/App/Resources/DevisResource.php
+ M app/Filament/App/Resources/DevisResource/Pages/ViewDevis.php
+ M app/Filament/App/Resources/FactureResource.php
+ M app/Filament/Concerns/AfficheLeJournalDAudit.php
+ M app/Filament/Concerns/AjouteDesLignesDeVente.php
+ M database/migrations/2026_10_03_100001_create_devis_table.php
+ M database/migrations/2026_10_03_100003_create_factures_table.php
+ M database/migrations/2026_10_13_100002_create_envois_documents_table.php
+ M resources/views/factures/pdf.blade.php
+ M resources/views/mail/document.blade.php
+ M routes/web.php
+ M tests/Feature/CaisseSecurisee/ProtectionDesTablesTest.php
+ M tests/Feature/Courriels/CourrielsReelsTest.php
+ M tests/Feature/Facturation/ContrePasserPaiementActionTest.php
+ M tests/Feature/Facturation/ModifierDevisActionTest.php
+ M tests/Feature/Tenancy/HistoriqueAuNomFigeTest.php
+ M tests/Feature/Tenancy/TenantIsolationTest.php
+?? app/Domain/Facturation/Actions/RepondreAuDevisEnLigneAction.php
+?? app/Domain/Facturation/Actions/RetirerLeLienDuDevisAction.php
+?? app/Domain/Facturation/Enums/ReponseAuDevis.php
+?? app/Domain/Facturation/Exceptions/LienDuDevisInvalideException.php
+?? app/Domain/Facturation/Models/LienDuDevis.php
+?? app/Domain/Facturation/Models/ReponseDuDevis.php
+?? app/Domain/Facturation/Notifications/ReponseDuClientAuDevis.php
+?? app/Http/Controllers/ReponseAuDevisController.php
+?? database/migrations/2026_10_14_100007_create_liens_des_devis_table.php
+?? database/migrations/2026_10_14_100008_create_reponses_des_devis_table.php
+?? resources/views/devis/reponse-enregistree.blade.php
+?? resources/views/devis/reponse-invalide.blade.php
+?? resources/views/devis/reponse.blade.php
+?? tests/Feature/Facturation/ReponseAuDevisEnLigneTest.php
 ```
 
 ## Dernière course de la chaîne
@@ -44,7 +91,6 @@ c2455dd Passe Larastan au niveau 10 sans erreur : les valeurs lues sans type son
 Course `wf_1d467e9e-93e`, étapes commencées (de la plus ancienne à la plus récente) :
 
 ```
-AUD:implementation-2
 AUD:implementation-3
 AUD:relecture1
 AUD:relecture2
@@ -69,4 +115,5 @@ ML:relecture2
 ML:correction
 ML:poussee
 ML:notes
+DV:implementation
 ```

@@ -231,7 +231,7 @@ class CollaborateursTest extends TestCase
         $this->assertTrue(password_verify('nouveau-mot-de-passe', $cible->fresh()->password));
         $this->assertSessionsFermees($cible);
         $acces = array_values(array_filter($this->entreesDAudit($cabinet, ActionAuditee::AccesRedonne), fn ($entree): bool => (int) $entree->nouvelles_valeurs['compte']['id'] === (int) $cible->id));
-        $this->assertSame([[true, (int) $proprietaire->id], [true, (int) $proprietaire->id]], array_map(fn ($entree): array => [$entree->nouvelles_valeurs['en_presence'], (int) $entree->auteur_id], $acces));
+        $this->assertSame([['presence', (int) $proprietaire->id], ['presence', (int) $proprietaire->id]], array_map(fn ($entree): array => [$entree->nouvelles_valeurs['mode'], (int) $entree->auteur_id], $acces));
         $this->assertNotNull($cible->fresh()->acces_redonne_le);
     }
 
@@ -263,8 +263,8 @@ class CollaborateursTest extends TestCase
         $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('users')->insert($nouveau($magasin->societe, RoleSociete::Collaborateur))), QueryException::class, 'un collaborateur n\'existe que dans un cabinet d\'expertise comptable');
         $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('users')->where('id', $responsable->id)->update(['role_societe' => RoleSociete::Collaborateur->value])), QueryException::class);
         foreach ([RoleSociete::Administrateur, RoleSociete::Membre] as $role) {
-            $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('users')->insert($nouveau($cabinet, $role))), QueryException::class, 'un cabinet d\'expertise comptable n\'a ni administrateur ni membre');
-            $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('users')->where('id', $collaborateur->id)->update(['role_societe' => $role->value])), QueryException::class, 'un cabinet d\'expertise comptable n\'a ni administrateur ni membre');
+            $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('users')->insert($nouveau($cabinet, $role))), QueryException::class, 'un cabinet d\'expertise comptable n\'a ni administrateur, ni membre, ni expert-comptable de société');
+            $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('users')->where('id', $collaborateur->id)->update(['role_societe' => $role->value])), QueryException::class, 'un cabinet d\'expertise comptable n\'a ni administrateur, ni membre, ni expert-comptable de société');
         }
 
         $this->assertSame([RoleSociete::Collaborateur, $type], [$collaborateur->fresh()->role_societe, $magasin->societe->fresh()->type_activite]);
@@ -275,7 +275,7 @@ class CollaborateursTest extends TestCase
         $cabinet = $this->ouvrirUnCabinet();
         $collaborateur = $this->collaborateur($cabinet);
 
-        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('affectations')->insert(['societe_id' => $cabinet->id, 'user_id' => $collaborateur->id, 'magasin_id' => null, 'role' => null, 'created_at' => now(), 'updated_at' => now()])), QueryException::class, 'un collaborateur d\'un cabinet n\'ont aucune affectation');
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('affectations')->insert(['societe_id' => $cabinet->id, 'user_id' => $collaborateur->id, 'magasin_id' => null, 'role' => null, 'created_at' => now(), 'updated_at' => now()])), QueryException::class, 'un collaborateur d\'un cabinet et un expert-comptable de la société n\'ont aucune affectation');
         $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('autorisations_societe')->insert(['societe_id' => $cabinet->id, 'user_id' => $collaborateur->id, 'autorisation' => 'societe.parametres.gerer'])), QueryException::class, 'seul un administrateur a des autorisations de société');
 
         $this->assertSame([[], 0], [$collaborateur->fresh()->autorisationsDeSociete(), DB::table('affectations')->where('user_id', $collaborateur->id)->count()]);

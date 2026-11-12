@@ -74,13 +74,13 @@
         <form method="POST" action="{{ $action }}">
             @csrf
 
-            <label class="champ" for="password">Votre mot de passe</label>
+            <label class="champ" for="password">Votre mot de passe<x-obligatoire /></label>
             <input id="password" type="password" name="password" autocomplete="new-password" required>
-            <label class="champ" for="password_confirmation">Confirmez votre mot de passe</label>
+            <label class="champ" for="password_confirmation">Confirmez votre mot de passe<x-obligatoire /></label>
             <input id="password_confirmation" type="password" name="password_confirmation" autocomplete="new-password" required>
 
             <fieldset>
-                <legend>Votre activité</legend>
+                <legend>Votre activité<x-obligatoire /></legend>
 
                 @foreach ($types as $type)
                     <label class="type">
@@ -109,7 +109,7 @@
 
             <label class="case">
                 <input type="checkbox" name="choix_definitif" value="1" required>
-                <span>{{ \App\Http\Controllers\AccepterLInvitationDuCabinetController::CASE_DU_CHOIX_DEFINITIF }}</span>
+                <span>{{ \App\Http\Controllers\AccepterLInvitationDuCabinetController::CASE_DU_CHOIX_DEFINITIF }}<x-obligatoire /></span>
             </label>
 
             <button type="submit">Accepter l'invitation</button>

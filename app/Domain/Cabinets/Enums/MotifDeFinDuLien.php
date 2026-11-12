@@ -11,7 +11,9 @@ use Filament\Support\Contracts\HasLabel;
  * constatée par l'éditeur) ; une autre personne a saisi le code du
  * courrier de la société et en est devenue propriétaire ; l'inscription de
  * la société s'est close sans validation ; l'éditeur a révoqué le cabinet
- * ou le client (voir RevoquerSocieteAction).
+ * ou le client (voir RevoquerSocieteAction). La déclaration de
+ * l'expert-comptable d'une société prend fin par le client, par un
+ * remplacement ou par la révocation de la société.
  */
 enum MotifDeFinDuLien: string implements HasLabel
 {
@@ -28,7 +30,7 @@ enum MotifDeFinDuLien: string implements HasLabel
         return match ($this) {
             self::ParLeClient => 'Fin décidée par le client',
             self::ParLeCabinet => 'Fin décidée par le cabinet',
-            self::Remplace => 'Le client a lié un autre cabinet',
+            self::Remplace => 'Le client a choisi un autre expert-comptable',
             self::CabinetPlusVerifie => 'Cabinet plus vérifié',
             self::ProprietaireRemplace => 'Nouveau propriétaire de la société',
             self::InscriptionClose => 'Inscription de la société close',

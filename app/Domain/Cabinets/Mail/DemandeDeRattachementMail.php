@@ -42,7 +42,7 @@ class DemandeDeRattachementMail extends Mailable
             'villeDuCabinet' => $this->villeDuCabinet,
             'siren' => $this->siren,
             'expireLe' => $this->expireLe,
-            'autorisations' => array_map(fn (string $cle): string => PermissionRegistry::libellesDuCabinet(TypeDActivite::Commerce)[$cle], PermissionRegistry::parDefautDuCabinet(TypeDActivite::Commerce)),
+            'autorisations' => PermissionRegistry::libellesDe(PermissionRegistry::parDefautDuCabinet(TypeDActivite::Commerce)),
         ]);
     }
 }

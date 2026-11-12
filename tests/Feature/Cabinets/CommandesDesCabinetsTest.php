@@ -6,13 +6,16 @@ use App\Domain\Cabinets\Actions\RefuserLInvitationAction;
 use App\Domain\Cabinets\Actions\RetirerLInvitationAction;
 use App\Domain\Cabinets\Enums\EtatDuLien;
 use App\Domain\Cabinets\Enums\EtatInvitation;
+use App\Domain\Cabinets\Jobs\RattacherLesDeclarationsDuSiren;
 use App\Domain\Cabinets\Models\InvitationCabinet;
 use App\Domain\Cabinets\Models\LienCabinet;
 use App\Domain\Cabinets\Support\GardesDesCabinets;
 use App\Domain\Tenancy\Enums\ActionAuditee;
+use App\Integrations\Sirene\FauxRepertoireSirene;
 use Database\Factories\SocieteFactory;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
@@ -85,5 +88,31 @@ class CommandesDesCabinetsTest extends TestCase
 
         $this->assertSame([EtatDuLien::Expire, null], [LienCabinet::query()->withoutGlobalScopes()->sole()->etat, DB::table('liens_cabinet')->value('jeton_hache')]);
         $this->get(route('cabinets.rattachement.afficher', ['jeton' => $jeton]))->assertStatus(410);
+    }
+
+    /**
+     * La tâche horaire envoie le rattachement de chaque SIREN dont le
+     * cabinet est vérifié et qui a une déclaration en attente, et rien
+     * d'autre : ni le SIREN d'un cabinet non vérifié, ni celui d'une
+     * déclaration sans cabinet sur PILIQI, ni un cabinet sans déclaration.
+     */
+    public function test_la_commande_horaire_rattache_chaque_siren_dont_le_cabinet_est_verifie_et_rien_d_autre(): void
+    {
+        $sirenVerifie = FauxRepertoireSirene::SIREN_CABINET;
+        $sirenSuspendu = SocieteFactory::sirenFictif();
+        $this->declarerSonExpertComptable($this->ouvrirUneSociete(['nom' => 'A', 'siren' => SocieteFactory::sirenFictif()]), siren: $sirenVerifie);
+        $this->declarerSonExpertComptable($this->ouvrirUneSociete(['nom' => 'B', 'siren' => SocieteFactory::sirenFictif()]), siren: $sirenVerifie, email: 'b@petit-associes.test');
+        $this->declarerSonExpertComptable($this->ouvrirUneSociete(['nom' => 'C', 'siren' => SocieteFactory::sirenFictif()]), siren: $sirenSuspendu, email: 'c@roux.test');
+        $this->declarerSonExpertComptable($this->ouvrirUneSociete(['nom' => 'D', 'siren' => SocieteFactory::sirenFictif()]), siren: '000000927', email: 'd@autre.test');
+        Bus::fake([RattacherLesDeclarationsDuSiren::class]);
+        $this->ouvrirUnCabinet($sirenVerifie);
+        $suspendu = $this->ouvrirUnCabinet($sirenSuspendu, 'Hélène Roux');
+        DB::table('societes')->where('id', $suspendu->id)->update(['statut' => 'suspendue']);
+        $this->ouvrirUnCabinet(SocieteFactory::sirenFictif(), 'Paul Sans Client');
+        $avant = Bus::dispatched(RattacherLesDeclarationsDuSiren::class)->count();
+
+        $this->artisan('app:rattacher-experts-comptables')->expectsOutput('1 SIREN de cabinet vérifié avec une déclaration en attente.')->assertSuccessful();
+
+        $this->assertSame([$sirenVerifie], Bus::dispatched(RattacherLesDeclarationsDuSiren::class)->slice($avant)->map(fn (RattacherLesDeclarationsDuSiren $tache): string => $tache->siren)->values()->all());
     }
 }

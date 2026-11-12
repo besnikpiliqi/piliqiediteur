@@ -314,4 +314,46 @@ class JournalAuditResourceTest extends TestCase
 
         return EntreeAudit::withoutGlobalScopes()->findOrFail($identifiant);
     }
+
+    /**
+     * L'expert-comptable de la société n'ouvre jamais le journal d'audit,
+     * ni sa liste ni une fiche (décision de l'éditeur du 01/11/2026).
+     */
+    public function test_l_expert_comptable_de_la_societe_n_ouvre_jamais_le_journal_d_audit(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Lyon Centre']);
+        $societe = $magasin->societe;
+        $expert = $this->expertComptable($magasin);
+        $entree = $this->inscrireParUneRequete($societe, $this->proprietaireDe($magasin));
+
+        $this->flushSession();
+        $this->actingAs($expert)->get(JournalAuditResource::getUrl('index', panel: 'societe', tenant: $societe))->assertForbidden();
+        $this->actingAs($expert)->get(JournalAuditResource::getUrl('view', ['record' => $entree], panel: 'societe', tenant: $societe))->assertForbidden();
+        $this->dansLeMagasin($magasin, $expert);
+        $this->assertFalse(Gate::forUser($expert)->allows('viewAny', EntreeAudit::class));
+        $this->assertFalse(Gate::forUser($expert)->allows('view', $entree));
+    }
+
+    /**
+     * Les entrées de la déclaration, de l'ajout d'une personne et du
+     * réglage des autorisations de l'expert-comptable de la société
+     * nomment leur objet (voir AfficheLeJournalDAudit::OBJETS), jamais une
+     * « Fiche » sans nature.
+     */
+    public function test_les_entrees_de_l_expert_comptable_de_la_societe_nomment_leur_objet(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Lyon Centre']);
+        $societe = $magasin->societe;
+        $this->declarerSonExpertComptable($magasin);
+        $this->ajouterUnExpertComptable($societe, 'Sophie Lenoir', 'sophie.lenoir@petit-associes.test');
+        $actions = [ActionAuditee::ExpertComptableDeclare, ActionAuditee::ExpertComptableCree];
+        $entrees = app(TenantContext::class)->runAsSociete($societe, fn () => EntreeAudit::query()->whereIn('action', array_map(fn (ActionAuditee $action): string => $action->value, $actions))->whereNotNull('cible_type')->get());
+        $this->assertNotEmpty($entrees);
+
+        foreach ($entrees as $entree) {
+            $page = html_entity_decode((string) $this->actingAs($this->proprietaireDe($magasin))->get(JournalAuditResource::getUrl('view', ['record' => $entree], panel: 'societe', tenant: $societe))->assertOk()->getContent(), ENT_QUOTES);
+            $this->assertStringNotContainsString('Fiche (identifiant', $page);
+            $this->assertStringContainsString("(identifiant {$entree->cible_id})", $page);
+        }
+    }
 }

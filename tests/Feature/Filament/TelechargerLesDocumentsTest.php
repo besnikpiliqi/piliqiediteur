@@ -336,7 +336,7 @@ class TelechargerLesDocumentsTest extends TestCase
         $this->telechargerEnTantQue($collaborateur, $telechargement->lien())->assertOk();
 
         app(ReglerLesAutorisationsDuCabinetAction::class)->handle($this->proprietaireDe($this->magasin), $lien, [
-            ...array_values(array_diff(PermissionRegistry::parDefautDuCabinet($this->magasin->societe->type_activite), [PermissionRegistry::FACTURE_VIEW])),
+            ...array_values(array_diff(PermissionRegistry::parDefautDuCabinet($this->magasin->societe->type_activite), [PermissionRegistry::FACTURE_VIEW, PermissionRegistry::FACTURE_VIEW_TOUTES])),
             PermissionRegistry::DOCUMENTS_TELECHARGER,
         ]);
         $this->telechargerEnTantQue($collaborateur->refresh(), $telechargement->lien())->assertForbidden()->assertSeeText(TelechargerLesDocumentsController::SANS_DROIT);

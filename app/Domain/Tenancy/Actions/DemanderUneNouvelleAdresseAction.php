@@ -33,8 +33,14 @@ use LogicException;
  *   du courrier et devient propriétaire avec l'adresse qu'elle choisit
  *   (voir SaisirCodeDeConfirmationAction), qui attend sur son nouveau
  *   compte, le lien partant une fois la société validée (voir envoyer()).
- * Tout autre compte n'a qu'une adresse de contact, qu'il enregistre
- * directement dans son profil, sans confirmation. Le propriétaire d'une
+ * Un expert-comptable de la société (voir DeclarerSonExpertComptableAction)
+ * change de même son adresse dans son profil : elle ne sert pas à se
+ * connecter, mais le propriétaire de la société y envoie les liens de son
+ * accès ; la nouvelle ne vaut qu'une fois confirmée par le lien qui lui
+ * est envoyé, et d'ici là les liens partent à l'ancienne (décision de
+ * l'éditeur du 01/11/2026, P13). Tout autre compte n'a qu'une adresse de
+ * contact, qu'il enregistre directement dans son profil, sans
+ * confirmation. Le propriétaire d'une
  * inscription close n'a plus d'adresse de connexion et n'en demande plus
  * : son compte ne s'ouvre qu'avec son identifiant (voir
  * CloreLInscriptionAction). La demande relit sa société sous un verrou
@@ -63,13 +69,11 @@ class DemanderUneNouvelleAdresseAction
      * en a une), sous le verrou partagé de la ligne de sa société.
      *
      * @throws ValidationException
-     * @throws LogicException quand le compte n'est pas propriétaire, que son inscription est close, ou qu'il a atteint le débit de ses e-mails
+     * @throws LogicException quand le compte n'est ni propriétaire ni expert-comptable de la société, que son inscription est close, ou qu'il a atteint le débit de ses e-mails
      */
     public function handle(User $compte, string $nouvelleAdresse): void
     {
-        if (! $compte->estProprietaire()) {
-            throw new LogicException('Seul le propriétaire a une adresse de connexion à confirmer.');
-        }
+        self::exigerUneAdresseAConfirmer($compte);
 
         DB::transaction(function () use ($compte, $nouvelleAdresse): void {
             if (Societe::query()->whereKey($compte->societe_id)->sharedLock()->value('close_le') !== null) {
@@ -85,7 +89,8 @@ class DemanderUneNouvelleAdresseAction
     }
 
     /**
-     * Pose sur ce compte de propriétaire, sans l'enregistrer, cette adresse
+     * Pose sur ce compte de propriétaire ou d'expert-comptable de la
+     * société, sans l'enregistrer, cette adresse
      * (normalisée et validée par l'appelant) en attente de confirmation,
      * avec l'empreinte du jeton de son lien et la fin de sa validité.
      *
@@ -93,9 +98,7 @@ class DemanderUneNouvelleAdresseAction
      */
     public function mettreEnAttente(User $compte, string $adresse): string
     {
-        if (! $compte->estProprietaire()) {
-            throw new LogicException('Seul le propriétaire a une adresse de connexion à confirmer.');
-        }
+        self::exigerUneAdresseAConfirmer($compte);
 
         $jeton = Str::random(64);
         $compte->forceFill([
@@ -122,8 +125,22 @@ class DemanderUneNouvelleAdresseAction
         EnvoiImmediat::exiger('L\'e-mail qui confirme votre nouvelle adresse', fn () => Mail::to((string) $compte->nouvelle_adresse)->send(new ConfirmationNouvelleAdresseMail(
             rtrim(Reglage::texte('app.url'), '/').route('profil.adresse.afficher', ['jeton' => $jeton], absolute: false),
             Calendrier::deParis()->afficher(ValeurRequise::de($compte->nouvelle_adresse_expire_le, 'l\'échéance du lien de la nouvelle adresse'), 'd/m/Y à H:i'),
-            premiereAdresse: ! $compte->aUneAdresseDeConnexion(),
+            premiereAdresse: $compte->estProprietaire() && ! $compte->aUneAdresseDeConnexion(),
+            adresseDeConnexion: $compte->estProprietaire(),
         )), 'Votre adresse ne change pas : réessayez dans quelques minutes.');
         $this->debit->compter($compte);
+    }
+
+    /**
+     * Seuls le propriétaire et un expert-comptable de la société ont une
+     * adresse qui ne change qu'une fois confirmée.
+     *
+     * @throws LogicException
+     */
+    private static function exigerUneAdresseAConfirmer(User $compte): void
+    {
+        if (! $compte->estProprietaire() && ! $compte->estExpertComptable()) {
+            throw new LogicException('Seuls le propriétaire et l\'expert-comptable de la société ont une adresse à confirmer.');
+        }
     }
 }

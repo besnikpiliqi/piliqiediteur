@@ -20,13 +20,16 @@ use App\Domain\Cabinets\Models\LienCabinet;
 use App\Domain\Cabinets\Services\EnvoiDesLiensDesCabinets;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\StatutSociete;
+use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\EntreeAudit;
 use App\Domain\Tenancy\Models\Societe;
+use App\Domain\Tenancy\Services\ControleSirene;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\MotDePasseRedemande;
 use App\Filament\Cabinet\Pages\InvitationsEtDemandes;
 use App\Filament\Societe\Pages\CabinetComptable;
 use App\Filament\Societe\Pages\TableauDeBord;
+use App\Integrations\Sirene\Contracts\RepertoireSirene;
 use App\Integrations\Sirene\FauxRepertoireSirene;
 use Database\Factories\SocieteFactory;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -218,6 +221,33 @@ class InvitationsTest extends TestCase
 
         $this->assertSame(InviterUneEntrepriseAction::MESSAGE_SIREN_NEUTRE, $refus);
         $this->assertStringNotContainsStringIgnoringCase('cabinet d\'expertise', (string) $refus);
+        $this->assertSame([0, 0], [DB::table('invitations_cabinet')->count(), DB::table('liens_cabinet')->count()]);
+        Mail::assertNothingSent();
+    }
+
+    /**
+     * Le SIREN d'un cabinet qui attend encore le code de son courrier est
+     * refusé par le même message neutre que celui d'un cabinet vérifié
+     * (constat 10 du lot EC, décision de l'éditeur du 01/11/2026) : rien
+     * ne dit qu'un cabinet s'inscrit sous ce SIREN.
+     */
+    public function test_un_siren_tenu_par_un_cabinet_qui_attend_son_code_est_refuse_par_le_meme_message(): void
+    {
+        $cabinet = $this->ouvrirUnCabinet();
+        $siren = SocieteFactory::sirenFictif();
+        app(RepertoireSirene::class)->exercer($siren, ControleSirene::CODE_ACTIVITES_COMPTABLES);
+        $enAttente = $this->inscrireUneSociete($siren, 'helene.roux@roux-conseil.test', TypeDActivite::Cabinet);
+        $this->assertNull($enAttente->validee_le);
+        Mail::fake();
+
+        $refus = null;
+        try {
+            app(InviterUneEntrepriseAction::class)->handle($this->proprietaireDuCabinet($cabinet), $cabinet, (string) $enAttente->siren, 'a@b.test', self::MOT_DE_PASSE_CHOISI);
+        } catch (LogicException $exception) {
+            $refus = $exception->getMessage();
+        }
+
+        $this->assertSame(InviterUneEntrepriseAction::MESSAGE_SIREN_NEUTRE, $refus);
         $this->assertSame([0, 0], [DB::table('invitations_cabinet')->count(), DB::table('liens_cabinet')->count()]);
         Mail::assertNothingSent();
     }
@@ -417,19 +447,39 @@ class InvitationsTest extends TestCase
     }
 
     /**
-     * Un cabinet suspendu ne retire plus ses invitations ouvertes : son
-     * propriétaire peut seulement mettre fin à ses liens (voir
-     * ControleDesDroits) ; l'invitation reste ouverte.
+     * Le propriétaire d'un cabinet suspendu ou résilié retire encore ses
+     * invitations ouvertes et ses demandes de lien en cours (décision de
+     * l'éditeur du 09/11/2026) : chaque retrait s'inscrit au journal
+     * d'audit, et le lien de l'invitation ou de la demande ne sert plus ;
+     * un collaborateur ne retire rien.
      */
-    public function test_un_cabinet_suspendu_ne_retire_plus_ses_invitations(): void
+    public function test_un_cabinet_suspendu_ou_resilie_retire_ses_invitations_et_ses_demandes_ouvertes(): void
     {
-        $cabinet = $this->ouvrirUnCabinet();
-        $this->inviterUneEntreprise($cabinet, SocieteFactory::sirenFictif(), 'a@b.test');
-        $invitation = InvitationCabinet::query()->withoutGlobalScopes()->sole();
-        $cabinet->forceFill(['statut' => StatutSociete::Suspendue])->save();
+        foreach ([StatutSociete::Suspendue, StatutSociete::Resiliee] as $rang => $statut) {
+            $cabinet = $this->ouvrirUnCabinet(SocieteFactory::sirenFictif());
+            $collaborateur = $this->collaborateur($cabinet);
+            $inscrite = $this->ouvrirUneSociete(['nom' => "Boutique {$rang}"])->societe;
+            $jeton = $this->inviterUneEntreprise($cabinet, SocieteFactory::sirenFictif(), "libre{$rang}@b.test");
+            $this->demanderLeRattachement($cabinet, $inscrite, "inscrite{$rang}@b.test");
+            $invitation = InvitationCabinet::query()->withoutGlobalScopes()->where('societe_id', $cabinet->id)->sole();
+            $demande = LienCabinet::query()->withoutGlobalScopes()->where('cabinet_id', $cabinet->id)->sole();
+            $cabinet->forceFill(['statut' => $statut])->save();
 
-        $this->assertThrows(fn () => app(RetirerLInvitationAction::class)->handle($this->proprietaireDuCabinet($cabinet), $invitation), AuthorizationException::class);
-        $this->assertSame(EtatInvitation::Ouverte, $invitation->fresh()->etat);
+            $this->assertThrows(fn () => app(RetirerLInvitationAction::class)->handle($collaborateur, $invitation), AuthorizationException::class);
+            $this->assertThrows(fn () => app(RetirerLaDemandeDeLienAction::class)->handle($collaborateur, $demande), AuthorizationException::class);
+            $this->assertSame([EtatInvitation::Ouverte, EtatDuLien::DemandeParLeCabinet], [$invitation->fresh()->etat, $demande->fresh()->etat]);
+
+            app(RetirerLInvitationAction::class)->handle($this->proprietaireDuCabinet($cabinet), $invitation);
+            app(RetirerLaDemandeDeLienAction::class)->handle($this->proprietaireDuCabinet($cabinet), $demande);
+
+            $this->assertSame([EtatInvitation::Retiree, EtatDuLien::Retire], [$invitation->fresh()->etat, $demande->fresh()->etat], $statut->value);
+            $this->assertCount(1, $this->entreesDAudit($cabinet, ActionAuditee::InvitationRetiree));
+            $this->assertCount(1, $this->entreesDAudit($cabinet, ActionAuditee::DemandeDeLienRetiree));
+            $this->get(route('cabinets.invitation.afficher', ['jeton' => $jeton]))->assertStatus(410)->assertSeeText(InvitationInvalideException::MESSAGE);
+            $this->dansLEspaceDeLaSociete($inscrite, $inscrite->proprietaire()->firstOrFail());
+            $this->assertSame([], Livewire::test(CabinetComptable::class)->instance()->demandesRecues()->all());
+            app(TenantContext::class)->clear();
+        }
     }
 
     public function test_une_invitation_expire_apres_sept_jours(): void

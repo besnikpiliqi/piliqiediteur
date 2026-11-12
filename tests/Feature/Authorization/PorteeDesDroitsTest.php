@@ -222,7 +222,12 @@ class PorteeDesDroitsTest extends TestCase
      * réactive, retire et réintègre ses collaborateurs, leur redonne
      * l'accès, leur confie des clients et leur transmet la propriété
      * (Q-EC3) ; ni un collaborateur (C, C2), ni le propriétaire de la
-     * société cliente (P) ne le font.
+     * société cliente (P) ne le font. La matrice E est celle de
+     * l'expert-comptable de la société (décision de l'éditeur du
+     * 01/11/2026) : seul le propriétaire suspend, réactive, retire,
+     * réintègre ses comptes, leur redonne l'accès et corrige leur adresse ;
+     * personne ne change leur rôle ; aucun administrateur ni responsable ne
+     * les voit.
      *
      * @return array<string, array{0: string, 1: string|null, 2: string, 3: bool}>
      */
@@ -266,6 +271,16 @@ class PorteeDesDroitsTest extends TestCase
             ['C', 'redonner l\'accès', 'vendeur de O', ['P' => true, 'A=' => false, 'A+ hors de M' => false]],
             ['C', 'afficher l\'identifiant', 'vendeur de M', ['P' => false, 'A+' => false, 'A=' => true, 'A-' => false, 'R(M)' => false, 'V' => false]],
             ['C', 'afficher l\'identifiant', 'vendeur de O', ['A=' => false]],
+
+            ['E', 'suspendre', 'expert-comptable de la société', ['P' => true, 'A+' => false, 'A=' => false, 'A-' => false, 'R(M)' => false, 'V' => false]],
+            ['E', 'réactiver', 'expert-comptable de la société suspendu', ['P' => true, 'A+' => false, 'A-' => false, 'R(M)' => false]],
+            ['E', 'retirer de la société', 'expert-comptable de la société', ['P' => true, 'A+' => false, 'A=' => false, 'A-' => false, 'R(M)' => false, 'V' => false]],
+            ['E', 'réintégrer comme expert-comptable de la société', 'expert-comptable de la société retiré', ['P' => true, 'A+' => false, 'A-' => false, 'R(M)' => false]],
+            ['E', 'redonner l\'accès', 'expert-comptable de la société', ['P' => true, 'A+' => false, 'A=' => false, 'A-' => false, 'R(M)' => false]],
+            ['E', 'afficher l\'identifiant', 'expert-comptable de la société', ['A+' => false, 'A=' => false, 'A-' => false, 'R(M)' => false]],
+            ['E', 'corriger l\'adresse de l\'expert-comptable', 'expert-comptable de la société', ['P' => true, 'A+' => false, 'A=' => false, 'A-' => false, 'R(M)' => false]],
+            ['E', 'changer le rôle vers administrateur', 'expert-comptable de la société', ['P' => false, 'A+' => false, 'R(M)' => false]],
+            ['E', 'voir ce compte dans l\'espace société', 'expert-comptable de la société', ['P' => true, 'A+' => false, 'A=' => false, 'A-' => false]],
 
             ['F', 'suspendre', 'propriétaire', [...$tous(false, false, false, false, false, false), 'A=' => false]],
             ['F', 'retirer de la société', 'propriétaire', [...$tous(false, false, false, false, false, false), 'A=' => false]],
@@ -364,6 +379,18 @@ class PorteeDesDroitsTest extends TestCase
     }
 
     /**
+     * Une seconde personne de l'expert-comptable déclaré par la société de
+     * M, à côté d'une première : retirée, elle ne met pas fin à la
+     * déclaration et se réintègre.
+     */
+    private function secondExpertComptableDeM(): User
+    {
+        $this->declarerSonExpertComptable($this->m);
+
+        return $this->ajouterUnExpertComptable($this->m->societe, 'Inès Garnier', 'ines.garnier@petit-associes.test');
+    }
+
+    /**
      * Le cabinet d'expertise comptable lié à la société de M, ouvert et lié
      * au premier besoin. Le contexte d'avant est rétabli ensuite.
      */
@@ -402,6 +429,8 @@ class PorteeDesDroitsTest extends TestCase
             'vendeur de N' => $this->membre($this->n, RoleMagasin::Vendeur),
             'vendeur de O' => $this->membre($this->o, RoleMagasin::Vendeur),
             'collaborateur', 'collaborateur suspendu', 'collaborateur retiré' => $this->collaborateurQuiSuitM('Julie Moreau'),
+            'expert-comptable de la société', 'expert-comptable de la société suspendu' => $this->declarerSonExpertComptable($this->m),
+            'expert-comptable de la société retiré' => $this->secondExpertComptableDeM(),
         };
 
         if ($compte->estDUnCabinet()) {
@@ -412,6 +441,8 @@ class PorteeDesDroitsTest extends TestCase
             'administrateur suspendu', 'responsable de M suspendu', 'vendeur de M suspendu par le propriétaire' => app(ChangerStatutCompteAction::class)->suspendre($proprietaire, $compte),
             'collaborateur suspendu' => app(ChangerStatutCompteAction::class)->suspendre($this->acteur('PC'), $compte),
             'collaborateur retiré' => app(ChangerStatutCompteAction::class)->retirer($this->acteur('PC'), $compte),
+            'expert-comptable de la société suspendu' => app(ChangerStatutCompteAction::class)->suspendre($proprietaire, $compte),
+            'expert-comptable de la société retiré' => app(ChangerStatutCompteAction::class)->retirer($proprietaire, $compte),
             'vendeur de M suspendu par R(M)' => app(ChangerStatutCompteAction::class)->suspendre($this->acteur('R(M)'), $compte),
             'ancien vendeur retiré par R(M)' => app(ChangerStatutCompteAction::class)->retirer($this->acteur('R(M)'), $compte),
             'ancien vendeur retiré par le propriétaire' => app(ChangerStatutCompteAction::class)->retirer($proprietaire, $compte),
@@ -471,6 +502,8 @@ class PorteeDesDroitsTest extends TestCase
             'réintégrer comme vendeur de M' => app(ChangerStatutCompteAction::class)->reintegrer($auteur, $compte, RoleMagasin::Vendeur),
             'réintégrer comme responsable de M' => app(ChangerStatutCompteAction::class)->reintegrer($auteur, $compte, RoleMagasin::Responsable),
             'réintégrer comme collaborateur' => app(ChangerStatutCompteAction::class)->reintegrerLeCollaborateur($auteur, $compte),
+            'réintégrer comme expert-comptable de la société' => app(ChangerStatutCompteAction::class)->reintegrerLExpertComptable($auteur, $compte),
+            'corriger l\'adresse de l\'expert-comptable' => $this->exiger($auteur->can('corrigerLAdresse', $compte)),
             'créer un collaborateur' => app(CreerCollaborateurAction::class)->handle($auteur, $this->cabinet(), $nouveau),
             'créer un second collaborateur' => $this->secondCollaborateur($auteur),
             'confier un client' => app(ConfierDesClientsAction::class)->handle($auteur, $compte, [(int) LienCabinet::query()->withoutGlobalScopes()->where('cabinet_id', $this->cabinet()->id)->value('id')]),

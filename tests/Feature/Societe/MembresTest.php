@@ -354,4 +354,33 @@ class MembresTest extends TestCase
         $this->assertSame($this->proprietaireDe($magasin)->id, (int) $vendeur->cree_par);
         $this->assertInstanceOf(Magasin::class, $magasin);
     }
+
+    /**
+     * La fiche d'un expert-comptable de la société redonne l'accès en sa
+     * présence ou par un nouveau lien, jamais en son absence : son mot de
+     * passe n'est jamais son identifiant (décision de l'éditeur du
+     * 01/11/2026, P4) ; en sa présence, il tape lui-même son nouveau mot de
+     * passe sur l'écran du propriétaire.
+     */
+    public function test_la_fiche_d_un_expert_comptable_redonne_l_acces_en_sa_presence_ou_par_un_lien_seulement(): void
+    {
+        $magasin = $this->ouvrirUneSociete();
+        $expert = $this->expertComptable($magasin);
+        $this->dansLEspaceDeLaSociete($magasin->societe, $this->proprietaireDe($magasin));
+
+        Livewire::test(FicheDuMembre::class, ['record' => $expert->getRouteKey()])
+            ->mountAction('redonnerLAcces')
+            ->assertSee('En sa présence : elle tape elle-même son nouveau mot de passe')
+            ->assertSee('Lui envoyer un nouveau lien, valable 7 jours, à marc.petit@petit-associes.test')
+            ->assertDontSee('son mot de passe redevient son identifiant');
+
+        $this->forgerLAction(Livewire::test(FicheDuMembre::class, ['record' => $expert->getRouteKey()]), 'redonnerLAcces', ['mode' => 'absent']);
+        $this->assertTrue(Hash::check(self::MOT_DE_PASSE_CHOISI, $expert->fresh()->password));
+        $this->assertFalse((bool) $expert->fresh()->mot_de_passe_est_l_identifiant);
+
+        Livewire::test(FicheDuMembre::class, ['record' => $expert->getRouteKey()])
+            ->callAction('redonnerLAcces', ['mode' => 'present', 'mot_de_passe' => 'Nouveau-Mot-2026!', 'mot_de_passe_confirmation' => 'Nouveau-Mot-2026!'])
+            ->assertHasNoActionErrors();
+        $this->assertTrue(Hash::check('Nouveau-Mot-2026!', $expert->fresh()->password));
+    }
 }

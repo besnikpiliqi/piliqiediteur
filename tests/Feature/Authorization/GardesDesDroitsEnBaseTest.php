@@ -4,6 +4,7 @@ namespace Tests\Feature\Authorization;
 
 use App\Domain\Authorization\AutorisationsSociete;
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Cabinets\Support\GardesDesCabinets;
 use App\Domain\Tenancy\Actions\ChangerLeRoleDeSocieteAction;
 use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
 use App\Domain\Tenancy\Actions\CreerMembreAction;
@@ -19,6 +20,7 @@ use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\GardesDesDroits;
 use App\Models\User;
 use Closure;
+use Database\Factories\SocieteFactory;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -85,8 +87,8 @@ class GardesDesDroitsEnBaseTest extends TestCase
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $proprietaire = $this->proprietaireDe($magasin);
 
-        $this->refusee(fn () => DB::table('affectations')->insert($this->ligne($magasin, $proprietaire, $magasin->id, RoleMagasin::Vendeur->value)), self::refus(GardesDesDroits::AFFECTATIONS, 'le propriétaire et un collaborateur d\'un cabinet n\'ont aucune affectation'));
-        $this->refusee(fn () => DB::table('affectations')->insert($this->ligne($magasin, $proprietaire, null, null)), self::refus(GardesDesDroits::AFFECTATIONS, 'le propriétaire et un collaborateur d\'un cabinet n\'ont aucune affectation'));
+        $this->refusee(fn () => DB::table('affectations')->insert($this->ligne($magasin, $proprietaire, $magasin->id, RoleMagasin::Vendeur->value)), self::refus(GardesDesDroits::AFFECTATIONS, 'le propriétaire, un collaborateur d\'un cabinet et un expert-comptable de la société n\'ont aucune affectation'));
+        $this->refusee(fn () => DB::table('affectations')->insert($this->ligne($magasin, $proprietaire, null, null)), self::refus(GardesDesDroits::AFFECTATIONS, 'le propriétaire, un collaborateur d\'un cabinet et un expert-comptable de la société n\'ont aucune affectation'));
 
         $this->assertSame(0, Affectation::query()->where('user_id', $proprietaire->id)->count());
     }
@@ -219,7 +221,7 @@ class GardesDesDroitsEnBaseTest extends TestCase
         $avant = Affectation::query()->orderBy('id')->get(['id', 'user_id', 'magasin_id', 'role'])->toArray();
 
         foreach ([
-            [$this->proprietaireDe($magasin), $magasin->id, RoleMagasin::Vendeur, 'Le propriétaire et un collaborateur d\'un cabinet n\'ont aucune affectation.'],
+            [$this->proprietaireDe($magasin), $magasin->id, RoleMagasin::Vendeur, 'Le propriétaire, un collaborateur d\'un cabinet et un expert-comptable de la société n\'ont aucune affectation.'],
             [$administrateur, $autre->id, RoleMagasin::Responsable, 'Un administrateur n\'a aucun rôle de magasin.'],
             [$administrateur, null, null, 'Un administrateur a accès à tous les magasins ou à une sélection, jamais aux deux.'],
             [$vendeur, $autre->id, null, 'Un membre est affecté à un magasin, avec un rôle de magasin.'],
@@ -281,8 +283,17 @@ class GardesDesDroitsEnBaseTest extends TestCase
 
         foreach ([RoleSociete::Proprietaire, RoleSociete::Collaborateur] as $role) {
             foreach ([$vendeur, $administrateur, $administrateurSansAffectation] as $compte) {
-                $this->refusee(fn () => DB::table('users')->where('id', $compte->id)->update(['role_societe' => $role->value]), self::refus(GardesDesDroits::ROLES, 'le propriétaire et un collaborateur d\'un cabinet n\'ont ni affectation ni autorisation de société'), "{$role->value} {$compte->name}");
+                $this->refusee(fn () => DB::table('users')->where('id', $compte->id)->update(['role_societe' => $role->value]), self::refus(GardesDesDroits::ROLES, 'le propriétaire, un collaborateur d\'un cabinet et un expert-comptable de la société n\'ont ni affectation ni autorisation de société'), "{$role->value} {$compte->name}");
             }
+        }
+
+        // Ni expert-comptable de la société (décision de l'éditeur du
+        // 01/11/2026) : la garde de son rôle, qui refuse d'abord qu'un compte
+        // le prenne, est retirée pour éprouver celle des droits.
+        $this->retirerLeDeclencheur('users', GardesDesCabinets::EXPERT_COMPTABLE_DE_SA_DECLARATION);
+
+        foreach ([$vendeur, $administrateur, $administrateurSansAffectation] as $compte) {
+            $this->refusee(fn () => DB::table('users')->where('id', $compte->id)->update(['role_societe' => RoleSociete::ExpertComptable->value, 'email' => 'expert@example.test']), self::refus(GardesDesDroits::ROLES, 'le propriétaire, un collaborateur d\'un cabinet et un expert-comptable de la société n\'ont ni affectation ni autorisation de société'), "expert_comptable {$compte->name}");
         }
 
         $this->assertSame(RoleSociete::Membre, $vendeur->refresh()->role_societe);
@@ -326,7 +337,7 @@ class GardesDesDroitsEnBaseTest extends TestCase
 
         $this->refusee(fn () => DB::table('users')->where('id', $sansDroits->id)->update(['role_societe' => RoleSociete::Collaborateur->value]), self::refus(GardesDesDroits::ROLES, 'un collaborateur n\'existe que dans un cabinet d\'expertise comptable'));
         foreach ([RoleSociete::Administrateur, RoleSociete::Membre] as $role) {
-            $this->refusee(fn () => DB::table('users')->where('id', $collaborateur->id)->update(['role_societe' => $role->value]), self::refus(GardesDesDroits::ROLES, 'un cabinet d\'expertise comptable n\'a ni administrateur ni membre'), $role->value);
+            $this->refusee(fn () => DB::table('users')->where('id', $collaborateur->id)->update(['role_societe' => $role->value]), self::refus(GardesDesDroits::ROLES, 'un cabinet d\'expertise comptable n\'a ni administrateur, ni membre, ni expert-comptable de société'), $role->value);
         }
         $this->refusee(fn () => DB::table('users')->where('id', $vendeur->id)->update(['role_societe' => RoleSociete::Administrateur->value]), self::refus(GardesDesDroits::ROLES, 'un administrateur n\'a aucune affectation de membre'));
         $this->refusee(fn () => DB::table('users')->where('id', $sansDroits->id)->update(['role_societe' => RoleSociete::Proprietaire->value, 'email' => 'futur-proprietaire@example.test', 'email_verified_at' => null, 'mot_de_passe_est_l_identifiant' => false]), self::refus(GardesDesDroits::ROLES, 'l\'adresse de connexion d\'un propriétaire est confirmée par un lien'));
@@ -399,6 +410,45 @@ class GardesDesDroitsEnBaseTest extends TestCase
         $this->assertSame([true, true], [$collaborateur->refresh()->estCollaborateur(), $collaborateur->estRetire()]);
         app(ChangerStatutCompteAction::class)->reintegrerLeCollaborateur($proprietaireDuCabinet, $collaborateur);
         $this->assertSame([true, true], [$collaborateur->refresh()->estCollaborateur(), $collaborateur->estActif()]);
+
+        // L'expert-comptable de la société (décision de l'éditeur du
+        // 01/11/2026) : créé, suspendu, réactivé puis retiré.
+        $client = $this->ouvrirUneSociete(['nom' => 'Cliente', 'siren' => SocieteFactory::sirenFictif()]);
+        $expert = $this->declarerSonExpertComptable($client, siren: '000000927');
+        $proprietaireDuClient = $this->proprietaireDe($client);
+        app(ChangerStatutCompteAction::class)->suspendre($proprietaireDuClient, $expert);
+        $this->assertSame([true, true], [$expert->refresh()->estExpertComptable(), $expert->estSuspendu()]);
+        app(ChangerStatutCompteAction::class)->reactiver($proprietaireDuClient, $expert);
+        app(ChangerStatutCompteAction::class)->retirer($proprietaireDuClient, $expert->refresh());
+        $this->assertSame([true, true], [$expert->refresh()->estExpertComptable(), $expert->estRetire()]);
+    }
+
+    /**
+     * Un expert-comptable de la société (décision de l'éditeur du
+     * 01/11/2026) n'a ni affectation, ni autorisation de société, ni son
+     * identifiant pour mot de passe, et n'existe jamais dans un cabinet
+     * d'expertise comptable. La garde du rôle de l'expert-comptable (voir
+     * GardesDesCabinets::EXPERT_COMPTABLE_DE_SA_DECLARATION), qui refuse
+     * d'abord qu'un compte prenne ce rôle, est retirée pour le cas du
+     * cabinet : c'est la garde des rôles qui est éprouvée ici.
+     */
+    public function test_la_base_refuse_un_expert_comptable_dans_un_cabinet_avec_une_affectation_une_autorisation_de_societe_ou_son_identifiant_pour_mot_de_passe(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $expert = $this->declarerSonExpertComptable($magasin);
+
+        $this->refusee(fn () => DB::table('affectations')->insert($this->ligne($magasin, $expert, $magasin->id, RoleMagasin::Vendeur->value)), self::refus(GardesDesDroits::AFFECTATIONS, 'le propriétaire, un collaborateur d\'un cabinet et un expert-comptable de la société n\'ont aucune affectation'));
+        $this->refusee(fn () => DB::table('autorisations_societe')->insert(['societe_id' => $magasin->societe_id, 'user_id' => $expert->id, 'autorisation' => AutorisationsSociete::MAGASINS_GERER]), self::refus(GardesDesDroits::AUTORISATIONS_SOCIETE, 'seul un administrateur a des autorisations de société'));
+        $this->refusee(fn () => DB::table('users')->where('id', $expert->id)->update(['mot_de_passe_est_l_identifiant' => true]), self::refus(GardesDesDroits::ROLES, 'un expert-comptable de la société n\'a jamais pour mot de passe son identifiant'));
+
+        $cabinet = $this->ouvrirUnCabinet();
+        $collaborateur = $this->collaborateur($cabinet);
+        $this->retirerLeDeclencheur('users', GardesDesCabinets::EXPERT_COMPTABLE_DE_SA_DECLARATION);
+        $this->refusee(fn () => DB::table('users')->where('id', $collaborateur->id)->update(['role_societe' => RoleSociete::ExpertComptable->value, 'email' => 'paul.lefevre@cabinet.test']), self::refus(GardesDesDroits::ROLES, 'un cabinet d\'expertise comptable n\'a ni administrateur, ni membre, ni expert-comptable de société'));
+
+        $this->assertSame(0, DB::table('affectations')->where('user_id', $expert->id)->count());
+        $this->assertSame([RoleSociete::ExpertComptable, false], [$expert->refresh()->role_societe, (bool) $expert->mot_de_passe_est_l_identifiant]);
+        $this->assertSame(RoleSociete::Collaborateur, $collaborateur->refresh()->role_societe);
     }
 
     /**

@@ -6,12 +6,19 @@ use App\Domain\Authorization\AutorisationsSociete;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Cabinets\Actions\ReglerLesAutorisationsDuCabinetAction;
 use App\Domain\Cabinets\Support\GardesDesCabinets;
+use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
+use App\Domain\Contacts\Enums\TypeClient;
+use App\Domain\Contacts\Models\Client;
+use App\Domain\Facturation\Actions\CreerFactureAction;
+use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
 use App\Domain\Tenancy\Enums\ActionAuditee;
+use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Filament\App\Resources\FactureResource;
 use App\Filament\Societe\Pages\CabinetComptable;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -90,11 +97,66 @@ class AutorisationsDuCabinetTest extends TestCase
 
         app(ReglerLesAutorisationsDuCabinetAction::class)->handle($this->proprietaireDe($magasin), $lien, $voulues);
 
-        $attendues = $voulues;
+        $attendues = [...$voulues, PermissionRegistry::FACTURE_VIEW_TOUTES];
         sort($attendues);
         $this->assertSame($attendues, $lien->autorisations());
         $this->assertSame($attendues, $this->proprietaireDuCabinet($cabinet)->autorisationsDans($magasin));
         $this->assertContains('Autorisations changées', $this->proprietaireDuCabinet($cabinet)->notifications()->get()->pluck('data.title')->all());
+    }
+
+    /**
+     * « Voir » les factures ou les clôtures de caisse accorde aussi au
+     * cabinet « voir celles de toute l'équipe » : il les voit toutes ou
+     * aucune ; « voir celles de toute l'équipe » seul est refusé, sans
+     * rien changer (décision de l'éditeur du 01/11/2026).
+     */
+    public function test_voir_les_factures_ou_les_clotures_accorde_toutes_celles_du_magasin_et_jamais_l_une_sans_l_autre(): void
+    {
+        $cabinet = $this->ouvrirUnCabinet();
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $lien = $this->lierLeCabinet($cabinet, $magasin);
+
+        app(ReglerLesAutorisationsDuCabinetAction::class)->handle($this->proprietaireDe($magasin), $lien, [PermissionRegistry::FACTURE_VIEW, PermissionRegistry::CLOTURE_CAISSE_VIEW]);
+        $paires = [PermissionRegistry::CLOTURE_CAISSE_VIEW, PermissionRegistry::CLOTURE_CAISSE_VIEW_TOUTES, PermissionRegistry::FACTURE_VIEW, PermissionRegistry::FACTURE_VIEW_TOUTES];
+        $this->assertSame($paires, $lien->fresh()->autorisations());
+
+        foreach ([PermissionRegistry::FACTURE_VIEW_TOUTES, PermissionRegistry::CLOTURE_CAISSE_VIEW_TOUTES] as $seule) {
+            app(TenantContext::class)->clear();
+            $this->assertThrows(fn () => app(ReglerLesAutorisationsDuCabinetAction::class)->handle($this->proprietaireDe($magasin), $lien, [PermissionRegistry::CLIENT_VIEW, $seule]), InvalidArgumentException::class, 'Autorisation qui ne s\'accorde pas seule à un cabinet');
+        }
+
+        $this->assertSame($paires, $lien->fresh()->autorisations());
+        app(ReglerLesAutorisationsDuCabinetAction::class)->handle($this->proprietaireDe($magasin), $lien, [PermissionRegistry::CLIENT_VIEW]);
+        $this->assertSame([PermissionRegistry::CLIENT_VIEW], $lien->fresh()->autorisations());
+    }
+
+    /**
+     * Un compte d'un cabinet à qui le client accorde la case des factures
+     * voit toutes les factures du magasin, celles de chaque vendeur, et
+     * sans elle aucune.
+     */
+    public function test_avec_la_case_des_factures_le_cabinet_voit_toutes_les_factures_du_magasin_et_sans_elle_aucune(): void
+    {
+        $cabinet = $this->ouvrirUnCabinet();
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $lien = $this->lierLeCabinet($cabinet, $magasin, [PermissionRegistry::FACTURE_VIEW]);
+        app(TenantContext::class)->set($magasin);
+        $this->completerIdentiteLegale($magasin);
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => '12.00', 'taux_tva' => 20, 'suivi_stock' => false]);
+        $client = Client::factory()->create(['nom' => 'Client professionnel', 'type_client' => TypeClient::Professionnel, 'siren' => '732829320']);
+        $facture = app(EmettreFactureAction::class)->handle($vendeur, app(CreerFactureAction::class)->handle($vendeur, $client, [['produit_id' => $produit->id, 'quantite' => 1]]));
+        $proprietaire = $this->proprietaireDuCabinet($cabinet);
+
+        $this->dansLeMagasin($magasin, $proprietaire);
+        $this->assertTrue($proprietaire->can('view', $facture));
+        $this->assertSame([$facture->id], FactureResource::getEloquentQuery()->pluck('id')->all());
+
+        app(TenantContext::class)->clear();
+        app(ReglerLesAutorisationsDuCabinetAction::class)->handle($this->proprietaireDe($magasin), $lien, [PermissionRegistry::CLIENT_VIEW]);
+        $this->dansLeMagasin($magasin, $proprietaire->fresh());
+        $this->assertFalse($proprietaire->fresh()->can('view', $facture));
+        $this->assertFalse($proprietaire->fresh()->can('viewAny', Facture::class));
     }
 
     public function test_aucune_autorisation_de_vente_de_compte_de_reglage_ni_de_caisse_ne_s_accorde_au_cabinet(): void
@@ -166,7 +228,7 @@ class AutorisationsDuCabinetTest extends TestCase
         $this->lierLeCabinet($cabinet, $magasin, [PermissionRegistry::CLIENT_VIEW, PermissionRegistry::FACTURE_VIEW]);
         $collaborateur = $this->confier($this->collaborateur($cabinet), [$magasin]);
 
-        $this->assertSame([PermissionRegistry::CLIENT_VIEW, PermissionRegistry::FACTURE_VIEW], $collaborateur->autorisationsDans($magasin));
+        $this->assertSame([PermissionRegistry::CLIENT_VIEW, PermissionRegistry::FACTURE_VIEW, PermissionRegistry::FACTURE_VIEW_TOUTES], $collaborateur->autorisationsDans($magasin));
         $this->dansLeMagasin($magasin, $collaborateur);
         $this->assertTrue($collaborateur->can(PermissionRegistry::CLIENT_VIEW));
         $this->assertFalse($collaborateur->can(PermissionRegistry::PRODUIT_VIEW));
@@ -201,7 +263,7 @@ class AutorisationsDuCabinetTest extends TestCase
 
         foreach ([$magasin, $autre] as $chacun) {
             $dernier = collect($this->modificationsDesDroits($chacun))->where('membre.id', $proprietaire->id)->last();
-            $this->assertSame([PermissionRegistry::FACTURE_VIEW], $dernier['apres']['permissions'], $chacun->nom);
+            $this->assertSame([PermissionRegistry::FACTURE_VIEW, PermissionRegistry::FACTURE_VIEW_TOUTES], $dernier['apres']['permissions'], $chacun->nom);
             $this->assertSame(PermissionRegistry::parDefautDuCabinet(TypeDActivite::Commerce), $dernier['avant']['permissions'], $chacun->nom);
         }
         $this->assertCount(1, $this->entreesDAudit($magasin->societe, ActionAuditee::AutorisationsDuCabinetModifiees));

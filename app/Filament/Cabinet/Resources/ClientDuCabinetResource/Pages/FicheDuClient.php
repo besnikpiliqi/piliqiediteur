@@ -4,6 +4,7 @@ namespace App\Filament\Cabinet\Resources\ClientDuCabinetResource\Pages;
 
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Cabinets\Models\LienCabinet;
+use App\Domain\Cabinets\Services\AccesDesCabinets;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Support\CompteConnecte;
@@ -62,7 +63,8 @@ class FicheDuClient extends ViewRecord
     }
 
     /**
-     * Ses magasins réels, par nom, chacun avec l'adresse qui l'ouvre dans le
+     * Ses magasins réels que le client ouvre au cabinet (tous, ou sa
+     * sélection), par nom, chacun avec l'adresse qui l'ouvre dans le
      * panneau des magasins : lus par le seul client du lien ouvert, aucun
      * identifiant de magasin n'entre ici par une requête.
      *
@@ -70,7 +72,7 @@ class FicheDuClient extends ViewRecord
      */
     public function magasins(): array
     {
-        return array_values(Magasin::query()->where('societe_id', $this->lien()->societe_id)->where('est_demonstration', false)->orderBy('nom')->orderBy('id')
+        return array_values(Magasin::query()->where('societe_id', $this->lien()->societe_id)->whereKey(app(AccesDesCabinets::class)->idsDesMagasinsOuverts(CompteConnecte::exiger()))->orderBy('nom')->orderBy('id')
             ->get(['id', 'uuid', 'nom', 'code', 'ville', 'statut'])
             ->map(fn (Magasin $magasin): array => [
                 'nom' => (string) $magasin->nom,
@@ -89,7 +91,7 @@ class FicheDuClient extends ViewRecord
      */
     public function autorisations(): array
     {
-        return array_values(array_intersect_key(PermissionRegistry::libellesDuCabinet($this->client()->type_activite), array_flip($this->lien()->autorisations())));
+        return PermissionRegistry::libellesDe($this->lien()->autorisations());
     }
 
     /**

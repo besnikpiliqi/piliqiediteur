@@ -14,6 +14,7 @@ use App\Console\Commands\PurgerInvitationsDesCabinets;
 use App\Console\Commands\PurgerJournalAudit;
 use App\Console\Commands\PurgerTraces;
 use App\Console\Commands\PurgerVerifications;
+use App\Console\Commands\RattacherLesExpertsComptables;
 use App\Console\Commands\RelancerFacturesImpayees;
 use App\Console\Commands\RelancerTransmissionsPdp;
 use App\Console\Commands\ReverifierSirene;
@@ -143,6 +144,11 @@ return Application::configure(basePath: dirname(__DIR__))
         // invitation refusée après 7 jours (voir PurgerInvitationsDesCabinets).
         $schedule->command(ExpirerInvitationsDesCabinets::class)->hourlyAt(45)->withoutOverlapping();
         $schedule->command(PurgerInvitationsDesCabinets::class)->hourlyAt(50)->withoutOverlapping();
+        // Chaque heure : la déclaration d'un expert-comptable de la société
+        // dont le cabinet est désormais vérifié et qu'aucune tâche n'a encore
+        // rattachée l'est (voir RattacherLesExpertsComptables) : au plus une
+        // heure entre un cabinet vérifié et ce rattachement.
+        $schedule->command(RattacherLesExpertsComptables::class)->hourlyAt(35)->withoutOverlapping();
         // Chaque heure, hors de 2 h à 3 h : les téléchargements des
         // documents par période dont le lien a expiré, sept jours après
         // leur demande, s'effacent avec leur fichier (voir

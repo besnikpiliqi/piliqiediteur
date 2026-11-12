@@ -58,7 +58,7 @@ class TableauDeBordDuCabinetTest extends TestCase
         $avec = $this->ouvrirUneSociete(['nom' => 'Avec', 'raison_sociale' => 'CLIENTE QUI ACCORDE']);
         $sans = $this->ouvrirUneSociete(['nom' => 'Sans', 'raison_sociale' => 'CLIENTE QUI REFUSE']);
         $this->lierLeCabinet($cabinet, $avec);
-        $this->lierLeCabinet($cabinet, $sans, [PermissionRegistry::FACTURE_VIEW]);
+        $this->lierLeCabinet($cabinet, $sans, [PermissionRegistry::CLIENT_VIEW, PermissionRegistry::PAIEMENT_VIEW]);
         $this->factureAEncaisser($avec, '120.00');
         $this->factureAEncaisser($sans, '80.00');
 

@@ -308,6 +308,7 @@ class InscriptionSociete extends Register
             ->label('Votre mot de passe')
             ->password()
             ->revealable(filament()->arePasswordsRevealable())
+            ->required()
             ->rules(RegleDuMotDePasse::regles(null))
             ->helperText('Au moins 8 caractères ; ni un seul caractère répété, ni une suite de chiffres.')
             ->dehydrateStateUsing(fn (string $state): string => Hash::make($state))

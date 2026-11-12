@@ -4,10 +4,13 @@ namespace App\Models;
 
 use App\Domain\Authorization\AutorisationsSociete;
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Cabinets\Models\LienCabinet;
 use App\Domain\Cabinets\Services\AccesDesCabinets;
+use App\Domain\Cabinets\Services\ExpertsComptablesDeclares;
 use App\Domain\Cabinets\Support\IdentiteDansLeJournal;
 use App\Domain\Calendrier\Calendrier;
 use App\Domain\Calendrier\Casts\Instant;
+use App\Domain\Tenancy\Enums\ModeDAccesRedonne;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\RoleSociete;
 use App\Domain\Tenancy\Enums\StatutCompte;
@@ -141,16 +144,26 @@ class User extends Authenticatable implements FilamentUser, HasTenants
     private array $autorisationsParMagasin = [];
 
     /**
-     * Pour un compte d'un cabinet d'expertise comptable, les sociétés
-     * clientes que lui ouvrent ses liens (voir peutOuvrir()), lues une fois
-     * par instance, comme ses autorisations : oubliées à chaque écriture de
+     * Pour un compte d'un cabinet d'expertise comptable, les magasins que
+     * lui ouvrent ses liens (voir peutOuvrir()), lus une fois par
+     * instance, comme ses autorisations : oubliés à chaque écriture de
      * droits, à chaque refresh() et à la fin de chaque requête (voir
-     * AppServiceProvider), la fin d'un lien fermant l'accès dès la requête
-     * suivante.
+     * AppServiceProvider), la fin d'un lien ou le retrait d'un magasin de la
+     * sélection du client fermant l'accès dès la requête suivante.
      *
      * @var list<int>|null
      */
-    private ?array $clientsOuverts = null;
+    private ?array $magasinsOuverts = null;
+
+    /**
+     * Pour un compte d'un cabinet, les magasins que ses liens lui ouvrent,
+     * sans regarder l'état du cabinet (voir
+     * AccesDesCabinets::idsDesMagasinsDuCompte()), où valent les
+     * autorisations que le client accorde : lus et oubliés de même.
+     *
+     * @var list<int>|null
+     */
+    private ?array $magasinsDesLiens = null;
 
     /**
      * Pour un compte d'un cabinet, les autorisations que chaque client lui
@@ -160,6 +173,21 @@ class User extends Authenticatable implements FilamentUser, HasTenants
      * @var array<int, list<string>>|null
      */
     private ?array $autorisationsParClient = null;
+
+    /**
+     * Pour un expert-comptable de la société, sa déclaration (voir
+     * ExpertsComptablesDeclares::declarationDe()), lue une fois par
+     * instance et oubliée de même ; faux tant qu'elle n'est pas lue.
+     */
+    private LienCabinet|false|null $declarationLue = false;
+
+    /**
+     * Pour un expert-comptable de la société, les autorisations de sa
+     * déclaration, lues une fois par instance et oubliées de même.
+     *
+     * @var list<string>|null
+     */
+    private ?array $autorisationsDeLaDeclaration = null;
 
     /**
      * Ses affectations, lues une fois par instance pour les écrans (voir
@@ -193,7 +221,7 @@ class User extends Authenticatable implements FilamentUser, HasTenants
             'premiere_connexion_le' => Instant::class,
             'derniere_connexion_le' => Instant::class,
             'acces_redonne_le' => Instant::class,
-            'acces_redonne_en_presence' => 'boolean',
+            'acces_redonne_mode' => ModeDAccesRedonne::class,
             'nouvelle_adresse_expire_le' => Instant::class,
         ];
     }
@@ -386,6 +414,45 @@ class User extends Authenticatable implements FilamentUser, HasTenants
     }
 
     /**
+     * Est-il un expert-comptable de la société, déclaré par le SIREN de son
+     * cabinet (voir RoleSociete::ExpertComptable) ?
+     */
+    public function estExpertComptable(): bool
+    {
+        return $this->role_societe === RoleSociete::ExpertComptable;
+    }
+
+    /**
+     * Entre-t-il dans les magasins d'une société par les autorisations
+     * qu'elle accorde à un cabinet (voir PermissionRegistry::duCabinet()) :
+     * un compte d'un cabinet lié, ou un expert-comptable de la société ?
+     * Ses droits n'y sont alors que ces autorisations, un refus net hors
+     * d'elles (voir ControleDesDroits).
+     */
+    public function entreParLesAutorisationsDUnCabinet(): bool
+    {
+        return $this->estExpertComptable() || $this->estDUnCabinet();
+    }
+
+    /**
+     * Pour un expert-comptable de la société, la déclaration à laquelle son
+     * compte est attaché, lue une fois par instance, quel que soit son
+     * état ; null pour tout autre compte.
+     */
+    public function declarationDeLExpertComptable(): ?LienCabinet
+    {
+        if (! $this->estExpertComptable()) {
+            return null;
+        }
+
+        if ($this->declarationLue === false) {
+            $this->declarationLue = app(ExpertsComptablesDeclares::class)->declarationDe($this);
+        }
+
+        return $this->declarationLue;
+    }
+
+    /**
      * Est-il responsable de son magasin : un membre dont l'affectation a le
      * rôle de responsable ?
      */
@@ -400,8 +467,10 @@ class User extends Authenticatable implements FilamentUser, HasTenants
      * « Bonjour » : « Propriétaire de » suivi de la dénomination de la
      * société quand elle est connue (« Propriétaire du cabinet » pour un
      * cabinet d'expertise comptable), « Collaborateur du cabinet » suivi
-     * de sa dénomination pour un collaborateur, sinon le libellé de son
-     * rôle (« Administrateur »).
+     * de sa dénomination pour un collaborateur, « Expert-comptable déclaré
+     * par la société · cabinet » suivi du cabinet déclaré pour un
+     * expert-comptable de la société, sinon le libellé de son rôle
+     * (« Administrateur »).
      */
     public function libelleDuRoleDeSociete(): string
     {
@@ -410,6 +479,7 @@ class User extends Authenticatable implements FilamentUser, HasTenants
         return match (true) {
             $this->estProprietaire() && $this->estDUnCabinet() => filled($denomination) ? "Propriétaire du cabinet {$denomination}" : 'Propriétaire du cabinet',
             $this->estCollaborateur() => filled($denomination) ? "Collaborateur du cabinet {$denomination}" : RoleSociete::Collaborateur->getLabel(),
+            $this->estExpertComptable() => 'Expert-comptable déclaré par la société · '.($this->declarationDeLExpertComptable()?->nomDuCabinetDeclare() ?? 'cabinet'),
             $this->estProprietaire() && filled($denomination) => "Propriétaire de {$denomination}",
             default => $this->role_societe->getLabel(),
         };
@@ -430,7 +500,7 @@ class User extends Authenticatable implements FilamentUser, HasTenants
     {
         $libelle = match (true) {
             $this->estMembre() => $this->libelleDuRoleDeMembreDans($magasin).' · '.$magasin->nom,
-            $this->estDUnCabinet() => $this->libelleDuRoleDeSociete().' · '.$magasin->nom,
+            $this->entreParLesAutorisationsDUnCabinet() => $this->libelleDuRoleDeSociete().' · '.$magasin->nom,
             default => $this->libelleDuRoleDeSociete(),
         };
 
@@ -454,25 +524,46 @@ class User extends Authenticatable implements FilamentUser, HasTenants
      * registre fiscal, les journaux) : son nom ; pour un compte d'un
      * cabinet d'expertise comptable, qui agit chez un client en son nom,
      * avec celui de son cabinet : « Nom (cabinet Dénomination) », ou le
-     * SIREN du cabinet sans dénomination, borné à 255 caractères : la
-     * dénomination se raccourcit d'abord, en gardant au moins ses 40
+     * SIREN du cabinet sans dénomination ; pour un expert-comptable de la
+     * société, avec ce qui le rattache au cabinet déclaré, sans laisser
+     * croire que ce cabinet l'a reconnu, d'après la dénomination ou le
+     * SIREN lus sur sa déclaration, quel que soit son état (voir
+     * nomAvecSonCabinet()). Borné à 255 caractères : la dénomination se
+     * raccourcit d'abord, en gardant au moins ses 40
      * premiers caractères, puis le nom ; seul un texte vraiment raccourci
      * finit par « … ».
      */
     public function nomPourLHistorique(): string
     {
+        if ($this->estExpertComptable()) {
+            $declaration = $this->declarationDeLExpertComptable();
+
+            return $declaration === null ? $this->name : self::nomAvecSonCabinet($this->name, '(expert-comptable déclaré par la société, cabinet ', filled($declaration->denomination_cabinet) ? (string) $declaration->denomination_cabinet : 'SIREN '.$declaration->siren_cabinet);
+        }
+
         if (! $this->estDUnCabinet()) {
             return $this->name;
         }
 
-        $cabinet = filled($this->societe->raison_sociale) ? (string) $this->societe->raison_sociale : (string) $this->societe->siren;
-        $nom = $this->name;
-        $place = self::LONGUEUR_D_UN_NOM_POUR_L_HISTORIQUE - mb_strlen(' (cabinet )');
+        return self::nomAvecSonCabinet($this->name, '(cabinet ', filled($this->societe->raison_sociale) ? (string) $this->societe->raison_sociale : (string) $this->societe->siren);
+    }
+
+    /**
+     * Le nom suivi de son cabinet entre parenthèses, après cette
+     * ouverture : « Marc Petit (cabinet COMPTA RHONE) » pour un compte d'un
+     * cabinet, « Marc Petit (expert-comptable déclaré par la société,
+     * cabinet CABINET PETIT ET ASSOCIES) » pour un expert-comptable de la
+     * société, borné à 255 caractères selon la règle de
+     * nomPourLHistorique().
+     */
+    private static function nomAvecSonCabinet(string $nom, string $ouverture, string $cabinet): string
+    {
+        $place = self::LONGUEUR_D_UN_NOM_POUR_L_HISTORIQUE - mb_strlen(" {$ouverture})");
         $raccourci = static fn (string $texte, int $longueur): string => mb_strlen($texte) <= $longueur ? $texte : mb_substr($texte, 0, $longueur - 1).'…';
         $cabinet = $raccourci($cabinet, max(self::DENOMINATION_GARDEE_DU_CABINET, $place - mb_strlen($nom)));
         $nom = $raccourci($nom, $place - mb_strlen($cabinet));
 
-        return "{$nom} (cabinet {$cabinet})";
+        return "{$nom} {$ouverture}{$cabinet})";
     }
 
     /**
@@ -736,8 +827,11 @@ class User extends Authenticatable implements FilamentUser, HasTenants
     public function oublierLesDroits(): void
     {
         $this->autorisationsParMagasin = [];
-        $this->clientsOuverts = null;
+        $this->magasinsOuverts = null;
+        $this->magasinsDesLiens = null;
         $this->autorisationsParClient = null;
+        $this->declarationLue = false;
+        $this->autorisationsDeLaDeclaration = null;
         $this->affectationsLues = null;
         $this->autorisationsParAffectation = [];
         $this->unsetRelation('societe');
@@ -750,11 +844,13 @@ class User extends Authenticatable implements FilamentUser, HasTenants
      * pour le propriétaire, un administrateur et un compte d'un cabinet),
      * son statut et ses autorisations par ordre alphabétique, et, pour un
      * compte d'un cabinet d'expertise comptable chez un client lié, son
-     * cabinet (identifiant, SIREN, dénomination) ;
+     * cabinet (identifiant, SIREN, dénomination), et, pour un
+     * expert-comptable de la société, son cabinet déclaré (SIREN,
+     * dénomination lue au répertoire) ;
      * null quand il n'y en a aucun (magasin d'une autre société hors d'un
      * client lié, aucun droit qui vaille ici).
      *
-     * @return array{role_societe: string, role_magasin: string|null, statut: string, permissions: list<string>, cabinet?: array{id: int, siren: string, raison_sociale: string|null}}|null
+     * @return array{role_societe: string, role_magasin: string|null, statut: string, permissions: list<string>, cabinet?: array{id: int, siren: string, raison_sociale: string|null}, cabinet_declare?: array{siren: string, raison_sociale: string|null}}|null
      */
     public function droitsDans(Magasin $magasin): ?array
     {
@@ -777,6 +873,7 @@ class User extends Authenticatable implements FilamentUser, HasTenants
             'statut' => $compte->statut->value,
             'permissions' => $autorisations,
             ...($duCabinet ? ['cabinet' => IdentiteDansLeJournal::de($compte->societe)] : []),
+            ...($compte->estExpertComptable() ? ['cabinet_declare' => IdentiteDansLeJournal::declaree(ValeurRequise::de($compte->declarationDeLExpertComptable(), 'la déclaration d\'un expert-comptable de la société'))] : []),
         ];
     }
 
@@ -823,10 +920,16 @@ class User extends Authenticatable implements FilamentUser, HasTenants
      * s'y lit jamais ; null quand aucune n'y vaut :
      * - un compte d'un cabinet d'expertise comptable, dans un magasin réel
      *   d'un client lié que son cabinet lui ouvre (son propriétaire, ou un
-     *   collaborateur à qui ce client est confié) : celles que le client
+     *   collaborateur à qui ce client est confié), parmi ceux que le client
+     *   ouvre au cabinet (tous, ou sa sélection, voir
+     *   AccesDesCabinets::idsDesMagasinsDuCompte()) : celles que le client
      *   accorde au cabinet (voir AccesDesCabinets::autorisationsParClient()),
      *   sans regarder si le cabinet est vérifié, ce que contrôlent
      *   peutOuvrir() et ControleDesDroits, comme la lecture seule ;
+     * - un expert-comptable de la société, dans un magasin réel de sa
+     *   société que sa déclaration en attente lui ouvre (tous, ou la
+     *   sélection du propriétaire) : les autorisations de sa déclaration
+     *   (voir ExpertsComptablesDeclares) ;
      * - le propriétaire : toutes sauf celles de la vente dans chaque
      *   magasin réel, où il ne vend jamais, comme dans le magasin de
      *   démonstration fermé (voir PermissionRegistry::duProprietaire()), et
@@ -847,8 +950,16 @@ class User extends Authenticatable implements FilamentUser, HasTenants
      */
     private function autorisationsEnregistreesDans(Magasin $magasin): ?array
     {
+        if ($this->estExpertComptable()) {
+            return in_array(CleDuModele::de($magasin), $this->magasinsDesLiens ??= app(ExpertsComptablesDeclares::class)->idsDesMagasinsOuverts($this), true)
+                ? $this->autorisationsDeLaDeclaration ??= ValeurRequise::de($this->declarationDeLExpertComptable(), 'la déclaration d\'un expert-comptable de la société')->autorisationsRetenues()
+                : null;
+        }
+
         if ($this->estDUnCabinet()) {
-            return $magasin->est_demonstration ? null : ($this->autorisationsParClient ??= app(AccesDesCabinets::class)->autorisationsParClient($this))[$magasin->societe_id] ?? null;
+            return in_array(CleDuModele::de($magasin), $this->magasinsDesLiens ??= app(AccesDesCabinets::class)->idsDesMagasinsDuCompte($this), true)
+                ? ($this->autorisationsParClient ??= app(AccesDesCabinets::class)->autorisationsParClient($this))[$magasin->societe_id] ?? null
+                : null;
         }
 
         $duType = PermissionRegistry::pourLeType($magasin->societe->type_activite);
@@ -931,18 +1042,25 @@ class User extends Authenticatable implements FilamentUser, HasTenants
     /**
      * Peut-il ouvrir ce magasin ? Avec un compte qui peut agir (voir
      * peutAgir()), un compte d'un cabinet d'expertise comptable vérifié
-     * ouvre les magasins réels d'un client lié qui lui est ouvert (voir
-     * AccesDesCabinets::clientsOuverts()) ; tout autre compte, un magasin de sa
+     * ouvre les magasins réels d'un client lié qui lui est ouvert, tous ou
+     * ceux que le client a choisis (voir
+     * AccesDesCabinets::idsDesMagasinsOuverts()) ; un expert-comptable de
+     * la société, les magasins réels de sa société que sa déclaration en
+     * attente lui ouvre ; tout autre compte, un magasin de sa
      * société : le propriétaire ouvre tous ceux de sa société ; tout autre
      * compte, ceux où une affectation lui donne des droits (voir
      * affectationQuiVautDans()).
      */
     public function peutOuvrir(Magasin $magasin): bool
     {
+        if ($this->estExpertComptable()) {
+            return $this->peutAgir() && $magasin->societe_id === $this->societe_id
+                && in_array(CleDuModele::de($magasin), $this->magasinsOuverts ??= app(ExpertsComptablesDeclares::class)->idsDesMagasinsOuverts($this), true);
+        }
+
         if ($this->estDUnCabinet()) {
             return $this->peutAgir()
-                && ! $magasin->est_demonstration
-                && in_array($magasin->societe_id, $this->clientsOuverts ??= app(AccesDesCabinets::class)->clientsOuverts($this), true);
+                && in_array(CleDuModele::de($magasin), $this->magasinsOuverts ??= app(AccesDesCabinets::class)->idsDesMagasinsOuverts($this), true);
         }
 
         if ($magasin->societe_id !== $this->societe_id || ! $this->peutAgir()) {
@@ -962,7 +1080,9 @@ class User extends Authenticatable implements FilamentUser, HasTenants
      * qui n'est pas actif ; pour un membre, son seul magasin ; pour un
      * compte d'un cabinet d'expertise comptable, les magasins réels des
      * clients que son cabinet lui ouvre, par dénomination du client puis
-     * nom du magasin (voir AccesDesCabinets::magasinsOuverts()).
+     * nom du magasin (voir AccesDesCabinets::magasinsOuverts()) ; pour un
+     * expert-comptable de la société, les magasins réels que sa déclaration
+     * lui ouvre, par nom.
      *
      * @return Collection<int, Magasin>
      */
@@ -974,6 +1094,10 @@ class User extends Authenticatable implements FilamentUser, HasTenants
 
         if ($this->estDUnCabinet()) {
             return app(AccesDesCabinets::class)->magasinsOuverts($this);
+        }
+
+        if ($this->estExpertComptable()) {
+            return Magasin::query()->with('societe')->whereKey(app(ExpertsComptablesDeclares::class)->idsDesMagasinsOuverts($this))->orderBy('nom')->orderBy('id')->get();
         }
 
         $magasins = Magasin::query()->with('societe')->where('societe_id', $this->societe_id);

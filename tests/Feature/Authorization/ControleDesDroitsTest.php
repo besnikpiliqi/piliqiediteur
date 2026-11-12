@@ -441,9 +441,10 @@ class ControleDesDroitsTest extends TestCase
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $proprietaire = $this->proprietaireDe($magasin);
         $responsable = $this->responsable($magasin);
+        $expertComptable = $this->expertComptable($magasin);
         app(TenantContext::class)->clear();
 
-        foreach ([$proprietaire, $responsable] as $compte) {
+        foreach ([$proprietaire, $responsable, $expertComptable] as $compte) {
             foreach ([Client::class, Fournisseur::class, Produit::class, Service::class, Devis::class, Facture::class, Paiement::class, Avoir::class, ClotureCaisse::class, ClotureCaissePersonnelle::class, FactureAchat::class, AvoirFournisseur::class, EnregistrementFiscal::class, Affectation::class] as $modele) {
                 $this->assertFalse($compte->can('viewAny', $modele), "viewAny {$modele}");
                 $this->assertFalse($compte->can('create', $modele), "create {$modele}");

@@ -8,11 +8,13 @@ use App\Domain\Cabinets\Actions\RefuserLaDemandeDeLienAction;
 use App\Domain\Cabinets\Enums\EtatDuLien;
 use App\Domain\Cabinets\Models\Cabinet;
 use App\Domain\Cabinets\Models\LienCabinet;
+use App\Domain\Cabinets\Services\ExpertsComptablesDeclares;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Scopes\SocieteScope;
 use App\Domain\Tenancy\Support\CompteConnecte;
 use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\Concerns\GereLesExceptionsMetier;
+use App\Models\User;
 use Filament\Actions\Action;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\CheckboxList;
@@ -96,13 +98,47 @@ class RattachementDUnCabinet extends Page
     }
 
     /**
-     * La dénomination du cabinet déjà lié, que l'acceptation remplace.
+     * Le cabinet qui demande est-il suspendu ? Sa demande ne s'accepte pas
+     * tant qu'il l'est ; elle se refuse (décision de l'éditeur du
+     * 11/11/2026).
+     */
+    public function cabinetSuspendu(LienCabinet $demande): bool
+    {
+        return Societe::query()->whereKey($demande->cabinet_id)->firstOrFail(['id', 'type_activite', 'statut'])->estUnCabinetSuspendu();
+    }
+
+    /**
+     * La dénomination du cabinet déjà lié, que l'acceptation remplace ;
+     * null sans cabinet lié (un expert-comptable déclaré se dit à part,
+     * voir texteDeLaDeclaration()).
      */
     public function cabinetActuel(): ?string
     {
         $actif = LienCabinet::query()->where('etat', EtatDuLien::Actif->value)->first(['id', 'cabinet_id']);
 
         return $actif === null ? null : (ValeursLues::texteOuNul(Societe::query()->whereKey($actif->cabinet_id)->value('raison_sociale')) ?? 'votre cabinet actuel');
+    }
+
+    /**
+     * Ce que l'acceptation fait de l'expert-comptable que la société a
+     * déclaré, s'il y en a un : la demande de son propre cabinet relie la
+     * déclaration avec ses autorisations, celle d'un autre la remplace ;
+     * null sans déclaration en attente.
+     */
+    public function texteDeLaDeclaration(LienCabinet $demande): ?string
+    {
+        $declaration = LienCabinet::query()->where('etat', EtatDuLien::Declare->value)->first();
+
+        if ($declaration === null) {
+            return null;
+        }
+
+        $noms = implode(', ', app(ExpertsComptablesDeclares::class)->comptesDe($declaration)->map(fn (User $compte): string => $compte->name)->all());
+        $siren = Societe::query()->whereKey($demande->cabinet_id)->value('siren');
+
+        return $siren === $declaration->siren_cabinet
+            ? "Ce cabinet est votre expert-comptable déclaré : accepter le relie à votre société avec les autorisations de votre déclaration, que vous pouvez ajuster, et ferme les comptes de {$noms}."
+            : 'Accepter remplace votre expert-comptable déclaré, '.$declaration->nomDuCabinetDeclare()." : les comptes de {$noms} seront fermés.";
     }
 
     /**
@@ -114,7 +150,7 @@ class RattachementDUnCabinet extends Page
     {
         $type = $this->societe()->type_activite;
 
-        return array_values(array_intersect_key(PermissionRegistry::libellesDuCabinet($type), array_flip(PermissionRegistry::parDefautDuCabinet($type))));
+        return PermissionRegistry::libellesDe(PermissionRegistry::parDefautDuCabinet($type));
     }
 
     public function accepterParDefautAction(): Action
@@ -124,7 +160,7 @@ class RattachementDUnCabinet extends Page
             ->color('success')
             ->requiresConfirmation()
             ->modalDescription(fn (): string => 'Ce cabinet consultera vos magasins réels : '.implode(', ', $this->autorisationsParDefaut()).'.')
-            ->visible(fn (): bool => $this->demande() !== null)
+            ->visible(fn (): bool => $this->demandeAcceptable())
             ->action(fn () => $this->accepter(null));
     }
 
@@ -135,9 +171,10 @@ class RattachementDUnCabinet extends Page
 
         return Action::make('accepterEnAjustant')
             ->label('Accepter en ajustant les autorisations')
-            ->visible(fn (): bool => $this->demande() !== null)
-            ->fillForm(['consultations' => PermissionRegistry::parDefautDuCabinet($type), 'achats' => [], 'telechargements' => []])
+            ->visible(fn (): bool => $this->demandeAcceptable())
+            ->fillForm(['portee' => CabinetComptable::TOUS_LES_MAGASINS, 'magasins' => [], 'consultations' => PermissionRegistry::casesDuCabinet(PermissionRegistry::parDefautDuCabinet($type)), 'achats' => [], 'telechargements' => []])
             ->form([
+                ...CabinetComptable::champsDesMagasins($this->societe(), fn (): bool => true),
                 CheckboxList::make('consultations')
                     ->label('Consulter')
                     ->options(array_intersect_key($libelles, array_flip(PermissionRegistry::parDefautDuCabinet($type))))
@@ -154,7 +191,7 @@ class RattachementDUnCabinet extends Page
                 Placeholder::make('jamais')->hiddenLabel()->content(CabinetComptable::TEXTE_JAMAIS),
                 Placeholder::make('vide')->hiddenLabel()->content('Sans aucune autorisation, votre cabinet reste lié et voit votre identité, vos réglages fiscaux et vos magasins, mais n\'ouvre aucun document, aucune fiche ni aucun téléchargement.'),
             ])
-            ->action(fn (array $data) => $this->accepter(CabinetComptable::autorisationsCocheesDans($data)));
+            ->action(fn (array $data) => $this->accepter(CabinetComptable::autorisationsCocheesDans($data), CabinetComptable::magasinsChoisisDans($data)));
     }
 
     public function refuserAction(): Action
@@ -175,12 +212,23 @@ class RattachementDUnCabinet extends Page
     }
 
     /**
-     * @param  list<string>|null  $autorisations
+     * Y a-t-il une demande en cours, d'un cabinet qui n'est pas suspendu ?
      */
-    private function accepter(?array $autorisations): void
+    private function demandeAcceptable(): bool
     {
-        static::executerSansCasser(function () use ($autorisations): void {
-            app(AccepterLaDemandeDeLienAction::class)->handle(CompteConnecte::exiger(), $this->demande() ?? throw new LogicException(AccepterLaDemandeDeLienAction::MESSAGE_PLUS_VALABLE), $autorisations);
+        $demande = $this->demande();
+
+        return $demande !== null && ! $this->cabinetSuspendu($demande);
+    }
+
+    /**
+     * @param  list<string>|null  $autorisations
+     * @param  list<int>|null  $magasins
+     */
+    private function accepter(?array $autorisations, ?array $magasins = null): void
+    {
+        static::executerSansCasser(function () use ($autorisations, $magasins): void {
+            app(AccepterLaDemandeDeLienAction::class)->handle(CompteConnecte::exiger(), $this->demande() ?? throw new LogicException(AccepterLaDemandeDeLienAction::MESSAGE_PLUS_VALABLE), $autorisations, $magasins);
             Notification::make()->title('Ce cabinet est désormais votre cabinet.')->success()->send();
             $this->redirect(CabinetComptable::getUrl());
         });

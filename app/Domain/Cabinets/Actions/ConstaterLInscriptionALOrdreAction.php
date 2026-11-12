@@ -5,6 +5,7 @@ namespace App\Domain\Cabinets\Actions;
 use App\Domain\Authorization\OperateurCourant;
 use App\Domain\Cabinets\Enums\VoieDeVerificationOrdre;
 use App\Domain\Cabinets\Jobs\PrevenirLesClientsDuCabinet;
+use App\Domain\Cabinets\Jobs\RattacherLesDeclarationsDuSiren;
 use App\Domain\Cabinets\Notifications\AvisDuCabinet;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Models\Societe;
@@ -110,6 +111,8 @@ class ConstaterLInscriptionALOrdreAction
             'Voir la vérification',
             AvisDuCabinet::SUCCES,
         ));
+
+        RattacherLesDeclarationsDuSiren::dispatch((string) $cabinet->siren);
 
         if ($devenuVerifie) {
             PrevenirLesClientsDuCabinet::dispatch(CleDuModele::de($cabinet), accesRetabli: true);

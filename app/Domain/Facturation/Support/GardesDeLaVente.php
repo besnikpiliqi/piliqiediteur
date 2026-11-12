@@ -12,9 +12,10 @@ use InvalidArgumentException;
  * Les gardes par lesquelles la base elle-même refuse une vente ou un
  * encaissement au nom du propriétaire de la société dans un magasin réel,
  * où il ne vend jamais (voir PermissionRegistry::duProprietaire()), ou au
- * nom d'un compte d'un cabinet d'expertise comptable, qui n'a jamais
- * d'autorisation de vente chez un client (voir
- * PermissionRegistry::duCabinet()), même écrits par DB::table(), une
+ * nom d'un compte d'un cabinet d'expertise comptable ou d'un
+ * expert-comptable de la société, qui n'ont jamais d'autorisation de vente
+ * chez un client (voir PermissionRegistry::duCabinet()), même écrits par
+ * DB::table(), une
  * requête brute ou une action défectueuse ; elles s'ajoutent aux droits,
  * qui ne leur donnent là aucune autorisation de vente, comme les gardes
  * des droits s'ajoutent aux lectures (voir GardesDesDroits). Seul le
@@ -53,7 +54,7 @@ use InvalidArgumentException;
  */
 final class GardesDeLaVente
 {
-    public const MESSAGE = 'Le propriétaire d\'une société ne vend que dans son magasin de démonstration, et les comptes d\'un cabinet ne vendent jamais : aucune autre vente ni aucun autre encaissement ne s\'inscrit à leur nom.';
+    public const MESSAGE = 'Le propriétaire d\'une société ne vend que dans son magasin de démonstration, et l\'expert-comptable de la société et les comptes d\'un cabinet ne vendent jamais : aucune autre vente ni aucun autre encaissement ne s\'inscrit à leur nom.';
 
     /**
      * Pour chaque table gardée : la colonne de son auteur, la condition
@@ -156,8 +157,9 @@ final class GardesDeLaVente
 
     /**
      * L'auteur de la ligne écrite est, à cet instant, un compte qui ne vend
-     * pas dans le magasin de cette ligne : un collaborateur d'un cabinet,
-     * qui ne vend jamais, ou le propriétaire d'une société (celui d'un
+     * pas dans le magasin de cette ligne : un collaborateur d'un cabinet ou
+     * un expert-comptable de la société, qui ne vendent jamais, ou le
+     * propriétaire d'une société (celui d'un
      * cabinet d'expertise comptable compris), sauf dans le magasin de
      * démonstration de sa société, le seul où il vend. Le rôle suffit : un
      * compte d'un cabinet a toujours l'un de ces deux rôles, la garde des
@@ -171,7 +173,7 @@ final class GardesDeLaVente
      */
     private static function auteurQuiNeVendPasDansCeMagasin(string $auteur): string
     {
-        return "EXISTS (SELECT 1 FROM users WHERE id = NEW.{$auteur} AND (role_societe = '".RoleSociete::Collaborateur->value."'"
+        return "EXISTS (SELECT 1 FROM users WHERE id = NEW.{$auteur} AND (role_societe IN ('".RoleSociete::Collaborateur->value."', '".RoleSociete::ExpertComptable->value."')"
             ." OR (role_societe = '".RoleSociete::Proprietaire->value."' AND NOT EXISTS (SELECT 1 FROM magasins"
             .' WHERE magasins.id = NEW.magasin_id AND magasins.est_demonstration AND magasins.societe_id = users.societe_id))))';
     }

@@ -1,5 +1,6 @@
 <?php
 
+use App\Domain\Cabinets\Support\GardesDesCabinets;
 use App\Domain\Tenancy\Support\GardesDesTypesDActivite;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
@@ -42,10 +43,12 @@ return new class extends Migration
         // Seule une société qui a des articles fait un inventaire
         // d'ouverture (voir TypeDActivite::aDesArticles()).
         GardesDesTypesDActivite::poser(GardesDesTypesDActivite::INVENTAIRES_OUVERTURE);
+        GardesDesCabinets::poserLesMagasinsOuverts('inventaires_ouverture');
     }
 
     public function down(): void
     {
+        GardesDesCabinets::retirerLesMagasinsOuverts('inventaires_ouverture');
         GardesDesTypesDActivite::retirer(GardesDesTypesDActivite::INVENTAIRES_OUVERTURE);
         Schema::dropIfExists('inventaires_ouverture');
     }

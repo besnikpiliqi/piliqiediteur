@@ -44,10 +44,18 @@ use Throwable;
  * connexion (celle qu'il a choisie en saisissant le code du courrier
  * attend son lien, ou ce lien n'a pas pu partir) y lit où en est ce lien
  * et en redemande un, pour cette adresse ou une autre ; celui d'une
- * inscription close n'en a plus et n'en demande plus. L'adresse de tout autre compte n'est qu'un contact,
+ * inscription close n'en a plus et n'en demande plus. L'adresse d'un
+ * expert-comptable de la société, obligatoire, ne sert pas à se connecter
+ * mais reçoit les liens que le propriétaire lui envoie quand il lui
+ * redonne l'accès : une nouvelle adresse ne prend effet, de même, qu'après
+ * un clic sur le lien envoyé à cette adresse, l'ancienne étant prévenue,
+ * sans contrôle d'unicité (décision de l'éditeur du 01/11/2026, P13).
+ * L'adresse de tout autre compte n'est qu'un contact,
  * facultatif, qui s'enregistre aussitôt, sans confirmation, et peut être
  * celle d'un autre compte : c'est le seul endroit où elle s'écrit, jamais
- * par qui a créé le compte. Elle s'enregistre en minuscules (voir
+ * par qui a créé le compte, hors l'adresse d'un expert-comptable de la
+ * société, saisie par le propriétaire à la création et confirmée par un
+ * lien quand la personne la change. Elle s'enregistre en minuscules (voir
  * User::normaliserEmail()).
  *
  * Le registre fiscal fige le nom de l'opérateur dans le contenu signé de
@@ -55,6 +63,8 @@ use Throwable;
  */
 class ModifierProfil extends EditProfile
 {
+    public const AIDE_ADRESSE_EXPERT_COMPTABLE = 'Le propriétaire de la société vous envoie à cette adresse un nouveau lien quand il vous redonne l\'accès ; elle ne sert pas à vous connecter. Une nouvelle adresse vaut une fois confirmée par le lien qui lui est envoyé.';
+
     public const RAPPEL_IDENTIFIANT = 'Votre mot de passe est encore votre identifiant : toute personne qui le connaît peut se connecter à votre place. Choisissez-en un à vous ci-dessous.';
 
     /**
@@ -105,6 +115,16 @@ class ModifierProfil extends EditProfile
 
     protected function getEmailFormComponent(): Component
     {
+        if ($this->compte()->estExpertComptable()) {
+            return TextInput::make('email')
+                ->label('Adresse e-mail professionnelle')
+                ->email()
+                ->required()
+                ->maxLength(255)
+                ->adresseDeConnexion()
+                ->helperText(fn (): string => self::AIDE_ADRESSE_EXPERT_COMPTABLE.($this->etatDeLAdresseEnAttente() === null ? '' : ' '.$this->etatDeLAdresseEnAttente()));
+        }
+
         if (! $this->compte()->estProprietaire()) {
             return TextInput::make('email')
                 ->label('Adresse e-mail de contact (facultative)')
@@ -143,6 +163,10 @@ class ModifierProfil extends EditProfile
     {
         $compte = $this->compte();
         $enAttente = $compte->nouvelle_adresse !== null && $compte->nouvelle_adresse_expire_le?->isFuture();
+
+        if ($compte->estExpertComptable()) {
+            return $enAttente ? "Nouvelle adresse en attente : {$compte->nouvelle_adresse}. Elle remplacera celle-ci quand vous aurez suivi le lien qui lui a été envoyé ; d'ici là, les liens du propriétaire partent à celle-ci." : null;
+        }
 
         if ($compte->aUneAdresseDeConnexion()) {
             return $enAttente ? "Nouvelle adresse en attente : {$compte->nouvelle_adresse}. Elle remplacera celle-ci quand vous aurez suivi le lien qui lui a été envoyé." : null;
@@ -207,12 +231,12 @@ class ModifierProfil extends EditProfile
 
         try {
             DB::transaction(function () use ($compte, $donnees, $adresse, $motDePasse): void {
-                if ($compte->estProprietaire() && $adresse !== null && $adresse !== $compte->email) {
+                if (($compte->estProprietaire() || $compte->estExpertComptable()) && $adresse !== null && $adresse !== $compte->email) {
                     app(DemanderUneNouvelleAdresseAction::class)->handle($compte, $adresse);
                     $this->adresseDemandee = $adresse;
                 }
 
-                if (! $compte->estProprietaire() && $adresse !== $compte->email) {
+                if (! $compte->estProprietaire() && ! $compte->estExpertComptable() && $adresse !== $compte->email) {
                     $compte->forceFill(['email' => $adresse])->save();
                 }
 
@@ -249,7 +273,7 @@ class ModifierProfil extends EditProfile
         return Notification::make()
             ->success()
             ->title('Profil enregistré')
-            ->body("Un lien de confirmation, valable 24 heures, vient d'être envoyé à {$this->adresseDemandee} : votre adresse de connexion ne changera qu'une fois ce lien suivi.");
+            ->body("Un lien de confirmation, valable 24 heures, vient d'être envoyé à {$this->adresseDemandee} : votre adresse ".($this->compte()->estExpertComptable() ? '' : 'de connexion ')."ne changera qu'une fois ce lien suivi.");
     }
 
     private function compte(): User

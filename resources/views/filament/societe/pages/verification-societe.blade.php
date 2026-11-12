@@ -6,7 +6,7 @@
         <x-slot name="heading">Où en est votre société</x-slot>
 
         @if ($societe->estValidee())
-            <p>Votre société est validée depuis le {{ \App\Domain\Calendrier\Calendrier::deParis()->afficher($societe->validee_le, 'd/m/Y') }}.</p>
+            <p>{{ $societe->phraseDeSaValidation() }}</p>
         @elseif ($societe->estClose())
             <p>L'inscription de votre société est close ({{ $societe->motif_cloture?->getLabel() }}) : vos magasins restent consultables, en lecture seule.</p>
         @else

@@ -7,6 +7,7 @@ use App\Domain\Cabinets\Enums\MotifDeFinDuLien;
 use App\Domain\Cabinets\Models\LienCabinet;
 use App\Domain\Cabinets\Notifications\AvisDuCabinet;
 use App\Domain\Cabinets\Services\AccesDesCabinets;
+use App\Domain\Cabinets\Services\ExpertsComptablesDeclares;
 use App\Domain\Cabinets\Support\IdentiteDansLeJournal;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Models\Societe;
@@ -87,9 +88,10 @@ class MettreFinAuLienAction
      * Le lien actif et les demandes en cours, dans les deux sens, d'un
      * client que l'éditeur révoque prennent fin dans la transaction de sa
      * révocation, qui tient déjà les registres de ses magasins réels et sa
-     * ligne (voir RevoquerSocieteAction) : le lien par la procédure de
-     * l'éditeur (voir parLEditeur()), motif « société révoquée », le
-     * cabinet prévenu ; chaque demande retirée au nom du système, son jeton
+     * ligne (voir RevoquerSocieteAction) : le lien, ou la déclaration de
+     * son expert-comptable, dont les comptes sont retirés sans auteur, par
+     * la procédure de l'éditeur (voir parLEditeur()), motif « société
+     * révoquée », le cabinet d'un lien prévenu ; chaque demande retirée au nom du système, son jeton
      * effacé, son cabinet prévenu sans le motif (voir
      * RetirerLaDemandeDeLienAction::parLeSysteme()).
      */
@@ -97,12 +99,12 @@ class MettreFinAuLienAction
     {
         $liens = LienCabinet::query()->withoutGlobalScope(SocieteScope::class)
             ->where('societe_id', $client->getKey())
-            ->whereIn('etat', [EtatDuLien::Actif->value, ...array_map(static fn (EtatDuLien $etat): string => $etat->value, EtatDuLien::demandes())])
+            ->whereIn('etat', array_map(static fn (EtatDuLien $etat): string => $etat->value, [...EtatDuLien::enCours(), ...EtatDuLien::demandes()]))
             ->orderBy('id')
             ->get();
 
         foreach ($liens as $lien) {
-            $lien->estActif()
+            $lien->estEnCours()
                 ? $this->parLEditeur($lien, MotifDeFinDuLien::SocieteRevoquee, $editeur, $client)
                 : $this->retraitDesDemandes->parLeSysteme($lien);
         }
@@ -145,13 +147,21 @@ class MettreFinAuLienAction
     }
 
     /**
-     * Termine ce lien, relu et verrouillé, dans la modification en cours :
-     * état, auteur, date et motif, clients confiés et autorisations
-     * effacés. Sert aussi au remplacement d'un cabinet (voir
-     * AccepterLaDemandeDeLienAction).
+     * Termine ce lien en cours, relu et verrouillé, dans la modification en
+     * cours : pour une déclaration, ses comptes d'expert-comptable retirés
+     * d'abord, au nom de l'auteur seulement s'il est de la société du
+     * client (un compte d'un cabinet n'écrit jamais le statut d'un compte
+     * du client) ; puis état, auteur, date et motif, clients confiés,
+     * autorisations et magasins choisis effacés. Sert aussi au remplacement
+     * d'un cabinet ou d'une déclaration (voir AccepterLaDemandeDeLienAction
+     * et DeclarerSonExpertComptableAction).
      */
     public static function terminerSousVerrou(LienCabinet $relu, ?User $auteur, MotifDeFinDuLien $motif): void
     {
+        if ($relu->estDeclare()) {
+            app(ExpertsComptablesDeclares::class)->retirerLesComptes($relu, $auteur !== null && (int) $auteur->societe_id === (int) $relu->societe_id ? $auteur : null);
+        }
+
         $relu->forceFill([
             'etat' => EtatDuLien::Termine,
             'termine_par' => $auteur?->getKey(),
@@ -160,6 +170,7 @@ class MettreFinAuLienAction
         ])->save();
         app(AccesDesCabinets::class)->effacerLesClientsConfies($relu);
         DB::table('autorisations_cabinet')->where('societe_id', $relu->societe_id)->where('lien_id', $relu->getKey())->delete();
+        DB::table('magasins_cabinet')->where('societe_id', $relu->societe_id)->where('lien_id', $relu->getKey())->delete();
     }
 
     /**
@@ -168,12 +179,17 @@ class MettreFinAuLienAction
      * il a lui-même lié un autre cabinet), et les collaborateurs qui avaient
      * ce client, dont les avis sur lui s'effacent d'abord. Chaque avis part
      * à part : celui qui ne part pas (une messagerie en panne) est signalé
-     * sans empêcher les suivants.
+     * sans empêcher les suivants. Rien pour une déclaration, sans cabinet :
+     * les personnes de l'expert-comptable ne sont pas prévenues.
      *
      * @param  Collection<int, User>  $comptesDuCabinet  les comptes du cabinet qui avaient accès
      */
     public static function prevenir(LienCabinet $lien, Collection $comptesDuCabinet, ?User $auteur, string $raison, bool $prevenirLeClient = true): void
     {
+        if ($lien->cabinet_id === null) {
+            return;
+        }
+
         $client = Societe::query()->findOrFail($lien->societe_id);
         $cabinet = Societe::query()->findOrFail($lien->cabinet_id);
 
@@ -236,7 +252,7 @@ class MettreFinAuLienAction
             [$relu] = $relus;
             $controle($auteurRelu, $relu);
 
-            if (! $relu->estActif()) {
+            if (! $relu->estEnCours()) {
                 return false;
             }
 
@@ -246,11 +262,17 @@ class MettreFinAuLienAction
         }, function (Societe $journal, array $relus, bool $termine) use ($client, $motif): array {
             [$relu] = $relus;
 
-            return ! $termine ? [] : [[ActionAuditee::LienTermine, [
-                'cabinet' => IdentiteDansLeJournal::de(Societe::query()->findOrFail($relu->cabinet_id)),
+            if (! $termine) {
+                return [];
+            }
+
+            $declaration = $relu->cabinet_id === null;
+
+            return [[ActionAuditee::LienTermine, [
+                'cabinet' => $declaration ? IdentiteDansLeJournal::declaree($relu) : IdentiteDansLeJournal::de(Societe::query()->findOrFail($relu->cabinet_id)),
                 'client' => IdentiteDansLeJournal::de($client),
                 'motif' => $motif->value,
-            ], (int) $relu->cabinet_id]];
+            ], $declaration ? CleDuModele::de($client) : (int) $relu->cabinet_id]];
         }, editeur: $editeur, visee: $visee);
 
         if ($termine) {

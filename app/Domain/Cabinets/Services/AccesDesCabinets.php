@@ -133,26 +133,39 @@ class AccesDesCabinets
     }
 
     /**
-     * Les sociétés clientes que lui ouvrent ses liens (voir liensOuverts()),
-     * par identifiant : il ouvre leurs magasins réels (voir
-     * User::peutOuvrir()).
-     *
-     * @return list<int>
-     */
-    public function clientsOuverts(User $compte): array
-    {
-        return ValeursLues::entiers($this->liensOuverts($compte)->pluck('liens_cabinet.societe_id'));
-    }
-
-    /**
      * Les magasins réels des clients que le compte ouvre, actifs ou non,
-     * par dénomination du client puis nom du magasin.
+     * par dénomination du client puis nom du magasin : tous ceux d'un
+     * client qui les ouvre tous au cabinet, présents et futurs, ou ceux
+     * qu'il a choisis (voir LienCabinet::choisirLesMagasins()).
      *
      * @return Collection<int, Magasin>
      */
     public function magasinsOuverts(User $compte): Collection
     {
         return $this->magasinsDes($this->liensOuverts($compte));
+    }
+
+    /**
+     * Les identifiants des magasins que le compte ouvre (voir
+     * magasinsOuverts()), en une lecture, sans regarder le client.
+     *
+     * @return list<int>
+     */
+    public function idsDesMagasinsOuverts(User $compte): array
+    {
+        return ValeursLues::entiers($this->requeteDesMagasins($this->liensOuverts($compte))->pluck('magasins.id'));
+    }
+
+    /**
+     * Les identifiants des magasins réels des clients de ses liens que leur
+     * client ouvre au cabinet, sans regarder l'état du cabinet (voir
+     * liensDuCompte() et magasinsDuCompte()), en une lecture.
+     *
+     * @return list<int>
+     */
+    public function idsDesMagasinsDuCompte(User $compte): array
+    {
+        return ValeursLues::entiers($this->requeteDesMagasins($this->liensDuCompte($compte))->pluck('magasins.id'));
     }
 
     /**
@@ -172,7 +185,8 @@ class AccesDesCabinets
      * le client accorde au cabinet par le lien actif, croisées avec celles
      * qu'un cabinet peut recevoir d'un client de ce type (voir
      * PermissionRegistry::duCabinet()), triées, par identifiant de la
-     * société cliente ; elles valent dans chacun de ses magasins réels.
+     * société cliente ; elles valent dans chacun des magasins réels que le
+     * client ouvre au cabinet (voir idsDesMagasinsDuCompte()).
      * Aucun client pour un compte retiré ou sans lien actif confié. Trois
      * lectures quel que soit le nombre de clients, chacune filtrée par les
      * liens du compte.
@@ -212,12 +226,18 @@ class AccesDesCabinets
     /**
      * Les comptes du cabinet qui ont accès au client de ce lien : son
      * propriétaire et les collaborateurs à qui il est confié, jamais un
-     * compte retiré ; sans les suspendus si on le demande.
+     * compte retiré ; sans les suspendus si on le demande. Pour une
+     * déclaration, sans cabinet, les comptes de l'expert-comptable de la
+     * société (voir ExpertsComptablesDeclares::comptesDe()).
      *
      * @return Collection<int, User>
      */
     public function comptesQuiOntAcces(LienCabinet $lien, bool $avecLesSuspendus = true): Collection
     {
+        if ($lien->cabinet_id === null) {
+            return app(ExpertsComptablesDeclares::class)->comptesDe($lien, $avecLesSuspendus);
+        }
+
         return User::query()
             ->with('societe')
             ->where('societe_id', $lien->cabinet_id)
@@ -237,10 +257,15 @@ class AccesDesCabinets
     /**
      * Efface les clients confiés de ce lien, depuis le contexte du client
      * (sa fin, son remplacement) : une écriture dans la table du cabinet,
-     * filtrée par le cabinet du lien et le lien.
+     * filtrée par le cabinet du lien et le lien ; rien pour une
+     * déclaration, qu'aucun cabinet ne confie.
      */
     public function effacerLesClientsConfies(LienCabinet $lien): void
     {
+        if ($lien->cabinet_id === null) {
+            return;
+        }
+
         DB::table('clients_confies')->where('societe_id', $lien->cabinet_id)->where('lien_id', $lien->getKey())->delete();
     }
 
@@ -250,14 +275,37 @@ class AccesDesCabinets
      */
     private function magasinsDes(Builder $liens): Collection
     {
-        return Magasin::query()
+        return $this->requeteDesMagasins($liens)
             ->with('societe')
-            ->whereIn('magasins.societe_id', $liens->select('liens_cabinet.societe_id'))
-            ->where('magasins.est_demonstration', false)
             ->join('societes', 'societes.id', '=', 'magasins.societe_id')
             ->orderBy('societes.raison_sociale')
             ->orderBy('magasins.nom')
             ->orderBy('magasins.id')
             ->get(['magasins.*']);
+    }
+
+    /**
+     * Les magasins réels que ces liens ouvrent : tous ceux du client d'un
+     * lien qui les ouvre tous, présents et futurs, et ceux qu'il a choisis
+     * pour un lien qui n'en ouvre qu'une sélection ; jamais le magasin de
+     * démonstration. Chaque lien est lu dans la société de son client.
+     *
+     * @param  Builder<LienCabinet>  $liens
+     * @return Builder<Magasin>
+     */
+    private function requeteDesMagasins(Builder $liens): Builder
+    {
+        $tous = (clone $liens)->where('liens_cabinet.tous_les_magasins', true)->select('liens_cabinet.societe_id');
+        $selections = (clone $liens)->where('liens_cabinet.tous_les_magasins', false)->select('liens_cabinet.id');
+
+        return Magasin::query()
+            ->where('magasins.est_demonstration', false)
+            ->where(fn (Builder $ouverts) => $ouverts
+                ->whereIn('magasins.societe_id', $tous)
+                ->orWhereIn('magasins.id', fn (RequeteSql $choisis) => $choisis
+                    ->from('magasins_cabinet')
+                    ->whereIn('magasins_cabinet.lien_id', $selections)
+                    ->whereColumn('magasins_cabinet.societe_id', 'magasins.societe_id')
+                    ->select('magasins_cabinet.magasin_id')));
     }
 }

@@ -14,7 +14,10 @@ use Illuminate\Mail\Mailables\Envelope;
  * nouvelle adresse demandée dans le profil remplace alors l'ancienne ; la
  * première adresse d'un propriétaire qui n'en a encore aucune (celle
  * choisie en saisissant le code du courrier) se confirme en suivant le
- * lien connecté à ce compte, avec son identifiant.
+ * lien connecté à ce compte, avec son identifiant. Pour un expert-comptable
+ * de la société ($adresseDeConnexion faux), l'adresse n'est pas une
+ * adresse de connexion : elle reçoit les liens que le propriétaire de la
+ * société lui envoie.
  */
 class ConfirmationNouvelleAdresseMail extends Mailable
 {
@@ -22,13 +25,16 @@ class ConfirmationNouvelleAdresseMail extends Mailable
         public readonly string $lien,
         public readonly string $expireLe,
         public readonly bool $premiereAdresse = false,
+        public readonly bool $adresseDeConnexion = true,
     ) {}
 
     public function envelope(): Envelope
     {
-        return new Envelope(subject: $this->premiereAdresse
-            ? 'Confirmez votre adresse de connexion à '.Reglage::texte('app.name')
-            : 'Confirmez votre nouvelle adresse de connexion à '.Reglage::texte('app.name'));
+        return new Envelope(subject: match (true) {
+            ! $this->adresseDeConnexion => 'Confirmez votre nouvelle adresse sur '.Reglage::texte('app.name'),
+            $this->premiereAdresse => 'Confirmez votre adresse de connexion à '.Reglage::texte('app.name'),
+            default => 'Confirmez votre nouvelle adresse de connexion à '.Reglage::texte('app.name'),
+        });
     }
 
     public function content(): Content
@@ -37,6 +43,7 @@ class ConfirmationNouvelleAdresseMail extends Mailable
             'lien' => $this->lien,
             'expireLe' => $this->expireLe,
             'premiereAdresse' => $this->premiereAdresse,
+            'adresseDeConnexion' => $this->adresseDeConnexion,
         ]);
     }
 }

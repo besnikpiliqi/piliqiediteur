@@ -3,6 +3,8 @@
 namespace App\Filament\Societe\Pages;
 
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Cabinets\Actions\AjouterUnExpertComptableAction;
+use App\Domain\Cabinets\Actions\DeclarerSonExpertComptableAction;
 use App\Domain\Cabinets\Actions\DesignerUnCabinetAction;
 use App\Domain\Cabinets\Actions\InviterSonCabinetACreerSonEspaceAction;
 use App\Domain\Cabinets\Actions\MettreFinAuLienAction;
@@ -11,27 +13,41 @@ use App\Domain\Cabinets\Actions\RetirerLaDemandeDeLienAction;
 use App\Domain\Cabinets\Enums\EtatDuLien;
 use App\Domain\Cabinets\Models\Cabinet;
 use App\Domain\Cabinets\Models\LienCabinet;
+use App\Domain\Cabinets\Services\ExpertsComptablesDeclares;
 use App\Domain\Cabinets\Services\RechercheDesCabinets;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Tenancy\Enums\StatutCompte;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Scopes\SocieteScope;
 use App\Domain\Tenancy\Support\CompteConnecte;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\Concerns\GereLesExceptionsMetier;
+use App\Filament\Societe\Resources\MembreResource;
+use App\Integrations\Courriel\CourrielNonParti;
 use App\Models\User;
+use Closure;
 use Filament\Actions\Action;
 use Filament\Facades\Filament;
+use Filament\Forms\Components\Checkbox;
 use Filament\Forms\Components\CheckboxList;
+use Filament\Forms\Components\Component;
+use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Placeholder;
+use Filament\Forms\Components\Radio;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Forms\Contracts\HasForms;
 use Filament\Forms\Form;
+use Filament\Forms\Get;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use LogicException;
 use UnexpectedValueException;
 
@@ -60,11 +76,19 @@ use UnexpectedValueException;
  */
 class CabinetComptable extends Page implements HasForms
 {
+    public const TOUS_LES_MAGASINS = 'tous';
+
+    public const SELECTION_DE_MAGASINS = 'selection';
+
     use GereLesExceptionsMetier, InteractsWithForms;
 
     public const AIDE_TELECHARGEMENTS = 'Jamais accordé par défaut : vous seul le cochez. Votre cabinet n\'y reçoit que les documents que ses autres autorisations lui laissent voir.';
 
     public const TEXTE_JAMAIS = 'Jamais la vente, l\'encaissement, la caisse, les comptes ni les réglages de la société.';
+
+    public const TEXTE_DE_LA_DECLARATION = 'Votre expert-comptable n\'a pas encore d\'espace PILIQI ? Déclarez-le par le SIREN de son cabinet : PILIQI crée un compte pour chaque personne que vous nommez, qui choisit son mot de passe par un lien valable 7 jours envoyé à son adresse professionnelle. Le jour où son cabinet ouvre son espace et est vérifié, il est relié à votre société avec les mêmes autorisations, et ces comptes se ferment.';
+
+    public const TEXTE_EN_ATTENTE = 'Dès que ce cabinet sera inscrit et vérifié sur PILIQI, il sera relié à votre société avec ces autorisations, et ces comptes seront fermés, tant qu\'au moins une de ces personnes a un compte actif.';
 
     protected static ?string $navigationIcon = 'heroicon-o-briefcase';
 
@@ -99,11 +123,15 @@ class CabinetComptable extends Page implements HasForms
      */
     private function remplir(): void
     {
-        $accordees = $this->lienActif()?->autorisations() ?? [];
+        $accordees = $this->lienEnCours()?->autorisations() ?? [];
         $type = $this->societe()->type_activite;
 
+        $lien = $this->lienEnCours();
+
         $this->form->fill([
-            'consultations' => array_values(array_intersect($accordees, PermissionRegistry::parDefautDuCabinet($type))),
+            'portee' => $lien === null || $lien->tous_les_magasins ? self::TOUS_LES_MAGASINS : self::SELECTION_DE_MAGASINS,
+            'magasins' => array_map(strval(...), $lien?->magasinsChoisis() ?? []),
+            'consultations' => PermissionRegistry::casesDuCabinet(array_values(array_intersect($accordees, PermissionRegistry::parDefautDuCabinet($type)))),
             'achats' => array_values(array_intersect($accordees, PermissionRegistry::ajoutablesAuCabinet($type))),
             'telechargements' => array_values(array_intersect($accordees, PermissionRegistry::cocheesParLeProprietaire($type))),
         ]);
@@ -117,6 +145,51 @@ class CabinetComptable extends Page implements HasForms
     private function autorisationsCochees(): array
     {
         return self::autorisationsCocheesDans($this->form->getState());
+    }
+
+    /**
+     * Les deux champs du choix des magasins que voit le cabinet, ici comme
+     * sur la page de rattachement (décision de l'éditeur du 11/11/2026) :
+     * « Tous les magasins, présents et futurs », d'un clic, ou une
+     * sélection cochée magasin par magasin, parmi les magasins réels de la
+     * société.
+     *
+     * @return list<Component>
+     */
+    public static function champsDesMagasins(Societe $societe, Closure $visible): array
+    {
+        return [
+            Radio::make('portee')
+                ->label('Magasins que voit votre cabinet')
+                ->options([self::TOUS_LES_MAGASINS => 'Tous les magasins, présents et futurs', self::SELECTION_DE_MAGASINS => 'Seulement les magasins cochés ci-dessous'])
+                ->default(self::TOUS_LES_MAGASINS)
+                ->required()
+                ->live()
+                ->visible($visible),
+            CheckboxList::make('magasins')
+                ->label('Magasins choisis')
+                ->helperText('Un magasin non coché n\'est ni listé ni ouvert pour votre cabinet. Les mêmes autorisations valent dans chaque magasin coché.')
+                ->options(fn (): array => $societe->magasinsReels()->orderBy('nom')->orderBy('id')->pluck('nom', 'id')->map(fn (mixed $nom): string => (string) $nom)->all())
+                ->columns(2)
+                ->visible(fn (Get $get): bool => $visible() && $get('portee') === self::SELECTION_DE_MAGASINS),
+        ];
+    }
+
+    /**
+     * Les magasins choisis d'un formulaire : null pour tous les magasins,
+     * présents et futurs ; sinon les identifiants cochés, une sélection
+     * vide étant refusée par l'action (voir LienCabinet::choisirLesMagasins()).
+     *
+     * @param  array<array-key, mixed>  $etat
+     * @return list<int>|null
+     */
+    public static function magasinsChoisisDans(array $etat): ?array
+    {
+        if (($etat['portee'] ?? self::TOUS_LES_MAGASINS) === self::TOUS_LES_MAGASINS) {
+            return null;
+        }
+
+        return array_values(array_map(static fn (mixed $magasin): int => (int) ValeurSimple::enTexte($magasin), ValeursLues::tableau($etat['magasins'] ?? [])));
     }
 
     /**
@@ -147,9 +220,15 @@ class CabinetComptable extends Page implements HasForms
         return ValeursLues::instance(Filament::getTenant(), Societe::class);
     }
 
-    public function lienActif(): ?LienCabinet
+    /**
+     * Le lien en cours de la société : son cabinet lié, ou son
+     * expert-comptable déclaré, dont la déclaration attend l'espace de son
+     * cabinet ; les autorisations et les magasins se règlent de même pour
+     * l'un et l'autre.
+     */
+    public function lienEnCours(): ?LienCabinet
     {
-        return LienCabinet::query()->where('etat', EtatDuLien::Actif->value)->first();
+        return LienCabinet::query()->enCours()->first();
     }
 
     public function form(Form $form): Form
@@ -159,22 +238,23 @@ class CabinetComptable extends Page implements HasForms
 
         return $form
             ->schema([
+                ...self::champsDesMagasins($this->societe(), fn (): bool => $this->lienEnCours() !== null),
                 CheckboxList::make('consultations')
                     ->label('Consulter')
                     ->options(array_intersect_key($libelles, array_flip(PermissionRegistry::parDefautDuCabinet($type))))
                     ->columns(2)
-                    ->hidden(fn (): bool => $this->lienActif() === null),
+                    ->hidden(fn (): bool => $this->lienEnCours() === null),
                 CheckboxList::make('achats')
                     ->label('Achats et stock')
                     ->options(array_intersect_key($libelles, array_flip(PermissionRegistry::ajoutablesAuCabinet($type))))
                     ->columns(2)
-                    ->hidden(fn (): bool => $this->lienActif() === null || PermissionRegistry::ajoutablesAuCabinet($type) === []),
+                    ->hidden(fn (): bool => $this->lienEnCours() === null || PermissionRegistry::ajoutablesAuCabinet($type) === []),
                 CheckboxList::make('telechargements')
                     ->label('Téléchargement des documents par période')
                     ->helperText(self::AIDE_TELECHARGEMENTS)
                     ->options(array_intersect_key($libelles, array_flip(PermissionRegistry::cocheesParLeProprietaire($type))))
-                    ->hidden(fn (): bool => $this->lienActif() === null),
-                Placeholder::make('jamais')->hiddenLabel()->content(self::TEXTE_JAMAIS)->hidden(fn (): bool => $this->lienActif() === null),
+                    ->hidden(fn (): bool => $this->lienEnCours() === null),
+                Placeholder::make('jamais')->hiddenLabel()->content(self::TEXTE_JAMAIS)->hidden(fn (): bool => $this->lienEnCours() === null),
             ])
             ->statePath('data');
     }
@@ -185,12 +265,13 @@ class CabinetComptable extends Page implements HasForms
             ->label('Enregistrer')
             ->requiresConfirmation(fn (): bool => $this->autorisationsCochees() === [])
             ->modalDescription('Sans aucune autorisation, votre cabinet reste lié et voit votre identité, vos réglages fiscaux et vos magasins, mais n\'ouvre plus aucun document, aucune fiche ni aucun téléchargement.')
-            ->visible(fn (): bool => $this->lienActif() !== null)
+            ->visible(fn (): bool => $this->lienEnCours() !== null)
             ->action(function (): void {
                 static::executerSansCasser(function (): void {
-                    $lien = $this->lienActif() ?? throw new LogicException('Votre société n\'a plus de cabinet lié.');
-                    app(ReglerLesAutorisationsDuCabinetAction::class)->handle(CompteConnecte::exiger(), $lien, $this->autorisationsCochees());
-                    Notification::make()->title('Les autorisations de votre cabinet sont enregistrées.')->success()->send();
+                    $lien = $this->lienEnCours() ?? throw new LogicException('Votre société n\'a plus de cabinet lié ni d\'expert-comptable déclaré.');
+                    $etat = $this->form->getState();
+                    app(ReglerLesAutorisationsDuCabinetAction::class)->handle(CompteConnecte::exiger(), $lien, self::autorisationsCocheesDans($etat), self::magasinsChoisisDans($etat));
+                    Notification::make()->title($lien->estDeclare() ? 'Les autorisations de votre expert-comptable sont enregistrées.' : 'Les autorisations de votre cabinet sont enregistrées.')->success()->send();
                 });
             });
     }
@@ -198,18 +279,21 @@ class CabinetComptable extends Page implements HasForms
     public function mettreFinAction(): Action
     {
         return Action::make('mettreFin')
-            ->label('Mettre fin au lien')
+            ->label(fn (): string => $this->lienEnCours()?->estDeclare() === true ? 'Retirer votre expert-comptable' : 'Mettre fin au lien')
             ->color('danger')
             ->icon('heroicon-o-link-slash')
             ->requiresConfirmation()
-            ->modalDescription('L\'accès de votre cabinet à votre société s\'arrête aussitôt ; il en est prévenu.')
-            ->visible(fn (): bool => $this->lienActif() !== null)
+            ->modalDescription(fn (): string => $this->lienEnCours()?->estDeclare() === true
+                ? 'Les comptes de '.implode(', ', $this->personnesDeLaDeclaration()->map(fn (User $compte): string => $compte->name)->all()).' sont retirés aussitôt ; leur historique reste.'
+                : 'L\'accès de votre cabinet à votre société s\'arrête aussitôt ; il en est prévenu.')
+            ->visible(fn (): bool => $this->lienEnCours() !== null)
             ->action(function (): void {
                 static::executerSansCasser(function (): void {
-                    $lien = $this->lienActif() ?? throw new LogicException('Votre société n\'a plus de cabinet lié.');
+                    $lien = $this->lienEnCours() ?? throw new LogicException('Votre société n\'a plus de cabinet lié ni d\'expert-comptable déclaré.');
+                    $declaration = $lien->estDeclare();
                     app(MettreFinAuLienAction::class)->handle(CompteConnecte::exiger(), $lien);
                     $this->remplir();
-                    Notification::make()->title('Le lien avec votre cabinet a pris fin.')->success()->send();
+                    Notification::make()->title($declaration ? 'Votre expert-comptable n\'est plus déclaré : ses comptes sont retirés.' : 'Le lien avec votre cabinet a pris fin.')->success()->send();
                 });
             });
     }
@@ -234,7 +318,8 @@ class CabinetComptable extends Page implements HasForms
         return Action::make('demanderLeLien')
             ->label('Demander le lien')
             ->requiresConfirmation()
-            ->modalDescription('Le propriétaire de ce cabinet reçoit votre demande et y répond dans les 7 jours ; tant qu\'il ne l\'a pas acceptée, il n\'a aucun accès à votre société.')
+            ->modalDescription(fn (): string => 'Le propriétaire de ce cabinet reçoit votre demande et y répond dans les 7 jours ; tant qu\'il ne l\'a pas acceptée, il n\'a aucun accès à votre société.'
+                .($this->lienEnCours()?->estDeclare() === true ? ' Son acceptation remplacera votre expert-comptable déclaré et fermera ses comptes, sauf si c\'est son cabinet : il est alors relié aussitôt.' : ''))
             ->action(function (array $arguments): void {
                 static::executerSansCasser(function () use ($arguments): void {
                     $cabinet = app(RechercheDesCabinets::class)->pour($this->recherche)->firstWhere('uuid', ValeurSimple::enTexte($arguments['uuid'] ?? ''))
@@ -260,6 +345,207 @@ class CabinetComptable extends Page implements HasForms
                     Notification::make()->title('L\'invitation est envoyée.')->success()->send();
                 });
             });
+    }
+
+    /**
+     * « Déclarer votre expert-comptable » : par le SIREN de son cabinet, le
+     * nom d'une personne et son adresse professionnelle saisie deux fois,
+     * avec les autorisations et les magasins de la déclaration, en
+     * redonnant son mot de passe (voir DeclarerSonExpertComptableAction).
+     * Avec un lien en cours ou une demande envoyée, une case confirme le
+     * remplacement. Le jeton d'écran, tiré à l'ouverture, rend sans effet
+     * une demande répétée.
+     */
+    public function declarerAction(): Action
+    {
+        $type = $this->societe()->type_activite;
+        $libelles = PermissionRegistry::libellesDuCabinet($type);
+
+        return Action::make('declarer')
+            ->label(fn (): string => $this->lienEnCours() === null ? 'Déclarer votre expert-comptable' : 'Déclarer un autre expert-comptable')
+            ->icon('heroicon-o-user-plus')
+            ->visible(fn (): bool => $this->societe()->estValidee())
+            ->modalHeading('Déclarer votre expert-comptable')
+            ->modalDescription(self::TEXTE_DE_LA_DECLARATION)
+            ->modalSubmitActionLabel('Déclarer')
+            ->mountUsing(fn (Form $form) => $form->fill([
+                'jeton' => (string) Str::uuid(),
+                'portee' => self::TOUS_LES_MAGASINS,
+                'consultations' => PermissionRegistry::casesDuCabinet(PermissionRegistry::parDefautDuCabinet($type)),
+                'achats' => [],
+                'telechargements' => [],
+            ]))
+            ->form(fn (): array => [
+                Hidden::make('jeton'),
+                TextInput::make('siren')->label('SIREN de son cabinet')->required()->length(9),
+                TextInput::make('name')->label('Nom de la personne')->required()->maxLength(255),
+                TextInput::make('email')->label('Son adresse e-mail professionnelle')->email()->required()->maxLength(255)
+                    ->helperText('Le lien part à cette adresse. La personne qui le suit entre dans vos magasins avec les autorisations ci-dessous.'),
+                TextInput::make('email_confirmation')->label('Confirmez cette adresse')->email()->required()->maxLength(255),
+                ...self::champsDesMagasins($this->societe(), fn (): bool => true),
+                CheckboxList::make('consultations')->label('Consulter')->options(array_intersect_key($libelles, array_flip(PermissionRegistry::parDefautDuCabinet($type))))->columns(2),
+                CheckboxList::make('achats')->label('Achats et stock')->options(array_intersect_key($libelles, array_flip(PermissionRegistry::ajoutablesAuCabinet($type))))->columns(2)
+                    ->visible(PermissionRegistry::ajoutablesAuCabinet($type) !== []),
+                CheckboxList::make('telechargements')->label('Téléchargement des documents par période')->helperText(self::AIDE_TELECHARGEMENTS)
+                    ->options(array_intersect_key($libelles, array_flip(PermissionRegistry::cocheesParLeProprietaire($type)))),
+                Placeholder::make('jamais')->hiddenLabel()->content(self::TEXTE_JAMAIS),
+                Checkbox::make('remplacer')->label(fn (): string => $this->texteDuRemplacement())->visible(fn (): bool => $this->texteDuRemplacement() !== ''),
+                TextInput::make('mot_de_passe')->label('Votre mot de passe')->password()->required(),
+            ])
+            ->action(function (array $data, Action $action): void {
+                $this->executerSansFermer($action, function () use ($data): void {
+                    $compte = app(DeclarerSonExpertComptableAction::class)->handle(CompteConnecte::exiger(), $this->societe(), [
+                        'siren' => ValeurSimple::enTexte($data['siren'] ?? ''),
+                        'name' => $data['name'] ?? null,
+                        'email' => $data['email'] ?? null,
+                        'email_confirmation' => $data['email_confirmation'] ?? null,
+                        'autorisations' => self::autorisationsCocheesDans($data),
+                        'magasins' => self::magasinsChoisisDans($data),
+                        'remplacer' => ($data['remplacer'] ?? false) === true,
+                    ], ValeurSimple::enTexte($data['mot_de_passe'] ?? ''), ValeurSimple::enTexte($data['jeton'] ?? ''));
+                    $this->remplir();
+                    $this->annoncerLeCompte($compte, 'est déclaré');
+                });
+            });
+    }
+
+    /**
+     * « Ajouter une personne de ce cabinet » à la déclaration en attente
+     * (voir AjouterUnExpertComptableAction).
+     */
+    public function ajouterUnePersonneAction(): Action
+    {
+        return Action::make('ajouterUnePersonne')
+            ->label('Ajouter une personne de ce cabinet')
+            ->icon('heroicon-o-user-plus')
+            ->visible(fn (): bool => $this->lienEnCours()?->estDeclare() === true)
+            ->modalSubmitActionLabel('Ajouter')
+            ->mountUsing(fn (Form $form) => $form->fill(['jeton' => (string) Str::uuid()]))
+            ->form([
+                Hidden::make('jeton'),
+                TextInput::make('name')->label('Nom de la personne')->required()->maxLength(255),
+                TextInput::make('email')->label('Son adresse e-mail professionnelle')->email()->required()->maxLength(255)
+                    ->helperText('Le lien part à cette adresse. La personne a les mêmes autorisations que les autres personnes de votre expert-comptable.'),
+                TextInput::make('email_confirmation')->label('Confirmez cette adresse')->email()->required()->maxLength(255),
+                TextInput::make('mot_de_passe')->label('Votre mot de passe')->password()->required(),
+            ])
+            ->action(function (array $data, Action $action): void {
+                $this->executerSansFermer($action, function () use ($data): void {
+                    $declaration = $this->lienEnCours();
+
+                    if ($declaration === null || ! $declaration->estDeclare()) {
+                        throw new LogicException(AjouterUnExpertComptableAction::MESSAGE_PLUS_DECLARE);
+                    }
+
+                    $compte = app(AjouterUnExpertComptableAction::class)->handle(CompteConnecte::exiger(), $declaration, [
+                        'name' => $data['name'] ?? null,
+                        'email' => $data['email'] ?? null,
+                        'email_confirmation' => $data['email_confirmation'] ?? null,
+                    ], ValeurSimple::enTexte($data['mot_de_passe'] ?? ''), ValeurSimple::enTexte($data['jeton'] ?? ''));
+                    $this->annoncerLeCompte($compte, 'est ajouté');
+                });
+            });
+    }
+
+    /**
+     * Exécute le geste d'une fenêtre qui crée un compte ; un refus (une
+     * donnée refusée, une règle, un droit, un e-mail qui n'a pas pu partir)
+     * s'affiche sans fermer la fenêtre, pour que le propriétaire corrige
+     * sans tout ressaisir.
+     *
+     * @param  Closure(): void  $geste
+     */
+    private function executerSansFermer(Action $action, Closure $geste): void
+    {
+        try {
+            $geste();
+        } catch (ValidationException $refus) {
+            Notification::make()->title(implode(' ', $refus->validator->errors()->all()))->danger()->send();
+            $action->halt();
+        } catch (LogicException|AuthorizationException|CourrielNonParti $refus) {
+            Notification::make()->title($refus->getMessage())->danger()->send();
+            $refus instanceof CourrielNonParti ? $this->remplir() : $action->halt();
+        }
+    }
+
+    /**
+     * Le texte de la case qui confirme le remplacement du lien en cours et
+     * le retrait de la demande envoyée ; vide quand il n'y a rien à
+     * remplacer.
+     */
+    private function texteDuRemplacement(): string
+    {
+        $enCours = $this->lienEnCours();
+        $demande = $this->demandesEnvoyees()->first();
+        $texte = match (true) {
+            $enCours?->estDeclare() === true => 'Je remplace '.$enCours->nomDuCabinetDeclare().' : les comptes de '.implode(', ', $this->personnesDeLaDeclaration()->map(fn (User $compte): string => $compte->name)->all()).' seront fermés',
+            $enCours !== null => 'Je remplace '.($this->cabinetDu($enCours)['societe']->raison_sociale ?? 'mon cabinet lié').' : son accès prend fin aussitôt',
+            default => '',
+        };
+
+        if ($demande !== null) {
+            $cabinet = $this->cabinetDu($demande)['societe']->raison_sociale ?? 'ce cabinet';
+            $texte = $texte === '' ? "Je retire ma demande à {$cabinet}" : "{$texte}, et je retire ma demande à {$cabinet}";
+        }
+
+        return $texte;
+    }
+
+    /**
+     * Annonce le compte créé au propriétaire : le lien et son échéance,
+     * l'adresse où il est parti, et l'identifiant, que la personne
+     * découvrira en choisissant son mot de passe.
+     */
+    private function annoncerLeCompte(User $compte, string $verbe): void
+    {
+        $attachement = app(ExpertsComptablesDeclares::class)->attachementDe($compte);
+        $echeance = $attachement?->jeton_expire_le === null ? null : Calendrier::deParis()->afficher($attachement->jeton_expire_le, 'd/m/Y à H:i');
+
+        Notification::make()
+            ->success()
+            ->persistent()
+            ->title("{$compte->name} {$verbe}")
+            ->body(($echeance === null ? "Le lien n'a pas pu partir : envoyez-lui un nouveau lien depuis sa fiche." : "Un lien valable jusqu'au {$echeance} est parti à {$compte->email}.")." Son identifiant : {$compte->identifiantDeConnexion()} ; la personne le découvrira en choisissant son mot de passe.")
+            ->send();
+    }
+
+    /**
+     * Les personnes non retirées de la déclaration en attente, par
+     * identifiant croissant ; aucune sans déclaration.
+     *
+     * @return Collection<int, User>
+     */
+    public function personnesDeLaDeclaration(): Collection
+    {
+        $declaration = $this->lienEnCours();
+
+        return $declaration?->estDeclare() === true ? app(ExpertsComptablesDeclares::class)->comptesDe($declaration) : new Collection;
+    }
+
+    /**
+     * L'état du lien du mot de passe d'une personne de la déclaration, dit
+     * au propriétaire.
+     */
+    public function etatDuLienDe(User $compte): string
+    {
+        $attachement = app(ExpertsComptablesDeclares::class)->attachementDe($compte);
+        $calendrier = Calendrier::deParis();
+
+        return match (true) {
+            $attachement === null => '—',
+            $attachement->aChoisiSonMotDePasse() => 'Mot de passe choisi le '.$calendrier->afficher(ValeurRequise::de($attachement->mot_de_passe_choisi_le, 'la date du premier mot de passe'), 'd/m/Y'),
+            $attachement->lienValable() => 'Lien valable jusqu\'au '.$calendrier->afficher(ValeurRequise::de($attachement->jeton_expire_le, 'l\'échéance du lien'), 'd/m/Y à H:i'),
+            default => 'Lien expiré, effacé ou non parti : à renvoyer',
+        };
+    }
+
+    /**
+     * L'adresse de la fiche d'une personne de la déclaration, dans la liste
+     * de l'équipe.
+     */
+    public function urlDeLaFiche(User $compte): string
+    {
+        return MembreResource::getUrl('view', ['record' => $compte]);
     }
 
     /**

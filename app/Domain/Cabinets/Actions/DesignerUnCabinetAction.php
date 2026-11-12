@@ -10,6 +10,7 @@ use App\Domain\Cabinets\Support\IdentiteDansLeJournal;
 use App\Domain\Calendrier\Calendrier;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Models\Societe;
+use App\Domain\Tenancy\Scopes\SocieteScope;
 use App\Domain\Tenancy\Services\DebitDesEmails;
 use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\JournalDesDroits;
@@ -41,7 +42,13 @@ use LogicException;
  * que cela la valide jamais. Le propriétaire du cabinet est prévenu, par
  * e-mail compris, dans la limite d'e-mails de l'auteur, par un avis qui
  * nomme le client et s'efface de sa cloche quand le lien prend fin (voir
- * MettreFinAuLienAction::prevenir()).
+ * MettreFinAuLienAction::prevenir()). Désigner le cabinet que la société a
+ * déclaré comme son expert-comptable (son SIREN est celui de la
+ * déclaration en attente) rattache directement cette déclaration, au nom
+ * du propriétaire, avec ses autorisations et ses magasins (voir
+ * RattacherUneDeclarationAction) ; quand elle ne se rattache pas (aucune
+ * personne active), la désignation suit son cours et le lien, une fois
+ * accepté, remplace la déclaration.
  */
 class DesignerUnCabinetAction
 {
@@ -73,6 +80,13 @@ class DesignerUnCabinetAction
 
         if (! $cabinet->estUnCabinetVerifie()) {
             throw new LogicException(self::MESSAGE_CABINET_NON_LIABLE);
+        }
+
+        $declaration = LienCabinet::query()->withoutGlobalScope(SocieteScope::class)->where('societe_id', $client->getKey())->where('etat', EtatDuLien::Declare->value)->first(['id', 'siren_cabinet']);
+
+        if ($declaration !== null && $declaration->siren_cabinet === $cabinet->siren
+            && app(RattacherUneDeclarationAction::class)->handle(CleDuModele::de($declaration), CleDuModele::de($cabinet), $auteurRelu)) {
+            return LienCabinet::query()->withoutGlobalScope(SocieteScope::class)->where('societe_id', $client->getKey())->findOrFail($declaration->getKey());
         }
 
         $this->debit->verifier($auteurRelu);

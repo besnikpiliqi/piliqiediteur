@@ -70,6 +70,7 @@ class PageDuLien extends SimplePage
                     ->label('Votre mot de passe')
                     ->password()
                     ->revealable(filament()->arePasswordsRevealable())
+                    ->required()
                     ->rules(fn (): array => RegleDuMotDePasse::regles($this->compteDuLien()?->identifiantDeConnexion()))
                     ->same('passwordConfirmation')
                     ->visible(fn (): bool => $this->compteDuLien() !== null),

@@ -1,7 +1,7 @@
 {{-- Voir CabinetComptable. --}}
 <x-filament-panels::page>
     @php($calendrier = \App\Domain\Calendrier\Calendrier::deParis())
-    @php($lien = $this->lienActif())
+    @php($lien = $this->lienEnCours())
 
     @if ($this->societe()->attendSonCode())
         <x-filament::section icon="heroicon-o-information-circle">
@@ -9,7 +9,51 @@
         </x-filament::section>
     @endif
 
-    @if ($lien !== null)
+    @if ($lien?->estDeclare())
+        <x-filament::section icon="heroicon-o-user-group">
+            <x-slot name="heading">Votre expert-comptable (sans espace {{ config('app.name') }})</x-slot>
+            <x-slot name="description">{{ $lien->denomination_cabinet ?? 'Cabinet' }} — SIREN {{ $lien->siren_cabinet }} — déclaré le {{ $calendrier->afficher($lien->demande_le, 'd/m/Y') }} — en attente de l'espace de son cabinet</x-slot>
+
+            <p>{{ \App\Filament\Societe\Pages\CabinetComptable::TEXTE_EN_ATTENTE }}</p>
+
+            <table class="mt-4 w-full text-sm">
+                <thead>
+                    <tr class="text-start">
+                        <th class="py-1 text-start">Nom</th>
+                        <th class="py-1 text-start">Identifiant</th>
+                        <th class="py-1 text-start">Adresse</th>
+                        <th class="py-1 text-start">Statut</th>
+                        <th class="py-1 text-start">Lien du mot de passe</th>
+                        <th class="py-1"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach ($this->personnesDeLaDeclaration() as $personne)
+                        <tr class="border-t border-gray-100 dark:border-white/10">
+                            <td class="py-1">{{ $personne->name }}</td>
+                            <td class="py-1">{{ $personne->identifiantDeConnexion() }}</td>
+                            <td class="py-1">{{ $personne->email }}</td>
+                            <td class="py-1">{{ $personne->statut->getLabel() }}</td>
+                            <td class="py-1">{{ $this->etatDuLienDe($personne) }}</td>
+                            <td class="py-1"><x-filament::link :href="$this->urlDeLaFiche($personne)">Fiche</x-filament::link></td>
+                        </tr>
+                    @endforeach
+                </tbody>
+            </table>
+
+            <div class="mt-4">
+                {{ $this->form }}
+            </div>
+
+            <div class="mt-4 flex flex-wrap gap-3">
+                {{ $this->enregistrerLesAutorisationsAction }}
+                {{ $this->ajouterUnePersonneAction }}
+                {{ $this->mettreFinAction }}
+            </div>
+        </x-filament::section>
+    @endif
+
+    @if ($lien?->estActif())
         @php($cabinet = $this->cabinetDu($lien))
         <x-filament::section icon="heroicon-o-briefcase">
             <x-slot name="heading">Votre cabinet : {{ $cabinet['societe']->raison_sociale ?? 'sans dénomination' }}</x-slot>
@@ -50,6 +94,17 @@
             @endforeach
         </x-filament::section>
     @endif
+
+    <x-filament::section icon="heroicon-o-identification">
+        <x-slot name="heading">Déclarer votre expert-comptable</x-slot>
+
+        @if ($this->societe()->estValidee())
+            <p>{{ \App\Filament\Societe\Pages\CabinetComptable::TEXTE_DE_LA_DECLARATION }}</p>
+            <div class="mt-2">{{ $this->declarerAction }}</div>
+        @else
+            <p>{{ \App\Domain\Cabinets\Actions\DeclarerSonExpertComptableAction::MESSAGE_SOCIETE_NON_VALIDEE }}</p>
+        @endif
+    </x-filament::section>
 
     <x-filament::section icon="heroicon-o-magnifying-glass">
         <x-slot name="heading">Désigner votre cabinet</x-slot>

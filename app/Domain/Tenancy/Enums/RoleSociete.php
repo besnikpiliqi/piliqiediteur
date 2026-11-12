@@ -24,6 +24,15 @@ use Filament\Support\Contracts\HasLabel;
  *   GardesDesDroits) : sans affectation ni case ni autorisation de
  *   société, il n'entre chez un client que par le lien de son cabinet,
  *   pour les clients que le propriétaire lui confie ;
+ * - l'expert-comptable de la société, une personne du cabinet que le
+ *   propriétaire déclare par son SIREN quand ce cabinet n'a pas d'espace
+ *   sur PILIQI (voir DeclarerSonExpertComptableAction) : ni administrateur
+ *   ni membre, sans affectation ni case ni autorisation de société, il
+ *   ouvre les magasins réels de sa société que la déclaration lui ouvre,
+ *   avec les autorisations qu'elle porte, comme un compte d'un cabinet
+ *   lié ; il ne vend jamais, n'a jamais son identifiant pour mot de passe,
+ *   ne change jamais de rôle, et son compte se retire de lui-même quand le
+ *   cabinet de son SIREN est vérifié (voir RattacherUneDeclarationAction) ;
  * - un membre, affecté à un seul magasin, celui de son identifiant, avec
  *   un rôle de magasin (voir RoleMagasin) : responsable, nommé par le
  *   propriétaire ou un administrateur autorisé ; vendeur ou observateur,
@@ -35,6 +44,7 @@ enum RoleSociete: string implements HasLabel
     case Administrateur = 'administrateur';
     case Membre = 'membre';
     case Collaborateur = 'collaborateur';
+    case ExpertComptable = 'expert_comptable';
 
     public function getLabel(): string
     {
@@ -43,6 +53,7 @@ enum RoleSociete: string implements HasLabel
             self::Administrateur => 'Administrateur',
             self::Membre => 'Membre',
             self::Collaborateur => 'Collaborateur du cabinet',
+            self::ExpertComptable => 'Expert-comptable de la société',
         };
     }
 }

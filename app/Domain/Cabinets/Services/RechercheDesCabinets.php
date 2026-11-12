@@ -2,12 +2,8 @@
 
 namespace App\Domain\Cabinets\Services;
 
-use App\Domain\Cabinets\Models\Cabinet;
 use App\Domain\Recherche\RechercheSansAccents;
-use App\Domain\Tenancy\Enums\StatutSociete;
-use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Societe;
-use App\Domain\Tenancy\Scopes\SocieteScope;
 use Illuminate\Database\Eloquent\Collection;
 
 /**
@@ -37,15 +33,7 @@ final class RechercheDesCabinets
             return new Collection;
         }
 
-        $requete = Societe::query()
-            ->where('type_activite', TypeDActivite::Cabinet->value)
-            ->whereNotNull('validee_le')
-            ->where('statut', StatutSociete::Active->value)
-            ->whereIn('id', Cabinet::query()->withoutGlobalScope(SocieteScope::class)
-                ->whereNotNull('activite_controlee_le')
-                ->whereNotNull('ordre_verifie_le')
-                ->whereNull('ordre_retire_le')
-                ->select('societe_id'));
+        $requete = Societe::query()->cabinetsVerifies();
 
         $parSiren ? $requete->where('siren', $terme) : RechercheSansAccents::appliquer($requete, $terme, ['raison_sociale']);
 

@@ -6,6 +6,7 @@ use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\Authorization\OperateurCourant;
 use App\Domain\Cabinets\Enums\VoieDeVerificationOrdre;
 use App\Domain\Cabinets\Jobs\PrevenirLesClientsDuCabinet;
+use App\Domain\Cabinets\Jobs\RattacherLesDeclarationsDuSiren;
 use App\Domain\Cabinets\Models\Cabinet;
 use App\Domain\Cabinets\Notifications\AvisDuCabinet;
 use App\Domain\Tenancy\Concerns\AgitDansLaSociete;
@@ -121,6 +122,8 @@ class VerifierLOrdreAction
             if (ModeleRelu::de($cabinet)->estUnCabinetVerifie()) {
                 PrevenirLesClientsDuCabinet::dispatch(CleDuModele::de($cabinet), accesRetabli: true);
             }
+
+            RattacherLesDeclarationsDuSiren::dispatch((string) $cabinet->siren);
 
             return $resultat;
         });

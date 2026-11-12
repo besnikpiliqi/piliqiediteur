@@ -8,6 +8,7 @@ use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
 use App\Domain\Tenancy\Actions\CreerMembreAction;
 use App\Domain\Tenancy\Actions\ModifierMembreAction;
 use App\Domain\Tenancy\Actions\RedonnerLAccesAction;
+use App\Domain\Tenancy\Enums\ModeDAccesRedonne;
 use App\Domain\Tenancy\Enums\MotifCloture;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\StatutCompte;
@@ -221,12 +222,12 @@ class EquipeDuMagasinTest extends TestCase
             ->callTableAction('redonner_l_acces', $saLigne->fresh(), ['mode' => 'present', 'mot_de_passe' => 'nouveau-mot-de-passe-de-paul', 'mot_de_passe_confirmation' => 'nouveau-mot-de-passe-de-paul'])
             ->assertHasNoTableActionErrors();
         $this->assertTrue(Hash::check('nouveau-mot-de-passe-de-paul', $vendeur->refresh()->password));
-        $this->assertSame([false, true, (int) $responsable->id], [$vendeur->mot_de_passe_est_l_identifiant, $vendeur->acces_redonne_en_presence, (int) $vendeur->acces_redonne_par]);
+        $this->assertSame([false, ModeDAccesRedonne::Presence, (int) $responsable->id], [$vendeur->mot_de_passe_est_l_identifiant, $vendeur->acces_redonne_mode, (int) $vendeur->acces_redonne_par]);
         Livewire::test(ListEquipeDuMagasin::class)
             ->callTableAction('redonner_l_acces', $saLigne->fresh(), ['mode' => 'absent'])
             ->assertNotified("Accès redonné. Son identifiant, qui est de nouveau son mot de passe : {$vendeur->identifiantDeConnexion()}. Remettez-le-lui en main propre.");
         $this->assertTrue(Hash::check((string) $vendeur->identifiantDeConnexion(), $vendeur->refresh()->password));
-        $this->assertSame([true, false], [$vendeur->mot_de_passe_est_l_identifiant, $vendeur->acces_redonne_en_presence]);
+        $this->assertSame([true, ModeDAccesRedonne::Absence], [$vendeur->mot_de_passe_est_l_identifiant, $vendeur->acces_redonne_mode]);
         Livewire::test(ListEquipeDuMagasin::class)->callTableAction('retirer_du_magasin', $saLigne->fresh());
 
         $this->assertSame(StatutCompte::Retire, $vendeur->refresh()->statut);

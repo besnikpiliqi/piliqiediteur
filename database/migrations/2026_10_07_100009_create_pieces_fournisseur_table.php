@@ -1,6 +1,7 @@
 <?php
 
 use App\Domain\Achats\Support\GardesDesPiecesDuFournisseur;
+use App\Domain\Cabinets\Support\GardesDesCabinets;
 use App\Domain\CaisseSecurisee\Support\DeclencheursDeProtection;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
@@ -78,10 +79,12 @@ return new class extends Migration
         DeclencheursDeProtection::auMoins('pieces_fournisseur', 'taille', 0);
 
         GardesDesPiecesDuFournisseur::poser();
+        GardesDesCabinets::poserLesMagasinsOuverts('pieces_fournisseur');
     }
 
     public function down(): void
     {
+        GardesDesCabinets::retirerLesMagasinsOuverts('pieces_fournisseur');
         GardesDesPiecesDuFournisseur::retirer();
         Schema::dropIfExists('pieces_fournisseur');
     }

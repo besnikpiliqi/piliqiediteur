@@ -52,19 +52,19 @@
     <form method="POST" action="{{ $verification ? route('code.saisir') : route('code.procedure.saisir', ['objet' => $motif->value]) }}">
         @csrf
 
-        <label for="siren">SIREN</label>
+        <label for="siren">SIREN<x-obligatoire /></label>
         <input id="siren" name="siren" inputmode="numeric" autocomplete="off" required value="{{ $siren }}">
 
-        <label for="code">Code du courrier (XXXX-XXXX-XXXX)</label>
+        <label for="code">Code du courrier (XXXX-XXXX-XXXX)<x-obligatoire /></label>
         <input id="code" name="code" autocomplete="one-time-code" required>
 
         @if ($verification)
             <p class="aide">Si vous avez inscrit la société, saisissez l'adresse e-mail et le mot de passe de votre inscription : vos comptes restent. Sinon, choisissez votre adresse e-mail et votre mot de passe : vous devenez propriétaire, et les comptes créés avant vous sont retirés de la société ; votre adresse ne servira à vous connecter qu'une fois confirmée par le lien qui lui sera envoyé, et d'ici là vous vous connecterez avec votre identifiant de connexion, qui vous sera montré.</p>
 
-            <label for="email">Adresse e-mail</label>
+            <label for="email">Adresse e-mail<x-obligatoire /></label>
             <input id="email" name="email" type="email" autocomplete="email" required value="{{ old('email') }}">
 
-            <label for="password">Mot de passe</label>
+            <label for="password">Mot de passe<x-obligatoire /></label>
             <input id="password" name="password" type="password" autocomplete="current-password" required>
 
             <label for="password_confirmation">Confirmation du mot de passe (si vous le choisissez maintenant)</label>

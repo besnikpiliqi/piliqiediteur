@@ -7,8 +7,9 @@ use Illuminate\Support\Facades\Schema;
 
 /**
  * Un compte appartient pour toujours à une seule société (voir User) : son
- * propriétaire, un administrateur, un membre ou, dans un cabinet
- * d'expertise comptable, un collaborateur (voir RoleSociete). Un compte
+ * propriétaire, un administrateur, un membre, un expert-comptable de la
+ * société ou, dans un cabinet d'expertise comptable, un collaborateur (voir
+ * RoleSociete). Un compte
  * ne s'efface pas : retiré, il garde son rôle, son identifiant de
  * connexion et son historique (voir StatutCompte).
  *
@@ -21,12 +22,18 @@ use Illuminate\Support\Facades\Schema;
  * SaisirCodeDeConfirmationAction), ni après la clôture de son inscription
  * (voir CloreLInscriptionAction). L'adresse de tout autre compte est
  * facultative, renseignée par la personne seule dans son profil, et n'est
- * qu'un contact (voir ModifierProfil). Un compte créé par la société (voir
- * CreerMembreAction et CreerAdministrateurAction) a pour premier mot de
- * passe son identifiant ; la personne choisit le sien quand elle le veut,
- * ou à sa première connexion pour un responsable ou un administrateur
- * (voir ExigerSonPropreMotDePasse) ; un collaborateur d'un cabinet choisit
- * le sien à la création de son compte (voir CreerCollaborateurAction).
+ * qu'un contact (voir ModifierProfil), sauf celle d'un expert-comptable de
+ * la société, que le propriétaire saisit en créant son compte et qui reçoit
+ * les liens de son mot de passe (voir DeclarerSonExpertComptableAction).
+ * Un compte créé par la société (voir CreerMembreAction et
+ * CreerAdministrateurAction) a pour premier mot de passe son identifiant ;
+ * la personne choisit le sien quand elle le veut, ou à sa première
+ * connexion pour un responsable ou un administrateur (voir
+ * ExigerSonPropreMotDePasse) ; un collaborateur d'un cabinet choisit le
+ * sien à la création de son compte (voir CreerCollaborateurAction) ; un
+ * expert-comptable de la société n'a jamais son identifiant pour mot de
+ * passe : il choisit le sien par un lien de 7 jours (voir
+ * ChoisirLeMotDePasseDeLExpertComptableAction).
  *
  * Les gardes de la base qui lient le rôle de société aux affectations, aux
  * autorisations de société et aux identifiants se posent avec la table des
@@ -41,10 +48,10 @@ return new class extends Migration
             $table->id();
             $table->uuid('uuid')->unique();
             $table->foreignId('societe_id')->constrained('societes')->restrictOnDelete();
-            // proprietaire, administrateur, membre ou collaborateur (voir
-            // RoleSociete) ; collaborateur seulement
-            // dans une société de type cabinet, administrateur et membre
-            // jamais (voir GardesDesDroits).
+            // proprietaire, administrateur, membre, expert_comptable ou
+            // collaborateur (voir RoleSociete) ; collaborateur seulement dans
+            // une société de type cabinet, administrateur, membre et
+            // expert_comptable jamais (voir GardesDesDroits).
             $table->string('role_societe', 20)->default('membre');
             $table->string('statut', 20)->default('actif');
             // Qui a donné au compte son statut actuel (voir
@@ -69,7 +76,13 @@ return new class extends Migration
             // nouvelle_adresse, et la clôture d'une inscription efface celle
             // de son propriétaire ; pour tout autre compte, une adresse de
             // contact facultative, que plusieurs comptes peuvent partager,
-            // jamais écrite par qui crée le compte.
+            // jamais écrite par qui crée le compte, sauf l'adresse
+            // professionnelle d'un expert-comptable de la société,
+            // obligatoire tant que son compte n'est pas retiré (voir
+            // GardesDesCabinets), que le propriétaire saisit en créant le
+            // compte et corrige tant que la personne n'a pas choisi son mot
+            // de passe, puis que la personne change par un lien de
+            // confirmation (voir nouvelle_adresse).
             $table->string('email')->nullable();
             // La date à laquelle le propriétaire a suivi le dernier lien
             // envoyé à son adresse de connexion actuelle : celui de
@@ -85,8 +98,8 @@ return new class extends Migration
             // la création par la société et après un accès redonné en
             // l'absence de la personne, faux dès qu'elle choisit le sien :
             // le rappel du profil et de la liste de l'équipe le lisent sans
-            // recalculer un hachage, et la base refuse un propriétaire dont
-            // il est vrai.
+            // recalculer un hachage, et la base refuse un propriétaire ou un
+            // expert-comptable de la société dont il est vrai.
             $table->boolean('mot_de_passe_est_l_identifiant')->default(false);
             // Le jour où cette personne a validé sa société en saisissant le
             // code du courrier recommandé envoyé au nom du représentant légal
@@ -108,24 +121,28 @@ return new class extends Migration
             $table->timestamp('derniere_connexion_le')->nullable();
             // Le dernier accès redonné au compte (voir RedonnerLAccesAction),
             // montré à la personne à sa connexion suivante : quand, par
-            // qui, en sa présence ou non.
+            // qui, et comment (ModeDAccesRedonne) : en sa présence, en son
+            // absence, ou par un lien envoyé à l'adresse d'un
+            // expert-comptable de la société.
             $table->timestamp('acces_redonne_le')->nullable();
             $table->foreignId('acces_redonne_par')->nullable()->constrained('users')->restrictOnDelete();
-            $table->boolean('acces_redonne_en_presence')->nullable();
+            $table->string('acces_redonne_mode', 10)->nullable();
             // Vrai après un accès redonné par un autre que le propriétaire :
             // le propriétaire sera prévenu du premier mot de passe que la
             // personne choisit ensuite, moment où il redevient faux.
             $table->boolean('signaler_le_prochain_mot_de_passe')->default(false);
             // Le jeton d'écran du dernier accès redonné en présence de la
-            // personne : une demande répétée avec le même jeton est sans
-            // effet.
+            // personne, ou par un lien envoyé à un expert-comptable de la
+            // société : une demande répétée avec le même jeton est sans
+            // effet, et n'envoie pas de second lien.
             $table->uuid('jeton_acces_redonne')->nullable();
             // L'adresse de connexion en attente de la confirmation du lien
             // envoyé à cette adresse (24 heures) : la nouvelle adresse que le
             // propriétaire a demandée dans son profil, ou celle qu'il a
-            // choisie en saisissant le code du courrier (voir
-            // DemanderUneNouvelleAdresseAction) ; SHA-256 du jeton du lien,
-            // jamais le jeton.
+            // choisie en saisissant le code du courrier, ou la nouvelle
+            // adresse qu'un expert-comptable de la société a demandée dans
+            // son profil (voir DemanderUneNouvelleAdresseAction) ; SHA-256
+            // du jeton du lien, jamais le jeton.
             $table->string('nouvelle_adresse')->nullable();
             $table->char('nouvelle_adresse_jeton_hache', 64)->nullable()->unique();
             $table->timestamp('nouvelle_adresse_expire_le')->nullable();

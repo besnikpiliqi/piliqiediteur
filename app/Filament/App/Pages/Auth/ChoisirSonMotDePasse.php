@@ -64,6 +64,7 @@ class ChoisirSonMotDePasse extends SimplePage
                     ->label('Votre nouveau mot de passe')
                     ->password()
                     ->revealable(filament()->arePasswordsRevealable())
+                    ->required()
                     ->rules(RegleDuMotDePasse::regles($this->compte()->identifiantDeConnexion()))
                     ->helperText('Au moins 8 caractères ; ni votre identifiant, ni un seul caractère répété, ni une suite de chiffres.')
                     ->same('passwordConfirmation'),

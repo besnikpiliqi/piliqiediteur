@@ -690,6 +690,23 @@ class ConnexionParIdentifiantTest extends TestCase
     }
 
     /**
+     * Le premier mot de passe qu'un responsable choisit à sa connexion et
+     * sa confirmation portent l'astérisque rouge des champs obligatoires
+     * (décision de l'éditeur du 01/11/2026).
+     */
+    public function test_le_premier_mot_de_passe_choisi_a_la_connexion_porte_l_asterisque_des_champs_obligatoires(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $poste = $this->reconnaitreUnPoste($magasin);
+        [, $identifiant] = $this->compteAuMotDePasseIdentifiant($magasin, RoleMagasin::Responsable);
+        $this->seConnecter($identifiant, $identifiant, postes: $poste)->assertHasNoErrors();
+
+        $page = Livewire::test(ChoisirSonMotDePasse::class);
+
+        $this->assertAsterisquesDesChamps($page->html(), ['Votre nouveau mot de passe', 'Confirmez-le']);
+    }
+
+    /**
      * Tant que le compte doit choisir son mot de passe, la page du choix
      * s'ouvre, comme la déconnexion ; une fois le mot de passe choisi
      * depuis une autre session du compte, la session qui en gardait la

@@ -68,6 +68,10 @@ enum ActionAuditee: string implements HasLabel
     case LienActive = 'lien_active';
     case LienTermine = 'lien_termine';
     case AutorisationsDuCabinetModifiees = 'autorisations_du_cabinet_modifiees';
+    case ExpertComptableDeclare = 'expert_comptable_declare';
+    case ExpertComptableCree = 'expert_comptable_cree';
+    case ExpertComptableRattache = 'expert_comptable_rattache';
+    case AdresseDExpertComptableChangee = 'adresse_d_expert_comptable_changee';
     case EspaceCabinetSuggere = 'espace_cabinet_suggere';
     case DroitsModifies = 'droits_modifies';
     case ResponsableNomme = 'responsable_nomme';
@@ -172,6 +176,10 @@ enum ActionAuditee: string implements HasLabel
             self::LienActive => 'Lien avec un cabinet actif',
             self::LienTermine => 'Lien avec un cabinet terminé',
             self::AutorisationsDuCabinetModifiees => 'Autorisations du cabinet modifiées',
+            self::ExpertComptableDeclare => 'Expert-comptable déclaré par le SIREN de son cabinet',
+            self::ExpertComptableCree => 'Compte d\'expert-comptable de la société créé',
+            self::ExpertComptableRattache => 'Expert-comptable rattaché à son cabinet : comptes de la société fermés',
+            self::AdresseDExpertComptableChangee => 'Adresse d\'un expert-comptable de la société changée',
             self::EspaceCabinetSuggere => 'Expert-comptable invité à créer l\'espace de son cabinet',
             self::DroitsModifies => 'Droits modifiés',
             self::ResponsableNomme => 'Responsable nommé',
@@ -227,7 +235,8 @@ enum ActionAuditee: string implements HasLabel
             self::AdresseDeConnexionRetiree, self::ClientsConfiesModifies, self::InvitationEnvoyee, self::InvitationRetiree,
             self::InvitationAcceptee, self::InvitationRefusee, self::InvitationCaduque, self::LienDemande, self::LienRefuse,
             self::DemandeDeLienRetiree, self::DemandeDeLienExpiree, self::LienActive, self::LienTermine,
-            self::AutorisationsDuCabinetModifiees => CategorieAudit::Acces,
+            self::AutorisationsDuCabinetModifiees, self::ExpertComptableDeclare, self::ExpertComptableCree, self::ExpertComptableRattache,
+            self::AdresseDExpertComptableChangee => CategorieAudit::Acces,
             default => CategorieAudit::Operations,
         };
     }
@@ -370,9 +379,15 @@ enum ActionAuditee: string implements HasLabel
             // dans les magasins réels du client (voir JournalDesDroits).
             self::LienDemande => ['cabinet', 'client', 'origine'],
             self::LienRefuse, self::DemandeDeLienRetiree, self::DemandeDeLienExpiree => ['cabinet', 'client'],
-            self::LienActive => ['cabinet', 'client', 'origine', 'autorisations', 'droits'],
+            self::LienActive => ['cabinet', 'client', 'origine', 'autorisations', 'magasins', 'droits'],
             self::LienTermine => ['cabinet', 'client', 'motif', 'droits'],
-            self::AutorisationsDuCabinetModifiees => ['cabinet', 'droits'],
+            self::AutorisationsDuCabinetModifiees => ['cabinet', 'autorisations', 'magasins', 'droits'],
+            // L'identité déclarée du cabinet (son SIREN et la dénomination
+            // lue au répertoire), jamais l'adresse ni l'identifiant d'une
+            // personne.
+            self::ExpertComptableDeclare => ['cabinet', 'autorisations', 'magasins', 'droits'],
+            self::ExpertComptableCree, self::ExpertComptableRattache => ['cabinet', 'droits'],
+            self::AdresseDExpertComptableChangee => ['compte'],
             // Si l'e-mail a pu partir ; l'adresse de l'expert-comptable
             // invité ne s'écrit pas.
             self::EspaceCabinetSuggere => ['envoye'],
@@ -381,7 +396,7 @@ enum ActionAuditee: string implements HasLabel
             // son mot de passe tant qu'il ne l'a pas changé ; pour un accès
             // redonné, si la personne était présente.
             self::PremiereConnexion, self::IdentifiantConsulte, self::AdresseDeConnexionChangee, self::AdresseDeConnexionRetiree => ['compte'],
-            self::AccesRedonne => ['compte', 'en_presence'],
+            self::AccesRedonne => ['compte', 'mode'],
             // L'administrateur à qui la propriété est proposée ; pour un
             // lien renvoyé, la mention qu'il l'a été.
             self::TransmissionDemandee => ['destinataire', 'lien_renvoye'],

@@ -270,4 +270,28 @@ class AccesAuxPanneauxTest extends TestCase
 
         return $membre->refresh();
     }
+
+    /**
+     * L'expert-comptable de la société (décision de l'éditeur du
+     * 01/11/2026) ouvre les magasins réels de sa société que sa déclaration
+     * lui ouvre, et jamais l'espace de la société, l'espace d'un cabinet,
+     * ni un magasin d'une autre société.
+     */
+    public function test_un_expert_comptable_de_la_societe_ouvre_ses_magasins_reels_et_jamais_l_espace_societe_ni_le_cabinet(): void
+    {
+        $lyon = $this->ouvrirUneSociete(['nom' => 'Lyon']);
+        $villeurbanne = $this->ouvrirUnAutreMagasin($lyon, ['nom' => 'Villeurbanne']);
+        $ailleurs = $this->ouvrirUneSociete(['nom' => 'Ailleurs']);
+        $expert = $this->expertComptable($lyon);
+
+        $this->assertTrue($expert->canAccessPanel(Filament::getPanel('app')));
+        $this->assertSame([true, true, false], [$expert->canAccessTenant($lyon), $expert->canAccessTenant($villeurbanne), $expert->canAccessTenant($ailleurs)]);
+        $this->actingAs($expert)->get("/app/{$villeurbanne->uuid}")->assertOk();
+        $this->get("/app/{$ailleurs->uuid}")->assertNotFound();
+        $this->assertFalse($expert->canAccessPanel(Filament::getPanel('societe')));
+        $this->assertSame([], $expert->getTenants(Filament::getPanel('societe'))->modelKeys());
+        $this->get(TableauDeBord::getUrl(panel: 'societe', tenant: $lyon->societe))->assertForbidden();
+        $this->assertFalse($expert->canAccessPanel(Filament::getPanel('cabinet')));
+        $this->assertSame([], $expert->getTenants(Filament::getPanel('cabinet'))->modelKeys());
+    }
 }

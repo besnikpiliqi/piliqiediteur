@@ -2,6 +2,7 @@
 
 namespace App\Filament\Societe\Resources\MembreResource\Pages;
 
+use App\Domain\Cabinets\Actions\CorrigerLAdresseDeLExpertComptableAction;
 use App\Domain\Tenancy\Actions\AnnulerLaTransmissionDeLaProprieteAction;
 use App\Domain\Tenancy\Actions\AnnulerUneNominationAction;
 use App\Domain\Tenancy\Actions\ChangerLeRoleDeSocieteAction;
@@ -61,6 +62,7 @@ class FicheDuMembre extends ViewRecord
             $this->renvoyerLeLienDeTransmissionAction(),
             $this->annulerLaTransmissionAction(),
             $this->reintegrerAction(),
+            $this->corrigerLAdresseAction(),
             MembreResource::actionRedonnerLAcces(Action::make('redonnerLAcces'), $compte)->after(fn () => $this->getRecord()->refresh()),
             MembreResource::actionAfficherLIdentifiant(Action::make('afficherLIdentifiant'), $compte),
             MembreResource::actionSuspendre(Action::make('suspendre'), $compte)->after(fn () => $this->getRecord()->refresh()),
@@ -188,7 +190,7 @@ class FicheDuMembre extends ViewRecord
                     match (RoleSociete::from(ValeurSimple::enTexte($saisie['role_societe']))) {
                         RoleSociete::Membre => $action->versMembre($this->auteur(), $compte, MembreResource::roleSaisi($saisie)['role'], MembreResource::roleSaisi($saisie)['autorisations'], filled($saisie['magasin_id'] ?? null) ? ValeurSimple::enEntier($saisie['magasin_id']) : null),
                         RoleSociete::Administrateur => $action->versAdministrateur(...$this->porteeSaisie($saisie)),
-                        RoleSociete::Proprietaire, RoleSociete::Collaborateur => throw new AuthorizationException(PorteeDesDroits::REFUS),
+                        RoleSociete::Proprietaire, RoleSociete::Collaborateur, RoleSociete::ExpertComptable => throw new AuthorizationException(PorteeDesDroits::REFUS),
                     };
 
                     if ($enPresence) {
@@ -290,14 +292,20 @@ class FicheDuMembre extends ViewRecord
                 $this->compte()->estMembre() && $this->auteur()->estProprietaire() => MembreResource::champsDuRoleDeMembre(),
                 default => [],
             })
-            ->requiresConfirmation(fn (): bool => ! $this->auteur()->estProprietaire())
-            ->modalDescription(fn (): string => $this->compte()->estMembre() ? 'Dans son magasin : '.($this->compte()->magasinDeSonIdentifiant()->nom ?? '—').'.' : 'Il retrouve son rôle.')
+            ->requiresConfirmation(fn (): bool => ! $this->auteur()->estProprietaire() || $this->compte()->estExpertComptable())
+            ->modalDescription(fn (): string => match (true) {
+                $this->compte()->estMembre() => 'Dans son magasin : '.($this->compte()->magasinDeSonIdentifiant()->nom ?? '—').'.',
+                $this->compte()->estExpertComptable() => 'La personne retrouve son compte, avec son mot de passe et les autorisations de votre déclaration.',
+                default => 'Il retrouve son rôle.',
+            })
             ->action(function (array $data): void {
                 $this->agir(function () use ($data): void {
                     $action = app(ChangerStatutCompteAction::class);
                     $compte = $this->compte();
 
-                    if ($compte->estAdministrateur()) {
+                    if ($compte->estExpertComptable()) {
+                        $action->reintegrerLExpertComptable($this->auteur(), $compte);
+                    } elseif ($compte->estAdministrateur()) {
                         $action->reintegrerLAdministrateur(...$this->porteeSaisie(ValeursLues::champs($data)));
                     } elseif ($this->auteur()->estProprietaire()) {
                         $role = MembreResource::roleSaisi(ValeursLues::champs($data));
@@ -307,6 +315,34 @@ class FicheDuMembre extends ViewRecord
                     }
                 });
             });
+    }
+
+    /**
+     * Corriger l'adresse d'un expert-comptable de la société qui n'a pas
+     * encore choisi son mot de passe (voir
+     * CorrigerLAdresseDeLExpertComptableAction) : le propriétaire tape deux
+     * fois la nouvelle adresse et redonne son mot de passe ; un nouveau
+     * lien y part, celui d'avant ne vaut plus.
+     */
+    public function corrigerLAdresseAction(): Action
+    {
+        return Action::make('corrigerLAdresse')
+            ->label('Corriger l\'adresse')
+            ->icon('heroicon-o-at-symbol')
+            ->visible(fn (): bool => $this->auteur()->can('corrigerLAdresse', $this->compte()))
+            ->modalDescription('Le lien envoyé à l\'ancienne adresse ne vaudra plus ; un nouveau lien, valable 7 jours, part à la nouvelle.')
+            ->form([
+                TextInput::make('email')->label('Nouvelle adresse e-mail professionnelle')->email()->required()->maxLength(255),
+                TextInput::make('email_confirmation')->label('Confirmez cette adresse')->email()->required()->maxLength(255),
+                TextInput::make('mot_de_passe')->label('Votre mot de passe')->password()->required(),
+            ])
+            ->action(function (array $data): void {
+                $this->agir(function () use ($data): void {
+                    $change = app(CorrigerLAdresseDeLExpertComptableAction::class)->handle($this->auteur(), $this->compte(), $data['email'] ?? null, $data['email_confirmation'] ?? null, ValeurSimple::enTexte($data['mot_de_passe'] ?? ''));
+                    Notification::make()->title($change ? 'Adresse corrigée : un nouveau lien est parti à la nouvelle adresse.' : 'L\'adresse était déjà celle-ci : rien n\'a changé.')->success()->send();
+                });
+            })
+            ->after(fn () => $this->getRecord()->refresh());
     }
 
     private function peutReintegrer(): bool
@@ -319,6 +355,10 @@ class FicheDuMembre extends ViewRecord
 
         if ($compte->estAdministrateur()) {
             return $this->auteur()->can('modifierUnAdministrateur', $compte);
+        }
+
+        if ($compte->estExpertComptable()) {
+            return $this->auteur()->can('reintegrerLExpertComptable', $compte);
         }
 
         return collect(RoleMagasin::cases())->contains(fn (RoleMagasin $role): bool => app(PorteeDesDroits::class)->peutReintegrer($this->auteur(), $compte, $role));

@@ -18,7 +18,8 @@ use Illuminate\Support\Facades\DB;
  * droits, dans l'ordre de leurs transitions (voir JournalDesDroits) :
  * - affectations_coherentes_avec_le_role (affectations) : un rôle de
  *   magasin qui n'est ni nul ni responsable, vendeur ou observateur ;
- *   l'affectation du propriétaire ou d'un collaborateur ; une
+ *   l'affectation du propriétaire, d'un collaborateur ou d'un
+ *   expert-comptable de la société ; une
  *   affectation sans rôle hors d'un administrateur, ou avec rôle pour un
  *   administrateur ; une affectation à tous les magasins avec un rôle ;
  *   une affectation qui devient celle d'un responsable avec d'autres cases
@@ -35,19 +36,23 @@ use Illuminate\Support\Facades\DB;
  *   une autorisation de société pour un compte qui n'est pas
  *   administrateur ;
  * - users_role_coherent_avec_les_droits (users) : un rôle de société
- *   inconnu ; devenir propriétaire ou collaborateur avec une
- *   affectation ou une autorisation de société ; devenir administrateur
+ *   inconnu ; devenir propriétaire, collaborateur ou expert-comptable de
+ *   la société avec une affectation ou une autorisation de société ; devenir administrateur
  *   avec l'affectation d'un membre ; devenir membre avec l'affectation d'un
  *   administrateur ou une autorisation de société ; un propriétaire dont
  *   l'adresse de connexion n'est pas confirmée par un lien (sans date de
  *   confirmation ; un propriétaire sans adresse de connexion passe, voir
  *   SaisirCodeDeConfirmationAction et CloreLInscriptionAction), ou dont le
- *   mot de passe est encore son identifiant ; le rôle de propriétaire,
+ *   mot de passe est encore son identifiant ; un expert-comptable de la
+ *   société dont le mot de passe est son identifiant ; le rôle de propriétaire,
  *   d'administrateur ou de collaborateur pour un compte d'entraînement
  *   (rattaché au magasin de démonstration), qui n'ouvre jamais un magasin
  *   réel ; un collaborateur hors d'un cabinet d'expertise comptable, un
- *   administrateur ou un membre dans un cabinet (le type d'une société ne
- *   change jamais : lu sans verrou).
+ *   administrateur, un membre ou un expert-comptable de la société dans
+ *   un cabinet (le type d'une société ne change jamais : lu sans verrou).
+ *   Les gardes propres à l'expert-comptable de la société (sa déclaration,
+ *   son adresse, son rôle qui ne se prend ni ne se quitte) sont celles de
+ *   GardesDesCabinets.
  *
  * Chaque garde est une fonction plpgsql et son déclencheur BEFORE INSERT
  * OR UPDATE ; celui de users ne se déclenche qu'à l'insertion et à la
@@ -137,7 +142,8 @@ final class GardesDesDroits
     {
         $rolesDeMagasin = self::liste(array_map(static fn (RoleMagasin $role): string => $role->value, RoleMagasin::cases()));
         $rolesDeSociete = self::liste(array_map(static fn (RoleSociete $role): string => $role->value, RoleSociete::cases()));
-        $sansAffectation = self::liste([RoleSociete::Proprietaire->value, RoleSociete::Collaborateur->value]);
+        $sansAffectation = self::liste([RoleSociete::Proprietaire->value, RoleSociete::Collaborateur->value, RoleSociete::ExpertComptable->value]);
+        $expertComptable = "'".RoleSociete::ExpertComptable->value."'";
         $administrateur = "'".RoleSociete::Administrateur->value."'";
         $membre = "'".RoleSociete::Membre->value."'";
         $responsable = "'".RoleMagasin::Responsable->value."'";
@@ -155,7 +161,7 @@ final class GardesDesDroits
         return [
             self::AFFECTATIONS => [
                 ["NEW.role IS NOT NULL AND NEW.role NOT IN ({$rolesDeMagasin})", 'rôle de magasin inconnu'],
-                ["{$roleDuCompte} IN ({$sansAffectation})", 'le propriétaire et un collaborateur d\'un cabinet n\'ont aucune affectation'],
+                ["{$roleDuCompte} IN ({$sansAffectation})", 'le propriétaire, un collaborateur d\'un cabinet et un expert-comptable de la société n\'ont aucune affectation'],
                 ["NEW.role IS NULL AND {$roleDuCompte} <> {$administrateur}", 'seul un administrateur a une affectation sans rôle'],
                 ["NEW.role IS NOT NULL AND {$roleDuCompte} = {$administrateur}", 'un administrateur n\'a aucun rôle de magasin'],
                 ['NEW.magasin_id IS NULL AND NEW.role IS NOT NULL', 'une affectation à tous les magasins n\'a pas de rôle de magasin'],
@@ -172,13 +178,14 @@ final class GardesDesDroits
             ],
             self::ROLES => [
                 ["NEW.role_societe NOT IN ({$rolesDeSociete})", 'rôle de société inconnu'],
-                ["NEW.role_societe IN ({$sansAffectation}) AND (EXISTS (SELECT 1 FROM affectations WHERE user_id = NEW.id) OR EXISTS (SELECT 1 FROM autorisations_societe WHERE user_id = NEW.id))", 'le propriétaire et un collaborateur d\'un cabinet n\'ont ni affectation ni autorisation de société'],
+                ["NEW.role_societe IN ({$sansAffectation}) AND (EXISTS (SELECT 1 FROM affectations WHERE user_id = NEW.id) OR EXISTS (SELECT 1 FROM autorisations_societe WHERE user_id = NEW.id))", 'le propriétaire, un collaborateur d\'un cabinet et un expert-comptable de la société n\'ont ni affectation ni autorisation de société'],
                 ["NEW.role_societe = {$collaborateur} AND {$typeDeLaSociete} <> {$cabinet}", 'un collaborateur n\'existe que dans un cabinet d\'expertise comptable'],
-                ["NEW.role_societe IN ({$administrateur}, {$membre}) AND {$typeDeLaSociete} = {$cabinet}", 'un cabinet d\'expertise comptable n\'a ni administrateur ni membre'],
+                ["NEW.role_societe IN ({$administrateur}, {$membre}, {$expertComptable}) AND {$typeDeLaSociete} = {$cabinet}", 'un cabinet d\'expertise comptable n\'a ni administrateur, ni membre, ni expert-comptable de société'],
                 ["NEW.role_societe = {$administrateur} AND EXISTS (SELECT 1 FROM affectations WHERE user_id = NEW.id AND role IS NOT NULL)", 'un administrateur n\'a aucune affectation de membre'],
                 ["NEW.role_societe = {$membre} AND (EXISTS (SELECT 1 FROM affectations WHERE user_id = NEW.id AND role IS NULL) OR EXISTS (SELECT 1 FROM autorisations_societe WHERE user_id = NEW.id))", 'un membre n\'a ni affectation d\'administrateur ni autorisation de société'],
                 ["NEW.role_societe = {$proprietaire} AND NEW.email IS NOT NULL AND NEW.email_verified_at IS NULL", 'l\'adresse de connexion d\'un propriétaire est confirmée par un lien'],
                 ["NEW.role_societe = {$proprietaire} AND NEW.mot_de_passe_est_l_identifiant = TRUE", 'un propriétaire n\'a jamais pour mot de passe son identifiant'],
+                ["NEW.role_societe = {$expertComptable} AND NEW.mot_de_passe_est_l_identifiant = TRUE", 'un expert-comptable de la société n\'a jamais pour mot de passe son identifiant'],
                 ["NEW.role_societe IN ({$horsDuMagasin}) AND {$compteDEntrainement}", 'un compte d\'entraînement ne change jamais de rôle de société'],
             ],
         ];

@@ -1946,7 +1946,9 @@ return [
             'tests/Browser/Balayage/BalayageDeLEspaceDuCabinetTest.php › le propriétaire du cabinet ouvre chaque page et chaque action de l’espace du cabinet sans erreur',
         ]],
         'action:refuserLaDemande' => ['lot' => 'NAV-5', 'tests' => []],
-        'action:retirerLInvitation' => ['lot' => 'NAV-5', 'tests' => []],
+        'action:retirerLInvitation' => ['lot' => 'NAV-5', 'tests' => [
+            'tests/Browser/Parcours/CabinetSuspenduTest.php › le propriétaire d’un cabinet suspendu retire son invitation encore ouverte',
+        ]],
         'action:retirerLaDemande' => ['lot' => 'NAV-5', 'tests' => []],
         'page' => ['lot' => 'NAV-5', 'tests' => [
             'tests/Browser/Balayage/BalayageDeLEspaceDuCabinetTest.php › le propriétaire du cabinet ouvre chaque page et chaque action de l’espace du cabinet sans erreur',
@@ -2262,6 +2264,15 @@ return [
         'page' => ['lot' => 'NAV-4', 'tests' => []],
     ],
     'app/Filament/Societe/Pages/CabinetComptable.php' => [
+        'action:ajouterUnePersonne' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Parcours/ExpertComptableDeclareTest.php › le propriétaire ajoute une personne à son expert-comptable déclaré, puis le retire',
+        ]],
+        'action:declarer' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Parcours/ExpertComptableDeclareTest.php › le propriétaire déclare son expert-comptable, qui choisit son mot de passe par le lien et lit la société',
+        ]],
+        'champ:portee' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Parcours/ExpertComptableDeclareTest.php › le propriétaire déclare son expert-comptable pour les seuls magasins cochés',
+        ]],
         'action:demanderLeLien' => ['lot' => 'NAV-4', 'tests' => []],
         'action:enregistrerLesAutorisations' => ['lot' => 'NAV-4', 'tests' => [
             'tests/Browser/Balayage/BalayageDeLEspaceDeLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action de l’espace de sa société sans erreur',
@@ -2271,6 +2282,7 @@ return [
             'tests/Browser/Balayage/BalayageDeLEspaceDeLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action de l’espace de sa société sans erreur',
         ]],
         'action:mettreFin' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Parcours/ExpertComptableDeclareTest.php › le propriétaire ajoute une personne à son expert-comptable déclaré, puis le retire',
             'tests/Browser/Balayage/BalayageDeLEspaceDeLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action de l’espace de sa société sans erreur',
         ]],
         'action:retirerLaDemande' => ['lot' => 'NAV-4', 'tests' => []],
@@ -2304,8 +2316,12 @@ return [
     'app/Filament/Societe/Pages/RattachementDUnCabinet.php' => [
         'action:accepterEnAjustant' => ['lot' => 'NAV-4', 'tests' => []],
         'action:accepterParDefaut' => ['lot' => 'NAV-4', 'tests' => []],
-        'action:refuser' => ['lot' => 'NAV-4', 'tests' => []],
-        'page' => ['lot' => 'NAV-4', 'tests' => []],
+        'action:refuser' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Parcours/CabinetSuspenduTest.php › le propriétaire d’une société lit que la demande d’un cabinet suspendu ne s’accepte pas, et la refuse',
+        ]],
+        'page' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Parcours/CabinetSuspenduTest.php › le propriétaire d’une société lit que la demande d’un cabinet suspendu ne s’accepte pas, et la refuse',
+        ]],
     ],
     'app/Filament/Societe/Pages/TableauDeBord.php' => [
         'action:ouvrirLaDemonstration' => ['lot' => 'NAV-4', 'tests' => [
@@ -2444,6 +2460,9 @@ return [
         ]],
     ],
     'app/Filament/Societe/Resources/MembreResource/Pages/FicheDuMembre.php' => [
+        'action:corrigerLAdresse' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Parcours/ExpertComptableDeclareTest.php › le propriétaire ouvre la fiche d’une personne de son expert-comptable, corrige son adresse, la retire puis la réintègre',
+        ]],
         'action:afficherLIdentifiant' => ['lot' => 'NAV-4', 'tests' => [
             'tests/Browser/Balayage/BalayageDeLEspaceDeLaSocieteTest.php › l’administrateur qui a toutes les autorisations de société ouvre chaque page et chaque action de l’espace sans erreur',
         ]],
@@ -2461,7 +2480,9 @@ return [
             'tests/Browser/Balayage/BalayageDeLEspaceDeLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action de l’espace de sa société sans erreur',
             'tests/Browser/Balayage/BalayageDeLEspaceDeLaSocieteTest.php › l’administrateur qui a toutes les autorisations de société ouvre chaque page et chaque action de l’espace sans erreur',
         ]],
-        'action:reintegrer' => ['lot' => 'NAV-4', 'tests' => []],
+        'action:reintegrer' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Parcours/ExpertComptableDeclareTest.php › le propriétaire ouvre la fiche d’une personne de son expert-comptable, corrige son adresse, la retire puis la réintègre',
+        ]],
         'action:renvoyerLeLienDeTransmission' => ['lot' => 'NAV-4', 'tests' => []],
         'action:retirerDeLaSociete' => ['lot' => 'NAV-4', 'tests' => [
             'tests/Browser/Balayage/BalayageDeLEspaceDeLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action de l’espace de sa société sans erreur',
@@ -2639,6 +2660,9 @@ return [
         'envoi:accepter' => ['lot' => 'NAV-4', 'tests' => []],
     ],
     'resources/views/filament/societe/pages/cabinet-comptable.blade.php' => [
+        'lien:Fiche' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Parcours/ExpertComptableDeclareTest.php › le propriétaire ouvre la fiche d’une personne de son expert-comptable, corrige son adresse, la retire puis la réintègre',
+        ]],
         'lien:Répondre' => ['lot' => 'NAV-4', 'tests' => []],
         'saisie:recherche' => ['lot' => 'NAV-4', 'tests' => []],
     ],
@@ -2649,9 +2673,13 @@ return [
     'resources/views/filament/societe/pages/tableau-de-bord.blade.php' => [
         'lien:Comptes' => ['lot' => 'NAV-4', 'tests' => []],
         'lien:Ouvrir le magasin de démonstration' => ['lot' => 'NAV-4', 'tests' => []],
-        'lien:{{ $cabinet[\'lie\'] === null ? \'Aucun cabinet lié\' : \'Cabinet comptable : \'.$cabinet[\'lie\'] }}' => ['lot' => 'NAV-4', 'tests' => []],
+        'lien:{{ $cabinet[\'lie\'] ?? \'Aucun cabinet lié\' }}' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Parcours/ExpertComptableDeclareTest.php › le propriétaire suit l’étape « Ajouter un magasin » et le lien de son expert-comptable déclaré depuis son tableau de bord',
+        ]],
         'lien:{{ $demande[\'cabinet\'] }} demande à suivre votre société' => ['lot' => 'NAV-4', 'tests' => []],
-        'lien:{{ $etape[\'titre\'] }}' => ['lot' => 'NAV-4', 'tests' => []],
+        'lien:{{ $etape[\'titre\'] }}' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Parcours/ExpertComptableDeclareTest.php › le propriétaire suit l’étape « Ajouter un magasin » et le lien de son expert-comptable déclaré depuis son tableau de bord',
+        ]],
         'lien:{{ $totaux[\'nombre\'] }}' => ['lot' => 'NAV-4', 'tests' => []],
     ],
     'resources/views/filament/telecharger-les-documents.blade.php' => [
@@ -2737,6 +2765,12 @@ return [
         ]],
     ],
     'routes/web.php' => [
+        'formulaire:/expert-comptable/{jeton}' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Parcours/ExpertComptableDeclareTest.php › le propriétaire déclare son expert-comptable, qui choisit son mot de passe par le lien et lit la société',
+        ]],
+        'page publique:/expert-comptable/{jeton}' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Parcours/ExpertComptableDeclareTest.php › le propriétaire déclare son expert-comptable, qui choisit son mot de passe par le lien et lit la société',
+        ]],
         'formulaire:/code' => ['lot' => 'NAV-4', 'tests' => [
             'tests/Browser/Parcours/InscriptionDUneSocieteTest.php › une société s’inscrit, confirme son lien, saisit le code de son courrier et crée son premier magasin',
         ]],
@@ -2770,6 +2804,26 @@ return [
         ]],
         'page publique:/devis/{jeton}/pdf' => ['lot' => 'NAV-4', 'tests' => [
             'tests/Browser/Parcours/ReponseAuDevisEnLigneTest.php › le client télécharge le PDF de son devis depuis la page de son lien',
+        ]],
+    ],
+    'app/Filament/App/Pages/AucunMagasin.php' => [
+        'page' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Parcours/ExpertComptableDeclareTest.php › la personne de l’expert-comptable d’une société sans magasin réel arrive sur la page qui le lui dit et s’en déconnecte',
+        ]],
+    ],
+    'app/Filament/App/Pages/LaSociete.php' => [
+        'page' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Parcours/ExpertComptableDeclareTest.php › le propriétaire déclare son expert-comptable, qui choisit son mot de passe par le lien et lit la société',
+        ]],
+    ],
+    'resources/views/cabinets/lien-expert-comptable.blade.php' => [
+        'formulaire:{{ $action }}' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Parcours/ExpertComptableDeclareTest.php › le propriétaire déclare son expert-comptable, qui choisit son mot de passe par le lien et lit la société',
+        ]],
+    ],
+    'resources/views/filament/app/pages/aucun-magasin.blade.php' => [
+        'formulaire:{{ filament()->getLogoutUrl() }}' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Parcours/ExpertComptableDeclareTest.php › la personne de l’expert-comptable d’une société sans magasin réel arrive sur la page qui le lui dit et s’en déconnecte',
         ]],
     ],
 ];

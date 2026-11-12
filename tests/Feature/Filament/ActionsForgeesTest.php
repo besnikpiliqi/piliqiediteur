@@ -5,6 +5,7 @@ namespace Tests\Feature\Filament;
 use App\Domain\Authorization\AutorisationsSociete;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Cabinets\Enums\EtatDuLien;
+use App\Domain\Cabinets\Mail\LienDuMotDePasseDeLExpertComptableMail;
 use App\Domain\Cabinets\Models\LienCabinet;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
@@ -18,6 +19,7 @@ use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\EnvoiDocument;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Stock\Models\MouvementStock;
+use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
 use App\Domain\Tenancy\Actions\FermerMagasinAction;
 use App\Domain\Tenancy\Enums\MotifFermeture;
 use App\Domain\Tenancy\Enums\RoleMagasin;
@@ -30,6 +32,7 @@ use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\PeriodeActivite;
 use App\Domain\Tenancy\Scopes\MagasinScope;
 use App\Domain\Tenancy\Scopes\SocieteScope;
+use App\Domain\Tenancy\Services\ControleSirene;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Resources\ClotureCaisseResource\Pages\ListClotureCaisses;
 use App\Filament\App\Resources\DevisResource\Pages\ListDevis;
@@ -45,12 +48,16 @@ use App\Filament\Societe\Pages\VerificationSociete;
 use App\Filament\Societe\Resources\MagasinResource\Pages\ModifierMagasin;
 use App\Filament\Societe\Resources\MembreResource\Pages\FicheDuMembre;
 use App\Filament\Societe\Resources\MembreResource\Pages\ListMembres;
+use App\Integrations\Sirene\Contracts\RepertoireSirene;
+use App\Integrations\Sirene\FauxRepertoireSirene;
 use App\Models\User;
 use Closure;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Str;
 use Livewire\Livewire;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
@@ -135,13 +142,17 @@ class ActionsForgeesTest extends TestCase
             'régler les autorisations du cabinet',
             'fermer un magasin',
             'rouvrir un magasin',
+            'déclarer l\'expert-comptable',
+            'ajouter une personne à la déclaration',
+            'corriger l\'adresse de l\'expert-comptable',
+            'envoyer un nouveau lien à l\'expert-comptable',
         ], array_map(static fn (string $nom): array => [$nom], $noms));
     }
 
     #[DataProvider('actionsMasquees')]
     public function test_une_action_d_en_tete_masquee_appelee_directement_ne_fait_rien(string $nom): void
     {
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique', 'a_verifier' => in_array($nom, ['demander un nouveau courrier', 'ouvrir la démonstration'], true)]);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique', 'a_verifier' => in_array($nom, ['demander un nouveau courrier', 'ouvrir la démonstration', 'déclarer l\'expert-comptable'], true)]);
         $societe = $magasin->societe;
 
         $rienNAEteFait = match ($nom) {
@@ -253,6 +264,38 @@ class ActionsForgeesTest extends TestCase
                 $this->forgerLAction(Livewire::test(ModifierMagasin::class, ['record' => $magasin->getRouteKey()])->assertActionHidden('rouvrir'), 'rouvrir', ['mot_de_passe' => 'password']);
 
                 return fn (): bool => $magasin->fresh()->aEteCede() && PeriodeActivite::query()->where('magasin_id', $magasin->id)->count() === 1;
+            })(),
+            'déclarer l\'expert-comptable' => (function () use ($magasin, $societe): Closure {
+                app(RepertoireSirene::class)->exercer(FauxRepertoireSirene::SIREN_CABINET, ControleSirene::CODE_ACTIVITES_COMPTABLES);
+                Mail::fake();
+                $this->dansLEspaceDeLaSociete($societe, $this->proprietaireDe($magasin));
+                $this->forgerLAction(Livewire::test(CabinetComptable::class)->assertActionHidden('declarer'), 'declarer', ['siren' => FauxRepertoireSirene::SIREN_CABINET, 'name' => 'Marc Petit', 'email' => 'marc.petit@petit-associes.test', 'email_confirmation' => 'marc.petit@petit-associes.test', 'mot_de_passe' => 'password']);
+
+                return fn (): bool => LienCabinet::query()->withoutGlobalScopes()->where('societe_id', $societe->id)->doesntExist() && User::query()->where('role_societe', RoleSociete::ExpertComptable->value)->doesntExist();
+            })(),
+            'ajouter une personne à la déclaration' => (function () use ($magasin, $societe): Closure {
+                Mail::fake();
+                $this->dansLEspaceDeLaSociete($societe, $this->proprietaireDe($magasin));
+                $this->forgerLAction(Livewire::test(CabinetComptable::class)->assertActionHidden('ajouterUnePersonne'), 'ajouterUnePersonne', ['name' => 'Inès Garnier', 'email' => 'ines.garnier@petit-associes.test', 'email_confirmation' => 'ines.garnier@petit-associes.test', 'mot_de_passe' => 'password']);
+
+                return fn (): bool => User::query()->where('role_societe', RoleSociete::ExpertComptable->value)->doesntExist();
+            })(),
+            'corriger l\'adresse de l\'expert-comptable' => (function () use ($magasin, $societe): Closure {
+                $expert = $this->expertComptable($magasin);
+                $this->dansLEspaceDeLaSociete($societe, $this->proprietaireDe($magasin));
+                $this->forgerLAction(Livewire::test(FicheDuMembre::class, ['record' => $expert->getRouteKey()])->assertActionHidden('corrigerLAdresse'), 'corrigerLAdresse', ['email' => 'autre@petit-associes.test', 'email_confirmation' => 'autre@petit-associes.test', 'mot_de_passe' => 'password']);
+
+                return fn (): bool => $expert->fresh()->email === 'marc.petit@petit-associes.test';
+            })(),
+            'envoyer un nouveau lien à l\'expert-comptable' => (function () use ($magasin, $societe): Closure {
+                $this->declarerSonExpertComptable($magasin);
+                $ines = $this->ajouterUnExpertComptable($societe, 'Inès Garnier', 'ines.garnier@petit-associes.test');
+                app(ChangerStatutCompteAction::class)->retirer($this->proprietaireDe($magasin), $ines);
+                $envoyes = count(Mail::sent(LienDuMotDePasseDeLExpertComptableMail::class));
+                $this->dansLEspaceDeLaSociete($societe, $this->proprietaireDe($magasin));
+                $this->forgerLAction(Livewire::test(FicheDuMembre::class, ['record' => $ines->getRouteKey()])->assertActionHidden('redonnerLAcces'), 'redonnerLAcces', ['mode' => 'lien', 'jeton' => (string) Str::uuid()]);
+
+                return fn (): bool => count(Mail::sent(LienDuMotDePasseDeLExpertComptableMail::class)) === $envoyes && $ines->fresh()->acces_redonne_le === null;
             })(),
         };
 

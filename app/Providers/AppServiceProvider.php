@@ -5,6 +5,7 @@ namespace App\Providers;
 use App\Domain\Achats\Models\AvoirFournisseur;
 use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Cabinets\Models\Cabinet;
+use App\Domain\Cabinets\Models\CompteExpertComptable;
 use App\Domain\Cabinets\Models\InvitationCabinet;
 use App\Domain\Cabinets\Models\LienCabinet;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
@@ -326,6 +327,7 @@ class AppServiceProvider extends ServiceProvider
             'invitation_cabinet' => InvitationCabinet::class,
             'ligne_avoir' => LigneAvoir::class,
             'lien_cabinet' => LienCabinet::class,
+            'compte_expert_comptable' => CompteExpertComptable::class,
             'magasin' => Magasin::class,
             'paiement' => Paiement::class,
             'produit' => Produit::class,

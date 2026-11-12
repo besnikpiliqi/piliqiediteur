@@ -177,6 +177,28 @@ class TypeDActiviteTest extends TestCase
      * avertissements se lisent dans la demande, même quand le répertoire
      * ne répond plus ou dit autre chose ; rien n'est consommé ni créé.
      */
+    /**
+     * La phrase qui suit le menu (décision de l'éditeur du 01/11/2026) dit
+     * qu'un micro-entrepreneur en franchise de TVA est pris en charge, et
+     * garde le refus des activités exonérées par la loi, mot pour mot sur
+     * le formulaire d'inscription, la page du lien et la page d'une
+     * invitation d'un cabinet ; l'ancienne phrase ne se lit plus nulle part.
+     */
+    public function test_le_rappel_du_choix_definitif_prend_en_charge_la_franchise_en_base_et_garde_le_refus_des_activites_exonerees(): void
+    {
+        Mail::fake();
+        $application = config('app.name');
+        $phrase = "Ce choix est définitif : il décide des menus de {$application} (articles, achats et stock) et ne changera pas, même si votre activité change ensuite. Dans le doute, choisissez « Commerce ou atelier », le plus complet. Les micro-entrepreneurs en franchise de TVA (art. 293 B du CGI) sont pris en charge. En revanche, {$application} ne permet pas de facturer une activité exonérée de TVA par la loi (soins médicaux, enseignement, assurance, location de logements…).";
+        $ancienne = "{$application} ne permet pas de facturer une activité exonérée de TVA (soins,";
+        $this->assertSame($phrase, TypeDActivite::rappelDuChoixDefinitif());
+
+        Livewire::test(InscriptionSociete::class)->assertSeeText($phrase)->assertDontSeeText($ancienne);
+        $this->demander();
+        $this->get($this->lienEnvoye())->assertOk()->assertSeeText($phrase)->assertDontSeeText($ancienne);
+        $jeton = $this->inviterUneEntreprise($this->ouvrirUnCabinet(), SocieteFactory::sirenFictif(), 'dirigeant@entreprise.test');
+        $this->get(route('cabinets.invitation.afficher', ['jeton' => $jeton]))->assertOk()->assertSeeText($phrase)->assertDontSeeText($ancienne);
+    }
+
     public function test_l_ouverture_du_lien_n_interroge_pas_le_repertoire_et_ne_consomme_rien(): void
     {
         Mail::fake();

@@ -104,11 +104,12 @@ final class PostesReconnus
      * navigateur, filtrés par les magasins de ce compte. Jamais pour un
      * compte d'un cabinet d'expertise comptable, que ni lui ni son cabinet
      * n'a reconnu : le poste d'un magasin d'un client ne lui ouvre pas son
-     * compte avec son identifiant.
+     * compte avec son identifiant ; ni pour un expert-comptable de la
+     * société, dont l'identifiant n'est jamais le mot de passe.
      */
     public function ouvreLeCompte(User $compte, Request $requete): bool
     {
-        if ($compte->estDUnCabinet()) {
+        if ($compte->entreParLesAutorisationsDUnCabinet()) {
             return false;
         }
 

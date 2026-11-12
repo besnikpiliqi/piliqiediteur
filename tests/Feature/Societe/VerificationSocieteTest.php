@@ -491,6 +491,18 @@ class VerificationSocieteTest extends TestCase
     }
 
     /**
+     * Sur la page du code, chaque champ obligatoire porte l'astérisque
+     * rouge des champs obligatoires ; la confirmation du mot de passe,
+     * facultative, n'en porte pas (décision de l'éditeur du 01/11/2026).
+     */
+    public function test_la_page_du_code_marque_d_un_asterisque_chaque_champ_obligatoire(): void
+    {
+        $page = $this->get(route('code.afficher'))->assertOk();
+
+        $this->assertAsterisquesDesChamps($page->getContent(), ['SIREN', 'Code du courrier (XXXX-XXXX-XXXX)', 'Adresse e-mail', 'Mot de passe'], ['Confirmation du mot de passe (si vous le choisissez maintenant)']);
+    }
+
+    /**
      * La page du code s'ouvre, sans être connecté, par l'adresse que porte
      * le QR code, le SIREN déjà rempli. Une saisie refusée y revient avec
      * son motif, le SIREN et l'adresse gardés, jamais le code ni le mot de

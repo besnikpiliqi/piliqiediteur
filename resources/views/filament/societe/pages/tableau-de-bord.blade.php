@@ -47,7 +47,7 @@
             <x-slot name="heading">Cabinet comptable</x-slot>
 
             <p>
-                <x-filament::link :href="\App\Filament\Societe\Pages\CabinetComptable::getUrl()">{{ $cabinet['lie'] === null ? 'Aucun cabinet lié' : 'Cabinet comptable : '.$cabinet['lie'] }}</x-filament::link>
+                <x-filament::link :href="\App\Filament\Societe\Pages\CabinetComptable::getUrl()">{{ $cabinet['lie'] ?? 'Aucun cabinet lié' }}</x-filament::link>
             </p>
             @foreach ($cabinet['demandes'] as $demande)
                 <p><x-filament::link :href="$demande['url']">{{ $demande['cabinet'] }} demande à suivre votre société</x-filament::link></p>

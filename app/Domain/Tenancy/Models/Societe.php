@@ -6,11 +6,13 @@ use App\Domain\Cabinets\Models\Cabinet;
 use App\Domain\CaisseSecurisee\Concerns\JournaliseSesParametresDeConformite;
 use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Facturation\Casts\NumeroTvaNormalise;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\FormeJuridique;
 use App\Domain\Tenancy\Enums\MotifCloture;
+use App\Domain\Tenancy\Enums\PreuveDeValidation;
 use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Enums\ResultatVerification;
 use App\Domain\Tenancy\Enums\RoleSociete;
@@ -22,6 +24,7 @@ use App\Domain\Tenancy\Scopes\SocieteScope;
 use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\CleDuModele;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Domain\Tenancy\Support\ValeursLues;
 use App\Models\User;
@@ -377,6 +380,37 @@ class Societe extends Model implements HasName
     }
 
     /**
+     * A-t-elle été validée par l'invitation acceptée d'un cabinet
+     * d'expertise comptable (voir AccepterLInvitationAction), sans
+     * courrier ni démonstration ? La preuve inscrite au journal d'audit avec
+     * sa validation le dit (voir ValiderLaSocieteAction), lue dans la
+     * société active, qui doit être celle-ci.
+     */
+    public function aEteValideeParLInvitationDUnCabinet(): bool
+    {
+        return $this->estValidee() && EntreeAudit::query()
+            ->where('societe_id', $this->getKey())
+            ->where('action', ActionAuditee::SocieteValidee->value)
+            ->where('nouvelles_valeurs->preuve', PreuveDeValidation::InvitationDuCabinet->value)
+            ->exists();
+    }
+
+    /**
+     * La phrase qui dit, sur le tableau de bord et la page de la
+     * vérification, depuis quand la société est validée : par
+     * l'invitation de son cabinet d'expertise comptable, sans le nom de ce
+     * cabinet, qui a pu changer depuis, quand c'est elle qui l'a validée.
+     */
+    public function phraseDeSaValidation(): string
+    {
+        $depuis = 'Votre société est validée depuis le '.Calendrier::deParis()->afficher(ValeurRequise::de($this->validee_le, 'la date de validation de la société validée'), 'd/m/Y');
+
+        return $this->aEteValideeParLInvitationDUnCabinet()
+            ? $depuis.', par l\'invitation de votre cabinet d\'expertise comptable.'
+            : $depuis.'.';
+    }
+
+    /**
      * Son inscription est-elle close sans avoir été validée (voir
      * CloreLInscriptionAction) ? Pour toujours : son SIREN est libéré.
      */
@@ -416,6 +450,42 @@ class Societe extends Model implements HasName
     public function cabinet(): HasOne
     {
         return $this->hasOne(Cabinet::class)->withoutGlobalScope(SocieteScope::class);
+    }
+
+    /**
+     * Est-ce un cabinet d'expertise comptable suspendu ? Tant qu'il l'est,
+     * ses liens restent bloqués : aucun client n'accepte son invitation ni
+     * sa demande de lien, qu'il peut refuser, et que le cabinet peut
+     * retirer (décision de l'éditeur du 11/11/2026).
+     */
+    public function estUnCabinetSuspendu(): bool
+    {
+        return $this->estUnCabinet() && $this->statut === StatutSociete::Suspendue;
+    }
+
+    /**
+     * Les cabinets d'expertise comptable vérifiés (voir
+     * estUnCabinetVerifie(), qui dit la même chose pour une société) :
+     * validés, actifs, leur code d'activité contrôlé et leur inscription à
+     * l'Ordre vérifiée sans radiation constatée. La seule condition dont se
+     * servent la recherche des cabinets, le rattachement des déclarations
+     * et sa tâche horaire ; la garde du rattachement l'écrit en SQL (voir
+     * GardesDesCabinets).
+     *
+     * @param  Builder<self>  $requete
+     * @return Builder<self>
+     */
+    public function scopeCabinetsVerifies(Builder $requete): Builder
+    {
+        return $requete
+            ->where('societes.type_activite', TypeDActivite::Cabinet->value)
+            ->whereNotNull('societes.validee_le')
+            ->where('societes.statut', StatutSociete::Active->value)
+            ->whereIn('societes.id', Cabinet::query()->withoutGlobalScope(SocieteScope::class)
+                ->whereNotNull('activite_controlee_le')
+                ->whereNotNull('ordre_verifie_le')
+                ->whereNull('ordre_retire_le')
+                ->select('societe_id'));
     }
 
     /**

@@ -2,10 +2,13 @@
 
 namespace Tests\Feature\Courriels;
 
+use App\Domain\Cabinets\Mail\CompteDExpertComptableFermeMail;
 use App\Domain\Cabinets\Mail\DemandeDeRattachementMail;
 use App\Domain\Cabinets\Mail\InvitationACreerUnEspaceMail;
 use App\Domain\Cabinets\Mail\InvitationDuCabinetMail;
+use App\Domain\Cabinets\Mail\LienDuMotDePasseDeLExpertComptableMail;
 use App\Domain\Cabinets\Notifications\AvisDuCabinet;
+use App\Domain\Cabinets\Notifications\AvisDuCabinetEnFile;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CreerAvoirAction;
@@ -110,10 +113,13 @@ class CourrielsReelsTest extends TestCase
         InvitationDuCabinetMail::class,
         DemandeDeRattachementMail::class,
         InvitationACreerUnEspaceMail::class,
+        LienDuMotDePasseDeLExpertComptableMail::class,
+        CompteDExpertComptableFermeMail::class,
         CourrielDEssai::class,
         DocumentMail::class,
         AvisDeLEquipe::class,
         AvisDuCabinet::class,
+        AvisDuCabinetEnFile::class,
         ReponseDuClientAuDevis::class,
         AvisDeLAntivirus::class,
         LienPourChoisirSonMotDePasse::class,
@@ -166,9 +172,7 @@ class CourrielsReelsTest extends TestCase
     public function test_chaque_e_mail_de_piliqi_arrive_dans_la_boite_de_test(): void
     {
         $this->travelTo(self::aParis('2026-11-12 10:00:00'));
-        $this->envoyerLesEMails();
-        $this->envoyerLesNotifications();
-        $attendus = count(self::COURRIELS) - 1 + $this->envoyerLesDocuments();
+        $attendus = $this->envoyerLesEMails() + $this->envoyerLesNotifications() + $this->envoyerLesDocuments();
 
         $recus = $this->messagesRecus($attendus);
 
@@ -187,15 +191,20 @@ class CourrielsReelsTest extends TestCase
     /**
      * Les e-mails qui partent sans file d'attente : inscription, adresse de
      * connexion, transmission de la propriété, inscription close, alerte de
-     * l'éditeur, invitations et demandes des cabinets, e-mail d'essai.
+     * l'éditeur, invitations et demandes des cabinets, lien du mot de passe
+     * et fermeture du compte d'un expert-comptable de la société, nouvelle
+     * adresse d'un expert-comptable, e-mail d'essai.
+     *
+     * @return int le nombre d'e-mails envoyés
      */
-    private function envoyerLesEMails(): void
+    private function envoyerLesEMails(): int
     {
         $lien = 'https://piliqi.test/lien/essai';
         $courriels = [
             new DemandeInscriptionMail($lien, now()->addHours(24), TypeDActivite::Commerce),
             new CompteExistantMail('https://piliqi.test/app/login', 'https://piliqi.test/app/password-reset/request'),
             new ConfirmationNouvelleAdresseMail($lien, '13/11/2026 à 10:00'),
+            new ConfirmationNouvelleAdresseMail($lien, '13/11/2026 à 10:00', adresseDeConnexion: false),
             new AdresseChangeeMail('Claire Martin', '12/11/2026 à 10:00'),
             new TransmissionDeLaProprieteMail($lien, 'Boutique Essai', 'Claire Martin', '13/11/2026 à 10:00'),
             new InscriptionCloseMail('Boutique Essai', 'sans code au bout de 30 jours', 'https://piliqi.test/app/register', 'Ses magasins restent consultables, en lecture seule.', null),
@@ -203,26 +212,34 @@ class CourrielsReelsTest extends TestCase
             new InvitationDuCabinetMail($lien, 'Cabinet Essai', 'Lyon', '000000018', '19/11/2026 à 10:00'),
             new DemandeDeRattachementMail($lien, 'Cabinet Essai', 'Lyon', '000000026', '19/11/2026 à 10:00'),
             new InvitationACreerUnEspaceMail('https://piliqi.test/app/register', 'Boutique Essai'),
+            new LienDuMotDePasseDeLExpertComptableMail($lien, 'Marc Petit', 'Boutique Essai', '000000018', 'cabinet Cabinet Essai', '19/11/2026 à 10:00', ['Factures : voir toutes celles du magasin']),
+            new CompteDExpertComptableFermeMail('Marc Petit', 'Boutique Essai', 'cabinet Cabinet Essai'),
             new CourrielDEssai('mailtrap'),
         ];
 
         foreach ($courriels as $courriel) {
             $this->envoyer(fn () => Mail::to(self::DESTINATAIRE)->send($courriel));
         }
+
+        return count($courriels);
     }
 
     /**
      * Les avis qui partent aussi par e-mail, chacun à un compte dont c'est
      * l'adresse, le lien « Mot de passe oublié » et l'avis de la réponse
-     * d'un client à un devis.
+     * d'un client à un devis, et l'avis en file du rattachement d'un
+     * expert-comptable de la société à son cabinet.
+     *
+     * @return int le nombre d'avis envoyés
      */
-    private function envoyerLesNotifications(): void
+    private function envoyerLesNotifications(): int
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Société des avis']);
         $compte = User::factory()->create(['email' => self::DESTINATAIRE]);
         $avis = [
             new AvisDeLEquipe($magasin->societe, 'Essai de l\'avis de l\'équipe', 'Un accès a été redonné.', parCourriel: true),
             new AvisDuCabinet($magasin->societe, 'Essai de l\'avis du cabinet', 'Une demande de lien attend votre réponse.', parCourriel: true),
+            new AvisDuCabinetEnFile($magasin->societe, 'Essai de l\'avis du cabinet en file', 'Votre expert-comptable a rejoint PILIQI.', parCourriel: true),
             new AvisDeLAntivirus($magasin->societe, 'Essai de l\'avis de l\'antivirus', 'Le fichier « essai.pdf » a été refusé.'),
             new LienPourChoisirSonMotDePasse('https://piliqi.test/app/password-reset/reset?token=essai', 60),
             new ReponseDuClientAuDevis(
@@ -236,6 +253,8 @@ class CourrielsReelsTest extends TestCase
         foreach ($avis as $notification) {
             $this->envoyer(fn () => $compte->notify($notification));
         }
+
+        return count($avis);
     }
 
     /**

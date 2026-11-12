@@ -50,7 +50,7 @@ final class TableauDeBordDesClients
         $clients = Societe::query()->whereKey($liens->pluck('societe_id')->all())
             ->get(['id', 'uuid', 'siren', 'raison_sociale', 'siege_ville', 'mois_fin_exercice', 'statut', 'validee_le', 'close_le'])
             ->keyBy('id');
-        $magasins = Magasin::query()->whereIn('societe_id', $clients->keys()->all())->where('est_demonstration', false)->orderBy('id')
+        $magasins = Magasin::query()->whereIn('societe_id', $clients->keys()->all())->whereKey($this->acces->idsDesMagasinsOuverts($compte))->orderBy('id')
             ->get(['id', 'societe_id', 'statut', 'territoire', 'est_demonstration']);
         $suivis = $magasins->filter(fn (Magasin $magasin): bool => $compte->suitLesFacturesAEncaisserDans($magasin))->keyBy('id');
         $factures = $this->facturesAEncaisser(ValeursLues::entiers($suivis->keys()))

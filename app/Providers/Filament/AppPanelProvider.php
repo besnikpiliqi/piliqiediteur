@@ -4,6 +4,7 @@ namespace App\Providers\Filament;
 
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Support\CompteConnecte;
+use App\Filament\App\Pages\AucunMagasin;
 use App\Filament\App\Pages\Auth\ChoisirSonMotDePasse;
 use App\Filament\App\Pages\Auth\Connexion;
 use App\Filament\App\Pages\Auth\DemandeDeLien;
@@ -46,7 +47,9 @@ use Illuminate\View\Middleware\ShareErrorsFromSession;
  * de l'équipe de chaque magasin, et les comptes d'un cabinet d'expertise
  * comptable lié, dans les magasins réels des clients qui leur sont
  * confiés, selon les autorisations que chaque client accorde au cabinet,
- * y gèrent clients, produits, factures, et le propriétaire et les
+ * y gèrent clients, produits, factures, l'expert-comptable que la société
+ * a déclaré par le SIREN de son cabinet y consulte ses magasins réels selon
+ * les autorisations de sa déclaration, et le propriétaire et les
  * responsables d'un magasin son équipe (voir EquipeDuMagasinResource).
  * C'est le panneau par défaut (->default()), avec la tenancy Filament
  * branchée sur Magasin (URL /app/{magasin:uuid}/...), et celui de
@@ -63,7 +66,8 @@ use Illuminate\View\Middleware\ShareErrorsFromSession;
  * mène un responsable ou un administrateur dont le mot de passe est
  * encore son identifiant au choix du sien, puis MenerUnCompteSansMagasin
  * mène un compte qui n'a encore aucun magasin à l'espace de sa société,
- * et un compte d'un cabinet à l'espace de son cabinet.
+ * un compte d'un cabinet à l'espace de son cabinet, et un expert-comptable
+ * de la société à la page qui le lui dit (voir AucunMagasin).
  * Le sélecteur de magasin n'apparaît qu'à qui en ouvre plusieurs : un
  * compte de membre n'en a qu'un, un compte d'un cabinet n'y voit que les
  * magasins du client ouvert.
@@ -98,6 +102,7 @@ class AppPanelProvider extends PanelProvider
             ->passwordReset(DemandeDeLien::class, PageDuLien::class)
             ->authenticatedRoutes(function (): void {
                 ChoisirSonMotDePasse::registerRoutes();
+                AucunMagasin::registerRoutes();
                 // Le lien d'un téléchargement des documents par période, pour
                 // le seul compte qui l'a demandé (voir
                 // TelechargerLesDocumentsController).

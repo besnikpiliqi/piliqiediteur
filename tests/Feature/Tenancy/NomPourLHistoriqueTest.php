@@ -13,6 +13,8 @@ use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\EntreeAudit;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Integrations\Sirene\Contracts\RepertoireSirene;
+use App\Integrations\Sirene\FauxRepertoireSirene;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
@@ -91,5 +93,25 @@ class NomPourLHistoriqueTest extends TestCase
 
         $this->assertSame('Paul '.Str::repeat('L', 235).'… (cabinet ABC)', $nom);
         $this->assertSame(255, mb_strlen($nom));
+    }
+
+    /**
+     * Le nom figé d'un expert-comptable de la société porte le cabinet
+     * déclaré (décision de l'éditeur du 01/11/2026), tel qu'il était au
+     * moment de l'opération, et se lit aussi sans aucun contexte (voir
+     * User::nomFigeDe()).
+     */
+    public function test_le_nom_fige_d_un_expert_comptable_de_la_societe_porte_le_cabinet_declare_et_se_lit_sans_contexte(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Boutique cliente']);
+        app(RepertoireSirene::class)->nommer(FauxRepertoireSirene::SIREN_CABINET, 'CABINET PETIT ET ASSOCIES');
+        $expert = $this->expertComptable($magasin, autorisations: PermissionRegistry::casesDuCabinet([...PermissionRegistry::parDefautDuCabinet(TypeDActivite::Commerce), PermissionRegistry::FACTURE_ACHAT_CREER]));
+        $this->dansLeMagasin($magasin, $expert);
+        $factureAchat = app(CreerFactureAchatAction::class)->handle($expert, Fournisseur::factory()->create(), [['produit_id' => Produit::factory()->create(['taux_tva' => 20])->id, 'quantite' => 1, 'prix_unitaire_ht' => 10]], ['date_facture' => '2026-01-15']);
+        app(TenantContext::class)->clear();
+        $expert->forceFill(['name' => 'Marc Renommé'])->save();
+
+        $this->assertSame('Marc Petit (expert-comptable déclaré par la société, cabinet CABINET PETIT ET ASSOCIES)', app(TenantContext::class)->runAs($magasin, fn (): ?string => $factureAchat->fresh()?->cree_par_nom));
+        $this->assertSame('Marc Renommé (expert-comptable déclaré par la société, cabinet CABINET PETIT ET ASSOCIES)', User::nomFigeDe($expert->id));
     }
 }

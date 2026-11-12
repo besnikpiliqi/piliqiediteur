@@ -60,6 +60,21 @@ class PageDuLienTest extends TestCase
     }
 
     /**
+     * Sur la page du lien, le mot de passe à choisir et sa confirmation
+     * portent l'astérisque rouge des champs obligatoires (décision de
+     * l'éditeur du 01/11/2026).
+     */
+    public function test_le_mot_de_passe_de_la_page_du_lien_porte_l_asterisque_des_champs_obligatoires(): void
+    {
+        $proprietaire = $this->proprietaireDe($this->ouvrirUneSociete(['nom' => 'Ma Boutique']));
+        $jeton = Password::broker()->createToken($proprietaire);
+
+        $page = Livewire::test(PageDuLien::class, ['email' => $proprietaire->email, 'token' => $jeton]);
+
+        $this->assertAsterisquesDesChamps($page->html(), ['Votre mot de passe', 'Confirmez-le']);
+    }
+
+    /**
      * Un lien faux reçoit la même réponse, que l'adresse soit celle d'un
      * propriétaire, l'adresse de contact d'un autre compte, ou d'aucun
      * compte : la page ne révèle rien.

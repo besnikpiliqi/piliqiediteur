@@ -208,7 +208,9 @@ class FacturesAEncaisserTest extends TestCase
      * Un compte du cabinet lié, à qui le client accorde par défaut de voir
      * les factures de toute l'équipe, voit l'alerte, toutes les factures
      * comprises, sans pouvoir contre-passer ni encaisser ; quand le client
-     * lui retire « voir celles de toute l'équipe », il ne la voit plus.
+     * lui retire la case des factures, « voir toutes celles du magasin »,
+     * il ne la voit plus (décision de l'éditeur du 01/11/2026 : le cabinet
+     * voit toutes les factures ou aucune).
      */
     public function test_un_compte_de_cabinet_voit_l_alerte_si_le_client_lui_accorde_les_factures_de_toute_l_equipe(): void
     {
@@ -226,7 +228,7 @@ class FacturesAEncaisserTest extends TestCase
         $this->assertSame([false, false], [$collaborateur->can(PermissionRegistry::PAIEMENT_CONTRE_PASSER), $collaborateur->can(PermissionRegistry::PAIEMENT_CREER)]);
 
         $lien = LienCabinet::query()->withoutGlobalScopes()->where('societe_id', $magasin->societe_id)->where('etat', EtatDuLien::Actif->value)->sole();
-        app(ReglerLesAutorisationsDuCabinetAction::class)->handle($this->proprietaireDe($magasin), $lien, array_values(array_diff(PermissionRegistry::parDefautDuCabinet(TypeDActivite::Commerce), [PermissionRegistry::FACTURE_VIEW_TOUTES])));
+        app(ReglerLesAutorisationsDuCabinetAction::class)->handle($this->proprietaireDe($magasin), $lien, array_values(array_diff(PermissionRegistry::parDefautDuCabinet(TypeDActivite::Commerce), [PermissionRegistry::FACTURE_VIEW, PermissionRegistry::FACTURE_VIEW_TOUTES])));
         $this->dansLeMagasin($magasin, $collaborateur->fresh());
 
         $this->assertFalse(FacturesAEncaisserApercu::canView());

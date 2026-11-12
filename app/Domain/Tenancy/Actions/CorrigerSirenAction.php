@@ -4,6 +4,7 @@ namespace App\Domain\Tenancy\Actions;
 
 use App\Domain\Authorization\OperateurCourant;
 use App\Domain\Cabinets\Jobs\PrevenirLesClientsDuCabinet;
+use App\Domain\Cabinets\Jobs\RattacherLesDeclarationsDuSiren;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Contacts\Enums\TypeClient;
@@ -246,6 +247,10 @@ class CorrigerSirenAction
 
         if ($cabinetQuiEtaitVerifie) {
             PrevenirLesClientsDuCabinet::dispatch(CleDuModele::de($corrigee), accesRetabli: false);
+        }
+
+        if ($corrigee->estUnCabinet()) {
+            RattacherLesDeclarationsDuSiren::dispatch((string) $corrigee->siren);
         }
 
         return $corrigee;

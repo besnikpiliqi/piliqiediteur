@@ -1,5 +1,6 @@
 <?php
 
+use App\Domain\Cabinets\Support\GardesDesCabinets;
 use App\Domain\CaisseSecurisee\Support\DeclencheursDeProtection;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
@@ -70,10 +71,12 @@ return new class extends Migration
 
         DeclencheursDeProtection::auMoins('telechargements_documents', 'nombre_documents', 0);
         DeclencheursDeProtection::auMoins('telechargements_documents', 'taille', 0);
+        GardesDesCabinets::poserLesMagasinsOuverts('telechargements_documents');
     }
 
     public function down(): void
     {
+        GardesDesCabinets::retirerLesMagasinsOuverts('telechargements_documents');
         Schema::dropIfExists('telechargements_documents');
     }
 };

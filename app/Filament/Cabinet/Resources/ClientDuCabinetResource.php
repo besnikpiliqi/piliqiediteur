@@ -105,7 +105,7 @@ class ClientDuCabinetResource extends RessourceDuPanneauCabinet
                 Tables\Columns\TextColumn::make('actif_depuis')->label('Lié depuis')->dateTime('d/m/Y'),
                 Tables\Columns\TextColumn::make('magasins')
                     ->label('Magasins réels')
-                    ->state(fn (LienCabinet $record): int => Magasin::query()->where('societe_id', $record->societe_id)->where('est_demonstration', false)->count()),
+                    ->state(fn (LienCabinet $record): int => $record->tous_les_magasins ? Magasin::query()->where('societe_id', $record->societe_id)->where('est_demonstration', false)->count() : count($record->magasinsChoisis())),
                 Tables\Columns\TextColumn::make('collaborateurs')
                     ->label('Collaborateurs confiés')
                     ->state(fn (LienCabinet $record): array => self::collaborateursConfies($record))

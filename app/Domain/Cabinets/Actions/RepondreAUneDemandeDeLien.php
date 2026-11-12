@@ -74,7 +74,7 @@ abstract class RepondreAUneDemandeDeLien
 
             $controle($auteurRelu, $relu);
 
-            $relu->forceFill(['etat' => $etat, 'jeton_hache' => null, 'repondu_par' => $auteurRelu?->getKey(), 'repondu_le' => now()])->save();
+            self::cloreSousVerrou($relu, $etat, $auteurRelu);
             $duCabinet = $relu->origine === OrigineDuLien::DemandeDuCabinet;
 
             $duVisiteur = $auteurRelu->societe_id ?? CleDuModele::de($client);
@@ -84,6 +84,18 @@ abstract class RepondreAUneDemandeDeLien
 
             return $relu;
         }));
+    }
+
+    /**
+     * Clôt cette demande, relue et verrouillée par l'appelant, dans sa
+     * transaction : son état, son jeton effacé, l'auteur de la réponse
+     * (null pour le système) et sa date. Sert aussi au retrait des demandes
+     * qu'une déclaration de l'expert-comptable de la société remplace, et
+     * de celles qu'un rattachement rend sans objet.
+     */
+    public static function cloreSousVerrou(LienCabinet $relu, EtatDuLien $etat, ?User $auteur): void
+    {
+        $relu->forceFill(['etat' => $etat, 'jeton_hache' => null, 'repondu_par' => $auteur?->getKey(), 'repondu_le' => now()])->save();
     }
 
     /**

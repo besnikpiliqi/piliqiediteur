@@ -4,6 +4,8 @@ namespace App\Filament\Societe\Resources;
 
 use App\Domain\Authorization\AutorisationsSociete;
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Cabinets\Services\ExpertsComptablesDeclares;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\RoleSociete;
 use App\Domain\Tenancy\Enums\StatutCompte;
@@ -110,7 +112,10 @@ class MembreResource extends RessourceDuPanneauSociete
                     ->state(fn (User $record): ?string => static::peut('voirLIdentifiant', $record) ? $record->identifiantDeConnexion() : null)
                     ->placeholder('—')
                     ->visible(fn (): bool => static::proprietaireConnecte()),
-                Tables\Columns\TextColumn::make('role_societe')->label('Rôle')->badge(),
+                Tables\Columns\TextColumn::make('role_societe')->label('Rôle')->badge()
+                    ->formatStateUsing(fn (RoleSociete $state, User $record): string => $record->estExpertComptable()
+                        ? 'Expert-comptable déclaré · '.(app(ExpertsComptablesDeclares::class)->declarationDe($record)?->nomDuCabinetDeclare() ?? 'cabinet')
+                        : $state->getLabel()),
                 Tables\Columns\TextColumn::make('magasins')->label('Magasin')->state(fn (User $record): string => static::resumeDesMagasins($record))->wrap(),
                 Tables\Columns\TextColumn::make('statut')->label('Statut')->badge(),
                 Tables\Columns\TextColumn::make('signaux')
@@ -146,13 +151,21 @@ class MembreResource extends RessourceDuPanneauSociete
                     ->state(fn (User $record): ?string => $record->identifiantDeConnexion())
                     ->visible(fn (User $record): bool => static::peut('voirLIdentifiant', $record)),
                 TextEntry::make('email')
-                    ->label(fn (User $record): string => $record->estProprietaire() ? 'Adresse e-mail de connexion' : 'Adresse e-mail de contact')
+                    ->label(fn (User $record): string => match (true) {
+                        $record->estProprietaire() => 'Adresse e-mail de connexion',
+                        $record->estExpertComptable() => 'Adresse e-mail professionnelle (reçoit les liens de son mot de passe)',
+                        default => 'Adresse e-mail de contact',
+                    })
                     ->placeholder('Non renseignée'),
                 TextEntry::make('role_societe')->label('Rôle dans la société')->badge(),
                 TextEntry::make('statut')->label('Statut')->badge(),
                 TextEntry::make('mot_de_passe')
                     ->label('Mot de passe')
-                    ->state(fn (User $record): string => $record->mot_de_passe_est_l_identifiant ? 'Encore l\'identifiant' : 'Choisi par la personne')
+                    ->state(fn (User $record): string => match (true) {
+                        $record->mot_de_passe_est_l_identifiant => 'Encore l\'identifiant',
+                        $record->estExpertComptable() && app(ExpertsComptablesDeclares::class)->attachementDe($record)?->aChoisiSonMotDePasse() !== true => 'Pas encore choisi',
+                        default => 'Choisi par la personne',
+                    })
                     ->visible(fn (User $record): bool => static::peut('voirLIdentifiant', $record)),
                 TextEntry::make('derniere_connexion_le')
                     ->label('Dernière connexion')
@@ -174,7 +187,15 @@ class MembreResource extends RessourceDuPanneauSociete
                         TextEntry::make('nomination')->label('Nomination')->placeholder('—'),
                     ])
                     ->columns(4),
-            ])->visible(fn (User $record): bool => ! $record->estProprietaire()),
+            ])->visible(fn (User $record): bool => ! $record->estProprietaire() && ! $record->estExpertComptable()),
+            Section::make('Autorisations de l\'expert-comptable')->schema([
+                TextEntry::make('autorisations_de_l_expert_comptable')
+                    ->label('')
+                    ->state(fn (User $record): array => PermissionRegistry::libellesDe(app(ExpertsComptablesDeclares::class)->declarationDe($record)?->autorisationsRetenues() ?? []))
+                    ->listWithLineBreaks()
+                    ->placeholder('Aucune')
+                    ->helperText('Elles se règlent dans « Cabinet comptable », pour toutes les personnes de votre expert-comptable.'),
+            ])->visible(fn (User $record): bool => $record->estExpertComptable()),
             Section::make('Autorisations de société')->schema([
                 TextEntry::make('autorisations_de_societe')
                     ->label('')
@@ -193,6 +214,20 @@ class MembreResource extends RessourceDuPanneauSociete
      */
     public static function signaux(User $compte): array
     {
+        if ($compte->estExpertComptable()) {
+            $attachement = app(ExpertsComptablesDeclares::class)->attachementDe($compte);
+
+            return array_values(array_filter([
+                match (true) {
+                    $attachement === null || $attachement->aChoisiSonMotDePasse() => null,
+                    $attachement->lienValable() => 'Lien valable jusqu\'au '.Calendrier::deParis()->afficher(ValeurRequise::de($attachement->jeton_expire_le, 'l\'échéance du lien'), 'd/m/Y'),
+                    default => 'Lien expiré, effacé ou non parti',
+                },
+                $attachement?->aChoisiSonMotDePasse() === true ? null : 'Mot de passe pas encore choisi',
+                $compte->premiere_connexion_le === null ? 'Jamais connecté' : null,
+            ]));
+        }
+
         return array_values(array_filter([
             $compte->mot_de_passe_est_l_identifiant ? 'Mot de passe : l\'identifiant' : null,
             $compte->premiere_connexion_le === null ? 'Jamais connecté' : null,
@@ -212,7 +247,7 @@ class MembreResource extends RessourceDuPanneauSociete
 
         $auteur = User::query()->where('societe_id', $compte->societe_id)->find($compte->acces_redonne_par)->name ?? 'un compte de la société';
 
-        return 'Le '.$compte->calendrier()->afficherHorsDuMagasin($compte->acces_redonne_le, 'd/m/Y à H:i')." par {$auteur}, ".($compte->acces_redonne_en_presence ? 'en sa présence' : 'en son absence');
+        return 'Le '.$compte->calendrier()->afficherHorsDuMagasin($compte->acces_redonne_le, 'd/m/Y à H:i')." par {$auteur}, ".($compte->acces_redonne_mode?->phraseAuProprietaire() ?? 'en son absence');
     }
 
     /**
@@ -228,6 +263,16 @@ class MembreResource extends RessourceDuPanneauSociete
 
         if ($compte->estAdministrateur() && $compte->administreTousLesMagasins()) {
             return 'Tous les magasins (administrateur)';
+        }
+
+        if ($compte->estExpertComptable()) {
+            $declaration = app(ExpertsComptablesDeclares::class)->declarationDe($compte);
+
+            return match (true) {
+                $declaration === null || ! $declaration->estDeclare() || $compte->estRetire() => '—',
+                $declaration->tous_les_magasins => 'Tous les magasins réels (expert-comptable)',
+                default => 'Magasins choisis (expert-comptable)',
+            };
         }
 
         $resume = collect(static::affectationsVisibles($compte))->map(fn (array $ligne): string => "{$ligne['magasin']} ({$ligne['role']})")->implode(', ');

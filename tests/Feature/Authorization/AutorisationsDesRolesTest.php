@@ -6,6 +6,8 @@ use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Affectation;
+use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Schema;
@@ -133,6 +135,7 @@ class AutorisationsDesRolesTest extends TestCase
             'responsable' => ['responsable', true],
             'administrateur' => ['administrateur', true],
             'cabinet lié' => ['cabinet lié', true],
+            'expert-comptable de la société' => ['expert-comptable de la société', true],
             'vendeur' => ['vendeur', false],
             'observateur' => ['observateur', false],
         ];
@@ -147,6 +150,7 @@ class AutorisationsDesRolesTest extends TestCase
             'responsable' => $this->responsable($magasin),
             'administrateur' => $this->administrateur($magasin),
             'cabinet lié' => $this->collaborateurDuCabinetLie($magasin),
+            'expert-comptable de la société' => $this->expertComptableDansSonMagasin($magasin),
             'vendeur' => $this->membre($magasin, RoleMagasin::Vendeur),
             'observateur' => $this->membre($magasin, RoleMagasin::Observateur),
         };
@@ -187,5 +191,17 @@ class AutorisationsDesRolesTest extends TestCase
 
         $this->assertSame($accordee, $membre->can($autorisation));
         $this->assertEqualsCanonicalizing($role->permissionsParDefaut(TypeDActivite::Commerce), Affectation::query()->where('user_id', $membre->id)->sole()->autorisations());
+    }
+
+    /**
+     * L'expert-comptable de la société, déclaré avec les autorisations par
+     * défaut, lu dans le contexte de son magasin.
+     */
+    private function expertComptableDansSonMagasin(Magasin $magasin): User
+    {
+        $expert = $this->expertComptable($magasin);
+        app(TenantContext::class)->set($magasin);
+
+        return $expert->fresh();
     }
 }

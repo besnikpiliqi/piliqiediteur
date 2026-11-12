@@ -106,6 +106,24 @@ class MembrePolicy
         return $this->portee->peutRedonnerLAcces($user, $membre);
     }
 
+    /**
+     * Réintégrer un expert-comptable de la société retiré : le propriétaire
+     * seul, tant que sa déclaration est en attente.
+     */
+    public function reintegrerLExpertComptable(User $user, User $membre): bool
+    {
+        return $this->portee->peutReintegrerLExpertComptable($user, $membre);
+    }
+
+    /**
+     * Corriger l'adresse d'un expert-comptable de la société qui n'a pas
+     * encore choisi son mot de passe : le propriétaire seul.
+     */
+    public function corrigerLAdresse(User $user, User $membre): bool
+    {
+        return $this->portee->peutCorrigerLAdresseDeLExpertComptable($user, $membre);
+    }
+
     public function voirLIdentifiant(User $user, User $membre): bool
     {
         return $this->portee->voitLIdentifiant($user, $membre);

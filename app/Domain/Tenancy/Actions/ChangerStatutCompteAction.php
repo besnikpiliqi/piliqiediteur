@@ -3,16 +3,25 @@
 namespace App\Domain\Tenancy\Actions;
 
 use App\Domain\Cabinets\Actions\CreerCollaborateurAction;
+use App\Domain\Cabinets\Actions\MettreFinAuLienAction;
+use App\Domain\Cabinets\Enums\MotifDeFinDuLien;
+use App\Domain\Cabinets\Jobs\RattacherUneDeclaration;
+use App\Domain\Cabinets\Models\LienCabinet;
+use App\Domain\Cabinets\Services\ExpertsComptablesDeclares;
+use App\Domain\Cabinets\Support\IdentiteDansLeJournal;
 use App\Domain\Tenancy\Concerns\AgitDansLaSociete;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\StatutCompte;
 use App\Domain\Tenancy\Models\Affectation;
+use App\Domain\Tenancy\Scopes\SocieteScope;
 use App\Domain\Tenancy\Services\AffectationsDesMembres;
+use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\JournalDesDroits;
 use App\Domain\Tenancy\Services\PorteeDesAdministrateurs;
 use App\Domain\Tenancy\Services\PorteeDesDroits;
 use App\Domain\Tenancy\Services\SessionsDesComptes;
+use App\Domain\Tenancy\Support\CleDuModele;
 use App\Models\User;
 use Closure;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -46,6 +55,18 @@ use LogicException;
  *   compte retiré par le propriétaire ne se réintègre que par le
  *   propriétaire.
  *
+ * Un compte d'expert-comptable de la société (voir
+ * DeclarerSonExpertComptableAction) ne se gère que par le propriétaire,
+ * tant que sa déclaration est en attente, celle-ci verrouillée avant les
+ * comptes (voir ExpertsComptablesDeclares::verrouillerLaDeclarationDe()) :
+ * le suspendre efface aussi le lien de son mot de passe en cours, qui ne
+ * revit pas à la réactivation ; retirer la dernière personne non retirée
+ * de la déclaration met fin à celle-ci, dans la même modification, par le
+ * client ; la réactivation et la réintégration (voir
+ * reintegrerLExpertComptable()) relancent, après le commit, le
+ * rattachement de la déclaration au cabinet vérifié de son SIREN, qui
+ * attendait une personne active (voir RattacherUneDeclarationAction).
+ *
  * Chaque nouveau statut note qui l'a donné, et si c'était alors le
  * propriétaire (voir User::nouveauStatut()) : la décision du propriétaire
  * tient après une transmission de la propriété.
@@ -62,6 +83,8 @@ class ChangerStatutCompteAction
         private readonly AffectationsDesMembres $affectations,
         private readonly SessionsDesComptes $sessions,
         private readonly PorteeDesAdministrateurs $porteeDesAdministrateurs,
+        private readonly ExpertsComptablesDeclares $experts,
+        private readonly JournalAudit $journalAudit,
     ) {}
 
     /**
@@ -79,6 +102,7 @@ class ChangerStatutCompteAction
             }
 
             $compteRelu->forceFill($compteRelu->nouveauStatut(StatutCompte::Suspendu, $auteurRelu))->save();
+            self::oublierLeLienDeLExpertComptable($compteRelu);
             $compteRelu->effacerToutesSesNotifications();
             $this->sessions->fermer($compteRelu);
         });
@@ -100,6 +124,8 @@ class ChangerStatutCompteAction
 
             $compteRelu->forceFill($compteRelu->nouveauStatut(StatutCompte::Actif, $auteurRelu))->save();
         });
+
+        $this->relancerLeRattachement($compte);
     }
 
     /**
@@ -116,6 +142,7 @@ class ChangerStatutCompteAction
             $compteRelu->forceFill($compteRelu->nouveauStatut(StatutCompte::Retire, $auteurRelu))->save();
             $compteRelu->effacerToutesSesNotifications();
             $this->sessions->fermer($compteRelu);
+            $this->terminerUneDeclarationSansPersonne($auteurRelu, $compteRelu);
         });
     }
 
@@ -219,19 +246,108 @@ class ChangerStatutCompteAction
     }
 
     /**
+     * Réintègre un expert-comptable de la société retiré : le propriétaire
+     * seul, tant que sa déclaration est en attente (voir
+     * PorteeDesDroits::peutReintegrerLExpertComptable()). Il garde son mot
+     * de passe, comme tout compte réintégré ; aucun lien ne revit : celui
+     * qui n'a pas encore choisi le sien reçoit un nouveau lien ou choisit
+     * son mot de passe en présence du propriétaire (voir
+     * RedonnerLAccesAction).
+     *
+     * @throws AuthorizationException
+     */
+    public function reintegrerLExpertComptable(User $auteur, User $compte): void
+    {
+        $this->changer($auteur, $compte, ActionAuditee::CompteReintegre, function (User $auteurRelu, User $compteRelu): void {
+            if (! $this->portee->peutReintegrerLExpertComptable($auteurRelu, $compteRelu)) {
+                throw new AuthorizationException(PorteeDesDroits::REFUS);
+            }
+
+            $compteRelu->forceFill($compteRelu->nouveauStatut(StatutCompte::Actif, $auteurRelu))->save();
+        });
+
+        $this->relancerLeRattachement($compte);
+    }
+
+    /**
      * Supprime les affectations, les autorisations de société et, pour un
      * collaborateur d'un cabinet d'expertise comptable, les clients confiés
-     * d'un compte qui quitte la société : il garde son rôle de société, son
-     * identifiant et son magasin de rattachement, sans aucun droit.
+     * d'un compte qui quitte la société, et, pour un expert-comptable de la
+     * société, le lien de son mot de passe en cours : il garde son rôle de
+     * société, son identifiant et son magasin de rattachement, sans aucun
+     * droit.
      */
     public static function retirerLesDroits(User $compte): void
     {
         Affectation::query()->where('user_id', $compte->getKey())->delete();
         DB::table('autorisations_societe')->where('user_id', $compte->getKey())->delete();
         DB::table('clients_confies')->where('societe_id', $compte->societe_id)->where('user_id', $compte->getKey())->delete();
+        self::oublierLeLienDeLExpertComptable($compte);
     }
 
     /**
+     * Efface le lien du mot de passe en cours d'un expert-comptable de la
+     * société, dans sa ligne d'attachement, verrouillée par l'appelant
+     * après le compte : il ne sert plus quand le compte est suspendu ou
+     * retiré. Rien pour un autre compte.
+     */
+    private static function oublierLeLienDeLExpertComptable(User $compte): void
+    {
+        DB::table('comptes_expert_comptable')->where('societe_id', $compte->societe_id)->where('user_id', $compte->getKey())->whereNotNull('jeton_hache')
+            ->update(['jeton_hache' => null, 'jeton_expire_le' => null, 'updated_at' => now()]);
+    }
+
+    /**
+     * Met fin à la déclaration de cet expert-comptable de la société, tout
+     * juste retiré, quand plus aucune de ses personnes n'a de compte non
+     * retiré : par le client, au nom du propriétaire, dans la même
+     * modification, sa déclaration étant déjà verrouillée ; l'entrée
+     * LienTermine, avec l'identité déclarée, ne s'inscrit qu'au journal de
+     * la société, aucun cabinet n'existant.
+     */
+    private function terminerUneDeclarationSansPersonne(User $auteur, User $compte): void
+    {
+        $attachee = $this->experts->declarationDe($compte);
+
+        if ($attachee === null || ! $attachee->estDeclare() || $this->experts->comptesDe($attachee)->isNotEmpty()) {
+            return;
+        }
+
+        $declaration = LienCabinet::query()->withoutGlobalScope(SocieteScope::class)->where('societe_id', $compte->societe_id)->findOrFail($attachee->getKey());
+        MettreFinAuLienAction::terminerSousVerrou($declaration, $auteur, MotifDeFinDuLien::ParLeClient);
+        $this->journalAudit->inscrire(ActionAuditee::LienTermine, $auteur, null, null, [
+            'cabinet' => IdentiteDansLeJournal::declaree($declaration),
+            'client' => IdentiteDansLeJournal::de($compte->societe()->firstOrFail()),
+            'motif' => MotifDeFinDuLien::ParLeClient->value,
+        ], $declaration);
+    }
+
+    /**
+     * Relance, après le commit, le rattachement de la déclaration de cet
+     * expert-comptable de la société au cabinet vérifié de son SIREN, s'il
+     * y en a un : une déclaration sans personne active attendait (voir
+     * RattacherUneDeclarationAction). Rien pour un autre compte.
+     */
+    private function relancerLeRattachement(User $compte): void
+    {
+        if (! $compte->estExpertComptable() || ! $compte->estActif()) {
+            return;
+        }
+
+        $declaration = $this->experts->declarationDe($compte);
+        $cabinet = $declaration?->estDeclare() === true && $declaration->siren_cabinet !== null ? $this->experts->cabinetVerifieDuSiren((string) $declaration->siren_cabinet) : null;
+
+        if ($declaration !== null && $cabinet !== null) {
+            RattacherUneDeclaration::dispatch(CleDuModele::de($declaration), CleDuModele::de($cabinet));
+        }
+    }
+
+    /**
+     * Exécute ce geste sur tout le compte, sous les verrous de
+     * JournalDesDroits::modifier() ; pour un expert-comptable de la
+     * société, sa déclaration se verrouille avant les comptes, dans l'ordre
+     * de tout geste sur les liens.
+     *
      * @param  Closure(User, User): void  $geste
      *
      * @throws AuthorizationException
@@ -241,7 +357,7 @@ class ChangerStatutCompteAction
         $this->dansLaSociete($compte->societe()->firstOrFail(), PorteeDesDroits::REFUS, function () use ($auteur, $compte, $action, $geste): void {
             $this->journalDesDroits->modifier($auteur, $action, [$compte], [], function (User $auteurRelu, array $relus) use ($geste): void {
                 $geste($auteurRelu, $relus[0]);
-            });
+            }, $compte->estExpertComptable() ? fn () => $this->experts->verrouillerLaDeclarationDe($compte) : null);
         });
 
         $compte->refresh();

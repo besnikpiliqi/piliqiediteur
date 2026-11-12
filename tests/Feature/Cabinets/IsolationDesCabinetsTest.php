@@ -8,13 +8,16 @@ use App\Domain\Cabinets\Actions\InviterUneEntrepriseAction;
 use App\Domain\Cabinets\Actions\MettreFinAuLienAction;
 use App\Domain\Cabinets\Actions\ReglerLesAutorisationsDuCabinetAction;
 use App\Domain\Cabinets\Models\ClientConfie;
+use App\Domain\Cabinets\Models\CompteExpertComptable;
 use App\Domain\Cabinets\Models\InvitationCabinet;
 use App\Domain\Cabinets\Models\LienCabinet;
 use App\Domain\Cabinets\Services\AccesDesCabinets;
+use App\Domain\Cabinets\Services\TableauDeBordDesClients;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
 use App\Domain\Tenancy\Enums\StatutCompte;
+use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\TenantContext;
@@ -29,6 +32,7 @@ use Filament\Facades\Filament;
 use Filament\Pages\Dashboard;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Mail\Mailable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Livewire\Exceptions\MethodNotFoundException;
@@ -243,6 +247,145 @@ class IsolationDesCabinetsTest extends TestCase
         $this->assertSame([$this->c1->id], app(TenantContext::class)->runAsSociete($this->c1, fn (): array => InvitationCabinet::query()->pluck('societe_id')->map(intval(...))->unique()->values()->all()));
         $this->assertSame([$this->c1->id], app(TenantContext::class)->runAsSociete($this->c1, fn (): array => ClientConfie::query()->pluck('societe_id')->map(intval(...))->unique()->values()->all()));
         $this->assertSame([], app(TenantContext::class)->runAsSociete($this->c2, fn (): array => ClientConfie::query()->pluck('id')->all()));
+
+        $w = $this->ouvrirUneSociete(['nom' => 'W', 'siren' => SocieteFactory::sirenFictif()]);
+        $expert = $this->declarerSonExpertComptable($w, siren: '000000927');
+        $this->assertSame([$expert->id], app(TenantContext::class)->runAsSociete($w->societe, fn (): array => CompteExpertComptable::query()->pluck('user_id')->map(intval(...))->all()));
+        $this->assertSame([], app(TenantContext::class)->runAsSociete($this->x->societe, fn (): array => CompteExpertComptable::query()->pluck('id')->all()));
+    }
+
+    /**
+     * Les déclarations en attente d'un SIREN, lues hors de toute société
+     * quand le cabinet de ce SIREN devient vérifié (lecture L2 du lot
+     * EC2), filtrent par ce SIREN et cet état et ne lisent de chacune que
+     * son identifiant et sa société.
+     */
+    public function test_les_lectures_des_declarations_d_un_siren_ne_lisent_que_leur_identifiant_et_leur_societe(): void
+    {
+        $w = $this->ouvrirUneSociete(['nom' => 'W', 'siren' => SocieteFactory::sirenFictif()]);
+        $v = $this->ouvrirUneSociete(['nom' => 'V', 'siren' => SocieteFactory::sirenFictif()]);
+        $autre = $this->ouvrirUneSociete(['nom' => 'U', 'siren' => SocieteFactory::sirenFictif()]);
+        $this->declarerSonExpertComptable($w, siren: '000000927');
+        $this->declarerSonExpertComptable($v, siren: '000000927', email: 'luc.moreau@petit-associes.test');
+        $this->declarerSonExpertComptable($autre, siren: '000000935', email: 'eve.morel@morel.test');
+        $requetes = [];
+        DB::listen(function ($requete) use (&$requetes): void {
+            $requetes[] = $requete->sql;
+        });
+
+        $declarations = LienCabinet::declaresDuSiren('000000927');
+
+        $this->assertSame([[['id', 'societe_id'], $w->societe_id], [['id', 'societe_id'], $v->societe_id]], $declarations->map(fn (LienCabinet $lien): array => [array_keys($lien->getAttributes()), $lien->societe_id])->all());
+        $this->assertSame(['select "id", "societe_id" from "liens_cabinet" where "siren_cabinet" = ? and "etat" = ? order by "id" asc'], $requetes);
+    }
+
+    /**
+     * Tant que le cabinet d'un SIREN déclaré n'est pas entièrement
+     * vérifié, il n'apprend rien des sociétés qui l'ont déclaré : ni lien,
+     * ni client, ni avis, ni entrée de son journal d'audit.
+     */
+    public function test_le_cabinet_n_apprend_rien_des_societes_qui_ont_declare_son_siren_avant_le_rattachement(): void
+    {
+        $w = $this->ouvrirUneSociete(['nom' => 'W', 'raison_sociale' => 'CLIENTE W', 'siren' => SocieteFactory::sirenFictif()]);
+        $this->declarerSonExpertComptable($w, siren: '000000927');
+        $cabinet = $this->inscrireUneSociete('000000927', 'cabinet@petit-associes.test', TypeDActivite::Cabinet);
+        $proprietaire = $cabinet->proprietaire()->firstOrFail();
+
+        $this->assertSame([], app(AccesDesCabinets::class)->liensActifsDuCabinet($cabinet)->all());
+        $this->assertSame(0, LienCabinet::query()->withoutGlobalScopes()->where('cabinet_id', $cabinet->id)->count());
+        $this->assertSame(0, DB::table('notifications')->where('notifiable_id', $proprietaire->id)->count());
+        $this->assertSame(0, DB::table('journal_audit')->where('societe_id', $cabinet->id)->where('nouvelles_valeurs', 'like', '%CLIENTE W%')->count());
+        Mail::assertNotSent(fn (Mailable $mail): bool => $mail->hasTo('cabinet@petit-associes.test') && str_contains((string) $mail->render(), 'CLIENTE W'));
+    }
+
+    /**
+     * Deux sociétés qui déclarent le même SIREN l'ignorent l'une de
+     * l'autre : la seconde déclaration se fait sans refus ni message, et
+     * rien de la première ne se lit dans la seconde société.
+     */
+    public function test_une_societe_n_apprend_pas_qu_une_autre_a_declare_le_meme_siren(): void
+    {
+        $w = $this->ouvrirUneSociete(['nom' => 'W', 'raison_sociale' => 'CLIENTE W', 'siren' => SocieteFactory::sirenFictif()]);
+        $v = $this->ouvrirUneSociete(['nom' => 'V', 'raison_sociale' => 'CLIENTE V', 'siren' => SocieteFactory::sirenFictif()]);
+        $marc = $this->declarerSonExpertComptable($w, siren: '000000927');
+        $luc = $this->declarerSonExpertComptable($v, siren: '000000927', nom: 'Luc Moreau', email: 'luc.moreau@petit-associes.test');
+
+        $this->assertSame([$luc->id], app(TenantContext::class)->runAsSociete($v->societe, fn (): array => CompteExpertComptable::query()->pluck('user_id')->map(intval(...))->all()));
+        $this->assertSame(1, app(TenantContext::class)->runAsSociete($v->societe, fn (): int => LienCabinet::query()->count()));
+        $this->dansLEspaceDeLaSociete($v->societe, $this->proprietaireDe($v));
+        Livewire::test(CabinetComptable::class)->assertSee('Luc Moreau')->assertDontSee('Marc Petit')->assertDontSee('CLIENTE W');
+        $this->assertSame(0, DB::table('journal_audit')->where('societe_id', $v->societe_id)->where('nouvelles_valeurs', 'like', '%CLIENTE W%')->count());
+        $this->assertSame(0, DB::table('notifications')->where('notifiable_id', $this->proprietaireDe($v)->id)->where('data', 'like', '%CLIENTE W%')->count());
+        $this->assertTrue($marc->fresh()->estActif());
+    }
+
+    /**
+     * La page du lien du mot de passe, avant qu'aucune société ne soit
+     * ouverte (lecture L3 du lot EC2), ne lit que l'attachement, le compte,
+     * sa société et sa déclaration, chacun par ses colonnes : jamais le
+     * type d'activité de la société, ni qui l'a déclaré, ni l'adresse ou
+     * le mot de passe du compte.
+     */
+    public function test_la_page_du_lien_ne_lit_que_le_compte_sa_societe_et_sa_declaration(): void
+    {
+        $w = $this->ouvrirUneSociete(['nom' => 'W', 'raison_sociale' => 'CLIENTE W', 'siren' => SocieteFactory::sirenFictif()]);
+        $this->declarerSonExpertComptable($w, siren: '000000927');
+        $jeton = $this->jetonDuDernierLienDExpertComptable();
+        $requetes = [];
+        DB::listen(function ($requete) use (&$requetes): void {
+            $requetes[] = $requete->sql;
+        });
+
+        $this->get(route('experts-comptables.lien.afficher', ['jeton' => $jeton]))->assertOk()->assertSee('CLIENTE W');
+
+        $lectures = collect($requetes)->filter(fn (string $sql): bool => str_starts_with($sql, 'select'));
+        $this->assertTrue($lectures->contains('select "id", "societe_id", "lien_id", "user_id", "jeton_expire_le" from "comptes_expert_comptable" where "jeton_hache" = ? limit 1'));
+        $this->assertTrue($lectures->contains(fn (string $sql): bool => str_starts_with($sql, 'select "id", "societe_id", "name", "role_societe", "statut" from "users" where "societe_id" = ?')));
+        $this->assertTrue($lectures->contains(fn (string $sql): bool => str_starts_with($sql, 'select "id", "raison_sociale", "siren", "close_le", "statut" from "societes"')));
+        $this->assertFalse($lectures->contains(fn (string $sql): bool => str_contains($sql, 'type_activite') || str_contains($sql, 'demande_par') || str_contains($sql, '"email"') || str_contains($sql, '"password"') || str_contains($sql, 'from "identifiants"') || str_contains($sql, 'select *')));
+        $this->assertTrue($lectures->filter(fn (string $sql): bool => str_contains($sql, 'from "liens_cabinet"'))->every(fn (string $sql): bool => str_contains($sql, '"liens_cabinet"."societe_id" = ?')));
+    }
+
+    /**
+     * Les listes, le tableau de bord et les liens d'un cabinet ne lisent
+     * que ses liens : une déclaration, qui n'a pas de cabinet, n'y paraît
+     * jamais.
+     */
+    public function test_les_listes_et_le_tableau_de_bord_du_cabinet_ignorent_les_declarations(): void
+    {
+        $w = $this->ouvrirUneSociete(['nom' => 'W', 'raison_sociale' => 'CLIENTE W', 'siren' => SocieteFactory::sirenFictif()]);
+        $this->declarerSonExpertComptable($w, siren: '000000927');
+        $proprietaire = $this->proprietaireDuCabinet($this->c1);
+
+        $this->assertSame([$this->lienX->id, $this->lienY->id], app(AccesDesCabinets::class)->liensOuverts($proprietaire)->pluck('liens_cabinet.id')->map(intval(...))->sort()->values()->all());
+        $this->assertSame(['CLIENTE X', 'CLIENTE Y'], collect(app(TableauDeBordDesClients::class)->pour($proprietaire))->map(fn (array $ligne): ?string => $ligne['client']->raison_sociale)->sort()->values()->all());
+        $this->assertSame([$this->lienX->id, $this->lienY->id], app(AccesDesCabinets::class)->liensActifsDuCabinet($this->c1)->pluck('id')->map(intval(...))->sort()->values()->all());
+        $this->dansLEspaceDuCabinet($this->c1, $proprietaire);
+        Livewire::test(ListClientsDuCabinet::class)->assertCanSeeTableRecords([$this->lienX, $this->lienY])->assertDontSee('CLIENTE W');
+    }
+
+    /**
+     * Le nom figé d'un expert-comptable de la société et sa déclaration,
+     * lus sans contexte, à la connexion ou à l'ouverture d'un magasin
+     * (lecture L4 du lot EC2), ne lisent que l'attachement et la
+     * déclaration de sa société.
+     */
+    public function test_la_connexion_et_le_nom_fige_d_un_expert_comptable_ne_lisent_que_la_declaration_de_sa_societe(): void
+    {
+        $w = $this->ouvrirUneSociete(['nom' => 'W', 'siren' => SocieteFactory::sirenFictif()]);
+        $expert = $this->declarerSonExpertComptable($w, siren: '000000927');
+        $relu = User::query()->findOrFail($expert->id);
+        app(TenantContext::class)->clear();
+        $requetes = [];
+        DB::listen(function ($requete) use (&$requetes): void {
+            $requetes[] = $requete->sql;
+        });
+
+        $this->assertStringContainsString('(expert-comptable déclaré par la société, cabinet', $relu->nomPourLHistorique());
+
+        $this->assertNotEmpty($requetes);
+        $this->assertTrue(collect($requetes)->every(fn (string $sql): bool => ! str_contains($sql, 'from "liens_cabinet"') || (str_contains($sql, '"liens_cabinet"."societe_id" = ?') && str_contains($sql, 'from "comptes_expert_comptable" where "societe_id" = ?'))));
+        $this->assertFalse(collect($requetes)->contains(fn (string $sql): bool => str_contains($sql, 'select *')));
     }
 
     public function test_une_action_forgee_du_cabinet_sur_un_client_non_lie_est_refusee(): void

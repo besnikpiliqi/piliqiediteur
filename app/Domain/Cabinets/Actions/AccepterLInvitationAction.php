@@ -101,6 +101,8 @@ class AccepterLInvitationAction
 
     public const MESSAGE_CABINET_NE_PEUT_PLUS = 'Le cabinet qui vous a invité ne peut plus inviter : inscrivez votre entreprise vous-même.';
 
+    public const MESSAGE_CABINET_SUSPENDU = 'Le cabinet qui vous a invité est suspendu : son invitation ne peut pas être acceptée tant qu\'il l\'est. Vous pouvez la refuser.';
+
     public const MESSAGE_ADRESSE_PRISE = 'Cette adresse est déjà l\'adresse de connexion d\'un compte PILIQI : demandez au cabinet une invitation à une autre adresse.';
 
     public const MESSAGE_SIREN_INSCRIT = 'Cette entreprise vient d\'être inscrite sur PILIQI : son propriétaire peut lier votre cabinet depuis son espace.';
@@ -223,7 +225,7 @@ class AccepterLInvitationAction
      */
     private function creer(InvitationCabinet $invitation, Societe $cabinet, TypeDActivite $type, array $identite, ?RepresentantRne $representant, string $nom, string $motDePasseHache, array $consultation, UniteSirene $unite): User
     {
-        Societe::query()->whereKey($cabinet->getKey())->sharedLock()->firstOrFail();
+        $cabinet = Societe::query()->whereKey($cabinet->getKey())->sharedLock()->firstOrFail();
         $relue = InvitationCabinet::query()->withoutGlobalScopes()->where('societe_id', $cabinet->getKey())->whereKey($invitation->getKey())->lockForUpdate()->first();
 
         if ($relue === null || ! $relue->estOuverte()) {
@@ -231,6 +233,10 @@ class AccepterLInvitationAction
         }
 
         $cabinet->cabinet()->sharedLock()->first();
+
+        if ($cabinet->estUnCabinetSuspendu()) {
+            throw new LogicException(self::MESSAGE_CABINET_SUSPENDU);
+        }
 
         if (! $cabinet->estUnCabinetVerifie()) {
             throw new LogicException(self::MESSAGE_CABINET_NE_PEUT_PLUS);
@@ -288,6 +294,7 @@ class AccepterLInvitationAction
                 'client' => IdentiteDansLeJournal::de(ModeleRelu::de($client)),
                 'origine' => OrigineDuLien::Invitation->value,
                 'autorisations' => 'par_defaut',
+                'magasins' => 'tous',
             ], CleDuModele::de($cabinet)]];
         }, [CleDuModele::de($cabinet)]);
 

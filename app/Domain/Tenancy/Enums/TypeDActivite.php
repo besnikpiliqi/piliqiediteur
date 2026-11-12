@@ -80,7 +80,7 @@ enum TypeDActivite: string implements HasLabel
     {
         $application = Reglage::texte('app.name');
 
-        return "Ce choix est définitif : il décide des menus de {$application} (articles, achats et stock) et ne changera pas, même si votre activité change ensuite. Dans le doute, choisissez « ".self::Commerce->getLabel()." », le plus complet. {$application} ne permet pas de facturer une activité exonérée de TVA (soins, enseignement, assurance, location de logements…).";
+        return "Ce choix est définitif : il décide des menus de {$application} (articles, achats et stock) et ne changera pas, même si votre activité change ensuite. Dans le doute, choisissez « ".self::Commerce->getLabel()." », le plus complet. Les micro-entrepreneurs en franchise de TVA (art. 293 B du CGI) sont pris en charge. En revanche, {$application} ne permet pas de facturer une activité exonérée de TVA par la loi (soins médicaux, enseignement, assurance, location de logements…).";
     }
 
     /**

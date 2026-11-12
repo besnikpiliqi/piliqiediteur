@@ -99,7 +99,9 @@ class HistoriqueAuNomFigeTest extends TestCase
      * droits actuels, un identifiant de connexion, un panier en cours, le
      * jeton d'une demande traitée, une demande de transmission de la
      * propriété, un lien interne jamais affiché, un client confié à un
-     * collaborateur d'un cabinet (un droit actuel), ou un nom déjà porté
+     * collaborateur d'un cabinet (un droit actuel), le compte d'un
+     * expert-comptable de la société attaché à sa déclaration (un droit
+     * actuel), ou un nom déjà porté
      * ailleurs (le contenu signé, le libellé de l'audit).
      *
      * @var list<string>
@@ -120,6 +122,7 @@ class HistoriqueAuNomFigeTest extends TestCase
         'enregistrements_fiscaux.operateur_id',
         'mandats_pdp.accorde_par',
         'clients_confies.user_id',
+        'comptes_expert_comptable.user_id',
     ];
 
     public function test_les_ecrans_de_l_historique_affichent_le_nom_tel_qu_il_etait_au_moment_de_l_operation(): void

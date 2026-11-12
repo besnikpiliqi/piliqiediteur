@@ -5,9 +5,11 @@ namespace App\Filament\Societe\Pages;
 use App\Domain\Authorization\AutorisationsSociete;
 use App\Domain\Cabinets\Enums\EtatDuLien;
 use App\Domain\Cabinets\Models\LienCabinet;
+use App\Domain\Cabinets\Services\ExpertsComptablesDeclares;
 use App\Domain\Calendrier\Calendrier;
 use App\Domain\Facturation\Services\FacturesAEncaisserDeLaSociete;
 use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
+use App\Domain\Tenancy\Enums\RoleSociete;
 use App\Domain\Tenancy\Enums\StatutCompte;
 use App\Domain\Tenancy\Enums\StatutMagasin;
 use App\Domain\Tenancy\Models\Magasin;
@@ -55,6 +57,8 @@ class TableauDeBord extends Dashboard
 
     public const ETAPE_PREMIER_MAGASIN = 'Créer votre premier magasin';
 
+    public const ETAPE_AJOUTER_UN_MAGASIN = 'Ajouter un magasin';
+
     public const ETAPE_EQUIPE = 'Ajouter votre équipe';
 
     public const ETAPE_DEMONSTRATION = 'Essayer le magasin de démonstration';
@@ -94,7 +98,7 @@ class TableauDeBord extends Dashboard
 
         return match (true) {
             $societe->estClose() => 'L\'inscription de votre société est close.',
-            $societe->estValidee() => 'Votre société est validée depuis le '.Calendrier::deParis()->afficher(ValeurRequise::de($societe->validee_le, 'la date de validation de la société validée'), 'd/m/Y').'.',
+            $societe->estValidee() => $societe->phraseDeSaValidation(),
             default => 'Votre société attend le code de son courrier recommandé : la vente, les e-mails aux clients, les PDF et les transmissions sont désactivés jusqu\'à sa validation. Vous pouvez déjà créer vos magasins et les configurer : '
                 .($societe->aDesArticles() ? 'catalogue, équipe, paramètres et achats' : 'catalogue, équipe et paramètres')
                 .', et vous essayer dans le magasin de démonstration.',
@@ -104,15 +108,23 @@ class TableauDeBord extends Dashboard
     /**
      * Les premières étapes de la société, celles de son propriétaire, dans
      * l'ordre : saisir le code du courrier recommandé, qui valide la
-     * société, créer son premier magasin, ajouter son
-     * équipe, essayer le magasin de démonstration. Chacune dit si elle est
-     * faite, où elle en est, et mène à l'écran qui la fait quand il peut
-     * l'ouvrir ; l'essai de la démonstration se fait par le bouton de
-     * l'étape (voir ouvrirLaDemonstrationAction()). L'essai ne se fait plus
-     * une fois la société validée : l'étape compte alors comme faite.
-     * Aucune pour un administrateur, qui ne voit jamais ici le nombre des
-     * magasins ni celui des comptes de la société. Les magasins et les
-     * comptes se comptent dans la portée du propriétaire (voir
+     * société ; créer son premier magasin, puis, dès le premier magasin
+     * réel, quel que soit son statut, en ajouter un autre (l'étape reste
+     * cochée, avec le nombre de magasins, sans ordinal, qui deviendrait
+     * faux avec les magasins fermés ou cédés) ; ajouter son équipe ;
+     * essayer le magasin de démonstration. Une société validée par
+     * l'invitation de son cabinet d'expertise comptable n'a jamais reçu de
+     * courrier ni eu de démonstration : ses étapes sont seulement celles
+     * des magasins et de l'équipe (décision de l'éditeur du 01/11/2026).
+     * Chacune dit si elle est faite, où elle en est, et mène à l'écran qui
+     * la fait quand il peut l'ouvrir : l'étape des magasins à la création
+     * d'un magasin quand le compte peut en créer un, sinon à leur liste ;
+     * l'essai de la démonstration se fait par le bouton de l'étape (voir
+     * ouvrirLaDemonstrationAction()). L'essai ne se fait plus une fois la
+     * société validée : l'étape compte alors comme faite. Aucune pour un
+     * administrateur, qui ne voit jamais ici le nombre des magasins ni
+     * celui des comptes de la société. Les magasins et les comptes se
+     * comptent dans la portée du propriétaire (voir
      * User::magasinsDeSaPortee() et MembreResource::getEloquentQuery()) :
      * toute la société, sans son propre compte.
      *
@@ -127,23 +139,16 @@ class TableauDeBord extends Dashboard
         }
 
         $societe = $this->societe();
+        $parSonCabinet = $societe->aEteValideeParLInvitationDUnCabinet();
         $magasins = $compte->magasinsDeSaPortee()->where('est_demonstration', false)->count();
-        $comptes = MembreResource::getEloquentQuery()->whereKeyNot($compte->getKey())->where('statut', '!=', StatutCompte::Retire->value)->count();
-        $demonstration = $societe->demonstration()->first();
-
-        return [
+        $comptes = MembreResource::getEloquentQuery()->whereKeyNot($compte->getKey())->where('statut', '!=', StatutCompte::Retire->value)->where('role_societe', '<>', RoleSociete::ExpertComptable->value)->count();
+        $magasinsEtEquipe = [
             [
-                'titre' => self::ETAPE_CODE_DU_COURRIER,
-                'faite' => $societe->estValidee(),
-                'etat' => $this->prochaineEtapeDeLaVerification(),
-                'url' => VerificationSociete::getUrl(),
-            ],
-            [
-                'titre' => self::ETAPE_PREMIER_MAGASIN,
+                'titre' => $magasins === 0 ? self::ETAPE_PREMIER_MAGASIN : self::ETAPE_AJOUTER_UN_MAGASIN,
                 'faite' => $magasins > 0,
                 'etat' => $magasins > 0 ? trans_choice('{1} 1 magasin|[2,*] :count magasins', $magasins) : 'Choisissez son établissement dans la liste de ceux de votre SIREN.',
                 'url' => match (true) {
-                    MagasinResource::canCreate() && $magasins === 0 => MagasinResource::getUrl('create'),
+                    MagasinResource::canCreate() => MagasinResource::getUrl('create'),
                     MagasinResource::canViewAny() => MagasinResource::getUrl('index'),
                     default => null,
                 },
@@ -154,6 +159,22 @@ class TableauDeBord extends Dashboard
                 'etat' => $comptes > 0 ? trans_choice('{1} 1 compte en plus du vôtre|[2,*] :count comptes en plus du vôtre', $comptes) : 'Créez les comptes de vos administrateurs, responsables, vendeurs et observateurs.',
                 'url' => MembreResource::canViewAny() ? MembreResource::getUrl('index') : null,
             ],
+        ];
+
+        if ($parSonCabinet) {
+            return $magasinsEtEquipe;
+        }
+
+        $demonstration = $societe->demonstration()->first();
+
+        return [
+            [
+                'titre' => self::ETAPE_CODE_DU_COURRIER,
+                'faite' => $societe->estValidee(),
+                'etat' => $this->prochaineEtapeDeLaVerification(),
+                'url' => VerificationSociete::getUrl(),
+            ],
+            ...$magasinsEtEquipe,
             [
                 'titre' => self::ETAPE_DEMONSTRATION,
                 'faite' => $demonstration !== null || $societe->estValidee(),
@@ -170,20 +191,27 @@ class TableauDeBord extends Dashboard
 
     /**
      * Pour le propriétaire qui gère son cabinet comptable (voir
-     * CabinetComptable) : la dénomination du cabinet lié, ou null, et
-     * chaque demande de rattachement en cours d'un cabinet, avec le lien de
-     * sa page de rattachement. Ce n'est pas une étape de la liste.
+     * CabinetComptable) : le cabinet lié (« Cabinet comptable : … »), ou
+     * l'expert-comptable déclaré qui attend l'espace de son cabinet, ou
+     * null, et chaque demande de rattachement en cours d'un cabinet, avec
+     * le lien de sa page de rattachement. Ce n'est pas une étape de la
+     * liste.
      *
      * @return array{lie: string|null, demandes: list<array{cabinet: string, url: string}>}
      */
     public function cabinetComptable(): array
     {
-        $lie = LienCabinet::query()->where('etat', EtatDuLien::Actif->value)->first(['id', 'cabinet_id']);
+        $enCours = LienCabinet::query()->enCours()->first();
         $demandes = LienCabinet::query()->where('etat', EtatDuLien::DemandeParLeCabinet->value)->where('expire_le', '>', now())->orderBy('demande_le')->get(['id', 'uuid', 'cabinet_id']);
         $denomination = fn (int $cabinet): string => ValeursLues::texteOuNul(Societe::query()->whereKey($cabinet)->value('raison_sociale')) ?? 'Un cabinet';
+        $personnes = $enCours?->estDeclare() === true ? app(ExpertsComptablesDeclares::class)->comptesDe($enCours)->count() : 0;
 
         return [
-            'lie' => $lie === null ? null : $denomination((int) $lie->cabinet_id),
+            'lie' => match (true) {
+                $enCours === null => null,
+                $enCours->estDeclare() => 'Cabinet comptable : votre expert-comptable, '.$enCours->nomDuCabinetDeclare().', déclaré, en attente de son espace ('.$personnes.' '.($personnes > 1 ? 'personnes' : 'personne').')',
+                default => 'Cabinet comptable : '.$denomination((int) $enCours->cabinet_id),
+            },
             'demandes' => array_values($demandes->map(fn (LienCabinet $demande): array => [
                 'cabinet' => $denomination((int) $demande->cabinet_id),
                 'url' => RattachementDUnCabinet::getUrl(['lien' => $demande->uuid]),

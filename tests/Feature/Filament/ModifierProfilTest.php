@@ -162,7 +162,7 @@ class ModifierProfilTest extends TestCase
 
         $this->assertMemeInstant(self::aParis('2026-10-15 10:00:00'), $proprietaire->refresh()->email_verified_at);
         $vendeur = $this->membre($this->magasinDe($proprietaire), RoleMagasin::Vendeur);
-        $this->assertThrows(fn () => app(DemanderUneNouvelleAdresseAction::class)->handle($vendeur, 'paul@example.test'), LogicException::class, 'Seul le propriétaire a une adresse de connexion à confirmer.');
+        $this->assertThrows(fn () => app(DemanderUneNouvelleAdresseAction::class)->handle($vendeur, 'paul@example.test'), LogicException::class, 'Seuls le propriétaire et l\'expert-comptable de la société ont une adresse à confirmer.');
         Mail::assertNotSent(ConfirmationNouvelleAdresseMail::class, fn (ConfirmationNouvelleAdresseMail $mail): bool => $mail->hasTo('paul@example.test'));
     }
 
@@ -463,6 +463,25 @@ class ModifierProfilTest extends TestCase
             ->assertHasFormErrors(['name' => 'Le champ nom est obligatoire.']);
 
         $this->assertSame('Paul', $vendeur->fresh()->name);
+    }
+
+    /**
+     * Dans le profil d'un vendeur, parmi les mots de passe, seul le mot de
+     * passe actuel porte l'astérisque des champs obligatoires : le nouveau
+     * est facultatif, et sa confirmation, qui n'apparaît qu'une fois un
+     * nouveau mot de passe tapé, le porte alors (décision de l'éditeur du
+     * 01/11/2026, rien à changer dans le profil).
+     */
+    public function test_le_profil_d_un_vendeur_ne_marque_obligatoire_que_le_mot_de_passe_actuel_et_la_confirmation_d_un_nouveau_mot_de_passe(): void
+    {
+        $this->actingAs($this->creerVendeur());
+
+        $page = Livewire::test(ModifierProfil::class);
+        $this->assertAsterisquesDesChamps($page->html(), ['Mot de passe actuel'], ['Nouveau mot de passe']);
+        $this->assertStringNotContainsString('Confirmer le nouveau mot de passe', $page->html());
+
+        $page->fillForm(['password' => 'nouveau-mot-de-passe']);
+        $this->assertAsterisquesDesChamps($page->html(), ['Mot de passe actuel', 'Confirmer le nouveau mot de passe'], ['Nouveau mot de passe']);
     }
 
     public function test_un_membre_change_son_mot_de_passe_avec_son_mot_de_passe_actuel(): void

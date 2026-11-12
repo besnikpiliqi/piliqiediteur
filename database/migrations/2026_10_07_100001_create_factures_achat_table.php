@@ -1,5 +1,6 @@
 <?php
 
+use App\Domain\Cabinets\Support\GardesDesCabinets;
 use App\Domain\CaisseSecurisee\Support\DeclencheursDeProtection;
 use App\Domain\Tenancy\Support\GardesDesTypesDActivite;
 use Illuminate\Database\Migrations\Migration;
@@ -101,11 +102,13 @@ return new class extends Migration
         // Seule une société qui a des articles achète des marchandises
         // (voir TypeDActivite::aDesArticles()).
         GardesDesTypesDActivite::poser(GardesDesTypesDActivite::FACTURES_ACHAT);
+        GardesDesCabinets::poserLesMagasinsOuverts('factures_achat');
         DeclencheursDeProtection::colonneFigee('factures_achat', 'repere_grand_livre');
     }
 
     public function down(): void
     {
+        GardesDesCabinets::retirerLesMagasinsOuverts('factures_achat');
         GardesDesTypesDActivite::retirer(GardesDesTypesDActivite::FACTURES_ACHAT);
         Schema::dropIfExists('factures_achat');
         DeclencheursDeProtection::retirerLaColonneFigee('factures_achat', 'repere_grand_livre');

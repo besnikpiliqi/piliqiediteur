@@ -24,14 +24,20 @@ use LogicException;
  * CreerMembreAction et CreerAdministrateurAction) ou par un cabinet
  * d'expertise comptable (voir CreerCollaborateurAction) :
  * - son nom, et aucune adresse e-mail : seule la personne renseigne la
- *   sienne, dans son profil, jamais qui crée son compte ;
+ *   sienne, dans son profil, jamais qui crée son compte ; seule exception
+ *   voulue (décision de l'éditeur du 01/11/2026) : l'adresse
+ *   professionnelle d'un expert-comptable de la société, que le
+ *   propriétaire saisit deux fois (voir validerLAdresse()) et où part le
+ *   lien de son mot de passe (voir DeclarerSonExpertComptableAction) ;
  * - son identifiant de connexion, tiré au hasard (voir
  *   GenerateurDIdentifiants), avec, pour un compte de membre, son magasin de
  *   rattachement, le seul qu'il ouvrira jamais ;
  * - son premier mot de passe, son identifiant lui-même, remis en main
  *   propre par qui l'a créé, jamais envoyé par e-mail ni journalisé :
  *   mot_de_passe_est_l_identifiant le dit, jusqu'à ce que la personne
- *   choisisse le sien ;
+ *   choisisse le sien ; sauf pour un expert-comptable de la société, qui
+ *   naît avec un mot de passe tiré au hasard que personne ne connaît, et
+ *   choisit le sien par un lien envoyé à son adresse ;
  * - le jeton de l'écran de création, tiré à son ouverture : une demande
  *   répétée après une réponse perdue rend le compte déjà créé par le même
  *   auteur pour la même demande, jamais un second compte ; le même jeton
@@ -71,8 +77,30 @@ final class CreationDesComptes
     }
 
     /**
+     * L'adresse e-mail professionnelle d'un expert-comptable de la société,
+     * saisie deux fois par le propriétaire : obligatoire, confirmée, au
+     * format d'une adresse, 255 caractères au plus, en minuscules et sans
+     * espaces autour (voir User::normaliserEmail()).
+     *
+     * @throws ValidationException
+     */
+    public function validerLAdresse(mixed $email, mixed $confirmation): string
+    {
+        $valide = Validator::make(
+            ['email' => is_string($email) ? trim($email) : $email, 'email_confirmation' => is_string($confirmation) ? trim($confirmation) : $confirmation],
+            ['email' => ['required', 'string', 'email', 'max:255', 'confirmed']],
+            ['email.confirmed' => 'Les deux adresses ne sont pas les mêmes.'],
+            ['email' => 'adresse e-mail professionnelle'],
+        )->validate();
+
+        return User::normaliserEmail(ValeursLues::texteDe($valide, 'email'));
+    }
+
+    /**
      * L'empreinte d'une demande de création : son rôle, son magasin, son nom
-     * et ses autorisations, dans un ordre stable, sans aucun secret.
+     * et ses autorisations et, pour un expert-comptable de la société, son
+     * adresse et le SIREN déclaré, hachés ensemble, dans un ordre stable,
+     * sans aucun secret : l'adresse ne s'enregistre jamais en clair.
      *
      * @param  array<string, mixed>  $demande
      */
@@ -150,23 +178,35 @@ final class CreationDesComptes
     /**
      * Crée le compte et son identifiant, dans la transaction de l'appelant
      * et dans la société active : actif, son identifiant pour mot de passe,
-     * créé par l'auteur, sans adresse.
+     * créé par l'auteur, sans adresse. Pour un expert-comptable de la
+     * société, et pour lui seul, l'adresse du lien de son mot de passe
+     * s'écrit dès l'insertion, et il garde un mot de passe tiré au hasard
+     * que personne ne connaît, jamais son identifiant.
      *
      * @param  array{name: string}  $identite
      *
      * @throws UniqueConstraintViolationException quand une autre demande du même jeton est passée entre-temps
+     * @throws LogicException quand une adresse est donnée pour un autre rôle, ou manque pour un expert-comptable
      */
-    public function creer(User $auteur, Societe $societe, array $identite, RoleSociete $role, ?Magasin $magasin, ?string $jeton, string $empreinte): User
+    public function creer(User $auteur, Societe $societe, array $identite, RoleSociete $role, ?Magasin $magasin, ?string $jeton, string $empreinte, ?string $adresseDuLien = null): User
     {
+        if (($role === RoleSociete::ExpertComptable) !== ($adresseDuLien !== null)) {
+            throw new LogicException('Seul un expert-comptable de la société naît avec une adresse, celle du lien de son mot de passe.');
+        }
+
         $compte = tap((new User(['name' => $identite['name'], 'password' => Str::random(40)]))->forceFill([
             'societe_id' => $societe->getKey(),
             'role_societe' => $role,
             'statut' => StatutCompte::Actif,
             'cree_par' => $auteur->getKey(),
+            ...($adresseDuLien === null ? [] : ['email' => $adresseDuLien]),
         ]))->save();
 
         $identifiant = $this->generateur->attribuer($compte, $magasin === null ? null : CleDuModele::de($magasin), $jeton, $empreinte);
-        $compte->forceFill(['password' => $identifiant, 'mot_de_passe_est_l_identifiant' => true])->save();
+
+        if ($adresseDuLien === null) {
+            $compte->forceFill(['password' => $identifiant, 'mot_de_passe_est_l_identifiant' => true])->save();
+        }
 
         return $compte;
     }

@@ -74,8 +74,8 @@ class Affectation extends Model
             $roleDuCompte = User::query()->find($affectation->user_id)?->role_societe;
             $ailleurs = static::query()->where('user_id', $affectation->user_id)->whereKeyNot($affectation->getKey() ?? 0);
 
-            if (in_array($roleDuCompte, [RoleSociete::Proprietaire, RoleSociete::Collaborateur], true)) {
-                throw new LogicException('Le propriétaire et un collaborateur d\'un cabinet n\'ont aucune affectation.');
+            if (in_array($roleDuCompte, [RoleSociete::Proprietaire, RoleSociete::Collaborateur, RoleSociete::ExpertComptable], true)) {
+                throw new LogicException('Le propriétaire, un collaborateur d\'un cabinet et un expert-comptable de la société n\'ont aucune affectation.');
             }
 
             if ($roleDuCompte === RoleSociete::Administrateur) {

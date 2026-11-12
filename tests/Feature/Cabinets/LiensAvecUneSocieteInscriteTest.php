@@ -23,6 +23,7 @@ use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\Tenancy\Actions\CloreLInscriptionAction;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\MotifCloture;
+use App\Domain\Tenancy\Enums\StatutCompte;
 use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\InterventionDeLEditeur;
@@ -357,6 +358,16 @@ class LiensAvecUneSocieteInscriteTest extends TestCase
         $this->assertCount(1, $this->entreesDAudit($magasin->societe, ActionAuditee::LienTermine));
         $this->assertNotContains('Avis sur ce client', $collaborateur->notifications()->get()->pluck('data.title')->all());
         $this->assertContains('Lien terminé', $collaborateur->notifications()->get()->pluck('data.title')->all());
+
+        $marc = $this->declarerSonExpertComptable($magasin, siren: '000000927', remplacer: true);
+        $declaration = LienCabinet::query()->withoutGlobalScopes()->where('societe_id', $magasin->societe_id)->where('etat', EtatDuLien::Declare->value)->sole();
+        $this->assertSame([EtatDuLien::Termine, MotifDeFinDuLien::Remplace], [$second->fresh()->etat, $second->fresh()->motif_fin]);
+
+        $troisieme = $this->lierLeCabinet($ancien, $magasin);
+
+        $this->assertSame([EtatDuLien::Termine, MotifDeFinDuLien::Remplace, EtatDuLien::Actif], [$declaration->fresh()->etat, $declaration->fresh()->motif_fin, $troisieme->etat]);
+        $this->assertSame(StatutCompte::Retire, $marc->fresh()->statut);
+        $this->assertSame(1, LienCabinet::query()->withoutGlobalScopes()->where('societe_id', $magasin->societe_id)->whereIn('etat', ['actif', 'declare'])->count());
     }
 
     public function test_le_proprietaire_du_cabinet_accepte_la_demande_d_un_client_controle_dans_son_cabinet(): void

@@ -33,6 +33,7 @@ use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 use LogicException;
 use Tests\TestCase;
+use Throwable;
 
 /**
  * Un changement de rôle garde le compte, son identifiant et son historique
@@ -186,6 +187,15 @@ class ChangementDeRoleTest extends TestCase
         $this->forgerLAction($fiche, 'changerLeRoleDeSociete', ['role_societe' => RoleSociete::Administrateur->value, 'portee' => 'tous']);
 
         $this->assertSame([RoleSociete::Membre, RoleSociete::Membre], [$vendeur->refresh()->role_societe, $responsableNomme->refresh()->role_societe]);
+
+        $expert = $this->expertComptable($magasin);
+        $proprietaire = $this->proprietaireDe($magasin);
+        $this->assertThrows(fn () => app(ChangerLeRoleDeSocieteAction::class)->versAdministrateur($proprietaire, $expert->fresh(), null, [], []), Throwable::class);
+        $this->assertThrows(fn () => app(ChangerLeRoleDeSocieteAction::class)->versMembre($proprietaire, $expert->fresh(), RoleMagasin::Vendeur, null, $magasin->id), Throwable::class);
+        $this->dansLEspaceDeLaSociete($magasin->societe, $proprietaire);
+        Livewire::test(FicheDuMembre::class, ['record' => $expert->getRouteKey()])->assertActionHidden('changerLeRoleDeSociete');
+
+        $this->assertSame(RoleSociete::ExpertComptable, $expert->refresh()->role_societe);
         $this->assertSame([], $this->entreesDAudit($magasin->societe, ActionAuditee::RoleDeSocieteChange));
     }
 

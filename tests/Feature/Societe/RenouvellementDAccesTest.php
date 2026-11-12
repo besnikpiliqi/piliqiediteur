@@ -11,6 +11,7 @@ use App\Domain\Tenancy\Actions\ModifierMembreAction;
 use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
 use App\Domain\Tenancy\Actions\RedonnerLAccesAction;
 use App\Domain\Tenancy\Enums\ActionAuditee;
+use App\Domain\Tenancy\Enums\ModeDAccesRedonne;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Affectation;
 use App\Domain\Tenancy\Models\Magasin;
@@ -73,7 +74,7 @@ class RenouvellementDAccesTest extends TestCase
 
         $vendeur->refresh();
         $this->assertTrue(Hash::check((string) $vendeur->identifiantDeConnexion(), $vendeur->password));
-        $this->assertSame([true, false, (int) $responsable->id], [$vendeur->mot_de_passe_est_l_identifiant, $vendeur->acces_redonne_en_presence, (int) $vendeur->acces_redonne_par]);
+        $this->assertSame([true, ModeDAccesRedonne::Absence, (int) $responsable->id], [$vendeur->mot_de_passe_est_l_identifiant, $vendeur->acces_redonne_mode, (int) $vendeur->acces_redonne_par]);
     }
 
     public function test_un_responsable_ne_redonne_l_acces_ni_d_un_autre_responsable_ni_d_un_compte_d_un_autre_magasin(): void
@@ -384,7 +385,7 @@ class RenouvellementDAccesTest extends TestCase
 
         $vendeur->refresh();
         $this->assertTrue(Hash::check(self::NOUVEAU_MOT_DE_PASSE, $vendeur->password));
-        $this->assertSame([false, true], [$vendeur->mot_de_passe_est_l_identifiant, $vendeur->acces_redonne_en_presence]);
+        $this->assertSame([false, ModeDAccesRedonne::Presence], [$vendeur->mot_de_passe_est_l_identifiant, $vendeur->acces_redonne_mode]);
     }
 
     /**
@@ -421,7 +422,7 @@ class RenouvellementDAccesTest extends TestCase
         $vendeur->refresh();
         $this->assertTrue(Hash::check((string) $vendeur->identifiantDeConnexion(), $vendeur->password));
         $this->assertFalse(Hash::check(self::MOT_DE_PASSE_CHOISI, $vendeur->password));
-        $this->assertSame([true, false, null], [$vendeur->mot_de_passe_est_l_identifiant, $vendeur->acces_redonne_en_presence, $vendeur->jeton_acces_redonne]);
+        $this->assertSame([true, ModeDAccesRedonne::Absence, null], [$vendeur->mot_de_passe_est_l_identifiant, $vendeur->acces_redonne_mode, $vendeur->jeton_acces_redonne]);
     }
 
     public function test_en_absence_un_mot_de_passe_deja_egal_a_l_identifiant_est_refuse(): void
@@ -466,7 +467,7 @@ class RenouvellementDAccesTest extends TestCase
         $entrees = $this->entreesDAudit($magasin->societe, ActionAuditee::AccesRedonne);
         $this->assertCount(1, $entrees);
         $this->assertSame((int) $responsable->id, (int) $entrees[0]->auteur_id);
-        $this->assertSame(['compte' => ['id' => $vendeur->id, 'nom' => 'Paul Martin'], 'en_presence' => false], $entrees[0]->nouvelles_valeurs);
+        $this->assertSame(['compte' => ['id' => $vendeur->id, 'nom' => 'Paul Martin'], 'mode' => 'absence'], $entrees[0]->nouvelles_valeurs);
         $this->assertStringNotContainsString((string) $vendeur->identifiantDeConnexion(), json_encode($entrees[0]->toArray(), JSON_THROW_ON_ERROR));
     }
 

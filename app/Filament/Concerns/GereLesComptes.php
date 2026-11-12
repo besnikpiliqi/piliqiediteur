@@ -2,6 +2,7 @@
 
 namespace App\Filament\Concerns;
 
+use App\Domain\Cabinets\Services\ExpertsComptablesDeclares;
 use App\Domain\Tenancy\Actions\AfficherLIdentifiantAction;
 use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
 use App\Domain\Tenancy\Actions\CreerMembreAction;
@@ -66,7 +67,7 @@ trait GereLesComptes
             ->icon('heroicon-o-pause-circle')
             ->color('warning')
             ->requiresConfirmation()
-            ->modalDescription('La personne n\'ouvre plus son magasin dès sa prochaine page, et ses sessions se ferment. Elle garde son rôle et ses autorisations pour sa réactivation.')
+            ->modalDescription(fn (mixed $record = null): string => self::texteDeLaSuspension($compte($record)))
             ->visible(fn (mixed $record = null): bool => self::peut('suspendreOuReactiver', $compte($record)) && $compte($record)->estActif())
             ->action(fn (mixed $record = null) => static::executerLeGeste(fn () => app(ChangerStatutCompteAction::class)->suspendre(self::auteur(), $compte($record))));
     }
@@ -103,9 +104,46 @@ trait GereLesComptes
             ->icon('heroicon-o-user-minus')
             ->color('danger')
             ->requiresConfirmation()
-            ->modalDescription(fn (mixed $record = null): string => "{$compte($record)->name} perd aussitôt tout accès à la société et à son magasin. Son compte et son identifiant restent, avec son historique : la société pourra le réintégrer.")
+            ->modalDescription(fn (mixed $record = null): string => self::texteDuRetrait($compte($record)))
             ->visible(fn (mixed $record = null): bool => self::peut('retirerDeLaSociete', $compte($record)))
             ->action(fn (mixed $record = null) => static::executerLeGeste(fn () => app(ChangerStatutCompteAction::class)->retirer(self::auteur(), $compte($record))));
+    }
+
+    /**
+     * Le texte de la fenêtre « Suspendre » : pour un expert-comptable de la
+     * société dont le lien du mot de passe vaut encore, ce lien ne vaudra
+     * plus (voir ChangerStatutCompteAction::suspendre()).
+     */
+    public static function texteDeLaSuspension(User $compte): string
+    {
+        $texte = 'La personne n\'ouvre plus son magasin dès sa prochaine page, et ses sessions se ferment. Elle garde son rôle et ses autorisations pour sa réactivation.';
+
+        if ($compte->estExpertComptable() && app(ExpertsComptablesDeclares::class)->attachementDe($compte)?->lienValable() === true) {
+            return $texte.' Son lien en cours ne vaudra plus.';
+        }
+
+        return $texte;
+    }
+
+    /**
+     * Le texte de la fenêtre « Retirer de la société » : retirer la dernière
+     * personne non retirée d'un expert-comptable déclaré met fin à la
+     * déclaration (voir ChangerStatutCompteAction::retirer()).
+     */
+    public static function texteDuRetrait(User $compte): string
+    {
+        $texte = "{$compte->name} perd aussitôt tout accès à la société et à son magasin. Son compte et son identifiant restent, avec son historique : la société pourra le réintégrer.";
+        $declaration = $compte->declarationDeLExpertComptable();
+
+        if ($declaration?->estDeclare() !== true) {
+            return $texte;
+        }
+
+        $restantes = app(ExpertsComptablesDeclares::class)->comptesDe($declaration)->reject(fn (User $personne): bool => $personne->is($compte));
+
+        return $restantes->isEmpty()
+            ? "{$compte->name} perd aussitôt tout accès à la société et à ses magasins. C'est la dernière personne de votre expert-comptable déclaré : la retirer met fin à la déclaration."
+            : $texte;
     }
 
     /**
@@ -127,18 +165,23 @@ trait GereLesComptes
             ->label('Redonner l\'accès')
             ->icon('heroicon-o-key')
             ->color('warning')
-            ->modalDescription('Toutes ses sessions se ferment. À sa prochaine connexion, la personne verra que son accès a été redonné, par vous, en sa présence ou en son absence.')
+            ->modalDescription('Toutes ses sessions se ferment. À sa prochaine connexion, la personne verra que son accès a été redonné, par vous, en sa présence, en son absence ou par un lien.')
             ->fillForm(fn (mixed $record = null): array => ['jeton' => (string) Str::uuid(), ...($compte($record)->estCollaborateur() ? ['mode' => 'present'] : [])])
             ->form(fn (mixed $record = null): array => [
                 Hidden::make('jeton'),
                 Radio::make('mode')
                     ->label('La personne est-elle là ?')
-                    ->options($compte($record)->estCollaborateur()
-                        ? ['present' => 'La personne est là : elle tape elle-même son nouveau mot de passe (un collaborateur ne se connecte jamais avec son identifiant)']
-                        : [
+                    ->options(match (true) {
+                        $compte($record)->estCollaborateur() => ['present' => 'La personne est là : elle tape elle-même son nouveau mot de passe (un collaborateur ne se connecte jamais avec son identifiant)'],
+                        $compte($record)->estExpertComptable() => [
+                            'present' => 'En sa présence : elle tape elle-même son nouveau mot de passe',
+                            'lien' => 'Lui envoyer un nouveau lien, valable 7 jours, à '.$compte($record)->email.' : son mot de passe actuel ne vaudra plus',
+                        ],
+                        default => [
                             'present' => 'La personne est là : elle tape elle-même son nouveau mot de passe',
                             'absent' => 'Elle est absente : son mot de passe redevient son identifiant',
-                        ])
+                        ],
+                    })
                     ->required()
                     ->live(),
                 ...self::champsDuMotDePasseChoisi(fn (Get $get): bool => $get('mode') === 'present'),
@@ -147,6 +190,19 @@ trait GereLesComptes
             ->action(function (array $data, Form $form, mixed $record = null) use ($compte): void {
                 $cible = $compte($record);
                 $enPresence = $data['mode'] === 'present';
+
+                if ($data['mode'] === 'lien') {
+                    static::executerLeGeste(function () use ($cible, $data): void {
+                        $envoye = app(RedonnerLAccesAction::class)->parUnNouveauLien(self::auteur(), $cible, ValeurSimple::enTexte($data['jeton'] ?? ''));
+
+                        Notification::make()
+                            ->title($envoye ? "Accès redonné : un nouveau lien, valable 7 jours, est parti à {$cible->email}." : RedonnerLAccesAction::MESSAGE_DEJA_REDONNE)
+                            ->success()
+                            ->send();
+                    });
+
+                    return;
+                }
 
                 self::exigerLeMotDePasseChoisi($enPresence ? ValeurSimple::enTexte($data['mot_de_passe'] ?? '') : null, $cible, $form);
 

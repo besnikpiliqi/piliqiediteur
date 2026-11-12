@@ -592,9 +592,30 @@ final class PermissionRegistry
     }
 
     /**
+     * Les paires d'autorisations qu'un client accorde ou retire toujours
+     * ensemble à son cabinet lié, sous une seule case : « voir (les
+     * siennes) » et « voir celles de toute l'équipe », des factures et des
+     * clôtures de caisse. Un compte d'un cabinet ne fait jamais ni facture
+     * ni clôture : « les siennes » ne désigne rien pour lui, qui voit
+     * toutes celles du magasin ou aucune (décision de l'éditeur du
+     * 01/11/2026) ; la base refuse une paire incomplète (voir
+     * GardesDesCabinets::poserLesPaires()). Rien ne change pour les comptes
+     * de la société, pour qui « les siennes » garde son sens.
+     *
+     * @var array<literal-string, literal-string>
+     */
+    public const PAIRES_DU_CABINET = [
+        self::FACTURE_VIEW => self::FACTURE_VIEW_TOUTES,
+        self::CLOTURE_CAISSE_VIEW => self::CLOTURE_CAISSE_VIEW_TOUTES,
+    ];
+
+    /**
      * Les autorisations accordées au cabinet lié d'un client de ce type,
      * refusées dès que l'une d'elles ne peut pas lui être accordée (voir
-     * duCabinet()), sans doublon, dans l'ordre alphabétique.
+     * duCabinet()), ou que « voir celles de toute l'équipe » vient sans
+     * « voir » ; « voir » les factures ou les clôtures accorde aussi celles
+     * de toute l'équipe (voir PAIRES_DU_CABINET) ; sans doublon, dans
+     * l'ordre alphabétique.
      *
      * @param  array<array-key, mixed>  $autorisations
      * @return list<string>
@@ -612,28 +633,70 @@ final class PermissionRegistry
         }
 
         $connues = array_values(array_unique($autorisations));
+
+        foreach (self::PAIRES_DU_CABINET as $voir => $toutes) {
+            if (in_array($toutes, $connues, true) && ! in_array($voir, $connues, true)) {
+                throw new InvalidArgumentException('Autorisation qui ne s\'accorde pas seule à un cabinet : '.self::libelles()[$toutes].' (cochez « '.self::libellesDuCabinet($typeDuClient)[$voir].' »)');
+            }
+
+            if (in_array($voir, $connues, true) && ! in_array($toutes, $connues, true)) {
+                $connues[] = $toutes;
+            }
+        }
+
         sort($connues);
 
         return $connues;
     }
 
     /**
-     * Les libellés des autorisations qu'un client de ce type peut accorder
-     * à son cabinet lié, dans l'ordre du registre, créer des produits
-     * précisé : seulement ceux d'une facture d'achat ou d'un inventaire
-     * d'ouverture.
+     * Les libellés des cases des autorisations qu'un client de ce type peut
+     * accorder à son cabinet lié, dans l'ordre du registre : une seule case
+     * par paire de PAIRES_DU_CABINET, « voir toutes celles du magasin »,
+     * et créer des produits précisé : seulement ceux d'une facture d'achat
+     * ou d'un inventaire d'ouverture.
      *
      * @return array<string, string>
      */
     public static function libellesDuCabinet(TypeDActivite $typeDuClient): array
     {
-        $libelles = array_intersect_key(self::libelles(), array_flip(self::duCabinet($typeDuClient)));
+        $libelles = array_diff_key(array_intersect_key(self::libelles(), array_flip(self::duCabinet($typeDuClient))), array_flip(self::PAIRES_DU_CABINET));
+        $precises = [
+            self::FACTURE_VIEW => 'Factures : voir toutes celles du magasin',
+            self::CLOTURE_CAISSE_VIEW => 'Clôtures de caisse : voir toutes celles du magasin',
+            self::PRODUIT_CREATE => 'Produits : créer ceux d\'une facture d\'achat ou d\'un inventaire d\'ouverture',
+        ];
 
-        if (isset($libelles[self::PRODUIT_CREATE])) {
-            $libelles[self::PRODUIT_CREATE] = 'Produits : créer ceux d\'une facture d\'achat ou d\'un inventaire d\'ouverture';
-        }
+        return array_replace($libelles, array_intersect_key($precises, $libelles));
+    }
 
-        return $libelles;
+    /**
+     * Les libellés des cases de ces autorisations d'un cabinet lié, dans
+     * l'ordre du registre, une seule par paire de PAIRES_DU_CABINET, sans
+     * lire le type du client : les clés suffisent, chacune ayant le même
+     * libellé dans tous les types où elle existe (voir libellesDuCabinet()).
+     * Pour l'e-mail d'une invitation ou d'une demande, la page d'une
+     * invitation et la fiche d'un client.
+     *
+     * @param  array<array-key, string>  $cles
+     * @return list<string>
+     */
+    public static function libellesDe(array $cles): array
+    {
+        return array_values(array_intersect_key(self::libellesDuCabinet(TypeDActivite::Commerce), array_flip($cles)));
+    }
+
+    /**
+     * Les cases de ces autorisations d'un cabinet, sans la seconde de
+     * chaque paire de PAIRES_DU_CABINET, que la première accorde avec
+     * elle : ce que les écrans cochent, dans l'ordre reçu.
+     *
+     * @param  list<string>  $autorisations
+     * @return list<string>
+     */
+    public static function casesDuCabinet(array $autorisations): array
+    {
+        return array_values(array_diff($autorisations, self::PAIRES_DU_CABINET));
     }
 
     /**

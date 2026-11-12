@@ -15,7 +15,9 @@ use Symfony\Component\HttpFoundation\Response;
  * d'un cabinet d'expertise comptable va toujours à l'accueil de l'espace
  * de son cabinet. Le propriétaire et un administrateur vont à celui de
  * l'espace de leur société, où se créent les magasins (voir
- * EspaceDeLaSociete). Un compte de membre a toujours son magasin, où il va,
+ * EspaceDeLaSociete). Un expert-comptable de la société dont la
+ * déclaration n'ouvre encore aucun magasin réel va à la page qui le lui dit
+ * (voir AucunMagasin). Un compte de membre a toujours son magasin, où il va,
  * comme Filament l'y mène : aucun autre compte actif n'est sans magasin,
  * et un compte que les données laisseraient sans magasin va de même à
  * l'espace de sa société, qui le refuse s'il ne l'ouvre pas (voir
@@ -42,6 +44,10 @@ class MenerUnCompteSansMagasin
 
         if ($compte->magasinsAccessibles()->isNotEmpty()) {
             return $next($request);
+        }
+
+        if ($compte->estExpertComptable() && $compte->estActif()) {
+            return redirect()->route('filament.app.aucun-magasin');
         }
 
         return redirect()->to(EspaceDeLaSociete::accueil($compte->societe));

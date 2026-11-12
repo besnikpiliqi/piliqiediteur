@@ -14,8 +14,11 @@ use Illuminate\Support\Facades\Schema;
  * réécrivent quand le client les règle ; leur historique est au journal
  * des événements de chaque magasin (JET 130) et au journal d'audit. La
  * base refuse une autorisation hors de la liste du cabinet, une
- * autorisation des articles chez un client qui n'en a pas, et une ligne
- * sur un lien qui n'est pas actif (voir GardesDesCabinets).
+ * autorisation des articles chez un client qui n'en a pas, une ligne sur
+ * un lien qui n'est pas actif, et, à la validation de la transaction,
+ * « voir » les factures ou les clôtures de caisse sans « voir celles de
+ * toute l'équipe », ou l'inverse : un cabinet les voit toutes ou aucune
+ * (voir GardesDesCabinets).
  */
 return new class extends Migration
 {
@@ -33,10 +36,12 @@ return new class extends Migration
         });
 
         GardesDesCabinets::poser(GardesDesCabinets::AUTORISATIONS);
+        GardesDesCabinets::poserLesPaires();
     }
 
     public function down(): void
     {
+        GardesDesCabinets::retirerLesPaires();
         GardesDesCabinets::retirer(GardesDesCabinets::AUTORISATIONS);
         Schema::dropIfExists('autorisations_cabinet');
     }

@@ -5,6 +5,7 @@ namespace Tests\Feature\Tenancy;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Cabinets\Models\Cabinet;
 use App\Domain\Cabinets\Models\ClientConfie;
+use App\Domain\Cabinets\Models\CompteExpertComptable;
 use App\Domain\Cabinets\Models\InvitationCabinet;
 use App\Domain\Cabinets\Models\LienCabinet;
 use App\Domain\Calendrier\Calendrier;
@@ -94,6 +95,7 @@ class IsolationDesSocietesTest extends TestCase
         ChangementFinExercice::class,
         ClientConfie::class,
         CodeConfirmation::class,
+        CompteExpertComptable::class,
         EntreeAudit::class,
         Identifiant::class,
         InvitationCabinet::class,

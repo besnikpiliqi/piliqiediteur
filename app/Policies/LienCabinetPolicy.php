@@ -65,19 +65,34 @@ class LienCabinetPolicy
         };
     }
 
+    /**
+     * Régler les autorisations et les magasins du lien en cours, actif ou
+     * déclaré : le propriétaire du client.
+     */
     public function reglerLesAutorisations(User $user, LienCabinet $lien): bool
     {
-        return $lien->estActif() && $this->gereSonCabinet($user, $lien);
+        return $lien->estEnCours() && $this->gereSonCabinet($user, $lien);
     }
 
     /**
-     * Mettre fin à un lien actif, ou redemander la fin d'un lien déjà
-     * terminé, qui ne change alors rien (voir MettreFinAuLienAction) :
-     * le propriétaire du client, ou celui du cabinet.
+     * Mettre fin à un lien actif ou retirer la déclaration de
+     * l'expert-comptable de la société, ou redemander la fin d'un lien déjà
+     * terminé, qui ne change alors rien (voir MettreFinAuLienAction) : le
+     * propriétaire du client, ou, pour un lien, celui du cabinet.
      */
     public function mettreFin(User $user, LienCabinet $lien): bool
     {
-        return in_array($lien->etat, [EtatDuLien::Actif, EtatDuLien::Termine], true) && ($this->gereSonCabinet($user, $lien) || $this->proprietaireDuCabinet($user, $lien));
+        return in_array($lien->etat, [EtatDuLien::Actif, EtatDuLien::Declare, EtatDuLien::Termine], true) && ($this->gereSonCabinet($user, $lien) || $this->proprietaireDuCabinet($user, $lien));
+    }
+
+    /**
+     * Ajouter une personne du cabinet déclaré, qui reçoit son compte
+     * d'expert-comptable de la société : le propriétaire du client, pour sa
+     * déclaration en attente (voir AjouterUnExpertComptableAction).
+     */
+    public function ajouterUnExpertComptable(User $user, LienCabinet $lien): bool
+    {
+        return $lien->estDeclare() && $this->gereSonCabinet($user, $lien);
     }
 
     /**

@@ -174,6 +174,18 @@ class InscriptionSocieteTest extends TestCase
     }
 
     /**
+     * Le mot de passe de l'inscription est obligatoire : son libellé porte
+     * l'astérisque rouge des champs obligatoires, comme sa confirmation
+     * (décision de l'éditeur du 01/11/2026).
+     */
+    public function test_le_mot_de_passe_de_l_inscription_porte_l_asterisque_des_champs_obligatoires(): void
+    {
+        $page = Livewire::test(InscriptionSociete::class);
+
+        $this->assertAsterisquesDesChamps($page->html(), ['Votre mot de passe', 'Confirmer le mot de passe']);
+    }
+
+    /**
      * Après son lien, le propriétaire arrive sur le tableau de bord de
      * l'espace de sa société, avec la liste de ses premières étapes, chacune
      * menant à son écran, aucune encore cochée : saisir le code du courrier

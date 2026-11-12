@@ -41,8 +41,9 @@ use LogicException;
  * de tous les magasins touchent tous les magasins de la société ; un
  * compte d'un cabinet d'expertise comptable, les magasins réels des
  * clients de son cabinet qu'il voit (voir
- * AccesDesCabinets::magasinsDuCompte()) ; tout autre compte, ceux de ses
- * affectations, avant comme après.
+ * AccesDesCabinets::magasinsDuCompte()) ; un expert-comptable de la
+ * société, les magasins réels de sa société, jamais la démonstration ;
+ * tout autre compte, ceux de ses affectations, avant comme après.
  *
  * Une modification se fait dans une transaction qui verrouille d'abord les
  * registres de ces magasins, par identifiant croissant (voir
@@ -61,14 +62,21 @@ use LogicException;
  * de l'auteur relu (voir OperateurCourant). Si la liste des magasins
  * touchés a changé entre sa lecture et ces verrous, tout reprend avec la
  * nouvelle liste. Fermé par défaut : un registre qui ne peut pas inscrire
- * refuse toute la modification. Une seule modification se fait sans
- * auteur, au nom du système : le retrait des comptes d'entraînement quand
- * la démonstration se ferme pour de bon (voir FermerLaDemonstrationAction).
+ * refuse toute la modification. Les modifications sans auteur sont
+ * celles du système ou de l'éditeur : le retrait des comptes
+ * d'entraînement quand la démonstration se ferme pour de bon (voir
+ * FermerLaDemonstrationAction), la reprise de la société à la saisie du
+ * code par une autre personne, la fin d'un lien ou d'une déclaration par
+ * le système ou par une procédure de l'éditeur, et le rattachement d'une
+ * déclaration par un job (voir RattacherUneDeclarationAction).
  *
- * L'accès des comptes d'un cabinet chez un client passe par
- * modifierLeLien(), dans le contexte du client : son journal d'audit et
- * celui de chaque cabinet du lien reçoivent leurs entrées, chacune avec
- * les droits des seuls comptes de ce cabinet.
+ * L'accès des comptes d'un cabinet chez un client, comme celui des comptes
+ * de l'expert-comptable de la société, passe par modifierLeLien(), dans le
+ * contexte du client, sur son lien en cours (le lien actif ou la
+ * déclaration) : son journal d'audit et celui de chaque cabinet du lien
+ * reçoivent leurs entrées, chacune avec les droits des seuls comptes d'une
+ * société (ceux d'un cabinet, ou ceux de l'expert-comptable au seul
+ * journal du client).
  */
 class JournalDesDroits
 {
@@ -222,7 +230,7 @@ class JournalDesDroits
      * @param-immediately-invoked-callable  $modification
      *
      * @param  Closure(User|null, Societe, list<LienCabinet>): TResultat  $modification
-     * @param  Closure(Societe, list<LienCabinet>, TResultat): list<array{0: ActionAuditee, 1: array<string, mixed>, 2: int}>  $entrees  qui reçoit aussi ce que la modification a rendu
+     * @param  Closure(Societe, list<LienCabinet>, TResultat): list<array{0: ActionAuditee, 1: array<string, mixed>, 2: int|null}>  $entrees  qui reçoit aussi ce que la modification a rendu ; le troisième élément est la société dont l'entrée porte les droits des comptes (le cabinet, ou le client pour ses comptes d'expert-comptable), nul pour une entrée sans droits
      * @param  list<int>  $cabinetsQuiEntrent  les cabinets d'un lien que la modification crée
      * @param  Societe|null  $visee  la société que vise la procédure de l'éditeur, le client ou le cabinet
      * @return TResultat
@@ -248,10 +256,10 @@ class JournalDesDroits
                     }
 
                     $ids = array_map(fn (LienCabinet $lien): int => CleDuModele::de($lien), $liens);
-                    $actif = LienCabinet::query()->where('etat', EtatDuLien::Actif->value)->value('id');
-                    $verrouilles = LienCabinet::query()->whereKey(array_values(array_unique([...$ids, ...($actif === null ? [] : [ValeursLues::entier($actif)])])))->orderBy('id')->lockForUpdate()->get()->keyBy(fn (LienCabinet $lien): int => CleDuModele::de($lien));
+                    $enCours = LienCabinet::query()->whereIn('etat', array_map(static fn (EtatDuLien $etat): string => $etat->value, EtatDuLien::enCours()))->value('id');
+                    $verrouilles = LienCabinet::query()->whereKey(array_values(array_unique([...$ids, ...($enCours === null ? [] : [ValeursLues::entier($enCours)])])))->orderBy('id')->lockForUpdate()->get()->keyBy(fn (LienCabinet $lien): int => CleDuModele::de($lien));
                     $relus = array_map(fn (int $id): LienCabinet => $verrouilles->get($id) ?? throw new LogicException('Ce lien n\'existe pas.'), $ids);
-                    $cabinets = array_values(array_unique([...$verrouilles->map(fn (LienCabinet $lien): int => (int) $lien->cabinet_id)->all(), ...$cabinetsQuiEntrent]));
+                    $cabinets = array_values(array_unique([...$verrouilles->filter(fn (LienCabinet $lien): bool => $lien->cabinet_id !== null)->map(fn (LienCabinet $lien): int => (int) $lien->cabinet_id)->all(), ...$cabinetsQuiEntrent]));
                     sort($cabinets);
                     Cabinet::query()->withoutGlobalScope(SocieteScope::class)->whereIn('societe_id', $cabinets)->orderBy('id')->sharedLock()->get(['id']);
                     $comptesAvant = $verrouilles->flatMap(fn (LienCabinet $lien) => $this->acces->comptesQuiOntAcces($lien))->keyBy(fn (User $compte): int => CleDuModele::de($compte));
@@ -261,13 +269,14 @@ class JournalDesDroits
                         ...($auteur === null ? [] : [CleDuModele::de($auteur)]),
                     ];
                     $comptesVerrouilles = User::query()->with('societe')->whereKey(array_values(array_unique($aVerrouiller)))->orderBy('id')->lockForUpdate()->get()->keyBy(fn (User $compte): int => CleDuModele::de($compte));
+                    DB::table('comptes_expert_comptable')->where('societe_id', $client->getKey())->whereIn('user_id', $comptesVerrouilles->keys()->all())->orderBy('id')->lockForUpdate()->get(['id']);
                     $auteurRelu = $auteur === null ? null : ($comptesVerrouilles->get(CleDuModele::de($auteur)) ?? throw new LogicException('Ce compte n\'existe pas.'));
 
                     $resultat = $this->operateur->auNomDe($auteurRelu, function () use ($auteurRelu, $clientVerrouille, $relus, $verrouilles, $modification, $entrees, $editeur, $visee, $magasins, $comptesAvant): mixed {
                         $avant = $this->etats($magasins, array_values($comptesAvant->all()));
                         $resultat = $modification($auteurRelu, $clientVerrouille, $relus);
                         $liensApres = LienCabinet::query()
-                            ->where(fn ($apres) => $apres->whereKey($verrouilles->keys()->all())->orWhere('etat', EtatDuLien::Actif->value))
+                            ->where(fn ($apres) => $apres->whereKey($verrouilles->keys()->all())->orWhereIn('etat', array_map(static fn (EtatDuLien $etat): string => $etat->value, EtatDuLien::enCours())))
                             ->orderBy('id')
                             ->get();
                         $comptesApres = $liensApres->flatMap(fn (LienCabinet $lien) => $this->acces->comptesQuiOntAcces($lien))->keyBy(fn (User $compte): int => CleDuModele::de($compte));
@@ -366,7 +375,7 @@ class JournalDesDroits
      * affectées, par identifiant : le propriétaire de la société, ses
      * administrateurs de tous les magasins, hors comptes retirés, et, pour
      * un magasin réel, les comptes du cabinet lié qui ont accès à la
-     * société.
+     * société, ou ceux de son expert-comptable déclaré.
      *
      * @return Collection<int, User>
      */
@@ -382,7 +391,7 @@ class JournalDesDroits
             ->orderBy('id')
             ->get();
 
-        $lien = $magasin->est_demonstration ? null : LienCabinet::query()->withoutGlobalScope(SocieteScope::class)->where('societe_id', $magasin->societe_id)->where('etat', EtatDuLien::Actif->value)->first();
+        $lien = $magasin->est_demonstration ? null : LienCabinet::query()->withoutGlobalScope(SocieteScope::class)->where('societe_id', $magasin->societe_id)->whereIn('etat', array_map(static fn (EtatDuLien $etat): string => $etat->value, EtatDuLien::enCours()))->first();
 
         return $lien === null ? $comptes : $comptes->concat($this->acces->comptesQuiOntAcces($lien));
     }
@@ -411,7 +420,7 @@ class JournalDesDroits
 
         $societeId = $societe->getKey();
         $tous = User::query()->whereKey($comptes)->where('societe_id', $societeId)->where(fn ($touchant) => $touchant
-            ->where('role_societe', RoleSociete::Proprietaire->value)
+            ->whereIn('role_societe', [RoleSociete::Proprietaire->value, RoleSociete::ExpertComptable->value])
             ->orWhereIn('id', Affectation::query()->where('societe_id', $societeId)->whereNull('magasin_id')->select('user_id')))->exists();
 
         $magasins = $societe->magasins();
@@ -529,12 +538,12 @@ class JournalDesDroits
      * @param  list<LienCabinet>  $concernes  les liens dont parlent les entrées, la première étant leur cible
      * @param  array<int, array{compte: User, societe: array<string, mixed>, magasins: array<int, array<string, mixed>|null>}>  $avant
      * @param  array<int, array{compte: User, societe: array<string, mixed>, magasins: array<int, array<string, mixed>|null>}>  $apres
-     * @param  Closure(Societe, list<LienCabinet>, TResultat): list<array{0: ActionAuditee, 1: array<string, mixed>, 2: int}>  $entrees  les entrées de chaque journal, d'après ce que la modification a rendu
+     * @param  Closure(Societe, list<LienCabinet>, TResultat): list<array{0: ActionAuditee, 1: array<string, mixed>, 2: int|null}>  $entrees  les entrées de chaque journal, d'après ce que la modification a rendu (la société dont l'entrée porte les droits des comptes, nulle pour une entrée sans droits)
      * @param  TResultat  $resultat  ce que la modification a rendu
      */
     private function inscrireAuxJournauxDuLien(?User $auteur, Societe $client, Collection $liens, array $concernes, array $avant, array $apres, Closure $entrees, mixed $resultat, ?InterventionDeLEditeur $editeur, ?Societe $visee): void
     {
-        $cabinets = $liens->map(fn (LienCabinet $lien): int => (int) $lien->cabinet_id)->unique()->sort()->values();
+        $cabinets = $liens->filter(fn (LienCabinet $lien): bool => $lien->cabinet_id !== null)->map(fn (LienCabinet $lien): int => (int) $lien->cabinet_id)->unique()->sort()->values();
         $journaux = [$client, ...$cabinets->map(fn (int $id): Societe => Societe::query()->findOrFail($id))->all()];
         $duVisiteur = $auteur->societe_id ?? CleDuModele::de($client);
 
@@ -544,7 +553,7 @@ class JournalDesDroits
                 $droitsApres = [];
 
                 foreach ($apres as $compteId => $etat) {
-                    if ((int) $etat['compte']->societe_id !== (int) $cabinetId) {
+                    if ($cabinetId === null || (int) $etat['compte']->societe_id !== (int) $cabinetId) {
                         continue;
                     }
 
@@ -561,8 +570,8 @@ class JournalDesDroits
                     $action,
                     $journal->is($client) || ($auteur !== null && in_array((int) $auteur->societe_id, [CleDuModele::de($journal), CleDuModele::de($client)], true)) ? $auteur : null,
                     null,
-                    ['droits' => $droitsAvant],
-                    ['droits' => $droitsApres, ...$valeurs],
+                    $cabinetId === null ? null : ['droits' => $droitsAvant],
+                    $cabinetId === null ? $valeurs : ['droits' => $droitsApres, ...$valeurs],
                     $concernes[0] ?? null,
                     $editeur,
                     detailsDeLEditeur: $visee === null || $journal->is($visee),

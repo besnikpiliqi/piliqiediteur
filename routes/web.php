@@ -5,6 +5,7 @@ use App\Http\Controllers\AccepterLInvitationDuCabinetController;
 use App\Http\Controllers\CodeDuCourrierController;
 use App\Http\Controllers\ConfirmerInscriptionController;
 use App\Http\Controllers\ConfirmerNouvelleAdresseController;
+use App\Http\Controllers\LienDeLExpertComptableController;
 use App\Http\Controllers\RappelsDesPrestatairesController;
 use App\Http\Controllers\RattachementAuCabinetController;
 use App\Http\Controllers\ReponseAuDevisController;
@@ -78,6 +79,18 @@ Route::post('/invitation-cabinet/{jeton}/refus', [AccepterLInvitationDuCabinetCo
     ->where('jeton', '[A-Za-z0-9]{64}')
     ->middleware('throttle:10,1')
     ->name('cabinets.invitation.refuser');
+
+// Le lien de 7 jours où un expert-comptable de la société choisit son mot
+// de passe (voir LienDeLExpertComptableController) : l'ouverture du lien
+// n'écrit rien, le formulaire choisit le mot de passe et connecte.
+Route::get('/expert-comptable/{jeton}', [LienDeLExpertComptableController::class, 'afficher'])
+    ->where('jeton', '[A-Za-z0-9]{64}')
+    ->middleware('throttle:30,1')
+    ->name('experts-comptables.lien.afficher');
+Route::post('/expert-comptable/{jeton}', [LienDeLExpertComptableController::class, 'choisir'])
+    ->where('jeton', '[A-Za-z0-9]{64}')
+    ->middleware('throttle:10,1')
+    ->name('experts-comptables.lien.choisir');
 
 // La demande de rattachement d'un cabinet à une entreprise déjà inscrite
 // (voir RattachementAuCabinetController) : le lien mène son propriétaire,

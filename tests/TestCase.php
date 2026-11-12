@@ -15,8 +15,11 @@ use App\Domain\Authorization\OperateurCourant;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Cabinets\Actions\AccepterLaDemandeDeLienAction;
 use App\Domain\Cabinets\Actions\AccepterLInvitationAction;
+use App\Domain\Cabinets\Actions\AjouterUnExpertComptableAction;
+use App\Domain\Cabinets\Actions\ChoisirLeMotDePasseDeLExpertComptableAction;
 use App\Domain\Cabinets\Actions\ConfierDesClientsAction;
 use App\Domain\Cabinets\Actions\CreerCollaborateurAction;
+use App\Domain\Cabinets\Actions\DeclarerSonExpertComptableAction;
 use App\Domain\Cabinets\Actions\DesignerUnCabinetAction;
 use App\Domain\Cabinets\Actions\InviterUneEntrepriseAction;
 use App\Domain\Cabinets\Actions\ReglerLesAutorisationsDuCabinetAction;
@@ -24,6 +27,7 @@ use App\Domain\Cabinets\Actions\VerifierLOrdreAction;
 use App\Domain\Cabinets\Enums\EtatDuLien;
 use App\Domain\Cabinets\Mail\DemandeDeRattachementMail;
 use App\Domain\Cabinets\Mail\InvitationDuCabinetMail;
+use App\Domain\Cabinets\Mail\LienDuMotDePasseDeLExpertComptableMail;
 use App\Domain\Cabinets\Models\LienCabinet;
 use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
@@ -66,6 +70,7 @@ use App\Domain\Tenancy\Actions\DemanderLaTransmissionDeLaProprieteAction;
 use App\Domain\Tenancy\Actions\EnvoyerCodeDeConfirmationAction;
 use App\Domain\Tenancy\Actions\ExaminerSirenAction;
 use App\Domain\Tenancy\Actions\RedonnerLAccesAction;
+use App\Domain\Tenancy\Actions\RevoquerSocieteAction;
 use App\Domain\Tenancy\Actions\SaisirCodeDeConfirmationAction;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\DecisionExamenSiren;
@@ -747,6 +752,103 @@ abstract class TestCase extends BaseTestCase
     }
 
     /**
+     * Le propriétaire de ce client (une société validée, ou celle de ce
+     * magasin) déclare son expert-comptable par ce SIREN, comme dans le vrai
+     * parcours (voir DeclarerSonExpertComptableAction) : le répertoire
+     * factice donne à ce SIREN le code 69.20Z, les e-mails sont retenus, et
+     * la personne reçoit son lien ; rend le compte créé. Aucun contexte
+     * n'est actif ensuite.
+     *
+     * @param  list<string>|null  $autorisations  null pour celles par défaut
+     */
+    protected function declarerSonExpertComptable(Magasin|Societe $client, string $siren = FauxRepertoireSirene::SIREN_CABINET, string $nom = 'Marc Petit', string $email = 'marc.petit@petit-associes.test', ?array $autorisations = null, bool $remplacer = false): User
+    {
+        $client = $client instanceof Magasin ? $client->societe : $client;
+        app(RepertoireSirene::class)->exercer($siren, ControleSirene::CODE_ACTIVITES_COMPTABLES);
+
+        if (! Mail::getFacadeRoot() instanceof MailFake) {
+            Mail::fake();
+        }
+
+        app(TenantContext::class)->clear();
+        $compte = app(DeclarerSonExpertComptableAction::class)->handle($client->proprietaire()->firstOrFail(), $client, [
+            'siren' => $siren,
+            'name' => $nom,
+            'email' => $email,
+            'email_confirmation' => $email,
+            'autorisations' => $autorisations ?? PermissionRegistry::casesDuCabinet(PermissionRegistry::parDefautDuCabinet($client->type_activite)),
+            'remplacer' => $remplacer,
+        ], 'password');
+        app(TenantContext::class)->clear();
+
+        return $compte->refresh();
+    }
+
+    /**
+     * Le propriétaire de ce client ajoute une personne du cabinet qu'il a
+     * déclaré (voir AjouterUnExpertComptableAction) ; rend son compte.
+     * Aucun contexte n'est actif ensuite.
+     */
+    protected function ajouterUnExpertComptable(Societe $client, string $nom, string $email): User
+    {
+        if (! Mail::getFacadeRoot() instanceof MailFake) {
+            Mail::fake();
+        }
+
+        app(TenantContext::class)->clear();
+        $declaration = LienCabinet::query()->withoutGlobalScopes()->where('societe_id', $client->getKey())->where('etat', EtatDuLien::Declare->value)->firstOrFail();
+        $compte = app(AjouterUnExpertComptableAction::class)->handle($client->proprietaire()->firstOrFail(), $declaration, ['name' => $nom, 'email' => $email, 'email_confirmation' => $email], 'password');
+        app(TenantContext::class)->clear();
+
+        return $compte->refresh();
+    }
+
+    /**
+     * Le jeton du dernier lien du mot de passe d'un expert-comptable de la
+     * société, lu dans l'e-mail retenu : le logiciel n'en garde que
+     * l'empreinte.
+     */
+    protected function jetonDuDernierLienDExpertComptable(): string
+    {
+        $lien = (string) Mail::sent(LienDuMotDePasseDeLExpertComptableMail::class)->last()?->lien;
+
+        return Str::afterLast($lien, '/');
+    }
+
+    /**
+     * Un expert-comptable de la société de ce client, déclaré puis qui a
+     * choisi son mot de passe (MOT_DE_PASSE_CHOISI) par le lien reçu. Aucun
+     * contexte n'est actif ensuite.
+     *
+     * @param  list<string>|null  $autorisations
+     */
+    protected function expertComptable(Magasin|Societe $client, string $nom = 'Marc Petit', ?array $autorisations = null): User
+    {
+        $compte = $this->declarerSonExpertComptable($client, nom: $nom, autorisations: $autorisations);
+        app(ChoisirLeMotDePasseDeLExpertComptableAction::class)->handle($this->jetonDuDernierLienDExpertComptable(), self::MOT_DE_PASSE_CHOISI, self::MOT_DE_PASSE_CHOISI);
+        app(TenantContext::class)->clear();
+
+        return $compte->refresh();
+    }
+
+    /**
+     * La révocation d'une société par la procédure de l'éditeur : la remise
+     * du courrier de révocation prouvée par son code, saisi sur sa page,
+     * puis la révocation par deux opérateurs. Aucun contexte n'est actif
+     * ensuite.
+     */
+    protected function revoquerLaSociete(Societe $societe): void
+    {
+        $editeur = new InterventionDeLEditeur('Société qui a pris le SIREN d\'un autre', 'DOSSIER-2026-0102', ['alice', 'bruno']);
+        app(TenantContext::class)->clear();
+        app(EnvoyerCodeDeConfirmationAction::class)->parLEditeur($societe->fresh(), MotifCode::Revocation, $editeur);
+        app(SaisirCodeDeConfirmationAction::class)->saisirUnCodeDeProcedure((string) $societe->siren, MotifCode::Revocation, $this->codeDuCourrier($societe, MotifCode::Revocation), '127.0.0.1');
+        app(TenantContext::class)->clear();
+        app(RevoquerSocieteAction::class)->handle($societe->fresh(), $editeur);
+        app(TenantContext::class)->clear();
+    }
+
+    /**
      * Le code que porte le dernier courrier de ce motif (la vérification,
      * sauf autre motif) de la société, tel que son destinataire le lit
      * (XXXX-XXXX-XXXX) dans le PDF que le prestataire factice a reçu : le
@@ -1274,6 +1376,27 @@ abstract class TestCase extends BaseTestCase
     {
         $this->assertSame(0, DB::table('sessions')->where('user_id', $compte->getKey())->count(), 'Une session de ce compte reste ouverte.');
         $this->assertNotSame('jeton-de-l-autre-appareil', $compte->refresh()->getRememberToken(), 'Le « se souvenir de moi » de ce compte vaut toujours.');
+    }
+
+    /**
+     * Ce HTML montre-t-il chaque libellé suivi de l'astérisque rouge d'un
+     * champ obligatoire, et chacun des autres sans lui ? L'astérisque est
+     * celui de Filament (resources/views/components/field-wrapper/label)
+     * ou celui des pages publiques (resources/views/components/obligatoire).
+     *
+     * @param  list<string>  $obligatoires
+     * @param  list<string>  $facultatifs
+     */
+    protected function assertAsterisquesDesChamps(string $html, array $obligatoires, array $facultatifs = []): void
+    {
+        $asterisque = '(?:\s|<!--\[if [A-Z]+\]><!\[endif\]-->)*<sup class="(?:text-danger-600[^"]*|obligatoire)"[^>]*>\*<\/sup>';
+        foreach ($obligatoires as $libelle) {
+            $this->assertMatchesRegularExpression('/'.preg_quote(e($libelle), '/').$asterisque.'/u', $html, "Le champ « {$libelle} » ne porte pas l'astérisque des champs obligatoires.");
+        }
+        foreach ($facultatifs as $libelle) {
+            $this->assertStringContainsString(e($libelle), $html, "Le champ « {$libelle} » n'est pas sur la page.");
+            $this->assertDoesNotMatchRegularExpression('/'.preg_quote(e($libelle), '/').$asterisque.'/u', $html, "Le champ facultatif « {$libelle} » porte l'astérisque des champs obligatoires.");
+        }
     }
 
     /**

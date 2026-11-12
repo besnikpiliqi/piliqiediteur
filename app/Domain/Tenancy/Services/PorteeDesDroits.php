@@ -4,6 +4,7 @@ namespace App\Domain\Tenancy\Services;
 
 use App\Domain\Authorization\AutorisationsSociete;
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Cabinets\Services\ExpertsComptablesDeclares;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\RoleSociete;
 use App\Domain\Tenancy\Enums\StatutCompte;
@@ -338,12 +339,49 @@ final class PorteeDesDroits
     }
 
     /**
+     * Peut-il réintégrer ce compte retiré d'expert-comptable de la société
+     * (voir ChangerStatutCompteAction::reintegrerLExpertComptable()) ? Le
+     * propriétaire seul, tant que la déclaration du compte est en attente :
+     * un compte retiré au rattachement ou à la fin de sa déclaration ne se
+     * rouvre jamais.
+     */
+    public function peutReintegrerLExpertComptable(User $auteur, User $compte): bool
+    {
+        return $this->estUneCible($auteur, $compte)
+            && $auteur->estProprietaire()
+            && $compte->estExpertComptable()
+            && $compte->estRetire()
+            && app(ExpertsComptablesDeclares::class)->declarationDe($compte)?->estDeclare() === true;
+    }
+
+    /**
+     * Peut-il corriger l'adresse de ce compte actif d'expert-comptable de la
+     * société, qui reçoit alors un nouveau lien (voir
+     * CorrigerLAdresseDeLExpertComptableAction) ? Le propriétaire seul, tant
+     * que la déclaration du compte est en attente et que la personne n'a pas
+     * encore choisi son mot de passe : ensuite, elle seule change son
+     * adresse, dans son profil.
+     */
+    public function peutCorrigerLAdresseDeLExpertComptable(User $auteur, User $compte): bool
+    {
+        if (! $this->estUneCible($auteur, $compte) || ! $auteur->estProprietaire() || ! $compte->estExpertComptable() || ! $compte->estActif()) {
+            return false;
+        }
+
+        $experts = app(ExpertsComptablesDeclares::class);
+
+        return $experts->declarationDe($compte)?->estDeclare() === true
+            && $experts->attachementDe($compte)?->aChoisiSonMotDePasse() === false;
+    }
+
+    /**
      * Peut-il changer le rôle de société de ce compte (membre ou
      * administrateur ; voir
      * ChangerLeRoleDeSocieteAction) ? Le propriétaire seul, pour un compte
      * actif de sa société qui n'est pas un compte d'entraînement ; jamais
      * dans un cabinet d'expertise comptable, dont les collaborateurs ne
-     * changent jamais de rôle.
+     * changent jamais de rôle, ni pour un expert-comptable de la société,
+     * qui n'en change jamais non plus.
      */
     public function peutChangerLeRoleDeSociete(User $auteur, User $compte): bool
     {
@@ -351,7 +389,8 @@ final class PorteeDesDroits
             && $auteur->estProprietaire()
             && ! $auteur->estDUnCabinet()
             && $compte->estActif()
-            && ! $compte->estUnCompteDEntrainement();
+            && ! $compte->estUnCompteDEntrainement()
+            && ! $compte->estExpertComptable();
     }
 
     /**

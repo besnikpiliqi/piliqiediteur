@@ -5,6 +5,7 @@ namespace App\Filament\Concerns;
 use App\Domain\Achats\Models\AvoirFournisseur;
 use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Cabinets\Models\Cabinet;
+use App\Domain\Cabinets\Models\CompteExpertComptable;
 use App\Domain\Cabinets\Models\InvitationCabinet;
 use App\Domain\Cabinets\Models\LienCabinet;
 use App\Domain\Calendrier\Calendrier;
@@ -95,7 +96,8 @@ trait AfficheLeJournalDAudit
         FactureAchat::class => 'Facture d\'achat',
         InventaireOuverture::class => 'Inventaire d\'ouverture',
         InvitationCabinet::class => 'Invitation d\'un client',
-        LienCabinet::class => 'Lien avec un cabinet',
+        LienCabinet::class => 'Lien avec un cabinet ou déclaration de l\'expert-comptable',
+        CompteExpertComptable::class => 'Compte d\'expert-comptable de la société',
         LigneAvoir::class => 'Ligne d\'avoir',
         Magasin::class => 'Magasin',
         Paiement::class => 'Paiement',

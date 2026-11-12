@@ -1,5 +1,6 @@
 <?php
 
+use App\Domain\Cabinets\Support\GardesDesCabinets;
 use App\Domain\Tenancy\Support\GardesDesTypesDActivite;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
@@ -69,10 +70,12 @@ return new class extends Migration
         // Seule une société qui a des articles reçoit un avoir fournisseur
         // (voir TypeDActivite::aDesArticles()).
         GardesDesTypesDActivite::poser(GardesDesTypesDActivite::AVOIRS_FOURNISSEUR);
+        GardesDesCabinets::poserLesMagasinsOuverts('avoirs_fournisseur');
     }
 
     public function down(): void
     {
+        GardesDesCabinets::retirerLesMagasinsOuverts('avoirs_fournisseur');
         GardesDesTypesDActivite::retirer(GardesDesTypesDActivite::AVOIRS_FOURNISSEUR);
         Schema::dropIfExists('avoirs_fournisseur');
     }

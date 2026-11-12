@@ -5,6 +5,9 @@ namespace Tests\Feature\Societe;
 use App\Domain\Authorization\AutorisationsSociete;
 use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Cabinets\Actions\MettreFinAuLienAction;
+use App\Domain\Cabinets\Enums\EtatDuLien;
+use App\Domain\Cabinets\Models\LienCabinet;
 use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
@@ -49,6 +52,7 @@ use App\Filament\App\Resources\ClotureCaisseResource\Pages\ListClotureCaisses;
 use App\Filament\Societe\Pages\AccepterLaTransmission;
 use App\Filament\Societe\Resources\MembreResource\Pages\FicheDuMembre;
 use App\Models\User;
+use Database\Factories\SocieteFactory;
 use Filament\Facades\Filament;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\QueryException;
@@ -566,6 +570,19 @@ class TransfererProprieteTest extends TestCase
         app(ChangerStatutCompteAction::class)->retirer($proprietaire->refresh(), $retire);
         $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('users')->where('id', $retire->id)->update(['role_societe' => RoleSociete::Proprietaire->value, 'email_verified_at' => now()])), UniqueConstraintViolationException::class);
         $this->assertTrue($unSeulProprietaireActif());
+
+        $client = $this->ouvrirUneSociete(['nom' => 'Boutique cliente', 'siren' => SocieteFactory::sirenFictif()]);
+        $proprietairesActifs = fn (int $societeId): int => User::query()->where('societe_id', $societeId)->where('role_societe', RoleSociete::Proprietaire->value)->where('statut', 'actif')->count();
+        $this->declarerSonExpertComptable($client);
+        $this->ajouterUnExpertComptable($client->societe, 'Inès Garnier', 'ines.garnier@petit-associes.test');
+        $this->assertSame(1, $proprietairesActifs($client->societe_id));
+        $this->declarerSonExpertComptable($client, siren: '000000927', nom: 'Léa Blanc', email: 'lea.blanc@blanc-expertise.test', remplacer: true);
+        $this->assertSame(1, $proprietairesActifs($client->societe_id));
+        $cabinet = $this->ouvrirUnCabinet('000000927');
+        $lien = LienCabinet::query()->withoutGlobalScopes()->where('societe_id', $client->societe_id)->where('etat', EtatDuLien::Actif->value)->sole();
+        $this->assertSame([1, 1], [$proprietairesActifs($client->societe_id), $proprietairesActifs($cabinet->id)]);
+        app(MettreFinAuLienAction::class)->handle($this->proprietaireDe($client), $lien);
+        $this->assertSame([1, 1, 1], [$proprietairesActifs($client->societe_id), $proprietairesActifs($cabinet->id), $proprietairesActifs($magasin->societe_id)]);
     }
 
     public function test_un_administrateur_ne_transmet_pas_la_propriete(): void

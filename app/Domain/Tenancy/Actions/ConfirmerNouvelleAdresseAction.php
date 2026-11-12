@@ -46,6 +46,12 @@ use Illuminate\Validation\ValidationException;
  *   prévenir, et une faute de frappe vers l'adresse d'un tiers ne donne
  *   pas à ce tiers le moyen de prendre le compte par « Mot de passe
  *   oublié ». Ailleurs, le lien reste valable et rien ne change.
+ * - La nouvelle adresse d'un expert-comptable de la société, encore actif
+ *   (décision de l'éditeur du 01/11/2026, P13) : le lien se suit sans être
+ *   connecté ; elle remplace l'ancienne, qui en est prévenue, sans date de
+ *   confirmation ni contrôle d'unicité (elle n'est pas une adresse de
+ *   connexion et ne sert jamais à « Mot de passe oublié ») ; l'entrée
+ *   AdresseDExpertComptableChangee s'inscrit, sans aucune adresse.
  *
  * Une adresse prise entre-temps par un autre propriétaire (une adresse en
  * attente ne bloque rien ; l'adresse de contact d'un autre compte n'est pas
@@ -96,7 +102,7 @@ class ConfirmerNouvelleAdresseAction
      */
     public static function peutConfirmerDepuis(User $compte, ?Authenticatable $connecte): bool
     {
-        return $compte->aUneAdresseDeConnexion() || ($connecte instanceof User && CleDuModele::de($connecte) === CleDuModele::de($compte));
+        return $compte->estExpertComptable() || $compte->aUneAdresseDeConnexion() || ($connecte instanceof User && CleDuModele::de($connecte) === CleDuModele::de($compte));
     }
 
     /**
@@ -128,7 +134,7 @@ class ConfirmerNouvelleAdresseAction
         if ($resultat['ancienne'] !== null) {
             // L'adresse a déjà changé : un serveur d'envoi en panne ne fait
             // que priver l'ancienne de son avis, ce que dit le journal.
-            EnvoiImmediat::essayer('L\'avis à l\'ancienne adresse de connexion', fn () => Mail::to($resultat['ancienne'])->send(new AdresseChangeeMail($compte->name, Calendrier::deParis()->afficher(now(), 'd/m/Y à H:i'))));
+            EnvoiImmediat::essayer('L\'avis à l\'ancienne adresse', fn () => Mail::to($resultat['ancienne'])->send(new AdresseChangeeMail($compte->name, Calendrier::deParis()->afficher(now(), 'd/m/Y à H:i'), adresseDeConnexion: $compte->estProprietaire())));
         }
 
         return $compte;
@@ -158,6 +164,16 @@ class ConfirmerNouvelleAdresseAction
 
         $nouvelle = (string) $relu->nouvelle_adresse;
         $ancienne = $relu->email;
+
+        if ($relu->estExpertComptable()) {
+            $relu->forceFill(['email' => $nouvelle, 'nouvelle_adresse' => null, 'nouvelle_adresse_jeton_hache' => null, 'nouvelle_adresse_expire_le' => null])->save();
+            $this->journalAudit->inscrire(ActionAuditee::AdresseDExpertComptableChangee, $relu, null, null, [
+                'compte' => ['id' => $relu->getKey(), 'nom' => $relu->name],
+            ]);
+
+            return ['refus' => null, 'ancienne' => $ancienne];
+        }
+
         $refus = match (true) {
             $close => DemanderUneNouvelleAdresseAction::MESSAGE_INSCRIPTION_CLOSE,
             User::query()->where('role_societe', RoleSociete::Proprietaire->value)->where('email', $nouvelle)->whereKeyNot($relu->getKey())->exists() => self::MESSAGE_ADRESSE_INUTILISABLE,
@@ -204,12 +220,13 @@ class ConfirmerNouvelleAdresseAction
     }
 
     /**
-     * Ce compte, encore propriétaire, attend-il l'adresse que confirme ce
-     * jeton, avant la fin de sa validité ?
+     * Ce compte, encore propriétaire, ou expert-comptable de la société
+     * encore actif, attend-il l'adresse que confirme ce jeton, avant la fin
+     * de sa validité ?
      */
     private static function estEnAttente(User $compte, string $jeton): bool
     {
-        return $compte->estProprietaire()
+        return ($compte->estProprietaire() || ($compte->estExpertComptable() && $compte->estActif()))
             && $compte->nouvelle_adresse_jeton_hache === self::empreinte($jeton)
             && (bool) $compte->nouvelle_adresse_expire_le?->isFuture();
     }

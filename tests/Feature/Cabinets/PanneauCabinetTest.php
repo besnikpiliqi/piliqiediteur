@@ -12,6 +12,7 @@ use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Pages\Caisse;
 use App\Filament\App\Pages\CoordonneesMagasin;
+use App\Filament\App\Pages\LaSociete;
 use App\Filament\App\Pages\ParametresFactures;
 use App\Filament\App\Pages\ParametresPrixDeVente;
 use App\Filament\App\Pages\ParametresRelances;
@@ -278,6 +279,7 @@ class PanneauCabinetTest extends TestCase
         $pagesAttendues = [
             Caisse::class => false,
             CoordonneesMagasin::class => false,
+            LaSociete::class => false,
             ParametresFactures::class => false,
             ParametresPrixDeVente::class => false,
             ParametresRelances::class => false,

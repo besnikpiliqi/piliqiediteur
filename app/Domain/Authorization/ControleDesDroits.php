@@ -4,6 +4,7 @@ namespace App\Domain\Authorization;
 
 use App\Domain\Achats\Models\AvoirFournisseur;
 use App\Domain\Achats\Models\FactureAchat;
+use App\Domain\Cabinets\Models\InvitationCabinet;
 use App\Domain\Cabinets\Models\LienCabinet;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\Catalogue\Models\Produit;
@@ -69,7 +70,8 @@ use App\Models\User;
  * magasin), il refuse tout au compte d'une autre société ; quand la
  * société est en lecture seule (suspendue, résiliée, révoquée ou close,
  * voir Societe::estEnLectureSeule()), tout ce qui n'est ni une
- * consultation ni un geste sur l'équipe (un compte, voir MembrePolicy), et,
+ * consultation, ni un geste sur l'équipe (un compte, voir MembrePolicy),
+ * ni, pour un cabinet, le retrait de ses invitations ouvertes, et,
  * dans une société révoquée, tout ce qui n'est pas une consultation ; sinon
  * les policies répondent, en mode strict (voir RessourceDuPanneauSociete).
  *
@@ -160,8 +162,8 @@ final class ControleDesDroits
 
         $contexte = app(TenantContext::class);
 
-        if ($user->estDUnCabinet()) {
-            return $this->pourUnCompteDeCabinet($user, $ability, $arguments[0] ?? null, $contexte);
+        if ($user->entreParLesAutorisationsDUnCabinet()) {
+            return $this->pourUnCompteAuxAutorisationsDUnCabinet($user, $ability, $arguments[0] ?? null, $contexte);
         }
 
         if (in_array($ability, AutorisationsSociete::toutes(), true)) {
@@ -198,21 +200,26 @@ final class ControleDesDroits
     }
 
     /**
+     * Un compte qui entre chez une société par les autorisations qu'elle
+     * accorde à un cabinet (voir User::entreParLesAutorisationsDUnCabinet()).
      * Un compte d'un cabinet d'expertise comptable : ses autorisations de
      * société dans l'espace de son cabinet seulement ; dans l'espace de son
      * cabinet, les policies du panneau, la lecture seule d'un cabinet
      * suspendu, résilié ou révoqué ne lui laissant que les consultations et
-     * les gestes d'accès ; jamais rien dans l'espace d'une autre société ;
-     * dans un magasin, seulement celui d'un client qu'il ouvre (voir
-     * User::peutOuvrir()), avec les règles de ce client (lecture seule,
-     * validation) et les seules autorisations que le client accorde au
-     * cabinet, un refus net pour toute autre ; et, pour une question de
+     * les gestes d'accès ; jamais rien dans l'espace d'une autre société.
+     * Un expert-comptable de la société : aucune autorisation de société et
+     * rien dans l'espace de sa société, qu'il n'ouvre jamais. Pour l'un et
+     * l'autre, dans un magasin, seulement celui qu'il ouvre (voir
+     * User::peutOuvrir() : un magasin réel d'un client, ou de sa société
+     * que sa déclaration lui ouvre), avec les règles de cette société
+     * (lecture seule, validation) et les seules autorisations qu'elle
+     * accorde, un refus net pour toute autre ; et, pour une question de
      * policy, seulement un geste de GESTES_D_UN_CABINET.
      */
-    private function pourUnCompteDeCabinet(User $user, string $ability, mixed $cible, TenantContext $contexte): ?bool
+    private function pourUnCompteAuxAutorisationsDUnCabinet(User $user, string $ability, mixed $cible, TenantContext $contexte): ?bool
     {
         if (in_array($ability, AutorisationsSociete::toutes(), true)) {
-            return $contexte->aUneSociete() && ! $contexte->has() && $contexte->societe()->getKey() === $user->societe_id
+            return ! $user->estExpertComptable() && $contexte->aUneSociete() && ! $contexte->has() && $contexte->societe()->getKey() === $user->societe_id
                 ? $this->autorisationDeSociete($user, $ability, $contexte->societe())
                 : false;
         }
@@ -222,7 +229,7 @@ final class ControleDesDroits
                 return null;
             }
 
-            return $contexte->societe()->getKey() === $user->societe_id
+            return ! $user->estExpertComptable() && $contexte->societe()->getKey() === $user->societe_id
                 ? $this->dansLEspaceDeLaSociete($user, $ability, $cible, $contexte->societe())
                 : false;
         }
@@ -276,7 +283,21 @@ final class ControleDesDroits
             return null;
         }
 
-        return (self::porteSurLEquipe($cible) || $ability === 'gererSonCabinet') && $societe->statut !== StatutSociete::Revoquee ? null : false;
+        return (self::porteSurLEquipe($cible) || $ability === 'gererSonCabinet' || self::estLeRetraitDUneInvitation($ability, $cible)) && $societe->statut !== StatutSociete::Revoquee ? null : false;
+    }
+
+    /**
+     * Le retrait d'une invitation encore ouverte par le propriétaire d'un
+     * cabinet en lecture seule (suspendu ou résilié), comme celui de ses
+     * demandes de lien (un geste sur un lien, voir porteSurLEquipe()) :
+     * retirer ne donne accès à rien et ne révèle rien de plus que ce que le
+     * cabinet savait déjà (décision de l'éditeur du 09/11/2026) ; la policy
+     * le réserve ensuite à son propriétaire (voir
+     * InvitationCabinetPolicy::retirer()).
+     */
+    private static function estLeRetraitDUneInvitation(string $ability, mixed $cible): bool
+    {
+        return $ability === 'retirer' && self::porteSur($cible, InvitationCabinet::class);
     }
 
     private function estPermisEnLectureSeule(string $ability, mixed $cible, Societe $societe): bool

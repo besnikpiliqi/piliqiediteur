@@ -99,8 +99,9 @@ class AccepterLInvitationDuCabinetController
 
     /**
      * La page d'une invitation ouverte, après la lecture du répertoire
-     * Sirene : le formulaire, ou, pour une entreprise cessée, inconnue ou
-     * un répertoire injoignable, le seul motif.
+     * Sirene : le formulaire, ou, pour une entreprise cessée, inconnue, un
+     * répertoire injoignable ou un cabinet suspendu, le seul motif, avec
+     * le bouton qui refuse l'invitation.
      *
      * @param  list<string>  $erreurs
      */
@@ -110,10 +111,11 @@ class AccepterLInvitationDuCabinetController
             return $this->invalide();
         }
 
-        $cabinet = Societe::query()->whereKey($invitation->societe_id)->firstOrFail(['id', 'raison_sociale', 'siege_ville']);
+        $cabinet = Societe::query()->whereKey($invitation->societe_id)->firstOrFail(['id', 'type_activite', 'statut', 'raison_sociale', 'siege_ville']);
         $consultation = $this->controleSirene->unite((string) $invitation->siren);
         $unite = $consultation['unite'];
         $motif ??= match (true) {
+            $cabinet->estUnCabinetSuspendu() => AccepterLInvitationAction::MESSAGE_CABINET_SUSPENDU,
             $consultation['resultat'] === ResultatVerification::Indisponible => AccepterLInvitationAction::MESSAGE_REPERTOIRE_INDISPONIBLE,
             $consultation['resultat'] !== ResultatVerification::Concluante || $unite === null => AccepterLInvitationAction::MESSAGE_ENTREPRISE_INACTIVE,
             default => null,
@@ -127,24 +129,13 @@ class AccepterLInvitationDuCabinetController
             'erreurs' => $erreurs,
             'types' => [TypeDActivite::Commerce, TypeDActivite::Services],
             'typeChoisi' => $type === TypeDActivite::Cabinet ? null : $type,
-            'autorisationsCommunes' => self::libelles(PermissionRegistry::parDefautDuCabinet(TypeDActivite::Services)),
-            'autorisationsDesArticles' => self::libelles(array_diff(PermissionRegistry::parDefautDuCabinet(TypeDActivite::Commerce), PermissionRegistry::parDefautDuCabinet(TypeDActivite::Services))),
+            'autorisationsCommunes' => PermissionRegistry::libellesDe(PermissionRegistry::parDefautDuCabinet(TypeDActivite::Services)),
+            'autorisationsDesArticles' => PermissionRegistry::libellesDe(array_diff(PermissionRegistry::parDefautDuCabinet(TypeDActivite::Commerce), PermissionRegistry::parDefautDuCabinet(TypeDActivite::Services))),
             'avertissements' => $unite === null ? [] : AvertissementsDuCodeDActivite::pourUneInvitation($unite->activitePrincipale, $unite->nomenclatureActivite),
             'expireLe' => $invitation->expire_le,
             'action' => route('cabinets.invitation.accepter', ['jeton' => $jeton]),
             'actionDuRefus' => route('cabinets.invitation.refuser', ['jeton' => $jeton]),
         ], $motif === null ? 200 : 422)->header('Referrer-Policy', 'no-referrer');
-    }
-
-    /**
-     * Les libellés de ces autorisations, dans l'ordre du registre.
-     *
-     * @param  array<array-key, string>  $autorisations
-     * @return list<string>
-     */
-    private static function libelles(array $autorisations): array
-    {
-        return array_values(array_intersect_key(PermissionRegistry::libelles(), array_flip($autorisations)));
     }
 
     private function invalide(): Response

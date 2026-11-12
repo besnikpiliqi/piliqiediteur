@@ -22,6 +22,7 @@ use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\IdentifiantsInsee;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\Societe\Pages\TableauDeBord;
+use App\Http\Controllers\AccepterLInvitationDuCabinetController;
 use App\Integrations\EnvoiRecommande\Contracts\ServiceEnvoiRecommande;
 use App\Integrations\Rne\Contracts\RegistreNationalDesEntreprises;
 use App\Integrations\Rne\FauxRne;
@@ -232,6 +233,20 @@ class AccepterLInvitationTest extends TestCase
         $page->assertDontSee('value="'.TypeDActivite::Cabinet->value.'"', false)->assertDontSee('checked', false);
         $page->assertSeeText([TypeDActivite::Commerce->aide(), TypeDActivite::Services->aide(), 'J\'ai compris que ce type d\'activité ne pourra plus changer.']);
         $this->assertSame(['password', 'password_confirmation', 'type_activite', 'choix_definitif'], array_values(array_unique(array_filter(preg_match_all('/name="([a-z_]+)"/', $page->getContent(), $champs) ? array_diff($champs[1], ['_token', 'referrer', 'viewport']) : []))));
+    }
+
+    /**
+     * Sur la page de l'invitation, chaque champ obligatoire (mot de passe,
+     * confirmation, activité et case du choix définitif) porte l'astérisque
+     * rouge des champs obligatoires (décision de l'éditeur du 01/11/2026).
+     */
+    public function test_la_page_de_l_invitation_marque_d_un_asterisque_chaque_champ_obligatoire(): void
+    {
+        $jeton = $this->inviterUneEntreprise($this->ouvrirUnCabinet(), SocieteFactory::sirenFictif(), 'dirigeant@entreprise.test');
+
+        $page = $this->get(route('cabinets.invitation.afficher', ['jeton' => $jeton]))->assertOk();
+
+        $this->assertAsterisquesDesChamps($page->getContent(), ['Votre mot de passe', 'Confirmez votre mot de passe', 'Votre activité', AccepterLInvitationDuCabinetController::CASE_DU_CHOIX_DEFINITIF]);
     }
 
     public function test_l_acceptation_sans_type_avec_le_type_cabinet_ou_sans_la_case_ne_cree_rien(): void

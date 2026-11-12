@@ -6,6 +6,7 @@ use App\Domain\Achats\Events\AvoirFournisseurEmis;
 use App\Domain\Achats\Events\FactureAchatValidee;
 use App\Domain\Achats\Listeners\DecrementerStockApresEmissionAvoirFournisseur;
 use App\Domain\Achats\Listeners\IncrementerStockApresValidationFactureAchat;
+use App\Domain\Cabinets\Listeners\RattacherLesDeclarationsDuCabinetValide;
 use App\Domain\CaisseSecurisee\Listeners\JournaliserFinDeSession;
 use App\Domain\Facturation\Events\AvoirEmis;
 use App\Domain\Facturation\Events\FactureEmise;
@@ -18,6 +19,7 @@ use App\Domain\Stock\Events\StockDevenuNegatif;
 use App\Domain\Stock\Events\StockPasseSousLeSeuilDAlerte;
 use App\Domain\Stock\Listeners\NotifierLeStockNegatif;
 use App\Domain\Stock\Listeners\NotifierLeStockSousLeSeuilDAlerte;
+use App\Domain\Tenancy\Events\SocieteValidee;
 use Illuminate\Auth\Events\CurrentDeviceLogout;
 use Illuminate\Auth\Events\Logout;
 use Illuminate\Support\Facades\Event;
@@ -43,6 +45,7 @@ class EventServiceProvider extends ServiceProvider
         Event::listen(AvoirFournisseurEmis::class, DecrementerStockApresEmissionAvoirFournisseur::class);
         Event::listen(StockPasseSousLeSeuilDAlerte::class, NotifierLeStockSousLeSeuilDAlerte::class);
         Event::listen(StockDevenuNegatif::class, NotifierLeStockNegatif::class);
+        Event::listen(SocieteValidee::class, RattacherLesDeclarationsDuCabinetValide::class);
         Event::listen(Logout::class, JournaliserFinDeSession::class);
         Event::listen(CurrentDeviceLogout::class, JournaliserFinDeSession::class);
     }

@@ -14,9 +14,11 @@ use PHPUnit\Framework\TestCase;
  * autorisation inconnue, ou qui ne s'accorde pas à un cabinet d'expertise
  * comptable, est refusée, et le refus la nomme (sa clé, son libellé, ou le
  * type d'une valeur qui n'est pas une clé) ; celles qui sont retenues le
- * sont sans doublon, dans l'ordre alphabétique. Un client ne propose à son
- * cabinet que les libellés des autorisations qu'il peut lui accorder, dans
- * l'ordre du registre.
+ * sont sans doublon, dans l'ordre alphabétique, « voir » les factures ou
+ * les clôtures emportant « voir celles de toute l'équipe », jamais accordé
+ * seul à un cabinet (décision de l'éditeur du 01/11/2026). Un client ne
+ * propose à son cabinet que les libellés des autorisations qu'il peut lui
+ * accorder, dans l'ordre du registre, une seule case par paire.
  */
 final class VerificationDesAutorisationsTest extends TestCase
 {
@@ -38,8 +40,10 @@ final class VerificationDesAutorisationsTest extends TestCase
         $this->assertRefus('Autorisation qui ne s\'accorde pas à un cabinet : facture.tout_faire', fn () => PermissionRegistry::verifierDuCabinet(['facture.tout_faire'], TypeDActivite::Commerce));
         $this->assertRefus('Autorisation qui ne s\'accorde pas à un cabinet : int', fn () => PermissionRegistry::verifierDuCabinet([7], TypeDActivite::Commerce));
 
+        $this->assertRefus('Autorisation qui ne s\'accorde pas seule à un cabinet : '.PermissionRegistry::libelles()[PermissionRegistry::FACTURE_VIEW_TOUTES].' (cochez « Factures : voir toutes celles du magasin »)', fn () => PermissionRegistry::verifierDuCabinet([PermissionRegistry::CLIENT_VIEW, PermissionRegistry::FACTURE_VIEW_TOUTES], TypeDActivite::Commerce));
+
         $this->assertSame(
-            [PermissionRegistry::CLIENT_VIEW, PermissionRegistry::FACTURE_VIEW],
+            [PermissionRegistry::CLIENT_VIEW, PermissionRegistry::FACTURE_VIEW, PermissionRegistry::FACTURE_VIEW_TOUTES],
             PermissionRegistry::verifierDuCabinet([PermissionRegistry::FACTURE_VIEW, PermissionRegistry::CLIENT_VIEW, PermissionRegistry::FACTURE_VIEW], TypeDActivite::Commerce),
         );
     }
@@ -52,12 +56,18 @@ final class VerificationDesAutorisationsTest extends TestCase
             }
 
             $libelles = PermissionRegistry::libellesDuCabinet($type);
-            $attendues = array_values(array_intersect(array_keys(PermissionRegistry::libelles()), PermissionRegistry::duCabinet($type)));
+            $attendues = array_values(array_diff(array_intersect(array_keys(PermissionRegistry::libelles()), PermissionRegistry::duCabinet($type)), PermissionRegistry::PAIRES_DU_CABINET));
+            $precises = [
+                PermissionRegistry::FACTURE_VIEW => 'Factures : voir toutes celles du magasin',
+                PermissionRegistry::CLOTURE_CAISSE_VIEW => 'Clôtures de caisse : voir toutes celles du magasin',
+                PermissionRegistry::PRODUIT_CREATE => 'Produits : créer ceux d\'une facture d\'achat ou d\'un inventaire d\'ouverture',
+            ];
 
             $this->assertSame($attendues, array_keys($libelles), $type->value);
+            $this->assertSame([], array_values(array_intersect(array_keys($libelles), PermissionRegistry::PAIRES_DU_CABINET)), $type->value);
 
             foreach ($libelles as $autorisation => $libelle) {
-                $this->assertSame($autorisation === PermissionRegistry::PRODUIT_CREATE ? 'Produits : créer ceux d\'une facture d\'achat ou d\'un inventaire d\'ouverture' : PermissionRegistry::libelles()[$autorisation], $libelle, $autorisation);
+                $this->assertSame($precises[$autorisation] ?? PermissionRegistry::libelles()[$autorisation], $libelle, $autorisation);
             }
         }
     }

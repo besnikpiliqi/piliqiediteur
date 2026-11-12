@@ -11,6 +11,7 @@ use App\Domain\Cabinets\Services\AccesDesCabinets;
 use App\Domain\Cabinets\Support\IdentiteDansLeJournal;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Models\Societe;
+use App\Domain\Tenancy\Scopes\SocieteScope;
 use App\Domain\Tenancy\Services\JournalDesDroits;
 use App\Domain\Tenancy\Support\CleDuModele;
 use App\Domain\Tenancy\Support\ValeurRequise;
@@ -34,7 +35,10 @@ use LogicException;
  * société (voir LienCabinetPolicy::accepter()). Sous les verrous de
  * JournalDesDroits::modifierLeLien() : la demande doit être encore en
  * cours et valable, le cabinet encore vérifié (sa ligne de vérification
- * relue sous un verrou partagé) ; le lien actif d'un autre cabinet prend
+ * relue sous un verrou partagé) ; le client lit, pour la demande d'un
+ * cabinet suspendu, qu'il ne l'accepte pas tant que le cabinet l'est, mais
+ * peut la refuser (décision de l'éditeur du 11/11/2026, voir
+ * RefuserLaDemandeDeLienAction) ; le lien actif d'un autre cabinet prend
  * fin (remplacé), la demande devient le lien actif, son jeton s'efface, et
  * ses autorisations s'écrivent, en une seule modification : un seul JET
  * 130 par compte et par magasin, une seule entrée LienActive par journal.
@@ -47,6 +51,8 @@ class AccepterLaDemandeDeLienAction
 
     public const MESSAGE_CABINET_NON_LIABLE = 'Ce cabinet ne peut plus être lié.';
 
+    public const MESSAGE_CABINET_SUSPENDU = 'Ce cabinet est suspendu : sa demande ne peut pas être acceptée tant qu\'il l\'est. Vous pouvez la refuser.';
+
     public function __construct(
         private readonly JournalDesDroits $journalDesDroits,
         private readonly AccesDesCabinets $acces,
@@ -54,16 +60,22 @@ class AccepterLaDemandeDeLienAction
 
     /**
      * @param  list<string>|null  $autorisations  null : les autorisations par défaut ; une liste, pour une demande de rattachement acceptée par le propriétaire du client
+     * @param  array<array-key, mixed>|null  $magasins  null : tous les magasins réels du client, présents et futurs ; une sélection d'au moins un, pour une demande de rattachement acceptée par le propriétaire du client
      *
      * @throws AuthorizationException
      * @throws InvalidArgumentException
      * @throws LogicException
      */
-    public function handle(User $auteur, LienCabinet $lien, ?array $autorisations = null): LienCabinet
+    public function handle(User $auteur, LienCabinet $lien, ?array $autorisations = null, ?array $magasins = null): LienCabinet
     {
         $client = Societe::query()->findOrFail($lien->societe_id);
+        $rattachee = $this->rattacherLaDeclarationDuMemeCabinet($auteur, $client, $lien, $autorisations, $magasins);
 
-        [$remplace, $ancienAcces] = $this->journalDesDroits->modifierLeLien($auteur, $client, [$lien], function (?User $auteurRelu, Societe $clientVerrouille, array $relus) use ($autorisations): array {
+        if ($rattachee !== null) {
+            return $rattachee;
+        }
+
+        [$remplace, $ancienAcces] = $this->journalDesDroits->modifierLeLien($auteur, $client, [$lien], function (?User $auteurRelu, Societe $clientVerrouille, array $relus) use ($autorisations, $magasins): array {
             [$demande] = $relus;
             $auteurRelu = ValeurRequise::de($auteurRelu, 'l\'auteur du geste, relu sous verrou');
             $this->journalDesDroits->exigerDansSaSociete($auteurRelu, 'accepter', $demande);
@@ -72,18 +84,22 @@ class AccepterLaDemandeDeLienAction
                 throw new LogicException(self::MESSAGE_PLUS_VALABLE);
             }
 
-            if ($autorisations !== null && ($demande->etat !== EtatDuLien::DemandeParLeCabinet || (int) $auteurRelu->societe_id !== CleDuModele::de($clientVerrouille))) {
+            if (($autorisations !== null || $magasins !== null) && ($demande->etat !== EtatDuLien::DemandeParLeCabinet || (int) $auteurRelu->societe_id !== CleDuModele::de($clientVerrouille))) {
                 throw new LogicException('Seul le propriétaire du client ajuste les autorisations d\'une demande de rattachement.');
             }
 
             $cabinet = Societe::query()->findOrFail($demande->cabinet_id);
             $cabinet->cabinet()->sharedLock()->first();
 
+            if ($demande->etat === EtatDuLien::DemandeParLeCabinet && $cabinet->estUnCabinetSuspendu()) {
+                throw new LogicException(self::MESSAGE_CABINET_SUSPENDU);
+            }
+
             if (! $cabinet->estUnCabinetVerifie()) {
                 throw new LogicException(self::MESSAGE_CABINET_NON_LIABLE);
             }
 
-            $remplace = LienCabinet::query()->where('etat', EtatDuLien::Actif->value)->whereKeyNot($demande->getKey())->first();
+            $remplace = LienCabinet::query()->enCours()->whereKeyNot($demande->getKey())->first();
             $ancienAcces = $remplace === null ? new Collection : $this->acces->comptesQuiOntAcces($remplace);
 
             if ($remplace !== null) {
@@ -98,6 +114,7 @@ class AccepterLaDemandeDeLienAction
                 'jeton_hache' => null,
             ])->save();
             $demande->accorder($autorisations ?? PermissionRegistry::parDefautDuCabinet($clientVerrouille->type_activite));
+            $demande->choisirLesMagasins($magasins);
 
             return [$remplace, $ancienAcces];
         }, function (Societe $journal, array $relus, array $resultat) use ($client, $autorisations): array {
@@ -109,12 +126,13 @@ class AccepterLaDemandeDeLienAction
                 'client' => IdentiteDansLeJournal::de($client),
                 'origine' => $demande->origine->value,
                 'autorisations' => $autorisations === null ? 'par_defaut' : 'ajustees',
+                'magasins' => IdentiteDansLeJournal::magasinsOuverts($demande),
             ], CleDuModele::de($cabinet)];
             $termine = $remplace === null ? null : [ActionAuditee::LienTermine, [
-                'cabinet' => IdentiteDansLeJournal::de(Societe::query()->findOrFail($remplace->cabinet_id)),
+                'cabinet' => $remplace->cabinet_id === null ? IdentiteDansLeJournal::declaree($remplace) : IdentiteDansLeJournal::de(Societe::query()->findOrFail($remplace->cabinet_id)),
                 'client' => IdentiteDansLeJournal::de($client),
                 'motif' => MotifDeFinDuLien::Remplace->value,
-            ], (int) $remplace->cabinet_id];
+            ], $remplace->cabinet_id === null ? CleDuModele::de($client) : (int) $remplace->cabinet_id];
 
             return match (true) {
                 $journal->is($client) => array_values(array_filter([$termine, $active])),
@@ -127,6 +145,44 @@ class AccepterLaDemandeDeLienAction
         DB::afterCommit(fn () => $this->prevenir($auteur, $lien, $remplace, $ancienAcces));
 
         return $lien;
+    }
+
+    /**
+     * Quand le propriétaire du client accepte la demande de rattachement du
+     * cabinet que sa société a déclaré comme expert-comptable (son SIREN
+     * est celui de la déclaration en attente, une donnée de la société,
+     * lue d'abord), c'est le rattachement de cette déclaration, à son nom
+     * (voir RattacherUneDeclarationAction) : ses comptes d'expert-comptable
+     * se ferment, et le lien garde les autorisations et les magasins de la
+     * déclaration, ou prend ceux qu'il ajuste ; la demande est retirée. Rend
+     * le lien né de la déclaration, ou null quand ce n'est pas ce cas, ou
+     * que la déclaration ne se rattache pas (aucune personne active) : la
+     * demande s'accepte alors comme toute autre, et remplace la
+     * déclaration.
+     *
+     * @param  list<string>|null  $autorisations
+     * @param  array<array-key, mixed>|null  $magasins
+     */
+    private function rattacherLaDeclarationDuMemeCabinet(User $auteur, Societe $client, LienCabinet $demande, ?array $autorisations, ?array $magasins): ?LienCabinet
+    {
+        if ($demande->etat !== EtatDuLien::DemandeParLeCabinet || (int) $auteur->societe_id !== CleDuModele::de($client) || $demande->cabinet_id === null) {
+            return null;
+        }
+
+        $declaration = LienCabinet::query()->withoutGlobalScope(SocieteScope::class)->where('societe_id', $client->getKey())->where('etat', EtatDuLien::Declare->value)->first(['id', 'siren_cabinet']);
+        $cabinet = Societe::query()->find($demande->cabinet_id, ['id', 'siren']);
+
+        if ($declaration === null || $cabinet === null || $declaration->siren_cabinet !== $cabinet->siren) {
+            return null;
+        }
+
+        $ajustee = $autorisations !== null || $magasins !== null;
+
+        if (! app(RattacherUneDeclarationAction::class)->handle(CleDuModele::de($declaration), CleDuModele::de($cabinet), $auteur, $autorisations, $ajustee, $magasins)) {
+            return null;
+        }
+
+        return LienCabinet::query()->withoutGlobalScope(SocieteScope::class)->where('societe_id', $client->getKey())->findOrFail($declaration->getKey());
     }
 
     /**

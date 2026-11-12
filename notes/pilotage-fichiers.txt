@@ -218,3 +218,4 @@ reprises/args-chaine-rapide-2026-11-12.json
 ci/bb135db-echec-navigateur.md
 reprises/lot-DEMO-commits-locaux.patch
 reprises/lot-UI-commits-locaux.patch
+reprises/lot-ML-travail-non-commite.patch

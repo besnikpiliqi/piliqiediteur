@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 12/11/2026 à 11:45 UTC par pilotage-sync.sh : « Après le lot UI ».
+Mis à jour le 12/11/2026 à 12:27 UTC par pilotage-sync.sh : « Point de suivi 12:27 UTC : UI poussé, CI 8feeb83, sauvegarde ML ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -37,6 +37,44 @@ c2455dd Passe Larastan au niveau 10 sans erreur : les valeurs lues sans type son
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
+ M .env.example
+ M app/Domain/Cabinets/Actions/InviterSonCabinetACreerSonEspaceAction.php
+ M app/Domain/Cabinets/Actions/InviterUneEntrepriseAction.php
+ M app/Domain/Cabinets/Services/EnvoiDesLiensDesCabinets.php
+ M app/Domain/Facturation/Actions/EnvoyerDocumentAction.php
+ M app/Domain/Facturation/Jobs/EnvoyerDocumentJob.php
+ M app/Domain/Facturation/Models/EnvoiDocument.php
+ M app/Domain/Tenancy/Actions/ConfirmerNouvelleAdresseAction.php
+ M app/Domain/Tenancy/Actions/DemanderLaTransmissionDeLaProprieteAction.php
+ M app/Domain/Tenancy/Actions/DemanderUneNouvelleAdresseAction.php
+ M app/Domain/Tenancy/Services/AlerteEditeur.php
+ M app/Filament/App/Pages/Auth/DemandeDeLien.php
+ M app/Filament/App/Pages/Auth/InscriptionSociete.php
+ M app/Filament/App/Resources/FactureResource.php
+ M app/Filament/Concerns/EnvoieLesDocuments.php
+ M bootstrap/app.php
+ M bootstrap/providers.php
+ M config/dompdf.php
+ M config/mail.php
+ M config/services.php
+ M database/migrations/2026_10_13_100002_create_envois_documents_table.php
+ M phpunit.xml
+ M tests/Browser/Parcours/RecuDePaiementTest.php
+ M tests/Feature/Calendrier/PlanificateurTest.php
+ M tests/Feature/Facturation/EnvoyerDocumentJobTest.php
+ M tests/Feature/Facturation/FacturePdfGeneratorTest.php
+ M tests/Feature/Facturation/RecusDePaiementTest.php
+ M tests/Feature/Filament/EnvoieLesDocumentsTest.php
+ M tests/Feature/Qualite/TestsSautesTest.php
+?? app/Console/Commands/EssayerUnCourriel.php
+?? app/Console/Commands/SurveillerLaFileDAttente.php
+?? app/Integrations/Courriel/
+?? app/Providers/CourrielsServiceProvider.php
+?? resources/views/mail/essai.blade.php
+?? tests/Feature/Courriels/
+?? tests/Feature/Integrations/TransportMailtrapTest.php
+?? tests/Fixtures/Courriels/
+?? tests/Unit/CauseDEchecDEnvoiTest.php
 ```
 
 ## Dernière course de la chaîne
@@ -44,7 +82,6 @@ c2455dd Passe Larastan au niveau 10 sans erreur : les valeurs lues sans type son
 Course `wf_1d467e9e-93e`, étapes commencées (de la plus ancienne à la plus récente) :
 
 ```
-FI:relecture1
 FI:relecture2
 FI:correction
 FI:poussee
@@ -69,4 +106,5 @@ UI:relecture2
 UI:correction
 UI:poussee
 UI:notes
+ML:implementation
 ```

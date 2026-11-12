@@ -84,6 +84,7 @@ Ce fichier est le point d'entrée. Il remplace, pour la reprise, `PASSATION-2026
 
 ## 7. Sauvegardes depuis cette passation
 
+- 12/11 12 h 27 UTC — lot ML : aucun commit, 45 entrées non commitées, base 8feeb83 (UI poussé) ; `reprises/lot-ML-travail-non-commite.patch` 172405 octets, SHA-256 `38d5a9e08875bebd67d618b8cd38589a89ba910a1b6fad35543a9fd071d328c7` ; arbre dda0ab14.
 - 12/11 10 h 26 UTC — lot UI : commits locaux e101d9f (correction CI de l'horloge) et 238f430 (lot UI), base b12a835 (DEMO poussé), relectures en cours ; `reprises/lot-UI-commits-locaux.patch` 146858 octets, SHA-256 `69cc69212df6c3c82bd9950fc39b9162e12fc26a0be5c244e131a8ac8cb48e7a` ; aucun travail non commité ; arbre fdab9a48.
 Les correctifs sont remplacés à chaque sauvegarde : seule la première ligne, la plus récente, vaut.
 - 12/11 08 h 10 UTC — lot DEMO : commit local d23eb96 (base bb135db, AUD poussé), relectures en cours ; `reprises/lot-DEMO-commits-locaux.patch` 222901 octets, SHA-256 `9cc9b3147cb10d8dd8c629f5c07e19c2e01123a1647ac2cc66f9c3c47306bff8` ; aucun travail non commité ; arbre 168005a4.

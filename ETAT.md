@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 12/11/2026 à 02:44 UTC par pilotage-sync.sh : « D75 : décision seule seulement sur source officielle sûre ».
+Mis à jour le 12/11/2026 à 03:05 UTC par pilotage-sync.sh : « 19 réponses de Claude écrites, textes de l'éditeur supprimés ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -101,23 +101,12 @@ d8d2ee3 Contrôle les seuils de l'analyse statique par ses paramètres effectifs
 
 ## Dernière course de la chaîne
 
-Course `wf_1d467e9e-93e`, étapes commencées (de la plus ancienne à la plus récente) :
+Course `wf_80d54011-fcf`, étapes commencées (de la plus ancienne à la plus récente) :
 
 ```
-CALC:implementation
-CALC:implementation-2
-CALC:relecture1
-CALC:relecture2
-CALC:correction
-CALC:poussee
-CALC:notes
-FI:implementation
-FI:implementation-2
-FI:relecture1
-FI:relecture2
-FI:correction
-FI:poussee
-FI:notes
-AUD:implementation
-AUD:implementation-2
+ecrire:pro
+ecrire:onglet3-decisions
+ecrire:onglet1
+ecrire:notes
+controle
 ```

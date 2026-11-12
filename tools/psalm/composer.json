@@ -15,7 +15,7 @@
             "block-insecure": true
         },
         "platform": {
-            "php": "8.3.16"
+            "php": "8.5.0"
         },
         "platform-check": false
     },

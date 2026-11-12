@@ -159,7 +159,7 @@ class AppServiceProvider extends ServiceProvider
 
         foreach (self::PILOTES_REFUSES as $pilote) {
             Connection::resolverFor($pilote, static fn (mixed $pdo, string $base, string $prefixe, array $configuration): never => throw new RuntimeException(
-                'PILIQI ne fonctionne qu\'avec PostgreSQL (17 ou 18) : la connexion « '.ValeursLues::texteDe($configuration, 'name')." » utilise le pilote « {$pilote} ». "
+                'PILIQI ne fonctionne qu\'avec PostgreSQL 18 : la connexion « '.ValeursLues::texteDe($configuration, 'name')." » utilise le pilote « {$pilote} ». "
                 .'Réglez DB_CONNECTION=pgsql et les autres variables DB_ de .env (voir le README), videz la configuration en cache (php artisan config:clear), puis recommencez.',
             ));
         }

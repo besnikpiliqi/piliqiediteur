@@ -243,7 +243,7 @@ class OutillageTest extends TestCase
      */
     private static function refusDuMoteur(string $connexion, string $pilote): string
     {
-        return "PILIQI ne fonctionne qu'avec PostgreSQL (17 ou 18) : la connexion « {$connexion} » utilise le pilote « {$pilote} ». "
+        return "PILIQI ne fonctionne qu'avec PostgreSQL 18 : la connexion « {$connexion} » utilise le pilote « {$pilote} ». "
             .'Réglez DB_CONNECTION=pgsql et les autres variables DB_ de .env (voir le README), videz la configuration en cache (php artisan config:clear), puis recommencez.';
     }
 

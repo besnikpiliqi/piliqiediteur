@@ -23,14 +23,15 @@ return [
     | Database Connections
     |--------------------------------------------------------------------------
     |
-    | PostgreSQL (17 ou 18), seul moteur de PILIQI, en production, en
-    | développement et pour les tests (décision de l'éditeur du
-    | 08/11/2026). La base est créée en UTF8 avec la collation déterministe
-    | C.UTF-8 : l'ordre binaire ne change jamais l'ordre d'un contenu signé,
-    | et lower() met en minuscules toutes les lettres, pas seulement celles
-    | de l'ASCII. Les recherches ignorent la casse et les accents par la
-    | fonction sans_casse_ni_accents(), créée par une migration (voir
-    | RechercheSansAccents). La session est en UTC, comme l'application.
+    | PostgreSQL 18, seul moteur et seule version de PILIQI, en production,
+    | en développement et pour les tests (décisions de l'éditeur du
+    | 08/11/2026 et du 12/11/2026). La base est créée en UTF8 avec la
+    | collation déterministe C.UTF-8 : l'ordre binaire ne change jamais
+    | l'ordre d'un contenu signé, et lower() met en minuscules toutes les
+    | lettres, pas seulement celles de l'ASCII. Les recherches ignorent la
+    | casse et les accents par la fonction sans_casse_ni_accents(), créée par
+    | une migration (voir RechercheSansAccents). La session est en UTC,
+    | comme l'application.
     |
     */
 

@@ -62,9 +62,9 @@ class ErreursOpenSslTest extends TestCase
 
         $this->assertStringStartsWith('Erreurs d\'OpenSSL : error:', $detail);
         $this->assertStringEndsWith('. Sous Windows, PHP ne trouve pas le fichier openssl.cnf tant que la variable d\'environnement OPENSSL_CONF ne le désigne pas : '
-            .'réglez-la sur le fichier openssl.cnf de PHP (par exemple, dans une invite de commandes : setx OPENSSL_CONF "C:\xampp\php\extras\ssl\openssl.cnf"), '
-            .'puis fermez et rouvrez le terminal, l\'éditeur de code qui l\'ouvre et le XAMPP Control Panel, qui ne voient la variable qu\'à leur lancement, et redémarrez Apache s\'il sert l\'application. '
-            .'Si Apache tourne comme service Windows, réglez-la pour tout le système (setx /M OPENSSL_CONF "C:\xampp\php\extras\ssl\openssl.cnf", dans une invite de commandes lancée en administrateur), puis redémarrez Windows : un service du compte Système local, comme celui qu\'installe XAMPP, ne voit ni une variable d\'utilisateur ni une variable du système réglée après le démarrage. '
+            .'réglez-la sur le fichier openssl.cnf de PHP, extras\\ssl\\openssl.cnf dans le dossier de PHP (dans une invite de commandes : setx OPENSSL_CONF "<dossier de PHP>\\extras\\ssl\\openssl.cnf"), '
+            .'puis fermez et rouvrez le terminal et l\'éditeur de code qui l\'ouvre, qui ne voient la variable qu\'à leur lancement. '
+            .'Si le programme qui sert l\'application tourne comme service Windows, réglez-la pour tout le système (setx /M OPENSSL_CONF "<dossier de PHP>\\extras\\ssl\\openssl.cnf", dans une invite de commandes lancée en administrateur), puis redémarrez Windows : un service du compte Système local ne voit ni une variable d\'utilisateur ni une variable du système réglée après le démarrage. '
             .'Relancez ensuite php artisan caisse:diagnostiquer.', $detail);
     }
 

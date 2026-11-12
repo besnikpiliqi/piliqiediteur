@@ -39,7 +39,7 @@ jobs:
       - name: Setup PHP
         uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
         with:
-          php-version: 8.3
+          php-version: 8.5
           extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, pdo_pgsql, sockets, gd, sodium, :pdo_sqlite, :sqlite3
           coverage: none
 
@@ -76,7 +76,7 @@ jobs:
       - name: Setup PHP
         uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
         with:
-          php-version: 8.3
+          php-version: 8.5
           extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, pdo_pgsql, sockets, gd, sodium, :pdo_sqlite, :sqlite3
           coverage: none
 
@@ -122,7 +122,7 @@ jobs:
       - name: Setup PHP
         uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
         with:
-          php-version: 8.3
+          php-version: 8.5
           extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, pdo_pgsql, sockets, gd, sodium, :pdo_sqlite, :sqlite3
           coverage: none
 
@@ -164,7 +164,7 @@ jobs:
       - name: Setup PHP
         uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
         with:
-          php-version: 8.3
+          php-version: 8.5
           extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, pdo_pgsql, sockets, gd, sodium, :pdo_sqlite, :sqlite3
           coverage: none
 
@@ -205,7 +205,7 @@ jobs:
 
     services:
       postgres:
-        image: postgres:17
+        image: postgres:18
         env:
           POSTGRES_PASSWORD: postgres
           POSTGRES_INITDB_ARGS: --encoding=UTF8 --locale=C.UTF-8
@@ -249,7 +249,7 @@ jobs:
       - name: Setup PHP
         uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
         with:
-          php-version: 8.3
+          php-version: 8.5
           extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, pdo_pgsql, sockets, gd, sodium, :pdo_sqlite, :sqlite3
           coverage: pcov
 
@@ -313,11 +313,12 @@ jobs:
           if-no-files-found: ignore
 
   # La suite complète, tests en navigateur compris, sur PostgreSQL, le seul
-  # moteur de PILIQI (décision de l'éditeur du 08/11/2026), dans ses deux
-  # versions de production (17 et 18) et pour chaque version de PHP : base
-  # en UTF8 et collation déterministe C.UTF-8 (POSTGRES_INITDB_ARGS), comme
-  # en production. Les extensions SQLite de PHP sont désactivées : rien ne
-  # s'appuie sur elles. Le compte des tests n'est pas superutilisateur : il
+  # moteur de PILIQI (décision de l'éditeur du 08/11/2026), dans les seules
+  # versions que vise PILIQI, PHP 8.5 et PostgreSQL 18 (décision de
+  # l'éditeur du 12/11/2026, en développement, en test, en CI et en
+  # production) : base en UTF8 et collation déterministe C.UTF-8
+  # (POSTGRES_INITDB_ARGS), comme en production. Les extensions SQLite de
+  # PHP sont désactivées : rien ne s'appuie sur elles. Le compte des tests n'est pas superutilisateur : il
   # crée seulement les bases des processus parallèles (CREATEDB), puis
   # leurs tables et leurs fonctions, comme le propriétaire de la base de
   # production.
@@ -327,8 +328,8 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        php: [8.3, 8.4, 8.5]
-        postgres: [17, 18]
+        php: [8.5]
+        postgres: [18]
 
     name: PHP ${{ matrix.php }}, PostgreSQL ${{ matrix.postgres }}
 
@@ -439,11 +440,11 @@ jobs:
   semis:
     runs-on: ubuntu-24.04
 
-    name: Semis complet (PHP 8.3, PostgreSQL 17)
+    name: Semis complet (PHP 8.5, PostgreSQL 18)
 
     services:
       postgres:
-        image: postgres:17
+        image: postgres:18
         env:
           POSTGRES_PASSWORD: postgres
           POSTGRES_INITDB_ARGS: --encoding=UTF8 --locale=C.UTF-8
@@ -481,7 +482,7 @@ jobs:
       - name: Setup PHP
         uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
         with:
-          php-version: 8.3
+          php-version: 8.5
           extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, pdo_pgsql, sockets, gd, sodium, :pdo_sqlite, :sqlite3
           coverage: none
 
@@ -520,11 +521,11 @@ jobs:
   copies:
     runs-on: ubuntu-24.04
 
-    name: Bases modèles de la démonstration (PHP 8.3, PostgreSQL 17)
+    name: Bases modèles de la démonstration (PHP 8.5, PostgreSQL 18)
 
     services:
       postgres:
-        image: postgres:17
+        image: postgres:18
         env:
           POSTGRES_PASSWORD: postgres
           POSTGRES_INITDB_ARGS: --encoding=UTF8 --locale=C.UTF-8
@@ -562,7 +563,7 @@ jobs:
       - name: Setup PHP
         uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
         with:
-          php-version: 8.3
+          php-version: 8.5
           extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, pdo_pgsql, sockets, gd, sodium, :pdo_sqlite, :sqlite3
           coverage: none
 

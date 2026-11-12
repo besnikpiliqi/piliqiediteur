@@ -5,7 +5,7 @@
     "description": "Logiciel de gestion vendu en SaaS aux magasins : devis, factures, avoirs, paiements, caisse et clôtures, achats et stock, e-reporting.",
     "license": "proprietary",
     "require": {
-        "php": "^8.3",
+        "php": "^8.5",
         "ext-gd": "*",
         "ext-openssl": "*",
         "ext-pdo_pgsql": "*",

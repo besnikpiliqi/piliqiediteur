@@ -1976,3 +1976,11 @@ mais tu va decider par rapport à tes recherche sur les lois et les regles de l 
 
 T105 tu me dit de quoi s’agissait
 
+## 209. 2026-11-12 13:55 UTC
+
+« a » mais tout ce genre de choses par rapport aux prix qui change avec la multiplication, je veux que tu me mettes aussi dans la fiche à confirmer avec expert comptable mais toi tu aplique «a » mais juste pour savoir tu me mets dans la fiche pour comptable
+
+
+
+Continue
+

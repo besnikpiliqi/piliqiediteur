@@ -28,8 +28,8 @@ use LogicException;
  * RegularisationDUneFacture) : émise par un compte autorisé à créer et
  * émettre une facture dans ce magasin à ce moment (un responsable, un
  * vendeur, un administrateur ou un observateur à qui la vente est cochée),
- * jamais par le propriétaire, qui ne vend jamais, ni par un compte d'un
- * cabinet lié : ni l'un ni l'autre n'a ces autorisations (voir
+ * jamais par le propriétaire, qui ne vend dans aucun magasin réel, ni par
+ * un compte d'un cabinet lié : ni l'un ni l'autre n'y a ces autorisations (voir
  * PermissionRegistry::deVente()), et la base refuse une facture à leur nom
  * (voir GardesDeLaVente).
  *

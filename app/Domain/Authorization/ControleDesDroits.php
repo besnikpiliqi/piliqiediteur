@@ -31,8 +31,10 @@ use App\Models\User;
  * pour le propriétaire : les règles qui valent pour tous (lecture seule,
  * validation de la société, document émis, journée clôturée) s'appliquent
  * à lui comme aux autres, et c'est par ses autorisations, toutes sans case
- * sauf celles de la vente, qu'il n'a jamais (voir
- * PermissionRegistry::duProprietaire()), qu'il passe les policies.
+ * sauf celles de la vente, qu'il n'a dans aucun magasin réel (voir
+ * PermissionRegistry::duProprietaire()), seulement dans le magasin de
+ * démonstration (voir PermissionRegistry::duProprietaireEnDemonstration()),
+ * qu'il passe les policies.
  *
  * Un compte qui ne peut pas agir n'a aucun droit, où que ce soit :
  * suspendu ou retiré (voir User::peutAgir()).
@@ -73,8 +75,9 @@ use App\Models\User;
  * Dans un magasin actif, il répond pour toute autorisation de
  * PermissionRegistry : seulement dans un magasin de la société du compte
  * (jamais ailleurs, propriétaire compris) ; oui s'il l'a dans ce magasin
- * (voir User::autorisationsDans() : toutes sauf celles de la vente pour le
- * propriétaire, toutes pour un responsable du magasin, ses cases pour
+ * (voir User::autorisationsDans() : pour le propriétaire, toutes sauf
+ * celles de la vente dans un magasin réel, toutes dans le magasin de
+ * démonstration ; toutes pour un responsable du magasin ; ses cases pour
  * tout autre compte), sinon la question passe aux policies.
  * Quel que soit le compte, il refuse dans ce magasin :
  * - en lecture seule (voir Magasin::estEnLectureSeule()), tout ce qui n'y

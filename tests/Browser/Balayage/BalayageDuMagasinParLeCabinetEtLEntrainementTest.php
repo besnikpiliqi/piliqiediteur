@@ -38,7 +38,7 @@ test('le propriétaire d’une société qui attend son code ouvre chaque page e
 
     $pages = $this->balayer($onglet, $magasin, [$magasin], __FILE__);
 
-    expect($pages)->toContain($magasin.'/equipe')->not->toContain($magasin.'/caisse');
+    expect($pages)->toContain($magasin.'/equipe', $magasin.'/caisse');
 });
 
 test('le responsable d’entraînement ouvre chaque page et chaque action du magasin de démonstration sans erreur', function () {

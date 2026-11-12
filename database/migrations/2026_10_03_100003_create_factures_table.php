@@ -7,9 +7,10 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * Les factures et les tickets de caisse d'un magasin. Le propriétaire, qui
- * ne vend jamais, n'en crée aucun : la base refuse une facture créée à son
- * nom, qu'on lui attribue ensuite ou qu'on émet à son nom (voir
+ * Les factures et les tickets de caisse d'un magasin. Le propriétaire n'en
+ * crée aucun dans un magasin réel, où il ne vend jamais : la base y refuse
+ * une facture créée à son nom, qu'on lui attribue ensuite ou qu'on émet à
+ * son nom ; il ne vend que dans le magasin de démonstration (voir
  * GardesDeLaVente). Une facture rectificative, après la correction du
  * SIREN de la société par l'éditeur, désigne la facture de son magasin
  * qu'elle rectifie, et une facture n'en a qu'une (voir

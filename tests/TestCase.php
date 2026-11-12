@@ -1415,7 +1415,8 @@ abstract class TestCase extends BaseTestCase
     /**
      * Le responsable de test du magasin : un membre responsable de ce seul
      * magasin, qui y a toutes les autorisations sans case, vente comprise,
-     * que le propriétaire n'a jamais. Créé à la première demande par la
+     * que le propriétaire n'a que dans le magasin de démonstration. Créé à
+     * la première demande par la
      * fabrique (voir UserFactory::responsableDeTest()), sans action, donc
      * sans rien inscrire au registre fiscal, au journal des événements ni
      * au journal d'audit : il se crée à toute heure, même après le dernier

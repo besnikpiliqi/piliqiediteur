@@ -475,12 +475,12 @@ class PanneauSocieteTest extends TestCase
             ->get($tableauDeBord)
             ->assertOk()
             ->assertSeeText('Lyon Centre')
-            ->assertDontSeeText(['Vos premières étapes', 'Paris Bastille', '2 magasins', 'en plus du vôtre', 'Ouvert : votre équipe']);
+            ->assertDontSeeText(['Vos premières étapes', 'Paris Bastille', '2 magasins', 'en plus du vôtre', 'Ouvert : vous vous y entraînez']);
         $this->flushSession();
         $this->actingAs($this->proprietaireDe($lyon))
             ->get($tableauDeBord)
             ->assertOk()
-            ->assertSeeText(['Vos premières étapes', '2 magasins', '3 comptes en plus du vôtre', 'Ouvert : votre équipe']);
+            ->assertSeeText(['Vos premières étapes', '2 magasins', '3 comptes en plus du vôtre', 'Ouvert : vous vous y entraînez']);
     }
 
     /**

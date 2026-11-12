@@ -55,35 +55,39 @@ class FonctionsDeGardeTest extends TestCase
 
     /**
      * Une table temporaire users vide ne fait pas accepter un paiement au
-     * nom du propriétaire, qui ne vend jamais : la garde lit toujours la
-     * table des comptes. Le même paiement est refusé sans table
-     * temporaire.
+     * nom du propriétaire dans un magasin réel, où il ne vend jamais : la
+     * garde lit toujours la table des comptes. Le même paiement est refusé
+     * sans table temporaire.
      */
     public function test_une_table_temporaire_des_comptes_ne_trompe_pas_la_garde_de_la_vente(): void
     {
-        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
-        $magasin = $this->ouvrirUneSociete();
-        app(TenantContext::class)->set($magasin);
-        // Lus avant : sous la table temporaire, toute lecture des comptes
-        // par l'application la lirait elle aussi.
-        $client = Client::factory()->create()->id;
-        $proprietaire = $this->proprietaireDe($magasin)->id;
-        $paiement = fn () => DB::table('paiements')->insert([
-            'magasin_id' => $magasin->id,
-            'client_id' => $client,
-            'mode_paiement' => 'especes',
-            'montant' => '12.00',
-            'recu_le' => '2026-10-09',
-            'cree_par' => $proprietaire,
-            'created_at' => self::enUtc('2026-10-09 08:00:00'),
-            'updated_at' => self::enUtc('2026-10-09 08:00:00'),
-        ]);
+        $paiement = $this->paiementDuProprietaireDansUnMagasinReel();
 
         $sansOmbre = $this->ecrireDansUnPointDeSauvegarde($paiement);
         $avecOmbre = $this->ecrireDansUnPointDeSauvegarde($paiement, 'CREATE TEMP TABLE users (id bigint, role_societe varchar(30))');
 
         $this->assertStringContainsString(GardesDeLaVente::MESSAGE, (string) $sansOmbre?->getMessage());
         $this->assertSame('P0001', $avecOmbre?->errorInfo[0], 'Une table temporaire users fait accepter un paiement au nom du propriétaire.');
+        $this->assertStringContainsString(GardesDeLaVente::MESSAGE, $avecOmbre->getMessage());
+        $this->assertSame(0, DB::table('paiements')->count());
+    }
+
+    /**
+     * Une table temporaire magasins qui fait passer chaque magasin pour un
+     * magasin de démonstration, le seul où le propriétaire vend, ne fait pas
+     * accepter un paiement à son nom dans un magasin réel : la garde lit
+     * toujours la table des magasins. Le même paiement est refusé sans
+     * table temporaire.
+     */
+    public function test_une_table_temporaire_des_magasins_ne_trompe_pas_la_garde_de_la_vente(): void
+    {
+        $paiement = $this->paiementDuProprietaireDansUnMagasinReel();
+
+        $sansOmbre = $this->ecrireDansUnPointDeSauvegarde($paiement);
+        $avecOmbre = $this->ecrireDansUnPointDeSauvegarde($paiement, 'CREATE TEMP TABLE magasins AS SELECT id, TRUE AS est_demonstration, societe_id FROM public.magasins');
+
+        $this->assertStringContainsString(GardesDeLaVente::MESSAGE, (string) $sansOmbre?->getMessage());
+        $this->assertSame('P0001', $avecOmbre?->errorInfo[0], 'Une table temporaire magasins fait accepter un paiement au nom du propriétaire.');
         $this->assertStringContainsString(GardesDeLaVente::MESSAGE, $avecOmbre->getMessage());
         $this->assertSame(0, DB::table('paiements')->count());
     }
@@ -110,6 +114,33 @@ class FonctionsDeGardeTest extends TestCase
         $this->assertSame('P0001', $avecOmbre?->errorInfo[0], 'Une table temporaire sequences_documents fait changer le territoire d\'un magasin qui a numéroté.');
         $this->assertStringContainsString('magasins.territoire : valeur figée, changement refusé', $avecOmbre->getMessage());
         $this->assertSame($magasin->territoire?->value, DB::table('magasins')->where('id', $magasin->id)->value('territoire'));
+    }
+
+    /**
+     * Un paiement de 12,00 € écrit directement en base au nom du
+     * propriétaire, dans le magasin réel d'une société ouverte, magasin
+     * actif.
+     */
+    private function paiementDuProprietaireDansUnMagasinReel(): Closure
+    {
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
+        $magasin = $this->ouvrirUneSociete();
+        app(TenantContext::class)->set($magasin);
+        // Lus avant : sous la table temporaire, toute lecture des comptes
+        // ou des magasins par l'application la lirait elle aussi.
+        $client = Client::factory()->create()->id;
+        $proprietaire = $this->proprietaireDe($magasin)->id;
+
+        return fn () => DB::table('paiements')->insert([
+            'magasin_id' => $magasin->id,
+            'client_id' => $client,
+            'mode_paiement' => 'especes',
+            'montant' => '12.00',
+            'recu_le' => '2026-10-09',
+            'cree_par' => $proprietaire,
+            'created_at' => self::enUtc('2026-10-09 08:00:00'),
+            'updated_at' => self::enUtc('2026-10-09 08:00:00'),
+        ]);
     }
 
     /**

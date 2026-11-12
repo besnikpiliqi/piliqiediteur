@@ -44,8 +44,9 @@ use Illuminate\Support\Str;
  * que par le lien de son cabinet (voir AccesDesCabinets) :
  * - son propriétaire, qui supervise et contrôle : tous les droits dans la
  *   société et dans chacun de ses magasins, sans case ni affectation, sauf
- *   celui de vendre, qu'il n'a jamais (voir
- *   PermissionRegistry::duProprietaire()) ;
+ *   celui de vendre, qu'il n'a dans aucun magasin réel (voir
+ *   PermissionRegistry::duProprietaire()), seulement dans le magasin de
+ *   démonstration (voir PermissionRegistry::duProprietaireEnDemonstration()) ;
  * - un administrateur, avec ses autorisations de société et sa portée
  *   (tous les magasins ou une sélection : ses affectations sans rôle, qui
  *   portent ses cases) ;
@@ -716,9 +717,10 @@ class User extends Authenticatable implements FilamentUser, HasTenants
      * y encaisse-t-il (paiement.creer) ? Lu sur ses autorisations dans ce
      * magasin (voir autorisationsDans()), pas sur le droit d'agir du
      * moment : dans un magasin en lecture seule, où plus rien ne se vend,
-     * chacun ferme toujours sa caisse et consulte ses relevés. Jamais le
-     * propriétaire, qui ne vend pas ; un administrateur seulement quand le
-     * propriétaire lui a coché la vente.
+     * chacun ferme toujours sa caisse et consulte ses relevés. Le
+     * propriétaire seulement dans le magasin de démonstration, le seul où
+     * il vend ; un administrateur seulement quand le propriétaire lui a
+     * coché la vente.
      */
     public function tientUneCaisseDans(Magasin $magasin): bool
     {
@@ -824,9 +826,11 @@ class User extends Authenticatable implements FilamentUser, HasTenants
      *   accorde au cabinet (voir AccesDesCabinets::autorisationsParClient()),
      *   sans regarder si le cabinet est vérifié, ce que contrôlent
      *   peutOuvrir() et ControleDesDroits, comme la lecture seule ;
-     * - le propriétaire : toutes sauf celles de la vente (voir
-     *   PermissionRegistry::duProprietaire()), dans chaque magasin,
-     *   démonstration comprise : il ne vend jamais ;
+     * - le propriétaire : toutes sauf celles de la vente dans chaque
+     *   magasin réel, où il ne vend jamais (voir
+     *   PermissionRegistry::duProprietaire()), et toutes, vente comprise,
+     *   dans le magasin de démonstration (voir
+     *   PermissionRegistry::duProprietaireEnDemonstration()) ;
      * - un administrateur : les cases de son affectation à ce magasin, ou
      *   de son affectation à tous les magasins ; rien s'il a les deux
      *   sortes d'affectations ;
@@ -847,7 +851,9 @@ class User extends Authenticatable implements FilamentUser, HasTenants
         $duType = PermissionRegistry::pourLeType($magasin->societe->type_activite);
 
         if ($this->estProprietaire()) {
-            return PermissionRegistry::duProprietaire($magasin->societe->type_activite);
+            return $magasin->est_demonstration
+                ? PermissionRegistry::duProprietaireEnDemonstration($magasin->societe->type_activite)
+                : PermissionRegistry::duProprietaire($magasin->societe->type_activite);
         }
 
         $affectation = $this->affectationQuiVautDans($magasin);

@@ -62,8 +62,9 @@ class FacturePolicy extends MagasinPolicy
     /**
      * « Émettre et encaisser » un brouillon fait hors de la caisse (R1) :
      * pouvoir l'émettre et enregistrer un encaissement dans ce magasin,
-     * comme les deux gestes qu'il réunit. Jamais le propriétaire, qui ne
-     * vend jamais, ni un compte du cabinet lié, qui n'a aucune de ces
+     * comme les deux gestes qu'il réunit. Jamais le propriétaire dans un
+     * magasin réel, où il ne vend jamais (il le fait dans le magasin de
+     * démonstration), ni un compte du cabinet lié, qui n'a aucune de ces
      * autorisations.
      */
     public function emettreEtEncaisser(User $user, Facture $facture): bool
@@ -78,7 +79,7 @@ class FacturePolicy extends MagasinPolicy
      * AjouterPreuveOperationAction) ou noter le bordereau de détaxe d'un
      * ticket (voir NoterBordereauDetaxeAction) : ce qui suit une vente
      * émise, hors du document signé, à qui est autorisé à noter les
-     * preuves (le propriétaire compris, qui ne vend pas), sur une facture
+     * preuves (le propriétaire compris, même là où il ne vend pas), sur une facture
      * qu'il voit.
      */
     public function justifier(User $user, Facture $facture): bool

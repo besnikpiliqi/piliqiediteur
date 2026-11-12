@@ -42,7 +42,10 @@ use Illuminate\Support\Facades\DB;
  * ses séries et ses clôtures ; chaque ouverture ouvre une période
  * d'activité et s'inscrit à son journal des événements (JET 100) ; à sa
  * création, les droits implicites du propriétaire et des administrateurs
- * de tous les magasins dans ce magasin s'y inscrivent aussi (JET 130).
+ * de tous les magasins dans ce magasin s'y inscrivent aussi (JET 130). Le
+ * propriétaire y a toutes les autorisations, celles de la vente comprises,
+ * et s'y entraîne à tout comme un responsable : c'est le seul magasin où il
+ * vend (voir PermissionRegistry::duProprietaireEnDemonstration()).
  *
  * Déjà ouvert, il est rendu tel quel ; fermé après 30 jours sans opération
  * (voir app:fermer-demonstrations-inactives), il se rouvre, avec ses

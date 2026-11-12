@@ -23,7 +23,9 @@ return new class extends Migration
             $table->string('code', 10);
             // Le magasin de démonstration de la société, au plus un (voir
             // OuvrirLaDemonstrationAction) : son identité est fictive, sans
-            // SIRET, et rien n'en passe aux magasins réels.
+            // SIRET, et rien n'en passe aux magasins réels. Le propriétaire
+            // y vend, et nulle part ailleurs (voir GardesDeLaVente) : la
+            // base refuse qu'un magasin le devienne ou cesse de l'être.
             $table->boolean('est_demonstration')->default(false);
             // L'établissement : son SIRET, que les documents émis gardent
             // signé, ne change qu'avec le registre des SIRET réservés
@@ -164,6 +166,11 @@ return new class extends Migration
         // d'effacer ou de changer sa libération.
         DeclencheursDeProtection::colonneFigee('magasins', 'siret_libere_le');
 
+        // Un magasin réel ne devient jamais le magasin de démonstration, ni
+        // l'inverse : la garde de la vente du propriétaire en dépend (voir
+        // GardesDeLaVente).
+        DeclencheursDeProtection::colonneFigee('magasins', 'est_demonstration');
+
         // Un cabinet d'expertise comptable n'a aucun magasin, démonstration
         // comprise (voir TypeDActivite::aDesMagasins()).
         GardesDesTypesDActivite::poser(GardesDesTypesDActivite::MAGASINS);
@@ -176,5 +183,6 @@ return new class extends Migration
         DeclencheursDeProtection::retirer('magasins');
         DeclencheursDeProtection::retirerLaColonneFigee('magasins', 'territoire');
         DeclencheursDeProtection::retirerLaColonneFigee('magasins', 'siret_libere_le');
+        DeclencheursDeProtection::retirerLaColonneFigee('magasins', 'est_demonstration');
     }
 };

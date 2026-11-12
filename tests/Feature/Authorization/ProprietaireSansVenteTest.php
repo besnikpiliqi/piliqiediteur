@@ -42,7 +42,6 @@ use App\Domain\Facturation\Services\PartDeReglement;
 use App\Domain\Facturation\Services\VerificateurCaissesPersonnelles;
 use App\Domain\Facturation\Support\GardesDeLaVente;
 use App\Domain\Tenancy\Actions\CreerAdministrateurAction;
-use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Magasin;
@@ -68,14 +67,15 @@ use Tests\TestCase;
 
 /**
  * Le propriétaire supervise et contrôle : il a tous les droits dans sa
- * société et dans chacun de ses magasins, sauf celui de vendre (voir
- * PermissionRegistry::deVente() et duProprietaire()), pas même dans le
- * magasin de démonstration. Il ne crée ni n'émet aucun ticket ni aucune
- * facture, n'enregistre aucun encaissement, n'utilise aucun bon d'avoir,
- * n'ouvre pas la caisse et n'a pas de caisse personnelle, ni par l'écran,
- * ni par Livewire, ni par une action appelée directement, ni par une
- * demande fabriquée ; la base refuse une vente ou un encaissement à son
- * nom (voir GardesDeLaVente). Il garde la consultation, la clôture du
+ * société et dans chacun de ses magasins réels, sauf celui de vendre (voir
+ * PermissionRegistry::deVente() et duProprietaire()). Il n'y crée ni n'y
+ * émet aucun ticket ni aucune facture, n'y enregistre aucun encaissement,
+ * n'y utilise aucun bon d'avoir, n'y ouvre pas la caisse et n'y a pas de
+ * caisse personnelle, ni par l'écran, ni par Livewire, ni par une action
+ * appelée directement, ni par une demande fabriquée ; la base y refuse une
+ * vente ou un encaissement à son nom (voir GardesDeLaVente). Seul le
+ * magasin de démonstration de sa société fait exception (voir
+ * ProprietaireEnDemonstrationTest). Il garde la consultation, la clôture du
  * jour, la fermeture de la caisse d'un vendeur, la contre-passation,
  * l'envoi, les avoirs et les devis (réponse (a) à Q-V1), et note les
  * preuves d'exonération et les bordereaux de détaxe (réponse (b) à Q-V2).
@@ -84,14 +84,14 @@ class ProprietaireSansVenteTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_le_proprietaire_n_a_aucune_autorisation_de_vente_dans_aucun_magasin_ni_dans_la_demonstration(): void
+    public function test_le_proprietaire_n_a_aucune_autorisation_de_vente_dans_aucun_de_ses_magasins_reels(): void
     {
         $lyon = $this->ouvrirUneSociete(['nom' => 'Lyon']);
         $villeurbanne = $this->ouvrirUnAutreMagasin($lyon, ['nom' => 'Villeurbanne']);
         $enVerification = $this->inscrireUneSociete();
-        $demonstration = app(OuvrirLaDemonstrationAction::class)->handle($enVerification->proprietaire, $enVerification);
+        $pasEncoreVerifie = $this->creerLeMagasinDuSiege($enVerification, 'Pas encore vérifié');
 
-        foreach ([[$lyon, $this->proprietaireDe($lyon)], [$villeurbanne, $this->proprietaireDe($lyon)], [$demonstration, $enVerification->proprietaire]] as [$magasin, $proprietaire]) {
+        foreach ([[$lyon, $this->proprietaireDe($lyon)], [$villeurbanne, $this->proprietaireDe($lyon)], [$pasEncoreVerifie, $enVerification->proprietaire]] as [$magasin, $proprietaire]) {
             $this->assertEqualsCanonicalizing(PermissionRegistry::duProprietaire(TypeDActivite::Commerce), $proprietaire->autorisationsDans($magasin), $magasin->nom);
             app(TenantContext::class)->runAs($magasin, function () use ($magasin, $proprietaire): void {
                 foreach (PermissionRegistry::deVente() as $autorisation) {

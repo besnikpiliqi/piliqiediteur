@@ -70,7 +70,8 @@ use SensitiveParameter;
  * le nouveau comme lui s'il le redevient signe les attestations à la main
  * (voir User::signeLesAttestationsDansLApplication()). Le changement
  * s'inscrit au JET 130 de chaque magasin et au journal d'audit (ProprieteTransferee,
- * voir JournalDesDroits), et chacun des deux en est prévenu. Le nouveau propriétaire ne vend plus : une caisse qu'il avait
+ * voir JournalDesDroits), et chacun des deux en est prévenu. Le nouveau
+ * propriétaire ne vend plus dans les magasins réels : une caisse qu'il y avait
  * ouverte comme administrateur se ferme comme celle de tout vendeur, par
  * lui-même (voir ClotureCaissePersonnellePolicy::fermer()), pour lui par
  * qui peut clôturer la journée, ou d'office par la clôture du jour ; tant

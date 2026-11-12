@@ -4,7 +4,6 @@ namespace Tests\Feature\Societe;
 
 use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Authorization\AutorisationsSociete;
-use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
@@ -182,13 +181,14 @@ class MagasinDeDemonstrationTest extends TestCase
     }
 
     /**
-     * Le propriétaire ne vend pas, pas même dans le magasin de
-     * démonstration : il n'y a ni caisse ni autorisation de vente, l'action
-     * le refuse et rien ne s'écrit ; la fenêtre qui ouvre la démonstration
-     * le lui dit et l'invite à y créer des comptes d'entraînement pour
-     * essayer la caisse, avec lesquels la vente passe.
+     * Le propriétaire vend dans le magasin de démonstration, le seul où il
+     * vend (décision de l'éditeur du 12/11/2026) : il y a la caisse et
+     * toutes les autorisations, vente comprise, et sa vente passe ; la
+     * fenêtre qui ouvre la démonstration le lui dit et l'invite à y créer
+     * des comptes d'entraînement pour faire essayer la caisse à son équipe,
+     * avec lesquels la vente passe aussi.
      */
-    public function test_le_proprietaire_ne_vend_pas_dans_la_demonstration_et_la_fenetre_le_dit(): void
+    public function test_le_proprietaire_vend_dans_la_demonstration_et_la_fenetre_le_dit(): void
     {
         $societe = $this->inscrireUneSociete();
         $proprietaire = $societe->proprietaire;
@@ -196,20 +196,20 @@ class MagasinDeDemonstrationTest extends TestCase
 
         Livewire::test(TableauDeBord::class)
             ->mountAction('ouvrirLaDemonstration')
-            ->assertSee('votre équipe y vend, encaisse et clôture comme pour de vrai ; vous-même ne vendez pas : pour essayer la caisse, créez-y des comptes d\'entraînement : ils ne servent qu\'ici et sont retirés à la validation de votre société.')
+            ->assertSee('vous y vendez, encaissez et clôturez comme pour de vrai, ce que vous ne faites jamais dans vos magasins réels ; pour y faire essayer la caisse à votre équipe, créez-y des comptes d\'entraînement : ils ne servent qu\'ici et sont retirés à la validation de votre société.')
             ->callMountedAction();
 
         $demonstration = $societe->demonstration()->sole();
-        $this->assertSame([], array_values(array_intersect(PermissionRegistry::deVente(), $proprietaire->autorisationsDans($demonstration))));
-        $this->assertFalse($proprietaire->tientUneCaisseDans($demonstration));
+        $this->assertSame(PermissionRegistry::deVente(), array_values(array_intersect(PermissionRegistry::deVente(), $proprietaire->autorisationsDans($demonstration))));
+        $this->assertTrue($proprietaire->tientUneCaisseDans($demonstration));
         $this->dansLeMagasin($demonstration, $proprietaire);
-        $this->get(Caisse::getUrl(tenant: $demonstration))->assertForbidden();
-        $this->assertThrows(fn () => $this->vendre(), AuthorizationException::class, LecteurDesDroits::REFUS);
-        $this->assertSame(0, Facture::query()->count());
+        $this->get(Caisse::getUrl(tenant: $demonstration))->assertOk();
+        $this->assertMatchesRegularExpression('/^TK-DEMO-/', $this->vendre()->numero);
 
         $this->actingAs($this->responsableDeTest($demonstration));
 
         $this->assertMatchesRegularExpression('/^TK-DEMO-/', $this->vendre()->numero);
+        $this->assertSame(2, Facture::query()->count());
     }
 
     public function test_l_ouverture_et_la_fin_de_la_demonstration_s_inscrivent_en_jet_100_et_105(): void
@@ -719,9 +719,8 @@ class MagasinDeDemonstrationTest extends TestCase
 
     /**
      * Ouvre la démonstration de la société par son propriétaire ; son
-     * responsable de test, le compte que l'équipe y crée pour essayer la
-     * caisse (le propriétaire ne vend pas), s'y connecte : elle devient le
-     * magasin actif.
+     * responsable de test, un compte d'entraînement que l'équipe y crée pour
+     * essayer la caisse, s'y connecte : elle devient le magasin actif.
      */
     private function ouvrirLaDemonstrationEtYEntrer(Societe $societe): Magasin
     {

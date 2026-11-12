@@ -17,8 +17,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 /**
  * Relevé « Fermer ma caisse » d'UN vendeur (voir FermerSaCaisseAction) --
  * tout compte qui vend ou encaisse, les responsables et un administrateur
- * à qui le propriétaire a coché la vente compris, jamais le propriétaire,
- * qui ne vend pas --, en quatre rubriques séparées (B18) :
+ * à qui le propriétaire a coché la vente compris, et le propriétaire dans
+ * le magasin de démonstration, le seul où il vend --, en quatre rubriques
+ * séparées (B18) :
  *  - les ventes : celles qu'il a émises et qu'aucune de ses fermetures
  *    n'a encore comptées, y compris celles d'un jour précédent ; leur
  *    nombre et leur TTC vendu, avec le HT et la TVA (total_ttc, total_ht,

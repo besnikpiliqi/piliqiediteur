@@ -15,8 +15,9 @@ use App\Models\User;
  * quiconque vend (facture.create) ou encaisse (paiement.creer) la ferme et
  * consulte ses relevés (voir User::tientUneCaisseDans() et le docblock de
  * ClotureCaissePersonnelle), le responsable comme le vendeur, et un
- * administrateur à qui le propriétaire a coché la vente ; jamais le
- * propriétaire, qui ne vend pas et n'a pas de caisse. Un compte qui n'est
+ * administrateur à qui le propriétaire a coché la vente, et le
+ * propriétaire dans le magasin de démonstration, le seul où il vend et
+ * tient une caisse. Un compte qui n'est
  * plus autorisé à vendre ferme encore la caisse qu'il a laissée ouverte
  * dans le magasin (voir fermer()) : un vendeur dont on a décoché la vente,
  * un administrateur devenu propriétaire avec les ventes qu'il avait faites
@@ -113,9 +114,10 @@ class ClotureCaissePersonnellePolicy extends MagasinPolicy
      * ou qui y a créé une facture ou enregistré un paiement (un membre qui
      * n'y est plus affecté y garde sa caisse ouverte jusqu'à ce qu'elle
      * soit fermée, et un administrateur devenu propriétaire celle de ses
-     * ventes d'avant). Jamais le propriétaire pour ses seuls droits : il ne
-     * vend pas. Les factures et les paiements se lisent sous MagasinScope,
-     * dans ce seul magasin.
+     * ventes d'avant, comme le propriétaire celle de ses ventes dans le
+     * magasin de démonstration). Jamais le propriétaire pour ses seuls
+     * droits : il n'a aucune affectation. Les factures et les paiements se
+     * lisent sous MagasinScope, dans ce seul magasin.
      */
     private function tientSaCaisseDansLeMagasinActif(User $vendeur): bool
     {

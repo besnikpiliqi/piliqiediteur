@@ -249,7 +249,8 @@ class AutorisationsSelonLeTypeTest extends TestCase
      * Le journal des événements (JET 130) d'un magasin d'une société de
      * services ne liste que les autorisations du type : aux droits
      * implicites du propriétaire, inscrits à l'ouverture du magasin de
-     * démonstration, puis à la création d'un vendeur d'entraînement.
+     * démonstration, où il a toutes celles du type, vente comprise, puis à
+     * la création d'un vendeur d'entraînement.
      */
     public function test_le_jet_130_ne_liste_que_les_autorisations_du_type(): void
     {
@@ -263,7 +264,8 @@ class AutorisationsSelonLeTypeTest extends TestCase
         $duProprietaire = collect($modifications)->where('membre.id', $proprietaire->id)->last();
         $duVendeur = collect($modifications)->where('membre.id', $vendeur->id)->last();
 
-        $this->assertSame(PermissionRegistry::duProprietaire(TypeDActivite::Services), $duProprietaire['apres']['permissions']);
+        $this->assertSame(PermissionRegistry::duProprietaireEnDemonstration(TypeDActivite::Services), $duProprietaire['apres']['permissions']);
+        $this->assertSame([], array_values(array_intersect($duProprietaire['apres']['permissions'], self::ARTICLES)));
         $this->assertSame([], array_values(array_intersect($duVendeur['apres']['permissions'], self::ARTICLES)));
         $this->assertContains(PermissionRegistry::SERVICE_VIEW, $duVendeur['apres']['permissions']);
     }

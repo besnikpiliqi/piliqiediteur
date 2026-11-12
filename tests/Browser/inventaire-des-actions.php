@@ -78,6 +78,7 @@ return [
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le vendeur d’entraînement ouvre chaque page et chaque action du magasin de démonstration sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le vendeur ouvre chaque page et chaque action du magasin sans erreur',
+            'tests/Browser/Parcours/ProprietaireEnDemonstrationTest.php › le propriétaire fait une facture dans la démonstration, l’émet et l’encaisse depuis sa fiche',
             'tests/Browser/Parcours/VentesDeBoutEnBoutTest.php › le responsable fait un devis puis une facture avec la loupe des clients et « Ajouter un produit », l’émet, l’encaisse et la crédite par un avoir',
         ]],
         'filtre:avec_credit' => ['lot' => 'NAV-2', 'tests' => []],
@@ -96,10 +97,13 @@ return [
     'app/Filament/App/Livewire/SelecteurDeProduits.php' => [
         'composant' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur autorisé à vendre ouvre chaque page et chaque action du magasin sans erreur',
+            'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le propriétaire d’une société qui attend son code ouvre chaque page et chaque action du magasin de démonstration sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le responsable d’entraînement ouvre chaque page et chaque action du magasin de démonstration sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le vendeur d’entraînement ouvre chaque page et chaque action du magasin de démonstration sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le vendeur ouvre chaque page et chaque action du magasin sans erreur',
+            'tests/Browser/Parcours/ProprietaireEnDemonstrationTest.php › le propriétaire fait une facture dans la démonstration, l’émet et l’encaisse depuis sa fiche',
+            'tests/Browser/Parcours/ProprietaireEnDemonstrationTest.php › le propriétaire vend à la caisse de la démonstration, encaisse en espèces et par carte, ferme sa caisse et clôture la journée',
             'tests/Browser/Parcours/VentesDeBoutEnBoutTest.php › le responsable fait un devis puis une facture avec la loupe des clients et « Ajouter un produit », l’émet, l’encaisse et la crédite par un avoir',
             'tests/Browser/Parcours/VentesDeBoutEnBoutTest.php › le vendeur vend à la caisse au client comptoir et encaisse en espèces et par carte',
         ]],
@@ -107,6 +111,7 @@ return [
         'filtre:hors_stock' => ['lot' => 'NAV-2', 'tests' => []],
         'recherche' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur autorisé à vendre ouvre chaque page et chaque action du magasin sans erreur',
+            'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le propriétaire d’une société qui attend son code ouvre chaque page et chaque action du magasin de démonstration sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le responsable d’entraînement ouvre chaque page et chaque action du magasin de démonstration sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le vendeur d’entraînement ouvre chaque page et chaque action du magasin de démonstration sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
@@ -170,11 +175,13 @@ return [
         'action:confirmerLaVenteSansStock' => ['lot' => 'NAV-2', 'tests' => []],
         'action:retourDUnTicket' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur autorisé à vendre ouvre chaque page et chaque action du magasin sans erreur',
+            'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le propriétaire d’une société qui attend son code ouvre chaque page et chaque action du magasin de démonstration sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le responsable d’entraînement ouvre chaque page et chaque action du magasin de démonstration sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
         ]],
         'champ:client_id' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur autorisé à vendre ouvre chaque page et chaque action du magasin sans erreur',
+            'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le propriétaire d’une société qui attend son code ouvre chaque page et chaque action du magasin de démonstration sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le responsable d’entraînement ouvre chaque page et chaque action du magasin de démonstration sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le vendeur d’entraînement ouvre chaque page et chaque action du magasin de démonstration sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
@@ -182,10 +189,12 @@ return [
         ]],
         'page' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur autorisé à vendre ouvre chaque page et chaque action du magasin sans erreur',
+            'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le propriétaire d’une société qui attend son code ouvre chaque page et chaque action du magasin de démonstration sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le responsable d’entraînement ouvre chaque page et chaque action du magasin de démonstration sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le vendeur d’entraînement ouvre chaque page et chaque action du magasin de démonstration sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le vendeur ouvre chaque page et chaque action du magasin sans erreur',
+            'tests/Browser/Parcours/ProprietaireEnDemonstrationTest.php › le propriétaire vend à la caisse de la démonstration, encaisse en espèces et par carte, ferme sa caisse et clôture la journée',
             'tests/Browser/Parcours/VentesDeBoutEnBoutTest.php › le vendeur vend à la caisse au client comptoir et encaisse en espèces et par carte',
         ]],
     ],
@@ -409,6 +418,7 @@ return [
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le vendeur d’entraînement ouvre chaque page et chaque action du magasin de démonstration sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le vendeur ouvre chaque page et chaque action du magasin sans erreur',
+            'tests/Browser/Parcours/ProprietaireEnDemonstrationTest.php › le propriétaire fait une facture dans la démonstration, l’émet et l’encaisse depuis sa fiche',
             'tests/Browser/Parcours/VentesDeBoutEnBoutTest.php › le responsable fait un devis puis une facture avec la loupe des clients et « Ajouter un produit », l’émet, l’encaisse et la crédite par un avoir',
         ]],
         'action:edit' => ['lot' => 'NAV-3', 'tests' => [
@@ -558,10 +568,12 @@ return [
         ]],
         'action:fermer_ma_caisse' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur autorisé à vendre ouvre chaque page et chaque action du magasin sans erreur',
+            'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le propriétaire d’une société qui attend son code ouvre chaque page et chaque action du magasin de démonstration sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le responsable d’entraînement ouvre chaque page et chaque action du magasin de démonstration sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le vendeur d’entraînement ouvre chaque page et chaque action du magasin de démonstration sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le vendeur ouvre chaque page et chaque action du magasin sans erreur',
+            'tests/Browser/Parcours/ProprietaireEnDemonstrationTest.php › le propriétaire vend à la caisse de la démonstration, encaisse en espèces et par carte, ferme sa caisse et clôture la journée',
         ]],
         'champ:vendeur_id' => ['lot' => 'NAV-2', 'tests' => []],
         'page' => ['lot' => 'NAV-2', 'tests' => [
@@ -575,6 +587,7 @@ return [
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le vendeur d’entraînement ouvre chaque page et chaque action du magasin de démonstration sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le vendeur ouvre chaque page et chaque action du magasin sans erreur',
+            'tests/Browser/Parcours/ProprietaireEnDemonstrationTest.php › le propriétaire vend à la caisse de la démonstration, encaisse en espèces et par carte, ferme sa caisse et clôture la journée',
         ]],
     ],
     'app/Filament/App/Resources/ClotureCaisseResource.php' => [
@@ -604,6 +617,7 @@ return [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur autorisé à vendre ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur sans la vente ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
+            'tests/Browser/Parcours/ProprietaireEnDemonstrationTest.php › le propriétaire vend à la caisse de la démonstration, encaisse en espèces et par carte, ferme sa caisse et clôture la journée',
         ]],
         'page' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action du magasin sans erreur',
@@ -614,6 +628,7 @@ return [
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le propriétaire d’une société qui attend son code ouvre chaque page et chaque action du magasin de démonstration sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le responsable d’entraînement ouvre chaque page et chaque action du magasin de démonstration sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
+            'tests/Browser/Parcours/ProprietaireEnDemonstrationTest.php › le propriétaire vend à la caisse de la démonstration, encaisse en espèces et par carte, ferme sa caisse et clôture la journée',
         ]],
     ],
     'app/Filament/App/Resources/ClotureCaisseResource/Pages/ViewClotureCaisse.php' => [
@@ -696,7 +711,6 @@ return [
         'champ:client_id' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur sans la vente ouvre chaque page et chaque action du magasin sans erreur',
-            'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le propriétaire d’une société qui attend son code ouvre chaque page et chaque action du magasin de démonstration sans erreur',
             'tests/Browser/Parcours/PuHtExactTest.php › le propriétaire change le client d’un devis, et le PU HT des lignes suit',
         ]],
         'filtre:statut' => ['lot' => 'NAV-2', 'tests' => [
@@ -1268,6 +1282,7 @@ return [
         ]],
         'repeteur:lignes' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur autorisé à vendre ouvre chaque page et chaque action du magasin sans erreur',
+            'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le propriétaire d’une société qui attend son code ouvre chaque page et chaque action du magasin de démonstration sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le responsable d’entraînement ouvre chaque page et chaque action du magasin de démonstration sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le vendeur d’entraînement ouvre chaque page et chaque action du magasin de démonstration sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
@@ -1277,10 +1292,12 @@ return [
     'app/Filament/App/Resources/FactureResource/Pages/CreateFacture.php' => [
         'page' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur autorisé à vendre ouvre chaque page et chaque action du magasin sans erreur',
+            'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le propriétaire d’une société qui attend son code ouvre chaque page et chaque action du magasin de démonstration sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le responsable d’entraînement ouvre chaque page et chaque action du magasin de démonstration sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le vendeur d’entraînement ouvre chaque page et chaque action du magasin de démonstration sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le vendeur ouvre chaque page et chaque action du magasin sans erreur',
+            'tests/Browser/Parcours/ProprietaireEnDemonstrationTest.php › le propriétaire fait une facture dans la démonstration, l’émet et l’encaisse depuis sa fiche',
             'tests/Browser/Parcours/VentesDeBoutEnBoutTest.php › le responsable fait un devis puis une facture avec la loupe des clients et « Ajouter un produit », l’émet, l’encaisse et la crédite par un avoir',
         ]],
     ],
@@ -1300,6 +1317,7 @@ return [
     'app/Filament/App/Resources/FactureResource/Pages/ListFactures.php' => [
         'action:create' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur autorisé à vendre ouvre chaque page et chaque action du magasin sans erreur',
+            'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le propriétaire d’une société qui attend son code ouvre chaque page et chaque action du magasin de démonstration sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le responsable d’entraînement ouvre chaque page et chaque action du magasin de démonstration sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le vendeur d’entraînement ouvre chaque page et chaque action du magasin de démonstration sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
@@ -1334,6 +1352,7 @@ return [
         'action:emettre_et_encaisser' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Parcours/EmettreEtEncaisserTest.php › le responsable ramène à zéro la part préremplie, et « Émettre et encaisser » émet le brouillon sans l’encaisser',
             'tests/Browser/Parcours/EmettreEtEncaisserTest.php › le responsable émet et encaisse une facture en espèces et par carte depuis sa fiche, et son PDF imprime chaque règlement à gauche du Total TTC',
+            'tests/Browser/Parcours/ProprietaireEnDemonstrationTest.php › le propriétaire fait une facture dans la démonstration, l’émet et l’encaisse depuis sa fiche',
         ]],
         'action:emettreLaFactureRectificative' => ['lot' => 'NAV-2', 'tests' => []],
         'action:encaisser' => ['lot' => 'NAV-2', 'tests' => [
@@ -1374,6 +1393,7 @@ return [
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le propriétaire du cabinet lié ouvre chaque page et chaque action du magasin de son client sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le vendeur ouvre chaque page et chaque action du magasin sans erreur',
+            'tests/Browser/Parcours/ProprietaireEnDemonstrationTest.php › le propriétaire fait une facture dans la démonstration, l’émet et l’encaisse depuis sa fiche',
             'tests/Browser/Parcours/PuHtExactTest.php › le collaborateur du cabinet lié lit le PU HT tel qu’il est enregistré sur la fiche d’une facture de son client à un professionnel',
             'tests/Browser/Parcours/PuHtExactTest.php › le propriétaire lit le PU HT tel qu’il est enregistré sur la fiche d’une facture à un professionnel',
             'tests/Browser/Parcours/PuHtExactTest.php › le responsable lit le PU HT tel qu’il est enregistré sur la fiche et sur le PDF d’une facture à un professionnel, et au centime sur la fiche d’un ticket',
@@ -1551,6 +1571,7 @@ return [
         ]],
         'repeteur:allocations' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur autorisé à vendre ouvre chaque page et chaque action du magasin sans erreur',
+            'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le propriétaire d’une société qui attend son code ouvre chaque page et chaque action du magasin de démonstration sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le responsable d’entraînement ouvre chaque page et chaque action du magasin de démonstration sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le vendeur d’entraînement ouvre chaque page et chaque action du magasin de démonstration sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
@@ -1560,6 +1581,7 @@ return [
     'app/Filament/App/Resources/PaiementResource/Pages/CreatePaiement.php' => [
         'page' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur autorisé à vendre ouvre chaque page et chaque action du magasin sans erreur',
+            'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le propriétaire d’une société qui attend son code ouvre chaque page et chaque action du magasin de démonstration sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le responsable d’entraînement ouvre chaque page et chaque action du magasin de démonstration sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le vendeur d’entraînement ouvre chaque page et chaque action du magasin de démonstration sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
@@ -1569,6 +1591,7 @@ return [
     'app/Filament/App/Resources/PaiementResource/Pages/ListPaiements.php' => [
         'action:create' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur autorisé à vendre ouvre chaque page et chaque action du magasin sans erreur',
+            'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le propriétaire d’une société qui attend son code ouvre chaque page et chaque action du magasin de démonstration sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le responsable d’entraînement ouvre chaque page et chaque action du magasin de démonstration sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le vendeur d’entraînement ouvre chaque page et chaque action du magasin de démonstration sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
@@ -1986,7 +2009,6 @@ return [
         'action:ajouterUnProduit' => ['lot' => 'NAV-3', 'tests' => [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur sans la vente ouvre chaque page et chaque action du magasin sans erreur',
-            'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le propriétaire d’une société qui attend son code ouvre chaque page et chaque action du magasin de démonstration sans erreur',
         ]],
         'action:modifierLaLigne' => ['lot' => 'NAV-3', 'tests' => [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action du magasin sans erreur',
@@ -2028,10 +2050,13 @@ return [
     'app/Filament/Concerns/AjouteDesLignesDeVente.php' => [
         'action:ajouterUnProduit' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur autorisé à vendre ouvre chaque page et chaque action du magasin sans erreur',
+            'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le propriétaire d’une société qui attend son code ouvre chaque page et chaque action du magasin de démonstration sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le responsable d’entraînement ouvre chaque page et chaque action du magasin de démonstration sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le vendeur d’entraînement ouvre chaque page et chaque action du magasin de démonstration sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le vendeur ouvre chaque page et chaque action du magasin sans erreur',
+            'tests/Browser/Parcours/ProprietaireEnDemonstrationTest.php › le propriétaire fait une facture dans la démonstration, l’émet et l’encaisse depuis sa fiche',
+            'tests/Browser/Parcours/ProprietaireEnDemonstrationTest.php › le propriétaire vend à la caisse de la démonstration, encaisse en espèces et par carte, ferme sa caisse et clôture la journée',
             'tests/Browser/Parcours/VentesDeBoutEnBoutTest.php › le responsable fait un devis puis une facture avec la loupe des clients et « Ajouter un produit », l’émet, l’encaisse et la crédite par un avoir',
             'tests/Browser/Parcours/VentesDeBoutEnBoutTest.php › le vendeur vend à la caisse au client comptoir et encaisse en espèces et par carte',
         ]],
@@ -2061,6 +2086,8 @@ return [
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le vendeur d’entraînement ouvre chaque page et chaque action du magasin de démonstration sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le vendeur ouvre chaque page et chaque action du magasin sans erreur',
+            'tests/Browser/Parcours/ProprietaireEnDemonstrationTest.php › le propriétaire fait une facture dans la démonstration, l’émet et l’encaisse depuis sa fiche',
+            'tests/Browser/Parcours/ProprietaireEnDemonstrationTest.php › le propriétaire vend à la caisse de la démonstration, encaisse en espèces et par carte, ferme sa caisse et clôture la journée',
             'tests/Browser/Parcours/VentesDeBoutEnBoutTest.php › le responsable fait un devis puis une facture avec la loupe des clients et « Ajouter un produit », l’émet, l’encaisse et la crédite par un avoir',
             'tests/Browser/Parcours/VentesDeBoutEnBoutTest.php › le vendeur vend à la caisse au client comptoir et encaisse en espèces et par carte',
         ]],
@@ -2120,20 +2147,26 @@ return [
     'app/Filament/Concerns/SaisitUnReglementEnParts.php' => [
         'champ:bon' => ['lot' => 'NAV-2', 'tests' => []],
         'champ:mode' => ['lot' => 'NAV-2', 'tests' => [
+            'tests/Browser/Parcours/ProprietaireEnDemonstrationTest.php › le propriétaire fait une facture dans la démonstration, l’émet et l’encaisse depuis sa fiche',
+            'tests/Browser/Parcours/ProprietaireEnDemonstrationTest.php › le propriétaire vend à la caisse de la démonstration, encaisse en espèces et par carte, ferme sa caisse et clôture la journée',
             'tests/Browser/Parcours/VentesDeBoutEnBoutTest.php › le responsable fait un devis puis une facture avec la loupe des clients et « Ajouter un produit », l’émet, l’encaisse et la crédite par un avoir',
             'tests/Browser/Parcours/VentesDeBoutEnBoutTest.php › le vendeur vend à la caisse au client comptoir et encaisse en espèces et par carte',
         ]],
         'champ:montant' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Parcours/EmettreEtEncaisserTest.php › le responsable ramène à zéro la part préremplie, et « Émettre et encaisser » émet le brouillon sans l’encaisser',
+            'tests/Browser/Parcours/ProprietaireEnDemonstrationTest.php › le propriétaire vend à la caisse de la démonstration, encaisse en espèces et par carte, ferme sa caisse et clôture la journée',
             'tests/Browser/Parcours/VentesDeBoutEnBoutTest.php › le vendeur vend à la caisse au client comptoir et encaisse en espèces et par carte',
         ]],
         'champ:montant_recu' => ['lot' => 'NAV-2', 'tests' => []],
         'repeteur:parts' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur autorisé à vendre ouvre chaque page et chaque action du magasin sans erreur',
+            'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le propriétaire d’une société qui attend son code ouvre chaque page et chaque action du magasin de démonstration sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le responsable d’entraînement ouvre chaque page et chaque action du magasin de démonstration sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le vendeur d’entraînement ouvre chaque page et chaque action du magasin de démonstration sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le vendeur ouvre chaque page et chaque action du magasin sans erreur',
+            'tests/Browser/Parcours/ProprietaireEnDemonstrationTest.php › le propriétaire fait une facture dans la démonstration, l’émet et l’encaisse depuis sa fiche',
+            'tests/Browser/Parcours/ProprietaireEnDemonstrationTest.php › le propriétaire vend à la caisse de la démonstration, encaisse en espèces et par carte, ferme sa caisse et clôture la journée',
             'tests/Browser/Parcours/VentesDeBoutEnBoutTest.php › le responsable fait un devis puis une facture avec la loupe des clients et « Ajouter un produit », l’émet, l’encaisse et la crédite par un avoir',
             'tests/Browser/Parcours/VentesDeBoutEnBoutTest.php › le vendeur vend à la caisse au client comptoir et encaisse en espèces et par carte',
         ]],
@@ -2456,6 +2489,8 @@ return [
     'resources/views/filament/app/livewire/selecteur-de-produits.blade.php' => [
         'changement:changerLaQuantite' => ['lot' => 'NAV-2', 'tests' => []],
         'clic:ajouterLaSelection' => ['lot' => 'NAV-2', 'tests' => [
+            'tests/Browser/Parcours/ProprietaireEnDemonstrationTest.php › le propriétaire fait une facture dans la démonstration, l’émet et l’encaisse depuis sa fiche',
+            'tests/Browser/Parcours/ProprietaireEnDemonstrationTest.php › le propriétaire vend à la caisse de la démonstration, encaisse en espèces et par carte, ferme sa caisse et clôture la journée',
             'tests/Browser/Parcours/VentesDeBoutEnBoutTest.php › le responsable fait un devis puis une facture avec la loupe des clients et « Ajouter un produit », l’émet, l’encaisse et la crédite par un avoir',
             'tests/Browser/Parcours/VentesDeBoutEnBoutTest.php › le vendeur vend à la caisse au client comptoir et encaisse en espèces et par carte',
         ]],
@@ -2470,6 +2505,7 @@ return [
     ],
     'resources/views/filament/app/pages/caisse.blade.php' => [
         'envoi:encaisser' => ['lot' => 'NAV-2', 'tests' => [
+            'tests/Browser/Parcours/ProprietaireEnDemonstrationTest.php › le propriétaire vend à la caisse de la démonstration, encaisse en espèces et par carte, ferme sa caisse et clôture la journée',
             'tests/Browser/Parcours/VentesDeBoutEnBoutTest.php › le vendeur vend à la caisse au client comptoir et encaisse en espèces et par carte',
         ]],
     ],

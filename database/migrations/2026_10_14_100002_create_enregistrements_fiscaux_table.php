@@ -14,8 +14,8 @@ use Illuminate\Support\Facades\Schema;
  * et la signature de la ligne précédente de sa chaîne ; la base refuse
  * toute modification, toute suppression et tout vidage (voir
  * DeclencheursDeProtection), et l'enregistrement d'un ticket, d'une
- * facture ou d'un paiement au nom du propriétaire, qui ne vend jamais
- * (voir GardesDeLaVente).
+ * facture ou d'un paiement au nom du propriétaire dans un magasin réel, où
+ * il ne vend jamais (voir GardesDeLaVente).
  */
 return new class extends Migration
 {

@@ -19,9 +19,10 @@ use Illuminate\Support\Facades\Schema;
  * qui désigne l'original par contre_passe_paiement_id. Un paiement n'a
  * qu'une contre-passation au plus.
  *
- * Le propriétaire, qui ne vend jamais, n'enregistre aucun paiement : la
- * base refuse un paiement à son nom, mais pas sa contre-passation, l'exact
- * opposé d'un paiement saisi par erreur (voir GardesDeLaVente).
+ * Le propriétaire, qui ne vend que dans le magasin de démonstration,
+ * n'enregistre aucun paiement dans un magasin réel : la base y refuse un
+ * paiement à son nom, mais pas sa contre-passation, l'exact opposé d'un
+ * paiement saisi par erreur (voir GardesDeLaVente).
  *
  * Un paiement reçu après l'émission de ce qu'il règle, et une
  * contre-passation, désignent leur reçu de paiement (R2, voir la migration

@@ -765,8 +765,8 @@ class IsolationDesSocietesTest extends TestCase
 
     /**
      * Un ticket de 12,00 € TTC réglé en espèces dans ce magasin par son
-     * responsable de test : le propriétaire ne vend jamais, pas même dans
-     * le magasin de démonstration.
+     * responsable de test : le propriétaire ne vend que dans le magasin de
+     * démonstration.
      */
     private function vendre(Magasin $magasin): Facture
     {

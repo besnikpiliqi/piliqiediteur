@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 12/11/2026 à 02:39 UTC par pilotage-sync.sh : « D74 : questions toujours proposées, décision appliquée sans réponse ».
+Mis à jour le 12/11/2026 à 02:44 UTC par pilotage-sync.sh : « D75 : décision seule seulement sur source officielle sûre ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -42,6 +42,7 @@ d8d2ee3 Contrôle les seuils de l'analyse statique par ses paramètres effectifs
  M app/Domain/Achats/Actions/ModifierFactureAchatAction.php
  M app/Domain/Achats/Support/GardesDesPiecesDuFournisseur.php
  M app/Domain/Cabinets/Support/GardesDesCabinets.php
+ M app/Domain/CaisseSecurisee/Actions/VerifierIntegriteAction.php
  M app/Domain/CaisseSecurisee/Concerns/ProtegeLesDonneesValidees.php
  M app/Domain/CaisseSecurisee/Services/RegistreFiscal.php
  M app/Domain/CaisseSecurisee/Services/VerificateurIntegrite.php
@@ -96,7 +97,6 @@ d8d2ee3 Contrôle les seuils de l'analyse statique par ses paramètres effectifs
  M database/migrations/2026_10_04_100001_create_paiements_table.php
  M database/migrations/2026_10_04_100002_create_paiement_allocations_table.php
  M database/migrations/2026_10_04_100003_create_lignes_recu_paiement_table.php
- M database/migrations/2026_10_05_100001_create_avoirs_table.php
 ```
 
 ## Dernière course de la chaîne

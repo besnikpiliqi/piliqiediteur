@@ -1962,3 +1962,13 @@ donc tu va faire la meme chose dorenavant pour tes nouvelles questions que tu va
 
 donc il y aura plus "le plus urgent car tu va faire toi meme la decision. mais tu oublie jamais de me proposer les questions afin que je puisse repondre sur place si je veux et si je reponds pas alors tu fait tes decisions
 
+## 207. 2026-11-12 02:43 UTC
+
+<!-- attach -->
+
+> La règle du projet qui disait « soumettre la question à l’éditeur au lieu de choisir » sera réécrite dans ce sens au prochain lot qui touche les règles.
+
+
+
+mais tu va decider par rapport à tes recherche sur les lois et les regles de l etat et pas autrement car si tu peut pas faire des recherche fiable ert sur alors il faut attendre mes decisions. mais toi tu va applique tes decisions fiable trouver sur internet
+

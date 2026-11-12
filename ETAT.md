@@ -1,18 +1,19 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 12/11/2026 à 14:28 UTC par pilotage-sync.sh : « Décision : seulement PHP 8.5 et PostgreSQL 18 (lot VER) ».
+Mis à jour le 12/11/2026 à 14:46 UTC par pilotage-sync.sh : « Après le lot ML ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
-Tête poussée : `8feeb83`. Commits locaux pas encore poussés :
+Tête poussée : `d4a8247`. Commits locaux pas encore poussés :
 
 ```
-0ad0710 Vérifie les e-mails sur Mailtrap et explique chaque échec d'envoi (lot ML)
 ```
 
 Derniers commits poussés :
 
 ```
+d4a8247 Relecture du lot ML des e-mails vérifiés
+0ad0710 Vérifie les e-mails sur Mailtrap et explique chaque échec d'envoi (lot ML)
 8feeb83 Relecture du lot UI des écrans
 238f430 Corrige les constats de l'éditeur sur les écrans de vente (lot UI)
 e101d9f Lit l'écart d'horloge du diagnostic à un dixième de seconde près (CI)
@@ -31,27 +32,11 @@ c2455dd Passe Larastan au niveau 10 sans erreur : les valeurs lues sans type son
 9f46860 Relecture du lot TY1 de l’analyse statique
 8546296 Couvre les lignes retouchées par le typage et retire une fonction sans appelant (lot TY1 12/n)
 5ff0152 Type les valeurs requises des écrans, et passe Larastan au niveau 8 (lot TY1 11/n)
-96b3f8a Type les valeurs requises des ventes, des achats, de la caisse et du stock (Larastan niveau 8, lot TY1 10/n)
-283c34d Type les valeurs requises des droits, de la société et des cabinets (Larastan niveau 8, lot TY1 9/n)
 ```
 
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
- M .env.example
- M README.md
- M app/Console/Commands/EssayerUnCourriel.php
- M app/Console/Commands/SurveillerLaFileDAttente.php
- M app/Domain/Facturation/Jobs/EnvoyerDocumentJob.php
- M app/Filament/App/Pages/Auth/ModifierProfil.php
- M app/Integrations/Courriel/CauseDEchecDEnvoi.php
- M tests/Feature/Courriels/CourrielsReelsTest.php
- M tests/Feature/Courriels/EssayerUnCourrielTest.php
- M tests/Feature/Courriels/ListeDesCourrielsTest.php
- M tests/Feature/Courriels/SurveillerLaFileDAttenteTest.php
- M tests/Feature/Facturation/EnvoyerDocumentJobTest.php
- M tests/Feature/Filament/ModifierProfilTest.php
- M tests/Unit/CauseDEchecDEnvoiTest.php
 ```
 
 ## Dernière course de la chaîne
@@ -59,8 +44,6 @@ c2455dd Passe Larastan au niveau 10 sans erreur : les valeurs lues sans type son
 Course `wf_1d467e9e-93e`, étapes commencées (de la plus ancienne à la plus récente) :
 
 ```
-FI:notes
-AUD:implementation
 AUD:implementation-2
 AUD:implementation-3
 AUD:relecture1
@@ -84,4 +67,6 @@ ML:implementation
 ML:relecture1
 ML:relecture2
 ML:correction
+ML:poussee
+ML:notes
 ```

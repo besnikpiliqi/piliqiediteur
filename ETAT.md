@@ -1,12 +1,14 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 12/11/2026 à 09:22 UTC par pilotage-sync.sh : « etat: CI b12a835, test de l'horloge ».
+Mis à jour le 12/11/2026 à 10:26 UTC par pilotage-sync.sh : « suivi 10:26: UI commité en local, sauvegarde ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
 Tête poussée : `b12a835`. Commits locaux pas encore poussés :
 
 ```
+238f430 Corrige les constats de l'éditeur sur les écrans de vente (lot UI)
+e101d9f Lit l'écart d'horloge du diagnostic à un dixième de seconde près (CI)
 ```
 
 Derniers commits poussés :
@@ -37,39 +39,6 @@ c2455dd Passe Larastan au niveau 10 sans erreur : les valeurs lues sans type son
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
- M README.md
- M app/Filament/App/Livewire/SelecteurDeProduits.php
- M app/Filament/App/Pages/Caisse.php
- M app/Filament/App/Resources/AvoirFournisseurResource.php
- M app/Filament/App/Resources/AvoirResource.php
- M app/Filament/App/Resources/ClotureCaisseResource.php
- M app/Filament/App/Resources/FactureAchatResource.php
- M app/Filament/App/Resources/FactureResource.php
- M app/Filament/App/Resources/FactureResource/Pages/ViewFacture.php
- M app/Filament/App/Resources/PaiementResource.php
- M app/Filament/Concerns/SaisitUnReglementEnParts.php
- M app/Providers/AppServiceProvider.php
- M resources/views/filament/app/pages/caisse.blade.php
- M tests/Browser/AidesCommunesTest.php
- M tests/Browser/Support/Navigation.php
- M tests/Browser/inventaire-des-actions.php
- M tests/Feature/CaisseSecurisee/CommandesModuleFiscalTest.php
- M tests/Feature/Facturation/ActionsUniquesTest.php
- M tests/Feature/Facturation/RegularisationDUneFactureTest.php
- M tests/Feature/Filament/CaisseTest.php
- M tests/Feature/Filament/PaiementResourceTest.php
- M tests/Feature/Filament/RessourcesServiesParPiliqiTest.php
- M tests/Pest.php
-?? app/Filament/App/FicheDUnDocument.php
-?? public/css/app/
-?? resources/css/
-?? tests/Browser/AucunSiteTiersTest.php
-?? tests/Browser/Parcours/FicheDUneFactureTest.php
-?? tests/Browser/Parcours/LiensVersLesDocumentsTest.php
-?? tests/Browser/Parcours/RangeesChoisiesTest.php
-?? tests/Browser/Parcours/ReglementEnPartsTest.php
-?? tests/Feature/Filament/FicheDUneFactureTest.php
-?? tests/Feature/Filament/LiensVersLesDocumentsTest.php
 ```
 
 ## Dernière course de la chaîne
@@ -77,8 +46,6 @@ c2455dd Passe Larastan au niveau 10 sans erreur : les valeurs lues sans type son
 Course `wf_1d467e9e-93e`, étapes commencées (de la plus ancienne à la plus récente) :
 
 ```
-CALC:correction
-CALC:poussee
 CALC:notes
 FI:implementation
 FI:implementation-2
@@ -102,4 +69,6 @@ DEMO:correction
 DEMO:poussee
 DEMO:notes
 UI:implementation
+UI:relecture1
+UI:relecture2
 ```

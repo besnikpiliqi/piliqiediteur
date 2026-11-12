@@ -1972,3 +1972,7 @@ donc il y aura plus "le plus urgent car tu va faire toi meme la decision. mais t
 
 mais tu va decider par rapport à tes recherche sur les lois et les regles de l etat et pas autrement car si tu peut pas faire des recherche fiable ert sur alors il faut attendre mes decisions. mais toi tu va applique tes decisions fiable trouver sur internet
 
+## 208. 2026-11-12 09:57 UTC
+
+T105 tu me dit de quoi s’agissait
+

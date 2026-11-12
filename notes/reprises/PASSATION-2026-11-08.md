@@ -84,6 +84,7 @@ Ce fichier est le point d'entrée. Il remplace, pour la reprise, `PASSATION-2026
 
 ## 7. Sauvegardes depuis cette passation
 
+- 12/11 10 h 26 UTC — lot UI : commits locaux e101d9f (correction CI de l'horloge) et 238f430 (lot UI), base b12a835 (DEMO poussé), relectures en cours ; `reprises/lot-UI-commits-locaux.patch` 146858 octets, SHA-256 `69cc69212df6c3c82bd9950fc39b9162e12fc26a0be5c244e131a8ac8cb48e7a` ; aucun travail non commité ; arbre fdab9a48.
 Les correctifs sont remplacés à chaque sauvegarde : seule la première ligne, la plus récente, vaut.
 - 12/11 08 h 10 UTC — lot DEMO : commit local d23eb96 (base bb135db, AUD poussé), relectures en cours ; `reprises/lot-DEMO-commits-locaux.patch` 222901 octets, SHA-256 `9cc9b3147cb10d8dd8c629f5c07e19c2e01123a1647ac2cc66f9c3c47306bff8` ; aucun travail non commité ; arbre 168005a4.
 - 12/11 06 h 08 UTC — lot AUD : commit local 484ddcd (implémentation finie, suite PostgreSQL passée), agent `AUD:correction` en cours après les deux relectures ; `reprises/lot-AUD-commits-locaux.patch` 929725 octets, SHA-256 `25929c2eed7676ee272a444f5226378e7de49cb9348d1f36439e6562ce6e6b38` ; 36 entrées non commitées, `reprises/lot-AUD-travail-non-commite.patch` 207569 octets, SHA-256 `8f49db43ff66db14017968e3b0d192ebd57a76ebd9c4e825a4c5f184c08d35c8` ; base 3dd8705 ; arbre d4a8276d.

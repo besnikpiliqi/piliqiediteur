@@ -1,0 +1,2512 @@
+From e101d9fe70472af92fa673f9b2e899788070d95f Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Thu, 12 Nov 2026 10:24:02 +0000
+Subject: [PATCH 1/2] =?UTF-8?q?Lit=20l'=C3=A9cart=20d'horloge=20du=20diagn?=
+ =?UTF-8?q?ostic=20=C3=A0=20un=20dixi=C3=A8me=20de=20seconde=20pr=C3=A8s?=
+ =?UTF-8?q?=20(CI)?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- La CI de b12a835 (PHP 8.4, PostgreSQL 17) a lu 1,999 s pour une horloge
+  décalée de 2 s : la mesure du diagnostic, corrigée de la moitié de
+  l'aller-retour, se fait à quelques millisecondes près de part et d'autre
+  sur une machine chargée, alors que le test n'acceptait qu'un écart d'au
+  moins 2,000 s.
+- Test réécrit, intention gardée (le diagnostic échoue sur un décalage de
+  2 s et dit comment remettre l'horloge à l'heure) :
+  CommandesModuleFiscalTest::test_le_diagnostic_controle_l_horloge_du_serveur_sur_celle_du_serveur_de_base
+  lit un écart de 1,9xx s ou 2,0xx s, comme il lit déjà -0,0xx s ou 0,0xx s
+  pour une horloge alignée.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01K3593fBCSfG8EcbWrZryb6
+---
+ .../Feature/CaisseSecurisee/CommandesModuleFiscalTest.php | 8 ++++++--
+ 1 file changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/tests/Feature/CaisseSecurisee/CommandesModuleFiscalTest.php b/tests/Feature/CaisseSecurisee/CommandesModuleFiscalTest.php
+index a93e06a..597e408 100644
+--- a/tests/Feature/CaisseSecurisee/CommandesModuleFiscalTest.php
++++ b/tests/Feature/CaisseSecurisee/CommandesModuleFiscalTest.php
+@@ -109,7 +109,11 @@ public function test_la_cle_privee_se_lit_dans_une_sortie_aux_fins_de_ligne_de_w
+      * Le diagnostic compare l'horloge de la machine à celle du serveur de
+      * base, corrigée de la moitié de l'aller-retour : alignée, la ligne est
+      * OK ; décalée de 2 secondes, elle échoue et dit comment la remettre à
+-     * l'heure (constat C93 des audits du 07/11/2026).
++     * l'heure (constat C93 des audits du 07/11/2026). La mesure se fait à
++     * quelques millisecondes près, de part et d'autre, l'aller et le retour
++     * d'une requête n'étant jamais tout à fait égaux sur une machine chargée
++     * (la CI a lu 1,999 s pour 2 s) : l'écart lu est celui du décalage à
++     * moins d'un dixième de seconde, dans les deux cas.
+      */
+     public function test_le_diagnostic_controle_l_horloge_du_serveur_sur_celle_du_serveur_de_base(): void
+     {
+@@ -120,7 +124,7 @@ public function test_le_diagnostic_controle_l_horloge_du_serveur_sur_celle_du_se
+         $this->poserLHorlogeDuSysteme(2.0);
+         $this->assertSame(1, Artisan::call('caisse:diagnostiquer'));
+         $sortie = Artisan::output();
+-        $this->assertMatchesRegularExpression("/\\| Horloge du serveur +\\| ÉCHEC +\\| L'horloge de ce serveur s'écarte de 2,0\\d\\d s de celle du serveur de base/u", $sortie);
++        $this->assertMatchesRegularExpression("/\\| Horloge du serveur +\\| ÉCHEC +\\| L'horloge de ce serveur s'écarte de (1,9\\d\\d|2,0\\d\\d) s de celle du serveur de base/u", $sortie);
+         $this->assertStringContainsString("Synchronisez l'horloge de chaque machine qui écrit au registre fiscal (serveur web, travailleurs des files, planificateur) par NTP", $sortie);
+         $this->assertStringContainsString('Caisse sécurisée non opérationnelle : 1 contrôle(s) en échec.', $sortie);
+     }
+-- 
+2.43.0
+
+
+From 238f430ce2857bf271885d635cfc898e60e4960c Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Thu, 12 Nov 2026 10:24:02 +0000
+Subject: [PATCH 2/2] =?UTF-8?q?Corrige=20les=20constats=20de=20l'=C3=A9dit?=
+ =?UTF-8?q?eur=20sur=20les=20=C3=A9crans=20de=20vente=20(lot=20UI)?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- C1 : « Il reste … à répartir » (et l'écart d'un encaissement de facture,
+  comme le refus d'un bon d'avoir) ne s'affiche plus qu'une fois : l'aide
+  en direct se tait quand le refus de Filament s'affiche à sa place, sous
+  les parts, et ce refus s'efface dès que la saisie le rend faux (parts,
+  panier ou client de la caisse) ; plus aucun message quand le règlement
+  tombe juste (SaisitUnReglementEnParts::oublierLeRefusDevenuFaux(),
+  Caisse::rendering()).
+- C2 (confirmé à T43) : tout numéro de document affiché sur une fiche mène
+  à la fiche de ce document pour qui peut la voir, en texte simple pour
+  les autres (FicheDUnDocument) : crédit appliqué et documents crédités
+  d'un avoir, facture rectifiée et rectificative, avoirs d'une facture,
+  avoirs fournisseur et retours d'une facture d'achat, facture d'achat
+  d'un avoir fournisseur, documents d'une clôture, documents réglés de la
+  liste des paiements, dernière vente de la caisse ; un ticket est nommé
+  « Ticket » (« Crédit appliqué », « Documents crédités », avis « Vente
+  encaissée : ticket … »).
+- C8 (T41) : la section « Paiements reçus » de la fiche d'un ticket ou
+  d'une facture ne se montre qu'à qui a « Paiements : voir » dans sa
+  portée (FactureResource::voitLesPaiementsDe()) ; « Payé » et « Restant
+  dû » restent visibles.
+- C9 (T42) : « Modifier » sur la fiche d'un brouillon, avec les droits de
+  la liste, caché dès l'émission faite depuis la fiche ; « Émettre » et
+  « Émettre et encaisser » y étaient depuis le lot TR (0afc14c).
+- C5 (T43) : la rangée choisie d'une fenêtre de sélection, la ligne
+  cochée d'une liste et le service coché prennent une teinte légère de la
+  couleur principale du panneau, en clair et en sombre, au survol compris
+  (resources/css/rangees-choisies.css, écrite à la main, enregistrée par
+  FilamentAsset, copie publiée dans public/css/app).
+- C6 : le fichier donné à Playwright passe par son chemin absolu résolu
+  (realpath), le délai des gestes se règle par PILIQI_NAVIGATEUR_DELAI
+  (15 s par défaut) ; README : Node.js 22 ou 24, installation de Chromium
+  à la main, php artisan view:cache avant les tests en navigateur sous
+  Windows, délai, tests de concurrence sous Windows.
+- C3 : fait par le lot TR (0afc14c) ; ce lot ajoute le test en navigateur
+  du ticket vendu à la caisse en espèces et par carte, dont le PDF imprime
+  chaque règlement à gauche du Total TTC.
+- C4 : fait par le lot QA (1b34f61) ; ce lot ajoute la licence SIL Open
+  Font License de la police Inter au README et le test en navigateur, par
+  panneau et sur les pages publiques, de ce que chaque page charge.
+- Tests nouveaux : FicheDUneFactureTest et LiensVersLesDocumentsTest
+  (Livewire), CaisseTest et PaiementResourceTest (C1),
+  RegularisationDUneFactureTest (liens de la rectificative),
+  RessourcesServiesParPiliqiTest (feuille publiée) ; en navigateur
+  ReglementEnPartsTest, FicheDUneFactureTest, LiensVersLesDocumentsTest,
+  RangeesChoisiesTest (contraste AA en clair et en sombre), AucunSiteTiersTest
+  et deux tests de AidesCommunesTest (chemin non résolu, délai) ;
+  inventaire des actions à jour.
+- Tests réécrits par la décision de l'éditeur à T43 (constat C2 : un
+  ticket est nommé « Ticket »), intention gardée :
+  ActionsUniquesTest::test_recharger_la_caisse_apres_une_reponse_perdue_ne_cree_pas_un_second_ticket
+  (avis « Vente encaissée : ticket … » ; la dernière vente, dont le numéro
+  est un lien, lue en texte) ;
+  CaisseTest::test_le_bon_d_avoir_d_un_ticket_comptoir_regle_une_partie_de_la_vente_comptoir_suivante
+  et CaisseTest::test_le_bon_d_avoir_regle_la_vente_d_un_client_nomme_apres_son_propre_credit
+  (avis « Vente encaissée : ticket … »).
+- Test réécrit par la décision de l'éditeur à T41 (constat C8 : la
+  section « Paiements reçus » est cachée à qui ne voit pas les
+  paiements), intention gardée : tests/Browser/Parcours/RecuDePaiementTest.php
+  › « Reçu (PDF) » ne se montre qu’à qui voit le paiement… (un compte sans
+  « Paiements : voir » ne voit plus ni la section ni le numéro du reçu ;
+  mêmes boutons attendus pour les autres comptes).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01K3593fBCSfG8EcbWrZryb6
+---
+ README.md                                     |  11 +-
+ app/Filament/App/FicheDUnDocument.php         |  87 +++++++++
+ .../App/Livewire/SelecteurDeProduits.php      |   2 +-
+ app/Filament/App/Pages/Caisse.php             |  26 ++-
+ .../Resources/AvoirFournisseurResource.php    |   8 +-
+ app/Filament/App/Resources/AvoirResource.php  |  20 +-
+ .../App/Resources/ClotureCaisseResource.php   |  22 ++-
+ .../App/Resources/FactureAchatResource.php    |  12 +-
+ .../App/Resources/FactureResource.php         |  36 +++-
+ .../FactureResource/Pages/ViewFacture.php     |  13 +-
+ .../App/Resources/PaiementResource.php        |  14 +-
+ .../Concerns/SaisitUnReglementEnParts.php     |  53 ++++-
+ app/Providers/AppServiceProvider.php          |  16 ++
+ public/css/app/rangees-choisies.css           |  25 +++
+ resources/css/rangees-choisies.css            |  25 +++
+ .../views/filament/app/pages/caisse.blade.php |   4 +-
+ tests/Browser/AidesCommunesTest.php           |  44 +++++
+ tests/Browser/AucunSiteTiersTest.php          |  97 ++++++++++
+ .../Browser/Parcours/FicheDUneFactureTest.php | 141 ++++++++++++++
+ .../Parcours/LiensVersLesDocumentsTest.php    | 118 ++++++++++++
+ .../Browser/Parcours/RangeesChoisiesTest.php  | 182 ++++++++++++++++++
+ tests/Browser/Parcours/RecuDePaiementTest.php |  34 ++--
+ .../Browser/Parcours/ReglementEnPartsTest.php | 119 ++++++++++++
+ tests/Browser/Support/Navigation.php          |  60 +++++-
+ tests/Browser/inventaire-des-actions.php      |  24 +++
+ .../Facturation/ActionsUniquesTest.php        |   4 +-
+ .../RegularisationDUneFactureTest.php         |  24 +++
+ tests/Feature/Filament/CaisseTest.php         |  36 +++-
+ .../Feature/Filament/FicheDUneFactureTest.php | 182 ++++++++++++++++++
+ .../Filament/LiensVersLesDocumentsTest.php    | 137 +++++++++++++
+ .../Feature/Filament/PaiementResourceTest.php |  29 +++
+ .../RessourcesServiesParPiliqiTest.php        |  14 ++
+ tests/Pest.php                                |   2 +-
+ 33 files changed, 1557 insertions(+), 64 deletions(-)
+ create mode 100644 app/Filament/App/FicheDUnDocument.php
+ create mode 100644 public/css/app/rangees-choisies.css
+ create mode 100644 resources/css/rangees-choisies.css
+ create mode 100644 tests/Browser/AucunSiteTiersTest.php
+ create mode 100644 tests/Browser/Parcours/FicheDUneFactureTest.php
+ create mode 100644 tests/Browser/Parcours/LiensVersLesDocumentsTest.php
+ create mode 100644 tests/Browser/Parcours/RangeesChoisiesTest.php
+ create mode 100644 tests/Browser/Parcours/ReglementEnPartsTest.php
+ create mode 100644 tests/Feature/Filament/FicheDUneFactureTest.php
+ create mode 100644 tests/Feature/Filament/LiensVersLesDocumentsTest.php
+
+diff --git a/README.md b/README.md
+index 7ba9698..9140524 100644
+--- a/README.md
++++ b/README.md
+@@ -95,7 +95,7 @@ ## Tests, commandes et fonctionnement
+ 
+ Le code de sortie doit valoir 0 : le résumé peut afficher « passed » alors qu'un avertissement PHPUnit fait échouer la suite. Sur le PC de l'éditeur, `php artisan test --parallel` suffit, le mot de passe venant de `.env`.
+ 
+-**Tests en navigateur.** Les tests de `tests/Browser` cliquent dans l'application comme une personne, dans un vrai Chromium que pilote Playwright, avec Pest 4 et son module browser ; ils font partie de la suite complète, et la CI les passe aussi. Le module sert lui-même l'application, depuis le processus du test : ni `php artisan serve` ni Apache ne sont nécessaires ; les tests y ajoutent la lecture des fichiers envoyés (formulaires `multipart/form-data`, champs de fichier de Filament), que le module ne fait pas, et celle des témoins de chaque requête comme PHP les lit (le module n'en transmet aucun dès qu'un nom contient un crochet, comme `postes_reconnus[0]`, que PHP range en tableau) ; chaque requête y part de la session de son navigateur, garde d'authentification comprise, si bien qu'un second navigateur ouvert dans un même test ne trouve pas connecté le compte du premier ; et chaque témoin du serveur y dure le temps du navigateur, son échéance comptée depuis l'heure figée du test n'ayant pas de sens pour le navigateur, qui suit l'heure réelle. Chaque test vérifie qu'aucune erreur JavaScript ou de la console n'apparaît, qu'aucune réponse du serveur n'est un refus ou une erreur qu'il n'attendait pas et qu'aucune page ne demande rien à un autre site et qu'aucune ne viole sa politique de contenu (`Content-Security-Policy`) : le navigateur des tests ne joint que l'application (toute autre requête passe par un serveur mandataire où rien n'écoute, et elle est refusée), et la police Inter (`public/fonts/inter`) et l'image des initiales du compte viennent de PILIQI. Après chaque geste, le test attend que la page soit au repos : sans requête en cours (fetch ou XMLHttpRequest, Livewire compris), sans changement pendant 300 ms comptées par une minuterie de la page, qui ne passe qu'après celles que le geste a posées, même sur une machine chargée. Sur le PC de l'éditeur (Windows, XAMPP), installez une fois Node.js (version LTS, depuis nodejs.org), puis, dans le dossier du projet :
++**Tests en navigateur.** Les tests de `tests/Browser` cliquent dans l'application comme une personne, dans un vrai Chromium que pilote Playwright, avec Pest 4 et son module browser ; ils font partie de la suite complète, et la CI les passe aussi. Le module sert lui-même l'application, depuis le processus du test : ni `php artisan serve` ni Apache ne sont nécessaires ; les tests y ajoutent la lecture des fichiers envoyés (formulaires `multipart/form-data`, champs de fichier de Filament), que le module ne fait pas, et celle des témoins de chaque requête comme PHP les lit (le module n'en transmet aucun dès qu'un nom contient un crochet, comme `postes_reconnus[0]`, que PHP range en tableau) ; chaque requête y part de la session de son navigateur, garde d'authentification comprise, si bien qu'un second navigateur ouvert dans un même test ne trouve pas connecté le compte du premier ; et chaque témoin du serveur y dure le temps du navigateur, son échéance comptée depuis l'heure figée du test n'ayant pas de sens pour le navigateur, qui suit l'heure réelle. Chaque test vérifie qu'aucune erreur JavaScript ou de la console n'apparaît, qu'aucune réponse du serveur n'est un refus ou une erreur qu'il n'attendait pas et qu'aucune page ne demande rien à un autre site et qu'aucune ne viole sa politique de contenu (`Content-Security-Policy`) : le navigateur des tests ne joint que l'application (toute autre requête passe par un serveur mandataire où rien n'écoute, et elle est refusée), et la police Inter (`public/fonts/inter`, sous licence SIL Open Font License 1.1, dont le texte est dans `public/fonts/inter/LICENSE.txt`) et l'image des initiales du compte viennent de PILIQI. Après chaque geste, le test attend que la page soit au repos : sans requête en cours (fetch ou XMLHttpRequest, Livewire compris), sans changement pendant 300 ms comptées par une minuterie de la page, qui ne passe qu'après celles que le geste a posées, même sur une machine chargée. Sur le PC de l'éditeur (Windows, XAMPP), installez une fois Node.js (version LTS, depuis nodejs.org), puis, dans le dossier du projet :
+ 
+ ```bat
+ npm install
+@@ -109,6 +109,15 @@ ## Tests, commandes et fonctionnement
+ php artisan test --parallel
+ ```
+ 
++Sous Windows, quatre précautions (constat C6 de l'éditeur) :
++
++- prenez Node.js 22 ou 24 (LTS) : avec Node.js 26, `npx playwright install chromium` se fige à « extracting archive ». S'il se fige, décompressez Chromium à la main : téléchargez les archives `chrome-win64.zip` et `chrome-headless-shell-win64.zip` de la version de Chromium qu'attend Playwright 1.59.1 (l'adresse s'affiche quand la commande commence), décompressez-les avec `Expand-Archive` (PowerShell) dans `%LOCALAPPDATA%\ms-playwright\chromium-1217` et `%LOCALAPPDATA%\ms-playwright\chromium_headless_shell-1217`, puis créez dans chacun de ces deux dossiers un fichier vide `INSTALLATION_COMPLETE` ; FFmpeg n'est pas nécessaire aux tests ;
++- avant les tests en navigateur, compilez une fois les vues : `php artisan view:cache`. Sinon, un antivirus qui tient la vue qu'une page vient de compiler fait échouer son renommage (« rename(…): Accès refusé (code: 5) », erreur 500). La suite ne le fait pas d'elle-même : sous `--parallel`, chaque processus recompilerait les mêmes vues en même temps, la course même que l'on évite. Après un `git pull` qui change une vue, relancez-la (ou `php artisan view:clear` pour revenir à la compilation à la demande) ;
++- un PC plus lent que la CI (serveur PHP intégré, antivirus, premières pages froides) peut dépasser le délai de 15 s d'un geste : réglez-le, en secondes, par la variable `PILIQI_NAVIGATEUR_DELAI` avant de lancer les tests, par exemple `$env:PILIQI_NAVIGATEUR_DELAI = "60"` dans PowerShell (`set PILIQI_NAVIGATEUR_DELAI=60` dans une invite de commandes) ; sans elle, le délai reste de 15 s, celui de la CI. Une valeur qui n'est pas un nombre entier de secondes, au moins 1, arrête les tests en le disant ;
++- les fichiers que les tests envoient (pièces du fournisseur, pièces de la vérification) se donnent à Playwright par leur chemin absolu entièrement résolu, avec les séparateurs de Windows : rien à faire de votre côté.
++
++Les tests de concurrence lancent un second processus PHP par `Process` de Laravel (`PHP_BINARY`, sans `pcntl` ni aucune fonction propre à Linux) et lisent l'attente des verrous dans `pg_stat_activity` : rien n'y est propre à Linux, et ils sont écrits pour tourner aussi sous Windows, avec PostgreSQL installé comme au point 3 de l'installation ; ils n'y ont pas encore été lancés (la CI tourne sous Linux) : un échec sous Windows est à signaler.
++
+ `package.json` fixe Playwright à la version 1.59.1, celle que demande le module browser de Pest 4 : à partir de Playwright 1.62, le serveur n'applique plus le délai que le module lui envoie, et un clic sur un élément caché attendrait sans fin. Ne la changez pas sans changer le module. Une capture de la page d'un test en échec s'écrit dans `tests/Browser/Screenshots`. Ne lancez pas deux suites en navigateur en même temps dans le même dossier : le module y garde l'adresse de son serveur Playwright (`vendor/pestphp/pest-plugin-browser/.temp`), que la première suite finie efface.
+ 
+ Les balayages (`tests/Browser/Balayage`) ouvrent, rôle par rôle, chaque page de chaque panneau, le profil et les entrées du menu du compte, et chaque action visible, fenêtre ouverte puis fermée sans rien valider ; une action qui ne fait que lire (le PDF d'un document) s'exécute, et le fichier que reçoit le navigateur se vérifie ; une action qui est un lien compte quand le balayage l'a vue et a ouvert sa page. L'inventaire des actions (`tests/Browser/inventaire-des-actions.php`) liste chaque action de l'interface (actions de Filament, avis compris, filtres, onglets, champs, liens, et dans les vues chaque bouton, formulaire, saisie et lien), le lot qui écrit ses tests et les tests qui la couvrent déjà, et `InventaireDesActionsTest` le compare au code ; chaque balayage échoue s'il n'ouvre pas une action que l'inventaire dit couverte par lui.
+diff --git a/app/Filament/App/FicheDUnDocument.php b/app/Filament/App/FicheDUnDocument.php
+new file mode 100644
+index 0000000..847e94b
+--- /dev/null
++++ b/app/Filament/App/FicheDUnDocument.php
+@@ -0,0 +1,87 @@
++<?php
++
++namespace App\Filament\App;
++
++use App\Domain\Achats\Models\AvoirFournisseur;
++use App\Domain\Achats\Models\FactureAchat;
++use App\Domain\Facturation\Enums\TypeDocument;
++use App\Domain\Facturation\Models\Avoir;
++use App\Domain\Facturation\Models\ClotureCaisse;
++use App\Domain\Facturation\Models\Devis;
++use App\Domain\Facturation\Models\Facture;
++use App\Filament\App\Resources\AvoirFournisseurResource;
++use App\Filament\App\Resources\AvoirResource;
++use App\Filament\App\Resources\ClotureCaisseResource;
++use App\Filament\App\Resources\DevisResource;
++use App\Filament\App\Resources\FactureAchatResource;
++use App\Filament\App\Resources\FactureResource;
++use Illuminate\Contracts\Support\Htmlable;
++use Illuminate\Database\Eloquent\Model;
++use Illuminate\Support\HtmlString;
++
++/**
++ * La fiche d'un document du magasin actif, vers laquelle mène son numéro
++ * (constat C2 de l'éditeur, confirmé à T43 : « tout numéro de document
++ * affiché devient un lien vers ce document pour qui peut le voir ») : le
++ * numéro d'un ticket, d'une facture, d'un avoir, d'un devis, d'une
++ * facture d'achat, d'un avoir fournisseur ou d'une clôture du jour mène à
++ * sa fiche quand la personne connectée peut la voir (la ressource lui est
++ * ouverte et la règle de ce document, voir les policies, le lui permet :
++ * ses ventes seulement, ou celles de toute l'équipe) ; sinon il reste un
++ * texte simple, sans lien qui mènerait à un refus. Un document d'un autre
++ * magasin n'a jamais de lien (voir les policies : appartientAuMagasinActif).
++ */
++final class FicheDUnDocument
++{
++    /**
++     * La ressource de chaque sorte de document.
++     *
++     * @var array<class-string<Model>, class-string<\Filament\Resources\Resource>>
++     */
++    private const RESSOURCES = [
++        Facture::class => FactureResource::class,
++        Avoir::class => AvoirResource::class,
++        Devis::class => DevisResource::class,
++        FactureAchat::class => FactureAchatResource::class,
++        AvoirFournisseur::class => AvoirFournisseurResource::class,
++        ClotureCaisse::class => ClotureCaisseResource::class,
++    ];
++
++    /**
++     * L'adresse de la fiche de ce document pour la personne connectée ;
++     * null si elle ne peut pas la voir, ou sans document.
++     */
++    public static function adresse(?Model $document): ?string
++    {
++        $ressource = $document === null ? null : (self::RESSOURCES[$document::class] ?? null);
++
++        if ($ressource === null || ! $ressource::canAccess() || ! $ressource::canView($document)) {
++            return null;
++        }
++
++        return $ressource::getUrl('view', ['record' => $document]);
++    }
++
++    /**
++     * Ce que ce document de vente est : « Ticket » ou « Facture », selon
++     * sa série.
++     */
++    public static function nature(Facture $document): string
++    {
++        return $document->serie() === TypeDocument::TicketCaisse ? 'Ticket' : 'Facture';
++    }
++
++    /**
++     * Le numéro de ce document, en lien vers sa fiche pour qui peut la voir,
++     * en texte simple pour les autres, échappé dans les deux cas : pour une
++     * liste de numéros dans une seule entrée ou une seule colonne.
++     */
++    public static function numeroEnLien(Model $document, string $numero): Htmlable
++    {
++        $adresse = self::adresse($document);
++
++        return new HtmlString($adresse === null
++            ? e($numero)
++            : '<a href="'.e($adresse).'" class="text-primary-600 underline dark:text-primary-400">'.e($numero).'</a>');
++    }
++}
+diff --git a/app/Filament/App/Livewire/SelecteurDeProduits.php b/app/Filament/App/Livewire/SelecteurDeProduits.php
+index c5be301..f49a4a6 100644
+--- a/app/Filament/App/Livewire/SelecteurDeProduits.php
++++ b/app/Filament/App/Livewire/SelecteurDeProduits.php
+@@ -155,7 +155,7 @@ public function table(Table $table): Table
+             ->recordAction('basculer')
+             ->recordClasses(fn (Produit $produit): array => [
+                 'opacity-50' => DevisResource::refusDuProduit($produit, $vendSansStock) !== null,
+-                'bg-gray-100 dark:bg-white/5 font-semibold' => $this->quantiteChoisie(CleDuModele::de($produit)) !== null,
++                'piliqi-rangee-choisie font-semibold' => $this->quantiteChoisie(CleDuModele::de($produit)) !== null,
+             ])
+             ->searchPlaceholder('Nom, référence ou code-barres')
+             ->emptyStateHeading('Aucun produit ne correspond.')
+diff --git a/app/Filament/App/Pages/Caisse.php b/app/Filament/App/Pages/Caisse.php
+index cdea328..8178456 100644
+--- a/app/Filament/App/Pages/Caisse.php
++++ b/app/Filament/App/Pages/Caisse.php
+@@ -8,7 +8,6 @@
+ use App\Domain\Contacts\Models\Client;
+ use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
+ use App\Domain\Facturation\Enums\ModePaiement;
+-use App\Domain\Facturation\Enums\TypeDocument;
+ use App\Domain\Facturation\Models\AvoirAllocation;
+ use App\Domain\Facturation\Models\ClotureCaisse;
+ use App\Domain\Facturation\Models\Facture;
+@@ -27,6 +26,7 @@
+ use App\Domain\Tenancy\Support\ValeurRequise;
+ use App\Domain\Tenancy\Support\ValeurSimple;
+ use App\Domain\Tenancy\Support\ValeursLues;
++use App\Filament\App\FicheDUnDocument;
+ use App\Filament\App\Resources\AvoirResource;
+ use App\Filament\App\Resources\ClientResource;
+ use App\Filament\App\Resources\DevisResource;
+@@ -217,6 +217,9 @@ public function mount(): void
+      * La seule part payée du règlement, tant que le vendeur n'en a pas
+      * saisi le montant, prend ce qui reste à payer : le panier, le client
+      * ou les bons d'avoir qui changent changent le montant qu'elle propose.
++     * Le refus d'un encaissement affiché sous les parts s'efface dès que le
++     * panier, le client ou les parts le rendent faux (constat C1, voir
++     * SaisitUnReglementEnParts::oublierLeRefusDevenuFaux()).
+      */
+     public function rendering(): void
+     {
+@@ -231,6 +234,11 @@ public function rendering(): void
+         }
+ 
+         $this->suivreLeResteAPayer();
++
++        if ($this->getErrorBag()->has('data.parts')) {
++            $parts = ValeursLues::tableau($this->data['parts'] ?? []);
++            self::oublierLeRefusDevenuFaux($this, 'data.parts', self::ecartDesParts($parts, $this->apercuDuReglement($this->data['lignes'] ?? [], $this->data['client_id'] ?? null, self::bonsDesParts($parts)), true));
++        }
+     }
+ 
+     /**
+@@ -308,9 +316,13 @@ private function commencerUneNouvelleVente(): void
+      * que le vendeur a encaissée dans ce magasin (voir
+      * ActionsUniques::dernierResultat()) : la caisse rechargée après une
+      * réponse perdue, son panier vidé par l'encaissement, dit ainsi que la
+-     * vente est faite. Null s'il n'en a encaissé aucune depuis 30 jours.
++     * vente est faite. Son numéro mène à sa fiche, pour qui peut la voir
++     * (constat C2, voir FicheDUnDocument). Null s'il n'en a encaissé aucune
++     * depuis 30 jours.
++     *
++     * @return array{texte: string, numero: string, adresse: string|null}|null
+      */
+-    public function derniereVenteEnregistree(): ?string
++    public function derniereVenteEnregistree(): ?array
+     {
+         $facture = app(ActionsUniques::class)->dernierResultat(ActionsUniques::VENDRE_A_LA_CAISSE, CompteConnecte::exiger());
+ 
+@@ -318,7 +330,11 @@ public function derniereVenteEnregistree(): ?string
+             return null;
+         }
+ 
+-        return 'Dernière vente enregistrée : '.($facture->serie() === TypeDocument::TicketCaisse ? 'ticket' : 'facture')." N° {$facture->numero}";
++        return [
++            'texte' => 'Dernière vente enregistrée : '.mb_strtolower(FicheDUnDocument::nature($facture)).' N° ',
++            'numero' => (string) $facture->numero,
++            'adresse' => FicheDUnDocument::adresse($facture),
++        ];
+     }
+ 
+     /**
+@@ -644,7 +660,7 @@ private function vendre(?ConfirmationVenteSansStock $confirmation): ?Confirmatio
+         }
+ 
+         Notification::make()
+-            ->title("Vente encaissée : facture {$facture->numero}")
++            ->title('Vente encaissée : '.mb_strtolower(FicheDUnDocument::nature($facture)).' '.$facture->numero)
+             ->body($this->resumeEncaissement($facture))
+             ->success()
+             ->send();
+diff --git a/app/Filament/App/Resources/AvoirFournisseurResource.php b/app/Filament/App/Resources/AvoirFournisseurResource.php
+index f53a472..296c980 100644
+--- a/app/Filament/App/Resources/AvoirFournisseurResource.php
++++ b/app/Filament/App/Resources/AvoirFournisseurResource.php
+@@ -4,6 +4,7 @@
+ 
+ use App\Domain\Achats\Enums\SourceAvoirFournisseur;
+ use App\Domain\Achats\Models\AvoirFournisseur;
++use App\Filament\App\FicheDUnDocument;
+ use App\Filament\App\Resources\AvoirFournisseurResource\Pages;
+ use Filament\Infolists\Components\Section as InfolistSection;
+ use Filament\Infolists\Components\TextEntry;
+@@ -66,7 +67,12 @@ public static function infolist(Infolist $infolist): Infolist
+                 TextEntry::make('statut')->badge(),
+                 FactureAchatResource::marqueTvaAVerifier(),
+                 TextEntry::make('source')->badge(),
+-                TextEntry::make('factureAchat.numero')->label('Facture d\'achat créditée'),
++                // Son numéro mène à la fiche de la facture d'achat, pour qui
++                // peut la voir (constat C2, voir FicheDUnDocument).
++                TextEntry::make('factureAchat.numero')
++                    ->label('Facture d\'achat créditée')
++                    ->url(fn (AvoirFournisseur $record): ?string => FicheDUnDocument::adresse($record->factureAchat))
++                    ->color(fn (AvoirFournisseur $record): ?string => FicheDUnDocument::adresse($record->factureAchat) === null ? null : 'primary'),
+                 TextEntry::make('factureAchat.fournisseur.nom')->label('Fournisseur'),
+                 TextEntry::make('numero_fournisseur')->label('N° de l\'avoir du fournisseur')->placeholder('—'),
+                 TextEntry::make('date_emission')->label('Émis le')->dateTime('d/m/Y')->placeholder('—'),
+diff --git a/app/Filament/App/Resources/AvoirResource.php b/app/Filament/App/Resources/AvoirResource.php
+index 1c18bdf..3d4435a 100644
+--- a/app/Filament/App/Resources/AvoirResource.php
++++ b/app/Filament/App/Resources/AvoirResource.php
+@@ -19,6 +19,7 @@
+ use App\Domain\Tenancy\Support\ValeurRequise;
+ use App\Domain\Tenancy\Support\ValeurSimple;
+ use App\Domain\Tenancy\Support\ValeursLues;
++use App\Filament\App\FicheDUnDocument;
+ use App\Filament\App\Resources\AvoirResource\Pages;
+ use App\Filament\Concerns\EnvoieLesDocuments;
+ use App\Filament\Concerns\GereLesExceptionsMetier;
+@@ -44,6 +45,7 @@
+ use Illuminate\Database\Eloquent\Builder;
+ use Illuminate\Support\Collection;
+ use Illuminate\Support\Facades\Gate;
++use Illuminate\Support\HtmlString;
+ use Illuminate\Support\Str;
+ use Illuminate\Validation\ValidationException;
+ use InvalidArgumentException;
+@@ -437,9 +439,14 @@ public static function infolist(Infolist $infolist): Infolist
+             InfolistSection::make('Avoir')->schema([
+                 TextEntry::make('numero')->label('Numéro'),
+                 FactureResource::clientEntry(),
++                // Chaque ticket ou facture que l'avoir crédite, nommé selon
++                // ce qu'il est, son numéro en lien vers sa fiche pour qui
++                // peut la voir (constat C2, voir FicheDUnDocument).
+                 TextEntry::make('factures_concernees')
+-                    ->label('Factures créditées')
+-                    ->state(fn (Avoir $record) => $record->facturesConcernees()->pluck('numero')->implode(', ')),
++                    ->label('Documents crédités')
++                    ->state(fn (Avoir $record): HtmlString => new HtmlString($record->facturesConcernees()->sortBy('numero')
++                        ->map(fn (Facture $document): string => FicheDUnDocument::nature($document).' '.FicheDUnDocument::numeroEnLien($document, (string) $document->numero)->toHtml())
++                        ->implode(', '))),
+                 TextEntry::make('date_emission')->label('Émis le')->dateTime('d/m/Y à H:i'),
+                 TextEntry::make('cree_par_nom')->label('Émis par'),
+                 TextEntry::make('motif')->label('Motif')->columnSpanFull(),
+@@ -489,10 +496,17 @@ public static function infolist(Infolist $infolist): Infolist
+                     // imputé y figure avec sa contre-passation, en négatif,
+                     // qui le rend à l'avoir (voir ContrePasserPaiementAction),
+                     // dans l'ordre où ils ont été imputés.
++                    // Chaque document est nommé selon ce qu'il est, ticket ou
++                    // facture, son numéro en lien vers sa fiche pour qui peut
++                    // la voir (constat C2, voir FicheDUnDocument).
+                     RepeatableEntry::make('allocations')
+                         ->label('')
++                        ->state(fn (Avoir $record) => $record->loadMissing('allocations.facture')->allocations)
+                         ->schema([
+-                            TextEntry::make('facture.numero')->label('Facture'),
++                            TextEntry::make('facture.numero')
++                                ->label(fn (AvoirAllocation $record): string => FicheDUnDocument::nature(ValeurRequise::de($record->facture, 'le document de l\'imputation')))
++                                ->url(fn (AvoirAllocation $record): ?string => FicheDUnDocument::adresse($record->facture))
++                                ->color(fn (AvoirAllocation $record): ?string => FicheDUnDocument::adresse($record->facture) === null ? null : 'primary'),
+                             TextEntry::make('montant_alloue')
+                                 ->label('Montant crédité')
+                                 ->money('EUR')
+diff --git a/app/Filament/App/Resources/ClotureCaisseResource.php b/app/Filament/App/Resources/ClotureCaisseResource.php
+index 11950fd..914654b 100644
+--- a/app/Filament/App/Resources/ClotureCaisseResource.php
++++ b/app/Filament/App/Resources/ClotureCaisseResource.php
+@@ -11,6 +11,7 @@
+ use App\Domain\Tenancy\Support\CompteConnecte;
+ use App\Domain\Tenancy\Support\ValeurRequise;
+ use App\Domain\Tenancy\Support\ValeursLues;
++use App\Filament\App\FicheDUnDocument;
+ use App\Filament\App\Resources\ClotureCaisseResource\Pages;
+ use App\Filament\Concerns\PrendLeCalendrierDuMagasin;
+ use Closure;
+@@ -208,7 +209,7 @@ public static function infolist(Infolist $infolist): Infolist
+ 
+     /**
+      * Le tableau des documents que la personne voit, chaque numéro en lien
+-     * vers sa fiche.
++     * vers sa fiche quand elle peut l'ouvrir (voir FicheDUnDocument).
+      *
+      * @param  Closure(ClotureCaisse): list<array<string, string|null>>  $documents
+      */
+@@ -219,8 +220,8 @@ private static function detailDesDocuments(string $nom, Closure $documents): Rep
+             ->state($documents)
+             ->schema([
+                 TextEntry::make('numero')->label('Numéro')
+-                    ->url(fn (TextEntry $component): string => ValeursLues::texteDe(ValeursLues::tableau($component->getContainer()->getState()), 'url'))
+-                    ->color('primary'),
++                    ->url(fn (TextEntry $component): ?string => self::adresseDuDocument($component))
++                    ->color(fn (TextEntry $component): ?string => self::adresseDuDocument($component) === null ? null : 'primary'),
+                 TextEntry::make('client_nom')->label('Client'),
+                 TextEntry::make('ht')->label('Total HT'),
+                 TextEntry::make('tva')->label('TVA'),
+@@ -229,6 +230,17 @@ private static function detailDesDocuments(string $nom, Closure $documents): Rep
+             ->columns(5);
+     }
+ 
++    /**
++     * L'adresse de la fiche du document de cette rangée, null quand la
++     * personne ne peut pas l'ouvrir (voir FicheDUnDocument).
++     */
++    private static function adresseDuDocument(TextEntry $component): ?string
++    {
++        $adresse = ValeursLues::tableau($component->getContainer()->getState())['url'] ?? null;
++
++        return is_string($adresse) ? $adresse : null;
++    }
++
+     /**
+      * Les tickets ou les avoirs de la clôture que la personne voit (règle
+      * « Vendeurs », voir Facture::scopeVisiblesPar() et
+@@ -240,7 +252,7 @@ private static function detailDesDocuments(string $nom, Closure $documents): Rep
+      *
+      * @param  HasMany<Facture, ClotureCaisse>|HasMany<Avoir, ClotureCaisse>  $tous
+      * @param  HasMany<Facture, ClotureCaisse>|HasMany<Avoir, ClotureCaisse>  $visibles
+-     * @return array{visibles: list<array{numero: string, url: string, client_nom: string|null, ht: string, tva: string, ttc: string}>, autres: string|null}
++     * @return array{visibles: list<array{numero: string, url: string|null, client_nom: string|null, ht: string, tva: string, ttc: string}>, autres: string|null}
+      */
+     private static function documentsVisibles(HasMany $tous, HasMany $visibles): array
+     {
+@@ -258,7 +270,7 @@ private static function documentsVisibles(HasMany $tous, HasMany $visibles): arr
+         return [
+             'visibles' => array_values($vus->map(fn (Facture|Avoir $document): array => [
+                 'numero' => ValeurRequise::de($document->numero, 'le numéro d\'un document de la clôture'),
+-                'url' => $estUnAvoir ? AvoirResource::getUrl('view', ['record' => $document]) : FactureResource::getUrl('view', ['record' => $document]),
++                'url' => FicheDUnDocument::adresse($document),
+                 'client_nom' => $document->client_nom,
+                 'ht' => $montant($document, 'total_ht'),
+                 'tva' => $montant($document, 'total_tva'),
+diff --git a/app/Filament/App/Resources/FactureAchatResource.php b/app/Filament/App/Resources/FactureAchatResource.php
+index 9498951..6dcb7c5 100644
+--- a/app/Filament/App/Resources/FactureAchatResource.php
++++ b/app/Filament/App/Resources/FactureAchatResource.php
+@@ -30,6 +30,7 @@
+ use App\Domain\Tenancy\Support\ValeurRequise;
+ use App\Domain\Tenancy\Support\ValeurSimple;
+ use App\Domain\Tenancy\Support\ValeursLues;
++use App\Filament\App\FicheDUnDocument;
+ use App\Filament\App\Resources\FactureAchatResource\Pages;
+ use App\Filament\Concerns\AjouteDesLignesDAchat;
+ use App\Filament\Concerns\GereLesExceptionsMetier;
+@@ -212,8 +213,8 @@ public static function infolist(Infolist $infolist): Infolist
+                             TextEntry::make('numero')
+                                 ->label('Numéro')
+                                 ->state(fn (AvoirFournisseur $record) => $record->numero)
+-                                ->url(fn (AvoirFournisseur $record): ?string => CompteConnecte::exiger()->can('view', $record) ? AvoirFournisseurResource::getUrl('view', ['record' => $record]) : null)
+-                                ->color('primary'),
++                                ->url(fn (AvoirFournisseur $record): ?string => FicheDUnDocument::adresse($record))
++                                ->color(fn (AvoirFournisseur $record): ?string => FicheDUnDocument::adresse($record) === null ? null : 'primary'),
+                             TextEntry::make('numero_fournisseur')->label('N° de l\'avoir du fournisseur')->state(fn (AvoirFournisseur $record) => $record->numero_fournisseur)->placeholder('—'),
+                             TextEntry::make('motif')->label('Motif')->state(fn (AvoirFournisseur $record) => $record->motif)->placeholder('—'),
+                             TextEntry::make('total_ttc')->label('Total retourné TTC')->state(fn (AvoirFournisseur $record) => $record->total_ttc)->money('EUR'),
+@@ -467,9 +468,10 @@ public static function retoursDeLaLigne(LigneAchat $ligne): ?Htmlable
+             ->sortBy(fn (LigneAvoirFournisseur $retour): array => [self::emissionDuRetour($retour)->getTimestamp(), self::avoirDuRetour($retour)->numero])
+             ->map(function (LigneAvoirFournisseur $retour): string {
+                 $avoir = self::avoirDuRetour($retour);
+-                $numero = auth()->user()?->can('view', $avoir)
+-                    ? '<a href="'.e(AvoirFournisseurResource::getUrl('view', ['record' => $avoir])).'" style="text-decoration: underline;">'.e($avoir->numero).'</a>'
+-                    : e($avoir->numero);
++                $adresse = FicheDUnDocument::adresse($avoir);
++                $numero = $adresse === null
++                    ? e($avoir->numero)
++                    : '<a href="'.e($adresse).'" style="text-decoration: underline;">'.e($avoir->numero).'</a>';
+ 
+                 return ClientResource::enEvidence(new HtmlString(e("Retourné : {$retour->quantite} (avoir ").$numero.e(' du '.self::calendrierDuMagasin()->afficher(self::emissionDuRetour($retour), 'd/m/Y').')')))->toHtml();
+             });
+diff --git a/app/Filament/App/Resources/FactureResource.php b/app/Filament/App/Resources/FactureResource.php
+index 4e7514f..9d55ae8 100644
+--- a/app/Filament/App/Resources/FactureResource.php
++++ b/app/Filament/App/Resources/FactureResource.php
+@@ -50,6 +50,7 @@
+ use App\Domain\Tenancy\Support\ValeurRequise;
+ use App\Domain\Tenancy\Support\ValeurSimple;
+ use App\Domain\Tenancy\Support\ValeursLues;
++use App\Filament\App\FicheDUnDocument;
+ use App\Filament\App\Resources\FactureResource\Pages;
+ use App\Filament\Concerns\AvertitDUneVenteSansStock;
+ use App\Filament\Concerns\ChoisitLaNatureDeLOperation;
+@@ -226,6 +227,25 @@ private static function echeanceAnnoncee(mixed $clientId): string
+         return 'Fixée à l\'émission : date d\'émission + '.$delai.' jour'.($delai > 1 ? 's' : '');
+     }
+ 
++    /**
++     * La personne voit le détail des paiements de ce document (constat C8,
++     * réponse de l'éditeur à T41 : « cacher ») : « Paiements : voir », dans
++     * sa portée, ses documents ou ceux de toute l'équipe (voir
++     * PaiementPolicy::view()). Le propriétaire, les responsables du magasin
++     * et le cabinet lié à qui le client accorde la consultation des
++     * paiements le voient ; pour les autres, la section « Paiements reçus »
++     * (paiements, références, contre-passations, reçus de paiement)
++     * n'apparaît pas du tout, et seuls « Payé » et « Restant dû » restent
++     * sur la fiche.
++     */
++    public static function voitLesPaiementsDe(Facture $facture): bool
++    {
++        $compte = CompteConnecte::exiger();
++
++        return $compte->can(PermissionRegistry::PAIEMENT_VIEW)
++            && ($compte->can(PermissionRegistry::FACTURE_VIEW_TOUTES) || $facture->cree_par === $compte->getKey());
++    }
++
+     public static function infolist(Infolist $infolist): Infolist
+     {
+         return $infolist->schema([
+@@ -245,13 +265,19 @@ public static function infolist(Infolist $infolist): Infolist
+                 // société (voir RegularisationDUneFacture) : la facture que
+                 // rectifie une facture rectificative, et la rectificative
+                 // d'une facture régularisée.
++                // Chaque numéro de document de la fiche mène à sa fiche, pour
++                // qui peut la voir (constat C2, voir FicheDUnDocument).
+                 TextEntry::make('facture_rectifiee')
+                     ->label('Rectifie la facture')
+                     ->state(fn (Facture $record): ?string => $record->factureRectifiee?->numero)
++                    ->url(fn (Facture $record): ?string => FicheDUnDocument::adresse($record->factureRectifiee))
++                    ->color(fn (Facture $record): ?string => FicheDUnDocument::adresse($record->factureRectifiee) === null ? null : 'primary')
+                     ->visible(fn (Facture $record): bool => $record->estUneRectificative()),
+                 TextEntry::make('rectificative')
+                     ->label('Facture rectificative')
+                     ->state(fn (Facture $record): ?string => $record->rectificative?->numero)
++                    ->url(fn (Facture $record): ?string => FicheDUnDocument::adresse($record->rectificative))
++                    ->color(fn (Facture $record): ?string => FicheDUnDocument::adresse($record->rectificative) === null ? null : 'primary')
+                     ->visible(fn (Facture $record): bool => $record->rectificative !== null),
+             ])->columns(3),
+ 
+@@ -301,7 +327,7 @@ public static function infolist(Infolist $infolist): Infolist
+             ])->columns(3),
+ 
+             InfolistSection::make('Paiements reçus')
+-                ->visible(fn (Facture $record) => $record->allocationsPaiement()->exists())
++                ->visible(fn (Facture $record) => self::voitLesPaiementsDe($record) && $record->allocationsPaiement()->exists())
+                 ->schema([
+                     // Un paiement saisi par erreur y figure avec sa
+                     // contre-passation, en négatif (voir
+@@ -356,8 +382,8 @@ public static function infolist(Infolist $infolist): Infolist
+                         ->schema([
+                             TextEntry::make('avoir.numero')
+                                 ->label('Avoir')
+-                                ->url(fn (AvoirAllocation $record) => AvoirResource::getUrl('view', ['record' => $record->avoir]))
+-                                ->color('primary'),
++                                ->url(fn (AvoirAllocation $record): ?string => FicheDUnDocument::adresse($record->avoir))
++                                ->color(fn (AvoirAllocation $record): ?string => FicheDUnDocument::adresse($record->avoir) === null ? null : 'primary'),
+                             TextEntry::make('montant_alloue')
+                                 ->label('Montant crédité')
+                                 ->money('EUR')
+@@ -412,8 +438,8 @@ public static function infolist(Infolist $infolist): Infolist
+                             TextEntry::make('numero')
+                                 ->label('Numéro')
+                                 ->state(fn (Avoir $record) => $record->numero)
+-                                ->url(fn (Avoir $record) => AvoirResource::getUrl('view', ['record' => $record]))
+-                                ->color('primary'),
++                                ->url(fn (Avoir $record): ?string => FicheDUnDocument::adresse($record))
++                                ->color(fn (Avoir $record): ?string => FicheDUnDocument::adresse($record) === null ? null : 'primary'),
+                             TextEntry::make('motif')->label('Motif')->state(fn (Avoir $record) => $record->motif)->placeholder('—'),
+                             TextEntry::make('total_ttc')
+                                 ->label('Crédité sur cette facture (TTC)')
+diff --git a/app/Filament/App/Resources/FactureResource/Pages/ViewFacture.php b/app/Filament/App/Resources/FactureResource/Pages/ViewFacture.php
+index dad2886..66d0cfd 100644
+--- a/app/Filament/App/Resources/FactureResource/Pages/ViewFacture.php
++++ b/app/Filament/App/Resources/FactureResource/Pages/ViewFacture.php
+@@ -8,6 +8,7 @@
+ use App\Domain\Facturation\Actions\FaireLAvoirDeRegularisationAction;
+ use App\Domain\Facturation\Actions\NoterBordereauDetaxeAction;
+ use App\Domain\Facturation\Actions\RelancerLaTransmissionAction;
++use App\Domain\Facturation\Enums\StatutFacture;
+ use App\Domain\Facturation\Enums\TypePreuve;
+ use App\Domain\Facturation\Models\Avoir;
+ use App\Domain\Facturation\Models\Facture;
+@@ -28,7 +29,8 @@
+ use Filament\Resources\Pages\ViewRecord;
+ 
+ /**
+- * La fiche d'une facture ou d'un ticket. Un brouillon s'y émet, par
++ * La fiche d'une facture ou d'un ticket. Un brouillon s'y modifie
++ * (« Modifier ») et s'y émet, par
+  * « Émettre » ou par « Émettre et encaisser », qui enregistre aussi son
+  * règlement, en tout ou en partie (R1, voir FactureResource::emettre() et
+  * FactureResource::emettreEtEncaisser()). Ce qui suit la vente sans la
+@@ -58,6 +60,15 @@ class ViewFacture extends ViewRecord
+     protected function getHeaderActions(): array
+     {
+         return [
++            // Un brouillon se modifie depuis sa fiche comme depuis la liste
++            // (constat C9, réponse de l'éditeur à T42), pour qui peut le
++            // modifier (voir FacturePolicy::update()) : jamais une facture
++            // émise, ni le propriétaire hors du magasin de démonstration.
++            // Son droit se lit à l'ouverture de la page : l'état du
++            // brouillon, relu après son émission (voir
++            // FactureResource::emettre()), le cache dès qu'il est émis.
++            Actions\EditAction::make()
++                ->visible(fn (Facture $record): bool => $record->statut === StatutFacture::Brouillon),
+             FactureResource::emettre(Actions\Action::make('emettre')),
+             FactureResource::emettreEtEncaisser(Actions\Action::make('emettre_et_encaisser')),
+             FactureResource::encaisser(Actions\Action::make('encaisser')),
+diff --git a/app/Filament/App/Resources/PaiementResource.php b/app/Filament/App/Resources/PaiementResource.php
+index b683793..dfb4d44 100644
+--- a/app/Filament/App/Resources/PaiementResource.php
++++ b/app/Filament/App/Resources/PaiementResource.php
+@@ -11,12 +11,14 @@
+ use App\Domain\Facturation\Models\AvoirAllocation;
+ use App\Domain\Facturation\Models\Facture;
+ use App\Domain\Facturation\Models\Paiement;
++use App\Domain\Facturation\Models\PaiementAllocation;
+ use App\Domain\Facturation\Services\CalculateurLigne;
+ use App\Domain\Facturation\Services\SaisieDecimale;
+ use App\Domain\Tenancy\Support\CompteConnecte;
+ use App\Domain\Tenancy\Support\ValeurRequise;
+ use App\Domain\Tenancy\Support\ValeurSimple;
+ use App\Domain\Tenancy\Support\ValeursLues;
++use App\Filament\App\FicheDUnDocument;
+ use App\Filament\App\Pages\Caisse;
+ use App\Filament\App\Resources\PaiementResource\Pages;
+ use App\Filament\Concerns\GereLesExceptionsMetier;
+@@ -38,6 +40,7 @@
+ use Filament\Tables\Table;
+ use Illuminate\Database\Eloquent\Builder;
+ use Illuminate\Database\Eloquent\Model;
++use Illuminate\Support\HtmlString;
+ use Illuminate\Validation\Rules\Exists;
+ use InvalidArgumentException;
+ 
+@@ -322,11 +325,14 @@ public static function table(Table $table): Table
+                     ->badge()
+                     ->color(fn (?string $state): string => $state === 'Contre-passation' ? 'danger' : 'gray')
+                     ->placeholder('—'),
++                // Chaque numéro mène à la fiche du ticket ou de la facture,
++                // pour qui peut la voir (constat C2, voir FicheDUnDocument) :
++                // la rangée d'un paiement n'ouvre aucune fiche.
+                 Tables\Columns\TextColumn::make('allocations')
+-                    ->label('Factures réglées')
+-                    ->state(fn (Paiement $record) => $record->allocations
+-                        ->map(fn ($allocation) => $allocation->facture->numero ?? '—')
+-                        ->join(', '))
++                    ->label('Documents réglés')
++                    ->state(fn (Paiement $record): HtmlString => new HtmlString($record->allocations
++                        ->map(fn (PaiementAllocation $allocation): string => $allocation->facture === null ? '—' : FicheDUnDocument::numeroEnLien($allocation->facture, (string) $allocation->facture->numero)->toHtml())
++                        ->join(', ')))
+                     ->wrap(),
+                 Tables\Columns\TextColumn::make('reference')->label('Référence')->toggleable(),
+                 Tables\Columns\TextColumn::make('cree_par_nom')->label('Enregistré par')->toggleable(),
+diff --git a/app/Filament/Concerns/SaisitUnReglementEnParts.php b/app/Filament/Concerns/SaisitUnReglementEnParts.php
+index 5bcaccc..634997d 100644
+--- a/app/Filament/Concerns/SaisitUnReglementEnParts.php
++++ b/app/Filament/Concerns/SaisitUnReglementEnParts.php
+@@ -27,6 +27,7 @@
+ use Illuminate\Contracts\Support\Htmlable;
+ use Illuminate\Database\Eloquent\Model;
+ use InvalidArgumentException;
++use Livewire\Component as LivewireComponent;
+ use LogicException;
+ 
+ /**
+@@ -55,7 +56,11 @@
+  * règlement sans aucun montant, ou à zéro, revient à « Émettre ».
+  * L'écran le dit pendant la saisie (« Il reste 10,00 € à répartir. ») et
+  * refuse un règlement qui ne tombe pas juste ; l'enregistrement le
+- * revérifie sous le verrou du registre.
++ * revérifie sous le verrou du registre. Ce qui sépare les parts du
++ * règlement, comme le refus d'un bon d'avoir, ne s'affiche qu'une fois
++ * (constat C1 de l'éditeur) : l'aide en direct pendant la saisie, puis,
++ * après un clic refusé, le refus à sa place, sous les parts, qui s'efface
++ * dès que la saisie le rend faux (voir oublierLeRefusDevenuFaux()).
+  */
+ trait SaisitUnReglementEnParts
+ {
+@@ -104,6 +109,11 @@ public static function composantsDuReglement(Closure $apercu, Closure $modePrefe
+                 ->reorderable(false)
+                 ->defaultItems(1)
+                 ->live()
++                ->afterStateUpdated(fn (Repeater $component, Get $get, ?Model $record) => self::oublierLeRefusDevenuFaux(
++                    $component->getLivewire(),
++                    $component->getStatePath(),
++                    self::ecartDesParts(ValeursLues::tableau($component->getState() ?? []), $apercu($get, $record, ''), $aLaCaisse),
++                ))
+                 ->rule(fn (Get $get, ?Model $record): Closure => function (string $attribute, mixed $parts, Closure $echec) use ($get, $record, $apercu, $aLaCaisse): void {
+                     $ecart = self::ecartDesParts(is_array($parts) ? $parts : [], $apercu($get, $record, ''), $aLaCaisse);
+ 
+@@ -111,13 +121,41 @@ public static function composantsDuReglement(Closure $apercu, Closure $modePrefe
+                         $echec($ecart);
+                     }
+                 }),
++            // L'aide en direct, tant qu'aucun refus ne la remplace sous les
++            // parts (voir oublierLeRefusDevenuFaux()).
+             Placeholder::make('reste_a_repartir')
+                 ->label('')
+                 ->content(fn (Get $get, ?Model $record): Htmlable => ClientResource::enEvidence((string) self::ecartDesParts(ValeursLues::tableau($get('parts') ?? []), $apercu($get, $record, ''), $aLaCaisse)))
+-                ->visible(fn (Get $get, ?Model $record): bool => self::ecartDesParts(ValeursLues::tableau($get('parts') ?? []), $apercu($get, $record, ''), $aLaCaisse) !== null),
++                ->visible(fn (Placeholder $component, Get $get, ?Model $record): bool => self::ecartDesParts(ValeursLues::tableau($get('parts') ?? []), $apercu($get, $record, ''), $aLaCaisse) !== null
++                    && ! self::refusAffiche($component->getLivewire(), ltrim($component->getContainer()->getStatePath().'.parts', '.'))),
+         ];
+     }
+ 
++    /**
++     * Le refus d'un champ du règlement, affiché sous lui après un clic
++     * refusé, s'efface dès qu'il ne dit plus vrai : l'écart de ses parts ou
++     * le refus de son bon d'avoir, recalculé sur la saisie, a changé.
++     * L'aide en direct reprend alors sa place, si un écart reste (constat
++     * C1 de l'éditeur). La caisse le fait aussi à chaque affichage (voir
++     * Caisse::rendering()), son panier et son client changeant ce qui
++     * reste à payer.
++     */
++    public static function oublierLeRefusDevenuFaux(LivewireComponent $livewire, string $chemin, ?string $refusActuel): void
++    {
++        if (self::refusAffiche($livewire, $chemin) && $livewire->getErrorBag()->first($chemin) !== $refusActuel) {
++            $livewire->resetErrorBag($chemin);
++        }
++    }
++
++    /**
++     * Un refus est affiché sous ce champ : Filament l'écrit à sa place, et
++     * l'aide qui dirait la même chose se tait.
++     */
++    private static function refusAffiche(LivewireComponent $livewire, string $chemin): bool
++    {
++        return $livewire->getErrorBag()->has($chemin);
++    }
++
+     /**
+      * Les parts payées du règlement saisi, sans les parts « Avoir » ni
+      * celles restées sans montant (rien ne restait à y payer) ou à zéro,
+@@ -251,12 +289,17 @@ private static function schemaDUnePart(Closure $apercu, Closure $modePrefere, bo
+                 ->visible($estAvoir)
+                 ->required($estAvoir)
+                 ->live(onBlur: true)
+-                ->helperText(function (Get $get, ?Model $record) use ($apercu, $aLaCaisse): Htmlable|string|null {
++                ->afterStateUpdated(fn (TextInput $component, Get $get, ?Model $record) => self::oublierLeRefusDevenuFaux(
++                    $component->getLivewire(),
++                    $component->getStatePath(),
++                    self::refusDuBon($apercu($get, $record, '../../'), $get('bon')),
++                ))
++                ->helperText(function (TextInput $component, Get $get, ?Model $record) use ($apercu, $aLaCaisse): Htmlable|string|null {
+                     $refus = self::refusDuBon($apercu($get, $record, '../../'), $get('bon'));
+ 
+                     return match (true) {
+-                        $refus !== null => ClientResource::enEvidence($refus),
+-                        $aLaCaisse => null,
++                        $refus !== null && ! self::refusAffiche($component->getLivewire(), $component->getStatePath()) => ClientResource::enEvidence($refus),
++                        $refus !== null, $aLaCaisse => null,
+                         default => self::BON_SIGNE_PAR_LA_PREMIERE_PART,
+                     };
+                 })
+diff --git a/app/Providers/AppServiceProvider.php b/app/Providers/AppServiceProvider.php
+index 327d1a1..f81a324 100644
+--- a/app/Providers/AppServiceProvider.php
++++ b/app/Providers/AppServiceProvider.php
+@@ -71,6 +71,8 @@
+ use Filament\Forms\Components\TextInput;
+ use Filament\Http\Responses\Auth\Contracts\LoginResponse;
+ use Filament\Infolists\Components\TextEntry;
++use Filament\Support\Assets\Css;
++use Filament\Support\Facades\FilamentAsset;
+ use Filament\Tables\Columns\TextColumn;
+ use Illuminate\Contracts\Foundation\Application;
+ use Illuminate\Contracts\Support\Htmlable;
+@@ -207,6 +209,20 @@ public function boot(): void
+         $this->nommerLesChampsDansLesMessages();
+         $this->ecrireLesDatesEnFrancaisDansLesMessages();
+         $this->neJamaisMettreEnFormeLesTextesDesEmails();
++        $this->teinterLesRangeesChoisies();
++    }
++
++    /**
++     * La feuille écrite à la main qui teinte la rangée choisie d'une
++     * fenêtre de sélection et la ligne cochée d'une liste, dans les trois
++     * panneaux (constat C5 de l'éditeur, voir
++     * resources/css/rangees-choisies.css) : Filament la sert, après ses
++     * propres feuilles, depuis la copie que « php artisan filament:assets »
++     * publie dans public/css/app.
++     */
++    private function teinterLesRangeesChoisies(): void
++    {
++        FilamentAsset::register([Css::make('rangees-choisies', resource_path('css/rangees-choisies.css'))], 'app');
+     }
+ 
+     /**
+diff --git a/public/css/app/rangees-choisies.css b/public/css/app/rangees-choisies.css
+new file mode 100644
+index 0000000..e8b1210
+--- /dev/null
++++ b/public/css/app/rangees-choisies.css
+@@ -0,0 +1,25 @@
++/*
++ * La rangée choisie d'une fenêtre de sélection (les produits ajoutés à une
++ * vente), la ligne cochée d'une liste qui a des actions groupées et le
++ * service coché d'une fenêtre de sélection (constat C5 de l'éditeur) : une
++ * teinte légère de la couleur principale du panneau, celle de ses boutons,
++ * au texte bien lisible, au repos comme au survol, en clair comme en
++ * sombre. Écrite à la main, sans aucun outil Node, elle ne lit que les
++ * variables de couleur que Filament pose pour le panneau ; ses sélecteurs
++ * l'emportent sur les fonds gris de Filament.
++ */
++.fi-ta-table .fi-ta-row.piliqi-rangee-choisie,
++.fi-ta-table .fi-ta-row.piliqi-rangee-choisie:hover,
++.fi-ta-table .fi-ta-row:has(.fi-ta-record-checkbox:checked),
++.fi-ta-table .fi-ta-row:has(.fi-ta-record-checkbox:checked):hover,
++.fi-fo-checkbox-list .fi-fo-checkbox-list-option-label:has(input:checked) {
++    background-color: rgba(var(--primary-50), 1);
++}
++
++.dark .fi-ta-table .fi-ta-row.piliqi-rangee-choisie,
++.dark .fi-ta-table .fi-ta-row.piliqi-rangee-choisie:hover,
++.dark .fi-ta-table .fi-ta-row:has(.fi-ta-record-checkbox:checked),
++.dark .fi-ta-table .fi-ta-row:has(.fi-ta-record-checkbox:checked):hover,
++.dark .fi-fo-checkbox-list .fi-fo-checkbox-list-option-label:has(input:checked) {
++    background-color: rgba(var(--primary-500), 0.15);
++}
+diff --git a/resources/css/rangees-choisies.css b/resources/css/rangees-choisies.css
+new file mode 100644
+index 0000000..e8b1210
+--- /dev/null
++++ b/resources/css/rangees-choisies.css
+@@ -0,0 +1,25 @@
++/*
++ * La rangée choisie d'une fenêtre de sélection (les produits ajoutés à une
++ * vente), la ligne cochée d'une liste qui a des actions groupées et le
++ * service coché d'une fenêtre de sélection (constat C5 de l'éditeur) : une
++ * teinte légère de la couleur principale du panneau, celle de ses boutons,
++ * au texte bien lisible, au repos comme au survol, en clair comme en
++ * sombre. Écrite à la main, sans aucun outil Node, elle ne lit que les
++ * variables de couleur que Filament pose pour le panneau ; ses sélecteurs
++ * l'emportent sur les fonds gris de Filament.
++ */
++.fi-ta-table .fi-ta-row.piliqi-rangee-choisie,
++.fi-ta-table .fi-ta-row.piliqi-rangee-choisie:hover,
++.fi-ta-table .fi-ta-row:has(.fi-ta-record-checkbox:checked),
++.fi-ta-table .fi-ta-row:has(.fi-ta-record-checkbox:checked):hover,
++.fi-fo-checkbox-list .fi-fo-checkbox-list-option-label:has(input:checked) {
++    background-color: rgba(var(--primary-50), 1);
++}
++
++.dark .fi-ta-table .fi-ta-row.piliqi-rangee-choisie,
++.dark .fi-ta-table .fi-ta-row.piliqi-rangee-choisie:hover,
++.dark .fi-ta-table .fi-ta-row:has(.fi-ta-record-checkbox:checked),
++.dark .fi-ta-table .fi-ta-row:has(.fi-ta-record-checkbox:checked):hover,
++.dark .fi-fo-checkbox-list .fi-fo-checkbox-list-option-label:has(input:checked) {
++    background-color: rgba(var(--primary-500), 0.15);
++}
+diff --git a/resources/views/filament/app/pages/caisse.blade.php b/resources/views/filament/app/pages/caisse.blade.php
+index a6e2561..bb38102 100644
+--- a/resources/views/filament/app/pages/caisse.blade.php
++++ b/resources/views/filament/app/pages/caisse.blade.php
+@@ -9,7 +9,9 @@
+     @endif
+ 
+     @if ($derniereVente !== null)
+-        <p class="text-sm text-gray-500 dark:text-gray-400">{{ $derniereVente }}</p>
++        <p class="text-sm text-gray-500 dark:text-gray-400">
++            {{ $derniereVente['texte'] }}@if ($derniereVente['adresse'] !== null)<a href="{{ $derniereVente['adresse'] }}" class="text-primary-600 underline dark:text-primary-400">{{ $derniereVente['numero'] }}</a>@else{{ $derniereVente['numero'] }}@endif
++        </p>
+     @endif
+ 
+     <form wire:submit="encaisser">
+diff --git a/tests/Browser/AidesCommunesTest.php b/tests/Browser/AidesCommunesTest.php
+index fffe814..e5bc4f0 100644
+--- a/tests/Browser/AidesCommunesTest.php
++++ b/tests/Browser/AidesCommunesTest.php
+@@ -13,6 +13,7 @@
+ use Illuminate\Support\Facades\Storage;
+ use Livewire\Features\SupportFileUploads\FileUploadConfiguration;
+ use PHPUnit\Framework\AssertionFailedError;
++use Tests\Browser\Support\Navigation;
+ use Tests\Fixtures\FichiersDeTest;
+ 
+ /*
+@@ -150,6 +151,49 @@ function fichierDuPoste(string $nom, string $contenu): string
+         ->voir('Reçu facture.txt (Facture n° 12 : 18,00 €) de Jeanne Dupont');
+ });
+ 
++/*
++ * Constat C6 de l'éditeur : Playwright n'accepte qu'un chemin absolu et
++ * entièrement résolu ; sous Windows, storage_path() mêle « \\ » et « / ».
++ * Un chemin qui passe par « .. », refusé de la même façon ici, arrive au
++ * serveur une fois résolu par l'aide.
++ */
++test('un fichier donné par un chemin qui n’est pas entièrement résolu arrive au serveur', function () {
++    Route::get('/essai-envoi', fn () => '<html><body><form method="post" action="/essai-envoi" enctype="multipart/form-data"><input type="file" name="pieces[]"><button type="submit">Envoyer</button></form></body></html>');
++    Route::post('/essai-envoi', fn (Request $requete) => 'Reçu '.$requete->file('pieces')[0]->getClientOriginalName());
++    $chemin = fichierDuPoste('facture.txt', 'Facture n° 12');
++    $nonResolu = dirname($chemin).'/../'.basename(dirname($chemin)).'/'.basename($chemin);
++
++    $this->naviguer('/essai-envoi')
++        ->envoyerLeFichier($nonResolu)
++        ->cliquerSur('Envoyer')
++        ->voir('Reçu facture.txt');
++});
++
++/*
++ * Constat C6 de l'éditeur : un poste plus lent que la CI règle le délai
++ * des gestes par PILIQI_NAVIGATEUR_DELAI, en secondes ; 15 sans elle ; une
++ * valeur qui n'est pas un nombre entier de secondes est refusée.
++ */
++test('le délai des gestes se règle par la variable PILIQI_NAVIGATEUR_DELAI', function () {
++    $avant = getenv(Navigation::VARIABLE_DU_DELAI);
++
++    try {
++        putenv(Navigation::VARIABLE_DU_DELAI);
++        expect(Navigation::delai())->toBe(15);
++
++        putenv(Navigation::VARIABLE_DU_DELAI.'=60');
++        expect(Navigation::delai())->toBe(60);
++
++        putenv(Navigation::VARIABLE_DU_DELAI.'=une minute');
++        expect(fn () => Navigation::delai())->toThrow(InvalidArgumentException::class, 'PILIQI_NAVIGATEUR_DELAI doit être un nombre entier de secondes, au moins 1');
++
++        putenv(Navigation::VARIABLE_DU_DELAI.'=0');
++        expect(fn () => Navigation::delai())->toThrow(InvalidArgumentException::class);
++    } finally {
++        putenv($avant === false ? Navigation::VARIABLE_DU_DELAI : Navigation::VARIABLE_DU_DELAI.'='.$avant);
++    }
++});
++
+ test('le propriétaire dont les courriers ne sont pas parvenus dépose une pièce par le champ de fichier de Filament', function () {
+     Storage::fake(PiecesDeVerification::DISQUE);
+     Storage::fake(FileUploadConfiguration::disk());
+diff --git a/tests/Browser/AucunSiteTiersTest.php b/tests/Browser/AucunSiteTiersTest.php
+new file mode 100644
+index 0000000..4e15731
+--- /dev/null
++++ b/tests/Browser/AucunSiteTiersTest.php
+@@ -0,0 +1,97 @@
++<?php
++
++use Tests\Browser\Support\Navigation;
++
++/*
++ * Aucune page ne joint un site tiers (constat C4 de l'éditeur, réponse
++ * « oui recommandé » à Q-TIERS) : panneau par panneau, et sur les pages
++ * publiques, aucune ressource (feuille de style, police, image, script,
++ * cadre) ne vient d'un autre site que PILIQI ; la police Inter vient de
++ * public/fonts/inter, et l'image des initiales du compte est dessinée par
++ * PILIQI dans son adresse même, sans que le nom de la personne parte
++ * ailleurs. Le navigateur des tests refuse de toute façon toute requête
++ * vers un autre site, et chaque vérification d'une page échoue sur la
++ * moindre (voir Navigation et surveillance.js) : ces tests lisent en plus
++ * ce que chaque page a chargé.
++ */
++
++/**
++ * Ce que cette page a chargé ou désigne hors de PILIQI (ressources
++ * chargées, feuilles de style, scripts, images, cadres), et les polices
++ * qu'elle a chargées, une fois ses polices prêtes.
++ *
++ * @return array{tiers: list<string>, polices: list<string>}
++ */
++function ressourcesDeLaPage(Navigation $onglet): array
++{
++    $ressources = $onglet->page()->evaluate(<<<'JS'
++        async () => {
++            await document.fonts.ready;
++            const adresses = [
++                ...performance.getEntriesByType('resource').map((ressource) => ressource.name),
++                ...[...document.querySelectorAll('link[href]')].map((lien) => lien.href),
++                ...[...document.querySelectorAll('script[src], img[src], iframe[src], source[src], video[src], audio[src]')].map((element) => element.src),
++            ];
++            const tiers = adresses.filter((adresse) => {
++                const url = new URL(adresse, location.href);
++
++                return ['http:', 'https:', 'ws:', 'wss:'].includes(url.protocol) && url.origin !== location.origin;
++            });
++            const polices = performance.getEntriesByType('resource').map((ressource) => ressource.name).filter((adresse) => /\.woff2?($|\?)/.test(adresse));
++
++            return { tiers, polices };
++        }
++    JS);
++
++    return ['tiers' => array_values($ressources['tiers']), 'polices' => array_values($ressources['polices'])];
++}
++
++/**
++ * La page ne charge rien d'un autre site ; chaque police qu'elle charge
++ * vient de public/fonts/inter, et une page d'un panneau de Filament, écrite
++ * en Inter, en charge au moins une.
++ */
++function pageSansSiteTiers(Navigation $onglet, string $quoi, bool $enInter = true): void
++{
++    $ressources = ressourcesDeLaPage($onglet);
++
++    expect($ressources['tiers'])->toBe([], $quoi.' charge une ressource d\'un autre site.');
++
++    if ($enInter) {
++        expect($ressources['polices'])->not->toBe([], $quoi.' ne charge aucune police.');
++    }
++
++    foreach ($ressources['polices'] as $police) {
++        expect(parse_url($police, PHP_URL_PATH))->toStartWith('/fonts/inter/', $quoi.' charge une police d\'ailleurs : '.$police);
++    }
++}
++
++test('les pages publiques ne chargent rien d’un autre site', function (string $page, bool $enInter) {
++    pageSansSiteTiers($this->naviguer($page), $page, $enInter);
++})->with([
++    'connexion au panneau des magasins' => ['/app/login', true],
++    'connexion à l’espace de la société' => ['/societe/login', true],
++    'connexion à l’espace du cabinet' => ['/cabinet/login', true],
++    'mot de passe oublié' => ['/app/password-reset/request', true],
++    'inscription d’une société' => ['/app/register', true],
++    'code du courrier recommandé, hors des panneaux' => ['/code', false],
++]);
++
++test('chaque panneau ne charge rien d’un autre site, et les initiales du compte sont dessinées par PILIQI', function () {
++    $societe = $this->societeComplete();
++    $panneaux = [
++        'le panneau du magasin' => [$societe->responsable, 'app'],
++        'l’espace de la société' => [$societe->proprietaire, 'societe'],
++        'l’espace du cabinet' => [$societe->proprietaireDuCabinet, 'cabinet'],
++    ];
++
++    foreach ($panneaux as $quoi => [$compte, $panneau]) {
++        $onglet = $this->seConnecter($compte, panneau: $panneau);
++        pageSansSiteTiers($onglet, $quoi);
++
++        $avatar = $onglet->page()->evaluate('() => document.querySelector(".fi-user-menu .fi-user-avatar")?.getAttribute("src") ?? null');
++        expect($avatar)->toBeString($quoi.' n\'a pas d\'image des initiales.')
++            ->and($avatar)->toStartWith('data:image/svg+xml;base64,')
++            ->and($avatar)->not->toContain('ui-avatars');
++    }
++});
+diff --git a/tests/Browser/Parcours/FicheDUneFactureTest.php b/tests/Browser/Parcours/FicheDUneFactureTest.php
+new file mode 100644
+index 0000000..494a414
+--- /dev/null
++++ b/tests/Browser/Parcours/FicheDUneFactureTest.php
+@@ -0,0 +1,141 @@
++<?php
++
++use App\Domain\Authorization\PermissionRegistry;
++use App\Domain\Catalogue\Models\Produit;
++use App\Domain\Contacts\Models\Client;
++use App\Domain\Facturation\Actions\CreerFactureAction;
++use App\Domain\Facturation\Actions\EmettreFactureAction;
++use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
++use App\Domain\Facturation\Enums\ModePaiement;
++use App\Domain\Facturation\Enums\StatutFacture;
++use App\Domain\Facturation\Models\Facture;
++use App\Domain\Tenancy\Enums\RoleMagasin;
++use App\Domain\Tenancy\Models\Magasin;
++use App\Domain\Tenancy\Services\TenantContext;
++use App\Models\User;
++use Tests\Browser\Support\Navigation;
++
++/*
++ * La fiche d'une facture ou d'un ticket dans le navigateur : un brouillon
++ * s'y modifie et s'y émet, pour qui le peut depuis la liste (constat C9,
++ * réponse de l'éditeur à T42) ; la section « Paiements reçus » ne se montre
++ * qu'à qui voit les paiements de ce document, « Payé » et « Restant dû »
++ * restant visibles (constat C8, réponse de l'éditeur à T41). La société de
++ * test a tous ses rôles et son catalogue (voir
++ * TestCaseDuNavigateur::societeComplete()).
++ */
++
++/**
++ * Le brouillon de facture du magasin de la société de test, fait par son
++ * vendeur (voir TestCaseDuNavigateur::remplirLeMagasin()).
++ */
++function brouillonDuVendeur(Magasin $magasin): Facture
++{
++    return app(TenantContext::class)->runAs($magasin, fn (): Facture => Facture::query()->where('statut', StatutFacture::Brouillon)->sole());
++}
++
++/**
++ * Le nombre de boutons ou de liens de ce libellé en haut de la fiche.
++ */
++function actionsDeLaFiche(Navigation $onglet, string $libelle): int
++{
++    return $onglet->element('.fi-header >> internal:role=button[name='.Navigation::texte($libelle).'s]')->count()
++        + $onglet->element('.fi-header >> internal:role=link[name='.Navigation::texte($libelle).'s]')->count();
++}
++
++test('le responsable modifie puis émet un brouillon depuis sa fiche', function () {
++    $societe = $this->societeComplete();
++    $brouillon = brouillonDuVendeur($societe->magasin);
++    $fiche = '/app/'.$societe->magasin->uuid.'/factures/'.$brouillon->id;
++    $onglet = $this->seConnecter($societe->responsable)->aller($fiche)->voir('Brouillon (pas encore émise)');
++
++    $onglet->cliquerSurLeLien('Modifier')->attendreLaPage('/factures/'.$brouillon->id.'/edit$');
++    $onglet->aller($fiche)
++        ->cliquerSur('Émettre')
++        ->soumettre('Confirmer')
++        ->voir('Émise');
++
++    $emise = app(TenantContext::class)->runAs($societe->magasin, fn (): Facture => $brouillon->fresh());
++    expect($emise->statut)->toBe(StatutFacture::Emise)
++        ->and($emise->numero)->toStartWith('FAC-PORT-2026-');
++    $onglet->voir((string) $emise->numero);
++    expect(actionsDeLaFiche($onglet, 'Modifier'))->toBe(0)
++        ->and(actionsDeLaFiche($onglet, 'Émettre'))->toBe(0);
++});
++
++test('le vendeur modifie puis émet son brouillon depuis sa fiche', function () {
++    $societe = $this->societeComplete();
++    $brouillon = brouillonDuVendeur($societe->magasin);
++    $fiche = '/app/'.$societe->magasin->uuid.'/factures/'.$brouillon->id;
++    $onglet = $this->seConnecter($societe->vendeur)->aller($fiche);
++
++    $onglet->cliquerSurLeLien('Modifier')->attendreLaPage('/factures/'.$brouillon->id.'/edit$');
++    $onglet->aller($fiche)
++        ->cliquerSur('Émettre')
++        ->soumettre('Confirmer')
++        ->voir('Émise');
++
++    expect(app(TenantContext::class)->runAs($societe->magasin, fn (): StatutFacture => $brouillon->fresh()->statut))->toBe(StatutFacture::Emise);
++});
++
++test('« Modifier » et « Émettre » ne se montrent sur la fiche d’un brouillon qu’à qui peut le modifier et l’émettre', function () {
++    $societe = $this->societeComplete();
++    $brouillon = brouillonDuVendeur($societe->magasin);
++    $lecteur = app(TenantContext::class)->runAs($societe->magasin, fn (): User => $this->membre($societe->magasin, RoleMagasin::Observateur, [
++        ...RoleMagasin::Observateur->permissionsParDefaut($societe->societe->type_activite),
++        PermissionRegistry::FACTURE_VIEW_TOUTES,
++    ], ['name' => 'Odile Regard']));
++    $comptes = [
++        'le propriétaire' => [$societe->proprietaire, 'app', false],
++        'l’administrateur sans la vente' => [$societe->administrateur, 'app', false],
++        'l’administrateur autorisé à vendre' => [$societe->administrateurVendeur, 'app', true],
++        'l’observateur qui voit les factures de l’équipe' => [$lecteur, 'app', false],
++        'le collaborateur du cabinet lié' => [$societe->collaborateur, 'cabinet', false],
++    ];
++
++    foreach ($comptes as $qui => [$compte, $panneau, $peut]) {
++        $onglet = $this->seConnecter($compte, panneau: $panneau)
++            ->aller('/app/'.$societe->magasin->uuid.'/factures/'.$brouillon->id)
++            ->voir('Brouillon (pas encore émise)');
++
++        expect(actionsDeLaFiche($onglet, 'Modifier'))->toBe($peut ? 1 : 0, $qui.' : « Modifier »')
++            ->and(actionsDeLaFiche($onglet, 'Émettre'))->toBe($peut ? 1 : 0, $qui.' : « Émettre »');
++    }
++});
++
++test('« Paiements reçus » ne se montre qu’à qui voit les paiements du document ; « Payé » et « Restant dû » restent visibles', function () {
++    $societe = $this->societeComplete();
++    [$sansLesPaiements, $saFacture] = app(TenantContext::class)->runAs($societe->magasin, function () use ($societe): array {
++        $vendeur = $this->membre($societe->magasin, RoleMagasin::Vendeur, array_values(array_diff(
++            RoleMagasin::Vendeur->permissionsParDefaut($societe->societe->type_activite),
++            [PermissionRegistry::PAIEMENT_VIEW],
++        )), ['name' => 'Valentin Sanspaiement']);
++        $client = Client::query()->where('nom', 'Hôtel des Pins')->sole();
++        $facture = app(EmettreFactureAction::class)->handle($vendeur, app(CreerFactureAction::class)->handle($vendeur, $client, [['produit_id' => Produit::query()->where('reference', 'BOUGIE')->sole()->id, 'quantite' => 1]]));
++        app(EnregistrerPaiementAction::class)->handle($societe->responsable, $client, ['mode_paiement' => ModePaiement::Especes->value, 'montant' => '10.00', 'recu_le' => '2026-03-10'], [['facture_id' => $facture->id, 'montant' => '10.00']]);
++
++        return [$vendeur, $facture];
++    });
++    $partiellementPayee = app(TenantContext::class)->runAs($societe->magasin, fn (): Facture => Facture::query()->where('statut', StatutFacture::PartiellementPayee)->where('cree_par', $societe->vendeur->id)->sole());
++
++    $onglet = $this->seConnecter($sansLesPaiements)->aller('/app/'.$societe->magasin->uuid.'/factures/'.$saFacture->id)
++        ->voir('Restant dû')
++        ->voir('8,00 €')
++        ->nePasVoir('Paiements reçus');
++    expect($onglet->element('text=Reçu le')->count())->toBe(0);
++
++    $comptes = [
++        'le vendeur qui voit les paiements' => [$societe->vendeur, 'app'],
++        'le propriétaire' => [$societe->proprietaire, 'app'],
++        'le responsable' => [$societe->responsable, 'app'],
++        'le collaborateur du cabinet lié' => [$societe->collaborateur, 'cabinet'],
++    ];
++
++    foreach ($comptes as $qui => [$compte, $panneau]) {
++        $this->seConnecter($compte, panneau: $panneau)
++            ->aller('/app/'.$societe->magasin->uuid.'/factures/'.$partiellementPayee->id)
++            ->voir('Paiements reçus')
++            ->voir('Virement')
++            ->voir('Restant dû');
++    }
++});
+diff --git a/tests/Browser/Parcours/LiensVersLesDocumentsTest.php b/tests/Browser/Parcours/LiensVersLesDocumentsTest.php
+new file mode 100644
+index 0000000..79aed57
+--- /dev/null
++++ b/tests/Browser/Parcours/LiensVersLesDocumentsTest.php
+@@ -0,0 +1,118 @@
++<?php
++
++use App\Domain\Achats\Models\AvoirFournisseur;
++use App\Domain\Catalogue\Models\Produit;
++use App\Domain\Contacts\Models\Client;
++use App\Domain\Facturation\Actions\CreerFactureAction;
++use App\Domain\Facturation\Actions\EmettreFactureAction;
++use App\Domain\Facturation\Models\Avoir;
++use App\Domain\Facturation\Models\Facture;
++use App\Domain\Tenancy\Services\TenantContext;
++use Tests\Browser\Support\Navigation;
++use Tests\Browser\Support\SocieteDeTest;
++
++/*
++ * Constat C2 de l'éditeur, confirmé à T43, dans le navigateur : chaque
++ * numéro de document d'une fiche mène à la fiche de ce document pour qui
++ * peut la voir, et reste un texte simple pour les autres ; un ticket est
++ * nommé « Ticket ». Dans la société de test (voir
++ * TestCaseDuNavigateur::remplirLeMagasin()), Jean Dupont a un avoir de
++ * 6,00 €, fait par le responsable sur un ticket du vendeur ; le ticket que
++ * le responsable lui émet ensuite, resté dû, en reçoit d'office le crédit.
++ */
++
++/**
++ * L'avoir de Jean Dupont, le ticket du vendeur qu'il corrige et le ticket
++ * du responsable, émis ensuite, que son crédit règle en partie.
++ *
++ * @return array{0: Avoir, 1: Facture, 2: Facture}
++ */
++function avoirEtTicketsDeJeanDupont(SocieteDeTest $societe): array
++{
++    return app(TenantContext::class)->runAs($societe->magasin, function () use ($societe): array {
++        $client = Client::query()->where('nom', 'Jean Dupont')->sole();
++        $ticketDuResponsable = app(EmettreFactureAction::class)->handle($societe->responsable, app(CreerFactureAction::class)->handle($societe->responsable, $client, [
++            ['produit_id' => Produit::query()->where('reference', 'BOUGIE')->sole()->id, 'quantite' => 1],
++        ]));
++        $avoir = Avoir::query()->where('client_id', $client->id)->sole();
++
++        return [$avoir, $avoir->facturesConcernees()->sole(), $ticketDuResponsable];
++    });
++}
++
++/**
++ * Le lien de ce texte exact, dans la page.
++ */
++function liensDeTexte(Navigation $onglet, string $texte): int
++{
++    return $onglet->element('internal:role=link[name='.Navigation::texte($texte).'s]')->count();
++}
++
++test('le responsable passe d’un document à l’autre par leurs numéros : avoir, ticket crédité, ticket réglé par le crédit', function () {
++    $societe = $this->societeComplete();
++    [$avoir, $ticketDuVendeur, $ticketDuResponsable] = avoirEtTicketsDeJeanDupont($societe);
++    $magasin = '/app/'.$societe->magasin->uuid;
++    $onglet = $this->seConnecter($societe->responsable)->aller($magasin.'/avoirs/'.$avoir->id)
++        ->voir('Crédit appliqué')
++        ->voir('Ticket '.$ticketDuVendeur->numero);
++
++    $onglet->cliquerSurLeLien((string) $ticketDuResponsable->numero)
++        ->attendreLaPage('/factures/'.$ticketDuResponsable->id.'$')
++        ->voir('Crédité par avoir')
++        ->cliquerSurLeLien((string) $avoir->numero)
++        ->attendreLaPage('/avoirs/'.$avoir->id.'$')
++        ->cliquerSurLeLien((string) $ticketDuVendeur->numero)
++        ->attendreLaPage('/factures/'.$ticketDuVendeur->id.'$')
++        ->voir('Avoirs émis')
++        ->cliquerSurLeLien((string) $avoir->numero)
++        ->attendreLaPage('/avoirs/'.$avoir->id.'$');
++
++    $onglet->aller($magasin.'/paiements')
++        ->cliquerSurLeLien((string) $ticketDuVendeur->numero)
++        ->attendreLaPage('/factures/'.$ticketDuVendeur->id.'$');
++});
++
++test('le collaborateur du cabinet lié ouvre de même le ticket que le crédit d’un avoir a réglé', function () {
++    $societe = $this->societeComplete();
++    [$avoir, , $ticketDuResponsable] = avoirEtTicketsDeJeanDupont($societe);
++
++    $this->seConnecter($societe->collaborateur, panneau: 'cabinet')
++        ->aller('/app/'.$societe->magasin->uuid.'/avoirs/'.$avoir->id)
++        ->cliquerSurLeLien((string) $ticketDuResponsable->numero)
++        ->attendreLaPage('/factures/'.$ticketDuResponsable->id.'$');
++});
++
++/*
++ * Le vendeur voit son ticket, mais pas les avoirs : le numéro de l'avoir
++ * qui le corrige se lit sur sa fiche, sans lien qui le mènerait à un refus.
++ */
++test('un vendeur qui ne voit pas l’avoir de son ticket en lit le numéro, sans lien', function () {
++    $societe = $this->societeComplete();
++    [$avoir, $ticketDuVendeur] = avoirEtTicketsDeJeanDupont($societe);
++
++    $onglet = $this->seConnecter($societe->vendeur)
++        ->aller('/app/'.$societe->magasin->uuid.'/factures/'.$ticketDuVendeur->id)
++        ->voir('Avoirs émis')
++        ->voir((string) $avoir->numero);
++
++    expect(liensDeTexte($onglet, (string) $avoir->numero))->toBe(0);
++});
++
++/*
++ * L'avoir fournisseur de la société de test (le retour d'une bougie
++ * cassée au Grossiste du Nord) mène à la facture d'achat qu'il crédite, qui
++ * mène à son tour à lui.
++ */
++test('le responsable passe de l’avoir fournisseur à la facture d’achat qu’il crédite, et retour', function () {
++    $societe = $this->societeComplete();
++    $avoir = app(TenantContext::class)->runAs($societe->magasin, fn (): AvoirFournisseur => AvoirFournisseur::query()->with('factureAchat')->sole());
++    $achat = $avoir->factureAchat;
++
++    $this->seConnecter($societe->responsable)
++        ->aller('/app/'.$societe->magasin->uuid.'/avoir-fournisseurs/'.$avoir->id)
++        ->voir('Facture d\'achat créditée')
++        ->cliquerSurLeLien((string) $achat->numero)
++        ->attendreLaPage('/facture-achats/'.$achat->id.'$')
++        ->cliquer('#avoirsFournisseurEmisListe a[href$="/avoir-fournisseurs/'.$avoir->id.'"]')
++        ->attendreLaPage('/avoir-fournisseurs/'.$avoir->id.'$');
++});
+diff --git a/tests/Browser/Parcours/RangeesChoisiesTest.php b/tests/Browser/Parcours/RangeesChoisiesTest.php
+new file mode 100644
+index 0000000..83c8ee1
+--- /dev/null
++++ b/tests/Browser/Parcours/RangeesChoisiesTest.php
+@@ -0,0 +1,182 @@
++<?php
++
++use Tests\Browser\Support\Navigation;
++
++/*
++ * Constat C5 de l'éditeur, confirmé à T43 : la rangée choisie d'une fenêtre
++ * de sélection (un produit ajouté à la vente) et la ligne cochée d'une
++ * liste prennent une teinte légère de la couleur principale du panneau, au
++ * texte bien lisible : le contraste entre le texte et le fond de la rangée,
++ * tels que le navigateur les calcule, atteint au moins 4,5 pour 1 (niveau AA
++ * des règles d'accessibilité WCAG), en mode clair comme en mode sombre, au
++ * repos comme au survol. La fenêtre des clients, qu'un clic ferme sur le
++ * client choisi, se lit de même au survol. La société de test a tous ses
++ * rôles et son catalogue (voir TestCaseDuNavigateur::societeComplete()).
++ */
++
++/**
++ * Le texte de cette étiquette de cellule (« Bougie parfumée »), sur la
++ * page ou dans la fenêtre ouverte : sa couleur, le fond que l'œil voit
++ * derrière lui (les fonds transparents de ses parents composés jusqu'au
++ * premier fond opaque) et leur contraste au sens des règles WCAG, tels que
++ * le navigateur les calcule.
++ *
++ * @return array{contraste: float, fond: string, texte: string}
++ */
++function couleursDeLaRangee(Navigation $onglet, string $etiquette): array
++{
++    $mesure = $onglet->page()->evaluate(<<<'JS'
++        (etiquette) => {
++            const libelle = [...document.querySelectorAll('.fi-ta-row .fi-ta-text-item-label')]
++                .find((element) => element.textContent.trim() === etiquette && element.offsetParent !== null);
++
++            if (! libelle) {
++                return null;
++            }
++
++            const couleur = (valeur) => {
++                const morceaux = valeur.match(/rgba?\(([^)]*)\)/);
++
++                if (! morceaux) {
++                    return null;
++                }
++
++                const parts = morceaux[1].split(/[\s,\/]+/).filter((part) => part !== '').map(Number);
++
++                return [parts[0], parts[1], parts[2], parts.length > 3 ? parts[3] : 1];
++            };
++            const poser = (dessus, dessous) => [0, 1, 2].map((i) => dessus[i] * dessus[3] + dessous[i] * (1 - dessus[3])).concat([1]);
++            const couches = [];
++
++            for (let element = libelle; element; element = element.parentElement) {
++                const fond = couleur(getComputedStyle(element).backgroundColor);
++
++                if (fond && fond[3] > 0) {
++                    couches.push(fond);
++
++                    if (fond[3] >= 1) {
++                        break;
++                    }
++                }
++            }
++
++            const fond = couches.reverse().reduce((dessous, dessus) => poser(dessus, dessous), [255, 255, 255, 1]);
++            const texte = poser(couleur(getComputedStyle(libelle).color), fond);
++            const luminance = (c) => {
++                const [r, g, b] = c.slice(0, 3).map((v) => {
++                    const s = v / 255;
++
++                    return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
++                });
++
++                return 0.2126 * r + 0.7152 * g + 0.0722 * b;
++            };
++            const [claire, sombre] = [luminance(texte), luminance(fond)].sort((a, b) => b - a);
++
++            return { contraste: (claire + 0.05) / (sombre + 0.05), fond: fond.map(Math.round).join(','), texte: texte.map(Math.round).join(',') };
++        }
++    JS, $etiquette);
++    expect($mesure)->toBeArray("« {$etiquette} » n'est dans aucune rangée visible.");
++
++    return ['contraste' => (float) $mesure['contraste'], 'fond' => (string) $mesure['fond'], 'texte' => (string) $mesure['texte']];
++}
++
++/**
++ * Le contraste du texte de cette étiquette sur sa rangée atteint le niveau
++ * AA (4,5 pour 1) ; rend ses couleurs.
++ *
++ * @return array{contraste: float, fond: string, texte: string}
++ */
++function rangeeLisible(Navigation $onglet, string $etiquette, string $etat): array
++{
++    $couleurs = couleursDeLaRangee($onglet, $etiquette);
++    expect($couleurs['contraste'])->toBeGreaterThanOrEqual(4.5, "« {$etiquette} » ({$etat}) : texte {$couleurs['texte']} sur fond {$couleurs['fond']}, contraste {$couleurs['contraste']}.");
++
++    return $couleurs;
++}
++
++/**
++ * Le fond propre de la rangée de cette étiquette, tel que le navigateur le
++ * calcule, et la teinte légère de la couleur principale du panneau que
++ * doit prendre une rangée choisie ou cochée (la plus claire en mode clair,
++ * la principale très transparente en mode sombre), calculée de même sur un
++ * élément témoin.
++ *
++ * @return array{rangee: string, teinte: string}
++ */
++function fondEtTeinteDeLaRangee(Navigation $onglet, string $etiquette): array
++{
++    $fonds = $onglet->page()->evaluate(<<<'JS'
++        (etiquette) => {
++            const libelle = [...document.querySelectorAll('.fi-ta-row .fi-ta-text-item-label')]
++                .find((element) => element.textContent.trim() === etiquette && element.offsetParent !== null);
++            const temoin = document.createElement('div');
++            temoin.style.backgroundColor = document.documentElement.classList.contains('dark') ? 'rgba(var(--primary-500), 0.15)' : 'rgba(var(--primary-50), 1)';
++            document.body.appendChild(temoin);
++            const teinte = getComputedStyle(temoin).backgroundColor;
++            temoin.remove();
++
++            return { rangee: libelle ? getComputedStyle(libelle.closest('.fi-ta-row')).backgroundColor : null, teinte };
++        }
++    JS, $etiquette);
++
++    return ['rangee' => (string) $fonds['rangee'], 'teinte' => (string) $fonds['teinte']];
++}
++
++/**
++ * La rangée de cette étiquette a la teinte de la couleur principale du
++ * panneau.
++ */
++function rangeeTeintee(Navigation $onglet, string $etiquette, string $etat): void
++{
++    $fonds = fondEtTeinteDeLaRangee($onglet, $etiquette);
++    expect($fonds['rangee'])->toBe($fonds['teinte'], "La rangée de « {$etiquette} » ({$etat}) n'a pas la teinte de la couleur principale du panneau.");
++}
++
++/**
++ * Passe la page en mode sombre, comme le choix du thème du menu du compte
++ * (Filament le garde dans le navigateur), et la recharge.
++ */
++function passerEnModeSombre(Navigation $onglet): Navigation
++{
++    $onglet->page()->evaluate('() => localStorage.setItem("theme", "dark")');
++
++    return $onglet->aller((string) parse_url($onglet->page()->url(), PHP_URL_PATH))
++        ->attendreQue('document.documentElement.classList.contains("dark")', 'la page ne passe pas en mode sombre');
++}
++
++test('la rangée choisie, la rangée survolée et la ligne cochée se lisent bien, en clair et en sombre', function (bool $sombre) {
++    $societe = $this->societeComplete();
++    $onglet = $this->seConnecter($societe->responsable)->aller('/app/'.$societe->magasin->uuid.'/factures/create');
++
++    if ($sombre) {
++        passerEnModeSombre($onglet);
++    }
++
++    $onglet->cliquerSur('Ajouter un produit');
++    $avant = couleursDeLaRangee($onglet, 'Bougie parfumée');
++    $onglet->cliquer(Navigation::FENETRE.' >> .fi-ta-text-item-label:text-is('.Navigation::texte('Bougie parfumée').')')->voir('× 1');
++    $choisie = rangeeLisible($onglet, 'Bougie parfumée', 'choisie');
++    rangeeLisible($onglet, 'BOUGIE', 'choisie');
++    rangeeTeintee($onglet, 'Bougie parfumée', 'choisie');
++    expect($choisie['fond'])->not->toBe($avant['fond'], 'La rangée choisie garde le fond d\'une rangée qui ne l\'est pas.')
++        ->and($choisie['fond'])->not->toBe(couleursDeLaRangee($onglet, 'Savon au lait')['fond']);
++
++    $onglet->element(Navigation::FENETRE.' .fi-ta-row:has(.fi-ta-text-item-label:text-is('.Navigation::texte('Bougie parfumée').'))')->hover();
++    expect(rangeeLisible($onglet, 'Bougie parfumée', 'choisie et survolée')['fond'])->toBe($choisie['fond']);
++    rangeeTeintee($onglet, 'Bougie parfumée', 'choisie et survolée');
++    $onglet->voir('× 1')->fermerLaFenetre();
++
++    $onglet->cliquer('[title="Chercher un client"]');
++    $onglet->element(Navigation::FENETRE.' .fi-ta-row:has(.fi-ta-text-item-label:text-is('.Navigation::texte('Jean Dupont').'))')->hover();
++    rangeeLisible($onglet, 'Jean Dupont', 'survolée dans la fenêtre des clients');
++    $onglet->fermerLaFenetre();
++
++    $onglet->aller('/app/'.$societe->magasin->uuid.'/clients');
++    $libre = couleursDeLaRangee($onglet, 'Jean Dupont');
++    $onglet->cliquer('.fi-ta-row:has(.fi-ta-text-item-label:text-is('.Navigation::texte('Jean Dupont').')) .fi-ta-record-checkbox');
++    $cochee = rangeeLisible($onglet, 'Jean Dupont', 'cochée dans la liste des clients');
++    rangeeTeintee($onglet, 'Jean Dupont', 'cochée dans la liste des clients');
++    expect($cochee['fond'])->not->toBe($libre['fond'], 'La ligne cochée garde le fond d\'une ligne qui ne l\'est pas.')
++        ->and($cochee['fond'])->toBe($choisie['fond']);
++})->with(['mode clair' => [false], 'mode sombre' => [true]]);
+diff --git a/tests/Browser/Parcours/RecuDePaiementTest.php b/tests/Browser/Parcours/RecuDePaiementTest.php
+index 09359b9..cd4f4cb 100644
+--- a/tests/Browser/Parcours/RecuDePaiementTest.php
++++ b/tests/Browser/Parcours/RecuDePaiementTest.php
+@@ -82,6 +82,11 @@ function factureEncaisseeParUnAutre(Magasin $magasin, User $vendeuse, User $resp
+         ->toBe(['compta@hotel-des-pins.fr', StatutEnvoi::Envoye, app(TenantContext::class)->runAs($societe->magasin, fn (): int => RecuPaiement::query()->sole()->id)]);
+ });
+ 
++/*
++ * La section « Paiements reçus », et le reçu qu'elle donne, ne se montre
++ * qu'à qui voit les paiements du document (constat C8, réponse de
++ * l'éditeur à T41) : un compte sans « Paiements : voir » n'en voit rien.
++ */
+ test('« Reçu (PDF) » ne se montre qu’à qui voit le paiement, « Envoyer le reçu » qu’à qui envoie la facture, jamais au cabinet lié', function () {
+     $societe = $this->societeComplete();
+     $facture = factureRegleeApresSonEmission(app(TenantContext::class), $societe->magasin);
+@@ -96,22 +101,25 @@ function factureEncaisseeParUnAutre(Magasin $magasin, User $vendeuse, User $resp
+     ]);
+     $deLaVendeuse = factureEncaisseeParUnAutre($societe->magasin, $vendeuse, $societe->responsable);
+     $comptes = [
+-        'le propriétaire' => [$societe->proprietaire, 'app', $facture, true, true],
+-        'l’administrateur sans la vente' => [$societe->administrateur, 'app', $facture, true, true],
+-        'l’administrateur autorisé à vendre' => [$societe->administrateurVendeur, 'app', $facture, true, true],
+-        'l’administrateur sans « Paiements : voir »' => [$administrateurSansLesPaiements, 'app', $facture, false, false],
+-        'le responsable' => [$societe->responsable, 'app', $facture, true, true],
+-        'le vendeur qui a encaissé' => [$societe->vendeur, 'app', $facture, true, true],
+-        'la vendeuse, sur sa facture encaissée par le responsable' => [$vendeuse, 'app', $deLaVendeuse, false, false],
+-        'le vendeur qui voit toutes les factures, sans « Paiements : voir »' => [$vendeurSansLesPaiements, 'app', $facture, false, false],
+-        'l’observateur qui voit toutes les factures, sans « Paiements : voir »' => [$observateurSansLesPaiements, 'app', $facture, false, false],
+-        'l’observateur qui voit toutes les factures et les paiements' => [$observateurAvecLesPaiements, 'app', $facture, true, false],
+-        'le collaborateur du cabinet lié' => [$societe->collaborateur, 'cabinet', $facture, true, false],
++        'le propriétaire' => [$societe->proprietaire, 'app', $facture, true, true, true],
++        'l’administrateur sans la vente' => [$societe->administrateur, 'app', $facture, true, true, true],
++        'l’administrateur autorisé à vendre' => [$societe->administrateurVendeur, 'app', $facture, true, true, true],
++        'l’administrateur sans « Paiements : voir »' => [$administrateurSansLesPaiements, 'app', $facture, false, false, false],
++        'le responsable' => [$societe->responsable, 'app', $facture, true, true, true],
++        'le vendeur qui a encaissé' => [$societe->vendeur, 'app', $facture, true, true, true],
++        'la vendeuse, sur sa facture encaissée par le responsable' => [$vendeuse, 'app', $deLaVendeuse, true, false, false],
++        'le vendeur qui voit toutes les factures, sans « Paiements : voir »' => [$vendeurSansLesPaiements, 'app', $facture, false, false, false],
++        'l’observateur qui voit toutes les factures, sans « Paiements : voir »' => [$observateurSansLesPaiements, 'app', $facture, false, false, false],
++        'l’observateur qui voit toutes les factures et les paiements' => [$observateurAvecLesPaiements, 'app', $facture, true, true, false],
++        'le collaborateur du cabinet lié' => [$societe->collaborateur, 'cabinet', $facture, true, true, false],
+     ];
+ 
+-    foreach ($comptes as $qui => [$compte, $panneau, $document, $telecharge, $envoie]) {
++    foreach ($comptes as $qui => [$compte, $panneau, $document, $voitLesPaiements, $telecharge, $envoie]) {
+         $recu = app(TenantContext::class)->runAs($societe->magasin, fn (): string => $document->allocationsPaiement()->sole()->paiement->recuPaiement->numero);
+-        $onglet = $this->seConnecter($compte, panneau: $panneau)->aller('/app/'.$societe->magasin->uuid.'/factures/'.$document->id)->voir('Paiements reçus')->voir($recu);
++        $onglet = $this->seConnecter($compte, panneau: $panneau)->aller('/app/'.$societe->magasin->uuid.'/factures/'.$document->id)->voir('Restant dû');
++        $voitLesPaiements
++            ? $onglet->voir('Paiements reçus')->voir($recu)
++            : $onglet->nePasVoir('Paiements reçus')->nePasVoir($recu);
+         $boutons = fn (string $libelle): int => $onglet->element('.fi-in-repeatable-item >> '.Navigation::bouton($libelle))->count();
+ 
+         expect([$qui, $boutons('Reçu (PDF)'), $boutons('Envoyer le reçu')])->toBe([$qui, $telecharge ? 1 : 0, $envoie ? 1 : 0]);
+diff --git a/tests/Browser/Parcours/ReglementEnPartsTest.php b/tests/Browser/Parcours/ReglementEnPartsTest.php
+new file mode 100644
+index 0000000..8ced244
+--- /dev/null
++++ b/tests/Browser/Parcours/ReglementEnPartsTest.php
+@@ -0,0 +1,119 @@
++<?php
++
++use App\Domain\Facturation\Enums\ModePaiement;
++use App\Domain\Facturation\Enums\StatutFacture;
++use App\Domain\Facturation\Models\Facture;
++use App\Domain\Tenancy\Services\TenantContext;
++use Tests\Browser\Support\Navigation;
++
++/*
++ * Le règlement en parts dans le navigateur (constat C1 de l'éditeur) : ce
++ * qui sépare les parts saisies de ce qu'elles doivent couvrir ne
++ * s'affiche qu'une fois, avant comme après le clic sur « Encaisser », le
++ * refus prenant la place de l'aide, et plus rien ne s'affiche une fois le
++ * règlement juste ; à la caisse comme sur l'encaissement d'une facture. La
++ * vente faite, son numéro mène à sa fiche (constat C2), et le PDF du ticket
++ * imprime chacun de ses règlements à gauche du Total TTC (constat C3). La
++ * société de test a tous ses rôles et son catalogue (voir
++ * TestCaseDuNavigateur::societeComplete()).
++ */
++
++/**
++ * Combien de fois ce texte se lit dans la page, fenêtres comprises.
++ */
++function foisDansLaPage(Navigation $onglet, string $texte): int
++{
++    return (int) $onglet->page()->evaluate('(texte) => document.body.innerText.split(texte).length - 1', $texte);
++}
++
++/**
++ * Combien de fois ce texte se lit dans un refus de Filament, affiché sous
++ * le champ refusé.
++ */
++function foisDansUnRefus(Navigation $onglet, string $texte): int
++{
++    return (int) $onglet->page()->evaluate('(texte) => [...document.querySelectorAll(".fi-fo-field-wrp-error-message")].filter((refus) => refus.offsetParent !== null && refus.innerText.includes(texte)).length', $texte);
++}
++
++/**
++ * Ajoute ce produit au panier de la caisse par la fenêtre « Ajouter un
++ * produit ».
++ */
++function ajouterALaCaisse(Navigation $onglet, string $produit): Navigation
++{
++    return $onglet->cliquerSur('Ajouter un produit')
++        ->cliquer(Navigation::FENETRE.' >> .fi-ta-text-item-label:text-is('.Navigation::texte($produit).')')
++        ->cliquerSur('Ajouter le produit');
++}
++
++test('à la caisse, « Il reste … à répartir » ne s’affiche qu’une fois, avant comme après « Encaisser » ; la vente faite, son numéro mène au ticket, dont le PDF imprime chaque règlement à gauche du Total TTC', function () {
++    $societe = $this->societeComplete();
++    $onglet = $this->seConnecter($societe->vendeur)->aller('/app/'.$societe->magasin->uuid.'/caisse');
++    $reste = 'Il reste 8,00 € à répartir.';
++
++    ajouterALaCaisse($onglet, 'Bougie parfumée')->voir('18,00 €');
++    $onglet->remplirLaLigne('parts', 0, 'montant', '10')->voir($reste);
++    expect(foisDansLaPage($onglet, $reste))->toBe(1);
++
++    $onglet->soumettre('Encaisser');
++    expect(foisDansLaPage($onglet, $reste))->toBe(1)
++        ->and(foisDansUnRefus($onglet, $reste))->toBe(1);
++
++    $onglet->cliquerSur('Ajouter un autre mode')
++        ->choisirDansLaLigne('parts', 1, 'mode', ModePaiement::CarteBancaire->value)
++        ->remplirLaLigne('parts', 1, 'montant', '8')
++        ->remplirLaLigne('parts', 1, 'reference', 'CB-TRX-7788');
++    expect(foisDansLaPage($onglet, 'à répartir'))->toBe(0);
++
++    $onglet->soumettre('Encaisser')->voir('Vente encaissée : ticket');
++    $ticket = app(TenantContext::class)->runAs($societe->magasin, fn (): Facture => Facture::query()->where('cree_par', $societe->vendeur->id)->latest('id')->firstOrFail());
++    expect($ticket->statut)->toBe(StatutFacture::Payee);
++
++    $onglet->aller('/app/'.$societe->magasin->uuid.'/caisse')
++        ->voir('Dernière vente enregistrée : ticket N°')
++        ->cliquerSurLeLien((string) $ticket->numero)
++        ->attendreLaPage('/factures/'.$ticket->id.'$')
++        ->voir((string) $ticket->numero);
++
++    $onglet->cliquerSur('PDF');
++    $fichiers = $onglet->telechargements();
++    expect($fichiers)->toHaveCount(1);
++    $page = $this->pagesDuPdf(base64_decode($fichiers[0]['contenu']))[0];
++    $texte = fn (string $libelle): array => collect($page['textes'])->firstWhere('texte', $libelle) ?? throw new RuntimeException("« {$libelle} » n'est pas sur le PDF.");
++    $totalTtc = $texte('Total TTC');
++    foreach (['RÈGLEMENTS', 'Espèces', 'Carte bancaire', 'CB-TRX-7788', '10,00 €', '8,00 €'] as $reglement) {
++        expect($texte($reglement)['x'] + $texte($reglement)['largeur'])->toBeLessThan($totalTtc['x']);
++    }
++});
++
++test('à la caisse de l’administrateur autorisé à vendre, l’écart ne s’affiche qu’une fois après « Encaisser »', function () {
++    $societe = $this->societeComplete();
++    $onglet = $this->seConnecter($societe->administrateurVendeur)->aller('/app/'.$societe->magasin->uuid.'/caisse');
++    $reste = 'Il reste 13,00 € à répartir.';
++
++    ajouterALaCaisse($onglet, 'Bougie parfumée')->voir('18,00 €');
++    $onglet->remplirLaLigne('parts', 0, 'montant', '5')->voir($reste)->soumettre('Encaisser');
++
++    expect(foisDansLaPage($onglet, $reste))->toBe(1)
++        ->and(foisDansUnRefus($onglet, $reste))->toBe(1);
++});
++
++test('sur l’encaissement d’une facture, l’écart ne s’affiche qu’une fois, avant comme après le clic, puis plus du tout', function () {
++    $societe = $this->societeComplete();
++    $facture = app(TenantContext::class)->runAs($societe->magasin, fn (): Facture => Facture::query()->where('statut', StatutFacture::PartiellementPayee)->sole());
++    $onglet = $this->seConnecter($societe->responsable)->aller('/app/'.$societe->magasin->uuid.'/factures/'.$facture->id);
++    $ecart = 'Les parts du règlement (50,00 €) dépassent ce qui reste dû (34,00 €).';
++
++    $onglet->cliquerSur('Encaisser')->remplirLaLigne('parts', 0, 'montant', '50')->voir($ecart);
++    expect(foisDansLaPage($onglet, $ecart))->toBe(1);
++
++    $onglet->soumettre('Soumettre');
++    expect(foisDansLaPage($onglet, $ecart))->toBe(1)
++        ->and(foisDansUnRefus($onglet, $ecart))->toBe(1);
++
++    $onglet->remplirLaLigne('parts', 0, 'montant', '34');
++    expect(foisDansLaPage($onglet, 'dépassent ce qui reste dû'))->toBe(0);
++
++    $onglet->soumettre('Soumettre')->voir('Payée');
++    expect(app(TenantContext::class)->runAs($societe->magasin, fn (): StatutFacture => $facture->fresh()->statut))->toBe(StatutFacture::Payee);
++});
+diff --git a/tests/Browser/Support/Navigation.php b/tests/Browser/Support/Navigation.php
+index d2419d6..a7b4340 100644
+--- a/tests/Browser/Support/Navigation.php
++++ b/tests/Browser/Support/Navigation.php
+@@ -5,6 +5,7 @@
+ use App\Domain\Calendrier\Calendrier;
+ use Closure;
+ use Illuminate\Support\Str;
++use InvalidArgumentException;
+ use Pest\Browser\Api\PendingAwaitablePage;
+ use Pest\Browser\Execution;
+ use Pest\Browser\Playwright\Locator;
+@@ -31,9 +32,18 @@
+ final class Navigation
+ {
+     /**
+-     * Le délai d'attente d'un geste, en secondes.
++     * Le délai d'attente d'un geste, en secondes, sauf autre délai donné
++     * par la variable d'environnement VARIABLE_DU_DELAI (voir delai()).
+      */
+-    public const DELAI = 15;
++    public const DELAI_PAR_DEFAUT = 15;
++
++    /**
++     * La variable d'environnement qui donne un autre délai d'attente, en
++     * secondes, à un poste plus lent que la CI (constat C6 de l'éditeur :
++     * sur son PC Windows, serveur PHP intégré et antivirus, les premières
++     * pages dépassent 15 s).
++     */
++    public const VARIABLE_DU_DELAI = 'PILIQI_NAVIGATEUR_DELAI';
+ 
+     /**
+      * Le temps sans aucune activité au bout duquel la page est au repos, en
+@@ -80,6 +90,32 @@ public static function ouvrir(string $chemin, JournalDesReponses $journal): self
+         return $navigation->aller($chemin);
+     }
+ 
++    /**
++     * Le délai d'attente d'un geste, en secondes : celui que donne la
++     * variable d'environnement PILIQI_NAVIGATEUR_DELAI, un nombre entier de
++     * secondes, au moins 1, sinon 15 (DELAI_PAR_DEFAUT). Il vaut pour chaque
++     * attente de cette classe et pour chaque geste de Playwright (voir
++     * tests/Pest.php).
++     *
++     * @throws InvalidArgumentException une variable qui n'est pas un nombre entier de secondes, au moins 1
++     */
++    public static function delai(): int
++    {
++        $valeur = getenv(self::VARIABLE_DU_DELAI);
++
++        if ($valeur === false || trim($valeur) === '') {
++            return self::DELAI_PAR_DEFAUT;
++        }
++
++        $secondes = filter_var(trim($valeur), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
++
++        if ($secondes === false) {
++            throw new InvalidArgumentException(self::VARIABLE_DU_DELAI.' doit être un nombre entier de secondes, au moins 1 : « '.$valeur.' » ne l\'est pas.');
++        }
++
++        return $secondes;
++    }
++
+     /**
+      * La page de Playwright, pour un geste que cette classe n'offre pas.
+      */
+@@ -122,11 +158,11 @@ public function chemin(): string
+      */
+     public function attendre(): self
+     {
+-        $fin = microtime(true) + self::DELAI;
++        $fin = microtime(true) + self::delai();
+ 
+         while ($this->evaluerPendantUneNavigation('async () => { try { return window.__piliqi !== undefined && await window.__piliqi.auRepos('.self::REPOS_EN_MS.'); } catch (e) { return false; } }') !== true) {
+             if (microtime(true) > $fin) {
+-                Assert::fail('Au bout de '.self::DELAI.' s, la page ne revient pas au repos (page '.$this->page()->url().').');
++                Assert::fail('Au bout de '.self::delai().' s, la page ne revient pas au repos (page '.$this->page()->url().').');
+             }
+ 
+             Execution::instance()->wait(0.05);
+@@ -142,7 +178,7 @@ public function attendre(): self
+      */
+     public function attendreQue(string $expression, string $motif): self
+     {
+-        $fin = microtime(true) + self::DELAI;
++        $fin = microtime(true) + self::delai();
+ 
+         while (true) {
+             $vrai = $this->evaluerPendantUneNavigation('() => { try { return Boolean('.$expression.'); } catch (e) { return false; } }');
+@@ -152,7 +188,7 @@ public function attendreQue(string $expression, string $motif): self
+             }
+ 
+             if (microtime(true) > $fin) {
+-                Assert::fail('Au bout de '.self::DELAI.' s, '.$motif.' (page '.$this->page()->url().').');
++                Assert::fail('Au bout de '.self::delai().' s, '.$motif.' (page '.$this->page()->url().').');
+             }
+ 
+             Execution::instance()->wait(0.05);
+@@ -329,11 +365,17 @@ public function choisir(string $etiquette, string $option): self
+     /**
+      * Donne ce fichier au champ de fichier de la fenêtre ouverte, ou de la
+      * page, comme une personne qui le choisit sur son poste, puis attend que
+-     * son envoi soit fini.
++     * son envoi soit fini. Playwright n'accepte qu'un chemin absolu et
++     * entièrement résolu, avec les séparateurs du système : le chemin donné
++     * l'est par realpath() (constat C6 de l'éditeur : sous Windows,
++     * storage_path() mêle « \\ » et « / »).
+      */
+     public function envoyerLeFichier(string $chemin): self
+     {
+-        return $this->geste(fn () => $this->element($this->portee().' input[type=file]')->setInputFiles($chemin), 'le choix du fichier '.basename($chemin));
++        $resolu = realpath($chemin);
++        Assert::assertIsString($resolu, "Le fichier {$chemin} n'existe pas sur le poste.");
++
++        return $this->geste(fn () => $this->element($this->portee().' input[type=file]')->setInputFiles($resolu), 'le choix du fichier '.basename($resolu));
+     }
+ 
+     /**
+@@ -447,7 +489,7 @@ public function choisirDansLaListe(string $etiquette, string $option): self
+      */
+     public function voir(string $texte): self
+     {
+-        $fin = microtime(true) + self::DELAI;
++        $fin = microtime(true) + self::delai();
+ 
+         while (true) {
+             try {
+diff --git a/tests/Browser/inventaire-des-actions.php b/tests/Browser/inventaire-des-actions.php
+index 48c87c9..941c80b 100644
+--- a/tests/Browser/inventaire-des-actions.php
++++ b/tests/Browser/inventaire-des-actions.php
+@@ -286,6 +286,9 @@
+             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
+             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › l’observateur ouvre chaque page et chaque action du magasin sans erreur',
+         ]],
++        'lien:factureAchat.numero' => ['lot' => 'NAV-3', 'tests' => [
++            'tests/Browser/Parcours/LiensVersLesDocumentsTest.php › le responsable passe de l’avoir fournisseur à la facture d’achat qu’il crédite, et retour',
++        ]],
+         'recherche' => ['lot' => 'NAV-3', 'tests' => [
+             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action du magasin sans erreur',
+             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur autorisé à vendre ouvre chaque page et chaque action du magasin sans erreur',
+@@ -350,6 +353,10 @@
+             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le propriétaire du cabinet lié ouvre chaque page et chaque action du magasin de son client sans erreur',
+             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
+         ]],
++        'lien:facture.numero' => ['lot' => 'NAV-2', 'tests' => [
++            'tests/Browser/Parcours/LiensVersLesDocumentsTest.php › le responsable passe d’un document à l’autre par leurs numéros : avoir, ticket crédité, ticket réglé par le crédit',
++            'tests/Browser/Parcours/LiensVersLesDocumentsTest.php › le collaborateur du cabinet lié ouvre de même le ticket que le crédit d’un avoir a réglé',
++        ]],
+         'recherche' => ['lot' => 'NAV-2', 'tests' => [
+             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action du magasin sans erreur',
+             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur autorisé à vendre ouvre chaque page et chaque action du magasin sans erreur',
+@@ -1266,7 +1273,9 @@
+             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › l’observateur ouvre chaque page et chaque action du magasin sans erreur',
+         ]],
+         'lien:avoir.numero' => ['lot' => 'NAV-2', 'tests' => []],
++        'lien:facture_rectifiee' => ['lot' => 'NAV-2', 'tests' => []],
+         'lien:numero' => ['lot' => 'NAV-2', 'tests' => []],
++        'lien:rectificative' => ['lot' => 'NAV-2', 'tests' => []],
+         'recherche' => ['lot' => 'NAV-2', 'tests' => [
+             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action du magasin sans erreur',
+             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur autorisé à vendre ouvre chaque page et chaque action du magasin sans erreur',
+@@ -1346,6 +1355,11 @@
+             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
+             'tests/Browser/Parcours/VentesDeBoutEnBoutTest.php › le responsable fait un devis puis une facture avec la loupe des clients et « Ajouter un produit », l’émet, l’encaisse et la crédite par un avoir',
+         ]],
++        'action:edit' => ['lot' => 'NAV-2', 'tests' => [
++            'tests/Browser/Parcours/FicheDUneFactureTest.php › le responsable modifie puis émet un brouillon depuis sa fiche',
++            'tests/Browser/Parcours/FicheDUneFactureTest.php › le vendeur modifie puis émet son brouillon depuis sa fiche',
++            'tests/Browser/Parcours/FicheDUneFactureTest.php › « Modifier » et « Émettre » ne se montrent sur la fiche d’un brouillon qu’à qui peut le modifier et l’émettre',
++        ]],
+         'action:emettre' => ['lot' => 'NAV-2', 'tests' => [
+             'tests/Browser/Parcours/EmettreEtEncaisserTest.php › l’administrateur autorisé à vendre émet un brouillon depuis sa fiche, sans l’encaisser',
+         ]],
+@@ -2149,12 +2163,16 @@
+         'champ:mode' => ['lot' => 'NAV-2', 'tests' => [
+             'tests/Browser/Parcours/ProprietaireEnDemonstrationTest.php › le propriétaire fait une facture dans la démonstration, l’émet et l’encaisse depuis sa fiche',
+             'tests/Browser/Parcours/ProprietaireEnDemonstrationTest.php › le propriétaire vend à la caisse de la démonstration, encaisse en espèces et par carte, ferme sa caisse et clôture la journée',
++            'tests/Browser/Parcours/ReglementEnPartsTest.php › à la caisse, « Il reste … à répartir » ne s’affiche qu’une fois, avant comme après « Encaisser » ; la vente faite, son numéro mène au ticket, dont le PDF imprime chaque règlement à gauche du Total TTC',
+             'tests/Browser/Parcours/VentesDeBoutEnBoutTest.php › le responsable fait un devis puis une facture avec la loupe des clients et « Ajouter un produit », l’émet, l’encaisse et la crédite par un avoir',
+             'tests/Browser/Parcours/VentesDeBoutEnBoutTest.php › le vendeur vend à la caisse au client comptoir et encaisse en espèces et par carte',
+         ]],
+         'champ:montant' => ['lot' => 'NAV-2', 'tests' => [
+             'tests/Browser/Parcours/EmettreEtEncaisserTest.php › le responsable ramène à zéro la part préremplie, et « Émettre et encaisser » émet le brouillon sans l’encaisser',
+             'tests/Browser/Parcours/ProprietaireEnDemonstrationTest.php › le propriétaire vend à la caisse de la démonstration, encaisse en espèces et par carte, ferme sa caisse et clôture la journée',
++            'tests/Browser/Parcours/ReglementEnPartsTest.php › sur l’encaissement d’une facture, l’écart ne s’affiche qu’une fois, avant comme après le clic, puis plus du tout',
++            'tests/Browser/Parcours/ReglementEnPartsTest.php › à la caisse de l’administrateur autorisé à vendre, l’écart ne s’affiche qu’une fois après « Encaisser »',
++            'tests/Browser/Parcours/ReglementEnPartsTest.php › à la caisse, « Il reste … à répartir » ne s’affiche qu’une fois, avant comme après « Encaisser » ; la vente faite, son numéro mène au ticket, dont le PDF imprime chaque règlement à gauche du Total TTC',
+             'tests/Browser/Parcours/VentesDeBoutEnBoutTest.php › le vendeur vend à la caisse au client comptoir et encaisse en espèces et par carte',
+         ]],
+         'champ:montant_recu' => ['lot' => 'NAV-2', 'tests' => []],
+@@ -2167,6 +2185,9 @@
+             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le vendeur ouvre chaque page et chaque action du magasin sans erreur',
+             'tests/Browser/Parcours/ProprietaireEnDemonstrationTest.php › le propriétaire fait une facture dans la démonstration, l’émet et l’encaisse depuis sa fiche',
+             'tests/Browser/Parcours/ProprietaireEnDemonstrationTest.php › le propriétaire vend à la caisse de la démonstration, encaisse en espèces et par carte, ferme sa caisse et clôture la journée',
++            'tests/Browser/Parcours/ReglementEnPartsTest.php › sur l’encaissement d’une facture, l’écart ne s’affiche qu’une fois, avant comme après le clic, puis plus du tout',
++            'tests/Browser/Parcours/ReglementEnPartsTest.php › à la caisse de l’administrateur autorisé à vendre, l’écart ne s’affiche qu’une fois après « Encaisser »',
++            'tests/Browser/Parcours/ReglementEnPartsTest.php › à la caisse, « Il reste … à répartir » ne s’affiche qu’une fois, avant comme après « Encaisser » ; la vente faite, son numéro mène au ticket, dont le PDF imprime chaque règlement à gauche du Total TTC',
+             'tests/Browser/Parcours/VentesDeBoutEnBoutTest.php › le responsable fait un devis puis une facture avec la loupe des clients et « Ajouter un produit », l’émet, l’encaisse et la crédite par un avoir',
+             'tests/Browser/Parcours/VentesDeBoutEnBoutTest.php › le vendeur vend à la caisse au client comptoir et encaisse en espèces et par carte',
+         ]],
+@@ -2511,6 +2532,9 @@
+             'tests/Browser/Parcours/ProprietaireEnDemonstrationTest.php › le propriétaire vend à la caisse de la démonstration, encaisse en espèces et par carte, ferme sa caisse et clôture la journée',
+             'tests/Browser/Parcours/VentesDeBoutEnBoutTest.php › le vendeur vend à la caisse au client comptoir et encaisse en espèces et par carte',
+         ]],
++        'lien:{{ $derniereVente[\'numero\'] }}' => ['lot' => 'NAV-2', 'tests' => [
++            'tests/Browser/Parcours/ReglementEnPartsTest.php › à la caisse, « Il reste … à répartir » ne s’affiche qu’une fois, avant comme après « Encaisser » ; la vente faite, son numéro mène au ticket, dont le PDF imprime chaque règlement à gauche du Total TTC',
++        ]],
+     ],
+     'resources/views/filament/app/pages/formulaire-de-parametres.blade.php' => [
+         'envoi:save' => ['lot' => 'NAV-3', 'tests' => []],
+diff --git a/tests/Feature/Facturation/ActionsUniquesTest.php b/tests/Feature/Facturation/ActionsUniquesTest.php
+index 3043e0d..28867e1 100644
+--- a/tests/Feature/Facturation/ActionsUniquesTest.php
++++ b/tests/Feature/Facturation/ActionsUniquesTest.php
+@@ -151,13 +151,13 @@ public function test_recharger_la_caisse_apres_une_reponse_perdue_ne_cree_pas_un
+         $ticket = self::vendreAuComptant($vendeur, $comptoir, $caisse->instance()->form->getState()['lignes'], ModePaiement::Especes, jeton: $caisse->get('jetonDeLaVente'));
+ 
+         $caisse->call('encaisser')
+-            ->assertNotified("Vente encaissée : facture {$ticket->numero}")
++            ->assertNotified("Vente encaissée : ticket {$ticket->numero}")
+             ->assertFormSet(['lignes' => []]);
+ 
+         $this->assertSame([1, 1, 0], [Facture::query()->count(), Paiement::query()->count(), PanierCaisse::query()->count()]);
+         Livewire::test(Caisse::class)
+             ->assertFormSet(['lignes' => []])
+-            ->assertSee("Dernière vente enregistrée : ticket N° {$ticket->numero}");
++            ->assertSeeText("Dernière vente enregistrée : ticket N° {$ticket->numero}");
+     }
+ 
+     public function test_le_meme_jeton_avec_un_autre_montant_est_refuse(): void
+diff --git a/tests/Feature/Facturation/RegularisationDUneFactureTest.php b/tests/Feature/Facturation/RegularisationDUneFactureTest.php
+index 85d2a94..fc981b4 100644
+--- a/tests/Feature/Facturation/RegularisationDUneFactureTest.php
++++ b/tests/Feature/Facturation/RegularisationDUneFactureTest.php
+@@ -49,6 +49,7 @@
+ use App\Domain\Tenancy\Services\IdentifiantsInsee;
+ use App\Domain\Tenancy\Services\TenantContext;
+ use App\Domain\Tenancy\Support\InterventionDeLEditeur;
++use App\Filament\App\FicheDUnDocument;
+ use App\Filament\App\Resources\AvoirResource;
+ use App\Filament\App\Resources\AvoirResource\Pages\CreateAvoir;
+ use App\Filament\App\Resources\AvoirResource\Pages\ViewAvoir;
+@@ -291,6 +292,29 @@ public function test_seules_les_factures_listees_par_l_examen_se_regularisent():
+      * faisant sur sa rectificative : sa fiche ne propose plus « Avoir », et
+      * « Nouvel avoir » refuse son numéro en le disant.
+      */
++    /**
++     * Constat C2 de l'éditeur : la fiche de la facture régularisée mène à
++     * sa facture rectificative, et celle de la rectificative à la facture
++     * qu'elle rectifie, pour qui peut les voir ; un compte qui ne voit pas
++     * l'autre facture en lit le numéro, sans lien.
++     */
++    public function test_la_facture_regularisee_et_sa_rectificative_menent_l_une_a_l_autre_pour_qui_les_voit(): void
++    {
++        [$magasin, $facture] = $this->factureDUneSocieteCorrigee();
++        $responsable = self::responsableDeTest($magasin);
++        $rectificative = app(EmettreLaFactureRectificativeAction::class)->handle($responsable, $facture);
++        $this->dansLeMagasin($magasin->fresh(), $responsable);
++
++        Livewire::test(ViewFacture::class, ['record' => $facture->getRouteKey()])
++            ->assertSee(FactureResource::getUrl('view', ['record' => $rectificative]));
++        Livewire::test(ViewFacture::class, ['record' => $rectificative->getRouteKey()])
++            ->assertSee(FactureResource::getUrl('view', ['record' => $facture]));
++
++        $this->dansLeMagasin($magasin->fresh(), $this->membre($magasin, RoleMagasin::Vendeur));
++        $this->assertNull(FicheDUnDocument::adresse($rectificative), 'Le vendeur ne voit pas la rectificative du responsable : aucun lien ne doit y mener.');
++        $this->assertNull(FicheDUnDocument::adresse($facture));
++    }
++
+     public function test_une_facture_deja_regularisee_ne_se_regularise_plus(): void
+     {
+         [$magasin, $facture, $client] = $this->factureDUneSocieteCorrigee(quantite: 3);
+diff --git a/tests/Feature/Filament/CaisseTest.php b/tests/Feature/Filament/CaisseTest.php
+index ed9b7cd..ae749fd 100644
+--- a/tests/Feature/Filament/CaisseTest.php
++++ b/tests/Feature/Filament/CaisseTest.php
+@@ -1845,7 +1845,7 @@ public function test_le_bon_d_avoir_d_un_ticket_comptoir_regle_une_partie_de_la_
+             ->assertFormFieldExists("parts.{$especes}.montant_recu", fn (TextInput $champ): bool => $champ->getMinValue() === '8.00')
+             ->call('encaisser')
+             ->assertHasNoFormErrors()
+-            ->assertNotified('Vente encaissée : facture TK-MABOUT-2026-000002');
++            ->assertNotified('Vente encaissée : ticket TK-MABOUT-2026-000002');
+ 
+         $ticket = Facture::query()->where('numero', 'TK-MABOUT-2026-000002')->sole();
+         $this->assertSame([StatutFacture::Payee, 1200, 800, 0], [$ticket->statut, $ticket->montantCrediteParAvoirEnCentimes(), $ticket->montantPayeEnCentimes(), $ticket->montantRestantEnCentimes()]);
+@@ -1976,7 +1976,7 @@ public function test_le_bon_d_avoir_regle_la_vente_d_un_client_nomme_apres_son_p
+         $caisse
+             ->call('encaisser')
+             ->assertHasNoFormErrors()
+-            ->assertNotified(Notification::make()->title('Vente encaissée : facture TK-MABOUT-2026-000003')->body('Réglée par 10,00 € du crédit d\'avoir AV-MABOUT-2026-000002 et 5,00 € du bon d\'avoir AV-MABOUT-2026-000001.')->success());
++            ->assertNotified(Notification::make()->title('Vente encaissée : ticket TK-MABOUT-2026-000003')->body('Réglée par 10,00 € du crédit d\'avoir AV-MABOUT-2026-000002 et 5,00 € du bon d\'avoir AV-MABOUT-2026-000001.')->success());
+ 
+         $ticket = Facture::query()->where('numero', 'TK-MABOUT-2026-000003')->sole();
+         $this->assertSame([$martin->id, 'Mme Martin'], [(int) $ticket->client_id, $ticket->client_nom]);
+@@ -2065,6 +2065,38 @@ public function test_ajouter_un_autre_mode_preremplit_ce_qui_reste(): void
+         );
+     }
+ 
++    /**
++     * Constat C1 de l'éditeur : « Il reste … à répartir » ne s'affiche
++     * qu'une fois, avant comme après le clic sur « Encaisser » : le refus
++     * prend la place de l'aide en direct. Il s'efface dès que la saisie le
++     * rend faux : un panier qui change laisse l'aide dire le nouveau reste,
++     * un règlement qui tombe juste ne laisse plus aucun message.
++     */
++    public function test_ce_qu_il_reste_a_repartir_ne_s_affiche_qu_une_fois_avant_comme_apres_le_clic(): void
++    {
++        $this->ouvrirLaCaisseDUnMagasin();
++        $produit = Produit::factory()->create(['prix_vente_ttc' => 40, 'taux_tva' => 20, 'suivi_stock' => false]);
++        $ligne = ['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 2, 'prix_unitaire_ttc' => 40, 'taux_tva' => 20, 'remise_pourcentage' => 0];
++        $caisse = Livewire::test(Caisse::class)->fillForm(['lignes' => [$ligne]]);
++        $especes = $this->premierePart($caisse);
++
++        $caisse->set("data.parts.{$especes}.montant", '50');
++        $this->assertSame(1, substr_count($caisse->html(), 'Il reste 30,00 € à répartir.'));
++
++        $caisse->call('encaisser')->assertHasFormErrors(['parts']);
++        $this->assertSame(1, substr_count($caisse->html(), 'Il reste 30,00 € à répartir.'));
++
++        $caisse->fillForm(['lignes' => [[...$ligne, 'quantite' => 3]]]);
++        $this->assertSame(0, substr_count($caisse->html(), 'Il reste 30,00 € à répartir.'));
++        $this->assertSame(1, substr_count($caisse->html(), 'Il reste 70,00 € à répartir.'));
++
++        $caisse->set("data.parts.{$especes}.montant", '120');
++        $this->assertSame(0, substr_count($caisse->html(), 'à répartir'));
++
++        $caisse->call('encaisser')->assertHasNoFormErrors();
++        $this->assertSame(1, Facture::query()->count());
++    }
++
+     /**
+      * À la caisse, le prélèvement n'est pas proposé, et une part par
+      * prélèvement envoyée sans passer par la liste est refusée.
+diff --git a/tests/Feature/Filament/FicheDUneFactureTest.php b/tests/Feature/Filament/FicheDUneFactureTest.php
+new file mode 100644
+index 0000000..0b7e6a4
+--- /dev/null
++++ b/tests/Feature/Filament/FicheDUneFactureTest.php
+@@ -0,0 +1,182 @@
++<?php
++
++namespace Tests\Feature\Filament;
++
++use App\Domain\Authorization\PermissionRegistry;
++use App\Domain\Catalogue\Models\Produit;
++use App\Domain\Contacts\Models\Client;
++use App\Domain\Facturation\Actions\CreerFactureAction;
++use App\Domain\Facturation\Actions\EmettreFactureAction;
++use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
++use App\Domain\Facturation\Enums\ModePaiement;
++use App\Domain\Facturation\Models\Facture;
++use App\Domain\Tenancy\Enums\RoleMagasin;
++use App\Domain\Tenancy\Models\Magasin;
++use App\Domain\Tenancy\Services\TenantContext;
++use App\Filament\App\Resources\FactureResource;
++use App\Filament\App\Resources\FactureResource\Pages\ViewFacture;
++use App\Models\User;
++use Illuminate\Foundation\Testing\RefreshDatabase;
++use Livewire\Livewire;
++use Tests\TestCase;
++
++/**
++ * La fiche d'une facture ou d'un ticket selon le compte qui l'ouvre :
++ * la section « Paiements reçus » ne se montre qu'à qui voit les paiements
++ * de ce document (constat C8, réponse de l'éditeur à T41) ; un brouillon
++ * se modifie et s'émet depuis sa fiche, avec les mêmes droits que depuis
++ * la liste (constat C9, réponse de l'éditeur à T42).
++ */
++class FicheDUneFactureTest extends TestCase
++{
++    use RefreshDatabase;
++
++    /**
++     * Une facture de ce vendeur au client « Hôtel des Pins », émise pour
++     * une bougie à 18,00 € TTC, réglée en partie (10,00 € en espèces) par le
++     * responsable du magasin, ou laissée en brouillon.
++     */
++    private function factureDe(Magasin $magasin, User $vendeur, bool $emise = true): Facture
++    {
++        return app(TenantContext::class)->runAs($magasin, function () use ($magasin, $vendeur, $emise): Facture {
++            $client = Client::query()->where('nom', 'Hôtel des Pins')->first() ?? Client::factory()->professionnel()->create(['nom' => 'Hôtel des Pins']);
++            $produit = Produit::query()->where('reference', 'BOUGIE')->first() ?? Produit::factory()->create(['nom' => 'Bougie', 'reference' => 'BOUGIE', 'prix_vente_ttc' => 18, 'taux_tva' => 20, 'suivi_stock' => false]);
++            $facture = app(CreerFactureAction::class)->handle($vendeur, $client, [['produit_id' => $produit->id, 'quantite' => 1]]);
++
++            if (! $emise) {
++                return $facture;
++            }
++
++            $facture = app(EmettreFactureAction::class)->handle($vendeur, $facture);
++            app(EnregistrerPaiementAction::class)->handle($this->responsable($magasin), $client, ['mode_paiement' => ModePaiement::Especes->value, 'montant' => '10.00', 'recu_le' => '2026-03-10'], [['facture_id' => $facture->id, 'montant' => '10.00']]);
++
++            return $facture->fresh();
++        });
++    }
++
++    /**
++     * Un vendeur avec les autorisations du modèle de son rôle, sauf
++     * « Paiements : voir ».
++     */
++    private function vendeurSansLesPaiements(Magasin $magasin): User
++    {
++        return $this->membre($magasin, RoleMagasin::Vendeur, array_values(array_diff(
++            RoleMagasin::Vendeur->permissionsParDefaut($magasin->societe->type_activite),
++            [PermissionRegistry::PAIEMENT_VIEW],
++        )), ['name' => 'Victor Durand']);
++    }
++
++    public function test_un_vendeur_sans_le_droit_de_voir_les_paiements_ne_voit_pas_la_section_mais_voit_le_paye_et_le_restant_du(): void
++    {
++        $this->travelTo(self::aParis('2026-03-10 10:00:00'));
++        $magasin = $this->ouvrirUneSociete(['nom' => 'Boutique du Port']);
++        $this->completerIdentiteLegale($magasin);
++        $vendeur = $this->vendeurSansLesPaiements($magasin);
++        $facture = $this->factureDe($magasin, $vendeur);
++        $this->dansLeMagasin($magasin, $vendeur);
++
++        Livewire::test(ViewFacture::class, ['record' => $facture->getRouteKey()])
++            ->assertOk()
++            ->assertSee('Payé')
++            ->assertSee('Restant dû')
++            ->assertSee('8,00 €')
++            ->assertDontSee('Paiements reçus')
++            ->assertDontSee('Reçu le')
++            ->assertDontSee('Reçu (PDF)');
++    }
++
++    public function test_le_meme_vendeur_avec_le_droit_de_voir_les_paiements_voit_la_section(): void
++    {
++        $this->travelTo(self::aParis('2026-03-10 10:00:00'));
++        $magasin = $this->ouvrirUneSociete(['nom' => 'Boutique du Port']);
++        $this->completerIdentiteLegale($magasin);
++        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, identite: ['name' => 'Victor Durand']);
++        $facture = $this->factureDe($magasin, $vendeur);
++        $this->dansLeMagasin($magasin, $vendeur);
++
++        Livewire::test(ViewFacture::class, ['record' => $facture->getRouteKey()])
++            ->assertSee('Paiements reçus')
++            ->assertSee('Espèces')
++            ->assertSee('Reçu le');
++    }
++
++    /**
++     * Le propriétaire, un responsable du magasin et le collaborateur du
++     * cabinet lié, à qui le client accorde par défaut la consultation des
++     * paiements, voient la section.
++     */
++    public function test_le_proprietaire_le_responsable_et_le_cabinet_lie_voient_les_paiements_recus(): void
++    {
++        $this->travelTo(self::aParis('2026-03-10 10:00:00'));
++        $magasin = $this->ouvrirUneSociete(['nom' => 'Boutique du Port']);
++        $this->completerIdentiteLegale($magasin);
++        $facture = $this->factureDe($magasin, $this->membre($magasin, RoleMagasin::Vendeur));
++        $collaborateur = $this->collaborateurDuCabinetLie($magasin);
++
++        foreach ([$this->proprietaireDe($magasin), $this->responsable($magasin), $collaborateur] as $compte) {
++            $this->dansLeMagasin($magasin, $compte);
++
++            Livewire::test(ViewFacture::class, ['record' => $facture->getRouteKey()])->assertSee('Paiements reçus')->assertSee('Espèces');
++        }
++    }
++
++    /**
++     * Un brouillon se modifie et s'émet depuis sa fiche, pour qui le peut
++     * depuis la liste : le responsable et le vendeur qui l'a fait ;
++     * « Modifier » ouvre le formulaire du brouillon.
++     */
++    public function test_le_brouillon_se_modifie_et_s_emet_depuis_sa_fiche_pour_qui_le_peut(): void
++    {
++        $this->travelTo(self::aParis('2026-03-10 10:00:00'));
++        $magasin = $this->ouvrirUneSociete(['nom' => 'Boutique du Port']);
++        $this->completerIdentiteLegale($magasin);
++        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
++        $brouillon = $this->factureDe($magasin, $vendeur, emise: false);
++
++        foreach ([$this->responsable($magasin), $vendeur] as $compte) {
++            $this->dansLeMagasin($magasin, $compte);
++
++            Livewire::test(ViewFacture::class, ['record' => $brouillon->getRouteKey()])
++                ->assertActionVisible('edit')
++                ->assertActionHasUrl('edit', FactureResource::getUrl('edit', ['record' => $brouillon]))
++                ->assertActionVisible('emettre');
++        }
++
++        Livewire::test(ViewFacture::class, ['record' => $brouillon->getRouteKey()])
++            ->callAction('emettre')
++            ->assertHasNoActionErrors()
++            ->assertActionHidden('edit')
++            ->assertActionHidden('emettre');
++
++        $emise = $brouillon->fresh();
++        $this->assertNotNull($emise->numero);
++        Livewire::test(ViewFacture::class, ['record' => $emise->getRouteKey()])
++            ->assertActionHidden('edit')
++            ->assertActionHidden('emettre');
++    }
++
++    /**
++     * Ni le propriétaire, qui ne vend pas dans un magasin réel, ni le
++     * collaborateur du cabinet lié, ni un vendeur à qui la création des
++     * factures n'est pas cochée ne voient « Modifier » ni « Émettre » sur la
++     * fiche d'un brouillon qu'ils voient.
++     */
++    public function test_sans_le_droit_ni_modifier_ni_emettre_sur_la_fiche_du_brouillon(): void
++    {
++        $this->travelTo(self::aParis('2026-03-10 10:00:00'));
++        $magasin = $this->ouvrirUneSociete(['nom' => 'Boutique du Port']);
++        $this->completerIdentiteLegale($magasin);
++        $brouillon = $this->factureDe($magasin, $this->membre($magasin, RoleMagasin::Vendeur), emise: false);
++        $lecteur = $this->membre($magasin, RoleMagasin::Observateur, [PermissionRegistry::FACTURE_VIEW, PermissionRegistry::FACTURE_VIEW_TOUTES]);
++
++        foreach ([$this->proprietaireDe($magasin), $this->collaborateurDuCabinetLie($magasin), $lecteur] as $compte) {
++            $this->dansLeMagasin($magasin, $compte);
++
++            Livewire::test(ViewFacture::class, ['record' => $brouillon->getRouteKey()])
++                ->assertOk()
++                ->assertActionHidden('edit')
++                ->assertActionHidden('emettre')
++                ->assertActionHidden('emettre_et_encaisser');
++        }
++    }
++}
+diff --git a/tests/Feature/Filament/LiensVersLesDocumentsTest.php b/tests/Feature/Filament/LiensVersLesDocumentsTest.php
+new file mode 100644
+index 0000000..35d3ea9
+--- /dev/null
++++ b/tests/Feature/Filament/LiensVersLesDocumentsTest.php
+@@ -0,0 +1,137 @@
++<?php
++
++namespace Tests\Feature\Filament;
++
++use App\Domain\Authorization\PermissionRegistry;
++use App\Domain\Catalogue\Models\Produit;
++use App\Domain\Contacts\Models\Client;
++use App\Domain\Facturation\Actions\CreerFactureAction;
++use App\Domain\Facturation\Actions\EmettreFactureAction;
++use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
++use App\Domain\Facturation\Models\Avoir;
++use App\Domain\Facturation\Models\Facture;
++use App\Domain\Tenancy\Enums\RoleMagasin;
++use App\Domain\Tenancy\Models\Magasin;
++use App\Domain\Tenancy\Services\TenantContext;
++use App\Filament\App\Resources\AvoirResource;
++use App\Filament\App\Resources\AvoirResource\Pages\ViewAvoir;
++use App\Filament\App\Resources\FactureResource;
++use App\Filament\App\Resources\FactureResource\Pages\ViewFacture;
++use App\Filament\App\Resources\PaiementResource\Pages\ListPaiements;
++use App\Models\User;
++use Illuminate\Foundation\Testing\RefreshDatabase;
++use Livewire\Livewire;
++use Tests\TestCase;
++
++/**
++ * Constat C2 de l'éditeur, confirmé à T43 : tout numéro de document
++ * affiché sur une fiche devient un lien vers la fiche de ce document pour
++ * qui peut la voir ; pour les autres, il reste un texte simple, sans lien
++ * qui mènerait à un refus ; un ticket est nommé « Ticket », une facture
++ * « Facture ».
++ */
++class LiensVersLesDocumentsTest extends TestCase
++{
++    use RefreshDatabase;
++
++    private Magasin $magasin;
++
++    private User $responsable;
++
++    private User $vendeur;
++
++    private Facture $ticketDuResponsable;
++
++    private Facture $ticketDuVendeur;
++
++    private Avoir $avoir;
++
++    /**
++     * Le responsable émet un ticket resté dû à Jean Dupont ; le vendeur,
++     * qui ne voit que ses ventes et peut faire un avoir, lui vend un ticket
++     * réglé au comptant puis le crédite : le crédit de l'avoir, rien ne
++     * restant dû sur le ticket du vendeur, règle le ticket du responsable.
++     */
++    protected function setUp(): void
++    {
++        parent::setUp();
++
++        $this->travelTo(self::aParis('2026-03-10 10:00:00'));
++        $this->magasin = $this->ouvrirUneSociete(['nom' => 'Boutique du Port']);
++        $this->responsable = $this->responsable($this->magasin);
++        $this->vendeur = $this->membre($this->magasin, RoleMagasin::Vendeur, [
++            ...RoleMagasin::Vendeur->permissionsParDefaut($this->magasin->societe->type_activite),
++            PermissionRegistry::AVOIR_VIEW,
++            PermissionRegistry::AVOIR_CREER,
++        ]);
++
++        app(TenantContext::class)->runAs($this->magasin, function (): void {
++            $client = Client::factory()->create(['nom' => 'Jean Dupont']);
++            $bougie = Produit::factory()->create(['nom' => 'Bougie', 'reference' => 'BOUGIE', 'prix_vente_ttc' => 18, 'taux_tva' => 20, 'suivi_stock' => false]);
++            $this->ticketDuResponsable = app(EmettreFactureAction::class)->handle($this->responsable, app(CreerFactureAction::class)->handle($this->responsable, $client, [['produit_id' => $bougie->id, 'quantite' => 1]]));
++            $this->ticketDuVendeur = self::vendreAuComptant($this->vendeur, $client, [['produit_id' => $bougie->id, 'quantite' => 1]]);
++            $this->avoir = app(EnregistrerAvoirAction::class)->handle($this->vendeur, $client, [['ligne_facture_id' => $this->ticketDuVendeur->lignes->sole()->id, 'quantite' => 1]], 'Retour');
++        });
++    }
++
++    public function test_sur_la_fiche_de_l_avoir_chaque_document_est_un_lien_pour_qui_peut_le_voir(): void
++    {
++        $this->dansLeMagasin($this->magasin, $this->responsable);
++
++        Livewire::test(ViewAvoir::class, ['record' => $this->avoir->getRouteKey()])
++            ->assertSee('Crédit appliqué')
++            ->assertSee('Documents crédités')
++            ->assertSee(FactureResource::getUrl('view', ['record' => $this->ticketDuResponsable]))
++            ->assertSee(FactureResource::getUrl('view', ['record' => $this->ticketDuVendeur]));
++    }
++
++    /**
++     * Le vendeur voit son avoir et son ticket, en lien, mais pas le ticket
++     * du responsable que le crédit a réglé : son numéro reste un texte, et
++     * le document y est nommé « Ticket », jamais « Facture ».
++     */
++    public function test_un_vendeur_ne_recoit_pas_de_lien_vers_un_document_qu_il_ne_voit_pas(): void
++    {
++        $this->dansLeMagasin($this->magasin, $this->vendeur);
++
++        $fiche = Livewire::test(ViewAvoir::class, ['record' => $this->avoir->getRouteKey()])
++            ->assertSee($this->ticketDuResponsable->numero)
++            ->assertDontSee(FactureResource::getUrl('view', ['record' => $this->ticketDuResponsable]))
++            ->assertSee(FactureResource::getUrl('view', ['record' => $this->ticketDuVendeur]))
++            ->assertSeeText('Ticket '.$this->ticketDuVendeur->numero);
++
++        $this->assertStringNotContainsString('Facture</', $fiche->html());
++    }
++
++    /**
++     * Sur la fiche d'un ticket, l'avoir qui l'a crédité mène à sa fiche
++     * pour qui voit les avoirs ; un compte qui voit le ticket sans voir les
++     * avoirs lit son numéro sans lien.
++     */
++    public function test_sur_la_fiche_du_ticket_l_avoir_est_un_lien_pour_qui_voit_les_avoirs(): void
++    {
++        $lecteur = $this->membre($this->magasin, RoleMagasin::Observateur, [PermissionRegistry::FACTURE_VIEW, PermissionRegistry::FACTURE_VIEW_TOUTES]);
++
++        $this->dansLeMagasin($this->magasin, $this->responsable);
++        Livewire::test(ViewFacture::class, ['record' => $this->ticketDuResponsable->getRouteKey()])
++            ->assertSee(AvoirResource::getUrl('view', ['record' => $this->avoir]));
++
++        $this->dansLeMagasin($this->magasin, $lecteur);
++        Livewire::test(ViewFacture::class, ['record' => $this->ticketDuResponsable->getRouteKey()])
++            ->assertSee($this->avoir->numero)
++            ->assertDontSee(AvoirResource::getUrl('view', ['record' => $this->avoir]));
++    }
++
++    /**
++     * La liste des paiements, dont une rangée n'ouvre aucune fiche, donne
++     * en lien chaque document réglé.
++     */
++    public function test_la_liste_des_paiements_donne_chaque_document_regle_en_lien(): void
++    {
++        $this->dansLeMagasin($this->magasin, $this->responsable);
++
++        Livewire::test(ListPaiements::class)
++            ->assertSee('Documents réglés')
++            ->assertSee(FactureResource::getUrl('view', ['record' => $this->ticketDuVendeur]));
++    }
++}
+diff --git a/tests/Feature/Filament/PaiementResourceTest.php b/tests/Feature/Filament/PaiementResourceTest.php
+index 34a8f27..9cd8f5a 100644
+--- a/tests/Feature/Filament/PaiementResourceTest.php
++++ b/tests/Feature/Filament/PaiementResourceTest.php
+@@ -286,6 +286,35 @@ public function test_laction_rapide_encaisser_bloque_un_montant_superieur_au_res
+         $this->assertSame(StatutFacture::Emise, $facture->fresh()->statut);
+     }
+ 
++    /**
++     * Constat C1 de l'éditeur : ce qui sépare les parts saisies de ce qui
++     * reste dû ne s'affiche qu'une fois, avant comme après le clic sur
++     * « Encaisser » : le refus prend la place de l'aide en direct, puis
++     * s'efface dès que la saisie le rend faux.
++     */
++    public function test_l_ecart_du_reglement_d_une_facture_ne_s_affiche_qu_une_fois_avant_comme_apres_le_clic(): void
++    {
++        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
++        $this->actingAs($this->responsableDeTest($magasin));
++        Filament::setTenant($magasin);
++        $facture = $this->emettreFactureDepuisLePanneau(Client::factory()->create()); // total TTC 120
++        $liste = Livewire::test(ListFactures::class)->mountTableAction('encaisser', $facture);
++        $cle = array_key_first($liste->get('mountedTableActionsData.0.parts'));
++        $ecart = 'Les parts du règlement (150,00 €) dépassent ce qui reste dû (120,00 €).';
++
++        $liste->setTableActionData(["parts.{$cle}.montant" => 150]);
++        $this->assertSame(1, substr_count($liste->html(), $ecart));
++
++        $liste->callMountedTableAction()->assertHasTableActionErrors(['parts']);
++        $this->assertSame(1, substr_count($liste->html(), $ecart));
++
++        $liste->setTableActionData(["parts.{$cle}.montant" => 120]);
++        $this->assertSame(0, substr_count($liste->html(), 'dépassent ce qui reste dû'));
++
++        $liste->callMountedTableAction()->assertHasNoTableActionErrors();
++        $this->assertSame(StatutFacture::Payee, $facture->fresh()->statut);
++    }
++
+     /**
+      * Un virement vu hier sur le relevé s'enregistre aujourd'hui avec sa
+      * vraie date de réception.
+diff --git a/tests/Feature/Filament/RessourcesServiesParPiliqiTest.php b/tests/Feature/Filament/RessourcesServiesParPiliqiTest.php
+index 13150c9..1aeba7e 100644
+--- a/tests/Feature/Filament/RessourcesServiesParPiliqiTest.php
++++ b/tests/Feature/Filament/RessourcesServiesParPiliqiTest.php
+@@ -40,6 +40,20 @@ public function test_chaque_panneau_charge_la_police_servie_par_piliqi(string $p
+         $this->assertFileExists(public_path(PoliceServieParPiliqi::FEUILLE_DE_STYLE));
+     }
+ 
++    /**
++     * La feuille écrite à la main qui teinte les rangées choisies et les
++     * lignes cochées (constat C5 de l'éditeur) se sert dans chaque panneau,
++     * depuis la copie que « php artisan filament:assets » publie, identique
++     * à la feuille du dépôt : une feuille changée sans être republiée ne
++     * passerait pas.
++     */
++    #[DataProvider('pagesDeConnexion')]
++    public function test_chaque_panneau_sert_la_feuille_des_rangees_choisies_publiee_telle_quelle(string $page): void
++    {
++        $this->get($page)->assertOk()->assertSee('css/app/rangees-choisies.css', false);
++        $this->assertFileEquals(resource_path('css/rangees-choisies.css'), public_path('css/app/rangees-choisies.css'));
++    }
++
+     /**
+      * @return array<string, array{0: string, 1: string}>
+      */
+diff --git a/tests/Pest.php b/tests/Pest.php
+index 1b54529..aab3881 100644
+--- a/tests/Pest.php
++++ b/tests/Pest.php
+@@ -14,6 +14,6 @@
+  */
+ pest()->extend(TestCaseDuNavigateur::class)->use(RefreshDatabase::class)->in('Browser');
+ 
+-pest()->browser()->timeout(Navigation::DELAI * 1000);
++pest()->browser()->timeout(Navigation::delai() * 1000);
+ 
+ ServeurPlaywright::arreterALaFin();
+-- 
+2.43.0
+

@@ -219,3 +219,4 @@ ci/bb135db-echec-navigateur.md
 reprises/lot-DEMO-commits-locaux.patch
 reprises/lot-UI-commits-locaux.patch
 reprises/lot-ML-travail-non-commite.patch
+reprises/lot-ML-commits-locaux.patch

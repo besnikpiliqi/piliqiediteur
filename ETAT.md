@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 12/11/2026 à 14:08 UTC par pilotage-sync.sh : « T105 tranchée (a) ; questions de prix P77 à P82 dans l'onglet professionnel ».
+Mis à jour le 12/11/2026 à 14:26 UTC par pilotage-sync.sh : « Point de suivi de 14 h 25 UTC : sauvegarde ML ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -38,6 +38,20 @@ c2455dd Passe Larastan au niveau 10 sans erreur : les valeurs lues sans type son
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
+ M .env.example
+ M README.md
+ M app/Console/Commands/EssayerUnCourriel.php
+ M app/Console/Commands/SurveillerLaFileDAttente.php
+ M app/Domain/Facturation/Jobs/EnvoyerDocumentJob.php
+ M app/Filament/App/Pages/Auth/ModifierProfil.php
+ M app/Integrations/Courriel/CauseDEchecDEnvoi.php
+ M tests/Feature/Courriels/CourrielsReelsTest.php
+ M tests/Feature/Courriels/EssayerUnCourrielTest.php
+ M tests/Feature/Courriels/ListeDesCourrielsTest.php
+ M tests/Feature/Courriels/SurveillerLaFileDAttenteTest.php
+ M tests/Feature/Facturation/EnvoyerDocumentJobTest.php
+ M tests/Feature/Filament/ModifierProfilTest.php
+ M tests/Unit/CauseDEchecDEnvoiTest.php
 ```
 
 ## Dernière course de la chaîne
@@ -45,7 +59,6 @@ c2455dd Passe Larastan au niveau 10 sans erreur : les valeurs lues sans type son
 Course `wf_1d467e9e-93e`, étapes commencées (de la plus ancienne à la plus récente) :
 
 ```
-FI:poussee
 FI:notes
 AUD:implementation
 AUD:implementation-2
@@ -70,4 +83,5 @@ UI:notes
 ML:implementation
 ML:relecture1
 ML:relecture2
+ML:correction
 ```

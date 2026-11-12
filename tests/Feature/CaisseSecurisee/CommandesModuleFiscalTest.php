@@ -109,7 +109,11 @@ class CommandesModuleFiscalTest extends TestCase
      * Le diagnostic compare l'horloge de la machine à celle du serveur de
      * base, corrigée de la moitié de l'aller-retour : alignée, la ligne est
      * OK ; décalée de 2 secondes, elle échoue et dit comment la remettre à
-     * l'heure (constat C93 des audits du 07/11/2026).
+     * l'heure (constat C93 des audits du 07/11/2026). La mesure se fait à
+     * quelques millisecondes près, de part et d'autre, l'aller et le retour
+     * d'une requête n'étant jamais tout à fait égaux sur une machine chargée
+     * (la CI a lu 1,999 s pour 2 s) : l'écart lu est celui du décalage à
+     * moins d'un dixième de seconde, dans les deux cas.
      */
     public function test_le_diagnostic_controle_l_horloge_du_serveur_sur_celle_du_serveur_de_base(): void
     {
@@ -120,7 +124,7 @@ class CommandesModuleFiscalTest extends TestCase
         $this->poserLHorlogeDuSysteme(2.0);
         $this->assertSame(1, Artisan::call('caisse:diagnostiquer'));
         $sortie = Artisan::output();
-        $this->assertMatchesRegularExpression("/\\| Horloge du serveur +\\| ÉCHEC +\\| L'horloge de ce serveur s'écarte de 2,0\\d\\d s de celle du serveur de base/u", $sortie);
+        $this->assertMatchesRegularExpression("/\\| Horloge du serveur +\\| ÉCHEC +\\| L'horloge de ce serveur s'écarte de (1,9\\d\\d|2,0\\d\\d) s de celle du serveur de base/u", $sortie);
         $this->assertStringContainsString("Synchronisez l'horloge de chaque machine qui écrit au registre fiscal (serveur web, travailleurs des files, planificateur) par NTP", $sortie);
         $this->assertStringContainsString('Caisse sécurisée non opérationnelle : 1 contrôle(s) en échec.', $sortie);
     }

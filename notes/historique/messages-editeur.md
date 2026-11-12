@@ -1906,3 +1906,11 @@ mais toi tu fait apres ton travail en se basant sur ce que tu me mets dans cette
 
 qunad tu remplis alors n ecris pas tres courte les phrases car je veux comprendre tes decision en detaillant un peu
 
+## 200. 2026-11-12 02:06 UTC
+
+je pense laisser tombre pour le demo car tu me parle des loi exigant. donc demo est accesible que pour le propritaire car ne demo on peut pas creer des membres et les memebre se creer juste pour les magasin de vrai. et comme j ai interdi que le reponsable ne fait pas des facture alors dans ce cas la en demo je peut rien faire. mais la c est pas bon car en demo avec ces interdiction alors le demo sert rien car on peut rien faire en tant proprietaire. dans ce cas la on garde le demo  peut etre pour toujours car la loi exige. mais le proprietaire doit pouvour faire tout dans un compte demo car sinon comment il va s entrainer  si fait pas des facture et tout le reste.
+
+## 201. 2026-11-12 02:07 UTC
+
+je pense laisser tombre pour le demo car tu me parle des loi exigant. donc demo est accesible que pour le propritaire car ne demo on peut pas creer des membres et les memebre se creer juste pour les magasin de vrai. et comme j ai interdi que le proprietaire ne fait pas des facture alors dans ce cas la en demo je peut rien faire. mais la c est pas bon car en demo avec ces interdiction alors le demo sert rien car on peut rien faire en tant proprietaire. dans ce cas la on garde le demo  peut etre pour toujours car la loi exige. mais le proprietaire doit pouvour faire tout dans un compte demo car sinon comment il va s entrainer  si fait pas des facture et tout le reste.
+

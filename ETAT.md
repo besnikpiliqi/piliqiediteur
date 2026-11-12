@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 12/11/2026 à 02:01 UTC par pilotage-sync.sh : « Point de suivi 02:05 UTC ; lot DEMO prêt ».
+Mis à jour le 12/11/2026 à 02:08 UTC par pilotage-sync.sh : « D70 : démonstration gardée, réservée au propriétaire qui peut tout y faire ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

@@ -1996,3 +1996,15 @@ Fais le passage
 
 * Si j’envoie mes changements pendant qu’il travaille, son propre envoi sera refusé. » non non tu arrêtes pas. Laisse finir tout après tu peux faire ce que tu veux. C’est pas obligé de passer mtn
 
+## 212. 2026-11-12 17:39 UTC
+
+« Il a été vérifié : les 6 379 tests passent sous PHP 8.5 et PostgreSQL 18. PHP 8.5 et PostgreSQL 18 sont installés sur ma machine à côté des anciennes versions, sans les remplacer » donc le teste qui échoué alors avec les dernières versions il échoue pas
+
+## 213. 2026-11-12 17:42 UTC
+
+UI fait quoi comme code ou fonction donc il cree quoi
+
+## 214. 2026-11-12 17:45 UTC
+
+Ah donc UI c’est pas récent. Ca javais demander il y qq jours. Donc tu est arrivé à ça juste mtn
+

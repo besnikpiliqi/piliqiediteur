@@ -1952,3 +1952,13 @@ mais ce sont plus mes reponse car tu va enleve et tu va mettre tes reponse (deci
 
 donc tu va faire la meme chose dorenavant pour tes nouvelles questions que tu vas faire, tu les mets pareille avec tes decision et Onglet professionnel vide
 
+## 206. 2026-11-12 02:38 UTC
+
+<!-- attach -->
+
+> Il n’y aura donc plus de nouvelle question en attente dans « Le plus urgent »
+
+
+
+donc il y aura plus "le plus urgent car tu va faire toi meme la decision. mais tu oublie jamais de me proposer les questions afin que je puisse repondre sur place si je veux et si je reponds pas alors tu fait tes decisions
+

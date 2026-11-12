@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 12/11/2026 à 02:34 UTC par pilotage-sync.sh : « D73 : nouvelles questions avec décision appliquée sans attendre ».
+Mis à jour le 12/11/2026 à 02:39 UTC par pilotage-sync.sh : « D74 : questions toujours proposées, décision appliquée sans réponse ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

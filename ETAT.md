@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 12/11/2026 à 07:27 UTC par pilotage-sync.sh : « CI rouge de bb135db : cause notée, réparation attendue de la chaîne ».
+Mis à jour le 12/11/2026 à 07:28 UTC par pilotage-sync.sh : « Q-AUD6 : fichiers copiés sur main ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

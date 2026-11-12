@@ -1,19 +1,20 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 12/11/2026 à 10:26 UTC par pilotage-sync.sh : « suivi 10:26: UI commité en local, sauvegarde ».
+Mis à jour le 12/11/2026 à 11:45 UTC par pilotage-sync.sh : « Après le lot UI ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
-Tête poussée : `b12a835`. Commits locaux pas encore poussés :
+Tête poussée : `8feeb83`. Commits locaux pas encore poussés :
 
 ```
-238f430 Corrige les constats de l'éditeur sur les écrans de vente (lot UI)
-e101d9f Lit l'écart d'horloge du diagnostic à un dixième de seconde près (CI)
 ```
 
 Derniers commits poussés :
 
 ```
+8feeb83 Relecture du lot UI des écrans
+238f430 Corrige les constats de l'éditeur sur les écrans de vente (lot UI)
+e101d9f Lit l'écart d'horloge du diagnostic à un dixième de seconde près (CI)
 b12a835 Relecture du lot DEMO de la démonstration
 d23eb96 Laisse le propriétaire tout faire dans le magasin de démonstration (lot DEMO)
 bb135db Relecture du lot AUD de la série 8
@@ -31,9 +32,6 @@ c2455dd Passe Larastan au niveau 10 sans erreur : les valeurs lues sans type son
 5ff0152 Type les valeurs requises des écrans, et passe Larastan au niveau 8 (lot TY1 11/n)
 96b3f8a Type les valeurs requises des ventes, des achats, de la caisse et du stock (Larastan niveau 8, lot TY1 10/n)
 283c34d Type les valeurs requises des droits, de la société et des cabinets (Larastan niveau 8, lot TY1 9/n)
-97c16bc Type les écrans, les commandes et la configuration, et passe Larastan au niveau 7 (lot TY1 8/n)
-430539c Type les ventes, les achats, la caisse et le stock (Larastan niveau 7, lot TY1 7/n)
-0e5cf71 Type les lectures des droits, de la société et des cabinets (Larastan niveau 7, lot TY1 6/n)
 ```
 
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
@@ -46,9 +44,6 @@ c2455dd Passe Larastan au niveau 10 sans erreur : les valeurs lues sans type son
 Course `wf_1d467e9e-93e`, étapes commencées (de la plus ancienne à la plus récente) :
 
 ```
-CALC:notes
-FI:implementation
-FI:implementation-2
 FI:relecture1
 FI:relecture2
 FI:correction
@@ -71,4 +66,7 @@ DEMO:notes
 UI:implementation
 UI:relecture1
 UI:relecture2
+UI:correction
+UI:poussee
+UI:notes
 ```

@@ -1,5 +1,16 @@
 # Registre de ce qui reste à trancher (D57)
 
+## 12/11/2026 vers 01 h UTC : règles de l'éditeur du 11/11 rangées (D67)
+
+- Réponses de l'éditeur écrites le 11/11 de 21 h 54 à 23 h 55 UTC (22 h 54 à 00 h 55, heure de Paris) dans la colonne « Réponse du professionnel » de 19 lignes de l'onglet « À faire vérifier par un professionnel » (T1.1 à T1.4, T1.7, T2.1 à T2.9, T3.1 à T3.4, T4.5 ; revs 61 à 844) : ce sont ses décisions, pas l'avis d'un professionnel. Plan de rangement : `scratchpad/onglet2-844/analyse/plan-rangement.md` ; textes exacts : `scratchpad/onglet2-844/lignes.txt` et `analyse/cellules.json`.
+- Rangement : D67 (`historique/DIRECTIVES.md`, et une ligne en haut du journal des réponses) ; V240 dans « Vos décisions » ; Q399 à Q417 dans « Mes questions et vos réponses » (série « Vos règles pour la facture électronique et l'e-reporting (11/11) ») ; questions de suite T106 à T114 en haut de « Le plus urgent » ; Q64 remplacée, Q71 remplacée pour cinq natures, Q396 avec le renvoi à T114. Les lignes T1.1 à T1.4, T1.7, T2.1 à T2.9, T3.1 à T3.4 et T4.5 quittent les tableaux de l'onglet 1 ; restent T1.6, T2.10, T4.1 à T4.4.
+- Onglet « À faire vérifier par un professionnel » : nouvel état **« Tranchée par vous le 11/11/2026, sans avis d'un professionnel »** pour 34 lignes (19 de l'expert-comptable, 15 des prestataires) ; comptes du texte d'entrée (288 questions) : 146 ouvertes, 53 règles que PILIQI applique en attendant l'avis, 51 tranchées comme conseillé, 4 tranchées autrement, 34 tranchées par vous. Dans `avis/final.json`, l'état s'écrit `tranche-par-l-editeur` (P32 à P36 ; P38 reçoit la réponse à T4.5 et reste ouvert pour le reste ; P37 inchangé).
+- Comptes : « Vos décisions » 240 décisions (dont 50 à appliquer) ; « Mes questions et vos réponses » 417 réponses ; texte d'entrée de l'onglet 1 : 240 décisions, 417 réponses.
+- rev : voir etat-chaines.md.
+- Notes mises à jour : `historique/DIRECTIVES.md`, `registre.json` (T1 à T4 : réponses par sous-point ; T3 tranché ; points T106 à T114 ; `urgent` : T106 à T114 en tête, T1 et T2 restent pour T1.6 et T2.10), `onglets23/releve-voix.json` (V240, Q394 à Q417, statuts de Q64, Q71, Q392, Q393), `avis/final.json`, `../decisions-editeur.md` (E6, E13), `../superpdp-plan.md`, `../tva/plan-execution.md`, `../regles-tva-international.md`, `../tva/reglementation.md`, `../a-faire-apres-chaine.md` (lot « ER », avec la note T105).
+- Écarts connus : dans `releve-voix.json`, Q394 à Q398 sont reconstitués depuis ces notes (champ `note`), pas depuis le document, et V239 (D63) manque toujours ; dans `registre.json`, `urgent` garde T45 (tranché, Q395) et n'a pas T105 (absent des points) ; les copies hors des notes (`scratchpad/a-trancher/resultat/final.json`, `scratchpad/a-trancher/avis/final.json`) ne sont pas mises à jour.
+- Prochains numéros : **T115** (déjà prévu pour la question de la démonstration après la validation, `../a-faire-apres-chaine.md` ; s'il est posé, le suivant est T116), **Q418**, **V241**, **D68**.
+
 - Document de l'éditeur : « PILIQI — Ce qui reste à trancher », https://claude.ai/artifact/9M7jL75DYpwBcTrLC1TpGS
   (document `439821cf-cd41-493d-8b4d-ce35494fcc4b`, corps de l'onglet `1d1e8094-dda6`).
 - Rempli le 10/11/2026 vers 17 h 40 UTC (révision 8) depuis le relevé du workflow `wf_437b8241-219`

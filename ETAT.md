@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 12/11/2026 à 00:15 UTC par pilotage-sync.sh : « Après le lot FI ».
+Mis à jour le 12/11/2026 à 00:54 UTC par pilotage-sync.sh : « Lot FI poussé, CI verte ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -37,25 +37,77 @@ d8d2ee3 Contrôle les seuils de l'analyse statique par ses paramètres effectifs
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
+ M app/Domain/Achats/Actions/CreerFactureAchatAction.php
+ M app/Domain/Achats/Actions/ModifierFactureAchatAction.php
+ M app/Domain/Achats/Support/GardesDesPiecesDuFournisseur.php
+ M app/Domain/Cabinets/Support/GardesDesCabinets.php
+ M app/Domain/CaisseSecurisee/Concerns/ProtegeLesDonneesValidees.php
+ M app/Domain/CaisseSecurisee/Support/DeclencheursDeProtection.php
+ M app/Domain/Contacts/Models/Client.php
+ M app/Domain/Contacts/Models/Fournisseur.php
+ M app/Domain/Facturation/Actions/CloturerCaisseAction.php
+ M app/Domain/Facturation/Actions/CreerAvoirAction.php
+ M app/Domain/Facturation/Actions/CreerDevisAction.php
+ M app/Domain/Facturation/Actions/CreerFactureAction.php
+ M app/Domain/Facturation/Actions/EnregistrerAvoirAction.php
+ M app/Domain/Facturation/Actions/EnregistrerPaiementAction.php
+ M app/Domain/Facturation/Actions/EnregistrerVenteCaisseAction.php
+ M app/Domain/Facturation/Actions/FermerSaCaisseAction.php
+ M app/Domain/Facturation/Actions/ModifierDevisAction.php
+ M app/Domain/Facturation/Actions/ModifierFactureAction.php
+ M app/Domain/Facturation/Services/RecusDePaiement.php
+ M app/Domain/Facturation/Support/GardesDeLaVente.php
+ M app/Domain/Tenancy/Concerns/BelongsToMagasin.php
+ M app/Domain/Tenancy/Support/GardesDesDroits.php
+ M app/Domain/Tenancy/Support/GardesDesIdentifiants.php
+ M app/Domain/Tenancy/Support/GardesDesTypesDActivite.php
+ M database/migrations/2026_10_02_100018_create_mandats_pdp_table.php
+ M database/migrations/2026_10_02_200001_create_clients_table.php
+ M database/migrations/2026_10_02_200002_create_fournisseurs_table.php
+ M database/migrations/2026_10_02_200003_create_produits_table.php
+ M database/migrations/2026_10_02_200004_create_mouvements_stock_table.php
+ M database/migrations/2026_10_02_200005_create_services_table.php
+ M database/migrations/2026_10_02_200006_create_consultations_vies_table.php
+ M database/migrations/2026_10_03_000002_create_clotures_caisse_table.php
+ M database/migrations/2026_10_03_100001_create_devis_table.php
+ M database/migrations/2026_10_03_100002_create_lignes_devis_table.php
+ M database/migrations/2026_10_03_100003_create_factures_table.php
+ M database/migrations/2026_10_03_100004_create_lignes_facture_table.php
+ M database/migrations/2026_10_03_100007_create_preuves_operation_table.php
+ M database/migrations/2026_10_03_100008_create_bordereaux_detaxe_table.php
+ M database/migrations/2026_10_04_100000_create_recus_paiement_table.php
+ M database/migrations/2026_10_04_100001_create_paiements_table.php
+ M database/migrations/2026_10_04_100002_create_paiement_allocations_table.php
+ M database/migrations/2026_10_04_100003_create_lignes_recu_paiement_table.php
+ M database/migrations/2026_10_05_100001_create_avoirs_table.php
+ M database/migrations/2026_10_05_100002_create_lignes_avoir_table.php
+ M database/migrations/2026_10_07_100001_create_factures_achat_table.php
+ M database/migrations/2026_10_07_100002_create_lignes_achat_table.php
+ M database/migrations/2026_10_07_100003_create_avoirs_fournisseur_table.php
+ M database/migrations/2026_10_07_100004_create_lignes_avoir_fournisseur_table.php
+ M database/migrations/2026_10_07_100005_create_inventaires_ouverture_table.php
+ M database/migrations/2026_10_07_100006_create_lignes_inventaire_ouverture_table.php
+ M database/migrations/2026_10_07_100007_create_taux_factures_achat_table.php
+ M database/migrations/2026_10_07_100008_create_taux_avoirs_fournisseur_table.php
+ M database/migrations/2026_10_09_100001_create_clotures_caisse_personnelles_table.php
+ M database/migrations/2026_10_12_100001_create_avoir_allocations_table.php
+ M database/migrations/2026_10_13_100002_create_envois_documents_table.php
+ M database/migrations/2026_10_14_100002_create_enregistrements_fiscaux_table.php
+ M database/migrations/2026_10_14_100003_create_paniers_caisse_table.php
+ M database/migrations/2026_10_14_100004_create_traces_evenements_table.php
+ M tests/Feature/Authorization/ActionsHorsEcranTest.php
+ M tests/Feature/CaisseSecurisee/InalterabiliteTest.php
 ```
 
 ## Dernière course de la chaîne
 
-Course `wf_1d467e9e-93e`, étapes commencées (de la plus ancienne à la plus récente) :
+Course `wf_7ca7f9f7-b84`, étapes commencées (de la plus ancienne à la plus récente) :
 
 ```
-CALC:implementation
-CALC:implementation-2
-CALC:relecture1
-CALC:relecture2
-CALC:correction
-CALC:poussee
-CALC:notes
-FI:implementation
-FI:implementation-2
-FI:relecture1
-FI:relecture2
-FI:correction
-FI:poussee
-FI:notes
+ranger:onglet1
+ranger:onglet-pro
+ranger:onglet3
+ranger:decisions
+ranger:notes
+controle
 ```

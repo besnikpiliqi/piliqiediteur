@@ -108,6 +108,7 @@
   - Choix : Envoyé automatiquement à chaque paiement d'une facture de services, avec le montant et la date, sauf pour un magasin qui a opté pour les débits. (recommandation)
 - **E6 – Paiements des particuliers pour des services** (SUPER PDP D8)
   - Choix : Les déclarer une fois la règle confirmée avec votre expert-comptable ; rien n'est envoyé d'ici là. (recommandation)
+  - Remplacée le 11/11/2026 par la décision de l'éditeur (D67 ; Q399 à Q402, réponses à T1.1 à T1.4) : les paiements de particuliers pour des services, sans option pour les débits, se déclarent dans l'e-reporting des paiements, sans attendre un expert-comptable. Le montant est le TTC encaissé, ventilé par taux, avec la date d'encaissement. D'une vente qui mêle biens et services, seule la part des services se déclare. Un paiement partiel se répartit entre les taux au prorata des TTC du document d'origine. Questions de suite : T106 (rangement de la réponse titrée « T1.2 » dans la ligne T1.3), T107.1 (arrondi du prorata), T107.2 (base après un avoir), T114 (place de ces règles dans la revue fiscale, Q396).
 - **E7 – Clients publics (mairies…) et professionnels non assujettis** (SUPER PDP D25)
   - Choix : Ces factures restent hors plateforme, avec un message sur la facture. (recommandation)
 - **E8 – Facture rejetée par la plateforme** (SUPER PDP D26)
@@ -122,6 +123,7 @@
   - Choix : Bouton « Transmettre » pour les factures émises avant la connexion ; pas de rattrapage des clôtures antérieures. (recommandation)
 - **E13 – Ventes à 0 % de TVA (export, autoliquidation…)** (SUPER PDP D10)
   - Choix : Transmission refusée, avec un message clair, tant que le motif d'exonération n'est pas géré. (recommandation)
+  - Remplacée en partie le 11/11/2026 par la décision de l'éditeur (D67 ; Q404 à Q411, réponses à T2.1 à T2.8) : l'export hors UE et la livraison vers un DOM (catégorie G), la livraison intracommunautaire (K), la prestation à un professionnel hors UE (E, jamais O) et la vente en franchise en base (E, « TVA non applicable, art. 293 B du CGI ») se transmettent. E13 vaut encore pour la vente en France à 0 % hors franchise et pour la prestation à un professionnel de l'UE en autoliquidation. Questions de suite : T109.1 (code VATEX en BT-121), T109.3 (canal B2B international), T110.1 (texte des mentions), T110.2 (CIBS au 01/01/2027), T111.1 et T111.2 (identifiants, envoi en deux temps).
 - **E14 – Déclaration des ventes aux particuliers (e-reporting)** (Audit C28, X5 · SUPER PDP D17)
   - Choix : Une déclaration par clôture journalière, suivie jusqu'à l'accusé de réception ; les journées manquées sont rattrapées. (recommandation)
 - **E15 – Vérification des envois contre la spécification SUPER PDP dans les tests** (SUPER PDP D19)

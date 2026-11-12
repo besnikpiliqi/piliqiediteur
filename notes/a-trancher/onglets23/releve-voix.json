@@ -5101,6 +5101,32 @@
    "refs": [
     "D61"
    ]
+  },
+  {
+   "id": "V240",
+   "date_utc": "2026-11-11 entre 21:54 et 23:55 UTC",
+   "date_paris": "11/11/2026",
+   "heure_paris": "de 22 h 54 à 00 h 55 (le 12/11)",
+   "theme": "Facture électronique (SUPER PDP)",
+   "code": "D67",
+   "titre": "Vos propres règles pour la facture électronique et l'e-reporting, sans attendre un professionnel",
+   "decision": "Vous validez et imposez vous-même 19 règles de la facture électronique et de l'e-reporting (T1.1 à T1.4, T1.7, T2.1 à T2.9, T3.1 à T3.4, T4.5), sans attendre l'avis d'un expert-comptable ni l'essai au bac à sable de SUPER PDP. Elles remplacent la recommandation E6 (Q64) et, pour cinq natures d'opération, E13 (Q71). Le détail de chaque règle est dans « Mes questions et vos réponses » (Q399 à Q417). (D67)",
+   "mots": "« Règle validée et imposée par le concepteur (annule et remplace l'attente de validation par un expert-comptable) »",
+   "statut": "a-appliquer",
+   "statut_detail": "Étape 1 pour l'aperçu des clôtures et CLAUDE.md (lot ER, après la chaîne en cours) ; étape 2 pour le reste ; 19 questions de suite T106 à T114.",
+   "sources": [
+    "historique/DIRECTIVES.md, § 1.4, D67",
+    "scratchpad/onglet2-844/analyse/plan-rangement.md, § 3.4",
+    "scratchpad/onglet2-844/lignes.txt"
+   ],
+   "refs": [
+    "D67",
+    "Q399",
+    "Q417",
+    "Q64",
+    "Q71"
+   ],
+   "note": "V239 (D63) n'est pas dans ce fichier : le relevé s'arrête à V238."
   }
  ],
  "questions": [
@@ -6445,8 +6471,8 @@
    "mots": "",
    "decision": "Recommandation retenue : ces paiements ne seront déclarés qu'une fois la règle confirmée par l'expert-comptable. Rien n'est envoyé d'ici là.",
    "theme": "Facture électronique (SUPER PDP)",
-   "statut": "a-appliquer",
-   "statut_detail": "Étape 2 (SUPER PDP), après confirmation de l'expert-comptable ; règle écrite dans CLAUDE.md",
+   "statut": "remplacee",
+   "statut_detail": "Remplacée le 11/11/2026 par Q399 à Q402 (D67) : les paiements de particuliers pour des services se déclarent sans attendre un expert-comptable. Avant : Étape 2 (SUPER PDP), après confirmation de l'expert-comptable ; règle écrite dans CLAUDE.md",
    "sources": [
     "decisions-editeur.md:109",
     "historique/messages-editeur.md, message 150",
@@ -6595,7 +6621,7 @@
    "decision": "Recommandation retenue : une vente à 0 % n'est pas transmise tant que son motif d'exonération n'est pas géré, avec un message clair.",
    "theme": "Facture électronique (SUPER PDP)",
    "statut": "a-appliquer",
-   "statut_detail": "Étape 2 (SUPER PDP) ; règle écrite dans CLAUDE.md",
+   "statut_detail": "Remplacée le 11/11/2026 pour l'export, la livraison vers un DOM, la franchise, la livraison intracommunautaire et la prestation hors UE (Q404 à Q411, D67) ; vaut encore pour la vente en France à 0 % hors franchise et la prestation à un professionnel de l'UE en autoliquidation. Avant : Étape 2 (SUPER PDP) ; règle écrite dans CLAUDE.md",
    "sources": [
     "decisions-editeur.md:123",
     "historique/messages-editeur.md, message 150",
@@ -13365,8 +13391,8 @@
    "mots": "oui",
    "decision": "EC2, DV et S9-L tournent à l'effort « max » (écrire le code, relire, corriger), comme les autres lots qui touchent aux calculs, à la caisse ou aux droits.",
    "theme": "Façon de travailler",
-   "statut": "a-appliquer",
-   "statut_detail": "Script de la chaîne modifié le 11/11 vers 04 h 32 ; pris en compte à la prochaine reprise de la course, au plus tard juste avant le lot DV.",
+   "statut": "remplacee",
+   "statut_detail": "Remplacée le 11/11/2026 vers 09 h 50 UTC par Q394 (D63 : effort « max » seulement pour CALC), d'après le rangement de l'onglet 3 au rev 48 noté dans a-trancher/LISEZMOI.md. Avant : Script de la chaîne modifié le 11/11 vers 04 h 32 ; pris en compte à la prochaine reprise de la course, au plus tard juste avant le lot DV.",
    "sources": [
     "message de l'éditeur dans la conversation, le 11/11 vers 03 h 32 UTC",
     "nouvelle-session/serie8-lots.js, LOTS_SENSIBLES"
@@ -13383,8 +13409,8 @@
    "mots": "« 1 et 2 »",
    "decision": "Les sorties longues des outils sont écrites dans un fichier (l'agent ne lit que le résumé et chaque erreur en entier) ; à partir de TY3, chaque lot est écrit par des agents successifs avec une note de passage. L'effort reste « max » pour TY3, PS1 et PS2.",
    "theme": "Façon de travailler",
-   "statut": "a-appliquer",
-   "statut_detail": "Règle 1 écrite dans les consignes que lit chaque lot (D62) ; règle 2 dans le script de la chaîne, prise en compte à la prochaine reprise de la course.",
+   "statut": "appliquee",
+   "statut_detail": "Appliquée (D62), d'après le rangement de l'onglet 3 au rev 48 noté dans a-trancher/LISEZMOI.md. Avant : Règle 1 écrite dans les consignes que lit chaque lot (D62) ; règle 2 dans le script de la chaîne, prise en compte à la prochaine reprise de la course.",
    "sources": [
     "message de l'éditeur dans la conversation, le 11/11 vers 03 h 40 UTC",
     "historique/DIRECTIVES.md, D62",
@@ -13392,6 +13418,585 @@
    ],
    "refs": [
     "D62"
+   ]
+  },
+  {
+   "id": "Q394",
+   "serie": "Effort de la chaîne (11/11)",
+   "date_utc": "2026-11-11 09:50",
+   "date_paris": "11/11/2026 vers 10 h 50",
+   "code": "3",
+   "question": "Effort des lots et relectures (ma recommandation, citée par vous) : garder « max » seulement pour CALC (les calculs d'argent) et passer tous les autres lots à « extra » ; garder les deux relectures adversariales.",
+   "mots": "« Tu fait comme tu as dir « Ma recommandation : garder « max » seulement pour CALC (les calculs d'argent) et passer tous les autres lots à « extra ». Et pour les relectures je suis pas trop sur de passer à un seul car eux peuvent trouver des problèmes non? Dit moi e c'est pas tres naissessaire. »",
+   "decision": "Effort « max » seulement pour CALC (calculs d'argent), « extra » pour tous les autres lots ; les deux relectures adversariales restent, en même temps (D63, points 5 et 5 bis).",
+   "theme": "Façon de travailler",
+   "statut": "appliquee",
+   "statut_detail": "Rangée le 11/11 vers 10 h 05 UTC avec D63 (onglet 3 au rev 48 : Q394 appliquée, Q392 remplacée, Q393 appliquée, d'après les comptes notés dans a-trancher/LISEZMOI.md).",
+   "sources": [
+    "a-trancher/LISEZMOI.md (11/11 vers 10 h 05 UTC)",
+    "historique/DIRECTIVES.md, D63"
+   ],
+   "refs": [
+    "D63"
+   ],
+   "note": "Ligne reconstituée le 12/11/2026 depuis les notes (a-trancher/LISEZMOI.md, historique/DIRECTIVES.md, registre.json, d66/sortie/onglet1.md), pas depuis le document : le texte de l'onglet 3 peut différer ; série non relevée dans les notes."
+  },
+  {
+   "id": "Q395",
+   "serie": "",
+   "date_utc": "2026-11-11 10:15",
+   "date_paris": "11/11/2026 vers 11 h 15",
+   "code": "T45",
+   "question": "Votre oui du 09/11 laisse un cabinet suspendu retirer ses invitations ouvertes ; la session y ajoute ses demandes de lien ouvertes. D'accord, ou les invitations seules ? Ma proposition : Invitations et demandes ouvertes retirables par le seul propriétaire du cabinet, chaque retrait inscrit au journal d'audit (lot EC2).",
+   "mots": "les liens doivent restés bloqué / pendant que le cabinet et suspendu / donc les clients des cabinet ne peuvent pas accepter son invitation pendant ce temps mais les client peuvent refuser s ils veulent",
+   "decision": "Tant qu'un cabinet est suspendu, ses liens restent bloqués : aucun client ne peut accepter une invitation ou une demande de lien de ce cabinet ; le client peut la refuser. Le propriétaire du cabinet peut toujours retirer ses invitations et ses demandes de lien ouvertes (oui du 09/11).",
+   "theme": "Cabinets d'expertise comptable",
+   "statut": "a-appliquer",
+   "statut_detail": "Lot EC2 (§ 5 quater de ec2/decision-expert-comptable-societe.md).",
+   "sources": [
+    "a-trancher/LISEZMOI.md (onglet 3 au rev 52 : Q395 = T45)",
+    "historique/DIRECTIVES.md, journal des réponses (11/11 vers 10 h 15 UTC)",
+    "a-trancher/registre.json, T45"
+   ],
+   "refs": [
+    "T45"
+   ],
+   "note": "Ligne reconstituée le 12/11/2026 depuis les notes (a-trancher/LISEZMOI.md, historique/DIRECTIVES.md, registre.json, d66/sortie/onglet1.md), pas depuis le document : le texte de l'onglet 3 peut différer ; série non relevée dans les notes."
+  },
+  {
+   "id": "Q396",
+   "serie": "",
+   "date_utc": "2026-11-11 11:45",
+   "date_paris": "11/11/2026 vers 12 h 45",
+   "code": "T1.5",
+   "question": "Qui confirme la règle. Vous n'avez pas d'expert-comptable, et la règle de déclaration de ces paiements doit être confirmée par l'un d'eux. Qui la confirmera : un expert-comptable que vous choisissez, ou la revue fiscale indépendante avant la mise en production (T38) ? Ma proposition : Un expert-comptable que vous choisissez, ou la revue fiscale proposée avant la mise en production (T38), qui peut confirmer d'un coup tous les points de l'expert-comptable ; d'ici là, rien n'est déclaré.",
+   "mots": "B",
+   "decision": "Une seule revue fiscale indépendante, faite avant la mise en production (étape 15), confirme d'un coup toutes les règles « à confirmer », dont la déclaration des paiements de services des particuliers (T1.5) ; pas d'expert-comptable cherché dès maintenant. Restent ouverts : T38.2 (qui fait la revue) et T38.4 (budget).",
+   "theme": "Juridique et administration",
+   "statut": "a-appliquer",
+   "statut_detail": "Étape 15 (onglet « À appliquer à la fin du logiciel »). Les règles de l'éditeur du 11/11 (Q399 à Q417) s'appliquent sans attendre la revue ; leur place dans la revue : T114.",
+   "sources": [
+    "a-trancher/LISEZMOI.md (11/11 vers 11 h 50 UTC : Q396 = T1.5, Q397 = T38.1, Q398 = T38.3)",
+    "historique/DIRECTIVES.md, journal des réponses (11/11 vers 11 h 45 UTC)",
+    "a-trancher/registre.json, tranche"
+   ],
+   "refs": [
+    "T1.5",
+    "T38",
+    "T114"
+   ],
+   "note": "Ligne reconstituée le 12/11/2026 depuis les notes (a-trancher/LISEZMOI.md, historique/DIRECTIVES.md, registre.json, d66/sortie/onglet1.md), pas depuis le document : le texte de l'onglet 3 peut différer ; série non relevée dans les notes."
+  },
+  {
+   "id": "Q397",
+   "serie": "",
+   "date_utc": "2026-11-11 11:45",
+   "date_paris": "11/11/2026 vers 12 h 45",
+   "code": "T38.1",
+   "question": "Faire faire la revue indépendante. Une revue indépendante peut relire la conformité fiscale de PILIQI (TVA, caisse, facture électronique) et les règles marquées « à confirmer ». Voulez-vous la faire faire avant la mise en production ? Ma proposition : Oui, recommandée : sans expert-comptable chez vous, elle peut confirmer d'un coup les points de la section expert-comptable.",
+   "mots": "B",
+   "decision": "Une seule revue fiscale indépendante, faite avant la mise en production (étape 15), confirme d'un coup toutes les règles « à confirmer », dont la déclaration des paiements de services des particuliers (T1.5) ; pas d'expert-comptable cherché dès maintenant. Restent ouverts : T38.2 (qui fait la revue) et T38.4 (budget).",
+   "theme": "Juridique et administration",
+   "statut": "a-appliquer",
+   "statut_detail": "Étape 15 (onglet « À appliquer à la fin du logiciel »).",
+   "sources": [
+    "a-trancher/LISEZMOI.md (11/11 vers 11 h 50 UTC : Q396 = T1.5, Q397 = T38.1, Q398 = T38.3)",
+    "historique/DIRECTIVES.md, journal des réponses (11/11 vers 11 h 45 UTC)",
+    "a-trancher/registre.json, tranche"
+   ],
+   "refs": [
+    "T38.1",
+    "T38"
+   ],
+   "note": "Ligne reconstituée le 12/11/2026 depuis les notes (a-trancher/LISEZMOI.md, historique/DIRECTIVES.md, registre.json, d66/sortie/onglet1.md), pas depuis le document : le texte de l'onglet 3 peut différer ; série non relevée dans les notes."
+  },
+  {
+   "id": "Q398",
+   "serie": "",
+   "date_utc": "2026-11-11 11:45",
+   "date_paris": "11/11/2026 vers 12 h 45",
+   "code": "T38.3",
+   "question": "Quand faire la revue. La revue indépendante doit être faite avant la mise en production. Quand voulez-vous la faire faire ? Ma proposition : À l'étape 15, avant la mise en production.",
+   "mots": "B",
+   "decision": "Une seule revue fiscale indépendante, faite avant la mise en production (étape 15), confirme d'un coup toutes les règles « à confirmer », dont la déclaration des paiements de services des particuliers (T1.5) ; pas d'expert-comptable cherché dès maintenant. Restent ouverts : T38.2 (qui fait la revue) et T38.4 (budget).",
+   "theme": "Juridique et administration",
+   "statut": "a-appliquer",
+   "statut_detail": "Étape 15 (onglet « À appliquer à la fin du logiciel »).",
+   "sources": [
+    "a-trancher/LISEZMOI.md (11/11 vers 11 h 50 UTC : Q396 = T1.5, Q397 = T38.1, Q398 = T38.3)",
+    "historique/DIRECTIVES.md, journal des réponses (11/11 vers 11 h 45 UTC)",
+    "a-trancher/registre.json, tranche"
+   ],
+   "refs": [
+    "T38.3",
+    "T38"
+   ],
+   "note": "Ligne reconstituée le 12/11/2026 depuis les notes (a-trancher/LISEZMOI.md, historique/DIRECTIVES.md, registre.json, d66/sortie/onglet1.md), pas depuis le document : le texte de l'onglet 3 peut différer ; série non relevée dans les notes."
+  },
+  {
+   "id": "Q399",
+   "serie": "Vos règles pour la facture électronique et l'e-reporting (11/11)",
+   "date_utc": "2026-11-11 entre 21:54 et 23:55",
+   "date_paris": "du 11/11/2026 à 22 h 54 au 12/11/2026 vers 00 h 55",
+   "code": "T1.1",
+   "question": "Déclarer les paiements de particuliers pour des services. Quand un particulier paie une prestation de services (réparation, main-d'œuvre), la TVA est due à l'encaissement, et PILIQI ne déclare rien aujourd'hui. Faut-il déclarer ces paiements dans l'e-reporting ? Ma proposition : Déjà appliqué. Rien n'est déclaré tant qu'un expert-comptable n'a pas confirmé la règle ; l'aperçu de la clôture montre ces encaissements à part.",
+   "mots": "Sur le fond fiscal (DGFiP) : Oui, le paiement d'une prestation de services par un particulier (TVA due à l'encaissement, sans option pour les débits) doit obligatoirement être transmis dans l'e-reporting des données de paiement (date d'encaissement effectif, montant encaissé par taux de TVA), en plus des données de transaction B2C. Décision pour PILIQI : On lève le blocage « en attente de confirmation ». La logique prévue pour l'étape 2 (inclure ces encaissements dans l'e-reporting de paiement) est confirmée.",
+   "decision": "Quand un particulier paie une prestation de services (TVA due à l'encaissement, sans option pour les débits), ce paiement se déclare dans l'e-reporting des paiements (date d'encaissement, montant par taux), en plus des ventes aux particuliers. On n'attend plus la confirmation d'un expert-comptable.",
+   "theme": "Facture électronique (SUPER PDP)",
+   "statut": "a-appliquer",
+   "statut_detail": "À appliquer : mention de l'aperçu de l'e-reporting à retirer (étape 1, lot ER) ; envoi par b2c_payments (étape 2).",
+   "sources": [
+    "onglet « À faire vérifier par un professionnel », colonne « Réponse du professionnel », cellule mb4cajnjtng.151257 (rev 61)",
+    "scratchpad/onglet2-844/lignes.txt",
+    "scratchpad/onglet2-844/analyse/plan-rangement.md, § 2"
+   ],
+   "refs": [
+    "T1.1",
+    "D67",
+    "V240"
+   ]
+  },
+  {
+   "id": "Q400",
+   "serie": "Vos règles pour la facture électronique et l'e-reporting (11/11)",
+   "date_utc": "2026-11-11 entre 21:54 et 23:55",
+   "date_paris": "du 11/11/2026 à 22 h 54 au 12/11/2026 vers 00 h 55",
+   "code": "T1.2",
+   "question": "Montant déclaré : TTC ou HT. Si les paiements de particuliers pour des services se déclarent dans l'e-reporting, quel montant faut-il transmettre : le TTC ou le HT, ventilé par taux ? Ma proposition : Déjà appliqué. Rien n'est déclaré tant que la règle n'est pas confirmée ; l'aperçu de la clôture montre ces encaissements à part.",
+   "mots": "Règle technique et fiscale officielle validée (Spécifications Externes DGFiP). Format exigé : Il faut transmettre le montant encaissé TTC , obligatoirement ventilé par taux de TVA (ainsi que la date d'encaissement effectif). Application à l'exemple PILIQI : Pour une réparation de 60,00 € TTC à 20 % payée par carte, le flux de paiement transmettra 60,00 € TTC sur la ligne correspondant au taux de 20 % (et non 50,00 € HT). Décision pour PILIQI : Règle validée pour l'implémentation de l'étape 2",
+   "decision": "On transmet le montant encaissé TTC (pas le HT), ventilé par taux, avec la date d'encaissement : une réparation de 60,00 € TTC à 20 % se déclare 60,00 € sur la ligne du taux de 20 %.",
+   "theme": "Facture électronique (SUPER PDP)",
+   "statut": "a-appliquer",
+   "statut_detail": "À appliquer : étape 2 (le calcul de l'aperçu est déjà conforme).",
+   "sources": [
+    "onglet « À faire vérifier par un professionnel », colonne « Réponse du professionnel », cellule mb4cajnjtng.152116 (rev 63)",
+    "scratchpad/onglet2-844/lignes.txt",
+    "scratchpad/onglet2-844/analyse/plan-rangement.md, § 2"
+   ],
+   "refs": [
+    "T1.2",
+    "D67",
+    "V240"
+   ]
+  },
+  {
+   "id": "Q401",
+   "serie": "Vos règles pour la facture électronique et l'e-reporting (11/11)",
+   "date_utc": "2026-11-11 entre 21:54 et 23:55",
+   "date_paris": "du 11/11/2026 à 22 h 54 au 12/11/2026 vers 00 h 55",
+   "code": "T1.3",
+   "question": "Paiement partiel d'une prestation. Si les paiements de particuliers pour des services se déclarent dans l'e-reporting, comment déclarer un paiement partiel d'une prestation ? Ma proposition : Déjà appliqué. Rien n'est déclaré tant que la règle n'est pas confirmée ; l'aperçu de la clôture montre ces encaissements à part.",
+   "mots": "### T1.2 - Format des montants pour l'e-reporting des paiements Statut : Règle validée et imposée par le concepteur (annule et remplace l'attente de validation par un expert-comptable). Règle fiscale (DGFiP) : Pour le flux d'e-reporting des données de paiement, les montants à transmettre correspondent aux flux financiers réels. Il faut donc déclarer le montant TTC encaissé , et celui-ci doit obligatoirement être ventilé par taux de TVA . Implémentation technique exigée dans PILIQI : Ventilation TTC : Lors de la clôture (Z de caisse) et de la génération du flux d'e-reporting des paiements, le système doit agréger les montants de services encaissés en TTC, regroupés par taux de TVA (ex: encaissements de services à 20 %, encaissements de services à 10 %). Paiements partiels : En cas d'acompte ou de paiement partiel sur une prestation comportant plusieurs taux, le système appliquera par défaut une ventilation au prorata des montants TTC de la facture/ticket d'origine pour répartir l'encaissement sur les différents taux de TVA. Transmission : Ces montants TTC ventilés sont injectés dans la structure JSON/XML du flux de paiement destiné à la PDP, remplaçant la mise en attente.",
+   "decision": "Les encaissements de services se déclarent en TTC, regroupés par taux, à la clôture du jour (par jour d'encaissement). Un acompte ou un paiement partiel sur une prestation à plusieurs taux se répartit entre les taux au prorata des TTC du document d'origine.",
+   "theme": "Facture électronique (SUPER PDP)",
+   "statut": "a-appliquer",
+   "statut_detail": "À appliquer après T106 et T107 : répartition au prorata dans l'aperçu (étape 1, lot ER), envoi (étape 2). Questions de suite : T106, T107.1, T107.2.",
+   "sources": [
+    "onglet « À faire vérifier par un professionnel », colonne « Réponse du professionnel », cellule mb4cajnjtng.152859 (rev 89)",
+    "scratchpad/onglet2-844/lignes.txt",
+    "scratchpad/onglet2-844/analyse/plan-rangement.md, § 2"
+   ],
+   "refs": [
+    "T1.3",
+    "D67",
+    "V240",
+    "T106",
+    "T107.1",
+    "T107.2"
+   ]
+  },
+  {
+   "id": "Q402",
+   "serie": "Vos règles pour la facture électronique et l'e-reporting (11/11)",
+   "date_utc": "2026-11-11 entre 21:54 et 23:55",
+   "date_paris": "du 11/11/2026 à 22 h 54 au 12/11/2026 vers 00 h 55",
+   "code": "T1.4",
+   "question": "Vente qui mêle biens et services. Si les paiements de particuliers pour des services se déclarent dans l'e-reporting, comment déclarer le paiement d'une vente qui mêle biens et services ? Ma proposition : Déjà appliqué. Rien n'est déclaré tant que la règle n'est pas confirmée ; l'aperçu de la clôture montre ces encaissements à part.",
+   "mots": "### T1.4 - E-reporting des ventes mixtes (Biens et Services) Statut : Règle validée et imposée par le concepteur (annule et remplace l'attente de validation par un expert-comptable). Règle fiscale (DGFiP) : Dans le cas d'une transaction mixte (comprenant à la fois des livraisons de biens et des prestations de services), l'obligation de transmission des données de paiement ne s'applique qu'à la part de la transaction relative aux prestations de services . Implémentation technique exigée dans PILIQI : Typage des lignes : Le système de panier/facturation doit strictement différencier les articles (type bien ) des réparations/main-d'œuvre (type service ). Calcul de la quote-part (Paiement total) : Si le client règle la totalité du ticket, le logiciel extrait le total TTC des lignes de type service et l'affecte au flux d'e-reporting des paiements (ventilé par taux). Calcul au prorata (Paiement partiel) : Si le client effectue un paiement partiel (ex: acompte), le montant à déclarer est calculé proportionnellement. (Formule : Montant du paiement × (Total TTC des services / Total TTC du ticket)). Clôture (Z de caisse) : La routine de clôture applique cette séparation automatiquement et génère le flux sans mettre les paiements \"en attente\".",
+   "decision": "D'une vente qui mêle biens et services, seule la part des services va dans l'e-reporting des paiements : paiement total, le TTC des lignes de service par taux ; paiement partiel, paiement × (TTC des services ÷ TTC du ticket). La clôture fait cette séparation d'office.",
+   "theme": "Facture électronique (SUPER PDP)",
+   "statut": "a-appliquer",
+   "statut_detail": "À appliquer après T107 : même calcul que T1.3, aperçu (étape 1) et envoi (étape 2). Questions de suite : T107.1, T107.2.",
+   "sources": [
+    "onglet « À faire vérifier par un professionnel », colonne « Réponse du professionnel », cellule mb4cajnjtng.153604 (rev 127)",
+    "scratchpad/onglet2-844/lignes.txt",
+    "scratchpad/onglet2-844/analyse/plan-rangement.md, § 2"
+   ],
+   "refs": [
+    "T1.4",
+    "D67",
+    "V240",
+    "T107.1",
+    "T107.2"
+   ]
+  },
+  {
+   "id": "Q403",
+   "serie": "Vos règles pour la facture électronique et l'e-reporting (11/11)",
+   "date_utc": "2026-11-11 entre 21:54 et 23:55",
+   "date_paris": "du 11/11/2026 à 22 h 54 au 12/11/2026 vers 00 h 55",
+   "code": "T1.7",
+   "question": "Avoirs dans l'e-reporting du jour. Dans l'e-reporting des ventes aux particuliers, PILIQI déclare pour chaque journée le net des ventes et des avoirs, chaque avoir comptant en négatif le jour du retour. Cette règle est-elle juste ? Ma proposition : Déjà appliqué, selon votre « oui pour tout » du 07/10/2026 : chaque clôture du jour garde les ventes aux particuliers et leurs avoirs par taux, puis leur net, base de l'e-reporting ; rien n'est transmis avant l'étape 2.",
+   "mots": "### T1.7 - E-reporting des ventes B2C et gestion des avoirs (Z de caisse) Statut : Règle validée et imposée par le concepteur (annule définitivement l'attente d'un avis d'expert-comptable). Règle fiscale (DGFiP) : L'e-reporting des données de transaction B2C nécessite une agrégation journalière. Les retours marchandises ou annulations (matérialisés par un avoir) viennent diminuer le chiffre d'affaires à la date de l'émission de l'avoir , et non à la date de la vente d'origine. Le montant à transmettre à l'administration est donc le montant net journalier. Implémentation technique exigée dans PILIQI : Agrégation du jour : Lors de la clôture journalière (Z de caisse), le système agrège toutes les ventes B2C du jour par taux de TVA. Imputation des avoirs : Le système agrège séparément tous les avoirs B2C émis ce même jour (qu'ils donnent lieu à un crédit (avoir) en boutique). Calcul du Net : Le script de clôture calcule le Net journalier par taux de TVA Total Ventes B2C du jour - Total Avoirs B2C du jour ). Génération du flux : C'est exclusivement ce montant Net (base HT et montant TVA correspondant) qui est injecté dans le flux d'e-reporting des transactions pour cette journée spécifique.",
+   "decision": "L'e-reporting des ventes aux particuliers déclare, pour chaque jour, par catégorie et par taux, le net des ventes moins les avoirs émis ce jour-là ; un avoir compte le jour de son émission. Seul ce net (base HT et TVA) part.",
+   "theme": "Facture électronique (SUPER PDP)",
+   "statut": "appliquee",
+   "statut_detail": "Appliquée : les clôtures gardent déjà ce net par catégorie et par taux ; l'envoi se fait à l'étape 2.",
+   "sources": [
+    "onglet « À faire vérifier par un professionnel », colonne « Réponse du professionnel », cellule mb4cajnjtng.155675 (rev 165)",
+    "scratchpad/onglet2-844/lignes.txt",
+    "scratchpad/onglet2-844/analyse/plan-rangement.md, § 2"
+   ],
+   "refs": [
+    "T1.7",
+    "D67",
+    "V240"
+   ]
+  },
+  {
+   "id": "Q404",
+   "serie": "Vos règles pour la facture électronique et l'e-reporting (11/11)",
+   "date_utc": "2026-11-11 entre 21:54 et 23:55",
+   "date_paris": "du 11/11/2026 à 22 h 54 au 12/11/2026 vers 00 h 55",
+   "code": "T2.1",
+   "question": "Export : catégorie et motif dans la facture électronique. Une vente exportée hors de l'Union se fait sans TVA française. Quelle catégorie de TVA (E, Z, O, K ou G) et quel motif VATEX porter pour elle dans la facture électronique ? Ma proposition : Déjà appliqué. Aucune vente à 0 % n'est transmise tant que son motif n'est pas géré ; catégorie et motif vérifiés au bac à sable SUPER PDP à l'étape 2.",
+   "mots": "### T2.1 - Norme EN 16931 : Facturation et code VATEX des exports hors UE Statut : Règle validée et imposée par le concepteur (annule l'attente de validation par un expert-comptable pour EC3/EC9 et lève le blocage E13). Règle fiscale et normative (EN 16931) : Lors d'une vente de biens exportés hors de l'Union Européenne, l'opération est exonérée de TVA. La norme Factur-X exige l'utilisation d'une catégorie spécifique et d'un code VATEX dédié. Implémentation technique exigée dans PILIQI (Génération XML / Factur-X) : Catégorie de TVA (BT-118) : Attribuer obligatoirement le code G * (Exportation hors UE). Taux de TVA (BT-119) : Fixer la valeur à 0.00 *. Motif d'exonération (BT-120 / TaxExemptionReason) : Insérer obligatoirement le code VATEX-EU-G *, accompagné de la mention légale Exonération de TVA — exportation hors UE (art. 262 I du CGI) *. Déblocage : La recommandation E13 est annulée. Le système ne doit plus bloquer la transmission des ventes à 0 % si elles sont typées comme un export avec ce code VATEX. La facture électronique doit être générée et transmise normalement.",
+   "decision": "Un export de biens hors de l'UE prend la catégorie G, le taux 0, le code VATEX-EU-G et la mention « Exonération de TVA — exportation hors UE (art. 262 I du CGI) ». E13 est levée pour ce cas : la vente se transmet.",
+   "theme": "Facture électronique (SUPER PDP)",
+   "statut": "a-appliquer",
+   "statut_detail": "À appliquer : étape 2 ; retrait de la mention « transmission en attente » de l'aperçu pour l'export (étape 1, lot ER). Questions de suite : T109.1, T109.3, T110.1, T110.2.",
+   "sources": [
+    "onglet « À faire vérifier par un professionnel », colonne « Réponse du professionnel », cellule mb4cajnjtng.157286 (rev 212)",
+    "scratchpad/onglet2-844/lignes.txt",
+    "scratchpad/onglet2-844/analyse/plan-rangement.md, § 2"
+   ],
+   "refs": [
+    "T2.1",
+    "D67",
+    "V240",
+    "T109.1",
+    "T109.3",
+    "T110.1",
+    "T110.2"
+   ]
+  },
+  {
+   "id": "Q405",
+   "serie": "Vos règles pour la facture électronique et l'e-reporting (11/11)",
+   "date_utc": "2026-11-11 entre 21:54 et 23:55",
+   "date_paris": "du 11/11/2026 à 22 h 54 au 12/11/2026 vers 00 h 55",
+   "code": "T2.2",
+   "question": "Livraison vers un DOM : catégorie G ou E. Une livraison de biens vers un DOM depuis la métropole ou la Corse se fait sans TVA française (art. 294 du CGI). Dans la facture électronique, faut-il la catégorie G, ou E avec un motif VATEX propre ? Ma proposition : Déjà appliqué. Catégorie G proposée ; aucune transmission tant qu'elle n'est pas vérifiée au bac à sable SUPER PDP (étape 2).",
+   "mots": "### T2.2 - Norme EN 16931 : Facturation des livraisons vers un DOM (depuis la Métropole/Corse) Statut : Règle validée et imposée par le concepteur (annule l'attente de validation par un expert-comptable pour le point EC3). Le blocage de transmission (E13) est levé. Règle fiscale et normative (EN 16931) : Les DOM (Guadeloupe, Martinique, Guyane, La Réunion, Mayotte) sont hors du territoire fiscal européen. Une livraison de biens vers un DOM constitue une exportation (exonérée selon l'art. 294 du CGI). Implémentation technique exigée dans PILIQI (Génération XML / Factur-X) : Catégorie de TVA (BT-118) : Attribuer obligatoirement le code G * (Exportation). (Ne pas utiliser la catégorie E, qui est réservée aux exonérations internes). Taux de TVA (BT-119) : Fixer la valeur à 0.00 *. Motif d'exonération (BT-120 / TaxExemptionReason) : Insérer la mention légale Exonération de TVA, article 294 du CGI (Livraison vers un DOM) *. Le code VATEX-EU-G peut y être associé si le système gère les codes structurés. Déblocage : Dès qu'une vente est identifiée comme \"Livraison vers un DOM\", le système mappe ces valeurs et autorise la transmission au bac à sable / PPF sans bloquer le flux.",
+   "decision": "Une livraison de biens vers un DOM depuis la métropole ou la Corse prend la catégorie G (jamais E), le taux 0 et la mention « Exonération de TVA, article 294 du CGI (Livraison vers un DOM) » ; VATEX-EU-G est facultatif. La transmission n'est plus retenue (EC3 tranché : G).",
+   "theme": "Facture électronique (SUPER PDP)",
+   "statut": "a-appliquer",
+   "statut_detail": "À appliquer : étape 2 ; texte de l'aperçu comme pour T2.1 (étape 1). Questions de suite : T109.1, T110.1, T108.2.",
+   "sources": [
+    "onglet « À faire vérifier par un professionnel », colonne « Réponse du professionnel », cellule mb4cajnjtng.158892 (rev 259)",
+    "scratchpad/onglet2-844/lignes.txt",
+    "scratchpad/onglet2-844/analyse/plan-rangement.md, § 2"
+   ],
+   "refs": [
+    "T2.2",
+    "D67",
+    "V240",
+    "T109.1",
+    "T110.1",
+    "T108.2"
+   ]
+  },
+  {
+   "id": "Q406",
+   "serie": "Vos règles pour la facture électronique et l'e-reporting (11/11)",
+   "date_utc": "2026-11-11 entre 21:54 et 23:55",
+   "date_paris": "du 11/11/2026 à 22 h 54 au 12/11/2026 vers 00 h 55",
+   "code": "T2.3",
+   "question": "Franchise en base : catégorie et motif dans la facture électronique. Une société en franchise en base vend sans TVA. Quelle catégorie de TVA et quel motif VATEX porter dans sa facture électronique ? Ma proposition : Déjà appliqué. Aucune vente à 0 % n'est transmise tant que son motif n'est pas géré ; vérification au bac à sable SUPER PDP à l'étape 2.",
+   "mots": "### T2.3 - Norme EN 16931 : Facturation d'une société en Franchise en base de TVA Statut : Règle validée et imposée par le concepteur (annule l'attente d'un avis d'expert-comptable pour EC3/EC9 et lève le blocage E13). Règle fiscale et normative (EN 16931) : Une entreprise sous le régime de la franchise en base ne facture pas de TVA. La facture électronique doit le justifier techniquement en utilisant la catégorie d'exonération standard couplée à la mention légale du Code Général des Impôts français. Implémentation technique exigée dans PILIQI (Génération XML / Factur-X) : Catégorie de TVA (BT-118) : Attribuer obligatoirement le code E * (Exonéré). Taux de TVA (BT-119) : Fixer la valeur à 0.00 *. Motif d'exonération (BT-120 / TaxExemptionReason) : Insérer obligatoirement la chaîne de caractères exacte : TVA non applicable, art. 293 B du CGI *. (La norme accepte l'absence de code VATEX si cette justification textuelle est présente). Déblocage métier : Lorsqu'un profil \"Société\" est configuré avec le régime \"Franchise en base\" dans l'application, PILIQI force automatiquement ces valeurs sur l'ensemble de ses ventes et autorise leur transmission au bac à sable / PPF.",
+   "decision": "Une société en franchise en base prend la catégorie E et le taux 0, avec le texte exact « TVA non applicable, art. 293 B du CGI », sans code VATEX obligatoire. Ces valeurs s'appliquent d'office à toutes ses ventes, qui se transmettent.",
+   "theme": "Facture électronique (SUPER PDP)",
+   "statut": "a-appliquer",
+   "statut_detail": "À appliquer : étape 2 ; texte lu depuis RegimeTva::MENTION_FRANCHISE. Le cas sans n° de TVA reste T2.10. Questions de suite : T109.1, T110.2.",
+   "sources": [
+    "onglet « À faire vérifier par un professionnel », colonne « Réponse du professionnel », cellule mb4cajnjtng.159671 (rev 303)",
+    "scratchpad/onglet2-844/lignes.txt",
+    "scratchpad/onglet2-844/analyse/plan-rangement.md, § 2"
+   ],
+   "refs": [
+    "T2.3",
+    "D67",
+    "V240",
+    "T109.1",
+    "T110.2"
+   ]
+  },
+  {
+   "id": "Q407",
+   "serie": "Vos règles pour la facture électronique et l'e-reporting (11/11)",
+   "date_utc": "2026-11-11 entre 21:54 et 23:55",
+   "date_paris": "du 11/11/2026 à 22 h 54 au 12/11/2026 vers 00 h 55",
+   "code": "T2.4",
+   "question": "Export à un particulier : catégorie d'e-reporting. L'e-reporting déclare aussi les ventes aux particuliers sans TVA française. Pour un export à un particulier, faut-il déclarer la catégorie TNT1 (« non soumis à la TVA en France ») ? Ma proposition : Déjà appliqué. L'aperçu de l'e-reporting range ces ventes parmi les opérations non soumises à la TVA en France ; rien n'est transmis avant l'essai au bac à sable de l'étape 2.",
+   "mots": "### T2.4 - E-reporting B2C : Catégorie des exports aux particuliers Statut : Règle validée et imposée par le concepteur (annule l'attente d'un avis d'expert-comptable pour le point EC9 et lève le blocage de transmission). Règle fiscale et normative (DGFiP / PPF) : Dans le cadre de l'e-reporting des transactions avec des personnes non assujetties (B2C), le chiffre d'affaires doit être agrégé par code catégorie. Les ventes exonérées de TVA française, telles que les exportations de biens hors de l'Union Européenne à des particuliers, appartiennent obligatoirement à la catégorie réservée aux opérations non territoriales. Implémentation technique exigée dans PILIQI : Catégorisation au Z de caisse : Lors de la clôture journalière, l'algorithme doit regrouper toutes les lignes de ventes \"Export B2C\" sous le code catégorie TNT1 * (Transactions non soumises à la TVA en France). Base de TVA : Les montants correspondants sont déclarés avec un taux de TVA de 0 %. Déblocage : La restriction exigeant de ne pas enregistrer ou transmettre ces flux avant l'étape 2 (Bac à sable) est levée. Le système est autorisé à générer le fichier JSON/XML d'e-reporting en utilisant ce code normé.",
+   "decision": "Un export de biens hors de l'UE à un particulier se déclare dans l'e-reporting des ventes aux particuliers en TNT1, au taux 0 %, regroupé à la clôture du jour. On n'attend plus le bac à sable.",
+   "theme": "Facture électronique (SUPER PDP)",
+   "statut": "a-appliquer",
+   "statut_detail": "À appliquer : aperçu (étape 1, lot ER : rangement en TNT1 déjà fait, mention « transmission en attente » à retirer) ; envoi (étape 2). Questions de suite : T108.1, T108.2.",
+   "sources": [
+    "onglet « À faire vérifier par un professionnel », colonne « Réponse du professionnel », cellule mb4cajnjtng.161149 (rev 331)",
+    "scratchpad/onglet2-844/lignes.txt",
+    "scratchpad/onglet2-844/analyse/plan-rangement.md, § 2"
+   ],
+   "refs": [
+    "T2.4",
+    "D67",
+    "V240",
+    "T108.1",
+    "T108.2"
+   ]
+  },
+  {
+   "id": "Q408",
+   "serie": "Vos règles pour la facture électronique et l'e-reporting (11/11)",
+   "date_utc": "2026-11-11 entre 21:54 et 23:55",
+   "date_paris": "du 11/11/2026 à 22 h 54 au 12/11/2026 vers 00 h 55",
+   "code": "T2.5",
+   "question": "Franchise en base : catégorie d'e-reporting. Une vente en franchise en base est située en France et seulement dispensée de paiement de la TVA. Dans l'e-reporting des ventes aux particuliers, faut-il quand même la déclarer en catégorie TNT1 ? Ma proposition : Déjà appliqué. L'aperçu de l'e-reporting la marque comme catégorie à vérifier ; rien n'est transmis avant l'essai au bac à sable de l'étape 2.",
+   "mots": "### T2.5 - E-reporting B2C : Catégories pour la Franchise en base (art. 293 B) Statut : Règle validée et imposée par le concepteur (annule l'attente d'un avis d'expert-comptable pour le point EC9). Règle fiscale (DGFiP / PPF) : Les opérations réalisées sous le régime de la franchise en base de TVA sont situées en France. Elles ne relèvent donc pas du code TNT1 (qui est réservé aux opérations non soumises territorialement, comme les exports). Elles doivent être déclarées dans les catégories domestiques à un taux de 0 %. Implémentation technique exigée dans PILIQI : Catégorisation au Z de caisse : Si la société (tenant) est configurée sous le régime \"Franchise en base\", le script de clôture journalière doit strictement ventiler les ventes B2C selon le type de ligne : Lignes de type bien (pièces, accessoires) ➔ Catégorie TLB1 * Lignes de type service (main-d'œuvre, forfaits) ➔ Catégorie TPS1 * Base et Taux : Ces montants sont associés à un taux de TVA forcé à 0.00 *. Mise à jour UI et Flux : L'aperçu de la clôture ne doit plus afficher la mention \"catégorie à vérifier\". La restriction d'enregistrement (étape 2) est levée, le système est autorisé à générer le flux d'e-reporting B2C avec ces catégories.",
+   "decision": "Les ventes à des particuliers d'une société en franchise ne vont pas en TNT1 : les biens vont en TLB1 et les services en TPS1, au taux 0. L'aperçu n'affiche plus « catégorie à vérifier ».",
+   "theme": "Facture électronique (SUPER PDP)",
+   "statut": "a-appliquer",
+   "statut_detail": "À appliquer : aperçu (étape 1, lot ER : ligne en franchise rangée par sa nature, au taux 0) ; envoi (étape 2).",
+   "sources": [
+    "onglet « À faire vérifier par un professionnel », colonne « Réponse du professionnel », cellule mb4cajnjtng.162633 (rev 378)",
+    "scratchpad/onglet2-844/lignes.txt",
+    "scratchpad/onglet2-844/analyse/plan-rangement.md, § 2"
+   ],
+   "refs": [
+    "T2.5",
+    "D67",
+    "V240"
+   ]
+  },
+  {
+   "id": "Q409",
+   "serie": "Vos règles pour la facture électronique et l'e-reporting (11/11)",
+   "date_utc": "2026-11-11 entre 21:54 et 23:55",
+   "date_paris": "du 11/11/2026 à 22 h 54 au 12/11/2026 vers 00 h 55",
+   "code": "T2.6",
+   "question": "Livraison intracommunautaire : catégorie et motif. Une livraison intracommunautaire à un professionnel se fait sans TVA française. Quelle catégorie de TVA et quel motif VATEX porter dans sa facture électronique ? Ma proposition : Déjà appliqué. Aucune vente à 0 % n'est transmise tant que son motif n'est pas géré ; vérification au bac à sable SUPER PDP à l'étape 2.",
+   "mots": "### T2.6 - Norme EN 16931 : Facturation des livraisons intracommunautaires (Biens B2B UE) Statut : Règle validée et imposée par le concepteur (annule l'attente de validation par un expert-comptable pour EC3/EC9 et lève le blocage E13). Règle fiscale et normative (EN 16931) : Une livraison de biens à un assujetti (B2B) situé dans un autre État membre de l'UE est exonérée de TVA en France (le client autoliquide la TVA dans son pays). La norme Factur-X impose la catégorie d'autoliquidation avec le code VATEX dédié aux livraisons intracommunautaires. Implémentation technique exigée dans PILIQI (Génération XML / Factur-X) : Catégorie de TVA (BT-118) : Attribuer obligatoirement le code K * (VAT reverse charge / Autoliquidation). Taux de TVA (BT-119) : Fixer la valeur à 0.00 *. Motif d'exonération (BT-120 / TaxExemptionReason) : Insérer obligatoirement le code VATEX-EU-IC *, accompagné de la mention légale Exonération de TVA, article 262 ter I du CGI *. (Note : le n° de TVA intracommunautaire du client doit également être présent dans le XML, balise BT-48). Déblocage : La recommandation E13 est annulée pour ce cas. Le système ne doit plus bloquer la transmission de ces ventes à 0 %. Dès lors qu'une opération est typée \"Livraison intracommunautaire\", le logiciel génère la facture électronique.",
+   "decision": "Une livraison intracommunautaire de biens à un professionnel prend la catégorie K, le taux 0, le code VATEX-EU-IC, la mention « Exonération de TVA, article 262 ter I du CGI » et le n° de TVA du client en BT-48. Elle se transmet.",
+   "theme": "Facture électronique (SUPER PDP)",
+   "statut": "a-appliquer",
+   "statut_detail": "À appliquer : étape 2 (libellé interne « Livraison intracommunautaire (exonérée) »). Questions de suite : T109.1, T109.3.",
+   "sources": [
+    "onglet « À faire vérifier par un professionnel », colonne « Réponse du professionnel », cellule mb4cajnjtng.163388 (rev 428)",
+    "scratchpad/onglet2-844/lignes.txt",
+    "scratchpad/onglet2-844/analyse/plan-rangement.md, § 2"
+   ],
+   "refs": [
+    "T2.6",
+    "D67",
+    "V240",
+    "T109.1",
+    "T109.3"
+   ]
+  },
+  {
+   "id": "Q410",
+   "serie": "Vos règles pour la facture électronique et l'e-reporting (11/11)",
+   "date_utc": "2026-11-11 entre 21:54 et 23:55",
+   "date_paris": "du 11/11/2026 à 22 h 54 au 12/11/2026 vers 00 h 55",
+   "code": "T2.7",
+   "question": "Prestation hors de l'Union : catégorie O. Une prestation à un professionnel hors de l'Union est hors du champ de la TVA française. Peut-on lui donner la catégorie O dans la facture électronique, malgré la règle BR-O-02 ? Ma proposition : Déjà appliqué. Aucune vente à 0 % n'est transmise tant que son motif n'est pas géré ; vérification au bac à sable SUPER PDP à l'étape 2.",
+   "mots": "### T2.7 - Norme EN 16931 : Prestations de services B2B hors UE (Opérations hors champ) Statut : Règle validée et imposée par le concepteur (annule l'attente d'un avis d'expert-comptable pour EC3/EC9 et lève le blocage E13). Règle fiscale et normative (Contournement BR-O-02) : Une prestation de services facturée à un professionnel (B2B) situé hors de l'Union Européenne est \"hors champ\" de la TVA française (art. 259-1 du CGI). Toutefois, l'utilisation de la catégorie O (Outside scope) déclenche l'erreur fatale BR-O-02 si le XML contient le n° de TVA du vendeur (BT-31), pourtant obligatoire en France. Il faut donc utiliser la catégorie d'exonération générale. Implémentation technique exigée dans PILIQI (Génération XML / Factur-X) : Catégorie de TVA (BT-118) : Attribuer le code E * (Exonéré) et jamais le code O . Taux de TVA (BT-119) : Fixer la valeur à 0.00 *. Identifiant Vendeur : Conserver normalement le Numéro de TVA intracommunautaire du vendeur dans la balise BT-31 * (Seller VAT identifier). Motif (BT-120 / TaxExemptionReason) : Insérer obligatoirement la chaîne exacte : TVA non applicable, art. 259-1 du CGI *. Déblocage : Si la nature d'opération est \"Prestation de services B2B hors UE\", l'application effectue ce mappage automatiquement et génère la facture électronique sans la bloquer.",
+   "decision": "Une prestation à un professionnel hors de l'UE ne prend jamais la catégorie O : elle prend E, le taux 0, le n° de TVA du vendeur en BT-31 et le texte exact « TVA non applicable, art. 259-1 du CGI ». La facture n'est plus retenue.",
+   "theme": "Facture électronique (SUPER PDP)",
+   "statut": "a-appliquer",
+   "statut_detail": "À appliquer : étape 2 ; plan TVA mis à jour (E au lieu de O). Questions de suite : T109.2, T109.3, T110.1.",
+   "sources": [
+    "onglet « À faire vérifier par un professionnel », colonne « Réponse du professionnel », cellule mb4cajnjtng.164217 (rev 490)",
+    "scratchpad/onglet2-844/lignes.txt",
+    "scratchpad/onglet2-844/analyse/plan-rangement.md, § 2"
+   ],
+   "refs": [
+    "T2.7",
+    "D67",
+    "V240",
+    "T109.2",
+    "T109.3",
+    "T110.1"
+   ]
+  },
+  {
+   "id": "Q411",
+   "serie": "Vos règles pour la facture électronique et l'e-reporting (11/11)",
+   "date_utc": "2026-11-11 entre 21:54 et 23:55",
+   "date_paris": "du 11/11/2026 à 22 h 54 au 12/11/2026 vers 00 h 55",
+   "code": "T2.8",
+   "question": "Catégorie O : où porter l'identifiant du vendeur. Sur une facture électronique en catégorie O, le n° de TVA du vendeur pose problème avec la règle BR-O-02. Où porter alors l'identifiant fiscal du vendeur : dans le champ BT-32 ? Ma proposition : Déjà appliqué. Rien n'est transmis avant la vérification au bac à sable SUPER PDP à l'étape 2.",
+   "mots": "### T2.8 - Norme EN 16931 : Identifiants Vendeur (SIRET et TVA intra) face à la règle BR-O-02 Statut : Règle validée et imposée par le concepteur (annule l'attente d'un avis d'expert-comptable et valide l'architecture JSON). Règle normative et Architecture : La norme européenne prévoit deux données pour l'identification fiscale du vendeur : BT-31 * : Numéro de TVA intracommunautaire. BT-32 * : Identifiant fiscal national (en France, le SIRET ). La contrainte BR-O-02 interdit la transmission de la TVA intra (BT-31) si la catégorie de TVA O est utilisée. PILIQI ne générant pas de XML directement mais un payload JSON pour une API (ex: SUPER PDP), le backend doit fournir les données brutes correctes sans déclencher cette règle. Implémentation technique exigée dans PILIQI (Payload JSON) : Transmission systématique : Lors de la préparation du JSON de la facture, le code Laravel doit toujours injecter le SIRET et le Numéro de TVA intracommunautaire de la société (tenant) dans les clés d'identification prévues par l'API de la PDP. Contournement validé : En stricte cohérence avec la règle T2.7, l'algorithme ne génère jamais de catégorie O (systématiquement remplacée par E à 0%). Délégation XML : La PDP recevra ainsi un JSON contenant les deux identifiants et la catégorie E. Elle forgera et signera le XML Factur-X sans déclencher l'erreur BR-O-02, assurant un dépôt réussi sur le PPF.",
+   "decision": "PILIQI n'émet jamais la catégorie O (toujours E à 0 %). Le JSON envoyé à la PDP porte toujours le SIRET et le n° de TVA de la société, et la PDP fabrique le Factur-X. La question de BT-32 en catégorie O devient sans objet.",
+   "theme": "Facture électronique (SUPER PDP)",
+   "statut": "a-appliquer",
+   "statut_detail": "À appliquer : étape 2 (construction d'en_invoice, conversion, envoi). Questions de suite : T111.1, T111.2.",
+   "sources": [
+    "onglet « À faire vérifier par un professionnel », colonne « Réponse du professionnel », cellule mb4cajnjtng.164904 (rev 625)",
+    "scratchpad/onglet2-844/lignes.txt",
+    "scratchpad/onglet2-844/analyse/plan-rangement.md, § 2"
+   ],
+   "refs": [
+    "T2.8",
+    "D67",
+    "V240",
+    "T111.1",
+    "T111.2"
+   ]
+  },
+  {
+   "id": "Q412",
+   "serie": "Vos règles pour la facture électronique et l'e-reporting (11/11)",
+   "date_utc": "2026-11-11 entre 21:54 et 23:55",
+   "date_paris": "du 11/11/2026 à 22 h 54 au 12/11/2026 vers 00 h 55",
+   "code": "T2.9",
+   "question": "Vente à distance sous le guichet OSS : catégorie d'e-reporting. Une vente à distance à un particulier d'un autre pays de l'Union, au-delà du seuil, est taxée dans le pays d'arrivée (guichet OSS). Dans l'e-reporting, faut-il la déclarer en catégorie TNT1 ? Ma proposition : Déjà appliqué. Le guichet OSS n'existe pas (votre choix TVA8 : plus tard, après SUPER PDP) ; rien n'est transmis avant l'essai au bac à sable.",
+   "mots": "### T2.9 - E-reporting B2C : Catégorie des ventes à distance (Guichet OSS) Statut : Règle validée et imposée par le concepteur (annule l'attente de validation par un expert-comptable pour EC9 et l'attente du bac à sable). Règle fiscale (DGFiP / PPF) : Les ventes à distance intracommunautaires (B2C UE) déclarées au guichet unique OSS par une entreprise établie en France sont taxables dans le pays de destination. Elles ne sont donc pas soumises à la TVA française. Dans le flux d'e-reporting B2C, le chiffre d'affaires HT correspondant doit obligatoirement être déclaré sous la catégorie TNT1 * (Transactions non soumises à la TVA en France). Implémentation technique exigée dans PILIQI : Catégorisation au Z de caisse : Lors de la clôture journalière, l'algorithme doit isoler les ventes B2C identifiées comme \"Ventes à distance / OSS\" et les agréger sous le code catégorie TNT1 *. Payload JSON (E-reporting FR) : Dans les données transmises à la PDP, le taux de TVA française associé à cette catégorie TNT1 sera strictement forcé à 0.00 *. (La TVA étrangère réellement facturée au client est stockée à part dans la base de données pour la déclaration OSS, elle ne remonte pas au PPF). Déblocage : La restriction exigeant d'attendre l'étape 2 (vérification au bac à sable SUPER PDP) est levée. Le backend générera le JSON d'e-reporting avec ce code de manière autonome.",
+   "decision": "Les ventes à distance à des particuliers de l'UE déclarées au guichet OSS vont dans l'e-reporting des ventes aux particuliers en TNT1, en HT, au taux français 0. La TVA étrangère est gardée à part pour la déclaration OSS et n'est jamais envoyée.",
+   "theme": "Facture électronique (SUPER PDP)",
+   "statut": "a-appliquer",
+   "statut_detail": "À appliquer : lot du guichet OSS, après l'étape 2.",
+   "sources": [
+    "onglet « À faire vérifier par un professionnel », colonne « Réponse du professionnel », cellule mb4cajnjtng.165615 (rev 669)",
+    "scratchpad/onglet2-844/lignes.txt",
+    "scratchpad/onglet2-844/analyse/plan-rangement.md, § 2"
+   ],
+   "refs": [
+    "T2.9",
+    "D67",
+    "V240"
+   ]
+  },
+  {
+   "id": "Q413",
+   "serie": "Vos règles pour la facture électronique et l'e-reporting (11/11)",
+   "date_utc": "2026-11-11 entre 21:54 et 23:55",
+   "date_paris": "du 11/11/2026 à 22 h 54 au 12/11/2026 vers 00 h 55",
+   "code": "T3.1",
+   "question": "Services : code de date d'exigibilité. Pour une prestation de services, la TVA devient due à l'encaissement. Quelle valeur donner au code de date d'exigibilité dans la facture électronique et l'e-reporting (TPS1 pour les particuliers) ? Ma proposition : Codes omis par défaut (plan de l'étape 2) ; valeurs à vérifier au bac à sable SUPER PDP avant les premiers envois.",
+   "mots": "### T3.1 - E-reporting B2C : Code de date d'exigibilité (tax_due_date_type_code) Statut : Règle validée et imposée par le concepteur (annule l'attente d'un avis d'expert-comptable et l'attente du bac à sable). Règle fiscale et normative (DGFiP / PPF) : La norme européenne utilise le tax_due_date_type_code (UNTDID 2005 / balise BT-8) pour indiquer si la TVA d'une facture est sur les débits ou sur les encaissements. Cette notion s'applique au flux B2B (e-invoicing). Dans le flux B2C (e-reporting), l'administration reçoit un Z de caisse agrégé. L'exigibilité est intrinsèquement portée par la catégorie d'agrégation (ex: TPS1 = Services = Encaissement). Implémentation technique exigée dans PILIQI : Payload JSON (E-reporting B2C) : Lors de la génération du JSON pour l'e-reporting des transactions B2C (et des données de paiement B2C), le champ tax_due_date_type_code ne doit pas être renseigné. Action API : Selon les spécifications exactes de l'API de la PDP (ex: SUPER PDP), ce champ doit être soit totalement omis du payload JSON, soit envoyé sous forme de chaîne vide \"\" ). Déblocage : La vérification préalable au bac à sable pour ce champ spécifique est levée. Le système générera le flux sans fournir de code UNTDID pour le B2C.",
+   "decision": "Dans l'e-reporting des ventes aux particuliers (transactions et paiements), le code de date d'exigibilité n'est pas renseigné pour les services (TPS1) : le champ est omis.",
+   "theme": "Facture électronique (SUPER PDP)",
+   "statut": "a-appliquer",
+   "statut_detail": "À appliquer : étape 2. Questions de suite : T112.1.",
+   "sources": [
+    "onglet « À faire vérifier par un professionnel », colonne « Réponse du professionnel », cellule mb4cajnjtng.166308 (rev 701)",
+    "scratchpad/onglet2-844/lignes.txt",
+    "scratchpad/onglet2-844/analyse/plan-rangement.md, § 2"
+   ],
+   "refs": [
+    "T3.1",
+    "D67",
+    "V240",
+    "T112.1"
+   ]
+  },
+  {
+   "id": "Q414",
+   "serie": "Vos règles pour la facture électronique et l'e-reporting (11/11)",
+   "date_utc": "2026-11-11 entre 21:54 et 23:55",
+   "date_paris": "du 11/11/2026 à 22 h 54 au 12/11/2026 vers 00 h 55",
+   "code": "T3.2",
+   "question": "Option pour les débits : date du fait générateur. Une société qui a opté pour les débits doit la TVA de ses services à la facture et non à l'encaissement. Quelle valeur donner à la date du fait générateur (BT-8) sur ses factures électroniques ? Ma proposition : Codes omis par défaut (plan de l'étape 2) ; valeurs à vérifier au bac à sable SUPER PDP avant les premiers envois.",
+   "mots": "### T3.2 - E-invoicing B2B : Code d'exigibilité (Option pour les débits) Statut : Règle validée et imposée par le concepteur (annule l'attente d'un avis d'expert-comptable et l'attente du bac à sable). Règle fiscale et normative (Factur-X / FNFE-MPE) : Lorsqu'une entreprise prestataire de services opte pour le paiement de la TVA sur les débits, l'exigibilité intervient à l'émission de la facture. La norme technique l'exprime via le code de la liste UNTDID 2005 (balise BT-8 : Value added tax point date code ). La facture doit aussi obligatoirement porter une mention légale visible. Implémentation technique exigée dans PILIQI (Payload JSON PDP) : Condition d'activation : Si la société (tenant) a activé le paramètre \"Option pour les débits\" dans sa configuration. Code d'exigibilité : Lors de la génération d'une facture électronique B2B, le code tax_due_date_type_code (ou clé équivalente attendue par l'API SUPER PDP) ne doit pas être omis, mais impérativement renseigné avec la valeur 3 * (Date of invoice). Mention légale : Le code Laravel doit automatiquement injecter la chaîne de caractères TVA acquittée sur les débits * dans les notes globales de la facture (correspondant à la balise BT-22 : Invoice Note). Déblocage : Le système de facturation appliquera cette règle sans attendre de validation au bac à sable pour l'envoi de l'étape 2.",
+   "decision": "Pour une société qui a l'option pour les débits, chaque facture électronique entre professionnels porte le code d'exigibilité 3 (date de la facture) et la note « TVA acquittée sur les débits » (BT-22).",
+   "theme": "Facture électronique (SUPER PDP)",
+   "statut": "a-appliquer",
+   "statut_detail": "À appliquer : étape 2. Questions de suite : T112.3, T112.4.",
+   "sources": [
+    "onglet « À faire vérifier par un professionnel », colonne « Réponse du professionnel », cellule mb4cajnjtng.166862 (rev 745)",
+    "scratchpad/onglet2-844/lignes.txt",
+    "scratchpad/onglet2-844/analyse/plan-rangement.md, § 2"
+   ],
+   "refs": [
+    "T3.2",
+    "D67",
+    "V240",
+    "T112.3",
+    "T112.4"
+   ]
+  },
+  {
+   "id": "Q415",
+   "serie": "Vos règles pour la facture électronique et l'e-reporting (11/11)",
+   "date_utc": "2026-11-11 entre 21:54 et 23:55",
+   "date_paris": "du 11/11/2026 à 22 h 54 au 12/11/2026 vers 00 h 55",
+   "code": "T3.3",
+   "question": "Biens : code de date d'exigibilité. Pour une vente de biens à un particulier, la TVA devient due à la livraison. Quelle valeur donner au code de date d'exigibilité dans l'e-reporting (TLB1) ? Ma proposition : Codes omis par défaut (plan de l'étape 2) ; valeurs à vérifier au bac à sable SUPER PDP avant les premiers envois.",
+   "mots": "### T3.3 - E-reporting B2C : Code de date d'exigibilité pour les Biens (TLB1) Statut : Règle validée et imposée par le concepteur (annule l'attente d'un avis d'expert-comptable et l'attente du bac à sable). Règle fiscale et normative (DGFiP / PPF) : Tout comme pour les prestations de services, l'e-reporting B2C des livraisons de biens ne requiert pas de code d'exigibilité UNTDID 2005. La TVA sur les biens est exigible au moment du transfert de propriété (généralement la remise au client en boutique). L'utilisation de la catégorie TLB1 suffit à l'administration pour appliquer la bonne règle d'exigibilité. Implémentation technique exigée dans PILIQI : Payload JSON (E-reporting B2C) : Lors de la génération du payload JSON pour l'e-reporting des transactions contenant des biens TLB1 ), le champ tax_due_date_type_code ne doit pas être renseigné. Action API : Ce champ sera totalement omis du JSON (ou envoyé sous forme de chaîne vide \"\" , selon les spécifications exactes de l'API PDP). Déblocage : La validation préalable au bac à sable SUPER PDP est levée. Le système générera le flux e-reporting des biens sans fournir de code d'exigibilité.",
+   "decision": "Pour les ventes de biens à des particuliers (TLB1), le code d'exigibilité n'est pas renseigné.",
+   "theme": "Facture électronique (SUPER PDP)",
+   "statut": "a-appliquer",
+   "statut_detail": "À appliquer : étape 2 (test : la clé est absente du JSON).",
+   "sources": [
+    "onglet « À faire vérifier par un professionnel », colonne « Réponse du professionnel », cellule mb4cajnjtng.167324 (rev 777)",
+    "scratchpad/onglet2-844/lignes.txt",
+    "scratchpad/onglet2-844/analyse/plan-rangement.md, § 2"
+   ],
+   "refs": [
+    "T3.3",
+    "D67",
+    "V240"
+   ]
+  },
+  {
+   "id": "Q416",
+   "serie": "Vos règles pour la facture électronique et l'e-reporting (11/11)",
+   "date_utc": "2026-11-11 entre 21:54 et 23:55",
+   "date_paris": "du 11/11/2026 à 22 h 54 au 12/11/2026 vers 00 h 55",
+   "code": "T3.4",
+   "question": "Envoyer ou omettre ces codes. Le plan de l'étape 2 omet ces codes d'exigibilité par défaut. Peut-on les omettre, ou faut-il les envoyer ? Ma proposition : Codes omis par défaut (plan de l'étape 2) ; à vérifier au bac à sable SUPER PDP avant les premiers envois.",
+   "mots": "### T3.4 - Règle Maître : Codes de date d'exigibilité (BT-8 / UNTDID 2005) Statut : Règle validée et imposée par le concepteur (annule l'attente d'un avis d'expert-comptable et l'attente du bac à sable pour l'ensemble du sujet d'exigibilité). Règle fiscale et normative (Factur-X / DGFiP) : La norme EN 16931 n'impose pas la balise BT-8 (Value added tax point date code) de manière absolue si la date d'exigibilité correspond à la règle fiscale par défaut du document ou de la nature de l'opération. Implémentation technique exigée dans PILIQI (Payload JSON PDP) : L'algorithme de préparation du JSON de facturation/reporting applique la règle du \"Omis par défaut\" : E-reporting B2C : Le champ tax_due_date_type_code n'est jamais envoyé (omis), qu'il s'agisse de biens TLB1 ), de services TPS1 ) ou d'exports TNT1 ). E-invoicing B2B (Cas Standard) : Le champ est omis pour les factures de livraisons de biens, et pour les factures de prestations de services sous le régime standard (TVA sur les encaissements). E-invoicing B2B (Exception Débits) : Le champ n'est renseigné avec la valeur 3 * uniquement si le tenant a activé l'option pour les débits (cf. T3.2).",
+   "decision": "Règle générale « omis par défaut » : le code n'est jamais envoyé dans l'e-reporting des ventes aux particuliers (TLB1, TPS1, TNT1) ; il est omis sur les factures entre professionnels de biens et de services à l'encaissement ; il vaut 3 seulement pour une société avec l'option pour les débits.",
+   "theme": "Facture électronique (SUPER PDP)",
+   "statut": "a-appliquer",
+   "statut_detail": "À appliquer : étape 2 (une seule classe donne le code, un test par branche). Questions de suite : T112.1, T112.2.",
+   "sources": [
+    "onglet « À faire vérifier par un professionnel », colonne « Réponse du professionnel », cellule mb4cajnjtng.167838 (rev 827)",
+    "scratchpad/onglet2-844/lignes.txt",
+    "scratchpad/onglet2-844/analyse/plan-rangement.md, § 2"
+   ],
+   "refs": [
+    "T3.4",
+    "D67",
+    "V240",
+    "T112.1",
+    "T112.2"
+   ]
+  },
+  {
+   "id": "Q417",
+   "serie": "Vos règles pour la facture électronique et l'e-reporting (11/11)",
+   "date_utc": "2026-11-11 entre 21:54 et 23:55",
+   "date_paris": "du 11/11/2026 à 22 h 54 au 12/11/2026 vers 00 h 55",
+   "code": "T4.5",
+   "question": "Achat auprès de Monaco : e-reporting des achats. Un magasin peut acheter auprès de Monaco. Que faut-il alors déclarer dans l'e-reporting des achats (sens « in ») ? Ma proposition : Déjà appliqué. Un achat à un fournisseur monégasque reste à la TVA française, circuit fixé à l'étape 2.",
+   "mots": "### T4.5 - Achats et E-reporting (Rôle Achats / BY) : Cas de Monaco Statut : Règle validée et imposée par le concepteur (annule l'attente d'un expert-comptable et du bac à sable). Règle fiscale et normative (Union douanière France-Monaco) : Les échanges de biens et services avec des entreprises établies à Monaco ne relèvent pas des règles d'importation/exportation ni des régimes intracommunautaires. La TVA applicable est la TVA française domestique. Implémentation technique exigée dans PILIQI : Module Achats : Lorsqu'un fournisseur monégasque est enregistré dans PILIQI, le système le traite comme un fournisseur français (gestion de la TVA française standard et non d'une autoliquidation étrangère). E-reporting Achats (Rôle BY) : Le moteur d'e-reporting n'inclut pas ces factures dans les flux d'achats internationaux soumis à autoliquidation (pas de déclaration spécifique d'acquisition transfrontalière).",
+   "decision": "Un fournisseur établi à Monaco est traité comme un fournisseur français : TVA française, pas d'autoliquidation. Ses factures n'entrent dans aucun e-reporting des achats.",
+   "theme": "International",
+   "statut": "a-verifier",
+   "statut_detail": "À vérifier : la vérification contredit « aucune déclaration » (BOFiP BOI-TVA-DECLA-20-30-50-10 § 210) ; rien à coder aujourd'hui. Questions de suite : T113.",
+   "sources": [
+    "onglet « À faire vérifier par un professionnel », colonne « Réponse du professionnel », cellule mb4cajnjtng.168381 (rev 844)",
+    "scratchpad/onglet2-844/lignes.txt",
+    "scratchpad/onglet2-844/analyse/plan-rangement.md, § 2"
+   ],
+   "refs": [
+    "T4.5",
+    "D67",
+    "V240",
+    "T113"
    ]
   }
  ]

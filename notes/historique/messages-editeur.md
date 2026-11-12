@@ -1844,3 +1844,35 @@ non non la magasin demo il marche quand meme
 
 mais re rempli aussi celles que j ai remplis car tu m as propose meilleur, donc tu remplie meme les miennes
 
+## 195. 2026-11-12 01:22 UTC
+
+[1 capture(s) d'écran jointe(s)]
+
+<!-- attach -->
+
+> Elle dit si la démonstration est fermée ou ouverte, et combien de ventes, de factures d’achat et de paiements y ont été faits après la validation. Dites-moi aussi quel geste vous avez fait (par exemple « j’ai créé une facture d’achat »).
+
+## 196. 2026-11-12 01:25 UTC
+
+<!-- attach -->
+
+> Elle dit si la démonstration est fermée ou ouverte, et combien de ventes, de factures d’achat et de paiements y ont été faits après la validation. Dites-moi aussi quel geste vous avez fait (par exemple « j’ai créé une facture d’achat »).
+
+
+
+WARNING  Attempt to read property "id" on null on line 2.
+
+   WARNING  Attempt to read property "validee_le" on null on line 3.
+
+validee_le: 
+
+demo: aucune
+
+   WARNING  Attempt to read property "validee_le" on null on line 5.
+
+   InvalidArgumentException  Illegal operator and value combination.
+
+## 197. 2026-11-12 01:30 UTC
+
+il faut supprimer ce qui se fait avec demo. peut etre il faut cherche avec son uuid tout ces fait
+

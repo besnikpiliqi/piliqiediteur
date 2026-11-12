@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 12/11/2026 à 22:26 UTC par pilotage-sync.sh : « Point de suivi 22 h 27 UTC ».
+Mis à jour le 12/11/2026 à 23:32 UTC par pilotage-sync.sh : « Onglet À faire de votre côté ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -77,6 +77,7 @@ c2455dd Passe Larastan au niveau 10 sans erreur : les valeurs lues sans type son
  M app/Domain/Tenancy/Services/JournalDesDroits.php
  M app/Domain/Tenancy/Services/PorteeDesDroits.php
  M app/Domain/Tenancy/Services/PostesReconnus.php
+ M app/Domain/Tenancy/Services/SessionsDesComptes.php
  M app/Domain/Tenancy/Services/SuiviDesConnexions.php
  M app/Domain/Tenancy/Support/GardesDesDroits.php
  M app/Filament/App/Pages/Auth/ChoisirSonMotDePasse.php
@@ -96,7 +97,6 @@ c2455dd Passe Larastan au niveau 10 sans erreur : les valeurs lues sans type son
  M app/Http/Middleware/MenerUnCompteSansMagasin.php
  M app/Models/User.php
  M app/Policies/LienCabinetPolicy.php
- M app/Policies/MembrePolicy.php
 ```
 
 ## Dernière course de la chaîne

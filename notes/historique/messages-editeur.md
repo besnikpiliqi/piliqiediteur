@@ -2012,3 +2012,73 @@ Ah donc UI c’est pas récent. Ca javais demander il y qq jours. Donc tu est ar
 
 moi je t ai dit que tu mettes les decision dans la fiche "À faire vérifier par un professionnel" par rapport aux lois et reglemantaire. donc tu marque jamais attendre l avis du comptable. donc tu te base ce que t as mis comme decision et si "Réponse du professionnel" sera rempli alors tu prendra en compte cette case meme si cette case sera remplis apres la production du logiciel. car toi tu va  t occuper pour toujour du logiciel pour mettre à jours le logiciel par rapport se que je te ditcet aussi ce que tu vas trouver comme nessaisaires de facon automatique, donc mettre à jour les dependances etc etc. donc ce que je te dit la tu aplique partout mtn dans tout logiciel et tu modifie et regle ce que je te dit par rapport aux decisions
 
+## 216. 2026-11-12 22:47 UTC
+
+dans .env je vois ces: # Vérification d'identité à distance (prestataire certifié PVID) et envoi
+
+# recommandé (courrier AR, lettre recommandée électronique qualifiée,
+
+# lettre simple) : « faux » en développement, sans aucune requête (voir
+
+# FausseVerificationIdentite et FauxServiceEnvoiRecommande), jamais en
+
+# production ; les prestataires réels se brancheront ici quand l'éditeur
+
+# les aura choisis. Les secrets signent les rappels des prestataires
+
+# (POST /rappels/identite et /rappels/recommande) et ne vont jamais dans
+
+# le dépôt.
+
+IDENTITE_PILOTE=faux
+
+IDENTITE_URL=
+
+IDENTITE_CLE=
+
+IDENTITE_SECRET_RAPPEL=
+
+RECOMMANDE_PILOTE=faux
+
+RECOMMANDE_URL=
+
+RECOMMANDE_CLE=
+
+RECOMMANDE_SECRET_RAPPEL=
+
+et dans .env.example je vois comme ca : # Envoi recommandé par l'API de La Poste (courrier recommandé avec avis de
+
+# réception, remis au destinataire en personne) : « faux » en
+
+# développement, sans aucune requête (voir FauxServiceEnvoiRecommande,
+
+# qui écrit chaque courrier en PDF dans storage/app/private/
+
+# courriers-factices), jamais en production ; l'implémentation réelle se
+
+# branchera ici avec le contrat de l'éditeur. Le secret signe les rappels
+
+# du prestataire (POST /rappels/recommande) et ne va jamais dans le dépôt.
+
+RECOMMANDE_PILOTE=faux
+
+RECOMMANDE_URL=
+
+RECOMMANDE_CLE=
+
+RECOMMANDE_SECRET_RAPPEL= ... je laisse lequels
+
+## 217. 2026-11-12 23:25 UTC
+
+tu m as dit quoi pour "QPDF_BINAIRE=qpdf"
+
+## 218. 2026-11-12 23:30 UTC
+
+<!-- attach -->
+
+> QPDF_BINAIRE=qpdf tout court ne marche que si qpdf est dans le PATH de Windows, ou sur Linux après sudo apt-get install qpdf. Sous Windows, mettez le chemin complet : c’est le plus sûr.
+
+
+
+donc ca tu doit mettre alors dans l ongle a aplique a la fin du logiciel ou bien tu creer un nouveau ongle ou tu mets tout ce que je doit faire sur pc et en production avant lancer le logiciel en ligne
+

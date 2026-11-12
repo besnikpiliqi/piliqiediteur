@@ -738,3 +738,7 @@ Elles sont appliquées dans le code depuis leur demande (sauf la règle (1) du p
   3. Claude entretient le logiciel pour toujours : demandes de l'éditeur, et de lui-même ce qu'il juge nécessaire (mises à jour des dépendances, failles, changements de lois).
   4. Appliqué partout, maintenant : document (onglet professionnel, onglet 1), CLAUDE.md, code (lot PRO après la chaîne, car un agent de la chaîne travaille dans le dépôt).
 - Remplace D75 (« je décide seul seulement avec une source officielle et une certitude sûre ») : Claude décide toujours ; sa certitude et ses sources sont écrites dans sa cellule.
+
+## 12/11/2026 vers 22 h 45 UTC : onglet « À faire de votre côté (PC et mise en ligne) »
+- Mots de l'éditeur : « donc ca tu doit mettre alors dans l ongle a aplique a la fin du logiciel ou bien tu creer un nouveau ongle ou tu mets tout ce que je doit faire sur pc et en production avant lancer le logiciel en ligne »
+- Règle : nouvel onglet du document (fichier c21022d2-bf5b, corps 5d42b5dc-c29b), rangé après les autres. Il liste tous les gestes de l'éditeur : PC (une fois), après chaque lot, comptes et contrats, serveur de production, juste avant l'ouverture. Chaque compte rendu qui crée un geste pour l'éditeur l'y ajoute le jour même. « À appliquer à la fin » reste la liste du travail de Claude.

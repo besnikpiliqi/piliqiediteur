@@ -1,0 +1,48 @@
+name: Audit quotidien des dépendances
+
+# Chaque jour, l'audit des failles connues des paquets de la branche de
+# travail, même sans envoi (décision de l'éditeur du 09/11/2026, Q-AUD6) :
+# GitHub ne lance une tâche planifiée que depuis la branche par défaut
+# (main), d'où ce flux, copié à l'identique sur main, qui extrait la
+# branche de travail. Une faille connue fait échouer la tâche, et GitHub
+# prévient ; elle se corrige par la mise à jour du paquet, dans un lot.
+on:
+  schedule:
+    - cron: '17 5 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+
+    name: Audit des dépendances de la branche de travail
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: claude/saas-invoice-editor-architecture-q6eizh
+          persist-credentials: false
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
+        with:
+          php-version: 8.3
+          extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, pdo_pgsql, sockets, gd, :pdo_sqlite, :sqlite3
+          coverage: none
+
+      - name: Setup Node
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 22
+
+      - name: Composer audit
+        run: |
+          composer audit --locked --no-interaction
+          if [ -f tools/psalm/composer.lock ]; then composer audit --locked --no-interaction --working-dir=tools/psalm; fi
+
+      - name: npm audit
+        run: npm audit --package-lock-only

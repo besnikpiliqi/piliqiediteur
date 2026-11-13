@@ -60,3 +60,8 @@
 - Constat 5 (en partie) : une fiche de fournisseur ne nomme pas son auteur ; seuls les écrans et les actions empêchent un compte du cabinet lié ou de l'expert-comptable de la société de la créer ou de la modifier dans un magasin non choisi (la base garde déjà les achats et les avoirs fournisseur, via mouvements_stock.cree_par).
 - Décision de Claude, appliquée après la chaîne (lot ER-PRO ou lot dédié juste après) : ajouter à la migration de création de `fournisseurs` les colonnes `cree_par` et `modifie_par` (clé composée magasin), remplies par l'action, et étendre le déclencheur de GardesDesCabinets::AUTEURS_DANS_UN_MAGASIN à cette table ; test qui échoue sans la garde. Le même relevé vérifie les autres fiches qu'un cabinet peut toucher (produits nés d'un achat, inventaires).
 - À reporter dans l'onglet « À faire vérifier par un professionnel » ? Non : point technique d'isolation, pas légal ; noté dans « À appliquer à la fin ».
+
+## CI rouge de 9b258e5 (S9-L), constatée le 13/11 à 05:30 UTC
+
+- Cause : la fonction globale `choisirLeClient()` est déclarée deux fois, dans tests/Browser/Parcours/UnProduitUneLigneTest.php:88 et dans VentesDeBoutEnBoutTest.php:37. Pest s'arrête au chargement des tests (FatalException).
+- Correction prévue : S9-A la répare d'abord (consigne l. 34 du script). Si ce n'est pas fait à la fin de S9-A, la réparer avant le lot 21 : une seule déclaration, dans une aide commune de tests/Browser, puis la suite PostgreSQL complète au code 0.

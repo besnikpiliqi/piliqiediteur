@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 13/11/2026 à 05:23 UTC par pilotage-sync.sh : « Après le lot S9-L ».
+Mis à jour le 13/11/2026 à 05:25 UTC par pilotage-sync.sh : « S9-L poussé, CI rouge (choisirLeClient déclarée deux fois), S9-A la répare ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -44,7 +44,6 @@ b21124f Calcule les montants sans virgule flottante et imprime le PU HT tel qu'i
 Course `wf_1d467e9e-93e`, étapes commencées (de la plus ancienne à la plus récente) :
 
 ```
-ML:poussee
 ML:notes
 DV:implementation
 DV:implementation-2
@@ -69,4 +68,5 @@ S9-L:relecture2
 S9-L:correction
 S9-L:poussee
 S9-L:notes
+S9-A:implementation
 ```

@@ -2260,3 +2260,13 @@ un Ticket ne doit pas pouvoir de relancer quand le client est comptoir et l'autr
 
 Vente en France" est ce que c 'est vrai ou pas
 
+## 244. 2026-11-13 22:19 UTC
+
+<!-- attach -->
+
+> C’est noté : modèle D pour tous les tableaux.
+
+
+
+donc pour tous les tableaux du logiciel on est bien d accord, donc tous les tables doivent resemble à ce model
+

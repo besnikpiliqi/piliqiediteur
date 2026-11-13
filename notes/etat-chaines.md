@@ -375,3 +375,4 @@
 - 13/11 ~21:55 UTC — l'éditeur : « pour tous les tables il faut que tu appliques pareil ». Le modèle choisi (A–D, page mise à jour avec « Ventes et avoirs ») vaudra pour les 19 RepeatableEntry de 9 fichiers ; cahier DEMO-V mis à jour. Toujours EN ATTENTE de la lettre.
 - 13/11 ~22:00 UTC — l'éditeur a choisi le MODÈLE D pour tous les tableaux (tiret gris pour les 0, total dans le tableau). Écrit dans a-faire-apres-chaine.md (section DEMO-V) et DIRECTIVES.md.
 - 13/11 ~22:10 UTC — constat de l'éditeur : « Relancer » sur un ticket du client comptoir → caché et refusé (ajout au cahier DEMO-V). Question détaxe sur « Vente en France » : expliqué que c'est voulu (rien ne change).
+- 13/11 ~22:15 UTC — l'éditeur confirme : modèle D pour TOUS les tableaux du logiciel. Ajouté au cahier DEMO-V (19 fiches + 24 listes + tableaux de bord ; PDF légaux exclus). Question posée : L1 (listes sans total) ou L2 (total de la liste filtrée), modèles publiés (même page, v3). EN ATTENTE.

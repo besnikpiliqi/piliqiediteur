@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 13/11/2026 à 08:50 UTC par pilotage-sync.sh : « 13/11 08:50 UTC : lot SEED décidé (données de démonstration), affichage des 295 décisions en cours ».
+Mis à jour le 13/11/2026 à 08:58 UTC par pilotage-sync.sh : « 13/11 ~09:00 UTC : lot SEED, mot de passe commun facultatif PILIQI_DEMO_MOT_DE_PASSE ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

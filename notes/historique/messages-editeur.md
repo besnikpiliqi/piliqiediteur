@@ -2152,3 +2152,7 @@ comment ca ? tu as deja fait ou je doit faire qqch de mon cote
 
 mais tu doit m afficher tout ici tout les decision que t es en train d apliquer afin que je pouisse voir tes decision prise, mais tu juste m 'affiche et tu ne m 'attend pas pour que je reponds oui ou non. je parle juste pour savoir
 
+## 223. 2026-11-13 08:56 UTC
+
+Mais -seed fait quoi? Il remplis la base de données c est ca? Alors la je dois avoir les identifiants pour me connecter avec ces donnes du seed
+

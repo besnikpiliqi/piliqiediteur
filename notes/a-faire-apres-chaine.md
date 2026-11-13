@@ -109,6 +109,10 @@
    - Les mots de passe sont tirés au hasard à chaque semis, comme si chaque personne avait choisi le sien. Aucun n'est écrit dans le dépôt.
    - Un vendeur garde son identifiant pour mot de passe, pour montrer la règle du poste reconnu.
    - Les propriétaires ont une adresse de connexion confirmée sur un domaine réservé (`exemple.test`).
+   - Ajout du 13/11, vers 09 h UTC, après la question de l'éditeur (« Alors la je dois avoir les identifiants pour me connecter avec ces donnes du seed »).
+     - Une variable facultative du `.env`, `PILIQI_DEMO_MOT_DE_PASSE`, donne à tous les comptes semés le même mot de passe, stable d'un semis à l'autre. Le semeur la refuse si elle viole la règle des mots de passe : moins de 8 caractères, un seul caractère répété, une suite de chiffres, ou l'identifiant d'un compte.
+     - Sans cette variable, chaque mot de passe est tiré au hasard et affiché.
+     - Les adresses des propriétaires sont fixes et connues d'avance (par exemple `proprietaire@commerce.exemple.test`). Les identifiants de 8 chiffres, tirés au hasard par PILIQI, changent à chaque semis : le tableau final les donne.
 
 5. Tests.
    - Un test lance le semeur sur PostgreSQL et vérifie les nombres, l'isolation et le refus en production.

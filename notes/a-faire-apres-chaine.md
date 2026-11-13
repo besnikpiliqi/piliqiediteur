@@ -32,13 +32,10 @@
   - Sur un téléphone, le tableau défile de côté dans son cadre.
   - Ce n'est que de l'affichage : jamais le contenu signé ni un montant enregistré ; un export CSV garde des valeurs chiffrées (0, 0,00), sans tiret.
   - Modèle de référence : `../modeles/encaissements-cloture.html`, section D.
-  - **Tous les tableaux du logiciel** (confirmation de l'éditeur, le 13/11 vers 22 h 15 UTC) :
-    - les 19 listes en cadres des fiches deviennent des tableaux du modèle D ;
-    - les 24 listes (Factures, Clients, Produits…) sont déjà des tableaux, et prennent le tiret gris pour les valeurs nulles et l'alignement à droite des nombres et des montants ;
-    - les tableaux des tableaux de bord et des espaces de la société et du cabinet suivent aussi le modèle D.
-  - **Ligne de total des listes : L1 (sans total) ou L2 (avec le total de la liste filtrée). CHOIX DE L'ÉDITEUR : (pas encore choisi)**
-    - Tant que ce choix n'est pas écrit, n'ajoute aucune ligne de total aux listes. Le reste du modèle D s'applique.
-    - Si L2 est choisi, le total s'additionne en centimes entiers dans le code, jamais par une somme SQL sur une colonne décimale (CLAUDE.md).
+  - **Portée, précisée par l'éditeur le 13/11 vers 22 h 25 UTC** (« ce qui était en tableaux c'est bon, comme par exemple les factures de vente, devis etc. sont bonnes, donc tu ne les touches pas ») :
+    - seules les listes affichées aujourd'hui en cadres, une ligne par cadre avec ses titres répétés (`RepeatableEntry` des fiches, 19 listes dans 9 fichiers), deviennent des tableaux du modèle D ;
+    - tout ce qui est déjà un tableau ne change pas, ni sur l'écran, ni dans le tiret, ni par une ligne de total : les 24 listes (Factures, Devis, Clients, Produits, Paiements…) et les tableaux des tableaux de bord et des espaces de la société et du cabinet ;
+    - la question L1/L2 est sans objet.
   - **Hors du modèle :** les PDF des documents légaux (factures, tickets, avoirs, devis, reçus) gardent leur présentation, qui a ses propres règles (CLAUDE.md, « Documents de vente ») et ses tests d'empreinte. Le tiret n'y remplace jamais un 0.
   - Sinon, applique exactement le modèle choisi à **tous les tableaux de PILIQI** qui montrent aujourd'hui une ligne par cadre en répétant leurs titres (demande de l'éditeur du 13/11 vers 21 h 50 UTC : « pour tous les tables il faut que tu appliques pareil »).
     - Ce sont les `RepeatableEntry` des fiches : 19 listes dans 9 fichiers de `app/` au 13/11, par exemple « Ventes et avoirs », « Encaissements par mode » et le détail des documents de la clôture, le relevé d'une caisse personnelle, ou l'aperçu de l'e-reporting.

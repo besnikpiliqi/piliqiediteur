@@ -2270,3 +2270,17 @@ Vente en France" est ce que c 'est vrai ou pas
 
 donc pour tous les tableaux du logiciel on est bien d accord, donc tous les tables doivent resemble à ce model
 
+## 245. 2026-11-13 22:30 UTC
+
+<!-- attach -->
+
+> La détaxe, c’est justement une vente en France : le touriste qui habite hors de l’Union paie la TVA française en caisse. Le ticket est donc bien de nature « Vente en France ». Ensuite, la douane vise le bordereau quand il quitte l’Union, et c’est seulement alors que la TVA lui est remboursée.
+
+
+
+et apres ca sert quoi ca pour le magasin
+
+## 246. 2026-11-13 22:36 UTC
+
+en fait ce qui etais en tableaux c 'est bon comme par ex: les factures de vente, devis etc sont bonnes, donc tu les touches pas
+

@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 13/11/2026 à 22:20 UTC par pilotage-sync.sh : « Modèle D partout, question L1/L2 ».
+Mis à jour le 13/11/2026 à 22:37 UTC par pilotage-sync.sh : « Portée du modèle D : seulement les cadres ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

@@ -19,9 +19,10 @@ use LogicException;
  * personne dit l'avoir regardé, et l'écart sort de l'« À faire » de
  * l'espace de la société (décision de l'éditeur du 01/11/2026, Q-AF13).
  * Rien d'autre ne change : ni l'identité de la société, ni le magasin,
- * ni ce que l'éditeur peut décider ; un nouvel écart relevé ensuite se
- * signale de nouveau. Le propriétaire, ou, pour l'établissement d'un
- * magasin, un administrateur qui peut le rouvrir (voir
+ * ni ce que l'éditeur peut décider ; le même écart relu ensuite ne revient
+ * pas dans l'« À faire », un écart d'un autre motif s'y signale (voir
+ * ReverificationSirene::retenirLEcart()). Le propriétaire, ou, pour
+ * l'établissement d'un magasin, un administrateur qui peut le rouvrir (voir
  * PorteeDesDroits::peutVerifierLEcart()).
  *
  * Sous le verrou de la ligne de l'auteur relu (voir

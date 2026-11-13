@@ -154,8 +154,8 @@ class AppPanelProvider extends PanelProvider
                 Pages\Dashboard::class,
             ])
             // Les widgets du tableau de bord d'un magasin, dont sa bienvenue
-            // (voir BienvenueApercu) et les factures à encaisser (voir
-            // FacturesAEncaisserApercu), en tête.
+            // (voir BienvenueApercu) et l'« À faire » (voir AFaireApercu),
+            // en tête.
             ->discoverWidgets(in: app_path('Filament/App/Widgets'), for: 'App\\Filament\\App\\Widgets')
             // Les tableaux des clients et des produits que montent les
             // fenêtres des pages de vente (voir SelecteurDeClients et

@@ -15,6 +15,7 @@ use App\Domain\Calendrier\Connexions\ConnexionPostgres;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
 use App\Domain\Catalogue\Services\OrigineDesProduits;
+use App\Domain\Contacts\Concerns\Proposable;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Facturation\Models\Avoir;
@@ -411,7 +412,10 @@ class AppServiceProvider extends ServiceProvider
      * Proposable), et la recherche ignore la casse et les accents (voir
      * RechercheSansAccents) ; elle cherche dans l'attribut affiché, ou dans
      * les colonnes données (celles du client d'une vente, voir
-     * ClientResource::colonnesDeRecherche()).
+     * ClientResource::colonnesDeRecherche()). Le choix d'une fiche
+     * proposable ne se valide que parmi les fiches proposées : une requête
+     * forgée n'y fait pas passer le client comptoir, que les factures et
+     * les devis ne proposent jamais (voir Client::scopeProposables()).
      *
      * La valeur déjà enregistrée sur la fiche modifiée n'est jamais
      * revérifiée : elle n'a pas été choisie dans ce formulaire, et une
@@ -452,8 +456,9 @@ class AppServiceProvider extends ServiceProvider
     /**
      * La règle « exists » d'un choix d'une fiche d'un magasin (un modèle
      * BelongsToMagasin, le seul qui sait regleExisteDansLeMagasin()), à
-     * vérifier quand la fiche est nouvelle ou que le choix a changé ; null
-     * pour tout autre champ.
+     * vérifier quand la fiche est nouvelle ou que le choix a changé, parmi
+     * les fiches proposées pour un modèle Proposable ; null pour tout
+     * autre champ.
      */
     private static function regleDuChoixDansLeMagasin(Select $component): ?Exists
     {
@@ -471,7 +476,9 @@ class AppServiceProvider extends ServiceProvider
             return null;
         }
 
-        return ValeursLues::instance($modele::regleExisteDansLeMagasin(), Exists::class);
+        $parmi = in_array(Proposable::class, class_uses_recursive($modele), true) ? $modele::query()->scopes(['proposables']) : null;
+
+        return ValeursLues::instance($modele::regleExisteDansLeMagasin($parmi), Exists::class);
     }
 
     /**

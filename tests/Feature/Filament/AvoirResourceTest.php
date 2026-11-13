@@ -524,7 +524,9 @@ class AvoirResourceTest extends TestCase
 
     /**
      * B6 et K6 : avant son émission, le magasin lit ce que deviendra le
-     * crédit de l'avoir, selon son client.
+     * crédit de l'avoir, selon son client. La vente au client comptoir se
+     * fait à la caisse, la seule où il se choisit (décision de l'éditeur du
+     * 01/11/2026, « 3 oui »).
      */
     public function test_le_formulaire_annonce_ce_que_devient_le_credit_de_l_avoir(): void
     {
@@ -533,7 +535,7 @@ class AvoirResourceTest extends TestCase
         $this->actingAs($responsable);
         Filament::setTenant($magasin);
         $venteAuClient = $this->emettreFactureDepuisLePanneau(Client::factory()->create());
-        $venteAuComptoir = $this->emettreFactureDepuisLePanneau(Client::query()->where('est_comptoir', true)->sole());
+        $venteAuComptoir = self::vendreAuComptant($responsable, Client::query()->where('est_comptoir', true)->sole(), [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'stock_quantite' => 10])->id, 'quantite' => 3]]);
 
         $avoirAuClient = $this->chercher(Livewire::test(CreateAvoir::class), $venteAuClient->numero);
         $avoirAuComptoir = $this->chercher(Livewire::test(CreateAvoir::class), $venteAuComptoir->numero);

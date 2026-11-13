@@ -28,6 +28,7 @@ use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Enums\TransportPar;
 use App\Domain\Facturation\Jobs\SubmitFactureToPdpJob;
 use App\Domain\Facturation\Models\Avoir;
+use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\LigneFacture;
 use App\Domain\Facturation\Services\FacturePdfGenerator;
@@ -37,6 +38,7 @@ use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\MandatPdp;
 use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\App\Resources\AvoirResource;
+use App\Filament\App\Resources\DevisResource\Pages\CreateDevis;
 use App\Filament\App\Resources\FactureResource;
 use App\Filament\App\Resources\FactureResource\Pages\CreateFacture;
 use App\Filament\App\Resources\FactureResource\Pages\EditFacture;
@@ -2064,6 +2066,34 @@ class FactureResourceTest extends TestCase
             ->assertHasFormErrors(['client_id' => 'exists']);
 
         $this->assertSame($client->id, $facture->fresh()->client_id);
+    }
+
+    /**
+     * Le client comptoir n'est le client que de la caisse (décision de
+     * l'éditeur du 01/11/2026, « 3 oui ») : ni les sélecteurs ni la loupe
+     * des factures et des devis ne le proposent, et une requête forgée qui
+     * l'envoie est refusée comme un client qui n'est pas proposé ; ni
+     * facture ni devis ne naît.
+     */
+    public function test_le_client_comptoir_est_refuse_par_une_facture_ou_un_devis_forge(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $this->dansLeMagasin($magasin, $this->responsableDeTest($magasin));
+        $comptoir = Client::query()->where('est_comptoir', true)->sole();
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 40, 'taux_tva' => 20, 'suivi_stock' => false]);
+
+        Livewire::test(CreateFacture::class)
+            ->fillForm(['client_id' => $comptoir->id])
+            ->call('recevoirLesProduitsChoisis', [['produit_id' => $produit->id, 'quantite' => 1]])
+            ->call('create')
+            ->assertHasFormErrors(['client_id' => 'exists']);
+        Livewire::test(CreateDevis::class)
+            ->fillForm(['client_id' => $comptoir->id])
+            ->call('recevoirLesProduitsChoisis', [['produit_id' => $produit->id, 'quantite' => 1]])
+            ->call('create')
+            ->assertHasFormErrors(['client_id' => 'exists']);
+
+        $this->assertSame([0, 0], [Facture::query()->count(), Devis::query()->count()]);
     }
 
     public function test_un_client_archive_ne_peut_pas_etre_choisi_pour_un_brouillon(): void

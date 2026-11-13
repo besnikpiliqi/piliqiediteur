@@ -176,6 +176,10 @@ class FactureResource extends Resource
      * que les factures que l'utilisateur voit (voir
      * Facture::scopeVisiblesPar()) -- une policy sur l'accès direct ne
      * suffit pas, un montant visible dans un tableau est déjà une fuite.
+     * Ce que la colonne « À faire » dit d'une preuve ou d'un visa (voir
+     * raisonsAFaire()) se lit dans la même requête, par les scopes mêmes
+     * des filtres et de l'« À faire » (voir Facture::elleMeme()) : une
+     * page de 25 ventes à l'export ne relit pas chaque facture.
      *
      * @return Builder<Facture>
      */
@@ -184,7 +188,10 @@ class FactureResource extends Resource
         return RequeteDuModele::de(parent::getEloquentQuery(), Facture::class)
             ->visiblesPar(CompteConnecte::exiger())
             ->with(['client', 'magasin'])
-            ->withExists(['bordereauDetaxe as visa_a_noter' => fn (Builder $bordereaux): Builder => $bordereaux->whereDoesntHave('visa')]);
+            ->withExists([
+                'elleMeme as preuve_a_fournir' => fn (Builder $elleMeme): Builder => $elleMeme->preuvesAFournir(),
+                'elleMeme as visa_a_noter' => fn (Builder $elleMeme): Builder => $elleMeme->visaANoter(),
+            ]);
     }
 
     public static function form(Form $form): Form

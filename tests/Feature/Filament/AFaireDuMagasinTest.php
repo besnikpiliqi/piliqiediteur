@@ -4,6 +4,8 @@ namespace Tests\Feature\Filament;
 
 use App\Domain\Achats\Actions\CreerFactureAchatAction;
 use App\Domain\Achats\Actions\ValiderFactureAchatAction;
+use App\Domain\Achats\Enums\StatutFactureAchat;
+use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
@@ -14,12 +16,17 @@ use App\Domain\Facturation\Actions\CreerDevisAction;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreDevisAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
+use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
+use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\NatureOperation;
+use App\Domain\Facturation\Enums\StatutDevis;
 use App\Domain\Facturation\Enums\TypePreuve;
 use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\EnvoiDocument;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Models\RecuPaiement;
 use App\Domain\Stock\Actions\CreerInventaireOuvertureAction;
+use App\Domain\Stock\Models\InventaireOuverture;
 use App\Domain\Tenancy\Actions\FermerMagasinAction;
 use App\Domain\Tenancy\Enums\MotifFermeture;
 use App\Domain\Tenancy\Enums\RoleMagasin;
@@ -31,15 +38,21 @@ use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\ChoseAFaire;
 use App\Filament\App\Resources\DevisResource;
 use App\Filament\App\Resources\DevisResource\Pages\ListDevis;
+use App\Filament\App\Resources\DevisResource\Pages\ViewDevis;
 use App\Filament\App\Resources\FactureAchatResource;
+use App\Filament\App\Resources\FactureAchatResource\Pages\ViewFactureAchat;
 use App\Filament\App\Resources\FactureResource;
 use App\Filament\App\Resources\FactureResource\Pages\ListFactures;
+use App\Filament\App\Resources\FactureResource\Pages\ViewFacture;
+use App\Filament\App\Resources\InventaireOuvertureResource;
+use App\Filament\App\Resources\InventaireOuvertureResource\Pages\ViewInventaireOuverture;
 use App\Filament\App\Resources\ProduitResource;
 use App\Filament\App\Resources\ProduitResource\Pages\ListProduits;
 use App\Filament\App\Widgets\AFaireApercu;
 use App\Models\User;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use Livewire\Livewire;
 use LogicException;
 use Tests\TestCase;
@@ -141,8 +154,9 @@ class AFaireDuMagasinTest extends TestCase
     /**
      * Règle 5 : un brouillon de facture entre dans l'« À faire » dès sa
      * création, avec sa date ; son auteur l'a à faire, avec « Émettre » et
-     * sa page de modification ; le propriétaire, qui n'émet pas, l'a à
-     * surveiller, avec « Voir » et sa fiche.
+     * sa fiche, où il l'émet (sa page de modification n'émet pas, règle
+     * 2) ; le propriétaire, qui n'émet pas, l'a à surveiller, avec « Voir »
+     * et sa fiche. Émis, il en sort.
      */
     public function test_un_brouillon_de_facture_entre_dans_l_a_faire_des_sa_creation(): void
     {
@@ -153,12 +167,72 @@ class AFaireDuMagasinTest extends TestCase
         $brouillon = app(CreerFactureAction::class)->handle($vendeur, Client::factory()->professionnel()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
 
         $pourLeVendeur = $this->chose($vendeur, $magasin, 'brouillons_de_facture');
-        $this->assertSame(['1 brouillon de facture pas encore émis, du 21/10/2026.', false, 'Émettre', FactureResource::getUrl('edit', ['record' => $brouillon]), '2026-10-21'], [$pourLeVendeur?->phrase, $pourLeVendeur?->aSurveiller, $pourLeVendeur?->bouton, $pourLeVendeur?->url, $pourLeVendeur?->date]);
+        $this->assertSame(['1 brouillon de facture pas encore émis, du 21/10/2026.', false, 'Émettre', FactureResource::getUrl('view', ['record' => $brouillon]), '2026-10-21'], [$pourLeVendeur?->phrase, $pourLeVendeur?->aSurveiller, $pourLeVendeur?->bouton, $pourLeVendeur?->url, $pourLeVendeur?->date]);
 
         $proprietaire = $this->proprietaireDe($magasin);
         $this->dansLeMagasin($magasin, $proprietaire);
         $pourLeProprietaire = $this->chose($proprietaire, $magasin, 'brouillons_de_facture');
         $this->assertSame([true, 'Voir', FactureResource::getUrl('view', ['record' => $brouillon])], [$pourLeProprietaire?->aSurveiller, $pourLeProprietaire?->bouton, $pourLeProprietaire?->url]);
+
+        $this->dansLeMagasin($magasin, $vendeur);
+        $this->get((string) $pourLeVendeur?->url)->assertOk();
+        Livewire::test(ViewFacture::class, ['record' => $brouillon->getRouteKey()])->callAction('emettre')->assertHasNoActionErrors();
+        $this->assertNotNull($brouillon->fresh()?->numero);
+        $this->assertNull($this->chose($vendeur, $magasin, 'brouillons_de_facture'));
+    }
+
+    /**
+     * Qui émet les factures sans en créer (un vendeur à qui l'on a coché
+     * « émettre » et « voir celles de toute l'équipe », sans « créer »)
+     * n'ouvre pas la page de modification d'un brouillon (voir
+     * FacturePolicy::update()) : l'« À faire » le mène à sa fiche, qui
+     * s'ouvre, sans « Modifier », et où il l'émet.
+     */
+    public function test_qui_emet_sans_creer_les_factures_ouvre_la_fiche_du_brouillon_et_l_emet(): void
+    {
+        $magasin = $this->magasin();
+        $responsable = self::responsableDeTest($magasin);
+        $emetteur = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW, PermissionRegistry::FACTURE_VIEW_TOUTES, PermissionRegistry::FACTURE_EMETTRE]);
+        $this->dansLeMagasin($magasin, $responsable);
+        $brouillon = app(CreerFactureAction::class)->handle($responsable, Client::factory()->professionnel()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
+
+        $chose = $this->chose($emetteur, $magasin, 'brouillons_de_facture');
+
+        $this->assertSame([false, 'Émettre', FactureResource::getUrl('view', ['record' => $brouillon])], [$chose?->aSurveiller, $chose?->bouton, $chose?->url]);
+        $this->get((string) $chose?->url)->assertOk();
+        $this->get(FactureResource::getUrl('edit', ['record' => $brouillon]))->assertForbidden();
+        Livewire::test(ViewFacture::class, ['record' => $brouillon->getRouteKey()])
+            ->assertActionHidden('edit')
+            ->callAction('emettre')
+            ->assertHasNoActionErrors();
+        $this->assertNotNull($brouillon->fresh()?->numero);
+    }
+
+    /**
+     * Un devis en brouillon seul mène à sa fiche, qui porte son envoi
+     * (règle 2) : « Envoyer par e-mail » et « Numéroter sans e-mail », et
+     * « Modifier » pour changer sa validité ; numéroté sans e-mail depuis
+     * la fiche, il sort de l'« À faire ».
+     */
+    public function test_un_devis_en_brouillon_seul_s_envoie_depuis_la_fiche_ou_mene_l_a_faire(): void
+    {
+        $magasin = $this->magasin();
+        $responsable = self::responsableDeTest($magasin);
+        $this->dansLeMagasin($magasin, $responsable);
+        $devis = app(CreerDevisAction::class)->handle($responsable, Client::factory()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
+
+        $chose = $this->chose($responsable, $magasin, 'brouillons_de_devis');
+
+        $this->assertSame(['Envoyer', DevisResource::getUrl('view', ['record' => $devis])], [$chose?->bouton, $chose?->url]);
+        $this->get((string) $chose?->url)->assertOk();
+        Livewire::test(ViewDevis::class, ['record' => $devis->getRouteKey()])
+            ->assertActionVisible('envoyer_par_email')
+            ->assertActionHasUrl('edit', DevisResource::getUrl('edit', ['record' => $devis]))
+            ->callAction('envoyer')
+            ->assertHasNoActionErrors()
+            ->assertActionHidden('envoyer');
+        $this->assertSame(StatutDevis::Envoye, $devis->fresh()?->statut);
+        $this->assertNull($this->chose($responsable, $magasin, 'brouillons_de_devis'));
     }
 
     /**
@@ -217,8 +291,11 @@ class AFaireDuMagasinTest extends TestCase
 
     /**
      * Une facture d'achat en brouillon entre dans l'« À faire » de qui
-     * valide les achats ; un inventaire d'ouverture en brouillon aussi,
-     * à valider avant la première vente, à supprimer après elle.
+     * valide les achats, et mène à sa fiche, où « Valider la réception »
+     * la valide (règle 2) ; un inventaire d'ouverture en brouillon aussi,
+     * à valider avant la première vente, à supprimer après elle, depuis sa
+     * fiche, où mène l'« À faire » (sa page de modification est fermée
+     * après la vente).
      */
     public function test_les_achats_et_l_inventaire_en_brouillon_attendent_leur_validation(): void
     {
@@ -227,26 +304,75 @@ class AFaireDuMagasinTest extends TestCase
         $achat = app(CreerFactureAchatAction::class)->handle($responsable, Fournisseur::factory()->create(['nom' => 'Grossiste Dupont']), [
             ['produit_id' => $this->produit()->id, 'quantite' => 5, 'prix_unitaire_ht' => '4.00', 'taux_tva' => 20],
         ], ['date_facture' => '2026-01-15']);
-        app(CreerInventaireOuvertureAction::class)->handle($responsable, [
+        $inventaire = app(CreerInventaireOuvertureAction::class)->handle($responsable, [
             ['produit' => ['nom' => 'Carnet A5', 'reference' => 'CARNET-A5', 'prix_vente_ttc' => '4.90', 'taux_tva' => '20'], 'quantite' => 10, 'cout_unitaire_ht' => '2.00'],
         ]);
         $this->dansLeMagasin($magasin, $responsable);
 
         $achats = $this->chose($responsable, $magasin, 'achats_en_brouillon');
-        $this->assertSame(['Valider', FactureAchatResource::getUrl('edit', ['record' => $achat])], [$achats?->bouton, $achats?->url]);
+        $this->assertSame(['Valider', FactureAchatResource::getUrl('view', ['record' => $achat])], [$achats?->bouton, $achats?->url]);
         $this->assertStringContainsString('Validez-le avant la première vente.', (string) $this->chose($responsable, $magasin, 'inventaires_en_brouillon')?->phrase);
+        $this->get((string) $achats?->url)->assertOk();
+        Livewire::test(ViewFactureAchat::class, ['record' => $achat->getRouteKey()])
+            ->callAction('valider')
+            ->assertHasNoActionErrors()
+            ->assertActionHidden('valider');
+        $this->assertSame(StatutFactureAchat::Validee, $achat->fresh()?->statut);
+        $this->assertNull($this->chose($responsable, $magasin, 'achats_en_brouillon'));
 
         $this->facture($responsable, 'Atelier Martin');
-        $this->assertSame('Supprimer', $this->chose($responsable, $magasin, 'inventaires_en_brouillon')?->bouton);
-        $this->assertStringContainsString('le magasin a déjà vendu', (string) $this->chose($responsable, $magasin, 'inventaires_en_brouillon')?->phrase);
+        $inventaires = $this->chose($responsable, $magasin, 'inventaires_en_brouillon');
+        $this->assertSame(['Supprimer', InventaireOuvertureResource::getUrl('view', ['record' => $inventaire])], [$inventaires?->bouton, $inventaires?->url]);
+        $this->assertStringContainsString('le magasin a déjà vendu', (string) $inventaires?->phrase);
+        $this->get((string) $inventaires?->url)->assertOk();
+        Livewire::test(ViewInventaireOuverture::class, ['record' => $inventaire->getRouteKey()])
+            ->assertActionHidden('valider')
+            ->assertActionHidden('edit')
+            ->callAction('delete')
+            ->assertHasNoActionErrors()
+            ->assertRedirect(InventaireOuvertureResource::getUrl('index'));
+        $this->assertSame(0, InventaireOuverture::query()->count());
+        $this->assertNull($this->chose($responsable, $magasin, 'inventaires_en_brouillon'));
     }
 
     /**
-     * Le stock négatif, en rouge, et le stock bas, en orange, mènent à la
-     * liste des produits filtrée sur leur statut, qui les montre
-     * exactement, chacun avec sa raison sous sa quantité.
+     * Plusieurs produits en stock négatif, en rouge, ou en stock bas, en
+     * orange, mènent à la liste des produits filtrée sur leur statut, qui
+     * les montre exactement, chacun avec sa raison sous sa quantité.
      */
-    public function test_le_stock_negatif_et_le_stock_bas_menent_a_leur_liste_filtree(): void
+    public function test_le_stock_negatif_et_le_stock_bas_de_plusieurs_produits_menent_a_leur_liste_filtree(): void
+    {
+        $magasin = $this->magasin();
+        $responsable = self::responsableDeTest($magasin);
+        $negatif = Produit::factory()->create(['nom' => 'Câble USB', 'suivi_stock' => true]);
+        self::vendreJusquAuStockNegatif($negatif, 2);
+        $autreNegatif = Produit::factory()->create(['nom' => 'Câble HDMI', 'suivi_stock' => true]);
+        self::vendreJusquAuStockNegatif($autreNegatif, 1);
+        $bas = Produit::factory()->create(['nom' => 'Chargeur', 'suivi_stock' => true, 'seuil_alerte' => 5]);
+        $this->recevoir($responsable, $bas, 3);
+        $autreBas = Produit::factory()->create(['nom' => 'Batterie', 'suivi_stock' => true, 'seuil_alerte' => 4]);
+        $this->recevoir($responsable, $autreBas, 2);
+        $assez = Produit::factory()->create(['nom' => 'Housse', 'suivi_stock' => true, 'seuil_alerte' => 2]);
+        $this->recevoir($responsable, $assez, 10);
+        $this->dansLeMagasin($magasin, $responsable);
+
+        $this->assertSame([UrgenceAFaire::Rouge, 2, ProduitResource::urlDuStock(ProduitResource::STOCK_NEGATIF)], [$this->chose($responsable, $magasin, 'stock_negatif')?->urgence, $this->chose($responsable, $magasin, 'stock_negatif')?->nombre, $this->chose($responsable, $magasin, 'stock_negatif')?->url]);
+        $this->assertSame([2, ProduitResource::urlDuStock(ProduitResource::STOCK_BAS)], [$this->chose($responsable, $magasin, 'stock_bas')?->nombre, $this->chose($responsable, $magasin, 'stock_bas')?->url]);
+        Livewire::test(ListProduits::class)
+            ->filterTable('statut_stock', ProduitResource::STOCK_BAS)
+            ->assertCanSeeTableRecords([$bas, $autreBas])
+            ->assertCanNotSeeTableRecords([$negatif, $autreNegatif, $assez])
+            ->assertSee('À réapprovisionner');
+    }
+
+    /**
+     * Règle 1 : un seul produit en stock négatif, ou en stock bas, mène à
+     * sa fiche pour qui peut l'ouvrir (le responsable) ; pour qui voit les
+     * produits et ajuste le stock sans pouvoir ouvrir leur fiche (un
+     * vendeur sans « modifier les produits », voir ProduitPolicy::update()),
+     * à la liste filtrée, qui le montre seul.
+     */
+    public function test_un_seul_produit_en_stock_negatif_ou_bas_mene_a_sa_fiche(): void
     {
         $magasin = $this->magasin();
         $responsable = self::responsableDeTest($magasin);
@@ -254,17 +380,15 @@ class AFaireDuMagasinTest extends TestCase
         self::vendreJusquAuStockNegatif($negatif, 2);
         $bas = Produit::factory()->create(['nom' => 'Chargeur', 'suivi_stock' => true, 'seuil_alerte' => 5]);
         $this->recevoir($responsable, $bas, 3);
-        $assez = Produit::factory()->create(['nom' => 'Housse', 'suivi_stock' => true, 'seuil_alerte' => 2]);
-        $this->recevoir($responsable, $assez, 10);
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::PRODUIT_VIEW, PermissionRegistry::PRODUIT_AJUSTER_STOCK, PermissionRegistry::FACTURE_ACHAT_CREER, PermissionRegistry::FACTURE_ACHAT_VIEW]);
         $this->dansLeMagasin($magasin, $responsable);
 
-        $this->assertSame([UrgenceAFaire::Rouge, ProduitResource::urlDuStock(ProduitResource::STOCK_NEGATIF)], [$this->chose($responsable, $magasin, 'stock_negatif')?->urgence, $this->chose($responsable, $magasin, 'stock_negatif')?->url]);
-        $this->assertSame('« Chargeur » est au seuil d\'alerte ou dessous (3 pour un seuil de 5) : réapprovisionnez-le.', $this->chose($responsable, $magasin, 'stock_bas')?->phrase);
-        Livewire::test(ListProduits::class)
-            ->filterTable('statut_stock', ProduitResource::STOCK_BAS)
-            ->assertCanSeeTableRecords([$bas])
-            ->assertCanNotSeeTableRecords([$negatif, $assez])
-            ->assertSee('À réapprovisionner');
+        $this->assertSame([1, ProduitResource::getUrl('edit', ['record' => $negatif])], [$this->chose($responsable, $magasin, 'stock_negatif')?->nombre, $this->chose($responsable, $magasin, 'stock_negatif')?->url]);
+        $this->assertSame([1, ProduitResource::getUrl('edit', ['record' => $bas])], [$this->chose($responsable, $magasin, 'stock_bas')?->nombre, $this->chose($responsable, $magasin, 'stock_bas')?->url]);
+        $this->get((string) $this->chose($responsable, $magasin, 'stock_negatif')?->url)->assertOk();
+
+        $this->assertSame([false, ProduitResource::urlDuStock(ProduitResource::STOCK_NEGATIF)], [$this->chose($vendeur, $magasin, 'stock_negatif')?->aSurveiller, $this->chose($vendeur, $magasin, 'stock_negatif')?->url]);
+        $this->assertSame(ProduitResource::urlDuStock(ProduitResource::STOCK_BAS), $this->chose($vendeur, $magasin, 'stock_bas')?->url);
     }
 
     /**
@@ -304,6 +428,36 @@ class AFaireDuMagasinTest extends TestCase
 
         EnvoiDocument::factory()->envoye()->for($facture, 'document')->create();
         $this->assertNull($this->chose($responsable, $magasin, 'emails_en_echec'));
+    }
+
+    /**
+     * Un reçu de paiement n'a pas de fiche : l'e-mail en échec d'un reçu
+     * mène à la fiche de la facture qu'il règle, dont « Paiements reçus »
+     * le renvoie. Avec deux reçus en échec, le tableau de bord s'ouvre,
+     * chaque ligne avec son lien, les factures des reçus lues une seule fois
+     * pour tous (sans chargement paresseux, qui ferait échouer le test).
+     */
+    public function test_l_e_mail_en_echec_d_un_recu_de_paiement_mene_a_la_facture_qu_il_regle(): void
+    {
+        $this->travelTo(self::aParis('2026-10-08 10:00:00'));
+        $magasin = $this->magasin();
+        $responsable = self::responsableDeTest($magasin);
+        $this->dansLeMagasin($magasin, $responsable);
+        $premiere = $this->facture($responsable, 'Atelier Martin');
+        $this->encaisser($responsable, $premiere);
+        EnvoiDocument::factory()->enEchec()->for(RecuPaiement::query()->sole(), 'document')->create(['destinataire' => 'compta@atelier-martin.test']);
+
+        $chose = $this->chose($responsable, $magasin, 'emails_en_echec');
+        $this->assertSame([1, 'Renvoyer', FactureResource::getUrl('view', ['record' => $premiere])], [$chose?->nombre, $chose?->bouton, $chose?->url]);
+        $this->assertStringStartsWith('Reçu de paiement RP-', (string) ($chose?->lignes[0]['libelle'] ?? ''));
+
+        $seconde = $this->facture($responsable, 'Hôtel des Pins');
+        $this->encaisser($responsable, $seconde);
+        EnvoiDocument::factory()->enEchec()->for(RecuPaiement::query()->latest('id')->firstOrFail(), 'document')->create(['destinataire' => 'accueil@hotel-des-pins.test']);
+
+        $chose = $this->chose($responsable, $magasin, 'emails_en_echec');
+        $this->assertSame([2, null, [FactureResource::getUrl('view', ['record' => $premiere]), FactureResource::getUrl('view', ['record' => $seconde])]], [$chose?->nombre, $chose?->url, array_column($chose?->lignes ?? [], 'url')]);
+        $this->get('/app/'.$magasin->uuid)->assertOk()->assertSee('2 e-mails ne sont pas partis');
     }
 
     /**
@@ -417,6 +571,17 @@ class AFaireDuMagasinTest extends TestCase
         return app(EmettreFactureAction::class)->handle($auteur, app(CreerFactureAction::class)->handle($auteur, Client::factory()->professionnel()->create(['nom' => $client]), [
             ['produit_id' => $this->produit()->id, 'quantite' => 1],
         ]));
+    }
+
+    /**
+     * Cet auteur encaisse toute cette facture par virement, après son
+     * émission, ce qui lui donne un reçu de paiement.
+     */
+    private function encaisser(User $auteur, Facture $facture): void
+    {
+        app(EnregistrerPaiementAction::class)->handle($auteur, $facture->client()->firstOrFail(), ['mode_paiement' => ModePaiement::Virement->value, 'montant' => (string) $facture->total_ttc, 'reference' => 'VIR-'.$facture->id, 'recu_le' => $facture->magasin()->firstOrFail()->calendrier()->aujourdhui()], [
+            ['facture_id' => $facture->id, 'montant' => (string) $facture->total_ttc],
+        ], (string) Str::uuid());
     }
 
     /**

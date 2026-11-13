@@ -957,6 +957,21 @@ class PaiementResourceTest extends TestCase
     }
 
     /**
+     * Un ticket émis au client comptoir, de ce prix TTC, qui reste dû en
+     * entier. Le comptoir ne se choisit pas sur une facture du panneau
+     * (décision de l'éditeur du 01/11/2026, « 3 oui ») : le ticket naît
+     * des actions du domaine, comme un ticket de la caisse dont le paiement
+     * a été contre-passé.
+     */
+    private function ticketDuComptoirResteDu(float $prixUnitaireTtc): Facture
+    {
+        $produit = Produit::factory()->create(['prix_vente_ttc' => $prixUnitaireTtc, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), Client::query()->where('est_comptoir', true)->sole(), [['produit_id' => $produit->id, 'quantite' => 1]]);
+
+        return app(EmettreFactureAction::class)->handle(self::auteur(), $brouillon);
+    }
+
+    /**
      * Un bon d'avoir du client comptoir de ce montant, AV-MABOUT-2026-000001
      * pour le premier : un ticket vendu au comptoir puis repris en entier.
      */
@@ -990,7 +1005,7 @@ class PaiementResourceTest extends TestCase
     {
         $this->connecterLeProprietaire();
         $bon = $this->bonDAvoir($montantDuBon);
-        $ticket = $this->emettreFactureDepuisLePanneau(Client::query()->where('est_comptoir', true)->sole(), 20);
+        $ticket = $this->ticketDuComptoirResteDu(20);
         $paiementsAvant = Paiement::query()->count();
         $liste = Livewire::test(ListFactures::class)->mountTableAction('encaisser', $ticket);
         $cle = array_key_first($liste->get('mountedTableActionsData.0.parts'));
@@ -1014,7 +1029,7 @@ class PaiementResourceTest extends TestCase
     {
         $this->connecterLeProprietaire();
         $bon = $this->bonDAvoir(10);
-        $ticket = $this->emettreFactureDepuisLePanneau(Client::query()->where('est_comptoir', true)->sole(), 20);
+        $ticket = $this->ticketDuComptoirResteDu(20);
         $liste = Livewire::test(ListFactures::class)->mountTableAction('encaisser', $ticket);
         $especes = array_key_first($liste->get('mountedTableActionsData.0.parts'));
 
@@ -1043,7 +1058,7 @@ class PaiementResourceTest extends TestCase
         $this->connecterLeProprietaire();
         $bon = $this->bonDAvoir(10);
         $comptoir = Client::query()->where('est_comptoir', true)->sole();
-        $ticket = $this->emettreFactureDepuisLePanneau($comptoir, 50);
+        $ticket = $this->ticketDuComptoirResteDu(50);
         app(EncaisserEnPlusieursModesAction::class)->handle(self::auteur(), $ticket, [new PartDeReglement(ModePaiement::CarteBancaire, 3000), new PartDeReglement(ModePaiement::Especes, 1000)], [$bon->numero], Calendrier::deParis()->aujourdhui());
         $partsDuTicket = Paiement::query()->whereHas('allocations', fn (Builder $allocations): Builder => $allocations->where('facture_id', $ticket->id));
         $carte = (clone $partsDuTicket)->where('mode_paiement', ModePaiement::CarteBancaire)->sole();

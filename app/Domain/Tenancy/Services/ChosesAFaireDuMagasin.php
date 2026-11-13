@@ -22,7 +22,9 @@ use App\Domain\Facturation\Models\AvoirAllocation;
 use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\EnvoiDocument;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Models\LigneRecuPaiement;
 use App\Domain\Facturation\Models\PanierCaisse;
+use App\Domain\Facturation\Models\RecuPaiement;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\PreuvesRequises;
 use App\Domain\Facturation\Services\VerificateurCaissesPersonnelles;
@@ -58,6 +60,7 @@ use DateTimeInterface;
 use Filament\Facades\Filament;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Database\Query\Builder as RequeteSql;
 use Illuminate\Support\Collection;
 use LogicException;
@@ -366,7 +369,9 @@ final class ChosesAFaireDuMagasin
      * Les brouillons de facture ou de ticket, dès leur création (règle 5),
      * parmi ceux que le compte voit : à faire pour qui les émet ; à
      * surveiller pour le propriétaire, un administrateur ou un
-     * responsable qui les voit sans émettre.
+     * responsable qui les voit sans émettre. Un brouillon seul mène à sa
+     * fiche, qui porte « Émettre » et « Modifier » (voir ViewFacture) ; sa
+     * page de modification n'émet pas.
      */
     private function brouillonsDeFacture(): ?ChoseAFaire
     {
@@ -391,11 +396,7 @@ final class ChosesAFaireDuMagasin
             urgence: UrgenceAFaire::Orange,
             nombre: $brouillons->count(),
             phrase: $seul !== null ? "1 brouillon de facture pas encore émis, du {$jour}." : $brouillons->count()." brouillons de facture pas encore émis, le plus ancien du {$jour}.",
-            url: match (true) {
-                $seul === null => FactureResource::urlDesBrouillons(),
-                $aFaire && ! $this->magasin->estEnLectureSeule() => FactureResource::getUrl('edit', ['record' => $seul]),
-                default => FactureResource::getUrl('view', ['record' => $seul]),
-            },
+            url: $seul === null ? FactureResource::urlDesBrouillons() : FactureResource::getUrl('view', ['record' => $seul]),
             bouton: $this->bouton('Émettre', $aFaire, permisEnLectureSeule: false),
             aSurveiller: ! $aFaire,
             date: $this->jourDe($brouillons->first()?->created_at),
@@ -408,7 +409,11 @@ final class ChosesAFaireDuMagasin
      * tentatives, tant qu'aucun envoi plus récent du même document n'a
      * réussi ni n'est en cours : à faire pour qui peut renvoyer ce
      * document, à surveiller pour qui supervise et le voit. Une chose par
-     * partie, chaque e-mail sur sa ligne avec le lien de son document.
+     * partie, chaque e-mail sur sa ligne avec le lien de la fiche où le
+     * document se renvoie (voir urlDuDocument()). Les documents se lisent
+     * avec ce que leurs policies relisent (les factures que règle un reçu
+     * de paiement, voir RecuPaiementPolicy::envoyer()), une seule fois pour
+     * tous les e-mails.
      *
      * @return list<ChoseAFaire>
      */
@@ -424,7 +429,7 @@ final class ChosesAFaireDuMagasin
                 ->whereColumn('suivants.document_id', 'envois_documents.document_id')
                 ->whereColumn('suivants.id', '>', 'envois_documents.id')
                 ->whereIn('suivants.statut', [StatutEnvoi::Envoye->value, StatutEnvoi::EnAttente->value]))
-            ->with('document')
+            ->with(['document' => fn (MorphTo $documents): MorphTo => $documents->morphWith([RecuPaiement::class => ['lignes.facture']])])
             ->orderBy('id')
             ->get();
         $parPartie = ['a_faire' => [], 'a_surveiller' => []];
@@ -466,7 +471,7 @@ final class ChosesAFaireDuMagasin
                 aSurveiller: $partie === 'a_surveiller',
                 date: $this->jourDe($echecs[0]->created_at),
                 lignes: array_map(fn (EnvoiDocument $envoi): array => [
-                    'libelle' => $envoi->document instanceof DocumentEnvoyable ? $envoi->document->libelleDocument() : 'Document',
+                    'libelle' => $envoi->document instanceof DocumentEnvoyable ? trim($envoi->document->libelleDocument().' '.$envoi->document->getAttribute('numero')) : 'Document',
                     'url' => $this->urlDuDocument($envoi),
                     'description' => $envoi->destinataire,
                     'montant' => null,
@@ -513,7 +518,10 @@ final class ChosesAFaireDuMagasin
     /**
      * Les devis en brouillon, dès leur création (règle 5), jamais
      * numérotés ou repassés en brouillon : à faire pour qui envoie les
-     * devis. Les devis n'ont pas d'auteur : qui les voit les voit tous.
+     * devis. Les devis n'ont pas d'auteur : qui les voit les voit tous. Un
+     * brouillon seul mène à sa fiche, qui porte « Envoyer par e-mail »,
+     * « Numéroter sans e-mail » et « Modifier » (voir ViewDevis) ; sa page
+     * de modification n'envoie pas.
      */
     private function brouillonsDeDevis(): ?ChoseAFaire
     {
@@ -539,11 +547,7 @@ final class ChosesAFaireDuMagasin
             urgence: UrgenceAFaire::Orange,
             nombre: $brouillons->count(),
             phrase: $seul !== null ? "1 devis en brouillon pas encore envoyé, du {$jour}." : $brouillons->count()." devis en brouillon pas encore envoyés, le plus ancien du {$jour}.",
-            url: match (true) {
-                $seul === null => DevisResource::urlDesBrouillons(),
-                $aFaire && ! $this->magasin->estEnLectureSeule() && $this->compte->can('update', $seul) => DevisResource::getUrl('edit', ['record' => $seul]),
-                default => DevisResource::getUrl('view', ['record' => $seul]),
-            },
+            url: $seul === null ? DevisResource::urlDesBrouillons() : DevisResource::getUrl('view', ['record' => $seul]),
             bouton: $this->bouton('Envoyer', $aFaire, permisEnLectureSeule: false),
             aSurveiller: ! $aFaire,
             date: $this->jourDe($brouillons->first()?->created_at),
@@ -737,7 +741,8 @@ final class ChosesAFaireDuMagasin
     /**
      * Les factures d'achat en brouillon, dès leur création (règle 5) :
      * leur stock n'est pas encore entré ; à faire pour qui valide les
-     * achats.
+     * achats. Un brouillon seul mène à sa fiche, qui porte « Valider la
+     * réception » (voir ViewFactureAchat).
      */
     private function achatsEnBrouillon(): ?ChoseAFaire
     {
@@ -762,11 +767,7 @@ final class ChosesAFaireDuMagasin
             urgence: UrgenceAFaire::Orange,
             nombre: $brouillons->count(),
             phrase: $seul !== null ? "1 facture d'achat en brouillon, du {$jour} : son stock n'est pas encore entré." : $brouillons->count()." factures d'achat en brouillon, la plus ancienne du {$jour} : leur stock n'est pas encore entré.",
-            url: match (true) {
-                $seul === null => FactureAchatResource::urlDesBrouillons(),
-                $this->compte->can('update', $seul) => FactureAchatResource::getUrl('edit', ['record' => $seul]),
-                default => FactureAchatResource::getUrl('view', ['record' => $seul]),
-            },
+            url: $seul === null ? FactureAchatResource::urlDesBrouillons() : FactureAchatResource::getUrl('view', ['record' => $seul]),
             bouton: $this->bouton('Valider', $aFaire, permisEnLectureSeule: false),
             aSurveiller: ! $aFaire,
             date: $this->jourDe($brouillons->first()?->created_at),
@@ -835,7 +836,9 @@ final class ChosesAFaireDuMagasin
      * Les inventaires d'ouverture en brouillon : à valider avant la
      * première vente du magasin, par qui valide les achats et crée les
      * produits ; après elle, ils ne se valident plus et restent à
-     * supprimer (voir InventaireOuverturePolicy).
+     * supprimer (voir InventaireOuverturePolicy). Un brouillon seul mène à
+     * sa fiche, qui porte « Valider l'inventaire » et « Supprimer » (voir
+     * ViewInventaireOuverture).
      */
     private function inventairesEnBrouillon(): ?ChoseAFaire
     {
@@ -874,7 +877,8 @@ final class ChosesAFaireDuMagasin
     /**
      * Les produits en stock négatif (voir Produit::scopeEnStockNegatif()),
      * à régulariser par un achat ou un inventaire : à faire pour qui ajuste
-     * le stock ou valide les achats.
+     * le stock ou valide les achats. Un produit seul mène à sa fiche (voir
+     * urlDuProduit()), plusieurs à la liste filtrée.
      */
     private function stockNegatif(): ?ChoseAFaire
     {
@@ -884,7 +888,7 @@ final class ChosesAFaireDuMagasin
             return null;
         }
 
-        $produits = Produit::query()->enStockNegatif()->orderBy('stock_quantite')->orderBy('id')->get(['id', 'nom', 'stock_quantite']);
+        $produits = Produit::query()->enStockNegatif()->orderBy('stock_quantite')->orderBy('id')->get();
 
         if ($produits->isEmpty()) {
             return null;
@@ -900,7 +904,7 @@ final class ChosesAFaireDuMagasin
             phrase: $seul !== null
                 ? "« {$seul->nom} » est en stock négatif ({$seul->stock_quantite}) : régularisez-le par un achat ou un inventaire."
                 : $produits->count().' produits sont en stock négatif, à régulariser par un achat ou un inventaire.',
-            url: ProduitResource::urlDuStock(ProduitResource::STOCK_NEGATIF),
+            url: $this->urlDuProduit($seul) ?? ProduitResource::urlDuStock(ProduitResource::STOCK_NEGATIF),
             bouton: $aFaire ? 'Régulariser' : 'Voir',
             aSurveiller: ! $aFaire,
         );
@@ -909,7 +913,9 @@ final class ChosesAFaireDuMagasin
     /**
      * Les produits suivis au seuil d'alerte ou dessous, sans être en stock
      * négatif (voir Produit::scopeEnStockBas()) : à faire pour qui
-     * réapprovisionne (saisit ou valide les achats) ou ajuste le stock.
+     * réapprovisionne (saisit ou valide les achats) ou ajuste le stock. Un
+     * produit seul mène à sa fiche (voir urlDuProduit()), plusieurs à la
+     * liste filtrée.
      */
     private function stockBas(): ?ChoseAFaire
     {
@@ -919,7 +925,7 @@ final class ChosesAFaireDuMagasin
             return null;
         }
 
-        $produits = Produit::query()->enStockBas()->orderBy('stock_quantite')->orderBy('id')->get(['id', 'nom', 'stock_quantite', 'seuil_alerte']);
+        $produits = Produit::query()->enStockBas()->orderBy('stock_quantite')->orderBy('id')->get();
 
         if ($produits->isEmpty()) {
             return null;
@@ -935,7 +941,7 @@ final class ChosesAFaireDuMagasin
             phrase: $seul !== null
                 ? "« {$seul->nom} » est au seuil d'alerte ou dessous ({$seul->stock_quantite} pour un seuil de {$seul->seuil_alerte}) : réapprovisionnez-le."
                 : $produits->count().' produits sont au seuil d\'alerte ou dessous : réapprovisionnez-les.',
-            url: ProduitResource::urlDuStock(ProduitResource::STOCK_BAS),
+            url: $this->urlDuProduit($seul) ?? ProduitResource::urlDuStock(ProduitResource::STOCK_BAS),
             bouton: $aFaire ? 'Réapprovisionner' : 'Voir',
             aSurveiller: ! $aFaire,
         );
@@ -1306,14 +1312,34 @@ final class ChosesAFaireDuMagasin
     }
 
     /**
-     * La fiche du document d'un e-mail, dans ce magasin.
+     * La fiche de ce produit seul, quand le compte peut l'ouvrir : un
+     * produit n'a d'autre fiche que sa page de modification (voir
+     * ProduitResource::getPages()), que ProduitPolicy::update() ouvre ;
+     * sinon null, et la chose mène à la liste filtrée, qui le montre seul.
+     */
+    private function urlDuProduit(?Produit $seul): ?string
+    {
+        return $seul !== null && $this->compte->can('update', $seul) ? ProduitResource::getUrl('edit', ['record' => $seul]) : null;
+    }
+
+    /**
+     * La fiche où se renvoie le document d'un e-mail, dans ce magasin : sa
+     * propre fiche, ou, pour un reçu de paiement, qui n'en a pas, celle de
+     * la première facture qu'il règle que ce compte voit, dont la section
+     * « Paiements reçus » le renvoie (voir FactureResource::envoyerLeRecu()).
      */
     private function urlDuDocument(EnvoiDocument $envoi): ?string
     {
+        $document = $envoi->document;
+        $factureDuRecu = $document instanceof RecuPaiement
+            ? $document->lignes->map(fn (LigneRecuPaiement $ligne): ?Facture => $ligne->facture)->first(fn (?Facture $facture): bool => $facture !== null && $this->compte->can('view', $facture))
+            : null;
+
         return match (true) {
-            $envoi->document instanceof Facture => FactureResource::getUrl('view', ['record' => $envoi->document]),
-            $envoi->document instanceof Devis => DevisResource::getUrl('view', ['record' => $envoi->document]),
-            $envoi->document instanceof Avoir => AvoirResource::getUrl('view', ['record' => $envoi->document]),
+            $document instanceof Facture => FactureResource::getUrl('view', ['record' => $document]),
+            $document instanceof Devis => DevisResource::getUrl('view', ['record' => $document]),
+            $document instanceof Avoir => AvoirResource::getUrl('view', ['record' => $document]),
+            $factureDuRecu instanceof Facture => FactureResource::getUrl('view', ['record' => $factureDuRecu]),
             default => null,
         };
     }

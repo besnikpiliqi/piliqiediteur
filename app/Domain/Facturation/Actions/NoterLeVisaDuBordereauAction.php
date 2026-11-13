@@ -65,7 +65,7 @@ class NoterLeVisaDuBordereauAction
             $this->lecteur->exiger($compte, 'justifier', $magasin, $ticket);
             $bordereau = $ticket->bordereauDetaxe()->with('visa')->first();
 
-            if (($refus = self::refusPour($bordereau)) !== null) {
+            if (($refus = self::refusPour($ticket, $bordereau)) !== null) {
                 throw new LogicException($refus);
             }
 
@@ -97,17 +97,20 @@ class NoterLeVisaDuBordereauAction
     }
 
     /**
-     * Pourquoi le visa de ce bordereau, celui qui fait foi sur le ticket,
+     * Pourquoi le visa de ce bordereau, celui qui fait foi sur ce ticket,
      * ne se note pas, null quand il se note : ce que l'action refuse, et ce
-     * qui retire son bouton de la fiche.
+     * qui retire son bouton de la fiche. Un ticket qui ne garde plus aucun
+     * bien taxé, tout ayant été rendu, n'attend aucun visa (voir
+     * Facture::scopeVisaANoter()).
      *
      * @phpstan-assert-if-null BordereauDetaxe $bordereau
      */
-    public static function refusPour(?BordereauDetaxe $bordereau): ?string
+    public static function refusPour(Facture $ticket, ?BordereauDetaxe $bordereau): ?string
     {
         return match (true) {
             $bordereau === null => 'Le visa se note sur un ticket détaxé : notez d\'abord le n° de son bordereau de détaxe.',
             $bordereau->visa !== null => "Le visa du bordereau n° {$bordereau->numero} est déjà noté, au ".Calendrier::afficherJour($bordereau->visa->date_visa, 'd/m/Y').'.',
+            ! $ticket->lignes()->creditables()->biensTaxes()->exists() => 'Ce ticket ne garde aucun bien taxé, tous ses articles ayant été rendus : aucune marchandise ne sort de l\'Union, et aucun visa n\'est attendu.',
             default => null,
         };
     }

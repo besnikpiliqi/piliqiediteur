@@ -8,7 +8,9 @@ use Filament\Actions;
 use Filament\Resources\Pages\ViewRecord;
 
 /**
- * La fiche d'une facture d'achat : « Créer un avoir fournisseur » en tête,
+ * La fiche d'une facture d'achat : « Valider la réception » d'un brouillon,
+ * où mène l'« À faire » d'un brouillon seul (voir ChosesAFaireDuMagasin),
+ * puis « Créer un avoir fournisseur » en tête,
  * pour retourner au fournisseur des produits de cette facture, et
  * « Retourner ce produit » sur chacune de ses lignes retournables (voir
  * FactureAchatResource::creerUnAvoirFournisseur()) ; sous chaque ligne, en
@@ -27,6 +29,7 @@ class ViewFactureAchat extends ViewRecord
     protected function getHeaderActions(): array
     {
         return [
+            FactureAchatResource::actionValider(Actions\Action::make('valider')),
             FactureAchatResource::creerUnAvoirFournisseur(Actions\Action::make('creer_avoir_fournisseur')),
             FactureAchatResource::ajouterDesPieces(),
             FactureAchatResource::remplacerUnePiece(),

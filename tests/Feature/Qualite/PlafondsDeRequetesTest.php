@@ -6,6 +6,7 @@ use App\Domain\Achats\Actions\CreerFactureAchatAction;
 use App\Domain\Achats\Actions\ValiderFactureAchatAction;
 use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Facturation\Actions\CloturerCaisseAction;
@@ -14,8 +15,12 @@ use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
 use App\Domain\Facturation\Actions\FermerSaCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
+use App\Domain\Facturation\Enums\NatureOperation;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\FacturePdfGenerator;
+use App\Domain\Facturation\Services\PartDeReglement;
+use App\Domain\Facturation\Services\ReglementComptant;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\Cabinet\Pages\TableauDeBordDuCabinet;
@@ -93,6 +98,37 @@ class PlafondsDeRequetesTest extends TestCase
 
         $this->assertSame($requetes[2], $requetes[8], "La page {$page} lit la base une fois de plus par ligne.");
         $this->assertLessThanOrEqual($plafond, $requetes[8]);
+    }
+
+    /**
+     * La liste des ventes dit, sur chaque vente à l'export, qu'elle attend
+     * sa preuve de douane (colonne « À faire ») : ce drapeau se lit dans la
+     * requête de la liste, jamais facture par facture, avec deux ventes à
+     * l'export comme avec huit. Chacune est réglée par virement à son
+     * émission, comme les ventes des autres pages.
+     */
+    public function test_la_liste_des_ventes_a_l_export_lit_la_base_autant_de_fois_avec_deux_lignes_ou_huit(): void
+    {
+        $requetes = [];
+        $client = Client::factory()->create(['nom' => 'Acme Inc.', 'type_client' => TypeClient::Professionnel, 'pays' => 'US', 'etabli_en_france' => false, 'identifiant_etranger' => 'EIN 12-3456789']);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => '50.00', 'taux_tva' => 20, 'suivi_stock' => false]);
+        $adresse = '/app/'.$this->magasin->uuid.'/factures';
+
+        foreach ([2, 8] as $lignes) {
+            while (Facture::query()->count() < $lignes) {
+                $brouillon = app(CreerFactureAction::class)->handle($this->responsable, $client, [['produit_id' => $produit->getKey(), 'quantite' => 1]], [
+                    'nature_operation' => NatureOperation::ExportHorsUe, 'livraison_adresse' => '1 Main Street', 'livraison_code_postal' => '10001', 'livraison_ville' => 'New York', 'livraison_pays' => 'US',
+                ]);
+                $virement = new PartDeReglement(ModePaiement::Virement, app(CalculateurLigne::class)->enCentiemes($brouillon->total_ttc), 'VIR-'.$brouillon->getKey());
+                app(EmettreFactureAction::class)->handle($this->responsable, $brouillon, ReglementComptant::horsDeLaCaisse([$virement]));
+            }
+
+            $this->get($adresse)->assertOk()->assertSee('Preuve à fournir');
+            $requetes[$lignes] = $this->requetes(fn () => $this->get($adresse)->assertOk());
+        }
+
+        $this->assertSame($requetes[2], $requetes[8], 'La liste des ventes lit la base une fois de plus par vente à l\'export.');
+        $this->assertLessThanOrEqual(90, $requetes[8]);
     }
 
     public function test_le_pdf_d_une_facture_lit_la_base_autant_de_fois_avec_deux_lignes_ou_vingt(): void

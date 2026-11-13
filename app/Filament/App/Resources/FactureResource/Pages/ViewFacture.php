@@ -260,7 +260,7 @@ class ViewFacture extends ViewRecord
         return Actions\Action::make('noter_visa_detaxe')
             ->label('Noter le visa du bordereau')
             ->icon('heroicon-o-check-badge')
-            ->visible(fn (Facture $record): bool => NoterLeVisaDuBordereauAction::refusPour($record->bordereauDetaxe()->with('visa')->first()) === null)
+            ->visible(fn (Facture $record): bool => NoterLeVisaDuBordereauAction::refusPour($record, $record->bordereauDetaxe()->with('visa')->first()) === null)
             ->authorize('justifier')
             ->modalDescription('Le jour où la douane a visé le bordereau à la sortie de l\'Union européenne, tel que le donne PABLO : la TVA du ticket pourra se régulariser.')
             ->form([

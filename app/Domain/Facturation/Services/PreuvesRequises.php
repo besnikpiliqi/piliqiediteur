@@ -18,10 +18,11 @@ use Illuminate\Database\Eloquent\Builder;
  * Les preuves qui justifient l'exonération d'une facture émise, et celles
  * qui manquent encore (I4) : le magasin enregistre leurs références (voir
  * AjouterPreuveOperationAction), et ce qui manque lui est rappelé sur la
- * fiche de la facture et dans la liste (filtre et badge « Preuves à
- * fournir »). Sans ses preuves, la vente reste exonérée sur le document,
- * qui ne change jamais, mais le magasin devra la corriger par un avoir et
- * une nouvelle facture à la TVA française.
+ * fiche de la facture, dans l'« À faire » du tableau de bord (voir
+ * ChosesAFaireDuMagasin) et dans la liste (filtre « Preuves à fournir » et
+ * colonne « À faire »). Sans ses preuves, la vente reste exonérée sur le
+ * document, qui ne change jamais, mais le magasin devra la corriger par un
+ * avoir et une nouvelle facture à la TVA française.
  *
  * - Export hors UE (art. 262 I du CGI) : la déclaration d'export (MRN)
  *   avec la certification de sortie, ou le CN23 d'un colis postal.

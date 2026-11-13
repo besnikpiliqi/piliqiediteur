@@ -833,6 +833,12 @@ return [
         ]],
     ],
     'app/Filament/App/Resources/DevisResource/Pages/ViewDevis.php' => [
+        'action:edit' => ['lot' => 'NAV-2', 'tests' => [
+            'tests/Browser/Parcours/AFaireTest.php › le responsable numérote sans e-mail le devis en brouillon depuis « Envoyer » de l’« À faire », sur sa fiche, qui mène aussi à sa modification',
+        ]],
+        'action:envoyer' => ['lot' => 'NAV-2', 'tests' => [
+            'tests/Browser/Parcours/AFaireTest.php › le responsable numérote sans e-mail le devis en brouillon depuis « Envoyer » de l’« À faire », sur sa fiche, qui mène aussi à sa modification',
+        ]],
         'action:envoyer_par_email' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le vendeur ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Parcours/EnvoiParEMailTest.php › chaque compte qui envoie un document lit, depuis sa liste comme depuis sa fiche, que l’envoi est demandé, puis son résultat dans « Envois », relu sans rechargement',
@@ -1219,6 +1225,9 @@ return [
             'tests/Browser/Parcours/TvaDesAchatsTest.php › le responsable crée un avoir fournisseur depuis la fiche d’une facture d’achat avec le HT et la TVA de la note d’avoir, et confirme leur écart',
             'tests/Browser/Parcours/PiecesDuFournisseurTest.php › un fichier refusé dans la fenêtre « Créer un avoir fournisseur » affiche son message pour chaque rôle qui saisit les achats, et aucun avoir n’est émis',
         ]],
+        'action:valider' => ['lot' => 'NAV-3', 'tests' => [
+            'tests/Browser/Parcours/AFaireTest.php › le responsable valide la facture d’achat en brouillon puis supprime l’inventaire d’ouverture en brouillon depuis l’« À faire », sur la fiche où mène chaque bouton',
+        ]],
         'page' => ['lot' => 'NAV-3', 'tests' => [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur autorisé à vendre ouvre chaque page et chaque action du magasin sans erreur',
@@ -1412,8 +1421,12 @@ return [
     'app/Filament/App/Resources/FactureResource/Pages/ViewFacture.php' => [
         'action:noter_visa_detaxe' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Parcours/AFaireTest.php › le responsable note le visa d’un ticket détaxé depuis « À faire », puis la liste « Visa à noter » montre exactement les tickets qui l’attendent',
+            'tests/Browser/Parcours/AFaireTest.php › dans le magasin fermé, le responsable note le bordereau de détaxe d’un ticket sur sa fiche, puis la date de son visa depuis son « À faire »',
+            'tests/Browser/Parcours/AFaireTest.php › le vendeur, le propriétaire et l’administrateur notent chacun depuis leur « À faire » le visa du bordereau d’un ticket détaxé',
         ]],
-        'action:ajouter_preuve' => ['lot' => 'NAV-2', 'tests' => []],
+        'action:ajouter_preuve' => ['lot' => 'NAV-2', 'tests' => [
+            'tests/Browser/Parcours/AFaireTest.php › dans le magasin fermé, le responsable puis le vendeur notent depuis leur « À faire » la preuve de leur vente à l’export (exemple de l’éditeur, Q-AF12)',
+        ]],
         'action:avoir' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur autorisé à vendre ouvre chaque page et chaque action du magasin sans erreur',
@@ -1434,6 +1447,7 @@ return [
             'tests/Browser/Parcours/FicheDUneFactureTest.php › le vendeur modifie puis émet son brouillon depuis sa fiche',
             'tests/Browser/Parcours/FicheDUneFactureTest.php › l’administrateur autorisé à vendre modifie puis émet un brouillon depuis sa fiche',
             'tests/Browser/Parcours/FicheDUneFactureTest.php › le propriétaire modifie puis émet depuis sa fiche un brouillon du magasin de démonstration',
+            'tests/Browser/Parcours/AFaireTest.php › le vendeur émet son brouillon de facture depuis « Émettre » de l’« À faire » : le bouton mène à sa fiche, qui porte le geste',
         ]],
         'action:emettre_et_encaisser' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Parcours/EmettreEtEncaisserTest.php › le responsable ramène à zéro la part préremplie, et « Émettre et encaisser » émet le brouillon sans l’encaisser',
@@ -1458,6 +1472,7 @@ return [
         'action:faireLAvoirDeRegularisation' => ['lot' => 'NAV-2', 'tests' => []],
         'action:noter_bordereau_detaxe' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le vendeur ouvre chaque page et chaque action du magasin sans erreur',
+            'tests/Browser/Parcours/AFaireTest.php › dans le magasin fermé, le responsable note le bordereau de détaxe d’un ticket sur sa fiche, puis la date de son visa depuis son « À faire »',
         ]],
         'action:relancer' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Parcours/EnvoiParEMailTest.php › chaque compte qui relance une facture échue lit, depuis la liste comme depuis sa fiche, que la relance est demandée, puis son résultat dans « Envois », relu sans rechargement',
@@ -1622,6 +1637,9 @@ return [
         ]],
     ],
     'app/Filament/App/Resources/InventaireOuvertureResource/Pages/ViewInventaireOuverture.php' => [
+        'action:delete' => ['lot' => 'NAV-3', 'tests' => [
+            'tests/Browser/Parcours/AFaireTest.php › le responsable valide la facture d’achat en brouillon puis supprime l’inventaire d’ouverture en brouillon depuis l’« À faire », sur la fiche où mène chaque bouton',
+        ]],
         'action:edit' => ['lot' => 'NAV-3', 'tests' => []],
         'action:valider' => ['lot' => 'NAV-3', 'tests' => []],
         'page' => ['lot' => 'NAV-3', 'tests' => [
@@ -1909,6 +1927,10 @@ return [
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le propriétaire d’une société qui attend son code ouvre chaque page et chaque action du magasin de démonstration sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le responsable d’entraînement ouvre chaque page et chaque action du magasin de démonstration sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
+            'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le vendeur ouvre chaque page et chaque action du magasin sans erreur',
+            'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › l’observateur ouvre chaque page et chaque action du magasin sans erreur',
+            'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le vendeur d’entraînement ouvre chaque page et chaque action du magasin de démonstration sans erreur',
+            'tests/Browser/Parcours/AFaireTest.php › l’observateur qui voit les avoirs de toute l’équipe suit son « À surveiller » jusqu’au client qui garde un crédit d’avoir, et l’administrateur le sien jusqu’à la facture à encaisser',
         ]],
     ],
     'app/Filament/App/Widgets/BienvenueApercu.php' => [
@@ -2406,6 +2428,7 @@ return [
     'app/Filament/Societe/Pages/TableauDeBord.php' => [
         'action:verifierLEcart' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Parcours/AFaireTest.php › le propriétaire dit vérifié, depuis l’« À faire » de la société, l’écart relevé au répertoire Sirene',
+            'tests/Browser/Parcours/AFaireTest.php › l’administrateur qui gère les magasins dit vérifié, depuis l’« À faire » de la société, l’écart relevé au répertoire Sirene',
         ]],
         'action:ouvrirLaDemonstration' => ['lot' => 'NAV-4', 'tests' => [
             'tests/Browser/Parcours/OuvrirLaDemonstrationTest.php › le propriétaire ouvre le magasin de démonstration, dont la fenêtre dit qu’il y vend',
@@ -2737,12 +2760,21 @@ return [
             'tests/Browser/Parcours/AFaireTest.php › le vendeur encaisse sa facture depuis « À faire » et ouvre la liste filtrée ; le propriétaire la surveille avec « Voir »',
             'tests/Browser/Parcours/AFaireTest.php › le responsable note le visa d’un ticket détaxé depuis « À faire », puis la liste « Visa à noter » montre exactement les tickets qui l’attendent',
             'tests/Browser/Parcours/AFaireTest.php › le responsable ouvre, depuis « À faire », la liste des devis à transformer puis celle des devis qui expirent bientôt, chacune avec ses seuls devis',
+            'tests/Browser/Parcours/AFaireTest.php › le vendeur émet son brouillon de facture depuis « Émettre » de l’« À faire » : le bouton mène à sa fiche, qui porte le geste',
+            'tests/Browser/Parcours/AFaireTest.php › le responsable numérote sans e-mail le devis en brouillon depuis « Envoyer » de l’« À faire », sur sa fiche, qui mène aussi à sa modification',
+            'tests/Browser/Parcours/AFaireTest.php › le responsable valide la facture d’achat en brouillon puis supprime l’inventaire d’ouverture en brouillon depuis l’« À faire », sur la fiche où mène chaque bouton',
+            'tests/Browser/Parcours/AFaireTest.php › dans le magasin fermé, le responsable puis le vendeur notent depuis leur « À faire » la preuve de leur vente à l’export (exemple de l’éditeur, Q-AF12)',
+            'tests/Browser/Parcours/AFaireTest.php › dans le magasin fermé, le responsable note le bordereau de détaxe d’un ticket sur sa fiche, puis la date de son visa depuis son « À faire »',
+            'tests/Browser/Parcours/AFaireTest.php › le vendeur, le propriétaire et l’administrateur notent chacun depuis leur « À faire » le visa du bordereau d’un ticket détaxé',
+            'tests/Browser/Parcours/AFaireTest.php › l’observateur qui voit les avoirs de toute l’équipe suit son « À surveiller » jusqu’au client qui garde un crédit d’avoir, et l’administrateur le sien jusqu’à la facture à encaisser',
         ]],
         'lien:{{ $chose->lienDesLignes[\'libelle\'] }}' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Parcours/AFaireTest.php › le vendeur encaisse sa facture depuis « À faire » et ouvre la liste filtrée ; le propriétaire la surveille avec « Voir »',
         ]],
         'lien:{{ $ligne[\'libelle\'] }}' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Parcours/AFaireTest.php › le vendeur encaisse sa facture depuis « À faire » et ouvre la liste filtrée ; le propriétaire la surveille avec « Voir »',
+            'tests/Browser/Parcours/AFaireTest.php › dans le magasin fermé, le responsable puis le vendeur notent depuis leur « À faire » la preuve de leur vente à l’export (exemple de l’éditeur, Q-AF12)',
+            'tests/Browser/Parcours/AFaireTest.php › l’observateur qui voit les avoirs de toute l’équipe suit son « À surveiller » jusqu’au client qui garde un crédit d’avoir, et l’administrateur le sien jusqu’à la facture à encaisser',
         ]],
     ],
     'resources/views/filament/bienvenue.blade.php' => [

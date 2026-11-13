@@ -278,10 +278,11 @@ class ReverificationSirene
     }
 
     /**
-     * Retient l'écart, une seule fois tant que personne ne l'a dit vérifié
-     * : une revérification qui relit le même écart ne le double pas (index
-     * unique partiel de la table, voir EcartSirene). Écrit dans cette
-     * société, nommée explicitement.
+     * Retient l'écart, une seule fois par motif : une revérification qui
+     * relit le même écart ne le double pas et, s'il est déjà dit vérifié,
+     * ne le remet pas dans l'« À faire » (index unique de la table, voir
+     * EcartSirene) ; un motif qui change fait un nouvel écart. Écrit dans
+     * cette société, nommée explicitement.
      */
     private function retenirLEcart(Societe $societe, ?Magasin $magasin, string $motif, bool $negatif): void
     {

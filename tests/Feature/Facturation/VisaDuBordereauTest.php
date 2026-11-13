@@ -7,6 +7,7 @@ use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
+use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
 use App\Domain\Facturation\Actions\NoterBordereauDetaxeAction;
 use App\Domain\Facturation\Actions\NoterLeVisaDuBordereauAction;
 use App\Domain\Facturation\Models\Facture;
@@ -17,6 +18,7 @@ use App\Domain\Tenancy\Enums\MotifFermeture;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\UrgenceAFaire;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Services\ChosesAFaireDeLaSociete;
 use App\Domain\Tenancy\Services\ChosesAFaireDuMagasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\ChoseAFaire;
@@ -150,6 +152,40 @@ class VisaDuBordereauTest extends TestCase
     }
 
     /**
+     * Un ticket détaxé dont le voyageur rend tous les articles n'attend
+     * plus aucun visa : aucune marchandise ne sort de l'Union. Il sort de
+     * l'« À faire », du filtre « Visa à noter » et des nombres de l'espace
+     * de la société, sa fiche ne propose plus de noter le visa, et l'action
+     * le refuse. Un ticket dont un seul des deux articles est rendu
+     * attend toujours son visa.
+     */
+    public function test_un_ticket_detaxe_entierement_rendu_n_attend_plus_son_visa(): void
+    {
+        $magasin = $this->magasin();
+        $responsable = self::responsableDeTest($magasin);
+        $rendu = $this->ticketDetaxe($responsable, '2026FR000123456');
+        $enPartie = $this->ticketDetaxe($responsable, '2026FR000654321', 2);
+        $this->rendre($responsable, $rendu, 1);
+        $this->rendre($responsable, $enPartie, 1);
+
+        $chose = $this->chose($responsable, $magasin, 'visas_detaxe');
+
+        $this->assertSame([1, FactureResource::getUrl('view', ['record' => $enPartie])], [$chose?->nombre, $chose?->url]);
+        Livewire::test(ListFactures::class)
+            ->filterTable(FactureResource::FILTRE_VISA_A_NOTER)
+            ->assertCanSeeTableRecords([$enPartie])
+            ->assertCanNotSeeTableRecords([$rendu]);
+        Livewire::test(ViewFacture::class, ['record' => $rendu->getRouteKey()])->assertActionHidden('noter_visa_detaxe');
+        Livewire::test(ViewFacture::class, ['record' => $enPartie->getRouteKey()])->assertActionVisible('noter_visa_detaxe');
+        $this->assertThrows(fn () => app(NoterLeVisaDuBordereauAction::class)->handle($responsable, $rendu, '2026-10-09'), LogicException::class, 'Ce ticket ne garde aucun bien taxé, tous ses articles ayant été rendus : aucune marchandise ne sort de l\'Union, et aucun visa n\'est attendu.');
+        $this->assertSame(0, VisaDetaxe::query()->count());
+
+        $proprietaire = $this->proprietaireDe($magasin);
+        $this->dansLEspaceDeLaSociete($magasin->societe, $proprietaire);
+        $this->assertContains(['groupe' => 'visa de détaxe à noter', 'nombre' => 1, 'montant' => null], app(ChosesAFaireDeLaSociete::class)->parMagasin($proprietaire)[$magasin->id] ?? []);
+    }
+
+    /**
      * Isolation : un ticket d'un autre magasin, même de la même société,
      * est introuvable pour l'action ; son « À faire » ne compte que les
      * tickets du magasin actif.
@@ -181,25 +217,35 @@ class VisaDuBordereauTest extends TestCase
     }
 
     /**
-     * Un ticket émis de 250,00 € TTC d'un sac à main, par cet auteur, dans
-     * le magasin actif.
+     * Un ticket émis de 250,00 € TTC par sac à main, de ce nombre de sacs,
+     * par cet auteur, dans le magasin actif.
      */
-    private function ticket(User $auteur): Facture
+    private function ticket(User $auteur, int $sacs = 1): Facture
     {
         $produit = Produit::factory()->create(['nom' => 'Sac à main', 'prix_vente_ttc' => '250.00', 'taux_tva' => 20, 'suivi_stock' => false]);
 
-        return app(EmettreFactureAction::class)->handle($auteur, app(CreerFactureAction::class)->handle($auteur, Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]]));
+        return app(EmettreFactureAction::class)->handle($auteur, app(CreerFactureAction::class)->handle($auteur, Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => $sacs]]));
     }
 
     /**
-     * Un ticket émis dont cet auteur a noté ce n° de bordereau.
+     * Un ticket émis de ce nombre de sacs dont cet auteur a noté ce n° de
+     * bordereau.
      */
-    private function ticketDetaxe(User $auteur, string $bordereau): Facture
+    private function ticketDetaxe(User $auteur, string $bordereau, int $sacs = 1): Facture
     {
-        $ticket = $this->ticket($auteur);
+        $ticket = $this->ticket($auteur, $sacs);
         app(NoterBordereauDetaxeAction::class)->handle($auteur, $ticket, $bordereau);
 
         return $ticket;
+    }
+
+    /**
+     * Le voyageur rend ce nombre de sacs du ticket : un avoir émis par cet
+     * auteur sur sa ligne.
+     */
+    private function rendre(User $auteur, Facture $ticket, int $sacs): void
+    {
+        app(EnregistrerAvoirAction::class)->handle($auteur, $ticket->client()->firstOrFail(), [['ligne_facture_id' => $ticket->lignes()->sole()->id, 'quantite' => $sacs]], 'Article rendu');
     }
 
     /**

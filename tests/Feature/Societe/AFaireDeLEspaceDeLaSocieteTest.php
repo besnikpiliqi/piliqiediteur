@@ -134,6 +134,38 @@ class AFaireDeLEspaceDeLaSocieteTest extends TestCase
     }
 
     /**
+     * Q-AF13 : un écart dit vérifié ne revient pas dans l'« À faire » à la
+     * revérification suivante (le 1er du mois, voir la planification) qui
+     * relit le même écart, par exemple une adresse que la société garde
+     * volontairement : aucune nouvelle ligne. Un écart dont le motif lu
+     * change (le répertoire donne une autre adresse) est un nouvel écart,
+     * qui s'y signale.
+     */
+    public function test_un_ecart_dit_verifie_ne_revient_pas_a_la_reverification_suivante_qui_relit_le_meme(): void
+    {
+        Mail::fake();
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $societe = $magasin->societe;
+        $proprietaire = $this->proprietaireDe($magasin);
+        app(RepertoireSirene::class)->deplacer((string) $magasin->siret, '69001', 'LYON', '69381');
+        $this->artisan('app:reverifier-sirene', ['--toutes' => true])->assertSuccessful();
+        $ecart = app(TenantContext::class)->runAsSociete($societe, fn (): EcartSirene => EcartSirene::query()->sole());
+        app(VerifierUnEcartSireneAction::class)->handle($proprietaire, $ecart);
+
+        $this->artisan('app:reverifier-sirene', ['--toutes' => true])->assertSuccessful();
+
+        $this->assertSame(1, app(TenantContext::class)->runAsSociete($societe, fn (): int => EcartSirene::query()->count()));
+        $this->assertNull($this->chose($proprietaire, $societe, 'ecart_sirene'));
+
+        app(RepertoireSirene::class)->deplacer((string) $magasin->siret, '13001', 'MARSEILLE', '13201');
+        $this->artisan('app:reverifier-sirene', ['--toutes' => true])->assertSuccessful();
+
+        $nouveau = app(TenantContext::class)->runAsSociete($societe, fn (): EcartSirene => EcartSirene::query()->aVerifier()->sole());
+        $this->assertNotSame($ecart->motif, $nouveau->motif);
+        $this->assertSame((int) $nouveau->id, $this->chose($proprietaire, $societe, 'ecart_sirene')?->cible);
+    }
+
+    /**
      * Le code du courrier recommandé, avec sa date limite, n'est que dans
      * l'« À faire » du propriétaire : un administrateur n'en voit rien, pas
      * plus que des comptes dont le mot de passe est encore l'identifiant,

@@ -272,21 +272,7 @@ class DevisResource extends Resource
                 Tables\Actions\EditAction::make(),
                 self::telechargerLePdf(Tables\Actions\Action::make('telecharger_pdf')),
                 self::envoyerParEmail(Tables\Actions\Action::make('envoyer_par_email')),
-                // Remis en main propre, par exemple : le devis part sans
-                // e-mail, avec le numéro qu'il reçoit, ou celui qu'il a gardé
-                // s'il a été modifié depuis son envoi (voir
-                // EmettreDevisAction).
-                Tables\Actions\Action::make('envoyer')
-                    ->label(fn (Devis $record): string => $record->numero === null ? 'Numéroter sans e-mail' : 'Marquer envoyé sans e-mail')
-                    ->icon('heroicon-o-paper-airplane')
-                    ->color('gray')
-                    ->requiresConfirmation()
-                    ->modalDescription(fn (Devis $record): string => $record->numero === null
-                        ? 'Le devis reçoit son numéro et passe au statut « Envoyé », sans e-mail : pour un devis remis en main propre, par exemple.'
-                        : "Le devis garde son numéro {$record->numero} et repasse au statut « Envoyé », sans e-mail : pour un devis remis en main propre, par exemple.")
-                    ->form([self::champDuJeton()])
-                    ->visible(fn (Devis $record) => $record->statut === StatutDevis::Brouillon && CompteConnecte::exiger()->can('envoyer', $record))
-                    ->action(fn (Devis $record, array $data) => static::executerSansCasser(fn () => app(EmettreDevisAction::class)->handle(CompteConnecte::exiger(), $record, ValeurSimple::enTexteOuNul($data['jeton'])))),
+                self::envoyerSansEmail(Tables\Actions\Action::make('envoyer')),
                 // Masquée une fois la date de validité dépassée (voir
                 // DevisPolicy::accepter()).
                 Tables\Actions\Action::make('accepter')
@@ -310,6 +296,38 @@ class DevisResource extends Resource
                     static::suppressionEnMasse(Devis::class, fn (Devis $devis) => app(SupprimerDevisAction::class)->handle(CompteConnecte::exiger(), $devis)),
                 ]),
             ]);
+    }
+
+    /**
+     * Remis en main propre, par exemple : le devis en brouillon part sans
+     * e-mail, avec le numéro qu'il reçoit, ou celui qu'il a gardé s'il a
+     * été modifié depuis son envoi (voir EmettreDevisAction) ; sur la ligne
+     * de la liste comme sur la fiche, où mène l'« À faire » d'un brouillon
+     * seul (voir ChosesAFaireDuMagasin), y compris dans le magasin de
+     * démonstration, qui n'écrit à aucun client. La fiche relit ensuite le
+     * devis, numéroté et envoyé.
+     *
+     * @template TAction of MountableAction
+     *
+     * @param  TAction  $action
+     * @return TAction
+     */
+    public static function envoyerSansEmail(MountableAction $action): MountableAction
+    {
+        return $action
+            ->label(fn (Devis $record): string => $record->numero === null ? 'Numéroter sans e-mail' : 'Marquer envoyé sans e-mail')
+            ->icon('heroicon-o-paper-airplane')
+            ->color('gray')
+            ->requiresConfirmation()
+            ->modalDescription(fn (Devis $record): string => $record->numero === null
+                ? 'Le devis reçoit son numéro et passe au statut « Envoyé », sans e-mail : pour un devis remis en main propre, par exemple.'
+                : "Le devis garde son numéro {$record->numero} et repasse au statut « Envoyé », sans e-mail : pour un devis remis en main propre, par exemple.")
+            ->form([self::champDuJeton()])
+            ->visible(fn (Devis $record): bool => $record->statut === StatutDevis::Brouillon && CompteConnecte::exiger()->can('envoyer', $record))
+            ->action(fn (Devis $record, array $data) => static::executerSansCasser(function () use ($record, $data): void {
+                app(EmettreDevisAction::class)->handle(CompteConnecte::exiger(), $record, ValeurSimple::enTexteOuNul($data['jeton']));
+                $record->refresh();
+            }));
     }
 
     /**

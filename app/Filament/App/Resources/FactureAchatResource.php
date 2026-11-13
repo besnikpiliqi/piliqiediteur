@@ -291,15 +291,7 @@ class FactureAchatResource extends Resource
                     ->visible(fn (FactureAchat $record) => $record->estModifiable()),
                 self::actionSupprimer(Tables\Actions\DeleteAction::make())
                     ->visible(fn (FactureAchat $record) => $record->statut === StatutFactureAchat::Brouillon),
-                Tables\Actions\Action::make('valider')
-                    ->label('Valider la réception')
-                    ->icon('heroicon-o-check-circle')
-                    ->color('success')
-                    ->requiresConfirmation()
-                    ->modalDescription('Un numéro définitif sera attribué et le stock des produits sera incrémenté. Cette action est irréversible.')
-                    ->form([self::champDuJeton()])
-                    ->visible(fn (FactureAchat $record) => $record->statut === StatutFactureAchat::Brouillon && CompteConnecte::exiger()->can('valider', $record))
-                    ->action(fn (FactureAchat $record, array $data) => static::executerSansCasser(fn () => app(ValiderFactureAchatAction::class)->handle(CompteConnecte::exiger(), $record, ValeurSimple::enTexteOuNul($data['jeton'])))),
+                self::actionValider(Tables\Actions\Action::make('valider')),
                 self::creerUnAvoirFournisseur(Tables\Actions\Action::make('avoir_fournisseur')),
             ])
             ->bulkActions([
@@ -415,6 +407,35 @@ class FactureAchatResource extends Resource
 
             return true;
         }));
+    }
+
+    /**
+     * « Valider la réception » d'un brouillon, sur la ligne de la liste
+     * comme sur la fiche, où mène l'« À faire » d'un brouillon seul (voir
+     * ChosesAFaireDuMagasin) : un numéro définitif, et le stock des
+     * produits qui entre (voir ValiderFactureAchatAction). La fenêtre porte
+     * le jeton de la demande (R3) ; la fiche relit ensuite la facture
+     * d'achat, validée.
+     *
+     * @template TAction of MountableAction
+     *
+     * @param  TAction  $action
+     * @return TAction
+     */
+    public static function actionValider(MountableAction $action): MountableAction
+    {
+        return $action
+            ->label('Valider la réception')
+            ->icon('heroicon-o-check-circle')
+            ->color('success')
+            ->requiresConfirmation()
+            ->modalDescription('Un numéro définitif sera attribué et le stock des produits sera incrémenté. Cette action est irréversible.')
+            ->form([self::champDuJeton()])
+            ->visible(fn (FactureAchat $record): bool => $record->statut === StatutFactureAchat::Brouillon && CompteConnecte::exiger()->can('valider', $record))
+            ->action(fn (FactureAchat $record, array $data) => static::executerSansCasser(function () use ($record, $data): void {
+                app(ValiderFactureAchatAction::class)->handle(CompteConnecte::exiger(), $record, ValeurSimple::enTexteOuNul($data['jeton']));
+                $record->refresh();
+            }));
     }
 
     /**

@@ -13,9 +13,11 @@ use Illuminate\Support\Facades\Schema;
  * ne se bloque ; l'écart reste dans l'« À faire » de l'espace de la
  * société jusqu'à ce que le propriétaire, ou un administrateur qui gère ce
  * magasin, dise « C'est vérifié » (décision de l'éditeur du 01/11/2026,
- * Q-AF13, voir VerifierUnEcartSireneAction). Un écart encore à vérifier
- * ne s'inscrit qu'une fois par motif (index unique partiel) : chaque
- * revérification qui le relit de nouveau ne le double pas.
+ * Q-AF13, voir VerifierUnEcartSireneAction). Un écart ne s'inscrit qu'une
+ * fois par motif, qu'il soit encore à vérifier ou déjà dit vérifié (index
+ * unique) : chaque revérification qui relit le même écart ne le double
+ * pas et ne le remet pas dans l'« À faire » ; un écart dont le motif lu
+ * change (une autre adresse, un autre territoire) est un nouvel écart.
  *
  * magasin_id : le magasin dont l'établissement est en cause, désigné dans
  * la société de l'écart (clé composée) ; vide pour un écart de
@@ -47,7 +49,7 @@ return new class extends Migration
             $table->foreign(['societe_id', 'magasin_id'])->references(['societe_id', 'id'])->on('magasins')->restrictOnDelete();
         });
 
-        DB::statement('create unique index ecarts_sirene_a_verifier_unique on ecarts_sirene (societe_id, md5(motif)) where verifie_le is null');
+        DB::statement('create unique index ecarts_sirene_motif_unique on ecarts_sirene (societe_id, md5(motif))');
     }
 
     public function down(): void

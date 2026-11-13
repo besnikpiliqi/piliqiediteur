@@ -367,10 +367,10 @@ class Facture extends Model implements DocumentEnvoyable
      * régler : émis, envoyés, partiellement payés ou en retard (voir
      * StatutFacture::quiAttendentUnReglement()), jamais un brouillon ni un
      * document payé. Une facture rouverte par la contre-passation d'un
-     * paiement y revient (voir constaterUnReglement()) : l'alerte du
-     * tableau de bord (voir FacturesAEncaisserApercu), le filtre « À
-     * encaisser » de la liste des factures et les totaux de l'espace de la
-     * société (voir FacturesAEncaisserDeLaSociete) la montrent.
+     * paiement y revient (voir constaterUnReglement()) : l'« À faire » du
+     * tableau de bord du magasin (voir ChosesAFaireDuMagasin), le filtre
+     * « À encaisser » de la liste des factures et les totaux de l'espace de
+     * la société (voir FacturesAEncaisserDeLaSociete) la montrent.
      *
      * @param  Builder<static>  $query
      * @return Builder<static>
@@ -554,8 +554,10 @@ class Facture extends Model implements DocumentEnvoyable
 
     /**
      * Les factures émises dont l'exonération attend encore une preuve
-     * (voir PreuvesRequises::incompletes()) : le filtre et le badge
-     * « Preuves à fournir » de la liste des factures.
+     * (voir PreuvesRequises::incompletes()) : l'« À faire » du tableau de
+     * bord du magasin (voir ChosesAFaireDuMagasin), ses nombres dans
+     * l'espace de la société, et le filtre « Preuves à fournir » et la
+     * colonne « À faire » de la liste des factures.
      *
      * @param  Builder<static>  $query
      * @return Builder<static>
@@ -571,11 +573,15 @@ class Facture extends Model implements DocumentEnvoyable
      * sortie de l'Union (décision de l'éditeur du 01/11/2026, Q-AF13, voir
      * NoterLeVisaDuBordereauAction) : le filtre « Visa à noter » de la
      * liste des factures, l'« À faire » du tableau de bord du magasin et
-     * ses nombres dans l'espace de la société. Les bordereaux et leurs
-     * visas se lisent dans le magasin de chaque ticket (voir
-     * BelongsToMagasin::scopeDuMagasinDe()) : la condition vaut dans le
-     * magasin actif comme pour plusieurs magasins de la société (voir
-     * ChosesAFaireDeLaSociete).
+     * ses nombres dans l'espace de la société. Seul un ticket qui garde au
+     * moins un bien taxé qu'aucun avoir émis n'a entièrement repris attend
+     * son visa, comme pour noter son bordereau (voir
+     * NoterBordereauDetaxeAction::refusPour()) : rendu en entier, aucune
+     * marchandise ne sort de l'Union et aucun visa ne viendra. Les
+     * bordereaux, leurs visas et les lignes se lisent dans le magasin de
+     * chaque ticket (voir BelongsToMagasin::scopeDuMagasinDe()) : la
+     * condition vaut dans le magasin actif comme pour plusieurs magasins de
+     * la société (voir ChosesAFaireDeLaSociete).
      *
      * @param  Builder<static>  $query
      * @return Builder<static>
@@ -588,10 +594,27 @@ class Facture extends Model implements DocumentEnvoyable
             ->whereColumn('bordereaux_detaxe.facture_id', $query->qualifyColumn('id'))
             ->selectRaw('max(bordereaux_detaxe.id)');
 
-        return $query->whereHas('bordereauxDetaxe', fn (Builder $bordereaux): Builder => $bordereaux
-            ->duMagasinDe($magasin)
-            ->where('bordereaux_detaxe.id', $dernierNote)
-            ->whereDoesntHave('visa', fn (Builder $visas): Builder => $visas->duMagasinDe('bordereaux_detaxe.magasin_id')));
+        return $query
+            ->whereHas('bordereauxDetaxe', fn (Builder $bordereaux): Builder => $bordereaux
+                ->duMagasinDe($magasin)
+                ->where('bordereaux_detaxe.id', $dernierNote)
+                ->whereDoesntHave('visa', fn (Builder $visas): Builder => $visas->duMagasinDe('bordereaux_detaxe.magasin_id')))
+            ->whereHas('lignes', fn (Builder $lignes): Builder => $lignes->duMagasinDe($magasin)->creditables()->biensTaxes());
+    }
+
+    /**
+     * Elle-même : une relation de la facture vers sa propre ligne, pour
+     * qu'une requête de plusieurs factures lise en une seule sous-requête
+     * corrélée une condition écrite comme un scope (voir
+     * FactureResource::getEloquentQuery(), withExists() sur cette
+     * relation) ; Eloquent y renomme la table de la sous-requête, si bien
+     * que le scope s'y lit tel quel.
+     *
+     * @return HasOne<Facture, $this>
+     */
+    public function elleMeme(): HasOne
+    {
+        return $this->hasOne(self::class, 'id', 'id');
     }
 
     /**
@@ -611,11 +634,17 @@ class Facture extends Model implements DocumentEnvoyable
 
     /**
      * Cette facture émise attend-elle encore une preuve de son exonération
-     * (voir scopePreuvesAFournir()) ? Sans rien lire pour une facture d'une
-     * nature qui n'en demande aucune, la plupart.
+     * (voir scopePreuvesAFournir()) ? Lu par la requête de la liste des
+     * factures quand elle l'a chargé (voir FactureResource::getEloquentQuery()) ;
+     * sinon relu en base, sans rien lire pour une facture d'une nature qui
+     * n'en demande aucune, la plupart.
      */
     public function attendUnePreuve(): bool
     {
+        if (array_key_exists('preuve_a_fournir', $this->getAttributes())) {
+            return (bool) $this->getAttribute('preuve_a_fournir');
+        }
+
         return $this->statut !== StatutFacture::Brouillon
             && PreuvesRequises::typesAdmis($this->nature_operation) !== []
             && static::query()->whereKey($this->getKey())->preuvesAFournir()->exists();

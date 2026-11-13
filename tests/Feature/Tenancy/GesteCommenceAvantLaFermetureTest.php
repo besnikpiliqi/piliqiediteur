@@ -95,12 +95,33 @@ class GesteCommenceAvantLaFermetureTest extends TestCase
             'abandonner la vente de la caisse' => ['abandonnerLaVente'],
             'numéroter un devis' => ['numeroterUnDevis'],
             'envoyer un devis' => ['envoyerUnDevis'],
-            'noter un bordereau de détaxe' => ['noterUnBordereau'],
-            'noter une preuve d\'exonération' => ['noterUnePreuve'],
             'saisir un inventaire d\'ouverture' => ['saisirUnInventaire'],
             'modifier un inventaire d\'ouverture' => ['modifierUnInventaire'],
             'supprimer un inventaire d\'ouverture' => ['supprimerUnInventaire'],
         ];
+    }
+
+    /**
+     * Les gestes qui continuent jusqu'au bout dans un magasin fermé (voir
+     * test_une_preuve_commencee_avant_la_fermeture_s_enregistre_encore()),
+     * que la suspension de leur auteur arrête pourtant comme les autres.
+     *
+     * @return array<string, array{0: string}>
+     */
+    public static function gestesJusquAuBout(): array
+    {
+        return [
+            'noter un bordereau de détaxe' => ['noterUnBordereau'],
+            'noter une preuve d\'exonération' => ['noterUnePreuve'],
+        ];
+    }
+
+    /**
+     * @return array<string, array{0: string}>
+     */
+    public static function tousLesGestes(): array
+    {
+        return [...self::gestes(), ...self::gestesJusquAuBout()];
     }
 
     #[DataProvider('gestes')]
@@ -118,11 +139,29 @@ class GesteCommenceAvantLaFermetureTest extends TestCase
     }
 
     /**
+     * Une preuve d'exonération ou un bordereau de détaxe dont l'écran s'est
+     * ouvert avant la fermeture s'enregistre encore : les preuves
+     * continuent jusqu'au bout, comme les clôtures (décision de l'éditeur du
+     * 01/11/2026, Q-AF12).
+     */
+    #[DataProvider('gestesJusquAuBout')]
+    public function test_une_preuve_commencee_avant_la_fermeture_s_enregistre_encore(string $geste): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        [$faire] = $this->{$geste}();
+        $this->fermerSansQueLeMagasinActifLeSache($magasin);
+
+        $faire();
+
+        $this->assertSame(1, $geste === 'noterUnBordereau' ? BordereauDetaxe::query()->count() : PreuveOperation::query()->count());
+    }
+
+    /**
      * L'auteur suspendu après avoir ouvert son écran (la caisse comprise) :
      * le geste le relit en base sous le verrou de sa ligne, et le refuse,
      * sans rien écrire.
      */
-    #[DataProvider('gestes')]
+    #[DataProvider('tousLesGestes')]
     public function test_un_compte_suspendu_depuis_l_ouverture_de_son_ecran_ne_fait_plus_rien(string $geste): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);

@@ -84,7 +84,9 @@ class ClientPolicyTest extends TestCase
 
     /**
      * Toutes les ventes anonymes du magasin le portent : même le
-     * propriétaire ne l'archive pas.
+     * propriétaire ne l'archive pas ; et sa fiche ne se consulte ni ne se
+     * modifie (décision de l'éditeur du 01/11/2026, qui remplace sa
+     * modification permise).
      */
     public function test_personne_n_archive_le_client_comptoir(): void
     {
@@ -92,8 +94,7 @@ class ClientPolicyTest extends TestCase
         $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $comptoir = Client::query()->where('est_comptoir', true)->sole();
 
-        $this->assertFalse($proprietaire->can('delete', $comptoir));
-        $this->assertTrue($proprietaire->can('update', $comptoir));
+        $this->assertSame([false, false, false], [$proprietaire->can('delete', $comptoir), $proprietaire->can('update', $comptoir), $proprietaire->can('view', $comptoir)]);
     }
 
     public function test_la_permission_est_scopee_par_magasin_et_le_modele_doit_appartenir_au_contexte_actif(): void

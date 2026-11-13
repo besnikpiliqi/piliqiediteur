@@ -169,4 +169,15 @@ class Affectation extends Model
     {
         return $this->belongsTo(Magasin::class);
     }
+
+    /**
+     * L'administrateur qui a nommé ce responsable, tant que la nomination
+     * peut s'annuler ou se garder.
+     *
+     * @return BelongsTo<User, $this>
+     */
+    public function nommePar(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'nomme_par');
+    }
 }

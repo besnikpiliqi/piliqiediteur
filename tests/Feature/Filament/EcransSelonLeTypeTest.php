@@ -16,6 +16,7 @@ use App\Domain\Facturation\Enums\NatureOperation;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Services\ChosesAFaireDuMagasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Livewire\SelecteurDeProduits;
 use App\Filament\App\Pages\Caisse;
@@ -30,7 +31,6 @@ use App\Filament\App\Resources\ProduitResource;
 use App\Filament\App\Resources\ProduitResource\Widgets\ValeurStockApercu;
 use App\Filament\App\Resources\ServiceResource;
 use App\Filament\App\Resources\ServiceResource\Pages\ManageServices;
-use App\Filament\App\Widgets\StockNegatifApercu;
 use App\Filament\Societe\Pages\TableauDeBord;
 use App\Models\User;
 use Closure;
@@ -107,8 +107,9 @@ class EcransSelonLeTypeTest extends TestCase
     /**
      * Les aperçus du stock suivent l'autorisation de voir les produits, que
      * le propriétaire d'une société de services n'a pas, et que celui d'un
-     * commerce a : dans le commerce, un produit en stock négatif fait
-     * paraître l'aperçu du stock négatif.
+     * commerce a : dans le commerce, un produit en stock négatif paraît
+     * dans l'« À faire » du tableau de bord (décision de l'éditeur du
+     * 26/10/2026, qui remplace l'aperçu du stock négatif).
      */
     public function test_sans_articles_les_apercus_de_stock_n_apparaissent_pas(): void
     {
@@ -116,14 +117,25 @@ class EcransSelonLeTypeTest extends TestCase
         $proprietaireDesServices = $this->proprietaireDe($services);
         $this->dansLeMagasin($services, $proprietaireDesServices);
 
-        $this->assertSame([false, false, false], [$proprietaireDesServices->can(PermissionRegistry::PRODUIT_VIEW), StockNegatifApercu::canView(), ValeurStockApercu::canView()]);
+        $this->assertSame([false, false, false], [$proprietaireDesServices->can(PermissionRegistry::PRODUIT_VIEW), self::aLaChose($proprietaireDesServices, $services, 'stock_negatif'), ValeurStockApercu::canView()]);
 
         $commerce = $this->ouvrirUneSociete(['nom' => 'Boutique']);
         $proprietaireDuCommerce = $this->proprietaireDe($commerce);
         $this->dansLeMagasin($commerce, $proprietaireDuCommerce);
         self::vendreJusquAuStockNegatif(Produit::factory()->create(['nom' => 'Housse', 'suivi_stock' => true]), 2);
 
-        $this->assertSame([true, true, true], [$proprietaireDuCommerce->can(PermissionRegistry::PRODUIT_VIEW), StockNegatifApercu::canView(), ValeurStockApercu::canView()]);
+        $this->assertSame([true, true, true], [$proprietaireDuCommerce->can(PermissionRegistry::PRODUIT_VIEW), self::aLaChose($proprietaireDuCommerce, $commerce, 'stock_negatif'), ValeurStockApercu::canView()]);
+    }
+
+    /**
+     * Cette chose est-elle dans l'« À faire » de ce compte, dans ce
+     * magasin actif (voir ChosesAFaireDuMagasin) ?
+     */
+    private static function aLaChose(User $compte, Magasin $magasin, string $cle): bool
+    {
+        $choses = ChosesAFaireDuMagasin::pour($compte, $magasin);
+
+        return collect([...$choses['a_faire'], ...$choses['a_surveiller']])->contains('cle', $cle);
     }
 
     /**

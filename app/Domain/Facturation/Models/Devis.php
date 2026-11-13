@@ -2,6 +2,7 @@
 
 namespace App\Domain\Facturation\Models;
 
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Calendrier\Casts\JourCivil;
 use App\Domain\Catalogue\Models\Produit;
@@ -17,6 +18,7 @@ use App\Domain\Facturation\Enums\TransportPar;
 use App\Domain\Facturation\Services\Emetteur;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use Database\Factories\DevisFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -145,6 +147,48 @@ class Devis extends Model implements DocumentEnvoyable
     public function factures(): HasMany
     {
         return $this->hasMany(Facture::class);
+    }
+
+    /**
+     * Combien de jours avant la fin de sa validité un devis envoyé sans
+     * réponse se rappelle dans l'« À faire » (décision de l'éditeur du
+     * 26/10/2026, règle 5).
+     */
+    public const JOURS_DU_RAPPEL_AVANT_LA_FIN = 7;
+
+    /**
+     * Les devis envoyés sans réponse du client dont la validité finit dans
+     * les sept jours de ce jour du calendrier de leur magasin, ce jour
+     * compris : l'« À faire » du tableau de bord (voir
+     * ChosesAFaireDuMagasin) et le filtre « Expirent bientôt » de la liste
+     * (voir DevisResource). Un devis valable jusqu'au 31/10 y entre le
+     * 24/10 ; le lendemain de sa validité, il expire (voir
+     * ExpirerLesDevisAction).
+     *
+     * @param  Builder<static>  $query
+     * @param  string  $aujourdhui  AAAA-MM-JJ, dans le calendrier du magasin actif
+     * @return Builder<static>
+     */
+    public function scopeExpirentBientot(Builder $query, string $aujourdhui): Builder
+    {
+        return $query
+            ->where($query->qualifyColumn('statut'), StatutDevis::Envoye)
+            ->where($query->qualifyColumn('date_validite'), '>=', $aujourdhui)
+            ->where($query->qualifyColumn('date_validite'), '<=', Calendrier::ajouterJours($aujourdhui, self::JOURS_DU_RAPPEL_AVANT_LA_FIN));
+    }
+
+    /**
+     * Les devis acceptés que le magasin n'a pas encore transformés en
+     * facture : l'« À faire » du tableau de bord et le filtre « À
+     * transformer en facture » de la liste.
+     *
+     * @param  Builder<static>  $query
+     * @return Builder<static>
+     */
+    public function scopeATransformer(Builder $query): Builder
+    {
+        return $query->where($query->qualifyColumn('statut'), StatutDevis::Accepte)
+            ->whereDoesntHave('factures', fn (Builder $factures): Builder => $factures->duMagasinDe($query->qualifyColumn('magasin_id')));
     }
 
     /**

@@ -10,11 +10,14 @@ use PHPUnit\Framework\Assert;
 /**
  * Le balayage d'un panneau par un compte connecté : depuis une page, il
  * ouvre chaque page que ses liens atteignent dans les préfixes donnés (une
- * seule fiche par sorte d'adresse), et, sur chacune, chaque action visible,
+ * seule fiche par sorte d'adresse, la première que les menus et les listes
+ * atteignent), puis chaque page où mène l'« À faire » de la page de départ
+ * (data-a-faire, voir AFaireApercu), chacune une fois, même une seconde
+ * fiche d'une sorte déjà balayée ; et, sur chacune, chaque action visible,
  * comme une personne : il ouvre chaque menu d'actions, clique sur chaque
- * action (une seule fois par composant et par action, la première ligne
- * d'un tableau pour ses actions de ligne, la première ligne cochée pour
- * ses actions groupées), cherche dans le tableau que montre la fenêtre
+ * action (une seule fois par composant de page et par action, la première
+ * ligne d'un tableau pour ses actions de ligne, la première ligne cochée
+ * pour ses actions groupées), cherche dans le tableau que montre la fenêtre
  * ouverte, s'il y en a un, puis la ferme sans la valider ; il clique sur
  * chaque onglet, change chaque filtre puis remet la page dans son état,
  * et cherche dans chaque tableau. Les liens d'une page, visibles ou rangés
@@ -56,6 +59,13 @@ final class Balayeur
     private array $sortesVues = [];
 
     /**
+     * Les adresses déjà balayées.
+     *
+     * @var array<string, true>
+     */
+    private array $adressesVues = [];
+
+    /**
      * Les actions déjà ouvertes, par composant.
      *
      * @var array<string, true>
@@ -90,8 +100,9 @@ final class Balayeur
 
     /**
      * Balaye chaque page atteignable depuis ce chemin dont l'adresse
-     * commence par l'un de ces préfixes, puis le profil et les entrées du
-     * menu du compte de la page de départ ; rend les pages balayées.
+     * commence par l'un de ces préfixes, le profil et les entrées du menu
+     * du compte de la page de départ, puis chaque page où mène son « À
+     * faire » qui n'a pas encore été balayée ; rend les pages balayées.
      *
      * @param  list<string>  $prefixes
      * @return list<string>
@@ -102,16 +113,19 @@ final class Balayeur
         $profil = $this->ouvrirLeMenuDuCompte($depart);
         $prefixes = [...$prefixes, ...$profil];
         $aVisiter = [$depart, ...$profil];
+        $aFaire = [];
 
-        while ($aVisiter !== []) {
-            $chemin = array_shift($aVisiter);
+        while ($aVisiter !== [] || $aFaire !== []) {
+            $deLAFaire = $aVisiter === [];
+            $chemin = (string) ($deLAFaire ? array_shift($aFaire) : array_shift($aVisiter));
             $sorte = $this->sorte($chemin, $prefixes);
 
-            if (isset($this->sortesVues[$sorte])) {
+            if (isset($this->adressesVues[$chemin]) || (! $deLAFaire && isset($this->sortesVues[$sorte]))) {
                 continue;
             }
 
             $this->sortesVues[$sorte] = true;
+            $this->adressesVues[$chemin] = true;
             $this->onglet->aller($chemin);
             $this->pages[] = $chemin;
 
@@ -124,7 +138,9 @@ final class Balayeur
                     $this->liensVus[] = ['composant' => $lien['composant'], 'action' => $lien['action'], 'sorte' => $this->sorte($lien['chemin'], $prefixes)];
                 }
 
-                if (! isset($this->sortesVues[$this->sorte($lien['chemin'], $prefixes)])) {
+                if ($lien['aFaire']) {
+                    $aFaire[] = $lien['chemin'];
+                } elseif (! isset($this->sortesVues[$this->sorte($lien['chemin'], $prefixes)])) {
                     $aVisiter[] = $lien['chemin'];
                 }
             }
@@ -177,10 +193,11 @@ final class Balayeur
     /**
      * Les liens de la page vers l'application, sans requête ni ancre,
      * visibles ou rangés dans un menu d'actions visible, hors menus du
-     * panneau : leur chemin, et, pour une action qui est un lien, son nom et
-     * le composant Livewire qui la montre.
+     * panneau : leur chemin, pour une action qui est un lien, son nom et
+     * le composant Livewire qui la montre, et s'il est dans l'« À faire »
+     * de la page (data-a-faire).
      *
-     * @return list<array{chemin: string, action: string|null, composant: string}>
+     * @return list<array{chemin: string, action: string|null, composant: string, aFaire: bool}>
      */
     private function liens(): array
     {
@@ -206,6 +223,7 @@ final class Balayeur
                         chemin: adresse.pathname,
                         action: lien.getAttribute('data-balayage-action'),
                         composant: composant ? JSON.parse(composant.getAttribute('wire:snapshot')).memo.name : '',
+                        aFaire: lien.closest('[data-a-faire]') !== null,
                     };
                 })
         JS);
@@ -299,13 +317,18 @@ final class Balayeur
     }
 
     /**
-     * Le nom Livewire du composant principal de la page.
+     * Le nom Livewire du composant principal de la page : le premier dans
+     * son contenu (.fi-main), jamais un composant de la barre du haut
+     * (notifications, recherche) qui le précède dans la page, ni, à
+     * défaut, d'une page sans ce contenu (le profil d'une page simple).
      */
     private function composantDeLaPage(): string
     {
         return (string) $this->onglet->page()->evaluate(<<<'JS'
             () => {
-                const racine = document.querySelector('.fi-main [wire\\:snapshot], main [wire\\:snapshot], [wire\\:snapshot]');
+                const racine = document.querySelector('.fi-main [wire\\:snapshot]')
+                    ?? document.querySelector('main [wire\\:snapshot]')
+                    ?? document.querySelector('[wire\\:snapshot]');
 
                 return racine ? JSON.parse(racine.getAttribute('wire:snapshot')).memo.name : '';
             }

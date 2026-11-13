@@ -51,8 +51,9 @@ class ControleDesDroitsTest extends TestCase
 
     /**
      * Chaque autorisation, et si elle reste permise dans un magasin en
-     * lecture seule : consulter, clôturer la journée et gérer l'équipe
-     * seulement.
+     * lecture seule : consulter, clôturer la journée, noter les preuves
+     * d'exonération et les bordereaux de détaxe (décision de l'éditeur du
+     * 01/11/2026, Q-AF12) et gérer l'équipe seulement.
      *
      * @return array<string, array{0: string, 1: bool}>
      */
@@ -76,6 +77,7 @@ class ControleDesDroitsTest extends TestCase
             PermissionRegistry::AVOIR_FOURNISSEUR_VIEW,
             PermissionRegistry::CAISSE_SECURISEE_CONSULTER,
             PermissionRegistry::DOCUMENTS_TELECHARGER,
+            PermissionRegistry::FACTURE_JUSTIFIER,
         ];
         $refusees = [
             PermissionRegistry::CLIENT_CREATE,
@@ -99,7 +101,6 @@ class ControleDesDroitsTest extends TestCase
             PermissionRegistry::FACTURE_CREATE,
             PermissionRegistry::FACTURE_EMETTRE,
             PermissionRegistry::FACTURE_ENVOYER,
-            PermissionRegistry::FACTURE_JUSTIFIER,
             PermissionRegistry::RELANCES_REGLER,
             PermissionRegistry::PARAMETRES_GERER,
             PermissionRegistry::PAIEMENT_CREER,

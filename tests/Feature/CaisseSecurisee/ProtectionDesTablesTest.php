@@ -41,7 +41,7 @@ class ProtectionDesTablesTest extends TestCase
 {
     use RefreshDatabase;
 
-    private const EN_AJOUT_SEUL = ['changements_fin_exercice', 'consultations_vies', 'preuves_operation', 'bordereaux_detaxe', 'recus_paiement', 'paiements', 'paiement_allocations', 'lignes_recu_paiement', 'avoir_allocations', 'enregistrements_fiscaux', 'clotures_caisse', 'clotures_caisse_personnelles', 'clotures_caisse_personnelles_factures', 'clotures_caisse_personnelles_paiements', 'mouvements_stock', 'reponses_des_devis'];
+    private const EN_AJOUT_SEUL = ['changements_fin_exercice', 'consultations_vies', 'preuves_operation', 'bordereaux_detaxe', 'visas_detaxe', 'recus_paiement', 'paiements', 'paiement_allocations', 'lignes_recu_paiement', 'avoir_allocations', 'enregistrements_fiscaux', 'clotures_caisse', 'clotures_caisse_personnelles', 'clotures_caisse_personnelles_factures', 'clotures_caisse_personnelles_paiements', 'mouvements_stock', 'reponses_des_devis'];
 
     private const SANS_SUPPRESSION = ['societes', 'magasins', 'sirets_magasins', 'periodes_activite', 'tetes_journal_audit', 'pieces_verification', 'cabinets', 'liens_cabinet'];
 
@@ -171,7 +171,8 @@ class ProtectionDesTablesTest extends TestCase
             'changements_fin_exercice' => ['changements_fin_exercice', 'id', DB::table('changements_fin_exercice')->insertGetId(['societe_id' => $societe, 'ancien_mois' => 12, 'nouveau_mois' => 6, 'debut_exercice_en_cours' => '2026-01-01', 'fin_exercice_en_cours_avant' => '2026-12-31', 'fin_exercice_en_cours_apres' => '2026-12-31', 'decision_du' => '2026-10-01', 'piece_reference' => 'PV de l\'assemblée du 01/10/2026', 'duree_validee_par' => 'Cabinet Exemple', 'justification' => 'Changement légal de la date de clôture', 'operateur' => json_encode(['operateurs' => ['alice']]), 'created_at' => now()])],
             'consultations_vies' => ['consultations_vies', 'id', DB::table('consultations_vies')->insertGetId(['magasin_id' => $magasin->id, 'client_id' => $client->id, 'numero_tva' => 'DE123456789', 'valide' => true, 'consultee_le' => now(), 'reponse' => '{}'])],
             'preuves_operation' => ['preuves_operation', 'id', DB::table('preuves_operation')->insertGetId(['magasin_id' => $magasin->id, 'facture_id' => $facture->id, 'type' => TypePreuve::Mrn->value, 'reference' => '26FR00000000000001', 'created_at' => now()])],
-            'bordereaux_detaxe' => ['bordereaux_detaxe', 'id', DB::table('bordereaux_detaxe')->insertGetId(['magasin_id' => $magasin->id, 'facture_id' => $facture->id, 'numero' => 'PABLO-000001', 'created_at' => now()])],
+            'bordereaux_detaxe' => ['bordereaux_detaxe', 'id', $bordereau = DB::table('bordereaux_detaxe')->insertGetId(['magasin_id' => $magasin->id, 'facture_id' => $facture->id, 'numero' => 'PABLO-000001', 'created_at' => now()])],
+            'visas_detaxe' => ['visas_detaxe', 'id', DB::table('visas_detaxe')->insertGetId(['magasin_id' => $magasin->id, 'bordereau_detaxe_id' => $bordereau, 'date_visa' => '2026-10-10', 'created_at' => now()])],
             'recus_paiement' => ['recus_paiement', 'id', $premiere('recus_paiement', 'magasin_id', $magasin->id)],
             'paiements' => ['paiements', 'id', $premiere('paiements', 'magasin_id', $magasin->id)],
             'paiement_allocations' => ['paiement_allocations', 'id', $premiere('paiement_allocations', 'magasin_id', $magasin->id)],

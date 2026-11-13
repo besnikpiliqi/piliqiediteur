@@ -29,6 +29,7 @@ use Filament\Tables\Table;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
+use Livewire\Attributes\Locked;
 use Livewire\Component;
 
 /**
@@ -58,6 +59,16 @@ class SelecteurDeClients extends Component implements HasForms, HasTable
     use InteractsWithForms, InteractsWithTable;
 
     /**
+     * Le client comptoir est-il proposé ? Seulement à la caisse, dont il
+     * est le client par défaut ; jamais pour une facture ou un devis
+     * (décision de l'éditeur du 01/11/2026). Posé par la page qui ouvre le
+     * tableau, jamais par le navigateur ; la page revérifie de toute
+     * façon le client choisi (voir RecoitLeClientChoisi).
+     */
+    #[Locked]
+    public bool $avecLeComptoir = false;
+
+    /**
      * L'événement qui porte le client choisi à la page du document.
      */
     public const EVENEMENT = 'client-choisi';
@@ -85,7 +96,7 @@ class SelecteurDeClients extends Component implements HasForms, HasTable
         $voitLesFiches = ClientResource::voitLesFichesDesClients();
 
         return $table
-            ->query(fn (): Builder => Client::query())
+            ->query(fn (): Builder => $this->avecLeComptoir ? Client::query() : Client::query()->identifies())
             // Avant le tri choisi : le client comptoir reste en tête. Seul
             // il a est_comptoir rempli (vrai), les autres l'ont vide :
             // trié par « est vide », il passe avant eux, quand PostgreSQL

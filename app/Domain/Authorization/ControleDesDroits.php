@@ -87,8 +87,10 @@ use App\Models\User;
  *   reste pas permis : viewAny et view, sur tout modèle (consulter et
  *   télécharger) ; clôturer la journée (ClotureCaissePolicy::cloturer()),
  *   fermer sa caisse et celle d'un vendeur
- *   (ClotureCaissePersonnellePolicy::fermer() et fermerLaCaisseDe()) : les
- *   clôtures continuent jusqu'au bout ; les autorisations de
+ *   (ClotureCaissePersonnellePolicy::fermer() et fermerLaCaisseDe()), noter
+ *   les preuves de l'exonération d'une vente, son bordereau de détaxe ou
+ *   son visa (FacturePolicy::justifier()) : les clôtures et les preuves
+ *   continuent jusqu'au bout ; les autorisations de
  *   PermissionRegistry::permisesEnLectureSeule() ; un geste sur l'équipe
  *   du magasin (une affectation, un compte ou un poste reconnu), sauf dans
  *   une société révoquée ;
@@ -107,12 +109,16 @@ final class ControleDesDroits
     private const CONSULTATIONS = ['viewAny', 'view', 'voirLesParametres', 'voirLesParametresFiscaux'];
 
     /**
-     * Les gestes de clôture, chacun sur son modèle.
+     * Les gestes qui continuent jusqu'au bout dans un magasin en lecture
+     * seule, chacun sur son modèle : les clôtures, et les preuves de
+     * l'exonération d'une vente émise, son bordereau de détaxe et son
+     * visa (décision de l'éditeur du 01/11/2026, Q-AF12).
      */
-    private const CLOTURES = [
+    private const JUSQU_AU_BOUT = [
         'cloturer' => ClotureCaisse::class,
         'fermer' => ClotureCaissePersonnelle::class,
         'fermerLaCaisseDe' => ClotureCaissePersonnelle::class,
+        'justifier' => Facture::class,
     ];
 
     /**
@@ -303,7 +309,7 @@ final class ControleDesDroits
     private function estPermisEnLectureSeule(string $ability, mixed $cible, Societe $societe): bool
     {
         return in_array($ability, self::CONSULTATIONS, true)
-            || (isset(self::CLOTURES[$ability]) && self::porteSur($cible, self::CLOTURES[$ability]))
+            || (isset(self::JUSQU_AU_BOUT[$ability]) && self::porteSur($cible, self::JUSQU_AU_BOUT[$ability]))
             || in_array($ability, PermissionRegistry::permisesEnLectureSeule(), true)
             || (self::porteSurLEquipe($cible) && $societe->statut !== StatutSociete::Revoquee);
     }

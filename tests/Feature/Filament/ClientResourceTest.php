@@ -19,6 +19,7 @@ use App\Filament\App\Resources\ClientResource\Pages\CreateClient;
 use App\Filament\App\Resources\ClientResource\Pages\EditClient;
 use App\Filament\App\Resources\ClientResource\Pages\ListClients;
 use App\Filament\App\Resources\ClientResource\Pages\ViewClient;
+use App\Filament\App\Resources\DevisResource\Pages\CreateDevis;
 use App\Filament\App\Resources\FactureResource\Pages\CreateFacture;
 use App\Filament\App\Resources\FactureResource\Pages\ListFactures;
 use App\Filament\App\Resources\FactureResource\Pages\ViewFacture;
@@ -313,48 +314,75 @@ class ClientResourceTest extends TestCase
         Filament::setTenant($magasin);
     }
 
-    private function connecterLeProprietaire(): void
+    private function connecterLeProprietaire(): User
     {
         $proprietaire = User::factory()->create();
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
+
+        return $proprietaire;
     }
 
     /**
-     * Le client comptoir garde son nom et son type (voir
-     * Client::estComptoir()) : ses champs sont désactivés, et une valeur
-     * forcée n'est pas enregistrée. Il n'a pas non plus de bouton
-     * « Archiver ».
+     * La fiche du client comptoir ne se consulte ni ne se modifie
+     * (décision de l'éditeur du 01/11/2026, qui remplace ses champs
+     * désactivés) : ses adresses sont refusées par la policy, et il garde
+     * son nom et son type, même forcés en base, ni ne s'archive.
      */
     public function test_le_client_comptoir_ne_se_renomme_ni_ne_change_de_type_ni_ne_s_archive(): void
     {
-        $this->connecterLeProprietaire();
+        $proprietaire = $this->connecterLeProprietaire();
         $comptoir = Client::query()->where('est_comptoir', true)->sole();
 
-        Livewire::test(EditClient::class, ['record' => $comptoir->getRouteKey()])
-            ->assertFormFieldIsDisabled('nom')
-            ->assertFormFieldIsDisabled('type_client')
-            ->assertActionHidden('archiver')
-            ->fillForm(['nom' => 'Vente comptoir', 'type_client' => TypeClient::Professionnel->value, 'notes' => 'Ventes anonymes'])
-            ->call('save')
-            ->assertHasNoFormErrors();
+        $this->get(ClientResource::getUrl('view', ['record' => $comptoir]))->assertForbidden();
+        $this->get(ClientResource::getUrl('edit', ['record' => $comptoir]))->assertForbidden();
+        $this->assertSame([false, false, false], [$proprietaire->can('view', $comptoir), $proprietaire->can('update', $comptoir), $proprietaire->can('delete', $comptoir)]);
+
+        try {
+            $comptoir->forceFill(['nom' => 'Vente comptoir', 'type_client' => TypeClient::Professionnel])->save();
+            $this->fail('Le client comptoir s\'est renommé.');
+        } catch (LogicException $refus) {
+            $this->assertSame('Le client comptoir ne se renomme pas et reste un particulier.', $refus->getMessage());
+        }
 
         $comptoir->refresh();
-        $this->assertSame(['Client comptoir', TypeClient::Particulier, 'Ventes anonymes'], [$comptoir->nom, $comptoir->type_client, $comptoir->notes]);
+        $this->assertSame(['Client comptoir', TypeClient::Particulier], [$comptoir->nom, $comptoir->type_client]);
     }
 
+    /**
+     * Le client comptoir n'apparaît dans aucun sélecteur de client d'une
+     * facture ou d'un devis, ni dans leur liste préchargée ni dans une
+     * recherche, alors qu'il reste le client choisi par la caisse
+     * (décision de l'éditeur du 01/11/2026, « 3 oui »).
+     */
+    public function test_le_client_comptoir_n_est_propose_qu_a_la_caisse(): void
+    {
+        $this->connecterLeResponsable();
+        $comptoir = Client::query()->where('est_comptoir', true)->sole();
+        $dupont = Client::factory()->create(['nom' => 'Comptoir Dupont']);
+        $sansLeComptoir = fn (Select $champ): bool => array_keys($champ->getSearchResults('comptoir')) === [$dupont->id] && ! array_key_exists($comptoir->id, $champ->getOptions());
+
+        Livewire::test(CreateFacture::class)->assertFormFieldExists('client_id', $sansLeComptoir);
+        Livewire::test(CreateDevis::class)->assertFormFieldExists('client_id', $sansLeComptoir);
+        Livewire::test(Caisse::class)->assertFormFieldExists('client_id', fn (Select $champ): bool => array_key_exists($comptoir->id, $champ->getSearchResults('comptoir')));
+    }
+
+    /**
+     * Le client comptoir n'apparaît pas dans la liste des clients
+     * (décision de l'éditeur du 01/11/2026) : l'archivage en masse ne peut
+     * pas l'atteindre, et il reste.
+     */
     public function test_l_archivage_en_masse_garde_le_client_comptoir(): void
     {
         $this->connecterLeProprietaire();
         $comptoir = Client::query()->where('est_comptoir', true)->sole();
         $client = Client::factory()->create();
 
-        $ecran = Livewire::test(ListClients::class);
-
-        $ecran->callTableBulkAction('archiver', [$comptoir, $client])
-            ->assertNotified('1 ligne cochée n\'a pas été archivée')
-            ->assertDispatched(ClientResource::LIGNES_GARDEES, composant: $ecran->id(), cles: [(string) $comptoir->getKey()]);
+        Livewire::test(ListClients::class)
+            ->assertCanSeeTableRecords([$client])
+            ->assertCanNotSeeTableRecords([$comptoir])
+            ->callTableBulkAction('archiver', [$client]);
 
         $this->assertNotSoftDeleted($comptoir);
         $this->assertSoftDeleted($client);

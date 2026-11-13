@@ -339,9 +339,11 @@ final class PermissionRegistry
     /**
      * Les autorisations qui restent permises quand le magasin est suspendu
      * ou fermé (voir ControleDesDroits) : tout consulter et télécharger,
-     * documents par période compris, et clôturer la journée, car les
-     * clôtures continuent jusqu'au bout. L'équipe reste
-     * gérable, par le propriétaire et les responsables (voir
+     * documents par période compris ; clôturer la journée, car les
+     * clôtures continuent jusqu'au bout ; noter les preuves d'exonération,
+     * le bordereau de détaxe et son visa, qui arrivent souvent après la
+     * fermeture (décision de l'éditeur du 01/11/2026, Q-AF12). L'équipe
+     * reste gérable, par le propriétaire et les responsables (voir
      * ControleDesDroits), et dans l'administration de la société (voir
      * AutorisationsSociete::permisesEnLectureSeule()).
      *
@@ -349,7 +351,7 @@ final class PermissionRegistry
      */
     public static function permisesEnLectureSeule(): array
     {
-        return [...self::consultations(), self::DOCUMENTS_TELECHARGER, self::CLOTURE_CAISSE_GERER];
+        return [...self::consultations(), self::DOCUMENTS_TELECHARGER, self::CLOTURE_CAISSE_GERER, self::FACTURE_JUSTIFIER];
     }
 
     /**
@@ -702,10 +704,11 @@ final class PermissionRegistry
     /**
      * Les autorisations des opérations commerciales, refusées tant que le
      * magasin ne peut pas vendre (voir ControleDesDroits et
-     * Magasin::peutVendre()) : émettre une facture ou un ticket, noter les
-     * preuves de son exonération ou son bordereau de détaxe, envoyer une
-     * facture, un devis ou un avoir, créer un avoir, enregistrer ou
-     * contre-passer un paiement.
+     * Magasin::peutVendre()) : émettre une facture ou un ticket, envoyer
+     * une facture, un devis ou un avoir, créer un avoir, enregistrer ou
+     * contre-passer un paiement. Noter les preuves de l'exonération d'une
+     * vente déjà émise, son bordereau de détaxe ou son visa n'en est pas :
+     * cela continue jusqu'au bout (voir permisesEnLectureSeule()).
      *
      * @return list<string>
      */
@@ -713,7 +716,6 @@ final class PermissionRegistry
     {
         return [
             self::FACTURE_EMETTRE,
-            self::FACTURE_JUSTIFIER,
             self::FACTURE_ENVOYER,
             self::DEVIS_ENVOYER,
             self::AVOIR_CREER,

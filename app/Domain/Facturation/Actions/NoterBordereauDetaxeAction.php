@@ -9,7 +9,6 @@ use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Enums\TypeDocument;
 use App\Domain\Facturation\Models\BordereauDetaxe;
 use App\Domain\Facturation\Models\Facture;
-use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -44,13 +43,14 @@ use LogicException;
  * dernier noté faisant foi ; noter de nouveau celui qui fait déjà foi est
  * refusé.
  *
- * Dans une transaction, la ligne du magasin se relit sous un verrou
- * partagé (un magasin suspendu, fermé ou cédé, ou dont la société est en
- * lecture seule, ne note plus rien, voir Magasin::verifierQuIlEstOuvert()
- * ; une fermeture du magasin, qui la verrouille, voir
- * FermerMagasinAction, passe tout entière avant ou après), puis son
- * auteur sous le verrou de sa ligne (voir LecteurDesDroits), puis le
- * ticket sous le sien, dans le magasin actif (MagasinScope) : celui d'un
+ * Un magasin en lecture seule (suspendu, fermé ou cédé, ou dont la
+ * société l'est) en note encore : le bordereau suit la vente, comme les
+ * preuves d'exonération, jusqu'au bout (décision de l'éditeur du
+ * 01/11/2026, Q-AF12, voir PermissionRegistry::permisesEnLectureSeule()).
+ *
+ * Dans une transaction, son auteur se relit sous le verrou de sa ligne
+ * (voir LecteurDesDroits), puis le ticket sous le sien, dans le magasin
+ * actif (MagasinScope) : celui d'un
  * autre magasin est introuvable. L'auteur relu doit pouvoir justifier le
  * ticket relu (voir FacturePolicy::justifier()) ; le bordereau note son
  * nom figé.
@@ -73,7 +73,6 @@ class NoterBordereauDetaxeAction
 
         return DB::transaction(function () use ($auteur, $facture, $numero): BordereauDetaxe {
             $magasin = app(TenantContext::class)->magasin();
-            Magasin::query()->whereKey($magasin->getKey())->sharedLock()->firstOrFail()->verifierQuIlEstOuvert();
             $compte = $this->lecteur->exigerSousVerrou($auteur, PermissionRegistry::FACTURE_JUSTIFIER, $magasin);
             $facture = Facture::query()->whereKey($facture->getKey())->lockForUpdate()->first()
                 ?? throw new LogicException(Facture::REFUS_INTROUVABLE);

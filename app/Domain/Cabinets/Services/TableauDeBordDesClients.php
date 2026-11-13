@@ -24,7 +24,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * et la date du lien ; et ses factures à encaisser (nombre, restant dû,
  * dont en retard, en centimes), sommées sur ses magasins réels dont le
  * compte suit les factures à encaisser (voir
- * User::suitLesFacturesAEncaisserDans() : le client accorde au cabinet les
+ * User::suitToutesLesFacturesAEncaisserDe() : le client accorde au cabinet les
  * factures et celles de toute l'équipe), null quand il n'en suit aucun ;
  * aucun nom de client final, aucun numéro de document. Chaque requête
  * filtre explicitement par les clients, les magasins ou les liens, et ne
@@ -52,7 +52,7 @@ final class TableauDeBordDesClients
             ->keyBy('id');
         $magasins = Magasin::query()->whereIn('societe_id', $clients->keys()->all())->whereKey($this->acces->idsDesMagasinsOuverts($compte))->orderBy('id')
             ->get(['id', 'societe_id', 'statut', 'territoire', 'est_demonstration']);
-        $suivis = $magasins->filter(fn (Magasin $magasin): bool => $compte->suitLesFacturesAEncaisserDans($magasin))->keyBy('id');
+        $suivis = $magasins->filter(fn (Magasin $magasin): bool => $compte->suitToutesLesFacturesAEncaisserDe($magasin))->keyBy('id');
         $factures = $this->facturesAEncaisser(ValeursLues::entiers($suivis->keys()))
             ->each(fn (Facture $facture): Facture => $facture->setRelation('magasin', $suivis[$facture->magasin_id]));
 

@@ -46,8 +46,10 @@ use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
+use App\Domain\Tenancy\Services\ChosesAFaireDuMagasin;
 use App\Domain\Tenancy\Services\IdentifiantsInsee;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\ChoseAFaire;
 use App\Domain\Tenancy\Support\InterventionDeLEditeur;
 use App\Filament\App\FicheDUnDocument;
 use App\Filament\App\Resources\AvoirResource;
@@ -476,6 +478,33 @@ class RegularisationDUneFactureTest extends TestCase
      * mention de la régularisation ; la rectificative le reçoit à son
      * émission.
      */
+    /**
+     * Ce qui reste du crédit d'un avoir de régularisation figure parmi les
+     * avoirs non utilisés du tableau de bord, avec « Réservé à la facture
+     * rectificative de la facture n° … » (décision de l'éditeur du
+     * 01/11/2026, 22 h 50) ; la rectificative émise, il n'y est plus.
+     */
+    public function test_le_credit_reserve_d_un_avoir_de_regularisation_figure_parmi_les_avoirs_non_utilises(): void
+    {
+        [$magasin, $facture] = $this->factureDUneSocieteCorrigee();
+        $this->payer($facture, '240.00');
+        $this->travelTo(self::aParis('2026-11-02 10:05:00'));
+        $proprietaire = $this->proprietaireDe($magasin);
+        $avoir = app(FaireLAvoirDeRegularisationAction::class)->handle($proprietaire, $facture->fresh());
+        $credits = function () use ($magasin, $proprietaire): ?ChoseAFaire {
+            $this->dansLeMagasin($magasin->fresh(), $proprietaire);
+            $choses = ChosesAFaireDuMagasin::pour($proprietaire->fresh(), $magasin->fresh());
+
+            return collect($choses['a_surveiller'])->firstWhere('cle', 'credits_des_clients');
+        };
+
+        $ligne = $credits()?->lignes[0] ?? [];
+        $this->assertSame(['240,00 €', 'Réservé à la facture rectificative de la facture n° '.$facture->numero, 'Avoirs '.$avoir->numero], [$ligne['montant'] ?? null, $ligne['badge'] ?? null, $ligne['description'] ?? null]);
+
+        app(EmettreLaFactureRectificativeAction::class)->handle(self::responsableDeTest($magasin), $facture->fresh());
+        $this->assertNull($credits());
+    }
+
     public function test_tant_que_la_rectificative_manque_le_credit_lui_reste_reserve(): void
     {
         [$magasin, $facture, $client] = $this->factureDUneSocieteCorrigee();

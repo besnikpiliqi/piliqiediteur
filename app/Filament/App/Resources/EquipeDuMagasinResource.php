@@ -6,6 +6,7 @@ use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
 use App\Domain\Tenancy\Actions\ModifierMembreAction;
 use App\Domain\Tenancy\Actions\RedonnerLAccesAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Domain\Tenancy\Enums\StatutCompte;
 use App\Domain\Tenancy\Models\Affectation;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\PorteeDesDroits;
@@ -159,6 +160,40 @@ class EquipeDuMagasinResource extends Resource
         );
     }
 
+    /**
+     * Le filtre « Mot de passe encore l'identifiant » de la liste (voir
+     * table()).
+     */
+    public const FILTRE_MOT_DE_PASSE_IDENTIFIANT = 'mot_de_passe_identifiant';
+
+    /**
+     * Les affectations de l'équipe dont le compte actif a encore son
+     * identifiant pour mot de passe (un compte suspendu ou retiré ne se
+     * connecte pas) : pour le propriétaire, tous les rôles ; pour un
+     * responsable, ses vendeurs et ses observateurs, dont il gère les
+     * comptes. Le filtre de la liste les montre, et l'« À faire » du
+     * tableau de bord les compte (voir ChosesAFaireDuMagasin), par la même
+     * requête.
+     *
+     * @param  Builder<Affectation>  $affectations
+     * @return Builder<Affectation>
+     */
+    public static function auMotDePasseIdentifiant(Builder $affectations, bool $proprietaire): Builder
+    {
+        return $affectations
+            ->whereHas('utilisateur', fn (Builder $comptes): Builder => $comptes->where('mot_de_passe_est_l_identifiant', true)->where('statut', StatutCompte::Actif->value))
+            ->when(! $proprietaire, fn (Builder $deSonEquipe): Builder => $deSonEquipe->whereIn('affectations.role', [RoleMagasin::Vendeur->value, RoleMagasin::Observateur->value]));
+    }
+
+    /**
+     * La liste de l'équipe du magasin actif, filtrée sur les comptes qui
+     * ont encore leur identifiant pour mot de passe.
+     */
+    public static function urlDesMotsDePasseIdentifiants(): string
+    {
+        return static::getUrl('index', ['tableFilters' => [self::FILTRE_MOT_DE_PASSE_IDENTIFIANT => ['isActive' => true]]]);
+    }
+
     public static function proprietaireConnecte(): bool
     {
         $magasin = Filament::getTenant();
@@ -186,11 +221,9 @@ class EquipeDuMagasinResource extends Resource
             ])
             ->filters([
                 Tables\Filters\SelectFilter::make('role')->label('Rôle')->options(RoleMagasin::class),
-                Tables\Filters\Filter::make('mot_de_passe_identifiant')
+                Tables\Filters\Filter::make(self::FILTRE_MOT_DE_PASSE_IDENTIFIANT)
                     ->label('Mot de passe encore l\'identifiant')
-                    ->query(fn (Builder $query): Builder => $query
-                        ->whereHas('utilisateur', fn (Builder $comptes): Builder => $comptes->where('mot_de_passe_est_l_identifiant', true))
-                        ->when(! static::proprietaireConnecte(), fn (Builder $affectations): Builder => $affectations->whereIn('affectations.role', [RoleMagasin::Vendeur->value, RoleMagasin::Observateur->value]))),
+                    ->query(fn (Builder $query): Builder => self::auMotDePasseIdentifiant($query, static::proprietaireConnecte())),
             ])
             ->actions([
                 Tables\Actions\EditAction::make()->label('Rôle et autorisations'),

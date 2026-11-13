@@ -110,6 +110,9 @@ enum ActionAuditee: string implements HasLabel
     case DevisAccepteEnLigne = 'devis_accepte_en_ligne';
     case DevisRefuseEnLigne = 'devis_refuse_en_ligne';
     case LienDuDevisRetire = 'lien_du_devis_retire';
+    case VisaDeDetaxeNote = 'visa_de_detaxe_note';
+    case NominationGardee = 'nomination_gardee';
+    case EcartSireneVerifie = 'ecart_sirene_verifie';
 
     /**
      * Les mots qui, dans un nom de champ (entre ses traits de soulignement,
@@ -218,6 +221,9 @@ enum ActionAuditee: string implements HasLabel
             self::DevisAccepteEnLigne => 'Devis accepté en ligne par le client',
             self::DevisRefuseEnLigne => 'Devis refusé en ligne par le client',
             self::LienDuDevisRetire => 'Lien de réponse d\'un devis retiré',
+            self::VisaDeDetaxeNote => 'Visa d\'un bordereau de détaxe noté',
+            self::NominationGardee => 'Nomination d\'un responsable gardée par le propriétaire',
+            self::EcartSireneVerifie => 'Écart relevé au répertoire Sirene vérifié',
         };
     }
 
@@ -227,9 +233,9 @@ enum ActionAuditee: string implements HasLabel
             self::VerificationEnregistree, self::PieceDeposee, self::PieceEffacee, self::PiecesConsultees, self::PieceDeVerificationRefusee, self::PieceDeVerificationBloquee,
             self::CodeEnvoye, self::CodeSaisi, self::CodeAnnule, self::SocieteValidee, self::InscriptionClose,
             self::ActiviteDuCabinetControlee, self::OrdreDemande, self::OrdreVerifie, self::OrdreRefuse, self::OrdreRetire,
-            self::OrdreARefaire => CategorieAudit::Verification,
+            self::OrdreARefaire, self::EcartSireneVerifie => CategorieAudit::Verification,
             self::MembreCree, self::AdministrateurCree, self::AdministrateurModifie, self::RoleDeSocieteChange, self::CollaborateurCree, self::DroitsModifies,
-            self::ResponsableNomme, self::ResponsableRetire, self::NominationAnnulee, self::CompteSuspendu, self::CompteReactive, self::CompteRetire,
+            self::ResponsableNomme, self::ResponsableRetire, self::NominationAnnulee, self::NominationGardee, self::CompteSuspendu, self::CompteReactive, self::CompteRetire,
             self::CompteReintegre, self::AccesRedonne, self::PremiereConnexion, self::IdentifiantConsulte, self::TransmissionDemandee,
             self::TransmissionAnnulee, self::ProprieteTransferee, self::ProprieteReprise, self::AdresseDeConnexionChangee,
             self::AdresseDeConnexionRetiree, self::ClientsConfiesModifies, self::InvitationEnvoyee, self::InvitationRetiree,
@@ -473,6 +479,17 @@ enum ActionAuditee: string implements HasLabel
             self::DevisAccepteEnLigne => ['devis', 'signataire', 'empreinte_du_devis'],
             self::DevisRefuseEnLigne => ['devis', 'motif', 'empreinte_du_devis'],
             self::LienDuDevisRetire => ['devis'],
+            // Le visa d'un bordereau de détaxe : le numéro du ticket, celui du
+            // bordereau qui fait foi et le jour du visa (voir
+            // NoterLeVisaDuBordereauAction).
+            self::VisaDeDetaxeNote => ['ticket', 'bordereau', 'date_visa'],
+            // La nomination d'un responsable par un administrateur que le
+            // propriétaire garde : le compte nommé et l'administrateur qui
+            // l'a nommé (voir GarderUneNominationAction).
+            self::NominationGardee => ['compte', 'nomme_par'],
+            // L'écart relevé au répertoire Sirene dit vérifié : son motif et
+            // l'instant où il a été relevé (voir VerifierUnEcartSireneAction).
+            self::EcartSireneVerifie => ['motif', 'signale_le'],
         };
     }
 }

@@ -774,6 +774,12 @@ return [
         'lien:facture_transformee' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Parcours/ReponseAuDevisEnLigneTest.php › le responsable transforme un devis accepté depuis sa fiche et arrive sur la facture brouillon, qui dit d’où elle vient et mène au devis',
         ]],
+        'filtre:a_transformer' => ['lot' => 'NAV-2', 'tests' => [
+            'tests/Browser/Parcours/AFaireTest.php › le responsable ouvre, depuis « À faire », la liste des devis à transformer puis celle des devis qui expirent bientôt, chacune avec ses seuls devis',
+        ]],
+        'filtre:expirent_bientot' => ['lot' => 'NAV-2', 'tests' => [
+            'tests/Browser/Parcours/AFaireTest.php › le responsable ouvre, depuis « À faire », la liste des devis à transformer puis celle des devis qui expirent bientôt, chacune avec ses seuls devis',
+        ]],
     ],
     'app/Filament/App/Resources/DevisResource/Pages/CreateDevis.php' => [
         'page' => ['lot' => 'NAV-2', 'tests' => [
@@ -1227,6 +1233,9 @@ return [
         ]],
     ],
     'app/Filament/App/Resources/FactureResource.php' => [
+        'filtre:visa_a_noter' => ['lot' => 'NAV-2', 'tests' => [
+            'tests/Browser/Parcours/AFaireTest.php › le responsable note le visa d’un ticket détaxé depuis « À faire », puis la liste « Visa à noter » montre exactement les tickets qui l’attendent',
+        ]],
         'action:avoir' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur autorisé à vendre ouvre chaque page et chaque action du magasin sans erreur',
@@ -1401,6 +1410,9 @@ return [
         ]],
     ],
     'app/Filament/App/Resources/FactureResource/Pages/ViewFacture.php' => [
+        'action:noter_visa_detaxe' => ['lot' => 'NAV-2', 'tests' => [
+            'tests/Browser/Parcours/AFaireTest.php › le responsable note le visa d’un ticket détaxé depuis « À faire », puis la liste « Visa à noter » montre exactement les tickets qui l’attendent',
+        ]],
         'action:ajouter_preuve' => ['lot' => 'NAV-2', 'tests' => []],
         'action:avoir' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action du magasin sans erreur',
@@ -1578,6 +1590,7 @@ return [
             'tests/Browser/Parcours/UnProduitUneLigneTest.php › sur un inventaire d’ouverture, le propriétaire choisit sur une seconde ligne un produit déjà inventorié : il rejoint sa ligne, dont la quantité monte',
             'tests/Browser/Parcours/UnProduitUneLigneTest.php › sur un inventaire d’ouverture, un responsable choisit sur une seconde ligne un produit déjà inventorié : il rejoint sa ligne, dont la quantité monte',
         ]],
+        'filtre:statut' => ['lot' => 'NAV-3', 'tests' => []],
     ],
     'app/Filament/App/Resources/InventaireOuvertureResource/Pages/CreateInventaireOuverture.php' => [
         'page' => ['lot' => 'NAV-3', 'tests' => [
@@ -1884,6 +1897,20 @@ return [
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › l’observateur ouvre chaque page et chaque action du magasin sans erreur',
         ]],
     ],
+    'app/Filament/App/Widgets/AFaireApercu.php' => [
+        'widget' => ['lot' => 'NAV-2', 'tests' => [
+            'tests/Browser/Balayage/BalayageDeLEspaceDeLaSocieteTest.php › le propriétaire d’une société qui attend son code ouvre chaque page et chaque action de l’espace de sa société sans erreur',
+            'tests/Browser/Balayage/BalayageDeLEspaceDeLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action de l’espace de sa société sans erreur',
+            'tests/Browser/Balayage/BalayageDeLEspaceDeLaSocieteTest.php › l’administrateur qui a toutes les autorisations de société ouvre chaque page et chaque action de l’espace sans erreur',
+            'tests/Browser/Balayage/BalayageDeLEspaceDeLaSocieteTest.php › l’administrateur sans autorisation de société ouvre chaque page et chaque action de l’espace sans erreur',
+            'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action du magasin sans erreur',
+            'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur autorisé à vendre ouvre chaque page et chaque action du magasin sans erreur',
+            'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur sans la vente ouvre chaque page et chaque action du magasin sans erreur',
+            'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le propriétaire d’une société qui attend son code ouvre chaque page et chaque action du magasin de démonstration sans erreur',
+            'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le responsable d’entraînement ouvre chaque page et chaque action du magasin de démonstration sans erreur',
+            'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
+        ]],
+    ],
     'app/Filament/App/Widgets/BienvenueApercu.php' => [
         'widget' => ['lot' => 'NAV-3', 'tests' => [
             'tests/Browser/Balayage/BalayageDeLEspaceDeLaSocieteTest.php › le propriétaire d’une société qui attend son code ouvre chaque page et chaque action de l’espace de sa société sans erreur',
@@ -1901,22 +1928,6 @@ return [
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le vendeur ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › l’observateur ouvre chaque page et chaque action du magasin sans erreur',
-        ]],
-    ],
-    'app/Filament/App/Widgets/FacturesAEncaisserApercu.php' => [
-        'widget' => ['lot' => 'NAV-2', 'tests' => [
-            'tests/Browser/Balayage/BalayageDeLEspaceDeLaSocieteTest.php › le propriétaire d’une société qui attend son code ouvre chaque page et chaque action de l’espace de sa société sans erreur',
-            'tests/Browser/Balayage/BalayageDeLEspaceDeLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action de l’espace de sa société sans erreur',
-            'tests/Browser/Balayage/BalayageDeLEspaceDeLaSocieteTest.php › l’administrateur qui a toutes les autorisations de société ouvre chaque page et chaque action de l’espace sans erreur',
-            'tests/Browser/Balayage/BalayageDeLEspaceDeLaSocieteTest.php › l’administrateur sans autorisation de société ouvre chaque page et chaque action de l’espace sans erreur',
-            'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action du magasin sans erreur',
-            'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur autorisé à vendre ouvre chaque page et chaque action du magasin sans erreur',
-            'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur sans la vente ouvre chaque page et chaque action du magasin sans erreur',
-            'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le collaborateur du cabinet lié ouvre chaque page et chaque action du magasin de son client sans erreur',
-            'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le propriétaire du cabinet lié ouvre chaque page et chaque action du magasin de son client sans erreur',
-            'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le propriétaire d’une société qui attend son code ouvre chaque page et chaque action du magasin de démonstration sans erreur',
-            'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le responsable d’entraînement ouvre chaque page et chaque action du magasin de démonstration sans erreur',
-            'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
         ]],
     ],
     'app/Filament/App/Widgets/FacturesApercu.php' => [
@@ -1937,14 +1948,6 @@ return [
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le vendeur ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › l’observateur ouvre chaque page et chaque action du magasin sans erreur',
         ]],
-    ],
-    'app/Filament/App/Widgets/PiecesDuFournisseurManquantesApercu.php' => [
-        'widget' => ['lot' => 'NAV-3', 'tests' => [
-            'tests/Browser/Parcours/PiecesDuFournisseurTest.php › une facture saisie sans sa pièce est marquée, se retrouve par le filtre et par « À faire », et « Ajouter des pièces » lève la marque pour chaque rôle qui saisit les achats',
-        ]],
-    ],
-    'app/Filament/App/Widgets/StockNegatifApercu.php' => [
-        'widget' => ['lot' => 'NAV-3', 'tests' => []],
     ],
     'app/Filament/Cabinet/Pages/IdentiteDuCabinet.php' => [
         'page' => ['lot' => 'NAV-5', 'tests' => [
@@ -2401,6 +2404,9 @@ return [
         ]],
     ],
     'app/Filament/Societe/Pages/TableauDeBord.php' => [
+        'action:verifierLEcart' => ['lot' => 'NAV-2', 'tests' => [
+            'tests/Browser/Parcours/AFaireTest.php › le propriétaire dit vérifié, depuis l’« À faire » de la société, l’écart relevé au répertoire Sirene',
+        ]],
         'action:ouvrirLaDemonstration' => ['lot' => 'NAV-4', 'tests' => [
             'tests/Browser/Parcours/OuvrirLaDemonstrationTest.php › le propriétaire ouvre le magasin de démonstration, dont la fenêtre dit qu’il y vend',
             'tests/Browser/Parcours/OuvrirLaDemonstrationTest.php › l’administrateur rouvre le magasin de démonstration fermé faute d’opération, dont la fenêtre dit qu’il n’y vend que si la vente lui est cochée',
@@ -2537,6 +2543,9 @@ return [
         ]],
     ],
     'app/Filament/Societe/Resources/MembreResource/Pages/FicheDuMembre.php' => [
+        'action:garderLaNomination' => ['lot' => 'NAV-2', 'tests' => [
+            'tests/Browser/Parcours/AFaireTest.php › le propriétaire garde, depuis l’« À faire » de la société, la nomination d’un responsable par un administrateur',
+        ]],
         'action:corrigerLAdresse' => ['lot' => 'NAV-4', 'tests' => [
             'tests/Browser/Parcours/ExpertComptableDeclareTest.php › le propriétaire ouvre la fiche d’une personne de son expert-comptable, corrige son adresse, la retire puis la réintègre',
         ]],
@@ -2723,9 +2732,18 @@ return [
     'resources/views/filament/app/pages/formulaire-de-parametres.blade.php' => [
         'envoi:save' => ['lot' => 'NAV-3', 'tests' => []],
     ],
-    'resources/views/filament/app/widgets/factures-a-encaisser-apercu.blade.php' => [
-        'lien:Voir toutes les factures à encaisser' => ['lot' => 'NAV-2', 'tests' => []],
-        'lien:{{ $facture->numero }}' => ['lot' => 'NAV-2', 'tests' => []],
+    'resources/views/filament/app/widgets/a-faire-apercu.blade.php' => [
+        'lien:{{ $chose->bouton }}' => ['lot' => 'NAV-2', 'tests' => [
+            'tests/Browser/Parcours/AFaireTest.php › le vendeur encaisse sa facture depuis « À faire » et ouvre la liste filtrée ; le propriétaire la surveille avec « Voir »',
+            'tests/Browser/Parcours/AFaireTest.php › le responsable note le visa d’un ticket détaxé depuis « À faire », puis la liste « Visa à noter » montre exactement les tickets qui l’attendent',
+            'tests/Browser/Parcours/AFaireTest.php › le responsable ouvre, depuis « À faire », la liste des devis à transformer puis celle des devis qui expirent bientôt, chacune avec ses seuls devis',
+        ]],
+        'lien:{{ $chose->lienDesLignes[\'libelle\'] }}' => ['lot' => 'NAV-2', 'tests' => [
+            'tests/Browser/Parcours/AFaireTest.php › le vendeur encaisse sa facture depuis « À faire » et ouvre la liste filtrée ; le propriétaire la surveille avec « Voir »',
+        ]],
+        'lien:{{ $ligne[\'libelle\'] }}' => ['lot' => 'NAV-2', 'tests' => [
+            'tests/Browser/Parcours/AFaireTest.php › le vendeur encaisse sa facture depuis « À faire » et ouvre la liste filtrée ; le propriétaire la surveille avec « Voir »',
+        ]],
     ],
     'resources/views/filament/bienvenue.blade.php' => [
         'formulaire:{{ filament()->getLogoutUrl() }}' => ['lot' => 'NAV-4', 'tests' => []],
@@ -2762,12 +2780,18 @@ return [
         'saisie:jour' => ['lot' => 'NAV-4', 'tests' => []],
     ],
     'resources/views/filament/societe/pages/tableau-de-bord.blade.php' => [
+        'lien:{{ $chose->bouton }}' => ['lot' => 'NAV-2', 'tests' => [
+            'tests/Browser/Parcours/AFaireTest.php › le propriétaire garde, depuis l’« À faire » de la société, la nomination d’un responsable par un administrateur',
+        ]],
         'lien:Comptes' => ['lot' => 'NAV-4', 'tests' => []],
         'lien:Ouvrir le magasin de démonstration' => ['lot' => 'NAV-4', 'tests' => []],
         'lien:{{ $cabinet[\'lie\'] ?? \'Aucun cabinet lié\' }}' => ['lot' => 'NAV-4', 'tests' => [
             'tests/Browser/Parcours/ExpertComptableDeclareTest.php › le propriétaire suit l’étape « Ajouter un magasin » et le lien de son expert-comptable déclaré depuis son tableau de bord',
         ]],
         'lien:{{ $demande[\'cabinet\'] }} demande à suivre votre société' => ['lot' => 'NAV-4', 'tests' => []],
+        'lien:{{ $texteAFaire }}' => ['lot' => 'NAV-2', 'tests' => [
+            'tests/Browser/Parcours/AFaireTest.php › l’administrateur ouvre, depuis la colonne « À faire » de « Vos magasins », le tableau de bord du magasin',
+        ]],
         'lien:{{ $etape[\'titre\'] }}' => ['lot' => 'NAV-4', 'tests' => [
             'tests/Browser/Parcours/ExpertComptableDeclareTest.php › le propriétaire suit l’étape « Ajouter un magasin » et le lien de son expert-comptable déclaré depuis son tableau de bord',
         ]],

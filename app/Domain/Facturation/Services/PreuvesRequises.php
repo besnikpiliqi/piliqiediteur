@@ -8,6 +8,7 @@ use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Enums\TransportPar;
 use App\Domain\Facturation\Enums\TypePreuve;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Models\PreuveOperation;
 use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Domain\Tenancy\Support\ValeursLues;
 use Closure;
@@ -101,10 +102,50 @@ class PreuvesRequises
     }
 
     /**
+     * Combien de jours après la date de la facture la preuve de douane
+     * (MRN ou CN23) d'une vente hors de l'Union peut manquer avant d'être
+     * en retard : orange jusqu'au 30e jour, rouge à partir du 31e, en
+     * jours du calendrier du magasin (décision de l'éditeur du 01/11/2026,
+     * Q-AF10 : un rappel interne, à faire confirmer par l'expert-comptable
+     * de la société).
+     */
+    public const JOURS_POUR_LA_PREUVE_DE_DOUANE = 30;
+
+    /**
+     * Une preuve de cette facture qui demande encore une preuve (voir
+     * incompletes()) est-elle en retard ce jour (AAAA-MM-JJ, calendrier de
+     * son magasin) : sa preuve de douane manque après le 30e jour qui suit
+     * sa date (une facture d'export du 2 octobre l'est à partir du
+     * 2 novembre), ou l'attestation de l'acquéreur a passé le 10 du mois
+     * qui suit la livraison ? Lit les preuves chargées avec la facture,
+     * sinon les lit.
+     */
+    public function enRetard(Facture $facture, string $aujourdhui): bool
+    {
+        $types = ($facture->relationLoaded('preuvesOperation') ? $facture->preuvesOperation : $facture->preuvesOperation()->get())
+            ->map(fn (PreuveOperation $preuve): TypePreuve => ValeursLues::instance($preuve->type, TypePreuve::class));
+        $sans = fn (TypePreuve ...$attendus): bool => ! $types->contains(fn (TypePreuve $type): bool => in_array($type, $attendus, true));
+        $emission = $facture->date_emission === null ? null : $facture->magasin->calendrier()->jourDe($facture->date_emission);
+
+        return match ($facture->nature_operation) {
+            NatureOperation::ExportHorsUe, NatureOperation::LivraisonDom => $emission !== null
+                && $sans(TypePreuve::Mrn, TypePreuve::Cn23)
+                && Calendrier::ajouterJours($emission, self::JOURS_POUR_LA_PREUVE_DE_DOUANE) < $aujourdhui,
+            NatureOperation::LivraisonIntracommunautaire => $facture->transport_par === TransportPar::Acquereur
+                && $facture->livraison_date !== null
+                && $sans(TypePreuve::AttestationAcquereur)
+                && Calendrier::jourDuMoisSuivant($facture->livraison_date, 10) < $aujourdhui,
+            default => false,
+        };
+    }
+
+    /**
      * Restreint les factures à celles qui demandent encore une preuve,
      * comme manquantes() les compte : en une seule requête, chaque preuve
-     * comptée par une sous-requête, que filtre MagasinScope comme la
-     * facture elle-même.
+     * comptée par une sous-requête, limitée au magasin de sa facture (voir
+     * BelongsToMagasin::scopeDuMagasinDe()), si bien que la requête vaut
+     * dans le magasin actif comme pour plusieurs magasins de la société
+     * (voir ChosesAFaireDeLaSociete).
      *
      * @template TFacture of Facture
      *
@@ -113,13 +154,14 @@ class PreuvesRequises
      */
     public function incompletes(Builder $factures): Builder
     {
-        $deType = fn (TypePreuve ...$types): Closure => fn (Builder $preuves): Builder => $preuves->whereIn('type', $types);
+        $magasin = $factures->qualifyColumn('magasin_id');
+        $deType = fn (TypePreuve ...$types): Closure => fn (Builder $preuves): Builder => $preuves->duMagasinDe($magasin)->whereIn('type', $types);
         $sansDeclaration = fn (Builder $facture): Builder => $facture->whereDoesntHave('preuvesOperation', $deType(TypePreuve::Mrn, TypePreuve::Cn23));
         $sansTransportA = fn (Builder $facture): Builder => $facture->whereDoesntHave('preuvesOperation', $deType(TypePreuve::TransportA));
 
         return $factures
             ->emises()
-            ->whereHas('lignes', fn (Builder $lignes): Builder => $lignes->creditables())
+            ->whereHas('lignes', fn (Builder $lignes): Builder => $lignes->duMagasinDe($magasin)->creditables())
             ->where(fn (Builder $natures): Builder => $natures
                 ->where(fn (Builder $export): Builder => $export
                     ->where('nature_operation', NatureOperation::ExportHorsUe)

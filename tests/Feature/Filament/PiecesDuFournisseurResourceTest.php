@@ -24,7 +24,7 @@ use App\Filament\App\Resources\FactureAchatResource\Pages\CreateFactureAchat;
 use App\Filament\App\Resources\FactureAchatResource\Pages\EditFactureAchat;
 use App\Filament\App\Resources\FactureAchatResource\Pages\ListFacturesAchat;
 use App\Filament\App\Resources\FactureAchatResource\Pages\ViewFactureAchat;
-use App\Filament\App\Widgets\PiecesDuFournisseurManquantesApercu;
+use App\Filament\App\Widgets\AFaireApercu;
 use App\Models\User;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -122,18 +122,18 @@ class PiecesDuFournisseurResourceTest extends TestCase
             ->assertCanSeeTableRecords([$sansPiece])
             ->assertCanNotSeeTableRecords([$avecPiece]);
 
-        Livewire::test(PiecesDuFournisseurManquantesApercu::class)
+        Livewire::test(AFaireApercu::class)
             ->assertSeeText('À faire')
-            ->assertSeeText('1 facture d\'achat sans sa pièce')
-            ->assertSee(FactureAchatResource::getUrl('index', ['tableFilters' => ['piece_manquante' => ['isActive' => true]]]), false);
+            ->assertSeeText('1 facture d\'achat attend la pièce du fournisseur.')
+            ->assertSee(FactureAchatResource::getUrl('view', ['record' => $sansPiece]), false);
 
         $avoir = $this->retourner(app(ValiderFactureAchatAction::class)->handle($this->responsable, $avecPiece));
         Livewire::test(ListAvoirsFournisseur::class)->filterTable('piece_manquante')->assertCanSeeTableRecords([$avoir]);
-        Livewire::test(PiecesDuFournisseurManquantesApercu::class)->assertSeeText('1 avoir fournisseur sans sa pièce');
+        Livewire::test(AFaireApercu::class)->assertSeeText('1 avoir fournisseur attend la note d\'avoir du fournisseur.');
 
         $vendeur = $this->membre($this->magasin, RoleMagasin::Vendeur);
         $this->actingAs($vendeur);
-        $this->assertFalse(PiecesDuFournisseurManquantesApercu::canView());
+        Livewire::test(AFaireApercu::class)->assertDontSeeText('pièce du fournisseur')->assertDontSeeText('note d\'avoir du fournisseur');
     }
 
     public function test_la_fiche_ajoute_une_piece_et_sur_un_brouillon_la_remplace_ou_la_retire(): void

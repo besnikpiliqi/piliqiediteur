@@ -7,6 +7,7 @@ use App\Domain\Facturation\Actions\AjouterPreuveOperationAction;
 use App\Domain\Facturation\Actions\EmettreLaFactureRectificativeAction;
 use App\Domain\Facturation\Actions\FaireLAvoirDeRegularisationAction;
 use App\Domain\Facturation\Actions\NoterBordereauDetaxeAction;
+use App\Domain\Facturation\Actions\NoterLeVisaDuBordereauAction;
 use App\Domain\Facturation\Actions\RelancerLaTransmissionAction;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Enums\TypePreuve;
@@ -41,8 +42,10 @@ use Illuminate\Contracts\Support\Htmlable;
  * d'exonération et les bordereaux de détaxe (facture.justifier, voir
  * FacturePolicy::justifier()), le propriétaire compris, même dans un
  * magasin réel, où il ne vend pas : les preuves de son exonération (voir
- * AjouterPreuveOperationAction) et le bordereau de détaxe d'un ticket
- * (voir NoterBordereauDetaxeAction). Chaque bouton n'apparaît que là où
+ * AjouterPreuveOperationAction), le bordereau de détaxe d'un ticket
+ * (voir NoterBordereauDetaxeAction) et la date de son visa (voir
+ * NoterLeVisaDuBordereauAction), même dans un magasin en lecture seule :
+ * les preuves continuent jusqu'au bout. Chaque bouton n'apparaît que là où
  * son action l'accepte (voir leurs refusPour()). « Encaisser » le règle
  * d'un seul geste, en un ou plusieurs modes, comme sur la liste (voir
  * FactureResource::encaisser()). Son retour passe par « Avoir », qui ouvre
@@ -96,6 +99,7 @@ class ViewFacture extends ViewRecord
             $this->emettreLaFactureRectificative(),
             $this->ajouterUnePreuve(),
             $this->noterLeBordereauDeDetaxe(),
+            $this->noterLeVisaDuBordereau(),
             $this->relancerLaTransmission(),
         ];
     }
@@ -243,6 +247,32 @@ class ViewFacture extends ViewRecord
                 app(AjouterPreuveOperationAction::class)->handle(CompteConnecte::exiger(), $record, TypePreuve::from(ValeurSimple::enTexte($data['type'])), ValeurSimple::enTexte($data['reference']), ValeurSimple::enTexteOuNul($data['date_document'] ?? null), ValeurSimple::enTexteOuNul($data['emetteur'] ?? null));
 
                 Notification::make()->title('Preuve enregistrée.')->success()->send();
+            }));
+    }
+
+    /**
+     * La date du visa du bordereau qui fait foi, à la sortie de l'Union,
+     * dès que le magasin l'apprend : le ticket n'attend plus son visa dans
+     * l'« À faire » (décision de l'éditeur du 01/11/2026, Q-AF13).
+     */
+    private function noterLeVisaDuBordereau(): Actions\Action
+    {
+        return Actions\Action::make('noter_visa_detaxe')
+            ->label('Noter le visa du bordereau')
+            ->icon('heroicon-o-check-badge')
+            ->visible(fn (Facture $record): bool => NoterLeVisaDuBordereauAction::refusPour($record->bordereauDetaxe()->with('visa')->first()) === null)
+            ->authorize('justifier')
+            ->modalDescription('Le jour où la douane a visé le bordereau à la sortie de l\'Union européenne, tel que le donne PABLO : la TVA du ticket pourra se régulariser.')
+            ->form([
+                DatePicker::make('date_visa')
+                    ->label('Date du visa')
+                    ->required()
+                    ->maxDate(fn (): string => self::calendrierDuMagasin()->aujourdhui()),
+            ])
+            ->action(fn (Facture $record, array $data) => static::executerSansCasser(function () use ($record, $data): void {
+                app(NoterLeVisaDuBordereauAction::class)->handle(CompteConnecte::exiger(), $record, ValeurSimple::enTexte($data['date_visa']));
+
+                Notification::make()->title('Visa du bordereau noté.')->success()->send();
             }));
     }
 

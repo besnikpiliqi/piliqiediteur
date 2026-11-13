@@ -9,12 +9,17 @@ use App\Domain\Cabinets\Services\ExpertsComptablesDeclares;
 use App\Domain\Calendrier\Calendrier;
 use App\Domain\Facturation\Services\FacturesAEncaisserDeLaSociete;
 use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
+use App\Domain\Tenancy\Actions\VerifierUnEcartSireneAction;
 use App\Domain\Tenancy\Enums\RoleSociete;
 use App\Domain\Tenancy\Enums\StatutCompte;
 use App\Domain\Tenancy\Enums\StatutMagasin;
+use App\Domain\Tenancy\Models\EcartSirene;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
+use App\Domain\Tenancy\Services\ChosesAFaireDeLaSociete;
 use App\Domain\Tenancy\Services\CourriersDeVerification;
+use App\Domain\Tenancy\Services\PorteeDesDroits;
+use App\Domain\Tenancy\Support\ChoseAFaire;
 use App\Domain\Tenancy\Support\CompteConnecte;
 use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Domain\Tenancy\Support\ValeursLues;
@@ -23,14 +28,17 @@ use App\Filament\Societe\Resources\MagasinResource;
 use App\Filament\Societe\Resources\MembreResource;
 use Filament\Actions\Action;
 use Filament\Facades\Filament;
+use Filament\Notifications\Notification;
 use Filament\Pages\Dashboard;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Collection;
 
 /**
  * Le tableau de bord de la société, où arrive son propriétaire après le
  * lien de son inscription : en tête, « Bonjour » et le rôle de la personne
- * dans la société (voir User::libelleDuRoleDeSociete()) ; pour le
+ * dans la société (voir User::libelleDuRoleDeSociete()) ; ce qui y
+ * attend la personne (voir chosesAFaireDeLaSociete()) ; pour le
  * propriétaire seul, la liste de ses premières étapes, chacune avec son
  * état et l'écran qui la fait (voir etapes()), tant qu'il en reste une à
  * faire ; où en est sa vérification ; ce qui manque à son identité pour
@@ -40,7 +48,9 @@ use Illuminate\Database\Eloquent\Collection;
  * chacun avec son SIRET, son établissement (vérifié ou à vérifier), son
  * état et, quand la personne y voit toutes les factures, le nombre, le
  * restant dû et le retard de ses factures à encaisser (voir
- * facturesAEncaisser()), qui mènent à leur liste dans le magasin ; pour un
+ * facturesAEncaisser()), qui mènent à leur liste dans le magasin, et ce
+ * qui y reste à faire, en nombres par groupe, qui mène à son tableau de
+ * bord (voir chosesAFaire()) ; pour un
  * administrateur autorisé à nommer les responsables, où le faire (voir
  * peutNommerUnResponsable()) ; pour le propriétaire, son cabinet
  * comptable et les demandes de rattachement en cours (voir
@@ -250,6 +260,56 @@ class TableauDeBord extends Dashboard
     public function facturesAEncaisser(): array
     {
         return app(FacturesAEncaisserDeLaSociete::class)->pour(CompteConnecte::exiger());
+    }
+
+    /**
+     * Ce qui reste à faire dans chaque magasin réel de la portée, par
+     * identifiant de magasin, en nombres par groupe, sans nom de client ni
+     * numéro de document (voir ChosesAFaireDeLaSociete) : chaque magasin y
+     * mène à son tableau de bord.
+     *
+     * @return array<int, list<array{groupe: string, nombre: int, montant: string|null}>>
+     */
+    public function chosesAFaire(): array
+    {
+        return app(ChosesAFaireDeLaSociete::class)->parMagasin(CompteConnecte::exiger());
+    }
+
+    /**
+     * Ce qui attend dans la société elle-même, pour la personne connectée
+     * (voir ChosesAFaireDeLaSociete::delaSociete()) : la section « À
+     * faire », juste après la bienvenue.
+     *
+     * @return list<ChoseAFaire>
+     */
+    public function chosesAFaireDeLaSociete(): array
+    {
+        return app(ChosesAFaireDeLaSociete::class)->delaSociete(CompteConnecte::exiger(), $this->societe());
+    }
+
+    /**
+     * « C'est vérifié », sur la ligne d'un écart relevé au répertoire
+     * Sirene (voir VerifierUnEcartSireneAction) : l'écart sort de l'« À
+     * faire ». Le droit se relit dans l'action, sous les verrous.
+     */
+    public function verifierLEcartAction(): Action
+    {
+        return Action::make('verifierLEcart')
+            ->label('C\'est vérifié')
+            ->icon('heroicon-o-check')
+            ->color('success')
+            ->size('sm')
+            ->requiresConfirmation()
+            ->modalHeading('Écart vérifié')
+            ->modalDescription('L\'écart sort de votre « À faire ». Rien d\'autre ne change ; un nouvel écart relevé ensuite se signalera de nouveau.')
+            ->action(function (array $arguments): void {
+                static::executerSansCasser(function () use ($arguments): void {
+                    $ecart = EcartSirene::query()->find(ValeursLues::entierOuNulDe($arguments, 'ecart'))
+                        ?? throw new AuthorizationException(PorteeDesDroits::REFUS);
+                    app(VerifierUnEcartSireneAction::class)->handle(CompteConnecte::exiger(), $ecart);
+                    Notification::make()->title('Écart vérifié.')->success()->send();
+                });
+            });
     }
 
     /**

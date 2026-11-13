@@ -239,6 +239,25 @@ class FactureAchatResource extends Resource
             ->withExists(['avoirsFournisseur', 'lignes as lignes_retournables_exists' => fn (Builder $lignes): Builder => ValeursLues::instance($lignes->scopes('retournables'), Builder::class)]);
     }
 
+    /**
+     * La liste des factures d'achat du magasin actif, filtrée sur les
+     * brouillons : où mène l'« À faire » du tableau de bord (voir
+     * ChosesAFaireDuMagasin).
+     */
+    public static function urlDesBrouillons(): string
+    {
+        return static::getUrl('index', ['tableFilters' => ['statut' => ['value' => StatutFactureAchat::Brouillon->value]]]);
+    }
+
+    /**
+     * La liste des factures d'achat marquées « pièce du fournisseur
+     * manquante » (voir filtrePieceManquante()).
+     */
+    public static function urlDesPiecesManquantes(): string
+    {
+        return static::getUrl('index', ['tableFilters' => ['piece_manquante' => ['isActive' => true]]]);
+    }
+
     public static function table(Table $table): Table
     {
         return $table

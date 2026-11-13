@@ -35,6 +35,8 @@ return new class extends Migration
             $table->timestamp('created_at');
 
             $table->index(['magasin_id', 'facture_id']);
+            // La cible de la clé composée de son visa (voir visas_detaxe).
+            $table->unique(['magasin_id', 'id']);
 
             $table->foreign(['magasin_id', 'facture_id'])->references(['magasin_id', 'id'])->on('factures')->restrictOnDelete();
         });

@@ -102,6 +102,32 @@ class MembreResource extends RessourceDuPanneauSociete
             : User::query()->whereRaw('1 = 0');
     }
 
+    public const FILTRE_MOT_DE_PASSE_IDENTIFIANT = 'mot_de_passe_identifiant';
+
+    /**
+     * Les comptes actifs qui ont encore leur identifiant pour mot de passe
+     * (un compte suspendu ou retiré ne se connecte pas), que seul le
+     * propriétaire voit : le filtre de la liste les montre, et l'« À
+     * faire » de la société les compte (voir
+     * ChosesAFaireDeLaSociete::delaSociete()), par la même requête.
+     *
+     * @param  Builder<User>  $comptes
+     * @return Builder<User>
+     */
+    public static function auMotDePasseIdentifiant(Builder $comptes): Builder
+    {
+        return $comptes->where('users.mot_de_passe_est_l_identifiant', true)->where('users.statut', StatutCompte::Actif->value);
+    }
+
+    /**
+     * La liste des comptes, filtrée sur ceux qui ont encore leur
+     * identifiant pour mot de passe.
+     */
+    public static function urlDesMotsDePasseIdentifiants(): string
+    {
+        return static::getUrl('index', ['tableFilters' => [self::FILTRE_MOT_DE_PASSE_IDENTIFIANT => ['isActive' => true]]]);
+    }
+
     public static function table(Table $table): Table
     {
         return $table
@@ -129,9 +155,9 @@ class MembreResource extends RessourceDuPanneauSociete
             ->filters([
                 Tables\Filters\SelectFilter::make('role_societe')->label('Rôle')->options(RoleSociete::class),
                 Tables\Filters\SelectFilter::make('statut')->label('Statut')->options(StatutCompte::class),
-                Tables\Filters\Filter::make('mot_de_passe_identifiant')
+                Tables\Filters\Filter::make(self::FILTRE_MOT_DE_PASSE_IDENTIFIANT)
                     ->label('Mot de passe encore l\'identifiant')
-                    ->query(fn (Builder $query): Builder => $query->where('users.mot_de_passe_est_l_identifiant', true))
+                    ->query(fn (Builder $query): Builder => self::auMotDePasseIdentifiant($query))
                     ->visible(fn (): bool => static::proprietaireConnecte()),
             ])
             ->actions([

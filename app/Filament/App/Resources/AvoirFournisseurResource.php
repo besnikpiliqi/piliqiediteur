@@ -94,6 +94,16 @@ class AvoirFournisseurResource extends Resource
         ]);
     }
 
+    /**
+     * La liste des avoirs fournisseur marqués « pièce du fournisseur
+     * manquante » : où mène l'« À faire » du tableau de bord (voir
+     * ChosesAFaireDuMagasin).
+     */
+    public static function urlDesPiecesManquantes(): string
+    {
+        return static::getUrl('index', ['tableFilters' => ['piece_manquante' => ['isActive' => true]]]);
+    }
+
     public static function table(Table $table): Table
     {
         return $table

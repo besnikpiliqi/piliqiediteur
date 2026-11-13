@@ -319,19 +319,21 @@ class BordereauDetaxeTest extends TestCase
         $this->assertSame(0, BordereauDetaxe::query()->count());
     }
 
-    public function test_un_magasin_suspendu_ne_note_plus_de_bordereau(): void
+    /**
+     * Suspendu, le magasin ne vend plus, mais le bordereau d'un ticket déjà
+     * émis s'y note encore, comme les preuves d'exonération (décision de
+     * l'éditeur du 01/11/2026, Q-AF12).
+     */
+    public function test_un_magasin_suspendu_note_encore_un_bordereau(): void
     {
         $magasin = $this->magasin();
         $ticket = $this->venteEmise('250.00');
         $magasin->forceFill(['suspendu_le' => now()])->save();
+        app(TenantContext::class)->set($magasin->fresh());
 
-        $this->assertThrows(
-            fn () => $this->noter($ticket, '2026FR000123456'),
-            LogicException::class,
-            'Ce magasin est suspendu : seules la consultation et les téléchargements restent possibles.',
-        );
+        $this->noter($ticket, '2026FR000123456');
 
-        $this->assertSame(0, BordereauDetaxe::query()->count());
+        $this->assertSame(['2026FR000123456'], BordereauDetaxe::query()->pluck('numero')->all());
     }
 
     /**
@@ -428,8 +430,10 @@ class BordereauDetaxeTest extends TestCase
      * En production, le compte de l'application n'a pas le droit de
      * modifier une table en ajout seul, que PostgreSQL exige pour un
      * SELECT ... FOR UPDATE : aucun bordereau ne se verrouille. Chaque
-     * geste ne verrouille que des lignes modifiables : celle du magasin
-     * (verrou partagé), celle de son auteur, puis le ticket.
+     * geste ne verrouille que des lignes modifiables : celle de son
+     * auteur, puis le ticket ; plus celle du magasin, qu'un bordereau ne
+     * relit plus, les preuves continuant dans un magasin fermé (décision
+     * de l'éditeur du 01/11/2026, Q-AF12).
      */
     public function test_noter_un_bordereau_ne_verrouille_aucun_bordereau(): void
     {
@@ -446,7 +450,7 @@ class BordereauDetaxeTest extends TestCase
         $this->noter($ticket, '2026FR000123456');
 
         $this->assertSame(
-            ['magasins for share', 'users for no key update', 'factures for update', 'magasins for share', 'users for no key update', 'factures for update'],
+            ['users for no key update', 'factures for update', 'users for no key update', 'factures for update'],
             array_map(fn (string $sql): string => preg_replace('/^select \* from "(\w+)" .* (for (?:share|no key update|update))$/s', '$1 $2', $sql), $verrous),
         );
     }

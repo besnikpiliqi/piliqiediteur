@@ -10,7 +10,6 @@ use App\Domain\Facturation\Enums\TypePreuve;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\PreuveOperation;
 use App\Domain\Facturation\Services\PreuvesRequises;
-use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\ValeursLues;
 use App\Models\User;
@@ -31,14 +30,15 @@ use LogicException;
  * qu'exige une livraison intracommunautaire, ou vaudrait à la fois la
  * déclaration et le document de transport d'une livraison vers un DOM.
  *
- * Dans une transaction, la ligne du magasin se relit sous un verrou
- * partagé (un magasin suspendu, fermé ou cédé, ou dont la société est en
- * lecture seule, n'enregistre plus rien, voir
- * Magasin::verifierQuIlEstOuvert() ; une fermeture du magasin, qui la
- * verrouille, voir FermerMagasinAction, passe tout entière avant ou
- * après), puis son auteur sous le verrou de sa ligne (voir
- * LecteurDesDroits), puis la facture sous le sien, dans le magasin actif
- * (MagasinScope) : celle d'un autre magasin est introuvable, et deux
+ * Un magasin en lecture seule (suspendu, fermé ou cédé, ou dont la
+ * société l'est) en enregistre encore : une preuve arrive souvent après
+ * la fermeture, et les preuves continuent jusqu'au bout, comme les
+ * clôtures (décision de l'éditeur du 01/11/2026, Q-AF12, voir
+ * PermissionRegistry::permisesEnLectureSeule()).
+ *
+ * Dans une transaction, son auteur se relit sous le verrou de sa ligne
+ * (voir LecteurDesDroits), puis la facture sous le sien, dans le magasin
+ * actif (MagasinScope) : celle d'un autre magasin est introuvable, et deux
  * enregistrements de la même preuve ne passent pas l'un à côté de
  * l'autre. La facture elle-même ne change pas : la preuve s'écrit à côté
  * de son contenu signé. L'auteur relu doit pouvoir justifier la facture
@@ -73,7 +73,6 @@ class AjouterPreuveOperationAction
 
         return DB::transaction(function () use ($auteur, $facture, $type, $reference, $dateDocument, $emetteur): PreuveOperation {
             $magasin = app(TenantContext::class)->magasin();
-            Magasin::query()->whereKey($magasin->getKey())->sharedLock()->firstOrFail()->verifierQuIlEstOuvert();
             $compte = $this->lecteur->exigerSousVerrou($auteur, PermissionRegistry::FACTURE_JUSTIFIER, $magasin);
             $facture = Facture::query()->whereKey($facture->getKey())->lockForUpdate()->first()
                 ?? throw new LogicException(Facture::REFUS_INTROUVABLE);

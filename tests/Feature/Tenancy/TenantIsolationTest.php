@@ -60,6 +60,7 @@ use App\Domain\Facturation\Models\PanierCaisse;
 use App\Domain\Facturation\Models\PreuveOperation;
 use App\Domain\Facturation\Models\RecuPaiement;
 use App\Domain\Facturation\Models\ReponseDuDevis;
+use App\Domain\Facturation\Models\VisaDetaxe;
 use App\Domain\Stock\Models\InventaireOuverture;
 use App\Domain\Stock\Models\LigneInventaireOuverture;
 use App\Domain\Stock\Models\MouvementStock;
@@ -158,7 +159,8 @@ class TenantIsolationTest extends TestCase
      * Modèles de magasin qui n'ont pas de fabrique : les documents fiscaux
      * et le registre ne s'écrivent que signés, par leurs actions, la trace
      * d'un événement technique qu'avec lui, une vérification VIES, une
-     * preuve d'exonération ou un bordereau de détaxe, que par la sienne, un
+     * preuve d'exonération, un bordereau de détaxe ou son visa, que par la
+     * sienne, un
      * reçu de paiement et ses lignes, qu'avec leur encaissement, la TVA
      * d'un taux d'une facture d'achat ou d'un avoir fournisseur, qu'avec
      * son document, le jeton d'une demande traitée, que par
@@ -167,8 +169,8 @@ class TenantIsolationTest extends TestCase
      * BordereauDetaxe, ConsultationVies, EnregistrementFiscal,
      * LienDuDevis, LigneRecuPaiement, Paiement, PaiementAllocation,
      * PieceDuFournisseur, PreuveOperation, RecuPaiement, ReponseDuDevis,
-     * TauxAvoirFournisseur, TauxFactureAchat, TeteRegistreFiscal et
-     * TraceEvenement sont aussi dans modelesCrees(),
+     * TauxAvoirFournisseur, TauxFactureAchat, TeteRegistreFiscal,
+     * TraceEvenement et VisaDetaxe sont aussi dans modelesCrees(),
      * écrits directement par ces tests (voir creerEnregistrement()).
      *
      * @var list<class-string<Model>>
@@ -201,6 +203,7 @@ class TenantIsolationTest extends TestCase
         TeteRegistreFiscal::class,
         TraceEvenement::class,
         TransmissionPdp::class,
+        VisaDetaxe::class,
     ];
 
     private Magasin $magasinA;
@@ -243,7 +246,7 @@ class TenantIsolationTest extends TestCase
                 $modele,
                 static fn (array $attributs = []): Model => $modele::factory()->create($attributs),
             ]])
-            ->merge(collect([ActionTraitee::class, Avoir::class, AvoirAllocation::class, BordereauDetaxe::class, ConsultationVies::class, EnregistrementFiscal::class, LienDuDevis::class, LigneRecuPaiement::class, Paiement::class, PaiementAllocation::class, PieceDuFournisseur::class, PreuveOperation::class, RecuPaiement::class, ReponseDuDevis::class, TauxAvoirFournisseur::class, TauxFactureAchat::class, TeteRegistreFiscal::class, TraceEvenement::class])
+            ->merge(collect([ActionTraitee::class, Avoir::class, AvoirAllocation::class, BordereauDetaxe::class, ConsultationVies::class, EnregistrementFiscal::class, LienDuDevis::class, LigneRecuPaiement::class, Paiement::class, PaiementAllocation::class, PieceDuFournisseur::class, PreuveOperation::class, RecuPaiement::class, ReponseDuDevis::class, TauxAvoirFournisseur::class, TauxFactureAchat::class, TeteRegistreFiscal::class, TraceEvenement::class, VisaDetaxe::class])
                 ->mapWithKeys(static fn (string $modele): array => [class_basename($modele) => [
                     $modele,
                     static fn (array $attributs = []): Model => self::creerEnregistrement($modele, $attributs),
@@ -788,6 +791,10 @@ class TenantIsolationTest extends TestCase
             BordereauDetaxe::class => [
                 'facture_id' => Facture::factory()->create()->getKey(),
                 'numero' => '2026FR000123456',
+            ],
+            VisaDetaxe::class => [
+                'bordereau_detaxe_id' => self::creerEnregistrement(BordereauDetaxe::class)->getKey(),
+                'date_visa' => '2026-10-10',
             ],
             ConsultationVies::class => [
                 'client_id' => Client::factory()->etranger('DE', 'DE123456789')->create()->getKey(),

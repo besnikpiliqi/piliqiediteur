@@ -18,6 +18,7 @@ use App\Domain\Facturation\Models\PreuveOperation;
 use App\Domain\Facturation\Services\PreuvesRequises;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Services\ChosesAFaireDuMagasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Resources\FactureResource;
 use App\Filament\App\Resources\FactureResource\Pages\ListFactures;
@@ -249,12 +250,13 @@ class PreuvesOperationTest extends TestCase
 
     /**
      * Le filtre ne garde que les factures dont une preuve manque, jamais
-     * une vente complète ni une vente en France, et le badge du menu les
-     * compte.
+     * une vente complète ni une vente en France, et l'« À faire » du
+     * tableau de bord les compte et y mène ; le menu des factures n'affiche
+     * plus aucun nombre (décision de l'éditeur du 26/10/2026, règle 7).
      */
-    public function test_le_filtre_preuves_a_fournir_ne_liste_que_les_factures_incompletes_et_le_badge_les_compte(): void
+    public function test_le_filtre_preuves_a_fournir_ne_liste_que_les_factures_incompletes_et_l_a_faire_les_compte_sans_nombre_au_menu(): void
     {
-        $this->magasin();
+        $magasin = $this->magasin();
         $incomplete = $this->venteEmise('dom');
         $complete = $this->venteEmise('export');
         $this->ajouter($complete, TypePreuve::Mrn, '26FR000000123456E1');
@@ -262,22 +264,25 @@ class PreuvesOperationTest extends TestCase
 
         $liste = Livewire::test(ListFactures::class)->filterTable('preuves_a_fournir');
 
-        $liste->assertCanSeeTableRecords([$incomplete])->assertCanNotSeeTableRecords([$complete, $enFrance]);
-        $this->assertSame('1', FactureResource::getNavigationBadge());
+        $liste->assertCanSeeTableRecords([$incomplete])->assertCanNotSeeTableRecords([$complete, $enFrance])
+            ->assertTableColumnStateSet('a_faire', ['À encaisser', 'Preuve à fournir'], $incomplete);
+        $preuves = collect(ChosesAFaireDuMagasin::pour($this->proprietaireDe($magasin), $magasin)['a_faire'])->firstWhere('cle', 'preuves');
+        $this->assertSame([1, FactureResource::getUrl('view', ['record' => $incomplete])], [$preuves?->nombre, $preuves?->url]);
+        $this->assertNull(FactureResource::getNavigationBadge());
     }
 
     /**
-     * Le badge ne compte que les factures que l'utilisateur voit (B16) : un
-     * vendeur ne voit pas l'export incomplet de son responsable.
+     * L'« À faire » ne compte que les factures que l'utilisateur voit
+     * (B16) : un vendeur ne voit pas l'export incomplet de son responsable.
      */
-    public function test_le_badge_ne_compte_pas_les_factures_qu_un_vendeur_ne_voit_pas(): void
+    public function test_l_a_faire_ne_compte_pas_les_preuves_des_factures_qu_un_vendeur_ne_voit_pas(): void
     {
         $magasin = $this->magasin();
         $this->venteEmise('export');
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
+        $this->actingAs($vendeur);
 
-        $this->actingAs($this->membre($magasin, RoleMagasin::Vendeur));
-
-        $this->assertNull(FactureResource::getNavigationBadge());
+        $this->assertNull(collect(ChosesAFaireDuMagasin::pour($vendeur, $magasin)['a_faire'])->firstWhere('cle', 'preuves'));
     }
 
     /**
@@ -409,21 +414,21 @@ class PreuvesOperationTest extends TestCase
     }
 
     /**
-     * Suspendu, le magasin ne fait plus que consulter et télécharger.
+     * Suspendu, le magasin ne vend plus, mais la preuve d'une vente déjà
+     * émise s'y note encore : les preuves continuent jusqu'au bout, comme
+     * les clôtures (décision de l'éditeur du 01/11/2026, Q-AF12).
      */
-    public function test_un_magasin_suspendu_n_enregistre_plus_de_preuve(): void
+    public function test_un_magasin_suspendu_enregistre_encore_une_preuve(): void
     {
         $magasin = $this->magasin();
         $export = $this->venteEmise('export');
         $magasin->forceFill(['suspendu_le' => now()])->save();
+        app(TenantContext::class)->set($magasin->fresh());
 
-        $this->assertThrows(
-            fn () => $this->ajouter($export, TypePreuve::Mrn, '26FR000000123456E1'),
-            LogicException::class,
-            'Ce magasin est suspendu : seules la consultation et les téléchargements restent possibles.',
-        );
+        $preuve = $this->ajouter($export, TypePreuve::Mrn, '26FR000000123456E1');
 
-        $this->assertSame(0, PreuveOperation::query()->count());
+        $this->assertSame(['26FR000000123456E1'], PreuveOperation::query()->pluck('reference')->all());
+        $this->assertSame($export->id, $preuve->facture_id);
     }
 
     public function test_une_preuve_ne_se_modifie_ni_ne_se_supprime_par_le_modele(): void
@@ -460,8 +465,10 @@ class PreuvesOperationTest extends TestCase
      * En production, le compte de l'application n'a pas le droit de
      * modifier une table en ajout seul, que PostgreSQL exige pour un
      * SELECT ... FOR UPDATE : aucune preuve ne se verrouille. Chaque
-     * geste ne verrouille que des lignes modifiables : celle du magasin
-     * (verrou partagé), celle de son auteur, puis la facture.
+     * geste ne verrouille que des lignes modifiables : celle de son
+     * auteur, puis la facture ; plus celle du magasin, qu'une preuve ne
+     * relit plus, les preuves continuant dans un magasin fermé (décision
+     * de l'éditeur du 01/11/2026, Q-AF12).
      */
     public function test_enregistrer_une_preuve_ne_verrouille_aucune_preuve(): void
     {
@@ -478,7 +485,7 @@ class PreuvesOperationTest extends TestCase
         $this->ajouter($livraison, TypePreuve::TransportB, 'POLICE-778');
 
         $this->assertSame(
-            ['magasins for share', 'users for no key update', 'factures for update', 'magasins for share', 'users for no key update', 'factures for update'],
+            ['users for no key update', 'factures for update', 'users for no key update', 'factures for update'],
             array_map(fn (string $sql): string => preg_replace('/^select \* from "(\w+)" .* (for (?:share|no key update|update))$/s', '$1 $2', $sql), $verrous),
         );
     }

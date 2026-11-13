@@ -82,6 +82,8 @@ class HistoriqueAuNomFigeTest extends TestCase
         'envois_documents' => ['envoye_par' => 'envoye_par_nom'],
         'preuves_operation' => ['note_par' => 'note_par_nom'],
         'bordereaux_detaxe' => ['note_par' => 'note_par_nom'],
+        'visas_detaxe' => ['note_par' => 'note_par_nom'],
+        'ecarts_sirene' => ['verifie_par' => 'verifie_par_nom'],
         'consultations_vies' => ['consultee_par' => 'consultee_par_nom'],
         'periodes_activite' => ['ouverte_par' => 'ouverte_par_nom', 'fermee_par' => 'fermee_par_nom'],
         'verifications_societe' => ['auteur_id' => 'auteur_nom'],

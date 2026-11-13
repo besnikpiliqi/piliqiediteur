@@ -17,9 +17,15 @@ class ClientPolicy extends MagasinPolicy
         return $user->can(PermissionRegistry::CLIENT_VIEW);
     }
 
+    /**
+     * La fiche du client comptoir ne se consulte pas (décision de
+     * l'éditeur du 01/11/2026) : client inconnu de toutes les ventes
+     * anonymes, il n'a rien à y montrer ; son adresse est refusée, et il
+     * reste « Client comptoir » sur ses tickets et ses avoirs.
+     */
     public function view(User $user, Client $client): bool
     {
-        return $this->appartientAuMagasinActif($client) && $user->can(PermissionRegistry::CLIENT_VIEW);
+        return $this->appartientAuMagasinActif($client) && ! $client->estComptoir() && $user->can(PermissionRegistry::CLIENT_VIEW);
     }
 
     public function create(User $user): bool
@@ -28,7 +34,8 @@ class ClientPolicy extends MagasinPolicy
     }
 
     /**
-     * Un client archivé se restaure avant de se modifier : sa page de
+     * Le client comptoir ne se modifie jamais (voir view()). Un client
+     * archivé se restaure avant de se modifier : sa page de
      * modification ne s'ouvre plus, et une page restée ouverte ne
      * l'enregistre plus (voir EnregistreLesCorrectionsDeLaFiche). Ce refus
      * retire aussi, dans la liste des clients archivés, le bouton
@@ -38,6 +45,7 @@ class ClientPolicy extends MagasinPolicy
     public function update(User $user, Client $client): bool
     {
         return $this->appartientAuMagasinActif($client)
+            && ! $client->estComptoir()
             && ! $client->trashed()
             && $this->updateAny($user);
     }

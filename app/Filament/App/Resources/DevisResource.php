@@ -15,7 +15,9 @@ use App\Domain\Facturation\Enums\StatutDevis;
 use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\PiedDePage;
+use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\CompteConnecte;
+use App\Domain\Tenancy\Support\RequeteDuModele;
 use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Domain\Tenancy\Support\ValeursLues;
@@ -179,7 +181,57 @@ class DevisResource extends Resource
      */
     public static function getEloquentQuery(): Builder
     {
-        return parent::getEloquentQuery()->with('magasin');
+        return parent::getEloquentQuery()->with('magasin')->withExists('factures');
+    }
+
+    /**
+     * La liste des devis du magasin actif, filtrée sur les brouillons : où
+     * mène l'« À faire » du tableau de bord (voir ChosesAFaireDuMagasin).
+     */
+    public static function urlDesBrouillons(): string
+    {
+        return static::getUrl('index', ['tableFilters' => ['statut' => ['value' => StatutDevis::Brouillon->value]]]);
+    }
+
+    /**
+     * La liste des devis envoyés qui expirent dans les sept jours (voir
+     * Devis::scopeExpirentBientot()).
+     */
+    public static function urlDesDevisQuiExpirent(): string
+    {
+        return static::getUrl('index', ['tableFilters' => ['expirent_bientot' => ['isActive' => true]]]);
+    }
+
+    /**
+     * La liste des devis acceptés pas encore transformés en facture (voir
+     * Devis::scopeATransformer()).
+     */
+    public static function urlDesDevisATransformer(): string
+    {
+        return static::getUrl('index', ['tableFilters' => ['a_transformer' => ['isActive' => true]]]);
+    }
+
+    /**
+     * Ce qui attend encore sur ce devis, dit sur sa ligne (voir
+     * ChosesAFaireDuMagasin) : « À envoyer » pour un brouillon, « À
+     * transformer en facture » pour un devis accepté sans facture, « Expire
+     * le … » pour un devis envoyé dont la validité finit dans les sept
+     * jours. Les factures d'un devis de la liste se lisent avec elle
+     * (voir getEloquentQuery()).
+     *
+     * @return list<string>
+     */
+    public static function raisonsAFaire(Devis $devis): array
+    {
+        $aujourdhui = $devis->magasin->calendrier()->aujourdhui();
+
+        return array_values(array_filter([
+            $devis->statut === StatutDevis::Brouillon ? 'À envoyer' : null,
+            $devis->statut === StatutDevis::Accepte && ! (array_key_exists('factures_exists', $devis->getAttributes()) ? (bool) $devis->getAttribute('factures_exists') : $devis->factures()->exists()) ? 'À transformer en facture' : null,
+            $devis->statut === StatutDevis::Envoye && $devis->date_validite !== null && $devis->date_validite >= $aujourdhui && $devis->date_validite <= Calendrier::ajouterJours($aujourdhui, Devis::JOURS_DU_RAPPEL_AVANT_LA_FIN)
+                ? 'Expire le '.Calendrier::afficherJour($devis->date_validite, 'd/m/Y')
+                : null,
+        ]));
     }
 
     public static function table(Table $table): Table
@@ -192,9 +244,25 @@ class DevisResource extends Resource
                 Tables\Columns\TextColumn::make('total_ttc')->label('Total TTC')->money('EUR')->sortable(),
                 Tables\Columns\TextColumn::make('date_validite')->label('Validité')->jour(),
                 Tables\Columns\TextColumn::make('created_at')->label('Créé le')->dateTime('d/m/Y')->sortable()->toggleable(isToggledHiddenByDefault: true),
+                Tables\Columns\TextColumn::make('a_faire')
+                    ->label('À faire')
+                    ->badge()
+                    ->color('warning')
+                    ->state(fn (Devis $record): array => self::raisonsAFaire($record))
+                    ->placeholder('—'),
             ])
             ->filters([
                 Tables\Filters\SelectFilter::make('statut')->options(StatutDevis::class),
+                // Les filtres où mène l'« À faire » du tableau de bord, qui
+                // comptent ce que la liste montre (voir ChosesAFaireDuMagasin).
+                Tables\Filters\Filter::make('expirent_bientot')
+                    ->label('Expirent dans les 7 jours')
+                    ->toggle()
+                    ->query(fn (Builder $query): Builder => RequeteDuModele::de($query, Devis::class)->expirentBientot(app(TenantContext::class)->magasin()->calendrier()->aujourdhui())),
+                Tables\Filters\Filter::make('a_transformer')
+                    ->label('À transformer en facture')
+                    ->toggle()
+                    ->query(fn (Builder $query): Builder => RequeteDuModele::de($query, Devis::class)->aTransformer()),
             ])
             ->actions([
                 Tables\Actions\ViewAction::make(),

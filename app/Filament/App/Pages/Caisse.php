@@ -455,7 +455,7 @@ class Caisse extends Page implements HasForms
                         ->limit(50)
                         ->pluck('nom', 'id'))
                     ->getOptionLabelUsing(fn ($value) => Client::withTrashed()->whereKey(ValeursLues::cle($value))->first()?->nom)
-                    ->suffixAction(ClientResource::actionChercherUnClient())
+                    ->suffixAction(ClientResource::actionChercherUnClient(avecLeComptoir: true))
                     ->rule(fn (): Exists => Client::regleExisteDansLeMagasin())
                     // Form explicitement modelé sur Client : ce Select
                     // n'utilise pas relationship(), qui le ferait sinon.

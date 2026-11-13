@@ -33,6 +33,7 @@ use App\Domain\Tenancy\Enums\RoleSociete;
 use App\Domain\Tenancy\Enums\StatutSociete;
 use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Services\ChosesAFaireDuMagasin;
 use App\Domain\Tenancy\Services\DestinatairesDesAlertes;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Pages\AucunMagasin;
@@ -55,6 +56,7 @@ use App\Filament\App\Resources\EquipeDuMagasinResource;
 use App\Filament\App\Resources\EReportingResource;
 use App\Filament\App\Resources\FactureAchatResource;
 use App\Filament\App\Resources\FactureResource;
+use App\Filament\App\Resources\FactureResource\Pages\ListFactures;
 use App\Filament\App\Resources\FactureResource\Pages\ViewFacture;
 use App\Filament\App\Resources\FournisseurResource;
 use App\Filament\App\Resources\InventaireOuvertureResource;
@@ -62,7 +64,7 @@ use App\Filament\App\Resources\PaiementResource;
 use App\Filament\App\Resources\PosteReconnuResource;
 use App\Filament\App\Resources\ProduitResource;
 use App\Filament\App\Resources\ServiceResource;
-use App\Filament\App\Widgets\FacturesAEncaisserApercu;
+use App\Filament\App\Widgets\AFaireApercu;
 use App\Filament\Societe\Pages\TableauDeBord;
 use App\Integrations\Sirene\Contracts\RepertoireSirene;
 use App\Integrations\Sirene\FauxRepertoireSirene;
@@ -478,7 +480,15 @@ class AccesDeLExpertComptableTest extends TestCase
         $this->assertTrue($ines->fresh()->peutOuvrir($magasin));
     }
 
-    public function test_l_alerte_des_factures_a_encaisser_suit_l_autorisation_de_voir_celles_de_toute_l_equipe(): void
+    /**
+     * L'expert-comptable de la société, qui voit les factures de toute
+     * l'équipe, ne voit rien de l'« À faire » du tableau de bord, ni les
+     * factures à encaisser ni rien d'autre (règle 9 de l'« À faire »,
+     * décision de l'éditeur du 01/11/2026 : « ce n'est pas son
+     * problème ») ; il garde la liste des factures, filtre « À encaisser »
+     * compris, tant que la déclaration lui accorde de les voir.
+     */
+    public function test_l_expert_comptable_ne_voit_rien_de_l_a_faire_meme_avec_les_factures_de_toute_l_equipe(): void
     {
         $magasin = $this->completerIdentiteLegale($this->ouvrirUneSociete(['nom' => 'Lyon 1']));
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
@@ -489,16 +499,11 @@ class AccesDeLExpertComptableTest extends TestCase
         $marc = $this->expertComptable($magasin);
         $this->dansLeMagasin($magasin, $marc->fresh());
 
-        $this->assertTrue(FacturesAEncaisserApercu::canView());
-        Livewire::test(FacturesAEncaisserApercu::class)->assertSeeInOrder(['2 factures à encaisser', '170,00 € restant dû', $deLEquipe->numero, $duResponsable->numero]);
-        $this->assertSame([false, false], [$marc->fresh()->can(PermissionRegistry::PAIEMENT_CONTRE_PASSER), $marc->fresh()->can(PermissionRegistry::PAIEMENT_CREER)]);
-        app(TenantContext::class)->clear();
-
-        $declaration = LienCabinet::query()->withoutGlobalScopes()->where('societe_id', $magasin->societe_id)->where('etat', EtatDuLien::Declare->value)->sole();
-        app(ReglerLesAutorisationsDuCabinetAction::class)->handle($this->proprietaireDe($magasin), $declaration, array_values(array_diff(PermissionRegistry::casesDuCabinet(PermissionRegistry::parDefautDuCabinet(TypeDActivite::Commerce)), [PermissionRegistry::FACTURE_VIEW])));
-        $this->dansLeMagasin($magasin, $marc->fresh());
-
-        $this->assertFalse(FacturesAEncaisserApercu::canView());
+        $this->assertTrue($marc->fresh()->can(PermissionRegistry::FACTURE_VIEW_TOUTES));
+        $this->assertFalse(AFaireApercu::canView());
+        $this->assertSame(['a_faire' => [], 'a_surveiller' => []], ChosesAFaireDuMagasin::pour($marc->fresh(), $magasin));
+        $this->get(Dashboard::getUrl())->assertOk()->assertDontSee('factures à encaisser')->assertDontSee($deLEquipe->numero);
+        Livewire::test(ListFactures::class)->filterTable(FactureResource::FILTRE_A_ENCAISSER)->assertCanSeeTableRecords([$deLEquipe, $duResponsable]);
     }
 
     public function test_l_url_d_un_document_d_un_autre_magasin_de_la_societe_repond_404_a_l_expert_comptable(): void

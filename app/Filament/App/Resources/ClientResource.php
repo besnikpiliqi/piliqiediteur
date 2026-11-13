@@ -15,6 +15,7 @@ use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\TerritoireFiscal;
 use App\Domain\Tenancy\Support\CleDuModele;
 use App\Domain\Tenancy\Support\CompteConnecte;
+use App\Domain\Tenancy\Support\RequeteDuModele;
 use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\App\Resources\ClientResource\Pages;
@@ -44,6 +45,7 @@ use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Contracts\View\View;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\HtmlString;
 
 class ClientResource extends Resource
@@ -406,6 +408,11 @@ class ClientResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            // Le client comptoir n'apparaît pas dans la liste des clients
+            // (décision de l'éditeur du 01/11/2026) : rien à y voir ni à
+            // modifier (voir ClientPolicy::view()) ; il reste le client par
+            // défaut de la caisse.
+            ->modifyQueryUsing(fn (Builder $query): Builder => RequeteDuModele::de($query, Client::class)->identifies())
             ->columns([
                 Tables\Columns\TextColumn::make('nom')->rechercheSansAccents()->sortable(),
                 Tables\Columns\TextColumn::make('type_client')->label('Type')->badge()->sortable(),
@@ -487,11 +494,12 @@ class ClientResource extends Resource
     /**
      * La loupe à côté du champ « Client » de la caisse, d'une facture ou
      * d'un devis : elle ouvre le tableau des clients (point 22, voir
-     * SelecteurDeClients) sur tout l'écran. La fenêtre n'a pas de bouton de
+     * SelecteurDeClients) sur tout l'écran, le client comptoir seulement à
+     * la caisse. La fenêtre n'a pas de bouton de
      * validation : un clic sur un client l'envoie à la page (voir
      * RecoitLeClientChoisi), qui la ferme.
      */
-    public static function actionChercherUnClient(): FormAction
+    public static function actionChercherUnClient(bool $avecLeComptoir = false): FormAction
     {
         return FormAction::make('chercherUnClient')
             ->label('Chercher un client')
@@ -501,7 +509,7 @@ class ClientResource extends Resource
             ->modalWidth(MaxWidth::Screen)
             ->modalSubmitAction(false)
             ->modalCancelActionLabel('Fermer')
-            ->modalContent(fn (): View => view('filament.app.livewire.fenetre-du-selecteur-de-clients'));
+            ->modalContent(fn (): View => view('filament.app.livewire.fenetre-du-selecteur-de-clients', ['avecLeComptoir' => $avecLeComptoir]));
     }
 
     /**

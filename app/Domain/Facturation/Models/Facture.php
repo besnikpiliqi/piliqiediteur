@@ -566,6 +566,62 @@ class Facture extends Model implements DocumentEnvoyable
     }
 
     /**
+     * Les tickets détaxés dont le bordereau qui fait foi, le dernier noté
+     * (voir bordereauDetaxe()), attend encore la date de son visa à la
+     * sortie de l'Union (décision de l'éditeur du 01/11/2026, Q-AF13, voir
+     * NoterLeVisaDuBordereauAction) : le filtre « Visa à noter » de la
+     * liste des factures, l'« À faire » du tableau de bord du magasin et
+     * ses nombres dans l'espace de la société. Les bordereaux et leurs
+     * visas se lisent dans le magasin de chaque ticket (voir
+     * BelongsToMagasin::scopeDuMagasinDe()) : la condition vaut dans le
+     * magasin actif comme pour plusieurs magasins de la société (voir
+     * ChosesAFaireDeLaSociete).
+     *
+     * @param  Builder<static>  $query
+     * @return Builder<static>
+     */
+    public function scopeVisaANoter(Builder $query): Builder
+    {
+        $magasin = $query->qualifyColumn('magasin_id');
+        $dernierNote = BordereauDetaxe::query()
+            ->duMagasinDe($magasin)
+            ->whereColumn('bordereaux_detaxe.facture_id', $query->qualifyColumn('id'))
+            ->selectRaw('max(bordereaux_detaxe.id)');
+
+        return $query->whereHas('bordereauxDetaxe', fn (Builder $bordereaux): Builder => $bordereaux
+            ->duMagasinDe($magasin)
+            ->where('bordereaux_detaxe.id', $dernierNote)
+            ->whereDoesntHave('visa', fn (Builder $visas): Builder => $visas->duMagasinDe('bordereaux_detaxe.magasin_id')));
+    }
+
+    /**
+     * Ce ticket détaxé attend-il la date du visa de son bordereau (voir
+     * scopeVisaANoter()) ? Lu par la requête de la liste des factures
+     * quand elle l'a chargé (voir FactureResource::getEloquentQuery()),
+     * sinon relu en base.
+     */
+    public function attendSonVisa(): bool
+    {
+        if (array_key_exists('visa_a_noter', $this->getAttributes())) {
+            return (bool) $this->getAttribute('visa_a_noter');
+        }
+
+        return $this->statut !== StatutFacture::Brouillon && static::query()->whereKey($this->getKey())->visaANoter()->exists();
+    }
+
+    /**
+     * Cette facture émise attend-elle encore une preuve de son exonération
+     * (voir scopePreuvesAFournir()) ? Sans rien lire pour une facture d'une
+     * nature qui n'en demande aucune, la plupart.
+     */
+    public function attendUnePreuve(): bool
+    {
+        return $this->statut !== StatutFacture::Brouillon
+            && PreuvesRequises::typesAdmis($this->nature_operation) !== []
+            && static::query()->whereKey($this->getKey())->preuvesAFournir()->exists();
+    }
+
+    /**
      * @return MorphMany<TransmissionPdp, $this>
      */
     public function transmissionsPdp(): MorphMany

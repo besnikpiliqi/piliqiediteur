@@ -301,6 +301,16 @@ class InventaireOuvertureResource extends Resource
         ]);
     }
 
+    /**
+     * La liste des inventaires d'ouverture du magasin actif, filtrée sur
+     * les brouillons : où mène l'« À faire » du tableau de bord (voir
+     * ChosesAFaireDuMagasin).
+     */
+    public static function urlDesBrouillons(): string
+    {
+        return static::getUrl('index', ['tableFilters' => ['statut' => ['value' => StatutInventaireOuverture::Brouillon->value]]]);
+    }
+
     public static function table(Table $table): Table
     {
         return $table
@@ -311,6 +321,9 @@ class InventaireOuvertureResource extends Resource
                 Tables\Columns\TextColumn::make('valeur_ht')->label('Valeur du stock HT')->money('EUR'),
                 Tables\Columns\TextColumn::make('date_validation')->label('Validé le')->dateTime('d/m/Y')->placeholder('—'),
                 Tables\Columns\TextColumn::make('cree_par_nom')->label('Saisi par')->toggleable(),
+            ])
+            ->filters([
+                Tables\Filters\SelectFilter::make('statut')->options(StatutInventaireOuverture::class),
             ])
             ->actions([
                 Tables\Actions\ViewAction::make(),

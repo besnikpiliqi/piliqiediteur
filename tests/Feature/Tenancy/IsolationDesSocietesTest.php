@@ -35,6 +35,7 @@ use App\Domain\Tenancy\Enums\TypeVerification;
 use App\Domain\Tenancy\Exceptions\TenantContextMissingException;
 use App\Domain\Tenancy\Models\ChangementFinExercice;
 use App\Domain\Tenancy\Models\CodeConfirmation;
+use App\Domain\Tenancy\Models\EcartSirene;
 use App\Domain\Tenancy\Models\EntreeAudit;
 use App\Domain\Tenancy\Models\Identifiant;
 use App\Domain\Tenancy\Models\Magasin;
@@ -96,6 +97,7 @@ class IsolationDesSocietesTest extends TestCase
         ClientConfie::class,
         CodeConfirmation::class,
         CompteExpertComptable::class,
+        EcartSirene::class,
         EntreeAudit::class,
         Identifiant::class,
         InvitationCabinet::class,

@@ -185,7 +185,7 @@ test('une facture saisie sans sa pièce est marquée, se retrouve par le filtre 
         $rang++;
         $sansPiece = factureDuGrossiste($societe->magasin, $societe->responsable, [], true, 'SANS-'.$rang);
         $onglet = $this->seConnecter($compte)->aller('/app/'.$societe->magasin->uuid);
-        $onglet->voir('À faire')->voir('3 factures d\'achat sans leur pièce');
+        $onglet->voir('À faire')->voir('3 factures d\'achat attendent la pièce du fournisseur.');
         $onglet->cliquer('a[href*="/facture-achats?tableFilters%5Bpiece_manquante%5D%5BisActive%5D=1"]')->attendreLaPage('/facture-achats');
         expect([$qui, $onglet->element('.fi-ta-row')->count(), $onglet->element('.fi-ta-row:has-text("SANS-'.$rang.'") >> text=Manquante')->count()])->toBe([$qui, 3, 1]);
 
@@ -198,7 +198,7 @@ test('une facture saisie sans sa pièce est marquée, se retrouve par le filtre 
             ->voir('facture-'.$rang.'.pdf');
 
         expect([$qui, app(TenantContext::class)->runAs($societe->magasin, fn (): bool => $sansPiece->refresh()->piece_manquante)])->toBe([$qui, false]);
-        $onglet->aller('/app/'.$societe->magasin->uuid)->voir('2 factures d\'achat sans leur pièce');
+        $onglet->aller('/app/'.$societe->magasin->uuid)->voir('2 factures d\'achat attendent la pièce du fournisseur.');
         $onglet->seDeconnecter();
     }
 });

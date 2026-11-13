@@ -535,6 +535,20 @@ class Produit extends Model
     }
 
     /**
+     * Les produits suivis au seuil d'alerte ou dessous, sans être en stock
+     * négatif, compté à part (voir scopeEnStockNegatif()) : comme
+     * enAlerteStock(), sans les produits négatifs. L'« À faire » du
+     * tableau de bord les compte (voir ChosesAFaireDuMagasin) et le filtre
+     * « Stock bas » de la liste les montre (voir ProduitResource).
+     *
+     * @param  Builder<Produit>  $query
+     */
+    public function scopeEnStockBas(Builder $query): void
+    {
+        $query->where('suivi_stock', true)->where('stock_quantite', '>=', 0)->whereColumn('stock_quantite', '<=', 'seuil_alerte');
+    }
+
+    /**
      * Son stock suivi est à zéro ou au-dessous : seule une personne
      * autorisée à vendre sans stock dans ce magasin le vend (R1, voir
      * VerificateurDeStock). Un produit qui ne suit pas son stock n'est

@@ -124,4 +124,24 @@ trait BelongsToMagasin
             ? $regle->whereNull(ValeursLues::texte($modele->getDeletedAtColumn()))
             : $regle;
     }
+
+    /**
+     * Dans une sous-requête corrélée (whereHas, whereDoesntHave, sous-requête
+     * d'une condition), les fiches du magasin de la ligne qui la porte, dont
+     * $colonneDuMagasin est le magasin_id (« factures.magasin_id ») : le
+     * magasin se filtre explicitement par cette colonne, à la place de
+     * MagasinScope. La sous-requête vaut ainsi dans le magasin actif, dont
+     * MagasinScope filtre la requête qui la porte, comme dans une lecture
+     * de plusieurs magasins de la société, où aucun magasin n'est actif et
+     * où la requête qui la porte est filtrée par ses magasins (voir
+     * ChosesAFaireDeLaSociete::parMagasin()) ; jamais au-delà du magasin de
+     * chaque ligne, que la clé composée (magasin_id, …) garantit déjà en
+     * base.
+     *
+     * @param  Builder<static>  $query
+     */
+    public function scopeDuMagasinDe(Builder $query, string $colonneDuMagasin): void
+    {
+        $query->withoutGlobalScope(MagasinScope::class)->whereColumn($query->qualifyColumn('magasin_id'), $colonneDuMagasin);
+    }
 }

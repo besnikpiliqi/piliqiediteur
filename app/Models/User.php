@@ -784,24 +784,22 @@ class User extends Authenticatable implements FilamentUser, HasTenants
     }
 
     /**
-     * Suit-il les factures à encaisser de ce magasin : l'alerte de son
-     * tableau de bord (voir FacturesAEncaisserApercu) et, dans l'espace de
-     * la société, les totaux de ce magasin (voir
-     * FacturesAEncaisserDeLaSociete) ? Une seule condition pour tous, celle
-     * des écrans où elles mènent : il voit les factures (la liste et « Mes
-     * ventes » l'exigent, voir FacturePolicy::viewAny()), et, pour un
-     * membre, il est autorisé à contre-passer un paiement (un responsable
-     * l'est toujours), pour le propriétaire, un administrateur ou un
-     * compte d'un cabinet, il voit celles de toute l'équipe. Lue sur ses
-     * cases cochées dans ce magasin (voir autorisationsDans()), pas sur le
-     * droit d'agir du moment : dans un magasin en lecture seule, où plus
-     * rien ne se contre-passe, la facture reste due et l'alerte reste.
+     * Suit-il toutes les factures à encaisser de ce magasin, pour en lire
+     * les totaux hors du magasin : dans l'espace de la société (voir
+     * FacturesAEncaisserDeLaSociete) et au tableau de bord d'un cabinet
+     * d'expertise comptable (voir TableauDeBordDesClients) ? Il y voit les
+     * factures et celles de toute l'équipe (toujours le propriétaire, les
+     * cases cochées pour un administrateur, les autorisations que le
+     * client accorde pour un compte d'un cabinet), et peut donc ouvrir la
+     * liste où mène chaque total. Lue sur ses cases cochées dans ce
+     * magasin (voir autorisationsDans()), pas sur le droit d'agir du
+     * moment : dans un magasin en lecture seule, la facture reste due.
+     * Dans le magasin, l'« À faire » de son tableau de bord a sa propre
+     * règle (voir ChosesAFaireDuMagasin).
      */
-    public function suitLesFacturesAEncaisserDans(Magasin $magasin): bool
+    public function suitToutesLesFacturesAEncaisserDe(Magasin $magasin): bool
     {
-        $exigees = [PermissionRegistry::FACTURE_VIEW, $this->estMembre() ? PermissionRegistry::PAIEMENT_CONTRE_PASSER : PermissionRegistry::FACTURE_VIEW_TOUTES];
-
-        return array_diff($exigees, $this->autorisationsDans($magasin)) === [];
+        return array_diff([PermissionRegistry::FACTURE_VIEW, PermissionRegistry::FACTURE_VIEW_TOUTES], $this->autorisationsDans($magasin)) === [];
     }
 
     /**

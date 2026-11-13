@@ -293,6 +293,23 @@ class ProduitResource extends Resource
         ]);
     }
 
+    /**
+     * Les options du filtre « Statut du stock » où mène l'« À faire » du
+     * tableau de bord (voir ChosesAFaireDuMagasin).
+     */
+    public const STOCK_NEGATIF = 'negatif';
+
+    public const STOCK_BAS = 'bas';
+
+    /**
+     * La liste des produits du magasin actif, filtrée sur ce statut du
+     * stock.
+     */
+    public static function urlDuStock(string $statut): string
+    {
+        return static::getUrl('index', ['tableFilters' => ['statut_stock' => ['value' => $statut]]]);
+    }
+
     public static function table(Table $table): Table
     {
         $calculateur = app(CalculateurLigne::class);
@@ -315,7 +332,11 @@ class ProduitResource extends Resource
                     ->formatStateUsing(fn (Produit $record) => $record->suivi_stock
                         ? Number::format($record->stock_quantite, locale: Reglage::texte('app.locale'))
                         : '—')
-                    ->description(fn (Produit $record): ?string => $record->estEnStockNegatif() ? 'À régulariser' : null)
+                    ->description(fn (Produit $record): ?string => match (true) {
+                        $record->estEnStockNegatif() => 'À régulariser',
+                        $record->enAlerteStock() => 'À réapprovisionner',
+                        default => null,
+                    })
                     ->badge()
                     ->color(fn (Produit $record) => ! $record->suivi_stock
                         ? 'gray'
@@ -333,16 +354,18 @@ class ProduitResource extends Resource
                     ->label('Statut du stock')
                     ->options([
                         'en_stock' => 'En stock',
+                        self::STOCK_BAS => 'Stock bas (au seuil d\'alerte ou dessous)',
                         'epuise' => 'Épuisé',
-                        'negatif' => 'Stock négatif',
+                        self::STOCK_NEGATIF => 'Stock négatif',
                     ])
                     ->query(function (Builder $query, array $data): Builder {
                         $produits = RequeteDuModele::de($query, Produit::class);
 
                         return match ($data['value'] ?? null) {
                             'en_stock' => $produits->where('suivi_stock', true)->where('stock_quantite', '>', 0),
+                            self::STOCK_BAS => $produits->enStockBas(),
                             'epuise' => $produits->epuises(),
-                            'negatif' => $produits->enStockNegatif(),
+                            self::STOCK_NEGATIF => $produits->enStockNegatif(),
                             default => $produits,
                         };
                     }),

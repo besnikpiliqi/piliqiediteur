@@ -139,7 +139,10 @@ class LigneFacture extends Model
     /**
      * Les lignes qu'il reste à créditer, comme quantiteCreditableRestante()
      * mais en une seule requête : celles qu'aucun avoir émis n'a encore
-     * entièrement créditées.
+     * entièrement créditées. Les lignes d'avoir se lisent dans le magasin
+     * de chaque ligne (voir BelongsToMagasin::scopeDuMagasinDe()) : la
+     * condition vaut dans le magasin actif comme pour plusieurs magasins
+     * de la société (voir ChosesAFaireDeLaSociete).
      *
      * @param  Builder<static>  $query
      * @return Builder<static>
@@ -147,9 +150,10 @@ class LigneFacture extends Model
     public function scopeCreditables(Builder $query): Builder
     {
         return $query->where($this->qualifyColumn('quantite'), '>', LigneAvoir::query()
+            ->duMagasinDe($this->qualifyColumn('magasin_id'))
             ->selectRaw('coalesce(sum(lignes_avoir.quantite), 0)')
             ->whereColumn('lignes_avoir.ligne_facture_id', $this->getQualifiedKeyName())
-            ->whereHas('avoir', fn (Builder $avoirs): Builder => $avoirs->where('statut', StatutAvoir::Emise)));
+            ->whereHas('avoir', fn (Builder $avoirs): Builder => $avoirs->duMagasinDe('lignes_avoir.magasin_id')->where('statut', StatutAvoir::Emise)));
     }
 
     /**

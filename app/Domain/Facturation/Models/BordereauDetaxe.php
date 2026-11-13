@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 /**
  * Le n° du bordereau de vente à l'exportation (BVE) noté sur le ticket
@@ -67,6 +68,17 @@ class BordereauDetaxe extends Model
     public function facture(): BelongsTo
     {
         return $this->belongsTo(Facture::class);
+    }
+
+    /**
+     * La date de son visa à la sortie de l'Union, une fois notée (voir
+     * NoterLeVisaDuBordereauAction).
+     *
+     * @return HasOne<VisaDetaxe, $this>
+     */
+    public function visa(): HasOne
+    {
+        return $this->hasOne(VisaDetaxe::class);
     }
 
     /**

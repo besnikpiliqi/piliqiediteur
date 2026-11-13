@@ -35,7 +35,7 @@ use App\Filament\App\Pages\Caisse;
 use App\Filament\App\Resources\FactureResource\Pages\ListFactures;
 use App\Filament\App\Resources\FactureResource\Pages\ViewFacture;
 use App\Filament\App\Resources\ProduitResource\Pages\ListProduits;
-use App\Filament\App\Widgets\StockNegatifApercu;
+use App\Filament\App\Widgets\AFaireApercu;
 use App\Models\User;
 use Filament\Facades\Filament;
 use Illuminate\Database\QueryException;
@@ -147,7 +147,7 @@ class VenteSansStockTest extends TestCase
             ->assertCanSeeTableRecords([$cable])
             ->assertCanNotSeeTableRecords([$enStock])
             ->assertSee('À régulariser');
-        Livewire::test(StockNegatifApercu::class)->assertSee('Stock négatif')->assertSee('1 produit à régulariser');
+        Livewire::test(AFaireApercu::class)->assertSee('« Câble USB » est en stock négatif (-2) : régularisez-le par un achat ou un inventaire.', false);
 
         app(ValiderFactureAchatAction::class)->handle($proprietaire, app(CreerFactureAchatAction::class)->handle($proprietaire, Fournisseur::factory()->create(), [
             ['produit_id' => $cable->id, 'quantite' => 5, 'prix_unitaire_ht' => '4.00', 'taux_tva' => 20],
@@ -158,7 +158,7 @@ class VenteSansStockTest extends TestCase
             ->filterTable('statut_stock', 'negatif')
             ->assertCanNotSeeTableRecords([$cable, $enStock])
             ->assertDontSee('À régulariser');
-        $this->assertFalse(StockNegatifApercu::canView());
+        Livewire::test(AFaireApercu::class)->assertDontSee('stock négatif');
     }
 
     public function test_un_produit_sans_suivi_du_stock_n_est_jamais_bloque(): void

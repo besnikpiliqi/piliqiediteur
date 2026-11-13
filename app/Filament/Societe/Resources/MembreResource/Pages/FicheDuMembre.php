@@ -8,6 +8,7 @@ use App\Domain\Tenancy\Actions\AnnulerUneNominationAction;
 use App\Domain\Tenancy\Actions\ChangerLeRoleDeSocieteAction;
 use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
 use App\Domain\Tenancy\Actions\DemanderLaTransmissionDeLaProprieteAction;
+use App\Domain\Tenancy\Actions\GarderUneNominationAction;
 use App\Domain\Tenancy\Actions\ModifierAdministrateurAction;
 use App\Domain\Tenancy\Actions\ModifierMembreAction;
 use App\Domain\Tenancy\Actions\RedonnerLAccesAction;
@@ -61,6 +62,7 @@ class FicheDuMembre extends ViewRecord
 
         return [
             $this->modifierSonRoleAction(),
+            $this->garderLaNominationAction(),
             $this->annulerLaNominationAction(),
             $this->changerLeRoleDeSocieteAction(),
             $this->modifierLAdministrateurAction(),
@@ -102,6 +104,30 @@ class FicheDuMembre extends ViewRecord
                     $role = MembreResource::roleSaisi(ValeursLues::champs($data));
                     app(ModifierMembreAction::class)->handle($this->auteur(), $this->compte(), $role['role'], $role['autorisations']);
                     Notification::make()->title('Son rôle est enregistré.')->success()->send();
+                });
+            });
+    }
+
+    /**
+     * Garde la nomination d'un responsable par un administrateur : le
+     * propriétaire seul, à côté de « Annuler la nomination » ; la
+     * nomination cesse d'être annulable et sort de l'« À faire » de la
+     * société (voir GarderUneNominationAction).
+     */
+    public function garderLaNominationAction(): Action
+    {
+        return Action::make('garderLaNomination')
+            ->label('Garder')
+            ->icon('heroicon-o-check')
+            ->color('success')
+            ->requiresConfirmation()
+            ->modalHeading('Garder la nomination')
+            ->visible(fn (): bool => $this->nominationGardable() !== null)
+            ->modalDescription(fn (): string => ($this->nominationGardable()?->nommePar?->name ?? 'Un administrateur').' l\'a nommé responsable. En la gardant, vous ne pourrez plus l\'annuler en un clic : pour lui retirer ce rôle, vous changerez son rôle comme pour tout responsable.')
+            ->action(function (): void {
+                $this->agir(function (): void {
+                    app(GarderUneNominationAction::class)->handle($this->auteur(), $this->nominationGardable() ?? throw new AuthorizationException(PorteeDesDroits::REFUS));
+                    Notification::make()->title('La nomination est gardée.')->success()->send();
                 });
             });
     }
@@ -380,6 +406,13 @@ class FicheDuMembre extends ViewRecord
         }
 
         return collect(RoleMagasin::cases())->contains(fn (RoleMagasin $role): bool => app(PorteeDesDroits::class)->peutReintegrer($this->auteur(), $compte, $role));
+    }
+
+    private function nominationGardable(): ?Affectation
+    {
+        $affectation = $this->compte()->affectationDeMembre();
+
+        return $affectation !== null && app(PorteeDesDroits::class)->peutGarderLaNomination($this->auteur(), $affectation) ? $affectation : null;
     }
 
     private function nominationAnnulable(): ?Affectation

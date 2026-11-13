@@ -61,7 +61,9 @@ class SelecteurDeClientsTest extends TestCase
 
     /**
      * Du plus récent au plus ancien par défaut, et dans l'autre sens à la
-     * demande ; le client comptoir reste toujours en tête.
+     * demande ; à la caisse, le client comptoir reste toujours en tête ;
+     * pour une facture ou un devis, il n'y est pas (décision de l'éditeur
+     * du 01/11/2026).
      */
     public function test_les_clients_se_trient_du_plus_recent_au_plus_ancien(): void
     {
@@ -73,10 +75,13 @@ class SelecteurDeClientsTest extends TestCase
         $recent = Client::factory()->create(['nom' => 'Zoé Récente']);
         $this->travelBack();
 
-        Livewire::test(SelecteurDeClients::class)
+        Livewire::test(SelecteurDeClients::class, ['avecLeComptoir' => true])
             ->assertCanSeeTableRecords([$comptoir, $recent, $ancien], inOrder: true)
             ->sortTable('created_at', 'asc')
             ->assertCanSeeTableRecords([$comptoir, $ancien, $recent], inOrder: true);
+        Livewire::test(SelecteurDeClients::class)
+            ->assertCanSeeTableRecords([$recent, $ancien], inOrder: true)
+            ->assertCanNotSeeTableRecords([$comptoir]);
     }
 
     /**
@@ -116,7 +121,7 @@ class SelecteurDeClientsTest extends TestCase
         $this->travelTo(self::aParis('2026-10-10 10:00:00'));
         $recent = Client::factory()->create(['nom' => 'Lucie Bernard']);
 
-        Livewire::test(SelecteurDeClients::class)
+        Livewire::test(SelecteurDeClients::class, ['avecLeComptoir' => true])
             ->assertCanSeeTableRecords([$comptoir, $recent], inOrder: true)
             ->assertSee('Vente anonyme');
 

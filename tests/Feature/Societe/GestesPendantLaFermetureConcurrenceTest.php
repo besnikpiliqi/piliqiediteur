@@ -120,8 +120,6 @@ class GestesPendantLaFermetureConcurrenceTest extends TestCase
         'créer un devis' => ['creerUnDevis', false],
         'numéroter un devis' => ['numeroterUnDevis', false],
         'envoyer un devis par e-mail' => ['envoyerUnDevis', false],
-        'noter un bordereau de détaxe' => ['noterUnBordereau', false],
-        'noter une preuve d\'exonération' => ['noterUnePreuve', false],
         'archiver un client' => ['archiverUnClient', false],
         'restaurer un produit' => ['restaurerUnProduit', false],
         'retirer un article du panier de la caisse' => ['retirerUnArticleDuPanier', true],
@@ -141,6 +139,20 @@ class GestesPendantLaFermetureConcurrenceTest extends TestCase
         'créer un service' => ['creerUnService', false],
         'créer un service depuis une vente' => ['trouverOuCreerUnService', false],
         'régler les paramètres du magasin' => ['reglerLesParametresDuMagasin', false, 'for no key update'],
+    ];
+
+    /**
+     * Les gestes qui continuent jusqu'au bout dans un magasin fermé : noter
+     * la preuve de l'exonération d'une vente émise ou son bordereau de
+     * détaxe (décision de l'éditeur du 01/11/2026, Q-AF12). Ils ne relisent
+     * pas la ligne du magasin, que la fermeture ne leur dispute donc pas ;
+     * la suspension de leur auteur les arrête comme les autres.
+     *
+     * @var array<string, array{0: string, 1: bool}>
+     */
+    private const GESTES_JUSQU_AU_BOUT = [
+        'noter un bordereau de détaxe' => ['noterUnBordereau', false],
+        'noter une preuve d\'exonération' => ['noterUnePreuve', false],
     ];
 
     /**
@@ -240,7 +252,7 @@ class GestesPendantLaFermetureConcurrenceTest extends TestCase
      */
     public static function gestesPendantLaSuspension(): array
     {
-        return array_map(static fn (array $geste): array => [$geste[0]], self::GESTES);
+        return array_map(static fn (array $geste): array => [$geste[0]], [...self::GESTES, ...self::GESTES_JUSQU_AU_BOUT]);
     }
 
     /**

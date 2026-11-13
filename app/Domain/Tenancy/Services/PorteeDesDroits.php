@@ -10,6 +10,7 @@ use App\Domain\Tenancy\Enums\RoleSociete;
 use App\Domain\Tenancy\Enums\StatutCompte;
 use App\Domain\Tenancy\Enums\StatutSociete;
 use App\Domain\Tenancy\Models\Affectation;
+use App\Domain\Tenancy\Models\EcartSirene;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Support\ValeurRequise;
@@ -391,6 +392,44 @@ final class PorteeDesDroits
             && $compte->estActif()
             && ! $compte->estUnCompteDEntrainement()
             && ! $compte->estExpertComptable();
+    }
+
+    /**
+     * Peut-il dire « C'est vérifié » d'un écart relevé au répertoire Sirene
+     * après la validation (voir VerifierUnEcartSireneAction) ? Le
+     * propriétaire ; pour l'écart de l'établissement d'un magasin, aussi un
+     * administrateur qui peut rouvrir ce magasin (voir
+     * MagasinDeLaSocietePolicy::rouvrirLeMagasin()) (décision de l'éditeur
+     * du 01/11/2026, Q-AF13). Toujours dans sa société.
+     */
+    public function peutVerifierLEcart(User $auteur, EcartSirene $ecart): bool
+    {
+        if (! $auteur->peutAgir() || $ecart->societe_id !== $auteur->societe_id) {
+            return false;
+        }
+
+        if ($auteur->estProprietaire()) {
+            return true;
+        }
+
+        $magasin = $ecart->magasin;
+
+        return $magasin !== null && $auteur->estAdministrateur() && $auteur->can('rouvrirLeMagasin', $magasin);
+    }
+
+    /**
+     * Peut-il garder la nomination de ce responsable par un administrateur,
+     * qui cesse alors d'être annulable (voir GarderUneNominationAction) ?
+     * Le propriétaire seul, qui en a été prévenu, tant que l'affectation
+     * est celle de cette nomination (décision de l'éditeur du 01/11/2026,
+     * Q-AF13).
+     */
+    public function peutGarderLaNomination(User $auteur, Affectation $affectation): bool
+    {
+        return $affectation->nomme_par !== null
+            && $this->gereSonEquipe($auteur)
+            && $auteur->estProprietaire()
+            && $affectation->societe_id === $auteur->societe_id;
     }
 
     /**

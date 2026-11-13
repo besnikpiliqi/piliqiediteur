@@ -23,7 +23,8 @@ use function Livewire\on;
  * élément se range dans le fichier qui le déclare : la classe du
  * composant, ses parents et ses traits, puis la ressource d'une page de
  * ressource et ses traits, puis les classes de l'interface que son fichier
- * importe ; à défaut, le seul fichier qui le déclare.
+ * importe, puis celles que le fichier de sa ressource importe ou appelle ;
+ * à défaut, le seul fichier qui le déclare.
  */
 final class CouvertureDuBalayage
 {
@@ -207,7 +208,10 @@ final class CouvertureDuBalayage
      * l'ordre où les chercher : la classe, ses parents et leurs traits ; la
      * ressource d'une page de ressource ; puis les classes de l'interface
      * que son fichier importe (la caisse reprend les lignes de vente des
-     * devis), avec leurs parents et leurs traits.
+     * devis), et enfin celles que le fichier de sa ressource importe ou
+     * appelle (le formulaire de création d'une facture reprend les lignes
+     * de vente des devis par DevisResource::lignesDeVente()), chacune avec
+     * ses parents et ses traits.
      *
      * @param  class-string  $classe
      * @return list<class-string>
@@ -215,20 +219,59 @@ final class CouvertureDuBalayage
     private function candidats(string $classe): array
     {
         $candidats = self::classesDeclarantes($classe);
+        $ressource = is_subclass_of($classe, PageDeRessource::class) ? $classe::getResource() : null;
 
-        if (is_subclass_of($classe, PageDeRessource::class)) {
-            $candidats = [...$candidats, ...self::classesDeclarantes($classe::getResource())];
+        if ($ressource !== null) {
+            $candidats = [...$candidats, ...self::classesDeclarantes($ressource)];
         }
 
-        preg_match_all('/^use\s+(App\\\\Filament\\\\[\w\\\\]+);/m', (string) file_get_contents((string) (new ReflectionClass($classe))->getFileName()), $imports);
-
-        foreach ($imports[1] as $importee) {
-            if (class_exists($importee) || trait_exists($importee)) {
-                $candidats = [...$candidats, ...self::classesDeclarantes($importee)];
-            }
+        foreach ([...self::classesImportees($classe), ...($ressource === null ? [] : self::classesImporteesOuAppelees($ressource))] as $nommee) {
+            $candidats = [...$candidats, ...self::classesDeclarantes($nommee)];
         }
 
         return array_values(array_unique($candidats));
+    }
+
+    /**
+     * Les classes de l'interface (App\Filament) que le fichier de cette
+     * classe importe.
+     *
+     * @param  class-string  $classe
+     * @return list<class-string>
+     */
+    private static function classesImportees(string $classe): array
+    {
+        preg_match_all('/^use\s+(App\\\\Filament\\\\[\w\\\\]+);/m', self::source($classe), $imports);
+
+        return array_values(array_filter($imports[1], fn (string $importee): bool => class_exists($importee) || trait_exists($importee)));
+    }
+
+    /**
+     * Les classes de l'interface que le fichier de cette classe importe, ou
+     * qu'il appelle sans les importer, parce qu'elles sont de son espace de
+     * noms (« DevisResource:: » dans FactureResource).
+     *
+     * @param  class-string  $classe
+     * @return list<class-string>
+     */
+    private static function classesImporteesOuAppelees(string $classe): array
+    {
+        preg_match_all('/(?<![\\\\\w])([A-Z]\w*)::/', self::source($classe), $appels);
+        $espace = (new ReflectionClass($classe))->getNamespaceName();
+        $appelees = array_filter(
+            array_map(fn (string $nom): string => $espace.'\\'.$nom, array_unique($appels[1])),
+            fn (string $appelee): bool => str_starts_with($appelee, 'App\\Filament\\') && (class_exists($appelee) || trait_exists($appelee)),
+        );
+
+        return array_values(array_unique([...self::classesImportees($classe), ...$appelees]));
+    }
+
+    /**
+     * @param  class-string  $classe
+     */
+    private static function source(string $classe): string
+    {
+        return (string) file_get_contents((string) (new ReflectionClass($classe))->getFileName());
     }
 
     /**

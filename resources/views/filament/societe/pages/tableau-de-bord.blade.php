@@ -5,6 +5,38 @@
 
     @include('filament.bienvenue', ['compte' => auth()->user(), 'role' => auth()->user()->libelleDuRoleDeSociete()])
 
+    @php($chosesDeLaSociete = $this->chosesAFaireDeLaSociete())
+    @if ($chosesDeLaSociete !== [])
+        <x-filament::section icon="heroicon-o-clipboard-document-check">
+            <x-slot name="heading">À faire</x-slot>
+
+            <ul class="divide-y divide-gray-200 dark:divide-white/10">
+                @foreach ($chosesDeLaSociete as $chose)
+                    <li class="flex flex-wrap items-start justify-between gap-3 py-3" data-a-faire="{{ $chose->cle }}">
+                        <div class="min-w-0 flex-1">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <x-filament::badge :color="$chose->urgence->getColor()">{{ $chose->urgence->getLabel() }}</x-filament::badge>
+                                <span class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ $chose->groupe }}</span>
+                            </div>
+                            <p class="mt-1 font-semibold">{{ $chose->phrase }}</p>
+                            @if ($chose->precision !== null)
+                                <p class="text-sm text-gray-600 dark:text-gray-300">{{ $chose->precision }}</p>
+                            @endif
+                        </div>
+
+                        @if ($chose->cible !== null)
+                            {{ ($this->verifierLEcartAction)(['ecart' => $chose->cible]) }}
+                        @elseif ($chose->url !== null)
+                            <x-filament::button tag="a" :href="$chose->url" size="sm" :color="$chose->aSurveiller ? 'gray' : 'primary'">{{ $chose->bouton }}</x-filament::button>
+                        @else
+                            <span class="text-sm text-gray-600 dark:text-gray-300">{{ $chose->bouton }}</span>
+                        @endif
+                    </li>
+                @endforeach
+            </ul>
+        </x-filament::section>
+    @endif
+
     @if ($this->resteDesEtapes())
         <x-filament::section icon="heroicon-o-list-bullet">
             <x-slot name="heading">Vos premières étapes</x-slot>
@@ -89,6 +121,7 @@
             <p>Aucun magasin pour le moment.</p>
         @else
             @php($aEncaisser = $this->facturesAEncaisser())
+            @php($aFaire = $this->chosesAFaire())
             @php($calculateur = app(\App\Domain\Facturation\Services\CalculateurLigne::class))
             <table class="w-full text-start text-sm">
                 <thead>
@@ -98,7 +131,8 @@
                         <th class="py-1 pe-3 text-start font-medium">État</th>
                         <th class="py-1 pe-3 text-end font-medium">À encaisser</th>
                         <th class="py-1 pe-3 text-end font-medium">Restant dû</th>
-                        <th class="py-1 text-end font-medium">dont en retard</th>
+                        <th class="py-1 pe-3 text-end font-medium">dont en retard</th>
+                        <th class="py-1 text-start font-medium">À faire</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -114,16 +148,24 @@
                             @if ($totaux === null)
                                 <td class="py-1 pe-3 text-end">—</td>
                                 <td class="py-1 pe-3 text-end">—</td>
-                                <td class="py-1 text-end">—</td>
+                                <td class="py-1 pe-3 text-end">—</td>
                             @else
                                 <td class="py-1 pe-3 text-end">
                                     <x-filament::link :href="\App\Filament\App\Resources\FactureResource::urlDesFacturesAEncaisser($magasin)">{{ $totaux['nombre'] }}</x-filament::link>
                                 </td>
                                 <td class="py-1 pe-3 text-end">{{ $calculateur->enEuros($totaux['restant_du']) }}</td>
-                                <td @class(['py-1 text-end', 'font-semibold text-danger-600 dark:text-danger-400' => $totaux['nombre_en_retard'] > 0])>
+                                <td @class(['py-1 pe-3 text-end', 'font-semibold text-danger-600 dark:text-danger-400' => $totaux['nombre_en_retard'] > 0])>
                                     {{ $totaux['nombre_en_retard'] }} · {{ $calculateur->enEuros($totaux['restant_du_en_retard']) }}
                                 </td>
                             @endif
+                            <td class="py-1" data-a-faire-du-magasin="{{ $magasin->code }}">
+                                @if (($aFaire[$magasin->id] ?? []) === [])
+                                    —
+                                @else
+                                    @php($texteAFaire = collect($aFaire[$magasin->id])->map(fn (array $groupe): string => $groupe['nombre'].' '.$groupe['groupe'].($groupe['montant'] === null ? '' : ' ('.$groupe['montant'].')'))->implode(' · '))
+                                    <x-filament::link :href="\Filament\Pages\Dashboard::getUrl(panel: 'app', tenant: $magasin)">{{ $texteAFaire }}</x-filament::link>
+                                @endif
+                            </td>
                         </tr>
                     @endforeach
                 </tbody>

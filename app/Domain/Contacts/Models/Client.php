@@ -27,7 +27,11 @@ use LogicException;
 class Client extends Model
 {
     /** @use HasFactory<ClientFactory> */
-    use BelongsToMagasin, HasFactory, Proposable, SoftDeletes;
+    use BelongsToMagasin, HasFactory, SoftDeletes;
+
+    use Proposable {
+        scopeProposables as scopeFichesProposables;
+    }
 
     /**
      * Nom du client comptoir créé pour chaque magasin (voir
@@ -296,6 +300,32 @@ class Client extends Model
         }
 
         return $credits;
+    }
+
+    /**
+     * Les clients identifiés, jamais le client comptoir : la liste des
+     * clients et les sélecteurs de client des factures et des devis
+     * (décision de l'éditeur du 01/11/2026).
+     *
+     * @param  Builder<static>  $query
+     * @return Builder<static>
+     */
+    public function scopeIdentifies(Builder $query): Builder
+    {
+        return $query->whereNull($query->qualifyColumn('est_comptoir'));
+    }
+
+    /**
+     * Les clients proposés au choix d'une facture ou d'un devis (voir
+     * Proposable) : non archivés, plus celui déjà rattaché au document,
+     * jamais le client comptoir, qui n'est le client que de la caisse.
+     *
+     * @param  Builder<static>  $query
+     * @return Builder<static>
+     */
+    public function scopeProposables(Builder $query, int|string|null $dejaRattachee = null): Builder
+    {
+        return $this->scopeFichesProposables($query, $dejaRattachee)->identifies();
     }
 
     /**

@@ -7,6 +7,7 @@ use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Achats\Models\LigneAchat;
 use App\Domain\Achats\Models\LigneAvoirFournisseur;
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Contacts\Actions\VerifierNumeroTvaAction;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\AjouterPreuveOperationAction;
@@ -133,6 +134,44 @@ class FactureResource extends Resource
     }
 
     /**
+     * Le filtre « Preuves à fournir » de la liste (voir table()).
+     */
+    public const FILTRE_PREUVES_A_FOURNIR = 'preuves_a_fournir';
+
+    /**
+     * La liste des factures du magasin actif, filtrée sur les ventes hors
+     * de France qui attendent une preuve de leur exonération : où mène
+     * l'« À faire » du tableau de bord (voir ChosesAFaireDuMagasin).
+     */
+    public static function urlDesPreuvesAFournir(): string
+    {
+        return static::getUrl('index', ['tableFilters' => [self::FILTRE_PREUVES_A_FOURNIR => ['isActive' => true]]]);
+    }
+
+    /**
+     * Le filtre « Visa à noter » de la liste (voir table()).
+     */
+    public const FILTRE_VISA_A_NOTER = 'visa_a_noter';
+
+    /**
+     * La liste des factures du magasin actif, filtrée sur les tickets
+     * détaxés dont le bordereau attend la date de son visa : où mène
+     * l'« À faire » du tableau de bord (voir ChosesAFaireDuMagasin).
+     */
+    public static function urlDesVisasANoter(): string
+    {
+        return static::getUrl('index', ['tableFilters' => [self::FILTRE_VISA_A_NOTER => ['isActive' => true]]]);
+    }
+
+    /**
+     * La liste des factures du magasin actif, filtrée sur les brouillons.
+     */
+    public static function urlDesBrouillons(): string
+    {
+        return static::getUrl('index', ['tableFilters' => ['statut' => ['value' => StatutFacture::Brouillon->value]]]);
+    }
+
+    /**
      * Confidentialité entre vendeurs (B16) : la liste elle-même ne montre
      * que les factures que l'utilisateur voit (voir
      * Facture::scopeVisiblesPar()) -- une policy sur l'accès direct ne
@@ -144,29 +183,8 @@ class FactureResource extends Resource
     {
         return RequeteDuModele::de(parent::getEloquentQuery(), Facture::class)
             ->visiblesPar(CompteConnecte::exiger())
-            ->with(['client', 'magasin']);
-    }
-
-    /**
-     * Le nombre de factures exonérées dont une preuve manque encore (voir
-     * Facture::scopePreuvesAFournir()), parmi celles que l'utilisateur
-     * voit (B16) ; aucun badge quand il n'y en a pas.
-     */
-    public static function getNavigationBadge(): ?string
-    {
-        $nombre = Facture::query()->visiblesPar(CompteConnecte::exiger())->preuvesAFournir()->count();
-
-        return $nombre === 0 ? null : (string) $nombre;
-    }
-
-    public static function getNavigationBadgeColor(): string
-    {
-        return 'warning';
-    }
-
-    public static function getNavigationBadgeTooltip(): ?string
-    {
-        return 'Factures dont une preuve d\'exonération reste à fournir';
+            ->with(['client', 'magasin'])
+            ->withExists(['bordereauDetaxe as visa_a_noter' => fn (Builder $bordereaux): Builder => $bordereaux->whereDoesntHave('visa')]);
     }
 
     public static function form(Form $form): Form
@@ -567,8 +585,9 @@ class FactureResource extends Resource
      * NoterBordereauDetaxeAction), affiché ici et jamais sur le ticket, qui
      * reproduit le document tel qu'émis : le dernier noté, qui fait foi,
      * avec l'avertissement quand les biens taxés emportés ne dépassent pas
-     * 100 € TTC (voir BordereauDetaxe::avertissement()), puis ceux qu'il a
-     * remplacés. Relus à chaque affichage, comme les preuves.
+     * 100 € TTC (voir BordereauDetaxe::avertissement()), la date de son
+     * visa une fois notée (voir NoterLeVisaDuBordereauAction), puis ceux
+     * qu'il a remplacés. Relus à chaque affichage, comme les preuves.
      */
     private static function detaxeSection(): InfolistSection
     {
@@ -587,6 +606,16 @@ class FactureResource extends Resource
 
                         return $bordereau === null ? null : 'le '.self::calendrierDuMagasin()->afficher($bordereau->created_at, 'd/m/Y à H:i').($bordereau->note_par_nom === null ? '' : ' par '.$bordereau->note_par_nom);
                     }),
+                TextEntry::make('visa_du_bordereau')
+                    ->label('Visa à la sortie de l\'Union')
+                    ->state(function (Facture $record): string {
+                        $visa = self::bordereauQuiFaitFoi($record)?->visa;
+
+                        return $visa === null
+                            ? 'À noter dès qu\'il est connu'
+                            : 'le '.Calendrier::afficherJour($visa->date_visa, 'd/m/Y').($visa->note_par_nom === null ? '' : ', noté par '.$visa->note_par_nom);
+                    })
+                    ->color(fn (Facture $record): ?string => self::bordereauQuiFaitFoi($record)?->visa === null ? 'warning' : null),
                 TextEntry::make('bordereaux_detaxe_remplaces')
                     ->label('N° remplacés')
                     ->state(fn (Facture $record): array => $record->bordereauxDetaxe->slice(0, -1)
@@ -605,7 +634,7 @@ class FactureResource extends Resource
      */
     private static function bordereauQuiFaitFoi(Facture $ticket): ?BordereauDetaxe
     {
-        return $ticket->bordereauDetaxe()->first()?->setRelation('facture', $ticket);
+        return $ticket->bordereauDetaxe()->with('visa')->first()?->setRelation('facture', $ticket);
     }
 
     /**
@@ -819,20 +848,30 @@ class FactureResource extends Resource
                     ->money('EUR'),
                 Tables\Columns\TextColumn::make('cree_par_nom')->label('Créée par')->toggleable(),
                 Tables\Columns\TextColumn::make('date_echeance')->label('Échéance')->jour(),
+                self::colonneAFaire(),
             ])
             ->filters([
                 Tables\Filters\SelectFilter::make('statut')->options(StatutFacture::class),
                 // Les factures exonérées dont une preuve manque encore (voir
-                // Facture::scopePreuvesAFournir()), que compte aussi le
-                // badge du menu (voir getNavigationBadge()).
-                Tables\Filters\Filter::make('preuves_a_fournir')
+                // Facture::scopePreuvesAFournir()), où mène l'« À faire » du
+                // tableau de bord (voir ChosesAFaireDuMagasin) ; aucun menu
+                // n'affiche plus de nombre (décision de l'éditeur du
+                // 26/10/2026).
+                Tables\Filters\Filter::make(self::FILTRE_PREUVES_A_FOURNIR)
                     ->label('Preuves à fournir')
                     ->toggle()
                     ->query(fn (Builder $query): Builder => RequeteDuModele::de($query, Facture::class)->preuvesAFournir()),
+                // Les tickets détaxés dont le bordereau attend la date de son
+                // visa (voir Facture::scopeVisaANoter()), où mène aussi
+                // l'« À faire ».
+                Tables\Filters\Filter::make(self::FILTRE_VISA_A_NOTER)
+                    ->label('Visa à noter')
+                    ->toggle()
+                    ->query(fn (Builder $query): Builder => RequeteDuModele::de($query, Facture::class)->visaANoter()),
                 // Les factures et les tickets émis dont il reste quelque
                 // chose à régler (voir Facture::scopeAEncaisser()), où mène
-                // l'alerte du tableau de bord (voir
-                // FacturesAEncaisserApercu).
+                // l'« À faire » du tableau de bord (voir
+                // ChosesAFaireDuMagasin).
                 Tables\Filters\Filter::make(self::FILTRE_A_ENCAISSER)
                     ->label('À encaisser')
                     ->toggle()
@@ -912,6 +951,43 @@ class FactureResource extends Resource
                     static::suppressionEnMasse(Facture::class, fn (Facture $facture) => app(SupprimerFactureAction::class)->handle(CompteConnecte::exiger(), $facture)),
                 ]),
             ]);
+    }
+
+    /**
+     * La colonne « À faire » de la liste : ce qui attend encore sur chaque
+     * facture, dit sur sa ligne (règle 1 de l'« À faire », voir
+     * ChosesAFaireDuMagasin) : « À émettre » pour un brouillon, « À
+     * encaisser » et « En retard » pour ce qui reste dû (voir
+     * Facture::scopeAEncaisser() et estEchue()), « Preuve à fournir » pour
+     * une vente hors de France qui attend une preuve de son exonération
+     * (voir Facture::attendUnePreuve()), « Visa à noter » pour un ticket
+     * détaxé dont le bordereau attend la date de son visa (voir
+     * Facture::attendSonVisa()).
+     */
+    public static function colonneAFaire(): Tables\Columns\TextColumn
+    {
+        return Tables\Columns\TextColumn::make('a_faire')
+            ->label('À faire')
+            ->badge()
+            ->state(fn (Facture $record): array => self::raisonsAFaire($record))
+            ->color(fn (string $state): string => $state === 'En retard' ? 'danger' : 'warning')
+            ->placeholder('—');
+    }
+
+    /**
+     * Ce qui attend encore sur cette facture, dans l'ordre de l'« À faire ».
+     *
+     * @return list<string>
+     */
+    public static function raisonsAFaire(Facture $facture): array
+    {
+        return array_values(array_filter([
+            $facture->statut === StatutFacture::Brouillon ? 'À émettre' : null,
+            in_array($facture->statut, StatutFacture::quiAttendentUnReglement(), true) ? 'À encaisser' : null,
+            $facture->statut !== StatutFacture::Brouillon && $facture->estEchue() ? 'En retard' : null,
+            $facture->attendUnePreuve() ? 'Preuve à fournir' : null,
+            $facture->attendSonVisa() ? 'Visa à noter' : null,
+        ]));
     }
 
     /**

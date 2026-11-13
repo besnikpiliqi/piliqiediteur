@@ -34,6 +34,7 @@ use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\PanierCaisse;
 use App\Domain\Facturation\Models\PreuveOperation;
+use App\Domain\Facturation\Models\VisaDetaxe;
 use App\Domain\Fichiers\PieceDeposee;
 use App\Domain\Stock\Actions\CreerInventaireOuvertureAction;
 use App\Domain\Stock\Actions\ValiderInventaireOuvertureAction;
@@ -365,14 +366,20 @@ class ReferencesEntreMagasinsEnBaseTest extends TestCase
 
     /**
      * Une preuve d'exonération, un bordereau de détaxe et une trace
-     * technique sur cette vente, écrits sans leurs actions, qui exigent une
-     * vente à l'export ou une requête HTTP.
+     * technique sur cette vente, et la date du visa du premier bordereau du
+     * magasin actif (les suivants l'attendent : un visa peut alors désigner
+     * un autre bordereau du magasin sans heurter l'unicité d'un visa par
+     * bordereau), écrits sans leurs actions, qui exigent une vente à
+     * l'export ou détaxée, ou une requête HTTP.
      */
     private function noterSansEcran(Facture $vente): void
     {
         Model::unguarded(function () use ($vente): void {
             PreuveOperation::query()->create(['facture_id' => $vente->id, 'type' => TypePreuve::Mrn, 'reference' => "MRN-{$vente->id}"]);
-            BordereauDetaxe::query()->create(['facture_id' => $vente->id, 'numero' => "BD-{$vente->id}"]);
+            $bordereau = BordereauDetaxe::query()->create(['facture_id' => $vente->id, 'numero' => "BD-{$vente->id}"]);
+            if (! VisaDetaxe::query()->exists()) {
+                VisaDetaxe::query()->create(['bordereau_detaxe_id' => $bordereau->id, 'date_visa' => $vente->magasin->calendrier()->aujourdhui()]);
+            }
             TraceEvenement::query()->create([
                 'enregistrement_fiscal_id' => EnregistrementFiscal::query()->orderByDesc('id')->firstOrFail()->id,
                 'ip' => '203.0.113.7',

@@ -406,7 +406,7 @@ class ContrePasserPaiementActionTest extends TestCase
     public function test_aucune_requete_ne_verrouille_une_ligne_d_une_table_en_ajout_seul(): void
     {
         $tablesEnAjoutSeul = collect(DB::select("select distinct c.relname as nom from pg_trigger t join pg_class c on c.oid = t.tgrelid where t.tgname like '%\\_ajout\\_seul\\_update'"))->pluck('nom')->sort()->values()->all();
-        $this->assertSame(['avoir_allocations', 'bordereaux_detaxe', 'changements_fin_exercice', 'clotures_caisse', 'clotures_caisse_personnelles', 'clotures_caisse_personnelles_factures', 'clotures_caisse_personnelles_paiements', 'consultations_vies', 'enregistrements_fiscaux', 'lignes_recu_paiement', 'mouvements_stock', 'paiement_allocations', 'paiements', 'preuves_operation', 'recus_paiement', 'reponses_des_devis'], $tablesEnAjoutSeul);
+        $this->assertSame(['avoir_allocations', 'bordereaux_detaxe', 'changements_fin_exercice', 'clotures_caisse', 'clotures_caisse_personnelles', 'clotures_caisse_personnelles_factures', 'clotures_caisse_personnelles_paiements', 'consultations_vies', 'enregistrements_fiscaux', 'lignes_recu_paiement', 'mouvements_stock', 'paiement_allocations', 'paiements', 'preuves_operation', 'recus_paiement', 'reponses_des_devis', 'visas_detaxe'], $tablesEnAjoutSeul);
         $verrous = [];
         DB::listen(static function (QueryExecuted $requete) use ($tablesEnAjoutSeul, &$verrous): void {
             $tables = implode('|', $tablesEnAjoutSeul);

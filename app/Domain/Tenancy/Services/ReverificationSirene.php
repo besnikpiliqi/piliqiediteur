@@ -10,6 +10,7 @@ use App\Domain\Tenancy\Enums\ResultatVerification;
 use App\Domain\Tenancy\Enums\StatutMagasin;
 use App\Domain\Tenancy\Enums\Territoire;
 use App\Domain\Tenancy\Enums\TypeVerification;
+use App\Domain\Tenancy\Models\EcartSirene;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Models\VerificationSociete;
@@ -209,7 +210,7 @@ class ReverificationSirene
 
         if ($ecart !== null) {
             Log::warning('Revérification Sirene : écart sur un établissement vérifié.', ['magasin_id' => $verifie->getKey(), 'motif' => $ecart]);
-            $this->signalerLEcart($societe, "{$verifie->nom} (SIRET {$verifie->siret}) : {$ecart}", $consultation['resultat'] === ResultatVerification::Negative);
+            $this->signalerLEcart($societe, "{$verifie->nom} (SIRET {$verifie->siret}) : {$ecart}", $consultation['resultat'] === ResultatVerification::Negative, $verifie);
         }
 
         if ($situeAilleurs !== null) {
@@ -255,20 +256,46 @@ class ReverificationSirene
         };
 
         Log::warning('Revérification Sirene : établissement situé dans un autre territoire.', ['magasin_id' => $magasin->getKey(), 'territoire' => $magasin->territoire?->value, 'territoire_lu' => $lu?->value]);
+        $this->retenirLEcart($magasin->societe, $magasin, $ecart, negatif: false);
         $this->alerteEditeur->alerter($magasin->societe, 'Revérification Sirene : établissement situé dans un autre territoire', [$ecart, $suitePourLEditeur]);
-        $magasin->societe->proprietaire?->notify(new AvisDeVerification($magasin->societe, 'Territoire de votre magasin au répertoire Sirene', "{$ecart} {$suitePourLeProprietaire} Vos ventes continuent ; l'éditeur, prévenu, pourra vous contacter."));
+        $magasin->societe->loadMissing('proprietaire')->proprietaire?->notify(new AvisDeVerification($magasin->societe, 'Territoire de votre magasin au répertoire Sirene', "{$ecart} {$suitePourLeProprietaire} Vos ventes continuent ; l'éditeur, prévenu, pourra vous contacter."));
     }
 
     /**
      * Un écart après la validation : le propriétaire et l'éditeur sont
-     * prévenus, rien ne se bloque. Le répertoire dit-il l'entreprise
-     * cessée, ou l'établissement fermé ou inconnu (négative), ou seulement
-     * une catégorie ou une adresse différente ?
+     * prévenus, rien ne se bloque, et l'écart reste dans l'« À faire » de
+     * l'espace de la société jusqu'à « C'est vérifié » (voir
+     * retenirLEcart()). Le répertoire dit-il l'entreprise cessée, ou
+     * l'établissement fermé ou inconnu (négative), ou seulement une
+     * catégorie ou une adresse différente ? $magasin : celui dont
+     * l'établissement est en cause, aucun pour l'entreprise.
      */
-    private function signalerLEcart(Societe $societe, string $motif, bool $negative = false): void
+    private function signalerLEcart(Societe $societe, string $motif, bool $negative = false, ?Magasin $magasin = null): void
     {
+        $this->retenirLEcart($societe, $magasin, $motif, $negative);
         $this->alerteEditeur->alerter($societe, $negative ? 'Revérification Sirene négative d\'une société validée' : 'Revérification Sirene : écart sur une société validée', [$motif, 'Rien n\'est bloqué : à vous de décider (suspension à l\'étape 13).']);
-        $societe->proprietaire?->notify(new AvisDeVerification($societe, 'Écart au répertoire Sirene', "{$motif} Vos ventes continuent ; l'éditeur, prévenu, pourra vous contacter."));
+        $societe->loadMissing('proprietaire')->proprietaire?->notify(new AvisDeVerification($societe, 'Écart au répertoire Sirene', "{$motif} Vos ventes continuent ; l'éditeur, prévenu, pourra vous contacter."));
+    }
+
+    /**
+     * Retient l'écart, une seule fois tant que personne ne l'a dit vérifié
+     * : une revérification qui relit le même écart ne le double pas (index
+     * unique partiel de la table, voir EcartSirene). Écrit dans cette
+     * société, nommée explicitement.
+     */
+    private function retenirLEcart(Societe $societe, ?Magasin $magasin, string $motif, bool $negatif): void
+    {
+        $maintenant = now();
+
+        EcartSirene::query()->withoutGlobalScopes()->insertOrIgnore([
+            'societe_id' => $societe->getKey(),
+            'magasin_id' => $magasin?->getKey(),
+            'motif' => $motif,
+            'negatif' => $negatif,
+            'signale_le' => $maintenant,
+            'created_at' => $maintenant,
+            'updated_at' => $maintenant,
+        ]);
     }
 
     /**

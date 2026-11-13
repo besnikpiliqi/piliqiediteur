@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 13/11/2026 à 08:27 UTC par pilotage-sync.sh : « Point de suivi 13/11 08:30 UTC : document relu, fil D76 résolu par l'éditeur ».
+Mis à jour le 13/11/2026 à 08:50 UTC par pilotage-sync.sh : « 13/11 08:50 UTC : lot SEED décidé (données de démonstration), affichage des 295 décisions en cours ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -83,6 +83,7 @@ D  resources/views/filament/app/widgets/factures-a-encaisser-apercu.blade.php
  M resources/views/filament/societe/pages/tableau-de-bord.blade.php
  M tests/Browser/Parcours/PiecesDuFournisseurTest.php
  M tests/Browser/Support/Balayeur.php
+ M tests/Browser/Support/CouvertureDuBalayage.php
  M tests/Browser/inventaire-des-actions.php
  M tests/Feature/Authorization/ClientPolicyTest.php
  M tests/Feature/Authorization/ControleDesDroitsTest.php
@@ -97,7 +98,6 @@ D  resources/views/filament/app/widgets/factures-a-encaisser-apercu.blade.php
  M tests/Feature/Filament/FacturesAEncaisserTest.php
  M tests/Feature/Filament/PiecesDuFournisseurResourceTest.php
  M tests/Feature/Filament/SelecteurDeClientsTest.php
- M tests/Feature/Societe/GestesPendantLaFermetureConcurrenceTest.php
 ```
 
 ## Dernière course de la chaîne

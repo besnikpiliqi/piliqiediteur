@@ -65,3 +65,54 @@
 
 - Cause : la fonction globale `choisirLeClient()` est déclarée deux fois, dans tests/Browser/Parcours/UnProduitUneLigneTest.php:88 et dans VentesDeBoutEnBoutTest.php:37. Pest s'arrête au chargement des tests (FatalException).
 - Correction prévue : S9-A la répare d'abord (consigne l. 34 du script). Si ce n'est pas fait à la fin de S9-A, la réparer avant le lot 21 : une seule déclaration, dans une aide commune de tests/Browser, puis la suite PostgreSQL complète au code 0.
+
+## Lot « SEED » : données de démonstration pour le PC de l'éditeur (décidé le 13/11/2026, vers 08 h 50 UTC)
+
+**Demande de l'éditeur (13/11, mot pour mot)** : « et donne moi la liste de  --seed pour voir ici chez moi avec les donnes remplir par --seed ».
+
+**Constat** : à `9b258e5`, `database/seeders/DatabaseSeeder.php` ne sème rien. Il affiche seulement « Aucune donnée de démonstration : créez une société depuis la page d'inscription (/app/register). » Les données de démonstration étaient prévues à l'étape 15.
+
+**Décision de Claude (D74 et D76 : décider, appliquer et prévenir, sans attendre)** : avancer les données de démonstration. Le lot SEED passe juste après la chaîne en cours (après le lot 21), avant ER-PRO. L'ordre devient : SEED, ER-PRO, VER, campagne 1 bis.
+
+**Contenu du lot**
+
+1. `php artisan migrate:fresh --seed` remplit la base, en local et en test seulement.
+   - En production, le semeur refuse, avec un message.
+   - Il passe par les vraies actions, avec les fournisseurs factices : Sirene, INPI, courrier recommandé, plateforme agréée et antivirus.
+   - Il n'écrit jamais directement en base ce qu'une garde réserve à un document : un produit naît d'une facture d'achat ou d'un inventaire d'ouverture validé, et le stock suit son grand livre.
+
+2. Le jeu de données reprend celui de la campagne 1 bis (CLAUDE.md, feuille de route).
+   - **Sociétés.**
+     - Une société « Commerce ou atelier » validée, avec deux magasins réels et le magasin de démonstration.
+     - Une société « Services, sans vente d'articles » validée, avec un magasin.
+     - Une inscription qui attend le code de son courrier.
+   - **Comptes de chaque société validée.**
+     - Un propriétaire, qui ne vend pas dans les magasins réels.
+     - Un administrateur sans vente, et un administrateur autorisé à vendre dans deux magasins.
+     - Par magasin, un responsable et deux vendeurs. Une même personne a un compte dans deux magasins.
+     - Des comptes d'entraînement dans le magasin de démonstration.
+   - **Cabinet.** Un cabinet d'expertise comptable vérifié, avec son propriétaire et deux collaborateurs. Il est lié à deux sociétés, et chaque collaborateur a un client confié.
+   - **Expert-comptable déclaré.** Une société déclare son expert-comptable par le SIREN d'un cabinet absent de PILIQI.
+
+3. Données métier remplies.
+   - Clients professionnels et particuliers, fournisseurs et services.
+   - Factures d'achat validées, dont une sans pièce du fournisseur, et un inventaire d'ouverture.
+   - Tickets à la caisse, en un et plusieurs modes de règlement.
+   - Factures payées, payées en partie et en retard.
+   - Devis : brouillon, envoyé, accepté et transformé en facture.
+   - Avoirs : un bon d'avoir du client comptoir, un crédit d'un client, et un avoir fournisseur.
+   - Une contre-passation, des journées clôturées et une caisse personnelle fermée.
+   - Le tout par ordre chronologique, sans jamais dater une opération avant le dernier verrou de son magasin.
+
+4. La liste des comptes s'affiche à la fin du semis : société, magasin, rôle, nom, identifiant et mot de passe.
+   - Elle s'écrit aussi dans un fichier non suivi par git (par exemple `storage/app/private/comptes-de-demonstration.txt`).
+   - Les mots de passe sont tirés au hasard à chaque semis, comme si chaque personne avait choisi le sien. Aucun n'est écrit dans le dépôt.
+   - Un vendeur garde son identifiant pour mot de passe, pour montrer la règle du poste reconnu.
+   - Les propriétaires ont une adresse de connexion confirmée sur un domaine réservé (`exemple.test`).
+
+5. Tests.
+   - Un test lance le semeur sur PostgreSQL et vérifie les nombres, l'isolation et le refus en production.
+   - `migrate:fresh --seed` doit sortir avec le code 0.
+   - Le README reçoit une section « Données de démonstration sur votre PC ». La feuille de route de CLAUDE.md est mise à jour : l'étape 15 garde les données de démonstration de la production.
+
+6. Une fois le lot poussé, ajouter le jour même dans l'onglet de l'éditeur « À faire de votre côté » : `git pull`, puis `php artisan migrate:fresh --seed`, puis se connecter avec les comptes affichés.

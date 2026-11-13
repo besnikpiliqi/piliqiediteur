@@ -2172,3 +2172,7 @@ Esct c’est possible que github fait de son côté larastan et psalm. Car tu m�
 
 Mais tu m avais dit tout ce temps avec l’ancienne méthode et la tu me dit la meme chose avec la nouvelle méthode ?? Bizarre ! Est-ce que t’est en train de compter aussi les procédures administratives ?? Non non tu comptes pas ceux. Tu comptes que le logiciel pour qu’il finisse tout mais sans les démarches administratives
 
+## 228. 2026-11-13 18:33 UTC
+
+« Je garde ce qui se fait aujourd’hui : une date passée est permise, une date future est refusée. ⚠️ Cela change votre règle du 5/10. Si vous la voulez à nouveau, dites-le : c’est un petit lot. » je comprends pas ce que tu veux dire ?
+

@@ -1,18 +1,19 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 13/11/2026 à 04:26 UTC par pilotage-sync.sh : « Point de suivi 13/11 04:27 UTC : sauvegarde S9-L ».
+Mis à jour le 13/11/2026 à 05:23 UTC par pilotage-sync.sh : « Après le lot S9-L ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
-Tête poussée : `c54c221`. Commits locaux pas encore poussés :
+Tête poussée : `9b258e5`. Commits locaux pas encore poussés :
 
 ```
-4e2b320 Un produit n'a qu'une ligne d'un document
 ```
 
 Derniers commits poussés :
 
 ```
+9b258e5 Relecture du lot S9-L de la série 9
+4e2b320 Un produit n'a qu'une ligne d'un document
 c54c221 Relecture du lot EC2 de l’expert-comptable de la société
 f159294 Donne à la société un expert-comptable déclaré par le SIREN de son cabinet, rattaché tout seul au cabinet vérifié (lot EC2)
 b10d2e8 Relecture du lot DV du devis en ligne
@@ -31,19 +32,11 @@ bb135db Relecture du lot AUD de la série 8
 5c67a15 Contrôle les fichiers reçus et sert les fichiers en sécurité (lot FI)
 cba222d Relecture du lot CALC de la série 8
 b21124f Calcule les montants sans virgule flottante et imprime le PU HT tel qu'il est enregistré (lot CALC)
-71a217a Passe à la méthode rapide : la suite une fois par lot, l'analyse statique et la mutation à la fin
-5dc11a1 Relecture du lot TY2 de l’analyse statique
 ```
 
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
- M app/Domain/Achats/Models/AvoirFournisseur.php
- M app/Domain/Achats/Services/ConstructeurLigneAchat.php
- M app/Filament/Concerns/AjouteDesLignesDAchat.php
- M tests/Feature/Achats/AvoirFournisseurActionsTest.php
- M tests/Feature/Facturation/LignesUniquesTest.php
- M tests/Feature/Filament/FactureAchatResourceTest.php
 ```
 
 ## Dernière course de la chaîne
@@ -51,8 +44,6 @@ b21124f Calcule les montants sans virgule flottante et imprime le PU HT tel qu'i
 Course `wf_1d467e9e-93e`, étapes commencées (de la plus ancienne à la plus récente) :
 
 ```
-ML:relecture2
-ML:correction
 ML:poussee
 ML:notes
 DV:implementation
@@ -76,4 +67,6 @@ S9-L:implementation
 S9-L:relecture1
 S9-L:relecture2
 S9-L:correction
+S9-L:poussee
+S9-L:notes
 ```

@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 13/11/2026 à 21:26 UTC par pilotage-sync.sh : « Leçon SendMessage, § 8 fait par la copie ».
+Mis à jour le 13/11/2026 à 21:33 UTC par pilotage-sync.sh : « Fiche de clôture : modes à 0 cachés (DEMO-V) ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -37,8 +37,19 @@ d4a8247 Relecture du lot ML des e-mails vérifiés
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
+ M app/Domain/Cabinets/Actions/DeclarerSonExpertComptableAction.php
+ M app/Domain/Cabinets/Support/GardesDesCabinets.php
+ M app/Domain/CaisseSecurisee/Support/DeclencheursDeProtection.php
+ M app/Domain/Facturation/Services/EReportingDesParticuliers.php
+ M app/Domain/Facturation/Support/GardesDesDocumentsEmis.php
+ M app/Domain/Stock/Enums/TypeMouvementStock.php
+ M app/Domain/Stock/Services/VerificateurDuStock.php
+ M app/Domain/Stock/Support/GardesDuStock.php
+ M app/Domain/Tenancy/Services/ChosesAFaireDeLaSociete.php
  M app/Domain/Tenancy/Services/ChosesAFaireDuMagasin.php
+ M app/Providers/AppServiceProvider.php
  M composer.lock
+?? app/Domain/Tenancy/Support/NomsPolymorphes.php
 ```
 
 ## Dernière course de la chaîne

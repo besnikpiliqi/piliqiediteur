@@ -12,6 +12,24 @@
 - Proposé (T115, applique-la si l'éditeur ne répond pas) : une fois la société validée, la démonstration disparaît de tous les écrans de la société et de ses magasins (section du tableau de bord, liste des magasins, téléchargement par période de la société, du cabinet, liste « Vos téléchargements » pour les demandes qui ne portent que sur elle, changement de magasin), et plus personne n'y entre ; ses données restent en base, sans rien effacer (registre, journal des événements, JET 100/105, conservés pour la caisse sécurisée et l'attestation). Lot « DEMO-V », avec le lot ER, après la chaîne ; tests : société validée → aucune trace de la démonstration dans ces écrans, URL directe refusée (404), données toujours en base.
 - Sur son PC, les téléchargements « en préparation » attendent le travailleur de la file : `php artisan queue:listen telechargements --timeout=1800` (README, Lancement).
 
+
+**Ajout du 13/11/2026 à 21 h 35 UTC, dans ce même lot DEMO-V : la fiche d'une clôture de caisse** (question de l'éditeur, capture de `/app/{magasin}/cloture-caisses/{id}`). Décision de Claude (D74), montrée à l'éditeur.
+
+- **Le problème :** la section des encaissements montre les cinq modes, même à 0, chacun dans un cadre qui répète ses titres (« Mode de paiement », « Paiements », « Contre-passations », « Montant encaissé »).
+- **Ce qui change :**
+  - Un seul tableau, avec une ligne par mode qui a au moins un paiement ou une contre-passation ce jour-là.
+  - Une phrase sous le tableau : « Aucun encaissement en {modes restants} ». Sans aucun encaissement : « Aucun encaissement ce jour-là ».
+  - Puis le total encaissé et le crédit d'avoir utilisé, comme aujourd'hui.
+  - Même règle partout où les encaissements d'une clôture s'affichent : fiche de la clôture, relevé d'une caisse personnelle (« Ma caisse », « Les caisses » du magasin et de la société), PDF ou CSV des clôtures dans « Télécharger les documents », si le récapitulatif y liste les modes.
+  - Applique la même présentation en tableau aux autres sections de la fiche qui répètent leurs titres par ligne (rubriques par taux, détail des documents), s'il y en a.
+- **Ce qui ne change pas :**
+  - Le contenu signé de la clôture et ses totaux enregistrés : c'est seulement l'affichage.
+  - Rien de tout cela n'est envoyé à l'administration. L'e-reporting ne déclare pas les modes de paiement.
+- **Tests :**
+  - Domaine ou Filament : un mode à 0 n'est pas affiché ; une contre-passation seule fait afficher son mode ; la phrase des modes restants ; le cas « aucun encaissement ».
+  - Test en navigateur de la fiche ; inventaire des actions.
+- Si une règle de CLAUDE.md impose d'afficher tous les modes, dis-le dans « laisses » et applique quand même la décision. Aucune règle légale n'impose un mode à 0.
+
 ## Lot « ER » : aperçu de l'e-reporting et règles de CLAUDE.md (étape 1, après la chaîne en cours ; ajouté le 12/11 vers 01 h UTC)
 - Origine : décision de l'éditeur du 11/11/2026 (D67, V240 ; Q399 à Q417), écrite dans la colonne « Réponse du professionnel » de 19 lignes de l'onglet « À faire vérifier par un professionnel ». Source unique : `scratchpad/onglet2-844/analyse/plan-rangement.md` (§ 2, § 2 bis, fin du § 3.5) ; textes exacts de l'éditeur : `scratchpad/onglet2-844/lignes.txt`. Petit lot, effort « extra » (D63), un commit, suite PostgreSQL complète une fois avant le commit, deux relectures en parallèle.
 - Au lancement, relire dans l'onglet 1 les réponses de l'éditeur aux questions de suite T106 à T114 (« Le plus urgent ») : chaque passage ci-dessous qui dépend d'une question encore sans réponse attend ; la phrase actuelle de CLAUDE.md reste alors telle quelle, sans « à faire » (§ 2 bis).

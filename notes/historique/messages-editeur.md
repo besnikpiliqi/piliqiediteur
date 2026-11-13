@@ -2238,3 +2238,9 @@ qu est ce tu veux dire qui reli 498 decisions, tu peux me dateillé
 
 tu parle pour ceux que je t ai dit decide toi, ce que t as mis dans la fiche ?
 
+## 240. 2026-11-13 21:33 UTC
+
+[1 capture(s) d'écran jointe(s)]
+
+la c est obligé d envoyé tous les mode paiment malgre qu il y en a pas des ventes aves tout les mode de paimment, je vois que les autre sont 0€ mais esc ce que c est obligé ?
+

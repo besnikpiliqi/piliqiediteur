@@ -2200,3 +2200,7 @@ Et quand tu faisais ici alors ca prenait du temps bcp plus c’est ça
 
 mais pourquoi avoirs ce genre d erreurs?? toi t es sencé creer un code propre sans erreurs et perfromant
 
+## 235. 2026-11-13 20:48 UTC
+
+oui pour larastan et psalm sur github
+

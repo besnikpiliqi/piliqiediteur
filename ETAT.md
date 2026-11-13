@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 13/11/2026 à 20:44 UTC par pilotage-sync.sh : « Point de suivi 20:42 UTC : ER-PRO en correction ».
+Mis à jour le 13/11/2026 à 20:51 UTC par pilotage-sync.sh : « Lot STAT préparé (Larastan et Psalm à chaque envoi) ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -38,7 +38,11 @@ b12a835 Relecture du lot DEMO de la démonstration
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
+ M CLAUDE.md
+ M app/Domain/Cabinets/Support/GardesDesCabinets.php
  M app/Domain/Facturation/Services/CalculateurLigne.php
+ M app/Domain/Facturation/Services/EReportingDesParticuliers.php
+ M app/Domain/Facturation/Services/EncaissementsDesPrestations.php
  M app/Domain/Facturation/Services/RegularisationDUneExoneration.php
  M tests/Feature/Facturation/EReportingDesParticuliersTest.php
  M tests/Feature/Facturation/ExonerationNonProuveeTest.php

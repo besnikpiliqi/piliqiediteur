@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 13/11/2026 à 22:42 UTC par pilotage-sync.sh : « Point de suivi 22:45 ».
+Mis à jour le 13/11/2026 à 23:08 UTC par pilotage-sync.sh : « Modèles de signature du devis ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

@@ -2288,3 +2288,11 @@ en fait ce qui etais en tableaux c 'est bon comme par ex: les factures de vente,
 
 ce que tu touches ces les linges dans ces
 
+## 248. 2026-11-13 23:07 UTC
+
+[3 capture(s) d'écran jointe(s)]
+
+Quand le cleint accept en ligne et sign et donne son nom er prenom alors dans le pdf du devis alors dans la parti "Date et signature du client, précédées de la mention « Bon pour
+
+accord »" il faut que tu ecris la date quand c 'est accepté et le nom et prenom qui donne. apres c est toi doit savoir si mettre aussi signé comment donc dans quelle facon . mais tu me montre apres je te dis lequel model
+

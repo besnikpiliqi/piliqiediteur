@@ -334,6 +334,16 @@ final class Navigation
     }
 
     /**
+     * Choisit ce client dans la loupe « Chercher un client » d'une facture
+     * ou d'un devis.
+     */
+    public function choisirLeClient(string $client): self
+    {
+        return $this->cliquer('[title="Chercher un client"]')
+            ->cliquer(self::FENETRE.' >> .fi-ta-text-item-label:text-is('.self::texte($client).')');
+    }
+
+    /**
      * Clique sur le lien de ce libellé exact.
      */
     public function cliquerSurLeLien(string $libelle): self

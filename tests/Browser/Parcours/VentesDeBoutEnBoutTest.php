@@ -31,15 +31,6 @@ function ajouterLeProduit(Navigation $onglet, string $produit): Navigation
         ->cliquerSur('Ajouter le produit');
 }
 
-/**
- * Choisit ce client du formulaire par la loupe « Chercher un client ».
- */
-function choisirLeClient(Navigation $onglet, string $client): Navigation
-{
-    return $onglet->cliquer('[title="Chercher un client"]')
-        ->cliquer(Navigation::FENETRE.' >> .fi-ta-text-item-label:text-is('.Navigation::texte($client).')');
-}
-
 test('le vendeur vend à la caisse au client comptoir et encaisse en espèces et par carte', function () {
     $societe = $this->societeComplete();
     $onglet = $this->seConnecter($societe->vendeur)->aller('/app/'.$societe->magasin->uuid.'/caisse');
@@ -65,7 +56,7 @@ test('le responsable fait un devis puis une facture avec la loupe des clients et
     $magasin = '/app/'.$societe->magasin->uuid;
     $onglet = $this->seConnecter($societe->responsable)->aller($magasin.'/devis/create');
 
-    choisirLeClient($onglet, 'Hôtel des Pins');
+    $onglet->choisirLeClient('Hôtel des Pins');
     ajouterLeProduit($onglet, 'Bougie parfumée')->soumettre('Créer')->attendreLaPage('/devis$');
 
     $devis = app(TenantContext::class)->runAs($societe->magasin, fn (): Devis => Devis::query()->with(['client', 'lignes'])->latest('id')->firstOrFail());
@@ -73,7 +64,7 @@ test('le responsable fait un devis puis une facture avec la loupe des clients et
         ->and($devis->lignes->pluck('description')->all())->toBe(['Bougie parfumée']);
 
     $onglet->aller($magasin.'/factures/create');
-    choisirLeClient($onglet, 'Hôtel des Pins');
+    $onglet->choisirLeClient('Hôtel des Pins');
     ajouterLeProduit($onglet, 'Bougie parfumée')->soumettre('Créer')->attendreLaPage('/factures$');
     $facture = app(TenantContext::class)->runAs($societe->magasin, fn (): Facture => Facture::query()->latest('id')->firstOrFail());
 

@@ -82,15 +82,6 @@ function quitterLeChamp(Navigation $onglet, string $liste, int $rang, string $ch
     return $onglet->geste(fn () => $onglet->element('[id*=".'.$liste.'."][id$=".'.$champ.'"] >> nth='.$rang)->press('Tab'), "la sortie du champ {$champ} de la ligne {$rang}");
 }
 
-/**
- * Choisit ce client dans la loupe des clients d'une facture ou d'un devis.
- */
-function choisirLeClient(Navigation $onglet, string $client): Navigation
-{
-    return $onglet->cliquer('[title="Chercher un client"]')
-        ->cliquer(Navigation::FENETRE.' >> .fi-ta-text-item-label:text-is('.Navigation::texte($client).')');
-}
-
 test('à la caisse, le vendeur clique deux fois sur un produit, le choisit de nouveau par le tableau puis par la douchette : une seule ligne, dont la quantité monte, qu’il encaisse', function () {
     $societe = $this->societeComplete();
     $onglet = $this->seConnecter($societe->vendeur)->aller('/app/'.$societe->magasin->uuid.'/caisse');
@@ -232,7 +223,7 @@ test('sur un devis du magasin, le propriétaire choisit deux fois le même produ
     $societe = $this->societeComplete();
     $onglet = $this->seConnecter($societe->proprietaire)->aller('/app/'.$societe->magasin->uuid.'/devis/create');
 
-    choisirLeClient($onglet, 'Hôtel des Pins');
+    $onglet->choisirLeClient('Hôtel des Pins');
     ajouterParLeTableau($onglet, 'Savon au lait');
     ajouterParLeTableau($onglet, 'Savon au lait')
         ->voir('Déjà sur une ligne : « Savon au lait » (2), sa quantité a augmenté.');
@@ -290,7 +281,7 @@ test('l’administrateur autorisé à vendre choisit de nouveau un produit à la
         ->voir('Vente encaissée');
 
     $onglet->aller('/app/'.$societe->magasin->uuid.'/factures/create');
-    choisirLeClient($onglet, 'Hôtel des Pins');
+    $onglet->choisirLeClient('Hôtel des Pins');
     ajouterParLeTableau($onglet, 'Bougie parfumée');
     $onglet->remplir('Scanner ou taper une référence', 'BOUGIE')
         ->geste(fn () => $onglet->element(Navigation::champ('Scanner ou taper une référence'))->press('Enter'), 'Entrée dans le champ de la douchette')
@@ -322,7 +313,7 @@ test('sur une facture, le responsable coche deux fois « Réparation », sans pr
     app(TenantContext::class)->runAs($societe->magasin, fn (): Service => Service::factory()->create(['nom' => 'Réparation']));
     $onglet = $this->seConnecter($societe->responsable)->aller('/app/'.$societe->magasin->uuid.'/factures/create');
 
-    choisirLeClient($onglet, 'Hôtel des Pins');
+    $onglet->choisirLeClient('Hôtel des Pins');
     cocherLeService($onglet, 'Emballage cadeau');
     cocherLeService($onglet, 'Emballage cadeau')->voir('Déjà sur une ligne : « Emballage cadeau » (2), sa quantité a augmenté.');
     cocherLeService($onglet, 'Réparation');
@@ -399,7 +390,7 @@ test('sur une facture, le vendeur choisit de nouveau un produit dont la fiche a 
     $societe = $this->societeComplete();
     $onglet = $this->seConnecter($societe->vendeur)->aller('/app/'.$societe->magasin->uuid.'/factures/create');
 
-    choisirLeClient($onglet, 'Hôtel des Pins');
+    $onglet->choisirLeClient('Hôtel des Pins');
     ajouterParLeTableau($onglet, 'Savon au lait');
     app(TenantContext::class)->runAs($societe->magasin, fn () => Produit::query()->where('nom', 'Savon au lait')->sole()->forceFill(['prix_vente_ttc' => '7.20'])->save());
     ajouterParLeTableau($onglet, 'Savon au lait')

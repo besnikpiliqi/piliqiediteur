@@ -2296,3 +2296,7 @@ Quand le cleint accept en ligne et sign et donne son nom er prenom alors dans le
 
 accord »" il faut que tu ecris la date quand c 'est accepté et le nom et prenom qui donne. apres c est toi doit savoir si mettre aussi signé comment donc dans quelle facon . mais tu me montre apres je te dis lequel model
 
+## 249. 2026-11-13 23:08 UTC
+
+et avant signe le devis il faut pas affiche le lien du devis mais ca doit etre affiche aprs signé et envyé par mail
+

@@ -223,3 +223,4 @@ reprises/lot-ML-commits-locaux.patch
 reprises/lot-DV-travail-non-commite.patch
 reprises/lot-DV-commits-locaux.patch
 reprises/lot-EC2-travail-non-commite.patch
+reprises/lot-EC2-commits-locaux-complet.patch

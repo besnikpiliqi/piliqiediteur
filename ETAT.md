@@ -1,12 +1,13 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 12/11/2026 à 23:58 UTC par pilotage-sync.sh : « Onglet À faire de votre côté rempli ».
+Mis à jour le 13/11/2026 à 00:25 UTC par pilotage-sync.sh : « Point de suivi 00 h 27 UTC ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
 Tête poussée : `b10d2e8`. Commits locaux pas encore poussés :
 
 ```
+f159294 Donne à la société un expert-comptable déclaré par le SIREN de son cabinet, rattaché tout seul au cabinet vérifié (lot EC2)
 ```
 
 Derniers commits poussés :
@@ -37,78 +38,39 @@ c2455dd Passe Larastan au niveau 10 sans erreur : les valeurs lues sans type son
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
- M CLAUDE.md
- M README.md
- M app/Domain/Authorization/ControleDesDroits.php
- M app/Domain/Authorization/PermissionRegistry.php
- M app/Domain/Cabinets/Actions/AccepterLInvitationAction.php
- M app/Domain/Cabinets/Actions/AccepterLaDemandeDeLienAction.php
- M app/Domain/Cabinets/Actions/ConstaterLInscriptionALOrdreAction.php
- M app/Domain/Cabinets/Actions/DesignerUnCabinetAction.php
- M app/Domain/Cabinets/Actions/MettreFinAuLienAction.php
- M app/Domain/Cabinets/Actions/ReglerLesAutorisationsDuCabinetAction.php
- M app/Domain/Cabinets/Actions/RepondreAUneDemandeDeLien.php
- M app/Domain/Cabinets/Actions/VerifierLOrdreAction.php
- M app/Domain/Cabinets/Enums/EtatDuLien.php
- M app/Domain/Cabinets/Enums/MotifDeFinDuLien.php
- M app/Domain/Cabinets/Enums/OrigineDuLien.php
- M app/Domain/Cabinets/Mail/DemandeDeRattachementMail.php
- M app/Domain/Cabinets/Mail/InvitationDuCabinetMail.php
- M app/Domain/Cabinets/Models/LienCabinet.php
- M app/Domain/Cabinets/Services/AccesDesCabinets.php
- M app/Domain/Cabinets/Services/RechercheDesCabinets.php
- M app/Domain/Cabinets/Services/TableauDeBordDesClients.php
- M app/Domain/Cabinets/Support/GardesDesCabinets.php
- M app/Domain/Cabinets/Support/IdentiteDansLeJournal.php
- M app/Domain/Facturation/Support/GardesDeLaVente.php
- M app/Domain/Tenancy/Actions/ChangerStatutCompteAction.php
- M app/Domain/Tenancy/Actions/ConfirmerNouvelleAdresseAction.php
- M app/Domain/Tenancy/Actions/CorrigerSirenAction.php
- M app/Domain/Tenancy/Actions/DemanderUneNouvelleAdresseAction.php
- M app/Domain/Tenancy/Actions/RedonnerLAccesAction.php
- M app/Domain/Tenancy/Enums/ActionAuditee.php
- M app/Domain/Tenancy/Enums/RoleSociete.php
- M app/Domain/Tenancy/Enums/TypeDActivite.php
- M app/Domain/Tenancy/Mail/AdresseChangeeMail.php
- M app/Domain/Tenancy/Mail/ConfirmationNouvelleAdresseMail.php
- M app/Domain/Tenancy/Models/Affectation.php
- M app/Domain/Tenancy/Models/Societe.php
- M app/Domain/Tenancy/Services/CreationDesComptes.php
- M app/Domain/Tenancy/Services/JournalDesDroits.php
- M app/Domain/Tenancy/Services/PorteeDesDroits.php
- M app/Domain/Tenancy/Services/PostesReconnus.php
- M app/Domain/Tenancy/Services/SessionsDesComptes.php
- M app/Domain/Tenancy/Services/SuiviDesConnexions.php
- M app/Domain/Tenancy/Support/GardesDesDroits.php
- M app/Filament/App/Pages/Auth/ChoisirSonMotDePasse.php
- M app/Filament/App/Pages/Auth/InscriptionSociete.php
- M app/Filament/App/Pages/Auth/ModifierProfil.php
- M app/Filament/App/Pages/Auth/PageDuLien.php
- M app/Filament/Cabinet/Resources/ClientDuCabinetResource.php
- M app/Filament/Cabinet/Resources/ClientDuCabinetResource/Pages/FicheDuClient.php
- M app/Filament/Concerns/AfficheLeJournalDAudit.php
- M app/Filament/Concerns/GereLesComptes.php
  M app/Filament/Societe/Pages/CabinetComptable.php
  M app/Filament/Societe/Pages/RattachementDUnCabinet.php
- M app/Filament/Societe/Pages/TableauDeBord.php
- M app/Filament/Societe/Resources/MembreResource.php
- M app/Filament/Societe/Resources/MembreResource/Pages/FicheDuMembre.php
- M app/Http/Controllers/AccepterLInvitationDuCabinetController.php
- M app/Http/Middleware/MenerUnCompteSansMagasin.php
- M app/Models/User.php
- M app/Policies/LienCabinetPolicy.php
+ M tests/Feature/Cabinets/RattachementDesExpertsComptablesTest.php
 ```
 
 ## Dernière course de la chaîne
 
-Course `wf_36339710-257`, étapes commencées (de la plus ancienne à la plus récente) :
+Course `wf_1d467e9e-93e`, étapes commencées (de la plus ancienne à la plus récente) :
 
 ```
-releve:readme-env
-releve:claude-md
-releve:notes
-releve:comptes-rendus
-releve:onglet-fin
-ecrire:onglet
-verifier:onglet
+UI:relecture2
+UI:correction
+UI:poussee
+UI:notes
+ML:implementation
+ML:relecture1
+ML:relecture2
+ML:correction
+ML:poussee
+ML:notes
+DV:implementation
+DV:implementation-2
+DV:relecture1
+DV:relecture2
+DV:correction
+DV:poussee
+DV:notes
+EC2:implementation
+EC2:implementation-2
+EC2:implementation-3
+EC2:implementation-4
+EC2:implementation-5
+EC2:relecture1
+EC2:relecture2
+EC2:correction
 ```

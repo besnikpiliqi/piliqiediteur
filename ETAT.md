@@ -1,12 +1,13 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 13/11/2026 à 12:42 UTC par pilotage-sync.sh : « 13/11 12:42 UTC : S9-A poussé, lot 21 en cours, sauvegarde ».
+Mis à jour le 13/11/2026 à 14:41 UTC par pilotage-sync.sh : « 13/11 14:41 UTC : CI S9-A verte, lot 21 en correction ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
 Tête poussée : `7f983c1`. Commits locaux pas encore poussés :
 
 ```
+8f9817a Vérifie toutes les décisions par une matrice décision → test (lot 21)
 ```
 
 Derniers commits poussés :
@@ -37,30 +38,28 @@ bb135db Relecture du lot AUD de la série 8
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
- M app/Domain/Authorization/PermissionRegistry.php
- M app/Domain/Tenancy/Enums/RoleSociete.php
+ M app/Domain/Tenancy/Actions/ModifierMembreAction.php
  M app/Domain/Tenancy/Exceptions/TenantContextMissingException.php
  M app/Domain/Tenancy/Models/Affectation.php
- M app/Domain/Tenancy/Notifications/AvisDuTelechargementDesDocuments.php
- M app/Domain/Tenancy/Notifications/NotificationDuMagasin.php
  M app/Domain/Tenancy/Scopes/MagasinScope.php
- M app/Domain/Tenancy/Services/AffectationsDesMembres.php
- M app/Domain/Tenancy/Services/PorteeDesDroits.php
- M app/Domain/Tenancy/Services/SiretsDesMagasins.php
+ M app/Domain/Tenancy/Scopes/SocieteScope.php
+ M app/Domain/Tenancy/Services/CodeMagasin.php
+ M app/Domain/Tenancy/Services/TenantContext.php
  M app/Domain/Tenancy/Support/GardesDesDroits.php
- M app/Filament/Concerns/CocheLesAutorisationsDeMagasin.php
- M app/Filament/Societe/Resources/MembreResource.php
- M app/Filament/Societe/Resources/MembreResource/Pages/ListMembres.php
- M app/Models/User.php
- M database/migrations/0001_01_01_000000_create_magasins_table.php
- M database/migrations/2026_10_02_100003_create_sirets_magasins_table.php
- M database/migrations/2026_10_02_100005_create_affectations_table.php
- M tests/Feature/Authorization/GardesDesDroitsEnBaseConcurrenceTest.php
- M tests/Feature/Authorization/GardesDesDroitsEnBaseTest.php
- M tests/Feature/Proprietes/DroitsEtIsolationAuHasardTest.php
-?? tests/Unit/MatriceDesDecisionsTest.php
-?? tests/Unit/MigrationsDeCreationTest.php
-?? tests/Unit/matrice-des-decisions.php
+ M app/Filament/App/Resources/InventaireOuvertureResource/Pages/CreateInventaireOuverture.php
+ M app/Filament/App/Resources/InventaireOuvertureResource/Pages/EditInventaireOuverture.php
+ M app/Filament/Societe/Resources/MagasinResource/Pages/ModifierMagasin.php
+ M tests/Browser/Parcours/UnProduitUneLigneTest.php
+ M tests/Browser/inventaire-des-actions.php
+ M tests/Feature/Filament/InventaireOuvertureResourceTest.php
+ M tests/Feature/OutillageTest.php
+ M tests/Feature/Societe/MagasinResourceTest.php
+ M tests/Feature/Tenancy/IsolationDesSocietesTest.php
+ M tests/Feature/Tenancy/TenantIsolationTest.php
+ M tests/Unit/MatriceDesDecisionsTest.php
+ M tests/Unit/RetourALaListeTest.php
+ M tests/Unit/matrice-des-decisions.php
+?? tests/Browser/Parcours/RetourALaListeTest.php
 ```
 
 ## Dernière course de la chaîne
@@ -68,11 +67,6 @@ bb135db Relecture du lot AUD de la série 8
 Course `wf_1d467e9e-93e`, étapes commencées (de la plus ancienne à la plus récente) :
 
 ```
-EC2:implementation
-EC2:implementation-2
-EC2:implementation-3
-EC2:implementation-4
-EC2:implementation-5
 EC2:relecture1
 EC2:relecture2
 EC2:correction
@@ -93,4 +87,9 @@ S9-A:correction
 S9-A:poussee
 S9-A:notes
 21:implementation
+21:implementation-2
+21:implementation-3
+21:relecture1
+21:relecture2
+21:correction
 ```

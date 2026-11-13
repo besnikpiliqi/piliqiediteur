@@ -10,6 +10,67 @@
 
 ---
 
+## Ajouts du lot de décisions 21 étendu (13/11/2026) — priment sur les sections ci-dessous
+
+Sources : conception v2 finale § 13 (T1 à T6 et « Scénarios »), avenant A4 § 7.4 (composition et scénarios), plan de la série 8 § 3.4.1 (« Campagne 1 bis »), étape 1 bis de `CLAUDE.md`, décisions de l'éditeur postérieures (D50, D55, D63, D71, lots EC2, DV, S9-L, S9-A). Ce qui suit corrige les sections 2, 5.4, 6 et 7 sans les réécrire ; en cas d'écart, cette section l'emporte.
+
+### A. Cadre mis à jour
+
+- **Moteur** : PostgreSQL seul, en production, en développement, en test et en CI (D55, 08/11/2026) ; toute mention de SQLite, MariaDB ou MySQL dans les sections ci-dessous est périmée. La campagne vise PostgreSQL 18 et PHP 8.5 une fois le lot VER passé (12/11/2026) ; avant, elle publie la version réellement utilisée.
+- **Place** [T1] : après la chaîne société et le lot 21, puis le lot de compléments des lots 14 à 20, le moteur de TVA centralisé (série 7) et les lots T105, VER et PRO ; recalage R0, préparation C0, campagne initiale C1 (paliers P0 à P3, P4 extrapolé) ; relances C2 (étape 2), C3 (étape 3), C4 (étape 5), C5 (étape 9), C6 (étape 13) ; finale CF (étape 15) sur une machine dédiée au volume complet (10 000 sociétés).
+- **Configuration** [T3] : d'abord la configuration actuelle (base de données pour les sessions, le cache et les files), puis Redis.
+- **Gravité** [T5] : Claude classe et corrige chaque anomalie avec un test qui la reproduit ; le rapport montre chaque classement, que l'éditeur peut contester ; il ne valide que le déclassement d'une anomalie bloquante.
+- **Preuves** [T6] : après chaque palier, archive publiée dans une page privée, empreinte de son `SHA256SUMS` enregistrée dans le dépôt ; chaque palier repart d'une base recréée au commit testé et publie son commit, l'état de la copie, le moteur et sa version, la commande, le code de sortie et les nombres de tests réussis, échoués et sautés ; aucun test sauté hors d'une raison permise, aucune limite de temps relevée pour faire passer un test, anomalies comptées par cause, niveau de preuve de chaque résultat.
+- **Grille faketime** : elle ne se lance qu'une fois, à la fin du logiciel (D50) ; la campagne C1 ne la lance pas, mais chaque scénario lié au calendrier fige le temps à un instant écrit avec son fuseau.
+
+### B. Composition des sociétés fictives (remplace la section 5.4)
+
+- Par société : 1 propriétaire, qui ne vend pas dans les magasins réels ; au moins 1 administrateur de tous les magasins **sans la vente** et 1 administrateur **autorisé à vendre dans deux magasins** ; dans une société de plusieurs magasins, un administrateur d'une **sélection** de magasins autorisé à nommer les responsables, un autre sans cette autorisation, et un magasin créé **après** la déclaration de l'expert-comptable.
+- Par magasin réel : au moins 1 responsable et 2 vendeurs ; au moins un magasin à 2 responsables ; **une même personne avec un compte dans deux magasins** (deux identifiants, une caisse ouverte avec chacun) ; au moins un observateur.
+- Magasin de démonstration : des **comptes d'entraînement** (responsable et vendeur), et le propriétaire qui y vend, encaisse et clôture (D71).
+- Un **cabinet d'expertise comptable vérifié**, avec son propriétaire et deux collaborateurs, **lié à deux des sociétés**, chaque collaborateur avec un client confié ; une autre société avec un **expert-comptable déclaré** par le SIREN d'un cabinet non inscrit (comptes d'expert-comptable de la société), puis ce cabinet qui s'inscrit et se vérifie pendant la campagne.
+- Des sociétés des deux types qui ont un magasin (« Commerce ou atelier », « Services, sans vente d'articles »), dont une en franchise en base, et des magasins en métropole, en Corse, en Guadeloupe, en Martinique et à La Réunion.
+
+### C. Scénarios retirés
+
+- « Retirer le magasin principal » et « rattachement d'un magasin par SIREN » : ces voies n'existent plus (aucun magasin ne rejoint une société par la saisie d'un SIREN ; un établissement principal n'est qu'une indication).
+- Tout scénario qui supposait une vérification par prestataire d'identité, l'accord d'un dirigeant, des signaux de risque, une preuve par la plateforme agréée, la qualité de représentant d'un administrateur ou une lettre simple à la validation (décision du 19/10/2026).
+
+### D. Scénarios ajoutés (C1 sauf mention)
+
+Société et vérification :
+1. Inscriptions concurrentes du même SIREN et réclamation par le vrai titulaire (procédure de l'éditeur) ; validation simultanée par deux saisies du même code ; inscriptions factices sans courrier imposé (limite par adresse IP, une seule lettre par SIREN tant qu'une inscription attend) ; clôture d'une inscription sans code au bout de 30 jours.
+2. Démonstration : aucune fuite vers les magasins réels (numéros, registre, totaux), entrée et sortie au JET (100 et 105), fermeture à la validation pendant que des comptes d'entraînement vendent ; le propriétaire qui vend en démonstration puis tente de vendre dans un magasin réel (refusé par l'écran, Livewire, l'action et la base).
+3. Fermeture et réouverture d'un magasin (tickets Z, périodes d'activité, fermeture et réouverture le même jour) ; cession ; suspension décidée par l'éditeur jamais levée par une réouverture ; retrait du dernier magasin.
+
+Comptes et droits :
+4. Essais de connexion en rafale sur des identifiants existants et inexistants, écrits de plusieurs façons (espaces, zéros, adresse en majuscules) : même réponse, même délai, mêmes compteurs ; double envoi d'une création de compte (aucun second compte).
+5. Refus des comptes jamais confirmés ou retirés (connexion, lien, compte suspendu), suivis d'une tentative avec l'ancien mot de passe ou une session déjà ouverte.
+6. Nominations et retraits de responsables par un administrateur autorisé, non autorisé et hors de sa portée ; « Garder » ou annuler une nomination ; un responsable qui crée des vendeurs et coche leurs cases pendant des ventes.
+7. Administrateur qui tente de vendre par l'écran, par Livewire, par l'action, après une transmission de la propriété et par un compte de responsable qu'il a créé ; administrateur autorisé à vendre dans deux magasins qui tente d'encaisser dans le second sans fermer sa caisse du premier.
+8. Retraits de droits simultanés à des ventes dans plusieurs magasins ; clôtures manuelles pendant un retrait de « clôturer » ; validations d'achats pendant un retrait de « valider » ; écriture d'une autorisation inconnue directement en base (refusée).
+9. Envois d'e-mails en file après un retrait ou une suspension (aucun ne part, le propriétaire est prévenu) ; noms figés après un changement de nom ou un refus.
+10. Transmission de la propriété pendant que l'administrateur visé vend, annulation et lien expiré.
+
+Cabinets et expert-comptable :
+11. Le cabinet lié et l'expert-comptable de la société lisent tous les magasins choisis pendant des ventes, exportent le journal des événements et tentent des écritures par l'écran, par Livewire et par les actions (toutes refusées, sauf les achats et le stock accordés à un client « Commerce ou atelier ») ; création et retrait de comptes d'expert-comptable pendant des ventes.
+12. Un cabinet qui devient vérifié pendant que plusieurs sociétés ont déclaré son SIREN : rattachement de chaque déclaration depuis le contexte de sa société, comptes de l'expert-comptable fermés, aucune société n'apprend qu'une autre l'a déclaré ; suspension et révocation du cabinet pendant que ses collaborateurs ouvrent des clients (accès perdu dès la requête suivante).
+13. Magasins choisis par le client changés pendant qu'un collaborateur consulte (magasin retiré : plus listé, plus ouvert, plus compté).
+
+Ventes, caisse, stock :
+14. Même panier vendu en même temps dans deux caisses de deux magasins (mêmes montants, aucune différence d'arrondi) ; ventes en plusieurs modes pendant une clôture ; caisses personnelles fermées d'office par la clôture du jour et à minuit local, en métropole et outre-mer.
+15. Vente sans stock simultanée par deux vendeurs autorisés et un non autorisé ; avoirs fournisseur pendant des ventes du même produit (jamais plus que la ligne d'achat ni que le stock).
+16. Jetons répétés (réponse perdue) et rechargement de la caisse ; même jeton avec une demande différente (refusé).
+17. Un produit, une ligne : ajouts simultanés du même produit à un brouillon ouvert dans deux onglets, ligne remisée augmentée par un compte sans l'autorisation des remises (refusée), document forgé par l'API avec deux lignes du même produit (refusé).
+18. Devis répondu en ligne par le client pendant que le magasin le modifie ou le renvoie (lien caduc, réponse enregistrée une seule fois), puis transformé en facture deux fois en même temps (une seule facture).
+19. « À faire » : nombres du tableau de bord du magasin et de l'espace de la société comparés aux documents réels pendant des ventes, sans nom de client ni numéro pour la société, rien pour le cabinet ni l'expert-comptable.
+20. Téléchargement des documents par période demandé en rafale (limite par heure), pendant des émissions, par des comptes qui perdent l'autorisation entre la demande et le téléchargement ; pièces du fournisseur déposées avec des fichiers piégés (PDF à code actif, polyglotte, photo avec position GPS, EICAR).
+21. Effacement des traces à leur échéance (adresses IP et navigateurs après 1 an, jetons après 30 jours, téléchargements après 7 jours) sans toucher aucun contenu signé ; le vérificateur d'intégrité reste sans anomalie.
+
+Relances :
+22. C2 (étape 2) : attribution des factures reçues (un seul magasin désigné, indices contradictoires, indices faibles, société d'un seul magasin, magasin fermé), jamais deux imports de la même facture en concurrence, refus et contestation par le propriétaire et les administrateurs autorisés seulement, facture de frais et société de services sans produit ni stock (voir la révision du plan SUPER PDP, R.3 à R.5).
+23. C3 (étape 3) : clôtures mensuelles et d'exercice, archives signées, rattrapage d'une clôture d'exercice avancée, reprise de la caisse à la réouverture.
+
 ## Ce qui a changé depuis la version précédente
 
 Deux critiques ont relu la version précédente. J'ai vérifié leurs remarques dans le code ou dans les fichiers de la reconnaissance, puis je les ai intégrées. Voici les principaux changements.

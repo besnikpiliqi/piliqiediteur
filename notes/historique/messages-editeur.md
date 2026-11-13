@@ -2252,3 +2252,11 @@ non tu mets dans une tableau comme par ex: tu met les titres en haut: Mode de pa
 
 je choisi le D
 
+## 243. 2026-11-13 22:17 UTC
+
+[1 capture(s) d'écran jointe(s)]
+
+un Ticket ne doit pas pouvoir de relancer quand le client est comptoir et l'autre le "Noter le bordereau de détaxe (BVE)" pas besoin si la vente est fait france "Nature de l'opération
+
+Vente en France" est ce que c 'est vrai ou pas
+

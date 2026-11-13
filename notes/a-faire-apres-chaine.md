@@ -43,6 +43,19 @@
   - Rien de cela n'est envoyé à l'administration.
 - **Tests :** ceux du modèle choisi (ordre des lignes, modes à 0 selon le modèle, total, crédit d'avoir), un test en navigateur et l'inventaire des actions.
 
+
+**Ajout du 13/11/2026 vers 22 h 10 UTC, dans ce même lot DEMO-V : « Relancer » sur un ticket du client comptoir.** Constat de l'éditeur, sur la fiche d'un ticket du client comptoir « En retard ». Décision de Claude (D74), montrée à l'éditeur.
+
+- **Le constat :** le bouton « Relancer » s'affiche alors que le client comptoir est anonyme. Il n'a pas d'adresse, personne ne peut être relancé, et la relance automatique l'ignore déjà, faute d'adresse.
+- **Ce qui change :**
+  - « Relancer » est caché sur tout document du client comptoir.
+  - `EnvoyerDocumentAction::relancer()` le refuse avec une alerte claire, même par une requête forgée : « Un ticket du client comptoir ne se relance pas : le client comptoir est anonyme. »
+- **Ce qui reste :**
+  - « Envoyer par e-mail » reste possible, pour un ticket donné par e-mail au client présent.
+  - Le statut « En retard » reste : il dit qu'un montant reste dû après l'échéance, ce qui vaut aussi pour le client comptoir.
+- **Tests :** domaine (refus), Filament (bouton caché pour le client comptoir, visible pour un client nommé avec une adresse), navigateur, inventaire des actions.
+- **Ce qui ne change pas :** « Noter le bordereau de détaxe (BVE) » reste sur un ticket « Vente en France ». La détaxe est justement une vente en France, à la TVA française, à un voyageur qui part hors de l'Union, et la TVA ne se rembourse qu'après le visa. Le bouton se cache déjà quand la nature n'est pas « Vente en France », quand le ticket est en franchise ou quand il n'a aucun bien taxé.
+
 ## Lot « ER » : aperçu de l'e-reporting et règles de CLAUDE.md (étape 1, après la chaîne en cours ; ajouté le 12/11 vers 01 h UTC)
 - Origine : décision de l'éditeur du 11/11/2026 (D67, V240 ; Q399 à Q417), écrite dans la colonne « Réponse du professionnel » de 19 lignes de l'onglet « À faire vérifier par un professionnel ». Source unique : `scratchpad/onglet2-844/analyse/plan-rangement.md` (§ 2, § 2 bis, fin du § 3.5) ; textes exacts de l'éditeur : `scratchpad/onglet2-844/lignes.txt`. Petit lot, effort « extra » (D63), un commit, suite PostgreSQL complète une fois avant le commit, deux relectures en parallèle.
 - Au lancement, relire dans l'onglet 1 les réponses de l'éditeur aux questions de suite T106 à T114 (« Le plus urgent ») : chaque passage ci-dessous qui dépend d'une question encore sans réponse attend ; la phrase actuelle de CLAUDE.md reste alors telle quelle, sans « à faire » (§ 2 bis).

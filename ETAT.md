@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 13/11/2026 à 21:51 UTC par pilotage-sync.sh : « Modèle D choisi pour tous les tableaux ».
+Mis à jour le 13/11/2026 à 22:18 UTC par pilotage-sync.sh : « Relancer caché pour le client comptoir ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -37,6 +37,9 @@ d4a8247 Relecture du lot ML des e-mails vérifiés
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
+ M .github/workflows/tests.yml
+ M CLAUDE.md
+ M README.md
  M app/Console/Commands/DiagnostiquerCaisseSecurisee.php
  M app/Console/Commands/RelancerTransmissionsPdp.php
  M app/Domain/Achats/Models/FactureAchat.php
@@ -47,6 +50,7 @@ d4a8247 Relecture du lot ML des e-mails vérifiés
  M app/Domain/Cabinets/Actions/DeclarerSonExpertComptableAction.php
  M app/Domain/Cabinets/Actions/DesignerUnCabinetAction.php
  M app/Domain/Cabinets/Listeners/RattacherLesDeclarationsDuCabinetValide.php
+ M app/Domain/Cabinets/Notifications/AvisDuCabinet.php
  M app/Domain/Cabinets/Notifications/AvisDuCabinetEnFile.php
  M app/Domain/Cabinets/Support/GardesDesCabinets.php
  M app/Domain/CaisseSecurisee/Actions/VerifierIntegriteAction.php
@@ -58,6 +62,7 @@ d4a8247 Relecture du lot ML des e-mails vérifiés
  M app/Domain/Facturation/Actions/RetirerUnTicketZNonSigneAction.php
  M app/Domain/Facturation/Jobs/EnvoyerDocumentJob.php
  M app/Domain/Facturation/Models/Devis.php
+ M app/Domain/Facturation/Notifications/ReponseDuClientAuDevis.php
  M app/Domain/Facturation/Services/CalculateurLigne.php
  M app/Domain/Facturation/Services/DocumentChiffre.php
  M app/Domain/Facturation/Services/EReportingDesParticuliers.php
@@ -71,13 +76,27 @@ d4a8247 Relecture du lot ML des e-mails vérifiés
  M app/Domain/Stock/Services/VerificateurDuStock.php
  M app/Domain/Stock/Support/GardesDuStock.php
  M app/Domain/Tenancy/Actions/ChangerStatutCompteAction.php
+ M app/Domain/Tenancy/Notifications/AvisDeLAntivirus.php
+ M app/Domain/Tenancy/Notifications/AvisDeLEquipe.php
  M app/Domain/Tenancy/Services/ChosesAFaireDeLaSociete.php
  M app/Domain/Tenancy/Services/ChosesAFaireDuMagasin.php
  M app/Domain/Tenancy/Services/PiecesDeVerification.php
+ M app/Domain/Tenancy/Support/RequeteDuModele.php
+ M app/Filament/App/Pages/Caisse.php
+ M app/Filament/App/Resources/DevisResource.php
+ M app/Filament/App/Resources/FactureResource.php
+ M app/Filament/App/Resources/InventaireOuvertureResource.php
+ M app/Filament/Concerns/AjouteDesLignesDeVente.php
+ M app/Filament/Concerns/RecoitLesProduitsChoisis.php
+ M app/Filament/Concerns/SaisitUnReglementEnParts.php
+ M app/Filament/Societe/Pages/CabinetComptable.php
+ M app/Filament/Societe/Resources/MembreResource/Pages/FicheDuMembre.php
+ M app/Http/Controllers/LienDeLExpertComptableController.php
  M app/Http/Controllers/TelechargerLesDocumentsController.php
- M app/Providers/AppServiceProvider.php
- M composer.lock
-?? app/Domain/Tenancy/Support/NomsPolymorphes.php
+ M app/Http/Middleware/FaireConfianceAuxMandataires.php
+ M app/Integrations/Courriel/CauseDEchecDEnvoi.php
+ M app/Integrations/Courriel/TransportMailtrap.php
+ M app/Providers/AntivirusServiceProvider.php
 ```
 
 ## Dernière course de la chaîne

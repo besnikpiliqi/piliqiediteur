@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 13/11/2026 à 10:35 UTC par pilotage-sync.sh : « 13/11 10:40 UTC : document relu (PC1-PC14 faits), T2.7/T2.8 en O, cahier ER-PRO § 12 complété ».
+Mis à jour le 13/11/2026 à 10:47 UTC par pilotage-sync.sh : « 13/11 10:55 UTC : estimation du temps restant lancée (wf_2abf6606-e68) ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -46,7 +46,6 @@ b21124f Calcule les montants sans virgule flottante et imprime le PU HT tel qu'i
 Course `wf_1d467e9e-93e`, étapes commencées (de la plus ancienne à la plus récente) :
 
 ```
-DV:relecture2
 DV:correction
 DV:poussee
 DV:notes
@@ -71,4 +70,5 @@ S9-A:implementation-2
 S9-A:implementation-3
 S9-A:relecture1
 S9-A:relecture2
+S9-A:correction
 ```

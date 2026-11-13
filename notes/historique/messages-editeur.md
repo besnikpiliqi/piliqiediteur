@@ -2156,3 +2156,7 @@ mais tu doit m afficher tout ici tout les decision que t es en train d apliquer 
 
 Mais -seed fait quoi? Il remplis la base de données c est ca? Alors la je dois avoir les identifiants pour me connecter avec ces donnes du seed
 
+## 224. 2026-11-13 10:44 UTC
+
+avec cette routine ca va prendre combien de temps pour finir tout ?
+

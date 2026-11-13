@@ -228,3 +228,4 @@ decisions/cahier-ER-PRO.md
 reprises/lot-S9-L-travail-non-commite.patch
 reprises/lot-S9-L-commits-locaux-complet.patch
 reprises/lot-S9-A-travail-non-commite-complet.patch
+reprises/lot-S9-A-commits-locaux-complet.patch

@@ -1,12 +1,13 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 13/11/2026 à 06:26 UTC par pilotage-sync.sh : « Point de suivi 13/11 06:27 UTC : sauvegarde S9-A ».
+Mis à jour le 13/11/2026 à 08:26 UTC par pilotage-sync.sh : « Point de suivi 13/11 08:27 UTC : sauvegarde S9-A (9ef56b6 + 85 entrées) ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
 Tête poussée : `9b258e5`. Commits locaux pas encore poussés :
 
 ```
+9ef56b6 Répare la CI : une seule aide pour choisir le client en navigateur
 ```
 
 Derniers commits poussés :
@@ -37,6 +38,7 @@ b21124f Calcule les montants sans virgule flottante et imprime le PU HT tel qu'i
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
+ M CLAUDE.md
  M app/Domain/Authorization/ControleDesDroits.php
  M app/Domain/Authorization/PermissionRegistry.php
  M app/Domain/Cabinets/Services/TableauDeBordDesClients.php
@@ -47,8 +49,10 @@ b21124f Calcule les montants sans virgule flottante et imprime le PU HT tel qu'i
  M app/Domain/Facturation/Models/BordereauDetaxe.php
  M app/Domain/Facturation/Models/Devis.php
  M app/Domain/Facturation/Models/Facture.php
+ M app/Domain/Facturation/Models/LigneFacture.php
  M app/Domain/Facturation/Services/FacturesAEncaisserDeLaSociete.php
  M app/Domain/Facturation/Services/PreuvesRequises.php
+ M app/Domain/Tenancy/Concerns/BelongsToMagasin.php
  M app/Domain/Tenancy/Enums/ActionAuditee.php
  M app/Domain/Tenancy/Models/Affectation.php
  M app/Domain/Tenancy/Services/PorteeDesDroits.php
@@ -77,26 +81,23 @@ D  app/Filament/App/Widgets/StockNegatifApercu.php
  M resources/views/filament/app/livewire/fenetre-du-selecteur-de-clients.blade.php
 D  resources/views/filament/app/widgets/factures-a-encaisser-apercu.blade.php
  M resources/views/filament/societe/pages/tableau-de-bord.blade.php
+ M tests/Browser/Parcours/PiecesDuFournisseurTest.php
+ M tests/Browser/Support/Balayeur.php
  M tests/Browser/inventaire-des-actions.php
  M tests/Feature/Authorization/ClientPolicyTest.php
+ M tests/Feature/Authorization/ControleDesDroitsTest.php
  M tests/Feature/Cabinets/AccesDeLExpertComptableTest.php
  M tests/Feature/CaisseSecurisee/ProtectionDesTablesTest.php
  M tests/Feature/Facturation/BordereauDetaxeTest.php
  M tests/Feature/Facturation/ContrePasserPaiementActionTest.php
  M tests/Feature/Facturation/PreuvesOperationTest.php
+ M tests/Feature/Facturation/RegularisationDUneFactureTest.php
  M tests/Feature/Filament/ClientResourceTest.php
  M tests/Feature/Filament/EcransSelonLeTypeTest.php
  M tests/Feature/Filament/FacturesAEncaisserTest.php
  M tests/Feature/Filament/PiecesDuFournisseurResourceTest.php
  M tests/Feature/Filament/SelecteurDeClientsTest.php
  M tests/Feature/Societe/GestesPendantLaFermetureConcurrenceTest.php
- M tests/Feature/Stock/VenteSansStockTest.php
- M tests/Feature/Tenancy/GesteCommenceAvantLaFermetureTest.php
- M tests/Feature/Tenancy/HistoriqueAuNomFigeTest.php
-?? app/Domain/Facturation/Actions/NoterLeVisaDuBordereauAction.php
-?? app/Domain/Facturation/Models/VisaDetaxe.php
-?? app/Domain/Tenancy/Actions/GarderUneNominationAction.php
-?? app/Domain/Tenancy/Actions/VerifierUnEcartSireneAction.php
 ```
 
 ## Dernière course de la chaîne
@@ -104,7 +105,6 @@ D  resources/views/filament/app/widgets/factures-a-encaisser-apercu.blade.php
 Course `wf_1d467e9e-93e`, étapes commencées (de la plus ancienne à la plus récente) :
 
 ```
-DV:implementation
 DV:implementation-2
 DV:relecture1
 DV:relecture2
@@ -129,4 +129,5 @@ S9-L:poussee
 S9-L:notes
 S9-A:implementation
 S9-A:implementation-2
+S9-A:implementation-3
 ```

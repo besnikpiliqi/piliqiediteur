@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 13/11/2026 à 12:15 UTC par pilotage-sync.sh : « Après le lot S9-A ».
+Mis à jour le 13/11/2026 à 12:42 UTC par pilotage-sync.sh : « 13/11 12:42 UTC : S9-A poussé, lot 21 en cours, sauvegarde ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -37,6 +37,30 @@ bb135db Relecture du lot AUD de la série 8
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
+ M app/Domain/Authorization/PermissionRegistry.php
+ M app/Domain/Tenancy/Enums/RoleSociete.php
+ M app/Domain/Tenancy/Exceptions/TenantContextMissingException.php
+ M app/Domain/Tenancy/Models/Affectation.php
+ M app/Domain/Tenancy/Notifications/AvisDuTelechargementDesDocuments.php
+ M app/Domain/Tenancy/Notifications/NotificationDuMagasin.php
+ M app/Domain/Tenancy/Scopes/MagasinScope.php
+ M app/Domain/Tenancy/Services/AffectationsDesMembres.php
+ M app/Domain/Tenancy/Services/PorteeDesDroits.php
+ M app/Domain/Tenancy/Services/SiretsDesMagasins.php
+ M app/Domain/Tenancy/Support/GardesDesDroits.php
+ M app/Filament/Concerns/CocheLesAutorisationsDeMagasin.php
+ M app/Filament/Societe/Resources/MembreResource.php
+ M app/Filament/Societe/Resources/MembreResource/Pages/ListMembres.php
+ M app/Models/User.php
+ M database/migrations/0001_01_01_000000_create_magasins_table.php
+ M database/migrations/2026_10_02_100003_create_sirets_magasins_table.php
+ M database/migrations/2026_10_02_100005_create_affectations_table.php
+ M tests/Feature/Authorization/GardesDesDroitsEnBaseConcurrenceTest.php
+ M tests/Feature/Authorization/GardesDesDroitsEnBaseTest.php
+ M tests/Feature/Proprietes/DroitsEtIsolationAuHasardTest.php
+?? tests/Unit/MatriceDesDecisionsTest.php
+?? tests/Unit/MigrationsDeCreationTest.php
+?? tests/Unit/matrice-des-decisions.php
 ```
 
 ## Dernière course de la chaîne
@@ -44,7 +68,6 @@ bb135db Relecture du lot AUD de la série 8
 Course `wf_1d467e9e-93e`, étapes commencées (de la plus ancienne à la plus récente) :
 
 ```
-DV:notes
 EC2:implementation
 EC2:implementation-2
 EC2:implementation-3
@@ -69,4 +92,5 @@ S9-A:relecture2
 S9-A:correction
 S9-A:poussee
 S9-A:notes
+21:implementation
 ```

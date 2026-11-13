@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 13/11/2026 à 02:13 UTC par pilotage-sync.sh : « EC2 vert (c54c221) ; question garde fiche fournisseur tranchée ».
+Mis à jour le 13/11/2026 à 02:27 UTC par pilotage-sync.sh : « point de suivi 02:26 UTC : sauvegarde S9-L ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -37,15 +37,19 @@ b21124f Calcule les montants sans virgule flottante et imprime le PU HT tel qu'i
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
+ M CLAUDE.md
  M app/Domain/Achats/Actions/CreerAvoirFournisseurAction.php
  M app/Domain/Achats/Models/AvoirFournisseur.php
  M app/Domain/Achats/Models/LigneAchat.php
  M app/Domain/Achats/Services/ConstructeurLigneAchat.php
  M app/Domain/Facturation/Models/Devis.php
+ M app/Domain/Facturation/Services/CalculateurLigne.php
  M app/Domain/Facturation/Services/ConstructeurLigneDocument.php
  M app/Filament/App/Livewire/SelecteurDeProduits.php
  M app/Filament/App/Resources/FactureAchatResource.php
  M app/Filament/App/Resources/FactureResource.php
+ M app/Filament/App/Resources/InventaireOuvertureResource.php
+ M app/Filament/Concerns/AjouteDesLignesDAchat.php
  M app/Filament/Concerns/AjouteDesLignesDeVente.php
  M app/Filament/Concerns/RecoitLesProduitsChoisis.php
  M resources/views/filament/app/livewire/selecteur-de-produits.blade.php
@@ -65,15 +69,20 @@ b21124f Calcule les montants sans virgule flottante et imprime le PU HT tel qu'i
  M tests/Feature/Filament/ClotureCaissePersonnelleResourceTest.php
  M tests/Feature/Filament/ClotureCaisseResourceTest.php
  M tests/Feature/Filament/DevisResourceTest.php
+ M tests/Feature/Filament/FactureAchatResourceTest.php
  M tests/Feature/Filament/FactureResourceTest.php
  M tests/Feature/Filament/FacturesApercuWidgetTest.php
+ M tests/Feature/Filament/FenetresDesSelecteursTest.php
+ M tests/Feature/Filament/InventaireOuvertureResourceTest.php
  M tests/Feature/Filament/ProduitResourceTest.php
  M tests/Feature/Filament/SelecteurDeProduitsTest.php
  M tests/Feature/Filament/VentesEnAttenteApercuTest.php
  M tests/Feature/Proprietes/AchatsEtStockAuHasardTest.php
  M tests/Feature/Proprietes/VentesAuHasardTest.php
  M tests/Feature/Stock/StockLedgerServiceTest.php
+ M tests/Feature/Stock/VenteSansStockTest.php
 ?? tests/Feature/Facturation/LignesUniquesTest.php
+?? tests/Feature/Filament/UnProduitUneLigneTest.php
 ```
 
 ## Dernière course de la chaîne

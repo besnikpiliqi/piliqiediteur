@@ -3,6 +3,6 @@
     "description": "Outils de développement des tests en navigateur (Pest 4 et son module browser) : Playwright seulement, jamais livré en production.",
     "license": "UNLICENSED",
     "devDependencies": {
-        "playwright": "1.59.1"
+        "playwright": "1.65.0"
     }
 }

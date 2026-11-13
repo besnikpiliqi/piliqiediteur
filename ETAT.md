@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 13/11/2026 à 15:37 UTC par pilotage-sync.sh : « CI lot 21 verte ».
+Mis à jour le 13/11/2026 à 16:40 UTC par pilotage-sync.sh : « 13/11 16:41 UTC : point de suivi, SEED presque fini ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

@@ -1,12 +1,13 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 13/11/2026 à 02:27 UTC par pilotage-sync.sh : « point de suivi 02:26 UTC : sauvegarde S9-L ».
+Mis à jour le 13/11/2026 à 04:26 UTC par pilotage-sync.sh : « Point de suivi 13/11 04:27 UTC : sauvegarde S9-L ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
 Tête poussée : `c54c221`. Commits locaux pas encore poussés :
 
 ```
+4e2b320 Un produit n'a qu'une ligne d'un document
 ```
 
 Derniers commits poussés :
@@ -37,52 +38,12 @@ b21124f Calcule les montants sans virgule flottante et imprime le PU HT tel qu'i
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
- M CLAUDE.md
- M app/Domain/Achats/Actions/CreerAvoirFournisseurAction.php
  M app/Domain/Achats/Models/AvoirFournisseur.php
- M app/Domain/Achats/Models/LigneAchat.php
  M app/Domain/Achats/Services/ConstructeurLigneAchat.php
- M app/Domain/Facturation/Models/Devis.php
- M app/Domain/Facturation/Services/CalculateurLigne.php
- M app/Domain/Facturation/Services/ConstructeurLigneDocument.php
- M app/Filament/App/Livewire/SelecteurDeProduits.php
- M app/Filament/App/Resources/FactureAchatResource.php
- M app/Filament/App/Resources/FactureResource.php
- M app/Filament/App/Resources/InventaireOuvertureResource.php
  M app/Filament/Concerns/AjouteDesLignesDAchat.php
- M app/Filament/Concerns/AjouteDesLignesDeVente.php
- M app/Filament/Concerns/RecoitLesProduitsChoisis.php
- M resources/views/filament/app/livewire/selecteur-de-produits.blade.php
  M tests/Feature/Achats/AvoirFournisseurActionsTest.php
- M tests/Feature/Achats/FactureAchatActionsTest.php
- M tests/Feature/Facturation/ActionsUniquesTest.php
- M tests/Feature/Facturation/AvoirPdfGeneratorTest.php
- M tests/Feature/Facturation/ConstructeurLigneDocumentTest.php
- M tests/Feature/Facturation/EnregistrerVenteCaisseActionConcurrenceTest.php
- M tests/Feature/Facturation/ExempleDeQuinzeLignesTest.php
- M tests/Feature/Facturation/PolitiqueDArrondiTest.php
- M tests/Feature/Facturation/TransformerUnDevisEnFactureTest.php
- M tests/Feature/Filament/AvoirFournisseurResourceTest.php
- M tests/Feature/Filament/AvoirResourceTest.php
- M tests/Feature/Filament/CaisseTest.php
- M tests/Feature/Filament/ClientResourceTest.php
- M tests/Feature/Filament/ClotureCaissePersonnelleResourceTest.php
- M tests/Feature/Filament/ClotureCaisseResourceTest.php
- M tests/Feature/Filament/DevisResourceTest.php
+ M tests/Feature/Facturation/LignesUniquesTest.php
  M tests/Feature/Filament/FactureAchatResourceTest.php
- M tests/Feature/Filament/FactureResourceTest.php
- M tests/Feature/Filament/FacturesApercuWidgetTest.php
- M tests/Feature/Filament/FenetresDesSelecteursTest.php
- M tests/Feature/Filament/InventaireOuvertureResourceTest.php
- M tests/Feature/Filament/ProduitResourceTest.php
- M tests/Feature/Filament/SelecteurDeProduitsTest.php
- M tests/Feature/Filament/VentesEnAttenteApercuTest.php
- M tests/Feature/Proprietes/AchatsEtStockAuHasardTest.php
- M tests/Feature/Proprietes/VentesAuHasardTest.php
- M tests/Feature/Stock/StockLedgerServiceTest.php
- M tests/Feature/Stock/VenteSansStockTest.php
-?? tests/Feature/Facturation/LignesUniquesTest.php
-?? tests/Feature/Filament/UnProduitUneLigneTest.php
 ```
 
 ## Dernière course de la chaîne
@@ -90,9 +51,6 @@ b21124f Calcule les montants sans virgule flottante et imprime le PU HT tel qu'i
 Course `wf_1d467e9e-93e`, étapes commencées (de la plus ancienne à la plus récente) :
 
 ```
-UI:notes
-ML:implementation
-ML:relecture1
 ML:relecture2
 ML:correction
 ML:poussee
@@ -115,4 +73,7 @@ EC2:correction
 EC2:poussee
 EC2:notes
 S9-L:implementation
+S9-L:relecture1
+S9-L:relecture2
+S9-L:correction
 ```

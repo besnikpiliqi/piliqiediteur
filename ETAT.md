@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 13/11/2026 à 00:25 UTC par pilotage-sync.sh : « Point de suivi 00 h 27 UTC ».
+Mis à jour le 13/11/2026 à 00:33 UTC par pilotage-sync.sh : « Reprise après redémarrage ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -38,8 +38,11 @@ c2455dd Passe Larastan au niveau 10 sans erreur : les valeurs lues sans type son
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
+ M app/Domain/Cabinets/Actions/CorrigerLAdresseDeLExpertComptableAction.php
+ M app/Domain/Tenancy/Services/JournalDesDroits.php
  M app/Filament/Societe/Pages/CabinetComptable.php
  M app/Filament/Societe/Pages/RattachementDUnCabinet.php
+ M tests/Feature/Cabinets/ExpertsComptablesConcurrenceTest.php
  M tests/Feature/Cabinets/RattachementDesExpertsComptablesTest.php
 ```
 

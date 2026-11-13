@@ -1,5 +1,94 @@
+diff --git a/app/Domain/Cabinets/Actions/CorrigerLAdresseDeLExpertComptableAction.php b/app/Domain/Cabinets/Actions/CorrigerLAdresseDeLExpertComptableAction.php
+index 0e3cda9..83e7eb8 100644
+--- a/app/Domain/Cabinets/Actions/CorrigerLAdresseDeLExpertComptableAction.php
++++ b/app/Domain/Cabinets/Actions/CorrigerLAdresseDeLExpertComptableAction.php
+@@ -4,6 +4,7 @@
+ 
+ use App\Domain\Cabinets\Models\CompteExpertComptable;
+ use App\Domain\Cabinets\Services\EnvoiDesLiensDesExpertsComptables;
++use App\Domain\Cabinets\Services\ExpertsComptablesDeclares;
+ use App\Domain\Tenancy\Actions\RedonnerLAccesAction;
+ use App\Domain\Tenancy\Concerns\AgitDansLaSociete;
+ use App\Domain\Tenancy\Enums\ActionAuditee;
+@@ -30,7 +31,12 @@
+  * limite de 5 liens par jour et par compte. La même adresse ne change rien.
+  * Une fois son mot de passe choisi, seule la personne change son adresse,
+  * dans son profil. L'entrée d'audit ne retient que le compte, jamais
+- * l'adresse.
++ * l'adresse. Les verrous suivent l'ordre de l'espace des cabinets : la
++ * ligne de la société puis la déclaration du compte, avant les comptes
++ * (voir ExpertsComptablesDeclares::verrouillerLaDeclarationDe()) ; la garde
++ * de l'adresse prend ensuite la déclaration en partage, déjà tenue, si bien
++ * que la correction attend un rattachement ou un réglage en cours au lieu
++ * de s'interbloquer avec lui.
+  */
+ class CorrigerLAdresseDeLExpertComptableAction
+ {
+@@ -45,6 +51,7 @@ public function __construct(
+         private readonly JournalAudit $journalAudit,
+         private readonly DebitDesEmails $debit,
+         private readonly EnvoiDesLiensDesExpertsComptables $envoi,
++        private readonly ExpertsComptablesDeclares $experts,
+     ) {}
+ 
+     /**
+@@ -89,7 +96,7 @@ public function handle(User $auteur, User $compte, mixed $adresse, mixed $confir
+             ]);
+ 
+             return ['jeton' => $jetonDuLien, 'auteur' => CleDuModele::de($auteurRelu)];
+-        }));
++        }, fn () => $this->experts->verrouillerLaDeclarationDe($compte)));
+ 
+         if ($lien === null) {
+             return false;
+diff --git a/app/Domain/Tenancy/Services/JournalDesDroits.php b/app/Domain/Tenancy/Services/JournalDesDroits.php
+index eb4cfbc..85545e4 100644
+--- a/app/Domain/Tenancy/Services/JournalDesDroits.php
++++ b/app/Domain/Tenancy/Services/JournalDesDroits.php
+@@ -167,25 +167,34 @@ public function modifier(?User $auteur, ActionAuditee $action, array $comptes, i
+ 
+     /**
+      * Exécute un geste sur des comptes qui ne change pas leurs droits (un
+-     * accès redonné, un identifiant affiché), dans une
+-     * transaction qui verrouille les lignes de l'auteur et de ces comptes,
+-     * par identifiant croissant, comme modifier() : le geste reçoit
+-     * l'auteur et les comptes relus sous ce verrou, et s'inscrit au nom de
+-     * l'auteur relu.
++     * accès redonné, un identifiant affiché, une adresse corrigée), dans
++     * une transaction qui verrouille les lignes de l'auteur et de ces
++     * comptes, par identifiant croissant, comme modifier() : le geste
++     * reçoit l'auteur et les comptes relus sous ce verrou, et s'inscrit au
++     * nom de l'auteur relu. $verrousAvantLesComptes prend d'abord, dans la
++     * même transaction, les verrous que l'ordre de l'espace des cabinets
++     * place avant les comptes (la ligne de la société, puis la déclaration
++     * d'un expert-comptable de la société, voir
++     * ExpertsComptablesDeclares::verrouillerLaDeclarationDe()).
+      *
+      * @template TResultat
+      *
+      * @param  list<User>  $comptes
+      * @param  Closure(User, list<User>): TResultat  $geste
++     * @param  (Closure(): void)|null  $verrousAvantLesComptes
+      * @return TResultat
+      *
+      * @throws LogicException
+      */
+-    public function sousVerrouDesComptes(User $auteur, array $comptes, Closure $geste): mixed
++    public function sousVerrouDesComptes(User $auteur, array $comptes, Closure $geste, ?Closure $verrousAvantLesComptes = null): mixed
+     {
+         $ids = array_map(fn (User $compte): int => CleDuModele::de($compte), $comptes);
+ 
+-        return DB::transaction(function () use ($auteur, $ids, $geste): mixed {
++        return DB::transaction(function () use ($auteur, $ids, $geste, $verrousAvantLesComptes): mixed {
++            if ($verrousAvantLesComptes !== null) {
++                $verrousAvantLesComptes();
++            }
++
+             $verrouilles = User::query()->with('societe')->whereKey([...$ids, CleDuModele::de($auteur)])->orderBy('id')->lockForUpdate()->get()->keyBy(fn (User $compte): int => CleDuModele::de($compte));
+             $auteurRelu = $verrouilles->get(CleDuModele::de($auteur)) ?? throw new LogicException('Ce compte n\'existe pas.');
+             $relus = array_map(fn (int $id): User => $verrouilles->get($id) ?? throw new LogicException('Ce compte n\'existe pas.'), $ids);
 diff --git a/app/Filament/Societe/Pages/CabinetComptable.php b/app/Filament/Societe/Pages/CabinetComptable.php
-index 0842050..130c4f9 100644
+index 0842050..8ad643d 100644
 --- a/app/Filament/Societe/Pages/CabinetComptable.php
 +++ b/app/Filament/Societe/Pages/CabinetComptable.php
 @@ -17,6 +17,7 @@
@@ -87,6 +176,83 @@ index 0842050..130c4f9 100644
      }
  
      /**
+@@ -264,7 +309,9 @@ public function enregistrerLesAutorisationsAction(): Action
+         return Action::make('enregistrerLesAutorisations')
+             ->label('Enregistrer')
+             ->requiresConfirmation(fn (): bool => $this->autorisationsCochees() === [])
+-            ->modalDescription('Sans aucune autorisation, votre cabinet reste lié et voit votre identité, vos réglages fiscaux et vos magasins, mais n\'ouvre plus aucun document, aucune fiche ni aucun téléchargement.')
++            ->modalDescription(fn (): ?string => $this->autorisationsCochees() !== [] ? null : ($this->lienEnCours()?->estDeclare() === true
++                ? 'Sans aucune autorisation, les comptes de votre expert-comptable déclaré voient votre identité, vos réglages fiscaux et les magasins choisis, mais n\'ouvrent plus aucun document, aucune fiche ni aucun téléchargement.'
++                : 'Sans aucune autorisation, votre cabinet reste lié et voit votre identité, vos réglages fiscaux et vos magasins, mais n\'ouvre plus aucun document, aucune fiche ni aucun téléchargement.'))
+             ->visible(fn (): bool => $this->lienEnCours() !== null)
+             ->action(function (): void {
+                 static::executerSansCasser(function (): void {
+@@ -324,12 +371,63 @@ public function demanderLeLienAction(): Action
+                 static::executerSansCasser(function () use ($arguments): void {
+                     $cabinet = app(RechercheDesCabinets::class)->pour($this->recherche)->firstWhere('uuid', ValeurSimple::enTexte($arguments['uuid'] ?? ''))
+                         ?? throw new LogicException(DesignerUnCabinetAction::MESSAGE_CABINET_NON_LIABLE);
+-                    app(DesignerUnCabinetAction::class)->handle(CompteConnecte::exiger(), $this->societe(), Societe::query()->whereKey($cabinet->getKey())->firstOrFail());
+-                    Notification::make()->title('Votre demande est envoyée au cabinet.')->success()->send();
++                    $this->designer($cabinet);
++                });
++            });
++    }
++
++    /**
++     * « Lui demander le lien », dans la fenêtre « Déclarer votre
++     * expert-comptable », quand le SIREN saisi est celui d'un cabinet déjà
++     * vérifié sur PILIQI, qui ne se déclare pas (décision de l'éditeur du
++     * 01/11/2026, P1 a) : la désignation de ce cabinet, retrouvé par la
++     * recherche des cabinets vérifiés ; la fenêtre se ferme.
++     */
++    private function actionLuiDemanderLeLien(): Action
++    {
++        return Action::make('luiDemanderLeLien')
++            ->label('Lui demander le lien')
++            ->icon('heroicon-o-link')
++            ->cancelParentActions()
++            ->action(function (array $arguments): void {
++                static::executerSansCasser(function () use ($arguments): void {
++                    $this->designer($this->cabinetVerifieDuSiren($arguments['siren'] ?? null) ?? throw new LogicException(DesignerUnCabinetAction::MESSAGE_CABINET_NON_LIABLE));
+                 });
+             });
+     }
+ 
++    /**
++     * Le cabinet vérifié de ce SIREN, tel que la recherche des cabinets le
++     * montre (voir RechercheDesCabinets) ; null pour un SIREN qui n'a pas
++     * neuf chiffres ou qu'aucun cabinet vérifié ne porte : un cabinet
++     * inscrit sans être vérifié ne se révèle jamais.
++     */
++    private function cabinetVerifieDuSiren(mixed $siren): ?Societe
++    {
++        $siren = is_string($siren) ? (string) preg_replace('/\s+/', '', $siren) : '';
++
++        return preg_match('/^\d{9}$/', $siren) === 1 ? app(RechercheDesCabinets::class)->pour($siren)->first() : null;
++    }
++
++    /**
++     * Désigne ce cabinet vérifié (voir DesignerUnCabinetAction) et dit ce
++     * qui en est né : la déclaration de son SIREN rattachée aussitôt, ses
++     * comptes fermés ; le lien actif, quand le cabinet avait déjà demandé le
++     * rattachement ; sinon la demande envoyée, qui attend sa réponse.
++     */
++    private function designer(Societe $cabinet): void
++    {
++        $noms = implode(', ', $this->personnesDeLaDeclaration()->map(fn (User $compte): string => $compte->name)->all());
++        $lien = app(DesignerUnCabinetAction::class)->handle(CompteConnecte::exiger(), $this->societe(), Societe::query()->whereKey($cabinet->getKey())->firstOrFail());
++        $this->remplir();
++
++        Notification::make()->success()->title(match (true) {
++            $lien->estActif() && $lien->origine === OrigineDuLien::DeclarationDuClient => "Votre expert-comptable déclaré est désormais relié à votre société par son cabinet : les comptes de {$noms} sont fermés.",
++            $lien->estActif() => 'Ce cabinet est désormais votre cabinet.',
++            default => 'Votre demande est envoyée au cabinet.',
++        })->send();
++    }
++
+     public function inviterSonExpertAction(): Action
+     {
+         return Action::make('inviterSonExpert')
 diff --git a/app/Filament/Societe/Pages/RattachementDUnCabinet.php b/app/Filament/Societe/Pages/RattachementDUnCabinet.php
 index d6f5fd0..71feea7 100644
 --- a/app/Filament/Societe/Pages/RattachementDUnCabinet.php
@@ -218,6 +384,77 @@ index d6f5fd0..71feea7 100644
              ->form([
                  ...CabinetComptable::champsDesMagasins($this->societe(), fn (): bool => true),
                  CheckboxList::make('consultations')
+diff --git a/tests/Feature/Cabinets/ExpertsComptablesConcurrenceTest.php b/tests/Feature/Cabinets/ExpertsComptablesConcurrenceTest.php
+index 8a7b30b..f3f451b 100644
+--- a/tests/Feature/Cabinets/ExpertsComptablesConcurrenceTest.php
++++ b/tests/Feature/Cabinets/ExpertsComptablesConcurrenceTest.php
+@@ -338,6 +338,36 @@ public function test_la_correction_de_l_adresse_pendant_que_la_personne_choisit_
+         $this->assertTrue(Hash::check(self::MOT_DE_PASSE_CHOISI, $marc->fresh()->password));
+     }
+ 
++    /**
++     * Le rattachement tient la ligne de la société puis la déclaration avant
++     * les comptes ; la correction de l'adresse les prend dans le même
++     * ordre, si bien qu'elle attend la fin du rattachement au lieu de
++     * tenir le compte qu'il veut retirer pendant que la garde de son
++     * adresse attend la déclaration (interblocage). Elle passe après lui :
++     * le compte est retiré, la correction refusée, l'adresse inchangée.
++     */
++    #[DataProvider('avecEtSansMagasinReel')]
++    public function test_la_correction_de_l_adresse_pendant_le_rattachement_passe_avant_ou_apres_sans_interblocage(bool $avecUnMagasin): void
++    {
++        [$client, $marc] = $this->declarationSansMotDePasseChoisi($avecUnMagasin);
++        $declaration = $this->declarationDe($client);
++        $cabinet = $this->ouvrirLeCabinetSansRattachement();
++        [$marcId, $proprietaireId] = [(int) $marc->getKey(), (int) $client->proprietaire()->firstOrFail()->getKey()];
++        $concurrente = null;
++        $this->concurrencerDesQueLaLigneEstVerrouillee('liens_cabinet', 'for update', static function () use ($marcId, $proprietaireId): void {
++            app(CorrigerLAdresseDeLExpertComptableAction::class)->handle(User::query()->findOrFail($proprietaireId), User::query()->findOrFail($marcId), 'marc@petit-associes.test', 'marc@petit-associes.test', 'password');
++        }, $concurrente);
++
++        $this->assertTrue(app(RattacherUneDeclarationAction::class)->handle((int) $declaration->getKey(), (int) $cabinet->getKey()));
++
++        $resultat = $this->attendre($concurrente);
++        $this->assertStringNotContainsString('40P01', $resultat->errorOutput().$resultat->output());
++        $this->assertFalse($resultat->successful());
++        $this->assertSame(EtatDuLien::Actif, $declaration->fresh()->etat);
++        $this->assertSame(StatutCompte::Retire, $marc->fresh()->statut);
++        $this->assertSame('marc.petit@petit-associes.test', $marc->fresh()->email);
++    }
++
+     public function test_deux_retraits_simultanes_des_deux_dernieres_personnes_mettent_fin_a_la_declaration(): void
+     {
+         $magasin = $this->ouvrirUneSociete(['nom' => 'Boutique cliente']);
+@@ -630,6 +660,29 @@ private function unAchatSaisiParLExpertComptable(): array
+         return [$magasin, $marc, (int) $factureAchat->getKey()];
+     }
+ 
++    /**
++     * Un client, avec ou sans magasin réel, qui a déclaré son
++     * expert-comptable ; la personne n'a pas encore choisi son mot de
++     * passe : son adresse se corrige encore.
++     *
++     * @return array{0: Societe, 1: User}
++     */
++    private function declarationSansMotDePasseChoisi(bool $avecUnMagasin): array
++    {
++        if ($avecUnMagasin) {
++            $client = $this->ouvrirUneSociete(['nom' => 'Boutique cliente'])->societe;
++        } else {
++            $client = $this->inscrireUneSociete();
++            $this->saisirLeCodeDuCourrier($client)->forceFill(['password' => 'password'])->save();
++            $client = $client->fresh();
++        }
++
++        $marc = $this->declarerSonExpertComptable($client);
++        app(TenantContext::class)->clear();
++
++        return [$client->fresh(), $marc];
++    }
++
+     private function declarationDe(Societe $client): LienCabinet
+     {
+         return LienCabinet::query()->withoutGlobalScopes()->where('societe_id', $client->getKey())->orderByDesc('id')->firstOrFail();
 diff --git a/tests/Feature/Cabinets/RattachementDesExpertsComptablesTest.php b/tests/Feature/Cabinets/RattachementDesExpertsComptablesTest.php
 index 9aab350..6b951ce 100644
 --- a/tests/Feature/Cabinets/RattachementDesExpertsComptablesTest.php

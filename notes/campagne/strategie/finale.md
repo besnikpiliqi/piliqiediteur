@@ -35,6 +35,11 @@ Sources : conception v2 finale § 13 (T1 à T6 et « Scénarios »), avenant A4 
 
 - « Retirer le magasin principal » et « rattachement d'un magasin par SIREN » : ces voies n'existent plus (aucun magasin ne rejoint une société par la saisie d'un SIREN ; un établissement principal n'est qu'une indication).
 - Tout scénario qui supposait une vérification par prestataire d'identité, l'accord d'un dirigeant, des signaux de risque, une preuve par la plateforme agréée, la qualité de représentant d'un administrateur ou une lettre simple à la validation (décision du 19/10/2026).
+- Retirés aussi, chacun avec la règle de `CLAUDE.md` qui le remplace (relecture du lot 21, 13/11/2026) ; un agent de campagne qui les trouverait plus bas ne les teste pas :
+  - **EQU-01** (adresse déjà utilisée refusée pour un nouveau membre et au changement de profil), **A1** du tableau de la section 6.6, **CR-27** (même adresse e-mail dans deux magasins) : l'adresse d'un compte autre que le propriétaire est un contact facultatif, renseigné par la personne elle-même dans son profil, qui peut être celle de plusieurs comptes et ne sert jamais à se connecter ; seule l'adresse de connexion d'un propriétaire est unique dans tout PILIQI, refusée sans rien révéler d'autre que le refus (« Comptes et équipe »). La matrice décision → test classe A1 « remplacée ». Remplacés par D 24 et D 25.
+  - **EQU-06** (inscription ouverte sans vérification de l'adresse, adresse d'un tiers occupée pour toujours) : une société s'inscrit par un lien envoyé à l'adresse de son propriétaire, valable 24 heures, et une inscription close libère l'adresse de son propriétaire (« Comptes et équipe », « Vérification de la société »). Remplacé par D 26.
+  - **M11** (mutant « unicité de l'adresse e-mail sensible à la casse », rattaché à EQU-01) : il vise désormais l'adresse de connexion d'un propriétaire, comparée en minuscules sans espaces autour (D 25).
+  - **SOC-07** (code de magasin unique dans toute la base, dont le refus révèle un autre client) et la part « SOC-07 » de **J1** dans le tableau de la section 6.6 : le code d'un magasin est unique dans la société seulement ; deux sociétés ont chacune leurs codes (« Société et établissements »), et seul un code déjà émis sous le même SIREN, par une société révoquée ou dont l'éditeur a corrigé le SIREN, n'est jamais redonné. Remplacé par D 27.
 
 ### D. Scénarios ajoutés (C1 sauf mention)
 
@@ -70,6 +75,12 @@ Ventes, caisse, stock :
 Relances :
 22. C2 (étape 2) : attribution des factures reçues (un seul magasin désigné, indices contradictoires, indices faibles, société d'un seul magasin, magasin fermé), jamais deux imports de la même facture en concurrence, refus et contestation par le propriétaire et les administrateurs autorisés seulement, facture de frais et société de services sans produit ni stock (voir la révision du plan SUPER PDP, R.3 à R.5).
 23. C3 (étape 3) : clôtures mensuelles et d'exercice, archives signées, rattrapage d'une clôture d'exercice avancée, reprise de la caisse à la réouverture.
+
+Comptes, adresses et codes (scénarios qui remplacent EQU-01, EQU-06, A1, CR-27, M11 et SOC-07) :
+24. La même adresse de contact renseignée par deux comptes de deux magasins, puis de deux sociétés, dans leur profil, en même temps : acceptée pour les deux, sans rien révéler ; aucun des deux ne se connecte ni ne retrouve son accès par elle.
+25. L'adresse de connexion d'un propriétaire déjà prise, écrite autrement (majuscules, espaces autour), refusée à l'inscription, à la saisie du code par une autre personne, au changement d'adresse dans le profil et à la transmission de la propriété, toujours par le seul refus, au même délai, et revérifiée à la confirmation par le lien ; deux confirmations simultanées de la même adresse n'en laissent passer qu'une.
+26. Inscriptions avec l'adresse d'un tiers : rien n'est créé avant le lien de 24 heures ; une inscription close sans code libère l'adresse de son propriétaire, qui sert à une nouvelle inscription.
+27. Deux magasins de deux sociétés avec le même code (LYON1), créés en même temps : acceptés, numéros de documents propres à chacun ; dans une même société, le second refusé ; un code émis sous un SIREN par une société révoquée jamais redonné sous ce SIREN.
 
 ## Ce qui a changé depuis la version précédente
 

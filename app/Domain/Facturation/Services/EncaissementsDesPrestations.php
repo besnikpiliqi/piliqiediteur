@@ -12,33 +12,45 @@ use App\Domain\Facturation\Enums\NatureLigne;
  *
  * - le ticket se divise en groupes de lignes de même nature et de même
  *   taux, du plus fort taux au plus faible, les biens avant les services
- *   d'un même taux ; chaque groupe vaut le TTC de ses lignes, moins celui
- *   des lignes des avoirs émis jusque-là qui les corrigent ;
+ *   d'un même taux ; chaque groupe vaut le TTC de ses lignes, moins ce
+ *   que le crédit des avoirs qui les corrigent a déjà consommé : la part
+ *   qui réduit ce que doit le ticket lui-même (son imputation sur lui) et
+ *   celle qui a réglé une autre vente, réparties sur les groupes de ses
+ *   lignes au prorata de leur TTC ; le crédit encore disponible garde sa
+ *   place dans le ticket ;
  * - ce qu'il a encaissé est la somme de ses règlements (paiements, crédits
  *   d'avoir imputés, contre-passations déduites), moins le crédit des
- *   avoirs qui le corrigent quand il règle une autre vente ; la part
- *   d'un crédit qui annule les lignes de son avoir sur ce ticket n'est pas
- *   un règlement (voir EReportingDesParticuliers::sansLesReductions()) ;
- * - à chaque changement de ce montant, l'encaissé, borné au TTC du ticket,
- *   se répartit entre les groupes au prorata de leur TTC, en cumul dans
- *   leur ordre, chaque part arrondie au centime le plus proche (voir
- *   CalculateurLigne::repartirAuProrata()) ; la part de chaque groupe moins
- *   ce qui en est déjà déclaré se déclare à la date du mouvement, pour les
- *   seuls services à un taux de TVA non nul : une réparation de 60,00 €
- *   et un livre de 10,55 € dont 30,00 € sont reçus déclarent 25,51 € au
- *   taux de la réparation, et le dernier règlement retombe exactement sur
- *   le TTC de chaque service ;
- * - l'émission d'un avoir ne déclare rien : l'avoir d'une prestation déjà
- *   encaissée se déduit le jour où son crédit règle une autre vente,
- *   imputé d'abord sur les tickets qu'il corrige dans l'ordre de leur
- *   identifiant, chacun dans la limite de ce que l'avoir en corrige moins
- *   ce que son crédit y a déjà annulé ; un crédit jamais utilisé ne déduit
- *   rien, et la contre-passation d'une telle utilisation la rend, dans
- *   l'ordre inverse ;
+ *   avoirs qui le corrigent quand il règle une autre vente ; la part d'un
+ *   crédit qui annule les lignes de son avoir sur ce ticket n'est pas un
+ *   règlement (voir EReportingDesParticuliers::sansLesReductions()) ;
+ * - à chaque mouvement qui change l'un ou l'autre, l'encaissé, borné au
+ *   TTC des groupes, se répartit entre eux au prorata de leur TTC, en
+ *   cumul dans leur ordre, chaque part arrondie au centime le plus proche
+ *   (voir CalculateurLigne::repartirAuProrata()) ; la part de chaque
+ *   groupe moins ce qui en est déjà déclaré se déclare à la date du
+ *   mouvement, pour les seuls services à un taux de TVA non nul : une
+ *   réparation de 60,00 € et un livre de 10,55 € dont 30,00 € sont reçus
+ *   déclarent 25,51 € au taux de la réparation, et le dernier règlement
+ *   retombe exactement sur le TTC de chaque service ;
+ * - un avoir dont le crédit s'impute sur le ticket qu'il corrige change
+ *   donc ses groupes le jour de son émission (C-1 : au prorata du TTC
+ *   restant après un avoir) : d'une réparation de 60,00 € et d'un article
+ *   de 40,00 € dont 30,00 € sont reçus (18,00 € déclarés), l'article rendu
+ *   reporte les 30,00 € sur la réparation (12,00 € de plus), et la
+ *   réparation annulée les reporte sur l'article (18,00 € déduits) ; le
+ *   crédit qui reste au client ne déduit rien tant qu'il n'est pas
+ *   utilisé : l'avoir d'une prestation déjà encaissée se déduit le jour
+ *   où son crédit règle une autre vente, imputé d'abord sur les tickets
+ *   qu'il corrige dans l'ordre de leur identifiant, chacun dans la limite
+ *   de ce que l'avoir en corrige moins ce que son crédit y a déjà
+ *   consommé ; un crédit jamais utilisé ne déduit rien, et la
+ *   contre-passation d'une telle utilisation la rend, dans l'ordre
+ *   inverse (T1.3) ;
  * - le crédit d'un avoir de régularisation après la correction du SIREN
  *   de la société n'est jamais un encaissement : ses imputations ne
- *   comptent pas ; celui d'une exonération non prouvée règle la vente à la
- *   TVA française qui la remplace comme tout crédit d'avoir.
+ *   comptent pas et ne consomment rien ; celui d'une exonération non
+ *   prouvée règle la vente à la TVA française qui la remplace comme tout
+ *   crédit d'avoir.
  *
  * Seuls les mouvements que compte la clôture s'ajoutent aux encaissements
  * déclarés ; les précédents servent à savoir ce que chaque ticket a déjà
@@ -78,31 +90,17 @@ final class EncaissementsDesPrestations
      */
     public function __construct(
         private readonly CalculateurLigne $calculateur,
-        private array $groupes,
+        private readonly array $groupes,
         private readonly array $lignesDesAvoirs,
         private readonly array $regularisations,
     ) {}
 
     /**
-     * L'émission d'un avoir : le TTC de ses lignes quitte les groupes
-     * des tickets suivis qu'il corrige, sans rien déclarer.
-     */
-    public function avoirEmis(int $avoirId): void
-    {
-        foreach ($this->lignesDesAvoirs[$avoirId] ?? [] as $factureId => $parGroupe) {
-            foreach ($parGroupe as $cle => $ttc) {
-                if (isset($this->groupes[$factureId][$cle])) {
-                    $this->groupes[$factureId][$cle]['ttc'] = max(0, $this->groupes[$factureId][$cle]['ttc'] - $ttc);
-                }
-            }
-        }
-    }
-
-    /**
      * Un règlement d'un document : $montant le règle, à la date $date ;
      * $reduction, la part d'un crédit d'avoir qui annule les lignes de cet
      * avoir sur ce document, ne le règle pas et n'est pas comptée dans
-     * $montant. $compte dit si la clôture compte ce règlement.
+     * $montant, mais retire ces lignes de ses groupes. $compte dit si la
+     * clôture compte ce règlement.
      */
     public function reglement(int $factureId, string $date, int $montant, int $reduction, ?int $avoirId, bool $compte): void
     {
@@ -110,19 +108,17 @@ final class EncaissementsDesPrestations
             return;
         }
 
-        if ($avoirId !== null) {
+        if ($avoirId !== null && $reduction !== 0) {
             $this->annule[$avoirId][$factureId] = ($this->annule[$avoirId][$factureId] ?? 0) + $reduction;
         }
 
-        if ($montant === 0) {
-            return;
-        }
+        $this->encaisse[$factureId] = ($this->encaisse[$factureId] ?? 0) + $montant;
 
-        $this->ajouter($factureId, $montant, $date, $compte);
-
-        if ($avoirId !== null) {
+        if ($avoirId !== null && $montant !== 0) {
             $this->creditUtilise($avoirId, $montant, $date, $compte);
         }
+
+        $this->declarer($factureId, $date, $compte);
     }
 
     /**
@@ -177,28 +173,28 @@ final class EncaissementsDesPrestations
 
             $sens = $montant <=> 0;
             $this->utilise[$avoirId][$factureId] = $dejaUtilise + $sens * $part;
+            $this->encaisse[$factureId] = ($this->encaisse[$factureId] ?? 0) - $sens * $part;
             $reste -= $part;
-            $this->ajouter($factureId, -$sens * $part, $date, $compte);
+            $this->declarer($factureId, $date, $compte);
         }
     }
 
     /**
-     * Ce montant s'ajoute à l'encaissé d'un ticket suivi, et la part de
-     * chacun de ses services qui change se déclare à cette date, si la
-     * clôture compte ce mouvement.
+     * L'encaissé d'un ticket suivi se répartit sur ses groupes tels qu'ils
+     * sont maintenant (voir groupesRestants()), et la part de chacun de ses
+     * services qui change se déclare à cette date, si la clôture compte ce
+     * mouvement.
      */
-    private function ajouter(int $factureId, int $montant, string $date, bool $compte): void
+    private function declarer(int $factureId, string $date, bool $compte): void
     {
         if (! isset($this->groupes[$factureId])) {
             return;
         }
 
-        $this->encaisse[$factureId] = ($this->encaisse[$factureId] ?? 0) + $montant;
-        $groupes = $this->groupes[$factureId];
-        $ttc = array_map(fn (array $groupe): int => $groupe['ttc'], $groupes);
-        $parts = $this->calculateur->repartirAuProrata(max(0, min($this->encaisse[$factureId], (int) array_sum($ttc))), $ttc);
+        $ttc = $this->groupesRestants($factureId);
+        $parts = $this->calculateur->repartirAuProrata(max(0, min($this->encaisse[$factureId] ?? 0, (int) array_sum($ttc))), $ttc);
 
-        foreach ($groupes as $cle => $groupe) {
+        foreach ($this->groupes[$factureId] as $cle => $groupe) {
             $ecart = $parts[$cle] - ($this->declare[$factureId][$cle] ?? 0);
             $this->declare[$factureId][$cle] = $parts[$cle];
 
@@ -206,5 +202,36 @@ final class EncaissementsDesPrestations
                 $this->parDateEtParTaux["{$date}|{$groupe['taux']}"] = ($this->parDateEtParTaux["{$date}|{$groupe['taux']}"] ?? 0) + $ecart;
             }
         }
+    }
+
+    /**
+     * Le TTC de chaque groupe du ticket, dans leur ordre, moins ce que le
+     * crédit de chaque avoir qui le corrige a consommé (annulé sur lui ou
+     * utilisé pour une autre vente), réparti sur les groupes des lignes de
+     * cet avoir au prorata de leur TTC, en cumul dans l'ordre des groupes ;
+     * jamais en dessous de zéro.
+     *
+     * @return array<string, int>
+     */
+    private function groupesRestants(int $factureId): array
+    {
+        $restants = array_map(fn (array $groupe): int => $groupe['ttc'], $this->groupes[$factureId]);
+
+        foreach ($this->lignesDesAvoirs as $avoirId => $parDocument) {
+            $corrige = $parDocument[$factureId] ?? [];
+            $consomme = min((int) array_sum($corrige), max(0, ($this->annule[$avoirId][$factureId] ?? 0) + ($this->utilise[$avoirId][$factureId] ?? 0)));
+
+            if ($consomme === 0) {
+                continue;
+            }
+
+            $poids = array_map(fn (string $cle): int => $corrige[$cle] ?? 0, array_combine(array_keys($restants), array_keys($restants)));
+
+            foreach ($this->calculateur->repartirAuProrata($consomme, $poids) as $cle => $part) {
+                $restants[$cle] = max(0, $restants[$cle] - $part);
+            }
+        }
+
+        return $restants;
     }
 }

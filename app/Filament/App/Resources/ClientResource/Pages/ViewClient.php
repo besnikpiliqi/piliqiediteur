@@ -27,11 +27,13 @@ class ViewClient extends ViewRecord
      * Une fiche archivée reste lisible (voir ArchiveLaFiche) : cette page
      * la trouve, à la différence de celle de modification (voir
      * ClientPolicy::update()). La requête de la ressource garde le client
-     * dans le magasin actif : celui d'un autre magasin reste introuvable.
+     * dans le magasin actif : celui d'un autre magasin reste introuvable ;
+     * une clé que la base ne peut pas lire ne désigne aucun client (voir
+     * RefuseUneCleIllisible).
      */
     protected function resolveRecord(int|string $key): Model
     {
-        return RequeteDuModele::de(ClientResource::getEloquentQuery(), Client::class)->withTrashed()->whereKey($key)->firstOrFail();
+        return (new Client)->resolveRouteBindingQuery(RequeteDuModele::de(ClientResource::getEloquentQuery(), Client::class)->withTrashed(), $key)->firstOrFail();
     }
 
     /**

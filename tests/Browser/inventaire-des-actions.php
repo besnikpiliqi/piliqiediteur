@@ -1460,6 +1460,7 @@ return [
         'action:emettreLaFactureRectificative' => ['lot' => 'NAV-2', 'tests' => []],
         'action:regulariserLExoneration' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Parcours/ExonerationNonProuveeTest.php › le responsable ouvre depuis son « À faire » la liste « Exonération non prouvée », puis régularise chaque export resté sans preuve de sortie 150 jours après sa date, et chaque facture rectificative s’ouvre',
+            'tests/Browser/Parcours/ExonerationNonProuveeTest.php › l’administrateur autorisé à vendre régularise depuis son « À faire » l’export resté sans preuve de sortie 150 jours après sa date, et la facture rectificative s’ouvre à son nom',
         ]],
         'action:encaisser' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur autorisé à vendre ouvre chaque page et chaque action du magasin sans erreur',

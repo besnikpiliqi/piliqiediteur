@@ -16,6 +16,7 @@ use App\Domain\Facturation\Enums\TypeDocument;
 use App\Domain\Facturation\Exceptions\IdentiteDeLaSocieteIncompleteException;
 use App\Domain\Facturation\Models\SequenceDocument;
 use App\Domain\Facturation\Services\CalculateurLigne;
+use App\Domain\Tenancy\Concerns\RefuseUneCleIllisible;
 use App\Domain\Tenancy\Enums\MotifFermeture;
 use App\Domain\Tenancy\Enums\StatutMagasin;
 use App\Domain\Tenancy\Enums\Territoire;
@@ -25,17 +26,14 @@ use App\Domain\Tenancy\Services\CodeMagasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\CleDuModele;
 use App\Domain\Tenancy\Support\ValeurRequise;
-use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Domain\Tenancy\Support\ValeursLues;
 use Database\Factories\MagasinFactory;
 use Filament\Models\Contracts\HasName;
-use Illuminate\Contracts\Database\Eloquent\Builder as BuilderContract;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
@@ -119,7 +117,7 @@ use LogicException;
 class Magasin extends Model implements HasName
 {
     /** @use HasFactory<MagasinFactory> */
-    use HasFactory, JournaliseSesParametresDeConformite;
+    use HasFactory, JournaliseSesParametresDeConformite, RefuseUneCleIllisible;
 
     /**
      * L'exemple proposé au magasin qui active les relances (Paramètres >
@@ -227,35 +225,6 @@ class Magasin extends Model implements HasName
             Str::isUuid($identifiant) => static::query()->firstWhere('uuid', $identifiant),
             default => null,
         };
-    }
-
-    /**
-     * Le magasin de l'adresse du panneau (/app/{uuid}, voir
-     * AppPanelProvider) ou de sa fiche dans l'espace de la société
-     * (/societe/{uuid}/magasins/{id}, voir MagasinResource) : une adresse
-     * qui ne porte pas un uuid, ou un identifiant entier que la colonne
-     * bigint peut lire, ne désigne aucun magasin (404), sans interroger la
-     * base, qui refuserait la valeur par une erreur.
-     *
-     * @param  Model|BuilderContract  $query
-     * @param  mixed  $value
-     * @param  string|null  $field
-     * @return BuilderContract
-     */
-    public function resolveRouteBindingQuery($query, $value, $field = null)
-    {
-        $colonne = $field ?? $this->getRouteKeyName();
-        $lisible = match ($colonne) {
-            'uuid' => Str::isUuid($value),
-            $this->getKeyName() => is_int($value) || (is_string($value) && preg_match('/^[1-9]\d{0,17}$/', $value) === 1),
-            default => true,
-        };
-
-        if (! $lisible) {
-            throw (new ModelNotFoundException)->setModel(self::class, [ValeurSimple::enTexte($value)]);
-        }
-
-        return parent::resolveRouteBindingQuery($query, $value, $field);
     }
 
     protected static function booted(): void

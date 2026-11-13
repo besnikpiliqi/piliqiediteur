@@ -3,6 +3,7 @@
 namespace App\Domain\Tenancy\Models;
 
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Tenancy\Concerns\RefuseUneCleIllisible;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\RoleSociete;
 use App\Domain\Tenancy\Services\AffectationsDesMembres;
@@ -55,6 +56,8 @@ use LogicException;
  */
 class Affectation extends Model
 {
+    use RefuseUneCleIllisible;
+
     protected $table = 'affectations';
 
     protected $fillable = [];

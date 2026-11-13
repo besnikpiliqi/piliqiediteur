@@ -325,8 +325,46 @@ class MagasinsOuvertsAuCabinetTest extends TestCase
     }
 
     /**
+     * Une fiche de fournisseur dont l'auteur de la dernière écriture n'ouvre
+     * plus le magasin (constat de la relecture du lot ER-PRO) :
+     * l'expert-comptable de la société la crée à « Lyon 2 » tant que tous
+     * les magasins lui sont ouverts, puis le propriétaire ne lui laisse que
+     * « Lyon 1 ». La base refuse alors toute écriture qui le garde pour
+     * auteur, même quand le code oublie de le vérifier et que la colonne
+     * ne change pas : la modifier en son nom, la modifier sans nommer
+     * d'auteur, l'archiver ; rien ne s'écrit, et le propriétaire, nommé
+     * auteur, la modifie et l'archive.
+     */
+    public function test_la_base_refuse_d_ecrire_une_fiche_de_fournisseur_au_nom_d_un_auteur_qui_n_ouvre_plus_le_magasin(): void
+    {
+        $lyon1 = $this->ouvrirUneSociete(['nom' => 'Lyon 1']);
+        $lyon2 = $this->ouvrirUnAutreMagasin($lyon1, ['nom' => 'Lyon 2']);
+        $marc = $this->expertComptable($lyon1, autorisations: [...PermissionRegistry::casesDuCabinet(PermissionRegistry::parDefautDuCabinet(TypeDActivite::Commerce)), PermissionRegistry::FOURNISSEUR_CREATE, PermissionRegistry::FOURNISSEUR_UPDATE, PermissionRegistry::FOURNISSEUR_ARCHIVER])->fresh();
+        $proprietaire = $this->proprietaireDe($lyon1);
+        $refus = GardesDesCabinets::MAGASINS_OUVERTS.' : un compte d\'un cabinet d\'expertise comptable ou un expert-comptable de la société n\'agit que dans un magasin que le client lui ouvre';
+        app(TenantContext::class)->set($lyon2);
+        $fiche = app(CreerUneFicheAction::class)->handle($marc, Fournisseur::class, ['nom' => 'Grossiste de Villeurbanne', 'pays' => 'FR']);
+        $this->assertSame([$marc->id, $marc->id], [$fiche->cree_par, $fiche->modifie_par]);
+        $this->regler(LienCabinet::query()->withoutGlobalScopes()->where('societe_id', $lyon1->societe_id)->sole(), [$lyon1->id]);
+        app(TenantContext::class)->set($lyon2);
+
+        $this->assertFalse($marc->fresh()->peutOuvrir($lyon2));
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn (): bool => $fiche->fresh()->noterSonAuteur($marc)->fill(['telephone' => '0400000000'])->save()), QueryException::class, $refus);
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn (): bool => $fiche->fresh()->fill(['telephone' => '0400000000'])->save()), QueryException::class, $refus);
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn (): ?bool => app(OperateurCourant::class)->pendant($marc, fn (): ?bool => tap($fiche->fresh(), fn (Fournisseur $relue): bool => $relue->noterSonAuteur($marc)->save())->delete())), QueryException::class, $refus);
+        $this->assertSame([null, null, $marc->id], [$fiche->fresh()->telephone, Fournisseur::withTrashed()->whereKey($fiche->id)->value('deleted_at'), $fiche->fresh()->modifie_par]);
+
+        $this->assertTrue($fiche->fresh()->noterSonAuteur($proprietaire)->fill(['telephone' => '0400000000'])->save());
+        app(ArchiverUneFicheAction::class)->archiver($proprietaire, $fiche->fresh());
+        $this->assertSame(['0400000000', $proprietaire->id, true], [$fiche->fresh()->telephone, Fournisseur::withTrashed()->whereKey($fiche->id)->value('modifie_par'), Fournisseur::withTrashed()->findOrFail($fiche->id)->trashed()]);
+        app(TenantContext::class)->clear();
+    }
+
+    /**
      * Chaque table où un compte agit dans un magasin porte la garde, sur
-     * les colonnes qui nomment ce compte.
+     * les colonnes qui nomment ce compte ; une table où une colonne nomme
+     * l'auteur de chaque écriture la porte sur toute modification, cette
+     * colonne marquée pour être contrôlée même inchangée.
      */
     public function test_chaque_table_ou_un_compte_agit_dans_un_magasin_porte_la_garde_des_magasins_ouverts(): void
     {
@@ -334,9 +372,12 @@ class MagasinsOuvertsAuCabinetTest extends TestCase
             ->mapWithKeys(fn (object $declencheur): array => [$declencheur->table_ => $declencheur->definition]);
 
         $this->assertEqualsCanonicalizing(array_keys(GardesDesCabinets::AUTEURS_DANS_UN_MAGASIN), $declencheurs->keys()->all());
+        $this->assertSame(['fournisseurs' => 'modifie_par'], GardesDesCabinets::AUTEUR_DE_CHAQUE_ECRITURE);
 
         foreach (GardesDesCabinets::AUTEURS_DANS_UN_MAGASIN as $table => $colonnes) {
-            $this->assertStringContainsString('BEFORE INSERT OR UPDATE OF '.implode(', ', $colonnes).' ON public.'.$table, (string) $declencheurs[$table]);
+            $aChaqueEcriture = GardesDesCabinets::AUTEUR_DE_CHAQUE_ECRITURE[$table] ?? null;
+            $this->assertStringContainsString($aChaqueEcriture === null ? 'BEFORE INSERT OR UPDATE OF '.implode(', ', $colonnes).' ON public.'.$table : 'BEFORE INSERT OR UPDATE ON public.'.$table, (string) $declencheurs[$table]);
+            $this->assertStringEndsWith("garde_magasins_ouverts_a_l_expert_comptable('".implode("', '", array_map(fn (string $colonne): string => $colonne === $aChaqueEcriture ? '*'.$colonne : $colonne, $colonnes))."')", (string) $declencheurs[$table]);
         }
     }
 

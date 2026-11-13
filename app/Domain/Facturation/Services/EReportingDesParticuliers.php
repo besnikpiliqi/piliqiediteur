@@ -62,13 +62,19 @@ use Illuminate\Support\Collection;
  * plusieurs taux de services, chaque règlement se répartit au prorata du
  * TTC de chaque groupe restant après les avoirs, en cumul, si bien que le
  * dernier règlement retombe exactement sur le TTC de chaque service ;
- * seule la part des services se déclare (T1.3, T1.4, T9.3, T107.1) ;
- * l'avoir d'une prestation déjà encaissée se déduit le jour où son crédit
- * règle une autre vente (T1.3) : voir EncaissementsDesPrestations. Une
- * société qui a opté pour les débits ne déclare aucun encaissement de
- * services (T112.1). Les paiements des services d'un magasin en franchise
- * en base, vendus à 0 %, partiront à l'étape 2, tous les deux mois (art.
- * 242 nonies P de l'annexe II du CGI) : l'aperçu ne les compte pas.
+ * seule la part des services se déclare (T1.3, T1.4, T9.3, T107.1) ; le
+ * crédit d'un avoir qui s'impute sur le ticket qu'il corrige change ses
+ * groupes le jour de son émission, et ce qu'il a encaissé se répartit de
+ * nouveau (C-1) ; l'avoir d'une prestation déjà encaissée dont le crédit
+ * reste au client se déduit le jour où ce crédit règle une autre vente
+ * (T1.3) : voir EncaissementsDesPrestations. Une vente émise sous
+ * l'option pour les débits, que son émetteur signé garde (voir Emetteur),
+ * ne déclare aucun encaissement de ses services (T112.1), quoi que la
+ * société choisisse ensuite : l'aperçu d'une journée passée ne change
+ * jamais avec ce réglage. Les paiements des services d'un magasin en
+ * franchise en base, vendus à 0 %, partiront à l'étape 2, tous les deux
+ * mois (art. 242 nonies P de l'annexe II du CGI) : l'aperçu ne les compte
+ * pas.
  *
  * Ils se lisent, comme ceux du récapitulatif de la clôture (voir
  * RecapitulatifDeCloture), dans les enregistrements du registre fiscal :
@@ -378,10 +384,6 @@ class EReportingDesParticuliers
      */
     private function encaissements(ClotureCaisse $cloture): array
     {
-        if ($cloture->magasin->societe->option_debits_tva) {
-            return [];
-        }
-
         $fenetre = self::fenetreSignee($cloture);
         $calendrier = $cloture->magasin->calendrier();
         $suivis = $this->ticketsSuivis($this->mouvements(self::enregistrementsDeLaFenetre($fenetre), $fenetre, $calendrier));
@@ -390,22 +392,18 @@ class EReportingDesParticuliers
             return [];
         }
 
-        $mouvements = $this->sansLesReductions($this->mouvements(self::historique($suivis->modelKeys(), $fenetre), $fenetre, $calendrier));
+        $historique = self::historique($suivis->modelKeys(), $fenetre);
+        $sousLOption = self::emisSousLOptionPourLesDebits($historique);
+        $mouvements = $this->sansLesReductions($this->mouvements($historique, $fenetre, $calendrier));
         $avoirs = array_values(array_unique(array_filter(array_column($mouvements, 'avoir_id'))));
         $encaissements = new EncaissementsDesPrestations(
             $this->calculateur,
-            $suivis->map(fn (Facture $ticket): array => $this->groupes($ticket))->all(),
+            $suivis->reject(fn (Facture $ticket): bool => in_array($ticket->getKey(), $sousLOption, true))->map(fn (Facture $ticket): array => $this->groupes($ticket))->all(),
             $this->lignesDesAvoirs($avoirs),
             array_map(intval(...), Avoir::query()->whereKey($avoirs)->where('motif_regularisation', MotifDeRegularisation::SirenCorrige)->pluck('id')->all()),
         );
 
         foreach ($mouvements as $mouvement) {
-            if ($mouvement['facture_id'] === null) {
-                $encaissements->avoirEmis((int) $mouvement['avoir_id']);
-
-                continue;
-            }
-
             $encaissements->reglement($mouvement['facture_id'], $mouvement['date'], $mouvement['montant'], $mouvement['reduction'], $mouvement['avoir_id'], $mouvement['compte']);
         }
 
@@ -413,18 +411,38 @@ class EReportingDesParticuliers
     }
 
     /**
+     * Les ventes de ces enregistrements que leur émetteur signé a émises
+     * sous l'option pour les débits (voir Emetteur et FigeSonEmetteur) :
+     * leurs services ne déclarent aucun encaissement (T112.1), quoi que la
+     * société ait choisi depuis, si bien que l'aperçu d'une journée passée
+     * ne change jamais avec ce réglage.
+     *
+     * @param  Collection<int, EnregistrementFiscal>  $enregistrements
+     * @return list<int>
+     */
+    private static function emisSousLOptionPourLesDebits(Collection $enregistrements): array
+    {
+        return $enregistrements
+            ->filter(fn (EnregistrementFiscal $enregistrement): bool => $enregistrement->chaine === ChaineFiscale::Vente
+                && $enregistrement->type !== 'avoir'
+                && Emetteur::duContenuSigne(ValeursLues::tableauDe(ValeursLues::tableauDe($enregistrement->donneesSignees(), 'contexte'), 'emetteur'))->optionDebitsTva)
+            ->map(fn (EnregistrementFiscal $vente): int => (int) $vente->document_id)
+            ->values()
+            ->all();
+    }
+
+    /**
      * Les tickets déclarés qui vendent un service, avec leurs lignes, que
      * touchent ces mouvements de la clôture : ceux qu'ils règlent, et ceux
      * que corrigent les avoirs dont ils utilisent le crédit.
      *
-     * @param  list<array{facture_id: int|null, date: string, montant: int, avoir_id: int|null, paiement_id: int|null, compte: bool}>  $mouvements
+     * @param  list<array{facture_id: int, date: string, montant: int, avoir_id: int|null, paiement_id: int|null, compte: bool}>  $mouvements
      * @return EloquentCollection<int, Facture>
      */
     private function ticketsSuivis(array $mouvements): EloquentCollection
     {
-        $reglements = array_filter($mouvements, fn (array $mouvement): bool => $mouvement['facture_id'] !== null);
-        $avoirs = array_values(array_unique(array_filter(array_column($reglements, 'avoir_id'))));
-        $factures = array_column($reglements, 'facture_id');
+        $avoirs = array_values(array_unique(array_filter(array_column($mouvements, 'avoir_id'))));
+        $factures = array_column($mouvements, 'facture_id');
 
         if ($factures === []) {
             return new EloquentCollection;
@@ -562,21 +580,19 @@ class EReportingDesParticuliers
      * Les mouvements que signent ces enregistrements, dans leur ordre, en
      * centimes : l'émission d'une vente la règle de ses paiements (en un
      * seul règlement daté du jour de l'émission) puis de chaque crédit
-     * d'avoir plus ancien ; l'émission d'un avoir retire ses lignes des
-     * tickets qu'il corrige (facture_id nul), puis ses imputations, datées
-     * du jour de son émission ; un paiement ou une contre-passation règle
-     * à la date de sa réception, et le crédit d'avoir qu'il impute ou rend
-     * est daté du jour de son enregistrement. Un paiement signé dans le
-     * contexte de l'émission de sa vente, et écrit juste avant elle, ne se
-     * compte qu'une fois. Un
-     * crédit d'avoir garde son avoir, et le paiement qui le signe (null à
-     * l'émission d'une vente ou de l'avoir) ; chaque mouvement dit si la
-     * clôture le compte.
+     * d'avoir plus ancien ; l'émission d'un avoir, de ses imputations,
+     * datées du jour de son émission ; un paiement ou une contre-passation
+     * règle à la date de sa réception, et le crédit d'avoir qu'il impute ou
+     * rend est daté du jour de son enregistrement. Un paiement signé dans
+     * le contexte de l'émission de sa vente, et écrit juste avant elle, ne
+     * se compte qu'une fois. Un crédit d'avoir garde son avoir, et le
+     * paiement qui le signe (null à l'émission d'une vente ou de l'avoir) ;
+     * chaque mouvement dit si la clôture le compte.
      *
      * @param  Collection<int, EnregistrementFiscal>  $enregistrements  dans l'ordre du registre
      * @param  array{vente: array{0: int|null, 1: int|null}, encaissement: array{0: int|null, 1: int|null}}  $fenetre
      * @param  Calendrier  $calendrier  celui du magasin de la clôture, qui date chaque enregistrement
-     * @return list<array{facture_id: int|null, date: string, montant: int, avoir_id: int|null, paiement_id: int|null, compte: bool}>
+     * @return list<array{facture_id: int, date: string, montant: int, avoir_id: int|null, paiement_id: int|null, compte: bool}>
      */
     private function mouvements(Collection $enregistrements, array $fenetre, Calendrier $calendrier): array
     {
@@ -597,8 +613,6 @@ class EReportingDesParticuliers
                 $contexte = ValeursLues::tableauDe($enregistrement->donneesSignees(), 'contexte');
 
                 if ($enregistrement->type === 'avoir') {
-                    $mouvements[] = self::mouvement(null, $jour, 0, (int) $enregistrement->document_id, null, $compte);
-
                     foreach (ValeursLues::tableauDe($contexte, 'imputations') as $imputation) {
                         $imputation = ValeursLues::tableau($imputation);
                         $mouvements[] = self::mouvement(ValeurSimple::enEntier($imputation['facture_id']), $jour, ValeurSimple::enEntier($imputation['montant']), (int) $enregistrement->document_id, null, $compte);
@@ -643,9 +657,9 @@ class EReportingDesParticuliers
     }
 
     /**
-     * @return array{facture_id: int|null, date: string, montant: int, avoir_id: int|null, paiement_id: int|null, compte: bool}
+     * @return array{facture_id: int, date: string, montant: int, avoir_id: int|null, paiement_id: int|null, compte: bool}
      */
-    private static function mouvement(?int $factureId, string $date, int $montant, ?int $avoirId, ?int $paiementId, bool $compte): array
+    private static function mouvement(int $factureId, string $date, int $montant, ?int $avoirId, ?int $paiementId, bool $compte): array
     {
         return ['facture_id' => $factureId, 'date' => $date, 'montant' => $montant, 'avoir_id' => $avoirId, 'paiement_id' => $paiementId, 'compte' => $compte];
     }
@@ -659,8 +673,8 @@ class EReportingDesParticuliers
      * crédit d'avoir (Q13). Un ticket dont la vente est réduite de cette
      * part encaisse ainsi, une fois soldé, exactement son net vendu.
      *
-     * @param  list<array{facture_id: int|null, date: string, montant: int, avoir_id: int|null, paiement_id: int|null, compte: bool}>  $mouvements
-     * @return list<array{facture_id: int|null, date: string, montant: int, reduction: int, avoir_id: int|null, paiement_id: int|null, compte: bool}>
+     * @param  list<array{facture_id: int, date: string, montant: int, avoir_id: int|null, paiement_id: int|null, compte: bool}>  $mouvements
+     * @return list<array{facture_id: int, date: string, montant: int, reduction: int, avoir_id: int|null, paiement_id: int|null, compte: bool}>
      */
     private function sansLesReductions(array $mouvements): array
     {
@@ -673,7 +687,7 @@ class EReportingDesParticuliers
         return array_map(function (array $mouvement) use ($corrections, &$reductions): array {
             $reduction = 0;
 
-            if ($mouvement['facture_id'] !== null && $mouvement['avoir_id'] !== null && isset($corrections[$mouvement['avoir_id']][$mouvement['facture_id']])) {
+            if ($mouvement['avoir_id'] !== null && isset($corrections[$mouvement['avoir_id']][$mouvement['facture_id']])) {
                 $cle = self::cleDImputation($mouvement['avoir_id'], $mouvement['facture_id'], $mouvement['paiement_id']);
                 $reductions[$cle] ??= [];
                 $reduction = array_shift($reductions[$cle]) ?? 0;

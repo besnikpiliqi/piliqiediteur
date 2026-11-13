@@ -9,6 +9,7 @@ use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\Calendrier\Calendrier;
 use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Facturation\Casts\NumeroTvaNormalise;
+use App\Domain\Tenancy\Concerns\RefuseUneCleIllisible;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\FormeJuridique;
 use App\Domain\Tenancy\Enums\MotifCloture;
@@ -25,17 +26,14 @@ use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\CleDuModele;
 use App\Domain\Tenancy\Support\ValeurRequise;
-use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Domain\Tenancy\Support\ValeursLues;
 use App\Models\User;
 use Database\Factories\SocieteFactory;
 use Filament\Models\Contracts\HasName;
-use Illuminate\Contracts\Database\Eloquent\Builder as BuilderContract;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Str;
@@ -90,7 +88,7 @@ use LogicException;
 class Societe extends Model implements HasName
 {
     /** @use HasFactory<SocieteFactory> */
-    use HasFactory, JournaliseSesParametresDeConformite;
+    use HasFactory, JournaliseSesParametresDeConformite, RefuseUneCleIllisible;
 
     /**
      * Les champs de son identité légale, tels que le journal d'audit en
@@ -232,26 +230,6 @@ class Societe extends Model implements HasName
             Str::isUuid($identifiant) => static::query()->firstWhere('uuid', $identifiant),
             default => null,
         };
-    }
-
-    /**
-     * La société d'un uuid tapé dans l'adresse du panneau de son
-     * administration (/societe/{uuid}) : un texte qui n'est pas un uuid ne
-     * désigne aucune société (404), sans interroger la colonne uuid, de
-     * type uuid.
-     *
-     * @param  Model|BuilderContract  $query
-     * @param  mixed  $value
-     * @param  string|null  $field
-     * @return BuilderContract
-     */
-    public function resolveRouteBindingQuery($query, $value, $field = null)
-    {
-        if (($field ?? $this->getRouteKeyName()) === 'uuid' && ! Str::isUuid($value)) {
-            throw (new ModelNotFoundException)->setModel(self::class, [ValeurSimple::enTexte($value)]);
-        }
-
-        return parent::resolveRouteBindingQuery($query, $value, $field);
     }
 
     /**

@@ -19,7 +19,11 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * CreerUneFicheAction, ModifierUneFicheAction et ArchiverUneFicheAction) :
  * la base refuse ces écritures à un compte d'un cabinet lié ou à un
  * expert-comptable de la société dans un magasin que le client ne lui
- * ouvre pas (voir GardesDesCabinets::AUTEURS_DANS_UN_MAGASIN).
+ * ouvre pas (voir GardesDesCabinets::AUTEURS_DANS_UN_MAGASIN), et toute
+ * écriture de la fiche qui garde un tel compte pour dernier auteur, même
+ * sans changer modifie_par (voir
+ * GardesDesCabinets::AUTEUR_DE_CHAQUE_ECRITURE) : chaque écriture nomme
+ * son auteur (voir noterSonAuteur()).
  *
  * @property int|null $cree_par
  * @property string|null $cree_par_nom

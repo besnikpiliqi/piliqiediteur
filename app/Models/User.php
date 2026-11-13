@@ -10,6 +10,7 @@ use App\Domain\Cabinets\Services\ExpertsComptablesDeclares;
 use App\Domain\Cabinets\Support\IdentiteDansLeJournal;
 use App\Domain\Calendrier\Calendrier;
 use App\Domain\Calendrier\Casts\Instant;
+use App\Domain\Tenancy\Concerns\RefuseUneCleIllisible;
 use App\Domain\Tenancy\Enums\ModeDAccesRedonne;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\RoleSociete;
@@ -101,7 +102,7 @@ use Illuminate\Support\Str;
 class User extends Authenticatable implements FilamentUser, HasTenants
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, Notifiable;
+    use HasFactory, Notifiable, RefuseUneCleIllisible;
 
     /**
      * La longueur des colonnes où l'historique fige le nom d'une personne

@@ -360,8 +360,11 @@ final class ChosesAFaireDuMagasin
      * voit, toujours en rouge : à faire pour qui vend (créer et émettre une
      * facture, faire un avoir), qui la régularise depuis sa fiche ; à
      * surveiller pour qui supervise et les voit. Le rappel de leur preuve
-     * reste à côté (voir preuvesAFournir()). Dans un magasin en lecture
-     * seule, rien ne s'émet : le bouton ne dit que « Voir ».
+     * reste à côté (voir preuvesAFournir()). Dans un magasin qui ne peut
+     * pas vendre (lecture seule, société membre d'un assujetti unique,
+     * établissement à confirmer, voir Magasin::refusDeVente()), rien ne
+     * s'émet et la fiche n'offre pas le geste : le bouton ne dit que
+     * « Voir », et la précision dit pourquoi.
      */
     private function exonerationsNonProuvees(): ?ChoseAFaire
     {
@@ -384,6 +387,7 @@ final class ChosesAFaireDuMagasin
         }
 
         $seule = $factures->count() === 1 ? $factures->first() : null;
+        $refusDeVente = $aFaire ? $this->magasin->refusDeVente() : null;
 
         return new ChoseAFaire(
             cle: 'exonerations_non_prouvees',
@@ -394,10 +398,10 @@ final class ChosesAFaireDuMagasin
                 ? '1 vente hors de France sans preuve de sortie 150 jours après sa date : '.$seule->numero.($seule->nomDuClient() === null ? '' : ', '.$seule->nomDuClient()).'.'
                 : $factures->count().' ventes hors de France sans preuve de sortie 150 jours après leur date.',
             url: $seule === null ? FactureResource::urlDesExonerationsNonProuvees() : FactureResource::getUrl('view', ['record' => $seule]),
-            bouton: $this->bouton('Régulariser', $aFaire, permisEnLectureSeule: false),
+            bouton: $aFaire && $refusDeVente === null ? 'Régulariser' : 'Voir',
             aSurveiller: ! $aFaire,
             date: $this->jourDe($factures->first()?->date_emission),
-            precision: $this->avecLaLectureSeule('L\'exonération se régularise : un avoir sans retour en stock, puis une facture à la TVA française au même prix TTC.', $aFaire, permisEnLectureSeule: false),
+            precision: 'L\'exonération se régularise : un avoir sans retour en stock, puis une facture à la TVA française au même prix TTC.'.($refusDeVente === null ? '' : ' '.$refusDeVente),
             lignes: $seule !== null ? [] : array_values($factures->take(self::LIGNES_ENUMEREES)->map(fn (Facture $facture): array => [
                 'libelle' => (string) $facture->numero,
                 'url' => FactureResource::getUrl('view', ['record' => $facture]),

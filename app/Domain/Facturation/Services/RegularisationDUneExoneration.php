@@ -163,11 +163,22 @@ class RegularisationDUneExoneration
      *   magasin ;
      * - le HT et la TVA se calculent depuis ce TTC, taux par taux, en
      *   cumul, comme toute vente (voir CalculateurLigne::chiffrerUneVente()) ;
-     * - le PU TTC est le prix unitaire payé (le PU HT de la ligne d'origine)
-     *   au centime, la remise de la ligne gardée, et le PU HT en est la
-     *   conversion au millionième : la note de calcul du document dit si la
-     *   quantité × le PU HT retombe sur le HT de chaque ligne (voir
-     *   MentionsFiscales::calcul()).
+     * - le prix unitaire payé (le PU HT de la ligne d'origine, au
+     *   millionième) n'est en général pas un prix au centime : le PU HT
+     *   enregistré est le HT de la ligne ÷ (la quantité × (100 % - la
+     *   remise gardée)), au millionième (voir
+     *   CalculateurLigne::prixUnitaireHtDuMontant()), si bien que la
+     *   quantité × ce PU HT, remise déduite, retombe sur le HT de la ligne à
+     *   moins de deux centimes près jusqu'à 10 000 articles, comme le dit la
+     *   note de calcul d'une facture à un professionnel (voir
+     *   MentionsFiscales::calcul()) : 10 000 articles payés 83 333,33 € font
+     *   69 444,44 € HT, à 6,944444 € ; le PU TTC est ce prix payé, au
+     *   centime (8,33 €), que seul un ticket imprime, avec la note qui dit
+     *   que la quantité × le prix unitaire affiché peut différer du total de
+     *   la ligne (décision de Claude, D76 : la ligne garde le TTC payé, et
+     *   jamais une seconde ligne du même produit ne la complète) ; une
+     *   remise de 100 % ne laisse aucun HT, et le PU HT est alors la
+     *   conversion du PU TTC.
      * Aucune quand tout a été crédité.
      *
      * @return list<array{produit_id: int|null, service_id: int|null, nature: NatureLigne, description: string, reference: string|null, quantite: int, prix_unitaire_ht: string, prix_unitaire_ttc: string, taux_tva: string, taux_tva_du_prix: string, remise_pourcentage: string, montant_ht: string, montant_tva: string, montant_ttc: string, ordre: int}>
@@ -194,6 +205,8 @@ class RegularisationDUneExoneration
         foreach ($restantes as $index => $ligne) {
             $prixUnitaireTtc = $this->calculateur->prixUnitaireAuCentime($this->calculateur->enMillioniemes($ligne['prix_unitaire_ht']));
             $montants = $chiffre['lignes'][$index];
+            $prixUnitaireHt = $this->calculateur->prixUnitaireHtDuMontant($montants['montant_ht'], $ligne['quantite'], $this->calculateur->enCentiemes($ligne['remise_pourcentage']))
+                ?? $this->calculateur->prixUnitaireHtExact($prixUnitaireTtc, $taux[$index]);
 
             $lignes[] = [
                 'produit_id' => $ligne['produit_id'],
@@ -202,7 +215,7 @@ class RegularisationDUneExoneration
                 'description' => $ligne['description'],
                 'reference' => $ligne['reference'],
                 'quantite' => $ligne['quantite'],
-                'prix_unitaire_ht' => $this->calculateur->enDecimalAuMillionieme($this->calculateur->prixUnitaireHtExact($prixUnitaireTtc, $taux[$index])),
+                'prix_unitaire_ht' => $this->calculateur->enDecimalAuMillionieme($prixUnitaireHt),
                 'prix_unitaire_ttc' => $this->calculateur->enDecimal($prixUnitaireTtc),
                 'taux_tva' => $this->calculateur->enDecimal($taux[$index]),
                 'taux_tva_du_prix' => $this->calculateur->enDecimal($taux[$index]),

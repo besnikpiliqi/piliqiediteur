@@ -110,6 +110,22 @@ class EReportingDesParticuliersTest extends TestCase
         ], [['facture_id' => $facture->id, 'montant' => $montant]]);
     }
 
+    /**
+     * Le ticket d'un particulier du 5 octobre 2026 : une réparation de
+     * 60,00 € et un article de 40,00 €, à 20 %, laissés dus, dont ces
+     * centimes sont reçus en espèces le 5 ; la journée du 5 est clôturée,
+     * et son aperçu déclare la part de la réparation (60 % de ce montant).
+     */
+    private function ticketMixtePayeEnPartieLeCinq(int $centimesRecus): Facture
+    {
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
+        $ticket = $this->emettre(Client::factory()->create(), [$this->reparation(60), ['produit_id' => $this->produit(40)->id, 'quantite' => 1]]);
+        $this->payer($ticket, $centimesRecus / 100, ModePaiement::Especes, '2026-10-05');
+        $this->assertSame([['date' => '2026-10-05', 'taux' => 2000, 'montant' => intdiv($centimesRecus * 60, 100)]], $this->apercu($this->cloturer('2026-10-05'))->encaissementsDeServices);
+
+        return $ticket->load('lignes', 'client');
+    }
+
     private function cloturer(string $journee): ClotureCaisse
     {
         return app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, $journee);
@@ -684,6 +700,133 @@ class EReportingDesParticuliersTest extends TestCase
 
         $this->assertSame([[CategorieEReporting::PrestationsDeServices, 2000, 5000, 1000]], self::totaux($apercu));
         $this->assertSame([], $apercu->encaissementsDeServices);
+    }
+
+    /**
+     * L'option pour les débits est celle que chaque ticket a signée dans
+     * son émetteur à son émission, jamais le réglage du jour où l'aperçu
+     * se lit (constat de la relecture du lot ER-PRO) : le 5, sans l'option,
+     * une réparation de 60,00 € payée par carte, déclarée le 5, et une
+     * réparation de 40,00 € laissée due ; le 6, la société prend l'option,
+     * la seconde réparation est payée et une troisième, de 30,00 €, est
+     * vendue et payée sous l'option. L'aperçu du 5 ne change pas, et celui
+     * du 6 ne déclare que les 40,00 € vendus sans l'option.
+     */
+    public function test_l_apercu_d_une_journee_passee_ne_change_pas_quand_la_societe_prend_l_option_pour_les_debits(): void
+    {
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
+        $client = Client::factory()->create();
+        self::vendreAuComptant(self::auteur(), $client, [$this->reparation(60)], ModePaiement::CarteBancaire);
+        $due = $this->emettre($client, [$this->reparation(40)]);
+        $duCinq = $this->cloturer('2026-10-05');
+        $this->assertSame([['date' => '2026-10-05', 'taux' => 2000, 'montant' => 6000]], $this->apercu($duCinq)->encaissementsDeServices);
+
+        $this->travelTo(self::aParis('2026-10-06 10:00:00'));
+        $this->reglerLaSociete($this->magasin, ['option_debits_tva' => true]);
+        $this->payer($due, 40, ModePaiement::Especes, '2026-10-06');
+        self::vendreAuComptant(self::auteur(), $client, [$this->reparation(30)], ModePaiement::CarteBancaire);
+        $duSix = $this->cloturer('2026-10-06');
+
+        $this->assertSame([['date' => '2026-10-05', 'taux' => 2000, 'montant' => 6000]], $this->apercu($duCinq->fresh())->encaissementsDeServices);
+        $this->assertSame([['date' => '2026-10-06', 'taux' => 2000, 'montant' => 4000]], $this->apercu($duSix)->encaissementsDeServices);
+        $this->assertSame([$duCinq->id, $duSix->id], app(EReportingDesParticuliers::class)->journeesADeclarer($this->magasin->fresh())->orderBy('id')->pluck('id')->all());
+    }
+
+    /**
+     * Dans l'autre sens : le 5, sous l'option pour les débits, une
+     * réparation de 60,00 € payée et une de 40,00 € laissée due ne
+     * déclarent rien ; le 6, la société quitte l'option, la seconde est
+     * payée et une troisième, de 30,00 €, vendue et payée sans l'option.
+     * L'aperçu du 5 reste vide, et celui du 6 ne déclare que les 30,00 €
+     * vendus sans l'option : jamais un encaissement d'une vente faite sous
+     * le régime des débits.
+     */
+    public function test_l_apercu_d_une_journee_passee_ne_change_pas_quand_la_societe_quitte_l_option_pour_les_debits(): void
+    {
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
+        $this->reglerLaSociete($this->magasin, ['option_debits_tva' => true]);
+        $client = Client::factory()->create();
+        self::vendreAuComptant(self::auteur(), $client, [$this->reparation(60)], ModePaiement::CarteBancaire);
+        $due = $this->emettre($client, [$this->reparation(40)]);
+        $duCinq = $this->cloturer('2026-10-05');
+        $this->assertSame([], $this->apercu($duCinq)->encaissementsDeServices);
+
+        $this->travelTo(self::aParis('2026-10-06 10:00:00'));
+        $this->reglerLaSociete($this->magasin, ['option_debits_tva' => false]);
+        $this->payer($due, 40, ModePaiement::Especes, '2026-10-06');
+        self::vendreAuComptant(self::auteur(), $client, [$this->reparation(30)], ModePaiement::CarteBancaire);
+        $duSix = $this->cloturer('2026-10-06');
+
+        $this->assertSame([], $this->apercu($duCinq->fresh())->encaissementsDeServices);
+        $this->assertSame([['date' => '2026-10-06', 'taux' => 2000, 'montant' => 3000]], $this->apercu($duSix)->encaissementsDeServices);
+    }
+
+    /**
+     * L'avoir dont le crédit s'impute sur le ticket qu'il corrige change
+     * la part de chaque groupe, le jour de son émission (C-1 : au prorata
+     * du TTC restant après un avoir ; constat de la relecture du lot
+     * ER-PRO) : une réparation de 60,00 € et un article de 40,00 €, à 20 %,
+     * dont 30,00 € sont reçus le 5 (18,00 € déclarés pour la réparation) ;
+     * le 6, l'article est rendu, et son crédit de 40,00 € réduit ce que
+     * doit le ticket, qui ne vend plus que la réparation : les 30,00 € reçus
+     * la payent, et 12,00 € de plus se déclarent le 6.
+     */
+    public function test_l_avoir_d_un_bien_impute_sur_son_ticket_reporte_l_encaisse_sur_le_service(): void
+    {
+        $ticket = $this->ticketMixtePayeEnPartieLeCinq(3000);
+
+        $this->travelTo(self::aParis('2026-10-06 10:00:00'));
+        app(EnregistrerAvoirAction::class)->handle(self::auteur(), $ticket->client, [['ligne_facture_id' => $ticket->lignes->firstWhere('produit_id', '!=', null)->id, 'quantite' => 1]], 'Retour');
+        $duSix = $this->cloturer('2026-10-06');
+
+        $this->assertSame(3000, $ticket->fresh()->resteDuEnCentimes());
+        $this->assertSame([['date' => '2026-10-06', 'taux' => 2000, 'montant' => 1200]], $this->apercu($duSix)->encaissementsDeServices);
+    }
+
+    /**
+     * Le cas miroir : le 6, c'est la réparation qui est annulée ; son
+     * crédit de 60,00 € réduit tout entier ce que doit le ticket (10,00 €
+     * restent dus pour l'article), sans crédit pour le client : les
+     * 30,00 € reçus ne payent plus que l'article, et les 18,00 € déclarés
+     * pour la réparation se déduisent le 6.
+     */
+    public function test_l_avoir_d_un_service_impute_sur_son_ticket_deduit_sa_part_encaissee(): void
+    {
+        $ticket = $this->ticketMixtePayeEnPartieLeCinq(3000);
+
+        $this->travelTo(self::aParis('2026-10-06 10:00:00'));
+        app(EnregistrerAvoirAction::class)->handle(self::auteur(), $ticket->client, [['ligne_facture_id' => $ticket->lignes->firstWhere('service_id', '!=', null)->id, 'quantite' => 1]], 'Annulée');
+        $duSix = $this->cloturer('2026-10-06');
+
+        $this->assertSame([1000, 0], [$ticket->fresh()->resteDuEnCentimes(), $ticket->client->fresh()->soldeCrediteurEnCentimes()]);
+        $this->assertSame([['date' => '2026-10-06', 'taux' => 2000, 'montant' => -1800]], $this->apercu($duSix)->encaissementsDeServices);
+    }
+
+    /**
+     * Quand le ticket n'absorbe qu'une part du crédit : 50,00 € reçus le 5
+     * (30,00 € déclarés pour la réparation) ; le 6, la réparation annulée
+     * donne 60,00 € de crédit, dont 50,00 € réduisent ce que doit le
+     * ticket et 10,00 € restent au client : seule la part absorbée se
+     * déduit le 6 (20,00 €) ; le 7, les 10,00 € restants règlent une autre
+     * réparation de 10,00 € : 10,00 € reçus et 10,00 € annulés, net rien le
+     * 7 (T1.3). La réparation annulée finit à 0,00 € déclaré.
+     */
+    public function test_seule_la_part_du_credit_absorbee_par_son_ticket_se_deduit_le_jour_de_l_avoir(): void
+    {
+        $ticket = $this->ticketMixtePayeEnPartieLeCinq(5000);
+
+        $this->travelTo(self::aParis('2026-10-06 10:00:00'));
+        app(EnregistrerAvoirAction::class)->handle(self::auteur(), $ticket->client, [['ligne_facture_id' => $ticket->lignes->firstWhere('service_id', '!=', null)->id, 'quantite' => 1]], 'Annulée');
+        $duSix = $this->cloturer('2026-10-06');
+        $this->assertSame([0, 1000], [$ticket->fresh()->resteDuEnCentimes(), $ticket->client->fresh()->soldeCrediteurEnCentimes()]);
+
+        $this->travelTo(self::aParis('2026-10-07 10:00:00'));
+        $autre = $this->emettre($ticket->client, [$this->reparation(10)]);
+        $duSept = $this->cloturer('2026-10-07');
+
+        $this->assertSame(StatutFacture::Payee, $autre->fresh()->statut);
+        $this->assertSame([['date' => '2026-10-06', 'taux' => 2000, 'montant' => -2000]], $this->apercu($duSix)->encaissementsDeServices);
+        $this->assertSame([], $this->apercu($duSept)->encaissementsDeServices);
     }
 
     /**

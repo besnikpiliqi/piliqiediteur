@@ -18,16 +18,19 @@ use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Enums\TypePreuve;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\MentionsFiscales;
 use App\Domain\Facturation\Services\PiedDePage;
 use App\Domain\Facturation\Services\RegularisationDUneExoneration;
 use App\Domain\Stock\Models\MouvementStock;
+use App\Domain\Tenancy\Actions\ModifierParametresFiscauxSocieteAction;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\UrgenceAFaire;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\ActionsUniques;
 use App\Domain\Tenancy\Services\ChosesAFaireDuMagasin;
+use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\ChoseAFaire;
 use App\Filament\App\Resources\FactureResource;
 use App\Filament\App\Resources\FactureResource\Pages\ListFactures;
@@ -235,6 +238,43 @@ class ExonerationNonProuveeTest extends TestCase
     }
 
     /**
+     * Un export de 100, puis de 10 000 articles à 10,00 € TTC à 20 %,
+     * vendus 833,33 € et 83 333,33 € sans la TVA française (PU HT de
+     * 8,333333 €) : la ligne de la facture rectificative garde la quantité
+     * et le TTC payé, 694,44 € HT et 138,89 € de TVA, puis 69 444,44 € HT et
+     * 13 888,89 € de TVA ; son PU HT est ce HT ÷ la quantité, au millionième
+     * (6,9444 € puis 6,944444 €), si bien que la quantité x ce PU HT retombe
+     * sur le HT de la ligne à moins de deux centimes près, comme le dit la
+     * note de calcul (constat de la relecture du lot ER-PRO : 10 000 x
+     * 6,941667 € tombaient 27,77 € sous le HT) ; son PU TTC est le prix
+     * payé au centime, 8,33 €, que la facture n'imprime pas, et la quantité
+     * x ce PU TTC s'écarte du TTC de la ligne d'au plus un demi-centime par
+     * article (décision de Claude, D76 : la ligne garde le TTC payé).
+     */
+    public function test_la_ligne_rectificative_d_un_export_de_nombreux_articles_retombe_sur_son_ht(): void
+    {
+        $magasin = $this->magasin();
+        $responsable = self::responsableDeTest($magasin);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 10, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $centArticles = $this->exporter($responsable, $produit, 100);
+        $dixMilleArticles = $this->exporter($responsable, $produit, 10_000);
+        $this->assertSame(['833.33', '83333.33'], [(string) $centArticles->total_ttc, (string) $dixMilleArticles->total_ttc]);
+        $calculateur = app(CalculateurLigne::class);
+
+        $this->travelTo(self::aParis('2027-03-01 09:00:00'));
+
+        foreach ([[$centArticles, 100, '694.44', '138.89', '833.33', '6.944400'], [$dixMilleArticles, 10_000, '69444.44', '13888.89', '83333.33', '6.944444']] as [$export, $quantite, $ht, $tva, $ttc, $prixUnitaireHt]) {
+            $rectificative = $this->regulariser($magasin, $export);
+            $ligne = $rectificative->lignes()->sole();
+
+            $this->assertSame([$quantite, $ht, $tva, $ttc, $prixUnitaireHt, '8.33'], [$ligne->quantite, (string) $ligne->montant_ht, (string) $ligne->montant_tva, (string) $ligne->montant_ttc, (string) $ligne->prix_unitaire_ht, (string) $ligne->prix_unitaire_ttc]);
+            $this->assertSame($calculateur->enCentiemes($ht) * 10_000, $quantite * $calculateur->enMillioniemes($ligne->prix_unitaire_ht));
+            $this->assertLessThanOrEqual($quantite / 2, abs($calculateur->enCentiemes($ttc) - $quantite * $calculateur->enCentiemes($ligne->prix_unitaire_ttc)));
+            $this->assertStringEndsWith('la quantité × le PU HT, remise déduite, retombe sur le total HT de la ligne à moins de deux centimes près.', (string) app(MentionsFiscales::class)->calcul($rectificative));
+        }
+    }
+
+    /**
      * Depuis la fiche de la vente, le responsable régularise d'un clic au
      * 150e jour, et la facture rectificative s'ouvre ; le bouton n'existe
      * ni le 149e jour, ni pour le propriétaire, à qui une demande forgée
@@ -307,6 +347,40 @@ class ExonerationNonProuveeTest extends TestCase
         $this->assertNull($this->chose($responsable, $magasin, 'exonerations_non_prouvees'));
     }
 
+    /**
+     * Dans un magasin qui ne peut pas vendre, la fiche n'offre pas « Régulariser
+     * l'exonération » : l'« À faire » ne propose donc que « Voir », et sa
+     * précision dit pourquoi (constat de la relecture du lot ER-PRO). Un
+     * export de 500,00 € du 2 octobre 2026, puis la société se déclare
+     * membre d'un assujetti unique : le 1er mars 2027, la vente reste à
+     * faire pour le responsable, en rouge, avec « Voir » et le refus de
+     * vente ; la case décochée, « Régulariser » revient.
+     */
+    public function test_l_a_faire_ne_propose_pas_de_regulariser_dans_un_magasin_qui_ne_peut_pas_vendre(): void
+    {
+        [$magasin, $export] = $this->exportDe500Euros();
+        $responsable = self::responsableDeTest($magasin);
+        $this->cocherLAssujettiUnique($magasin, true);
+
+        $this->travelTo(self::aParis('2027-03-01 09:00:00'));
+        $chose = $this->chose($responsable, $magasin, 'exonerations_non_prouvees');
+        $this->assertSame([UrgenceAFaire::Rouge, false, 'Voir', FactureResource::getUrl('view', ['record' => $export])], [$chose?->urgence, $chose?->aSurveiller, $chose?->bouton, $chose?->url]);
+        $this->assertSame('L\'exonération se régularise : un avoir sans retour en stock, puis une facture à la TVA française au même prix TTC. '.Magasin::REFUS_ASSUJETTI_UNIQUE, $chose?->precision);
+        Livewire::test(ViewFacture::class, ['record' => $export->getRouteKey()])->assertActionHidden('regulariserLExoneration');
+
+        $this->cocherLAssujettiUnique($magasin, false);
+        $chose = $this->chose($responsable, $magasin, 'exonerations_non_prouvees');
+        $this->assertSame(['Régulariser', 'L\'exonération se régularise : un avoir sans retour en stock, puis une facture à la TVA française au même prix TTC.'], [$chose?->bouton, $chose?->precision]);
+        Livewire::test(ViewFacture::class, ['record' => $export->getRouteKey()])->assertActionVisible('regulariserLExoneration');
+    }
+
+    private function cocherLAssujettiUnique(Magasin $magasin, bool $membre): void
+    {
+        app(TenantContext::class)->runAsSociete($magasin->societe, fn () => app(ModifierParametresFiscauxSocieteAction::class)->handle($this->proprietaireDe($magasin), $magasin->societe->fresh(), ['membre_assujetti_unique' => $membre]));
+        $magasin->unsetRelation('societe');
+        app(TenantContext::class)->set($magasin->fresh());
+    }
+
     private function chose(User $compte, Magasin $magasin, string $cle): ?ChoseAFaire
     {
         $this->dansLeMagasin($magasin, $compte->fresh() ?? $compte);
@@ -332,11 +406,11 @@ class ExonerationNonProuveeTest extends TestCase
         return [$magasin, $export, $produit];
     }
 
-    private function exporter(User $auteur, Produit $produit): Facture
+    private function exporter(User $auteur, Produit $produit, int $quantite = 1): Facture
     {
         $client = Client::factory()->create(['nom' => 'Acme Inc.', 'type_client' => TypeClient::Professionnel, 'pays' => 'US', 'etabli_en_france' => false, 'identifiant_etranger' => 'EIN 12-3456789']);
 
-        return app(EmettreFactureAction::class)->handle($auteur, app(CreerFactureAction::class)->handle($auteur, $client, [['produit_id' => $produit->id, 'quantite' => 1]], self::livraisonAuxEtatsUnis()));
+        return app(EmettreFactureAction::class)->handle($auteur, app(CreerFactureAction::class)->handle($auteur, $client, [['produit_id' => $produit->id, 'quantite' => $quantite]], self::livraisonAuxEtatsUnis()));
     }
 
     /**

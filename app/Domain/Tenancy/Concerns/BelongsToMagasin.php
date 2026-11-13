@@ -42,6 +42,9 @@ use LogicException;
  * (magasin_id, …) → (magasin_id, id) refuse de même une référence vers la
  * fiche d'un autre magasin.
  *
+ * Une adresse qui désigne une de ses fiches par une clé que la base ne
+ * peut pas lire ne désigne rien (404, voir RefuseUneCleIllisible).
+ *
  * Son magasin n'est jamais nul : magasin_id ne l'est jamais dans les
  * tables de ces modèles, sa clé étrangère vise un magasin, qu'aucun
  * magasin ne s'efface (voir DeclencheursDeProtection::sansSuppression())
@@ -51,6 +54,8 @@ use LogicException;
  */
 trait BelongsToMagasin
 {
+    use RefuseUneCleIllisible;
+
     public static function bootBelongsToMagasin(): void
     {
         static::addGlobalScope(new MagasinScope);

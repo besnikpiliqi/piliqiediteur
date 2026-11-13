@@ -75,10 +75,12 @@ use Illuminate\Support\Facades\DB;
  *   déclaration qui prend fin ou se rattache avec un compte
  *   d'expert-comptable encore ouvert : ses comptes se retirent avant.
  * - magasins_ouverts_a_l_expert_comptable (factures_achat,
- *   avoirs_fournisseur, inventaires_ouverture, pieces_fournisseur,
- *   telechargements_documents, voir poserLaFonctionDesMagasinsOuverts()) :
- *   un compte d'un cabinet ou un expert-comptable de la société qui agit
- *   dans un magasin que le client ne lui ouvre pas.
+ *   avoirs_fournisseur, fournisseurs, inventaires_ouverture,
+ *   mouvements_stock, pieces_fournisseur, telechargements_documents, voir
+ *   poserLaFonctionDesMagasinsOuverts()) : un compte d'un cabinet ou un
+ *   expert-comptable de la société qui agit dans un magasin que le client
+ *   ne lui ouvre pas, ou qui y reste le dernier auteur d'une fiche de
+ *   fournisseur qu'une autre écriture touche.
  *
  * Chacune se pose dans la migration de création de sa table, et se retire
  * avant elle, fonction comprise, par retirer() ; celles de
@@ -88,7 +90,8 @@ use Illuminate\Support\Facades\DB;
  * verrouille rien : aucune écriture simultanée ne peut le rendre faux.
  *
  * Chaque garde est une fonction plpgsql et son déclencheur BEFORE (INSERT,
- * ou INSERT OR UPDATE OF les colonnes qu'elle lit). Celle d'un
+ * INSERT OR UPDATE OF les colonnes qu'elle lit, ou INSERT OR UPDATE pour
+ * une colonne contrôlée à chaque écriture). Celle d'un
  * expert-comptable de la société ouvert prend d'abord sa déclaration en
  * partage (voir verrou()) : toute action qui rouvre un tel compte tient
  * déjà sa déclaration, si bien qu'une écriture fautive attend, puis voit
@@ -147,6 +150,26 @@ final class GardesDesCabinets
         'mouvements_stock' => ['cree_par'],
         'telechargements_documents' => ['demande_par'],
     ];
+
+    /**
+     * Les tables de AUTEURS_DANS_UN_MAGASIN dont une colonne nomme l'auteur
+     * de chaque écriture de la ligne, et non d'un seul geste : la garde la
+     * contrôle à chaque modification de la ligne, même quand elle garde sa
+     * valeur, si bien qu'une fiche de fournisseur dont le dernier auteur
+     * n'ouvre plus le magasin ne se modifie, ne s'archive ni ne se restaure
+     * plus qu'en nommant son nouvel auteur (voir
+     * Fournisseur::noterSonAuteur()) : jamais en son nom.
+     */
+    public const AUTEUR_DE_CHAQUE_ECRITURE = [
+        'fournisseurs' => 'modifie_par',
+    ];
+
+    /**
+     * La marque, devant son nom, de la colonne que la garde des magasins
+     * ouverts contrôle à chaque modification (voir
+     * AUTEUR_DE_CHAQUE_ECRITURE).
+     */
+    private const A_CHAQUE_ECRITURE = '*';
 
     /**
      * Un refus vaut à l'insertion et à la modification, à l'insertion
@@ -297,9 +320,10 @@ final class GardesDesCabinets
             ."WHEN u.role_societe = '".RoleSociete::ExpertComptable->value."' THEN EXISTS (SELECT 1 FROM comptes_expert_comptable c JOIN liens_cabinet d ON d.id = c.lien_id WHERE c.user_id = u.id AND d.etat = '".EtatDuLien::Declare->value."' AND d.societe_id = m.societe_id AND ".$ouvre('d').') '
             ."WHEN s.type_activite = '".TypeDActivite::Cabinet->value."' THEN EXISTS (SELECT 1 FROM liens_cabinet l WHERE l.cabinet_id = u.societe_id AND l.societe_id = m.societe_id AND l.etat = '".EtatDuLien::Actif->value."' AND ".$ouvre('l').') '
             .'ELSE TRUE END FROM users u JOIN societes s ON s.id = u.societe_id JOIN magasins m ON m.id = magasin WHERE u.id = compte $$');
-        $connexion->unprepared('CREATE OR REPLACE FUNCTION garde_'.self::MAGASINS_OUVERTS.'() RETURNS trigger LANGUAGE plpgsql '.DeclencheursDeProtection::CHEMIN_DE_RECHERCHE.' AS $$ DECLARE colonne text; compte bigint; BEGIN '
-            .'FOREACH colonne IN ARRAY TG_ARGV LOOP '
-            ."IF TG_OP = 'UPDATE' AND (to_jsonb(OLD) ->> colonne) IS NOT DISTINCT FROM (to_jsonb(NEW) ->> colonne) THEN CONTINUE; END IF; "
+        $connexion->unprepared('CREATE OR REPLACE FUNCTION garde_'.self::MAGASINS_OUVERTS.'() RETURNS trigger LANGUAGE plpgsql '.DeclencheursDeProtection::CHEMIN_DE_RECHERCHE.' AS $$ DECLARE argument text; colonne text; compte bigint; BEGIN '
+            .'FOREACH argument IN ARRAY TG_ARGV LOOP '
+            ."colonne := ltrim(argument, '".self::A_CHAQUE_ECRITURE."'); "
+            ."IF TG_OP = 'UPDATE' AND left(argument, 1) <> '".self::A_CHAQUE_ECRITURE."' AND (to_jsonb(OLD) ->> colonne) IS NOT DISTINCT FROM (to_jsonb(NEW) ->> colonne) THEN CONTINUE; END IF; "
             .'compte := (to_jsonb(NEW) ->> colonne)::bigint; '
             ."IF compte IS NOT NULL AND (CASE WHEN TG_TABLE_NAME = 'telechargements_documents' THEN EXISTS (SELECT 1 FROM jsonb_array_elements_text(to_jsonb(NEW) -> 'magasins') choisi WHERE compte_ouvre_le_magasin(compte, choisi::bigint) = FALSE) ELSE compte_ouvre_le_magasin(compte, (to_jsonb(NEW) ->> 'magasin_id')::bigint) = FALSE END) "
             ."THEN RAISE EXCEPTION '%', ".self::message(self::MAGASINS_OUVERTS, 'un compte d\'un cabinet d\'expertise comptable ou un expert-comptable de la société n\'agit que dans un magasin que le client lui ouvre').'; END IF; '
@@ -319,17 +343,22 @@ final class GardesDesCabinets
      * garde des magasins ouverts : à l'insertion, et quand une colonne qui
      * nomme un compte change (seule la colonne changée est contrôlée : un
      * inventaire saisi par le cabinet se valide encore par le propriétaire
-     * après que le client lui a retiré ce magasin). Dans la migration de
-     * création de la table, retiré par retirerLesMagasinsOuverts() dans son
-     * down().
+     * après que le client lui a retiré ce magasin) ; sur une table de
+     * AUTEUR_DE_CHAQUE_ECRITURE, à toute modification, la colonne de
+     * l'auteur de chaque écriture, marquée pour la fonction, étant
+     * contrôlée même inchangée. Dans la migration de création de la table,
+     * retiré par retirerLesMagasinsOuverts() dans son down().
      *
      * @param  key-of<self::AUTEURS_DANS_UN_MAGASIN>  $table
      */
     public static function poserLesMagasinsOuverts(string $table): void
     {
         $colonnes = self::AUTEURS_DANS_UN_MAGASIN[$table];
+        $aChaqueEcriture = self::AUTEUR_DE_CHAQUE_ECRITURE[$table] ?? null;
+        $moments = $aChaqueEcriture === null ? 'INSERT OR UPDATE OF '.implode(', ', $colonnes) : 'INSERT OR UPDATE';
+        $arguments = array_map(fn (string $colonne): string => $colonne === $aChaqueEcriture ? self::A_CHAQUE_ECRITURE.$colonne : $colonne, $colonnes);
 
-        DB::connection()->unprepared('CREATE TRIGGER '.self::MAGASINS_OUVERTS.' BEFORE INSERT OR UPDATE OF '.implode(', ', $colonnes)." ON {$table} FOR EACH ROW EXECUTE FUNCTION garde_".self::MAGASINS_OUVERTS."('".implode("', '", $colonnes)."')");
+        DB::connection()->unprepared('CREATE TRIGGER '.self::MAGASINS_OUVERTS." BEFORE {$moments} ON {$table} FOR EACH ROW EXECUTE FUNCTION garde_".self::MAGASINS_OUVERTS."('".implode("', '", $arguments)."')");
     }
 
     /**

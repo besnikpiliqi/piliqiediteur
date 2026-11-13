@@ -21,6 +21,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  *     $fillable, et un identifiant forcé dans une requête ne rattache
  *     jamais rien à une autre société.
  *
+ * Une adresse qui désigne une de ses fiches par une clé que la base ne
+ * peut pas lire ne désigne rien (404, voir RefuseUneCleIllisible).
+ *
  * Sa société n'est jamais nulle : societe_id ne l'est jamais dans les
  * tables de ces modèles, sa clé étrangère vise une société, qu'aucune
  * société ne s'efface (voir DeclencheursDeProtection::sansSuppression())
@@ -30,6 +33,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 trait BelongsToSociete
 {
+    use RefuseUneCleIllisible;
+
     public static function bootBelongsToSociete(): void
     {
         static::addGlobalScope(new SocieteScope);

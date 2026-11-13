@@ -93,3 +93,28 @@ test('le propriétaire surveille l’export sans preuve de sortie depuis son « 
 
     expect(app(TenantContext::class)->runAs($societe->magasin, fn (): int => Avoir::query()->whereNotNull('motif_regularisation')->count()))->toBe(0);
 });
+
+test('l’administrateur autorisé à vendre régularise depuis son « À faire » l’export resté sans preuve de sortie 150 jours après sa date, et la facture rectificative s’ouvre à son nom', function () {
+    $societe = $this->societeComplete();
+    $export = exportSansPreuve($societe, $societe->responsable);
+    $this->travelTo(self::aParis('2026-08-07 10:00:00'));
+
+    $onglet = $this->seConnecter($societe->administrateurVendeur)->aller('/app/'.$societe->magasin->uuid)
+        ->voir('1 vente hors de France sans preuve de sortie 150 jours après sa date : '.$export->numero)
+        ->cliquer('[data-a-faire="exonerations_non_prouvees"] >> text="Régulariser"')
+        ->attendreLaPage('/factures/'.$export->getRouteKey().'$')
+        ->cliquerSur('Régulariser l\'exonération')
+        ->voir('son exonération tombe')
+        ->soumettre('Régulariser')
+        ->voir('Exonération régularisée : facture');
+
+    [$rectificative, $avoir] = app(TenantContext::class)->runAs($societe->magasin, fn (): array => [
+        Facture::query()->where('facture_rectifiee_id', $export->id)->sole(),
+        Avoir::query()->where('motif_regularisation', MotifDeRegularisation::ExonerationNonProuvee)->sole(),
+    ]);
+    $onglet->attendreLaPage('/factures/'.$rectificative->getRouteKey().'$')->voir((string) $rectificative->numero);
+
+    expect([$rectificative->nature_operation, $rectificative->total_ttc, $rectificative->cree_par, $avoir->cree_par])
+        ->toBe([NatureOperation::VenteEnFrance, $export->total_ttc, $societe->administrateurVendeur->id, $societe->administrateurVendeur->id]);
+    $onglet->aller('/app/'.$societe->magasin->uuid)->nePasVoir('sans preuve de sortie 150 jours');
+});

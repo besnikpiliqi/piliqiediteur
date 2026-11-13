@@ -7,6 +7,7 @@ namespace App\Domain\Facturation\Services;
 use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Domain\Tenancy\Support\ValeursLues;
 use Brick\Math\BigInteger;
+use Brick\Math\RoundingMode;
 use InvalidArgumentException;
 use UnexpectedValueException;
 
@@ -511,6 +512,38 @@ class CalculateurLigne
         // dépasserait les entiers pour les plus grands prix des colonnes.
         return $this->multiplier(intdiv($ttcEnMillioniemes, $diviseur), 10000)
             + $this->diviserArrondi(($ttcEnMillioniemes % $diviseur) * 10000, $diviseur);
+    }
+
+    /**
+     * Le PU HT d'une ligne qui retombe sur son HT : ce HT ÷ (la quantité x
+     * (100 % - la remise)), au millionième d'euro le plus proche, un
+     * demi-millionième au millionième supérieur, si bien que la quantité x
+     * ce PU HT, remise déduite, s'écarte du HT de la ligne d'au plus un
+     * demi-centime jusqu'à 10 000 articles : 694,44 € HT pour 100 articles
+     * font 6,9444 € ; 69 444,44 € pour 10 000, 6,944444 €. Le PU HT d'une
+     * ligne dont le prix unitaire payé n'est pas un prix au centime, comme
+     * celle d'une facture rectificative qui reprend le TTC payé d'une vente
+     * sans TVA française (voir RegularisationDUneExoneration). Une remise
+     * de 100 % ne laisse aucun HT à diviser : null.
+     *
+     * @param  int  $htCentimes  le HT de la ligne, en centimes
+     * @param  int  $remiseCentiemes  en centièmes de point
+     * @return int|null en millionièmes d'euro
+     *
+     * @throws InvalidArgumentException
+     */
+    public function prixUnitaireHtDuMontant(int $htCentimes, int $quantite, int $remiseCentiemes): ?int
+    {
+        $ht = $this->entier(['montant_ht' => $htCentimes], 'montant_ht');
+        $articlesPayes = BigInteger::of($this->quantite(['quantite' => $quantite]))->multipliedBy(10000 - $this->remise(['remise_pourcentage' => $remiseCentiemes]));
+
+        if ($articlesPayes->isZero()) {
+            return null;
+        }
+
+        // Centimes en millionièmes (x 10 000), et la remise en centièmes de
+        // point (x 10 000) : HT x 10^8 ÷ (quantité x (10 000 - remise)).
+        return BigInteger::of($ht)->multipliedBy(100_000_000)->dividedBy($articlesPayes, RoundingMode::HalfUp)->toInt();
     }
 
     /**

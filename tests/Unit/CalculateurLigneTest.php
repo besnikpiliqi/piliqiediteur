@@ -1103,4 +1103,24 @@ class CalculateurLigneTest extends TestCase
         $this->assertTrue($this->calculateur()->puHtRetombeSurLeHt(1, 1000000, 0, 101));
         $this->assertFalse($this->calculateur()->puHtRetombeSurLeHt(1, 1000000, 0, 102));
     }
+
+    /**
+     * Le PU HT qui retombe sur le HT d'une ligne : 694,44 € HT pour 100
+     * articles font 6,9444 € ; 69 444,44 € pour 10 000, 6,944444 € ; 195,00
+     * € HT pour 4 articles remisés de 10 %, 54,166667 € (54,1666...
+     * arrondi au millionième), qui retombe sur la ligne ; 0,01 € pour 32
+     * articles, 0,0003125 € arrondi au millionième supérieur ; une remise
+     * de 100 % ne laisse aucun HT à diviser.
+     */
+    public function test_le_pu_ht_du_montant_d_une_ligne_retombe_sur_son_ht(): void
+    {
+        $this->assertSame([6944400, 6944444, 54166667, 313], [
+            $this->calculateur()->prixUnitaireHtDuMontant(69444, 100, 0),
+            $this->calculateur()->prixUnitaireHtDuMontant(6944444, 10000, 0),
+            $this->calculateur()->prixUnitaireHtDuMontant(19500, 4, 1000),
+            $this->calculateur()->prixUnitaireHtDuMontant(1, 32, 0),
+        ]);
+        $this->assertTrue($this->calculateur()->puHtRetombeSurLeHt(4, 54166667, 1000, 19500));
+        $this->assertNull($this->calculateur()->prixUnitaireHtDuMontant(0, 3, 10000));
+    }
 }

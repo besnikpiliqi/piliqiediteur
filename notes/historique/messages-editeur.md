@@ -2168,3 +2168,7 @@ Montre moi les deux methodes: que fait mnt et que a fait l’ancienne
 
 Esct c’est possible que github fait de son côté larastan et psalm. Car tu m’as dit que la session ici n attends pas la réponse de github pour passer à autre lot. Donc c’est possible pourquoi pas et si il y des problèmes alors tu les règles ! Mais dit moi avant, si sera possible
 
+## 227. 2026-11-13 12:02 UTC
+
+Mais tu m avais dit tout ce temps avec l’ancienne méthode et la tu me dit la meme chose avec la nouvelle méthode ?? Bizarre ! Est-ce que t’est en train de compter aussi les procédures administratives ?? Non non tu comptes pas ceux. Tu comptes que le logiciel pour qu’il finisse tout mais sans les démarches administratives
+

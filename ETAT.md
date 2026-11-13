@@ -1,19 +1,20 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 13/11/2026 à 11:41 UTC par pilotage-sync.sh : « 13/11 : estimation du temps restant (fin du code ~10/02/2027) ».
+Mis à jour le 13/11/2026 à 12:15 UTC par pilotage-sync.sh : « Après le lot S9-A ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
-Tête poussée : `9b258e5`. Commits locaux pas encore poussés :
+Tête poussée : `7f983c1`. Commits locaux pas encore poussés :
 
 ```
-8ec160b Ajoute l'« À faire » au tableau de bord du magasin et de la société
-9ef56b6 Répare la CI : une seule aide pour choisir le client en navigateur
 ```
 
 Derniers commits poussés :
 
 ```
+7f983c1 Relecture du lot S9-A de la série 9
+8ec160b Ajoute l'« À faire » au tableau de bord du magasin et de la société
+9ef56b6 Répare la CI : une seule aide pour choisir le client en navigateur
 9b258e5 Relecture du lot S9-L de la série 9
 4e2b320 Un produit n'a qu'une ligne d'un document
 c54c221 Relecture du lot EC2 de l’expert-comptable de la société
@@ -31,39 +32,11 @@ d23eb96 Laisse le propriétaire tout faire dans le magasin de démonstration (lo
 bb135db Relecture du lot AUD de la série 8
 484ddcd Corrige les constats des audits du 07/11/2026 : isolation, base, clôtures, stock, plateforme agréée et outillage (lot AUD)
 3dd8705 Relecture du lot FI de la série 8
-5c67a15 Contrôle les fichiers reçus et sert les fichiers en sécurité (lot FI)
-cba222d Relecture du lot CALC de la série 8
-b21124f Calcule les montants sans virgule flottante et imprime le PU HT tel qu'il est enregistré (lot CALC)
 ```
 
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
- M app/Domain/Facturation/Actions/NoterLeVisaDuBordereauAction.php
- M app/Domain/Facturation/Models/Facture.php
- M app/Domain/Facturation/Services/PreuvesRequises.php
- M app/Domain/Tenancy/Actions/VerifierUnEcartSireneAction.php
- M app/Domain/Tenancy/Services/ChosesAFaireDuMagasin.php
- M app/Domain/Tenancy/Services/ReverificationSirene.php
- M app/Filament/App/Resources/DevisResource.php
- M app/Filament/App/Resources/DevisResource/Pages/ViewDevis.php
- M app/Filament/App/Resources/FactureAchatResource.php
- M app/Filament/App/Resources/FactureAchatResource/Pages/ViewFactureAchat.php
- M app/Filament/App/Resources/FactureResource.php
- M app/Filament/App/Resources/FactureResource/Pages/ViewFacture.php
- M app/Filament/App/Resources/InventaireOuvertureResource/Pages/ViewInventaireOuverture.php
- M app/Providers/AppServiceProvider.php
- M app/Providers/Filament/AppPanelProvider.php
- M database/migrations/2026_10_02_100015_create_ecarts_sirene_table.php
- M tests/Browser/Parcours/AFaireTest.php
- M tests/Browser/inventaire-des-actions.php
- M tests/Feature/Facturation/VisaDuBordereauTest.php
- M tests/Feature/Filament/AFaireDuMagasinTest.php
- M tests/Feature/Filament/AvoirResourceTest.php
- M tests/Feature/Filament/FactureResourceTest.php
- M tests/Feature/Filament/PaiementResourceTest.php
- M tests/Feature/Qualite/PlafondsDeRequetesTest.php
- M tests/Feature/Societe/AFaireDeLEspaceDeLaSocieteTest.php
 ```
 
 ## Dernière course de la chaîne
@@ -71,8 +44,6 @@ b21124f Calcule les montants sans virgule flottante et imprime le PU HT tel qu'i
 Course `wf_1d467e9e-93e`, étapes commencées (de la plus ancienne à la plus récente) :
 
 ```
-DV:correction
-DV:poussee
 DV:notes
 EC2:implementation
 EC2:implementation-2
@@ -96,4 +67,6 @@ S9-A:implementation-3
 S9-A:relecture1
 S9-A:relecture2
 S9-A:correction
+S9-A:poussee
+S9-A:notes
 ```

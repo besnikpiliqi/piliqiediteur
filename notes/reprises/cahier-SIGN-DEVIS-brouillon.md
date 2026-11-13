@@ -14,7 +14,11 @@
      - Modèle de référence : `../modeles/signature-devis.html`, section D1.
    - Un devis pas encore accepté, refusé, expiré ou repassé en brouillon garde le cadre vide.
    - L'adresse IP et le navigateur ne s'impriment jamais.
-2. **Page publique du devis (lien personnel), avant la réponse :** pas de lien « Télécharger le devis en PDF ». Le client a déjà le PDF en pièce jointe de l'e-mail d'envoi.
+2. **Avant la réponse, le client ne reçoit ni ne voit aucun PDF du devis** (précision de l'éditeur du 14/11 vers 00 h 25 UTC : « le client voit le devis là où il signe et ne voit le devis en PDF que quand il accepte ») :
+   - l'e-mail d'envoi d'un devis n'a plus le PDF en pièce jointe. Son texte devient : « Votre devis DEV-… d'un montant de … TTC vous attend en ligne : vous pouvez le lire, puis l'accepter ou le refuser. » Il ne dit plus « ci-joint ». Le bouton « Répondre au devis » reste, avec les mêmes phrases sur le lien personnel ;
+   - la page publique montre le devis en entier (magasin, client, lignes, totaux, validité, mentions), mais pas le lien « Télécharger le devis en PDF » ;
+   - une relance ou un nouvel envoi du même devis suit la même règle ;
+   - dans le magasin, la fiche du devis garde son PDF (aperçu, impression, remise en main propre), qui ne change pas.
 3. **Après l'acceptation :**
    - la page publique montre « Devis accepté le … par … » et le lien vers le PDF signé, valable tant que le lien de la page l'est ;
    - un e-mail de confirmation part à l'adresse de l'envoi, avec le PDF signé en pièce jointe. Il suit les règles des e-mails aux clients : magasin qui peut écrire aux clients, plafonds, nouvel essai et cause de l'échec dite en clair.

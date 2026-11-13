@@ -2308,3 +2308,13 @@ le D mais le nom et prenom tu mets simple et le tampon accepté en ligne tu le m
 
 le D1
 
+## 252. 2026-11-13 23:14 UTC
+
+<!-- attach -->
+
+> Le client a déjà le PDF en pièce jointe de l’e-mail d’envoi, donc il peut le lire avant de décider.
+
+
+
+non le client il voit le devis la ou il signe et ne vois pas le devis en pdf que quand il accepte, d accord
+

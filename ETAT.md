@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 13/11/2026 à 10:47 UTC par pilotage-sync.sh : « 13/11 10:55 UTC : estimation du temps restant lancée (wf_2abf6606-e68) ».
+Mis à jour le 13/11/2026 à 11:41 UTC par pilotage-sync.sh : « 13/11 : estimation du temps restant (fin du code ~10/02/2027) ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -39,6 +39,31 @@ b21124f Calcule les montants sans virgule flottante et imprime le PU HT tel qu'i
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
+ M app/Domain/Facturation/Actions/NoterLeVisaDuBordereauAction.php
+ M app/Domain/Facturation/Models/Facture.php
+ M app/Domain/Facturation/Services/PreuvesRequises.php
+ M app/Domain/Tenancy/Actions/VerifierUnEcartSireneAction.php
+ M app/Domain/Tenancy/Services/ChosesAFaireDuMagasin.php
+ M app/Domain/Tenancy/Services/ReverificationSirene.php
+ M app/Filament/App/Resources/DevisResource.php
+ M app/Filament/App/Resources/DevisResource/Pages/ViewDevis.php
+ M app/Filament/App/Resources/FactureAchatResource.php
+ M app/Filament/App/Resources/FactureAchatResource/Pages/ViewFactureAchat.php
+ M app/Filament/App/Resources/FactureResource.php
+ M app/Filament/App/Resources/FactureResource/Pages/ViewFacture.php
+ M app/Filament/App/Resources/InventaireOuvertureResource/Pages/ViewInventaireOuverture.php
+ M app/Providers/AppServiceProvider.php
+ M app/Providers/Filament/AppPanelProvider.php
+ M database/migrations/2026_10_02_100015_create_ecarts_sirene_table.php
+ M tests/Browser/Parcours/AFaireTest.php
+ M tests/Browser/inventaire-des-actions.php
+ M tests/Feature/Facturation/VisaDuBordereauTest.php
+ M tests/Feature/Filament/AFaireDuMagasinTest.php
+ M tests/Feature/Filament/AvoirResourceTest.php
+ M tests/Feature/Filament/FactureResourceTest.php
+ M tests/Feature/Filament/PaiementResourceTest.php
+ M tests/Feature/Qualite/PlafondsDeRequetesTest.php
+ M tests/Feature/Societe/AFaireDeLEspaceDeLaSocieteTest.php
 ```
 
 ## Dernière course de la chaîne

@@ -2160,3 +2160,11 @@ Mais -seed fait quoi? Il remplis la base de données c est ca? Alors la je dois 
 
 avec cette routine ca va prendre combien de temps pour finir tout ?
 
+## 225. 2026-11-13 11:19 UTC
+
+Montre moi les deux methodes: que fait mnt et que a fait l’ancienne
+
+## 226. 2026-11-13 11:27 UTC
+
+Esct c’est possible que github fait de son côté larastan et psalm. Car tu m’as dit que la session ici n attends pas la réponse de github pour passer à autre lot. Donc c’est possible pourquoi pas et si il y des problèmes alors tu les règles ! Mais dit moi avant, si sera possible
+

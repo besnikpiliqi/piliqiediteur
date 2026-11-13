@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 13/11/2026 à 21:21 UTC par pilotage-sync.sh : « Après le lot ER-PRO ».
+Mis à jour le 13/11/2026 à 21:22 UTC par pilotage-sync.sh : « Après le lot ER-PRO ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

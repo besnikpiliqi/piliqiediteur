@@ -29,7 +29,6 @@ use App\Domain\Stock\Models\MouvementStock;
 use App\Domain\Tenancy\Actions\FermerMagasinAction;
 use App\Domain\Tenancy\Enums\MotifFermeture;
 use App\Domain\Tenancy\Models\ActionTraitee;
-use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\ActionsUniques;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Pages\Caisse;
@@ -144,9 +143,9 @@ class ActionsUniquesTest extends TestCase
         $comptoir = Client::query()->where('est_comptoir', true)->sole();
         $caisse = Livewire::test(Caisse::class)->fillForm([
             'client_id' => $comptoir->id,
-            'lignes' => [['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 1]],
             'mode_paiement' => 'especes',
-        ]);
+        ])
+            ->call('recevoirLesProduitsChoisis', [['produit_id' => $produit->id, 'quantite' => 1]]);
         $this->assertSame(PanierCaisse::query()->sole()->jeton, $caisse->get('jetonDeLaVente'));
         $ticket = self::vendreAuComptant($vendeur, $comptoir, $caisse->instance()->form->getState()['lignes'], ModePaiement::Especes, jeton: $caisse->get('jetonDeLaVente'));
 

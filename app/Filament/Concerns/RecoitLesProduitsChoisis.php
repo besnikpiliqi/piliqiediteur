@@ -12,7 +12,8 @@ use Livewire\Attributes\On;
  * voir AjouteDesLignesDeVente) reçoit les produits que choisit le tableau
  * des produits (voir SelecteurDeProduits) et ceux que scanne la douchette.
  * Ce qui arrive du navigateur est revérifié avant d'ajouter la moindre
- * ligne (voir AjouteDesLignesDeVente::ajouterLesProduitsChoisis()).
+ * ligne, et un produit déjà sur une ligne en augmente la quantité (voir
+ * AjouteDesLignesDeVente::ajouterLesProduitsChoisis()).
  */
 trait RecoitLesProduitsChoisis
 {

@@ -198,8 +198,11 @@ class ConstructeurLigneDocumentTest extends TestCase
     }
 
     /**
-     * L'aperçu compte cette ligne avec sa fiche, et l'enregistrement la
-     * prend, sans autre erreur.
+     * L'aperçu compte cette ligne avec sa fiche ; l'enregistrement la
+     * prend, sans autre erreur, ou, quand elle désigne la fiche 12 de
+     * l'autre ligne, la refuse comme une seconde ligne du même article (un
+     * produit n'a qu'une ligne, un service qu'une ligne par prix et par
+     * taux : décision de l'éditeur du 26/10/2026, série 9).
      */
     #[DataProvider('identifiantsLusCommeUneCle')]
     public function test_la_ligne_d_un_identifiant_booleen_ou_decimal_prend_la_fiche_que_php_lit_sous_cette_cle(string $champ, mixed $identifiant, int $cle): void
@@ -209,9 +212,16 @@ class ConstructeurLigneDocumentTest extends TestCase
         $contexte = new ContexteDeVente(TypeClient::Particulier, false, '20.00');
 
         $apercu = app(ConstructeurLigneDocument::class)->apercu($lignes, $contexte);
-        $document = app(ConstructeurLigneDocument::class)->construireToutes($lignes, $contexte);
 
         $this->assertSame(['choisie' => 12, 'forgee' => $cle], array_map(fn (array $ligne): int => $ligne[$champ], $apercu->lignes));
+
+        if ($cle === 12) {
+            $this->expectException(InvalidArgumentException::class);
+            $this->expectExceptionMessage('figure sur deux lignes');
+        }
+
+        $document = app(ConstructeurLigneDocument::class)->construireToutes($lignes, $contexte);
+
         $this->assertSame([12, $cle], array_column($document->lignes, $champ));
     }
 

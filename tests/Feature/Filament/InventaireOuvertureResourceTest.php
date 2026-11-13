@@ -313,4 +313,26 @@ class InventaireOuvertureResourceTest extends TestCase
 
         $this->assertSame(0, InventaireOuverture::query()->count());
     }
+
+    /**
+     * Un inventaire d'ouverture n'a qu'une ligne par produit (décision de
+     * l'éditeur du 26/10/2026, série 9) : la tasse choisie sur une seconde
+     * ligne y ajoute sa quantité à la première, qui garde son coût, et la
+     * seconde ligne disparaît, avec un message ; l'inventaire s'enregistre
+     * avec une ligne de 6 tasses.
+     */
+    public function test_un_produit_choisi_sur_une_seconde_ligne_rejoint_sa_ligne(): void
+    {
+        $this->magasinDuProprietaire();
+        $tasse = Produit::factory()->create(['nom' => 'Tasse', 'reference' => 'TASSE', 'stock_quantite' => 0]);
+        $page = $this->creationAvecUneLigne(['produit_id' => $tasse->id, 'quantite' => 4, 'cout_unitaire_ht' => '3.25']);
+
+        $page->set('data.lignes.seconde', ['produit_id' => null, 'produit' => [], 'quantite' => 2, 'cout_unitaire_ht' => '3.00'])
+            ->set('data.lignes.seconde.produit_id', $tasse->id)
+            ->assertNotified('« Tasse » était déjà sur une ligne de cet inventaire, qui n\'a qu\'une ligne par produit : sa quantité passe à 6. Vérifiez son coût unitaire.');
+
+        $this->assertSame([[$tasse->id, 6, '3.25']], array_map(fn (array $ligne): array => [$ligne['produit_id'], $ligne['quantite'], $ligne['cout_unitaire_ht']], array_values($page->get('data.lignes'))));
+        $page->call('create')->assertHasNoFormErrors();
+        $this->assertSame([[$tasse->id, 6]], InventaireOuverture::query()->sole()->lignes->map(fn ($ligne): array => [$ligne->produit_id, $ligne->quantite])->all());
+    }
 }

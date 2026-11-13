@@ -40,7 +40,6 @@ use App\Filament\Concerns\PrendLeCalendrierDuMagasin;
 use App\Filament\Concerns\SaisitUneQuantiteRetournee;
 use App\Filament\Concerns\SupprimeEnMasseLigneParLigne;
 use Carbon\CarbonImmutable;
-use Closure;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\MountableAction;
 use Filament\Forms\Components\Checkbox;
@@ -583,7 +582,6 @@ class FactureAchatResource extends Resource
                         ->disabled()
                         ->dehydrated(false),
                     self::champQuantiteRetournee('Quantité à retourner', fn (Get $get): int => self::ligneAchat($get('ligne_achat_id'))?->quantiteRetournableRestante() ?? 0)
-                        ->rule(self::regleStockDuProduitRetourne())
                         ->saisieEnDirect(),
                     TextInput::make('montant_ht')
                         ->label('HT sur la note d\'avoir')
@@ -865,14 +863,14 @@ class FactureAchatResource extends Resource
 
     /**
      * Chaque ligne encore retournable, ou cette seule ligne, proposée pour
-     * tout ce qui peut en être retourné ; deux lignes du même produit se
-     * partagent son stock, dans l'ordre de la facture.
+     * tout ce qui peut en être retourné, reliquat de la ligne et stock de
+     * son produit compris (voir LigneAchat::quantiteRetournableRestante()) ;
+     * une facture d'achat n'a qu'une ligne par produit.
      *
      * @return list<array{ligne_achat_id: int, description: string, quantite: int}>
      */
     private static function lignesRetournables(?FactureAchat $factureAchat, ?LigneAchat $seuleLigne = null): array
     {
-        $stockRestant = [];
         $lignes = [];
 
         foreach ($factureAchat?->loadMissing('lignes.produit')->lignes ?? [] as $ligne) {
@@ -881,13 +879,6 @@ class FactureAchatResource extends Resource
             }
 
             $quantite = $ligne->quantiteRetournableRestante();
-            $produit = ValeurRequise::de($ligne->produit, 'le produit de la ligne d\'une facture d\'achat validée');
-
-            if ($produit->suivi_stock) {
-                $stockRestant[$ligne->produit_id] ??= max(0, $produit->stock_quantite);
-                $quantite = min($quantite, $stockRestant[$ligne->produit_id]);
-                $stockRestant[$ligne->produit_id] -= $quantite;
-            }
 
             if ($quantite > 0) {
                 $lignes[] = ['ligne_achat_id' => $ligne->id, 'description' => $ligne->description, 'quantite' => $quantite];
@@ -895,40 +886,6 @@ class FactureAchatResource extends Resource
         }
 
         return $lignes;
-    }
-
-    /**
-     * Deux lignes du même produit se partagent son stock : leur total ne
-     * peut pas le dépasser (voir AvoirFournisseur::verifierQueLeStockSuffit(),
-     * qui le revérifie à l'enregistrement). Une ligne dont l'identifiant est
-     * illisible n'est jamais cherchée en base : sa quantité, plafonnée à
-     * zéro, est déjà refusée.
-     */
-    private static function regleStockDuProduitRetourne(): Closure
-    {
-        return fn (Get $get): Closure => function (string $attribute, mixed $value, Closure $fail) use ($get): void {
-            $produit = self::ligneAchat($get('ligne_achat_id'))?->produit;
-
-            if ($produit === null || ! $produit->suivi_stock) {
-                return;
-            }
-
-            $saisies = $get('../../lignes');
-            $lignes = collect(is_array($saisies) ? $saisies : [])
-                ->filter(fn (mixed $ligne): bool => is_array($ligne) && self::estUnIdentifiant($ligne['ligne_achat_id'] ?? null));
-            $lignesDuProduit = LigneAchat::query()
-                ->whereIn('id', $lignes->map(fn (array $ligne): int => ValeurSimple::enEntier($ligne['ligne_achat_id']))->values())
-                ->where('produit_id', $produit->id)
-                ->pluck('id')
-                ->all();
-            $quantite = $lignes
-                ->filter(fn (array $ligne): bool => in_array(ValeurSimple::enEntier($ligne['ligne_achat_id']), $lignesDuProduit, true))
-                ->sum(fn (array $ligne): int => ValeurSimple::enEntier($ligne['quantite'] ?? 0));
-
-            if ($quantite > $produit->stock_quantite) {
-                $fail(AvoirFournisseur::messageStockInsuffisant($produit, $quantite));
-            }
-        };
     }
 
     public static function getPages(): array

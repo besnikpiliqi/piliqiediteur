@@ -32,6 +32,7 @@ use App\Filament\App\Resources\FactureResource\Pages\ViewFacture;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use InvalidArgumentException;
 use Livewire\Livewire;
 use LogicException;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -229,10 +230,11 @@ class TransformerUnDevisEnFactureTest extends TestCase
         $this->dansLeMagasin($this->magasin, self::responsableDeTest($this->magasin));
 
         Livewire::test(CreateDevis::class)
-            ->fillForm(['client_id' => Client::factory()->create()->id, 'lignes' => [['produit_id' => $produit->id, 'quantite' => 1, 'remise_pourcentage' => 0]]])
+            ->fillForm(['client_id' => Client::factory()->create()->id])
+            ->call('recevoirLesProduitsChoisis', [['produit_id' => $produit->id, 'quantite' => 1]])
             ->assertSee('Stock disponible : 2.')
             ->assertDontSee('La quantité dépasse le stock')
-            ->fillForm(['lignes' => [['produit_id' => $produit->id, 'quantite' => 4, 'remise_pourcentage' => 0]]])
+            ->call('recevoirLesProduitsChoisis', [['produit_id' => $produit->id, 'quantite' => 3]])
             ->assertSee('Stock disponible : 2. La quantité dépasse le stock : le devis ne réserve rien, la facture le contrôlera.');
 
         $devis = app(CreerDevisAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 4]]);
@@ -270,24 +272,32 @@ class TransformerUnDevisEnFactureTest extends TestCase
     }
 
     /**
-     * Deux lignes d'un même produit se comptent ensemble, dans le
-     * formulaire comme sur la fiche et dans l'avis de l'acceptation : 2 et
-     * 2 pour 3 en stock en demandent 4, plus que le stock.
+     * Un produit choisi deux fois n'a qu'une ligne (décision de l'éditeur
+     * du 26/10/2026, série 9), dont la quantité, toute la demande du devis,
+     * se compare au stock, dans le formulaire comme sur la fiche et dans
+     * l'avis de l'acceptation : 2 puis 2 pour 3 en stock font une ligne de
+     * 4, plus que le stock ; deux lignes de ce produit ne s'enregistrent
+     * jamais.
      */
-    public function test_les_lignes_d_un_meme_produit_se_comptent_ensemble_face_au_stock(): void
+    public function test_un_produit_choisi_deux_fois_n_a_qu_une_ligne_comparee_au_stock(): void
     {
         $lampe = Produit::factory()->create(['nom' => 'Lampe de bureau', 'prix_vente_ttc' => 30, 'taux_tva' => 20, 'stock_quantite' => 3]);
         $this->dansLeMagasin($this->magasin, self::responsableDeTest($this->magasin));
-        $avertissement = 'Stock disponible : 3. Les lignes de ce produit en demandent 4, plus que le stock : le devis ne réserve rien, la facture le contrôlera.';
+        $avertissement = 'Stock disponible : 3. La quantité dépasse le stock : le devis ne réserve rien, la facture le contrôlera.';
 
-        Livewire::test(CreateDevis::class)
-            ->fillForm(['client_id' => Client::factory()->create()->id, 'lignes' => [
-                ['produit_id' => $lampe->id, 'quantite' => 2, 'remise_pourcentage' => 0],
-                ['produit_id' => $lampe->id, 'quantite' => 2, 'remise_pourcentage' => 0],
-            ]])
+        $formulaire = Livewire::test(CreateDevis::class)
+            ->fillForm(['client_id' => Client::factory()->create()->id])
+            ->call('recevoirLesProduitsChoisis', [['produit_id' => $lampe->id, 'quantite' => 2]])
+            ->call('recevoirLesProduitsChoisis', [['produit_id' => $lampe->id, 'quantite' => 2]])
             ->assertSee($avertissement);
+        $this->assertSame([4], array_column(array_values($formulaire->get('data.lignes')), 'quantite'));
 
-        $devis = app(CreerDevisAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $lampe->id, 'quantite' => 2], ['produit_id' => $lampe->id, 'quantite' => 2]]);
+        $this->assertThrows(
+            fn () => app(CreerDevisAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $lampe->id, 'quantite' => 2], ['produit_id' => $lampe->id, 'quantite' => 2]]),
+            InvalidArgumentException::class,
+            '« Lampe de bureau » figure sur deux lignes',
+        );
+        $devis = app(CreerDevisAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $lampe->id, 'quantite' => 4]]);
 
         Livewire::test(ViewDevis::class, ['record' => $devis->getRouteKey()])->assertSee($avertissement);
         $this->assertSame([['produit' => 'Lampe de bureau', 'demande' => 4, 'disponible' => 3]], $devis->stocksInsuffisants());

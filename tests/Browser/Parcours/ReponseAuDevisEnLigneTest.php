@@ -380,20 +380,24 @@ test('le responsable qui a envoyé le devis et le propriétaire lisent dans la c
     }
 });
 
-test('le responsable lit sur la fiche d’un devis envoyé le stock de chaque ligne de produit, et l’avertissement quand ses lignes en demandent plus', function () {
+/*
+ * Un produit n'a qu'une ligne d'un devis (décision de l'éditeur du
+ * 26/10/2026, série 9) : la lampe, sur une seule ligne de 4, en demande
+ * plus que ses 3 en stock.
+ */
+test('le responsable lit sur la fiche d’un devis envoyé le stock de chaque ligne de produit, et l’avertissement quand sa ligne en demande plus', function () {
     $equipe = $this->societeComplete();
     app(TenantContext::class)->set($equipe->magasin);
     $lampe = Produit::factory()->create(['nom' => 'Lampe de chevet', 'prix_vente_ttc' => 30, 'taux_tva' => 20, 'stock_quantite' => 3]);
     $ampoule = Produit::factory()->create(['nom' => 'Ampoule LED', 'prix_vente_ttc' => 6, 'taux_tva' => 20, 'stock_quantite' => 10]);
     $devis = app(EmettreDevisAction::class)->handle($equipe->responsable, app(CreerDevisAction::class)->handle($equipe->responsable, Client::factory()->create(['nom' => 'Paul Durand']), [
-        ['produit_id' => $lampe->id, 'quantite' => 2],
+        ['produit_id' => $lampe->id, 'quantite' => 4],
         ['produit_id' => $ampoule->id, 'quantite' => 2],
-        ['produit_id' => $lampe->id, 'quantite' => 2],
     ]));
     app(TenantContext::class)->clear();
 
     $this->seConnecter($equipe->responsable)
         ->aller('/app/'.$equipe->magasin->uuid.'/devis/'.$devis->getRouteKey())
         ->voir('Stock disponible : 10.')
-        ->voir('Stock disponible : 3. Les lignes de ce produit en demandent 4, plus que le stock : le devis ne réserve rien, la facture le contrôlera.');
+        ->voir('Stock disponible : 3. La quantité dépasse le stock : le devis ne réserve rien, la facture le contrôlera.');
 });

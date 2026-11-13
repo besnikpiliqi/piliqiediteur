@@ -769,8 +769,7 @@ class FactureAchatActionsTest extends TestCase
         $this->assertSame('6.0000', $produit->fresh()->cmup_ht);
 
         app(ValiderFactureAchatAction::class)->handle(self::auteur(), app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [
-            ['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => 7.6],
-            ['produit_id' => $produit->id, 'quantite' => 15, 'prix_unitaire_ht' => 7.6],
+            ['produit_id' => $produit->id, 'quantite' => 20, 'prix_unitaire_ht' => 7.6],
         ], ['date_facture' => '2026-01-15']));
 
         $this->assertSame(['6.8000', 40], [$produit->fresh()->cmup_ht, $produit->fresh()->stock_quantite]);

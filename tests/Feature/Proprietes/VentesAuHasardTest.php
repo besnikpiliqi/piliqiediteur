@@ -119,12 +119,14 @@ class VentesAuHasardTest extends TestCase
      */
     private function etape(Tirage $tirage): array
     {
-        $lignes = fn (): array => array_map(fn (): array => [
-            'produit' => $tirage->entier(0, count($this->produits) - 1),
+        // Chaque ligne d'un produit différent : un produit n'a qu'une ligne
+        // (décision de l'éditeur du 26/10/2026, série 9).
+        $lignes = fn (): array => array_map(fn (int $produit): array => [
+            'produit' => $produit,
             'quantite' => $tirage->uneFoisSur(4) ? $tirage->entier(2, 40) : 1,
             'prix' => $tirage->uneFoisSur(3) ? $tirage->entier(1, 99999) : null,
             'remise' => $tirage->uneFoisSur(3) ? $tirage->entier(1, 9999) : 0,
-        ], range(1, $tirage->entier(1, 5)));
+        ], $tirage->quelquesUns(array_keys($this->produits)));
 
         return match ($tirage->parmi(['caisse', 'caisse', 'facture', 'facture', 'paiement', 'avoir', 'contre_passation'])) {
             'caisse' => ['geste' => 'caisse', 'client' => $tirage->parmi(['comptoir', 'particulier']), 'lignes' => $lignes(), 'modes' => $tirage->entier(1, 4)],

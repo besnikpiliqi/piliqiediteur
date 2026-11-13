@@ -22,7 +22,7 @@ use App\Domain\Facturation\Services\DevisPdfGenerator;
 use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
-use App\Domain\Tenancy\Services\TenantContext;
+use App\Filament\App\Livewire\SelecteurDeProduits;
 use App\Filament\App\Resources\DevisResource;
 use App\Filament\App\Resources\DevisResource\Pages\CreateDevis;
 use App\Filament\App\Resources\DevisResource\Pages\EditDevis;
@@ -56,8 +56,8 @@ class DevisResourceTest extends TestCase
             ->fillForm([
                 'client_id' => Client::factory()->create()->id,
                 'conditions_paiement' => str_repeat('a', 501),
-                'lignes' => [['produit_id' => $produit->id, 'quantite' => 1, 'remise_pourcentage' => 0]],
             ])
+            ->call('recevoirLesProduitsChoisis', [['produit_id' => $produit->id, 'quantite' => 1]])
             ->call('create')
             ->assertHasFormErrors(['conditions_paiement' => 'max']);
 
@@ -86,8 +86,8 @@ class DevisResourceTest extends TestCase
                 'livraison_code_postal' => '97200',
                 'livraison_ville' => 'Fort-de-France',
                 'livraison_pays' => 'FR',
-                'lignes' => [['produit_id' => $produit->id, 'quantite' => 3, 'remise_pourcentage' => 0]],
             ])
+            ->call('recevoirLesProduitsChoisis', [['produit_id' => $produit->id, 'quantite' => 3]])
             ->call('create')
             ->assertHasNoFormErrors();
 
@@ -107,12 +107,8 @@ class DevisResourceTest extends TestCase
         $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20]);
 
         Livewire::test(CreateDevis::class)
-            ->fillForm([
-                'client_id' => $client->id,
-                'lignes' => [
-                    ['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 2, 'prix_unitaire_ht' => 50, 'taux_tva' => 20, 'remise_pourcentage' => 0],
-                ],
-            ])
+            ->fillForm(['client_id' => $client->id])
+            ->call('recevoirLesProduitsChoisis', [['produit_id' => $produit->id, 'quantite' => 2]])
             ->call('create')
             ->assertHasNoFormErrors();
 
@@ -199,12 +195,8 @@ class DevisResourceTest extends TestCase
         $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20]);
 
         Livewire::test(CreateDevis::class)
-            ->fillForm([
-                'client_id' => $client->id,
-                'lignes' => [
-                    ['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 1, 'prix_unitaire_ht' => 50, 'taux_tva' => 20, 'remise_pourcentage' => 0],
-                ],
-            ])
+            ->fillForm(['client_id' => $client->id])
+            ->call('recevoirLesProduitsChoisis', [['produit_id' => $produit->id, 'quantite' => 1]])
             ->call('create');
 
         $devis = Devis::query()->firstOrFail();
@@ -247,10 +239,8 @@ class DevisResourceTest extends TestCase
         $produit = Produit::factory()->create(['prix_vente_ttc' => 40, 'taux_tva' => 20]);
 
         Livewire::test(CreateDevis::class)
-            ->fillForm([
-                'client_id' => $archive->id,
-                'lignes' => [['produit_id' => $produit->id, 'quantite' => 1, 'taux_tva' => 20, 'remise_pourcentage' => 0]],
-            ])
+            ->fillForm(['client_id' => $archive->id])
+            ->call('recevoirLesProduitsChoisis', [['produit_id' => $produit->id, 'quantite' => 1]])
             ->call('create')
             ->assertHasFormErrors(['client_id' => 'exists']);
 
@@ -259,12 +249,8 @@ class DevisResourceTest extends TestCase
 
     private function envoyerDevis(Client $client, Produit $produit): Devis
     {
-        Livewire::test(CreateDevis::class)->fillForm([
-            'client_id' => $client->id,
-            'lignes' => [
-                ['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 2, 'prix_unitaire_ht' => 50, 'taux_tva' => 20, 'remise_pourcentage' => 0],
-            ],
-        ])->call('create');
+        Livewire::test(CreateDevis::class)->fillForm(['client_id' => $client->id])
+            ->call('recevoirLesProduitsChoisis', [['produit_id' => $produit->id, 'quantite' => 2]])->call('create');
 
         $devis = Devis::query()->where('client_id', $client->id)->latest('id')->firstOrFail();
         Livewire::test(ListDevis::class)->callTableAction('envoyer', $devis);
@@ -373,12 +359,10 @@ class DevisResourceTest extends TestCase
         Livewire::test(ListDevis::class)->callTableAction('accepter', $devis);
 
         Livewire::test(EditDevis::class, ['record' => $devis->fresh()->getRouteKey()])
-            ->fillForm([
-                'client_id' => $autreClient->id,
-                'lignes' => [
-                    ['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 5, 'prix_unitaire_ht' => 50, 'taux_tva' => 20, 'remise_pourcentage' => 0],
-                ],
-            ])
+            ->fillForm(['client_id' => $autreClient->id])
+            // La corbeille de la ligne, puis le produit de nouveau.
+            ->set('data.lignes', [])
+            ->call('recevoirLesProduitsChoisis', [['produit_id' => $produit->id, 'quantite' => 5]])
             ->call('save')
             ->assertHasNoFormErrors()
             // Filament reste par défaut sur le formulaire après sauvegarde :
@@ -651,23 +635,30 @@ class DevisResourceTest extends TestCase
 
     /**
      * Une douchette USB se contente de "taper" les chiffres scannés dans
-     * le champ actif : il faut donc que la recherche du produit porte
-     * aussi sur le code-barres, pas seulement sur le nom.
+     * le champ actif : la recherche du tableau des produits porte donc
+     * aussi sur le code-barres, pas seulement sur le nom, et la douchette
+     * d'un devis ajoute le produit de ce code (le produit d'une ligne ne se
+     * choisit plus dans une liste : décision de l'éditeur du 26/10/2026,
+     * série 9).
      */
     public function test_rechercher_un_produit_par_code_barres_le_retrouve(): void
     {
-        $magasin = Magasin::factory()->create();
-        app(TenantContext::class)->set($magasin);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $this->dansLeMagasin($magasin, self::responsableDeTest($magasin));
 
         $produitCible = Produit::factory()->create(['nom' => 'Chaise de bureau', 'code_barres' => '3456789012345']);
-        Produit::factory()->create(['nom' => 'Autre produit', 'code_barres' => '0000000000000']);
+        $autre = Produit::factory()->create(['nom' => 'Autre produit', 'code_barres' => '0000000000000']);
 
-        $selectProduit = collect(DevisResource::ligneSchema())
-            ->first(fn ($component) => $component instanceof Select && $component->getName() === 'produit_id');
+        Livewire::test(SelecteurDeProduits::class)
+            ->searchTable('3456789012345')
+            ->assertCanSeeTableRecords([$produitCible])
+            ->assertCanNotSeeTableRecords([$autre]);
 
-        $resultats = $selectProduit->getSearchResults('3456789012345');
+        $devis = Livewire::test(CreateDevis::class)
+            ->set('data.douchette', '3456789012345')
+            ->call('scannerUneReference');
 
-        $this->assertSame([$produitCible->id => 'Chaise de bureau ('.$produitCible->reference.')'], $resultats);
+        $this->assertSame([$produitCible->id], array_column(array_values($devis->get('data.lignes')), 'produit_id'));
     }
 
     /**

@@ -11,6 +11,7 @@ use App\Domain\Achats\Enums\SourceFactureAchat;
 use App\Domain\Achats\Enums\StatutFactureAchat;
 use App\Domain\Achats\Models\AvoirFournisseur;
 use App\Domain\Achats\Models\FactureAchat;
+use App\Domain\Achats\Models\LigneAchat;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
@@ -1120,33 +1121,30 @@ class FactureAchatResourceTest extends TestCase
     }
 
     /**
-     * Deux lignes du même produit (5 + 5 reçus), 4 vendus : l'avoir
-     * fournisseur propose 5 puis 1, et refuse d'en retourner 5 + 5 -- il
-     * n'en reste que 6 en stock.
+     * Dix câbles reçus sur une ligne -- une facture d'achat n'a qu'une
+     * ligne par produit (décision de l'éditeur du 26/10/2026, série 9) --,
+     * 4 vendus : l'avoir fournisseur en propose 6, et refuse d'en retourner
+     * 10.
      */
-    public function test_l_avoir_fournisseur_partage_le_stock_entre_deux_lignes_du_meme_produit(): void
+    public function test_l_avoir_fournisseur_plafonne_sa_ligne_au_stock_restant(): void
     {
         $this->connecterLeProprietaire();
         $produit = Produit::factory()->create(['nom' => 'Câble USB-C', 'taux_tva' => 20, 'suivi_stock' => true]);
         $factureAchat = app(ValiderFactureAchatAction::class)->handle(self::auteur(), app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [
-            ['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => 20],
-            ['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => 20],
+            ['produit_id' => $produit->id, 'quantite' => 10, 'prix_unitaire_ht' => 20],
         ], ['date_facture' => '2026-01-15']));
         $this->sortirParUneVente($produit, 4);
         $component = Livewire::test(ListFacturesAchat::class)->mountTableAction('avoir_fournisseur', $factureAchat);
         $lignes = $component->get('mountedTableActionsData.0.lignes');
-        $this->assertSame([5, 1], array_column(array_values($lignes), 'quantite'));
-        [$premiere, $seconde] = array_keys($lignes);
+        $this->assertSame([6], array_column(array_values($lignes), 'quantite'));
+        $ligne = array_key_first($lignes);
 
         $component
-            ->set("mountedTableActionsData.0.lignes.{$seconde}.quantite", 5)
+            ->set("mountedTableActionsData.0.lignes.{$ligne}.quantite", 10)
             ->set('mountedTableActionsData.0.motif', 'Marchandise non conforme')
-            ->callMountedTableAction();
+            ->callMountedTableAction()
+            ->assertHasTableActionErrors(["lignes.{$ligne}.quantite"]);
 
-        $this->assertSame(
-            ['« Câble USB-C » : ces lignes en retournent 10 au total, mais il n\'en reste que 6 en stock (les autres ont déjà été vendus ou retournés).'],
-            $component->errors()->get("mountedTableActionsData.0.lignes.{$premiere}.quantite"),
-        );
         $this->assertSame(0, AvoirFournisseur::query()->count());
         $this->assertSame(6, $produit->fresh()->stock_quantite);
     }
@@ -1335,6 +1333,83 @@ class FactureAchatResourceTest extends TestCase
 
         $produit->refresh();
         $this->assertSame(['Coque iPhone 15 noire', '18.00'], [$produit->nom, $produit->prix_vente_ttc]);
+    }
+
+    /**
+     * Une facture d'achat n'a qu'une ligne par produit (décision de
+     * l'éditeur du 26/10/2026, série 9) : 10 câbles à 4,00 € HT puis 2
+     * offerts à 0,00 € font une ligne de 12 câbles au prix moyen, 3,333333 €
+     * HT, dont le HT reste 40,00 € ; la fenêtre le dit dès le choix du
+     * produit, et un message après l'ajout. Le même produit au même prix
+     * n'ajoute que sa quantité.
+     */
+    public function test_un_produit_ajoute_de_nouveau_rejoint_sa_ligne_au_prix_moyen(): void
+    {
+        $this->connecterLeProprietaire();
+        $cable = Produit::factory()->create(['nom' => 'Câble USB-C', 'prix_vente_ttc' => '9.90', 'taux_tva' => 20, 'suivi_stock' => true]);
+        $chargeur = Produit::factory()->create(['nom' => 'Chargeur', 'prix_vente_ttc' => '19.90', 'taux_tva' => 20, 'suivi_stock' => true]);
+
+        $page = Livewire::test(CreateFactureAchat::class)
+            ->fillForm(['fournisseur_id' => Fournisseur::factory()->create()->id, 'date_facture' => '2026-01-15'])
+            ->mountFormComponentAction('ajouterUnProduitAction', 'ajouterUnProduit')
+            ->setFormComponentActionData(['produit_id' => $cable->id])
+            ->setFormComponentActionData(['quantite' => 10, 'prix_unitaire_ht' => '4.00'])
+            ->callMountedFormComponentAction()
+            ->mountFormComponentAction('ajouterUnProduitAction', 'ajouterUnProduit')
+            ->setFormComponentActionData(['produit_id' => $chargeur->id])
+            ->setFormComponentActionData(['quantite' => 3, 'prix_unitaire_ht' => '8.00'])
+            ->callMountedFormComponentAction()
+            ->mountFormComponentAction('ajouterUnProduitAction', 'ajouterUnProduit')
+            ->setFormComponentActionData(['produit_id' => $cable->id])
+            ->assertSee('Ce produit est déjà sur cette facture d\'achat, qui n\'a qu\'une ligne par produit')
+            ->setFormComponentActionData(['quantite' => 2, 'prix_unitaire_ht' => '0'])
+            ->callMountedFormComponentAction()
+            ->assertHasNoFormComponentActionErrors()
+            ->assertNotified('« Câble USB-C » était déjà sur la facture : sa ligne compte désormais 12 articles à 3,333333 € HT.');
+
+        $this->assertSame(
+            [[$cable->id, 12, '3.333333', null], [$chargeur->id, 3, '8.00', null]],
+            array_map(fn (array $ligne): array => [$ligne['produit_id'], $ligne['quantite'], $ligne['prix_unitaire_ht'], $ligne['montant_ht']], array_values($page->get('data.lignes'))),
+        );
+
+        $page->mountFormComponentAction('ajouterUnProduitAction', 'ajouterUnProduit')
+            ->setFormComponentActionData(['produit_id' => $chargeur->id])
+            ->setFormComponentActionData(['quantite' => 1, 'prix_unitaire_ht' => '8.00'])
+            ->callMountedFormComponentAction()
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $this->assertSame(
+            [['Câble USB-C', 12, '3.333333', '40.00'], ['Chargeur', 4, '8.00', '32.00']],
+            FactureAchat::query()->sole()->lignes->map(fn (LigneAchat $ligne): array => [$ligne->description, $ligne->quantite, $ligne->prix_unitaire_ht, $ligne->montant_ht])->all(),
+        );
+    }
+
+    /**
+     * Une ligne ne prend pas le produit d'une autre ligne : « Modifier » la
+     * refuse, avec la raison, et la fenêtre reste ouverte ; les lignes ne
+     * changent pas.
+     */
+    public function test_une_ligne_modifiee_ne_prend_pas_le_produit_d_une_autre_ligne(): void
+    {
+        $this->connecterLeProprietaire();
+        $cable = Produit::factory()->create(['nom' => 'Câble USB-C', 'prix_vente_ttc' => '9.90', 'taux_tva' => 20, 'suivi_stock' => true]);
+        $chargeur = Produit::factory()->create(['nom' => 'Chargeur', 'prix_vente_ttc' => '19.90', 'taux_tva' => 20, 'suivi_stock' => true]);
+        $page = $this->factureDAchatQuiAchete($cable, ['prix_unitaire_ht' => '4.00'])
+            ->mountFormComponentAction('ajouterUnProduitAction', 'ajouterUnProduit')
+            ->setFormComponentActionData(['produit_id' => $chargeur->id])
+            ->setFormComponentActionData(['quantite' => 1, 'prix_unitaire_ht' => '8.00'])
+            ->callMountedFormComponentAction();
+        $avant = $page->get('data.lignes');
+        $ligneDuChargeur = array_keys($avant)[1];
+
+        $page->mountFormComponentAction('lignes', 'modifierLaLigne', ['item' => $ligneDuChargeur])
+            ->setFormComponentActionData(['produit_id' => $cable->id])
+            ->callMountedFormComponentAction()
+            ->assertNotified('« Câble USB-C » est déjà sur une autre ligne de cette facture d\'achat : modifiez cette ligne-là, une facture d\'achat n\'a qu\'une ligne par produit.')
+            ->assertFormComponentActionMounted('lignes', 'modifierLaLigne');
+
+        $this->assertSame(array_column(array_values($avant), 'produit_id'), array_column(array_values($page->get('data.lignes')), 'produit_id'));
     }
 
     /**

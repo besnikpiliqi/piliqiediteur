@@ -82,11 +82,9 @@ class CaisseTest extends TestCase
         Livewire::test(Caisse::class)
             ->fillForm([
                 'client_id' => $clientComptoir->id,
-                'lignes' => [
-                    ['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 2, 'prix_unitaire_ht' => 20, 'taux_tva' => 20, 'remise_pourcentage' => 0],
-                ],
                 'mode_paiement' => 'especes',
             ])
+            ->call('recevoirLesProduitsChoisis', [['produit_id' => $produit->id, 'quantite' => 2]])
             ->call('encaisser');
 
         $facture = Facture::query()->where('client_id', $clientComptoir->id)->latest('id')->firstOrFail();
@@ -127,11 +125,9 @@ class CaisseTest extends TestCase
         Livewire::test(Caisse::class)
             ->fillForm([
                 'client_id' => $clientComptoir->id,
-                'lignes' => [
-                    ['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 1, 'prix_unitaire_ht' => 30, 'taux_tva' => 20, 'remise_pourcentage' => 0],
-                ],
                 'mode_paiement' => 'especes',
             ])
+            ->call('recevoirLesProduitsChoisis', [['produit_id' => $produit->id, 'quantite' => 1]])
             ->call('encaisser');
 
         $facture = Facture::query()->where('cree_par', $vendeur->id)->latest('id')->firstOrFail();
@@ -188,10 +184,8 @@ class CaisseTest extends TestCase
         $this->actingAs($vendeur);
         Filament::setTenant($magasin);
         $produit = Produit::factory()->create(['prix_vente_ttc' => 24, 'taux_tva' => 20, 'suivi_stock' => false]);
-        $caisse = Livewire::test(Caisse::class)->fillForm([
-            'lignes' => [['produit_id' => $produit->id, 'quantite' => 1, 'taux_tva' => 20, 'remise_pourcentage' => 0]],
-            'mode_paiement' => ModePaiement::CarteBancaire->value,
-        ]);
+        $caisse = Livewire::test(Caisse::class)->fillForm(['mode_paiement' => ModePaiement::CarteBancaire->value])
+            ->call('recevoirLesProduitsChoisis', [['produit_id' => $produit->id, 'quantite' => 1]]);
         $this->retirerUneCase($magasin, $vendeur, PermissionRegistry::FACTURE_EMETTRE);
 
         $caisse->call('encaisser')->assertForbidden();
@@ -214,10 +208,8 @@ class CaisseTest extends TestCase
         $this->actingAs($vendeur);
         Filament::setTenant($magasin);
         $produit = Produit::factory()->create(['prix_vente_ttc' => 24, 'taux_tva' => 20, 'suivi_stock' => false]);
-        $caisse = Livewire::test(Caisse::class)->fillForm([
-            'lignes' => [['produit_id' => $produit->id, 'quantite' => 1, 'taux_tva' => 20, 'remise_pourcentage' => 0]],
-            'mode_paiement' => ModePaiement::CarteBancaire->value,
-        ])->instance();
+        $caisse = Livewire::test(Caisse::class)->fillForm(['mode_paiement' => ModePaiement::CarteBancaire->value])
+            ->call('recevoirLesProduitsChoisis', [['produit_id' => $produit->id, 'quantite' => 1]])->instance();
         $this->retirerUneCase($magasin, $vendeur, PermissionRegistry::FACTURE_EMETTRE);
 
         $this->assertThrows(
@@ -251,11 +243,9 @@ class CaisseTest extends TestCase
         Livewire::test(Caisse::class)
             ->fillForm([
                 'client_id' => $clientComptoir->id,
-                'lignes' => [
-                    ['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 1, 'prix_unitaire_ht' => 20, 'taux_tva' => 20, 'remise_pourcentage' => 0],
-                ],
                 'mode_paiement' => 'especes',
             ])
+            ->call('recevoirLesProduitsChoisis', [['produit_id' => $produit->id, 'quantite' => 1]])
             ->call('encaisser')
             ->assertNotified("L'horloge du serveur a reculé : il est 09/10/2026 08:00:04 UTC, mais le registre fiscal du magasin n°{$magasin->id} a déjà été verrouillé à 09/10/2026 08:00:05 UTC. Aucune opération fiscale n'est enregistrée tant que l'horloge n'est pas corrigée.");
 
@@ -300,14 +290,17 @@ class CaisseTest extends TestCase
         Filament::setTenant($magasin);
 
         $clientComptoir = Client::query()->where('nom', 'Client comptoir')->firstOrFail();
+        // Deux produits différents au même prix : un produit n'a qu'une
+        // ligne (décision de l'éditeur du 26/10/2026, série 9).
         $produit = Produit::factory()->create(['prix_vente_ttc' => 10, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $autreProduit = Produit::factory()->create(['prix_vente_ttc' => 10, 'taux_tva' => 20, 'suivi_stock' => false]);
 
         $caisse = Livewire::test(Caisse::class)
             ->fillForm([
                 'client_id' => $clientComptoir->id,
                 'lignes' => [
                     ['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 1, 'prix_unitaire_ht' => '8.33', 'prix_unitaire_ttc' => '10.00', 'taux_tva' => 20, 'remise_pourcentage' => 0],
-                    ['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 1, 'prix_unitaire_ht' => '8.33', 'prix_unitaire_ttc' => '10.00', 'taux_tva' => 20, 'remise_pourcentage' => 0],
+                    ['produit_id' => $autreProduit->id, 'description' => $autreProduit->nom, 'quantite' => 1, 'prix_unitaire_ht' => '8.33', 'prix_unitaire_ttc' => '10.00', 'taux_tva' => 20, 'remise_pourcentage' => 0],
                 ],
             ]);
 
@@ -336,11 +329,10 @@ class CaisseTest extends TestCase
         $produit = Produit::factory()->create(['prix_vente_ttc' => 40, 'taux_tva' => 20, 'suivi_stock' => false]);
 
         $component = Livewire::test(Caisse::class);
-        $component->set('data.lignes', [['quantite' => 1, 'taux_tva' => 20, 'remise_pourcentage' => 0]]);
+        $component->call('recevoirLesProduitsChoisis', [['produit_id' => $produit->id, 'quantite' => 1]]);
         $cle = array_key_first($component->get('data.lignes'));
 
         $component
-            ->set("data.lignes.{$cle}.produit_id", $produit->id)
             ->set("data.lignes.{$cle}.quantite", '2')
             ->set("data.parts.{$this->premierePart($component)}.montant_recu", '100')
             ->assertSeeHtml('80,00 €')
@@ -377,11 +369,9 @@ class CaisseTest extends TestCase
 
         $produit = Produit::factory()->create(['prix_vente_ttc' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
         $component = Livewire::test(Caisse::class)->set('data.client_id', $client->id);
-        $component->set('data.lignes', [['quantite' => 1, 'taux_tva' => 20, 'remise_pourcentage' => 0]]);
+        $component->call('recevoirLesProduitsChoisis', [['produit_id' => $produit->id, 'quantite' => 1]]);
         $cle = array_key_first($component->get('data.lignes'));
 
-        $component
-            ->set("data.lignes.{$cle}.produit_id", $produit->id);
         $part = $this->premierePart($component);
 
         $component
@@ -416,12 +406,8 @@ class CaisseTest extends TestCase
         $produit = Produit::factory()->create(['prix_vente_ttc' => 9, 'taux_tva' => 20]);
 
         $component = Livewire::test(Caisse::class)
-            ->fillForm([
-                'client_id' => $clientComptoir->id,
-                'lignes' => [
-                    ['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 1, 'prix_unitaire_ht' => 7.5, 'taux_tva' => 20, 'remise_pourcentage' => 0],
-                ],
-            ]);
+            ->fillForm(['client_id' => $clientComptoir->id])
+            ->call('recevoirLesProduitsChoisis', [['produit_id' => $produit->id, 'quantite' => 1]]);
 
         $cle = array_key_first($component->get('data.lignes'));
 
@@ -482,11 +468,9 @@ class CaisseTest extends TestCase
 
         $produit = Produit::factory()->create(['prix_vente_ttc' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
         $component = Livewire::test(Caisse::class);
-        $component->set('data.lignes', [['quantite' => 1, 'taux_tva' => 20, 'remise_pourcentage' => 0]]);
+        $component->call('recevoirLesProduitsChoisis', [['produit_id' => $produit->id, 'quantite' => 1]]);
         $cle = array_key_first($component->get('data.lignes'));
 
-        $component
-            ->set("data.lignes.{$cle}.produit_id", $produit->id);
         $part = $this->premierePart($component);
 
         $component
@@ -512,11 +496,10 @@ class CaisseTest extends TestCase
 
         $produit = Produit::factory()->create(['prix_vente_ttc' => 40, 'taux_tva' => 20, 'suivi_stock' => false]);
         $component = Livewire::test(Caisse::class);
-        $component->set('data.lignes', [['quantite' => 1, 'taux_tva' => 20, 'remise_pourcentage' => 0]]);
+        $component->call('recevoirLesProduitsChoisis', [['produit_id' => $produit->id, 'quantite' => 1]]);
         $cle = array_key_first($component->get('data.lignes'));
 
         $component
-            ->set("data.lignes.{$cle}.produit_id", $produit->id)
             ->set("data.lignes.{$cle}.quantite", '2')
             ->assertSee('Total HT 66,67 € · TVA 13,33 € · Total TTC 80,00 €')
             ->assertDontSee('€ HT +');
@@ -680,11 +663,9 @@ class CaisseTest extends TestCase
 
         $produit = Produit::factory()->create(['prix_vente_ttc' => 40, 'taux_tva' => 20, 'suivi_stock' => false]);
         $component = Livewire::test(Caisse::class);
-        $component->set('data.lignes', [['quantite' => 1, 'taux_tva' => 20, 'remise_pourcentage' => 0]]);
+        $component->call('recevoirLesProduitsChoisis', [['produit_id' => $produit->id, 'quantite' => 1]]);
         $cle = array_key_first($component->get('data.lignes'));
 
-        $component
-            ->set("data.lignes.{$cle}.produit_id", $produit->id);
         $part = $this->premierePart($component);
 
         $component
@@ -705,11 +686,10 @@ class CaisseTest extends TestCase
         $this->ouvrirLaCaisseDUnMagasin();
         $produit = Produit::factory()->create(['prix_vente_ttc' => 40, 'taux_tva' => 20, 'suivi_stock' => false]);
         $component = Livewire::test(Caisse::class);
-        $component->set('data.lignes', [['quantite' => 1, 'taux_tva' => 20, 'remise_pourcentage' => 0]]);
+        $component->call('recevoirLesProduitsChoisis', [['produit_id' => $produit->id, 'quantite' => 1]]);
         $cle = array_key_first($component->get('data.lignes'));
 
         $component
-            ->set("data.lignes.{$cle}.produit_id", $produit->id)
             ->set("data.lignes.{$cle}.prix_unitaire_ttc", '-50')
             ->call('encaisser')
             ->assertHasFormErrors(["lignes.{$cle}.prix_unitaire_ttc" => 'min'])
@@ -833,8 +813,8 @@ class CaisseTest extends TestCase
         $this->assertSame(1, $ligne['quantite']);
         $this->assertNull($ligne['prix_unitaire_ttc']);
         $cle = array_key_first($component->get('data.lignes'));
+        $this->assertNull($ligne['produit_id']);
         $component
-            ->assertFormFieldIsHidden("lignes.{$cle}.produit_id")
             ->assertFormFieldIsHidden("lignes.{$cle}.prix_unitaire_ht")
             ->assertFormFieldIsVisible("lignes.{$cle}.prix_unitaire_ttc")
             ->assertFormFieldIsVisible("lignes.{$cle}.taux_tva");
@@ -1166,9 +1146,9 @@ class CaisseTest extends TestCase
         Livewire::test(Caisse::class)
             ->fillForm([
                 'client_id' => $clientDUnAutreMagasin->id,
-                'lignes' => [['produit_id' => $produit->id, 'quantite' => 1, 'taux_tva' => 20, 'remise_pourcentage' => 0]],
                 'mode_paiement' => ModePaiement::CarteBancaire->value,
             ])
+            ->call('recevoirLesProduitsChoisis', [['produit_id' => $produit->id, 'quantite' => 1]])
             ->call('encaisser')
             ->assertHasFormErrors(['client_id' => 'exists']);
 
@@ -1208,9 +1188,7 @@ class CaisseTest extends TestCase
         $produit = Produit::factory()->create(['prix_vente_ttc' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
         $client->delete();
         $component = Livewire::test(Caisse::class)->set('data.client_id', $client->id);
-        $component->set('data.lignes', [['quantite' => 1, 'taux_tva' => 20, 'remise_pourcentage' => 0]]);
-
-        $component->set('data.lignes.'.array_key_first($component->get('data.lignes')).'.produit_id', $produit->id);
+        $component->call('recevoirLesProduitsChoisis', [['produit_id' => $produit->id, 'quantite' => 1]]);
 
         $component
             ->assertSee('Crédit disponible pour ce client : 10,00 € (sera appliqué automatiquement).')
@@ -1227,9 +1205,9 @@ class CaisseTest extends TestCase
         Livewire::test(Caisse::class)
             ->fillForm([
                 'client_id' => $archive->id,
-                'lignes' => [['produit_id' => $produit->id, 'quantite' => 1, 'taux_tva' => 20, 'remise_pourcentage' => 0]],
                 'mode_paiement' => ModePaiement::CarteBancaire->value,
             ])
+            ->call('recevoirLesProduitsChoisis', [['produit_id' => $produit->id, 'quantite' => 1]])
             ->call('encaisser')
             ->assertHasFormErrors(['client_id' => 'exists']);
 
@@ -1437,9 +1415,9 @@ class CaisseTest extends TestCase
     }
 
     /**
-     * Une ligne encore vide (son produit effacé) n'est pas une vente
-     * commencée : la retirer n'inscrit rien, et il n'y a pas de vente à
-     * abandonner.
+     * Une ligne sans produit ni service, que l'écran ne crée jamais et que
+     * seule une requête forgée envoie, n'est pas une vente commencée : la
+     * retirer n'inscrit rien, et il n'y a pas de vente à abandonner.
      */
     public function test_un_panier_vide_n_inscrit_rien_au_journal(): void
     {

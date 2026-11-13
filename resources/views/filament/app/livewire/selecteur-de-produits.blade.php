@@ -28,7 +28,8 @@
         @if ($nombre > 0)
             <ul class="space-y-2">
                 @foreach ($choisis as $choisi)
-                    <li wire:key="choisi-{{ $choisi['produit']->getKey() }}" class="flex items-center gap-3">
+                    {{-- La quantité dans la clé : un clic de plus sur la rangée remplace le champ, qui montre la nouvelle quantité même après une saisie. --}}
+                    <li wire:key="choisi-{{ $choisi['produit']->getKey() }}-{{ $choisi['quantite'] }}" class="flex items-center gap-3">
                         <span class="flex-1 text-sm">{{ $choisi['produit']->nom }} ({{ $choisi['produit']->reference }})</span>
 
                         <x-filament::input.wrapper class="w-32">

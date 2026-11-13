@@ -207,12 +207,14 @@ class VenteSansStockTest extends TestCase
         $responsable = $this->responsableDeTest($magasin);
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
         $cable = $this->produit('Câble USB', 1);
-        $panier = ['client_id' => $this->comptoir()->id, 'lignes' => [['produit_id' => $cable->id, 'description' => $cable->nom, 'quantite' => 3]], 'mode_paiement' => 'especes'];
+        $panier = ['client_id' => $this->comptoir()->id, 'mode_paiement' => 'especes'];
+        $troisCables = [['produit_id' => $cable->id, 'quantite' => 3]];
 
         $this->actingAs($vendeur);
         Filament::setTenant($magasin);
         Livewire::test(Caisse::class)
             ->fillForm($panier)
+            ->call('recevoirLesProduitsChoisis', $troisCables)
             ->mountAction('confirmerLaVenteSansStock', ['confirmation' => [$cable->id => -100]])
             ->callMountedAction()
             ->assertNotified('Stock insuffisant : Câble USB, reste 1, demandé 3.');
@@ -221,6 +223,7 @@ class VenteSansStockTest extends TestCase
         $this->actingAs($responsable);
         $caisse = Livewire::test(Caisse::class)
             ->fillForm($panier)
+            ->call('recevoirLesProduitsChoisis', $troisCables)
             ->call('encaisser')
             ->assertActionMounted('confirmerLaVenteSansStock')
             ->assertSee('Le stock de Câble USB passera à −2.')

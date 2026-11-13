@@ -400,10 +400,8 @@ class ClientResourceTest extends TestCase
             ->assertFormFieldExists('client_id', fn (Select $champ): bool => $champ->getSearchResults('Jeanne') === []);
         Livewire::test(CreateFacture::class)
             ->assertFormFieldExists('client_id', fn (Select $champ): bool => ! array_key_exists($client->id, $champ->getOptions()))
-            ->fillForm([
-                'client_id' => $client->id,
-                'lignes' => [['produit_id' => $produit->id, 'quantite' => 1, 'taux_tva' => 20, 'remise_pourcentage' => 0]],
-            ])
+            ->fillForm(['client_id' => $client->id])
+            ->call('recevoirLesProduitsChoisis', [['produit_id' => $produit->id, 'quantite' => 1]])
             ->call('create')
             ->assertHasFormErrors(['client_id' => 'exists']);
         $this->assertSame(0, Facture::query()->count());

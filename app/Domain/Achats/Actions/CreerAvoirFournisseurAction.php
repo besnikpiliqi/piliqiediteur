@@ -32,8 +32,8 @@ use LogicException;
  * vente). Un produit déjà vendu à un client ne peut jamais être inclus :
  * voir LigneAchat::quantiteRetournableRestante(), qui plafonne la
  * quantité retournable de chaque ligne au stock actuellement disponible du
- * produit, et AvoirFournisseur::verifierQueLeStockSuffit(), qui plafonne
- * aussi le total des lignes d'un même produit.
+ * produit, et AvoirFournisseur::verifierQueLeStockSuffit(), qui le relit
+ * sous verrou.
  *
  * Il garde le n° de l'avoir du fournisseur, facultatif : l'écran le
  * demande avec un avertissement, sans refus, quand il manque (voir

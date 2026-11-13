@@ -5,6 +5,7 @@ namespace App\Filament\App\Resources;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Facturation\Rules\PrixDAchatEcrit;
 use App\Domain\Facturation\Services\CalculateurLigne;
+use App\Domain\Facturation\Services\QuantiteEntiere;
 use App\Domain\Stock\Actions\SupprimerInventaireOuvertureAction;
 use App\Domain\Stock\Actions\ValiderInventaireOuvertureAction;
 use App\Domain\Stock\Enums\StatutInventaireOuverture;
@@ -30,6 +31,7 @@ use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Form;
 use Filament\Forms\Get;
+use Filament\Forms\Set;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\Section as InfolistSection;
 use Filament\Infolists\Components\TextEntry;
@@ -39,6 +41,7 @@ use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Validation\Rules\Exists;
+use InvalidArgumentException;
 
 /**
  * L'inventaire d'ouverture du magasin : le stock existant à son
@@ -50,7 +53,7 @@ use Illuminate\Validation\Rules\Exists;
  * vente du magasin, par une personne autorisée à valider les achats et à
  * créer des produits (voir InventaireOuverturePolicy). Le menu disparaît
  * après la première vente, sauf pour consulter les inventaires déjà
- * saisis.
+ * saisis. Un produit n'y a qu'une ligne (voir reunirAvecSaLigne()).
  */
 class InventaireOuvertureResource extends Resource
 {
@@ -139,6 +142,7 @@ class InventaireOuvertureResource extends Resource
                     'exists' => 'Choisissez un produit du magasin jamais reçu.',
                 ])
                 ->live()
+                ->afterStateUpdated(fn (mixed $state, Get $get, Set $set, Select $component) => self::reunirAvecSaLigne($state, $get, $set, $component))
                 ->columnSpanFull(),
             Group::make([
                 ...ProduitResource::champsIdentification(fn (): ?Produit => null),
@@ -166,6 +170,61 @@ class InventaireOuvertureResource extends Resource
                 ->prefix('€')
                 ->required(),
         ];
+    }
+
+    /**
+     * Un inventaire d'ouverture n'a qu'une ligne par produit (décision de
+     * l'éditeur du 26/10/2026, série 9) : un produit déjà sur une autre
+     * ligne, choisi de nouveau, y ajoute la quantité de cette ligne, qui
+     * disparaît ; l'autre ligne garde sa place et son coût unitaire (celui
+     * de cette ligne s'il n'en avait pas), et un message le dit.
+     * L'enregistrement refuse toujours deux lignes du même produit (voir
+     * ConstructeurLigneInventaire).
+     */
+    private static function reunirAvecSaLigne(mixed $produitId, Get $get, Set $set, Select $champ): void
+    {
+        if (blank($produitId)) {
+            return;
+        }
+
+        $cleCourante = $champ->getContainer()->getStatePath(isAbsolute: false);
+        $lignes = ValeursLues::tableau($get('../../lignes') ?? []);
+        $courante = ValeursLues::champs($lignes[$cleCourante] ?? []);
+
+        foreach ($lignes as $cle => $ligne) {
+            if ((string) $cle === $cleCourante || ! is_array($ligne) || ValeurSimple::enTexte($ligne['produit_id'] ?? '') !== ValeurSimple::enTexte($produitId)) {
+                continue;
+            }
+
+            $lignes[$cle]['quantite'] = self::quantiteLue($ligne['quantite'] ?? null) + self::quantiteLue($courante['quantite'] ?? null);
+
+            if (blank($ligne['cout_unitaire_ht'] ?? null)) {
+                $lignes[$cle]['cout_unitaire_ht'] = $courante['cout_unitaire_ht'] ?? null;
+            }
+
+            unset($lignes[$cleCourante]);
+            $set('../../lignes', $lignes);
+
+            Notification::make()
+                ->title('« '.(self::libelleDeLaLigne(ValeursLues::champs($ligne)) ?? '').' » était déjà sur une ligne de cet inventaire, qui n\'a qu\'une ligne par produit : sa quantité passe à '.$lignes[$cle]['quantite'].'. Vérifiez son coût unitaire.')
+                ->success()
+                ->send();
+
+            return;
+        }
+    }
+
+    /**
+     * La quantité d'une ligne en cours de saisie : un nombre entier d'au
+     * moins 1, sinon 1, celle d'une ligne qu'on vient d'ajouter.
+     */
+    private static function quantiteLue(mixed $quantite): int
+    {
+        try {
+            return QuantiteEntiere::depuisSaisie($quantite);
+        } catch (InvalidArgumentException) {
+            return 1;
+        }
     }
 
     /**

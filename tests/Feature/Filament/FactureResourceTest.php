@@ -44,6 +44,8 @@ use App\Filament\App\Resources\FactureResource\Pages\ListFactures;
 use App\Filament\App\Resources\FactureResource\Pages\ViewFacture;
 use App\Integrations\Pdp\Enums\StatutTransmissionPdp;
 use Filament\Facades\Filament;
+use Filament\Forms\Components\Field;
+use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Illuminate\Database\Events\QueryExecuted;
@@ -78,10 +80,8 @@ class FactureResourceTest extends TestCase
         $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => false]);
 
         $this->assertThrows(
-            fn () => Livewire::test(CreateFacture::class)->fillForm([
-                'client_id' => [$premier->id, $second->id],
-                'lignes' => [['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 1, 'prix_unitaire_ht' => 50, 'taux_tva' => 20, 'remise_pourcentage' => 0]],
-            ])->call('create'),
+            fn () => Livewire::test(CreateFacture::class)->fillForm(['client_id' => [$premier->id, $second->id]])
+                ->call('recevoirLesProduitsChoisis', [['produit_id' => $produit->id, 'quantite' => 1]])->call('create'),
             ViewException::class,
             sprintf(ValeursLues::REFUS_CLE, 'array'),
         );
@@ -104,10 +104,8 @@ class FactureResourceTest extends TestCase
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['nom' => 'Écran iPhone 17 Pro', 'prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => false]);
 
-        Livewire::test(CreateFacture::class)->fillForm([
-            'client_id' => $client->id,
-            'lignes' => [['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 1, 'prix_unitaire_ht' => 50, 'taux_tva' => 20, 'remise_pourcentage' => 0]],
-        ])->call('create');
+        Livewire::test(CreateFacture::class)->fillForm(['client_id' => $client->id])
+            ->call('recevoirLesProduitsChoisis', [['produit_id' => $produit->id, 'quantite' => 1]])->call('create');
 
         $facture = Facture::query()->where('client_id', $client->id)->latest('id')->firstOrFail();
         Livewire::test(ListFactures::class)->callTableAction('emettre', $facture);
@@ -146,10 +144,8 @@ class FactureResourceTest extends TestCase
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => false]);
 
-        Livewire::test(CreateFacture::class)->fillForm([
-            'client_id' => $client->id,
-            'lignes' => [['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 1, 'prix_unitaire_ht' => 50, 'taux_tva' => 20, 'remise_pourcentage' => 0]],
-        ])->call('create');
+        Livewire::test(CreateFacture::class)->fillForm(['client_id' => $client->id])
+            ->call('recevoirLesProduitsChoisis', [['produit_id' => $produit->id, 'quantite' => 1]])->call('create');
         $facture = Facture::query()->where('client_id', $client->id)->latest('id')->firstOrFail();
         Livewire::test(ListFactures::class)->callTableAction('emettre', $facture);
 
@@ -188,10 +184,8 @@ class FactureResourceTest extends TestCase
         app(EmettreAvoirAction::class)->handle(self::auteur(), $avoir);
 
         // Nouvel achat du même montant : couvert automatiquement par le crédit.
-        Livewire::test(CreateFacture::class)->fillForm([
-            'client_id' => $client->id,
-            'lignes' => [['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 1, 'prix_unitaire_ht' => 50, 'taux_tva' => 20, 'remise_pourcentage' => 0]],
-        ])->call('create');
+        Livewire::test(CreateFacture::class)->fillForm(['client_id' => $client->id])
+            ->call('recevoirLesProduitsChoisis', [['produit_id' => $produit->id, 'quantite' => 1]])->call('create');
 
         $nouvelleFacture = Facture::query()->where('client_id', $client->id)->latest('id')->firstOrFail();
         Livewire::test(ListFactures::class)->callTableAction('emettre', $nouvelleFacture);
@@ -230,8 +224,8 @@ class FactureResourceTest extends TestCase
             ->fillForm([
                 'client_id' => Client::factory()->create()->id,
                 'conditions_paiement' => str_repeat('a', 501),
-                'lignes' => [['produit_id' => $produit->id, 'quantite' => 1, 'remise_pourcentage' => 0]],
             ])
+            ->call('recevoirLesProduitsChoisis', [['produit_id' => $produit->id, 'quantite' => 1]])
             ->call('create')
             ->assertHasFormErrors(['conditions_paiement' => 'max']);
 
@@ -263,23 +257,30 @@ class FactureResourceTest extends TestCase
 
     /**
      * Le nom vient du catalogue et le prix d'une vente se saisit en TTC :
-     * ni la description ni le PU HT d'une ligne ne se modifient ici.
+     * ni la description ni le PU HT d'une ligne ne se modifient ici, et son
+     * produit ne se change pas, sans liste pour le choisir (décision de
+     * l'éditeur du 26/10/2026, série 9) : la ligne montre sa référence, et
+     * une nouvelle facture s'ouvre sans ligne.
      */
-    public function test_la_description_et_le_pu_ht_dune_ligne_ne_se_modifient_pas(): void
+    public function test_la_description_le_produit_et_le_pu_ht_dune_ligne_ne_se_modifient_pas(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $responsable = $this->responsableDeTest($magasin);
         $this->actingAs($responsable);
         Filament::setTenant($magasin);
+        $produit = Produit::factory()->create(['reference' => 'CAB-01', 'prix_vente_ttc' => 12, 'taux_tva' => 20]);
 
-        $component = Livewire::test(CreateFacture::class);
+        $component = Livewire::test(CreateFacture::class)
+            ->assertSet('data.lignes', [])
+            ->call('recevoirLesProduitsChoisis', [['produit_id' => $produit->id, 'quantite' => 1]]);
         $cle = array_key_first($component->get('data.lignes'));
 
         $component
             ->assertFormFieldIsDisabled("lignes.{$cle}.description")
+            ->assertFormFieldExists("lignes.{$cle}.produit_id", fn (Field $champ): bool => $champ instanceof Hidden)
+            ->assertSee('Référence : CAB-01')
             ->assertFormFieldIsDisabled("lignes.{$cle}.prix_unitaire_ht")
-            ->assertFormFieldIsEnabled("lignes.{$cle}.prix_unitaire_ttc")
-            ->assertFormComponentActionDoesNotExist("lignes.{$cle}.produit_id", 'createOption');
+            ->assertFormFieldIsEnabled("lignes.{$cle}.prix_unitaire_ttc");
     }
 
     /**
@@ -316,10 +317,8 @@ class FactureResourceTest extends TestCase
 
         // Nouvel achat d'un montant supérieur : seulement couvert en partie
         // par le crédit, aucun encaissement réel.
-        Livewire::test(CreateFacture::class)->fillForm([
-            'client_id' => $client->id,
-            'lignes' => [['produit_id' => $produitFacture->id, 'description' => $produitFacture->nom, 'quantite' => 1, 'prix_unitaire_ht' => 50, 'taux_tva' => 20, 'remise_pourcentage' => 0]],
-        ])->call('create');
+        Livewire::test(CreateFacture::class)->fillForm(['client_id' => $client->id])
+            ->call('recevoirLesProduitsChoisis', [['produit_id' => $produitFacture->id, 'quantite' => 1]])->call('create');
         $nouvelleFacture = Facture::query()->where('client_id', $client->id)->latest('id')->firstOrFail();
         Livewire::test(ListFactures::class)->callTableAction('emettre', $nouvelleFacture);
         $nouvelleFacture = $nouvelleFacture->fresh();
@@ -371,10 +370,8 @@ class FactureResourceTest extends TestCase
 
         // Nouvel achat d'un montant supérieur (61,20 € TTC) : seulement
         // couvert en partie par le crédit, aucun encaissement réel.
-        Livewire::test(CreateFacture::class)->fillForm([
-            'client_id' => $client->id,
-            'lignes' => [['produit_id' => $produitFacture->id, 'description' => $produitFacture->nom, 'quantite' => 1, 'prix_unitaire_ht' => 51, 'taux_tva' => 20, 'remise_pourcentage' => 0]],
-        ])->call('create');
+        Livewire::test(CreateFacture::class)->fillForm(['client_id' => $client->id])
+            ->call('recevoirLesProduitsChoisis', [['produit_id' => $produitFacture->id, 'quantite' => 1]])->call('create');
         $nouvelleFacture = Facture::query()->where('client_id', $client->id)->latest('id')->firstOrFail();
         Livewire::test(ListFactures::class)->callTableAction('emettre', $nouvelleFacture);
         $nouvelleFacture = $nouvelleFacture->fresh();
@@ -559,9 +556,9 @@ class FactureResourceTest extends TestCase
         $produit = Produit::factory()->create(['prix_vente_ttc' => 35, 'taux_tva' => 20]);
 
         $component = Livewire::test(CreateFacture::class)->fillForm(['client_id' => $client->id]);
+        $component->call('recevoirLesProduitsChoisis', [['produit_id' => $produit->id, 'quantite' => 1]]);
         $cle = array_key_first($component->get('data.lignes'));
         $component
-            ->set("data.lignes.{$cle}.produit_id", $produit->id)
             ->set("data.lignes.{$cle}.quantite", '2')
             ->set("data.lignes.{$cle}.prix_unitaire_ttc", '40');
 
@@ -589,7 +586,9 @@ class FactureResourceTest extends TestCase
         $this->actingAs($responsable);
         Filament::setTenant($magasin);
 
-        $html = Livewire::test(CreateFacture::class)->html();
+        $html = Livewire::test(CreateFacture::class)
+            ->call('recevoirLesProduitsChoisis', [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20])->id, 'quantite' => 1]])
+            ->html();
 
         foreach (['quantite', 'prix_unitaire_ttc', 'taux_tva', 'remise_pourcentage'] as $champ) {
             $this->assertMatchesRegularExpression(
@@ -619,10 +618,10 @@ class FactureResourceTest extends TestCase
         Produit::factory()->create(['id' => 1, 'prix_vente_ttc' => '10.00', 'taux_tva' => 20]);
         Produit::factory()->create(['id' => 12, 'prix_vente_ttc' => '12.00', 'taux_tva' => 20]);
         $component = Livewire::test(CreateFacture::class)->fillForm(['client_id' => Client::factory()->create()->id]);
+        $component->call('recevoirLesProduitsChoisis', [['produit_id' => 12, 'quantite' => 1]]);
         $cle = array_key_first($component->get('data.lignes'));
 
         $component
-            ->set("data.lignes.{$cle}.produit_id", 12)
             ->set('data.lignes.forgee', ['produit_id' => true, 'quantite' => '1']);
 
         $component->assertSee('Total HT 18,33 € · TVA 3,67 € · Total TTC 22,00 €');
@@ -1063,10 +1062,10 @@ class FactureResourceTest extends TestCase
         $ecran = Produit::factory()->create(['prix_vente_ttc' => '65.00', 'taux_tva' => 20, 'suivi_stock' => false]);
 
         $formulaire = Livewire::test(CreateFacture::class)->fillForm(['client_id' => $particulier->id]);
+        $formulaire->call('recevoirLesProduitsChoisis', [['produit_id' => $ecran->id, 'quantite' => 1]]);
         $cle = array_key_first($formulaire->get('data.lignes'));
 
         $formulaire
-            ->set("data.lignes.{$cle}.produit_id", $ecran->id)
             ->assertSet("data.lignes.{$cle}.prix_unitaire_ht", '54.17')
             ->set('data.client_id', $professionnel->id)
             ->assertSet("data.lignes.{$cle}.prix_unitaire_ht", '54.166667')
@@ -1152,10 +1151,10 @@ class FactureResourceTest extends TestCase
         $produit = Produit::factory()->create(['prix_vente_ttc' => 40, 'taux_tva' => 20, 'suivi_stock' => false]);
 
         $component = Livewire::test(CreateFacture::class)->fillForm(['client_id' => $client->id]);
+        $component->call('recevoirLesProduitsChoisis', [['produit_id' => $produit->id, 'quantite' => 1]]);
         $cle = array_key_first($component->get('data.lignes'));
 
         $component
-            ->set("data.lignes.{$cle}.produit_id", $produit->id)
             ->set("data.lignes.{$cle}.quantite", '1.5')
             ->call('create')
             ->assertHasFormErrors(["lignes.{$cle}.quantite" => 'integer']);
@@ -1180,13 +1179,13 @@ class FactureResourceTest extends TestCase
         $produit = Produit::factory()->create(['prix_vente_ttc' => 10, 'taux_tva' => 20]);
 
         $component = Livewire::test(CreateFacture::class)->fillForm(['client_id' => $client->id]);
+        $component->call('recevoirLesProduitsChoisis', [['produit_id' => $produit->id, 'quantite' => 1]]);
         $cle = array_key_first($component->get('data.lignes'));
 
         // 10,05 € TTC / 1,20 = 8,375 € HT, enregistré au millionième d'euro
         // (Q1-b) et montré au centime, un demi-centime exact au centime
         // supérieur (décision de l'éditeur du 25/10/2026).
         $component
-            ->set("data.lignes.{$cle}.produit_id", $produit->id)
             ->set("data.lignes.{$cle}.quantite", '3')
             ->set("data.lignes.{$cle}.prix_unitaire_ttc", '10.05')
             ->assertSet("data.lignes.{$cle}.prix_unitaire_ht", '8.38')
@@ -1327,12 +1326,8 @@ class FactureResourceTest extends TestCase
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => false]);
         Livewire::test(CreateFacture::class)
-            ->fillForm([
-                'client_id' => $client->id,
-                'lignes' => [
-                    ['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 1, 'prix_unitaire_ht' => 50, 'taux_tva' => 20, 'remise_pourcentage' => 0],
-                ],
-            ])
+            ->fillForm(['client_id' => $client->id])
+            ->call('recevoirLesProduitsChoisis', [['produit_id' => $produit->id, 'quantite' => 1]])
             ->call('create')
             ->assertHasNoFormErrors();
         $brouillon = Facture::query()->sole();
@@ -1355,12 +1350,8 @@ class FactureResourceTest extends TestCase
         $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'stock_quantite' => 10]);
 
         Livewire::test(CreateFacture::class)
-            ->fillForm([
-                'client_id' => $client->id,
-                'lignes' => [
-                    ['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 2, 'prix_unitaire_ht' => 50, 'taux_tva' => 20, 'remise_pourcentage' => 0],
-                ],
-            ])
+            ->fillForm(['client_id' => $client->id])
+            ->call('recevoirLesProduitsChoisis', [['produit_id' => $produit->id, 'quantite' => 2]])
             ->call('create')
             ->assertHasNoFormErrors();
 
@@ -1418,12 +1409,8 @@ class FactureResourceTest extends TestCase
         $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'stock_quantite' => 10]);
 
         Livewire::test(CreateFacture::class)
-            ->fillForm([
-                'client_id' => $client->id,
-                'lignes' => [
-                    ['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 3, 'prix_unitaire_ht' => 50, 'taux_tva' => 20, 'remise_pourcentage' => 0],
-                ],
-            ])
+            ->fillForm(['client_id' => $client->id])
+            ->call('recevoirLesProduitsChoisis', [['produit_id' => $produit->id, 'quantite' => 3]])
             ->call('create');
 
         $facture = Facture::query()->firstOrFail();
@@ -1451,10 +1438,8 @@ class FactureResourceTest extends TestCase
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => false]);
 
-        Livewire::test(CreateFacture::class)->fillForm([
-            'client_id' => $client->id,
-            'lignes' => [['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 1, 'prix_unitaire_ht' => 50, 'taux_tva' => 20, 'remise_pourcentage' => 0]],
-        ])->call('create');
+        Livewire::test(CreateFacture::class)->fillForm(['client_id' => $client->id])
+            ->call('recevoirLesProduitsChoisis', [['produit_id' => $produit->id, 'quantite' => 1]])->call('create');
 
         $facture = Facture::query()->firstOrFail();
         Livewire::test(ListFactures::class)->callTableAction('emettre', $facture);
@@ -1476,10 +1461,8 @@ class FactureResourceTest extends TestCase
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20]);
 
-        Livewire::test(CreateFacture::class)->fillForm([
-            'client_id' => $client->id,
-            'lignes' => [['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 1, 'prix_unitaire_ht' => 50, 'taux_tva' => 20, 'remise_pourcentage' => 0]],
-        ])->call('create');
+        Livewire::test(CreateFacture::class)->fillForm(['client_id' => $client->id])
+            ->call('recevoirLesProduitsChoisis', [['produit_id' => $produit->id, 'quantite' => 1]])->call('create');
 
         $facture = Facture::query()->firstOrFail();
 
@@ -1612,20 +1595,16 @@ class FactureResourceTest extends TestCase
         $autreClient = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20]);
 
-        Livewire::test(CreateFacture::class)->fillForm([
-            'client_id' => $client->id,
-            'lignes' => [['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 1, 'prix_unitaire_ht' => 50, 'taux_tva' => 20, 'remise_pourcentage' => 0]],
-        ])->call('create');
+        Livewire::test(CreateFacture::class)->fillForm(['client_id' => $client->id])
+            ->call('recevoirLesProduitsChoisis', [['produit_id' => $produit->id, 'quantite' => 1]])->call('create');
 
         $facture = Facture::query()->firstOrFail();
 
         Livewire::test(EditFacture::class, ['record' => $facture->getRouteKey()])
-            ->fillForm([
-                'client_id' => $autreClient->id,
-                'lignes' => [
-                    ['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 3, 'prix_unitaire_ht' => 50, 'taux_tva' => 20, 'remise_pourcentage' => 0],
-                ],
-            ])
+            ->fillForm(['client_id' => $autreClient->id])
+            // La corbeille de la ligne, puis le produit de nouveau.
+            ->set('data.lignes', [])
+            ->call('recevoirLesProduitsChoisis', [['produit_id' => $produit->id, 'quantite' => 3]])
             ->call('save')
             ->assertHasNoFormErrors()
             // Filament reste par défaut sur le formulaire après sauvegarde :
@@ -1683,10 +1662,8 @@ class FactureResourceTest extends TestCase
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => false]);
 
-        Livewire::test(CreateFacture::class)->fillForm([
-            'client_id' => $client->id,
-            'lignes' => [['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 1, 'prix_unitaire_ht' => 50, 'taux_tva' => 20, 'remise_pourcentage' => 0]],
-        ])->call('create');
+        Livewire::test(CreateFacture::class)->fillForm(['client_id' => $client->id])
+            ->call('recevoirLesProduitsChoisis', [['produit_id' => $produit->id, 'quantite' => 1]])->call('create');
 
         $facture = Facture::query()->firstOrFail();
         Livewire::test(ListFactures::class)->assertTableActionVisible('edit', $facture);
@@ -1706,16 +1683,12 @@ class FactureResourceTest extends TestCase
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => false]);
 
-        Livewire::test(CreateFacture::class)->fillForm([
-            'client_id' => $client->id,
-            'lignes' => [['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 1, 'prix_unitaire_ht' => 50, 'taux_tva' => 20, 'remise_pourcentage' => 0]],
-        ])->call('create');
+        Livewire::test(CreateFacture::class)->fillForm(['client_id' => $client->id])
+            ->call('recevoirLesProduitsChoisis', [['produit_id' => $produit->id, 'quantite' => 1]])->call('create');
         $factureBrouillon = Facture::query()->latest('id')->firstOrFail();
 
-        Livewire::test(CreateFacture::class)->fillForm([
-            'client_id' => $client->id,
-            'lignes' => [['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 1, 'prix_unitaire_ht' => 50, 'taux_tva' => 20, 'remise_pourcentage' => 0]],
-        ])->call('create');
+        Livewire::test(CreateFacture::class)->fillForm(['client_id' => $client->id])
+            ->call('recevoirLesProduitsChoisis', [['produit_id' => $produit->id, 'quantite' => 1]])->call('create');
         $factureEmise = Facture::query()->latest('id')->firstOrFail();
         Livewire::test(ListFactures::class)->callTableAction('emettre', $factureEmise);
 
@@ -1846,10 +1819,8 @@ class FactureResourceTest extends TestCase
     {
         $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => false]);
 
-        Livewire::test(CreateFacture::class)->fillForm([
-            'client_id' => $client->id,
-            'lignes' => [['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 1, 'prix_unitaire_ht' => 50, 'taux_tva' => 20, 'remise_pourcentage' => 0]],
-        ])->call('create');
+        Livewire::test(CreateFacture::class)->fillForm(['client_id' => $client->id])
+            ->call('recevoirLesProduitsChoisis', [['produit_id' => $produit->id, 'quantite' => 1]])->call('create');
 
         $facture = Facture::query()->where('client_id', $client->id)->latest('id')->firstOrFail();
         Livewire::test(ListFactures::class)->callTableAction('emettre', $facture);
@@ -1926,17 +1897,13 @@ class FactureResourceTest extends TestCase
 
         $this->actingAs($vendeurA);
         Filament::setTenant($magasin);
-        Livewire::test(CreateFacture::class)->fillForm([
-            'client_id' => $client->id,
-            'lignes' => [['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 1, 'prix_unitaire_ht' => 10, 'taux_tva' => 20, 'remise_pourcentage' => 0]],
-        ])->call('create');
+        Livewire::test(CreateFacture::class)->fillForm(['client_id' => $client->id])
+            ->call('recevoirLesProduitsChoisis', [['produit_id' => $produit->id, 'quantite' => 1]])->call('create');
 
         $this->actingAs($vendeurB);
         Filament::setTenant($magasin);
-        Livewire::test(CreateFacture::class)->fillForm([
-            'client_id' => $client->id,
-            'lignes' => [['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 1, 'prix_unitaire_ht' => 10, 'taux_tva' => 20, 'remise_pourcentage' => 0]],
-        ])->call('create');
+        Livewire::test(CreateFacture::class)->fillForm(['client_id' => $client->id])
+            ->call('recevoirLesProduitsChoisis', [['produit_id' => $produit->id, 'quantite' => 1]])->call('create');
 
         Livewire::test(ListFactures::class)
             ->assertCanSeeTableRecords(Facture::where('cree_par', $vendeurB->id)->get())
@@ -2135,7 +2102,7 @@ class FactureResourceTest extends TestCase
         $client->delete();
 
         Livewire::test(EditFacture::class, ['record' => $facture->getRouteKey()])
-            ->fillForm(['lignes' => [['produit_id' => $produit->id, 'quantite' => 3, 'taux_tva' => 20, 'remise_pourcentage' => 0]]])
+            ->call('recevoirLesProduitsChoisis', [['produit_id' => $produit->id, 'quantite' => 2]])
             ->call('save')
             ->assertHasNoFormErrors();
 
@@ -2158,10 +2125,8 @@ class FactureResourceTest extends TestCase
         $produit = Produit::factory()->create(['prix_vente_ttc' => 40, 'taux_tva' => 20, 'suivi_stock' => false]);
 
         Livewire::test(CreateFacture::class)
-            ->fillForm([
-                'client_id' => $archive->id,
-                'lignes' => [['produit_id' => $produit->id, 'quantite' => 1, 'taux_tva' => 20, 'remise_pourcentage' => 0]],
-            ])
+            ->fillForm(['client_id' => $archive->id])
+            ->call('recevoirLesProduitsChoisis', [['produit_id' => $produit->id, 'quantite' => 1]])
             ->call('create')
             ->assertHasFormErrors(['client_id' => 'exists']);
 
@@ -2279,8 +2244,8 @@ class FactureResourceTest extends TestCase
                 'livraison_code_postal' => '10001',
                 'livraison_ville' => 'New York',
                 'livraison_pays' => 'us',
-                'lignes' => [['produit_id' => $produit->id, 'quantite' => 1000, 'remise_pourcentage' => 0]],
             ])
+            ->call('recevoirLesProduitsChoisis', [['produit_id' => $produit->id, 'quantite' => 1000]])
             ->assertFormFieldIsHidden('transport_par')
             ->assertSeeText('Total HT 833,33 € · TVA 0,00 € · Total TTC 833,33 €')
             ->call('create')

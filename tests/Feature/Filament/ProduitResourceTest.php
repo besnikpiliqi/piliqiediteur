@@ -17,7 +17,7 @@ use App\Domain\Stock\Models\InventaireOuverture;
 use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Services\TenantContext;
-use App\Filament\App\Resources\DevisResource;
+use App\Filament\App\Livewire\SelecteurDeProduits;
 use App\Filament\App\Resources\FactureResource\Pages\CreateFacture;
 use App\Filament\App\Resources\InventaireOuvertureResource\Pages\CreateInventaireOuverture;
 use App\Filament\App\Resources\ProduitResource;
@@ -25,7 +25,6 @@ use App\Filament\App\Resources\ProduitResource\Pages\EditProduit;
 use App\Filament\App\Resources\ProduitResource\Pages\ListProduits;
 use App\Models\User;
 use Filament\Facades\Filament;
-use Filament\Forms\Components\Select;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -150,9 +149,9 @@ class ProduitResourceTest extends TestCase
         $component = Livewire::test(CreateFacture::class)
             ->fillForm(['client_id' => $client->id]);
 
+        $component->call('recevoirLesProduitsChoisis', [['produit_id' => $produit->id, 'quantite' => 1]]);
         $cle = array_key_first($component->get('data.lignes'));
         $component
-            ->set("data.lignes.{$cle}.produit_id", $produit->id)
             ->set("data.lignes.{$cle}.quantite", '2')
             ->assertSet("data.lignes.{$cle}.prix_unitaire_ttc", '40.00')
             ->assertSet("data.lignes.{$cle}.prix_unitaire_ht", '33.33')
@@ -667,39 +666,35 @@ class ProduitResourceTest extends TestCase
     }
 
     /**
-     * La recherche de produit des devis, des factures et de la caisse (voir
-     * ProduitResource::rechercher()) ignore la casse et les accents, sur le
-     * nom comme sur la référence.
+     * La recherche de produit des devis, des factures et de la caisse, celle
+     * du tableau des produits (voir SelecteurDeProduits), ignore la casse et
+     * les accents, sur le nom comme sur la référence.
      */
     public function test_la_recherche_de_produit_a_la_vente_ignore_la_casse_et_les_accents(): void
     {
         $this->connecterProprietaire();
         $ecran = Produit::factory()->create(['nom' => 'Écran OLED', 'reference' => 'ECR-1']);
         $protection = Produit::factory()->create(['nom' => 'Protection', 'reference' => 'Écran-verre']);
-        Produit::factory()->create(['nom' => 'Chargeur', 'reference' => 'CHG-1']);
+        $chargeur = Produit::factory()->create(['nom' => 'Chargeur', 'reference' => 'CHG-1']);
 
-        $selectProduit = collect(DevisResource::ligneSchema())
-            ->first(fn ($component): bool => $component instanceof Select && $component->getName() === 'produit_id');
-
-        $resultats = $selectProduit->getSearchResults('ecran');
-        ksort($resultats);
-
-        $this->assertSame([$ecran->id => 'Écran OLED (ECR-1)', $protection->id => 'Protection (Écran-verre)'], $resultats);
+        Livewire::test(SelecteurDeProduits::class)
+            ->searchTable('ecran')
+            ->assertCanSeeTableRecords([$ecran, $protection])
+            ->assertCanNotSeeTableRecords([$chargeur]);
     }
 
     /**
      * La recherche de produit des devis, des factures et de la caisse (voir
-     * DevisResource::ligneSchema()) ne propose plus un produit archivé.
+     * SelecteurDeProduits) ne propose plus un produit archivé.
      */
     public function test_un_produit_archive_n_est_plus_propose_a_la_vente(): void
     {
         $this->connecterProprietaire();
-        Produit::factory()->trashed()->create(['nom' => 'Chargeur ancien modèle']);
+        $archive = Produit::factory()->trashed()->create(['nom' => 'Chargeur ancien modèle']);
 
-        $selectProduit = collect(DevisResource::ligneSchema())
-            ->first(fn ($component): bool => $component instanceof Select && $component->getName() === 'produit_id');
-
-        $this->assertSame([], $selectProduit->getSearchResults('Chargeur'));
+        Livewire::test(SelecteurDeProduits::class)
+            ->searchTable('Chargeur')
+            ->assertCanNotSeeTableRecords([$archive]);
     }
 
     /**

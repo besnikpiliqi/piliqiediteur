@@ -1050,6 +1050,27 @@ class CalculateurLigne
     }
 
     /**
+     * Le prix d'achat moyen d'une ligne, en millionièmes d'euro : son HT ÷
+     * sa quantité, arrondi une fois au plus proche, un demi au-dessus --
+     * 40,00 € HT pour 12 câbles font 3,333333 € (3333333). Une facture
+     * d'achat n'a qu'une ligne par produit (décision de l'éditeur du
+     * 26/10/2026, série 9) : le même produit facturé à deux prix (10 câbles
+     * à 4,00 € HT et 2 offerts) y tient sur une ligne, à ce prix moyen.
+     *
+     * @param  int  $htCentimes  le HT de la ligne, en centimes
+     * @return int en millionièmes d'euro
+     *
+     * @throws InvalidArgumentException
+     */
+    public function prixMoyenDUnAchat(int $htCentimes, int $quantite): int
+    {
+        $quantite = $this->quantite(['quantite' => $quantite]);
+        $ht = $this->entier(['montant_ht' => $htCentimes], 'montant_ht');
+
+        return $this->diviserArrondi($this->multiplier($ht, 10000), $quantite);
+    }
+
+    /**
      * Le HT que le calcul propose pour une ligne d'achat (voir htDUnAchat()),
      * pour la montrer à côté du HT qu'écrit la facture du fournisseur.
      *

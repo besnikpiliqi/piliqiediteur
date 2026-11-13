@@ -43,12 +43,8 @@ class AvoirResourceTest extends TestCase
     {
         $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'stock_quantite' => 10]);
 
-        Livewire::test(CreateFacture::class)->fillForm([
-            'client_id' => $client->id,
-            'lignes' => [
-                ['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 3, 'prix_unitaire_ht' => 50, 'taux_tva' => 20, 'remise_pourcentage' => 0],
-            ],
-        ])->call('create');
+        Livewire::test(CreateFacture::class)->fillForm(['client_id' => $client->id])
+            ->call('recevoirLesProduitsChoisis', [['produit_id' => $produit->id, 'quantite' => 3]])->call('create');
 
         $facture = Facture::query()->where('client_id', $client->id)->latest('id')->firstOrFail();
         Livewire::test(ListFactures::class)->callTableAction('emettre', $facture);
@@ -147,10 +143,8 @@ class AvoirResourceTest extends TestCase
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => false]);
 
-        Livewire::test(CreateFacture::class)->fillForm([
-            'client_id' => $client->id,
-            'lignes' => [['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 1, 'prix_unitaire_ht' => 50, 'taux_tva' => 20, 'remise_pourcentage' => 0]],
-        ])->call('create');
+        Livewire::test(CreateFacture::class)->fillForm(['client_id' => $client->id])
+            ->call('recevoirLesProduitsChoisis', [['produit_id' => $produit->id, 'quantite' => 1]])->call('create');
 
         $facture = Facture::query()->where('client_id', $client->id)->latest('id')->firstOrFail();
         $this->assertSame(StatutFacture::Brouillon, $facture->statut);

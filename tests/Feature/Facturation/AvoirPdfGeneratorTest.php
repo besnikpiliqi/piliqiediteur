@@ -127,7 +127,8 @@ class AvoirPdfGeneratorTest extends TestCase
      * différence avec les avoirs déjà émis sur la même ligne, le dernier
      * retour soldant la ligne : une note sous les lignes le dit tel qu'il
      * est fait, sur une facture comme sur un ticket. Sur trois lignes de
-     * 0,10 € à 20 % (0,25 € HT au taux, répartis 0,08, 0,09 et 0,08 €), le
+     * trois articles à 0,10 € à 20 % (0,25 € HT au taux, répartis 0,08,
+     * 0,09 et 0,08 €), le
      * retour de la deuxième crédite toute la ligne, 0,09 € + 0,01 €, et non
      * 0,08 € + 0,02 € comme une ligne seule : la note l'annonce, et dit
      * aussi l'écart avec la quantité x le prix unitaire affiché : sur
@@ -142,8 +143,10 @@ class AvoirPdfGeneratorTest extends TestCase
         app(TenantContext::class)->set(Magasin::factory()->create());
         $professionnel = Client::factory()->professionnel()->create();
         $particulier = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ttc' => '0.10', 'taux_tva' => 20, 'suivi_stock' => false]);
-        $facture = app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), $professionnel, array_fill(0, 3, ['produit_id' => $produit->id, 'quantite' => 1])));
+        // Trois produits différents au même prix : un produit n'a qu'une
+        // ligne (décision de l'éditeur du 26/10/2026, série 9).
+        $lignes = array_map(fn (): array => ['produit_id' => Produit::factory()->create(['prix_vente_ttc' => '0.10', 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1], range(1, 3));
+        $facture = app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), $professionnel, $lignes));
 
         $avoirProfessionnel = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $professionnel, [['ligne_facture_id' => $facture->lignes[1]->id, 'quantite' => 1]]);
         $avoirSurTicket = $this->crediter($particulier, $this->emettreUneFacture($particulier));

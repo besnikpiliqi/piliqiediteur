@@ -248,12 +248,12 @@ class Devis extends Model implements DocumentEnvoyable
 
     /**
      * Le stock disponible du magasin aujourd'hui de chaque produit suivi en
-     * stock de ses lignes, et la quantité que ses lignes en demandent, les
-     * lignes d'un même produit additionnées, par identifiant de produit
-     * (un produit archivé depuis compris) : le devis ne réserve aucun stock
-     * (décision de l'éditeur du 02/11/2026), sa fiche le montre sous chaque
-     * ligne (voir FactureResource::lignesEntry()), l'avis de son
-     * acceptation nomme les produits qui manquent (voir
+     * stock de ses lignes, et la quantité que sa ligne en demande -- un
+     * produit n'a qu'une ligne (voir ConstructeurLigneDocument) --, par
+     * identifiant de produit (un produit archivé depuis compris) : le devis
+     * ne réserve aucun stock (décision de l'éditeur du 02/11/2026), sa fiche
+     * le montre sous chaque ligne (voir FactureResource::lignesEntry()),
+     * l'avis de son acceptation nomme les produits qui manquent (voir
      * stocksInsuffisants()), et l'émission de la facture le contrôle (voir
      * VerificateurDeStock). Dans l'ordre de ses lignes ; deux lectures,
      * quel que soit le nombre de lignes.
@@ -262,11 +262,11 @@ class Devis extends Model implements DocumentEnvoyable
      */
     public function stocksDeSesProduits(): array
     {
-        $demandes = [];
-
-        foreach ($this->lignes()->whereNotNull('produit_id')->get(['produit_id', 'quantite']) as $ligne) {
-            $demandes[(int) $ligne->produit_id] = ($demandes[(int) $ligne->produit_id] ?? 0) + $ligne->quantite;
-        }
+        $demandes = $this->lignes()
+            ->whereNotNull('produit_id')
+            ->get(['produit_id', 'quantite'])
+            ->mapWithKeys(fn (LigneDevis $ligne): array => [(int) $ligne->produit_id => $ligne->quantite])
+            ->all();
 
         $produits = Produit::withTrashed()
             ->whereKey(array_keys($demandes))
@@ -287,9 +287,8 @@ class Devis extends Model implements DocumentEnvoyable
     }
 
     /**
-     * Les produits suivis en stock dont ses lignes demandent plus que le
-     * stock disponible du magasin aujourd'hui, un par produit (voir
-     * stocksDeSesProduits()).
+     * Les produits suivis en stock dont la ligne demande plus que le stock
+     * disponible du magasin aujourd'hui (voir stocksDeSesProduits()).
      *
      * @return list<array{produit: string, demande: int, disponible: int}>
      */

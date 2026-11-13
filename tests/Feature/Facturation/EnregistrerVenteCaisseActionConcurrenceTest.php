@@ -45,14 +45,14 @@ class EnregistrerVenteCaisseActionConcurrenceTest extends TestCase
     }
 
     /**
-     * Le panier de deux T-shirts à 25,00 € en deux lignes et d'un livre à
-     * 10,00 € à 5,5 %, vendu au comptoir.
+     * Le panier d'un T-shirt et d'une casquette à 25,00 €, en deux lignes,
+     * et d'un livre à 10,00 € à 5,5 %, vendu au comptoir.
      */
-    private static function vendreLePanier(int $comptoirId, int $tshirtId, int $livreId): Facture
+    private static function vendreLePanier(int $comptoirId, int $tshirtId, int $casquetteId, int $livreId): Facture
     {
         return self::vendreAuComptant(self::auteur(),
             Client::query()->findOrFail($comptoirId),
-            [['produit_id' => $tshirtId, 'quantite' => 1], ['produit_id' => $tshirtId, 'quantite' => 1], ['produit_id' => $livreId, 'quantite' => 1]],
+            [['produit_id' => $tshirtId, 'quantite' => 1], ['produit_id' => $casquetteId, 'quantite' => 1], ['produit_id' => $livreId, 'quantite' => 1]],
             ModePaiement::Especes,
         );
     }
@@ -75,14 +75,15 @@ class EnregistrerVenteCaisseActionConcurrenceTest extends TestCase
         $magasinId = $magasin->id;
         $comptoirId = Client::query()->where('est_comptoir', true)->sole()->id;
         $tshirtId = Produit::factory()->create(['nom' => 'T-shirt', 'prix_vente_ttc' => '25.00', 'taux_tva' => 20, 'suivi_stock' => false])->id;
+        $casquetteId = Produit::factory()->create(['nom' => 'Casquette', 'prix_vente_ttc' => '25.00', 'taux_tva' => 20, 'suivi_stock' => false])->id;
         $livreId = Produit::factory()->create(['nom' => 'Livre', 'prix_vente_ttc' => '10.00', 'taux_tva' => 5.5, 'suivi_stock' => false])->id;
         $concurrente = null;
-        $this->concurrencerDesQueLeRegistreEstVerrouille(static function () use ($magasinId, $comptoirId, $tshirtId, $livreId): void {
+        $this->concurrencerDesQueLeRegistreEstVerrouille(static function () use ($magasinId, $comptoirId, $tshirtId, $casquetteId, $livreId): void {
             app(TenantContext::class)->set(Magasin::query()->findOrFail($magasinId));
-            self::vendreLePanier($comptoirId, $tshirtId, $livreId);
+            self::vendreLePanier($comptoirId, $tshirtId, $casquetteId, $livreId);
         }, $concurrente);
 
-        $premiere = self::vendreLePanier($comptoirId, $tshirtId, $livreId);
+        $premiere = self::vendreLePanier($comptoirId, $tshirtId, $casquetteId, $livreId);
 
         $this->assertInstanceOf(InvokedProcess::class, $concurrente);
         $resultat = $this->attendreLeProcessusConcurrent($concurrente);

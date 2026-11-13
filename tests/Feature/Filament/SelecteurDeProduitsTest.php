@@ -7,9 +7,11 @@ use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\Fournisseur;
+use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Enums\NatureOperation;
 use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Services\DerogationsDePrix;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Magasin;
@@ -19,9 +21,12 @@ use App\Filament\App\Resources\DevisResource;
 use App\Filament\App\Resources\DevisResource\Pages\CreateDevis;
 use App\Filament\App\Resources\FactureResource\Pages\CreateFacture;
 use Filament\Facades\Filament;
+use Filament\Forms\Components\Field;
+use Filament\Forms\Components\Hidden;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
+use LogicException;
 use Tests\TestCase;
 
 /**
@@ -183,9 +188,9 @@ class SelecteurDeProduitsTest extends TestCase
             ->assertTableColumnHasDescription('nom', 'Épuisé', $epuise)
             ->assertTableColumnHasDescription('nom', 'Épuisé', $negatif)
             ->assertTableColumnHasDescription('stock_quantite', 'À régulariser', $negatif)
-            ->call('basculer', $epuise->getKey())
+            ->call('ajouterUnArticle', $epuise->getKey())
             ->assertNotified($refus)
-            ->call('basculer', $negatif->getKey())
+            ->call('ajouterUnArticle', $negatif->getKey())
             ->assertNotified($refusDuNegatif)
             ->assertSet('selection', []);
 
@@ -204,18 +209,20 @@ class SelecteurDeProduitsTest extends TestCase
         Livewire::test(SelecteurDeProduits::class)
             ->assertTableColumnDoesNotHaveDescription('nom', 'Épuisé', $negatif)
             ->assertTableColumnHasDescription('stock_quantite', 'À régulariser', $negatif)
-            ->call('basculer', $epuise->getKey())
+            ->call('ajouterUnArticle', $epuise->getKey())
             ->assertSet('selection', [['produit_id' => $epuise->getKey(), 'quantite' => 1]]);
     }
 
     /**
-     * La liste « Produit » d'une ligne déjà posée applique le même refus
-     * que le tableau : sans l'autorisation de vendre sans stock, choisir un
-     * produit épuisé le dit et la ligne garde son produit et son prix, puis
-     * le brouillon s'enregistre avec eux ; une personne autorisée change le
-     * produit de la ligne.
+     * Le produit d'une ligne ne se change pas à l'écran (décision de
+     * l'éditeur du 26/10/2026, série 9 : plus de liste « Produit » dans une
+     * ligne, son champ est caché) ; un vendeur sans l'autorisation de vendre
+     * sans stock qui force dans ce champ un produit épuisé, au prix de la
+     * ligne, voit l'enregistrement le refuser comme un autre prix que celui
+     * de la fiche, et, au prix de la fiche, l'émission le refuser comme un
+     * produit épuisé : rien ne se vend.
      */
-    public function test_la_liste_produit_d_une_ligne_refuse_un_produit_epuise_sans_l_autorisation(): void
+    public function test_un_produit_epuise_force_dans_le_champ_cache_d_une_ligne_ne_se_vend_jamais(): void
     {
         $magasin = $this->ouvrirLeMagasinEnTantQueResponsable();
         $cable = Produit::factory()->create(['nom' => 'Câble', 'reference' => 'CAB-1', 'prix_vente_ttc' => '12.00', 'taux_tva' => 20, 'suivi_stock' => true, 'stock_quantite' => 5]);
@@ -229,24 +236,20 @@ class SelecteurDeProduitsTest extends TestCase
             ->call('recevoirLesProduitsChoisis', [['produit_id' => $cable->getKey(), 'quantite' => 1]]);
         $cle = array_key_first($page->get('data.lignes'));
 
-        $page->set("data.lignes.{$cle}.produit_id", $chargeur->getKey())
-            ->assertNotified('« Chargeur » est épuisé : seule une personne autorisée à vendre sans stock peut le vendre.')
-            ->assertSet("data.lignes.{$cle}.produit_id", $cable->getKey())
-            ->assertSet("data.lignes.{$cle}.prix_unitaire_ttc", '12.00')
+        $page->assertFormFieldExists("lignes.{$cle}.produit_id", fn (Field $champ): bool => $champ instanceof Hidden)
+            ->set("data.lignes.{$cle}.produit_id", $chargeur->getKey())
+            ->call('create')
+            ->assertNotified('Vendre « Chargeur » à 12,00 € au lieu de 30,00 €, le prix de sa fiche, '.DerogationsDePrix::AUTORISATION.'.');
+        $this->assertSame(0, Facture::query()->count());
+
+        $page->set("data.lignes.{$cle}.prix_unitaire_ttc", '30.00')
             ->call('create')
             ->assertHasNoFormErrors();
-        $this->assertSame([$cable->getKey()], Facture::query()->sole()->lignes->pluck('produit_id')->all());
+        $brouillon = Facture::query()->sole();
 
-        $this->actingAs($this->responsableDeTest($magasin));
-
-        $page = Livewire::test(CreateFacture::class)
-            ->fillForm(['client_id' => $client->getKey()])
-            ->call('recevoirLesProduitsChoisis', [['produit_id' => $cable->getKey(), 'quantite' => 1]]);
-        $cle = array_key_first($page->get('data.lignes'));
-
-        $page->set("data.lignes.{$cle}.produit_id", $chargeur->getKey())
-            ->assertSet("data.lignes.{$cle}.produit_id", $chargeur->getKey())
-            ->assertSet("data.lignes.{$cle}.prix_unitaire_ttc", '30.00');
+        $this->assertThrows(fn () => app(EmettreFactureAction::class)->handle($vendeur, $brouillon), LogicException::class);
+        $this->assertNull($brouillon->fresh()->numero);
+        $this->assertSame(0, $chargeur->fresh()->stock_quantite);
     }
 
     /**
@@ -288,7 +291,7 @@ class SelecteurDeProduitsTest extends TestCase
             ->assertTableColumnHasDescription('nom', 'Épuisé', $epuise)
             ->assertDontSee('Grossiste Secret')
             ->assertDontSee('03/09/2026')
-            ->call('basculer', $cable->getKey())
+            ->call('ajouterUnArticle', $cable->getKey())
             ->assertSet('selection', [['produit_id' => $cable->getKey(), 'quantite' => 1]]);
     }
 
@@ -344,8 +347,8 @@ class SelecteurDeProduitsTest extends TestCase
 
     /**
      * « Ajouter » envoie la sélection à la page : une ligne par produit, au
-     * prix et au taux de sa fiche, sans remise, avec sa quantité ; la ligne
-     * vide du formulaire disparaît et la fenêtre se ferme.
+     * prix et au taux de sa fiche, sans remise, avec sa quantité, et la
+     * fenêtre se ferme ; une nouvelle facture s'ouvre sans ligne.
      */
     public function test_ajouter_la_selection_cree_une_ligne_par_produit_au_prix_de_sa_fiche(): void
     {
@@ -355,8 +358,8 @@ class SelecteurDeProduitsTest extends TestCase
         $client = Client::factory()->create();
 
         Livewire::test(SelecteurDeProduits::class, ['clientId' => $client->getKey()])
-            ->call('basculer', $cable->getKey())
-            ->call('basculer', $livre->getKey())
+            ->call('ajouterUnArticle', $cable->getKey())
+            ->call('ajouterUnArticle', $livre->getKey())
             ->call('changerLaQuantite', $livre->getKey(), '3')
             ->call('ajouterLaSelection')
             ->assertDispatched(SelecteurDeProduits::EVENEMENT, selection: [
@@ -365,6 +368,7 @@ class SelecteurDeProduitsTest extends TestCase
             ]);
 
         $page = Livewire::test(CreateFacture::class)
+            ->assertSet('data.lignes', [])
             ->fillForm(['client_id' => $client->getKey()])
             ->mountFormComponentAction('ajouterUnProduitAction', 'ajouterUnProduit')
             ->call('recevoirLesProduitsChoisis', [
@@ -389,29 +393,35 @@ class SelecteurDeProduitsTest extends TestCase
     }
 
     /**
-     * Un produit déjà sur une ligne au prix de sa fiche, sans remise, voit
-     * sa quantité augmenter ; une ligne remisée n'est jamais touchée (sa
-     * quantité exigerait l'autorisation des remises) : le produit arrive
-     * sur une nouvelle ligne.
+     * Un produit n'a qu'une ligne (décision de l'éditeur du 26/10/2026,
+     * série 9) : choisi de nouveau, il augmente la quantité de sa ligne, qui
+     * garde sa place, et un message le dit ; pour une personne autorisée à
+     * accorder des remises, une ligne remisée voit aussi sa quantité
+     * augmenter, et sa remise s'applique aux articles ajoutés -- jamais une
+     * seconde ligne.
      */
-    public function test_un_produit_deja_present_sans_remise_voit_sa_quantite_augmenter(): void
+    public function test_un_produit_deja_present_voit_sa_quantite_augmenter_meme_sur_une_ligne_remisee(): void
     {
         $this->ouvrirLeMagasinEnTantQueResponsable();
         $cable = Produit::factory()->create(['nom' => 'Câble', 'prix_vente_ttc' => '10.00', 'taux_tva' => 20, 'suivi_stock' => false]);
 
+        $chargeur = Produit::factory()->create(['nom' => 'Chargeur', 'prix_vente_ttc' => '20.00', 'taux_tva' => 20, 'suivi_stock' => false]);
+
         $caisse = Livewire::test(Caisse::class)
-            ->call('recevoirLesProduitsChoisis', [['produit_id' => $cable->getKey(), 'quantite' => 1]])
-            ->call('recevoirLesProduitsChoisis', [['produit_id' => $cable->getKey(), 'quantite' => 2]]);
+            ->call('recevoirLesProduitsChoisis', [['produit_id' => $cable->getKey(), 'quantite' => 1], ['produit_id' => $chargeur->getKey(), 'quantite' => 1]])
+            ->call('recevoirLesProduitsChoisis', [['produit_id' => $cable->getKey(), 'quantite' => 2]])
+            ->assertNotified('Déjà sur une ligne : « Câble » (3), sa quantité a augmenté.');
         $cle = array_key_first($caisse->get('data.lignes'));
-        $this->assertSame([3], array_column($caisse->get('data.lignes'), 'quantite'));
+        $this->assertSame([3, 1], array_column(array_values($caisse->get('data.lignes')), 'quantite'));
 
         $caisse->set("data.lignes.{$cle}.remise_pourcentage", '10')
             ->call('recevoirLesProduitsChoisis', [['produit_id' => $cable->getKey(), 'quantite' => 1]]);
 
         $this->assertSame(
-            [[3, '10'], [1, '0']],
-            array_map(fn (array $ligne): array => [$ligne['quantite'], $ligne['remise_pourcentage']], array_values($caisse->get('data.lignes'))),
+            [['Câble', 4, '10'], ['Chargeur', 1, '0']],
+            array_map(fn (array $ligne): array => [$ligne['description'], $ligne['quantite'], $ligne['remise_pourcentage']], array_values($caisse->get('data.lignes'))),
         );
+        $this->assertSame('56.00', DevisResource::apercuDesLignes($caisse->get('data.lignes'), $caisse->get('data.client_id'))->totaux['total_ttc']);
     }
 
     public function test_un_produit_archive_ou_d_un_autre_magasin_n_est_jamais_propose(): void
@@ -429,9 +439,9 @@ class SelecteurDeProduitsTest extends TestCase
             ->searchTable('cable')
             ->assertCanSeeTableRecords([$actif])
             ->assertCanNotSeeTableRecords([$archive, $autreMagasin])
-            ->call('basculer', $autreMagasin->getKey())
+            ->call('ajouterUnArticle', $autreMagasin->getKey())
             ->assertNotified(DevisResource::PRODUIT_INTROUVABLE)
-            ->call('basculer', $archive->getKey())
+            ->call('ajouterUnArticle', $archive->getKey())
             ->assertNotified(DevisResource::PRODUIT_INTROUVABLE)
             ->assertSet('selection', []);
 
@@ -477,7 +487,7 @@ class SelecteurDeProduitsTest extends TestCase
         $piege = Produit::factory()->create(['nom' => '<script>alert("piège")</script>', 'reference' => 'PIEGE-1']);
 
         Livewire::test(SelecteurDeProduits::class)
-            ->call('basculer', $piege->getKey())
+            ->call('ajouterUnArticle', $piege->getKey())
             ->assertSee('&lt;script&gt;alert', escape: false)
             ->assertDontSee('<script>alert("piège")</script>', escape: false);
     }
@@ -518,7 +528,7 @@ class SelecteurDeProduitsTest extends TestCase
         $selecteur = Livewire::test(SelecteurDeProduits::class, ['clientId' => $clientId, 'nature' => $nature]);
 
         foreach ($quantites as $produitId => $quantite) {
-            $selecteur->call('basculer', $produitId)->call('changerLaQuantite', $produitId, (string) $quantite);
+            $selecteur->call('ajouterUnArticle', $produitId)->call('changerLaQuantite', $produitId, (string) $quantite);
         }
 
         return $selecteur;

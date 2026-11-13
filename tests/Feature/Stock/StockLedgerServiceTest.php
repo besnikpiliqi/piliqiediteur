@@ -386,9 +386,8 @@ class StockLedgerServiceTest extends TestCase
     }
 
     /**
-     * Une facture à deux lignes du même produit fait deux mouvements dans
-     * la même transaction : l'alerte dit le stock qui reste vraiment, pas
-     * celui du premier mouvement.
+     * Deux mouvements du même produit dans la même transaction : l'alerte
+     * dit le stock qui reste vraiment, pas celui du premier mouvement.
      */
     public function test_l_alerte_donne_le_stock_restant_apres_toute_la_transaction(): void
     {

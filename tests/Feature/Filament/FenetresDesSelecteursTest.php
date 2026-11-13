@@ -134,7 +134,7 @@ class FenetresDesSelecteursTest extends TestCase
         $fenetre = $this->requeteLivewire($instantane, [], 'mountFormComponentAction', ['data.ajouterUnProduitAction', 'ajouterUnProduit'])->assertOk();
         $selecteur = $this->instantaneLivewire((string) $fenetre->json('components.0.effects.html'), app(ComponentRegistry::class)->getName(SelecteurDeProduits::class));
 
-        $clic = $this->requeteLivewire($selecteur, [], 'basculer', [(string) $bougie->getKey()]);
+        $clic = $this->requeteLivewire($selecteur, [], 'ajouterUnArticle', [(string) $bougie->getKey()]);
         $ajout = $this->requeteLivewire((string) $clic->json('components.0.snapshot'), [], 'ajouterLaSelection');
 
         $clic->assertOk();

@@ -8,13 +8,11 @@ use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Domain\Tenancy\Concerns\FigeLeNomDeSesAuteurs;
-use App\Domain\Tenancy\Support\ValeursLues;
 use Database\Factories\AvoirFournisseurFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Support\Collection;
 use LogicException;
 
 /**
@@ -126,38 +124,34 @@ class AvoirFournisseur extends Model
 
     /**
      * Chaque ligne est plafonnée au stock de son produit (voir
-     * LigneAchat::quantiteRetournableRestante()), mais deux lignes du même
-     * produit (deux lignes de la facture d'achat) ne peuvent pas non plus
-     * en retourner ensemble plus que son stock : des articles déjà vendus
-     * seraient retournés. Le stock est lu sous verrou, à la création de
-     * l'avoir comme à son émission, puisqu'il change entre les deux ; celui
-     * d'un produit archivé depuis compte aussi, il est toujours là.
+     * LigneAchat::quantiteRetournableRestante()), relu ici sous le verrou de
+     * la fiche, à la création de l'avoir comme à son émission, puisqu'il
+     * change entre les deux et pendant elles : des articles vendus
+     * entre-temps ne sont jamais retournés. Une
+     * facture d'achat n'ayant qu'une ligne par produit (voir
+     * ConstructeurLigneAchat), chaque ligne de l'avoir retourne un produit
+     * différent, verrouillé par identifiant croissant ; le stock d'un
+     * produit archivé depuis compte aussi, il est toujours là.
      *
      * @throws LogicException
      */
     public function verifierQueLeStockSuffit(): void
     {
-        $quantitesParProduit = $this->lignes()
-            ->get()
-            ->groupBy('produit_id')
-            ->map(fn (Collection $lignes): int => ValeursLues::entier($lignes->sum('quantite')))
-            ->sortKeys();
+        foreach ($this->lignes()->reorder('produit_id')->get() as $ligne) {
+            $produit = Produit::withTrashed()->whereKey($ligne->produit_id)->lockForUpdate()->firstOrFail();
 
-        foreach ($quantitesParProduit as $produitId => $quantite) {
-            $produit = Produit::withTrashed()->whereKey($produitId)->lockForUpdate()->firstOrFail();
-
-            if ($produit->suivi_stock && $quantite > $produit->stock_quantite) {
-                throw new LogicException(self::messageStockInsuffisant($produit, $quantite));
+            if ($produit->suivi_stock && $ligne->quantite > $produit->stock_quantite) {
+                throw new LogicException(self::messageStockInsuffisant($produit, $ligne->quantite));
             }
         }
     }
 
     /**
-     * Le même message dans le formulaire de l'avoir et à son
-     * enregistrement.
+     * Le refus d'une ligne qui retournerait plus que le stock restant de son
+     * produit.
      */
-    public static function messageStockInsuffisant(Produit $produit, int $quantite): string
+    private static function messageStockInsuffisant(Produit $produit, int $quantite): string
     {
-        return "« {$produit->nom} » : ces lignes en retournent {$quantite} au total, mais il n'en reste que ".max(0, $produit->stock_quantite).' en stock (les autres ont déjà été vendus ou retournés).';
+        return "« {$produit->nom} » : l'avoir en retourne {$quantite}, mais il n'en reste que ".max(0, $produit->stock_quantite).' en stock (les autres ont déjà été vendus ou retournés).';
     }
 }

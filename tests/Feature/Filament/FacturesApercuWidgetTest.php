@@ -41,10 +41,8 @@ class FacturesApercuWidgetTest extends TestCase
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ttc' => 120, 'taux_tva' => 20, 'suivi_stock' => false]);
         foreach (range(1, 2) as $_) {
-            Livewire::test(CreateFacture::class)->fillForm([
-                'client_id' => $client->id,
-                'lignes' => [['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 1, 'prix_unitaire_ht' => 100, 'taux_tva' => 20, 'remise_pourcentage' => 0]],
-            ])->call('create');
+            Livewire::test(CreateFacture::class)->fillForm(['client_id' => $client->id])
+                ->call('recevoirLesProduitsChoisis', [['produit_id' => $produit->id, 'quantite' => 1]])->call('create');
         }
         foreach (Facture::query()->where('client_id', $client->id)->get() as $facture) {
             Livewire::test(ListFactures::class)->callTableAction('emettre', $facture);

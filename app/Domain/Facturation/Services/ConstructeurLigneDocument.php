@@ -8,6 +8,7 @@ use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
 use App\Domain\Facturation\Enums\NatureLigne;
 use App\Domain\Tenancy\Support\CleDuModele;
+use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Domain\Tenancy\Support\ValeursLues;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Collection;
@@ -32,7 +33,8 @@ use UnexpectedValueException;
  * CalculateurLigne::chiffrerUneVente()) : le HT de chaque taux, arrondi une
  * fois, se répartit entre ses lignes, qui ne se calculent donc
  * qu'ensemble (voir chiffrer()). Un même panier a les mêmes montants pour
- * tout client.
+ * tout client. Un produit n'y a qu'une ligne, un service qu'une ligne par
+ * prix et par taux (voir refuserUnArticleSurDeuxLignes()).
  */
 class ConstructeurLigneDocument
 {
@@ -71,7 +73,67 @@ class ConstructeurLigneDocument
             $lignes[] = $this->construire($donnees, $index, $contexte, $produits, $services);
         }
 
+        self::refuserUnArticleSurDeuxLignes($lignes);
+
         return $this->chiffrer($lignes);
+    }
+
+    /**
+     * Un produit n'a qu'une ligne d'un ticket, d'une facture ou d'un devis,
+     * et un service qu'une ligne par prix et par taux (décision de
+     * l'éditeur du 26/10/2026, série 9) : le choisir de nouveau augmente la
+     * quantité de sa ligne (voir AjouteDesLignesDeVente), et l'enregistrement
+     * refuse ce que l'écran ne doit jamais envoyer, d'où que viennent les
+     * lignes (écran, panier de la caisse, API, requête forgée).
+     *
+     * @param  list<array<string, mixed>>  $lignes  voir construire()
+     *
+     * @throws InvalidArgumentException
+     */
+    private static function refuserUnArticleSurDeuxLignes(array $lignes): void
+    {
+        $refus = self::articleSurDeuxLignes($lignes);
+
+        if ($refus !== null) {
+            throw new InvalidArgumentException($refus);
+        }
+    }
+
+    /**
+     * Pourquoi ces lignes construites (voir construire() et apercu()) ne
+     * s'enregistrent pas : un produit sur deux lignes, quelles que soient
+     * leurs conditions, ou un service sur deux lignes au même prix et au
+     * même taux ; null sinon. Seul un service vendu à deux prix ou à deux
+     * taux, comme un service sans prix de référence saisi à 60,00 € puis à
+     * 80,00 €, a plusieurs lignes ; une remise ne fait jamais une seconde
+     * ligne. Les prix et les taux se comparent tels que les lignes
+     * construites les écrivent, dans cette vente. L'écran le lit avant
+     * d'envoyer le document (voir AjouteDesLignesDeVente::lignesDeVente()).
+     *
+     * @param  array<array-key, array<string, mixed>>  $lignes
+     */
+    public static function articleSurDeuxLignes(array $lignes): ?string
+    {
+        $articles = [];
+
+        foreach ($lignes as $ligne) {
+            $estUnProduit = $ligne['produit_id'] !== null;
+            $article = $estUnProduit
+                ? 'produit:'.ValeurSimple::enTexte($ligne['produit_id'])
+                : 'service:'.ValeurSimple::enTexte($ligne['service_id']).'|'.ValeurSimple::enTexte($ligne['prix_unitaire_ttc']).'|'.ValeurSimple::enTexte($ligne['taux_tva_du_prix']);
+
+            if (isset($articles[$article])) {
+                $nom = ValeurSimple::enTexte($ligne['description']);
+
+                return $estUnProduit
+                    ? "« {$nom} » figure sur deux lignes : un produit n'a qu'une ligne, faites-en une seule de la quantité totale."
+                    : "« {$nom} » figure sur deux lignes au même prix et au même taux : faites-en une seule ligne de la quantité totale.";
+            }
+
+            $articles[$article] = true;
+        }
+
+        return null;
     }
 
     /**

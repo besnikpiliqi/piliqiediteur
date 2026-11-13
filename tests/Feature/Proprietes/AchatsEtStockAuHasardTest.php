@@ -134,12 +134,15 @@ class AchatsEtStockAuHasardTest extends TestCase
     private function etape(Tirage $tirage): array
     {
         return match ($tirage->parmi(['achat', 'achat', 'retour', 'vente'])) {
-            'achat' => ['geste' => 'achat', 'lignes' => array_map(fn (): array => [
-                'produit' => $tirage->entier(0, count($this->produits) - 1),
+            // Chaque ligne d'un produit différent : une facture d'achat n'a
+            // qu'une ligne par produit (décision de l'éditeur du 26/10/2026,
+            // série 9).
+            'achat' => ['geste' => 'achat', 'lignes' => array_map(fn (int $produit): array => [
+                'produit' => $produit,
                 'quantite' => $tirage->entier(1, 50),
                 'prix' => $tirage->entier(1, 99_999_999),
                 'remise' => $tirage->uneFoisSur(3) ? $tirage->entier(1, 5000) : 0,
-            ], range(1, $tirage->entier(1, 4)))],
+            ], $tirage->quelquesUns(array_keys($this->produits)))],
             'retour' => ['geste' => 'retour', 'achat' => $tirage->entier(0, 9), 'pourcents' => array_map(fn (): int => $tirage->entier(0, 100), range(1, 4))],
             'vente' => ['geste' => 'vente', 'produit' => $tirage->entier(0, count($this->produits) - 1), 'quantite' => $tirage->entier(1, 30)],
         };

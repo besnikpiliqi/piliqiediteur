@@ -196,8 +196,9 @@ class LigneAchat extends Model
      * reliquat de cette ligne et le stock actuellement disponible du
      * produit -- un produit vendu a quitté le stock, il ne peut
      * mécaniquement plus être compté dans ce qui reste disponible au
-     * retour. Plusieurs lignes du même produit se partagent ce stock (voir
-     * AvoirFournisseur::verifierQueLeStockSuffit()).
+     * retour. Une facture d'achat n'ayant qu'une ligne par produit, ce stock
+     * n'est à partager avec aucune autre ligne ; l'avoir le relit sous
+     * verrou (voir AvoirFournisseur::verifierQueLeStockSuffit()).
      */
     public function quantiteRetournableRestante(): int
     {

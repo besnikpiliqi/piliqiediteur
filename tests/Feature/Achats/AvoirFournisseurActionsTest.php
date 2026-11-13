@@ -230,26 +230,23 @@ class AvoirFournisseurActionsTest extends TestCase
     }
 
     /**
-     * Deux lignes du même produit (5 + 5 reçus), puis 4 vendus : il en
-     * reste 6 en stock. Chaque ligne prise seule pourrait en retourner 5,
-     * mais ensemble elles ne retournent pas plus que les 6 en stock --
-     * sinon des articles déjà vendus seraient « retournés » et le stock
-     * tomberait à -4.
+     * Dix câbles reçus sur une ligne, puis 4 vendus : il en reste 6 en
+     * stock. La ligne ne retourne pas les 10 reçus -- des articles déjà
+     * vendus seraient « retournés » et le stock tomberait à -4. Une facture
+     * d'achat n'a qu'une ligne par produit (décision de l'éditeur du
+     * 26/10/2026, série 9) : aucun autre retour ne partage ce stock.
      */
-    public function test_deux_lignes_du_meme_produit_ne_retournent_pas_ensemble_plus_que_le_stock(): void
+    public function test_une_ligne_ne_retourne_pas_plus_que_le_stock_restant_apres_des_ventes(): void
     {
         $produit = Produit::factory()->create(['nom' => 'Câble USB-C', 'taux_tva' => 20, 'suivi_stock' => true]);
-        $factureAchat = $this->recevoirEnDeuxLignes($produit);
+        $factureAchat = $this->recevoirDixCables($produit);
         $this->sortirParUneVente($produit, 4);
-        [$premiere, $seconde] = $factureAchat->lignes->all();
 
         $this->assertThrows(
             fn () => app(CreerAvoirFournisseurAction::class)->handle(self::auteur(), $factureAchat, [
-                ['ligne_achat_id' => $premiere->id, 'quantite' => 5],
-                ['ligne_achat_id' => $seconde->id, 'quantite' => 5],
+                ['ligne_achat_id' => $factureAchat->lignes->sole()->id, 'quantite' => 10],
             ]),
             LogicException::class,
-            '« Câble USB-C » : ces lignes en retournent 10 au total, mais il n\'en reste que 6 en stock (les autres ont déjà été vendus ou retournés).',
         );
 
         $this->assertSame(0, AvoirFournisseur::query()->count());
@@ -257,37 +254,34 @@ class AvoirFournisseurActionsTest extends TestCase
     }
 
     /**
-     * Le stock change entre la création de l'avoir et son émission : 3 + 3
+     * Le stock change entre la création de l'avoir et son émission : 6
      * retours acceptés sur 6 en stock, puis 2 de plus vendus -- l'émission
      * est refusée et rien ne sort du stock.
      */
-    public function test_le_total_retourne_par_produit_est_reverifie_a_l_emission(): void
+    public function test_le_retour_est_reverifie_contre_le_stock_a_l_emission(): void
     {
         $produit = Produit::factory()->create(['nom' => 'Câble USB-C', 'taux_tva' => 20, 'suivi_stock' => true]);
-        $factureAchat = $this->recevoirEnDeuxLignes($produit);
+        $factureAchat = $this->recevoirDixCables($produit);
         $this->sortirParUneVente($produit, 4);
-        [$premiere, $seconde] = $factureAchat->lignes->all();
         $avoir = app(CreerAvoirFournisseurAction::class)->handle(self::auteur(), $factureAchat, [
-            ['ligne_achat_id' => $premiere->id, 'quantite' => 3],
-            ['ligne_achat_id' => $seconde->id, 'quantite' => 3],
+            ['ligne_achat_id' => $factureAchat->lignes->sole()->id, 'quantite' => 6],
         ]);
         $this->sortirParUneVente($produit, 2);
 
         $this->assertThrows(
             fn () => app(EmettreAvoirFournisseurAction::class)->handle(self::auteur(), $avoir),
             LogicException::class,
-            '« Câble USB-C » : ces lignes en retournent 6 au total, mais il n\'en reste que 4 en stock (les autres ont déjà été vendus ou retournés).',
+            'La ligne "Câble USB-C" a été retournée ou vendue entre-temps : il ne reste que 4 article(s) à retourner.',
         );
 
         $this->assertSame(StatutAvoirFournisseur::Brouillon, $avoir->fresh()->statut);
         $this->assertSame(4, $produit->fresh()->stock_quantite);
     }
 
-    private function recevoirEnDeuxLignes(Produit $produit): FactureAchat
+    private function recevoirDixCables(Produit $produit): FactureAchat
     {
         return app(ValiderFactureAchatAction::class)->handle(self::auteur(), app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [
-            ['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => 20],
-            ['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => 20],
+            ['produit_id' => $produit->id, 'quantite' => 10, 'prix_unitaire_ht' => 20],
         ], ['date_facture' => '2026-01-15']));
     }
 

@@ -51,8 +51,10 @@ use Livewire\Component;
  * produits (« Produits : voir ») : vendre ne demande que la
  * référence, le nom, le prix et le taux.
  *
- * Un clic sur une rangée ajoute le produit à la sélection, gardée ici,
- * côté serveur, avec sa quantité, ou l'en retire ; un produit épuisé reste
+ * Un clic sur une rangée ajoute un article du produit à la sélection,
+ * gardée ici, côté serveur, avec sa quantité : le premier clic le choisit,
+ * chaque clic suivant en ajoute un de plus (décision de l'éditeur du
+ * 26/10/2026, série 9) ; la croix, en bas, le retire. Un produit épuisé reste
  * visible, grisé, « Épuisé » sous son nom, pour qui ne peut pas le vendre,
  * même sans voir son stock, mais ne se sélectionne pas sans l'autorisation
  * de vendre sans stock (voir AjouteDesLignesDeVente::refusDuProduit()). Le
@@ -61,8 +63,10 @@ use Livewire\Component;
  * l'opération du document (voir AjouteDesLignesDeVente::apercuDesLignes()) :
  * aucun montant ne se calcule ici. « Ajouter » envoie la sélection à la
  * page (voir RecoitLesProduitsChoisis), qui la revérifie avant d'ajouter
- * ses lignes ; à l'émission, VerificateurDeStock reste le contrôle final
- * du stock.
+ * ses lignes -- un produit déjà sur une ligne en augmente la quantité --,
+ * puis la vide : un second clic n'envoie rien. Les quantités choisies ne se
+ * comparent pas au stock ici : à l'émission, VerificateurDeStock reste le
+ * contrôle final du stock.
  */
 class SelecteurDeProduits extends Component implements HasForms, HasTable
 {
@@ -152,7 +156,7 @@ class SelecteurDeProduits extends Component implements HasForms, HasTable
                 ? $query->orderByDesc('created_at')->orderByDesc('id')
                 : $query->orderBy('nom')->orderBy('id'))
             ->paginated(false)
-            ->recordAction('basculer')
+            ->recordAction('ajouterUnArticle')
             ->recordClasses(fn (Produit $produit): array => [
                 'opacity-50' => DevisResource::refusDuProduit($produit, $vendSansStock) !== null,
                 'piliqi-rangee-choisie font-semibold' => $this->quantiteChoisie(CleDuModele::de($produit)) !== null,
@@ -244,22 +248,16 @@ class SelecteurDeProduits extends Component implements HasForms, HasTable
     }
 
     /**
-     * Un clic sur la rangée : le produit entre dans la sélection, avec une
-     * quantité de 1, ou en sort s'il y était. Un produit qui n'est pas au
-     * catalogue du magasin (archivé, ou d'un autre magasin) ou que la
-     * personne ne peut pas vendre (épuisé, sans l'autorisation de vendre
-     * sans stock) n'y entre pas, même par une requête forgée.
+     * Un clic sur la rangée : le produit entre dans la sélection avec une
+     * quantité de 1, ou, s'il y est déjà, sa quantité augmente de 1. Un
+     * produit qui n'est pas au catalogue du magasin (archivé, ou d'un autre
+     * magasin) ou que la personne ne peut pas vendre (épuisé, sans
+     * l'autorisation de vendre sans stock) n'y entre pas, même par une
+     * requête forgée.
      */
-    public function basculer(int|string $cle): void
+    public function ajouterUnArticle(int|string $cle): void
     {
         $identifiant = (int) $cle;
-
-        if ($this->quantiteChoisie($identifiant) !== null) {
-            $this->retirer($identifiant);
-
-            return;
-        }
-
         $produit = Produit::query()->find($identifiant);
         $refus = $produit === null ? DevisResource::PRODUIT_INTROUVABLE : DevisResource::refusDuProduit($produit, $this->vendSansStock());
 
@@ -267,6 +265,14 @@ class SelecteurDeProduits extends Component implements HasForms, HasTable
             Notification::make()->title($refus)->danger()->send();
 
             return;
+        }
+
+        foreach ($this->selection as $choix) {
+            if ($choix['produit_id'] === $identifiant) {
+                $this->changerLaQuantite($identifiant, $choix['quantite'] + 1);
+
+                return;
+            }
         }
 
         $this->selection[] = ['produit_id' => $identifiant, 'quantite' => 1];
@@ -315,11 +321,17 @@ class SelecteurDeProduits extends Component implements HasForms, HasTable
 
     /**
      * « Ajouter » : la sélection part à la page du document, qui la
-     * revérifie (voir RecoitLesProduitsChoisis) ; un produit devenu
-     * épuisé ou archivé depuis son choix l'arrête ici, avec sa raison.
+     * revérifie (voir RecoitLesProduitsChoisis), puis se vide : un second
+     * clic, parti avant que la fenêtre ne se ferme, n'ajoute rien. Un
+     * produit devenu épuisé ou archivé depuis son choix l'arrête ici, avec
+     * sa raison, et la sélection reste.
      */
     public function ajouterLaSelection(): void
     {
+        if ($this->selection === []) {
+            return;
+        }
+
         try {
             DevisResource::produitsChoisis($this->selection);
         } catch (InvalidArgumentException $refus) {
@@ -329,6 +341,7 @@ class SelecteurDeProduits extends Component implements HasForms, HasTable
         }
 
         $this->dispatch(self::EVENEMENT, selection: $this->selection);
+        $this->selection = [];
     }
 
     /**

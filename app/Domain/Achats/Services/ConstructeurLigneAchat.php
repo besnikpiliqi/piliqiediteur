@@ -108,6 +108,12 @@ class ConstructeurLigneAchat
     public const REFUS_FICHE_PERIMEE = 'La fiche du produit « %s » a été modifiée depuis que cette ligne l\'a lue : choisissez de nouveau ce produit dans la ligne pour repartir de sa fiche actuelle, puis refaites votre correction.';
 
     /**
+     * Le refus d'un produit du catalogue sur deux lignes d'une facture
+     * d'achat (voir refuserUnProduitSurDeuxLignes()).
+     */
+    public const REFUS_PRODUIT_SUR_DEUX_LIGNES = '« %s » figure sur deux lignes : une facture d\'achat n\'a qu\'une ligne par produit. Faites-en une seule ligne de la quantité totale, au prix moyen si le fournisseur le facture à deux prix.';
+
+    /**
      * Ce qu'une ligne peut effacer de la fiche de son produit ; un autre
      * attribut laissé vide garde sa valeur (ou prend sa valeur par défaut
      * pour un nouveau produit).
@@ -177,7 +183,8 @@ class ConstructeurLigneAchat
      * de chaque nouveau produit est vérifiée une fois toutes les lignes
      * enregistrées (voir verifierLesNouveauxProduits()). Une facture déjà
      * validée crée tout de suite ses nouveaux produits (voir
-     * creerLesNouveauxProduits()).
+     * creerLesNouveauxProduits()). Un produit du catalogue n'y a qu'une
+     * ligne (voir refuserUnProduitSurDeuxLignes()).
      *
      * Rend le document chiffré : l'action qui l'appelle en retient la TVA
      * de chaque taux en dernier (voir TvaDuFournisseur::retenir()).
@@ -199,6 +206,7 @@ class ConstructeurLigneAchat
             throw new InvalidArgumentException('Une facture d\'achat doit contenir au moins une ligne.');
         }
 
+        self::refuserUnProduitSurDeuxLignes($lignes);
         Produit::verrouillerPourLeStock(array_column($lignes, 'produit_id'));
         $fichesDejaSaisies = $factureAchat->lignes()
             ->whereNull('produit_id')
@@ -232,6 +240,50 @@ class ConstructeurLigneAchat
         }
 
         return $document;
+    }
+
+    /**
+     * Une facture d'achat n'a qu'une ligne par produit du catalogue
+     * (décision de l'éditeur du 26/10/2026, série 9), même quand le
+     * fournisseur facture le même produit à deux prix : 10 câbles à 4,00 €
+     * HT et 2 offerts font une ligne de 12 câbles au prix moyen, l'écart
+     * d'un centime possible avec la facture du fournisseur étant accepté.
+     * L'écran réunit un produit choisi de nouveau (voir
+     * AjouteDesLignesDAchat) ; l'enregistrement refuse deux lignes du même
+     * produit, d'où qu'elles viennent (écran, API, requête forgée). Un
+     * nouveau produit, qui n'a pas encore de fiche, n'est pas concerné :
+     * deux nouveaux produits de même référence sont refusés à part (voir
+     * verifierLesNouveauxProduits()). Un identifiant qu'aucun produit du
+     * magasin ne porte est refusé ensuite, avec sa ligne (voir
+     * produitDeLaLigne()).
+     *
+     * @param  array<array-key, array<string, mixed>>  $lignes
+     *
+     * @throws InvalidArgumentException
+     */
+    private static function refuserUnProduitSurDeuxLignes(array $lignes): void
+    {
+        $produits = [];
+
+        foreach ($lignes as $donnees) {
+            if (! filled($donnees['produit_id'] ?? null)) {
+                continue;
+            }
+
+            // Sous la clé que PHP en fait : « 12 » et 12 désignent la même
+            // fiche (voir ValeursLues::cleDeTableau()).
+            $produit = ValeursLues::cleDeTableau($donnees['produit_id']);
+
+            if (isset($produits[$produit])) {
+                $nom = Produit::withTrashed()->whereKey($produit)->value('nom');
+
+                if (is_string($nom)) {
+                    throw new InvalidArgumentException(sprintf(self::REFUS_PRODUIT_SUR_DEUX_LIGNES, $nom));
+                }
+            }
+
+            $produits[$produit] = true;
+        }
     }
 
     /**

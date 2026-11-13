@@ -40,6 +40,7 @@ use Filament\Forms\Components\TextInput;
 use Filament\Forms\Contracts\HasForms;
 use Filament\Forms\Get;
 use Filament\Forms\Set;
+use Filament\Notifications\Notification;
 use Filament\Support\Enums\MaxWidth;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\HtmlString;
@@ -50,7 +51,11 @@ use InvalidArgumentException;
  * complet (le produit, existant ou nouveau, puis ce qu'il coûte sur cette
  * facture et ce qu'il se vendra en magasin) et apparaît en lecture seule
  * dans la facture. Le bouton « Modifier » d'une ligne rouvre le même
- * formulaire.
+ * formulaire. Une facture d'achat n'a qu'une ligne par produit du
+ * catalogue (décision de l'éditeur du 26/10/2026, série 9) : un produit
+ * ajouté de nouveau rejoint sa ligne (voir actionAjouterUnProduit()), et
+ * l'enregistrement refuse deux lignes du même produit (voir
+ * ConstructeurLigneAchat).
  *
  * Les montants sont ceux qu'écrit la facture du fournisseur (décision de
  * l'éditeur du 02/11/2026, T1 et T2, voir TvaDuFournisseur) : le PU HT se
@@ -486,6 +491,13 @@ trait AjouteDesLignesDAchat
             });
     }
 
+    /**
+     * Une facture d'achat n'a qu'une ligne par produit (décision de
+     * l'éditeur du 26/10/2026, série 9) : un produit du catalogue déjà sur
+     * la facture, choisi de nouveau, ajoute sa quantité à sa ligne, qui
+     * garde sa place (voir reunirAvecSaLigne()) ; la fenêtre le dit dès le
+     * choix du produit, et un message après l'ajout.
+     */
     private static function actionAjouterUnProduit(): Action
     {
         return Action::make('ajouterUnProduit')
@@ -494,15 +506,37 @@ trait AjouteDesLignesDAchat
             ->modalHeading('Ajouter un produit à la facture')
             ->modalSubmitActionLabel('Ajouter à la facture')
             ->modalWidth(MaxWidth::FourExtraLarge)
-            ->form(self::formulaireDeLigne())
+            ->form(self::formulaireDeLigne(ajout: true))
             ->action(function (array $data, HasForms $livewire): void {
-                $lignes = ValeursLues::instance(ValeurRequise::de($livewire->getForm('form'), 'le formulaire de la page')->getComponent('data.lignes'), Repeater::class);
+                $repeteur = ValeursLues::instance(ValeurRequise::de($livewire->getForm('form'), 'le formulaire de la page')->getComponent('data.lignes'), Repeater::class);
+                $lignes = ValeursLues::tableau($repeteur->getState() ?? []);
+                $ligne = self::ligneDepuisLeFormulaire(ValeursLues::champs($data));
+                $cle = self::ligneDuProduit($lignes, $ligne['produit_id']);
 
-                $lignes->state([...ValeursLues::tableau($lignes->getState() ?? []), $lignes->generateUuid() => self::ligneDepuisLeFormulaire(ValeursLues::champs($data))]);
-                $lignes->callAfterStateUpdated();
+                if ($cle === null) {
+                    $repeteur->state([...$lignes, $repeteur->generateUuid() => $ligne]);
+                    $repeteur->callAfterStateUpdated();
+
+                    return;
+                }
+
+                $lignes[$cle] = self::reunirAvecSaLigne(ValeursLues::champs($lignes[$cle]), $ligne);
+                $repeteur->state($lignes);
+                $repeteur->callAfterStateUpdated();
+
+                Notification::make()
+                    ->title('« '.ValeurSimple::enTexte(ValeursLues::valeurAu($ligne, 'produit', 'nom')).' » était déjà sur la facture : sa ligne compte désormais '.ValeurSimple::enTexte($lignes[$cle]['quantite']).' articles à '.self::prixDAchatEnTexte($lignes[$cle]['prix_unitaire_ht']).' HT.')
+                    ->success()
+                    ->send();
             });
     }
 
+    /**
+     * Une ligne ne prend pas le produit d'une autre ligne de la facture :
+     * c'est cette autre ligne qui se modifie, une facture d'achat n'ayant
+     * qu'une ligne par produit. Refusé, la fenêtre reste ouverte avec la
+     * raison.
+     */
     private static function actionModifierLaLigne(): Action
     {
         return Action::make('modifierLaLigne')
@@ -514,13 +548,104 @@ trait AjouteDesLignesDAchat
             ->modalWidth(MaxWidth::FourExtraLarge)
             ->fillForm(fn (array $arguments, Repeater $component): array => self::formulaireDepuisLaLigne($component->getRawItemState(ValeurSimple::enTexte($arguments['item']))))
             ->form(self::formulaireDeLigne())
-            ->action(function (array $arguments, array $data, Repeater $component): void {
+            ->action(function (array $arguments, array $data, Repeater $component, Action $action): void {
+                $item = ValeurSimple::enTexte($arguments['item']);
                 $etat = ValeursLues::tableau($component->getState() ?? []);
-                $etat[ValeurSimple::enTexte($arguments['item'])] = self::ligneDepuisLeFormulaire(ValeursLues::champs($data));
+                $ligne = self::ligneDepuisLeFormulaire(ValeursLues::champs($data));
+                $autres = array_diff_key($etat, [$item => true]);
+
+                if (self::ligneDuProduit($autres, $ligne['produit_id']) !== null) {
+                    Notification::make()
+                        ->title('« '.ValeurSimple::enTexte(ValeursLues::valeurAu($ligne, 'produit', 'nom')).' » est déjà sur une autre ligne de cette facture d\'achat : modifiez cette ligne-là, une facture d\'achat n\'a qu\'une ligne par produit.')
+                        ->danger()
+                        ->send();
+                    $action->halt();
+                }
+
+                $etat[$item] = $ligne;
 
                 $component->state($etat);
                 $component->callAfterStateUpdated();
             });
+    }
+
+    /**
+     * La clé de la ligne de la facture qui porte ce produit du catalogue ;
+     * null pour un nouveau produit, qui n'a pas encore de fiche, ou un
+     * produit sur aucune ligne.
+     *
+     * @param  array<array-key, mixed>  $lignes
+     */
+    private static function ligneDuProduit(array $lignes, mixed $produitId): int|string|null
+    {
+        if (blank($produitId)) {
+            return null;
+        }
+
+        foreach ($lignes as $cle => $ligne) {
+            if (is_array($ligne) && filled($ligne['produit_id'] ?? null) && ValeurSimple::enTexte($ligne['produit_id']) === ValeurSimple::enTexte($produitId)) {
+                return $cle;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * La ligne d'un produit déjà sur la facture, quand on l'ajoute de
+     * nouveau : la quantité des deux, et, si le fournisseur le facture au
+     * même prix et à la même remise, ce prix et cette remise ; sinon (10
+     * câbles à 4,00 € HT et 2 offerts à 0,00 €), le prix moyen, sans remise,
+     * que donne le HT des deux (40,00 € pour 12 câbles : 3,333333 €, voir
+     * CalculateurLigne::prixMoyenDUnAchat()). Le HT de chaque part est celui
+     * qu'écrit la facture du fournisseur, sinon la proposition de PILIQI ;
+     * leur somme reste le HT de la ligne quand le calcul de PILIQI ne la
+     * retrouve pas au centime. L'écart d'un centime possible avec la
+     * facture du fournisseur est accepté par l'éditeur. La fiche du produit
+     * est celle du dernier formulaire, lue et corrigée en dernier.
+     *
+     * @param  array<string, mixed>  $existante  voir ligneDepuisLeFormulaire()
+     * @param  array<string, mixed>  $ajout  voir ligneDepuisLeFormulaire()
+     * @return array<string, mixed>
+     */
+    private static function reunirAvecSaLigne(array $existante, array $ajout): array
+    {
+        $calculateur = app(CalculateurLigne::class);
+        $quantite = QuantiteEntiere::depuisSaisie($existante['quantite']) + QuantiteEntiere::depuisSaisie($ajout['quantite']);
+        [$prixExistant, $remiseExistante, $htExistant] = self::prixRemiseEtHt($existante);
+        [$prixAjoute, $remiseAjoutee, $htAjoute] = self::prixRemiseEtHt($ajout);
+        $ht = $htExistant + $htAjoute;
+        [$prix, $remise] = $prixExistant === $prixAjoute && $remiseExistante === $remiseAjoutee
+            ? [$prixExistant, $remiseExistante]
+            : [$calculateur->prixMoyenDUnAchat($ht, $quantite), 0];
+
+        return [
+            ...$ajout,
+            'quantite' => $quantite,
+            'prix_unitaire_ht' => $calculateur->prixUnitaireExactEnDecimal($prix),
+            'remise_pourcentage' => self::pourcentageEnTexte($calculateur->enDecimal($remise)),
+            'montant_ht' => $ht === $calculateur->htProposeDUneLigneDAchat($prix, $quantite, $remise) ? null : $calculateur->enDecimal($ht),
+        ];
+    }
+
+    /**
+     * Le PU HT d'une ligne (en millionièmes d'euro), sa remise (en
+     * centièmes de point) et son HT (en centimes) : celui qu'écrit la
+     * facture du fournisseur, sinon la proposition de PILIQI.
+     *
+     * @param  array<string, mixed>  $ligne
+     * @return array{int, int, int}
+     */
+    private static function prixRemiseEtHt(array $ligne): array
+    {
+        $calculateur = app(CalculateurLigne::class);
+        $prix = SaisieDecimale::enMillioniemes($ligne['prix_unitaire_ht']);
+        $remise = filled($ligne['remise_pourcentage'] ?? null) ? SaisieDecimale::enCentiemes($ligne['remise_pourcentage']) : 0;
+        $ht = filled($ligne['montant_ht'] ?? null)
+            ? SaisieDecimale::montantAuCentime($ligne['montant_ht'])
+            : $calculateur->htProposeDUneLigneDAchat($prix, QuantiteEntiere::depuisSaisie($ligne['quantite']), $remise);
+
+        return [$prix, $remise, $ht];
     }
 
     /**
@@ -533,7 +658,7 @@ trait AjouteDesLignesDAchat
      *
      * @return array<Component>
      */
-    private static function formulaireDeLigne(): array
+    private static function formulaireDeLigne(bool $ajout = false): array
     {
         // Archivé compris : la ligne qui le garde se rouvre sur sa fiche,
         // non modifiable (voir ProduitPolicy::update()), et l'enregistrement
@@ -573,6 +698,11 @@ trait AjouteDesLignesDAchat
                     ->live()
                     ->columnSpanFull()
                     ->afterStateUpdated(fn (int|string|null $state, Set $set) => self::remplirDepuisLeProduit(filled($state) ? Produit::find($state) : null, $set)),
+                Placeholder::make('deja_sur_la_facture')
+                    ->label('')
+                    ->content(fn (): string => 'Ce produit est déjà sur cette facture d\'achat, qui n\'a qu\'une ligne par produit : la quantité saisie ici s\'ajoute à sa ligne. Si le fournisseur le facture à deux prix (des articles offerts à 0,00 €, par exemple), sa ligne prend le prix moyen des deux ; un écart d\'un centime avec sa facture reste possible.')
+                    ->visible(fn (Get $get, HasForms $livewire): bool => $ajout && $get('origine') !== self::NOUVEAU_PRODUIT && self::ligneDuProduit(ValeursLues::tableau(ValeursLues::champs(self::etatDeLaPage($livewire))['lignes'] ?? []), $get('produit_id')) !== null)
+                    ->columnSpanFull(),
                 Placeholder::make('fiche_non_modifiable')
                     ->label('')
                     ->content(fn (Get $get): string => $figeParSonFournisseur($get)
@@ -645,6 +775,19 @@ trait AjouteDesLignesDAchat
                 ))
                 ->columns(2),
         ];
+    }
+
+    /**
+     * Le formulaire de la page tel qu'il est saisi, depuis la fenêtre d'une
+     * ligne.
+     *
+     * @return array<array-key, mixed>
+     */
+    private static function etatDeLaPage(HasForms $livewire): array
+    {
+        $etat = ValeurRequise::de($livewire->getForm('form'), 'le formulaire de la page')->getRawState();
+
+        return is_array($etat) ? $etat : $etat->toArray();
     }
 
     /**

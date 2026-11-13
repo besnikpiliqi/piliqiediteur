@@ -226,8 +226,10 @@ class PolitiqueDArrondiTest extends TestCase
      * TTC à 20 % se calculent sans arrondi intermédiaire, 260,00 ÷ 1,2 =
      * 216,666... -> 216,67 € HT et 43,33 € de TVA, en une ligne de 4 comme
      * en quatre lignes de 1, en ticket comme en facture, et jamais 4 x
-     * 54,17 € = 216,68 €. Les quatre lignes de 1 reçoivent le HT arrondi du
-     * cumul de leurs TTC : 54,17 € (65,00 ÷ 1,2 = 54,1666...), 54,16 €
+     * 54,17 € = 216,68 €. Un produit n'ayant qu'une ligne (décision de
+     * l'éditeur du 26/10/2026, série 9), les quatre lignes de 1 vendent
+     * quatre écrans différents au même prix ; elles reçoivent le HT arrondi
+     * du cumul de leurs TTC : 54,17 € (65,00 ÷ 1,2 = 54,1666...), 54,16 €
      * (108,33 - 54,17), 54,17 € (162,50 - 108,33) et 54,17 € (216,67 -
      * 162,50). Chaque ligne enregistre et signe son PU HT exact, 54,166667 €,
      * que la facture à un professionnel imprime tel quel (décision de
@@ -243,8 +245,8 @@ class PolitiqueDArrondiTest extends TestCase
         return [
             'une ligne de 4, particulier' => [[4], false, $uneLigne],
             'une ligne de 4, professionnel' => [[4], true, $uneLigne],
-            'quatre lignes de 1, particulier' => [[1, 1, 1, 1], false, $quatreLignes],
-            'quatre lignes de 1, professionnel' => [[1, 1, 1, 1], true, $quatreLignes],
+            'quatre écrans différents, une ligne chacun, particulier' => [[1, 1, 1, 1], false, $quatreLignes],
+            'quatre écrans différents, une ligne chacun, professionnel' => [[1, 1, 1, 1], true, $quatreLignes],
         ];
     }
 
@@ -256,8 +258,7 @@ class PolitiqueDArrondiTest extends TestCase
     public function test_quatre_articles_a_65_euros_ttc_font_216_67_ht_et_43_33_de_tva_en_une_ou_quatre_lignes(array $quantites, bool $professionnel, array $lignesAttendues): void
     {
         $this->magasin();
-        $ecran = $this->article('Écran', '65.00');
-        $articles = array_map(fn (int $quantite): array => [$ecran, $quantite], $quantites);
+        $articles = array_map(fn (int $numero, int $quantite): array => [$this->article("Écran {$numero}", '65.00'), $quantite], array_keys($quantites), $quantites);
 
         $vente = $professionnel ? $this->facturerUnProfessionnel($articles) : $this->vendreALaCaisse($this->comptoir(), $articles);
 
@@ -297,17 +298,19 @@ class PolitiqueDArrondiTest extends TestCase
     }
 
     /**
-     * Le même panier, deux lignes de 25,00 € et un article à 9,99 €, a les
-     * mêmes montants en ticket et en facture à un professionnel : le HT du
-     * taux, 59,99 ÷ 1,2 = 49,99 €, se répartit 20,83 €, 20,84 € et 8,32 €,
-     * et la TVA fait 10,00 €.
+     * Le même panier, deux articles différents à 25,00 € et un article à
+     * 9,99 €, a les mêmes montants en ticket et en facture à un
+     * professionnel : le HT du taux, 59,99 ÷ 1,2 = 49,99 €, se répartit
+     * 20,83 €, 20,84 € et 8,32 €, et la TVA fait 10,00 €. Deux lignes de
+     * même prix reçoivent ainsi des HT qui diffèrent d'un centime.
      */
     public function test_le_meme_panier_donne_les_memes_montants_a_un_particulier_et_a_un_professionnel(): void
     {
         $this->magasin();
         $tshirt = $this->article('T-shirt', '25.00');
+        $casquette = $this->article('Casquette', '25.00');
         $chaussettes = $this->article('Chaussettes', '9.99');
-        $panier = [[$tshirt, 1], [$tshirt, 1], [$chaussettes, 1]];
+        $panier = [[$tshirt, 1], [$casquette, 1], [$chaussettes, 1]];
 
         $ticket = $this->vendreALaCaisse(Client::factory()->create(), $panier);
         $facture = $this->facturerUnProfessionnel($panier);
@@ -343,8 +346,9 @@ class PolitiqueDArrondiTest extends TestCase
     {
         $this->magasin();
         $tshirt = $this->article('T-shirt', '25.00');
+        $casquette = $this->article('Casquette', '25.00');
         $livre = $this->article('Livre', '10.00', 5.5);
-        $panier = [[$tshirt, 1], [$tshirt, 1], [$livre, 2]];
+        $panier = [[$tshirt, 1], [$casquette, 1], [$livre, 2]];
         $ticket = $this->vendreALaCaisse(Client::factory()->create(), $panier);
         $facture = $this->facturerUnProfessionnel($panier);
 

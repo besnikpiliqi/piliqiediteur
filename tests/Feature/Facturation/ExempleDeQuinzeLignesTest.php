@@ -37,8 +37,9 @@ class ExempleDeQuinzeLignesTest extends TestCase
      * Les quinze lignes, dans leur ordre : référence, quantité, PU TTC,
      * remise et taux, puis le PU HT enregistré, tel que la facture à un
      * professionnel l'imprime, le PU TTC, tel que le ticket l'imprime, et le
-     * HT, la TVA et le TTC de la ligne. La ligne 7 revend le produit de la
-     * ligne 1, remisé.
+     * HT, la TVA et le TTC de la ligne. La ligne 7 vend, remisé, un autre
+     * produit au prix de la ligne 1 : un produit n'a qu'une ligne (décision
+     * de l'éditeur du 26/10/2026, série 9).
      *
      * @var list<array{0: string, 1: int, 2: string, 3: int, 4: string, 5: string, 6: string, 7: string, 8: string, 9: string}>
      */
@@ -49,7 +50,7 @@ class ExempleDeQuinzeLignesTest extends TestCase
         ['BOU-1000', 100, '10.00', 0, '20', '8.333333', '8,333333 €', '833.34', '166.66', '1000.00'],
         ['LIV-1590', 2, '15.90', 0, '5.5', '15.071090', '15,07109 €', '30.14', '1.66', '31.80'],
         ['PLT-1850', 4, '18.50', 0, '10', '16.818182', '16,818182 €', '67.27', '6.73', '74.00'],
-        ['CRM-1000', 2, '10.00', 10, '20', '8.333333', '8,333333 €', '15.00', '3.00', '18.00'],
+        ['CRM-1001', 2, '10.00', 10, '20', '8.333333', '8,333333 €', '15.00', '3.00', '18.00'],
         ['MO-HEURE', 3, '54.00', 0, '20', '45.000000', '45,00 €', '135.00', '27.00', '162.00'],
         ['PRF-6500', 4, '65.00', 0, '20', '54.166667', '54,166667 €', '216.66', '43.34', '260.00'],
         ['JUS-0135', 12, '1.35', 0, '5.5', '1.279621', '1,279621 €', '15.36', '0.84', '16.20'],

@@ -641,8 +641,8 @@ class FactureResource extends Resource
      * FactureAchatResource::creerUnAvoirFournisseur()). Sous la quantité de
      * chaque ligne de produit suivi en stock d'un devis dont la facture
      * n'est pas émise, le stock disponible du magasin et l'avertissement
-     * quand ses lignes de ce produit le dépassent, comme dans son
-     * formulaire (voir Devis::stocksDeSesProduits() et
+     * quand sa quantité le dépasse, comme dans son formulaire (voir
+     * Devis::stocksDeSesProduits() et
      * AjouteDesLignesDeVente::texteDuStockDUneLigne()), lus une fois pour
      * toutes ses lignes.
      *
@@ -689,7 +689,7 @@ class FactureResource extends Resource
                     ->label('Quantité')
                     ->numeric()
                     ->helperText(fn (?Model $record): ?string => $record instanceof LigneDevis && $record->produit_id !== null && isset($stocks[$record->produit_id])
-                        ? DevisResource::texteDuStockDUneLigne($stocks[$record->produit_id]['disponible'], $record->quantite, $stocks[$record->produit_id]['demande'])
+                        ? DevisResource::texteDuStockDUneLigne($stocks[$record->produit_id]['disponible'], $record->quantite)
                         : null),
                 TextEntry::make('prix_unitaire_ht')
                     ->label('PU HT')

@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 13/11/2026 à 08:26 UTC par pilotage-sync.sh : « Point de suivi 13/11 08:27 UTC : sauvegarde S9-A (9ef56b6 + 85 entrées) ».
+Mis à jour le 13/11/2026 à 08:27 UTC par pilotage-sync.sh : « Point de suivi 13/11 08:30 UTC : document relu, fil D76 résolu par l'éditeur ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

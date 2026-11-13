@@ -81,6 +81,18 @@
 - **Matrice :** mets à jour la décision du 09/11 et T105, en « remplacee » par celle du 14/11, et les règles concernées.
 - **Tests :** réécris ceux qui attendent les six décimales à l'affichage, avec la nouvelle règle de l'éditeur : c'est un changement de règle, pas un affaiblissement. Ajoute un test du PDF et de la fiche (11,279621 → 11,28), un test de la page publique du devis et un test de la note de calcul. Mets aussi à jour l'empreinte des PDF (EmpreinteDeLaCaisseEtDesPdfTest), en le disant dans « faits ».
 
+
+**Ajout du 14/11/2026 vers 01 h UTC, dans ce même lot DEMO-V, à faire EN PREMIER : défaut « En retard » sur une facture payée.** Constat de l'éditeur sur la liste des factures : le ticket TK-EPICERIE-2026-000001, « Payée » (32,30 € payés sur 32,30 €), montre « En retard » dans la colonne « À faire ».
+
+- **Cause :** `FactureResource::raisonsAFaire()` (app/Filament/App/Resources/FactureResource.php, vers la ligne 1037) écrit « En retard » dès que `estEchue()`, c'est-à-dire dès que l'échéance est passée, même quand plus rien n'est dû.
+- **Correction :** écrire « En retard » seulement si la facture attend encore un règlement et qu'un montant reste dû après l'échéance. Utiliser `Facture::estEchueEtImpayee()`, qui suit la règle de CLAUDE.md : « Une facture en retard le reste tant qu'un montant reste dû après l'échéance ».
+- **Vérifier les autres usages de `estEchue()`** : `Facture.php` vers les lignes 399 et 929, `ChosesAFaireDuMagasin.php` vers la ligne 256, et tout filtre « En retard » de la liste. Pour chacun, montrer qu'il ne porte que sur des factures qui ont encore un montant dû, et corriger sinon.
+- **Tests de régression :**
+  - une facture payée en entier après son échéance n'a plus « En retard », ni dans la colonne, ni dans un filtre, ni dans l'« À faire » ;
+  - une facture soldée par un avoir non plus ;
+  - une facture payée en partie après son échéance garde « En retard » ;
+  - un test en navigateur sur la liste.
+
 ## Lot « ER » : aperçu de l'e-reporting et règles de CLAUDE.md (étape 1, après la chaîne en cours ; ajouté le 12/11 vers 01 h UTC)
 - Origine : décision de l'éditeur du 11/11/2026 (D67, V240 ; Q399 à Q417), écrite dans la colonne « Réponse du professionnel » de 19 lignes de l'onglet « À faire vérifier par un professionnel ». Source unique : `scratchpad/onglet2-844/analyse/plan-rangement.md` (§ 2, § 2 bis, fin du § 3.5) ; textes exacts de l'éditeur : `scratchpad/onglet2-844/lignes.txt`. Petit lot, effort « extra » (D63), un commit, suite PostgreSQL complète une fois avant le commit, deux relectures en parallèle.
 - Au lancement, relire dans l'onglet 1 les réponses de l'éditeur aux questions de suite T106 à T114 (« Le plus urgent ») : chaque passage ci-dessous qui dépend d'une question encore sans réponse attend ; la phrase actuelle de CLAUDE.md reste alors telle quelle, sans « à faire » (§ 2 bis).

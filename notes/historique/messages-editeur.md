@@ -2324,3 +2324,9 @@ non le client il voit le devis la ou il signe et ne vois pas le devis en pdf que
 
 le prix ht "11,279621" me plait pas car bcp de nombre. pourquoi tu n as pas arrondi 11.28 car de tout facon t as mis 11.9o ttc et 11.28ht donc la differnce est 0.62, du coup c 'est bien compter 11.28. non comme bcp de nombre, non non il faut arrondir
 
+## 254. 2026-11-13 23:56 UTC
+
+[1 capture(s) d'écran jointe(s)]
+
+malgre que tout est regle = payé il montre à faire =  en retard. je crois qu 'il a un problem au niveau de code
+

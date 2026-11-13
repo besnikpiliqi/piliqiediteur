@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 13/11/2026 à 23:34 UTC par pilotage-sync.sh : « PU HT arrondi au centime ».
+Mis à jour le 13/11/2026 à 23:56 UTC par pilotage-sync.sh : « Défaut En retard sur facture payée ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -38,6 +38,11 @@ d4a8247 Relecture du lot ML des e-mails vérifiés
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
+ M app/Domain/Tenancy/Support/LigneDeCourriel.php
+ M tests/Feature/Facturation/ReponseAuDevisEnLigneTest.php
+ M tests/Feature/Qualite/OutilDeQualiteTest.php
+ M tests/Feature/Tenancy/LigneDeCourrielTest.php
+ M tests/Qualite/qualite.php
 ```
 
 ## Dernière course de la chaîne
@@ -63,4 +68,5 @@ STAT:implementation
 STAT:implementation-2
 STAT:relecture1
 STAT:relecture2
+STAT:correction
 ```

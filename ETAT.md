@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 13/11/2026 à 14:50 UTC par pilotage-sync.sh : « heure corrigée ».
+Mis à jour le 13/11/2026 à 15:37 UTC par pilotage-sync.sh : « CI lot 21 verte ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -37,6 +37,15 @@ bb135db Relecture du lot AUD de la série 8
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
+ M .env.example
+ M CLAUDE.md
+ M README.md
+ M config/piliqi.php
+ M database/seeders/DatabaseSeeder.php
+ M tests/Feature/DatabaseSeederTest.php
+ M tests/Unit/matrice-des-decisions.php
+?? database/seeders/Semis/
+?? tests/Browser/Parcours/DonneesDeDemonstrationTest.php
 ```
 
 ## Dernière course de la chaîne
@@ -45,4 +54,5 @@ Course `wf_ee9b6e6e-908`, étapes commencées (de la plus ancienne à la plus r�
 
 ```
 SEED:implementation
+SEED:implementation-2
 ```

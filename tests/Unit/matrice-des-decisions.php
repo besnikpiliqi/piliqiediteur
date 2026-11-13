@@ -126,9 +126,10 @@ return [
         ],
         'developpement.aucune-donnee-reelle' => [
             'puce' => 'Développement',
-            'regle' => 'Aucune donnée réelle n\'existe : l\'installation ne sème aucune donnée.',
+            'regle' => 'Aucune donnée réelle n\'existe : les seules données semées sont les données de démonstration, toutes fictives (SIREN fictifs, adresses sur le domaine réservé exemple.test), qui ne se sèment qu\'en développement local et dans les tests, jamais en production (décision de l\'éditeur du 13/11/2026, lot SEED).',
             'tests' => [
-                'tests/Feature/DatabaseSeederTest.php::test_db_seed_s_execute_sans_erreur_et_ne_seme_aucune_donnee',
+                'tests/Feature/DatabaseSeederTest.php::test_le_semis_est_refuse_en_production_sans_rien_ecrire',
+                'tests/Feature/DatabaseSeederTest.php::test_le_semis_remplit_la_base_par_les_vraies_actions_et_donne_la_liste_des_comptes',
             ],
         ],
         'developpement.commentaires-devenus-inutiles-supprimes' => [
@@ -2575,6 +2576,21 @@ return [
                 'tests/Feature/Providers/FournisseursExternesServiceProviderTest.php::test_la_plateforme_agreee_suit_son_pilote',
             ],
         ],
+        'hors.donnees-de-demonstration' => [
+            'puce' => 'Hors de CLAUDE.md',
+            'regle' => 'php artisan migrate:fresh --seed remplit la base de développement par les vraies actions et les fournisseurs factices, et donne la liste des comptes pour se connecter, chacun avec un mot de passe tiré au hasard ou celui, commun, de PILIQI_DEMO_MOT_DE_PASSE ; il refuse, sans rien écrire, la production, les fournisseurs réels, une base qui a déjà des sociétés et un mot de passe commun hors de la règle.',
+            'tests' => [
+                'tests/Feature/DatabaseSeederTest.php::test_le_semis_remplit_la_base_par_les_vraies_actions_et_donne_la_liste_des_comptes',
+                'tests/Feature/DatabaseSeederTest.php::test_le_semis_est_refuse_en_production_sans_rien_ecrire',
+                'tests/Feature/DatabaseSeederTest.php::test_le_semis_est_refuse_avec_un_fournisseur_reel_sans_rien_ecrire',
+                'tests/Feature/DatabaseSeederTest.php::test_le_semis_est_refuse_dans_une_base_qui_a_deja_des_societes',
+                'tests/Feature/DatabaseSeederTest.php::test_un_mot_de_passe_commun_hors_de_la_regle_est_refuse_sans_rien_ecrire',
+                'tests/Feature/DatabaseSeederTest.php::test_le_mot_de_passe_commun_va_a_chaque_compte_sauf_s_il_contient_son_identifiant',
+                'tests/Feature/DatabaseSeederTest.php::test_sans_mot_de_passe_commun_chaque_compte_recoit_un_mot_de_passe_tire_au_hasard',
+                'tests/Browser/Parcours/DonneesDeDemonstrationTest.php › les comptes de la liste du semis se connectent et retrouvent leurs données',
+                'tests/Browser/Parcours/DonneesDeDemonstrationTest.php › le vendeur qui garde son identifiant pour mot de passe ne se connecte que depuis un poste reconnu',
+            ],
+        ],
     ],
 
     'decisions' => [
@@ -4064,6 +4080,10 @@ return [
             'ONGLET-12-11' => [
                 'decision' => 'Le 12/11/2026 vers 22 h 45 UTC : onglet « À faire de votre côté (PC et mise en ligne) » du document de l\'éditeur.',
                 'hors_logiciel' => 'Tenue du document de l\'éditeur.',
+            ],
+            'SEED-13-11' => [
+                'decision' => 'Le 13/11/2026 vers 08 h 50 UTC : « donne moi la liste de --seed pour voir ici chez moi avec les donnes remplir par --seed » ; vers 09 h UTC, les identifiants pour s\'y connecter : un mot de passe commun facultatif, PILIQI_DEMO_MOT_DE_PASSE, sinon un mot de passe tiré au hasard par compte, affiché à la fin du semis (lot SEED, a-faire-apres-chaine.md).',
+                'regles' => ['hors.donnees-de-demonstration'],
             ],
         ],
         'Décisions métier tranchées dans la conversation (historique/DIRECTIVES.md, § 2.1)' => [

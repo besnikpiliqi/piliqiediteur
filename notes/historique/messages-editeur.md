@@ -2300,3 +2300,11 @@ accord »" il faut que tu ecris la date quand c 'est accepté et le nom et preno
 
 et avant signe le devis il faut pas affiche le lien du devis mais ca doit etre affiche aprs signé et envyé par mail
 
+## 250. 2026-11-13 23:12 UTC
+
+le D mais le nom et prenom tu mets simple et le tampon accepté en ligne tu le mets simple. tu me montre encore
+
+## 251. 2026-11-13 23:13 UTC
+
+le D1
+

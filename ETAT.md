@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 13/11/2026 à 23:08 UTC par pilotage-sync.sh : « Devis signé : PDF après signature ».
+Mis à jour le 13/11/2026 à 23:14 UTC par pilotage-sync.sh : « Signature du devis : D1, lot DEVIS-RET ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

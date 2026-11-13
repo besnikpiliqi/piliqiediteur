@@ -3,7 +3,15 @@
 1. **Cadre « Date et signature du client, précédées de la mention « Bon pour accord » » du PDF du devis.**
    - Une fois le devis accepté en ligne, le cadre porte la date et l'heure de l'acceptation (heure de Paris) et le nom et le prénom tels que le client les a tapés.
    - Présentation : le modèle choisi par l'éditeur parmi A–D (https://claude.ai/artifact/Y8hGptGyzZqH76miqD7N9q).
-   - **MODÈLE CHOISI : (pas encore choisi)**
+   - **MODÈLE CHOISI : D1 (14/11/2026, vers 00 h 20 UTC), dans l'ordre du cadre :**
+     - le titre du cadre, inchangé ;
+     - un cachet sobre « Accepté en ligne » : petit cadre vert fin, droit, en minuscules ;
+     - « Bon pour accord » en gras ;
+     - « Le 14/11/2026 à 00:05 (heure de Paris) » ;
+     - le nom et le prénom en texte simple, en gras, sans écriture manuscrite ;
+     - sous un trait fin : « Signature électronique : nom tapé et case « Bon pour accord » cochée par le client, sur le lien personnel reçu à son adresse e-mail » ;
+     - « Référence de l'acceptation : … · Empreinte du devis accepté : … ». L'empreinte est celle du contenu du devis accepté, et l'acceptation est déjà enregistrée par le lot DV.
+     - Modèle de référence : `../modeles/signature-devis.html`, section D1.
    - Un devis pas encore accepté, refusé, expiré ou repassé en brouillon garde le cadre vide.
    - L'adresse IP et le navigateur ne s'impriment jamais.
 2. **Page publique du devis (lien personnel), avant la réponse :** pas de lien « Télécharger le devis en PDF ». Le client a déjà le PDF en pièce jointe de l'e-mail d'envoi.

@@ -2284,3 +2284,7 @@ et apres ca sert quoi ca pour le magasin
 
 en fait ce qui etais en tableaux c 'est bon comme par ex: les factures de vente, devis etc sont bonnes, donc tu les touches pas
 
+## 247. 2026-11-13 22:37 UTC
+
+ce que tu touches ces les linges dans ces
+

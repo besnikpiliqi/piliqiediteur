@@ -74,3 +74,5 @@ Ce cahier fait foi pour le lot.
 - Avant le commit, la suite PostgreSQL complète tourne avec ce nouveau composer.lock.
 - Ajoute une ligne au README (paquets mis à jour et pourquoi).
 - Dans « laisses » : « À faire sur le PC de l'éditeur : composer install ».
+
+**Précision du 13/11 à 22 h 42 UTC sur le § 8.** Le « processus extérieur » que signale la partie 1 était une copie de l'agent STAT, lancée par erreur par la session. Elle a fait la mise à jour de laravel/framework demandée au § 8. La partie 1 l'a annulée en remettant composer.lock et vendor à leur état commité. Cette mise à jour reste voulue et fait partie du lot : refais-la toi-même, comme le § 8 le dit, puis lance la suite PostgreSQL complète avec le nouveau composer.lock. Plus aucun autre agent ne travaille dans le dépôt.

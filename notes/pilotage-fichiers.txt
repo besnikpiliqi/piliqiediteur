@@ -236,3 +236,4 @@ reprises/lot-ER-PRO-travail-non-commite-complet.patch
 reprises/lot-ER-PRO-commits-locaux-complet.patch
 reprises/cahier-STAT.md
 reprises/cahier-MAT-PRO.md
+reprises/lot-STAT-travail-non-commite-complet.patch

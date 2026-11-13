@@ -61,6 +61,26 @@
 - **Tests :** domaine (refus), Filament (bouton caché pour le client comptoir, visible pour un client nommé avec une adresse), navigateur, inventaire des actions.
 - **Ce qui ne change pas :** « Noter le bordereau de détaxe (BVE) » reste sur un ticket « Vente en France ». La détaxe est justement une vente en France, à la TVA française, à un voyageur qui part hors de l'Union, et la TVA ne se rembourse qu'après le visa. Le bouton se cache déjà quand la nature n'est pas « Vente en France », quand le ticket est en franchise ou quand il n'a aucun bien taxé.
 
+
+**Ajout du 14/11/2026 vers 00 h 35 UTC, dans ce même lot DEMO-V : le PU HT des ventes s'affiche arrondi au centime, partout.** Décision de l'éditeur, qui remplace sa décision du 09/11/2026 et la note de calcul de T105 (12/11), ce qui se reporte à la matrice. Ses mots : « le prix HT "11,279621" me plaît pas car beaucoup de nombres […] non non il faut arrondir ».
+
+- **Ce qui change :** le PU HT d'une ligne de vente s'affiche arrondi au centime le plus proche (un demi-centime exact au centime supérieur), comme le PU TTC, sur tous les documents et tous les écrans :
+  - factures, avoirs sur facture et devis à un professionnel ;
+  - ventes sans TVA française ;
+  - leurs fiches, les lignes de leurs formulaires, la page publique du devis, leurs PDF.
+
+  Exemple : 11,279621 € devient 11,28 €.
+- **Ce qui ne change pas :**
+  - le PU HT reste **enregistré** avec ses six décimales ;
+  - tous les montants (HT, TVA, TTC de chaque ligne et de chaque taux) restent calculés une seule fois, depuis les prix TTC, et ne changent pas d'un centime ;
+  - un champ où un prix se saisit le montre toujours tel qu'il est enregistré ;
+  - le PU HT des **achats**, recopié de la facture du fournisseur, et le coût unitaire d'un inventaire d'ouverture s'affichent comme le fournisseur les écrit. Ce point est à confirmer avec l'éditeur dans le compte rendu.
+- **Note de calcul** (PDF et fiches) : elle ne dit plus que la quantité × le PU HT retombe sur le total HT. Elle dit, pour tout document, que les totaux se calculent depuis les prix TTC, sans arrondi intermédiaire, et que la quantité × le prix unitaire affiché, arrondi au centime, peut s'écarter de quelques centimes du total de la ligne. Exemple pour le PU HT : 20 × 11,28 € = 225,60 €, pour un total HT de 225,59 €.
+- **Facture électronique (étape 2, à noter dans le plan SUPER PDP) :** le prix unitaire envoyé dans le XML sera tranché à cette étape (6 décimales dans le XML pour que la ligne retombe juste, ou centime). Ce lot ne touche à aucune transmission.
+- **CLAUDE.md :** réécris les phrases concernées de « Documents de vente » et de « Prix et TVA des ventes ». Ce sont celles qui disent que le PU HT s'imprime « tel qu'il est enregistré, jusqu'à six décimales » et que la note de calcul ne l'imprime que si chaque ligne le vérifie. Écris la nouvelle règle, datée du 14/11/2026.
+- **Matrice :** mets à jour la décision du 09/11 et T105, en « remplacee » par celle du 14/11, et les règles concernées.
+- **Tests :** réécris ceux qui attendent les six décimales à l'affichage, avec la nouvelle règle de l'éditeur : c'est un changement de règle, pas un affaiblissement. Ajoute un test du PDF et de la fiche (11,279621 → 11,28), un test de la page publique du devis et un test de la note de calcul. Mets aussi à jour l'empreinte des PDF (EmpreinteDeLaCaisseEtDesPdfTest), en le disant dans « faits ».
+
 ## Lot « ER » : aperçu de l'e-reporting et règles de CLAUDE.md (étape 1, après la chaîne en cours ; ajouté le 12/11 vers 01 h UTC)
 - Origine : décision de l'éditeur du 11/11/2026 (D67, V240 ; Q399 à Q417), écrite dans la colonne « Réponse du professionnel » de 19 lignes de l'onglet « À faire vérifier par un professionnel ». Source unique : `scratchpad/onglet2-844/analyse/plan-rangement.md` (§ 2, § 2 bis, fin du § 3.5) ; textes exacts de l'éditeur : `scratchpad/onglet2-844/lignes.txt`. Petit lot, effort « extra » (D63), un commit, suite PostgreSQL complète une fois avant le commit, deux relectures en parallèle.
 - Au lancement, relire dans l'onglet 1 les réponses de l'éditeur aux questions de suite T106 à T114 (« Le plus urgent ») : chaque passage ci-dessous qui dépend d'une question encore sans réponse attend ; la phrase actuelle de CLAUDE.md reste alors telle quelle, sans « à faire » (§ 2 bis).

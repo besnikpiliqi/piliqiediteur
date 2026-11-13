@@ -2318,3 +2318,9 @@ le D1
 
 non le client il voit le devis la ou il signe et ne vois pas le devis en pdf que quand il accepte, d accord
 
+## 253. 2026-11-13 23:33 UTC
+
+[2 capture(s) d'écran jointe(s)]
+
+le prix ht "11,279621" me plait pas car bcp de nombre. pourquoi tu n as pas arrondi 11.28 car de tout facon t as mis 11.9o ttc et 11.28ht donc la differnce est 0.62, du coup c 'est bien compter 11.28. non comme bcp de nombre, non non il faut arrondir
+

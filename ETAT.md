@@ -1,12 +1,13 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 13/11/2026 à 23:15 UTC par pilotage-sync.sh : « Devis : aucun PDF avant l'acceptation ».
+Mis à jour le 13/11/2026 à 23:34 UTC par pilotage-sync.sh : « PU HT arrondi au centime ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
 Tête poussée : `eba4bc8`. Commits locaux pas encore poussés :
 
 ```
+565f1ba Passe Larastan et l'analyse des flux de Psalm à chaque envoi (lot STAT)
 ```
 
 Derniers commits poussés :
@@ -37,66 +38,6 @@ d4a8247 Relecture du lot ML des e-mails vérifiés
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
- M .github/workflows/tests.yml
- M CLAUDE.md
- M README.md
- M app/Console/Commands/DiagnostiquerCaisseSecurisee.php
- M app/Console/Commands/RelancerTransmissionsPdp.php
- M app/Domain/Achats/Models/FactureAchat.php
- M app/Domain/Achats/Services/ConstructeurLigneAchat.php
- M app/Domain/Achats/Services/PiecesDuFournisseur.php
- M app/Domain/Cabinets/Actions/AccepterLaDemandeDeLienAction.php
- M app/Domain/Cabinets/Actions/ChoisirLeMotDePasseDeLExpertComptableAction.php
- M app/Domain/Cabinets/Actions/DeclarerSonExpertComptableAction.php
- M app/Domain/Cabinets/Actions/DesignerUnCabinetAction.php
- M app/Domain/Cabinets/Listeners/RattacherLesDeclarationsDuCabinetValide.php
- M app/Domain/Cabinets/Notifications/AvisDuCabinet.php
- M app/Domain/Cabinets/Notifications/AvisDuCabinetEnFile.php
- M app/Domain/Cabinets/Support/GardesDesCabinets.php
- M app/Domain/CaisseSecurisee/Actions/VerifierIntegriteAction.php
- M app/Domain/CaisseSecurisee/Services/VerificateurIntegrite.php
- M app/Domain/CaisseSecurisee/Support/DeclencheursDeProtection.php
- M app/Domain/Catalogue/Services/BaremePrixDeVente.php
- M app/Domain/Facturation/Actions/NoterLeVisaDuBordereauAction.php
- M app/Domain/Facturation/Actions/RepondreAuDevisEnLigneAction.php
- M app/Domain/Facturation/Actions/RetirerUnTicketZNonSigneAction.php
- M app/Domain/Facturation/Jobs/EnvoyerDocumentJob.php
- M app/Domain/Facturation/Models/Devis.php
- M app/Domain/Facturation/Notifications/ReponseDuClientAuDevis.php
- M app/Domain/Facturation/Services/CalculateurLigne.php
- M app/Domain/Facturation/Services/DocumentChiffre.php
- M app/Domain/Facturation/Services/EReportingDesParticuliers.php
- M app/Domain/Facturation/Services/LignesRetirees.php
- M app/Domain/Facturation/Services/PreuvesRequises.php
- M app/Domain/Facturation/Support/GardesDesDocumentsEmis.php
- M app/Domain/Fichiers/AnalyseurDePdf.php
- M app/Domain/Fichiers/MemoireDePhp.php
- M app/Domain/Stock/Enums/TypeMouvementStock.php
- M app/Domain/Stock/Services/StockLedgerService.php
- M app/Domain/Stock/Services/VerificateurDuStock.php
- M app/Domain/Stock/Support/GardesDuStock.php
- M app/Domain/Tenancy/Actions/ChangerStatutCompteAction.php
- M app/Domain/Tenancy/Notifications/AvisDeLAntivirus.php
- M app/Domain/Tenancy/Notifications/AvisDeLEquipe.php
- M app/Domain/Tenancy/Services/ChosesAFaireDeLaSociete.php
- M app/Domain/Tenancy/Services/ChosesAFaireDuMagasin.php
- M app/Domain/Tenancy/Services/PiecesDeVerification.php
- M app/Domain/Tenancy/Support/RequeteDuModele.php
- M app/Filament/App/Pages/Caisse.php
- M app/Filament/App/Resources/DevisResource.php
- M app/Filament/App/Resources/FactureResource.php
- M app/Filament/App/Resources/InventaireOuvertureResource.php
- M app/Filament/Concerns/AjouteDesLignesDeVente.php
- M app/Filament/Concerns/RecoitLesProduitsChoisis.php
- M app/Filament/Concerns/SaisitUnReglementEnParts.php
- M app/Filament/Societe/Pages/CabinetComptable.php
- M app/Filament/Societe/Resources/MembreResource/Pages/FicheDuMembre.php
- M app/Http/Controllers/LienDeLExpertComptableController.php
- M app/Http/Controllers/TelechargerLesDocumentsController.php
- M app/Http/Middleware/FaireConfianceAuxMandataires.php
- M app/Integrations/Courriel/CauseDEchecDEnvoi.php
- M app/Integrations/Courriel/TransportMailtrap.php
- M app/Providers/AntivirusServiceProvider.php
 ```
 
 ## Dernière course de la chaîne
@@ -120,4 +61,6 @@ ER-PRO:poussee
 ER-PRO:notes
 STAT:implementation
 STAT:implementation-2
+STAT:relecture1
+STAT:relecture2
 ```

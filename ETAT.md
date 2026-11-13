@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 13/11/2026 à 21:24 UTC par pilotage-sync.sh : « CI eba4bc8 : audit rouge, confié à STAT ».
+Mis à jour le 13/11/2026 à 21:26 UTC par pilotage-sync.sh : « Leçon SendMessage, § 8 fait par la copie ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -37,6 +37,7 @@ d4a8247 Relecture du lot ML des e-mails vérifiés
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
+ M app/Domain/Tenancy/Services/ChosesAFaireDuMagasin.php
  M composer.lock
 ```
 

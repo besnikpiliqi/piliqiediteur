@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 13/11/2026 à 10:27 UTC par pilotage-sync.sh : « 13/11 10:26 UTC : redémarrage, sauvegarde S9-A (8ec160b), chaîne reprise, décisions T2.7/T2.8 alignées ».
+Mis à jour le 13/11/2026 à 10:35 UTC par pilotage-sync.sh : « 13/11 10:40 UTC : document relu (PC1-PC14 faits), T2.7/T2.8 en O, cahier ER-PRO § 12 complété ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

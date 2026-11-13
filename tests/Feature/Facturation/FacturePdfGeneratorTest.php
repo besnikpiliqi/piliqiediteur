@@ -759,6 +759,25 @@ class FacturePdfGeneratorTest extends TestCase
     }
 
     /**
+     * T105 : 100 000 articles à 1,00 € TTC à 20 % font 83 333,33 € HT, et
+     * 100 000 x 0,833333 € = 83 333,30 € s'en écarte de 3 centimes : le PDF
+     * imprime sous les lignes la phrase qui dit qu'un petit écart est
+     * possible, jamais « à moins de deux centimes près ».
+     */
+    public function test_au_dela_de_dix_mille_articles_la_note_de_calcul_dit_qu_un_petit_ecart_est_possible(): void
+    {
+        app(TenantContext::class)->set(Magasin::factory()->create());
+        $produit = Produit::factory()->create(['reference' => 'VIS-01', 'nom' => 'Vis', 'prix_vente_ttc' => 1, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $facture = $this->emettre(Client::factory()->professionnel()->create(), [['produit_id' => $produit->id, 'quantite' => 100000]]);
+
+        $html = $this->compacte($this->rendu($facture));
+
+        $this->assertSame(['0.833333', '83333.33'], [$facture->lignes->sole()->prix_unitaire_ht, $facture->lignes->sole()->montant_ht]);
+        $this->assertStringContainsString('<div class="note-calcul">'.e('Montants calculés depuis les prix TTC : pour chaque taux, le HT est le TTC du taux ÷ (1 + taux), arrondi une fois au centime, puis réparti sur les lignes ; la TVA est la différence. Les prix unitaires HT sont affichés tels qu\'ils sont enregistrés et les totaux calculés sans arrondi intermédiaire : la quantité × le PU HT, remise déduite, peut s\'écarter de quelques centimes du total HT de la ligne.').'</div>', $html);
+        $this->assertStringNotContainsString('deux centimes', $html);
+    }
+
+    /**
      * L'exemple de l'éditeur sur le PDF d'une facture à un professionnel :
      * 4 articles à 65,00 € TTC à 20 % ont un PU HT de 65 ÷ 1,2 =
      * 54,166667 €, enregistré et imprimé ainsi (décision de l'éditeur du

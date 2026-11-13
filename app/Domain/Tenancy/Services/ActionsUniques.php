@@ -75,6 +75,8 @@ class ActionsUniques
 
     public const EMETTRE_LA_FACTURE_RECTIFICATIVE = 'facture.rectifier';
 
+    public const REGULARISER_UNE_EXONERATION = 'exoneration.regulariser';
+
     public const ENVOYER_DOCUMENT = 'document.envoyer';
 
     public const RELANCER_FACTURE = 'facture.relancer';

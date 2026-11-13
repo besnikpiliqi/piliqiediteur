@@ -1061,4 +1061,46 @@ class CalculateurLigneTest extends TestCase
         $this->assertSame('9 999 999 999,99 €', $this->calculateur()->enEuros(999999999999));
         $this->assertRefuse(fn () => $this->calculateur()->enEuros(PHP_INT_MIN), 'Montant hors limites.');
     }
+
+    /**
+     * T107.1 : un montant se répartit au prorata des poids, en cumul dans
+     * leur ordre, chaque part arrondie au centime le plus proche ; 50,02 €
+     * sur 120,00 € puis 40,00 € font 37,52 € (37,515 au centime supérieur)
+     * et 12,50 €, et la somme des parts égale toujours le montant, même
+     * quand chaque part arrondie seule la dépasserait (3 x 33,33 % de
+     * 1,00 € font 0,33 + 0,34 + 0,33).
+     */
+    public function test_un_montant_se_repartit_au_prorata_en_cumul(): void
+    {
+        $this->assertSame(['service_20' => 3752, 'service_10' => 1250], $this->calculateur()->repartirAuProrata(5002, ['service_20' => 12000, 'service_10' => 4000]));
+        $this->assertSame([33, 34, 33], $this->calculateur()->repartirAuProrata(100, [1, 1, 1]));
+        $this->assertSame([2551, 449], $this->calculateur()->repartirAuProrata(3000, [6000, 1055]));
+    }
+
+    /**
+     * Sans poids, aucune part ; un poids négatif est refusé.
+     */
+    public function test_une_repartition_sans_poids_ne_donne_rien_et_un_poids_negatif_est_refuse(): void
+    {
+        $this->assertSame(['a' => 0, 'b' => 0], $this->calculateur()->repartirAuProrata(5000, ['a' => 0, 'b' => 0]));
+        $this->assertSame([], $this->calculateur()->repartirAuProrata(5000, []));
+        $this->assertRefuse(fn () => $this->calculateur()->repartirAuProrata(100, [100, -1]), 'Un poids de la répartition ne peut pas être négatif.');
+    }
+
+    /**
+     * T105 : la quantité x le PU HT, remise déduite, calculée exactement,
+     * retombe-t-elle à moins de deux centimes du HT de la ligne ? 1 000 x
+     * 0,833333 € = 833,333 € pour 833,33 € HT : oui ; 100 000 x 0,833333 €
+     * = 83 333,30 € pour 83 333,33 € HT : non (3 centimes) ; 4 x 54,166667 €
+     * moins 10 % = 195,0000012 € pour 195,00 € HT : oui ; la limite, 0,02 €
+     * d'écart, n'y retombe plus.
+     */
+    public function test_le_pu_ht_retombe_sur_le_ht_de_la_ligne_a_moins_de_deux_centimes(): void
+    {
+        $this->assertTrue($this->calculateur()->puHtRetombeSurLeHt(1000, 833333, 0, 83333));
+        $this->assertFalse($this->calculateur()->puHtRetombeSurLeHt(100000, 833333, 0, 8333333));
+        $this->assertTrue($this->calculateur()->puHtRetombeSurLeHt(4, 54166667, 1000, 19500));
+        $this->assertTrue($this->calculateur()->puHtRetombeSurLeHt(1, 1000000, 0, 101));
+        $this->assertFalse($this->calculateur()->puHtRetombeSurLeHt(1, 1000000, 0, 102));
+    }
 }

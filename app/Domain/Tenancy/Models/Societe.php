@@ -153,6 +153,7 @@ class Societe extends Model implements HasName
         'regime_tva',
         'option_debits_tva',
         'mois_fin_exercice',
+        'membre_assujetti_unique',
     ];
 
     protected $casts = [
@@ -164,6 +165,7 @@ class Societe extends Model implements HasName
         'regime_tva' => RegimeTva::class,
         'option_debits_tva' => 'boolean',
         'mois_fin_exercice' => 'integer',
+        'membre_assujetti_unique' => 'boolean',
         'type_activite' => TypeDActivite::class,
         'statut' => StatutSociete::class,
         'validee_le' => Instant::class,
@@ -745,7 +747,7 @@ class Societe extends Model implements HasName
 
     public static function parametresDeConformite(): array
     {
-        return ['regime_tva', 'option_debits_tva', 'mois_fin_exercice', 'siren', 'numero_tva'];
+        return ['regime_tva', 'option_debits_tva', 'mois_fin_exercice', 'membre_assujetti_unique', 'siren', 'numero_tva'];
     }
 
     /**

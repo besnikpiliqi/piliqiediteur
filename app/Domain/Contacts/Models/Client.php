@@ -290,7 +290,7 @@ class Client extends Model
 
         $avoirs = Avoir::query()
             ->where('statut', StatutAvoir::Emise)
-            ->where('regularisation', false)
+            ->whereNull('motif_regularisation')
             ->whereIn('client_id', $identifies->map(fn (Client $client): mixed => $client->getKey())->all())
             ->with('allocations')
             ->get();
@@ -350,7 +350,7 @@ class Client extends Model
         $query->whereNull($query->qualifyColumn('est_comptoir'))
             ->whereHas('avoirs', fn (Builder $avoirs): Builder => $avoirs
                 ->where($avoirs->qualifyColumn('statut'), StatutAvoir::Emise)
-                ->where($avoirs->qualifyColumn('regularisation'), false)
+                ->whereNull($avoirs->qualifyColumn('motif_regularisation'))
                 ->where(
                     new ExpressionDUneColonne($enCentimes, $avoirs->qualifyColumn('total_ttc')),
                     '>',

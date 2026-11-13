@@ -117,7 +117,7 @@ class ModifierUneFicheAction
                 $this->exigerLeDroitDeCorriger($compte, $magasin, $relue, $corrections);
                 $lue->refuserUneCorrectionPerimee($relue, $corrections, self::REFUS_PERIMEE);
 
-                $this->operateur->pendant($compte, fn (): bool => $relue->fill($corrections)->save());
+                $this->operateur->pendant($compte, fn (): bool => ($relue instanceof Fournisseur ? $relue->noterSonAuteur($compte) : $relue)->fill($corrections)->save());
 
                 return $relue;
             });

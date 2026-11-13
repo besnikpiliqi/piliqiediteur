@@ -5,6 +5,7 @@ namespace App\Filament\Societe\Pages;
 use App\Domain\Calendrier\Calendrier;
 use App\Domain\Tenancy\Actions\ModifierParametresFiscauxSocieteAction;
 use App\Domain\Tenancy\Enums\RegimeTva;
+use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Support\CompteConnecte;
 use App\Domain\Tenancy\Support\ValeursLues;
@@ -22,7 +23,8 @@ use Illuminate\Validation\ValidationException;
 
 /**
  * Seul endroit où se règlent le régime de TVA de la société, l'option pour
- * les débits et le mois de fin de son exercice, communs à tous ses
+ * les débits, le mois de fin de son exercice et sa qualité de membre d'un
+ * assujetti unique (groupe TVA), communs à tous ses
  * magasins (voir ModifierParametresFiscauxSocieteAction, qui les
  * enregistre sous le verrou des registres de tous les magasins et
  * inscrit chaque changement au journal des événements de chacun). Le mois
@@ -90,6 +92,9 @@ class ParametresFiscauxSociete extends Page implements HasForms
                     : 'Décembre par défaut. Il se verrouille dès la première vente de l\'un de vos magasins.')
                 ->required()
                 ->disabled(fn (): bool => $this->societe()->aVenduUneFois()),
+            Toggle::make('membre_assujetti_unique')
+                ->label('La société est membre d\'un assujetti unique (groupe TVA, art. 256 C du CGI)')
+                ->helperText(Magasin::REFUS_ASSUJETTI_UNIQUE),
         ])
             ->statePath('data')
             ->disabled(fn (): bool => ! (auth()->user()?->can('modifierLesParametresFiscaux', $this->societe()) ?? false));
@@ -128,6 +133,7 @@ class ParametresFiscauxSociete extends Page implements HasForms
             'regime_tva' => $societe->regime_tva?->value,
             'option_debits_tva' => $societe->option_debits_tva,
             'mois_fin_exercice' => $societe->mois_fin_exercice,
+            'membre_assujetti_unique' => $societe->membre_assujetti_unique,
         ]);
     }
 

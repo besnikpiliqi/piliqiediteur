@@ -14,6 +14,8 @@ use App\Domain\Cabinets\Models\LienCabinet;
 use App\Domain\Cabinets\Services\TableauDeBordDesClients;
 use App\Domain\Cabinets\Support\GardesDesCabinets;
 use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Contacts\Actions\ArchiverUneFicheAction;
+use App\Domain\Contacts\Actions\CreerUneFicheAction;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\Fournisseur;
@@ -283,6 +285,42 @@ class MagasinsOuvertsAuCabinetTest extends TestCase
 
         $this->assertSame(StatutFactureAchat::Validee, $validerSansControle($proprietaire)->statut);
         $this->assertSame(1, DB::table('mouvements_stock')->where('magasin_id', $lyon2->id)->where('source_id', $factureAchat->id)->where('cree_par', $proprietaire->id)->count());
+        app(TenantContext::class)->clear();
+    }
+
+    /**
+     * Une fiche de fournisseur nomme qui l'a créée et qui l'a modifiée,
+     * archivée ou restaurée en dernier : l'action pose ces colonnes, avec
+     * leur nom figé, et la base refuse qu'un expert-comptable de la société
+     * en écrive une dans un magasin que le client ne lui ouvre pas, même
+     * quand le code oublie de le vérifier (constat 5 du lot EC2) ; rien ne
+     * s'écrit, et le propriétaire, lui, y écrit.
+     */
+    public function test_la_base_refuse_une_fiche_de_fournisseur_ecrite_dans_un_magasin_non_choisi(): void
+    {
+        $lyon1 = $this->ouvrirUneSociete(['nom' => 'Lyon 1']);
+        $lyon2 = $this->ouvrirUnAutreMagasin($lyon1, ['nom' => 'Lyon 2']);
+        $marc = $this->expertComptable($lyon1, autorisations: [...PermissionRegistry::casesDuCabinet(PermissionRegistry::parDefautDuCabinet(TypeDActivite::Commerce)), PermissionRegistry::FOURNISSEUR_CREATE, PermissionRegistry::FOURNISSEUR_UPDATE, PermissionRegistry::FOURNISSEUR_ARCHIVER])->fresh();
+        $this->regler(LienCabinet::query()->withoutGlobalScopes()->where('societe_id', $lyon1->societe_id)->sole(), [$lyon1->id]);
+        $proprietaire = $this->proprietaireDe($lyon1);
+        $refus = GardesDesCabinets::MAGASINS_OUVERTS.' : un compte d\'un cabinet d\'expertise comptable ou un expert-comptable de la société n\'agit que dans un magasin que le client lui ouvre';
+        app(TenantContext::class)->set($lyon1);
+        $grossiste = app(CreerUneFicheAction::class)->handle($marc, Fournisseur::class, ['nom' => 'Grossiste Lyonnais', 'pays' => 'FR']);
+        app(TenantContext::class)->set($lyon2);
+        $fiche = app(CreerUneFicheAction::class)->handle($proprietaire, Fournisseur::class, ['nom' => 'Grossiste de Villeurbanne', 'pays' => 'FR']);
+        $ecrireSansControle = fn (User $compte): bool => $fiche->fresh()->noterSonAuteur($compte)->fill(['telephone' => '0400000000'])->save();
+
+        $this->assertSame([$marc->id, $marc->id, $marc->nomPourLHistorique(), $marc->nomPourLHistorique()], [$grossiste->cree_par, $grossiste->modifie_par, $grossiste->cree_par_nom, $grossiste->modifie_par_nom]);
+        $this->assertStringStartsWith('Marc Petit (expert-comptable déclaré par la société', (string) $grossiste->cree_par_nom);
+        $this->assertSame([$proprietaire->id, $proprietaire->id], [$fiche->cree_par, $fiche->modifie_par]);
+        $this->assertFalse($marc->peutOuvrir($lyon2));
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn (): bool => $ecrireSansControle($marc)), QueryException::class, $refus);
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn (): bool => DB::table('fournisseurs')->insert(['magasin_id' => $lyon2->id, 'nom' => 'Fiche forgée', 'pays' => 'FR', 'cree_par' => $marc->id, 'modifie_par' => $marc->id, 'created_at' => now(), 'updated_at' => now()])), QueryException::class, $refus);
+        $this->assertSame([null, 0], [$fiche->fresh()->telephone, DB::table('fournisseurs')->where('nom', 'Fiche forgée')->count()]);
+
+        $this->assertTrue($ecrireSansControle($proprietaire));
+        app(ArchiverUneFicheAction::class)->archiver($proprietaire, $fiche->fresh());
+        $this->assertSame(['0400000000', $proprietaire->id], [$fiche->fresh()->telephone, Fournisseur::withTrashed()->whereKey($fiche->id)->value('modifie_par')]);
         app(TenantContext::class)->clear();
     }
 

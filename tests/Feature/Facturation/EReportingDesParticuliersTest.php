@@ -144,9 +144,9 @@ class EReportingDesParticuliersTest extends TestCase
         $apercu = $this->apercu($cloture);
 
         $this->assertSame([
-            ['categorie' => CategorieEReporting::LivraisonsDeBiens, 'taux' => 2000, 'ht' => 8333, 'tva' => 1667, 'motif' => null, 'remarque' => null],
-            ['categorie' => CategorieEReporting::LivraisonsDeBiens, 'taux' => 550, 'ht' => 1000, 'tva' => 55, 'motif' => null, 'remarque' => null],
-            ['categorie' => CategorieEReporting::PrestationsDeServices, 'taux' => 2000, 'ht' => 5000, 'tva' => 1000, 'motif' => null, 'remarque' => null],
+            ['categorie' => CategorieEReporting::LivraisonsDeBiens, 'taux' => 2000, 'ht' => 8333, 'tva' => 1667, 'motif' => null],
+            ['categorie' => CategorieEReporting::LivraisonsDeBiens, 'taux' => 550, 'ht' => 1000, 'tva' => 55, 'motif' => null],
+            ['categorie' => CategorieEReporting::PrestationsDeServices, 'taux' => 2000, 'ht' => 5000, 'tva' => 1000, 'motif' => null],
         ], $apercu->transactions);
         $this->assertSame(['2026-10-05', false], [$apercu->journee, $apercu->demonstration]);
     }
@@ -226,7 +226,7 @@ class EReportingDesParticuliersTest extends TestCase
         $apercu = $this->apercu($this->cloturer('2026-10-05'));
 
         $this->assertSame([[CategorieEReporting::LivraisonsDeBiens, 2000, 1000, 200]], self::totaux($apercu));
-        $this->assertSame([[], []], [$apercu->encaissementsDeServices, $apercu->encaissementsARepartir]);
+        $this->assertSame([], $apercu->encaissementsDeServices);
     }
 
     /**
@@ -250,83 +250,79 @@ class EReportingDesParticuliersTest extends TestCase
 
     /**
      * Un écran de 12,00 € expédié par le magasin à un particulier hors de
-     * l'Union : vendu sans TVA française, au prix sans la TVA de son taux,
-     * il reste à déclarer, parmi les opérations non soumises à la TVA en
-     * France, avec son motif ; sa transmission attend la prise en charge
-     * de ce motif.
+     * l'Union, et un autre livré en Martinique : vendus sans TVA
+     * française, au prix sans la TVA de leur taux, ils se rangent parmi
+     * les opérations non soumises à la TVA en France, au taux 0 %, avec
+     * leur nature d'opération pour motif (T108.1, T108.2), sans autre
+     * remarque.
      */
-    public function test_une_vente_sans_tva_francaise_se_range_dans_les_operations_non_soumises_en_attente_de_son_motif(): void
+    public function test_une_vente_sans_tva_francaise_se_range_dans_les_operations_non_soumises_au_taux_zero(): void
     {
         $this->travelTo(self::aParis('2026-10-05 10:00:00'));
-        $this->emettre(Client::factory()->create(), [['produit_id' => $this->produit(12)->id, 'quantite' => 1]], [
+        $ecran = $this->produit(12);
+        $this->emettre(Client::factory()->create(), [['produit_id' => $ecran->id, 'quantite' => 1]], [
             'nature_operation' => NatureOperation::ExportHorsUe, 'livraison_adresse' => '1 Main Street', 'livraison_code_postal' => '10001', 'livraison_ville' => 'New York', 'livraison_pays' => 'US',
+        ]);
+        $this->emettre(Client::factory()->create(), [['produit_id' => $ecran->id, 'quantite' => 1]], [
+            'nature_operation' => NatureOperation::LivraisonDom, 'livraison_adresse' => '1 rue Victor Hugo', 'livraison_code_postal' => '97200', 'livraison_ville' => 'Fort-de-France', 'livraison_pays' => 'FR',
         ]);
 
         $apercu = $this->apercu($this->cloturer('2026-10-05'));
 
-        $this->assertSame([[
-            'categorie' => CategorieEReporting::NonSoumisesALaTvaEnFrance,
-            'taux' => 0,
-            'ht' => 1000,
-            'tva' => 0,
-            'motif' => 'Export hors UE expédié par le magasin',
-            'remarque' => 'À déclarer ; transmission en attente de la prise en charge de son motif d\'exonération (étape 2).',
-        ]], $apercu->transactions);
+        $this->assertSame([
+            ['categorie' => CategorieEReporting::NonSoumisesALaTvaEnFrance, 'taux' => 0, 'ht' => 1000, 'tva' => 0, 'motif' => 'Export hors UE expédié par le magasin'],
+            ['categorie' => CategorieEReporting::NonSoumisesALaTvaEnFrance, 'taux' => 0, 'ht' => 1000, 'tva' => 0, 'motif' => NatureOperation::LivraisonDom->getLabel()],
+        ], $apercu->transactions);
     }
 
     /**
-     * En franchise en base, la vente de 12,00 € se fait à 0 % au même prix
-     * TTC : elle se range aussi parmi les opérations non soumises à la TVA
-     * en France, une catégorie que les notes du projet disent à vérifier.
+     * En franchise en base, la vente se fait à 0 % au même prix TTC : un
+     * câble de 12,00 € se range parmi les livraisons de biens et une
+     * réparation de 30,00 € parmi les prestations de services, au taux
+     * 0 %, avec le motif de la franchise et sans autre remarque (T2.5).
      */
-    public function test_une_vente_en_franchise_en_base_se_range_dans_les_operations_non_soumises_categorie_a_verifier(): void
+    public function test_une_vente_en_franchise_en_base_se_range_par_la_nature_de_sa_ligne(): void
     {
         $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $this->reglerLaSociete($this->magasin, ['regime_tva' => RegimeTva::FranchiseEnBase]);
-        self::vendreAuComptant(self::auteur(), Client::factory()->create(), [['produit_id' => $this->produit(12)->id, 'quantite' => 1]]);
+        self::vendreAuComptant(self::auteur(), Client::factory()->create(), [['produit_id' => $this->produit(12)->id, 'quantite' => 1], $this->reparation(30)]);
 
         $apercu = $this->apercu($this->cloturer('2026-10-05'));
 
-        $this->assertSame([[
-            'categorie' => CategorieEReporting::NonSoumisesALaTvaEnFrance,
-            'taux' => 0,
-            'ht' => 1200,
-            'tva' => 0,
-            'motif' => 'Franchise en base de TVA (art. 293 B du CGI)',
-            'remarque' => 'Catégorie à vérifier. À déclarer ; transmission en attente de la prise en charge de son motif d\'exonération (étape 2).',
-        ]], $apercu->transactions);
+        $this->assertSame([
+            ['categorie' => CategorieEReporting::LivraisonsDeBiens, 'taux' => 0, 'ht' => 1200, 'tva' => 0, 'motif' => 'Franchise en base de TVA (art. 293 B du CGI)'],
+            ['categorie' => CategorieEReporting::PrestationsDeServices, 'taux' => 0, 'ht' => 3000, 'tva' => 0, 'motif' => 'Franchise en base de TVA (art. 293 B du CGI)'],
+        ], $apercu->transactions);
     }
 
     /**
-     * Un câble à 10,00 € vendu en France à un taux saisi de 0 % : la France
-     * n'a pas de taux zéro, une vente sans TVA française se range parmi les
-     * opérations non soumises à la TVA en France, à déclarer, sa catégorie
-     * restant à vérifier comme celle de la franchise en base.
+     * Un câble à 10,00 € et une réparation à 25,00 € vendus en France à un
+     * taux saisi de 0 % : comme la franchise en base, chacun se range selon
+     * la nature de sa ligne, au taux 0 %, avec son motif et sans autre
+     * remarque (T2.5) ; le paiement de la réparation à 0 % ne compte pas
+     * parmi les encaissements des prestations.
      */
-    public function test_une_vente_en_france_a_zero_pour_cent_se_range_dans_les_operations_non_soumises_categorie_a_verifier(): void
+    public function test_une_vente_en_france_a_zero_pour_cent_se_range_par_la_nature_de_sa_ligne(): void
     {
         $this->travelTo(self::aParis('2026-10-05 10:00:00'));
-        self::vendreAuComptant(self::auteur(), Client::factory()->create(), [['produit_id' => $this->produit(10, 0)->id, 'quantite' => 1]]);
+        self::vendreAuComptant(self::auteur(), Client::factory()->create(), [['produit_id' => $this->produit(10, 0)->id, 'quantite' => 1], $this->reparation(25, 0)]);
 
         $apercu = $this->apercu($this->cloturer('2026-10-05'));
 
-        $this->assertSame([[
-            'categorie' => CategorieEReporting::NonSoumisesALaTvaEnFrance,
-            'taux' => 0,
-            'ht' => 1000,
-            'tva' => 0,
-            'motif' => 'Vente en France à 0 %',
-            'remarque' => 'Catégorie à vérifier. À déclarer ; transmission en attente de la prise en charge de son motif d\'exonération (étape 2).',
-        ]], $apercu->transactions);
+        $this->assertSame([
+            ['categorie' => CategorieEReporting::LivraisonsDeBiens, 'taux' => 0, 'ht' => 1000, 'tva' => 0, 'motif' => 'Vente en France à 0 %'],
+            ['categorie' => CategorieEReporting::PrestationsDeServices, 'taux' => 0, 'ht' => 2500, 'tva' => 0, 'motif' => 'Vente en France à 0 %'],
+        ], $apercu->transactions);
+        $this->assertSame([], $apercu->encaissementsDeServices);
     }
 
     /**
      * Une réparation à 60,00 € à 20 % par carte, un cours à 30,00 € à 10 %
      * en espèces, et un écran : les encaissements des prestations se
-     * déclarent par taux, à leur date, l'écran n'en donne aucun, et la
-     * fiche les marque en attente de la confirmation de l'expert-comptable.
+     * déclarent par taux, à leur date, pour leur montant TTC ; l'écran n'en
+     * donne aucun, et la fiche dit la règle appliquée (T1.1, T1.2).
      */
-    public function test_l_encaissement_d_un_service_est_ventile_par_taux_et_marque_a_confirmer(): void
+    public function test_l_encaissement_d_un_service_est_ventile_par_taux(): void
     {
         $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $client = Client::factory()->create();
@@ -344,7 +340,8 @@ class EReportingDesParticuliersTest extends TestCase
         $this->actingAs(self::auteur());
         Filament::setTenant($this->magasin);
         Livewire::test(ViewClotureCaisse::class, ['record' => $cloture->getRouteKey()])
-            ->assertSeeInOrder(['Encaissements des prestations de services', 'En attente de la confirmation de l\'expert-comptable de la société.', '05/10/2026', '20 %', '60,00 €', '05/10/2026', '10 %', '30,00 €']);
+            ->assertSeeInOrder(['Encaissements des prestations de services', e(EReportingDesParticuliers::MENTION_ENCAISSEMENTS), '05/10/2026', '20 %', '60,00 €', '05/10/2026', '10 %', '30,00 €'], false);
+        $this->assertSame('Encaissements des prestations de services payées par des particuliers, déclarés par jour et par taux de TVA. Un crédit d\'avoir compte à la date où il est utilisé, sauf la part qui annule les lignes que son avoir corrige sur ce ticket ; l\'avoir d\'une prestation déjà encaissée se déduit à la date où son crédit règle une autre vente.', EReportingDesParticuliers::MENTION_ENCAISSEMENTS);
     }
 
     /**
@@ -370,30 +367,66 @@ class EReportingDesParticuliersTest extends TestCase
     }
 
     /**
-     * Point soumis à l'éditeur, calcul gardé jusqu'à sa réponse : le 5,
-     * deux réparations de 60,00 €, l'une payée par carte, l'autre laissée
-     * due ; le 6, la première est annulée et son crédit règle la seconde.
-     * Le 5 déclare 60,00 € encaissés et le 6 encore 60,00 €, sans déduire
-     * l'annulation d'une prestation déjà encaissée ; la fiche le signale.
+     * T1.3 : une réparation de 120,00 € à 20 % payée par carte le 3
+     * novembre déclare 120,00 € ce jour ; son avoir, le 5, alors que le
+     * client ne doit rien, ne déclare rien ; le 10, son crédit règle une
+     * autre réparation de 120,00 € à 20 % : 120,00 € reçus et 120,00 €
+     * annulés se déclarent le même jour, net 0,00 €. Sur les trois jours,
+     * 120,00 € sont déclarés pour 120,00 € reçus.
      */
-    public function test_l_avoir_d_une_prestation_deja_encaissee_ne_se_deduit_pas_de_ses_encaissements_en_attendant_l_editeur(): void
+    public function test_l_avoir_d_une_prestation_deja_encaissee_se_deduit_a_l_utilisation_de_son_credit(): void
     {
-        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
+        $this->travelTo(self::aParis('2026-11-03 10:00:00'));
         $client = Client::factory()->create();
-        $payee = self::vendreAuComptant(self::auteur(), $client, [$this->reparation(60)], ModePaiement::CarteBancaire);
-        $this->emettre($client, [$this->reparation(60)]);
-        $duCinq = $this->cloturer('2026-10-05');
-        $this->travelTo(self::aParis('2026-10-06 10:00:00'));
+        $payee = self::vendreAuComptant(self::auteur(), $client, [$this->reparation(120)], ModePaiement::CarteBancaire);
+        $duTrois = $this->cloturer('2026-11-03');
+        $this->travelTo(self::aParis('2026-11-05 10:00:00'));
+        $this->cloturer('2026-11-04');
         app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [['ligne_facture_id' => $payee->lignes->sole()->id, 'quantite' => 1]], 'Annulée');
+        $duCinq = $this->cloturer('2026-11-05');
+        $this->travelTo(self::aParis('2026-11-10 10:00:00'));
+        foreach (['2026-11-06', '2026-11-07', '2026-11-08', '2026-11-09'] as $journee) {
+            $this->cloturer($journee);
+        }
 
-        $duSix = $this->cloturer('2026-10-06');
+        $reglee = self::vendreAuComptant(self::auteur(), $client, [$this->reparation(120)]);
 
-        $this->assertSame([['date' => '2026-10-05', 'taux' => 2000, 'montant' => 6000]], $this->apercu($duCinq)->encaissementsDeServices);
-        $this->assertSame([['date' => '2026-10-06', 'taux' => 2000, 'montant' => 6000]], $this->apercu($duSix)->encaissementsDeServices);
-        $this->actingAs(self::auteur());
-        Filament::setTenant($this->magasin);
-        Livewire::test(ViewClotureCaisse::class, ['record' => $duSix->getRouteKey()])
-            ->assertSee('Point soumis à l\'éditeur : l\'avoir d\'une prestation déjà encaissée ne se déduit pas de ses encaissements, même quand son crédit règle ensuite une autre vente.');
+        $duDix = $this->cloturer('2026-11-10');
+
+        $this->assertSame(StatutFacture::Payee, $reglee->fresh()->statut);
+        $this->assertSame([['date' => '2026-11-03', 'taux' => 2000, 'montant' => 12000]], $this->apercu($duTrois)->encaissementsDeServices);
+        $this->assertSame([], $this->apercu($duCinq)->encaissementsDeServices);
+        $this->assertSame([], $this->apercu($duDix)->encaissementsDeServices);
+    }
+
+    /**
+     * La même réparation payée puis annulée, dont le client garde le
+     * crédit sans jamais l'utiliser : rien ne se déduit, les 120,00 €
+     * restent déclarés.
+     */
+    public function test_le_credit_jamais_utilise_d_une_prestation_annulee_ne_deduit_rien(): void
+    {
+        $this->travelTo(self::aParis('2026-11-03 10:00:00'));
+        $client = Client::factory()->create();
+        $payee = self::vendreAuComptant(self::auteur(), $client, [$this->reparation(120)], ModePaiement::CarteBancaire);
+        $duTrois = $this->cloturer('2026-11-03');
+        $this->travelTo(self::aParis('2026-11-05 10:00:00'));
+        $this->cloturer('2026-11-04');
+        app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [['ligne_facture_id' => $payee->lignes->sole()->id, 'quantite' => 1]], 'Annulée');
+        $duCinq = $this->cloturer('2026-11-05');
+        $this->travelTo(self::aParis('2026-11-10 10:00:00'));
+        foreach (['2026-11-06', '2026-11-07', '2026-11-08', '2026-11-09'] as $journee) {
+            $this->cloturer($journee);
+        }
+
+        self::vendreAuComptant(self::auteur(), Client::factory()->create(), [$this->reparation(120)], ModePaiement::CarteBancaire);
+
+        $duDix = $this->cloturer('2026-11-10');
+
+        $this->assertSame([['date' => '2026-11-03', 'taux' => 2000, 'montant' => 12000]], $this->apercu($duTrois)->encaissementsDeServices);
+        $this->assertSame([], $this->apercu($duCinq)->encaissementsDeServices);
+        $this->assertSame([['date' => '2026-11-10', 'taux' => 2000, 'montant' => 12000]], $this->apercu($duDix)->encaissementsDeServices);
+        $this->assertSame(12000, $client->fresh()->soldeCrediteurEnCentimes());
     }
 
     /**
@@ -408,7 +441,6 @@ class EReportingDesParticuliersTest extends TestCase
         $apercu = $this->apercu($cloture);
 
         $this->assertSame([['date' => '2026-10-05', 'taux' => 2000, 'montant' => 6000]], $apercu->encaissementsDeServices);
-        $this->assertSame([], $apercu->encaissementsARepartir);
     }
 
     /**
@@ -429,7 +461,7 @@ class EReportingDesParticuliersTest extends TestCase
         $apercu = $this->apercu($this->cloturer('2026-10-06'));
 
         $this->assertSame([[CategorieEReporting::PrestationsDeServices, 2000, -5000, -1000]], self::totaux($apercu));
-        $this->assertSame([[], []], [$apercu->encaissementsDeServices, $apercu->encaissementsARepartir]);
+        $this->assertSame([], $apercu->encaissementsDeServices);
     }
 
     /**
@@ -453,7 +485,7 @@ class EReportingDesParticuliersTest extends TestCase
 
         $apercu = $this->apercu($this->cloturer('2026-10-06'));
 
-        $this->assertSame([[['date' => '2026-10-06', 'taux' => 2000, 'montant' => 5000]], []], [$apercu->encaissementsDeServices, $apercu->encaissementsARepartir]);
+        $this->assertSame([['date' => '2026-10-06', 'taux' => 2000, 'montant' => 5000]], $apercu->encaissementsDeServices);
         $this->assertSame(StatutFacture::Payee, $heures->fresh()->statut);
     }
 
@@ -484,16 +516,19 @@ class EReportingDesParticuliersTest extends TestCase
         $duSept = $this->cloturer('2026-10-07');
 
         $this->assertSame([], $this->apercu($duSix)->encaissementsDeServices);
-        $this->assertSame([[['date' => '2026-10-07', 'taux' => 2000, 'montant' => -8000]], []], [$this->apercu($duSept)->encaissementsDeServices, $this->apercu($duSept)->encaissementsARepartir]);
+        $this->assertSame([['date' => '2026-10-07', 'taux' => 2000, 'montant' => -8000]], $this->apercu($duSept)->encaissementsDeServices);
         $this->assertSame(2000, $reparations->fresh()->resteDuEnCentimes());
     }
 
     /**
-     * Un livre et une réparation laissés dus, puis 30,00 € reçus : la part
-     * de la réparation dans ce règlement partiel attend la règle de
-     * l'expert-comptable ; le montant reste à répartir, à sa date.
+     * Un livre à 10,55 € et une réparation à 60,00 € laissés dus, puis
+     * 30,00 € reçus : le règlement se répartit au prorata du TTC de chaque
+     * groupe ; la part de la réparation, 30,00 x 60,00 ÷ 70,55 = 25,51 €
+     * (25,5138... arrondi au centime le plus proche), se déclare au taux de
+     * 20 % ; celle du livre, un bien, ne se déclare pas (T1.3, T1.4,
+     * T107.1).
      */
-    public function test_un_reglement_partiel_d_un_ticket_mixte_reste_a_repartir(): void
+    public function test_un_reglement_partiel_d_un_ticket_mixte_se_repartit_au_prorata(): void
     {
         $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $mixte = $this->emettre(Client::factory()->create(), [['produit_id' => $this->produit(10.55, 5.5)->id, 'quantite' => 1], $this->reparation(60)]);
@@ -501,8 +536,154 @@ class EReportingDesParticuliersTest extends TestCase
 
         $apercu = $this->apercu($this->cloturer('2026-10-05'));
 
+        $this->assertSame([['date' => '2026-10-05', 'taux' => 2000, 'montant' => 2551]], $apercu->encaissementsDeServices);
+    }
+
+    /**
+     * Un ticket de 160,00 € : une réparation à 120,00 € à 20 % et un cours
+     * à 40,00 € à 10 %. Un acompte de 50,00 € déclare 37,50 € à 20 % et
+     * 12,50 € à 10 % ; sur un autre ticket identique, 50,02 € déclarent
+     * 37,52 € à 20 % (37,515 arrondi au centime supérieur) et 12,50 € à
+     * 10 %, la somme des parts égalant toujours le paiement (T107.1).
+     */
+    public function test_un_acompte_se_repartit_entre_les_taux_de_services_au_prorata(): void
+    {
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
+        $client = Client::factory()->create();
+        $premier = $this->emettre($client, [$this->reparation(120), $this->reparation(40, 10)]);
+        $this->payer($premier, 50, ModePaiement::Especes, '2026-10-05');
+        $duCinq = $this->cloturer('2026-10-05');
+        $this->travelTo(self::aParis('2026-10-06 10:00:00'));
+        $second = $this->emettre($client, [$this->reparation(120), $this->reparation(40, 10)]);
+        $this->payer($second, 50.02, ModePaiement::Especes, '2026-10-06');
+
+        $duSix = $this->cloturer('2026-10-06');
+
+        $this->assertSame([
+            ['date' => '2026-10-05', 'taux' => 2000, 'montant' => 3750],
+            ['date' => '2026-10-05', 'taux' => 1000, 'montant' => 1250],
+        ], $this->apercu($duCinq)->encaissementsDeServices);
+        $this->assertSame([
+            ['date' => '2026-10-06', 'taux' => 2000, 'montant' => 3752],
+            ['date' => '2026-10-06', 'taux' => 1000, 'montant' => 1250],
+        ], $this->apercu($duSix)->encaissementsDeServices);
+    }
+
+    /**
+     * T9.3 : une réparation à 51,00 € à 20 % et un cours à 49,01 € à 10 %
+     * (100,01 €), payés 30,00 € le 5, 70,00 € le 6 et 0,01 € le 7 ; chaque
+     * paiement se répartit sur l'encaissé cumulé : 15,30 € et 14,70 € le
+     * 5 ; le 6, la part cumulée de la réparation est 100,00 x 51,00 ÷
+     * 100,01 = 50,99 €, soit 35,69 € et non 35,70 € (70,00 x 51,00 ÷ 100,01
+     * arrondi seul), et 34,31 € pour le cours ; le 7, le dernier centime va
+     * à la réparation, qui retombe exactement sur 51,00 €, et le cours sur
+     * 49,01 €.
+     */
+    public function test_des_paiements_successifs_se_repartissent_sur_l_encaisse_cumule(): void
+    {
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
+        $ticket = $this->emettre(Client::factory()->create(), [$this->reparation(51), $this->reparation(49.01, 10)]);
+        $this->payer($ticket, 30, ModePaiement::Especes, '2026-10-05');
+        $duCinq = $this->cloturer('2026-10-05');
+        $this->travelTo(self::aParis('2026-10-06 10:00:00'));
+        $this->payer($ticket, 70, ModePaiement::Especes, '2026-10-06');
+        $duSix = $this->cloturer('2026-10-06');
+        $this->travelTo(self::aParis('2026-10-07 10:00:00'));
+        $this->payer($ticket, 0.01, ModePaiement::Especes, '2026-10-07');
+
+        $duSept = $this->cloturer('2026-10-07');
+
+        $this->assertSame([['date' => '2026-10-05', 'taux' => 2000, 'montant' => 1530], ['date' => '2026-10-05', 'taux' => 1000, 'montant' => 1470]], $this->apercu($duCinq)->encaissementsDeServices);
+        $this->assertSame([['date' => '2026-10-06', 'taux' => 2000, 'montant' => 3569], ['date' => '2026-10-06', 'taux' => 1000, 'montant' => 3431]], $this->apercu($duSix)->encaissementsDeServices);
+        $this->assertSame([['date' => '2026-10-07', 'taux' => 2000, 'montant' => 1]], $this->apercu($duSept)->encaissementsDeServices);
+    }
+
+    /**
+     * T107.2 : la réparation à 120,00 € à 20 % et le cours à 40,00 € à
+     * 10 % laissés dus le 5 ; le 6, l'avoir du cours, imputé sur le ticket
+     * qu'il corrige, le réduit à 120,00 € sans rien encaisser ; un acompte
+     * de 50,00 € le 7 se répartit sur ce qui reste du ticket : tout au
+     * taux de la réparation.
+     */
+    public function test_un_acompte_se_repartit_sur_le_ttc_restant_apres_un_avoir(): void
+    {
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
+        $client = Client::factory()->create();
+        $ticket = $this->emettre($client, [$this->reparation(120), $this->reparation(40, 10)]);
+        $this->cloturer('2026-10-05');
+        $this->travelTo(self::aParis('2026-10-06 10:00:00'));
+        app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [['ligne_facture_id' => $ticket->lignes->firstWhere('taux_tva', '10.00')->id, 'quantite' => 1]], 'Cours annulé');
+        $duSix = $this->cloturer('2026-10-06');
+        $this->travelTo(self::aParis('2026-10-07 10:00:00'));
+        $this->payer($ticket, 50, ModePaiement::Especes, '2026-10-07');
+
+        $duSept = $this->cloturer('2026-10-07');
+
+        $this->assertSame([], $this->apercu($duSix)->encaissementsDeServices);
+        $this->assertSame([['date' => '2026-10-07', 'taux' => 2000, 'montant' => 5000]], $this->apercu($duSept)->encaissementsDeServices);
+    }
+
+    /**
+     * Un crédit d'avoir utilisé compte comme un paiement (T107.2) : la
+     * réparation et le cours (160,00 €) laissés dus et un écran de 50,00 €
+     * payé le 5 ; le 6, l'écran rendu donne un crédit de 50,00 € qui
+     * s'impute sur le ticket des services et s'y répartit, 37,50 € à 20 %
+     * et 12,50 € à 10 %.
+     */
+    public function test_un_credit_d_avoir_utilise_se_repartit_comme_un_paiement(): void
+    {
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
+        $client = Client::factory()->create();
+        $this->emettre($client, [$this->reparation(120), $this->reparation(40, 10)]);
+        $ecran = self::vendreAuComptant(self::auteur(), $client, [['produit_id' => $this->produit(50)->id, 'quantite' => 1]]);
+        $this->cloturer('2026-10-05');
+        $this->travelTo(self::aParis('2026-10-06 10:00:00'));
+        app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [['ligne_facture_id' => $ecran->lignes->sole()->id, 'quantite' => 1]], 'Retour');
+
+        $duSix = $this->cloturer('2026-10-06');
+
+        $this->assertSame([
+            ['date' => '2026-10-06', 'taux' => 2000, 'montant' => 3750],
+            ['date' => '2026-10-06', 'taux' => 1000, 'montant' => 1250],
+        ], $this->apercu($duSix)->encaissementsDeServices);
+    }
+
+    /**
+     * L'acompte de 50,00 € sur la réparation et le cours, réparti le 5 en
+     * 37,50 € et 12,50 €, est contre-passé le 6 : les mêmes parts se
+     * déduisent, à la date de la contre-passation (T1.3).
+     */
+    public function test_la_contre_passation_d_un_acompte_reparti_se_deduit_des_memes_parts(): void
+    {
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
+        $ticket = $this->emettre(Client::factory()->create(), [$this->reparation(120), $this->reparation(40, 10)]);
+        $acompte = $this->payer($ticket, 50, ModePaiement::CarteBancaire, '2026-10-05');
+        $this->cloturer('2026-10-05');
+        $this->travelTo(self::aParis('2026-10-06 10:00:00'));
+        app(ContrePasserPaiementAction::class)->handle(self::auteur(), $acompte, 'Carte refusée');
+
+        $duSix = $this->cloturer('2026-10-06');
+
+        $this->assertSame([
+            ['date' => '2026-10-06', 'taux' => 2000, 'montant' => -3750],
+            ['date' => '2026-10-06', 'taux' => 1000, 'montant' => -1250],
+        ], $this->apercu($duSix)->encaissementsDeServices);
+    }
+
+    /**
+     * T112.1 : une société qui a opté pour les débits ne déclare aucun
+     * encaissement de services ; ses ventes restent dans les totaux.
+     */
+    public function test_une_societe_qui_a_opte_pour_les_debits_ne_declare_aucun_encaissement_de_services(): void
+    {
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
+        $this->reglerLaSociete($this->magasin, ['option_debits_tva' => true]);
+        self::vendreAuComptant(self::auteur(), Client::factory()->create(), [$this->reparation(60)], ModePaiement::CarteBancaire);
+
+        $apercu = $this->apercu($this->cloturer('2026-10-05'));
+
+        $this->assertSame([[CategorieEReporting::PrestationsDeServices, 2000, 5000, 1000]], self::totaux($apercu));
         $this->assertSame([], $apercu->encaissementsDeServices);
-        $this->assertSame([['date' => '2026-10-05', 'montant' => 3000]], $apercu->encaissementsARepartir);
     }
 
     /**
@@ -526,8 +707,7 @@ class EReportingDesParticuliersTest extends TestCase
     /**
      * Un livre à 10,55 € et une réparation à 60,00 €, payés ensemble par
      * carte à la caisse le 5, puis le paiement contre-passé le 6 : le 6
-     * rend exactement les 60,00 € de la réparation déclarés le 5, et rien
-     * ne reste à répartir.
+     * rend exactement les 60,00 € de la réparation déclarés le 5.
      */
     public function test_la_contre_passation_du_reglement_d_un_ticket_mixte_solde_en_une_fois_rend_la_part_du_service(): void
     {
@@ -539,13 +719,13 @@ class EReportingDesParticuliersTest extends TestCase
 
         $apercu = $this->apercu($this->cloturer('2026-10-06'));
 
-        $this->assertSame([[['date' => '2026-10-06', 'taux' => 2000, 'montant' => -6000]], []], [$apercu->encaissementsDeServices, $apercu->encaissementsARepartir]);
+        $this->assertSame([['date' => '2026-10-06', 'taux' => 2000, 'montant' => -6000]], $apercu->encaissementsDeServices);
     }
 
     /**
      * Un livre à 10,55 € et une réparation à 60,00 € laissés dus le 5, puis
-     * soldés le 6 par un seul paiement de 70,55 € : la part de la
-     * réparation est connue, comme pour un ticket soldé à son émission.
+     * soldés le 6 par un seul paiement de 70,55 € : toute la réparation
+     * se déclare, comme pour un ticket soldé à son émission.
      */
     public function test_un_ticket_mixte_solde_en_un_seul_reglement_apres_son_emission_declare_la_part_du_service(): void
     {
@@ -557,7 +737,7 @@ class EReportingDesParticuliersTest extends TestCase
 
         $apercu = $this->apercu($this->cloturer('2026-10-06'));
 
-        $this->assertSame([[['date' => '2026-10-06', 'taux' => 2000, 'montant' => 6000]], []], [$apercu->encaissementsDeServices, $apercu->encaissementsARepartir]);
+        $this->assertSame([['date' => '2026-10-06', 'taux' => 2000, 'montant' => 6000]], $apercu->encaissementsDeServices);
     }
 
     /**

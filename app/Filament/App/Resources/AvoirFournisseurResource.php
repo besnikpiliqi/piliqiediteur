@@ -28,6 +28,13 @@ use Illuminate\Database\Eloquent\Model;
  */
 class AvoirFournisseurResource extends Resource
 {
+    /**
+     * Ce que disent la liste des avoirs fournisseur et le formulaire d'un
+     * avoir fournisseur (décision T71.2) : seul un retour de marchandise
+     * s'y saisit ; un rabais ou une ristourne attend l'étape 2.
+     */
+    public const INFORMATION_RISTOURNE = 'Un rabais ou une ristourne sans retour de marchandise ne se saisit pas encore dans PILIQI : la TVA de la note d\'avoir se reverse sur la CA3 (ligne 15).';
+
     protected static ?string $model = AvoirFournisseur::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-arrow-uturn-left';

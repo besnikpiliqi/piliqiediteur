@@ -33,14 +33,16 @@ return new class extends Migration
             // nature d'opération (voir CreerAvoirAction) : l'avoir en
             // imprime la mention.
             $table->string('nature_operation', 40)->default('vente_france');
-            // L'avoir de régularisation d'une facture que désigne l'examen
-            // du SIREN de la société par l'éditeur, après sa correction
-            // (voir FaireLAvoirDeRegularisationAction) : il crédite ce qui
+            // Le motif d'un avoir de régularisation (voir
+            // MotifDeRegularisation), vide pour tout autre avoir : après la
+            // correction du SIREN de la société par l'éditeur (voir
+            // FaireLAvoirDeRegularisationAction), ou pour une exonération
+            // dont la preuve de sortie manque (voir
+            // RegulariserUneExonerationNonProuveeAction). Il crédite ce qui
             // reste à créditer de la facture, ce que les avoirs déjà émis
-            // n'en ont pas crédité, sans retour en stock, imprime son
-            // émetteur figé, et son crédit ne règle qu'elle, puis sa facture
-            // rectificative.
-            $table->boolean('regularisation')->default(false);
+            // n'en ont pas crédité, sans retour en stock, et son crédit ne
+            // règle qu'elle, puis sa facture rectificative.
+            $table->string('motif_regularisation', 30)->nullable();
             // La copie du client prise à l'émission de l'avoir sur le
             // document qu'il corrige, le plus récent s'il en corrige
             // plusieurs, et non sur la fiche du client (voir

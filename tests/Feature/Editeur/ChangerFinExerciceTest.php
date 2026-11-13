@@ -11,6 +11,7 @@ use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Tenancy\Actions\ChangerFinExerciceAction;
 use App\Domain\Tenancy\Actions\ModifierParametresFiscauxSocieteAction;
 use App\Domain\Tenancy\Enums\ActionAuditee;
+use App\Domain\Tenancy\Enums\OrganeDeLaDecision;
 use App\Domain\Tenancy\Models\ChangementFinExercice;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
@@ -31,9 +32,11 @@ use Tests\TestCase;
  * première vente, change par elle seule, avec la fin de l'exercice en cours
  * que fixe le procès-verbal ; il s'inscrit au journal des événements de
  * chaque magasin, dans changements_fin_exercice et au journal d'audit.
- * Jamais un exercice clos ne se modifie, ni une clôture ne se repousse, et
- * la durée de l'exercice transitoire est validée par l'expert-comptable de
- * la société ; un changement n'est jamais rétroactif, et les exercices de
+ * Jamais un exercice clos ne se modifie, ni une clôture ne se repousse :
+ * seul un exercice raccourci, terminé le dernier jour d'un mois, est
+ * accepté ; l'organe qui a décidé est obligatoire, le nom d'un
+ * expert-comptable consulté facultatif (T28.1, T28.2) ; un changement
+ * n'est jamais rétroactif, et les exercices de
  * tout jour passé se reconstituent par l'historique des changements. Le
  * temps est figé au 2 novembre 2026, à Paris : l'exercice en cours, de
  * décembre, va du 1er janvier au 31 décembre 2026.
@@ -48,6 +51,8 @@ class ChangerFinExerciceTest extends TestCase
 
     private const EXPERT_COMPTABLE = 'Claire Martin, Cabinet Martin et associés';
 
+    private const DEPOT_AU_REGISTRE = 'Dépôt au RCS de Lyon n° 2026-A-04512';
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -61,9 +66,11 @@ class ChangerFinExerciceTest extends TestCase
     /**
      * Par la commande, le changement à l'exercice suivant s'inscrit au
      * journal des événements de chaque magasin réel (le mois, de 12 à 6),
-     * dans changements_fin_exercice avec sa pièce, sa décision, la durée
-     * validée et ses opérateurs, et au journal d'audit, origine
-     * « éditeur » ; le résumé montre l'exercice transitoire de six mois.
+     * dans changements_fin_exercice avec sa pièce, sa décision, son
+     * organe, la référence de son dépôt au registre, l'expert-comptable
+     * consulté et ses opérateurs, et au journal d'audit, origine
+     * « éditeur » ; le résumé montre l'exercice transitoire de six mois,
+     * l'organe et l'expert-comptable consulté.
      */
     public function test_le_changement_legal_s_inscrit_dans_chaque_magasin_avec_sa_piece(): void
     {
@@ -79,6 +86,8 @@ class ChangerFinExerciceTest extends TestCase
             '--mois' => '6',
             '--fin-exercice-en-cours' => '2026-12-31',
             '--decision-du' => '2026-10-15',
+            '--organe' => 'assemblee_generale_extraordinaire',
+            '--depot-au-registre' => self::DEPOT_AU_REGISTRE,
             '--duree-validee-par' => self::EXPERT_COMPTABLE,
             '--justification' => self::JUSTIFICATION,
             '--piece' => self::PIECE,
@@ -86,6 +95,8 @@ class ChangerFinExerciceTest extends TestCase
         ])
             ->expectsOutputToContain('Exercice en cours : du 01/01/2026 au 31/12/2026 (12 mois ; fin d\'origine le 31/12/2026).')
             ->expectsOutputToContain('Exercice suivant : du 01/01/2027 au 30/06/2027 (6 mois).')
+            ->expectsOutputToContain('Organe de la décision : Assemblée générale extraordinaire.')
+            ->expectsOutputToContain('Expert-comptable consulté : Claire Martin, Cabinet Martin et associés.')
             ->expectsQuestion('Nom de l\'opérateur', 'alice')
             ->expectsQuestion('Secret de l\'opérateur', 'secret-d-alice')
             ->expectsOutputToContain('Date de clôture de l\'exercice changée : fin d\'exercice en juin, l\'exercice en cours finissant le 31/12/2026.')
@@ -98,11 +109,18 @@ class ChangerFinExerciceTest extends TestCase
 
         $changement = app(TenantContext::class)->runAsSociete($societe, fn (): ChangementFinExercice => ChangementFinExercice::query()->sole());
         $this->assertSame(
-            [12, 6, '2026-01-01', '2026-12-31', '2026-12-31', '2026-10-15', self::PIECE, self::EXPERT_COMPTABLE, self::JUSTIFICATION, ['alice']],
-            [$changement->ancien_mois, $changement->nouveau_mois, $changement->debut_exercice_en_cours, $changement->fin_exercice_en_cours_avant, $changement->fin_exercice_en_cours_apres, $changement->decision_du, $changement->piece_reference, $changement->duree_validee_par, $changement->justification, $changement->operateur['operateurs']],
+            [12, 6, '2026-01-01', '2026-12-31', '2026-12-31', '2026-10-15', OrganeDeLaDecision::AssembleeGeneraleExtraordinaire, self::PIECE, self::DEPOT_AU_REGISTRE, self::EXPERT_COMPTABLE, self::JUSTIFICATION, ['alice']],
+            [$changement->ancien_mois, $changement->nouveau_mois, $changement->debut_exercice_en_cours, $changement->fin_exercice_en_cours_avant, $changement->fin_exercice_en_cours_apres, $changement->decision_du, $changement->organe_de_la_decision, $changement->piece_reference, $changement->depot_au_registre, $changement->duree_validee_par, $changement->justification, $changement->operateur['operateurs']],
         );
         [$entree] = $this->entreesDAudit($societe, ActionAuditee::FinExerciceChangee);
         $this->assertSame(['editeur', ['fin_exercice_en_cours' => '2026-12-31', 'mois_fin_exercice' => 12]], [$entree->origine, $entree->anciennes_valeurs]);
+        $this->assertEquals([
+            'mois_fin_exercice' => 6,
+            'fin_exercice_en_cours' => '2026-12-31',
+            'decision_du' => '2026-10-15',
+            'organe_de_la_decision' => 'assemblee_generale_extraordinaire',
+            'duree_validee_par' => self::EXPERT_COMPTABLE,
+        ], $entree->nouvelles_valeurs);
         $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('changements_fin_exercice')->update(['nouveau_mois' => 3])), QueryException::class, 'changements_fin_exercice : table en ajout seul, modification refusée');
         foreach ([[$lyon, $signaturesDeLyon], [$villeurbanne, $signaturesDeVilleurbanne]] as [$magasin, $signatures]) {
             $this->assertSame($signatures, array_intersect_key($this->signaturesDuRegistre($magasin), $signatures));
@@ -172,7 +190,7 @@ class ChangerFinExerciceTest extends TestCase
         $magasin = $this->ouvrirUneSociete(['nom' => 'Lyon']);
         $this->vendre($magasin);
 
-        $this->assertThrows(fn () => $this->changer($magasin->societe, 6, '2027-03-31', '2026-10-15'), LogicException::class, sprintf(ChangerFinExerciceAction::MESSAGE_CLOTURE_REPOUSSEE, '31/12/2026'));
+        $this->assertThrows(fn () => $this->changer($magasin->societe, 6, '2027-03-31', '2026-10-15'), LogicException::class, 'Cette fin est postérieure à celle de l\'exercice en cours (31/12/2026) : elle repousserait une clôture obligatoire. PILIQI n\'accepte qu\'un exercice raccourci, terminé le dernier jour d\'un mois.');
 
         $this->assertNothingChanged($magasin->societe);
     }
@@ -237,6 +255,7 @@ class ChangerFinExerciceTest extends TestCase
             '--mois' => '6',
             '--fin-exercice-en-cours' => '2026-12-31',
             '--decision-du' => '2026-10-15',
+            '--organe' => 'associe_unique',
             '--duree-validee-par' => self::EXPERT_COMPTABLE,
             '--justification' => self::JUSTIFICATION,
             '--piece' => self::PIECE,
@@ -260,6 +279,10 @@ class ChangerFinExerciceTest extends TestCase
         $this->lancerUneProcedureDeLEditeur('editeur:societe:changer-fin-exercice', $societe, [...$parametres, '--fin-exercice-en-cours' => '2026-09-30'], [['alice', 'secret-d-alice']])
             ->expectsOutputToContain(sprintf(ChangerFinExerciceAction::MESSAGE_DECISION_APRES_LA_FIN, '30/09/2026'))
             ->assertFailed();
+        $this->lancerUneProcedureDeLEditeur('editeur:societe:changer-fin-exercice', $societe, [...$parametres, '--organe' => null], [['alice', 'secret-d-alice']])
+            ->expectsOutputToContain('Organe de la décision : inconnu, la procédure le refusera.')
+            ->expectsOutputToContain(ChangerFinExerciceAction::MESSAGE_ORGANE)
+            ->assertFailed();
 
         $this->assertNothingChanged($societe);
         $this->assertSame($signatures, $this->signaturesDuRegistre($magasin));
@@ -267,14 +290,52 @@ class ChangerFinExerciceTest extends TestCase
     }
 
     /**
-     * Sans l'expert-comptable qui a validé la durée de l'exercice
-     * transitoire, le changement est refusé.
+     * Sans expert-comptable consulté, le changement est accepté : la
+     * colonne reste nulle et le journal d'audit n'en nomme aucun (T28.1).
      */
-    public function test_la_duree_doit_etre_validee_par_l_expert_comptable(): void
+    public function test_un_changement_sans_expert_comptable_consulte_est_accepte(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Lyon']);
+        $this->vendre($magasin);
+        app(TenantContext::class)->clear();
+
+        $changement = app(ChangerFinExerciceAction::class)->handle($magasin->societe->fresh(), 6, '2026-12-31', '2026-10-15', OrganeDeLaDecision::DecisionDesAssocies, '  ', null, $this->editeur());
+
+        $this->assertSame([6, OrganeDeLaDecision::DecisionDesAssocies, null, null], [$magasin->societe->fresh()->mois_fin_exercice, $changement->organe_de_la_decision, $changement->duree_validee_par, $changement->depot_au_registre]);
+        [$entree] = $this->entreesDAudit($magasin->societe, ActionAuditee::FinExerciceChangee);
+        $this->assertEquals([
+            'mois_fin_exercice' => 6,
+            'fin_exercice_en_cours' => '2026-12-31',
+            'decision_du' => '2026-10-15',
+            'organe_de_la_decision' => 'decision_des_associes',
+            'duree_validee_par' => null,
+        ], $entree->nouvelles_valeurs);
+    }
+
+    /**
+     * Sans l'organe qui a décidé, ou avec un nom d'expert-comptable ou une
+     * référence de dépôt trop longs, le changement est refusé, avec son
+     * message exact, et rien ne s'écrit.
+     */
+    public function test_un_changement_sans_organe_de_la_decision_est_refuse(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Lyon']);
 
-        $this->assertThrows(fn () => app(ChangerFinExerciceAction::class)->handle($magasin->societe, 6, '2026-12-31', '2026-10-15', '  ', $this->editeur()), LogicException::class, ChangerFinExerciceAction::MESSAGE_DUREE_NON_VALIDEE);
+        $this->assertThrows(
+            fn () => app(ChangerFinExerciceAction::class)->handle($magasin->societe, 6, '2026-12-31', '2026-10-15', null, self::EXPERT_COMPTABLE, null, $this->editeur()),
+            LogicException::class,
+            'Indiquez l\'organe qui a décidé le changement, tel que le nomme le procès-verbal : assemblée générale extraordinaire, décision des associés, organe prévu par les statuts, associé unique ou entrepreneur individuel.',
+        );
+        $this->assertThrows(
+            fn () => app(ChangerFinExerciceAction::class)->handle($magasin->societe, 6, '2026-12-31', '2026-10-15', OrganeDeLaDecision::AssocieUnique, str_repeat('a', 151), null, $this->editeur()),
+            LogicException::class,
+            'Le nom de l\'expert-comptable consulté compte 150 caractères au plus.',
+        );
+        $this->assertThrows(
+            fn () => app(ChangerFinExerciceAction::class)->handle($magasin->societe, 6, '2026-12-31', '2026-10-15', OrganeDeLaDecision::AssocieUnique, null, str_repeat('a', 101), $this->editeur()),
+            LogicException::class,
+            'La référence du dépôt au registre compte 100 caractères au plus.',
+        );
 
         $this->assertNothingChanged($magasin->societe);
     }
@@ -288,7 +349,7 @@ class ChangerFinExerciceTest extends TestCase
         $magasin = $this->ouvrirUneSociete(['nom' => 'Lyon']);
 
         $this->assertThrows(fn () => $this->changer($magasin->societe, 12, '2026-12-31', '2026-10-15'), LogicException::class, ChangerFinExerciceAction::MESSAGE_MOIS);
-        $this->assertThrows(fn () => $this->changer($magasin->societe, 6, '2026-11-15', '2026-10-15'), LogicException::class, ChangerFinExerciceAction::MESSAGE_FIN_DE_MOIS);
+        $this->assertThrows(fn () => $this->changer($magasin->societe, 6, '2026-11-15', '2026-10-15'), LogicException::class, 'La fin d\'un exercice est le dernier jour d\'un mois. PILIQI n\'accepte qu\'un exercice raccourci, terminé le dernier jour d\'un mois.');
 
         $this->assertNothingChanged($magasin->societe);
     }
@@ -316,7 +377,7 @@ class ChangerFinExerciceTest extends TestCase
     {
         app(TenantContext::class)->clear();
 
-        return app(ChangerFinExerciceAction::class)->handle($societe->fresh(), $mois, $fin, $decision, self::EXPERT_COMPTABLE, $this->editeur());
+        return app(ChangerFinExerciceAction::class)->handle($societe->fresh(), $mois, $fin, $decision, OrganeDeLaDecision::AssembleeGeneraleExtraordinaire, self::EXPERT_COMPTABLE, null, $this->editeur());
     }
 
     private function editeur(): InterventionDeLEditeur

@@ -141,6 +141,13 @@ return [
         ],
 
         // Produit.
+        'produit.adresse-d-une-fiche-de-magasin-illisible' => [
+            'puce' => 'Produit',
+            'regle' => 'L\'adresse d\'une fiche de magasin de l\'espace de la société qui ne porte pas un identifiant lisible répond 404, jamais 500, sans interroger la base.',
+            'tests' => [
+                'tests/Feature/Societe/MagasinResourceTest.php::test_l_adresse_d_une_fiche_de_magasin_qui_ne_porte_pas_un_identifiant_repond_404',
+            ],
+        ],
         'produit.magasins-isoles' => [
             'puce' => 'Produit',
             'regle' => 'Dans une société, chaque magasin est strictement isolé : aucun client, produit, fournisseur, service, document, stock, caisse ni réglage local n\'est partagé ni mélangé entre magasins.',
@@ -760,6 +767,27 @@ return [
         ],
 
         // Société et établissements.
+        'societe.membre-d-un-assujetti-unique' => [
+            'puce' => 'Société et établissements',
+            'regle' => 'Une société membre d\'un assujetti unique (groupe TVA) le coche dans ses réglages fiscaux communs, changement inscrit au journal d\'audit et au journal des événements de chaque magasin : PILIQI refuse alors toute opération commerciale réelle, avec son message, que l\'« À faire » de chaque magasin réel répète, le magasin de démonstration restant utilisable ; la page d\'inscription le dit (P3.1).',
+            'tests' => [
+                'tests/Feature/Societe/AssujettiUniqueTest.php::test_la_case_s_inscrit_au_journal_d_audit_et_au_journal_des_evenements_de_chaque_magasin',
+                'tests/Feature/Societe/AssujettiUniqueTest.php::test_case_cochee_chaque_operation_commerciale_reelle_est_refusee',
+                'tests/Feature/Societe/AssujettiUniqueTest.php::test_case_decochee_la_vente_se_fait',
+                'tests/Feature/Societe/AssujettiUniqueTest.php::test_le_magasin_de_demonstration_reste_utilisable',
+                'tests/Feature/Societe/AssujettiUniqueTest.php::test_la_page_d_inscription_le_dit_sans_champ',
+                'tests/Feature/Societe/AssujettiUniqueTest.php::test_l_a_faire_du_magasin_dit_pourquoi_rien_ne_se_vend',
+                'tests/Browser/Parcours/AssujettiUniqueTest.php › le propriétaire déclare dans « Paramètres fiscaux » la société membre d’un assujetti unique, et le vendeur, à qui son « À faire » le dit, ne peut plus émettre sa facture',
+            ],
+        ],
+        'societe.immatriculation-lue-au-registre-national' => [
+            'puce' => 'Société et établissements',
+            'regle' => 'L\'immatriculation lue au registre national des entreprises est « {registre} {lieuRegistre} » quand les deux sont remplis, sinon le propriétaire la complète (T99).',
+            'tests' => [
+                'tests/Feature/Integrations/InpiRneTest.php::test_l_identite_d_une_societe_se_lit_dans_la_formalite',
+                'tests/Feature/Integrations/InpiRneTest.php::test_sans_le_lieu_du_registre_l_immatriculation_reste_nulle',
+            ],
+        ],
         'societe.magasins-crees-dans-l-espace-de-la-societe' => [
             'puce' => 'Société et établissements',
             'regle' => 'Une société s\'inscrit sans magasin ; ses magasins se créent dans son espace par le propriétaire ou un administrateur autorisé de tous les magasins, avec le SIREN de la société : on ne saisit que le NIC, et le SIRET, valide, actif et rattaché à ce SIREN au répertoire Sirene, n\'est jamais celui d\'un autre magasin.',
@@ -1045,6 +1073,14 @@ return [
         ],
 
         // Cabinets d'expertise comptable.
+        'cabinets.fiche-de-fournisseur-dans-un-magasin-ouvert' => [
+            'puce' => 'Cabinets d\'expertise comptable',
+            'regle' => 'Une fiche de fournisseur nomme qui l\'a créée et qui l\'a modifiée en dernier ; la base refuse qu\'un compte d\'un cabinet lié ou un expert-comptable de la société en écrive une dans un magasin que le client ne lui ouvre pas.',
+            'tests' => [
+                'tests/Feature/Cabinets/MagasinsOuvertsAuCabinetTest.php::test_la_base_refuse_une_fiche_de_fournisseur_ecrite_dans_un_magasin_non_choisi',
+                'tests/Feature/Cabinets/MagasinsOuvertsAuCabinetTest.php::test_chaque_table_ou_un_compte_agit_dans_un_magasin_porte_la_garde_des_magasins_ouverts',
+            ],
+        ],
         'cabinets.inscription-et-verification' => [
             'puce' => 'Cabinets d\'expertise comptable',
             'regle' => 'Un cabinet s\'inscrit et se valide comme toute société qui s\'inscrit elle-même, avec le code d\'activité 69.20Z contrôlé avant tout courrier, et son inscription au tableau de l\'Ordre vérifiée par l\'annuaire de l\'Ordre ou, à défaut, une fois par l\'éditeur ; son propriétaire arrive dans l\'espace du cabinet, sur sa liste d\'étapes.',
@@ -1329,6 +1365,16 @@ return [
         ],
 
         // Documents de vente.
+        'documents.note-de-calcul-a-moins-de-deux-centimes' => [
+            'puce' => 'Documents de vente',
+            'regle' => 'La note de calcul d\'un document qui montre le PU HT ne dit « à moins de deux centimes près » que si chaque ligne le vérifie ; sinon elle dit qu\'un écart de quelques centimes est possible (T105).',
+            'tests' => [
+                'tests/Feature/Facturation/MentionsFiscalesTest.php::test_la_note_ne_dit_moins_de_deux_centimes_que_si_chaque_ligne_le_verifie',
+                'tests/Feature/Facturation/MentionsFiscalesTest.php::test_le_dernier_avoir_d_une_ligne_rendue_en_trois_fois_retombe_a_moins_de_deux_centimes',
+                'tests/Feature/Facturation/FacturePdfGeneratorTest.php::test_au_dela_de_dix_mille_articles_la_note_de_calcul_dit_qu_un_petit_ecart_est_possible',
+                'tests/Unit/CalculateurLigneTest.php::test_le_pu_ht_retombe_sur_le_ht_de_la_ligne_a_moins_de_deux_centimes',
+            ],
+        ],
         'documents.client-fige-et-facture-immuable' => [
             'puce' => 'Documents de vente',
             'regle' => 'Le client (nom, adresse, identifiants) et son type sont figés à l\'émission ; une facture émise ne change plus jamais, ne se supprime pas et se corrige par un avoir.',
@@ -1608,6 +1654,18 @@ return [
                 'tests/Feature/Filament/AFaireDuMagasinTest.php::test_la_preuve_d_un_export_se_note_encore_apres_la_fermeture_du_magasin',
                 'tests/Feature/Facturation/PreuvesOperationTest.php::test_le_bouton_ajouter_une_preuve_est_reserve_a_qui_est_autorise_a_noter_les_preuves_d_une_vente_exoneree',
                 'tests/Feature/Facturation/FacturePolicyTest.php::test_justifier_une_vente_selon_le_role',
+            ],
+        ],
+        'hors-france.exoneration-non-prouvee' => [
+            'puce' => 'Ventes hors de France',
+            'regle' => 'Sans preuve de sortie 150 jours après la vente, un export ou une livraison vers un DOM se régularise d\'un seul geste d\'un compte autorisé à vendre (jamais le propriétaire hors du magasin de démonstration) : un avoir sans retour en stock et une facture à la TVA française au même prix TTC, que le crédit de l\'avoir règle ; la vente entre dans l\'« À faire » ce jour-là, en rouge.',
+            'tests' => [
+                'tests/Feature/Facturation/ExonerationNonProuveeTest.php::test_un_export_sans_preuve_au_150e_jour_se_regularise_a_la_tva_francaise_au_meme_prix_ttc',
+                'tests/Feature/Facturation/ExonerationNonProuveeTest.php::test_avant_le_150e_jour_la_regularisation_est_refusee',
+                'tests/Feature/Facturation/ExonerationNonProuveeTest.php::test_une_vente_dont_la_preuve_de_sortie_est_enregistree_ne_se_regularise_pas',
+                'tests/Feature/Facturation/ExonerationNonProuveeTest.php::test_le_proprietaire_ne_regularise_pas_hors_du_magasin_de_demonstration',
+                'tests/Feature/Facturation/ExonerationNonProuveeTest.php::test_une_demande_repetee_rend_la_meme_facture_sans_doublon',
+                'tests/Feature/Facturation/ExonerationNonProuveeTest.php::test_l_a_faire_et_la_liste_filtree_montrent_l_exoneration_non_prouvee',
             ],
         ],
         'hors-france.detaxe' => [
@@ -2058,14 +2116,16 @@ return [
         ],
         'caisse.fiche-de-la-cloture-et-apercu-de-l-e-reporting' => [
             'puce' => 'Caisse et clôtures',
-            'regle' => 'La fiche d\'une clôture ouvre chaque ticket et chaque avoir qu\'elle compte pour qui peut voir ce document ; une personne qui ne voit que ses ventes y voit les totaux du magasin et le détail de ses seuls documents ; la fiche montre en français l\'aperçu de ce que l\'e-reporting déclarera pour la journée, opérations non soumises à la TVA en France comprises.',
+            'regle' => 'La fiche d\'une clôture ouvre chaque ticket et chaque avoir qu\'elle compte pour qui peut voir ce document ; une personne qui ne voit que ses ventes y voit les totaux du magasin et le détail de ses seuls documents ; la fiche montre en français l\'aperçu de ce que l\'e-reporting déclarera pour la journée, opérations non soumises à la TVA en France comprises : une vente en franchise en base, comme une vente en France à 0 % hors franchise, s\'y range selon la nature de sa ligne, au taux 0 %, et un export ou une livraison vers un DOM à un particulier parmi les opérations non soumises à la TVA en France, au taux 0 %.',
             'tests' => [
                 'tests/Feature/Filament/ClotureCaisseResourceTest.php::test_les_numeros_des_tickets_et_des_avoirs_ouvrent_leur_fiche',
                 'tests/Feature/Filament/ClotureCaisseResourceTest.php::test_un_vendeur_qui_ne_voit_que_ses_ventes_ne_voit_dans_la_cloture_que_le_detail_de_ses_documents',
                 'tests/Feature/Filament/ClotureCaisseResourceTest.php::test_la_fiche_montre_l_apercu_de_l_e_reporting_en_francais',
                 'tests/Feature/Facturation/EReportingDesParticuliersTest.php::test_une_journee_donne_une_ligne_par_categorie_et_par_taux',
                 'tests/Feature/Facturation/EReportingDesParticuliersTest.php::test_l_apercu_egale_le_net_de_la_cloture',
-                'tests/Feature/Facturation/EReportingDesParticuliersTest.php::test_une_vente_sans_tva_francaise_se_range_dans_les_operations_non_soumises_en_attente_de_son_motif',
+                'tests/Feature/Facturation/EReportingDesParticuliersTest.php::test_une_vente_sans_tva_francaise_se_range_dans_les_operations_non_soumises_au_taux_zero',
+                'tests/Feature/Facturation/EReportingDesParticuliersTest.php::test_une_vente_en_franchise_en_base_se_range_par_la_nature_de_sa_ligne',
+                'tests/Feature/Facturation/EReportingDesParticuliersTest.php::test_une_vente_en_france_a_zero_pour_cent_se_range_par_la_nature_de_sa_ligne',
                 'tests/Feature/Facturation/EReportingDesParticuliersTest.php::test_une_journee_sans_operation_n_a_rien_a_declarer',
                 'tests/Feature/Facturation/EReportingDesParticuliersTest.php::test_l_apercu_ne_lit_que_les_documents_du_magasin_de_la_cloture',
             ],
@@ -2095,14 +2155,15 @@ return [
         ],
         'caisse.exercice-de-la-societe' => [
             'puce' => 'Caisse et clôtures',
-            'regle' => 'Le mois de fin d\'exercice, réglage de la société, est verrouillé dès la première vente de l\'un de ses magasins ; seul un changement légal sur procès-verbal le modifie ensuite, par la procédure de l\'éditeur, journalisée dans chaque magasin, avec une durée validée par l\'expert-comptable, sans toucher un exercice clos ni repousser une clôture obligatoire.',
+            'regle' => 'Le mois de fin d\'exercice, réglage de la société, est verrouillé dès la première vente de l\'un de ses magasins ; seul un changement légal sur procès-verbal le modifie ensuite, par la procédure de l\'éditeur, journalisée dans chaque magasin, avec l\'organe qui l\'a décidé, la date et la pièce de la décision, le nom d\'un expert-comptable consulté étant facultatif, sans toucher un exercice clos ni repousser une clôture obligatoire : seul un exercice raccourci, terminé le dernier jour d\'un mois, est accepté (T28.1, T28.2).',
             'tests' => [
                 'tests/Feature/Societe/ParametresFiscauxSocieteTest.php::test_le_mois_de_fin_d_exercice_se_verrouille_des_la_premiere_vente_d_un_magasin',
                 'tests/Feature/Editeur/ChangerFinExerciceTest.php::test_hors_procedure_le_mois_reste_verrouille_apres_la_premiere_vente',
                 'tests/Feature/Editeur/ChangerFinExerciceTest.php::test_le_changement_legal_s_inscrit_dans_chaque_magasin_avec_sa_piece',
                 'tests/Feature/Editeur/ChangerFinExerciceTest.php::test_une_fin_avant_la_derniere_cloture_d_exercice_est_refusee',
                 'tests/Feature/Editeur/ChangerFinExerciceTest.php::test_une_fin_qui_repousserait_la_cloture_est_refusee',
-                'tests/Feature/Editeur/ChangerFinExerciceTest.php::test_la_duree_doit_etre_validee_par_l_expert_comptable',
+                'tests/Feature/Editeur/ChangerFinExerciceTest.php::test_un_changement_sans_expert_comptable_consulte_est_accepte',
+                'tests/Feature/Editeur/ChangerFinExerciceTest.php::test_un_changement_sans_organe_de_la_decision_est_refuse',
             ],
         ],
         'caisse.fermeture-et-reouverture-du-magasin' => [
@@ -2179,14 +2240,35 @@ return [
         ],
         'pdp.e-reporting-et-encaissements-des-services' => [
             'puce' => 'Facture électronique (SUPER PDP)',
-            'regle' => 'Les ventes aux particuliers se déclarent par clôture journalière qui a des opérations ; l\'encaissement d\'une prestation de services se déclare à chaque paiement, à confirmer par l\'expert-comptable, une prestation réglée par un crédit d\'avoir comptant comme encaissée à la date où ce crédit est utilisé ; une vente à 0 % attend son motif.',
+            'regle' => 'Les ventes aux particuliers se déclarent par clôture journalière qui a des opérations ; les paiements de particuliers pour des services, sans option pour les débits, se déclarent par jour d\'encaissement, TTC par taux, seule la part des services d\'une vente mêlée, un paiement partiel réparti au prorata des TTC restant après les avoirs, en cumul, chaque part arrondie au centime le plus proche ; un crédit d\'avoir utilisé compte comme un paiement, l\'avoir d\'une prestation déjà payée se déduisant le jour où son crédit règle une autre vente ; une société qui a opté pour les débits n\'en déclare aucun ; dans l\'aperçu, une vente en franchise ou en France à 0 % se range selon la nature de sa ligne, au taux 0 %, et un export ou une livraison vers un DOM parmi les opérations non soumises à la TVA en France (décisions de Claude T1.1 à T1.4, T2.4, T2.5, T9.3, T107, T108, T112.1, D76).',
             'tests' => [
                 'tests/Feature/Facturation/EReportingDesParticuliersTest.php::test_une_journee_sans_operation_n_a_rien_a_declarer',
-                'tests/Feature/Facturation/EReportingDesParticuliersTest.php::test_l_encaissement_d_un_service_est_ventile_par_taux_et_marque_a_confirmer',
+                'tests/Feature/Facturation/EReportingDesParticuliersTest.php::test_l_encaissement_d_un_service_est_ventile_par_taux',
                 'tests/Feature/Facturation/EReportingDesParticuliersTest.php::test_un_service_regle_par_un_credit_d_avoir_compte_parmi_les_encaissements_a_la_date_de_son_utilisation',
                 'tests/Feature/Facturation/EReportingDesParticuliersTest.php::test_le_credit_d_un_avoir_impute_sur_le_ticket_qu_il_corrige_n_est_pas_un_encaissement',
                 'tests/Feature/Facturation/EReportingDesParticuliersTest.php::test_la_contre_passation_d_un_paiement_de_service_se_deduit_a_sa_date',
-                'tests/Feature/Facturation/EReportingDesParticuliersTest.php::test_une_vente_en_france_a_zero_pour_cent_se_range_dans_les_operations_non_soumises_categorie_a_verifier',
+                'tests/Feature/Facturation/EReportingDesParticuliersTest.php::test_un_reglement_partiel_d_un_ticket_mixte_se_repartit_au_prorata',
+                'tests/Feature/Facturation/EReportingDesParticuliersTest.php::test_un_acompte_se_repartit_entre_les_taux_de_services_au_prorata',
+                'tests/Feature/Facturation/EReportingDesParticuliersTest.php::test_des_paiements_successifs_se_repartissent_sur_l_encaisse_cumule',
+                'tests/Feature/Facturation/EReportingDesParticuliersTest.php::test_un_acompte_se_repartit_sur_le_ttc_restant_apres_un_avoir',
+                'tests/Feature/Facturation/EReportingDesParticuliersTest.php::test_un_credit_d_avoir_utilise_se_repartit_comme_un_paiement',
+                'tests/Feature/Facturation/EReportingDesParticuliersTest.php::test_la_contre_passation_d_un_acompte_reparti_se_deduit_des_memes_parts',
+                'tests/Feature/Facturation/EReportingDesParticuliersTest.php::test_l_avoir_d_une_prestation_deja_encaissee_se_deduit_a_l_utilisation_de_son_credit',
+                'tests/Feature/Facturation/EReportingDesParticuliersTest.php::test_le_credit_jamais_utilise_d_une_prestation_annulee_ne_deduit_rien',
+                'tests/Feature/Facturation/EReportingDesParticuliersTest.php::test_une_societe_qui_a_opte_pour_les_debits_ne_declare_aucun_encaissement_de_services',
+                'tests/Feature/Facturation/EReportingDesParticuliersTest.php::test_une_vente_sans_tva_francaise_se_range_dans_les_operations_non_soumises_au_taux_zero',
+                'tests/Feature/Facturation/EReportingDesParticuliersTest.php::test_une_vente_en_franchise_en_base_se_range_par_la_nature_de_sa_ligne',
+                'tests/Feature/Facturation/EReportingDesParticuliersTest.php::test_une_vente_en_france_a_zero_pour_cent_se_range_par_la_nature_de_sa_ligne',
+                'tests/Unit/CalculateurLigneTest.php::test_un_montant_se_repartit_au_prorata_en_cumul',
+            ],
+        ],
+
+        // Règles légales et réglementaires.
+        'regles-legales.decisions-de-claude-appliquees' => [
+            'puce' => 'Règles légales et réglementaires',
+            'regle' => 'Chaque point légal ou réglementaire reçoit une décision de Claude, appliquée sans attendre : aucun code, écran, mention ni règle n\'attend l\'avis d\'un expert-comptable ou d\'un professionnel (D76).',
+            'tests' => [
+                'tests/Feature/OutillageTest.php::test_aucun_texte_n_attend_l_avis_d_un_professionnel',
             ],
         ],
 
@@ -2313,8 +2395,8 @@ return [
         ],
 
         // Hors de CLAUDE.md : décisions de la conversation appliquées dans le code, que CLAUDE.md n'écrit pas encore (historique/DIRECTIVES.md, § 2.2, et réponses du 26/10/2026 sur deux règles d'écran) ; leur texte est proposé à l'éditeur.
-        'hors.aucun-ecran-de-magasin-ne-devine-les-autres' => [
-            'puce' => 'Hors de CLAUDE.md',
+        'produit.aucun-ecran-de-magasin-ne-devine-les-autres' => [
+            'puce' => 'Produit',
             'regle' => 'Aucun écran ni aucun message du panneau d\'un magasin ne laisse deviner qu\'il existe d\'autres magasins de la même société, ni d\'autres sociétés : ni nom, ni nombre, ni identifiant, ni refus qui révélerait qu\'une donnée appartient à un autre magasin ou à une autre société (réponse 2 du 26/10/2026).',
             'tests' => [
                 'tests/Feature/Tenancy/IsolationDesSocietesTest.php::test_l_url_d_un_enregistrement_d_un_autre_magasin_de_la_societe_repond_404_meme_pour_un_compte_autorise_dans_les_deux',
@@ -2329,8 +2411,8 @@ return [
                 'tests/Browser/IsolationTest.php › le propriétaire d’une société qui tape l’adresse d’une facture ou de l’espace d’une autre société reçoit la page introuvable',
             ],
         ],
-        'hors.erreurs-metier-en-alertes-claires' => [
-            'puce' => 'Hors de CLAUDE.md',
+        'ecrans.erreurs-metier-en-alertes-claires' => [
+            'puce' => 'Écrans',
             'regle' => 'Une erreur métier s\'affiche partout en alerte claire, en français, qui dit pourquoi le geste n\'a pas été accepté, jamais en erreur technique (trace, requête, page d\'erreur par défaut) (DIRECTIVES § 2.2, point 2).',
             'tests' => [
                 'tests/Feature/Facturation/DocumentIntrouvableTest.php::test_un_geste_sur_un_brouillon_supprime_entre_temps_le_dit_sans_rien_ecrire',
@@ -2343,8 +2425,8 @@ return [
                 'tests/Browser/Balayage/BalayageDeLEspaceDeLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action de l’espace de sa société sans erreur',
             ],
         ],
-        'hors.champ-en-cours-de-frappe' => [
-            'puce' => 'Hors de CLAUDE.md',
+        'ecrans.champ-en-cours-de-frappe' => [
+            'puce' => 'Écrans',
             'regle' => 'Le champ en cours de frappe n\'est jamais modifié ; les autres champs se calculent en direct (DIRECTIVES § 2.2, point 3).',
             'tests' => [
                 'tests/Feature/Filament/FactureResourceTest.php::test_les_champs_calcules_en_direct_ne_sont_jamais_reecrits_pendant_la_frappe',
@@ -2353,8 +2435,8 @@ return [
                 'tests/Feature/Filament/UnProduitUneLigneTest.php::test_un_ajout_pendant_la_frappe_d_une_quantite_ne_cree_pas_de_seconde_ligne',
             ],
         ],
-        'hors.retour-a-la-page-parente' => [
-            'puce' => 'Hors de CLAUDE.md',
+        'ecrans.retour-a-la-page-parente' => [
+            'puce' => 'Écrans',
             'regle' => 'Après chaque enregistrement d\'une page de création ou de modification, retour à sa page parente, la liste de sa ressource (DIRECTIVES § 2.2, point 4, et D34).',
             'tests' => [
                 'tests/Unit/RetourALaListeTest.php::test_chaque_page_de_creation_ou_de_modification_revient_a_la_liste_de_sa_ressource',
@@ -2366,8 +2448,8 @@ return [
                 'tests/Feature/Societe/MagasinResourceTest.php::test_enregistrer_la_page_d_un_magasin_revient_a_la_liste_des_magasins',
             ],
         ],
-        'hors.facture-brouillon-numerotee-a-l-emission' => [
-            'puce' => 'Hors de CLAUDE.md',
+        'documents.facture-brouillon-numerotee-a-l-emission' => [
+            'puce' => 'Documents de vente',
             'regle' => 'Une facture brouillon n\'a pas de numéro définitif : elle est numérotée à son émission ; un brouillon se modifie et se supprime en entier, lignes comprises, d\'un seul geste ; une facture émise ne se supprime jamais (DIRECTIVES § 2.2, point 6).',
             'tests' => [
                 'tests/Feature/Facturation/CreerFactureActionTest.php::test_une_facture_est_creee_en_brouillon_avec_ses_lignes_et_ses_totaux',
@@ -2377,8 +2459,8 @@ return [
                 'tests/Feature/Facturation/FactureNeSePasSupprimeTest.php::test_meme_le_proprietaire_ne_peut_pas_supprimer_une_facture_emise',
             ],
         ],
-        'hors.reference-produit-automatique' => [
-            'puce' => 'Hors de CLAUDE.md',
+        'fiches.reference-produit-automatique' => [
+            'puce' => 'Clients, produits, fournisseurs',
             'regle' => 'La référence d\'un produit est facultative : quand elle manque, y compris pour un produit reçu par l\'API, elle se génère comme une séquence du magasin, sans code de magasin ni année, en sautant un numéro déjà pris (DIRECTIVES § 2.2, point 7).',
             'tests' => [
                 'tests/Feature/Catalogue/ProduitTest.php::test_une_reference_vide_est_generee_automatiquement',
@@ -2388,16 +2470,16 @@ return [
                 'tests/Feature/Facturation/DocumentNumberingServiceTest.php::test_une_reference_de_produit_ne_porte_ni_code_de_magasin_ni_annee',
             ],
         ],
-        'hors.deux-numeros-d-une-facture-d-achat' => [
-            'puce' => 'Hors de CLAUDE.md',
+        'achats.deux-numeros-d-une-facture-d-achat' => [
+            'puce' => 'Achats et stock',
             'regle' => 'Une facture d\'achat porte deux numéros : celui de la séquence du magasin, donné à sa validation, et le numéro d\'origine du fournisseur, facultatif (DIRECTIVES § 2.2, point 8).',
             'tests' => [
                 'tests/Feature/Filament/FactureAchatResourceTest.php::test_creer_une_facture_dachat_depuis_le_panneau',
                 'tests/Feature/Achats/FactureAchatActionsTest.php::test_valider_une_facture_dachat_lui_attribue_un_numero_et_incremente_le_stock',
             ],
         ],
-        'hors.quantites-sans-decimales' => [
-            'puce' => 'Hors de CLAUDE.md',
+        'ecrans.quantites-sans-decimales' => [
+            'puce' => 'Écrans',
             'regle' => 'Les quantités s\'affichent sans décimales (« 2 », jamais « 2.000 ») et ne se saisissent qu\'entières (DIRECTIVES § 2.2, point 9).',
             'tests' => [
                 'tests/Feature/Filament/FactureResourceTest.php::test_quantites_et_taux_saffichent_sans_zeros_inutiles_partout',
@@ -2405,8 +2487,8 @@ return [
                 'tests/Unit/QuantiteEntiereTest.php::test_une_quantite_non_entiere_ou_inferieure_a_1_est_refusee',
             ],
         ],
-        'hors.achat-recu-par-l-api' => [
-            'puce' => 'Hors de CLAUDE.md',
+        'achats.achat-recu-par-l-api' => [
+            'puce' => 'Achats et stock',
             'regle' => 'Une facture d\'achat reçue automatiquement (API, puis SUPER PDP) ne se modifie jamais ; un produit qui en vient garde ce que son fournisseur en dit (référence, code-barres, nom, taille, couleur), son prix de vente, sa TVA et son suivi du stock restant modifiables (DIRECTIVES § 2.2, point 10).',
             'tests' => [
                 'tests/Feature/Achats/FactureAchatActionsTest.php::test_une_facture_dachat_recuperee_par_api_nest_jamais_modifiable',
@@ -2417,8 +2499,8 @@ return [
                 'tests/Feature/Filament/FactureAchatResourceTest.php::test_la_fiche_dun_produit_recu_par_api_ne_se_corrige_pas_depuis_une_ligne',
             ],
         ],
-        'hors.code-barres-scanne' => [
-            'puce' => 'Hors de CLAUDE.md',
+        'fiches.code-barres-scanne' => [
+            'puce' => 'Clients, produits, fournisseurs',
             'regle' => 'Un produit se cherche aussi par son code-barres scanné, à la caisse comme dans les formulaires de vente (DIRECTIVES § 2.2, point 11).',
             'tests' => [
                 'tests/Feature/Filament/CaisseTest.php::test_scanner_un_code_barres_ajoute_le_produit_sans_ouvrir_le_tableau',
@@ -2427,8 +2509,8 @@ return [
                 'tests/Feature/Filament/SelecteurDeProduitsTest.php::test_la_recherche_trouve_par_nom_reference_et_code_barres_sans_accents',
             ],
         ],
-        'hors.client-cree-depuis-la-vente' => [
-            'puce' => 'Hors de CLAUDE.md',
+        'fiches.client-cree-depuis-la-vente' => [
+            'puce' => 'Clients, produits, fournisseurs',
             'regle' => 'Toute l\'équipe qui en a le droit crée un client depuis la vente (caisse, facture, devis), dans une fenêtre, sans quitter la vente (DIRECTIVES § 2.2, point 12).',
             'tests' => [
                 'tests/Feature/Filament/CaisseTest.php::test_creer_un_nouveau_client_a_la_volee_depuis_la_caisse',
@@ -2438,8 +2520,8 @@ return [
             ],
         ],
 
-        'hors.numeros-de-documents-cliquables' => [
-            'puce' => 'Hors de CLAUDE.md',
+        'ecrans.numeros-de-documents-cliquables' => [
+            'puce' => 'Écrans',
             'regle' => 'Tout numéro de document affiché (avoir, ticket ou facture crédité ou réglé, clôture, facture d\'achat, avoir fournisseur, rectificative) ouvre sa fiche d\'un clic pour qui peut voir ce document ; les autres en lisent le numéro, sans lien (DIRECTIVES D38, constat C2 du 02/11/2026).',
             'tests' => [
                 'tests/Feature/Filament/LiensVersLesDocumentsTest.php::test_sur_la_fiche_de_l_avoir_chaque_document_est_un_lien_pour_qui_peut_le_voir',
@@ -2456,8 +2538,8 @@ return [
                 'tests/Browser/Parcours/RangeesChoisiesTest.php › chaque texte d’une rangée choisie se lit, stock épuisé et « À régulariser » compris ; le service coché aussi, pas les autorisations',
             ],
         ],
-        'hors.aucun-site-tiers' => [
-            'puce' => 'Hors de CLAUDE.md',
+        'ecrans.aucun-site-tiers' => [
+            'puce' => 'Écrans',
             'regle' => 'Aucune page de PILIQI ne charge rien d\'un autre site : la police est servie par PILIQI et les initiales du compte sont dessinées par le serveur (Q-TIERS du 03/11/2026).',
             'tests' => [
                 'tests/Browser/AucunSiteTiersTest.php › les pages publiques ne chargent rien d’un autre site',
@@ -2465,8 +2547,8 @@ return [
                 'tests/Feature/Filament/RessourcesServiesParPiliqiTest.php::test_chaque_panneau_charge_la_police_servie_par_piliqi',
             ],
         ],
-        'hors.envoi-des-e-mails' => [
-            'puce' => 'Hors de CLAUDE.md',
+        'emails.envoi-des-e-mails' => [
+            'puce' => 'E-mails',
             'regle' => 'Les e-mails partent par le service d\'essai choisi par l\'éditeur (Mailtrap) ou par le serveur SMTP réglé dans .env ; un envoi raté repart aussitôt, puis 30 secondes et 2 minutes plus tard, chaque cause se dit en clair et l\'expéditeur est prévenu de l\'échec (lot ML, réponses du 01/11 et du 02/11/2026).',
             'tests' => [
                 'tests/Feature/Integrations/TransportMailtrapTest.php::test_le_message_part_a_la_boite_de_test_avec_ses_adresses_son_contenu_et_sa_piece_jointe',
@@ -3692,7 +3774,7 @@ return [
             ],
             '2' => [
                 'decision' => 'Aucun écran ni aucun message du panneau d\'un magasin ne laisse deviner qu\'il existe d\'autres magasins de la même société ni d\'autres sociétés : « Oui, elle tient ».',
-                'regles' => ['hors.aucun-ecran-de-magasin-ne-devine-les-autres'],
+                'regles' => ['produit.aucun-ecran-de-magasin-ne-devine-les-autres'],
             ],
         ],
         'Client comptoir et ticket transformé en facture, réponses du 01/11/2026 (decisions/client-comptoir-01-11.md)' => [
@@ -3712,19 +3794,19 @@ return [
         'Décisions de la conversation absentes de tout fichier de décision et de CLAUDE.md (historique/DIRECTIVES.md, § 2.2)' => [
             '1' => [
                 'decision' => 'Messages à l\'utilisateur sans le mot « magasin », et aucun message ne laisse deviner d\'autres magasins ou sociétés (messages 19 et 20) ; tranché le 26/10/2026 : première règle abandonnée, seconde maintenue.',
-                'regles' => ['hors.aucun-ecran-de-magasin-ne-devine-les-autres'],
+                'regles' => ['produit.aucun-ecran-de-magasin-ne-devine-les-autres'],
             ],
             '2' => [
                 'decision' => 'Erreurs métier affichées en alertes claires, jamais en erreur technique, partout (message 67).',
-                'regles' => ['hors.erreurs-metier-en-alertes-claires'],
+                'regles' => ['ecrans.erreurs-metier-en-alertes-claires'],
             ],
             '3' => [
                 'decision' => 'Le champ en cours de frappe n\'est jamais modifié ; les autres champs se calculent en direct (messages 58 et 87).',
-                'regles' => ['hors.champ-en-cours-de-frappe'],
+                'regles' => ['ecrans.champ-en-cours-de-frappe'],
             ],
             '4' => [
                 'decision' => 'Après chaque enregistrement, retour à la page parente (messages 71 et 110).',
-                'regles' => ['hors.retour-a-la-page-parente'],
+                'regles' => ['ecrans.retour-a-la-page-parente'],
             ],
             '5' => [
                 'decision' => 'Échéance préremplie à la date du jour, et aucune date passée dans les champs de date concernés (messages 72 et 75).',
@@ -3733,31 +3815,31 @@ return [
             ],
             '6' => [
                 'decision' => 'Facture brouillon sans numéro définitif, numérotée à la validation ; brouillon modifiable et supprimable en entier d\'un seul geste (messages 14 et 19).',
-                'regles' => ['hors.facture-brouillon-numerotee-a-l-emission'],
+                'regles' => ['documents.facture-brouillon-numerotee-a-l-emission'],
             ],
             '7' => [
                 'decision' => 'Référence produit facultative, générée automatiquement comme une séquence quand elle manque, y compris pour un produit reçu par l\'API (message 55).',
-                'regles' => ['hors.reference-produit-automatique'],
+                'regles' => ['fiches.reference-produit-automatique'],
             ],
             '8' => [
                 'decision' => 'Deux numéros pour chaque facture d\'achat : celui de la séquence du logiciel et celui d\'origine du fournisseur (message 55).',
-                'regles' => ['hors.deux-numeros-d-une-facture-d-achat'],
+                'regles' => ['achats.deux-numeros-d-une-facture-d-achat'],
             ],
             '9' => [
                 'decision' => 'Quantités affichées sans décimales (« 2 », jamais « 2.000 ») (message 98).',
-                'regles' => ['hors.quantites-sans-decimales'],
+                'regles' => ['ecrans.quantites-sans-decimales'],
             ],
             '10' => [
                 'decision' => 'Une facture d\'achat récupérée automatiquement ne se modifie jamais ; un produit qui en vient garde ce que son fournisseur en dit, son prix de vente, sa TVA et son suivi du stock restant modifiables (messages 20, 110 et 112).',
-                'regles' => ['hors.achat-recu-par-l-api'],
+                'regles' => ['achats.achat-recu-par-l-api'],
             ],
             '11' => [
                 'decision' => 'Un produit se cherche aussi par son code-barres scanné (message 18).',
-                'regles' => ['hors.code-barres-scanne'],
+                'regles' => ['fiches.code-barres-scanne'],
             ],
             '12' => [
                 'decision' => 'Toute l\'équipe qui en a le droit crée un client depuis la vente, dans une fenêtre (message 15).',
-                'regles' => ['hors.client-cree-depuis-la-vente'],
+                'regles' => ['fiches.client-cree-depuis-la-vente'],
             ],
         ],
         'Directives permanentes de l\'éditeur sur la façon de travailler (historique/DIRECTIVES.md, § 1, et ses entrées datées du 12/11/2026)' => [
@@ -3875,7 +3957,7 @@ return [
             ],
             'D29' => [
                 'decision' => 'Chaque magasin doit croire qu\'il a son propre logiciel ; tranché le 26/10/2026 : un message peut dire « ce magasin », mais aucun écran ne laisse deviner d\'autres magasins ou sociétés.',
-                'regles' => ['hors.aucun-ecran-de-magasin-ne-devine-les-autres'],
+                'regles' => ['produit.aucun-ecran-de-magasin-ne-devine-les-autres'],
             ],
             'D30' => [
                 'decision' => 'Les principes de sécurité du prompt maître (accès explicite et audité de l\'éditeur, secrets hors du dépôt, conservation et RGPD, cache et jobs) guident chaque lot et chaque relecture de sécurité.',
@@ -3887,15 +3969,15 @@ return [
             ],
             'D32' => [
                 'decision' => 'Jamais d\'erreur technique à l\'écran : une alerte claire.',
-                'regles' => ['hors.erreurs-metier-en-alertes-claires'],
+                'regles' => ['ecrans.erreurs-metier-en-alertes-claires'],
             ],
             'D33' => [
                 'decision' => 'Ne jamais changer ce que la personne tape ; calculer en direct les champs voisins.',
-                'regles' => ['hors.champ-en-cours-de-frappe'],
+                'regles' => ['ecrans.champ-en-cours-de-frappe'],
             ],
             'D34' => [
                 'decision' => 'Après un enregistrement, retour à la page parente.',
-                'regles' => ['hors.retour-a-la-page-parente'],
+                'regles' => ['ecrans.retour-a-la-page-parente'],
             ],
             'D35' => [
                 'decision' => 'Cases à cocher plutôt que menus déroulants quand c\'est plus rapide.',
@@ -3903,7 +3985,7 @@ return [
             ],
             'D36' => [
                 'decision' => 'Des écrans compacts, des nombres propres, des libellés exacts : quantités entières sans décimales, prix unitaires affichés au centime.',
-                'regles' => ['hors.quantites-sans-decimales', 'prix.pu-ht-a-six-decimales'],
+                'regles' => ['ecrans.quantites-sans-decimales', 'prix.pu-ht-a-six-decimales'],
             ],
             'D37' => [
                 'decision' => 'Les dates proposées et les dates interdites : la clôture sans choix de date ; l\'échéance préremplie à la date du jour ; aucune date passée dans les champs de date concernés.',
@@ -3917,7 +3999,7 @@ return [
             ],
             'D39' => [
                 'decision' => 'Créer sur place ce qui manque, chercher vite.',
-                'regles' => ['hors.client-cree-depuis-la-vente', 'fiches.recherches-sans-casse-ni-accents'],
+                'regles' => ['fiches.client-cree-depuis-la-vente', 'fiches.recherches-sans-casse-ni-accents'],
             ],
             'D40' => [
                 'decision' => 'Avertir avant un geste irréversible.',
@@ -3988,7 +4070,7 @@ return [
                 'a_venir' => 'Étape 15 (lots TY3, PS1 et PS2), reportée par D63.',
             ],
             'D57' => [
-                'decision' => 'Note « Ce qui reste à trancher » : tout point à trancher ou à faire confirmer vit dans le document de l\'éditeur.',
+                'decision' => 'Note « Ce qui reste à trancher » : tout point à trancher ou à soumettre vit dans le document de l\'éditeur.',
                 'hors_logiciel' => 'Tenue du document de l\'éditeur.',
             ],
             'D58' => [
@@ -4077,7 +4159,7 @@ return [
             ],
             'D76' => [
                 'decision' => 'Le 12/11/2026 vers 20 h 45 UTC : jamais attendre l\'avis du comptable ; chaque point de lois reçoit une décision de Claude, que PILIQI applique sans attendre ; une réponse du professionnel, même après la mise en production, prime ; Claude entretient le logiciel pour toujours ; remplace D75.',
-                'a_venir' => 'Lot PRO, après la chaîne en cours : plus aucune ligne, aucun écran ni aucune règle de CLAUDE.md ne dit « en attente de l\'avis de l\'expert-comptable ».',
+                'regles' => ['regles-legales.decisions-de-claude-appliquees', 'pdp.e-reporting-et-encaissements-des-services', 'caisse.fiche-de-la-cloture-et-apercu-de-l-e-reporting', 'hors-france.exoneration-non-prouvee'],
             ],
             'ONGLET-12-11' => [
                 'decision' => 'Le 12/11/2026 vers 22 h 45 UTC : onglet « À faire de votre côté (PC et mise en ligne) » du document de l\'éditeur.',
@@ -4091,7 +4173,7 @@ return [
         'Décisions métier tranchées dans la conversation (historique/DIRECTIVES.md, § 2.1)' => [
             '2.1-001' => [
                 'decision' => 'Message 3, 4 (02/10) : Factures émises et reçues par l\'API SUPER PDP ; achats et retours fournisseur récupérés automatiquement, stock mis à jour',
-                'regles' => ['pdp.transmission-par-la-passerelle', 'hors.achat-recu-par-l-api'],
+                'regles' => ['pdp.transmission-par-la-passerelle', 'achats.achat-recu-par-l-api'],
             ],
             '2.1-002' => [
                 'decision' => 'Message 5 (02/10) : Mandat accepté d\'un clic sur le site',
@@ -4119,15 +4201,15 @@ return [
             ],
             '2.1-008' => [
                 'decision' => 'Message 14 (03/10) : Facture brouillon sans numéro définitif ; numéro à la validation ; plus de suppression ensuite',
-                'regles' => ['hors.facture-brouillon-numerotee-a-l-emission'],
+                'regles' => ['documents.facture-brouillon-numerotee-a-l-emission'],
             ],
             '2.1-009' => [
                 'decision' => 'Message 15 (03/10) : Aucune modification ni suppression d\'une facture',
-                'regles' => ['documents.client-fige-et-facture-immuable', 'hors.facture-brouillon-numerotee-a-l-emission'],
+                'regles' => ['documents.client-fige-et-facture-immuable', 'documents.facture-brouillon-numerotee-a-l-emission'],
             ],
             '2.1-010' => [
                 'decision' => 'Message 15 (03/10) : Clients visibles par toute l\'équipe ; création d\'un client depuis la facture, dans une fenêtre',
-                'regles' => ['hors.client-cree-depuis-la-vente'],
+                'regles' => ['fiches.client-cree-depuis-la-vente'],
             ],
             '2.1-011' => [
                 'decision' => 'Message 15 (03/10) : Valeur du stock et TVA du stock visibles du propriétaire et de qui il autorise',
@@ -4143,7 +4225,7 @@ return [
             ],
             '2.1-014' => [
                 'decision' => 'Message 18 (03/10) : Recherche d\'un produit par lecture du code-barres',
-                'regles' => ['hors.code-barres-scanne'],
+                'regles' => ['fiches.code-barres-scanne'],
             ],
             '2.1-015' => [
                 'decision' => 'Message 19 (03/10) : Avoir fournisseur sans toucher la facture d\'achat, lié à sa facture',
@@ -4155,7 +4237,7 @@ return [
             ],
             '2.1-017' => [
                 'decision' => 'Message 19 (03/10) : Brouillon modifiable, et supprimable en entier d\'un geste',
-                'regles' => ['hors.facture-brouillon-numerotee-a-l-emission'],
+                'regles' => ['documents.facture-brouillon-numerotee-a-l-emission'],
             ],
             '2.1-018' => [
                 'decision' => 'Message 19 (03/10) : Clôtures de caisse visibles par le vendeur, le propriétaire et les autorisés',
@@ -4183,7 +4265,7 @@ return [
             ],
             '2.1-024' => [
                 'decision' => 'Message 20 (04/10) : Facture d\'achat modifiable si saisie à la main, pas si reçue par API ; avoirs non modifiables',
-                'regles' => ['hors.achat-recu-par-l-api'],
+                'regles' => ['achats.achat-recu-par-l-api'],
             ],
             '2.1-025' => [
                 'decision' => 'Message 39 (04/10) : Clôture du jour sans choix de date',
@@ -4199,11 +4281,11 @@ return [
             ],
             '2.1-028' => [
                 'decision' => 'Message 55 (04/10) : Référence produit facultative, sinon générée comme un numéro de séquence',
-                'regles' => ['hors.reference-produit-automatique'],
+                'regles' => ['fiches.reference-produit-automatique'],
             ],
             '2.1-029' => [
                 'decision' => 'Message 55 (04/10) : Une facture d\'achat porte deux numéros : celui du logiciel et celui du fournisseur',
-                'regles' => ['hors.deux-numeros-d-une-facture-d-achat'],
+                'regles' => ['achats.deux-numeros-d-une-facture-d-achat'],
             ],
             '2.1-030' => [
                 'decision' => 'Message 56 (04/10) : Calcul en centimes entiers',
@@ -4243,7 +4325,7 @@ return [
             ],
             '2.1-039' => [
                 'decision' => 'Message 98, 99 (06/10) : Quantités en nombres entiers',
-                'regles' => ['hors.quantites-sans-decimales'],
+                'regles' => ['ecrans.quantites-sans-decimales'],
             ],
             '2.1-040' => [
                 'decision' => 'Message 106, 109 (07/10) : Bouton « Ajouter un service », prix TTC saisi ; un produit est un bien, un service est un service',
@@ -4371,11 +4453,11 @@ return [
             ],
             '2.1-071' => [
                 'decision' => 'Message 327 (01/11) : « je veut utilier le https://mailtrap.io pour les email […] tu peux faire quelque testes mais pas à chaque fois »',
-                'regles' => ['hors.envoi-des-e-mails'],
+                'regles' => ['emails.envoi-des-e-mails'],
             ],
             '2.1-072' => [
                 'decision' => 'Message 01/11 vers 16 h 15 UTC (01/11) : Capture de php artisan queue:listen coupé au bout de 60 s (ProcessTimedOutException) sur son PC, .env réglé sur Mailtrap',
-                'regles' => ['hors.envoi-des-e-mails'],
+                'regles' => ['emails.envoi-des-e-mails'],
             ],
             '2.1-073' => [
                 'decision' => 'Message 01/11 vers 17 h 20 UTC (01/11) : Deux captures : SIREN d\'un vrai cabinet refusé en local (« n\'est pas 69.20Z ») ; « Créer votre premier magasin » reste affiché après le premier magasin, « laisser un texte par défaut comme "Ajouter un magasin" ou écrire par deuxième, troisième »',
@@ -4443,7 +4525,7 @@ return [
             ],
             '2.1-089' => [
                 'decision' => 'Message 02/11 vers 01 h 05 UTC (02/11) : Capture « Envoyer par e-mail : Ticket de caisse TK-PARIS-2026-000001 » : « tous les envois des mails ils s\'envoient pas, comme ex une facture ou ticket ou devis donc rien ne s\'envoie »',
-                'regles' => ['hors.envoi-des-e-mails'],
+                'regles' => ['emails.envoi-des-e-mails'],
             ],
             '2.1-090' => [
                 'decision' => 'Message 02/11 vers 01 h 40 UTC (02/11) : « je vois que le vendeur ne vois pas ce qui reste à payer ou Factures à encaisser » ; « si je coche « Factures : voir celles de toute l\'équipe » alors il voit tous les factures des autres et je veux pas comme ca. donc par defaut il faut que chacun voit tout les siennes »',
@@ -4455,15 +4537,15 @@ return [
             ],
             '2.1-092' => [
                 'decision' => 'Message 02/11 vers 01 h 55 UTC (02/11) : Capture de la fiche d\'un avoir : « il faut que les factures sur Crédit appliqué soit cliquable pour aller voir la facture ou ticket comme les avoirs »',
-                'regles' => ['hors.numeros-de-documents-cliquables'],
+                'regles' => ['ecrans.numeros-de-documents-cliquables'],
             ],
             '2.1-093' => [
                 'decision' => 'Message 02/11 vers 02 h 30 UTC (02/11) : (suite du constat des e-mails) envoi réussi avec QUEUE_CONNECTION=sync, PDF trouvé',
-                'regles' => ['hors.envoi-des-e-mails'],
+                'regles' => ['emails.envoi-des-e-mails'],
             ],
             '2.1-094' => [
                 'decision' => 'Message 02/11 vers 07 h 55 UTC (02/11) : « Fais comme tu proposes - recommandé » (rythme des nouvelles tentatives d\'un envoi d\'e-mail raté : option b, 0, +30 s, +2 min)',
-                'regles' => ['hors.envoi-des-e-mails'],
+                'regles' => ['emails.envoi-des-e-mails'],
             ],
             '2.1-095' => [
                 'decision' => 'Message 02/11 vers 08 h 55 UTC (02/11) : Devis acceptés ou refusés par le client en ligne, puis payés à distance (carte, Apple Pay, Google Pay, Pay by Bank, PayPal) ; « oui » pour le lien Accepter / Refuser plus tôt, « si tu peux faire hyper sécurisé »',
@@ -4499,7 +4581,7 @@ return [
             ],
             '2.1-103' => [
                 'decision' => 'Message 03/11 vers 00 h 15 UTC (03/11) : Q-TIERS (police et initiales chargées par Filament depuis des sites tiers) : « oui recommandé »',
-                'regles' => ['hors.aucun-site-tiers'],
+                'regles' => ['ecrans.aucun-site-tiers'],
             ],
             '2.1-104' => [
                 'decision' => 'Message 03/11 vers 00 h 50 UTC (03/11) : Q-MAJ (failles aussitôt, mises à jour régulières à chaque relance de la campagne et avant la production, versions majeures sur décision) : « oui »',
@@ -4608,7 +4690,7 @@ return [
             ],
             '2.1-130' => [
                 'decision' => 'Message 11/11 vers 00 h 10 UTC (11/11) : « oui » (écrit dans la colonne « Votre réponse » de T43)',
-                'regles' => ['hors.numeros-de-documents-cliquables', 'hors.rangees-choisies-lisibles'],
+                'regles' => ['ecrans.numeros-de-documents-cliquables', 'hors.rangees-choisies-lisibles'],
             ],
             '2.1-131' => [
                 'decision' => 'Message 10/11 à 23 h 59 UTC (10/11) : « voila comme ca tu ajoute toujour dans cette endroit »',

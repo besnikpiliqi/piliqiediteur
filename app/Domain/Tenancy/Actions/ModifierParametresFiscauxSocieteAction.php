@@ -22,9 +22,11 @@ use LogicException;
  * magasins, un seul assujetti : son régime de TVA (dont dépendent la
  * cadence à laquelle la plateforme agréée transmet son e-reporting, et la
  * franchise en base de ses ventes), l'option pour le paiement de la taxe
- * d'après les débits, et le mois de fin de son exercice (décembre par
+ * d'après les débits, le mois de fin de son exercice (décembre par
  * défaut), verrouillé dès la première vente de l'un de ses magasins (voir
- * Societe::aVenduUneFois()).
+ * Societe::aVenduUneFois()), et sa qualité de membre d'un assujetti unique
+ * (groupe TVA, art. 256 C du CGI), qui arrête toute opération commerciale
+ * réelle de ses magasins (voir Magasin::refusDeVente(), décision P3.1).
  *
  * Réservé à qui règle les paramètres de la société (voir SocietePolicy),
  * jamais dans un cabinet d'expertise comptable, qui ne règle que son
@@ -43,7 +45,7 @@ use LogicException;
  */
 class ModifierParametresFiscauxSocieteAction
 {
-    public const CHAMPS = ['regime_tva', 'option_debits_tva', 'mois_fin_exercice'];
+    public const CHAMPS = ['regime_tva', 'option_debits_tva', 'mois_fin_exercice', 'membre_assujetti_unique'];
 
     public const MESSAGE_CABINET = 'Un cabinet d\'expertise comptable n\'a pas de réglages fiscaux dans PILIQI : il n\'a ni magasin ni document de vente.';
 
@@ -77,6 +79,7 @@ class ModifierParametresFiscauxSocieteAction
             $valides = ValeursLues::champs(Validator::make(array_intersect_key($donnees, array_flip(self::CHAMPS)), [
                 'regime_tva' => ['sometimes', 'required', Rule::enum(RegimeTva::class)],
                 'option_debits_tva' => ['sometimes', 'boolean'],
+                'membre_assujetti_unique' => ['sometimes', 'boolean'],
                 'mois_fin_exercice' => ['sometimes', 'required', 'integer', 'between:1,12'],
             ], attributes: ['regime_tva' => 'régime de TVA', 'mois_fin_exercice' => 'mois de fin d\'exercice'])->validate());
 

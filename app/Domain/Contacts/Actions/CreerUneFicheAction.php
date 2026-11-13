@@ -34,7 +34,8 @@ use LogicException;
  * fiche (voir ClientPolicy, FournisseurPolicy et ServicePolicy), et, pour
  * fixer le prix de référence d'un nouveau service, fixer les prix (R2,
  * voir DerogationsDePrix). La fiche se crée à son nom (voir
- * OperateurCourant), dans le magasin actif (voir BelongsToMagasin). Un
+ * OperateurCourant), dans le magasin actif (voir BelongsToMagasin) ; celle
+ * d'un fournisseur nomme son auteur (voir Fournisseur::noterSonAuteur()). Un
  * SIRET de fournisseur ou un nom de service qu'une autre personne vient
  * d'enregistrer dans le magasin est refusé comme par la validation du
  * formulaire, jamais par une erreur de la base (voir DoublonDUneFiche).
@@ -70,7 +71,9 @@ class CreerUneFicheAction
                     $this->lecteur->exiger($compte, PermissionRegistry::VENTE_REMISES_ET_PRIX, $magasin);
                 }
 
-                $fiche = $this->operateur->pendant($compte, fn () => $classe::query()->create($attributs));
+                $fiche = $this->operateur->pendant($compte, fn () => $classe === Fournisseur::class
+                    ? tap((new Fournisseur($attributs))->noterSonAuteur($compte))->save()
+                    : $classe::query()->create($attributs));
 
                 return $fiche instanceof $classe ? $fiche : throw new LogicException(self::REFUS_CLASSE);
             });

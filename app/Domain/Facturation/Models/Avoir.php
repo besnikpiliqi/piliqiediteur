@@ -15,6 +15,7 @@ use App\Domain\Facturation\Concerns\FigeLeClient;
 use App\Domain\Facturation\Concerns\FigeSonEmetteur;
 use App\Domain\Facturation\Concerns\VentileLaTvaParTaux;
 use App\Domain\Facturation\Contracts\DocumentEnvoyable;
+use App\Domain\Facturation\Enums\MotifDeRegularisation;
 use App\Domain\Facturation\Enums\NatureOperation;
 use App\Domain\Facturation\Enums\StatutAvoir;
 use App\Domain\Facturation\Services\CalculateurLigne;
@@ -49,13 +50,12 @@ use LogicException;
  * documents les ont figés (voir FigeLeClient), et l'émetteur qu'il
  * imprime pour toujours (voir FigeSonEmetteur).
  *
- * L'avoir de régularisation d'une facture que désigne l'examen du SIREN de
- * la société par l'éditeur, après sa correction (voir
- * estUneRegularisation() et FaireLAvoirDeRegularisationAction), crédite
- * ce qui reste à créditer de cette facture, ce que les avoirs déjà émis
- * n'en ont pas crédité, sans retour en stock, imprime l'émetteur qu'elle a
- * figé, et son crédit lui est réservé, puis à sa facture rectificative
- * (voir ImputationDuCredit).
+ * L'avoir de régularisation d'une facture (voir estUneRegularisation() et
+ * MotifDeRegularisation) crédite ce qui reste à créditer de cette facture,
+ * ce que les avoirs déjà émis n'en ont pas crédité, sans retour en stock,
+ * et son crédit lui est réservé, puis à sa facture rectificative (voir
+ * ImputationDuCredit) ; après la correction du SIREN de la société, il
+ * imprime l'émetteur que la facture a figé.
  */
 class Avoir extends Model implements DocumentEnvoyable
 {
@@ -102,14 +102,13 @@ class Avoir extends Model implements DocumentEnvoyable
     ];
 
     /**
-     * La vente en France tant qu'aucune nature n'est reprise, et un avoir
-     * qui n'est pas une régularisation, comme en base.
+     * La vente en France tant qu'aucune nature n'est reprise, comme en
+     * base.
      *
      * @var array<string, mixed>
      */
     protected $attributes = [
         'nature_operation' => 'vente_france',
-        'regularisation' => false,
     ];
 
     protected $casts = [
@@ -118,7 +117,7 @@ class Avoir extends Model implements DocumentEnvoyable
         'type_client' => TypeClient::class,
         'client_etabli_en_france' => 'boolean',
         'franchise_en_base' => 'boolean',
-        'regularisation' => 'boolean',
+        'motif_regularisation' => MotifDeRegularisation::class,
         'nature_operation' => NatureOperation::class,
         'total_ht' => 'decimal:2',
         'total_tva' => 'decimal:2',
@@ -260,9 +259,9 @@ class Avoir extends Model implements DocumentEnvoyable
 
     /**
      * La mention que l'avoir de régularisation a signée à son émission
-     * (voir MentionsFiscales::regularisation()) et que son PDF imprime,
-     * avec le SIREN correct de la société ; null pour un autre avoir, comme
-     * tant qu'il est un brouillon.
+     * (voir MentionsFiscales::regularisation()) et que son PDF imprime :
+     * le SIREN correct de la société, ou la preuve de sortie non reçue ;
+     * null pour un autre avoir, comme tant qu'il est un brouillon.
      *
      * @throws DocumentSansEnregistrementSigneException
      */
@@ -272,16 +271,30 @@ class Avoir extends Model implements DocumentEnvoyable
     }
 
     /**
-     * Est-ce l'avoir de régularisation d'une facture que l'examen du SIREN
-     * de la société a désignée (voir FaireLAvoirDeRegularisationAction) ?
-     * Il ne rend rien au stock (voir RestaurerStockApresEmissionAvoir) et
-     * son crédit ne règle que cette facture, puis sa facture rectificative
-     * (voir ImputationDuCredit) : jamais un crédit disponible du client
-     * (voir Client::creditsDAvoirEnCentimes()).
+     * Est-ce l'avoir de régularisation d'une facture, quel qu'en soit le
+     * motif (voir MotifDeRegularisation) : après la correction du SIREN de
+     * la société (voir FaireLAvoirDeRegularisationAction), ou pour une
+     * exonération dont la preuve de sortie manque (voir
+     * RegulariserUneExonerationNonProuveeAction) ? Il ne rend rien au stock
+     * (voir RestaurerStockApresEmissionAvoir) et son crédit ne règle que
+     * cette facture, puis sa facture rectificative (voir
+     * ImputationDuCredit) : jamais un crédit disponible du client (voir
+     * Client::creditsDAvoirEnCentimes()).
      */
     public function estUneRegularisation(): bool
     {
-        return $this->regularisation === true;
+        return $this->motif_regularisation !== null;
+    }
+
+    /**
+     * Est-ce l'avoir de régularisation d'une facture après la correction du
+     * SIREN de la société ? Il imprime l'émetteur que la facture a signé,
+     * l'ancien SIREN (voir ContenuFiscal), et son crédit n'est jamais un
+     * encaissement (voir EReportingDesParticuliers).
+     */
+    public function regulariseUnSirenCorrige(): bool
+    {
+        return $this->motif_regularisation === MotifDeRegularisation::SirenCorrige;
     }
 
     /**

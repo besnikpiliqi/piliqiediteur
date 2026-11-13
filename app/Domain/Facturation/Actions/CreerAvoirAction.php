@@ -4,6 +4,7 @@ namespace App\Domain\Facturation\Actions;
 
 use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\Contacts\Models\Client;
+use App\Domain\Facturation\Enums\MotifDeRegularisation;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Facture;
@@ -64,10 +65,13 @@ use LogicException;
  * BelongsToMagasin::relueDansLeMagasin()) : celui d'un autre magasin est
  * refusé, même déjà chargé ou avec son magasin_id changé en mémoire.
  *
- * L'avoir de régularisation d'une facture que désigne l'examen du SIREN de
- * la société se crée ici comme tout avoir, régularisation notée (voir
- * FaireLAvoirDeRegularisationAction, qui en choisit les lignes). Une
- * facture désignée ne reçoit pas d'autre avoir, ni la facture
+ * L'avoir de régularisation d'une facture se crée ici comme tout avoir,
+ * son motif noté (voir MotifDeRegularisation) : après la correction du
+ * SIREN de la société (voir FaireLAvoirDeRegularisationAction), ou pour une
+ * exonération dont la preuve de sortie manque (voir
+ * RegulariserUneExonerationNonProuveeAction), chacune en choisissant les
+ * lignes. Une facture désignée par l'examen du SIREN ne reçoit pas d'autre
+ * avoir, ni une facture qui a sa rectificative, ni la facture
  * rectificative qui attend encore l'avoir de régularisation : un retour se
  * fait sur la rectificative, qui en a repris les lignes, une fois cet avoir
  * émis (voir RegularisationDUneFacture::refusDUnAvoirOrdinaire()).
@@ -82,11 +86,11 @@ class CreerAvoirAction
 
     /**
      * @param  array<array-key, array{ligne_facture_id: int|string, quantite: int|string}>  $lignesSelectionnees
-     * @param  bool  $regularisation  l'avoir de régularisation d'une facture désignée par l'examen du SIREN de la société (voir RegularisationDUneFacture)
+     * @param  MotifDeRegularisation|null  $regularisation  le motif de l'avoir de régularisation d'une facture, null pour tout autre avoir
      *
      * @throws AuthorizationException
      */
-    public function handle(User $auteur, Client $client, array $lignesSelectionnees, ?string $motif = null, bool $regularisation = false): Avoir
+    public function handle(User $auteur, Client $client, array $lignesSelectionnees, ?string $motif = null, ?MotifDeRegularisation $regularisation = null): Avoir
     {
         if ($lignesSelectionnees === []) {
             throw new InvalidArgumentException('Un avoir doit porter sur au moins une ligne.');
@@ -103,6 +107,7 @@ class CreerAvoirAction
 
         return DB::transaction(function () use ($auteur, $client, $lignesSelectionnees, $motif, $regularisation) {
             $magasin = app(TenantContext::class)->magasin();
+            $magasin->verifierQuIlNEstPasDansUnAssujettiUnique();
             $compte = $this->lecteur->exiger($auteur, 'create', $magasin, Avoir::class);
             $client = Client::relueDansLeMagasin($client, Client::REFUS_AUTRE_MAGASIN);
             $lignesDeLAvoir = [];
@@ -131,7 +136,7 @@ class CreerAvoirAction
                     throw new LogicException("Impossible de créditer une ligne d'une facture au statut [{$facture->statut->value}].");
                 }
 
-                $refus = $regularisation ? null : $this->regularisationDUneFacture->refusDUnAvoirOrdinaire($facture);
+                $refus = $regularisation !== null ? null : $this->regularisationDUneFacture->refusDUnAvoirOrdinaire($facture);
 
                 if ($refus !== null) {
                     throw new LogicException($refus);
@@ -175,7 +180,7 @@ class CreerAvoirAction
                 'type_client' => $premiere->type_client,
                 'franchise_en_base' => $premiere->franchise_en_base,
                 'nature_operation' => $premiere->nature_operation,
-                'regularisation' => $regularisation,
+                'motif_regularisation' => $regularisation,
                 ...$this->calculateurLigne->enDecimaux($this->calculateurLigne->totaliser($lignesDeLAvoir)),
             ])->save();
 

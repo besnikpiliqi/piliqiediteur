@@ -14,7 +14,11 @@ use Filament\Support\Contracts\HasLabel;
  *
  * Aucune colonne ne garde la catégorie d'une vente avant l'étape 2 : elle
  * se déduit, à chaque lecture, de la nature de chaque ligne et de la
- * nature d'opération du document, enregistrées à son émission. Le régime
+ * nature d'opération du document, enregistrées à son émission. Une vente
+ * en franchise en base, ou en France à 0 % hors franchise, se range selon
+ * la nature de sa ligne, livraison de biens ou prestation de services, au
+ * taux 0 % ; un export ou une livraison vers un DOM à un particulier, parmi
+ * les opérations non soumises à la TVA en France, au taux 0 %. Le régime
  * de la marge attend l'étape 14 (achats auprès de particuliers).
  */
 enum CategorieEReporting: string implements HasLabel
@@ -35,8 +39,8 @@ enum CategorieEReporting: string implements HasLabel
     }
 
     /**
-     * La catégorie d'une ligne vendue avec la TVA française : livraison
-     * d'un bien ou prestation d'un service.
+     * La catégorie d'une ligne selon sa nature : livraison d'un bien ou
+     * prestation d'un service.
      */
     public static function deLaNature(NatureLigne $nature): self
     {

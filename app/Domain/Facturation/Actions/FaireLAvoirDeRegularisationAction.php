@@ -6,6 +6,7 @@ use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\CaisseSecurisee\Exceptions\HorlogeRegressiveException;
 use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
+use App\Domain\Facturation\Enums\MotifDeRegularisation;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Facture;
@@ -95,7 +96,7 @@ class FaireLAvoirDeRegularisationAction
                 ValeurRequise::de($origine->client, 'le client de la facture régularisée'),
                 $this->regularisation->lignesDeLAvoir($origine),
                 sprintf(RegularisationDUneFacture::MOTIF_DE_L_AVOIR, $origine->numero),
-                regularisation: true,
+                regularisation: MotifDeRegularisation::SirenCorrige,
             ));
             $origine->rectificative()->where('statut', StatutFacture::EnAttenteDeRegularisation)->lockForUpdate()->first()?->constaterUnReglement();
 

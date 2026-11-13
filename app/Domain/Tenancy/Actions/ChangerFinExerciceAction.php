@@ -7,6 +7,7 @@ use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Calendrier\Calendrier;
 use App\Domain\Tenancy\Enums\ActionAuditee;
+use App\Domain\Tenancy\Enums\OrganeDeLaDecision;
 use App\Domain\Tenancy\Models\ChangementFinExercice;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
@@ -26,9 +27,14 @@ use LogicException;
  * de fin de l'exercice en cours que fixe le procès-verbal : inchangée, le
  * changement vaut à partir de l'exercice suivant, qui est transitoire ;
  * avancée, l'exercice en cours, transitoire, finit à cette date, et le
- * suivant au nouveau mois. Le logiciel ne tranche pas la durée légale d'un
- * exercice transitoire : il la montre (voir apercu()), et l'expert-
- * comptable de la société qui l'a validée est nommé.
+ * suivant au nouveau mois : la procédure n'accepte qu'un exercice
+ * raccourci, terminé le dernier jour d'un mois, jamais un exercice
+ * allongé (décisions T28.1 et T28.2 de l'onglet « À faire vérifier par un
+ * professionnel », appliquées sans attendre, D76). Elle montre les
+ * exercices qu'aurait la société (voir apercu()) et garde l'organe qui a
+ * décidé, la date de la décision, sa pièce, la référence de son dépôt au
+ * registre s'il y en a une, et le nom d'un expert-comptable consulté,
+ * facultatif.
  *
  * Refusée, sans rien écrire : un nouveau mois égal à l'ancien ; une
  * décision postérieure à aujourd'hui, ou à la fin de l'exercice qu'elle
@@ -36,8 +42,9 @@ use LogicException;
  * exercice ne se modifie qu'avant sa clôture) ; une fin qui n'est pas le
  * dernier jour d'un mois, qui tombe dans un exercice déjà clos (avant le
  * début de l'exercice en cours), ou qui repousserait la clôture
- * obligatoire de l'exercice en cours (après sa fin) ; une durée validée
- * par personne. Une fin déjà passée, dans l'exercice en cours, décidée
+ * obligatoire de l'exercice en cours (après sa fin) ; une décision sans son
+ * organe ; un nom d'expert-comptable ou une référence de dépôt trop longs.
+ * Une fin déjà passée, dans l'exercice en cours, décidée
  * avant elle, sera rattrapée par les clôtures d'exercice de l'étape 3,
  * comme les journées manquées.
  *
@@ -63,13 +70,17 @@ class ChangerFinExerciceAction
 
     public const MESSAGE_DECISION_FUTURE = 'La décision ne peut pas être postérieure à aujourd\'hui.';
 
-    public const MESSAGE_FIN_DE_MOIS = 'La fin d\'un exercice est le dernier jour d\'un mois.';
+    public const MESSAGE_FIN_DE_MOIS = 'La fin d\'un exercice est le dernier jour d\'un mois. PILIQI n\'accepte qu\'un exercice raccourci, terminé le dernier jour d\'un mois.';
 
     public const MESSAGE_EXERCICE_CLOS = 'Cette fin tombe avant le début de l\'exercice en cours (%s), dans un exercice déjà clos : un exercice clos ne se modifie jamais.';
 
-    public const MESSAGE_CLOTURE_REPOUSSEE = 'Cette fin est postérieure à celle de l\'exercice en cours (%s) : elle repousserait une clôture obligatoire.';
+    public const MESSAGE_CLOTURE_REPOUSSEE = 'Cette fin est postérieure à celle de l\'exercice en cours (%s) : elle repousserait une clôture obligatoire. PILIQI n\'accepte qu\'un exercice raccourci, terminé le dernier jour d\'un mois.';
 
-    public const MESSAGE_DUREE_NON_VALIDEE = 'La durée de l\'exercice transitoire doit être validée par l\'expert-comptable de la société, nommé (150 caractères au plus).';
+    public const MESSAGE_ORGANE = 'Indiquez l\'organe qui a décidé le changement, tel que le nomme le procès-verbal : assemblée générale extraordinaire, décision des associés, organe prévu par les statuts, associé unique ou entrepreneur individuel.';
+
+    public const MESSAGE_EXPERT_COMPTABLE_CONSULTE = 'Le nom de l\'expert-comptable consulté compte 150 caractères au plus.';
+
+    public const MESSAGE_DEPOT_AU_REGISTRE = 'La référence du dépôt au registre compte 100 caractères au plus.';
 
     public function __construct(
         private readonly RegistreFiscal $registre,
@@ -116,25 +127,28 @@ class ChangerFinExerciceAction
     /**
      * @param  string  $fin  la fin de l'exercice en cours tirée du procès-verbal (« AAAA-MM-JJ »)
      * @param  string  $decisionDu  le jour de la décision (« AAAA-MM-JJ »)
-     * @param  string  $dureeValideePar  l'expert-comptable de la société qui a validé la durée de l'exercice transitoire
+     * @param  OrganeDeLaDecision|null  $organe  l'organe qui a décidé, que nomme le procès-verbal ; null est refusé
+     * @param  string|null  $dureeValideePar  l'expert-comptable consulté, s'il y en a un
+     * @param  string|null  $depotAuRegistre  la référence du dépôt du procès-verbal au registre, s'il y en a une
      *
      * @throws LogicException quand le changement est refusé
      */
-    public function handle(Societe $societe, int $nouveauMois, string $fin, string $decisionDu, string $dureeValideePar, InterventionDeLEditeur $editeur): ChangementFinExercice
+    public function handle(Societe $societe, int $nouveauMois, string $fin, string $decisionDu, ?OrganeDeLaDecision $organe, ?string $dureeValideePar, ?string $depotAuRegistre, InterventionDeLEditeur $editeur): ChangementFinExercice
     {
         if ($societe->estUnCabinet()) {
             throw new LogicException(self::MESSAGE_CABINET);
         }
 
-        $dureeValideePar = trim($dureeValideePar);
-
-        if ($dureeValideePar === '' || mb_strlen($dureeValideePar) > 150) {
-            throw new LogicException(self::MESSAGE_DUREE_NON_VALIDEE);
+        if ($organe === null) {
+            throw new LogicException(self::MESSAGE_ORGANE);
         }
+
+        $dureeValideePar = self::texteFacultatif($dureeValideePar, 150, self::MESSAGE_EXPERT_COMPTABLE_CONSULTE);
+        $depotAuRegistre = self::texteFacultatif($depotAuRegistre, 100, self::MESSAGE_DEPOT_AU_REGISTRE);
 
         return app(TenantContext::class)->runAsSociete($societe, fn (): ChangementFinExercice => $this->operateur->pendantLeSysteme(fn (): ChangementFinExercice => $this->registre->sousVerrouDesMagasins(
             $societe->magasinsReels()->orderBy('id')->get(),
-            function () use ($societe, $nouveauMois, $fin, $decisionDu, $dureeValideePar, $editeur): ChangementFinExercice {
+            function () use ($societe, $nouveauMois, $fin, $decisionDu, $organe, $dureeValideePar, $depotAuRegistre, $editeur): ChangementFinExercice {
                 $verrouillee = Societe::query()->whereKey($societe->getKey())->lockForUpdate()->firstOrFail();
                 $apercu = $this->verifier($verrouillee, $nouveauMois, $fin, $decisionDu);
                 $ancienMois = (int) $verrouillee->mois_fin_exercice;
@@ -152,7 +166,9 @@ class ChangerFinExerciceAction
                     'fin_exercice_en_cours_avant' => $apercu['fin_d_origine'],
                     'fin_exercice_en_cours_apres' => $fin,
                     'decision_du' => $decisionDu,
+                    'organe_de_la_decision' => $organe,
                     'piece_reference' => $editeur->piece,
+                    'depot_au_registre' => $depotAuRegistre,
                     'duree_validee_par' => $dureeValideePar,
                     'justification' => $editeur->justification,
                     'operateur' => $editeur->operateur(),
@@ -166,12 +182,30 @@ class ChangerFinExerciceAction
                     'mois_fin_exercice' => $nouveauMois,
                     'fin_exercice_en_cours' => $fin,
                     'decision_du' => $decisionDu,
+                    'organe_de_la_decision' => $organe->value,
                     'duree_validee_par' => $dureeValideePar,
                 ], $changement, $editeur);
 
                 return $changement;
             },
         )));
+    }
+
+    /**
+     * Un texte facultatif, sans espaces autour : null quand il est vide,
+     * refusé avec ce message au-delà de cette longueur.
+     *
+     * @throws LogicException
+     */
+    private static function texteFacultatif(?string $texte, int $longueurMaximale, string $refus): ?string
+    {
+        $texte = trim((string) $texte);
+
+        if (mb_strlen($texte) > $longueurMaximale) {
+            throw new LogicException($refus);
+        }
+
+        return $texte === '' ? null : $texte;
     }
 
     /**

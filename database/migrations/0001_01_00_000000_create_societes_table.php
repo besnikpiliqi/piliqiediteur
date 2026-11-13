@@ -97,6 +97,11 @@ return new class extends Migration
             // Verrouillé dès la première vente de l'un de ses magasins
             // (voir Societe::aVenduUneFois()).
             $table->unsignedTinyInteger('mois_fin_exercice')->default(12);
+            // Membre d'un assujetti unique (groupe TVA, art. 256 C du CGI) :
+            // PILIQI n'en gère pas encore les factures ni les déclarations,
+            // et refuse alors toute opération commerciale réelle (voir
+            // Magasin::refusDeVente(), décision P3.1).
+            $table->boolean('membre_assujetti_unique')->default(false);
             // Active, suspendue, résiliée ou révoquée (voir
             // StatutSociete) : hors active, ses magasins sont en lecture
             // seule.

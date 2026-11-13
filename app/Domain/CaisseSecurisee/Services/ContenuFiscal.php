@@ -45,8 +45,7 @@ use Illuminate\Support\Collection;
  *   retenue, auteur, devise, échéance, conditions, notes ou motif, lignes,
  *   ventilation par taux et totaux ; la facture que rectifie une facture
  *   rectificative, et si un avoir est l'avoir de régularisation d'une
- *   facture, après la correction du SIREN de la société (voir
- *   RegularisationDUneFacture).
+ *   facture (voir MotifDeRegularisation).
  *   Un avoir s'y écrit en négatif (quantités et montants), cite le numéro
  *   et la date d'émission de chaque ticket ou facture qu'il corrige, et
  *   chacune de ses lignes y référence la ligne et le numéro du document
@@ -59,8 +58,8 @@ use Illuminate\Support\Collection;
  *   document imprime ensuite pour toujours (voir FigeSonEmetteur) ; celui
  *   de l'avoir de régularisation d'une facture, après la correction du
  *   SIREN de la société, est celui que cette facture a signé (l'ancien
- *   SIREN), avec la mention de la régularisation (voir
- *   MentionsFiscales::regularisation()) ; la
+ *   SIREN) ; un avoir de régularisation signe la mention de sa
+ *   régularisation (voir MentionsFiscales::regularisation()) ; la
  *   catégorie de l'opération, les mentions fiscales imprimées (voir
  *   MentionsFiscales), pour une facture la vérification VIES qu'elle
  *   retient (n° vérifié, résultat, n° de consultation, instant), et ce
@@ -279,7 +278,7 @@ class ContenuFiscal
     private function contexteDeLAvoir(Avoir $avoir): array
     {
         $avoir->load(['lignes', 'magasin', 'allocations.facture']);
-        $emetteur = $avoir->estUneRegularisation() ? $avoir->factureRegularisee()->emetteur() : Emetteur::duMagasin($avoir->magasin);
+        $emetteur = $avoir->regulariseUnSirenCorrige() ? $avoir->factureRegularisee()->emetteur() : Emetteur::duMagasin($avoir->magasin);
 
         return [
             'emetteur' => $emetteur->enTableau(),

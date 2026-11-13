@@ -20,8 +20,9 @@ use Illuminate\Database\Eloquent\Builder;
  * La régularisation d'une facture après la correction exceptionnelle du
  * SIREN de la société par l'éditeur (voir ExaminerSirenAction et
  * CorrigerSirenAction ; décision de l'éditeur du 01/11/2026, réponse 1a),
- * règle à faire confirmer par l'expert-comptable de la société le jour où
- * le cas se présente.
+ * règle de l'onglet « À faire vérifier par un professionnel » (T27.1 à
+ * T27.5, T68.2), appliquée ; une réponse d'un professionnel la
+ * remplacerait.
  *
  * Seules se régularisent les factures que désigne la dernière décision
  * d'examen du SIREN de la société, inscrite au journal d'audit
@@ -183,7 +184,7 @@ class RegularisationDUneFacture
     public function avoirDeRegularisation(Facture $facture, bool $verrouille = false): ?Avoir
     {
         return Avoir::query()
-            ->where('regularisation', true)
+            ->whereNotNull('motif_regularisation')
             ->where('statut', StatutAvoir::Emise)
             ->whereHas('lignes.ligneFacture', fn (Builder $lignes): Builder => $lignes->where('facture_id', $facture->getKey()))
             ->when($verrouille, fn (Builder $avoirs): Builder => $avoirs->lockForUpdate())
@@ -224,7 +225,7 @@ class RegularisationDUneFacture
         foreach ($facture->lignes()->get() as $ligne) {
             $creditees = LigneAvoir::query()
                 ->where('ligne_facture_id', $ligne->getKey())
-                ->whereHas('avoir', fn (Builder $avoirs): Builder => $avoirs->where('statut', StatutAvoir::Emise)->where('regularisation', false))
+                ->whereHas('avoir', fn (Builder $avoirs): Builder => $avoirs->where('statut', StatutAvoir::Emise)->whereNull('motif_regularisation'))
                 ->get(['quantite', 'montant_ht', 'montant_tva', 'montant_ttc']);
             $quantite = $ligne->quantite - ValeursLues::entier($creditees->sum('quantite'));
 

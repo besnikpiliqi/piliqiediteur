@@ -451,8 +451,9 @@ class AvoirResource extends Resource
                 TextEntry::make('cree_par_nom')->label('Émis par'),
                 TextEntry::make('motif')->label('Motif')->columnSpanFull(),
                 // La mention que l'avoir de régularisation d'une facture a
-                // signée, après la correction du SIREN de la société (voir
-                // RegularisationDUneFacture), comme son PDF l'imprime.
+                // signée, après la correction du SIREN de la société ou pour
+                // une exonération non prouvée (voir MotifDeRegularisation),
+                // comme son PDF l'imprime.
                 TextEntry::make('regularisation')
                     ->label('Régularisation')
                     ->state(fn (Avoir $record): ?string => $record->mentionDeRegularisation())

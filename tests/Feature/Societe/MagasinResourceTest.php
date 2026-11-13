@@ -84,6 +84,27 @@ class MagasinResourceTest extends TestCase
     private const MOT_DE_PASSE_DU_PROPRIETAIRE = 'password';
 
     /**
+     * L'adresse de la fiche d'un magasin dans l'espace de la société porte
+     * son identifiant : une adresse qui n'en porte pas un que la base peut
+     * lire (un mot, un uuid, zéro, un nombre trop grand pour la colonne)
+     * répond 404, jamais 500, sans interroger la base ; un magasin d'une
+     * autre société aussi, et la fiche du magasin s'ouvre.
+     */
+    public function test_l_adresse_d_une_fiche_de_magasin_qui_ne_porte_pas_un_identifiant_repond_404(): void
+    {
+        $lyon = $this->ouvrirUneSociete(['nom' => 'Lyon']);
+        $ailleurs = $this->ouvrirUneSociete(['nom' => 'Ailleurs']);
+        $this->dansLEspaceDeLaSociete($lyon->societe, $this->proprietaireDe($lyon));
+        $adresse = MagasinResource::getUrl('edit', ['record' => $lyon]);
+
+        foreach (['abc', (string) $lyon->uuid, '0', '-1', '99999999999999999999', (string) $ailleurs->id] as $cle) {
+            $this->get(preg_replace('#/[^/]+$#', '/'.$cle, $adresse))->assertNotFound();
+        }
+
+        $this->get($adresse)->assertOk()->assertSee('Lyon');
+    }
+
+    /**
      * La liste des magasins ne montre que les magasins réels de la portée
      * de la personne connectée, jamais la démonstration ni un magasin d'une
      * autre société.

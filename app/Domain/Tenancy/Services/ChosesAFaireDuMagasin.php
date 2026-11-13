@@ -53,6 +53,7 @@ use App\Filament\App\Resources\PosteReconnuResource;
 use App\Filament\App\Resources\ProduitResource;
 use App\Filament\App\Resources\ServiceResource;
 use App\Filament\Societe\Pages\IdentiteSociete;
+use App\Filament\Societe\Pages\ParametresFiscauxSociete;
 use App\Filament\Societe\Pages\VerificationSociete;
 use App\Filament\Societe\Resources\MagasinResource;
 use App\Models\User;
@@ -163,6 +164,7 @@ final class ChosesAFaireDuMagasin
         return array_values(array_filter([
             $this->facturesAEncaisser(),
             $articles ? $this->preuvesAFournir() : null,
+            $articles ? $this->exonerationsNonProuvees() : null,
             $articles ? $this->visasANoter() : null,
             $this->brouillonsDeFacture(),
             ...$this->emailsEnEchec(),
@@ -181,6 +183,7 @@ final class ChosesAFaireDuMagasin
             $articles ? $this->stockBas() : null,
             $this->catalogueVide(),
             $this->societeAVerifier(),
+            $this->membreDUnAssujettiUnique(),
             $this->etablissementAConfirmer(),
             $this->identiteIncomplete(),
             $this->monMotDePasse(),
@@ -315,6 +318,94 @@ final class ChosesAFaireDuMagasin
                 'date' => $this->afficherLeJourDe($facture->date_emission),
                 'date_en_rouge' => $enRetard->contains($facture),
                 'badge' => $enRetard->contains($facture) ? 'En retard' : null,
+            ])->all()),
+        );
+    }
+
+    /**
+     * La société est déclarée membre d'un assujetti unique (groupe TVA,
+     * décision P3.1, voir Magasin::REFUS_ASSUJETTI_UNIQUE) : aucun magasin
+     * réel ne vend, et chaque compte du magasin le lit ici, en rouge, avec
+     * la raison, puisque les gestes de vente ne s'y montrent plus. À faire
+     * pour qui règle les paramètres fiscaux de la société (le propriétaire,
+     * un administrateur autorisé), qui y mène, à surveiller pour les
+     * autres ; jamais dans le magasin de démonstration, qui vend encore.
+     */
+    private function membreDUnAssujettiUnique(): ?ChoseAFaire
+    {
+        $societe = $this->magasin->societe;
+
+        if ($this->magasin->est_demonstration || ! $societe->membre_assujetti_unique) {
+            return null;
+        }
+
+        $regle = $this->compte->can('voirLesParametresFiscaux', $societe);
+
+        return new ChoseAFaire(
+            cle: 'assujetti_unique',
+            groupe: 'Magasin',
+            urgence: UrgenceAFaire::Rouge,
+            nombre: 1,
+            phrase: Magasin::REFUS_ASSUJETTI_UNIQUE,
+            url: $regle ? ParametresFiscauxSociete::getUrl(panel: 'societe', tenant: $societe) : null,
+            bouton: 'Voir',
+            aSurveiller: ! $regle,
+        );
+    }
+
+    /**
+     * Les exports hors de l'Union et les livraisons vers un DOM sans preuve
+     * de sortie 150 jours après leur date (T29.3, voir
+     * RegularisationDUneExoneration), parmi les factures que le compte
+     * voit, toujours en rouge : à faire pour qui vend (créer et émettre une
+     * facture, faire un avoir), qui la régularise depuis sa fiche ; à
+     * surveiller pour qui supervise et les voit. Le rappel de leur preuve
+     * reste à côté (voir preuvesAFournir()). Dans un magasin en lecture
+     * seule, rien ne s'émet : le bouton ne dit que « Voir ».
+     */
+    private function exonerationsNonProuvees(): ?ChoseAFaire
+    {
+        $aFaire = $this->a(PermissionRegistry::FACTURE_CREATE) && $this->a(PermissionRegistry::FACTURE_EMETTRE) && $this->a(PermissionRegistry::AVOIR_CREER);
+
+        if (! $this->voit(PermissionRegistry::FACTURE_VIEW, $aFaire)) {
+            return null;
+        }
+
+        $factures = Facture::query()
+            ->exonerationsNonProuvees($this->calendrier, $this->aujourdhui)
+            ->visiblesPar($this->compte)
+            ->orderBy('date_emission')
+            ->orderBy('id')
+            ->get()
+            ->each(fn (Facture $facture): Facture => $facture->setRelation('magasin', $this->magasin));
+
+        if ($factures->isEmpty()) {
+            return null;
+        }
+
+        $seule = $factures->count() === 1 ? $factures->first() : null;
+
+        return new ChoseAFaire(
+            cle: 'exonerations_non_prouvees',
+            groupe: 'Ventes hors de France',
+            urgence: UrgenceAFaire::Rouge,
+            nombre: $factures->count(),
+            phrase: $seule !== null
+                ? '1 vente hors de France sans preuve de sortie 150 jours après sa date : '.$seule->numero.($seule->nomDuClient() === null ? '' : ', '.$seule->nomDuClient()).'.'
+                : $factures->count().' ventes hors de France sans preuve de sortie 150 jours après leur date.',
+            url: $seule === null ? FactureResource::urlDesExonerationsNonProuvees() : FactureResource::getUrl('view', ['record' => $seule]),
+            bouton: $this->bouton('Régulariser', $aFaire, permisEnLectureSeule: false),
+            aSurveiller: ! $aFaire,
+            date: $this->jourDe($factures->first()?->date_emission),
+            precision: $this->avecLaLectureSeule('L\'exonération se régularise : un avoir sans retour en stock, puis une facture à la TVA française au même prix TTC.', $aFaire, permisEnLectureSeule: false),
+            lignes: $seule !== null ? [] : array_values($factures->take(self::LIGNES_ENUMEREES)->map(fn (Facture $facture): array => [
+                'libelle' => (string) $facture->numero,
+                'url' => FactureResource::getUrl('view', ['record' => $facture]),
+                'description' => $facture->nomDuClient(),
+                'montant' => null,
+                'date' => $this->afficherLeJourDe($facture->date_emission),
+                'date_en_rouge' => true,
+                'badge' => 'Exonération non prouvée',
             ])->all()),
         );
     }

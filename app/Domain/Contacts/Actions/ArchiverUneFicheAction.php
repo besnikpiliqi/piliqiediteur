@@ -97,7 +97,13 @@ class ArchiverUneFicheAction
             $verifierLEtat($relue);
             $this->lecteur->exiger($compte, $question, $magasin, $relue);
 
-            $this->operateur->pendant($compte, fn (): mixed => $geste($relue));
+            $this->operateur->pendant($compte, function () use ($compte, $relue, $geste): mixed {
+                if ($relue instanceof Fournisseur) {
+                    $relue->noterSonAuteur($compte)->save();
+                }
+
+                return $geste($relue);
+            });
         });
     }
 }

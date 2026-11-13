@@ -1322,6 +1322,9 @@ return [
         ]],
         'filtre:a_encaisser' => ['lot' => 'NAV-2', 'tests' => []],
         'filtre:preuves_a_fournir' => ['lot' => 'NAV-2', 'tests' => []],
+        'filtre:exonerations_non_prouvees' => ['lot' => 'NAV-2', 'tests' => [
+            'tests/Browser/Parcours/ExonerationNonProuveeTest.php › le responsable ouvre depuis son « À faire » la liste « Exonération non prouvée », puis régularise chaque export resté sans preuve de sortie 150 jours après sa date, et chaque facture rectificative s’ouvre',
+        ]],
         'filtre:statut' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur autorisé à vendre ouvre chaque page et chaque action du magasin sans erreur',
@@ -1455,6 +1458,9 @@ return [
             'tests/Browser/Parcours/ProprietaireEnDemonstrationTest.php › le propriétaire fait une facture dans la démonstration, l’émet et l’encaisse depuis sa fiche',
         ]],
         'action:emettreLaFactureRectificative' => ['lot' => 'NAV-2', 'tests' => []],
+        'action:regulariserLExoneration' => ['lot' => 'NAV-2', 'tests' => [
+            'tests/Browser/Parcours/ExonerationNonProuveeTest.php › le responsable ouvre depuis son « À faire » la liste « Exonération non prouvée », puis régularise chaque export resté sans preuve de sortie 150 jours après sa date, et chaque facture rectificative s’ouvre',
+        ]],
         'action:encaisser' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur autorisé à vendre ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',

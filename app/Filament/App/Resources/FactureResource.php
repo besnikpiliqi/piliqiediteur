@@ -119,6 +119,13 @@ class FactureResource extends Resource
     protected static ?string $pluralModelLabel = 'factures';
 
     /**
+     * Ce que disent les formulaires d'une facture et d'un devis sous leurs
+     * conditions de paiement (décision T50.1) : PILIQI ne fait pas encore
+     * de facture d'acompte, prévue à l'étape 2.
+     */
+    public const INFORMATION_ACOMPTE = 'Un acompte reçu avant la facture ne s\'enregistre pas encore dans PILIQI.';
+
+    /**
      * Le filtre « À encaisser » de la liste (voir table()).
      */
     public const FILTRE_A_ENCAISSER = 'a_encaisser';
@@ -149,6 +156,22 @@ class FactureResource extends Resource
     }
 
     /**
+     * Le filtre « Exonération non prouvée » de la liste (voir table()).
+     */
+    public const FILTRE_EXONERATIONS_NON_PROUVEES = 'exonerations_non_prouvees';
+
+    /**
+     * La liste des factures du magasin actif, filtrée sur les exports et
+     * les livraisons vers un DOM qui se régularisent faute de preuve de
+     * sortie 150 jours après leur date : où mène l'« À faire » du tableau
+     * de bord (voir ChosesAFaireDuMagasin).
+     */
+    public static function urlDesExonerationsNonProuvees(): string
+    {
+        return static::getUrl('index', ['tableFilters' => [self::FILTRE_EXONERATIONS_NON_PROUVEES => ['isActive' => true]]]);
+    }
+
+    /**
      * Le filtre « Visa à noter » de la liste (voir table()).
      */
     public const FILTRE_VISA_A_NOTER = 'visa_a_noter';
@@ -176,20 +199,24 @@ class FactureResource extends Resource
      * que les factures que l'utilisateur voit (voir
      * Facture::scopeVisiblesPar()) -- une policy sur l'accès direct ne
      * suffit pas, un montant visible dans un tableau est déjà une fuite.
-     * Ce que la colonne « À faire » dit d'une preuve ou d'un visa (voir
-     * raisonsAFaire()) se lit dans la même requête, par les scopes mêmes
-     * des filtres et de l'« À faire » (voir Facture::elleMeme()) : une
+     * Ce que la colonne « À faire » dit d'une preuve, d'une exonération à
+     * régulariser ou d'un visa (voir raisonsAFaire()) se lit dans la même
+     * requête, par les scopes mêmes des filtres et de l'« À faire » (voir
+     * Facture::elleMeme()), au jour du calendrier du magasin actif : une
      * page de 25 ventes à l'export ne relit pas chaque facture.
      *
      * @return Builder<Facture>
      */
     public static function getEloquentQuery(): Builder
     {
+        $calendrier = ValeursLues::instance(Filament::getTenant(), Magasin::class)->calendrier();
+
         return RequeteDuModele::de(parent::getEloquentQuery(), Facture::class)
             ->visiblesPar(CompteConnecte::exiger())
             ->with(['client', 'magasin'])
             ->withExists([
                 'elleMeme as preuve_a_fournir' => fn (Builder $elleMeme): Builder => $elleMeme->preuvesAFournir(),
+                'elleMeme as exoneration_non_prouvee' => fn (Builder $elleMeme): Builder => $elleMeme->exonerationsNonProuvees($calendrier, $calendrier->aujourdhui()),
                 'elleMeme as visa_a_noter' => fn (Builder $elleMeme): Builder => $elleMeme->visaANoter(),
             ]);
     }
@@ -222,7 +249,7 @@ class FactureResource extends Resource
                     ->label('Échéance')
                     ->content(fn (Get $get): string => self::echeanceAnnoncee($get('client_id'))),
                 self::champNatureDeLOperation(),
-                Textarea::make('conditions_paiement')->label('Conditions de paiement')->maxLength(PiedDePage::CARACTERES_DES_CONDITIONS_DE_PAIEMENT)->columnSpanFull(),
+                Textarea::make('conditions_paiement')->label('Conditions de paiement')->maxLength(PiedDePage::CARACTERES_DES_CONDITIONS_DE_PAIEMENT)->helperText(self::INFORMATION_ACOMPTE)->columnSpanFull(),
                 Textarea::make('notes')->columnSpanFull(),
             ])->columns(2),
 
@@ -542,7 +569,7 @@ class FactureResource extends Resource
     private static function preuvesSection(): InfolistSection
     {
         return InfolistSection::make('Preuves de l\'exonération')
-            ->description('Les références des documents qui prouvent l\'expédition des biens et justifient l\'exonération. Sans elles, la vente devra être corrigée par un avoir et une nouvelle facture à la TVA française.')
+            ->description('Les références des documents qui prouvent l\'expédition des biens et justifient l\'exonération. Sans preuve de sortie 150 jours après sa date, un export ou une livraison vers un DOM se régularise par un avoir sans retour en stock et une facture à la TVA française au même prix TTC.')
             ->visible(fn (Facture $record): bool => AjouterPreuveOperationAction::refusPour($record) === null)
             ->schema([
                 TextEntry::make('etat_des_preuves')
@@ -868,6 +895,18 @@ class FactureResource extends Resource
                     ->label('Preuves à fournir')
                     ->toggle()
                     ->query(fn (Builder $query): Builder => RequeteDuModele::de($query, Facture::class)->preuvesAFournir()),
+                // Les exports et les livraisons vers un DOM dont la preuve de
+                // sortie manque 150 jours après leur date (voir
+                // Facture::scopeExonerationsNonProuvees()), où mène aussi
+                // l'« À faire ».
+                Tables\Filters\Filter::make(self::FILTRE_EXONERATIONS_NON_PROUVEES)
+                    ->label('Exonération non prouvée')
+                    ->toggle()
+                    ->query(function (Builder $query): Builder {
+                        $calendrier = ValeursLues::instance(Filament::getTenant(), Magasin::class)->calendrier();
+
+                        return RequeteDuModele::de($query, Facture::class)->exonerationsNonProuvees($calendrier, $calendrier->aujourdhui());
+                    }),
                 // Les tickets détaxés dont le bordereau attend la date de son
                 // visa (voir Facture::scopeVisaANoter()), où mène aussi
                 // l'« À faire ».
@@ -967,7 +1006,11 @@ class FactureResource extends Resource
      * encaisser » et « En retard » pour ce qui reste dû (voir
      * Facture::scopeAEncaisser() et estEchue()), « Preuve à fournir » pour
      * une vente hors de France qui attend une preuve de son exonération
-     * (voir Facture::attendUnePreuve()), « Visa à noter » pour un ticket
+     * (voir Facture::attendUnePreuve()), « Exonération non prouvée » pour
+     * une vente qui se régularise faute de preuve de sortie 150 jours
+     * après sa date (voir
+     * Facture::attendLaRegularisationDeSonExoneration()), « Visa à noter »
+     * pour un ticket
      * détaxé dont le bordereau attend la date de son visa (voir
      * Facture::attendSonVisa()).
      */
@@ -977,7 +1020,7 @@ class FactureResource extends Resource
             ->label('À faire')
             ->badge()
             ->state(fn (Facture $record): array => self::raisonsAFaire($record))
-            ->color(fn (string $state): string => $state === 'En retard' ? 'danger' : 'warning')
+            ->color(fn (string $state): string => in_array($state, ['En retard', 'Exonération non prouvée'], true) ? 'danger' : 'warning')
             ->placeholder('—');
     }
 
@@ -993,6 +1036,7 @@ class FactureResource extends Resource
             in_array($facture->statut, StatutFacture::quiAttendentUnReglement(), true) ? 'À encaisser' : null,
             $facture->statut !== StatutFacture::Brouillon && $facture->estEchue() ? 'En retard' : null,
             $facture->attendUnePreuve() ? 'Preuve à fournir' : null,
+            $facture->attendLaRegularisationDeSonExoneration() ? 'Exonération non prouvée' : null,
             $facture->attendSonVisa() ? 'Visa à noter' : null,
         ]));
     }

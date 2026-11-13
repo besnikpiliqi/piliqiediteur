@@ -1,7 +1,8 @@
 {{--
-    Voir InscriptionSociete : le formulaire de la demande, puis, une fois
-    la demande partie, le seul message neutre, quoi que contiennent les
-    informations saisies.
+    Voir InscriptionSociete : le formulaire de la demande, avec la phrase
+    qui dit qu'une société membre d'un assujetti unique ne vend pas encore
+    dans PILIQI (décision P3.1), puis, une fois la demande partie, le seul
+    message neutre, quoi que contiennent les informations saisies.
 --}}
 <x-filament-panels::page.simple>
     @if (filament()->hasLogin())
@@ -24,6 +25,8 @@
                 :actions="$this->getCachedFormActions()"
                 :full-width="$this->hasFullWidthFormActions()"
             />
+
+            <p class="text-sm text-gray-600 dark:text-gray-300">{{ \App\Filament\App\Pages\Auth\InscriptionSociete::INFORMATION_ASSUJETTI_UNIQUE }}</p>
         </x-filament-panels::form>
     @endif
 </x-filament-panels::page.simple>

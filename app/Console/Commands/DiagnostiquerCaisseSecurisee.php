@@ -145,7 +145,7 @@ class DiagnostiquerCaisseSecurisee extends Command
             throw new RuntimeException("qpdf ne se lance pas ({$binaire}). Installez qpdf ou indiquez son chemin dans QPDF_BINAIRE : sans lui, tout PDF reçu est refusé.");
         }
 
-        $version = (string) strtok(trim($processus->getOutput()), "\n");
+        $version = AnalyseurDePdf::premiereLigne($processus->getOutput());
 
         if (! AnalyseurDePdf::versionAdmise($version)) {
             throw new RuntimeException("qpdf {$binaire} répond « {$version} » : l'analyse des PDF demande qpdf ".AnalyseurDePdf::VERSION_MINIMALE_DE_QPDF.' ou plus (sa description JSON version 2). Installez une version récente (README, point 4) : sans elle, tout PDF reçu est refusé.');

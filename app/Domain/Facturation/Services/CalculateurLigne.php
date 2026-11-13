@@ -6,6 +6,7 @@ namespace App\Domain\Facturation\Services;
 
 use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Domain\Tenancy\Support\ValeursLues;
+use Brick\Math\BigInteger;
 use InvalidArgumentException;
 use UnexpectedValueException;
 
@@ -67,7 +68,10 @@ use UnexpectedValueException;
  *    autre prix unitaire de vente montré en lecture s'affiche arrondi au
  *    centime, 0,83 € (prixUnitaireAffiche()). Aucun montant ne se calcule
  *    sur un prix affiché : 4 x 65,00 € TTC à 20 % font 216,67 € HT, et non
- *    4 x 54,17 € = 216,68 € ; la note de calcul du document l'explique.
+ *    4 x 54,17 € = 216,68 € ; la note de calcul du document l'explique, et
+ *    ne dit « à moins de deux centimes près » que si chaque ligne le
+ *    vérifie (puHtRetombeSurLeHt(), décision T105) : au-delà de 10 000
+ *    articles d'une ligne, l'écart peut l'atteindre.
  *
  * Ces calculs n'acceptent et ne rendent que des entiers, chacun dans son
  * unité : centimes d'un montant, dix-millièmes d'euro d'un coût d'achat
@@ -386,6 +390,51 @@ class CalculateurLigne
         }
 
         return array_map(fn (array $ligne): array => [...$ligne, 'montant_ttc' => $this->entier($ligne, 'montant_ht') + $this->entier($ligne, 'montant_tva')], $lignes);
+    }
+
+    /**
+     * Un montant réparti entre des parts au prorata de leur poids, en
+     * cumul dans leur ordre : la part cumulée jusqu'à chacune est le
+     * montant x le cumul des poids jusqu'à elle ÷ leur total, arrondie une
+     * fois au centime le plus proche (un demi-centime au centime
+     * supérieur), et chaque part est sa part cumulée moins celle des parts
+     * précédentes ; leur somme égale toujours le montant. 50,02 € répartis
+     * sur 120,00 € puis 40,00 € font 37,52 € (37,515 arrondi au centime
+     * supérieur) et 12,50 €. Un total de poids nul ne donne que des parts
+     * nulles.
+     *
+     * @template TCle of array-key
+     *
+     * @param  int  $montant  en centimes
+     * @param  array<TCle, int>  $poids  chacun en centimes, positif ou nul, dans leur ordre
+     * @return array<TCle, int> la part de chacun, en centimes, sous les mêmes clés
+     *
+     * @throws InvalidArgumentException
+     */
+    public function repartirAuProrata(int $montant, array $poids): array
+    {
+        $total = 0;
+
+        foreach ($poids as $unPoids) {
+            if ($unPoids < 0) {
+                throw new InvalidArgumentException('Un poids de la répartition ne peut pas être négatif.');
+            }
+
+            $total = $this->borne($total + $unPoids);
+        }
+
+        $cumul = 0;
+        $partCumuleePrecedente = 0;
+        $parts = [];
+
+        foreach ($poids as $cle => $unPoids) {
+            $cumul += $unPoids;
+            $partCumulee = $total === 0 ? 0 : $this->diviserArrondi($this->multiplier($this->borne($montant), $cumul), $total);
+            $parts[$cle] = $partCumulee - $partCumuleePrecedente;
+            $partCumuleePrecedente = $partCumulee;
+        }
+
+        return $parts;
     }
 
     /**
@@ -999,8 +1048,8 @@ class CalculateurLigne
      * centime, écrit comme un montant : « 8,333333 € », « 8,325 € »,
      * « 0,825 € », « 1 040,833333 € », « 45,00 € ». Il ne s'arrondit jamais
      * au centime : la quantité x ce prix, remise déduite, retombe sur le
-     * total HT de la ligne à moins de deux centimes près (voir
-     * prixUnitaireHtExact()). C'est le PU HT d'une ligne de vente sur les
+     * total HT de la ligne à moins de deux centimes près jusqu'à 10 000
+     * articles (voir prixUnitaireHtExact() et puHtRetombeSurLeHt()). C'est le PU HT d'une ligne de vente sur les
      * documents qui le montrent, leur PDF, leur fiche et les lignes de leur
      * formulaire -- factures, avoirs sur facture et devis à un
      * professionnel, ventes sans TVA française (décision de l'éditeur du
@@ -1068,6 +1117,28 @@ class CalculateurLigne
         $ht = $this->entier(['montant_ht' => $htCentimes], 'montant_ht');
 
         return $this->diviserArrondi($this->multiplier($ht, 10000), $quantite);
+    }
+
+    /**
+     * La quantité x le PU HT d'une ligne de vente (en millionièmes d'euro),
+     * remise déduite, calculée exactement, sans arrondi, s'écarte-t-elle de
+     * moins de deux centimes de son HT enregistré ? Vrai jusqu'à 10 000
+     * articles (voir prixUnitaireHtExact()) : 1 000 x 0,833333 € font
+     * 833,333 €, à 0,003 € des 833,33 € HT ; au-delà, l'écart peut
+     * l'atteindre : 100 000 x 0,833333 € font 83 333,30 €, à 0,03 € des
+     * 83 333,33 € HT. La note de calcul d'un document qui montre le PU HT
+     * le dit (voir MentionsFiscales::calcul(), décision T105).
+     *
+     * @param  int  $prixMillioniemes  le PU HT, en millionièmes d'euro
+     * @param  int  $remiseCentiemes  en centièmes de point
+     * @param  int  $htCentimes  le HT de la ligne, en centimes
+     */
+    public function puHtRetombeSurLeHt(int $quantite, int $prixMillioniemes, int $remiseCentiemes, int $htCentimes): bool
+    {
+        $produit = BigInteger::of($quantite)->multipliedBy($prixMillioniemes)->multipliedBy(10000 - $remiseCentiemes);
+        $ht = BigInteger::of($htCentimes)->multipliedBy(100_000_000);
+
+        return $produit->minus($ht)->abs()->isLessThan(200_000_000);
     }
 
     /**

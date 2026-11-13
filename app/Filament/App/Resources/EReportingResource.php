@@ -105,9 +105,9 @@ class EReportingResource extends Resource
      * la fiche d'une clôture et celle d'une journée de cette page : les
      * totaux journaliers par catégorie et par taux, en français, avec le
      * contrôle de leur total contre le net de la clôture, les encaissements
-     * des prestations de services, ceux qui restent à répartir, et le
-     * statut ; pour le magasin de démonstration, la seule mention qu'il
-     * n'est jamais déclaré.
+     * des prestations de services, par date et par taux, et le statut ;
+     * pour le magasin de démonstration, la seule mention qu'il n'est jamais
+     * déclaré.
      */
     public static function sectionDeLApercu(): InfolistSection
     {
@@ -133,7 +133,7 @@ class EReportingResource extends Resource
                         TextEntry::make('taux')->label('Taux'),
                         TextEntry::make('ht')->label('Base HT'),
                         TextEntry::make('tva')->label('TVA'),
-                        TextEntry::make('remarque')->label('Motif et remarque')->placeholder('—'),
+                        TextEntry::make('motif')->label('Motif')->placeholder('—'),
                     ])
                     ->columns(6)
                     ->visible(fn (ClotureCaisse $record): bool => self::apercu($record)->transactions !== [])
@@ -166,24 +166,6 @@ class EReportingResource extends Resource
                     ])
                     ->columns(3)
                     ->visible(fn (ClotureCaisse $record): bool => self::apercu($record)->encaissementsDeServices !== [])
-                    ->columnSpanFull(),
-                TextEntry::make('ereporting_a_repartir_mention')
-                    ->label('Encaissements à répartir')
-                    ->state(EReportingDesParticuliers::MENTION_A_REPARTIR)
-                    ->visible(fn (ClotureCaisse $record): bool => self::apercu($record)->encaissementsARepartir !== [])
-                    ->columnSpanFull(),
-                RepeatableEntry::make('ereporting_a_repartir')
-                    ->hiddenLabel()
-                    ->state(fn (ClotureCaisse $record): array => array_map(fn (array $encaissement): array => [
-                        'date' => self::date($encaissement['date']),
-                        'montant' => app(CalculateurLigne::class)->enEuros($encaissement['montant']),
-                    ], self::apercu($record)->encaissementsARepartir))
-                    ->schema([
-                        TextEntry::make('date')->label('Date'),
-                        TextEntry::make('montant')->label('Montant reçu'),
-                    ])
-                    ->columns(2)
-                    ->visible(fn (ClotureCaisse $record): bool => self::apercu($record)->encaissementsARepartir !== [])
                     ->columnSpanFull(),
                 TextEntry::make('ereporting_statut')
                     ->label('Statut')
@@ -258,7 +240,7 @@ class EReportingResource extends Resource
     /**
      * Les lignes de l'aperçu, en une phrase chacune : « Livraisons de
      * biens, 20 % : 83,33 € HT, 16,67 € de TVA », puis les encaissements
-     * des prestations de services et ceux qui restent à répartir.
+     * des prestations de services, par date et par taux.
      *
      * @return list<string>
      */
@@ -275,25 +257,20 @@ class EReportingResource extends Resource
                 $transaction['motif'] === null ? '' : " ({$transaction['motif']})",
             ), $apercu->transactions),
             ...array_map(fn (array $encaissement): string => sprintf(
-                'Prestations de services encaissées le %s à %s : %s (à confirmer)',
+                'Prestations de services encaissées le %s à %s : %s',
                 self::date($encaissement['date']),
                 ClotureCaisse::tauxEnTexte($encaissement['taux']),
                 $calculateur->enEuros($encaissement['montant']),
             ), $apercu->encaissementsDeServices),
-            ...array_map(fn (array $encaissement): string => sprintf(
-                'Encaissement à répartir le %s : %s',
-                self::date($encaissement['date']),
-                $calculateur->enEuros($encaissement['montant']),
-            ), $apercu->encaissementsARepartir),
         ];
     }
 
     /**
      * Les transactions de l'aperçu telles qu'elles s'affichent : la date de
      * la journée, la catégorie et le taux en toutes lettres, les montants
-     * en euros, le motif suivi de la remarque.
+     * en euros, et le motif d'une vente sans TVA française.
      *
-     * @return list<array{date: string, categorie: string, taux: string, ht: string, tva: string, remarque: string|null}>
+     * @return list<array{date: string, categorie: string, taux: string, ht: string, tva: string, motif: string|null}>
      */
     private static function transactions(ApercuEReporting $apercu): array
     {
@@ -305,7 +282,7 @@ class EReportingResource extends Resource
             'taux' => ClotureCaisse::tauxEnTexte($transaction['taux']),
             'ht' => $calculateur->enEuros($transaction['ht']),
             'tva' => $calculateur->enEuros($transaction['tva']),
-            'remarque' => $transaction['motif'] === null ? null : trim("{$transaction['motif']}. {$transaction['remarque']}"),
+            'motif' => $transaction['motif'],
         ], $apercu->transactions);
     }
 

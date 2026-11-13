@@ -8,12 +8,14 @@ use App\Domain\Facturation\Actions\EmettreLaFactureRectificativeAction;
 use App\Domain\Facturation\Actions\FaireLAvoirDeRegularisationAction;
 use App\Domain\Facturation\Actions\NoterBordereauDetaxeAction;
 use App\Domain\Facturation\Actions\NoterLeVisaDuBordereauAction;
+use App\Domain\Facturation\Actions\RegulariserUneExonerationNonProuveeAction;
 use App\Domain\Facturation\Actions\RelancerLaTransmissionAction;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Enums\TypePreuve;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\PreuvesRequises;
+use App\Domain\Facturation\Services\RegularisationDUneExoneration;
 use App\Domain\Facturation\Services\RegularisationDUneFacture;
 use App\Domain\Tenancy\Support\CompteConnecte;
 use App\Domain\Tenancy\Support\ValeurSimple;
@@ -55,7 +57,11 @@ use Illuminate\Contracts\Support\Htmlable;
  * gestes faits dans l'ordre que l'on veut (voir RegularisationDUneFacture)
  * : « Faire l'avoir de régularisation », pour qui peut faire un avoir dans
  * ce magasin, et « Émettre la facture rectificative », pour qui peut créer
- * et émettre une facture dans ce magasin, jamais le propriétaire.
+ * et émettre une facture dans ce magasin, jamais le propriétaire. Un
+ * export ou une livraison vers un DOM sans preuve de sortie 150 jours après
+ * sa date se régularise ici d'un seul geste, « Régulariser l'exonération »
+ * (voir RegulariserUneExonerationNonProuveeAction), pour qui vend dans ce
+ * magasin.
  */
 class ViewFacture extends ViewRecord
 {
@@ -97,6 +103,7 @@ class ViewFacture extends ViewRecord
             $this->faireUnAvoir(),
             $this->faireLAvoirDeRegularisation(),
             $this->emettreLaFactureRectificative(),
+            $this->regulariserLExoneration(),
             $this->ajouterUnePreuve(),
             $this->noterLeBordereauDeDetaxe(),
             $this->noterLeVisaDuBordereau(),
@@ -181,6 +188,39 @@ class ViewFacture extends ViewRecord
                 $rectificative = app(EmettreLaFactureRectificativeAction::class)->handle(CompteConnecte::exiger(), $record, ValeurSimple::enTexteOuNul($data['jeton']));
 
                 Notification::make()->title("Facture rectificative {$rectificative->numero} émise.")->success()->send();
+                $this->redirect(FactureResource::getUrl('view', ['record' => $rectificative]));
+            }));
+    }
+
+    /**
+     * « Régulariser l'exonération » d'un export hors de l'Union ou d'une
+     * livraison vers un DOM dont la preuve de sortie manque 150 jours après
+     * sa date (voir RegulariserUneExonerationNonProuveeAction), pour qui
+     * crée et émet une facture et fait un avoir dans ce magasin, jamais le
+     * propriétaire hors du magasin de démonstration ni un compte d'un
+     * cabinet lié. La fenêtre de confirmation dit ce qui va s'émettre et
+     * porte le jeton de la demande (R3) ; la facture rectificative s'ouvre
+     * ensuite.
+     */
+    private function regulariserLExoneration(): Actions\Action
+    {
+        return Actions\Action::make('regulariserLExoneration')
+            ->label('Régulariser l\'exonération')
+            ->icon('heroicon-o-scale')
+            ->color('danger')
+            ->requiresConfirmation()
+            ->modalHeading('Régulariser l\'exonération')
+            ->modalDescription('La preuve de sortie de cette vente n\'est pas venue 150 jours après sa date : son exonération tombe. Un avoir de régularisation crédite ce qui reste de cette vente, sans retour en stock, puis une facture rectificative la refait à la TVA française, au même prix TTC : le magasin reverse la TVA sur ce que le client a payé. Le crédit de l\'avoir la règle de ce que la vente avait reçu. Des numéros définitifs leur sont attribués.')
+            ->modalSubmitActionLabel('Régulariser')
+            ->form([FactureResource::champDuJeton()])
+            ->visible(fn (Facture $record): bool => (auth()->user()?->can('create', Facture::class) ?? false)
+                && auth()->user()->can(PermissionRegistry::FACTURE_EMETTRE)
+                && auth()->user()->can('create', Avoir::class)
+                && app(RegularisationDUneExoneration::class)->refus($record, $record->magasin->calendrier()->aujourdhui()) === null)
+            ->action(fn (Facture $record, array $data) => static::executerSansCasser(function () use ($record, $data): void {
+                $rectificative = app(RegulariserUneExonerationNonProuveeAction::class)->handle(CompteConnecte::exiger(), $record, ValeurSimple::enTexteOuNul($data['jeton']));
+
+                Notification::make()->title("Exonération régularisée : facture {$rectificative->numero} émise.")->success()->send();
                 $this->redirect(FactureResource::getUrl('view', ['record' => $rectificative]));
             }));
     }

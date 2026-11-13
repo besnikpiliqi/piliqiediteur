@@ -90,6 +90,8 @@ class InscriptionSociete extends Register
 {
     public const MESSAGE_NEUTRE = 'Si ces informations permettent l\'inscription, un e-mail vient d\'être envoyé à cette adresse. Le lien est valable 24 heures.';
 
+    public const INFORMATION_ASSUJETTI_UNIQUE = 'Une société membre d\'un assujetti unique (groupe TVA, art. 256 C du CGI) ne peut pas encore vendre dans PILIQI : elle peut s\'inscrire et essayer le magasin de démonstration, mais aucune vente, facture, avoir, encaissement ni devis numéroté réel n\'y sera possible.';
+
     public const DEMANDES_PAR_HEURE_ET_PAR_ADRESSE_IP = 20;
 
     public const DEMANDES_PAR_HEURE_POUR_UN_SIREN_ET_UNE_ADRESSE = 3;

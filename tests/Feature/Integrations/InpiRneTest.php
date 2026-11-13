@@ -114,13 +114,14 @@ class InpiRneTest extends TestCase
     /**
      * L'identité d'une société se lit dans sa formalité : sa dénomination,
      * le code de sa catégorie juridique, son capital en euros et s'il est
-     * variable, son greffe d'immatriculation et son siège.
+     * variable, son immatriculation, « {registre} {lieuRegistre} » (« RCS
+     * Lyon », décision T99), et son siège.
      */
     public function test_l_identite_d_une_societe_se_lit_dans_la_formalite(): void
     {
         $formalite = self::formaliteDeSociete();
         $formalite['formality']['content']['personneMorale']['identite'] = [
-            'entreprise' => ['denomination' => 'SOCIETE FICTIVE', 'formeJuridique' => '5710', 'greffeImmatriculation' => 'Lyon'],
+            'entreprise' => ['denomination' => 'SOCIETE FICTIVE', 'formeJuridique' => '5710', 'registre' => 'RCS', 'lieuRegistre' => 'Lyon'],
             'description' => ['montantCapital' => 15000, 'deviseCapital' => 'EUR', 'capitalVariable' => false],
         ];
         Http::fake([
@@ -154,6 +155,28 @@ class InpiRneTest extends TestCase
 
         $this->assertSame(['SOCIETE FICTIVE', null, null, null, null, null], [$identite->denomination, $identite->categorieJuridique, $identite->capital, $identite->deviseCapital, $identite->capitalVariable, $identite->immatriculation]);
         $this->assertNotNull($identite->adresseDuSiege);
+    }
+
+    /**
+     * Sans le lieu du registre, l'immatriculation reste nulle : le
+     * propriétaire la complète (décision T99) ; le reste de l'identité se
+     * lit.
+     */
+    public function test_sans_le_lieu_du_registre_l_immatriculation_reste_nulle(): void
+    {
+        $formalite = self::formaliteDeSociete();
+        $formalite['formality']['content']['personneMorale']['identite'] = [
+            'entreprise' => ['denomination' => 'SOCIETE FICTIVE', 'formeJuridique' => '5710', 'registre' => 'RCS'],
+            'description' => ['montantCapital' => 15000, 'deviseCapital' => 'EUR', 'capitalVariable' => false],
+        ];
+        Http::fake([
+            self::URL.'/sso/login' => Http::response(['token' => self::JETON]),
+            self::URL.'/companies/000000018' => Http::response($formalite),
+        ]);
+
+        $identite = (new InpiRne)->identite('000000018');
+
+        $this->assertSame(['SOCIETE FICTIVE', '5710', '15000.00', null], [$identite->denomination, $identite->categorieJuridique, $identite->capital, $identite->immatriculation]);
     }
 
     public function test_un_siren_inconnu_du_registre_n_a_pas_d_identite(): void

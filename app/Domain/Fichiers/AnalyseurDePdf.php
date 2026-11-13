@@ -152,7 +152,18 @@ final class AnalyseurDePdf
      */
     public static function versionAdmise(string $version): bool
     {
-        return preg_match('/^qpdf version (\d+)\.\d+/', trim($version), $lue) === 1 && (int) $lue[1] >= self::VERSION_MINIMALE_DE_QPDF;
+        return preg_match('/^qpdf version (\d+)\.\d+/', self::premiereLigne($version), $lue) === 1 && (int) $lue[1] >= self::VERSION_MINIMALE_DE_QPDF;
+    }
+
+    /**
+     * La première ligne de ce qu'écrit un programme, sans espaces autour
+     * ni fin de ligne, quelle qu'elle soit (« \n », ou « \r\n » sous
+     * Windows, dont le retour chariot, imprimé dans une cellule du
+     * diagnostic, en effacerait la ligne) : « qpdf version 12.2.0 ».
+     */
+    public static function premiereLigne(string $sortie): string
+    {
+        return trim(preg_split('/\R/', trim($sortie), 2)[0] ?? '');
     }
 
     /**
@@ -599,8 +610,8 @@ final class AnalyseurDePdf
             $departs[$tableDeSecours] = true;
         }
 
-        for ($ligne = strtok($xref, "\n"); $ligne !== false; $ligne = strtok("\n")) {
-            if (sscanf($ligne, '%d/%d: uncompressed; offset = %d', $numero, $generation, $position) === 3 && $position >= $debut && $position < $startxref) {
+        foreach (preg_split('/\R/', $xref) ?: [] as $ligne) {
+            if (sscanf(trim($ligne), '%d/%d: uncompressed; offset = %d', $numero, $generation, $position) === 3 && $position >= $debut && $position < $startxref) {
                 $departs[$position] = true;
             }
         }

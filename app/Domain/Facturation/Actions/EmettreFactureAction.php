@@ -102,9 +102,11 @@ use LogicException;
  * sans jeton : la vente porte le sien.
  *
  * Une facture rectificative, après la correction du SIREN de la société
- * (voir EmettreLaFactureRectificativeAction, qui l'appelle sans jeton),
- * reproduit la facture qu'elle rectifie : ni le type de son client, ni la
- * franchise de TVA, ni sa nature d'opération ne se recontrôlent, et elle
+ * (voir EmettreLaFactureRectificativeAction, qui l'appelle sans jeton) ou
+ * pour une exonération non prouvée, en vente en France (voir
+ * RegulariserUneExonerationNonProuveeAction), reproduit la facture qu'elle
+ * rectifie : ni le type de son client, ni la franchise de TVA, ni sa
+ * nature d'opération ne se recontrôlent, et elle
  * garde la vérification VIES de cette facture et la copie de son client
  * (voir Facture::clientAFiger()) ; elle ne sort rien du stock et n'en
  * contrôle aucun. Elle s'émet sous l'identité actuelle de la société, qui

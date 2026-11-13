@@ -443,4 +443,33 @@ class OutillageTest extends TestCase
             $this->assertArrayHasKey($extension, $composer['require'] ?? [], $extension.' n\'est pas déclarée dans composer.json.');
         }
     }
+
+    /**
+     * D76 : chaque point légal ou réglementaire a une décision de Claude,
+     * appliquée sans attendre ; aucun texte du code, des migrations, des
+     * vues ni de CLAUDE.md ne dit attendre l'avis d'un expert-comptable ou
+     * d'un professionnel, ni n'en garde la marque (« à confirmer », point
+     * soumis à l'éditeur, règle attendue). Témoins : chaque tournure est
+     * reconnue.
+     */
+    public function test_aucun_texte_n_attend_l_avis_d_un_professionnel(): void
+    {
+        $motif = '/confirmation de l\'expert-comptable|confirm(é|ée|er) par l\'expert-comptable|faire confirmer|validée par l\'expert-comptable|en attente de (la confirmation|l\'avis) d(e l\'|u |\'un )(expert|professionnel)|Point soumis à l\'éditeur|\(à confirmer\)|attend la règle/u';
+        $fichiers = [base_path('CLAUDE.md')];
+
+        foreach (['app', 'database', 'resources'] as $dossier) {
+            foreach (new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator(base_path($dossier), \FilesystemIterator::SKIP_DOTS)) as $fichier) {
+                if ($fichier instanceof \SplFileInfo && in_array($fichier->getExtension(), ['php', 'md'], true)) {
+                    $fichiers[] = $fichier->getPathname();
+                }
+            }
+        }
+
+        $trouves = array_values(array_filter($fichiers, fn (string $fichier): bool => preg_match($motif, (string) file_get_contents($fichier)) === 1));
+
+        $this->assertSame([], $trouves);
+        foreach (['en attente de la confirmation de l\'expert-comptable', 'à faire confirmer par l\'expert-comptable', 'une durée validée par l\'expert-comptable', 'Point soumis à l\'éditeur : x', 'Encaissement le 05/10 (à confirmer)', 'la répartition attend la règle'] as $temoin) {
+            $this->assertMatchesRegularExpression($motif, $temoin);
+        }
+    }
 }

@@ -25,8 +25,9 @@ use Throwable;
  * jeton dans l'en-tête Authorization.
  *
  * La formalité se lit avec tolérance (documentation technique des API
- * formalités v4.0 de l'INPI, structure à confirmer sur des réponses réelles
- * avant la mise en production) :
+ * formalités v4.0 de l'INPI ; chemins retenus par la décision T99 de
+ * l'onglet « À faire vérifier par un professionnel », appliquée, qu'une
+ * réponse réelle de l'API remplacerait par un lot qui la suit) :
  * - formality.content.personneMorale.composition.pouvoirs : les dirigeants
  *   d'une société, chacun une personne physique (individu.descriptionPersonne :
  *   nom, nomUsage, prenoms, dateDeNaissance AAAA-MM) ou une personne morale
@@ -57,8 +58,8 @@ class InpiRne implements RegistreNationalDesEntreprises
      * de représenter l'entreprise : gérant (30), président du conseil
      * d'administration (51), directeur général (53), directeur général
      * délégué (56), président du directoire (65), directeur général unique
-     * (66), président (73). À confirmer sur la nomenclature officielle avant
-     * la mise en production.
+     * (66), président (73), d'après la nomenclature des rôles de l'INPI
+     * (décision T99, appliquée).
      */
     public const ROLES_QUI_REPRESENTENT = ['30', '51', '53', '56', '65', '66', '73'];
 
@@ -98,12 +99,12 @@ class InpiRne implements RegistreNationalDesEntreprises
      * L'identité d'une société (personneMorale.identite) : entreprise.denomination,
      * entreprise.formeJuridique (le code à 4 chiffres de sa catégorie
      * juridique), description.montantCapital, description.deviseCapital,
-     * description.capitalVariable, entreprise.greffeImmatriculation (la
-     * ville du greffe, « RCS {ville} ») ; d'un entrepreneur individuel
-     * (personnePhysique.identite.entreprise), sa seule forme juridique,
-     * sans capital. Chemins à confirmer dans le dictionnaire de données
-     * officiel du RNE avant la mise en production ; un champ absent ou
-     * d'un autre type est nul.
+     * description.capitalVariable, et l'immatriculation, « {registre}
+     * {lieuRegistre} » de son bloc entreprise (« RCS Lyon ») quand les deux
+     * sont remplis, sinon nulle, le propriétaire la complétant ; d'un
+     * entrepreneur individuel (personnePhysique.identite.entreprise), sa
+     * forme juridique et son immatriculation, sans capital (décision T99).
+     * Un champ absent ou d'un autre type est nul.
      */
     public function identite(string $siren): ?IdentiteRne
     {
@@ -119,7 +120,8 @@ class InpiRne implements RegistreNationalDesEntreprises
         $description = $morale && is_array($identite) && is_array($identite['description'] ?? null) ? $identite['description'] : [];
         $categorie = $this->texte($entreprise, 'formeJuridique');
         $capital = $this->texte($description, 'montantCapital');
-        $greffe = $this->texte($entreprise, 'greffeImmatriculation');
+        $registre = $this->texte($entreprise, 'registre');
+        $lieuDuRegistre = $this->texte($entreprise, 'lieuRegistre');
 
         return new IdentiteRne(
             denomination: $morale ? $this->texte($entreprise, 'denomination') : null,
@@ -127,7 +129,7 @@ class InpiRne implements RegistreNationalDesEntreprises
             capital: $this->capital($capital),
             deviseCapital: $this->texte($description, 'deviseCapital'),
             capitalVariable: is_bool($description['capitalVariable'] ?? null) ? $description['capitalVariable'] : null,
-            immatriculation: $morale && $greffe !== null ? mb_substr("RCS {$greffe}", 0, 100) : null,
+            immatriculation: $registre !== null && $lieuDuRegistre !== null ? mb_substr("{$registre} {$lieuDuRegistre}", 0, 100) : null,
             adresseDuSiege: $this->siege($contenu),
         );
     }

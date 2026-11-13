@@ -239,7 +239,7 @@ final class GardesDuStock
             ."ELSIF NEW.type = '".TypeMouvementStock::RetourClient->value."' THEN "
             .'SELECT a.date_emission, la.quantite, lf.facture_id INTO instant, plafond, vendue FROM lignes_avoir la '
             .'JOIN avoirs a ON a.magasin_id = la.magasin_id AND a.id = la.avoir_id JOIN lignes_facture lf ON lf.magasin_id = la.magasin_id AND lf.id = la.ligne_facture_id '
-            .'WHERE la.magasin_id = NEW.magasin_id AND la.id = NEW.source_id AND la.produit_id = NEW.produit_id AND a.numero IS NOT NULL AND NOT a.regularisation; '
+            .'WHERE la.magasin_id = NEW.magasin_id AND la.id = NEW.source_id AND la.produit_id = NEW.produit_id AND a.numero IS NOT NULL AND a.motif_regularisation IS NULL; '
             ."IF NOT FOUND THEN RAISE EXCEPTION '%', TG_ARGV[0]; END IF; "
             .'WITH RECURSIVE avant(id, rectifiee) AS (SELECT f.id, f.facture_rectifiee_id FROM factures f WHERE f.magasin_id = NEW.magasin_id AND f.id = vendue '
             .'UNION SELECT f.id, f.facture_rectifiee_id FROM factures f JOIN avant ON f.id = avant.rectifiee WHERE f.magasin_id = NEW.magasin_id), '

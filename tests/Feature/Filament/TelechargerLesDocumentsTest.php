@@ -20,6 +20,7 @@ use App\Domain\Facturation\Models\Facture;
 use App\Domain\Fichiers\PieceDeposee;
 use App\Domain\Tenancy\Actions\ChangerFinExerciceAction;
 use App\Domain\Tenancy\Actions\ModifierMembreAction;
+use App\Domain\Tenancy\Enums\OrganeDeLaDecision;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\StatutDuTelechargement;
 use App\Domain\Tenancy\Jobs\PreparerLeTelechargementDesDocumentsJob;
@@ -113,7 +114,7 @@ class TelechargerLesDocumentsTest extends TestCase
         $juin->societe->forceFill(['mois_fin_exercice' => 6])->save();
         $this->lierLeCabinet($cabinet, $juin, [...PermissionRegistry::parDefautDuCabinet($juin->societe->type_activite), PermissionRegistry::DOCUMENTS_TELECHARGER]);
         $this->confier($collaborateur, [$this->magasin, $juin]);
-        app(ChangerFinExerciceAction::class)->handle($this->magasin->societe->fresh(), 6, '2026-06-30', '2026-03-05', 'Claire Martin, Cabinet Martin et associés', new InterventionDeLEditeur('Procès-verbal de l\'assemblée générale reçu', 'PV-AGE-2026-03-05', ['alice']));
+        app(ChangerFinExerciceAction::class)->handle($this->magasin->societe->fresh(), 6, '2026-06-30', '2026-03-05', OrganeDeLaDecision::AssembleeGeneraleExtraordinaire, 'Claire Martin, Cabinet Martin et associés', null, new InterventionDeLEditeur('Procès-verbal de l\'assemblée générale reçu', 'PV-AGE-2026-03-05', ['alice']));
         $this->dansLEspaceDuCabinet($cabinet, $collaborateur->refresh());
 
         $page = Livewire::test(TelechargerLesDocumentsDuCabinet::class)->set('client', $juin->societe->uuid);

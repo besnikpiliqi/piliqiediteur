@@ -68,7 +68,7 @@ class AppliquerAvoirsDisponiblesAction
             $avoirs = collect([$reserve])->filter()->concat(Avoir::query()
                 ->where('client_id', $facture->client_id)
                 ->where('statut', StatutAvoir::Emise)
-                ->where('regularisation', false)
+                ->whereNull('motif_regularisation')
                 ->orderBy('date_emission')
                 ->orderBy('id')
                 ->lockForUpdate()

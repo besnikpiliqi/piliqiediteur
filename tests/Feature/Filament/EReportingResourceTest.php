@@ -7,6 +7,9 @@ use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CloturerCaisseAction;
+use App\Domain\Facturation\Actions\CreerFactureAction;
+use App\Domain\Facturation\Actions\EmettreFactureAction;
+use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Tenancy\Enums\RoleMagasin;
@@ -78,8 +81,38 @@ class EReportingResourceTest extends TestCase
             ->assertCanNotSeeTableRecords([$duSix])
             ->assertSee('Livraisons de biens, 20 % : 10,00 € HT, 2,00 € de TVA')
             ->assertSee('Prestations de services, 20 % : 50,00 € HT, 10,00 € de TVA')
-            ->assertSee('Prestations de services encaissées le 07/10/2026 à 20 % : 60,00 € (à confirmer)')
+            ->assertSee('Prestations de services encaissées le 07/10/2026 à 20 % : 60,00 €')
+            ->assertDontSee('à confirmer')
             ->assertSee('Non transmis : plateforme pas encore raccordée (étape 2).');
+    }
+
+    /**
+     * Un livre à 10,55 € et une réparation à 60,00 € vendus le 5, dont
+     * 30,00 € seulement sont reçus : la fiche de la journée et la liste
+     * montrent la part de la réparation, 25,51 € au taux de 20 % (T107.1),
+     * et plus aucun bloc « Encaissements à répartir ».
+     */
+    public function test_un_reglement_partiel_s_affiche_reparti_entre_les_taux(): void
+    {
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
+        $magasin = $this->ouvrirLeMagasin();
+        $responsable = $this->responsableDeTest($magasin);
+        $client = Client::factory()->create();
+        $mixte = app(EmettreFactureAction::class)->handle($responsable, app(CreerFactureAction::class)->handle($responsable, $client, [
+            ['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 10.55, 'taux_tva' => 5.5, 'suivi_stock' => false])->id, 'quantite' => 1],
+            ['service_id' => Service::factory()->create()->id, 'prix_unitaire_ttc' => 60, 'taux_tva' => 20, 'quantite' => 1],
+        ]));
+        app(EnregistrerPaiementAction::class)->handle($responsable, $client, ['mode_paiement' => ModePaiement::Especes->value, 'montant' => 30, 'recu_le' => '2026-10-05'], [['facture_id' => $mixte->id, 'montant' => 30]]);
+        $this->travelTo(self::aParis('2026-10-05 19:00:00'));
+        $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, '2026-10-05');
+
+        Livewire::test(ViewEReporting::class, ['record' => $cloture->getRouteKey()])
+            ->assertSeeInOrder(['Encaissements des prestations de services', '05/10/2026', '20 %', '25,51 €'])
+            ->assertDontSee('Encaissements à répartir')
+            ->assertDontSee('à répartir');
+        Livewire::test(ListEReporting::class)
+            ->assertSee('Prestations de services encaissées le 05/10/2026 à 20 % : 25,51 €')
+            ->assertDontSee('Encaissement à répartir');
     }
 
     /**

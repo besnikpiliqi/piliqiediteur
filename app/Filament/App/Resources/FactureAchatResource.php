@@ -46,6 +46,7 @@ use Filament\Forms\Components\Checkbox;
 use Filament\Forms\Components\Component;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Hidden;
+use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Section as FormSection;
 use Filament\Forms\Components\Select;
@@ -592,6 +593,9 @@ class FactureAchatResource extends Resource
 
         return [
             self::champDuJeton(),
+            Placeholder::make('information_ristourne')
+                ->hiddenLabel()
+                ->content(AvoirFournisseurResource::INFORMATION_RISTOURNE),
             Select::make('facture_achat_id')
                 ->label('Facture d\'achat')
                 ->helperText('Une facture d\'achat validée du magasin dont des produits restent à retourner : encore en stock, et pas déjà retournés.')

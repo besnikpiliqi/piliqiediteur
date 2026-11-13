@@ -28,6 +28,8 @@ use App\Filament\App\Resources\DevisResource\Pages\CreateDevis;
 use App\Filament\App\Resources\DevisResource\Pages\EditDevis;
 use App\Filament\App\Resources\DevisResource\Pages\ListDevis;
 use App\Filament\App\Resources\DevisResource\Pages\ViewDevis;
+use App\Filament\App\Resources\FactureResource;
+use App\Filament\App\Resources\FactureResource\Pages\CreateFacture;
 use App\Models\User;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Select;
@@ -39,6 +41,23 @@ use Tests\TestCase;
 class DevisResourceTest extends TestCase
 {
     use RefreshDatabase;
+
+    /**
+     * T50.1 : sous les conditions de paiement, le formulaire d'un devis,
+     * comme celui d'une facture, dit qu'un acompte reçu avant la facture ne
+     * s'enregistre pas encore dans PILIQI.
+     */
+    public function test_les_formulaires_du_devis_et_de_la_facture_disent_qu_un_acompte_ne_s_enregistre_pas_encore(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $this->actingAs($this->responsableDeTest($magasin));
+        Filament::setTenant($magasin);
+        $phrase = 'Un acompte reçu avant la facture ne s\'enregistre pas encore dans PILIQI.';
+
+        Livewire::test(CreateDevis::class)->assertSee($phrase);
+        Livewire::test(CreateFacture::class)->assertSee($phrase);
+        $this->assertSame($phrase, FactureResource::INFORMATION_ACOMPTE);
+    }
 
     /**
      * Les conditions de paiement d'un devis s'impriment, comme celles d'une

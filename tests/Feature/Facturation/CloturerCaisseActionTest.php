@@ -269,8 +269,8 @@ class CloturerCaisseActionTest extends TestCase
         $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, Calendrier::deParis()->aujourdhui());
 
         $this->assertSame([
-            ['categorie' => CategorieEReporting::LivraisonsDeBiens, 'taux' => 2000, 'ht' => 5000, 'tva' => 1000, 'motif' => null, 'remarque' => null],
-            ['categorie' => CategorieEReporting::PrestationsDeServices, 'taux' => 2000, 'ht' => 2500, 'tva' => 500, 'motif' => null, 'remarque' => null],
+            ['categorie' => CategorieEReporting::LivraisonsDeBiens, 'taux' => 2000, 'ht' => 5000, 'tva' => 1000, 'motif' => null],
+            ['categorie' => CategorieEReporting::PrestationsDeServices, 'taux' => 2000, 'ht' => 2500, 'tva' => 500, 'motif' => null],
         ], app(EReportingDesParticuliers::class)->apercu($cloture)->transactions);
     }
 

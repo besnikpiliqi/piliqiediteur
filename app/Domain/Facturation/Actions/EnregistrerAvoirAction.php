@@ -8,6 +8,7 @@ use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Models\Avoir;
+use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\ActionsUniques;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
@@ -72,6 +73,7 @@ class EnregistrerAvoirAction
 
         return $this->actionsUniques->executer($jeton, ActionsUniques::ENREGISTRER_AVOIR, Avoir::class, $auteur, $parametres, fn () => $this->registre->verrouiller($magasin), fn (): Avoir => DB::transaction(function () use ($auteur, $client, $lignesSelectionnees, $motif, $magasin): Avoir {
             $this->registre->verrouiller($magasin);
+            Magasin::query()->whereKey($magasin->getKey())->firstOrFail()->verifierQuIlNEstPasDansUnAssujettiUnique();
             $compte = $this->lecteur->exigerSousVerrou($auteur, 'create', $magasin, Avoir::class);
 
             return $this->emettreAvoir->handle($compte, $this->creerAvoir->handle($compte, $client, $lignesSelectionnees, $motif));

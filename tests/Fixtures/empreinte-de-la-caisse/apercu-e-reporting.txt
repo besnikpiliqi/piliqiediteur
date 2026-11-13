@@ -7,18 +7,15 @@
             "taux": 2000,
             "ht": 1000,
             "tva": 200,
-            "motif": null,
-            "remarque": null
+            "motif": null
         },
         {
             "categorie": "TLB1",
             "taux": 550,
             "ht": 616,
             "tva": 34,
-            "motif": null,
-            "remarque": null
+            "motif": null
         }
     ],
-    "encaissementsDeServices": [],
-    "encaissementsARepartir": []
+    "encaissementsDeServices": []
 }

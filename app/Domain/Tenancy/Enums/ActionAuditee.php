@@ -107,6 +107,7 @@ enum ActionAuditee: string implements HasLabel
     case InventaireOuvertureValide = 'inventaire_ouverture_valide';
     case AvoirDeRegularisationEmis = 'avoir_de_regularisation_emis';
     case FactureRectificativeEmise = 'facture_rectificative_emise';
+    case ExonerationNonProuveeRegularisee = 'exoneration_non_prouvee_regularisee';
     case DevisAccepteEnLigne = 'devis_accepte_en_ligne';
     case DevisRefuseEnLigne = 'devis_refuse_en_ligne';
     case LienDuDevisRetire = 'lien_du_devis_retire';
@@ -218,6 +219,7 @@ enum ActionAuditee: string implements HasLabel
             self::InventaireOuvertureValide => 'Inventaire d\'ouverture validé',
             self::AvoirDeRegularisationEmis => 'Avoir de régularisation émis après la correction du SIREN',
             self::FactureRectificativeEmise => 'Facture rectificative émise après la correction du SIREN',
+            self::ExonerationNonProuveeRegularisee => 'Exonération non prouvée régularisée à la TVA française',
             self::DevisAccepteEnLigne => 'Devis accepté en ligne par le client',
             self::DevisRefuseEnLigne => 'Devis refusé en ligne par le client',
             self::LienDuDevisRetire => 'Lien de réponse d\'un devis retiré',
@@ -265,7 +267,7 @@ enum ActionAuditee: string implements HasLabel
             // s'inscrit elle-même.
             self::SocieteInscrite => ['siren', 'type_activite', 'code_activite', 'nomenclature_activite', 'raison_sociale', 'forme_juridique', 'proprietaire', 'origine'],
             self::IdentiteModifiee => Societe::CHAMPS_DE_L_IDENTITE,
-            self::ParametresFiscauxModifies => ['regime_tva', 'option_debits_tva', 'mois_fin_exercice'],
+            self::ParametresFiscauxModifies => ['regime_tva', 'option_debits_tva', 'mois_fin_exercice', 'membre_assujetti_unique'],
             self::VerificationEnregistree => ['type', 'resultat', 'fournisseur', 'siret'],
             // Le type de la pièce, son nom réécrit et l'empreinte du fichier
             // conservé ; le nom tel que reçu, l'empreinte et la taille du
@@ -357,10 +359,10 @@ enum ActionAuditee: string implements HasLabel
             self::TicketZNonSigneRetire => ['numero', 'journee', 'documents_detaches'],
             // Le mois de fin d'exercice et la fin de l'exercice en cours,
             // avant et après le changement légal de la date de clôture, le
-            // jour de la décision et l'expert-comptable de la société qui a
-            // validé la durée de l'exercice transitoire (voir
+            // jour de la décision, l'organe qui l'a prise et, s'il y en a
+            // un, l'expert-comptable consulté (voir
             // ChangerFinExerciceAction).
-            self::FinExerciceChangee => ['mois_fin_exercice', 'fin_exercice_en_cours', 'decision_du', 'duree_validee_par'],
+            self::FinExerciceChangee => ['mois_fin_exercice', 'fin_exercice_en_cours', 'decision_du', 'organe_de_la_decision', 'duree_validee_par'],
             self::EtablissementPrincipalChoisi => ['etablissement_principal'],
             // Les droits de chaque compte touché, avant et après, avec son
             // nom au moment de l'opération, son rôle de société et ses rôles
@@ -476,6 +478,11 @@ enum ActionAuditee: string implements HasLabel
             // RegularisationDUneFacture).
             self::AvoirDeRegularisationEmis => ['avoir', 'facture', 'siren_correct', 'total_ttc'],
             self::FactureRectificativeEmise => ['facture', 'facture_rectifiee', 'total_ttc'],
+            // La vente exonérée dont la preuve de sortie manque, son avoir
+            // de régularisation, sa facture rectificative à la TVA
+            // française, son TTC et sa TVA, en centimes (voir
+            // RegularisationDUneExoneration).
+            self::ExonerationNonProuveeRegularisee => ['facture', 'avoir', 'facture_rectificative', 'total_ttc', 'total_tva'],
             self::DevisAccepteEnLigne => ['devis', 'signataire', 'empreinte_du_devis'],
             self::DevisRefuseEnLigne => ['devis', 'motif', 'empreinte_du_devis'],
             self::LienDuDevisRetire => ['devis'],

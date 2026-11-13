@@ -36,6 +36,7 @@ use App\Domain\Facturation\Services\CopieClient;
 use App\Domain\Facturation\Services\DocumentNumberingService;
 use App\Domain\Facturation\Services\PreuvesRequises;
 use App\Domain\Facturation\Services\ReglementsALEmission;
+use App\Domain\Facturation\Services\RegularisationDUneExoneration;
 use App\Domain\Stock\Models\MouvementStock;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Domain\Tenancy\Concerns\FigeLeNomDeSesAuteurs;
@@ -292,8 +293,9 @@ class Facture extends Model implements DocumentEnvoyable
     /**
      * La facture du même magasin que rectifie cette facture rectificative,
      * émise après la correction du SIREN de la société par l'éditeur (voir
-     * EmettreLaFactureRectificativeAction) ; aucune pour toute autre
-     * facture.
+     * EmettreLaFactureRectificativeAction) ou pour une exonération non
+     * prouvée (voir RegulariserUneExonerationNonProuveeAction) ; aucune
+     * pour toute autre facture.
      *
      * @return BelongsTo<self, $this>
      */
@@ -315,9 +317,11 @@ class Facture extends Model implements DocumentEnvoyable
 
     /**
      * Est-ce la facture rectificative d'une facture que l'examen du SIREN
-     * de la société a désignée ? Elle reprend les lignes de cette facture
-     * (voir RegularisationDUneFacture::lignesDeLaRectificative()), sans
-     * sortie de stock (voir DecrementerStockApresEmissionFacture).
+     * de la société a désignée, ou d'une exonération non prouvée ? Elle
+     * reprend les lignes de cette facture (voir
+     * RegularisationDUneFacture::lignesDeLaRectificative() et
+     * RegularisationDUneExoneration::lignesALaTvaFrancaise()), sans sortie
+     * de stock (voir DecrementerStockApresEmissionFacture).
      */
     public function estUneRectificative(): bool
     {
@@ -568,6 +572,22 @@ class Facture extends Model implements DocumentEnvoyable
     }
 
     /**
+     * Les exports hors de l'Union et les livraisons vers un DOM sans preuve
+     * de sortie qui se régularisent ce jour (AAAA-MM-JJ, dans ce
+     * calendrier, celui de leur magasin) : 150 jours après leur date (voir
+     * RegularisationDUneExoneration::aRegulariser()). Le filtre «
+     * Exonération non prouvée » de la liste des factures et l'« À faire »
+     * du tableau de bord du magasin.
+     *
+     * @param  Builder<static>  $query
+     * @return Builder<static>
+     */
+    public function scopeExonerationsNonProuvees(Builder $query, Calendrier $calendrier, string $aujourdhui): Builder
+    {
+        return app(RegularisationDUneExoneration::class)->aRegulariser($query, $calendrier, $aujourdhui);
+    }
+
+    /**
      * Les tickets détaxés dont le bordereau qui fait foi, le dernier noté
      * (voir bordereauDetaxe()), attend encore la date de son visa à la
      * sortie de l'Union (décision de l'éditeur du 01/11/2026, Q-AF13, voir
@@ -630,6 +650,27 @@ class Facture extends Model implements DocumentEnvoyable
         }
 
         return $this->statut !== StatutFacture::Brouillon && static::query()->whereKey($this->getKey())->visaANoter()->exists();
+    }
+
+    /**
+     * Cette vente exonérée se régularise-t-elle aujourd'hui, faute de
+     * preuve de sortie 150 jours après sa date (voir
+     * scopeExonerationsNonProuvees()) ? Lu par la requête de la liste des
+     * factures quand elle l'a chargé (voir
+     * FactureResource::getEloquentQuery()) ; sinon relu en base, sans rien
+     * lire pour une facture d'une autre nature, la plupart.
+     */
+    public function attendLaRegularisationDeSonExoneration(): bool
+    {
+        if (array_key_exists('exoneration_non_prouvee', $this->getAttributes())) {
+            return (bool) $this->getAttribute('exoneration_non_prouvee');
+        }
+
+        $calendrier = $this->magasin->calendrier();
+
+        return $this->statut !== StatutFacture::Brouillon
+            && in_array($this->nature_operation, RegularisationDUneExoneration::NATURES, true)
+            && static::query()->whereKey($this->getKey())->exonerationsNonProuvees($calendrier, $calendrier->aujourdhui())->exists();
     }
 
     /**

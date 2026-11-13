@@ -21,8 +21,10 @@ use Illuminate\Database\Eloquent\Builder;
  * fiche de la facture, dans l'« À faire » du tableau de bord (voir
  * ChosesAFaireDuMagasin) et dans la liste (filtre « Preuves à fournir » et
  * colonne « À faire »). Sans ses preuves, la vente reste exonérée sur le
- * document, qui ne change jamais, mais le magasin devra la corriger par un
- * avoir et une nouvelle facture à la TVA française.
+ * document, qui ne change jamais ; sans sa preuve de sortie 150 jours
+ * après sa date, un export ou une livraison vers un DOM se régularise par
+ * un avoir et une facture rectificative à la TVA française (voir
+ * RegularisationDUneExoneration).
  *
  * - Export hors UE (art. 262 I du CGI) : la déclaration d'export (MRN)
  *   avec la certification de sortie, ou le CN23 d'un colis postal.
@@ -107,10 +109,21 @@ class PreuvesRequises
      * (MRN ou CN23) d'une vente hors de l'Union peut manquer avant d'être
      * en retard : orange jusqu'au 30e jour, rouge à partir du 31e, en
      * jours du calendrier du magasin (décision de l'éditeur du 01/11/2026,
-     * Q-AF10 : un rappel interne, à faire confirmer par l'expert-comptable
-     * de la société).
+     * Q-AF10 : un rappel interne, qu'aucun délai légal n'impose, T29.2 ;
+     * sans preuve 150 jours après la vente, l'exonération se régularise :
+     * voir JOURS_AVANT_LA_REGULARISATION).
      */
     public const JOURS_POUR_LA_PREUVE_DE_DOUANE = 30;
+
+    /**
+     * Combien de jours après la date de la facture un export hors de
+     * l'Union ou une livraison vers un DOM attend sa preuve de sortie (MRN
+     * ou CN23) avant de se régulariser à la TVA française : à partir du
+     * 150e jour qui suit sa date, en jours du calendrier du magasin (T29.3,
+     * voir RegularisationDUneExoneration et
+     * RegulariserUneExonerationNonProuveeAction).
+     */
+    public const JOURS_AVANT_LA_REGULARISATION = 150;
 
     /**
      * Une preuve de cette facture qui demande encore une preuve (voir

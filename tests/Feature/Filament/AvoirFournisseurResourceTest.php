@@ -30,6 +30,7 @@ use App\Filament\App\Resources\FactureResource\Pages\CreateFacture;
 use App\Filament\App\Resources\FactureResource\Pages\ListFactures;
 use App\Models\User;
 use Filament\Facades\Filament;
+use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
 use Filament\Notifications\Notification;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -231,6 +232,29 @@ class AvoirFournisseurResourceTest extends TestCase
         Livewire::test(ListAvoirsFournisseur::class)
             ->assertSee('N° de l\'avoir du fournisseur')
             ->assertTableColumnStateSet('numero_fournisseur', 'AV-2026-0042', $avoir);
+    }
+
+    /**
+     * T71.2 : la liste des avoirs fournisseur et le formulaire d'un avoir
+     * fournisseur disent qu'un rabais ou une ristourne sans retour de
+     * marchandise ne se saisit pas encore dans PILIQI.
+     */
+    public function test_la_liste_et_le_formulaire_disent_qu_une_ristourne_ne_se_saisit_pas_encore(): void
+    {
+        $this->travelTo(self::aParis('2026-10-17 10:32:00'));
+        $this->connecterLeProprietaire();
+        $this->recevoir([[Produit::factory()->create(['nom' => 'Câble USB-C', 'taux_tva' => 20, 'suivi_stock' => true]), 10, '10.00']]);
+        $phrase = 'Un rabais ou une ristourne sans retour de marchandise ne se saisit pas encore dans PILIQI : la TVA de la note d\'avoir se reverse sur la CA3 (ligne 15).';
+
+        $liste = Livewire::test(ListAvoirsFournisseur::class)
+            ->assertSee($phrase)
+            ->mountAction('creer_avoir_fournisseur')
+            ->assertSee($phrase);
+        $formulaire = $liste->instance()->getMountedActionForm();
+
+        $this->assertNotNull($formulaire);
+        $this->assertContains($phrase, collect($formulaire->getFlatComponents())->filter(fn ($composant): bool => $composant instanceof Placeholder)->map(fn (Placeholder $information): mixed => $information->getContent())->values()->all());
+        $this->assertSame($phrase, AvoirFournisseurResource::INFORMATION_RISTOURNE);
     }
 
     /**

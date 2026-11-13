@@ -95,7 +95,7 @@ class ProvenanceDesMouvements
                 : null,
             $source instanceof Facture => Facture::query()->whereKey($source->getKey())->whereNotNull('numero')->whereNull('facture_rectifiee_id')->first(),
             $source instanceof LigneAvoir => LigneAvoir::query()->whereKey($source->getKey())->whereNotNull('ligne_facture_id')
-                ->whereHas('avoir', fn ($avoir) => $avoir->whereNotNull('numero')->where('regularisation', false))->first(),
+                ->whereHas('avoir', fn ($avoir) => $avoir->whereNotNull('numero')->whereNull('motif_regularisation'))->first(),
             $source instanceof FactureAchat => FactureAchat::query()->whereKey($source->getKey())->where('statut', StatutFactureAchat::Validee->value)->first(),
             $source instanceof InventaireOuverture => InventaireOuverture::query()->whereKey($source->getKey())->where('statut', StatutInventaireOuverture::Valide->value)->first(),
             $source instanceof AvoirFournisseur => AvoirFournisseur::query()->whereKey($source->getKey())->where('statut', StatutAvoirFournisseur::Emise->value)->first(),

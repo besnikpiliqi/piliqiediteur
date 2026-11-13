@@ -36,6 +36,10 @@ class MentionsFiscalesTest extends TestCase
 
     private const PU_HT_TEL_QU_ENREGISTRE = 'Les prix unitaires HT sont affichés tels qu\'ils sont enregistrés et les totaux calculés sans arrondi intermédiaire : la quantité × le PU HT, remise déduite, retombe sur le total HT de la ligne à moins de deux centimes près.';
 
+    private const PU_HT_ECART_POSSIBLE = 'Les prix unitaires HT sont affichés tels qu\'ils sont enregistrés et les totaux calculés sans arrondi intermédiaire : la quantité × le PU HT, remise déduite, peut s\'écarter de quelques centimes du total HT de la ligne.';
+
+    private const CALCUL_VENTE = 'Montants calculés depuis les prix TTC : pour chaque taux, le HT est le TTC du taux ÷ (1 + taux), arrondi une fois au centime, puis réparti sur les lignes ; la TVA est la différence. ';
+
     public function test_chaque_variante_de_la_note_de_calcul_finit_par_la_phrase_des_prix_unitaires_de_son_document(): void
     {
         app(TenantContext::class)->set(Magasin::factory()->create());
@@ -75,6 +79,48 @@ class MentionsFiscalesTest extends TestCase
         $notes = array_map(app(MentionsFiscales::class)->calcul(...), [$vente, $this->rendreUnArticle($client, $vente)]);
 
         $this->assertSame([null, null], $notes);
+    }
+
+    /**
+     * T105 : une facture de 100 000 articles à 1,00 € TTC à 20 % fait
+     * 83 333,33 € HT pour un PU HT de 0,833333 €, dont 100 000 fois font
+     * 83 333,30 €, à 0,03 € de la ligne : sa note dit qu'un petit écart est
+     * possible ; une facture ordinaire, dont chaque ligne retombe à moins
+     * de deux centimes, garde la première phrase.
+     */
+    public function test_la_note_ne_dit_moins_de_deux_centimes_que_si_chaque_ligne_le_verifie(): void
+    {
+        app(TenantContext::class)->set(Magasin::factory()->create());
+        $professionnel = Client::factory()->professionnel()->create();
+        $grande = app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), $professionnel, [
+            ['produit_id' => Produit::factory()->create(['prix_vente_ttc' => '7.00', 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 3],
+            ['produit_id' => Produit::factory()->create(['prix_vente_ttc' => '1.00', 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 100000],
+        ]));
+        $ordinaire = $this->emettre($professionnel, []);
+
+        $this->assertSame(['0.833333', '83333.33'], [$grande->lignes->last()->prix_unitaire_ht, $grande->lignes->last()->montant_ht]);
+        $this->assertSame([
+            self::CALCUL_VENTE.self::PU_HT_ECART_POSSIBLE,
+            self::CALCUL_VENTE.self::PU_HT_TEL_QU_ENREGISTRE,
+        ], array_map(app(MentionsFiscales::class)->calcul(...), [$grande, $ordinaire]));
+    }
+
+    /**
+     * Une ligne de 3 articles à 7,00 € TTC à 20 % (17,50 € HT, PU HT
+     * 5,833333 €) rendue en trois avoirs d'un article : 5,83 €, 5,84 € puis
+     * 5,83 € HT, chacun à moins d'un centime de 5,833333 € ; le dernier,
+     * qui solde la ligne, garde la première phrase, comme les deux autres.
+     */
+    public function test_le_dernier_avoir_d_une_ligne_rendue_en_trois_fois_retombe_a_moins_de_deux_centimes(): void
+    {
+        app(TenantContext::class)->set(Magasin::factory()->create());
+        $professionnel = Client::factory()->professionnel()->create();
+        $facture = $this->emettre($professionnel, []);
+
+        $avoirs = [$this->rendreUnArticle($professionnel, $facture), $this->rendreUnArticle($professionnel, $facture), $this->rendreUnArticle($professionnel, $facture)];
+
+        $this->assertSame(['5.83', '5.84', '5.83'], array_map(fn (Avoir $avoir): string => $avoir->lignes->sole()->montant_ht, $avoirs));
+        $this->assertStringEndsWith(self::PU_HT_TEL_QU_ENREGISTRE, (string) app(MentionsFiscales::class)->calcul($avoirs[2]));
     }
 
     /**

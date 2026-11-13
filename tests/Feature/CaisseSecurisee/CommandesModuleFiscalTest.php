@@ -213,6 +213,37 @@ class CommandesModuleFiscalTest extends TestCase
     }
 
     /**
+     * Constat de l'éditeur du 12/11/2026 : sous Windows, « qpdf --version »
+     * finit ses lignes par « \r\n » ; le retour chariot, imprimé dans la
+     * cellule, effaçait la ligne de qpdf du diagnostic. La première ligne
+     * se lit sans fin de ligne : le diagnostic dit la version, sans aucun
+     * « \r ». Le programme simulé écrit exactement ce qu'écrit qpdf sous
+     * Windows.
+     */
+    public function test_le_diagnostic_lit_la_version_de_qpdf_sans_le_retour_chariot_de_windows(): void
+    {
+        $sortieDeWindows = "qpdf version 12.2.0\r\nRun qpdf --copyright to see copyright and license information.\r\n";
+        $this->assertSame('qpdf version 12.2.0', AnalyseurDePdf::premiereLigne($sortieDeWindows));
+        $this->assertTrue(AnalyseurDePdf::versionAdmise($sortieDeWindows));
+        $qpdfDeWindows = tempnam(sys_get_temp_dir(), 'qpdf-windows-');
+        $this->assertIsString($qpdfDeWindows);
+        file_put_contents($qpdfDeWindows, "#!/bin/sh\nprintf 'qpdf version 12.2.0\\r\\nRun qpdf --copyright to see copyright and license information.\\r\\n'\n");
+        chmod($qpdfDeWindows, 0755);
+        config(['piliqi.qpdf' => $qpdfDeWindows]);
+
+        try {
+            $code = Artisan::call('caisse:diagnostiquer');
+            $sortie = Artisan::output();
+        } finally {
+            unlink($qpdfDeWindows);
+        }
+
+        $this->assertSame(0, $code, $sortie);
+        $this->assertMatchesRegularExpression('/\| Analyseur des PDF \(qpdf\) +\| OK +\| qpdf version 12\.2\.0 +\|/u', $sortie);
+        $this->assertStringNotContainsString("\r", $sortie);
+    }
+
+    /**
      * L'échec que connaît PHP sous Windows tant que la variable
      * OPENSSL_CONF ne désigne pas son fichier openssl.cnf, reproduit sur
      * tout système : la commande tourne dans un autre processus PHP, dont

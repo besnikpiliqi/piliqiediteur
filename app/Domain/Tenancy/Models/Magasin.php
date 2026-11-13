@@ -147,6 +147,8 @@ class Magasin extends Model implements HasName
 
     private const REFUS_SOCIETE_A_VERIFIER = 'Votre société est en cours de vérification : la vente, les e-mails aux clients, les PDF et les transmissions sont désactivés jusqu\'à sa validation.';
 
+    public const REFUS_ASSUJETTI_UNIQUE = 'PILIQI ne gère pas encore les sociétés membres d\'un assujetti unique (groupe TVA) : aucune vente, facture, avoir, encaissement ni devis numéroté réel n\'est possible.';
+
     private const REFUS_DEMONSTRATION_TERMINEE = 'Votre société est validée : la démonstration est terminée, vendez dans vos magasins.';
 
     private const REFUS_DEMONSTRATION_SANS_ENVOI = 'Le magasin de démonstration n\'écrit à aucun client et ne transmet rien.';
@@ -229,8 +231,11 @@ class Magasin extends Model implements HasName
 
     /**
      * Le magasin de l'adresse du panneau (/app/{uuid}, voir
-     * AppPanelProvider) : une adresse qui ne porte pas un uuid ne désigne
-     * aucun magasin (404), sans interroger la colonne uuid, de type uuid.
+     * AppPanelProvider) ou de sa fiche dans l'espace de la société
+     * (/societe/{uuid}/magasins/{id}, voir MagasinResource) : une adresse
+     * qui ne porte pas un uuid, ou un identifiant entier que la colonne
+     * bigint peut lire, ne désigne aucun magasin (404), sans interroger la
+     * base, qui refuserait la valeur par une erreur.
      *
      * @param  Model|BuilderContract  $query
      * @param  mixed  $value
@@ -239,7 +244,14 @@ class Magasin extends Model implements HasName
      */
     public function resolveRouteBindingQuery($query, $value, $field = null)
     {
-        if (($field ?? $this->getRouteKeyName()) === 'uuid' && ! Str::isUuid($value)) {
+        $colonne = $field ?? $this->getRouteKeyName();
+        $lisible = match ($colonne) {
+            'uuid' => Str::isUuid($value),
+            $this->getKeyName() => is_int($value) || (is_string($value) && preg_match('/^[1-9]\d{0,17}$/', $value) === 1),
+            default => true,
+        };
+
+        if (! $lisible) {
             throw (new ModelNotFoundException)->setModel(self::class, [ValeurSimple::enTexte($value)]);
         }
 
@@ -600,7 +612,8 @@ class Magasin extends Model implements HasName
 
     /**
      * Le magasin peut-il vendre ? Hors lecture seule, un magasin réel une
-     * fois sa société validée (voir Societe::estValidee()) et son
+     * fois sa société validée (voir Societe::estValidee()), tant qu'elle
+     * n'est pas membre d'un assujetti unique (décision P3.1), et son
      * établissement confirmé par le répertoire Sirene
      * (etablissement_verifie_le), le magasin de démonstration tant que sa
      * société n'est ni validée ni close : ticket, facture, avoir,
@@ -625,6 +638,7 @@ class Magasin extends Model implements HasName
             $refusEnLectureSeule !== null => $refusEnLectureSeule,
             $this->est_demonstration => $this->societe->estValidee() ? self::REFUS_DEMONSTRATION_TERMINEE : null,
             ! $this->societe->estValidee() => self::REFUS_SOCIETE_A_VERIFIER,
+            $this->societe->membre_assujetti_unique => self::REFUS_ASSUJETTI_UNIQUE,
             $this->etablissement_verifie_le === null => "L'établissement de ce magasin (SIRET {$this->siret}) n'est pas encore confirmé par le répertoire Sirene de l'INSEE : aucune vente avant sa confirmation.",
             default => null,
         };
@@ -644,6 +658,22 @@ class Magasin extends Model implements HasName
 
         if ($refus !== null) {
             throw new VenteNonAutoriseeException($refus);
+        }
+    }
+
+    /**
+     * La garde des gestes qu'une autorisation refuse déjà quand le magasin
+     * ne peut pas vendre (voir ControleDesDroits), comme l'avoir : pour une
+     * société membre d'un assujetti unique, le refus dit pourquoi (décision
+     * P3.1) plutôt qu'un refus d'autorisation. Un autre motif garde son
+     * refus.
+     *
+     * @throws VenteNonAutoriseeException
+     */
+    public function verifierQuIlNEstPasDansUnAssujettiUnique(): void
+    {
+        if ($this->refusDeVente() === self::REFUS_ASSUJETTI_UNIQUE) {
+            throw new VenteNonAutoriseeException(self::REFUS_ASSUJETTI_UNIQUE);
         }
     }
 

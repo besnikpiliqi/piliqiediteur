@@ -131,14 +131,17 @@ final class GardesDesCabinets
      * magasins. Le grand livre du stock nomme qui a fait chaque mouvement
      * (voir StockLedgerService) : la validation d'une facture d'achat, qui
      * n'a pas de colonne de son validateur, et l'émission d'un avoir
-     * fournisseur y écrivent leur auteur. Une fiche de fournisseur ne nomme
-     * pas qui la crée ou la modifie : seuls les écrans et les actions
-     * arrêtent un compte d'un cabinet qui écrirait celle d'un magasin non
-     * choisi (voir User::peutOuvrir()).
+     * fournisseur y écrivent leur auteur. Une fiche de fournisseur nomme
+     * qui l'a créée et qui l'a modifiée, archivée ou restaurée en dernier
+     * (voir CreerUneFicheAction, ModifierUneFicheAction et
+     * ArchiverUneFicheAction). Un produit ne naît que d'une facture
+     * d'achat ou d'un inventaire d'ouverture, gardés ici, et un compte d'un
+     * cabinet ne le modifie jamais (voir PermissionRegistry::duCabinet()).
      */
     public const AUTEURS_DANS_UN_MAGASIN = [
         'factures_achat' => ['cree_par'],
         'avoirs_fournisseur' => ['cree_par'],
+        'fournisseurs' => ['cree_par', 'modifie_par'],
         'inventaires_ouverture' => ['cree_par', 'valide_par'],
         'pieces_fournisseur' => ['ajoutee_par'],
         'mouvements_stock' => ['cree_par'],

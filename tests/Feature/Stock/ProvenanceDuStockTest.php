@@ -188,7 +188,7 @@ class ProvenanceDuStockTest extends TestCase
         $venteRetournee = $this->justificatifDuStock(TypeMouvementStock::Vente, $retourne, 1);
         $this->commeAuteurDuDocument(fn () => app(StockLedgerService::class)->enregistrer($retourne, TypeMouvementStock::Vente, 1, $venteRetournee));
         $regularisation = app(CreerAvoirAction::class)->handle(self::auteur(), $venteRetournee->client()->firstOrFail(), [['ligne_facture_id' => $venteRetournee->lignes()->sole()->id, 'quantite' => 1]]);
-        DB::table('avoirs')->where('id', $regularisation->id)->update(['regularisation' => true, 'numero' => 'AV-BOUT-2026-000901', 'statut' => 'emise', 'date_emission' => now()]);
+        DB::table('avoirs')->where('id', $regularisation->id)->update(['motif_regularisation' => 'siren_corrige', 'numero' => 'AV-BOUT-2026-000901', 'statut' => 'emise', 'date_emission' => now()]);
         $ligneDeRegularisation = $regularisation->lignes()->sole();
         $this->receptionner(10);
 

@@ -3,11 +3,14 @@
 namespace App\Domain\Facturation\Services;
 
 use App\Domain\Facturation\Enums\CategorieOperation;
+use App\Domain\Facturation\Enums\MotifDeRegularisation;
 use App\Domain\Facturation\Enums\NatureLigne;
+use App\Domain\Facturation\Enums\TypeDocument;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\LigneAvoir;
+use App\Domain\Facturation\Models\LigneDevis;
 use App\Domain\Facturation\Models\LigneFacture;
 use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Support\ValeurRequise;
@@ -38,14 +41,16 @@ use App\Domain\Tenancy\Support\ValeurRequise;
  *   réimprimé après un changement de l'option, il garde la mention de
  *   son émission.
  *
- * Une facture rectificative, après la correction du SIREN de la société,
- * dit d'abord quelle facture elle rectifie (« Facture rectificative de la
- * facture n° FAC-LYON-2026-000001 du 15/10/2026 », voir
- * RegularisationDUneFacture). S'y ajoute, sous les lignes de tout document
- * hors franchise en base, l'explication de son calcul (voir calcul()), qui
- * ne se signe pas ; sur l'avoir d'un client comptoir, la mention de son
- * bon d'avoir (voir bonDAvoir()) ; sur un avoir de régularisation, celle de
- * la régularisation, avec le SIREN correct (voir regularisation()). Le
+ * Une facture rectificative, après la correction du SIREN de la société
+ * ou une exonération non prouvée, dit d'abord quelle facture elle rectifie
+ * (« Facture rectificative de la facture n° FAC-LYON-2026-000001 du
+ * 15/10/2026 », « Ticket rectificatif du ticket n° … » pour un ticket, voir
+ * RegularisationDUneFacture et RegularisationDUneExoneration). S'y ajoute,
+ * sous les lignes de tout document hors franchise en base, l'explication
+ * de son calcul (voir calcul()), qui ne se signe pas ; sur l'avoir d'un
+ * client comptoir, la mention de son bon d'avoir (voir bonDAvoir()) ; sur
+ * un avoir de régularisation, celle de la régularisation, avec le SIREN
+ * correct ou la preuve de sortie non reçue (voir regularisation()). Le
  * motif d'un taux de 0 % se répète aussi dans le tableau de la TVA, à côté
  * de ce taux (voir motifDuTauxZero()).
  */
@@ -55,7 +60,11 @@ class MentionsFiscales
 
     public const RECTIFICATIVE = 'Facture rectificative de la facture n° %s du %s';
 
+    public const TICKET_RECTIFICATIF = 'Ticket rectificatif du ticket n° %s du %s';
+
     public const REGULARISATION = 'Avoir de régularisation émis après correction de l\'identité du vendeur (SIREN correct : %s)';
+
+    public const REGULARISATION_DE_L_EXONERATION = 'Avoir de régularisation : preuve de sortie non reçue pour %s n° %s';
 
     private const CALCUL_VENTE = 'Montants calculés depuis les prix TTC : pour chaque taux, le HT est le TTC du taux ÷ (1 + taux), arrondi une fois au centime, puis réparti sur les lignes ; la TVA est la différence.';
 
@@ -69,6 +78,8 @@ class MentionsFiscales
 
     private const PU_HT_TEL_QU_ENREGISTRE = 'Les prix unitaires HT sont affichés tels qu\'ils sont enregistrés et les totaux calculés sans arrondi intermédiaire : la quantité × le PU HT, remise déduite, retombe sur le total HT de la ligne à moins de deux centimes près.';
 
+    private const PU_HT_ECART_POSSIBLE = 'Les prix unitaires HT sont affichés tels qu\'ils sont enregistrés et les totaux calculés sans arrondi intermédiaire : la quantité × le PU HT, remise déduite, peut s\'écarter de quelques centimes du total HT de la ligne.';
+
     /**
      * @param  Emetteur  $emetteur  celui qu'imprime le document : signé une fois émis (voir FigeSonEmetteur::emetteur()), figé au dernier envoi d'un devis (voir Devis::emetteur()), la société et le magasin d'aujourd'hui pour un brouillon et pour le document qu'on émet (voir ContenuFiscal)
      * @return list<string>
@@ -79,7 +90,7 @@ class MentionsFiscales
 
         if ($document instanceof Facture && $document->estUneRectificative()) {
             $rectifiee = $document->factureRectifiee()->firstOrFail();
-            $mentions[] = sprintf(self::RECTIFICATIVE, $rectifiee->numero, $rectifiee->magasin->calendrier()->afficher(ValeurRequise::de($rectifiee->date_emission, 'la date d\'émission de la facture rectifiée'), 'd/m/Y'));
+            $mentions[] = sprintf($rectifiee->serie() === TypeDocument::TicketCaisse ? self::TICKET_RECTIFICATIF : self::RECTIFICATIVE, $rectifiee->numero, $rectifiee->magasin->calendrier()->afficher(ValeurRequise::de($rectifiee->date_emission, 'la date d\'émission de la facture rectifiée'), 'd/m/Y'));
         }
 
         if (! $document instanceof Devis) {
@@ -132,16 +143,26 @@ class MentionsFiscales
     }
 
     /**
-     * La mention qu'imprime l'avoir de régularisation d'une facture, après
-     * la correction du SIREN de la société, avec ce SIREN correct, celui de
-     * la société à l'émission de l'avoir (voir RegularisationDUneFacture).
-     * Calculée et signée à l'émission (voir ContenuFiscal), elle se relit
-     * ensuite dans le contenu signé (voir Avoir::mentionDeRegularisation()).
-     * Null pour tout autre avoir.
+     * La mention qu'imprime l'avoir de régularisation d'une facture : après
+     * la correction du SIREN de la société, ce SIREN correct, celui de la
+     * société à l'émission de l'avoir (voir RegularisationDUneFacture) ;
+     * pour une exonération non prouvée, la preuve de sortie non reçue pour
+     * la facture ou le ticket qu'il régularise (voir
+     * RegularisationDUneExoneration). Calculée et signée à l'émission (voir
+     * ContenuFiscal), elle se relit ensuite dans le contenu signé (voir
+     * Avoir::mentionDeRegularisation()). Null pour tout autre avoir.
      */
     public function regularisation(Avoir $avoir): ?string
     {
-        return $avoir->estUneRegularisation() ? sprintf(self::REGULARISATION, $avoir->magasin->societe->siren) : null;
+        return match ($avoir->motif_regularisation) {
+            null => null,
+            MotifDeRegularisation::SirenCorrige => sprintf(self::REGULARISATION, $avoir->magasin->societe->siren),
+            MotifDeRegularisation::ExonerationNonProuvee => sprintf(
+                self::REGULARISATION_DE_L_EXONERATION,
+                ($facture = $avoir->factureRegularisee())->serie() === TypeDocument::TicketCaisse ? 'le ticket' : 'la facture',
+                $facture->numero,
+            ),
+        };
     }
 
     /**
@@ -163,7 +184,11 @@ class MentionsFiscales
      * ContexteDeVente::documentMontreLePuHt() et
      * CalculateurLigne::prixUnitaireExact(), décision de l'éditeur du
      * 09/11/2026) --, que la quantité x ce PU HT, remise déduite, retombe
-     * sur le total HT de la ligne à moins de deux centimes près ; sur un
+     * sur le total HT de la ligne à moins de deux centimes près, quand
+     * chaque ligne du document le vérifie (voir
+     * CalculateurLigne::puHtRetombeSurLeHt()), et sinon qu'elle peut s'en
+     * écarter de quelques centimes, au-delà de 10 000 articles d'une ligne
+     * (décision T105 de l'éditeur du 12/11/2026) ; sur un
      * ticket, un avoir sur ticket ou un devis à un particulier, que les
      * prix unitaires s'affichent arrondis au centime (voir
      * CalculateurLigne::prixUnitaireAffiche()), si bien que la quantité x le
@@ -185,6 +210,27 @@ class MentionsFiscales
             ? ($document instanceof Avoir ? self::CALCUL_RETOUR_SANS_TVA : self::CALCUL_SANS_TVA)
             : ($document instanceof Avoir ? self::CALCUL_RETOUR : self::CALCUL_VENTE);
 
-        return $calcul.' '.(ContexteDeVente::documentMontreLePuHt($document) ? self::PU_HT_TEL_QU_ENREGISTRE : self::PRIX_UNITAIRES_AU_CENTIME);
+        if (! ContexteDeVente::documentMontreLePuHt($document)) {
+            return $calcul.' '.self::PRIX_UNITAIRES_AU_CENTIME;
+        }
+
+        return $calcul.' '.($this->chaqueLigneRetombeSurSonHt($document) ? self::PU_HT_TEL_QU_ENREGISTRE : self::PU_HT_ECART_POSSIBLE);
+    }
+
+    /**
+     * Pour chaque ligne du document, la quantité x le PU HT enregistré,
+     * remise déduite, retombe-t-elle sur son HT à moins de deux centimes
+     * près ?
+     */
+    private function chaqueLigneRetombeSurSonHt(Facture|Avoir|Devis $document): bool
+    {
+        $calculateur = app(CalculateurLigne::class);
+
+        return $document->loadMissing('lignes')->lignes->every(fn (LigneFacture|LigneAvoir|LigneDevis $ligne): bool => $calculateur->puHtRetombeSurLeHt(
+            (int) $ligne->quantite,
+            $calculateur->enMillioniemes($ligne->prix_unitaire_ht),
+            $calculateur->enCentiemes($ligne->remise_pourcentage),
+            $calculateur->enCentiemes($ligne->montant_ht),
+        ));
     }
 }

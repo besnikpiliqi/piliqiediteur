@@ -1,10 +1,10 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 13/11/2026 à 16:40 UTC par pilotage-sync.sh : « 13/11 16:41 UTC : point de suivi, SEED presque fini ».
+Mis à jour le 13/11/2026 à 18:00 UTC par pilotage-sync.sh : « Après le lot SEED ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
-Tête poussée : `3b695ec`. Commits locaux pas encore poussés :
+Tête poussée : `58ad4de`. Commits locaux pas encore poussés :
 
 ```
 ```
@@ -12,6 +12,8 @@ Tête poussée : `3b695ec`. Commits locaux pas encore poussés :
 Derniers commits poussés :
 
 ```
+58ad4de Relecture du lot SEED
+8847d24 Sème des données de démonstration pour le poste de l'éditeur (lot SEED)
 3b695ec Relecture du lot 21 des décisions
 8f9817a Vérifie toutes les décisions par une matrice décision → test (lot 21)
 7f983c1 Relecture du lot S9-A de la série 9
@@ -30,22 +32,11 @@ d4a8247 Relecture du lot ML des e-mails vérifiés
 238f430 Corrige les constats de l'éditeur sur les écrans de vente (lot UI)
 e101d9f Lit l'écart d'horloge du diagnostic à un dixième de seconde près (CI)
 b12a835 Relecture du lot DEMO de la démonstration
-d23eb96 Laisse le propriétaire tout faire dans le magasin de démonstration (lot DEMO)
-bb135db Relecture du lot AUD de la série 8
 ```
 
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
- M .env.example
- M CLAUDE.md
- M README.md
- M config/piliqi.php
- M database/seeders/DatabaseSeeder.php
- M tests/Feature/DatabaseSeederTest.php
- M tests/Unit/matrice-des-decisions.php
-?? database/seeders/Semis/
-?? tests/Browser/Parcours/DonneesDeDemonstrationTest.php
 ```
 
 ## Dernière course de la chaîne
@@ -55,4 +46,9 @@ Course `wf_ee9b6e6e-908`, étapes commencées (de la plus ancienne à la plus r�
 ```
 SEED:implementation
 SEED:implementation-2
+SEED:relecture1
+SEED:relecture2
+SEED:correction
+SEED:poussee
+SEED:notes
 ```

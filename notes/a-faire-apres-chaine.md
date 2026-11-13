@@ -13,7 +13,7 @@
 - Sur son PC, les téléchargements « en préparation » attendent le travailleur de la file : `php artisan queue:listen telechargements --timeout=1800` (README, Lancement).
 
 
-**Ajout du 13/11/2026 à 21 h 35 UTC, dans ce même lot DEMO-V : la fiche d'une clôture de caisse** (question de l'éditeur, capture de `/app/{magasin}/cloture-caisses/{id}`).
+**Ajout du 13/11/2026 à 21 h 35 UTC, dans ce même lot DEMO-V : les tableaux des fiches (d'abord la clôture de caisse)** (question de l'éditeur, capture de `/app/{magasin}/cloture-caisses/{id}`).
 
 - **Le problème :** la section des encaissements montre chaque mode dans un cadre à part, qui répète ses titres (« Mode de paiement », « Paiements », « Contre-passations », « Montant encaissé »).
 - **Ce que l'éditeur veut (13/11, vers 21 h 45 UTC) :** un seul tableau, les titres en haut, une ligne par mode, le tout dans la même table. Avant toute application, il choisit le modèle parmi ceux que Claude lui propose (directive du 13/11 : chaque modèle d'écran lui est proposé avant d'être appliqué).
@@ -24,7 +24,12 @@
   - D : les cinq modes, un tiret à la place des 0, le total dans le tableau.
 - **MODÈLE CHOISI PAR L'ÉDITEUR : (pas encore choisi)**
   - Si cette ligne dit encore « pas encore choisi » quand le lot commence, ne touche pas à cette fiche. Dis-le dans « laisses », et la session le fera dans un lot suivant.
-  - Sinon, applique exactement le modèle choisi : à la fiche de la clôture, au relevé d'une caisse personnelle (« Ma caisse », « Les caisses » du magasin et de la société) et aux PDF ou CSV des clôtures, si le récapitulatif y liste les modes.
+  - Sinon, applique exactement le modèle choisi à **tous les tableaux de PILIQI** qui montrent aujourd'hui une ligne par cadre en répétant leurs titres (demande de l'éditeur du 13/11 vers 21 h 50 UTC : « pour tous les tables il faut que tu appliques pareil »).
+    - Ce sont les `RepeatableEntry` des fiches : 19 listes dans 9 fichiers de `app/` au 13/11, par exemple « Ventes et avoirs », « Encaissements par mode » et le détail des documents de la clôture, le relevé d'une caisse personnelle, ou l'aperçu de l'e-reporting.
+    - Pars de `git grep -n "RepeatableEntry::make" app` et traite chaque liste.
+    - Le modèle s'applique aussi aux PDF et CSV des clôtures, s'ils listent ces rubriques.
+    - Un composant commun (vue ou entrée Filament) pour tous ces tableaux, plutôt que 19 copies.
+    - L'éditeur peut avoir choisi un modèle différent pour certains tableaux : suis exactement ce que dit la ligne du choix.
 - **Ce qui ne change pas :**
   - Le contenu signé de la clôture et ses totaux enregistrés : seul l'affichage change.
   - Rien de cela n'est envoyé à l'administration.

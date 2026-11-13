@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 13/11/2026 à 21:47 UTC par pilotage-sync.sh : « Modèles des encaissements de la clôture, directive des modèles ».
+Mis à jour le 13/11/2026 à 21:48 UTC par pilotage-sync.sh : « Modèles : tous les tableaux ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

@@ -76,14 +76,6 @@ final class HorlogeDuSemis
     }
 
     /**
-     * L'instant où l'horloge du semis est.
-     */
-    public function maintenant(): CarbonImmutable
-    {
-        return $this->maintenant;
-    }
-
-    /**
      * Revient à l'instant du début du semis, tâches horaires rattrapées,
      * puis rend l'horloge telle qu'elle était avant lui.
      */

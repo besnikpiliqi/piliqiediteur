@@ -1746,6 +1746,7 @@ return [
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le propriétaire d’une société qui attend son code ouvre chaque page et chaque action du magasin de démonstration sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le responsable d’entraînement ouvre chaque page et chaque action du magasin de démonstration sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
+            'tests/Browser/Parcours/DonneesDeDemonstrationTest.php › le vendeur qui garde son identifiant pour mot de passe ne se connecte que depuis un poste reconnu',
             'tests/Browser/Parcours/TemoinsDePosteEnTableauTest.php › avec un témoin des postes reconnus envoyé en tableau, le propriétaire et le responsable ouvrent « Postes reconnus » et reconnaissent ce navigateur, que la liste dit ensuite « Ce navigateur » et où le vendeur se connecte avec son identifiant',
         ]],
         'page' => ['lot' => 'NAV-3', 'tests' => [
@@ -1754,6 +1755,7 @@ return [
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le propriétaire d’une société qui attend son code ouvre chaque page et chaque action du magasin de démonstration sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le responsable d’entraînement ouvre chaque page et chaque action du magasin de démonstration sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
+            'tests/Browser/Parcours/DonneesDeDemonstrationTest.php › le vendeur qui garde son identifiant pour mot de passe ne se connecte que depuis un poste reconnu',
             'tests/Browser/Parcours/TemoinsDePosteEnTableauTest.php › avec un témoin des postes reconnus envoyé en tableau, le propriétaire et le responsable ouvrent « Postes reconnus » et reconnaissent ce navigateur, que la liste dit ensuite « Ce navigateur » et où le vendeur se connecte avec son identifiant',
         ]],
     ],

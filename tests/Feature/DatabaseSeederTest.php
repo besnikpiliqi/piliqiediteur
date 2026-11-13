@@ -2,18 +2,24 @@
 
 namespace Tests\Feature;
 
+use App\Console\SemisEnCours;
+use App\Domain\Achats\Services\PiecesDuFournisseur;
 use App\Domain\Calendrier\Calendrier;
+use App\Domain\Facturation\Events\FactureEmise;
 use App\Domain\Tenancy\Enums\StatutCompte;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Support\RegleDuMotDePasse;
 use App\Models\User;
+use Carbon\Carbon;
 use Carbon\CarbonImmutable;
 use Database\Seeders\DatabaseSeeder;
 use Database\Seeders\Semis\ComptesSemes;
 use Database\Seeders\Semis\MotsDePasseDuSemis;
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -35,15 +41,11 @@ class DatabaseSeederTest extends TestCase
 
     public function test_le_semis_remplit_la_base_par_les_vraies_actions_et_donne_la_liste_des_comptes(): void
     {
-        Storage::fake('local');
         config(['piliqi.demo_mot_de_passe' => null]);
         $debut = self::aParis('2026-11-13 10:00:00');
         $this->travelTo($debut);
 
-        $this->artisan('db:seed')
-            ->expectsOutputToContain('Données de démonstration semées.')
-            ->expectsOutputToContain('proprietaire@commerce.exemple.test')
-            ->assertSuccessful();
+        $this->semer();
 
         $this->assertTrue(now()->equalTo($debut), 'Le semis rend l\'horloge telle qu\'elle était avant lui.');
         $this->assertSame([
@@ -71,6 +73,36 @@ class DatabaseSeederTest extends TestCase
         $this->assertSame(0, Artisan::call('app:verifier-journal-audit'), Artisan::output());
     }
 
+    /**
+     * Le planificateur (php artisan schedule:work, que l'installation garde
+     * ouvert) passe à l'heure réelle au milieu du semis, juste après la
+     * première vente d'un magasin réel : il ne lance aucune tâche, et le
+     * semis va jusqu'au bout ; ensuite, ses tâches repartent.
+     */
+    public function test_le_planificateur_ne_lance_aucune_tache_pendant_le_semis(): void
+    {
+        $heureReelle = self::aParis('2026-11-13 10:00:00');
+        $this->travelTo($heureReelle);
+        $passages = [];
+        Event::listen(FactureEmise::class, function (FactureEmise $emise) use ($heureReelle, &$passages): void {
+            if ($passages !== [] || ! str_contains((string) $emise->facture->numero, '-HALLES-')) {
+                return;
+            }
+
+            $passages[] = 'attendu';
+            DB::afterCommit(function () use ($heureReelle, &$passages): void {
+                $passages = [$this->passageDuPlanificateurA($heureReelle)];
+            });
+        });
+
+        $this->semer();
+
+        $this->assertSame([[]], $passages, 'Le planificateur ne lance aucune tâche pendant le semis.');
+        $this->assertFalse(SemisEnCours::estEnCours());
+        $this->assertContains('app:cloturer-caisses-automatiquement', $this->passageDuPlanificateurA($heureReelle), 'Les tâches repartent après le semis.');
+        $this->assertSame(0, Artisan::call('caisse:verifier', ['--complet' => true]), Artisan::output());
+    }
+
     public function test_le_semis_est_refuse_en_production_sans_rien_ecrire(): void
     {
         $this->app['env'] = 'production';
@@ -81,24 +113,32 @@ class DatabaseSeederTest extends TestCase
     }
 
     /**
-     * @return array<string, array{0: string}>
+     * Chaque fournisseur externe avec son pilote réel, ou sans pilote
+     * quand il n'en a pas encore d'autre que le factice (le courrier
+     * recommandé et la plateforme agréée).
+     *
+     * @return array<string, array{0: string, 1: string|null}>
      */
     public static function fournisseursReels(): array
     {
         return [
-            'répertoire Sirene de l\'INSEE' => ['services.sirene.pilote'],
-            'registre national des entreprises de l\'INPI' => ['services.rne.pilote'],
-            'annuaire de l\'Ordre tenu par l\'éditeur' => ['services.ordre.pilote'],
+            'répertoire Sirene de l\'INSEE' => ['services.sirene.pilote', 'insee'],
+            'registre national des entreprises de l\'INPI' => ['services.rne.pilote', 'inpi'],
+            'courrier recommandé sans pilote' => ['services.recommande.pilote', null],
+            'annuaire de l\'Ordre tenu par l\'éditeur' => ['services.ordre.pilote', 'editeur'],
+            'plateforme agréée sans pilote' => ['services.pdp.pilote', null],
+            'antivirus ClamAV' => ['services.antivirus.pilote', 'clamav'],
         ];
     }
 
     #[DataProvider('fournisseursReels')]
-    public function test_le_semis_est_refuse_avec_un_fournisseur_reel_sans_rien_ecrire(string $pilote): void
+    public function test_le_semis_est_refuse_avec_un_fournisseur_reel_sans_rien_ecrire(string $reglage, ?string $pilote): void
     {
-        config([$pilote => 'insee']);
+        config([$reglage => $pilote]);
 
         $this->assertSame(DatabaseSeeder::MESSAGE_FOURNISSEURS_REELS, $this->refusDuSemis());
         $this->assertDatabaseEmpty('societes');
+        $this->assertDatabaseEmpty('users');
     }
 
     public function test_le_semis_est_refuse_dans_une_base_qui_a_deja_des_societes(): void
@@ -179,7 +219,8 @@ class DatabaseSeederTest extends TestCase
             ['000000117', 'expert_comptable', 'actif', 1],
             ['000000117', 'membre', 'actif', 3],
             ['000000117', 'proprietaire', 'actif', 1],
-            ['000000125', 'membre', 'actif', 2],
+            ['000000125', 'administrateur', 'actif', 2],
+            ['000000125', 'membre', 'actif', 3],
             ['000000125', 'proprietaire', 'actif', 1],
             ['000000133', 'membre', 'actif', 2],
             ['000000133', 'proprietaire', 'actif', 1],
@@ -194,6 +235,7 @@ class DatabaseSeederTest extends TestCase
         $this->assertSame([
             'Antoine Roux (000000117) : 000000117/PARIS',
             'Aurélie BLANC (000000133) : 000000133/DEMO',
+            'Bastien Leroy (000000125) : 000000125/EPICERIE',
             'Bernard LEMOINE (000000125) : 000000125/EPICERIE',
             'Camille Laurent (000000109) : 000000109/HALLES',
             'Chloé Bernard (000000125) : 000000125/EPICERIE',
@@ -211,9 +253,11 @@ class DatabaseSeederTest extends TestCase
             'Léa Fontaine (000000117) : 000000117/PARIS',
             'Marc Petit (000000117) : 000000117/PARIS',
             'Maxime Henry (000000117) : 000000117/PARIS',
+            'Mehdi Brahimi (000000125) : 000000125/EPICERIE',
             'Nadia Benali (000000109) : 000000109/DEMO, 000000109/HALLES, 000000109/REPUB',
             'Nicolas Lemoine (000000125) : 000000125/EPICERIE',
             'Paul Lefèvre (000000943) : 000000109/HALLES, 000000109/REPUB',
+            'Romane Gauthier (000000125) : 000000125/EPICERIE',
             'Sarah Petit (000000109) : 000000109/REPUB',
             'Thomas Girard (000000109) : 000000109/HALLES, 000000109/REPUB',
             'Zoé Marchand (000000133) : 000000133/DEMO',
@@ -288,7 +332,8 @@ class DatabaseSeederTest extends TestCase
     /**
      * Le fichier des comptes donne, pour chaque compte actif, son
      * identifiant et son mot de passe, qui ouvre ce compte ; le vendeur qui
-     * garde son identifiant pour mot de passe y est marqué.
+     * garde son identifiant pour mot de passe y est marqué, et le poste de
+     * son magasin, d'où il vend, a été reconnu avant sa première vente.
      */
     private function assertLaListeDesComptesOuvreChaqueCompte(): void
     {
@@ -317,7 +362,58 @@ class DatabaseSeederTest extends TestCase
         }
 
         $this->assertSame(['Inès Garcia'], array_values(array_map(fn (array $compte): string => $compte[3], array_filter($comptes, fn (array $compte): bool => $compte[6] === ComptesSemes::SON_IDENTIFIANT))));
+        $this->assertSame(
+            [['HALLES', 'Caisse des Halles', 'Camille Laurent', true]],
+            $this->lignes("select m.code, p.nom, p.reconnu_par_nom, p.created_at < (select min(f.created_at) from factures f join users u on u.id = f.cree_par where u.name = 'Inès Garcia') from postes_reconnus p join magasins m on m.id = p.magasin_id where p.retire_le is null"),
+            'Inès Garcia, qui garde son identifiant pour mot de passe, ne vend que depuis le poste que sa responsable a reconnu avant sa première vente.',
+        );
         $this->assertStringContainsString('proprietaire@cabinet.exemple.test', $texte);
+    }
+
+    /**
+     * Sème les données de démonstration, sur des disques simulés : la liste
+     * des comptes, les courriers factices et la pièce du fournisseur de la
+     * facture d'achat semée.
+     */
+    private function semer(): void
+    {
+        Storage::fake('local');
+        Storage::fake(PiecesDuFournisseur::DISQUE);
+
+        $this->artisan('db:seed')
+            ->expectsOutputToContain('Données de démonstration semées.')
+            ->expectsOutputToContain('proprietaire@commerce.exemple.test')
+            ->assertSuccessful();
+    }
+
+    /**
+     * Un passage du planificateur à cet instant, comme celui de php artisan
+     * schedule:run qu'un autre processus lance à l'heure réelle : chaque
+     * tâche due dont les conditions passent s'exécute. Rend les commandes
+     * exécutées, et l'horloge à l'heure où elle était.
+     *
+     * @return list<string>
+     */
+    private function passageDuPlanificateurA(CarbonImmutable $instant): array
+    {
+        $heureDAvant = CarbonImmutable::now();
+        Carbon::setTestNow($instant);
+
+        try {
+            $executees = [];
+
+            foreach (app(Schedule::class)->dueEvents($this->app) as $tache) {
+                if ($tache->filtersPass($this->app)) {
+                    $commande = Str::after((string) $tache->command, "'artisan' ");
+                    $this->assertSame(0, Artisan::call($commande), Artisan::output());
+                    $executees[] = $commande;
+                }
+            }
+
+            return $executees;
+        } finally {
+            Carbon::setTestNow($heureDAvant);
+        }
     }
 
     private function magasin(string $code): int

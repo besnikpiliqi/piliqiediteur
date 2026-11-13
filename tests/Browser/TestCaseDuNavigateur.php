@@ -134,14 +134,15 @@ abstract class TestCaseDuNavigateur extends TestCase
     }
 
     /**
-     * Ce compte, propriétaire ou responsable du magasin, reconnaît le
-     * navigateur de cet onglet comme un poste du magasin (paramètres du
-     * magasin, « Postes reconnus »), puis se déconnecte : un compte dont le
-     * mot de passe est encore son identifiant peut ensuite s'y connecter.
+     * Ce compte, propriétaire ou responsable du magasin, connecté avec ce
+     * mot de passe, reconnaît le navigateur de cet onglet comme un poste du
+     * magasin (paramètres du magasin, « Postes reconnus »), puis se
+     * déconnecte : un compte dont le mot de passe est encore son
+     * identifiant peut ensuite s'y connecter.
      */
-    protected function reconnaitreCeNavigateur(Navigation $onglet, Magasin $magasin, User $parQui, string $nom = 'Caisse 1'): Navigation
+    protected function reconnaitreCeNavigateur(Navigation $onglet, Magasin $magasin, User $parQui, string $nom = 'Caisse 1', string $motDePasse = self::MOT_DE_PASSE_CHOISI): Navigation
     {
-        $this->seConnecter($parQui, onglet: $onglet)
+        $this->seConnecter($parQui, $motDePasse, onglet: $onglet)
             ->aller('/app/'.$magasin->uuid.'/postes-reconnus')
             ->cliquerSur('Reconnaître ce navigateur')
             ->remplir('Nom du poste', $nom)

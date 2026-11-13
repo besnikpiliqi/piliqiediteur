@@ -239,12 +239,14 @@ final class ActiviteDesMagasins
         $this->horloge->aller(16, '15:00');
         $republique->vendreALaCaisse($thomas, $republique->comptoir(), [$this->ligne($republique, 'COUSSIN-LIN', 2)], ModePaiement::CarteBancaire);
         $conseil->vendreALaCaisse($this->semis->compte('Antoine Roux'), $this->client($conseil, 'Paul Garnier'), [$this->ligne($conseil, 'Heure de conseil', 2)], ModePaiement::Virement);
+        $epicerie->vendreALaCaisse($this->semis->compte('Bastien Leroy'), $epicerie->comptoir(), [$this->ligne($epicerie, 'PANIER-GARNI', 1)], ModePaiement::CarteBancaire);
     }
 
     /**
      * Les jours suivants, jusqu'à l'avant-veille du semis : quelques
-     * tickets chaque jour ouvré dans les magasins qui ont des articles,
-     * sans jamais vendre au-delà du stock.
+     * tickets presque chaque jour, dimanches compris, dans les magasins qui
+     * ont des articles, chaque vendeur se reposant un jour sur trois selon
+     * son rang, sans jamais vendre au-delà du stock.
      */
     private function joursSuivants(GestesDuMagasin $halles, GestesDuMagasin $republique, GestesDuMagasin $epicerie): void
     {
@@ -254,6 +256,7 @@ final class ActiviteDesMagasins
             [$republique, 'Lucas Moreau (République)', ['COUSSIN-LIN' => 1]],
             [$republique, 'Sarah Petit', ['BOUGIE-FIGUE' => 1]],
             [$epicerie, 'Chloé Bernard', ['MIEL-LAVANDE' => 1, 'HUILE-OLIVE' => 1]],
+            [$epicerie, 'Mehdi Brahimi', ['HUILE-OLIVE' => 1]],
         ];
 
         for ($jour = 17; $jour <= SemisDeDemonstration::JOURS - 2; $jour++) {

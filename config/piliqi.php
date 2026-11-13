@@ -45,6 +45,8 @@ return [
     |
     */
 
+    'proxies_de_confiance' => array_values(array_filter(array_map(trim(...), explode(',', (string) env('PROXIES_DE_CONFIANCE', ''))), static fn (string $adresse): bool => $adresse !== '')),
+
     /*
     |--------------------------------------------------------------------------
     | Mot de passe des données de démonstration
@@ -62,7 +64,5 @@ return [
     */
 
     'demo_mot_de_passe' => env('PILIQI_DEMO_MOT_DE_PASSE'),
-
-    'proxies_de_confiance' => array_values(array_filter(array_map(trim(...), explode(',', (string) env('PROXIES_DE_CONFIANCE', ''))), static fn (string $adresse): bool => $adresse !== '')),
 
 ];

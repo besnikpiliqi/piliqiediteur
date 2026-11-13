@@ -22,6 +22,7 @@ use App\Console\Commands\SuivreEnvoisRecommandes;
 use App\Console\Commands\SurveillerLaFileDAttente;
 use App\Console\Commands\VerifierIntegriteFiscale;
 use App\Console\Commands\VerifierJournalAudit;
+use App\Console\SemisEnCours;
 use App\Http\Middleware\AjouterLesEnTetesDeSecurite;
 use App\Http\Middleware\FaireConfianceAuxMandataires;
 use App\Http\Responses\ReponseAUnDocumentDisparu;
@@ -164,6 +165,15 @@ return Application::configure(basePath: dirname(__DIR__))
         // au niveau critique et prévient l'éditeur, une fois par incident
         // (voir SurveillerLaFileDAttente). Elle ne fait que lire.
         $schedule->command(SurveillerLaFileDAttente::class)->everyFiveMinutes()->withoutOverlapping();
+        // Pendant le semis des données de démonstration (php artisan
+        // migrate:fresh --seed, en développement), aucune tâche ne part :
+        // le semis exécute lui-même les tâches du calendrier des magasins à
+        // chaque minuit de son histoire, qui finit la veille, et une tâche
+        // partie à l'heure réelle verrouillerait les registres avant la fin
+        // de cette histoire (voir SemisEnCours).
+        foreach ($schedule->events() as $tache) {
+            $tache->skip(SemisEnCours::estEnCours(...));
+        }
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(

@@ -1,5 +1,6 @@
 <?php
 
+use App\Domain\Achats\Services\PiecesDuFournisseur;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Models\User;
 use Database\Seeders\Semis\SemisDeDemonstration;
@@ -11,7 +12,10 @@ use Illuminate\Support\Facades\Storage;
  * compte de la liste se connecte avec le mot de passe que la liste donne,
  * ici le mot de passe commun de PILIQI_DEMO_MOT_DE_PASSE ; le propriétaire
  * avec son adresse de connexion, les autres avec leur identifiant ; et
- * chacun arrive où son rôle le mène, avec les données semées.
+ * chacun arrive où son rôle le mène, avec les données semées. La vendeuse
+ * qui garde son identifiant pour mot de passe ne se connecte qu'une fois
+ * le navigateur reconnu comme un poste de son magasin, comme le README le
+ * dit.
  */
 
 const MOT_DE_PASSE_DE_DEMONSTRATION = 'Fraise-Ete-Demo';
@@ -22,6 +26,7 @@ const MOT_DE_PASSE_DE_DEMONSTRATION = 'Fraise-Ete-Demo';
 function semerLaDemonstration(): void
 {
     Storage::fake('local');
+    Storage::fake(PiecesDuFournisseur::DISQUE);
     config(['piliqi.demo_mot_de_passe' => MOT_DE_PASSE_DE_DEMONSTRATION]);
     test()->artisan('db:seed')->assertSuccessful();
 }
@@ -64,10 +69,17 @@ test('le vendeur qui garde son identifiant pour mot de passe ne se connecte que 
     semerLaDemonstration();
     $ines = compteSeme('Inès Garcia');
     $identifiant = (string) $ines->identifiantDeConnexion();
+    $halles = Magasin::query()->where('code', 'HALLES')->sole();
+    $proprietaire = User::query()->where('email', SemisDeDemonstration::ADRESSE_COMMERCE)->sole();
 
-    $this->naviguer('/app/login')
+    $onglet = $this->naviguer('/app/login')
         ->remplir('Identifiant ou adresse e-mail', $identifiant)
         ->remplir('Mot de passe', $identifiant)
         ->cliquerSur('Connexion')
         ->voir('poste reconnu');
+
+    $this->reconnaitreCeNavigateur($onglet, $halles, $proprietaire, 'Poste de l\'éditeur', MOT_DE_PASSE_DE_DEMONSTRATION);
+    $this->seConnecter($ines, $identifiant, onglet: $onglet);
+
+    expect($onglet->chemin())->toBe('/app/'.$halles->uuid);
 });

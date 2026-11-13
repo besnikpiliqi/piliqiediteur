@@ -2578,9 +2578,11 @@ return [
         ],
         'hors.donnees-de-demonstration' => [
             'puce' => 'Hors de CLAUDE.md',
-            'regle' => 'php artisan migrate:fresh --seed remplit la base de développement par les vraies actions et les fournisseurs factices, et donne la liste des comptes pour se connecter, chacun avec un mot de passe tiré au hasard ou celui, commun, de PILIQI_DEMO_MOT_DE_PASSE ; il refuse, sans rien écrire, la production, les fournisseurs réels, une base qui a déjà des sociétés et un mot de passe commun hors de la règle.',
+            'regle' => 'php artisan migrate:fresh --seed remplit la base de développement par les vraies actions et les fournisseurs factices, et donne la liste des comptes pour se connecter, chacun avec un mot de passe tiré au hasard ou celui, commun, de PILIQI_DEMO_MOT_DE_PASSE ; le planificateur ne lance aucune tâche tant qu\'il dure ; il refuse, sans rien écrire, la production, un fournisseur réel (répertoire Sirene, registre national des entreprises, courrier recommandé, annuaire de l\'Ordre, plateforme agréée, antivirus), une base qui a déjà des sociétés et un mot de passe commun hors de la règle.',
             'tests' => [
                 'tests/Feature/DatabaseSeederTest.php::test_le_semis_remplit_la_base_par_les_vraies_actions_et_donne_la_liste_des_comptes',
+                'tests/Feature/DatabaseSeederTest.php::test_le_planificateur_ne_lance_aucune_tache_pendant_le_semis',
+                'tests/Feature/Calendrier/PlanificateurTest.php::test_aucune_tache_planifiee_ne_part_pendant_le_semis_des_donnees_de_demonstration',
                 'tests/Feature/DatabaseSeederTest.php::test_le_semis_est_refuse_en_production_sans_rien_ecrire',
                 'tests/Feature/DatabaseSeederTest.php::test_le_semis_est_refuse_avec_un_fournisseur_reel_sans_rien_ecrire',
                 'tests/Feature/DatabaseSeederTest.php::test_le_semis_est_refuse_dans_une_base_qui_a_deja_des_societes',

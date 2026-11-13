@@ -28,9 +28,11 @@ use App\Domain\Tenancy\Actions\SaisirCodeDeConfirmationAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Models\PosteReconnu;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\ControleSirene;
 use App\Domain\Tenancy\Services\IdentifiantsInsee;
+use App\Domain\Tenancy\Services\PostesReconnus;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Integrations\EnvoiRecommande\AdressePostale;
 use App\Integrations\Ordre\FauxAnnuaireDeLOrdre;
@@ -42,6 +44,8 @@ use App\Integrations\Sirene\Contracts\RepertoireSirene;
 use App\Integrations\Sirene\FauxRepertoireSirene;
 use App\Models\User;
 use Closure;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cookie;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use LogicException;
@@ -199,6 +203,7 @@ final class SemisDeDemonstration
         $this->membre('halles', 'Camille Laurent', RoleMagasin::Responsable);
         $this->membre('halles', 'Lucas Moreau', RoleMagasin::Vendeur);
         $this->membre('halles', 'Inès Garcia', RoleMagasin::Vendeur, gardeSonIdentifiant: true);
+        $this->reconnaitreUnPoste('halles', 'Camille Laurent', 'Caisse des Halles');
         $this->membre('republique', 'Hugo Lefebvre', RoleMagasin::Responsable);
         $this->membre('republique', 'Lucas Moreau', RoleMagasin::Vendeur, cle: 'Lucas Moreau (République)');
         $this->membre('republique', 'Sarah Petit', RoleMagasin::Vendeur);
@@ -219,8 +224,11 @@ final class SemisDeDemonstration
         $this->accepterLInvitationDuCabinet();
         $this->confier('Emma Rousseau', 'client');
         $this->ouvrirUnMagasin('client', 'epicerie', 'Épicerie Lemoine', 'EPICERIE', 'siege');
+        $this->administrateur('client', 'Romane Gauthier', null, []);
+        $this->administrateur('client', 'Bastien Leroy', ['epicerie'], PermissionRegistry::deVente());
         $this->membre('epicerie', 'Nicolas Lemoine', RoleMagasin::Responsable);
         $this->membre('epicerie', 'Chloé Bernard', RoleMagasin::Vendeur);
+        $this->membre('epicerie', 'Mehdi Brahimi', RoleMagasin::Vendeur);
 
         $this->horloge->aller(2, '10:00');
         $this->declarerLExpertComptable();
@@ -438,6 +446,20 @@ final class SemisDeDemonstration
         }
 
         $this->choisirSonMotDePasse($compte, $cle ?? $nom, $this->nomsDesSocietes[$magasin], (string) $leMagasin->nom, $role->getLabel());
+    }
+
+    /**
+     * Ce responsable reconnaît le poste de caisse de son magasin, sous ce
+     * nom, depuis son navigateur (voir PostesReconnus::reconnaitre()) : un
+     * compte dont le mot de passe est encore son identifiant peut s'y
+     * connecter. Le témoin du poste reste à ce poste du magasin, qu'aucun
+     * navigateur de l'éditeur ne reçoit.
+     */
+    private function reconnaitreUnPoste(string $magasin, string $responsable, string $nom): void
+    {
+        $leMagasin = $this->magasin($magasin);
+        $this->horsDeToutContexte(fn (): PosteReconnu => app(PostesReconnus::class)->reconnaitre($this->compte($responsable), $leMagasin, $nom, Request::create('/app/'.$leMagasin->uuid.'/postes-reconnus', 'POST')));
+        Cookie::unqueue(PostesReconnus::TEMOIN);
     }
 
     /**

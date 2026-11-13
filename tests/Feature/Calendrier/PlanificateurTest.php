@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Calendrier;
 
+use App\Console\SemisEnCours;
 use App\Domain\Calendrier\Calendrier;
 use App\Domain\Tenancy\Enums\Territoire;
 use Carbon\CarbonImmutable;
@@ -138,6 +139,25 @@ class PlanificateurTest extends TestCase
         foreach ($this->evenements() as $evenement) {
             $this->assertTrue($evenement->withoutOverlapping, self::commande($evenement));
         }
+    }
+
+    /**
+     * Pendant le semis des données de démonstration, aucune tâche planifiée
+     * ne part, même due (le semis exécute lui-même celles de son histoire,
+     * voir SemisEnCours) ; après lui, chacune repart. Une tâche ajoutée au
+     * planning suit la même règle.
+     */
+    public function test_aucune_tache_planifiee_ne_part_pendant_le_semis_des_donnees_de_demonstration(): void
+    {
+        $this->travelTo(self::enUtc('2026-11-13 09:00:00'));
+        $evenements = $this->evenements();
+        $partent = fn (): array => array_map(fn (Event $evenement): string => self::commande($evenement).' : '.($evenement->filtersPass($this->app) ? 'part' : 'attend'), $evenements);
+
+        $pendantLeSemis = SemisEnCours::pendant($partent);
+
+        $this->assertSame(array_map(static fn (Event $evenement): string => self::commande($evenement).' : attend', $evenements), $pendantLeSemis);
+        $this->assertFalse(SemisEnCours::estEnCours());
+        $this->assertSame(array_map(static fn (Event $evenement): string => self::commande($evenement).' : part', $evenements), $partent());
     }
 
     /**

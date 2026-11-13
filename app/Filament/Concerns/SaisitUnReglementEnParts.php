@@ -22,10 +22,12 @@ use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Contracts\HasForms;
 use Filament\Forms\Get;
 use Filament\Forms\Set;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\MessageBag;
 use InvalidArgumentException;
 use Livewire\Component as LivewireComponent;
 use LogicException;
@@ -140,10 +142,10 @@ trait SaisitUnReglementEnParts
      * Caisse::rendering()), son panier et son client changeant ce qui
      * reste à payer.
      */
-    public static function oublierLeRefusDevenuFaux(LivewireComponent $livewire, string $chemin, ?string $refusActuel): void
+    public static function oublierLeRefusDevenuFaux(HasForms $livewire, string $chemin, ?string $refusActuel): void
     {
-        if (self::refusAffiche($livewire, $chemin) && $livewire->getErrorBag()->first($chemin) !== $refusActuel) {
-            $livewire->resetErrorBag($chemin);
+        if (self::refusAffiche($livewire, $chemin) && self::refusDuFormulaire($livewire)->first($chemin) !== $refusActuel) {
+            ValeursLues::instance($livewire, LivewireComponent::class)->resetErrorBag($chemin);
         }
     }
 
@@ -151,9 +153,18 @@ trait SaisitUnReglementEnParts
      * Un refus est affiché sous ce champ : Filament l'écrit à sa place, et
      * l'aide qui dirait la même chose se tait.
      */
-    private static function refusAffiche(LivewireComponent $livewire, string $chemin): bool
+    private static function refusAffiche(HasForms $livewire, string $chemin): bool
     {
-        return $livewire->getErrorBag()->has($chemin);
+        return self::refusDuFormulaire($livewire)->has($chemin);
+    }
+
+    /**
+     * Les refus que le formulaire affiche, chacun sous son champ : le sac
+     * des erreurs de son composant Livewire.
+     */
+    private static function refusDuFormulaire(HasForms $livewire): MessageBag
+    {
+        return ValeursLues::instance(ValeursLues::instance($livewire, LivewireComponent::class)->getErrorBag(), MessageBag::class);
     }
 
     /**

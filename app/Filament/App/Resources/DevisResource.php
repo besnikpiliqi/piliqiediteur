@@ -140,7 +140,7 @@ class DevisResource extends Resource
                 // pour qui peut la voir (voir FicheDUnDocument).
                 TextEntry::make('facture_transformee')
                     ->label('Transformé en facture')
-                    ->state(fn (Devis $record): ?string => $record->factures->first()?->numero ?? ($record->factures->isNotEmpty() ? 'Facture brouillon' : null))
+                    ->state(fn (Devis $record): ?string => $record->factures->first()->numero ?? ($record->factures->isNotEmpty() ? 'Facture brouillon' : null))
                     ->url(fn (Devis $record): ?string => FicheDUnDocument::adresse($record->factures->first()))
                     ->color(fn (Devis $record): ?string => FicheDUnDocument::adresse($record->factures->first()) === null ? null : 'primary')
                     ->visible(fn (Devis $record): bool => $record->factures->isNotEmpty()),
@@ -340,6 +340,11 @@ class DevisResource extends Resource
      * un vendeur sans la vente, un observateur, un compte du cabinet lié),
      * le bouton reste visible, désactivé, au lieu de disparaître ; la fiche
      * en écrit l'explication juste au-dessous (voir infolist()).
+     *
+     * @template TAction of MountableAction
+     *
+     * @param  TAction  $action
+     * @return TAction
      */
     public static function actionTransformer(MountableAction $action): MountableAction
     {
@@ -400,6 +405,11 @@ class DevisResource extends Resource
      * « Retirer le lien de réponse » : le client ne peut plus répondre en
      * ligne au devis (voir RetirerLeLienDuDevisAction), pour qui peut
      * l'envoyer, tant qu'un lien vaut encore.
+     *
+     * @template TAction of MountableAction
+     *
+     * @param  TAction  $action
+     * @return TAction
      */
     public static function actionRetirerLeLien(MountableAction $action): MountableAction
     {

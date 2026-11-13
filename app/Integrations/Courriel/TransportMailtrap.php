@@ -2,6 +2,7 @@
 
 namespace App\Integrations\Courriel;
 
+use App\Domain\Tenancy\Support\ValeursLues;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Factory;
 use Illuminate\Http\Client\Response;
@@ -11,6 +12,8 @@ use Symfony\Component\Mailer\SentMessage;
 use Symfony\Component\Mailer\Transport\AbstractTransport;
 use Symfony\Component\Mime\Address;
 use Symfony\Component\Mime\Email;
+use Symfony\Component\Mime\Header\HeaderInterface;
+use Symfony\Component\Mime\Message;
 use Symfony\Component\Mime\MessageConverter;
 use Symfony\Component\Mime\Part\DataPart;
 
@@ -77,7 +80,7 @@ class TransportMailtrap extends AbstractTransport
             throw new RefusDeMailtrap('Le transport « mailtrap » demande '.implode(' et ', $manquantes).' dans le fichier .env (voir config/services.php) : l\'e-mail n\'est pas parti.', CauseDEchecDEnvoi::Configuration);
         }
 
-        $corps = self::corps(MessageConverter::toEmail($message->getOriginalMessage()), $message->getEnvelope());
+        $corps = self::corps(MessageConverter::toEmail(ValeursLues::instance($message->getOriginalMessage(), Message::class)), $message->getEnvelope());
 
         try {
             $reponse = $this->http
@@ -197,8 +200,13 @@ class TransportMailtrap extends AbstractTransport
     {
         $enTetes = [];
 
-        foreach ($email->getHeaders()->all() as $nom => $enTete) {
-            if (! in_array(strtolower((string) $nom), self::EN_TETES_DU_CORPS, true)) {
+        foreach (ValeursLues::textes($email->getHeaders()->getNames()) as $nom) {
+            if (in_array($nom, self::EN_TETES_DU_CORPS, true)) {
+                continue;
+            }
+
+            foreach ($email->getHeaders()->all($nom) as $enTete) {
+                $enTete = ValeursLues::instance($enTete, HeaderInterface::class);
                 $enTetes[$enTete->getName()] = $enTete->getBodyAsString();
             }
         }

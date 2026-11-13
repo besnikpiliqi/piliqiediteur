@@ -35,7 +35,7 @@ class RelancerTransmissionsPdp extends Command
 
         Magasin::query()->with('societe')->each(function (Magasin $magasin) use ($tenantContext, &$relancees): void {
             foreach ($tenantContext->runAs($magasin, fn (): array => self::facturesEnEchecDe($magasin)) as $factureId) {
-                SubmitFactureToPdpJob::dispatch($magasin->getKey(), $factureId);
+                SubmitFactureToPdpJob::dispatch($magasin->id, $factureId);
                 $relancees++;
             }
         });

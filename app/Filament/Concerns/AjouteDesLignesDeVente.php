@@ -844,7 +844,7 @@ trait AjouteDesLignesDeVente
             ->whereKey($identifiants)
             ->where('suivi_stock', true)
             ->get(['id', 'stock_quantite'])
-            ->mapWithKeys(fn (Produit $produit): array => [$produit->getKey() => $produit->stock_quantite])
+            ->mapWithKeys(fn (Produit $produit): array => [$produit->id => $produit->stock_quantite])
             ->all());
         $disponible = $stocks[$produitId] ?? null;
 

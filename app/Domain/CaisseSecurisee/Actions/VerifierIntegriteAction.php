@@ -131,7 +131,7 @@ class VerifierIntegriteAction
         $ecartsDansLeStock = count(array_filter($rapport->anomalies(), static fn (AnomalieFiscale $anomalie): bool => $anomalie->controle === 'stock'));
 
         if ($ecartsDansLeStock > 0) {
-            $magasin->societe?->proprietaire?->notify(new EcartDansLeStock($magasin, $ecartsDansLeStock));
+            $magasin->societe->proprietaire?->notify(new EcartDansLeStock($magasin, $ecartsDansLeStock));
         }
 
         return $rapport;

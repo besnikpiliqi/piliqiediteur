@@ -69,7 +69,6 @@ $lireLaValeur = static fn (string $valeur): string => (string) preg_replace_call
     $valeur,
 );
 
-/** @var array<string, int> $raisons */
 $raisons = [];
 preg_match_all('/^##teamcity\\[testIgnored (.*)\\]\\s*$/m', $teamcity, $ignores);
 

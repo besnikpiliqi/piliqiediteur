@@ -2538,6 +2538,17 @@ return [
                 'tests/Browser/Parcours/RangeesChoisiesTest.php › chaque texte d’une rangée choisie se lit, stock épuisé et « À régulariser » compris ; le service coché aussi, pas les autorisations',
             ],
         ],
+        'hors.recu-le-passe-permis-futur-refuse' => [
+            'puce' => 'Hors de CLAUDE.md',
+            'regle' => 'Le champ « Reçu le » d\'un paiement (encaissement d\'une facture, page des paiements) accepte une date passée, comme un virement vu sur le relevé de la veille, et refuse une date future, au jour du calendrier du magasin (décision de Claude du 09/10/2026, constat X0 de son audit, appliquée sans attendre selon D76 et lue par l\'éditeur le 13/11/2026 sans la contester).',
+            'tests' => [
+                'tests/Feature/Filament/PaiementResourceTest.php::test_laction_rapide_encaisser_accepte_une_date_de_reception_passee',
+                'tests/Feature/Filament/PaiementResourceTest.php::test_laction_rapide_encaisser_refuse_une_date_de_reception_future',
+                'tests/Feature/Filament/PaiementResourceTest.php::test_le_formulaire_des_paiements_accepte_une_date_de_reception_passee',
+                'tests/Feature/Filament/PaiementResourceTest.php::test_le_formulaire_des_paiements_refuse_une_date_de_reception_future',
+                'tests/Feature/Calendrier/HeureLocaleTest.php::test_un_reglement_recu_le_jour_local_est_accepte_et_le_lendemain_local_refuse',
+            ],
+        ],
         'ecrans.aucun-site-tiers' => [
             'puce' => 'Écrans',
             'regle' => 'Aucune page de PILIQI ne charge rien d\'un autre site : la police est servie par PILIQI et les initiales du compte sont dessinées par le serveur (Q-TIERS du 03/11/2026).',
@@ -3810,8 +3821,8 @@ return [
             ],
             '5' => [
                 'decision' => 'Échéance préremplie à la date du jour, et aucune date passée dans les champs de date concernés (messages 72 et 75).',
-                'remplacee' => 'Remplacée en partie par la décision B7 du 09/10/2026 (CLAUDE.md, « Documents de vente ») : l\'échéance se calcule à l\'émission (date d\'émission + délai du client, sinon du magasin), aucun champ ne la saisit.',
-                'a_trancher' => 'Question proposée à l\'éditeur dans le compte rendu de la relecture du lot 21 (D74) : le champ « Reçu le » d\'un paiement (encaissement d\'une facture et page des paiements) refusait toute date passée depuis le 05/10/2026 (message 75, commit f9af00b) ; le constat X0 de l\'audit de Claude (09/10/2026, commit fecca26), jamais soumis à l\'éditeur, l\'a changé : une date passée est acceptée (un virement vu sur le relevé de la veille), une date future refusée. En attendant sa réponse, le code garde ce qu\'il fait.',
+                'regles' => ['hors.recu-le-passe-permis-futur-refuse'],
+                'remplacee' => 'Remplacée en partie par la décision B7 du 09/10/2026 (CLAUDE.md, « Documents de vente ») : l\'échéance se calcule à l\'émission (date d\'émission + délai du client, sinon du magasin), aucun champ ne la saisit ; et, pour le champ « Reçu le » d\'un paiement, par la décision de Claude du 09/10/2026 (constat X0 de son audit), appliquée sans attendre selon D76 et lue par l\'éditeur le 13/11/2026 sans la contester : une date passée est permise, une date future refusée.',
             ],
             '6' => [
                 'decision' => 'Facture brouillon sans numéro définitif, numérotée à la validation ; brouillon modifiable et supprimable en entier d\'un seul geste (messages 14 et 19).',
@@ -3989,9 +4000,8 @@ return [
             ],
             'D37' => [
                 'decision' => 'Les dates proposées et les dates interdites : la clôture sans choix de date ; l\'échéance préremplie à la date du jour ; aucune date passée dans les champs de date concernés.',
-                'regles' => ['caisse.cloture-jamais-bloquee'],
-                'remplacee' => 'Remplacée en partie par la décision B7 du 09/10/2026 (CLAUDE.md, « Documents de vente ») : l\'échéance se calcule à l\'émission, aucun champ ne la saisit.',
-                'a_trancher' => 'Question proposée à l\'éditeur dans le compte rendu de la relecture du lot 21 (D74) : le champ « Reçu le » d\'un paiement (encaissement d\'une facture et page des paiements) refusait toute date passée depuis le 05/10/2026 (message 75, commit f9af00b) ; le constat X0 de l\'audit de Claude (09/10/2026, commit fecca26), jamais soumis à l\'éditeur, l\'a changé : une date passée est acceptée (un virement vu sur le relevé de la veille), une date future refusée. En attendant sa réponse, le code garde ce qu\'il fait.',
+                'regles' => ['caisse.cloture-jamais-bloquee', 'hors.recu-le-passe-permis-futur-refuse'],
+                'remplacee' => 'Remplacée en partie par la décision B7 du 09/10/2026 (CLAUDE.md, « Documents de vente ») : l\'échéance se calcule à l\'émission, aucun champ ne la saisit ; et, pour le champ « Reçu le » d\'un paiement, par la décision de Claude du 09/10/2026 (constat X0 de son audit), appliquée sans attendre selon D76 et lue par l\'éditeur le 13/11/2026 sans la contester : une date passée est permise, une date future refusée.',
             ],
             'D38' => [
                 'decision' => 'Tout document cité s\'ouvre d\'un clic ; l\'important se voit en orange (retours sous les lignes d\'achat, numéros des tickets et des avoirs dans les clôtures).',

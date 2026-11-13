@@ -196,17 +196,19 @@ class InventaireOuvertureResource extends Resource
                 continue;
             }
 
-            $lignes[$cle]['quantite'] = self::quantiteLue($ligne['quantite'] ?? null) + self::quantiteLue($courante['quantite'] ?? null);
+            $reunie = $ligne;
+            $reunie['quantite'] = self::quantiteLue($ligne['quantite'] ?? null) + self::quantiteLue($courante['quantite'] ?? null);
 
             if (blank($ligne['cout_unitaire_ht'] ?? null)) {
-                $lignes[$cle]['cout_unitaire_ht'] = $courante['cout_unitaire_ht'] ?? null;
+                $reunie['cout_unitaire_ht'] = $courante['cout_unitaire_ht'] ?? null;
             }
 
+            $lignes[$cle] = $reunie;
             unset($lignes[$cleCourante]);
             $set('../../lignes', $lignes);
 
             Notification::make()
-                ->title('« '.(self::libelleDeLaLigne(ValeursLues::champs($ligne)) ?? '').' » était déjà sur une ligne de cet inventaire, qui n\'a qu\'une ligne par produit : sa quantité passe à '.$lignes[$cle]['quantite'].'. Vérifiez son coût unitaire.')
+                ->title('« '.(self::libelleDeLaLigne(ValeursLues::champs($ligne)) ?? '').' » était déjà sur une ligne de cet inventaire, qui n\'a qu\'une ligne par produit : sa quantité passe à '.$reunie['quantite'].'. Vérifiez son coût unitaire.')
                 ->success()
                 ->send();
 

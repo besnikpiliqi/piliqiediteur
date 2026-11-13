@@ -123,7 +123,7 @@ class FicheDuMembre extends ViewRecord
             ->requiresConfirmation()
             ->modalHeading('Garder la nomination')
             ->visible(fn (): bool => $this->nominationGardable() !== null)
-            ->modalDescription(fn (): string => ($this->nominationGardable()?->nommePar?->name ?? 'Un administrateur').' l\'a nommé responsable. En la gardant, vous ne pourrez plus l\'annuler en un clic : pour lui retirer ce rôle, vous changerez son rôle comme pour tout responsable.')
+            ->modalDescription(fn (): string => ($this->nominationGardable()?->nommePar->name ?? 'Un administrateur').' l\'a nommé responsable. En la gardant, vous ne pourrez plus l\'annuler en un clic : pour lui retirer ce rôle, vous changerez son rôle comme pour tout responsable.')
             ->action(function (): void {
                 $this->agir(function (): void {
                     app(GarderUneNominationAction::class)->handle($this->auteur(), $this->nominationGardable() ?? throw new AuthorizationException(PorteeDesDroits::REFUS));
@@ -381,7 +381,7 @@ class FicheDuMembre extends ViewRecord
             })])
             ->action(function (array $data, Action $action): void {
                 try {
-                    $this->demanderLaConfirmationDeLAdresse($data, 'confirmerLaCorrection');
+                    $this->demanderLaConfirmationDeLAdresse(ValeursLues::champs($data), 'confirmerLaCorrection');
                 } catch (ValidationException $refus) {
                     Notification::make()->title(implode(' ', $refus->validator->errors()->all()))->danger()->send();
                     $this->revenirALaSaisie($action);

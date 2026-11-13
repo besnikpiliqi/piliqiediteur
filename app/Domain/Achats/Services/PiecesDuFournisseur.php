@@ -23,6 +23,7 @@ use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Notifications\AvisDeLAntivirus;
 use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Integrations\Antivirus\AntivirusInjoignableException;
 use App\Models\User;
 use Carbon\CarbonImmutable;
@@ -247,7 +248,7 @@ final class PiecesDuFournisseur
 
         $contenu = (string) Storage::disk(self::DISQUE)->get($piece->chemin);
 
-        if (! $this->revue->aRevoir($piece->analysee_le)) {
+        if (! $this->revue->aRevoir(ValeurRequise::de($piece->analysee_le, 'l\'instant de la dernière analyse de la pièce'))) {
             return $contenu;
         }
 

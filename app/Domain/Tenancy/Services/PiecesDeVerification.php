@@ -101,7 +101,7 @@ class PiecesDeVerification
 
         $contenu = Crypt::decryptString(ValeurRequise::de(Storage::disk(self::DISQUE)->get(ValeurRequise::de($piece->chemin, 'le fichier de la pièce, pas encore effacée')), 'le contenu chiffré de la pièce'));
 
-        if (! $this->revue->aRevoir($piece->analysee_le)) {
+        if (! $this->revue->aRevoir(ValeurRequise::de($piece->analysee_le, 'l\'instant de la dernière analyse de la pièce'))) {
             return $contenu;
         }
 

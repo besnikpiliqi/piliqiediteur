@@ -3,7 +3,6 @@
 namespace App\Integrations\Courriel;
 
 use Illuminate\Queue\MaxAttemptsExceededException;
-use Illuminate\Queue\TimeoutExceededException;
 use Illuminate\Support\Str;
 use Symfony\Component\Mailer\Exception\TransportExceptionInterface;
 use Symfony\Component\Mailer\Exception\UnsupportedSchemeException;
@@ -71,7 +70,7 @@ enum CauseDEchecDEnvoi: string
 
         return match (true) {
             $erreur instanceof UnsupportedSchemeException => self::Schema,
-            $erreur instanceof MaxAttemptsExceededException, $erreur instanceof TimeoutExceededException => self::Interrompue,
+            $erreur instanceof MaxAttemptsExceededException => self::Interrompue,
             ! $erreur instanceof TransportExceptionInterface => self::Inattendue,
             in_array($erreur->getCode(), [530, 534, 535], true) => self::Identifiants,
             $contient('too many', 'rate limit', 'quota') => self::ServeurOccupe,

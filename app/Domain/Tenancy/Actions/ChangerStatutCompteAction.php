@@ -313,7 +313,7 @@ class ChangerStatutCompteAction
             return;
         }
 
-        $declaration = LienCabinet::query()->withoutGlobalScope(SocieteScope::class)->where('societe_id', $compte->societe_id)->findOrFail($attachee->getKey());
+        $declaration = LienCabinet::query()->withoutGlobalScope(SocieteScope::class)->where('societe_id', $compte->societe_id)->findOrFail($attachee->id);
         MettreFinAuLienAction::terminerSousVerrou($declaration, $auteur, MotifDeFinDuLien::ParLeClient);
         $this->journalAudit->inscrire(ActionAuditee::LienTermine, $auteur, null, null, [
             'cabinet' => IdentiteDansLeJournal::declaree($declaration),

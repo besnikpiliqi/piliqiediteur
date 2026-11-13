@@ -25,7 +25,7 @@ final class MemoireDePhp
     public static function prevoir(int $octets): void
     {
         $limite = ini_get('memory_limit');
-        $permise = $limite === false || $limite === '' || $limite === '-1' ? -1 : ini_parse_quantity($limite);
+        $permise = $limite === '' || $limite === '-1' ? -1 : ini_parse_quantity($limite);
         $necessaire = memory_get_usage(true) + $octets + self::MARGE_EN_OCTETS;
 
         if ($permise !== -1 && $permise < $necessaire) {

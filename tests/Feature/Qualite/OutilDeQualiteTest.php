@@ -167,6 +167,37 @@ class OutilDeQualiteTest extends TestCase
         $this->assertFalse($arguments->getOption('git-diff-lines'));
     }
 
+    /**
+     * Larastan, les seuils et l'analyse des flux de Psalm avec son témoin
+     * passent à chaque envoi et à chaque demande de fusion (décision de
+     * l'éditeur du 13/11/2026) : leurs tâches n'ont aucune condition, et la
+     * base des seuils est le commit d'avant l'envoi ou la base de la demande
+     * de fusion. La couverture et la mutation restent à la main jusqu'à
+     * l'étape 15.
+     */
+    public function test_l_analyse_statique_et_l_analyse_des_flux_passent_a_chaque_envoi(): void
+    {
+        $ci = Yaml::parseFile(__DIR__.'/../../../.github/workflows/tests.yml');
+        $commandes = fn (string $tache): string => implode("\n", array_column($ci['jobs'][$tache]['steps'], 'run'));
+        $seuils = array_values(array_filter($ci['jobs']['analyse']['steps'], fn (array $etape): bool => ($etape['name'] ?? '') === 'Seuils qui ne baissent pas'))[0];
+
+        $this->assertArrayHasKey('push', $ci['on']);
+        $this->assertArrayHasKey('pull_request', $ci['on']);
+
+        foreach (['analyse', 'flux'] as $tache) {
+            $this->assertArrayNotHasKey('if', $ci['jobs'][$tache], "La tâche {$tache} doit passer à chaque envoi, sans condition.");
+        }
+
+        $this->assertStringContainsString('vendor/bin/phpstan analyse', $commandes('analyse'));
+        $this->assertStringContainsString('php tests/Qualite/qualite.php seuils', $commandes('analyse'));
+        $this->assertSame("\${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}", $seuils['env']['BASE']);
+        $this->assertStringContainsString('git cat-file -e "$BASE:tests/Qualite/seuils.json"', $seuils['run']);
+        $this->assertStringContainsString('psalm --taint-analysis', $commandes('flux'));
+        $this->assertStringContainsString('php tests/Qualite/qualite.php flux storage/qualite/psalm.json', $commandes('flux'));
+        $this->assertStringContainsString('php tests/Qualite/qualite.php flux-temoin storage/qualite/psalm-temoin.json', $commandes('flux'));
+        $this->assertSame("github.event_name == 'workflow_dispatch'", $ci['jobs']['couverture']['if']);
+    }
+
     public function test_le_temoin_de_l_analyse_des_flux_exige_exactement_les_chemins_qu_il_annonce(): void
     {
         $this->ecrire('tests/Qualite/Psalm/Temoin/Temoin.php', "<?php\n\necho \$x; // attendu : TaintedHtml, TaintedTextWithQuotes\nDB::select(\$y); // attendu : TaintedSql\n");

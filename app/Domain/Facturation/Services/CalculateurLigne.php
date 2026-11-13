@@ -9,6 +9,7 @@ use App\Domain\Tenancy\Support\ValeursLues;
 use Brick\Math\BigInteger;
 use Brick\Math\RoundingMode;
 use InvalidArgumentException;
+use LogicException;
 use UnexpectedValueException;
 
 /**
@@ -914,7 +915,7 @@ class CalculateurLigne
             throw new InvalidArgumentException('Montant hors limites.');
         }
 
-        return sprintf('%s%d.%02d', $centiemes < 0 ? '-' : '', intdiv(abs($centiemes), 100), abs($centiemes) % 100);
+        return self::ecritureDecimale(sprintf('%s%d.%02d', $centiemes < 0 ? '-' : '', intdiv(abs($centiemes), 100), abs($centiemes) % 100));
     }
 
     /**
@@ -972,7 +973,7 @@ class CalculateurLigne
             throw new InvalidArgumentException('Montant hors limites.');
         }
 
-        return sprintf('%s%d.%06d', $millioniemes < 0 ? '-' : '', intdiv(abs($millioniemes), 1_000_000), abs($millioniemes) % 1_000_000);
+        return self::ecritureDecimale(sprintf('%s%d.%06d', $millioniemes < 0 ? '-' : '', intdiv(abs($millioniemes), 1_000_000), abs($millioniemes) % 1_000_000));
     }
 
     /**
@@ -1008,7 +1009,7 @@ class CalculateurLigne
     {
         $this->borne($dixMilliemes);
 
-        return sprintf('%s%d.%04d', $dixMilliemes < 0 ? '-' : '', intdiv(abs($dixMilliemes), 10000), abs($dixMilliemes) % 10000);
+        return self::ecritureDecimale(sprintf('%s%d.%04d', $dixMilliemes < 0 ? '-' : '', intdiv(abs($dixMilliemes), 10000), abs($dixMilliemes) % 10000));
     }
 
     /**
@@ -1072,7 +1073,21 @@ class CalculateurLigne
         $decimal = $this->enDecimalAuMillionieme($millioniemes);
         [$entiers, $decimales] = explode('.', $decimal);
 
-        return $entiers.'.'.str_pad(rtrim($decimales, '0'), 2, '0');
+        return self::ecritureDecimale($entiers.'.'.str_pad(rtrim($decimales, '0'), 2, '0'));
+    }
+
+    /**
+     * Une écriture décimale que le code vient de composer (« 120.00 »,
+     * « -0.05 », « 8.333333 »), contrôlée avant d'être rendue : une
+     * écriture qui ne serait pas un nombre est refusée.
+     *
+     * @return numeric-string
+     *
+     * @throws LogicException une écriture qui n'est pas un nombre
+     */
+    private static function ecritureDecimale(string $ecriture): string
+    {
+        return is_numeric($ecriture) ? $ecriture : throw new LogicException("Écriture décimale invalide : {$ecriture}.");
     }
 
     /**

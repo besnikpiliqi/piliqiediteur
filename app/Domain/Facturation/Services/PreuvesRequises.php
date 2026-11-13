@@ -169,7 +169,7 @@ class PreuvesRequises
     public function incompletes(Builder $factures): Builder
     {
         $magasin = $factures->qualifyColumn('magasin_id');
-        $deType = fn (TypePreuve ...$types): Closure => fn (Builder $preuves): Builder => $preuves->duMagasinDe($magasin)->whereIn('type', $types);
+        $deType = fn (TypePreuve ...$types): Closure => fn (Builder $preuves): Builder => self::deTypes($preuves, $magasin, $types);
         $sansDeclaration = fn (Builder $facture): Builder => $facture->whereDoesntHave('preuvesOperation', $deType(TypePreuve::Mrn, TypePreuve::Cn23));
         $sansTransportA = fn (Builder $facture): Builder => $facture->whereDoesntHave('preuvesOperation', $deType(TypePreuve::TransportA));
 
@@ -193,6 +193,19 @@ class PreuvesRequises
                         ->orWhere(fn (Builder $enleveParLeClient): Builder => $enleveParLeClient
                             ->where('transport_par', TransportPar::Acquereur)
                             ->whereDoesntHave('preuvesOperation', $deType(TypePreuve::AttestationAcquereur))))));
+    }
+
+    /**
+     * Les preuves des types donnés, limitées au magasin de leur facture
+     * ($colonneDuMagasin, voir BelongsToMagasin::scopeDuMagasinDe()).
+     *
+     * @param  Builder<PreuveOperation>  $preuves
+     * @param  array<TypePreuve>  $types
+     * @return Builder<PreuveOperation>
+     */
+    private static function deTypes(Builder $preuves, string $colonneDuMagasin, array $types): Builder
+    {
+        return $preuves->duMagasinDe($colonneDuMagasin)->whereIn('type', $types);
     }
 
     /**

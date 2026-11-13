@@ -313,12 +313,11 @@ final class GardesDesCabinets
      */
     public static function poserLaFonctionDesMagasinsOuverts(): void
     {
-        $ouvre = static fn (string $lien): string => "({$lien}.tous_les_magasins OR EXISTS (SELECT 1 FROM magasins_cabinet choisi WHERE choisi.lien_id = {$lien}.id AND choisi.magasin_id = m.id))";
         $connexion = DB::connection();
 
         $connexion->unprepared('CREATE OR REPLACE FUNCTION compte_ouvre_le_magasin(compte bigint, magasin bigint) RETURNS boolean LANGUAGE sql '.DeclencheursDeProtection::CHEMIN_DE_RECHERCHE.' AS $$ SELECT CASE '
-            ."WHEN u.role_societe = '".RoleSociete::ExpertComptable->value."' THEN EXISTS (SELECT 1 FROM comptes_expert_comptable c JOIN liens_cabinet d ON d.id = c.lien_id WHERE c.user_id = u.id AND d.etat = '".EtatDuLien::Declare->value."' AND d.societe_id = m.societe_id AND ".$ouvre('d').') '
-            ."WHEN s.type_activite = '".TypeDActivite::Cabinet->value."' THEN EXISTS (SELECT 1 FROM liens_cabinet l WHERE l.cabinet_id = u.societe_id AND l.societe_id = m.societe_id AND l.etat = '".EtatDuLien::Actif->value."' AND ".$ouvre('l').') '
+            ."WHEN u.role_societe = '".RoleSociete::ExpertComptable->value."' THEN EXISTS (SELECT 1 FROM comptes_expert_comptable c JOIN liens_cabinet d ON d.id = c.lien_id WHERE c.user_id = u.id AND d.etat = '".EtatDuLien::Declare->value."' AND d.societe_id = m.societe_id AND ".self::ouvreLeMagasin('d').') '
+            ."WHEN s.type_activite = '".TypeDActivite::Cabinet->value."' THEN EXISTS (SELECT 1 FROM liens_cabinet l WHERE l.cabinet_id = u.societe_id AND l.societe_id = m.societe_id AND l.etat = '".EtatDuLien::Actif->value."' AND ".self::ouvreLeMagasin('l').') '
             .'ELSE TRUE END FROM users u JOIN societes s ON s.id = u.societe_id JOIN magasins m ON m.id = magasin WHERE u.id = compte $$');
         $connexion->unprepared('CREATE OR REPLACE FUNCTION garde_'.self::MAGASINS_OUVERTS.'() RETURNS trigger LANGUAGE plpgsql '.DeclencheursDeProtection::CHEMIN_DE_RECHERCHE.' AS $$ DECLARE argument text; colonne text; compte bigint; BEGIN '
             .'FOREACH argument IN ARRAY TG_ARGV LOOP '
@@ -507,6 +506,18 @@ final class GardesDesCabinets
     }
 
     /**
+     * Le lien $lien ouvre le magasin m : tous ses magasins, ou sa sélection
+     * le contient.
+     *
+     * @param  literal-string  $lien
+     * @return literal-string
+     */
+    private static function ouvreLeMagasin(string $lien): string
+    {
+        return "({$lien}.tous_les_magasins OR EXISTS (SELECT 1 FROM magasins_cabinet choisi WHERE choisi.lien_id = {$lien}.id AND choisi.magasin_id = m.id))";
+    }
+
+    /**
      * Ces valeurs, en liste SQL.
      *
      * @param  array<array-key, literal-string>  $valeurs
@@ -521,7 +532,7 @@ final class GardesDesCabinets
      * Le message d'un refus, préfixé du nom de sa garde, en littéral SQL
      * (voir LitteralSql).
      *
-     * @param  key-of<self::TABLES>  $garde
+     * @param  key-of<self::TABLES>|self::PAIRES|self::SELECTION|self::MAGASINS_OUVERTS  $garde
      * @param  literal-string  $raison
      * @return literal-string
      */

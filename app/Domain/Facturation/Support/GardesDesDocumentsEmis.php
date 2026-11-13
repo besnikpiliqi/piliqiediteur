@@ -135,14 +135,10 @@ final class GardesDesDocumentsEmis
         }
 
         $garde = self::lignes($table);
-        $document = $garde['document'];
-        $colonne = $garde['colonne'];
-        $numerote = fn (string $ligne): string => "PERFORM 1 FROM {$document} WHERE id = {$ligne}.{$colonne} FOR SHARE; "
-            ."IF EXISTS (SELECT 1 FROM {$document} WHERE id = {$ligne}.{$colonne} AND numero IS NOT NULL) THEN RAISE EXCEPTION '%', TG_ARGV[0]; END IF; ";
 
         $connexion->unprepared("CREATE OR REPLACE FUNCTION {$nom}() RETURNS trigger LANGUAGE plpgsql ".DeclencheursDeProtection::CHEMIN_DE_RECHERCHE.' AS $$ BEGIN '
-            ."IF TG_OP <> 'INSERT' THEN ".$numerote('OLD').'END IF; '
-            ."IF TG_OP <> 'DELETE' THEN ".$numerote('NEW').'RETURN NEW; END IF; '
+            ."IF TG_OP <> 'INSERT' THEN ".self::refusSiNumerote($garde, 'OLD').'END IF; '
+            ."IF TG_OP <> 'DELETE' THEN ".self::refusSiNumerote($garde, 'NEW').'RETURN NEW; END IF; '
             .'RETURN OLD; END $$');
         $connexion->unprepared("CREATE TRIGGER {$nom} BEFORE INSERT OR UPDATE OR DELETE ON {$table} FOR EACH ROW EXECUTE FUNCTION {$nom}(".LitteralSql::de($garde['refus']).')');
     }
@@ -183,6 +179,20 @@ final class GardesDesDocumentsEmis
     private static function document(string $table): array
     {
         return self::DOCUMENTS[$table] ?? throw new InvalidArgumentException("La table {$table} n'est pas celle d'un document gardé.");
+    }
+
+    /**
+     * Le refus d'écrire la ligne $ligne (OLD ou NEW) d'un document déjà
+     * numéroté, sous le verrou partagé de ce document.
+     *
+     * @param  array{document: literal-string, colonne: literal-string, refus: literal-string}  $garde
+     * @param  'OLD'|'NEW'  $ligne
+     * @return literal-string
+     */
+    private static function refusSiNumerote(array $garde, string $ligne): string
+    {
+        return "PERFORM 1 FROM {$garde['document']} WHERE id = {$ligne}.{$garde['colonne']} FOR SHARE; "
+            ."IF EXISTS (SELECT 1 FROM {$garde['document']} WHERE id = {$ligne}.{$garde['colonne']} AND numero IS NOT NULL) THEN RAISE EXCEPTION '%', TG_ARGV[0]; END IF; ";
     }
 
     /**

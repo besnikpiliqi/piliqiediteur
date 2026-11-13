@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Domain\Facturation\Services;
 
+use App\Domain\Tenancy\Support\ValeursLues;
 use LogicException;
+use UnexpectedValueException;
 
 /**
  * Un document calculé en une seule fois (voir CalculateurLigne) : ses
@@ -16,15 +18,50 @@ use LogicException;
 final readonly class DocumentChiffre
 {
     /**
+     * Par taux facturé (« 20.00 »), dans l'ordre où il apparaît ; pour un
+     * achat, avec la TVA que PILIQI propose (montant_tva_calcule).
+     *
+     * @var array<string, array{montant_ht: string, montant_tva: string, montant_ttc: string, montant_tva_calcule?: string}>
+     */
+    public array $parTaux;
+
+    /**
      * @param  array<array-key, array<string, mixed>>  $lignes  par clé de ligne, chacune avec montant_ht, montant_tva et montant_ttc
-     * @param  array<string, array{montant_ht: string, montant_tva: string, montant_ttc: string, montant_tva_calcule?: string}>  $parTaux  par taux facturé (« 20.00 »), dans l'ordre où il apparaît ; pour un achat, avec la TVA que PILIQI propose (montant_tva_calcule)
+     * @param  array<array-key, array{montant_ht: string, montant_tva: string, montant_ttc: string, montant_tva_calcule?: string}>  $parTaux  par taux facturé, écrit comme sa colonne (« 20.00 », jamais un entier : voir parTaux())
      * @param  array{total_ht: string, total_tva: string, total_ttc: string}  $totaux
+     *
+     * @throws UnexpectedValueException un taux qui n'est pas écrit en texte
      */
     public function __construct(
         public array $lignes,
-        public array $parTaux,
+        array $parTaux,
         public array $totaux,
-    ) {}
+    ) {
+        $this->parTaux = self::parTaux($parTaux);
+    }
+
+    /**
+     * Les montants de chaque taux, sous le taux écrit comme sa colonne
+     * decimal(5,2) (« 20.00 », « 5.50 »), que PHP garde en texte : une clé
+     * entière viendrait d'un taux écrit sans ses décimales, et est refusée.
+     *
+     * @template TMontants of array
+     *
+     * @param  array<array-key, TMontants>  $parTaux
+     * @return array<string, TMontants>
+     *
+     * @throws UnexpectedValueException
+     */
+    private static function parTaux(array $parTaux): array
+    {
+        $lus = [];
+
+        foreach ($parTaux as $taux => $montants) {
+            $lus[ValeursLues::texte($taux)] = $montants;
+        }
+
+        return $lus;
+    }
 
     /**
      * Un document sans aucune ligne complète : rien à compter.

@@ -16,8 +16,8 @@ class RattacherLesDeclarationsDuCabinetValide
 {
     public function handle(SocieteValidee $evenement): void
     {
-        if ($evenement->societe->estUnCabinet() && $evenement->societe->siren !== null) {
-            RattacherLesDeclarationsDuSiren::dispatch((string) $evenement->societe->siren);
+        if ($evenement->societe->estUnCabinet()) {
+            RattacherLesDeclarationsDuSiren::dispatch($evenement->societe->siren);
         }
     }
 }

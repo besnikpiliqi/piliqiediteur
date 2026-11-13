@@ -11,6 +11,7 @@ use App\Domain\Facturation\Models\VisaDetaxe;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
@@ -65,12 +66,15 @@ class NoterLeVisaDuBordereauAction
             $this->lecteur->exiger($compte, 'justifier', $magasin, $ticket);
             $bordereau = $ticket->bordereauDetaxe()->with('visa')->first();
 
-            if (($refus = self::refusPour($ticket, $bordereau)) !== null) {
+            $refus = self::refusPour($ticket, $bordereau);
+
+            if ($refus !== null) {
                 throw new LogicException($refus);
             }
 
+            $bordereau = ValeurRequise::de($bordereau, 'le bordereau de détaxe du ticket');
             $calendrier = $magasin->calendrier();
-            $jourDuTicket = $calendrier->jourDe($ticket->date_emission);
+            $jourDuTicket = $calendrier->jourDe(ValeurRequise::de($ticket->date_emission, 'la date d\'émission du ticket'));
 
             if ($jourDuVisa < $jourDuTicket) {
                 throw new InvalidArgumentException('Le visa ne peut pas précéder le ticket, du '.Calendrier::afficherJour($jourDuTicket, 'd/m/Y').'.');
@@ -102,14 +106,12 @@ class NoterLeVisaDuBordereauAction
      * qui retire son bouton de la fiche. Un ticket qui ne garde plus aucun
      * bien taxé, tout ayant été rendu, n'attend aucun visa (voir
      * Facture::scopeVisaANoter()).
-     *
-     * @phpstan-assert-if-null BordereauDetaxe $bordereau
      */
     public static function refusPour(Facture $ticket, ?BordereauDetaxe $bordereau): ?string
     {
         return match (true) {
             $bordereau === null => 'Le visa se note sur un ticket détaxé : notez d\'abord le n° de son bordereau de détaxe.',
-            $bordereau->visa !== null => "Le visa du bordereau n° {$bordereau->numero} est déjà noté, au ".Calendrier::afficherJour($bordereau->visa->date_visa, 'd/m/Y').'.',
+            $bordereau->visa !== null => "Le visa du bordereau n° {$bordereau->numero} est déjà noté, au ".Calendrier::afficherJour(ValeurRequise::de($bordereau->visa->date_visa, 'le jour du visa'), 'd/m/Y').'.',
             ! $ticket->lignes()->creditables()->biensTaxes()->exists() => 'Ce ticket ne garde aucun bien taxé, tous ses articles ayant été rendus : aucune marchandise ne sort de l\'Union, et aucun visa n\'est attendu.',
             default => null,
         };

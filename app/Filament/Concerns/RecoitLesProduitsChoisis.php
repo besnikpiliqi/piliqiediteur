@@ -3,10 +3,12 @@
 namespace App\Filament\Concerns;
 
 use App\Domain\Tenancy\Support\ValeurRequise;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\App\Livewire\SelecteurDeProduits;
 use App\Filament\App\Resources\DevisResource;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\On;
+use Livewire\Features\SupportEvents\Event;
 
 /**
  * Une page qui saisit les lignes d'une vente (caisse, facture, devis,
@@ -53,7 +55,7 @@ trait RecoitLesProduitsChoisis
 
             if ($envoi !== null) {
                 $this->envoisDuTableauAjoutes = array_slice([...$this->envoisDuTableauAjoutes, $envoi], -self::ENVOIS_GARDES);
-                $this->dispatch(SelecteurDeProduits::SELECTION_AJOUTEE, envoi: $envoi)->to(SelecteurDeProduits::class);
+                ValeursLues::instance($this->dispatch(SelecteurDeProduits::SELECTION_AJOUTEE, envoi: $envoi), Event::class)->to(SelecteurDeProduits::class);
             }
         }
 

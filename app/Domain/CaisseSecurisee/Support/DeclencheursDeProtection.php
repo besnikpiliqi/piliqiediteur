@@ -225,6 +225,7 @@ final class DeclencheursDeProtection
      *
      * @param  literal-string  $table
      * @param  literal-string  $colonne
+     * @param  0|1  $minimum
      */
     public static function auMoins(string $table, string $colonne, int $minimum): void
     {

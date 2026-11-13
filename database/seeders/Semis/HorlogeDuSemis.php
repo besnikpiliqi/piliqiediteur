@@ -44,8 +44,7 @@ final class HorlogeDuSemis
      */
     public function __construct(public readonly int $jours)
     {
-        $avant = Carbon::getTestNow();
-        $this->avant = $avant === null ? null : CarbonImmutable::instance($avant);
+        $this->avant = Carbon::hasTestNow() ? CarbonImmutable::instance(Carbon::getTestNow()) : null;
         $this->fin = CarbonImmutable::now()->startOfSecond();
         $this->premierJour = Calendrier::ajouterJours(Calendrier::deParis()->jourDe($this->fin), -$jours);
         $this->maintenant = Calendrier::deParis()->debutDuJour($this->premierJour);

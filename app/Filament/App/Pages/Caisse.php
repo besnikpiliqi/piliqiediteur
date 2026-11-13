@@ -246,7 +246,7 @@ class Caisse extends Page implements HasForms
      */
     private function oublierLesRefusDevenusFaux(): void
     {
-        $chemins = array_filter(array_keys($this->getErrorBag()->messages()), fn (string $chemin): bool => str_starts_with($chemin, 'data.parts'));
+        $chemins = array_filter(self::refusDuFormulaire($this)->keys(), fn (string $chemin): bool => str_starts_with($chemin, 'data.parts'));
 
         if ($chemins === []) {
             return;

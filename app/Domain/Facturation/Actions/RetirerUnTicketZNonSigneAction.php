@@ -68,24 +68,32 @@ class RetirerUnTicketZNonSigneAction
             throw new LogicException(self::MESSAGE_DEUX_OPERATEURS);
         }
 
-        return app(TenantContext::class)->runAsSociete($magasin->societe, fn (): array => app(TenantContext::class)->runAs($magasin, function () use ($magasin, $numero, $editeur): array {
-            $retire = $this->operateur->pendantLeSysteme(fn (): array => $this->registre->sousVerrou($magasin, fn (): array => $this->retirer($magasin, $numero, $editeur)));
-            $calendrier = $magasin->calendrier();
-            $ticketsZ = [];
-            $clotureArretee = null;
+        return app(TenantContext::class)->runAsSociete($magasin->societe, fn (): array => app(TenantContext::class)->runAs($magasin, fn (): array => $this->retirerPuisCloturer($magasin, $numero, $editeur)));
+    }
 
-            try {
-                $ticketsZ = $this->cloturerLesJournees->parLeSysteme($magasin, Calendrier::ajouterJours($calendrier->aujourdhui(), -1))
-                    ->map(fn (ClotureCaisse $cloture): string => (string) $cloture->numero)
-                    ->values()
-                    ->all();
-            } catch (Throwable $refus) {
-                report($refus);
-                $clotureArretee = $refus->getMessage();
-            }
+    /**
+     * Retire le ticket Z sous le verrou du registre, puis clôture les
+     * journées en attente du magasin, hors de cette transaction.
+     *
+     * @return array{retire: array{numero: string, journee: string, documents_detaches: int}, tickets_z: list<string>, cloture_arretee: string|null}
+     */
+    private function retirerPuisCloturer(Magasin $magasin, string $numero, InterventionDeLEditeur $editeur): array
+    {
+        $retire = $this->operateur->pendantLeSysteme(fn (): array => $this->registre->sousVerrou($magasin, fn (): array => $this->retirer($magasin, $numero, $editeur)));
+        $calendrier = $magasin->calendrier();
+        $ticketsZ = [];
+        $clotureArretee = null;
 
-            return ['retire' => $retire, 'tickets_z' => $ticketsZ, 'cloture_arretee' => $clotureArretee];
-        }));
+        try {
+            $ticketsZ = array_values($this->cloturerLesJournees->parLeSysteme($magasin, Calendrier::ajouterJours($calendrier->aujourdhui(), -1))
+                ->map(fn (ClotureCaisse $cloture): string => (string) $cloture->numero)
+                ->all());
+        } catch (Throwable $refus) {
+            report($refus);
+            $clotureArretee = $refus->getMessage();
+        }
+
+        return ['retire' => $retire, 'tickets_z' => $ticketsZ, 'cloture_arretee' => $clotureArretee];
     }
 
     /**

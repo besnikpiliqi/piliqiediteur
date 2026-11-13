@@ -139,7 +139,7 @@ class TelechargerLesDocumentsController
 
         $parMagasin = $magasins->keyBy(fn (Magasin $magasin): int => CleDuModele::de($magasin));
 
-        foreach ($contenues->filter(fn (PieceDuFournisseur $piece): bool => $revue->aRevoir($piece->analysee_le)) as $piece) {
+        foreach ($contenues->filter(fn (PieceDuFournisseur $piece): bool => $revue->aRevoir(ValeurRequise::de($piece->analysee_le, 'l\'instant de la dernière analyse de la pièce'))) as $piece) {
             $documents->dansLeMagasin($parMagasin->get($piece->magasin_id) ?? throw new PieceBloqueeException, fn (): string => $pieces->contenuServable($compte, $piece));
         }
     }

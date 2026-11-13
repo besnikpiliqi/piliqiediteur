@@ -7,6 +7,7 @@ use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\ReponseDuDevis;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Notifications\NotificationDuMagasin;
+use App\Domain\Tenancy\Support\LigneDeCourriel;
 use App\Domain\Tenancy\Support\Reglage;
 use App\Filament\App\Resources\DevisResource;
 use Filament\Notifications\Actions\Action;
@@ -57,10 +58,10 @@ final class ReponseDuClientAuDevis extends NotificationDuMagasin
     {
         $message = (new MailMessage)
             ->subject("{$this->titre()} · {$this->magasin->nom}")
-            ->line($this->texte());
+            ->line(LigneDeCourriel::de($this->texte()));
 
         foreach ($this->lignesDuStock() as $ligne) {
-            $message->line($ligne);
+            $message->line(LigneDeCourriel::de($ligne));
         }
 
         return $message

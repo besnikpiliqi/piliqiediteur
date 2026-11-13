@@ -316,7 +316,7 @@ class Devis extends Model implements DocumentEnvoyable
             ->whereKey(array_keys($demandes))
             ->where('suivi_stock', true)
             ->get(['id', 'nom', 'stock_quantite'])
-            ->keyBy(fn (Produit $produit): int => $produit->getKey());
+            ->keyBy(fn (Produit $produit): int => $produit->id);
         $stocks = [];
 
         foreach ($demandes as $id => $demande) {

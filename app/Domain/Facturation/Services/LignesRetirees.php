@@ -31,8 +31,6 @@ use InvalidArgumentException;
  */
 class LignesRetirees
 {
-    public function __construct(private readonly CalculateurLigne $calculateur) {}
-
     /**
      * Une ligne réduite à ce qui se compare : son article, sa description,
      * sa quantité et son PU TTC en centimes (null s'il n'est pas lisible).

@@ -41,6 +41,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Notification;
+use LogicException;
 use SensitiveParameter;
 use Symfony\Component\Mailer\Exception\TransportExceptionInterface;
 use Symfony\Component\Mailer\Exception\UnsupportedSchemeException;
@@ -262,7 +263,7 @@ class EnvoyerDocumentJob implements ShouldBeUnique, ShouldQueue
             return;
         }
 
-        $delai = $this->backoff[$tentative - 1] ?? $this->backoff[array_key_last($this->backoff)];
+        $delai = $this->backoff[$tentative - 1] ?? throw new LogicException("Aucun délai n'est prévu après la tentative {$tentative} d'un envoi.");
         $envoi->forceFill(['derniere_erreur' => $cause->libelle(), 'prochaine_tentative_le' => now()->addSeconds($delai)])->save();
         $this->release($delai);
     }
@@ -496,7 +497,7 @@ class EnvoyerDocumentJob implements ShouldBeUnique, ShouldQueue
         $destinataires = $aPrevenir ?? $this->aPrevenir($envoi);
 
         if ($cause?->tientALaPlateforme() === true) {
-            $destinataires = $destinataires->push(ValeurRequise::de($envoi->magasin->societe->proprietaire, 'le propriétaire de la société'))->unique(fn (User $compte): int => $compte->getKey());
+            $destinataires = $destinataires->push(ValeurRequise::de($envoi->magasin->societe->proprietaire, 'le propriétaire de la société'))->unique(fn (User $compte): int => $compte->id);
         }
 
         Notification::send($destinataires, new EnvoiDocumentEchoue($envoi));

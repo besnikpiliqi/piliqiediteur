@@ -201,9 +201,9 @@ final class ActiviteDesMagasins
         $this->horloge->aller(11, '10:00');
         $ticketRendu = $halles->vendreALaCaisse($lucas, $halles->comptoir(), [$this->ligne($halles, 'DIFF-BAMBOU', 1)], ModePaiement::CarteBancaire);
         $this->horloge->aller(11, '15:30');
-        $ligneRendue = $halles->dans(fn (): int => (int) $ticketRendu->lignes()->sole()->getKey());
+        $ligneRendue = $halles->dans(fn (): int => $ticketRendu->lignes()->sole()->id);
         $halles->rendre($camille, $halles->comptoir(), [['ligne_facture_id' => $ligneRendue, 'quantite' => 1]], 'Cadeau en double : la cliente garde un bon d\'avoir.');
-        $ligneDesTassesVendues = $halles->dans(fn (): int => (int) $facturePayee->lignes()->orderBy('ordre')->firstOrFail()->getKey());
+        $ligneDesTassesVendues = $halles->dans(fn (): int => $facturePayee->lignes()->orderBy('ordre')->firstOrFail()->id);
         $halles->rendre($camille, $horizon, [['ligne_facture_id' => $ligneDesTassesVendues, 'quantite' => 2]], 'Deux tasses ébréchées à la livraison.');
 
         $hugo = $this->semis->compte('Hugo Lefebvre');
@@ -212,11 +212,11 @@ final class ActiviteDesMagasins
         $factureDuStudio = $republique->facturer($hugo, $studio, [$this->ligne($republique, 'COUSSIN-LIN', 4)], [new PartDeReglement(ModePaiement::Virement, 10000)]);
 
         $this->horloge->aller(13, '10:00');
-        $ligneDesCoussins = $republique->dans(fn (): int => (int) $factureDuStudio->lignes()->sole()->getKey());
+        $ligneDesCoussins = $republique->dans(fn (): int => $factureDuStudio->lignes()->sole()->id);
         $republique->rendre($hugo, $studio, [['ligne_facture_id' => $ligneDesCoussins, 'quantite' => 1]], 'Un coussin taché : le studio garde un crédit pour sa prochaine commande.');
         $achat = $halles->dans(fn () => FactureAchat::query()->where('numero_fournisseur', 'GL-2026-118')->sole());
         $ligneDesTasses = $halles->dans(fn () => $achat->lignes()->whereHas('produit', fn ($produit) => $produit->where('reference', 'TASSE-GRES'))->sole());
-        $halles->retournerAuFournisseur($camille, $achat, [['ligne_achat_id' => (int) $ligneDesTasses->getKey(), 'quantite' => 2]], 'Deux tasses cassées au déballage.', 'AV-GL-2026-031');
+        $halles->retournerAuFournisseur($camille, $achat, [['ligne_achat_id' => $ligneDesTasses->id, 'quantite' => 2]], 'Deux tasses cassées au déballage.', 'AV-GL-2026-031');
 
         $this->horloge->aller(14, '10:00');
         $cheque = $halles->payer($camille, $partielle, ModePaiement::Cheque, '30.00', $this->horloge->jour(14));
@@ -293,8 +293,8 @@ final class ActiviteDesMagasins
         $produit = $gestes->dans(fn () => Produit::query()->where('reference', $referenceOuService)->first());
 
         return $produit !== null
-            ? ['produit_id' => (int) $produit->getKey(), 'quantite' => $quantite]
-            : ['service_id' => (int) $gestes->service($referenceOuService)->getKey(), 'quantite' => $quantite];
+            ? ['produit_id' => $produit->id, 'quantite' => $quantite]
+            : ['service_id' => $gestes->service($referenceOuService)->id, 'quantite' => $quantite];
     }
 
     private function client(GestesDuMagasin $gestes, string $nom): Client

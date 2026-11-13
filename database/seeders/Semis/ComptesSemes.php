@@ -3,6 +3,7 @@
 namespace Database\Seeders\Semis;
 
 use App\Domain\Tenancy\Enums\StatutCompte;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Models\User;
 use SensitiveParameter;
 
@@ -40,7 +41,7 @@ final class ComptesSemes
     public function noter(User $compte, string $societe, string $magasin, string $role, #[SensitiveParameter] ?string $motDePasse): void
     {
         $this->comptes[] = [
-            'id' => (int) $compte->getKey(),
+            'id' => $compte->id,
             'ligne' => [
                 $societe,
                 $magasin,
@@ -60,12 +61,10 @@ final class ComptesSemes
      */
     public function oublierLesComptesRetires(): void
     {
-        $retires = User::query()
+        $retires = ValeursLues::entiers(User::query()
             ->whereKey(array_column($this->comptes, 'id'))
             ->where('statut', StatutCompte::Retire)
-            ->pluck('id')
-            ->map(static fn (mixed $id): int => (int) $id)
-            ->all();
+            ->pluck('id'));
 
         $this->comptes = array_values(array_filter($this->comptes, static fn (array $compte): bool => ! in_array($compte['id'], $retires, true)));
     }

@@ -9,6 +9,7 @@ use App\Domain\Cabinets\Services\ExpertsComptablesDeclares;
 use App\Domain\Tenancy\Services\SuiviDesConnexions;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\ValeurSimple;
+use App\Domain\Tenancy\Support\ValeursLues;
 use Filament\Facades\Filament;
 use Filament\Notifications\Notification;
 use Illuminate\Http\RedirectResponse;
@@ -52,7 +53,7 @@ class LienDeLExpertComptableController
         } catch (LienDeLExpertComptableInvalideException) {
             return self::pageNeutre();
         } catch (ValidationException $refus) {
-            return $this->page($jeton, array_values(array_merge(...array_values($refus->errors()))));
+            return $this->page($jeton, ValeursLues::textes($refus->validator->errors()->all()));
         }
 
         if (Auth::check() && Auth::id() !== $compte->getKey()) {
@@ -71,7 +72,7 @@ class LienDeLExpertComptableController
             ->persistent()
             ->send();
 
-        return redirect()->to(Filament::getPanel('app')->getUrl())->header('Referrer-Policy', 'no-referrer');
+        return redirect()->to(Filament::getPanel('app')->getUrl() ?? route('filament.app.tenant'))->header('Referrer-Policy', 'no-referrer');
     }
 
     /**

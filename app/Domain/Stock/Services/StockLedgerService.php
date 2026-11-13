@@ -154,7 +154,7 @@ class StockLedgerService
      * à pondérer : il coûte sa dernière ligne achetée (voir
      * coutDeLaDerniereLigneAchetee()).
      *
-     * @param  array<int|string, array{repere: int, lots: list<array{quantite: int, cout_unitaire: int}>}>  $receptions  chaque réception validée du produit (voir lotsDe())
+     * @param  array<int|string, array{repere: int, lots: non-empty-list<array{quantite: int, cout_unitaire: int}>}>  $receptions  chaque réception validée du produit (voir lotsDe())
      */
     public function corrigerUneReception(
         Produit $produit,
@@ -433,7 +433,7 @@ class StockLedgerService
      * de la réception la plus ancienne à la plus récente : ce que rejoue
      * corrigerUneReception().
      *
-     * @return array<int|string, array{repere: int, lots: list<array{quantite: int, cout_unitaire: int}>}> chaque coût en dix-millièmes d'euro
+     * @return array<int|string, array{repere: int, lots: non-empty-list<array{quantite: int, cout_unitaire: int}>}> chaque coût en dix-millièmes d'euro
      */
     public function lotsDesReceptions(Produit $produit): array
     {
@@ -448,7 +448,7 @@ class StockLedgerService
      * que chacune a réellement payé (voir LigneAchat::coutUnitaireHt()).
      *
      * @param  iterable<LigneAchat>  $lignes
-     * @return array<int|string, array{repere: int, lots: list<array{quantite: int, cout_unitaire: int}>}> chaque coût en dix-millièmes d'euro
+     * @return array<int|string, array{repere: int, lots: non-empty-list<array{quantite: int, cout_unitaire: int}>}> chaque coût en dix-millièmes d'euro
      */
     public function lotsDe(iterable $lignes): array
     {
@@ -506,7 +506,7 @@ class StockLedgerService
      * mouvement) serait valorisé au coût moyen actuel.
      *
      * @param  Collection<int, MouvementStock>  $grandLivre  dans l'ordre
-     * @param  array<int|string, array{repere: int, lots: list<array{quantite: int, cout_unitaire: int}>}>  $receptions  chaque coût en dix-millièmes d'euro
+     * @param  array<int|string, array{repere: int, lots: non-empty-list<array{quantite: int, cout_unitaire: int}>}>  $receptions  chaque coût en dix-millièmes d'euro
      * @return int|null en dix-millièmes d'euro
      */
     public function coutMoyenRejoue(Produit $produit, Collection $grandLivre, array $receptions): ?int
@@ -591,7 +591,7 @@ class StockLedgerService
      * enregistré (voir VerificateurDuStock).
      *
      * @param  Collection<int, MouvementStock>  $grandLivre  dans l'ordre
-     * @param  array<int|string, array{repere: int, lots: list<array{quantite: int, cout_unitaire: int}>}>  $receptions
+     * @param  array<int|string, array{repere: int, lots: non-empty-list<array{quantite: int, cout_unitaire: int}>}>  $receptions
      * @return list<int> en dix-millièmes d'euro
      */
     public function coutsMoyensPossibles(Produit $produit, Collection $grandLivre, array $receptions): array
@@ -606,7 +606,7 @@ class StockLedgerService
      * Le coût de la dernière ligne de la réception la plus récente, en
      * dix-millièmes d'euro, null s'il n'y en a aucune.
      *
-     * @param  array<int|string, array{repere: int, lots: list<array{quantite: int, cout_unitaire: int}>}>  $receptions
+     * @param  array<int|string, array{repere: int, lots: non-empty-list<array{quantite: int, cout_unitaire: int}>}>  $receptions
      */
     private function coutDeLaDerniereLigneAchetee(array $receptions): ?int
     {
@@ -618,7 +618,7 @@ class StockLedgerService
      * d'euro : celui que prend un produit qui ne suit pas son stock (voir
      * entrerAuCout()), ses lignes reçues une à une.
      *
-     * @param  array{repere: int, lots: list<array{quantite: int, cout_unitaire: int}>}  $reception
+     * @param  array{repere: int, lots: non-empty-list<array{quantite: int, cout_unitaire: int}>}  $reception
      */
     private function coutDeSaDerniereLigne(array $reception): int
     {

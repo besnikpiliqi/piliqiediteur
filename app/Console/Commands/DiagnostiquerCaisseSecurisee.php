@@ -225,7 +225,8 @@ class DiagnostiquerCaisseSecurisee extends Command
     private function controlerLHorloge(HorlogeDuSysteme $horloge): string
     {
         $avant = $horloge->secondes();
-        $base = (float) DB::scalar("select date_part('epoch', clock_timestamp())");
+        $lue = DB::scalar("select date_part('epoch', clock_timestamp())");
+        $base = is_numeric($lue) ? (float) $lue : throw new RuntimeException('Le serveur de base n\'a pas donné son heure.');
         $apres = $horloge->secondes();
         $ecart = ($avant + $apres) / 2 - $base;
         $ecartLu = number_format($ecart, 3, ',', ' ');

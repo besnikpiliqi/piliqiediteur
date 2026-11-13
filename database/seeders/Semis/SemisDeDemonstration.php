@@ -34,6 +34,7 @@ use App\Domain\Tenancy\Services\ControleSirene;
 use App\Domain\Tenancy\Services\IdentifiantsInsee;
 use App\Domain\Tenancy\Services\PostesReconnus;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Integrations\EnvoiRecommande\AdressePostale;
 use App\Integrations\Ordre\FauxAnnuaireDeLOrdre;
 use App\Integrations\Rne\Contracts\RegistreNationalDesEntreprises;
@@ -274,12 +275,8 @@ final class SemisDeDemonstration
      */
     private function nommerLesEntreprises(): void
     {
-        $sirene = app(RepertoireSirene::class);
-        $rne = app(RegistreNationalDesEntreprises::class);
-
-        if (! $sirene instanceof FauxRepertoireSirene || ! $rne instanceof FauxRne) {
-            throw new LogicException('Le semis ne passe que par le répertoire Sirene et le registre national des entreprises factices.');
-        }
+        $sirene = ValeursLues::instance(app(RepertoireSirene::class), FauxRepertoireSirene::class);
+        $rne = ValeursLues::instance(app(RegistreNationalDesEntreprises::class), FauxRne::class);
 
         foreach ([
             self::SIREN_COMMERCE => ['MAISON FERRAND', 'FERRAND', ['Hélène'], 'Présidente'],
@@ -416,7 +413,7 @@ final class SemisDeDemonstration
             $this->proprietaire($societe),
             $this->societe($societe),
             ['name' => $nom],
-            $magasins === null ? null : array_map(fn (string $cle): int => (int) $this->magasin($cle)->getKey(), $magasins),
+            $magasins === null ? null : array_map(fn (string $cle): int => $this->magasin($cle)->id, $magasins),
             $cases,
             [],
             GestesDuMagasin::jeton(),
@@ -549,7 +546,7 @@ final class SemisDeDemonstration
             ->where('etat', EtatDuLien::Actif->value)
             ->sole();
 
-        $this->horsDeToutContexte(fn () => app(ConfierDesClientsAction::class)->handle($this->proprietaire('cabinet'), $this->compte($collaborateur), [(int) $lien->getKey()]));
+        $this->horsDeToutContexte(fn () => app(ConfierDesClientsAction::class)->handle($this->proprietaire('cabinet'), $this->compte($collaborateur), [$lien->id]));
     }
 
     /**
@@ -563,7 +560,7 @@ final class SemisDeDemonstration
     private function accepterLInvitationDuCabinet(): void
     {
         $this->horsDeToutContexte(fn () => app(InviterUneEntrepriseAction::class)->handle($this->proprietaire('cabinet'), $this->societe('cabinet'), self::SIREN_CLIENT_INVITE, self::ADRESSE_CLIENT_INVITE, $this->motsDePasseDesProprietaires['cabinet']));
-        $jeton = Str::afterLast((string) Mail::sent(InvitationDuCabinetMail::class)->last()?->lien, '/');
+        $jeton = Str::afterLast(ValeursLues::instance(Mail::sent(InvitationDuCabinetMail::class)->last(), InvitationDuCabinetMail::class)->lien, '/');
         $motDePasse = $this->motsDePasse->nouveau();
         $proprietaire = $this->horsDeToutContexte(fn (): User => app(AccepterLInvitationAction::class)->handle($jeton, [
             'password' => $motDePasse,
@@ -596,7 +593,7 @@ final class SemisDeDemonstration
             'autorisations' => PermissionRegistry::casesDuCabinet(PermissionRegistry::parDefautDuCabinet(TypeDActivite::Services)),
             'remplacer' => false,
         ], $this->motsDePasseDesProprietaires['services'], GestesDuMagasin::jeton()));
-        $jeton = Str::afterLast((string) Mail::sent(LienDuMotDePasseDeLExpertComptableMail::class)->last()?->lien, '/');
+        $jeton = Str::afterLast(ValeursLues::instance(Mail::sent(LienDuMotDePasseDeLExpertComptableMail::class)->last(), LienDuMotDePasseDeLExpertComptableMail::class)->lien, '/');
         $motDePasse = $this->motsDePasse->nouveau();
         $this->horsDeToutContexte(fn (): User => app(ChoisirLeMotDePasseDeLExpertComptableAction::class)->handle($jeton, $motDePasse, $motDePasse));
         $compte = $compte->refresh();

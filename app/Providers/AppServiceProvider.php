@@ -5,7 +5,6 @@ namespace App\Providers;
 use App\Domain\Achats\Models\AvoirFournisseur;
 use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Cabinets\Models\Cabinet;
-use App\Domain\Cabinets\Models\CompteExpertComptable;
 use App\Domain\Cabinets\Models\InvitationCabinet;
 use App\Domain\Cabinets\Models\LienCabinet;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
@@ -22,9 +21,7 @@ use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
 use App\Domain\Facturation\Models\Devis;
-use App\Domain\Facturation\Models\EnvoiDocument;
 use App\Domain\Facturation\Models\Facture;
-use App\Domain\Facturation\Models\LigneAvoir;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Models\RecuPaiement;
 use App\Domain\Recherche\RechercheSansAccents;
@@ -37,6 +34,7 @@ use App\Domain\Tenancy\Models\PosteReconnu;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\FournisseurDesComptes;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\NomsPolymorphes;
 use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Domain\Tenancy\Support\ValeursLues;
 use App\Http\Controllers\ReponseAuDevisController;
@@ -105,6 +103,7 @@ use LogicException;
 use PDO;
 use RuntimeException;
 use Symfony\Component\HttpFoundation\Response;
+use UnexpectedValueException;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -232,10 +231,31 @@ class AppServiceProvider extends ServiceProvider
     {
         RateLimiter::for('lien-du-devis', static fn (Request $requete): Limit => Limit::perMinute(30)
             ->by((string) $requete->ip())
-            ->response(static fn (Request $requete, array $entetes): Response => ReponseAuDevisController::tropDEssais($entetes)));
+            ->response(static fn (Request $requete, array $entetes): Response => ReponseAuDevisController::tropDEssais(self::entetesDeLAttente($entetes))));
         RateLimiter::for('reponse-au-devis', static fn (Request $requete): Limit => Limit::perMinute(10)
             ->by((string) $requete->ip())
-            ->response(static fn (Request $requete, array $entetes): Response => ReponseAuDevisController::tropDEssais($entetes)));
+            ->response(static fn (Request $requete, array $entetes): Response => ReponseAuDevisController::tropDEssais(self::entetesDeLAttente($entetes))));
+    }
+
+    /**
+     * Les en-têtes que Laravel donne à la réponse d'une limite dépassée
+     * (X-RateLimit-Limit, X-RateLimit-Remaining, Retry-After,
+     * X-RateLimit-Reset), chacun sous son nom : un entier ou un texte.
+     *
+     * @param  array<array-key, mixed>  $entetes
+     * @return array<string, int|string>
+     *
+     * @throws UnexpectedValueException un en-tête sans nom, ou ni entier ni texte
+     */
+    private static function entetesDeLAttente(array $entetes): array
+    {
+        $lus = [];
+
+        foreach ($entetes as $nom => $valeur) {
+            $lus[ValeursLues::texte($nom)] = ValeursLues::entierOuTexte($valeur);
+        }
+
+        return $lus;
     }
 
     /**
@@ -302,40 +322,12 @@ class AppServiceProvider extends ServiceProvider
     }
 
     /**
-     * Le nom sous lequel un modèle s'écrit dans une colonne polymorphique
-     * (document_type du registre fiscal et des envois, source_type du
-     * grand livre du stock, transmissible_type, notifiable_type,
-     * cible_type du journal d'audit, resultat_type des demandes déjà
-     * traitées) : un alias stable plutôt que le nom de sa
-     * classe, qu'un déplacement de fichier changerait, alors que le
-     * registre fiscal le signe (voir RegistreFiscal). Sans
-     * enforceMorphMap() : un modèle absent de la liste garde le nom de sa
-     * classe.
+     * Le nom stable de chaque modèle écrit dans une colonne polymorphique
+     * (voir NomsPolymorphes).
      */
     private function nommerLesModelesPolymorphes(): void
     {
-        Relation::morphMap([
-            'avoir' => Avoir::class,
-            'avoir_fournisseur' => AvoirFournisseur::class,
-            'cabinet' => Cabinet::class,
-            'cloture_caisse' => ClotureCaisse::class,
-            'cloture_caisse_personnelle' => ClotureCaissePersonnelle::class,
-            'devis' => Devis::class,
-            'envoi_document' => EnvoiDocument::class,
-            'facture' => Facture::class,
-            'facture_achat' => FactureAchat::class,
-            'inventaire_ouverture' => InventaireOuverture::class,
-            'invitation_cabinet' => InvitationCabinet::class,
-            'ligne_avoir' => LigneAvoir::class,
-            'lien_cabinet' => LienCabinet::class,
-            'compte_expert_comptable' => CompteExpertComptable::class,
-            'magasin' => Magasin::class,
-            'paiement' => Paiement::class,
-            'produit' => Produit::class,
-            'recu_paiement' => RecuPaiement::class,
-            'societe' => Societe::class,
-            'utilisateur' => User::class,
-        ]);
+        Relation::morphMap(NomsPolymorphes::MODELES);
     }
 
     /**

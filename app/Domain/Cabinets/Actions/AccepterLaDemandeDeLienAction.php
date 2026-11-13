@@ -182,7 +182,7 @@ class AccepterLaDemandeDeLienAction
             return null;
         }
 
-        return LienCabinet::query()->withoutGlobalScope(SocieteScope::class)->where('societe_id', $client->getKey())->findOrFail($declaration->getKey());
+        return LienCabinet::query()->withoutGlobalScope(SocieteScope::class)->where('societe_id', $client->getKey())->findOrFail($declaration->id);
     }
 
     /**

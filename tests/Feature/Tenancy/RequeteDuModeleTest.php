@@ -4,7 +4,10 @@ namespace Tests\Feature\Tenancy;
 
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
+use App\Domain\Facturation\Models\Facture;
+use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\RequeteDuModele;
+use Illuminate\Database\Eloquent\Builder;
 use Tests\TestCase;
 use UnexpectedValueException;
 
@@ -49,5 +52,46 @@ class RequeteDuModeleTest extends TestCase
         }
 
         $this->assertSame('clients as laravel_reserved_0', $requete->getQuery()->from);
+    }
+
+    public function test_la_sous_requete_d_une_relation_vers_soi_meme_est_rendue_elle_meme_inchangee(): void
+    {
+        $magasin = $this->ouvrirUneSociete();
+        $lues = [];
+
+        app(TenantContext::class)->runAs($magasin, function () use (&$lues): void {
+            Facture::query()->withExists(['elleMeme as elle_meme' => function (Builder $elleMeme) use (&$lues): Builder {
+                $avant = $elleMeme->getQuery()->from;
+                $lue = RequeteDuModele::deSoiMeme($elleMeme, Facture::class);
+                $lues[] = [$elleMeme, $lue, $avant, $lue->getQuery()->from, $lue->getModel()->getTable()];
+
+                return $lue;
+            }])->toSql();
+        });
+
+        $this->assertCount(1, $lues);
+        [$elleMeme, $lue, $avant, $apres, $tableDuModele] = $lues[0];
+        $this->assertSame($elleMeme, $lue);
+        $this->assertSame('factures as '.$tableDuModele, $avant);
+        $this->assertSame($avant, $apres);
+        $this->assertStringStartsWith('laravel_reserved_', $tableDuModele);
+    }
+
+    public function test_une_requete_qui_n_est_pas_celle_d_une_relation_vers_soi_meme_est_refusee(): void
+    {
+        foreach ([
+            [Client::query(), Client::class, 'clients'],
+            [Produit::query()->from('produits', 'laravel_reserved_0'), Client::class, 'produits as laravel_reserved_0'],
+            [Client::query()->from('clients', 'laravel_reserved_0'), Client::class, 'clients as laravel_reserved_0'],
+        ] as [$requete, $classe, $table]) {
+            try {
+                RequeteDuModele::deSoiMeme($requete, $classe);
+                $this->fail("La requête sur {$table} aurait dû être refusée.");
+            } catch (UnexpectedValueException $refus) {
+                $this->assertSame(sprintf(RequeteDuModele::REFUS_SOI_MEME, $classe, $requete->getModel()::class, $table), $refus->getMessage());
+            }
+
+            $this->assertSame($table, $requete->getQuery()->from);
+        }
     }
 }

@@ -319,7 +319,7 @@ class DeclarerSonExpertComptableAction
      */
     private static function exigerUneSocieteValidee(Societe $societe): void
     {
-        $relue = Societe::query()->findOrFail($societe->getKey());
+        $relue = Societe::query()->findOrFail($societe->id);
 
         if (! $relue->estValidee() || $relue->estClose() || $relue->statut === StatutSociete::Revoquee) {
             throw new LogicException(self::MESSAGE_SOCIETE_NON_VALIDEE);
@@ -387,7 +387,7 @@ class DeclarerSonExpertComptableAction
      * droits des comptes de la société ; au journal d'un cabinet, la fin de
      * son lien ou le retrait de sa demande, sans rien de la déclaration.
      *
-     * @param  array<string, mixed>  $resultat
+     * @param  array{existant: User}|array{compte: User, declaration: LienCabinet, remplace: LienCabinet|null, comptesRemplaces: Collection<int, User>, demandes: list<LienCabinet>, jetonDuLien: string}  $resultat
      * @return list<array{0: ActionAuditee, 1: array<string, mixed>, 2: int|null}>
      */
     private static function entrees(Societe $journal, Societe $client, array $resultat): array
@@ -398,7 +398,7 @@ class DeclarerSonExpertComptableAction
 
         $duClient = $journal->is($client);
         $entrees = [];
-        $remplace = $resultat['remplace'] ?? null;
+        $remplace = $resultat['remplace'];
 
         if ($remplace instanceof LienCabinet && ($duClient || (int) $remplace->cabinet_id === CleDuModele::de($journal))) {
             $entrees[] = [ActionAuditee::LienTermine, [
@@ -408,7 +408,7 @@ class DeclarerSonExpertComptableAction
             ], $remplace->cabinet_id === null ? CleDuModele::de($client) : (int) $remplace->cabinet_id];
         }
 
-        foreach ($resultat['demandes'] ?? [] as $demande) {
+        foreach ($resultat['demandes'] as $demande) {
             if ($duClient || (int) $demande->cabinet_id === CleDuModele::de($journal)) {
                 $entrees[] = [ActionAuditee::DemandeDeLienRetiree, [
                     'cabinet' => IdentiteDansLeJournal::de(Societe::query()->findOrFail($demande->cabinet_id)),

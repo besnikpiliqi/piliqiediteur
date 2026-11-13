@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Domain\Tenancy\Support\EntetesDeConfiance;
+use App\Domain\Tenancy\Support\ValeursLues;
 use Illuminate\Http\Middleware\TrustProxies;
 use Illuminate\Http\Request;
 
@@ -64,7 +65,7 @@ class FaireConfianceAuxMandataires extends TrustProxies
      */
     protected function proxies(): array
     {
-        return array_values(array_filter((array) config('piliqi.proxies_de_confiance', []), self::estUneAdresseOuUnePlageEtroite(...)));
+        return ValeursLues::textes(array_filter((array) config('piliqi.proxies_de_confiance', []), self::estUneAdresseOuUnePlageEtroite(...)));
     }
 
     private static function estUneAdresseOuUnePlageEtroite(mixed $declaree): bool
@@ -73,7 +74,9 @@ class FaireConfianceAuxMandataires extends TrustProxies
             return false;
         }
 
-        [$adresse, $prefixe] = array_pad(explode('/', $declaree, 2), 2, null);
+        $morceaux = explode('/', $declaree, 2);
+        $adresse = $morceaux[0];
+        $prefixe = $morceaux[1] ?? null;
 
         if (filter_var($adresse, FILTER_VALIDATE_IP) === false) {
             return false;

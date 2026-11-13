@@ -144,6 +144,19 @@ class LienDeLExpertComptableTest extends TestCase
         $this->get(route('experts-comptables.lien.afficher', ['jeton' => $jeton]))->assertStatus(410)->assertSee(LienDeLExpertComptableInvalideException::MESSAGE);
     }
 
+    public function test_sans_magasin_reel_le_mot_de_passe_choisi_mene_a_l_accueil_du_panneau_des_magasins(): void
+    {
+        $societe = $this->inscrireUneSociete();
+        $this->saisirLeCodeDuCourrier($societe)->forceFill(['password' => 'password'])->save();
+        $compte = $this->declarerSonExpertComptable($societe->fresh());
+
+        $this->post(route('experts-comptables.lien.choisir', ['jeton' => $this->jetonDuDernierLienDExpertComptable()]), ['password' => self::MOT_DE_PASSE_CHOISI, 'password_confirmation' => self::MOT_DE_PASSE_CHOISI])
+            ->assertRedirect(route('filament.app.tenant'));
+
+        $this->assertAuthenticatedAs($compte);
+        $this->get(route('filament.app.tenant'))->assertRedirect(route('filament.app.aucun-magasin'));
+    }
+
     public function test_le_mot_de_passe_choisi_suit_la_regle_et_ne_contient_pas_l_identifiant(): void
     {
         $magasin = $this->ouvrirUneSociete();

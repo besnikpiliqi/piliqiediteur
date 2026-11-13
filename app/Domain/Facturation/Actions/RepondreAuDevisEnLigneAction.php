@@ -195,6 +195,6 @@ class RepondreAuDevisEnLigneAction
         return collect([
             $demandeur !== null && $demandeur->peutOuvrir($magasin) ? $demandeur : null,
             ValeurRequise::de($magasin->societe->proprietaire, 'le propriétaire de la société'),
-        ])->filter()->unique(fn (User $compte): int => $compte->getKey())->values();
+        ])->filter()->unique(fn (User $compte): int => $compte->id)->values();
     }
 }

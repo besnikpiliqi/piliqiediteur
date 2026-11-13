@@ -212,7 +212,7 @@ final class GestesDuMagasin
             $vendeur,
             $facture->client()->firstOrFail(),
             ['mode_paiement' => $mode->value, 'montant' => $montant, 'recu_le' => $recuLe, 'reference' => $reference],
-            [['facture_id' => $facture->getKey(), 'montant' => $montant]],
+            [['facture_id' => $facture->id, 'montant' => $montant]],
             self::jeton(),
         ));
     }

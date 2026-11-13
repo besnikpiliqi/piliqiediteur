@@ -24,7 +24,6 @@ use App\Domain\Tenancy\Support\ValeursLues;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterval;
 use Illuminate\Database\Eloquent\Collection;
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Facades\DB;
 use stdClass;
@@ -84,7 +83,7 @@ class VerificateurDuStock
     {
         $grandLivre = MouvementStock::query()->toBase()->selectRaw('produit_id, sum('.self::variation().') AS net')->groupBy('produit_id');
 
-        return Produit::withTrashed()->toBase()
+        return array_values(Produit::withTrashed()->toBase()
             ->leftJoinSub($grandLivre, 'grand_livre', 'grand_livre.produit_id', '=', 'produits.id')
             ->select(['produits.id', 'produits.reference', 'produits.nom', 'produits.stock_quantite'])
             ->selectRaw('coalesce(grand_livre.net, 0) AS net')
@@ -95,8 +94,7 @@ class VerificateurDuStock
                 'Le stock du produit '.self::libelleDuProduit($produit).' est de '.ValeurSimple::enEntier($produit->stock_quantite).' article(s), au lieu des '.ValeurSimple::enEntier($produit->net).' de son grand livre.',
                 ['produit_id' => ValeurSimple::enEntier($produit->id)],
             ))
-            ->values()
-            ->all();
+            ->all());
     }
 
     /**
@@ -178,7 +176,7 @@ class VerificateurDuStock
 
                 if ($sens * ValeurSimple::enEntier($net->net) !== $attendu) {
                     $anomalies[] = self::anomalie(
-                        "Les mouvements du produit #{$net->produit_id} venus de {$libelle} #{$net->source_id} font ".($sens * ValeurSimple::enEntier($net->net))." article(s), au lieu des {$attendu} de ses lignes.",
+                        'Les mouvements du produit #'.ValeurSimple::enEntier($net->produit_id)." venus de {$libelle} #".ValeurSimple::enEntier($net->source_id).' font '.($sens * ValeurSimple::enEntier($net->net))." article(s), au lieu des {$attendu} de ses lignes.",
                         ['document_type' => $alias, 'document_id' => ValeurSimple::enEntier($net->source_id), 'produit_id' => ValeurSimple::enEntier($net->produit_id)],
                     );
                 }
@@ -215,14 +213,14 @@ class VerificateurDuStock
 
         FactureAchat::query()->where('statut', StatutFactureAchat::Validee->value)->with(['lignes', 'taux'])->chunkById(100, function (Collection $achats) use ($inscrites, &$anomalies): void {
             foreach ($achats as $achat) {
-                if (! $achat instanceof FactureAchat || ! array_key_exists($achat->getKey(), $inscrites)) {
+                if (! array_key_exists($achat->id, $inscrites)) {
                     continue;
                 }
 
-                if (self::cleesTriees($achat->valeursAuditees()['lignes']) !== self::cleesTriees($inscrites[$achat->getKey()])) {
+                if (self::cleesTriees($achat->valeursAuditees()['lignes']) !== self::cleesTriees($inscrites[$achat->id])) {
                     $anomalies[] = self::anomalie(
                         "Les lignes de la facture d'achat {$achat->numero} ne sont plus celles que le journal d'audit a inscrites : elles ont été réécrites en dehors de PILIQI.",
-                        ['document_type' => $achat->getMorphClass(), 'document_id' => ValeurSimple::enEntier($achat->getKey())],
+                        ['document_type' => $achat->getMorphClass(), 'document_id' => $achat->id],
                     );
                 }
             }
@@ -253,18 +251,14 @@ class VerificateurDuStock
                 ->groupBy('produit_id');
 
             foreach ($produits as $produit) {
-                if (! $produit instanceof Produit) {
-                    continue;
-                }
-
-                $lignes = $achats->get($produit->getKey(), new Collection);
-                $couts = $this->stock->coutsMoyensPossibles($produit, $grandsLivres->get($produit->getKey(), new Collection), $this->stock->lotsDe($lignes));
+                $lignes = $achats->get($produit->id, new Collection);
+                $couts = $this->stock->coutsMoyensPossibles($produit, $grandsLivres->get($produit->id, new Collection), $this->stock->lotsDe($lignes));
                 $enBase = $this->calculateur->enDixMilliemes($produit->cmup_ht);
 
                 if ($couts !== [] && ! in_array($enBase, $couts, true)) {
                     $anomalies[] = self::anomalie(
                         'Le coût moyen du produit '.self::libelleDuProduit($produit).' est de '.self::enEuros($enBase).' au lieu de '.implode(' ou ', array_map(self::enEuros(...), $couts)).' que rejouent son grand livre et ses achats.',
-                        ['produit_id' => ValeurSimple::enEntier($produit->getKey())],
+                        ['produit_id' => $produit->id],
                     );
                 }
 
@@ -274,7 +268,7 @@ class VerificateurDuStock
                 if ((int) $fournisseur !== (int) $produit->fournisseur_id) {
                     $anomalies[] = self::anomalie(
                         'Le fournisseur du produit '.self::libelleDuProduit($produit).' est #'.($produit->fournisseur_id ?? '—').' au lieu de #'.($fournisseur ?? '—').', celui de son dernier achat validé.',
-                        ['produit_id' => ValeurSimple::enEntier($produit->getKey())],
+                        ['produit_id' => $produit->id],
                     );
                 }
             }
@@ -322,10 +316,12 @@ class VerificateurDuStock
     /**
      * La variation signée d'un mouvement, en SQL, depuis son type (voir
      * TypeMouvementStock::estEntree()).
+     *
+     * @return literal-string
      */
     private static function variation(): string
     {
-        $entrees = implode(', ', array_map(static fn (TypeMouvementStock $type): string => "'{$type->value}'", array_filter(TypeMouvementStock::cases(), static fn (TypeMouvementStock $type): bool => $type->estEntree())));
+        $entrees = TypeMouvementStock::enListeSql(array_filter(TypeMouvementStock::cases(), static fn (TypeMouvementStock $type): bool => $type->estEntree()));
 
         return "CASE WHEN type IN ({$entrees}) THEN quantite ELSE -quantite END";
     }
@@ -349,7 +345,7 @@ class VerificateurDuStock
         return $triees;
     }
 
-    private static function libelleDuProduit(stdClass|Model $produit): string
+    private static function libelleDuProduit(stdClass|Produit $produit): string
     {
         return ValeursLues::texte($produit->reference).' ('.ValeursLues::texte($produit->nom).')';
     }

@@ -3,6 +3,7 @@
 namespace App\Domain\Cabinets\Notifications;
 
 use App\Domain\Tenancy\Models\Societe;
+use App\Domain\Tenancy\Support\LigneDeCourriel;
 use App\Domain\Tenancy\Support\Reglage;
 use Filament\Notifications\Actions\Action;
 use Filament\Notifications\Notification as NotificationFilament;
@@ -55,7 +56,7 @@ class AvisDuCabinet extends Notification
     {
         $message = (new MailMessage)
             ->subject("{$this->titre} · {$this->societe->getFilamentName()}")
-            ->line($this->texte);
+            ->line(LigneDeCourriel::de($this->texte));
 
         if ($this->url !== null) {
             $message->action($this->libelleDuLien, $this->url);

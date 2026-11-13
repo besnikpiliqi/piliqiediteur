@@ -245,7 +245,7 @@ final class ChosesAFaireDuMagasin
             url: $seule === null ? FactureResource::urlDesFacturesAEncaisser() : FactureResource::getUrl('view', ['record' => $seule]),
             bouton: $this->bouton('Encaisser', $aFaire, permisEnLectureSeule: false),
             aSurveiller: ! $aFaire,
-            date: ValeursLues::texteOuNul($factures->first()?->date_echeance),
+            date: ValeursLues::texteOuNul($factures->first()->date_echeance),
             precision: $this->avecLaLectureSeule($precision, $aFaire, permisEnLectureSeule: false),
             lignes: array_values($factures->take(self::LIGNES_ENUMEREES)->map(fn (Facture $facture): array => [
                 'libelle' => (string) $facture->numero,
@@ -308,7 +308,7 @@ final class ChosesAFaireDuMagasin
             url: $seule === null ? FactureResource::urlDesPreuvesAFournir() : FactureResource::getUrl('view', ['record' => $seule]),
             bouton: $aFaire ? 'Ajouter la preuve' : 'Voir',
             aSurveiller: ! $aFaire,
-            date: $this->jourDe($factures->first()?->date_emission),
+            date: $this->jourDe($factures->first()->date_emission),
             precision: $precision,
             lignes: $seule !== null ? [] : array_values($factures->take(self::LIGNES_ENUMEREES)->map(fn (Facture $facture): array => [
                 'libelle' => (string) $facture->numero,
@@ -400,7 +400,7 @@ final class ChosesAFaireDuMagasin
             url: $seule === null ? FactureResource::urlDesExonerationsNonProuvees() : FactureResource::getUrl('view', ['record' => $seule]),
             bouton: $aFaire && $refusDeVente === null ? 'Régulariser' : 'Voir',
             aSurveiller: ! $aFaire,
-            date: $this->jourDe($factures->first()?->date_emission),
+            date: $this->jourDe($factures->first()->date_emission),
             precision: 'L\'exonération se régularise : un avoir sans retour en stock, puis une facture à la TVA française au même prix TTC.'.($refusDeVente === null ? '' : ' '.$refusDeVente),
             lignes: $seule !== null ? [] : array_values($factures->take(self::LIGNES_ENUMEREES)->map(fn (Facture $facture): array => [
                 'libelle' => (string) $facture->numero,
@@ -455,7 +455,7 @@ final class ChosesAFaireDuMagasin
             url: $seul === null ? FactureResource::urlDesVisasANoter() : FactureResource::getUrl('view', ['record' => $seul]),
             bouton: $aFaire ? 'Noter le visa' : 'Voir',
             aSurveiller: ! $aFaire,
-            date: $this->jourDe($tickets->first()?->bordereauDetaxe?->created_at),
+            date: $this->jourDe($tickets->first()->bordereauDetaxe?->created_at),
             precision: 'La TVA du ticket ne se régularise qu\'après le visa du bordereau à la sortie de l\'Union européenne.',
         );
     }
@@ -483,7 +483,7 @@ final class ChosesAFaireDuMagasin
         }
 
         $seul = $brouillons->count() === 1 ? $brouillons->first() : null;
-        $jour = $this->afficherLeJourDe($brouillons->first()?->created_at);
+        $jour = $this->afficherLeJourDe($brouillons->first()->created_at);
 
         return new ChoseAFaire(
             cle: 'brouillons_de_facture',
@@ -494,7 +494,7 @@ final class ChosesAFaireDuMagasin
             url: $seul === null ? FactureResource::urlDesBrouillons() : FactureResource::getUrl('view', ['record' => $seul]),
             bouton: $this->bouton('Émettre', $aFaire, permisEnLectureSeule: false),
             aSurveiller: ! $aFaire,
-            date: $this->jourDe($brouillons->first()?->created_at),
+            date: $this->jourDe($brouillons->first()->created_at),
             precision: $this->avecLaLectureSeule(null, $aFaire, permisEnLectureSeule: false),
         );
     }
@@ -566,7 +566,7 @@ final class ChosesAFaireDuMagasin
                 aSurveiller: $partie === 'a_surveiller',
                 date: $this->jourDe($echecs[0]->created_at),
                 lignes: array_map(fn (EnvoiDocument $envoi): array => [
-                    'libelle' => $envoi->document instanceof DocumentEnvoyable ? trim($envoi->document->libelleDocument().' '.$envoi->document->getAttribute('numero')) : 'Document',
+                    'libelle' => $envoi->document instanceof DocumentEnvoyable ? trim($envoi->document->libelleDocument().' '.ValeursLues::texteOuNul($envoi->document->getAttribute('numero'))) : 'Document',
                     'url' => $this->urlDuDocument($envoi),
                     'description' => $envoi->destinataire,
                     'montant' => null,
@@ -633,7 +633,7 @@ final class ChosesAFaireDuMagasin
         }
 
         $seul = $brouillons->count() === 1 ? $brouillons->first() : null;
-        $jour = $this->afficherLeJourDe($brouillons->first()?->created_at);
+        $jour = $this->afficherLeJourDe($brouillons->first()->created_at);
         $depasses = $brouillons->filter(fn (Devis $devis): bool => $devis->date_validite !== null && $devis->date_validite < $this->aujourdhui)->count();
 
         return new ChoseAFaire(
@@ -645,7 +645,7 @@ final class ChosesAFaireDuMagasin
             url: $seul === null ? DevisResource::urlDesBrouillons() : DevisResource::getUrl('view', ['record' => $seul]),
             bouton: $this->bouton('Envoyer', $aFaire, permisEnLectureSeule: false),
             aSurveiller: ! $aFaire,
-            date: $this->jourDe($brouillons->first()?->created_at),
+            date: $this->jourDe($brouillons->first()->created_at),
             precision: $this->avecLaLectureSeule($depasses > 0 ? trans_choice('{1} La validité d\'un brouillon est dépassée : changez-la avant de l\'envoyer.|[2,*] La validité de :count brouillons est dépassée : changez-la avant de les envoyer.', $depasses) : null, $aFaire, permisEnLectureSeule: false),
         );
     }
@@ -683,7 +683,7 @@ final class ChosesAFaireDuMagasin
             url: $seul === null ? DevisResource::urlDesDevisQuiExpirent() : DevisResource::getUrl('view', ['record' => $seul]),
             bouton: 'Voir',
             aSurveiller: ! $aFaire,
-            date: ValeursLues::texteOuNul($devis->first()?->date_validite),
+            date: ValeursLues::texteOuNul($devis->first()->date_validite),
             precision: 'Relancez le client, ou notez sa réponse sur le devis.',
         );
     }
@@ -719,7 +719,7 @@ final class ChosesAFaireDuMagasin
             url: $seul === null ? DevisResource::urlDesDevisATransformer() : DevisResource::getUrl('view', ['record' => $seul]),
             bouton: $this->bouton('Transformer en facture', $aFaire, permisEnLectureSeule: false),
             aSurveiller: ! $aFaire,
-            date: $this->jourDe($devis->first()?->accepte_le),
+            date: $this->jourDe($devis->first()->accepte_le),
             precision: $this->avecLaLectureSeule(null, $aFaire, permisEnLectureSeule: false),
         );
     }
@@ -761,7 +761,7 @@ final class ChosesAFaireDuMagasin
             return null;
         }
 
-        $vendeurs = app(VerificateurCaissesPersonnelles::class)->vendeursAvecCaisseOuverte($this->aujourdhui)->except([$this->compte->getKey()]);
+        $vendeurs = app(VerificateurCaissesPersonnelles::class)->vendeursAvecCaisseOuverte($this->aujourdhui)->except([$this->compte->id]);
 
         if ($vendeurs->isEmpty()) {
             return null;
@@ -854,7 +854,7 @@ final class ChosesAFaireDuMagasin
         }
 
         $seul = $brouillons->count() === 1 ? $brouillons->first() : null;
-        $jour = $this->afficherLeJourDe($brouillons->first()?->created_at);
+        $jour = $this->afficherLeJourDe($brouillons->first()->created_at);
 
         return new ChoseAFaire(
             cle: 'achats_en_brouillon',
@@ -865,7 +865,7 @@ final class ChosesAFaireDuMagasin
             url: $seul === null ? FactureAchatResource::urlDesBrouillons() : FactureAchatResource::getUrl('view', ['record' => $seul]),
             bouton: $this->bouton('Valider', $aFaire, permisEnLectureSeule: false),
             aSurveiller: ! $aFaire,
-            date: $this->jourDe($brouillons->first()?->created_at),
+            date: $this->jourDe($brouillons->first()->created_at),
             precision: $this->avecLaLectureSeule(null, $aFaire, permisEnLectureSeule: false),
         );
     }
@@ -894,7 +894,7 @@ final class ChosesAFaireDuMagasin
             url: $factures->count() === 1 ? FactureAchatResource::getUrl('view', ['record' => $factures->first()]) : FactureAchatResource::urlDesPiecesManquantes(),
             bouton: $this->bouton('Joindre la pièce', $aFaire, permisEnLectureSeule: false),
             aSurveiller: ! $aFaire,
-            date: $this->jourDe($factures->first()?->created_at),
+            date: $this->jourDe($factures->first()->created_at),
             precision: $this->avecLaLectureSeule('Le PDF ou la photo de la facture du fournisseur.', $aFaire, permisEnLectureSeule: false),
         );
     }
@@ -922,7 +922,7 @@ final class ChosesAFaireDuMagasin
             url: $avoirs->count() === 1 ? AvoirFournisseurResource::getUrl('view', ['record' => $avoirs->first()]) : AvoirFournisseurResource::urlDesPiecesManquantes(),
             bouton: $this->bouton('Joindre la pièce', $aFaire, permisEnLectureSeule: false),
             aSurveiller: ! $aFaire,
-            date: $this->jourDe($avoirs->first()?->created_at),
+            date: $this->jourDe($avoirs->first()->created_at),
             precision: $this->avecLaLectureSeule(null, $aFaire, permisEnLectureSeule: false),
         );
     }
@@ -964,7 +964,7 @@ final class ChosesAFaireDuMagasin
             url: $nombre === 1 ? InventaireOuvertureResource::getUrl('view', ['record' => $brouillons->first()]) : InventaireOuvertureResource::urlDesBrouillons(),
             bouton: $this->bouton($aVendu ? 'Supprimer' : 'Valider', $aFaire, permisEnLectureSeule: false),
             aSurveiller: ! $aFaire,
-            date: $this->jourDe($brouillons->first()?->created_at),
+            date: $this->jourDe($brouillons->first()->created_at),
             precision: $this->avecLaLectureSeule(null, $aFaire, permisEnLectureSeule: false),
         );
     }
@@ -1279,7 +1279,8 @@ final class ChosesAFaireDuMagasin
             return [];
         }
 
-        [$bons, $credits] = $avoirs->partition(fn (array $restant): bool => $restant['avoir']->client?->estComptoir() === true && ! $restant['avoir']->estUneRegularisation());
+        $bons = $avoirs->filter(fn (array $restant): bool => $this->estUnBonDAvoir($restant['avoir']))->values();
+        $credits = $avoirs->reject(fn (array $restant): bool => $this->estUnBonDAvoir($restant['avoir']))->values();
         $choses = [];
 
         if ($bons->isNotEmpty()) {
@@ -1288,7 +1289,7 @@ final class ChosesAFaireDuMagasin
                 groupe: 'Avoirs non utilisés',
                 urgence: UrgenceAFaire::Gris,
                 nombre: $bons->count(),
-                phrase: trans_choice('{1} 1 bon d\'avoir du comptoir n\'est pas encore utilisé|[2,*] :count bons d\'avoir du comptoir ne sont pas encore utilisés', $bons->count()).' : '.$this->euros($bons->sum('credit')).' restant.',
+                phrase: trans_choice('{1} 1 bon d\'avoir du comptoir n\'est pas encore utilisé|[2,*] :count bons d\'avoir du comptoir ne sont pas encore utilisés', $bons->count()).' : '.$this->euros($bons->sum(fn (array $restant): int => $restant['credit'])).' restant.',
                 url: null,
                 bouton: 'Voir',
                 aSurveiller: true,
@@ -1312,20 +1313,20 @@ final class ChosesAFaireDuMagasin
                 groupe: 'Avoirs non utilisés',
                 urgence: UrgenceAFaire::Gris,
                 nombre: $parClient->count(),
-                phrase: trans_choice('{1} 1 client a un crédit d\'avoir non utilisé|[2,*] :count clients ont un crédit d\'avoir non utilisé', $parClient->count()).' : '.$this->euros($credits->sum('credit')).' restant.',
+                phrase: trans_choice('{1} 1 client a un crédit d\'avoir non utilisé|[2,*] :count clients ont un crédit d\'avoir non utilisé', $parClient->count()).' : '.$this->euros($credits->sum(fn (array $restant): int => $restant['credit'])).' restant.',
                 url: null,
                 bouton: 'Voir',
                 aSurveiller: true,
                 date: $this->jourDe($credits->first()['avoir']->date_emission),
                 lignes: array_values($parClient->take(self::LIGNES_ENUMEREES)->map(function (Collection $siens): array {
-                    $premier = $siens->first()['avoir'];
+                    $premier = $siens->firstOrFail()['avoir'];
                     $regularisations = $siens->filter(fn (array $restant): bool => $restant['avoir']->estUneRegularisation());
 
                     return [
                         'libelle' => $premier->nomDuClient() ?? 'Client',
                         'url' => $premier->client !== null && $this->compte->can('view', $premier->client) ? ClientResource::getUrl('view', ['record' => $premier->client]) : AvoirResource::getUrl('view', ['record' => $premier]),
                         'description' => 'Avoirs '.$siens->map(fn (array $restant): string => (string) $restant['avoir']->numero)->implode(', '),
-                        'montant' => $this->euros($siens->sum('credit')),
+                        'montant' => $this->euros($siens->sum(fn (array $restant): int => $restant['credit'])),
                         'date' => $this->afficherLeJourDe($premier->date_emission),
                         'date_en_rouge' => false,
                         'badge' => $regularisations->isEmpty() ? null : 'Réservé à la facture rectificative de la facture n° '.$regularisations->map(fn (array $restant): string => (string) $restant['avoir']->factureRegularisee()->numero)->implode(', '),
@@ -1335,6 +1336,15 @@ final class ChosesAFaireDuMagasin
         }
 
         return $choses;
+    }
+
+    /**
+     * Un avoir au client comptoir sert de bon d'avoir, sauf un avoir de
+     * régularisation, dont le crédit est réservé à la facture rectificative.
+     */
+    private function estUnBonDAvoir(Avoir $avoir): bool
+    {
+        return $avoir->client?->estComptoir() === true && ! $avoir->estUneRegularisation();
     }
 
     /**

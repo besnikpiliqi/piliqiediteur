@@ -215,9 +215,9 @@ class FactureResource extends Resource
             ->visiblesPar(CompteConnecte::exiger())
             ->with(['client', 'magasin'])
             ->withExists([
-                'elleMeme as preuve_a_fournir' => fn (Builder $elleMeme): Builder => $elleMeme->preuvesAFournir(),
-                'elleMeme as exoneration_non_prouvee' => fn (Builder $elleMeme): Builder => $elleMeme->exonerationsNonProuvees($calendrier, $calendrier->aujourdhui()),
-                'elleMeme as visa_a_noter' => fn (Builder $elleMeme): Builder => $elleMeme->visaANoter(),
+                'elleMeme as preuve_a_fournir' => fn (Builder $elleMeme): Builder => RequeteDuModele::deSoiMeme($elleMeme, Facture::class)->preuvesAFournir(),
+                'elleMeme as exoneration_non_prouvee' => fn (Builder $elleMeme): Builder => RequeteDuModele::deSoiMeme($elleMeme, Facture::class)->exonerationsNonProuvees($calendrier, $calendrier->aujourdhui()),
+                'elleMeme as visa_a_noter' => fn (Builder $elleMeme): Builder => RequeteDuModele::deSoiMeme($elleMeme, Facture::class)->visaANoter(),
             ]);
     }
 
@@ -647,7 +647,7 @@ class FactureResource extends Resource
 
                         return $visa === null
                             ? 'À noter dès qu\'il est connu'
-                            : 'le '.Calendrier::afficherJour($visa->date_visa, 'd/m/Y').($visa->note_par_nom === null ? '' : ', noté par '.$visa->note_par_nom);
+                            : 'le '.Calendrier::afficherJour(ValeurRequise::de($visa->date_visa, 'la date du visa noté'), 'd/m/Y').($visa->note_par_nom === null ? '' : ', noté par '.$visa->note_par_nom);
                     })
                     ->color(fn (Facture $record): ?string => self::bordereauQuiFaitFoi($record)?->visa === null ? 'warning' : null),
                 TextEntry::make('bordereaux_detaxe_remplaces')

@@ -273,10 +273,14 @@ final class AnalyseurDePdf
         $objets = [];
         $flux = [];
 
-        foreach (is_array($description) && is_array($description['qpdf'][1] ?? null) ? $description['qpdf'][1] : [] as $cle => $objet) {
+        $qpdf = is_array($description) ? ($description['qpdf'] ?? null) : null;
+
+        foreach (is_array($qpdf) && is_array($qpdf[1] ?? null) ? $qpdf[1] : [] as $cle => $objet) {
             $reference = $cle === 'trailer' ? 'trailer' : substr((string) $cle, 4);
-            $estUnFlux = is_array($objet) && is_array($objet['stream']['dict'] ?? null);
-            $objets[$reference] = is_array($objet) ? ($estUnFlux ? $objet['stream']['dict'] : ($objet['value'] ?? null)) : null;
+            $leFlux = is_array($objet) ? ($objet['stream'] ?? null) : null;
+            $dictionnaireDuFlux = is_array($leFlux) ? ($leFlux['dict'] ?? null) : null;
+            $estUnFlux = is_array($dictionnaireDuFlux);
+            $objets[$reference] = is_array($objet) ? ($estUnFlux ? $dictionnaireDuFlux : ($objet['value'] ?? null)) : null;
 
             if ($estUnFlux) {
                 $flux[$reference] = true;
@@ -611,8 +615,8 @@ final class AnalyseurDePdf
         }
 
         foreach (preg_split('/\R/', $xref) ?: [] as $ligne) {
-            if (sscanf(trim($ligne), '%d/%d: uncompressed; offset = %d', $numero, $generation, $position) === 3 && $position >= $debut && $position < $startxref) {
-                $departs[$position] = true;
+            if (sscanf(trim($ligne), '%d/%d: uncompressed; offset = %d', $numero, $generation, $decalage) === 3 && is_int($decalage) && $decalage >= $debut && $decalage < $startxref) {
+                $departs[$decalage] = true;
             }
         }
 

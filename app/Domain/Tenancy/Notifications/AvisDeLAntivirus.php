@@ -3,6 +3,7 @@
 namespace App\Domain\Tenancy\Notifications;
 
 use App\Domain\Tenancy\Models\Societe;
+use App\Domain\Tenancy\Support\LigneDeCourriel;
 use App\Domain\Tenancy\Support\Reglage;
 use Filament\Notifications\Notification as NotificationFilament;
 use Illuminate\Notifications\Messages\MailMessage;
@@ -36,7 +37,7 @@ class AvisDeLAntivirus extends Notification
     {
         return (new MailMessage)
             ->subject("{$this->titre} · {$this->societe->getFilamentName()}")
-            ->line($this->texte)
+            ->line(LigneDeCourriel::de($this->texte))
             ->line('Ce message vous est envoyé en tant que propriétaire de la société sur '.Reglage::texte('app.name').'.');
     }
 

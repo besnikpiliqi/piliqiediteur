@@ -8,6 +8,8 @@ use App\Domain\Facturation\Models\Facture;
 use App\Domain\Stock\Enums\TypeMouvementStock;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\RoleSociete;
+use App\Domain\Tenancy\Support\LitteralSql;
+use App\Domain\Tenancy\Support\NomsPolymorphes;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -114,8 +116,8 @@ final class GardesDuStock
         foreach ([
             'mouvements_stock_quantite_positive' => 'quantite > 0',
             'mouvements_stock_cout_positif' => 'cout_unitaire_ht IS NULL OR cout_unitaire_ht >= 0',
-            'mouvements_stock_type_connu' => 'type IN ('.self::liste(TypeMouvementStock::cases()).')',
-            'mouvements_stock_cout_selon_le_type' => '(type IN ('.self::liste(array_values(array_filter(TypeMouvementStock::cases(), static fn (TypeMouvementStock $type): bool => $type->porteSonCout()))).')) = (cout_unitaire_ht IS NOT NULL)',
+            'mouvements_stock_type_connu' => 'type IN ('.TypeMouvementStock::enListeSql(TypeMouvementStock::cases()).')',
+            'mouvements_stock_cout_selon_le_type' => '(type IN ('.TypeMouvementStock::enListeSql(array_filter(TypeMouvementStock::cases(), static fn (TypeMouvementStock $type): bool => $type->porteSonCout())).')) = (cout_unitaire_ht IS NOT NULL)',
         ] as $nom => $condition) {
             $connexion->unprepared("ALTER TABLE mouvements_stock ADD CONSTRAINT {$nom} CHECK ({$condition})");
         }
@@ -179,7 +181,7 @@ final class GardesDuStock
 
         $connexion->unprepared('CREATE OR REPLACE FUNCTION refus_produit_ne_avec_du_stock() RETURNS trigger LANGUAGE plpgsql '.DeclencheursDeProtection::CHEMIN_DE_RECHERCHE.' AS $$ BEGIN '
             ."IF NEW.stock_quantite <> 0 OR NEW.dernier_mouvement_stock_id IS NOT NULL THEN RAISE EXCEPTION '%', TG_ARGV[0]; END IF; RETURN NEW; END \$\$");
-        $connexion->unprepared('CREATE TRIGGER produits_nes_sans_stock BEFORE INSERT ON produits FOR EACH ROW EXECUTE FUNCTION refus_produit_ne_avec_du_stock('.self::litteral(self::REFUS_PRODUIT_NE_AVEC_DU_STOCK).')');
+        $connexion->unprepared('CREATE TRIGGER produits_nes_sans_stock BEFORE INSERT ON produits FOR EACH ROW EXECUTE FUNCTION refus_produit_ne_avec_du_stock('.LitteralSql::de(self::REFUS_PRODUIT_NE_AVEC_DU_STOCK).')');
     }
 
     public static function retirerLaNaissanceSansStock(): void
@@ -223,13 +225,13 @@ final class GardesDuStock
     {
         $connexion = DB::connection();
         $variation = self::variation('m');
-        $vente = self::alias(TypeMouvementStock::Vente);
-        $retourClient = self::alias(TypeMouvementStock::RetourClient);
+        $vente = TypeMouvementStock::Vente->aliasDuJustificatif();
+        $retourClient = TypeMouvementStock::RetourClient->aliasDuJustificatif();
 
         $connexion->unprepared('CREATE OR REPLACE FUNCTION refus_mouvement_sans_justificatif() RETURNS trigger LANGUAGE plpgsql '.DeclencheursDeProtection::CHEMIN_DE_RECHERCHE.' AS $$ '
             .'DECLARE sens integer := 1; instant timestamp; plafond bigint; net bigint; sortie_restante bigint; vendue bigint; stock integer; cmup numeric; sortie mouvements_stock%ROWTYPE; BEGIN '
             .'SELECT p.stock_quantite, p.cmup_ht INTO stock, cmup FROM produits p WHERE p.id = NEW.produit_id AND p.magasin_id = NEW.magasin_id FOR UPDATE; '
-            .'IF NEW.source_id IS NULL OR NEW.source_type IS DISTINCT FROM (CASE NEW.type '.implode(' ', array_map(static fn (TypeMouvementStock $type): string => "WHEN '{$type->value}' THEN '".self::alias($type)."'", TypeMouvementStock::cases())).' END) '
+            .'IF NEW.source_id IS NULL OR NEW.source_type IS DISTINCT FROM (CASE NEW.type '.self::justificatifs().'END) '
             ."THEN RAISE EXCEPTION '%', TG_ARGV[0]; END IF; "
             ."IF NEW.survenu_le IS DISTINCT FROM NEW.created_at THEN RAISE EXCEPTION '%', TG_ARGV[2]; END IF; "
             ."IF NEW.type = '".TypeMouvementStock::Vente->value."' THEN sens := -1; "
@@ -282,7 +284,7 @@ final class GardesDuStock
             ."THEN RAISE EXCEPTION '%', TG_ARGV[1]; END IF; "
             .'RETURN NEW; END $$');
         $connexion->unprepared('CREATE TRIGGER mouvements_stock_justifies BEFORE INSERT ON mouvements_stock FOR EACH ROW EXECUTE FUNCTION refus_mouvement_sans_justificatif('
-            .self::litteral(self::REFUS_SANS_JUSTIFICATIF).', '.self::litteral(self::REFUS_AU_DELA_DU_DOCUMENT).', '.self::litteral(self::REFUS_INSTANT).')');
+            .LitteralSql::de(self::REFUS_SANS_JUSTIFICATIF).', '.LitteralSql::de(self::REFUS_AU_DELA_DU_DOCUMENT).', '.LitteralSql::de(self::REFUS_INSTANT).')');
     }
 
     public static function retirerLaProvenance(): void
@@ -312,15 +314,15 @@ final class GardesDuStock
     public static function poserLAuteurDesMouvements(): void
     {
         $connexion = DB::connection();
-        $achat = self::alias(TypeMouvementStock::ReceptionAchat);
+        $achat = TypeMouvementStock::ReceptionAchat->aliasDuJustificatif();
 
         $connexion->unprepared('CREATE OR REPLACE FUNCTION refus_mouvement_d_un_autre_auteur() RETURNS trigger LANGUAGE plpgsql '.DeclencheursDeProtection::CHEMIN_DE_RECHERCHE.' AS $$ '
             .'DECLARE attendu bigint; trouve boolean := false; BEGIN '
             ."IF NEW.type = '".TypeMouvementStock::Vente->value."' THEN "
-            ."SELECT e.operateur_id INTO attendu FROM enregistrements_fiscaux e WHERE e.magasin_id = NEW.magasin_id AND e.chaine = 'vente' AND e.document_type = '".(new Facture)->getMorphClass()."' AND e.document_id = NEW.source_id ORDER BY e.id LIMIT 1; "
+            ."SELECT e.operateur_id INTO attendu FROM enregistrements_fiscaux e WHERE e.magasin_id = NEW.magasin_id AND e.chaine = 'vente' AND e.document_type = '".NomsPolymorphes::aliasDe(Facture::class)."' AND e.document_id = NEW.source_id ORDER BY e.id LIMIT 1; "
             .'trouve := FOUND; '
             ."ELSIF NEW.type = '".TypeMouvementStock::RetourClient->value."' THEN "
-            ."SELECT e.operateur_id INTO attendu FROM enregistrements_fiscaux e JOIN lignes_avoir la ON la.magasin_id = e.magasin_id AND la.avoir_id = e.document_id WHERE e.magasin_id = NEW.magasin_id AND e.chaine = 'vente' AND e.document_type = '".(new Avoir)->getMorphClass()."' AND la.id = NEW.source_id ORDER BY e.id LIMIT 1; "
+            ."SELECT e.operateur_id INTO attendu FROM enregistrements_fiscaux e JOIN lignes_avoir la ON la.magasin_id = e.magasin_id AND la.avoir_id = e.document_id WHERE e.magasin_id = NEW.magasin_id AND e.chaine = 'vente' AND e.document_type = '".NomsPolymorphes::aliasDe(Avoir::class)."' AND la.id = NEW.source_id ORDER BY e.id LIMIT 1; "
             .'trouve := FOUND; '
             ."ELSIF NEW.type IN ('".TypeMouvementStock::ReceptionAchat->value."', '".TypeMouvementStock::RetourFournisseur->value."') THEN "
             ."SELECT j.auteur_id INTO attendu FROM journal_audit j WHERE j.magasin_id = NEW.magasin_id AND j.cible_type = NEW.source_type AND j.cible_id = NEW.source_id AND j.action = (CASE WHEN NEW.source_type = '{$achat}' THEN '".ActionAuditee::FactureAchatValidee->value."' ELSE '".ActionAuditee::AvoirFournisseurEmis->value."' END) ORDER BY j.id LIMIT 1; "
@@ -336,7 +338,7 @@ final class GardesDuStock
             .'END IF; '
             ."IF NOT trouve OR attendu IS NULL OR attendu IS DISTINCT FROM NEW.cree_par THEN RAISE EXCEPTION '%', TG_ARGV[0]; END IF; "
             .'RETURN NULL; END $$');
-        $connexion->unprepared('CREATE CONSTRAINT TRIGGER '.self::AUTEUR_DES_MOUVEMENTS.' AFTER INSERT ON mouvements_stock DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION refus_mouvement_d_un_autre_auteur('.self::litteral(self::REFUS_AUTEUR).')');
+        $connexion->unprepared('CREATE CONSTRAINT TRIGGER '.self::AUTEUR_DES_MOUVEMENTS.' AFTER INSERT ON mouvements_stock DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION refus_mouvement_d_un_autre_auteur('.LitteralSql::de(self::REFUS_AUTEUR).')');
     }
 
     public static function retirerLAuteurDesMouvements(): void
@@ -369,38 +371,31 @@ final class GardesDuStock
      * La variation qu'apporte au stock le mouvement $ligne (NEW, ou une
      * variable de ligne) : sa quantité pour une entrée, son opposé pour une
      * sortie ; jamais un type inconnu, que la contrainte du type refuse.
+     *
+     * @param  literal-string  $ligne
+     * @return literal-string
      */
     private static function variation(string $ligne): string
     {
-        $entrees = array_values(array_filter(TypeMouvementStock::cases(), static fn (TypeMouvementStock $type): bool => $type->estEntree()));
+        $entrees = TypeMouvementStock::enListeSql(array_filter(TypeMouvementStock::cases(), static fn (TypeMouvementStock $type): bool => $type->estEntree()));
 
-        return "(CASE WHEN {$ligne}.type IN (".self::liste($entrees).") THEN {$ligne}.quantite ELSE -{$ligne}.quantite END)";
+        return "(CASE WHEN {$ligne}.type IN ({$entrees}) THEN {$ligne}.quantite ELSE -{$ligne}.quantite END)";
     }
 
     /**
-     * Le nom stable du document qui justifie un mouvement de ce type (voir
-     * TypeMouvementStock::aliasDuJustificatif()).
-     */
-    private static function alias(TypeMouvementStock $type): string
-    {
-        return $type->aliasDuJustificatif();
-    }
-
-    /**
-     * Un texte écrit en littéral SQL, ses apostrophes doublées.
-     */
-    private static function litteral(string $texte): string
-    {
-        return "'".str_replace("'", "''", $texte)."'";
-    }
-
-    /**
-     * Les valeurs de ces types, écrites en SQL.
+     * Le document qui justifie chaque type de mouvement, en SQL : « WHEN
+     * 'vente' THEN 'facture' … », pour un CASE sur le type.
      *
-     * @param  list<TypeMouvementStock>  $types
+     * @return literal-string
      */
-    private static function liste(array $types): string
+    private static function justificatifs(): string
     {
-        return implode(', ', array_map(static fn (TypeMouvementStock $type): string => "'{$type->value}'", $types));
+        $cas = '';
+
+        foreach (TypeMouvementStock::cases() as $type) {
+            $cas .= "WHEN '".$type->value."' THEN '".$type->aliasDuJustificatif()."' ";
+        }
+
+        return $cas;
     }
 }

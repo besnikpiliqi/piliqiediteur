@@ -59,7 +59,7 @@ class ClotureCaisseFactory extends Factory
                 'total_ht' => $calculateur->enCentiemes($cloture->total_ht),
                 'total_tva' => $calculateur->enCentiemes($cloture->total_tva),
                 'total_ttc' => $calculateur->enCentiemes($cloture->total_ttc),
-                'encaissements' => array_column($recapitulatif['encaissements'], 'montant', 'mode'),
+                'encaissements' => array_column(ValeursLues::tableauDe($recapitulatif, 'encaissements'), 'montant', 'mode'),
                 'credit_avoir_impute' => $recapitulatif['credit_avoir_impute'],
                 'grands_totaux' => $recapitulatif['grands_totaux'],
                 'recapitulatif' => $recapitulatif,

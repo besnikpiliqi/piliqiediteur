@@ -37,6 +37,14 @@ final readonly class BaremePrixDeVente implements Castable
     public const REFUS_MONTANT_A_VIRGULE = 'Les montants du barème sont des centimes entiers, jamais un nombre à virgule.';
 
     /**
+     * En centimes ; un palier s'applique à un prix d'achat HT strictement
+     * inférieur à son « jusqu_a ».
+     *
+     * @var list<array{jusqu_a: int, benefice: int}>
+     */
+    public array $paliers;
+
+    /**
      * Le bénéfice au-delà du dernier palier, en centimes ; null quand le
      * magasin n'en prévoit aucun.
      */
@@ -45,35 +53,26 @@ final readonly class BaremePrixDeVente implements Castable
     /**
      * Chaque montant est un nombre entier de centimes, le bénéfice au-delà
      * du dernier palier compris : un nombre à virgule, que l'on prendrait
-     * pour des euros (60.0 pour 60,00 €), est refusé (REFUS_MONTANT_A_VIRGULE)
-     * au lieu de valoir 60 centimes, même passé depuis un fichier sans
-     * strict_types, où PHP le convertirait en entier sans rien dire.
+     * pour des euros (60.0 pour 60,00 €), ou un texte, est refusé
+     * (REFUS_MONTANT_A_VIRGULE) au lieu de valoir 60 centimes, même passé
+     * depuis un fichier sans strict_types, où PHP le convertirait en entier
+     * sans rien dire.
      *
-     * @param  list<array{jusqu_a: int, benefice: int}>  $paliers  en centimes ; un palier s'applique à un prix d'achat HT strictement inférieur à son « jusqu_a »
+     * @param  list<array{jusqu_a: mixed, benefice: mixed}>  $paliers  en centimes ; un palier s'applique à un prix d'achat HT strictement inférieur à son « jusqu_a »
      * @param  mixed  $beneficeAuDela  en centimes, ou null sans bénéfice au-delà du dernier palier
      *
      * @throws InvalidArgumentException
      */
     public function __construct(
-        public array $paliers,
+        array $paliers,
         mixed $beneficeAuDela,
         public bool $arrondiX9,
     ) {
-        $seuils = array_column($paliers, 'jusqu_a');
+        $this->paliers = array_map(static fn (array $palier): array => ['jusqu_a' => self::centimes($palier['jusqu_a']), 'benefice' => self::centimes($palier['benefice'])], $paliers);
+        $this->beneficeAuDela = $beneficeAuDela === null ? null : self::centimes($beneficeAuDela);
+        $seuils = array_column($this->paliers, 'jusqu_a');
 
-        foreach ([...$seuils, ...array_column($paliers, 'benefice')] as $montant) {
-            if (! is_int($montant)) {
-                throw new InvalidArgumentException(self::REFUS_MONTANT_A_VIRGULE);
-            }
-        }
-
-        if ($beneficeAuDela !== null && ! is_int($beneficeAuDela)) {
-            throw new InvalidArgumentException(self::REFUS_MONTANT_A_VIRGULE);
-        }
-
-        $this->beneficeAuDela = $beneficeAuDela;
-
-        if ($paliers === [] && $beneficeAuDela === null) {
+        if ($this->paliers === [] && $this->beneficeAuDela === null) {
             throw new InvalidArgumentException('Le barème a au moins un palier, ou un bénéfice au-delà.');
         }
 
@@ -81,15 +80,25 @@ final readonly class BaremePrixDeVente implements Castable
             throw new InvalidArgumentException('Chaque palier du barème a son propre prix d\'achat, supérieur à 0.');
         }
 
-        $benefices = array_column($paliers, 'benefice');
+        $benefices = array_column($this->paliers, 'benefice');
 
-        if ($beneficeAuDela !== null) {
-            $benefices[] = $beneficeAuDela;
+        if ($this->beneficeAuDela !== null) {
+            $benefices[] = $this->beneficeAuDela;
         }
 
-        if (min($benefices) < 0) {
+        if ($benefices !== [] && min($benefices) < 0) {
             throw new InvalidArgumentException('Un bénéfice du barème ne peut pas être négatif.');
         }
+    }
+
+    /**
+     * Un montant du barème, en centimes entiers.
+     *
+     * @throws InvalidArgumentException un nombre à virgule, un texte ou toute autre valeur
+     */
+    private static function centimes(mixed $montant): int
+    {
+        return is_int($montant) ? $montant : throw new InvalidArgumentException(self::REFUS_MONTANT_A_VIRGULE);
     }
 
     /**

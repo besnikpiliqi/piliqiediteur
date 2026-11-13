@@ -86,7 +86,7 @@ class DesignerUnCabinetAction
 
         if ($declaration !== null && $declaration->siren_cabinet === $cabinet->siren
             && app(RattacherUneDeclarationAction::class)->handle(CleDuModele::de($declaration), CleDuModele::de($cabinet), $auteurRelu)) {
-            return LienCabinet::query()->withoutGlobalScope(SocieteScope::class)->where('societe_id', $client->getKey())->findOrFail($declaration->getKey());
+            return LienCabinet::query()->withoutGlobalScope(SocieteScope::class)->where('societe_id', $client->getKey())->findOrFail($declaration->id);
         }
 
         $this->debit->verifier($auteurRelu);

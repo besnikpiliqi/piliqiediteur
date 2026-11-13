@@ -53,7 +53,7 @@ class ChoisirLeMotDePasseDeLExpertComptableAction
             $ligne = CompteExpertComptable::query()->whereKey($attachement->getKey())->lockForUpdate()->firstOrFail();
             $societeRelue = Societe::query()->findOrFail($compteRelu->societe_id);
 
-            if (! hash_equals((string) $ligne->getAttribute('jeton_hache'), CompteExpertComptable::empreinte($jeton)) || ! $ligne->lienValable()
+            if ($ligne->jeton_hache === null || ! hash_equals($ligne->jeton_hache, CompteExpertComptable::empreinte($jeton)) || ! $ligne->lienValable()
                 || ! self::estOuvert($compteRelu, $societeRelue) || $this->experts->declarationDe($compteRelu)?->estDeclare() !== true) {
                 throw new LienDeLExpertComptableInvalideException;
             }

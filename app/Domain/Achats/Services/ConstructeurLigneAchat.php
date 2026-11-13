@@ -272,11 +272,11 @@ class ConstructeurLigneAchat
                 continue;
             }
 
-            if (isset($dejaSurUneLigne[$produit->getKey()])) {
+            if (isset($dejaSurUneLigne[$produit->id])) {
                 throw new InvalidArgumentException(sprintf(self::REFUS_PRODUIT_SUR_DEUX_LIGNES, ValeurSimple::enTexte($produit->getOriginal('nom'))));
             }
 
-            $dejaSurUneLigne[$produit->getKey()] = true;
+            $dejaSurUneLigne[$produit->id] = true;
         }
     }
 
@@ -559,6 +559,7 @@ class ConstructeurLigneAchat
      *
      * @param  string  $prixUnitaireHt  écrit comme sa colonne (voir PrixDAchat)
      * @param  string  $remise  écrite comme sa colonne (« 10.00 »)
+     * @return numeric-string|null
      *
      * @throws InvalidArgumentException
      */

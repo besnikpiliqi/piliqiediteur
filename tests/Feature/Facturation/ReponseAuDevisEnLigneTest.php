@@ -37,6 +37,7 @@ use App\Http\Controllers\ReponseAuDevisController;
 use App\Models\User;
 use Filament\Notifications\Notification as NotificationFilament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Notification;
@@ -252,7 +253,7 @@ class ReponseAuDevisEnLigneTest extends TestCase
 
         $proprietaire = $this->proprietaireDe($this->magasin);
         Notification::assertSentTo($proprietaire, ReponseDuClientAuDevis::class, function (ReponseDuClientAuDevis $avis) use ($proprietaire): bool {
-            $courriel = implode(' ', $avis->toMail($proprietaire)->introLines);
+            $courriel = self::texteDuCourriel($avis->toMail($proprietaire));
 
             return $avis->stocksInsuffisants === [['produit' => 'Lampe de bureau', 'demande' => 4, 'disponible' => 2]]
                 && str_contains($courriel, '1 produit n\'a plus assez de stock')
@@ -291,6 +292,32 @@ class ReponseAuDevisEnLigneTest extends TestCase
     }
 
     /**
+     * Dans l'e-mail, que Laravel écrit en Markdown, le nom et le motif tapés
+     * par le client se lisent aussi tels quels : ni gras, ni lien, ni
+     * titre, dans la version HTML comme dans la version en texte.
+     */
+    public function test_le_nom_et_le_motif_du_client_se_lisent_en_texte_dans_l_e_mail(): void
+    {
+        Notification::fake();
+        $motif = "**Urgent** : [payez ici](https://evil.example/payer)\n# Votre compte est bloqué";
+        $this->repondre('refuser', $this->envoyer($this->devisEnvoyable()), ['motif' => $motif])->assertOk();
+        $this->repondre('accepter', $this->envoyer($this->devisEnvoyable()), ['signataire' => '_Paul_ `Durand`', 'bon_pour_accord' => '1'])->assertOk();
+
+        $proprietaire = $this->proprietaireDe($this->magasin);
+        $courriels = Notification::sent($proprietaire, ReponseDuClientAuDevis::class)->map(fn (ReponseDuClientAuDevis $avis): MailMessage => $avis->toMail($proprietaire));
+        $this->assertCount(2, $courriels);
+        $html = $courriels->map(fn (MailMessage $courriel): string => (string) $courriel->render())->implode(' ');
+
+        $this->assertDoesNotMatchRegularExpression('#<(strong|em|code)\b#i', $html);
+        $this->assertDoesNotMatchRegularExpression('#<a\b[^>]*evil\.example#i', $html);
+        $this->assertDoesNotMatchRegularExpression('#<h1\b[^>]*>\s*Votre compte#i', $html);
+        $textes = $courriels->map(fn (MailMessage $courriel): string => self::texteDuCourriel($courriel))->implode(' ');
+        $this->assertStringContainsString("avec ce motif : « {$motif} »", $textes);
+        $this->assertStringContainsString('signé « _Paul_ `Durand` »', $textes);
+        $this->assertStringContainsString('**Urgent** : [payez ici](https://evil.example/payer)', html_entity_decode(strip_tags($html), ENT_QUOTES | ENT_HTML5));
+    }
+
+    /**
      * La cloche et la boîte du propriétaire réunissent les avis de tous ses
      * magasins : l'heure d'un magasin d'outre-mer y porte le nom de son
      * heure, comme sur la page du client.
@@ -307,7 +334,7 @@ class ReponseAuDevisEnLigneTest extends TestCase
 
         $proprietaire = $this->proprietaireDe($this->magasin);
         Notification::assertSentTo($proprietaire, ReponseDuClientAuDevis::class, function (ReponseDuClientAuDevis $avis) use ($proprietaire): bool {
-            $courriel = implode(' ', $avis->toMail($proprietaire)->introLines);
+            $courriel = self::texteDuCourriel($avis->toMail($proprietaire));
             $cloche = $avis->toDatabase($proprietaire)['body'];
 
             return str_contains($courriel, 'le 12/11/2026 à 06:00 (heure de la Martinique)')
@@ -373,7 +400,7 @@ class ReponseAuDevisEnLigneTest extends TestCase
         $this->assertSame([StatutDevis::Refuse, null], [$devis->fresh()->statut, $devis->fresh()->accepte_le]);
         $this->assertSame(['devis' => $devis->numero, 'empreinte_du_devis' => $enregistree->empreinte_du_devis, 'motif' => 'Trop cher pour nous.'], EntreeAudit::query()->where('action', ActionAuditee::DevisRefuseEnLigne)->sole()->nouvelles_valeurs);
         $this->assertSame('paul@client.fr', EnvoiDocument::query()->where('nature', NatureEnvoi::Refus)->sole()->destinataire);
-        Notification::assertSentTo($this->proprietaireDe($this->magasin), ReponseDuClientAuDevis::class, fn (ReponseDuClientAuDevis $avis): bool => str_contains(implode(' ', $avis->toMail($this->proprietaireDe($this->magasin))->introLines), 'avec ce motif : « Trop cher pour nous. »'));
+        Notification::assertSentTo($this->proprietaireDe($this->magasin), ReponseDuClientAuDevis::class, fn (ReponseDuClientAuDevis $avis): bool => str_contains(self::texteDuCourriel($avis->toMail($this->proprietaireDe($this->magasin))), 'avec ce motif : « Trop cher pour nous. »'));
         $this->repondre('get', $jeton)->assertStatus(410);
     }
 
@@ -616,5 +643,15 @@ class ReponseAuDevisEnLigneTest extends TestCase
                 $contexte->set($avant);
             }
         }
+    }
+
+    /**
+     * Le texte des lignes d'un e-mail de notification, tel que la version en
+     * texte de l'e-mail le donne : Laravel en décode les références (voir
+     * LigneDeCourriel).
+     */
+    private static function texteDuCourriel(MailMessage $courriel): string
+    {
+        return html_entity_decode(implode(' ', array_map(strval(...), $courriel->introLines)), ENT_QUOTES | ENT_HTML5);
     }
 }

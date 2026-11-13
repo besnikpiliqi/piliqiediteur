@@ -37,6 +37,8 @@ class AntivirusServiceProvider extends ServiceProvider
     /**
      * Le pilote configuré.
      *
+     * @return self::CLAMAV|self::FACTICE
+     *
      * @throws RuntimeException quand ce pilote n'existe pas
      */
     public static function pilote(): string

@@ -8,8 +8,8 @@ on:
   pull_request:
   schedule:
     - cron: '0 0 * * *'
-  # Lancement à la main : seul moyen de lancer l'analyse statique, l'analyse
-  # des flux et la couverture avec la mutation jusqu'à l'étape 15 (D63).
+  # Lancement à la main : seul moyen de lancer la couverture avec la
+  # mutation jusqu'à l'étape 15 (D63).
   workflow_dispatch:
 
 permissions:
@@ -49,11 +49,11 @@ jobs:
   # par phpstan dump-parameters, voir qualite.php seuils).
   analyse:
     runs-on: ubuntu-latest
-    # Décision de l'éditeur du 11/11/2026 (D63, méthode rapide) : cette tâche
-    # ne se lance plus à chaque envoi, seulement à la main (workflow_dispatch),
-    # jusqu'à l'étape 15 de la feuille de route, où elle repasse sur tout le
-    # code.
-    if: github.event_name == 'workflow_dispatch'
+    # Décision de l'éditeur du 13/11/2026 : Larastan et les seuils passent à
+    # chaque envoi et à chaque demande de fusion. Pour un envoi, la base des
+    # seuils est le commit précédent de la branche (github.event.before) ;
+    # pour une nouvelle branche, où il vaut des zéros, seuils.json se compare
+    # à lui-même.
 
     name: Analyse statique et seuils
 
@@ -99,11 +99,8 @@ jobs:
   # dont l'analyse doit voir exactement les chemins qu'il annonce.
   flux:
     runs-on: ubuntu-latest
-    # Décision de l'éditeur du 11/11/2026 (D63, méthode rapide) : cette tâche
-    # ne se lance plus à chaque envoi, seulement à la main (workflow_dispatch),
-    # jusqu'à l'étape 15 de la feuille de route, où elle repasse sur tout le
-    # code.
-    if: github.event_name == 'workflow_dispatch'
+    # Décision de l'éditeur du 13/11/2026 : l'analyse des flux de Psalm et
+    # son témoin passent à chaque envoi et à chaque demande de fusion.
 
     name: Analyse des flux de données
 

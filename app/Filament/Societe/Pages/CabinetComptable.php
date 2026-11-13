@@ -224,7 +224,7 @@ class CabinetComptable extends Page implements HasForms
             CheckboxList::make('magasins')
                 ->label('Magasins choisis')
                 ->helperText('Un magasin non coché n\'est ni listé ni ouvert pour votre cabinet. Les mêmes autorisations valent dans chaque magasin coché.')
-                ->options(fn (): array => $societe->magasinsReels()->orderBy('nom')->orderBy('id')->pluck('nom', 'id')->map(fn (mixed $nom): string => (string) $nom)->all())
+                ->options(fn (): array => $societe->magasinsReels()->orderBy('nom')->orderBy('id')->pluck('nom', 'id')->map(fn (mixed $nom): string => ValeursLues::texte($nom))->all())
                 ->columns(2)
                 ->visible(fn (Get $get): bool => $visible() && $get('portee') === self::SELECTION_DE_MAGASINS),
         ];
@@ -532,7 +532,7 @@ class CabinetComptable extends Page implements HasForms
                         throw ValidationException::withMessages(['siren' => DeclarerSonExpertComptableAction::MESSAGE_CABINET_SUR_PILIQI]);
                     }
 
-                    $this->demanderLaConfirmationDeLAdresse($data, 'confirmerLaDeclaration');
+                    $this->demanderLaConfirmationDeLAdresse(ValeursLues::champs($data), 'confirmerLaDeclaration');
                 });
             });
     }
@@ -578,7 +578,7 @@ class CabinetComptable extends Page implements HasForms
                 });
             })])
             ->action(function (array $data, Action $action): void {
-                $this->executerSansFermer($action, fn () => $this->demanderLaConfirmationDeLAdresse($data, 'confirmerLAjout'));
+                $this->executerSansFermer($action, fn () => $this->demanderLaConfirmationDeLAdresse(ValeursLues::champs($data), 'confirmerLAjout'));
             });
     }
 

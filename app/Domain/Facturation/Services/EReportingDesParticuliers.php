@@ -224,26 +224,39 @@ class EReportingDesParticuliers
      */
     private static function enregistrementsDeLaCloture(QueryBuilder $enregistrements, ChaineFiscale $chaine, string $derniereSequence): QueryBuilder
     {
-        $evenementDeCloture = static fn (QueryBuilder $evenements, string $alias): QueryBuilder => $evenements
-            ->where("{$alias}.chaine", ChaineFiscale::Evenement->value)
-            ->where("{$alias}.type", (string) CodeEvenement::CloturePeriode->value);
-
         return $enregistrements
             ->from('enregistrements_fiscaux')
-            ->join('enregistrements_fiscaux as signee', fn (JoinClause $signee): JoinClause => $evenementDeCloture($signee
+            ->join('enregistrements_fiscaux as signee', fn (JoinClause $signee): JoinClause => self::evenementDeCloture($signee
                 ->on('signee.magasin_id', '=', 'clotures_caisse.magasin_id')
                 ->where('signee.document_type', (new ClotureCaisse)->getMorphClass())
                 ->on('signee.document_id', '=', 'clotures_caisse.id'), 'signee'))
             ->whereColumn('enregistrements_fiscaux.magasin_id', 'clotures_caisse.magasin_id')
             ->where('enregistrements_fiscaux.chaine', $chaine->value)
             ->whereRaw('enregistrements_fiscaux.sequence <= '.self::sequenceSignee('signee', $derniereSequence))
-            ->where('enregistrements_fiscaux.sequence', '>', fn (QueryBuilder $precedente): QueryBuilder => $evenementDeCloture($precedente
+            ->where('enregistrements_fiscaux.sequence', '>', fn (QueryBuilder $precedente): QueryBuilder => self::evenementDeCloture($precedente
                 ->from('enregistrements_fiscaux')
                 ->selectRaw('coalesce('.self::sequenceSignee('enregistrements_fiscaux', $derniereSequence).', 0)')
                 ->whereColumn('enregistrements_fiscaux.magasin_id', 'signee.magasin_id')
                 ->whereColumn('enregistrements_fiscaux.sequence', '<', 'signee.sequence'), 'enregistrements_fiscaux')
                 ->orderByDesc('enregistrements_fiscaux.sequence')
                 ->limit(1));
+    }
+
+    /**
+     * Les événements de clôture du journal des événements (événement 50)
+     * parmi ces enregistrements, lus sous cet alias.
+     *
+     * @template TRequete of QueryBuilder
+     *
+     * @param  TRequete  $evenements
+     * @return TRequete
+     */
+    private static function evenementDeCloture(QueryBuilder $evenements, string $alias): QueryBuilder
+    {
+        $evenements->where("{$alias}.chaine", ChaineFiscale::Evenement->value)
+            ->where("{$alias}.type", (string) CodeEvenement::CloturePeriode->value);
+
+        return $evenements;
     }
 
     /**
@@ -256,6 +269,7 @@ class EReportingDesParticuliers
      *
      * @param  'signee'|'enregistrements_fiscaux'  $alias  l'événement de la clôture, ou celui de la précédente, lu dans sa propre sous-requête
      * @param  'derniere_sequence_vente'|'derniere_sequence_encaissement'  $derniereSequence
+     * @return literal-string
      */
     private static function sequenceSignee(string $alias, string $derniereSequence): string
     {
@@ -392,7 +406,7 @@ class EReportingDesParticuliers
             return [];
         }
 
-        $historique = self::historique($suivis->modelKeys(), $fenetre);
+        $historique = self::historique(ValeursLues::entiers($suivis->modelKeys()), $fenetre);
         $sousLOption = self::emisSousLOptionPourLesDebits($historique);
         $mouvements = $this->sansLesReductions($this->mouvements($historique, $fenetre, $calendrier));
         $avoirs = array_values(array_unique(array_filter(array_column($mouvements, 'avoir_id'))));
@@ -400,7 +414,7 @@ class EReportingDesParticuliers
             $this->calculateur,
             $suivis->reject(fn (Facture $ticket): bool => in_array($ticket->getKey(), $sousLOption, true))->map(fn (Facture $ticket): array => $this->groupes($ticket))->all(),
             $this->lignesDesAvoirs($avoirs),
-            array_map(intval(...), Avoir::query()->whereKey($avoirs)->where('motif_regularisation', MotifDeRegularisation::SirenCorrige)->pluck('id')->all()),
+            ValeursLues::entiers(Avoir::query()->whereKey($avoirs)->where('motif_regularisation', MotifDeRegularisation::SirenCorrige)->pluck('id')),
         );
 
         foreach ($mouvements as $mouvement) {
@@ -422,13 +436,12 @@ class EReportingDesParticuliers
      */
     private static function emisSousLOptionPourLesDebits(Collection $enregistrements): array
     {
-        return $enregistrements
+        return array_values($enregistrements
             ->filter(fn (EnregistrementFiscal $enregistrement): bool => $enregistrement->chaine === ChaineFiscale::Vente
                 && $enregistrement->type !== 'avoir'
                 && Emetteur::duContenuSigne(ValeursLues::tableauDe(ValeursLues::tableauDe($enregistrement->donneesSignees(), 'contexte'), 'emetteur'))->optionDebitsTva)
             ->map(fn (EnregistrementFiscal $vente): int => (int) $vente->document_id)
-            ->values()
-            ->all();
+            ->all());
     }
 
     /**
@@ -519,11 +532,11 @@ class EReportingDesParticuliers
             ->where(fn (Builder $enregistrements): Builder => $enregistrements
                 ->where(fn (Builder $ventes): Builder => $jusquALaCloture($ventes, ChaineFiscale::Vente, $fenetre['vente'][1])
                     ->where(fn (Builder $documents): Builder => $documents
-                        ->where(fn (Builder $emissions): Builder => $emissions->where('document_type', (new Facture)->getMorphClass())->whereIn('document_id', array_values(array_unique(array_map(intval(...), $factures)))))
-                        ->orWhere(fn (Builder $emissions): Builder => $emissions->where('document_type', (new Avoir)->getMorphClass())->whereIn('document_id', array_values(array_unique(array_map(intval(...), $avoirs)))))))
+                        ->where(fn (Builder $emissions): Builder => $emissions->where('document_type', (new Facture)->getMorphClass())->whereIn('document_id', array_values(array_unique(ValeursLues::entiers($factures)))))
+                        ->orWhere(fn (Builder $emissions): Builder => $emissions->where('document_type', (new Avoir)->getMorphClass())->whereIn('document_id', array_values(array_unique(ValeursLues::entiers($avoirs)))))))
                 ->orWhere(fn (Builder $encaissements): Builder => $jusquALaCloture($encaissements, ChaineFiscale::Encaissement, $fenetre['encaissement'][1])
                     ->where('document_type', (new Paiement)->getMorphClass())
-                    ->whereIn('document_id', array_values(array_unique(array_map(intval(...), $paiements))))))
+                    ->whereIn('document_id', array_values(array_unique(ValeursLues::entiers($paiements))))))
             ->orderBy('id')
             ->get()
             ->toBase();

@@ -56,7 +56,7 @@ class AvisDuCabinetEnFile extends Notification implements ShouldQueue
         bool $parCourriel = false,
         ?int $clientId = null,
     ) {
-        $this->societeId = (int) $societe->getKey();
+        $this->societeId = $societe->id;
         $this->titre = $titre;
         $this->texte = $texte;
         $this->url = $url;

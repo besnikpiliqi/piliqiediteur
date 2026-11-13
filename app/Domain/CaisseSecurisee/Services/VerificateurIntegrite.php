@@ -1678,7 +1678,7 @@ class VerificateurIntegrite
      * et le rang du numéro dans la série, ou null après avoir signalé qu'il
      * n'appartient à aucune.
      *
-     * @param  key-of<self::MODELES>  $alias
+     * @param  key-of<self::SERIES_NUMEROTEES>  $alias
      * @param  array<string, SequenceDocument>  $series  par préfixe
      * @return array{0: SequenceDocument, 1: int}|null
      */
@@ -1706,7 +1706,7 @@ class VerificateurIntegrite
     }
 
     /**
-     * @param  key-of<self::MODELES>  $alias
+     * @param  key-of<self::SERIES_NUMEROTEES>  $alias
      */
     private function verifierLAnneeDuNumero(SequenceDocument $serie, stdClass $document, string $alias): void
     {
@@ -1743,7 +1743,7 @@ class VerificateurIntegrite
     }
 
     /**
-     * @param  key-of<self::MODELES>  $alias
+     * @param  key-of<self::SERIES_NUMEROTEES>  $alias
      * @param  int  $attribuesPresents  le nombre de documents de la série dont le numéro est l'un de ceux qu'elle a attribués
      * @param  list<int>  $horsDeLaSerie  les rangs des documents de la série hors de ceux qu'elle a attribués
      */
@@ -1781,7 +1781,7 @@ class VerificateurIntegrite
      * l'ordre de leurs numéros (une écriture plus longue est un numéro plus
      * grand, sans zéro de tête), jusqu'à les avoir trouvés.
      *
-     * @param  key-of<self::MODELES>  $alias
+     * @param  key-of<self::SERIES_NUMEROTEES>  $alias
      * @return list<int>
      */
     private function premiersNumerosManquants(string $alias, SequenceDocument $serie): array

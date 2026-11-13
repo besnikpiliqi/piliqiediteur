@@ -34,7 +34,6 @@ use App\Filament\Societe\Pages\VerificationSociete as VerificationSocietePage;
 use App\Filament\Societe\Resources\MagasinResource;
 use App\Filament\Societe\Resources\MembreResource;
 use App\Models\User;
-use Closure;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Database\Eloquent\Model;
@@ -91,52 +90,55 @@ final class ChosesAFaireDeLaSociete
         }
 
         $magasins = $compte->magasinsDeSaPortee()->where('est_demonstration', false)->orderBy('id')->get()->keyBy('id');
-        $ou = fn (string ...$autorisations): array => array_values($magasins
-            ->filter(fn (Magasin $magasin): bool => array_diff($autorisations, $compte->autorisationsDans($magasin)) === [])
-            ->keys()
-            ->map(fn (mixed $id): int => ValeursLues::entier($id))
-            ->all());
-        $avecArticles = fn (array $ids): array => array_values(array_filter($ids, fn (int $id): bool => $magasins[$id]->societe->aDesArticles()));
-        $factures = $ou(PermissionRegistry::FACTURE_VIEW, PermissionRegistry::FACTURE_VIEW_TOUTES);
-        $devis = $ou(PermissionRegistry::DEVIS_VIEW);
-        $achats = $avecArticles($ou(PermissionRegistry::FACTURE_ACHAT_VIEW));
-        $avoirsFournisseur = $avecArticles($ou(PermissionRegistry::FACTURE_ACHAT_VIEW, PermissionRegistry::AVOIR_FOURNISSEUR_VIEW));
-        $produits = $avecArticles($ou(PermissionRegistry::PRODUIT_VIEW));
-        $credits = $this->avoirsNonUtilises($ou(PermissionRegistry::FACTURE_VIEW, PermissionRegistry::FACTURE_VIEW_TOUTES, PermissionRegistry::AVOIR_VIEW));
-        $piecesDesAchats = $this->compter(FactureAchat::class, $achats, fn (Builder $achats): Builder => $achats->where('piece_manquante', true));
-        $piecesDesAvoirs = $this->compter(AvoirFournisseur::class, $avoirsFournisseur, fn (Builder $avoirs): Builder => $avoirs->where('statut', StatutAvoirFournisseur::Emise)->where('piece_manquante', true));
+        $avecArticles = $magasins->filter(fn (Magasin $magasin): bool => $magasin->societe->aDesArticles());
+        $factures = $this->ou($magasins, $compte, PermissionRegistry::FACTURE_VIEW, PermissionRegistry::FACTURE_VIEW_TOUTES);
+        $devis = $this->ou($magasins, $compte, PermissionRegistry::DEVIS_VIEW);
+        $ventesDArticles = $this->ou($avecArticles, $compte, PermissionRegistry::FACTURE_VIEW, PermissionRegistry::FACTURE_VIEW_TOUTES);
+        $achats = $this->ou($avecArticles, $compte, PermissionRegistry::FACTURE_ACHAT_VIEW);
+        $avoirsFournisseur = $this->ou($avecArticles, $compte, PermissionRegistry::FACTURE_ACHAT_VIEW, PermissionRegistry::AVOIR_FOURNISSEUR_VIEW);
+        $produits = $this->ou($avecArticles, $compte, PermissionRegistry::PRODUIT_VIEW);
+        $credits = $this->avoirsNonUtilises($this->ou($magasins, $compte, PermissionRegistry::FACTURE_VIEW, PermissionRegistry::FACTURE_VIEW_TOUTES, PermissionRegistry::AVOIR_VIEW));
+        $piecesDesAchats = $this->compter(FactureAchat::query()->where('piece_manquante', true), $achats);
+        $piecesDesAvoirs = $this->compter(AvoirFournisseur::query()->where('statut', StatutAvoirFournisseur::Emise)->where('piece_manquante', true), $avoirsFournisseur);
+        $pieces = [];
+
+        foreach ($achats as $id) {
+            $pieces[$id] = ($piecesDesAchats[$id] ?? 0) + ($piecesDesAvoirs[$id] ?? 0);
+        }
+
         $groupes = [
-            ['preuve à fournir', 'preuves à fournir', $this->compter(Facture::class, $avecArticles($factures), fn (Builder $ventes): Builder => $ventes->preuvesAFournir())],
-            ['visa de détaxe à noter', 'visas de détaxe à noter', $this->compter(Facture::class, $avecArticles($factures), fn (Builder $ventes): Builder => $ventes->visaANoter())],
-            ['brouillon de facture', 'brouillons de facture', $this->compter(Facture::class, $factures, fn (Builder $ventes): Builder => $ventes->where('statut', StatutFacture::Brouillon))],
-            ['devis en brouillon', 'devis en brouillon', $this->compter(Devis::class, $devis, fn (Builder $lesDevis): Builder => $lesDevis->where('statut', StatutDevis::Brouillon))],
+            ['preuve à fournir', 'preuves à fournir', $this->compter(Facture::query()->preuvesAFournir(), $ventesDArticles)],
+            ['visa de détaxe à noter', 'visas de détaxe à noter', $this->compter(Facture::query()->visaANoter(), $ventesDArticles)],
+            ['brouillon de facture', 'brouillons de facture', $this->compter(Facture::query()->where('statut', StatutFacture::Brouillon), $factures)],
+            ['devis en brouillon', 'devis en brouillon', $this->compter(Devis::query()->where('statut', StatutDevis::Brouillon), $devis)],
             ['devis qui expire', 'devis qui expirent', $this->devisQuiExpirent($magasins->only($devis))],
-            ['devis à transformer', 'devis à transformer', $this->compter(Devis::class, $devis, fn (Builder $lesDevis): Builder => $lesDevis->aTransformer())],
-            ['achat à valider', 'achats à valider', $this->compter(FactureAchat::class, $achats, fn (Builder $lesAchats): Builder => $lesAchats->where('statut', StatutFactureAchat::Brouillon))],
-            ['inventaire à valider', 'inventaires à valider', $this->compter(InventaireOuverture::class, $achats, fn (Builder $inventaires): Builder => $inventaires->where('statut', StatutInventaireOuverture::Brouillon))],
-            ['pièce du fournisseur manquante', 'pièces du fournisseur manquantes', array_map(fn (int $id): int => ($piecesDesAchats[$id] ?? 0) + ($piecesDesAvoirs[$id] ?? 0), array_combine($achats, $achats))],
-            ['produit en stock négatif', 'produits en stock négatif', $this->compter(Produit::class, $produits, fn (Builder $catalogue): Builder => $catalogue->enStockNegatif())],
-            ['produit en stock bas', 'produits en stock bas', $this->compter(Produit::class, $produits, fn (Builder $catalogue): Builder => $catalogue->enStockBas())],
+            ['devis à transformer', 'devis à transformer', $this->compter(Devis::query()->aTransformer(), $devis)],
+            ['achat à valider', 'achats à valider', $this->compter(FactureAchat::query()->where('statut', StatutFactureAchat::Brouillon), $achats)],
+            ['inventaire à valider', 'inventaires à valider', $this->compter(InventaireOuverture::query()->where('statut', StatutInventaireOuverture::Brouillon), $achats)],
+            ['pièce du fournisseur manquante', 'pièces du fournisseur manquantes', $pieces],
+            ['produit en stock négatif', 'produits en stock négatif', $this->compter(Produit::query()->enStockNegatif(), $produits)],
+            ['produit en stock bas', 'produits en stock bas', $this->compter(Produit::query()->enStockBas(), $produits)],
         ];
         $nombres = [];
 
-        foreach ($magasins->keys() as $id) {
-            $id = ValeursLues::entier($id);
-            $nombres[$id] = [];
+        foreach ($magasins as $magasin) {
+            $sesNombres = [];
 
             foreach ($groupes as [$singulier, $pluriel, $parMagasin]) {
-                $nombre = $parMagasin[$id] ?? 0;
+                $nombre = $parMagasin[$magasin->id] ?? 0;
 
                 if ($nombre > 0) {
-                    $nombres[$id][] = ['groupe' => $nombre === 1 ? $singulier : $pluriel, 'nombre' => $nombre, 'montant' => null];
+                    $sesNombres[] = ['groupe' => $nombre === 1 ? $singulier : $pluriel, 'nombre' => $nombre, 'montant' => null];
                 }
             }
 
-            $restants = $credits[$id] ?? [];
+            $restants = $credits[$magasin->id] ?? [];
 
             if ($restants !== []) {
-                $nombres[$id][] = ['groupe' => count($restants) === 1 ? 'avoir non utilisé' : 'avoirs non utilisés', 'nombre' => count($restants), 'montant' => $this->calculateur->enEuros(array_sum($restants))];
+                $sesNombres[] = ['groupe' => count($restants) === 1 ? 'avoir non utilisé' : 'avoirs non utilisés', 'nombre' => count($restants), 'montant' => $this->calculateur->enEuros(array_sum($restants))];
             }
+
+            $nombres[$magasin->id] = $sesNombres;
         }
 
         return $nombres;
@@ -414,33 +416,53 @@ final class ChosesAFaireDeLaSociete
                 aSurveiller: false,
                 date: $ecart->signale_le === null ? null : $paris->jourDe($ecart->signale_le),
                 precision: 'Rien n\'est bloqué : vérifiez l\'information, contactez l\'éditeur si besoin, puis dites « C\'est vérifié ». Relevé le '.($ecart->signale_le === null ? '' : $paris->afficher($ecart->signale_le, 'd/m/Y')).'.',
-                cible: (int) $ecart->getKey(),
+                cible: $ecart->id,
             ))
             ->all());
     }
 
     /**
-     * Le nombre de fiches de ce modèle que retient ce filtre, par magasin,
-     * parmi ces magasins : une seule requête pour tous, sans MagasinScope,
-     * filtrée explicitement par leurs identifiants, qui ne compte que des
-     * lignes (jamais une somme de montants). Un magasin sans fiche n'y
-     * figure pas.
+     * Les identifiants de ceux de ces magasins où ce compte a toutes ces
+     * autorisations, dans leur ordre.
      *
-     * @param  class-string<Model>  $modele
+     * @param  EloquentCollection<array-key, Magasin>  $magasins
+     * @return list<int>
+     */
+    private function ou(EloquentCollection $magasins, User $compte, string ...$autorisations): array
+    {
+        $ids = [];
+
+        foreach ($magasins as $magasin) {
+            if (array_diff($autorisations, $compte->autorisationsDans($magasin)) === []) {
+                $ids[] = $magasin->id;
+            }
+        }
+
+        return $ids;
+    }
+
+    /**
+     * Le nombre de fiches que retient cette requête, par magasin, parmi ces
+     * magasins : une seule requête pour tous, sans MagasinScope, filtrée
+     * explicitement par leurs identifiants, qui ne compte que des lignes
+     * (jamais une somme de montants). Un magasin sans fiche n'y figure pas.
+     *
+     * @template TModele of Model
+     *
+     * @param  Builder<TModele>  $requete
      * @param  list<int>  $magasins
-     * @param  Closure(Builder<Model>): Builder<Model>  $filtre
      * @return array<int, int>
      */
-    private function compter(string $modele, array $magasins, Closure $filtre): array
+    private function compter(Builder $requete, array $magasins): array
     {
         if ($magasins === []) {
             return [];
         }
 
-        $requete = $modele::query()->withoutGlobalScope(MagasinScope::class);
         $colonne = $requete->qualifyColumn('magasin_id');
 
-        return $filtre($requete->whereIn($colonne, $magasins))
+        return $requete->withoutGlobalScope(MagasinScope::class)
+            ->whereIn($colonne, $magasins)
             ->toBase()
             ->select($colonne)
             ->selectRaw('count(*) as nombre')
@@ -457,18 +479,18 @@ final class ChosesAFaireDeLaSociete
      * société peuvent ne pas être le même jour. Une seule requête pour
      * tous, une condition par jour.
      *
-     * @param  EloquentCollection<int, Magasin>  $magasins
+     * @param  EloquentCollection<array-key, Magasin>  $magasins
      * @return array<int, int>
      */
     private function devisQuiExpirent(EloquentCollection $magasins): array
     {
         $parJour = $magasins->groupBy(fn (Magasin $magasin): string => $magasin->calendrier()->aujourdhui());
 
-        return $this->compter(Devis::class, array_values($magasins->keys()->map(fn (mixed $id): int => ValeursLues::entier($id))->all()), fn (Builder $devis): Builder => $devis->where(function (Builder $jours) use ($parJour): void {
+        return $this->compter(Devis::query()->where(function (Builder $jours) use ($parJour): void {
             foreach ($parJour as $jour => $siens) {
                 $jours->orWhere(fn (Builder $ceJour): Builder => $ceJour->whereIn('devis.magasin_id', $siens->modelKeys())->expirentBientot((string) $jour));
             }
-        }));
+        }), array_values($magasins->map(fn (Magasin $magasin): int => $magasin->id)->all()));
     }
 
     /**

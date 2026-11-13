@@ -8,6 +8,7 @@ use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\LigneAvoir;
 use App\Domain\Stock\Models\InventaireOuverture;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Support\NomsPolymorphes;
 use Illuminate\Database\Eloquent\Model;
 
 /**
@@ -94,14 +95,33 @@ enum TypeMouvementStock: string
     }
 
     /**
-     * Le nom stable (Relation::morphMap()) de ce document, tel que le grand
+     * Le nom stable (voir NomsPolymorphes) de ce document, tel que le grand
      * livre l'enregistre dans source_type.
+     *
+     * @return literal-string
      */
     public function aliasDuJustificatif(): string
     {
-        $justificatif = $this->justificatif();
+        return NomsPolymorphes::aliasDe($this->justificatif());
+    }
 
-        return (new $justificatif)->getMorphClass();
+    /**
+     * Les valeurs de ces types, écrites en liste de littéraux SQL
+     * (« 'vente', 'retour_client' »), pour une contrainte, un déclencheur
+     * ou une requête : des valeurs du code, jamais une saisie.
+     *
+     * @param  iterable<self>  $types
+     * @return literal-string
+     */
+    public static function enListeSql(iterable $types): string
+    {
+        $liste = '';
+
+        foreach ($types as $type) {
+            $liste .= ($liste === '' ? '' : ', ')."'".$type->value."'";
+        }
+
+        return $liste;
     }
 
     /**

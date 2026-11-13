@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 13/11/2026 à 21:48 UTC par pilotage-sync.sh : « Modèles : tous les tableaux ».
+Mis à jour le 13/11/2026 à 21:51 UTC par pilotage-sync.sh : « Modèle D choisi pour tous les tableaux ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -61,15 +61,22 @@ d4a8247 Relecture du lot ML des e-mails vérifiés
  M app/Domain/Facturation/Services/CalculateurLigne.php
  M app/Domain/Facturation/Services/DocumentChiffre.php
  M app/Domain/Facturation/Services/EReportingDesParticuliers.php
+ M app/Domain/Facturation/Services/LignesRetirees.php
+ M app/Domain/Facturation/Services/PreuvesRequises.php
  M app/Domain/Facturation/Support/GardesDesDocumentsEmis.php
+ M app/Domain/Fichiers/AnalyseurDePdf.php
+ M app/Domain/Fichiers/MemoireDePhp.php
  M app/Domain/Stock/Enums/TypeMouvementStock.php
+ M app/Domain/Stock/Services/StockLedgerService.php
  M app/Domain/Stock/Services/VerificateurDuStock.php
  M app/Domain/Stock/Support/GardesDuStock.php
+ M app/Domain/Tenancy/Actions/ChangerStatutCompteAction.php
  M app/Domain/Tenancy/Services/ChosesAFaireDeLaSociete.php
  M app/Domain/Tenancy/Services/ChosesAFaireDuMagasin.php
  M app/Domain/Tenancy/Services/PiecesDeVerification.php
  M app/Http/Controllers/TelechargerLesDocumentsController.php
  M app/Providers/AppServiceProvider.php
+ M composer.lock
 ?? app/Domain/Tenancy/Support/NomsPolymorphes.php
 ```
 

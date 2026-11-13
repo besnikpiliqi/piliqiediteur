@@ -2248,3 +2248,7 @@ la c est obligé d envoyé tous les mode paiment malgre qu il y en a pas des ven
 
 non tu mets dans une tableau comme par ex: tu met les titres en haut: Mode de paiement, Paiements,Contre-passations,Montant encaissé. et en par desus tu mets pour chacun tu affiche par linge mais pas les lignes separe mais dans la meme table tout. tu me montre les modeles avant que tu aplique et je veux que tu me propose dorenavant pout chaque modele tu me propose les modeles et moi je choisi lequel me plai
 
+## 242. 2026-11-13 21:51 UTC
+
+je choisi le D
+

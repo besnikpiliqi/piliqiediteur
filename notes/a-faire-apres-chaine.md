@@ -22,8 +22,16 @@
   - B : les cinq modes, le total et le crédit d'avoir dans le pied du tableau ;
   - C : seulement les modes utilisés, le total dans le tableau, une phrase pour les autres modes ;
   - D : les cinq modes, un tiret à la place des 0, le total dans le tableau.
-- **MODÈLE CHOISI PAR L'ÉDITEUR : (pas encore choisi)**
-  - Si cette ligne dit encore « pas encore choisi » quand le lot commence, ne touche pas à cette fiche. Dis-le dans « laisses », et la session le fera dans un lot suivant.
+- **MODÈLE CHOISI PAR L'ÉDITEUR : D (13/11/2026, vers 22 h UTC, « je choisis le D »), pour tous les tableaux.**
+  - Un seul tableau, avec les titres une seule fois en haut et une ligne par élément.
+  - Toutes les lignes restent, dans l'ordre fixe.
+  - Une valeur nulle s'affiche « – » (tiret), en gris : nombre 0, montant 0,00 €, contre-passations 0. La ligne entière passe en gris quand toutes ses valeurs sont nulles.
+  - Le total (« Total encaissé », « Net des ventes aux particuliers ») est la dernière ligne du tableau, en gras, dans les mêmes colonnes.
+  - Les lignes d'information (« Crédit d'avoir utilisé (n'entre pas dans les encaissements) », « Factures aux professionnels (pour information) », « Avoirs sur des factures (pour information) ») viennent sous le total, en gris, avec « – » pour une valeur nulle.
+  - Les nombres et les montants sont alignés à droite, avec des chiffres de même largeur.
+  - Sur un téléphone, le tableau défile de côté dans son cadre.
+  - Ce n'est que de l'affichage : jamais le contenu signé ni un montant enregistré ; un export CSV garde des valeurs chiffrées (0, 0,00), sans tiret.
+  - Modèle de référence : `../modeles/encaissements-cloture.html`, section D.
   - Sinon, applique exactement le modèle choisi à **tous les tableaux de PILIQI** qui montrent aujourd'hui une ligne par cadre en répétant leurs titres (demande de l'éditeur du 13/11 vers 21 h 50 UTC : « pour tous les tables il faut que tu appliques pareil »).
     - Ce sont les `RepeatableEntry` des fiches : 19 listes dans 9 fichiers de `app/` au 13/11, par exemple « Ventes et avoirs », « Encaissements par mode » et le détail des documents de la clôture, le relevé d'une caisse personnelle, ou l'aperçu de l'e-reporting.
     - Pars de `git grep -n "RepeatableEntry::make" app` et traite chaque liste.

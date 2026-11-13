@@ -62,9 +62,10 @@ class InventaireOuvertureResourceTest extends TestCase
 
     /**
      * Le propriétaire saisit le brouillon (un nouveau produit, sans
-     * référence, et un produit du catalogue jamais reçu), qui s'ouvre sur
-     * sa fiche sans rien créer ; il le valide depuis cette fiche, et les
-     * produits entrent en stock, le nouveau avec sa référence générée.
+     * référence, et un produit du catalogue jamais reçu) ; l'enregistrement
+     * revient à la liste des inventaires, sa page parente (D34), sans rien
+     * créer ; il le valide depuis sa fiche, et les produits entrent en
+     * stock, le nouveau avec sa référence générée.
      * 10 x 2,00 € + 4 x 3,25 € = 33,00 € HT.
      */
     public function test_le_proprietaire_saisit_puis_valide_un_inventaire_depuis_ses_ecrans(): void
@@ -83,7 +84,7 @@ class InventaireOuvertureResourceTest extends TestCase
         $page->call('create')->assertHasNoFormErrors();
 
         $inventaire = InventaireOuverture::query()->sole();
-        $page->assertRedirect(InventaireOuvertureResource::getUrl('view', ['record' => $inventaire]));
+        $page->assertRedirect(InventaireOuvertureResource::getUrl('index'));
         $this->assertSame([StatutInventaireOuverture::Brouillon, '33.00', 1], [$inventaire->statut, $inventaire->valeur_ht, Produit::query()->count()]);
 
         Livewire::test(ViewInventaireOuverture::class, ['record' => $inventaire->getRouteKey()])
@@ -126,10 +127,11 @@ class InventaireOuvertureResourceTest extends TestCase
     }
 
     /**
-     * Le propriétaire corrige un brouillon depuis sa page de modification :
-     * la quantité et la note enregistrées sont celles saisies, la valeur du
-     * stock se recalcule (12 x 2,00 € = 24,00 € HT), et rien n'est créé
-     * avant la validation.
+     * Le propriétaire corrige un brouillon depuis sa page de modification,
+     * qui revient ensuite à la liste des inventaires (D34) : la quantité et
+     * la note enregistrées sont celles saisies, la valeur du stock se
+     * recalcule (12 x 2,00 € = 24,00 € HT), et rien n'est créé avant la
+     * validation.
      */
     public function test_un_brouillon_se_corrige_depuis_sa_page_de_modification(): void
     {
@@ -144,7 +146,7 @@ class InventaireOuvertureResourceTest extends TestCase
             ->set('data.notes', 'Recompté le soir')
             ->call('save')
             ->assertHasNoFormErrors()
-            ->assertRedirect(InventaireOuvertureResource::getUrl('view', ['record' => $inventaire]));
+            ->assertRedirect(InventaireOuvertureResource::getUrl('index'));
 
         $inventaire->refresh();
         $this->assertSame([StatutInventaireOuverture::Brouillon, '24.00', 'Recompté le soir', 0], [$inventaire->statut, $inventaire->valeur_ht, $inventaire->notes, Produit::query()->count()]);

@@ -2,6 +2,7 @@
 
 namespace App\Domain\Tenancy\Scopes;
 
+use App\Domain\Tenancy\Exceptions\TenantContextMissingException;
 use App\Domain\Tenancy\Services\TenantContext;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -23,6 +24,12 @@ class SocieteScope implements Scope
 {
     public function apply(Builder $builder, Model $model): void
     {
-        $builder->where($model->getTable().'.societe_id', app(TenantContext::class)->societe()->getKey());
+        $context = app(TenantContext::class);
+
+        if (! $context->aUneSociete()) {
+            throw TenantContextMissingException::sansSociete($model::class);
+        }
+
+        $builder->where($model->getTable().'.societe_id', $context->societe()->getKey());
     }
 }

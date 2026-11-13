@@ -28,7 +28,7 @@ class MagasinScope implements Scope
         $context = app(TenantContext::class);
 
         if (! $context->has()) {
-            throw TenantContextMissingException::forModel($model::class);
+            throw TenantContextMissingException::sansMagasin($model::class);
         }
 
         $builder->where($model->getTable().'.magasin_id', $context->id());

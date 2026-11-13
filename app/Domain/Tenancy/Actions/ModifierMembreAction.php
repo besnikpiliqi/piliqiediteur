@@ -21,9 +21,9 @@ use LogicException;
  *   s'annule en un clic (voir AnnulerUneNominationAction) ;
  * - rétrograder un responsable : le propriétaire seul ;
  * - le rôle et les cases d'un vendeur ou d'un observateur : le propriétaire,
- *   ou un responsable de son magasin ; une case que seul le propriétaire
- *   coche (le téléchargement des documents par période, celle d'un
- *   responsable comprise) ne change que par le propriétaire.
+ *   ou un responsable de son magasin ; une case que le propriétaire est
+ *   seul à cocher (le téléchargement des documents par période, celle d'un
+ *   responsable comprise) ne change que par lui.
  * Un compte ne change jamais de magasin : une personne qui change de
  * magasin y reçoit un nouveau compte. Le retirer de son magasin le retire
  * de la société (voir ChangerStatutCompteAction::retirer()).

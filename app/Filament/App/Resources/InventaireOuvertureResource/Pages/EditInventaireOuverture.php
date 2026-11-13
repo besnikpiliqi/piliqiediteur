@@ -10,6 +10,7 @@ use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\App\Resources\InventaireOuvertureResource;
 use App\Filament\Concerns\GereLesExceptionsMetier;
+use App\Filament\Concerns\RevientALaListe;
 use Filament\Actions;
 use Filament\Resources\Pages\EditRecord;
 use Illuminate\Database\Eloquent\Model;
@@ -23,7 +24,7 @@ use Illuminate\Database\Eloquent\Model;
  */
 class EditInventaireOuverture extends EditRecord
 {
-    use GereLesExceptionsMetier;
+    use GereLesExceptionsMetier, RevientALaListe;
 
     protected static string $resource = InventaireOuvertureResource::class;
 
@@ -52,10 +53,5 @@ class EditInventaireOuverture extends EditRecord
             array_values(ValeursLues::lignes($data['lignes'] ?? [])),
             ['notes' => ValeurSimple::enTexteOuNul($data['notes'] ?? null)],
         ));
-    }
-
-    protected function getRedirectUrl(): string
-    {
-        return InventaireOuvertureResource::getUrl('view', ['record' => $this->record]);
     }
 }

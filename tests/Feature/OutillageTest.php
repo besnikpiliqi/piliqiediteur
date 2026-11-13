@@ -378,6 +378,37 @@ class OutillageTest extends TestCase
     }
 
     /**
+     * Les commentaires devenus inutiles sont supprimés (CLAUDE.md,
+     * « Développement ») : aucun texte du code, des migrations ni des vues
+     * ne garde une formule que la conception de la société a retirée
+     * (critères de fin de sa section 14), même coupée en fin de ligne
+     * d'un commentaire, où une recherche ligne par ligne ne la voit pas.
+     */
+    public function test_aucun_texte_du_code_ne_garde_une_formule_retiree_meme_coupee_en_fin_de_ligne(): void
+    {
+        $formules = ['Super Admin', 'un seul magasin', 'magasin principal', 'écran de sélection', 'seul le propriétaire coche'];
+        $enUneLigne = static fn (string $texte): string => (string) preg_replace('/(?:\s|\*|\/\/|#)+/u', ' ', $texte);
+        $trouvees = [];
+
+        $this->assertStringContainsString('un seul magasin', $enUneLigne("Il n'appartient qu'à un seul\n * magasin de la société"));
+        $this->assertStringContainsString('seul le propriétaire coche', $enUneLigne("celles que seul le\n     // propriétaire coche"));
+
+        foreach (['app', 'database', 'resources'] as $dossier) {
+            foreach (File::allFiles(base_path($dossier)) as $fichier) {
+                $texte = mb_strtolower($enUneLigne($fichier->getContents()));
+
+                foreach ($formules as $formule) {
+                    if (str_contains($texte, mb_strtolower($formule))) {
+                        $trouvees[] = $dossier.'/'.$fichier->getRelativePathname().' : « '.$formule.' »';
+                    }
+                }
+            }
+        }
+
+        $this->assertSame([], $trouvees);
+    }
+
+    /**
      * Aucun outil Node tant qu'aucun thème d'écran personnalisé n'existe,
      * sauf Playwright, qui ne sert qu'aux tests en navigateur (CLAUDE.md,
      * « Outillage » ; directive D51) : package.json ne déclare que lui, en

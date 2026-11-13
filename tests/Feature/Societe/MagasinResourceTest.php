@@ -509,6 +509,23 @@ class MagasinResourceTest extends TestCase
         $this->assertSame(['Ma Boutique de Lyon', $magasin->siret], [$magasin->fresh()->nom, $magasin->fresh()->siret]);
     }
 
+    /**
+     * « Enregistrer » ramène à la liste des magasins, la page parente de la
+     * fiche (D34), le propriétaire comme l'administrateur qui gère les
+     * magasins ; un geste de la fiche, lui, la laisse ouverte.
+     */
+    public function test_enregistrer_la_page_d_un_magasin_revient_a_la_liste_des_magasins(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $administrateur = $this->administrateur($magasin, null, [AutorisationsSociete::MAGASINS_GERER]);
+        $liste = MagasinResource::getUrl('index', panel: 'societe', tenant: $magasin->societe);
+
+        $this->ouvrirLaFiche($magasin)->fillForm(['nom' => 'Ma Boutique de Lyon'])->call('save')->assertHasNoFormErrors()->assertRedirect($liste);
+        $this->ouvrirLaFiche($magasin, $administrateur)->fillForm(['nom' => 'Lyon Centre'])->call('save')->assertHasNoFormErrors()->assertRedirect($liste);
+
+        $this->assertSame('Lyon Centre', $magasin->fresh()->nom);
+    }
+
     public function test_le_code_saisi_en_minuscules_s_enregistre_en_majuscules(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
@@ -603,7 +620,8 @@ class MagasinResourceTest extends TestCase
         $fiche = $this->ouvrirLaFiche($magasin)->assertFormFieldIsEnabled('code');
         $this->numeroterUnPremierDevis($magasin);
 
-        $fiche->fillForm(['code' => 'AUTRE', 'nom' => 'Ma Boutique de Lyon'])->call('save')->assertHasNoFormErrors()->assertFormSet(['code' => 'MABOUT']);
+        $fiche->fillForm(['code' => 'AUTRE', 'nom' => 'Ma Boutique de Lyon'])->call('save')->assertHasNoFormErrors();
+        $this->assertSame(['MABOUT', 'Ma Boutique de Lyon'], [$magasin->fresh()->code, $magasin->fresh()->nom]);
         app(ModifierEtablissementAction::class)->handle($this->proprietaireDe($magasin), $magasin->fresh(), ['code' => 'AUTRE', 'nom' => 'Lyon Centre']);
 
         $this->assertSame(['MABOUT', 'Lyon Centre'], [$magasin->fresh()->code, $magasin->fresh()->nom]);

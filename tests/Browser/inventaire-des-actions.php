@@ -1612,12 +1612,15 @@ return [
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le propriétaire d’une société qui attend son code ouvre chaque page et chaque action du magasin de démonstration sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le responsable d’entraînement ouvre chaque page et chaque action du magasin de démonstration sans erreur',
             'tests/Browser/Parcours/UnProduitUneLigneTest.php › sur un inventaire d’ouverture, le propriétaire choisit sur une seconde ligne un produit déjà inventorié : il rejoint sa ligne, dont la quantité monte',
+            'tests/Browser/Parcours/UnProduitUneLigneTest.php › sur un inventaire d’ouverture, un responsable choisit sur une seconde ligne un produit déjà inventorié : il rejoint sa ligne, dont la quantité monte',
         ]],
     ],
     'app/Filament/App/Resources/InventaireOuvertureResource/Pages/EditInventaireOuverture.php' => [
         'action:delete' => ['lot' => 'NAV-3', 'tests' => []],
         'action:valider' => ['lot' => 'NAV-3', 'tests' => []],
-        'page' => ['lot' => 'NAV-3', 'tests' => []],
+        'page' => ['lot' => 'NAV-3', 'tests' => [
+            'tests/Browser/Parcours/RetourALaListeTest.php › le propriétaire et un responsable enregistrent un inventaire d’ouverture en brouillon et reviennent à la liste des inventaires',
+        ]],
     ],
     'app/Filament/App/Resources/InventaireOuvertureResource/Pages/ListInventairesOuverture.php' => [
         'action:create' => ['lot' => 'NAV-3', 'tests' => [
@@ -2535,6 +2538,7 @@ return [
         'page' => ['lot' => 'NAV-4', 'tests' => [
             'tests/Browser/Balayage/BalayageDeLEspaceDeLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action de l’espace de sa société sans erreur',
             'tests/Browser/Balayage/BalayageDeLEspaceDeLaSocieteTest.php › l’administrateur qui a toutes les autorisations de société ouvre chaque page et chaque action de l’espace sans erreur',
+            'tests/Browser/Parcours/RetourALaListeTest.php › le propriétaire et l’administrateur qui gère les magasins enregistrent la page d’un magasin et reviennent à la liste des magasins',
         ]],
     ],
     'app/Filament/Societe/Resources/MembreResource.php' => [

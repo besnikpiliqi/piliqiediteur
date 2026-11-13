@@ -30,8 +30,8 @@ use Illuminate\Support\Facades\DB;
  *   membre ne vaut que pour un magasin ;
  * - autorisations_affectations_sans_responsable (autorisations_affectations) :
  *   une case sur l'affectation d'un responsable, qui a sans case toutes
- *   les autorisations de son magasin, sauf celles que seul le propriétaire
- *   coche (voir PermissionRegistry::cocheesParLeProprietaire()) ;
+ *   les autorisations de son magasin, sauf celles que le propriétaire est
+ *   seul à cocher (voir PermissionRegistry::cocheesParLeProprietaire()) ;
  * - autorisations_societe_administrateur_seul (autorisations_societe) :
  *   une autorisation de société pour un compte qui n'est pas
  *   administrateur ;

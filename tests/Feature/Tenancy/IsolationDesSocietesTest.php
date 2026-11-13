@@ -133,7 +133,9 @@ class IsolationDesSocietesTest extends TestCase
 
     /**
      * Sans société active, toute lecture d'un modèle de société échoue au
-     * lieu de tout renvoyer.
+     * lieu de tout renvoyer, et le message nomme ce modèle, le scope à
+     * retirer (SocieteScope) et le filtre à poser (par société) pour un
+     * accès voulu hors de la société, jamais ceux d'un magasin.
      *
      * @param  class-string<Model>  $modele
      */
@@ -142,7 +144,12 @@ class IsolationDesSocietesTest extends TestCase
     {
         app(TenantContext::class)->clear();
 
-        $this->assertThrows(fn () => $modele::query()->get(), TenantContextMissingException::class);
+        $this->assertThrows(
+            fn () => $modele::query()->get(),
+            fn (TenantContextMissingException $refus): bool => str_starts_with($refus->getMessage(), "Tentative d'accès au modèle [{$modele}] sans société active.")
+                && str_ends_with($refus->getMessage(), 'passez explicitement par withoutGlobalScope(SocieteScope::class) et filtrez la requête par société.')
+                && ! str_contains($refus->getMessage(), 'MagasinScope'),
+        );
     }
 
     public function test_une_societe_ne_lit_ni_le_journal_d_audit_ni_les_verifications_ni_les_demandes_d_une_autre(): void

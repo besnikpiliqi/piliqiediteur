@@ -12,9 +12,9 @@ use Illuminate\Support\Str;
  * Le code court d'un magasin, inséré dans tous les numéros de ses
  * documents (FAC-LYON1-2026-000001, voir DocumentNumberingService) : 2 à
  * 10 lettres majuscules ou chiffres, sans espace ni tiret, puisque le
- * tiret sépare les segments du numéro. Il n'appartient qu'à un seul
- * magasin de la société (voir l'index unique (societe_id, code) de
- * magasins), n'est jamais repris d'un magasin d'une autre société qui a
+ * tiret sépare les segments du numéro. Il n'appartient qu'à un magasin
+ * de la société (voir l'index unique (societe_id, code) de magasins),
+ * n'est jamais repris d'un magasin d'une autre société qui a
  * numéroté des documents sous le même SIREN : une société révoquée qui
  * avait ce SIREN, ou une société dont l'éditeur a corrigé le SIREN, qui
  * portait celui-ci (voir estPris()), et ne change plus dès le premier

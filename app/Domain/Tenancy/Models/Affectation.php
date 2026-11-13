@@ -121,9 +121,9 @@ class Affectation extends Model
      * sa société, est refusée avant que rien ne soit effacé (voir
      * PermissionRegistry::verifierConnues()), puis par la clé étrangère du
      * référentiel et la garde des articles (voir GardesDesTypesDActivite) ;
-     * une affectation de responsable n'a de case que celles que seul le
-     * propriétaire coche. Ce que l'auteur a le droit de cocher se contrôle
-     * avant, par l'action (voir AffectationsDesMembres::cases()).
+     * une affectation de responsable n'a de case que celles que le
+     * propriétaire est seul à cocher. Ce que l'auteur a le droit de cocher
+     * se contrôle avant, par l'action (voir AffectationsDesMembres::cases()).
      *
      * @param  array<array-key, mixed>  $autorisations
      *

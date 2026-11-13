@@ -13,6 +13,7 @@ use App\Domain\Tenancy\Services\CodeMagasin;
 use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\Concerns\GereLesExceptionsMetier;
+use App\Filament\Concerns\RevientALaListe;
 use App\Filament\Societe\Resources\MagasinResource;
 use App\Models\User;
 use Closure;
@@ -51,15 +52,16 @@ use Illuminate\Validation\ValidationException;
  *
  * Ce que montre la page n'est qu'une proposition : chaque action du
  * domaine revérifie l'auteur, l'état du magasin et ses données sous ses
- * verrous, avec ses propres messages, qui s'affichent tels quels. Un
- * magasin cédé ne se modifie plus : la page le montre sans rien
- * enregistrer.
+ * verrous, avec ses propres messages, qui s'affichent tels quels. Après
+ * « Enregistrer », la page revient à la liste des magasins ; après un
+ * geste, elle reste sur le magasin, relu. Un magasin cédé ne se modifie
+ * plus : la page le montre sans rien enregistrer.
  *
  * @property Magasin $record
  */
 class ModifierMagasin extends EditRecord
 {
-    use GereLesExceptionsMetier;
+    use GereLesExceptionsMetier, RevientALaListe;
 
     /**
      * Les champs que la page envoie à ModifierEtablissementAction ; un
@@ -159,16 +161,6 @@ class ModifierMagasin extends EditRecord
                 throw ValidationException::withMessages(collect($refus->validator->errors()->messages())->mapWithKeys(fn (array $messages, string $champ): array => ["data.{$champ}" => $messages])->all());
             }
         });
-    }
-
-    /**
-     * Le formulaire se remplit de nouveau avec ce que l'action a
-     * enregistré : un code devenu définitif pendant la saisie y reprend sa
-     * valeur.
-     */
-    protected function afterSave(): void
-    {
-        $this->rafraichir();
     }
 
     /**

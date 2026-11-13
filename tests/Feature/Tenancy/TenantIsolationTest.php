@@ -307,6 +307,10 @@ class TenantIsolationTest extends TestCase
     }
 
     /**
+     * Sans magasin actif, toute lecture d'un modèle de magasin échoue, et
+     * le message nomme le modèle, le scope à retirer (MagasinScope) et le
+     * filtre à poser (par magasin) pour un accès voulu hors du magasin.
+     *
      * @param  class-string<Model>  $modelClass
      */
     #[DataProvider('modelesDeMagasin')]
@@ -314,9 +318,11 @@ class TenantIsolationTest extends TestCase
     {
         app(TenantContext::class)->clear();
 
-        $this->expectException(TenantContextMissingException::class);
-        $this->expectExceptionMessage("Tentative d'accès au modèle [{$modelClass}] sans contexte magasin résolu.");
-        $modelClass::query()->get();
+        $this->assertThrows(
+            fn () => $modelClass::query()->get(),
+            fn (TenantContextMissingException $refus): bool => str_starts_with($refus->getMessage(), "Tentative d'accès au modèle [{$modelClass}] sans magasin actif.")
+                && str_ends_with($refus->getMessage(), 'passez explicitement par withoutGlobalScope(MagasinScope::class) et filtrez la requête par magasin.'),
+        );
     }
 
     /**

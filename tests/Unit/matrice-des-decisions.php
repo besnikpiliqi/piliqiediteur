@@ -13,15 +13,24 @@
  * « chemin › nom » pour un test Pest.
  *
  * « decisions » : chaque décision de l'éditeur, par le fichier de notes qui
- * la porte (page d'arbitrages du 09/10/2026, séries 4, 5, 6 et 8, réponses
- * du 26/10/2026 sur deux règles d'écran, directives et décisions de la
- * conversation réunies dans historique/DIRECTIVES.md), avec les règles qui
- * la font vivre (« regles »), ou la raison pour laquelle aucun test ne la
- * porte : « hors_logiciel » (une façon de travailler, que suivent le
- * protocole de rigueur, la CI et les relectures), « remplacee » (par la
- * décision qui la remplace), « a_venir » (une étape de la feuille de route
- * qui n'est pas faite), « explication » (une réponse donnée à l'éditeur,
- * qui ne décide rien).
+ * la porte (page d'arbitrages du 09/10/2026 ; séries 4, 5, 6 et 8 ;
+ * décisions du 19/10/2026 sur la vérification par courrier et l'espace des
+ * cabinets ; réponses du 24/10/2026 sur la relecture du lot V2, les
+ * cabinets et les types d'activité ; réponses du 25/10/2026 des lots T2,
+ * T3 et PU ; décision du 01/11/2026 sur l'expert-comptable de la société ;
+ * réponses du 26/10/2026 sur deux règles d'écran et du 01/11/2026 sur le
+ * client comptoir ; directives et décisions de la conversation réunies
+ * dans historique/DIRECTIVES.md ; série 9), avec les règles qui la font
+ * vivre (« regles »), ou la raison pour laquelle aucun test ne la porte :
+ * « hors_logiciel » (une façon de travailler, que suivent le protocole de
+ * rigueur, la CI et les relectures), « remplacee » (par la décision qui la
+ * remplace), « a_venir » (une étape de la feuille de route qui n'est pas
+ * faite), « explication » (une réponse donnée à l'éditeur, qui ne décide
+ * rien). Une décision remplacée en partie porte « remplacee » et ses
+ * « regles », celles de la part qui tient. Une décision qui tient, ou la
+ * part d'une décision qui tient, que le code contredit porte
+ * « a_trancher » : la question proposée à l'éditeur et ce que le code fait
+ * en attendant sa réponse.
  *
  * MatriceDesDecisionsTest échoue si une partie de CLAUDE.md n'a aucune
  * règle, si une règle ne nomme aucun test ou nomme un test qui n'existe
@@ -120,6 +129,13 @@ return [
             'regle' => 'Aucune donnée réelle n\'existe : l\'installation ne sème aucune donnée.',
             'tests' => [
                 'tests/Feature/DatabaseSeederTest.php::test_db_seed_s_execute_sans_erreur_et_ne_seme_aucune_donnee',
+            ],
+        ],
+        'developpement.commentaires-devenus-inutiles-supprimes' => [
+            'puce' => 'Développement',
+            'regle' => 'Les commentaires devenus inutiles sont supprimés : aucun texte du code, des migrations ni des vues ne garde une formule que la conception de la société a retirée (« Super Admin », « un seul magasin », « magasin principal », « écran de sélection », « seul le propriétaire coche »), même coupée en fin de ligne.',
+            'tests' => [
+                'tests/Feature/OutillageTest.php::test_aucun_texte_du_code_ne_garde_une_formule_retiree_meme_coupee_en_fin_de_ligne',
             ],
         ],
 
@@ -240,8 +256,11 @@ return [
         ],
         'outillage.seul-le-calendrier-connait-un-fuseau' => [
             'puce' => 'Outillage',
-            'regle' => 'Un jour est une date « AAAA-MM-JJ » de son calendrier ; seule la classe Calendrier connaît un fuseau, et un jour s\'affiche tel quel.',
+            'regle' => 'Un jour est une date « AAAA-MM-JJ » de son calendrier ; seule la classe Calendrier connaît un fuseau et donne le jour, l\'année, minuit, les décalages en jours (la même heure murale n jours plus tard) et l\'affichage, et un jour s\'affiche tel quel.',
             'tests' => [
+                'tests/Unit/CalendrierTest.php::test_un_decalage_en_jours_garde_l_heure_de_paris_a_travers_un_changement_d_heure',
+                'tests/Unit/CalendrierTest.php::test_un_decalage_en_jours_outre_mer_garde_l_heure_locale',
+                'tests/Feature/Calendrier/HeureRepeteeTest.php::test_un_code_de_courrier_expire_trente_jours_apres_son_envoi_a_la_meme_heure_de_paris',
                 'tests/Feature/Calendrier/ReglesDuCalendrierTest.php::test_seul_le_calendrier_connait_un_fuseau_et_met_les_dates_en_forme',
                 'tests/Feature/Calendrier/ReglesDuCalendrierTest.php::test_aucune_requete_n_extrait_une_date_en_sql_ni_ne_compare_par_where_date',
                 'tests/Feature/Calendrier/ReglesDuCalendrierTest.php::test_les_colonnes_de_date_ont_les_casts_du_calendrier_et_aucune_heure_par_defaut',
@@ -355,6 +374,8 @@ return [
                 'tests/Feature/Societe/AdresseDeConnexionDuProprietaireTest.php::test_l_adresse_choisie_en_saisissant_le_code_n_ouvre_rien_avant_son_lien',
                 'tests/Feature/Societe/AdresseDeConnexionDuProprietaireTest.php::test_le_lien_de_l_adresse_choisie_ne_se_suit_que_connecte_a_ce_compte',
                 'tests/Feature/Societe/AdresseDeConnexionDuProprietaireTest.php::test_un_lien_qui_ne_part_pas_a_la_saisie_du_code_laisse_la_personne_connectee_avec_son_identifiant',
+                'tests/Feature/Societe/AdresseDeConnexionDuProprietaireTest.php::test_une_adresse_prise_par_un_autre_proprietaire_avant_la_confirmation_est_refusee',
+                'tests/Feature/Societe/AdresseDeConnexionDuProprietaireTest.php::test_un_lien_expire_se_redemande_depuis_le_profil',
                 'tests/Feature/Societe/ConnexionParIdentifiantTest.php::test_une_adresse_en_attente_ou_d_une_inscription_close_coute_comme_une_adresse_inconnue',
             ],
         ],
@@ -546,7 +567,8 @@ return [
             'tests' => [
                 'tests/Feature/Societe/ConnexionParIdentifiantTest.php::test_le_mot_de_passe_egal_a_l_identifiant_n_ouvre_le_compte_que_depuis_un_poste_reconnu_du_magasin',
                 'tests/Feature/Societe/ConnexionParIdentifiantTest.php::test_un_poste_se_retire_depuis_la_liste_des_postes_du_magasin',
-                'tests/Feature/Cabinets/CollaborateursTest.php::test_un_collaborateur_recoit_un_identifiant_de_huit_chiffres_pour_premier_mot_de_passe_sans_adresse',
+                'tests/Feature/Cabinets/CollaborateursTest.php::test_un_collaborateur_ne_peut_pas_se_connecter_avec_son_identifiant_faute_de_poste_reconnu',
+                'tests/Feature/Cabinets/CollaborateursTest.php::test_la_fenetre_du_compte_cree_propose_d_office_au_collaborateur_de_choisir_son_mot_de_passe',
             ],
         ],
         'comptes.premiere-connexion-signalee' => [
@@ -626,6 +648,17 @@ return [
                 'tests/Feature/Tenancy/TracabiliteDesVentesTest.php::test_le_contenu_signe_porte_le_siret_du_magasin_et_l_operateur',
                 'tests/Feature/Tenancy/TracabiliteDesVentesTest.php::test_retirer_le_vendeur_de_b_pendant_qu_un_onglet_est_ouvert_refuse_la_vente_suivante_dans_b',
                 'tests/Feature/Tenancy/TracabiliteDesVentesTest.php::test_deux_onglets_de_deux_magasins_n_echangent_jamais_leur_magasin',
+            ],
+        ],
+        'comptes.une-caisse-a-la-fois' => [
+            'puce' => 'Comptes et équipe',
+            'regle' => 'Un compte autorisé à vendre n\'encaisse que dans un magasin à la fois : un administrateur autorisé à vendre dans plusieurs magasins ferme sa caisse d\'un magasin avant d\'encaisser dans un autre ; une personne qui a un compte dans deux magasins peut avoir une caisse ouverte avec chacun.',
+            'tests' => [
+                'tests/Feature/Tenancy/TracabiliteDesVentesTest.php::test_un_vendeur_n_encaisse_dans_b_qu_apres_avoir_ferme_sa_caisse_de_a',
+                'tests/Feature/Tenancy/TracabiliteDesVentesTest.php::test_un_administrateur_autorise_a_vendre_dans_deux_magasins_n_encaisse_que_dans_un_a_la_fois',
+                'tests/Feature/Tenancy/TracabiliteDesVentesTest.php::test_deux_premieres_ventes_simultanees_du_meme_vendeur_dans_a_et_b_n_en_laissent_passer_qu_une',
+                'tests/Feature/Tenancy/TracabiliteDesVentesTest.php::test_une_meme_personne_avec_deux_comptes_peut_avoir_une_caisse_ouverte_avec_chacun',
+                'tests/Feature/Societe/AdministrateursTest.php::test_un_administrateur_a_qui_le_proprietaire_coche_la_vente_vend_avec_une_caisse_a_la_fois',
             ],
         ],
         'comptes.e-mail-reverifie-a-l-envoi' => [
@@ -871,6 +904,8 @@ return [
                 'tests/Feature/Societe/VerificationSocieteTest.php::test_les_pieces_deposees_sont_chiffrees_et_effacees_a_la_decision',
                 'tests/Feature/Societe/VerificationSocieteTest.php::test_le_refus_de_l_editeur_clot_l_inscription_efface_les_pieces_et_libere_le_siren',
                 'tests/Feature/Societe/InscriptionSocieteTest.php::test_l_adresse_d_une_inscription_close_recoit_le_lien_d_une_nouvelle_inscription',
+                'tests/Feature/Societe/AdresseDeConnexionDuProprietaireTest.php::test_la_cloture_sans_code_retire_l_adresse_de_connexion_et_le_compte_s_ouvre_par_son_identifiant',
+                'tests/Feature/Societe/AdresseDeConnexionDuProprietaireTest.php::test_la_cloture_previent_par_e_mail_l_adresse_retiree_sans_dire_l_identifiant',
             ],
         ],
         'verification.limite-des-courriers' => [
@@ -1112,7 +1147,7 @@ return [
         ],
         'cabinets.societe-deja-inscrite' => [
             'puce' => 'Cabinets d\'expertise comptable',
-            'regle' => 'Quand le SIREN invité est déjà pris, l\'invitation devient une demande de rattachement, dont la page montre le cabinet et ses choix (accepter par défaut, en ajustant, ou refuser) ; tant que le lien n\'est pas actif, le cabinet ne connaît de cette société que le SIREN qu\'il a saisi ; le propriétaire d\'une société peut aussi désigner un cabinet vérifié, cherché par SIREN ou par nom, et le lien naît quand le cabinet accepte.',
+            'regle' => 'Quand le SIREN invité est déjà pris, l\'invitation devient une demande de rattachement, dont la page montre le cabinet et ses choix (accepter par défaut, en ajustant, ou refuser) ; tant que le lien n\'est pas actif, le cabinet ne connaît de cette société que le SIREN qu\'il a saisi ; le propriétaire d\'une société peut aussi désigner un cabinet vérifié, cherché par SIREN ou par nom, et le lien naît quand le cabinet accepte ; une demande sans réponse expire après 7 jours.',
             'tests' => [
                 'tests/Feature/Cabinets/InvitationsTest.php::test_un_siren_pris_envoie_a_l_adresse_saisie_une_demande_de_rattachement_qui_nomme_le_cabinet',
                 'tests/Feature/Cabinets/LiensAvecUneSocieteInscriteTest.php::test_la_page_de_rattachement_accepte_avec_les_autorisations_par_defaut_ou_ajustees_ou_refuse',
@@ -1128,6 +1163,7 @@ return [
             'regle' => 'Un rattachement ne valide jamais une société qui attend son code ; le lien et les demandes d\'une société non validée prennent fin quand son inscription est close ou qu\'une autre personne saisit le code, et le cabinet en est prévenu.',
             'tests' => [
                 'tests/Feature/Cabinets/LiensAvecUneSocieteInscriteTest.php::test_un_rattachement_ne_valide_jamais_une_societe_qui_attend_son_code',
+                'tests/Feature/Cabinets/LiensAvecUneSocieteInscriteTest.php::test_un_lien_prend_fin_quand_une_autre_personne_saisit_le_code_du_courrier',
                 'tests/Feature/Cabinets/LiensAvecUneSocieteInscriteTest.php::test_un_lien_prend_fin_quand_l_inscription_est_close_sans_validation',
                 'tests/Feature/Cabinets/LiensAvecUneSocieteInscriteTest.php::test_la_cloture_d_une_inscription_previent_le_cabinet_de_la_fin_de_sa_demande_sans_le_motif',
             ],
@@ -2117,14 +2153,12 @@ return [
         // Facture électronique (SUPER PDP) : la connexion de chaque société, l'adresse de réception des magasins et la réception des factures sont à l'étape 2 (décisions « a_venir »).
         'pdp.transmission-par-la-passerelle' => [
             'puce' => 'Facture électronique (SUPER PDP)',
-            'regle' => 'Une facture à un professionnel part par la plateforme agréée derrière son interface (passerelle factice jusqu\'à l\'étape 2), jamais une vente à un particulier, et seulement avec un mandat actif ; le consentement est prouvé, la révocation horodatée.',
+            'regle' => 'Une facture à un professionnel se transmet par la plateforme agréée, derrière son interface, avec une implémentation factice jusqu\'à l\'étape 2, qui branche la connexion unique de la société faite par son propriétaire ; une vente à un particulier ne se transmet jamais comme facture (elle se déclare par sa clôture journalière), une facture déjà transmise ne se dépose jamais deux fois, et rien ne part du magasin de démonstration.',
             'tests' => [
                 'tests/Feature/Facturation/TransmissionPdpTest.php::test_une_facture_a_un_client_professionnel_avec_mandat_actif_declenche_la_transmission',
                 'tests/Feature/Facturation/TransmissionPdpTest.php::test_une_facture_a_un_client_particulier_ne_declenche_jamais_la_transmission',
-                'tests/Feature/Facturation/TransmissionPdpTest.php::test_sans_mandat_actif_rien_nest_transmis_meme_pour_un_client_professionnel',
-                'tests/Feature/Facturation/TransmissionPdpTest.php::test_un_mandat_revoque_bloque_aussi_la_transmission',
-                'tests/Feature/Tenancy/MandatPdpActionsTest.php::test_creer_un_mandat_enregistre_la_preuve_de_consentement_et_lactive_via_la_gateway',
-                'tests/Feature/Tenancy/MandatPdpActionsTest.php::test_la_preuve_du_consentement_survit_a_une_panne_de_la_plateforme',
+                'tests/Feature/Facturation/TransmissionPdpTest.php::test_le_job_execute_reellement_cree_une_transmission_acceptee_via_la_fake_gateway',
+                'tests/Feature/Facturation/TransmissionPdpTest.php::test_le_job_est_idempotent_si_rejoue_sur_une_facture_deja_transmise',
                 'tests/Feature/Societe/MagasinDeDemonstrationTest.php::test_aucun_e_mail_ni_aucune_transmission_ne_part_de_la_demonstration',
             ],
         ],
@@ -2320,12 +2354,15 @@ return [
         ],
         'hors.retour-a-la-page-parente' => [
             'puce' => 'Hors de CLAUDE.md',
-            'regle' => 'Après chaque enregistrement, retour à la page parente, la liste de la ressource, sauf les pages dont la fiche porte le geste qui suit (inventaire d\'ouverture, page du magasin) (DIRECTIVES § 2.2, point 4).',
+            'regle' => 'Après chaque enregistrement d\'une page de création ou de modification, retour à sa page parente, la liste de sa ressource (DIRECTIVES § 2.2, point 4, et D34).',
             'tests' => [
                 'tests/Unit/RetourALaListeTest.php::test_chaque_page_de_creation_ou_de_modification_revient_a_la_liste_de_sa_ressource',
                 'tests/Unit/RetourALaListeTest.php::test_revenir_a_la_liste_mene_a_l_index_de_la_ressource',
                 'tests/Feature/Filament/ClientResourceTest.php::test_un_proprietaire_peut_creer_un_client_via_le_formulaire',
                 'tests/Feature/Filament/FactureResourceTest.php::test_modifier_un_brouillon_depuis_le_panneau_remplace_les_lignes_et_recalcule_les_totaux',
+                'tests/Feature/Filament/InventaireOuvertureResourceTest.php::test_le_proprietaire_saisit_puis_valide_un_inventaire_depuis_ses_ecrans',
+                'tests/Feature/Filament/InventaireOuvertureResourceTest.php::test_un_brouillon_se_corrige_depuis_sa_page_de_modification',
+                'tests/Feature/Societe/MagasinResourceTest.php::test_enregistrer_la_page_d_un_magasin_revient_a_la_liste_des_magasins',
             ],
         ],
         'hors.facture-brouillon-numerotee-a-l-emission' => [
@@ -2448,6 +2485,24 @@ return [
                 'tests/Feature/Filament/FicheDUneFactureTest.php::test_sans_le_droit_ni_modifier_ni_emettre_sur_la_fiche_du_brouillon',
                 'tests/Browser/Parcours/FicheDUneFactureTest.php › « Paiements reçus » ne se montre qu’à qui voit les paiements du document ; « Payé » et « Restant dû » restent visibles',
                 'tests/Browser/Parcours/FicheDUneFactureTest.php › « Modifier » et « Émettre » ne se montrent sur la fiche d’un brouillon qu’à qui peut le modifier et l’émettre',
+            ],
+        ],
+        'hors.nom-du-compte-inscrit' => [
+            'puce' => 'Hors de CLAUDE.md',
+            'regle' => 'Le compte de la personne inscrite prend le nom du représentant légal lu au registre national (INPI), la dénomination d\'une personne morale dirigeante ; le compte d\'une autre personne qui saisit le code prend le nom du destinataire du courrier ; chacun change ensuite son nom dans son profil (réponses du 24/10/2026 au lot V2, point 1).',
+            'tests' => [
+                'tests/Feature/Societe/InscriptionSocieteTest.php::test_la_confirmation_cree_la_societe_qui_attend_son_code_et_envoie_le_courrier',
+                'tests/Feature/Societe/VerificationSocieteTest.php::test_une_personne_morale_dirigeante_recoit_le_courrier_a_l_attention_de_son_representant',
+                'tests/Feature/Societe/VerificationSocieteTest.php::test_une_autre_personne_qui_saisit_le_code_devient_proprietaire_et_les_comptes_d_avant_sont_retires',
+            ],
+        ],
+        'hors.code-du-courrier' => [
+            'puce' => 'Hors de CLAUDE.md',
+            'regle' => 'Le code du courrier compte 12 caractères de l\'alphabet de Crockford et ne se garde que haché ; il n\'est jamais annulé après des saisies fausses, qui restent comptées et limitées par adresse IP (réponses du 24/10/2026 au lot V2, point 4).',
+            'tests' => [
+                'tests/Feature/Societe/VerificationSocieteTest.php::test_le_code_est_hache_unique_valable_trente_jours_et_a_usage_unique',
+                'tests/Feature/Societe/VerificationSocieteTest.php::test_un_code_faux_se_compte_et_s_inscrit_sans_jamais_annuler_le_courrier',
+                'tests/Feature/Societe/VerificationSocieteTest.php::test_la_page_du_code_limite_les_saisies_par_adresse_ip',
             ],
         ],
         'outillage.licence-et-extensions' => [
@@ -2956,7 +3011,8 @@ return [
             ],
             'V1-9' => [
                 'decision' => 'Une personne retirée d\'une société peut rejoindre une autre société avec le même compte ; un magasin ne change jamais de société.',
-                'remplacee' => 'Remplacée par la série 6 et l\'avenant A4 (CLAUDE.md, « Comptes et équipe ») : un compte appartient pour toujours à une seule société ; une personne qui rejoint une autre société y reçoit un nouveau compte. Qu\'un magasin ne change jamais de société reste, par la cession.',
+                'regles' => ['statuts.ceder-un-magasin'],
+                'remplacee' => 'Remplacée en partie par la série 6 et l\'avenant A4 (CLAUDE.md, « Comptes et équipe ») : un compte appartient pour toujours à une seule société ; une personne qui rejoint une autre société y reçoit un nouveau compte. Qu\'un magasin ne change jamais de société tient : une activité reprise s\'ouvre dans le compte de l\'autre société, et le magasin cédé se ferme.',
             ],
             'V1-10' => [
                 'decision' => 'L\'e-mail et le téléphone du magasin sont des réglages du magasin.',
@@ -3042,7 +3098,8 @@ return [
             ],
             'Q2' => [
                 'decision' => 'Deux caisses : une personne n\'encaisse que dans un magasin à la fois et ferme sa caisse d\'un magasin avant d\'encaisser dans un autre.',
-                'regles' => ['comptes.tracabilite-des-ventes'],
+                'regles' => ['comptes.une-caisse-a-la-fois'],
+                'remplacee' => 'Remplacée en partie par l\'avenant A4 (CLAUDE.md, « Comptes et équipe ») : la règle vaut par compte autorisé à vendre, et une personne qui a un compte dans deux magasins peut avoir une caisse ouverte avec chacun.',
             ],
             'Q3' => [
                 'decision' => 'Verrou du SIREN : il se corrige librement avant la validation de la société et se verrouille à sa validation.',
@@ -3202,7 +3259,7 @@ return [
             ],
             'Q4-e' => [
                 'decision' => 'Le propriétaire ne vend pas : il supervise ; « une caisse à la fois » vaut pour les comptes qui vendent (note de l\'éditeur).',
-                'regles' => ['comptes.proprietaire-sans-vente', 'comptes.tracabilite-des-ventes'],
+                'regles' => ['comptes.proprietaire-sans-vente', 'comptes.une-caisse-a-la-fois'],
             ],
             'Q4-f' => [
                 'decision' => 'Les comptes d\'un magasin cédé ou fermé définitivement sont gardés.',
@@ -3414,6 +3471,7 @@ return [
             ],
             '7-I1' => [
                 'decision' => 'Le compte d\'expert-comptable créé par le propriétaire dans sa société disparaît : l\'expert-comptable entre par le lien de son cabinet.',
+                'regles' => ['cabinets.comptes-du-cabinet-chez-le-client', 'cabinets.rattachement-de-la-declaration'],
                 'remplacee' => 'Remplacée en partie par la décision du 01/11/2026 (ec2/decision-expert-comptable-societe.md) : tant que son cabinet n\'est pas vérifié, l\'expert-comptable entre par un compte que la société lui crée, déclaré par le SIREN de son cabinet et fermé quand ce cabinet s\'y rattache.',
             ],
             '8-K2' => [
@@ -3427,6 +3485,132 @@ return [
             '10' => [
                 'decision' => 'Typologie des entreprises : l\'espace des cabinets n\'en dépend pas ; un client est une société « Commerce ou atelier » ou « Services, sans vente d\'articles ».',
                 'regles' => ['type.choix-a-l-inscription', 'type.cabinet-sans-magasin'],
+            ],
+        ],
+        'Réponses du 24/10/2026 aux points laissés par la relecture du lot V2 (serie8/reponses-v2.md)' => [
+            '1' => [
+                'decision' => 'Nom du compte inscrit : le nom du représentant légal lu au registre national, ou la dénomination d\'une personne morale dirigeante ; une autre personne qui saisit le code prend le nom du destinataire du courrier ; chacun change son nom dans son profil.',
+                'regles' => ['hors.nom-du-compte-inscrit', 'comptes.profil'],
+            ],
+            '2' => [
+                'decision' => 'L\'adresse choisie par une autre personne qui saisit le code ne sert à la connexion et à « Mot de passe oublié » qu\'après confirmation par un lien de 24 heures suivi connecté à ce compte ; en attendant, la personne se connecte avec son identifiant ; un lien expiré se redemande depuis le profil ; une adresse de connexion d\'un autre propriétaire est refusée sans rien révéler et revérifiée à la confirmation.',
+                'regles' => ['comptes.adresse-de-connexion-du-proprietaire', 'verification.saisie-du-code'],
+            ],
+            '3' => [
+                'decision' => 'À la clôture de l\'inscription, l\'adresse de son propriétaire cesse d\'être une adresse de connexion : le compte ne se connecte plus qu\'avec son identifiant et l\'adresse peut servir à une nouvelle inscription.',
+                'regles' => ['verification.inscription-close-sans-code', 'comptes.adresse-de-connexion-du-proprietaire'],
+            ],
+            '4' => [
+                'decision' => 'Un code n\'est jamais annulé après des saisies fausses ; les essais restent limités par adresse IP et comptés ; le code compte 12 caractères de l\'alphabet de Crockford.',
+                'regles' => ['hors.code-du-courrier', 'verification.saisie-du-code'],
+            ],
+            '5' => [
+                'decision' => 'Un propriétaire devenu propriétaire par transmission signe les attestations à la main.',
+                'regles' => ['comptes.signature-des-attestations'],
+            ],
+        ],
+        'Réponses du 24/10/2026 aux questions du cahier des charges des cabinets (serie8/reponses-cabinets.md)' => [
+            'Q-EC1' => [
+                'decision' => 'Le cabinet invite son client par son seul SIREN et un lien envoyé par e-mail qui nomme le cabinet ; le client accepte ou refuse ; une entreprise pas encore inscrite, contrôlée au répertoire Sirene, est validée sans courrier ni QR code ; une société déjà inscrite se rattache par une page qui lui montre ses choix ; le courrier ne sert qu\'aux sociétés qui s\'inscrivent elles-mêmes.',
+                'regles' => ['cabinets.invitation-d-un-siren', 'cabinets.invitation-d-une-entreprise-non-inscrite', 'cabinets.societe-deja-inscrite', 'cabinets.rattachement-sans-validation'],
+            ],
+            'Q-EC1-qui-invite' => [
+                'decision' => 'Dans le cabinet, seul son propriétaire invite.',
+                'regles' => ['cabinets.invitation-d-un-siren'],
+            ],
+            'Q-EC2' => [
+                'decision' => 'À l\'inscription, un menu fait choisir le type d\'activité de la société (cabinet d\'expertise comptable, services sans stock, activités avec stock), qui ne change plus ensuite.',
+                'regles' => ['type.choix-a-l-inscription', 'type.definitif'],
+            ],
+            'Q-EC3' => [
+                'decision' => 'La propriété d\'un cabinet se transmet à un collaborateur actif, aux mêmes conditions qu\'à un administrateur ; l\'ancien propriétaire devient collaborateur, avec tous les clients du cabinet confiés.',
+                'regles' => ['cabinets.collaborateurs', 'comptes.transmission-de-la-propriete'],
+            ],
+            'Q-EC4' => [
+                'decision' => 'Choix de Claude, que l\'éditeur peut contester : la fin d\'un lien ne ferme pas les sessions, chacune perd l\'accès à sa requête suivante ; au plus 50 invitations par jour et par cabinet ; le mot de passe est redemandé pour inviter.',
+                'regles' => ['cabinets.fin-du-lien', 'cabinets.limites-des-invitations', 'cabinets.invitation-d-un-siren'],
+            ],
+            'Q-EC5' => [
+                'decision' => 'Un cabinet qui n\'est plus vérifié n\'a plus aucun accès à ses clients ni aucun nouveau lien, son propriétaire pouvant seulement mettre fin à ses liens ; sa révocation ou sa radiation met fin à ses liens ; sa suspension ou sa résiliation suspend seulement l\'accès.',
+                'regles' => ['cabinets.rien-avant-d-etre-verifie-et-actif', 'cabinets.correction-revocation-radiation'],
+            ],
+            'Q-EC6' => [
+                'decision' => 'Une demande de rattachement sans réponse expire après 7 jours, comme l\'invitation.',
+                'regles' => ['cabinets.societe-deja-inscrite', 'cabinets.invitation-d-un-siren'],
+            ],
+            'Q-EC7' => [
+                'decision' => 'Le lien et les demandes d\'une société non validée prennent fin quand son inscription est close sans validation ou quand une autre personne saisit le code du courrier ; le cabinet est prévenu ; le nouveau propriétaire choisit lui-même son cabinet.',
+                'regles' => ['cabinets.rattachement-sans-validation'],
+            ],
+        ],
+        'Réponses du 24/10/2026 aux questions des types d\'activité (serie8/reponses-types-activite.md)' => [
+            'Q-TA1' => [
+                'decision' => 'Le menu ne garde que les activités qui ont besoin de stock et les activités de services sans stock, plus le cabinet d\'expertise comptable ; les métiers du bâtiment s\'inscrivent dans les services, sans règle propre.',
+                'regles' => ['type.choix-a-l-inscription', 'type.societe-de-services'],
+            ],
+            'Q-TA2' => [
+                'decision' => 'Une société de services ne passe jamais au type commerce, ni l\'inverse, ni vers ou depuis le cabinet, par aucun écran ni aucune procédure de l\'éditeur.',
+                'regles' => ['type.definitif'],
+            ],
+            'TA-2' => [
+                'decision' => 'Aucune exception pour les articles fabriqués : un produit naît seulement d\'une facture d\'achat validée ou d\'un inventaire d\'ouverture.',
+                'regles' => ['achats.produit-ne-d-un-achat-ou-d-un-inventaire'],
+            ],
+            'TA-4' => [
+                'decision' => 'Choix de Claude, que l\'éditeur peut contester : l\'assurance professionnelle reste facultative pour tous les types qui ont un magasin, imprimée dans le pied des devis et des factures quand elle est renseignée, et figée à l\'émission.',
+                'regles' => ['documents.mentions-et-assurance'],
+            ],
+        ],
+        'Réponses du 25/10/2026 aux questions Q1 à Q3 du lot T2 (t2/reponses-t2.md)' => [
+            'Q1' => [
+                'decision' => 'Chaque magasin suit l\'heure locale de son territoire : journée de caisse et clôture à minuit local, date de ses documents, année de ses numéros, échéances ; un seul endroit connaît le fuseau, la classe Calendrier.',
+                'regles' => ['outillage.heure-locale-du-territoire', 'outillage.seul-le-calendrier-connait-un-fuseau', 'caisse.calendrier-du-magasin'],
+            ],
+            'Q2' => [
+                'decision' => 'Un délai en jours est la même heure, n jours plus tard.',
+                'regles' => ['outillage.seul-le-calendrier-connait-un-fuseau'],
+            ],
+            'Q3' => [
+                'decision' => 'Pendant l\'heure répétée, seuls le journal des événements et le journal d\'audit ajoutent « (heure d\'été) » ou « (heure d\'hiver) ».',
+                'regles' => ['outillage.heure-repetee'],
+            ],
+            '4' => [
+                'decision' => 'Le texte de la puce « Outillage » de CLAUDE.md sur les instants, les jours, le Calendrier, l\'heure répétée, le planificateur et les tests sans heure réelle, approuvé par l\'éditeur.',
+                'regles' => ['outillage.instants-en-utc', 'outillage.seul-le-calendrier-connait-un-fuseau', 'outillage.heure-repetee', 'outillage.planificateur', 'outillage.tests-sans-hasard-ni-heure-reelle'],
+            ],
+        ],
+        'Réponses du 25/10/2026 aux questions A, B et C du lot T3 (t3/reponses-t3.md)' => [
+            'A' => [
+                'decision' => 'Tout changement de territoire passe par un nouveau magasin ; un changement de SIRET qui change le territoire est refusé.',
+                'regles' => ['societe.changement-de-siret'],
+            ],
+            'B' => [
+                'decision' => 'Un magasin dont l\'établissement n\'est pas encore confirmé ne valide ni facture d\'achat, ni avoir fournisseur, ni inventaire d\'ouverture : il attend la confirmation, qui fixe son territoire et l\'année de ses numéros.',
+                'regles' => ['verification.controle-sirene-et-territoire'],
+            ],
+            'C' => [
+                'decision' => 'Avant le premier document numéroté du magasin, l\'éditeur corrige un territoire mal lu par sa procédure, inscrite aux deux journaux ; après, la société ouvre un nouveau magasin et l\'éditeur libère le SIRET pour lui.',
+                'regles' => ['verification.controle-sirene-et-territoire'],
+            ],
+        ],
+        'Décision du 25/10/2026 : calcul exact, prix unitaires affichés au centime, note de calcul gardée (serie8/reponses-affichage-pu.md)' => [
+            '1' => [
+                'decision' => 'Calcul inchangé : pour chaque taux, le HT est le TTC de ses lignes ÷ (1 + taux), arrondi une seule fois, puis réparti par cumul ; le PU HT, enregistré avec six décimales, ne sert jamais à recalculer un total.',
+                'regles' => ['prix.calcul-depuis-le-ttc', 'prix.pu-ht-a-six-decimales'],
+            ],
+            '2' => [
+                'decision' => 'Tout prix unitaire affiché en lecture, PU HT comme PU TTC, ventes comme achats, s\'affiche arrondi au centime ; un champ de saisie montre la valeur telle qu\'elle est enregistrée.',
+                'regles' => ['prix.pu-ht-a-six-decimales'],
+                'remplacee' => 'Remplacée en partie le 09/11/2026 (CLAUDE.md, « Prix et TVA des ventes » et « Documents de vente ») : sur les documents qui montrent le PU HT (factures, avoirs sur facture et devis à un professionnel, ventes sans TVA française), le PU HT s\'affiche tel qu\'il est enregistré, comme le PU HT d\'un achat ; ailleurs, l\'affichage au centime tient.',
+            ],
+            '3' => [
+                'decision' => 'La note de calcul des PDF est gardée et explique l\'écart d\'un centime possible entre la quantité × le prix unitaire affiché et le total d\'une ligne.',
+                'regles' => ['documents.note-de-calcul'],
+            ],
+            '4' => [
+                'decision' => 'Les puces « Prix et TVA des ventes » et « Documents de vente » de CLAUDE.md disent que le PU HT, enregistré avec six décimales, s\'affiche arrondi au centime, et que la note de calcul l\'explique.',
+                'regles' => ['documents.note-de-calcul', 'documents.colonnes-ht-ou-ttc'],
+                'remplacee' => 'Remplacée en partie le 09/11/2026 : CLAUDE.md dit désormais que les documents qui montrent le PU HT l\'impriment tel qu\'il est enregistré, jusqu\'à six décimales.',
             ],
         ],
         'Décision du 01/11/2026 : l\'expert-comptable de la société, déclaré par le SIREN de son cabinet (ec2/decision-expert-comptable-societe.md)' => [
@@ -3526,7 +3710,8 @@ return [
             ],
             '5' => [
                 'decision' => 'Échéance préremplie à la date du jour, et aucune date passée dans les champs de date concernés (messages 72 et 75).',
-                'remplacee' => 'Remplacée par la décision B7 du 09/10/2026 (CLAUDE.md, « Documents de vente ») : l\'échéance se calcule à l\'émission (date d\'émission + délai du client, sinon du magasin), aucun champ ne la saisit ; la date d\'un règlement se préremplit au jour du magasin, jamais dans le futur, et peut être passée.',
+                'remplacee' => 'Remplacée en partie par la décision B7 du 09/10/2026 (CLAUDE.md, « Documents de vente ») : l\'échéance se calcule à l\'émission (date d\'émission + délai du client, sinon du magasin), aucun champ ne la saisit.',
+                'a_trancher' => 'Question proposée à l\'éditeur dans le compte rendu de la relecture du lot 21 (D74) : le champ « Reçu le » d\'un paiement (encaissement d\'une facture et page des paiements) refusait toute date passée depuis le 05/10/2026 (message 75, commit f9af00b) ; le constat X0 de l\'audit de Claude (09/10/2026, commit fecca26), jamais soumis à l\'éditeur, l\'a changé : une date passée est acceptée (un virement vu sur le relevé de la veille), une date future refusée. En attendant sa réponse, le code garde ce qu\'il fait.',
             ],
             '6' => [
                 'decision' => 'Facture brouillon sans numéro définitif, numérotée à la validation ; brouillon modifiable et supprimable en entier d\'un seul geste (messages 14 et 19).',
@@ -3703,8 +3888,10 @@ return [
                 'regles' => ['hors.quantites-sans-decimales', 'prix.pu-ht-a-six-decimales'],
             ],
             'D37' => [
-                'decision' => 'Les dates proposées et les dates interdites : la clôture sans choix de date ; l\'échéance préremplie et sans date passée (cette part est remplacée par la décision B7 : l\'échéance se calcule à l\'émission, et la date d\'un règlement, jamais dans le futur, peut être passée).',
-                'regles' => ['caisse.cloture-jamais-bloquee', 'documents.echeance'],
+                'decision' => 'Les dates proposées et les dates interdites : la clôture sans choix de date ; l\'échéance préremplie à la date du jour ; aucune date passée dans les champs de date concernés.',
+                'regles' => ['caisse.cloture-jamais-bloquee'],
+                'remplacee' => 'Remplacée en partie par la décision B7 du 09/10/2026 (CLAUDE.md, « Documents de vente ») : l\'échéance se calcule à l\'émission, aucun champ ne la saisit.',
+                'a_trancher' => 'Question proposée à l\'éditeur dans le compte rendu de la relecture du lot 21 (D74) : le champ « Reçu le » d\'un paiement (encaissement d\'une facture et page des paiements) refusait toute date passée depuis le 05/10/2026 (message 75, commit f9af00b) ; le constat X0 de l\'audit de Claude (09/10/2026, commit fecca26), jamais soumis à l\'éditeur, l\'a changé : une date passée est acceptée (un virement vu sur le relevé de la veille), une date future refusée. En attendant sa réponse, le code garde ce qu\'il fait.',
             ],
             'D38' => [
                 'decision' => 'Tout document cité s\'ouvre d\'un clic ; l\'important se voit en orange (retours sous les lignes d\'achat, numéros des tickets et des avoirs dans les clôtures).',
@@ -3845,6 +4032,18 @@ return [
             'D72' => [
                 'decision' => 'Une colonne à part pour les décisions de Claude dans l\'onglet professionnel ; « Réponse du professionnel » reste vide ; ses 19 textes du 11/11 supprimés.',
                 'hors_logiciel' => 'Tenue du document de l\'éditeur ; le code suit par le lot PRO et par l\'étape 2.',
+            ],
+            'D73' => [
+                'decision' => 'Le 12/11/2026 vers 02 h 50 UTC : toute nouvelle question part avec la décision de Claude, écrite dans le document de l\'éditeur et appliquée sans attendre ; le point 4 du protocole de CLAUDE.md (« la soumettre à l\'utilisateur au lieu de choisir ») est à réécrire.',
+                'a_venir' => 'Lot PRO, après la chaîne en cours : réécrire le point 4 du protocole de CLAUDE.md et appliquer les décisions des questions déjà proposées.',
+            ],
+            'D74' => [
+                'decision' => 'Le 12/11/2026 vers 02 h 55 UTC : chaque nouvelle question est toujours proposée à l\'éditeur, dans le message de la session et dans son document, avec la décision de Claude, qui s\'applique s\'il ne répond pas.',
+                'hors_logiciel' => 'Façon de travailler : chaque compte rendu de lot propose ses questions à l\'éditeur.',
+            ],
+            'D75' => [
+                'decision' => 'Le 12/11/2026 vers 03 h 00 UTC : Claude ne décide seul que sur une source officielle lue et sûre ; sinon sa décision attend celle de l\'éditeur.',
+                'remplacee' => 'Remplacée par D76 : Claude décide toujours, sa certitude et ses sources écrites dans sa cellule.',
             ],
             'T105-12-11' => [
                 'decision' => 'Le 12/11/2026 vers 13 h UTC : T105 tranchée (a) ; toute question sur un prix ou un montant qui change avec la multiplication ou l\'arrondi va aussi dans l\'onglet professionnel, pour information.',
@@ -4326,7 +4525,8 @@ return [
             ],
             '2.1-115' => [
                 'decision' => 'Message 12/11 de 00 h 33 à 01 h 30 UTC (12/11) : « tout ce qui est fait ou creer sur demonstration ne doit jamais passer en magasin vrai quand la societe confirme avec le code », puis « il faut supprimer ce qui se fait avec demo. peut etre il faut cherche avec son uuid tout ces fait »',
-                'remplacee' => 'Remplacée par D71 : rien de la démonstration n\'est supprimé.',
+                'regles' => ['verification.magasin-de-demonstration'],
+                'remplacee' => 'Remplacée en partie par D71 : rien de la démonstration n\'est supprimé ; que rien n\'en passe aux magasins réels tient (CLAUDE.md, « Vérification de la société »).',
             ],
             '2.1-116' => [
                 'decision' => 'Message 12/11 à 01 h 12 UTC (12/11) : « mais re rempli aussi celles que j ai remplis car tu m as propose meilleur, donc tu remplie meme les miennes »',

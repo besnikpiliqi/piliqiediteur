@@ -94,7 +94,7 @@ class TenantContext
     public function magasin(): Magasin
     {
         if ($this->magasin === null) {
-            throw TenantContextMissingException::forModel(Magasin::class);
+            throw TenantContextMissingException::sansMagasin(Magasin::class);
         }
 
         return $this->magasin;
@@ -126,7 +126,7 @@ class TenantContext
     public function societe(): Societe
     {
         if ($this->societe === null) {
-            throw TenantContextMissingException::forModel(Societe::class);
+            throw TenantContextMissingException::sansSociete(Societe::class);
         }
 
         return $this->societe;

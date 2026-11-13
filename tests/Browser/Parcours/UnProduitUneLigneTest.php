@@ -214,7 +214,7 @@ test('sur un inventaire d’ouverture, le propriétaire choisit sur une seconde 
         ->voir('« Tasse en grès » était déjà sur une ligne de cet inventaire, qui n\'a qu\'une ligne par produit : sa quantité passe à 5. Vérifiez son coût unitaire.');
     expect(quantitesDesLignes($onglet))->toBe(['5']);
 
-    $onglet->soumettre('Créer')->attendreLaPage('^/app/'.$societe->autreMagasin->uuid.'/inventaires-ouverture/[^/]+');
+    $onglet->soumettre('Créer')->attendreLaPage('^/app/'.$societe->autreMagasin->uuid.'/inventaires-ouverture$');
     $inventaire = app(TenantContext::class)->runAs($societe->autreMagasin, fn (): InventaireOuverture => InventaireOuverture::query()->latest('id')->firstOrFail()->load('lignes'));
     expect($inventaire->lignes->map(fn ($ligne): array => [$ligne->description, $ligne->quantite, (string) $ligne->cout_unitaire_ht])->all())->toBe([['Tasse en grès', 5, '3.25']]);
 });
@@ -448,7 +448,7 @@ test('sur un inventaire d’ouverture, un responsable choisit sur une seconde li
         ->voir('« Tasse en grès » était déjà sur une ligne de cet inventaire, qui n\'a qu\'une ligne par produit : sa quantité passe à 7. Vérifiez son coût unitaire.');
     expect(quantitesDesLignes($onglet))->toBe(['7']);
 
-    $onglet->soumettre('Créer')->attendreLaPage('^/app/'.$societe->autreMagasin->uuid.'/inventaires-ouverture/[^/]+');
+    $onglet->soumettre('Créer')->attendreLaPage('^/app/'.$societe->autreMagasin->uuid.'/inventaires-ouverture$');
     $inventaire = app(TenantContext::class)->runAs($societe->autreMagasin, fn (): InventaireOuverture => InventaireOuverture::query()->latest('id')->firstOrFail()->load('lignes'));
     expect($inventaire->lignes->map(fn ($ligne): array => [$ligne->description, $ligne->quantite, (string) $ligne->cout_unitaire_ht])->all())->toBe([['Tasse en grès', 7, '3.25']]);
 });

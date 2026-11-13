@@ -14,12 +14,17 @@ use PHPUnit\Framework\TestCase;
  * - chaque règle nomme au moins un test, et chaque test nommé existe,
  *   « chemin › nom » pour un test Pest, « chemin::méthode » pour un test
  *   PHPUnit ;
- * - chaque décision de l'éditeur, de chaque fichier qui les porte, renvoie
- *   aux règles qui la font vivre, ou dit pourquoi aucun test ne la porte :
- *   une façon de travailler, hors du logiciel ; une décision remplacée, par
- *   celle qui la remplace ; une étape de la feuille de route qui n'est pas
- *   encore faite ; une explication donnée à l'éditeur, qui ne décide rien.
- * Ce test lit les fichiers, sans base de données.
+ * - chaque décision recopiée dans la matrice renvoie aux règles qui la font
+ *   vivre, ou dit pourquoi aucun test ne la porte : une façon de travailler,
+ *   hors du logiciel ; une décision remplacée, par celle qui la remplace ;
+ *   une étape de la feuille de route qui n'est pas encore faite ; une
+ *   explication donnée à l'éditeur, qui ne décide rien ; une décision
+ *   remplacée en partie garde ses règles pour la part qui tient, et une
+ *   décision que le code contredit dit la question proposée à l'éditeur.
+ * Ce test lit les fichiers, sans base de données. Que la matrice recopie
+ * chaque décision de chaque fichier de notes de l'éditeur, hors du dépôt,
+ * ne se contrôle pas ici : la relecture de chaque lot qui la tient à jour
+ * le vérifie.
  */
 class MatriceDesDecisionsTest extends TestCase
 {
@@ -34,12 +39,20 @@ class MatriceDesDecisionsTest extends TestCase
     private const AUTRES_PARTIES = ['Protocole de rigueur', 'Développement', 'Produit', 'Hors de CLAUDE.md'];
 
     /**
-     * Pourquoi une décision n'a pas de test : chaque clé, avec sa raison
-     * écrite.
+     * Pourquoi une décision, ou une part d'une décision, n'a pas de test :
+     * chaque clé, avec sa raison écrite. Seule une décision remplacée en
+     * partie (« remplacee ») garde aussi des règles, pour la part qui tient.
      *
      * @var list<string>
      */
     private const RAISONS_SANS_TEST = ['hors_logiciel', 'remplacee', 'a_venir', 'explication'];
+
+    /**
+     * Une décision de l'éditeur qui tient, ou la part d'une décision qui
+     * tient, que le code contredit : la question proposée à l'éditeur, avec
+     * ce que le code fait en attendant sa réponse.
+     */
+    private const QUESTION_A_TRANCHER = 'a_trancher';
 
     public function test_chaque_partie_de_claude_md_a_ses_regles_et_chaque_regle_nomme_une_partie_qui_existe(): void
     {
@@ -81,37 +94,33 @@ class MatriceDesDecisionsTest extends TestCase
 
         foreach (self::matrice()['decisions'] as $source => $decisions) {
             foreach ($decisions as $identifiant => $decision) {
-                $nom = $source.' › '.$identifiant;
-                $raisons = array_values(array_intersect(array_keys($decision), self::RAISONS_SANS_TEST));
-                $renvois = $decision['regles'] ?? [];
-
-                if (trim($decision['decision']) === '') {
-                    $fautes[] = $nom.' : décision sans texte';
-                }
-
-                if (($renvois === []) === ($raisons === [])) {
-                    $fautes[] = $nom.' : il faut soit des règles, soit une seule raison sans test';
-                }
-
-                if (count($raisons) > 1) {
-                    $fautes[] = $nom.' : plusieurs raisons sans test';
-                }
-
-                foreach ($raisons as $raison) {
-                    if (trim((string) $decision[$raison]) === '') {
-                        $fautes[] = $nom.' : raison « '.$raison.' » sans texte';
-                    }
-                }
-
-                foreach ($renvois as $renvoi) {
-                    if (! isset($regles[$renvoi])) {
-                        $fautes[] = $nom.' : règle inconnue « '.$renvoi.' »';
-                    }
-                }
+                $fautes = [...$fautes, ...self::fautesDeLaDecision($source.' › '.$identifiant, $decision, $regles)];
             }
         }
 
         $this->assertSame([], $fautes);
+    }
+
+    /**
+     * Une décision renvoie à ses règles, dit une seule raison sans test,
+     * ou les deux quand elle est remplacée en partie ; une question à
+     * trancher s'ajoute à l'une ou l'autre forme, ou se suffit.
+     */
+    public function test_une_decision_remplacee_en_partie_garde_ses_regles_et_une_question_a_trancher_se_dit(): void
+    {
+        $regles = ['une.regle' => ['puce' => 'Produit', 'regle' => 'Une règle.', 'tests' => []]];
+        $controler = fn (array $decision): array => self::fautesDeLaDecision('source › 1', ['decision' => 'Une décision.', ...$decision], $regles);
+
+        $this->assertSame([], $controler(['regles' => ['une.regle']]));
+        $this->assertSame([], $controler(['a_venir' => 'Étape 2.']));
+        $this->assertSame([], $controler(['regles' => ['une.regle'], 'remplacee' => 'Remplacée en partie par B7.']));
+        $this->assertSame([], $controler(['regles' => ['une.regle'], 'remplacee' => 'Remplacée en partie par B7.', 'a_trancher' => 'Question proposée à l\'éditeur.']));
+        $this->assertSame([], $controler(['a_trancher' => 'Question proposée à l\'éditeur.']));
+        $this->assertSame(['source › 1 : seule une décision remplacée en partie garde des règles avec une raison sans test'], $controler(['regles' => ['une.regle'], 'a_venir' => 'Étape 2.']));
+        $this->assertSame(['source › 1 : il faut des règles, une raison sans test ou une question à trancher'], $controler([]));
+        $this->assertSame(['source › 1 : plusieurs raisons sans test'], $controler(['remplacee' => 'Par B7.', 'a_venir' => 'Étape 2.']));
+        $this->assertSame(['source › 1 : raison « a_trancher » sans texte'], $controler(['regles' => ['une.regle'], 'a_trancher' => ' ']));
+        $this->assertSame(['source › 1 : règle inconnue « une.autre »'], $controler(['regles' => ['une.autre']]));
     }
 
     /**
@@ -156,12 +165,60 @@ class MatriceDesDecisionsTest extends TestCase
     /**
      * @return array{
      *     regles: array<string, array{puce: string, regle: string, tests: list<string>}>,
-     *     decisions: array<string, array<string, array{decision: string, regles?: list<string>, hors_logiciel?: string, remplacee?: string, a_venir?: string, explication?: string}>>
+     *     decisions: array<string, array<string, array{decision: string, regles?: list<string>, hors_logiciel?: string, remplacee?: string, a_venir?: string, explication?: string, a_trancher?: string}>>
      * }
      */
     private static function matrice(): array
     {
         return require __DIR__.'/matrice-des-decisions.php';
+    }
+
+    /**
+     * Ce qui manque à cette décision : un texte, des règles connues ou une
+     * seule raison sans test (les deux seulement quand elle est remplacée
+     * en partie), et le texte de chaque raison et de la question à
+     * trancher.
+     *
+     * @param  array{decision: string, regles?: list<string>, hors_logiciel?: string, remplacee?: string, a_venir?: string, explication?: string, a_trancher?: string}  $decision
+     * @param  array<string, array{puce: string, regle: string, tests: list<string>}>  $regles
+     * @return list<string>
+     */
+    private static function fautesDeLaDecision(string $nom, array $decision, array $regles): array
+    {
+        $fautes = [];
+        $raisons = array_values(array_intersect(array_keys($decision), self::RAISONS_SANS_TEST));
+        $renvois = $decision['regles'] ?? [];
+        $question = array_key_exists(self::QUESTION_A_TRANCHER, $decision);
+
+        if (trim($decision['decision']) === '') {
+            $fautes[] = $nom.' : décision sans texte';
+        }
+
+        if ($renvois === [] && $raisons === [] && ! $question) {
+            $fautes[] = $nom.' : il faut des règles, une raison sans test ou une question à trancher';
+        }
+
+        if ($renvois !== [] && $raisons !== [] && $raisons !== ['remplacee']) {
+            $fautes[] = $nom.' : seule une décision remplacée en partie garde des règles avec une raison sans test';
+        }
+
+        if (count($raisons) > 1) {
+            $fautes[] = $nom.' : plusieurs raisons sans test';
+        }
+
+        foreach ([...$raisons, ...($question ? [self::QUESTION_A_TRANCHER] : [])] as $raison) {
+            if (trim((string) $decision[$raison]) === '') {
+                $fautes[] = $nom.' : raison « '.$raison.' » sans texte';
+            }
+        }
+
+        foreach ($renvois as $renvoi) {
+            if (! isset($regles[$renvoi])) {
+                $fautes[] = $nom.' : règle inconnue « '.$renvoi.' »';
+            }
+        }
+
+        return $fautes;
     }
 
     /**

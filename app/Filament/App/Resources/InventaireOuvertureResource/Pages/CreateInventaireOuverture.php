@@ -8,17 +8,18 @@ use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\App\Resources\InventaireOuvertureResource;
 use App\Filament\Concerns\GereLesExceptionsMetier;
+use App\Filament\Concerns\RevientALaListe;
 use Filament\Resources\Pages\CreateRecord;
 use Illuminate\Database\Eloquent\Model;
 
 /**
  * Un inventaire d'ouverture s'enregistre en brouillon (voir
- * CreerInventaireOuvertureAction) et s'ouvre ensuite sur sa fiche, où il
- * se valide.
+ * CreerInventaireOuvertureAction), puis la page revient à la liste des
+ * inventaires, d'où sa fiche s'ouvre pour le valider.
  */
 class CreateInventaireOuverture extends CreateRecord
 {
-    use GereLesExceptionsMetier;
+    use GereLesExceptionsMetier, RevientALaListe;
 
     protected static string $resource = InventaireOuvertureResource::class;
 
@@ -29,10 +30,5 @@ class CreateInventaireOuverture extends CreateRecord
             array_values(ValeursLues::lignes($data['lignes'] ?? [])),
             ['notes' => ValeurSimple::enTexteOuNul($data['notes'] ?? null)],
         ));
-    }
-
-    protected function getRedirectUrl(): string
-    {
-        return InventaireOuvertureResource::getUrl('view', ['record' => $this->record]);
     }
 }

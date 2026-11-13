@@ -43,7 +43,7 @@ use UnexpectedValueException;
  * MembrePolicy et PorteeDesDroits) :
  * - pour le propriétaire, tous les comptes, avec leur identifiant de
  *   connexion, leur magasin et leurs autorisations, et tous les gestes :
- *   créer un membre (pour un seul magasin) ou un administrateur ; changer
+ *   créer un membre (dont le compte ne vaut que pour un magasin) ou un administrateur ; changer
  *   le rôle de société d'un compte ; modifier un administrateur ;
  *   suspendre, réactiver, retirer, réintégrer ; redonner l'accès ; annuler
  *   la nomination d'un responsable par un administrateur ; demander,

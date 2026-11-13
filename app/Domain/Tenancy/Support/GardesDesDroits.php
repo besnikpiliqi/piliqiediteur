@@ -23,7 +23,7 @@ use Illuminate\Support\Facades\DB;
  *   affectation sans rôle hors d'un administrateur, ou avec rôle pour un
  *   administrateur ; une affectation à tous les magasins avec un rôle ;
  *   une affectation qui devient celle d'un responsable avec d'autres cases
- *   que celles que seul le propriétaire coche ; un
+ *   que celles que le propriétaire est seul à cocher ; un
  *   administrateur à la fois affecté à tous les magasins et à une
  *   sélection ; une affectation de membre hors du magasin de rattachement
  *   de l'identifiant du compte (voir la table identifiants) : un compte de
@@ -165,13 +165,13 @@ final class GardesDesDroits
                 ["NEW.role IS NULL AND {$roleDuCompte} <> {$administrateur}", 'seul un administrateur a une affectation sans rôle'],
                 ["NEW.role IS NOT NULL AND {$roleDuCompte} = {$administrateur}", 'un administrateur n\'a aucun rôle de magasin'],
                 ['NEW.magasin_id IS NULL AND NEW.role IS NOT NULL', 'une affectation à tous les magasins n\'a pas de rôle de magasin'],
-                ["NEW.role = {$responsable} AND EXISTS (SELECT 1 FROM autorisations_affectations WHERE affectation_id = NEW.id AND autorisation NOT IN ({$cocheesParLeProprietaire}))", 'un responsable n\'a de case que celles que seul le propriétaire coche'],
+                ["NEW.role = {$responsable} AND EXISTS (SELECT 1 FROM autorisations_affectations WHERE affectation_id = NEW.id AND autorisation NOT IN ({$cocheesParLeProprietaire}))", 'un responsable n\'a de case que celles que le propriétaire est seul à cocher'],
                 ["NEW.magasin_id IS NULL AND EXISTS ({$autresAffectations} AND magasin_id IS NOT NULL)", 'un administrateur a accès à tous les magasins ou à une sélection, jamais aux deux'],
                 ["NEW.magasin_id IS NOT NULL AND EXISTS ({$autresAffectations} AND magasin_id IS NULL)", 'un administrateur a accès à tous les magasins ou à une sélection, jamais aux deux'],
                 ["NEW.role IS NOT NULL AND {$magasinDeSonIdentifiant} <> COALESCE(NEW.magasin_id, -2)", 'un membre n\'a d\'affectation que dans le magasin de son identifiant'],
             ],
             self::CASES => [
-                ["COALESCE((SELECT role FROM affectations WHERE id = NEW.affectation_id), '') = {$responsable} AND NEW.autorisation NOT IN ({$cocheesParLeProprietaire})", 'un responsable n\'a de case que celles que seul le propriétaire coche'],
+                ["COALESCE((SELECT role FROM affectations WHERE id = NEW.affectation_id), '') = {$responsable} AND NEW.autorisation NOT IN ({$cocheesParLeProprietaire})", 'un responsable n\'a de case que celles que le propriétaire est seul à cocher'],
             ],
             self::AUTORISATIONS_SOCIETE => [
                 ["{$roleDuCompte} <> {$administrateur}", 'seul un administrateur a des autorisations de société'],

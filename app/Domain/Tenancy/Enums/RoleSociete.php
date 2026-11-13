@@ -33,7 +33,7 @@ use Filament\Support\Contracts\HasLabel;
  *   lié ; il ne vend jamais, n'a jamais son identifiant pour mot de passe,
  *   ne change jamais de rôle, et son compte se retire de lui-même quand le
  *   cabinet de son SIREN est vérifié (voir RattacherUneDeclarationAction) ;
- * - un membre, affecté à un seul magasin, celui de son identifiant, avec
+ * - un membre, dont le compte ne vaut que pour le magasin de son identifiant, avec
  *   un rôle de magasin (voir RoleMagasin) : responsable, nommé par le
  *   propriétaire ou un administrateur autorisé ; vendeur ou observateur,
  *   créé par le propriétaire ou un responsable du magasin.

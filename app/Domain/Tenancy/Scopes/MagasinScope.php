@@ -13,10 +13,11 @@ use Illuminate\Database\Eloquent\Scope;
  * magasin actif du TenantContext.
  *
  * Fail-closed : si aucun contexte n'est résolu, on lève plutôt que de
- * renvoyer les données de tous les magasins. Un accès volontairement
- * cross-tenant (Super Admin) doit passer explicitement par
- * withoutGlobalScope(self::class), jamais par un contexte "vide" qui
- * désactiverait silencieusement le filtre.
+ * renvoyer les données de tous les magasins. Un accès volontairement hors
+ * du magasin courant (une lecture que CLAUDE.md permet, une procédure de
+ * l'éditeur, une tâche planifiée) passe explicitement par
+ * withoutGlobalScope(self::class) et filtre sa requête par magasin, jamais
+ * par un contexte « vide » qui désactiverait silencieusement le filtre.
  *
  * @implements Scope<Model>
  */

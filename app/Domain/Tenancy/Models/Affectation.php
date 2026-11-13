@@ -17,7 +17,7 @@ use LogicException;
  * L'affectation d'un compte de la société à un de ses magasins, ou à tous
  * (magasin_id nul : tous les magasins, présents et futurs) :
  * - celle d'un membre a un rôle de magasin (voir RoleMagasin) : un
- *   responsable n'a de case que celles que seul le propriétaire coche
+ *   responsable n'a de case que celles que le propriétaire est seul à cocher
  *   (voir PermissionRegistry::cocheesParLeProprietaire()), car il a sans
  *   case toutes les autres autorisations de son magasin ; un vendeur ou un
  *   observateur a les cases cochées pour lui (voir cocher()) ;
@@ -147,7 +147,7 @@ class Affectation extends Model
 
     /**
      * Efface toutes ses cases : avant qu'elle devienne celle d'un
-     * responsable, qui n'a que celles que seul le propriétaire coche.
+     * responsable, qui n'a que celles que le propriétaire est seul à cocher.
      */
     public function effacerLesCases(): void
     {

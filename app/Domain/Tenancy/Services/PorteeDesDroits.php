@@ -464,7 +464,7 @@ final class PorteeDesDroits
      * PermissionRegistry::pourLeType()) : toutes pour le propriétaire,
      * celles de la vente comprises, qu'il ne fait jamais lui-même mais
      * coche pour qui il veut ; pour un responsable de ce magasin, toutes
-     * sauf celles que seul le propriétaire coche (voir
+     * sauf celles que le propriétaire est seul à cocher (voir
      * PermissionRegistry::cocheesParLeProprietaire()) ; aucune sinon (les
      * cases d'un administrateur se cochent par le propriétaire, dans les
      * actions des administrateurs).

@@ -16,12 +16,12 @@ use LogicException;
  * compte, changer son rôle ou ses cases, le réintégrer), lue, contrôlée et
  * écrite une seule fois. Un compte de membre n'a qu'une affectation, dans
  * le magasin de son identifiant (voir GardesDesDroits) :
- * - un responsable n'a de case que celles que seul le propriétaire coche
+ * - un responsable n'a de case que celles que le propriétaire est seul à cocher
  *   (voir PermissionRegistry::cocheesParLeProprietaire()) ; un vendeur ou
  *   un observateur reçoit les cases demandées, ou le modèle de son rôle,
  *   jamais au-delà de ce que l'auteur peut cocher dans ce magasin (voir
  *   PorteeDesDroits) ;
- * - une case que seul le propriétaire coche ne change que par lui : quand
+ * - une case que le propriétaire est seul à cocher ne change que par lui : quand
  *   un autre auteur change les cases ou le rôle d'un membre, elle reste
  *   telle quelle ;
  * - un responsable nommé par un administrateur garde la trace de sa
@@ -30,7 +30,7 @@ use LogicException;
  */
 final class AffectationsDesMembres
 {
-    public const MESSAGE_RESPONSABLE_SANS_CASE = 'Un responsable n\'a de case que celles que seul le propriétaire coche : il a sans case toutes les autres autorisations de son magasin.';
+    public const MESSAGE_RESPONSABLE_SANS_CASE = 'Un responsable n\'a de case que celles que le propriétaire est seul à cocher : il a sans case toutes les autres autorisations de son magasin.';
 
     public function __construct(private readonly PorteeDesDroits $portee) {}
 
@@ -56,8 +56,8 @@ final class AffectationsDesMembres
      * modèle du rôle dans le type d'activité de la société du magasin
      * (voir RoleMagasin::permissionsParDefaut()), que l'auteur peut toutes
      * cocher dans ce magasin ; pour un responsable, seulement celles que
-     * seul le propriétaire coche. Quand l'auteur n'est pas le propriétaire,
-     * les cases que seul le propriétaire coche restent celles de
+     * le propriétaire est seul à cocher. Quand l'auteur n'est pas le propriétaire,
+     * les cases que le propriétaire est seul à cocher restent celles de
      * l'affectation actuelle du membre, s'il en a une : il ne les coche ni
      * ne les décoche jamais.
      *

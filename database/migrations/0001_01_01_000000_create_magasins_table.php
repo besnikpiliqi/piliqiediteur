@@ -124,7 +124,7 @@ return new class extends Migration
             $table->string('mention_escompte', 500);
             $table->timestamps();
 
-            // Un code n'appartient qu'à un seul magasin de la société (voir
+            // Un code n'appartient qu'à un magasin de la société (voir
             // CodeMagasin) : deux magasins d'une même société ne produisent
             // jamais le même numéro de document.
             $table->unique(['societe_id', 'code']);
@@ -142,7 +142,7 @@ return new class extends Migration
         DB::statement('CREATE UNIQUE INDEX magasins_une_demonstration_par_societe ON magasins (societe_id) WHERE est_demonstration');
         DB::statement('CREATE UNIQUE INDEX magasins_un_principal_par_societe ON magasins (societe_id) WHERE est_etablissement_principal');
 
-        // Un SIRET n'appartient qu'à un seul magasin de la société, sauf
+        // Un SIRET n'appartient qu'à un magasin de la société, sauf
         // celui d'un magasin dont l'éditeur l'a libéré pour un nouveau
         // magasin (siret_libere_le) ; le registre des SIRET réservés le
         // refuse en plus à tout autre magasin du logiciel (voir

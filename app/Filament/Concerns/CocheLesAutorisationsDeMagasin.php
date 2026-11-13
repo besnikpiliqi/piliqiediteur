@@ -20,14 +20,14 @@ use UnexpectedValueException;
  * groupes : celles qui ne sont pas des ventes (voir
  * PermissionRegistry::horsVente()), puis, à part, celles de la vente (voir
  * PermissionRegistry::deVente()), que le propriétaire coche pour qui il
- * veut sans les exercer lui-même, et celles que seul le propriétaire coche
+ * veut sans les exercer lui-même, et celles que le propriétaire est seul à cocher
  * (voir PermissionRegistry::cocheesParLeProprietaire()), montrées à lui
  * seul, pour tout rôle, responsable compris, jamais précochées. Le
  * formulaire garde chaque groupe sous son nom ($nom, $nom_vente, puis
  * $nom_proprietaire) ; l'action reçoit leur réunion (voir
  * autorisationsSaisies()), et refuse elle-même ce que l'auteur ne peut pas
  * cocher ; un groupe qu'il ne voit pas n'est pas envoyé, et l'action garde
- * alors les cases que seul le propriétaire coche (voir
+ * alors les cases que le propriétaire est seul à cocher (voir
  * AffectationsDesMembres::cases()).
  */
 trait CocheLesAutorisationsDeMagasin
@@ -122,7 +122,7 @@ trait CocheLesAutorisationsDeMagasin
     }
 
     /**
-     * Celles que seul le propriétaire coche dans le type d'activité de la
+     * Celles que le propriétaire est seul à cocher dans le type d'activité de la
      * société du panneau.
      *
      * @return list<string>

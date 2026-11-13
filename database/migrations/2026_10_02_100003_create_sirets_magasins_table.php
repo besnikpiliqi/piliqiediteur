@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Schema;
 
 /**
  * Le registre des SIRET réservés (voir SiretMagasin et
- * SiretsDesMagasins) : un SIRET n'appartient qu'à un seul magasin de tout
+ * SiretsDesMagasins) : un SIRET n'appartient qu'à un magasin de tout
  * le logiciel, dès que sa société est validée, et ne sert jamais à un
  * autre, même après un changement de SIRET (retire_le), sauf libération
  * par la procédure de l'éditeur (libere_le). Une ligne ne se corrige

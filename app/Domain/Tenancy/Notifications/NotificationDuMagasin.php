@@ -8,7 +8,7 @@ use Illuminate\Notifications\Notification;
 
 /**
  * Notification en base, affichée dans la cloche du panneau (voir
- * AppPanelProvider::databaseNotifications()), à propos d'un seul magasin :
+ * AppPanelProvider::databaseNotifications()), à propos d'un magasin et de lui seul :
  * elle nomme le magasin en tête de son titre, ne parle que de lui, et
  * retient sa société (`societe_id`) et son identifiant (`magasin_id`), qui
  * servent à effacer les notifications d'un compte qui quitte sa société

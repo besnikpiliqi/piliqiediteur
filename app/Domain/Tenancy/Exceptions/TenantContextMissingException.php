@@ -20,8 +20,8 @@ class TenantContextMissingException extends RuntimeException
     {
         return new self(sprintf(
             "Tentative d'accès au modèle [%s] sans contexte magasin résolu. ".
-            'Si cet accès est légitime et volontairement cross-tenant (Super Admin), '.
-            'utilisez explicitement withoutGlobalScope(MagasinScope::class) depuis un service audité.',
+            'Si cet accès est volontairement hors du magasin courant (une lecture que CLAUDE.md permet, une procédure de l\'éditeur, une tâche planifiée), '.
+            'passez explicitement par withoutGlobalScope(MagasinScope::class) et filtrez la requête par magasin.',
             $modelClass,
         ));
     }

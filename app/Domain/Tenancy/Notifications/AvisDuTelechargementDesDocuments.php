@@ -23,7 +23,7 @@ use LogicException;
  * (`societe_id`) et, pour un compte d'un cabinet, le client
  * dont il lit les documents (`client_id`), pour s'effacer de sa cloche
  * quand ce client ne lui est plus ouvert (voir
- * User::effacerLesAvisDesClients()) ; d'un seul magasin, ce magasin
+ * User::effacerLesAvisDesClients()) ; d'un magasin et de lui seul, ce magasin
  * (`magasin_id`, voir User::effacerLesNotificationsDesMagasins()). Le lien
  * redemande ses droits à chaque téléchargement (voir
  * TelechargerLesDocumentsController).

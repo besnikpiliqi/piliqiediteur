@@ -106,7 +106,7 @@ class GardesDesDroitsEnBaseConcurrenceTest extends TestCase
 
         $resultat = $this->attendre($concurrente);
         $this->assertFalse($resultat->successful());
-        $this->assertStringContainsString('un responsable n\'a de case que celles que seul le propriétaire coche', $resultat->errorOutput());
+        $this->assertStringContainsString('un responsable n\'a de case que celles que le propriétaire est seul à cocher', $resultat->errorOutput());
         $this->assertSame(RoleMagasin::Responsable, Affectation::query()->whereKey($affectationId)->sole()->role);
         $this->assertSame(0, DB::table('autorisations_affectations')->where('affectation_id', $affectationId)->count());
     }

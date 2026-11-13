@@ -58,7 +58,7 @@ use Illuminate\Support\Str;
  *   membre, un collaborateur, créé par le propriétaire du cabinet, sans
  *   affectation, ni case, ni autorisation de société (voir
  *   CreerCollaborateurAction) ;
- * - un membre, affecté à un seul magasin, celui de son identifiant (voir
+ * - un membre, dont le compte ne vaut que pour le magasin de son identifiant (voir
  *   Identifiant), avec un rôle de magasin : responsable (toutes les
  *   autorisations de ce magasin, sans case), vendeur ou observateur (ses
  *   cases dans ce magasin) ; une personne qui travaille dans plusieurs
@@ -939,7 +939,7 @@ class User extends Authenticatable implements FilamentUser, HasTenants
      *   de son affectation à tous les magasins ; rien s'il a les deux
      *   sortes d'affectations ;
      * - un membre : pour un responsable de ce magasin, toutes sauf celles
-     *   que seul le propriétaire coche (voir
+     *   que le propriétaire est seul à cocher (voir
      *   PermissionRegistry::cocheesParLeProprietaire()), plus celles-ci
      *   quand le propriétaire les lui a cochées ; les cases de son
      *   affectation pour un vendeur ou un observateur.

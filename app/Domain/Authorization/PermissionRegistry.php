@@ -500,7 +500,7 @@ final class PermissionRegistry
     }
 
     /**
-     * Les autorisations que seul le propriétaire coche, compte par compte,
+     * Les autorisations que le propriétaire est seul à cocher, compte par compte,
      * dans un magasin d'une société de ce type : le téléchargement des
      * documents par période (décision de l'éditeur du 03/11/2026, E3). Le
      * propriétaire l'a toujours ; aucun modèle ne la précoche, pas même

@@ -63,7 +63,7 @@ return new class extends Migration
         // Une seule affectation à tous les magasins par compte : l'index
         // unique (user_id, magasin_id) ne compare pas deux magasin_id nuls.
         DB::statement('CREATE UNIQUE INDEX affectations_une_globale ON affectations (user_id) WHERE magasin_id IS NULL');
-        // Un seul magasin par compte de membre.
+        // Un compte de membre ne vaut que pour un magasin.
         DB::statement('CREATE UNIQUE INDEX affectations_un_magasin_par_membre ON affectations (user_id) WHERE role IS NOT NULL');
     }
 

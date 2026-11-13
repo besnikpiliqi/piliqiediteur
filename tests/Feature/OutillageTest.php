@@ -326,4 +326,90 @@ class OutillageTest extends TestCase
 
         $this->assertSame([], $fonctionsAvalees);
     }
+
+    /**
+     * Aucun raccourci dans le code (CLAUDE.md, protocole de rigueur, point 1 ;
+     * directive D11) : aucun commentaire du code, des migrations, des routes,
+     * de la configuration, des tests ni des vues ne laisse à la place du code
+     * une marque de travail à finir, une ligne de points de suspension ni la
+     * phrase qui dit que le reste ne change pas (les motifs exacts sont ceux
+     * de $estUnRaccourci).
+     */
+    public function test_aucun_commentaire_du_code_ne_laisse_un_raccourci(): void
+    {
+        $raccourcis = [];
+        $estUnRaccourci = static fn (string $commentaire): bool => preg_match('/\b(TODO|FIXME|XXX)\b/u', $commentaire) === 1
+            || preg_match('/\breste inchangé\b|^\s*(\/\/|#|\/?\*+)\s*(\.\.\.|…)\s*(\*\/)?\s*$/miu', $commentaire) === 1;
+
+        $this->assertTrue($estUnRaccourci('// TODO : finir le calcul'));
+        $this->assertTrue($estUnRaccourci("/**\n * ...\n */"));
+        $this->assertTrue($estUnRaccourci('// Le reste inchangé.'));
+        $this->assertFalse($estUnRaccourci('// La requête reste inchangée quand elle est refusée.'));
+
+        foreach (['app', 'bootstrap', 'config', 'database', 'resources', 'routes', 'tests'] as $dossier) {
+            foreach (File::allFiles(base_path($dossier)) as $fichier) {
+                $chemin = $dossier.'/'.$fichier->getRelativePathname();
+
+                if ($fichier->getExtension() !== 'php' || str_starts_with($chemin, 'bootstrap/cache/') || str_starts_with($chemin, 'tests/Feature/Scratch/')) {
+                    continue;
+                }
+
+                if (str_ends_with($chemin, '.blade.php')) {
+                    preg_match_all('/\{\{--(.*?)--\}\}/su', $fichier->getContents(), $commentaires);
+
+                    foreach ($commentaires[1] as $commentaire) {
+                        if ($estUnRaccourci($commentaire)) {
+                            $raccourcis[] = $chemin;
+                        }
+                    }
+
+                    continue;
+                }
+
+                foreach (token_get_all($fichier->getContents()) as $jeton) {
+                    if (is_array($jeton) && in_array($jeton[0], [T_COMMENT, T_DOC_COMMENT], true) && $estUnRaccourci($jeton[1])) {
+                        $raccourcis[] = $chemin.':'.$jeton[2];
+                    }
+                }
+            }
+        }
+
+        $this->assertSame([], $raccourcis);
+    }
+
+    /**
+     * Aucun outil Node tant qu'aucun thème d'écran personnalisé n'existe,
+     * sauf Playwright, qui ne sert qu'aux tests en navigateur (CLAUDE.md,
+     * « Outillage » ; directive D51) : package.json ne déclare que lui, en
+     * dépendance de développement, sans script de construction des écrans.
+     */
+    public function test_package_json_ne_declare_que_playwright_pour_les_tests_en_navigateur(): void
+    {
+        $paquet = json_decode((string) file_get_contents(base_path('package.json')), true, flags: JSON_THROW_ON_ERROR);
+
+        $this->assertIsArray($paquet);
+        $this->assertTrue($paquet['private'] ?? false);
+        $this->assertSame(['playwright'], array_keys($paquet['devDependencies'] ?? []));
+        $this->assertArrayNotHasKey('dependencies', $paquet);
+        $this->assertArrayNotHasKey('scripts', $paquet);
+        $this->assertFileDoesNotExist(base_path('vite.config.js'));
+        $this->assertFileDoesNotExist(base_path('tailwind.config.js'));
+    }
+
+    /**
+     * Le logiciel est sous licence propriétaire et déclare les extensions
+     * PHP de la signature, des PDF, des archives et de PostgreSQL (CLAUDE.md,
+     * « Outillage » ; décisions D13 et H3 du 09/10/2026).
+     */
+    public function test_composer_declare_la_licence_proprietaire_et_les_extensions_php(): void
+    {
+        $composer = json_decode((string) file_get_contents(base_path('composer.json')), true, flags: JSON_THROW_ON_ERROR);
+
+        $this->assertIsArray($composer);
+        $this->assertSame('proprietary', $composer['license'] ?? null);
+
+        foreach (['ext-gd', 'ext-openssl', 'ext-zip', 'ext-pdo_pgsql'] as $extension) {
+            $this->assertArrayHasKey($extension, $composer['require'] ?? [], $extension.' n\'est pas déclarée dans composer.json.');
+        }
+    }
 }

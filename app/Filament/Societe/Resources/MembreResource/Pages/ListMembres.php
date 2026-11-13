@@ -29,7 +29,7 @@ use Illuminate\Support\Str;
 
 /**
  * La liste des comptes, avec les créations que permet le rôle de la
- * personne connectée : un membre (pour un seul magasin) ou un
+ * personne connectée : un membre (dont le compte ne vaut que pour un magasin) ou un
  * administrateur pour le propriétaire ; un responsable pour lui et
  * pour un administrateur autorisé à nommer les responsables, dans un
  * magasin réel de sa portée. Chaque fenêtre de création tire son jeton à

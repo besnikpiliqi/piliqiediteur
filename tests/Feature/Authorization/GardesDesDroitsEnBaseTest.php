@@ -198,8 +198,8 @@ class GardesDesDroitsEnBaseTest extends TestCase
         $affectationDuResponsable = Affectation::query()->where('user_id', $responsable->id)->sole();
         $affectationDuVendeur = Affectation::query()->where('user_id', $vendeur->id)->sole();
 
-        $this->refusee(fn () => DB::table('autorisations_affectations')->insert(['affectation_id' => $affectationDuResponsable->id, 'autorisation' => PermissionRegistry::FACTURE_VIEW]), self::refus(GardesDesDroits::CASES, 'un responsable n\'a de case que celles que seul le propriétaire coche'));
-        $this->refusee(fn () => DB::table('affectations')->where('id', $affectationDuVendeur->id)->update(['role' => RoleMagasin::Responsable->value]), self::refus(GardesDesDroits::AFFECTATIONS, 'un responsable n\'a de case que celles que seul le propriétaire coche'));
+        $this->refusee(fn () => DB::table('autorisations_affectations')->insert(['affectation_id' => $affectationDuResponsable->id, 'autorisation' => PermissionRegistry::FACTURE_VIEW]), self::refus(GardesDesDroits::CASES, 'un responsable n\'a de case que celles que le propriétaire est seul à cocher'));
+        $this->refusee(fn () => DB::table('affectations')->where('id', $affectationDuVendeur->id)->update(['role' => RoleMagasin::Responsable->value]), self::refus(GardesDesDroits::AFFECTATIONS, 'un responsable n\'a de case que celles que le propriétaire est seul à cocher'));
 
         $this->assertSame([], $affectationDuResponsable->autorisations());
         $this->assertSame(RoleMagasin::Vendeur, $affectationDuVendeur->fresh()->role);

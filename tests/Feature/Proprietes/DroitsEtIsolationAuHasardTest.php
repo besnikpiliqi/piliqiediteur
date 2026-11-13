@@ -36,7 +36,7 @@ use Tests\TestCase;
  * - ses autorisations dans chaque magasin sont celles que le cas lui
  *   donne : les cases tirées pour un vendeur, un observateur ou un
  *   administrateur (à qui le propriétaire peut cocher la vente), toutes
- *   celles du type d'activité sauf celles que seul le propriétaire coche
+ *   celles du type d'activité sauf celles que le propriétaire est seul à cocher
  *   pour un responsable, aucune dans un magasin qu'il n'ouvre pas ;
  * - aucune fiche ni aucun document d'un autre magasin, ou d'une autre
  *   société, ne se lit depuis son magasin, ni ne s'ouvre, ni ne se modifie ;
@@ -193,7 +193,7 @@ class DroitsEtIsolationAuHasardTest extends TestCase
     /**
      * Les autorisations que le cas donne au compte dans un magasin qu'il
      * ouvre, dans l'ordre alphabétique : toutes celles d'un commerce, sauf
-     * celles que seul le propriétaire coche, pour un responsable sans case ;
+     * celles que le propriétaire est seul à cocher, pour un responsable sans case ;
      * les cases tirées, toutes d'un commerce, pour tout autre rôle.
      *
      * @param  array{role: string, autorisations: list<string>}  $cas

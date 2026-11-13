@@ -1,18 +1,19 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 13/11/2026 à 00:59 UTC par pilotage-sync.sh : « D76 fini, cahier ER-PRO ».
+Mis à jour le 13/11/2026 à 01:26 UTC par pilotage-sync.sh : « Après le lot EC2 ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
-Tête poussée : `b10d2e8`. Commits locaux pas encore poussés :
+Tête poussée : `c54c221`. Commits locaux pas encore poussés :
 
 ```
-f159294 Donne à la société un expert-comptable déclaré par le SIREN de son cabinet, rattaché tout seul au cabinet vérifié (lot EC2)
 ```
 
 Derniers commits poussés :
 
 ```
+c54c221 Relecture du lot EC2 de l’expert-comptable de la société
+f159294 Donne à la société un expert-comptable déclaré par le SIREN de son cabinet, rattaché tout seul au cabinet vérifié (lot EC2)
 b10d2e8 Relecture du lot DV du devis en ligne
 496da9c Laisse le client répondre à son devis en ligne et transformer un devis accepté en facture (lot DV)
 0b7e734 Écrit chaque jour de la relance en navigateur sans calcul sur un instant (CI)
@@ -31,35 +32,11 @@ cba222d Relecture du lot CALC de la série 8
 b21124f Calcule les montants sans virgule flottante et imprime le PU HT tel qu'il est enregistré (lot CALC)
 71a217a Passe à la méthode rapide : la suite une fois par lot, l'analyse statique et la mutation à la fin
 5dc11a1 Relecture du lot TY2 de l’analyse statique
-b9dd057 Vérifie les types que donnaient les commentaires en ligne, et refuse ces commentaires au contrôle des seuils (lot TY2, types en ligne)
-c2455dd Passe Larastan au niveau 10 sans erreur : les valeurs lues sans type sont vérifiées (lot TY2, niveaux 9 et 10)
 ```
 
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
- M app/Domain/Cabinets/Actions/CorrigerLAdresseDeLExpertComptableAction.php
- M app/Domain/Cabinets/Actions/DeclarerSonExpertComptableAction.php
- M app/Domain/Cabinets/Support/GardesDesCabinets.php
- M app/Domain/Tenancy/Services/JournalDesDroits.php
- M app/Filament/Societe/Pages/CabinetComptable.php
- M app/Filament/Societe/Pages/RattachementDUnCabinet.php
- M app/Filament/Societe/Resources/MembreResource/Pages/FicheDuMembre.php
- M app/Http/Controllers/ConfirmerNouvelleAdresseController.php
- M database/migrations/2026_10_02_200004_create_mouvements_stock_table.php
- M resources/views/filament/societe/pages/cabinet-comptable.blade.php
- M resources/views/filament/societe/pages/rattachement-d-un-cabinet.blade.php
- M resources/views/profil/adresse.blade.php
- M tests/Browser/Parcours/CabinetSuspenduTest.php
- M tests/Browser/Parcours/ExpertComptableDeclareTest.php
- M tests/Feature/Cabinets/ExpertComptableDeclareTest.php
- M tests/Feature/Cabinets/ExpertsComptablesConcurrenceTest.php
- M tests/Feature/Cabinets/LienDeLExpertComptableTest.php
- M tests/Feature/Cabinets/MagasinsOuvertsAuCabinetTest.php
- M tests/Feature/Cabinets/RattachementDesExpertsComptablesTest.php
- M tests/Feature/Societe/CabinetComptableTest.php
-?? app/Filament/Concerns/ConfirmeLAdresseDuLien.php
-?? tests/Browser/Parcours/RattachementDUnCabinetTest.php
 ```
 
 ## Dernière course de la chaîne
@@ -67,8 +44,6 @@ c2455dd Passe Larastan au niveau 10 sans erreur : les valeurs lues sans type son
 Course `wf_1d467e9e-93e`, étapes commencées (de la plus ancienne à la plus récente) :
 
 ```
-UI:relecture2
-UI:correction
 UI:poussee
 UI:notes
 ML:implementation
@@ -92,4 +67,6 @@ EC2:implementation-5
 EC2:relecture1
 EC2:relecture2
 EC2:correction
+EC2:poussee
+EC2:notes
 ```

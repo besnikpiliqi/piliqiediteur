@@ -9,6 +9,7 @@ use App\Domain\Cabinets\Actions\DesignerUnCabinetAction;
 use App\Domain\Cabinets\Actions\InviterUneEntrepriseAction;
 use App\Domain\Cabinets\Actions\MettreFinAuLienAction;
 use App\Domain\Cabinets\Actions\RattacherUneDeclarationAction;
+use App\Domain\Cabinets\Actions\ReglerLesAutorisationsDuCabinetAction;
 use App\Domain\Cabinets\Actions\RetirerLInscriptionALOrdreAction;
 use App\Domain\Cabinets\Actions\VerifierLOrdreAction;
 use App\Domain\Cabinets\Enums\EtatDuLien;
@@ -24,12 +25,15 @@ use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\StatutCompte;
 use App\Domain\Tenancy\Enums\TypeDActivite;
+use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\ControleSirene;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\InterventionDeLEditeur;
 use App\Filament\Cabinet\Resources\ClientDuCabinetResource\Pages\FicheDuClient;
 use App\Filament\Cabinet\Resources\ClientDuCabinetResource\Pages\ListClientsDuCabinet;
+use App\Filament\Societe\Pages\CabinetComptable;
+use App\Filament\Societe\Pages\RattachementDUnCabinet;
 use App\Integrations\Ordre\Contracts\AnnuaireDeLOrdre;
 use App\Integrations\Ordre\FauxAnnuaireDeLOrdre;
 use App\Integrations\Sirene\Contracts\RepertoireSirene;
@@ -324,6 +328,74 @@ class RattachementDesExpertsComptablesTest extends TestCase
         $this->assertSame($attendues, app(TenantContext::class)->runAsSociete($magasin->societe, fn (): array => $lien->autorisations()));
         $this->assertSame(EtatDuLien::Retire, $demande->fresh()->etat);
         $this->assertSame(StatutCompte::Retire, $marc->fresh()->statut);
+    }
+
+    /**
+     * Sur la page de rattachement, la demande du cabinet déclaré part des
+     * autorisations et des magasins de la déclaration : « Accepter en
+     * ajustant », validé sans rien changer, n'accorde rien de plus, ni
+     * « Clients : voir » ni « Devis : voir » que la déclaration avait
+     * retirés, ni un magasin qu'elle n'ouvrait pas.
+     */
+    public function test_accepter_en_ajustant_la_demande_du_cabinet_declare_part_de_la_declaration_et_n_elargit_rien(): void
+    {
+        [$client, $lyon2, $demande, $attendues] = $this->demandeDuCabinetDeclareSansClientsNiDevisPourLyon2();
+
+        Livewire::test(RattachementDUnCabinet::class, ['lien' => $demande->uuid])
+            ->assertSeeText('avec les autorisations et les magasins de votre déclaration')
+            ->mountAction('accepterEnAjustant')
+            ->assertActionDataSet([
+                'portee' => CabinetComptable::SELECTION_DE_MAGASINS,
+                'magasins' => [(string) $lyon2->id],
+                'consultations' => PermissionRegistry::casesDuCabinet($attendues),
+                'achats' => [],
+                'telechargements' => [],
+            ])
+            ->callMountedAction()
+            ->assertHasNoActionErrors();
+
+        $lien = $this->lienDe($client);
+        $this->assertSame([EtatDuLien::Actif, false], [$lien->etat, $lien->tous_les_magasins]);
+        $this->assertSame($attendues, app(TenantContext::class)->runAsSociete($client, fn (): array => $lien->autorisations()));
+        $this->assertSame([$lyon2->id], $lien->magasinsChoisis());
+        $this->assertNotContains(PermissionRegistry::CLIENT_VIEW, $attendues);
+        $this->assertNotContains(PermissionRegistry::DEVIS_VIEW, $attendues);
+    }
+
+    /**
+     * « Accepter », pour le cabinet déclaré, dit et accorde les
+     * autorisations et les magasins de la déclaration ; pour un autre
+     * cabinet, tous les magasins et les autorisations par défaut.
+     */
+    public function test_accepter_la_demande_du_cabinet_declare_dit_et_garde_les_autorisations_et_les_magasins_de_la_declaration(): void
+    {
+        [$client, $lyon2, $demande, $attendues] = $this->demandeDuCabinetDeclareSansClientsNiDevisPourLyon2();
+
+        Livewire::test(RattachementDUnCabinet::class, ['lien' => $demande->uuid])
+            ->assertActionHasLabel('accepterParDefaut', 'Accepter avec les autorisations de votre déclaration')
+            ->mountAction('accepterParDefaut')
+            ->assertSeeText('Ce cabinet consultera le magasin Lyon 2, avec les autorisations de votre déclaration : '.implode(', ', PermissionRegistry::libellesDe($attendues)).'.')
+            ->assertDontSeeText('Clients : voir')
+            ->callMountedAction();
+
+        $lien = $this->lienDe($client);
+        $this->assertSame([EtatDuLien::Actif, false, [$lyon2->id]], [$lien->etat, $lien->tous_les_magasins, $lien->magasinsChoisis()]);
+        $this->assertSame($attendues, app(TenantContext::class)->runAsSociete($client, fn (): array => $lien->autorisations()));
+
+        $autre = $this->ouvrirUneSociete(['nom' => 'Atelier Morel']);
+        $this->lierLeCabinet($this->ouvrirUnCabinet(SocieteFactory::sirenFictif(), 'Paul Garnier'), $autre);
+        $cabinet = $this->ouvrirUnCabinet(SocieteFactory::sirenFictif(), 'Luc Moreau');
+        $this->demanderLeRattachement($cabinet, $autre->societe, 'contact@atelier.test');
+        $autreDemande = LienCabinet::query()->withoutGlobalScopes()->where('societe_id', $autre->societe_id)->where('etat', EtatDuLien::DemandeParLeCabinet->value)->sole();
+        $this->dansLEspaceDeLaSociete($autre->societe, $this->proprietaireDe($autre));
+
+        Livewire::test(RattachementDUnCabinet::class, ['lien' => $autreDemande->uuid])
+            ->assertActionHasLabel('accepterParDefaut', 'Accepter avec les autorisations par défaut')
+            ->mountAction('accepterParDefaut')
+            ->assertSeeText('Ce cabinet consultera tous vos magasins réels, présents et futurs : '.implode(', ', PermissionRegistry::libellesDe(PermissionRegistry::parDefautDuCabinet(TypeDActivite::Commerce))).'.');
+        Livewire::test(RattachementDUnCabinet::class, ['lien' => $autreDemande->uuid])
+            ->mountAction('accepterEnAjustant')
+            ->assertActionDataSet(CabinetComptable::etatParDefaut(TypeDActivite::Commerce));
     }
 
     public function test_plusieurs_societes_qui_declarent_le_meme_siren_sont_rattachees_chacune_dans_sa_transaction(): void
@@ -858,6 +930,37 @@ class RattachementDesExpertsComptablesTest extends TestCase
         foreach (Bus::dispatched(RattacherLesDeclarationsDuSiren::class)->filter(fn (RattacherLesDeclarationsDuSiren $tache): bool => $tache->siren === $siren) as $tache) {
             $tache->handle(app(ExpertsComptablesDeclares::class));
         }
+    }
+
+    /**
+     * Une société de deux magasins, « Lyon 1 » et « Lyon 2 », qui a déclaré
+     * son expert-comptable sans « Clients : voir » ni « Devis : voir », pour
+     * le seul magasin « Lyon 2 » ; le cabinet de ce SIREN, vérifié, sa
+     * tâche de rattachement retenue, invite son SIREN : sa demande de
+     * rattachement attend. Le propriétaire est dans l'espace de sa société.
+     *
+     * @return array{0: Societe, 1: Magasin, 2: LienCabinet, 3: list<string>}
+     */
+    private function demandeDuCabinetDeclareSansClientsNiDevisPourLyon2(): array
+    {
+        $lyon1 = $this->ouvrirUneSociete(['nom' => 'Lyon 1']);
+        $lyon2 = $this->ouvrirUnAutreMagasin($lyon1, ['nom' => 'Lyon 2']);
+        $cases = array_values(array_diff(PermissionRegistry::casesDuCabinet(PermissionRegistry::parDefautDuCabinet(TypeDActivite::Commerce)), [PermissionRegistry::CLIENT_VIEW, PermissionRegistry::DEVIS_VIEW]));
+        $this->expertComptable($lyon1, autorisations: $cases);
+        $declaration = $this->declaration($lyon1->societe);
+        $proprietaire = $this->proprietaireDe($lyon1);
+        app(ReglerLesAutorisationsDuCabinetAction::class)->handle($proprietaire, $declaration, $cases, [$lyon2->id]);
+        app(TenantContext::class)->clear();
+        $attendues = app(TenantContext::class)->runAsSociete($lyon1->societe, fn (): array => $declaration->fresh()->autorisations());
+        Bus::fake([RattacherLesDeclarationsDuSiren::class]);
+        $cabinet = $this->ouvrirUnCabinet();
+        app(InviterUneEntrepriseAction::class)->handle($this->proprietaireDuCabinet($cabinet), $cabinet, (string) $lyon1->societe->siren, 'contact@boulangerie.test', self::MOT_DE_PASSE_CHOISI);
+        app(TenantContext::class)->clear();
+        $demande = LienCabinet::query()->withoutGlobalScopes()->where('societe_id', $lyon1->societe_id)->where('etat', EtatDuLien::DemandeParLeCabinet->value)->sole();
+        $this->assertSame(EtatDuLien::Declare, $declaration->fresh()->etat);
+        $this->dansLEspaceDeLaSociete($lyon1->societe, $proprietaire);
+
+        return [$lyon1->societe, $lyon2, $demande, $attendues];
     }
 
     /**

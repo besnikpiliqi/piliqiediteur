@@ -338,6 +338,36 @@ class ExpertsComptablesConcurrenceTest extends TestCase
         $this->assertTrue(Hash::check(self::MOT_DE_PASSE_CHOISI, $marc->fresh()->password));
     }
 
+    /**
+     * Le rattachement tient la ligne de la société puis la déclaration avant
+     * les comptes ; la correction de l'adresse les prend dans le même
+     * ordre, si bien qu'elle attend la fin du rattachement au lieu de
+     * tenir le compte qu'il veut retirer pendant que la garde de son
+     * adresse attend la déclaration (interblocage). Elle passe après lui :
+     * le compte est retiré, la correction refusée, l'adresse inchangée.
+     */
+    #[DataProvider('avecEtSansMagasinReel')]
+    public function test_la_correction_de_l_adresse_pendant_le_rattachement_passe_avant_ou_apres_sans_interblocage(bool $avecUnMagasin): void
+    {
+        [$client, $marc] = $this->declarationSansMotDePasseChoisi($avecUnMagasin);
+        $declaration = $this->declarationDe($client);
+        $cabinet = $this->ouvrirLeCabinetSansRattachement();
+        [$marcId, $proprietaireId] = [(int) $marc->getKey(), (int) $client->proprietaire()->firstOrFail()->getKey()];
+        $concurrente = null;
+        $this->concurrencerDesQueLaLigneEstVerrouillee('liens_cabinet', 'for update', static function () use ($marcId, $proprietaireId): void {
+            app(CorrigerLAdresseDeLExpertComptableAction::class)->handle(User::query()->findOrFail($proprietaireId), User::query()->findOrFail($marcId), 'marc@petit-associes.test', 'marc@petit-associes.test', 'password');
+        }, $concurrente);
+
+        $this->assertTrue(app(RattacherUneDeclarationAction::class)->handle((int) $declaration->getKey(), (int) $cabinet->getKey()));
+
+        $resultat = $this->attendre($concurrente);
+        $this->assertStringNotContainsString('40P01', $resultat->errorOutput().$resultat->output());
+        $this->assertFalse($resultat->successful());
+        $this->assertSame(EtatDuLien::Actif, $declaration->fresh()->etat);
+        $this->assertSame(StatutCompte::Retire, $marc->fresh()->statut);
+        $this->assertSame('marc.petit@petit-associes.test', $marc->fresh()->email);
+    }
+
     public function test_deux_retraits_simultanes_des_deux_dernieres_personnes_mettent_fin_a_la_declaration(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Boutique cliente']);
@@ -628,6 +658,29 @@ class ExpertsComptablesConcurrenceTest extends TestCase
         app(TenantContext::class)->clear();
 
         return [$magasin, $marc, (int) $factureAchat->getKey()];
+    }
+
+    /**
+     * Un client, avec ou sans magasin réel, qui a déclaré son
+     * expert-comptable ; la personne n'a pas encore choisi son mot de
+     * passe : son adresse se corrige encore.
+     *
+     * @return array{0: Societe, 1: User}
+     */
+    private function declarationSansMotDePasseChoisi(bool $avecUnMagasin): array
+    {
+        if ($avecUnMagasin) {
+            $client = $this->ouvrirUneSociete(['nom' => 'Boutique cliente'])->societe;
+        } else {
+            $client = $this->inscrireUneSociete();
+            $this->saisirLeCodeDuCourrier($client)->forceFill(['password' => 'password'])->save();
+            $client = $client->fresh();
+        }
+
+        $marc = $this->declarerSonExpertComptable($client);
+        app(TenantContext::class)->clear();
+
+        return [$client->fresh(), $marc];
     }
 
     private function declarationDe(Societe $client): LienCabinet

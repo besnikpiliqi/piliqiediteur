@@ -128,13 +128,20 @@ final class GardesDesCabinets
      * Les tables où un compte d'un cabinet ou un expert-comptable de la
      * société agit dans un magasin, et les colonnes qui nomment ce compte ;
      * telechargements_documents nomme ses magasins dans sa colonne JSON
-     * magasins.
+     * magasins. Le grand livre du stock nomme qui a fait chaque mouvement
+     * (voir StockLedgerService) : la validation d'une facture d'achat, qui
+     * n'a pas de colonne de son validateur, et l'émission d'un avoir
+     * fournisseur y écrivent leur auteur. Une fiche de fournisseur ne nomme
+     * pas qui la crée ou la modifie : seuls les écrans et les actions
+     * arrêtent un compte d'un cabinet qui écrirait celle d'un magasin non
+     * choisi (voir User::peutOuvrir()).
      */
     public const AUTEURS_DANS_UN_MAGASIN = [
         'factures_achat' => ['cree_par'],
         'avoirs_fournisseur' => ['cree_par'],
         'inventaires_ouverture' => ['cree_par', 'valide_par'],
         'pieces_fournisseur' => ['ajoutee_par'],
+        'mouvements_stock' => ['cree_par'],
         'telechargements_documents' => ['demande_par'],
     ];
 

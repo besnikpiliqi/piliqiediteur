@@ -1,5 +1,6 @@
 <?php
 
+use App\Domain\Cabinets\Support\GardesDesCabinets;
 use App\Domain\Stock\Support\GardesDuStock;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
@@ -57,10 +58,15 @@ return new class extends Migration
         });
 
         GardesDuStock::poser();
+        // Un compte d'un cabinet ou un expert-comptable de la société ne
+        // fait entrer ni sortir de stock que dans un magasin que le client
+        // lui ouvre (voir GardesDesCabinets::AUTEURS_DANS_UN_MAGASIN).
+        GardesDesCabinets::poserLesMagasinsOuverts('mouvements_stock');
     }
 
     public function down(): void
     {
+        GardesDesCabinets::retirerLesMagasinsOuverts('mouvements_stock');
         Schema::dropIfExists('mouvements_stock');
         GardesDuStock::retirer();
     }

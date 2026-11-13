@@ -167,25 +167,34 @@ class JournalDesDroits
 
     /**
      * Exécute un geste sur des comptes qui ne change pas leurs droits (un
-     * accès redonné, un identifiant affiché), dans une
-     * transaction qui verrouille les lignes de l'auteur et de ces comptes,
-     * par identifiant croissant, comme modifier() : le geste reçoit
-     * l'auteur et les comptes relus sous ce verrou, et s'inscrit au nom de
-     * l'auteur relu.
+     * accès redonné, un identifiant affiché, une adresse corrigée), dans
+     * une transaction qui verrouille les lignes de l'auteur et de ces
+     * comptes, par identifiant croissant, comme modifier() : le geste
+     * reçoit l'auteur et les comptes relus sous ce verrou, et s'inscrit au
+     * nom de l'auteur relu. $verrousAvantLesComptes prend d'abord, dans la
+     * même transaction, les verrous que l'ordre de l'espace des cabinets
+     * place avant les comptes (la ligne de la société, puis la déclaration
+     * d'un expert-comptable de la société, voir
+     * ExpertsComptablesDeclares::verrouillerLaDeclarationDe()).
      *
      * @template TResultat
      *
      * @param  list<User>  $comptes
      * @param  Closure(User, list<User>): TResultat  $geste
+     * @param  (Closure(): void)|null  $verrousAvantLesComptes
      * @return TResultat
      *
      * @throws LogicException
      */
-    public function sousVerrouDesComptes(User $auteur, array $comptes, Closure $geste): mixed
+    public function sousVerrouDesComptes(User $auteur, array $comptes, Closure $geste, ?Closure $verrousAvantLesComptes = null): mixed
     {
         $ids = array_map(fn (User $compte): int => CleDuModele::de($compte), $comptes);
 
-        return DB::transaction(function () use ($auteur, $ids, $geste): mixed {
+        return DB::transaction(function () use ($auteur, $ids, $geste, $verrousAvantLesComptes): mixed {
+            if ($verrousAvantLesComptes !== null) {
+                $verrousAvantLesComptes();
+            }
+
             $verrouilles = User::query()->with('societe')->whereKey([...$ids, CleDuModele::de($auteur)])->orderBy('id')->lockForUpdate()->get()->keyBy(fn (User $compte): int => CleDuModele::de($compte));
             $auteurRelu = $verrouilles->get(CleDuModele::de($auteur)) ?? throw new LogicException('Ce compte n\'existe pas.');
             $relus = array_map(fn (int $id): User => $verrouilles->get($id) ?? throw new LogicException('Ce compte n\'existe pas.'), $ids);

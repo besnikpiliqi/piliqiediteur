@@ -4,6 +4,7 @@ namespace App\Domain\Cabinets\Actions;
 
 use App\Domain\Cabinets\Models\CompteExpertComptable;
 use App\Domain\Cabinets\Services\EnvoiDesLiensDesExpertsComptables;
+use App\Domain\Cabinets\Services\ExpertsComptablesDeclares;
 use App\Domain\Tenancy\Actions\RedonnerLAccesAction;
 use App\Domain\Tenancy\Concerns\AgitDansLaSociete;
 use App\Domain\Tenancy\Enums\ActionAuditee;
@@ -30,7 +31,12 @@ use SensitiveParameter;
  * limite de 5 liens par jour et par compte. La même adresse ne change rien.
  * Une fois son mot de passe choisi, seule la personne change son adresse,
  * dans son profil. L'entrée d'audit ne retient que le compte, jamais
- * l'adresse.
+ * l'adresse. Les verrous suivent l'ordre de l'espace des cabinets : la
+ * ligne de la société puis la déclaration du compte, avant les comptes
+ * (voir ExpertsComptablesDeclares::verrouillerLaDeclarationDe()) ; la garde
+ * de l'adresse prend ensuite la déclaration en partage, déjà tenue, si bien
+ * que la correction attend un rattachement ou un réglage en cours au lieu
+ * de s'interbloquer avec lui.
  */
 class CorrigerLAdresseDeLExpertComptableAction
 {
@@ -45,6 +51,7 @@ class CorrigerLAdresseDeLExpertComptableAction
         private readonly JournalAudit $journalAudit,
         private readonly DebitDesEmails $debit,
         private readonly EnvoiDesLiensDesExpertsComptables $envoi,
+        private readonly ExpertsComptablesDeclares $experts,
     ) {}
 
     /**
@@ -89,7 +96,7 @@ class CorrigerLAdresseDeLExpertComptableAction
             ]);
 
             return ['jeton' => $jetonDuLien, 'auteur' => CleDuModele::de($auteurRelu)];
-        }));
+        }, fn () => $this->experts->verrouillerLaDeclarationDe($compte)));
 
         if ($lien === null) {
             return false;

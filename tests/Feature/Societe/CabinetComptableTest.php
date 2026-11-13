@@ -8,6 +8,7 @@ use App\Domain\Cabinets\Actions\AccepterLaDemandeDeLienAction;
 use App\Domain\Cabinets\Actions\DeclarerSonExpertComptableAction;
 use App\Domain\Cabinets\Actions\DesignerUnCabinetAction;
 use App\Domain\Cabinets\Enums\EtatDuLien;
+use App\Domain\Cabinets\Jobs\RattacherLesDeclarationsDuSiren;
 use App\Domain\Cabinets\Mail\DemandeDeRattachementMail;
 use App\Domain\Cabinets\Mail\InvitationACreerUnEspaceMail;
 use App\Domain\Cabinets\Mail\InvitationDuCabinetMail;
@@ -19,6 +20,7 @@ use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Services\ControleSirene;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\InterventionDeLEditeur;
+use App\Domain\Tenancy\Support\MotDePasseRedemande;
 use App\Filament\Societe\Pages\CabinetComptable;
 use App\Filament\Societe\Pages\RattachementDUnCabinet;
 use App\Integrations\Sirene\Contracts\RepertoireSirene;
@@ -26,6 +28,7 @@ use App\Integrations\Sirene\FauxRepertoireSirene;
 use App\Models\User;
 use Database\Factories\SocieteFactory;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Mail;
 use Livewire\Livewire;
 use Tests\TestCase;
@@ -273,6 +276,9 @@ class CabinetComptableTest extends TestCase
             ->assertActionMounted('declarer')
             ->setActionData(['email_confirmation' => 'marc.petit@petit-associes.test'])
             ->callMountedAction()
+            ->assertActionMounted(['declarer', 'confirmerLaDeclaration'])
+            ->assertSeeHtml('<strong>marc.petit@petit-associes.test</strong>')
+            ->callMountedAction()
             ->assertHasNoActionErrors();
 
         $marc = User::query()->where('role_societe', 'expert_comptable')->sole();
@@ -304,6 +310,9 @@ class CabinetComptableTest extends TestCase
 
         Livewire::test(CabinetComptable::class)
             ->callAction('ajouterUnePersonne', ['name' => 'Sophie Lenoir', 'email' => 'sophie.lenoir@petit-associes.test', 'email_confirmation' => 'sophie.lenoir@petit-associes.test', 'mot_de_passe' => 'password'])
+            ->assertActionMounted(['ajouterUnePersonne', 'confirmerLAjout'])
+            ->assertSeeHtml('<strong>sophie.lenoir@petit-associes.test</strong>')
+            ->callMountedAction()
             ->assertHasNoActionErrors()
             ->assertNotified();
         $sophie = User::query()->where('name', 'Sophie Lenoir')->sole();
@@ -348,7 +357,7 @@ class CabinetComptableTest extends TestCase
             'consultations' => $consultations,
             'achats' => [PermissionRegistry::FACTURE_ACHAT_CREER],
             'mot_de_passe' => 'password',
-        ])->callMountedAction()->assertHasNoActionErrors();
+        ])->callMountedAction()->assertActionMounted(['declarer', 'confirmerLaDeclaration'])->callMountedAction()->assertHasNoActionErrors();
 
         $declaration = LienCabinet::query()->withoutGlobalScopes()->where('etat', EtatDuLien::Declare->value)->sole();
         $accordees = app(TenantContext::class)->runAsSociete($magasin->societe, fn (): array => $declaration->autorisations());
@@ -397,5 +406,203 @@ class CabinetComptableTest extends TestCase
         $this->assertSame(0, User::query()->withoutGlobalScopes()->where('name', 'Intrus')->count());
         $this->assertSame(1, LienCabinet::query()->withoutGlobalScopes()->where('societe_id', $autre->societe_id)->count());
         $this->assertSame(0, LienCabinet::query()->withoutGlobalScopes()->where('societe_id', $magasin->societe_id)->count());
+    }
+
+    /**
+     * Le SIREN d'un cabinet déjà vérifié sur PILIQI ne se déclare pas : la
+     * fenêtre le dit dès qu'il est saisi, « Continuer » le refuse sans rien
+     * créer, et « Lui demander le lien », au pied de la fenêtre, demande le
+     * lien à ce cabinet et ferme la fenêtre (cahier du lot EC2, R5).
+     */
+    public function test_le_siren_d_un_cabinet_verifie_se_refuse_et_lui_demander_le_lien_fait_la_designation(): void
+    {
+        $cabinet = $this->ouvrirUnCabinet('000000935', 'Paul Garnier');
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Lyon 1']);
+        $this->dansLEspaceDeLaSociete($magasin->societe, $this->proprietaireDe($magasin));
+
+        Livewire::test(CabinetComptable::class)
+            ->mountAction('declarer')
+            ->assertDontSeeText('Lui demander le lien')
+            ->setActionData(['siren' => '000000935', 'name' => 'Paul Garnier', 'email' => 'paul@compta-rhone.test', 'email_confirmation' => 'paul@compta-rhone.test', 'mot_de_passe' => 'password'])
+            ->assertSeeText([DeclarerSonExpertComptableAction::MESSAGE_CABINET_SUR_PILIQI, 'Lui demander le lien'])
+            ->callMountedAction()
+            ->assertNotified(DeclarerSonExpertComptableAction::MESSAGE_CABINET_SUR_PILIQI)
+            ->assertActionMounted('declarer')
+            ->call('mountAction', 'luiDemanderLeLien')
+            ->assertNotified('Votre demande est envoyée au cabinet.')
+            ->assertSet('mountedActions', []);
+
+        $this->assertSame(EtatDuLien::DemandeParLeClient, LienCabinet::query()->withoutGlobalScopes()->where('cabinet_id', $cabinet->id)->sole()->etat);
+        $this->assertSame(0, User::query()->where('role_societe', 'expert_comptable')->count());
+        $this->assertSame(0, LienCabinet::query()->withoutGlobalScopes()->where('etat', EtatDuLien::Declare->value)->count());
+    }
+
+    /**
+     * « Continuer » ouvre la fenêtre qui répète en gras l'adresse où part
+     * le lien, telle qu'elle s'enregistre ; « Corriger » ramène à la
+     * saisie, gardée, sans rien créer ni envoyer ; un refus dans la
+     * confirmation (le mot de passe redonné) y ramène aussi ; le bouton de
+     * la confirmation déclare (cahier du lot EC2, R8 et C30).
+     */
+    public function test_la_confirmation_repete_l_adresse_en_gras_et_corriger_ramene_a_la_saisie(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Lyon 1']);
+        app(RepertoireSirene::class)->exercer(FauxRepertoireSirene::SIREN_CABINET, ControleSirene::CODE_ACTIVITES_COMPTABLES);
+        Mail::fake();
+        $this->dansLEspaceDeLaSociete($magasin->societe, $this->proprietaireDe($magasin));
+
+        $page = Livewire::test(CabinetComptable::class)
+            ->mountAction('declarer')
+            ->setActionData(['siren' => FauxRepertoireSirene::SIREN_CABINET, 'name' => 'Marc Petit', 'email' => 'Marc.Petit@Petit-Associes.test', 'email_confirmation' => 'Marc.Petit@Petit-Associes.test', 'mot_de_passe' => 'mauvais'])
+            ->callMountedAction()
+            ->assertActionMounted(['declarer', 'confirmerLaDeclaration'])
+            ->assertSeeText('Vérifiez l\'adresse avant l\'envoi')
+            ->assertSeeHtml('<strong>marc.petit@petit-associes.test</strong>')
+            ->call('unmountAction', false, false)
+            ->assertActionMounted('declarer')
+            ->assertActionDataSet(['name' => 'Marc Petit', 'email' => 'Marc.Petit@Petit-Associes.test'])
+            ->callMountedAction()
+            ->callMountedAction()
+            ->assertNotified(MotDePasseRedemande::MESSAGE)
+            ->assertActionMounted('declarer');
+
+        $this->assertSame(0, User::query()->where('role_societe', 'expert_comptable')->count());
+        Mail::assertNothingOutgoing();
+
+        $page->setActionData(['mot_de_passe' => 'password'])
+            ->callMountedAction()
+            ->callMountedAction()
+            ->assertHasNoActionErrors()
+            ->assertSet('mountedActions', []);
+        $this->assertSame('marc.petit@petit-associes.test', User::query()->where('role_societe', 'expert_comptable')->sole()->email);
+    }
+
+    /**
+     * Une requête forgée qui ouvre directement la fenêtre de confirmation,
+     * dans une société qui ne peut pas déclarer, ne déclare rien : la
+     * confirmation ne s'ouvre que là où la fenêtre du geste s'ouvre.
+     */
+    public function test_une_confirmation_forgee_ne_declare_rien_dans_une_societe_qui_attend_son_code(): void
+    {
+        $societe = $this->inscrireUneSociete();
+        app(RepertoireSirene::class)->exercer(FauxRepertoireSirene::SIREN_CABINET, ControleSirene::CODE_ACTIVITES_COMPTABLES);
+        Mail::fake();
+        $this->dansLEspaceDeLaSociete($societe, $societe->proprietaire()->firstOrFail());
+
+        Livewire::test(CabinetComptable::class)
+            ->set('mountedActions', ['declarer', 'confirmerLaDeclaration'])
+            ->set('mountedActionsArguments', [[], []])
+            ->set('mountedActionsData', [['siren' => FauxRepertoireSirene::SIREN_CABINET, 'name' => 'Marc Petit', 'email' => 'marc.petit@petit-associes.test', 'email_confirmation' => 'marc.petit@petit-associes.test', 'mot_de_passe' => 'password', 'jeton' => 'jeton-forge'], []])
+            ->call('callMountedAction');
+
+        $this->assertSame(0, User::query()->where('role_societe', 'expert_comptable')->count());
+        $this->assertSame(0, LienCabinet::query()->withoutGlobalScopes()->count());
+    }
+
+    /**
+     * Déclarer quand la société n'a qu'une demande de lien envoyée : la
+     * case qui la nomme commande son retrait ; sans elle, rien ne change et
+     * la fenêtre le dit ; avec elle, la demande est retirée (C32).
+     */
+    public function test_declarer_avec_une_demande_envoyee_exige_la_case_qui_la_retire(): void
+    {
+        $cabinet = $this->ouvrirUnCabinet('000000935', 'Paul Garnier');
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Lyon 1']);
+        $demande = app(DesignerUnCabinetAction::class)->handle($this->proprietaireDe($magasin), $magasin->societe, $cabinet);
+        app(TenantContext::class)->clear();
+        app(RepertoireSirene::class)->exercer(FauxRepertoireSirene::SIREN_CABINET, ControleSirene::CODE_ACTIVITES_COMPTABLES);
+        Mail::fake();
+        $this->dansLEspaceDeLaSociete($magasin->societe, $this->proprietaireDe($magasin));
+        $saisie = ['siren' => FauxRepertoireSirene::SIREN_CABINET, 'name' => 'Marc Petit', 'email' => 'marc.petit@petit-associes.test', 'email_confirmation' => 'marc.petit@petit-associes.test', 'mot_de_passe' => 'password'];
+
+        Livewire::test(CabinetComptable::class)
+            ->mountAction('declarer')
+            ->assertSeeText('Je retire ma demande à '.$cabinet->raison_sociale)
+            ->setActionData($saisie)
+            ->callMountedAction()
+            ->callMountedAction()
+            ->assertNotified('Cochez la case pour retirer votre demande à '.$cabinet->raison_sociale.'.')
+            ->assertActionMounted('declarer')
+            ->setActionData(['remplacer' => true])
+            ->callMountedAction()
+            ->callMountedAction()
+            ->assertHasNoActionErrors();
+
+        $this->assertSame(EtatDuLien::Retire, LienCabinet::query()->withoutGlobalScopes()->findOrFail($demande->id)->etat);
+        $this->assertSame(1, User::query()->where('role_societe', 'expert_comptable')->count());
+    }
+
+    /**
+     * « Enregistrer » les autorisations de l'expert-comptable déclaré
+     * n'ouvre une fenêtre de confirmation que si plus aucune case n'est
+     * cochée, et cette fenêtre parle de ses comptes, pas d'un cabinet lié.
+     */
+    public function test_enregistrer_ne_confirme_que_sans_aucune_autorisation_et_parle_de_l_expert_comptable_declare(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Lyon 1']);
+        $this->expertComptable($magasin);
+        $declaration = LienCabinet::query()->withoutGlobalScopes()->where('etat', EtatDuLien::Declare->value)->sole();
+        $this->dansLEspaceDeLaSociete($magasin->societe, $this->proprietaireDe($magasin));
+        $sansClients = array_values(array_diff(PermissionRegistry::casesDuCabinet(PermissionRegistry::parDefautDuCabinet(TypeDActivite::Commerce)), [PermissionRegistry::CLIENT_VIEW]));
+
+        Livewire::test(CabinetComptable::class)
+            ->set('data.consultations', $sansClients)
+            ->mountAction('enregistrerLesAutorisations')
+            ->assertNotified('Les autorisations de votre expert-comptable sont enregistrées.')
+            ->assertSet('mountedActions', []);
+        $accordees = app(TenantContext::class)->runAsSociete($magasin->societe, fn (): array => $declaration->fresh()->autorisations());
+        $this->assertNotContains(PermissionRegistry::CLIENT_VIEW, $accordees);
+        $this->assertContains(PermissionRegistry::DEVIS_VIEW, $accordees);
+
+        Livewire::test(CabinetComptable::class)
+            ->set('data.consultations', [])
+            ->set('data.achats', [])
+            ->set('data.telechargements', [])
+            ->mountAction('enregistrerLesAutorisations')
+            ->assertActionMounted('enregistrerLesAutorisations')
+            ->assertSeeText('Sans aucune autorisation, les comptes de votre expert-comptable déclaré voient votre identité')
+            ->assertDontSeeText('votre cabinet reste lié')
+            ->callMountedAction();
+        $this->assertSame([], app(TenantContext::class)->runAsSociete($magasin->societe, fn (): array => $declaration->fresh()->autorisations()));
+    }
+
+    /**
+     * L'en-tête de l'expert-comptable déclaré dit qui l'a déclaré, et
+     * quand.
+     */
+    public function test_l_en_tete_de_la_declaration_nomme_qui_l_a_declaree(): void
+    {
+        $this->travelTo(self::aParis('2026-11-05 10:00:00'));
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Lyon 1']);
+        $proprietaire = $this->proprietaireDe($magasin);
+        $proprietaire->forceFill(['name' => 'Julie Bernard'])->save();
+        $this->expertComptable($magasin);
+
+        $this->actingAs($proprietaire)
+            ->get(CabinetComptable::getUrl(panel: 'societe', tenant: $magasin->societe))
+            ->assertOk()
+            ->assertSeeText('déclaré le 05/11/2026 par Julie Bernard');
+    }
+
+    /**
+     * Désigner depuis la page le cabinet que la société a déclaré, une fois
+     * vérifié, le relie aussitôt et ferme les comptes de la déclaration :
+     * l'avis le dit, au lieu d'annoncer une demande envoyée.
+     */
+    public function test_designer_le_cabinet_declare_annonce_le_rattachement_et_les_comptes_fermes(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Lyon 1']);
+        $marc = $this->expertComptable($magasin);
+        Bus::fake([RattacherLesDeclarationsDuSiren::class]);
+        $cabinet = $this->ouvrirUnCabinet();
+        $this->dansLEspaceDeLaSociete($magasin->societe, $this->proprietaireDe($magasin));
+
+        Livewire::test(CabinetComptable::class)
+            ->set('recherche', (string) $cabinet->siren)
+            ->callAction('demanderLeLien', arguments: ['uuid' => $cabinet->uuid])
+            ->assertNotified('Votre expert-comptable déclaré est désormais relié à votre société par son cabinet : les comptes de Marc Petit sont fermés.');
+
+        $this->assertSame(EtatDuLien::Actif, LienCabinet::query()->withoutGlobalScopes()->where('cabinet_id', $cabinet->id)->sole()->etat);
+        $this->assertSame(StatutCompte::Retire, $marc->fresh()->statut);
     }
 }

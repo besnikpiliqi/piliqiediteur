@@ -381,7 +381,11 @@ class ExpertComptableDeclareTest extends TestCase
         $demande = app(DesignerUnCabinetAction::class)->handle($this->proprietaireDe($magasin), $magasin->societe, $cabinet);
         app(TenantContext::class)->clear();
 
-        $this->declarer($this->proprietaireDe($magasin), $magasin->societe);
+        $this->assertThrows(fn () => $this->declarer($this->proprietaireDe($magasin), $magasin->societe), ValidationException::class, 'Cochez la case pour retirer votre demande à '.$cabinet->raison_sociale.'.');
+        $this->assertSame(EtatDuLien::DemandeParLeClient, LienCabinet::query()->withoutGlobalScopes()->findOrFail($demande->id)->etat);
+        $this->assertSame(0, User::query()->where('role_societe', 'expert_comptable')->count());
+
+        $this->declarer($this->proprietaireDe($magasin), $magasin->societe, remplacer: true);
 
         $this->assertSame(EtatDuLien::Retire, LienCabinet::query()->withoutGlobalScopes()->findOrFail($demande->id)->etat);
         $this->assertCount(1, $this->entreesDAudit($cabinet, ActionAuditee::DemandeDeLienRetiree));

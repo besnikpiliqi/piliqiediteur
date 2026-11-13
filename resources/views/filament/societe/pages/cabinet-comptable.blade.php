@@ -12,7 +12,7 @@
     @if ($lien?->estDeclare())
         <x-filament::section icon="heroicon-o-user-group">
             <x-slot name="heading">Votre expert-comptable (sans espace {{ config('app.name') }})</x-slot>
-            <x-slot name="description">{{ $lien->denomination_cabinet ?? 'Cabinet' }} — SIREN {{ $lien->siren_cabinet }} — déclaré le {{ $calendrier->afficher($lien->demande_le, 'd/m/Y') }} — en attente de l'espace de son cabinet</x-slot>
+            <x-slot name="description">{{ $lien->denomination_cabinet ?? 'Cabinet' }} — SIREN {{ $lien->siren_cabinet }} — déclaré le {{ $calendrier->afficher($lien->demande_le, 'd/m/Y') }}@if ($lien->demande_par_nom) par {{ $lien->demande_par_nom }}@endif — en attente de l'espace de son cabinet</x-slot>
 
             <p>{{ \App\Filament\Societe\Pages\CabinetComptable::TEXTE_EN_ATTENTE }}</p>
 

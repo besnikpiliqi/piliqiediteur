@@ -374,6 +374,37 @@ class LienDeLExpertComptableTest extends TestCase
         $this->assertSame('marc.petit@petit-associes.test', $compte->fresh()->email);
     }
 
+    /**
+     * La page du lien de la nouvelle adresse d'un expert-comptable de la
+     * société, et sa réponse, ne parlent jamais d'une adresse de connexion :
+     * cette adresse ne sert jamais à se connecter (P13).
+     */
+    public function test_la_page_du_lien_de_la_nouvelle_adresse_d_un_expert_comptable_ne_parle_pas_de_connexion(): void
+    {
+        $magasin = $this->ouvrirUneSociete();
+        $compte = $this->expertComptable($magasin);
+        $this->actingAs($compte);
+        Filament::setCurrentPanel(Filament::getPanel('app'));
+        Filament::setTenant($magasin);
+        Livewire::test(ModifierProfil::class)
+            ->fillForm(['email' => 'm.petit@petit-associes.test', 'mot_de_passe_actuel' => self::MOT_DE_PASSE_CHOISI])
+            ->call('save')
+            ->assertHasNoFormErrors();
+        $jeton = Str::afterLast((string) Mail::sent(ConfirmationNouvelleAdresseMail::class)->last()?->lien, '/');
+        app(TenantContext::class)->clear();
+
+        $this->get(route('profil.adresse.afficher', ['jeton' => $jeton]))
+            ->assertOk()
+            ->assertSeeText('Confirmez m.petit@petit-associes.test comme nouvelle adresse professionnelle de votre compte')
+            ->assertSeeText('Confirmer ma nouvelle adresse')
+            ->assertDontSeeText('adresse de connexion');
+        $this->post(route('profil.adresse.confirmer', ['jeton' => $jeton]))
+            ->assertOk()
+            ->assertSeeText('Votre adresse professionnelle est désormais m.petit@petit-associes.test')
+            ->assertDontSeeText('adresse de connexion');
+        $this->assertSame('m.petit@petit-associes.test', $compte->fresh()->email);
+    }
+
     public function test_la_nouvelle_adresse_d_un_expert_comptable_attend_son_lien_et_l_ancienne_est_prevenue(): void
     {
         $magasin = $this->ouvrirUneSociete();
@@ -416,6 +447,9 @@ class LienDeLExpertComptableTest extends TestCase
             ->assertActionHidden('changerLeRoleDeSociete')
             ->assertActionHidden('transmettreLaPropriete')
             ->callAction('corrigerLAdresse', ['email' => 'sophie.lenoir@petit-associes.test', 'email_confirmation' => 'sophie.lenoir@petit-associes.test', 'mot_de_passe' => 'password'])
+            ->assertActionMounted(['corrigerLAdresse', 'confirmerLaCorrection'])
+            ->assertSeeHtml('<strong>sophie.lenoir@petit-associes.test</strong>')
+            ->callMountedAction()
             ->assertNotified('Adresse corrigée : un nouveau lien est parti à la nouvelle adresse.');
         $this->assertSame('sophie.lenoir@petit-associes.test', $sophie->fresh()->email);
 

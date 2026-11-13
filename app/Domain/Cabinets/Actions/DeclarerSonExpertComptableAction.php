@@ -66,8 +66,9 @@ use Throwable;
  * d'un autre cabinet ou d'un autre SIREN ne se remplace qu'avec la case de
  * confirmation (il prend fin, motif « remplacé », et une déclaration
  * remplacée retire ses comptes) ; chaque demande de lien envoyée par la
- * société et encore en cours est retirée ; une demande répétée après une
- * réponse perdue rend le compte déjà créé, sans rien écrire ni envoyer.
+ * société et encore en cours est retirée, avec la même case, qui la nomme
+ * (C32) ; une demande répétée après une réponse perdue rend le compte déjà
+ * créé, sans rien écrire ni envoyer.
  * Après la transaction, le lien du mot de passe part, sans file d'attente,
  * le jeton en mémoire seulement (voir EnvoiDesLiensDesExpertsComptables).
  */
@@ -163,6 +164,10 @@ class DeclarerSonExpertComptableAction
                     throw new LogicException(self::MESSAGE_LIENS_CHANGES);
                 }
 
+                if ($demandesRelues !== [] && ! $remplacer) {
+                    throw ValidationException::withMessages(['remplacer' => 'Cochez la case pour retirer votre demande à '.self::nomsDesCabinets($demandesRelues).'.']);
+                }
+
                 $comptesRemplaces = $enCours === null ? new Collection : $this->acces->comptesQuiOntAcces($enCours);
 
                 if ($enCours !== null) {
@@ -236,6 +241,16 @@ class DeclarerSonExpertComptableAction
         return $lien->cabinet_id === null
             ? $lien->nomDuCabinetDeclare()
             : Societe::query()->findOrFail($lien->cabinet_id)->getFilamentName();
+    }
+
+    /**
+     * Les dénominations des cabinets de ces demandes de lien, à la suite.
+     *
+     * @param  list<LienCabinet>  $demandes
+     */
+    private static function nomsDesCabinets(array $demandes): string
+    {
+        return implode(', ', array_map(static fn (LienCabinet $demande): string => Societe::query()->findOrFail($demande->cabinet_id)->getFilamentName(), $demandes));
     }
 
     /**

@@ -2,6 +2,12 @@
 
 namespace Tests\Feature\Cabinets;
 
+use App\Domain\Achats\Actions\CreerFactureAchatAction;
+use App\Domain\Achats\Actions\ValiderFactureAchatAction;
+use App\Domain\Achats\Enums\StatutFactureAchat;
+use App\Domain\Achats\Models\FactureAchat;
+use App\Domain\Authorization\OperateurCourant;
+use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Cabinets\Actions\AccepterLaDemandeDeLienAction;
 use App\Domain\Cabinets\Actions\ReglerLesAutorisationsDuCabinetAction;
 use App\Domain\Cabinets\Models\LienCabinet;
@@ -10,11 +16,13 @@ use App\Domain\Cabinets\Support\GardesDesCabinets;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
+use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
 use App\Domain\Tenancy\Enums\ActionAuditee;
+use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\Cabinet\Resources\ClientDuCabinetResource\Pages\FicheDuClient;
@@ -27,6 +35,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
 use Livewire\Livewire;
+use ReflectionMethod;
 use Tests\TestCase;
 
 /**
@@ -245,6 +254,36 @@ class MagasinsOuvertsAuCabinetTest extends TestCase
         $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => $inventaire($paris2, $marc)), QueryException::class, $refus);
         $inventaire($paris, $marc);
         $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => $inventaire($lyon2, $marc)), QueryException::class, $refus);
+    }
+
+    /**
+     * La validation d'une facture d'achat n'écrit son auteur que dans le
+     * grand livre du stock : la base refuse qu'un expert-comptable de la
+     * société ou un compte d'un cabinet lié la valide dans un magasin que
+     * le client ne lui ouvre pas, même quand le code oublie de le vérifier
+     * (§ 5 ter, point 6) ; rien ne s'écrit, et le propriétaire valide
+     * ensuite cet achat.
+     */
+    public function test_la_base_refuse_la_validation_d_un_achat_dans_un_magasin_non_choisi(): void
+    {
+        $lyon1 = $this->ouvrirUneSociete(['nom' => 'Lyon 1']);
+        $lyon2 = $this->ouvrirUnAutreMagasin($lyon1, ['nom' => 'Lyon 2']);
+        $marc = $this->expertComptable($lyon1, autorisations: [...PermissionRegistry::casesDuCabinet(PermissionRegistry::parDefautDuCabinet(TypeDActivite::Commerce)), PermissionRegistry::FACTURE_ACHAT_VALIDER])->fresh();
+        $this->regler(LienCabinet::query()->withoutGlobalScopes()->where('societe_id', $lyon1->societe_id)->sole(), [$lyon1->id]);
+        $proprietaire = $this->proprietaireDe($lyon1);
+        $refus = GardesDesCabinets::MAGASINS_OUVERTS.' : un compte d\'un cabinet d\'expertise comptable ou un expert-comptable de la société n\'agit que dans un magasin que le client lui ouvre';
+        app(TenantContext::class)->set($lyon2);
+        $factureAchat = app(CreerFactureAchatAction::class)->handle($proprietaire, Fournisseur::factory()->create(), [['produit_id' => Produit::factory()->create(['taux_tva' => 20])->id, 'quantite' => 2, 'prix_unitaire_ht' => 10]], ['date_facture' => '2026-01-15']);
+        $validerSansControle = fn (User $compte): FactureAchat => app(OperateurCourant::class)->pendant($compte, fn (): FactureAchat => (new ReflectionMethod(ValiderFactureAchatAction::class, 'valider'))->invoke(app(ValiderFactureAchatAction::class), $compte, $factureAchat));
+
+        $this->assertFalse($marc->peutOuvrir($lyon2));
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn (): FactureAchat => $validerSansControle($marc)), QueryException::class, $refus);
+        $this->assertSame(StatutFactureAchat::Brouillon, $factureAchat->fresh()->statut);
+        $this->assertSame(0, DB::table('mouvements_stock')->where('cree_par', $marc->id)->count());
+
+        $this->assertSame(StatutFactureAchat::Validee, $validerSansControle($proprietaire)->statut);
+        $this->assertSame(1, DB::table('mouvements_stock')->where('magasin_id', $lyon2->id)->where('source_id', $factureAchat->id)->where('cree_par', $proprietaire->id)->count());
+        app(TenantContext::class)->clear();
     }
 
     /**

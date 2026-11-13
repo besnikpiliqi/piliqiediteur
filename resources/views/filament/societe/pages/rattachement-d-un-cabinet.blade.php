@@ -30,9 +30,12 @@
                 <p class="mt-2">Accepter ce rattachement ne valide pas votre société : saisissez le code du courrier envoyé à votre siège.</p>
             @endif
 
+            {{-- Un cabinet suspendu ne se lie pas : seul « Refuser » se montre. --}}
             <div class="mt-4 flex flex-wrap gap-3">
-                {{ $this->accepterParDefautAction }}
-                {{ $this->accepterEnAjustantAction }}
+                @if (! $this->cabinetSuspendu($demande))
+                    {{ $this->accepterParDefautAction }}
+                    {{ $this->accepterEnAjustantAction }}
+                @endif
                 {{ $this->refuserAction }}
             </div>
         </x-filament::section>

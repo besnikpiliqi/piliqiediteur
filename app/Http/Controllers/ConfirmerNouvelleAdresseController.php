@@ -13,9 +13,11 @@ use Illuminate\Validation\ValidationException;
 
 /**
  * Le lien envoyé à une adresse de connexion en attente (voir
- * DemanderUneNouvelleAdresseAction). L'ouvrir (GET) n'affiche qu'un bouton
- * et ne change rien : un outil qui suit les liens d'un e-mail ne confirme
- * rien. Le bouton (POST) confirme (voir ConfirmerNouvelleAdresseAction) ;
+ * DemanderUneNouvelleAdresseAction), ou à la nouvelle adresse
+ * professionnelle d'un expert-comptable de la société, qui ne sert jamais à
+ * se connecter : la page et sa réponse le disent. L'ouvrir (GET) n'affiche
+ * qu'un bouton et ne change rien : un outil qui suit les liens d'un e-mail
+ * ne confirme rien. Le bouton (POST) confirme (voir ConfirmerNouvelleAdresseAction) ;
  * un lien expiré, déjà servi, remplacé ou inconnu dit seulement « Ce lien
  * n'est plus valable. ». La première adresse d'un propriétaire qui n'en a
  * encore aucune ne se confirme que connecté à ce compte : ailleurs, la page
@@ -35,7 +37,9 @@ class ConfirmerNouvelleAdresseController
             return $this->pageDeConnexion($requete, $jeton, erreur: false);
         }
 
-        return $this->page($jeton, $compte?->nouvelle_adresse, null, premiereAdresse: $compte !== null && ! $compte->aUneAdresseDeConnexion());
+        $expertComptable = $compte?->estExpertComptable() === true;
+
+        return $this->page($jeton, $compte?->nouvelle_adresse, null, premiereAdresse: $compte !== null && ! $expertComptable && ! $compte->aUneAdresseDeConnexion(), expertComptable: $expertComptable);
     }
 
     public function confirmer(Request $requete, string $jeton, ConfirmerNouvelleAdresseAction $confirmer): Response
@@ -50,7 +54,9 @@ class ConfirmerNouvelleAdresseController
                 : $this->page($jeton, null, $message, erreur: true);
         }
 
-        return $this->page($jeton, null, "Votre adresse de connexion est désormais {$compte->email} : connectez-vous avec elle.");
+        return $compte->estExpertComptable()
+            ? $this->page($jeton, null, "Votre adresse professionnelle est désormais {$compte->email} : les liens de votre mot de passe y partiront. Vous vous connectez toujours avec votre identifiant.", expertComptable: true)
+            : $this->page($jeton, null, "Votre adresse de connexion est désormais {$compte->email} : connectez-vous avec elle.");
     }
 
     /**
@@ -64,12 +70,13 @@ class ConfirmerNouvelleAdresseController
         return $this->page($jeton, null, ConfirmerNouvelleAdresseAction::MESSAGE_CONNEXION_REQUISE, erreur: $erreur, connexion: true);
     }
 
-    private function page(string $jeton, ?string $nouvelleAdresse, ?string $message, bool $erreur = false, bool $connexion = false, bool $premiereAdresse = false): Response
+    private function page(string $jeton, ?string $nouvelleAdresse, ?string $message, bool $erreur = false, bool $connexion = false, bool $premiereAdresse = false, bool $expertComptable = false): Response
     {
         return response()
             ->view('profil.adresse', [
                 'nouvelleAdresse' => $nouvelleAdresse,
                 'premiereAdresse' => $premiereAdresse,
+                'expertComptable' => $expertComptable,
                 'message' => $message,
                 'erreur' => $erreur,
                 'connexion' => $connexion ? Filament::getPanel('app')->getLoginUrl() : null,

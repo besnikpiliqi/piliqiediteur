@@ -1,5 +1,7 @@
 {{--
-    La confirmation d'une adresse de connexion en attente (voir
+    La confirmation d'une adresse de connexion en attente, ou de la
+    nouvelle adresse professionnelle d'un expert-comptable de la société,
+    qui ne sert jamais à se connecter (voir
     ConfirmerNouvelleAdresseController) : l'ouverture du lien ne change
     rien, seul le bouton confirme. Un lien expiré, déjà servi, remplacé ou
     inconnu dit seulement qu'il n'est plus valable ; un lien qui se suit
@@ -11,7 +13,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="referrer" content="no-referrer">
-    <title>Confirmer votre adresse de connexion · {{ config('app.name') }}</title>
+    <title>{{ ($expertComptable ?? false) ? 'Confirmer votre adresse professionnelle' : 'Confirmer votre adresse de connexion' }} · {{ config('app.name') }}</title>
     <style>
         body { font-family: system-ui, sans-serif; background: #f9fafb; color: #111827; margin: 0; }
         main { max-width: 32rem; margin: 4rem auto; padding: 2rem; background: #fff; border-radius: .75rem; box-shadow: 0 1px 3px rgba(0, 0, 0, .1); }
@@ -34,7 +36,9 @@
     @endif
 
     @if ($nouvelleAdresse !== null)
-        @if ($premiereAdresse)
+        @if ($expertComptable)
+            <p>Confirmez {{ $nouvelleAdresse }} comme nouvelle adresse professionnelle de votre compte : les liens de votre mot de passe y partiront, et l'ancienne en sera prévenue. Elle ne sert jamais à vous connecter : vous vous connectez toujours avec votre identifiant.</p>
+        @elseif ($premiereAdresse)
             <p>Confirmez {{ $nouvelleAdresse }} comme adresse de connexion de votre compte : elle servira à vous connecter et à recevoir un lien « Mot de passe oublié ».</p>
         @else
             <p>Confirmez {{ $nouvelleAdresse }} comme nouvelle adresse de connexion de votre compte : l'ancienne ne servira plus à vous connecter, et elle en sera prévenue.</p>

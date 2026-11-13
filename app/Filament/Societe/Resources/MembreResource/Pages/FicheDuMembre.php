@@ -20,6 +20,7 @@ use App\Domain\Tenancy\Models\TransmissionPropriete;
 use App\Domain\Tenancy\Services\PorteeDesDroits;
 use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Domain\Tenancy\Support\ValeursLues;
+use App\Filament\Concerns\ConfirmeLAdresseDuLien;
 use App\Filament\Societe\Resources\MembreResource;
 use App\Models\User;
 use Closure;
@@ -36,6 +37,7 @@ use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ViewRecord;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 /**
  * La fiche d'un compte, avec les gestes que la personne connectée peut
@@ -47,6 +49,10 @@ use Illuminate\Support\Str;
  */
 class FicheDuMembre extends ViewRecord
 {
+    use ConfirmeLAdresseDuLien;
+
+    public const TEXTE_DE_LA_CORRECTION = 'Le nouveau lien du mot de passe part à :adresse ; celui envoyé à l\'ancienne adresse ne vaut plus. La personne qui le suit choisit son mot de passe et entre dans vos magasins avec les autorisations de votre déclaration : vérifiez cette adresse avant l\'envoi.';
+
     protected static string $resource = MembreResource::class;
 
     protected function getHeaderActions(): array
@@ -321,28 +327,40 @@ class FicheDuMembre extends ViewRecord
      * Corriger l'adresse d'un expert-comptable de la société qui n'a pas
      * encore choisi son mot de passe (voir
      * CorrigerLAdresseDeLExpertComptableAction) : le propriétaire tape deux
-     * fois la nouvelle adresse et redonne son mot de passe ; un nouveau
-     * lien y part, celui d'avant ne vaut plus.
+     * fois la nouvelle adresse et redonne son mot de passe ; « Continuer »
+     * ouvre la fenêtre qui répète la nouvelle adresse en gras (voir
+     * ConfirmeLAdresseDuLien), dont le bouton la corrige : un nouveau lien
+     * y part, celui d'avant ne vaut plus.
      */
     public function corrigerLAdresseAction(): Action
     {
+        $visible = fn (): bool => $this->auteur()->can('corrigerLAdresse', $this->compte());
+
         return Action::make('corrigerLAdresse')
             ->label('Corriger l\'adresse')
             ->icon('heroicon-o-at-symbol')
-            ->visible(fn (): bool => $this->auteur()->can('corrigerLAdresse', $this->compte()))
+            ->visible($visible)
             ->modalDescription('Le lien envoyé à l\'ancienne adresse ne vaudra plus ; un nouveau lien, valable 7 jours, part à la nouvelle.')
+            ->modalSubmitActionLabel('Continuer')
             ->form([
                 TextInput::make('email')->label('Nouvelle adresse e-mail professionnelle')->email()->required()->maxLength(255),
                 TextInput::make('email_confirmation')->label('Confirmez cette adresse')->email()->required()->maxLength(255),
                 TextInput::make('mot_de_passe')->label('Votre mot de passe')->password()->required(),
             ])
-            ->action(function (array $data): void {
-                $this->agir(function () use ($data): void {
-                    $change = app(CorrigerLAdresseDeLExpertComptableAction::class)->handle($this->auteur(), $this->compte(), $data['email'] ?? null, $data['email_confirmation'] ?? null, ValeurSimple::enTexte($data['mot_de_passe'] ?? ''));
+            ->registerModalActions([$this->confirmationDeLAdresse(Action::make('confirmerLaCorrection'), self::TEXTE_DE_LA_CORRECTION, 'Corriger et envoyer le lien', $visible, function (array $saisie): void {
+                $this->agir(function () use ($saisie): void {
+                    $change = app(CorrigerLAdresseDeLExpertComptableAction::class)->handle($this->auteur(), $this->compte(), $saisie['email'] ?? null, $saisie['email_confirmation'] ?? null, ValeurSimple::enTexte($saisie['mot_de_passe'] ?? ''));
                     Notification::make()->title($change ? 'Adresse corrigée : un nouveau lien est parti à la nouvelle adresse.' : 'L\'adresse était déjà celle-ci : rien n\'a changé.')->success()->send();
                 });
-            })
-            ->after(fn () => $this->getRecord()->refresh());
+            })])
+            ->action(function (array $data, Action $action): void {
+                try {
+                    $this->demanderLaConfirmationDeLAdresse($data, 'confirmerLaCorrection');
+                } catch (ValidationException $refus) {
+                    Notification::make()->title(implode(' ', $refus->validator->errors()->all()))->danger()->send();
+                    $this->revenirALaSaisie($action);
+                }
+            });
     }
 
     private function peutReintegrer(): bool

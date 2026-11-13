@@ -36,9 +36,12 @@ use LogicException;
  * accepter avec les autorisations par défaut, accepter en les ajustant
  * (jamais la vente, l'encaissement, la caisse, les comptes ni les
  * réglages), ou refuser (voir AccepterLaDemandeDeLienAction et
- * RefuserLaDemandeDeLienAction). Accepter remplace le cabinet déjà lié, et
- * ne valide jamais une société qui attend son code. Aucune méthode
- * publique ne reçoit l'identifiant d'une autre demande.
+ * RefuserLaDemandeDeLienAction). Pour la demande du cabinet que la société
+ * a déclaré comme son expert-comptable, « par défaut » veut dire « les
+ * autorisations et les magasins de votre déclaration », que la fenêtre
+ * d'ajustement reprend (voir declarationRattachee()). Accepter remplace le
+ * cabinet déjà lié, et ne valide jamais une société qui attend son code.
+ * Aucune méthode publique ne reçoit l'identifiant d'une autre demande.
  */
 class RattachementDUnCabinet extends Page
 {
@@ -120,10 +123,32 @@ class RattachementDUnCabinet extends Page
     }
 
     /**
+     * La déclaration en attente de la société que l'acceptation de cette
+     * demande rattache : celle du SIREN du cabinet qui demande, tant qu'une
+     * de ses personnes a un compte actif (voir
+     * AccepterLaDemandeDeLienAction::rattacherLaDeclarationDuMemeCabinet()) ;
+     * null sinon, la demande s'acceptant alors comme toute autre. Le lien
+     * qui en naît garde les autorisations et les magasins de la
+     * déclaration, ou ceux que le propriétaire ajuste : « par défaut » y
+     * veut dire « ceux de votre déclaration ».
+     */
+    public function declarationRattachee(LienCabinet $demande): ?LienCabinet
+    {
+        $declaration = LienCabinet::query()->where('etat', EtatDuLien::Declare->value)->first();
+
+        if ($declaration === null || Societe::query()->whereKey($demande->cabinet_id)->value('siren') !== $declaration->siren_cabinet) {
+            return null;
+        }
+
+        return app(ExpertsComptablesDeclares::class)->aUnCompteActif($declaration) ? $declaration : null;
+    }
+
+    /**
      * Ce que l'acceptation fait de l'expert-comptable que la société a
      * déclaré, s'il y en a un : la demande de son propre cabinet relie la
-     * déclaration avec ses autorisations, celle d'un autre la remplace ;
-     * null sans déclaration en attente.
+     * déclaration avec ses autorisations et ses magasins, celle d'un autre
+     * cabinet, ou du sien quand plus aucune personne déclarée n'a de compte
+     * actif, la remplace ; null sans déclaration en attente.
      */
     public function texteDeLaDeclaration(LienCabinet $demande): ?string
     {
@@ -134,36 +159,49 @@ class RattachementDUnCabinet extends Page
         }
 
         $noms = implode(', ', app(ExpertsComptablesDeclares::class)->comptesDe($declaration)->map(fn (User $compte): string => $compte->name)->all());
-        $siren = Societe::query()->whereKey($demande->cabinet_id)->value('siren');
 
-        return $siren === $declaration->siren_cabinet
-            ? "Ce cabinet est votre expert-comptable déclaré : accepter le relie à votre société avec les autorisations de votre déclaration, que vous pouvez ajuster, et ferme les comptes de {$noms}."
+        return $this->declarationRattachee($demande) !== null
+            ? "Ce cabinet est votre expert-comptable déclaré : accepter le relie à votre société avec les autorisations et les magasins de votre déclaration, que vous pouvez ajuster, et ferme les comptes de {$noms}."
             : 'Accepter remplace votre expert-comptable déclaré, '.$declaration->nomDuCabinetDeclare()." : les comptes de {$noms} seront fermés.";
     }
 
     /**
-     * Les libellés des autorisations par défaut.
-     *
-     * @return list<string>
+     * Ce que « Accepter » accorde, dit dans sa fenêtre : pour le cabinet
+     * déclaré, les magasins et les autorisations de la déclaration ; pour
+     * un autre cabinet, tous les magasins réels, présents et futurs, et les
+     * autorisations par défaut.
      */
-    public function autorisationsParDefaut(): array
+    public function texteDeLAcceptation(LienCabinet $demande): string
     {
-        $type = $this->societe()->type_activite;
+        $declaration = $this->declarationRattachee($demande);
 
-        return PermissionRegistry::libellesDe(PermissionRegistry::parDefautDuCabinet($type));
+        if ($declaration === null) {
+            return 'Ce cabinet consultera tous vos magasins réels, présents et futurs : '.implode(', ', PermissionRegistry::libellesDe(PermissionRegistry::parDefautDuCabinet($this->societe()->type_activite))).'.';
+        }
+
+        $libelles = PermissionRegistry::libellesDe($declaration->autorisations());
+
+        return 'Ce cabinet consultera '.CabinetComptable::magasinsOuvertsEnToutesLettres($declaration, $this->societe()).', avec les autorisations de votre déclaration : '.($libelles === [] ? 'aucune' : implode(', ', $libelles)).'.';
     }
 
     public function accepterParDefautAction(): Action
     {
         return Action::make('accepterParDefaut')
-            ->label('Accepter avec les autorisations par défaut')
+            ->label(fn (): string => ($demande = $this->demande()) !== null && $this->declarationRattachee($demande) !== null ? 'Accepter avec les autorisations de votre déclaration' : 'Accepter avec les autorisations par défaut')
             ->color('success')
             ->requiresConfirmation()
-            ->modalDescription(fn (): string => 'Ce cabinet consultera vos magasins réels : '.implode(', ', $this->autorisationsParDefaut()).'.')
+            ->modalDescription(fn (): string => ($demande = $this->demande()) === null ? AccepterLaDemandeDeLienAction::MESSAGE_PLUS_VALABLE : $this->texteDeLAcceptation($demande))
             ->visible(fn (): bool => $this->demandeAcceptable())
             ->action(fn () => $this->accepter(null));
     }
 
+    /**
+     * « Accepter en ajustant les autorisations » : la fenêtre part des
+     * autorisations et des magasins par défaut, ou de ceux de la
+     * déclaration pour la demande du cabinet que la société a déclaré, si
+     * bien que la valider sans rien changer accorde exactement ce que dit
+     * « Accepter ».
+     */
     public function accepterEnAjustantAction(): Action
     {
         $type = $this->societe()->type_activite;
@@ -172,7 +210,12 @@ class RattachementDUnCabinet extends Page
         return Action::make('accepterEnAjustant')
             ->label('Accepter en ajustant les autorisations')
             ->visible(fn (): bool => $this->demandeAcceptable())
-            ->fillForm(['portee' => CabinetComptable::TOUS_LES_MAGASINS, 'magasins' => [], 'consultations' => PermissionRegistry::casesDuCabinet(PermissionRegistry::parDefautDuCabinet($type)), 'achats' => [], 'telechargements' => []])
+            ->fillForm(function () use ($type): array {
+                $demande = $this->demande();
+                $declaration = $demande === null ? null : $this->declarationRattachee($demande);
+
+                return $declaration === null ? CabinetComptable::etatParDefaut($type) : CabinetComptable::etatDuLien($declaration, $type);
+            })
             ->form([
                 ...CabinetComptable::champsDesMagasins($this->societe(), fn (): bool => true),
                 CheckboxList::make('consultations')

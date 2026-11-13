@@ -113,6 +113,12 @@ return [
             'tests/Browser/Parcours/UnProduitUneLigneTest.php › à la caisse, le vendeur clique deux fois sur un produit, le choisit de nouveau par le tableau puis par la douchette : une seule ligne, dont la quantité monte, qu’il encaisse',
             'tests/Browser/Parcours/VentesDeBoutEnBoutTest.php › le responsable fait un devis puis une facture avec la loupe des clients et « Ajouter un produit », l’émet, l’encaisse et la crédite par un avoir',
             'tests/Browser/Parcours/VentesDeBoutEnBoutTest.php › le vendeur vend à la caisse au client comptoir et encaisse en espèces et par carte',
+            'tests/Browser/Parcours/UnProduitUneLigneTest.php › sur un devis du magasin, le propriétaire choisit deux fois le même produit : une seule ligne, dont la quantité monte, et le devis s’enregistre',
+            'tests/Browser/Parcours/UnProduitUneLigneTest.php › dans la démonstration, le propriétaire choisit de nouveau un produit à la caisse : sa ligne monte, et il encaisse',
+            'tests/Browser/Parcours/UnProduitUneLigneTest.php › le vendeur et le responsable d’entraînement ajoutent un produit sur une facture de la démonstration, le reprennent, puis retirent sa ligne par la corbeille',
+            'tests/Browser/Parcours/UnProduitUneLigneTest.php › l’administrateur autorisé à vendre choisit de nouveau un produit à la caisse, qu’il encaisse, puis sur une facture : une seule ligne chaque fois',
+            'tests/Browser/Parcours/UnProduitUneLigneTest.php › le vendeur sans l’autorisation des remises choisit dans le tableau un produit dont la ligne est remisée : refusé, la sélection reste, il retire ce produit et ajoute le reste',
+            'tests/Browser/Parcours/UnProduitUneLigneTest.php › sur une facture, le vendeur choisit de nouveau un produit dont la fiche a changé de prix depuis sa ligne : la ligne reprend le prix du catalogue et sa quantité monte',
         ]],
         'filtre:en_stock' => ['lot' => 'NAV-2', 'tests' => []],
         'filtre:hors_stock' => ['lot' => 'NAV-2', 'tests' => []],
@@ -1553,6 +1559,7 @@ return [
         ]],
         'champ:produit_id' => ['lot' => 'NAV-3', 'tests' => [
             'tests/Browser/Parcours/UnProduitUneLigneTest.php › sur un inventaire d’ouverture, le propriétaire choisit sur une seconde ligne un produit déjà inventorié : il rejoint sa ligne, dont la quantité monte',
+            'tests/Browser/Parcours/UnProduitUneLigneTest.php › sur un inventaire d’ouverture, un responsable choisit sur une seconde ligne un produit déjà inventorié : il rejoint sa ligne, dont la quantité monte',
         ]],
         'recherche' => ['lot' => 'NAV-3', 'tests' => [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action du magasin sans erreur',
@@ -1569,6 +1576,7 @@ return [
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le propriétaire d’une société qui attend son code ouvre chaque page et chaque action du magasin de démonstration sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le responsable d’entraînement ouvre chaque page et chaque action du magasin de démonstration sans erreur',
             'tests/Browser/Parcours/UnProduitUneLigneTest.php › sur un inventaire d’ouverture, le propriétaire choisit sur une seconde ligne un produit déjà inventorié : il rejoint sa ligne, dont la quantité monte',
+            'tests/Browser/Parcours/UnProduitUneLigneTest.php › sur un inventaire d’ouverture, un responsable choisit sur une seconde ligne un produit déjà inventorié : il rejoint sa ligne, dont la quantité monte',
         ]],
     ],
     'app/Filament/App/Resources/InventaireOuvertureResource/Pages/CreateInventaireOuverture.php' => [
@@ -2092,6 +2100,7 @@ return [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur sans la vente ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Parcours/UnProduitUneLigneTest.php › sur une facture d’achat, le responsable ajoute de nouveau un produit, dont la ligne compte la quantité totale au prix moyen, et « Modifier » une autre ligne ne lui prend pas ce produit',
+            'tests/Browser/Parcours/UnProduitUneLigneTest.php › sur une facture d’achat, le propriétaire corrige le prix de vente sur la première ligne, ajoute de nouveau le produit offert : la ligne réunie garde sa correction au prix moyen',
         ]],
         'action:modifierLaLigne' => ['lot' => 'NAV-3', 'tests' => [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action du magasin sans erreur',
@@ -2114,11 +2123,16 @@ return [
             'tests/Browser/Parcours/TvaDesAchatsTest.php › le responsable confirme une TVA du fournisseur au-delà de la tolérance, puis retrouve la facture marquée par le filtre et sur sa fiche',
             'tests/Browser/Parcours/TvaDesAchatsTest.php › le responsable saisit une facture d’achat au PU à six décimales, avec le HT et la TVA du fournisseur dans la tolérance',
             'tests/Browser/Parcours/UnProduitUneLigneTest.php › sur une facture d’achat, le responsable ajoute de nouveau un produit, dont la ligne compte la quantité totale au prix moyen, et « Modifier » une autre ligne ne lui prend pas ce produit',
+            'tests/Browser/Parcours/UnProduitUneLigneTest.php › sur une facture d’achat, le propriétaire corrige le prix de vente sur la première ligne, ajoute de nouveau le produit offert : la ligne réunie garde sa correction au prix moyen',
         ]],
         'champ:produit_id' => ['lot' => 'NAV-3', 'tests' => [
             'tests/Browser/Parcours/TvaDesAchatsTest.php › le responsable confirme une TVA du fournisseur au-delà de la tolérance, puis retrouve la facture marquée par le filtre et sur sa fiche',
             'tests/Browser/Parcours/TvaDesAchatsTest.php › le responsable saisit une facture d’achat au PU à six décimales, avec le HT et la TVA du fournisseur dans la tolérance',
             'tests/Browser/Parcours/UnProduitUneLigneTest.php › sur une facture d’achat, le responsable ajoute de nouveau un produit, dont la ligne compte la quantité totale au prix moyen, et « Modifier » une autre ligne ne lui prend pas ce produit',
+            'tests/Browser/Parcours/UnProduitUneLigneTest.php › sur une facture d’achat, le propriétaire corrige le prix de vente sur la première ligne, ajoute de nouveau le produit offert : la ligne réunie garde sa correction au prix moyen',
+        ]],
+        'champ:quantite' => ['lot' => 'NAV-3', 'tests' => [
+            'tests/Browser/Parcours/UnProduitUneLigneTest.php › sur une facture d’achat, le propriétaire corrige le prix de vente sur la première ligne, ajoute de nouveau le produit offert : la ligne réunie garde sa correction au prix moyen',
         ]],
         'champ:remise_pourcentage' => ['lot' => 'NAV-3', 'tests' => []],
         'champ:total_ttc_controle' => ['lot' => 'NAV-3', 'tests' => [
@@ -2128,6 +2142,7 @@ return [
             'tests/Browser/Parcours/TvaDesAchatsTest.php › le responsable confirme une TVA du fournisseur au-delà de la tolérance, puis retrouve la facture marquée par le filtre et sur sa fiche',
             'tests/Browser/Parcours/TvaDesAchatsTest.php › le responsable saisit une facture d’achat au PU à six décimales, avec le HT et la TVA du fournisseur dans la tolérance',
             'tests/Browser/Parcours/UnProduitUneLigneTest.php › sur une facture d’achat, le responsable ajoute de nouveau un produit, dont la ligne compte la quantité totale au prix moyen, et « Modifier » une autre ligne ne lui prend pas ce produit',
+            'tests/Browser/Parcours/UnProduitUneLigneTest.php › sur une facture d’achat, le propriétaire corrige le prix de vente sur la première ligne, ajoute de nouveau le produit offert : la ligne réunie garde sa correction au prix moyen',
         ]],
         'repeteur:taux' => ['lot' => 'NAV-3', 'tests' => [
             'tests/Browser/Parcours/TvaDesAchatsTest.php › le responsable saisit une facture d’achat au PU à six décimales, avec le HT et la TVA du fournisseur dans la tolérance',
@@ -2148,6 +2163,12 @@ return [
             'tests/Browser/Parcours/UnProduitUneLigneTest.php › à la caisse, le vendeur clique deux fois sur un produit, le choisit de nouveau par le tableau puis par la douchette : une seule ligne, dont la quantité monte, qu’il encaisse',
             'tests/Browser/Parcours/VentesDeBoutEnBoutTest.php › le responsable fait un devis puis une facture avec la loupe des clients et « Ajouter un produit », l’émet, l’encaisse et la crédite par un avoir',
             'tests/Browser/Parcours/VentesDeBoutEnBoutTest.php › le vendeur vend à la caisse au client comptoir et encaisse en espèces et par carte',
+            'tests/Browser/Parcours/UnProduitUneLigneTest.php › sur un devis du magasin, le propriétaire choisit deux fois le même produit : une seule ligne, dont la quantité monte, et le devis s’enregistre',
+            'tests/Browser/Parcours/UnProduitUneLigneTest.php › dans la démonstration, le propriétaire choisit de nouveau un produit à la caisse : sa ligne monte, et il encaisse',
+            'tests/Browser/Parcours/UnProduitUneLigneTest.php › le vendeur et le responsable d’entraînement ajoutent un produit sur une facture de la démonstration, le reprennent, puis retirent sa ligne par la corbeille',
+            'tests/Browser/Parcours/UnProduitUneLigneTest.php › l’administrateur autorisé à vendre choisit de nouveau un produit à la caisse, qu’il encaisse, puis sur une facture : une seule ligne chaque fois',
+            'tests/Browser/Parcours/UnProduitUneLigneTest.php › le vendeur sans l’autorisation des remises choisit dans le tableau un produit dont la ligne est remisée : refusé, la sélection reste, il retire ce produit et ajoute le reste',
+            'tests/Browser/Parcours/UnProduitUneLigneTest.php › sur une facture, le vendeur choisit de nouveau un produit dont la fiche a changé de prix depuis sa ligne : la ligne reprend le prix du catalogue et sa quantité monte',
         ]],
         'action:ajouterUnService' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action du magasin sans erreur',
@@ -2160,9 +2181,14 @@ return [
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le vendeur ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Parcours/RangeesChoisiesTest.php › chaque texte d’une rangée choisie se lit, stock épuisé et « À régulariser » compris ; le service coché aussi, pas les autorisations',
             'tests/Browser/Parcours/UnProduitUneLigneTest.php › sur un devis, le vendeur coche deux fois « Emballage cadeau » par « Ajouter un service » : une seule ligne, de deux',
+            'tests/Browser/Parcours/UnProduitUneLigneTest.php › à la caisse, le vendeur coche deux fois « Emballage cadeau » : une seule ligne, de deux, qu’il encaisse',
+            'tests/Browser/Parcours/UnProduitUneLigneTest.php › sur une facture, le responsable coche deux fois « Réparation », sans prix de référence, et saisit le même prix sur les deux lignes : elles se réunissent dès le prix saisi',
+            'tests/Browser/Parcours/UnProduitUneLigneTest.php › le vendeur coche un service dont la ligne est remisée : refusé avec la raison, la fenêtre garde ses cases, il décoche ce service et ajoute l’autre',
         ]],
         'champ:nouveau_service' => ['lot' => 'NAV-2', 'tests' => []],
-        'champ:prix_unitaire_ttc' => ['lot' => 'NAV-2', 'tests' => []],
+        'champ:prix_unitaire_ttc' => ['lot' => 'NAV-2', 'tests' => [
+            'tests/Browser/Parcours/UnProduitUneLigneTest.php › sur une facture, le responsable coche deux fois « Réparation », sans prix de référence, et saisit le même prix sur les deux lignes : elles se réunissent dès le prix saisi',
+        ]],
         'champ:quantite' => ['lot' => 'NAV-2', 'tests' => []],
         'champ:recherche' => ['lot' => 'NAV-2', 'tests' => []],
         'champ:remise_pourcentage' => ['lot' => 'NAV-2', 'tests' => [
@@ -2182,6 +2208,15 @@ return [
             'tests/Browser/Parcours/UnProduitUneLigneTest.php › à la caisse, le vendeur clique deux fois sur un produit, le choisit de nouveau par le tableau puis par la douchette : une seule ligne, dont la quantité monte, qu’il encaisse',
             'tests/Browser/Parcours/VentesDeBoutEnBoutTest.php › le responsable fait un devis puis une facture avec la loupe des clients et « Ajouter un produit », l’émet, l’encaisse et la crédite par un avoir',
             'tests/Browser/Parcours/VentesDeBoutEnBoutTest.php › le vendeur vend à la caisse au client comptoir et encaisse en espèces et par carte',
+            'tests/Browser/Parcours/UnProduitUneLigneTest.php › sur un devis du magasin, le propriétaire choisit deux fois le même produit : une seule ligne, dont la quantité monte, et le devis s’enregistre',
+            'tests/Browser/Parcours/UnProduitUneLigneTest.php › dans la démonstration, le propriétaire choisit de nouveau un produit à la caisse : sa ligne monte, et il encaisse',
+            'tests/Browser/Parcours/UnProduitUneLigneTest.php › le vendeur et le responsable d’entraînement ajoutent un produit sur une facture de la démonstration, le reprennent, puis retirent sa ligne par la corbeille',
+            'tests/Browser/Parcours/UnProduitUneLigneTest.php › l’administrateur autorisé à vendre choisit de nouveau un produit à la caisse, qu’il encaisse, puis sur une facture : une seule ligne chaque fois',
+            'tests/Browser/Parcours/UnProduitUneLigneTest.php › à la caisse, le vendeur coche deux fois « Emballage cadeau » : une seule ligne, de deux, qu’il encaisse',
+            'tests/Browser/Parcours/UnProduitUneLigneTest.php › sur une facture, le responsable coche deux fois « Réparation », sans prix de référence, et saisit le même prix sur les deux lignes : elles se réunissent dès le prix saisi',
+            'tests/Browser/Parcours/UnProduitUneLigneTest.php › le vendeur coche un service dont la ligne est remisée : refusé avec la raison, la fenêtre garde ses cases, il décoche ce service et ajoute l’autre',
+            'tests/Browser/Parcours/UnProduitUneLigneTest.php › le vendeur sans l’autorisation des remises choisit dans le tableau un produit dont la ligne est remisée : refusé, la sélection reste, il retire ce produit et ajoute le reste',
+            'tests/Browser/Parcours/UnProduitUneLigneTest.php › sur une facture, le vendeur choisit de nouveau un produit dont la fiche a changé de prix depuis sa ligne : la ligne reprend le prix du catalogue et sa quantité monte',
         ]],
     ],
     'app/Filament/Concerns/ArchiveLaFiche.php' => [

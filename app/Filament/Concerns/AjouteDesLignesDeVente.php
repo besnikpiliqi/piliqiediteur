@@ -104,8 +104,12 @@ use WeakMap;
  * une ligne dont elle change la quantité, le prix du catalogue d'aujourd'hui
  * (Q1) : un prix de fiche changé depuis ne la bloque jamais. Sans
  * l'autorisation, un article choisi de nouveau dont la ligne porte une
- * remise ou un autre prix est refusé, avec la raison (voir
- * refusDeChangerLaQuantite()) : jamais une seconde ligne.
+ * remise, un prix enregistré sur le brouillon autre que celui du
+ * catalogue, ou reprend une ligne du devis accepté, est refusé, avec la
+ * raison (voir refusDeChangerLaQuantite()) : jamais une seconde ligne ;
+ * une ligne seulement restée au prix d'une fiche changée depuis reprend,
+ * comme pour la quantité tapée, le prix du catalogue d'aujourd'hui (voir
+ * completerLaLigne()).
  */
 trait AjouteDesLignesDeVente
 {
@@ -307,10 +311,17 @@ trait AjouteDesLignesDeVente
             // Archivé compris : seul l'enregistrement refuse, avec un
             // message, la ligne d'un produit archivé depuis (voir
             // ConstructeurLigneDocument) ; un produit d'un autre magasin,
-            // que seule une requête forgée envoie, ne passe jamais.
+            // ou un identifiant qui n'est pas un entier, que seule une
+            // requête forgée envoie, ne passe jamais, et la base ne lit
+            // jamais ce dernier.
             Hidden::make('produit_id')
                 ->required(fn (Get $get): bool => ! self::estUneLigneDeService($get))
-                ->rule(fn (): Exists => Produit::regleExisteDansLeMagasin(Produit::withTrashed()), fn (mixed $state): bool => filled($state))
+                ->rule(fn (): Closure => function (string $attribute, mixed $value, Closure $fail): void {
+                    if (filled($value) && self::identifiantDuProduit($value) === null) {
+                        $fail(self::PRODUIT_INTROUVABLE);
+                    }
+                })
+                ->rule(fn (): Exists => Produit::regleExisteDansLeMagasin(Produit::withTrashed()), fn (mixed $state): bool => self::identifiantDuProduit($state) !== null)
                 ->validationMessages(['required' => 'Une ligne vend un produit ou un service du catalogue.', 'exists' => self::PRODUIT_INTROUVABLE]),
             TextInput::make('description')
                 ->label(fn (Get $get): string => self::estUneLigneDeService($get) ? 'Service' : 'Produit')
@@ -353,13 +364,45 @@ trait AjouteDesLignesDeVente
                 ->saisieEnDirect()
                 ->disabled(fn (): bool => ! self::peutAccorderDesRemises())
                 ->dehydrated()
+                ->extraInputAttributes(fn (Get $get): array => self::reunitSiIdentique($get))
                 ->helperText(fn (): ?string => self::peutAccorderDesRemises() ? null : self::aideSansAutorisation('Une remise')),
         ];
+    }
+
+    /**
+     * Le prix, le taux ou la remise d'une ligne de service, une fois saisi
+     * (le champ quitté, ou Entrée), fait réunir les lignes de ce service
+     * devenues identiques (voir reunirLesLignesIdentiques()) ; jamais
+     * pendant la frappe, où « 60 » réunirait la ligne d'un « 60,50 » à
+     * venir. Une ligne de produit n'en a pas besoin : un produit n'a
+     * jamais qu'une ligne.
+     *
+     * @return array<string, string>
+     */
+    private static function reunitSiIdentique(Get $get): array
+    {
+        return self::estUneLigneDeService($get) ? ['x-on:change' => '$wire.reunirLesLignesIdentiques()'] : [];
     }
 
     public static function estUneLigneDeService(Get $get): bool
     {
         return filled($get('service_id'));
+    }
+
+    /**
+     * L'identifiant du produit d'une ligne, tel que l'écran le pose (un
+     * entier, ou le texte qui l'écrit) ; null pour toute autre valeur, que
+     * seule une requête forgée envoie et qu'aucune requête ne doit lire.
+     */
+    private static function identifiantDuProduit(mixed $valeur): ?int
+    {
+        if (! is_int($valeur) && ! is_string($valeur)) {
+            return null;
+        }
+
+        $identifiant = filter_var($valeur, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+
+        return $identifiant === false ? null : $identifiant;
     }
 
     /**
@@ -407,6 +450,7 @@ trait AjouteDesLignesDeVente
                 ->disabled(fn (): bool => ! self::peutAccorderDesRemises())
                 ->dehydrated()
                 ->helperText(fn (Get $get): ?string => self::peutAccorderDesRemises() ? null : (self::estUneLigneDeService($get) ? 'Prix de référence du service. ' : 'Prix de la fiche du produit. ').self::aideSansAutorisation('Un autre prix'))
+                ->extraInputAttributes(fn (Get $get): array => self::reunitSiIdentique($get))
                 // Le PU HT d'une ligne de produit suit le PU TTC saisi, au
                 // taux affiché ; une ligne de service n'en montre pas.
                 ->afterStateUpdated(function (?string $state, Get $get, Set $set) {
@@ -427,6 +471,7 @@ trait AjouteDesLignesDeVente
                 ->dehydrated(fn (Get $get): bool => self::estUneLigneDeService($get))
                 ->hidden(fn (Get $get): bool => self::estUneLigneDeService($get) && (self::magasin()->societe->estEnFranchiseDeTva() || self::venteSansTvaFrancaise($get)))
                 ->helperText(fn (Get $get): ?string => self::aideDuTaux($get))
+                ->extraInputAttributes(fn (Get $get): array => self::reunitSiIdentique($get))
                 ->saisieEnDirect()
                 // Une ligne de produit rouverte (brouillon, devis, panier de
                 // la caisse) reprend le taux de sa fiche et le régime du
@@ -434,9 +479,8 @@ trait AjouteDesLignesDeVente
                 // enregistrée ; une ligne de service garde le taux saisi
                 // (voir lignesARouvrir()).
                 ->afterStateHydrated(function (Get $get, Set $set): void {
-                    $produit = self::estUneLigneDeService($get) || blank($get('produit_id'))
-                        ? null
-                        : Produit::withTrashed()->whereKey(ValeursLues::cle($get('produit_id')))->first();
+                    $identifiant = self::estUneLigneDeService($get) ? null : self::identifiantDuProduit($get('produit_id'));
+                    $produit = $identifiant === null ? null : Produit::withTrashed()->whereKey($identifiant)->first();
 
                     if ($produit !== null) {
                         self::appliquerLeTauxDuProduit($produit, $get, $set);
@@ -616,7 +660,8 @@ trait AjouteDesLignesDeVente
      */
     private static function ligneAuPrixDuCatalogue(array $ligne, ContexteDeVente $contexte): array
     {
-        $produit = filled($ligne['produit_id'] ?? null) ? Produit::withTrashed()->whereKey(ValeursLues::cle($ligne['produit_id']))->first() : null;
+        $identifiant = self::identifiantDuProduit($ligne['produit_id'] ?? null);
+        $produit = $identifiant === null ? null : Produit::withTrashed()->whereKey($identifiant)->first();
 
         if ($produit !== null) {
             $calculateur = app(CalculateurLigne::class);
@@ -782,15 +827,15 @@ trait AjouteDesLignesDeVente
      */
     public static function stockDUneLigneDeDevis(Get $get, HasForms $livewire): ?string
     {
-        $produitId = $get('produit_id');
+        $produitId = self::identifiantDuProduit($get('produit_id'));
 
-        if (! $livewire instanceof ResourcePage || $livewire->getModel() !== Devis::class || blank($produitId)) {
+        if (! $livewire instanceof ResourcePage || $livewire->getModel() !== Devis::class || $produitId === null) {
             return null;
         }
 
         $identifiants = collect(ValeursLues::tableau($get('../../lignes') ?? []))
-            ->filter(fn (mixed $ligne): bool => is_array($ligne) && filled($ligne['produit_id'] ?? null))
-            ->map(fn (array $ligne): int|string => ValeursLues::cleDeTableau($ligne['produit_id']))
+            ->map(fn (mixed $ligne): ?int => is_array($ligne) ? self::identifiantDuProduit($ligne['produit_id'] ?? null) : null)
+            ->filter()
             ->unique()
             ->sort()
             ->values()
@@ -801,7 +846,7 @@ trait AjouteDesLignesDeVente
             ->get(['id', 'stock_quantite'])
             ->mapWithKeys(fn (Produit $produit): array => [$produit->getKey() => $produit->stock_quantite])
             ->all());
-        $disponible = $stocks[ValeursLues::cleDeTableau($produitId)] ?? null;
+        $disponible = $stocks[$produitId] ?? null;
 
         return $disponible === null ? null : self::texteDuStockDUneLigne($disponible, max(0, ValeurSimple::enEntierOuNul($get('quantite')) ?? 0));
     }
@@ -945,8 +990,7 @@ trait AjouteDesLignesDeVente
                     continue;
                 }
 
-                $lignes[$cle] = self::completerLaLigne($livewire, $lignes[$cle], $quantite, $contexte);
-                $completees[] = $lignes[$cle];
+                [$lignes[$cle], $completees[]] = self::completerLaLigne($livewire, $lignes[$cle], $quantite, $contexte);
             }
         } catch (InvalidArgumentException $refus) {
             Notification::make()->title($refus->getMessage())->danger()->send();
@@ -962,11 +1006,7 @@ trait AjouteDesLignesDeVente
     /**
      * Les lignes du formulaire qui portent un produit ou un service, par clé
      * de ligne -- les lignes encore vides disparaissent --, et la vente de la
-     * page. À la caisse, une personne qui n'est pas autorisée à fixer les
-     * prix voit d'abord ses lignes reprendre le prix du catalogue, comme à
-     * chaque requête de la caisse (voir lignesAuxPrixPermis() et
-     * Caisse::rendering()) : une fiche dont le prix a changé depuis l'ajout
-     * de sa ligne ne bloque jamais l'ajout.
+     * page.
      *
      * @return array{array<array-key, array<string, mixed>>, ContexteDeVente}
      */
@@ -981,10 +1021,6 @@ trait AjouteDesLignesDeVente
             }
         }
 
-        if ($livewire instanceof Caisse) {
-            $lignes = self::lignesAuxPrixPermis($lignes, $etat['client_id'] ?? null);
-        }
-
         return [$lignes, self::contexteDeVente($etat['client_id'] ?? null, $etat['nature_operation'] ?? null)];
     }
 
@@ -992,11 +1028,12 @@ trait AjouteDesLignesDeVente
      * Les lignes du formulaire remplacées par celles-ci, dans leur ordre,
      * puis les nouvelles lignes, chacune avec les valeurs par défaut de ses
      * champs (voir ajouterUneLigne()) ; les lignes dont la quantité a
-     * augmenté le disent.
+     * augmenté le disent, et celles qui ont repris le prix du catalogue
+     * d'aujourd'hui disent ce prix (voir completerLaLigne()).
      *
      * @param  array<array-key, array<string, mixed>>  $lignes
      * @param  list<array<string, mixed>>  $nouvelles
-     * @param  list<array<string, mixed>>  $completees
+     * @param  list<array{ligne: array<string, mixed>, auPrixDuCatalogue: bool}>  $completees
      */
     private static function remplacerLesLignes(HasForms $livewire, array $lignes, array $nouvelles, array $completees): void
     {
@@ -1013,7 +1050,11 @@ trait AjouteDesLignesDeVente
             return;
         }
 
-        $quantites = array_map(fn (array $ligne): string => '« '.ValeurSimple::enTexte($ligne['description'] ?? '').' » ('.ValeurSimple::enTexte($ligne['quantite']).')', $completees);
+        $quantites = array_map(
+            fn (array $completee): string => '« '.ValeurSimple::enTexte($completee['ligne']['description'] ?? '').' » ('.ValeurSimple::enTexte($completee['ligne']['quantite']).')'
+                .($completee['auPrixDuCatalogue'] ? ' au prix du catalogue d\'aujourd\'hui, '.self::prixUnitaireEnTexte($completee['ligne']['prix_unitaire_ttc']) : ''),
+            $completees,
+        );
 
         Notification::make()
             ->title(count($completees) === 1
@@ -1056,15 +1097,22 @@ trait AjouteDesLignesDeVente
      * autorisée à fixer les prix, quand changer sa quantité le demande (voir
      * refusDeChangerLaQuantite()).
      *
+     * Pour cette personne, une ligne qui n'est qu'à un prix de fiche ou de
+     * référence d'avant (la fiche a changé de prix depuis l'ajout de la
+     * ligne), sans remise et sans prix enregistré sur le brouillon,
+     * reprend d'abord le prix du catalogue d'aujourd'hui, comme quand elle
+     * tape la quantité dans la ligne (Q1, voir ligneSchema()) ; le message
+     * de l'ajout le dit.
+     *
      * @param  array<string, mixed>  $ligne
-     * @return array<string, mixed>
+     * @return array{array<string, mixed>, array{ligne: array<string, mixed>, auPrixDuCatalogue: bool}}
      *
      * @throws InvalidArgumentException la raison du refus, à montrer telle quelle
      */
     private static function completerLaLigne(HasForms $livewire, array $ligne, int $ajoutee, ContexteDeVente $contexte): array
     {
-        $construite = app(ConstructeurLigneDocument::class)->apercu(['ligne' => $ligne], $contexte)->lignes['ligne']
-            ?? throw new InvalidArgumentException('Terminez d\'abord la ligne « '.ValeurSimple::enTexte($ligne['description'] ?? '').' » : sa quantité, son prix ou sa remise n\'est pas encore un nombre valable.');
+        $construite = self::ligneConstruite($ligne, $contexte);
+        $auPrixDuCatalogue = false;
 
         if (! self::peutAccorderDesRemises()) {
             $refus = self::refusDeChangerLaQuantite($livewire, $construite, $contexte);
@@ -1072,19 +1120,54 @@ trait AjouteDesLignesDeVente
             if ($refus !== null) {
                 throw new InvalidArgumentException($refus);
             }
+
+            if (app(DerogationsDePrix::class)->introduites([], ['ligne' => $construite], $contexte) !== []) {
+                $ligne = self::ligneAuPrixDuCatalogue($ligne, $contexte);
+                $construite = self::ligneConstruite($ligne, $contexte);
+                $derogations = app(DerogationsDePrix::class)->introduites([], ['ligne' => $construite], $contexte);
+
+                // Un service sans prix de référence n'a pas de prix du
+                // catalogue à reprendre.
+                if ($derogations !== []) {
+                    throw new InvalidArgumentException(ValeurSimple::enTexte(reset($derogations)));
+                }
+
+                $auPrixDuCatalogue = true;
+            }
         }
 
-        return [...$ligne, 'quantite' => self::quantiteCumulee(ValeursLues::entier($construite['quantite']), $ajoutee)];
+        $ligne = [...$ligne, 'quantite' => self::quantiteCumulee(ValeursLues::entier($construite['quantite']), $ajoutee)];
+
+        return [$ligne, ['ligne' => $ligne, 'auPrixDuCatalogue' => $auPrixDuCatalogue]];
+    }
+
+    /**
+     * Une ligne du formulaire telle que l'enregistrement la construira dans
+     * cette vente (voir ConstructeurLigneDocument).
+     *
+     * @param  array<string, mixed>  $ligne
+     * @return array<string, mixed>
+     *
+     * @throws InvalidArgumentException une ligne encore en cours de saisie
+     */
+    private static function ligneConstruite(array $ligne, ContexteDeVente $contexte): array
+    {
+        return ValeursLues::champs(app(ConstructeurLigneDocument::class)->apercu(['ligne' => $ligne], $contexte)->lignes['ligne']
+            ?? throw new InvalidArgumentException('Terminez d\'abord la ligne « '.ValeurSimple::enTexte($ligne['description'] ?? '').' » : sa quantité, son prix ou sa remise n\'est pas encore un nombre valable.'));
     }
 
     /**
      * Pourquoi une personne qui n'est pas autorisée à accorder des remises
      * et fixer le prix d'un service (R2) ne change pas la quantité de cette
      * ligne construite (voir ConstructeurLigneDocument) : elle porte une
-     * remise, un autre prix que celui de la fiche de son produit ou du prix
-     * de référence de son service (voir DerogationsDePrix), ou elle reprend
-     * une ligne du devis accepté dont la facture est issue (voir
-     * DerogationsDePrix::exigerPourLesLignesDuDevis()) ; null sinon.
+     * remise, elle reprend une ligne du devis accepté dont la facture est
+     * issue (voir DerogationsDePrix::exigerPourLesLignesDuDevis()), ou elle
+     * reprend telle quelle une ligne enregistrée sur le brouillon à un
+     * autre prix que celui de la fiche de son produit ou du prix de
+     * référence de son service, que l'enregistrement tient pour accordé
+     * (voir DerogationsDePrix) ; null sinon. Une ligne saisie sur cette page
+     * et seulement restée au prix d'une fiche qui a changé depuis n'est pas
+     * refusée : elle reprend le prix du catalogue (voir completerLaLigne()).
      *
      * @param  array<string, mixed>  $ligne
      */
@@ -1092,15 +1175,33 @@ trait AjouteDesLignesDeVente
     {
         $nom = ValeurSimple::enTexte($ligne['description']);
         $demande = 'demandez à un responsable de changer sa quantité.';
+        $derogations = app(DerogationsDePrix::class);
 
         return match (true) {
             app(CalculateurLigne::class)->enCentiemes($ligne['remise_pourcentage']) !== 0 => "« {$nom} » a une remise sur sa ligne : {$demande}",
-            app(DerogationsDePrix::class)->introduites([], ['ligne' => $ligne], $contexte) !== [] => $ligne['produit_id'] !== null
-                ? "« {$nom} » est sur sa ligne à un autre prix que celui de sa fiche : {$demande}"
-                : "« {$nom} » est sur sa ligne à un autre prix ou à un autre taux que son prix de référence : {$demande}",
             self::repriseDuDevis($livewire, $ligne) => "« {$nom} » est sur une ligne reprise du devis accepté par le client : {$demande}",
+            $derogations->introduites([], ['ligne' => $ligne], $contexte) !== []
+                && $derogations->introduites(self::lignesEnregistrees($livewire), ['ligne' => $ligne], $contexte) === [] => $ligne['produit_id'] !== null
+                    ? "« {$nom} » est sur sa ligne au prix enregistré sur ce brouillon, différent de celui de sa fiche : {$demande}"
+                    : "« {$nom} » est sur sa ligne au prix ou au taux enregistré sur ce brouillon, différent de son prix de référence : {$demande}",
             default => null,
         };
+    }
+
+    /**
+     * Les lignes déjà enregistrées du brouillon de facture ou du devis que
+     * la page modifie, telles que DerogationsDePrix les compare ; aucune
+     * pour un nouveau document ou la caisse.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private static function lignesEnregistrees(HasForms $livewire): array
+    {
+        $document = $livewire instanceof EditRecord ? $livewire->getRecord() : null;
+
+        return $document instanceof Facture || $document instanceof Devis
+            ? array_values($document->lignes()->get()->map(fn (LigneFacture|LigneDevis $ligne): array => $ligne->attributesToArray())->all())
+            : [];
     }
 
     /**
@@ -1125,13 +1226,81 @@ trait AjouteDesLignesDeVente
     }
 
     /**
+     * Deux lignes du même service au même prix, au même taux et à la même
+     * remise, dans cette vente, n'en font qu'une (décision de l'éditeur du
+     * 26/10/2026, série 9, règle 3) : quand la saisie du prix, du taux ou de
+     * la remise d'une ligne de service la rend identique à une autre (un
+     * service sans prix de référence saisi à 60,00 € sur deux lignes), la
+     * ligne la plus haute garde sa place et reçoit la somme des quantités,
+     * l'autre disparaît, et un message le dit. Rien ne s'inscrit au journal
+     * des événements : réunir deux lignes du même article au même prix ne
+     * retire rien (voir LignesRetirees). Une ligne encore en cours de saisie
+     * ne se compare pas ; deux lignes du même service au même prix et au
+     * même taux mais à deux remises restent, et leur envoi est refusé avec
+     * la raison (voir regleUnArticleParLigne()).
+     */
+    public static function reunirLesLignesIdentiques(HasForms $livewire): void
+    {
+        $etat = self::etatDuFormulaire($livewire);
+        $repeteur = self::repeteurDesLignes($livewire);
+        $lignes = ValeursLues::tableau($repeteur->getState() ?? []);
+        $premieres = [];
+        $quantites = [];
+
+        try {
+            foreach (self::apercuDesLignes($lignes, $etat['client_id'] ?? null, $etat['nature_operation'] ?? null)->lignes as $cle => $ligne) {
+                if ($ligne['service_id'] === null) {
+                    continue;
+                }
+
+                $conditions = implode('|', array_map(ValeurSimple::enTexte(...), [$ligne['service_id'], $ligne['prix_unitaire_ttc'], $ligne['taux_tva_du_prix'], $ligne['remise_pourcentage']]));
+                $haute = $premieres[$conditions] ?? null;
+
+                if ($haute === null) {
+                    $premieres[$conditions] = $cle;
+
+                    continue;
+                }
+
+                $quantites[$haute] = self::quantiteCumulee($quantites[$haute] ?? QuantiteEntiere::depuisSaisie(ValeursLues::champs($lignes[$haute])['quantite'] ?? null), ValeursLues::entier($ligne['quantite']));
+                unset($lignes[$cle]);
+            }
+        } catch (InvalidArgumentException $refus) {
+            Notification::make()->title($refus->getMessage())->danger()->send();
+
+            return;
+        }
+
+        if ($quantites === []) {
+            return;
+        }
+
+        foreach ($quantites as $haute => $quantite) {
+            $lignes[$haute] = [...ValeursLues::champs($lignes[$haute]), 'quantite' => $quantite];
+        }
+
+        $repeteur->state($lignes);
+        $repeteur->callAfterStateUpdated();
+
+        Notification::make()
+            ->title(implode(' ', array_map(
+                fn (int|string $haute): string => '« '.ValeurSimple::enTexte(ValeursLues::champs($lignes[$haute])['description'] ?? '').' » : ses lignes au même prix sont réunies (quantité '.$quantites[$haute].').',
+                array_keys($quantites),
+            )))
+            ->success()
+            ->send();
+    }
+
+    /**
      * Le document ne part jamais avec un article sur deux lignes (voir
      * ConstructeurLigneDocument::articleSurDeuxLignes()) : l'écran réunit
-     * un produit ou un service choisi de nouveau, et refuse d'envoyer, avec
-     * la raison sous les lignes, deux lignes d'un service sans prix de
-     * référence saisies au même prix et au même taux, ou ce qu'une requête
-     * forgée met en double. Les lignes se comparent comme l'enregistrement
-     * les construira, pour le client et la nature de l'opération saisis.
+     * un produit ou un service choisi de nouveau, et les lignes d'un
+     * service devenues identiques (voir reunirLesLignesIdentiques()), et
+     * refuse d'envoyer, avec la raison sous les lignes, ce qui reste
+     * malgré tout en double (deux lignes d'un service au même prix et au
+     * même taux mais à deux remises, une requête forgée). Les lignes se
+     * comparent comme l'enregistrement les construira, pour le client et la
+     * nature de l'opération saisis.
      */
     private static function regleUnArticleParLigne(): Closure
     {
@@ -1225,7 +1394,7 @@ trait AjouteDesLignesDeVente
             ->color('gray')
             ->size(ActionSize::Small)
             ->modalHeading('Ajouter un service')
-            ->modalDescription('Cochez les services réalisés : chacun devient une ligne, ou ajoute 1 à la quantité de sa ligne s\'il y est déjà. Un service dont le prix n\'est pas fixé arrive toujours sur une nouvelle ligne, où vous saisissez son prix.')
+            ->modalDescription('Cochez les services réalisés : chacun devient une ligne, ou ajoute 1 à la quantité de sa ligne s\'il y est déjà. Un service dont le prix n\'est pas fixé arrive toujours sur une nouvelle ligne, où vous saisissez son prix ; saisi au prix d\'une autre ligne de ce service, il la rejoint.')
             ->modalSubmitActionLabel('Ajouter')
             ->modalWidth(MaxWidth::Large)
             ->visible(fn (): bool => self::servicesVendables()->exists() || self::peutCreerUnService())
@@ -1267,7 +1436,13 @@ trait AjouteDesLignesDeVente
                     ->map(fn (TextInput $champ): TextInput => $champ->visible(fn (Get $get): bool => self::peutCreerUnService() && self::peutAccorderDesRemises() && filled($get('nouveau_service'))))
                     ->all(),
             ])
-            ->action(fn (array $data, HasForms $livewire) => self::ajouterLesServices($livewire, ValeursLues::champs($data)));
+            // Refusé, la fenêtre reste ouverte avec ses cases, pour décocher
+            // le service refusé et ajouter les autres.
+            ->action(function (array $data, HasForms $livewire, Action $action): void {
+                if (! self::ajouterLesServices($livewire, ValeursLues::champs($data))) {
+                    $action->halt();
+                }
+            });
     }
 
     private static function peutCreerUnService(): bool
@@ -1332,13 +1507,14 @@ trait AjouteDesLignesDeVente
      * produit choisi de nouveau (voir completerLaLigne()) ; sinon il arrive
      * sur une nouvelle ligne, à ce prix et à son taux. Un service sans prix
      * de référence arrive toujours sur une nouvelle ligne, dont le prix se
-     * saisit : deux lignes de ce service au même prix et au même taux ne
-     * partent pas (voir regleUnArticleParLigne()). Un ajout refusé pour l'un
-     * des services n'ajoute rien, et la raison s'affiche.
+     * saisit : saisi au prix et au taux d'une autre ligne de ce service, sa
+     * ligne la rejoint (voir reunirLesLignesIdentiques()). Un ajout refusé
+     * pour l'un des services n'ajoute rien, et la raison s'affiche.
      *
      * @param  array<string, mixed>  $data
+     * @return bool les services cochés ont été ajoutés
      */
-    private static function ajouterLesServices(HasForms $livewire, array $data): void
+    private static function ajouterLesServices(HasForms $livewire, array $data): bool
     {
         $identifiants = array_map(ValeurSimple::enEntier(...), ValeursLues::tableau($data['services'] ?? []));
         $nouveauService = Service::nettoyerNom(ValeurSimple::enTexte($data['nouveau_service'] ?? ''));
@@ -1349,7 +1525,7 @@ trait AjouteDesLignesDeVente
             } catch (LogicException|AuthorizationException $exception) {
                 Notification::make()->title($exception->getMessage())->danger()->send();
 
-                return;
+                return false;
             }
 
             if ($nouveau->wasRecentlyCreated) {
@@ -1403,16 +1579,17 @@ trait AjouteDesLignesDeVente
                     continue;
                 }
 
-                $lignes[$cle] = self::completerLaLigne($livewire, $lignes[$cle], 1, $contexte);
-                $completees[] = $lignes[$cle];
+                [$lignes[$cle], $completees[]] = self::completerLaLigne($livewire, $lignes[$cle], 1, $contexte);
             }
         } catch (InvalidArgumentException $refus) {
             Notification::make()->title($refus->getMessage())->danger()->send();
 
-            return;
+            return false;
         }
 
         self::remplacerLesLignes($livewire, $lignes, $nouvelles, $completees);
+
+        return true;
     }
 
     /**

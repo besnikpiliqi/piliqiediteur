@@ -278,6 +278,41 @@ class AvoirFournisseurActionsTest extends TestCase
         $this->assertSame(4, $produit->fresh()->stock_quantite);
     }
 
+    /**
+     * Défense en profondeur : même si une facture d'achat portait deux
+     * lignes du même produit, que l'enregistrement refuse (voir
+     * ConstructeurLigneAchat), l'avoir fournisseur compare le total retourné
+     * de chaque produit à son stock. Deux lignes de cinq câbles posées en
+     * base sur un brouillon, puis validées, 4 vendus : chaque ligne peut
+     * retourner ses cinq, mais 5 + 5 retournés ensemble sont refusés, le stock reste à 6 et ne passe jamais sous zéro.
+     */
+    public function test_le_total_retourne_d_un_produit_ne_depasse_jamais_son_stock_meme_sur_deux_lignes_d_achat(): void
+    {
+        $produit = Produit::factory()->create(['nom' => 'Câble USB-C', 'taux_tva' => 20, 'suivi_stock' => true]);
+        $brouillon = app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [
+            ['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => 20],
+        ], ['date_facture' => '2026-01-15']);
+        $premiere = $brouillon->lignes->sole();
+        $seconde = $premiere->replicate();
+        $seconde->ordre = 1;
+        $seconde->save();
+        $factureAchat = app(ValiderFactureAchatAction::class)->handle(self::auteur(), $brouillon->fresh());
+        $this->assertSame(10, $produit->fresh()->stock_quantite);
+        $this->sortirParUneVente($produit, 4);
+
+        $this->assertThrows(
+            fn () => app(CreerAvoirFournisseurAction::class)->handle(self::auteur(), $factureAchat->fresh(), [
+                ['ligne_achat_id' => $premiere->id, 'quantite' => 5],
+                ['ligne_achat_id' => $seconde->id, 'quantite' => 5],
+            ]),
+            LogicException::class,
+            '« Câble USB-C » : l\'avoir en retourne 10, mais il n\'en reste que 6 en stock',
+        );
+
+        $this->assertSame(0, AvoirFournisseur::query()->count());
+        $this->assertSame(6, $produit->fresh()->stock_quantite);
+    }
+
     private function recevoirDixCables(Produit $produit): FactureAchat
     {
         return app(ValiderFactureAchatAction::class)->handle(self::auteur(), app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [

@@ -127,21 +127,29 @@ class AvoirFournisseur extends Model
      * LigneAchat::quantiteRetournableRestante()), relu ici sous le verrou de
      * la fiche, à la création de l'avoir comme à son émission, puisqu'il
      * change entre les deux et pendant elles : des articles vendus
-     * entre-temps ne sont jamais retournés. Une
-     * facture d'achat n'ayant qu'une ligne par produit (voir
-     * ConstructeurLigneAchat), chaque ligne de l'avoir retourne un produit
-     * différent, verrouillé par identifiant croissant ; le stock d'un
-     * produit archivé depuis compte aussi, il est toujours là.
+     * entre-temps ne sont jamais retournés. Une facture d'achat n'a qu'une
+     * ligne par produit (voir ConstructeurLigneAchat) ; le total retourné
+     * de chaque produit se compare tout de même à son stock, toutes lignes
+     * de l'avoir comprises, pour qu'aucun article déjà vendu ne reparte
+     * jamais chez le fournisseur, quoi qu'ait laissé passer la facture
+     * d'achat. Les produits se verrouillent par identifiant croissant ; le
+     * stock d'un produit archivé depuis compte aussi, il est toujours là.
      *
      * @throws LogicException
      */
     public function verifierQueLeStockSuffit(): void
     {
-        foreach ($this->lignes()->reorder('produit_id')->get() as $ligne) {
-            $produit = Produit::withTrashed()->whereKey($ligne->produit_id)->lockForUpdate()->firstOrFail();
+        $quantitesParProduit = [];
 
-            if ($produit->suivi_stock && $ligne->quantite > $produit->stock_quantite) {
-                throw new LogicException(self::messageStockInsuffisant($produit, $ligne->quantite));
+        foreach ($this->lignes()->reorder('produit_id')->get(['produit_id', 'quantite']) as $ligne) {
+            $quantitesParProduit[$ligne->produit_id] = ($quantitesParProduit[$ligne->produit_id] ?? 0) + $ligne->quantite;
+        }
+
+        foreach ($quantitesParProduit as $produitId => $quantite) {
+            $produit = Produit::withTrashed()->whereKey($produitId)->lockForUpdate()->firstOrFail();
+
+            if ($produit->suivi_stock && $quantite > $produit->stock_quantite) {
+                throw new LogicException(self::messageStockInsuffisant($produit, $quantite));
             }
         }
     }

@@ -25,8 +25,10 @@ use Filament\Tables\Table;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Number;
+use Illuminate\Support\Str;
 use InvalidArgumentException;
 use Livewire\Attributes\Locked;
+use Livewire\Attributes\On;
 use Livewire\Component;
 
 /**
@@ -64,9 +66,10 @@ use Livewire\Component;
  * aucun montant ne se calcule ici. « Ajouter » envoie la sélection à la
  * page (voir RecoitLesProduitsChoisis), qui la revérifie avant d'ajouter
  * ses lignes -- un produit déjà sur une ligne en augmente la quantité --,
- * puis la vide : un second clic n'envoie rien. Les quantités choisies ne se
- * comparent pas au stock ici : à l'émission, VerificateurDeStock reste le
- * contrôle final du stock.
+ * puis la fait vider : un second envoi de la même sélection n'ajoute rien,
+ * et une sélection refusée reste (voir ajouterLaSelection()). Les
+ * quantités choisies ne se comparent pas au stock ici : à l'émission,
+ * VerificateurDeStock reste le contrôle final du stock.
  */
 class SelecteurDeProduits extends Component implements HasForms, HasTable
 {
@@ -76,6 +79,12 @@ class SelecteurDeProduits extends Component implements HasForms, HasTable
      * L'événement qui porte la sélection à la page du document.
      */
     public const EVENEMENT = 'produits-choisis';
+
+    /**
+     * L'événement que la page renvoie au tableau une fois la sélection
+     * ajoutée (voir RecoitLesProduitsChoisis), qui la vide.
+     */
+    public const SELECTION_AJOUTEE = 'selection-ajoutee';
 
     public const PAR_PAGE = 50;
 
@@ -105,6 +114,14 @@ class SelecteurDeProduits extends Component implements HasForms, HasTable
      */
     #[Locked]
     public array $selection = [];
+
+    /**
+     * Le jeton de l'envoi de cette sélection à la page : la page n'ajoute
+     * qu'une fois un envoi répété (voir ajouterLaSelection()), et un
+     * nouveau jeton suit chaque sélection ajoutée.
+     */
+    #[Locked]
+    public string $envoi = '';
 
     #[Locked]
     public int $nombreAffiche = self::PAR_PAGE;
@@ -140,6 +157,7 @@ class SelecteurDeProduits extends Component implements HasForms, HasTable
     {
         $this->clientId = is_int($clientId) || (is_string($clientId) && ctype_digit($clientId)) ? (int) $clientId : null;
         $this->nature = is_string($nature) && $nature !== '' ? $nature : null;
+        $this->envoi = (string) Str::uuid();
     }
 
     public function table(Table $table): Table
@@ -320,11 +338,16 @@ class SelecteurDeProduits extends Component implements HasForms, HasTable
     }
 
     /**
-     * « Ajouter » : la sélection part à la page du document, qui la
-     * revérifie (voir RecoitLesProduitsChoisis), puis se vide : un second
-     * clic, parti avant que la fenêtre ne se ferme, n'ajoute rien. Un
-     * produit devenu épuisé ou archivé depuis son choix l'arrête ici, avec
-     * sa raison, et la sélection reste.
+     * « Ajouter » : la sélection part à la page du document avec le jeton
+     * de son envoi ; la page la revérifie (voir RecoitLesProduitsChoisis),
+     * l'ajoute, puis renvoie au tableau l'événement qui la vide (voir
+     * selectionAjoutee()) ; un second clic, parti avant que la page ne
+     * réponde, porte le même jeton et la page ne l'ajoute pas deux fois.
+     * Refusée par la page (une ligne remisée pour une personne qui
+     * n'accorde pas de remise, par exemple), la sélection reste, pour en
+     * retirer le produit refusé et ajouter les autres. Un produit devenu
+     * épuisé ou archivé depuis son choix l'arrête ici, avec sa raison, et
+     * la sélection reste aussi.
      */
     public function ajouterLaSelection(): void
     {
@@ -340,8 +363,23 @@ class SelecteurDeProduits extends Component implements HasForms, HasTable
             return;
         }
 
-        $this->dispatch(self::EVENEMENT, selection: $this->selection);
+        $this->dispatch(self::EVENEMENT, selection: $this->selection, envoi: $this->envoi);
+    }
+
+    /**
+     * La page a ajouté la sélection de cet envoi : elle se vide, et le
+     * prochain envoi reçoit un nouveau jeton. L'événement d'un autre envoi
+     * ne vide rien.
+     */
+    #[On(self::SELECTION_AJOUTEE)]
+    public function selectionAjoutee(mixed $envoi = null): void
+    {
+        if ($envoi !== $this->envoi) {
+            return;
+        }
+
         $this->selection = [];
+        $this->envoi = (string) Str::uuid();
     }
 
     /**

@@ -4,6 +4,7 @@ namespace Tests\Feature\Facturation;
 
 use App\Domain\Achats\Actions\CreerFactureAchatAction;
 use App\Domain\Achats\Models\FactureAchat;
+use App\Domain\Achats\Models\LigneAchat;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
 use App\Domain\Contacts\Models\Client;
@@ -23,6 +24,7 @@ use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
@@ -193,6 +195,42 @@ class LignesUniquesTest extends TestCase
         ], ['date_facture' => '2026-10-26']);
 
         $this->assertSame('40.00', $achat->total_ht);
+    }
+
+    /**
+     * Le produit d'une ligne d'achat se compare une fois lu en base : un
+     * identifiant écrit autrement (« +12 », « 012 », « 12 » précédé d'une
+     * espace), que la base lit comme 12, désigne le même produit que 12, et
+     * la seconde ligne est refusée. Rien n'est enregistré.
+     */
+    #[DataProvider('identifiantsEcritsAutrement')]
+    public function test_un_identifiant_ecrit_autrement_designe_le_meme_produit_d_une_facture_d_achat(string $prefixe): void
+    {
+        $cable = $this->cable();
+
+        $this->assertThrows(
+            fn () => app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [
+                ['produit_id' => $cable->id, 'quantite' => 5, 'prix_unitaire_ht' => '4.00'],
+                ['produit_id' => $prefixe.$cable->id, 'quantite' => 5, 'prix_unitaire_ht' => '4.00'],
+            ], ['date_facture' => '2026-10-26']),
+            InvalidArgumentException::class,
+            '« Câble » figure sur deux lignes : une facture d\'achat n\'a qu\'une ligne par produit.',
+        );
+
+        $this->assertSame(0, FactureAchat::query()->count());
+        $this->assertSame(0, LigneAchat::query()->count());
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function identifiantsEcritsAutrement(): array
+    {
+        return [
+            'précédé de +' => ['+'],
+            'précédé d\'un zéro' => ['0'],
+            'précédé d\'une espace' => [' '],
+        ];
     }
 
     /**

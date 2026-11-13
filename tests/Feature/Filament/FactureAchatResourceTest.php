@@ -1365,7 +1365,7 @@ class FactureAchatResourceTest extends TestCase
             ->setFormComponentActionData(['quantite' => 2, 'prix_unitaire_ht' => '0'])
             ->callMountedFormComponentAction()
             ->assertHasNoFormComponentActionErrors()
-            ->assertNotified('« Câble USB-C » était déjà sur la facture : sa ligne compte désormais 12 articles à 3,333333 € HT.');
+            ->assertNotified('« Câble USB-C » était déjà sur la facture : sa ligne compte désormais 12 articles à 3,333333 € HT, vendus 9,90 € TTC l\'article.');
 
         $this->assertSame(
             [[$cable->id, 12, '3.333333', null], [$chargeur->id, 3, '8.00', null]],
@@ -1383,6 +1383,80 @@ class FactureAchatResourceTest extends TestCase
             [['Câble USB-C', 12, '3.333333', '40.00'], ['Chargeur', 4, '8.00', '32.00']],
             FactureAchat::query()->sole()->lignes->map(fn (LigneAchat $ligne): array => [$ligne->description, $ligne->quantite, $ligne->prix_unitaire_ht, $ligne->montant_ht])->all(),
         );
+    }
+
+    /**
+     * Avec le barème du magasin (5,00 € de bénéfice HT jusqu'à 99,00 €),
+     * 10 câbles à 4,00 € HT font proposer 10,80 € TTC ; 2 câbles offerts à
+     * 0,00 € HT les rejoignent au prix moyen de 3,333333 € HT, et le barème
+     * propose le prix de vente de ce prix moyen, 10,00 € TTC, jamais celui
+     * des seuls articles offerts (6,00 €). La fiche du câble se vend 10,00 €
+     * une fois le brouillon enregistré, et l'avis le dit.
+     */
+    public function test_avec_le_bareme_le_produit_ajoute_de_nouveau_prend_le_prix_de_vente_du_prix_moyen(): void
+    {
+        $this->connecterLeProprietaire()->update([
+            'prix_vente_automatique' => true,
+            'bareme_prix_vente' => new BaremePrixDeVente([['jusqu_a' => 9900, 'benefice' => 500]], null, false),
+        ]);
+        $cable = Produit::factory()->create(['nom' => 'Câble', 'prix_vente_ttc' => '15.00', 'taux_tva' => 20, 'suivi_stock' => true]);
+
+        $page = Livewire::test(CreateFactureAchat::class)
+            ->fillForm(['fournisseur_id' => Fournisseur::factory()->create()->id, 'date_facture' => '2026-01-15'])
+            ->mountFormComponentAction('ajouterUnProduitAction', 'ajouterUnProduit')
+            ->setFormComponentActionData(['produit_id' => $cable->id])
+            ->setFormComponentActionData(['quantite' => 10, 'prix_unitaire_ht' => '4.00'])
+            ->assertFormComponentActionDataSet(['prix_vente_ttc' => '10.80'])
+            ->callMountedFormComponentAction()
+            ->mountFormComponentAction('ajouterUnProduitAction', 'ajouterUnProduit')
+            ->setFormComponentActionData(['produit_id' => $cable->id])
+            ->assertFormComponentActionDataSet(['prix_vente_ttc' => '10.80', 'prix_unitaire_ht' => '4.00'])
+            ->setFormComponentActionData(['quantite' => 2, 'prix_unitaire_ht' => '0'])
+            ->assertFormComponentActionDataSet(['prix_vente_ttc' => '10.00'])
+            ->assertSee('bénéfice 5,00 € HT par article, au prix d\'achat moyen de la ligne')
+            ->callMountedFormComponentAction()
+            ->assertHasNoFormComponentActionErrors()
+            ->assertNotified('« Câble » était déjà sur la facture : sa ligne compte désormais 12 articles à 3,333333 € HT, vendus 10,00 € TTC l\'article.');
+
+        $this->assertSame([[12, '3.333333', '10.00']], array_map(
+            fn (array $ligne): array => [$ligne['quantite'], $ligne['prix_unitaire_ht'], $ligne['produit']['prix_vente_ttc']],
+            array_values($page->get('data.lignes')),
+        ));
+
+        $page->call('create')->assertHasNoFormErrors();
+
+        $this->assertSame('10.00', $cable->fresh()->prix_vente_ttc);
+    }
+
+    /**
+     * Sans barème, la fiche corrigée par la première ligne (prix de vente
+     * passé de 15,00 € à 20,00 €, nom complété) est celle que reprend la
+     * fenêtre quand le produit est ajouté de nouveau, et celle que garde la
+     * ligne réunie : rien ne revient en silence à la fiche de la base.
+     */
+    public function test_la_fiche_corrigee_par_la_premiere_ligne_est_gardee_apres_la_reunion(): void
+    {
+        $this->connecterLeProprietaire();
+        $cable = Produit::factory()->create(['nom' => 'Câble', 'prix_vente_ttc' => '15.00', 'taux_tva' => 20, 'suivi_stock' => true]);
+
+        $page = Livewire::test(CreateFactureAchat::class)
+            ->fillForm(['fournisseur_id' => Fournisseur::factory()->create()->id, 'date_facture' => '2026-01-15'])
+            ->mountFormComponentAction('ajouterUnProduitAction', 'ajouterUnProduit')
+            ->setFormComponentActionData(['produit_id' => $cable->id])
+            ->setFormComponentActionData(['quantite' => 10, 'prix_unitaire_ht' => '4.00', 'prix_vente_ttc' => '20', 'nom' => 'Câble USB-C 2 m'])
+            ->callMountedFormComponentAction()
+            ->mountFormComponentAction('ajouterUnProduitAction', 'ajouterUnProduit')
+            ->setFormComponentActionData(['produit_id' => $cable->id])
+            ->assertFormComponentActionDataSet(['prix_vente_ttc' => '20.00', 'nom' => 'Câble USB-C 2 m'])
+            ->setFormComponentActionData(['quantite' => 2, 'prix_unitaire_ht' => '0'])
+            ->callMountedFormComponentAction()
+            ->assertHasNoFormComponentActionErrors()
+            ->assertNotified('« Câble USB-C 2 m » était déjà sur la facture : sa ligne compte désormais 12 articles à 3,333333 € HT, vendus 20,00 € TTC l\'article.');
+
+        $page->call('create')->assertHasNoFormErrors();
+
+        $this->assertSame(['Câble USB-C 2 m', '20.00'], [$cable->fresh()->nom, $cable->fresh()->prix_vente_ttc]);
+        $this->assertSame([12], FactureAchat::query()->sole()->lignes->pluck('quantite')->all());
     }
 
     /**
@@ -1410,6 +1484,31 @@ class FactureAchatResourceTest extends TestCase
             ->assertFormComponentActionMounted('lignes', 'modifierLaLigne');
 
         $this->assertSame(array_column(array_values($avant), 'produit_id'), array_column(array_values($page->get('data.lignes')), 'produit_id'));
+    }
+
+    /**
+     * Une requête forgée qui écrit autrement l'identifiant d'un produit
+     * déjà sur la facture (« +12 », que la base lit comme 12) ne lui donne
+     * pas une seconde ligne : l'enregistrement compare les produits lus en
+     * base et refuse, avec la raison ; rien n'est enregistré.
+     */
+    public function test_un_produit_force_sous_un_identifiant_ecrit_autrement_n_a_toujours_qu_une_ligne(): void
+    {
+        $this->connecterLeProprietaire();
+        $cable = Produit::factory()->create(['nom' => 'Câble USB-C', 'prix_vente_ttc' => '9.90', 'taux_tva' => 20, 'suivi_stock' => true]);
+        $chargeur = Produit::factory()->create(['nom' => 'Chargeur', 'prix_vente_ttc' => '19.90', 'taux_tva' => 20, 'suivi_stock' => true]);
+        $page = $this->factureDAchatQuiAchete($cable, ['prix_unitaire_ht' => '4.00'])
+            ->mountFormComponentAction('ajouterUnProduitAction', 'ajouterUnProduit')
+            ->setFormComponentActionData(['produit_id' => $chargeur->id])
+            ->setFormComponentActionData(['quantite' => 1, 'prix_unitaire_ht' => '8.00'])
+            ->callMountedFormComponentAction();
+        $ligneDuChargeur = array_keys($page->get('data.lignes'))[1];
+
+        $page->set("data.lignes.{$ligneDuChargeur}.produit_id", '+'.$cable->id)
+            ->call('create')
+            ->assertNotified('« Câble USB-C » figure sur deux lignes : une facture d\'achat n\'a qu\'une ligne par produit. Faites-en une seule ligne de la quantité totale, au prix moyen si le fournisseur le facture à deux prix.');
+
+        $this->assertSame(0, FactureAchat::query()->count());
     }
 
     /**

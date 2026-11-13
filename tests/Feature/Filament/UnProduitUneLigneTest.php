@@ -20,6 +20,7 @@ use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Livewire\SelecteurDeProduits;
 use App\Filament\App\Pages\Caisse;
+use App\Filament\App\Resources\DevisResource;
 use App\Filament\App\Resources\DevisResource\Pages\CreateDevis;
 use App\Filament\App\Resources\DevisResource\Pages\EditDevis;
 use App\Filament\App\Resources\FactureResource\Pages\CreateFacture;
@@ -110,21 +111,69 @@ class UnProduitUneLigneTest extends TestCase
     }
 
     /**
-     * « Ajouter » envoie la sélection une fois, puis la vide : un second
-     * clic, parti avant que la fenêtre ne se ferme, n'envoie rien.
+     * « Ajouter » envoie la sélection avec le jeton de son envoi : un
+     * second clic, parti avant que la page ne réponde, porte le même jeton,
+     * et la page n'ajoute les produits qu'une fois. Une fois la sélection
+     * ajoutée, la page la fait vider, et le prochain envoi a un nouveau
+     * jeton.
      */
     public function test_un_second_envoi_de_la_selection_n_ajoute_pas_les_produits_deux_fois(): void
     {
         $cable = $this->cable();
-
-        Livewire::test(SelecteurDeProduits::class)
+        $tableau = Livewire::test(SelecteurDeProduits::class)
             ->call('ajouterUnArticle', $cable->getKey())
             ->call('ajouterLaSelection')
-            ->assertDispatched(SelecteurDeProduits::EVENEMENT)
-            ->assertSet('selection', [])
+            ->call('ajouterLaSelection');
+        $envoi = $tableau->get('envoi');
+        $tableau->assertDispatched(SelecteurDeProduits::EVENEMENT, selection: [['produit_id' => $cable->getKey(), 'quantite' => 1]], envoi: $envoi);
+
+        $page = Livewire::test(CreateFacture::class)
+            ->call('recevoirLesProduitsChoisis', [['produit_id' => $cable->getKey(), 'quantite' => 1]], $envoi)
+            ->assertDispatched(SelecteurDeProduits::SELECTION_AJOUTEE, envoi: $envoi)
+            ->call('recevoirLesProduitsChoisis', [['produit_id' => $cable->getKey(), 'quantite' => 1]], $envoi);
+
+        $this->assertSame([['Câble', 1, '0']], self::lignes($page->get('data.lignes')));
+
+        $tableau->call('selectionAjoutee', 'un-autre-envoi')
+            ->assertSet('selection', [['produit_id' => $cable->getKey(), 'quantite' => 1]])
+            ->call('selectionAjoutee', $envoi)
+            ->assertSet('selection', []);
+        $this->assertNotSame($envoi, $tableau->get('envoi'));
+    }
+
+    /**
+     * Refusée par la page (une ligne remisée pour un vendeur qui n'accorde
+     * pas de remise), la sélection reste dans le tableau, avec le même
+     * jeton : le vendeur retire le produit refusé et ajoute les autres.
+     */
+    public function test_apres_un_refus_de_la_page_la_selection_reste_et_le_reste_s_ajoute(): void
+    {
+        $cable = $this->cable();
+        $bougie = Produit::factory()->create(['nom' => 'Bougie', 'prix_vente_ttc' => '18.00', 'taux_tva' => 20, 'suivi_stock' => false]);
+        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [
+            ['produit_id' => $cable->getKey(), 'quantite' => 1, 'remise_pourcentage' => '10'],
+        ]);
+        $this->connecter($this->vendeurQuiVoitToutesLesFactures());
+
+        $tableau = Livewire::test(SelecteurDeProduits::class)
+            ->call('ajouterUnArticle', $bougie->getKey())
+            ->call('ajouterUnArticle', $bougie->getKey())
+            ->call('ajouterUnArticle', $cable->getKey())
+            ->call('ajouterLaSelection');
+        $envoi = $tableau->get('envoi');
+        $page = Livewire::test(EditFacture::class, ['record' => $brouillon->getRouteKey()])
+            ->call('recevoirLesProduitsChoisis', $tableau->get('selection'), $envoi)
+            ->assertNotified('« Câble » a une remise sur sa ligne : demandez à un responsable de changer sa quantité.')
+            ->assertNotDispatched(SelecteurDeProduits::SELECTION_AJOUTEE);
+
+        $tableau->assertSet('selection', [['produit_id' => $bougie->getKey(), 'quantite' => 2], ['produit_id' => $cable->getKey(), 'quantite' => 1]])
+            ->call('retirer', $cable->getKey())
             ->call('ajouterLaSelection')
-            ->assertNotDispatched(SelecteurDeProduits::EVENEMENT)
-            ->assertNotNotified();
+            ->assertDispatched(SelecteurDeProduits::EVENEMENT, selection: [['produit_id' => $bougie->getKey(), 'quantite' => 2]], envoi: $envoi);
+        $page->call('recevoirLesProduitsChoisis', $tableau->get('selection'), $envoi)
+            ->assertDispatched(SelecteurDeProduits::SELECTION_AJOUTEE, envoi: $envoi);
+
+        $this->assertSame([['Câble', 1, '10'], ['Bougie', 2, '0']], self::lignes($page->get('data.lignes')));
     }
 
     /**
@@ -182,9 +231,87 @@ class UnProduitUneLigneTest extends TestCase
             ->call('recevoirLesProduitsChoisis', [['produit_id' => $cable->getKey(), 'quantite' => 1]])
             ->assertNotified('« Câble » a une remise sur sa ligne : demandez à un responsable de changer sa quantité.')
             ->call('recevoirLesProduitsChoisis', [['produit_id' => $chargeur->getKey(), 'quantite' => 1]])
-            ->assertNotified('« Chargeur » est sur sa ligne à un autre prix que celui de sa fiche : demandez à un responsable de changer sa quantité.');
+            ->assertNotified('« Chargeur » est sur sa ligne au prix enregistré sur ce brouillon, différent de celui de sa fiche : demandez à un responsable de changer sa quantité.');
 
         $this->assertSame([['Câble', 1, '10'], ['Chargeur', 1, '0']], self::lignes($page->get('data.lignes')));
+    }
+
+    /**
+     * Sans l'autorisation des remises, une ligne seulement restée au prix
+     * d'une fiche qui a changé depuis son ajout (10,00 € puis 12,00 €) ne
+     * bloque pas l'ajout : elle reprend le prix du catalogue d'aujourd'hui,
+     * comme quand le vendeur tape la quantité, et sa quantité augmente ;
+     * le message dit ce prix, et le document s'enregistre.
+     *
+     * @param  class-string  $page
+     */
+    #[DataProvider('nouveauxDocuments')]
+    public function test_sans_l_autorisation_une_ligne_au_prix_d_une_fiche_changee_reprend_le_prix_du_catalogue(string $page): void
+    {
+        $cable = $this->cable();
+        $this->connecter($this->membre($this->magasin, RoleMagasin::Vendeur));
+        $formulaire = Livewire::test($page)
+            ->fillForm(['client_id' => Client::factory()->create()->id])
+            ->call('recevoirLesProduitsChoisis', [['produit_id' => $cable->getKey(), 'quantite' => 1]]);
+        $cable->forceFill(['prix_vente_ttc' => '12.00'])->save();
+
+        $formulaire->call('recevoirLesProduitsChoisis', [['produit_id' => $cable->getKey(), 'quantite' => 1]])
+            ->assertNotified('Déjà sur une ligne : « Câble » (2) au prix du catalogue d\'aujourd\'hui, 12,00 €, sa quantité a augmenté.')
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $this->assertSame([[2, '12.00']], array_map(fn (array $ligne): array => [$ligne['quantite'], $ligne['prix_unitaire_ttc']], array_values($formulaire->get('data.lignes'))));
+    }
+
+    /**
+     * @return array<string, array{class-string}>
+     */
+    public static function nouveauxDocuments(): array
+    {
+        return [
+            'nouvelle facture' => [CreateFacture::class],
+            'nouveau devis' => [CreateDevis::class],
+        ];
+    }
+
+    /**
+     * Sur un brouillon rouvert, une ligne ajoutée pendant la modification,
+     * restée au prix d'une fiche qui a changé depuis, reprend de même le
+     * prix du catalogue d'aujourd'hui quand le vendeur choisit de nouveau
+     * son produit ; la ligne enregistrée à un autre prix, elle, reste
+     * refusée (voir le test précédent).
+     *
+     * @param  class-string  $page
+     */
+    #[DataProvider('brouillonsRouverts')]
+    public function test_sur_un_brouillon_rouvert_une_ligne_ajoutee_au_prix_d_une_fiche_changee_reprend_le_prix_du_catalogue(string $page, string $action): void
+    {
+        $cable = $this->cable();
+        $chargeur = Produit::factory()->create(['nom' => 'Chargeur', 'prix_vente_ttc' => '20.00', 'taux_tva' => 20, 'suivi_stock' => false]);
+        $vendeur = $this->membre($this->magasin, RoleMagasin::Vendeur);
+        $this->connecter($vendeur);
+        $document = app($action)->handle($vendeur, Client::factory()->create(), [['produit_id' => $chargeur->getKey(), 'quantite' => 1]]);
+        $formulaire = Livewire::test($page, ['record' => $document->getRouteKey()])
+            ->call('recevoirLesProduitsChoisis', [['produit_id' => $cable->getKey(), 'quantite' => 1]]);
+        $cable->forceFill(['prix_vente_ttc' => '12.00'])->save();
+
+        $formulaire->call('recevoirLesProduitsChoisis', [['produit_id' => $cable->getKey(), 'quantite' => 1]])
+            ->assertNotified('Déjà sur une ligne : « Câble » (2) au prix du catalogue d\'aujourd\'hui, 12,00 €, sa quantité a augmenté.')
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $this->assertSame([['Chargeur', 1, '20.00'], ['Câble', 2, '12.00']], $document->fresh()->lignes->map(fn ($ligne): array => [$ligne->description, $ligne->quantite, $ligne->prix_unitaire_ttc])->all());
+    }
+
+    /**
+     * @return array<string, array{class-string, class-string}>
+     */
+    public static function brouillonsRouverts(): array
+    {
+        return [
+            'brouillon de facture' => [EditFacture::class, CreerFactureAction::class],
+            'devis' => [EditDevis::class, CreerDevisAction::class],
+        ];
     }
 
     /**
@@ -264,9 +391,12 @@ class UnProduitUneLigneTest extends TestCase
     /**
      * Un service à prix de référence coché de nouveau ajoute 1 à la
      * quantité de sa ligne ; un service sans prix de référence arrive
-     * toujours sur une nouvelle ligne, dont le prix se saisit (60,00 € puis
-     * 80,00 €) ; deux lignes de ce service au même prix et au même taux ne
-     * partent pas, avec la raison sous les lignes.
+     * toujours sur une nouvelle ligne, dont le prix se saisit : saisi au
+     * prix d'une autre ligne de ce service (60,00 €), sa ligne la rejoint
+     * (voir le test suivant) ; à un autre prix (80,00 €), elle reste. Deux
+     * lignes au même prix et au même taux qui arriveraient quand même
+     * (la saisie envoyée sans quitter le champ) ne partent pas, avec la
+     * raison sous les lignes.
      */
     public function test_un_service_n_a_qu_une_ligne_par_prix_et_par_taux(): void
     {
@@ -288,9 +418,103 @@ class UnProduitUneLigneTest extends TestCase
         $this->assertSame(0, Facture::query()->count());
 
         $page->set("data.lignes.{$seconde}.prix_unitaire_ttc", '80.00')
+            ->call('reunirLesLignesIdentiques')
             ->call('create')
             ->assertHasNoFormErrors();
         $this->assertSame([['Pose', 2], ['Réparation', 1], ['Réparation', 1]], Facture::query()->sole()->lignes->map(fn ($ligne): array => [$ligne->description, $ligne->quantite])->all());
+    }
+
+    /**
+     * Une ligne de service que la saisie de son prix rend identique à une
+     * autre (« Réparation » à 60,00 € sur deux lignes) la rejoint dès que
+     * le prix est saisi : la ligne la plus haute garde sa place et reçoit la
+     * somme des quantités, et un message le dit ; rien ne s'inscrit au
+     * journal des événements, et le document s'enregistre. Deux lignes au
+     * même prix mais à deux remises restent.
+     */
+    public function test_une_ligne_devenue_identique_a_une_autre_est_reunie_a_l_ecran(): void
+    {
+        $reparation = Service::factory()->create(['nom' => 'Réparation']);
+        $pose = Service::factory()->auPrixDe('45.00')->create(['nom' => 'Pose']);
+        $page = Livewire::test(CreateFacture::class)->fillForm(['client_id' => Client::factory()->create()->id]);
+
+        foreach ([$reparation, $pose, $reparation, $reparation] as $service) {
+            $page->callFormComponentAction('ajouterUnServiceAction', 'ajouterUnService', data: ['services' => [$service->id]]);
+        }
+
+        [$premiere, , $seconde, $troisieme] = array_keys($page->get('data.lignes'));
+        $avant = $this->evenementsDuMagasin();
+
+        $page->set("data.lignes.{$premiere}.prix_unitaire_ttc", '60.00')
+            ->set("data.lignes.{$premiere}.quantite", 2)
+            ->set("data.lignes.{$seconde}.prix_unitaire_ttc", '60.00')
+            ->set("data.lignes.{$troisieme}.prix_unitaire_ttc", '60.00')
+            ->set("data.lignes.{$troisieme}.remise_pourcentage", '10')
+            ->call('reunirLesLignesIdentiques')
+            ->assertNotified('« Réparation » : ses lignes au même prix sont réunies (quantité 3).');
+
+        $this->assertSame([$premiere, array_keys($page->get('data.lignes'))[1], $troisieme], array_keys($page->get('data.lignes')));
+        $this->assertSame([['Réparation', 3, '0'], ['Pose', 1, '0'], ['Réparation', 1, '10']], self::lignes($page->get('data.lignes')));
+        $this->assertSame($avant, $this->evenementsDuMagasin());
+
+        $page->call('create')->assertHasFormErrors(['lignes']);
+        $page->set("data.lignes.{$troisieme}.remise_pourcentage", '0')
+            ->call('reunirLesLignesIdentiques')
+            ->call('create')
+            ->assertHasNoFormErrors();
+        $this->assertSame([['Réparation', 4], ['Pose', 1]], Facture::query()->sole()->lignes->map(fn ($ligne): array => [$ligne->description, $ligne->quantite])->all());
+    }
+
+    /**
+     * Le champ du prix, du taux et de la remise d'une ligne de service
+     * demande la réunion une fois sa saisie faite (le champ quitté) ; ceux
+     * d'une ligne de produit, qui n'a jamais qu'une ligne, non.
+     */
+    public function test_seule_une_ligne_de_service_demande_la_reunion_une_fois_son_prix_saisi(): void
+    {
+        $reparation = Service::factory()->create(['nom' => 'Réparation']);
+        $cable = $this->cable();
+
+        $page = Livewire::test(CreateFacture::class)
+            ->fillForm(['client_id' => Client::factory()->create()->id])
+            ->call('recevoirLesProduitsChoisis', [['produit_id' => $cable->getKey(), 'quantite' => 1]]);
+
+        $this->assertSame(0, substr_count($page->html(), 'x-on:change="$wire.reunirLesLignesIdentiques()"'));
+
+        $page->callFormComponentAction('ajouterUnServiceAction', 'ajouterUnService', data: ['services' => [$reparation->id]]);
+
+        // Le prix, le taux et la remise de la seule ligne de service.
+        $this->assertSame(3, substr_count($page->html(), 'x-on:change="$wire.reunirLesLignesIdentiques()"'));
+    }
+
+    /**
+     * Sans l'autorisation des remises, un service coché de nouveau dont la
+     * ligne porte une remise est refusé avec la raison : la fenêtre reste
+     * ouverte avec ses cases, pour décocher ce service et ajouter les
+     * autres.
+     */
+    public function test_un_service_refuse_garde_la_fenetre_ouverte_avec_ses_cases(): void
+    {
+        $pose = Service::factory()->auPrixDe('45.00')->create(['nom' => 'Pose']);
+        $livraison = Service::factory()->auPrixDe('10.00')->create(['nom' => 'Livraison']);
+        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [
+            ['service_id' => $pose->id, 'quantite' => 1, 'remise_pourcentage' => '10'],
+        ]);
+        $this->connecter($this->vendeurQuiVoitToutesLesFactures());
+
+        $page = Livewire::test(EditFacture::class, ['record' => $brouillon->getRouteKey()])
+            ->mountFormComponentAction('ajouterUnServiceAction', 'ajouterUnService')
+            ->setFormComponentActionData(['services' => [$livraison->id, $pose->id]])
+            ->callMountedFormComponentAction()
+            ->assertNotified('« Pose » a une remise sur sa ligne : demandez à un responsable de changer sa quantité.')
+            ->assertFormComponentActionMounted('ajouterUnServiceAction', 'ajouterUnService')
+            ->assertFormComponentActionDataSet(['services' => [$livraison->id, $pose->id]]);
+        $this->assertSame([['Pose', 1, '10']], self::lignes($page->get('data.lignes')));
+
+        $page->set('mountedFormComponentActionsData.0.services', [$livraison->id])
+            ->callMountedFormComponentAction()
+            ->assertHasNoFormComponentActionErrors();
+        $this->assertSame([['Pose', 1, '10'], ['Livraison', 1, '0']], self::lignes($page->get('data.lignes')));
     }
 
     /**
@@ -330,6 +554,21 @@ class UnProduitUneLigneTest extends TestCase
         $page->set("data.lignes.{$cle}.produit_id", $ailleurs->getKey())
             ->call('create')
             ->assertHasFormErrors(["lignes.{$cle}.produit_id" => 'exists']);
+        $this->assertSame(0, Facture::query()->count());
+
+        // Un identifiant qui n'est pas un entier n'est jamais lu en base :
+        // une erreur du formulaire, jamais une erreur de la base.
+        $page->set("data.lignes.{$cle}.produit_id", 'abc')
+            ->call('create')
+            ->assertHasFormErrors(["lignes.{$cle}.produit_id"]);
+        $this->assertSame([DevisResource::PRODUIT_INTROUVABLE], $page->errors()->get("data.lignes.{$cle}.produit_id"));
+        $this->assertSame(0, Facture::query()->count());
+
+        $caisse = Livewire::test(Caisse::class)->call('recevoirLesProduitsChoisis', [['produit_id' => $cable->getKey(), 'quantite' => 1]]);
+        $cleALaCaisse = array_key_first($caisse->get('data.lignes'));
+        $caisse->set("data.lignes.{$cleALaCaisse}.produit_id", 'abc')
+            ->call('encaisser')
+            ->assertHasFormErrors(["lignes.{$cleALaCaisse}.produit_id"]);
         $this->assertSame(0, Facture::query()->count());
     }
 

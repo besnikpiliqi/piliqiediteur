@@ -206,7 +206,6 @@ class ConstructeurLigneAchat
             throw new InvalidArgumentException('Une facture d\'achat doit contenir au moins une ligne.');
         }
 
-        self::refuserUnProduitSurDeuxLignes($lignes);
         Produit::verrouillerPourLeStock(array_column($lignes, 'produit_id'));
         $fichesDejaSaisies = $factureAchat->lignes()
             ->whereNull('produit_id')
@@ -215,10 +214,13 @@ class ConstructeurLigneAchat
             ->all();
         $factureAchat->lignes()->delete();
 
+        $lignes = array_values($lignes);
+        $produits = array_map(fn (array $donnees): Produit => $this->produitDeLaLigne($factureAchat, $donnees), $lignes);
+        self::refuserUnProduitSurDeuxLignes($produits);
         $lignesPreparees = [];
 
-        foreach (array_values($lignes) as $ordre => $donnees) {
-            $lignesPreparees[] = $this->preparerUneLigne($auteur, $factureAchat, $donnees, $ordre);
+        foreach ($lignes as $ordre => $donnees) {
+            $lignesPreparees[] = $this->preparerUneLigne($auteur, $factureAchat, $produits[$ordre], $donnees, $ordre);
         }
 
         $document = $this->chiffrer($lignesPreparees, $montants->tvaParTaux);
@@ -250,39 +252,31 @@ class ConstructeurLigneAchat
      * d'un centime possible avec la facture du fournisseur étant accepté.
      * L'écran réunit un produit choisi de nouveau (voir
      * AjouteDesLignesDAchat) ; l'enregistrement refuse deux lignes du même
-     * produit, d'où qu'elles viennent (écran, API, requête forgée). Un
-     * nouveau produit, qui n'a pas encore de fiche, n'est pas concerné :
-     * deux nouveaux produits de même référence sont refusés à part (voir
-     * verifierLesNouveauxProduits()). Un identifiant qu'aucun produit du
-     * magasin ne porte est refusé ensuite, avec sa ligne (voir
-     * produitDeLaLigne()).
+     * produit, d'où qu'elles viennent (écran, API, requête forgée). Les
+     * produits se comparent une fois lus en base, tels que les lignes les
+     * enregistreront : « 12 », « +12 » et « 012 » désignent tous la fiche
+     * 12. Un nouveau produit, qui n'a pas encore de fiche, n'est pas
+     * concerné : deux nouveaux produits de même référence sont refusés à
+     * part (voir verifierLesNouveauxProduits()).
      *
-     * @param  array<array-key, array<string, mixed>>  $lignes
+     * @param  list<Produit>  $produits  le produit de chaque ligne (voir produitDeLaLigne())
      *
      * @throws InvalidArgumentException
      */
-    private static function refuserUnProduitSurDeuxLignes(array $lignes): void
+    private static function refuserUnProduitSurDeuxLignes(array $produits): void
     {
-        $produits = [];
+        $dejaSurUneLigne = [];
 
-        foreach ($lignes as $donnees) {
-            if (! filled($donnees['produit_id'] ?? null)) {
+        foreach ($produits as $produit) {
+            if (! $produit->exists) {
                 continue;
             }
 
-            // Sous la clé que PHP en fait : « 12 » et 12 désignent la même
-            // fiche (voir ValeursLues::cleDeTableau()).
-            $produit = ValeursLues::cleDeTableau($donnees['produit_id']);
-
-            if (isset($produits[$produit])) {
-                $nom = Produit::withTrashed()->whereKey($produit)->value('nom');
-
-                if (is_string($nom)) {
-                    throw new InvalidArgumentException(sprintf(self::REFUS_PRODUIT_SUR_DEUX_LIGNES, $nom));
-                }
+            if (isset($dejaSurUneLigne[$produit->getKey()])) {
+                throw new InvalidArgumentException(sprintf(self::REFUS_PRODUIT_SUR_DEUX_LIGNES, ValeurSimple::enTexte($produit->getOriginal('nom'))));
             }
 
-            $produits[$produit] = true;
+            $dejaSurUneLigne[$produit->getKey()] = true;
         }
     }
 
@@ -510,12 +504,12 @@ class ConstructeurLigneAchat
      * avec les autres lignes (voir chiffrer()) : son produit, existant et
      * corrigé tout de suite, ou nouveau et gardé en fiche, et ses prix.
      *
+     * @param  Produit  $produit  le produit de la ligne (voir produitDeLaLigne())
      * @param  array<string, mixed>  $donnees
      * @return array<string, mixed>
      */
-    private function preparerUneLigne(User $auteur, FactureAchat $factureAchat, array $donnees, int $ordre): array
+    private function preparerUneLigne(User $auteur, FactureAchat $factureAchat, Produit $produit, array $donnees, int $ordre): array
     {
-        $produit = $this->produitDeLaLigne($factureAchat, $donnees);
         // Un achat part toujours du PU HT du fournisseur (voir
         // CalculateurLigne) : celui saisi, sinon le dernier prix d'achat du
         // produit.

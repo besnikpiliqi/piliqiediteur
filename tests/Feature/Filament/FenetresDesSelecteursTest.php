@@ -139,7 +139,8 @@ class FenetresDesSelecteursTest extends TestCase
 
         $clic->assertOk();
         $ajout->assertOk();
-        $this->assertSame([['name' => SelecteurDeProduits::EVENEMENT, 'params' => ['selection' => [['produit_id' => $bougie->getKey(), 'quantite' => 1]]]]], $ajout->json('components.0.effects.dispatches'));
+        $envoi = $this->donneesDeLInstantane((string) $ajout->json('components.0.snapshot'))['envoi'];
+        $this->assertSame([['name' => SelecteurDeProduits::EVENEMENT, 'params' => ['selection' => [['produit_id' => $bougie->getKey(), 'quantite' => 1]], 'envoi' => $envoi]]], $ajout->json('components.0.effects.dispatches'));
 
         $reception = $this->recevoirLEvenement($fenetre, $ajout);
 

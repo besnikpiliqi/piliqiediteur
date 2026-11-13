@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 13/11/2026 à 14:46 UTC par pilotage-sync.sh : « Après le lot 21 ».
+Mis à jour le 13/11/2026 à 14:49 UTC par pilotage-sync.sh : « 13/11 15:40 UTC : chaîne finie (lot 21), nouvelle chaîne SEED → VIES-DEP lancée ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -41,32 +41,8 @@ bb135db Relecture du lot AUD de la série 8
 
 ## Dernière course de la chaîne
 
-Course `wf_1d467e9e-93e`, étapes commencées (de la plus ancienne à la plus récente) :
+Course `wf_ee9b6e6e-908`, étapes commencées (de la plus ancienne à la plus récente) :
 
 ```
-EC2:correction
-EC2:poussee
-EC2:notes
-S9-L:implementation
-S9-L:relecture1
-S9-L:relecture2
-S9-L:correction
-S9-L:poussee
-S9-L:notes
-S9-A:implementation
-S9-A:implementation-2
-S9-A:implementation-3
-S9-A:relecture1
-S9-A:relecture2
-S9-A:correction
-S9-A:poussee
-S9-A:notes
-21:implementation
-21:implementation-2
-21:implementation-3
-21:relecture1
-21:relecture2
-21:correction
-21:poussee
-21:notes
+SEED:implementation
 ```

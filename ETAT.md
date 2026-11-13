@@ -1,18 +1,19 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 13/11/2026 à 21:12 UTC par pilotage-sync.sh : « Lot MAT-PRO ajouté ».
+Mis à jour le 13/11/2026 à 21:21 UTC par pilotage-sync.sh : « Après le lot ER-PRO ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
-Tête poussée : `58ad4de`. Commits locaux pas encore poussés :
+Tête poussée : `eba4bc8`. Commits locaux pas encore poussés :
 
 ```
-175df0f Applique les décisions de Claude sans attendre un professionnel (lot ER-PRO)
 ```
 
 Derniers commits poussés :
 
 ```
+eba4bc8 Relecture du lot ER-PRO
+175df0f Applique les décisions de Claude sans attendre un professionnel (lot ER-PRO)
 58ad4de Relecture du lot SEED
 8847d24 Sème des données de démonstration pour le poste de l'éditeur (lot SEED)
 3b695ec Relecture du lot 21 des décisions
@@ -31,36 +32,11 @@ d4a8247 Relecture du lot ML des e-mails vérifiés
 0ad0710 Vérifie les e-mails sur Mailtrap et explique chaque échec d'envoi (lot ML)
 8feeb83 Relecture du lot UI des écrans
 238f430 Corrige les constats de l'éditeur sur les écrans de vente (lot UI)
-e101d9f Lit l'écart d'horloge du diagnostic à un dixième de seconde près (CI)
-b12a835 Relecture du lot DEMO de la démonstration
 ```
 
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
- M CLAUDE.md
- M app/Domain/Cabinets/Support/GardesDesCabinets.php
- M app/Domain/Contacts/Models/Fournisseur.php
- M app/Domain/Facturation/Services/CalculateurLigne.php
- M app/Domain/Facturation/Services/EReportingDesParticuliers.php
- M app/Domain/Facturation/Services/EncaissementsDesPrestations.php
- M app/Domain/Facturation/Services/RegularisationDUneExoneration.php
- M app/Domain/Tenancy/Concerns/BelongsToMagasin.php
- M app/Domain/Tenancy/Concerns/BelongsToSociete.php
- M app/Domain/Tenancy/Models/Affectation.php
- M app/Domain/Tenancy/Models/Magasin.php
- M app/Domain/Tenancy/Models/Societe.php
- M app/Domain/Tenancy/Services/ChosesAFaireDuMagasin.php
- M app/Filament/App/Resources/ClientResource/Pages/ViewClient.php
- M app/Models/User.php
- M tests/Browser/Parcours/ExonerationNonProuveeTest.php
- M tests/Browser/inventaire-des-actions.php
- M tests/Feature/Cabinets/MagasinsOuvertsAuCabinetTest.php
- M tests/Feature/Facturation/EReportingDesParticuliersTest.php
- M tests/Feature/Facturation/ExonerationNonProuveeTest.php
- M tests/Unit/CalculateurLigneTest.php
-?? app/Domain/Tenancy/Concerns/RefuseUneCleIllisible.php
-?? tests/Feature/Filament/FichesAUneCleIllisibleTest.php
 ```
 
 ## Dernière course de la chaîne
@@ -80,4 +56,6 @@ ER-PRO:implementation-2
 ER-PRO:relecture1
 ER-PRO:relecture2
 ER-PRO:correction
+ER-PRO:poussee
+ER-PRO:notes
 ```

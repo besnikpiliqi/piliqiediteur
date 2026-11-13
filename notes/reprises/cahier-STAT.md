@@ -58,3 +58,11 @@ Ce cahier fait foi pour le lot.
 - Chaque lot lance Larastan et `qualite.php seuils` avant son commit. Avec le cache de Larastan, c'est rapide.
 - Psalm flux tourne dans la CI seulement, parce qu'il est lent en local.
 - Une CI rouge, analyse comprise, est réparée en premier par le lot suivant.
+
+## 7. Petit ajout : matrice des décisions (D76)
+
+- Dans `tests/Unit/matrice-des-decisions.php`, les deux décisions marquées « a_trancher » (série 4, décision 5, et D37 : le champ « Reçu le » d'un paiement) ne sont plus en attente.
+  - Selon D76, la décision de Claude s'applique : une date passée est permise, une date future est refusée. L'éditeur l'a lue le 13/11/2026 sans la contester.
+  - Remplace « a_trancher » par la règle qui la fait vivre, avec ses tests existants. Si aucun test ne refuse une date future ou n'accepte une date passée, ajoute-le.
+  - Garde « remplacee » pour la part de l'échéance.
+- Mets `MatriceDesDecisionsTest` à jour si une liste de clés y change.

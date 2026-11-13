@@ -2204,3 +2204,37 @@ mais pourquoi avoirs ce genre d erreurs?? toi t es sencé creer un code propre s
 
 oui pour larastan et psalm sur github
 
+## 236. 2026-11-13 20:55 UTC
+
+c est quoi ces erreurs
+
+## 237. 2026-11-13 21:01 UTC
+
+<!-- attach -->
+
+> plus de 6 800
+
+
+
+tu me dit qu'il sont 6800 teste et alors combien de assertions sont?
+
+## 238. 2026-11-13 21:05 UTC
+
+<!-- attach -->
+
+> Le nombre d’assertions ne prouve pas à lui seul la qualité. Ce qui compte, c’est que chaque règle importante ait son test qui échouerait si on la cassait. C’est ce qu’a vérifié la matrice du lot 21, qui relie 498 décisions à leurs tests.
+
+
+
+qu est ce tu veux dire qui reli 498 decisions, tu peux me dateillé
+
+## 239. 2026-11-13 21:11 UTC
+
+<!-- attach -->
+
+> 1. Vos décisions : 530 aujourd’hui
+
+
+
+tu parle pour ceux que je t ai dit decide toi, ce que t as mis dans la fiche ?
+

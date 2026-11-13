@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 13/11/2026 à 20:51 UTC par pilotage-sync.sh : « Lot STAT préparé (Larastan et Psalm à chaque envoi) ».
+Mis à jour le 13/11/2026 à 21:12 UTC par pilotage-sync.sh : « Lot MAT-PRO ajouté ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -40,13 +40,27 @@ b12a835 Relecture du lot DEMO de la démonstration
 ```
  M CLAUDE.md
  M app/Domain/Cabinets/Support/GardesDesCabinets.php
+ M app/Domain/Contacts/Models/Fournisseur.php
  M app/Domain/Facturation/Services/CalculateurLigne.php
  M app/Domain/Facturation/Services/EReportingDesParticuliers.php
  M app/Domain/Facturation/Services/EncaissementsDesPrestations.php
  M app/Domain/Facturation/Services/RegularisationDUneExoneration.php
+ M app/Domain/Tenancy/Concerns/BelongsToMagasin.php
+ M app/Domain/Tenancy/Concerns/BelongsToSociete.php
+ M app/Domain/Tenancy/Models/Affectation.php
+ M app/Domain/Tenancy/Models/Magasin.php
+ M app/Domain/Tenancy/Models/Societe.php
+ M app/Domain/Tenancy/Services/ChosesAFaireDuMagasin.php
+ M app/Filament/App/Resources/ClientResource/Pages/ViewClient.php
+ M app/Models/User.php
+ M tests/Browser/Parcours/ExonerationNonProuveeTest.php
+ M tests/Browser/inventaire-des-actions.php
+ M tests/Feature/Cabinets/MagasinsOuvertsAuCabinetTest.php
  M tests/Feature/Facturation/EReportingDesParticuliersTest.php
  M tests/Feature/Facturation/ExonerationNonProuveeTest.php
  M tests/Unit/CalculateurLigneTest.php
+?? app/Domain/Tenancy/Concerns/RefuseUneCleIllisible.php
+?? tests/Feature/Filament/FichesAUneCleIllisibleTest.php
 ```
 
 ## Dernière course de la chaîne

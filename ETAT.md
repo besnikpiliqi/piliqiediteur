@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 13/11/2026 à 21:22 UTC par pilotage-sync.sh : « ER-PRO poussé, chaîne reprise avec STAT et MAT-PRO ».
+Mis à jour le 13/11/2026 à 21:24 UTC par pilotage-sync.sh : « CI eba4bc8 : audit rouge, confié à STAT ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -37,6 +37,7 @@ d4a8247 Relecture du lot ML des e-mails vérifiés
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
+ M composer.lock
 ```
 
 ## Dernière course de la chaîne

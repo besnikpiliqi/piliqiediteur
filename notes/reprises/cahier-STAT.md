@@ -66,3 +66,11 @@ Ce cahier fait foi pour le lot.
   - Remplace « a_trancher » par la règle qui la fait vivre, avec ses tests existants. Si aucun test ne refuse une date future ou n'accepte une date passée, ajoute-le.
   - Garde « remplacee » pour la part de l'échéance.
 - Mets `MatriceDesDecisionsTest` à jour si une liste de clés y change.
+
+## 8. CI rouge sur eba4bc8 : à réparer dans ce lot (ajout du 13/11, 21 h 25 UTC)
+
+- La tâche « Audit des dépendances » est rouge. `composer audit` signale l'avis PKSA-yxbx-3c9s-cjt9 (CVE-2026-128083, GHSA-63hm-g96r-2m2q, gravité faible) sur `laravel/framework` : versions >=13.0.0 et <13.40.0. Il a été publié le 13/11 à 18:54 UTC. La version installée est la v13.34.0.
+- Réparation (CLAUDE.md, « Outillage » : mise à jour aussitôt qu'un audit signale une faille) : `composer update laravel/framework --with-dependencies`, dans les plages permises de composer.json, sans version majeure. Ensuite `composer audit --locked` et `composer audit --locked --working-dir=tools/psalm` rendent 0.
+- Avant le commit, la suite PostgreSQL complète tourne avec ce nouveau composer.lock.
+- Ajoute une ligne au README (paquets mis à jour et pourquoi).
+- Dans « laisses » : « À faire sur le PC de l'éditeur : composer install ».

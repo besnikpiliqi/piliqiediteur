@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 13/11/2026 à 00:33 UTC par pilotage-sync.sh : « Reprise après redémarrage ».
+Mis à jour le 13/11/2026 à 00:59 UTC par pilotage-sync.sh : « D76 fini, cahier ER-PRO ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -39,11 +39,27 @@ c2455dd Passe Larastan au niveau 10 sans erreur : les valeurs lues sans type son
 
 ```
  M app/Domain/Cabinets/Actions/CorrigerLAdresseDeLExpertComptableAction.php
+ M app/Domain/Cabinets/Actions/DeclarerSonExpertComptableAction.php
+ M app/Domain/Cabinets/Support/GardesDesCabinets.php
  M app/Domain/Tenancy/Services/JournalDesDroits.php
  M app/Filament/Societe/Pages/CabinetComptable.php
  M app/Filament/Societe/Pages/RattachementDUnCabinet.php
+ M app/Filament/Societe/Resources/MembreResource/Pages/FicheDuMembre.php
+ M app/Http/Controllers/ConfirmerNouvelleAdresseController.php
+ M database/migrations/2026_10_02_200004_create_mouvements_stock_table.php
+ M resources/views/filament/societe/pages/cabinet-comptable.blade.php
+ M resources/views/filament/societe/pages/rattachement-d-un-cabinet.blade.php
+ M resources/views/profil/adresse.blade.php
+ M tests/Browser/Parcours/CabinetSuspenduTest.php
+ M tests/Browser/Parcours/ExpertComptableDeclareTest.php
+ M tests/Feature/Cabinets/ExpertComptableDeclareTest.php
  M tests/Feature/Cabinets/ExpertsComptablesConcurrenceTest.php
+ M tests/Feature/Cabinets/LienDeLExpertComptableTest.php
+ M tests/Feature/Cabinets/MagasinsOuvertsAuCabinetTest.php
  M tests/Feature/Cabinets/RattachementDesExpertsComptablesTest.php
+ M tests/Feature/Societe/CabinetComptableTest.php
+?? app/Filament/Concerns/ConfirmeLAdresseDuLien.php
+?? tests/Browser/Parcours/RattachementDUnCabinetTest.php
 ```
 
 ## Dernière course de la chaîne

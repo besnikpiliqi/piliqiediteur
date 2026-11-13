@@ -2176,3 +2176,27 @@ Mais tu m avais dit tout ce temps avec l’ancienne méthode et la tu me dit la 
 
 « Je garde ce qui se fait aujourd’hui : une date passée est permise, une date future est refusée. ⚠️ Cela change votre règle du 5/10. Si vous la voulez à nouveau, dites-le : c’est un petit lot. » je comprends pas ce que tu veux dire ?
 
+## 229. 2026-11-13 19:51 UTC
+
+Larastan et psalm sera appliqué ici au dans le github?
+
+## 230. 2026-11-13 19:59 UTC
+
+Donc les tests que tu fais et le github qui est ce qu’ils sont les memes donc sont-ils les tiennes ou c’est à lui à part
+
+## 231. 2026-11-13 20:03 UTC
+
+Donc avec les corrections qui se font par larastan et psalm font le code meuilleur et sécurise le code ou quoi et si eux trouves des erreurs alors ca va prendre bcp plus de temps pour les corriger par toi
+
+## 232. 2026-11-13 20:09 UTC
+
+Et quand tu faisais ici alors ca prenait du temps bcp plus c’est ça
+
+## 233. 2026-11-13 20:12 UTC
+
+« La montée de Larastan niveau par niveau, du 7 au 10, sur tout le code. Les lots TY1 et TY2 ont pris environ 20 h rien que pour ça. C’est fait : on est déjà au niveau 10 » et pourquoi 20h?? Qu’est ce qu’ils ont fait ?
+
+## 234. 2026-11-13 20:27 UTC
+
+mais pourquoi avoirs ce genre d erreurs?? toi t es sencé creer un code propre sans erreurs et perfromant
+

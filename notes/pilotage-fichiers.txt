@@ -233,3 +233,4 @@ reprises/lot-21-travail-non-commite-complet.patch
 reprises/lot-21-commits-locaux-complet.patch
 reprises/lot-SEED-travail-non-commite-complet.patch
 reprises/lot-ER-PRO-travail-non-commite-complet.patch
+reprises/lot-ER-PRO-commits-locaux-complet.patch

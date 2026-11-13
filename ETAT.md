@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 13/11/2026 à 18:41 UTC par pilotage-sync.sh : « 13/11 18:42 UTC : SEED poussé, PC37, ER-PRO en cours ».
+Mis à jour le 13/11/2026 à 18:53 UTC par pilotage-sync.sh : « CI SEED verte ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -37,6 +37,7 @@ b12a835 Relecture du lot DEMO de la démonstration
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
+ M CLAUDE.md
  M app/Console/Commands/DiagnostiquerCaisseSecurisee.php
  M app/Console/Commands/Editeur/ChangerLaFinDExercice.php
  M app/Domain/Cabinets/Support/GardesDesCabinets.php
@@ -86,7 +87,9 @@ b12a835 Relecture du lot DEMO de la démonstration
  M tests/Feature/Filament/EReportingResourceTest.php
  M tests/Feature/Filament/TelechargerLesDocumentsTest.php
  M tests/Feature/Integrations/InpiRneTest.php
+ M tests/Feature/OutillageTest.php
  M tests/Feature/Societe/MagasinResourceTest.php
+ M tests/Feature/Tenancy/HistoriqueAuNomFigeTest.php
  M tests/Fixtures/empreinte-de-la-caisse/apercu-e-reporting.txt
  M tests/Unit/CalculateurLigneTest.php
  M tests/Unit/matrice-des-decisions.php

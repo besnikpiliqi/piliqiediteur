@@ -77,6 +77,13 @@ Sources de la révision : réponse S2 de la série 4 (`societe/reponses-serie4.m
 3. Autorisation de société qui ouvre la liste « À attribuer » : `societe.plateforme.suivre` ou une case dédiée.
 
 
+## Ajouts du lot ER-PRO (13/11/2026) — priment sur les phases ci-dessous
+
+- Phase 8 (paiements de services aux particuliers) : l'aperçu de la clôture déclare déjà les encaissements de services par jour et par taux, au prorata en cumul (EReportingDesParticuliers et EncaissementsDesPrestations, décisions T1.1 à T1.4, T9.3, T107, T112.1) ; l'envoi reprend ces montants tels quels. Le filtre « taux > 0 » est gardé : les paiements des services d'un magasin en franchise en base (vendus à 0 %) partent à l'étape 2, tous les deux mois (art. 242 nonies P de l'annexe II du CGI ; T1.1, T65.5) : à construire dans la phase 8, avec sa cadence.
+- Phase 5 (factures B2B) : document d'acompte (T50.1, T50.2) : pour un client professionnel, une facture d'acompte payée en entier, avec la date du versement, puis déduite par une ligne négative sur la facture finale. D'ici là, les formulaires de devis et de facture disent qu'un acompte reçu avant la facture ne s'enregistre pas encore (FactureResource::INFORMATION_ACOMPTE).
+- Phase 7 (réception) : un rabais ou une ristourne fournisseur sans retour réduira le coût et la TVA déduite de la période où elle est reçue (T71.2) ; d'ici là, l'écran des avoirs fournisseur le dit (AvoirFournisseurResource::INFORMATION_RISTOURNE).
+- Société membre d'un assujetti unique (P3.1 à P3.3) : elle ne vend pas dans PILIQI (Magasin::refusDeVente()) ; rien ne se transmet en son nom.
+
 ## 0. Cadre
 
 - **Ordre de la feuille de route.** SUPER PDP est l'étape 2 de la feuille de route (révision du lot 21, R.0).

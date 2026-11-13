@@ -2244,3 +2244,7 @@ tu parle pour ceux que je t ai dit decide toi, ce que t as mis dans la fiche ?
 
 la c est obligé d envoyé tous les mode paiment malgre qu il y en a pas des ventes aves tout les mode de paimment, je vois que les autre sont 0€ mais esc ce que c est obligé ?
 
+## 241. 2026-11-13 21:46 UTC
+
+non tu mets dans une tableau comme par ex: tu met les titres en haut: Mode de paiement, Paiements,Contre-passations,Montant encaissé. et en par desus tu mets pour chacun tu affiche par linge mais pas les lignes separe mais dans la meme table tout. tu me montre les modeles avant que tu aplique et je veux que tu me propose dorenavant pout chaque modele tu me propose les modeles et moi je choisi lequel me plai
+

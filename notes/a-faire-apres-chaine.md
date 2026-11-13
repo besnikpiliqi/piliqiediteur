@@ -13,22 +13,22 @@
 - Sur son PC, les téléchargements « en préparation » attendent le travailleur de la file : `php artisan queue:listen telechargements --timeout=1800` (README, Lancement).
 
 
-**Ajout du 13/11/2026 à 21 h 35 UTC, dans ce même lot DEMO-V : la fiche d'une clôture de caisse** (question de l'éditeur, capture de `/app/{magasin}/cloture-caisses/{id}`). Décision de Claude (D74), montrée à l'éditeur.
+**Ajout du 13/11/2026 à 21 h 35 UTC, dans ce même lot DEMO-V : la fiche d'une clôture de caisse** (question de l'éditeur, capture de `/app/{magasin}/cloture-caisses/{id}`).
 
-- **Le problème :** la section des encaissements montre les cinq modes, même à 0, chacun dans un cadre qui répète ses titres (« Mode de paiement », « Paiements », « Contre-passations », « Montant encaissé »).
-- **Ce qui change :**
-  - Un seul tableau, avec une ligne par mode qui a au moins un paiement ou une contre-passation ce jour-là.
-  - Une phrase sous le tableau : « Aucun encaissement en {modes restants} ». Sans aucun encaissement : « Aucun encaissement ce jour-là ».
-  - Puis le total encaissé et le crédit d'avoir utilisé, comme aujourd'hui.
-  - Même règle partout où les encaissements d'une clôture s'affichent : fiche de la clôture, relevé d'une caisse personnelle (« Ma caisse », « Les caisses » du magasin et de la société), PDF ou CSV des clôtures dans « Télécharger les documents », si le récapitulatif y liste les modes.
-  - Applique la même présentation en tableau aux autres sections de la fiche qui répètent leurs titres par ligne (rubriques par taux, détail des documents), s'il y en a.
+- **Le problème :** la section des encaissements montre chaque mode dans un cadre à part, qui répète ses titres (« Mode de paiement », « Paiements », « Contre-passations », « Montant encaissé »).
+- **Ce que l'éditeur veut (13/11, vers 21 h 45 UTC) :** un seul tableau, les titres en haut, une ligne par mode, le tout dans la même table. Avant toute application, il choisit le modèle parmi ceux que Claude lui propose (directive du 13/11 : chaque modèle d'écran lui est proposé avant d'être appliqué).
+- **Modèles proposés :** https://claude.ai/artifact/5hANusG3Xj7Xuy7Mp7L56C, copie dans `../modeles/encaissements-cloture.html`. Ce sont quatre modèles, chacun avec ses titres en haut :
+  - A : les cinq modes, les « 0 » en gris, le total sous le tableau ;
+  - B : les cinq modes, le total et le crédit d'avoir dans le pied du tableau ;
+  - C : seulement les modes utilisés, le total dans le tableau, une phrase pour les autres modes ;
+  - D : les cinq modes, un tiret à la place des 0, le total dans le tableau.
+- **MODÈLE CHOISI PAR L'ÉDITEUR : (pas encore choisi)**
+  - Si cette ligne dit encore « pas encore choisi » quand le lot commence, ne touche pas à cette fiche. Dis-le dans « laisses », et la session le fera dans un lot suivant.
+  - Sinon, applique exactement le modèle choisi : à la fiche de la clôture, au relevé d'une caisse personnelle (« Ma caisse », « Les caisses » du magasin et de la société) et aux PDF ou CSV des clôtures, si le récapitulatif y liste les modes.
 - **Ce qui ne change pas :**
-  - Le contenu signé de la clôture et ses totaux enregistrés : c'est seulement l'affichage.
-  - Rien de tout cela n'est envoyé à l'administration. L'e-reporting ne déclare pas les modes de paiement.
-- **Tests :**
-  - Domaine ou Filament : un mode à 0 n'est pas affiché ; une contre-passation seule fait afficher son mode ; la phrase des modes restants ; le cas « aucun encaissement ».
-  - Test en navigateur de la fiche ; inventaire des actions.
-- Si une règle de CLAUDE.md impose d'afficher tous les modes, dis-le dans « laisses » et applique quand même la décision. Aucune règle légale n'impose un mode à 0.
+  - Le contenu signé de la clôture et ses totaux enregistrés : seul l'affichage change.
+  - Rien de cela n'est envoyé à l'administration.
+- **Tests :** ceux du modèle choisi (ordre des lignes, modes à 0 selon le modèle, total, crédit d'avoir), un test en navigateur et l'inventaire des actions.
 
 ## Lot « ER » : aperçu de l'e-reporting et règles de CLAUDE.md (étape 1, après la chaîne en cours ; ajouté le 12/11 vers 01 h UTC)
 - Origine : décision de l'éditeur du 11/11/2026 (D67, V240 ; Q399 à Q417), écrite dans la colonne « Réponse du professionnel » de 19 lignes de l'onglet « À faire vérifier par un professionnel ». Source unique : `scratchpad/onglet2-844/analyse/plan-rangement.md` (§ 2, § 2 bis, fin du § 3.5) ; textes exacts de l'éditeur : `scratchpad/onglet2-844/lignes.txt`. Petit lot, effort « extra » (D63), un commit, suite PostgreSQL complète une fois avant le commit, deux relectures en parallèle.

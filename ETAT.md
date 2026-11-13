@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 13/11/2026 à 21:33 UTC par pilotage-sync.sh : « Fiche de clôture : modes à 0 cachés (DEMO-V) ».
+Mis à jour le 13/11/2026 à 21:47 UTC par pilotage-sync.sh : « Modèles des encaissements de la clôture, directive des modèles ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -37,9 +37,29 @@ d4a8247 Relecture du lot ML des e-mails vérifiés
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
+ M app/Console/Commands/DiagnostiquerCaisseSecurisee.php
+ M app/Console/Commands/RelancerTransmissionsPdp.php
+ M app/Domain/Achats/Models/FactureAchat.php
+ M app/Domain/Achats/Services/ConstructeurLigneAchat.php
+ M app/Domain/Achats/Services/PiecesDuFournisseur.php
+ M app/Domain/Cabinets/Actions/AccepterLaDemandeDeLienAction.php
+ M app/Domain/Cabinets/Actions/ChoisirLeMotDePasseDeLExpertComptableAction.php
  M app/Domain/Cabinets/Actions/DeclarerSonExpertComptableAction.php
+ M app/Domain/Cabinets/Actions/DesignerUnCabinetAction.php
+ M app/Domain/Cabinets/Listeners/RattacherLesDeclarationsDuCabinetValide.php
+ M app/Domain/Cabinets/Notifications/AvisDuCabinetEnFile.php
  M app/Domain/Cabinets/Support/GardesDesCabinets.php
+ M app/Domain/CaisseSecurisee/Actions/VerifierIntegriteAction.php
+ M app/Domain/CaisseSecurisee/Services/VerificateurIntegrite.php
  M app/Domain/CaisseSecurisee/Support/DeclencheursDeProtection.php
+ M app/Domain/Catalogue/Services/BaremePrixDeVente.php
+ M app/Domain/Facturation/Actions/NoterLeVisaDuBordereauAction.php
+ M app/Domain/Facturation/Actions/RepondreAuDevisEnLigneAction.php
+ M app/Domain/Facturation/Actions/RetirerUnTicketZNonSigneAction.php
+ M app/Domain/Facturation/Jobs/EnvoyerDocumentJob.php
+ M app/Domain/Facturation/Models/Devis.php
+ M app/Domain/Facturation/Services/CalculateurLigne.php
+ M app/Domain/Facturation/Services/DocumentChiffre.php
  M app/Domain/Facturation/Services/EReportingDesParticuliers.php
  M app/Domain/Facturation/Support/GardesDesDocumentsEmis.php
  M app/Domain/Stock/Enums/TypeMouvementStock.php
@@ -47,8 +67,9 @@ d4a8247 Relecture du lot ML des e-mails vérifiés
  M app/Domain/Stock/Support/GardesDuStock.php
  M app/Domain/Tenancy/Services/ChosesAFaireDeLaSociete.php
  M app/Domain/Tenancy/Services/ChosesAFaireDuMagasin.php
+ M app/Domain/Tenancy/Services/PiecesDeVerification.php
+ M app/Http/Controllers/TelechargerLesDocumentsController.php
  M app/Providers/AppServiceProvider.php
- M composer.lock
 ?? app/Domain/Tenancy/Support/NomsPolymorphes.php
 ```
 
@@ -72,4 +93,5 @@ ER-PRO:correction
 ER-PRO:poussee
 ER-PRO:notes
 STAT:implementation
+STAT:implementation-2
 ```

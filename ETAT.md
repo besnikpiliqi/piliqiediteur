@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 14/11/2026 à 00:05 UTC par pilotage-sync.sh : « Après le lot STAT ».
+Mis à jour le 14/11/2026 à 00:45 UTC par pilotage-sync.sh : « Point de suivi 14/11 00:50 : STAT poussé, CI rouge (RequeteDuModeleTest) confiée à DEMO-V, sauvegarde MAT-PRO ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -37,6 +37,17 @@ d4a8247 Relecture du lot ML des e-mails vérifiés
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
+ M app/Domain/Facturation/Enums/TerritoireTva.php
+ M app/Domain/Facturation/Services/ControleNatureOperation.php
+ M tests/Feature/Facturation/BordereauDetaxeTest.php
+ M tests/Feature/Facturation/EnregistrerVenteCaisseActionTest.php
+ M tests/Feature/Facturation/NatureOperationTest.php
+ M tests/Feature/Facturation/PreuvesOperationTest.php
+ M tests/Feature/Proprietes/CalculsAuHasardTest.php
+ M tests/Feature/Societe/JournalAuditTest.php
+ M tests/Unit/MatriceDesDecisionsTest.php
+ M tests/Unit/TerritoireTvaTest.php
+ M tests/Unit/matrice-des-decisions.php
 ```
 
 ## Dernière course de la chaîne
@@ -65,4 +76,6 @@ STAT:relecture2
 STAT:correction
 STAT:poussee
 STAT:notes
+MAT-PRO:implementation
+MAT-PRO:implementation-2
 ```

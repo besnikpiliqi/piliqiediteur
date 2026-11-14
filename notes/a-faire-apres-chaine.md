@@ -82,6 +82,12 @@
 - **Tests :** réécris ceux qui attendent les six décimales à l'affichage, avec la nouvelle règle de l'éditeur : c'est un changement de règle, pas un affaiblissement. Ajoute un test du PDF et de la fiche (11,279621 → 11,28), un test de la page publique du devis et un test de la note de calcul. Mets aussi à jour l'empreinte des PDF (EmpreinteDeLaCaisseEtDesPdfTest), en le disant dans « faits ».
 
 
+**CI rouge de 6bf1d94 (lot STAT), à réparer EN TOUT PREMIER (ajout du 14/11/2026 à 00 h 50 UTC).** Course 43531775339 : la tâche « PHP 8.4, PostgreSQL 17 » échoue (6 966 tests, 1 erreur), les cinq autres tâches de tests sont annulées par elle ; « Analyse statique et seuils », « Analyse des flux de données », Pint et l’audit sont verts.
+- **Test en échec :** `Tests\Feature\Tenancy\RequeteDuModeleTest::test_la_sous_requete_d_une_relation_vers_soi_meme_est_rendue_elle_meme_inchangee` → `relation "societes" does not exist` à l’insertion de la société.
+- **Cause :** le lot STAT (565f1ba) a ajouté à cette classe un test qui appelle `ouvrirUneSociete()` et écrit en base, alors que la classe n’utilise pas `RefreshDatabase`. En parallèle, quand ce test est le premier de son processus à toucher la base, celle-ci n’est pas encore migrée ; ailleurs, ses lignes restent en base hors de toute transaction et peuvent gêner d’autres tests. L’échec dépend de l’ordre : la suite locale a pu passer.
+- **Réparation :** `use RefreshDatabase;` dans la classe (comme `BindTenantContextFromFilamentTenantTest`), puis chercher dans `tests/` toute autre classe sans `RefreshDatabase` ni `DatabaseMigrations` qui écrit en base (`ouvrirUneSociete`, `::create(`, fabriques) et la corriger de même. Si possible, ajouter un contrôle (test d’outillage) qui refuse une classe de test qui écrit en base sans l’un de ces traits.
+- Vérifier : le test seul (`php artisan test --compact tests/Feature/Tenancy/RequeteDuModeleTest.php`) sur une base vide fraîchement créée, puis la suite PostgreSQL complète. Commit à part, avant le reste du lot.
+
 **Ajout du 14/11/2026 vers 01 h UTC, dans ce même lot DEMO-V, à faire EN PREMIER : défaut « En retard » sur une facture payée.** Constat de l'éditeur sur la liste des factures : le ticket TK-EPICERIE-2026-000001, « Payée » (32,30 € payés sur 32,30 €), montre « En retard » dans la colonne « À faire ».
 
 - **Cause :** `FactureResource::raisonsAFaire()` (app/Filament/App/Resources/FactureResource.php, vers la ligne 1037) écrit « En retard » dès que `estEchue()`, c'est-à-dire dès que l'échéance est passée, même quand plus rien n'est dû.

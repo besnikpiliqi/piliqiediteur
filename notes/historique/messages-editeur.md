@@ -2358,3 +2358,27 @@ si tu veux prend l 'exemple sur ce model. montre moi tes modeles ce que tu vas c
 
 je t ai donne le pdf pour que tu regare comme il a mis les prix ht en desus du description, car la il affiche plusieurs decimal sans arrondir et dans la colone tu affiches arrondi
 
+## 257. 2026-11-14 00:10 UTC
+
+sans total ttc et je pense au lieu de refernce mettre le type de produti !! qu est ce que tu pense ? sera mieux ou il faut pas mettre
+
+## 258. 2026-11-14 00:16 UTC
+
+je comprends d ou vient 8.33333 == 100* 8.33= 833.34 alors que normal 833.33 et meme si tu fait 1000/1.2 fait 833.33333 donc que tu arrondi ca vient 833.33
+
+## 259. 2026-11-14 00:23 UTC
+
+je pense calcule comme ca: 1000ttc =833.33, donc si 100qte avec 8.33 alors tu cumule par qty avec ht pour total ht donc 8.33ht= total tt ht 833.33, donc tu fait la cumule entre prix ht et pas avec ttc , ttc donné au debut et divise par tva et apres calcule uniquement avec ht. montre moi si t as compris
+
+## 260. 2026-11-14 00:31 UTC
+
+par ex 9.99/1.2 fait 8,325 donc pour enleve cette valeur du 9.99 alors tu dois mettre 8.32 car 8.32+1.67 de tva fait 9.99 car 8.325-9.99 fait 1.665 donc si tu part arrondi vers plus haut alors fait 1.67. donc il faut que tu calcule pour que le prix tombe pil poil comme ex 9.99-8.31.67 donc tu arrondi vers plus bas ou plus haut pour tomber au prix exact.  est ce que peut faire ca pour toujours en se basant sur le prix donné ttc
+
+## 261. 2026-11-14 00:34 UTC
+
+donne moi une ex en pdf comme tu m avais donné avant pour que je vois
+
+## 262. 2026-11-14 00:38 UTC
+
+@"/root/.claude/uploads/00d7e3b2-c4d1-5536-95c0-3e77e19552bb/2eefbd6a-exemple-calcul-des-prix-15-lignes-regle-du-08-11-1.pdf" @"/root/.claude/uploads/00d7e3b2-c4d1-5536-95c0-3e77e19552bb/4b811e8d-exemple-calcul-des-prix-15-lignes-regle-a-1.pdf" tu me donne comme ca, non comme le pdf mais ce que tu m as expliqué les ecart, je veux savoir si avec ma method mtn il y aura des ecart ou pas et si sera accepté par l etat
+

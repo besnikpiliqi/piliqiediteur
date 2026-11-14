@@ -36,3 +36,13 @@ La matrice `tests/Unit/matrice-des-decisions.php` recopie les décisions de l'é
 - Larastan et `qualite.php seuils` à 0 (lot STAT, fait juste avant).
 - Suite PostgreSQL complète une seule fois avant le commit, code 0. Pint. Un seul commit.
 - Dans « faits » : combien de décisions de l'onglet sont reliées à des tests, combien sont « a_venir » (par étape), combien sont « hors_logiciel », combien de tests ont été ajoutés, et chaque défaut trouvé.
+
+## Ajout du 14/11/2026 à 00 h 50 UTC : CI rouge de 6bf1d94
+
+**CI rouge de 6bf1d94 (lot STAT), à réparer EN TOUT PREMIER (ajout du 14/11/2026 à 00 h 50 UTC).** Course 43531775339 : la tâche « PHP 8.4, PostgreSQL 17 » échoue (6 966 tests, 1 erreur), les cinq autres tâches de tests sont annulées par elle ; « Analyse statique et seuils », « Analyse des flux de données », Pint et l’audit sont verts.
+- **Test en échec :** `Tests\Feature\Tenancy\RequeteDuModeleTest::test_la_sous_requete_d_une_relation_vers_soi_meme_est_rendue_elle_meme_inchangee` → `relation "societes" does not exist` à l’insertion de la société.
+- **Cause :** le lot STAT (565f1ba) a ajouté à cette classe un test qui appelle `ouvrirUneSociete()` et écrit en base, alors que la classe n’utilise pas `RefreshDatabase`. En parallèle, quand ce test est le premier de son processus à toucher la base, celle-ci n’est pas encore migrée ; ailleurs, ses lignes restent en base hors de toute transaction et peuvent gêner d’autres tests. L’échec dépend de l’ordre : la suite locale a pu passer.
+- **Réparation :** `use RefreshDatabase;` dans la classe (comme `BindTenantContextFromFilamentTenantTest`), puis chercher dans `tests/` toute autre classe sans `RefreshDatabase` ni `DatabaseMigrations` qui écrit en base (`ouvrirUneSociete`, `::create(`, fabriques) et la corriger de même. Si possible, ajouter un contrôle (test d’outillage) qui refuse une classe de test qui écrit en base sans l’un de ces traits.
+- Vérifier : le test seul (`php artisan test --compact tests/Feature/Tenancy/RequeteDuModeleTest.php`) sur une base vide fraîchement créée, puis la suite PostgreSQL complète. Commit à part, avant le reste du lot.
+
+Si ta suite PostgreSQL complète tombe sur ce test, répare-le dans ton lot (protocole, point 4) et dis-le dans « faits » ; sinon, le lot DEMO-V le répare en premier.

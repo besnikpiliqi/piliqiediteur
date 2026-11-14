@@ -237,4 +237,6 @@ reprises/lot-ER-PRO-commits-locaux-complet.patch
 reprises/cahier-STAT.md
 reprises/cahier-MAT-PRO.md
 reprises/lot-STAT-travail-non-commite-complet.patch
+reprises/lot-MAT-PRO-commits-locaux-complet.patch
+reprises/lot-MAT-PRO-travail-non-commite-complet.patch
 reprises/cahier-SIGN-DEVIS-brouillon.md

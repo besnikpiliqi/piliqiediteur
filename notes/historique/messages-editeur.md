@@ -2436,3 +2436,9 @@ Vous pouvez valider cette logique de calcul (règle b) dans votre ERP. Assurez-v
 
 2. Données structurées XML : Vous devez impérativement injecter le PU HT exact à 6 décimales (`8.333333`) dans la balise du prix unitaire (`BT-146`). [1].  === mais nous on va envoyé en json chez super pdp
 
+## 264. 2026-11-14 01:02 UTC
+
+[1 capture(s) d'écran jointe(s)]
+
+il faut que tu cree une nouvelle fonction. quand une notification arriver en arrier plan alors il faut qu'il s'affiche automatiqument comme une petit  notification afin que le magasin(vendeur , responsable etc) le vois qu'il s'affiche afin qu'il soit mis au courant qu il a qqch. donc une petite notification qui tombe de haut ou qui glisse du droit
+

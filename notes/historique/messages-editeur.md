@@ -2382,3 +2382,57 @@ donne moi une ex en pdf comme tu m avais donné avant pour que je vois
 
 @"/root/.claude/uploads/00d7e3b2-c4d1-5536-95c0-3e77e19552bb/2eefbd6a-exemple-calcul-des-prix-15-lignes-regle-du-08-11-1.pdf" @"/root/.claude/uploads/00d7e3b2-c4d1-5536-95c0-3e77e19552bb/4b811e8d-exemple-calcul-des-prix-15-lignes-regle-a-1.pdf" tu me donne comme ca, non comme le pdf mais ce que tu m as expliqué les ecart, je veux savoir si avec ma method mtn il y aura des ecart ou pas et si sera accepté par l etat
 
+## 263. 2026-11-14 00:56 UTC
+
+ce que dit gemini sur google pour ta facture mtn : est ce que sera accepté par l etat une telle facture. regarde les ecart.
+
+Oui, cette facture sera acceptée par l'État (la norme EN 16931), à condition de transmettre le Prix Unitaire HT exact (avec 6 décimales) dans le fichier XML et non le prix affiché à 2 décimales. [1]
+
+La méthode présentée dans ce document (la « règle (b) », qui consiste à partir du TTC pour déduire la TVA et le HT avec un centime d'ajustement) est une technique classique utilisée par les logiciels de caisse et de retail pour garantir que le client paie le prix affiché en rayon. [1]
+
+Voici l'audit technique des écarts de votre document face aux contrôles obligatoires de la facture électronique :
+
+1. Les totaux en pied de facture : 100 % Conforme (0,00 € d'écart)
+
+Les règles bloquantes (fatales) de l'État vérifient la cohérence globale du document. Sur votre exemple, tout tombe juste :
+
+
+
+* Somme des lignes HT = Total HT : L'addition de la colonne `Total HT` de vos 15 lignes donne exactement 2 590,86 € (Règle `BR-CO-10` validée).
+
+* Ventilation par taux = Base × Taux : Grâce au centime d'ajustement appliqué sur la ligne 12 (`STY-0099`), la TVA déclarée pour chaque taux (487,35 €, 10,86 € et 2,50 €) correspond exactement à la `Base HT × Taux` (Règle `BR-S-09` validée).
+
+* Somme des TVA par taux = Total TVA : `487,35 + 10,86 + 2,50 = 500,71 €`. Aucun écart (Règle `BR-CO-14` validée).
+
+* Total HT + Total TVA = Net à payer : `2 590,86 + 500,71 = 3 091,57 €` (Règle `BR-CO-15` validée). [1]
+
+
+
+2. Le seul point de vigilance : L'écart sur la ligne (Règle `BR-CO-04`)
+
+C'est ici que se joue l'acceptation ou le rejet par votre plateforme (PDP). La norme européenne contrôle chaque ligne avec la formule suivante :
+
+\(\text{Total\ HT\ de\ la\ ligne\ (BT-131)}=\text{Quantité (BT-129)}\times \text{Prix\ Unitaire\ HT\ (BT-146)}\)
+
+La norme tolère un écart d'arrondi de 1 centime maximum sur cette équation par ligne.
+
+
+
+* Ce qu'il ne faut surtout pas envoyer dans le XML : Si vous envoyez le `PU HT affiché` à 2 décimales, la ligne 4 (`100 bougies × 8,33 € = 833,00 €` au lieu de `833,33 €`) génère un écart de 0,33 €. La facture sera immédiatement rejetée. [1]
+
+* Ce qu'il faut envoyer dans le XML : En transmettant le `PU HT exact` (sur 6 décimales, comme mentionné en page 3 : `8,333333 €`), le calcul donne `833,3333 €`, soit 0,00 € d'écart avec les `833,33 €` déclarés. [1]
+
+
+
+Même sur la ligne 12 (`STY-0099`) qui a subi le centime d'ajustement, l'écart avec le PU HT exact (`25 × 0,825000 = 20,6250 €` contre `20,63 €`) reste inférieur ou égal à 0,01 €, ce qui passe sous le seuil de tolérance des validateurs officiels. [1]
+
+Verdict pour l'intégration dans votre ERP
+
+Vous pouvez valider cette logique de calcul (règle b) dans votre ERP. Assurez-vous simplement de respecter ces deux règles d'or lors de la génération du fichier électronique (Factur-X / UBL / CII) :
+
+
+
+1. Visuel PDF : Vous pouvez afficher le PU HT arrondi à 2 décimales (`8,33 €`) pour le confort de lecture du client, en conservant la mention explicative en bas de tableau.
+
+2. Données structurées XML : Vous devez impérativement injecter le PU HT exact à 6 décimales (`8.333333`) dans la balise du prix unitaire (`BT-146`). [1].  === mais nous on va envoyé en json chez super pdp
+

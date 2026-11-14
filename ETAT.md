@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 14/11/2026 à 00:45 UTC par pilotage-sync.sh : « Point de suivi 14/11 00:50 : STAT poussé, CI rouge (RequeteDuModeleTest) confiée à DEMO-V, sauvegarde MAT-PRO ».
+Mis à jour le 14/11/2026 à 01:01 UTC par pilotage-sync.sh : « Redémarrage : chaîne relancée (we3brrlwm) ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

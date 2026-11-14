@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 14/11/2026 à 10:16 UTC par pilotage-sync.sh : « CI MAT-PRO verte ».
+Mis à jour le 14/11/2026 à 10:25 UTC par pilotage-sync.sh : « Lot CHARGES ajouté ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -61,13 +61,27 @@ b10d2e8 Relecture du lot DV du devis en ligne
  M app/Filament/Societe/Pages/TableauDeBord.php
  M app/Http/Controllers/ReponseAuDevisController.php
  M app/Models/User.php
+RM tests/Browser/Parcours/PuHtExactTest.php -> tests/Browser/Parcours/PuHtAfficheTest.php
  M tests/Browser/inventaire-des-actions.php
  M tests/Feature/DatabaseSeederTest.php
+ M tests/Feature/Facturation/AvoirPdfGeneratorTest.php
+ M tests/Feature/Facturation/DevisPdfGeneratorTest.php
  M tests/Feature/Facturation/EnvoyerDocumentActionTest.php
+ M tests/Feature/Facturation/ExempleDeQuinzeLignesTest.php
+ M tests/Feature/Facturation/ExonerationNonProuveeTest.php
  M tests/Feature/Facturation/FacturePdfGeneratorTest.php
+ M tests/Feature/Facturation/MentionsFiscalesTest.php
+ M tests/Feature/Facturation/NatureOperationTest.php
+ M tests/Feature/Facturation/PolitiqueDArrondiTest.php
+ M tests/Feature/Facturation/RepartitionTvaParCumulTest.php
+ M tests/Feature/Filament/CaisseTest.php
  M tests/Feature/Filament/EnvoieLesDocumentsTest.php
+ M tests/Feature/Filament/FactureResourceTest.php
  M tests/Feature/Societe/MagasinDeDemonstrationTest.php
  M tests/Feature/Societe/PanneauSocieteTest.php
+ M tests/Fixtures/empreinte-de-la-caisse/pdf/avoir.txt
+ M tests/Fixtures/empreinte-de-la-caisse/pdf/devis.txt
+ M tests/Fixtures/empreinte-de-la-caisse/pdf/facture.txt
  M tests/Unit/CalculateurLigneAuHasardTest.php
  M tests/Unit/CalculateurLigneTest.php
  M tests/Unit/matrice-des-decisions.php

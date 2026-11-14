@@ -748,3 +748,4 @@ Elles sont appliquées dans le code depuis leur demande (sauf la règle (1) du p
 - 13/11/2026, vers 22 h 25 UTC — Précision de l'éditeur : ce qui est déjà un tableau (listes des factures, devis, etc.) ne change pas ; seules les listes en cadres des fiches passent au modèle D.
 - 14/11/2026, vers 00 h 35 UTC — Décision de l'éditeur : le PU HT des ventes s'affiche arrondi au centime partout (« il faut arrondir »), au lieu des six décimales (décision du 09/11 et T105, remplacées). Il reste enregistré à six décimales et les montants ne changent pas. La note de calcul dit qu'un écart de quelques centimes est possible. Lot DEMO-V.
 - 14/11 directive éditeur (~02:10) : PU HT affiché d'une vente = PU TTC − arrondi(PU TTC × t ÷ (1+t)) (9,99 → 8,32), le même partout ; remplace l'arrondi simple du 14/11 00:35 ; cahier DEMO-V mis à jour.
+- 14/11 ~02:20 : notification qui s'affiche toute seule, modèle A choisi (glisse de la droite, en haut à droite, sous la cloche).

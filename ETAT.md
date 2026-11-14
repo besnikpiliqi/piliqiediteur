@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 14/11/2026 à 01:08 UTC par pilotage-sync.sh : « PU HT affiché = PU TTC − TVA d'un article arrondie (directive éditeur) ».
+Mis à jour le 14/11/2026 à 01:11 UTC par pilotage-sync.sh : « Modèle A de la notification, ajouté au lot DEMO-V ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

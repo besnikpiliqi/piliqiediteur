@@ -2448,3 +2448,7 @@ il faut que tu cree une nouvelle fonction. quand une notification arriver en arr
 
 mais pourquoi pour 9.99ttc une cote 8.33 et cote 8.32 alors pourquoi t as mis comme ca? donc ce que j 'ai dit c est pour 8.32 et toi tu aplique tous les endroit pareil car comme c est halucinant 2 prix different !!
 
+## 266. 2026-11-14 01:10 UTC
+
+je choisi : A — Glisse de la droite, en haut à droite, sous la cloche.
+

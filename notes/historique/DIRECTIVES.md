@@ -753,3 +753,4 @@ Elles sont appliquées dans le code depuis leur demande (sauf la règle (1) du p
 - 14/11 ~02:45 : facture pro M6-b (PU HT exact en petit sous l'article).
 - 14/11 ~03:05 : modèle P1 choisi (comptoir et particuliers : page M6-b, tableau Qté, PU TTC, Rem., TVA, Total TTC).
 - 14/11 ~09:55 : graphiques du tableau de bord : G1 + chiffres clés de G2 ; case « Voir les graphiques » pour administrateurs et responsables ; page à part pour l'expert-comptable déclaré ; graphiques aussi dans le panneau de chaque magasin.
+- 14/11 ~10:10 : modèle des graphiques validé (« G1 + chiffres de G2 ») ; lot GRAPH après REGLE-B.

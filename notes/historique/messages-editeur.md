@@ -2516,3 +2516,7 @@ il faut que creer dans le tableaux de bord que pour le proprietaire tes tableaux
 
 je choisi G1 mais tu ajoute la parti du haut de G2. et pour tes "Mes questions" alors la 2em pour Les administrateurs et les responsable tu ajoute les case de l'autorisation que le proprietaire coche ou pas. et la 3em: L'expert-comptable déclaré: oui. et la 4em : Dans le panneau d'un magasin: aussi pour chaque magasin doit pouvoir les voir. montre moi encore le model que j ai prposé
 
+## 279. 2026-11-14 09:50 UTC
+
+oui c'est bon, fais le lot GRAPH avec "G1 + chiffres de G2"
+

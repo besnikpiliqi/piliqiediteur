@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 14/11/2026 à 09:45 UTC par pilotage-sync.sh : « Graphiques : réponses de l'éditeur, modèle v3 ».
+Mis à jour le 14/11/2026 à 09:52 UTC par pilotage-sync.sh : « Lot GRAPH ajouté (bascule à faire après DEMO-V) ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -37,6 +37,7 @@ b10d2e8 Relecture du lot DV du devis en ligne
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
+ M CLAUDE.md
  M app/Domain/Facturation/Actions/EnvoyerDocumentAction.php
  M app/Domain/Facturation/Models/Facture.php
  M app/Domain/Facturation/Services/DocumentsDeLaPeriode.php
@@ -49,11 +50,15 @@ b10d2e8 Relecture du lot DV du devis en ligne
  M app/Filament/Concerns/EnvoieLesDocuments.php
  M app/Filament/Societe/Pages/TableauDeBord.php
  M app/Models/User.php
+ M tests/Browser/inventaire-des-actions.php
  M tests/Feature/DatabaseSeederTest.php
  M tests/Feature/Facturation/EnvoyerDocumentActionTest.php
  M tests/Feature/Filament/EnvoieLesDocumentsTest.php
  M tests/Feature/Societe/MagasinDeDemonstrationTest.php
  M tests/Feature/Societe/PanneauSocieteTest.php
+ M tests/Unit/matrice-des-decisions.php
+?? tests/Browser/Parcours/DemonstrationApresLaValidationTest.php
+?? tests/Browser/Parcours/RetardEtRelanceDesTicketsTest.php
 ?? tests/Feature/Filament/FactureEnRetardTest.php
 ?? tests/Feature/Societe/DemonstrationApresLaValidationTest.php
 ```

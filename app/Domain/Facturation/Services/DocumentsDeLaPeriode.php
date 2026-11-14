@@ -43,8 +43,9 @@ use Illuminate\Support\Facades\Gate;
  * permis. Un magasin n'est lu que si la personne y a l'autorisation
  * « télécharger les documents par période » (voir peutTelechargerDans()) ;
  * un magasin réel d'une société qui n'est pas validée n'a aucun document
- * réel et n'est jamais lu ; le magasin de démonstration se lit, ses
- * documents marqués comme tels. Les droits d'un compte dans un magasin se
+ * réel et n'est jamais lu ; le magasin de démonstration se lit jusqu'à
+ * la validation de la société, ses documents marqués comme tels, puis plus
+ * jamais (T115). Les droits d'un compte dans un magasin se
  * lisent une fois par instance (une requête de la page, une préparation,
  * un téléchargement, voir peutTelechargerDans() et lectureDans()), et
  * seulement ceux qui servent : une page qui lit plusieurs magasins ne
@@ -103,8 +104,9 @@ final class DocumentsDeLaPeriode
     /**
      * Les magasins de sa société dans sa portée (tous pour le propriétaire,
      * la sélection d'un administrateur, voir User::magasinsDeSaPortee()) où
-     * il télécharge, les magasins réels d'abord, par nom, chacun avec cette
-     * société, qui ne se relit pas.
+     * il télécharge (voir peutTelechargerDans()) : le magasin de
+     * démonstration avant la validation de la société, ses magasins réels
+     * ensuite, par nom, chacun avec cette société, qui ne se relit pas.
      *
      * @return Collection<int, Magasin>
      */
@@ -115,7 +117,6 @@ final class DocumentsDeLaPeriode
         }
 
         return $compte->magasinsDeSaPortee()
-            ->orderBy('est_demonstration')
             ->orderBy('nom')
             ->orderBy('id')
             ->get()
@@ -152,11 +153,15 @@ final class DocumentsDeLaPeriode
     /**
      * A-t-il, dans ce magasin, l'autorisation de télécharger les documents
      * par période, posée à la Gate dans ce magasin ? Jamais dans un magasin
-     * réel d'une société qui n'est pas validée, qui n'a aucun document réel.
+     * réel d'une société qui n'est pas validée, qui n'a aucun document réel,
+     * ni dans le magasin de démonstration d'une société validée, qui a
+     * disparu de tous ses écrans (T115, lot DEMO-V).
      */
     public function peutTelechargerDans(User $compte, Magasin $magasin): bool
     {
-        return $this->telecharge[CleDuModele::de($compte).':'.CleDuModele::de($magasin)] ??= ($magasin->est_demonstration || $magasin->societe->estValidee())
+        $aDesDocuments = $magasin->est_demonstration === true ? ! $magasin->societe->estValidee() : $magasin->societe->estValidee();
+
+        return $this->telecharge[CleDuModele::de($compte).':'.CleDuModele::de($magasin)] ??= $aDesDocuments
             && $this->dansLeMagasin($magasin, fn (): bool => Gate::forUser($compte)->allows(PermissionRegistry::DOCUMENTS_TELECHARGER));
     }
 

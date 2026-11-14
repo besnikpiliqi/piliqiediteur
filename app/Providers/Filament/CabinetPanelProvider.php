@@ -6,6 +6,7 @@ use App\Domain\Tenancy\Models\Societe;
 use App\Filament\App\Pages\Auth\Connexion;
 use App\Filament\App\Pages\Auth\ModifierProfil;
 use App\Filament\Cabinet\Pages\TableauDeBordDuCabinet;
+use App\Filament\CartesDesNotifications;
 use App\Filament\InitialesDuCompte;
 use App\Filament\PoliceServieParPiliqi;
 use App\Filament\Societe\Pages\AccepterLaTransmission;
@@ -82,6 +83,9 @@ class CabinetPanelProvider extends PanelProvider
                 'primary' => Color::Sky,
             ])
             ->databaseNotifications()
+            // La cloche et les cartes des notifications regardent s'il y a
+            // du nouveau au même rythme (voir CartesDesNotifications).
+            ->databaseNotificationsPolling(fn (): string => CartesDesNotifications::intervalle())
             ->discoverResources(in: app_path('Filament/Cabinet/Resources'), for: 'App\\Filament\\Cabinet\\Resources')
             ->discoverPages(in: app_path('Filament/Cabinet/Pages'), for: 'App\\Filament\\Cabinet\\Pages')
             ->pages([
@@ -103,6 +107,10 @@ class CabinetPanelProvider extends PanelProvider
             ], isPersistent: true)
             // Tant que le cabinet n'est pas validé, qu'il attend son code.
             ->renderHook(PanelsRenderHook::CONTENT_START, fn (): View => view('filament.verification-en-cours', ['magasin' => null, 'societe' => Filament::getTenant()]))
+            // Chaque notification de la cloche arrivée pendant qu'une page
+            // est ouverte s'y montre en carte, en haut à droite (voir
+            // CartesDesNotifications).
+            ->renderHook(PanelsRenderHook::SCRIPTS_BEFORE, fn (): View => view('filament.cartes-des-notifications-du-panneau'))
             // Une requête refusée (419, 404) dit en français quoi faire, au
             // lieu de la question en anglais de Livewire.
             ->renderHook(PanelsRenderHook::SCRIPTS_BEFORE, fn (): View => view('filament.requete-refusee'));

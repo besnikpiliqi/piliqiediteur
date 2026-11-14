@@ -480,7 +480,7 @@ trait AjouteDesLignesDAchat
                 try {
                     $calculateur = app(CalculateurLigne::class);
                     $benefice = $calculateur->beneficeUnitaire(
-                        $calculateur->prixUnitaireHtDepuisTtc(SaisieDecimale::enCentiemes($get('produit.prix_vente_ttc')), $tauxTva),
+                        $calculateur->prixUnitaireHtAffiche(SaisieDecimale::enCentiemes($get('produit.prix_vente_ttc')), $tauxTva),
                         self::prixDAchatNet($get),
                     );
                 } catch (InvalidArgumentException) {
@@ -940,7 +940,7 @@ trait AjouteDesLignesDAchat
         try {
             $calculateur = app(CalculateurLigne::class);
             $benefice = $calculateur->beneficeUnitaire(
-                $calculateur->prixUnitaireHtDepuisTtc(SaisieDecimale::enCentiemes($get('prix_vente_ttc')), $tauxTva),
+                $calculateur->prixUnitaireHtAffiche(SaisieDecimale::enCentiemes($get('prix_vente_ttc')), $tauxTva),
                 self::prixDAchatNetRetenu($get, $ligneRejointe),
             );
         } catch (InvalidArgumentException) {

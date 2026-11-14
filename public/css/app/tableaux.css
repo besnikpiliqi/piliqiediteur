@@ -1,0 +1,121 @@
+/*
+ * Les tableaux des fiches, au modèle D choisi par l'éditeur le 13/11/2026
+ * (voir App\Filament\TableauEntry) : un seul tableau par liste, les titres
+ * une fois en haut, les nombres et les montants alignés à droite en
+ * chiffres de même largeur, « – » en gris pour une valeur nulle, la ligne
+ * en gris quand toutes ses valeurs sont nulles, le total en gras et les
+ * lignes d'information en gris sous le total ; sur un téléphone, le
+ * tableau défile de côté dans son cadre. Écrite à la main, sans aucun
+ * outil Node, elle ne lit que les variables de couleur que Filament pose
+ * pour le panneau, en clair comme en sombre ; le gris des valeurs nulles
+ * garde un contraste lisible (AA) sur le fond du tableau.
+ */
+/*
+ * Le cadre du tableau est aussi le bloc de référence de ce qu'il contient
+ * en position absolue (le libellé de chaque valeur, que seul un lecteur
+ * d'écran lit) : sans cela, ce libellé échapperait au défilement du cadre
+ * et élargirait la page sur un téléphone.
+ */
+.piliqi-tableau {
+    position: relative;
+    max-width: 100%;
+    overflow-x: auto;
+    border-radius: 0.75rem;
+    box-shadow: 0 0 0 1px rgba(var(--gray-950), 0.05);
+}
+
+.dark .piliqi-tableau {
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.1);
+}
+
+.piliqi-tableau table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.piliqi-tableau th,
+.piliqi-tableau td {
+    padding: 0.5rem 0.75rem;
+    text-align: start;
+    vertical-align: top;
+    border-bottom: 1px solid rgba(var(--gray-200), 1);
+}
+
+.dark .piliqi-tableau th,
+.dark .piliqi-tableau td {
+    border-bottom-color: rgba(255, 255, 255, 0.05);
+}
+
+.piliqi-tableau thead th {
+    background-color: rgba(var(--gray-50), 1);
+    color: rgba(var(--gray-950), 1);
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.dark .piliqi-tableau thead th {
+    background-color: rgba(255, 255, 255, 0.05);
+    color: rgba(255, 255, 255, 1);
+}
+
+.piliqi-tableau .piliqi-chiffre {
+    text-align: end;
+    white-space: nowrap;
+}
+
+.piliqi-tableau .piliqi-chiffre .fi-in-text,
+.piliqi-tableau .piliqi-chiffre .fi-in-entry-wrp-content-ctn {
+    justify-content: flex-end;
+    text-align: end;
+}
+
+.piliqi-tableau .piliqi-nul,
+.piliqi-tableau tr.piliqi-ligne-nulle td,
+.piliqi-tableau tr.piliqi-ligne-nulle td .fi-in-text-item,
+.piliqi-tableau tr.piliqi-information td {
+    color: rgba(var(--gray-500), 1);
+}
+
+.dark .piliqi-tableau .piliqi-nul,
+.dark .piliqi-tableau tr.piliqi-ligne-nulle td,
+.dark .piliqi-tableau tr.piliqi-ligne-nulle td .fi-in-text-item,
+.dark .piliqi-tableau tr.piliqi-information td {
+    color: rgba(var(--gray-400), 1);
+}
+
+.piliqi-tableau .piliqi-aide {
+    margin-top: 0.25rem;
+    font-size: 0.875rem;
+    white-space: normal;
+    text-align: start;
+    color: rgba(var(--gray-500), 1);
+}
+
+.dark .piliqi-tableau .piliqi-aide {
+    color: rgba(var(--gray-400), 1);
+}
+
+.piliqi-tableau tr.piliqi-total td {
+    font-weight: 700;
+    border-top: 2px solid rgba(var(--gray-200), 1);
+}
+
+.dark .piliqi-tableau tr.piliqi-total td {
+    border-top-color: rgba(255, 255, 255, 0.1);
+}
+
+.piliqi-tableau tr.piliqi-information td {
+    font-weight: 400;
+}
+
+.piliqi-tableau tfoot tr:last-child td,
+.piliqi-tableau tbody:last-child tr:last-child td {
+    border-bottom: none;
+}
+
+.piliqi-tableau tr.piliqi-dessous td {
+    padding-top: 0;
+}

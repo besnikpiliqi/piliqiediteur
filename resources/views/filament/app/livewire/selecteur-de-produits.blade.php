@@ -1,5 +1,6 @@
 {{-- Ouvert dans la fenêtre d'une action du formulaire de la page : Entrée dans un champ (recherche, quantité) validerait ce formulaire et fermerait la fenêtre. --}}
-<div class="space-y-4" x-data x-on:keydown.enter="if ($event.target.tagName === 'INPUT') $event.preventDefault()">
+{{-- Le tri en haut, le tableau qui défile, puis les produits choisis et le bouton, toujours visibles (voir resources/css/fenetres-de-selection.css). --}}
+<div class="piliqi-selecteur" x-data x-on:keydown.enter="if ($event.target.tagName === 'INPUT') $event.preventDefault()">
     @php($choisis = $this->produitsSelectionnes())
     @php($nombre = count($choisis))
 
@@ -16,15 +17,7 @@
 
     {{ $this->table }}
 
-    @if ($this->resteDAutresProduits())
-        <div class="flex justify-center">
-            <x-filament::button color="gray" wire:click="voirPlus">
-                Voir {{ \App\Filament\App\Livewire\SelecteurDeProduits::PAR_PAGE }} de plus
-            </x-filament::button>
-        </div>
-    @endif
-
-    <x-filament::section>
+    <x-filament::section class="piliqi-choisis">
         @if ($nombre > 0)
             <ul class="space-y-2">
                 @foreach ($choisis as $choisi)

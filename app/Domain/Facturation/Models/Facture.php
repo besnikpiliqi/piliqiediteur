@@ -386,17 +386,17 @@ class Facture extends Model implements DocumentEnvoyable
 
     /**
      * Le nombre et le restant dû de ces factures, dont celles en retard
-     * (échéance dépassée, voir estEchue()), en centimes : chaque restant dû
-     * se calcule ici, depuis les imputations chargées avec les factures
-     * (voir resteDuEnCentimes()), jamais par une somme que la base ferait
-     * sur une colonne décimale.
+     * (voir estEnRetard()), en centimes : chaque restant dû se calcule
+     * ici, depuis les imputations chargées avec les factures (voir
+     * resteDuEnCentimes()), jamais par une somme que la base ferait sur une
+     * colonne décimale.
      *
      * @param  Collection<int, Facture>  $factures
      * @return array{nombre: int, restant_du: int, nombre_en_retard: int, restant_du_en_retard: int}
      */
     public static function totauxAEncaisser(Collection $factures): array
     {
-        $enRetard = $factures->filter(fn (Facture $facture): bool => $facture->estEchue());
+        $enRetard = $factures->filter(fn (Facture $facture): bool => $facture->estEnRetard());
 
         return [
             'nombre' => $factures->count(),
@@ -954,6 +954,23 @@ class Facture extends Model implements DocumentEnvoyable
     public function estEchue(): bool
     {
         return $this->date_echeance !== null && $this->date_echeance < $this->magasin->calendrier()->aujourdhui();
+    }
+
+    /**
+     * Une facture émise en retard : son échéance est dépassée et il lui
+     * reste un montant dû, lu dans les imputations chargées avec une liste
+     * (voir resteDuEnCentimes()). Une facture en retard le reste tant qu'un
+     * montant reste dû après l'échéance (CLAUDE.md, « Paiements et
+     * avoirs ») : réglée ou soldée par un avoir après son échéance, elle ne
+     * l'est plus. La colonne « À faire » de la liste des factures (qui en
+     * écarte les brouillons), l'« À faire » du tableau de bord et les
+     * totaux des espaces de la société et du cabinet (qui ne lisent que des
+     * factures à encaisser) le lisent ainsi ; une relance relit ce qui
+     * reste dû sous verrou (voir estEchueEtImpayee()).
+     */
+    public function estEnRetard(): bool
+    {
+        return $this->estEchue() && $this->resteDuEnCentimes() > 0;
     }
 
     /**

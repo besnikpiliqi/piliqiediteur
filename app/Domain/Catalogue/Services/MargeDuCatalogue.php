@@ -41,7 +41,7 @@ final readonly class MargeDuCatalogue
     {
         $calculateur = app(CalculateurLigne::class);
         $tauxTva = $franchiseEnBase ? 0 : $calculateur->enCentiemes($produit->taux_tva);
-        $prixVenteHt = $calculateur->prixUnitaireHtDepuisTtc($calculateur->enCentiemes($produit->prix_vente_ttc), $tauxTva);
+        $prixVenteHt = $calculateur->prixUnitaireHtAffiche($calculateur->enCentiemes($produit->prix_vente_ttc), $tauxTva);
         $benefice = $calculateur->beneficeUnitaire($prixVenteHt, $calculateur->enDixMilliemes($produit->cmup_ht));
 
         return new self($tauxTva, $prixVenteHt, $benefice, $calculateur->tauxDeMarque($benefice, $prixVenteHt));

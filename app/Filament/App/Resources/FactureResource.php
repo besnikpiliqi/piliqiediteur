@@ -61,6 +61,7 @@ use App\Filament\Concerns\PrendLeCalendrierDuMagasin;
 use App\Filament\Concerns\SaisitUneQuantiteRetournee;
 use App\Filament\Concerns\SaisitUnReglementEnParts;
 use App\Filament\Concerns\SupprimeEnMasseLigneParLigne;
+use App\Filament\TableauEntry;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\MountableAction;
 use Filament\Facades\Filament;
@@ -78,7 +79,6 @@ use Filament\Forms\Get;
 use Filament\Forms\Set;
 use Filament\Infolists\Components\Actions;
 use Filament\Infolists\Components\Actions\Action as InfolistAction;
-use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\Section as InfolistSection;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Infolists\Infolist;
@@ -401,7 +401,7 @@ class FactureResource extends Resource
                     // (« allocationsPaiement.0.paiement.recu_le ») : les
                     // imputations s'y chargent avec leur paiement et son
                     // reçu, en une requête par relation.
-                    RepeatableEntry::make('allocationsPaiement')
+                    TableauEntry::make('allocationsPaiement')
                         ->label('')
                         ->state(fn (Facture $record) => $record->loadMissing(['allocationsPaiement.paiement.recuPaiement.client', 'allocationsPaiement.paiement.recuPaiement.magasin', 'allocationsPaiement.paiement.recuPaiement.lignes.facture'])->allocationsPaiement)
                         ->schema([
@@ -415,6 +415,7 @@ class FactureResource extends Resource
                             TextEntry::make('montant_alloue')
                                 ->label('Montant imputé')
                                 ->money('EUR')
+                                ->alignEnd()
                                 ->color(fn (PaiementAllocation $record): ?string => app(CalculateurLigne::class)->enCentiemes($record->montant_alloue) < 0 ? 'danger' : null),
                             TextEntry::make('paiement.reference')->label('Référence')->placeholder('—'),
                             TextEntry::make('recu')
@@ -424,9 +425,8 @@ class FactureResource extends Resource
                             Actions::make([
                                 self::telechargerLeRecu(InfolistAction::make('telecharger_recu')),
                                 self::envoyerLeRecu(InfolistAction::make('envoyer_recu')),
-                            ])->columnSpanFull(),
-                        ])
-                        ->columns(6),
+                            ]),
+                        ]),
                 ]),
 
             InfolistSection::make('Crédité par avoir')
@@ -436,7 +436,7 @@ class FactureResource extends Resource
                     // erreur y figure avec sa contre-passation, en négatif
                     // (voir ContrePasserPaiementAction), dans l'ordre où ils
                     // ont été imputés.
-                    RepeatableEntry::make('allocationsAvoir')
+                    TableauEntry::make('allocationsAvoir')
                         ->label('')
                         ->state(fn (Facture $record) => $record->loadMissing('allocationsAvoir.avoir')->allocationsAvoir)
                         ->schema([
@@ -447,9 +447,9 @@ class FactureResource extends Resource
                             TextEntry::make('montant_alloue')
                                 ->label('Montant crédité')
                                 ->money('EUR')
+                                ->alignEnd()
                                 ->color(fn (AvoirAllocation $record): ?string => app(CalculateurLigne::class)->enCentiemes($record->montant_alloue) < 0 ? 'danger' : null),
-                        ])
-                        ->columns(2),
+                        ]),
                 ]),
 
             InfolistSection::make('Transmission électronique')->schema([
@@ -474,7 +474,7 @@ class FactureResource extends Resource
                 // chacun partiel (voir CreerAvoirAction).
                 ->visible(fn (Facture $record) => $record->avoirsEmisConcernes()->exists())
                 ->schema([
-                    RepeatableEntry::make('avoirsEmisListe')
+                    TableauEntry::make('avoirsEmisListe')
                         ->label('')
                         // Un avoir peut couvrir plusieurs factures (voir
                         // CreerAvoirAction) : seules ses lignes qui
@@ -487,7 +487,7 @@ class FactureResource extends Resource
                         ))
                         ->schema([
                             // ::make('x') seul ne fonctionne pas ici : une
-                            // fois le nom imbriqué sous un RepeatableEntry
+                            // fois le nom imbriqué sous un TableauEntry
                             // nourri par un state() arbitraire (pas une
                             // vraie relation Eloquent du modèle racine), le
                             // chemin résolu par Filament ("avoirsEmisListe.
@@ -504,26 +504,25 @@ class FactureResource extends Resource
                             TextEntry::make('total_ttc')
                                 ->label('Crédité sur cette facture (TTC)')
                                 ->state(fn (Avoir $record): string => app(CalculateurLigne::class)->enDecimal(app(CalculateurLigne::class)->sommer($record->lignes->map(fn (LigneAvoir $ligne): string => $ligne->montant_ttc))))
-                                ->money('EUR'),
+                                ->money('EUR')
+                                ->alignEnd(),
                             // Le résumé (numéro/motif/total) ne dit pas CE QUI
                             // a été retourné : le détail des lignes créditées
                             // (produit, quantité, montant) doit être visible
                             // directement ici, pas seulement sur la page
                             // dédiée de l'avoir.
-                            RepeatableEntry::make('lignes')
+                            TableauEntry::make('lignes')
                                 ->label(fn (Avoir $record): string => $record->estUneRegularisation() ? 'Lignes régularisées, sans retour en stock' : 'Produits retournés')
                                 ->columnSpanFull()
                                 ->state(fn (Avoir $record) => $record->lignes)
                                 ->schema([
                                     TextEntry::make('description')->state(fn (LigneAvoir $record) => $record->description),
-                                    TextEntry::make('quantite')->label('Quantité')->state(fn (LigneAvoir $record) => $record->quantite)->numeric(),
-                                    TextEntry::make('montant_ht')->label('Total HT')->state(fn (LigneAvoir $record) => $record->montant_ht)->money('EUR'),
-                                    TextEntry::make('montant_tva')->label('TVA')->state(fn (LigneAvoir $record) => $record->montant_tva)->money('EUR'),
-                                    TextEntry::make('montant_ttc')->label('Total TTC')->state(fn (LigneAvoir $record) => $record->montant_ttc)->money('EUR'),
-                                ])
-                                ->columns(5),
-                        ])
-                        ->columns(3),
+                                    TextEntry::make('quantite')->label('Quantité')->state(fn (LigneAvoir $record) => $record->quantite)->numeric()->alignEnd(),
+                                    TextEntry::make('montant_ht')->label('Total HT')->state(fn (LigneAvoir $record) => $record->montant_ht)->money('EUR')->alignEnd(),
+                                    TextEntry::make('montant_tva')->label('TVA')->state(fn (LigneAvoir $record) => $record->montant_tva)->money('EUR')->alignEnd(),
+                                    TextEntry::make('montant_ttc')->label('Total TTC')->state(fn (LigneAvoir $record) => $record->montant_ttc)->money('EUR')->alignEnd(),
+                                ]),
+                        ]),
                 ]),
 
             self::envoisSection(),
@@ -577,7 +576,7 @@ class FactureResource extends Resource
                     ->state(fn (Facture $record): array => self::etatDesPreuves($record))
                     ->listWithLineBreaks()
                     ->color(fn (string $state): string => str_starts_with($state, 'À fournir') ? 'warning' : 'success'),
-                RepeatableEntry::make('preuves_enregistrees')
+                TableauEntry::make('preuves_enregistrees')
                     ->label('Preuves enregistrées')
                     ->state(fn (Facture $record) => $record->preuvesOperation()->get())
                     ->visible(fn (Facture $record): bool => $record->preuvesOperation()->exists())
@@ -589,8 +588,7 @@ class FactureResource extends Resource
                         TextEntry::make('note')
                             ->label('Enregistrée')
                             ->state(fn (PreuveOperation $record): string => 'le '.self::calendrierDuMagasin()->afficher($record->created_at, 'd/m/Y à H:i').($record->note_par_nom === null ? '' : ' par '.$record->note_par_nom)),
-                    ])
-                    ->columns(5),
+                    ]),
             ]);
     }
 
@@ -675,16 +673,11 @@ class FactureResource extends Resource
      * Lignes d'un document (facture, avoir, devis, facture d'achat, avoir
      * fournisseur) : pour chaque article son PU HT, son PU TTC et son taux,
      * puis le HT, la TVA et le TTC de la ligne, tels qu'enregistrés (voir
-     * CalculateurLigne). Le PU HT d'une vente, enregistré au millionième
-     * d'euro (voir CalculateurLigne::prixUnitaireHtExact()), s'affiche tel
-     * qu'il est enregistré sur les documents qui le montrent -- facture,
-     * avoir sur facture ou devis à un professionnel, vente sans TVA
-     * française (décision de l'éditeur du 09/11/2026) -- comme celui d'un
-     * achat, tel que le fournisseur l'écrit (voir
-     * CalculateurLigne::prixUnitaireExact()) ; sur un ticket, un avoir sur
-     * ticket ou un devis à un particulier, arrondi au centime, comme tout
-     * prix unitaire de vente (voir CalculateurLigne::prixUnitaireAffiche()).
-     * Un achat n'a pas de PU TTC :
+     * CalculateurLigne). Le PU HT d'une vente s'affiche comme partout :
+     * son PU TTC moins la TVA d'un article arrondie au centime (voir
+     * CalculateurLigne::prixUnitaireHtAffiche(), décision de l'éditeur du
+     * 14/11/2026) ; celui d'un achat, tel que le fournisseur l'écrit (voir
+     * CalculateurLigne::prixUnitaireExact()). Un achat n'a pas de PU TTC :
      * sa TVA est sa part de celle que la facture du fournisseur écrit pour
      * son taux (voir TvaDuFournisseur) ; le HT d'une ligne d'achat que la
      * facture écrit autrement que le calcul depuis le PU montre ce calcul
@@ -716,7 +709,7 @@ class FactureResource extends Resource
      * ne passe pas pour un PU TTC, et le calcul se vérifie (3 x 7,00 € ÷
      * 1,20 = 17,50 €). Un service, saisi sans TVA, n'a ni l'un ni l'autre.
      */
-    public static function lignesEntry(?Model $document): RepeatableEntry
+    public static function lignesEntry(?Model $document): TableauEntry
     {
         $estUnAchat = $document instanceof FactureAchat || $document instanceof AvoirFournisseur;
         $estUneVente = $document instanceof Facture || $document instanceof Avoir || $document instanceof Devis;
@@ -735,10 +728,9 @@ class FactureResource extends Resource
         $prixCatalogueSansTvaFrancaise = fn (LigneFacture|LigneAvoir|LigneDevis $ligne): bool => $sansTvaFrancaise && ($ligne->nature === NatureLigne::Bien || $calculateur->enCentiemes($ligne->taux_tva_du_prix) > 0);
         $prixUnitaire = fn (string $state): string => $calculateur->prixUnitaireAffiche($calculateur->enMillioniemes($state));
         $prixExact = fn (string $state): string => $calculateur->prixUnitaireExact($calculateur->enMillioniemes($state));
-        $montreLePuHtExact = $estUnAchat || ($estUneVente && ContexteDeVente::documentMontreLePuHt($document));
         $stocks = $document instanceof Devis && $document->montreLeStockDeSesLignes() ? $document->stocksDeSesProduits() : [];
 
-        return RepeatableEntry::make('lignes')
+        return TableauEntry::make('lignes')
             ->label('')
             ->helperText($estUneVente ? app(MentionsFiscales::class)->calcul($document) : null)
             ->schema([
@@ -751,40 +743,45 @@ class FactureResource extends Resource
                 TextEntry::make('quantite')
                     ->label('Quantité')
                     ->numeric()
+                    ->alignEnd()
                     ->helperText(fn (?Model $record): ?string => $record instanceof LigneDevis && $record->produit_id !== null && isset($stocks[$record->produit_id])
                         ? DevisResource::texteDuStockDUneLigne($stocks[$record->produit_id]['disponible'], $record->quantite)
                         : null),
                 TextEntry::make('prix_unitaire_ht')
                     ->label('PU HT')
-                    ->formatStateUsing($montreLePuHtExact ? $prixExact : $prixUnitaire),
+                    ->alignEnd()
+                    ->formatStateUsing(fn (string $state, Model $record): string => $record instanceof LigneFacture || $record instanceof LigneAvoir || $record instanceof LigneDevis
+                        ? $calculateur->prixUnitaireHtAfficheEnEuros($calculateur->enCentiemes($record->prix_unitaire_ttc), $calculateur->enCentiemes($record->taux_tva_du_prix))
+                        : $prixExact($state)),
                 TextEntry::make('prix_unitaire_ttc')
                     ->label($sansTvaFrancaise ? 'Prix catalogue TTC' : 'PU TTC')
+                    ->alignEnd()
                     ->state(fn (LigneFacture|LigneAvoir|LigneDevis $record): mixed => ! $sansTvaFrancaise || $prixCatalogueSansTvaFrancaise($record) ? $record->prix_unitaire_ttc : null)
                     ->placeholder('—')
                     ->formatStateUsing($prixUnitaire)
                     ->hidden($estUnAchat),
                 TextEntry::make('taux_tva_du_prix')
                     ->label('TVA retirée')
+                    ->alignEnd()
                     ->state(fn (LigneFacture|LigneAvoir|LigneDevis $record): mixed => $prixCatalogueSansTvaFrancaise($record) ? $record->taux_tva_du_prix : null)
                     ->placeholder('—')
                     ->numeric(maxDecimalPlaces: 2)
                     ->suffix(' %')
                     ->visible($sansTvaFrancaise),
-                TextEntry::make('taux_tva')->label('Taux TVA')->numeric(maxDecimalPlaces: 2)->suffix(' %'),
-                TextEntry::make('remise_pourcentage')->label('Remise')->numeric(maxDecimalPlaces: 2)->suffix(' %')->visible($avecRemise),
+                TextEntry::make('taux_tva')->label('Taux TVA')->numeric(maxDecimalPlaces: 2)->suffix(' %')->alignEnd(),
+                TextEntry::make('remise_pourcentage')->label('Remise')->numeric(maxDecimalPlaces: 2)->suffix(' %')->alignEnd()->visible($avecRemise),
                 TextEntry::make('montant_ht')
                     ->label('Total HT')
                     ->money('EUR')
+                    ->alignEnd()
                     ->helperText(fn (?Model $record): ?string => $record instanceof LigneAchat && $record->montant_ht_saisi !== null && $calculateur->enCentiemes($record->montant_ht_saisi) !== $record->montantHtPropose()
                         ? 'HT de la facture du fournisseur ; calcul depuis le PU : '.$calculateur->enEuros($record->montantHtPropose())
                         : null),
-                TextEntry::make('montant_tva')->label('TVA')->money('EUR'),
-                TextEntry::make('montant_ttc')->label('Total TTC')->money('EUR'),
+                TextEntry::make('montant_tva')->label('TVA')->money('EUR')->alignEnd(),
+                TextEntry::make('montant_ttc')->label('Total TTC')->money('EUR')->alignEnd(),
                 Actions::make([FactureAchatResource::creerUnAvoirFournisseur(InfolistAction::make('retourner_ce_produit'))])
-                    ->visible(fn (?Model $record): bool => $record instanceof LigneAchat)
-                    ->columnSpanFull(),
-            ])
-            ->columns(8 + ($avecRemise ? 1 : 0) + ($sansTvaFrancaise ? 1 : 0) - ($estUnAchat ? 1 : 0));
+                    ->visible(fn (?Model $record): bool => $record instanceof LigneAchat),
+            ]);
     }
 
     /**
@@ -820,18 +817,17 @@ class FactureResource extends Resource
      * Récapitulatif par taux (voir VentileLaTvaParTaux), partagé par les
      * fiches de tous les documents à lignes.
      */
-    public static function ventilationTvaEntry(): RepeatableEntry
+    public static function ventilationTvaEntry(): TableauEntry
     {
-        return RepeatableEntry::make('ventilation_tva')
+        return TableauEntry::make('ventilation_tva')
             ->label('TVA par taux')
             ->columnSpanFull()
             ->schema([
-                TextEntry::make('taux_tva')->label('Taux')->numeric(maxDecimalPlaces: 2)->suffix(' %'),
-                TextEntry::make('montant_ht')->label('Base HT')->money('EUR'),
-                TextEntry::make('montant_tva')->label('TVA')->money('EUR'),
-                TextEntry::make('montant_ttc')->label('Total TTC')->money('EUR'),
-            ])
-            ->columns(4);
+                TextEntry::make('taux_tva')->label('Taux')->numeric(maxDecimalPlaces: 2)->suffix(' %')->alignEnd(),
+                TextEntry::make('montant_ht')->label('Base HT')->money('EUR')->alignEnd(),
+                TextEntry::make('montant_tva')->label('TVA')->money('EUR')->alignEnd(),
+                TextEntry::make('montant_ttc')->label('Total TTC')->money('EUR')->alignEnd(),
+            ]);
     }
 
     /**
@@ -862,7 +858,7 @@ class FactureResource extends Resource
             // magasin, sa société et cette décision une seule fois, quel que
             // soit le nombre de factures.
             ->modifyQueryUsing(fn (Builder $query): Builder => $query
-                ->with(['allocationsPaiement:id,facture_id,montant_alloue', 'allocationsAvoir:id,facture_id,montant_alloue', 'rectificative:id,facture_rectifiee_id', 'magasin.societe.dernierExamenDuSiren'])
+                ->with(['allocationsPaiement:id,facture_id,montant_alloue', 'allocationsAvoir:id,facture_id,montant_alloue', 'rectificative:id,facture_rectifiee_id', 'client', 'magasin.societe.dernierExamenDuSiren'])
                 ->withExists(['lignes as lignes_creditables_exists' => fn (Builder $lignes): Builder => ValeursLues::instance($lignes->scopes('creditables'), Builder::class)]))
             ->columns([
                 Tables\Columns\TextColumn::make('numero')->label('Numéro')->placeholder('Brouillon')->rechercheSansAccents(),
@@ -1003,8 +999,10 @@ class FactureResource extends Resource
      * La colonne « À faire » de la liste : ce qui attend encore sur chaque
      * facture, dit sur sa ligne (règle 1 de l'« À faire », voir
      * ChosesAFaireDuMagasin) : « À émettre » pour un brouillon, « À
-     * encaisser » et « En retard » pour ce qui reste dû (voir
-     * Facture::scopeAEncaisser() et estEchue()), « Preuve à fournir » pour
+     * encaisser » pour ce qui reste dû (voir Facture::scopeAEncaisser()),
+     * « En retard » tant qu'un montant reste dû après l'échéance, jamais
+     * pour une facture réglée ou soldée par un avoir (voir
+     * Facture::estEnRetard()), « Preuve à fournir » pour
      * une vente hors de France qui attend une preuve de son exonération
      * (voir Facture::attendUnePreuve()), « Exonération non prouvée » pour
      * une vente qui se régularise faute de preuve de sortie 150 jours
@@ -1034,7 +1032,7 @@ class FactureResource extends Resource
         return array_values(array_filter([
             $facture->statut === StatutFacture::Brouillon ? 'À émettre' : null,
             in_array($facture->statut, StatutFacture::quiAttendentUnReglement(), true) ? 'À encaisser' : null,
-            $facture->statut !== StatutFacture::Brouillon && $facture->estEchue() ? 'En retard' : null,
+            $facture->statut !== StatutFacture::Brouillon && $facture->estEnRetard() ? 'En retard' : null,
             $facture->attendUnePreuve() ? 'Preuve à fournir' : null,
             $facture->attendLaRegularisationDeSonExoneration() ? 'Exonération non prouvée' : null,
             $facture->attendSonVisa() ? 'Visa à noter' : null,

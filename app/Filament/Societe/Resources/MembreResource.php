@@ -21,6 +21,7 @@ use App\Filament\Concerns\CocheLesAutorisationsDeMagasin;
 use App\Filament\Concerns\GereLesComptes;
 use App\Filament\Societe\Resources\MembreResource\Pages;
 use App\Filament\Societe\RessourceDuPanneauSociete;
+use App\Filament\TableauEntry;
 use App\Models\User;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\CheckboxList;
@@ -29,7 +30,6 @@ use Filament\Forms\Components\Radio;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Get;
 use Filament\Forms\Set;
-use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\Section;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Infolists\Infolist;
@@ -203,7 +203,7 @@ class MembreResource extends RessourceDuPanneauSociete
                     ->placeholder('—'),
             ])->columns(2),
             Section::make('Magasin')->schema([
-                RepeatableEntry::make('affectationsVisibles')
+                TableauEntry::make('affectationsVisibles')
                     ->label('')
                     ->state(fn (User $record): array => static::affectationsVisibles($record))
                     ->schema([
@@ -211,8 +211,7 @@ class MembreResource extends RessourceDuPanneauSociete
                         TextEntry::make('role')->label('Rôle'),
                         TextEntry::make('autorisations')->label('Autorisations')->listWithLineBreaks()->placeholder('—'),
                         TextEntry::make('nomination')->label('Nomination')->placeholder('—'),
-                    ])
-                    ->columns(4),
+                    ]),
             ])->visible(fn (User $record): bool => ! $record->estProprietaire() && ! $record->estExpertComptable()),
             Section::make('Autorisations de l\'expert-comptable')->schema([
                 TextEntry::make('autorisations_de_l_expert_comptable')

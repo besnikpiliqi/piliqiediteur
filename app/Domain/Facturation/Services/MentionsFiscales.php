@@ -10,7 +10,6 @@ use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\LigneAvoir;
-use App\Domain\Facturation\Models\LigneDevis;
 use App\Domain\Facturation\Models\LigneFacture;
 use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Support\ValeurRequise;
@@ -76,9 +75,7 @@ class MentionsFiscales
 
     private const PRIX_UNITAIRES_AU_CENTIME = 'Les prix unitaires sont affichés arrondis au centime et les totaux calculés sans arrondi intermédiaire : la quantité × le prix unitaire affiché peut donc différer du total de la ligne.';
 
-    private const PU_HT_TEL_QU_ENREGISTRE = 'Les prix unitaires HT sont affichés tels qu\'ils sont enregistrés et les totaux calculés sans arrondi intermédiaire : la quantité × le PU HT, remise déduite, retombe sur le total HT de la ligne à moins de deux centimes près.';
-
-    private const PU_HT_ECART_POSSIBLE = 'Les prix unitaires HT sont affichés tels qu\'ils sont enregistrés et les totaux calculés sans arrondi intermédiaire : la quantité × le PU HT, remise déduite, peut s\'écarter de quelques centimes du total HT de la ligne.';
+    private const PU_HT_D_UN_ARTICLE = 'Le PU HT affiché est celui d\'un article : prix TTC moins sa TVA arrondie au centime (9,99 € TTC à 20 % : 8,32 € HT). La quantité × ce prix peut différer de quelques centimes du total HT de la ligne, calculé sur toute la quantité.';
 
     /**
      * @param  Emetteur  $emetteur  celui qu'imprime le document : signé une fois émis (voir FigeSonEmetteur::emetteur()), figé au dernier envoi d'un devis (voir Devis::emetteur()), la société et le magasin d'aujourd'hui pour un brouillon et pour le document qu'on émet (voir ContenuFiscal)
@@ -177,18 +174,15 @@ class MentionsFiscales
      * dit que ses produits, et ses services à leur prix de référence, se
      * comptent au prix de leur catalogue sans la TVA de leur taux, et ses
      * autres services à leur prix sans TVA. Chacune de ces explications
-     * ajoute que les totaux se calculent sans arrondi intermédiaire, et
-     * l'écart qui peut en résulter : sur un document qui montre le PU HT
-     * tel qu'il est enregistré -- facture, avoir sur facture ou devis à un
-     * professionnel, vente sans TVA française (voir
-     * ContexteDeVente::documentMontreLePuHt() et
-     * CalculateurLigne::prixUnitaireExact(), décision de l'éditeur du
-     * 09/11/2026) --, que la quantité x ce PU HT, remise déduite, retombe
-     * sur le total HT de la ligne à moins de deux centimes près, quand
-     * chaque ligne du document le vérifie (voir
-     * CalculateurLigne::puHtRetombeSurLeHt()), et sinon qu'elle peut s'en
-     * écarter de quelques centimes, au-delà de 10 000 articles d'une ligne
-     * (décision T105 de l'éditeur du 12/11/2026) ; sur un
+     * ajoute l'écart qui peut résulter du prix unitaire affiché : sur un
+     * document qui montre le PU HT -- facture, avoir sur facture ou devis à
+     * un professionnel, vente sans TVA française (voir
+     * ContexteDeVente::documentMontreLePuHt()) --, que ce PU HT est celui
+     * d'un article, son prix TTC moins sa TVA arrondie au centime (voir
+     * CalculateurLigne::prixUnitaireHtAffiche(), décision de l'éditeur du
+     * 14/11/2026, qui remplace celle du 09/11/2026 et T105), et que la
+     * quantité x ce prix peut différer de quelques centimes du total HT de
+     * la ligne, calculé sur toute la quantité ; sur un
      * ticket, un avoir sur ticket ou un devis à un particulier, que les
      * prix unitaires s'affichent arrondis au centime (voir
      * CalculateurLigne::prixUnitaireAffiche()), si bien que la quantité x le
@@ -210,27 +204,6 @@ class MentionsFiscales
             ? ($document instanceof Avoir ? self::CALCUL_RETOUR_SANS_TVA : self::CALCUL_SANS_TVA)
             : ($document instanceof Avoir ? self::CALCUL_RETOUR : self::CALCUL_VENTE);
 
-        if (! ContexteDeVente::documentMontreLePuHt($document)) {
-            return $calcul.' '.self::PRIX_UNITAIRES_AU_CENTIME;
-        }
-
-        return $calcul.' '.($this->chaqueLigneRetombeSurSonHt($document) ? self::PU_HT_TEL_QU_ENREGISTRE : self::PU_HT_ECART_POSSIBLE);
-    }
-
-    /**
-     * Pour chaque ligne du document, la quantité x le PU HT enregistré,
-     * remise déduite, retombe-t-elle sur son HT à moins de deux centimes
-     * près ?
-     */
-    private function chaqueLigneRetombeSurSonHt(Facture|Avoir|Devis $document): bool
-    {
-        $calculateur = app(CalculateurLigne::class);
-
-        return $document->loadMissing('lignes')->lignes->every(fn (LigneFacture|LigneAvoir|LigneDevis $ligne): bool => $calculateur->puHtRetombeSurLeHt(
-            (int) $ligne->quantite,
-            $calculateur->enMillioniemes($ligne->prix_unitaire_ht),
-            $calculateur->enCentiemes($ligne->remise_pourcentage),
-            $calculateur->enCentiemes($ligne->montant_ht),
-        ));
+        return $calcul.' '.(ContexteDeVente::documentMontreLePuHt($document) ? self::PU_HT_D_UN_ARTICLE : self::PRIX_UNITAIRES_AU_CENTIME);
     }
 }

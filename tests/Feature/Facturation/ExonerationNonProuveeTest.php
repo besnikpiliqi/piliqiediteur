@@ -243,13 +243,16 @@ class ExonerationNonProuveeTest extends TestCase
      * 8,333333 €) : la ligne de la facture rectificative garde la quantité
      * et le TTC payé, 694,44 € HT et 138,89 € de TVA, puis 69 444,44 € HT et
      * 13 888,89 € de TVA ; son PU HT est ce HT ÷ la quantité, au millionième
-     * (6,9444 € puis 6,944444 €), si bien que la quantité x ce PU HT retombe
-     * sur le HT de la ligne à moins de deux centimes près, comme le dit la
-     * note de calcul (constat de la relecture du lot ER-PRO : 10 000 x
+     * (6,9444 € puis 6,944444 €), si bien que la quantité x ce PU HT, celui
+     * de la facture électronique, retombe sur le HT de la ligne à moins de
+     * deux centimes près (constat de la relecture du lot ER-PRO : 10 000 x
      * 6,941667 € tombaient 27,77 € sous le HT) ; son PU TTC est le prix
      * payé au centime, 8,33 €, que la facture n'imprime pas, et la quantité
      * x ce PU TTC s'écarte du TTC de la ligne d'au plus un demi-centime par
-     * article (décision de Claude, D76 : la ligne garde le TTC payé).
+     * article (décision de Claude, D76 : la ligne garde le TTC payé). Le
+     * PU HT affiché est, comme partout, celui d'un article à ce PU TTC :
+     * 8,33 € moins sa TVA de 1,39 €, soit 6,94 € (décision de l'éditeur du
+     * 14/11/2026), ce que dit la note de calcul.
      */
     public function test_la_ligne_rectificative_d_un_export_de_nombreux_articles_retombe_sur_son_ht(): void
     {
@@ -270,7 +273,8 @@ class ExonerationNonProuveeTest extends TestCase
             $this->assertSame([$quantite, $ht, $tva, $ttc, $prixUnitaireHt, '8.33'], [$ligne->quantite, (string) $ligne->montant_ht, (string) $ligne->montant_tva, (string) $ligne->montant_ttc, (string) $ligne->prix_unitaire_ht, (string) $ligne->prix_unitaire_ttc]);
             $this->assertSame($calculateur->enCentiemes($ht) * 10_000, $quantite * $calculateur->enMillioniemes($ligne->prix_unitaire_ht));
             $this->assertLessThanOrEqual($quantite / 2, abs($calculateur->enCentiemes($ttc) - $quantite * $calculateur->enCentiemes($ligne->prix_unitaire_ttc)));
-            $this->assertStringEndsWith('la quantité × le PU HT, remise déduite, retombe sur le total HT de la ligne à moins de deux centimes près.', (string) app(MentionsFiscales::class)->calcul($rectificative));
+            $this->assertSame(694, $calculateur->prixUnitaireHtAffiche($calculateur->enCentiemes($ligne->prix_unitaire_ttc), $calculateur->enCentiemes($ligne->taux_tva_du_prix)));
+            $this->assertStringEndsWith('Le PU HT affiché est celui d\'un article : prix TTC moins sa TVA arrondie au centime (9,99 € TTC à 20 % : 8,32 € HT). La quantité × ce prix peut différer de quelques centimes du total HT de la ligne, calculé sur toute la quantité.', (string) app(MentionsFiscales::class)->calcul($rectificative));
         }
     }
 

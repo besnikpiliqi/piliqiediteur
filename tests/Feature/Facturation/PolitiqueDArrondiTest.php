@@ -232,8 +232,10 @@ class PolitiqueDArrondiTest extends TestCase
      * du cumul de leurs TTC : 54,17 € (65,00 ÷ 1,2 = 54,1666...), 54,16 €
      * (108,33 - 54,17), 54,17 € (162,50 - 108,33) et 54,17 € (216,67 -
      * 162,50). Chaque ligne enregistre et signe son PU HT exact, 54,166667 €,
-     * que la facture à un professionnel imprime tel quel (décision de
-     * l'éditeur du 09/11/2026), et le ticket son PU TTC, 65,00 €.
+     * celui de la facture électronique ; la facture à un professionnel
+     * imprime le PU HT d'un article, 65,00 € moins sa TVA de 10,83 €, soit
+     * 54,17 € (décision de l'éditeur du 14/11/2026), et le ticket son PU
+     * TTC, 65,00 €.
      *
      * @return array<string, array{list<int>, bool, list<list<string>>}>
      */
@@ -273,7 +275,8 @@ class PolitiqueDArrondiTest extends TestCase
         $this->assertStringContainsString('216,67 €', $pdf);
         $this->assertStringContainsString('43,33 €', $pdf);
         $this->assertStringNotContainsString('216,68 €', $pdf);
-        $this->assertStringContainsString($professionnel ? '54,166667 €' : '65,00 €', $pdf);
+        $this->assertStringContainsString($professionnel ? '54,17 €' : '65,00 €', $pdf);
+        $this->assertStringNotContainsString('54,166667', $pdf);
     }
 
     /**

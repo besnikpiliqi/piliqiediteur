@@ -14,10 +14,10 @@ use App\Domain\Fichiers\NomDeFichier;
 use App\Domain\Fichiers\PieceDeposee;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\CompteConnecte;
+use App\Filament\TableauEntry;
 use Filament\Actions\Action;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Select;
-use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\Section as InfolistSection;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Notifications\Notification;
@@ -128,7 +128,7 @@ trait JointLesPiecesDuFournisseur
         return InfolistSection::make('Pièces du fournisseur')
             ->schema([
                 self::marquePieceManquante(),
-                RepeatableEntry::make('pieces_jointes')
+                TableauEntry::make('pieces_jointes')
                     ->hiddenLabel()
                     ->state(fn (FactureAchat|AvoirFournisseur $record) => $record->pieces()->get())
                     ->schema([
@@ -157,7 +157,6 @@ trait JointLesPiecesDuFournisseur
                             ->state(fn (PieceDuFournisseur $record): mixed => $record->created_at)
                             ->dateTime('d/m/Y à H:i'),
                     ])
-                    ->columns(4)
                     ->visible(fn (FactureAchat|AvoirFournisseur $record): bool => $record->pieces()->exists()),
                 TextEntry::make('aucune_piece')
                     ->hiddenLabel()

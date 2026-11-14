@@ -39,6 +39,7 @@ use App\Filament\Concerns\PorteUnJeton;
 use App\Filament\Concerns\PrendLeCalendrierDuMagasin;
 use App\Filament\Concerns\SaisitUneQuantiteRetournee;
 use App\Filament\Concerns\SupprimeEnMasseLigneParLigne;
+use App\Filament\TableauEntry;
 use Carbon\CarbonImmutable;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\MountableAction;
@@ -55,7 +56,6 @@ use Filament\Forms\Components\TextInput;
 use Filament\Forms\Form;
 use Filament\Forms\Get;
 use Filament\Forms\Set;
-use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\Section as InfolistSection;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Infolists\Infolist;
@@ -200,13 +200,13 @@ class FactureAchatResource extends Resource
             InfolistSection::make('Avoirs fournisseur émis')
                 ->visible(fn (FactureAchat $record) => $record->avoirsFournisseurEmis()->exists())
                 ->schema([
-                    RepeatableEntry::make('avoirsFournisseurEmisListe')
+                    TableauEntry::make('avoirsFournisseurEmisListe')
                         ->label('')
                         ->state(fn (FactureAchat $record) => $record->avoirsFournisseurEmis()->get())
                         ->schema([
                             // ::make('x') seul ne fonctionne pas ici : voir
                             // le commentaire équivalent dans
-                            // FactureResource (RepeatableEntry nourri par un
+                            // FactureResource (TableauEntry nourri par un
                             // state() arbitraire, pas une vraie relation du
                             // modèle racine -- state() explicite contourne
                             // le chemin cassé que Filament calcule sinon.
@@ -217,9 +217,8 @@ class FactureAchatResource extends Resource
                                 ->color(fn (AvoirFournisseur $record): ?string => FicheDUnDocument::adresse($record) === null ? null : 'primary'),
                             TextEntry::make('numero_fournisseur')->label('N° de l\'avoir du fournisseur')->state(fn (AvoirFournisseur $record) => $record->numero_fournisseur)->placeholder('—'),
                             TextEntry::make('motif')->label('Motif')->state(fn (AvoirFournisseur $record) => $record->motif)->placeholder('—'),
-                            TextEntry::make('total_ttc')->label('Total retourné TTC')->state(fn (AvoirFournisseur $record) => $record->total_ttc)->money('EUR'),
-                        ])
-                        ->columns(4),
+                            TextEntry::make('total_ttc')->label('Total retourné TTC')->state(fn (AvoirFournisseur $record) => $record->total_ttc)->money('EUR')->alignEnd(),
+                        ]),
                 ]),
         ]);
     }
@@ -327,22 +326,25 @@ class FactureAchatResource extends Resource
      * (« TVA du fournisseur 6,00 € — calcul depuis les lignes : 6,01 € ») ;
      * pour un écart confirmé, qui l'a confirmé et quand.
      */
-    public static function tvaParTauxEntry(): RepeatableEntry
+    public static function tvaParTauxEntry(): TableauEntry
     {
         $calculateur = app(CalculateurLigne::class);
 
-        return RepeatableEntry::make('tva_du_fournisseur')
+        return TableauEntry::make('tva_du_fournisseur')
             ->label('TVA par taux')
             ->state(fn (FactureAchat|AvoirFournisseur $record) => $record->taux()->get())
             ->schema([
                 TextEntry::make('taux_tva')
                     ->label('Taux')
+                    ->alignEnd()
                     ->state(fn (TauxFactureAchat|TauxAvoirFournisseur $record): string => str_replace('.', ',', self::pourcentageEnTexte($record->taux_tva)).' %'),
                 TextEntry::make('base_ht')
                     ->label('Base HT')
+                    ->alignEnd()
                     ->state(fn (TauxFactureAchat|TauxAvoirFournisseur $record): string => $calculateur->enEuros($calculateur->enCentiemes($record->base_ht))),
                 TextEntry::make('montant_tva')
                     ->label('TVA du fournisseur')
+                    ->alignEnd()
                     ->state(fn (TauxFactureAchat|TauxAvoirFournisseur $record): string => $calculateur->enEuros($calculateur->enCentiemes($record->montant_tva)))
                     ->helperText(fn (TauxFactureAchat|TauxAvoirFournisseur $record): ?string => $record->montant_tva === $record->montant_tva_calcule
                         ? null
@@ -354,7 +356,6 @@ class FactureAchatResource extends Resource
                         : null)
                     ->placeholder('Dans la tolérance'),
             ])
-            ->columns(4)
             ->columnSpanFull();
     }
 

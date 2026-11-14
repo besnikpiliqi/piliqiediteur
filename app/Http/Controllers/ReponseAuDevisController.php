@@ -143,7 +143,7 @@ class ReponseAuDevisController
             'description' => $ligne->description,
             'quantite' => $ligne->quantite,
             'prix_unitaire' => $horsTaxe
-                ? $calculateur->prixUnitaireExact($calculateur->enMillioniemes($ligne->prix_unitaire_ht))
+                ? $calculateur->prixUnitaireHtAfficheEnEuros($calculateur->enCentiemes($ligne->prix_unitaire_ttc), $calculateur->enCentiemes($ligne->taux_tva_du_prix))
                 : $calculateur->prixUnitaireAffiche($calculateur->enMillioniemes($ligne->prix_unitaire_ttc)),
             'remise' => $calculateur->enCentiemes($ligne->remise_pourcentage) === 0 ? null : CalculateurLigne::tauxEnTexte($calculateur->enCentiemes($ligne->remise_pourcentage)),
             'total' => $calculateur->enEuros($calculateur->enCentiemes($horsTaxe ? $ligne->montant_ht : $ligne->montant_ttc)),

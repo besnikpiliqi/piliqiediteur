@@ -114,6 +114,26 @@ class ReponseAuDevisEnLigneTest extends TestCase
         $this->assertSame([route('devis.reponse.pdf', ['jeton' => $jeton])], $liens[1]);
     }
 
+    /**
+     * La page du lien d'un devis à un professionnel montre, comme son PDF
+     * et sa fiche, le PU HT d'un article (décision de l'éditeur du
+     * 14/11/2026) : 3 savons à 9,99 € TTC à 20 %, PU HT 9,99 € moins sa TVA
+     * de 1,67 €, soit 8,32 €, jamais le PU HT enregistré, 8,325 €, ni
+     * 8,33 € ; la ligne garde ses 24,98 € HT.
+     */
+    public function test_la_page_du_lien_d_un_devis_a_un_professionnel_montre_le_pu_ht_d_un_article(): void
+    {
+        $savon = Produit::factory()->create(['nom' => 'Savon', 'prix_vente_ttc' => '9.99', 'taux_tva' => 20, 'suivi_stock' => false]);
+        $devis = $this->devisEnvoyable(lignes: [['produit_id' => $savon->id, 'quantite' => 3]], client: Client::factory()->professionnel()->create());
+        $jeton = $this->envoyer($devis);
+
+        $this->repondre('get', $jeton)->assertOk()
+            ->assertSeeInOrder(['Savon', '8,32 €', '24,98 €'])
+            ->assertDontSee('8,325')
+            ->assertDontSee('8,33 €');
+        $this->assertSame('8.325000', $devis->lignes()->sole()->prix_unitaire_ht);
+    }
+
     public function test_la_page_du_lien_ecrit_une_remise_decimale_avec_une_virgule(): void
     {
         $produit = Produit::factory()->create(['nom' => 'Câble tressé', 'prix_vente_ttc' => 120, 'taux_tva' => 20, 'suivi_stock' => false]);

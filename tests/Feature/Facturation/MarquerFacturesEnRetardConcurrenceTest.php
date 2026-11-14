@@ -224,7 +224,10 @@ class MarquerFacturesEnRetardConcurrenceTest extends TestCase
      * démarre dès que la fermeture de la démonstration verrouille le
      * ticket, ou, le passage en retard d'abord, dès sa première mise à
      * jour. Les deux passent, sans interblocage ; le ticket passe en retard
-     * dans la démonstration fermée et est annoncé. Un interblocage dont
+     * dans la démonstration fermée ; il est annoncé à la clôture de
+     * l'inscription, jamais à la validation, quel que soit l'ordre : la
+     * démonstration d'une société validée n'apparaît plus nulle part, pas
+     * même dans la cloche (T115). Un interblocage dont
      * PostgreSQL sacrifierait la fermeture de la démonstration laisserait
      * celle-ci ouverte : son échec est signalé sans empêcher la validation
      * ni la clôture de l'inscription.
@@ -260,8 +263,14 @@ class MarquerFacturesEnRetardConcurrenceTest extends TestCase
         $this->assertSame(StatutMagasin::Ferme, $demonstration->fresh()->statut);
         app(TenantContext::class)->set($demonstration->fresh());
         $this->assertSame(StatutFacture::EnRetard, $echu->fresh()->statut);
-        $notification = $this->proprietaireDe($demonstration)->notifications()->where('type', FacturesPasseesEnRetard::class)->sole();
-        $this->assertSame("Échéance dépassée sans règlement complet : {$echu->numero}.", $notification->data['body']);
+        $annonces = $this->proprietaireDe($demonstration)->notifications()->where('type', FacturesPasseesEnRetard::class);
+
+        if ($fin === 'saisirLeCode') {
+            $this->assertSame(0, $annonces->count());
+        } else {
+            $this->assertSame("Échéance dépassée sans règlement complet : {$echu->numero}.", $annonces->sole()->data['body']);
+        }
+
         $this->assertSame([], app(VerificateurIntegrite::class)->verifier($demonstration)->anomalies());
     }
 

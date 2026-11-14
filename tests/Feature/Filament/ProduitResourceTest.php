@@ -507,6 +507,28 @@ class ProduitResourceTest extends TestCase
     }
 
     /**
+     * La fiche d'un produit montre le PU HT d'un article, le même que sur
+     * ses ventes (décision de l'éditeur du 14/11/2026) : son prix TTC moins
+     * la TVA d'un article, arrondie une fois au centime. 9,99 € TTC à 20 % :
+     * TVA 1,665 €, arrondie à 1,67 €, soit 8,32 € HT, jamais 8,33 € ;
+     * 10,00 € : 8,33 € HT + 1,67 € ; 0,99 € : 0,82 € HT + 0,17 € ; 10,00 €
+     * à 5,5 % : 9,48 € HT + 0,52 € ; à 10 % : 9,09 € HT + 0,91 €.
+     */
+    public function test_la_fiche_d_un_produit_montre_le_pu_ht_d_un_article(): void
+    {
+        $this->connecterProprietaire();
+        $produit = Produit::factory()->create(['prix_vente_ttc' => '9.99', 'taux_tva' => 20]);
+
+        $fiche = Livewire::test(EditProduit::class, ['record' => $produit->getRouteKey()])
+            ->assertSee('Soit 8,32 € HT + 1,67 € de TVA')
+            ->assertDontSee('8,33 € HT');
+
+        foreach ([['10.00', '20', 'Soit 8,33 € HT + 1,67 € de TVA'], ['0.99', '20', 'Soit 0,82 € HT + 0,17 € de TVA'], ['10.00', '5.5', 'Soit 9,48 € HT + 0,52 € de TVA'], ['10.00', '10', 'Soit 9,09 € HT + 0,91 € de TVA']] as [$prix, $taux, $detail]) {
+            $fiche->fillForm(['prix_vente_ttc' => $prix, 'taux_tva' => $taux])->assertSee($detail);
+        }
+    }
+
+    /**
      * Le détail HT et TVA du prix de vente ne se calcule pas tant que la
      * TVA est vide.
      */

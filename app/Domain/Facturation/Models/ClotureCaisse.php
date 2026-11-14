@@ -178,39 +178,59 @@ class ClotureCaisse extends Model
      * chacun de ses taux ; le net des ventes aux particuliers après leurs
      * avoirs, que gardent les totaux de la clôture (la fiche de la clôture
      * et son ticket Z les montrent, voir ClotureCaisseResource et
-     * ClotureCaissePdfGenerator).
+     * ClotureCaissePdfGenerator). Chaque ligne dit sa partie : les ventes
+     * aux particuliers et leurs avoirs, leur net, puis les factures aux
+     * professionnels et leurs avoirs, pour information.
      *
-     * @return list<array{rubrique: string, nombre: int|null, ht: int, tva: int, ttc: int, detail: bool}>
+     * @return list<array{rubrique: string, nombre: int|null, ht: int, tva: int, ttc: int, detail: bool, partie: 'particuliers'|'net'|'information'}>
      */
     public function rubriques(): array
     {
         $calculateur = app(CalculateurLigne::class);
-        $ligne = fn (string $rubrique, ?int $nombre, int $ht, int $tva, int $ttc, bool $detail = false): array => [
+
+        return [
+            ...$this->lignesDeLaRubrique('particuliers', 'ventes_particuliers', 'Ventes aux particuliers (tickets)'),
+            ...$this->lignesDeLaRubrique('particuliers', 'avoirs_particuliers', 'Avoirs sur des tickets'),
+            self::ligneDeRubrique('net', 'Net des ventes aux particuliers (base de l\'e-reporting)', null, $calculateur->enCentiemes($this->total_ht), $calculateur->enCentiemes($this->total_tva), $calculateur->enCentiemes($this->total_ttc)),
+            ...$this->lignesDeLaRubrique('information', 'factures_professionnels', 'Factures aux professionnels (pour information)'),
+            ...$this->lignesDeLaRubrique('information', 'avoirs_professionnels', 'Avoirs aux professionnels (pour information)'),
+        ];
+    }
+
+    /**
+     * Une rubrique du récapitulatif avec son nombre et ses montants, puis
+     * le détail de chacun de ses taux.
+     *
+     * @param  'particuliers'|'information'  $partie
+     * @return list<array{rubrique: string, nombre: int|null, ht: int, tva: int, ttc: int, detail: bool, partie: 'particuliers'|'net'|'information'}>
+     */
+    private function lignesDeLaRubrique(string $partie, string $cle, string $libelle): array
+    {
+        $rubrique = $this->rubriqueDuRecapitulatif($cle);
+
+        return [
+            self::ligneDeRubrique($partie, $libelle, $rubrique['nombre'], $rubrique['ht'], $rubrique['tva'], $rubrique['ttc']),
+            ...array_map(
+                fn (array $taux): array => self::ligneDeRubrique($partie, 'dont TVA à '.self::tauxEnTexte($taux['taux']), null, $taux['ht'], $taux['tva'], $taux['ttc'], true),
+                $rubrique['par_taux'],
+            ),
+        ];
+    }
+
+    /**
+     * @param  'particuliers'|'net'|'information'  $partie
+     * @return array{rubrique: string, nombre: int|null, ht: int, tva: int, ttc: int, detail: bool, partie: 'particuliers'|'net'|'information'}
+     */
+    private static function ligneDeRubrique(string $partie, string $rubrique, ?int $nombre, int $ht, int $tva, int $ttc, bool $detail = false): array
+    {
+        return [
             'rubrique' => $rubrique,
             'nombre' => $nombre,
             'ht' => $ht,
             'tva' => $tva,
             'ttc' => $ttc,
             'detail' => $detail,
-        ];
-        $rubrique = function (string $cle, string $libelle) use ($ligne): array {
-            $rubrique = $this->rubriqueDuRecapitulatif($cle);
-
-            return [
-                $ligne($libelle, $rubrique['nombre'], $rubrique['ht'], $rubrique['tva'], $rubrique['ttc']),
-                ...array_map(
-                    fn (array $taux): array => $ligne('dont TVA à '.self::tauxEnTexte($taux['taux']), null, $taux['ht'], $taux['tva'], $taux['ttc'], true),
-                    $rubrique['par_taux'],
-                ),
-            ];
-        };
-
-        return [
-            ...$rubrique('ventes_particuliers', 'Ventes aux particuliers (tickets)'),
-            ...$rubrique('avoirs_particuliers', 'Avoirs sur des tickets'),
-            $ligne('Net des ventes aux particuliers (base de l\'e-reporting)', null, $calculateur->enCentiemes($this->total_ht), $calculateur->enCentiemes($this->total_tva), $calculateur->enCentiemes($this->total_ttc)),
-            ...$rubrique('factures_professionnels', 'Factures aux professionnels (pour information)'),
-            ...$rubrique('avoirs_professionnels', 'Avoirs aux professionnels (pour information)'),
+            'partie' => $partie,
         ];
     }
 

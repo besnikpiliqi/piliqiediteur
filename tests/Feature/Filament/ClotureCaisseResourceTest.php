@@ -516,7 +516,9 @@ class ClotureCaisseResourceTest extends TestCase
      * Points 15 et 24 : la fiche montre les ventes, la somme des avoirs, le
      * net, les encaissements par mode avec leur total, le crédit d'avoir
      * utilisé à part, et les grands totaux. Un ticket de 60,00 € en
-     * espèces, un de 30,00 € par carte, rendu.
+     * espèces, un de 30,00 € par carte, rendu. Au modèle D des tableaux des
+     * fiches (choisi par l'éditeur le 13/11/2026), une valeur nulle s'écrit
+     * « – ».
      */
     public function test_la_fiche_affiche_les_encaissements_par_mode_et_la_somme_des_avoirs(): void
     {
@@ -532,9 +534,9 @@ class ClotureCaisseResourceTest extends TestCase
         $fiche->assertSeeInOrder(['Ventes aux particuliers (tickets)', '2', '75,00 €', '15,00 €', '90,00 €'])
             ->assertSeeInOrder(['Avoirs sur des tickets', '1', '-25,00 €', '-5,00 €', '-30,00 €'])
             ->assertSeeInOrder(['Net des ventes aux particuliers (base de l\'e-reporting)', '50,00 €', '10,00 €', '60,00 €'])
-            ->assertSeeInOrder(['Espèces', '1', '0', '60,00 €', 'Carte bancaire', '1', '0', '30,00 €', 'Chèque', '0', '0', '0,00 €'])
-            ->assertSeeInOrder(['Total encaissé', '90,00 €'])
-            ->assertSeeInOrder(['Crédit d\'avoir utilisé (n\'entre pas dans les encaissements)', '0,00 €'])
+            ->assertSeeInOrder(['Espèces', '1', '–', '60,00 €', 'Carte bancaire', '1', '–', '30,00 €', 'Chèque', '–', '–', '–'])
+            ->assertSeeInOrder(['Total encaissé', '2', '–', '90,00 €'])
+            ->assertSeeInOrder(['Crédit d\'avoir utilisé (n\'entre pas dans les encaissements)', '–'])
             ->assertSee('Ventes et encaissements diffèrent quand un client garde un crédit d\'avoir ou paie plus tard.')
             ->assertSeeInOrder(['Grand total perpétuel réel', '60,00 €', 'Grand total perpétuel absolu', '120,00 €']);
         Livewire::test(ListClotureCaisses::class)

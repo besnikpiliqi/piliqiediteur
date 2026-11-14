@@ -100,7 +100,9 @@ class Service extends Model
      * cette vente, écrit comme sa colonne (« 50.00 »), null sans prix de
      * référence : son prix TTC, et, hors de la TVA française, où le prix
      * d'un service se saisit sans TVA, ce prix sans sa TVA, au centime,
-     * comme le PU HT d'un produit (voir ChoisitLaNatureDeLOperation). En
+     * comme le PU HT d'un article (voir
+     * CalculateurLigne::prixUnitaireHtAffiche() et
+     * ChoisitLaNatureDeLOperation). En
      * franchise en base, le client paie le même prix TTC, sans TVA.
      */
     public function prixDeReferenceDans(ContexteDeVente $contexte): ?string
@@ -112,7 +114,7 @@ class Service extends Model
         $calculateur = app(CalculateurLigne::class);
 
         return $contexte->retireLaTvaDuPrix()
-            ? $calculateur->enDecimal($calculateur->prixUnitaireHtDepuisTtc($calculateur->enCentiemes($this->prix_ttc), $calculateur->enCentiemes($this->taux_tva)))
+            ? $calculateur->enDecimal($calculateur->prixUnitaireHtAffiche($calculateur->enCentiemes($this->prix_ttc), $calculateur->enCentiemes($this->taux_tva)))
             : $this->prix_ttc;
     }
 

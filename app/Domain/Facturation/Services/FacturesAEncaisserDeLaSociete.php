@@ -30,7 +30,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * chacune de ses imputations que ce qu'elle a réglé : les restants dus se
  * calculent ici, en centimes, jamais par une somme que la base ferait sur
  * une colonne décimale. Le retard se compte au jour de chaque magasin,
- * dans son calendrier (voir Magasin::calendrier() et Facture::estEchue()) :
+ * dans son calendrier (voir Magasin::calendrier() et Facture::estEnRetard()) :
  * deux magasins d'une même société peuvent ne pas être le même jour.
  */
 final class FacturesAEncaisserDeLaSociete

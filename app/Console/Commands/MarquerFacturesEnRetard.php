@@ -6,12 +6,14 @@ use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Notifications\FacturesPasseesEnRetard;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\ValeursLues;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
 
 /**
@@ -23,7 +25,8 @@ use Illuminate\Support\Facades\Notification;
  * démarrage -- puis prévient le propriétaire de la société de chaque
  * magasin concerné. Un magasin en lecture seule est traité comme les
  * autres : les statuts de ses factures continuent de suivre leurs
- * échéances.
+ * échéances. Le magasin de démonstration d'une société validée aussi, sans
+ * que rien n'en soit annoncé : il n'apparaît plus nulle part (T115).
  */
 #[Signature('app:marquer-factures-en-retard')]
 #[Description("Passe au statut 'en_retard' les factures impayées dont l'échéance est dépassée")]
@@ -73,9 +76,34 @@ class MarquerFacturesEnRetard extends Command
         }
 
         if ($marquees !== []) {
-            Notification::send($magasin->societe->proprietaire, new FacturesPasseesEnRetard($magasin, $marquees));
+            $this->annoncer($magasin, $marquees);
         }
 
         return count($marquees);
+    }
+
+    /**
+     * Annonce au propriétaire les factures passées en retard, sauf dans le
+     * magasin de démonstration d'une société validée, qui n'apparaît plus
+     * nulle part et dont les notifications s'effacent à la validation
+     * (T115, voir ValiderLaSocieteAction::apresLaValidation()). La société
+     * se relit sous le verrou partagé de sa ligne, le temps de l'annonce :
+     * une validation en cours, qui la verrouille, s'achève avant la
+     * lecture, et une validation qui suit l'annonce l'efface avec les
+     * autres notifications de la démonstration.
+     *
+     * @param  list<string>  $marquees  les numéros des factures passées en retard
+     */
+    private function annoncer(Magasin $magasin, array $marquees): void
+    {
+        DB::transaction(function () use ($magasin, $marquees): void {
+            $societe = Societe::query()->whereKey($magasin->societe_id)->sharedLock()->firstOrFail();
+
+            if ($magasin->est_demonstration === true && $societe->estValidee()) {
+                return;
+            }
+
+            Notification::send($magasin->societe->proprietaire, new FacturesPasseesEnRetard($magasin, $marquees));
+        });
     }
 }

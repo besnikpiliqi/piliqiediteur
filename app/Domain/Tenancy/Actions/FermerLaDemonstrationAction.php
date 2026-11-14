@@ -50,9 +50,12 @@ use Throwable;
  * alors aussi les siens. Fermée après trente jours sans opération, elle
  * garde ses comptes d'entraînement, qui la retrouvent à sa réouverture.
  *
- * Fermé, il reste consultable, en lecture seule (« Démonstration
- * (terminée) »), et ne produit plus de ticket Z. Déjà fermé, rien n'est
- * refait.
+ * Fermé, il ne produit plus de ticket Z. Fermé pour inactivité, il reste
+ * consultable, en lecture seule (« Démonstration (terminée) »), et se
+ * rouvre ; fermé à la validation de la société, il disparaît de tous ses
+ * écrans et plus personne n'y entre (T115, lot DEMO-V, voir
+ * User::peutOuvrir()), ses données restant en base (registre, journal des
+ * événements, JET 100 et 105). Déjà fermé, rien n'est refait.
  */
 class FermerLaDemonstrationAction
 {

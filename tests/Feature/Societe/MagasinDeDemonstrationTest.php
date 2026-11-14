@@ -445,7 +445,13 @@ class MagasinDeDemonstrationTest extends TestCase
         $this->assertNotContains('270', $this->codesDuJournal($demonstration));
     }
 
-    public function test_la_validation_ferme_la_demonstration_qui_reste_consultable(): void
+    /**
+     * La validation ferme la démonstration pour de bon : elle disparaît de
+     * tous les écrans de la société et plus personne n'y entre (T115, lot
+     * DEMO-V), mais rien ne s'efface : son ticket se relit et son PDF se
+     * produit toujours depuis ses données.
+     */
+    public function test_la_validation_ferme_la_demonstration_qui_disparait_sans_rien_effacer(): void
     {
         $societe = $this->inscrireUneSociete();
         $demonstration = $this->ouvrirLaDemonstrationEtYEntrer($societe);
@@ -457,8 +463,8 @@ class MagasinDeDemonstrationTest extends TestCase
         $this->assertSame([StatutMagasin::Ferme, false], [$fermee->statut, $fermee->peutVendre()]);
         $periode = PeriodeActivite::query()->where('magasin_id', $demonstration->id)->sole();
         $this->assertSame(MotifFermeture::FinDemonstration, $periode->motif_fin);
+        $this->assertFalse($societe->proprietaire->fresh()->peutOuvrir($fermee));
         app(TenantContext::class)->set($fermee);
-        $this->assertTrue($societe->proprietaire->can('viewAny', Facture::class));
         $this->assertStringContainsString('TICKET DE DÉMONSTRATION', app(FacturePdfGenerator::class)->html($ticket->fresh()));
         $this->assertThrows(fn () => app(OuvrirLaDemonstrationAction::class)->handle($societe->proprietaire, $societe->fresh()), VerificationRefuseeException::class);
     }

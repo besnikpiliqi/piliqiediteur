@@ -33,13 +33,11 @@ use Illuminate\Support\Number;
  *
  * La TVA et le TTC de chaque taux sont dans le tableau qui suit (voir
  * documents/pdf/totaux). La remise n'apparaît que si une ligne en a une.
- * Le PU HT, enregistré au millionième d'euro (voir
- * CalculateurLigne::prixUnitaireHtExact()), s'imprime tel qu'il est
- * enregistré, sans zéro inutile au-delà du centime (voir
- * CalculateurLigne::prixUnitaireExact(), décision de l'éditeur du
- * 09/11/2026) : 54,166667 €, 0,825 €, 45,00 € ; la quantité x ce prix,
- * remise déduite, retombe sur le total HT de la ligne à moins de deux
- * centimes près. Le PU TTC s'imprime au centime (voir
+ * Le PU HT s'imprime comme partout : le PU TTC moins la TVA d'un
+ * article arrondie au centime (voir CalculateurLigne::prixUnitaireHtAffiche(),
+ * décision de l'éditeur du 14/11/2026) : 8,32 € pour 9,99 € TTC à 20 % ;
+ * la quantité x ce prix peut s'écarter de quelques centimes du total HT
+ * de la ligne, calculé sur toute la quantité. Le PU TTC s'imprime au centime (voir
  * CalculateurLigne::prixUnitaireAffiche()). Les totaux se calculent depuis
  * les prix TTC, sans arrondi intermédiaire, ce qu'explique la note de
  * calcul imprimée sous les lignes (voir MentionsFiscales::calcul()).
@@ -127,7 +125,7 @@ final readonly class TableauDesLignes
             'factureDOrigine' => $ligne instanceof LigneAvoir ? ($ligne->ligneFacture?->facture->numero ?? '—') : null,
             'montants' => array_values(array_filter([
                 ResultatDePhp::texte(Number::format($ligne->quantite, locale: 'fr'), 'Le format de la quantité'),
-                $enTtc ? $calculateur->prixUnitaireAffiche($calculateur->enMillioniemes($ligne->prix_unitaire_ttc)) : $calculateur->prixUnitaireExact($calculateur->enMillioniemes($ligne->prix_unitaire_ht)),
+                $enTtc ? $calculateur->prixUnitaireAffiche($calculateur->enMillioniemes($ligne->prix_unitaire_ttc)) : $calculateur->prixUnitaireHtAfficheEnEuros($calculateur->enCentiemes($ligne->prix_unitaire_ttc), $calculateur->enCentiemes($ligne->taux_tva_du_prix)),
                 $avecRemise ? $pourcentage($ligne->remise_pourcentage) : null,
                 $pourcentage($ligne->taux_tva),
                 $calculateur->enEuros($calculateur->enCentiemes($enTtc ? $ligne->montant_ttc : $ligne->montant_ht)),

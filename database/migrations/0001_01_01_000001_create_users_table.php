@@ -119,6 +119,13 @@ return new class extends Migration
             // la personne à sa connexion suivante.
             $table->timestamp('premiere_connexion_le')->nullable();
             $table->timestamp('derniere_connexion_le')->nullable();
+            // L'arrivée (created_at) de la plus récente notification de la
+            // cloche déjà montrée en carte à ce compte, ou passée sans
+            // carte (voir CartesAMontrer) : aucune notification arrivée
+            // jusque-là ne s'affiche plus en carte, même après un
+            // changement de page, dans un autre onglet ou après une
+            // nouvelle connexion. Rien ne s'écrit sur les notifications.
+            $table->timestamp('cartes_montrees_jusqu_au')->nullable();
             // Le dernier accès redonné au compte (voir RedonnerLAccesAction),
             // montré à la personne à sa connexion suivante : quand, par
             // qui, et comment (ModeDAccesRedonne) : en sa présence, en son

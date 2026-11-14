@@ -79,17 +79,19 @@ class CalculateurLigneAuHasardTest extends TestCase
 
     /**
      * Les 10 000 prix TTC de 0,01 € à 100,00 €, pour chaque taux : le PU HT
-     * est exactement TTC / (1 + taux), arrondi au centime.
+     * affiché est exactement le TTC moins la TVA d'un article, TTC x taux ÷
+     * (1 + taux), arrondie au centime (décision de l'éditeur du
+     * 14/11/2026).
      */
-    public function test_la_conversion_ttc_vers_ht_est_exacte_sur_tous_les_prix_de_0_01_a_100_euros(): void
+    public function test_le_pu_ht_affiche_est_exact_sur_tous_les_prix_de_0_01_a_100_euros(): void
     {
         $verifications = 0;
 
         foreach (self::TAUX as $taux) {
             for ($ttcCentimes = 1; $ttcCentimes <= 10000; $ttcCentimes++) {
-                $ht = $this->calculateur()->prixUnitaireHtDepuisTtc($ttcCentimes, $this->centiemes($taux));
+                $ht = $this->calculateur()->prixUnitaireHtAffiche($ttcCentimes, $this->centiemes($taux));
 
-                $this->assertSame($this->htDepuisTtcAttendu($ttcCentimes, $taux), $ht, "TTC {$this->texte($ttcCentimes)} à {$taux} %");
+                $this->assertSame($ttcCentimes - $this->tvaDUnArticleAttendue($ttcCentimes, $taux), $ht, "TTC {$this->texte($ttcCentimes)} à {$taux} %");
                 $verifications++;
             }
         }
@@ -452,6 +454,20 @@ class CalculateurLigneAuHasardTest extends TestCase
     private function tvaAttendue(int $htCentimes, string $taux): int
     {
         return $this->auCentime(BigDecimal::ofUnscaledValue($htCentimes, 2)->multipliedBy(BigDecimal::of($taux))->dividedBy(100, 6));
+    }
+
+    /**
+     * La TVA comprise dans un prix TTC : TTC x taux ÷ (1 + taux), au centime
+     * le plus proche, un demi-centime au centime supérieur.
+     */
+    private function tvaDUnArticleAttendue(int $ttcCentimes, string $taux): int
+    {
+        $taux = BigDecimal::of($taux)->dividedBy(100, 4);
+
+        return BigDecimal::ofUnscaledValue($ttcCentimes, 2)->multipliedBy($taux)
+            ->dividedBy(BigDecimal::one()->plus($taux), 2, RoundingMode::HalfUp)
+            ->getUnscaledValue()
+            ->toInt();
     }
 
     private function htDepuisTtcAttendu(int $ttcCentimes, string $taux): int

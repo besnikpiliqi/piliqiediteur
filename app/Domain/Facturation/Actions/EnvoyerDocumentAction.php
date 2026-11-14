@@ -154,7 +154,9 @@ class EnvoyerDocumentAction
      * Facture::relancesComptees()) : c'est elle qui repart, à sa place dans
      * l'historique, vers l'adresse donnée cette fois.
      *
-     * Demandée par une personne, à l'adresse qu'elle donne.
+     * Demandée par une personne, à l'adresse qu'elle donne. Un ticket du
+     * client comptoir, anonyme, ne se relance jamais, même par une requête
+     * forgée (lot DEMO-V).
      *
      * @param  string|null  $jeton  le jeton de la demande (R3)
      *
@@ -190,6 +192,11 @@ class EnvoyerDocumentAction
     private function relance(Facture $facture, string $destinataire, ?User $expediteur): EnvoiDocument
     {
         $facture = $this->verrouiller($facture);
+
+        if (ValeurRequise::de($facture->client, 'le client de la facture relancée')->estComptoir()) {
+            throw new LogicException('Un ticket du client comptoir ne se relance pas : le client comptoir est anonyme.');
+        }
+
         $facture->magasin->verifierQuIlPeutEcrireAuxClients();
         $this->verifierLeDebit($facture, $expediteur);
 

@@ -63,17 +63,15 @@ use UnexpectedValueException;
  *    taux), au millionième d'euro (prixUnitaireHtExact()) : 1 000
  *    articles à 1,00 € TTC à 20 % ont un PU HT de 0,833333 €, et 1 000 x
  *    0,833333 retombe à moins de deux centimes sur les 833,33 € HT de la
- *    ligne. Les documents qui montrent le PU HT (factures, avoirs sur
- *    facture et devis à un professionnel, ventes sans TVA française)
- *    l'affichent tel qu'il est enregistré, 0,833333 €
- *    (prixUnitaireExact(), décision de l'éditeur du 09/11/2026) ; tout
- *    autre prix unitaire de vente montré en lecture s'affiche arrondi au
- *    centime, 0,83 € (prixUnitaireAffiche()). Aucun montant ne se calcule
- *    sur un prix affiché : 4 x 65,00 € TTC à 20 % font 216,67 € HT, et non
- *    4 x 54,17 € = 216,68 € ; la note de calcul du document l'explique, et
- *    ne dit « à moins de deux centimes près » que si chaque ligne le
- *    vérifie (puHtRetombeSurLeHt(), décision T105) : au-delà de 10 000
- *    articles d'une ligne, l'écart peut l'atteindre.
+ *    ligne (puHtRetombeSurLeHt()) : c'est le PU HT de la facture
+ *    électronique. Partout où PILIQI le montre, le PU HT d'une vente est
+ *    celui d'un article, son PU TTC moins sa TVA arrondie au centime,
+ *    8,32 € pour 9,99 € TTC à 20 % (prixUnitaireHtAffiche(), décision de
+ *    l'éditeur du 14/11/2026) ; tout autre prix unitaire de vente montré
+ *    en lecture s'affiche arrondi au centime (prixUnitaireAffiche()).
+ *    Aucun montant ne se calcule sur un prix affiché : 4 x 65,00 € TTC à
+ *    20 % font 216,67 € HT, et non 4 x 54,17 € = 216,68 € ; la note de
+ *    calcul du document l'explique.
  *
  * Ces calculs n'acceptent et ne rendent que des entiers, chacun dans son
  * unité : centimes d'un montant, dix-millièmes d'euro d'un coût d'achat
@@ -463,25 +461,47 @@ class CalculateurLigne
     }
 
     /**
-     * Un prix TTC sans sa TVA, au centime le plus proche, un demi-centime
-     * au centime supérieur -- 40,00 € TTC à 20 % font 33,33 € ; 10,00 € à
-     * 5,5 %, 9,48 € : le prix HT d'un produit que montrent sa fiche et le
-     * barème, et le prix sans TVA d'un service, saisi au centime, hors de
-     * la TVA française. Le PU HT qu'enregistre une ligne de vente est plus
-     * précis (voir prixUnitaireHtExact()).
+     * Le PU HT d'un article vendu, tel que PILIQI l'affiche partout
+     * (décision de l'éditeur du 14/11/2026, lot DEMO-V) : son PU TTC moins
+     * la TVA d'un article, cette TVA étant le PU TTC x taux ÷ (1 + taux),
+     * arrondie une fois au centime le plus proche, un demi-centime au
+     * centime supérieur -- 9,99 € TTC à 20 % : TVA 1,665 €, soit 1,67 €, et
+     * PU HT 8,32 € ; 10,00 € : 8,33 € ; 0,99 € : 0,82 € ; à 0 %, le PU TTC.
+     * Le seul calcul du PU HT de vente que montrent les fiches des produits
+     * et des services, la caisse, les lignes des formulaires de vente, les
+     * fiches et les listes des documents, leurs PDF, la page publique du
+     * devis, les aides et les messages ; aucun montant ne se calcule
+     * dessus. La quantité x ce prix peut s'écarter de quelques centimes du
+     * total HT de la ligne, calculé sur toute la quantité. Le PU HT
+     * qu'enregistre la ligne, au millionième (voir prixUnitaireHtExact()),
+     * reste celui de la facture électronique.
      *
      * @param  int  $prixUnitaireTtc  en centimes
-     * @param  int  $tauxTva  en centièmes de point
+     * @param  int  $tauxDuPrix  le taux que comprend ce prix, en centièmes de point
      * @return int en centimes
      *
      * @throws InvalidArgumentException
      */
-    public function prixUnitaireHtDepuisTtc(int $prixUnitaireTtc, int $tauxTva): int
+    public function prixUnitaireHtAffiche(int $prixUnitaireTtc, int $tauxDuPrix): int
     {
-        return $this->htDepuisTtc(
-            $this->prix(['prix_unitaire_ttc' => $prixUnitaireTtc], 'prix_unitaire_ttc'),
-            $this->taux(['taux_tva' => $tauxTva], 'taux_tva'),
-        );
+        $ttc = $this->prix(['prix_unitaire_ttc' => $prixUnitaireTtc], 'prix_unitaire_ttc');
+        $taux = $this->taux(['taux_tva' => $tauxDuPrix], 'taux_tva');
+
+        return $ttc - $this->diviserArrondi($this->multiplier($ttc, $taux), 10000 + $taux);
+    }
+
+    /**
+     * Le PU HT d'un article vendu, affiché (voir prixUnitaireHtAffiche()),
+     * écrit comme un montant : « 8,32 € ».
+     *
+     * @param  int  $prixUnitaireTtc  en centimes
+     * @param  int  $tauxDuPrix  en centièmes de point
+     *
+     * @throws InvalidArgumentException
+     */
+    public function prixUnitaireHtAfficheEnEuros(int $prixUnitaireTtc, int $tauxDuPrix): string
+    {
+        return $this->enEuros($this->prixUnitaireHtAffiche($prixUnitaireTtc, $tauxDuPrix));
     }
 
     /**
@@ -1095,16 +1115,11 @@ class CalculateurLigne
      * enregistré, jusqu'à six décimales, sans zéro inutile au-delà du
      * centime, écrit comme un montant : « 8,333333 € », « 8,325 € »,
      * « 0,825 € », « 1 040,833333 € », « 45,00 € ». Il ne s'arrondit jamais
-     * au centime : la quantité x ce prix, remise déduite, retombe sur le
-     * total HT de la ligne à moins de deux centimes près jusqu'à 10 000
-     * articles (voir prixUnitaireHtExact() et puHtRetombeSurLeHt()). C'est le PU HT d'une ligne de vente sur les
-     * documents qui le montrent, leur PDF, leur fiche et les lignes de leur
-     * formulaire -- factures, avoirs sur facture et devis à un
-     * professionnel, ventes sans TVA française (décision de l'éditeur du
-     * 09/11/2026) --, le même prix que la facture électronique transmet ; et
-     * le PU HT d'un achat ou le coût d'un inventaire d'ouverture dans les
-     * fiches, les listes, les aides et les messages des achats (décision de
-     * l'éditeur du 02/11/2026, T2) : 1 000 x 0,1234 € font bien 123,40 € HT.
+     * au centime : c'est le PU HT d'un achat ou le coût d'un inventaire
+     * d'ouverture dans les fiches, les listes, les aides et les messages des
+     * achats, tel que le fournisseur l'écrit (décision de l'éditeur du
+     * 02/11/2026, T2) : 1 000 x 0,1234 € font bien 123,40 € HT. Le PU HT
+     * d'une vente s'affiche autrement (voir prixUnitaireHtAffiche()).
      *
      * @throws InvalidArgumentException
      */
@@ -1174,8 +1189,8 @@ class CalculateurLigne
      * articles (voir prixUnitaireHtExact()) : 1 000 x 0,833333 € font
      * 833,333 €, à 0,003 € des 833,33 € HT ; au-delà, l'écart peut
      * l'atteindre : 100 000 x 0,833333 € font 83 333,30 €, à 0,03 € des
-     * 83 333,33 € HT. La note de calcul d'un document qui montre le PU HT
-     * le dit (voir MentionsFiscales::calcul(), décision T105).
+     * 83 333,33 € HT. C'est la tolérance que la facture électronique
+     * attend de son PU HT (règle Peppol R120 : 0,02 €).
      *
      * @param  int  $prixMillioniemes  le PU HT, en millionièmes d'euro
      * @param  int  $remiseCentiemes  en centièmes de point

@@ -451,7 +451,7 @@ class PanneauSocieteTest extends TestCase
 
         $this->saisirLeCodeDuCourrier($societe->fresh());
 
-        $this->assertSame([true, true, true, true], array_column(array_values($etapes($proprietaire)), 0));
+        $this->assertSame([TableauDeBord::ETAPE_CODE_DU_COURRIER => true, TableauDeBord::ETAPE_AJOUTER_UN_MAGASIN => true, TableauDeBord::ETAPE_EQUIPE => true], array_map(fn (array $etape): bool => $etape[0], $etapes($proprietaire)));
         $this->get(TableauDeBord::getUrl(panel: 'societe', tenant: $societe))->assertOk()->assertDontSeeText('Vos premières étapes')->assertSeeText($magasin->nom);
     }
 
@@ -514,8 +514,9 @@ class PanneauSocieteTest extends TestCase
      * bord comme sa page « Vérification » disent seulement qu'elle est
      * validée par l'invitation de son cabinet, sans courrier, ni code, ni
      * démonstration, ni lien ou bouton qui y mène (décision de l'éditeur du
-     * 01/11/2026). Une société qui s'inscrit elle-même garde ses quatre
-     * étapes, avant comme après sa validation.
+     * 01/11/2026). Une société qui s'inscrit elle-même a ses quatre étapes
+     * avant sa validation, puis trois : la démonstration disparaît de tous
+     * ses écrans une fois la société validée (T115, lot DEMO-V).
      */
     public function test_une_societe_validee_par_l_invitation_de_son_cabinet_ne_voit_ni_l_etape_du_courrier_ni_celle_de_la_demonstration(): void
     {
@@ -546,7 +547,7 @@ class PanneauSocieteTest extends TestCase
         $this->assertSame([TableauDeBord::ETAPE_CODE_DU_COURRIER, TableauDeBord::ETAPE_PREMIER_MAGASIN, TableauDeBord::ETAPE_EQUIPE, TableauDeBord::ETAPE_DEMONSTRATION], array_column(Livewire::test(TableauDeBord::class)->instance()->etapes(), 'titre'));
         $this->saisirLeCodeDuCourrier($inscrite->fresh());
         $this->dansLEspaceDeLaSociete($inscrite->fresh(), $sonProprietaire);
-        $this->assertSame([TableauDeBord::ETAPE_CODE_DU_COURRIER, TableauDeBord::ETAPE_PREMIER_MAGASIN, TableauDeBord::ETAPE_EQUIPE, TableauDeBord::ETAPE_DEMONSTRATION], array_column(Livewire::test(TableauDeBord::class)->instance()->etapes(), 'titre'));
+        $this->assertSame([TableauDeBord::ETAPE_CODE_DU_COURRIER, TableauDeBord::ETAPE_PREMIER_MAGASIN, TableauDeBord::ETAPE_EQUIPE], array_column(Livewire::test(TableauDeBord::class)->instance()->etapes(), 'titre'));
         $this->flushSession();
         $this->actingAs($sonProprietaire)->get(VerificationSociete::getUrl(panel: 'societe', tenant: $inscrite))
             ->assertOk()

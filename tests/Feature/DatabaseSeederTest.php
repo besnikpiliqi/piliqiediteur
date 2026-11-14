@@ -203,8 +203,8 @@ class DatabaseSeederTest extends TestCase
      * Chaque compte semé par société, rôle et statut, et les magasins que
      * chacun ouvre : un membre n'ouvre que le magasin de son compte, une
      * même personne a un compte dans chacun de ses deux magasins, un
-     * administrateur ouvre ceux de sa portée (la démonstration fermée à la
-     * validation reste lisible pour qui a tous les magasins), un compte du
+     * administrateur ouvre ceux de sa portée (la démonstration d'une société
+     * validée n'est plus ouverte par personne, T115), un compte du
      * cabinet ceux des clients qui lui sont confiés, et aucun compte n'ouvre
      * un magasin d'une autre société, hors le cabinet chez ses clients liés.
      */
@@ -242,7 +242,7 @@ class DatabaseSeederTest extends TestCase
             'Claire Dubois (000000117) : 000000117/PARIS',
             'Emma Rousseau (000000943) : 000000125/EPICERIE',
             'Hugo Lefebvre (000000109) : 000000109/REPUB',
-            'Hélène FERRAND (000000109) : 000000109/DEMO, 000000109/HALLES, 000000109/REPUB',
+            'Hélène FERRAND (000000109) : 000000109/HALLES, 000000109/REPUB',
             'Inès Garcia (000000109) : 000000109/HALLES',
             'Isabelle MARTIN (000000943) : 000000109/HALLES, 000000109/REPUB, 000000125/EPICERIE',
             'Julie Mercier (000000117) : 000000117/PARIS',
@@ -254,7 +254,7 @@ class DatabaseSeederTest extends TestCase
             'Marc Petit (000000117) : 000000117/PARIS',
             'Maxime Henry (000000117) : 000000117/PARIS',
             'Mehdi Brahimi (000000125) : 000000125/EPICERIE',
-            'Nadia Benali (000000109) : 000000109/DEMO, 000000109/HALLES, 000000109/REPUB',
+            'Nadia Benali (000000109) : 000000109/HALLES, 000000109/REPUB',
             'Nicolas Lemoine (000000125) : 000000125/EPICERIE',
             'Paul Lefèvre (000000943) : 000000109/HALLES, 000000109/REPUB',
             'Romane Gauthier (000000125) : 000000125/EPICERIE',

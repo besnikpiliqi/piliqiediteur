@@ -22,9 +22,10 @@ use Tests\TestCase;
  * ventes (décision du 09/11/2026, Q-CALC2 (a), puce « Prix et TVA des
  * ventes » de CLAUDE.md) -- le TTC de chaque ligne depuis son PU TTC, le HT
  * de chaque taux depuis son TTC, arrondi une fois puis réparti sur ses
- * lignes, la TVA par différence -- et le PU HT imprimé tel qu'il est
- * enregistré sur une facture à un professionnel (décision « exact » du
- * même jour). Les montants attendus ont été vérifiés par deux recalculs
+ * lignes, la TVA par différence -- et le PU HT imprimé sur une facture à
+ * un professionnel, celui d'un article, son PU TTC moins sa TVA arrondie
+ * au centime (décision de l'éditeur du 14/11/2026, qui remplace
+ * l'impression « exacte » du 09/11/2026). Les montants attendus ont été vérifiés par deux recalculs
  * indépendants en fractions exactes. Trois HT de cumul à 20 % tombent sur
  * un demi-centime exact, arrondi au centime supérieur (889,975 ;
  * 904,975 ; 1 039,975), comme la remise de la ligne 13 (7,495 -> 7,50 €).
@@ -35,8 +36,9 @@ class ExempleDeQuinzeLignesTest extends TestCase
 
     /**
      * Les quinze lignes, dans leur ordre : référence, quantité, PU TTC,
-     * remise et taux, puis le PU HT enregistré, tel que la facture à un
-     * professionnel l'imprime, le PU TTC, tel que le ticket l'imprime, et le
+     * remise et taux, puis le PU HT enregistré, le PU HT d'un article, tel
+     * que la facture à un professionnel l'imprime (9,99 € TTC à 20 % :
+     * 9,99 - 1,67 = 8,32 €), le PU TTC, tel que le ticket l'imprime, et le
      * HT, la TVA et le TTC de la ligne. La ligne 7 vend, remisé, un autre
      * produit au prix de la ligne 1 : un produit n'a qu'une ligne (décision
      * de l'éditeur du 26/10/2026, série 9).
@@ -44,21 +46,21 @@ class ExempleDeQuinzeLignesTest extends TestCase
      * @var list<array{0: string, 1: int, 2: string, 3: int, 4: string, 5: string, 6: string, 7: string, 8: string, 9: string}>
      */
     private const LIGNES = [
-        ['CRM-1000', 2, '10.00', 0, '20', '8.333333', '8,333333 €', '16.67', '3.33', '20.00'],
-        ['SAV-0999', 1, '9.99', 0, '20', '8.325000', '8,325 €', '8.32', '1.67', '9.99'],
+        ['CRM-1000', 2, '10.00', 0, '20', '8.333333', '8,33 €', '16.67', '3.33', '20.00'],
+        ['SAV-0999', 1, '9.99', 0, '20', '8.325000', '8,32 €', '8.32', '1.67', '9.99'],
         ['SHP-1266', 3, '12.66', 0, '20', '10.550000', '10,55 €', '31.65', '6.33', '37.98'],
-        ['BOU-1000', 100, '10.00', 0, '20', '8.333333', '8,333333 €', '833.34', '166.66', '1000.00'],
-        ['LIV-1590', 2, '15.90', 0, '5.5', '15.071090', '15,07109 €', '30.14', '1.66', '31.80'],
-        ['PLT-1850', 4, '18.50', 0, '10', '16.818182', '16,818182 €', '67.27', '6.73', '74.00'],
-        ['CRM-1001', 2, '10.00', 10, '20', '8.333333', '8,333333 €', '15.00', '3.00', '18.00'],
+        ['BOU-1000', 100, '10.00', 0, '20', '8.333333', '8,33 €', '833.34', '166.66', '1000.00'],
+        ['LIV-1590', 2, '15.90', 0, '5.5', '15.071090', '15,07 €', '30.14', '1.66', '31.80'],
+        ['PLT-1850', 4, '18.50', 0, '10', '16.818182', '16,82 €', '67.27', '6.73', '74.00'],
+        ['CRM-1001', 2, '10.00', 10, '20', '8.333333', '8,33 €', '15.00', '3.00', '18.00'],
         ['MO-HEURE', 3, '54.00', 0, '20', '45.000000', '45,00 €', '135.00', '27.00', '162.00'],
-        ['PRF-6500', 4, '65.00', 0, '20', '54.166667', '54,166667 €', '216.66', '43.34', '260.00'],
-        ['JUS-0135', 12, '1.35', 0, '5.5', '1.279621', '1,279621 €', '15.36', '0.84', '16.20'],
+        ['PRF-6500', 4, '65.00', 0, '20', '54.166667', '54,17 €', '216.66', '43.34', '260.00'],
+        ['JUS-0135', 12, '1.35', 0, '5.5', '1.279621', '1,28 €', '15.36', '0.84', '16.20'],
         ['SAL-0330', 7, '3.30', 0, '10', '3.000000', '3,00 €', '21.00', '2.10', '23.10'],
-        ['STY-0099', 25, '0.99', 0, '20', '0.825000', '0,825 €', '20.63', '4.12', '24.75'],
-        ['SAC-14990', 1, '149.90', 5, '20', '124.916667', '124,916667 €', '118.66', '23.74', '142.40'],
-        ['VEL-124900', 1, '1249.00', 0, '20', '1040.833333', '1 040,833333 €', '1040.84', '208.16', '1249.00'],
-        ['SDW-0745', 3, '7.45', 0, '10', '6.772727', '6,772727 €', '20.32', '2.03', '22.35'],
+        ['STY-0099', 25, '0.99', 0, '20', '0.825000', '0,82 €', '20.63', '4.12', '24.75'],
+        ['SAC-14990', 1, '149.90', 5, '20', '124.916667', '124,92 €', '118.66', '23.74', '142.40'],
+        ['VEL-124900', 1, '1249.00', 0, '20', '1040.833333', '1 040,83 €', '1040.84', '208.16', '1249.00'],
+        ['SDW-0745', 3, '7.45', 0, '10', '6.772727', '6,77 €', '20.32', '2.03', '22.35'],
     ];
 
     /**
@@ -119,14 +121,14 @@ class ExempleDeQuinzeLignesTest extends TestCase
 
     /**
      * La facture à un professionnel émise enregistre ces montants, et son
-     * PDF les imprime : pour chaque ligne la quantité, le PU HT tel qu'il
-     * est enregistré, sans zéro inutile au-delà de deux décimales (8,333333 €,
-     * 8,325 €, 10,55 €, 15,07109 €, 45,00 €...), la remise, le taux et le
+     * PDF les imprime : pour chaque ligne la quantité, le PU HT d'un
+     * article, son PU TTC moins sa TVA arrondie au centime (8,33 €, 8,32 €,
+     * 10,55 €, 15,07 €, 45,00 €...), la remise, le taux et le
      * total HT ; puis la base HT, la TVA et le TTC de chaque taux, et les
      * totaux du document. Le PDF lui-même, lu page par page, porte chaque
      * PU HT et chaque total.
      */
-    public function test_la_facture_a_un_professionnel_imprime_le_pu_ht_enregistre_et_les_montants_verifies(): void
+    public function test_la_facture_a_un_professionnel_imprime_le_pu_ht_d_un_article_et_les_montants_verifies(): void
     {
         $facture = $this->emettre(Client::factory()->professionnel()->create());
 

@@ -11,6 +11,7 @@ use App\Filament\App\Pages\Auth\DemandeDeLien;
 use App\Filament\App\Pages\Auth\InscriptionSociete;
 use App\Filament\App\Pages\Auth\ModifierProfil;
 use App\Filament\App\Pages\Auth\PageDuLien;
+use App\Filament\CartesDesNotifications;
 use App\Filament\EspaceDeLaSociete;
 use App\Filament\InitialesDuCompte;
 use App\Filament\PoliceServieParPiliqi;
@@ -132,6 +133,9 @@ class AppPanelProvider extends PanelProvider
             // NotificationDuMagasin) : envois échoués, factures passées en
             // retard, stocks bas.
             ->databaseNotifications()
+            // La cloche et les cartes des notifications regardent s'il y a
+            // du nouveau au même rythme (voir CartesDesNotifications).
+            ->databaseNotificationsPolling(fn (): string => CartesDesNotifications::intervalle())
             // Le propriétaire passe d'ici à l'administration de sa société
             // (voir SocietePanelProvider), un compte d'un cabinet
             // d'expertise comptable à l'espace de son cabinet (voir
@@ -181,6 +185,10 @@ class AppPanelProvider extends PanelProvider
             // Avant les scripts de Filament/Livewire : le script doit
             // s'abonner à "livewire:init" avant que Livewire ne démarre.
             ->renderHook(PanelsRenderHook::SCRIPTS_BEFORE, fn (): View => view('filament.app.saisie-protegee'))
+            // Chaque notification de la cloche arrivée pendant qu'une page
+            // est ouverte s'y montre en carte, en haut à droite (voir
+            // CartesDesNotifications).
+            ->renderHook(PanelsRenderHook::SCRIPTS_BEFORE, fn (): View => view('filament.cartes-des-notifications-du-panneau'))
             // Une requête refusée (419, 404) dit en français quoi faire, au
             // lieu de la question en anglais de Livewire.
             ->renderHook(PanelsRenderHook::SCRIPTS_BEFORE, fn (): View => view('filament.requete-refusee'))

@@ -253,7 +253,7 @@ final class ChosesAFaireDuMagasin
                 'description' => $facture->nomDuClient(),
                 'montant' => $this->euros($facture->resteDuEnCentimes()),
                 'date' => $facture->date_echeance === null ? null : Calendrier::afficherJour($facture->date_echeance, 'd/m/Y'),
-                'date_en_rouge' => $facture->estEchue(),
+                'date_en_rouge' => $facture->estEnRetard(),
                 'badge' => $facture->getAttribute('paiement_contre_passe') ? 'Paiement contre-passé' : null,
             ])->all()),
             lienDesLignes: ['libelle' => 'Voir toutes les factures à encaisser', 'url' => FactureResource::urlDesFacturesAEncaisser()],

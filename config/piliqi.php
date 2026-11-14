@@ -65,4 +65,21 @@ return [
 
     'demo_mot_de_passe' => env('PILIQI_DEMO_MOT_DE_PASSE'),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Rythme de la cloche et des cartes des notifications
+    |--------------------------------------------------------------------------
+    |
+    | Toutes les combien de secondes une page ouverte de PILIQI regarde s'il
+    | y a du nouveau dans la cloche et montre en carte chaque notification
+    | arrivée depuis (voir CartesDesNotifications), sans service extérieur
+    | ni WebSocket : 30 secondes par défaut, dans
+    | PILIQI_INTERVALLE_DES_NOTIFICATIONS. Un nombre plus petit fait
+    | apparaître une notification plus tôt, au prix d'une requête de plus
+    | par page ouverte à chaque intervalle.
+    |
+    */
+
+    'intervalle_des_notifications_en_secondes' => (int) env('PILIQI_INTERVALLE_DES_NOTIFICATIONS', 30),
+
 ];

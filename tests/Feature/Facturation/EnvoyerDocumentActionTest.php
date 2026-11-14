@@ -476,6 +476,32 @@ class EnvoyerDocumentActionTest extends TestCase
         $this->assertSame(0, EnvoiDocument::query()->count());
     }
 
+    /**
+     * Lot DEMO-V : un ticket du client comptoir, anonyme, ne se relance
+     * jamais, même par une requête qui forgerait le geste caché à l'écran,
+     * échu et resté dû, avec une adresse donnée : rien ne part.
+     */
+    public function test_un_ticket_du_client_comptoir_ne_se_relance_pas(): void
+    {
+        $this->travelTo(self::aParis('2026-10-01 10:00:00'));
+        Queue::fake([EnvoyerDocumentJob::class]);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $responsable = self::responsableDeTest($magasin);
+        $ticket = app(EmettreFactureAction::class)->handle($responsable, app(CreerFactureAction::class)->handle($responsable, Client::query()->where('est_comptoir', true)->sole(), [
+            ['produit_id' => $this->produit()->id, 'quantite' => 1],
+        ]));
+        $this->travelTo(self::aParis('2026-11-02 10:00:00'));
+        $this->assertTrue($ticket->estEchueEtImpayee());
+
+        $this->assertThrows(
+            fn () => app(EnvoyerDocumentAction::class)->relancer($responsable, $ticket, 'client@exemple.fr'),
+            LogicException::class,
+            'Un ticket du client comptoir ne se relance pas : le client comptoir est anonyme.',
+        );
+
+        $this->assertSame(0, EnvoiDocument::query()->count());
+    }
+
     public function test_une_facture_echue_mais_payee_ne_se_relance_pas(): void
     {
         $this->travelTo(self::aParis('2026-10-15 10:00:00'));

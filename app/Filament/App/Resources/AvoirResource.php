@@ -25,6 +25,7 @@ use App\Filament\Concerns\EnvoieLesDocuments;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use App\Filament\Concerns\PrendLeCalendrierDuMagasin;
 use App\Filament\Concerns\SaisitUneQuantiteRetournee;
+use App\Filament\TableauEntry;
 use Filament\Forms\Components\Actions\Action as ActionDeChamp;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Placeholder;
@@ -34,7 +35,6 @@ use Filament\Forms\Components\TextInput;
 use Filament\Forms\Form;
 use Filament\Forms\Get;
 use Filament\Forms\Set;
-use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\Section as InfolistSection;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Infolists\Infolist;
@@ -500,20 +500,24 @@ class AvoirResource extends Resource
                     // Chaque document est nommé selon ce qu'il est, ticket ou
                     // facture, son numéro en lien vers sa fiche pour qui peut
                     // la voir (constat C2, voir FicheDUnDocument).
-                    RepeatableEntry::make('allocations')
+                    TableauEntry::make('allocations')
                         ->label('')
                         ->state(fn (Avoir $record) => $record->loadMissing('allocations.facture')->allocations)
                         ->schema([
+                            // La nature dans sa colonne, le numéro seul en lien.
+                            TextEntry::make('nature')
+                                ->label('Document')
+                                ->state(fn (AvoirAllocation $record): string => FicheDUnDocument::nature(ValeurRequise::de($record->facture, 'le document de l\'imputation'))),
                             TextEntry::make('facture.numero')
-                                ->label(fn (AvoirAllocation $record): string => FicheDUnDocument::nature(ValeurRequise::de($record->facture, 'le document de l\'imputation')))
+                                ->label('Numéro')
                                 ->url(fn (AvoirAllocation $record): ?string => FicheDUnDocument::adresse($record->facture))
                                 ->color(fn (AvoirAllocation $record): ?string => FicheDUnDocument::adresse($record->facture) === null ? null : 'primary'),
                             TextEntry::make('montant_alloue')
                                 ->label('Montant crédité')
                                 ->money('EUR')
+                                ->alignEnd()
                                 ->color(fn (AvoirAllocation $record): ?string => app(CalculateurLigne::class)->enCentiemes($record->montant_alloue) < 0 ? 'danger' : null),
-                        ])
-                        ->columns(2),
+                        ]),
                 ]),
 
             self::envoisSection(),

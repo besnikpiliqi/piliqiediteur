@@ -120,7 +120,7 @@ test('« Reçu (PDF) » ne se montre qu’à qui voit le paiement, « Envoyer le
         $voitLesPaiements
             ? $onglet->voir('Paiements reçus')->voir($recu)
             : $onglet->nePasVoir('Paiements reçus')->nePasVoir($recu);
-        $boutons = fn (string $libelle): int => $onglet->element('.fi-in-repeatable-item >> '.Navigation::bouton($libelle))->count();
+        $boutons = fn (string $libelle): int => $onglet->element('.piliqi-tableau tbody tr >> '.Navigation::bouton($libelle))->count();
 
         expect([$qui, $boutons('Reçu (PDF)'), $boutons('Envoyer le reçu')])->toBe([$qui, $telecharge ? 1 : 0, $envoie ? 1 : 0]);
 

@@ -37,6 +37,7 @@ use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\NomsPolymorphes;
 use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Domain\Tenancy\Support\ValeursLues;
+use App\Filament\CartesDesNotifications;
 use App\Http\Controllers\ReponseAuDevisController;
 use App\Http\Responses\ReponseDeConnexion;
 use App\Models\User;
@@ -99,6 +100,7 @@ use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Exists;
 use Illuminate\Validation\Validator as ValidatorDeLaravel;
+use Livewire\Livewire;
 use LogicException;
 use PDO;
 use RuntimeException;
@@ -216,6 +218,9 @@ class AppServiceProvider extends ServiceProvider
         $this->ecrireLesDatesEnFrancaisDansLesMessages();
         $this->neJamaisMettreEnFormeLesTextesDesEmails();
         $this->teinterLesRangeesChoisies();
+        $this->dessinerLesTableauxDesFiches();
+        $this->tenirLesFenetresDeSelectionDansLEcran();
+        $this->montrerLesCartesDesNotifications();
         $this->limiterLesEssaisDuLienDUnDevis();
     }
 
@@ -271,6 +276,42 @@ class AppServiceProvider extends ServiceProvider
     private function teinterLesRangeesChoisies(): void
     {
         FilamentAsset::register([Css::make('rangees-choisies', resource_path('css/rangees-choisies.css'))], 'app');
+    }
+
+    /**
+     * La feuille écrite à la main des tableaux des fiches, au modèle D
+     * choisi par l'éditeur (voir App\Filament\TableauEntry et
+     * resources/css/tableaux.css), dans les trois panneaux : Filament la
+     * sert depuis la copie que « php artisan filament:assets » publie dans
+     * public/css/app.
+     */
+    private function dessinerLesTableauxDesFiches(): void
+    {
+        FilamentAsset::register([Css::make('tableaux', resource_path('css/tableaux.css'))], 'app');
+    }
+
+    /**
+     * La feuille écrite à la main des fenêtres de sélection en plein écran
+     * (« Ajouter des produits », « Chercher un client » ; voir
+     * resources/css/fenetres-de-selection.css), dans les trois panneaux,
+     * servie de même depuis public/css/app.
+     */
+    private function tenirLesFenetresDeSelectionDansLEcran(): void
+    {
+        FilamentAsset::register([Css::make('fenetres-de-selection', resource_path('css/fenetres-de-selection.css'))], 'app');
+    }
+
+    /**
+     * Les cartes des notifications (voir App\Filament\CartesDesNotifications),
+     * que les trois panneaux montent par un crochet de rendu : leur
+     * composant, retrouvé par son nom à chacune de ses requêtes, et leur
+     * feuille écrite à la main (resources/css/cartes-des-notifications.css),
+     * servie de même depuis public/css/app.
+     */
+    private function montrerLesCartesDesNotifications(): void
+    {
+        Livewire::component(CartesDesNotifications::NOM, CartesDesNotifications::class);
+        FilamentAsset::register([Css::make('cartes-des-notifications', resource_path('css/cartes-des-notifications.css'))], 'app');
     }
 
     /**

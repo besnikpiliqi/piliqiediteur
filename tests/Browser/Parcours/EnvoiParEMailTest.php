@@ -99,11 +99,11 @@ function lancerLaTacheDEnvoi(): void
 
 /**
  * L'expression JavaScript vraie quand la section « Envois » montre l'envoi
- * à cette adresse avec ce statut.
+ * à cette adresse avec ce statut, sur une même ligne de son tableau.
  */
 function envoiAffiche(string $adresse, string $statut): string
 {
-    return '[...document.querySelectorAll(".fi-in-repeatable-item")].some((envoi) => envoi.innerText.includes('.Navigation::texte($adresse).') && envoi.innerText.includes('.Navigation::texte($statut).'))';
+    return '[...document.querySelectorAll(".piliqi-tableau tbody tr")].some((envoi) => envoi.innerText.includes('.Navigation::texte($adresse).') && envoi.innerText.includes('.Navigation::texte($statut).'))';
 }
 
 /**

@@ -507,6 +507,10 @@ class ClientResource extends Resource
             ->modalHeading('Chercher un client')
             ->modalDescription('Cliquez sur le client de la vente.')
             ->modalWidth(MaxWidth::Screen)
+            // Le haut et le bas de la fenêtre restent visibles, seul le
+            // tableau des clients défile (voir
+            // resources/css/fenetres-de-selection.css).
+            ->extraModalWindowAttributes(['class' => 'piliqi-fenetre-de-selection'])
             ->modalSubmitAction(false)
             ->modalCancelActionLabel('Fermer')
             ->modalContent(fn (): View => view('filament.app.livewire.fenetre-du-selecteur-de-clients', ['avecLeComptoir' => $avecLeComptoir]));

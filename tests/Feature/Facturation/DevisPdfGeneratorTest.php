@@ -84,10 +84,10 @@ class DevisPdfGeneratorTest extends TestCase
     /**
      * Tout devis se calcule comme sa facture, pour un professionnel comme
      * pour un particulier, et l'explique sous ses lignes (point 15) : le
-     * devis à un professionnel, qui montre le PU HT tel qu'il est
-     * enregistré, dit que la quantité x ce PU HT retombe sur le total HT
-     * de la ligne à moins de deux centimes près (décision de l'éditeur du
-     * 09/11/2026) ; le devis à un particulier, que ses prix unitaires sont
+     * devis à un professionnel, qui montre le PU HT d'un article, prix TTC
+     * moins sa TVA arrondie au centime, dit que la quantité x ce prix peut
+     * différer de quelques centimes du total HT de la ligne (décision de
+     * l'éditeur du 14/11/2026) ; le devis à un particulier, que ses prix unitaires sont
      * affichés arrondis au centime (décision de l'éditeur du 25/10/2026).
      * Si la fiche du client devient professionnelle après son envoi, il se
      * réimprime tel qu'il a été établi : client sans identifiant, avec la
@@ -104,7 +104,7 @@ class DevisPdfGeneratorTest extends TestCase
         $renduParticulier = $this->compacte(app(DevisPdfGenerator::class)->html($devisParticulier->fresh()->load('client', 'lignes', 'magasin')));
 
         $this->assertStringContainsString(
-            e($calcul.' Les prix unitaires HT sont affichés tels qu\'ils sont enregistrés et les totaux calculés sans arrondi intermédiaire : la quantité × le PU HT, remise déduite, retombe sur le total HT de la ligne à moins de deux centimes près.'),
+            e($calcul.' Le PU HT affiché est celui d\'un article : prix TTC moins sa TVA arrondie au centime (9,99 € TTC à 20 % : 8,32 € HT). La quantité × ce prix peut différer de quelques centimes du total HT de la ligne, calculé sur toute la quantité.'),
             app(DevisPdfGenerator::class)->html($devisProfessionnel->load('client', 'lignes', 'magasin')),
         );
         $this->assertStringContainsString(e($calcul.' Les prix unitaires sont affichés arrondis au centime et les totaux calculés sans arrondi intermédiaire : la quantité × le prix unitaire affiché peut donc différer du total de la ligne.'), $renduParticulier);

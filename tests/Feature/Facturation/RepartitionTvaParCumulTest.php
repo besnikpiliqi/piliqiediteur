@@ -83,10 +83,10 @@ class RepartitionTvaParCumulTest extends TestCase
 
     /**
      * Le contenu signé, en centimes, et le PDF portent les parts réparties ;
-     * le PDF de cette facture à un professionnel imprime le PU HT de la
-     * ligne 3, 2,00 ÷ 1,20 = 1,666667 €, tel qu'il est enregistré
-     * (décision de l'éditeur du 09/11/2026) : 2 x 1,666667 € retombe sur
-     * les 3,34 € HT de la ligne à moins de deux centimes près.
+     * le PDF de cette facture à un professionnel imprime le PU HT d'un
+     * article de la ligne 3, 2,00 € moins sa TVA de 0,33 €, soit 1,67 €
+     * (décision de l'éditeur du 14/11/2026), devant les 3,34 € HT de la
+     * ligne.
      */
     public function test_le_contenu_signe_et_le_pdf_portent_les_parts_ainsi_reparties(): void
     {
@@ -109,7 +109,7 @@ class RepartitionTvaParCumulTest extends TestCase
             ['taux' => 550, 'ht' => 853, 'tva' => 47, 'ttc' => 900],
         ], $document['ventilation']);
         $this->assertSame(['ht' => 1270, 'tva' => 130, 'ttc' => 1400], $document['totaux']);
-        $this->assertStringContainsString('<td>Cheville</td><td class="montant">2</td><td class="montant">1,666667 €</td><td class="montant">20 %</td><td class="montant">3,34 €</td>', preg_replace('/>\s+</', '><', $html));
+        $this->assertStringContainsString('<td>Cheville</td><td class="montant">2</td><td class="montant">1,67 €</td><td class="montant">20 %</td><td class="montant">3,34 €</td>', preg_replace('/>\s+</', '><', $html));
         $this->assertStringContainsString('<td>20 %</td><td class="montant">4,17 €</td><td class="montant">0,83 €</td><td class="montant">5,00 €</td>', preg_replace('/>\s+</', '><', $html));
     }
 

@@ -14,8 +14,8 @@ use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\App\FicheDUnDocument;
 use App\Filament\App\Resources\ClotureCaisseResource\Pages;
 use App\Filament\Concerns\PrendLeCalendrierDuMagasin;
+use App\Filament\TableauEntry;
 use Closure;
-use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\Section as InfolistSection;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Infolists\Infolist;
@@ -133,42 +133,51 @@ class ClotureCaisseResource extends Resource
             InfolistSection::make('Ventes et avoirs')
                 ->description('Montants enregistrés des documents, additionnés une seule fois à la clôture. Le net des ventes aux particuliers est la base de l\'e-reporting : « TVA par taux » le détaille, et l\'aperçu de l\'e-reporting le range par catégorie.')
                 ->schema([
-                    RepeatableEntry::make('rubriques')
+                    // Modèle D (lot DEMO-V) : les ventes aux particuliers et
+                    // leurs avoirs, leur net en dernière ligne, puis les
+                    // factures aux professionnels et leurs avoirs, pour
+                    // information, en gris.
+                    TableauEntry::make('rubriques')
                         ->hiddenLabel()
-                        ->state(fn (ClotureCaisse $record): array => self::rubriques($record))
+                        ->state(fn (ClotureCaisse $record): array => self::rubriques($record, 'particuliers'))
                         ->schema([
                             TextEntry::make('rubrique')->label('Rubrique'),
-                            TextEntry::make('nombre')->label('Nombre')->placeholder(''),
-                            TextEntry::make('ht')->label('Total HT'),
-                            TextEntry::make('tva')->label('TVA'),
-                            TextEntry::make('ttc')->label('Total TTC'),
+                            TextEntry::make('nombre')->label('Nombre')->placeholder('')->alignEnd(),
+                            TextEntry::make('ht')->label('Total HT')->alignEnd(),
+                            TextEntry::make('tva')->label('TVA')->alignEnd(),
+                            TextEntry::make('ttc')->label('Total TTC')->alignEnd(),
                         ])
-                        ->columns(5),
+                        ->ligneDeTotal(fn (ClotureCaisse $record): ?array => self::rubriques($record, 'net')[0] ?? null)
+                        ->lignesDInformation(fn (ClotureCaisse $record): array => self::rubriques($record, 'information')),
                     FactureResource::ventilationTvaEntry(),
                 ]),
 
             InfolistSection::make('Encaissements')
                 ->description('Paiements enregistrés depuis la clôture précédente jusqu\'à la fin de la journée, par mode, contre-passations déduites : un paiement enregistré après la clôture de sa journée compte dans la suivante. Ventes et encaissements diffèrent quand un client garde un crédit d\'avoir ou paie plus tard.')
                 ->schema([
-                    RepeatableEntry::make('encaissements')
+                    // Modèle D (lot DEMO-V) : les cinq modes dans leur
+                    // ordre, le total encaissé en dernière ligne, puis le
+                    // crédit d'avoir utilisé, qui n'en fait pas partie.
+                    TableauEntry::make('encaissements')
                         ->hiddenLabel()
                         ->state(fn (ClotureCaisse $record): array => self::encaissements($record))
                         ->schema([
                             TextEntry::make('libelle')->label('Mode de paiement'),
-                            TextEntry::make('paiements')->label('Paiements'),
-                            TextEntry::make('contre_passations')->label('Contre-passations'),
-                            TextEntry::make('montant')->label('Montant encaissé'),
+                            TextEntry::make('paiements')->label('Paiements')->alignEnd(),
+                            TextEntry::make('contre_passations')->label('Contre-passations')->alignEnd(),
+                            TextEntry::make('montant')->label('Montant encaissé')->alignEnd(),
                         ])
-                        ->columns(4)
-                        ->columnSpanFull(),
-                    TextEntry::make('total_encaisse')
-                        ->label('Total encaissé')
-                        ->state(fn (ClotureCaisse $record): string => app(CalculateurLigne::class)->enEuros($record->totalEncaisseEnCentimes())),
-                    TextEntry::make('credit_avoir_impute')
-                        ->label('Crédit d\'avoir utilisé (n\'entre pas dans les encaissements)')
-                        ->state(fn (ClotureCaisse $record): string => app(CalculateurLigne::class)->enEuros($record->creditAvoirImpute())),
-                ])
-                ->columns(2),
+                        ->ligneDeTotal(fn (ClotureCaisse $record): array => [
+                            'libelle' => 'Total encaissé',
+                            'paiements' => array_sum(array_column($record->encaissementsParMode(), 'paiements')),
+                            'contre_passations' => array_sum(array_column($record->encaissementsParMode(), 'contre_passations')),
+                            'montant' => app(CalculateurLigne::class)->enEuros($record->totalEncaisseEnCentimes()),
+                        ])
+                        ->lignesDInformation(fn (ClotureCaisse $record): array => [[
+                            'libelle' => 'Crédit d\'avoir utilisé (n\'entre pas dans les encaissements)',
+                            'montant' => app(CalculateurLigne::class)->enEuros($record->creditAvoirImpute()),
+                        ]]),
+                ]),
 
             InfolistSection::make('Grands totaux')
                 ->description('Grands totaux perpétuels du magasin après le dernier document que compte la clôture, jamais remis à zéro : toutes ses ventes, factures aux professionnels comprises, avoirs déduits (réel) ou ajoutés en valeur absolue (absolu).')
@@ -213,9 +222,9 @@ class ClotureCaisseResource extends Resource
      *
      * @param  Closure(ClotureCaisse): list<array<string, string|null>>  $documents
      */
-    private static function detailDesDocuments(string $nom, Closure $documents): RepeatableEntry
+    private static function detailDesDocuments(string $nom, Closure $documents): TableauEntry
     {
-        return RepeatableEntry::make($nom)
+        return TableauEntry::make($nom)
             ->hiddenLabel()
             ->state($documents)
             ->schema([
@@ -223,11 +232,10 @@ class ClotureCaisseResource extends Resource
                     ->url(fn (TextEntry $component): ?string => self::adresseDuDocument($component))
                     ->color(fn (TextEntry $component): ?string => self::adresseDuDocument($component) === null ? null : 'primary'),
                 TextEntry::make('client_nom')->label('Client'),
-                TextEntry::make('ht')->label('Total HT'),
-                TextEntry::make('tva')->label('TVA'),
-                TextEntry::make('ttc')->label('Total TTC'),
-            ])
-            ->columns(5);
+                TextEntry::make('ht')->label('Total HT')->alignEnd(),
+                TextEntry::make('tva')->label('TVA')->alignEnd(),
+                TextEntry::make('ttc')->label('Total TTC')->alignEnd(),
+            ]);
     }
 
     /**
@@ -287,23 +295,26 @@ class ClotureCaisseResource extends Resource
     }
 
     /**
-     * Les lignes de la rubrique « Ventes et avoirs » telles que la clôture
-     * les a écrites (voir ClotureCaisse::rubriques()), leurs montants en
-     * euros.
+     * Les lignes d'une partie de la rubrique « Ventes et avoirs » telles
+     * que la clôture les a écrites (voir ClotureCaisse::rubriques()) : les
+     * ventes aux particuliers et leurs avoirs, leur net, ou les factures
+     * aux professionnels et leurs avoirs ; leurs montants en euros, le
+     * détail d'un taux en retrait.
      *
+     * @param  'particuliers'|'net'|'information'  $partie
      * @return list<array{rubrique: string, nombre: int|null, ht: string, tva: string, ttc: string}>
      */
-    private static function rubriques(ClotureCaisse $cloture): array
+    private static function rubriques(ClotureCaisse $cloture, string $partie): array
     {
         $calculateur = app(CalculateurLigne::class);
 
-        return array_map(fn (array $rubrique): array => [
-            'rubrique' => $rubrique['rubrique'],
+        return array_values(array_map(fn (array $rubrique): array => [
+            'rubrique' => ($rubrique['detail'] ? "\u{2003}" : '').$rubrique['rubrique'],
             'nombre' => $rubrique['nombre'],
             'ht' => $calculateur->enEuros($rubrique['ht']),
             'tva' => $calculateur->enEuros($rubrique['tva']),
             'ttc' => $calculateur->enEuros($rubrique['ttc']),
-        ], $cloture->rubriques());
+        ], array_filter($cloture->rubriques(), fn (array $rubrique): bool => $rubrique['partie'] === $partie)));
     }
 
     /**

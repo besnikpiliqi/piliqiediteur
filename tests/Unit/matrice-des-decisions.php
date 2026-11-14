@@ -985,9 +985,24 @@ return [
                 'tests/Feature/Societe/MagasinDeDemonstrationTest.php::test_l_ouverture_et_la_fin_de_la_demonstration_s_inscrivent_en_jet_100_et_105',
                 'tests/Feature/Societe/MagasinDeDemonstrationTest.php::test_aucun_e_mail_ni_aucune_transmission_ne_part_de_la_demonstration',
                 'tests/Feature/Societe/MagasinDeDemonstrationTest.php::test_rien_ne_passe_du_magasin_de_demonstration_aux_magasins_reels',
-                'tests/Feature/Societe/MagasinDeDemonstrationTest.php::test_la_validation_ferme_la_demonstration_qui_reste_consultable',
+                'tests/Feature/Societe/MagasinDeDemonstrationTest.php::test_la_validation_ferme_la_demonstration_qui_disparait_sans_rien_effacer',
                 'tests/Feature/Societe/MagasinDeDemonstrationTest.php::test_la_demonstration_prend_le_territoire_du_siege_et_le_garde',
                 'tests/Feature/Societe/MagasinDeDemonstrationTest.php::test_la_demonstration_vend_encaisse_et_cloture_dans_son_propre_registre',
+            ],
+        ],
+        'verification.demonstration-apres-la-validation' => [
+            'puce' => 'Vérification de la société',
+            'regle' => 'Une fois la société validée, son magasin de démonstration disparaît de tous ses écrans et de ceux de ses magasins (tableau de bord, liste et menu des magasins, téléchargement des documents par période et ses demandes passées, cloche) et plus personne n\'y entre, son adresse menant à une page introuvable, ses données restant en base (T115).',
+            'tests' => [
+                'tests/Feature/Societe/DemonstrationApresLaValidationTest.php::test_une_fois_la_societe_validee_la_demonstration_disparait_de_ses_ecrans_sans_rien_effacer',
+                'tests/Feature/Societe/DemonstrationApresLaValidationTest.php::test_les_telechargements_de_la_demonstration_disparaissent_une_fois_la_societe_validee',
+                'tests/Feature/Societe/DemonstrationApresLaValidationTest.php::test_les_notifications_de_la_demonstration_s_effacent_a_la_validation',
+                'tests/Feature/Facturation/MarquerFacturesEnRetardTest.php::test_une_facture_de_la_demonstration_ne_s_annonce_plus_une_fois_la_societe_validee',
+                'tests/Feature/Facturation/MarquerFacturesEnRetardConcurrenceTest.php::test_le_passage_en_retard_pendant_la_validation_ou_le_refus_de_la_societe_passe_sans_interblocage',
+                'tests/Feature/Societe/DemonstrationApresLaValidationTest.php::test_le_cabinet_lie_ne_voit_jamais_la_demonstration_de_son_client',
+                'tests/Feature/Societe/MagasinDeDemonstrationTest.php::test_la_validation_ferme_la_demonstration_qui_disparait_sans_rien_effacer',
+                'tests/Feature/Societe/PanneauSocieteTest.php::test_le_tableau_de_bord_coche_chaque_premiere_etape_faite',
+                'tests/Browser/Parcours/DemonstrationApresLaValidationTest.php › une fois la société validée, le propriétaire et l’administrateur ne voient plus la démonstration et son adresse est introuvable',
             ],
         ],
         'verification.controle-sirene-et-territoire' => [
@@ -1366,6 +1381,15 @@ return [
                 'tests/Feature/Filament/FactureResourceTest.php::test_le_client_comptoir_est_refuse_par_une_facture_ou_un_devis_forge',
             ],
         ],
+        'fiches.client-comptoir-jamais-relance' => [
+            'puce' => 'Clients, produits, fournisseurs',
+            'regle' => 'Le client comptoir, anonyme, ne se relance jamais : « Relancer » ne s\'offre sur aucun de ses tickets et la relance est refusée, même par une requête forgée ; « Envoyer par e-mail » reste possible (décision de Claude du 13/11/2026).',
+            'tests' => [
+                'tests/Feature/Facturation/EnvoyerDocumentActionTest.php::test_un_ticket_du_client_comptoir_ne_se_relance_pas',
+                'tests/Feature/Filament/EnvoieLesDocumentsTest.php::test_un_ticket_du_client_comptoir_ne_propose_pas_de_relancer',
+                'tests/Browser/Parcours/RetardEtRelanceDesTicketsTest.php › ni le responsable ni le vendeur ne trouvent « Relancer » sur un ticket du client comptoir échu et resté dû, ni sur la liste ni sur sa fiche, quand ils le trouvent sur la facture échue d’un client nommé',
+            ],
+        ],
         'fiches.recherches-sans-casse-ni-accents' => [
             'puce' => 'Clients, produits, fournisseurs',
             'regle' => 'Les recherches ignorent la casse et les accents (« creme » trouve « Crème »).',
@@ -1387,14 +1411,15 @@ return [
         ],
 
         // Documents de vente.
-        'documents.note-de-calcul-a-moins-de-deux-centimes' => [
+        'documents.note-de-calcul-du-pu-ht-d-un-article' => [
             'puce' => 'Documents de vente',
-            'regle' => 'La note de calcul d\'un document qui montre le PU HT ne dit « à moins de deux centimes près » que si chaque ligne le vérifie ; sinon elle dit qu\'un écart de quelques centimes est possible (T105).',
+            'regle' => 'La note de calcul d\'un document qui montre le PU HT dit, en une seule phrase quel que soit le nombre d\'articles de ses lignes, que le PU HT affiché est celui d\'un article, prix TTC moins sa TVA arrondie au centime (9,99 € TTC à 20 % : 8,32 € HT), et que la quantité × ce prix peut différer de quelques centimes du total HT de la ligne, calculé sur toute la quantité (décision de l\'éditeur du 14/11/2026, qui remplace T105).',
             'tests' => [
-                'tests/Feature/Facturation/MentionsFiscalesTest.php::test_la_note_ne_dit_moins_de_deux_centimes_que_si_chaque_ligne_le_verifie',
-                'tests/Feature/Facturation/MentionsFiscalesTest.php::test_le_dernier_avoir_d_une_ligne_rendue_en_trois_fois_retombe_a_moins_de_deux_centimes',
-                'tests/Feature/Facturation/FacturePdfGeneratorTest.php::test_au_dela_de_dix_mille_articles_la_note_de_calcul_dit_qu_un_petit_ecart_est_possible',
-                'tests/Unit/CalculateurLigneTest.php::test_le_pu_ht_retombe_sur_le_ht_de_la_ligne_a_moins_de_deux_centimes',
+                'tests/Feature/Facturation/MentionsFiscalesTest.php::test_la_note_d_un_document_qui_montre_le_pu_ht_est_la_meme_quel_que_soit_le_nombre_d_articles',
+                'tests/Feature/Facturation/MentionsFiscalesTest.php::test_chaque_avoir_d_une_ligne_rendue_en_trois_fois_garde_la_note_du_pu_ht_d_un_article',
+                'tests/Feature/Facturation/FacturePdfGeneratorTest.php::test_la_note_de_calcul_est_la_meme_quel_que_soit_le_nombre_d_articles',
+                'tests/Feature/Facturation/FacturePdfGeneratorTest.php::test_le_pu_ht_d_un_article_s_imprime_sans_changer_le_total_de_la_ligne',
+                'tests/Feature/Filament/FactureResourceTest.php::test_la_fiche_d_une_facture_a_un_professionnel_montre_le_pu_ht_d_un_article',
             ],
         ],
         'documents.client-fige-et-facture-immuable' => [
@@ -1463,7 +1488,7 @@ return [
             'puce' => 'Documents de vente',
             'regle' => 'Toute facture, tout avoir sur facture et tout devis à un professionnel montrent par ligne le PU HT, la remise, le taux et le total HT, le PU HT tel qu\'il est enregistré, jusqu\'à six décimales ; un ticket, un avoir sur ticket et un devis à un particulier montrent le PU TTC et le total TTC ; une vente sans TVA française montre le PU HT et le total HT.',
             'tests' => [
-                'tests/Feature/Facturation/FacturePdfGeneratorTest.php::test_une_facture_a_un_professionnel_imprime_le_pu_ht_de_54_166667_euros_tel_qu_il_est_enregistre',
+                'tests/Feature/Facturation/FacturePdfGeneratorTest.php::test_une_facture_a_un_professionnel_imprime_le_pu_ht_de_54_17_euros_d_un_article',
                 'tests/Feature/Facturation/FacturePdfGeneratorTest.php::test_une_facture_n_imprime_ni_pu_ttc_ni_tva_ni_total_ttc_par_ligne',
                 'tests/Feature/Facturation/FacturePdfGeneratorTest.php::test_un_ticket_imprime_le_pu_ttc_et_le_total_ttc_de_chaque_ligne',
                 'tests/Feature/Facturation/AvoirPdfGeneratorTest.php::test_un_avoir_sur_facture_imprime_les_colonnes_ht_et_un_avoir_sur_ticket_les_colonnes_ttc',
@@ -1478,7 +1503,7 @@ return [
             'tests' => [
                 'tests/Feature/Facturation/MentionsFiscalesTest.php::test_chaque_variante_de_la_note_de_calcul_finit_par_la_phrase_des_prix_unitaires_de_son_document',
                 'tests/Feature/Facturation/MentionsFiscalesTest.php::test_une_vente_en_franchise_en_base_n_a_pas_de_note_de_calcul',
-                'tests/Feature/Facturation/FacturePdfGeneratorTest.php::test_la_note_de_calcul_explique_le_pu_ht_tel_qu_il_est_enregistre_et_les_mentions_obligatoires_restent',
+                'tests/Feature/Facturation/FacturePdfGeneratorTest.php::test_la_note_de_calcul_explique_le_pu_ht_d_un_article_et_les_mentions_obligatoires_restent',
             ],
         ],
         'documents.emettre-et-encaisser' => [
@@ -1607,13 +1632,32 @@ return [
         ],
         'prix.pu-ht-a-six-decimales' => [
             'puce' => 'Prix et TVA des ventes',
-            'regle' => 'Le PU HT d\'une ligne est son PU TTC ÷ (1 + taux), enregistré avec au plus six décimales : la quantité × le PU HT s\'écarte du HT de la ligne de moins de deux centimes jusqu\'à 10 000 articles ; il s\'affiche au centime, sauf sur les documents qui montrent le PU HT, où il s\'affiche tel qu\'il est enregistré.',
+            'regle' => 'Le PU HT d\'une ligne est son PU TTC ÷ (1 + taux), enregistré et signé avec au plus six décimales, celui de la facture électronique : la quantité × ce PU HT s\'écarte du HT de la ligne de moins de deux centimes jusqu\'à 10 000 articles ; aucun montant ne se calcule sur un prix affiché.',
             'tests' => [
                 'tests/Unit/CalculateurLigneTest.php::test_le_pu_ht_se_calcule_avec_au_plus_six_decimales',
-                'tests/Unit/CalculateurLigneTest.php::test_un_prix_unitaire_s_affiche_au_centime_un_demi_centime_au_centime_superieur',
+                'tests/Unit/CalculateurLigneTest.php::test_le_pu_ht_retombe_sur_le_ht_de_la_ligne_a_moins_de_deux_centimes',
                 'tests/Unit/CalculateurLigneAuHasardTest.php::test_10000_lignes_aleatoires_egalent_le_calcul_exact',
-                'tests/Feature/Facturation/FacturePdfGeneratorTest.php::test_un_pu_ht_a_un_demi_centime_exact_s_imprime_tel_qu_il_est_enregistre',
-                'tests/Browser/Parcours/PuHtExactTest.php › le responsable lit le PU HT tel qu’il est enregistré sur la fiche et sur le PDF d’une facture à un professionnel, et au centime sur la fiche d’un ticket',
+                'tests/Feature/Facturation/PolitiqueDArrondiTest.php::test_quatre_articles_a_65_euros_ttc_font_216_67_ht_et_43_33_de_tva_en_une_ou_quatre_lignes',
+            ],
+        ],
+        'prix.pu-ht-affiche-d-un-article' => [
+            'puce' => 'Prix et TVA des ventes',
+            'regle' => 'Le PU HT affiché d\'une vente est, partout, celui d\'un article : son PU TTC moins la TVA d\'un article, arrondie une fois au centime, un demi-centime au centime supérieur (9,99 € TTC à 20 % : 8,32 € ; 10,00 € : 8,33 € ; 0,99 € : 0,82 €), un seul calcul que la fiche du produit, la caisse, les lignes des formulaires, les fiches et les PDF des documents et la page publique du devis appellent ; aucun montant ne change (décision de l\'éditeur du 14/11/2026).',
+            'tests' => [
+                'tests/Unit/CalculateurLigneTest.php::test_le_pu_ht_affiche_d_une_vente_est_le_pu_ttc_moins_la_tva_d_un_article_arrondie',
+                'tests/Unit/CalculateurLigneAuHasardTest.php::test_le_pu_ht_affiche_est_exact_sur_tous_les_prix_de_0_01_a_100_euros',
+                'tests/Unit/PuHtAfficheDesVentesTest.php::test_le_calculateur_n_offre_qu_un_calcul_du_pu_ht_affiche_depuis_le_pu_ttc',
+                'tests/Unit/PuHtAfficheDesVentesTest.php::test_aucun_ecran_ni_aucun_pdf_ne_met_en_forme_autrement_le_pu_ht_d_une_vente',
+                'tests/Feature/Filament/ProduitResourceTest.php::test_la_fiche_d_un_produit_montre_le_pu_ht_d_un_article',
+                'tests/Feature/Filament/CaisseTest.php::test_a_la_caisse_le_pu_ht_est_celui_d_un_article_pour_tout_client',
+                'tests/Feature/Filament/FactureResourceTest.php::test_le_champ_du_pu_ht_est_celui_d_un_article_quels_que_soient_le_client_et_la_nature_de_la_vente',
+                'tests/Feature/Filament/FactureResourceTest.php::test_la_fiche_d_une_facture_montre_le_pu_ht_d_un_savon_a_9_99_euros_8_32_euros',
+                'tests/Feature/Facturation/FacturePdfGeneratorTest.php::test_un_savon_a_9_99_euros_ttc_imprime_un_pu_ht_de_8_32_euros',
+                'tests/Feature/Facturation/FacturePdfGeneratorTest.php::test_le_pu_ht_d_un_article_s_imprime_aux_taux_reduits_et_pour_un_petit_prix',
+                'tests/Feature/Facturation/ExempleDeQuinzeLignesTest.php::test_la_facture_a_un_professionnel_imprime_le_pu_ht_d_un_article_et_les_montants_verifies',
+                'tests/Feature/Facturation/ReponseAuDevisEnLigneTest.php::test_la_page_du_lien_d_un_devis_a_un_professionnel_montre_le_pu_ht_d_un_article',
+                'tests/Browser/Parcours/PuHtAfficheTest.php › le responsable lit le PU HT d’un article, 8,32 € pour un savon à 9,99 €, sur la fiche et sur le PDF d’une facture à un professionnel, et sur la fiche d’un ticket',
+                'tests/Browser/Parcours/PuHtAfficheTest.php › le vendeur change le client de son brouillon, et le PU HT des lignes reste celui d’un article, pour un professionnel comme pour un particulier',
             ],
         ],
         'prix.retours' => [
@@ -1792,6 +1836,62 @@ return [
                 'tests/Feature/Facturation/MarquerFacturesEnRetardTest.php::test_une_facture_emise_dont_lecheance_est_depassee_passe_en_retard',
                 'tests/Feature/Facturation/ImputerAvoirSurSesFacturesActionTest.php::test_une_facture_en_retard_encore_due_apres_l_imputation_reste_en_retard',
                 'tests/Feature/Facturation/ContrePasserPaiementActionTest.php::test_une_facture_echue_rouverte_par_la_contre_passation_est_en_retard',
+                'tests/Feature/Filament/FactureEnRetardTest.php::test_une_facture_payee_en_partie_apres_son_echeance_reste_en_retard',
+            ],
+        ],
+        'ecrans.tableaux-des-fiches-modele-d' => [
+            'puce' => 'Écrans',
+            'regle' => 'Une liste d\'une fiche s\'affiche en un seul tableau, au modèle D (13/11/2026) : titres une fois en haut, une ligne par élément dans l\'ordre fixe, « – » en gris pour une valeur nulle et la ligne en gris quand toutes ses valeurs le sont, total en dernière ligne, en gras, informations dessous, en gris ; le tableau défile de côté sur un téléphone.',
+            'tests' => [
+                'tests/Feature/Filament/TableauxDesFichesTest.php::test_une_valeur_chiffree_nulle_s_ecrit_d_un_tiret_et_un_taux_de_zero_reste',
+                'tests/Feature/Filament/TableauxDesFichesTest.php::test_les_encaissements_de_la_cloture_sont_un_seul_tableau_au_modele_d',
+                'tests/Feature/Filament/TableauxDesFichesTest.php::test_les_ventes_et_avoirs_de_la_cloture_finissent_par_leur_net_puis_les_informations_en_gris',
+                'tests/Feature/Filament/ClotureCaisseResourceTest.php::test_la_fiche_affiche_les_encaissements_par_mode_et_la_somme_des_avoirs',
+                'tests/Feature/Filament/InventaireOuvertureResourceTest.php::test_la_fiche_dit_qu_un_produit_qui_ne_suit_pas_son_stock_ne_recoit_que_son_cout',
+                'tests/Feature/Filament/RessourcesServiesParPiliqiTest.php::test_chaque_panneau_sert_la_feuille_des_tableaux_publiee_telle_quelle',
+                'tests/Browser/Parcours/TableauxDesFichesTest.php › le responsable lit les encaissements de la clôture en un seul tableau au modèle D, qui défile de côté sur un téléphone',
+            ],
+        ],
+        'ecrans.fenetres-de-selection-dans-l-ecran' => [
+            'puce' => 'Écrans',
+            'regle' => 'Une fenêtre de sélection en plein écran (« Ajouter des produits », « Chercher un client ») tient dans la hauteur de l\'écran : son haut et son bas restent visibles, seul le tableau défile, ses titres collés en haut, « Voir 50 de plus » au bout ; la liste des produits choisis défile à son tour quand ils sont nombreux.',
+            'tests' => [
+                'tests/Browser/Parcours/FenetresDeSelectionTest.php › avec 80 produits, la fenêtre « Ajouter des produits » de la caisse garde son haut et son bas visibles, et seul le tableau défile',
+                'tests/Browser/Parcours/FenetresDeSelectionTest.php › avec 30 produits choisis, la liste des choisis défile et le bouton « Ajouter les 30 produits » reste visible',
+                'tests/Browser/Parcours/FenetresDeSelectionTest.php › avec 80 clients, la fenêtre « Chercher un client » de la caisse garde sa recherche et sa pagination visibles, et seul le tableau défile',
+                'tests/Feature/Filament/RessourcesServiesParPiliqiTest.php::test_chaque_panneau_sert_la_feuille_des_fenetres_de_selection_publiee_telle_quelle',
+            ],
+        ],
+        'ecrans.cartes-des-notifications' => [
+            'puce' => 'Écrans',
+            'regle' => 'Une notification de la cloche arrivée pendant qu\'une page est ouverte se montre toute seule en carte (modèle A, 14/11/2026), dans les trois espaces, pour tout compte qui a la cloche et seulement ce que sa cloche lui montre : en haut à droite, sous la barre du haut, 8 secondes ou tant que la souris est dessus, trois au plus, une seule à l\'ouverture d\'une session, jamais deux fois ni lue ; la carte n\'écrit rien sur la notification, et seul son bouton la marque comme lue.',
+            'tests' => [
+                'tests/Feature/Filament/CartesDesNotificationsTest.php::test_une_notification_non_lue_arrivee_pendant_que_la_page_est_ouverte_se_montre_une_seule_fois',
+                'tests/Feature/Filament/CartesDesNotificationsTest.php::test_une_notification_arrivee_dans_la_seconde_du_passage_se_montre_au_passage_suivant',
+                'tests/Feature/Filament/CartesDesNotificationsTest.php::test_une_notification_deja_lue_ne_se_montre_pas',
+                'tests/Feature/Filament/CartesDesNotificationsTest.php::test_une_notification_d_un_autre_compte_ne_se_montre_pas',
+                'tests/Feature/Filament/CartesDesNotificationsTest.php::test_a_l_ouverture_d_une_session_une_seule_carte_se_montre_la_plus_recente',
+                'tests/Feature/Filament/CartesDesNotificationsTest.php::test_au_chargement_d_une_page_les_cartes_s_empilent_la_plus_recente_en_haut',
+                'tests/Feature/Filament/CartesDesNotificationsTest.php::test_une_carte_montree_ne_revient_pas_apres_une_nouvelle_session',
+                'tests/Feature/Filament/CartesDesNotificationsTest.php::test_au_plus_trois_cartes_se_montrent_a_la_fois_les_plus_recentes',
+                'tests/Feature/Filament/CartesDesNotificationsTest.php::test_la_carte_montree_ne_change_rien_aux_notifications_de_la_cloche',
+                'tests/Feature/Filament/CartesDesNotificationsTest.php::test_le_bouton_de_la_carte_marque_sa_notification_comme_lue_par_la_cloche_et_rien_d_autre',
+                'tests/Feature/Filament/CartesDesNotificationsTest.php::test_les_cartes_se_montrent_dans_l_espace_de_la_societe_et_dans_celui_du_cabinet',
+                'tests/Feature/Filament/CartesDesNotificationsTest.php::test_de_deux_onglets_qui_regardent_en_meme_temps_un_seul_montre_la_carte',
+                'tests/Browser/Parcours/CartesDesNotificationsTest.php › le vendeur voit glisser la carte de chaque notification arrivée, la ferme, et ouvre la fiche par son bouton',
+                'tests/Browser/Parcours/CartesDesNotificationsTest.php › la responsable voit glisser la carte de chaque notification arrivée, la ferme, et ouvre la fiche par son bouton',
+                'tests/Browser/Parcours/CartesDesNotificationsTest.php › la propriétaire voit glisser dans l’espace de la société la carte de chaque notification arrivée, la ferme, et ouvre la fiche par son bouton',
+                'tests/Browser/Parcours/CartesDesNotificationsTest.php › le collaborateur voit glisser dans l’espace du cabinet la carte de chaque notification arrivée, la ferme, et ouvre la fiche par son bouton',
+            ],
+        ],
+        'paiements.plus-en-retard-une-fois-reglee' => [
+            'puce' => 'Paiements et avoirs',
+            'regle' => 'Réglée ou soldée par un avoir, même après son échéance, une facture n\'est plus dite en retard nulle part (colonne « À faire » de la liste, filtre du statut, « À faire » du tableau de bord, totaux).',
+            'tests' => [
+                'tests/Feature/Filament/FactureEnRetardTest.php::test_une_facture_payee_en_entier_apres_son_echeance_n_est_plus_en_retard',
+                'tests/Feature/Filament/FactureEnRetardTest.php::test_une_facture_soldee_par_un_avoir_apres_son_echeance_n_est_plus_en_retard',
+                'tests/Feature/Filament/FactureEnRetardTest.php::test_un_ticket_paye_a_la_caisse_n_est_pas_en_retard_apres_son_echeance',
+                'tests/Browser/Parcours/RetardEtRelanceDesTicketsTest.php › le responsable lit « En retard » sur la facture échue tant qu’il en reste un montant dû, puis plus une fois réglée, ni sur le ticket payé à la caisse',
             ],
         ],
         'paiements.avoirs-partiels-et-multiples' => [
@@ -3421,6 +3521,7 @@ return [
             'Q1-b' => [
                 'decision' => 'Le PU HT exact, PU TTC ÷ (1 + taux), enregistré avec au plus six décimales, signé, imprimé avec ses décimales utiles ; quantité × PU HT retombe sur le total HT à moins de deux centimes.',
                 'regles' => ['prix.pu-ht-a-six-decimales', 'documents.colonnes-ht-ou-ttc'],
+                'remplacee' => 'Remplacée en partie le 14/11/2026 (DEMO-V-PU-HT-14-11) : le PU HT reste enregistré et signé avec six décimales, celui de la facture électronique, mais il s\'affiche et s\'imprime comme celui d\'un article, PU TTC moins sa TVA arrondie au centime.',
             ],
             'Q5' => [
                 'decision' => 'Le PDF imprime les règlements reçus à l\'émission ; les paiements reçus ensuite restent sur la fiche, avec leur mode.',
@@ -3805,8 +3906,8 @@ return [
             ],
             '2' => [
                 'decision' => 'Tout prix unitaire affiché en lecture, PU HT comme PU TTC, ventes comme achats, s\'affiche arrondi au centime ; un champ de saisie montre la valeur telle qu\'elle est enregistrée.',
-                'regles' => ['prix.pu-ht-a-six-decimales'],
-                'remplacee' => 'Remplacée en partie le 09/11/2026 (CLAUDE.md, « Prix et TVA des ventes » et « Documents de vente ») : sur les documents qui montrent le PU HT (factures, avoirs sur facture et devis à un professionnel, ventes sans TVA française), le PU HT s\'affiche tel qu\'il est enregistré, comme le PU HT d\'un achat ; ailleurs, l\'affichage au centime tient.',
+                'regles' => ['prix.pu-ht-a-six-decimales', 'prix.pu-ht-affiche-d-un-article'],
+                'remplacee' => 'Remplacée en partie le 09/11/2026, puis le 14/11/2026 (DEMO-V-PU-HT-14-11) : le PU HT d\'une vente s\'affiche partout comme celui d\'un article, son PU TTC moins sa TVA arrondie au centime ; un champ de saisie montre toujours la valeur telle qu\'elle est enregistrée, et le PU HT d\'un achat s\'affiche tel que le fournisseur l\'écrit.',
             ],
             '3' => [
                 'decision' => 'La note de calcul des PDF est gardée et explique l\'écart d\'un centime possible entre la quantité × le prix unitaire affiché et le total d\'une ligne.',
@@ -3815,7 +3916,7 @@ return [
             '4' => [
                 'decision' => 'Les puces « Prix et TVA des ventes » et « Documents de vente » de CLAUDE.md disent que le PU HT, enregistré avec six décimales, s\'affiche arrondi au centime, et que la note de calcul l\'explique.',
                 'regles' => ['documents.note-de-calcul', 'documents.colonnes-ht-ou-ttc'],
-                'remplacee' => 'Remplacée en partie le 09/11/2026 : CLAUDE.md dit désormais que les documents qui montrent le PU HT l\'impriment tel qu\'il est enregistré, jusqu\'à six décimales.',
+                'remplacee' => 'Remplacée en partie le 09/11/2026, puis le 14/11/2026 (DEMO-V-PU-HT-14-11) : CLAUDE.md dit désormais que le PU HT d\'une vente s\'affiche partout comme celui d\'un article, PU TTC moins sa TVA arrondie au centime, et que la note de calcul l\'explique.',
             ],
         ],
         'Décision du 01/11/2026 : l\'expert-comptable de la société, déclaré par le SIREN de son cabinet (ec2/decision-expert-comptable-societe.md)' => [
@@ -4251,7 +4352,7 @@ return [
             ],
             'T105-12-11' => [
                 'decision' => 'Le 12/11/2026 vers 13 h UTC : T105 tranchée (a) ; toute question sur un prix ou un montant qui change avec la multiplication ou l\'arrondi va aussi dans l\'onglet professionnel, pour information.',
-                'a_venir' => 'Petit lot T105, après la chaîne en cours et avant la campagne 1 bis.',
+                'remplacee' => 'Remplacée le 14/11/2026 par la décision de l\'éditeur sur le PU HT affiché (DEMO-V-PU-HT-14-11) : la note de calcul dit une seule phrase, quel que soit le nombre d\'articles ; la question d\'un prix qui change avec l\'arrondi va toujours dans l\'onglet professionnel.',
             ],
             'VER-12-11' => [
                 'decision' => 'Le 12/11/2026 vers 14 h 30 UTC : seulement les dernières versions, PHP 8.5 et PostgreSQL 18, en développement, en test, en CI et en production.',
@@ -4272,6 +4373,34 @@ return [
             'SEED-13-11' => [
                 'decision' => 'Le 13/11/2026 vers 08 h 50 UTC : « donne moi la liste de --seed pour voir ici chez moi avec les donnes remplir par --seed » ; vers 09 h UTC, les identifiants pour s\'y connecter : un mot de passe commun facultatif, PILIQI_DEMO_MOT_DE_PASSE, sinon un mot de passe tiré au hasard par compte, affiché à la fin du semis (lot SEED, a-faire-apres-chaine.md).',
                 'regles' => ['hors.donnees-de-demonstration'],
+            ],
+            'DEMO-V-RETARD-14-11' => [
+                'decision' => 'Le 14/11/2026 vers 01 h UTC : « En retard » ne s\'écrit plus sur une facture payée (ticket TK-EPICERIE-2026-000001, payé, vu « En retard » par l\'éditeur) ; seulement tant qu\'un montant reste dû après l\'échéance (lot DEMO-V, a-faire-apres-chaine.md).',
+                'regles' => ['paiements.facture-en-retard', 'paiements.plus-en-retard-une-fois-reglee'],
+            ],
+            'DEMO-V-RELANCE-13-11' => [
+                'decision' => 'Le 13/11/2026 vers 22 h 10 UTC (décision de Claude, D74, montrée à l\'éditeur) : « Relancer » caché sur tout document du client comptoir et refusé par l\'action, même forgée ; « Envoyer par e-mail » et le statut « En retard » restent (lot DEMO-V).',
+                'regles' => ['fiches.client-comptoir-jamais-relance'],
+            ],
+            'DEMO-V-FENETRES-14-11' => [
+                'decision' => 'Le 14/11/2026 vers 03 h 45 UTC, constat de l\'éditeur sur la caisse : « quand il y a beaucoup de produits, les boutons en bas disparaissent […] la partie au-dessus du tableau des produits doit rester intacte » ; même correction pour la fenêtre des clients (lot DEMO-V).',
+                'regles' => ['ecrans.fenetres-de-selection-dans-l-ecran'],
+            ],
+            'DEMO-V-CARTES-14-11' => [
+                'decision' => 'Le 14/11/2026 vers 02 h 20 UTC : « quand une notification arrive en arrière-plan, il faut qu\'elle s\'affiche automatiquement comme une petite notification » ; modèle A choisi (carte qui glisse de la droite, en haut à droite, sous la cloche) ; précisé vers 02 h 40 UTC : « les notifications restent toujours telles qu\'elles sont », la carte ne fait qu\'avertir (lot DEMO-V).',
+                'regles' => ['ecrans.cartes-des-notifications'],
+            ],
+            'DEMO-V-TABLEAUX-13-11' => [
+                'decision' => 'Le 13/11/2026 vers 22 h UTC : « je choisis le D », pour tous les tableaux qui répètent leurs titres dans un cadre par ligne (les 19 listes des fiches), précisé vers 22 h 25 UTC : ce qui est déjà un tableau ne change pas (lot DEMO-V).',
+                'regles' => ['ecrans.tableaux-des-fiches-modele-d'],
+            ],
+            'DEMO-V-PU-HT-14-11' => [
+                'decision' => 'Le 14/11/2026 vers 00 h 35 UTC, précisé vers 02 h 10 UTC (« ce que j\'ai dit c\'est pour 8.32 et toi tu appliques tous les endroits pareil ») : le PU HT affiché d\'une vente est, partout, son PU TTC moins la TVA d\'un article arrondie au centime (9,99 € TTC à 20 % : 8,32 €) ; aucun montant ne change ; la note de calcul le dit en une phrase ; remplace la décision « exact » du 09/11/2026 et T105 (lot DEMO-V).',
+                'regles' => ['prix.pu-ht-affiche-d-un-article', 'documents.note-de-calcul-du-pu-ht-d-un-article'],
+            ],
+            'T115' => [
+                'decision' => 'Le 12/11/2026 vers 00 h 30 UTC, constat de l\'éditeur, puis décision de Claude (D76) : une fois la société validée, la démonstration disparaît de tous les écrans de la société et de ses magasins et plus personne n\'y entre, sans rien effacer (lot DEMO-V).',
+                'regles' => ['verification.demonstration-apres-la-validation'],
             ],
         ],
         'Décisions métier tranchées dans la conversation (historique/DIRECTIVES.md, § 2.1)' => [
@@ -4827,6 +4956,7 @@ return [
             '2.1-138' => [
                 'decision' => 'Message 09/11 vers 23 h 00 UTC (09/11) : « exact, A, oui » (réponses aux trois questions : affichage du PU HT des documents aux professionnels ; couverture des branches ; invitations ouvertes d\'un cabinet suspendu)',
                 'regles' => ['prix.pu-ht-a-six-decimales', 'cabinets.rien-avant-d-etre-verifie-et-actif'],
+                'remplacee' => 'Remplacée en partie le 14/11/2026 (DEMO-V-PU-HT-14-11) : « exact » ne vaut plus que pour le PU HT enregistré ; le PU HT d\'une vente s\'affiche partout comme celui d\'un article. « A » et « oui » tiennent.',
             ],
             '2.1-139' => [
                 'decision' => 'Message 09/11 vers 21 h 05 UTC (09/11) : « pourquoi le niveau est 6 et s’il peut monter au plus strict, 10 pour Larastan et 1 pour Psalm » (vers 20 h 34), puis, après les mesures et la proposition : « oui + Psalm 1 » (un premier envoi, interrompu et remplacé par l’éditeur, ajoutait « mais tu faise ce que tu vois la meilleurs option »)',
@@ -5089,7 +5219,7 @@ return [
             ],
             'T105' => [
                 'decision' => 'Note de calcul sous les lignes des factures : La phrase « à moins de deux centimes près » ne s\'imprimera que si chaque ligne la vérifie ; sinon, une phrase dira qu\'un petit écart est possible, sans changer les montants.',
-                'regles' => ['documents.note-de-calcul-a-moins-de-deux-centimes'],
+                'remplacee' => 'Remplacée le 14/11/2026 par la décision de l\'éditeur (DEMO-V-PU-HT-14-11) : le PU HT affiché est celui d\'un article, et la note de calcul de tout document qui le montre dit, en une seule phrase, que la quantité × ce prix peut différer de quelques centimes du total HT de la ligne (documents.note-de-calcul-du-pu-ht-d-un-article).',
             ],
             'T51.6' => [
                 'decision' => 'Mentions du devis de dépannage à domicile : Un réglage facultatif du magasin, décoché par défaut, ajoutera aux devis à un particulier les mentions du dépannage à domicile : lieu d\'intervention, devis gratuit ou payant, frais de déplacement, pièces remplacées à garder.',
@@ -5862,7 +5992,7 @@ return [
             'P77' => [
                 'decision' => 'PU HT à six décimales sur les factures : PILIQI imprime déjà le PU HT tel qu\'il est enregistré, jusqu\'à six décimales, sur les factures, avoirs sur facture et devis à un professionnel et sur les ventes sans TVA française ; les montants restent au centime.',
                 'regles' => ['prix.pu-ht-a-six-decimales', 'documents.colonnes-ht-ou-ttc'],
-                'a_venir' => 'Étape 2 (intégration SUPER PDP) : facture électronique essayée avec le PU HT à six décimales (T90.2-prestataire-1).',
+                'remplacee' => 'Remplacée en partie le 14/11/2026 par la décision de l\'éditeur (DEMO-V-PU-HT-14-11) : le PU HT imprimé est celui d\'un article, PU TTC moins sa TVA arrondie au centime ; le PU HT à six décimales reste enregistré et signé, celui de la facture électronique, essayée à l\'étape 2 (intégration SUPER PDP, T90.2-prestataire-1).',
             ],
             'P78' => [
                 'decision' => 'Répartition du HT entre les lignes d\'une facture : PILIQI calcule déjà le HT de chaque taux une fois, puis le répartit sur les lignes par cumul : deux lignes de 25,00 € TTC à 20 % reçoivent 20,83 € et 20,84 € HT.',

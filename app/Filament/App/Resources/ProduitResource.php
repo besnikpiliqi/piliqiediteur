@@ -217,16 +217,15 @@ class ProduitResource extends Resource
 
         try {
             $prixUnitaireTtc = SaisieDecimale::enCentiemes($get('prix_vente_ttc'));
-            $prixUnitaireHt = $calculateur->prixUnitaireHtDepuisTtc($prixUnitaireTtc, $tauxTva);
+            $prixUnitaireHt = $calculateur->prixUnitaireHtAffiche($prixUnitaireTtc, $tauxTva);
         } catch (InvalidArgumentException) {
             return null;
         }
 
-        // Le prix HT s'écrit comme tout prix unitaire montré en lecture
-        // (voir CalculateurLigne::prixUnitaireAffiche()), la TVA qu'il
-        // laisse sur un article comme un montant.
-        return 'Soit '.$calculateur->prixUnitaireAffiche($calculateur->enMillioniemes($calculateur->enDecimal($prixUnitaireHt))).' HT + '
-            .$calculateur->enEuros($prixUnitaireTtc - $prixUnitaireHt).' de TVA';
+        // Le PU HT d'un article, comme partout (voir
+        // CalculateurLigne::prixUnitaireHtAffiche()), et la TVA d'un
+        // article : 9,99 € TTC à 20 % font 8,32 € HT + 1,67 € de TVA.
+        return 'Soit '.$calculateur->enEuros($prixUnitaireHt).' HT + '.$calculateur->enEuros($prixUnitaireTtc - $prixUnitaireHt).' de TVA';
     }
 
     /**

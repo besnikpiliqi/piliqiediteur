@@ -221,6 +221,7 @@ class User extends Authenticatable implements FilamentUser, HasTenants
             'signaler_le_prochain_mot_de_passe' => 'boolean',
             'premiere_connexion_le' => Instant::class,
             'derniere_connexion_le' => Instant::class,
+            'cartes_montrees_jusqu_au' => Instant::class,
             'acces_redonne_le' => Instant::class,
             'acces_redonne_mode' => ModeDAccesRedonne::class,
             'nouvelle_adresse_expire_le' => Instant::class,
@@ -1048,7 +1049,10 @@ class User extends Authenticatable implements FilamentUser, HasTenants
      * attente lui ouvre ; tout autre compte, un magasin de sa
      * société : le propriétaire ouvre tous ceux de sa société ; tout autre
      * compte, ceux où une affectation lui donne des droits (voir
-     * affectationQuiVautDans()).
+     * affectationQuiVautDans()). Une fois sa société validée, plus personne
+     * n'ouvre son magasin de démonstration, qui disparaît de tous les
+     * écrans, ses données restant en base (T115, lot DEMO-V) : son adresse
+     * mène à une page introuvable.
      */
     public function peutOuvrir(Magasin $magasin): bool
     {
@@ -1062,7 +1066,7 @@ class User extends Authenticatable implements FilamentUser, HasTenants
                 && in_array(CleDuModele::de($magasin), $this->magasinsOuverts ??= app(AccesDesCabinets::class)->idsDesMagasinsOuverts($this), true);
         }
 
-        if ($magasin->societe_id !== $this->societe_id || ! $this->peutAgir()) {
+        if ($magasin->societe_id !== $this->societe_id || ! $this->peutAgir() || ($magasin->est_demonstration && $this->societe->estValidee())) {
             return false;
         }
 
@@ -1081,7 +1085,8 @@ class User extends Authenticatable implements FilamentUser, HasTenants
      * clients que son cabinet lui ouvre, par dénomination du client puis
      * nom du magasin (voir AccesDesCabinets::magasinsOuverts()) ; pour un
      * expert-comptable de la société, les magasins réels que sa déclaration
-     * lui ouvre, par nom.
+     * lui ouvre, par nom. Le magasin de démonstration d'une société validée
+     * n'y est jamais (T115).
      *
      * @return Collection<int, Magasin>
      */
@@ -1105,6 +1110,10 @@ class User extends Authenticatable implements FilamentUser, HasTenants
             $magasins->whereIn('id', $this->affectations()->whereNotNull('role')->whereNotNull('magasin_id')->select('magasin_id'));
         } elseif ($this->estAdministrateur()) {
             $magasins->whereIn('id', $this->magasinsDeSaPortee()->select('magasins.id'));
+        }
+
+        if ($this->societe->estValidee()) {
+            $magasins->where('est_demonstration', false);
         }
 
         return $magasins->orderBy('est_demonstration')->orderBy('nom')->orderBy('id')->get();

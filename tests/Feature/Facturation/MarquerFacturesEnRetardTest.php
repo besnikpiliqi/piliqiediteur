@@ -12,6 +12,7 @@ use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Notifications\FacturesPasseesEnRetard;
+use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
@@ -200,6 +201,53 @@ class MarquerFacturesEnRetardTest extends TestCase
         $notificationDeB = $proprietaireB->notifications()->sole();
         $this->assertSame('Boutique B : 1 facture passée en retard', $notificationDeB->data['title']);
         $this->assertSame("Échéance dépassée sans règlement complet : {$factureB->numero}.", $notificationDeB->data['body']);
+    }
+
+    /**
+     * T115 (lot DEMO-V) : une facture du magasin de démonstration passe en
+     * retard comme toute autre et l'est annoncé tant que la société attend
+     * son code ; une fois la société validée, la démonstration n'apparaît
+     * plus nulle part, pas même dans la cloche : sa facture passe encore en
+     * retard, ses données restant, sans que rien n'en soit annoncé.
+     */
+    public function test_une_facture_de_la_demonstration_ne_s_annonce_plus_une_fois_la_societe_validee(): void
+    {
+        $this->travelTo(self::aParis('2026-10-01 10:00:00'));
+        $societe = $this->inscrireUneSociete();
+        $demonstration = app(OuvrirLaDemonstrationAction::class)->handle($societe->proprietaire()->firstOrFail(), $societe);
+        $this->facturerDansLaDemonstration($demonstration, 0);
+        $apresLaValidation = $this->facturerDansLaDemonstration($demonstration, 10);
+        $this->travelTo(self::aParis('2026-10-06 10:00:00'));
+
+        $this->artisan('app:marquer-factures-en-retard')->assertSuccessful();
+        $this->assertSame(1, $societe->proprietaire()->firstOrFail()->notifications()->where('type', FacturesPasseesEnRetard::class)->count());
+
+        $proprietaire = $this->saisirLeCodeDuCourrier($societe->fresh() ?? $societe);
+        $this->assertSame(0, $proprietaire->notifications()->where('type', FacturesPasseesEnRetard::class)->count());
+        $this->travelTo(self::aParis('2026-10-20 10:00:00'));
+
+        $this->artisan('app:marquer-factures-en-retard')->assertSuccessful();
+
+        app(TenantContext::class)->set($demonstration);
+        $this->assertSame(StatutFacture::EnRetard, $apresLaValidation->fresh()?->statut);
+        $this->assertSame(0, $proprietaire->notifications()->where('type', FacturesPasseesEnRetard::class)->count());
+    }
+
+    /**
+     * Un ticket de 120,00 € TTC émis maintenant dans le magasin de
+     * démonstration, par son responsable de test, à un client au délai de
+     * paiement donné.
+     */
+    private function facturerDansLaDemonstration(Magasin $demonstration, int $delaiDuClient): Facture
+    {
+        app(TenantContext::class)->set($demonstration);
+        $responsable = self::responsableDeTest($demonstration);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 120, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $facture = app(CreerFactureAction::class)->handle($responsable, Client::factory()->create(['delai_paiement_jours' => $delaiDuClient]), [
+            ['produit_id' => $produit->id, 'quantite' => 1],
+        ]);
+
+        return app(EmettreFactureAction::class)->handle($responsable, $facture);
     }
 
     public function test_aucune_notification_quand_aucune_facture_ne_passe_en_retard(): void

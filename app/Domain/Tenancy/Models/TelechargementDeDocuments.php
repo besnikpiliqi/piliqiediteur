@@ -133,17 +133,26 @@ class TelechargementDeDocuments extends Model
      * sept jours, les plus récents d'abord, dix au plus : ceux que montre
      * la page « Télécharger les documents ». Une lecture filtrée par la
      * société et par le compte, quelle que soit la société active (un
-     * compte d'un cabinet les demande pour un client).
+     * compte d'un cabinet les demande pour un client). Une fois la société
+     * validée, ceux qui portent sur son magasin de démonstration n'y sont
+     * plus (T115, lot DEMO-V) : avant la validation, aucun magasin réel ne
+     * se télécharge, et après, la démonstration ne se télécharge plus (voir
+     * DocumentsDeLaPeriode::peutTelechargerDans()) ; une demande qui la
+     * nomme ne porte donc que sur elle. Elle reste en base jusqu'à son
+     * effacement planifié.
      *
      * @return Builder<static>
      */
     public static function recentsDe(User $compte, Societe $societe): Builder
     {
+        $demonstration = $societe->estValidee() ? $societe->demonstration()->value('id') : null;
+
         return static::query()
             ->withoutGlobalScope(SocieteScope::class)
             ->where('societe_id', $societe->getKey())
             ->where('demande_par', $compte->getKey())
             ->where('expire_le', '>', now())
+            ->when($demonstration !== null, fn (Builder $telechargements): Builder => $telechargements->whereJsonDoesntContain('magasins', $demonstration))
             ->orderByDesc('id')
             ->limit(10);
     }

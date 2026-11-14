@@ -181,6 +181,9 @@ class SelecteurDeProduits extends Component implements HasForms, HasTable
             ])
             ->searchPlaceholder('Nom, référence ou code-barres')
             ->emptyStateHeading('Aucun produit ne correspond.')
+            // « Voir 50 de plus » au bout du tableau, qui défile seul dans
+            // la fenêtre.
+            ->contentFooter(fn (): ?View => $this->resteDAutresProduits() ? view('filament.app.livewire.voir-plus-de-produits') : null)
             ->columns([
                 TextColumn::make('choisi')
                     ->label('')

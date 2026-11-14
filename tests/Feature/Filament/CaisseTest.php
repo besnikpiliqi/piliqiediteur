@@ -566,14 +566,15 @@ class CaisseTest extends TestCase
     }
 
     /**
-     * À la caisse, tout prix unitaire de vente montré en lecture reste au
-     * centime, même pour un client professionnel, dont la facture
-     * imprimera son PU HT tel qu'il est enregistré (décision de l'éditeur
-     * du 09/11/2026) : le champ du PU HT de 4 écrans à 65,00 € TTC à 20 %,
-     * ajoutés avant le choix du client, montre 54.17, et celui de 3 câbles
-     * à 9,99 € TTC, ajoutés après, 8.33 (8,325 €).
+     * À la caisse, le PU HT montré est, pour tout client, celui d'un
+     * article, son PU TTC moins sa TVA arrondie au centime, le même que sur
+     * la facture (décision de l'éditeur du 14/11/2026) : le champ du PU HT
+     * de 4 écrans à 65,00 € TTC à 20 %, ajoutés avant le choix d'un client
+     * professionnel, montre 54.17 (65,00 - 10,83), et celui de 3 câbles à
+     * 9,99 € TTC, ajoutés après, 8.32 (9,99 - 1,67), jamais 8.33 ; les
+     * totaux restent ceux du calcul de la vente.
      */
-    public function test_a_la_caisse_le_pu_ht_reste_au_centime_meme_pour_un_professionnel(): void
+    public function test_a_la_caisse_le_pu_ht_est_celui_d_un_article_pour_tout_client(): void
     {
         $this->ouvrirLaCaisseDUnMagasin();
         $professionnel = Client::factory()->professionnel()->create();
@@ -585,7 +586,7 @@ class CaisseTest extends TestCase
             ->set('data.client_id', $professionnel->id)
             ->call('recevoirLesProduitsChoisis', [['produit_id' => $cable->id, 'quantite' => 3]]);
 
-        $this->assertSame(['54.17', '8.33'], array_values(array_column($caisse->get('data.lignes'), 'prix_unitaire_ht')));
+        $this->assertSame(['54.17', '8.32'], array_values(array_column($caisse->get('data.lignes'), 'prix_unitaire_ht')));
         $caisse->assertSee('Total HT 241,64 € · TVA 48,33 € · Total TTC 289,97 €');
     }
 

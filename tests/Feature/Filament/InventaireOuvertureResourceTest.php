@@ -181,7 +181,9 @@ class InventaireOuvertureResourceTest extends TestCase
      * stock, qu'il ne reçoit que son coût de départ. Le coût unitaire
      * s'écrit comme tout prix unitaire montré en lecture (voir
      * CalculateurLigne::prixUnitaireAffiche()), la valeur du stock comme
-     * un montant.
+     * un montant ; une valeur nulle s'écrit « – » et garde son aide
+     * (modèle D des tableaux des fiches, choisi par l'éditeur le
+     * 13/11/2026).
      */
     public function test_la_fiche_dit_qu_un_produit_qui_ne_suit_pas_son_stock_ne_recoit_que_son_cout(): void
     {
@@ -195,7 +197,7 @@ class InventaireOuvertureResourceTest extends TestCase
 
         $fiche->assertSeeInOrder([
             'Valeur du stock HT', "15,00\u{00A0}€",
-            'Carnet A5', '2,00 €', "0,00\u{00A0}€", InventaireOuvertureResource::AIDE_SANS_SUIVI_DU_STOCK,
+            'Carnet A5', '2,00 €', '–', InventaireOuvertureResource::AIDE_SANS_SUIVI_DU_STOCK,
             'Stylo bleu', '0,30 €', "15,00\u{00A0}€",
         ]);
         $this->assertSame(1, substr_count($fiche->html(), e(InventaireOuvertureResource::AIDE_SANS_SUIVI_DU_STOCK)));

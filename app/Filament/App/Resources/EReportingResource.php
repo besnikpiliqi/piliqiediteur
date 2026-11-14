@@ -12,7 +12,7 @@ use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Filament\App\FicheDUnDocument;
 use App\Filament\App\Resources\EReportingResource\Pages;
-use Filament\Infolists\Components\RepeatableEntry;
+use App\Filament\TableauEntry;
 use Filament\Infolists\Components\Section as InfolistSection;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Infolists\Infolist;
@@ -124,18 +124,17 @@ class EReportingResource extends Resource
                     ->state('Rien à déclarer pour cette journée.')
                     ->visible(fn (ClotureCaisse $record): bool => ! self::apercu($record)->demonstration && ! self::apercu($record)->aDeclarer())
                     ->columnSpanFull(),
-                RepeatableEntry::make('ereporting_transactions')
+                TableauEntry::make('ereporting_transactions')
                     ->label('Totaux journaliers')
                     ->state(fn (ClotureCaisse $record): array => self::transactions(self::apercu($record)))
                     ->schema([
                         TextEntry::make('date')->label('Date'),
                         TextEntry::make('categorie')->label('Catégorie'),
-                        TextEntry::make('taux')->label('Taux'),
-                        TextEntry::make('ht')->label('Base HT'),
-                        TextEntry::make('tva')->label('TVA'),
+                        TextEntry::make('taux')->label('Taux')->alignEnd(),
+                        TextEntry::make('ht')->label('Base HT')->alignEnd(),
+                        TextEntry::make('tva')->label('TVA')->alignEnd(),
                         TextEntry::make('motif')->label('Motif')->placeholder('—'),
                     ])
-                    ->columns(6)
                     ->visible(fn (ClotureCaisse $record): bool => self::apercu($record)->transactions !== [])
                     ->columnSpanFull(),
                 TextEntry::make('ereporting_total')
@@ -152,7 +151,7 @@ class EReportingResource extends Resource
                     ->state(EReportingDesParticuliers::MENTION_ENCAISSEMENTS)
                     ->visible(fn (ClotureCaisse $record): bool => self::apercu($record)->encaissementsDeServices !== [])
                     ->columnSpanFull(),
-                RepeatableEntry::make('ereporting_encaissements')
+                TableauEntry::make('ereporting_encaissements')
                     ->hiddenLabel()
                     ->state(fn (ClotureCaisse $record): array => array_map(fn (array $encaissement): array => [
                         'date' => self::date($encaissement['date']),
@@ -161,10 +160,9 @@ class EReportingResource extends Resource
                     ], self::apercu($record)->encaissementsDeServices))
                     ->schema([
                         TextEntry::make('date')->label('Date d\'encaissement'),
-                        TextEntry::make('taux')->label('Taux'),
-                        TextEntry::make('montant')->label('Montant encaissé'),
+                        TextEntry::make('taux')->label('Taux')->alignEnd(),
+                        TextEntry::make('montant')->label('Montant encaissé')->alignEnd(),
                     ])
-                    ->columns(3)
                     ->visible(fn (ClotureCaisse $record): bool => self::apercu($record)->encaissementsDeServices !== [])
                     ->columnSpanFull(),
                 TextEntry::make('ereporting_statut')

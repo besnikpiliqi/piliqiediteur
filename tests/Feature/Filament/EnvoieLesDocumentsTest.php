@@ -253,6 +253,34 @@ class EnvoieLesDocumentsTest extends TestCase
             ->assertSee("Relance n°2 : Ticket de caisse {$facture->numero}");
     }
 
+    /**
+     * Lot DEMO-V : le client comptoir est anonyme, personne n'y est à
+     * relancer. Sur un ticket du client comptoir échu et resté dû,
+     * « Relancer » est caché sur la liste comme sur la fiche ; « Envoyer
+     * par e-mail » reste, pour un ticket donné par e-mail au client
+     * présent. Sur le ticket échu d'un client nommé avec une adresse, il
+     * reste visible.
+     */
+    public function test_un_ticket_du_client_comptoir_ne_propose_pas_de_relancer(): void
+    {
+        $this->travelTo(self::aParis('2026-10-01 10:00:00'));
+        $this->connecterLeProprietaire();
+        $duComptoir = $this->emettreFacture(Client::query()->where('est_comptoir', true)->sole());
+        $duClientNomme = $this->emettreFacture(Client::factory()->create(['nom' => 'Lucie Martin', 'email' => 'lucie@exemple.fr']));
+        $this->travelTo(self::aParis('2026-11-02 10:00:00'));
+        $this->assertTrue($duComptoir->fresh()?->estEchueEtImpayee());
+
+        Livewire::test(ListFactures::class)
+            ->assertTableActionHidden('relancer', $duComptoir)
+            ->assertTableActionVisible('envoyer_par_email', $duComptoir)
+            ->assertTableActionVisible('relancer', $duClientNomme);
+        Livewire::test(ViewFacture::class, ['record' => $duComptoir->getRouteKey()])
+            ->assertActionHidden('relancer')
+            ->assertActionVisible('envoyer_par_email');
+        Livewire::test(ViewFacture::class, ['record' => $duClientNomme->getRouteKey()])
+            ->assertActionVisible('relancer');
+    }
+
     public function test_une_facture_pas_encore_echue_ne_se_relance_pas(): void
     {
         $this->travelTo(self::aParis('2026-10-15 10:00:00'));

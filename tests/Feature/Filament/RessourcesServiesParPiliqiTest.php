@@ -55,6 +55,30 @@ class RessourcesServiesParPiliqiTest extends TestCase
     }
 
     /**
+     * La feuille écrite à la main des tableaux des fiches, au modèle D
+     * (lot DEMO-V), se sert de même dans chaque panneau, publiée telle
+     * qu'elle est dans le dépôt.
+     */
+    #[DataProvider('pagesDeConnexion')]
+    public function test_chaque_panneau_sert_la_feuille_des_tableaux_publiee_telle_quelle(string $page): void
+    {
+        $this->get($page)->assertOk()->assertSee('css/app/tableaux.css', false);
+        $this->assertFileEquals(resource_path('css/tableaux.css'), public_path('css/app/tableaux.css'));
+    }
+
+    /**
+     * La feuille écrite à la main des fenêtres de sélection en plein écran
+     * (lot DEMO-V) se sert de même dans chaque panneau, publiée telle
+     * qu'elle est dans le dépôt.
+     */
+    #[DataProvider('pagesDeConnexion')]
+    public function test_chaque_panneau_sert_la_feuille_des_fenetres_de_selection_publiee_telle_quelle(string $page): void
+    {
+        $this->get($page)->assertOk()->assertSee('css/app/fenetres-de-selection.css', false);
+        $this->assertFileEquals(resource_path('css/fenetres-de-selection.css'), public_path('css/app/fenetres-de-selection.css'));
+    }
+
+    /**
      * @return array<string, array{0: string, 1: string}>
      */
     public static function noms(): array

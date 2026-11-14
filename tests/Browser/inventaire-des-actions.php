@@ -33,7 +33,9 @@
 
 return [
     'app/Domain/Cabinets/Notifications/AvisDuCabinet.php' => [
-        'action:voir' => ['lot' => 'NAV-5', 'tests' => []],
+        'action:voir' => ['lot' => 'NAV-5', 'tests' => [
+            'tests/Browser/Parcours/CartesDesNotificationsTest.php › le collaborateur voit glisser dans l’espace du cabinet la carte de chaque notification arrivée, la ferme, et ouvre la fiche par son bouton',
+        ]],
     ],
     'app/Domain/Facturation/Notifications/ReponseDuClientAuDevis.php' => [
         'action:voir' => ['lot' => 'NAV-2', 'tests' => [
@@ -56,7 +58,11 @@ return [
         'action:voir' => ['lot' => 'NAV-3', 'tests' => []],
     ],
     'app/Domain/Tenancy/Notifications/AvisDeLEquipe.php' => [
-        'action:voir' => ['lot' => 'NAV-4', 'tests' => []],
+        'action:voir' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Parcours/CartesDesNotificationsTest.php › le vendeur voit glisser la carte de chaque notification arrivée, la ferme, et ouvre la fiche par son bouton',
+            'tests/Browser/Parcours/CartesDesNotificationsTest.php › la responsable voit glisser la carte de chaque notification arrivée, la ferme, et ouvre la fiche par son bouton',
+            'tests/Browser/Parcours/CartesDesNotificationsTest.php › la propriétaire voit glisser dans l’espace de la société la carte de chaque notification arrivée, la ferme, et ouvre la fiche par son bouton',
+        ]],
     ],
     'app/Domain/Tenancy/Notifications/AvisDeVerification.php' => [
         'action:voir' => ['lot' => 'NAV-4', 'tests' => []],
@@ -421,7 +427,7 @@ return [
             'tests/Browser/Parcours/EnvoiParEMailTest.php › chaque compte qui envoie un document lit, depuis sa liste comme depuis sa fiche, que l’envoi est demandé, puis son résultat dans « Envois », relu sans rechargement',
         ]],
         'action:telecharger_pdf' => ['lot' => 'NAV-2', 'tests' => [
-            'tests/Browser/Parcours/PuHtExactTest.php › le responsable lit le PU HT tel qu’il est enregistré et la note de calcul d’un retour sur la fiche et sur le PDF d’un avoir sur une facture à un professionnel',
+            'tests/Browser/Parcours/PuHtAfficheTest.php › le responsable lit le PU HT d’un article et la note de calcul d’un retour sur la fiche et sur le PDF d’un avoir sur une facture à un professionnel',
         ]],
         'page' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action du magasin sans erreur',
@@ -430,11 +436,12 @@ return [
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le collaborateur du cabinet lié ouvre chaque page et chaque action du magasin de son client sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le propriétaire du cabinet lié ouvre chaque page et chaque action du magasin de son client sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
-            'tests/Browser/Parcours/PuHtExactTest.php › le responsable lit le PU HT tel qu’il est enregistré et la note de calcul d’un retour sur la fiche et sur le PDF d’un avoir sur une facture à un professionnel',
+            'tests/Browser/Parcours/PuHtAfficheTest.php › le responsable lit le PU HT d’un article et la note de calcul d’un retour sur la fiche et sur le PDF d’un avoir sur une facture à un professionnel',
         ]],
     ],
     'app/Filament/App/Resources/ClientResource.php' => [
         'action:chercherUnClient' => ['lot' => 'NAV-3', 'tests' => [
+            'tests/Browser/Parcours/FenetresDeSelectionTest.php › avec 80 clients, la fenêtre « Chercher un client » de la caisse garde sa recherche et sa pagination visibles, et seul le tableau défile',
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur autorisé à vendre ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur sans la vente ouvre chaque page et chaque action du magasin sans erreur',
@@ -660,6 +667,7 @@ return [
     ],
     'app/Filament/App/Resources/ClotureCaisseResource/Pages/ViewClotureCaisse.php' => [
         'page' => ['lot' => 'NAV-2', 'tests' => [
+            'tests/Browser/Parcours/TableauxDesFichesTest.php › le responsable lit les encaissements de la clôture en un seul tableau au modèle D, qui défile de côté sur un téléphone',
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur autorisé à vendre ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur sans la vente ouvre chaque page et chaque action du magasin sans erreur',
@@ -743,7 +751,7 @@ return [
         'champ:client_id' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur sans la vente ouvre chaque page et chaque action du magasin sans erreur',
-            'tests/Browser/Parcours/PuHtExactTest.php › le propriétaire change le client d’un devis, et le PU HT des lignes suit',
+            'tests/Browser/Parcours/PuHtAfficheTest.php › le propriétaire change le client d’un devis, et le PU HT des lignes reste celui d’un article',
         ]],
         'filtre:statut' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action du magasin sans erreur',
@@ -804,7 +812,7 @@ return [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur sans la vente ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le vendeur ouvre chaque page et chaque action du magasin sans erreur',
-            'tests/Browser/Parcours/PuHtExactTest.php › le propriétaire change le client d’un devis, et le PU HT des lignes suit',
+            'tests/Browser/Parcours/PuHtAfficheTest.php › le propriétaire change le client d’un devis, et le PU HT des lignes reste celui d’un article',
         ]],
     ],
     'app/Filament/App/Resources/DevisResource/Pages/ListDevis.php' => [
@@ -844,7 +852,7 @@ return [
             'tests/Browser/Parcours/EnvoiParEMailTest.php › chaque compte qui envoie un document lit, depuis sa liste comme depuis sa fiche, que l’envoi est demandé, puis son résultat dans « Envois », relu sans rechargement',
         ]],
         'action:telecharger_pdf' => ['lot' => 'NAV-2', 'tests' => [
-            'tests/Browser/Parcours/PuHtExactTest.php › le propriétaire lit le PU HT tel qu’il est enregistré et la note de calcul sur la fiche et sur le PDF d’un devis envoyé à un professionnel',
+            'tests/Browser/Parcours/PuHtAfficheTest.php › le propriétaire lit le PU HT d’un article et la note de calcul sur la fiche et sur le PDF d’un devis envoyé à un professionnel',
         ]],
         'page' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action du magasin sans erreur',
@@ -855,7 +863,7 @@ return [
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le vendeur ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › l’observateur ouvre chaque page et chaque action du magasin sans erreur',
-            'tests/Browser/Parcours/PuHtExactTest.php › le propriétaire lit le PU HT tel qu’il est enregistré et la note de calcul sur la fiche et sur le PDF d’un devis envoyé à un professionnel',
+            'tests/Browser/Parcours/PuHtAfficheTest.php › le propriétaire lit le PU HT d’un article et la note de calcul sur la fiche et sur le PDF d’un devis envoyé à un professionnel',
         ]],
         'action:convertir' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Parcours/ReponseAuDevisEnLigneTest.php › le responsable transforme un devis accepté depuis sa fiche et arrive sur la facture brouillon, qui dit d’où elle vient et mène au devis',
@@ -1287,6 +1295,7 @@ return [
         ]],
         'action:relancer' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Parcours/EnvoiParEMailTest.php › chaque compte qui relance une facture échue lit, depuis la liste comme depuis sa fiche, que la relance est demandée, puis son résultat dans « Envois », relu sans rechargement',
+            'tests/Browser/Parcours/RetardEtRelanceDesTicketsTest.php › ni le responsable ni le vendeur ne trouvent « Relancer » sur un ticket du client comptoir échu et resté dû, ni sur la liste ni sur sa fiche, quand ils le trouvent sur la facture échue d’un client nommé',
         ]],
         'action:retourner_ce_produit' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action du magasin sans erreur',
@@ -1306,7 +1315,7 @@ return [
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le collaborateur du cabinet lié ouvre chaque page et chaque action du magasin de son client sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le propriétaire du cabinet lié ouvre chaque page et chaque action du magasin de son client sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
-            'tests/Browser/Parcours/PuHtExactTest.php › le responsable lit le PU HT tel qu’il est enregistré sur la fiche et sur le PDF d’une facture à un professionnel, et au centime sur la fiche d’un ticket',
+            'tests/Browser/Parcours/PuHtAfficheTest.php › le responsable lit le PU HT d’un article, 8,32 € pour un savon à 9,99 €, sur la fiche et sur le PDF d’une facture à un professionnel, et sur la fiche d’un ticket',
         ]],
         'action:view' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action du magasin sans erreur',
@@ -1318,7 +1327,7 @@ return [
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le vendeur ouvre chaque page et chaque action du magasin sans erreur',
         ]],
         'champ:client_id' => ['lot' => 'NAV-2', 'tests' => [
-            'tests/Browser/Parcours/PuHtExactTest.php › le vendeur change le client de son brouillon, et le PU HT des lignes suit : tel qu’il est enregistré pour un professionnel, au centime pour un particulier',
+            'tests/Browser/Parcours/PuHtAfficheTest.php › le vendeur change le client de son brouillon, et le PU HT des lignes reste celui d’un article, pour un professionnel comme pour un particulier',
         ]],
         'filtre:a_encaisser' => ['lot' => 'NAV-2', 'tests' => []],
         'filtre:preuves_a_fournir' => ['lot' => 'NAV-2', 'tests' => []],
@@ -1394,8 +1403,8 @@ return [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur autorisé à vendre ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le vendeur ouvre chaque page et chaque action du magasin sans erreur',
-            'tests/Browser/Parcours/PuHtExactTest.php › le responsable fait sortir de la TVA française la vente d’un particulier, et le PU HT des lignes se montre tel qu’il sera enregistré',
-            'tests/Browser/Parcours/PuHtExactTest.php › le vendeur change le client de son brouillon, et le PU HT des lignes suit : tel qu’il est enregistré pour un professionnel, au centime pour un particulier',
+            'tests/Browser/Parcours/PuHtAfficheTest.php › le responsable fait sortir de la TVA française la vente d’un particulier, et le PU HT des lignes reste celui d’un article',
+            'tests/Browser/Parcours/PuHtAfficheTest.php › le vendeur change le client de son brouillon, et le PU HT des lignes reste celui d’un article, pour un professionnel comme pour un particulier',
         ]],
     ],
     'app/Filament/App/Resources/FactureResource/Pages/ListFactures.php' => [
@@ -1419,6 +1428,7 @@ return [
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le vendeur ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › l’observateur ouvre chaque page et chaque action du magasin sans erreur',
+            'tests/Browser/Parcours/RetardEtRelanceDesTicketsTest.php › le responsable lit « En retard » sur la facture échue tant qu’il en reste un montant dû, puis plus une fois réglée, ni sur le ticket payé à la caisse',
         ]],
     ],
     'app/Filament/App/Resources/FactureResource/Pages/ViewFacture.php' => [
@@ -1486,6 +1496,7 @@ return [
         ]],
         'action:relancer' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Parcours/EnvoiParEMailTest.php › chaque compte qui relance une facture échue lit, depuis la liste comme depuis sa fiche, que la relance est demandée, puis son résultat dans « Envois », relu sans rechargement',
+            'tests/Browser/Parcours/RetardEtRelanceDesTicketsTest.php › ni le responsable ni le vendeur ne trouvent « Relancer » sur un ticket du client comptoir échu et resté dû, ni sur la liste ni sur sa fiche, quand ils le trouvent sur la facture échue d’un client nommé',
         ]],
         'action:relancerLaTransmission' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Parcours/TransmissionALaPlateformeTest.php › le propriétaire relance la transmission d’une facture que la plateforme n’a pas reçue, et elle est acceptée',
@@ -1511,11 +1522,11 @@ return [
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le vendeur ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Parcours/ProprietaireEnDemonstrationTest.php › le propriétaire fait une facture dans la démonstration, l’émet et l’encaisse depuis sa fiche',
-            'tests/Browser/Parcours/PuHtExactTest.php › le collaborateur du cabinet lié lit le PU HT tel qu’il est enregistré sur la fiche d’une facture de son client à un professionnel',
-            'tests/Browser/Parcours/PuHtExactTest.php › le propriétaire lit le PU HT tel qu’il est enregistré sur la fiche d’une facture à un professionnel',
-            'tests/Browser/Parcours/PuHtExactTest.php › le responsable lit le PU HT tel qu’il est enregistré sur la fiche et sur le PDF d’une facture à un professionnel, et au centime sur la fiche d’un ticket',
-            'tests/Browser/Parcours/PuHtExactTest.php › le vendeur lit le PU HT tel qu’il est enregistré sur la fiche de sa facture à un professionnel',
-            'tests/Browser/Parcours/PuHtExactTest.php › l’administrateur lit le PU HT tel qu’il est enregistré sur la fiche d’une facture à un professionnel',
+            'tests/Browser/Parcours/PuHtAfficheTest.php › le collaborateur du cabinet lié lit le PU HT d’un article sur la fiche d’une facture de son client à un professionnel',
+            'tests/Browser/Parcours/PuHtAfficheTest.php › le propriétaire lit le PU HT d’un article sur la fiche d’une facture à un professionnel',
+            'tests/Browser/Parcours/PuHtAfficheTest.php › le responsable lit le PU HT d’un article, 8,32 € pour un savon à 9,99 €, sur la fiche et sur le PDF d’une facture à un professionnel, et sur la fiche d’un ticket',
+            'tests/Browser/Parcours/PuHtAfficheTest.php › le vendeur lit le PU HT d’un article sur la fiche de sa facture à un professionnel',
+            'tests/Browser/Parcours/PuHtAfficheTest.php › l’administrateur lit le PU HT d’un article sur la fiche d’une facture à un professionnel',
             'tests/Browser/Parcours/VentesDeBoutEnBoutTest.php › le responsable fait un devis puis une facture avec la loupe des clients et « Ajouter un produit », l’émet, l’encaisse et la crédite par un avoir',
         ]],
     ],
@@ -2191,6 +2202,8 @@ return [
     ],
     'app/Filament/Concerns/AjouteDesLignesDeVente.php' => [
         'action:ajouterUnProduit' => ['lot' => 'NAV-2', 'tests' => [
+            'tests/Browser/Parcours/FenetresDeSelectionTest.php › avec 80 produits, la fenêtre « Ajouter des produits » de la caisse garde son haut et son bas visibles, et seul le tableau défile',
+            'tests/Browser/Parcours/FenetresDeSelectionTest.php › avec 30 produits choisis, la liste des choisis défile et le bouton « Ajouter les 30 produits » reste visible',
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur autorisé à vendre ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le propriétaire d’une société qui attend son code ouvre chaque page et chaque action du magasin de démonstration sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le responsable d’entraînement ouvre chaque page et chaque action du magasin de démonstration sans erreur',
@@ -2285,7 +2298,7 @@ return [
     ],
     'app/Filament/Concerns/ChoisitLaNatureDeLOperation.php' => [
         'champ:nature_operation' => ['lot' => 'NAV-2', 'tests' => [
-            'tests/Browser/Parcours/PuHtExactTest.php › le responsable fait sortir de la TVA française la vente d’un particulier, et le PU HT des lignes se montre tel qu’il sera enregistré',
+            'tests/Browser/Parcours/PuHtAfficheTest.php › le responsable fait sortir de la TVA française la vente d’un particulier, et le PU HT des lignes reste celui d’un article',
         ]],
     ],
     'app/Filament/Concerns/GereLesComptes.php' => [
@@ -2450,6 +2463,7 @@ return [
             'tests/Browser/Parcours/OuvrirLaDemonstrationTest.php › l’administrateur rouvre le magasin de démonstration fermé faute d’opération, dont la fenêtre dit qu’il n’y vend que si la vente lui est cochée',
         ]],
         'page' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Parcours/DemonstrationApresLaValidationTest.php › une fois la société validée, le propriétaire et l’administrateur ne voient plus la démonstration et son adresse est introuvable',
             'tests/Browser/Balayage/BalayageDeLEspaceDeLaSocieteTest.php › le propriétaire d’une société qui attend son code ouvre chaque page et chaque action de l’espace de sa société sans erreur',
             'tests/Browser/Balayage/BalayageDeLEspaceDeLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action de l’espace de sa société sans erreur',
             'tests/Browser/Balayage/BalayageDeLEspaceDeLaSocieteTest.php › l’administrateur qui a toutes les autorisations de société ouvre chaque page et chaque action de l’espace sans erreur',
@@ -2464,6 +2478,7 @@ return [
         'page' => ['lot' => 'NAV-4', 'tests' => [
             'tests/Browser/Parcours/TelechargerLesDocumentsTest.php › dans l’espace de la société, le propriétaire télécharge le récapitulatif CSV des magasins cochés',
             'tests/Browser/Parcours/TelechargerLesDocumentsTest.php › chaque rôle à qui le propriétaire coche la case télécharge les documents qu’il voit, dans le magasin et dans l’espace de la société',
+            'tests/Browser/Parcours/DemonstrationApresLaValidationTest.php › une fois la société validée, le propriétaire et l’administrateur ne voient plus la démonstration et son adresse est introuvable',
         ]],
     ],
     'app/Filament/Societe/Pages/VerificationSociete.php' => [
@@ -2750,8 +2765,10 @@ return [
             'tests/Browser/Parcours/VentesDeBoutEnBoutTest.php › le vendeur vend à la caisse au client comptoir et encaisse en espèces et par carte',
         ]],
         'clic:retirer' => ['lot' => 'NAV-2', 'tests' => []],
-        'clic:voirPlus' => ['lot' => 'NAV-2', 'tests' => []],
         'saisie:tri' => ['lot' => 'NAV-2', 'tests' => []],
+    ],
+    'resources/views/filament/app/livewire/voir-plus-de-produits.blade.php' => [
+        'clic:voirPlus' => ['lot' => 'NAV-2', 'tests' => []],
     ],
     'resources/views/filament/app/pages/auth/inscription-societe.blade.php' => [
         'envoi:register' => ['lot' => 'NAV-4', 'tests' => [

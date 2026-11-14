@@ -18,10 +18,10 @@ use App\Domain\Tenancy\Exceptions\VenteNonAutoriseeException;
 use App\Domain\Tenancy\Support\CompteConnecte;
 use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Domain\Tenancy\Support\ValeurSimple;
+use App\Filament\TableauEntry;
 use Filament\Actions\MountableAction;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
-use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\Section;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Notifications\Notification;
@@ -128,7 +128,10 @@ trait EnvoieLesDocuments
 
     /**
      * La relance qui suit la dernière, facture jointe, avec le rappel de
-     * ce qu'il reste à payer (voir EnvoyerDocumentAction::relancer()).
+     * ce qu'il reste à payer (voir EnvoyerDocumentAction::relancer()). Elle
+     * ne s'offre jamais sur un ticket du client comptoir, anonyme : personne
+     * n'y est à relancer (lot DEMO-V) ; « Envoyer par e-mail » reste, pour
+     * un ticket donné par e-mail au client présent.
      *
      * @template TAction of MountableAction
      *
@@ -144,7 +147,7 @@ trait EnvoieLesDocuments
             ->modalHeading(fn (Facture $record): string => 'Relance n°'.($record->niveauDeRelanceAtteint() + 1)." : {$record->libelleDocument()} {$record->numero}")
             ->modalDescription('Le client reçoit la facture en pièce jointe, avec le rappel de son montant, de son échéance et de ce qu\'il reste à payer.')
             ->modalSubmitActionLabel('Relancer')
-            ->visible(fn (Facture $record): bool => $record->estEchueEtImpayee() && ! $record->magasin->est_demonstration && CompteConnecte::exiger()->can('envoyer', $record))
+            ->visible(fn (Facture $record): bool => ! ($record->client?->estComptoir() ?? false) && $record->estEchueEtImpayee() && ! $record->magasin->est_demonstration && CompteConnecte::exiger()->can('envoyer', $record))
             ->fillForm(fn (Facture $record): array => ['destinataire' => ValeurRequise::de($record->client, 'le client de la facture relancée')->email])
             ->form([static::champDuJeton(), self::champDestinataire()])
             ->action(fn (Facture $record, array $data) => static::executerSansCasser(function () use ($record, $data) {
@@ -170,7 +173,7 @@ trait EnvoieLesDocuments
             ->visible(fn (Facture|Avoir|Devis|RecuPaiement $record): bool => $record->envois()->exists())
             ->extraAttributes(fn (Facture|Avoir|Devis|RecuPaiement $record): array => $record->envois()->where('statut', StatutEnvoi::EnAttente)->exists() ? ['wire:poll.5s' => ''] : [])
             ->schema([
-                RepeatableEntry::make('envois')
+                TableauEntry::make('envois')
                     ->label('')
                     ->state(fn (Facture|Avoir|Devis|RecuPaiement $record) => $record->envois()->with('magasin')->latest('id')->get())
                     ->schema([
@@ -181,8 +184,7 @@ trait EnvoieLesDocuments
                         TextEntry::make('statut')->label('Statut')->state(fn (EnvoiDocument $record) => $record->statut)->badge(),
                         TextEntry::make('detail')->label('Détail')->state(fn (EnvoiDocument $record): ?string => $record->detail())->placeholder('—'),
                         TextEntry::make('envoye_par_nom')->label('Demandé par')->state(fn (EnvoiDocument $record): ?string => $record->envoye_par_nom ?? $record->nature->demandeSansPersonne())->placeholder('—'),
-                    ])
-                    ->columns(7),
+                    ]),
             ]);
     }
 

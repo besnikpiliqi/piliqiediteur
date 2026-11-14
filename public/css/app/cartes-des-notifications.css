@@ -1,0 +1,156 @@
+/*
+ * Les cartes des notifications (modèle A choisi par l'éditeur le
+ * 14/11/2026, voir App\Filament\CartesDesNotifications) : en haut à
+ * droite, juste sous la barre du haut et sa cloche, trois au plus, la plus
+ * récente en haut ; chacune glisse depuis le bord droit, porte une fine
+ * barre du temps qui reste et s'en va en glissant vers la droite ; la
+ * cloche bouge un instant à leur arrivée. La pile ne prend aucun clic :
+ * seules les cartes en prennent. Sur un téléphone, une carte prend la
+ * largeur de l'écran, moins ses marges. Avec « réduire les animations »,
+ * rien ne glisse, la barre ne défile pas et la cloche ne bouge pas. Écrite
+ * à la main, sans aucun outil Node, elle ne lit que les variables de
+ * couleur que Filament pose pour le panneau, en clair comme en sombre.
+ */
+.piliqi-cartes {
+    position: fixed;
+    top: 4.75rem;
+    right: 1rem;
+    z-index: 50;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    width: min(24rem, calc(100vw - 2rem));
+    pointer-events: none;
+}
+
+.piliqi-carte {
+    pointer-events: auto;
+    overflow: hidden;
+    border-radius: 0.75rem;
+    background-color: #fff;
+    box-shadow:
+        0 10px 15px -3px rgba(0, 0, 0, 0.1),
+        0 4px 6px -4px rgba(0, 0, 0, 0.1),
+        0 0 0 1px rgba(var(--gray-950), 0.05);
+    animation: piliqi-carte-arrivee 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.dark .piliqi-carte {
+    background-color: rgba(var(--gray-900), 1);
+    box-shadow:
+        0 10px 15px -3px rgba(0, 0, 0, 0.4),
+        0 0 0 1px rgba(255, 255, 255, 0.1);
+}
+
+.piliqi-carte--partante {
+    pointer-events: none;
+    animation: piliqi-carte-depart 0.3s ease-in both;
+}
+
+.piliqi-carte__corps {
+    display: flex;
+    gap: 0.75rem;
+    padding: 1rem 1rem 0.75rem;
+}
+
+.piliqi-carte__texte {
+    display: grid;
+    flex: 1 1 auto;
+    min-width: 0;
+    margin-top: 0.125rem;
+}
+
+.piliqi-carte__fermer {
+    flex: none;
+    align-self: flex-start;
+}
+
+.piliqi-carte__temps {
+    height: 3px;
+    background-color: rgba(var(--gray-200), 1);
+}
+
+.dark .piliqi-carte__temps {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.piliqi-carte__temps i {
+    display: block;
+    height: 100%;
+    background-color: rgba(var(--primary-600), 1);
+    transform-origin: left;
+}
+
+.dark .piliqi-carte__temps i {
+    background-color: rgba(var(--primary-400), 1);
+}
+
+.piliqi-carte__temps--en-cours {
+    animation: piliqi-carte-temps var(--piliqi-carte-duree, 8000ms) linear both;
+}
+
+.piliqi-cloche-qui-sonne svg {
+    transform-origin: top center;
+    animation: piliqi-cloche 0.7s ease both;
+}
+
+@keyframes piliqi-carte-arrivee {
+    from {
+        opacity: 0;
+        transform: translateX(120%);
+    }
+
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+@keyframes piliqi-carte-depart {
+    to {
+        opacity: 0;
+        transform: translateX(120%);
+    }
+}
+
+@keyframes piliqi-carte-temps {
+    from {
+        transform: scaleX(1);
+    }
+
+    to {
+        transform: scaleX(0);
+    }
+}
+
+@keyframes piliqi-cloche {
+    0%,
+    100% {
+        transform: rotate(0);
+    }
+
+    20% {
+        transform: rotate(-14deg);
+    }
+
+    40% {
+        transform: rotate(12deg);
+    }
+
+    60% {
+        transform: rotate(-8deg);
+    }
+
+    80% {
+        transform: rotate(5deg);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .piliqi-carte,
+    .piliqi-carte--partante,
+    .piliqi-carte__temps--en-cours,
+    .piliqi-cloche-qui-sonne svg {
+        animation: none;
+    }
+}

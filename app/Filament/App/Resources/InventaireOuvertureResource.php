@@ -20,6 +20,7 @@ use App\Filament\App\Pages\Caisse;
 use App\Filament\App\Resources\InventaireOuvertureResource\Pages;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use App\Filament\Concerns\PorteUnJeton;
+use App\Filament\TableauEntry;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\MountableAction;
 use Filament\Forms\Components\Field;
@@ -32,7 +33,6 @@ use Filament\Forms\Components\TextInput;
 use Filament\Forms\Form;
 use Filament\Forms\Get;
 use Filament\Forms\Set;
-use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\Section as InfolistSection;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Infolists\Infolist;
@@ -282,23 +282,24 @@ class InventaireOuvertureResource extends Resource
             ])->columns(3),
 
             InfolistSection::make('Produits en stock')->schema([
-                RepeatableEntry::make('lignes')
+                TableauEntry::make('lignes')
                     ->label('')
                     ->schema([
                         TextEntry::make('reference')
                             ->label('Référence')
                             ->placeholder('Générée à la validation'),
                         TextEntry::make('description')->label('Produit'),
-                        TextEntry::make('quantite')->label('Quantité'),
+                        TextEntry::make('quantite')->label('Quantité')->alignEnd(),
                         TextEntry::make('cout_unitaire_ht')
                             ->label('Coût unitaire HT')
+                            ->alignEnd()
                             ->formatStateUsing(fn (string $state): string => $calculateur->prixUnitaireExact($calculateur->enMillioniemes($state))),
                         TextEntry::make('valeur_ht')
                             ->label('Valeur du stock HT')
                             ->money('EUR')
+                            ->alignEnd()
                             ->helperText(fn (LigneInventaireOuverture $record): ?string => $record->suivi_stock ? null : self::AIDE_SANS_SUIVI_DU_STOCK),
-                    ])
-                    ->columns(5),
+                    ]),
             ]),
         ]);
     }

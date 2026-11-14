@@ -623,14 +623,28 @@ class CalculateurLigneTest extends TestCase
     }
 
     /**
-     * Le prix HT qu'affichent la fiche d'un produit et le barème : 40,00 €
-     * TTC = 33,33 € HT ; 10,00 € TTC à 5,5 % = 9,48 € HT (10 / 1,055 =
-     * 9,4786...).
+     * Le PU HT d'un article vendu, que PILIQI affiche partout (décision de
+     * l'éditeur du 14/11/2026) : son PU TTC moins sa TVA arrondie une fois
+     * au centime, un demi-centime au centime supérieur. 9,99 € TTC à 20 % :
+     * TVA 1,665 €, soit 1,67 €, PU HT 8,32 € (et non 8,325 € arrondi à
+     * 8,33 €) ; 10,00 € : 8,33 € ; 0,99 € : 0,82 € ; 40,00 € : 33,33 € ;
+     * 10,00 € à 5,5 % : TVA 0,5213... €, 9,48 € ; 10,00 € à 10 % : TVA
+     * 0,909... €, 9,09 € ; 0,35 € à 5,5 % : TVA 0,01824... €, 0,33 €.
      */
-    public function test_un_prix_ttc_sans_sa_tva_s_affiche_au_centime(): void
+    public function test_le_pu_ht_affiche_d_une_vente_est_le_pu_ttc_moins_la_tva_d_un_article_arrondie(): void
     {
-        $this->assertSame(3333, $this->calculateur()->prixUnitaireHtDepuisTtc(4000, 2000));
-        $this->assertSame(948, $this->calculateur()->prixUnitaireHtDepuisTtc(1000, 550));
+        $this->assertSame([832, 833, 82, 3333], [
+            $this->calculateur()->prixUnitaireHtAffiche(999, 2000),
+            $this->calculateur()->prixUnitaireHtAffiche(1000, 2000),
+            $this->calculateur()->prixUnitaireHtAffiche(99, 2000),
+            $this->calculateur()->prixUnitaireHtAffiche(4000, 2000),
+        ]);
+        $this->assertSame([948, 909, 33], [
+            $this->calculateur()->prixUnitaireHtAffiche(1000, 550),
+            $this->calculateur()->prixUnitaireHtAffiche(1000, 1000),
+            $this->calculateur()->prixUnitaireHtAffiche(35, 550),
+        ]);
+        $this->assertSame('8,32 €', $this->calculateur()->prixUnitaireHtAfficheEnEuros(999, 2000));
     }
 
     /**
@@ -764,7 +778,7 @@ class CalculateurLigneTest extends TestCase
     public static function saisiesHorsBornes(): array
     {
         return [
-            'taux négatif (TTC vers HT)' => [fn (CalculateurLigne $c) => $c->prixUnitaireHtDepuisTtc(1000, -10000), 'Le taux de TVA doit être compris entre 0 et 100 %.'],
+            'taux négatif (TTC vers HT)' => [fn (CalculateurLigne $c) => $c->prixUnitaireHtAffiche(1000, -10000), 'Le taux de TVA doit être compris entre 0 et 100 %.'],
             'taux négatif (HT vers TTC)' => [fn (CalculateurLigne $c) => $c->prixUnitaireTtcDepuisHt(1000, -500), 'Le taux de TVA doit être compris entre 0 et 100 %.'],
             'taux au-delà de 100 % (achat)' => [fn (CalculateurLigne $c) => $c->chiffrerUnAchat([self::ligneDAchat(1000, 1, 15000)]), 'Le taux de TVA doit être compris entre 0 et 100 %.'],
             'taux au-delà de 100 % (prix de vente)' => [fn (CalculateurLigne $c) => $c->prixTtcArrondi(100000, 15000), 'Le taux de TVA doit être compris entre 0 et 100 %.'],
@@ -804,7 +818,7 @@ class CalculateurLigneTest extends TestCase
 
     public function test_les_bornes_0_et_100_restent_acceptees(): void
     {
-        $this->assertSame(1000, $this->calculateur()->prixUnitaireHtDepuisTtc(1000, 0));
+        $this->assertSame(1000, $this->calculateur()->prixUnitaireHtAffiche(1000, 0));
         $this->assertSame([1000, 1000, 2000], self::triplet($this->calculateur()->chiffrerUnAchat([self::ligneDAchat(1000, 1, 10000)])['total']));
         $this->assertSame([0, 0, 0], self::triplet($this->calculateur()->chiffrerUneVente([self::ligneDeVente(1200, 3, 2000, 10000)])['total']));
     }

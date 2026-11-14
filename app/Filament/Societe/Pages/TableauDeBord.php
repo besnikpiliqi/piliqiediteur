@@ -130,8 +130,9 @@ class TableauDeBord extends Dashboard
      * la fait quand il peut l'ouvrir : l'étape des magasins à la création
      * d'un magasin quand le compte peut en créer un, sinon à leur liste ;
      * l'essai de la démonstration se fait par le bouton de l'étape (voir
-     * ouvrirLaDemonstrationAction()). L'essai ne se fait plus une fois la
-     * société validée : l'étape compte alors comme faite. Aucune pour un
+     * ouvrirLaDemonstrationAction()). Une fois la société validée, la
+     * démonstration disparaît de tous ses écrans (T115, lot DEMO-V) : son
+     * étape n'est plus dans la liste. Aucune pour un
      * administrateur, qui ne voit jamais ici le nombre des magasins ni
      * celui des comptes de la société. Les magasins et les comptes se
      * comptent dans la portée du propriétaire (voir
@@ -175,23 +176,28 @@ class TableauDeBord extends Dashboard
             return $magasinsEtEquipe;
         }
 
+        $code = [
+            'titre' => self::ETAPE_CODE_DU_COURRIER,
+            'faite' => $societe->estValidee(),
+            'etat' => $this->prochaineEtapeDeLaVerification(),
+            'url' => VerificationSociete::getUrl(),
+        ];
+
+        if ($societe->estValidee()) {
+            return [$code, ...$magasinsEtEquipe];
+        }
+
         $demonstration = $societe->demonstration()->first();
 
         return [
-            [
-                'titre' => self::ETAPE_CODE_DU_COURRIER,
-                'faite' => $societe->estValidee(),
-                'etat' => $this->prochaineEtapeDeLaVerification(),
-                'url' => VerificationSociete::getUrl(),
-            ],
+            $code,
             ...$magasinsEtEquipe,
             [
                 'titre' => self::ETAPE_DEMONSTRATION,
-                'faite' => $demonstration !== null || $societe->estValidee(),
+                'faite' => $demonstration !== null,
                 'etat' => match (true) {
                     $demonstration?->statut === StatutMagasin::Actif => 'Ouvert : vous vous y entraînez à vendre, encaisser et clôturer, et votre équipe aussi, avec des comptes d\'entraînement créés ici : ils ne servent qu\'ici et sont retirés à la validation de votre société.',
                     $demonstration !== null => 'Terminé.',
-                    $societe->estValidee() => 'Plus disponible : votre société est validée.',
                     default => 'Un magasin d\'entraînement, sans valeur, à essayer avant la validation.',
                 },
                 'url' => $demonstration?->statut === StatutMagasin::Actif && $compte->peutOuvrir($demonstration) ? Dashboard::getUrl(panel: 'app', tenant: $demonstration) : null,
@@ -326,11 +332,16 @@ class TableauDeBord extends Dashboard
     }
 
     /**
-     * Le magasin de démonstration, pour qui administre tous les magasins.
+     * Le magasin de démonstration, pour qui administre tous les magasins,
+     * tant que la société n'est pas validée : une fois validée, sa section
+     * disparaît, comme la démonstration de tous ses écrans (T115, lot
+     * DEMO-V).
      */
     public function demonstration(): ?Magasin
     {
-        return CompteConnecte::exiger()->administreTousLesMagasins() ? $this->societe()->demonstration()->first() : null;
+        $societe = $this->societe();
+
+        return CompteConnecte::exiger()->administreTousLesMagasins() && ! $societe->estValidee() ? $societe->demonstration()->first() : null;
     }
 
     /**

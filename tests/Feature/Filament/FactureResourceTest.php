@@ -933,7 +933,7 @@ class FactureResourceTest extends TestCase
             ->assertSee('66,67')
             ->assertSee('13,33')
             ->assertSee('85,00')
-            ->assertSee('Montants calculés depuis les prix TTC : pour chaque ligne, la TVA est le TTC × taux ÷ (1 + taux), arrondie une fois au centime, et le HT est le TTC moins cette TVA ; un centime peut être ajusté sur une ligne pour que la TVA de chaque taux soit égale à sa base HT × le taux.');
+            ->assertSee('Montants calculés depuis les prix TTC : pour chaque ligne, la TVA est le TTC × taux ÷ (1 + taux), arrondie une fois au centime, et le HT est le TTC moins cette TVA ; un centime peut être ajusté sur une ligne pour que la TVA de chaque taux soit celle de son TTC total, calculée de même.');
     }
 
     /**
@@ -981,23 +981,25 @@ class FactureResourceTest extends TestCase
     }
 
     /**
-     * La fiche d'un ticket, vendu à un particulier, montre son PU HT
-     * arrondi au centime, comme tout prix unitaire de vente montré en
-     * lecture (décision de l'éditeur du 25/10/2026, que celle du 09/11/2026
-     * garde pour ces documents) : 0,83 € pour un PU HT enregistré de
-     * 0,833333 €. Sous les lignes, la note de calcul ne dit que le calcul de
-     * chaque ligne depuis son prix TTC (modèle P1, choix de l'éditeur du
-     * 14/11/2026), sans la phrase du PU HT d'un article.
+     * La fiche d'un ticket, vendu à un particulier, montre comme toute fiche
+     * de vente la colonne du PU HT, celui d'un article (décision de
+     * l'éditeur du 14/11/2026) : 0,83 € pour un PU HT enregistré de
+     * 0,833333 €, dont les 1 000 font 833,33 € HT, et non 1 000 x 0,83 € =
+     * 830,00 €. Sous les lignes, la note de calcul dit le calcul de chaque
+     * ligne depuis son prix TTC et, puisque la fiche montre ce PU HT, que la
+     * quantité x ce prix peut différer de quelques centimes du total HT de
+     * la ligne ; seul le PDF du ticket (modèle P1), sans PU HT, s'en passe
+     * (voir MentionsFiscales::calcul()).
      */
-    public function test_la_fiche_d_un_ticket_montre_le_pu_ht_au_centime(): void
+    public function test_la_fiche_d_un_ticket_montre_le_pu_ht_d_un_article_et_explique_son_ecart(): void
     {
         $ticket = $this->factureDeVisEtDEcran(professionnel: false);
 
         Livewire::test(ViewFacture::class, ['record' => $ticket->getRouteKey()])
             ->assertSeeInOrder(['0,83 €', '1,00 €', '833,33', '100,00 €', '120,00 €', '100,00'])
             ->assertDontSee('0,833333')
-            ->assertSee('Montants calculés depuis les prix TTC : pour chaque ligne, la TVA est le TTC × taux ÷ (1 + taux), arrondie une fois au centime, et le HT est le TTC moins cette TVA ; un centime peut être ajusté sur une ligne pour que la TVA de chaque taux soit égale à sa base HT × le taux.')
-            ->assertDontSee('Le PU HT affiché est celui d\'un article');
+            ->assertSee('Montants calculés depuis les prix TTC : pour chaque ligne, la TVA est le TTC × taux ÷ (1 + taux), arrondie une fois au centime, et le HT est le TTC moins cette TVA ; un centime peut être ajusté sur une ligne pour que la TVA de chaque taux soit celle de son TTC total, calculée de même.')
+            ->assertSee('Le PU HT affiché est celui d\'un article : prix TTC moins sa TVA arrondie au centime (9,99 € TTC à 20 % : 8,32 € HT). La quantité × ce prix peut différer de quelques centimes du total HT de la ligne, calculé sur toute la quantité.');
     }
 
     /**

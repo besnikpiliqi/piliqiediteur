@@ -684,9 +684,9 @@ class FactureResource extends Resource
      * en dessous. La remise
      * n'apparaît que si une ligne du document en a une : c'est elle qui
      * explique alors que PU x quantité diffère du total. Sur tout document
-     * de vente soumis à la TVA, la note de calcul dit que le HT de chaque
-     * taux se calcule sur son TTC et se répartit sur les lignes, et l'écart
-     * qui peut en résulter avec la quantité x le prix unitaire affiché (voir
+     * de vente soumis à la TVA, la note de calcul dit le calcul de chaque
+     * ligne depuis son TTC, et l'écart qui peut en résulter avec la quantité
+     * x le PU HT affiché, celui d'un article (voir
      * MentionsFiscales::calcul()).
      * La ligne d'une facture d'achat brouillon
      * qui garde la fiche d'un nouveau produit dit qu'il ne naîtra qu'à sa

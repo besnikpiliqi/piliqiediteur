@@ -392,6 +392,96 @@ class CalculateurLigneAuHasardTest extends TestCase
     }
 
     /**
+     * 2 000 ventes de 1 à 6 lignes, à un ou plusieurs taux (une vente sur
+     * cinq sans TVA française), créditées par des avoirs successifs de
+     * plusieurs lignes, chacune d'un nombre d'articles tiré au hasard,
+     * jusqu'à tout rendre (décision de Claude, D76) : chaque ligne d'avoir a
+     * un HT et une TVA positifs, et un HT à moins de deux centimes de ses
+     * articles x le PU HT de la ligne, remise déduite (règle Peppol R120) ;
+     * après chaque avoir, ce qui reste d'une ligne rendue en partie garde
+     * une TVA à un centime au plus de celle de son TTC, si bien que l'avoir
+     * qui solde une ligne, comme celui qui la rend en entier, en rend une
+     * TVA à un centime au plus de celle de son TTC ; et les avoirs d'une
+     * ligne en rendent exactement les montants.
+     */
+    public function test_2000_ventes_creditees_par_des_avoirs_successifs_de_plusieurs_lignes_gardent_les_bornes_de_chaque_ligne(): void
+    {
+        $hasard = new Randomizer(new Mt19937(self::GRAINE + 6));
+        $lignesDAvoir = 0;
+
+        for ($i = 0; $i < 2000; $i++) {
+            $sansTva = $hasard->getInt(0, 4) === 0;
+            $tauxDeLaVente = self::TAUX[$hasard->getInt(1, count(self::TAUX) - 1)];
+            $lignes = [];
+            $taux = [];
+
+            for ($n = $hasard->getInt(1, 6); $n > 0; $n--) {
+                $taux[] = $hasard->getInt(0, 2) === 0 ? self::TAUX[$hasard->getInt(0, count(self::TAUX) - 1)] : $tauxDeLaVente;
+                $prix = $hasard->getInt(1, $hasard->getInt(0, 1) === 0 ? 300 : 30000);
+                $remise = $hasard->getInt(0, 2) === 0 ? $hasard->getInt(1, 5000) : 0;
+                $lignes[] = self::ligneDeVente($prix, $hasard->getInt(2, 60), $this->centiemes(end($taux)), $remise, $sansTva);
+            }
+
+            $vente = $this->calculateur()->chiffrerUneVente($lignes);
+            $vendues = array_map(fn (array $ligne, array $montants, string $tauxDuPrix): array => [
+                ...$ligne,
+                'prix_unitaire_ht' => $this->puHtAttendu($ligne['prix_unitaire_ttc'], $tauxDuPrix),
+                'montant_ht' => $montants['montant_ht'],
+                'montant_tva' => $montants['montant_tva'],
+            ], $lignes, $vente['lignes'], $taux);
+            $rendus = array_fill(0, count($vendues), ['quantite' => 0, 'montant_ht' => 0, 'montant_tva' => 0]);
+
+            while (array_sum(array_column($rendus, 'quantite')) < array_sum(array_column($vendues, 'quantite'))) {
+                $articles = [];
+
+                foreach ($vendues as $rang => $vendue) {
+                    $restants = $vendue['quantite'] - $rendus[$rang]['quantite'];
+
+                    if ($restants > 0 && $hasard->getInt(0, 1) === 0) {
+                        $articles[$rang] = $hasard->getInt(0, 3) === 0 ? $restants : $hasard->getInt(1, $restants);
+                    }
+                }
+
+                $avoir = $this->calculateur()->chiffrerUnAvoir(array_map(fn (int $rang, int $nombre): array => [
+                    'ligne' => $vendues[$rang],
+                    'quantite_rendue' => $rendus[$rang]['quantite'] + $nombre,
+                    'deja_rendu' => $rendus[$rang],
+                ], array_keys($articles), $articles));
+
+                foreach (array_keys($articles) as $position => $rang) {
+                    $vendue = $vendues[$rang];
+                    $montants = $avoir['lignes'][$position];
+                    $rendus[$rang] = ['quantite' => $rendus[$rang]['quantite'] + $articles[$rang], 'montant_ht' => $rendus[$rang]['montant_ht'] + $montants['montant_ht'], 'montant_tva' => $rendus[$rang]['montant_tva'] + $montants['montant_tva']];
+                    $cas = sprintf('vente n° %d, ligne %d (PU TTC %s, TVA %s %%%s, quantité %d, remise %s %%), %d articles rendus jusqu\'ici', $i, $rang, $this->texte($vendue['prix_unitaire_ttc']), $taux[$rang], $sansTva ? ', retirée' : '', $vendue['quantite'], $this->texte($vendue['remise_pourcentage']), $rendus[$rang]['quantite']);
+                    $ecartAuPuHt = abs($articles[$rang] * $vendue['prix_unitaire_ht'] * (10000 - $vendue['remise_pourcentage']) - $montants['montant_ht'] * 100_000_000);
+
+                    $this->assertGreaterThanOrEqual(0, min($montants['montant_ht'], $montants['montant_tva']), "montant négatif : {$cas}");
+                    $this->assertSame($montants['montant_ht'] + $montants['montant_tva'], $montants['montant_ttc'], "TTC de la ligne d'avoir : {$cas}");
+                    $this->assertLessThan(200_000_000, $ecartAuPuHt, "HT de la ligne d'avoir à deux centimes ou plus de ses articles x le PU HT : {$cas}");
+
+                    if ($sansTva) {
+                        $this->assertSame(0, $montants['montant_tva'], $cas);
+                    } elseif ($rendus[$rang]['quantite'] === $vendue['quantite']) {
+                        $this->assertLessThanOrEqual(1, abs($montants['montant_tva'] - $this->tvaDuTtcAttendue($montants['montant_ttc'], $taux[$rang])), "TVA de l'avoir qui solde la ligne : {$cas}");
+                    } else {
+                        $resteHt = $vendue['montant_ht'] - $rendus[$rang]['montant_ht'];
+                        $resteTva = $vendue['montant_tva'] - $rendus[$rang]['montant_tva'];
+                        $this->assertLessThanOrEqual(1, abs($resteTva - $this->tvaDuTtcAttendue($resteHt + $resteTva, $taux[$rang])), "TVA de ce qui reste de la ligne : {$cas}");
+                    }
+
+                    $lignesDAvoir++;
+                }
+            }
+
+            foreach ($vendues as $rang => $vendue) {
+                $this->assertSame([$vendue['quantite'], $vendue['montant_ht'], $vendue['montant_tva']], array_values($rendus[$rang]), "vente n° {$i}, ligne {$rang} : les avoirs rendent exactement la ligne");
+            }
+        }
+
+        $this->assertGreaterThan(10000, $lignesDAvoir);
+    }
+
+    /**
      * 2 000 lignes d'achats (de 1 à 5 lignes du même taux, dont la TVA se
      * répartit), retournées en retours successifs de quantités tirées au
      * hasard : tant que la ligne n'est pas toute retournée, le HT retourné
@@ -484,6 +574,19 @@ class CalculateurLigneAuHasardTest extends TestCase
 
         return BigDecimal::ofUnscaledValue($ttcCentimes, 2)->multipliedBy($taux)
             ->dividedBy(BigDecimal::one()->plus($taux), 2, RoundingMode::HalfUp)
+            ->getUnscaledValue()
+            ->toInt();
+    }
+
+    /**
+     * Le PU HT qu'enregistre une ligne de vente : son PU TTC ÷ (1 + taux), au
+     * millionième d'euro le plus proche, un demi-millionième au millionième
+     * supérieur.
+     */
+    private function puHtAttendu(int $prixTtcCentimes, string $taux): int
+    {
+        return BigDecimal::ofUnscaledValue($prixTtcCentimes, 2)
+            ->dividedBy(BigDecimal::one()->plus(BigDecimal::of($taux)->dividedBy(100, 4)), 6, RoundingMode::HalfUp)
             ->getUnscaledValue()
             ->toInt();
     }

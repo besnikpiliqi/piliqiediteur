@@ -696,6 +696,49 @@ class AvoirActionsTest extends TestCase
         $this->assertSame(['0.09', '0.01', '0.10'], [$avoir->lignes->sole()->montant_ht, $avoir->lignes->sole()->montant_tva, $avoir->lignes->sole()->montant_ttc]);
     }
 
+    /**
+     * Des avoirs successifs d'une ligne ne reportent pas leurs centimes sur
+     * celui qui la solde (décision de Claude, D76, voir
+     * CalculateurLigneTest::test_des_avoirs_successifs_ne_reportent_pas_leurs_centimes_sur_celui_qui_solde_la_ligne) :
+     * 7 x 0,26 € TTC à 10 % (1,65 € HT et 0,17 € de TVA) crédités article par
+     * article finissent par 0,23 € HT et 0,03 € de TVA, à un centime de la
+     * TVA de 0,26 €, 0,02 € ; 6 x 2,29 € TTC à 5,5 % remisés de 10 % (11,73 €
+     * HT et 0,64 € de TVA), par 1,97 € HT et 0,10 € de TVA, à 1,64 centime de
+     * 1 x 2,170616 € x 90 %. Chaque série rend exactement sa ligne.
+     */
+    public function test_des_avoirs_successifs_d_une_ligne_ne_reportent_pas_leurs_centimes_sur_celui_qui_la_solde(): void
+    {
+        $client = Client::factory()->professionnel()->create();
+        $sachet = Produit::factory()->create(['prix_vente_ttc' => '0.26', 'taux_tva' => 10, 'suivi_stock' => false]);
+        $pile = Produit::factory()->create(['prix_vente_ttc' => '2.29', 'taux_tva' => '5.5', 'suivi_stock' => false]);
+        $facture = app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), $client, [
+            ['produit_id' => $sachet->id, 'quantite' => 7],
+            ['produit_id' => $pile->id, 'quantite' => 6, 'remise_pourcentage' => 10],
+        ]));
+        [$sachets, $piles] = $facture->lignes->sortBy('ordre')->values()->all();
+        $crediterUnArticle = fn (int $ligneId): array => [
+            ($avoir = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [['ligne_facture_id' => $ligneId, 'quantite' => 1]]))->total_ht,
+            $avoir->total_tva,
+            $avoir->total_ttc,
+        ];
+
+        $avoirsDesSachets = array_map(fn (): array => $crediterUnArticle($sachets->id), range(1, 7));
+        $avoirsDesPiles = array_map(fn (): array => $crediterUnArticle($piles->id), range(1, 6));
+
+        $this->assertSame([['1.65', '0.17', '1.82'], ['11.73', '0.64', '12.37']], [
+            [$sachets->montant_ht, $sachets->montant_tva, $sachets->montant_ttc],
+            [$piles->montant_ht, $piles->montant_tva, $piles->montant_ttc],
+        ]);
+        $this->assertSame([
+            ['0.24', '0.02', '0.26'], ['0.24', '0.02', '0.26'], ['0.23', '0.03', '0.26'], ['0.24', '0.02', '0.26'],
+            ['0.24', '0.02', '0.26'], ['0.23', '0.03', '0.26'], ['0.23', '0.03', '0.26'],
+        ], $avoirsDesSachets);
+        $this->assertSame([
+            ['1.95', '0.11', '2.06'], ['1.95', '0.11', '2.06'], ['1.95', '0.11', '2.06'],
+            ['1.96', '0.10', '2.06'], ['1.95', '0.11', '2.06'], ['1.97', '0.10', '2.07'],
+        ], $avoirsDesPiles);
+    }
+
     public function test_une_quantite_a_crediter_non_entiere_est_refusee(): void
     {
         $client = Client::factory()->create();

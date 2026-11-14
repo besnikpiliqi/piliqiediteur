@@ -36,7 +36,7 @@ Thé vert 100 g
 5,5 %
 6,50 €
 Montants calculés depuis les prix TTC : pour chaque ligne, la TVA est le TTC × taux ÷ (1 + taux), arrondie une fois au centime, et le HT est le TTC moins cette TVA ; un centime peut
-être ajusté sur une ligne pour que la TVA de chaque taux soit égale à sa base HT × le taux.
+être ajusté sur une ligne pour que la TVA de chaque taux soit celle de son TTC total, calculée de même.
 Récapitulatif TVA
 Taux
 Base HT

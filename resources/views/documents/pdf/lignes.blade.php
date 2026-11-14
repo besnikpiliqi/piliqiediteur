@@ -16,7 +16,7 @@
     @param \App\Domain\Facturation\Services\TableauDesLignes $tableau
 --}}
 @php
-    $noteDeCalcul = app(\App\Domain\Facturation\Services\MentionsFiscales::class)->calcul($document, avecLePuHtExact: true);
+    $noteDeCalcul = app(\App\Domain\Facturation\Services\MentionsFiscales::class)->calcul($document, surLePdf: true);
 @endphp
 
 <div class="titre-section">Détail des articles et prestations</div>

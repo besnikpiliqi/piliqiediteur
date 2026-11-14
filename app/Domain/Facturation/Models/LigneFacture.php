@@ -195,11 +195,12 @@ class LigneFacture extends Model
     /**
      * Un retour de $quantite articles de cette ligne, tel que le calcul
      * d'un avoir le lit (voir CalculateurLigne::chiffrerUnAvoir()) : la
-     * ligne vendue, tous ses articles rendus par les avoirs émis, ce retour
-     * compris, et ce que ces avoirs ont crédité, en centimes et en
-     * centièmes de point.
+     * ligne vendue, avec son PU HT en millionièmes d'euro, tous ses
+     * articles rendus par les avoirs émis, ce retour compris, et ce que ces
+     * avoirs ont rendu (articles, HT et TVA), en centimes et en centièmes
+     * de point.
      *
-     * @return array{ligne: array{prix_unitaire_ttc: int, quantite: int, remise_pourcentage: int, taux_tva_du_prix: int, taux_tva: int, montant_ht: int, montant_tva: int}, quantite_rendue: int, deja_rendu: array{montant_ht: int, montant_tva: int}}
+     * @return array{ligne: array{prix_unitaire_ttc: int, prix_unitaire_ht: int, quantite: int, remise_pourcentage: int, taux_tva_du_prix: int, taux_tva: int, montant_ht: int, montant_tva: int}, quantite_rendue: int, deja_rendu: array{quantite: int, montant_ht: int, montant_tva: int}}
      */
     private function retourAChiffrer(int $quantite): array
     {
@@ -208,10 +209,12 @@ class LigneFacture extends Model
             ->whereHas('avoir', fn ($query) => $query->where('statut', StatutAvoir::Emise))
             ->get(['quantite', 'montant_ht', 'montant_tva']);
         $centiemes = fn (string $colonne): int => $calculateur->enCentiemes($this->getAttribute($colonne));
+        $dejaRendus = ValeursLues::entier($avoirsEmis->sum('quantite'));
 
         return [
             'ligne' => [
                 'prix_unitaire_ttc' => $centiemes('prix_unitaire_ttc'),
+                'prix_unitaire_ht' => $calculateur->enMillioniemes($this->prix_unitaire_ht),
                 'quantite' => $this->quantite,
                 'remise_pourcentage' => $centiemes('remise_pourcentage'),
                 'taux_tva_du_prix' => $centiemes('taux_tva_du_prix'),
@@ -219,8 +222,9 @@ class LigneFacture extends Model
                 'montant_ht' => $centiemes('montant_ht'),
                 'montant_tva' => $centiemes('montant_tva'),
             ],
-            'quantite_rendue' => ValeursLues::entier($avoirsEmis->sum('quantite')) + $quantite,
+            'quantite_rendue' => $dejaRendus + $quantite,
             'deja_rendu' => [
+                'quantite' => $dejaRendus,
                 'montant_ht' => $avoirsEmis->sum(fn (LigneAvoir $ligne): int => $calculateur->enCentiemes($ligne->montant_ht)),
                 'montant_tva' => $avoirsEmis->sum(fn (LigneAvoir $ligne): int => $calculateur->enCentiemes($ligne->montant_tva)),
             ],

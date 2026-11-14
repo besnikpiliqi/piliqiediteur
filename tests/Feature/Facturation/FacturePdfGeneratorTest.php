@@ -42,7 +42,7 @@ class FacturePdfGeneratorTest extends TestCase
 
     private const LIVRAISON_A_BERLIN = ['nature_operation' => NatureOperation::LivraisonIntracommunautaire, 'livraison_adresse' => 'Musterstraße 1', 'livraison_code_postal' => '10115', 'livraison_ville' => 'Berlin', 'livraison_pays' => 'DE', 'livraison_date' => '2026-10-12', 'transport_par' => 'magasin'];
 
-    private const NOTE_DE_CALCUL = 'Montants calculés depuis les prix TTC : pour chaque ligne, la TVA est le TTC × taux ÷ (1 + taux), arrondie une fois au centime, et le HT est le TTC moins cette TVA ; un centime peut être ajusté sur une ligne pour que la TVA de chaque taux soit égale à sa base HT × le taux.';
+    private const NOTE_DE_CALCUL = 'Montants calculés depuis les prix TTC : pour chaque ligne, la TVA est le TTC × taux ÷ (1 + taux), arrondie une fois au centime, et le HT est le TTC moins cette TVA ; un centime peut être ajusté sur une ligne pour que la TVA de chaque taux soit celle de son TTC total, calculée de même.';
 
     /**
      * La note d'un document qui montre le PU HT : facture à un
@@ -50,7 +50,7 @@ class FacturePdfGeneratorTest extends TestCase
      * d'un article (décision de l'éditeur du 14/11/2026, qui remplace
      * celle du 09/11/2026 et T105).
      */
-    private const NOTE_DE_CALCUL_PU_HT_D_UN_ARTICLE = 'Montants calculés depuis les prix TTC : pour chaque ligne, la TVA est le TTC × taux ÷ (1 + taux), arrondie une fois au centime, et le HT est le TTC moins cette TVA ; un centime peut être ajusté sur une ligne pour que la TVA de chaque taux soit égale à sa base HT × le taux. Le PU HT affiché est celui d\'un article : prix TTC moins sa TVA arrondie au centime (9,99 € TTC à 20 % : 8,32 € HT). La quantité × ce prix peut différer de quelques centimes du total HT de la ligne, calculé sur toute la quantité. Le PU HT exact, écrit sous chaque article, est celui de la facture électronique : la quantité × ce prix retombe sur le total HT de la ligne à quelques centimes près.';
+    private const NOTE_DE_CALCUL_PU_HT_D_UN_ARTICLE = 'Montants calculés depuis les prix TTC : pour chaque ligne, la TVA est le TTC × taux ÷ (1 + taux), arrondie une fois au centime, et le HT est le TTC moins cette TVA ; un centime peut être ajusté sur une ligne pour que la TVA de chaque taux soit celle de son TTC total, calculée de même. Le PU HT affiché est celui d\'un article : prix TTC moins sa TVA arrondie au centime (9,99 € TTC à 20 % : 8,32 € HT). La quantité × ce prix peut différer de quelques centimes du total HT de la ligne, calculé sur toute la quantité. Le PU HT exact, écrit sous chaque article, est celui de la facture électronique : la quantité × ce prix retombe sur le total HT de la ligne à quelques centimes près.';
 
     public function test_genere_un_pdf_non_vide_pour_une_facture_emise(): void
     {
@@ -211,6 +211,42 @@ class FacturePdfGeneratorTest extends TestCase
             'une main-d\'œuvre seule' => [['service'], 'Prestation de services'],
             'un écran et sa pose' => [['bien', 'service'], 'Livraison de biens et prestation de services'],
         ];
+    }
+
+    /**
+     * @return array<string, array{bool}>
+     */
+    public static function clientsDesDeuxModeles(): array
+    {
+        return [
+            'facture à un professionnel (modèle M6-b)' => [true],
+            'ticket à un particulier (modèle P1)' => [false],
+        ];
+    }
+
+    /**
+     * Un service, qui n'a pas de référence, montre « Service » en gris à la
+     * place de la référence, sur la facture d'un professionnel comme sur le
+     * ticket d'un particulier (modèles M6-b et P1, décision de l'éditeur du
+     * 14/11/2026) ;
+     * la référence d'un produit garde la couleur du texte.
+     */
+    #[DataProvider('clientsDesDeuxModeles')]
+    public function test_un_service_montre_service_en_gris_a_la_place_de_la_reference(bool $professionnel): void
+    {
+        app(TenantContext::class)->set(Magasin::factory()->create());
+        $client = $professionnel ? Client::factory()->professionnel()->create() : Client::factory()->create();
+        $facture = $this->emettre($client, [
+            ['produit_id' => $this->produitAVingtPourCent('ECR-01', '120.00')->id, 'quantite' => 1],
+            ['service_id' => Service::factory()->create(['nom' => 'Pose'])->id, 'prix_unitaire_ttc' => 60, 'taux_tva' => 20, 'quantite' => 1],
+        ]);
+
+        $html = $this->compacte($this->rendu($facture));
+        $tableau = $this->tableauDesLignes($facture);
+
+        $this->assertStringContainsString('<td class="reference">ECR-01</td>', $tableau);
+        $this->assertStringContainsString('<td class="reference service">Service</td>', $tableau);
+        $this->assertStringContainsString('table.lignes .reference.service { color: #9aa5b1; }', $html);
     }
 
     /**

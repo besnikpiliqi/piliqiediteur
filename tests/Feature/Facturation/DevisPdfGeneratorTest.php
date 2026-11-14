@@ -97,7 +97,7 @@ class DevisPdfGeneratorTest extends TestCase
      */
     public function test_tout_devis_explique_le_calcul_de_ses_lignes_et_se_reimprime_tel_qu_etabli(): void
     {
-        $calcul = 'Montants calculés depuis les prix TTC : pour chaque ligne, la TVA est le TTC × taux ÷ (1 + taux), arrondie une fois au centime, et le HT est le TTC moins cette TVA ; un centime peut être ajusté sur une ligne pour que la TVA de chaque taux soit égale à sa base HT × le taux.';
+        $calcul = 'Montants calculés depuis les prix TTC : pour chaque ligne, la TVA est le TTC × taux ÷ (1 + taux), arrondie une fois au centime, et le HT est le TTC moins cette TVA ; un centime peut être ajusté sur une ligne pour que la TVA de chaque taux soit celle de son TTC total, calculée de même.';
         $devisProfessionnel = $this->devisEnvoye();
         $client = Client::factory()->create(['nom' => 'Jean Ancien']);
         $devisParticulier = app(EmettreDevisAction::class)->handle(self::auteur(), app(CreerDevisAction::class)->handle(self::auteur(), $client, [['produit_id' => Produit::factory()->create()->id, 'quantite' => 1]]));

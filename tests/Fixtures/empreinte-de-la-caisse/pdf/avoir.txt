@@ -39,9 +39,10 @@ FAC-LYON1-2026-000001
 33,75 €
 Montants calculés depuis les prix TTC : chaque retour rend, pour tous les articles d'une ligne rendus jusqu'ici, le calcul de la vente sur leur TTC (TVA = TTC × taux ÷ (1 + taux),
 arrondie une fois au centime ; HT = TTC moins cette TVA), sans dépasser le HT ni la TVA de la ligne, déduction faite des avoirs déjà émis sur la même ligne ; le dernier retour solde la
-ligne au centime ; un centime peut être ajusté sur une ligne rendue en partie pour que la TVA de chaque taux soit égale à sa base HT × le taux. Le PU HT affiché est celui d'un article
-: prix TTC moins sa TVA arrondie au centime (9,99 € TTC à 20 % : 8,32 € HT). La quantité × ce prix peut différer de quelques centimes du total HT de la ligne, calculé sur toute la
-quantité. Le PU HT exact, écrit sous chaque article, est celui de la facture électronique : la quantité × ce prix retombe sur le total HT de la ligne à quelques centimes près.
+ligne au centime ; un centime peut être ajusté sur une ligne rendue en partie pour rapprocher la TVA de chaque taux de celle de son TTC total, calculée de même. Le PU HT affiché
+est celui d'un article : prix TTC moins sa TVA arrondie au centime (9,99 € TTC à 20 % : 8,32 € HT). La quantité × ce prix peut différer de quelques centimes du total HT de la ligne,
+calculé sur toute la quantité. Le PU HT exact, écrit sous chaque article, est celui de la facture électronique : la quantité × ce prix retombe sur le total HT de la ligne à quelques
+centimes près.
 Récapitulatif TVA
 Taux
 Base HT

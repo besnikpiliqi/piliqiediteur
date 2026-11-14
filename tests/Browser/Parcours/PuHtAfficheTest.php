@@ -27,7 +27,8 @@ use Tests\Browser\Support\Navigation;
  * 1,67 €, PU HT 8,32 €, jamais 8,325 € (le PU HT enregistré, celui de la
  * facture électronique) ni 8,33 € ; 33,30 € HT ; 2 savons rendus :
  * 16,65 € HT. Chaque rôle qui ouvre la fiche ou le PDF y lit le même PU
- * HT, avec la note de calcul de son document ; le PDF d'un document à un
+ * HT, avec la note de calcul de son document, qui explique ce PU HT sur
+ * la fiche de toute vente ; le PDF d'un document à un
  * professionnel suit le modèle M6-b, le PU HT exact écrit en petit sous
  * l'article, sans colonne PU TTC (décision de l'éditeur du 14/11/2026). La société de test a tous
  * ses rôles et son catalogue (voir TestCaseDuNavigateur::societeComplete()).
@@ -119,7 +120,7 @@ test('le responsable lit le PU HT d’un article, 8,32 € pour un savon à 9,99
     $onglet->aller('/app/'.$societe->magasin->uuid.'/factures/'.$ticket->id)
         ->voir('8,32 €')
         ->voir('pour chaque ligne, la TVA est le TTC')
-        ->nePasVoir('Le PU HT affiché est celui d\'un article')
+        ->voir('Le PU HT affiché est celui d\'un article')
         ->nePasVoir('8,325');
 });
 

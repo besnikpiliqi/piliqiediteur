@@ -11,9 +11,11 @@ use App\Domain\Facturation\Services\CalculateurLigne;
  * Ce que la fiche d'un produit dit de sa vente au magasin, tel que le
  * tableau des produits le montre (voir SelecteurDeProduits) : le taux
  * que prend une ligne qui le vend, celui de sa fiche, ou 0 % en franchise
- * en base (voir ConstructeurLigneDocument) ; son prix de vente HT, son
- * prix TTC ÷ (1 + ce taux), au centime, comme le détail de sa fiche (voir
- * ProduitResource::detailPrixDeVente()) ; son bénéfice unitaire HT sur
+ * en base (voir ConstructeurLigneDocument) ; son prix de vente HT, le PU
+ * HT d'un article : son prix TTC moins sa TVA, ce prix x taux ÷ (1 + taux)
+ * arrondi une fois au centime -- 8,32 € pour 9,99 € TTC à 20 % -- (voir
+ * CalculateurLigne::prixUnitaireHtAffiche()), comme le détail de sa fiche
+ * (voir ProduitResource::detailPrixDeVente()) ; son bénéfice unitaire HT sur
  * son coût moyen, arrondi une fois au centime, comme le bénéfice que
  * montre une facture d'achat (voir CalculateurLigne::beneficeUnitaire()) ;
  * et son taux de marque, ce bénéfice ÷ ce prix HT.

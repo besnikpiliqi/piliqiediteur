@@ -43,9 +43,9 @@ PU HT exact : 12,500000 €
 20 %
 12,50 €
 Montants calculés depuis les prix TTC : pour chaque ligne, la TVA est le TTC × taux ÷ (1 + taux), arrondie une fois au centime, et le HT est le TTC moins cette TVA ; un centime peut
-être ajusté sur une ligne pour que la TVA de chaque taux soit égale à sa base HT × le taux. Le PU HT affiché est celui d'un article : prix TTC moins sa TVA arrondie au centime (9,99 €
-TTC à 20 % : 8,32 € HT). La quantité × ce prix peut différer de quelques centimes du total HT de la ligne, calculé sur toute la quantité. Le PU HT exact, écrit sous chaque article, est
-celui de la facture électronique : la quantité × ce prix retombe sur le total HT de la ligne à quelques centimes près.
+être ajusté sur une ligne pour que la TVA de chaque taux soit celle de son TTC total, calculée de même. Le PU HT affiché est celui d'un article : prix TTC moins sa TVA arrondie au
+centime (9,99 € TTC à 20 % : 8,32 € HT). La quantité × ce prix peut différer de quelques centimes du total HT de la ligne, calculé sur toute la quantité. Le PU HT exact, écrit sous
+chaque article, est celui de la facture électronique : la quantité × ce prix retombe sur le total HT de la ligne à quelques centimes près.
 Récapitulatif TVA
 Taux
 Base HT

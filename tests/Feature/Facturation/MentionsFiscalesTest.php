@@ -22,12 +22,15 @@ use Tests\TestCase;
  * que sa fiche affiche (voir MentionsFiscales::calcul()) : chacune de ses
  * variantes, vente ou retour, avec ou sans TVA française, dit comment
  * chaque ligne se calcule depuis son prix TTC (règle (b), décision de
- * l'éditeur du 14/11/2026) ; une facture ou un avoir à un professionnel et
- * une vente sans TVA française, qui montrent le PU HT (modèle M6-b), y
- * ajoutent la phrase du PU HT d'un article, prix TTC moins sa TVA arrondie
- * au centime, et leur PDF celle du PU HT exact écrit sous chaque article ;
- * un ticket et un avoir sur ticket, qui ne montrent que des prix TTC
- * (modèle P1), n'impriment que l'explication du calcul ; une vente en
+ * l'éditeur du 14/11/2026), un centime ajusté rendant à chaque taux la TVA
+ * de son TTC total, sans jamais promettre qu'elle égale sa base HT x le
+ * taux (décision de Claude, D76) ; partout où le document montre le PU HT
+ * -- la fiche de toute vente, et le PDF d'une facture ou d'un avoir à un
+ * professionnel et d'une vente sans TVA française (modèle M6-b) --, elle
+ * ajoute la phrase du PU HT d'un article, prix TTC moins sa TVA arrondie au
+ * centime, et le PDF celle du PU HT exact écrit sous chaque article ; le
+ * PDF d'un ticket et d'un avoir sur ticket, qui ne montre que des prix TTC
+ * (modèle P1), n'imprime que l'explication du calcul ; une vente en
  * franchise en base n'en a pas.
  */
 class MentionsFiscalesTest extends TestCase
@@ -38,9 +41,9 @@ class MentionsFiscalesTest extends TestCase
 
     private const PU_HT_EXACT = 'Le PU HT exact, écrit sous chaque article, est celui de la facture électronique : la quantité × ce prix retombe sur le total HT de la ligne à quelques centimes près.';
 
-    private const CALCUL_VENTE = 'Montants calculés depuis les prix TTC : pour chaque ligne, la TVA est le TTC × taux ÷ (1 + taux), arrondie une fois au centime, et le HT est le TTC moins cette TVA ; un centime peut être ajusté sur une ligne pour que la TVA de chaque taux soit égale à sa base HT × le taux.';
+    private const CALCUL_VENTE = 'Montants calculés depuis les prix TTC : pour chaque ligne, la TVA est le TTC × taux ÷ (1 + taux), arrondie une fois au centime, et le HT est le TTC moins cette TVA ; un centime peut être ajusté sur une ligne pour que la TVA de chaque taux soit celle de son TTC total, calculée de même.';
 
-    private const CALCUL_RETOUR = 'Montants calculés depuis les prix TTC : chaque retour rend, pour tous les articles d\'une ligne rendus jusqu\'ici, le calcul de la vente sur leur TTC (TVA = TTC × taux ÷ (1 + taux), arrondie une fois au centime ; HT = TTC moins cette TVA), sans dépasser le HT ni la TVA de la ligne, déduction faite des avoirs déjà émis sur la même ligne ; le dernier retour solde la ligne au centime ; un centime peut être ajusté sur une ligne rendue en partie pour que la TVA de chaque taux soit égale à sa base HT × le taux.';
+    private const CALCUL_RETOUR = 'Montants calculés depuis les prix TTC : chaque retour rend, pour tous les articles d\'une ligne rendus jusqu\'ici, le calcul de la vente sur leur TTC (TVA = TTC × taux ÷ (1 + taux), arrondie une fois au centime ; HT = TTC moins cette TVA), sans dépasser le HT ni la TVA de la ligne, déduction faite des avoirs déjà émis sur la même ligne ; le dernier retour solde la ligne au centime ; un centime peut être ajusté sur une ligne rendue en partie pour rapprocher la TVA de chaque taux de celle de son TTC total, calculée de même.';
 
     public function test_chaque_variante_de_la_note_de_calcul_explique_son_calcul_et_le_pu_ht_du_document_qui_le_montre(): void
     {
@@ -61,15 +64,15 @@ class MentionsFiscalesTest extends TestCase
         ]);
 
         $this->assertSame([
-            self::CALCUL_VENTE,
-            self::CALCUL_RETOUR,
             self::CALCUL_VENTE.' '.self::PU_HT_D_UN_ARTICLE,
             self::CALCUL_RETOUR.' '.self::PU_HT_D_UN_ARTICLE,
-            'Vente sans TVA française : chaque produit, et chaque service à son prix de référence, se vend à son prix catalogue TTC moins la TVA française de son taux (pour chaque ligne, cette TVA est le TTC × taux ÷ (1 + taux), arrondie une fois au centime ; un centime peut être ajusté sur une ligne pour qu\'elle soit, pour chaque taux, égale à la base HT × le taux) ; un autre service, à son prix sans TVA. '.self::PU_HT_D_UN_ARTICLE,
+            self::CALCUL_VENTE.' '.self::PU_HT_D_UN_ARTICLE,
+            self::CALCUL_RETOUR.' '.self::PU_HT_D_UN_ARTICLE,
+            'Vente sans TVA française : chaque produit, et chaque service à son prix de référence, se vend à son prix catalogue TTC moins la TVA française de son taux (pour chaque ligne, cette TVA est le TTC × taux ÷ (1 + taux), arrondie une fois au centime ; un centime peut être ajusté sur une ligne pour que, pour chaque taux, elle soit celle du TTC total du taux, calculée de même) ; un autre service, à son prix sans TVA. '.self::PU_HT_D_UN_ARTICLE,
             'Vente sans TVA française : chaque retour rend, pour tous les articles d\'une ligne rendus jusqu\'ici, le calcul de la vente sur cette quantité, sans dépasser le HT de la ligne, déduction faite des avoirs déjà émis sur la même ligne ; le dernier retour solde la ligne au centime. '.self::PU_HT_D_UN_ARTICLE,
         ], $notes);
-        $this->assertSame(self::CALCUL_VENTE.' '.self::PU_HT_D_UN_ARTICLE.' '.self::PU_HT_EXACT, app(MentionsFiscales::class)->calcul($facture, avecLePuHtExact: true));
-        $this->assertSame(self::CALCUL_VENTE, app(MentionsFiscales::class)->calcul($ticket, avecLePuHtExact: true));
+        $this->assertSame(self::CALCUL_VENTE.' '.self::PU_HT_D_UN_ARTICLE.' '.self::PU_HT_EXACT, app(MentionsFiscales::class)->calcul($facture, surLePdf: true));
+        $this->assertSame(self::CALCUL_VENTE, app(MentionsFiscales::class)->calcul($ticket, surLePdf: true));
     }
 
     public function test_une_vente_en_franchise_en_base_n_a_pas_de_note_de_calcul(): void

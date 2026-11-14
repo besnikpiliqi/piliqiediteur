@@ -116,6 +116,28 @@ class CalculateurLigneTest extends TestCase
     }
 
     /**
+     * Les avoirs successifs d'une seule ligne vendue, de ces nombres
+     * d'articles, chacun déduction faite des précédents.
+     *
+     * @param  array{prix_unitaire_ttc: int, prix_unitaire_ht: int, quantite: int, remise_pourcentage: int, taux_tva_du_prix: int, taux_tva: int, montant_ht: int, montant_tva: int}  $ligne
+     * @param  list<int>  $articles
+     * @return list<array{int, int, int}>
+     */
+    private function avoirsSuccessifs(array $ligne, array $articles): array
+    {
+        $dejaRendu = ['quantite' => 0, 'montant_ht' => 0, 'montant_tva' => 0];
+        $avoirs = [];
+
+        foreach ($articles as $nombre) {
+            $montants = $this->calculateur()->chiffrerUnAvoir([['ligne' => $ligne, 'quantite_rendue' => $dejaRendu['quantite'] + $nombre, 'deja_rendu' => $dejaRendu]])['total'];
+            $dejaRendu = ['quantite' => $dejaRendu['quantite'] + $nombre, 'montant_ht' => $dejaRendu['montant_ht'] + $montants['montant_ht'], 'montant_tva' => $dejaRendu['montant_tva'] + $montants['montant_tva']];
+            $avoirs[] = self::triplet($montants);
+        }
+
+        return $avoirs;
+    }
+
+    /**
      * @param  Closure(int, array{montant_ht: int, montant_tva: int}): array{montant_ht: int, montant_tva: int, montant_ttc: int}  $retour
      * @param  list<int>  $quantites
      * @return list<array{int, int, int}>
@@ -209,12 +231,18 @@ class CalculateurLigneTest extends TestCase
     }
 
     /**
-     * Chaque taux se calcule sur le TTC de ses seules lignes : 1,00 € et
-     * 2 x 2,00 € à 20 % (5,00 ÷ 1,2 = 4,166... -> 4,17 € HT, répartis 0,83
-     * puis 3,34) et 2 x 4,50 € à 5,5 % (9,00 ÷ 1,055 = 8,530... -> 8,53 €)
-     * font 12,70 € HT et 1,30 € de TVA pour 14,00 € ; 3 x 12,90 € à 10 %
-     * (35,18 €), 2 x 3,99 € à 5,5 % (7,56 €) et 19,99 € à 20 % (16,66 €)
-     * font 59,40 € HT et 7,27 € de TVA pour 66,67 €.
+     * Chaque taux ramène la TVA de ses seules lignes à celle de son TTC
+     * (règle (b), décision de l'éditeur du 14/11/2026) : à 20 %, 1,00 €
+     * (1,00 x 20 ÷ 120 = 0,1666... -> 0,17 € de TVA, 0,83 € HT) et 2 x
+     * 2,00 € (4,00 € : 0,666... -> 0,67 €, 3,33 € HT) font 0,84 € de TVA pour
+     * une TVA du taux de 5,00 x 20 ÷ 120 = 0,8333... -> 0,83 € : la ligne de
+     * 4,00 €, au plus gros TTC à égalité d'arrondi, rend le centime (3,34 €
+     * HT, 0,66 €) ; à 5,5 %, 2 x 4,50 € (9,00 x 5,5 ÷ 105,5 = 0,4691... ->
+     * 0,47 €, 8,53 € HT) ; en tout 12,70 € HT et 1,30 € de TVA pour 14,00 €.
+     * 3 x 12,90 € à 10 % (38,70 € : 3,518... -> 3,52 €, 35,18 € HT), 2 x
+     * 3,99 € à 5,5 % (7,98 € : 0,4159... -> 0,42 €, 7,56 € HT) et 19,99 € à
+     * 20 % (3,3316... -> 3,33 €, 16,66 € HT) font 59,40 € HT et 7,27 € de
+     * TVA pour 66,67 €.
      */
     public function test_plusieurs_taux_se_calculent_chacun_sur_son_ttc(): void
     {
@@ -340,12 +368,19 @@ class CalculateurLigneTest extends TestCase
     }
 
     /**
-     * Une ligne seule a pour HT quantité x PU TTC, remise déduite, ÷ (1 +
-     * taux), arrondi une seule fois -- 1 000 x 1,00 € à 20 % = 833,333... ->
-     * 833,33 €, jamais 1 000 x 0,83 € ; 49,90 € x 2 / 1,2 = 83,166... ;
-     * 4,20 € x 3 / 1,055 = 11,943... ; 3,99 € x 7 = 27,93 € remisés de 10 %
-     * (2,79 €), 25,14 / 1,055 = 23,829... ; 12,00 € x 10 x 0,85 / 1,2 =
-     * 85,00 €.
+     * Une ligne seule : sa TVA est son TTC (quantité x PU TTC, remise
+     * déduite) x taux ÷ (1 + taux), arrondie une seule fois, et son HT son
+     * TTC moins cette TVA (règle (b), décision de l'éditeur du 14/11/2026),
+     * jamais quantité x un PU HT au centime -- 1 000 x 1,00 € à 20 % :
+     * 1 000 x 20 ÷ 120 = 166,666... -> 166,67 € de TVA, 833,33 € HT, et non
+     * 1 000 x 0,83 € ; 49,90 € x 2 = 99,80 € : 16,633... -> 16,63 €, 83,17 €
+     * HT ; 4,20 € x 3 = 12,60 € à 5,5 % : 0,6568... -> 0,66 €, 11,94 € HT ;
+     * 3,99 € x 7 = 27,93 € remisés de 10 % (2,79 €), 25,14 € à 5,5 % :
+     * 1,3106... -> 1,31 €, 23,83 € HT ; 12,00 € x 10 remisés de 15 %, 102,00
+     * € : 17,00 €, 85,00 € HT. Un demi-centime exact de TVA s'arrondit au
+     * centime supérieur : 9,99 € seul à 20 % compte 1,665 -> 1,67 € de TVA et
+     * 8,32 € HT, et non 9,99 ÷ 1,2 = 8,325 -> 8,33 € ; 2,97 € seul, 0,495 ->
+     * 0,50 € et 2,47 € HT.
      *
      * @return array<string, array{int, int, int, int, int}>
      */
@@ -357,19 +392,24 @@ class CalculateurLigneTest extends TestCase
             '3 x 4,20 € à 5,5 %' => [420, 550, 3, 0, 1194],
             '7 x 3,99 € à 5,5 % remisés de 10 %' => [399, 550, 7, 1000, 2383],
             '10 x 12,00 € à 20 % remisés de 15 %' => [1200, 2000, 10, 1500, 8500],
+            '9,99 € à 20 %, un demi-centime de TVA' => [999, 2000, 1, 0, 832],
+            '2,97 € à 20 %, un demi-centime de TVA' => [297, 2000, 1, 0, 247],
         ];
     }
 
     #[DataProvider('lignesSeules')]
-    public function test_le_ht_d_une_ligne_seule_s_arrondit_une_seule_fois(int $prixTtc, int $taux, int $quantite, int $remise, int $htAttendu): void
+    public function test_la_tva_d_une_ligne_seule_s_arrondit_une_seule_fois_sur_son_ttc(int $prixTtc, int $taux, int $quantite, int $remise, int $htAttendu): void
     {
         $this->assertSame($htAttendu, $this->calculateur()->chiffrerUneVente([self::ligneDeVente($prixTtc, $quantite, $taux, $remise)])['lignes'][0]['montant_ht']);
     }
 
     /**
      * Facture signalée par le magasin : 2 x 40 € TTC (20 %), 10 € sans TVA
-     * et 10 € TTC (20 %). À 20 %, 90,00 ÷ 1,2 = 75,00 € HT, répartis 66,67 €
-     * et 8,33 € ; sans TVA, 10,00 € : 85,00 € HT, 15,00 € de TVA, 100,00 €
+     * et 10 € TTC (20 %). À 20 %, les lignes de 80,00 € (80,00 x 20 ÷ 120 =
+     * 13,333... -> 13,33 € de TVA, 66,67 € HT) et de 10,00 € (1,666... ->
+     * 1,67 €, 8,33 € HT) font 15,00 € de TVA, celle des 90,00 € du taux,
+     * sans centime à ajuster (règle (b), décision de l'éditeur du
+     * 14/11/2026) ; sans TVA, 10,00 € : 85,00 € HT, 15,00 € de TVA, 100,00 €
      * TTC, et HT + TVA = TTC.
      */
     public function test_la_facture_du_magasin_totalise_85_ht_15_tva_100_ttc(): void
@@ -487,16 +527,16 @@ class CalculateurLigneTest extends TestCase
      */
     public function test_un_avoir_ramene_la_tva_de_son_taux_sur_une_ligne_rendue_en_partie(): void
     {
-        $deuxArticles = [...self::ligneDeVente(2500, 2), 'montant_ht' => 4167, 'montant_tva' => 833];
-        $unArticle = [...self::ligneDeVente(2500), 'montant_ht' => 2083, 'montant_tva' => 417];
-        $rienRendu = ['montant_ht' => 0, 'montant_tva' => 0];
+        $deuxArticles = [...self::ligneDeVente(2500, 2), 'prix_unitaire_ht' => 20833333, 'montant_ht' => 4167, 'montant_tva' => 833];
+        $unArticle = [...self::ligneDeVente(2500), 'prix_unitaire_ht' => 20833333, 'montant_ht' => 2083, 'montant_tva' => 417];
+        $rienRendu = ['quantite' => 0, 'montant_ht' => 0, 'montant_tva' => 0];
 
         $premier = $this->calculateur()->chiffrerUnAvoir([
             ['ligne' => $deuxArticles, 'quantite_rendue' => 1, 'deja_rendu' => $rienRendu],
             ['ligne' => $unArticle, 'quantite_rendue' => 1, 'deja_rendu' => $rienRendu],
         ]);
         $second = $this->calculateur()->chiffrerUnAvoir([
-            ['ligne' => $deuxArticles, 'quantite_rendue' => 2, 'deja_rendu' => ['montant_ht' => 2084, 'montant_tva' => 416]],
+            ['ligne' => $deuxArticles, 'quantite_rendue' => 2, 'deja_rendu' => ['quantite' => 1, 'montant_ht' => 2084, 'montant_tva' => 416]],
         ]);
 
         $this->assertSame([[2084, 416, 2500], [2083, 417, 2500]], self::triplets($premier['lignes']));
@@ -509,15 +549,17 @@ class CalculateurLigneTest extends TestCase
      * (décision de Claude, D76) : deux lignes de 25,00 € à 20 % ont été
      * vendues 20,84 € + 4,16 € et 20,83 € + 4,17 €. L'avoir de la première
      * rend 20,84 € + 4,16 €, quand la TVA de ses 25,00 € serait 4,17 € :
-     * aucune ligne rendue en partie ne peut recevoir le centime, l'avoir
-     * garde cet écart d'un centime. L'avoir des deux lignes rend exactement
-     * la facture : 41,67 € + 8,33 €.
+     * aucune ligne rendue en partie ne peut recevoir le centime, et cette
+     * ligne garde son écart d'un centime ; sur plusieurs lignes, ces écarts
+     * s'additionnent (voir
+     * test_un_avoir_de_plusieurs_lignes_entieres_additionne_leurs_ecarts).
+     * L'avoir des deux lignes rend exactement la facture : 41,67 € + 8,33 €.
      */
     public function test_un_avoir_qui_ne_rend_que_des_lignes_entieres_en_garde_les_montants(): void
     {
-        $premiere = [...self::ligneDeVente(2500), 'montant_ht' => 2084, 'montant_tva' => 416];
-        $seconde = [...self::ligneDeVente(2500), 'montant_ht' => 2083, 'montant_tva' => 417];
-        $rienRendu = ['montant_ht' => 0, 'montant_tva' => 0];
+        $premiere = [...self::ligneDeVente(2500), 'prix_unitaire_ht' => 20833333, 'montant_ht' => 2084, 'montant_tva' => 416];
+        $seconde = [...self::ligneDeVente(2500), 'prix_unitaire_ht' => 20833333, 'montant_ht' => 2083, 'montant_tva' => 417];
+        $rienRendu = ['quantite' => 0, 'montant_ht' => 0, 'montant_tva' => 0];
 
         $dUneLigne = $this->calculateur()->chiffrerUnAvoir([['ligne' => $premiere, 'quantite_rendue' => 1, 'deja_rendu' => $rienRendu]]);
         $deToutLaFacture = $this->calculateur()->chiffrerUnAvoir([
@@ -528,6 +570,72 @@ class CalculateurLigneTest extends TestCase
         $this->assertSame([2084, 416, 2500], self::triplet($dUneLigne['total']));
         $this->assertSame([[2084, 416, 2500], [2083, 417, 2500]], self::triplets($deToutLaFacture['lignes']));
         $this->assertSame([4167, 833, 5000], self::triplet($deToutLaFacture['total']));
+    }
+
+    /**
+     * Les écarts de lignes rendues en entier s'additionnent (décision de
+     * Claude, D76) : 9 articles différents à 25,00 € TTC à 20 % ont chacun
+     * 25,00 x 20 ÷ 120 = 4,1666... -> 4,17 € de TVA, 37,53 € pour une TVA du
+     * taux de 225,00 x 20 ÷ 120 = 37,50 € ; à égalité de tout, les trois
+     * premières lignes rendent chacune un centime (20,84 € HT et 4,16 €).
+     * L'avoir de ces trois lignes, rendues en entier, en garde les montants,
+     * faute de ligne rendue en partie qui puisse recevoir un centime :
+     * 62,52 € HT et 12,48 € de TVA pour 75,00 €, dont la TVA est 75,00 x 20
+     * ÷ 120 = 12,50 €, deux centimes plus haut ; et 62,52 x 20 % = 12,504 €.
+     */
+    public function test_un_avoir_de_plusieurs_lignes_entieres_additionne_leurs_ecarts(): void
+    {
+        $vente = $this->calculateur()->chiffrerUneVente(array_fill(0, 9, self::ligneDeVente(2500)));
+        $rienRendu = ['quantite' => 0, 'montant_ht' => 0, 'montant_tva' => 0];
+
+        $avoir = $this->calculateur()->chiffrerUnAvoir(array_map(fn (array $vendue): array => [
+            'ligne' => [...self::ligneDeVente(2500), 'prix_unitaire_ht' => 20833333, 'montant_ht' => $vendue['montant_ht'], 'montant_tva' => $vendue['montant_tva']],
+            'quantite_rendue' => 1,
+            'deja_rendu' => $rienRendu,
+        ], array_slice($vente['lignes'], 0, 3)));
+
+        $this->assertSame([...array_fill(0, 3, [2084, 416, 2500]), ...array_fill(0, 6, [2083, 417, 2500])], self::triplets($vente['lignes']));
+        $this->assertSame(array_fill(0, 3, [2084, 416, 2500]), self::triplets($avoir['lignes']));
+        $this->assertSame([6252, 1248, 7500], self::triplet($avoir['total']));
+    }
+
+    /**
+     * Les avoirs successifs d'une ligne ne reportent pas leurs centimes sur
+     * celui qui la solde (décision de Claude, D76) : un avoir ne donne le
+     * centime à une ligne rendue en partie que si ce qui reste d'elle garde
+     * une TVA à un centime au plus de celle de son TTC (voir
+     * CalculateurLigne::chiffrerUnAvoir()).
+     *
+     * 7 x 0,26 € TTC à 10 % (182 x 10 ÷ 110 = 16,5... -> 0,17 € de TVA,
+     * 1,65 € HT), crédités article par article : la TVA de 0,26 € est
+     * 0,0236... -> 0,02 €. Deux articles rendus (0,52 € : 0,047... ->
+     * 0,05 €) rendraient 0,23 € + 0,03 € : l'avoir rend 0,24 € + 0,02 €. Au
+     * troisième, le centime laisserait 0,93 € HT et 0,11 € de TVA pour
+     * 1,04 €, dont la TVA est 0,0945... -> 0,09 € : l'avoir rend 0,23 € +
+     * 0,03 €. Le dernier rend 0,23 € + 0,03 €, à un centime de la TVA de son
+     * TTC, et non 0,22 € + 0,04 €.
+     *
+     * 6 x 2,29 € TTC à 5,5 % remisés de 10 % (13,74 € moins 1,37 €, 12,37 € :
+     * 0,6448... -> 0,64 € de TVA, 11,73 € HT), crédités article par article
+     * (2,29 € moins 0,23 € de remise, 2,06 € : 0,1073... -> 0,11 € de TVA) :
+     * au quatrième, le centime laisserait 3,93 € HT et 0,20 € de TVA pour
+     * 4,13 €, dont la TVA est 0,2153... -> 0,22 € ; le dernier rend 1,97 € HT
+     * et 0,10 € de TVA pour 2,07 € (0,1079... -> 0,11 €), et son HT reste à
+     * 1,64 centime de 1 x 2,170616 € x 90 % = 1,9535544 €, sous les deux
+     * centimes de la facture électronique, et non 1,98 € HT.
+     */
+    public function test_des_avoirs_successifs_ne_reportent_pas_leurs_centimes_sur_celui_qui_solde_la_ligne(): void
+    {
+        $sachets = [...self::ligneDeVente(26, 7, 1000), 'prix_unitaire_ht' => 236364, 'montant_ht' => 165, 'montant_tva' => 17];
+        $piles = [...self::ligneDeVente(229, 6, 550, 1000), 'prix_unitaire_ht' => 2170616, 'montant_ht' => 1173, 'montant_tva' => 64];
+
+        $avoirsDesSachets = $this->avoirsSuccessifs($sachets, array_fill(0, 7, 1));
+        $avoirsDesPiles = $this->avoirsSuccessifs($piles, array_fill(0, 6, 1));
+
+        $this->assertSame([[24, 2, 26], [24, 2, 26], [23, 3, 26], [24, 2, 26], [24, 2, 26], [23, 3, 26], [23, 3, 26]], $avoirsDesSachets);
+        $this->assertSame([[195, 11, 206], [195, 11, 206], [195, 11, 206], [196, 10, 206], [195, 11, 206], [197, 10, 207]], $avoirsDesPiles);
+        $this->assertSame([165, 17], [array_sum(array_column($avoirsDesSachets, 0)), array_sum(array_column($avoirsDesSachets, 1))]);
+        $this->assertSame([1173, 64], [array_sum(array_column($avoirsDesPiles, 0)), array_sum(array_column($avoirsDesPiles, 1))]);
     }
 
     /**
@@ -543,12 +651,13 @@ class CalculateurLigneTest extends TestCase
      */
     public function test_apres_un_centime_d_ajustement_aucun_retour_ne_rend_un_montant_negatif(): void
     {
-        $troisArticles = [...self::ligneDeVente(1, 3), 'montant_ht' => 2, 'montant_tva' => 1];
-        $deuxCentimes = [...self::ligneDeVente(2), 'montant_ht' => 2, 'montant_tva' => 0];
+        $troisArticles = [...self::ligneDeVente(1, 3), 'prix_unitaire_ht' => 8333, 'montant_ht' => 2, 'montant_tva' => 1];
+        $deuxCentimes = [...self::ligneDeVente(2), 'prix_unitaire_ht' => 16667, 'montant_ht' => 2, 'montant_tva' => 0];
+        $rienRendu = ['quantite' => 0, 'montant_ht' => 0, 'montant_tva' => 0];
 
         $avoir = $this->calculateur()->chiffrerUnAvoir([
-            ['ligne' => $troisArticles, 'quantite_rendue' => 1, 'deja_rendu' => ['montant_ht' => 0, 'montant_tva' => 0]],
-            ['ligne' => $deuxCentimes, 'quantite_rendue' => 1, 'deja_rendu' => ['montant_ht' => 0, 'montant_tva' => 0]],
+            ['ligne' => $troisArticles, 'quantite_rendue' => 1, 'deja_rendu' => $rienRendu],
+            ['ligne' => $deuxCentimes, 'quantite_rendue' => 1, 'deja_rendu' => $rienRendu],
         ]);
 
         $this->assertSame([[0, 1, 1], [2, 0, 2]], self::triplets($avoir['lignes']));

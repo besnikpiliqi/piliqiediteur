@@ -1416,13 +1416,14 @@ return [
         // Documents de vente.
         'documents.note-de-calcul-du-pu-ht-d-un-article' => [
             'puce' => 'Documents de vente',
-            'regle' => 'La note de calcul d\'un document qui montre le PU HT ajoute, en une seule phrase quel que soit le nombre d\'articles de ses lignes, que le PU HT affiché est celui d\'un article, prix TTC moins sa TVA arrondie au centime (9,99 € TTC à 20 % : 8,32 € HT), et que la quantité × ce prix peut différer de quelques centimes du total HT de la ligne, calculé sur toute la quantité ; son PDF ajoute que le PU HT exact écrit sous chaque article est celui de la facture électronique (décisions de l\'éditeur du 14/11/2026, qui remplacent T105 ; modèle M6-b).',
+            'regle' => 'La note de calcul de la fiche de toute vente et du PDF d\'un document qui montre le PU HT ajoute, en une seule phrase quel que soit le nombre d\'articles de ses lignes, que le PU HT affiché est celui d\'un article, prix TTC moins sa TVA arrondie au centime (9,99 € TTC à 20 % : 8,32 € HT), et que la quantité × ce prix peut différer de quelques centimes du total HT de la ligne, calculé sur toute la quantité ; son PDF ajoute que le PU HT exact écrit sous chaque article est celui de la facture électronique (décisions de l\'éditeur du 14/11/2026, qui remplacent T105 ; modèle M6-b).',
             'tests' => [
                 'tests/Feature/Facturation/MentionsFiscalesTest.php::test_la_note_d_un_document_qui_montre_le_pu_ht_est_la_meme_quel_que_soit_le_nombre_d_articles',
                 'tests/Feature/Facturation/MentionsFiscalesTest.php::test_chaque_avoir_d_une_ligne_rendue_en_trois_fois_garde_la_note_du_pu_ht_d_un_article',
                 'tests/Feature/Facturation/FacturePdfGeneratorTest.php::test_la_note_de_calcul_est_la_meme_quel_que_soit_le_nombre_d_articles',
                 'tests/Feature/Facturation/FacturePdfGeneratorTest.php::test_le_pu_ht_d_un_article_s_imprime_sans_changer_le_total_de_la_ligne',
                 'tests/Feature/Filament/FactureResourceTest.php::test_la_fiche_d_une_facture_a_un_professionnel_montre_le_pu_ht_d_un_article',
+                'tests/Feature/Filament/FactureResourceTest.php::test_la_fiche_d_un_ticket_montre_le_pu_ht_d_un_article_et_explique_son_ecart',
             ],
         ],
         'documents.client-fige-et-facture-immuable' => [
@@ -1505,7 +1506,7 @@ return [
         ],
         'documents.note-de-calcul' => [
             'puce' => 'Documents de vente',
-            'regle' => 'La note de calcul imprimée sous les lignes de toute vente hors franchise dit que, pour chaque ligne, la TVA est le TTC × taux ÷ (1 + taux), arrondie une fois au centime, et le HT le TTC moins cette TVA, un centime pouvant être ajusté sur une ligne pour que la TVA de chaque taux soit égale à sa base HT × le taux ; un ticket, un avoir sur ticket ou un devis à un particulier n\'en dit pas plus (décision de l\'éditeur du 14/11/2026, modèle P1).',
+            'regle' => 'La note de calcul imprimée sous les lignes de toute vente hors franchise dit que, pour chaque ligne, la TVA est le TTC × taux ÷ (1 + taux), arrondie une fois au centime, et le HT le TTC moins cette TVA, un centime pouvant être ajusté sur une ligne pour que la TVA de chaque taux soit celle de son TTC total, calculée de même, sans jamais promettre qu\'elle égale sa base HT × le taux (décision de Claude, D76) ; le PDF d\'un ticket, d\'un avoir sur ticket ou d\'un devis à un particulier n\'en dit pas plus (décision de l\'éditeur du 14/11/2026, modèle P1).',
             'tests' => [
                 'tests/Feature/Facturation/MentionsFiscalesTest.php::test_chaque_variante_de_la_note_de_calcul_explique_son_calcul_et_le_pu_ht_du_document_qui_le_montre',
                 'tests/Feature/Facturation/FacturePdfGeneratorTest.php::test_une_vente_explique_le_calcul_de_ses_lignes',
@@ -1624,7 +1625,7 @@ return [
         ],
         'prix.calcul-depuis-le-ttc' => [
             'puce' => 'Prix et TVA des ventes',
-            'regle' => 'Toute vente se calcule une seule fois, à son enregistrement, depuis les prix TTC, ligne par ligne : la TVA de chaque ligne est son TTC × taux ÷ (1 + taux), arrondie une fois au centime le plus proche (un demi-centime au centime supérieur), et son HT le TTC moins cette TVA ; la somme des TVA des lignes de chaque taux se ramène à la TVA du TTC du taux, d\'un centime par ligne au plus, d\'abord sur la ligne dont la TVA arrondie s\'écarte le plus de sa TVA exacte, à égalité celle au plus gros TTC, puis la première ; un même panier a les mêmes montants pour tout client (décision de l\'éditeur du 14/11/2026).',
+            'regle' => 'Toute vente se calcule une seule fois, à son enregistrement, depuis les prix TTC, ligne par ligne : la TVA de chaque ligne est son TTC × taux ÷ (1 + taux), arrondie une fois au centime le plus proche (un demi-centime au centime supérieur), et son HT le TTC moins cette TVA ; la somme des TVA des lignes de chaque taux se ramène à la TVA du TTC du taux (décision de Claude, D76, plutôt que le TTC moins le HT arrondi : un article seul à 9,99 € fait 8,32 € HT, comme son PU HT affiché), d\'un centime par ligne au plus, d\'abord sur la ligne dont la TVA arrondie s\'écarte le plus de sa TVA exacte, à égalité celle au plus gros TTC, puis la première ; la TVA de chaque taux s\'écarte ainsi de sa base HT × le taux d\'un demi-centime × (1 + taux) au plus ; un même panier a les mêmes montants pour tout client (décision de l\'éditeur du 14/11/2026).',
             'tests' => [
                 'tests/Feature/Facturation/PolitiqueDArrondiTest.php::test_cinquante_euros_ttc_font_41_67_ht_a_l_ecran_et_sur_la_vente_quel_que_soit_le_decoupage_et_le_client',
                 'tests/Feature/Facturation/PolitiqueDArrondiTest.php::test_quatre_articles_a_65_euros_ttc_font_216_67_ht_et_43_33_de_tva_en_une_ou_quatre_lignes',
@@ -1632,6 +1633,7 @@ return [
                 'tests/Feature/Facturation/TvaLigneParLigneTest.php::test_une_facture_professionnelle_calcule_la_tva_ligne_par_ligne_et_ajuste_un_centime_par_taux',
                 'tests/Feature/Facturation/TvaLigneParLigneTest.php::test_le_contenu_signe_et_le_pdf_portent_les_montants_de_chaque_ligne',
                 'tests/Unit/CalculateurLigneTest.php::test_un_demi_centime_exact_arrondit_la_tva_au_centime_superieur',
+                'tests/Unit/CalculateurLigneTest.php::test_la_tva_d_une_ligne_seule_s_arrondit_une_seule_fois_sur_son_ttc',
                 'tests/Unit/CalculateurLigneTest.php::test_le_meme_total_donne_les_memes_montants_quel_que_soit_le_decoupage',
                 'tests/Unit/CalculateurLigneTest.php::test_le_centime_d_ecart_d_un_taux_va_a_la_ligne_dont_la_tva_est_la_plus_arrondie',
                 'tests/Unit/CalculateurLigneTest.php::test_a_egalite_le_centime_va_a_la_ligne_au_plus_gros_ttc',
@@ -1677,7 +1679,7 @@ return [
         ],
         'prix.retours' => [
             'puce' => 'Prix et TVA des ventes',
-            'regle' => 'Un retour rend, pour tous les articles d\'une ligne rendus jusqu\'ici, le même calcul sur leur TTC (sa TVA arrondie une fois, son HT le TTC moins cette TVA), sans jamais dépasser le HT ni la TVA de la ligne, moins ce que les retours précédents ont rendu ; le retour de toute la ligne rend exactement ses montants ; dans un avoir, la TVA de chaque taux se ramène à celle de son TTC d\'un centime, seulement sur une ligne rendue en partie et dans la limite de ce qui en reste, et un avoir qui ne rend que des lignes entières en garde les montants (décision de Claude, D76).',
+            'regle' => 'Un retour rend, pour tous les articles d\'une ligne rendus jusqu\'ici, le même calcul sur leur TTC (sa TVA arrondie une fois, son HT le TTC moins cette TVA), sans jamais dépasser le HT ni la TVA de la ligne, moins ce que les retours précédents ont rendu ; le retour de toute la ligne rend exactement ses montants ; dans un avoir, la TVA de chaque taux se ramène vers celle de son TTC d\'un centime par ligne au plus, seulement sur une ligne rendue en partie et seulement si ce centime garde la ligne de l\'avoir et ce qui reste de la ligne vendue dans leurs bornes (une TVA à un centime au plus de celle du TTC de ce qui reste, un HT à moins de deux centimes de la quantité × le PU HT), si bien que l\'avoir qui solde une ligne en rend une TVA à un centime au plus de celle de son TTC ; un avoir qui ne rend que des lignes entières en garde les montants, et leurs écarts s\'additionnent (9 articles à 25,00 € dont les trois premiers sont ajustés, rendus en entier : 12,48 € de TVA pour 75,00 €) (décision de Claude, D76).',
             'tests' => [
                 'tests/Unit/CalculateurLigneTest.php::test_les_retours_partiels_rendent_le_calcul_de_la_vente_encadre_par_la_ligne',
                 'tests/Unit/CalculateurLigneTest.php::test_un_retour_rend_le_calcul_de_la_vente_sur_les_articles_rendus',
@@ -1686,6 +1688,11 @@ return [
                 'tests/Unit/CalculateurLigneTest.php::test_un_avoir_ramene_la_tva_de_son_taux_sur_une_ligne_rendue_en_partie',
                 'tests/Unit/CalculateurLigneTest.php::test_un_avoir_qui_ne_rend_que_des_lignes_entieres_en_garde_les_montants',
                 'tests/Unit/CalculateurLigneTest.php::test_apres_un_centime_d_ajustement_aucun_retour_ne_rend_un_montant_negatif',
+                'tests/Unit/CalculateurLigneTest.php::test_un_avoir_de_plusieurs_lignes_entieres_additionne_leurs_ecarts',
+                'tests/Unit/CalculateurLigneTest.php::test_des_avoirs_successifs_ne_reportent_pas_leurs_centimes_sur_celui_qui_solde_la_ligne',
+                'tests/Unit/CalculateurLigneAuHasardTest.php::test_2000_ventes_creditees_par_des_avoirs_successifs_de_plusieurs_lignes_gardent_les_bornes_de_chaque_ligne',
+                'tests/Feature/Facturation/AvoirActionsTest.php::test_des_avoirs_successifs_d_une_ligne_ne_reportent_pas_leurs_centimes_sur_celui_qui_la_solde',
+                'tests/Feature/Facturation/TotauxDeLaNormeEuropeenneTest.php::test_un_avoir_de_lignes_entieres_d_un_meme_taux_additionne_leurs_ecarts',
                 'tests/Feature/Facturation/TvaLigneParLigneTest.php::test_le_retour_d_une_ligne_ne_depasse_jamais_sa_part_de_tva',
                 'tests/Feature/Facturation/PolitiqueDArrondiTest.php::test_les_retours_partiels_soldent_la_ligne_au_centime',
                 'tests/Feature/Facturation/AvoirActionsTest.php::test_le_retour_d_une_ligne_ajustee_credite_exactement_ses_montants',
@@ -4427,7 +4434,7 @@ return [
                 'regles' => ['prix.pu-ht-affiche-d-un-article', 'documents.note-de-calcul-du-pu-ht-d-un-article'],
             ],
             'REGLE-B-14-11' => [
-                'decision' => 'Le 14/11/2026 vers 02 h 25 UTC : « Règle (b) et M6 mais sans pu ttc » ; toute vente se calcule ligne par ligne, la TVA de chaque ligne arrondie sur son TTC, son HT le TTC moins cette TVA, un centime par ligne au plus ramenant la TVA de chaque taux à celle de son TTC ; un avoir ne reçoit ce centime que sur une ligne rendue en partie (décision de Claude, D76) (lot REGLE-B, regle-b/cahier-REGLE-B.md).',
+                'decision' => 'Le 14/11/2026 vers 02 h 25 UTC : « Règle (b) et M6 mais sans pu ttc » ; toute vente se calcule ligne par ligne, la TVA de chaque ligne arrondie sur son TTC, son HT le TTC moins cette TVA, un centime par ligne au plus ramenant la TVA de chaque taux à celle de son TTC ; décisions de Claude (D76) : la cible du taux est la TVA de son TTC, arrondie une fois, plutôt que son TTC moins son HT arrondi (un article seul à 9,99 € fait 8,32 € HT, comme son PU HT affiché), ce qui l\'écarte de sa base HT × le taux d\'un demi-centime × (1 + taux) au plus, et la note de calcul ne promet pas leur égalité ; un avoir ne reçoit ce centime que sur une ligne rendue en partie, et seulement s\'il garde la ligne de l\'avoir et ce qui reste de la ligne vendue dans leurs bornes (lot REGLE-B, regle-b/cahier-REGLE-B.md, et sa relecture).',
                 'regles' => ['prix.calcul-depuis-le-ttc', 'prix.retours', 'prix.pu-ht-a-six-decimales', 'documents.note-de-calcul'],
             ],
             'REGLE-B-M6-14-11' => [
@@ -5013,7 +5020,7 @@ return [
             ],
             '2.1-143' => [
                 'decision' => 'Message 09/11 vers 01 h 32 UTC (09/11) : « Et dans la facture que tu m as envoyé il y a apparemment +0.26€ de plus, alors sera accepté ou pas . Car comme j’aime bcp p’us »',
-                'explication' => 'Question, pas une décision : l\'écart est accepté selon la tolérance européenne, et la règle des ventes reste celle de Q-CALC2 (a).',
+                'explication' => 'Question, pas une décision : l\'écart est accepté selon la tolérance européenne ; la règle des ventes, Q-CALC2 (a) à l\'époque, est depuis le 14/11/2026 la règle (b) (REGLE-B-14-11).',
             ],
             '2.1-144' => [
                 'decision' => 'Message 09/11 vers 00 h 10 UTC (09/11) : « tout en a, Q-AUD6 oui, Q-AUD7 oui »',

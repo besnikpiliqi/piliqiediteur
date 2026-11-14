@@ -25,9 +25,12 @@ use UnexpectedValueException;
  *    TVA de chaque ligne est son TTC x taux ÷ (1 + taux), arrondie une
  *    fois au centime le plus proche (un demi-centime exact au centime
  *    supérieur), et son HT son TTC moins cette TVA ; pour chaque taux, la
- *    TVA est celle du TTC de ses lignes, arrondie de même, et si la somme
- *    des TVA des lignes s'en écarte, l'écart se corrige d'un centime par
- *    ligne au plus. 9,99 € TTC à 20 % font 1,67 € de TVA et 8,32 € HT ;
+ *    TVA est celle du TTC de ses lignes, arrondie de même (décision de
+ *    Claude, D76 : la TVA de son TTC plutôt que son TTC moins son HT
+ *    arrondi), et si la somme des TVA des lignes s'en écarte, l'écart se
+ *    corrige d'un centime par ligne au plus ; elle s'écarte ainsi de sa
+ *    base HT x le taux d'un demi-centime x (1 + taux) au plus. 9,99 € TTC
+ *    à 20 % font 1,67 € de TVA et 8,32 € HT (8,32 x 20 % = 1,664 €) ;
  *    un même document de 50,00 € TTC à 20 % fait 41,67 € HT et 8,33 € de
  *    TVA, en une ligne, en 2 x 25,00 € ou en deux lignes de 25,00 €
  *    (20,84 € puis 20,83 € HT, la première rendant le centime de TVA en
@@ -45,8 +48,11 @@ use UnexpectedValueException;
  *    2 x 40,00 € (66,67 € HT + 13,33 €) se rendent en 33,33 € + 6,67 €,
  *    puis 33,34 € + 6,66 € ; le retour de toute la ligne rend exactement
  *    ses montants. Dans un avoir (chiffrerUnAvoir()), la TVA de chaque
- *    taux se ramène de même à celle de son TTC, d'un centime par ligne
- *    rendue en partie, dans la limite de ce qui reste de la ligne.
+ *    taux se ramène vers celle de son TTC, d'un centime par ligne rendue
+ *    en partie, seulement si ce centime garde la ligne de l'avoir et ce
+ *    qui reste de la ligne vendue dans leurs bornes ; un avoir qui ne rend
+ *    que des lignes entières en garde les montants, et les écarts de leurs
+ *    TVA s'additionnent.
  * 4. Un achat garde les montants qu'écrit la facture du fournisseur
  *    (chiffrerUnAchat(), décision de l'éditeur du 02/11/2026, T1) : son PU
  *    HT a six décimales au plus ; le HT proposé de chaque ligne est
@@ -107,6 +113,13 @@ class CalculateurLigne
      * prixUnitaireHtExact()).
      */
     private const MILLIONIEMES_MAXIMUM = 1_000_000_000_000_000_000;
+
+    /**
+     * La tolérance de la facture électronique entre le HT d'une ligne et sa
+     * quantité x son PU HT, remise déduite (règle Peppol R120 : 0,02 €), en
+     * cent millionièmes de centime (voir ecartAuPuHt()).
+     */
+    private const ECART_R120 = 200_000_000;
 
     private const NOMBRE_A_VIRGULE = 'Le calcul attend des montants en centimes et des taux et remises en centièmes de point, en nombres entiers, jamais un nombre à virgule.';
 
@@ -224,18 +237,29 @@ class CalculateurLigne
      * Les montants d'un avoir, dans l'ordre de ses lignes (voir le point 3
      * du commentaire de classe) : chacune rend ce que rend son retour (voir
      * retourDeLigne()) ; puis, pour chaque taux soumis à la TVA, la somme
-     * des TVA de ses lignes se ramène, comme dans une vente, à la TVA du TTC
-     * du taux arrondie une fois, d'un centime par ligne au plus (voir
+     * des TVA de ses lignes se ramène vers la TVA du TTC du taux, arrondie
+     * une fois, comme dans une vente, d'un centime par ligne au plus (voir
      * lignesQuiRecoiventLEcart()), mais seulement sur une ligne rendue en
-     * partie, et dans la limite de ce qui reste de la ligne vendue : ni HT
-     * ni TVA négatifs, ni plus que son HT ou sa TVA ; son dernier retour en
-     * solde le reste au centime. Faute d'une telle ligne -- un avoir qui ne
-     * rend que des lignes entières --, l'avoir garde les montants de ses
-     * lignes : sa TVA peut alors s'écarter d'un centime de celle de son TTC
-     * (décision de Claude, D76). Un avoir qui rend toute la facture en
-     * rend exactement les montants.
+     * partie, et seulement si ce centime ne fait sortir ni la ligne de
+     * l'avoir ni ce qui reste de la ligne vendue de leurs bornes, ni ne les
+     * en éloigne (voir leCentimeGardeLesBornes(), décision de Claude, D76) :
+     * ce qui reste garde une TVA à un centime au plus de celle de son TTC,
+     * et l'une et l'autre un HT à moins de deux centimes de leur quantité x
+     * le PU HT de la ligne, remise déduite. Le retour qui solde une ligne,
+     * comme celui d'une ligne entière, rend donc une TVA à un centime au
+     * plus de celle de son TTC.
      *
-     * @param  array<array-key, array{ligne: array{prix_unitaire_ttc: int, quantite: int, remise_pourcentage: int, taux_tva_du_prix: int, taux_tva: int, montant_ht: int, montant_tva: int}, quantite_rendue: int, deja_rendu: array{montant_ht: int, montant_tva: int}}>  $retours  pour chaque ligne de l'avoir, la ligne vendue, tous ses articles rendus jusqu'ici, ce retour compris, et ce que ses retours précédents ont rendu, en centimes et centièmes de point
+     * La TVA d'un taux de l'avoir s'écarte de celle de son TTC quand il faut
+     * plus de centimes que de lignes rendues en partie qui peuvent en
+     * recevoir un : sur plusieurs lignes, les écarts des lignes rendues en
+     * entier ou soldées, chacun d'un centime au plus, et ceux de leurs
+     * arrondis s'additionnent. 9 articles différents à 25,00 € TTC à 20 %,
+     * dont les trois premiers ont reçu le centime à la vente (20,84 € HT et
+     * 4,16 € de TVA), rendus en entier, font 62,52 € HT et 12,48 € de TVA
+     * pour 75,00 €, dont la TVA est 12,50 €. Un avoir qui rend toute la
+     * facture en rend exactement les montants.
+     *
+     * @param  array<array-key, array{ligne: array{prix_unitaire_ttc: int, prix_unitaire_ht: int, quantite: int, remise_pourcentage: int, taux_tva_du_prix: int, taux_tva: int, montant_ht: int, montant_tva: int}, quantite_rendue: int, deja_rendu: array{quantite: int, montant_ht: int, montant_tva: int}}>  $retours  pour chaque ligne de l'avoir, la ligne vendue avec son PU HT en millionièmes d'euro, tous ses articles rendus jusqu'ici, ce retour compris, et ce que ses retours précédents ont rendu (articles, HT et TVA), en centimes et centièmes de point
      * @return array{lignes: list<array{montant_ht: int, montant_tva: int, montant_ttc: int}>, taux: array<int, array{montant_ht: int, montant_tva: int, montant_ttc: int}>, total: array{montant_ht: int, montant_tva: int, montant_ttc: int}}
      *
      * @throws InvalidArgumentException
@@ -243,17 +267,16 @@ class CalculateurLigne
     public function chiffrerUnAvoir(array $retours): array
     {
         $calculees = [];
-        $restes = [];
+        // Pour chaque ligne rendue en partie, les sens où elle peut recevoir
+        // le centime (voir leCentimeGardeLesBornes()).
+        $sensPossibles = [];
 
         foreach (array_values($retours) as $rang => ['ligne' => $ligne, 'quantite_rendue' => $quantite, 'deja_rendu' => $dejaRendu]) {
             $rendu = $this->retourDeLigne($ligne, $quantite, $dejaRendu);
             $calculees[$rang] = ['taux' => $this->taux($ligne, 'taux_tva'), 'ttc' => $rendu['montant_ttc'], 'tva' => $rendu['montant_tva']];
 
-            if ($quantite < $this->quantite($ligne)) {
-                $restes[$rang] = [
-                    'ht' => $this->entier($ligne, 'montant_ht') - $this->entier($dejaRendu, 'montant_ht') - $rendu['montant_ht'],
-                    'tva' => $this->entier($ligne, 'montant_tva') - $this->entier($dejaRendu, 'montant_tva') - $rendu['montant_tva'],
-                ];
+            if ($quantite < $this->quantite($ligne) && $calculees[$rang]['taux'] !== 0) {
+                $sensPossibles[$rang] = array_values(array_filter([1, -1], fn (int $sens): bool => $this->leCentimeGardeLesBornes($ligne, $quantite, $dejaRendu, $rendu, $sens)));
             }
         }
 
@@ -263,12 +286,7 @@ class CalculateurLigne
         foreach (array_unique(array_column($calculees, 'taux')) as $taux) {
             $duTaux = array_filter($calculees, fn (array $ligne): bool => $ligne['taux'] === $taux);
             $ecart = $taux === 0 ? 0 : array_sum(array_column($duTaux, 'tva')) - $this->tvaDuTtc($this->borne(array_sum(array_column($duTaux, 'ttc'))), $taux);
-            // Un centime de TVA en moins est un centime de HT en plus, et
-            // inversement : la ligne doit pouvoir le donner sans dépasser
-            // ce qui reste d'elle.
-            $possibles = array_filter($duTaux, fn (array $ligne, int $rang): bool => isset($restes[$rang]) && ($ecart > 0
-                ? $ligne['tva'] > 0 && $restes[$rang]['ht'] > 0
-                : $ligne['ttc'] - $ligne['tva'] > 0 && $restes[$rang]['tva'] > 0), ARRAY_FILTER_USE_BOTH);
+            $possibles = array_filter($duTaux, fn (int $rang): bool => in_array($ecart <=> 0, $sensPossibles[$rang] ?? [], true), ARRAY_FILTER_USE_KEY);
 
             foreach ($this->lignesQuiRecoiventLEcart($possibles, $taux, $ecart) as $rang) {
                 $ajustements[$rang] = $ecart <=> 0;
@@ -280,6 +298,50 @@ class CalculateurLigne
 
             return ['taux' => $ligne['taux'], 'montant_ht' => $ligne['ttc'] - $tva, 'montant_tva' => $tva, 'montant_ttc' => $ligne['ttc']];
         }, $calculees, array_keys($calculees)));
+    }
+
+    /**
+     * Une ligne rendue en partie peut-elle recevoir le centime d'un avoir
+     * dans ce sens -- 1 : un centime de TVA en moins, donc un de HT en
+     * plus ; -1 : l'inverse -- (voir chiffrerUnAvoir()) ? Seulement si ni
+     * la ligne de l'avoir ni ce qui reste de la ligne vendue ne deviennent
+     * négatifs, et si chacun garde ses bornes, ou s'en rapproche : ce qui
+     * reste, une TVA à un centime au plus de celle de son TTC ; la ligne de
+     * l'avoir et ce qui reste, un HT à moins de deux centimes de leur
+     * quantité x le PU HT de la ligne, remise déduite (règle Peppol R120).
+     * Le retour qui solde la ligne garde ainsi ces bornes : sans elles, des
+     * avoirs successifs y reportaient leurs centimes -- 7 x 0,26 € TTC à
+     * 10 % crédités article par article finissaient par 0,22 € HT et 0,04 €
+     * de TVA, quand la TVA de 0,26 € est 0,02 €.
+     *
+     * @param  array<string, mixed>  $ligne  la ligne vendue, avec son PU HT en millionièmes d'euro (prix_unitaire_ht)
+     * @param  int  $quantiteRendue  tous les articles rendus jusqu'ici, ce retour compris
+     * @param  array<string, mixed>  $dejaRendu  ce que les retours précédents ont rendu : articles, HT et TVA
+     * @param  array{montant_ht: int, montant_tva: int, montant_ttc: int}  $rendu  ce que rend ce retour, sans le centime
+     *
+     * @throws InvalidArgumentException
+     */
+    private function leCentimeGardeLesBornes(array $ligne, int $quantiteRendue, array $dejaRendu, array $rendu, int $sens): bool
+    {
+        $articlesDuRetour = $quantiteRendue - $this->entier($dejaRendu, 'quantite');
+
+        if ($articlesDuRetour < 1) {
+            throw new InvalidArgumentException('Un retour rend entre 1 article et la quantité de la ligne.');
+        }
+
+        $prix = $this->prixAuMillionieme($ligne);
+        $remise = $this->remise($ligne);
+        $resteHt = $this->entier($ligne, 'montant_ht') - $this->entier($dejaRendu, 'montant_ht') - $rendu['montant_ht'];
+        $resteTva = $this->entier($ligne, 'montant_tva') - $this->entier($dejaRendu, 'montant_tva') - $rendu['montant_tva'];
+        $tvaDuReste = $this->tvaDuTtc($resteHt + $resteTva, $this->taux($ligne, 'taux_tva'));
+        $articlesRestants = $this->quantite($ligne) - $quantiteRendue;
+        // Un écart garde sa borne, ou s'en rapproche.
+        $tient = fn (BigInteger $avant, BigInteger $apres, int $borne): bool => $apres->isLessThan($borne) || $apres->isLessThan($avant);
+
+        return min($rendu['montant_tva'] - $sens, $rendu['montant_ht'] + $sens, $resteHt - $sens, $resteTva + $sens) >= 0
+            && $tient(BigInteger::of(abs($resteTva - $tvaDuReste)), BigInteger::of(abs($resteTva + $sens - $tvaDuReste)), 2)
+            && $tient($this->ecartAuPuHt($articlesRestants, $prix, $remise, $resteHt), $this->ecartAuPuHt($articlesRestants, $prix, $remise, $resteHt - $sens), self::ECART_R120)
+            && $tient($this->ecartAuPuHt($articlesDuRetour, $prix, $remise, $rendu['montant_ht']), $this->ecartAuPuHt($articlesDuRetour, $prix, $remise, $rendu['montant_ht'] + $sens), self::ECART_R120);
     }
 
     /**
@@ -636,7 +698,10 @@ class CalculateurLigne
      * demi-centime au plus pour la remise, arrondie une fois au centime sur
      * son TTC, et un demi-centime au plus pour le millionième (0,0000005 € x
      * 10 000). C'est la tolérance de la facture électronique (règle Peppol
-     * R120 : 0,02 €).
+     * R120 : 0,02 €). Une ligne d'avoir, qui rend le calcul de la vente sur
+     * ses articles (voir retourDeLigne()), ne reçoit le centime de l'avoir
+     * que s'il ne l'en fait pas sortir, ni ce qui reste de la ligne vendue
+     * (voir chiffrerUnAvoir()).
      *
      * @param  int  $prixUnitaireTtc  en centimes
      * @param  int  $tauxTva  en centièmes de point
@@ -1337,10 +1402,23 @@ class CalculateurLigne
      */
     public function puHtRetombeSurLeHt(int $quantite, int $prixMillioniemes, int $remiseCentiemes, int $htCentimes): bool
     {
-        $produit = BigInteger::of($quantite)->multipliedBy($prixMillioniemes)->multipliedBy(10000 - $remiseCentiemes);
-        $ht = BigInteger::of($htCentimes)->multipliedBy(100_000_000);
+        return $this->ecartAuPuHt($quantite, $prixMillioniemes, $remiseCentiemes, $htCentimes)->isLessThan(self::ECART_R120);
+    }
 
-        return $produit->minus($ht)->abs()->isLessThan(200_000_000);
+    /**
+     * L'écart entre le HT d'une ligne et la quantité x son PU HT (en
+     * millionièmes d'euro), remise déduite, calculé exactement, en cent
+     * millionièmes de centime : 2 centimes valent ECART_R120.
+     *
+     * @param  int  $prixMillioniemes  le PU HT, en millionièmes d'euro
+     * @param  int  $remiseCentiemes  en centièmes de point
+     * @param  int  $htCentimes  le HT de la ligne, en centimes
+     */
+    private function ecartAuPuHt(int $quantite, int $prixMillioniemes, int $remiseCentiemes, int $htCentimes): BigInteger
+    {
+        $produit = BigInteger::of($quantite)->multipliedBy($prixMillioniemes)->multipliedBy(10000 - $remiseCentiemes);
+
+        return $produit->minus(BigInteger::of($htCentimes)->multipliedBy(100_000_000))->abs();
     }
 
     /**

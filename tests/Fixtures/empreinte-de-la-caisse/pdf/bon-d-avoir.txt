@@ -33,7 +33,7 @@ TK-LYON1-2026-000001
 12,00 €
 Montants calculés depuis les prix TTC : chaque retour rend, pour tous les articles d'une ligne rendus jusqu'ici, le calcul de la vente sur leur TTC (TVA = TTC × taux ÷ (1 + taux),
 arrondie une fois au centime ; HT = TTC moins cette TVA), sans dépasser le HT ni la TVA de la ligne, déduction faite des avoirs déjà émis sur la même ligne ; le dernier retour solde la
-ligne au centime ; un centime peut être ajusté sur une ligne rendue en partie pour que la TVA de chaque taux soit égale à sa base HT × le taux.
+ligne au centime ; un centime peut être ajusté sur une ligne rendue en partie pour rapprocher la TVA de chaque taux de celle de son TTC total, calculée de même.
 Récapitulatif TVA
 Taux
 Base HT

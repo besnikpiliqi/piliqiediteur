@@ -65,11 +65,11 @@ class MentionsFiscales
 
     public const REGULARISATION_DE_L_EXONERATION = 'Avoir de régularisation : preuve de sortie non reçue pour %s n° %s';
 
-    private const CALCUL_VENTE = 'Montants calculés depuis les prix TTC : pour chaque ligne, la TVA est le TTC × taux ÷ (1 + taux), arrondie une fois au centime, et le HT est le TTC moins cette TVA ; un centime peut être ajusté sur une ligne pour que la TVA de chaque taux soit égale à sa base HT × le taux.';
+    private const CALCUL_VENTE = 'Montants calculés depuis les prix TTC : pour chaque ligne, la TVA est le TTC × taux ÷ (1 + taux), arrondie une fois au centime, et le HT est le TTC moins cette TVA ; un centime peut être ajusté sur une ligne pour que la TVA de chaque taux soit celle de son TTC total, calculée de même.';
 
-    private const CALCUL_RETOUR = 'Montants calculés depuis les prix TTC : chaque retour rend, pour tous les articles d\'une ligne rendus jusqu\'ici, le calcul de la vente sur leur TTC (TVA = TTC × taux ÷ (1 + taux), arrondie une fois au centime ; HT = TTC moins cette TVA), sans dépasser le HT ni la TVA de la ligne, déduction faite des avoirs déjà émis sur la même ligne ; le dernier retour solde la ligne au centime ; un centime peut être ajusté sur une ligne rendue en partie pour que la TVA de chaque taux soit égale à sa base HT × le taux.';
+    private const CALCUL_RETOUR = 'Montants calculés depuis les prix TTC : chaque retour rend, pour tous les articles d\'une ligne rendus jusqu\'ici, le calcul de la vente sur leur TTC (TVA = TTC × taux ÷ (1 + taux), arrondie une fois au centime ; HT = TTC moins cette TVA), sans dépasser le HT ni la TVA de la ligne, déduction faite des avoirs déjà émis sur la même ligne ; le dernier retour solde la ligne au centime ; un centime peut être ajusté sur une ligne rendue en partie pour rapprocher la TVA de chaque taux de celle de son TTC total, calculée de même.';
 
-    private const CALCUL_SANS_TVA = 'Vente sans TVA française : chaque produit, et chaque service à son prix de référence, se vend à son prix catalogue TTC moins la TVA française de son taux (pour chaque ligne, cette TVA est le TTC × taux ÷ (1 + taux), arrondie une fois au centime ; un centime peut être ajusté sur une ligne pour qu\'elle soit, pour chaque taux, égale à la base HT × le taux) ; un autre service, à son prix sans TVA.';
+    private const CALCUL_SANS_TVA = 'Vente sans TVA française : chaque produit, et chaque service à son prix de référence, se vend à son prix catalogue TTC moins la TVA française de son taux (pour chaque ligne, cette TVA est le TTC × taux ÷ (1 + taux), arrondie une fois au centime ; un centime peut être ajusté sur une ligne pour que, pour chaque taux, elle soit celle du TTC total du taux, calculée de même) ; un autre service, à son prix sans TVA.';
 
     private const CALCUL_RETOUR_SANS_TVA = 'Vente sans TVA française : chaque retour rend, pour tous les articles d\'une ligne rendus jusqu\'ici, le calcul de la vente sur cette quantité, sans dépasser le HT de la ligne, déduction faite des avoirs déjà émis sur la même ligne ; le dernier retour solde la ligne au centime.';
 
@@ -168,31 +168,40 @@ class MentionsFiscales
      * modèles M6-b et P1) : toute vente soumise à la TVA française se
      * calcule ligne par ligne depuis ses prix TTC, la TVA de chaque ligne
      * arrondie une fois, son HT le TTC moins cette TVA, un centime pouvant
-     * être ajusté sur une ligne pour que la TVA de chaque taux soit égale à
-     * sa base HT x le taux (voir CalculateurLigne::chiffrerUneVente()) ; un
-     * avoir rend le calcul de la vente sur les articles rendus, dans la
-     * limite de la ligne (voir CalculateurLigne::chiffrerUnAvoir()). Une
-     * vente sans TVA française (K3, voir
-     * ContexteDeVente::documentRetireLaTvaDuPrix()) dit que ses produits, et
-     * ses services à leur prix de référence, se comptent au prix de leur
-     * catalogue moins la TVA de leur taux, et ses autres services à leur
-     * prix sans TVA.
+     * être ajusté sur une ligne pour que la TVA de chaque taux soit celle de
+     * son TTC total, calculée de même (voir
+     * CalculateurLigne::chiffrerUneVente()) ; un avoir rend le calcul de la
+     * vente sur les articles rendus, dans la limite de la ligne, et un
+     * centime ajusté sur une ligne rendue en partie rapproche la TVA de
+     * chaque taux de celle de son TTC total (voir
+     * CalculateurLigne::chiffrerUnAvoir()). Une vente sans TVA française
+     * (K3, voir ContexteDeVente::documentRetireLaTvaDuPrix()) dit que ses
+     * produits, et ses services à leur prix de référence, se comptent au
+     * prix de leur catalogue moins la TVA de leur taux, et ses autres
+     * services à leur prix sans TVA. Aucune n'écrit que la TVA d'un taux
+     * égale sa base HT x le taux : elle s'en écarte d'un demi-centime x (1 +
+     * taux) au plus dans une vente (9,99 € TTC à 20 % : 1,67 € de TVA pour
+     * 8,32 € HT, et 8,32 x 20 % = 1,664 €).
      *
-     * Un document qui montre le PU HT -- facture, avoir sur facture ou devis
-     * à un professionnel, vente sans TVA française (voir
-     * ContexteDeVente::documentMontreLePuHt()), modèle M6-b -- ajoute que ce
-     * PU HT est celui d'un article, son prix TTC moins sa TVA arrondie au
-     * centime (voir CalculateurLigne::prixUnitaireHtAffiche()), et que la
-     * quantité x ce prix peut différer de quelques centimes du total HT de
-     * la ligne ; son PDF, qui écrit en petit sous chaque article son PU HT
-     * exact ($avecLePuHtExact), ajoute que ce prix est celui de la facture
-     * électronique. Un ticket, un avoir sur ticket, une facture, un avoir ou
-     * un devis d'un particulier, qui ne montrent que des prix TTC (modèle
-     * P1), n'impriment que l'explication du calcul. Rien en franchise en
-     * base, où le HT est le prix TTC, sans TVA. Une explication, pas une
-     * mention : elle ne se signe pas avec le document (voir ContenuFiscal).
+     * Partout où le document montre le PU HT, la note ajoute que ce PU HT
+     * est celui d'un article, son prix TTC moins sa TVA arrondie au centime
+     * (voir CalculateurLigne::prixUnitaireHtAffiche()), et que la quantité
+     * x ce prix peut différer de quelques centimes du total HT de la ligne :
+     * sur la fiche de toute vente, qui montre la colonne « PU HT » (voir
+     * FactureResource::lignesEntry()), et sur le PDF d'un document au modèle
+     * M6-b -- facture, avoir sur facture ou devis à un professionnel, vente
+     * sans TVA française (voir ContexteDeVente::documentMontreLePuHt()) --,
+     * qui ajoute encore que le PU HT exact écrit en petit sous chaque
+     * article est celui de la facture électronique. Le PDF d'un ticket, d'un
+     * avoir sur ticket, d'une facture, d'un avoir ou d'un devis d'un
+     * particulier, qui ne montre que des prix TTC (modèle P1), n'imprime que
+     * l'explication du calcul. Rien en franchise en base, où le HT est le
+     * prix TTC, sans TVA. Une explication, pas une mention : elle ne se
+     * signe pas avec le document (voir ContenuFiscal).
+     *
+     * @param  bool  $surLePdf  la note du PDF du document, et non celle de sa fiche
      */
-    public function calcul(Facture|Avoir|Devis $document, bool $avecLePuHtExact = false): ?string
+    public function calcul(Facture|Avoir|Devis $document, bool $surLePdf = false): ?string
     {
         if ($document->franchise_en_base) {
             return null;
@@ -202,10 +211,10 @@ class MentionsFiscales
             ? ($document instanceof Avoir ? self::CALCUL_RETOUR_SANS_TVA : self::CALCUL_SANS_TVA)
             : ($document instanceof Avoir ? self::CALCUL_RETOUR : self::CALCUL_VENTE);
 
-        if (! ContexteDeVente::documentMontreLePuHt($document)) {
+        if ($surLePdf && ! ContexteDeVente::documentMontreLePuHt($document)) {
             return $calcul;
         }
 
-        return implode(' ', [$calcul, self::PU_HT_D_UN_ARTICLE, ...($avecLePuHtExact ? [self::PU_HT_EXACT] : [])]);
+        return implode(' ', [$calcul, self::PU_HT_D_UN_ARTICLE, ...($surLePdf ? [self::PU_HT_EXACT] : [])]);
     }
 }

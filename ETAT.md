@@ -1,12 +1,13 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 14/11/2026 à 14:21 UTC par pilotage-sync.sh : « point de suivi 14/11 14:20 UTC : DEMO-V suite PG n° 4 ».
+Mis à jour le 14/11/2026 à 15:20 UTC par pilotage-sync.sh : « point de suivi 14/11 15:20 UTC : DEMO-V commité 0b89116, correction en cours ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
 Tête poussée : `fbf139f`. Commits locaux pas encore poussés :
 
 ```
+0b89116 Démonstration masquée après la validation, PU HT d'un article, tableaux au modèle D et cartes des notifications (lot DEMO-V)
 ```
 
 Derniers commits poussés :
@@ -37,66 +38,14 @@ b10d2e8 Relecture du lot DV du devis en ligne
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
- M .env.example
- M CLAUDE.md
- M README.md
- M app/Console/Commands/MarquerFacturesEnRetard.php
- M app/Domain/Catalogue/Models/Service.php
- M app/Domain/Catalogue/Services/MargeDuCatalogue.php
- M app/Domain/Facturation/Actions/EnvoyerDocumentAction.php
- M app/Domain/Facturation/Models/ClotureCaisse.php
- M app/Domain/Facturation/Models/Facture.php
- M app/Domain/Facturation/Services/CalculateurLigne.php
- M app/Domain/Facturation/Services/DocumentsDeLaPeriode.php
- M app/Domain/Facturation/Services/FacturesAEncaisserDeLaSociete.php
- M app/Domain/Facturation/Services/MentionsFiscales.php
- M app/Domain/Facturation/Services/TableauDesLignes.php
- M app/Domain/Tenancy/Actions/FermerLaDemonstrationAction.php
- M app/Domain/Tenancy/Actions/ValiderLaSocieteAction.php
- M app/Domain/Tenancy/Models/TelechargementDeDocuments.php
- M app/Domain/Tenancy/Services/ChosesAFaireDuMagasin.php
- M app/Filament/App/Livewire/SelecteurDeProduits.php
- M app/Filament/App/Pages/ParametresPrixDeVente.php
- M app/Filament/App/Resources/AvoirResource.php
- M app/Filament/App/Resources/ClientResource.php
- M app/Filament/App/Resources/ClotureCaisseResource.php
- M app/Filament/App/Resources/EReportingResource.php
- M app/Filament/App/Resources/FactureAchatResource.php
- M app/Filament/App/Resources/FactureResource.php
- M app/Filament/App/Resources/InventaireOuvertureResource.php
- M app/Filament/App/Resources/ProduitResource.php
- M app/Filament/Concerns/AjouteDesLignesDAchat.php
- M app/Filament/Concerns/AjouteDesLignesDeVente.php
- M app/Filament/Concerns/ChoisitLaNatureDeLOperation.php
- M app/Filament/Concerns/EnvoieLesDocuments.php
- M app/Filament/Concerns/JointLesPiecesDuFournisseur.php
- M app/Filament/Societe/Pages/TableauDeBord.php
+ M app/Domain/Tenancy/Services/PorteeDesAdministrateurs.php
  M app/Filament/Societe/Resources/MembreResource.php
- M app/Http/Controllers/ReponseAuDevisController.php
- M app/Models/User.php
- M app/Providers/AppServiceProvider.php
- M app/Providers/Filament/AppPanelProvider.php
- M app/Providers/Filament/CabinetPanelProvider.php
- M app/Providers/Filament/SocietePanelProvider.php
- M config/piliqi.php
- M database/migrations/0001_01_01_000001_create_users_table.php
- M resources/views/filament/app/livewire/selecteur-de-clients.blade.php
- M resources/views/filament/app/livewire/selecteur-de-produits.blade.php
- M tests/Browser/Parcours/EnvoiParEMailTest.php
-RM tests/Browser/Parcours/PuHtExactTest.php -> tests/Browser/Parcours/PuHtAfficheTest.php
- M tests/Browser/Parcours/RecuDePaiementTest.php
+ M app/Filament/Societe/Resources/MembreResource/Pages/FicheDuMembre.php
+ M app/Filament/TableauEntry.php
+ M tests/Browser/Parcours/DemonstrationApresLaValidationTest.php
  M tests/Browser/inventaire-des-actions.php
- M tests/Feature/DatabaseSeederTest.php
- M tests/Feature/Facturation/AvoirPdfGeneratorTest.php
- M tests/Feature/Facturation/DevisPdfGeneratorTest.php
- M tests/Feature/Facturation/EnvoyerDocumentActionTest.php
- M tests/Feature/Facturation/ExempleDeQuinzeLignesTest.php
- M tests/Feature/Facturation/ExonerationNonProuveeTest.php
- M tests/Feature/Facturation/FacturePdfGeneratorTest.php
- M tests/Feature/Facturation/MarquerFacturesEnRetardConcurrenceTest.php
- M tests/Feature/Facturation/MarquerFacturesEnRetardTest.php
- M tests/Feature/Facturation/MentionsFiscalesTest.php
- M tests/Feature/Facturation/NatureOperationTest.php
+ M tests/Feature/Filament/TableauxDesFichesTest.php
+ M tests/Feature/Societe/DemonstrationApresLaValidationTest.php
 ```
 
 ## Dernière course de la chaîne
@@ -104,9 +53,6 @@ RM tests/Browser/Parcours/PuHtExactTest.php -> tests/Browser/Parcours/PuHtAffich
 Course `wf_ee9b6e6e-908`, étapes commencées (de la plus ancienne à la plus récente) :
 
 ```
-SEED:notes
-ER-PRO:implementation
-ER-PRO:implementation-2
 ER-PRO:relecture1
 ER-PRO:relecture2
 ER-PRO:correction
@@ -129,4 +75,7 @@ MAT-PRO:notes
 DEMO-V:implementation
 DEMO-V:implementation-2
 DEMO-V:implementation-3
+DEMO-V:relecture1
+DEMO-V:relecture2
+DEMO-V:correction
 ```

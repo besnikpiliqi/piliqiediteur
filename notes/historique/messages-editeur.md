@@ -2442,3 +2442,9 @@ Vous pouvez valider cette logique de calcul (règle b) dans votre ERP. Assurez-v
 
 il faut que tu cree une nouvelle fonction. quand une notification arriver en arrier plan alors il faut qu'il s'affiche automatiqument comme une petit  notification afin que le magasin(vendeur , responsable etc) le vois qu'il s'affiche afin qu'il soit mis au courant qu il a qqch. donc une petite notification qui tombe de haut ou qui glisse du droit
 
+## 265. 2026-11-14 01:07 UTC
+
+[1 capture(s) d'écran jointe(s)]
+
+mais pourquoi pour 9.99ttc une cote 8.33 et cote 8.32 alors pourquoi t as mis comme ca? donc ce que j 'ai dit c est pour 8.32 et toi tu aplique tous les endroit pareil car comme c est halucinant 2 prix different !!
+

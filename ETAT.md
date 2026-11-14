@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 14/11/2026 à 01:04 UTC par pilotage-sync.sh : « Modèles de notification affichée ».
+Mis à jour le 14/11/2026 à 01:08 UTC par pilotage-sync.sh : « PU HT affiché = PU TTC − TVA d'un article arrondie (directive éditeur) ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -38,6 +38,8 @@ d4a8247 Relecture du lot ML des e-mails vérifiés
 
 ```
  M tests/Feature/Tenancy/RequeteDuModeleTest.php
+ M tests/TestCase.php
+?? tests/Feature/EcrituresSansBaseDeTestTest.php
 ?? tests/Fixtures/EcrituresDurables.php
 ```
 

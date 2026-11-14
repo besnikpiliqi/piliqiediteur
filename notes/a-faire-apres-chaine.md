@@ -62,6 +62,14 @@
 - **Ce qui ne change pas :** « Noter le bordereau de détaxe (BVE) » reste sur un ticket « Vente en France ». La détaxe est justement une vente en France, à la TVA française, à un voyageur qui part hors de l'Union, et la TVA ne se rembourse qu'après le visa. Le bouton se cache déjà quand la nature n'est pas « Vente en France », quand le ticket est en franchise ou quand il n'a aucun bien taxé.
 
 
+**Précision de l'éditeur du 14/11/2026 vers 02 h 10 UTC, qui remplace la façon d'arrondir de l'ajout ci-dessous (À FAIRE ainsi).** Sur l'exemple du savon à 9,99 € TTC à 20 %, la colonne PU HT montrait 8,33 € (8,325 arrondi) et le total HT de la ligne 8,32 € : « hallucinant, 2 prix différents ». Ses mots : « ce que j'ai dit c'est pour 8.32 et toi tu appliques tous les endroits pareil ».
+- **Règle d'affichage du PU HT d'une vente :** PU HT affiché = PU TTC − TVA d'un article, cette TVA étant PU TTC × taux ÷ (1 + taux) arrondie une fois au centime le plus proche (un demi-centime exact au centime supérieur). 9,99 € à 20 % : TVA 1,665 → 1,67 €, PU HT **8,32 €**. 10,00 € à 20 % : TVA 1,67 €, PU HT 8,33 €. 0,99 € à 20 % : TVA 0,17 €, PU HT 0,82 €.
+- Le même PU HT partout : fiche du produit ou du service, caisse, lignes des formulaires de vente, fiches et listes, PDF (factures, avoirs, devis, ventes sans TVA française), aides et messages. Un seul calcul, dans une seule fonction du domaine, que tous les écrans et le PDF appellent ; un test refuse tout autre arrondi du PU HT des ventes.
+- Aucun montant ne change : les totaux HT, TVA et TTC restent ceux enregistrés. Le PU HT enregistré à 6 décimales reste celui de la facture électronique (BT-146, `item_net_price` en texte chez SUPER PDP).
+- La note de calcul du PDF le dit : « Le PU HT affiché est celui d'un article : prix TTC moins sa TVA arrondie au centime (9,99 € TTC à 20 % : 8,32 € HT). La quantité × ce prix peut différer de quelques centimes du total HT de la ligne, calculé sur toute la quantité. »
+- Tests : 9,99 € → 8,32 € sur la fiche, la caisse, le formulaire, la fiche du document et le PDF ; 10,00 € → 8,33 € ; 0,99 € → 0,82 € ; taux 5,5 % et 10 % ; un document dont le total HT est inchangé.
+- Exemple montré à l'éditeur : scratchpad/modeles/exemple-calcul-des-prix-15-lignes-regle-b2.pdf.
+
 **Ajout du 14/11/2026 vers 00 h 35 UTC, dans ce même lot DEMO-V : le PU HT des ventes s'affiche arrondi au centime, partout.** Décision de l'éditeur, qui remplace sa décision du 09/11/2026 et la note de calcul de T105 (12/11), ce qui se reporte à la matrice. Ses mots : « le prix HT "11,279621" me plaît pas car beaucoup de nombres […] non non il faut arrondir ».
 
 - **Ce qui change :** le PU HT d'une ligne de vente s'affiche arrondi au centime le plus proche (un demi-centime exact au centime supérieur), comme le PU TTC, sur tous les documents et tous les écrans :

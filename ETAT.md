@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 14/11/2026 à 01:20 UTC par pilotage-sync.sh : « Notification : la cloche ne change pas ».
+Mis à jour le 14/11/2026 à 01:27 UTC par pilotage-sync.sh : « M6-b choisi ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

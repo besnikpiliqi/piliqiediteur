@@ -1,5 +1,8 @@
 # À faire après la chaîne société (petits points remontés par l'éditeur en développement local Windows/XAMPP)
 
+**MODÈLE M6 : LIGNE DU PU HT EXACT : OUI — l'éditeur a choisi M6-b le 14/11/2026 vers 02 h 45 UTC (lot REGLE-B, cahier regle-b/cahier-REGLE-B.md § 4).** Sous le nom de chaque article d'un document qui montre le PU HT, une petite ligne grise « PU HT exact : 8,325000 € » donne le PU HT enregistré (PU TTC ÷ (1 + taux), 6 décimales, celui de la facture électronique). La colonne PU HT montre le PU HT d'un article (PU TTC − TVA d'un article arrondie : 8,32 €). La note de calcul ajoute : « Le PU HT exact, écrit sous chaque article, est celui de la facture électronique : la quantité × ce prix retombe sur le total HT de la ligne à quelques centimes près. » Modèle : https://claude.ai/artifact/QwUP3rwrUKX3BQmjB1y52v (M6-b). Tests PDF : la petite ligne présente, avec 6 décimales, sous chaque article et chaque service.
+
+
 1. SignataireFiscal::genererUnePaire() (et toute génération ou lecture de clé OpenSSL) : inclure les messages de openssl_error_string() dans l'exception et indiquer, sous Windows, que PHP ne trouve pas openssl.cnf (variable OPENSSL_CONF). caisse:diagnostiquer : vérifier que la génération d'une clé EC fonctionne et afficher la piste OPENSSL_CONF. README : note Windows (OPENSSL_CONF vers C:\xampp\apache\conf\openssl.cnf ou C:\xampp\php\extras\openssl\openssl.cnf). Test : message d'erreur explicite (simulé).
 2. Proposé à l'éditeur, à faire seulement s'il le confirme : une commande `composer run dev` propre à PILIQI, sans Node, qui lance serve, queue:listen et schedule:work ensemble.
 3. README : note Windows/XAMPP (extensions à activer dans php.ini, dont pdo_pgsql ; ne jamais lancer composer update ; SQLite en développement).

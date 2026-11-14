@@ -2466,3 +2466,7 @@ Règle (b) et M6 mais sans pu ttc
 
 non la notification s affiche comme j ai choisi mais les noitification reste toujours telle qu'il sont . moi je dis juste pour ca pour qu'il affiche directement mais pas changer ce qu'il y a dans les notification
 
+## 269. 2026-11-14 01:27 UTC
+
+je choisi M6-b
+

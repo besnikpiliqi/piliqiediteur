@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 14/11/2026 à 09:52 UTC par pilotage-sync.sh : « Lot GRAPH ajouté (bascule à faire après DEMO-V) ».
+Mis à jour le 14/11/2026 à 10:15 UTC par pilotage-sync.sh : « Modèles des charges et TVA réelle ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -38,17 +38,28 @@ b10d2e8 Relecture du lot DV du devis en ligne
 
 ```
  M CLAUDE.md
+ M app/Domain/Catalogue/Models/Service.php
+ M app/Domain/Catalogue/Services/MargeDuCatalogue.php
  M app/Domain/Facturation/Actions/EnvoyerDocumentAction.php
  M app/Domain/Facturation/Models/Facture.php
+ M app/Domain/Facturation/Services/CalculateurLigne.php
  M app/Domain/Facturation/Services/DocumentsDeLaPeriode.php
  M app/Domain/Facturation/Services/FacturesAEncaisserDeLaSociete.php
+ M app/Domain/Facturation/Services/MentionsFiscales.php
+ M app/Domain/Facturation/Services/TableauDesLignes.php
  M app/Domain/Tenancy/Actions/FermerLaDemonstrationAction.php
  M app/Domain/Tenancy/Actions/ValiderLaSocieteAction.php
  M app/Domain/Tenancy/Models/TelechargementDeDocuments.php
  M app/Domain/Tenancy/Services/ChosesAFaireDuMagasin.php
+ M app/Filament/App/Pages/ParametresPrixDeVente.php
  M app/Filament/App/Resources/FactureResource.php
+ M app/Filament/App/Resources/ProduitResource.php
+ M app/Filament/Concerns/AjouteDesLignesDAchat.php
+ M app/Filament/Concerns/AjouteDesLignesDeVente.php
+ M app/Filament/Concerns/ChoisitLaNatureDeLOperation.php
  M app/Filament/Concerns/EnvoieLesDocuments.php
  M app/Filament/Societe/Pages/TableauDeBord.php
+ M app/Http/Controllers/ReponseAuDevisController.php
  M app/Models/User.php
  M tests/Browser/inventaire-des-actions.php
  M tests/Feature/DatabaseSeederTest.php
@@ -56,6 +67,8 @@ b10d2e8 Relecture du lot DV du devis en ligne
  M tests/Feature/Filament/EnvoieLesDocumentsTest.php
  M tests/Feature/Societe/MagasinDeDemonstrationTest.php
  M tests/Feature/Societe/PanneauSocieteTest.php
+ M tests/Unit/CalculateurLigneAuHasardTest.php
+ M tests/Unit/CalculateurLigneTest.php
  M tests/Unit/matrice-des-decisions.php
 ?? tests/Browser/Parcours/DemonstrationApresLaValidationTest.php
 ?? tests/Browser/Parcours/RetardEtRelanceDesTicketsTest.php
@@ -68,7 +81,6 @@ b10d2e8 Relecture du lot DV du devis en ligne
 Course `wf_ee9b6e6e-908`, étapes commencées (de la plus ancienne à la plus récente) :
 
 ```
-SEED:correction
 SEED:poussee
 SEED:notes
 ER-PRO:implementation
@@ -93,4 +105,5 @@ MAT-PRO:correction
 MAT-PRO:poussee
 MAT-PRO:notes
 DEMO-V:implementation
+DEMO-V:implementation-2
 ```

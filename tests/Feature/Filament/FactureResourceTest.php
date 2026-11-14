@@ -2471,6 +2471,58 @@ class FactureResourceTest extends TestCase
     }
 
     /**
+     * Le prix sans TVA d'un service sorti de la TVA française est ce que
+     * paie le client pour un article vendu à ce prix TTC, calculé comme
+     * toute vente : 9,99 € TTC à 20 % font 8,33 € HT en vente en France,
+     * et 8,33 € sans TVA en prestation hors UE -- jamais le PU HT affiché
+     * d'un article (9,99 € moins 1,67 € de TVA, 8,32 €), sur lequel aucun
+     * montant ne se calcule.
+     */
+    public function test_sortir_de_la_tva_francaise_garde_le_montant_d_un_service_a_9_99_euros_ttc(): void
+    {
+        $this->magasinQuiVendHorsDeFrance();
+        $conseil = Service::factory()->create(['nom' => 'Conseil']);
+        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), $this->clientAmericain(), [['service_id' => $conseil->id, 'prix_unitaire_ttc' => '9.99', 'taux_tva' => 20, 'quantite' => 1]]);
+        $this->assertSame(['8.33', '1.66', '9.99'], [$brouillon->total_ht, $brouillon->total_tva, $brouillon->total_ttc]);
+
+        $page = Livewire::test(EditFacture::class, ['record' => $brouillon->getRouteKey()])
+            ->set('data.nature_operation', NatureOperation::PrestationHorsUe->value);
+        $page->assertSet('data.lignes.'.array_key_first($page->get('data.lignes')).'.prix_unitaire_ttc', '8.33')
+            ->assertNotified('Prix des services convertis')
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $brouillon->refresh();
+        $this->assertSame(NatureOperation::PrestationHorsUe, $brouillon->nature_operation);
+        $this->assertSame(['8.33', '0.00', '8.33'], [$brouillon->total_ht, $brouillon->total_tva, $brouillon->total_ttc]);
+    }
+
+    /**
+     * Un service à son prix de référence de 9,99 € TTC à 20 % passé en
+     * prestation hors UE montre ce prix sans sa TVA comme le PU HT d'un
+     * article, 8,32 €, que la vente reconnaît comme son prix de référence :
+     * la ligne se calcule toujours depuis 9,99 € TTC, 8,33 € HT, sans
+     * changer de montant.
+     */
+    public function test_un_service_a_son_prix_de_reference_sorti_de_la_tva_francaise_garde_son_montant(): void
+    {
+        $this->magasinQuiVendHorsDeFrance();
+        $savonnage = Service::factory()->auPrixDe('9.99', '20')->create(['nom' => 'Savonnage']);
+        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), $this->clientAmericain(), [['service_id' => $savonnage->id, 'quantite' => 1]]);
+
+        $page = Livewire::test(EditFacture::class, ['record' => $brouillon->getRouteKey()])
+            ->set('data.nature_operation', NatureOperation::PrestationHorsUe->value);
+        $page->assertSet('data.lignes.'.array_key_first($page->get('data.lignes')).'.prix_unitaire_ttc', '8.32')
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $brouillon->refresh();
+        $ligne = $brouillon->lignes->sole();
+        $this->assertSame([NatureOperation::PrestationHorsUe, '9.99', '20.00'], [$brouillon->nature_operation, $ligne->prix_unitaire_ttc, $ligne->taux_tva_du_prix]);
+        $this->assertSame(['8.33', '0.00', '8.33'], [$brouillon->total_ht, $brouillon->total_tva, $brouillon->total_ttc]);
+    }
+
+    /**
      * @return array<string, array{bool}>
      */
     public static function vendeurOuResponsable(): array

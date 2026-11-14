@@ -7,6 +7,7 @@ use Filament\Infolists\ComponentContainer;
 use Filament\Infolists\Components\Component;
 use Filament\Infolists\Components\Entry;
 use Filament\Infolists\Components\RepeatableEntry;
+use Filament\Infolists\Components\TextEntry;
 use Filament\Support\Enums\Alignment;
 use Illuminate\Contracts\Support\Htmlable;
 
@@ -25,7 +26,10 @@ use Illuminate\Contracts\Support\Htmlable;
  * ses valeurs chiffrées.
  *
  * Chaque colonne est une entrée du schéma, son libellé pour titre ; une
- * entrée alignée à droite (alignEnd()) est une colonne chiffrée. Une
+ * entrée alignée à droite (alignEnd()) est une colonne chiffrée, dont la
+ * valeur nulle se juge sur ce que montre la cellule, jamais sur l'état
+ * brut (un taux enregistré « 0.00 » s'écrit « 0 % », un taux et non une
+ * valeur nulle). Une
  * entrée qui prend toute la largeur (columnSpanFull()), comme les lignes
  * d'un avoir sous l'avoir, s'affiche sous sa ligne, sur toute la largeur
  * du tableau. La ligne de total et les lignes d'information se donnent par
@@ -130,7 +134,7 @@ class TableauEntry extends RepeatableEntry
             $cellules[] = [
                 'composant' => $composant,
                 'chiffre' => self::estChiffre($composant),
-                'nulle' => ! $cachee && self::estChiffre($composant) && $composant instanceof Entry && self::estNulle($composant->getState()),
+                'nulle' => ! $cachee && self::estChiffre($composant) && self::estNulle(self::valeurAffichee($composant)),
                 'cachee' => $cachee,
                 'aide' => $composant instanceof Entry ? $composant->getHelperText() : null,
             ];
@@ -209,6 +213,28 @@ class TableauEntry extends RepeatableEntry
         }
 
         return preg_match('/^[-−]?0+([.,]0+)?\s*€?$/u', trim(str_replace(["\u{00A0}", "\u{202F}"], ' ', $valeur))) === 1;
+    }
+
+    /**
+     * La valeur que montre la cellule d'une entrée : son état tel que son
+     * format l'écrit (« 0 % » pour un taux enregistré « 0.00 », « 0,00 € »
+     * pour un montant), pour qu'un taux de 0 % reste un taux et ne
+     * devienne jamais « – » ; une valeur absente, une liste ou un objet
+     * restent tels quels.
+     */
+    private static function valeurAffichee(Component $composant): mixed
+    {
+        if (! $composant instanceof Entry) {
+            return null;
+        }
+
+        $valeur = $composant->getState();
+
+        if (! $composant instanceof TextEntry || ! is_scalar($valeur) || $valeur === '') {
+            return $valeur;
+        }
+
+        return $composant->formatState($valeur);
     }
 
     /**

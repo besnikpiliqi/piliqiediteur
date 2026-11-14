@@ -22,7 +22,9 @@ use LogicException;
  * écrites une seule fois :
  * - tous les magasins, présents et futurs (une affectation sans magasin),
  *   ou une sélection de magasins de la société (une affectation par
- *   magasin), jamais les deux, et jamais une portée vide ;
+ *   magasin), jamais les deux, et jamais une portée vide ; le magasin de
+ *   démonstration d'une société validée, qui a disparu de tous ses écrans
+ *   (T115), n'entre plus dans une sélection ;
  * - ses cases de magasin, les mêmes partout ou propres à chaque magasin de
  *   sa sélection ;
  * - ses autorisations de société ; celles qui touchent toute la société
@@ -37,6 +39,8 @@ final class PorteeDesAdministrateurs
     public const MESSAGE_SANS_PORTEE = 'Choisissez tous les magasins ou au moins un magasin.';
 
     public const MESSAGE_TOUS_LES_MAGASINS_EXIGES = 'Les paramètres de la société ne se confient qu\'à un administrateur de tous les magasins.';
+
+    public const MESSAGE_DEMONSTRATION_TERMINEE = 'Le magasin de démonstration est terminé depuis la validation de la société : il ne se choisit plus dans la portée d\'un administrateur.';
 
     /**
      * @param  list<int>|null  $magasins  null : tous les magasins, présents et futurs
@@ -60,6 +64,10 @@ final class PorteeDesAdministrateurs
 
         if (! $tous && ($magasins === [] || $selection->count() !== count(array_unique($magasins)))) {
             throw $magasins === [] ? new LogicException(self::MESSAGE_SANS_PORTEE) : new AuthorizationException(PorteeDesDroits::REFUS);
+        }
+
+        if ($selection->contains(fn (Magasin $magasin): bool => $magasin->est_demonstration === true) && Societe::query()->whereKey($societe->getKey())->whereNotNull('validee_le')->exists()) {
+            throw new LogicException(self::MESSAGE_DEMONSTRATION_TERMINEE);
         }
 
         $memesPartout = array_is_list($autorisationsMagasin);

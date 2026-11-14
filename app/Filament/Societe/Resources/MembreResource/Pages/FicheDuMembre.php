@@ -467,6 +467,11 @@ class FicheDuMembre extends ViewRecord
     }
 
     /**
+     * La portée de l'administrateur, telle que la fenêtre « Modifier » la
+     * précoche : ses magasins choisis que l'équipe montre (voir
+     * MembreResource::magasinsDeLaPortee()), jamais le magasin de
+     * démonstration d'une société validée, qui a disparu de ses écrans.
+     *
      * @return array<string, mixed>
      */
     private function porteeActuelle(): array
@@ -477,7 +482,7 @@ class FicheDuMembre extends ViewRecord
 
         return [
             'portee' => $compte->administreTousLesMagasins() ? 'tous' : 'selection',
-            'magasins' => ValeursLues::entiers($affectations->pluck('magasin_id')->filter()),
+            'magasins' => array_values(array_intersect(ValeursLues::entiers($affectations->pluck('magasin_id')->filter()), array_keys(MembreResource::magasinsDeLaPortee()))),
             'autorisations_societe' => $compte->autorisationsDeSociete(),
             ...MembreResource::autorisationsAAfficher($premiere?->autorisations() ?? [], 'autorisations_magasin'),
         ];

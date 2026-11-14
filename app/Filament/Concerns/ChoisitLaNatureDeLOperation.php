@@ -237,9 +237,12 @@ trait ChoisitLaNatureDeLOperation
      * Le prix saisi d'un service change de sens quand la vente entre dans
      * la TVA française ou en sort (voir ContexteDeVente::retireLaTvaDuPrix()) :
      * TTC au taux de sa ligne en France, sans TVA hors de France (K3). Il
-     * se convertit donc au taux de sa ligne, au centime comme le PU HT d'un
-     * produit (voir CalculateurLigne) : 18,00 € TTC à 20 % font 15,00 € sans
-     * TVA, et 15,00 € sans TVA font 18,00 € TTC. Une ligne de produit garde
+     * se convertit donc au taux de sa ligne, au centime, sans changer ce
+     * que paie le client : sorti de la TVA française, il devient le HT d'un
+     * article vendu à ce prix, calculé comme toute vente sans TVA française
+     * (voir prixSansTvaDUnArticle()), 18,00 € TTC à 20 % font 15,00 € sans
+     * TVA et 9,99 €, 8,33 € ; revenu en France, 15,00 € sans TVA font
+     * 18,00 € TTC. Une ligne de produit garde
      * son PU TTC, celui de son catalogue, dont le calcul retire ou non la
      * TVA ; une ligne de service sans prix ou sans taux valable reste telle
      * quelle, sa validation le signalera. Rien ne change entre deux natures
@@ -290,7 +293,7 @@ trait ChoisitLaNatureDeLOperation
                 }
 
                 [$prixConverti, $tauxConverti] = $reference ?? [$sansTvaApres
-                    ? $calculateur->enDecimal($calculateur->prixUnitaireHtAffiche($prix, $taux))
+                    ? $calculateur->enDecimal(self::prixSansTvaDUnArticle($prix, $taux))
                     : $calculateur->enDecimal($calculateur->prixUnitaireTtcDepuisHt($prix, $taux)), $calculateur->enDecimal($taux)];
             } catch (InvalidArgumentException) {
                 continue;
@@ -306,11 +309,43 @@ trait ChoisitLaNatureDeLOperation
     }
 
     /**
+     * Le prix sans TVA française d'un service vendu jusque-là à ce prix TTC
+     * et à ce taux : le HT d'un article vendu à ce prix sans la TVA
+     * française, calculé comme toute vente (voir
+     * CalculateurLigne::chiffrerUneVente()), son TTC ÷ (1 + taux) arrondi
+     * une fois au centime le plus proche, un demi-centime au centime
+     * supérieur : 9,99 € TTC à 20 % font 8,33 €, ce que paie le client
+     * pour un article vendu à ce prix hors de la TVA française. C'est le
+     * prix de vente de la ligne, et non le PU HT affiché d'un article
+     * (8,32 €, voir CalculateurLigne::prixUnitaireHtAffiche()), sur lequel
+     * aucun montant ne se calcule.
+     *
+     * @param  int  $prixTtc  en centimes
+     * @param  int  $taux  en centièmes de point
+     * @return int en centimes
+     *
+     * @throws InvalidArgumentException
+     */
+    private static function prixSansTvaDUnArticle(int $prixTtc, int $taux): int
+    {
+        return app(CalculateurLigne::class)->chiffrerUneVente([[
+            'prix_unitaire_ttc' => $prixTtc,
+            'quantite' => 1,
+            'remise_pourcentage' => 0,
+            'taux_tva_du_prix' => $taux,
+            'taux_tva' => 0,
+        ]])['total']['montant_ht'];
+    }
+
+    /**
      * Le prix de référence du service dans la nouvelle nature, avec son
      * taux, écrits comme leurs colonnes, quand la ligne était à son prix de
-     * référence dans l'ancienne : TTC en France, sans TVA hors de France ;
-     * null sinon. Prix et taux se comparent en centimes et en centièmes de
-     * point.
+     * référence dans l'ancienne : TTC en France ; hors de France, sans TVA
+     * tel que l'écran le montre et que la vente le reconnaît (voir
+     * Service::prixDeReferenceDans() et vendAuPrixDeReferenceSansTva()),
+     * le PU HT d'un article, la ligne se calculant toujours depuis ce prix
+     * TTC, sans changer de montant ; null sinon. Prix et taux se comparent
+     * en centimes et en centièmes de point.
      *
      * @return array{0: string, 1: string}|null
      */

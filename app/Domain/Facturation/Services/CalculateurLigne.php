@@ -1039,7 +1039,9 @@ class CalculateurLigne
      * 54,166667 € s'affiche 54,17 € ; 8,325 €, 8,33 € ; 0,833333 €, 0,83 €.
      * Seul l'affichage s'arrondit : le prix enregistré ne change pas, et
      * aucun montant ne se calcule sur ce prix affiché (voir
-     * MentionsFiscales::calcul(), qui explique l'écart).
+     * MentionsFiscales::calcul(), qui explique l'écart). Le PU HT d'une
+     * vente ne s'affiche jamais ainsi, mais comme celui d'un article (voir
+     * prixUnitaireHtAffiche(), décision de l'éditeur du 14/11/2026).
      *
      * @throws InvalidArgumentException
      */
@@ -1055,17 +1057,16 @@ class CalculateurLigne
     /**
      * La mise en forme de tout prix unitaire de vente que montre en lecture
      * un document, une fiche, une liste, une aide, un message ou la caisse,
-     * PU TTC, prix de vente, prix de référence, PU HT d'un ticket ou d'un
-     * document à un particulier, et du coût moyen d'un produit : arrondi au
-     * centime (voir prixUnitaireAuCentime()), écrit comme un montant (voir
-     * enEuros()) : « 54,17 € », « 0,83 € », « 1 000,00 € ». Un prix
-     * enregistré au centime s'y écrit tel quel. Un champ où le prix ne se
-     * saisit pas le montre de même au centime (voir
-     * prixUnitaireDansUnChamp()) ; un champ où il se saisit, tel qu'il est
-     * enregistré. Le PU HT d'un document qui le montre (facture, avoir sur
-     * facture ou devis à un professionnel, vente sans TVA française) et un
-     * prix d'achat s'affichent tels qu'ils sont enregistrés (voir
-     * prixUnitaireExact()).
+     * hors du PU HT : PU TTC, prix de vente, prix de référence, et du coût
+     * moyen d'un produit : arrondi au centime (voir
+     * prixUnitaireAuCentime()), écrit comme un montant (voir enEuros()) :
+     * « 54,17 € », « 0,83 € », « 1 000,00 € ». Un prix enregistré au
+     * centime s'y écrit tel quel. Le champ du coût moyen, qui ne se saisit
+     * pas, le montre de même au centime (voir prixUnitaireDansUnChamp()) ;
+     * un champ où un prix se saisit, tel qu'il est enregistré. Le PU HT
+     * d'une vente s'affiche partout comme celui d'un article (voir
+     * prixUnitaireHtAffiche(), décision de l'éditeur du 14/11/2026), et un
+     * prix d'achat tel qu'il est enregistré (voir prixUnitaireExact()).
      *
      * @throws InvalidArgumentException
      */
@@ -1080,9 +1081,9 @@ class CalculateurLigne
      * PrixDAchat) et le montre un champ : « 0.1234 », « 12.50 »,
      * « 8.333333 ». Le PU HT d'une ligne d'achat ou un coût d'inventaire
      * d'ouverture, où il se saisit (décision de l'éditeur du 02/11/2026,
-     * T2), et le PU HT d'une ligne de vente dans le formulaire d'un
-     * document qui le montre, où il ne se saisit pas (décision de l'éditeur
-     * du 09/11/2026, voir prixUnitaireExact()).
+     * T2) ; le PU HT d'une vente ne s'écrit jamais ainsi, mais comme celui
+     * d'un article (voir prixUnitaireHtAffiche(), décision de l'éditeur du
+     * 14/11/2026).
      *
      * @return numeric-string
      *
@@ -1131,13 +1132,13 @@ class CalculateurLigne
     }
 
     /**
-     * Un prix unitaire tel que le montre un champ où il ne se saisit pas :
-     * le PU HT d'une ligne de vente, simple conversion de son PU TTC saisi,
-     * ou le coût moyen d'un produit, que seuls les achats, les retours et
-     * les inventaires font évoluer. Arrondi au centime comme tout prix
-     * unitaire montré en lecture (voir prixUnitaireAuCentime()), il s'écrit
-     * comme une colonne au centime (voir enDecimal()) : « 54.17 » pour
-     * 54,166667 €, « 0.83 », « 12.00 ».
+     * Le coût moyen d'un produit tel que le montre son champ, où il ne se
+     * saisit pas : seuls les achats, les retours et les inventaires le font
+     * évoluer. Arrondi au centime comme tout prix unitaire montré en
+     * lecture (voir prixUnitaireAuCentime()), il s'écrit comme une colonne
+     * au centime (voir enDecimal()) : « 54.17 » pour 54,166667 €, « 0.83 »,
+     * « 12.00 ». Le champ du PU HT d'une ligne de vente montre celui d'un
+     * article (voir prixUnitaireHtAffiche()).
      *
      * @throws InvalidArgumentException
      */

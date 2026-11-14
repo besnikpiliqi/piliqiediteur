@@ -992,11 +992,14 @@ return [
         ],
         'verification.demonstration-apres-la-validation' => [
             'puce' => 'Vérification de la société',
-            'regle' => 'Une fois la société validée, son magasin de démonstration disparaît de tous ses écrans et de ceux de ses magasins (tableau de bord, liste et menu des magasins, téléchargement des documents par période et ses demandes passées, cloche) et plus personne n\'y entre, son adresse menant à une page introuvable, ses données restant en base (T115).',
+            'regle' => 'Une fois la société validée, son magasin de démonstration disparaît de tous ses écrans et de ceux de ses magasins (tableau de bord, liste et menu des magasins, comptes de l\'équipe et portée des administrateurs, téléchargement des documents par période et ses demandes passées, cloche) et plus personne n\'y entre, son adresse menant à une page introuvable, ses données restant en base (T115).',
             'tests' => [
                 'tests/Feature/Societe/DemonstrationApresLaValidationTest.php::test_une_fois_la_societe_validee_la_demonstration_disparait_de_ses_ecrans_sans_rien_effacer',
                 'tests/Feature/Societe/DemonstrationApresLaValidationTest.php::test_les_telechargements_de_la_demonstration_disparaissent_une_fois_la_societe_validee',
                 'tests/Feature/Societe/DemonstrationApresLaValidationTest.php::test_les_notifications_de_la_demonstration_s_effacent_a_la_validation',
+                'tests/Feature/Societe/DemonstrationApresLaValidationTest.php::test_une_demande_de_la_demonstration_preparee_apres_la_validation_se_clot_sans_rien_annoncer',
+                'tests/Feature/Societe/DemonstrationApresLaValidationTest.php::test_l_equipe_de_la_societe_ne_nomme_plus_la_demonstration_une_fois_la_societe_validee',
+                'tests/Feature/Societe/DemonstrationApresLaValidationTest.php::test_la_demonstration_d_une_societe_validee_ne_se_choisit_plus_dans_la_portee_d_un_administrateur',
                 'tests/Feature/Facturation/MarquerFacturesEnRetardTest.php::test_une_facture_de_la_demonstration_ne_s_annonce_plus_une_fois_la_societe_validee',
                 'tests/Feature/Facturation/MarquerFacturesEnRetardConcurrenceTest.php::test_le_passage_en_retard_pendant_la_validation_ou_le_refus_de_la_societe_passe_sans_interblocage',
                 'tests/Feature/Societe/DemonstrationApresLaValidationTest.php::test_le_cabinet_lie_ne_voit_jamais_la_demonstration_de_son_client',
@@ -1486,7 +1489,7 @@ return [
         ],
         'documents.colonnes-ht-ou-ttc' => [
             'puce' => 'Documents de vente',
-            'regle' => 'Toute facture, tout avoir sur facture et tout devis à un professionnel montrent par ligne le PU HT, la remise, le taux et le total HT, le PU HT tel qu\'il est enregistré, jusqu\'à six décimales ; un ticket, un avoir sur ticket et un devis à un particulier montrent le PU TTC et le total TTC ; une vente sans TVA française montre le PU HT et le total HT.',
+            'regle' => 'Toute facture, tout avoir sur facture et tout devis à un professionnel montrent par ligne la quantité, le PU HT, la remise s\'il y en a, le taux et le total HT ; un ticket, un avoir sur ticket et un devis à un particulier montrent le PU TTC et le total TTC ; une vente sans TVA française montre le PU HT et le total HT ; le PU HT imprimé est celui d\'un article, son PU TTC moins sa TVA arrondie au centime (8,32 € pour 9,99 € TTC à 20 %, décision de l\'éditeur du 14/11/2026, qui remplace celle du 09/11/2026 et T105).',
             'tests' => [
                 'tests/Feature/Facturation/FacturePdfGeneratorTest.php::test_une_facture_a_un_professionnel_imprime_le_pu_ht_de_54_17_euros_d_un_article',
                 'tests/Feature/Facturation/FacturePdfGeneratorTest.php::test_une_facture_n_imprime_ni_pu_ttc_ni_tva_ni_total_ttc_par_ligne',
@@ -1494,7 +1497,7 @@ return [
                 'tests/Feature/Facturation/AvoirPdfGeneratorTest.php::test_un_avoir_sur_facture_imprime_les_colonnes_ht_et_un_avoir_sur_ticket_les_colonnes_ttc',
                 'tests/Feature/Facturation/DevisPdfGeneratorTest.php::test_un_devis_a_un_professionnel_imprime_les_colonnes_ht_et_un_devis_a_un_particulier_les_colonnes_ttc',
                 'tests/Feature/Facturation/NatureOperationTest.php::test_le_pdf_d_un_export_a_un_professionnel_n_imprime_que_le_pu_ht_et_le_total_ht',
-                'tests/Unit/CalculateurLigneTest.php::test_un_pu_ht_s_affiche_tel_qu_il_est_enregistre_sans_zero_inutile_au_dela_de_deux_decimales',
+                'tests/Unit/PuHtAfficheDesVentesTest.php::test_aucun_ecran_ni_aucun_pdf_ne_met_en_forme_autrement_le_pu_ht_d_une_vente',
             ],
         ],
         'documents.note-de-calcul' => [
@@ -1676,6 +1679,9 @@ return [
             'regle' => 'Une vente exonérée se paie au prix hors taxe, calculé de la même façon, sans TVA ; un magasin en franchise en base vend à 0 % au même prix TTC, avec la mention « TVA non applicable, art. 293 B du CGI ».',
             'tests' => [
                 'tests/Feature/Facturation/NatureOperationTest.php::test_un_export_a_un_professionnel_se_paie_au_prix_hors_taxe_sans_tva_avec_sa_mention',
+                'tests/Feature/Filament/FactureResourceTest.php::test_sortir_de_la_tva_francaise_garde_le_montant_d_un_service_a_9_99_euros_ttc',
+                'tests/Feature/Filament/FactureResourceTest.php::test_un_service_a_son_prix_de_reference_sorti_de_la_tva_francaise_garde_son_montant',
+                'tests/Browser/Parcours/PuHtAfficheTest.php › le responsable fait passer en prestation hors UE la facture d’un service à 9,99 € TTC, dont le prix sans TVA devient 8,33 €, son montant inchangé',
                 'tests/Feature/Facturation/FranchiseEnBaseTest.php::test_un_ticket_en_franchise_est_a_zero_pour_cent_au_meme_prix_ttc_avec_la_mention',
                 'tests/Feature/Facturation/FranchiseEnBaseTest.php::test_le_meme_ticket_au_reel_coute_le_meme_prix_ttc_sans_la_mention',
                 'tests/Feature/Facturation/CreerFactureActionTest.php::test_une_vente_a_un_professionnel_en_franchise_est_sans_tva_au_meme_prix',
@@ -1683,9 +1689,10 @@ return [
         ],
         'prix.achats-aux-montants-du-fournisseur' => [
             'puce' => 'Prix et TVA des ventes',
-            'regle' => 'Un achat garde les montants qu\'écrit la facture du fournisseur : son PU HT s\'enregistre avec au plus six décimales ; PILIQI propose le HT de chaque ligne et la TVA de chaque taux, que la personne remplace par ceux de la facture, acceptés jusqu\'à 0,02 € par ligne pour le HT et 1 centime par ligne du taux pour la TVA ; au-delà, une confirmation au journal d\'audit marque le document « TVA à vérifier » ; un avoir fournisseur garde de même les montants de la note d\'avoir, sans jamais rendre plus que la TVA restante du taux.',
+            'regle' => 'Un achat garde les montants qu\'écrit la facture du fournisseur : son PU HT s\'enregistre avec au plus six décimales et s\'affiche tel qu\'il est enregistré, comme le coût unitaire d\'un inventaire d\'ouverture ; PILIQI propose le HT de chaque ligne et la TVA de chaque taux, que la personne remplace par ceux de la facture, acceptés jusqu\'à 0,02 € par ligne pour le HT et 1 centime par ligne du taux pour la TVA ; au-delà, une confirmation au journal d\'audit marque le document « TVA à vérifier » ; un avoir fournisseur garde de même les montants de la note d\'avoir, sans jamais rendre plus que la TVA restante du taux.',
             'tests' => [
                 'tests/Feature/Achats/TvaDuFournisseurTest.php::test_un_pu_ht_a_six_decimales_se_garde_tel_quel_et_fait_le_cout_moyen',
+                'tests/Unit/CalculateurLigneTest.php::test_un_pu_ht_s_affiche_tel_qu_il_est_enregistre_sans_zero_inutile_au_dela_de_deux_decimales',
                 'tests/Feature/Achats/TvaDuFournisseurTest.php::test_un_ht_de_ligne_s_accepte_jusqu_a_deux_centimes_d_ecart',
                 'tests/Feature/Achats/TvaDuFournisseurTest.php::test_une_tva_s_accepte_jusqu_a_un_centime_par_ligne_du_taux',
                 'tests/Feature/Achats/TvaDuFournisseurTest.php::test_sans_montant_ecrit_la_facture_garde_le_calcul_de_piliqi',
@@ -1846,6 +1853,8 @@ return [
                 'tests/Feature/Filament/TableauxDesFichesTest.php::test_une_valeur_chiffree_nulle_s_ecrit_d_un_tiret_et_un_taux_de_zero_reste',
                 'tests/Feature/Filament/TableauxDesFichesTest.php::test_les_encaissements_de_la_cloture_sont_un_seul_tableau_au_modele_d',
                 'tests/Feature/Filament/TableauxDesFichesTest.php::test_les_ventes_et_avoirs_de_la_cloture_finissent_par_leur_net_puis_les_informations_en_gris',
+                'tests/Feature/Filament/TableauxDesFichesTest.php::test_un_taux_de_zero_reste_ecrit_0_pour_cent_sur_la_fiche_d_un_document',
+                'tests/Feature/Filament/TableauxDesFichesTest.php::test_un_taux_de_zero_reste_ecrit_0_pour_cent_dans_la_tva_par_taux_de_la_cloture',
                 'tests/Feature/Filament/ClotureCaisseResourceTest.php::test_la_fiche_affiche_les_encaissements_par_mode_et_la_somme_des_avoirs',
                 'tests/Feature/Filament/InventaireOuvertureResourceTest.php::test_la_fiche_dit_qu_un_produit_qui_ne_suit_pas_son_stock_ne_recoit_que_son_cout',
                 'tests/Feature/Filament/RessourcesServiesParPiliqiTest.php::test_chaque_panneau_sert_la_feuille_des_tableaux_publiee_telle_quelle',

@@ -716,15 +716,16 @@ class CalculateurLigneTest extends TestCase
     }
 
     /**
-     * Le PU HT d'un document qui le montre (facture, avoir sur facture ou
-     * devis à un professionnel, vente sans TVA française) s'affiche tel
-     * qu'il est enregistré, jusqu'à six décimales, sans zéro inutile
-     * au-delà de deux, les milliers séparés par une espace comme tout
-     * montant (décision de l'éditeur du 09/11/2026) : les sept exemples de
-     * la décision, de 10,00 €, 9,99 €, 12,66 €, 1 249,00 € et 54,00 € TTC à
-     * 20 %, de 15,90 € TTC à 5,5 % et de 0,99 € TTC à 20 %. Le champ d'une
-     * ligne de leur formulaire, où il ne se saisit pas, l'écrit de même,
-     * avec un point et sans espace.
+     * Un PU HT au millionième s'écrit tel qu'il est enregistré, jusqu'à six
+     * décimales, sans zéro inutile au-delà de deux, les milliers séparés
+     * par une espace comme tout montant : le PU HT d'un achat, que le
+     * fournisseur écrit, et le coût unitaire d'un inventaire d'ouverture
+     * (le PU HT d'une vente, lui, s'affiche comme celui d'un article, voir
+     * prixUnitaireHtAffiche(), décision de l'éditeur du 14/11/2026). Les
+     * sept prix exemples, de 10,00 €, 9,99 €, 12,66 €, 1 249,00 € et
+     * 54,00 € TTC à 20 %, de 15,90 € TTC à 5,5 % et de 0,99 € TTC à 20 %,
+     * donnent des millionièmes de toutes les formes. Un champ qui le montre
+     * l'écrit de même, avec un point et sans espace.
      */
     public function test_un_pu_ht_s_affiche_tel_qu_il_est_enregistre_sans_zero_inutile_au_dela_de_deux_decimales(): void
     {

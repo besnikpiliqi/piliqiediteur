@@ -8,7 +8,9 @@ use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CloturerCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Models\ClotureCaisse;
+use App\Domain\Facturation\Models\Facture;
 use App\Filament\App\Resources\ClotureCaisseResource\Pages\ViewClotureCaisse;
+use App\Filament\App\Resources\FactureResource\Pages\ViewFacture;
 use App\Filament\TableauEntry;
 use DOMDocument;
 use DOMElement;
@@ -72,6 +74,57 @@ class TableauxDesFichesTest extends TestCase
             ['piliqi-information', ['Factures aux professionnels (pour information)', '–', '–', '–', '–']],
             ['piliqi-information', ['Avoirs aux professionnels (pour information)', '–', '–', '–', '–']],
         ], self::lignesDuTableau($html, 'Rubrique'));
+    }
+
+    public function test_un_taux_de_zero_reste_ecrit_0_pour_cent_sur_la_fiche_d_un_document(): void
+    {
+        $ticket = $this->ticketDUnLivreAZeroEtDUnSavonAVingt();
+
+        $html = Livewire::test(ViewFacture::class, ['record' => $ticket->getRouteKey()])->html();
+
+        $this->assertSame([
+            ['', ['Description', 'Quantité', 'PU HT', 'PU TTC', 'Taux TVA', 'Total HT', 'TVA', 'Total TTC']],
+            ['', ['Livre', '1', '10,00 €', '10,00 €', '0 %', "10,00\u{00A0}€", '–', "10,00\u{00A0}€"]],
+            ['', ['Savon', '1', '8,32 €', '9,99 €', '20 %', "8,33\u{00A0}€", "1,66\u{00A0}€", "9,99\u{00A0}€"]],
+        ], self::lignesDuTableau($html, 'Description'));
+        $this->assertSame([
+            ['', ['Taux', 'Base HT', 'TVA', 'Total TTC']],
+            ['', ['20 %', "8,33\u{00A0}€", "1,66\u{00A0}€", "9,99\u{00A0}€"]],
+            ['', ['0 %', "10,00\u{00A0}€", '–', "10,00\u{00A0}€"]],
+        ], self::lignesDuTableau($html, 'Taux'));
+    }
+
+    public function test_un_taux_de_zero_reste_ecrit_0_pour_cent_dans_la_tva_par_taux_de_la_cloture(): void
+    {
+        $ticket = $this->ticketDUnLivreAZeroEtDUnSavonAVingt();
+        $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $ticket->magasin, Calendrier::deParis()->aujourdhui());
+
+        $html = Livewire::test(ViewClotureCaisse::class, ['record' => $cloture->getRouteKey()])->html();
+
+        $this->assertSame([
+            ['', ['Taux', 'Base HT', 'TVA', 'Total TTC']],
+            ['', ['20 %', "8,33\u{00A0}€", "1,66\u{00A0}€", "9,99\u{00A0}€"]],
+            ['', ['0 %', "10,00\u{00A0}€", '–', "10,00\u{00A0}€"]],
+        ], self::lignesDuTableau($html, 'Taux'));
+    }
+
+    /**
+     * Un ticket payé en espèces à la caisse par le responsable connecté :
+     * un livre à 10,00 € TTC à 0 % et un savon à 9,99 € TTC à 20 %.
+     */
+    private function ticketDUnLivreAZeroEtDUnSavonAVingt(): Facture
+    {
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $this->actingAs($this->responsableDeTest($magasin));
+        Filament::setTenant($magasin);
+        $livre = Produit::factory()->create(['nom' => 'Livre', 'prix_vente_ttc' => '10.00', 'taux_tva' => 0, 'suivi_stock' => false]);
+        $savon = Produit::factory()->create(['nom' => 'Savon', 'prix_vente_ttc' => '9.99', 'taux_tva' => 20, 'suivi_stock' => false]);
+
+        return self::vendreAuComptant(self::auteur(), Client::factory()->create(), [
+            ['produit_id' => $livre->id, 'quantite' => 1],
+            ['produit_id' => $savon->id, 'quantite' => 1],
+        ]);
     }
 
     /**

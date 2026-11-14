@@ -2299,6 +2299,7 @@ return [
     'app/Filament/Concerns/ChoisitLaNatureDeLOperation.php' => [
         'champ:nature_operation' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Parcours/PuHtAfficheTest.php › le responsable fait sortir de la TVA française la vente d’un particulier, et le PU HT des lignes reste celui d’un article',
+            'tests/Browser/Parcours/PuHtAfficheTest.php › le responsable fait passer en prestation hors UE la facture d’un service à 9,99 € TTC, dont le prix sans TVA devient 8,33 €, son montant inchangé',
         ]],
     ],
     'app/Filament/Concerns/GereLesComptes.php' => [
@@ -2652,6 +2653,7 @@ return [
         'action:creerUnAdministrateur' => ['lot' => 'NAV-4', 'tests' => [
             'tests/Browser/Balayage/BalayageDeLEspaceDeLaSocieteTest.php › le propriétaire d’une société qui attend son code ouvre chaque page et chaque action de l’espace de sa société sans erreur',
             'tests/Browser/Balayage/BalayageDeLEspaceDeLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action de l’espace de sa société sans erreur',
+            'tests/Browser/Parcours/DemonstrationApresLaValidationTest.php › une fois la société validée, le propriétaire et l’administrateur ne voient plus la démonstration et son adresse est introuvable',
         ]],
         'action:creerUnMembre' => ['lot' => 'NAV-4', 'tests' => [
             'tests/Browser/Balayage/BalayageDeLEspaceDeLaSocieteTest.php › le propriétaire d’une société qui attend son code ouvre chaque page et chaque action de l’espace de sa société sans erreur',
@@ -2670,6 +2672,7 @@ return [
             'tests/Browser/Balayage/BalayageDeLEspaceDeLaSocieteTest.php › le propriétaire d’une société qui attend son code ouvre chaque page et chaque action de l’espace de sa société sans erreur',
             'tests/Browser/Balayage/BalayageDeLEspaceDeLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action de l’espace de sa société sans erreur',
             'tests/Browser/Balayage/BalayageDeLEspaceDeLaSocieteTest.php › l’administrateur qui a toutes les autorisations de société ouvre chaque page et chaque action de l’espace sans erreur',
+            'tests/Browser/Parcours/DemonstrationApresLaValidationTest.php › une fois la société validée, le propriétaire et l’administrateur ne voient plus la démonstration et son adresse est introuvable',
         ]],
     ],
     'app/Http/Controllers/TelechargerLesDocumentsController.php' => [

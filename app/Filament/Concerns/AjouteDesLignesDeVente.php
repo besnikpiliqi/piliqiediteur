@@ -408,11 +408,11 @@ trait AjouteDesLignesDeVente
      * et se montre tel qu'il est enregistré. Le PU HT n'en est que la
      * conversion, que la ligne enregistrera au millionième d'euro (voir
      * ConstructeurLigneDocument) : son champ, qui ne se saisit pas et ne
-     * part pas avec le formulaire, le montre comme la vente le montre (voir
-     * puHtDansLeChamp()), tel qu'il sera enregistré sur une facture ou un
-     * devis à un professionnel et sur une vente sans TVA française, 54.166667
-     * pour 54,166667 €, sinon arrondi au centime, comme tout prix unitaire
-     * montré en lecture, 54.17.
+     * part pas avec le formulaire, montre celui d'un article, le PU TTC
+     * moins sa TVA arrondie au centime, comme partout dans PILIQI et pour
+     * toute vente (voir puHtDansLeChamp() et
+     * CalculateurLigne::prixUnitaireHtAffiche(), décision de l'éditeur du
+     * 14/11/2026) : 8.32 pour 9,99 € TTC à 20 %.
      *
      * Le taux d'une ligne de produit est celui de sa fiche (voir
      * ConstructeurLigneDocument) : affiché, il ne se modifie pas et ne

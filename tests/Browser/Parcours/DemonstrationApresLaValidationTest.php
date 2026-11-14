@@ -14,8 +14,10 @@ use App\Domain\Tenancy\Services\TenantContext;
  * magasins, qui l'ont vue sur le tableau de bord de la société avant la
  * validation, n'en lisent plus rien ensuite, ni sur ce tableau de bord, ni
  * dans la liste des magasins, ni dans le menu des magasins, ni sur la page
- * du téléchargement des documents ; son adresse mène à une page
- * introuvable.
+ * du téléchargement des documents, ni, pour le propriétaire, dans les
+ * comptes de la société, où le compte d'entraînement retiré reste listé
+ * sans magasin, ni dans la sélection des magasins d'un nouvel
+ * administrateur ; son adresse mène à une page introuvable.
  */
 
 test('une fois la société validée, le propriétaire et l’administrateur ne voient plus la démonstration et son adresse est introuvable', function () {
@@ -55,6 +57,16 @@ test('une fois la société validée, le propriétaire et l’administrateur ne 
             $onglet->aller($espace.'/telecharger-les-documents')
                 ->voir('Boutique Lyon 1')
                 ->nePasVoir(OuvrirLaDemonstrationAction::NOM);
+            $onglet->aller($espace.'/comptes')
+                ->voir('Responsable de test')
+                ->voir('Adèle Martin')
+                ->nePasVoir('Démonstration')
+                ->cliquerSur('Créer un administrateur')
+                ->cliquer('label:has-text("Une sélection de magasins") input[type=radio]')
+                ->voir('Magasins de sa sélection')
+                ->voir('Boutique de la Gare')
+                ->nePasVoir('Démonstration')
+                ->fermerLaFenetre();
         }
 
         $onglet->aller('/app/'.$reel->uuid);

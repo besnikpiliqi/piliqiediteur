@@ -1,6 +1,8 @@
 <?php
 
 use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Catalogue\Models\Service;
+use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CreerDevisAction;
 use App\Domain\Facturation\Actions\CreerFactureAction;
@@ -154,6 +156,30 @@ test('le responsable fait sortir de la TVA française la vente d’un particulie
     attendreLePuHt($onglet, '8.32');
     $onglet->choisir('Nature de l\'opération', NatureOperation::VenteEnFrance->value);
     attendreLePuHt($onglet, '8.32');
+});
+
+test('le responsable fait passer en prestation hors UE la facture d’un service à 9,99 € TTC, dont le prix sans TVA devient 8,33 €, son montant inchangé', function () {
+    $societe = $this->societeComplete();
+    $brouillon = app(TenantContext::class)->runAs($societe->magasin, fn (): Facture => app(CreerFactureAction::class)->handle(
+        $societe->responsable,
+        Client::factory()->create(['nom' => 'Acme Inc.', 'type_client' => TypeClient::Professionnel, 'pays' => 'US', 'etabli_en_france' => false, 'identifiant_etranger' => 'EIN 12-3456789']),
+        [['service_id' => Service::factory()->create(['nom' => 'Conseil à l\'export'])->id, 'prix_unitaire_ttc' => '9.99', 'taux_tva' => 20, 'quantite' => 1]],
+    ));
+    expect($brouillon->total_ht)->toBe('8.33');
+    $onglet = $this->seConnecter($societe->responsable)->aller('/app/'.$societe->magasin->uuid.'/factures/'.$brouillon->id.'/edit');
+
+    $onglet->choisir('Nature de l\'opération', NatureOperation::PrestationHorsUe->value)
+        ->voir('Prix des services convertis')
+        ->attendreQue(
+            'document.querySelector('.Navigation::texte('[id*=".lignes."][id$=".prix_unitaire_ttc"]').')?.value === "8.33"',
+            'le prix sans TVA du service ne montre pas 8.33',
+        )
+        ->soumettre('Sauvegarder')
+        ->voir('Sauvegardé');
+
+    $brouillon = app(TenantContext::class)->runAs($societe->magasin, fn (): Facture => $brouillon->fresh());
+    expect($brouillon->nature_operation)->toBe(NatureOperation::PrestationHorsUe)
+        ->and([$brouillon->total_ht, $brouillon->total_tva, $brouillon->total_ttc])->toBe(['8.33', '0.00', '8.33']);
 });
 
 test('le propriétaire change le client d’un devis, et le PU HT des lignes reste celui d’un article', function () {

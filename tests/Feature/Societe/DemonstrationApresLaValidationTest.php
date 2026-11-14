@@ -14,24 +14,35 @@ use App\Domain\Facturation\Enums\TypeDeDocumentTelechargeable;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Notifications\FacturesPasseesEnRetard;
 use App\Domain\Facturation\Services\DocumentsDeLaPeriode;
+use App\Domain\Tenancy\Actions\CreerAdministrateurAction;
 use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
+use App\Domain\Tenancy\Enums\StatutDuTelechargement;
+use App\Domain\Tenancy\Jobs\PreparerLeTelechargementDesDocumentsJob;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Models\TelechargementDeDocuments;
 use App\Domain\Tenancy\Scopes\MagasinScope;
+use App\Domain\Tenancy\Services\PorteeDesAdministrateurs;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Pages\TelechargerLesDocuments as TelechargerLesDocumentsDuMagasin;
 use App\Filament\App\Resources\FactureResource;
 use App\Filament\Societe\Pages\TableauDeBord;
 use App\Filament\Societe\Pages\TelechargerLesDocuments as TelechargerLesDocumentsDeLaSociete;
 use App\Filament\Societe\Resources\MagasinResource;
+use App\Filament\Societe\Resources\MembreResource;
+use App\Filament\Societe\Resources\MembreResource\Pages\FicheDuMembre;
+use App\Filament\Societe\Resources\MembreResource\Pages\ListMembres;
 use App\Http\Controllers\TelechargerLesDocumentsController;
 use App\Models\User;
 use Filament\Facades\Filament;
 use Filament\Pages\Dashboard;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Notifications\DatabaseNotification;
+use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Testing\TestResponse;
 use Livewire\Livewire;
+use LogicException;
 use Tests\TestCase;
 
 /**
@@ -117,6 +128,39 @@ class DemonstrationApresLaValidationTest extends TestCase
     }
 
     /**
+     * Une demande sur la démonstration encore en file à la validation (le
+     * travailleur des téléchargements ne tournait pas) se clôt, quand il
+     * passe, sans rien annoncer : aucune notification sur la démonstration
+     * n'arrive dans la cloche après la validation, et aucun fichier ne
+     * s'écrit.
+     */
+    public function test_une_demande_de_la_demonstration_preparee_apres_la_validation_se_clot_sans_rien_annoncer(): void
+    {
+        Queue::fake();
+        Storage::fake(PreparerLeTelechargementDesDocumentsJob::DISQUE);
+        [$societe, $proprietaire, , $demonstration] = $this->societeQuiSEstEntraineeDansSaDemonstration();
+        $this->dansLeMagasin($demonstration, $proprietaire);
+        Livewire::test(TelechargerLesDocumentsDuMagasin::class)
+            ->set('types', [TypeDeDocumentTelechargeable::Ventes->value])
+            ->set('format', FormatDuTelechargement::Csv->value)
+            ->call('toutSelectionner')
+            ->call('telecharger');
+        $demande = TelechargementDeDocuments::query()->withoutGlobalScopes()->where('demande_par', $proprietaire->id)->sole();
+        $this->assertSame(StatutDuTelechargement::EnPreparation, $demande->statut);
+        Queue::assertPushed(PreparerLeTelechargementDesDocumentsJob::class);
+
+        $this->saisirLeCodeDuCourrier($societe->fresh());
+        app(TenantContext::class)->clear();
+        app()->call([new PreparerLeTelechargementDesDocumentsJob($demande->id), 'handle']);
+
+        $demande->refresh();
+        $this->assertSame([StatutDuTelechargement::Echec, PreparerLeTelechargementDesDocumentsJob::MOTIF_DEMONSTRATION, null], [$demande->statut, $demande->motif_echec, $demande->chemin]);
+        $this->assertSame(0, DatabaseNotification::query()->where('data->telechargement_id', $demande->id)->count());
+        $this->assertSame(0, DatabaseNotification::query()->where('data->magasin_id', $demonstration->id)->count());
+        $this->assertSame([], Storage::disk(PreparerLeTelechargementDesDocumentsJob::DISQUE)->allFiles());
+    }
+
+    /**
      * Les notifications à propos de la démonstration s'effacent des cloches
      * de la société à sa validation ; celles d'un magasin réel restent.
      */
@@ -145,6 +189,73 @@ class DemonstrationApresLaValidationTest extends TestCase
 
         $this->assertFalse($collaborateur->peutOuvrir($demonstration->fresh()));
         $this->assertSame([$reel->id], app(DocumentsDeLaPeriode::class)->magasinsDesClients($collaborateur)->flatten()->map(fn (Magasin $magasin): int => $magasin->id)->all());
+    }
+
+    /**
+     * L'équipe de la société ne nomme plus la démonstration : le compte
+     * d'entraînement retiré à la validation reste listé, sans magasin
+     * (« — »), l'administrateur qui l'avait dans sa sélection n'y montre
+     * que ses magasins réels, et la sélection d'un administrateur, à sa
+     * création comme à sa modification, ne propose plus de la cocher.
+     */
+    public function test_l_equipe_de_la_societe_ne_nomme_plus_la_demonstration_une_fois_la_societe_validee(): void
+    {
+        [$societe, $proprietaire, $reel, $demonstration] = $this->societeQuiSEstEntraineeDansSaDemonstration();
+        $entrainement = $this->responsableDeTest($demonstration);
+        $administrateur = $this->administrateur($reel, [$reel->id, $demonstration->id], nom: 'Alice Martin');
+
+        $this->saisirLeCodeDuCourrier($societe->fresh());
+
+        $this->assertTrue($entrainement->fresh()?->estRetire());
+        $this->ouvrir($proprietaire, MembreResource::getUrl('index', panel: 'societe', tenant: $societe))
+            ->assertOk()
+            ->assertSeeText([$entrainement->name, 'Alice Martin', 'Boutique Lyon 1 (Administrateur)'])
+            ->assertDontSeeText('Démonstration');
+
+        foreach ([$entrainement, $administrateur] as $compte) {
+            $this->ouvrir($proprietaire, MembreResource::getUrl('view', ['record' => $compte], panel: 'societe', tenant: $societe))
+                ->assertOk()
+                ->assertSeeText($compte->name)
+                ->assertDontSeeText('Démonstration');
+        }
+
+        $this->dansLEspaceDeLaSociete($societe->fresh(), $proprietaire->fresh());
+        $this->assertSame([$reel->id => 'Boutique Lyon 1'], MembreResource::magasinsDeLaPortee());
+        Livewire::test(ListMembres::class)
+            ->mountAction('creerUnAdministrateur')
+            ->setActionData(['portee' => 'selection'])
+            ->assertSee('Boutique Lyon 1')
+            ->assertDontSee('Démonstration');
+        Livewire::test(FicheDuMembre::class, ['record' => $administrateur->getRouteKey()])
+            ->mountAction('modifierLAdministrateur')
+            ->assertActionDataSet(['portee' => 'selection', 'magasins' => [$reel->id]])
+            ->assertSee('Boutique Lyon 1')
+            ->assertDontSee('Démonstration');
+    }
+
+    /**
+     * Avant la validation, la démonstration se choisit dans la portée d'un
+     * administrateur ; une fois la société validée, l'action la refuse,
+     * même forgée, sans rien créer.
+     */
+    public function test_la_demonstration_d_une_societe_validee_ne_se_choisit_plus_dans_la_portee_d_un_administrateur(): void
+    {
+        [$societe, $proprietaire, $reel, $demonstration] = $this->societeQuiSEstEntraineeDansSaDemonstration();
+        $avant = app(CreerAdministrateurAction::class)->handle($proprietaire, $societe, ['name' => 'Alice Martin'], [$demonstration->id], [], []);
+        $this->assertSame([$demonstration->id], $avant->affectations()->pluck('magasin_id')->all());
+
+        $this->saisirLeCodeDuCourrier($societe->fresh());
+
+        foreach ([[$demonstration->id], [$reel->id, $demonstration->id]] as $selection) {
+            try {
+                app(CreerAdministrateurAction::class)->handle($proprietaire->fresh(), $societe->fresh(), ['name' => 'Bruno Petit'], $selection, [], []);
+                $this->fail('La démonstration d\'une société validée est entrée dans la portée d\'un administrateur.');
+            } catch (LogicException $refus) {
+                $this->assertSame(PorteeDesAdministrateurs::MESSAGE_DEMONSTRATION_TERMINEE, $refus->getMessage());
+            }
+        }
+
+        $this->assertFalse(User::query()->where('name', 'Bruno Petit')->exists());
     }
 
     /**

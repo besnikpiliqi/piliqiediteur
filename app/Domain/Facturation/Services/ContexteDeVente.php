@@ -135,23 +135,16 @@ final readonly class ContexteDeVente
     }
 
     /**
-     * Les lignes de cette vente montrent-elles le PU HT, tel qu'il est
-     * enregistré (décision de l'éditeur du 09/11/2026, voir
-     * CalculateurLigne::prixUnitaireExact()) ? Une facture ou un devis à un
-     * professionnel, et toute vente sans TVA française, qui se paie hors
-     * taxe (voir retireLaTvaDuPrix()) ; un ticket ou un devis à un
-     * particulier montre le PU TTC, et son PU HT, au centime.
-     */
-    public function montreLePuHt(): bool
-    {
-        return $this->typeClient === TypeClient::Professionnel || $this->retireLaTvaDuPrix();
-    }
-
-    /**
-     * Le document montre-t-il le PU HT (voir montreLePuHt()), d'après le
-     * type de client, la franchise et la nature qu'il a notés ? Ses PDF,
-     * sa fiche et sa note de calcul le lisent ici (voir TableauDesLignes et
-     * MentionsFiscales::calcul()), un avoir comme sa facture.
+     * Le document montre-t-il le PU HT, d'après le type de client, la
+     * franchise et la nature qu'il a notés ? Une facture, un avoir sur
+     * facture ou un devis à un professionnel, et toute vente sans TVA
+     * française, qui se paie hors taxe (voir documentRetireLaTvaDuPrix()) ;
+     * un ticket, un avoir sur ticket ou un devis à un particulier montre le
+     * PU TTC. Ses PDF, sa fiche et sa note de calcul le lisent ici (voir
+     * TableauDesLignes et MentionsFiscales::calcul()), un avoir comme sa
+     * facture ; le PU HT qu'ils montrent est celui d'un article (voir
+     * CalculateurLigne::prixUnitaireHtAffiche(), décision de l'éditeur du
+     * 14/11/2026).
      */
     public static function documentMontreLePuHt(Facture|Avoir|Devis $document): bool
     {

@@ -2510,3 +2510,9 @@ si tu peux arrete et recommncé à 10h10 ce matin
 
 il faut que creer dans le tableaux de bord que pour le proprietaire tes tableaux avec chart.js de ([www.chartjs.org](https://www.chartjs.org)) qui est deja installer sur js/ widgets/chart.js. il faut creer pour tout dont pour compare les ventes/achats, la tva redevable, par moi,par an donc tout tout. et il faut que tu laisse en choix libre dans un menu deroulant pour tout les modeles de charts afin que le proprietaire chosis lequelle il veux apparaitre. et aussi pour les comptables pareille qui voit les comptes de leurs client, donc meme si c'est un comptable qui est declare par la societet ou c'est dans le compte du comptable elle meme. montre moi ce que t as compris et montre des modeles
 
+## 278. 2026-11-14 09:44 UTC
+
+[1 capture(s) d'écran jointe(s)]
+
+je choisi G1 mais tu ajoute la parti du haut de G2. et pour tes "Mes questions" alors la 2em pour Les administrateurs et les responsable tu ajoute les case de l'autorisation que le proprietaire coche ou pas. et la 3em: L'expert-comptable déclaré: oui. et la 4em : Dans le panneau d'un magasin: aussi pour chaque magasin doit pouvoir les voir. montre moi encore le model que j ai prposé
+

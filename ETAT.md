@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 14/11/2026 à 09:26 UTC par pilotage-sync.sh : « Modèles des graphiques du tableau de bord ».
+Mis à jour le 14/11/2026 à 09:45 UTC par pilotage-sync.sh : « Graphiques : réponses de l'éditeur, modèle v3 ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -37,6 +37,25 @@ b10d2e8 Relecture du lot DV du devis en ligne
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
+ M app/Domain/Facturation/Actions/EnvoyerDocumentAction.php
+ M app/Domain/Facturation/Models/Facture.php
+ M app/Domain/Facturation/Services/DocumentsDeLaPeriode.php
+ M app/Domain/Facturation/Services/FacturesAEncaisserDeLaSociete.php
+ M app/Domain/Tenancy/Actions/FermerLaDemonstrationAction.php
+ M app/Domain/Tenancy/Actions/ValiderLaSocieteAction.php
+ M app/Domain/Tenancy/Models/TelechargementDeDocuments.php
+ M app/Domain/Tenancy/Services/ChosesAFaireDuMagasin.php
+ M app/Filament/App/Resources/FactureResource.php
+ M app/Filament/Concerns/EnvoieLesDocuments.php
+ M app/Filament/Societe/Pages/TableauDeBord.php
+ M app/Models/User.php
+ M tests/Feature/DatabaseSeederTest.php
+ M tests/Feature/Facturation/EnvoyerDocumentActionTest.php
+ M tests/Feature/Filament/EnvoieLesDocumentsTest.php
+ M tests/Feature/Societe/MagasinDeDemonstrationTest.php
+ M tests/Feature/Societe/PanneauSocieteTest.php
+?? tests/Feature/Filament/FactureEnRetardTest.php
+?? tests/Feature/Societe/DemonstrationApresLaValidationTest.php
 ```
 
 ## Dernière course de la chaîne

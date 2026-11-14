@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 14/11/2026 à 09:24 UTC par pilotage-sync.sh : « Après le lot MAT-PRO ».
+Mis à jour le 14/11/2026 à 09:26 UTC par pilotage-sync.sh : « Modèles des graphiques du tableau de bord ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -44,7 +44,6 @@ b10d2e8 Relecture du lot DV du devis en ligne
 Course `wf_ee9b6e6e-908`, étapes commencées (de la plus ancienne à la plus récente) :
 
 ```
-SEED:relecture2
 SEED:correction
 SEED:poussee
 SEED:notes
@@ -69,4 +68,5 @@ MAT-PRO:relecture2
 MAT-PRO:correction
 MAT-PRO:poussee
 MAT-PRO:notes
+DEMO-V:implementation
 ```

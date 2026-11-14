@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 14/11/2026 à 02:43 UTC par pilotage-sync.sh : « Sélecteur de produits : tableau qui défile (DEMO-V) ».
+Mis à jour le 14/11/2026 à 02:49 UTC par pilotage-sync.sh : « Arrêt de la chaîne à la demande de l'éditeur, reprise 10 h 10 Paris ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -41,10 +41,15 @@ d4a8247 Relecture du lot ML des e-mails vérifiés
 ```
  M app/Domain/Facturation/Services/ControleNatureOperation.php
  M app/Domain/Tenancy/Support/AvertissementsDuCodeDActivite.php
+ M tests/Browser/inventaire-des-actions.php
  M tests/Feature/EcrituresSansBaseDeTestTest.php
  M tests/Feature/Facturation/NatureOperationTest.php
+ M tests/Feature/Facturation/RegularisationDUneFactureTest.php
  M tests/Feature/Societe/TypeDActiviteTest.php
  M tests/Fixtures/EcrituresDurables.php
+ M tests/Unit/MatriceDesDecisionsTest.php
+ M tests/Unit/matrice-des-decisions.php
+?? tests/Browser/Parcours/AntillesUnSeulTerritoireTest.php
 ```
 
 ## Dernière course de la chaîne

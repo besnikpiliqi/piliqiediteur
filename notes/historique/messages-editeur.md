@@ -2502,3 +2502,7 @@ c est quoi la faille
 
 ici il y a un problem car quand il y a en bcp de produit alors les buttons en bas se disparait car la tables n est pas en overflow, tu vois quand il y en bcp de produits il faut decendre la coursol, donc la parti en desus de la tables des produits doit reste intact donc non caché ou disparaitre
 
+## 276. 2026-11-14 02:48 UTC
+
+si tu peux arrete et recommncé à 10h10 ce matin
+

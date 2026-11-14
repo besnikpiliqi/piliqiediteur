@@ -15,8 +15,12 @@
  *       mutants ont été testés, comparé à son seuil : échoue sous le seuil.
  *       Le rapport liste aussi les mutants non conclus, lus dans le journal
  *       texte d'Infection rangé à côté (infection.log).
- *   php tests/Qualite/qualite.php seuils <ancien seuils.json>
- *       Aucun seuil ne baisse par rapport à l'ancien fichier : ni la
+ *   php tests/Qualite/qualite.php seuils [<ancien seuils.json>]
+ *       Aucun seuil ne baisse par rapport à l'ancien fichier, ou, sans
+ *       fichier, au seuils.json de la branche que suit la branche courante
+ *       (git @{upstream}), que la CI prend pour base à l'envoi suivant, ou,
+ *       sans branche suivie qui en ait un, à seuils.json lui-même, comme
+ *       la CI pour une nouvelle branche (voir anciensSeuils()) : ni la
  *       couverture, ni le score de mutation d'une partie, ni l'analyse
  *       statique (Larastan), que seuils.json enregistre telle que PHPStan
  *       la règle (niveau, chemins, exclusions, stubs, options, règles
@@ -73,13 +77,56 @@ function seuils(string $fichier = __DIR__.'/seuils.json'): array
         throw new RuntimeException("Seuils illisibles : {$fichier}.");
     }
 
+    return seuilsDuTexte($contenu, $fichier);
+}
+
+/**
+ * Les seuils qu'enregistre ce texte d'un seuils.json, venu de cette
+ * origine (un fichier, une branche).
+ *
+ * @return array<array-key, mixed>
+ */
+function seuilsDuTexte(string $contenu, string $origine): array
+{
     $seuils = json_decode($contenu, true, flags: JSON_THROW_ON_ERROR);
 
     if (! is_array($seuils)) {
-        throw new RuntimeException("{$fichier} n'enregistre aucun seuil.");
+        throw new RuntimeException("{$origine} n'enregistre aucun seuil.");
     }
 
     return $seuils;
+}
+
+/**
+ * Les anciens seuils auxquels « seuils » compare seuils.json, avec ce
+ * qu'ils sont : ceux du fichier donné ; sans fichier, ceux du seuils.json
+ * de la branche que suit la branche courante (git @{upstream}), que la CI
+ * prend pour base à l'envoi suivant (le commit d'avant l'envoi) ; sans
+ * branche suivie, ou sans seuils.json sur elle, seuils.json lui-même, comme
+ * la CI pour une nouvelle branche : le réglage de l'analyse statique y est
+ * alors contrôlé, sans rien pour baisser.
+ *
+ * @return array{0: array<array-key, mixed>, 1: string}
+ */
+function anciensSeuils(?string $fichier): array
+{
+    if ($fichier !== null) {
+        return [seuils($fichier), $fichier];
+    }
+
+    $processus = proc_open(['git', '-C', RACINE, 'show', '@{upstream}:tests/Qualite/seuils.json'], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $tubes);
+
+    if ($processus !== false) {
+        $sortie = stream_get_contents($tubes[1]);
+        fclose($tubes[1]);
+        fclose($tubes[2]);
+
+        if (proc_close($processus) === 0 && $sortie !== false) {
+            return [seuilsDuTexte($sortie, 'Le seuils.json de la branche suivie'), 'celui de la branche suivie (git @{upstream})'];
+        }
+    }
+
+    return [seuils(), "seuils.json lui-même (aucune branche suivie n'en a)"];
 }
 
 /**
@@ -522,10 +569,11 @@ function mutation(string $journal, ?string $rapport): int
     return $echec ? 1 : 0;
 }
 
-function seuilsQuiMontent(string $ancien): int
+function seuilsQuiMontent(?string $ancien): int
 {
     $nouveaux = seuils();
-    $anciens = seuils($ancien);
+    [$anciens, $origine] = anciensSeuils($ancien);
+    echo "Ancien seuils.json : {$origine}.\n";
     $refus = [];
 
     foreach (['couverture', 'mutation'] as $outil) {
@@ -1356,7 +1404,7 @@ const COMMANDES = [
     'couverture' => [1, 1, '<clover.xml> [<rapport.md>]'],
     'nouveau-code' => [2, 0, '<clover.xml> <commit de base>'],
     'mutation' => [1, 1, '<infection.json> [<rapport.md>]'],
-    'seuils' => [1, 0, '<ancien seuils.json>'],
+    'seuils' => [0, 1, '[<ancien seuils.json>]'],
     'sensibles' => [0, 0, ''],
     'sensibles-changes' => [1, 0, '<commit de base>'],
     'configuration-sensibles' => [1, 0, '<destination>'],
@@ -1397,7 +1445,7 @@ function lancer(?string $commande, array $arguments): int
         'couverture' => couverture($arguments[0], $arguments[1] ?? null),
         'nouveau-code' => nouveauCode($arguments[0], $arguments[1]),
         'mutation' => mutation($arguments[0], $arguments[1] ?? null),
-        'seuils' => seuilsQuiMontent($arguments[0]),
+        'seuils' => seuilsQuiMontent($arguments[0] ?? null),
         'sensibles' => sensibles(),
         'sensibles-changes' => sensiblesChanges($arguments[0]),
         'configuration-sensibles' => configurationSensibles($arguments[0]),

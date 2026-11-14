@@ -29,6 +29,8 @@ use Symfony\Component\Yaml\Yaml;
  */
 class OutilDeQualiteTest extends TestCase
 {
+    private const CI = __DIR__.'/../../../.github/workflows/tests.yml';
+
     private string $depot;
 
     protected function setUp(): void
@@ -153,7 +155,7 @@ class OutilDeQualiteTest extends TestCase
      */
     public function test_la_ci_donne_a_infection_les_chemins_des_fichiers_sensibles_changes(): void
     {
-        $ci = Yaml::parseFile(__DIR__.'/../../../.github/workflows/tests.yml');
+        $ci = Yaml::parseFile(self::CI);
         $etape = array_values(array_filter($ci['jobs']['couverture']['steps'], fn (array $etape): bool => ($etape['name'] ?? '') === 'Tests de mutation des parties sensibles changées'))[0];
         preg_match('#vendor/bin/infection (.+)$#m', $etape['run'], $commande);
         $fichiers = ['app/Domain/Facturation/Services/CalculateurLigne.php', 'app/Models/User.php', 'app/Policies/FacturePolicy.php'];
@@ -170,23 +172,21 @@ class OutilDeQualiteTest extends TestCase
     /**
      * Larastan, les seuils et l'analyse des flux de Psalm avec son témoin
      * passent à chaque envoi et à chaque demande de fusion (décision de
-     * l'éditeur du 13/11/2026) : leurs tâches n'ont aucune condition, et la
-     * base des seuils est le commit d'avant l'envoi ou la base de la demande
-     * de fusion. La couverture et la mutation restent à la main jusqu'à
-     * l'étape 15.
+     * l'éditeur du 13/11/2026) : ni leurs tâches ni aucune de leurs étapes
+     * n'ont de condition ou d'échec permis (voir conditionsDesAnalyses()),
+     * et la base des seuils est le commit d'avant l'envoi ou la base de la
+     * demande de fusion. La couverture et la mutation restent à la main
+     * jusqu'à l'étape 15.
      */
     public function test_l_analyse_statique_et_l_analyse_des_flux_passent_a_chaque_envoi(): void
     {
-        $ci = Yaml::parseFile(__DIR__.'/../../../.github/workflows/tests.yml');
+        $ci = Yaml::parseFile(self::CI);
         $commandes = fn (string $tache): string => implode("\n", array_column($ci['jobs'][$tache]['steps'], 'run'));
         $seuils = array_values(array_filter($ci['jobs']['analyse']['steps'], fn (array $etape): bool => ($etape['name'] ?? '') === 'Seuils qui ne baissent pas'))[0];
 
         $this->assertArrayHasKey('push', $ci['on']);
         $this->assertArrayHasKey('pull_request', $ci['on']);
-
-        foreach (['analyse', 'flux'] as $tache) {
-            $this->assertArrayNotHasKey('if', $ci['jobs'][$tache], "La tâche {$tache} doit passer à chaque envoi, sans condition.");
-        }
+        $this->assertSame([], self::conditionsDesAnalyses((string) file_get_contents(self::CI)));
 
         $this->assertStringContainsString('vendor/bin/phpstan analyse', $commandes('analyse'));
         $this->assertStringContainsString('php tests/Qualite/qualite.php seuils', $commandes('analyse'));
@@ -196,6 +196,37 @@ class OutilDeQualiteTest extends TestCase
         $this->assertStringContainsString('php tests/Qualite/qualite.php flux storage/qualite/psalm.json', $commandes('flux'));
         $this->assertStringContainsString('php tests/Qualite/qualite.php flux-temoin storage/qualite/psalm-temoin.json', $commandes('flux'));
         $this->assertSame("github.event_name == 'workflow_dispatch'", $ci['jobs']['couverture']['if']);
+    }
+
+    /**
+     * Une condition (« if ») ou un échec permis (« continue-on-error ») sur
+     * la tâche « analyse » ou « flux », ou sur l'une de leurs étapes,
+     * laisserait la tâche verte sans que Larastan, les seuils, Psalm ou son
+     * témoin aient tourné, ou malgré leur échec : chacun, posé sur une
+     * copie du fichier de la CI, est vu.
+     */
+    public function test_une_condition_ou_un_echec_permis_sur_les_analyses_est_refuse(): void
+    {
+        $ci = (string) file_get_contents(self::CI);
+        $avecUneLigneApres = function (string $ancre, string $ligne) use ($ci): string {
+            $this->assertSame(1, substr_count($ci, $ancre), $ancre);
+
+            return str_replace($ancre, $ancre.$ligne, $ci);
+        };
+
+        foreach ([['analyse', 'Larastan'], ['analyse', 'Seuils qui ne baissent pas'], ['flux', 'Psalm'], ['flux', "Témoin de l'analyse des flux"]] as [$tache, $etape]) {
+            $this->assertSame(["{$tache}, étape « {$etape} » : if"], self::conditionsDesAnalyses($avecUneLigneApres("      - name: {$etape}\n", "        if: github.event_name == 'workflow_dispatch'\n")));
+            $this->assertSame(["{$tache}, étape « {$etape} » : continue-on-error"], self::conditionsDesAnalyses($avecUneLigneApres("      - name: {$etape}\n", "        continue-on-error: true\n")));
+        }
+
+        foreach (['analyse', 'flux'] as $tache) {
+            $this->assertSame(["{$tache} : if"], self::conditionsDesAnalyses($avecUneLigneApres("  {$tache}:\n", "    if: github.event_name == 'workflow_dispatch'\n")));
+            $this->assertSame(["{$tache} : continue-on-error"], self::conditionsDesAnalyses($avecUneLigneApres("  {$tache}:\n", "    continue-on-error: true\n")));
+        }
+
+        $cle = "      - name: Generate app key\n        run: php artisan key:generate\n\n      - name: Psalm\n";
+        $this->assertSame(1, substr_count($ci, $cle));
+        $this->assertSame(['flux, étape « Generate app key » : if'], self::conditionsDesAnalyses(str_replace($cle, "      - name: Generate app key\n        if: false\n        run: php artisan key:generate\n\n      - name: Psalm\n", $ci)));
     }
 
     public function test_le_temoin_de_l_analyse_des_flux_exige_exactement_les_chemins_qu_il_annonce(): void
@@ -260,12 +291,42 @@ class OutilDeQualiteTest extends TestCase
         $this->assertStringContainsString('Échec : Le mutateur d\'un mutant « killed » du journal d\'Infection n\'est pas un tableau : null.', $sortie);
     }
 
-    public function test_les_seuils_sans_leur_ancien_fichier_ecrivent_l_usage_et_sortent_avec_le_code_2(): void
+    public function test_les_seuils_avec_plus_d_un_ancien_fichier_ecrivent_l_usage_et_sortent_avec_le_code_2(): void
     {
-        [$code, $sortie] = $this->lancer('seuils');
+        [$code, $sortie] = $this->lancer('seuils', 'un.json', 'deux.json');
 
         $this->assertSame(2, $code, $sortie);
-        $this->assertStringContainsString('php tests/Qualite/qualite.php seuils <ancien seuils.json>', $sortie);
+        $this->assertStringContainsString('php tests/Qualite/qualite.php seuils [<ancien seuils.json>]', $sortie);
+    }
+
+    /**
+     * Sans ancien fichier, comme le protocole de CLAUDE.md le fait lancer
+     * avant chaque commit, « seuils » se compare au seuils.json de la
+     * branche suivie, que la CI prend pour base à l'envoi suivant : un
+     * niveau qui baisse depuis elle est refusé. Sans branche suivie, il se
+     * compare à lui-même, comme la CI pour une nouvelle branche, et un
+     * dépôt conforme rend 0.
+     */
+    public function test_les_seuils_sans_argument_se_comparent_a_la_branche_suivie_ou_a_eux_memes(): void
+    {
+        $this->depotAnalyse();
+
+        [$code, $sortie] = $this->lancer('seuils');
+        $this->assertSame(0, $code, $sortie);
+        $this->assertStringContainsString("Ancien seuils.json : seuils.json lui-même (aucune branche suivie n'en a).", $sortie);
+        $this->assertStringContainsString('Aucun seuil ne baisse', $sortie);
+
+        $this->git('init', '--quiet');
+        $this->git('add', '.');
+        $this->git('-c', 'user.name=PILIQI', '-c', 'user.email=test@example.test', 'commit', '--quiet', '-m', 'Base');
+        $this->git('branch', 'amont');
+        $this->git('branch', '--quiet', '--set-upstream-to=amont');
+        $this->depotAnalyse(niveau: 6);
+
+        [$code, $sortie] = $this->lancer('seuils');
+        $this->assertSame(1, $code, $sortie);
+        $this->assertStringContainsString('Ancien seuils.json : celui de la branche suivie (git @{upstream}).', $sortie);
+        $this->assertStringContainsString("niveau de l'analyse statique : 7 → 6", $sortie);
     }
 
     /**
@@ -648,6 +709,38 @@ class OutilDeQualiteTest extends TestCase
         }
 
         return $this->ecrire('clover.xml', $xml.'</project></coverage>');
+    }
+
+    /**
+     * Ce qui, dans ce fichier de la CI, empêcherait Larastan, les seuils,
+     * Psalm ou son témoin de tourner à un envoi, ou en cacherait l'échec :
+     * une clé « if » ou « continue-on-error » sur la tâche « analyse » ou
+     * « flux », ou sur l'une de leurs étapes, chacune nommée.
+     *
+     * @return list<string>
+     */
+    private static function conditionsDesAnalyses(string $ci): array
+    {
+        $taches = Yaml::parse($ci)['jobs'];
+        $trouvees = [];
+
+        foreach (['analyse', 'flux'] as $tache) {
+            foreach (['if', 'continue-on-error'] as $cle) {
+                if (array_key_exists($cle, $taches[$tache])) {
+                    $trouvees[] = "{$tache} : {$cle}";
+                }
+            }
+
+            foreach ($taches[$tache]['steps'] as $etape) {
+                foreach (['if', 'continue-on-error'] as $cle) {
+                    if (array_key_exists($cle, $etape)) {
+                        $trouvees[] = "{$tache}, étape « {$etape['name']} » : {$cle}";
+                    }
+                }
+            }
+        }
+
+        return $trouvees;
     }
 
     private function ecrire(string $chemin, string $contenu): string

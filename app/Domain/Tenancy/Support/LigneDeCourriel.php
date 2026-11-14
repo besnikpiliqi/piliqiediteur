@@ -11,11 +11,16 @@ use Illuminate\Support\HtmlString;
  * qu'un client tape en répondant à un devis. Laravel écrit ces lignes dans
  * un modèle Markdown, que CommonMark lit ensuite : sans précaution, un
  * texte « [Vérifier](https://…) » y deviendrait un lien, « **…** » du gras
- * et « # … » un titre. Le texte se lit tel qu'il a été écrit : échappé pour
- * le HTML, puis chaque caractère que Markdown lit comme une structure écrit
- * en référence numérique, que CommonMark affiche comme ce caractère sans
- * jamais le lire comme une structure. La version en texte de l'e-mail, dont
- * Laravel décode les références, garde le texte tel quel.
+ * et « # … » un titre. Le texte se lit tel qu'il a été écrit, sur une seule
+ * ligne : ses lignes se réunissent d'abord, chacune rognée, les lignes
+ * vides retirées, comme MailMessage::line() le fait d'une chaîne simple
+ * (une ligne vide suivie d'un retrait ferait sinon un bloc de code, hors
+ * de la phrase de l'avis, où CommonMark laisse les références en clair) ;
+ * puis il est échappé pour le HTML, et chaque caractère que Markdown lit
+ * comme une structure écrit en référence numérique, que CommonMark affiche
+ * comme ce caractère sans jamais le lire comme une structure. La version
+ * en texte de l'e-mail, dont Laravel décode les références, garde le texte
+ * tel quel, sur sa ligne.
  */
 final class LigneDeCourriel
 {
@@ -49,6 +54,8 @@ final class LigneDeCourriel
 
     public static function de(string $texte): HtmlString
     {
-        return new HtmlString(strtr(htmlspecialchars($texte, ENT_QUOTES | ENT_SUBSTITUTE | ENT_HTML401, 'UTF-8'), self::STRUCTURES));
+        $lignes = array_filter(array_map(trim(...), explode("\n", str_replace(["\r\n", "\r"], "\n", $texte))), fn (string $ligne): bool => $ligne !== '');
+
+        return new HtmlString(strtr(htmlspecialchars(implode(' ', $lignes), ENT_QUOTES | ENT_SUBSTITUTE | ENT_HTML401, 'UTF-8'), self::STRUCTURES));
     }
 }

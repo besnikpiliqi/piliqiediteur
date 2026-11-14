@@ -293,13 +293,15 @@ class ReponseAuDevisEnLigneTest extends TestCase
 
     /**
      * Dans l'e-mail, que Laravel écrit en Markdown, le nom et le motif tapés
-     * par le client se lisent aussi tels quels : ni gras, ni lien, ni
-     * titre, dans la version HTML comme dans la version en texte.
+     * par le client se lisent aussi tels quels, sur une seule ligne : ni
+     * gras, ni lien, ni titre, dans la version HTML comme dans la version
+     * en texte.
      */
     public function test_le_nom_et_le_motif_du_client_se_lisent_en_texte_dans_l_e_mail(): void
     {
         Notification::fake();
         $motif = "**Urgent** : [payez ici](https://evil.example/payer)\n# Votre compte est bloqué";
+        $motifSurUneLigne = '**Urgent** : [payez ici](https://evil.example/payer) # Votre compte est bloqué';
         $this->repondre('refuser', $this->envoyer($this->devisEnvoyable()), ['motif' => $motif])->assertOk();
         $this->repondre('accepter', $this->envoyer($this->devisEnvoyable()), ['signataire' => '_Paul_ `Durand`', 'bon_pour_accord' => '1'])->assertOk();
 
@@ -312,9 +314,35 @@ class ReponseAuDevisEnLigneTest extends TestCase
         $this->assertDoesNotMatchRegularExpression('#<a\b[^>]*evil\.example#i', $html);
         $this->assertDoesNotMatchRegularExpression('#<h1\b[^>]*>\s*Votre compte#i', $html);
         $textes = $courriels->map(fn (MailMessage $courriel): string => self::texteDuCourriel($courriel))->implode(' ');
-        $this->assertStringContainsString("avec ce motif : « {$motif} »", $textes);
+        $this->assertStringContainsString("avec ce motif : « {$motifSurUneLigne} »", $textes);
         $this->assertStringContainsString('signé « _Paul_ `Durand` »', $textes);
-        $this->assertStringContainsString('**Urgent** : [payez ici](https://evil.example/payer)', html_entity_decode(strip_tags($html), ENT_QUOTES | ENT_HTML5));
+        $this->assertStringContainsString("avec ce motif : « {$motifSurUneLigne} »", html_entity_decode(strip_tags($html), ENT_QUOTES | ENT_HTML5));
+    }
+
+    /**
+     * Un motif tapé sur plusieurs lignes, une ligne vide suivie d'un
+     * retrait, ferait en Markdown un bloc de code : sa fin sortirait des
+     * « », écrite comme si PILIQI l'avait rédigée, et sa ponctuation se
+     * lirait en références (« &#46; »). L'e-mail le donne à lire sur une
+     * seule ligne, entre les « », tel qu'il a été tapé ; le motif
+     * enregistré garde ses lignes.
+     */
+    public function test_un_motif_sur_plusieurs_lignes_se_lit_sur_une_seule_ligne_dans_l_e_mail(): void
+    {
+        Notification::fake();
+        $motif = "Trop cher.\n\n    Votre compte est bloqué : rappelez le 01-23-45-67-89.\n\t- Merci.";
+        $this->repondre('refuser', $this->envoyer($this->devisEnvoyable()), ['motif' => $motif])->assertOk();
+        $this->assertSame($motif, ReponseDuDevis::query()->sole()->motif);
+
+        $proprietaire = $this->proprietaireDe($this->magasin);
+        $courriel = Notification::sent($proprietaire, ReponseDuClientAuDevis::class)->sole()->toMail($proprietaire);
+        $html = (string) $courriel->render();
+        $lu = html_entity_decode(strip_tags($html), ENT_QUOTES | ENT_HTML5);
+
+        $this->assertDoesNotMatchRegularExpression('#<(pre|code)\b#i', $html);
+        $this->assertStringContainsString('avec ce motif : « Trop cher. Votre compte est bloqué : rappelez le 01-23-45-67-89. - Merci. ».', $lu);
+        $this->assertStringNotContainsString('&#', $lu);
+        $this->assertStringContainsString('avec ce motif : « Trop cher. Votre compte est bloqué : rappelez le 01-23-45-67-89. - Merci. ».', self::texteDuCourriel($courriel));
     }
 
     /**

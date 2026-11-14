@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 14/11/2026 à 01:11 UTC par pilotage-sync.sh : « Modèle A de la notification, ajouté au lot DEMO-V ».
+Mis à jour le 14/11/2026 à 01:19 UTC par pilotage-sync.sh : « Règle (b) et M6 : lot REGLE-B ajouté à la chaîne (bascule à faire) ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

@@ -2452,3 +2452,7 @@ mais pourquoi pour 9.99ttc une cote 8.33 et cote 8.32 alors pourquoi t as mis co
 
 je choisi : A — Glisse de la droite, en haut à droite, sous la cloche.
 
+## 267. 2026-11-14 01:16 UTC
+
+Règle (b) et M6 mais sans pu ttc
+

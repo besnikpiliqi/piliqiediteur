@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 14/11/2026 à 19:34 UTC par pilotage-sync.sh : « Après le lot REGLE-B ».
+Mis à jour le 14/11/2026 à 19:35 UTC par pilotage-sync.sh : « REGLE-B poussé, chaîne relancée avec la méthode du 14/11 ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -44,7 +44,6 @@ eba4bc8 Relecture du lot ER-PRO
 Course `wf_ee9b6e6e-908`, étapes commencées (de la plus ancienne à la plus récente) :
 
 ```
-STAT:relecture2
 STAT:correction
 STAT:poussee
 STAT:notes
@@ -69,4 +68,5 @@ REGLE-B:relecture2
 REGLE-B:correction
 REGLE-B:poussee
 REGLE-B:notes
+GRAPH:implementation
 ```

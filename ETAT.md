@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 14/11/2026 à 18:22 UTC par pilotage-sync.sh : « Point de suivi 18:25 UTC : REGLE-B commité en local, relectures en cours, disque libéré ».
+Mis à jour le 14/11/2026 à 19:08 UTC par pilotage-sync.sh : « Décision de l'éditeur : Larastan seulement dans la CI (cahiers GRAPH et CHARGES) ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -38,6 +38,29 @@ f159294 Donne à la société un expert-comptable déclaré par le SIREN de son 
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
+ M CLAUDE.md
+ M app/Domain/Catalogue/Services/MargeDuCatalogue.php
+ M app/Domain/Facturation/Models/LigneFacture.php
+ M app/Domain/Facturation/Services/CalculateurLigne.php
+ M app/Domain/Facturation/Services/MentionsFiscales.php
+ M app/Filament/App/Resources/FactureResource.php
+ M resources/views/documents/pdf/lignes.blade.php
+ M tests/Browser/Parcours/PuHtAfficheTest.php
+ M tests/Feature/Facturation/AvoirActionsTest.php
+ M tests/Feature/Facturation/AvoirPdfGeneratorTest.php
+ M tests/Feature/Facturation/DevisPdfGeneratorTest.php
+ M tests/Feature/Facturation/FacturePdfGeneratorTest.php
+ M tests/Feature/Facturation/MentionsFiscalesTest.php
+ M tests/Feature/Facturation/TotauxDeLaNormeEuropeenneTest.php
+ M tests/Feature/Filament/FactureResourceTest.php
+ M tests/Fixtures/empreinte-de-la-caisse/pdf/avoir.txt
+ M tests/Fixtures/empreinte-de-la-caisse/pdf/bon-d-avoir.txt
+ M tests/Fixtures/empreinte-de-la-caisse/pdf/devis.txt
+ M tests/Fixtures/empreinte-de-la-caisse/pdf/facture.txt
+ M tests/Fixtures/empreinte-de-la-caisse/pdf/ticket.txt
+ M tests/Unit/CalculateurLigneAuHasardTest.php
+ M tests/Unit/CalculateurLigneTest.php
+ M tests/Unit/matrice-des-decisions.php
 ```
 
 ## Dernière course de la chaîne
@@ -45,7 +68,6 @@ f159294 Donne à la société un expert-comptable déclaré par le SIREN de son 
 Course `wf_ee9b6e6e-908`, étapes commencées (de la plus ancienne à la plus récente) :
 
 ```
-STAT:implementation
 STAT:implementation-2
 STAT:relecture1
 STAT:relecture2
@@ -70,4 +92,5 @@ DEMO-V:notes
 REGLE-B:implementation
 REGLE-B:relecture1
 REGLE-B:relecture2
+REGLE-B:correction
 ```

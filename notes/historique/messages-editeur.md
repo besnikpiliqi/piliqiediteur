@@ -2562,3 +2562,15 @@ donc elle corrige dans la parti charge ce qu'on vient de faire c 'est ca?
 
 Pourquoi que le demo-v et regle-b ont pris tout ma journée ?? C'est bizarre
 
+## 285. 2026-11-14 18:55 UTC
+
+J'ai dit "La suite complète resterait obligatoire avant chaque commit, comme le veut votre protocole."  Alors dit moi pourquoi c'est mieux comme ça ?? Parce que moi je pansais pourquoi faire tous les testes au lieu de faire juste ceux qui sont lie avec le travail en cours m. Comme ca on gagne énormément de temps. Dit moi ce que tu penses
+
+## 286. 2026-11-14 19:02 UTC
+
+Tu utilises larastan ici? Car tu as dit avant le commit, ici
+
+## 287. 2026-11-14 19:06 UTC
+
+Mais je t ai dit je crois que tu mette que sur github et pas ici larastan car il prend du temps
+

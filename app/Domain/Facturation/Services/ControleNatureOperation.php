@@ -41,8 +41,12 @@ use Illuminate\Support\Collection;
  *   territoire (voir Territoire::departement()), jamais son code postal,
  *   que le répertoire Sirene peut ne pas diffuser. La Guadeloupe et la
  *   Martinique forment un seul territoire (art. 294 du CGI) : entre
- *   elles, la vente reste au taux du magasin, comme sur place (décision de
- *   Claude T2.2 de l'onglet « À faire vérifier par un professionnel »).
+ *   elles, la vente reste au taux du magasin, comme sur place (décisions de
+ *   Claude T2.2 et P41.4 de l'onglet « À faire vérifier par un
+ *   professionnel »). Une livraison qui reste ainsi dans le territoire du
+ *   magasin est refusée pour le même motif en « Livraison vers un DOM »
+ *   et en export, qui ne renvoie jamais vers une nature elle aussi
+ *   refusée.
  * - Livraison intracommunautaire (art. 262 ter I du CGI) : des biens, et
  *   leurs frais accessoires, livrés à un professionnel à une adresse
  *   complète d'un autre État membre (l'Irlande du Nord comprise), à une
@@ -193,20 +197,24 @@ class ControleNatureOperation
     private function manquementDeLaDestination(NatureOperation $nature, string $pays, string $codePostal, ?string $departementDuMagasin): ?string
     {
         $departement = TerritoireFiscal::departementDom($pays, $codePostal);
+        $resteDansLeTerritoireDuMagasin = match (true) {
+            $departement === null || $departementDuMagasin === null => null,
+            $departement === $departementDuMagasin => 'la livraison reste dans le département d\'outre-mer du magasin',
+            in_array($departement, self::ANTILLES, true) && in_array($departementDuMagasin, self::ANTILLES, true) => 'la Guadeloupe et la Martinique forment un seul territoire de TVA, où la vente reste au taux du magasin',
+            default => null,
+        };
 
         return match ($nature) {
             NatureOperation::ExportHorsUe => match (true) {
+                $resteDansLeTerritoireDuMagasin !== null => $resteDansLeTerritoireDuMagasin,
                 $departement !== null => 'la livraison va dans un département d\'outre-mer : utilisez « '.NatureOperation::LivraisonDom->getLabel().' »',
                 strtoupper($pays) === 'MC' => 'Monaco suit la TVA française',
                 ! TerritoireFiscal::estHorsUePourDesBiens($pays, $codePostal) => 'la livraison reste dans le territoire de TVA de l\'Union européenne',
                 default => null,
             },
-            NatureOperation::LivraisonDom => match (true) {
-                $departement === null => 'la livraison doit aller dans un département d\'outre-mer (Guadeloupe, Martinique, Guyane, La Réunion ou Mayotte)',
-                $departement === $departementDuMagasin => 'la livraison reste dans le département d\'outre-mer du magasin',
-                in_array($departement, self::ANTILLES, true) && in_array($departementDuMagasin, self::ANTILLES, true) => 'la Guadeloupe et la Martinique forment un seul territoire de TVA, où la vente reste au taux du magasin',
-                default => null,
-            },
+            NatureOperation::LivraisonDom => $departement === null
+                ? 'la livraison doit aller dans un département d\'outre-mer (Guadeloupe, Martinique, Guyane, La Réunion ou Mayotte)'
+                : $resteDansLeTerritoireDuMagasin,
             default => TerritoireFiscal::estDestinationUePourDesBiens($pays, $codePostal) ? null : 'la livraison doit arriver dans un autre État membre de l\'Union européenne',
         };
     }

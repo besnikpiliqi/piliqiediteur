@@ -463,7 +463,7 @@ class TypeDActiviteTest extends TestCase
             'services et 95.12Z' => [TypeDActivite::Services, '95.12Z', 'Votre code d\'activité au répertoire Sirene est 95.12Z : ces entreprises vendent en général des articles.'],
             'commerce et 10.71C' => [TypeDActivite::Commerce, '10.71C', 'Votre code d\'activité est 10.71C, une activité de fabrication'],
             'commerce et 43.22A' => [TypeDActivite::Commerce, '43.22A', 'Votre code d\'activité est 43.22A, une activité du bâtiment. Si la loi exige une assurance professionnelle pour votre activité (la garantie décennale, par exemple), renseignez-la dans l\'identité de votre société :'],
-            'services et 43.22A' => [TypeDActivite::Services, '43.22A', 'ne prend pas encore en charge la sous-traitance où la TVA est due par le donneur d\'ordre (autoliquidation), les factures d\'acompte et de situation, ni la retenue de garantie.'],
+            'services et 43.22A' => [TypeDActivite::Services, '43.22A', 'ne prend pas encore en charge la sous-traitance où la TVA est due par le donneur d\'ordre (autoliquidation), les factures d\'acompte, ni la retenue de garantie.'],
             'services et 69.20Z' => [TypeDActivite::Services, '69.20Z', 'Votre code d\'activité est 69.20Z (activités comptables) : si vous êtes inscrit à l\'Ordre des experts-comptables, choisissez « Cabinet d\'expertise comptable ».'],
             'commerce et 86.90D' => [TypeDActivite::Commerce, '86.90D', 'Si votre activité est exonérée de TVA (soins, enseignement, assurance, services financiers…)'],
             'services et 68.20A' => [TypeDActivite::Services, '68.20A', 'La location de logements est en général exonérée de TVA (art. 261 D du CGI)'],

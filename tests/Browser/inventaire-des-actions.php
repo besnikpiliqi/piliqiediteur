@@ -1451,6 +1451,9 @@ return [
             'tests/Browser/Parcours/FicheDUneFactureTest.php › l’administrateur autorisé à vendre modifie puis émet un brouillon depuis sa fiche',
             'tests/Browser/Parcours/FicheDUneFactureTest.php › le propriétaire modifie puis émet depuis sa fiche un brouillon du magasin de démonstration',
             'tests/Browser/Parcours/AFaireTest.php › le vendeur émet son brouillon de facture depuis « Émettre » de l’« À faire » : le bouton mène à sa fiche, qui porte le geste',
+            'tests/Browser/Parcours/AntillesUnSeulTerritoireTest.php › le responsable d’un magasin de la Guadeloupe ne peut pas émettre une livraison vers un DOM à Fort-de-France : l’alerte dit pourquoi et la facture reste en brouillon',
+            'tests/Browser/Parcours/AntillesUnSeulTerritoireTest.php › le vendeur d’un magasin de la Guadeloupe ne peut pas émettre sa livraison vers un DOM à Fort-de-France : l’alerte dit pourquoi et la facture reste en brouillon',
+            'tests/Browser/Parcours/AntillesUnSeulTerritoireTest.php › l’administrateur autorisé à vendre dans un magasin de la Guadeloupe ne peut pas émettre une livraison vers un DOM à Fort-de-France : l’alerte dit pourquoi et la facture reste en brouillon',
         ]],
         'action:emettre_et_encaisser' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Parcours/EmettreEtEncaisserTest.php › le responsable ramène à zéro la part préremplie, et « Émettre et encaisser » émet le brouillon sans l’encaisser',

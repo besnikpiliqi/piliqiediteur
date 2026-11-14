@@ -348,32 +348,46 @@ class NatureOperationTest extends TestCase
         $this->assertEmissionRefusee($brouillon, "Impossible d'émettre en « Livraison vers un DOM » : {$manquement}. Choisissez « Vente en France » (TVA française) si ces conditions ne sont pas remplies.");
     }
 
+    /**
+     * Ni en livraison vers un DOM ni en export, dont le refus ne renvoie
+     * pas vers une nature elle aussi refusée.
+     */
     public function test_un_magasin_de_martinique_ne_livre_pas_en_exoneration_dans_son_propre_departement(): void
     {
         $this->magasin(['territoire' => Territoire::Martinique, 'code_postal' => '97200', 'ville' => 'Fort-de-France']);
-        $brouillon = $this->brouillon(Client::factory()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]], NatureOperation::LivraisonDom, self::LIVRAISON_FORT_DE_FRANCE);
+        $client = Client::factory()->create();
+        $brouillon = $this->brouillon($client, [['produit_id' => $this->produit()->id, 'quantite' => 1]], NatureOperation::LivraisonDom, self::LIVRAISON_FORT_DE_FRANCE);
+        $export = $this->brouillon($this->clientAmericain(), [['produit_id' => $this->produit()->id, 'quantite' => 1]], NatureOperation::ExportHorsUe, self::LIVRAISON_FORT_DE_FRANCE);
 
         $this->assertEmissionRefusee($brouillon, 'Impossible d\'émettre en « Livraison vers un DOM » : la livraison reste dans le département d\'outre-mer du magasin. Choisissez « Vente en France » (TVA française) si ces conditions ne sont pas remplies.');
+        $this->assertEmissionRefusee($export, 'Impossible d\'émettre en « Export hors UE expédié par le magasin » : la livraison reste dans le département d\'outre-mer du magasin. Choisissez « Vente en France » (TVA française) si ces conditions ne sont pas remplies.');
     }
 
     /**
      * La Guadeloupe et la Martinique forment un seul territoire de TVA
-     * (décision de Claude T2.2 de l'onglet « À faire vérifier par un
-     * professionnel ») : un magasin de la Guadeloupe ne livre pas en
-     * exonération à Fort-de-France, la vente reste au taux du magasin ; il
-     * livre en exonération à La Réunion.
+     * (décisions de Claude T2.2 et P41.4 de l'onglet « À faire vérifier
+     * par un professionnel ») : un magasin de la Guadeloupe ne livre à
+     * Fort-de-France ni en exonération vers un DOM ni en export, dont le
+     * refus ne renvoie pas vers la livraison vers un DOM ; la vente s'y
+     * fait comme sur place, au taux du magasin (108,50 € TTC à 8,5 % :
+     * 100,00 € HT et 8,50 € de TVA) ; il livre en exonération à La
+     * Réunion.
      */
     public function test_une_livraison_entre_la_guadeloupe_et_la_martinique_reste_au_taux_du_magasin(): void
     {
         $this->magasin(['territoire' => Territoire::Guadeloupe, 'code_postal' => '97110', 'ville' => 'Pointe-à-Pitre']);
         $client = Client::factory()->create();
-        $produit = $this->produit('108.50');
+        $produit = Produit::factory()->create(['nom' => 'Clé USB', 'prix_vente_ttc' => '108.50', 'taux_tva' => '8.5', 'suivi_stock' => false]);
         $versLaMartinique = $this->brouillon($client, [['produit_id' => $produit->id, 'quantite' => 1]], NatureOperation::LivraisonDom, self::LIVRAISON_FORT_DE_FRANCE);
+        $exportVersLaMartinique = $this->brouillon($this->clientAmericain(), [['produit_id' => $produit->id, 'quantite' => 1]], NatureOperation::ExportHorsUe, self::LIVRAISON_FORT_DE_FRANCE);
 
         $this->assertEmissionRefusee($versLaMartinique, 'Impossible d\'émettre en « Livraison vers un DOM » : la Guadeloupe et la Martinique forment un seul territoire de TVA, où la vente reste au taux du magasin. Choisissez « Vente en France » (TVA française) si ces conditions ne sont pas remplies.');
+        $this->assertEmissionRefusee($exportVersLaMartinique, 'Impossible d\'émettre en « Export hors UE expédié par le magasin » : la Guadeloupe et la Martinique forment un seul territoire de TVA, où la vente reste au taux du magasin. Choisissez « Vente en France » (TVA française) si ces conditions ne sont pas remplies.');
 
+        $commeSurPlace = app(EmettreFactureAction::class)->handle(self::auteur(), $this->brouillon($client, [['produit_id' => $produit->id, 'quantite' => 1]], NatureOperation::VenteEnFrance));
         $versLaReunion = app(EmettreFactureAction::class)->handle(self::auteur(), $this->brouillon($client, [['produit_id' => $produit->id, 'quantite' => 1]], NatureOperation::LivraisonDom, [...self::LIVRAISON_FORT_DE_FRANCE, 'livraison_code_postal' => '97400', 'livraison_ville' => 'Saint-Denis']));
 
+        $this->assertSame(['100.00', '8.50', '108.50', StatutFacture::Emise], [$commeSurPlace->total_ht, $commeSurPlace->total_tva, $commeSurPlace->total_ttc, $commeSurPlace->statut]);
         $this->assertSame(['0.00', StatutFacture::Emise], [$versLaReunion->total_tva, $versLaReunion->statut]);
     }
 

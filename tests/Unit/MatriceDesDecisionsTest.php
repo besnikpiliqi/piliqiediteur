@@ -23,8 +23,10 @@ use PHPUnit\Framework\TestCase;
  *   décision que le code contredit dit la question proposée à l'éditeur ;
  * - les 295 décisions de Claude de l'onglet « À faire vérifier par un
  *   professionnel » y sont, chacune sous son numéro, sans aucune question
- *   à trancher (D76), et chacune qui reste à faire nomme son étape ou son
- *   lot.
+ *   à trancher (D76), et chacune qui reste à faire, en tout ou en partie,
+ *   nomme son étape ou son lot : une décision de l'onglet appliquée en
+ *   partie garde ses règles pour la part faite et dit, en « a_venir »,
+ *   l'étape ou le lot de ce qui reste.
  * Ce test lit les fichiers, sans base de données. Que la matrice recopie
  * chaque décision de chaque fichier de notes de l'éditeur, hors du dépôt,
  * ne se contrôle pas ici : la relecture de chaque lot qui la tient à jour
@@ -45,7 +47,9 @@ class MatriceDesDecisionsTest extends TestCase
     /**
      * Pourquoi une décision, ou une part d'une décision, n'a pas de test :
      * chaque clé, avec sa raison écrite. Seule une décision remplacée en
-     * partie (« remplacee ») garde aussi des règles, pour la part qui tient.
+     * partie (« remplacee ») garde aussi des règles, pour la part qui tient,
+     * et, parmi les décisions de l'onglet, une décision appliquée en partie
+     * (« a_venir »), pour la part faite.
      *
      * @var list<string>
      */
@@ -108,7 +112,7 @@ class MatriceDesDecisionsTest extends TestCase
 
         foreach (self::matrice()['decisions'] as $source => $decisions) {
             foreach ($decisions as $identifiant => $decision) {
-                $fautes = [...$fautes, ...self::fautesDeLaDecision($source.' › '.$identifiant, $decision, $regles)];
+                $fautes = [...$fautes, ...self::fautesDeLaDecision($source.' › '.$identifiant, $decision, $regles, $source === self::SOURCE_DE_L_ONGLET)];
             }
         }
 
@@ -136,13 +140,15 @@ class MatriceDesDecisionsTest extends TestCase
 
     /**
      * Une décision renvoie à ses règles, dit une seule raison sans test,
-     * ou les deux quand elle est remplacée en partie ; une question à
-     * trancher s'ajoute à l'une ou l'autre forme, ou se suffit.
+     * ou les deux quand elle est remplacée en partie, ou, pour une décision
+     * de l'onglet, appliquée en partie ; une question à trancher s'ajoute à
+     * l'une ou l'autre forme, ou se suffit.
      */
     public function test_une_decision_remplacee_en_partie_garde_ses_regles_et_une_question_a_trancher_se_dit(): void
     {
         $regles = ['une.regle' => ['puce' => 'Produit', 'regle' => 'Une règle.', 'tests' => []]];
         $controler = fn (array $decision): array => self::fautesDeLaDecision('source › 1', ['decision' => 'Une décision.', ...$decision], $regles);
+        $controlerDansLOnglet = fn (array $decision): array => self::fautesDeLaDecision('onglet › T1', ['decision' => 'Une décision.', ...$decision], $regles, true);
 
         $this->assertSame([], $controler(['regles' => ['une.regle']]));
         $this->assertSame([], $controler(['a_venir' => 'Étape 2.']));
@@ -154,6 +160,10 @@ class MatriceDesDecisionsTest extends TestCase
         $this->assertSame(['source › 1 : plusieurs raisons sans test'], $controler(['remplacee' => 'Par B7.', 'a_venir' => 'Étape 2.']));
         $this->assertSame(['source › 1 : raison « a_trancher » sans texte'], $controler(['regles' => ['une.regle'], 'a_trancher' => ' ']));
         $this->assertSame(['source › 1 : règle inconnue « une.autre »'], $controler(['regles' => ['une.autre']]));
+        $this->assertSame([], $controlerDansLOnglet(['regles' => ['une.regle'], 'a_venir' => 'Étape 2 : la part qui reste.']));
+        $this->assertSame([], $controlerDansLOnglet(['regles' => ['une.regle'], 'remplacee' => 'Remplacée en partie par T2.']));
+        $this->assertSame(['onglet › T1 : seule une décision remplacée ou appliquée en partie garde des règles avec une raison sans test'], $controlerDansLOnglet(['regles' => ['une.regle'], 'hors_logiciel' => 'Une démarche.']));
+        $this->assertSame(['onglet › T1 : seule une décision remplacée ou appliquée en partie garde des règles avec une raison sans test', 'onglet › T1 : plusieurs raisons sans test'], $controlerDansLOnglet(['regles' => ['une.regle'], 'remplacee' => 'Par T2.', 'a_venir' => 'Étape 2.']));
     }
 
     /**
@@ -209,14 +219,16 @@ class MatriceDesDecisionsTest extends TestCase
     /**
      * Ce qui manque à cette décision : un texte, des règles connues ou une
      * seule raison sans test (les deux seulement quand elle est remplacée
-     * en partie), et le texte de chaque raison et de la question à
-     * trancher.
+     * en partie, ou, pour une décision de l'onglet « À faire vérifier par
+     * un professionnel », appliquée en partie, ce qui reste « a_venir »),
+     * et le texte de chaque raison et de la question à trancher.
      *
      * @param  array{decision: string, regles?: list<string>, hors_logiciel?: string, remplacee?: string, a_venir?: string, explication?: string, a_trancher?: string}  $decision
      * @param  array<string, array{puce: string, regle: string, tests: list<string>}>  $regles
+     * @param  bool  $deLOnglet  une décision de Claude de l'onglet, qui peut être appliquée en partie
      * @return list<string>
      */
-    private static function fautesDeLaDecision(string $nom, array $decision, array $regles): array
+    private static function fautesDeLaDecision(string $nom, array $decision, array $regles, bool $deLOnglet = false): array
     {
         $fautes = [];
         $raisons = array_values(array_intersect(array_keys($decision), self::RAISONS_SANS_TEST));
@@ -231,8 +243,8 @@ class MatriceDesDecisionsTest extends TestCase
             $fautes[] = $nom.' : il faut des règles, une raison sans test ou une question à trancher';
         }
 
-        if ($renvois !== [] && $raisons !== [] && $raisons !== ['remplacee']) {
-            $fautes[] = $nom.' : seule une décision remplacée en partie garde des règles avec une raison sans test';
+        if ($renvois !== [] && $raisons !== [] && ! in_array($raisons, $deLOnglet ? [['remplacee'], ['a_venir']] : [['remplacee']], true)) {
+            $fautes[] = $nom.' : seule une décision remplacée '.($deLOnglet ? 'ou appliquée ' : '').'en partie garde des règles avec une raison sans test';
         }
 
         if (count($raisons) > 1) {

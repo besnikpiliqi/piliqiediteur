@@ -76,7 +76,7 @@ final class AvertissementsDuCodeDActivite
             ],
             [
                 $entre(41, 43),
-                "Votre code d'activité est {$code}, une activité du bâtiment. Si la loi exige une assurance professionnelle pour votre activité (la garantie décennale, par exemple), renseignez-la dans l'identité de votre société : {$application} l'imprime sur vos devis et vos factures. {$application} ne prend pas encore en charge la sous-traitance où la TVA est due par le donneur d'ordre (autoliquidation), les factures d'acompte et de situation, ni la retenue de garantie.",
+                "Votre code d'activité est {$code}, une activité du bâtiment. Si la loi exige une assurance professionnelle pour votre activité (la garantie décennale, par exemple), renseignez-la dans l'identité de votre société : {$application} l'imprime sur vos devis et vos factures. {$application} ne prend pas encore en charge la sous-traitance où la TVA est due par le donneur d'ordre (autoliquidation), les factures d'acompte, ni la retenue de garantie.",
                 $sansLeCabinet,
             ],
             [

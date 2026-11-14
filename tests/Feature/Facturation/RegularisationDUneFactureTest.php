@@ -58,6 +58,7 @@ use App\Filament\App\Resources\AvoirResource\Pages\ViewAvoir;
 use App\Filament\App\Resources\FactureResource;
 use App\Filament\App\Resources\FactureResource\Pages\ListFactures;
 use App\Filament\App\Resources\FactureResource\Pages\ViewFacture;
+use Brick\Math\BigDecimal;
 use Closure;
 use Database\Factories\SocieteFactory;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -390,6 +391,45 @@ class RegularisationDUneFactureTest extends TestCase
         $this->assertSame(['51.67', '8.88', '60.55'], [$rectificative->total_ht, $rectificative->total_tva, $rectificative->total_ttc]);
         $this->assertTrue($avoir->factureRegularisee()->is($facture));
         $this->assertSame([StatutFacture::Payee, 6055], [$facture->fresh()->statut, $rectificative->fresh()->resteDuEnCentimes()]);
+    }
+
+    /**
+     * La facture rectificative reprend sans recalcul, ligne par ligne, ce
+     * que les avoirs déjà émis laissent de chaque ligne (décision de Claude
+     * T27.6 de l'onglet « À faire vérifier par un professionnel ») : une
+     * facture de 3 × 1,01 € et 3 × 1,04 € TTC à 20 % (5,13 € HT, la
+     * première ligne 2,53 €, la seconde 2,60 €), dont deux avoirs ont rendu
+     * deux articles de chaque ligne (1,68 € et 1,73 € HT), se rectifie à
+     * 0,85 € + 0,87 € = 1,72 € HT et 0,16 € + 0,17 € = 0,33 € de TVA, pour
+     * 2,05 € TTC. Sa TVA s'écarte ainsi de 1,4 centime de la base × le
+     * taux (0,344 €), au-delà des 0,6 centime que garde toute autre vente
+     * (décision T90.1-prestataire-4) et des 0,01 € qu'un envoi à la
+     * plateforme agréée contrôlera : le lot de la régularisation tranche
+     * entre ces deux décisions avant l'étape 2 (la matrice des décisions
+     * note T90.1-prestataire-4 « a_venir » pour la rectificative).
+     */
+    public function test_la_rectificative_reprend_sans_recalcul_le_reste_des_lignes_rendues_par_plusieurs_avoirs(): void
+    {
+        $magasin = $this->magasinDeLyon();
+        $client = Client::factory()->professionnel()->create(['nom' => 'Dupont SAS']);
+        $article = fn (string $reference, string $prix): int => Produit::factory()->create(['reference' => $reference, 'prix_vente_ttc' => $prix, 'taux_tva' => 20, 'suivi_stock' => false])->id;
+        $facture = $this->facturer($magasin, $client, [
+            ['produit_id' => $article('VIS', '1.01'), 'quantite' => 3],
+            ['produit_id' => $article('ECROU', '1.04'), 'quantite' => 3],
+        ]);
+        $responsable = self::responsableDeTest($magasin);
+        foreach ($facture->lignes()->orderBy('ordre')->get() as $ligne) {
+            app(EnregistrerAvoirAction::class)->handle($responsable, $client, [['ligne_facture_id' => $ligne->id, 'quantite' => 2]], 'Retour');
+        }
+        $this->corrigerLeSirenDeLaSociete($magasin);
+
+        app(FaireLAvoirDeRegularisationAction::class)->handle($this->proprietaireDe($magasin), $facture->fresh());
+        $rectificative = app(EmettreLaFactureRectificativeAction::class)->handle($responsable, $facture->fresh());
+
+        $this->assertSame(['5.13', '1.02', '6.15'], [$facture->total_ht, $facture->total_tva, $facture->total_ttc]);
+        $this->assertSame([['VIS', 1, '0.85', '0.16', '1.01'], ['ECROU', 1, '0.87', '0.17', '1.04']], $rectificative->lignes()->orderBy('ordre')->get()->map(fn ($ligne): array => [$ligne->reference, $ligne->quantite, $ligne->montant_ht, $ligne->montant_tva, $ligne->montant_ttc])->all());
+        $this->assertSame(['1.72', '0.33', '2.05'], [$rectificative->total_ht, $rectificative->total_tva, $rectificative->total_ttc]);
+        $this->assertTrue(BigDecimal::of($rectificative->total_ht)->multipliedBy('0.20')->minus($rectificative->total_tva)->abs()->isEqualTo('0.014'), 'La TVA de la rectificative s\'écarte de 1,4 centime de sa base × 20 %.');
     }
 
     /**

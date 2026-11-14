@@ -397,12 +397,15 @@ class RegularisationDUneFactureTest extends TestCase
      * La facture rectificative reprend sans recalcul, ligne par ligne, ce
      * que les avoirs déjà émis laissent de chaque ligne (décision de Claude
      * T27.6 de l'onglet « À faire vérifier par un professionnel ») : une
-     * facture de 3 × 1,01 € et 3 × 1,04 € TTC à 20 % (5,13 € HT, la
-     * première ligne 2,53 €, la seconde 2,60 €), dont deux avoirs ont rendu
-     * deux articles de chaque ligne (1,68 € et 1,73 € HT), se rectifie à
-     * 0,85 € + 0,87 € = 1,72 € HT et 0,16 € + 0,17 € = 0,33 € de TVA, pour
-     * 2,05 € TTC. Sa TVA s'écarte ainsi de 1,4 centime de la base × le
-     * taux (0,344 €), au-delà des 0,6 centime que garde toute autre vente
+     * facture de 3 × 1,00 € et 3 × 1,03 € TTC à 20 % (règle (b), décision de
+     * l'éditeur du 14/11/2026 : la première ligne 0,50 € de TVA et 2,50 €
+     * HT, la seconde 3,09 x 20 ÷ 120 = 0,515 -> 0,52 € et 2,57 € HT, soit
+     * 5,07 € HT et 1,02 € de TVA, la TVA de 6,09 €), dont deux avoirs ont
+     * rendu deux articles de chaque ligne (2,00 € : 0,333... -> 0,33 € de TVA
+     * et 1,67 € HT ; 2,06 € : 0,343... -> 0,34 € et 1,72 € HT), se rectifie à
+     * 0,83 € + 0,85 € = 1,68 € HT et 0,17 € + 0,18 € = 0,35 € de TVA, pour
+     * 2,03 € TTC. Sa TVA s'écarte ainsi de 1,4 centime de la base × le
+     * taux (0,336 €), au-delà des 0,6 centime que garde toute autre vente
      * (décision T90.1-prestataire-4) et des 0,01 € qu'un envoi à la
      * plateforme agréée contrôlera : le lot de la régularisation tranche
      * entre ces deux décisions avant l'étape 2 (la matrice des décisions
@@ -414,8 +417,8 @@ class RegularisationDUneFactureTest extends TestCase
         $client = Client::factory()->professionnel()->create(['nom' => 'Dupont SAS']);
         $article = fn (string $reference, string $prix): int => Produit::factory()->create(['reference' => $reference, 'prix_vente_ttc' => $prix, 'taux_tva' => 20, 'suivi_stock' => false])->id;
         $facture = $this->facturer($magasin, $client, [
-            ['produit_id' => $article('VIS', '1.01'), 'quantite' => 3],
-            ['produit_id' => $article('ECROU', '1.04'), 'quantite' => 3],
+            ['produit_id' => $article('VIS', '1.00'), 'quantite' => 3],
+            ['produit_id' => $article('ECROU', '1.03'), 'quantite' => 3],
         ]);
         $responsable = self::responsableDeTest($magasin);
         foreach ($facture->lignes()->orderBy('ordre')->get() as $ligne) {
@@ -426,9 +429,9 @@ class RegularisationDUneFactureTest extends TestCase
         app(FaireLAvoirDeRegularisationAction::class)->handle($this->proprietaireDe($magasin), $facture->fresh());
         $rectificative = app(EmettreLaFactureRectificativeAction::class)->handle($responsable, $facture->fresh());
 
-        $this->assertSame(['5.13', '1.02', '6.15'], [$facture->total_ht, $facture->total_tva, $facture->total_ttc]);
-        $this->assertSame([['VIS', 1, '0.85', '0.16', '1.01'], ['ECROU', 1, '0.87', '0.17', '1.04']], $rectificative->lignes()->orderBy('ordre')->get()->map(fn ($ligne): array => [$ligne->reference, $ligne->quantite, $ligne->montant_ht, $ligne->montant_tva, $ligne->montant_ttc])->all());
-        $this->assertSame(['1.72', '0.33', '2.05'], [$rectificative->total_ht, $rectificative->total_tva, $rectificative->total_ttc]);
+        $this->assertSame(['5.07', '1.02', '6.09'], [$facture->total_ht, $facture->total_tva, $facture->total_ttc]);
+        $this->assertSame([['VIS', 1, '0.83', '0.17', '1.00'], ['ECROU', 1, '0.85', '0.18', '1.03']], $rectificative->lignes()->orderBy('ordre')->get()->map(fn ($ligne): array => [$ligne->reference, $ligne->quantite, $ligne->montant_ht, $ligne->montant_tva, $ligne->montant_ttc])->all());
+        $this->assertSame(['1.68', '0.35', '2.03'], [$rectificative->total_ht, $rectificative->total_tva, $rectificative->total_ttc]);
         $this->assertTrue(BigDecimal::of($rectificative->total_ht)->multipliedBy('0.20')->minus($rectificative->total_tva)->abs()->isEqualTo('0.014'), 'La TVA de la rectificative s\'écarte de 1,4 centime de sa base × 20 %.');
     }
 

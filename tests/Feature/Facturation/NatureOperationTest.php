@@ -159,7 +159,9 @@ class NatureOperationTest extends TestCase
     /**
      * Le PDF d'un export à un professionnel, qui se paie hors taxe,
      * n'imprime pour chaque ligne que son PU HT et son total HT, au taux de
-     * 0 % (point 3) : 3 x 7,00 € ÷ 1,20 = 17,50 € HT, au PU HT d'un
+     * 0 % (point 3, modèle M6-b) : 3 x 7,00 € = 21,00 € moins leur TVA de
+     * 3,50 €, 17,50 € HT (règle (b), décision de l'éditeur du 14/11/2026),
+     * au PU HT d'un
      * article, 7,00 € moins sa TVA de 1,17 €, soit 5,83 € (décision de
      * l'éditeur du 14/11/2026), 3 x 5,83 € pouvant différer de quelques
      * centimes des 17,50 € HT de la ligne, ce que dit sa note de calcul ;
@@ -179,10 +181,10 @@ class NatureOperationTest extends TestCase
 
         $pdf = $this->pdf($facture);
         $this->assertSame(['32.50', '0.00', '32.50'], [$facture->total_ht, $facture->total_tva, $facture->total_ttc]);
-        $this->assertMatchesRegularExpression('#<th class="montant">Qté</th>\s*<th class="montant">PU HT</th>\s*<th class="montant">Taux</th>\s*<th class="montant">Total HT</th>#', $pdf);
-        $this->assertMatchesRegularExpression('#<td class="montant">3</td>\s*<td class="montant">5,83 €</td>\s*<td class="montant">0 %</td>\s*<td class="montant">17,50 €</td>#', $pdf);
-        $this->assertMatchesRegularExpression('#<td class="montant">1</td>\s*<td class="montant">15,00 €</td>\s*<td class="montant">0 %</td>\s*<td class="montant">15,00 €</td>#', $pdf);
-        $this->assertStringContainsString('HT de chaque taux = TTC du catalogue ÷ (1 + taux), arrondi une fois au centime, puis réparti sur les lignes', $pdf);
+        $this->assertMatchesRegularExpression('#<th class="montant">Qté</th>\s*<th class="montant">PU HT</th>\s*<th class="montant">Rem.</th>\s*<th class="montant">TVA</th>\s*<th class="montant">Total HT</th>#', $pdf);
+        $this->assertMatchesRegularExpression('#<td class="montant">3</td>\s*<td class="montant">5,83 €</td>\s*<td class="montant">—</td>\s*<td class="montant">0 %</td>\s*<td class="montant total-de-la-ligne">17,50 €</td>#', $pdf);
+        $this->assertMatchesRegularExpression('#<td class="montant">1</td>\s*<td class="montant">15,00 €</td>\s*<td class="montant">—</td>\s*<td class="montant">0 %</td>\s*<td class="montant total-de-la-ligne">15,00 €</td>#', $pdf);
+        $this->assertStringContainsString('se vend à son prix catalogue TTC moins la TVA française de son taux', $pdf);
         $this->assertStringContainsString(e('Le PU HT affiché est celui d\'un article : prix TTC moins sa TVA arrondie au centime (9,99 € TTC à 20 % : 8,32 € HT). La quantité × ce prix peut différer de quelques centimes du total HT de la ligne, calculé sur toute la quantité.'), $pdf);
         foreach (['PU TTC', 'Prix catalogue TTC', 'TVA retirée'] as $colonneAbsente) {
             $this->assertStringNotContainsString($colonneAbsente, $pdf);
@@ -191,9 +193,9 @@ class NatureOperationTest extends TestCase
 
     /**
      * Un service à son prix de référence, 50,00 € TTC à 20 %, se calcule
-     * sans TVA française comme un produit au même prix : 3 x 50,00 ÷ 1,20
-     * = 125,00 € HT pour un professionnel, arrondi une fois, et non 3 x
-     * 41,67 € = 125,01 €. Le vendeur, qui ne fixe aucun prix, le vend ainsi,
+     * sans TVA française comme un produit au même prix : 150,00 € moins leur
+     * TVA de 25,00 €, 125,00 € HT pour un professionnel (règle (b),
+     * décision de l'éditeur du 14/11/2026), et non 3 x 41,67 € = 125,01 €. Le vendeur, qui ne fixe aucun prix, le vend ainsi,
      * son prix laissé vide comme celui que l'écran montre, 41,67 € ; il ne
      * met pas un autre prix sans TVA. La ligne enregistre, comme pour le
      * produit, le PU HT au millionième d'euro, 41,666667 €, celui de la
@@ -219,7 +221,7 @@ class NatureOperationTest extends TestCase
         }
         $this->assertSame('125.00', $export->total_ht);
         $this->assertThrows(fn () => $prestation(['prix_unitaire_ttc' => '40.00']), AuthorizationException::class, 'Vendre « Conseil » à 40,00 € au lieu de 41,67 €, son prix de référence, '.DerogationsDePrix::AUTORISATION.'.');
-        $this->assertMatchesRegularExpression('#<td class="montant">3</td>\s*<td class="montant">41,67 €</td>\s*<td class="montant">0 %</td>\s*<td class="montant">125,00 €</td>#', $this->pdf(app(EmettreFactureAction::class)->handle(self::auteur(), $prixVide)));
+        $this->assertMatchesRegularExpression('#<td class="montant">3</td>\s*<td class="montant">41,67 €</td>\s*<td class="montant">—</td>\s*<td class="montant">0 %</td>\s*<td class="montant total-de-la-ligne">125,00 €</td>#', $this->pdf(app(EmettreFactureAction::class)->handle(self::auteur(), $prixVide)));
     }
 
     /**

@@ -17,18 +17,23 @@ use Illuminate\Support\Str;
 use Tests\TestCase;
 
 /**
- * L'exemple de quinze lignes montré à l'éditeur le 09/11/2026 pour qu'il
- * compare les règles de calcul : la règle qu'il a gardée pour toutes les
- * ventes (décision du 09/11/2026, Q-CALC2 (a), puce « Prix et TVA des
- * ventes » de CLAUDE.md) -- le TTC de chaque ligne depuis son PU TTC, le HT
- * de chaque taux depuis son TTC, arrondi une fois puis réparti sur ses
- * lignes, la TVA par différence -- et le PU HT imprimé sur une facture à
- * un professionnel, celui d'un article, son PU TTC moins sa TVA arrondie
- * au centime (décision de l'éditeur du 14/11/2026, qui remplace
- * l'impression « exacte » du 09/11/2026). Les montants attendus ont été vérifiés par deux recalculs
- * indépendants en fractions exactes. Trois HT de cumul à 20 % tombent sur
- * un demi-centime exact, arrondi au centime supérieur (889,975 ;
- * 904,975 ; 1 039,975), comme la remise de la ligne 13 (7,495 -> 7,50 €).
+ * L'exemple de quinze lignes montré à l'éditeur (exemple-calcul-des-prix-15-lignes-regle-b2.pdf,
+ * modèles M6-b et P1) : la règle (b) qu'il a choisie pour toutes les ventes
+ * (décision de l'éditeur du 14/11/2026, puce « Prix et TVA des ventes » de
+ * CLAUDE.md) -- le TTC de chaque ligne depuis son PU TTC, la TVA de chaque
+ * ligne, son TTC x taux ÷ (1 + taux), arrondie une fois, son HT le TTC
+ * moins cette TVA, un centime ajusté par taux quand la somme des TVA des
+ * lignes s'écarte de celle du TTC du taux -- et le PU HT imprimé sur une
+ * facture à un professionnel, celui d'un article, son PU TTC moins sa TVA
+ * arrondie au centime, avec en petit sous l'article son PU HT exact. Les
+ * montants attendus ont été recalculés à la main en fractions exactes : à
+ * 20 %, les TVA arrondies des lignes font 487,36 € pour une TVA du taux de
+ * 2 924,12 x 20 ÷ 120 = 487,353... -> 487,35 € ; le savon (1,665 -> 1,67 €)
+ * et les stylos (4,125 -> 4,13 €) dépassent le plus leur TVA exacte, d'un
+ * demi-centime chacun, et les stylos, au plus gros TTC, rendent le
+ * centime (4,12 € de TVA, 20,63 € HT) ; à 10 % et à 5,5 %, les TVA des
+ * lignes font déjà celle du taux (10,86 € et 2,50 €). La remise de la
+ * ligne 13 tombe sur un demi-centime exact (7,495 -> 7,50 €).
  */
 class ExempleDeQuinzeLignesTest extends TestCase
 {
@@ -38,10 +43,13 @@ class ExempleDeQuinzeLignesTest extends TestCase
      * Les quinze lignes, dans leur ordre : référence, quantité, PU TTC,
      * remise et taux, puis le PU HT enregistré, le PU HT d'un article, tel
      * que la facture à un professionnel l'imprime (9,99 € TTC à 20 % :
-     * 9,99 - 1,67 = 8,32 €), le PU TTC, tel que le ticket l'imprime, et le
-     * HT, la TVA et le TTC de la ligne. La ligne 7 vend, remisé, un autre
-     * produit au prix de la ligne 1 : un produit n'a qu'une ligne (décision
-     * de l'éditeur du 26/10/2026, série 9).
+     * 9,99 - 1,67 = 8,32 €), et le HT, la TVA et le TTC de la ligne selon la
+     * règle (b) (100 bougies : 1 000,00 x 20 ÷ 120 = 166,666... -> 166,67 €
+     * de TVA, 833,33 € HT ; le parfum : 260,00 € -> 43,33 €, 216,67 € HT ;
+     * le sac : 142,40 € -> 23,733... -> 23,73 €, 118,67 € HT ; le vélo :
+     * 1 249,00 € -> 208,166... -> 208,17 €, 1 040,83 € HT). La ligne 7 vend,
+     * remisé, un autre produit au prix de la ligne 1 : un produit n'a
+     * qu'une ligne (décision de l'éditeur du 26/10/2026, série 9).
      *
      * @var list<array{0: string, 1: int, 2: string, 3: int, 4: string, 5: string, 6: string, 7: string, 8: string, 9: string}>
      */
@@ -49,17 +57,17 @@ class ExempleDeQuinzeLignesTest extends TestCase
         ['CRM-1000', 2, '10.00', 0, '20', '8.333333', '8,33 €', '16.67', '3.33', '20.00'],
         ['SAV-0999', 1, '9.99', 0, '20', '8.325000', '8,32 €', '8.32', '1.67', '9.99'],
         ['SHP-1266', 3, '12.66', 0, '20', '10.550000', '10,55 €', '31.65', '6.33', '37.98'],
-        ['BOU-1000', 100, '10.00', 0, '20', '8.333333', '8,33 €', '833.34', '166.66', '1000.00'],
+        ['BOU-1000', 100, '10.00', 0, '20', '8.333333', '8,33 €', '833.33', '166.67', '1000.00'],
         ['LIV-1590', 2, '15.90', 0, '5.5', '15.071090', '15,07 €', '30.14', '1.66', '31.80'],
         ['PLT-1850', 4, '18.50', 0, '10', '16.818182', '16,82 €', '67.27', '6.73', '74.00'],
         ['CRM-1001', 2, '10.00', 10, '20', '8.333333', '8,33 €', '15.00', '3.00', '18.00'],
         ['MO-HEURE', 3, '54.00', 0, '20', '45.000000', '45,00 €', '135.00', '27.00', '162.00'],
-        ['PRF-6500', 4, '65.00', 0, '20', '54.166667', '54,17 €', '216.66', '43.34', '260.00'],
+        ['PRF-6500', 4, '65.00', 0, '20', '54.166667', '54,17 €', '216.67', '43.33', '260.00'],
         ['JUS-0135', 12, '1.35', 0, '5.5', '1.279621', '1,28 €', '15.36', '0.84', '16.20'],
         ['SAL-0330', 7, '3.30', 0, '10', '3.000000', '3,00 €', '21.00', '2.10', '23.10'],
         ['STY-0099', 25, '0.99', 0, '20', '0.825000', '0,82 €', '20.63', '4.12', '24.75'],
-        ['SAC-14990', 1, '149.90', 5, '20', '124.916667', '124,92 €', '118.66', '23.74', '142.40'],
-        ['VEL-124900', 1, '1249.00', 0, '20', '1040.833333', '1 040,83 €', '1040.84', '208.16', '1249.00'],
+        ['SAC-14990', 1, '149.90', 5, '20', '124.916667', '124,92 €', '118.67', '23.73', '142.40'],
+        ['VEL-124900', 1, '1249.00', 0, '20', '1040.833333', '1 040,83 €', '1040.83', '208.17', '1249.00'],
         ['SDW-0745', 3, '7.45', 0, '10', '6.772727', '6,77 €', '20.32', '2.03', '22.35'],
     ];
 
@@ -121,9 +129,11 @@ class ExempleDeQuinzeLignesTest extends TestCase
 
     /**
      * La facture à un professionnel émise enregistre ces montants, et son
-     * PDF les imprime : pour chaque ligne la quantité, le PU HT d'un
-     * article, son PU TTC moins sa TVA arrondie au centime (8,33 €, 8,32 €,
-     * 10,55 €, 15,07 €, 45,00 €...), la remise, le taux et le
+     * PDF les imprime au modèle M6-b : pour chaque ligne la référence,
+     * l'article avec en petit son PU HT exact, tel qu'il est enregistré
+     * (« PU HT exact : 8,333333 € »), la quantité, le PU HT d'un article, son
+     * PU TTC moins sa TVA arrondie au centime (8,33 €, 8,32 €, 10,55 €,
+     * 15,07 €, 45,00 €...), la remise (« — » sans remise), le taux et le
      * total HT ; puis la base HT, la TVA et le TTC de chaque taux, et les
      * totaux du document. Le PDF lui-même, lu page par page, porte chaque
      * PU HT et chaque total.
@@ -138,15 +148,15 @@ class ExempleDeQuinzeLignesTest extends TestCase
         $html = $this->compacte(app(FacturePdfGenerator::class)->html($facture->load('client', 'lignes', 'magasin')));
         $tableau = Str::betweenFirst($html, '<table class="lignes">', '</table>');
 
-        foreach (self::LIGNES as $rang => [$reference, $quantite, , $remise, $taux, , $puHt, $ht]) {
+        foreach (self::LIGNES as $rang => [$reference, $quantite, , $remise, $taux, $puHtExact, $puHt, $ht]) {
             $this->assertStringContainsString(
-                "<tr><td class=\"reference\">{$reference}</td><td>Article {$reference}</td><td class=\"montant\">{$quantite}</td><td class=\"montant\">{$puHt}</td><td class=\"montant\">{$remise} %</td><td class=\"montant\">".self::taux($taux).'</td><td class="montant">'.$this->euros($ht).'</td></tr>',
+                "<td class=\"reference\">{$reference}</td><td>Article {$reference}<span class=\"sous\">PU HT exact : ".self::auMillionieme($puHtExact)."</span></td><td class=\"montant\">{$quantite}</td><td class=\"montant\">{$puHt}</td><td class=\"montant\">".self::remise($remise).'</td><td class="montant">'.self::taux($taux).'</td><td class="montant total-de-la-ligne">'.$this->euros($ht).'</td></tr>',
                 $tableau,
                 'Ligne '.($rang + 1),
             );
         }
 
-        $this->assertTauxEtTotauxImprimes($html);
+        $this->assertTauxEtTotauxImprimes($html, 'Net à payer');
 
         $textes = $this->textesDuPdf($facture);
         foreach ([...array_column(self::LIGNES, 6), ...self::TOTAUX] as $texte) {
@@ -156,8 +166,9 @@ class ExempleDeQuinzeLignesTest extends TestCase
 
     /**
      * Le même panier en ticket à un particulier a les mêmes montants, au
-     * centime, et son PDF imprime pour chaque ligne le PU TTC et le total
-     * TTC, puis les mêmes taux et les mêmes totaux.
+     * centime, et son PDF, au modèle P1, imprime pour chaque ligne le PU TTC
+     * et le total TTC, sans PU HT ni PU HT exact, puis les mêmes taux et
+     * les mêmes totaux.
      */
     public function test_le_meme_panier_en_ticket_a_les_memes_montants_et_imprime_les_pu_ttc(): void
     {
@@ -170,13 +181,14 @@ class ExempleDeQuinzeLignesTest extends TestCase
 
         foreach (self::LIGNES as $rang => [$reference, $quantite, $puTtc, $remise, $taux, , , , , $ttc]) {
             $this->assertStringContainsString(
-                "<tr><td class=\"reference\">{$reference}</td><td>Article {$reference}</td><td class=\"montant\">{$quantite}</td><td class=\"montant\">".$this->euros($puTtc)."</td><td class=\"montant\">{$remise} %</td><td class=\"montant\">".self::taux($taux).'</td><td class="montant">'.$this->euros($ttc).'</td></tr>',
+                "<td class=\"reference\">{$reference}</td><td>Article {$reference}</td><td class=\"montant\">{$quantite}</td><td class=\"montant\">".$this->euros($puTtc).'</td><td class="montant">'.self::remise($remise).'</td><td class="montant">'.self::taux($taux).'</td><td class="montant total-de-la-ligne">'.$this->euros($ttc).'</td></tr>',
                 $tableau,
                 'Ligne '.($rang + 1),
             );
         }
 
-        $this->assertTauxEtTotauxImprimes($html);
+        $this->assertStringNotContainsString('PU HT', $tableau);
+        $this->assertTauxEtTotauxImprimes($html, 'Net à payer');
     }
 
     /**
@@ -213,13 +225,13 @@ class ExempleDeQuinzeLignesTest extends TestCase
     /**
      * Le tableau des taux et les totaux du PDF (voir documents/pdf/totaux).
      */
-    private function assertTauxEtTotauxImprimes(string $html): void
+    private function assertTauxEtTotauxImprimes(string $html, string $libelleDuTotal): void
     {
         foreach (self::TAUX as [$taux, $base, $tva, $ttc]) {
             $this->assertStringContainsString("<tr><td>{$taux}</td><td class=\"montant\">{$base}</td><td class=\"montant\">{$tva}</td><td class=\"montant\">{$ttc}</td></tr>", $html);
         }
 
-        foreach (['Total HT', 'Total TVA', 'Total TTC'] as $rang => $libelle) {
+        foreach (['Total HT', 'Total TVA', $libelleDuTotal] as $rang => $libelle) {
             $this->assertMatchesRegularExpression('#<td class="libelle">'.$libelle.'</td><td class="montant">'.preg_quote(self::TOTAUX[$rang], '#').'</td>#', $html);
         }
     }
@@ -250,6 +262,25 @@ class ExempleDeQuinzeLignesTest extends TestCase
     private static function taux(string $taux): string
     {
         return str_replace('.', ',', $taux).' %';
+    }
+
+    /**
+     * La remise telle que la colonne l'imprime : « — » sans remise.
+     */
+    private static function remise(int $remise): string
+    {
+        return $remise === 0 ? '—' : "{$remise} %";
+    }
+
+    /**
+     * Un PU HT enregistré, écrit avec ses six décimales comme un montant :
+     * « 8,333333 € », « 1 040,833333 € ».
+     */
+    private static function auMillionieme(string $prix): string
+    {
+        [$euros, $decimales] = explode('.', $prix);
+
+        return preg_replace('/\B(?=(\d{3})+$)/', ' ', $euros).','.$decimales.' €';
     }
 
     /**

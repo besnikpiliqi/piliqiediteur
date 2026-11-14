@@ -30,10 +30,11 @@ use UnexpectedValueException;
  *
  * Toute vente, à un particulier comme à un professionnel, se calcule en
  * une fois, depuis les prix TTC de ses lignes (voir
- * CalculateurLigne::chiffrerUneVente()) : le HT de chaque taux, arrondi une
- * fois, se répartit entre ses lignes, qui ne se calculent donc
- * qu'ensemble (voir chiffrer()). Un même panier a les mêmes montants pour
- * tout client. Un produit n'y a qu'une ligne, un service qu'une ligne par
+ * CalculateurLigne::chiffrerUneVente()) : la TVA de chaque ligne
+ * s'arrondit une fois sur son TTC, puis la somme de chaque taux se ramène
+ * à la TVA de son TTC d'un centime par ligne au plus ; les lignes ne se
+ * calculent donc qu'ensemble (voir chiffrer()). Un même panier a les mêmes
+ * montants pour tout client. Un produit n'y a qu'une ligne, un service qu'une ligne par
  * prix et par taux (voir refuserUnArticleSurDeuxLignes()).
  */
 class ConstructeurLigneDocument

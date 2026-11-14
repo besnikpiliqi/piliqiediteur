@@ -27,7 +27,9 @@ use Tests\Browser\Support\Navigation;
  * 1,67 €, PU HT 8,32 €, jamais 8,325 € (le PU HT enregistré, celui de la
  * facture électronique) ni 8,33 € ; 33,30 € HT ; 2 savons rendus :
  * 16,65 € HT. Chaque rôle qui ouvre la fiche ou le PDF y lit le même PU
- * HT, avec la note de calcul de son document. La société de test a tous
+ * HT, avec la note de calcul de son document ; le PDF d'un document à un
+ * professionnel suit le modèle M6-b, le PU HT exact écrit en petit sous
+ * l'article, sans colonne PU TTC (décision de l'éditeur du 14/11/2026). La société de test a tous
  * ses rôles et son catalogue (voir TestCaseDuNavigateur::societeComplete()).
  */
 
@@ -106,12 +108,18 @@ test('le responsable lit le PU HT d’un article, 8,32 € pour un savon à 9,99
     $textes = array_column($this->pagesDuPdf(base64_decode($fichiers[0]['contenu']))[0]['textes'], 'texte');
     expect($textes)->toContain('8,32 €')
         ->and($textes)->toContain('33,30 €')
+        ->and($textes)->toContain('PU HT exact : 8,325000 €')
+        ->and($textes)->toContain('RÉF.')
+        ->and($textes)->toContain('REM.')
+        ->and($textes)->toContain('NET À PAYER')
+        ->and($textes)->not->toContain('PU TTC')
         ->and($textes)->not->toContain('8,325 €')
         ->and($textes)->not->toContain('8,33 €');
 
     $onglet->aller('/app/'.$societe->magasin->uuid.'/factures/'.$ticket->id)
         ->voir('8,32 €')
-        ->voir('Les prix unitaires sont affichés arrondis au centime')
+        ->voir('pour chaque ligne, la TVA est le TTC')
+        ->nePasVoir('Le PU HT affiché est celui d\'un article')
         ->nePasVoir('8,325');
 });
 
@@ -158,28 +166,28 @@ test('le responsable fait sortir de la TVA française la vente d’un particulie
     attendreLePuHt($onglet, '8.32');
 });
 
-test('le responsable fait passer en prestation hors UE la facture d’un service à 9,99 € TTC, dont le prix sans TVA devient 8,33 €, son montant inchangé', function () {
+test('le responsable fait passer en prestation hors UE la facture d’un service à 9,99 € TTC, dont le prix sans TVA devient 8,32 €, son montant inchangé', function () {
     $societe = $this->societeComplete();
     $brouillon = app(TenantContext::class)->runAs($societe->magasin, fn (): Facture => app(CreerFactureAction::class)->handle(
         $societe->responsable,
         Client::factory()->create(['nom' => 'Acme Inc.', 'type_client' => TypeClient::Professionnel, 'pays' => 'US', 'etabli_en_france' => false, 'identifiant_etranger' => 'EIN 12-3456789']),
         [['service_id' => Service::factory()->create(['nom' => 'Conseil à l\'export'])->id, 'prix_unitaire_ttc' => '9.99', 'taux_tva' => 20, 'quantite' => 1]],
     ));
-    expect($brouillon->total_ht)->toBe('8.33');
+    expect($brouillon->total_ht)->toBe('8.32');
     $onglet = $this->seConnecter($societe->responsable)->aller('/app/'.$societe->magasin->uuid.'/factures/'.$brouillon->id.'/edit');
 
     $onglet->choisir('Nature de l\'opération', NatureOperation::PrestationHorsUe->value)
         ->voir('Prix des services convertis')
         ->attendreQue(
-            'document.querySelector('.Navigation::texte('[id*=".lignes."][id$=".prix_unitaire_ttc"]').')?.value === "8.33"',
-            'le prix sans TVA du service ne montre pas 8.33',
+            'document.querySelector('.Navigation::texte('[id*=".lignes."][id$=".prix_unitaire_ttc"]').')?.value === "8.32"',
+            'le prix sans TVA du service ne montre pas 8.32',
         )
         ->soumettre('Sauvegarder')
         ->voir('Sauvegardé');
 
     $brouillon = app(TenantContext::class)->runAs($societe->magasin, fn (): Facture => $brouillon->fresh());
     expect($brouillon->nature_operation)->toBe(NatureOperation::PrestationHorsUe)
-        ->and([$brouillon->total_ht, $brouillon->total_tva, $brouillon->total_ttc])->toBe(['8.33', '0.00', '8.33']);
+        ->and([$brouillon->total_ht, $brouillon->total_tva, $brouillon->total_ttc])->toBe(['8.32', '0.00', '8.32']);
 });
 
 test('le propriétaire change le client d’un devis, et le PU HT des lignes reste celui d’un article', function () {
@@ -225,6 +233,8 @@ test('le responsable lit le PU HT d’un article et la note de calcul d’un ret
     $textes = array_column($this->pagesDuPdf(base64_decode($fichiers[0]['contenu']))[0]['textes'], 'texte');
     expect($textes)->toContain('8,32 €')
         ->and($textes)->toContain('16,65 €')
+        ->and($textes)->toContain('PU HT exact : 8,325000 €')
+        ->and($textes)->toContain('Montant de l\'avoir')
         ->and($textes)->not->toContain('8,325 €')
         ->and(preg_replace('/\s+/u', ' ', implode(' ', $textes)))->toContain('La quantité × ce prix peut différer de quelques centimes du total HT de la ligne');
 });

@@ -675,7 +675,7 @@ class EmetteurFigeTest extends TestCase
      */
     private function enTete(string $html): string
     {
-        return Str::betweenFirst(preg_replace(['/>\s+/', '/\s+</'], ['>', '<'], $html), '<table class="en-tete"><tr><td>', '</td>');
+        return Str::betweenFirst(preg_replace(['/>\s+/', '/\s+</'], ['>', '<'], $html), '<table class="en-tete"><tr><td class="magasin">', '</td>');
     }
 
     /**

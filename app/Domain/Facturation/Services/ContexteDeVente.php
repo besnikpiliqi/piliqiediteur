@@ -108,8 +108,9 @@ final readonly class ContexteDeVente
     /**
      * Le client paie-t-il le prix sans la TVA française (K3) ? Hors de la
      * vente en France, hors franchise : un produit se vend au prix TTC de
-     * son catalogue ÷ (1 + son taux), calculé taux par taux comme toute
-     * vente (voir CalculateurLigne::chiffrerUneVente()), et un service à son
+     * son catalogue moins la TVA de son taux, calculée ligne par ligne et
+     * taux par taux comme toute vente (voir
+     * CalculateurLigne::chiffrerUneVente()), et un service à son
      * prix saisi sans TVA -- 1 000 articles à 1,00 € TTC à 20 % font
      * 833,33 €, pour un particulier comme pour un professionnel. En
      * franchise, le client paie le même prix TTC, sans TVA, quelle que soit

@@ -6,10 +6,9 @@ Ma Boutique
 FR
 SIRET : 10000000900017
 Tél. 04 72 00 00 00 · contact@ma-boutique.example
-Avoir
-AV-LYON1-2026-000002
+AVOIR
+N° AV-LYON1-2026-000002
 Émis le 09/10/2026
-Sur facture FAC-LYON1-2026-000001 du 09/10/2026
 ÉMIS À
 Atelier Dupont SARL
 8 rue des Tanneurs
@@ -17,39 +16,47 @@ Atelier Dupont SARL
 SIREN : 123456789
 SIRET : 12345678900011
 N° TVA : FR32123456789
-RÉFÉRENCE
-DÉSIGNATION
+RECTIFIE
+Sur facture FAC-LYON1-2026-000001 du
+09/10/2026
+DÉTAIL DES ARTICLES ET PRESTATIONS
+RÉF.
+ARTICLE
 FACTURE D'ORIGINE
 QTÉ
 PU HT
-REMISE
-TAUX
+REM.
+TVA
 TOTAL HT
 COF-DEG
 Coffret dégustation
+PU HT exact : 37,500000 €
 FAC-LYON1-2026-000001
 1
 37,50 €
 10 %
 20 %
 33,75 €
-Montants calculés depuis les prix TTC : chaque retour rend, pour tous les articles d'une ligne rendus jusqu'ici, le calcul de la vente sur cette quantité (HT = TTC ÷ (1 +
-taux), arrondi une fois au centime ; TVA = la différence), sans dépasser le HT ni la TVA de la ligne, déduction faite des avoirs déjà émis sur la même ligne ; le dernier
-retour solde la ligne au centime. Le PU HT affiché est celui d'un article : prix TTC moins sa TVA arrondie au centime (9,99 € TTC à 20 % : 8,32 € HT). La quantité × ce prix
-peut différer de quelques centimes du total HT de la ligne, calculé sur toute la quantité.
-TAUX TVA
-BASE HT
+Montants calculés depuis les prix TTC : chaque retour rend, pour tous les articles d'une ligne rendus jusqu'ici, le calcul de la vente sur leur TTC (TVA = TTC × taux ÷ (1 + taux),
+arrondie une fois au centime ; HT = TTC moins cette TVA), sans dépasser le HT ni la TVA de la ligne, déduction faite des avoirs déjà émis sur la même ligne ; le dernier retour solde la
+ligne au centime ; un centime peut être ajusté sur une ligne rendue en partie pour que la TVA de chaque taux soit égale à sa base HT × le taux. Le PU HT affiché est celui d'un article
+: prix TTC moins sa TVA arrondie au centime (9,99 € TTC à 20 % : 8,32 € HT). La quantité × ce prix peut différer de quelques centimes du total HT de la ligne, calculé sur toute la
+quantité. Le PU HT exact, écrit sous chaque article, est celui de la facture électronique : la quantité × ce prix retombe sur le total HT de la ligne à quelques centimes près.
+Récapitulatif TVA
+Taux
+Base HT
 TVA
-TOTAL TTC
+TTC
 20 %
 33,75 €
 6,75 €
 40,50 €
+Montant de l'avoir
 Total HT
 -33,75 €
 Total TVA
 -6,75 €
-Total TTC
+TOTAL TTC
 -40,50 €
 Motif : Coffret abîmé
 Les Délices de Jeanne SAS au capital de 10 000,00 € · Siège social : 1 rue de la République, 69002 Lyon · SIREN : 100000009 · RCS Lyon · TVA intracommunautaire :

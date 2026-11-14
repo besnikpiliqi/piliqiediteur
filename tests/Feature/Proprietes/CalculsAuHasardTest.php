@@ -36,7 +36,18 @@ class CalculsAuHasardTest extends TestCase
         $this->calculateur = new CalculateurLigne;
     }
 
-    public function test_une_vente_tiree_au_hasard_suit_la_regle_du_ttc_et_du_ht_par_taux(): void
+    /**
+     * La règle (b) des ventes (décision de l'éditeur du 14/11/2026),
+     * refaite ici : la TVA de chaque ligne est son TTC x taux ÷ (1 + taux),
+     * arrondie une fois ; pour chaque groupe de lignes de même taux du prix
+     * et de même taux facturé, autant de lignes que de centimes d'écart
+     * entre la somme de leurs TVA et la TVA du TTC du groupe reçoivent un
+     * centime, celles dont la TVA arrondie s'écarte le plus de leur TVA
+     * exacte dans le sens de l'écart, à égalité la ligne au plus gros TTC,
+     * puis la première ; le HT est le TTC moins la TVA, et une ligne sans la
+     * TVA française a pour TTC ce HT, sans TVA.
+     */
+    public function test_une_vente_tiree_au_hasard_suit_la_regle_de_la_tva_ligne_par_ligne(): void
     {
         $this->pourChaqueCas(
             self::GRAINE,
@@ -44,17 +55,36 @@ class CalculsAuHasardTest extends TestCase
             fn (Tirage $tirage): array => self::lignesDeVente($tirage),
             function (array $lignes): void {
                 $calcul = $this->calculateur->chiffrerUneVente($lignes);
-                $cumuls = [];
+                $groupes = [];
+                $tva = [];
+
+                foreach ($lignes as $rang => $ligne) {
+                    $tva[$rang] = self::arrondi(self::ttcDeLaLigne($ligne) * $ligne['taux_tva_du_prix'], 10000 + $ligne['taux_tva_du_prix']);
+                    $groupes[$ligne['taux_tva_du_prix'].'|'.$ligne['taux_tva']][] = $rang;
+                }
+
+                foreach ($groupes as $rangs) {
+                    $taux = $lignes[$rangs[0]]['taux_tva_du_prix'];
+                    $ttcDuGroupe = array_sum(array_map(fn (int $rang): int => self::ttcDeLaLigne($lignes[$rang]), $rangs));
+                    $ecart = array_sum(array_map(fn (int $rang): int => $tva[$rang], $rangs)) - self::arrondi($ttcDuGroupe * $taux, 10000 + $taux);
+                    $sens = $ecart <=> 0;
+                    usort($rangs, fn (int $a, int $b): int => [
+                        $sens * ($tva[$b] * (10000 + $taux) - self::ttcDeLaLigne($lignes[$b]) * $taux), self::ttcDeLaLigne($lignes[$b]), $a,
+                    ] <=> [
+                        $sens * ($tva[$a] * (10000 + $taux) - self::ttcDeLaLigne($lignes[$a]) * $taux), self::ttcDeLaLigne($lignes[$a]), $b,
+                    ]);
+
+                    foreach (array_slice($rangs, 0, abs($ecart)) as $rang) {
+                        $tva[$rang] -= $sens;
+                    }
+                }
 
                 foreach ($lignes as $rang => $ligne) {
                     $montants = $calcul['lignes'][$rang];
                     $ttcAuPrix = self::ttcDeLaLigne($ligne);
-                    $cle = $ligne['taux_tva_du_prix'].'|'.$ligne['taux_tva'];
-                    $avant = $cumuls[$cle] ?? ['ttc' => 0, 'ht' => 0];
-                    $cumuls[$cle] = ['ttc' => $avant['ttc'] + $ttcAuPrix, 'ht' => self::arrondi(($avant['ttc'] + $ttcAuPrix) * 10000, 10000 + $ligne['taux_tva_du_prix'])];
-                    $ht = $cumuls[$cle]['ht'] - $avant['ht'];
+                    $ht = $ttcAuPrix - $tva[$rang];
 
-                    Assert::assertSame($ht, $montants['montant_ht'], "HT de la ligne {$rang} : celui du cumul de son taux, moins celui des lignes précédentes");
+                    Assert::assertSame($ht, $montants['montant_ht'], "HT de la ligne {$rang} : son TTC moins sa TVA arrondie, un centime ajusté par taux");
                     Assert::assertSame($montants['montant_ttc'] - $montants['montant_ht'], $montants['montant_tva'], "TVA de la ligne {$rang} : TTC moins HT");
                     Assert::assertGreaterThanOrEqual(0, $montants['montant_tva'], "TVA de la ligne {$rang} jamais négative");
                     Assert::assertSame($ligne['taux_tva'] === $ligne['taux_tva_du_prix'] ? $ttcAuPrix : $ht, $montants['montant_ttc'], "TTC de la ligne {$rang} : quantité x PU TTC, remise déduite, ou son HT sans la TVA française");
@@ -72,9 +102,9 @@ class CalculsAuHasardTest extends TestCase
      * La TVA de chaque taux d'une vente reste à six dixièmes de centime au
      * plus de sa base × son taux, sans arrondi (décision de Claude T90.1
      * de l'onglet « À faire vérifier par un professionnel », sous le seuil
-     * français de 0,01 €) : le HT du taux est arrondi une fois au
-     * demi-centime près, et la TVA est le TTC moins ce HT, d'où un écart
-     * d'au plus un demi-centime × (1 + taux), 0,6 centime à 20 %.
+     * français de 0,01 €) : la TVA du taux est celle de son TTC, arrondie
+     * une fois au demi-centime près, et le HT le TTC moins cette TVA, d'où
+     * un écart d'au plus un demi-centime × (1 + taux), 0,6 centime à 20 %.
      */
     public function test_la_tva_de_chaque_taux_reste_a_six_dixiemes_de_centime_de_sa_base_fois_le_taux(): void
     {

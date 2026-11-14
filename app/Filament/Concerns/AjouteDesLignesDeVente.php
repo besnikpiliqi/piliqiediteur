@@ -83,8 +83,8 @@ use WeakMap;
  * de l'opération (voir ChoisitLaNatureDeLOperation) et le régime de TVA du
  * magasin (voir apercuDesLignes()) : l'écran ne peut jamais afficher un
  * centime différent de ce qui sera enregistré. Une ligne ne montre aucun
- * total sous elle : ses montants dépendent des autres lignes de son taux
- * (voir CalculateurLigne::chiffrerUneVente()), et seuls les totaux du
+ * total sous elle : un centime de sa TVA peut dépendre des autres lignes
+ * de son taux (voir CalculateurLigne::chiffrerUneVente()), et seuls les totaux du
  * document, par taux dès qu'il y en a plusieurs, s'affichent (voir
  * totauxDuDocument()). Une vente sans TVA française se calcule sans TVA,
  * et le prix d'un service s'y saisit sans TVA.

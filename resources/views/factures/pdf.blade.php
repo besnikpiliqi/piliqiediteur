@@ -20,12 +20,27 @@
         L'échéance s'imprime sur toute facture à un professionnel, même
         réglée à son émission (date à laquelle le règlement doit intervenir,
         art. L441-9 du Code de commerce) ; une vente à un particulier
-        réglée en entier à son émission n'en imprime pas.
+        réglée en entier à son émission n'en imprime pas. Le bloc des
+        conditions (modèle M6-b) le redit : le délai de paiement, de
+        l'émission à l'échéance, et la date avant laquelle payer, ou que le
+        document a été réglé à son émission.
     --}}
     @php
         $libelleDocument = $facture->libelleDocument();
+        $solde = $reglements->soldentLeDocument();
         $avecEcheance = $facture->date_echeance !== null
-            && ($facture->estPourUnProfessionnel() || ! $reglements->soldentLeDocument());
+            && ($facture->estPourUnProfessionnel() || ! $solde);
+        $regle = $facture->estPourUnProfessionnel() ? 'Réglée à l\'émission' : 'Réglé à l\'émission';
+        $calendrier = $facture->magasin->calendrier();
+        $jours = $facture->date_echeance === null ? null : \App\Domain\Calendrier\Calendrier::joursEntre($facture->date_emission === null ? $calendrier->aujourdhui() : $calendrier->jourDe($facture->date_emission), $facture->date_echeance);
+        $conditions = match (true) {
+            $facture->date_echeance === null => ['Échéance fixée à l\'émission'],
+            ! $avecEcheance => [$regle],
+            default => [
+                $jours > 0 ? "Paiement à {$jours} jours" : 'Paiement à réception',
+                $solde ? $regle : 'Net à payer avant le '.\App\Domain\Calendrier\Calendrier::afficherJour($facture->date_echeance, 'd/m/Y'),
+            ],
+        };
     @endphp
     <meta charset="utf-8">
     <title>{{ $facture->numero ?? "{$libelleDocument} (brouillon)" }}</title>
@@ -38,24 +53,27 @@
         'emetteur' => $emetteur,
         'estUnTicket' => ! $facture->estPourUnProfessionnel(),
         'titre' => $libelleDocument,
+        'classeTitre' => 'majuscules',
         'details' => array_filter([
-            $facture->numero ?? 'Brouillon (non émise)',
+            $facture->numero !== null ? 'N° '.$facture->numero : 'Brouillon (non émise)',
             $facture->date_emission ? 'Émise le '.$facture->magasin->calendrier()->afficher($facture->date_emission, 'd/m/Y') : null,
             $avecEcheance ? 'Échéance le '.\App\Domain\Calendrier\Calendrier::afficherJour($facture->date_echeance, 'd/m/Y') : null,
             $facture->mentionDuDevis(),
         ]),
     ])
 
-    @include('documents.pdf.client', [
+    @include('documents.pdf.blocs', [
         'client' => $facture->copieClient(),
         'professionnel' => $facture->estPourUnProfessionnel(),
         'titre' => $facture->estPourUnProfessionnel() ? 'Facturé à' : 'Client',
+        'titreDesConditions' => 'Conditions',
+        'conditions' => $conditions,
     ])
 
     @include('documents.pdf.livraison', ['lignes' => $facture->lignesDeLivraison()])
 
     @include('documents.pdf.lignes', ['document' => $facture, 'tableau' => $tableau])
 
-    @include('documents.pdf.totaux', ['document' => $facture, 'reglements' => $reglements, 'dateEmission' => $facture->date_emission, 'calendrier' => $facture->magasin->calendrier()])
+    @include('documents.pdf.totaux', ['document' => $facture, 'titreDuMontant' => 'Montant à régler', 'libelleDuTotal' => 'Net à payer', 'reglements' => $reglements, 'dateEmission' => $facture->date_emission, 'calendrier' => $calendrier])
 </body>
 </html>

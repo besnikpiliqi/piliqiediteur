@@ -13,8 +13,9 @@ use Tests\Browser\Support\Navigation;
  * refus prenant la place de l'aide, et plus rien ne s'affiche une fois le
  * règlement juste ; à la caisse comme sur l'encaissement d'une facture. La
  * vente faite, son numéro mène à sa fiche (constat C2), et le PDF du ticket
- * imprime chacun de ses règlements à gauche du Total TTC (constat C3). La
- * société de test a tous ses rôles et son catalogue (voir
+ * imprime chacun de ses règlements à gauche du montant à régler, sous le
+ * récapitulatif par taux (constat C3, modèle M6-b). La société de test a
+ * tous ses rôles et son catalogue (voir
  * TestCaseDuNavigateur::societeComplete()).
  */
 
@@ -46,7 +47,7 @@ function ajouterALaCaisse(Navigation $onglet, string $produit): Navigation
         ->cliquerSur('Ajouter le produit');
 }
 
-test('à la caisse, « Il reste … à répartir » ne s’affiche qu’une fois, avant comme après « Encaisser » ; la vente faite, son numéro mène au ticket, dont le PDF imprime chaque règlement à gauche du Total TTC', function () {
+test('à la caisse, « Il reste … à répartir » ne s’affiche qu’une fois, avant comme après « Encaisser » ; la vente faite, son numéro mène au ticket, dont le PDF imprime chaque règlement à gauche du montant à régler', function () {
     $societe = $this->societeComplete();
     $onglet = $this->seConnecter($societe->vendeur)->aller('/app/'.$societe->magasin->uuid.'/caisse');
     $reste = 'Il reste 8,00 € à répartir.';
@@ -80,10 +81,11 @@ test('à la caisse, « Il reste … à répartir » ne s’affiche qu’une fois
     expect($fichiers)->toHaveCount(1);
     $page = $this->pagesDuPdf(base64_decode($fichiers[0]['contenu']))[0];
     $texte = fn (string $libelle): array => collect($page['textes'])->firstWhere('texte', $libelle) ?? throw new RuntimeException("« {$libelle} » n'est pas sur le PDF.");
-    $totalTtc = $texte('Total TTC');
+    $totalHt = $texte('Total HT');
     foreach (['RÈGLEMENTS', 'Espèces', 'Carte bancaire', 'CB-TRX-7788', '10,00 €', '8,00 €'] as $reglement) {
-        expect($texte($reglement)['x'] + $texte($reglement)['largeur'])->toBeLessThan($totalTtc['x']);
+        expect($texte($reglement)['x'] + $texte($reglement)['largeur'])->toBeLessThan($totalHt['x']);
     }
+    expect($texte('RÈGLEMENTS')['y'])->toBeLessThan($texte('Récapitulatif TVA')['y']);
 });
 
 test('à la caisse de l’administrateur autorisé à vendre, l’écart ne s’affiche qu’une fois après « Encaisser »', function () {

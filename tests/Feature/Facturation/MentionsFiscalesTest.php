@@ -20,26 +20,29 @@ use Tests\TestCase;
 /**
  * La note de calcul que les PDF impriment sous les lignes d'une vente et
  * que sa fiche affiche (voir MentionsFiscales::calcul()) : chacune de ses
- * variantes, vente ou retour, avec ou sans TVA française, garde son
- * explication et se termine par la phrase des prix unitaires de son
- * document : le PU HT d'un article, prix TTC moins sa TVA arrondie au
- * centime, sur une facture ou un avoir à un professionnel et sur une
- * vente sans TVA française, qui montrent le PU HT (décision de l'éditeur
- * du 14/11/2026, qui remplace celle du 09/11/2026 et T105), arrondis au centime sur un
- * ticket et un avoir sur ticket (décision de l'éditeur du 25/10/2026) ;
- * une vente en franchise en base n'en a pas.
+ * variantes, vente ou retour, avec ou sans TVA française, dit comment
+ * chaque ligne se calcule depuis son prix TTC (règle (b), décision de
+ * l'éditeur du 14/11/2026) ; une facture ou un avoir à un professionnel et
+ * une vente sans TVA française, qui montrent le PU HT (modèle M6-b), y
+ * ajoutent la phrase du PU HT d'un article, prix TTC moins sa TVA arrondie
+ * au centime, et leur PDF celle du PU HT exact écrit sous chaque article ;
+ * un ticket et un avoir sur ticket, qui ne montrent que des prix TTC
+ * (modèle P1), n'impriment que l'explication du calcul ; une vente en
+ * franchise en base n'en a pas.
  */
 class MentionsFiscalesTest extends TestCase
 {
     use RefreshDatabase;
 
-    private const PRIX_UNITAIRES_AU_CENTIME = 'Les prix unitaires sont affichés arrondis au centime et les totaux calculés sans arrondi intermédiaire : la quantité × le prix unitaire affiché peut donc différer du total de la ligne.';
-
     private const PU_HT_D_UN_ARTICLE = 'Le PU HT affiché est celui d\'un article : prix TTC moins sa TVA arrondie au centime (9,99 € TTC à 20 % : 8,32 € HT). La quantité × ce prix peut différer de quelques centimes du total HT de la ligne, calculé sur toute la quantité.';
 
-    private const CALCUL_VENTE = 'Montants calculés depuis les prix TTC : pour chaque taux, le HT est le TTC du taux ÷ (1 + taux), arrondi une fois au centime, puis réparti sur les lignes ; la TVA est la différence. ';
+    private const PU_HT_EXACT = 'Le PU HT exact, écrit sous chaque article, est celui de la facture électronique : la quantité × ce prix retombe sur le total HT de la ligne à quelques centimes près.';
 
-    public function test_chaque_variante_de_la_note_de_calcul_finit_par_la_phrase_des_prix_unitaires_de_son_document(): void
+    private const CALCUL_VENTE = 'Montants calculés depuis les prix TTC : pour chaque ligne, la TVA est le TTC × taux ÷ (1 + taux), arrondie une fois au centime, et le HT est le TTC moins cette TVA ; un centime peut être ajusté sur une ligne pour que la TVA de chaque taux soit égale à sa base HT × le taux.';
+
+    private const CALCUL_RETOUR = 'Montants calculés depuis les prix TTC : chaque retour rend, pour tous les articles d\'une ligne rendus jusqu\'ici, le calcul de la vente sur leur TTC (TVA = TTC × taux ÷ (1 + taux), arrondie une fois au centime ; HT = TTC moins cette TVA), sans dépasser le HT ni la TVA de la ligne, déduction faite des avoirs déjà émis sur la même ligne ; le dernier retour solde la ligne au centime ; un centime peut être ajusté sur une ligne rendue en partie pour que la TVA de chaque taux soit égale à sa base HT × le taux.';
+
+    public function test_chaque_variante_de_la_note_de_calcul_explique_son_calcul_et_le_pu_ht_du_document_qui_le_montre(): void
     {
         app(TenantContext::class)->set(Magasin::factory()->create());
         $particulier = Client::factory()->create();
@@ -57,16 +60,16 @@ class MentionsFiscalesTest extends TestCase
             $export, $this->rendreUnArticle($particulier, $export),
         ]);
 
-        $vente = 'Montants calculés depuis les prix TTC : pour chaque taux, le HT est le TTC du taux ÷ (1 + taux), arrondi une fois au centime, puis réparti sur les lignes ; la TVA est la différence. ';
-        $retour = 'Montants calculés depuis les prix TTC : chaque retour rend, pour tous les articles d\'une ligne rendus jusqu\'ici, le calcul de la vente sur cette quantité (HT = TTC ÷ (1 + taux), arrondi une fois au centime ; TVA = la différence), sans dépasser le HT ni la TVA de la ligne, déduction faite des avoirs déjà émis sur la même ligne ; le dernier retour solde la ligne au centime. ';
         $this->assertSame([
-            $vente.self::PRIX_UNITAIRES_AU_CENTIME,
-            $retour.self::PRIX_UNITAIRES_AU_CENTIME,
-            $vente.self::PU_HT_D_UN_ARTICLE,
-            $retour.self::PU_HT_D_UN_ARTICLE,
-            'Vente sans TVA française : chaque produit, et chaque service à son prix de référence, se vend à son prix catalogue TTC sans la TVA française de son taux (HT de chaque taux = TTC du catalogue ÷ (1 + taux), arrondi une fois au centime, puis réparti sur les lignes) ; un autre service, à son prix sans TVA. '.self::PU_HT_D_UN_ARTICLE,
+            self::CALCUL_VENTE,
+            self::CALCUL_RETOUR,
+            self::CALCUL_VENTE.' '.self::PU_HT_D_UN_ARTICLE,
+            self::CALCUL_RETOUR.' '.self::PU_HT_D_UN_ARTICLE,
+            'Vente sans TVA française : chaque produit, et chaque service à son prix de référence, se vend à son prix catalogue TTC moins la TVA française de son taux (pour chaque ligne, cette TVA est le TTC × taux ÷ (1 + taux), arrondie une fois au centime ; un centime peut être ajusté sur une ligne pour qu\'elle soit, pour chaque taux, égale à la base HT × le taux) ; un autre service, à son prix sans TVA. '.self::PU_HT_D_UN_ARTICLE,
             'Vente sans TVA française : chaque retour rend, pour tous les articles d\'une ligne rendus jusqu\'ici, le calcul de la vente sur cette quantité, sans dépasser le HT de la ligne, déduction faite des avoirs déjà émis sur la même ligne ; le dernier retour solde la ligne au centime. '.self::PU_HT_D_UN_ARTICLE,
         ], $notes);
+        $this->assertSame(self::CALCUL_VENTE.' '.self::PU_HT_D_UN_ARTICLE.' '.self::PU_HT_EXACT, app(MentionsFiscales::class)->calcul($facture, avecLePuHtExact: true));
+        $this->assertSame(self::CALCUL_VENTE, app(MentionsFiscales::class)->calcul($ticket, avecLePuHtExact: true));
     }
 
     public function test_une_vente_en_franchise_en_base_n_a_pas_de_note_de_calcul(): void
@@ -99,16 +102,20 @@ class MentionsFiscalesTest extends TestCase
 
         $this->assertSame(['0.833333', '83333.33'], [$grande->lignes->last()->prix_unitaire_ht, $grande->lignes->last()->montant_ht]);
         $this->assertSame([
-            self::CALCUL_VENTE.self::PU_HT_D_UN_ARTICLE,
-            self::CALCUL_VENTE.self::PU_HT_D_UN_ARTICLE,
+            self::CALCUL_VENTE.' '.self::PU_HT_D_UN_ARTICLE,
+            self::CALCUL_VENTE.' '.self::PU_HT_D_UN_ARTICLE,
         ], array_map(app(MentionsFiscales::class)->calcul(...), [$grande, $ordinaire]));
     }
 
     /**
-     * Une ligne de 3 articles à 7,00 € TTC à 20 % (17,50 € HT, PU HT
-     * 5,833333 €) rendue en trois avoirs d'un article : 5,83 €, 5,84 € puis
-     * 5,83 € HT ; chacun, le dernier qui solde la ligne compris, garde la
-     * phrase du PU HT d'un article (décision de l'éditeur du 14/11/2026).
+     * Une ligne de 3 articles à 7,00 € TTC à 20 % (3,50 € de TVA, 17,50 €
+     * HT, PU HT 5,833333 €) rendue en trois avoirs d'un article (règle (b)
+     * et D76, décision de l'éditeur du 14/11/2026) : le premier rend 7,00 x
+     * 20 ÷ 120 = 1,166... -> 1,17 € de TVA, 5,83 € HT ; le deuxième, 14,00 €
+     * rendus en tout (2,33 € de TVA), rendrait 1,16 €, que l'avoir ramène à
+     * la TVA de ses 7,00 €, 1,17 €, sur cette ligne rendue en partie :
+     * 5,83 € HT ; le dernier solde la ligne, 5,84 € HT et 1,16 €. Chacun
+     * garde la phrase du PU HT d'un article.
      */
     public function test_chaque_avoir_d_une_ligne_rendue_en_trois_fois_garde_la_note_du_pu_ht_d_un_article(): void
     {
@@ -118,7 +125,7 @@ class MentionsFiscalesTest extends TestCase
 
         $avoirs = [$this->rendreUnArticle($professionnel, $facture), $this->rendreUnArticle($professionnel, $facture), $this->rendreUnArticle($professionnel, $facture)];
 
-        $this->assertSame(['5.83', '5.84', '5.83'], array_map(fn (Avoir $avoir): string => $avoir->lignes->sole()->montant_ht, $avoirs));
+        $this->assertSame(['5.83', '5.83', '5.84'], array_map(fn (Avoir $avoir): string => $avoir->lignes->sole()->montant_ht, $avoirs));
         foreach ($avoirs as $avoir) {
             $this->assertStringEndsWith(self::PU_HT_D_UN_ARTICLE, (string) app(MentionsFiscales::class)->calcul($avoir));
         }

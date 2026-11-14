@@ -215,6 +215,7 @@ return [
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le vendeur ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Parcours/ProprietaireEnDemonstrationTest.php › le propriétaire vend à la caisse de la démonstration, encaisse en espèces et par carte, ferme sa caisse et clôture la journée',
+            'tests/Browser/Parcours/RegleBDesVentesTest.php › le vendeur vend à la caisse un savon à 9,99 € au client comptoir : 8,32 € HT et 1,67 € de TVA, et le PDF du ticket ne montre que ses prix TTC',
             'tests/Browser/Parcours/VentesDeBoutEnBoutTest.php › le vendeur vend à la caisse au client comptoir et encaisse en espèces et par carte',
         ]],
     ],
@@ -399,6 +400,7 @@ return [
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le propriétaire d’une société qui attend son code ouvre chaque page et chaque action du magasin de démonstration sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le responsable d’entraînement ouvre chaque page et chaque action du magasin de démonstration sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
+            'tests/Browser/Parcours/RegleBDesVentesTest.php › le responsable fait à l’écran l’avoir d’un des quatre savons d’une facture à un professionnel : il rend 8,32 € HT et 1,67 € de TVA, et son PDF suit le modèle M6-b',
             'tests/Browser/Parcours/VentesDeBoutEnBoutTest.php › le responsable fait un devis puis une facture avec la loupe des clients et « Ajouter un produit », l’émet, l’encaisse et la crédite par un avoir',
         ]],
     ],
@@ -428,6 +430,7 @@ return [
         ]],
         'action:telecharger_pdf' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Parcours/PuHtAfficheTest.php › le responsable lit le PU HT d’un article et la note de calcul d’un retour sur la fiche et sur le PDF d’un avoir sur une facture à un professionnel',
+            'tests/Browser/Parcours/RegleBDesVentesTest.php › le responsable fait à l’écran l’avoir d’un des quatre savons d’une facture à un professionnel : il rend 8,32 € HT et 1,67 € de TVA, et son PDF suit le modèle M6-b',
         ]],
         'page' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action du magasin sans erreur',
@@ -437,6 +440,7 @@ return [
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le propriétaire du cabinet lié ouvre chaque page et chaque action du magasin de son client sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Parcours/PuHtAfficheTest.php › le responsable lit le PU HT d’un article et la note de calcul d’un retour sur la fiche et sur le PDF d’un avoir sur une facture à un professionnel',
+            'tests/Browser/Parcours/RegleBDesVentesTest.php › le responsable fait à l’écran l’avoir d’un des quatre savons d’une facture à un professionnel : il rend 8,32 € HT et 1,67 € de TVA, et son PDF suit le modèle M6-b',
         ]],
     ],
     'app/Filament/App/Resources/ClientResource.php' => [
@@ -1445,6 +1449,7 @@ return [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur autorisé à vendre ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur sans la vente ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
+            'tests/Browser/Parcours/RegleBDesVentesTest.php › le responsable fait à l’écran l’avoir d’un des quatre savons d’une facture à un professionnel : il rend 8,32 € HT et 1,67 € de TVA, et son PDF suit le modèle M6-b',
             'tests/Browser/Parcours/VentesDeBoutEnBoutTest.php › le responsable fait un devis puis une facture avec la loupe des clients et « Ajouter un produit », l’émet, l’encaisse et la crédite par un avoir',
         ]],
         'action:edit' => ['lot' => 'NAV-2', 'tests' => [
@@ -1467,7 +1472,7 @@ return [
         ]],
         'action:emettre_et_encaisser' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Parcours/EmettreEtEncaisserTest.php › le responsable ramène à zéro la part préremplie, et « Émettre et encaisser » émet le brouillon sans l’encaisser',
-            'tests/Browser/Parcours/EmettreEtEncaisserTest.php › le responsable émet et encaisse une facture en espèces et par carte depuis sa fiche, et son PDF imprime chaque règlement à gauche du Total TTC',
+            'tests/Browser/Parcours/EmettreEtEncaisserTest.php › le responsable émet et encaisse une facture en espèces et par carte depuis sa fiche, et son PDF imprime chaque règlement à gauche du montant à régler',
             'tests/Browser/Parcours/ProprietaireEnDemonstrationTest.php › le propriétaire fait une facture dans la démonstration, l’émet et l’encaisse depuis sa fiche',
         ]],
         'action:emettreLaFactureRectificative' => ['lot' => 'NAV-2', 'tests' => []],
@@ -1503,7 +1508,6 @@ return [
             'tests/Browser/Parcours/TransmissionALaPlateformeTest.php › l’administrateur qui suit la plateforme agréée relance la transmission d’une facture que la plateforme n’a pas reçue, et elle est acceptée',
         ]],
         'action:telecharger_pdf' => ['lot' => 'NAV-2', 'tests' => [
-            'tests/Browser/Parcours/ReponseAuDevisEnLigneTest.php › le responsable lit sur le PDF de la facture transformée d’après quel devis elle est établie',
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur autorisé à vendre ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur sans la vente ouvre chaque page et chaque action du magasin sans erreur',
@@ -1511,7 +1515,10 @@ return [
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le propriétaire du cabinet lié ouvre chaque page et chaque action du magasin de son client sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le vendeur ouvre chaque page et chaque action du magasin sans erreur',
-            'tests/Browser/Parcours/EmettreEtEncaisserTest.php › le responsable émet et encaisse une facture en espèces et par carte depuis sa fiche, et son PDF imprime chaque règlement à gauche du Total TTC',
+            'tests/Browser/Parcours/EmettreEtEncaisserTest.php › le responsable émet et encaisse une facture en espèces et par carte depuis sa fiche, et son PDF imprime chaque règlement à gauche du montant à régler',
+            'tests/Browser/Parcours/RegleBDesVentesTest.php › le responsable lit sur le PDF d’une facture à un professionnel les colonnes du modèle M6-b, le PU HT exact sous l’article et « Service » à la place de la référence d’un service',
+            'tests/Browser/Parcours/RegleBDesVentesTest.php › le vendeur vend à la caisse un savon à 9,99 € au client comptoir : 8,32 € HT et 1,67 € de TVA, et le PDF du ticket ne montre que ses prix TTC',
+            'tests/Browser/Parcours/ReponseAuDevisEnLigneTest.php › le responsable lit sur le PDF de la facture transformée d’après quel devis elle est établie',
         ]],
         'page' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action du magasin sans erreur',
@@ -1527,6 +1534,9 @@ return [
             'tests/Browser/Parcours/PuHtAfficheTest.php › le responsable lit le PU HT d’un article, 8,32 € pour un savon à 9,99 €, sur la fiche et sur le PDF d’une facture à un professionnel, et sur la fiche d’un ticket',
             'tests/Browser/Parcours/PuHtAfficheTest.php › le vendeur lit le PU HT d’un article sur la fiche de sa facture à un professionnel',
             'tests/Browser/Parcours/PuHtAfficheTest.php › l’administrateur lit le PU HT d’un article sur la fiche d’une facture à un professionnel',
+            'tests/Browser/Parcours/RegleBDesVentesTest.php › le responsable fait à l’écran l’avoir d’un des quatre savons d’une facture à un professionnel : il rend 8,32 € HT et 1,67 € de TVA, et son PDF suit le modèle M6-b',
+            'tests/Browser/Parcours/RegleBDesVentesTest.php › le responsable lit sur le PDF d’une facture à un professionnel les colonnes du modèle M6-b, le PU HT exact sous l’article et « Service » à la place de la référence d’un service',
+            'tests/Browser/Parcours/RegleBDesVentesTest.php › le vendeur vend à la caisse un savon à 9,99 € au client comptoir : 8,32 € HT et 1,67 € de TVA, et le PDF du ticket ne montre que ses prix TTC',
             'tests/Browser/Parcours/VentesDeBoutEnBoutTest.php › le responsable fait un devis puis une facture avec la loupe des clients et « Ajouter un produit », l’émet, l’encaisse et la crédite par un avoir',
         ]],
     ],
@@ -2299,7 +2309,7 @@ return [
     'app/Filament/Concerns/ChoisitLaNatureDeLOperation.php' => [
         'champ:nature_operation' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Parcours/PuHtAfficheTest.php › le responsable fait sortir de la TVA française la vente d’un particulier, et le PU HT des lignes reste celui d’un article',
-            'tests/Browser/Parcours/PuHtAfficheTest.php › le responsable fait passer en prestation hors UE la facture d’un service à 9,99 € TTC, dont le prix sans TVA devient 8,33 €, son montant inchangé',
+            'tests/Browser/Parcours/PuHtAfficheTest.php › le responsable fait passer en prestation hors UE la facture d’un service à 9,99 € TTC, dont le prix sans TVA devient 8,32 €, son montant inchangé',
         ]],
     ],
     'app/Filament/Concerns/GereLesComptes.php' => [
@@ -2330,7 +2340,7 @@ return [
         'champ:mode' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Parcours/ProprietaireEnDemonstrationTest.php › le propriétaire fait une facture dans la démonstration, l’émet et l’encaisse depuis sa fiche',
             'tests/Browser/Parcours/ProprietaireEnDemonstrationTest.php › le propriétaire vend à la caisse de la démonstration, encaisse en espèces et par carte, ferme sa caisse et clôture la journée',
-            'tests/Browser/Parcours/ReglementEnPartsTest.php › à la caisse, « Il reste … à répartir » ne s’affiche qu’une fois, avant comme après « Encaisser » ; la vente faite, son numéro mène au ticket, dont le PDF imprime chaque règlement à gauche du Total TTC',
+            'tests/Browser/Parcours/ReglementEnPartsTest.php › à la caisse, « Il reste … à répartir » ne s’affiche qu’une fois, avant comme après « Encaisser » ; la vente faite, son numéro mène au ticket, dont le PDF imprime chaque règlement à gauche du montant à régler',
             'tests/Browser/Parcours/VentesDeBoutEnBoutTest.php › le responsable fait un devis puis une facture avec la loupe des clients et « Ajouter un produit », l’émet, l’encaisse et la crédite par un avoir',
             'tests/Browser/Parcours/VentesDeBoutEnBoutTest.php › le vendeur vend à la caisse au client comptoir et encaisse en espèces et par carte',
         ]],
@@ -2339,7 +2349,7 @@ return [
             'tests/Browser/Parcours/ProprietaireEnDemonstrationTest.php › le propriétaire vend à la caisse de la démonstration, encaisse en espèces et par carte, ferme sa caisse et clôture la journée',
             'tests/Browser/Parcours/ReglementEnPartsTest.php › sur l’encaissement d’une facture, l’écart ne s’affiche qu’une fois, avant comme après le clic, puis plus du tout',
             'tests/Browser/Parcours/ReglementEnPartsTest.php › à la caisse de l’administrateur autorisé à vendre, l’écart ne s’affiche qu’une fois après « Encaisser »',
-            'tests/Browser/Parcours/ReglementEnPartsTest.php › à la caisse, « Il reste … à répartir » ne s’affiche qu’une fois, avant comme après « Encaisser » ; la vente faite, son numéro mène au ticket, dont le PDF imprime chaque règlement à gauche du Total TTC',
+            'tests/Browser/Parcours/ReglementEnPartsTest.php › à la caisse, « Il reste … à répartir » ne s’affiche qu’une fois, avant comme après « Encaisser » ; la vente faite, son numéro mène au ticket, dont le PDF imprime chaque règlement à gauche du montant à régler',
             'tests/Browser/Parcours/VentesDeBoutEnBoutTest.php › le vendeur vend à la caisse au client comptoir et encaisse en espèces et par carte',
         ]],
         'champ:montant_recu' => ['lot' => 'NAV-2', 'tests' => []],
@@ -2354,7 +2364,7 @@ return [
             'tests/Browser/Parcours/ProprietaireEnDemonstrationTest.php › le propriétaire vend à la caisse de la démonstration, encaisse en espèces et par carte, ferme sa caisse et clôture la journée',
             'tests/Browser/Parcours/ReglementEnPartsTest.php › sur l’encaissement d’une facture, l’écart ne s’affiche qu’une fois, avant comme après le clic, puis plus du tout',
             'tests/Browser/Parcours/ReglementEnPartsTest.php › à la caisse de l’administrateur autorisé à vendre, l’écart ne s’affiche qu’une fois après « Encaisser »',
-            'tests/Browser/Parcours/ReglementEnPartsTest.php › à la caisse, « Il reste … à répartir » ne s’affiche qu’une fois, avant comme après « Encaisser » ; la vente faite, son numéro mène au ticket, dont le PDF imprime chaque règlement à gauche du Total TTC',
+            'tests/Browser/Parcours/ReglementEnPartsTest.php › à la caisse, « Il reste … à répartir » ne s’affiche qu’une fois, avant comme après « Encaisser » ; la vente faite, son numéro mène au ticket, dont le PDF imprime chaque règlement à gauche du montant à régler',
             'tests/Browser/Parcours/VentesDeBoutEnBoutTest.php › le responsable fait un devis puis une facture avec la loupe des clients et « Ajouter un produit », l’émet, l’encaisse et la crédite par un avoir',
             'tests/Browser/Parcours/VentesDeBoutEnBoutTest.php › le vendeur vend à la caisse au client comptoir et encaisse en espèces et par carte',
         ]],
@@ -2785,7 +2795,7 @@ return [
             'tests/Browser/Parcours/VentesDeBoutEnBoutTest.php › le vendeur vend à la caisse au client comptoir et encaisse en espèces et par carte',
         ]],
         'lien:{{ $derniereVente[\'numero\'] }}' => ['lot' => 'NAV-2', 'tests' => [
-            'tests/Browser/Parcours/ReglementEnPartsTest.php › à la caisse, « Il reste … à répartir » ne s’affiche qu’une fois, avant comme après « Encaisser » ; la vente faite, son numéro mène au ticket, dont le PDF imprime chaque règlement à gauche du Total TTC',
+            'tests/Browser/Parcours/ReglementEnPartsTest.php › à la caisse, « Il reste … à répartir » ne s’affiche qu’une fois, avant comme après « Encaisser » ; la vente faite, son numéro mène au ticket, dont le PDF imprime chaque règlement à gauche du montant à régler',
         ]],
     ],
     'resources/views/filament/app/pages/formulaire-de-parametres.blade.php' => [

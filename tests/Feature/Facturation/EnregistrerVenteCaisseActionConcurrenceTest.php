@@ -60,8 +60,10 @@ class EnregistrerVenteCaisseActionConcurrenceTest extends TestCase
     /**
      * Deux caisses vendent au même instant le même panier (point 15) : le
      * calcul ne dépend que du panier, pas de l'ordre des ventes ni du verrou
-     * attendu. Chaque ticket porte, à 20 %, 50,00 ÷ 1,2 = 41,67 € HT
-     * réparti 20,83 € + 20,84 €, et, à 5,5 %, 9,48 € HT, soit 51,15 € HT,
+     * attendu. Chaque ticket porte, à 20 %, 41,67 € HT et 8,33 € de TVA (la
+     * TVA de 50,00 €), soit 20,84 € + 20,83 € HT, la première ligne de
+     * 25,00 € rendant le centime de TVA en trop (règle (b), décision de
+     * l'éditeur du 14/11/2026), et, à 5,5 %, 9,48 € HT, soit 51,15 € HT,
      * 8,85 € de TVA et 60,00 € TTC, sous deux numéros distincts ; la
      * clôture du jour additionne les deux tickets : 102,30 € HT, 17,70 € de
      * TVA, 120,00 € TTC.
@@ -91,7 +93,7 @@ class EnregistrerVenteCaisseActionConcurrenceTest extends TestCase
         $seconde = Facture::query()->whereKeyNot($premiere->id)->sole();
         foreach ([$premiere, $seconde] as $ticket) {
             $this->assertSame(
-                [['20.83', '4.17', '25.00'], ['20.84', '4.16', '25.00'], ['9.48', '0.52', '10.00']],
+                [['20.84', '4.16', '25.00'], ['20.83', '4.17', '25.00'], ['9.48', '0.52', '10.00']],
                 $ticket->lignes()->orderBy('ordre')->get()->map(fn (object $ligne): array => [$ligne->montant_ht, $ligne->montant_tva, $ligne->montant_ttc])->all(),
             );
             $this->assertSame(['51.15', '8.85', '60.00'], [$ticket->total_ht, $ticket->total_tva, $ticket->total_ttc]);

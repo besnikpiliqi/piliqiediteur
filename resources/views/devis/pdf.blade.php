@@ -23,11 +23,12 @@
     @include('documents.pdf.en-tete', [
         'emetteur' => $emetteur,
         'titre' => 'Devis',
+        'classeTitre' => 'majuscules',
         'details' => array_filter([
             match (true) {
                 $devis->numero === null => 'Brouillon (non envoyé)',
-                $brouillon => "{$devis->numero} (brouillon, modifié depuis son envoi)",
-                default => $devis->numero,
+                $brouillon => "N° {$devis->numero} (brouillon, modifié depuis son envoi)",
+                default => 'N° '.$devis->numero,
             },
             $brouillon ? null : 'Émis le '.$devis->magasin->calendrier()->afficher($devis->date_emission, 'd/m/Y'),
             $devis->date_validite ? 'Valable jusqu\'au '.\App\Domain\Calendrier\Calendrier::afficherJour($devis->date_validite, 'd/m/Y') : null,
@@ -37,17 +38,19 @@
     {{-- La fiche du client d'aujourd'hui, présentée selon le type avec
          lequel le devis a été calculé, comme ses lignes (voir
          Devis::client()). --}}
-    @include('documents.pdf.client', [
+    @include('documents.pdf.blocs', [
         'client' => \App\Domain\Facturation\Services\CopieClient::depuisClient($devis->client),
         'professionnel' => $devis->estPourUnProfessionnel(),
         'titre' => 'Établi pour',
+        'titreDesConditions' => 'Conditions',
+        'conditions' => [$devis->date_validite ? 'Valable jusqu\'au '.\App\Domain\Calendrier\Calendrier::afficherJour($devis->date_validite, 'd/m/Y') : 'Sans date de validité'],
     ])
 
     @include('documents.pdf.livraison', ['lignes' => $devis->lignesDeLivraison()])
 
     @include('documents.pdf.lignes', ['document' => $devis, 'tableau' => $tableau])
 
-    @include('documents.pdf.totaux', ['document' => $devis])
+    @include('documents.pdf.totaux', ['document' => $devis, 'titreDuMontant' => 'Montant du devis', 'libelleDuTotal' => 'Total TTC'])
 
     @if($devis->notes)
         <div class="remarque">{{ $devis->notes }}</div>

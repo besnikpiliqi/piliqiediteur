@@ -67,12 +67,15 @@ class ConstructeurLigneDocumentTest extends TestCase
     }
 
     /**
-     * Le HT du taux se répartit entre les seules lignes complètes, dans
-     * leur ordre : trois lignes de 0,10 € TTC (0,30 ÷ 1,2 = 0,25 € HT)
-     * prennent 0,08, 0,09 et 0,08 € HT, la ligne encore vide entre elles ne
+     * Le centime d'ajustement du taux ne va qu'aux lignes complètes (règle
+     * (b), décision de l'éditeur du 14/11/2026) : trois lignes de 0,10 € TTC
+     * ont chacune 0,10 x 20 ÷ 120 = 0,0166... -> 0,02 € de TVA, soit 0,06 €
+     * pour une TVA du taux de 0,30 x 20 ÷ 120 = 0,05 € ; à égalité de tout,
+     * la première rend le centime (0,09 € HT, 0,01 € de TVA), les deux
+     * autres gardent 0,08 € et 0,02 € ; la ligne encore vide entre elles ne
      * compte pas.
      */
-    public function test_l_apercu_d_une_vente_professionnelle_repartit_le_ht_entre_les_lignes_completes(): void
+    public function test_l_apercu_d_une_vente_professionnelle_n_ajuste_que_les_lignes_completes(): void
     {
         app(TenantContext::class)->set(Magasin::factory()->create());
         $produit = Produit::factory()->create(['prix_vente_ttc' => '0.10', 'taux_tva' => 20]);
@@ -85,7 +88,7 @@ class ConstructeurLigneDocumentTest extends TestCase
         ], new ContexteDeVente(TypeClient::Professionnel, false, '20.00'));
 
         $this->assertSame(
-            ['premiere' => ['0.08', '0.02', '0.10'], 'deuxieme' => ['0.09', '0.01', '0.10'], 'troisieme' => ['0.08', '0.02', '0.10']],
+            ['premiere' => ['0.09', '0.01', '0.10'], 'deuxieme' => ['0.08', '0.02', '0.10'], 'troisieme' => ['0.08', '0.02', '0.10']],
             array_map(fn (array $ligne): array => [$ligne['montant_ht'], $ligne['montant_tva'], $ligne['montant_ttc']], $apercu->lignes),
         );
     }

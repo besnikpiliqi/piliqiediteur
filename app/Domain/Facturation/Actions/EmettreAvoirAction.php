@@ -16,6 +16,7 @@ use App\Domain\Facturation\Enums\TypeDocument;
 use App\Domain\Facturation\Events\AvoirEmis;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\ClotureCaisse;
+use App\Domain\Facturation\Models\LigneAvoir;
 use App\Domain\Facturation\Models\LigneFacture;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\DocumentNumberingService;
@@ -166,7 +167,7 @@ class EmettreAvoirAction
      * a pu créditer les mêmes lignes. Ses quantités sont donc revérifiées
      * et ses montants arrêtés au moment où il devient un document fiscal
      * -- le dernier retour d'une ligne en prend alors le solde exact (voir
-     * LigneFacture::montantsDuRetour()).
+     * LigneFacture::montantsDesRetours()).
      *
      * Par EnregistrerAvoirAction, seul chemin de l'application, les lignes
      * restent verrouillées depuis CreerAvoirAction jusqu'ici : cette
@@ -177,7 +178,8 @@ class EmettreAvoirAction
      */
     private function arreterLesMontants(Avoir $avoir): void
     {
-        $lignesArretees = [];
+        $retours = [];
+        $lignesAvoir = [];
 
         foreach ($avoir->lignes as $ligneAvoir) {
             $ligneFacture = LigneFacture::query()
@@ -191,9 +193,17 @@ class EmettreAvoirAction
                 throw new LogicException("La ligne \"{$ligneFacture->description}\" a été créditée entre-temps par un autre avoir : il ne reste que {$restante} article(s) à créditer.");
             }
 
-            $ligneAvoir->forceFill($ligneFacture->montantsDuRetour($ligneAvoir->quantite))->save();
-            $lignesArretees[] = $ligneAvoir->only(['montant_ht', 'montant_tva', 'montant_ttc']);
+            $retours[] = [$ligneFacture, $ligneAvoir->quantite];
+            $lignesAvoir[] = $ligneAvoir;
         }
+
+        // Les montants des lignes se calculent ensemble (voir
+        // LigneFacture::montantsDesRetours()), dans l'ordre des lignes.
+        $lignesArretees = array_map(function (LigneAvoir $ligneAvoir, array $montants): array {
+            $ligneAvoir->forceFill($montants)->save();
+
+            return $ligneAvoir->only(['montant_ht', 'montant_tva', 'montant_ttc']);
+        }, $lignesAvoir, LigneFacture::montantsDesRetours($retours));
 
         $avoir->forceFill($this->calculateur->enDecimaux($this->calculateur->totaliser($lignesArretees)));
     }

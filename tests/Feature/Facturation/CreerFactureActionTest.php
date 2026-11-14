@@ -242,9 +242,11 @@ class CreerFactureActionTest extends TestCase
      * Une vente part toujours de son PU TTC, quel que soit le client,
      * multiplié par la quantité ; son PU HT en est la conversion au
      * millionième d'euro (Q1-b) : 40 € TTC (33,333333 € HT) x 2 = 80,00 €
-     * TTC ; 10,05 € TTC (8,375 € HT) x 3 = 30,15 € TTC. Le HT du taux,
-     * 110,15 ÷ 1,2 = 91,791... -> 91,79 €, se répartit par cumul : 66,67 €
-     * (80,00 ÷ 1,2), puis 25,12 €.
+     * TTC ; 10,05 € TTC (8,375 € HT) x 3 = 30,15 € TTC. La TVA de chaque
+     * ligne est son TTC x 20 ÷ 120, arrondie une fois : 13,333... -> 13,33 €
+     * (66,67 € HT), puis 5,025 -> 5,03 € (25,12 € HT) ; leur somme, 18,36 €,
+     * est déjà celle du TTC du taux (110,15 x 20 ÷ 120 = 18,358... ->
+     * 18,36 €) : aucun centime à ajuster.
      */
     public function test_une_vente_part_toujours_du_pu_ttc(): void
     {
@@ -296,20 +298,23 @@ class CreerFactureActionTest extends TestCase
 
     /**
      * Un même panier a les mêmes montants pour un particulier et pour un
-     * professionnel : pour chaque taux, le HT est le TTC de ses lignes ÷
-     * (1 + taux), arrondi une fois et réparti par cumul ; la TVA est la
-     * différence (point 15, réponse Q1-a). Articles : [PU TTC, taux,
-     * quantité, remise] ; montants : [HT, TVA, TTC] de chaque ligne puis du
-     * document.
+     * professionnel : la TVA de chaque ligne est son TTC x taux ÷ (1 +
+     * taux), arrondie une fois, et son HT le TTC moins cette TVA, un centime
+     * ajusté par taux (règle (b), décision de l'éditeur du 14/11/2026).
+     * Articles : [PU TTC, taux, quantité, remise] ; montants : [HT, TVA,
+     * TTC] de chaque ligne puis du document.
      *
-     * - 1 000 x 1,00 € : 1 000 / 1,2 = 833,33 € HT et 166,67 € de TVA,
-     *   jamais 1 000 x 0,83 € = 830,00 € HT.
-     * - Trois lignes de 0,10 € : 0,30 / 1,2 = 0,25 € HT, répartis 0,08,
-     *   0,09 et 0,08 € ; le client paie bien les 0,30 € affichés.
-     * - 2 x 49,90 € à 20 % et 3 x 4,20 € à 5,5 % : 83,17 € HT (99,80 / 1,2
-     *   = 83,166...) et 11,94 € HT (12,60 / 1,055 = 11,943...).
+     * - 1 000 x 1,00 € : 1 000 x 20 ÷ 120 = 166,666... -> 166,67 € de TVA et
+     *   833,33 € HT, jamais 1 000 x 0,83 € = 830,00 € HT.
+     * - Trois lignes de 0,10 € : 0,0166... -> 0,02 € de TVA chacune, 0,06 €
+     *   pour une TVA du taux de 0,05 € ; à égalité de tout, la première
+     *   rend le centime : 0,09 €, 0,08 € et 0,08 € HT, 0,25 € en tout ; le
+     *   client paie bien les 0,30 € affichés.
+     * - 2 x 49,90 € à 20 % et 3 x 4,20 € à 5,5 % : 99,80 x 20 ÷ 120 =
+     *   16,633... -> 16,63 € de TVA, 83,17 € HT, et 12,60 x 5,5 ÷ 105,5 =
+     *   0,656... -> 0,66 €, 11,94 € HT.
      * - 7 x 3,99 € à 5,5 % remisés de 10 % : 27,93 € moins 2,79 € de
-     *   remise, 25,14 / 1,055 = 23,829... -> 23,83 € HT.
+     *   remise, 25,14 x 5,5 ÷ 105,5 = 1,310... -> 1,31 € de TVA, 23,83 € HT.
      *
      * @return array<string, array{bool, list<array{string, int|float, int, int}>, list<list<string>>, list<string>}>
      */
@@ -318,8 +323,8 @@ class CreerFactureActionTest extends TestCase
         return [
             'professionnel, 1 000 x 1,00 € à 20 %' => [true, [['1.00', 20, 1000, 0]], [['833.33', '166.67', '1000.00']], ['833.33', '166.67', '1000.00']],
             'particulier, 1 000 x 1,00 € à 20 %' => [false, [['1.00', 20, 1000, 0]], [['833.33', '166.67', '1000.00']], ['833.33', '166.67', '1000.00']],
-            'professionnel, trois lignes de 0,10 € à 20 %' => [true, [['0.10', 20, 1, 0], ['0.10', 20, 1, 0], ['0.10', 20, 1, 0]], [['0.08', '0.02', '0.10'], ['0.09', '0.01', '0.10'], ['0.08', '0.02', '0.10']], ['0.25', '0.05', '0.30']],
-            'particulier, trois lignes de 0,10 € à 20 %' => [false, [['0.10', 20, 1, 0], ['0.10', 20, 1, 0], ['0.10', 20, 1, 0]], [['0.08', '0.02', '0.10'], ['0.09', '0.01', '0.10'], ['0.08', '0.02', '0.10']], ['0.25', '0.05', '0.30']],
+            'professionnel, trois lignes de 0,10 € à 20 %' => [true, [['0.10', 20, 1, 0], ['0.10', 20, 1, 0], ['0.10', 20, 1, 0]], [['0.09', '0.01', '0.10'], ['0.08', '0.02', '0.10'], ['0.08', '0.02', '0.10']], ['0.25', '0.05', '0.30']],
+            'particulier, trois lignes de 0,10 € à 20 %' => [false, [['0.10', 20, 1, 0], ['0.10', 20, 1, 0], ['0.10', 20, 1, 0]], [['0.09', '0.01', '0.10'], ['0.08', '0.02', '0.10'], ['0.08', '0.02', '0.10']], ['0.25', '0.05', '0.30']],
             'professionnel, 2 x 49,90 € à 20 % et 3 x 4,20 € à 5,5 %' => [true, [['49.90', 20, 2, 0], ['4.20', 5.5, 3, 0]], [['83.17', '16.63', '99.80'], ['11.94', '0.66', '12.60']], ['95.11', '17.29', '112.40']],
             'particulier, 2 x 49,90 € à 20 % et 3 x 4,20 € à 5,5 %' => [false, [['49.90', 20, 2, 0], ['4.20', 5.5, 3, 0]], [['83.17', '16.63', '99.80'], ['11.94', '0.66', '12.60']], ['95.11', '17.29', '112.40']],
             'professionnel, 7 x 3,99 € à 5,5 % remisés de 10 %' => [true, [['3.99', 5.5, 7, 10]], [['23.83', '1.31', '25.14']], ['23.83', '1.31', '25.14']],
@@ -375,6 +380,11 @@ class CreerFactureActionTest extends TestCase
         $this->assertSame(['1000.00', '0.00', '1000.00'], [$facture->total_ht, $facture->total_tva, $facture->total_ttc]);
     }
 
+    /**
+     * Le service saisi à 15,03 € TTC à 20 % comprend 15,03 x 20 ÷ 120 =
+     * 2,505 € de TVA, arrondie au centime supérieur : 2,51 € et 12,52 € HT
+     * (règle (b), décision de l'éditeur du 14/11/2026).
+     */
     public function test_une_ligne_de_service_reprend_le_nom_du_service_et_se_calcule_depuis_le_ttc_saisi(): void
     {
         $client = Client::factory()->create();
@@ -388,8 +398,8 @@ class CreerFactureActionTest extends TestCase
         $this->assertSame($service->id, $ligne->service_id);
         $this->assertNull($ligne->produit_id);
         $this->assertSame('Main-d\'œuvre', $ligne->description);
-        $this->assertSame('12.53', $ligne->montant_ht);
-        $this->assertSame('2.50', $ligne->montant_tva);
+        $this->assertSame('12.52', $ligne->montant_ht);
+        $this->assertSame('2.51', $ligne->montant_tva);
         $this->assertSame('15.03', $ligne->montant_ttc);
     }
 

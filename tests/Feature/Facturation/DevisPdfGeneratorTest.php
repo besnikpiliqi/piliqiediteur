@@ -76,26 +76,28 @@ class DevisPdfGeneratorTest extends TestCase
         $devis = app(EmettreDevisAction::class)->handle(self::auteur(), $devis);
 
         $this->assertStringContainsString(
-            '<div class="bloc-client"><div class="titre">Établi pour</div><strong>Marc Nouveau</strong><br>SIREN : 111222333<br></div>',
+            '<td class="bloc"><div class="titre">Établi pour</div><strong>Marc Nouveau</strong><br>SIREN : 111222333<br></td>',
             $this->compacte(app(DevisPdfGenerator::class)->html($devis->load('client', 'lignes', 'magasin'))),
         );
     }
 
     /**
      * Tout devis se calcule comme sa facture, pour un professionnel comme
-     * pour un particulier, et l'explique sous ses lignes (point 15) : le
-     * devis à un professionnel, qui montre le PU HT d'un article, prix TTC
-     * moins sa TVA arrondie au centime, dit que la quantité x ce prix peut
-     * différer de quelques centimes du total HT de la ligne (décision de
-     * l'éditeur du 14/11/2026) ; le devis à un particulier, que ses prix unitaires sont
-     * affichés arrondis au centime (décision de l'éditeur du 25/10/2026).
+     * pour un particulier, et l'explique sous ses lignes (point 15, règle
+     * (b), décision de l'éditeur du 14/11/2026) : le devis à un
+     * professionnel, qui montre le PU HT d'un article, prix TTC moins sa TVA
+     * arrondie au centime, et en petit son PU HT exact (modèle M6-b), dit
+     * que la quantité x ce prix peut différer de quelques centimes du total
+     * HT de la ligne et ce qu'est le PU HT exact ; le devis à un
+     * particulier, qui ne montre que des prix TTC (modèle P1), ne dit que
+     * le calcul de chaque ligne.
      * Si la fiche du client devient professionnelle après son envoi, il se
      * réimprime tel qu'il a été établi : client sans identifiant, avec la
      * note d'un devis à un particulier.
      */
     public function test_tout_devis_explique_le_calcul_de_ses_lignes_et_se_reimprime_tel_qu_etabli(): void
     {
-        $calcul = 'Montants calculés depuis les prix TTC : pour chaque taux, le HT est le TTC du taux ÷ (1 + taux), arrondi une fois au centime, puis réparti sur les lignes ; la TVA est la différence.';
+        $calcul = 'Montants calculés depuis les prix TTC : pour chaque ligne, la TVA est le TTC × taux ÷ (1 + taux), arrondie une fois au centime, et le HT est le TTC moins cette TVA ; un centime peut être ajusté sur une ligne pour que la TVA de chaque taux soit égale à sa base HT × le taux.';
         $devisProfessionnel = $this->devisEnvoye();
         $client = Client::factory()->create(['nom' => 'Jean Ancien']);
         $devisParticulier = app(EmettreDevisAction::class)->handle(self::auteur(), app(CreerDevisAction::class)->handle(self::auteur(), $client, [['produit_id' => Produit::factory()->create()->id, 'quantite' => 1]]));
@@ -104,11 +106,11 @@ class DevisPdfGeneratorTest extends TestCase
         $renduParticulier = $this->compacte(app(DevisPdfGenerator::class)->html($devisParticulier->fresh()->load('client', 'lignes', 'magasin')));
 
         $this->assertStringContainsString(
-            e($calcul.' Le PU HT affiché est celui d\'un article : prix TTC moins sa TVA arrondie au centime (9,99 € TTC à 20 % : 8,32 € HT). La quantité × ce prix peut différer de quelques centimes du total HT de la ligne, calculé sur toute la quantité.'),
+            e($calcul.' Le PU HT affiché est celui d\'un article : prix TTC moins sa TVA arrondie au centime (9,99 € TTC à 20 % : 8,32 € HT). La quantité × ce prix peut différer de quelques centimes du total HT de la ligne, calculé sur toute la quantité. Le PU HT exact, écrit sous chaque article, est celui de la facture électronique : la quantité × ce prix retombe sur le total HT de la ligne à quelques centimes près.'),
             app(DevisPdfGenerator::class)->html($devisProfessionnel->load('client', 'lignes', 'magasin')),
         );
-        $this->assertStringContainsString(e($calcul.' Les prix unitaires sont affichés arrondis au centime et les totaux calculés sans arrondi intermédiaire : la quantité × le prix unitaire affiché peut donc différer du total de la ligne.'), $renduParticulier);
-        $this->assertStringContainsString('<div class="bloc-client"><div class="titre">Établi pour</div><strong>Jean Ancien</strong><br></div>', $renduParticulier);
+        $this->assertStringContainsString('<div class="note-calcul">'.e($calcul).'</div>', $renduParticulier);
+        $this->assertStringContainsString('<td class="bloc"><div class="titre">Établi pour</div><strong>Jean Ancien</strong><br></td>', $renduParticulier);
     }
 
     /**
@@ -145,8 +147,9 @@ class DevisPdfGeneratorTest extends TestCase
 
     /**
      * Un devis à un professionnel imprime, comme sa facture, le PU HT et le
-     * total HT de chaque ligne ; un devis à un particulier, comme son
-     * ticket, le PU TTC et le total TTC (point 3, P3).
+     * total HT de chaque ligne, avec son PU HT exact sous l'article (modèle
+     * M6-b) ; un devis à un particulier, comme son ticket, le PU TTC et le
+     * total TTC (point 3, P3, modèle P1).
      */
     public function test_un_devis_a_un_professionnel_imprime_les_colonnes_ht_et_un_devis_a_un_particulier_les_colonnes_ttc(): void
     {
@@ -157,10 +160,10 @@ class DevisPdfGeneratorTest extends TestCase
 
         $tableau = fn (Devis $devis): string => Str::betweenFirst($this->compacte(app(DevisPdfGenerator::class)->html($devis->load('client', 'lignes', 'magasin'))), '<table class="lignes">', '</table>');
 
-        $this->assertStringContainsString('<th class="montant">Qté</th><th class="montant">PU HT</th><th class="montant">Taux</th><th class="montant">Total HT</th>', $tableau($professionnel));
-        $this->assertStringContainsString('<td>Écran 15 pouces</td><td class="montant">2</td><td class="montant">100,00 €</td><td class="montant">20 %</td><td class="montant">200,00 €</td>', $tableau($professionnel));
-        $this->assertStringContainsString('<th class="montant">Qté</th><th class="montant">PU TTC</th><th class="montant">Taux</th><th class="montant">Total TTC</th>', $tableau($particulier));
-        $this->assertStringContainsString('<td class="reference">ECR-15</td><td>Écran 15 pouces</td><td class="montant">2</td><td class="montant">120,00 €</td><td class="montant">20 %</td><td class="montant">240,00 €</td>', $tableau($particulier));
+        $this->assertStringContainsString('<th class="montant">Qté</th><th class="montant">PU HT</th><th class="montant">Rem.</th><th class="montant">TVA</th><th class="montant">Total HT</th>', $tableau($professionnel));
+        $this->assertStringContainsString('<td>Écran 15 pouces<span class="sous">PU HT exact : 100,000000 €</span></td><td class="montant">2</td><td class="montant">100,00 €</td><td class="montant">—</td><td class="montant">20 %</td><td class="montant total-de-la-ligne">200,00 €</td>', $tableau($professionnel));
+        $this->assertStringContainsString('<th class="montant">Qté</th><th class="montant">PU TTC</th><th class="montant">Rem.</th><th class="montant">TVA</th><th class="montant">Total TTC</th>', $tableau($particulier));
+        $this->assertStringContainsString('<td class="reference">ECR-15</td><td>Écran 15 pouces</td><td class="montant">2</td><td class="montant">120,00 €</td><td class="montant">—</td><td class="montant">20 %</td><td class="montant total-de-la-ligne">240,00 €</td>', $tableau($particulier));
     }
 
     /**

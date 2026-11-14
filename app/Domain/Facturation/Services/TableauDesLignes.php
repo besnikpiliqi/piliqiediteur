@@ -2,6 +2,7 @@
 
 namespace App\Domain\Facturation\Services;
 
+use App\Domain\Facturation\Enums\NatureLigne;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\Facture;
@@ -17,40 +18,41 @@ use Dompdf\FontMetrics;
 use Illuminate\Support\Number;
 
 /**
- * Le tableau des lignes d'un PDF de vente (points 3 et 11), chacune avec
- * la référence de son produit, entière sur une seule ligne, et sa
- * désignation, qui passe à la ligne si la place manque :
+ * Le tableau des lignes d'un PDF de vente (points 3 et 11), au modèle M6-b
+ * pour un professionnel et P1 pour un particulier (choix de l'éditeur du
+ * 14/11/2026) : chaque ligne avec la référence de son produit, entière sur
+ * une seule ligne -- « Service » en gris pour un service, qui n'en a pas
+ * --, et son article, qui passe à la ligne si la place manque :
  *
- * - une facture, un avoir sur facture ou un devis à un professionnel
- *   montrent la quantité, le PU HT, la remise s'il y en a, le taux et le
- *   total HT : les mentions qu'une facture doit porter pour chaque ligne ;
- * - un ticket, un avoir sur ticket ou un devis à un particulier, qui paie
- *   le prix affiché TTC, montrent le PU TTC et le total TTC ;
- * - une vente sans TVA française, qui se paie hors taxe (voir
- *   ContexteDeVente::documentRetireLaTvaDuPrix()), montre toujours le PU
- *   HT et le total HT, même sur un ticket : le PU TTC de ses lignes est
- *   celui du catalogue, TVA française comprise, que le client ne paie pas.
+ * - une facture, un avoir sur facture ou un devis à un professionnel, et
+ *   toute vente sans TVA française, qui se paie hors taxe (voir
+ *   ContexteDeVente::documentMontreLePuHt()), montrent, dans l'ordre, la
+ *   quantité, le PU HT, la remise (« — » sans remise), le taux de TVA et le
+ *   total HT ; le TTC n'apparaît qu'en bas, au récapitulatif par taux et au
+ *   montant à régler (modèle M6-b). Le PU HT s'imprime comme partout, celui
+ *   d'un article : le PU TTC moins la TVA d'un article arrondie au centime
+ *   (voir CalculateurLigne::prixUnitaireHtAffiche(), décision de l'éditeur
+ *   du 14/11/2026) : 8,32 € pour 9,99 € TTC à 20 %. Sous l'article, en petit,
+ *   le PU HT exact, tel qu'il est enregistré avec ses six décimales, celui
+ *   de la facture électronique (voir CalculateurLigne::prixUnitaireAuMillionieme()) ;
+ * - un ticket, un avoir sur ticket, une facture, un avoir ou un devis à un
+ *   particulier, qui paie le prix affiché TTC, montrent la quantité, le PU
+ *   TTC, la remise, le taux de TVA et le total TTC, sans PU HT (modèle P1).
  *
- * La TVA et le TTC de chaque taux sont dans le tableau qui suit (voir
- * documents/pdf/totaux). La remise n'apparaît que si une ligne en a une.
- * Le PU HT s'imprime comme partout : le PU TTC moins la TVA d'un
- * article arrondie au centime (voir CalculateurLigne::prixUnitaireHtAffiche(),
- * décision de l'éditeur du 14/11/2026) : 8,32 € pour 9,99 € TTC à 20 % ;
- * la quantité x ce prix peut s'écarter de quelques centimes du total HT
- * de la ligne, calculé sur toute la quantité. Le PU TTC s'imprime au centime (voir
+ * La base, la TVA et le TTC de chaque taux sont dans le récapitulatif qui
+ * suit (voir documents/pdf/totaux). Le PU TTC s'imprime au centime (voir
  * CalculateurLigne::prixUnitaireAffiche()). Les totaux se calculent depuis
- * les prix TTC, sans arrondi intermédiaire, ce qu'explique la note de
- * calcul imprimée sous les lignes (voir MentionsFiscales::calcul()).
- * Un avoir indique la facture de chaque ligne, son numéro entier sur une
- * seule ligne. Rien ne se recalcule : chaque montant est celui de la ligne
- * enregistrée.
+ * les prix TTC, ce qu'explique la note de calcul imprimée sous les lignes
+ * (voir MentionsFiscales::calcul()). Un avoir indique la facture de chaque
+ * ligne, son numéro entier sur une seule ligne. Rien ne se recalcule :
+ * chaque montant est celui de la ligne enregistrée.
  *
  * Le tableau tient toujours dans la largeur utile de la page (voir
  * MiseEnPageA4::LARGEUR_UTILE), pour qu'aucune colonne obligatoire ne
  * sorte de la page. Ses textes sont mesurés avec la police du PDF :
  * chaque colonne qui ne passe jamais à la ligne (le n° de la facture
  * d'origine, la quantité, les prix, la remise, le taux et le total) a la
- * largeur de son plus long texte ; la désignation garde au moins
+ * largeur de son plus long texte ; l'article garde au moins
  * LARGEUR_MINIMALE_DE_LA_DESIGNATION ; la référence a la largeur de la plus
  * longue quand elle tient dans ce qui reste. Sinon, chaque référence trop
  * longue pour sa colonne s'imprime, entière sur une ligne, dans un corps
@@ -89,8 +91,14 @@ final readonly class TableauDesLignes
     private const JEU = 1.0;
 
     /**
+     * L'écart, en points, en deçà duquel deux largeurs calculées sont
+     * égales : celui des additions de nombres à virgule.
+     */
+    private const ECART_DE_CALCUL = 0.001;
+
+    /**
      * @param  list<array{titre: string, montant: bool, largeur: float}>  $colonnes  dans l'ordre, chacune avec sa largeur en points, marges comprises (leur somme est la largeur utile de la page)
-     * @param  list<array{reference: string, designation: string, factureDOrigine: string|null, montants: list<string>, corpsDeLaReference: float|null}>  $lignes  le texte de chaque case (montants : la quantité, le prix, la remise s'il y en a, le taux et le total) et, pour une référence réduite, son corps en points, arrondi au dixième inférieur comme dompdf l'écrit
+     * @param  list<array{reference: string, service: bool, designation: string, puHtExact: string|null, factureDOrigine: string|null, montants: list<string>, corpsDeLaReference: float|null}>  $lignes  le texte de chaque case (montants : la quantité, le prix, la remise, le taux et le total), « Service » à la place de la référence d'un service, le PU HT exact écrit sous l'article d'un document qui montre le PU HT et, pour une référence réduite, son corps en points, arrondi au dixième inférieur comme dompdf l'écrit
      */
     public function __construct(
         public array $colonnes,
@@ -105,31 +113,32 @@ final readonly class TableauDesLignes
         $calculateur = app(CalculateurLigne::class);
         $enTtc = ! ContexteDeVente::documentMontreLePuHt($document);
         $avecFactureDOrigine = $document instanceof Avoir;
-        $avecRemise = $document->lignes->contains(fn (LigneFacture|LigneAvoir|LigneDevis $ligne): bool => $calculateur->enCentiemes($ligne->remise_pourcentage) !== 0);
         $pourcentage = fn (mixed $valeur): string => CalculateurLigne::tauxEnTexte(SaisieDecimale::enCentiemes(ValeurSimple::simple($valeur)));
 
         $titres = [
-            ['titre' => 'Référence', 'montant' => false],
-            ['titre' => 'Désignation', 'montant' => false],
+            ['titre' => 'Réf.', 'montant' => false],
+            ['titre' => 'Article', 'montant' => false],
             ...($avecFactureDOrigine ? [['titre' => 'Facture d\'origine', 'montant' => false]] : []),
             ['titre' => 'Qté', 'montant' => true],
             ['titre' => $enTtc ? 'PU TTC' : 'PU HT', 'montant' => true],
-            ...($avecRemise ? [['titre' => 'Remise', 'montant' => true]] : []),
-            ['titre' => 'Taux', 'montant' => true],
+            ['titre' => 'Rem.', 'montant' => true],
+            ['titre' => 'TVA', 'montant' => true],
             ['titre' => $enTtc ? 'Total TTC' : 'Total HT', 'montant' => true],
         ];
 
         $lignes = array_values($document->lignes->map(fn (LigneFacture|LigneAvoir|LigneDevis $ligne): array => [
-            'reference' => $ligne->reference ?? '',
+            'reference' => $ligne->nature === NatureLigne::Service ? 'Service' : ($ligne->reference ?? ''),
+            'service' => $ligne->nature === NatureLigne::Service,
             'designation' => $ligne->description,
+            'puHtExact' => $enTtc ? null : 'PU HT exact : '.$calculateur->prixUnitaireAuMillionieme($calculateur->enMillioniemes($ligne->prix_unitaire_ht)),
             'factureDOrigine' => $ligne instanceof LigneAvoir ? ($ligne->ligneFacture?->facture->numero ?? '—') : null,
-            'montants' => array_values(array_filter([
+            'montants' => [
                 ResultatDePhp::texte(Number::format($ligne->quantite, locale: 'fr'), 'Le format de la quantité'),
                 $enTtc ? $calculateur->prixUnitaireAffiche($calculateur->enMillioniemes($ligne->prix_unitaire_ttc)) : $calculateur->prixUnitaireHtAfficheEnEuros($calculateur->enCentiemes($ligne->prix_unitaire_ttc), $calculateur->enCentiemes($ligne->taux_tva_du_prix)),
-                $avecRemise ? $pourcentage($ligne->remise_pourcentage) : null,
+                $calculateur->enCentiemes($ligne->remise_pourcentage) === 0 ? '—' : $pourcentage($ligne->remise_pourcentage),
                 $pourcentage($ligne->taux_tva),
                 $calculateur->enEuros($calculateur->enCentiemes($enTtc ? $ligne->montant_ttc : $ligne->montant_ht)),
-            ], fn (?string $texte): bool => $texte !== null)),
+            ],
         ])->all());
 
         return self::mesure($titres, $lignes, app(Dompdf::class)->getFontMetrics());
@@ -155,7 +164,7 @@ final readonly class TableauDesLignes
      * de ce qui reste), la désignation tout le reste.
      *
      * @param  list<array{titre: string, montant: bool}>  $titres
-     * @param  list<array{reference: string, designation: string, factureDOrigine: string|null, montants: list<string>}>  $lignes
+     * @param  list<array{reference: string, service: bool, designation: string, puHtExact: string|null, factureDOrigine: string|null, montants: list<string>}>  $lignes
      */
     private static function mesure(array $titres, array $lignes, FontMetrics $polices): self
     {
@@ -186,7 +195,11 @@ final readonly class TableauDesLignes
             array_map(function (array $ligne) use ($largeurDuTexte, $placeDUneReference): array {
                 $largeurDeLaReference = $largeurDuTexte($ligne['reference']);
 
-                return [...$ligne, 'corpsDeLaReference' => $largeurDeLaReference > $placeDUneReference
+                // La place d'une référence qui donne sa largeur à la colonne
+                // est cette largeur, retrouvée après une addition et une
+                // soustraction de nombres à virgule : un millième de point
+                // d'écart n'est pas un manque de place.
+                return [...$ligne, 'corpsDeLaReference' => $largeurDeLaReference > $placeDUneReference + self::ECART_DE_CALCUL
                     ? floor(self::CORPS * $placeDUneReference / $largeurDeLaReference * 10) / 10
                     : null];
             }, $lignes),

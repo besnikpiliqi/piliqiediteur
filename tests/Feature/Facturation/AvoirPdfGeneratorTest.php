@@ -97,7 +97,7 @@ class AvoirPdfGeneratorTest extends TestCase
         $avoir = $this->crediter($client, $facture);
 
         $this->assertStringContainsString(
-            '<div class="bloc-client"><div class="titre">Émis à</div><strong>Brasserie de Namur</strong><br>Rue de Fer 12<br>Boîte 3<br>5000 Namur<br>BE<br>N° TVA : BE0123456789<br></div>',
+            '<td class="bloc"><div class="titre">Émis à</div><strong>Brasserie de Namur</strong><br>Rue de Fer 12<br>Boîte 3<br>5000 Namur<br>BE<br>N° TVA : BE0123456789<br></td>',
             $this->compacte($this->rendu($avoir)),
         );
     }
@@ -117,7 +117,7 @@ class AvoirPdfGeneratorTest extends TestCase
         $avoir = $this->crediter($client->fresh(), $ticket);
 
         $this->assertStringContainsString(
-            '<div class="bloc-client"><div class="titre">Émis à</div><strong>Jean Ancien</strong><br></div>',
+            '<td class="bloc"><div class="titre">Émis à</div><strong>Jean Ancien</strong><br></td>',
             $this->compacte($this->rendu($avoir)),
         );
     }
@@ -127,17 +127,16 @@ class AvoirPdfGeneratorTest extends TestCase
      * différence avec les avoirs déjà émis sur la même ligne, le dernier
      * retour soldant la ligne : une note sous les lignes le dit tel qu'il
      * est fait, sur une facture comme sur un ticket. Sur trois lignes de
-     * trois articles à 0,10 € à 20 % (0,25 € HT au taux, répartis 0,08,
-     * 0,09 et 0,08 €), le
-     * retour de la deuxième crédite toute la ligne, 0,09 € + 0,01 €, et non
-     * 0,08 € + 0,02 € comme une ligne seule : la note l'annonce, et dit
-     * aussi l'écart avec la quantité x le prix unitaire affiché : sur
-     * l'avoir sur facture, qui imprime le PU HT d'un article, prix TTC
-     * moins sa TVA arrondie au centime, que la quantité x ce prix peut
-     * différer de quelques centimes du total HT de la ligne (décision de
-     * l'éditeur du 14/11/2026) ; sur l'avoir sur ticket,
-     * que les prix unitaires sont affichés arrondis au centime (décision de
-     * l'éditeur du 25/10/2026).
+     * trois articles à 0,10 € à 20 % (0,02 € de TVA chacune, 0,06 € pour
+     * une TVA du taux de 0,05 € : la première rend le centime, règle (b),
+     * décision de l'éditeur du 14/11/2026), le retour de la première
+     * crédite toute la ligne, 0,09 € + 0,01 €, et non 0,08 € + 0,02 € comme
+     * une ligne seule : la note l'annonce ; sur l'avoir sur facture, qui
+     * imprime le PU HT d'un article, prix TTC moins sa TVA arrondie au
+     * centime, et en petit son PU HT exact (modèle M6-b), elle ajoute que la
+     * quantité x ce prix peut différer de quelques centimes du total HT de
+     * la ligne et ce qu'est le PU HT exact ; sur l'avoir sur ticket, qui ne
+     * montre que des prix TTC (modèle P1), rien d'autre.
      */
     public function test_un_avoir_explique_le_calcul_de_ses_lignes(): void
     {
@@ -149,14 +148,14 @@ class AvoirPdfGeneratorTest extends TestCase
         $lignes = array_map(fn (): array => ['produit_id' => Produit::factory()->create(['prix_vente_ttc' => '0.10', 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1], range(1, 3));
         $facture = app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), $professionnel, $lignes));
 
-        $avoirProfessionnel = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $professionnel, [['ligne_facture_id' => $facture->lignes[1]->id, 'quantite' => 1]]);
+        $avoirProfessionnel = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $professionnel, [['ligne_facture_id' => $facture->lignes->sortBy('ordre')->firstOrFail()->id, 'quantite' => 1]]);
         $avoirSurTicket = $this->crediter($particulier, $this->emettreUneFacture($particulier));
 
         $this->assertSame(['0.09', '0.01', '0.10'], [$avoirProfessionnel->total_ht, $avoirProfessionnel->total_tva, $avoirProfessionnel->total_ttc]);
         $rendu = $this->compacte($this->rendu($avoirProfessionnel));
         $this->assertStringContainsString('<td class="montant">0,09 €</td><td class="montant">0,01 €</td><td class="montant">0,10 €</td>', $rendu);
-        $this->assertStringContainsString('<div class="note-calcul">Montants calculés depuis les prix TTC : chaque retour rend, pour tous les articles d&#039;une ligne rendus jusqu&#039;ici, le calcul de la vente sur cette quantité (HT = TTC ÷ (1 + taux), arrondi une fois au centime ; TVA = la différence), sans dépasser le HT ni la TVA de la ligne, déduction faite des avoirs déjà émis sur la même ligne ; le dernier retour solde la ligne au centime. Le PU HT affiché est celui d&#039;un article : prix TTC moins sa TVA arrondie au centime (9,99 € TTC à 20 % : 8,32 € HT). La quantité × ce prix peut différer de quelques centimes du total HT de la ligne, calculé sur toute la quantité.</div>', $rendu);
-        $this->assertStringContainsString('<div class="note-calcul">Montants calculés depuis les prix TTC : chaque retour rend, pour tous les articles d&#039;une ligne rendus jusqu&#039;ici, le calcul de la vente sur cette quantité (HT = TTC ÷ (1 + taux), arrondi une fois au centime ; TVA = la différence), sans dépasser le HT ni la TVA de la ligne, déduction faite des avoirs déjà émis sur la même ligne ; le dernier retour solde la ligne au centime. Les prix unitaires sont affichés arrondis au centime et les totaux calculés sans arrondi intermédiaire : la quantité × le prix unitaire affiché peut donc différer du total de la ligne.</div>', $this->compacte($this->rendu($avoirSurTicket)));
+        $this->assertStringContainsString('<div class="note-calcul">Montants calculés depuis les prix TTC : chaque retour rend, pour tous les articles d&#039;une ligne rendus jusqu&#039;ici, le calcul de la vente sur leur TTC (TVA = TTC × taux ÷ (1 + taux), arrondie une fois au centime ; HT = TTC moins cette TVA), sans dépasser le HT ni la TVA de la ligne, déduction faite des avoirs déjà émis sur la même ligne ; le dernier retour solde la ligne au centime ; un centime peut être ajusté sur une ligne rendue en partie pour que la TVA de chaque taux soit égale à sa base HT × le taux. Le PU HT affiché est celui d&#039;un article : prix TTC moins sa TVA arrondie au centime (9,99 € TTC à 20 % : 8,32 € HT). La quantité × ce prix peut différer de quelques centimes du total HT de la ligne, calculé sur toute la quantité. Le PU HT exact, écrit sous chaque article, est celui de la facture électronique : la quantité × ce prix retombe sur le total HT de la ligne à quelques centimes près.</div>', $rendu);
+        $this->assertStringContainsString('<div class="note-calcul">Montants calculés depuis les prix TTC : chaque retour rend, pour tous les articles d&#039;une ligne rendus jusqu&#039;ici, le calcul de la vente sur leur TTC (TVA = TTC × taux ÷ (1 + taux), arrondie une fois au centime ; HT = TTC moins cette TVA), sans dépasser le HT ni la TVA de la ligne, déduction faite des avoirs déjà émis sur la même ligne ; le dernier retour solde la ligne au centime ; un centime peut être ajusté sur une ligne rendue en partie pour que la TVA de chaque taux soit égale à sa base HT × le taux.</div>', $this->compacte($this->rendu($avoirSurTicket)));
     }
 
     /**
@@ -178,7 +177,7 @@ class AvoirPdfGeneratorTest extends TestCase
         ]);
 
         $this->assertStringContainsString(
-            '<br>Sur facture FAC-MABOUT-2026-000001 du 09/10/2026<br>Sur facture FAC-MABOUT-2026-000002 du 12/10/2026</div>',
+            '<strong>Sur facture FAC-MABOUT-2026-000001 du 09/10/2026</strong><br>Sur facture FAC-MABOUT-2026-000002 du 12/10/2026<br></td>',
             $this->compacte($this->rendu($avoir)),
         );
     }
@@ -194,7 +193,7 @@ class AvoirPdfGeneratorTest extends TestCase
 
         $avoir = $this->crediter($client, $this->emettreUneFacture($client));
 
-        $this->assertStringContainsString('<br>Sur ticket de caisse TK-MABOUT-2026-000001 du 09/10/2026</div>', $this->compacte($this->rendu($avoir)));
+        $this->assertStringContainsString('<strong>Sur ticket de caisse TK-MABOUT-2026-000001 du 09/10/2026</strong><br></td>', $this->compacte($this->rendu($avoir)));
     }
 
     /**
@@ -250,7 +249,8 @@ class AvoirPdfGeneratorTest extends TestCase
 
     /**
      * Un avoir sur une facture imprime, comme elle, le PU HT et le total HT
-     * de chaque ligne ; un avoir sur un ticket, le PU TTC et le total TTC.
+     * de chaque ligne, avec son PU HT exact sous l'article (modèle M6-b) ;
+     * un avoir sur un ticket, le PU TTC et le total TTC (modèle P1).
      * Chacun indique la facture ou le ticket de chaque ligne, son numéro
      * entier sur une seule ligne, comme la référence du produit (point 3).
      */
@@ -266,10 +266,10 @@ class AvoirPdfGeneratorTest extends TestCase
         $surFacture = $this->tableauDesLignes($this->crediter($professionnel, $vendre($professionnel)));
         $surTicket = $this->tableauDesLignes($this->crediter($particulier, $vendre($particulier)));
 
-        $this->assertStringContainsString('<tr><th>Référence</th><th>Désignation</th><th>Facture d\'origine</th><th class="montant">Qté</th><th class="montant">PU HT</th><th class="montant">Taux</th><th class="montant">Total HT</th></tr>', $surFacture);
-        $this->assertStringContainsString('<tr><td class="reference">TAS-01</td><td>Tasse</td><td class="numero">FAC-MABOUT-2026-000001</td><td class="montant">1</td><td class="montant">10,00 €</td><td class="montant">20 %</td><td class="montant">10,00 €</td></tr>', $surFacture);
-        $this->assertStringContainsString('<tr><th>Référence</th><th>Désignation</th><th>Facture d\'origine</th><th class="montant">Qté</th><th class="montant">PU TTC</th><th class="montant">Taux</th><th class="montant">Total TTC</th></tr>', $surTicket);
-        $this->assertStringContainsString('<tr><td class="reference">TAS-01</td><td>Tasse</td><td class="numero">TK-MABOUT-2026-000001</td><td class="montant">1</td><td class="montant">12,00 €</td><td class="montant">20 %</td><td class="montant">12,00 €</td></tr>', $surTicket);
+        $this->assertStringContainsString('<tr><th>Réf.</th><th>Article</th><th>Facture d\'origine</th><th class="montant">Qté</th><th class="montant">PU HT</th><th class="montant">Rem.</th><th class="montant">TVA</th><th class="montant">Total HT</th></tr>', $surFacture);
+        $this->assertStringContainsString('<tr><td class="reference">TAS-01</td><td>Tasse<span class="sous">PU HT exact : 10,000000 €</span></td><td class="numero">FAC-MABOUT-2026-000001</td><td class="montant">1</td><td class="montant">10,00 €</td><td class="montant">—</td><td class="montant">20 %</td><td class="montant total-de-la-ligne">10,00 €</td></tr>', $surFacture);
+        $this->assertStringContainsString('<tr><th>Réf.</th><th>Article</th><th>Facture d\'origine</th><th class="montant">Qté</th><th class="montant">PU TTC</th><th class="montant">Rem.</th><th class="montant">TVA</th><th class="montant">Total TTC</th></tr>', $surTicket);
+        $this->assertStringContainsString('<tr><td class="reference">TAS-01</td><td>Tasse</td><td class="numero">TK-MABOUT-2026-000001</td><td class="montant">1</td><td class="montant">12,00 €</td><td class="montant">—</td><td class="montant">20 %</td><td class="montant total-de-la-ligne">12,00 €</td></tr>', $surTicket);
     }
 
     /**
@@ -280,7 +280,8 @@ class AvoirPdfGeneratorTest extends TestCase
      * obligatoire et chaque texte entre les marges ; la référence s'imprime
      * entière sur une seule ligne, dans un corps réduit. 8 000 des 9 000
      * articles à 9 999,97 € TTC remisés de 12,5 % : 69 999 790,00 € TTC,
-     * soit 58 333 158,33 € HT à 20 %, au PU HT d'un article de 9 999,97 €
+     * dont 11 666 631,666... -> 11 666 631,67 € de TVA, soit 58 333 158,33 €
+     * HT à 20 % (règle (b)), au PU HT d'un article de 9 999,97 €
      * moins sa TVA de 1 666,66 €, 8 333,31 € (décision de l'éditeur du
      * 14/11/2026).
      */
@@ -299,7 +300,7 @@ class AvoirPdfGeneratorTest extends TestCase
         $page = $this->pagesDuPdf(app(AvoirPdfGenerator::class)->generer($avoir)->output())[0];
 
         $this->assertChaqueTexteTientEntreLesMarges($page);
-        foreach (['FACTURE D\'ORIGINE', 'QTÉ', 'PU HT', 'REMISE', 'TAUX', 'TOTAL HT', $reference, 'FAC-ABCDEFGHIJ-2026-000001', "8\u{202F}000", '8 333,31 €', '12,5 %', '58 333 158,33 €'] as $texte) {
+        foreach (['FACTURE D\'ORIGINE', 'QTÉ', 'PU HT', 'REM.', 'TVA', 'TOTAL HT', $reference, 'FAC-ABCDEFGHIJ-2026-000001', "8\u{202F}000", '8 333,31 €', '12,5 %', '58 333 158,33 €'] as $texte) {
             $this->assertContains($texte, array_column($page['textes'], 'texte'));
         }
         $this->assertMatchesRegularExpression('#<td class="reference" style="font-size: [1-7]\.\dpt">'.$reference.'</td>#', $this->tableauDesLignes($avoir));

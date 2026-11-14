@@ -6,8 +6,8 @@ Ma Boutique
 FR
 SIRET : 10000000900017
 Tél. 04 72 00 00 00 · contact@ma-boutique.example
-Devis
-DEV-LYON1-2026-000001
+DEVIS
+N° DEV-LYON1-2026-000001
 Émis le 09/10/2026
 ÉTABLI POUR
 Atelier Dupont SARL
@@ -16,39 +16,51 @@ Atelier Dupont SARL
 SIREN : 123456789
 SIRET : 12345678900011
 N° TVA : FR32123456789
-RÉFÉRENCE
-DÉSIGNATION
+CONDITIONS
+Sans date de validité
+DÉTAIL DES ARTICLES ET PRESTATIONS
+RÉF.
+ARTICLE
 QTÉ
 PU HT
-TAUX
+REM.
+TVA
 TOTAL HT
 COF-DEG
 Coffret dégustation
+PU HT exact : 37,500000 €
 2
 37,50 €
+—
 20 %
 75,00 €
+Service
 Livraison sur rendez-vous
+PU HT exact : 12,500000 €
 1
 12,50 €
+—
 20 %
 12,50 €
-Montants calculés depuis les prix TTC : pour chaque taux, le HT est le TTC du taux ÷ (1 + taux), arrondi une fois au centime, puis réparti sur les lignes ; la TVA est la
-différence. Le PU HT affiché est celui d'un article : prix TTC moins sa TVA arrondie au centime (9,99 € TTC à 20 % : 8,32 € HT). La quantité × ce prix peut différer de
-quelques centimes du total HT de la ligne, calculé sur toute la quantité.
-TAUX TVA
-BASE HT
+Montants calculés depuis les prix TTC : pour chaque ligne, la TVA est le TTC × taux ÷ (1 + taux), arrondie une fois au centime, et le HT est le TTC moins cette TVA ; un centime peut
+être ajusté sur une ligne pour que la TVA de chaque taux soit égale à sa base HT × le taux. Le PU HT affiché est celui d'un article : prix TTC moins sa TVA arrondie au centime (9,99 €
+TTC à 20 % : 8,32 € HT). La quantité × ce prix peut différer de quelques centimes du total HT de la ligne, calculé sur toute la quantité. Le PU HT exact, écrit sous chaque article, est
+celui de la facture électronique : la quantité × ce prix retombe sur le total HT de la ligne à quelques centimes près.
+Récapitulatif TVA
+Taux
+Base HT
 TVA
-TOTAL TTC
+TTC
 20 %
 87,50 €
 17,50 €
 105,00 €
+Montant du devis
 Total HT
 87,50 €
 Total TVA
 17,50 €
-Total TTC
+TOTAL TTC
 105,00 €
 Devis valable pour une livraison en novembre.
 Date et signature du client, précédées de la mention « Bon pour

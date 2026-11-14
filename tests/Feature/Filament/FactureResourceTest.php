@@ -897,17 +897,19 @@ class FactureResourceTest extends TestCase
             ->assertDontSee('84,99');
 
         $pdf = app(FacturePdfGenerator::class)->html($facture->load('client', 'lignes', 'magasin'));
-        $this->assertStringContainsString('<td class="montant">80,00 €</td>', $pdf);
+        $this->assertStringContainsString('<td class="montant total-de-la-ligne">80,00 €</td>', $pdf);
         $this->assertStringContainsString('75,00', $pdf);
         $this->assertStringContainsString('85,00', $pdf);
         $this->assertStringNotContainsString('84,99', $pdf);
     }
 
     /**
-     * Le même panier vendu à un professionnel a les mêmes montants : le HT
-     * du taux de 20 %, 75,00 €, se répartit 66,67 € et 8,33 €, la TVA par
-     * différence, 13,33 € et 1,67 €. Il totalise 85,00 € HT + 15,00 € =
-     * 100,00 €, et sa fiche explique le calcul sous les lignes.
+     * Le même panier vendu à un professionnel a les mêmes montants : la TVA
+     * de chaque ligne à 20 %, 80,00 x 20 ÷ 120 = 13,333... -> 13,33 € et
+     * 10,00 x 20 ÷ 120 = 1,666... -> 1,67 €, fait 15,00 €, la TVA de 90,00 €
+     * (règle (b), décision de l'éditeur du 14/11/2026), soit 66,67 € et
+     * 8,33 € HT. Il totalise 85,00 € HT + 15,00 € = 100,00 €, et sa fiche
+     * explique le calcul sous les lignes.
      */
     public function test_la_meme_facture_a_un_professionnel_totalise_85_ht_et_explique_son_calcul(): void
     {
@@ -931,7 +933,7 @@ class FactureResourceTest extends TestCase
             ->assertSee('66,67')
             ->assertSee('13,33')
             ->assertSee('85,00')
-            ->assertSee('Montants calculés depuis les prix TTC : pour chaque taux, le HT est le TTC du taux ÷ (1 + taux), arrondi une fois au centime, puis réparti sur les lignes ; la TVA est la différence.');
+            ->assertSee('Montants calculés depuis les prix TTC : pour chaque ligne, la TVA est le TTC × taux ÷ (1 + taux), arrondie une fois au centime, et le HT est le TTC moins cette TVA ; un centime peut être ajusté sur une ligne pour que la TVA de chaque taux soit égale à sa base HT × le taux.');
     }
 
     /**
@@ -959,7 +961,9 @@ class FactureResourceTest extends TestCase
      * L'exemple de l'éditeur du 14/11/2026 sur la fiche d'une facture à un
      * professionnel : 3 savons à 9,99 € TTC à 20 % ont un PU HT enregistré
      * de 8,325 €, affiché 8,32 € (9,99 € moins sa TVA de 1,665 €, arrondie
-     * à 1,67 €), jamais 8,33 € ni 8,325 € ; la ligne garde ses 24,98 € HT.
+     * à 1,67 €), jamais 8,33 € ni 8,325 € ; la ligne de 29,97 € TTC compte
+     * 29,97 x 20 ÷ 120 = 4,995 -> 5,00 € de TVA et 24,97 € HT (règle (b),
+     * décision de l'éditeur du 14/11/2026).
      */
     public function test_la_fiche_d_une_facture_montre_le_pu_ht_d_un_savon_a_9_99_euros_8_32_euros(): void
     {
@@ -970,10 +974,10 @@ class FactureResourceTest extends TestCase
         $facture = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->professionnel()->create(), [['produit_id' => $savon->id, 'quantite' => 3]]);
 
         Livewire::test(ViewFacture::class, ['record' => $facture->getRouteKey()])
-            ->assertSeeInOrder(['Savon', '8,32 €', '9,99 €', '24,98'])
+            ->assertSeeInOrder(['Savon', '8,32 €', '9,99 €', '24,97'])
             ->assertDontSee('8,325')
             ->assertDontSee('8,33 €');
-        $this->assertSame(['8.325000', '24.98'], [$facture->lignes()->sole()->prix_unitaire_ht, $facture->lignes()->sole()->montant_ht]);
+        $this->assertSame(['8.325000', '24.97'], [$facture->lignes()->sole()->prix_unitaire_ht, $facture->lignes()->sole()->montant_ht]);
     }
 
     /**
@@ -981,8 +985,9 @@ class FactureResourceTest extends TestCase
      * arrondi au centime, comme tout prix unitaire de vente montré en
      * lecture (décision de l'éditeur du 25/10/2026, que celle du 09/11/2026
      * garde pour ces documents) : 0,83 € pour un PU HT enregistré de
-     * 0,833333 €. Sous les lignes, la note de calcul dit que les prix
-     * unitaires sont affichés arrondis au centime.
+     * 0,833333 €. Sous les lignes, la note de calcul ne dit que le calcul de
+     * chaque ligne depuis son prix TTC (modèle P1, choix de l'éditeur du
+     * 14/11/2026), sans la phrase du PU HT d'un article.
      */
     public function test_la_fiche_d_un_ticket_montre_le_pu_ht_au_centime(): void
     {
@@ -991,7 +996,8 @@ class FactureResourceTest extends TestCase
         Livewire::test(ViewFacture::class, ['record' => $ticket->getRouteKey()])
             ->assertSeeInOrder(['0,83 €', '1,00 €', '833,33', '100,00 €', '120,00 €', '100,00'])
             ->assertDontSee('0,833333')
-            ->assertSee('Les prix unitaires sont affichés arrondis au centime et les totaux calculés sans arrondi intermédiaire : la quantité × le prix unitaire affiché peut donc différer du total de la ligne.');
+            ->assertSee('Montants calculés depuis les prix TTC : pour chaque ligne, la TVA est le TTC × taux ÷ (1 + taux), arrondie une fois au centime, et le HT est le TTC moins cette TVA ; un centime peut être ajusté sur une ligne pour que la TVA de chaque taux soit égale à sa base HT × le taux.')
+            ->assertDontSee('Le PU HT affiché est celui d\'un article');
     }
 
     /**
@@ -1204,7 +1210,8 @@ class FactureResourceTest extends TestCase
         // 10,05 € TTC / 1,20 = 8,375 € HT, enregistré au millionième d'euro
         // (Q1-b) et montré comme le PU HT d'un article : 10,05 € moins sa
         // TVA de 1,675 €, arrondie à 1,68 €, soit 8,37 € (décision de
-        // l'éditeur du 14/11/2026).
+        // l'éditeur du 14/11/2026). La ligne de 30,15 € TTC compte 30,15 x
+        // 20 ÷ 120 = 5,025 -> 5,03 € de TVA et 25,12 € HT (règle (b)).
         $component
             ->set("data.lignes.{$cle}.quantite", '3')
             ->set("data.lignes.{$cle}.prix_unitaire_ttc", '10.05')
@@ -1214,7 +1221,7 @@ class FactureResourceTest extends TestCase
             ->assertHasNoFormErrors();
 
         $facture = Facture::query()->where('client_id', $client->id)->latest('id')->firstOrFail();
-        $this->assertSame(['25.13', '5.02', '30.15'], [$facture->total_ht, $facture->total_tva, $facture->total_ttc]);
+        $this->assertSame(['25.12', '5.03', '30.15'], [$facture->total_ht, $facture->total_tva, $facture->total_ttc]);
         $this->assertSame(['10.05', '8.375000'], [$facture->lignes()->sole()->prix_unitaire_ttc, $facture->lignes()->sole()->prix_unitaire_ht]);
     }
 
@@ -2036,10 +2043,11 @@ class FactureResourceTest extends TestCase
 
     /**
      * La remise est une mention obligatoire et explique pourquoi PU x
-     * quantité diffère du total : elle apparaît sur le PDF dès qu'une ligne
-     * en a une, et seulement dans ce cas.
+     * quantité diffère du total : sa colonne est toujours sur le PDF, au
+     * modèle M6-b (choix de l'éditeur du 14/11/2026), avec le taux de la
+     * remise d'une ligne qui en a une et « — » pour une ligne sans remise.
      */
-    public function test_la_remise_apparait_sur_le_pdf_seulement_si_une_ligne_en_a_une(): void
+    public function test_la_colonne_de_la_remise_montre_la_remise_ou_un_tiret(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $responsable = $this->responsableDeTest($magasin);
@@ -2054,9 +2062,11 @@ class FactureResourceTest extends TestCase
         $rendre = fn (Facture $facture): string => app(FacturePdfGenerator::class)->html($facture->load('client', 'lignes', 'magasin'));
 
         $pdf = $rendre($avecRemise);
-        $this->assertStringContainsString('<th class="montant">Remise</th>', $pdf);
+        $this->assertStringContainsString('<th class="montant">Rem.</th>', $pdf);
         $this->assertStringContainsString('<td class="montant">12,5 %</td>', $pdf);
-        $this->assertStringNotContainsString('<th class="montant">Remise</th>', $rendre($sansRemise));
+        $this->assertStringContainsString('<th class="montant">Rem.</th>', $rendre($sansRemise));
+        $this->assertStringContainsString('<td class="montant">—</td>', $rendre($sansRemise));
+        $this->assertStringNotContainsString('<td class="montant">—</td>', $pdf);
 
         Livewire::test(ViewFacture::class, ['record' => $avecRemise->getRouteKey()])->assertSee('12,5 %');
     }
@@ -2473,35 +2483,36 @@ class FactureResourceTest extends TestCase
     /**
      * Le prix sans TVA d'un service sorti de la TVA française est ce que
      * paie le client pour un article vendu à ce prix TTC, calculé comme
-     * toute vente : 9,99 € TTC à 20 % font 8,33 € HT en vente en France,
-     * et 8,33 € sans TVA en prestation hors UE -- jamais le PU HT affiché
-     * d'un article (9,99 € moins 1,67 € de TVA, 8,32 €), sur lequel aucun
-     * montant ne se calcule.
+     * toute vente (règle (b), décision de l'éditeur du 14/11/2026) : 9,99 €
+     * TTC à 20 % comprennent 1,665 -> 1,67 € de TVA et font 8,32 € HT en
+     * vente en France, et 8,32 € sans TVA en prestation hors UE, le PU HT
+     * d'un article : le montant HT ne change pas.
      */
     public function test_sortir_de_la_tva_francaise_garde_le_montant_d_un_service_a_9_99_euros_ttc(): void
     {
         $this->magasinQuiVendHorsDeFrance();
         $conseil = Service::factory()->create(['nom' => 'Conseil']);
         $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), $this->clientAmericain(), [['service_id' => $conseil->id, 'prix_unitaire_ttc' => '9.99', 'taux_tva' => 20, 'quantite' => 1]]);
-        $this->assertSame(['8.33', '1.66', '9.99'], [$brouillon->total_ht, $brouillon->total_tva, $brouillon->total_ttc]);
+        $this->assertSame(['8.32', '1.67', '9.99'], [$brouillon->total_ht, $brouillon->total_tva, $brouillon->total_ttc]);
 
         $page = Livewire::test(EditFacture::class, ['record' => $brouillon->getRouteKey()])
             ->set('data.nature_operation', NatureOperation::PrestationHorsUe->value);
-        $page->assertSet('data.lignes.'.array_key_first($page->get('data.lignes')).'.prix_unitaire_ttc', '8.33')
+        $page->assertSet('data.lignes.'.array_key_first($page->get('data.lignes')).'.prix_unitaire_ttc', '8.32')
             ->assertNotified('Prix des services convertis')
             ->call('save')
             ->assertHasNoFormErrors();
 
         $brouillon->refresh();
         $this->assertSame(NatureOperation::PrestationHorsUe, $brouillon->nature_operation);
-        $this->assertSame(['8.33', '0.00', '8.33'], [$brouillon->total_ht, $brouillon->total_tva, $brouillon->total_ttc]);
+        $this->assertSame(['8.32', '0.00', '8.32'], [$brouillon->total_ht, $brouillon->total_tva, $brouillon->total_ttc]);
     }
 
     /**
      * Un service à son prix de référence de 9,99 € TTC à 20 % passé en
      * prestation hors UE montre ce prix sans sa TVA comme le PU HT d'un
      * article, 8,32 €, que la vente reconnaît comme son prix de référence :
-     * la ligne se calcule toujours depuis 9,99 € TTC, 8,33 € HT, sans
+     * la ligne se calcule toujours depuis 9,99 € TTC, 1,67 € de TVA retirée
+     * et 8,32 € HT (règle (b), décision de l'éditeur du 14/11/2026), sans
      * changer de montant.
      */
     public function test_un_service_a_son_prix_de_reference_sorti_de_la_tva_francaise_garde_son_montant(): void
@@ -2519,7 +2530,7 @@ class FactureResourceTest extends TestCase
         $brouillon->refresh();
         $ligne = $brouillon->lignes->sole();
         $this->assertSame([NatureOperation::PrestationHorsUe, '9.99', '20.00'], [$brouillon->nature_operation, $ligne->prix_unitaire_ttc, $ligne->taux_tva_du_prix]);
-        $this->assertSame(['8.33', '0.00', '8.33'], [$brouillon->total_ht, $brouillon->total_tva, $brouillon->total_ttc]);
+        $this->assertSame(['8.32', '0.00', '8.32'], [$brouillon->total_ht, $brouillon->total_tva, $brouillon->total_ttc]);
     }
 
     /**
@@ -2637,7 +2648,7 @@ class FactureResourceTest extends TestCase
         Livewire::test(ViewFacture::class, ['record' => $facture->getRouteKey()])
             ->assertSeeText('Prix catalogue TTC')
             ->assertSeeText('TVA retirée')
-            ->assertSeeText('HT de chaque taux = TTC du catalogue ÷ (1 + taux)')
+            ->assertSeeText('se vend à son prix catalogue TTC moins la TVA française de son taux')
             ->assertDontSeeText('PU TTC');
     }
 }

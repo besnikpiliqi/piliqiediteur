@@ -7,7 +7,8 @@
 </head>
 <body>
     {{-- Un avoir cite le numéro et la date d'émission de chaque document
-         qu'il rectifie, une ligne chacun ; une date effacée en base, que
+         qu'il rectifie, une ligne chacun, dans le bloc à droite du client
+         (modèle M6-b) ; une date effacée en base, que
          signale la vérification de l'intégrité, n'empêche pas d'imprimer
          l'avoir. $emetteur : celui que l'avoir a signé (voir
          AvoirPdfGenerator et FigeSonEmetteur) ; $pied : l'identité de la
@@ -27,23 +28,24 @@
     @include('documents.pdf.en-tete', [
         'emetteur' => $emetteur,
         'titre' => 'Avoir',
-        'classeTitre' => 'avoir',
+        'classeTitre' => 'majuscules avoir',
         'details' => array_filter([
-            $avoir->numero ?? 'Brouillon (non émis)',
+            $avoir->numero !== null ? 'N° '.$avoir->numero : 'Brouillon (non émis)',
             $avoir->date_emission ? 'Émis le '.$avoir->magasin->calendrier()->afficher($avoir->date_emission, 'd/m/Y') : null,
-            ...$documentsCorriges,
         ]),
     ])
 
-    @include('documents.pdf.client', [
+    @include('documents.pdf.blocs', [
         'client' => $avoir->copieClient(),
         'professionnel' => $avoir->estPourUnProfessionnel(),
         'titre' => 'Émis à',
+        'titreDesConditions' => 'Rectifie',
+        'conditions' => $documentsCorriges->values()->all(),
     ])
 
     @include('documents.pdf.lignes', ['document' => $avoir, 'tableau' => $tableau])
 
-    @include('documents.pdf.totaux', ['document' => $avoir, 'signe' => '-'])
+    @include('documents.pdf.totaux', ['document' => $avoir, 'signe' => '-', 'titreDuMontant' => 'Montant de l\'avoir', 'libelleDuTotal' => 'Total TTC'])
 
     @if($avoir->motif)
         <div class="remarque">Motif : {{ $avoir->motif }}</div>

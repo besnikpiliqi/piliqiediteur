@@ -603,10 +603,12 @@ class AvoirActionsTest extends TestCase
     /**
      * Avec une remise, un article rendu seul ne vaut pas la moitié de la
      * ligne : 2 x 9,99 € TTC remisés de 15 % = 16,98 € TTC (2,997 € de
-     * remise -> 3,00 €), 14,15 € HT ; un article seul vaut 8,49 € TTC
-     * (1,4985 € de remise -> 1,50 €), 7,075 -> 7,08 € HT. Le dernier retour
-     * crédite donc le solde (7,07 € HT, 1,42 € de TVA), jamais un second
-     * recalcul qui créditerait 14,16 € HT au total.
+     * remise -> 3,00 €), 2,83 € de TVA et 14,15 € HT ; un article seul vaut
+     * 8,49 € TTC (1,4985 € de remise -> 1,50 €), dont 8,49 x 20 ÷ 120 =
+     * 1,415 -> 1,42 € de TVA, 7,07 € HT (règle (b), décision de l'éditeur du
+     * 14/11/2026). Le dernier retour crédite donc le solde (7,08 € HT, 1,41 €
+     * de TVA), jamais un second recalcul qui créditerait 14,14 € HT au
+     * total.
      */
     public function test_le_dernier_retour_dune_ligne_remisee_en_credite_le_solde_exact(): void
     {
@@ -626,8 +628,8 @@ class AvoirActionsTest extends TestCase
             ['ligne_facture_id' => $ligneFacture->id, 'quantite' => 1],
         ]);
 
-        $this->assertSame(['7.08', '1.41', '8.49'], [$premier->total_ht, $premier->total_tva, $premier->total_ttc]);
-        $this->assertSame(['7.07', '1.42', '8.49'], [$dernier->total_ht, $dernier->total_tva, $dernier->total_ttc]);
+        $this->assertSame(['7.07', '1.42', '8.49'], [$premier->total_ht, $premier->total_tva, $premier->total_ttc]);
+        $this->assertSame(['7.08', '1.41', '8.49'], [$dernier->total_ht, $dernier->total_tva, $dernier->total_ttc]);
     }
 
     /**
@@ -673,12 +675,14 @@ class AvoirActionsTest extends TestCase
     }
 
     /**
-     * Trois lignes de 0,10 € à 20 % vendues à un professionnel : le HT du
-     * taux, 0,30 ÷ 1,2 = 0,25 €, se répartit 0,08, 0,09 et 0,08 €, si bien
-     * que la deuxième n'a que 0,01 € de TVA. Son retour crédite exactement
-     * cette ligne, 0,09 € HT et 0,01 € de TVA, 0,10 € TTC.
+     * Trois lignes de 0,10 € à 20 % vendues à un professionnel : chacune a
+     * 0,10 x 20 ÷ 120 = 0,0166... -> 0,02 € de TVA, 0,06 € pour une TVA du
+     * taux de 0,05 € ; la première rend le centime (règle (b), décision de
+     * l'éditeur du 14/11/2026) et n'a que 0,01 € de TVA. Son retour crédite
+     * exactement cette ligne, 0,09 € HT et 0,01 € de TVA, 0,10 € TTC, et non
+     * la TVA de ses seuls 0,10 €.
      */
-    public function test_le_retour_d_une_ligne_credite_sa_part_du_ht_de_son_taux(): void
+    public function test_le_retour_d_une_ligne_ajustee_credite_exactement_ses_montants(): void
     {
         $client = Client::factory()->professionnel()->create();
         $produits = Produit::factory()->count(3)->create(['prix_vente_ttc' => '0.10', 'taux_tva' => 20, 'suivi_stock' => false]);
@@ -686,7 +690,7 @@ class AvoirActionsTest extends TestCase
             ->map(fn (Produit $produit): array => ['produit_id' => $produit->id, 'quantite' => 1])
             ->all()));
 
-        $avoir = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [['ligne_facture_id' => $facture->lignes[1]->id, 'quantite' => 1]]);
+        $avoir = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [['ligne_facture_id' => $facture->lignes->sortBy('ordre')->firstOrFail()->id, 'quantite' => 1]]);
 
         $this->assertSame(['0.09', '0.01', '0.10'], [$avoir->total_ht, $avoir->total_tva, $avoir->total_ttc]);
         $this->assertSame(['0.09', '0.01', '0.10'], [$avoir->lignes->sole()->montant_ht, $avoir->lignes->sole()->montant_tva, $avoir->lignes->sole()->montant_ttc]);

@@ -214,7 +214,7 @@ class RegularisationDUneFacture
      * TTC de la ligne moins ceux de ces avoirs, en centimes) : exactement ce
      * que son avoir de régularisation crédite, qu'il soit émis avant ou
      * après elle (le dernier retour d'une ligne en rend le solde exact, voir
-     * LigneFacture::montantsDuRetour()). Aucune quand tout a été crédité.
+     * LigneFacture::montantsDesRetours()). Aucune quand tout a été crédité.
      *
      * @return list<array{produit_id: int|null, service_id: int|null, nature: NatureLigne, description: string, reference: string|null, quantite: int, prix_unitaire_ht: numeric-string, prix_unitaire_ttc: numeric-string, taux_tva: numeric-string, taux_tva_du_prix: numeric-string, remise_pourcentage: numeric-string, montant_ht: numeric-string, montant_tva: numeric-string, montant_ttc: numeric-string, ordre: int}>
      */

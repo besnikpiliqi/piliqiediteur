@@ -85,11 +85,11 @@ class TableauxDesFichesTest extends TestCase
         $this->assertSame([
             ['', ['Description', 'Quantité', 'PU HT', 'PU TTC', 'Taux TVA', 'Total HT', 'TVA', 'Total TTC']],
             ['', ['Livre', '1', '10,00 €', '10,00 €', '0 %', "10,00\u{00A0}€", '–', "10,00\u{00A0}€"]],
-            ['', ['Savon', '1', '8,32 €', '9,99 €', '20 %', "8,33\u{00A0}€", "1,66\u{00A0}€", "9,99\u{00A0}€"]],
+            ['', ['Savon', '1', '8,32 €', '9,99 €', '20 %', "8,32\u{00A0}€", "1,67\u{00A0}€", "9,99\u{00A0}€"]],
         ], self::lignesDuTableau($html, 'Description'));
         $this->assertSame([
             ['', ['Taux', 'Base HT', 'TVA', 'Total TTC']],
-            ['', ['20 %', "8,33\u{00A0}€", "1,66\u{00A0}€", "9,99\u{00A0}€"]],
+            ['', ['20 %', "8,32\u{00A0}€", "1,67\u{00A0}€", "9,99\u{00A0}€"]],
             ['', ['0 %', "10,00\u{00A0}€", '–', "10,00\u{00A0}€"]],
         ], self::lignesDuTableau($html, 'Taux'));
     }
@@ -103,7 +103,7 @@ class TableauxDesFichesTest extends TestCase
 
         $this->assertSame([
             ['', ['Taux', 'Base HT', 'TVA', 'Total TTC']],
-            ['', ['20 %', "8,33\u{00A0}€", "1,66\u{00A0}€", "9,99\u{00A0}€"]],
+            ['', ['20 %', "8,32\u{00A0}€", "1,67\u{00A0}€", "9,99\u{00A0}€"]],
             ['', ['0 %', "10,00\u{00A0}€", '–', "10,00\u{00A0}€"]],
         ], self::lignesDuTableau($html, 'Taux'));
     }

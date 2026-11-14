@@ -42,7 +42,8 @@ use Illuminate\Database\Eloquent\Builder;
  *   l'article (voir lignesALaTvaFrancaise()), son HT et sa TVA calculés
  *   depuis ce TTC selon la règle des ventes (voir
  *   CalculateurLigne::chiffrerUneVente()) : un export de 500,00 € devient
- *   une vente de 500,00 € TTC à 20 %, soit 416,67 € HT et 83,33 € de TVA.
+ *   une vente de 500,00 € TTC à 20 %, soit 83,33 € de TVA (83,333...) et
+ *   416,67 € HT.
  *   Le crédit de l'avoir règle d'abord ce qui reste dû de la vente
  *   d'origine, puis cette facture (voir ImputationDuCredit et
  *   AppliquerAvoirsDisponiblesAction) : elle reçoit ce que la vente avait
@@ -161,8 +162,9 @@ class RegularisationDUneExoneration
      *   jour de la vente) ; un service vendu à un autre prix, déjà sans
      *   TVA, prend le taux de sa fiche, sinon celui du territoire du
      *   magasin ;
-     * - le HT et la TVA se calculent depuis ce TTC, taux par taux, en
-     *   cumul, comme toute vente (voir CalculateurLigne::chiffrerUneVente()) ;
+     * - le HT et la TVA se calculent depuis ce TTC, ligne par ligne et
+     *   taux par taux, comme toute vente (voir
+     *   CalculateurLigne::chiffrerUneVente()) ;
      * - le prix unitaire payé (le PU HT de la ligne d'origine, au
      *   millionième) n'est en général pas un prix au centime : le PU HT
      *   enregistré est le HT de la ligne ÷ (la quantité × (100 % - la

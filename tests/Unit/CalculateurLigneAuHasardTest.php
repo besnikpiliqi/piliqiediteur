@@ -91,7 +91,7 @@ class CalculateurLigneAuHasardTest extends TestCase
             for ($ttcCentimes = 1; $ttcCentimes <= 10000; $ttcCentimes++) {
                 $ht = $this->calculateur()->prixUnitaireHtAffiche($ttcCentimes, $this->centiemes($taux));
 
-                $this->assertSame($ttcCentimes - $this->tvaDUnArticleAttendue($ttcCentimes, $taux), $ht, "TTC {$this->texte($ttcCentimes)} à {$taux} %");
+                $this->assertSame($ttcCentimes - $this->tvaDuTtcAttendue($ttcCentimes, $taux), $ht, "TTC {$this->texte($ttcCentimes)} à {$taux} %");
                 $verifications++;
             }
         }
@@ -146,9 +146,11 @@ class CalculateurLigneAuHasardTest extends TestCase
     /**
      * 10 000 lignes seules tirées au hasard (prix de 0,01 € à 9 999,99 €,
      * vente ou achat, de 1 à 999 articles, avec ou sans remise, tous les
-     * taux) : une vente a pour TTC son prix x quantité remise déduite et
-     * pour HT ce TTC ÷ (1 + taux) ; un achat a pour HT son prix x quantité
-     * remise déduite, et pour TVA celle de ce HT ; HT + TVA = TTC.
+     * taux) : une vente a pour TTC son prix x quantité remise déduite, pour
+     * TVA ce TTC x taux ÷ (1 + taux), arrondie une fois, et pour HT le TTC
+     * moins cette TVA (décision de l'éditeur du 14/11/2026) ; un achat a
+     * pour HT son prix x quantité remise déduite, et pour TVA celle de ce
+     * HT ; HT + TVA = TTC.
      */
     public function test_10000_lignes_aleatoires_egalent_le_calcul_exact(): void
     {
@@ -160,8 +162,8 @@ class CalculateurLigneAuHasardTest extends TestCase
 
             if ($ligne['vente']) {
                 $montants = $this->calculateur()->chiffrerUneVente([self::ligneDeVente($ligne['prix'], $ligne['quantite'], $this->centiemes($ligne['taux']), $ligne['remise'])])['lignes'][0];
-                $ht = $this->htDepuisTtcAttendu($net, $ligne['taux']);
-                $attendus = [$ht, $net - $ht, $net];
+                $tva = $this->tvaDuTtcAttendue($net, $ligne['taux']);
+                $attendus = [$net - $tva, $tva, $net];
             } else {
                 $montants = $this->calculateur()->chiffrerUnAchat([self::ligneDAchat($ligne['prix'], $ligne['quantite'], $this->centiemes($ligne['taux']), $ligne['remise'])])['lignes'][0];
                 $tva = $this->tvaAttendue($net, $ligne['taux']);
@@ -174,14 +176,18 @@ class CalculateurLigneAuHasardTest extends TestCase
 
     /**
      * 2 000 ventes de 1 à 20 lignes tirées au hasard, de taux mêlés, une
-     * sur cinq sans TVA française : pour chaque taux du prix, la somme des
-     * HT de ses lignes est exactement le TTC de ses lignes ÷ (1 + taux),
-     * arrondi une fois ; chaque ligne a pour TTC son prix (son HT sans TVA
+     * sur cinq sans TVA française (décision de l'éditeur du 14/11/2026) :
+     * pour chaque taux du prix, la somme des TVA de ses lignes (la TVA
+     * retirée, sans TVA française) est exactement celle du TTC de ses
+     * lignes, TTC x taux ÷ (1 + taux) arrondie une fois ; la TVA de chaque
+     * ligne s'écarte d'au plus un centime de celle de son TTC, arrondie de
+     * même, et autant de lignes en reçoivent un qu'il y a de centimes
+     * d'écart ; chaque ligne a pour TTC son prix (son HT sans TVA
      * française), aucun montant négatif, et un HT à moins d'un centime de
      * sa part exacte ; chaque taux et le document totalisent exactement
      * leurs lignes.
      */
-    public function test_2000_ventes_aleatoires_se_calculent_taux_par_taux_sur_leur_ttc(): void
+    public function test_2000_ventes_aleatoires_se_calculent_ligne_par_ligne_et_taux_par_taux_sur_leur_ttc(): void
     {
         $hasard = new Randomizer(new Mt19937(self::GRAINE + 1));
 
@@ -198,8 +204,10 @@ class CalculateurLigneAuHasardTest extends TestCase
 
             $vente = $this->calculateur()->chiffrerUneVente($lignes);
             $cas = "vente n° {$i}";
-            $htParTaux = [];
+            $tvaParTaux = [];
             $ttcParTaux = [];
+            $ecartsParTaux = [];
+            $ajusteesParTaux = [];
             $parTauxFacture = [];
 
             foreach ($vente['lignes'] as $index => $montants) {
@@ -213,14 +221,23 @@ class CalculateurLigneAuHasardTest extends TestCase
                 $this->assertGreaterThanOrEqual(0, $tva, "TVA de la ligne {$index} : {$cas}");
                 $this->assertTrue($exact->minus($ht)->abs()->isLessThan(1), "HT de la ligne {$index} à plus d'un centime de sa part exacte : {$cas}");
 
-                $htParTaux[$tauxDuPrix] = ($htParTaux[$tauxDuPrix] ?? 0) + $ht;
+                $tauxEnTexte = (string) BigDecimal::ofUnscaledValue($tauxDuPrix, 2);
+                $tvaDeLaLigne = $nets[$index] - $ht;
+                $tvaDeSonTtc = $this->tvaDuTtcAttendue($nets[$index], $tauxEnTexte);
+                $this->assertLessThanOrEqual(1, abs($tvaDeLaLigne - $tvaDeSonTtc), "TVA de la ligne {$index} à plus d'un centime de celle de son TTC : {$cas}");
+
+                $tvaParTaux[$tauxDuPrix] = ($tvaParTaux[$tauxDuPrix] ?? 0) + $tvaDeLaLigne;
                 $ttcParTaux[$tauxDuPrix] = ($ttcParTaux[$tauxDuPrix] ?? 0) + $nets[$index];
+                $ecartsParTaux[$tauxDuPrix] = ($ecartsParTaux[$tauxDuPrix] ?? 0) + $tvaDeSonTtc;
+                $ajusteesParTaux[$tauxDuPrix] = ($ajusteesParTaux[$tauxDuPrix] ?? 0) + ($tvaDeLaLigne !== $tvaDeSonTtc ? 1 : 0);
                 $facture = $lignes[$index]['taux_tva'];
                 $parTauxFacture[$facture] = array_map(fn (int $a, int $b): int => $a + $b, $parTauxFacture[$facture] ?? [0, 0, 0], [$ht, $tva, $ttc]);
             }
 
-            foreach ($htParTaux as $tauxDuPrix => $ht) {
-                $this->assertSame($this->htDepuisTtcAttendu($ttcParTaux[$tauxDuPrix], (string) BigDecimal::ofUnscaledValue($tauxDuPrix, 2)), $ht, "HT du taux {$tauxDuPrix} : {$cas}");
+            foreach ($tvaParTaux as $tauxDuPrix => $tva) {
+                $tvaDuTaux = $this->tvaDuTtcAttendue($ttcParTaux[$tauxDuPrix], (string) BigDecimal::ofUnscaledValue($tauxDuPrix, 2));
+                $this->assertSame($tvaDuTaux, $tva, "TVA du taux {$tauxDuPrix} : {$cas}");
+                $this->assertSame(abs($ecartsParTaux[$tauxDuPrix] - $tvaDuTaux), $ajusteesParTaux[$tauxDuPrix], "lignes ajustées du taux {$tauxDuPrix} : {$cas}");
             }
 
             $this->assertSame($parTauxFacture, self::triplets($vente['taux']), "montants par taux : {$cas}");
@@ -322,9 +339,10 @@ class CalculateurLigneAuHasardTest extends TestCase
      * cinq sans TVA française), rendues en retours successifs de quantités
      * tirées au hasard : tant que la ligne n'est pas toute rendue, le TTC
      * rendu en tout est le prix des articles rendus (leur HT sans TVA
-     * française), et le HT rendu en tout le TTC ÷ (1 + taux) arrondi une
-     * fois, gardé dans la limite du HT et de la TVA de la ligne ; aucun
-     * retour ne rend de montant négatif, et la somme des retours retombe
+     * française), sa TVA ce TTC x taux ÷ (1 + taux) arrondie une fois et
+     * son HT le TTC moins cette TVA, gardés dans la limite du HT et de la
+     * TVA de la ligne (décision de l'éditeur du 14/11/2026) ; aucun retour
+     * ne rend de montant négatif, et la somme des retours retombe
      * exactement sur la ligne.
      */
     public function test_2000_series_de_retours_creditent_exactement_la_ligne(): void
@@ -361,11 +379,11 @@ class CalculateurLigneAuHasardTest extends TestCase
 
                 if ($rendus < $vendue['quantite']) {
                     $net = $this->netAttendu($vendue['prix_unitaire_ttc'], $rendus, $vendue['remise_pourcentage']);
-                    $htAuPrix = $this->htDepuisTtcAttendu($net, $taux);
+                    $tvaAuPrix = $this->tvaDuTtcAttendue($net, $taux);
 
                     $this->assertSame($sansTva
-                        ? [min($htAuPrix, $vendue['montant_ht']), 0]
-                        : [$ht = min($vendue['montant_ht'], max($htAuPrix, $net - $vendue['montant_tva'])), $net - $ht], [$rendu['montant_ht'], $rendu['montant_tva']], "cumul de {$rendus} : {$cas}");
+                        ? [min($net - $tvaAuPrix, $vendue['montant_ht']), 0]
+                        : [$net - ($tva = min($vendue['montant_tva'], max($net - $vendue['montant_ht'], $tvaAuPrix))), $tva], [$rendu['montant_ht'], $rendu['montant_tva']], "cumul de {$rendus} : {$cas}");
                 }
             }
 
@@ -460,20 +478,12 @@ class CalculateurLigneAuHasardTest extends TestCase
      * La TVA comprise dans un prix TTC : TTC x taux ÷ (1 + taux), au centime
      * le plus proche, un demi-centime au centime supérieur.
      */
-    private function tvaDUnArticleAttendue(int $ttcCentimes, string $taux): int
+    private function tvaDuTtcAttendue(int $ttcCentimes, string $taux): int
     {
         $taux = BigDecimal::of($taux)->dividedBy(100, 4);
 
         return BigDecimal::ofUnscaledValue($ttcCentimes, 2)->multipliedBy($taux)
             ->dividedBy(BigDecimal::one()->plus($taux), 2, RoundingMode::HalfUp)
-            ->getUnscaledValue()
-            ->toInt();
-    }
-
-    private function htDepuisTtcAttendu(int $ttcCentimes, string $taux): int
-    {
-        return BigDecimal::ofUnscaledValue($ttcCentimes, 2)
-            ->dividedBy(BigDecimal::one()->plus(BigDecimal::of($taux)->dividedBy(100, 4)), 2, RoundingMode::HalfUp)
             ->getUnscaledValue()
             ->toInt();
     }

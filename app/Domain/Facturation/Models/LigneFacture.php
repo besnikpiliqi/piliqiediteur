@@ -171,16 +171,37 @@ class LigneFacture extends Model
     }
 
     /**
-     * Montants d'un retour de $quantite articles de cette ligne, écrits
-     * comme leurs colonnes : le calcul de la vente pour tout ce qui en a
-     * été rendu jusqu'ici, sans dépasser le HT ni la TVA de la ligne, moins
-     * ce que les avoirs déjà émis ont crédité (voir
-     * CalculateurLigne::retourDeLigne()). Le dernier retour retombe ainsi
-     * exactement sur la ligne vendue.
+     * Les montants des lignes d'un avoir, dans leur ordre, écrits comme
+     * leurs colonnes : pour chaque ligne vendue, le retour de $quantite
+     * articles, calculé avec les autres lignes de l'avoir (voir
+     * CalculateurLigne::chiffrerUnAvoir()) sur tout ce qui en a été rendu
+     * jusqu'ici, sans dépasser le HT ni la TVA de la ligne, moins ce que
+     * les avoirs déjà émis ont crédité. Le dernier retour d'une ligne
+     * retombe ainsi exactement sur la ligne vendue.
      *
-     * @return array{montant_ht: string, montant_tva: string, montant_ttc: string}
+     * @param  list<array{0: self, 1: int}>  $retours  chaque ligne vendue et le nombre d'articles que l'avoir en rend
+     * @return list<array{montant_ht: string, montant_tva: string, montant_ttc: string}>
      */
-    public function montantsDuRetour(int $quantite): array
+    public static function montantsDesRetours(array $retours): array
+    {
+        $calculateur = app(CalculateurLigne::class);
+
+        return array_map(
+            fn (array $montants): array => array_map($calculateur->enDecimal(...), $montants),
+            $calculateur->chiffrerUnAvoir(array_map(fn (array $retour): array => $retour[0]->retourAChiffrer($retour[1]), $retours))['lignes'],
+        );
+    }
+
+    /**
+     * Un retour de $quantite articles de cette ligne, tel que le calcul
+     * d'un avoir le lit (voir CalculateurLigne::chiffrerUnAvoir()) : la
+     * ligne vendue, tous ses articles rendus par les avoirs émis, ce retour
+     * compris, et ce que ces avoirs ont crédité, en centimes et en
+     * centièmes de point.
+     *
+     * @return array{ligne: array{prix_unitaire_ttc: int, quantite: int, remise_pourcentage: int, taux_tva_du_prix: int, taux_tva: int, montant_ht: int, montant_tva: int}, quantite_rendue: int, deja_rendu: array{montant_ht: int, montant_tva: int}}
+     */
+    private function retourAChiffrer(int $quantite): array
     {
         $calculateur = app(CalculateurLigne::class);
         $avoirsEmis = $this->lignesAvoir()
@@ -188,8 +209,8 @@ class LigneFacture extends Model
             ->get(['quantite', 'montant_ht', 'montant_tva']);
         $centiemes = fn (string $colonne): int => $calculateur->enCentiemes($this->getAttribute($colonne));
 
-        return array_map($calculateur->enDecimal(...), $calculateur->retourDeLigne(
-            [
+        return [
+            'ligne' => [
                 'prix_unitaire_ttc' => $centiemes('prix_unitaire_ttc'),
                 'quantite' => $this->quantite,
                 'remise_pourcentage' => $centiemes('remise_pourcentage'),
@@ -198,11 +219,11 @@ class LigneFacture extends Model
                 'montant_ht' => $centiemes('montant_ht'),
                 'montant_tva' => $centiemes('montant_tva'),
             ],
-            ValeursLues::entier($avoirsEmis->sum('quantite')) + $quantite,
-            [
+            'quantite_rendue' => ValeursLues::entier($avoirsEmis->sum('quantite')) + $quantite,
+            'deja_rendu' => [
                 'montant_ht' => $avoirsEmis->sum(fn (LigneAvoir $ligne): int => $calculateur->enCentiemes($ligne->montant_ht)),
                 'montant_tva' => $avoirsEmis->sum(fn (LigneAvoir $ligne): int => $calculateur->enCentiemes($ligne->montant_tva)),
             ],
-        ));
+        ];
     }
 }

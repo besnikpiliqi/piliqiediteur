@@ -111,6 +111,7 @@ class CreerAvoirAction
             $compte = $this->lecteur->exiger($auteur, 'create', $magasin, Avoir::class);
             $client = Client::relueDansLeMagasin($client, Client::REFUS_AUTRE_MAGASIN);
             $lignesDeLAvoir = [];
+            $retours = [];
             $premiere = null;
 
             foreach (array_values($lignesSelectionnees) as $index => $selection) {
@@ -169,9 +170,13 @@ class CreerAvoirAction
                     'taux_tva_du_prix' => $ligneFacture->taux_tva_du_prix,
                     'remise_pourcentage' => $ligneFacture->remise_pourcentage,
                     'ordre' => $index,
-                    ...$ligneFacture->montantsDuRetour($quantite),
                 ];
+                $retours[] = [$ligneFacture, $quantite];
             }
+
+            // Les montants des lignes se calculent ensemble (voir
+            // LigneFacture::montantsDesRetours()).
+            $lignesDeLAvoir = array_map(fn (array $ligne, array $montants): array => [...$ligne, ...$montants], $lignesDeLAvoir, LigneFacture::montantsDesRetours($retours));
 
             $avoir = new Avoir(['motif' => $motif]);
             $avoir->forceFill([

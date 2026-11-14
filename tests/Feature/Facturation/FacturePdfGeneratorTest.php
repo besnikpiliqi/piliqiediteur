@@ -42,7 +42,7 @@ class FacturePdfGeneratorTest extends TestCase
 
     private const LIVRAISON_A_BERLIN = ['nature_operation' => NatureOperation::LivraisonIntracommunautaire, 'livraison_adresse' => 'Musterstraße 1', 'livraison_code_postal' => '10115', 'livraison_ville' => 'Berlin', 'livraison_pays' => 'DE', 'livraison_date' => '2026-10-12', 'transport_par' => 'magasin'];
 
-    private const NOTE_DE_CALCUL = 'Montants calculés depuis les prix TTC : pour chaque taux, le HT est le TTC du taux ÷ (1 + taux), arrondi une fois au centime, puis réparti sur les lignes ; la TVA est la différence. Les prix unitaires sont affichés arrondis au centime et les totaux calculés sans arrondi intermédiaire : la quantité × le prix unitaire affiché peut donc différer du total de la ligne.';
+    private const NOTE_DE_CALCUL = 'Montants calculés depuis les prix TTC : pour chaque ligne, la TVA est le TTC × taux ÷ (1 + taux), arrondie une fois au centime, et le HT est le TTC moins cette TVA ; un centime peut être ajusté sur une ligne pour que la TVA de chaque taux soit égale à sa base HT × le taux.';
 
     /**
      * La note d'un document qui montre le PU HT : facture à un
@@ -50,7 +50,7 @@ class FacturePdfGeneratorTest extends TestCase
      * d'un article (décision de l'éditeur du 14/11/2026, qui remplace
      * celle du 09/11/2026 et T105).
      */
-    private const NOTE_DE_CALCUL_PU_HT_D_UN_ARTICLE = 'Montants calculés depuis les prix TTC : pour chaque taux, le HT est le TTC du taux ÷ (1 + taux), arrondi une fois au centime, puis réparti sur les lignes ; la TVA est la différence. Le PU HT affiché est celui d\'un article : prix TTC moins sa TVA arrondie au centime (9,99 € TTC à 20 % : 8,32 € HT). La quantité × ce prix peut différer de quelques centimes du total HT de la ligne, calculé sur toute la quantité.';
+    private const NOTE_DE_CALCUL_PU_HT_D_UN_ARTICLE = 'Montants calculés depuis les prix TTC : pour chaque ligne, la TVA est le TTC × taux ÷ (1 + taux), arrondie une fois au centime, et le HT est le TTC moins cette TVA ; un centime peut être ajusté sur une ligne pour que la TVA de chaque taux soit égale à sa base HT × le taux. Le PU HT affiché est celui d\'un article : prix TTC moins sa TVA arrondie au centime (9,99 € TTC à 20 % : 8,32 € HT). La quantité × ce prix peut différer de quelques centimes du total HT de la ligne, calculé sur toute la quantité. Le PU HT exact, écrit sous chaque article, est celui de la facture électronique : la quantité × ce prix retombe sur le total HT de la ligne à quelques centimes près.';
 
     public function test_genere_un_pdf_non_vide_pour_une_facture_emise(): void
     {
@@ -144,7 +144,7 @@ class FacturePdfGeneratorTest extends TestCase
         $this->assertStringContainsString('SIRET : 12121212000012<br>', $this->rendu($facture));
         $this->assertSame('98765432100013', $ticket->client_siret);
         $this->assertStringContainsString(
-            '<div class="bloc-client"><div class="titre">Client</div><strong>Jean Dupont</strong><br>3 place du Marché<br>75011 Paris<br></div>',
+            '<td class="bloc"><div class="titre">Client</div><strong>Jean Dupont</strong><br>3 place du Marché<br>75011 Paris<br></td>',
             $this->compacte($this->rendu($ticket)),
         );
     }
@@ -170,7 +170,7 @@ class FacturePdfGeneratorTest extends TestCase
         ]));
 
         $this->assertStringContainsString(
-            '<div class="bloc-client"><div class="titre">Facturé à</div><strong>Brasserie de Namur</strong><br>Rue de Fer 12<br>Boîte 3<br>5000 Namur<br>BE<br>N° TVA : BE0123456789<br></div>',
+            '<td class="bloc"><div class="titre">Facturé à</div><strong>Brasserie de Namur</strong><br>Rue de Fer 12<br>Boîte 3<br>5000 Namur<br>BE<br>N° TVA : BE0123456789<br></td>',
             $this->compacte($this->rendu($facture)),
         );
     }
@@ -570,12 +570,13 @@ class FacturePdfGeneratorTest extends TestCase
     }
 
     /**
-     * Toute vente soumise à la TVA, ticket ou facture, se calcule taux par
-     * taux depuis ses prix TTC, et le HT de chaque taux se répartit sur ses
-     * lignes : une note sous les lignes explique le calcul (point 15) et
-     * l'écart qui peut en résulter : avec le prix unitaire affiché au
-     * centime sur le ticket, avec le PU HT d'un article sur la facture à un
-     * professionnel (décision de l'éditeur du 14/11/2026).
+     * Toute vente soumise à la TVA, ticket ou facture, se calcule ligne par
+     * ligne depuis ses prix TTC, un centime pouvant être ajusté par taux :
+     * une note sous les lignes explique le calcul (point 15, règle (b),
+     * décision de l'éditeur du 14/11/2026) ; sur la facture à un
+     * professionnel (modèle M6-b), elle ajoute le PU HT d'un article et le PU
+     * HT exact écrit sous chaque article ; sur le ticket (modèle P1), qui ne
+     * montre que des prix TTC, rien d'autre.
      *
      * @return array<string, array{bool, string}>
      */
@@ -660,7 +661,7 @@ class FacturePdfGeneratorTest extends TestCase
 
         $textes = array_column($this->pagesDuPdf(app(FacturePdfGenerator::class)->generer($facture)->output())[0]['textes'], 'texte');
 
-        $this->assertStringContainsString('<td class="reference">CABLE USB-C 100W 2M NOIR</td><td>'.e($designation).'</td>', $this->tableauDesLignes($facture));
+        $this->assertStringContainsString('<td class="reference">CABLE USB-C 100W 2M NOIR</td><td>'.e($designation).'<span class="sous">', $this->tableauDesLignes($facture));
         $this->assertContains('CABLE USB-C 100W 2M NOIR', $textes);
         $this->assertNotContains($designation, $textes);
         $this->assertNotEmpty(array_filter($textes, fn (string $texte): bool => str_starts_with($texte, 'Câble USB-C')));
@@ -674,9 +675,10 @@ class FacturePdfGeneratorTest extends TestCase
      * marges. La longue référence s'imprime entière sur une seule ligne,
      * dans un corps réduit pour tenir dans sa colonne ; une référence
      * courte du même tableau garde le corps des lignes. 9 000 x 9 999,97 €
-     * TTC remisés de 12,5 % : 78 749 763,75 € TTC, soit 65 624 803,13 € HT
-     * à 20 %, PU HT d'un article 9 999,97 € moins sa TVA de 1 666,66 €,
-     * soit 8 333,31 € (décision de l'éditeur du 14/11/2026).
+     * TTC remisés de 12,5 % : 78 749 763,75 € TTC, dont 13 124 960,625 ->
+     * 13 124 960,63 € de TVA, soit 65 624 803,12 € HT à 20 % (règle (b)),
+     * PU HT d'un article 9 999,97 € moins sa TVA de 1 666,66 €, soit
+     * 8 333,31 € (décision de l'éditeur du 14/11/2026).
      */
     public function test_une_reference_de_60_caracteres_et_de_grands_montants_laissent_toutes_les_colonnes_dans_la_page(): void
     {
@@ -692,7 +694,7 @@ class FacturePdfGeneratorTest extends TestCase
         $page = $this->pagesDuPdf(app(FacturePdfGenerator::class)->generer($facture)->output())[0];
 
         $this->assertChaqueTexteTientEntreLesMarges($page);
-        foreach (['QTÉ', 'PU HT', 'REMISE', 'TAUX', 'TOTAL HT', $reference, "9\u{202F}000", '8 333,31 €', '12,5 %', '65 624 803,13 €'] as $texte) {
+        foreach (['QTÉ', 'PU HT', 'REM.', 'TVA', 'TOTAL HT', $reference, "9\u{202F}000", '8 333,31 €', '12,5 %', '65 624 803,12 €'] as $texte) {
             $this->assertContains($texte, array_column($page['textes'], 'texte'));
         }
         $this->assertMatchesRegularExpression('#<td class="reference" style="font-size: [1-7]\.\dpt">'.$reference.'</td>#', $this->tableauDesLignes($facture));
@@ -700,11 +702,13 @@ class FacturePdfGeneratorTest extends TestCase
     }
 
     /**
-     * Une facture imprime, pour chaque ligne, la référence, la désignation,
-     * la quantité, le PU HT, le taux et le total HT, et ni PU TTC, ni TVA,
-     * ni total TTC : ils sont dans le tableau de la TVA et les totaux
-     * (point 3). 2 écrans à 120,00 € TTC à 20 % : PU HT 100,00 €, total HT
-     * 200,00 €.
+     * Une facture imprime, pour chaque ligne et dans cet ordre, la
+     * référence, l'article avec en petit son PU HT exact, la quantité, le PU
+     * HT, la remise (« — » sans remise), le taux de TVA et le total HT, et
+     * ni PU TTC ni total TTC : le TTC n'est qu'au récapitulatif par taux et
+     * au montant à régler (point 3, modèle M6-b choisi par l'éditeur le
+     * 14/11/2026). 2 écrans à 120,00 € TTC à 20 % : PU HT 100,00 €, total
+     * HT 200,00 €.
      */
     public function test_une_facture_n_imprime_ni_pu_ttc_ni_tva_ni_total_ttc_par_ligne(): void
     {
@@ -714,13 +718,17 @@ class FacturePdfGeneratorTest extends TestCase
 
         $tableau = $this->tableauDesLignes($facture);
 
-        $this->assertSame(['Référence', 'Désignation', 'Qté', 'PU HT', 'Taux', 'Total HT'], $this->entetes($tableau));
-        $this->assertStringContainsString('<tr><td class="reference">ECR-15</td><td>Écran 15 pouces</td><td class="montant">2</td><td class="montant">100,00 €</td><td class="montant">20 %</td><td class="montant">200,00 €</td></tr>', $tableau);
+        $this->assertSame(['Réf.', 'Article', 'Qté', 'PU HT', 'Rem.', 'TVA', 'Total HT'], $this->entetes($tableau));
+        $this->assertStringContainsString('<tr><td class="reference">ECR-15</td><td>Écran 15 pouces<span class="sous">PU HT exact : 100,000000 €</span></td><td class="montant">2</td><td class="montant">100,00 €</td><td class="montant">—</td><td class="montant">20 %</td><td class="montant total-de-la-ligne">200,00 €</td></tr>', $tableau);
+        $this->assertStringNotContainsString('PU TTC', $tableau);
+        $this->assertStringNotContainsString('240,00 €', $tableau);
     }
 
     /**
      * Un ticket, dont le client paie le prix affiché TTC, imprime pour
-     * chaque ligne le PU TTC et le total TTC (P3) : 2 articles à 25,00 €
+     * chaque ligne la référence, l'article, la quantité, le PU TTC, la
+     * remise, le taux de TVA et le total TTC, sans PU HT ni PU HT exact (P3,
+     * modèle P1 choisi par l'éditeur le 14/11/2026) : 2 articles à 25,00 €
      * TTC font 50,00 €.
      */
     public function test_un_ticket_imprime_le_pu_ttc_et_le_total_ttc_de_chaque_ligne(): void
@@ -731,8 +739,9 @@ class FacturePdfGeneratorTest extends TestCase
 
         $tableau = $this->tableauDesLignes($ticket);
 
-        $this->assertSame(['Référence', 'Désignation', 'Qté', 'PU TTC', 'Taux', 'Total TTC'], $this->entetes($tableau));
-        $this->assertStringContainsString('<tr><td class="reference">TAS-01</td><td>Tasse</td><td class="montant">2</td><td class="montant">25,00 €</td><td class="montant">20 %</td><td class="montant">50,00 €</td></tr>', $tableau);
+        $this->assertSame(['Réf.', 'Article', 'Qté', 'PU TTC', 'Rem.', 'TVA', 'Total TTC'], $this->entetes($tableau));
+        $this->assertStringContainsString('<tr><td class="reference">TAS-01</td><td>Tasse</td><td class="montant">2</td><td class="montant">25,00 €</td><td class="montant">—</td><td class="montant">20 %</td><td class="montant total-de-la-ligne">50,00 €</td></tr>', $tableau);
+        $this->assertStringNotContainsString('PU HT', $tableau);
     }
 
     /**
@@ -740,10 +749,11 @@ class FacturePdfGeneratorTest extends TestCase
      * professionnel : le PU HT s'enregistre au millionième, 0,833333 €,
      * celui de la facture électronique, et s'imprime comme partout, celui
      * d'un article : 1,00 € moins sa TVA de 0,17 €, 0,83 € (décision de
-     * l'éditeur du 14/11/2026, qui remplace celle du 09/11/2026) ; le total
-     * HT de la ligne reste le calcul exact, 1 000 ÷ 1,20 = 833,33 €, jamais
-     * 1 000 x 0,83 € = 830,00 €, ce que dit la note de calcul imprimée sous
-     * les lignes.
+     * l'éditeur du 14/11/2026, qui remplace celle du 09/11/2026), et, en
+     * petit sous l'article, tel qu'il est enregistré (modèle M6-b) ; le
+     * total HT de la ligne reste le calcul exact, 1 000,00 € moins sa TVA de
+     * 166,67 € (166,666...), 833,33 €, jamais 1 000 x 0,83 € = 830,00 €, ce
+     * que dit la note de calcul imprimée sous les lignes.
      */
     public function test_le_pu_ht_d_un_article_s_imprime_sans_changer_le_total_de_la_ligne(): void
     {
@@ -754,8 +764,8 @@ class FacturePdfGeneratorTest extends TestCase
         $html = $this->rendu($facture);
 
         $this->assertSame(['0.833333', '833.33'], [$facture->lignes->sole()->prix_unitaire_ht, $facture->lignes->sole()->montant_ht]);
-        $this->assertStringContainsString("<td class=\"montant\">1\u{202F}000</td><td class=\"montant\">0,83 €</td><td class=\"montant\">20 %</td><td class=\"montant\">833,33 €</td>", $this->tableauDesLignes($facture));
-        $this->assertStringNotContainsString('0,833333', $html);
+        $this->assertStringContainsString("<td>Vis<span class=\"sous\">PU HT exact : 0,833333 €</span></td><td class=\"montant\">1\u{202F}000</td><td class=\"montant\">0,83 €</td><td class=\"montant\">—</td><td class=\"montant\">20 %</td><td class=\"montant total-de-la-ligne\">833,33 €</td>", $this->tableauDesLignes($facture));
+        $this->assertSame(1, substr_count($html, '0,833333'));
         $this->assertStringNotContainsString('830,00 €', $html);
         $this->assertStringContainsString('<div class="note-calcul">'.e(self::NOTE_DE_CALCUL_PU_HT_D_UN_ARTICLE).'</div>', $this->compacte($html));
     }
@@ -777,7 +787,7 @@ class FacturePdfGeneratorTest extends TestCase
         $html = $this->compacte($this->rendu($facture));
 
         $this->assertSame(['0.833333', '83333.33'], [$facture->lignes->sole()->prix_unitaire_ht, $facture->lignes->sole()->montant_ht]);
-        $this->assertStringContainsString('<td class="montant">0,83 €</td><td class="montant">20 %</td><td class="montant">83 333,33 €</td>', $this->tableauDesLignes($facture));
+        $this->assertStringContainsString('<td class="montant">0,83 €</td><td class="montant">—</td><td class="montant">20 %</td><td class="montant total-de-la-ligne">83 333,33 €</td>', $this->tableauDesLignes($facture));
         $this->assertStringContainsString('<div class="note-calcul">'.e(self::NOTE_DE_CALCUL_PU_HT_D_UN_ARTICLE).'</div>', $html);
         $this->assertStringNotContainsString('deux centimes', $html);
     }
@@ -787,9 +797,10 @@ class FacturePdfGeneratorTest extends TestCase
      * 4 articles à 65,00 € TTC à 20 % ont un PU HT enregistré de 65 ÷ 1,2 =
      * 54,166667 €, celui de la facture électronique, imprimé comme le PU HT
      * d'un article : 65,00 € moins sa TVA de 10,83 €, 54,17 € (décision de
-     * l'éditeur du 14/11/2026) -- jamais 54,166667 € --, et la ligne
-     * totalise 260 ÷ 1,2 = 216,67 € HT, et non 4 x 54,17 € = 216,68 € ; la
-     * TVA du taux est 43,33 €.
+     * l'éditeur du 14/11/2026) -- le PU HT exact, 54,166667 €, ne s'imprime
+     * qu'en petit sous l'article (modèle M6-b) --, et la ligne totalise
+     * 260,00 € moins sa TVA de 43,33 € (43,333...), 216,67 € HT, et non 4 x
+     * 54,17 € = 216,68 €.
      */
     public function test_une_facture_a_un_professionnel_imprime_le_pu_ht_de_54_17_euros_d_un_article(): void
     {
@@ -800,9 +811,10 @@ class FacturePdfGeneratorTest extends TestCase
         $html = $this->compacte($this->rendu($facture));
 
         $this->assertSame(['54.166667', '216.67', '43.33', '260.00'], [$facture->lignes->sole()->prix_unitaire_ht, $facture->lignes->sole()->montant_ht, $facture->total_tva, $facture->total_ttc]);
-        $this->assertStringContainsString('<tr><td class="reference">ECR-65</td><td>Écran</td><td class="montant">4</td><td class="montant">54,17 €</td><td class="montant">20 %</td><td class="montant">216,67 €</td></tr>', $this->tableauDesLignes($facture));
+        $this->assertStringContainsString('<tr><td class="reference">ECR-65</td><td>Écran<span class="sous">PU HT exact : 54,166667 €</span></td><td class="montant">4</td><td class="montant">54,17 €</td><td class="montant">—</td><td class="montant">20 %</td><td class="montant total-de-la-ligne">216,67 €</td></tr>', $this->tableauDesLignes($facture));
         $this->assertStringContainsString('<td>20 %</td><td class="montant">216,67 €</td><td class="montant">43,33 €</td><td class="montant">260,00 €</td>', $html);
-        foreach (['54,166667 €', '54,1667 €', '216,68'] as $absent) {
+        $this->assertSame(1, substr_count($html, '54,166667 €'));
+        foreach (['54,1667 €', '216,68'] as $absent) {
             $this->assertStringNotContainsString($absent, $html);
         }
     }
@@ -812,8 +824,10 @@ class FacturePdfGeneratorTest extends TestCase
      * ont un PU HT enregistré de 9,99 ÷ 1,2 = 8,325 €, imprimé comme le PU
      * HT d'un article : la TVA d'un savon, 1,665 €, s'arrondit à 1,67 €, et
      * le PU HT est 9,99 - 1,67 = 8,32 €, jamais 8,325 € ni 8,33 € (un
-     * arrondi simple de 8,325 €) ; la ligne totalise 29,97 ÷ 1,2 = 24,975
-     * -> 24,98 € HT, inchangé.
+     * arrondi simple de 8,325 €), le PU HT exact, 8,325000 €, ne s'imprimant
+     * qu'en petit sous l'article (modèle M6-b) ; la ligne de 29,97 € TTC
+     * comprend 29,97 x 20 ÷ 120 = 4,995 -> 5,00 € de TVA et totalise 24,97 €
+     * HT (règle (b), décision de l'éditeur du 14/11/2026).
      */
     public function test_un_savon_a_9_99_euros_ttc_imprime_un_pu_ht_de_8_32_euros(): void
     {
@@ -823,9 +837,9 @@ class FacturePdfGeneratorTest extends TestCase
 
         $tableau = $this->tableauDesLignes($facture);
 
-        $this->assertSame(['8.325000', '24.98'], [$facture->lignes->sole()->prix_unitaire_ht, $facture->lignes->sole()->montant_ht]);
-        $this->assertStringContainsString('<td class="montant">3</td><td class="montant">8,32 €</td><td class="montant">20 %</td><td class="montant">24,98 €</td>', $tableau);
-        foreach (['8,33 €', '8,325 €', '8,325000 €'] as $absent) {
+        $this->assertSame(['8.325000', '24.97'], [$facture->lignes->sole()->prix_unitaire_ht, $facture->lignes->sole()->montant_ht]);
+        $this->assertStringContainsString('<td>Savon<span class="sous">PU HT exact : 8,325000 €</span></td><td class="montant">3</td><td class="montant">8,32 €</td><td class="montant">—</td><td class="montant">20 %</td><td class="montant total-de-la-ligne">24,97 €</td>', $tableau);
+        foreach (['8,33 €', '8,325 €'] as $absent) {
             $this->assertStringNotContainsString($absent, $tableau);
         }
     }
@@ -835,10 +849,10 @@ class FacturePdfGeneratorTest extends TestCase
      * un professionnel : 10,00 € TTC à 5,5 % portent une TVA de 0,5213 €,
      * soit 0,52 €, et un PU HT de 9,48 € ; 10,00 € TTC à 10 %, une TVA de
      * 0,9090 €, soit 0,91 €, et un PU HT de 9,09 € ; 0,99 € TTC à 20 %,
-     * une TVA de 0,165 €, soit 0,17 €, et un PU HT de 0,82 €. Les totaux de
-     * la facture restent ceux de son enregistrement : le HT du taux de 20 %,
-     * 0,99 ÷ 1,2 = 0,825 €, s'arrondit à 0,83 €, à un centime du PU HT
-     * affiché, ce que dit la note de calcul.
+     * une TVA de 0,165 €, soit 0,17 €, et un PU HT de 0,82 €. Chaque ligne
+     * d'un seul article totalise le même HT, sa TVA arrondie de même (règle
+     * (b), décision de l'éditeur du 14/11/2026) : 9,48 €, 9,09 € et 0,82 €,
+     * soit 19,39 € HT et 1,60 € de TVA.
      */
     public function test_le_pu_ht_d_un_article_s_imprime_aux_taux_reduits_et_pour_un_petit_prix(): void
     {
@@ -854,17 +868,17 @@ class FacturePdfGeneratorTest extends TestCase
 
         $tableau = $this->tableauDesLignes($facture);
 
-        $this->assertStringContainsString('<td class="reference">LIV-01</td><td>Livre</td><td class="montant">1</td><td class="montant">9,48 €</td><td class="montant">5,5 %</td><td class="montant">9,48 €</td>', $tableau);
-        $this->assertStringContainsString('<td class="reference">REP-01</td><td>Repas</td><td class="montant">1</td><td class="montant">9,09 €</td><td class="montant">10 %</td><td class="montant">9,09 €</td>', $tableau);
-        $this->assertStringContainsString('<td class="reference">GOM-01</td><td>Gomme</td><td class="montant">1</td><td class="montant">0,82 €</td><td class="montant">20 %</td><td class="montant">0,83 €</td>', $tableau);
-        $this->assertSame(['19.40', '1.59', '20.99'], [$facture->total_ht, $facture->total_tva, $facture->total_ttc]);
+        $this->assertStringContainsString('<td class="reference">LIV-01</td><td>Livre<span class="sous">PU HT exact : 9,478673 €</span></td><td class="montant">1</td><td class="montant">9,48 €</td><td class="montant">—</td><td class="montant">5,5 %</td><td class="montant total-de-la-ligne">9,48 €</td>', $tableau);
+        $this->assertStringContainsString('<td class="reference">REP-01</td><td>Repas<span class="sous">PU HT exact : 9,090909 €</span></td><td class="montant">1</td><td class="montant">9,09 €</td><td class="montant">—</td><td class="montant">10 %</td><td class="montant total-de-la-ligne">9,09 €</td>', $tableau);
+        $this->assertStringContainsString('<td class="reference">GOM-01</td><td>Gomme<span class="sous">PU HT exact : 0,825000 €</span></td><td class="montant">1</td><td class="montant">0,82 €</td><td class="montant">—</td><td class="montant">20 %</td><td class="montant total-de-la-ligne">0,82 €</td>', $tableau);
+        $this->assertSame(['19.39', '1.60', '20.99'], [$facture->total_ht, $facture->total_tva, $facture->total_ttc]);
     }
 
     /**
      * La note de calcul imprimée sous les lignes d'une facture à un
-     * professionnel garde son explication et y ajoute la phrase du PU HT
-     * d'un article (décision de l'éditeur du 14/11/2026, qui remplace celle
-     * du 09/11/2026) ;
+     * professionnel explique le calcul de chaque ligne et y ajoute la
+     * phrase du PU HT d'un article et celle du PU HT exact (décision de
+     * l'éditeur du 14/11/2026, modèle M6-b) ;
      * le pied de page garde toutes les mentions obligatoires, dans leur
      * ordre : l'identité de la société, les conditions de paiement, les
      * pénalités de retard, l'indemnité forfaitaire de 40 €, l'escompte et
@@ -896,7 +910,9 @@ class FacturePdfGeneratorTest extends TestCase
     /**
      * Une vente sans TVA française se paie hors taxe : un ticket d'export
      * à un particulier comme la facture d'une livraison intracommunautaire
-     * n'impriment que le PU HT et le total HT, au taux de 0 %, et leur note
+     * n'impriment que le PU HT et le total HT, au taux de 0 %, au modèle
+     * M6-b quel que soit le client (décision de l'éditeur du 14/11/2026), et
+     * leur note
      * de calcul ne cite ni « Prix catalogue TTC » ni « TVA retirée », des
      * colonnes que le PDF n'a plus (point 3). Le PU HT s'y imprime comme
      * celui d'un article, le prix catalogue TTC moins sa TVA arrondie au
@@ -914,10 +930,10 @@ class FacturePdfGeneratorTest extends TestCase
         ]);
         $livraison = $this->emettre($this->clientAllemandVerifie(), [['produit_id' => $this->produitAVingtPourCent('LIC-01', '25.00')->id, 'quantite' => 12]], self::LIVRAISON_A_BERLIN);
 
-        foreach ([[$export, '3</td><td class="montant">5,83 €</td><td class="montant">0 %</td><td class="montant">17,50 €'], [$livraison, '12</td><td class="montant">20,83 €</td><td class="montant">0 %</td><td class="montant">250,00 €']] as [$vente, $ligne]) {
+        foreach ([[$export, '3</td><td class="montant">5,83 €</td><td class="montant">—</td><td class="montant">0 %</td><td class="montant total-de-la-ligne">17,50 €'], [$livraison, '12</td><td class="montant">20,83 €</td><td class="montant">—</td><td class="montant">0 %</td><td class="montant total-de-la-ligne">250,00 €']] as [$vente, $ligne]) {
             $html = $this->rendu($vente);
 
-            $this->assertSame(['Référence', 'Désignation', 'Qté', 'PU HT', 'Taux', 'Total HT'], $this->entetes($this->tableauDesLignes($vente)), $vente->numero);
+            $this->assertSame(['Réf.', 'Article', 'Qté', 'PU HT', 'Rem.', 'TVA', 'Total HT'], $this->entetes($this->tableauDesLignes($vente)), $vente->numero);
             $this->assertStringContainsString($ligne, $this->tableauDesLignes($vente), $vente->numero);
             $this->assertStringContainsString('Vente sans TVA française', $html, $vente->numero);
             foreach (['PU TTC', 'Prix catalogue TTC', 'TVA retirée'] as $colonneAbsente) {
@@ -987,7 +1003,7 @@ class FacturePdfGeneratorTest extends TestCase
         $this->assertStringNotContainsString('SIREN', Str::betweenFirst($html, '<table class="en-tete">', '</table>'));
         $this->assertGreaterThan(
             $this->texte($page, fn (string $texte): bool => str_starts_with($texte, 'Martin et Fils'))['y'],
-            $this->texte($page, fn (string $texte): bool => $texte === 'Total TTC')['y'],
+            $this->texte($page, fn (string $texte): bool => $texte === 'NET À PAYER')['y'],
         );
     }
 
@@ -1078,7 +1094,7 @@ class FacturePdfGeneratorTest extends TestCase
     public function test_un_taux_a_zero_imprime_son_motif_dans_le_tableau_de_tva(): void
     {
         $this->travelTo(self::aParis('2026-10-09 10:15:00'));
-        $tableauDeLaTva = fn (string $motif, string $base): string => '<thead><tr><th>Taux TVA</th><th>Motif</th><th class="montant">Base HT</th><th class="montant">TVA</th><th class="montant">Total TTC</th></tr></thead>'
+        $tableauDeLaTva = fn (string $motif, string $base): string => '<thead><tr><th>Taux</th><th>Motif</th><th class="montant">Base HT</th><th class="montant">TVA</th><th class="montant">TTC</th></tr></thead>'
             .'<tbody><tr><td>0 %</td><td class="motif">'.e($motif).'</td><td class="montant">'.$base.'</td><td class="montant">0,00 €</td><td class="montant">'.$base.'</td></tr></tbody>';
         app(TenantContext::class)->set(Magasin::factory()->create());
         $livraison = $this->rendu($this->emettre($this->clientAllemandVerifie(), [['produit_id' => $this->produitAVingtPourCent('LIC-01', '25.00')->id, 'quantite' => 12]], self::LIVRAISON_A_BERLIN));
@@ -1124,12 +1140,15 @@ class FacturePdfGeneratorTest extends TestCase
     }
 
     /**
-     * Les règlements reçus à l'émission s'impriment à gauche du tableau des
-     * totaux, sur la même bande, en colonnes Date, Mode, Référence et
-     * Montant, puis ce qui restait dû à l'émission (constat C3) : chaque
-     * texte du bloc finit avant que le tableau des totaux ne commence, et
-     * le bloc commence à la hauteur de « Total HT ». Ticket de 62,40 € réglé
-     * 20,00 € en espèces et 42,40 € par carte.
+     * Les règlements reçus à l'émission s'impriment à gauche du montant à
+     * régler, sur la même bande, sous le récapitulatif par taux (modèle
+     * M6-b, le même pour un particulier, choix de l'éditeur du 14/11/2026),
+     * en colonnes Date, Mode, Référence et Montant, puis ce qui restait dû
+     * à l'émission (constat C3) : chaque texte du bloc finit avant que le
+     * montant à régler ne commence, le récapitulatif et le montant à régler
+     * commencent à la même hauteur, en haut de la bande, et le bloc des
+     * règlements sous le récapitulatif. Ticket de 62,40 € réglé 20,00 € en
+     * espèces et 42,40 € par carte.
      */
     public function test_les_reglements_s_impriment_a_gauche_des_totaux_sur_la_meme_bande(): void
     {
@@ -1141,7 +1160,8 @@ class FacturePdfGeneratorTest extends TestCase
         $page = $this->pagesDuPdf(app(FacturePdfGenerator::class)->generer($ticket)->output())[0];
 
         $totalHt = $this->texte($page, fn (string $texte): bool => $texte === 'Total HT');
-        $totalTtc = $this->texte($page, fn (string $texte): bool => $texte === 'Total TTC');
+        $recapitulatif = $this->texte($page, fn (string $texte): bool => $texte === 'Récapitulatif TVA');
+        $montantARegler = $this->texte($page, fn (string $texte): bool => $texte === 'Montant à régler');
         $haut = $this->texte($page, fn (string $texte): bool => $texte === 'RÈGLEMENTS')['y'];
         $bas = $this->texte($page, fn (string $texte): bool => $texte === 'Restant dû à l\'émission')['y'];
         $surLaBande = array_values(array_filter($page['textes'], fn (array $texte): bool => $texte['y'] >= $bas - 0.5 && $texte['y'] <= $haut + 0.5));
@@ -1151,8 +1171,9 @@ class FacturePdfGeneratorTest extends TestCase
             $this->assertLessThan($totalHt['x'], $reglement['x'] + $reglement['largeur'], $libelle);
         }
         $this->assertCount(2, array_filter($surLaBande, fn (array $texte): bool => $texte['texte'] === '09/10/2026' && $totalHt['x'] > $texte['x'] + $texte['largeur']));
-        $this->assertEqualsWithDelta($totalHt['y'], $haut, 4.0);
-        $this->assertGreaterThan($totalTtc['y'] - 30, $bas);
+        $this->assertEqualsWithDelta($montantARegler['y'], $recapitulatif['y'], 4.0);
+        $this->assertLessThan($recapitulatif['y'], $haut);
+        $this->assertLessThan($montantARegler['x'], $recapitulatif['x']);
         $this->assertChaqueTexteTientEntreLesMarges($page);
     }
 
@@ -1197,7 +1218,8 @@ class FacturePdfGeneratorTest extends TestCase
     /**
      * La bande des totaux est une seule rangée de tableau : quel que soit le
      * nombre de lignes qui la pousse vers le bas de la page, « Total HT »,
-     * « Total TTC », le bloc des règlements et ce qui restait dû à
+     * « NET À PAYER », le récapitulatif par taux, le bloc des règlements et
+     * ce qui restait dû à
      * l'émission s'impriment sur la même page, au-dessus du pied (avant ce
      * lot, le bloc se coupait entre deux pages de 14 à 20 lignes, et le
      * tableau des totaux lui-même à 20 et 21 lignes).
@@ -1221,17 +1243,19 @@ class FacturePdfGeneratorTest extends TestCase
         $pages = $this->pagesDuPdf(app(FacturePdfGenerator::class)->generer($ticket)->output());
 
         $pageDe = fn (string $cherche): array => array_keys(array_filter($pages, fn (array $page): bool => in_array($cherche, array_column($page['textes'], 'texte'), true)));
-        $this->assertCount(1, $pageDe('Total TTC'));
-        foreach (['Total HT', 'RÈGLEMENTS', 'Restant dû à l\'émission', 'VIR-42'] as $texte) {
-            $this->assertSame($pageDe('Total TTC'), $pageDe($texte), $texte);
+        $this->assertCount(1, $pageDe('NET À PAYER'));
+        foreach (['Total HT', 'Récapitulatif TVA', 'RÈGLEMENTS', 'Restant dû à l\'émission', 'VIR-42'] as $texte) {
+            $this->assertSame($pageDe('NET À PAYER'), $pageDe($texte), $texte);
         }
-        $this->assertLePiedEstSousLesLignes($pages[$pageDe('Total TTC')[0]], $this->textesDuPied($this->compacte($this->rendu($ticket))), 'Page '.($pageDe('Total TTC')[0] + 1).' sur '.count($pages));
+        $this->assertLePiedEstSousLesLignes($pages[$pageDe('NET À PAYER')[0]], $this->textesDuPied($this->compacte($this->rendu($ticket))), 'Page '.($pageDe('NET À PAYER')[0] + 1).' sur '.count($pages));
     }
 
     /**
-     * Le tableau des totaux garde sa place, au point près, qu'un ticket ait
+     * Le montant à régler garde sa place, au point près, qu'un ticket ait
      * des règlements ou non, et sur un avoir et un devis, qui n'en ont
-     * jamais : la case de gauche de leur bande reste vide.
+     * jamais : la case de gauche de leur bande n'a que le récapitulatif par
+     * taux. Son dernier libellé est « NET À PAYER » sur un ticket ou une
+     * facture, « TOTAL TTC » sur un avoir ou un devis.
      */
     public function test_l_avoir_le_devis_et_un_document_sans_reglement_gardent_leurs_totaux_a_la_meme_place(): void
     {
@@ -1242,8 +1266,8 @@ class FacturePdfGeneratorTest extends TestCase
         $avoir = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [['ligne_facture_id' => $sansReglement->lignes->sole()->id, 'quantite' => 1]], 'Retour');
         $devis = app(CreerDevisAction::class)->handle(self::auteur(), $client, $article);
         $colonnes = fn (string $pdf): array => array_map(
-            fn (string $libelle): float => $this->texte($this->pagesDuPdf($pdf)[0], fn (string $texte): bool => $texte === $libelle)['x'],
-            ['Total HT', 'Total TVA', 'Total TTC'],
+            fn (array $libelles): float => $this->texte($this->pagesDuPdf($pdf)[0], fn (string $texte): bool => in_array($texte, $libelles, true))['x'],
+            [['Total HT'], ['Total TVA'], ['NET À PAYER', 'TOTAL TTC']],
         );
 
         $attendues = $colonnes(app(FacturePdfGenerator::class)->generer($paye)->output());

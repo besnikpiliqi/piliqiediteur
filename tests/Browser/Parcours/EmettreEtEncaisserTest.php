@@ -18,8 +18,9 @@ use Tests\Browser\Support\Navigation;
  * « Émettre et encaisser » (R1) dans le navigateur : un brouillon fait hors
  * de la caisse s'émet et s'encaisse d'un seul geste, depuis sa fiche ou
  * depuis la liste des factures, en un ou plusieurs modes, en tout ou en
- * partie ; le PDF téléchargé imprime chaque règlement à gauche du Total
- * TTC (constat C3). Seul qui peut émettre et encaisser voit l'action. La
+ * partie ; le PDF téléchargé imprime chaque règlement à gauche du montant
+ * à régler, sous le récapitulatif par taux (constat C3, modèle M6-b). Seul
+ * qui peut émettre et encaisser voit l'action. La
  * société de test a tous ses rôles et son catalogue (voir
  * TestCaseDuNavigateur::societeComplete()).
  */
@@ -52,7 +53,7 @@ function paiementsDeLaFacture(Magasin $magasin, Facture $facture): array
         ->all());
 }
 
-test('le responsable émet et encaisse une facture en espèces et par carte depuis sa fiche, et son PDF imprime chaque règlement à gauche du Total TTC', function () {
+test('le responsable émet et encaisse une facture en espèces et par carte depuis sa fiche, et son PDF imprime chaque règlement à gauche du montant à régler', function () {
     $societe = $this->societeComplete();
     $facture = brouillonDe($societe->magasin, $societe->responsable, 'Hôtel des Pins');
     $onglet = $this->seConnecter($societe->responsable)->aller('/app/'.$societe->magasin->uuid.'/factures/'.$facture->id);
@@ -78,12 +79,14 @@ test('le responsable émet et encaisse une facture en espèces et par carte depu
 
     $page = $this->pagesDuPdf(base64_decode($fichiers[0]['contenu']))[0];
     $texte = fn (string $libelle): array => collect($page['textes'])->firstWhere('texte', $libelle) ?? throw new RuntimeException("« {$libelle} » n'est pas sur le PDF.");
-    $totalTtc = $texte('Total TTC');
+    $totalHt = $texte('Total HT');
     foreach (['RÈGLEMENTS', 'Espèces', 'Carte bancaire', 'CB-TRX-4521', '10,00 €', '8,00 €', 'Restant dû à l\'émission'] as $reglement) {
-        expect($texte($reglement)['x'] + $texte($reglement)['largeur'])->toBeLessThan($totalTtc['x']);
+        expect($texte($reglement)['x'] + $texte($reglement)['largeur'])->toBeLessThan($totalHt['x']);
     }
-    expect($texte('RÈGLEMENTS')['y'])->toBeGreaterThan($totalTtc['y'])
-        ->and($texte('Restant dû à l\'émission')['y'])->toBeGreaterThan($totalTtc['y'] - 30);
+    expect($texte('RÈGLEMENTS')['y'])->toBeLessThan($texte('Récapitulatif TVA')['y'])
+        ->and($texte('Restant dû à l\'émission')['y'])->toBeLessThan($texte('RÈGLEMENTS')['y'])
+        ->and($texte('Récapitulatif TVA')['y'])->toEqualWithDelta($texte('Montant à régler')['y'], 4.0)
+        ->and($texte('NET À PAYER')['x'])->toBeGreaterThan($texte('Récapitulatif TVA')['x']);
 });
 
 /*

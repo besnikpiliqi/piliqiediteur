@@ -119,7 +119,9 @@ class ReponseAuDevisEnLigneTest extends TestCase
      * et sa fiche, le PU HT d'un article (décision de l'éditeur du
      * 14/11/2026) : 3 savons à 9,99 € TTC à 20 %, PU HT 9,99 € moins sa TVA
      * de 1,67 €, soit 8,32 €, jamais le PU HT enregistré, 8,325 €, ni
-     * 8,33 € ; la ligne garde ses 24,98 € HT.
+     * 8,33 € ; la ligne de 29,97 € TTC compte 29,97 x 20 ÷ 120 = 4,995 ->
+     * 5,00 € de TVA et 24,97 € HT (règle (b), décision de l'éditeur du
+     * 14/11/2026).
      */
     public function test_la_page_du_lien_d_un_devis_a_un_professionnel_montre_le_pu_ht_d_un_article(): void
     {
@@ -128,7 +130,7 @@ class ReponseAuDevisEnLigneTest extends TestCase
         $jeton = $this->envoyer($devis);
 
         $this->repondre('get', $jeton)->assertOk()
-            ->assertSeeInOrder(['Savon', '8,32 €', '24,98 €'])
+            ->assertSeeInOrder(['Savon', '8,32 €', '24,97 €'])
             ->assertDontSee('8,325')
             ->assertDontSee('8,33 €');
         $this->assertSame('8.325000', $devis->lignes()->sole()->prix_unitaire_ht);

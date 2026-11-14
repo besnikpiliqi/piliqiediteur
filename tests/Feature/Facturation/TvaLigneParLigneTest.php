@@ -21,25 +21,29 @@ use Illuminate\Support\Arr;
 use Tests\TestCase;
 
 /**
- * « Prix et TVA des ventes » dans CLAUDE.md : sur une facture, à un
- * professionnel comme à un particulier, le HT de chaque taux se calcule une
- * fois sur le TTC de ses lignes, puis se répartit entre elles par cumul,
- * dans leur ordre : chaque ligne reçoit le HT arrondi du cumul des TTC
- * jusqu'à elle, moins celui des lignes précédentes du même taux ; la TVA
- * est la différence (voir CalculateurLigne::chiffrerUneVente()).
+ * « Prix et TVA des ventes » dans CLAUDE.md (règle (b), décision de
+ * l'éditeur du 14/11/2026) : sur une facture, à un professionnel comme à un
+ * particulier, la TVA de chaque ligne est son TTC x taux ÷ (1 + taux),
+ * arrondie une fois, et son HT le TTC moins cette TVA ; quand la somme des
+ * TVA des lignes d'un taux s'écarte de la TVA du TTC du taux, arrondie de
+ * même, un centime se corrige sur la ligne dont la TVA arrondie dépasse le
+ * plus sa TVA exacte, à égalité celle au plus gros TTC (voir
+ * CalculateurLigne::chiffrerUneVente()).
  *
  * La facture de ces tests, au centime :
- * - ligne 1, 1 x 1,00 € TTC à 20 % : 1,00 ÷ 1,20 = 0,833 -> 0,83 € HT,
- *   0,17 € de TVA ;
- * - ligne 2, 2 x 4,50 € TTC à 5,5 % : 9,00 ÷ 1,055 = 8,5308 -> 8,53 € HT,
- *   0,47 € de TVA ;
- * - ligne 3, 2 x 2,00 € TTC à 20 % : le cumul du taux, 5,00 ÷ 1,20 =
- *   4,166 -> 4,17 € HT, moins les 0,83 € de la ligne 1 : 3,34 € HT, et
- *   0,66 € de TVA, et non les 0,67 € de ses seuls 4,00 € (3,33 € HT).
+ * - ligne 1, 1 x 1,00 € TTC à 20 % : TVA 1,00 x 20 ÷ 120 = 0,1666... ->
+ *   0,17 €, 0,83 € HT ;
+ * - ligne 2, 2 x 4,50 € TTC à 5,5 % : TVA 9,00 x 5,5 ÷ 105,5 = 0,4691... ->
+ *   0,47 €, 8,53 € HT ;
+ * - ligne 3, 2 x 2,00 € TTC à 20 % : TVA 4,00 x 20 ÷ 120 = 0,6666... ->
+ *   0,67 €. Les lignes à 20 % font 0,84 € de TVA, pour une TVA du taux de
+ *   5,00 x 20 ÷ 120 = 0,8333... -> 0,83 € : les lignes 1 et 3 dépassent
+ *   leur TVA exacte du même tiers de centime, et la ligne 3, au plus gros
+ *   TTC, rend le centime : 0,66 € de TVA et 3,34 € HT.
  * Totaux : 12,70 € HT, 1,30 € de TVA (0,83 € à 20 %, 0,47 € à 5,5 %),
  * 14,00 € TTC, la somme des prix.
  */
-class RepartitionTvaParCumulTest extends TestCase
+class TvaLigneParLigneTest extends TestCase
 {
     use RefreshDatabase;
 
@@ -69,7 +73,7 @@ class RepartitionTvaParCumulTest extends TestCase
             ->all();
     }
 
-    public function test_une_facture_professionnelle_repartit_le_ht_de_chaque_taux_par_cumul_au_centime(): void
+    public function test_une_facture_professionnelle_calcule_la_tva_ligne_par_ligne_et_ajuste_un_centime_par_taux(): void
     {
         $facture = $this->factureProfessionnelle();
 
@@ -82,13 +86,13 @@ class RepartitionTvaParCumulTest extends TestCase
     }
 
     /**
-     * Le contenu signé, en centimes, et le PDF portent les parts réparties ;
-     * le PDF de cette facture à un professionnel imprime le PU HT d'un
-     * article de la ligne 3, 2,00 € moins sa TVA de 0,33 €, soit 1,67 €
-     * (décision de l'éditeur du 14/11/2026), devant les 3,34 € HT de la
-     * ligne.
+     * Le contenu signé, en centimes, et le PDF portent ces montants ; le PDF
+     * de cette facture à un professionnel (modèle M6-b) imprime le PU HT
+     * d'un article de la ligne 3, 2,00 € moins sa TVA de 0,33 €, soit
+     * 1,67 €, son PU HT exact, 1,666667 €, en petit sous l'article, et les
+     * 3,34 € HT de la ligne, qui a reçu le centime d'ajustement.
      */
-    public function test_le_contenu_signe_et_le_pdf_portent_les_parts_ainsi_reparties(): void
+    public function test_le_contenu_signe_et_le_pdf_portent_les_montants_de_chaque_ligne(): void
     {
         $facture = $this->factureProfessionnelle();
 
@@ -109,16 +113,17 @@ class RepartitionTvaParCumulTest extends TestCase
             ['taux' => 550, 'ht' => 853, 'tva' => 47, 'ttc' => 900],
         ], $document['ventilation']);
         $this->assertSame(['ht' => 1270, 'tva' => 130, 'ttc' => 1400], $document['totaux']);
-        $this->assertStringContainsString('<td>Cheville</td><td class="montant">2</td><td class="montant">1,67 €</td><td class="montant">20 %</td><td class="montant">3,34 €</td>', preg_replace('/>\s+</', '><', $html));
+        $this->assertStringContainsString('<td>Cheville<span class="sous">PU HT exact : 1,666667 €</span></td><td class="montant">2</td><td class="montant">1,67 €</td><td class="montant">—</td><td class="montant">20 %</td><td class="montant total-de-la-ligne">3,34 €</td>', preg_replace('/>\s+</', '><', $html));
         $this->assertStringContainsString('<td>20 %</td><td class="montant">4,17 €</td><td class="montant">0,83 €</td><td class="montant">5,00 €</td>', preg_replace('/>\s+</', '><', $html));
     }
 
     /**
-     * La ligne 3 n'a que 0,66 € de TVA. Son premier article rendu crédite
-     * 2,00 € : 1,67 € HT (2,00 ÷ 1,20 = 1,666...) et 0,33 € ; le second
-     * solde la ligne : 3,34 € HT et 0,66 € de TVA, moins le premier retour,
-     * soit 1,67 € et 0,33 €. Les deux retours créditent 0,66 € de TVA,
-     * jamais les 0,67 € de ses seuls 4,00 €.
+     * La ligne 3 n'a que 0,66 € de TVA, après son centime d'ajustement. Son
+     * premier article rendu crédite 2,00 € : 0,33 € de TVA (2,00 x 20 ÷ 120
+     * = 0,333...) et 1,67 € HT ; le second solde la ligne : 3,34 € HT et
+     * 0,66 € de TVA, moins le premier retour, soit 1,67 € et 0,33 €. Les
+     * deux retours créditent 0,66 € de TVA, jamais les 0,67 € de ses seuls
+     * 4,00 €.
      */
     public function test_le_retour_d_une_ligne_ne_depasse_jamais_sa_part_de_tva(): void
     {

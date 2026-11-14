@@ -19,7 +19,8 @@ use App\Domain\Facturation\Services\CalculateurLigne;
  * et son taux de marque, ce bénéfice ÷ ce prix HT.
  *
  * Une information du catalogue, jamais le montant d'un document : une
- * vente se calcule ligne à ligne avec les autres lignes de son taux (voir
+ * vente se calcule avec les autres lignes de son taux, qui peuvent faire
+ * varier d'un centime la TVA d'une ligne (voir
  * CalculateurLigne::chiffrerUneVente()).
  */
 final readonly class MargeDuCatalogue

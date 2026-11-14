@@ -12,11 +12,12 @@ use PHPUnit\Framework\TestCase;
 /**
  * Calcul des montants (voir le commentaire de classe de CalculateurLigne),
  * en centimes entiers : toute vente, à un particulier comme à un
- * professionnel, part de ses prix TTC -- le HT de chaque taux est le TTC
- * de ses lignes ÷ (1 + taux), arrondi une fois au centime le plus proche,
- * un demi-centime au centime supérieur, et réparti sur ses lignes par
- * cumul ; la TVA est la différence --, et un retour rend le calcul de la
- * vente sur les articles rendus, dans la limite de la ligne ; un achat
+ * professionnel, part de ses prix TTC, ligne par ligne -- la TVA de
+ * chaque ligne est son TTC x taux ÷ (1 + taux), arrondie une fois au
+ * centime le plus proche, un demi-centime au centime supérieur, son HT est
+ * le TTC moins cette TVA, et un centime par ligne au plus ramène la TVA de
+ * chaque taux à celle du TTC de ses lignes --, et un retour rend le calcul
+ * de la vente sur les articles rendus, dans la limite de la ligne ; un achat
  * part du PU HT du fournisseur, la TVA de chaque taux se calculant sur le
  * total HT du taux, arrondie une fois et répartie par cumul.
  *
@@ -158,10 +159,12 @@ class CalculateurLigneTest extends TestCase
 
     /**
      * Sur un même document, 50,00 € TTC à 20 % font 41,67 € HT et 8,33 € de
-     * TVA en une ligne, en 2 x 25,00 € ou en deux lignes de 25,00 € : le HT
-     * du taux s'arrondit une fois, puis se répartit, la première ligne
-     * recevant 20,83 € (20,833...) et la seconde le reste du cumul,
-     * 41,67 - 20,83 = 20,84 €.
+     * TVA en une ligne, en 2 x 25,00 € ou en deux lignes de 25,00 €
+     * (décision de l'éditeur du 14/11/2026) : la TVA de chaque ligne de
+     * 25,00 €, 25,00 x 20 ÷ 120 = 4,1666... -> 4,17 €, fait 8,34 € pour une
+     * TVA du taux de 50,00 x 20 ÷ 120 = 8,333... -> 8,33 € ; les deux
+     * lignes ont le même écart d'arrondi et le même TTC, la première rend
+     * le centime : 20,84 € HT et 4,16 € de TVA, puis 20,83 € et 4,17 €.
      */
     public function test_le_meme_total_donne_les_memes_montants_quel_que_soit_le_decoupage(): void
     {
@@ -172,7 +175,7 @@ class CalculateurLigneTest extends TestCase
         $this->assertSame([4167, 833, 5000], self::triplet($enUneLigne['total']));
         $this->assertSame([4167, 833, 5000], self::triplet($enDeuxArticles['total']));
         $this->assertSame([4167, 833, 5000], self::triplet($enDeuxLignes['total']));
-        $this->assertSame([[2083, 417, 2500], [2084, 416, 2500]], self::triplets($enDeuxLignes['lignes']));
+        $this->assertSame([[2084, 416, 2500], [2083, 417, 2500]], self::triplets($enDeuxLignes['lignes']));
     }
 
     /**
@@ -187,19 +190,21 @@ class CalculateurLigneTest extends TestCase
     }
 
     /**
-     * Le client paie toujours la somme des prix affichés : 9,99 € (8,325
-     * -> 8,33 € HT), 3 x 0,99 € = 2,97 € (2,475 -> 2,48 € HT), et trois
-     * lignes de 0,10 €, 0,30 € (0,25 € HT : 0,083 -> 0,08, puis 0,167 ->
-     * 0,17 moins 0,08, puis 0,25 moins 0,17).
+     * Le client paie toujours la somme des prix affichés : 9,99 € (TVA
+     * 1,665 -> 1,67 €, 8,32 € HT), 3 x 0,99 € = 2,97 € (TVA 0,495 -> 0,50 €,
+     * 2,47 € HT), et trois lignes de 0,10 €, 0,30 € : la TVA de chaque ligne,
+     * 0,0166... -> 0,02 €, fait 0,06 € pour une TVA du taux de 0,05 €, et la
+     * première ligne rend le centime (0,09 € HT et 0,01 € de TVA), soit
+     * 0,25 € HT et 0,05 € de TVA.
      */
     public function test_le_ttc_paye_est_toujours_la_somme_des_prix(): void
     {
         $calculateur = $this->calculateur();
         $troisLignes = $calculateur->chiffrerUneVente([self::ligneDeVente(10), self::ligneDeVente(10), self::ligneDeVente(10)]);
 
-        $this->assertSame([833, 166, 999], self::triplet($calculateur->chiffrerUneVente([self::ligneDeVente(999)])['total']));
-        $this->assertSame([248, 49, 297], self::triplet($calculateur->chiffrerUneVente([self::ligneDeVente(99, 3)])['total']));
-        $this->assertSame([[8, 2, 10], [9, 1, 10], [8, 2, 10]], self::triplets($troisLignes['lignes']));
+        $this->assertSame([832, 167, 999], self::triplet($calculateur->chiffrerUneVente([self::ligneDeVente(999)])['total']));
+        $this->assertSame([247, 50, 297], self::triplet($calculateur->chiffrerUneVente([self::ligneDeVente(99, 3)])['total']));
+        $this->assertSame([[9, 1, 10], [8, 2, 10], [8, 2, 10]], self::triplets($troisLignes['lignes']));
         $this->assertSame([25, 5, 30], self::triplet($troisLignes['total']));
     }
 
@@ -228,50 +233,89 @@ class CalculateurLigneTest extends TestCase
     /**
      * La remise s'arrondit une fois, sur le TTC de la ligne : 50,00 €
      * remisés de 10 % font 45,00 € (37,50 € HT) ; 3 x 9,99 € = 29,97 €
-     * remisés de 15 % (4,4955 -> 4,50 €) font 25,47 € TTC, et 25,47 ÷ 1,2
-     * = 21,225 -> 21,23 € HT.
+     * remisés de 15 % (4,4955 -> 4,50 €) font 25,47 € TTC, dont 25,47 x 20 ÷
+     * 120 = 4,245 -> 4,25 € de TVA, et 21,22 € HT.
      */
     public function test_une_remise_s_arrondit_une_fois_sur_le_ttc_de_la_ligne(): void
     {
         $calculateur = $this->calculateur();
 
         $this->assertSame([3750, 750, 4500], self::triplet($calculateur->chiffrerUneVente([self::ligneDeVente(5000, 1, 2000, 1000)])['total']));
-        $this->assertSame([2123, 424, 2547], self::triplet($calculateur->chiffrerUneVente([self::ligneDeVente(999, 3, 2000, 1500)])['total']));
+        $this->assertSame([2122, 425, 2547], self::triplet($calculateur->chiffrerUneVente([self::ligneDeVente(999, 3, 2000, 1500)])['total']));
     }
 
     /**
-     * « L'arrondi classique au centime » de l'éditeur : 2,97 € TTC à 20 %
-     * font 2,475 € HT, arrondi au centime supérieur (2,48 € HT, 0,49 € de
-     * TVA) ; 1,05 € font 0,875 € -> 0,88 € HT et 0,17 € de TVA.
+     * « L'arrondi classique au centime » de l'éditeur, sur la TVA de la
+     * ligne (décision de l'éditeur du 14/11/2026) : 2,97 € TTC à 20 %
+     * comprennent 2,97 x 20 ÷ 120 = 0,495 € de TVA, arrondie au centime
+     * supérieur (0,50 €, 2,47 € HT) ; 1,05 € en comprennent 0,175 € ->
+     * 0,18 € (0,87 € HT) ; 9,99 €, 1,665 € -> 1,67 € (8,32 € HT, le PU HT
+     * d'un article, voir prixUnitaireHtAffiche()).
      */
-    public function test_un_demi_centime_exact_arrondit_le_ht_au_centime_superieur(): void
+    public function test_un_demi_centime_exact_arrondit_la_tva_au_centime_superieur(): void
     {
         $calculateur = $this->calculateur();
 
-        $this->assertSame([248, 49, 297], self::triplet($calculateur->chiffrerUneVente([self::ligneDeVente(297)])['total']));
-        $this->assertSame([88, 17, 105], self::triplet($calculateur->chiffrerUneVente([self::ligneDeVente(105)])['total']));
+        $this->assertSame([247, 50, 297], self::triplet($calculateur->chiffrerUneVente([self::ligneDeVente(297)])['total']));
+        $this->assertSame([87, 18, 105], self::triplet($calculateur->chiffrerUneVente([self::ligneDeVente(105)])['total']));
+        $this->assertSame([832, 167, 999], self::triplet($calculateur->chiffrerUneVente([self::ligneDeVente(999)])['total']));
     }
 
     /**
-     * Les lignes d'un taux se partagent son HT par cumul, dans leur ordre :
-     * 0,10 €, 0,05 € puis 0,10 € à 20 % (cumuls 0,083 -> 0,08, 0,125 ->
-     * 0,13 et 0,208 -> 0,21) reçoivent 0,08, 0,05 et 0,08 € HT ; 0,05 €
-     * d'abord (cumuls 0,042 -> 0,04, 0,125 -> 0,13 puis 0,21), elles
-     * reçoivent 0,04, 0,09 et 0,08 € : le centime d'arrondi va à la ligne où
-     * le cumul le fait apparaître. Le taux, lui, fait toujours 0,21 € HT et
-     * 0,04 € de TVA.
+     * Quand la somme des TVA des lignes d'un taux dépasse la TVA du taux, le
+     * centime va à la ligne dont la TVA arrondie dépasse le plus sa TVA
+     * exacte (décision de l'éditeur du 14/11/2026) : 0,10 €, 0,05 € puis
+     * 0,10 € à 20 % ont pour TVA 0,0166... -> 0,02 €, 0,0083... -> 0,01 € et
+     * 0,02 €, soit 0,05 € pour une TVA du taux de 0,25 x 20 ÷ 120 =
+     * 0,0416... -> 0,04 € ; les lignes de 0,10 € dépassent leur TVA exacte de
+     * 0,0033 € et celle de 0,05 € de 0,0017 € : la première ligne de 0,10 €
+     * rend le centime (0,09 € HT, 0,01 € de TVA), la ligne de 0,05 € garde
+     * 0,04 € HT et 0,01 € de TVA. Dans l'ordre 0,05 €, 0,10 €, 0,10 €, c'est
+     * la deuxième ligne. Le taux fait toujours 0,21 € HT et 0,04 € de TVA.
      */
-    public function test_le_ht_d_un_taux_se_repartit_par_cumul_dans_l_ordre_des_lignes(): void
+    public function test_le_centime_d_ecart_d_un_taux_va_a_la_ligne_dont_la_tva_est_la_plus_arrondie(): void
     {
         $calculateur = $this->calculateur();
 
         $dixCinqDix = $calculateur->chiffrerUneVente([self::ligneDeVente(10), self::ligneDeVente(5), self::ligneDeVente(10)]);
         $cinqDixDix = $calculateur->chiffrerUneVente([self::ligneDeVente(5), self::ligneDeVente(10), self::ligneDeVente(10)]);
 
-        $this->assertSame([[8, 2, 10], [5, 0, 5], [8, 2, 10]], self::triplets($dixCinqDix['lignes']));
+        $this->assertSame([[9, 1, 10], [4, 1, 5], [8, 2, 10]], self::triplets($dixCinqDix['lignes']));
         $this->assertSame([[4, 1, 5], [9, 1, 10], [8, 2, 10]], self::triplets($cinqDixDix['lignes']));
         $this->assertSame([21, 4, 25], self::triplet($dixCinqDix['total']));
         $this->assertSame([21, 4, 25], self::triplet($cinqDixDix['total']));
+    }
+
+    /**
+     * À égalité d'écart d'arrondi, le centime va à la ligne au plus gros
+     * TTC, même si elle vient après : 0,10 € (TVA 0,0166... -> 0,02 €) et
+     * 0,40 € (0,0666... -> 0,07 €) à 20 % dépassent tous deux leur TVA
+     * exacte de 0,0033 € ; leurs 0,09 € de TVA dépassent celle du taux,
+     * 0,50 x 20 ÷ 120 = 0,0833... -> 0,08 € : la ligne de 0,40 € rend le
+     * centime (0,34 € HT, 0,06 € de TVA).
+     */
+    public function test_a_egalite_le_centime_va_a_la_ligne_au_plus_gros_ttc(): void
+    {
+        $vente = $this->calculateur()->chiffrerUneVente([self::ligneDeVente(10), self::ligneDeVente(40)]);
+
+        $this->assertSame([[8, 2, 10], [34, 6, 40]], self::triplets($vente['lignes']));
+        $this->assertSame([42, 8, 50], self::triplet($vente['total']));
+    }
+
+    /**
+     * Quand la somme des TVA des lignes est sous la TVA du taux, la ligne
+     * dont la TVA arrondie est la plus en dessous de sa TVA exacte reçoit
+     * un centime : trois lignes de 1,03 € à 20 % ont chacune 1,03 x 20 ÷
+     * 120 = 0,1716... -> 0,17 € de TVA, soit 0,51 €, pour une TVA du taux de
+     * 3,09 x 20 ÷ 120 = 0,515 -> 0,52 € ; à égalité de tout, la première
+     * reçoit le centime (0,85 € HT et 0,18 € de TVA).
+     */
+    public function test_une_somme_trop_basse_ajoute_un_centime_de_tva(): void
+    {
+        $vente = $this->calculateur()->chiffrerUneVente([self::ligneDeVente(103), self::ligneDeVente(103), self::ligneDeVente(103)]);
+
+        $this->assertSame([[85, 18, 103], [86, 17, 103], [86, 17, 103]], self::triplets($vente['lignes']));
+        $this->assertSame([257, 52, 309], self::triplet($vente['total']));
     }
 
     /**
@@ -356,20 +400,22 @@ class CalculateurLigneTest extends TestCase
      * rendus jusqu'ici, le calcul de la vente sur cette quantité, moins ce
      * qu'ont rendu les précédents : 2 x 40,00 € (66,67 € HT + 13,33 €) se
      * rendent en 33,33 € + 6,67 €, puis 33,34 € + 6,66 €, 40,00 € chaque
-     * fois ; 3 x 0,99 € (2,48 € + 0,49 €) en 0,83 € + 0,16 €, puis 0,82 € +
-     * 0,17 € (1,98 € rendus : 1,65 € HT), puis 0,83 € + 0,16 € ; 3 x 9,99 €
-     * remisés de 15 % (21,23 € + 4,24 €), un article (9,99 € moins 1,50 € de
-     * remise, 8,49 € : 7,075 -> 7,08 € HT), puis les deux autres.
+     * fois ; 3 x 0,99 € (2,47 € + 0,50 €) en 0,82 € + 0,17 € (TVA 0,165 ->
+     * 0,17 €), puis 0,83 € + 0,16 € (1,98 € rendus : 0,33 € de TVA, 1,65 €
+     * HT), puis 0,82 € + 0,17 € ; 3 x 9,99 € remisés de 15 % (21,22 € +
+     * 4,25 €), un article (9,99 € moins 1,50 € de remise, 8,49 € : TVA
+     * 1,415 -> 1,42 €, 7,07 € HT), puis les deux autres (décision de
+     * l'éditeur du 14/11/2026).
      */
     public function test_les_retours_partiels_rendent_le_calcul_de_la_vente_encadre_par_la_ligne(): void
     {
         $cables = [...self::ligneDeVente(4000, 2), 'montant_ht' => 6667, 'montant_tva' => 1333];
-        $stylos = [...self::ligneDeVente(99, 3), 'montant_ht' => 248, 'montant_tva' => 49];
-        $piles = [...self::ligneDeVente(999, 3, 2000, 1500), 'montant_ht' => 2123, 'montant_tva' => 424];
+        $stylos = [...self::ligneDeVente(99, 3), 'montant_ht' => 247, 'montant_tva' => 50];
+        $piles = [...self::ligneDeVente(999, 3, 2000, 1500), 'montant_ht' => 2122, 'montant_tva' => 425];
 
         $this->assertSame([[3333, 667, 4000], [3334, 666, 4000]], $this->retoursDeVente($cables, [1, 2]));
-        $this->assertSame([[83, 16, 99], [82, 17, 99], [83, 16, 99]], $this->retoursDeVente($stylos, [1, 2, 3]));
-        $this->assertSame([[708, 141, 849], [1415, 283, 1698]], $this->retoursDeVente($piles, [1, 3]));
+        $this->assertSame([[82, 17, 99], [83, 16, 99], [82, 17, 99]], $this->retoursDeVente($stylos, [1, 2, 3]));
+        $this->assertSame([[707, 142, 849], [1415, 283, 1698]], $this->retoursDeVente($piles, [1, 3]));
     }
 
     /**
@@ -390,37 +436,124 @@ class CalculateurLigneTest extends TestCase
     }
 
     /**
-     * Un article à 0,04 € puis 5 x 0,01 € à 20 % : le HT du taux, 0,09 ÷ 1,2
-     * = 0,075 -> 0,08 €, se répartit 0,03 € et 0,05 €, si bien que la
-     * seconde ligne n'a aucune TVA. Quatre de ses articles rendus (0,04 €)
-     * vaudraient seuls 0,03 € HT et 0,01 € de TVA : le retour ne rend
-     * jamais plus de TVA que la ligne, ici 0,04 € HT sans TVA, puis le
-     * dernier article 0,01 €.
+     * 4 x 0,01 € puis un article à 0,04 € à 20 % : chaque ligne a pour TVA
+     * 0,04 x 20 ÷ 120 = 0,0066... -> 0,01 €, soit 0,02 € pour une TVA du
+     * taux de 0,08 x 20 ÷ 120 = 0,0133... -> 0,01 € ; à égalité, la
+     * première ligne rend le centime et n'a plus aucune TVA (décision de
+     * l'éditeur du 14/11/2026). Trois de ses articles rendus (0,03 €)
+     * vaudraient seuls 0,005 -> 0,01 € de TVA : le retour ne rend jamais
+     * plus de TVA que la ligne, ici 0,03 € HT sans TVA, puis le dernier
+     * article 0,01 €.
      */
     public function test_un_retour_ne_rend_jamais_plus_que_la_tva_de_la_ligne(): void
     {
-        $vente = $this->calculateur()->chiffrerUneVente([self::ligneDeVente(4), self::ligneDeVente(1, 5)]);
-        $ligne = [...self::ligneDeVente(1, 5), 'montant_ht' => 5, 'montant_tva' => 0];
+        $vente = $this->calculateur()->chiffrerUneVente([self::ligneDeVente(1, 4), self::ligneDeVente(4)]);
+        $ligne = [...self::ligneDeVente(1, 4), 'montant_ht' => 4, 'montant_tva' => 0];
 
-        $this->assertSame([[3, 1, 4], [5, 0, 5]], self::triplets($vente['lignes']));
-        $this->assertSame([[4, 0, 4], [1, 0, 1]], $this->retoursDeVente($ligne, [4, 5]));
+        $this->assertSame([[4, 0, 4], [3, 1, 4]], self::triplets($vente['lignes']));
+        $this->assertSame([[3, 0, 3], [1, 0, 1]], $this->retoursDeVente($ligne, [3, 4]));
     }
 
     /**
      * 10 articles à 0,02 € remisés de 25 % (0,20 € moins 0,05 €) font une
-     * ligne de 0,15 € TTC : 0,13 € HT et 0,02 € de TVA. Rendus un par un,
-     * un simple prorata rendrait -0,01 € de TVA au deuxième retour ; le
-     * calcul de la vente, encadré par la ligne, ne rend jamais rien de
-     * négatif, et les dix retours retombent exactement sur la ligne.
+     * ligne de 0,15 € TTC : 0,025 -> 0,03 € de TVA et 0,12 € HT. Rendus un
+     * par un, les articles rendus jusqu'ici coûtent 0,01 €, 0,03 €, 0,04 €,
+     * 0,06 €... (la remise de chaque cumul arrondie une fois), dont la TVA,
+     * le TTC ÷ 6, vaut 0,00 €, 0,005 -> 0,01 €, 0,0066... -> 0,01 €, 0,01
+     * €... ; chaque retour en rend la différence avec les précédents :
+     * jamais rien de négatif, et les dix retours retombent exactement sur
+     * la ligne (décision de l'éditeur du 14/11/2026).
      */
     public function test_aucun_retour_ne_rend_un_montant_negatif(): void
     {
-        $ligne = [...self::ligneDeVente(2, 10, 2000, 2500), 'montant_ht' => 13, 'montant_tva' => 2];
+        $ligne = [...self::ligneDeVente(2, 10, 2000, 2500), 'montant_ht' => 12, 'montant_tva' => 3];
 
         $retours = $this->retoursDeVente($ligne, range(1, 10));
 
-        $this->assertSame([[1, 0, 1], [2, 0, 2], [0, 1, 1], [2, 0, 2], [1, 0, 1], [2, 0, 2], [0, 1, 1], [2, 0, 2], [1, 0, 1], [2, 0, 2]], $retours);
-        $this->assertSame([13, 2, 15], [array_sum(array_column($retours, 0)), array_sum(array_column($retours, 1)), array_sum(array_column($retours, 2))]);
+        $this->assertSame([[1, 0, 1], [1, 1, 2], [1, 0, 1], [2, 0, 2], [1, 0, 1], [1, 1, 2], [1, 0, 1], [2, 0, 2], [1, 0, 1], [1, 1, 2]], $retours);
+        $this->assertSame([12, 3, 15], [array_sum(array_column($retours, 0)), array_sum(array_column($retours, 1)), array_sum(array_column($retours, 2))]);
+    }
+
+    /**
+     * Un avoir ramène la TVA de chaque taux à celle de son TTC, d'un
+     * centime sur une ligne rendue en partie (décision de Claude, D76) :
+     * une facture de 2 x 25,00 € (41,67 € HT + 8,33 €) et d'un article à
+     * 25,00 € (20,83 € + 4,17 €). Un avoir rend un des deux articles à
+     * 25,00 € (TVA 4,1666... -> 4,17 €, 20,83 € HT) et l'article seul
+     * (20,83 € + 4,17 €) : 8,34 € de TVA pour une TVA du taux de 50,00 x 20
+     * ÷ 120 = 8,333... -> 8,33 € ; seule la ligne rendue en partie peut
+     * recevoir le centime : 20,84 € HT et 4,16 €. Le second article de la
+     * ligne, rendu ensuite, en solde le reste : 20,83 € + 4,17 €.
+     */
+    public function test_un_avoir_ramene_la_tva_de_son_taux_sur_une_ligne_rendue_en_partie(): void
+    {
+        $deuxArticles = [...self::ligneDeVente(2500, 2), 'montant_ht' => 4167, 'montant_tva' => 833];
+        $unArticle = [...self::ligneDeVente(2500), 'montant_ht' => 2083, 'montant_tva' => 417];
+        $rienRendu = ['montant_ht' => 0, 'montant_tva' => 0];
+
+        $premier = $this->calculateur()->chiffrerUnAvoir([
+            ['ligne' => $deuxArticles, 'quantite_rendue' => 1, 'deja_rendu' => $rienRendu],
+            ['ligne' => $unArticle, 'quantite_rendue' => 1, 'deja_rendu' => $rienRendu],
+        ]);
+        $second = $this->calculateur()->chiffrerUnAvoir([
+            ['ligne' => $deuxArticles, 'quantite_rendue' => 2, 'deja_rendu' => ['montant_ht' => 2084, 'montant_tva' => 416]],
+        ]);
+
+        $this->assertSame([[2084, 416, 2500], [2083, 417, 2500]], self::triplets($premier['lignes']));
+        $this->assertSame([2000 => [4167, 833, 5000]], self::triplets($premier['taux']));
+        $this->assertSame([[2083, 417, 2500]], self::triplets($second['lignes']));
+    }
+
+    /**
+     * Un avoir qui ne rend que des lignes entières en garde les montants
+     * (décision de Claude, D76) : deux lignes de 25,00 € à 20 % ont été
+     * vendues 20,84 € + 4,16 € et 20,83 € + 4,17 €. L'avoir de la première
+     * rend 20,84 € + 4,16 €, quand la TVA de ses 25,00 € serait 4,17 € :
+     * aucune ligne rendue en partie ne peut recevoir le centime, l'avoir
+     * garde cet écart d'un centime. L'avoir des deux lignes rend exactement
+     * la facture : 41,67 € + 8,33 €.
+     */
+    public function test_un_avoir_qui_ne_rend_que_des_lignes_entieres_en_garde_les_montants(): void
+    {
+        $premiere = [...self::ligneDeVente(2500), 'montant_ht' => 2084, 'montant_tva' => 416];
+        $seconde = [...self::ligneDeVente(2500), 'montant_ht' => 2083, 'montant_tva' => 417];
+        $rienRendu = ['montant_ht' => 0, 'montant_tva' => 0];
+
+        $dUneLigne = $this->calculateur()->chiffrerUnAvoir([['ligne' => $premiere, 'quantite_rendue' => 1, 'deja_rendu' => $rienRendu]]);
+        $deToutLaFacture = $this->calculateur()->chiffrerUnAvoir([
+            ['ligne' => $premiere, 'quantite_rendue' => 1, 'deja_rendu' => $rienRendu],
+            ['ligne' => $seconde, 'quantite_rendue' => 1, 'deja_rendu' => $rienRendu],
+        ]);
+
+        $this->assertSame([2084, 416, 2500], self::triplet($dUneLigne['total']));
+        $this->assertSame([[2084, 416, 2500], [2083, 417, 2500]], self::triplets($deToutLaFacture['lignes']));
+        $this->assertSame([4167, 833, 5000], self::triplet($deToutLaFacture['total']));
+    }
+
+    /**
+     * Après un centime d'ajustement, aucun retour n'est négatif : une
+     * facture de 3 x 0,01 € (0,02 € HT + 0,01 € de TVA), 0,02 € (0,02 € HT,
+     * sans TVA) et 0,01 € à 20 %. Un avoir rend un article de la première
+     * ligne (0,01 € : 0,0016... -> 0,00 € de TVA) et la deuxième ligne :
+     * aucune TVA pour une TVA du taux de 0,03 x 20 ÷ 120 = 0,005 -> 0,01 € ;
+     * la ligne rendue en partie reçoit le centime (0,01 € de TVA, sans HT).
+     * Le deuxième article rendu ensuite (0,02 € en tout : 0,0033... -> 0,00 €
+     * de TVA) rendrait -0,01 € de TVA : il rend 0,01 € HT sans TVA, et le
+     * dernier article solde la ligne.
+     */
+    public function test_apres_un_centime_d_ajustement_aucun_retour_ne_rend_un_montant_negatif(): void
+    {
+        $troisArticles = [...self::ligneDeVente(1, 3), 'montant_ht' => 2, 'montant_tva' => 1];
+        $deuxCentimes = [...self::ligneDeVente(2), 'montant_ht' => 2, 'montant_tva' => 0];
+
+        $avoir = $this->calculateur()->chiffrerUnAvoir([
+            ['ligne' => $troisArticles, 'quantite_rendue' => 1, 'deja_rendu' => ['montant_ht' => 0, 'montant_tva' => 0]],
+            ['ligne' => $deuxCentimes, 'quantite_rendue' => 1, 'deja_rendu' => ['montant_ht' => 0, 'montant_tva' => 0]],
+        ]);
+
+        $this->assertSame([[0, 1, 1], [2, 0, 2]], self::triplets($avoir['lignes']));
+        $this->assertSame([1, 0, 1], self::triplet($this->calculateur()->retourDeLigne($troisArticles, 2, ['montant_ht' => 0, 'montant_tva' => 1])));
+        $this->assertSame([1, 0, 1], self::triplet($this->calculateur()->retourDeLigne($troisArticles, 3, ['montant_ht' => 1, 'montant_tva' => 1])));
     }
 
     /**
@@ -1100,6 +1233,92 @@ class CalculateurLigneTest extends TestCase
         $this->assertSame(['a' => 0, 'b' => 0], $this->calculateur()->repartirAuProrata(5000, ['a' => 0, 'b' => 0]));
         $this->assertSame([], $this->calculateur()->repartirAuProrata(5000, []));
         $this->assertRefuse(fn () => $this->calculateur()->repartirAuProrata(100, [100, -1]), 'Un poids de la répartition ne peut pas être négatif.');
+    }
+
+    /**
+     * Les 15 lignes de l'exemple montré à l'éditeur (exemple-calcul-des-prix-15-lignes-regle-b2.pdf
+     * et modèle M6-b, décision de l'éditeur du 14/11/2026) : la TVA de
+     * chaque ligne est son TTC x taux ÷ (1 + taux), arrondie une fois.
+     *
+     * - À 20 %, les TVA arrondies des lignes font 3,33 + 1,67 + 6,33 +
+     *   166,67 + 3,00 + 27,00 + 43,33 + 4,13 + 23,73 + 208,17 = 487,36 €,
+     *   pour une TVA du taux de 2 924,12 x 20 ÷ 120 = 487,353... -> 487,35 € :
+     *   le savon (1,665 -> 1,67 €) et les stylos (4,125 -> 4,13 €) dépassent
+     *   le plus leur TVA exacte, d'un demi-centime chacun ; à égalité, les
+     *   stylos, au plus gros TTC (24,75 € contre 9,99 €), rendent le
+     *   centime : 4,12 € de TVA et 20,63 € HT.
+     * - À 10 %, 6,73 + 2,10 + 2,03 = 10,86 €, la TVA de 119,45 € (10,859...
+     *   -> 10,86 €) : rien à ajuster.
+     * - À 5,5 %, 1,66 + 0,84 = 2,50 €, la TVA de 48,00 € (2,502... -> 2,50 €) :
+     *   rien à ajuster.
+     *
+     * Le document fait 2 590,86 € HT, 500,71 € de TVA et 3 091,57 € TTC.
+     */
+    public function test_les_quinze_lignes_de_l_exemple_montre_a_l_editeur(): void
+    {
+        $vente = $this->calculateur()->chiffrerUneVente([
+            self::ligneDeVente(1000, 2),
+            self::ligneDeVente(999),
+            self::ligneDeVente(1266, 3),
+            self::ligneDeVente(1000, 100),
+            self::ligneDeVente(1590, 2, 550),
+            self::ligneDeVente(1850, 4, 1000),
+            self::ligneDeVente(1000, 2, 2000, 1000),
+            self::ligneDeVente(5400, 3),
+            self::ligneDeVente(6500, 4),
+            self::ligneDeVente(135, 12, 550),
+            self::ligneDeVente(330, 7, 1000),
+            self::ligneDeVente(99, 25),
+            self::ligneDeVente(14990, 1, 2000, 500),
+            self::ligneDeVente(124900),
+            self::ligneDeVente(745, 3, 1000),
+        ]);
+
+        $this->assertSame([
+            [1667, 333, 2000],
+            [832, 167, 999],
+            [3165, 633, 3798],
+            [83333, 16667, 100000],
+            [3014, 166, 3180],
+            [6727, 673, 7400],
+            [1500, 300, 1800],
+            [13500, 2700, 16200],
+            [21667, 4333, 26000],
+            [1536, 84, 1620],
+            [2100, 210, 2310],
+            [2063, 412, 2475],
+            [11867, 2373, 14240],
+            [104083, 20817, 124900],
+            [2032, 203, 2235],
+        ], self::triplets($vente['lignes']));
+        $this->assertSame([2000 => [243677, 48735, 292412], 550 => [4550, 250, 4800], 1000 => [10859, 1086, 11945]], self::triplets($vente['taux']));
+        $this->assertSame([259086, 50071, 309157], self::triplet($vente['total']));
+    }
+
+    /**
+     * Le PU HT enregistré, PU TTC ÷ (1 + taux) au millionième, reste celui
+     * de la facture électronique (décision de l'éditeur du 14/11/2026) :
+     * 100 x 10,00 € à 20 % font 166,67 € de TVA (166,666...) et 833,33 € HT,
+     * et 100 x 8,333333 € = 833,3333 € ; même sur une ligne qui reçoit le
+     * centime d'ajustement, la quantité x ce PU HT reste à moins de deux
+     * centimes de son HT : 10 000 x 0,01 € (TVA 16,666... -> 16,67 €) et
+     * 0,04 € (0,0066... -> 0,01 €) font 16,68 € de TVA pour une TVA du taux
+     * de 100,04 x 20 ÷ 120 = 16,673... -> 16,67 € ; à égalité d'écart
+     * d'arrondi, la ligne au plus gros TTC rend le centime : 83,34 € HT,
+     * quand 10 000 x 0,008333 € font 83,33 €.
+     */
+    public function test_le_pu_ht_exact_retombe_a_moins_de_deux_centimes_meme_sur_une_ligne_ajustee(): void
+    {
+        $calculateur = $this->calculateur();
+        $centBougies = $calculateur->chiffrerUneVente([self::ligneDeVente(1000, 100)]);
+        $ajustee = $calculateur->chiffrerUneVente([self::ligneDeVente(1, 10000), self::ligneDeVente(4)]);
+
+        $this->assertSame([83333, 16667, 100000], self::triplet($centBougies['lignes'][0]));
+        $this->assertSame(8333333, $calculateur->prixUnitaireHtExact(1000, 2000));
+        $this->assertTrue($calculateur->puHtRetombeSurLeHt(100, 8333333, 0, 83333));
+        $this->assertSame([[8334, 1666, 10000], [3, 1, 4]], self::triplets($ajustee['lignes']));
+        $this->assertSame(8333, $calculateur->prixUnitaireHtExact(1, 2000));
+        $this->assertTrue($calculateur->puHtRetombeSurLeHt(10000, 8333, 0, 8334));
     }
 
     /**

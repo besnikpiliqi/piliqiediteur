@@ -32,13 +32,15 @@ use Tests\TestCase;
 
 /**
  * La politique d'arrondi unique de l'éditeur (point 15, réponses Q1-a et
- * Q2) suivie de l'écran de la caisse jusqu'à la clôture : toute vente, à un
- * particulier comme à un professionnel, se calcule une fois depuis ses
- * prix TTC -- le HT de chaque taux est le TTC du taux ÷ (1 + taux), arrondi
- * une fois au centime, un demi-centime au centime supérieur, réparti sur
- * les lignes ; la TVA est la différence -- et ensuite rien ne se
- * recalcule : le document signé, son PDF, sa fiche, la clôture et le
- * tableau de bord reprennent ou additionnent les montants enregistrés.
+ * Q2, règle (b) du 14/11/2026) suivie de l'écran de la caisse jusqu'à la
+ * clôture : toute vente, à un particulier comme à un professionnel, se
+ * calcule une fois depuis ses prix TTC -- la TVA de chaque ligne est son
+ * TTC x taux ÷ (1 + taux), arrondie une fois au centime, un demi-centime au
+ * centime supérieur, et son HT le TTC moins cette TVA, un centime pouvant
+ * être ajusté sur une ligne pour que la TVA de chaque taux soit celle du
+ * TTC du taux -- et ensuite rien ne se recalcule : le document signé, son
+ * PDF, sa fiche, la clôture et le tableau de bord reprennent ou
+ * additionnent les montants enregistrés.
  */
 class PolitiqueDArrondiTest extends TestCase
 {
@@ -164,8 +166,10 @@ class PolitiqueDArrondiTest extends TestCase
      * de 25,00 €, pour un particulier comme pour un professionnel, l'écran
      * de la caisse affiche 41,67 € HT et 8,33 € de TVA, et la vente
      * encaissée les porte, comme son contenu signé, son PDF et sa fiche ;
-     * la clôture du ticket aussi. Deux lignes de 25,00 € reçoivent 20,83 €
-     * puis 20,84 € HT.
+     * la clôture du ticket aussi. Deux lignes de 25,00 € ont chacune 4,17 €
+     * de TVA (4,1666...), 8,34 € pour une TVA du taux de 8,33 € : à égalité
+     * de tout, la première rend le centime, 20,84 € HT et 4,16 €, puis
+     * 20,83 € et 4,17 € (décision de l'éditeur du 14/11/2026).
      *
      * @return array<string, array{list<array{string, int}>, bool, list<list<string>>}>
      */
@@ -180,8 +184,8 @@ class PolitiqueDArrondiTest extends TestCase
             'une ligne, professionnel' => [$uneLigne, true, [['41.67', '8.33', '50.00']]],
             '2 x 25,00 €, particulier' => [$deuxArticles, false, [['41.67', '8.33', '50.00']]],
             '2 x 25,00 €, professionnel' => [$deuxArticles, true, [['41.67', '8.33', '50.00']]],
-            'deux lignes de 25,00 €, particulier' => [$deuxLignes, false, [['20.83', '4.17', '25.00'], ['20.84', '4.16', '25.00']]],
-            'deux lignes de 25,00 €, professionnel' => [$deuxLignes, true, [['20.83', '4.17', '25.00'], ['20.84', '4.16', '25.00']]],
+            'deux lignes de 25,00 €, particulier' => [$deuxLignes, false, [['20.84', '4.16', '25.00'], ['20.83', '4.17', '25.00']]],
+            'deux lignes de 25,00 €, professionnel' => [$deuxLignes, true, [['20.84', '4.16', '25.00'], ['20.83', '4.17', '25.00']]],
         ];
     }
 
@@ -228,21 +232,23 @@ class PolitiqueDArrondiTest extends TestCase
      * en quatre lignes de 1, en ticket comme en facture, et jamais 4 x
      * 54,17 € = 216,68 €. Un produit n'ayant qu'une ligne (décision de
      * l'éditeur du 26/10/2026, série 9), les quatre lignes de 1 vendent
-     * quatre écrans différents au même prix ; elles reçoivent le HT arrondi
-     * du cumul de leurs TTC : 54,17 € (65,00 ÷ 1,2 = 54,1666...), 54,16 €
-     * (108,33 - 54,17), 54,17 € (162,50 - 108,33) et 54,17 € (216,67 -
-     * 162,50). Chaque ligne enregistre et signe son PU HT exact, 54,166667 €,
-     * celui de la facture électronique ; la facture à un professionnel
-     * imprime le PU HT d'un article, 65,00 € moins sa TVA de 10,83 €, soit
-     * 54,17 € (décision de l'éditeur du 14/11/2026), et le ticket son PU
-     * TTC, 65,00 €.
+     * quatre écrans différents au même prix : chacune a 65,00 x 20 ÷ 120 =
+     * 10,8333... -> 10,83 € de TVA, soit 43,32 € pour une TVA du taux de
+     * 43,33 € ; à égalité de tout, la première reçoit le centime qui manque,
+     * 54,16 € HT et 10,84 €, les autres 54,17 € et 10,83 € (règle (b),
+     * décision de l'éditeur du 14/11/2026). Chaque ligne enregistre et signe
+     * son PU HT exact, 54,166667 €, celui de la facture électronique ; la
+     * facture à un professionnel imprime le PU HT d'un article, 65,00 €
+     * moins sa TVA de 10,83 €, soit 54,17 €, avec en petit sous l'article son
+     * PU HT exact (modèle M6-b), et le ticket son PU TTC, 65,00 €, sans
+     * aucun PU HT (modèle P1).
      *
      * @return array<string, array{list<int>, bool, list<list<string>>}>
      */
     public static function decoupagesDeQuatreArticlesA65Euros(): array
     {
         $uneLigne = [['216.67', '43.33', '260.00']];
-        $quatreLignes = [['54.17', '10.83', '65.00'], ['54.16', '10.84', '65.00'], ['54.17', '10.83', '65.00'], ['54.17', '10.83', '65.00']];
+        $quatreLignes = [['54.16', '10.84', '65.00'], ['54.17', '10.83', '65.00'], ['54.17', '10.83', '65.00'], ['54.17', '10.83', '65.00']];
 
         return [
             'une ligne de 4, particulier' => [[4], false, $uneLigne],
@@ -276,7 +282,9 @@ class PolitiqueDArrondiTest extends TestCase
         $this->assertStringContainsString('43,33 €', $pdf);
         $this->assertStringNotContainsString('216,68 €', $pdf);
         $this->assertStringContainsString($professionnel ? '54,17 €' : '65,00 €', $pdf);
-        $this->assertStringNotContainsString('54,166667', $pdf);
+        $professionnel
+            ? $this->assertSame(count($quantites), substr_count($pdf, 'PU HT exact : 54,166667 €'))
+            : $this->assertStringNotContainsString('54,166667', $pdf);
     }
 
     /**
@@ -303,9 +311,12 @@ class PolitiqueDArrondiTest extends TestCase
     /**
      * Le même panier, deux articles différents à 25,00 € et un article à
      * 9,99 €, a les mêmes montants en ticket et en facture à un
-     * professionnel : le HT du taux, 59,99 ÷ 1,2 = 49,99 €, se répartit
-     * 20,83 €, 20,84 € et 8,32 €, et la TVA fait 10,00 €. Deux lignes de
-     * même prix reçoivent ainsi des HT qui diffèrent d'un centime.
+     * professionnel : les TVA des lignes, 4,17 €, 4,17 € et 1,67 € (1,665
+     * arrondi au centime supérieur), font 10,01 € pour une TVA du taux de
+     * 59,99 x 20 ÷ 120 = 9,998... -> 10,00 € ; l'article à 9,99 €, dont la
+     * TVA arrondie dépasse le plus sa TVA exacte (d'un demi-centime), rend
+     * le centime : 8,33 € HT et 1,66 € de TVA. Une ligne peut ainsi recevoir
+     * un HT qui s'écarte d'un centime de celui de son prix seul (8,32 €).
      */
     public function test_le_meme_panier_donne_les_memes_montants_a_un_particulier_et_a_un_professionnel(): void
     {
@@ -319,7 +330,7 @@ class PolitiqueDArrondiTest extends TestCase
         $facture = $this->facturerUnProfessionnel($panier);
 
         foreach ([$ticket, $facture] as $vente) {
-            $this->assertSame([['20.83', '4.17', '25.00'], ['20.84', '4.16', '25.00'], ['8.32', '1.67', '9.99']], $this->montantsDesLignes($vente));
+            $this->assertSame([['20.83', '4.17', '25.00'], ['20.83', '4.17', '25.00'], ['8.33', '1.66', '9.99']], $this->montantsDesLignes($vente));
             $this->assertSame([['taux_tva' => '20.00', 'montant_ht' => '49.99', 'montant_tva' => '10.00', 'montant_ttc' => '59.99']], $vente->ventilation_tva);
             $this->assertSame(['49.99', '10.00', '59.99'], [$vente->total_ht, $vente->total_tva, $vente->total_ttc]);
         }
@@ -329,7 +340,8 @@ class PolitiqueDArrondiTest extends TestCase
 
     /**
      * Un professionnel paie le prix affiché : un article à 9,99 € TTC lui
-     * est facturé 9,99 € (8,33 € HT et 1,66 € de TVA), jamais 10,00 €.
+     * est facturé 9,99 € (1,67 € de TVA, 1,665 arrondi au centime
+     * supérieur, et 8,32 € HT, le PU HT d'un article), jamais 10,00 €.
      */
     public function test_une_facture_professionnelle_n_ajoute_jamais_un_centime_au_prix(): void
     {
@@ -337,13 +349,16 @@ class PolitiqueDArrondiTest extends TestCase
 
         $facture = $this->facturerUnProfessionnel([[$this->article('Chaussettes', '9.99'), 1]]);
 
-        $this->assertSame(['8.33', '1.66', '9.99'], [$facture->total_ht, $facture->total_tva, $facture->total_ttc]);
+        $this->assertSame(['8.32', '1.67', '9.99'], [$facture->total_ht, $facture->total_tva, $facture->total_ttc]);
     }
 
     /**
      * Le retour complet d'une vente de plusieurs lignes et deux taux, en
      * ticket comme en facture, reprend exactement les montants de chaque
-     * ligne et du document.
+     * ligne et du document, centime d'ajustement compris : les deux lignes
+     * de 25,00 € font 20,84 € + 4,16 € et 20,83 € + 4,17 €, et 2 livres à
+     * 10,00 € à 5,5 % 20,00 x 5,5 ÷ 105,5 = 1,042... -> 1,04 € de TVA et
+     * 18,96 € HT.
      */
     public function test_un_retour_complet_reprend_exactement_les_montants_de_la_vente(): void
     {
@@ -358,17 +373,20 @@ class PolitiqueDArrondiTest extends TestCase
         foreach ([$ticket, $facture] as $vente) {
             $avoir = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $vente->client, $vente->lignes()->orderBy('ordre')->get()->map(fn (object $ligne): array => ['ligne_facture_id' => $ligne->id, 'quantite' => $ligne->quantite])->all(), 'Retour complet');
 
-            $this->assertSame([['20.83', '4.17', '25.00'], ['20.84', '4.16', '25.00'], ['18.96', '1.04', '20.00']], $this->montantsDesLignes($vente));
+            $this->assertSame([['20.84', '4.16', '25.00'], ['20.83', '4.17', '25.00'], ['18.96', '1.04', '20.00']], $this->montantsDesLignes($vente));
             $this->assertSame($this->montantsDesLignes($vente), $this->montantsDesLignes($avoir));
             $this->assertSame([$vente->total_ht, $vente->total_tva, $vente->total_ttc], [$avoir->total_ht, $avoir->total_tva, $avoir->total_ttc]);
         }
     }
 
     /**
-     * 3 x 0,99 € (2,97 € TTC : 2,475 -> 2,48 € HT et 0,49 € de TVA), rendus
-     * un par un, en ticket comme en facture : 0,83 € + 0,16 €, puis 0,82 € +
-     * 0,17 € (1,98 € rendus en tout, 1,65 € HT), puis 0,83 € + 0,16 €, qui
-     * soldent la ligne au centime.
+     * 3 x 0,99 € (2,97 € TTC : TVA 0,495 -> 0,50 € et 2,47 € HT), rendus un
+     * par un, en ticket comme en facture (règle (b), décision de l'éditeur
+     * du 14/11/2026, et D76 pour les avoirs) : le premier rend 0,82 € + 0,17 €
+     * (TVA 0,165 -> 0,17 €) ; le deuxième, 1,98 € rendus en tout (TVA 0,33 €),
+     * rendrait 0,83 € + 0,16 €, mais l'avoir ramène sa TVA à celle de ses
+     * 0,99 €, 0,17 €, sur cette ligne rendue en partie : 0,82 € + 0,17 € ; le
+     * dernier solde la ligne au centime, 0,83 € + 0,16 €.
      */
     public function test_les_retours_partiels_soldent_la_ligne_au_centime(): void
     {
@@ -384,8 +402,8 @@ class PolitiqueDArrondiTest extends TestCase
                 range(1, 3),
             );
 
-            $this->assertSame(['2.48', '0.49', '2.97'], [$ligne->montant_ht, $ligne->montant_tva, $ligne->montant_ttc]);
-            $this->assertSame([['0.83', '0.16', '0.99'], ['0.82', '0.17', '0.99'], ['0.83', '0.16', '0.99']], $retours);
+            $this->assertSame(['2.47', '0.50', '2.97'], [$ligne->montant_ht, $ligne->montant_tva, $ligne->montant_ttc]);
+            $this->assertSame([['0.82', '0.17', '0.99'], ['0.82', '0.17', '0.99'], ['0.83', '0.16', '0.99']], $retours);
         }
     }
 

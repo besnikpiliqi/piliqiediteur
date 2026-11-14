@@ -2622,3 +2622,19 @@ Tu m'expliques tout ca: 4.	REGUL
 
 1 oui pour l'archive, 2 d'accord avec ta proposition
 
+## 294. 2026-11-14 22:21 UTC
+
+d'accord, dis-moi quand GRAPH est envoyé
+
+## 295. 2026-11-14 23:02 UTC
+
+tu peux me parle et expluque comment on peux apliquer ca dans piliqi: "Règle ASVS V6.2 (Protection contre la force brute) : Vérifier que des mécanismes anti-automatisation sont en place pour empêcher les attaques par force brute sur la connexion (ex. blocage temporaire ou délai progressif après plusieurs échecs)."
+
+## 296. 2026-11-14 23:24 UTC
+
+j ai pas compris quoi ajouter
+
+## 297. 2026-11-14 23:27 UTC
+
+mais les hacker attaque parmis milion de ip et alors ce sera pas possible de les arrete
+

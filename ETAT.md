@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 14/11/2026 à 12:21 UTC par pilotage-sync.sh : « point de suivi 14/11 12:20 UTC : DEMO-V en fin de lot, sauvegarde ».
+Mis à jour le 14/11/2026 à 13:21 UTC par pilotage-sync.sh : « point de suivi 14/11 13:20 UTC : DEMO-V suite PG n° 3 ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

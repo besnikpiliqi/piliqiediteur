@@ -8,6 +8,7 @@ use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\RequeteDuModele;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 use UnexpectedValueException;
 
@@ -19,6 +20,8 @@ use UnexpectedValueException;
  */
 class RequeteDuModeleTest extends TestCase
 {
+    use RefreshDatabase;
+
     public function test_la_requete_d_un_modele_sur_sa_table_est_rendue_elle_meme_inchangee(): void
     {
         $requete = Client::query()->where('nom', 'Dupont');

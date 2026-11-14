@@ -119,6 +119,9 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Application;
+use Illuminate\Foundation\Testing\DatabaseMigrations;
+use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Foundation\Testing\DatabaseTruncation;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
 use Illuminate\Foundation\Testing\Wormhole;
@@ -142,6 +145,7 @@ use PDO;
 use PHPUnit\Framework\AssertionFailedError;
 use Random\Engine\Xoshiro256StarStar;
 use Random\Randomizer;
+use Tests\Fixtures\EcrituresDurables;
 
 abstract class TestCase extends BaseTestCase
 {
@@ -165,6 +169,13 @@ abstract class TestCase extends BaseTestCase
      * laBaseRefuseraCetEtatALaValidation()).
      */
     private bool $etatRefuseALaValidation = false;
+
+    /**
+     * Les écritures durables d'un test dont la classe n'a pas de base de
+     * test (voir surveillerLesEcrituresSansBaseDeTest()), null pour une
+     * classe qui en a une.
+     */
+    private ?EcrituresDurables $ecrituresSansBaseDeTest = null;
 
     /**
      * Chaque application de test signe avec la paire éphémère des tests,
@@ -221,6 +232,7 @@ abstract class TestCase extends BaseTestCase
         fake()->seed($this->graineDuTest());
         Str::createRandomStringsUsing(self::chainesAleatoiresSemees($this->graineDuTest()));
         Http::preventStrayRequests();
+        $this->surveillerLesEcrituresSansBaseDeTest();
         $this->app->instance(HorlogeDuSysteme::class, new class extends HorlogeDuSysteme
         {
             /**
@@ -251,8 +263,43 @@ abstract class TestCase extends BaseTestCase
     {
         try {
             $this->faireJouerLesGardesDifferees();
+            $this->refuserLesEcrituresSansBaseDeTest();
         } finally {
             parent::tearDown();
+        }
+    }
+
+    /**
+     * Un test dont la classe n'a pas de base de test (ni RefreshDatabase,
+     * ni DatabaseMigrations, ni DatabaseTruncation, ni DatabaseTransactions)
+     * n'écrit jamais en base : ses lignes resteraient dans la base que
+     * partagent les tests de son processus, et, premier de son processus à
+     * toucher la base, il écrirait dans une base que rien n'a encore migrée,
+     * un échec qui ne se voit que selon l'ordre des tests. Ses écritures
+     * durables sont donc relevées dès le début du test, hors de toute
+     * transaction (voir EcrituresDurables), et sa fin le refuse s'il en a
+     * fait (voir refuserLesEcrituresSansBaseDeTest()).
+     */
+    private function surveillerLesEcrituresSansBaseDeTest(): void
+    {
+        if (array_intersect([RefreshDatabase::class, DatabaseMigrations::class, DatabaseTruncation::class, DatabaseTransactions::class], class_uses_recursive(static::class)) !== []) {
+            return;
+        }
+
+        $this->ecrituresSansBaseDeTest = new EcrituresDurables($this->app->make('events'), 0);
+    }
+
+    /**
+     * @throws AssertionFailedError quand un test sans base de test a écrit en base
+     */
+    private function refuserLesEcrituresSansBaseDeTest(): void
+    {
+        $refus = $this->status()->isSuccess()
+            ? $this->ecrituresSansBaseDeTest?->refusSansBaseDeTest(static::class.'::'.$this->name())
+            : null;
+
+        if ($refus !== null) {
+            throw new AssertionFailedError($refus);
         }
     }
 

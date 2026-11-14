@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 14/11/2026 à 13:21 UTC par pilotage-sync.sh : « point de suivi 14/11 13:20 UTC : DEMO-V suite PG n° 3 ».
+Mis à jour le 14/11/2026 à 14:21 UTC par pilotage-sync.sh : « point de suivi 14/11 14:20 UTC : DEMO-V suite PG n° 4 ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -40,6 +40,7 @@ b10d2e8 Relecture du lot DV du devis en ligne
  M .env.example
  M CLAUDE.md
  M README.md
+ M app/Console/Commands/MarquerFacturesEnRetard.php
  M app/Domain/Catalogue/Models/Service.php
  M app/Domain/Catalogue/Services/MargeDuCatalogue.php
  M app/Domain/Facturation/Actions/EnvoyerDocumentAction.php
@@ -92,11 +93,10 @@ RM tests/Browser/Parcours/PuHtExactTest.php -> tests/Browser/Parcours/PuHtAffich
  M tests/Feature/Facturation/ExempleDeQuinzeLignesTest.php
  M tests/Feature/Facturation/ExonerationNonProuveeTest.php
  M tests/Feature/Facturation/FacturePdfGeneratorTest.php
+ M tests/Feature/Facturation/MarquerFacturesEnRetardConcurrenceTest.php
+ M tests/Feature/Facturation/MarquerFacturesEnRetardTest.php
  M tests/Feature/Facturation/MentionsFiscalesTest.php
  M tests/Feature/Facturation/NatureOperationTest.php
- M tests/Feature/Facturation/PolitiqueDArrondiTest.php
- M tests/Feature/Facturation/RepartitionTvaParCumulTest.php
- M tests/Feature/Facturation/ReponseAuDevisEnLigneTest.php
 ```
 
 ## Dernière course de la chaîne

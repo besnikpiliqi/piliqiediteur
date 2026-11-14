@@ -1,0 +1,151 @@
+<?php
+
+namespace App\Filament\App\Resources;
+
+use App\Domain\Achats\Enums\SourceAvoirFournisseur;
+use App\Domain\Achats\Models\AvoirFournisseur;
+use App\Filament\App\FicheDUnDocument;
+use App\Filament\App\Resources\AvoirFournisseurResource\Pages;
+use Filament\Infolists\Components\Section as InfolistSection;
+use Filament\Infolists\Components\TextEntry;
+use Filament\Infolists\Infolist;
+use Filament\Resources\Resource;
+use Filament\Tables;
+use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
+
+/**
+ * Les avoirs fournisseur du magasin. Un avoir se crée à la main, par
+ * « Créer un avoir fournisseur » en tête de cette liste, de la liste des
+ * factures d'achat ou de la fiche de l'une d'elles, ou par « Retourner ce
+ * produit » sur une ligne de cette fiche : le même formulaire partout
+ * (voir FactureAchatResource::creerUnAvoirFournisseur()). Ceux reçus par
+ * la plateforme agréée ou par l'API viendront aussi ici. Émis, il ne se
+ * modifie ni ne se supprime jamais (voir AvoirFournisseurPolicy) : aucune
+ * page de modification, seulement sa fiche, où la note d'avoir du
+ * fournisseur s'ajoute en pièce (voir JointLesPiecesDuFournisseur).
+ */
+class AvoirFournisseurResource extends Resource
+{
+    /**
+     * Ce que disent la liste des avoirs fournisseur et le formulaire d'un
+     * avoir fournisseur (décision T71.2) : seul un retour de marchandise
+     * s'y saisit ; un rabais ou une ristourne attend l'étape 2.
+     */
+    public const INFORMATION_RISTOURNE = 'Un rabais ou une ristourne sans retour de marchandise ne se saisit pas encore dans PILIQI : la TVA de la note d\'avoir se reverse sur la CA3 (ligne 15).';
+
+    protected static ?string $model = AvoirFournisseur::class;
+
+    protected static ?string $navigationIcon = 'heroicon-o-arrow-uturn-left';
+
+    protected static ?string $navigationGroup = 'Achats';
+
+    protected static ?int $navigationSort = 2;
+
+    protected static ?string $modelLabel = 'avoir fournisseur';
+
+    protected static ?string $pluralModelLabel = 'avoirs fournisseur';
+
+    /**
+     * Chaque avoir avec sa facture d'achat, son fournisseur et le nombre de
+     * ses pièces du fournisseur, lus par la même requête que la liste.
+     *
+     * @return Builder<Model>
+     */
+    public static function getEloquentQuery(): Builder
+    {
+        return parent::getEloquentQuery()->with(['factureAchat.fournisseur'])->withCount('pieces');
+    }
+
+    /**
+     * Mêmes colonnes que la facture d'achat (voir
+     * FactureResource::lignesEntry()) : pour chaque article retourné, PU
+     * HT, taux, puis HT, TVA et TTC de la ligne, et la TVA de chaque taux,
+     * celle de la note d'avoir du fournisseur, avec le calcul de PILIQI
+     * quand elle en diffère, et la marque « TVA à vérifier » (voir
+     * FactureAchatResource::tvaParTauxEntry()).
+     */
+    public static function infolist(Infolist $infolist): Infolist
+    {
+        return $infolist->schema([
+            InfolistSection::make('Avoir fournisseur')->schema([
+                TextEntry::make('numero')->label('Numéro')->placeholder('Brouillon (pas encore émis)'),
+                TextEntry::make('statut')->badge(),
+                FactureAchatResource::marqueTvaAVerifier(),
+                TextEntry::make('source')->badge(),
+                // Son numéro mène à la fiche de la facture d'achat, pour qui
+                // peut la voir (constat C2, voir FicheDUnDocument).
+                TextEntry::make('factureAchat.numero')
+                    ->label('Facture d\'achat créditée')
+                    ->url(fn (AvoirFournisseur $record): ?string => FicheDUnDocument::adresse($record->factureAchat))
+                    ->color(fn (AvoirFournisseur $record): ?string => FicheDUnDocument::adresse($record->factureAchat) === null ? null : 'primary'),
+                TextEntry::make('factureAchat.fournisseur.nom')->label('Fournisseur'),
+                TextEntry::make('numero_fournisseur')->label('N° de l\'avoir du fournisseur')->placeholder('—'),
+                TextEntry::make('date_emission')->label('Émis le')->dateTime('d/m/Y')->placeholder('—'),
+                TextEntry::make('motif')->label('Motif')->placeholder('—')->columnSpanFull(),
+            ])->columns(3),
+
+            FactureAchatResource::sectionDesPieces(),
+
+            InfolistSection::make('Produits retournés')->schema([
+                FactureResource::lignesEntry($infolist->getRecord()),
+            ]),
+
+            InfolistSection::make('Totaux')->schema([
+                TextEntry::make('total_ht')->label('Total HT')->money('EUR'),
+                TextEntry::make('total_tva')->label('Total TVA')->money('EUR'),
+                TextEntry::make('total_ttc')->label('Total TTC')->money('EUR'),
+                FactureAchatResource::tvaParTauxEntry(),
+            ])->columns(3),
+        ]);
+    }
+
+    /**
+     * La liste des avoirs fournisseur marqués « pièce du fournisseur
+     * manquante » : où mène l'« À faire » du tableau de bord (voir
+     * ChosesAFaireDuMagasin).
+     */
+    public static function urlDesPiecesManquantes(): string
+    {
+        return static::getUrl('index', ['tableFilters' => ['piece_manquante' => ['isActive' => true]]]);
+    }
+
+    public static function table(Table $table): Table
+    {
+        return $table
+            ->columns([
+                Tables\Columns\TextColumn::make('numero')->label('Numéro')->rechercheSansAccents(),
+                Tables\Columns\TextColumn::make('factureAchat.numero')->label('Facture d\'achat créditée')->rechercheSansAccents(),
+                Tables\Columns\TextColumn::make('factureAchat.fournisseur.nom')->label('Fournisseur')->rechercheSansAccents(),
+                Tables\Columns\TextColumn::make('numero_fournisseur')->label('N° de l\'avoir du fournisseur')->placeholder('—')->rechercheSansAccents()->toggleable(),
+                Tables\Columns\TextColumn::make('total_ttc')->label('Total TTC')->money('EUR')->sortable(),
+                FactureAchatResource::colonneTvaAVerifier(),
+                FactureAchatResource::colonnePiece(),
+                Tables\Columns\TextColumn::make('motif')->limit(40)->toggleable(),
+                Tables\Columns\TextColumn::make('source')->badge()->toggleable(),
+                Tables\Columns\TextColumn::make('date_emission')->label('Émis le')->dateTime('d/m/Y')->sortable(),
+                Tables\Columns\TextColumn::make('cree_par_nom')->label('Émis par')->toggleable(),
+            ])
+            ->filters([
+                Tables\Filters\SelectFilter::make('source')->options(SourceAvoirFournisseur::class),
+                FactureAchatResource::filtreTvaAVerifier(),
+                FactureAchatResource::filtrePieceManquante(),
+            ])
+            ->actions([
+                Tables\Actions\ViewAction::make(),
+            ])
+            // Aucune action de suppression, ni unitaire ni groupée : un
+            // avoir fournisseur émis ne se supprime jamais (voir
+            // AvoirFournisseurPolicy::delete()).
+            ->bulkActions([]);
+    }
+
+    public static function getPages(): array
+    {
+        return [
+            'index' => Pages\ListAvoirsFournisseur::route('/'),
+            'view' => Pages\ViewAvoirFournisseur::route('/{record}'),
+        ];
+    }
+}

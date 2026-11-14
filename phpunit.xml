@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
+         bootstrap="vendor/autoload.php"
+         colors="true"
+>
+    <testsuites>
+        <testsuite name="Unit">
+            <directory>tests/Unit</directory>
+        </testsuite>
+        <testsuite name="Feature">
+            <directory>tests/Feature</directory>
+        </testsuite>
+        <testsuite name="Browser">
+            <directory>tests/Browser</directory>
+        </testsuite>
+    </testsuites>
+    <!-- Le groupe courriels-reels envoie de vrais e-mails à la boîte de test de Mailtrap : jamais dans la suite ni en CI, seulement à la demande (voir le README). -->
+    <groups>
+        <exclude>
+            <group>courriels-reels</group>
+        </exclude>
+    </groups>
+    <source>
+        <include>
+            <directory>app</directory>
+        </include>
+    </source>
+    <php>
+        <env name="APP_ENV" value="testing"/>
+        <env name="APP_MAINTENANCE_DRIVER" value="file"/>
+        <env name="AUTH_DELAI_CONSTANT_US" value="0"/>
+        <env name="BCRYPT_ROUNDS" value="4"/>
+        <env name="BROADCAST_CONNECTION" value="null"/>
+        <env name="CACHE_STORE" value="array"/>
+        <!-- La base de test PostgreSQL (voir le README) ; le mot de passe de son rôle vient de DB_PASSWORD, dans l'environnement ou dans .env, jamais du dépôt. -->
+        <env name="DB_CONNECTION" value="pgsql"/>
+        <env name="DB_HOST" value="127.0.0.1"/>
+        <env name="DB_PORT" value="5432"/>
+        <env name="DB_DATABASE" value="piliqi_test"/>
+        <env name="DB_USERNAME" value="piliqi"/>
+        <env name="DB_URL" value=""/>
+        <env name="MAIL_MAILER" value="array"/>
+        <env name="QUEUE_CONNECTION" value="sync"/>
+        <env name="TELECHARGEMENTS_QUEUE_DRIVER" value="sync"/>
+        <env name="SESSION_DRIVER" value="array"/>
+        <env name="SIRENE_PILOTE" value="faux"/>
+        <env name="RNE_PILOTE" value="faux"/>
+        <env name="RECOMMANDE_PILOTE" value="faux"/>
+        <env name="ORDRE_PILOTE" value="faux"/>
+        <env name="PDP_PILOTE" value="faux"/>
+        <env name="APP_FAKER_LOCALE" value="fr_FR" force="true"/>
+        <env name="ANTIVIRUS_PILOTE" value="factice"/>
+        <env name="PULSE_ENABLED" value="false"/>
+        <env name="TELESCOPE_ENABLED" value="false"/>
+        <env name="NIGHTWATCH_ENABLED" value="false"/>
+    </php>
+</phpunit>

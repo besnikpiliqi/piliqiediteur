@@ -1,0 +1,58 @@
+fichier : avoir-AV-LYON1-2026-000001.pdf
+--- page 1 (0.000 0.000 595.280 841.890)
+Ma Boutique
+12 rue Mercière
+69002 Lyon
+FR
+SIRET : 10000000900017
+Tél. 04 72 00 00 00 · contact@ma-boutique.example
+AVOIR
+N° AV-LYON1-2026-000001
+Émis le 09/10/2026
+ÉMIS À
+Client comptoir
+RECTIFIE
+Sur ticket de caisse TK-LYON1-2026-000001
+du 09/10/2026
+DÉTAIL DES ARTICLES ET PRESTATIONS
+RÉF.
+ARTICLE
+FACTURE D'ORIGINE
+QTÉ
+PU TTC
+REM.
+TVA
+TOTAL TTC
+CAF-250
+Café moulu 250 g
+TK-LYON1-2026-000001
+1
+12,00 €
+—
+20 %
+12,00 €
+Montants calculés depuis les prix TTC : chaque retour rend, pour tous les articles d'une ligne rendus jusqu'ici, le calcul de la vente sur leur TTC (TVA = TTC × taux ÷ (1 + taux),
+arrondie une fois au centime ; HT = TTC moins cette TVA), sans dépasser le HT ni la TVA de la ligne, déduction faite des avoirs déjà émis sur la même ligne ; le dernier retour solde la
+ligne au centime ; un centime peut être ajusté sur une ligne rendue en partie pour rapprocher la TVA de chaque taux de celle de son TTC total, calculée de même.
+Récapitulatif TVA
+Taux
+Base HT
+TVA
+TTC
+20 %
+10,00 €
+2,00 €
+12,00 €
+Montant de l'avoir
+Total HT
+-10,00 €
+Total TVA
+-2,00 €
+TOTAL TTC
+-12,00 €
+Motif : Retour du client
+Les Délices de Jeanne SAS au capital de 10 000,00 € · Siège social : 1 rue de la République, 69002 Lyon · SIREN : 100000009 · RCS Lyon · TVA intracommunautaire :
+FR88100000009
+Catégorie de l'opération : Livraison de biens
+Ce n° vaut bon d'avoir de 12,00 € à présenter lors d'un prochain achat.
+Page 1 sur 1

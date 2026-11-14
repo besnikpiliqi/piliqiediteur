@@ -1,0 +1,39 @@
+fichier : recu-RP-LYON1-2026-000002.pdf
+--- page 1 (0.000 0.000 595.280 841.890)
+Ma Boutique
+12 rue Mercière
+69002 Lyon
+FR
+SIRET : 10000000900017
+Tél. 04 72 00 00 00 · contact@ma-boutique.example
+Contre-passation de paiement
+RP-LYON1-2026-000002
+Contre-passation du 09/10/2026
+CLIENT
+Atelier Dupont SARL
+8 rue des Tanneurs
+69001 Lyon
+SIREN : 123456789
+SIRET : 12345678900011
+N° TVA : FR32123456789
+PAIEMENT CONTRE-PASSÉ
+DATE
+MODE
+RÉFÉRENCE
+MONTANT
+09/10/2026
+Virement
+VIR-2026-0042
+-50,00 €
+Total contre-passé
+-50,00 €
+DOCUMENT RÉGLÉ
+MONTANT IMPUTÉ
+RESTANT DÛ APRÈS CET ENCAISSEMENT
+Facture FAC-LYON1-2026-000001
+-50,00 €
+136,50 €
+Ce reçu n'est pas une facture.
+Les Délices de Jeanne SAS au capital de 10 000,00 € · Siège social : 1 rue de la République, 69002 Lyon · SIREN : 100000009 · RCS Lyon · TVA intracommunautaire :
+FR88100000009
+Page 1 sur 1

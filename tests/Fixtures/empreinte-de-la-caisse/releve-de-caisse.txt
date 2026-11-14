@@ -1,0 +1,21 @@
+{
+    "id": ⟦clotures_caisse_personnelles:releve⟧,
+    "magasin_id": ⟦magasins:lyon1⟧,
+    "vendeur_id": ⟦users:vendeur⟧,
+    "vendeur_nom": "Responsable de test",
+    "mode_fermeture": "vendeur",
+    "fermee_par": ⟦users:vendeur⟧,
+    "fermee_par_nom": "Responsable de test",
+    "periode_debut": "2026-10-08 22:00:00",
+    "jusqu_au": "2026-10-09 15:30:00",
+    "cloturee_a": "2026-10-09 15:30:00",
+    "nombre_ventes": 2,
+    "total_ht": "139.91",
+    "total_tva": "27.09",
+    "total_ttc": "167.00",
+    "encaissements": "{\"virement\":\"0.00\",\"especes\":\"10.50\",\"carte_bancaire\":\"20.00\"}",
+    "credit_avoir": "40.50",
+    "reste_du": "96.00",
+    "created_at": "2026-10-09 15:30:00",
+    "updated_at": "2026-10-09 15:30:00"
+}

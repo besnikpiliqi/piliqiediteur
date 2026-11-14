@@ -1,0 +1,60 @@
+{{-- Ouvert dans la fenêtre d'une action du formulaire de la page : Entrée dans un champ (recherche, quantité) validerait ce formulaire et fermerait la fenêtre. --}}
+{{-- Le tri en haut, le tableau qui défile, puis les produits choisis et le bouton, toujours visibles (voir resources/css/fenetres-de-selection.css). --}}
+<div class="piliqi-selecteur" x-data x-on:keydown.enter="if ($event.target.tagName === 'INPUT') $event.preventDefault()">
+    @php($choisis = $this->produitsSelectionnes())
+    @php($nombre = count($choisis))
+
+    <div class="flex items-center gap-3">
+        <label for="tri-des-produits" class="text-sm font-medium text-gray-950 dark:text-white">Trier</label>
+
+        <x-filament::input.wrapper>
+            <x-filament::input.select id="tri-des-produits" wire:model.live="tri">
+                <option value="{{ \App\Filament\App\Livewire\SelecteurDeProduits::TRI_PAR_NOM }}">Par nom</option>
+                <option value="{{ \App\Filament\App\Livewire\SelecteurDeProduits::TRI_PLUS_RECENTS }}">Plus récents d'abord</option>
+            </x-filament::input.select>
+        </x-filament::input.wrapper>
+    </div>
+
+    {{ $this->table }}
+
+    <x-filament::section class="piliqi-choisis">
+        @if ($nombre > 0)
+            <ul class="space-y-2">
+                @foreach ($choisis as $choisi)
+                    {{-- La quantité dans la clé : un clic de plus sur la rangée remplace le champ, qui montre la nouvelle quantité même après une saisie. --}}
+                    <li wire:key="choisi-{{ $choisi['produit']->getKey() }}-{{ $choisi['quantite'] }}" class="flex items-center gap-3">
+                        <span class="flex-1 text-sm">{{ $choisi['produit']->nom }} ({{ $choisi['produit']->reference }})</span>
+
+                        <x-filament::input.wrapper class="w-32">
+                            <x-filament::input
+                                type="number"
+                                min="1"
+                                step="1"
+                                aria-label="Quantité de {{ $choisi['produit']->nom }}"
+                                value="{{ $choisi['quantite'] }}"
+                                wire:change="changerLaQuantite({{ $choisi['produit']->getKey() }}, $event.target.value)"
+                            />
+                        </x-filament::input.wrapper>
+
+                        <x-filament::icon-button
+                            icon="heroicon-m-x-mark"
+                            color="gray"
+                            label="Retirer {{ $choisi['produit']->nom }}"
+                            wire:click="retirer({{ $choisi['produit']->getKey() }})"
+                        />
+                    </li>
+                @endforeach
+            </ul>
+        @endif
+
+        <div class="mt-2 flex flex-wrap items-center justify-between gap-3">
+            <p class="text-sm font-medium">{{ $this->resumeDeLaSelection($choisis) }}</p>
+
+            <x-filament::button wire:click="ajouterLaSelection" :disabled="$nombre === 0">
+                {{ $nombre <= 1 ? 'Ajouter le produit' : 'Ajouter les '.$nombre.' produits' }}
+            </x-filament::button>
+        </div>
+    </x-filament::section>
+
+    <x-filament-actions::modals />
+</div>

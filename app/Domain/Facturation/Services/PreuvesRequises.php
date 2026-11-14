@@ -1,0 +1,226 @@
+<?php
+
+namespace App\Domain\Facturation\Services;
+
+use App\Domain\Calendrier\Calendrier;
+use App\Domain\Facturation\Enums\NatureOperation;
+use App\Domain\Facturation\Enums\StatutFacture;
+use App\Domain\Facturation\Enums\TransportPar;
+use App\Domain\Facturation\Enums\TypePreuve;
+use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Models\PreuveOperation;
+use App\Domain\Tenancy\Support\ValeurRequise;
+use App\Domain\Tenancy\Support\ValeursLues;
+use Closure;
+use Illuminate\Database\Eloquent\Builder;
+
+/**
+ * Les preuves qui justifient l'exonération d'une facture émise, et celles
+ * qui manquent encore (I4) : le magasin enregistre leurs références (voir
+ * AjouterPreuveOperationAction), et ce qui manque lui est rappelé sur la
+ * fiche de la facture, dans l'« À faire » du tableau de bord (voir
+ * ChosesAFaireDuMagasin) et dans la liste (filtre « Preuves à fournir » et
+ * colonne « À faire »). Sans ses preuves, la vente reste exonérée sur le
+ * document, qui ne change jamais ; sans sa preuve de sortie 150 jours
+ * après sa date, un export ou une livraison vers un DOM se régularise par
+ * un avoir et une facture rectificative à la TVA française (voir
+ * RegularisationDUneExoneration).
+ *
+ * - Export hors UE (art. 262 I du CGI) : la déclaration d'export (MRN)
+ *   avec la certification de sortie, ou le CN23 d'un colis postal.
+ * - Livraison vers un DOM (art. 294 du CGI) : la même déclaration, et un
+ *   document de transport.
+ * - Livraison intracommunautaire (art. 262 ter I du CGI, art. 45 bis du
+ *   règlement 282/2011) : deux documents de transport de la catégorie a),
+ *   ou un de la catégorie a) et une autre preuve d'expédition de la
+ *   catégorie b), établis par deux parties indépendantes du magasin et
+ *   du client ; et, quand le client enlève lui-même les biens, son
+ *   attestation de réception, remise au plus tard le 10 du mois qui suit
+ *   la livraison.
+ *
+ * Seule une facture émise demande des preuves, et plus aucune une fois
+ * entièrement corrigée par des avoirs : la vente qu'elles justifiaient
+ * n'existe plus. Le calcul en PHP (manquantes()) et sa traduction en SQL
+ * (incompletes()) disent la même chose : une facture n'est jamais à la
+ * fois complète sur sa fiche et listée parmi les preuves à fournir.
+ */
+class PreuvesRequises
+{
+    /**
+     * Les types de preuve qu'une vente de cette nature admet : aucun pour
+     * une nature sans livraison exonérée (vente en France, prestations).
+     *
+     * @return list<TypePreuve>
+     */
+    public static function typesAdmis(NatureOperation $nature): array
+    {
+        return match ($nature) {
+            NatureOperation::ExportHorsUe => [TypePreuve::Mrn, TypePreuve::Cn23],
+            NatureOperation::LivraisonDom => [TypePreuve::Mrn, TypePreuve::Cn23, TypePreuve::TransportA],
+            NatureOperation::LivraisonIntracommunautaire => [TypePreuve::TransportA, TypePreuve::TransportB, TypePreuve::AttestationAcquereur],
+            default => [],
+        };
+    }
+
+    /**
+     * La facture demande-t-elle des preuves ? Émise, d'une nature qui en
+     * admet, et pas encore entièrement corrigée par des avoirs.
+     */
+    public function concerne(Facture $facture): bool
+    {
+        return $facture->statut !== StatutFacture::Brouillon
+            && self::typesAdmis($facture->nature_operation) !== []
+            && $facture->lignes()->creditables()->exists();
+    }
+
+    /**
+     * Ce qui manque encore, une phrase par preuve attendue, dans l'ordre
+     * où la nature les demande ; rien quand la facture est complète ou
+     * n'en demande pas (voir concerne()).
+     *
+     * @return list<string>
+     */
+    public function manquantes(Facture $facture): array
+    {
+        $nature = $facture->nature_operation;
+
+        if (! in_array($nature, [NatureOperation::ExportHorsUe, NatureOperation::LivraisonDom, NatureOperation::LivraisonIntracommunautaire], true) || ! $this->concerne($facture)) {
+            return [];
+        }
+
+        $nombre = $facture->preuvesOperation()->pluck('type')->countBy(fn (mixed $type): string => ValeursLues::instance($type, TypePreuve::class)->value);
+        $nombreDe = fn (TypePreuve ...$types): int => array_sum(array_map(fn (TypePreuve $type): int => $nombre->get($type->value, 0), $types));
+        $declaration = $nombreDe(TypePreuve::Mrn, TypePreuve::Cn23) > 0 ? null : TypePreuve::Mrn->getLabel().', ou '.lcfirst(TypePreuve::Cn23->getLabel());
+        $transportsA = $nombreDe(TypePreuve::TransportA);
+
+        return array_values(array_filter(match ($nature) {
+            NatureOperation::ExportHorsUe => [$declaration],
+            NatureOperation::LivraisonDom => [$declaration, $transportsA > 0 ? null : TypePreuve::TransportA->getLabel()],
+            NatureOperation::LivraisonIntracommunautaire => [
+                $transportsA > 0 ? null : TypePreuve::TransportA->getLabel(),
+                $transportsA >= 2 || $nombreDe(TypePreuve::TransportB) > 0 ? null : 'Un second document de transport, ou une autre preuve d\'expédition : assurance du transport, paiement bancaire du transport, document d\'une autorité publique, récépissé d\'entrepositaire',
+                $facture->transport_par === TransportPar::Acquereur && $nombreDe(TypePreuve::AttestationAcquereur) === 0 ? $this->attestationAttendue($facture) : null,
+            ],
+        }));
+    }
+
+    /**
+     * Combien de jours après la date de la facture la preuve de douane
+     * (MRN ou CN23) d'une vente hors de l'Union peut manquer avant d'être
+     * en retard : orange jusqu'au 30e jour, rouge à partir du 31e, en
+     * jours du calendrier du magasin (décision de l'éditeur du 01/11/2026,
+     * Q-AF10 : un rappel interne, qu'aucun délai légal n'impose, T29.2 ;
+     * sans preuve 150 jours après la vente, l'exonération se régularise :
+     * voir JOURS_AVANT_LA_REGULARISATION).
+     */
+    public const JOURS_POUR_LA_PREUVE_DE_DOUANE = 30;
+
+    /**
+     * Combien de jours après la date de la facture un export hors de
+     * l'Union ou une livraison vers un DOM attend sa preuve de sortie (MRN
+     * ou CN23) avant de se régulariser à la TVA française : à partir du
+     * 150e jour qui suit sa date, en jours du calendrier du magasin (T29.3,
+     * voir RegularisationDUneExoneration et
+     * RegulariserUneExonerationNonProuveeAction).
+     */
+    public const JOURS_AVANT_LA_REGULARISATION = 150;
+
+    /**
+     * Une preuve de cette facture qui demande encore une preuve (voir
+     * incompletes()) est-elle en retard ce jour (AAAA-MM-JJ, calendrier de
+     * son magasin) : sa preuve de douane manque après le 30e jour qui suit
+     * sa date (une facture d'export du 2 octobre l'est à partir du
+     * 2 novembre), ou l'attestation de l'acquéreur a passé le 10 du mois
+     * qui suit la livraison ? Lit les preuves chargées avec la facture,
+     * sinon les lit.
+     */
+    public function enRetard(Facture $facture, string $aujourdhui): bool
+    {
+        $types = ($facture->relationLoaded('preuvesOperation') ? $facture->preuvesOperation : $facture->preuvesOperation()->get())
+            ->map(fn (PreuveOperation $preuve): TypePreuve => ValeursLues::instance($preuve->type, TypePreuve::class));
+        $sans = fn (TypePreuve ...$attendus): bool => ! $types->contains(fn (TypePreuve $type): bool => in_array($type, $attendus, true));
+        $emission = $facture->date_emission === null ? null : $facture->magasin->calendrier()->jourDe($facture->date_emission);
+
+        return match ($facture->nature_operation) {
+            NatureOperation::ExportHorsUe, NatureOperation::LivraisonDom => $emission !== null
+                && $sans(TypePreuve::Mrn, TypePreuve::Cn23)
+                && Calendrier::ajouterJours($emission, self::JOURS_POUR_LA_PREUVE_DE_DOUANE) < $aujourdhui,
+            NatureOperation::LivraisonIntracommunautaire => $facture->transport_par === TransportPar::Acquereur
+                && $facture->livraison_date !== null
+                && $sans(TypePreuve::AttestationAcquereur)
+                && Calendrier::jourDuMoisSuivant($facture->livraison_date, 10) < $aujourdhui,
+            default => false,
+        };
+    }
+
+    /**
+     * Restreint les factures à celles qui demandent encore une preuve,
+     * comme manquantes() les compte : en une seule requête, chaque preuve
+     * comptée par une sous-requête, limitée au magasin de sa facture (voir
+     * BelongsToMagasin::scopeDuMagasinDe()), si bien que la requête vaut
+     * dans le magasin actif comme pour plusieurs magasins de la société
+     * (voir ChosesAFaireDeLaSociete).
+     *
+     * @template TFacture of Facture
+     *
+     * @param  Builder<TFacture>  $factures
+     * @return Builder<TFacture>
+     */
+    public function incompletes(Builder $factures): Builder
+    {
+        $magasin = $factures->qualifyColumn('magasin_id');
+        $deType = fn (TypePreuve ...$types): Closure => fn (Builder $preuves): Builder => self::deTypes($preuves, $magasin, $types);
+        $sansDeclaration = fn (Builder $facture): Builder => $facture->whereDoesntHave('preuvesOperation', $deType(TypePreuve::Mrn, TypePreuve::Cn23));
+        $sansTransportA = fn (Builder $facture): Builder => $facture->whereDoesntHave('preuvesOperation', $deType(TypePreuve::TransportA));
+
+        return $factures
+            ->emises()
+            ->whereHas('lignes', fn (Builder $lignes): Builder => $lignes->duMagasinDe($magasin)->creditables())
+            ->where(fn (Builder $natures): Builder => $natures
+                ->where(fn (Builder $export): Builder => $export
+                    ->where('nature_operation', NatureOperation::ExportHorsUe)
+                    ->where($sansDeclaration))
+                ->orWhere(fn (Builder $dom): Builder => $dom
+                    ->where('nature_operation', NatureOperation::LivraisonDom)
+                    ->where(fn (Builder $manque): Builder => $manque->where($sansDeclaration)->orWhere($sansTransportA)))
+                ->orWhere(fn (Builder $intracommunautaire): Builder => $intracommunautaire
+                    ->where('nature_operation', NatureOperation::LivraisonIntracommunautaire)
+                    ->where(fn (Builder $manque): Builder => $manque
+                        ->where($sansTransportA)
+                        ->orWhere(fn (Builder $unSeulDocument): Builder => $unSeulDocument
+                            ->whereHas('preuvesOperation', $deType(TypePreuve::TransportA), '<', 2)
+                            ->whereDoesntHave('preuvesOperation', $deType(TypePreuve::TransportB)))
+                        ->orWhere(fn (Builder $enleveParLeClient): Builder => $enleveParLeClient
+                            ->where('transport_par', TransportPar::Acquereur)
+                            ->whereDoesntHave('preuvesOperation', $deType(TypePreuve::AttestationAcquereur))))));
+    }
+
+    /**
+     * Les preuves des types donnés, limitées au magasin de leur facture
+     * ($colonneDuMagasin, voir BelongsToMagasin::scopeDuMagasinDe()).
+     *
+     * @param  Builder<PreuveOperation>  $preuves
+     * @param  array<TypePreuve>  $types
+     * @return Builder<PreuveOperation>
+     */
+    private static function deTypes(Builder $preuves, string $colonneDuMagasin, array $types): Builder
+    {
+        return $preuves->duMagasinDe($colonneDuMagasin)->whereIn('type', $types);
+    }
+
+    /**
+     * L'attestation de réception qui manque, avec le jour où elle est
+     * attendue, et le rappel que ce jour est passé dans le calendrier de
+     * son magasin. Elle est attendue au
+     * plus tard le 10 du mois qui suit la livraison (art. 45 bis du
+     * règlement 282/2011), dont toute livraison intracommunautaire émise
+     * porte la date (voir ControleNatureOperation).
+     */
+    private function attestationAttendue(Facture $facture): string
+    {
+        $echeance = Calendrier::jourDuMoisSuivant(ValeurRequise::de($facture->livraison_date, 'la date de livraison de la livraison intracommunautaire émise'), 10);
+
+        return TypePreuve::AttestationAcquereur->getLabel().', attendue au plus tard le '.Calendrier::afficherJour($echeance, 'd/m/Y')
+            .($echeance < $facture->magasin->calendrier()->aujourdhui() ? ' : délai dépassé' : '');
+    }
+}

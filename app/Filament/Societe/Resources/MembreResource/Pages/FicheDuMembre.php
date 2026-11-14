@@ -1,0 +1,523 @@
+<?php
+
+namespace App\Filament\Societe\Resources\MembreResource\Pages;
+
+use App\Domain\Cabinets\Actions\CorrigerLAdresseDeLExpertComptableAction;
+use App\Domain\Tenancy\Actions\AnnulerLaTransmissionDeLaProprieteAction;
+use App\Domain\Tenancy\Actions\AnnulerUneNominationAction;
+use App\Domain\Tenancy\Actions\ChangerLeRoleDeSocieteAction;
+use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
+use App\Domain\Tenancy\Actions\DemanderLaTransmissionDeLaProprieteAction;
+use App\Domain\Tenancy\Actions\GarderUneNominationAction;
+use App\Domain\Tenancy\Actions\ModifierAdministrateurAction;
+use App\Domain\Tenancy\Actions\ModifierMembreAction;
+use App\Domain\Tenancy\Actions\RedonnerLAccesAction;
+use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Domain\Tenancy\Enums\RoleSociete;
+use App\Domain\Tenancy\Enums\StatutMagasin;
+use App\Domain\Tenancy\Models\Affectation;
+use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Models\TransmissionPropriete;
+use App\Domain\Tenancy\Services\PorteeDesDroits;
+use App\Domain\Tenancy\Support\ValeurSimple;
+use App\Domain\Tenancy\Support\ValeursLues;
+use App\Filament\Concerns\ConfirmeLAdresseDuLien;
+use App\Filament\Societe\Resources\MembreResource;
+use App\Models\User;
+use Closure;
+use Filament\Actions\Action;
+use Filament\Forms\Components\Group;
+use Filament\Forms\Components\Hidden;
+use Filament\Forms\Components\Placeholder;
+use Filament\Forms\Components\Radio;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TextInput;
+use Filament\Forms\Form;
+use Filament\Forms\Get;
+use Filament\Notifications\Notification;
+use Filament\Resources\Pages\ViewRecord;
+use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
+
+/**
+ * La fiche d'un compte, avec les gestes que la personne connectée peut
+ * faire sur lui (voir MembreResource et PorteeDesDroits) ; chaque bouton
+ * n'apparaît qu'à qui peut faire ce geste, et l'action du domaine le
+ * revérifie sous ses verrous sur des comptes relus. Un administrateur qui
+ * n'est autorisé qu'à redonner l'accès d'un vendeur ou d'un observateur n'y
+ * trouve que « Redonner l'accès » et « Afficher l'identifiant ».
+ */
+class FicheDuMembre extends ViewRecord
+{
+    use ConfirmeLAdresseDuLien;
+
+    public const TEXTE_DE_LA_CORRECTION = 'Le nouveau lien du mot de passe part à :adresse ; celui envoyé à l\'ancienne adresse ne vaut plus. La personne qui le suit choisit son mot de passe et entre dans vos magasins avec les autorisations de votre déclaration : vérifiez cette adresse avant l\'envoi.';
+
+    protected static string $resource = MembreResource::class;
+
+    protected function getHeaderActions(): array
+    {
+        $compte = fn (): User => $this->compte();
+
+        return [
+            $this->modifierSonRoleAction(),
+            $this->garderLaNominationAction(),
+            $this->annulerLaNominationAction(),
+            $this->changerLeRoleDeSocieteAction(),
+            $this->modifierLAdministrateurAction(),
+            $this->transmettreLaProprieteAction(),
+            $this->renvoyerLeLienDeTransmissionAction(),
+            $this->annulerLaTransmissionAction(),
+            $this->reintegrerAction(),
+            $this->corrigerLAdresseAction(),
+            MembreResource::actionRedonnerLAcces(Action::make('redonnerLAcces'), $compte)->after(fn () => $this->getRecord()->refresh()),
+            MembreResource::actionAfficherLIdentifiant(Action::make('afficherLIdentifiant'), $compte),
+            MembreResource::actionSuspendre(Action::make('suspendre'), $compte)->after(fn () => $this->getRecord()->refresh()),
+            MembreResource::actionReactiver(Action::make('reactiver'), $compte)->after(fn () => $this->getRecord()->refresh()),
+            MembreResource::actionRetirerDeLaSociete(Action::make('retirerDeLaSociete'), $compte)->after(fn () => $this->getRecord()->refresh()),
+        ];
+    }
+
+    /**
+     * Le propriétaire change le rôle et les cases d'un membre dans son
+     * magasin, le seul qu'il ait (voir ModifierMembreAction).
+     */
+    public function modifierSonRoleAction(): Action
+    {
+        return Action::make('modifierSonRole')
+            ->label('Rôle dans son magasin')
+            ->icon('heroicon-o-adjustments-horizontal')
+            ->visible(fn (): bool => $this->gereLEquipe() && $this->auteur()->estProprietaire() && $this->compte()->estMembre() && $this->compte()->affectationDeMembre() !== null)
+            ->fillForm(function (): array {
+                $affectation = $this->compte()->affectationDeMembre();
+
+                return [
+                    'role' => $affectation?->role?->value,
+                    ...MembreResource::autorisationsAAfficher($affectation?->autorisations() ?? [], 'autorisations'),
+                ];
+            })
+            ->form(MembreResource::champsDuRoleDeMembre())
+            ->modalDescription(fn (): string => 'Son magasin ne change pas : '.($this->compte()->magasinDeSonIdentifiant()->nom ?? '—').'.')
+            ->action(function (array $data): void {
+                $this->agir(function () use ($data): void {
+                    $role = MembreResource::roleSaisi(ValeursLues::champs($data));
+                    app(ModifierMembreAction::class)->handle($this->auteur(), $this->compte(), $role['role'], $role['autorisations']);
+                    Notification::make()->title('Son rôle est enregistré.')->success()->send();
+                });
+            });
+    }
+
+    /**
+     * Garde la nomination d'un responsable par un administrateur : le
+     * propriétaire seul, à côté de « Annuler la nomination » ; la
+     * nomination cesse d'être annulable et sort de l'« À faire » de la
+     * société (voir GarderUneNominationAction).
+     */
+    public function garderLaNominationAction(): Action
+    {
+        return Action::make('garderLaNomination')
+            ->label('Garder')
+            ->icon('heroicon-o-check')
+            ->color('success')
+            ->requiresConfirmation()
+            ->modalHeading('Garder la nomination')
+            ->visible(fn (): bool => $this->nominationGardable() !== null)
+            ->modalDescription(fn (): string => ($this->nominationGardable()?->nommePar->name ?? 'Un administrateur').' l\'a nommé responsable. En la gardant, vous ne pourrez plus l\'annuler en un clic : pour lui retirer ce rôle, vous changerez son rôle comme pour tout responsable.')
+            ->action(function (): void {
+                $this->agir(function (): void {
+                    app(GarderUneNominationAction::class)->handle($this->auteur(), $this->nominationGardable() ?? throw new AuthorizationException(PorteeDesDroits::REFUS));
+                    Notification::make()->title('La nomination est gardée.')->success()->send();
+                });
+            });
+    }
+
+    /**
+     * Annule la nomination d'un responsable par un administrateur : le
+     * propriétaire, ou l'administrateur qui l'a faite.
+     */
+    public function annulerLaNominationAction(): Action
+    {
+        return Action::make('annulerLaNomination')
+            ->label('Annuler la nomination')
+            ->icon('heroicon-o-arrow-uturn-left')
+            ->color('danger')
+            ->requiresConfirmation()
+            ->visible(fn (): bool => $this->nominationAnnulable() !== null)
+            ->modalDescription('Le rôle de responsable disparaît : la personne retrouve son rôle d\'avant, ou, si la nomination avait créé son compte, perd son accès. Aucun document n\'est touché.')
+            ->action(function (): void {
+                $this->agir(function (): void {
+                    app(AnnulerUneNominationAction::class)->handle($this->auteur(), $this->nominationAnnulable() ?? throw new AuthorizationException(PorteeDesDroits::REFUS));
+                    Notification::make()->title('La nomination est annulée.')->success()->send();
+                });
+            });
+    }
+
+    /**
+     * Le propriétaire change le rôle de société de ce compte (membre ou
+     * administrateur), qui garde son identifiant et son
+     * historique (voir ChangerLeRoleDeSocieteAction) ; un compte qui n'a pas
+     * encore de magasin et devient membre reçoit, une fois pour toutes, le
+     * magasin réel ouvert choisi ici. Quand son mot de passe est encore son
+     * identifiant, la fenêtre l'avertit et la personne présente peut
+     * choisir le sien maintenant.
+     */
+    public function changerLeRoleDeSocieteAction(): Action
+    {
+        return Action::make('changerLeRoleDeSociete')
+            ->label('Changer de rôle')
+            ->icon('heroicon-o-arrows-right-left')
+            ->color('warning')
+            ->visible(fn (): bool => $this->auteur()->can('changerLeRoleDeSociete', $this->compte()))
+            ->fillForm(fn (): array => ['jeton_acces' => (string) Str::uuid(), 'mode' => 'plus_tard', ...MembreResource::modeleDeLAdministrateur()])
+            ->form([
+                Select::make('role_societe')
+                    ->label('Nouveau rôle')
+                    ->options(fn (): array => collect([RoleSociete::Membre, RoleSociete::Administrateur])
+                        ->reject(fn (RoleSociete $role): bool => $role === $this->compte()->role_societe)
+                        ->mapWithKeys(fn (RoleSociete $role): array => [$role->value => $role->getLabel()])
+                        ->all())
+                    ->required()
+                    ->live(),
+                Group::make([
+                    Placeholder::make('magasin_de_rattachement')
+                        ->label('Son magasin, définitif')
+                        ->content(fn (): string => $this->compte()->magasinDeSonIdentifiant()->nom ?? '—')
+                        ->visible(fn (): bool => $this->compte()->magasinDeSonIdentifiant() !== null),
+                    Select::make('magasin_id')
+                        ->label('Son magasin, définitif')
+                        ->helperText('Choisi une fois pour toutes, parmi les magasins réels ouverts : un compte de membre ne change jamais de magasin.')
+                        ->options(fn (): array => $this->magasinsReelsOuverts())
+                        ->required(fn (): bool => $this->compte()->magasinDeSonIdentifiant() === null)
+                        ->visible(fn (): bool => $this->compte()->magasinDeSonIdentifiant() === null),
+                    ...MembreResource::champsDuRoleDeMembre(),
+                ])->visible(fn (Get $get): bool => $get('role_societe') === RoleSociete::Membre->value),
+                Group::make(MembreResource::champsDeLAdministrateur())
+                    ->visible(fn (Get $get): bool => $get('role_societe') === RoleSociete::Administrateur->value),
+                Placeholder::make('avertissement')
+                    ->hiddenLabel()
+                    ->content(ListMembres::AVERTISSEMENT_IDENTIFIANT)
+                    ->visible(fn (): bool => $this->compte()->mot_de_passe_est_l_identifiant),
+                Hidden::make('jeton_acces'),
+                Radio::make('mode')
+                    ->label('La personne est-elle là ?')
+                    ->options(['plus_tard' => 'Non : elle choisira son mot de passe à sa prochaine connexion, si son nouveau rôle l\'exige', 'present' => 'Oui : elle choisit son mot de passe maintenant'])
+                    ->live()
+                    ->visible(fn (): bool => $this->compte()->mot_de_passe_est_l_identifiant),
+                ...MembreResource::champsDuMotDePasseChoisi(fn (Get $get): bool => $this->compte()->mot_de_passe_est_l_identifiant && $get('mode') === 'present'),
+            ])
+            ->modalDescription('Le compte garde son identifiant et son historique ; seuls son rôle et ses autorisations changent. Un administrateur ne garde aucune affectation de membre ; ses ventes passées restent à son nom.')
+            ->action(function (array $data, Form $form): void {
+                $compte = $this->compte();
+                $enPresence = $compte->mot_de_passe_est_l_identifiant && ($data['mode'] ?? null) === 'present';
+
+                if ($enPresence) {
+                    MembreResource::exigerLeMotDePasseChoisi(ValeurSimple::enTexte($data['mot_de_passe'] ?? ''), $compte, $form);
+                }
+
+                $this->agir(function () use ($data, $compte, $enPresence): void {
+                    $action = app(ChangerLeRoleDeSocieteAction::class);
+                    $saisie = ValeursLues::champs($data);
+
+                    match (RoleSociete::from(ValeurSimple::enTexte($saisie['role_societe']))) {
+                        RoleSociete::Membre => $action->versMembre($this->auteur(), $compte, MembreResource::roleSaisi($saisie)['role'], MembreResource::roleSaisi($saisie)['autorisations'], filled($saisie['magasin_id'] ?? null) ? ValeurSimple::enEntier($saisie['magasin_id']) : null),
+                        RoleSociete::Administrateur => $action->versAdministrateur(...$this->porteeSaisie($saisie)),
+                        RoleSociete::Proprietaire, RoleSociete::Collaborateur, RoleSociete::ExpertComptable => throw new AuthorizationException(PorteeDesDroits::REFUS),
+                    };
+
+                    if ($enPresence) {
+                        app(RedonnerLAccesAction::class)->handle($this->auteur(), $compte->refresh(), true, ValeurSimple::enTexte($data['mot_de_passe']), ValeurSimple::enTexte($data['jeton_acces']));
+                    }
+
+                    Notification::make()->title('Son rôle est changé.')->success()->send();
+                });
+            });
+    }
+
+    public function modifierLAdministrateurAction(): Action
+    {
+        return Action::make('modifierLAdministrateur')
+            ->label('Modifier sa portée et ses autorisations')
+            ->icon('heroicon-o-adjustments-horizontal')
+            ->visible(fn (): bool => $this->auteur()->can('modifierUnAdministrateur', $this->compte()) && ! $this->compte()->estRetire())
+            ->fillForm(fn (): array => $this->porteeActuelle())
+            ->form(MembreResource::champsDeLAdministrateur())
+            ->action(function (array $data): void {
+                $this->agir(fn () => app(ModifierAdministrateurAction::class)->modifier(...$this->porteeSaisie(ValeursLues::champs($data))));
+            });
+    }
+
+    /**
+     * Le propriétaire demande la transmission de la propriété à cet
+     * administrateur, en redonnant son mot de passe : un lien part à
+     * l'adresse que l'administrateur a renseignée lui-même, et la propriété
+     * ne passe que quand il le suit (voir
+     * DemanderLaTransmissionDeLaProprieteAction).
+     */
+    public function transmettreLaProprieteAction(): Action
+    {
+        return Action::make('transmettreLaPropriete')
+            ->label('Transmettre la propriété')
+            ->icon('heroicon-o-key')
+            ->color('danger')
+            ->visible(fn (): bool => $this->auteur()->can('transmettreLaPropriete', $this->compte()) && $this->transmissionEnAttente() === null)
+            ->modalDescription(fn (): string => "Un lien, valable 24 heures, part à l'adresse que {$this->compte()->name} a renseignée dans son profil : la propriété ne passera que quand il l'aura suivi, connecté à son compte, et vous pourrez annuler d'ici là. Il deviendra alors le propriétaire de la société, avec tous les droits sauf celui de vendre, hors du magasin de démonstration tant qu'il est ouvert ; vous en deviendrez administrateur de tous les magasins, avec toutes les autorisations de magasin sauf celles de la vente, et toutes celles de la société. Il doit avoir choisi son propre mot de passe et renseigné lui-même son adresse.")
+            ->form([
+                TextInput::make('mot_de_passe')->label('Votre mot de passe')->password()->autocomplete('current-password')->required(),
+            ])
+            ->action(function (array $data): void {
+                $this->agir(function () use ($data): void {
+                    app(DemanderLaTransmissionDeLaProprieteAction::class)->handle($this->auteur(), $this->compte(), ValeurSimple::enTexte($data['mot_de_passe']));
+                    Notification::make()->title('Un lien a été envoyé à l\'adresse de cet administrateur : la propriété ne passera que quand il l\'aura suivi.')->success()->send();
+                });
+            });
+    }
+
+    public function renvoyerLeLienDeTransmissionAction(): Action
+    {
+        return Action::make('renvoyerLeLienDeTransmission')
+            ->label('Renvoyer le lien de transmission')
+            ->icon('heroicon-o-envelope')
+            ->requiresConfirmation()
+            ->modalDescription('Un nouveau lien, valable 24 heures, part à son adresse ; le précédent ne sert plus.')
+            ->visible(fn (): bool => $this->auteur()->can('transmettreLaPropriete', $this->compte()) && $this->transmissionEnAttente() !== null)
+            ->action(function (): void {
+                $this->agir(function (): void {
+                    app(DemanderLaTransmissionDeLaProprieteAction::class)->renvoyerLeLien($this->auteur(), $this->compte());
+                    Notification::make()->title('Un nouveau lien a été envoyé à l\'adresse de cet administrateur.')->success()->send();
+                });
+            });
+    }
+
+    public function annulerLaTransmissionAction(): Action
+    {
+        return Action::make('annulerLaTransmission')
+            ->label('Annuler la transmission')
+            ->icon('heroicon-o-x-circle')
+            ->color('danger')
+            ->requiresConfirmation()
+            ->modalDescription('Le lien envoyé ne sert plus ; rien n\'a changé dans la société.')
+            ->visible(fn (): bool => $this->auteur()->estProprietaire() && $this->transmissionEnAttente() !== null)
+            ->action(function (): void {
+                $this->agir(function (): void {
+                    app(AnnulerLaTransmissionDeLaProprieteAction::class)->handle($this->auteur(), $this->compte());
+                    Notification::make()->title('La transmission de la propriété est annulée.')->success()->send();
+                });
+            });
+    }
+
+    /**
+     * Réintégrer un compte retiré, dans son rôle et, pour un membre, dans
+     * son magasin, comme une création : le propriétaire choisit son rôle de
+     * magasin, ou la portée d'un administrateur ; un administrateur
+     * autorisé réintègre un responsable d'un magasin réel de sa portée.
+     */
+    public function reintegrerAction(): Action
+    {
+        return Action::make('reintegrer')
+            ->label('Réintégrer')
+            ->icon('heroicon-o-arrow-path')
+            ->visible(fn (): bool => $this->peutReintegrer())
+            ->fillForm(fn (): array => $this->compte()->estAdministrateur() ? MembreResource::modeleDeLAdministrateur() : [])
+            ->form(fn (): array => match (true) {
+                $this->compte()->estAdministrateur() => MembreResource::champsDeLAdministrateur(),
+                $this->compte()->estMembre() && $this->auteur()->estProprietaire() => MembreResource::champsDuRoleDeMembre(),
+                default => [],
+            })
+            ->requiresConfirmation(fn (): bool => ! $this->auteur()->estProprietaire() || $this->compte()->estExpertComptable())
+            ->modalDescription(fn (): string => match (true) {
+                $this->compte()->estMembre() => 'Dans son magasin : '.($this->compte()->magasinDeSonIdentifiant()->nom ?? '—').'.',
+                $this->compte()->estExpertComptable() => 'La personne retrouve son compte, avec son mot de passe et les autorisations de votre déclaration.',
+                default => 'Il retrouve son rôle.',
+            })
+            ->action(function (array $data): void {
+                $this->agir(function () use ($data): void {
+                    $action = app(ChangerStatutCompteAction::class);
+                    $compte = $this->compte();
+
+                    if ($compte->estExpertComptable()) {
+                        $action->reintegrerLExpertComptable($this->auteur(), $compte);
+                    } elseif ($compte->estAdministrateur()) {
+                        $action->reintegrerLAdministrateur(...$this->porteeSaisie(ValeursLues::champs($data)));
+                    } elseif ($this->auteur()->estProprietaire()) {
+                        $role = MembreResource::roleSaisi(ValeursLues::champs($data));
+                        $action->reintegrer($this->auteur(), $compte, $role['role'], $role['autorisations']);
+                    } else {
+                        $action->reintegrer($this->auteur(), $compte, RoleMagasin::Responsable);
+                    }
+                });
+            });
+    }
+
+    /**
+     * Corriger l'adresse d'un expert-comptable de la société qui n'a pas
+     * encore choisi son mot de passe (voir
+     * CorrigerLAdresseDeLExpertComptableAction) : le propriétaire tape deux
+     * fois la nouvelle adresse et redonne son mot de passe ; « Continuer »
+     * ouvre la fenêtre qui répète la nouvelle adresse en gras (voir
+     * ConfirmeLAdresseDuLien), dont le bouton la corrige : un nouveau lien
+     * y part, celui d'avant ne vaut plus.
+     */
+    public function corrigerLAdresseAction(): Action
+    {
+        $visible = fn (): bool => $this->auteur()->can('corrigerLAdresse', $this->compte());
+
+        return Action::make('corrigerLAdresse')
+            ->label('Corriger l\'adresse')
+            ->icon('heroicon-o-at-symbol')
+            ->visible($visible)
+            ->modalDescription('Le lien envoyé à l\'ancienne adresse ne vaudra plus ; un nouveau lien, valable 7 jours, part à la nouvelle.')
+            ->modalSubmitActionLabel('Continuer')
+            ->form([
+                TextInput::make('email')->label('Nouvelle adresse e-mail professionnelle')->email()->required()->maxLength(255),
+                TextInput::make('email_confirmation')->label('Confirmez cette adresse')->email()->required()->maxLength(255),
+                TextInput::make('mot_de_passe')->label('Votre mot de passe')->password()->required(),
+            ])
+            ->registerModalActions([$this->confirmationDeLAdresse(Action::make('confirmerLaCorrection'), self::TEXTE_DE_LA_CORRECTION, 'Corriger et envoyer le lien', $visible, function (array $saisie): void {
+                $this->agir(function () use ($saisie): void {
+                    $change = app(CorrigerLAdresseDeLExpertComptableAction::class)->handle($this->auteur(), $this->compte(), $saisie['email'] ?? null, $saisie['email_confirmation'] ?? null, ValeurSimple::enTexte($saisie['mot_de_passe'] ?? ''));
+                    Notification::make()->title($change ? 'Adresse corrigée : un nouveau lien est parti à la nouvelle adresse.' : 'L\'adresse était déjà celle-ci : rien n\'a changé.')->success()->send();
+                });
+            })])
+            ->action(function (array $data, Action $action): void {
+                try {
+                    $this->demanderLaConfirmationDeLAdresse(ValeursLues::champs($data), 'confirmerLaCorrection');
+                } catch (ValidationException $refus) {
+                    Notification::make()->title(implode(' ', $refus->validator->errors()->all()))->danger()->send();
+                    $this->revenirALaSaisie($action);
+                }
+            });
+    }
+
+    private function peutReintegrer(): bool
+    {
+        $compte = $this->compte();
+
+        if (! $compte->estRetire()) {
+            return false;
+        }
+
+        if ($compte->estAdministrateur()) {
+            return $this->auteur()->can('modifierUnAdministrateur', $compte);
+        }
+
+        if ($compte->estExpertComptable()) {
+            return $this->auteur()->can('reintegrerLExpertComptable', $compte);
+        }
+
+        return collect(RoleMagasin::cases())->contains(fn (RoleMagasin $role): bool => app(PorteeDesDroits::class)->peutReintegrer($this->auteur(), $compte, $role));
+    }
+
+    private function nominationGardable(): ?Affectation
+    {
+        $affectation = $this->compte()->affectationDeMembre();
+
+        return $affectation !== null && app(PorteeDesDroits::class)->peutGarderLaNomination($this->auteur(), $affectation) ? $affectation : null;
+    }
+
+    private function nominationAnnulable(): ?Affectation
+    {
+        $affectation = $this->compte()->affectationDeMembre();
+
+        return $affectation !== null && app(PorteeDesDroits::class)->peutAnnulerLaNomination($this->auteur(), $affectation) ? $affectation : null;
+    }
+
+    /**
+     * La demande de transmission de la propriété qui attend pour ce compte.
+     */
+    private function transmissionEnAttente(): ?TransmissionPropriete
+    {
+        return TransmissionPropriete::query()
+            ->where('destinataire_id', $this->compte()->getKey())
+            ->whereNull('annulee_le')
+            ->whereNull('acceptee_le')
+            ->where('expire_le', '>', now())
+            ->first();
+    }
+
+    /**
+     * Les magasins réels ouverts de la société, où un compte qui n'a pas
+     * encore de magasin peut devenir membre.
+     *
+     * @return array<int, string>
+     */
+    private function magasinsReelsOuverts(): array
+    {
+        return ValeursLues::textesParCle(Magasin::query()
+            ->where('societe_id', MembreResource::societe()->getKey())
+            ->where('est_demonstration', false)
+            ->where('statut', StatutMagasin::Actif->value)
+            ->orderBy('nom')
+            ->pluck('nom', 'id'));
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array{0: User, 1: User, 2: list<int>|null, 3: list<string>, 4: list<string>}
+     */
+    private function porteeSaisie(array $data): array
+    {
+        return [
+            $this->auteur(),
+            $this->compte(),
+            MembreResource::magasinsSaisis($data),
+            MembreResource::autorisationsSaisies($data, 'autorisations_magasin'),
+            MembreResource::casesCochees($data, 'autorisations_societe'),
+        ];
+    }
+
+    /**
+     * La portée de l'administrateur, telle que la fenêtre « Modifier » la
+     * précoche : ses magasins choisis que l'équipe montre (voir
+     * MembreResource::magasinsDeLaPortee()), jamais le magasin de
+     * démonstration d'une société validée, qui a disparu de ses écrans.
+     *
+     * @return array<string, mixed>
+     */
+    private function porteeActuelle(): array
+    {
+        $compte = $this->compte();
+        $affectations = $compte->affectations()->whereNull('role')->get();
+        $premiere = $affectations->first();
+
+        return [
+            'portee' => $compte->administreTousLesMagasins() ? 'tous' : 'selection',
+            'magasins' => array_values(array_intersect(ValeursLues::entiers($affectations->pluck('magasin_id')->filter()), array_keys(MembreResource::magasinsDeLaPortee()))),
+            'autorisations_societe' => $compte->autorisationsDeSociete(),
+            ...MembreResource::autorisationsAAfficher($premiere?->autorisations() ?? [], 'autorisations_magasin'),
+        ];
+    }
+
+    /**
+     * Exécute le geste, affiche un refus sans casser la page, puis relit
+     * le compte pour que la fiche montre son nouvel état.
+     */
+    private function agir(Closure $geste): void
+    {
+        MembreResource::executerLeGeste($geste);
+        $this->getRecord()->refresh();
+    }
+
+    /**
+     * La personne connectée gère-t-elle encore l'équipe de sa société (pas
+     * dans une société révoquée, voir PorteeDesDroits::gereSonEquipe()) ?
+     */
+    private function gereLEquipe(): bool
+    {
+        return app(PorteeDesDroits::class)->gereSonEquipe($this->auteur());
+    }
+
+    private function compte(): User
+    {
+        return ValeursLues::instance($this->getRecord(), User::class);
+    }
+
+    private function auteur(): User
+    {
+        $auteur = auth()->user();
+
+        abort_unless($auteur instanceof User, 403);
+
+        return $auteur;
+    }
+}

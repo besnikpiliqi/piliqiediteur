@@ -1,0 +1,2360 @@
+<?php
+
+namespace Tests;
+
+use App\Domain\Achats\Actions\CreerAvoirFournisseurAction;
+use App\Domain\Achats\Actions\CreerFactureAchatAction;
+use App\Domain\Achats\Actions\EmettreAvoirFournisseurAction;
+use App\Domain\Achats\Actions\ValiderFactureAchatAction;
+use App\Domain\Achats\Events\AvoirFournisseurEmis;
+use App\Domain\Achats\Events\FactureAchatValidee;
+use App\Domain\Achats\Models\AvoirFournisseur;
+use App\Domain\Achats\Models\FactureAchat;
+use App\Domain\Authorization\AutorisationsSociete;
+use App\Domain\Authorization\OperateurCourant;
+use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Cabinets\Actions\AccepterLaDemandeDeLienAction;
+use App\Domain\Cabinets\Actions\AccepterLInvitationAction;
+use App\Domain\Cabinets\Actions\AjouterUnExpertComptableAction;
+use App\Domain\Cabinets\Actions\ChoisirLeMotDePasseDeLExpertComptableAction;
+use App\Domain\Cabinets\Actions\ConfierDesClientsAction;
+use App\Domain\Cabinets\Actions\CreerCollaborateurAction;
+use App\Domain\Cabinets\Actions\DeclarerSonExpertComptableAction;
+use App\Domain\Cabinets\Actions\DesignerUnCabinetAction;
+use App\Domain\Cabinets\Actions\InviterUneEntrepriseAction;
+use App\Domain\Cabinets\Actions\ReglerLesAutorisationsDuCabinetAction;
+use App\Domain\Cabinets\Actions\VerifierLOrdreAction;
+use App\Domain\Cabinets\Enums\EtatDuLien;
+use App\Domain\Cabinets\Mail\DemandeDeRattachementMail;
+use App\Domain\Cabinets\Mail\InvitationDuCabinetMail;
+use App\Domain\Cabinets\Mail\LienDuMotDePasseDeLExpertComptableMail;
+use App\Domain\Cabinets\Models\LienCabinet;
+use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
+use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
+use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
+use App\Domain\CaisseSecurisee\Services\SignataireFiscal;
+use App\Domain\CaisseSecurisee\Support\HorlogeDuSysteme;
+use App\Domain\Calendrier\Calendrier;
+use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Contacts\Models\Client;
+use App\Domain\Contacts\Models\Fournisseur;
+use App\Domain\Facturation\Actions\CreerAvoirAction;
+use App\Domain\Facturation\Actions\CreerFactureAction;
+use App\Domain\Facturation\Actions\EmettreAvoirAction;
+use App\Domain\Facturation\Actions\EmettreFactureAction;
+use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
+use App\Domain\Facturation\Enums\ModePaiement;
+use App\Domain\Facturation\Events\AvoirEmis;
+use App\Domain\Facturation\Events\FactureEmise;
+use App\Domain\Facturation\Models\Avoir;
+use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Services\ApercuDuReglement;
+use App\Domain\Facturation\Services\CalculateurLigne;
+use App\Domain\Facturation\Services\ConstructeurLigneDocument;
+use App\Domain\Facturation\Services\ContexteDeVente;
+use App\Domain\Facturation\Services\PartDeReglement;
+use App\Domain\Facturation\Services\RecapitulatifDeCloture;
+use App\Domain\Facturation\Services\ReglementComptant;
+use App\Domain\Facturation\Support\GardesDesDocumentsEmis;
+use App\Domain\Stock\Enums\TypeMouvementStock;
+use App\Domain\Stock\Models\MouvementStock;
+use App\Domain\Stock\Services\ConfirmationVenteSansStock;
+use App\Domain\Stock\Services\StockLedgerService;
+use App\Domain\Tenancy\Actions\ChangerSonMotDePasseAction;
+use App\Domain\Tenancy\Actions\CorrigerSirenAction;
+use App\Domain\Tenancy\Actions\CreerAdministrateurAction;
+use App\Domain\Tenancy\Actions\CreerEtablissementAction;
+use App\Domain\Tenancy\Actions\CreerMembreAction;
+use App\Domain\Tenancy\Actions\CreerSocieteAction;
+use App\Domain\Tenancy\Actions\DemanderLaTransmissionDeLaProprieteAction;
+use App\Domain\Tenancy\Actions\EnvoyerCodeDeConfirmationAction;
+use App\Domain\Tenancy\Actions\ExaminerSirenAction;
+use App\Domain\Tenancy\Actions\RedonnerLAccesAction;
+use App\Domain\Tenancy\Actions\RevoquerSocieteAction;
+use App\Domain\Tenancy\Actions\SaisirCodeDeConfirmationAction;
+use App\Domain\Tenancy\Enums\ActionAuditee;
+use App\Domain\Tenancy\Enums\DecisionExamenSiren;
+use App\Domain\Tenancy\Enums\FormeJuridique;
+use App\Domain\Tenancy\Enums\MotifCode;
+use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Domain\Tenancy\Enums\RoleSociete;
+use App\Domain\Tenancy\Enums\StatutCompte;
+use App\Domain\Tenancy\Enums\Territoire;
+use App\Domain\Tenancy\Enums\TypeDActivite;
+use App\Domain\Tenancy\Enums\TypeVerification;
+use App\Domain\Tenancy\Mail\ConfirmationNouvelleAdresseMail;
+use App\Domain\Tenancy\Mail\TransmissionDeLaProprieteMail;
+use App\Domain\Tenancy\Models\CodeConfirmation;
+use App\Domain\Tenancy\Models\EntreeAudit;
+use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Models\Societe;
+use App\Domain\Tenancy\Models\VerificationSociete;
+use App\Domain\Tenancy\Services\ControleSirene;
+use App\Domain\Tenancy\Services\SiretsDesMagasins;
+use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\CleDuModele;
+use App\Domain\Tenancy\Support\GardesDesDroits;
+use App\Domain\Tenancy\Support\InterventionDeLEditeur;
+use App\Domain\Tenancy\Support\ValeurRequise;
+use App\Integrations\EnvoiRecommande\Contracts\ServiceEnvoiRecommande;
+use App\Integrations\Ordre\Contracts\AnnuaireDeLOrdre;
+use App\Integrations\Ordre\FauxAnnuaireDeLOrdre;
+use App\Integrations\Sirene\Contracts\RepertoireSirene;
+use App\Integrations\Sirene\EtablissementSirene;
+use App\Integrations\Sirene\FauxRepertoireSirene;
+use App\Models\User;
+use Carbon\Carbon;
+use Carbon\CarbonImmutable;
+use Closure;
+use Database\Factories\MagasinFactory;
+use Database\Factories\SocieteFactory;
+use DateTimeImmutable;
+use DateTimeInterface;
+use DateTimeZone;
+use Filament\Facades\Filament;
+use Illuminate\Contracts\Process\ProcessResult;
+use Illuminate\Database\Connection;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Events\QueryExecuted;
+use Illuminate\Database\QueryException;
+use Illuminate\Foundation\Application;
+use Illuminate\Foundation\Testing\DatabaseMigrations;
+use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Foundation\Testing\DatabaseTruncation;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
+use Illuminate\Foundation\Testing\Wormhole;
+use Illuminate\Process\InvokedProcess;
+use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Process;
+use Illuminate\Support\Str;
+use Illuminate\Support\Testing\Fakes\MailFake;
+use Illuminate\Testing\PendingCommand;
+use Illuminate\Testing\TestResponse;
+use InvalidArgumentException;
+use Laravel\SerializableClosure\SerializableClosure;
+use Livewire\Features\SupportTesting\Testable;
+use LogicException;
+use PDO;
+use PHPUnit\Framework\AssertionFailedError;
+use Random\Engine\Xoshiro256StarStar;
+use Random\Randomizer;
+use Tests\Fixtures\EcrituresDurables;
+
+abstract class TestCase extends BaseTestCase
+{
+    /**
+     * La paire de clés de signature fiscale des tests, générée une seule
+     * fois par processus : aucune clé n'est jamais commitée.
+     *
+     * @var array{cle_id: string, cle_privee: string, cle_publique: string}|null
+     */
+    private static ?array $paireFiscaleDesTests = null;
+
+    /**
+     * La clé du journal d'audit des tests, tirée une seule fois par
+     * processus : aucune clé n'est jamais commitée.
+     */
+    private static ?string $cleDuJournalAuditDesTests = null;
+
+    /**
+     * Vrai pour un test de falsification qui laisse exprès un état que la
+     * base refuse à la validation de la transaction (voir
+     * laBaseRefuseraCetEtatALaValidation()).
+     */
+    private bool $etatRefuseALaValidation = false;
+
+    /**
+     * Les écritures durables d'un test dont la classe n'a pas de base de
+     * test (voir surveillerLesEcrituresSansBaseDeTest()), null pour une
+     * classe qui en a une.
+     */
+    private ?EcrituresDurables $ecrituresSansBaseDeTest = null;
+
+    /**
+     * Chaque application de test signe avec la paire éphémère des tests,
+     * seule clé épinglée, et chaîne son journal d'audit avec la clé
+     * éphémère des tests : ni la clé d'un .env local ni une clé épinglée
+     * dans le dépôt n'entrent dans les tests.
+     *
+     * @return Application
+     */
+    public function createApplication()
+    {
+        $app = parent::createApplication();
+
+        self::$paireFiscaleDesTests ??= SignataireFiscal::genererUnePaire();
+        self::$cleDuJournalAuditDesTests ??= base64_encode(random_bytes(32));
+
+        $app['config']->set([
+            'caisse_securisee.cle_privee' => base64_encode(self::$paireFiscaleDesTests['cle_privee']),
+            'caisse_securisee.phrase_secrete' => null,
+            'caisse_securisee.cles_publiques' => ['tests.pem' => self::$paireFiscaleDesTests['cle_publique']],
+            'journal_audit.cle' => self::$cleDuJournalAuditDesTests,
+            'journal_audit.cle_id' => 'tests',
+            'journal_audit.cles_precedentes' => [],
+        ]);
+
+        return $app;
+    }
+
+    /**
+     * Aucun test n'interroge un service réel : une requête HTTP sortante
+     * sans réponse simulée (Http::fake()) échoue au lieu de partir.
+     *
+     * Aucun test ne dépend du hasard : Faker et Str::random() sont semés
+     * au début de chaque test par une graine tirée du nom de sa classe, de
+     * sa méthode et de son jeu de données (voir graineDuTest()), si bien
+     * qu'un test tire les mêmes valeurs à chaque exécution, dans quelque
+     * ordre et quelque processus qu'il tourne. Faker sème le générateur de
+     * PHP (mt_srand) : la graine atteint ainsi le générateur de la locale
+     * de l'application que partagent fake() et les fabriques. Un
+     * générateur de Faker resté d'un test précédent ressème au hasard ce
+     * générateur de PHP en se détruisant (Faker\Generator::__destruct()),
+     * et le ramasse-miettes peut le détruire en plein test : il est donc
+     * détruit avant que ce test ne sème le sien. Str::random() donne
+     * l'identifiant de chaque composant Livewire et le jeton CSRF d'une
+     * page, que lisent les assertions sur le HTML : il tire ses chaînes
+     * d'un générateur à lui (voir chainesAleatoiresSemees()), que Laravel
+     * remet au hasard à la fin du test (Str::resetFactoryState()).
+     */
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        gc_collect_cycles();
+        fake()->seed($this->graineDuTest());
+        Str::createRandomStringsUsing(self::chainesAleatoiresSemees($this->graineDuTest()));
+        Http::preventStrayRequests();
+        $this->surveillerLesEcrituresSansBaseDeTest();
+        $this->app->instance(HorlogeDuSysteme::class, new class extends HorlogeDuSysteme
+        {
+            /**
+             * L'horloge du serveur de base, que la suite ne décale jamais
+             * (sous faketime non plus) : aucun test ne lit l'heure réelle de
+             * la machine (voir caisse:diagnostiquer).
+             */
+            public function secondes(): float
+            {
+                return (float) DB::scalar("select date_part('epoch', clock_timestamp())");
+            }
+        });
+    }
+
+    /**
+     * La transaction d'un test RefreshDatabase n'est jamais validée : ses
+     * gardes différées (le ticket Z signé, l'auteur des mouvements du
+     * stock, la cohérence des achats et de leur stock, voir
+     * GardesDesClotures et GardesDuStock) ne joueraient jamais. Avant de
+     * l'annuler, la fin du test les fait jouer (SET CONSTRAINTS ALL
+     * IMMEDIATE), comme la validation le ferait : un test réussi ne laisse
+     * jamais un état que la base refuserait à la validation. Seul un test
+     * de falsification, qui le fabrique exprès, s'en dispense (voir
+     * laBaseRefuseraCetEtatALaValidation()). Une transaction déjà annulée
+     * par un refus attendu (état SQL 25P02) n'a plus rien à valider.
+     */
+    protected function tearDown(): void
+    {
+        try {
+            $this->faireJouerLesGardesDifferees();
+            $this->refuserLesEcrituresSansBaseDeTest();
+        } finally {
+            parent::tearDown();
+        }
+    }
+
+    /**
+     * Un test dont la classe n'a pas de base de test (ni RefreshDatabase,
+     * ni DatabaseMigrations, ni DatabaseTruncation, ni DatabaseTransactions)
+     * n'écrit jamais en base : ses lignes resteraient dans la base que
+     * partagent les tests de son processus, et, premier de son processus à
+     * toucher la base, il écrirait dans une base que rien n'a encore migrée,
+     * un échec qui ne se voit que selon l'ordre des tests. Ses écritures
+     * durables sont donc relevées dès le début du test, hors de toute
+     * transaction (voir EcrituresDurables), et sa fin le refuse s'il en a
+     * fait (voir refuserLesEcrituresSansBaseDeTest()).
+     */
+    private function surveillerLesEcrituresSansBaseDeTest(): void
+    {
+        if (array_intersect([RefreshDatabase::class, DatabaseMigrations::class, DatabaseTruncation::class, DatabaseTransactions::class], class_uses_recursive(static::class)) !== []) {
+            return;
+        }
+
+        $this->ecrituresSansBaseDeTest = new EcrituresDurables($this->app->make('events'), 0);
+    }
+
+    /**
+     * @throws AssertionFailedError quand un test sans base de test a écrit en base
+     */
+    private function refuserLesEcrituresSansBaseDeTest(): void
+    {
+        $refus = $this->status()->isSuccess()
+            ? $this->ecrituresSansBaseDeTest?->refusSansBaseDeTest(static::class.'::'.$this->name())
+            : null;
+
+        if ($refus !== null) {
+            throw new AssertionFailedError($refus);
+        }
+    }
+
+    /**
+     * Un test de falsification fabrique exprès un état que la base refuse
+     * à la validation de la transaction (un ticket Z sans sa clôture
+     * signée, un mouvement au nom d'un autre que l'auteur de son
+     * document…) : sa transaction, jamais validée, s'annule sans faire
+     * jouer les gardes différées.
+     */
+    protected function laBaseRefuseraCetEtatALaValidation(): void
+    {
+        $this->etatRefuseALaValidation = true;
+    }
+
+    /**
+     * @throws AssertionFailedError quand une garde différée refuse l'état que laisse le test
+     */
+    private function faireJouerLesGardesDifferees(): void
+    {
+        if ($this->etatRefuseALaValidation
+            || ! $this->status()->isSuccess()
+            || ! in_array(RefreshDatabase::class, class_uses_recursive(static::class), true)
+            || DB::connection()->transactionLevel() === 0) {
+            return;
+        }
+
+        try {
+            DB::connection()->statement('SET CONSTRAINTS ALL IMMEDIATE');
+        } catch (QueryException $refus) {
+            if (($refus->errorInfo[0] ?? null) === '25P02') {
+                return;
+            }
+
+            throw new AssertionFailedError('Le test laisse un état que la base refuserait à la validation de sa transaction : '.($refus->errorInfo[2] ?? $refus->getMessage()));
+        }
+    }
+
+    /**
+     * La graine du hasard de ce test : l'empreinte CRC32 du nom de sa
+     * classe, de sa méthode et de son jeu de données.
+     */
+    protected function graineDuTest(): int
+    {
+        return crc32(static::class.'::'.$this->nameWithDataSet());
+    }
+
+    /**
+     * Le tirage de Str::random() semé par cette graine : des lettres et
+     * des chiffres, comme le tirage de Laravel, toujours les mêmes dans le
+     * même ordre pour une même graine.
+     *
+     * @return Closure(int): string
+     */
+    protected static function chainesAleatoiresSemees(int $graine): Closure
+    {
+        $hasard = new Randomizer(new Xoshiro256StarStar($graine));
+
+        return fn (int $longueur): string => $longueur > 0
+            ? $hasard->getBytesFromString('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789', $longueur)
+            : '';
+    }
+
+    /**
+     * L'instant d'une heure murale de Paris (« AAAA-MM-JJ HH:MM » ou
+     * « AAAA-MM-JJ HH:MM:SS »), au fuseau de l'application, comme now() :
+     * une heure écrite dans un test dit toujours de quel fuseau elle est,
+     * et ne se relit jamais dans le fuseau par défaut. Une heure qui
+     * n'existe pas à Paris (sautée au passage à l'heure d'été) ou qui s'y
+     * répète (au passage à l'heure d'hiver) est refusée (voir
+     * Calendrier::heureMurale()) : elle ne désigne pas un seul instant,
+     * qui s'écrit alors en UTC (voir enUtc()).
+     *
+     * @throws InvalidArgumentException
+     */
+    protected static function aParis(string $heure): CarbonImmutable
+    {
+        return Calendrier::deParis()->heureMurale($heure);
+    }
+
+    /**
+     * L'instant d'une heure murale du calendrier d'un territoire (« AAAA-MM-JJ
+     * HH:MM » ou « AAAA-MM-JJ HH:MM:SS »), au fuseau de l'application, comme
+     * aParis() : « 2026-11-16 20:00 » en Martinique est le 17 novembre à
+     * minuit UTC.
+     *
+     * @throws InvalidArgumentException
+     */
+    protected static function aLHeureDe(Territoire $territoire, string $heure): CarbonImmutable
+    {
+        return Calendrier::duTerritoire($territoire)->heureMurale($heure);
+    }
+
+    /**
+     * L'instant d'une heure UTC (« AAAA-MM-JJ HH:MM » ou « AAAA-MM-JJ
+     * HH:MM:SS »), au fuseau de l'application, comme now().
+     *
+     * @throws InvalidArgumentException
+     */
+    protected static function enUtc(string $heure): CarbonImmutable
+    {
+        return CarbonImmutable::instance(self::heureEcrite($heure))->setTimezone(date_default_timezone_get());
+    }
+
+    /**
+     * L'heure écrite, lue en UTC à la seconde : « AAAA-MM-JJ HH:MM » ou
+     * « AAAA-MM-JJ HH:MM:SS », une date du calendrier.
+     *
+     * @throws InvalidArgumentException
+     */
+    private static function heureEcrite(string $heure): DateTimeImmutable
+    {
+        $format = strlen($heure) === 16 ? 'Y-m-d H:i' : 'Y-m-d H:i:s';
+        $lue = DateTimeImmutable::createFromFormat('!'.$format, $heure, new DateTimeZone('UTC'));
+
+        if ($lue === false || $lue->format($format) !== $heure) {
+            throw new InvalidArgumentException("{$heure} n'est pas une heure « AAAA-MM-JJ HH:MM[:SS] ».");
+        }
+
+        return $lue;
+    }
+
+    /**
+     * Le même instant, quel que soit le fuseau de chacun : un instant
+     * attendu se compare comme un instant, jamais au texte d'une date mise
+     * en forme dans son fuseau.
+     */
+    protected function assertMemeInstant(DateTimeInterface $attendu, ?DateTimeInterface $obtenu, string $message = ''): void
+    {
+        $enUtc = static fn (DateTimeInterface $instant): string => CarbonImmutable::instance($instant)->utc()->format('Y-m-d\TH:i:s.u\Z');
+
+        $this->assertSame($enUtc($attendu), $obtenu === null ? null : $enUtc($obtenu), $message);
+    }
+
+    /**
+     * Un voyage relatif part de l'horloge figée du test, jamais de l'heure
+     * réelle : sans horloge figée, il dépendrait de l'instant où la suite
+     * tourne.
+     *
+     * @param  int  $value
+     *
+     * @throws LogicException
+     */
+    public function travel($value): Wormhole
+    {
+        $this->exigerUneHorlogeFigee('travel()');
+
+        return parent::travel($value);
+    }
+
+    /**
+     * Figer l'horloge à l'heure réelle ferait dépendre le test de l'instant
+     * où la suite tourne : l'horloge se fige d'abord à un instant écrit.
+     *
+     * @throws LogicException
+     */
+    public function freezeTime($callback = null): mixed
+    {
+        $this->exigerUneHorlogeFigee('freezeTime()');
+
+        return parent::freezeTime($callback);
+    }
+
+    /**
+     * Comme freezeTime().
+     *
+     * @throws LogicException
+     */
+    public function freezeSecond($callback = null): mixed
+    {
+        $this->exigerUneHorlogeFigee('freezeSecond()');
+
+        return parent::freezeSecond($callback);
+    }
+
+    /**
+     * @throws LogicException
+     */
+    private function exigerUneHorlogeFigee(string $voyage): void
+    {
+        if (! Carbon::hasTestNow()) {
+            throw new LogicException("{$voyage} partirait de l'heure réelle : figez d'abord l'horloge à un instant écrit, travelTo(self::aParis('…')) ou travelTo(self::enUtc('…')).");
+        }
+    }
+
+    /**
+     * Fige l'horloge à l'heure que relisent les fichiers : la date de
+     * modification de ce fichier témoin, ou d'un fichier tout juste écrit.
+     * Un test qui compare l'horloge à la date d'un fichier (un envoi que
+     * Livewire croit vieux, une pièce de vérification restée) la lit ainsi
+     * comme le code la lit, même quand faketime décale la date que relit
+     * un fichier (stat) sans décaler celle qu'on y écrit (touch).
+     */
+    protected function figerALHeureDesFichiers(?string $temoin = null): CarbonImmutable
+    {
+        $ecrit = $temoin === null;
+        $temoin ??= storage_path('framework/testing/horloge-'.getmypid());
+
+        if ($ecrit) {
+            File::ensureDirectoryExists(dirname($temoin));
+            File::put($temoin, '');
+        }
+
+        clearstatcache(true, $temoin);
+        $instant = CarbonImmutable::createFromTimestamp((int) filemtime($temoin))->setTimezone(date_default_timezone_get());
+
+        if ($ecrit) {
+            File::delete($temoin);
+        }
+
+        $this->travelTo($instant);
+
+        return $instant;
+    }
+
+    /**
+     * Une société et un magasin que son propriétaire y crée (voir
+     * CreerEtablissementAction), son établissement vérifié : l'identité de
+     * la société est celle que le répertoire Sirene préremplit à
+     * l'inscription (voir SocieteFactory::commeApresLInscription()), sans
+     * capital ni immatriculation. La société est ensuite validée, et le
+     * SIRET du magasin réservé, comme à sa validation ; le magasin est en activité depuis
+     * MagasinFactory::DEBUT_D_ACTIVITE, avant toute journée que visitent
+     * les tests. Avec ['a_verifier' => true], la société reste en cours de
+     * vérification. Le magasin devient le magasin actif.
+     *
+     * Les options nom, code, nic et email sont celles du magasin ; les
+     * options siren et type (son type d'activité, un TypeDActivite,
+     * « Commerce ou atelier » sans elle) sont celles de la société, qu'elle a
+     * dès sa création (ils ne changent jamais) ; toute autre, sauf
+     * a_verifier, se règle sur la société avant la création du magasin
+     * (regime_tva...). Avec $proprietaire, le propriétaire d'une société sans
+     * magasin (voir UserFactory), le magasin s'ouvre dans la société de ce
+     * compte, sans option siren ni type.
+     *
+     * @param  array<string, mixed>  $options
+     */
+    protected function ouvrirUneSociete(array $options = [], ?User $proprietaire = null): Magasin
+    {
+        app(TenantContext::class)->clear();
+        $this->assertFalse($proprietaire !== null && (array_key_exists('siren', $options) || array_key_exists('type', $options)), 'Le SIREN et le type d\'activité d\'une société existante ne changent jamais.');
+        $proprietaire ??= User::factory()->create(['societe_id' => Societe::factory()->state([
+            ...(array_key_exists('siren', $options) ? ['siren' => $options['siren']] : []),
+            'type_activite' => $options['type'] ?? TypeDActivite::Commerce,
+        ])->commeApresLInscription()]);
+        $societe = $proprietaire->societe;
+        $reglages = Arr::except($options, ['nom', 'code', 'nic', 'email', 'a_verifier', 'siren', 'type']);
+
+        if ($reglages !== []) {
+            app(TenantContext::class)->runAsSociete($societe, fn (): bool => $societe->forceFill($reglages)->save());
+        }
+
+        $magasin = app(CreerEtablissementAction::class)->handle($proprietaire, $societe, [
+            'nom' => $options['nom'] ?? 'Ma Boutique',
+            'code' => $options['code'] ?? null,
+            'email' => $options['email'] ?? null,
+            'nic' => $options['nic'] ?? MagasinFactory::nicLibre($societe),
+        ]);
+
+        if (! ($options['a_verifier'] ?? false)) {
+            $societe->forceFill(['validee_le' => now()])->save();
+            app(SiretsDesMagasins::class)->reserver($magasin);
+            MagasinFactory::ouvrirSaPremierePeriode($magasin, $proprietaire);
+        }
+
+        $magasin = $magasin->fresh();
+        app(TenantContext::class)->set($magasin);
+
+        return $magasin;
+    }
+
+    /**
+     * Une société dont le magasin s'ouvre comme par ouvrirUneSociete(),
+     * avec ses options, sur l'établissement de son siège, que le
+     * répertoire Sirene factice situe dans ce territoire (à son lieu, voir
+     * MagasinFactory::lieuDuTerritoire()), ou à ce code postal, dans cette
+     * ville et cette commune : le territoire du magasin s'y fixe à sa
+     * création. Le magasin devient le magasin actif.
+     *
+     * @param  Territoire|array{0: string, 1: string, 2: string}  $lieu
+     * @param  array<string, mixed>  $options
+     */
+    protected function ouvrirUneSocieteSituee(Territoire|array $lieu, array $options = []): Magasin
+    {
+        $siren = $options['siren'] ?? SocieteFactory::sirenFictif();
+        $siege = FauxRepertoireSirene::siretDuSiege($siren);
+        $this->repertoireSireneFactice()->deplacer($siege, ...($lieu instanceof Territoire ? MagasinFactory::lieuDuTerritoire($lieu) : $lieu));
+
+        return $this->ouvrirUneSociete([...$options, 'siren' => $siren, 'nic' => substr($siege, 9)]);
+    }
+
+    /**
+     * Un autre magasin de la société de $magasin, comme par
+     * ouvrirUnAutreMagasin(), sur un établissement que le répertoire Sirene
+     * factice situe dans ce territoire (voir
+     * MagasinFactory::lieuDuTerritoire()). Il devient le magasin actif.
+     *
+     * @param  array{nom?: string, code?: string, nic?: string, email?: string}  $donnees
+     */
+    protected function ouvrirUnAutreMagasinSitue(Magasin $magasin, Territoire $territoire, array $donnees = []): Magasin
+    {
+        $nic = $donnees['nic'] ?? MagasinFactory::nicLibre($magasin->societe);
+        $this->repertoireSireneFactice()->deplacer($magasin->societe->siren.$nic, ...MagasinFactory::lieuDuTerritoire($territoire));
+
+        return $this->ouvrirUnAutreMagasin($magasin, [...$donnees, 'nic' => $nic]);
+    }
+
+    private function repertoireSireneFactice(): FauxRepertoireSirene
+    {
+        $repertoire = app(RepertoireSirene::class);
+        $this->assertInstanceOf(FauxRepertoireSirene::class, $repertoire);
+
+        return $repertoire;
+    }
+
+    /**
+     * Une société inscrite comme par la confirmation de son lien (voir
+     * CreerSocieteAction), qui attend le code de son courrier recommandé,
+     * sans magasin : son entreprise contrôlée au répertoire Sirene factice,
+     * son propriétaire au nom de Jeanne DUPONT, la présidente que donne le
+     * registre national factice, son mot de passe MOT_DE_PASSE_CHOISI, et
+     * son premier courrier parti par le prestataire factice, avec ce type
+     * d'activité, « Commerce ou atelier » sauf autre type, qu'elle a dès sa
+     * création. Aucun magasin n'est le magasin actif.
+     */
+    protected function inscrireUneSociete(?string $siren = null, ?string $email = null, TypeDActivite $type = TypeDActivite::Commerce): Societe
+    {
+        app(TenantContext::class)->clear();
+
+        return app(CreerSocieteAction::class)->handle($siren ?? SocieteFactory::sirenFictif(), $type, $email ?? fake()->unique()->safeEmail(), self::MOT_DE_PASSE_CHOISI);
+    }
+
+    /**
+     * Un cabinet d'expertise comptable vérifié, comme par le vrai parcours :
+     * inscrit avec le type « Cabinet d'expertise comptable » (voir
+     * inscrireUneSociete()), sous le SIREN du cabinet de test du répertoire
+     * Sirene factice ou, donné, sous ce SIREN, d'activité 69.20Z ; validé
+     * par le code de son courrier ; son inscription au tableau de l'Ordre
+     * vérifiée par son propriétaire, par l'annuaire factice (voir
+     * VerifierLOrdreAction), qui inscrit d'abord ce SIREN. Son propriétaire
+     * porte ce nom, comme s'il l'avait changé dans son profil. Aucun
+     * contexte n'est actif ensuite.
+     */
+    protected function ouvrirUnCabinet(?string $siren = null, string $nomDuProprietaire = 'Claire Martin'): Societe
+    {
+        $siren ??= FauxRepertoireSirene::SIREN_CABINET;
+        app(RepertoireSirene::class)->exercer($siren, ControleSirene::CODE_ACTIVITES_COMPTABLES);
+        $annuaire = app(AnnuaireDeLOrdre::class);
+        $this->assertInstanceOf(FauxAnnuaireDeLOrdre::class, $annuaire);
+        $annuaire->inscrire($siren, '75-'.substr($siren, -5), FauxAnnuaireDeLOrdre::CONSEIL_DU_CABINET_DE_TEST);
+
+        $cabinet = $this->inscrireUneSociete($siren, type: TypeDActivite::Cabinet);
+        $proprietaire = $this->saisirLeCodeDuCourrier($cabinet);
+        $proprietaire->forceFill(['name' => $nomDuProprietaire])->save();
+        app(VerifierLOrdreAction::class)->handle($proprietaire, $cabinet->fresh(), ['numero_ordre' => '75-'.substr($siren, -5), 'conseil_regional' => FauxAnnuaireDeLOrdre::CONSEIL_DU_CABINET_DE_TEST]);
+        app(TenantContext::class)->clear();
+
+        return $cabinet->fresh();
+    }
+
+    /**
+     * Un collaborateur de ce cabinet d'expertise comptable, comme dans le
+     * vrai parcours : créé par le propriétaire du cabinet (voir
+     * CreerCollaborateurAction), qui choisit son mot de passe en sa
+     * présence, sur l'écran du propriétaire (voir RedonnerLAccesAction) : un
+     * collaborateur ne se connecte jamais avec son identifiant. Aucun
+     * contexte n'est actif ensuite.
+     */
+    protected function collaborateur(Societe $cabinet, string $nom = 'Paul Lefèvre'): User
+    {
+        app(TenantContext::class)->clear();
+        $proprietaire = $this->proprietaireDuCabinet($cabinet);
+        $compte = app(CreerCollaborateurAction::class)->handle($proprietaire, $cabinet, ['name' => $nom]);
+        app(RedonnerLAccesAction::class)->handle($proprietaire, $compte, true, self::MOT_DE_PASSE_CHOISI, (string) Str::uuid());
+        app(TenantContext::class)->clear();
+
+        return $compte->refresh();
+    }
+
+    /**
+     * Le lien actif entre ce cabinet et ce client (une société, ou celle de
+     * ce magasin), comme dans le vrai parcours : le propriétaire du client
+     * désigne le cabinet (voir DesignerUnCabinetAction), le propriétaire
+     * du cabinet accepte (voir AccepterLaDemandeDeLienAction), avec les
+     * autorisations par défaut ; puis, données, le propriétaire du client
+     * règle ces autorisations (voir ReglerLesAutorisationsDuCabinetAction).
+     * Aucun contexte n'est actif ensuite.
+     *
+     * @param  list<string>|null  $autorisations
+     */
+    protected function lierLeCabinet(Societe $cabinet, Magasin|Societe $client, ?array $autorisations = null): LienCabinet
+    {
+        $client = $client instanceof Magasin ? $client->societe : $client;
+        app(TenantContext::class)->clear();
+        $demande = app(DesignerUnCabinetAction::class)->handle($client->proprietaire()->firstOrFail(), $client, $cabinet);
+        app(TenantContext::class)->clear();
+        $lien = app(AccepterLaDemandeDeLienAction::class)->handle($this->proprietaireDuCabinet($cabinet), $demande);
+        app(TenantContext::class)->clear();
+
+        if ($autorisations !== null) {
+            app(ReglerLesAutorisationsDuCabinetAction::class)->handle($client->proprietaire()->firstOrFail(), $lien, $autorisations);
+            app(TenantContext::class)->clear();
+        }
+
+        return LienCabinet::query()->withoutGlobalScopes()->findOrFail($lien->getKey());
+    }
+
+    /**
+     * Confie ces clients liés (des sociétés, ou celles de ces magasins) à
+     * ce collaborateur, en plus de ceux qu'il suit déjà, par le
+     * propriétaire de son cabinet (voir ConfierDesClientsAction). Aucun
+     * contexte n'est actif ensuite.
+     *
+     * @param  list<Magasin|Societe>  $clients
+     */
+    protected function confier(User $collaborateur, array $clients): User
+    {
+        $cabinet = $collaborateur->societe()->firstOrFail();
+        $liens = LienCabinet::query()->withoutGlobalScopes()
+            ->where('cabinet_id', $cabinet->getKey())
+            ->where('etat', EtatDuLien::Actif->value)
+            ->whereIn('societe_id', array_map(fn (Magasin|Societe $client): int => (int) ($client instanceof Magasin ? $client->societe_id : $client->getKey()), $clients))
+            ->pluck('id')
+            ->all();
+        $deja = DB::table('clients_confies')->where('societe_id', $cabinet->getKey())->where('user_id', $collaborateur->getKey())->pluck('lien_id')->all();
+        app(TenantContext::class)->clear();
+        app(ConfierDesClientsAction::class)->handle($this->proprietaireDuCabinet($cabinet), $collaborateur, array_values(array_unique(array_map(intval(...), [...$deja, ...$liens]))));
+        app(TenantContext::class)->clear();
+
+        return $collaborateur->refresh();
+    }
+
+    /**
+     * Le propriétaire du cabinet invite ce SIREN à cette adresse (voir
+     * InviterUneEntrepriseAction), e-mails retenus : rend le jeton du lien
+     * du dernier e-mail d'invitation. Aucun contexte n'est actif ensuite.
+     */
+    protected function inviterUneEntreprise(Societe $cabinet, string $siren, string $email): string
+    {
+        if (! Mail::getFacadeRoot() instanceof MailFake) {
+            Mail::fake();
+        }
+
+        app(TenantContext::class)->clear();
+        app(InviterUneEntrepriseAction::class)->handle($this->proprietaireDuCabinet($cabinet), $cabinet, $siren, $email, self::MOT_DE_PASSE_CHOISI);
+        app(TenantContext::class)->clear();
+
+        return Str::afterLast((string) Mail::sent(InvitationDuCabinetMail::class)->last()?->lien, '/');
+    }
+
+    /**
+     * La personne qui a reçu le lien accepte l'invitation, avec ce type
+     * d'activité et la case du choix définitif (voir
+     * AccepterLInvitationAction) : rend le propriétaire de la société née.
+     * Aucun contexte n'est actif ensuite.
+     */
+    protected function accepterLInvitation(string $jeton, TypeDActivite $type = TypeDActivite::Commerce, string $motDePasse = self::MOT_DE_PASSE_CHOISI): User
+    {
+        app(TenantContext::class)->clear();
+        $proprietaire = app(AccepterLInvitationAction::class)->handle($jeton, [
+            'password' => $motDePasse,
+            'password_confirmation' => $motDePasse,
+            'type_activite' => $type->value,
+            'choix_definitif' => true,
+        ]);
+        app(TenantContext::class)->clear();
+
+        return $proprietaire;
+    }
+
+    /**
+     * Le propriétaire du cabinet invite le SIREN de cette société déjà
+     * inscrite, à cette adresse : une demande de rattachement (voir
+     * InviterUneEntrepriseAction), e-mails retenus ; rend le jeton du lien
+     * du dernier e-mail de rattachement. Aucun contexte n'est actif
+     * ensuite.
+     */
+    protected function demanderLeRattachement(Societe $cabinet, Societe $client, string $email): string
+    {
+        if (! Mail::getFacadeRoot() instanceof MailFake) {
+            Mail::fake();
+        }
+
+        app(TenantContext::class)->clear();
+        app(InviterUneEntrepriseAction::class)->handle($this->proprietaireDuCabinet($cabinet), $cabinet, (string) $client->siren, $email, self::MOT_DE_PASSE_CHOISI);
+        app(TenantContext::class)->clear();
+
+        return Str::afterLast((string) Mail::sent(DemandeDeRattachementMail::class)->last()?->lien, '/');
+    }
+
+    /**
+     * Le propriétaire de ce cabinet d'expertise comptable.
+     */
+    protected function proprietaireDuCabinet(Societe $cabinet): User
+    {
+        return $cabinet->proprietaire()->firstOrFail();
+    }
+
+    /**
+     * Le propriétaire de ce client (une société validée, ou celle de ce
+     * magasin) déclare son expert-comptable par ce SIREN, comme dans le vrai
+     * parcours (voir DeclarerSonExpertComptableAction) : le répertoire
+     * factice donne à ce SIREN le code 69.20Z, les e-mails sont retenus, et
+     * la personne reçoit son lien ; rend le compte créé. Aucun contexte
+     * n'est actif ensuite.
+     *
+     * @param  list<string>|null  $autorisations  null pour celles par défaut
+     */
+    protected function declarerSonExpertComptable(Magasin|Societe $client, string $siren = FauxRepertoireSirene::SIREN_CABINET, string $nom = 'Marc Petit', string $email = 'marc.petit@petit-associes.test', ?array $autorisations = null, bool $remplacer = false): User
+    {
+        $client = $client instanceof Magasin ? $client->societe : $client;
+        app(RepertoireSirene::class)->exercer($siren, ControleSirene::CODE_ACTIVITES_COMPTABLES);
+
+        if (! Mail::getFacadeRoot() instanceof MailFake) {
+            Mail::fake();
+        }
+
+        app(TenantContext::class)->clear();
+        $compte = app(DeclarerSonExpertComptableAction::class)->handle($client->proprietaire()->firstOrFail(), $client, [
+            'siren' => $siren,
+            'name' => $nom,
+            'email' => $email,
+            'email_confirmation' => $email,
+            'autorisations' => $autorisations ?? PermissionRegistry::casesDuCabinet(PermissionRegistry::parDefautDuCabinet($client->type_activite)),
+            'remplacer' => $remplacer,
+        ], 'password');
+        app(TenantContext::class)->clear();
+
+        return $compte->refresh();
+    }
+
+    /**
+     * Le propriétaire de ce client ajoute une personne du cabinet qu'il a
+     * déclaré (voir AjouterUnExpertComptableAction) ; rend son compte.
+     * Aucun contexte n'est actif ensuite.
+     */
+    protected function ajouterUnExpertComptable(Societe $client, string $nom, string $email): User
+    {
+        if (! Mail::getFacadeRoot() instanceof MailFake) {
+            Mail::fake();
+        }
+
+        app(TenantContext::class)->clear();
+        $declaration = LienCabinet::query()->withoutGlobalScopes()->where('societe_id', $client->getKey())->where('etat', EtatDuLien::Declare->value)->firstOrFail();
+        $compte = app(AjouterUnExpertComptableAction::class)->handle($client->proprietaire()->firstOrFail(), $declaration, ['name' => $nom, 'email' => $email, 'email_confirmation' => $email], 'password');
+        app(TenantContext::class)->clear();
+
+        return $compte->refresh();
+    }
+
+    /**
+     * Le jeton du dernier lien du mot de passe d'un expert-comptable de la
+     * société, lu dans l'e-mail retenu : le logiciel n'en garde que
+     * l'empreinte.
+     */
+    protected function jetonDuDernierLienDExpertComptable(): string
+    {
+        $lien = (string) Mail::sent(LienDuMotDePasseDeLExpertComptableMail::class)->last()?->lien;
+
+        return Str::afterLast($lien, '/');
+    }
+
+    /**
+     * Un expert-comptable de la société de ce client, déclaré puis qui a
+     * choisi son mot de passe (MOT_DE_PASSE_CHOISI) par le lien reçu. Aucun
+     * contexte n'est actif ensuite.
+     *
+     * @param  list<string>|null  $autorisations
+     */
+    protected function expertComptable(Magasin|Societe $client, string $nom = 'Marc Petit', ?array $autorisations = null): User
+    {
+        $compte = $this->declarerSonExpertComptable($client, nom: $nom, autorisations: $autorisations);
+        app(ChoisirLeMotDePasseDeLExpertComptableAction::class)->handle($this->jetonDuDernierLienDExpertComptable(), self::MOT_DE_PASSE_CHOISI, self::MOT_DE_PASSE_CHOISI);
+        app(TenantContext::class)->clear();
+
+        return $compte->refresh();
+    }
+
+    /**
+     * La révocation d'une société par la procédure de l'éditeur : la remise
+     * du courrier de révocation prouvée par son code, saisi sur sa page,
+     * puis la révocation par deux opérateurs. Aucun contexte n'est actif
+     * ensuite.
+     */
+    protected function revoquerLaSociete(Societe $societe): void
+    {
+        $editeur = new InterventionDeLEditeur('Société qui a pris le SIREN d\'un autre', 'DOSSIER-2026-0102', ['alice', 'bruno']);
+        app(TenantContext::class)->clear();
+        app(EnvoyerCodeDeConfirmationAction::class)->parLEditeur($societe->fresh(), MotifCode::Revocation, $editeur);
+        app(SaisirCodeDeConfirmationAction::class)->saisirUnCodeDeProcedure((string) $societe->siren, MotifCode::Revocation, $this->codeDuCourrier($societe, MotifCode::Revocation), '127.0.0.1');
+        app(TenantContext::class)->clear();
+        app(RevoquerSocieteAction::class)->handle($societe->fresh(), $editeur);
+        app(TenantContext::class)->clear();
+    }
+
+    /**
+     * Le code que porte le dernier courrier de ce motif (la vérification,
+     * sauf autre motif) de la société, tel que son destinataire le lit
+     * (XXXX-XXXX-XXXX) dans le PDF que le prestataire factice a reçu : le
+     * logiciel n'en garde que l'empreinte.
+     */
+    protected function codeDuCourrier(Societe $societe, MotifCode $motif = MotifCode::Verification): string
+    {
+        $reference = (string) app(TenantContext::class)->runAsSociete($societe, fn () => CodeConfirmation::query()
+            ->where('motif', $motif->value)
+            ->orderByDesc('id')
+            ->value('reference_envoi'));
+        $pdf = app(ServiceEnvoiRecommande::class)->envois()[$reference]['pdf'];
+        $texte = implode(' ', array_merge(...array_map(fn (array $page): array => array_column($page['textes'], 'texte'), $this->pagesDuPdf($pdf))));
+
+        $this->assertMatchesRegularExpression('/\b[0-9A-Z]{4}-[0-9A-Z]{4}-[0-9A-Z]{4}\b/', $texte);
+        preg_match('/\b([0-9A-Z]{4}-[0-9A-Z]{4}-[0-9A-Z]{4})\b/', $texte, $code);
+
+        return $code[1];
+    }
+
+    /**
+     * Le propriétaire inscrit saisit le code de son courrier sur la page du
+     * code, avec l'adresse et le mot de passe de son inscription (voir
+     * SaisirCodeDeConfirmationAction) : la société est validée. Rend le
+     * propriétaire.
+     */
+    protected function saisirLeCodeDuCourrier(Societe $societe): User
+    {
+        $proprietaire = $societe->proprietaire()->firstOrFail();
+        app(TenantContext::class)->clear();
+
+        return app(SaisirCodeDeConfirmationAction::class)->handle((string) $societe->siren, $this->codeDuCourrier($societe), (string) $proprietaire->email, self::MOT_DE_PASSE_CHOISI, '', '127.0.0.1');
+    }
+
+    /**
+     * Une autre personne que celle qui a inscrit la société saisit le code
+     * de son courrier, avec cette adresse et le mot de passe
+     * MOT_DE_PASSE_CHOISI (voir SaisirCodeDeConfirmationAction) : la
+     * société est validée et cette personne en devient le propriétaire, par
+     * un nouveau compte dont l'adresse attend la confirmation de son lien.
+     * Rend le nouveau propriétaire.
+     */
+    protected function saisirLeCodeCommeUneAutrePersonne(Societe $societe, string $email): User
+    {
+        $code = $this->codeDuCourrier($societe);
+        app(TenantContext::class)->clear();
+
+        return app(SaisirCodeDeConfirmationAction::class)->handle((string) $societe->siren, $code, $email, self::MOT_DE_PASSE_CHOISI, self::MOT_DE_PASSE_CHOISI, '127.0.0.1');
+    }
+
+    /**
+     * Le jeton du dernier lien de confirmation d'une adresse de connexion
+     * envoyé à cette adresse (voir DemanderUneNouvelleAdresseAction), sous
+     * Mail::fake().
+     */
+    protected function jetonDeLAdresseEnAttente(string $adresse): string
+    {
+        $mail = Mail::sent(ConfirmationNouvelleAdresseMail::class, fn (ConfirmationNouvelleAdresseMail $mail): bool => $mail->hasTo($adresse))->last();
+        $this->assertInstanceOf(ConfirmationNouvelleAdresseMail::class, $mail, "Aucun lien de confirmation n'est parti à {$adresse}.");
+
+        return Str::afterLast($mail->lien, '/');
+    }
+
+    /**
+     * Le magasin que le propriétaire crée dans l'espace de sa société (voir
+     * CreerEtablissementAction), sur l'établissement de son siège au
+     * répertoire Sirene factice, ou sur ce NIC. Aucun magasin n'est le
+     * magasin actif ensuite.
+     */
+    protected function creerLeMagasinDuSiege(Societe $societe, string $nom = 'Ma Boutique', ?string $nic = null): Magasin
+    {
+        app(TenantContext::class)->clear();
+
+        return app(CreerEtablissementAction::class)->handle($societe->proprietaire()->firstOrFail(), $societe, [
+            'nom' => $nom,
+            'nic' => $nic ?? substr(FauxRepertoireSirene::siretDuSiege($societe->siren), 9),
+        ]);
+    }
+
+    /**
+     * Un autre magasin de la société de $magasin, créé par son propriétaire
+     * (voir CreerEtablissementAction) : dans une société validée, son SIRET
+     * se réserve, sa période d'activité s'ouvre et les droits implicites du
+     * propriétaire s'inscrivent à son journal des événements. Il devient le
+     * magasin actif.
+     *
+     * @param  array{nom?: string, code?: string, nic?: string, email?: string}  $donnees
+     */
+    protected function ouvrirUnAutreMagasin(Magasin $magasin, array $donnees = []): Magasin
+    {
+        $societe = $magasin->societe;
+        $autre = app(CreerEtablissementAction::class)->handle($this->proprietaireDe($magasin), $societe, [
+            'nom' => $donnees['nom'] ?? 'Autre boutique',
+            'code' => $donnees['code'] ?? null,
+            'email' => $donnees['email'] ?? null,
+            'nic' => $donnees['nic'] ?? MagasinFactory::nicLibre($societe),
+        ]);
+        app(TenantContext::class)->set($autre);
+
+        return $autre;
+    }
+
+    /**
+     * Règle la société du magasin, comme son propriétaire dans les
+     * paramètres de la société : un réglage de conformité (régime de TVA,
+     * option pour les débits...) s'inscrit au journal des événements de
+     * chacun de ses magasins (voir JournaliseSesParametresDeConformite).
+     *
+     * @param  array<string, mixed>  $reglages
+     */
+    protected function reglerLaSociete(Magasin $magasin, array $reglages): Societe
+    {
+        $societe = $magasin->societe()->firstOrFail();
+        $societe->forceFill($reglages)->save();
+        $magasin->setRelation('societe', $societe);
+
+        return $societe;
+    }
+
+    /**
+     * Le mot de passe que la personne choisit elle-même, après son
+     * identifiant : il suit la règle du mot de passe choisi (voir
+     * RegleDuMotDePasse).
+     */
+    protected const MOT_DE_PASSE_CHOISI = 'mot-de-passe-sur';
+
+    /**
+     * Un nouveau membre du magasin, comme dans le vrai parcours : créé par
+     * le propriétaire pour ce seul magasin (voir CreerMembreAction), avec
+     * les autorisations données ou, sans liste, celles du modèle de son
+     * rôle (aucune pour un responsable, qui n'a pas de case), puis la
+     * personne choisit son mot de passe dans son profil (voir
+     * ChangerSonMotDePasseAction) ; une adresse donnée, elle la renseigne
+     * elle-même dans son profil (voir renseignerSonAdresse()). Le magasin
+     * reste ensuite le magasin actif.
+     *
+     * @param  list<string>|null  $autorisations
+     * @param  array{name?: string, email?: string}  $identite
+     */
+    protected function membre(Magasin $magasin, RoleMagasin $role, ?array $autorisations = null, array $identite = []): User
+    {
+        $compte = app(TenantContext::class)->runAs($magasin, fn (): User => app(CreerMembreAction::class)->handle(
+            $this->proprietaireDe($magasin),
+            $magasin,
+            ['name' => $identite['name'] ?? fake()->name()],
+            $role,
+            $autorisations,
+        ));
+
+        if (isset($identite['email'])) {
+            $this->renseignerSonAdresse($compte, $identite['email']);
+        }
+
+        return $this->choisirSonMotDePasse($compte);
+    }
+
+    /**
+     * Les cases que précochait le modèle « comptable » de magasin, que
+     * l'éditeur a supprimé (un cabinet lié, en consultation, le remplace) : un vendeur à qui on les coche garde, dans les
+     * tests des policies, les mêmes droits que l'ancien comptable, la
+     * consultation des services comprise, qui a ses propres autorisations
+     * depuis que celles des produits ne valent plus pour eux.
+     *
+     * @return list<string>
+     */
+    protected static function casesDeLAncienComptable(): array
+    {
+        return [
+            PermissionRegistry::CLIENT_VIEW,
+            PermissionRegistry::FOURNISSEUR_VIEW,
+            PermissionRegistry::PRODUIT_VIEW,
+            PermissionRegistry::SERVICE_VIEW,
+            PermissionRegistry::DEVIS_VIEW,
+            PermissionRegistry::FACTURE_VIEW,
+            PermissionRegistry::FACTURE_ACHAT_VIEW,
+            PermissionRegistry::AVOIR_FOURNISSEUR_VIEW,
+            PermissionRegistry::FACTURE_VIEW_TOUTES,
+            PermissionRegistry::FACTURE_ENVOYER,
+            PermissionRegistry::PAIEMENT_VIEW,
+            PermissionRegistry::PAIEMENT_CREER,
+            PermissionRegistry::PAIEMENT_CONTRE_PASSER,
+            PermissionRegistry::AVOIR_VIEW,
+            PermissionRegistry::AVOIR_ENVOYER,
+            PermissionRegistry::PRODUIT_VOIR_VALEUR_STOCK,
+            PermissionRegistry::CLOTURE_CAISSE_VIEW,
+            PermissionRegistry::CLOTURE_CAISSE_VIEW_TOUTES,
+            PermissionRegistry::CAISSE_SECURISEE_CONSULTER,
+        ];
+    }
+
+    /**
+     * Un vendeur du magasin, comme membre(), créé au début de l'activité
+     * des magasins de test (MagasinFactory::DEBUT_D_ACTIVITE), avant toute
+     * opération du test : un test qui voyage ensuite dans le temps ne
+     * trouve pas le registre du magasin verrouillé à une heure postérieure
+     * à ses ventes. La société du magasin reçoit son propriétaire si elle
+     * n'en a pas encore. L'horloge revient ensuite telle qu'elle était :
+     * figée au même instant, ou libre.
+     *
+     * @param  list<string>|null  $autorisations
+     */
+    protected function vendeurDeLaPremiereHeure(Magasin $magasin, ?array $autorisations = null): User
+    {
+        $horloge = Carbon::getTestNow();
+        $this->travelTo(self::aParis(MagasinFactory::DEBUT_D_ACTIVITE));
+
+        try {
+            if ($magasin->societe()->firstOrFail()->proprietaire()->doesntExist()) {
+                User::factory()->for($magasin->societe)->create();
+            }
+
+            return $this->membre($magasin, RoleMagasin::Vendeur, $autorisations);
+        } finally {
+            $horloge === null ? $this->travelBack() : $this->travelTo($horloge);
+        }
+    }
+
+    /**
+     * Un responsable de ce magasin, créé par le propriétaire pour ce seul
+     * magasin, son mot de passe choisi.
+     */
+    protected function responsable(Magasin $magasin): User
+    {
+        return $this->membre($magasin, RoleMagasin::Responsable);
+    }
+
+    /**
+     * Un administrateur de la société du magasin, créé par le propriétaire
+     * (voir CreerAdministrateurAction), son mot de passe choisi : de tous
+     * les magasins, ou de la sélection donnée, avec ces autorisations de
+     * société et ces cases de magasin (le modèle de l'administrateur dans
+     * le type d'activité de la société à défaut), sous ce nom (tiré au
+     * hasard à défaut).
+     *
+     * @param  list<int>|null  $selection
+     * @param  list<string>  $autorisationsSociete
+     * @param  array<int|string, mixed>|null  $autorisationsMagasin
+     */
+    protected function administrateur(Magasin $magasin, ?array $selection = null, array $autorisationsSociete = [], ?array $autorisationsMagasin = null, ?string $nom = null): User
+    {
+        $compte = app(TenantContext::class)->runAs($magasin, fn (): User => app(CreerAdministrateurAction::class)->handle(
+            $this->proprietaireDe($magasin),
+            $magasin->societe()->firstOrFail(),
+            ['name' => $nom ?? fake()->name()],
+            $selection,
+            $autorisationsMagasin ?? PermissionRegistry::modeleDeLAdministrateur($magasin->societe->type_activite),
+            $autorisationsSociete,
+        ));
+
+        return $this->choisirSonMotDePasse($compte);
+    }
+
+    /**
+     * Un collaborateur d'un cabinet d'expertise comptable lié à la société
+     * de ce magasin, à qui ce client est confié, comme dans le vrai
+     * parcours : le cabinet déjà lié à ce client, sinon un cabinet vérifié
+     * ouvert sous un SIREN fictif (voir ouvrirUnCabinet()) et lié avec ces
+     * autorisations, celles par défaut sauf mention (voir lierLeCabinet()) ;
+     * le collaborateur choisit son mot de passe en sa présence (voir
+     * collaborateur()). Le contexte d'avant est rétabli ensuite.
+     *
+     * @param  list<string>|null  $autorisations
+     */
+    protected function collaborateurDuCabinetLie(Magasin $magasin, ?array $autorisations = null, ?string $nom = null): User
+    {
+        return app(TenantContext::class)->runAs($magasin, function () use ($magasin, $autorisations, $nom): User {
+            $lien = LienCabinet::query()->withoutGlobalScopes()->where('societe_id', $magasin->societe_id)->where('etat', EtatDuLien::Actif->value)->first();
+            $cabinet = $lien === null ? $this->ouvrirUnCabinet(SocieteFactory::sirenFictif(), fake()->name()) : Societe::query()->findOrFail($lien->cabinet_id);
+
+            if ($lien === null) {
+                $this->lierLeCabinet($cabinet, $magasin, $autorisations);
+            }
+
+            return $this->confier($this->collaborateur($cabinet, $nom ?? fake()->name()), [$magasin]);
+        });
+    }
+
+    /**
+     * Un membre du magasin créé par le propriétaire, dont le mot de passe
+     * est encore son identifiant : le compte et son identifiant.
+     *
+     * @return array{0: User, 1: string}
+     */
+    protected function compteAuMotDePasseIdentifiant(Magasin $magasin, RoleMagasin $role): array
+    {
+        $compte = app(TenantContext::class)->runAs($magasin, fn (): User => app(CreerMembreAction::class)->handle(
+            $this->proprietaireDe($magasin),
+            $magasin,
+            ['name' => fake()->name()],
+            $role,
+        ));
+
+        return [$compte, (string) $compte->identifiantDeConnexion()];
+    }
+
+    /**
+     * La personne choisit son mot de passe dans son profil, à la place de
+     * son identifiant ; le magasin actif reste le même.
+     */
+    protected function choisirSonMotDePasse(User $compte): User
+    {
+        app(ChangerSonMotDePasseAction::class)->handle($compte, self::MOT_DE_PASSE_CHOISI);
+
+        return $compte->refresh();
+    }
+
+    /**
+     * La personne renseigne elle-même son adresse de contact, comme dans
+     * son profil (voir ModifierProfil::save()) : le seul chemin qui écrit
+     * l'adresse d'un compte qui n'est pas propriétaire.
+     */
+    protected function renseignerSonAdresse(User $compte, string $adresse): User
+    {
+        $compte->forceFill(['email' => User::normaliserEmail($adresse)])->save();
+
+        return $compte->refresh();
+    }
+
+    /**
+     * Le propriétaire demande la transmission de la propriété à cet
+     * administrateur (voir DemanderLaTransmissionDeLaProprieteAction) : le
+     * jeton du lien parti à l'adresse de l'administrateur, lu dans le
+     * courriel retenu par la fausse messagerie.
+     */
+    protected function demanderLaTransmission(User $proprietaire, User $administrateur, string $motDePasse = 'password'): string
+    {
+        if (! Mail::getFacadeRoot() instanceof MailFake) {
+            Mail::fake();
+        }
+
+        app(DemanderLaTransmissionDeLaProprieteAction::class)->handle($proprietaire, $administrateur, $motDePasse);
+
+        return $this->jetonDuDernierLienDeTransmission();
+    }
+
+    /**
+     * Le jeton du dernier lien de transmission de la propriété envoyé.
+     */
+    protected function jetonDuDernierLienDeTransmission(): string
+    {
+        $lien = (string) Mail::sent(TransmissionDeLaProprieteMail::class)->last()?->lien;
+
+        return Str::afterLast($lien, '/');
+    }
+
+    /**
+     * Un administrateur de tous les magasins qui remplit les conditions de
+     * la transmission de la propriété : son mot de passe choisi, son
+     * adresse renseignée par lui.
+     *
+     * @param  list<string>|null  $autorisationsMagasin
+     */
+    protected function administrateurPretAReprendre(Magasin $magasin, string $adresse = 'repreneur@example.test', ?array $autorisationsMagasin = null): User
+    {
+        return $this->renseignerSonAdresse($this->administrateur($magasin, null, AutorisationsSociete::toutes(), $autorisationsMagasin), $adresse);
+    }
+
+    /**
+     * Retire une garde des droits de la base (voir GardesDesDroits), comme
+     * le ferait un administrateur de la base, pour y glisser le temps d'un
+     * test une ligne qu'elle refuse : la transaction du test la rétablit.
+     */
+    protected function retirerLaGardeDesDroits(string $garde): void
+    {
+        DB::unprepared("DROP TRIGGER {$garde} ON ".match ($garde) {
+            GardesDesDroits::AFFECTATIONS => 'affectations',
+            GardesDesDroits::CASES => 'autorisations_affectations',
+            GardesDesDroits::AUTORISATIONS_SOCIETE => 'autorisations_societe',
+            GardesDesDroits::ROLES => 'users',
+        });
+    }
+
+    /**
+     * Ces gardes de la base (GardesDesDroits, GardesDesCabinets,
+     * GardesDesTypesDActivite) telles qu'elles sont en base, lues au
+     * catalogue de PostgreSQL : pour chacune, la définition de chacun de
+     * ses déclencheurs, table et moments compris (pg_get_triggerdef), et
+     * celle de sa fonction garde_<nom>, corps compris (pg_get_functiondef),
+     * null quand elle manque. Les tests qui reposent ces gardes par leur
+     * code les lisent d'abord, telles que les migrations les ont posées.
+     *
+     * @param  list<string>  $gardes
+     * @return array<string, array{declencheurs: list<string>, fonction: string|null}>
+     */
+    protected function definitionsDesGardes(array $gardes): array
+    {
+        $definitions = [];
+
+        foreach ($gardes as $garde) {
+            $definitions[$garde] = [
+                'declencheurs' => array_column(DB::select('select pg_get_triggerdef(oid) as definition from pg_trigger where tgname = ? and not tgisinternal order by 1', [$garde]), 'definition'),
+                'fonction' => DB::selectOne('select pg_get_functiondef(oid) as definition from pg_proc where proname = ?', ["garde_{$garde}"])?->definition,
+            ];
+        }
+
+        return $definitions;
+    }
+
+    /**
+     * Ce compte, connecté, dans l'espace d'administration de la société,
+     * comme pour un écran de ce panneau testé par Livewire. La session est
+     * repartie de zéro : celle d'un compte connecté avant n'y reste pas.
+     */
+    protected function dansLEspaceDeLaSociete(Societe $societe, User $compte): void
+    {
+        $this->flushSession();
+        app(TenantContext::class)->clear();
+        $this->actingAs($compte);
+        Filament::setCurrentPanel(Filament::getPanel('societe'));
+        Filament::setTenant($societe, isQuiet: true);
+        app(TenantContext::class)->poserSociete($societe);
+    }
+
+    /**
+     * Ce compte, connecté, dans l'espace de ce cabinet d'expertise
+     * comptable, comme pour un écran de ce panneau testé par Livewire. La
+     * session est repartie de zéro.
+     */
+    protected function dansLEspaceDuCabinet(Societe $cabinet, User $compte): void
+    {
+        $this->flushSession();
+        app(TenantContext::class)->clear();
+        $this->actingAs($compte);
+        Filament::setCurrentPanel(Filament::getPanel('cabinet'));
+        Filament::setTenant($cabinet, isQuiet: true);
+        app(TenantContext::class)->poserSociete($cabinet);
+    }
+
+    /**
+     * Ce compte, connecté, dans le panneau de ce magasin, comme pour un
+     * écran de ce panneau testé par Livewire. La session est repartie de
+     * zéro.
+     */
+    protected function dansLeMagasin(Magasin $magasin, User $compte): void
+    {
+        $this->flushSession();
+        $this->actingAs($compte);
+        Filament::setCurrentPanel(Filament::getPanel('app'));
+        Filament::setTenant($magasin, isQuiet: true);
+        app(TenantContext::class)->set($magasin);
+    }
+
+    /**
+     * Une requête forgée : l'action d'en-tête de la page, appelée par
+     * Livewire comme si son bouton était là, avec ces données. Une action
+     * masquée ou non autorisée ne se monte pas, et rien ne s'exécute.
+     *
+     * @param  array<string, mixed>  $donnees
+     */
+    protected function forgerLAction(Testable $page, string $action, array $donnees = []): Testable
+    {
+        return $page->call('mountAction', $action)->set('mountedActionsData.0', $donnees)->call('callMountedAction');
+    }
+
+    /**
+     * Une requête forgée sur l'action d'une ligne d'un tableau, pour cet
+     * enregistrement, avec ces données.
+     *
+     * @param  array<string, mixed>  $donnees
+     */
+    protected function forgerLActionDeLigne(Testable $page, string $action, Model $enregistrement, array $donnees = []): Testable
+    {
+        return $page->call('mountTableAction', $action, (string) $enregistrement->getKey())->set('mountedTableActionsData.0', $donnees)->call('callMountedTableAction');
+    }
+
+    /**
+     * L'instantané Livewire du composant de cette page HTML, tel que le
+     * navigateur le renverrait : la page reste ouverte, et la requête
+     * suivante le rejoue (voir requeteLivewire()).
+     */
+    protected function instantaneLivewire(string $html, string $nomDuComposant): string
+    {
+        preg_match_all('/wire:snapshot="([^"]+)"/', $html, $trouves);
+
+        foreach ($trouves[1] as $brut) {
+            $instantane = html_entity_decode($brut, ENT_QUOTES);
+
+            if (str_contains(json_decode($instantane, true)['memo']['name'] ?? '', $nomDuComposant)) {
+                return $instantane;
+            }
+        }
+
+        $this->fail("Aucun composant {$nomDuComposant} dans la page.");
+    }
+
+    /**
+     * Une vraie requête Livewire (POST /livewire/update), comme celle d'un
+     * navigateur dont la page est restée ouverte : elle repasse par les
+     * intergiciels persistants du panneau, que Livewire::test ne rejoue
+     * pas.
+     *
+     * @param  array<string, mixed>  $modifications
+     * @param  list<mixed>  $parametres
+     */
+    protected function requeteLivewire(string $instantane, array $modifications, string $methode, array $parametres = []): TestResponse
+    {
+        return $this->withHeaders(['X-Livewire' => 'true'])->postJson('/livewire/update', [
+            'components' => [[
+                'snapshot' => $instantane,
+                'updates' => $modifications,
+                'calls' => [['path' => '', 'method' => $methode, 'params' => $parametres]],
+            ]],
+        ]);
+    }
+
+    /**
+     * Une session ouverte de ce compte dans la table des sessions, et son
+     * « se souvenir de moi », comme sur un autre appareil ; l'identifiant
+     * de la session.
+     */
+    protected function ouvrirUneSessionAilleurs(User $compte): string
+    {
+        $session = Str::random(40);
+        DB::table('sessions')->insert(['id' => $session, 'user_id' => $compte->getKey(), 'ip_address' => '192.0.2.1', 'user_agent' => 'Autre appareil', 'payload' => base64_encode(serialize([])), 'last_activity' => now()->getTimestamp()]);
+        $compte->forceFill(['remember_token' => 'jeton-de-l-autre-appareil'])->save();
+
+        return $session;
+    }
+
+    /**
+     * Les sessions ouvertes et le « se souvenir de moi » de ce compte
+     * sont-ils tous coupés ?
+     */
+    protected function assertSessionsFermees(User $compte): void
+    {
+        $this->assertSame(0, DB::table('sessions')->where('user_id', $compte->getKey())->count(), 'Une session de ce compte reste ouverte.');
+        $this->assertNotSame('jeton-de-l-autre-appareil', $compte->refresh()->getRememberToken(), 'Le « se souvenir de moi » de ce compte vaut toujours.');
+    }
+
+    /**
+     * Ce HTML montre-t-il chaque libellé suivi de l'astérisque rouge d'un
+     * champ obligatoire, et chacun des autres sans lui ? L'astérisque est
+     * celui de Filament (resources/views/components/field-wrapper/label)
+     * ou celui des pages publiques (resources/views/components/obligatoire).
+     *
+     * @param  list<string>  $obligatoires
+     * @param  list<string>  $facultatifs
+     */
+    protected function assertAsterisquesDesChamps(string $html, array $obligatoires, array $facultatifs = []): void
+    {
+        $asterisque = '(?:\s|<!--\[if [A-Z]+\]><!\[endif\]-->)*<sup class="(?:text-danger-600[^"]*|obligatoire)"[^>]*>\*<\/sup>';
+        foreach ($obligatoires as $libelle) {
+            $this->assertMatchesRegularExpression('/'.preg_quote(e($libelle), '/').$asterisque.'/u', $html, "Le champ « {$libelle} » ne porte pas l'astérisque des champs obligatoires.");
+        }
+        foreach ($facultatifs as $libelle) {
+            $this->assertStringContainsString(e($libelle), $html, "Le champ « {$libelle} » n'est pas sur la page.");
+            $this->assertDoesNotMatchRegularExpression('/'.preg_quote(e($libelle), '/').$asterisque.'/u', $html, "Le champ facultatif « {$libelle} » porte l'astérisque des champs obligatoires.");
+        }
+    }
+
+    /**
+     * Les droits avant et après de chaque modification des droits (JET 130)
+     * du journal des événements du magasin, dans l'ordre de sa chaîne.
+     *
+     * @return list<array{membre: array{id: int, nom: string}, avant: array<string, mixed>|null, apres: array<string, mixed>|null}>
+     */
+    protected function modificationsDesDroits(Magasin $magasin): array
+    {
+        return app(TenantContext::class)->runAs($magasin, fn (): array => EnregistrementFiscal::query()
+            ->where('chaine', ChaineFiscale::Evenement->value)
+            ->where('type', (string) CodeEvenement::ModificationDesDroits->value)
+            ->orderBy('sequence')
+            ->get()
+            ->map(fn (EnregistrementFiscal $evenement): array => $evenement->contenuSigne()['donnees']['details'])
+            ->all());
+    }
+
+    /**
+     * Les entrées du journal d'audit de la société, dans l'ordre de leur
+     * inscription, pour cette action.
+     *
+     * @return list<EntreeAudit>
+     */
+    protected function entreesDAudit(Societe $societe, ActionAuditee $action): array
+    {
+        return app(TenantContext::class)->runAsSociete($societe, fn (): array => EntreeAudit::query()
+            ->where('action', $action->value)
+            ->orderBy('id')
+            ->get()
+            ->all());
+    }
+
+    /**
+     * La société garde exactement un propriétaire actif : l'invariant que
+     * respecte chaque procédure de l'éditeur (voir ProcedureDeLEditeur).
+     */
+    protected function assertUnSeulProprietaireActif(Societe $societe): void
+    {
+        $this->assertSame(1, User::query()
+            ->where('societe_id', $societe->id)
+            ->where('role_societe', RoleSociete::Proprietaire->value)
+            ->where('statut', StatutCompte::Actif->value)
+            ->count());
+    }
+
+    /**
+     * La signature de chaque enregistrement du registre fiscal du magasin,
+     * par son identifiant : une procédure qui ne réécrit aucun document
+     * émis les garde toutes, ce qu'elle inscrit s'ajoutant après.
+     *
+     * @return array<int, string>
+     */
+    protected function signaturesDuRegistre(Magasin $magasin): array
+    {
+        return app(TenantContext::class)->runAs($magasin, fn (): array => EnregistrementFiscal::query()->orderBy('id')->pluck('signature', 'id')->all());
+    }
+
+    /**
+     * La commande d'une procédure de l'éditeur (voir ProcedureDeLEditeur)
+     * sur cette société, avec ces paramètres (sa justification, sa pièce et
+     * la confirmation retapée compris), puis les opérateurs qui
+     * s'authentifient, chacun par son nom et son secret, dans l'ordre :
+     * $exiges dit combien la procédure en demande, ce qui nomme leurs
+     * questions (« (premier) », « (second) » pour une procédure grave) ; un
+     * refus s'arrête au premier opérateur refusé, et n'en donne pas plus.
+     *
+     * @param  array<string, mixed>  $parametres
+     * @param  list<array{0: string, 1: string}>  $operateurs
+     */
+    protected function lancerUneProcedureDeLEditeur(string $commande, Societe $societe, array $parametres, array $operateurs, int $exiges = 1): PendingCommand
+    {
+        app(TenantContext::class)->clear();
+        $pendante = $this->artisan($commande, ['societe' => (string) $societe->id, ...$parametres]);
+
+        foreach (array_values($operateurs) as $rang => [$nom, $secret]) {
+            $suffixe = $exiges === 1 ? '' : ($rang === 0 ? ' (premier)' : ' (second)');
+            $pendante->expectsQuestion("Nom de l'opérateur{$suffixe}", $nom)->expectsQuestion("Secret de l'opérateur{$suffixe}", $secret);
+        }
+
+        return $pendante;
+    }
+
+    /**
+     * Le SIREN de cette société validée corrigé par l'éditeur, comme dans
+     * le vrai parcours : le courrier d'examen envoyé au représentant légal
+     * de l'entité de ce SIREN correct, son code saisi sur sa page, l'examen
+     * qui conclut à une erreur, puis la correction par deux opérateurs
+     * (voir CorrigerSirenAction), avec le nouveau SIRET de chaque magasin
+     * qui peut encore vendre, par son code (aucun pour un cabinet
+     * d'expertise comptable). Rend la société corrigée ; aucun contexte
+     * n'est actif ensuite.
+     *
+     * @param  array<string, string>  $sirets
+     */
+    protected function corrigerLeSirenParLEditeur(Societe $societe, string $sirenCorrect, array $sirets = []): Societe
+    {
+        $editeur = new InterventionDeLEditeur('SIREN d\'une filiale saisi à la place de celui de la société', 'DOSSIER-2026-0095', ['alice', 'bruno']);
+        app(TenantContext::class)->clear();
+        app(EnvoyerCodeDeConfirmationAction::class)->parLEditeur($societe->fresh(), MotifCode::ExamenSiren, $editeur, $sirenCorrect);
+        app(SaisirCodeDeConfirmationAction::class)->saisirUnCodeDeProcedure($sirenCorrect, MotifCode::ExamenSiren, $this->codeDuCourrier($societe, MotifCode::ExamenSiren), '127.0.0.1');
+        app(TenantContext::class)->clear();
+        app(ExaminerSirenAction::class)->handle($societe->fresh(), $sirenCorrect, DecisionExamenSiren::Erreur, $editeur);
+        app(TenantContext::class)->clear();
+        $corrigee = app(CorrigerSirenAction::class)->handle($societe->fresh(), $sirenCorrect, $sirets, null, $editeur);
+        app(TenantContext::class)->clear();
+
+        return $corrigee->fresh();
+    }
+
+    /**
+     * Les contrôles de l'établissement du magasin au répertoire Sirene,
+     * inscrits au registre des vérifications de sa société, dans l'ordre :
+     * le résultat et le SIRET contrôlé de chacun.
+     *
+     * @return list<array{0: string, 1: string}>
+     */
+    protected function controlesDeLEtablissement(Magasin $magasin): array
+    {
+        return app(TenantContext::class)->runAsSociete($magasin->societe, fn (): array => VerificationSociete::query()
+            ->where('magasin_id', $magasin->id)
+            ->where('type', TypeVerification::SireneEtablissement->value)
+            ->orderBy('id')
+            ->get()
+            ->map(fn (VerificationSociete $controle): array => [$controle->resultat->value, $controle->details['siret']])
+            ->all());
+    }
+
+    /**
+     * Le propriétaire de la société du magasin, qui a tous les droits dans
+     * chacun de ses magasins.
+     */
+    protected function proprietaireDe(Magasin $magasin): User
+    {
+        return $magasin->societe()->firstOrFail()->proprietaire()->firstOrFail();
+    }
+
+    /**
+     * Le responsable de test du magasin : un membre responsable de ce seul
+     * magasin, qui y a toutes les autorisations sans case, vente comprise,
+     * que le propriétaire n'a que dans le magasin de démonstration. Créé à
+     * la première demande par la
+     * fabrique (voir UserFactory::responsableDeTest()), sans action, donc
+     * sans rien inscrire au registre fiscal, au journal des événements ni
+     * au journal d'audit : il se crée à toute heure, même après le dernier
+     * verrou du registre ; retrouvé ensuite par son nom et son magasin.
+     * Statique : un processus concurrent l'appelle aussi, une fois que le
+     * test l'a obtenu avant de lancer ses processus.
+     */
+    protected static function responsableDeTest(Magasin $magasin): User
+    {
+        $existant = User::query()
+            ->where('societe_id', $magasin->societe_id)
+            ->where('name', 'Responsable de test')
+            ->whereHas('affectations', fn (Builder $affectations): Builder => $affectations->where('magasin_id', $magasin->getKey())->where('role', RoleMagasin::Responsable->value))
+            ->first();
+
+        return $existant ?? User::factory()->responsableDeTest($magasin, self::MOT_DE_PASSE_CHOISI)->create();
+    }
+
+    /**
+     * L'auteur des actions qu'un test appelle directement, comme le ferait
+     * l'écran : la personne connectée, sinon le responsable de test du
+     * magasin actif (voir responsableDeTest()), qui peut vendre, ce que le
+     * propriétaire ne fait jamais. Statique : un processus concurrent
+     * l'appelle aussi.
+     */
+    protected static function auteur(): User
+    {
+        $connecte = auth()->user();
+
+        return $connecte instanceof User ? $connecte : self::responsableDeTest(app(TenantContext::class)->magasin());
+    }
+
+    /**
+     * Le document réel du magasin actif qui justifie un mouvement du grand
+     * livre de ce type pour ce produit, de $quantite articles (voir
+     * TypeMouvementStock::justificatif()), émis ou validé par sa vraie
+     * action, au nom de $auteur (par défaut le responsable de test du
+     * magasin, qui vend et achète, quel que soit le compte connecté), avec
+     * tout ce que la base exige à la validation de la transaction (son
+     * enregistrement au registre fiscal, son entrée au journal d'audit),
+     * mais sans faire bouger le stock : l'événement dont l'écouteur
+     * inscrirait le mouvement est seul retenu pendant l'action (voir
+     * sansSonMouvement()), et un test du grand livre appelle ensuite
+     * StockLedgerService lui-même, au nom de l'auteur de ce document (voir
+     * commeAuteurDuDocument()). Une vente est une facture émise ; un
+     * retour client, la ligne d'un avoir émis sur une vente dont les
+     * articles sont déjà sortis du stock (le mouvement de la vente est
+     * inscrit) ; une réception, une facture d'achat validée au prix
+     * unitaire HT donné ; un retour au fournisseur, un avoir fournisseur
+     * émis sur une telle facture. Un ajustement ne se justifie que par la
+     * correction d'une facture d'achat validée (ModifierFactureAchatAction).
+     */
+    protected function justificatifDuStock(TypeMouvementStock $type, Produit $produit, int $quantite, string $prixUnitaireHt = '2', ?User $auteur = null): Model
+    {
+        $auteur ??= self::responsableDeTest(app(TenantContext::class)->magasin());
+
+        return match ($type) {
+            TypeMouvementStock::Vente => $this->venteEmiseSansMouvement($auteur, $produit, $quantite),
+            TypeMouvementStock::RetourClient => (function () use ($auteur, $produit, $quantite) {
+                $vente = $this->venteEmiseSansMouvement($auteur, $produit, $quantite);
+                $this->commeAuteurDuDocument(fn () => app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::Vente, $quantite, $vente), $auteur);
+                $avoir = app(CreerAvoirAction::class)->handle($auteur, ValeurRequise::de($vente->client, 'le client de la vente'), [['ligne_facture_id' => $vente->lignes->sole()->id, 'quantite' => $quantite]]);
+
+                return self::sansSonMouvement(AvoirEmis::class, fn (): Avoir => app(EmettreAvoirAction::class)->handle($auteur, $avoir))->lignes()->sole();
+            })(),
+            TypeMouvementStock::ReceptionAchat => $this->achatValideSansMouvement($auteur, $produit, $quantite, $prixUnitaireHt),
+            TypeMouvementStock::RetourFournisseur => (function () use ($auteur, $produit, $quantite, $prixUnitaireHt) {
+                $achat = $this->achatValideSansMouvement($auteur, $produit, $quantite, $prixUnitaireHt);
+                $avoir = app(CreerAvoirFournisseurAction::class)->handle($auteur, $achat, [['ligne_achat_id' => $achat->lignes()->sole()->id, 'quantite' => $quantite]], 'Retour');
+
+                return self::sansSonMouvement(AvoirFournisseurEmis::class, fn (): AvoirFournisseur => app(EmettreAvoirFournisseurAction::class)->handle($auteur, $avoir));
+            })(),
+            default => throw new LogicException("Le justificatif d'un mouvement {$type->value} se prépare par son action (correction d'un achat, inventaire d'ouverture, cession)."),
+        };
+    }
+
+    /**
+     * Un stock négatif, qui ne naît que d'une vente sans stock (voir
+     * ProduitFactory::REFUS_STOCK_NEGATIF) : $quantite articles du produit
+     * vendus au comptant au client comptoir par le responsable de test du
+     * magasin actif, toujours autorisé à vendre sans stock, l'avertissement
+     * confirmé. Statique : un processus concurrent l'appelle aussi.
+     */
+    protected static function vendreJusquAuStockNegatif(Produit $produit, int $quantite): Facture
+    {
+        $stockApres = (int) Produit::withTrashed()->whereKey($produit->getKey())->value('stock_quantite') - $quantite;
+
+        return self::vendreAuComptant(self::responsableDeTest(app(TenantContext::class)->magasin()), Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => $quantite]], confirmation: new ConfirmationVenteSansStock([CleDuModele::de($produit) => $stockApres]));
+    }
+
+    /**
+     * Une vente de $quantite articles du produit qui les fait sortir du
+     * stock : une facture émise par le responsable de test (voir
+     * justificatifDuStock()) et son mouvement du grand livre, comme son
+     * émission les inscrirait.
+     */
+    protected function sortirParUneVente(Produit $produit, int $quantite): MouvementStock
+    {
+        $vente = $this->justificatifDuStock(TypeMouvementStock::Vente, $produit, $quantite);
+
+        return $this->commeAuteurDuDocument(fn (): MouvementStock => app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::Vente, $quantite, $vente));
+    }
+
+    /**
+     * Le mouvement du grand livre inscrit au nom de l'auteur de son
+     * document ($auteur, le responsable de test du magasin par défaut),
+     * comme l'action du
+     * document le ferait (voir StockLedgerService et
+     * ProvenanceDesMouvements).
+     *
+     * @template T
+     *
+     * @param  Closure(): T  $mouvement
+     * @return T
+     */
+    protected function commeAuteurDuDocument(Closure $mouvement, ?User $auteur = null): mixed
+    {
+        return app(OperateurCourant::class)->pendant($auteur ?? self::responsableDeTest(app(TenantContext::class)->magasin()), $mouvement);
+    }
+
+    /**
+     * Une facture de $quantite articles du produit émise par son action, au
+     * nom de $auteur, sans son mouvement de stock : l'avertissement d'une
+     * vente au-delà du stock est confirmé, comme la personne le ferait.
+     */
+    private function venteEmiseSansMouvement(User $auteur, Produit $produit, int $quantite): Facture
+    {
+        $brouillon = app(CreerFactureAction::class)->handle($auteur, Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => $quantite]]);
+        $stock = (int) Produit::withTrashed()->whereKey($produit->getKey())->value('stock_quantite');
+        $confirmation = $produit->suivi_stock && $stock < $quantite ? new ConfirmationVenteSansStock([CleDuModele::de($produit) => $stock - $quantite]) : null;
+
+        return self::sansSonMouvement(FactureEmise::class, fn (): Facture => app(EmettreFactureAction::class)->handle($auteur, $brouillon, confirmation: $confirmation))->load('lignes', 'client');
+    }
+
+    /**
+     * Une facture d'achat de $quantite articles du produit au prix unitaire
+     * HT donné, saisie puis validée par ses actions, au nom de $auteur,
+     * sans son mouvement de stock ; le produit prend son fournisseur, comme
+     * l'écouteur de la validation le ferait.
+     */
+    private function achatValideSansMouvement(User $auteur, Produit $produit, int $quantite, string $prixUnitaireHt): FactureAchat
+    {
+        $brouillon = app(CreerFactureAchatAction::class)->handle($auteur, Fournisseur::factory()->create(), [
+            ['produit_id' => $produit->id, 'quantite' => $quantite, 'prix_unitaire_ht' => $prixUnitaireHt],
+        ], ['date_facture' => Calendrier::deParis()->aujourdhui()]);
+        $achat = self::sansSonMouvement(FactureAchatValidee::class, fn (): FactureAchat => app(ValiderFactureAchatAction::class)->handle($auteur, $brouillon));
+        $produit->rattacherAuFournisseur($achat->fournisseur_id);
+
+        return $achat;
+    }
+
+    /**
+     * L'action d'un document, pendant laquelle seul l'événement dont un
+     * écouteur inscrirait son mouvement de stock est retenu : tout le
+     * reste (numéro, registre fiscal, journal d'audit) s'écrit comme en
+     * vrai.
+     *
+     * @template T
+     *
+     * @param  class-string  $evenement
+     * @param  Closure(): T  $action
+     * @return T
+     */
+    private static function sansSonMouvement(string $evenement, Closure $action): mixed
+    {
+        return Event::fakeFor($action, [$evenement]);
+    }
+
+    /**
+     * Une vente à la caisse réglée d'un seul mode pour tout ce qui reste à
+     * payer, une fois imputés le crédit du client et les bons d'avoir
+     * présentés, comme la caisse le propose (voir
+     * resteAPayerAuComptant()) ; rien à payer, aucune part. Statique : un
+     * processus concurrent l'appelle aussi.
+     *
+     * @param  list<array<string, mixed>>  $lignes
+     * @param  list<string>  $bonsDAvoir
+     */
+    protected static function vendreAuComptant(User $auteur, Client $client, array $lignes, ModePaiement $mode = ModePaiement::Especes, ?string $reference = null, array $bonsDAvoir = [], ?ConfirmationVenteSansStock $confirmation = null, ?string $jeton = null): Facture
+    {
+        $reste = self::resteAPayerAuComptant($client, $lignes, $bonsDAvoir);
+        $reglement = new ReglementComptant($reste > 0 ? [new PartDeReglement($mode, $reste, $reference)] : [], $bonsDAvoir);
+
+        return app(EnregistrerVenteCaisseAction::class)->handle($auteur, $client, $lignes, $reglement, $confirmation, $jeton);
+    }
+
+    /**
+     * Ce qui reste à payer d'une vente à la caisse, en centimes, comme
+     * l'écran de la caisse le montre : son total TTC calculé par le
+     * constructeur de lignes de la vente, moins le crédit du client et les
+     * bons d'avoir présentés (voir ApercuDuReglement).
+     *
+     * @param  list<array<string, mixed>>  $lignes
+     * @param  list<string>  $bonsDAvoir
+     */
+    protected static function resteAPayerAuComptant(Client $client, array $lignes, array $bonsDAvoir = []): int
+    {
+        $totalTtc = app(ConstructeurLigneDocument::class)->apercu($lignes, ContexteDeVente::pour($client, app(TenantContext::class)->magasin()))->totaux['total_ttc'];
+
+        return ApercuDuReglement::aLaCaisse($client, app(CalculateurLigne::class)->enCentiemes($totalTtc), $bonsDAvoir)->resteARepartir;
+    }
+
+    /**
+     * Les pages d'un PDF produit par dompdf, dans leur ordre, lues sans
+     * aucun outil externe : le format de chacune (sa MediaBox, en points),
+     * et chaque texte qu'elle imprime, avec sa position en points depuis le
+     * coin bas gauche de la page et sa largeur imprimée, en points, d'après
+     * son corps et la chasse de chacun de ses caractères dans sa police
+     * (voir chassesDesPolices()). Dompdf écrit chaque morceau de ligne par
+     * un opérateur « BT x y Td /Fn corps Tf [(texte)] TJ ET », le texte en
+     * UTF-16 dans un flux compressé, ses parenthèses, ses barres obliques
+     * inverses et ses retours chariot échappés. Les données d'un flux se
+     * lisent sur la longueur que déclare son dictionnaire : compressées,
+     * elles peuvent finir par un retour chariot, qu'un motif arrêté au
+     * « endstream » retirerait.
+     *
+     * @return list<array{format: string, textes: list<array{x: float, y: float, largeur: float, texte: string}>}>
+     */
+    protected function pagesDuPdf(string $pdf): array
+    {
+        $chasses = $this->chassesDesPolices($pdf);
+        preg_match_all('/<< \/Type \/Page\s(.*?)>>/s', $pdf, $pages);
+
+        return array_map(function (string $page) use ($pdf, $chasses): array {
+            preg_match('/\/MediaBox \[([^\]]+)\]/', $page, $format);
+            preg_match('/\/Contents (\d+) 0 R/', $page, $contenu);
+            preg_match('/\n'.$contenu[1].' 0 obj\s*<<(.*?)>>\s*stream\r?\n/s', $pdf, $flux, PREG_OFFSET_CAPTURE);
+            preg_match('/\/Length (\d+)/', $flux[1][0], $longueur);
+            $donnees = substr($pdf, $flux[0][1] + strlen($flux[0][0]), (int) $longueur[1]);
+            $operateurs = str_contains($flux[1][0], '/FlateDecode') ? gzuncompress($donnees) : $donnees;
+            preg_match_all('/BT ([-\d.]+) ([-\d.]+) Td \/(F\d+) ([\d.]+) Tf\s+\[\(((?:\\\\.|[^\\\\)])*)\)\] TJ ET/s', $operateurs, $textes, PREG_SET_ORDER);
+
+            return [
+                'format' => $format[1],
+                'textes' => array_map(function (array $texte) use ($chasses): array {
+                    $octets = (string) preg_replace_callback('/\\\\(.)/s', fn (array $echappe): string => $echappe[1] === 'r' ? "\r" : $echappe[1], $texte[5]);
+                    $police = $chasses[$texte[3]];
+
+                    return [
+                        'x' => (float) $texte[1],
+                        'y' => (float) $texte[2],
+                        'largeur' => array_sum(array_map(
+                            fn (int $caractere): int => $police['chasses'][$caractere] ?? $police['defaut'],
+                            $octets === '' ? [] : array_values(unpack('n*', $octets)),
+                        )) * (float) $texte[4] / 1000,
+                        'texte' => mb_convert_encoding($octets, 'UTF-8', 'UTF-16BE'),
+                    ];
+                }, $textes),
+            ];
+        }, $pages[1]);
+    }
+
+    /**
+     * Chaque texte de la page s'imprime entre ses marges de gauche et de
+     * droite : une page A4 de 595,28 points de large, avec 14 mm de marge
+     * de chaque côté (point 4).
+     *
+     * @param  array{format: string, textes: list<array{x: float, y: float, largeur: float, texte: string}>}  $page
+     */
+    protected function assertChaqueTexteTientEntreLesMarges(array $page): void
+    {
+        $marge = 14 * 72 / 25.4;
+        $horsDesMarges = array_values(array_filter(
+            $page['textes'],
+            fn (array $texte): bool => $texte['x'] < $marge - 0.01 || 595.28 - $marge + 0.01 < $texte['x'] + $texte['largeur'],
+        ));
+
+        $this->assertSame([], array_map(fn (array $texte): string => sprintf('%s (de %.2f à %.2f points)', $texte['texte'], $texte['x'], $texte['x'] + $texte['largeur']), $horsDesMarges));
+    }
+
+    /**
+     * La chasse des caractères de chaque police d'un PDF de dompdf, par nom
+     * de police (F1, F2…), en millièmes du corps : chaque police renvoie à
+     * une police descendante (DescendantFonts) dont le tableau /W donne la
+     * chasse de chaque caractère employé, désigné par son code Unicode
+     * (« code [chasse chasse …] », ou « premier dernier chasse » pour une
+     * suite), et /DW celle des autres.
+     *
+     * @return array<string, array{defaut: int, chasses: array<int, int>}>
+     */
+    private function chassesDesPolices(string $pdf): array
+    {
+        $objet = function (string $numero) use ($pdf): string {
+            preg_match('/\n'.$numero.' 0 obj\s*<<(.*?)>>\s*endobj/s', $pdf, $trouve);
+
+            return $trouve[1];
+        };
+        preg_match_all('/\/(F\d+) (\d+) 0 R/', $pdf, $polices, PREG_SET_ORDER);
+
+        $chassesDesPolices = [];
+        foreach ($polices as [, $nom, $numero]) {
+            preg_match('/\/DescendantFonts \[(\d+) 0 R\]/', $objet($numero), $descendante);
+            $definition = $objet($descendante[1]);
+            preg_match('/\/DW (\d+)/', $definition, $defaut);
+            preg_match('/\/W \[((?:\s*\d+\s*\[[^\]]*\]|\s*\d+\s+\d+\s+\d+)*)\s*\]/', $definition, $tableau);
+            preg_match_all('/(\d+)\s*\[([^\]]*)\]|(\d+)\s+(\d+)\s+(\d+)/', $tableau[1] ?? '', $entrees, PREG_SET_ORDER);
+
+            $chasses = [];
+            foreach ($entrees as $entree) {
+                if (($entree[3] ?? '') !== '') {
+                    $chasses += array_fill_keys(range((int) $entree[3], (int) $entree[4]), (int) $entree[5]);
+                } else {
+                    foreach (preg_split('/\s+/', trim($entree[2]), flags: PREG_SPLIT_NO_EMPTY) as $decalage => $chasse) {
+                        $chasses[(int) $entree[1] + $decalage] = (int) $chasse;
+                    }
+                }
+            }
+
+            $chassesDesPolices[$nom] = ['defaut' => (int) ($defaut[1] ?? 1000), 'chasses' => $chasses];
+        }
+
+        return $chassesDesPolices;
+    }
+
+    /**
+     * Complète l'identité légale de la société du magasin, comme son
+     * propriétaire dans Administration de la société > Identité : il peut
+     * alors émettre des factures à des professionnels (voir
+     * Magasin::mentionsLegalesManquantes()).
+     */
+    protected function completerIdentiteLegale(Magasin $magasin): Magasin
+    {
+        $societe = $magasin->societe()->firstOrFail();
+        $societe->forceFill([
+            'raison_sociale' => 'Ma Boutique',
+            'forme_juridique' => FormeJuridique::Sas,
+            'capital_social' => '10000.00',
+            'immatriculation' => 'RCS Lyon',
+            'siege_adresse' => '1 place Bellecour',
+            'siege_code_postal' => '69001',
+            'siege_ville' => 'Lyon',
+        ])->save();
+        $magasin->setRelation('societe', $societe);
+
+        return $magasin;
+    }
+
+    /**
+     * L'opération, exécutée dans un point de sauvegarde (une transaction
+     * imbriquée dans celle du test) : une erreur SQL annule toute la
+     * transaction en cours, et le test ne pourrait plus rien lire ensuite ;
+     * le point de sauvegarde n'annule que l'opération refusée.
+     */
+    protected function dansUnPointDeSauvegarde(Closure $operation): Closure
+    {
+        return static fn (): mixed => DB::transaction($operation);
+    }
+
+    /**
+     * Le contenu entier de ces tables, tous magasins confondus, chaque ligne
+     * en JSON, dans un ordre stable : deux instantanés égaux disent qu'une
+     * opération refusée n'a rien écrit, ni ligne ajoutée, ni ligne changée,
+     * ni ligne effacée. Une table absente de la liste n'est pas vérifiée :
+     * chaque test y met toutes les tables qu'écrit le geste.
+     *
+     * @return array<string, list<string>>
+     */
+    protected function instantaneDesTables(string ...$tables): array
+    {
+        $instantane = [];
+
+        foreach ($tables as $table) {
+            $instantane[$table] = array_map(
+                static fn (object $ligne): string => (string) $ligne->ligne,
+                DB::select("select to_jsonb(t)::text as ligne from {$table} t order by 1"),
+            );
+        }
+
+        return $instantane;
+    }
+
+    /**
+     * L'instant présent à l'horloge du serveur de base de données, en UTC à
+     * la seconde : celle que lisent les déclencheurs qui ne laissent
+     * effacer une ligne qu'une fois expirée (voir DeclencheursDeProtection).
+     * Elle peut différer de l'heure de l'application, voyagée par un test
+     * ou décalée par faketime : une échéance comparée par la base se
+     * construit depuis elle.
+     */
+    protected function maintenantSelonLaBase(): CarbonImmutable
+    {
+        $maintenant = DB::selectOne("select to_char(now() at time zone 'UTC', 'YYYY-MM-DD HH24:MI:SS') as maintenant")->maintenant;
+
+        return CarbonImmutable::createFromFormat('Y-m-d H:i:s', $maintenant, 'UTC');
+    }
+
+    /**
+     * Range ces tables dans l'ordre inverse de leurs identifiants (CLUSTER
+     * sur un index décroissant ; le DDL et la réécriture s'annulent avec la
+     * transaction du test) : une requête sans tri rend alors leurs lignes à
+     * l'envers de leur enregistrement, comme après qu'un VACUUM a libéré une
+     * place qu'une ligne plus récente a reprise, ou après une restauration.
+     */
+    protected function inverserLOrdrePhysiqueDesLignes(string ...$tables): void
+    {
+        foreach ($tables as $table) {
+            DB::statement("CREATE INDEX {$table}_ordre_inverse ON {$table} (id DESC)");
+            DB::statement("CLUSTER {$table} USING {$table}_ordre_inverse");
+        }
+    }
+
+    /**
+     * Retire un déclencheur de protection (voir DeclencheursDeProtection),
+     * comme le ferait un administrateur de la base, pour falsifier une
+     * table en ajout seul le temps d'un test. Le DDL de PostgreSQL est
+     * transactionnel : le retour en arrière de la transaction du test le
+     * rétablit.
+     */
+    protected function retirerLeDeclencheur(string $table, string $declencheur): void
+    {
+        DB::unprepared("DROP TRIGGER {$declencheur} ON {$table}");
+    }
+
+    /**
+     * Un ticket Z écrit directement dans la base, sans la clôture de sa
+     * journée ni son événement 50 au journal des événements, comme le
+     * ferait un administrateur de la base : une journée à zéro, sans
+     * auteur, aux séquences nulles. Le déclencheur différé qui refuse un
+     * ticket Z sans sa clôture signée ne joue qu'à la validation de la
+     * transaction (voir
+     * InalterabiliteTest::test_la_base_refuse_un_ticket_z_sans_sa_cloture_signee()) :
+     * le test qui le fabrique ne la fait pas jouer à sa fin (voir
+     * laBaseRefuseraCetEtatALaValidation()).
+     *
+     * @param  string  $journee  AAAA-MM-JJ
+     * @param  array<string, mixed>  $colonnes
+     */
+    protected function insererUnFauxTicketZ(Magasin $magasin, string $journee, string $numero, CarbonImmutable $clotureeA, array $colonnes = []): int
+    {
+        $this->laBaseRefuseraCetEtatALaValidation();
+
+        return DB::table('clotures_caisse')->insertGetId([
+            'magasin_id' => $magasin->id,
+            'numero' => $numero,
+            'date_cloture' => $journee,
+            'recapitulatif' => json_encode(RecapitulatifDeCloture::vide(), JSON_THROW_ON_ERROR),
+            'cloturee_a' => $clotureeA->utc()->format('Y-m-d H:i:s'),
+            'created_at' => $clotureeA,
+            'updated_at' => $clotureeA,
+            ...$colonnes,
+        ]);
+    }
+
+    /**
+     * L'écriture, faite dans un point de sauvegarde, est refusée par la clé
+     * composée qui garde cette référence dans son magasin (voir
+     * ReferencesEntreMagasinsEnBaseTest) : état 23503 et nom de la
+     * contrainte dans le message du pilote.
+     */
+    protected function assertRefuseeParLaCleDuMagasin(Closure $ecriture, string $table, string $colonne): void
+    {
+        try {
+            $this->dansUnPointDeSauvegarde($ecriture)();
+        } catch (QueryException $refus) {
+            $this->assertSame('23503', $refus->errorInfo[0] ?? null, $refus->getMessage());
+            $this->assertStringContainsString("\"{$table}_magasin_id_{$colonne}_foreign\"", (string) ($refus->errorInfo[2] ?? ''));
+
+            return;
+        }
+
+        $this->fail("La clé de {$table}.{$colonne} accepte une ligne d'un autre magasin.");
+    }
+
+    /**
+     * Retire la clé composée qui garde cette référence dans son magasin,
+     * comme le ferait le propriétaire des tables, pour fabriquer le temps
+     * d'un test une référence vers la ligne d'un autre magasin et éprouver
+     * ce qui doit la détecter ou l'ignorer. Le DDL de PostgreSQL est
+     * transactionnel : le retour en arrière de la transaction du test la
+     * rétablit. Le test prouve d'abord le refus de la base (voir
+     * assertRefuseeParLaCleDuMagasin()).
+     */
+    protected function falsifierMalgreLaCleDuMagasin(string $table, string $colonne): void
+    {
+        DB::unprepared("ALTER TABLE {$table} DROP CONSTRAINT {$table}_magasin_id_{$colonne}_foreign");
+    }
+
+    /**
+     * Fait cette écriture sur un document émis ou ses lignes malgré la
+     * garde de la base (voir GardesDesDocumentsEmis), comme le ferait le
+     * propriétaire des tables, pour éprouver ce qui doit la détecter :
+     * prouve d'abord que la garde la refuse, dans un point de sauvegarde,
+     * puis la retire le temps du test (le DDL est annulé avec la
+     * transaction du test) et fait l'écriture.
+     */
+    protected function falsifierMalgreLaGardeDesDocumentsEmis(string $table, Closure $ecriture): void
+    {
+        try {
+            $this->dansUnPointDeSauvegarde($ecriture)();
+            $this->fail("La garde des documents émis de {$table} accepte cette écriture.");
+        } catch (QueryException $refus) {
+            $this->assertSame('P0001', $refus->errorInfo[0] ?? null, $refus->getMessage());
+            $this->assertStringContainsString(GardesDesDocumentsEmis::nom($table).'()', $refus->getMessage());
+        }
+
+        $this->retirerLeDeclencheur($table, GardesDesDocumentsEmis::nom($table));
+        $ecriture();
+    }
+
+    /**
+     * Fait $pendant pendant la prochaine consultation de ce SIRET au
+     * répertoire Sirene factice, une seule fois, avant sa réponse : ce qui
+     * s'y fait passe pendant que l'action qui consulte attend l'INSEE,
+     * avant qu'elle ne prenne ses verrous, comme un geste fait au même
+     * moment dans un autre onglet. Le répertoire factice du conteneur est
+     * remplacé par un neuf, avec ses réponses par défaut, que le test règle
+     * ensuite comme l'ancien.
+     *
+     * @param  Closure(): void  $pendant
+     */
+    protected function pendantLaConsultationDe(string $siret, Closure $pendant): FauxRepertoireSirene
+    {
+        $repertoire = new class($siret, $pendant) extends FauxRepertoireSirene
+        {
+            public function __construct(private readonly string $siretGuette, private ?Closure $pendant) {}
+
+            public function etablissement(string $siret): ?EtablissementSirene
+            {
+                $pendant = $siret === $this->siretGuette ? $this->pendant : null;
+
+                if ($pendant !== null) {
+                    $this->pendant = null;
+                    $pendant();
+                }
+
+                return parent::etablissement($siret);
+            }
+        };
+        $this->app->instance(RepertoireSirene::class, $repertoire);
+
+        return $repertoire;
+    }
+
+    /**
+     * Lance l'opération dans un autre processus PHP, sur la base du test
+     * (voir tests/Fixtures/processus-concurrent.php), sans attendre sa
+     * fin : une seconde caisse qui agit au même instant. L'opération ne
+     * voit que ce que le test a validé ; elle est statique et ne capture
+     * que des valeurs simples (des identifiants). Quand le test a figé son
+     * heure, l'autre processus se fige au même instant : sinon il lirait
+     * l'heure réelle, et ce qu'il fait tomberait un autre jour que ce que
+     * fait le test. Il reprend aussi le préfixe du cache du test, propre à
+     * son processus de test parallèle : un cache en base est le même pour
+     * les deux.
+     */
+    protected function demarrerUnProcessusConcurrent(Closure $operation): InvokedProcess
+    {
+        $demande = serialize([
+            'base' => DB::connection()->getDatabaseName(),
+            'caisse_securisee' => config('caisse_securisee'),
+            'journal_audit' => config('journal_audit'),
+            'prefixe_du_cache' => config('cache.prefix'),
+            'maintenant' => Carbon::getTestNow()?->format('Y-m-d\TH:i:s.uP'),
+            'operation' => new SerializableClosure($operation),
+        ]);
+
+        return Process::path(base_path())
+            ->timeout(60)
+            ->input(base64_encode($demande))
+            ->start([PHP_BINARY, base_path('tests/Fixtures/processus-concurrent.php')]);
+    }
+
+    /**
+     * Démarre l'opération concurrente dès que l'opération du test tient le
+     * verrou du registre fiscal, et attend qu'elle attende ce verrou : deux
+     * caisses qui agissent au même instant, la seconde passant après la
+     * première. $concurrente reçoit le processus démarré.
+     *
+     * Le verrou est tenu à la première requête qui suit sa demande sans
+     * plus porter sur la tête du registre : quand le registre n'a pas
+     * encore de tête, la première demande ne trouve aucune ligne à
+     * verrouiller, et la tête s'insère puis se verrouille ensuite.
+     *
+     * @param  Closure(): void  $operationConcurrente
+     */
+    protected function concurrencerDesQueLeRegistreEstVerrouille(Closure $operationConcurrente, ?InvokedProcess &$concurrente): void
+    {
+        $connexionDuTest = DB::getDefaultConnection();
+        $verrouDemande = false;
+
+        DB::listen(function (QueryExecuted $requete) use (&$concurrente, &$verrouDemande, $operationConcurrente, $connexionDuTest): void {
+            if ($concurrente !== null || $requete->connectionName !== $connexionDuTest) {
+                return;
+            }
+
+            if (str_contains($requete->sql, '"tetes_registre_fiscal"')) {
+                $verrouDemande = $verrouDemande || str_contains($requete->sql, 'for update');
+
+                return;
+            }
+
+            if ($verrouDemande) {
+                $concurrente = $this->demarrerUnProcessusConcurrent($operationConcurrente);
+                $this->attendreQueLeProcessusAttendeUnVerrou($concurrente);
+            }
+        });
+    }
+
+    /**
+     * Démarre l'opération concurrente dès que l'opération du test a
+     * verrouillé une ligne de cette table (sa requête porte ce verrou :
+     * « for update », « for share », « for no key update »), et attend
+     * qu'elle attende un verrou que tient le test : la seconde passe après
+     * la première. $concurrente reçoit le processus démarré.
+     *
+     * @param  Closure(): void  $operationConcurrente
+     */
+    protected function concurrencerDesQueLaLigneEstVerrouillee(string $table, string $verrou, Closure $operationConcurrente, ?InvokedProcess &$concurrente): void
+    {
+        $connexionDuTest = DB::getDefaultConnection();
+
+        DB::listen(function (QueryExecuted $requete) use ($table, $verrou, &$concurrente, $operationConcurrente, $connexionDuTest): void {
+            if ($concurrente !== null || $requete->connectionName !== $connexionDuTest) {
+                return;
+            }
+
+            if (str_contains($requete->sql, "from \"{$table}\"") && str_ends_with($requete->sql, $verrou)) {
+                $concurrente = $this->demarrerUnProcessusConcurrent($operationConcurrente);
+                $this->attendreQueLeProcessusAttendeUnVerrou($concurrente);
+            }
+        });
+    }
+
+    /**
+     * Attend que l'autre processus attende un verrou que tient le test, ou
+     * qu'il ait fini, $limite secondes au plus (dix par défaut) ; à la
+     * limite, un processus qui tourne encore sans attendre de verrou fait
+     * échouer le test, avec ce que fait la base : sinon le test, croyant
+     * l'opération concurrente arrêtée sur le verrou, deviendrait
+     * séquentiel sans le dire (constat C69 des audits du 07/11/2026).
+     * L'attente se lit dans pg_stat_activity par une connexion
+     * d'observation à part (voir observerLaBase()).
+     */
+    protected function attendreQueLeProcessusAttendeUnVerrou(InvokedProcess $processus, int $limite = 10): void
+    {
+        $fin = hrtime(true) + $limite * 1_000_000_000;
+
+        $this->observerLaBase(function (Connection $observation) use ($processus, $fin, $limite): void {
+            while ($processus->running()) {
+                if ((int) $observation->selectOne("select count(*) as nombre from pg_stat_activity where datname = current_database() and wait_event_type = 'Lock'")->nombre > 0) {
+                    return;
+                }
+
+                if (hrtime(true) >= $fin) {
+                    $etat = self::lireLEtatDeLaBase($observation);
+                    $processus->stop(0);
+                    $this->fail("Au bout de {$limite} s, l'autre processus tourne sans attendre de verrou que tient le test : l'opération concurrente ne passerait pas après celle du test.\n{$etat}\nSortie de l'autre processus :\n".$processus->output().$processus->errorOutput());
+                }
+
+                usleep(20_000);
+            }
+        });
+    }
+
+    /**
+     * Attend la fin de l'autre processus (voir
+     * demarrerUnProcessusConcurrent()), $limite secondes au plus, en le
+     * sondant ; à l'expiration, relève d'abord ce que fait la base (voir
+     * etatDeLaBase()), puis arrête l'autre processus et fait échouer le
+     * test avec ces lignes, sa sortie et la durée de chacune de ses étapes
+     * (amorçage, connexion, opération), qu'il écrit au fil de l'eau
+     * (constat C42 des audits du 07/11/2026 : un dépassement sans aucun
+     * diagnostic).
+     */
+    protected function attendreLeProcessusConcurrent(InvokedProcess $processus, int $limite = 60): ProcessResult
+    {
+        $fin = hrtime(true) + $limite * 1_000_000_000;
+
+        while ($processus->running()) {
+            if (hrtime(true) >= $fin) {
+                $etat = $this->etatDeLaBase();
+                $processus->stop(0);
+                $this->fail("L'autre processus n'a pas fini en {$limite} s.\n{$etat}\nSortie de l'autre processus :\n".$processus->output().$processus->errorOutput());
+            }
+
+            usleep(20_000);
+        }
+
+        return $processus->wait();
+    }
+
+    /**
+     * L'erreur sur laquelle l'autre processus a échoué, sans les lignes de
+     * ses étapes (amorçage, connexion à la base, opération) qu'il écrit
+     * avant elle sur sa sortie d'erreur (voir
+     * tests/Fixtures/processus-concurrent.php).
+     */
+    protected static function erreurDuProcessus(ProcessResult $resultat): string
+    {
+        return (string) preg_replace('/^(?:amorçage|connexion à la base|opération) : \d+ ms\n/mu', '', $resultat->errorOutput());
+    }
+
+    /**
+     * Ce que fait la base du test, lu par une connexion d'observation :
+     * chaque autre session (pid, état, attente, requête, processus qui la
+     * bloquent) et chaque verrou demandé et pas encore accordé.
+     */
+    protected function etatDeLaBase(): string
+    {
+        return $this->observerLaBase(self::lireLEtatDeLaBase(...));
+    }
+
+    private static function lireLEtatDeLaBase(Connection $observation): string
+    {
+        $sessions = $observation->select('select pid, state, wait_event_type, wait_event, pg_blocking_pids(pid)::text as bloquee_par, left(query, 300) as requete from pg_stat_activity where datname = current_database() and pid <> pg_backend_pid() order by pid');
+        $verrous = $observation->select('select pid, locktype, mode, relation::regclass::text as relation from pg_locks where not granted order by pid');
+        $lignes = ['Sessions de la base :'];
+
+        foreach ($sessions as $session) {
+            $lignes[] = "- pid {$session->pid}, état {$session->state}, attente ".($session->wait_event_type ?? 'aucune').'/'.($session->wait_event ?? '-').", bloquée par {$session->bloquee_par} : {$session->requete}";
+        }
+
+        $lignes[] = 'Verrous non accordés :';
+
+        foreach ($verrous as $verrou) {
+            $lignes[] = "- pid {$verrou->pid} attend un verrou {$verrou->locktype} {$verrou->mode}".($verrou->relation !== null ? " sur {$verrou->relation}" : '');
+        }
+
+        return implode("\n", $lignes);
+    }
+
+    /**
+     * Une lecture par une connexion d'observation à part, hors de la
+     * transaction du test, ouverte en 5 s au plus, puis fermée. Elle porte
+     * son propre nom : fermée sous celui de la connexion du test, elle
+     * effacerait du gestionnaire de transactions celles que l'opération du
+     * test a ouvertes.
+     *
+     * @template T
+     *
+     * @param  Closure(Connection): T  $lecture
+     * @return T
+     */
+    private function observerLaBase(Closure $lecture): mixed
+    {
+        $observateur = DB::getDefaultConnection().'_observateur';
+        $configuration = DB::connection()->getConfig();
+        config(["database.connections.{$observateur}" => [...$configuration, 'name' => $observateur, 'options' => [...($configuration['options'] ?? []), PDO::ATTR_TIMEOUT => 5]]]);
+
+        try {
+            return $lecture(DB::connection($observateur));
+        } finally {
+            DB::purge($observateur);
+        }
+    }
+
+    /**
+     * Une vraie requête HTTP démarre sans magasin actif : seul le
+     * middleware du panneau (BindTenantContextFromFilamentTenant) le
+     * positionne, depuis l'URL. Une requête de test repart donc d'un
+     * TenantContext neuf, au lieu d'hériter de celui que la préparation du
+     * test a positionné ; ce dernier est rendu au test une fois la réponse
+     * reçue, pour ses vérifications.
+     *
+     * @param  array<string, mixed>  $parameters
+     * @param  array<string, mixed>  $cookies
+     * @param  array<string, mixed>  $files
+     * @param  array<string, mixed>  $server
+     */
+    public function call($method, $uri, $parameters = [], $cookies = [], $files = [], $server = [], $content = null): TestResponse
+    {
+        $contexteDuTest = $this->app->make(TenantContext::class);
+        $this->app->forgetInstance(TenantContext::class);
+
+        try {
+            return parent::call($method, $uri, $parameters, $cookies, $files, $server, $content);
+        } finally {
+            $this->app->instance(TenantContext::class, $contexteDuTest);
+        }
+    }
+}

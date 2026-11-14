@@ -1,0 +1,1001 @@
+<?php
+
+namespace App\Domain\Tenancy\Models;
+
+use App\Domain\CaisseSecurisee\Concerns\JournaliseSesParametresDeConformite;
+use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
+use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
+use App\Domain\Calendrier\Calendrier;
+use App\Domain\Calendrier\Casts\Instant;
+use App\Domain\Catalogue\Models\Service;
+use App\Domain\Catalogue\Services\BaremePrixDeVente;
+use App\Domain\Contacts\Models\Client;
+use App\Domain\Contacts\Models\Fournisseur;
+use App\Domain\Facturation\Enums\TerritoireTva;
+use App\Domain\Facturation\Enums\TypeDocument;
+use App\Domain\Facturation\Exceptions\IdentiteDeLaSocieteIncompleteException;
+use App\Domain\Facturation\Models\SequenceDocument;
+use App\Domain\Facturation\Services\CalculateurLigne;
+use App\Domain\Tenancy\Concerns\RefuseUneCleIllisible;
+use App\Domain\Tenancy\Enums\MotifFermeture;
+use App\Domain\Tenancy\Enums\StatutMagasin;
+use App\Domain\Tenancy\Enums\Territoire;
+use App\Domain\Tenancy\Exceptions\VenteNonAutoriseeException;
+use App\Domain\Tenancy\Scopes\MagasinScope;
+use App\Domain\Tenancy\Services\CodeMagasin;
+use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\CleDuModele;
+use App\Domain\Tenancy\Support\ValeurRequise;
+use App\Domain\Tenancy\Support\ValeursLues;
+use Database\Factories\MagasinFactory;
+use Filament\Models\Contracts\HasName;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Casts\Attribute;
+use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Support\Str;
+use InvalidArgumentException;
+use LogicException;
+
+/**
+ * Un établissement d'une société : son SIRET, son adresse, ses
+ * coordonnées et ses paramètres locaux (barème, relances, échéance et
+ * mentions des factures), avec sa caisse, ses stocks, ses ventes, ses
+ * clients et son catalogue, qu'il ne partage avec aucun autre magasin
+ * (BelongsToMagasin + MagasinScope), et son équipe : les comptes de la
+ * société qui y sont affectés (voir Affectation). Il imprime l'identité légale
+ * de sa société et en suit les réglages fiscaux (voir Societe et
+ * Emetteur) ; aucun magasin n'a de privilège sur les autres.
+ *
+ * Volontairement PAS de BelongsToMagasin ici : un magasin ne s'appartient
+ * pas à lui-même. La table n'a pas de scope global : dans l'espace de la
+ * société, ses magasins se lisent par Societe::magasins().
+ *
+ * Son SIRET touche la conformité de sa caisse : chaque changement
+ * s'inscrit à son journal des événements (JET 270, voir
+ * JournaliseSesParametresDeConformite). Une fois sa société validée, il
+ * ne change que par un déménagement (voir ChangerSiretAction), qui passe
+ * par le registre des SIRET réservés (voir SiretsDesMagasins), et un
+ * SIRET réservé ne sert jamais à un autre magasin, sauf libération par la
+ * procédure de l'éditeur (voir aLibereSonSiret()).
+ *
+ * Son territoire (voir Territoire) donne son taux de TVA par défaut, son
+ * département d'outre-mer et son calendrier. Il se fixe au premier
+ * contrôle Sirene concluant de son établissement, d'après sa commune
+ * (voir ControleSirene::territoireDe()), puis ne change plus : un
+ * établissement ou une adresse d'un autre territoire est refusé, un
+ * déménagement vers un autre territoire passant par un nouveau magasin.
+ * Seule la procédure de l'éditeur corrige un territoire mal lu au
+ * répertoire, tant que le magasin n'a numéroté aucun document (voir
+ * corrigerLeTerritoire()) ; la base refuse elle aussi de l'effacer, et de
+ * le changer une fois un document numéroté (voir
+ * DeclencheursDeProtection::colonneFigee()). Ensuite, la société le ferme
+ * pour cessation, puis l'éditeur libère son SIRET pour un nouveau magasin
+ * sur le même établissement (voir LibererLeSiretAction). Sa fixation sur
+ * un magasin qui existe déjà et sa correction s'inscrivent à son journal
+ * des événements (JET 270). Un magasin réel dont l'établissement n'a
+ * jamais été confirmé n'a pas encore de territoire : il ne vend pas et ne
+ * numérote aucun document (voir REFUS_TERRITOIRE_INCONNU).
+ *
+ * Son code court (voir CodeMagasin) figure dans tous les numéros de ses
+ * documents : unique dans la société, proposé depuis son nom s'il n'est
+ * pas choisi, il ne change plus dès son premier document (voir
+ * aNumeroteUnDocument()).
+ *
+ * Ce qu'il fait encore, quel que soit l'écran ou la commande qui le
+ * demande : en lecture seule (fermé, suspendu par l'éditeur, ou société
+ * qui n'est plus active), il ne vend plus et n'écrit plus à ses clients
+ * (voir estEnLectureSeule()) ; il ne vend qu'une fois sa société validée
+ * et son établissement confirmé par le répertoire Sirene (voir
+ * peutVendre()). Un magasin ne se supprime jamais (voir delete() et le
+ * déclencheur de la table magasins) : sa société le ferme et le rouvre
+ * (voir FermerMagasinAction et RouvrirMagasinAction), son motif de
+ * fermeture disant pourquoi il est fermé (motif_fermeture), et un magasin
+ * cédé, ouvert ou déjà fermé, ne se rouvre plus (voir aEteCede() et
+ * booted()). La société peut indiquer l'un de
+ * ses magasins comme son établissement principal, une simple information
+ * (voir ChoisirEtablissementPrincipalAction).
+ *
+ * Le magasin de démonstration d'une société (est_demonstration, voir
+ * OuvrirLaDemonstrationAction) est un magasin à part entière, avec son
+ * registre, ses séries (code DEMO) et ses clôtures, sans SIRET ni identité
+ * réelle (voir Emetteur::deDemonstration()) : il vend tant que sa société
+ * n'est ni validée ni close, n'écrit à aucun client et ne transmet rien
+ * (voir peutEcrireAuxClients()), et rien n'en passe aux magasins réels.
+ *
+ * Sa société n'est jamais nulle : societe_id ne l'est jamais en base, sa
+ * clé étrangère vise une société, qu'aucune société ne s'efface (voir
+ * DeclencheursDeProtection::sansSuppression()) et que Societe n'a aucun
+ * scope global.
+ *
+ * @property-read Societe $societe
+ */
+class Magasin extends Model implements HasName
+{
+    /** @use HasFactory<MagasinFactory> */
+    use HasFactory, JournaliseSesParametresDeConformite, RefuseUneCleIllisible;
+
+    /**
+     * L'exemple proposé au magasin qui active les relances (Paramètres >
+     * Relances) : il le modifie, le complète ou le réduit comme il veut.
+     */
+    public const DELAIS_RELANCE_PAR_DEFAUT = [7, 15, 30];
+
+    /**
+     * Les mentions des factures entre professionnels (art. L441-9 du Code
+     * de commerce, B9) que chaque magasin reçoit à sa création et règle
+     * ensuite (Paramètres > Factures) : pénalités de trois fois le taux
+     * d'intérêt légal, indemnité forfaitaire de 40 €, pas d'escompte.
+     */
+    public const MENTION_PENALITES_PAR_DEFAUT = 'Pénalités de retard : trois fois le taux d\'intérêt légal, exigibles dès le lendemain de la date d\'échéance.';
+
+    public const MENTION_INDEMNITE_PAR_DEFAUT = 'Indemnité forfaitaire pour frais de recouvrement en cas de retard de paiement : 40 €.';
+
+    public const MENTION_ESCOMPTE_PAR_DEFAUT = 'Pas d\'escompte pour paiement anticipé.';
+
+    /**
+     * Le délai de paiement de ses factures, en jours après leur émission,
+     * quand le client n'a pas le sien (B7).
+     */
+    public const DELAI_PAIEMENT_PAR_DEFAUT = 30;
+
+    private const REFUS_SOCIETE_A_VERIFIER = 'Votre société est en cours de vérification : la vente, les e-mails aux clients, les PDF et les transmissions sont désactivés jusqu\'à sa validation.';
+
+    public const REFUS_ASSUJETTI_UNIQUE = 'PILIQI ne gère pas encore les sociétés membres d\'un assujetti unique (groupe TVA) : aucune vente, facture, avoir, encaissement ni devis numéroté réel n\'est possible.';
+
+    private const REFUS_DEMONSTRATION_TERMINEE = 'Votre société est validée : la démonstration est terminée, vendez dans vos magasins.';
+
+    private const REFUS_DEMONSTRATION_SANS_ENVOI = 'Le magasin de démonstration n\'écrit à aucun client et ne transmet rien.';
+
+    /**
+     * Le refus de numéroter un document dans un magasin sans territoire
+     * (voir DocumentNumberingService) : l'année de ses numéros suit son
+     * calendrier, que seul son territoire donne.
+     */
+    public const REFUS_TERRITOIRE_INCONNU = 'L\'établissement de ce magasin n\'est pas encore confirmé par le répertoire Sirene de l\'INSEE : PILIQI ne connaît pas encore son territoire, donc ni son heure ni l\'année de ses numéros. Aucun document numéroté avant sa confirmation.';
+
+    /**
+     * La procédure de l'éditeur corrige-t-elle son territoire (voir
+     * corrigerLeTerritoire()) ? Le seul changement d'un territoire
+     * renseigné que le modèle laisse passer.
+     */
+    private bool $correctionDuTerritoire = false;
+
+    /**
+     * Le changement de son motif de fermeture en cours est-il l'annulation
+     * de sa cession par la procédure de l'éditeur (voir
+     * annulerSaCessionParLaProcedure()) ? La seule qui rend à un magasin
+     * cédé un autre motif de fermeture.
+     */
+    private bool $annulationDeLaCession = false;
+
+    protected $fillable = [
+        'nom',
+        'code',
+        'adresse',
+        'complement_adresse',
+        'code_postal',
+        'ville',
+        'pays',
+        'email',
+        'telephone',
+        'references_acheteur',
+        'prix_vente_automatique',
+        'bareme_prix_vente',
+        'relances_automatiques',
+        'delais_relance',
+        'delai_paiement_jours',
+        'mention_penalites_retard',
+        'mention_indemnite_recouvrement',
+        'mention_escompte',
+    ];
+
+    protected $casts = [
+        'societe_id' => 'integer',
+        'statut' => StatutMagasin::class,
+        'motif_fermeture' => MotifFermeture::class,
+        'territoire' => Territoire::class,
+        'est_demonstration' => 'boolean',
+        'etablissement_verifie_le' => Instant::class,
+        'suspendu_le' => Instant::class,
+        'siret_libere_le' => Instant::class,
+        'references_acheteur' => 'array',
+        'est_etablissement_principal' => 'boolean',
+        'prix_vente_automatique' => 'boolean',
+        'bareme_prix_vente' => BaremePrixDeVente::class,
+        'relances_automatiques' => 'boolean',
+        'delai_paiement_jours' => 'integer',
+    ];
+
+    /**
+     * Le magasin d'un identifiant ou d'un uuid tapé par l'éditeur (voir
+     * caisse:verifier), null s'il
+     * n'existe pas. Un texte qui n'est ni l'un ni l'autre ne désigne aucun
+     * magasin : la colonne uuid, de type uuid, n'est alors pas
+     * interrogée.
+     */
+    public static function trouverParIdentifiantOuUuid(string $identifiant): ?self
+    {
+        return match (true) {
+            ctype_digit($identifiant) => static::query()->find((int) $identifiant),
+            Str::isUuid($identifiant) => static::query()->firstWhere('uuid', $identifiant),
+            default => null,
+        };
+    }
+
+    protected static function booted(): void
+    {
+        static::creating(function (Magasin $magasin) {
+            $magasin->uuid ??= (string) Str::uuid();
+            $magasin->code ??= CodeMagasin::proposer($magasin->societe, $magasin->nom);
+            $magasin->statut ??= StatutMagasin::Actif;
+            $magasin->pays ??= 'FR';
+            $magasin->est_etablissement_principal ??= false;
+            $magasin->prix_vente_automatique ??= false;
+            $magasin->bareme_prix_vente ??= BaremePrixDeVente::parDefaut();
+            $magasin->relances_automatiques ??= false;
+            $magasin->delais_relance ??= self::DELAIS_RELANCE_PAR_DEFAUT;
+            $magasin->delai_paiement_jours ??= self::DELAI_PAIEMENT_PAR_DEFAUT;
+            $magasin->mention_penalites_retard ??= self::MENTION_PENALITES_PAR_DEFAUT;
+            $magasin->mention_indemnite_recouvrement ??= self::MENTION_INDEMNITE_PAR_DEFAUT;
+            $magasin->mention_escompte ??= self::MENTION_ESCOMPTE_PAR_DEFAUT;
+        });
+
+        static::saving(function (Magasin $magasin) {
+            if ((bool) $magasin->est_demonstration !== ($magasin->siret === null)) {
+                throw new LogicException('Seul le magasin de démonstration n\'a pas de SIRET, et il n\'en a jamais.');
+            }
+
+            if (! $magasin->estFerme() && $magasin->motif_fermeture !== null) {
+                throw new LogicException('Un magasin ouvert n\'a pas de motif de fermeture : sa réouverture l\'efface.');
+            }
+
+            if ($magasin->territoire === null && ($magasin->est_demonstration || $magasin->etablissement_verifie_le !== null)) {
+                throw new LogicException('Un magasin dont l\'établissement est confirmé, comme le magasin de démonstration, a toujours un territoire.');
+            }
+        });
+
+        static::updating(function (Magasin $magasin) {
+            if ($magasin->getOriginal('motif_fermeture') === MotifFermeture::Cession && $magasin->isDirty(['statut', 'motif_fermeture']) && ! $magasin->annulationDeLaCession) {
+                throw new LogicException('Un magasin cédé ne se rouvre jamais et reste cédé.');
+            }
+
+            if ($magasin->isDirty('est_demonstration')) {
+                throw new LogicException('Un magasin réel ne devient jamais le magasin de démonstration, ni l\'inverse.');
+            }
+
+            if ($magasin->est_etablissement_principal && $magasin->est_demonstration) {
+                throw new LogicException('Le magasin de démonstration n\'est jamais l\'établissement principal.');
+            }
+
+            if ($magasin->isDirty('code')) {
+                $magasin->verifierQueSonCodePeutChanger();
+            }
+
+            if ($magasin->isDirty('siret')) {
+                $magasin->verifierQueSonSiretEstReserve();
+            }
+
+            if ($magasin->isDirty('territoire') && $magasin->getOriginal('territoire') !== null && ! $magasin->correctionDuTerritoire) {
+                throw new LogicException('Le territoire d\'un magasin ne change plus une fois fixé : un déménagement vers un autre territoire passe par un nouveau magasin.');
+            }
+
+            if ($magasin->isDirty('siret_libere_le') && ($magasin->getOriginal('siret_libere_le') !== null || ! $magasin->estFermePourDeBon() || $magasin->isDirty(['statut', 'motif_fermeture', 'siret']))) {
+                throw new LogicException('Seul le SIRET d\'un magasin fermé pour cessation se libère, ou celui d\'un magasin cédé, une seule fois.');
+            }
+
+            if ($magasin->getOriginal('siret_libere_le') !== null && $magasin->isDirty(['statut', 'siret'])) {
+                throw new LogicException('Un magasin dont le SIRET a été libéré ne se rouvre jamais et garde son SIRET.');
+            }
+        });
+    }
+
+    /**
+     * La correction de son territoire mal lu au répertoire Sirene, par la
+     * seule procédure de l'éditeur (voir CorrigerLeTerritoireAction), sous
+     * le verrou de son registre, tant qu'il n'a numéroté aucun document :
+     * la base refuse elle-même le changement ensuite. Elle s'inscrit à son
+     * journal des événements (JET 270, voir
+     * JournaliseSesParametresDeConformite).
+     *
+     * @throws LogicException
+     */
+    public function corrigerLeTerritoire(Territoire $territoire): void
+    {
+        $this->correctionDuTerritoire = true;
+
+        try {
+            $this->forceFill(['territoire' => $territoire])->save();
+        } finally {
+            $this->correctionDuTerritoire = false;
+        }
+    }
+
+    /**
+     * L'annulation de sa cession faite par erreur, par la seule procédure
+     * de l'éditeur (voir AnnulerCessionAction), sous le verrou de son
+     * registre : il reste fermé, avec le motif qu'il avait avant sa
+     * cession, temporaire ou cessation.
+     *
+     * @throws LogicException
+     */
+    public function annulerSaCessionParLaProcedure(MotifFermeture $motif): void
+    {
+        if (! $this->aEteCede() || ! in_array($motif, [MotifFermeture::Temporaire, MotifFermeture::Cessation], true)) {
+            throw new LogicException('Seule la cession d\'un magasin s\'annule, vers une fermeture temporaire ou pour cessation.');
+        }
+
+        $this->annulationDeLaCession = true;
+
+        try {
+            $this->forceFill(['motif_fermeture' => $motif])->save();
+        } finally {
+            $this->annulationDeLaCession = false;
+        }
+    }
+
+    /**
+     * A-t-il numéroté un document ? Dès qu'une série de numérotation de
+     * document existe pour lui, la première s'étant créée avec son premier
+     * numéro, code compris (voir DocumentNumberingService) : son code ne
+     * change plus. Les références de produits (PRD-000001), qui ne portent
+     * pas le code, ne comptent pas. sequences_documents n'a pas de
+     * MagasinScope : le filtre par magasin est explicite.
+     */
+    public function aNumeroteUnDocument(): bool
+    {
+        return SequenceDocument::query()
+            ->where('magasin_id', $this->getKey())
+            ->where('type_document', '!=', TypeDocument::Produit->value)
+            ->exists();
+    }
+
+    /**
+     * A-t-il déjà vendu ? Un enregistrement de la chaîne des ventes dans
+     * son registre fiscal (un ticket, une facture ou un avoir émis) : sa
+     * première vente, après laquelle un inventaire d'ouverture ne se
+     * saisit plus (voir ValiderInventaireOuvertureAction). Lu sous le
+     * verrou de son registre, que toute vente prend en premier, il ne
+     * laisse passer aucune vente en même temps. Le registre n'a que le
+     * filtre par magasin explicite ci-dessous : la lecture vaut aussi hors
+     * du magasin actif.
+     */
+    public function aVendu(): bool
+    {
+        return EnregistrementFiscal::withoutGlobalScope(MagasinScope::class)
+            ->where('magasin_id', $this->getKey())
+            ->where('chaine', ChaineFiscale::Vente->value)
+            ->exists();
+    }
+
+    /**
+     * Refuse le changement d'un code définitif. La ligne du magasin se
+     * verrouille d'abord : dans la transaction du changement (voir
+     * ModifierEtablissementAction), une première série de numérotation qui
+     * se crée en même temps, et relit le code sous un verrou partagé,
+     * attend que le changement soit validé et prend le nouveau code ; ou
+     * bien le changement attend la fin de la transaction qui a créé la
+     * série, et la voit.
+     *
+     * @throws LogicException
+     */
+    private function verifierQueSonCodePeutChanger(): void
+    {
+        static::query()->whereKey($this->getKey())->lockForUpdate()->value($this->getKeyName());
+
+        if ($this->aNumeroteUnDocument()) {
+            throw new LogicException('Le code du magasin figure déjà dans les numéros de ses documents : il ne change plus.');
+        }
+    }
+
+    /**
+     * Une fois sa société validée, le SIRET d'un magasin ne change que par
+     * le registre des SIRET réservés, qui réserve le nouveau avant de
+     * l'écrire ici (voir SiretsDesMagasins) : tout autre changement est
+     * refusé. Avant la validation, rien n'est réservé, et le SIRET se
+     * corrige avec le contrôle du répertoire Sirene (voir
+     * ModifierEtablissementAction).
+     *
+     * @throws LogicException
+     */
+    private function verifierQueSonSiretEstReserve(): void
+    {
+        if (! $this->societe()->first()?->estValidee()) {
+            return;
+        }
+
+        $reserve = SiretMagasin::query()
+            ->where('magasin_id', $this->getKey())
+            ->where('siret', $this->siret)
+            ->whereNull('retire_le')
+            ->whereNull('libere_le')
+            ->exists();
+
+        if (! $reserve) {
+            throw new LogicException('Le SIRET d\'un magasin d\'une société validée ne change que par le registre des SIRET réservés.');
+        }
+    }
+
+    /**
+     * Un magasin ne s'efface jamais de la base : ses documents se
+     * conservent dix ans, même après sa fermeture ou la résiliation de sa
+     * société, et son SIRET reste réservé. La base refuse elle aussi ce qui
+     * ne passe pas par le modèle (voir
+     * DeclencheursDeProtection::sansSuppression()).
+     *
+     * @throws LogicException
+     */
+    public function delete(): never
+    {
+        throw new LogicException('Un magasin ne se supprime jamais : ses documents sont conservés et son SIRET reste réservé.');
+    }
+
+    /**
+     * Est-il fermé par sa société (voir FermerMagasinAction), ou, pour le
+     * magasin de démonstration, terminé ? Une suspension par l'éditeur
+     * n'est pas une fermeture (voir estEnLectureSeule()).
+     */
+    public function estFerme(): bool
+    {
+        return $this->statut === StatutMagasin::Ferme;
+    }
+
+    /**
+     * A-t-il été cédé ? Son motif de fermeture est la cession, qu'il ait été
+     * fermé pour cession ou cédé une fois fermé (voir FermerMagasinAction) :
+     * il ne se rouvre jamais et ne se modifie plus (voir booted()).
+     */
+    public function aEteCede(): bool
+    {
+        return $this->motif_fermeture === MotifFermeture::Cession;
+    }
+
+    /**
+     * Est-il fermé pour cessation d'activité (voir FermerMagasinAction) ?
+     */
+    public function estFermePourCessation(): bool
+    {
+        return $this->estFerme() && $this->motif_fermeture === MotifFermeture::Cessation;
+    }
+
+    /**
+     * Est-il fermé pour de bon, pour cessation ou par sa cession ? Seul un
+     * tel magasin peut voir son SIRET libéré par l'éditeur (voir
+     * aLibereSonSiret()).
+     */
+    public function estFermePourDeBon(): bool
+    {
+        return $this->estFermePourCessation() || ($this->estFerme() && $this->aEteCede());
+    }
+
+    /**
+     * L'éditeur a-t-il libéré son SIRET pour un autre magasin sur le même
+     * établissement, de la société (voir LibererLeSiretAction) ou du
+     * titulaire d'un SIRET saisi par erreur (voir
+     * LibererUnSiretSaisiParErreurAction) ? Il le garde, mais ne se rouvre
+     * plus et ne change plus de SIRET (voir booted()).
+     */
+    public function aLibereSonSiret(): bool
+    {
+        return $this->siret_libere_le !== null;
+    }
+
+    /**
+     * Les magasins qui portent ce SIRET sans que l'éditeur l'ait libéré
+     * (voir aLibereSonSiret()) : au plus un par société (index
+     * magasins_siret_par_societe), que l'appelant filtre explicitement.
+     *
+     * @param  Builder<static>  $query
+     * @return Builder<static>
+     */
+    public function scopePortantLeSiret(Builder $query, string $siret): Builder
+    {
+        return $query->where('siret', $siret)->whereNull('siret_libere_le');
+    }
+
+    /**
+     * Est-ce le magasin de démonstration d'une société validée ou close,
+     * fermé pour de bon : il ne se rouvre jamais, ses comptes d'entraînement
+     * sont retirés (voir FermerLaDemonstrationAction), et plus aucun compte
+     * n'y est créé, nommé ni réintégré (voir
+     * PorteeDesDroits::peutDonnerLeRole()). Lu en base à chaque appel, sous
+     * les verrous de qui l'appelle. Une démonstration fermée après trente
+     * jours sans opération, qui se rouvre, ne l'est pas.
+     */
+    public function estUneDemonstrationTerminee(): bool
+    {
+        return $this->est_demonstration && Societe::query()
+            ->whereKey($this->societe_id)
+            ->where(fn ($societe) => $societe->whereNotNull('validee_le')->orWhereNotNull('close_le'))
+            ->exists();
+    }
+
+    /**
+     * Le magasin est-il en lecture seule ? Fermé par sa société, suspendu
+     * par l'éditeur, ou parce que sa société n'est plus active ou que son
+     * inscription est close (voir Societe::estEnLectureSeule()) : la
+     * consultation et les
+     * téléchargements restent possibles, plus aucune vente ni aucun e-mail
+     * aux clients ; ses clôtures, les statuts de ses factures et ses
+     * déclarations continuent. Seul endroit où ces états se lisent (voir
+     * ControleDesDroits, RegistreFiscal, les envois et les relances).
+     */
+    public function estEnLectureSeule(): bool
+    {
+        return $this->motifDeLectureSeule() !== null;
+    }
+
+    /**
+     * Ce qui le met en lecture seule, tel que l'écran le dit, le magasin
+     * étant désigné ainsi (« Ce magasin est fermé », « Le magasin est en
+     * lecture seule, votre société étant suspendue ») ; null quand il ne
+     * l'est pas.
+     */
+    public function motifDeLectureSeule(string $designation = 'Ce magasin'): ?string
+    {
+        $societe = $this->societe;
+
+        return match (true) {
+            $this->estFerme() => "{$designation} est fermé",
+            $this->suspendu_le !== null => "{$designation} est suspendu",
+            $societe->estClose() => "{$designation} est en lecture seule, l'inscription de votre société étant close",
+            $societe->statut->estEnLectureSeule() => "{$designation} est en lecture seule, votre société étant ".mb_strtolower($societe->statut->getLabel()),
+            default => null,
+        };
+    }
+
+    /**
+     * Garde métier de ce que le magasin fait encore, quel que soit l'écran
+     * ou la commande qui le demande : en lecture seule, il n'émet plus
+     * rien, n'encaisse plus, ne valide plus d'achat et n'écrit plus à ses
+     * clients (voir RegistreFiscal et les actions qui l'appellent). Ses
+     * clôtures, les statuts de ses factures et ses déclarations, eux,
+     * continuent.
+     *
+     * @throws LogicException
+     */
+    public function verifierQuIlEstOuvert(): void
+    {
+        $refus = $this->refusEnLectureSeule();
+
+        if ($refus !== null) {
+            throw new LogicException($refus);
+        }
+    }
+
+    /**
+     * Ce que l'écran dit d'un geste que la lecture seule refuse (voir
+     * motifDeLectureSeule()) ; null quand le magasin n'est pas en lecture
+     * seule.
+     */
+    public function refusEnLectureSeule(): ?string
+    {
+        $motif = $this->motifDeLectureSeule();
+
+        return $motif === null ? null : "{$motif} : seules la consultation et les téléchargements restent possibles.";
+    }
+
+    /**
+     * Le magasin peut-il vendre ? Hors lecture seule, un magasin réel une
+     * fois sa société validée (voir Societe::estValidee()), tant qu'elle
+     * n'est pas membre d'un assujetti unique (décision P3.1), et son
+     * établissement confirmé par le répertoire Sirene
+     * (etablissement_verifie_le), le magasin de démonstration tant que sa
+     * société n'est ni validée ni close : ticket, facture, avoir,
+     * paiement, devis numéroté, e-mail à un client et transmission en
+     * dépendent (voir verifierQuIlPeutVendre() et peutEcrireAuxClients()).
+     * Une revérification négative après la validation n'y change rien.
+     */
+    public function peutVendre(): bool
+    {
+        return $this->refusDeVente() === null;
+    }
+
+    /**
+     * Pourquoi il ne peut pas vendre, tel que l'écran le dit ; null quand
+     * il le peut.
+     */
+    public function refusDeVente(): ?string
+    {
+        $refusEnLectureSeule = $this->refusEnLectureSeule();
+
+        return match (true) {
+            $refusEnLectureSeule !== null => $refusEnLectureSeule,
+            $this->est_demonstration => $this->societe->estValidee() ? self::REFUS_DEMONSTRATION_TERMINEE : null,
+            ! $this->societe->estValidee() => self::REFUS_SOCIETE_A_VERIFIER,
+            $this->societe->membre_assujetti_unique => self::REFUS_ASSUJETTI_UNIQUE,
+            $this->etablissement_verifie_le === null => "L'établissement de ce magasin (SIRET {$this->siret}) n'est pas encore confirmé par le répertoire Sirene de l'INSEE : aucune vente avant sa confirmation.",
+            default => null,
+        };
+    }
+
+    /**
+     * La porte de validation : appelée par le registre fiscal pour toute
+     * vente et tout encaissement, juste après son verrou par l'émission
+     * d'une facture, et par l'envoi d'un devis ou d'un document, un job
+     * d'envoi, une relance (voir peutVendre()).
+     *
+     * @throws VenteNonAutoriseeException
+     */
+    public function verifierQuIlPeutVendre(): void
+    {
+        $refus = $this->refusDeVente();
+
+        if ($refus !== null) {
+            throw new VenteNonAutoriseeException($refus);
+        }
+    }
+
+    /**
+     * La garde des gestes qu'une autorisation refuse déjà quand le magasin
+     * ne peut pas vendre (voir ControleDesDroits), comme l'avoir : pour une
+     * société membre d'un assujetti unique, le refus dit pourquoi (décision
+     * P3.1) plutôt qu'un refus d'autorisation. Un autre motif garde son
+     * refus.
+     *
+     * @throws VenteNonAutoriseeException
+     */
+    public function verifierQuIlNEstPasDansUnAssujettiUnique(): void
+    {
+        if ($this->refusDeVente() === self::REFUS_ASSUJETTI_UNIQUE) {
+            throw new VenteNonAutoriseeException(self::REFUS_ASSUJETTI_UNIQUE);
+        }
+    }
+
+    /**
+     * Le magasin écrit-il à ses clients et transmet-il à la plateforme ?
+     * Seulement s'il peut vendre (voir peutVendre()), et jamais le magasin
+     * de démonstration : ses documents n'ont aucune valeur.
+     */
+    public function peutEcrireAuxClients(): bool
+    {
+        return $this->refusDEcrireAuxClients() === null;
+    }
+
+    /**
+     * Pourquoi il n'écrit pas à ses clients, tel que l'écran le dit ; null
+     * quand il le peut.
+     */
+    public function refusDEcrireAuxClients(): ?string
+    {
+        return $this->refusDeVente() ?? ($this->est_demonstration ? self::REFUS_DEMONSTRATION_SANS_ENVOI : null);
+    }
+
+    /**
+     * La garde des e-mails aux clients, des relances et des transmissions
+     * (voir EnvoyerDocumentAction, EnvoyerDocumentJob et la transmission à
+     * la plateforme).
+     *
+     * @throws VenteNonAutoriseeException
+     */
+    public function verifierQuIlPeutEcrireAuxClients(): void
+    {
+        $refus = $this->refusDEcrireAuxClients();
+
+        if ($refus !== null) {
+            throw new VenteNonAutoriseeException($refus);
+        }
+    }
+
+    /**
+     * Avant la validation de sa société, aucun PDF d'un magasin réel ne se
+     * produit : un usurpateur ne fabrique pas un devis ou une facture au
+     * nom d'une entreprise qui n'a rien demandé. Ceux du magasin de
+     * démonstration, à l'identité fictive et marqués « Démonstration —
+     * sans valeur », se produisent toujours. En lecture seule, les
+     * téléchargements restent possibles.
+     *
+     * @throws VenteNonAutoriseeException
+     */
+    public function verifierQuIlPeutImprimer(): void
+    {
+        if (! $this->est_demonstration && ! $this->societe->estValidee()) {
+            throw new VenteNonAutoriseeException(self::REFUS_SOCIETE_A_VERIFIER);
+        }
+    }
+
+    /**
+     * Le territoire de TVA du magasin, celui de son territoire (voir
+     * Territoire::tva()) : null tant que son établissement n'a jamais été
+     * confirmé.
+     */
+    public function territoireTva(): ?TerritoireTva
+    {
+        return $this->territoire?->tva();
+    }
+
+    /**
+     * Le calendrier du magasin, celui de son territoire (voir
+     * Calendrier::duTerritoire()) : sa journée de caisse et ses clôtures,
+     * la date et l'année de ses documents, ses échéances, ses relances et
+     * ses délais en jours suivent son heure locale. Un magasin sans
+     * territoire, qui ne vend ni ne numérote rien, affiche ses écrans et
+     * ses brouillons à l'heure de la métropole.
+     */
+    public function calendrier(): Calendrier
+    {
+        return Calendrier::duTerritoire($this->territoire ?? Territoire::Metropole);
+    }
+
+    /**
+     * Le taux proposé pour une vente ou un nouveau produit, saisi ensuite
+     * librement (B2) : le taux normal de son territoire, 20 % en métropole,
+     * 8,5 % en Guadeloupe, en Martinique ou à La Réunion. Un magasin sans
+     * territoire, qui ne vend pas encore, retombe sur celui de la
+     * métropole. Écrit comme une colonne de taux (« 20.00 », « 8.50 »), à
+     * la place d'un taux saisi ou enregistré.
+     *
+     * @return numeric-string
+     */
+    public function tauxTvaParDefaut(): string
+    {
+        return app(CalculateurLigne::class)->enDecimal(($this->territoireTva() ?? TerritoireTva::Metropole)->tauxNormal());
+    }
+
+    /**
+     * Les mentions de l'identité légale qui manquent encore pour émettre
+     * une facture à un professionnel : celles de sa société (voir
+     * Societe::mentionsLegalesManquantes()), puis celles de
+     * l'établissement : adresse, code postal et ville, que le répertoire
+     * Sirene n'a pas encore données quand l'INSEE n'a pas répondu (voir
+     * CreerEtablissementAction). Son SIRET, lui, ne manque jamais. Le
+     * magasin de démonstration, qui imprime une identité fictive, n'en
+     * attend aucune.
+     *
+     * @return list<string>
+     */
+    public function mentionsLegalesManquantes(): array
+    {
+        if ($this->est_demonstration) {
+            return [];
+        }
+
+        $etablissement = [
+            'adresse du magasin' => $this->adresse,
+            'code postal du magasin' => $this->code_postal,
+            'ville du magasin' => $this->ville,
+        ];
+
+        return [...$this->societe->mentionsLegalesManquantes(), ...array_keys(array_filter($etablissement, blank(...)))];
+    }
+
+    /**
+     * Garde de l'émission d'une facture à un professionnel, ou de son
+     * avoir (voir EmettreFactureAction et EmettreAvoirAction) : refusée
+     * tant que l'identité légale de la société ou de l'établissement est
+     * incomplète.
+     *
+     * @throws IdentiteDeLaSocieteIncompleteException
+     */
+    public function verifierSonIdentiteLegale(): void
+    {
+        $manquantes = $this->mentionsLegalesManquantes();
+
+        if ($manquantes !== []) {
+            throw new IdentiteDeLaSocieteIncompleteException($manquantes);
+        }
+    }
+
+    /**
+     * Le délai de paiement d'une facture de ce client, en jours après son
+     * émission (B7) : le sien s'il en a un, sinon celui du magasin, qui
+     * vaut aussi tant qu'aucun client n'est choisi (voir FactureResource).
+     */
+    public function delaiDePaiementPour(?Client $client): int
+    {
+        return $client->delai_paiement_jours ?? $this->delai_paiement_jours;
+    }
+
+    /**
+     * Les mentions qu'imprime une facture à un professionnel (B9), dans
+     * l'ordre : pénalités de retard, indemnité forfaitaire pour frais de
+     * recouvrement, escompte.
+     *
+     * @return array{penalites_retard: string, indemnite_recouvrement: string, escompte: string}
+     */
+    public function mentionsEntreProfessionnels(): array
+    {
+        return [
+            'penalites_retard' => $this->mention_penalites_retard,
+            'indemnite_recouvrement' => $this->mention_indemnite_recouvrement,
+            'escompte' => $this->mention_escompte,
+        ];
+    }
+
+    public static function parametresDeConformite(): array
+    {
+        return ['siret', 'territoire'];
+    }
+
+    /**
+     * Son propre journal, et seulement dans le contexte de sa société : le
+     * magasin lui-même, lu comme un Magasin, ce que la collection d'Eloquent
+     * demande (elle ne tient pas le static de $this pour un Magasin).
+     *
+     * @return Collection<int, Magasin>
+     *
+     * @throws LogicException
+     */
+    protected function magasinsDuJournal(): Collection
+    {
+        $contexte = app(TenantContext::class);
+
+        if ($contexte->aUneSociete() && $contexte->societe()->getKey() !== (int) $this->societe_id) {
+            throw new LogicException('Le SIRET et le territoire d\'un magasin ne se modifient que dans le contexte de sa société.');
+        }
+
+        return new Collection([ValeursLues::instance($this, self::class)]);
+    }
+
+    /**
+     * @return array{magasin: array{id: int, nom: string}}
+     */
+    protected function identiteDansLeJournal(): array
+    {
+        return ['magasin' => ['id' => CleDuModele::de($this), 'nom' => $this->nom]];
+    }
+
+    /**
+     * Le code s'enregistre toujours en majuscules, sans espace autour ;
+     * laissé vide à la création, il est proposé depuis le nom (voir
+     * booted()).
+     *
+     * @return Attribute<string, string|null>
+     */
+    protected function code(): Attribute
+    {
+        return Attribute::make(
+            set: fn (?string $code): ?string => $code === null ? null : CodeMagasin::normaliser($code),
+        );
+    }
+
+    /**
+     * Le pays s'enregistre en majuscules, sans espace autour, comme celui
+     * d'un client (voir Client::booted()) : « fr » saisi devient « FR ».
+     *
+     * @return Attribute<string, string|null>
+     */
+    protected function pays(): Attribute
+    {
+        return Attribute::make(
+            set: fn (?string $pays): ?string => $pays === null ? null : Str::upper(trim($pays)),
+        );
+    }
+
+    /**
+     * Les délais de relance, en jours après l'échéance d'une facture :
+     * toujours enregistrés dans l'ordre, sans doublon, la relance n°1 étant
+     * celle du plus court (voir relanceDue()).
+     *
+     * @return Attribute<list<int>|null, list<int|string>>
+     */
+    protected function delaisRelance(): Attribute
+    {
+        return Attribute::make(
+            get: fn (mixed $valeur): ?array => $valeur === null ? null : ValeursLues::entiers(ValeursLues::tableau(json_decode(ValeursLues::texte($valeur), true, flags: JSON_THROW_ON_ERROR))),
+            set: function (array $delais): string {
+                $jours = collect($delais)->map(fn (mixed $delai): int => is_int($delai) || is_string($delai) ? (int) $delai : throw new InvalidArgumentException('Un délai de relance est un nombre de jours.'))->unique()->sort()->values();
+
+                if ($jours->contains(fn (int $delai): bool => $delai < 1)) {
+                    throw new InvalidArgumentException('Une relance part au moins un jour après l\'échéance.');
+                }
+
+                return json_encode($jours->all(), JSON_THROW_ON_ERROR);
+            },
+        );
+    }
+
+    /**
+     * La relance n°$niveau d'une facture échue depuis $joursDeRetard jours
+     * est-elle due ? Les relances partent dans l'ordre, chacune à son délai
+     * après l'échéance (avec 7, 15 et 30 jours : la n°2 pas avant 15 jours
+     * de retard), et jamais plus près de la précédente que l'écart entre
+     * leurs deux délais (8 jours entre la n°1 et la n°2) : une facture déjà
+     * très en retard quand les relances commencent -- activées tard,
+     * planificateur arrêté, relance en échec -- reçoit la n°1, puis les
+     * suivantes au rythme choisi par le magasin, jamais toutes d'un coup.
+     * Aucune au-delà du dernier délai.
+     */
+    public function relanceDue(int $niveau, int $joursDeRetard, ?int $joursDepuisLaPrecedente): bool
+    {
+        $delais = ValeurRequise::de($this->delais_relance, 'les délais de relance du magasin');
+
+        if ($niveau < 1 || $niveau > count($delais) || $joursDeRetard < $delais[$niveau - 1]) {
+            return false;
+        }
+
+        return $niveau === 1
+            || $joursDepuisLaPrecedente === null
+            || $joursDepuisLaPrecedente >= $delais[$niveau - 1] - $delais[$niveau - 2];
+    }
+
+    /**
+     * Le barème avec lequel ses factures d'achat proposent les prix de
+     * vente, une fois que le magasin a activé le calcul automatique
+     * (désactivé au départ).
+     */
+    public function baremePrixDeVenteActif(): ?BaremePrixDeVente
+    {
+        return $this->prix_vente_automatique ? $this->bareme_prix_vente : null;
+    }
+
+    /**
+     * @return BelongsTo<Societe, $this>
+     */
+    public function societe(): BelongsTo
+    {
+        return $this->belongsTo(Societe::class);
+    }
+
+    /**
+     * Ses périodes d'activité (voir PeriodesDActivite) : les tickets Z ne
+     * se produisent que pour leurs jours.
+     *
+     * @return HasMany<PeriodeActivite, $this>
+     */
+    public function periodes(): HasMany
+    {
+        return $this->hasMany(PeriodeActivite::class);
+    }
+
+    /**
+     * @return HasOne<PeriodeActivite, $this>
+     */
+    public function periodeOuverte(): HasOne
+    {
+        return $this->hasOne(PeriodeActivite::class)->whereNull('fin');
+    }
+
+    /**
+     * clients(), fournisseurs() et services() servent aux créations que
+     * Filament enregistre lui-même (CreateClient, CreateFournisseur et la
+     * fenêtre « Nouveau » de ManageServices) : il y rattache la fiche au
+     * magasin par la relation que nomme Resource::getTenantRelationshipName(),
+     * le pluriel du modèle. Les créations qui surchargent
+     * handleRecordCreation() ne s'en servent pas, et un produit ne se crée
+     * jamais par un écran (voir OrigineDesProduits). L'isolation, elle, reste
+     * BelongsToMagasin + MagasinScope.
+     *
+     * @return HasMany<Client, $this>
+     */
+    public function clients(): HasMany
+    {
+        return $this->hasMany(Client::class);
+    }
+
+    /**
+     * @return HasMany<Fournisseur, $this>
+     */
+    public function fournisseurs(): HasMany
+    {
+        return $this->hasMany(Fournisseur::class);
+    }
+
+    /**
+     * @return HasMany<Service, $this>
+     */
+    public function services(): HasMany
+    {
+        return $this->hasMany(Service::class);
+    }
+
+    /**
+     * Les affectations des comptes de la société à ce magasin (voir
+     * Affectation) : celles à tous les magasins n'y figurent pas.
+     *
+     * @return HasMany<Affectation, $this>
+     */
+    public function affectations(): HasMany
+    {
+        return $this->hasMany(Affectation::class);
+    }
+
+    public function getFilamentName(): string
+    {
+        return $this->nom;
+    }
+}

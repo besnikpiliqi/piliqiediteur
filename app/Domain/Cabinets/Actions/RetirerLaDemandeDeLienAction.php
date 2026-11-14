@@ -1,0 +1,133 @@
+<?php
+
+namespace App\Domain\Cabinets\Actions;
+
+use App\Domain\Cabinets\Enums\EtatDuLien;
+use App\Domain\Cabinets\Enums\MotifDeFinDuLien;
+use App\Domain\Cabinets\Enums\OrigineDuLien;
+use App\Domain\Cabinets\Models\LienCabinet;
+use App\Domain\Tenancy\Enums\ActionAuditee;
+use App\Domain\Tenancy\Models\Societe;
+use App\Domain\Tenancy\Support\ValeurRequise;
+use App\Models\User;
+use Closure;
+use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Facades\DB;
+use LogicException;
+use Throwable;
+
+/**
+ * Le retrait d'une demande de lien par la partie qui l'a faite : le
+ * propriétaire du cabinet pour une demande de rattachement, celui du
+ * client pour une désignation, chacun contrôlé dans sa propre société
+ * (voir LienCabinetPolicy::retirer()). Le lien de l'e-mail d'une demande
+ * de rattachement ne vaut plus rien.
+ */
+class RetirerLaDemandeDeLienAction extends RepondreAUneDemandeDeLien
+{
+    /**
+     * @throws AuthorizationException
+     * @throws LogicException
+     */
+    public function handle(User $auteur, LienCabinet $lien): void
+    {
+        self::exigerUneDemande($this->cloreLaDemande($auteur, $lien, EtatDuLien::Retire, ActionAuditee::DemandeDeLienRetiree, function (?User $auteurRelu, LienCabinet $relu): void {
+            $this->journalDesDroits->exigerDansSaSociete(ValeurRequise::de($auteurRelu, 'l\'auteur du geste, relu sous verrou'), 'retirer', $relu);
+        }));
+    }
+
+    /**
+     * Le retrait d'une demande au nom du système, dans la transaction de la
+     * clôture d'une inscription, de la saisie de son code par une autre
+     * personne, ou de la révocation de la société par l'éditeur : une
+     * société non validée qui change de mains, close ou révoquée ne garde
+     * aucune demande. Le cabinet en est prévenu par le seul SIREN, sans le
+     * motif : d'une demande qui n'est jamais devenue un lien actif, il
+     * n'apprend rien d'autre de la société. Un avis qui ne part pas est
+     * signalé sans rien défaire.
+     */
+    public function parLeSysteme(LienCabinet $lien): void
+    {
+        $retiree = $this->cloreLaDemande(null, $lien, EtatDuLien::Retire, ActionAuditee::DemandeDeLienRetiree, static fn (): null => null);
+
+        if ($retiree !== null) {
+            DB::afterCommit(static fn () => self::sansInterrompre(function () use ($retiree): void {
+                $client = Societe::query()->findOrFail($retiree->societe_id);
+                self::prevenirLeCabinet($retiree, 'Demande de lien retirée', "La demande de lien avec le SIREN {$client->siren} a pris fin.");
+            }));
+        }
+    }
+
+    /**
+     * Le retrait d'une demande en cours d'un cabinet que l'éditeur révoque,
+     * au nom du système, dans sa propre transaction, après la révocation
+     * (voir RevoquerSocieteAction) : le client qui avait désigné le cabinet
+     * en est prévenu ; une demande de rattachement du cabinet s'éteint sans
+     * rien dire au client, qui ne l'avait pas encore acceptée. Un avis qui
+     * ne part pas est signalé sans rien défaire.
+     */
+    public function pourUnCabinetRevoque(LienCabinet $lien): void
+    {
+        $retiree = $this->cloreLaDemande(null, $lien, EtatDuLien::Retire, ActionAuditee::DemandeDeLienRetiree, static fn (): null => null);
+
+        if ($retiree !== null && $retiree->origine === OrigineDuLien::DesignationDuClient) {
+            DB::afterCommit(static fn () => self::sansInterrompre(function () use ($retiree): void {
+                $cabinet = Societe::query()->findOrFail($retiree->cabinet_id);
+                self::prevenirLeClient($retiree, 'Demande de lien retirée', "Votre demande de lien avec le cabinet {$cabinet->getFilamentName()} a pris fin : ".lcfirst(MotifDeFinDuLien::SocieteRevoquee->getLabel()).'.');
+            }));
+        }
+    }
+
+    /**
+     * Prévient sans interrompre ce qui suit : un avis qui ne part pas (une
+     * messagerie en panne) est signalé, et rien n'est défait.
+     */
+    private static function sansInterrompre(Closure $avis): void
+    {
+        try {
+            $avis();
+        } catch (Throwable $erreur) {
+            report($erreur);
+        }
+    }
+
+    /**
+     * Expire, au nom du système et sans trace (voir TraceDuVisiteur), chaque
+     * demande de ces liens encore en cours mais dont l'échéance est passée,
+     * sans attendre la tâche horaire, dans la transaction d'un geste sur les
+     * liens d'un client qui tient déjà la ligne du client et ces liens (voir
+     * DesignerUnCabinetAction et InviterUneEntrepriseAction) : une demande
+     * périmée n'est jamais rendue comme une demande en cours. Rend ces
+     * liens relus.
+     *
+     * @param  Collection<int, LienCabinet>  $liens
+     * @return Collection<int, LienCabinet>
+     */
+    public function expirerLesPerimees(Collection $liens): Collection
+    {
+        return $liens->map(function (LienCabinet $lien): LienCabinet {
+            if (! $lien->estUneDemande() || $lien->estUneDemandeValable()) {
+                return $lien;
+            }
+
+            $this->traces->horsDeSaSociete(fn () => $this->expirer($lien));
+
+            return $lien->refresh();
+        });
+    }
+
+    /**
+     * L'expiration d'une demande restée sans réponse 7 jours, au nom du
+     * système (voir ExpirerInvitationsDesCabinets) : relue sous son verrou,
+     * seulement si elle est encore en cours et périmée.
+     */
+    public function expirer(LienCabinet $lien): void
+    {
+        $this->cloreLaDemande(null, $lien, EtatDuLien::Expire, ActionAuditee::DemandeDeLienExpiree, static function (?User $auteur, LienCabinet $relu): void {
+            if ($relu->expire_le === null || $relu->expire_le->isFuture()) {
+                throw new LogicException(AccepterLaDemandeDeLienAction::MESSAGE_PLUS_VALABLE);
+            }
+        });
+    }
+}

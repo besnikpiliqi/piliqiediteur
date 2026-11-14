@@ -1,0 +1,69 @@
+<?php
+
+namespace App\Filament\App\Resources\FactureAchatResource\Pages;
+
+use App\Domain\Achats\Actions\ModifierFactureAchatAction;
+use App\Domain\Achats\Models\FactureAchat;
+use App\Domain\Achats\Models\LigneAchat;
+use App\Domain\Contacts\Models\Fournisseur;
+use App\Domain\Fichiers\PieceDeposee;
+use App\Domain\Tenancy\Support\CompteConnecte;
+use App\Domain\Tenancy\Support\ValeursLues;
+use App\Filament\App\Resources\FactureAchatResource;
+use App\Filament\Concerns\GereLesExceptionsMetier;
+use App\Filament\Concerns\RevientALaListe;
+use Filament\Actions;
+use Filament\Resources\Pages\EditRecord;
+use Illuminate\Database\Eloquent\Model;
+
+/**
+ * Accessible tant que la facture d'achat reste modifiable (voir
+ * FactureAchat::estModifiable() et FactureAchatPolicy::update()), lignes
+ * comprises. Les pièces du fournisseur déposées s'ajoutent à celles déjà
+ * jointes (voir ModifierFactureAchatAction) ; leurs fichiers s'effacent du
+ * dossier temporaire des envois une fois la facture enregistrée.
+ *
+ * @property FactureAchat $record
+ */
+class EditFactureAchat extends EditRecord
+{
+    use GereLesExceptionsMetier, RevientALaListe;
+
+    protected static string $resource = FactureAchatResource::class;
+
+    protected function getHeaderActions(): array
+    {
+        return [
+            FactureAchatResource::actionSupprimer(Actions\DeleteAction::make()),
+        ];
+    }
+
+    protected function mutateFormDataBeforeFill(array $data): array
+    {
+        $data['lignes'] = $this->record->loadMissing('lignes.produit')->lignes
+            ->map(fn (LigneAchat $ligne): array => FactureAchatResource::ligneDejaEnregistree($ligne))
+            ->all();
+        $data['escompte_pourcentage'] = FactureAchatResource::pourcentageEnTexte($this->record->escompte_pourcentage);
+        $data['taux'] = FactureAchatResource::tauxDejaEnregistres($this->record);
+
+        return $data;
+    }
+
+    protected function handleRecordUpdate(Model $record, array $data): Model
+    {
+        // Limité au magasin par MagasinScope ; withTrashed() garde le
+        // fournisseur déjà rattaché s'il a été archivé depuis (voir
+        // AppServiceProvider::limiterLesChoixAuMagasin()).
+        $fournisseur = Fournisseur::withTrashed()->whereKey(ValeursLues::cle($data['fournisseur_id']))->firstOrFail();
+
+        $factureAchat = static::executerOuInterrompre(fn () => app(ModifierFactureAchatAction::class)->handle(CompteConnecte::exiger(), $this->record, $fournisseur, array_values(ValeursLues::lignes($data['lignes'])), [
+            'numero_fournisseur' => $data['numero_fournisseur'] ?? null,
+            'date_facture' => $data['date_facture'] ?? null,
+            'escompte_pourcentage' => $data['escompte_pourcentage'] ?? 0,
+            'notes' => $data['notes'] ?? null,
+        ], FactureAchatResource::montantsDuFournisseur($data), PieceDeposee::lire($data['pieces'] ?? [])));
+        PieceDeposee::effacerLesEnvois($data['pieces'] ?? []);
+
+        return $factureAchat;
+    }
+}

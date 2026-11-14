@@ -1,0 +1,617 @@
+<?php
+
+namespace Tests\Browser\Support;
+
+use App\Domain\Calendrier\Calendrier;
+use Closure;
+use Illuminate\Support\Str;
+use InvalidArgumentException;
+use Pest\Browser\Api\PendingAwaitablePage;
+use Pest\Browser\Execution;
+use Pest\Browser\Playwright\Locator;
+use Pest\Browser\Playwright\Page;
+use Pest\Browser\Support\ComputeUrl;
+use Pest\TestSuite;
+use PHPUnit\Framework\Assert;
+use PHPUnit\Framework\ExpectationFailedException;
+
+/**
+ * Un onglet d'un navigateur neuf (sans témoin ni session), piloté comme une
+ * personne le ferait : il ouvre une adresse, clique sur un bouton par son
+ * libellé, remplit un champ par son étiquette, ouvre et ferme une fenêtre.
+ * Après chaque geste, il attend que la page soit au repos (voir attendre())
+ * puis vérifie qu'aucune erreur JavaScript ni de console n'est apparue,
+ * qu'elle n'a rien demandé à un autre site et qu'aucune réponse du serveur
+ * n'a été un refus ou une erreur (4xx ou 5xx) que le test n'attendait pas
+ * (voir JournalDesReponses).
+ *
+ * Aucune attente n'endort le processus : le serveur de l'application tourne
+ * dans le processus du test et ne répond au navigateur que pendant que le
+ * test attend le navigateur (voir attendre()).
+ */
+final class Navigation
+{
+    /**
+     * Le délai d'attente d'un geste, en secondes, sauf autre délai donné
+     * par la variable d'environnement VARIABLE_DU_DELAI (voir delai()).
+     */
+    public const DELAI_PAR_DEFAUT = 15;
+
+    /**
+     * La variable d'environnement qui donne un autre délai d'attente, en
+     * secondes, à un poste plus lent que la CI (constat C6 de l'éditeur :
+     * sur son PC Windows, serveur PHP intégré et antivirus, les premières
+     * pages dépassent 15 s).
+     */
+    public const VARIABLE_DU_DELAI = 'PILIQI_NAVIGATEUR_DELAI';
+
+    /**
+     * Le temps sans aucune activité au bout duquel la page est au repos, en
+     * millisecondes, compté par une minuterie de la page (voir
+     * surveillance.js) : il couvre le regroupement des appels de Livewire
+     * et l'anti-rebond de ses champs (150 ms) ; un geste qui n'appelle le
+     * serveur qu'après un délai plus long passe par
+     * gesteQuiAppelleLeServeur().
+     */
+    private const REPOS_EN_MS = 300;
+
+    /**
+     * Le serveur mandataire de chaque requête vers un autre site : une
+     * adresse où rien n'écoute, si bien que le navigateur des tests refuse
+     * aussitôt toute requête qui sortirait de l'application ; il joint
+     * l'application directement, sans passer par lui (127.0.0.1,
+     * localhost).
+     */
+    private const MANDATAIRE_SANS_ISSUE = 'http://127.0.0.1:9';
+
+    /**
+     * Le sélecteur de la fenêtre de Filament ouverte au premier plan.
+     */
+    public const FENETRE = '.fi-modal.fi-modal-open .fi-modal-window';
+
+    public function __construct(
+        private readonly PendingAwaitablePage $onglet,
+        private readonly JournalDesReponses $journal,
+    ) {}
+
+    /**
+     * Un onglet d'un navigateur neuf, en français et à l'heure de Paris,
+     * qui ne joint aucun autre site que l'application (voir
+     * MANDATAIRE_SANS_ISSUE), surveillé dès le premier script de chaque
+     * page (voir surveillance.js), ouvert sur cette adresse de
+     * l'application.
+     */
+    public static function ouvrir(string $chemin, JournalDesReponses $journal): self
+    {
+        $onglet = visit('/robots.txt', ['proxy' => ['server' => self::MANDATAIRE_SANS_ISSUE, 'bypass' => '127.0.0.1,localhost']])->withLocale('fr-FR')->withTimezone(Calendrier::deParis()->fuseau());
+        $onglet->page()->context()->addInitScript((string) file_get_contents(__DIR__.'/surveillance.js'));
+        $navigation = new self($onglet, $journal);
+
+        return $navigation->aller($chemin);
+    }
+
+    /**
+     * Le délai d'attente d'un geste, en secondes : celui que donne la
+     * variable d'environnement PILIQI_NAVIGATEUR_DELAI, un nombre entier de
+     * secondes, au moins 1, sinon 15 (DELAI_PAR_DEFAUT). Il vaut pour chaque
+     * attente de cette classe et pour chaque geste de Playwright (voir
+     * tests/Pest.php).
+     *
+     * @throws InvalidArgumentException une variable qui n'est pas un nombre entier de secondes, au moins 1
+     */
+    public static function delai(): int
+    {
+        $valeur = getenv(self::VARIABLE_DU_DELAI);
+
+        if ($valeur === false || trim($valeur) === '') {
+            return self::DELAI_PAR_DEFAUT;
+        }
+
+        $secondes = filter_var(trim($valeur), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+
+        if ($secondes === false) {
+            throw new InvalidArgumentException(self::VARIABLE_DU_DELAI.' doit être un nombre entier de secondes, au moins 1 : « '.$valeur.' » ne l\'est pas.');
+        }
+
+        return $secondes;
+    }
+
+    /**
+     * La page de Playwright, pour un geste que cette classe n'offre pas.
+     */
+    public function page(): Page
+    {
+        return $this->onglet->page();
+    }
+
+    /**
+     * Ouvre cette adresse de l'application dans l'onglet, comme une adresse
+     * tapée à la main, en un seul chargement, dans le délai d'un geste (la
+     * navigation de la page de Pest recommence le chargement toutes les
+     * secondes tant qu'il n'est pas fini).
+     */
+    public function aller(string $chemin): self
+    {
+        $this->page()->goto(ComputeUrl::from($chemin));
+
+        return $this->attendre()->verifier();
+    }
+
+    /**
+     * Le chemin de la page affichée, sans le serveur ni la requête.
+     */
+    public function chemin(): string
+    {
+        return (string) parse_url($this->page()->url(), PHP_URL_PATH);
+    }
+
+    /**
+     * Attend que la page soit au repos (voir window.__piliqi.auRepos dans
+     * surveillance.js) : chargée, ne quittant pas la page, sans requête en
+     * cours, chaque composant visible que Filament charge à part démarré,
+     * et rien de cela n'ayant changé pendant REPOS_EN_MS, compté par une
+     * minuterie de la page posée après le geste. Une page qui en quitte une
+     * autre (un lien, un formulaire, une redirection de Livewire) n'est au
+     * repos qu'une fois la nouvelle chargée. Playwright attend ensuite de
+     * lui-même qu'un élément soit immobile (fenêtre ouverte) avant de
+     * cliquer dessus.
+     */
+    public function attendre(): self
+    {
+        $fin = microtime(true) + self::delai();
+
+        while ($this->evaluerPendantUneNavigation('async () => { try { return window.__piliqi !== undefined && await window.__piliqi.auRepos('.self::REPOS_EN_MS.'); } catch (e) { return false; } }') !== true) {
+            if (microtime(true) > $fin) {
+                Assert::fail('Au bout de '.self::delai().' s, la page ne revient pas au repos (page '.$this->page()->url().').');
+            }
+
+            Execution::instance()->wait(0.05);
+        }
+
+        return $this;
+    }
+
+    /**
+     * Attend que cette expression JavaScript soit vraie, en laissant le
+     * serveur de l'application répondre pendant l'attente ; échoue avec ce
+     * motif au bout du délai.
+     */
+    public function attendreQue(string $expression, string $motif): self
+    {
+        $fin = microtime(true) + self::delai();
+
+        while (true) {
+            $vrai = $this->evaluerPendantUneNavigation('() => { try { return Boolean('.$expression.'); } catch (e) { return false; } }');
+
+            if ($vrai === true) {
+                return $this;
+            }
+
+            if (microtime(true) > $fin) {
+                Assert::fail('Au bout de '.self::delai().' s, '.$motif.' (page '.$this->page()->url().').');
+            }
+
+            Execution::instance()->wait(0.05);
+        }
+    }
+
+    /**
+     * Le résultat de cette fonction JavaScript dans la page, ou false si la
+     * page change sous elle (un clic qui mène à une autre page détruit le
+     * contexte de l'ancienne) ou n'a pas encore de contexte où l'évaluer
+     * (Playwright l'attend alors jusqu'à son délai) : l'attente qui
+     * l'appelle recommence jusqu'au sien.
+     */
+    private function evaluerPendantUneNavigation(string $fonction): mixed
+    {
+        try {
+            return $this->page()->evaluate($fonction);
+        } catch (ExpectationFailedException $exception) {
+            foreach (['Execution context was destroyed', 'Cannot find context', 'Timeout'] as $pendantUneNavigation) {
+                if (str_contains($exception->getMessage(), $pendantUneNavigation)) {
+                    return false;
+                }
+            }
+
+            throw $exception;
+        }
+    }
+
+    /**
+     * Aucune erreur JavaScript ni de console depuis la vérification
+     * précédente, et aucune réponse du serveur en 4xx ou 5xx que le test
+     * n'attendait pas (voir JournalDesReponses::tolerer()).
+     */
+    public function verifier(): self
+    {
+        $erreurs = $this->page()->evaluate('() => window.__piliqi ? window.__piliqi.erreurs.splice(0) : []');
+
+        if (is_array($erreurs) && $erreurs !== []) {
+            Assert::fail('Erreurs dans le navigateur sur '.$this->page()->url().' :'.PHP_EOL.implode(PHP_EOL, $erreurs));
+        }
+
+        $this->journal->verifier();
+
+        return $this;
+    }
+
+    /**
+     * Les fichiers que la page a téléchargés depuis l'appel précédent, lus
+     * dans le navigateur (voir surveillance.js) : nom, type, taille,
+     * premiers caractères et tout le contenu, en base64.
+     *
+     * @return list<array{nom: string, type: string, taille: int, debut: string, contenu: string}>
+     */
+    public function telechargements(): array
+    {
+        $fichiers = $this->page()->evaluate('() => window.__piliqi ? window.__piliqi.telechargements.splice(0) : []');
+
+        return is_array($fichiers) ? array_values($fichiers) : [];
+    }
+
+    /**
+     * Fait ce geste, qui appelle le serveur après un délai plus long que
+     * REPOS_EN_MS (la recherche d'un tableau attend que la frappe s'arrête
+     * 500 ms), attend que la requête parte, puis que la page revienne au
+     * repos, et la vérifie.
+     */
+    public function gesteQuiAppelleLeServeur(Closure $geste, string $description): self
+    {
+        $avant = (int) $this->page()->evaluate('() => window.__piliqi ? window.__piliqi.lancees : 0');
+        $this->geste($geste, $description);
+
+        return $this->attendreQue('window.__piliqi.lancees > '.$avant, $description.' n\'a appelé aucune fois le serveur')
+            ->attendre()
+            ->verifier();
+    }
+
+    /**
+     * Un élément par son sélecteur (CSS ou de Playwright), qui doit être le
+     * seul à y répondre.
+     */
+    public function element(string $selecteur): Locator
+    {
+        return $this->page()->locator($selecteur);
+    }
+
+    /**
+     * Clique sur l'élément de ce sélecteur, puis attend la page au repos et
+     * la vérifie.
+     */
+    public function cliquer(string $selecteur): self
+    {
+        return $this->geste(fn () => $this->element($selecteur)->click(), 'le clic sur '.$selecteur);
+    }
+
+    /**
+     * Fait ce geste dans la page, puis attend qu'elle revienne au repos et
+     * la vérifie (voir attendre()). Un geste impossible (un élément
+     * introuvable, caché ou couvert) échoue en le nommant, et la page
+     * s'enregistre en image dans tests/Browser/Screenshots, que la CI garde,
+     * sous le nom du test courant (voir nomDeLaCapture()), que le message
+     * d'échec cite.
+     */
+    public function geste(Closure $geste, string $description = 'le geste'): self
+    {
+        try {
+            $geste();
+        } catch (ExpectationFailedException $exception) {
+            $capture = self::nomDeLaCapture($this->page()->url().$description);
+            $this->page()->screenshot(true, $capture);
+            Assert::fail(ucfirst($description).' a échoué sur '.$this->page()->url().' : '.$exception->getMessage()."\nCapture : tests/Browser/Screenshots/{$capture}.png");
+        }
+
+        return $this->attendre()->verifier();
+    }
+
+    /**
+     * Le nom de la capture d'un geste en échec : « echec- », le nom du test
+     * courant et de son jeu de données, réduits à des lettres sans accent,
+     * des chiffres et des tirets, puis l'empreinte de l'adresse et du geste,
+     * qui distingue deux échecs d'un même test (constat C75 des audits du
+     * 07/11/2026).
+     */
+    public static function nomDeLaCapture(string $adresseEtGeste): string
+    {
+        $test = TestSuite::getInstance()->test;
+        $nom = match (true) {
+            $test === null => 'hors-test',
+            method_exists($test, 'getPrintableTestCaseMethodName') => $test->getPrintableTestCaseMethodName().' '.$test->dataSetAsStringWithData(),
+            default => $test->nameWithDataSet(),
+        };
+        $nom = trim((string) preg_replace('/[^a-z0-9]+/', '-', strtolower(Str::ascii($nom))), '-');
+
+        return 'echec-'.substr($nom, 0, 120).'-'.substr(md5($adresseEtGeste), 0, 12);
+    }
+
+    /**
+     * Clique sur le bouton (ou le lien qui en a l'air) de ce libellé exact,
+     * dans la fenêtre ouverte s'il y en a une, sinon dans la page.
+     */
+    public function cliquerSur(string $libelle): self
+    {
+        return $this->cliquer($this->portee().' '.self::bouton($libelle));
+    }
+
+    /**
+     * Choisit ce client dans la loupe « Chercher un client » d'une facture
+     * ou d'un devis.
+     */
+    public function choisirLeClient(string $client): self
+    {
+        return $this->cliquer('[title="Chercher un client"]')
+            ->cliquer(self::FENETRE.' >> .fi-ta-text-item-label:text-is('.self::texte($client).')');
+    }
+
+    /**
+     * Clique sur le lien de ce libellé exact.
+     */
+    public function cliquerSurLeLien(string $libelle): self
+    {
+        return $this->cliquer($this->portee().' internal:role=link[name='.self::texte($libelle).'s]');
+    }
+
+    /**
+     * Remplit le champ de cette étiquette (sans l'astérisque d'un champ
+     * obligatoire), dans la fenêtre ouverte s'il y en a une, et dans
+     * l'élément de ce sélecteur s'il est donné (une ligne d'une liste de
+     * lignes, dont chaque champ a la même étiquette).
+     */
+    public function remplir(string $etiquette, string $valeur, ?string $dans = null): self
+    {
+        return $this->geste(fn () => $this->champDansLaPortee($etiquette, $dans)->fill($valeur), 'la saisie dans « '.$etiquette.' »');
+    }
+
+    /**
+     * Choisit cette option, par son libellé ou sa valeur, dans la liste
+     * déroulante native de cette étiquette, dans la fenêtre ouverte s'il y
+     * en a une.
+     */
+    public function choisir(string $etiquette, string $option): self
+    {
+        return $this->geste(fn () => $this->champDansLaPortee($etiquette, null)->selectOption($option), 'le choix dans « '.$etiquette.' »');
+    }
+
+    /**
+     * Donne ce fichier au champ de fichier de la fenêtre ouverte, ou de la
+     * page, comme une personne qui le choisit sur son poste, puis attend que
+     * son envoi soit fini. Playwright n'accepte qu'un chemin absolu et
+     * entièrement résolu, avec les séparateurs du système : le chemin donné
+     * l'est par realpath() (constat C6 de l'éditeur : sous Windows,
+     * storage_path() mêle « \\ » et « / »).
+     */
+    public function envoyerLeFichier(string $chemin): self
+    {
+        $resolu = realpath($chemin);
+        Assert::assertIsString($resolu, "Le fichier {$chemin} n'existe pas sur le poste.");
+
+        return $this->geste(fn () => $this->element($this->portee().' input[type=file]')->setInputFiles($resolu), 'le choix du fichier '.basename($resolu));
+    }
+
+    /**
+     * Remplit ce champ de la ligne de ce rang (à partir de 0) de cette liste
+     * de lignes du formulaire (un Repeater de Filament, par son nom : parts,
+     * lignes...), dans la fenêtre ouverte s'il y en a une : chaque ligne a
+     * les mêmes étiquettes.
+     */
+    public function remplirLaLigne(string $liste, int $rang, string $champ, string $valeur): self
+    {
+        return $this->geste(fn () => $this->champDeLaLigne($liste, $rang, $champ)->fill($valeur), "la saisie dans {$champ} de la ligne {$rang} de {$liste}");
+    }
+
+    /**
+     * Choisit cette option, par son libellé ou sa valeur, dans la liste
+     * déroulante native de ce champ de la ligne de ce rang de cette liste de
+     * lignes (voir remplirLaLigne()).
+     */
+    public function choisirDansLaLigne(string $liste, int $rang, string $champ, string $option): self
+    {
+        return $this->geste(fn () => $this->champDeLaLigne($liste, $rang, $champ)->selectOption($option), "le choix dans {$champ} de la ligne {$rang} de {$liste}");
+    }
+
+    /**
+     * Saisit ces valeurs d'un seul geste, sans attendre la page entre deux
+     * champs, comme une personne qui passe au champ suivant pendant que le
+     * serveur répond encore au précédent : chaque saisie désigne un champ de
+     * la fenêtre ouverte ou de la page par son étiquette, ou par [liste,
+     * rang, champ] dans une liste de lignes (voir remplirLaLigne()), et
+     * remplace ce qu'il contient par sa valeur, collée d'un coup ou, avec un
+     * délai, tapée touche par touche, ce délai en millisecondes entre deux
+     * touches. La page n'est attendue qu'à la fin.
+     *
+     * @param  list<array{0: string|array{0: string, 1: int, 2: string}, 1: string, 2?: int}>  $saisies
+     */
+    public function saisirSansAttendre(array $saisies): self
+    {
+        return $this->geste(function () use ($saisies): void {
+            foreach ($saisies as $saisie) {
+                [$champ, $valeur] = $saisie;
+                $element = is_array($champ) ? $this->champDeLaLigne(...$champ) : $this->champDansLaPortee($champ, null);
+
+                if (isset($saisie[2])) {
+                    $element->selectText();
+                    $element->type($valeur, ['delay' => $saisie[2]]);
+                } else {
+                    $element->fill($valeur);
+                }
+            }
+        }, 'la saisie de '.count($saisies).' champs sans attendre la page');
+    }
+
+    private function champDeLaLigne(string $liste, int $rang, string $champ): Locator
+    {
+        return $this->element($this->portee().' [id*='.self::texte('.'.$liste.'.').'][id$='.self::texte('.'.$champ).'] >> nth='.$rang);
+    }
+
+    /**
+     * Clique sur le bouton qui envoie le formulaire, de ce libellé, dans la
+     * fenêtre ouverte s'il y en a une : un autre bouton de la page peut
+     * porter le même nom (la création d'une option d'une liste).
+     */
+    public function soumettre(string $libelle): self
+    {
+        return $this->cliquer($this->portee().' button[type=submit]:has-text('.self::texte($libelle).')');
+    }
+
+    /**
+     * Le champ de cette étiquette dans la fenêtre ouverte ou la page, et
+     * dans l'élément de ce sélecteur s'il est donné.
+     */
+    private function champDansLaPortee(string $etiquette, ?string $dans): Locator
+    {
+        return $this->element($this->portee().' '.($dans === null ? '' : $dans.' >> ').self::champ($etiquette));
+    }
+
+    /**
+     * Choisit l'option qui contient ce texte dans la liste à recherche de
+     * cette étiquette (un Select de Filament qui n'est pas natif) : ouvre la
+     * liste, y tape le texte si elle a une recherche, touche par touche
+     * (Choices.js ne cherche qu'à la frappe, et une liste dont les options
+     * viennent du serveur ne les demande qu'alors), puis clique sur
+     * l'option.
+     */
+    public function choisirDansLaListe(string $etiquette, string $option): self
+    {
+        $id = $this->page()->evaluate(<<<'JS'
+            (etiquette) => {
+                const etiquettes = [...document.querySelectorAll('label[for]')];
+                const trouvee = etiquettes.find((candidate) => candidate.innerText.replace('*', '').trim() === etiquette && candidate.offsetParent !== null);
+
+                return trouvee ? trouvee.getAttribute('for') : null;
+            }
+        JS, $etiquette);
+        Assert::assertIsString($id, "Aucun champ visible n'a l'étiquette « {$etiquette} ».");
+        $liste = '.choices:has([id='.self::texte($id).'])';
+        $this->cliquer($liste.' .choices__inner');
+        $recherche = $this->element($liste.' input.choices__input--cloned');
+
+        if ($recherche->count() > 0 && $recherche->isVisible()) {
+            $this->geste(fn () => $recherche->type($option), 'la recherche de « '.$option.' » dans « '.$etiquette.' »');
+        }
+
+        return $this->geste(fn () => $this->element($liste.' .choices__list--dropdown .choices__item--choice:has-text('.self::texte($option).')')->first()->click());
+    }
+
+    /**
+     * Ce texte se lit dans la page, au plus tard au bout du délai d'un
+     * geste : le résultat visible d'un geste (un avis, un statut changé)
+     * qu'un test attend avant de lire la base.
+     */
+    public function voir(string $texte): self
+    {
+        $fin = microtime(true) + self::delai();
+
+        while (true) {
+            try {
+                $this->onglet->assertSee($texte);
+
+                return $this;
+            } catch (ExpectationFailedException $absent) {
+                if (microtime(true) > $fin) {
+                    throw $absent;
+                }
+            }
+
+            Execution::instance()->wait(0.05);
+        }
+    }
+
+    /**
+     * Attend que la page affichée soit celle d'une adresse dont le chemin
+     * répond à cette expression régulière (une fiche ouverte après sa
+     * création), puis qu'elle soit au repos, et la vérifie.
+     */
+    public function attendreLaPage(string $motif): self
+    {
+        return $this->attendreQue('new RegExp('.self::texte($motif).').test(location.pathname)', 'aucune page ne répond à '.$motif)
+            ->attendre()
+            ->verifier();
+    }
+
+    /**
+     * Ce texte ne se lit pas dans la page.
+     */
+    public function nePasVoir(string $texte): self
+    {
+        $this->onglet->assertDontSee($texte);
+
+        return $this;
+    }
+
+    /**
+     * Une fenêtre de Filament est ouverte au premier plan.
+     */
+    public function fenetreOuverte(): bool
+    {
+        return $this->page()->evaluate('() => document.querySelector('.self::texte(self::FENETRE).') !== null') === true;
+    }
+
+    /**
+     * Ferme la fenêtre ouverte sans la valider, par son bouton « Annuler »
+     * s'il existe, sinon par sa croix, et attend qu'elle soit fermée.
+     */
+    public function fermerLaFenetre(): self
+    {
+        $annuler = $this->page()->locator(self::FENETRE.' >> '.self::bouton('Annuler'));
+
+        return $this->geste(fn () => $annuler->count() > 0
+            ? $annuler->last()->click()
+            : $this->page()->locator(self::FENETRE.' .fi-modal-close-btn')->last()->click());
+    }
+
+    /**
+     * Ferme, par sa croix, chaque avis affiché : un avis qui reste jusqu'à
+     * ce qu'on le ferme (un accès redonné, une pièce qui ne se télécharge
+     * pas) couvre le menu du compte.
+     */
+    public function fermerLesAvis(): self
+    {
+        return $this->geste(fn () => $this->page()->evaluate('() => document.querySelectorAll(".fi-no-notification-close-btn").forEach((bouton) => bouton.click())'), 'la fermeture des avis');
+    }
+
+    /**
+     * Se déconnecte par le menu du compte du panneau affiché, et attend la
+     * page de connexion.
+     */
+    public function seDeconnecter(): self
+    {
+        $this->cliquer('.fi-user-menu .fi-dropdown-trigger');
+
+        return $this->cliquer('.fi-user-menu >> '.self::bouton('Déconnexion'));
+    }
+
+    /**
+     * La portée d'un geste : la fenêtre ouverte au premier plan s'il y en
+     * a une, sinon la page entière.
+     */
+    private function portee(): string
+    {
+        return $this->fenetreOuverte() ? self::FENETRE.' >>' : 'body >>';
+    }
+
+    /**
+     * Le sélecteur de Playwright d'un bouton de ce libellé exact.
+     */
+    public static function bouton(string $libelle): string
+    {
+        return 'internal:role=button[name='.self::texte($libelle).'s]';
+    }
+
+    /**
+     * Le sélecteur de Playwright d'un champ de cette étiquette ; celle d'un
+     * champ obligatoire de Filament se termine par un astérisque.
+     */
+    public static function champ(string $etiquette): string
+    {
+        return 'internal:label=/^\s*'.preg_quote($etiquette, '/').'\s*\*?\s*$/';
+    }
+
+    /**
+     * Ce texte entre guillemets, échappé pour un sélecteur de Playwright ou
+     * une expression JavaScript.
+     */
+    public static function texte(string $texte): string
+    {
+        return json_encode($texte, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+}

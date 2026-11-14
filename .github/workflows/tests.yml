@@ -1,0 +1,420 @@
+name: Tests
+
+on:
+  push:
+    branches:
+      - main
+      - 'claude/**'
+  pull_request:
+  schedule:
+    - cron: '0 0 * * *'
+  # Lancement à la main : seul moyen de lancer la couverture avec la
+  # mutation jusqu'à l'étape 15 (D63).
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  style:
+    runs-on: ubuntu-latest
+
+    name: Pint
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
+        with:
+          php-version: 8.3
+          extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, pdo_pgsql, sockets, gd, :pdo_sqlite, :sqlite3
+          coverage: none
+
+      - name: Install Composer dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Check code style
+        run: vendor/bin/pint --test
+
+  # Analyse statique (Larastan) au niveau de phpstan.neon, sans fichier de
+  # référence ; puis aucun seuil de tests/Qualite/seuils.json (couverture et
+  # score de mutation de chaque partie, réglage de l'analyse statique) ne
+  # baisse par rapport au commit précédent de la branche, ou à la base de
+  # la demande de fusion, et phpstan.neon règle l'analyse exactement comme
+  # seuils.json l'enregistre, sans rien relâcher ni cacher (paramètres lus
+  # par phpstan dump-parameters, voir qualite.php seuils).
+  analyse:
+    runs-on: ubuntu-latest
+    # Décision de l'éditeur du 13/11/2026 : Larastan et les seuils passent à
+    # chaque envoi et à chaque demande de fusion. Pour un envoi, la base des
+    # seuils est le commit précédent de la branche (github.event.before) ;
+    # pour une nouvelle branche, où il vaut des zéros, seuils.json se compare
+    # à lui-même.
+
+    name: Analyse statique et seuils
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
+        with:
+          php-version: 8.3
+          extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, pdo_pgsql, sockets, gd, :pdo_sqlite, :sqlite3
+          coverage: none
+
+      - name: Install Composer dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Copy environment file
+        run: cp .env.example .env
+
+      - name: Larastan
+        run: vendor/bin/phpstan analyse --no-progress --memory-limit=3G --error-format=github
+
+      - name: Seuils qui ne baissent pas
+        env:
+          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if [ -n "$BASE" ] && git cat-file -e "$BASE:tests/Qualite/seuils.json" 2>/dev/null; then
+            git show "$BASE:tests/Qualite/seuils.json" > "$RUNNER_TEMP/seuils-precedents.json"
+            php tests/Qualite/qualite.php seuils "$RUNNER_TEMP/seuils-precedents.json"
+          else
+            php tests/Qualite/qualite.php seuils tests/Qualite/seuils.json
+          fi
+
+  # Analyse des flux de données (Psalm et son extension Laravel, installés
+  # à part dans tools/psalm, et les saisies des écrans Livewire et Filament,
+  # tests/Qualite/Psalm) : aucun chemin d'une donnée venue de l'extérieur
+  # jusqu'à une requête SQL, une page, un fichier, une commande, une
+  # redirection, un autre site ou un e-mail sans contrôle ; puis le témoin,
+  # dont l'analyse doit voir exactement les chemins qu'il annonce.
+  flux:
+    runs-on: ubuntu-latest
+    # Décision de l'éditeur du 13/11/2026 : l'analyse des flux de Psalm et
+    # son témoin passent à chaque envoi et à chaque demande de fusion.
+
+    name: Analyse des flux de données
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
+        with:
+          php-version: 8.3
+          extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, pdo_pgsql, sockets, gd, :pdo_sqlite, :sqlite3
+          coverage: none
+
+      - name: Install Composer dependencies
+        run: |
+          composer install --prefer-dist --no-interaction --no-progress
+          composer install --working-dir=tools/psalm --prefer-dist --no-interaction --no-progress
+
+      - name: Copy environment file
+        run: cp .env.example .env
+
+      - name: Generate app key
+        run: php artisan key:generate
+
+      - name: Psalm
+        run: |
+          mkdir -p storage/qualite
+          php -d memory_limit=6G tools/psalm/vendor/bin/psalm --taint-analysis --no-progress --report=storage/qualite/psalm.json || true
+          php tests/Qualite/qualite.php flux storage/qualite/psalm.json
+
+      - name: Témoin de l'analyse des flux
+        run: |
+          php -d memory_limit=2G tools/psalm/vendor/bin/psalm --config=psalm-temoin.xml --taint-analysis --no-progress --report=storage/qualite/psalm-temoin.json || true
+          php tests/Qualite/qualite.php flux-temoin storage/qualite/psalm-temoin.json
+
+  # Sécurité des dépendances : une faille connue d'un paquet du dépôt fait
+  # échouer la CI ; elle se corrige par la mise à jour du paquet.
+  audit:
+    runs-on: ubuntu-latest
+
+    name: Audit des dépendances
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
+        with:
+          php-version: 8.3
+          extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, pdo_pgsql, sockets, gd, :pdo_sqlite, :sqlite3
+          coverage: none
+
+      - name: Setup Node
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 22
+
+      - name: Composer audit
+        run: |
+          composer audit --locked --no-interaction
+          composer audit --locked --no-interaction --working-dir=tools/psalm
+
+      - name: npm audit
+        run: npm audit --package-lock-only
+
+  # Couverture du code (PCOV) des suites Unit et Feature, sur PostgreSQL
+  # (les tests en navigateur passent dans la tâche « tests », sans
+  # couverture : Infection ne retrouve pas leurs noms dans le rapport
+  # JUnit) : chaque partie tient son seuil, et chaque ligne de app/ ajoutée
+  # ou modifiée par l'envoi est exécutée par un test. Puis tests de
+  # mutation (Infection) des fichiers entiers des parties sensibles (les
+  # calculs, les droits et l'isolation ; la caisse sécurisée à l'étape 3)
+  # ajoutés ou modifiés par l'envoi (décision de l'éditeur du 01/11/2026,
+  # point 2), chaque partie à son score minimal : un test retiré qui
+  # arrêtait les mutants d'une autre méthode d'un fichier changé se voit ;
+  # chaque processus d'Infection a sa base (TEST_TOKEN,
+  # LARAVEL_PARALLEL_TESTING). Rapports gardés en artefact.
+  couverture:
+    runs-on: ubuntu-latest
+    # Décision de l'éditeur du 11/11/2026 (D63, méthode rapide) : cette tâche
+    # ne se lance plus à chaque envoi, seulement à la main (workflow_dispatch),
+    # jusqu'à l'étape 15 de la feuille de route, où elle repasse sur tout le
+    # code.
+    if: github.event_name == 'workflow_dispatch'
+
+    name: Couverture et mutation
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_INITDB_ARGS: --encoding=UTF8 --locale=C.UTF-8
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DB_CONNECTION: pgsql
+      DB_HOST: 127.0.0.1
+      DB_PORT: 5432
+      DB_DATABASE: piliqi_test
+      DB_USERNAME: piliqi
+      DB_PASSWORD: piliqi
+      # Le commit d'avant l'envoi (push, ou nouveaux commits d'une demande
+      # de fusion) : seules ses lignes changées se contrôlent ; vide pour une
+      # course planifiée ou l'ouverture d'une demande de fusion, dont la
+      # base contiendrait tout le logiciel.
+      BASE: ${{ github.event.before }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Create test role and database
+        run: |
+          docker exec ${{ job.services.postgres.id }} psql -v ON_ERROR_STOP=1 -U postgres -c "CREATE ROLE piliqi LOGIN CREATEDB PASSWORD 'piliqi'"
+          docker exec ${{ job.services.postgres.id }} psql -v ON_ERROR_STOP=1 -U postgres -c "CREATE DATABASE piliqi_test OWNER piliqi"
+
+      - name: Install qpdf
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends qpdf
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
+        with:
+          php-version: 8.3
+          extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, pdo_pgsql, sockets, gd, :pdo_sqlite, :sqlite3
+          coverage: pcov
+
+      - name: Install Composer dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Copy environment file
+        run: cp .env.example .env
+
+      - name: Generate app key
+        run: php artisan key:generate
+
+      # Par paratest, et non par php artisan test : le rapport JUnit de
+      # PHPUnit donne à Infection le fichier de chaque test, celui de Pest
+      # non (Infection ne lancerait alors aucun test et compterait chaque
+      # mutant comme tué).
+      - name: Tests avec couverture
+        env:
+          LARAVEL_PARALLEL_TESTING: 1
+        run: vendor/bin/paratest --processes=$(nproc) --testsuite=Unit,Feature --cache-directory=storage/framework/cache/phpunit --coverage-clover=storage/qualite/clover.xml --coverage-xml=storage/qualite/infection/coverage-xml --log-junit=storage/qualite/infection/junit.xml
+
+      - name: Seuils de couverture par partie
+        run: php tests/Qualite/qualite.php couverture storage/qualite/clover.xml storage/qualite/couverture.md
+
+      - name: Nouveau code couvert
+        if: env.BASE != '' && env.BASE != '0000000000000000000000000000000000000000'
+        run: php tests/Qualite/qualite.php nouveau-code storage/qualite/clover.xml "$BASE"
+
+      # À l'envoi seulement : les commits d'une demande de fusion sont ceux
+      # que la course de leur envoi a déjà testés. Infection reçoit les
+      # chemins des fichiers sensibles changés, et non un filtre de git
+      # (--git-diff-filter, --git-diff-lines), avec lequel il ne muterait que
+      # les lignes changées de chaque fichier. Les chemins viennent après
+      # « -- » : --ignore-msi-with-no-mutations, qui accepte une valeur,
+      # prendrait sinon le premier pour la sienne, et Infection ne muterait
+      # pas ce fichier.
+      - name: Tests de mutation des parties sensibles changées
+        if: github.event_name == 'push' && env.BASE != '' && env.BASE != '0000000000000000000000000000000000000000'
+        env:
+          LARAVEL_PARALLEL_TESTING: 1
+        run: |
+          fichiers=$(php tests/Qualite/qualite.php sensibles-changes "$BASE")
+          if [ -n "$fichiers" ]; then
+            vendor/bin/infection --threads=max --only-covering-test-cases --coverage="$PWD/storage/qualite/infection" --skip-initial-tests --no-progress --ignore-msi-with-no-mutations -- $fichiers
+            if [ -f storage/qualite/infection.json ]; then
+              php tests/Qualite/qualite.php mutation storage/qualite/infection.json storage/qualite/mutation.md
+            fi
+          fi
+
+      - name: Garder les rapports
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: qualite
+          path: |
+            storage/qualite/clover.xml
+            storage/qualite/couverture.md
+            storage/qualite/mutation.md
+            storage/qualite/infection.json
+            storage/qualite/infection.log
+          if-no-files-found: ignore
+
+  # La suite complète, tests en navigateur compris, sur PostgreSQL, le seul
+  # moteur de PILIQI (décision de l'éditeur du 08/11/2026), dans ses deux
+  # versions de production (17 et 18) et pour chaque version de PHP : base
+  # en UTF8 et collation déterministe C.UTF-8 (POSTGRES_INITDB_ARGS), comme
+  # en production. Les extensions SQLite de PHP sont désactivées : rien ne
+  # s'appuie sur elles. Le compte des tests n'est pas superutilisateur : il
+  # crée seulement les bases des processus parallèles (CREATEDB), puis
+  # leurs tables et leurs fonctions, comme le propriétaire de la base de
+  # production.
+  tests:
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: true
+      matrix:
+        php: [8.3, 8.4, 8.5]
+        postgres: [17, 18]
+
+    name: PHP ${{ matrix.php }}, PostgreSQL ${{ matrix.postgres }}
+
+    services:
+      postgres:
+        image: postgres:${{ matrix.postgres }}
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_INITDB_ARGS: --encoding=UTF8 --locale=C.UTF-8
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DB_CONNECTION: pgsql
+      DB_HOST: 127.0.0.1
+      DB_PORT: 5432
+      DB_DATABASE: piliqi_test
+      DB_USERNAME: piliqi
+      DB_PASSWORD: piliqi
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Create test role and database
+        run: |
+          docker exec ${{ job.services.postgres.id }} psql -v ON_ERROR_STOP=1 -U postgres -c "CREATE ROLE piliqi LOGIN CREATEDB PASSWORD 'piliqi'"
+          docker exec ${{ job.services.postgres.id }} psql -v ON_ERROR_STOP=1 -U postgres -c "CREATE DATABASE piliqi_test OWNER piliqi"
+
+      # qpdf (licence Apache 2.0) lit en entier chaque PDF reçu (voir
+      # AnalyseurDePdf) : les tests des pièces déposées l'appellent.
+      - name: Install qpdf
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends qpdf
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, pdo_pgsql, sockets, gd, :pdo_sqlite, :sqlite3
+          coverage: none
+
+      - name: Install Composer dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Copy environment file
+        run: cp .env.example .env
+
+      - name: Generate app key
+        run: php artisan key:generate
+
+      - name: Setup Node
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 22
+          cache: npm
+
+      # Playwright pilote le Chromium des tests en navigateur (tests/Browser,
+      # Pest 4 et son module browser) : outil de test seulement, jamais livré.
+      - name: Install Playwright and its browser
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      # Les rapports JUnit (les nombres) et TeamCity (la raison de chaque
+      # saut, que le rapport JUnit n'écrit pas) de la suite donnent son
+      # résumé (tests réussis, échoués et sautés, chaque raison de saut) à
+      # la tâche, qui échoue si un test est sauté (voir
+      # tests/Qualite/resume-des-tests.php), et se gardent en artefact.
+      - name: Execute tests
+        run: php artisan test --parallel --log-junit storage/logs/junit.xml --log-teamcity storage/logs/teamcity.txt
+
+      - name: Résumé des tests
+        if: always()
+        run: php tests/Qualite/resume-des-tests.php storage/logs/junit.xml storage/logs/teamcity.txt
+
+      - name: Garder le rapport des tests
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: junit-php-${{ matrix.php }}-postgresql-${{ matrix.postgres }}
+          path: |
+            storage/logs/junit.xml
+            storage/logs/teamcity.txt
+          if-no-files-found: ignore
+
+      - name: Upload browser screenshots
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: captures-php-${{ matrix.php }}-postgresql-${{ matrix.postgres }}
+          path: tests/Browser/Screenshots
+          if-no-files-found: ignore

@@ -1,0 +1,97 @@
+fichier : Z-LYON1-2026-000001.pdf
+--- page 1 (0.000 0.000 595.280 841.890)
+Ma Boutique
+12 rue Mercière
+69002 Lyon
+FR
+SIRET : 10000000900017
+Tél. 04 72 00 00 00 · contact@ma-boutique.example
+Clôture du jour (ticket Z)
+Z-LYON1-2026-000001
+Journée du 09/10/2026
+Clôturée le 09/10/2026 à 19:00
+Déclenchée par Responsable de test
+VENTES ET AVOIRS
+NOMBRE
+TOTAL HT
+TVA
+TOTAL TTC
+Ventes aux particuliers (tickets)
+1
+26,16 €
+4,34 €
+30,50 €
+dont TVA à 20 %
+20,00 €
+4,00 €
+24,00 €
+dont TVA à 5,5 %
+6,16 €
+0,34 €
+6,50 €
+Avoirs sur des tickets
+1
+-10,00 €
+-2,00 €
+-12,00 €
+dont TVA à 20 %
+-10,00 €
+-2,00 €
+-12,00 €
+Net des ventes aux particuliers (base de l'e-reporting)
+16,16 €
+2,34 €
+18,50 €
+Factures aux professionnels (pour information)
+1
+113,75 €
+22,75 €
+136,50 €
+dont TVA à 20 %
+113,75 €
+22,75 €
+136,50 €
+Avoirs aux professionnels (pour information)
+1
+-33,75 €
+-6,75 €
+-40,50 €
+dont TVA à 20 %
+-33,75 €
+-6,75 €
+-40,50 €
+ENCAISSEMENTS PAR MODE
+PAIEMENTS
+CONTRE-PASSATIONS
+MONTANT ENCAISSÉ
+Espèces
+1
+0
+10,50 €
+Carte bancaire
+1
+0
+20,00 €
+Chèque
+0
+0
+0,00 €
+Virement
+1
+1
+0,00 €
+Prélèvement
+0
+0
+0,00 €
+Total encaissé
+30,50 €
+Crédit d'avoir utilisé (n'entre pas dans les encaissements)
+40,50 €
+Grand total perpétuel réel
+114,50 €
+Grand total perpétuel absolu
+219,50 €
+Les Délices de Jeanne SAS au capital de 10 000,00 € · Siège social : 1 rue de la République, 69002 Lyon · SIREN : 100000009 · RCS Lyon · TVA intracommunautaire :
+FR88100000009
+Page 1 sur 1

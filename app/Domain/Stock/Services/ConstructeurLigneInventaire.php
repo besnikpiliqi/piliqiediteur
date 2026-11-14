@@ -1,0 +1,286 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Domain\Stock\Services;
+
+use App\Domain\Achats\Services\ConstructeurLigneAchat;
+use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Facturation\Services\CalculateurLigne;
+use App\Domain\Facturation\Services\QuantiteEntiere;
+use App\Domain\Facturation\Services\SaisieDecimale;
+use App\Domain\Stock\Models\InventaireOuverture;
+use App\Domain\Stock\Models\LigneInventaireOuverture;
+use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\ValeurRequise;
+use App\Domain\Tenancy\Support\ValeurSimple;
+use App\Domain\Tenancy\Support\ValeursLues;
+use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Arr;
+use InvalidArgumentException;
+use LogicException;
+
+/**
+ * Enregistre les lignes d'un inventaire d'ouverture brouillon et sa
+ * valeur, à la création comme à la modification (voir
+ * CreerInventaireOuvertureAction et ModifierInventaireOuvertureAction).
+ *
+ * Chaque ligne fait entrer en stock un produit du magasin jamais reçu
+ * (voir Produit::scopeJamaisRecus()), qui n'est ni archivé ni déjà sur une
+ * autre ligne, ou un nouveau produit, dont la ligne garde seulement la
+ * fiche jusqu'à la validation, qui le crée (voir
+ * ValiderInventaireOuvertureAction) : référence (saisie ou générée à la
+ * validation), nom, prix de vente TTC et taux de TVA obligatoires,
+ * code-barres, taille, couleur, suivi du stock et seuil d'alerte comme sur
+ * une facture d'achat (voir ConstructeurLigneAchat::ATTRIBUTS_DU_PRODUIT).
+ * Sa référence n'est ni celle d'un produit du magasin, archivés compris,
+ * ni celle d'un autre nouveau produit de l'inventaire, sans tenir compte
+ * de la casse.
+ *
+ * Chaque ligne porte une quantité entière d'au moins un article et un coût
+ * unitaire HT tel que saisi, six décimales au plus, jamais arrondi ni
+ * négatif (décision de l'éditeur du 02/11/2026, T2, voir
+ * SaisieDecimale::enMillioniemes()). Elle retient si son produit suit
+ * son stock : seule une telle ligne fait entrer son stock, et sa valeur est
+ * quantité x coût, arrondie une fois au centime ; un produit qui ne suit
+ * pas son stock ne reçoit que son coût de départ, et sa ligne n'a aucune
+ * valeur de stock (voir StockLedgerService::entrerALInventaireDOuverture()). La
+ * valeur de l'inventaire est la somme de ses lignes : la valeur du stock
+ * qu'il fait entrer. Dans un brouillon, le suivi du stock se lit sur la
+ * fiche du produit à chaque enregistrement ; la validation le relit, sous
+ * le verrou du produit, et fixe les valeurs (voir valoriser()).
+ */
+class ConstructeurLigneInventaire
+{
+    /**
+     * La plus grande quantité qu'une ligne enregistre : celle que la
+     * colonne entière de PostgreSQL contient.
+     */
+    public const QUANTITE_MAXIMUM = 2_147_483_647;
+
+    /**
+     * La plus grande valeur, en centimes, qu'une ligne et l'inventaire
+     * enregistrent : celle de leur colonne decimal(14, 2).
+     */
+    private const VALEUR_MAXIMUM = 99_999_999_999_999;
+
+    public function __construct(private readonly CalculateurLigne $calculateur) {}
+
+    /**
+     * Enregistre les lignes de l'inventaire, dans leur ordre, à la place de
+     * celles qu'il avait, puis sa valeur.
+     *
+     * @param  array<array-key, array<string, mixed>>  $lignes  chaque ligne telle que l'écran la saisit (produit_id ou produit, quantite, cout_unitaire_ht), chaque valeur lue par sa vérification
+     *
+     * @throws InvalidArgumentException
+     * @throws LogicException
+     */
+    public function enregistrer(InventaireOuverture $inventaire, array $lignes): void
+    {
+        if ($lignes === []) {
+            throw new InvalidArgumentException('Un inventaire d\'ouverture doit contenir au moins une ligne.');
+        }
+
+        $inventaire->lignes()->delete();
+
+        $valeurDeLInventaire = 0;
+        $produitsInventories = [];
+        $referencesDesNouveauxProduits = [];
+
+        foreach (array_values($lignes) as $ordre => $donnees) {
+            $quantite = QuantiteEntiere::depuisSaisie($donnees['quantite'] ?? null);
+            $cout = $this->coutUnitaire($donnees['cout_unitaire_ht'] ?? null);
+
+            if (filled($donnees['produit_id'] ?? null)) {
+                $produit = $this->produitJamaisRecu(ValeurSimple::enTexte($donnees['produit_id']));
+
+                if (in_array($produit->getKey(), $produitsInventories, true)) {
+                    throw new LogicException("Le produit « {$produit->nom} » figure déjà sur une autre ligne de cet inventaire d'ouverture.");
+                }
+
+                $produitsInventories[] = $produit->getKey();
+                $fiche = null;
+            } else {
+                $produit = $this->nouveauProduit(ValeursLues::champs($donnees['produit'] ?? []));
+
+                if (filled($produit->reference)) {
+                    $cle = Produit::normaliserReference($produit->reference);
+
+                    if (in_array($cle, $referencesDesNouveauxProduits, true)) {
+                        throw new InvalidArgumentException("Deux nouveaux produits de cet inventaire d'ouverture ont la même référence « {$produit->reference} ».");
+                    }
+
+                    $referencesDesNouveauxProduits[] = $cle;
+                }
+
+                $fiche = array_filter($produit->only(ConstructeurLigneAchat::ATTRIBUTS_DU_PRODUIT), fn (mixed $valeur): bool => filled($valeur));
+            }
+
+            $suiviStock = $produit->suivi_stock;
+            $valeur = $this->valeurDuStock($quantite, $cout, $suiviStock);
+
+            $inventaire->lignes()->create([
+                'produit_id' => $produit->exists ? $produit->getKey() : null,
+                'nouveau_produit' => $fiche,
+                'description' => $produit->nom,
+                'reference' => $produit->reference,
+                'quantite' => $quantite,
+                'cout_unitaire_ht' => $this->calculateur->prixUnitaireExactEnDecimal($cout),
+                'suivi_stock' => $suiviStock,
+                'valeur_ht' => $this->calculateur->enDecimal($valeur),
+                'ordre' => $ordre,
+            ]);
+
+            $valeurDeLInventaire += $valeur;
+        }
+
+        $this->enregistrerLaValeur($inventaire, $valeurDeLInventaire);
+    }
+
+    /**
+     * À la validation, une fois les produits de ses lignes verrouillés ou
+     * créés (voir ValiderInventaireOuvertureAction), avant que l'inventaire
+     * ne passe validé : chaque ligne reprend le suivi du stock de son
+     * produit tel qu'il est alors, celui avec lequel son stock entre, et la
+     * valeur qui en découle ; l'inventaire, la somme de ses lignes. Ce que
+     * dit l'inventaire validé est ainsi ce qui entre en stock.
+     *
+     * @param  Collection<int, LigneInventaireOuverture>  $lignes  ses lignes, chacune avec son produit
+     *
+     * @throws InvalidArgumentException
+     */
+    public function valoriser(InventaireOuverture $inventaire, Collection $lignes): void
+    {
+        $valeurDeLInventaire = 0;
+
+        foreach ($lignes as $ligne) {
+            $suiviStock = ValeurRequise::de($ligne->produit, 'le produit de la ligne d\'inventaire')->suivi_stock;
+            $valeur = $this->valeurDuStock($ligne->quantite, SaisieDecimale::enMillioniemes($ligne->cout_unitaire_ht), $suiviStock);
+
+            $ligne->update(['suivi_stock' => $suiviStock, 'valeur_ht' => $this->calculateur->enDecimal($valeur)]);
+
+            $valeurDeLInventaire += $valeur;
+        }
+
+        $this->enregistrerLaValeur($inventaire, $valeurDeLInventaire);
+    }
+
+    /**
+     * Le produit d'une ligne, jamais reçu (voir Produit::aDejaEteRecu()) :
+     * le magasin actif seulement (voir MagasinScope), et pas archivé.
+     * Revérifié à la validation, sous le verrou des produits (voir
+     * ValiderInventaireOuvertureAction).
+     *
+     * @throws InvalidArgumentException
+     * @throws LogicException
+     */
+    public function produitJamaisRecu(int|string $produitId): Produit
+    {
+        $identifiant = filter_var($produitId, FILTER_VALIDATE_INT);
+        $produit = $identifiant === false ? null : Produit::withTrashed()->whereKey($identifiant)->first();
+
+        if ($produit === null) {
+            throw new InvalidArgumentException('Ce produit est introuvable dans le magasin.');
+        }
+
+        if ($produit->trashed()) {
+            throw new LogicException("Le produit « {$produit->nom} » a été archivé : restaurez-le depuis le catalogue, ou retirez-le de l'inventaire d'ouverture.");
+        }
+
+        if ($produit->aDejaEteRecu()) {
+            throw new LogicException("Le produit « {$produit->nom} » a déjà été reçu : seul un produit jamais reçu entre dans un inventaire d'ouverture.");
+        }
+
+        return $produit;
+    }
+
+    /**
+     * La fiche d'un nouveau produit, pas encore enregistrée : nom, prix de
+     * vente TTC et taux de TVA obligatoires, un prix jamais négatif, un
+     * taux entre 0 et 100 %, une référence libre dans le magasin.
+     *
+     * @param  array<string, mixed>  $attributs
+     *
+     * @throws InvalidArgumentException
+     */
+    private function nouveauProduit(array $attributs): Produit
+    {
+        $attributs = array_filter(ValeursLues::champs(Arr::only($attributs, ConstructeurLigneAchat::ATTRIBUTS_DU_PRODUIT)), fn (mixed $valeur): bool => filled($valeur));
+
+        if (! isset($attributs['nom'])) {
+            throw new InvalidArgumentException('Chaque nouveau produit d\'un inventaire d\'ouverture doit avoir un nom.');
+        }
+
+        if (! isset($attributs['prix_vente_ttc'])) {
+            throw new InvalidArgumentException('Indiquez le prix de vente TTC du nouveau produit « '.ValeurSimple::enTexte($attributs['nom']).' ».');
+        }
+
+        if (SaisieDecimale::enCentiemes($attributs['prix_vente_ttc']) < 0) {
+            throw new InvalidArgumentException('Le prix de vente d\'un produit ne peut pas être négatif.');
+        }
+
+        $taux = SaisieDecimale::enCentiemes($attributs['taux_tva'] ?? app(TenantContext::class)->magasin()->tauxTvaParDefaut());
+
+        if ($taux < 0 || $taux > 10000) {
+            throw new InvalidArgumentException('Le taux de TVA doit être compris entre 0 et 100 %.');
+        }
+
+        $produit = new Produit([...$attributs, 'taux_tva' => $this->calculateur->enDecimal($taux)]);
+        $produit->verifierQueSaReferenceEstLibre();
+
+        return $produit;
+    }
+
+    /**
+     * Le coût unitaire HT saisi, en millionièmes d'euro, tel que saisi, six
+     * décimales au plus ; la ligne refuse un coût négatif à son
+     * enregistrement (voir LigneInventaireOuverture).
+     *
+     * @throws InvalidArgumentException
+     */
+    private function coutUnitaire(mixed $saisie): int
+    {
+        if (blank($saisie)) {
+            throw new InvalidArgumentException('Indiquez le coût unitaire HT de chaque ligne de l\'inventaire d\'ouverture.');
+        }
+
+        return SaisieDecimale::enMillioniemes($saisie);
+    }
+
+    /**
+     * La valeur du stock qu'une ligne fait entrer, en centimes : quantité x
+     * coût unitaire (en millionièmes d'euro), arrondie une fois au centime le
+     * plus proche, un demi-centime au centime supérieur, dans les limites des
+     * colonnes -- 1 000 x 0,1234 € valent 123,40 € ; zéro pour un produit qui
+     * ne suit pas son stock, dont rien n'entre en stock. Le produit passe par
+     * array_product(), qui calcule comme « * » et rend un flottant quand il
+     * déborde d'un entier.
+     *
+     * @throws InvalidArgumentException
+     */
+    private function valeurDuStock(int $quantite, int $cout, bool $suiviStock): int
+    {
+        $millioniemes = array_product([$quantite, $cout]);
+        $valeur = is_int($millioniemes) ? intdiv($millioniemes, 10000) + (2 * ($millioniemes % 10000) >= 10000 ? 1 : 0) : null;
+
+        if ($quantite > self::QUANTITE_MAXIMUM || $valeur === null || $valeur > self::VALEUR_MAXIMUM) {
+            throw new InvalidArgumentException('Cette ligne dépasse ce que le logiciel accepte : réduisez sa quantité ou son coût.');
+        }
+
+        return $suiviStock ? $valeur : 0;
+    }
+
+    /**
+     * La valeur de l'inventaire, en centimes, dans la limite de sa colonne.
+     *
+     * @throws InvalidArgumentException
+     */
+    private function enregistrerLaValeur(InventaireOuverture $inventaire, int $valeur): void
+    {
+        if ($valeur > self::VALEUR_MAXIMUM) {
+            throw new InvalidArgumentException('Cet inventaire d\'ouverture dépasse ce que le logiciel accepte : répartissez son stock sur plusieurs inventaires.');
+        }
+
+        $inventaire->forceFill(['valeur_ht' => $this->calculateur->enDecimal($valeur)])->save();
+    }
+}

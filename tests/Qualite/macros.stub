@@ -1,0 +1,48 @@
+<?php
+
+/*
+ * Les macros que AppServiceProvider ajoute aux composants de Filament,
+ * déclarées pour l'analyse statique (phpstan.neon) : Filament les range
+ * dans son propre trait Macroable, que Larastan ne lit pas. Chaque méthode
+ * déclarée ici est une macro réellement enregistrée, avec la même
+ * signature (voir tests/Feature/Qualite/MacrosDeclareesTest). Dans la
+ * fonction d'une macro, $this est le composant qui l'appelle.
+ */
+
+namespace Filament\Support\Concerns;
+
+trait Macroable
+{
+    /**
+     * @param-closure-this static  $macro
+     */
+    public static function macro(string $name, callable $macro): void;
+}
+
+namespace Filament\Tables\Columns;
+
+/**
+ * @method $this rechercheSansAccents()
+ * @method $this jour(string $format = 'd/m/Y')
+ */
+class TextColumn {}
+
+namespace Filament\Infolists\Components;
+
+/**
+ * @method $this jour(string $format = 'd/m/Y')
+ */
+class TextEntry {}
+
+namespace Filament\Forms\Components;
+
+/**
+ * @method $this adresseDeConnexion()
+ * @method $this saisieEnDirect()
+ */
+class TextInput {}
+
+/**
+ * @method $this relationProposable(string $relation, string $attributAffiche, ?array<int, string> $colonnesDeRecherche = null)
+ */
+class Select {}

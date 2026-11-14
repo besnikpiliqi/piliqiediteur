@@ -1,0 +1,747 @@
+<?php
+
+namespace App\Domain\Tenancy\Models;
+
+use App\Domain\Cabinets\Models\Cabinet;
+use App\Domain\CaisseSecurisee\Concerns\JournaliseSesParametresDeConformite;
+use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
+use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
+use App\Domain\Calendrier\Calendrier;
+use App\Domain\Calendrier\Casts\Instant;
+use App\Domain\Facturation\Casts\NumeroTvaNormalise;
+use App\Domain\Tenancy\Concerns\RefuseUneCleIllisible;
+use App\Domain\Tenancy\Enums\ActionAuditee;
+use App\Domain\Tenancy\Enums\FormeJuridique;
+use App\Domain\Tenancy\Enums\MotifCloture;
+use App\Domain\Tenancy\Enums\PreuveDeValidation;
+use App\Domain\Tenancy\Enums\RegimeTva;
+use App\Domain\Tenancy\Enums\ResultatVerification;
+use App\Domain\Tenancy\Enums\RoleSociete;
+use App\Domain\Tenancy\Enums\StatutSociete;
+use App\Domain\Tenancy\Enums\TypeDActivite;
+use App\Domain\Tenancy\Enums\TypeVerification;
+use App\Domain\Tenancy\Scopes\MagasinScope;
+use App\Domain\Tenancy\Scopes\SocieteScope;
+use App\Domain\Tenancy\Services\JournalAudit;
+use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\CleDuModele;
+use App\Domain\Tenancy\Support\ValeurRequise;
+use App\Domain\Tenancy\Support\ValeursLues;
+use App\Models\User;
+use Database\Factories\SocieteFactory;
+use Filament\Models\Contracts\HasName;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Support\Str;
+use LogicException;
+
+/**
+ * Le client de l'éditeur : une entreprise, société ou entrepreneur
+ * individuel, identifiée par son SIREN, avec son propriétaire et ses
+ * magasins (ses établissements, un SIRET chacun).
+ *
+ * Elle seule porte l'identité légale que ses magasins impriment (raison
+ * sociale, forme juridique, capital, immatriculation, siège, n° de TVA,
+ * voir Emetteur) et ses réglages fiscaux communs (régime de TVA, option
+ * pour les débits, mois de fin d'exercice) : aucun magasin n'a de
+ * privilège sur eux. Le régime, l'option, le mois de fin d'exercice, le
+ * SIREN et le n° de TVA touchent la conformité de la caisse : chaque
+ * changement s'inscrit au journal des événements de chacun de ses
+ * magasins, fermés compris, sous le verrou de tous leurs registres (JET
+ * 270, voir JournaliseSesParametresDeConformite).
+ *
+ * Un SIREN n'appartient qu'à une seule société dans tout le logiciel :
+ * celle dont l'inscription attend le code de son courrier recommandé, ou
+ * qui est validée (index unique partiel societes_siren_unique) ; une
+ * inscription close (voir estClose()) ou une société révoquée le libère.
+ *
+ * Son type d'activité (voir TypeDActivite), choisi à son inscription, ne
+ * s'écrit qu'à sa création (voir CreerSocieteAction), jamais par un
+ * formulaire (il n'est pas dans $fillable), et ne change jamais : la base
+ * refuse un type inconnu et toute modification (voir
+ * GardesDesTypesDActivite).
+ *
+ * Ses gardes, quel que soit l'écran ou la commande qui l'enregistre :
+ * - jamais validée et close à la fois ;
+ * - son SIREN, celui que vérifie le courrier, ne change jamais, sauf par
+ *   la correction exceptionnelle de l'éditeur (voir
+ *   changerLeSirenParLaProcedure()), et son
+ *   mois de fin d'exercice plus après la première vente de l'un de ses
+ *   magasins (voir aVenduUneFois()), sauf par le changement légal de la
+ *   date de clôture (voir changerLeMoisDeFinDExerciceParLaProcedure()) ;
+ * - ce que sa forme juridique exclut ne s'enregistre pas (voir
+ *   retirerCeQueSaFormeExclut()) ;
+ * - elle ne s'efface jamais (voir forceDelete() et le déclencheur de la
+ *   table societes).
+ * La mention « EI » d'une autre forme n'est refusée qu'à la saisie (voir
+ * ModifierIdentiteSocieteAction) : la dénomination que donne le répertoire
+ * Sirene s'enregistre telle qu'elle est.
+ *
+ * Volontairement sans SocieteScope : une société est le tenant du panneau
+ * de son administration. Toute requête qui en lit une autre que celle de
+ * l'utilisateur passe par ses relations, ou filtre explicitement.
+ */
+class Societe extends Model implements HasName
+{
+    /** @use HasFactory<SocieteFactory> */
+    use HasFactory, JournaliseSesParametresDeConformite, RefuseUneCleIllisible;
+
+    /**
+     * Les champs de son identité légale, tels que le journal d'audit en
+     * retient les changements (voir identiteAuditee()) : ceux que le
+     * propriétaire saisit, son assurance professionnelle comprise, et la
+     * catégorie juridique lue au répertoire Sirene.
+     */
+    public const CHAMPS_DE_L_IDENTITE = [
+        'raison_sociale',
+        'forme_juridique',
+        'forme_juridique_autre',
+        'societe_commerciale',
+        'categorie_juridique_insee',
+        'capital_social',
+        'capital_variable',
+        'immatriculation',
+        'numero_tva',
+        'siege_adresse',
+        'siege_complement_adresse',
+        'siege_code_postal',
+        'siege_ville',
+        'assurance_assureur',
+        'assurance_adresse',
+        'assurance_contrat',
+        'assurance_couverture',
+    ];
+
+    /**
+     * Le changement de son mois de fin d'exercice en cours est-il le
+     * changement légal de la date de clôture, par la procédure de l'éditeur
+     * (voir changerLeMoisDeFinDExerciceParLaProcedure()) ? Le seul qui
+     * passe le verrou de la première vente.
+     */
+    private bool $changementLegalDeLaFinDExercice = false;
+
+    /**
+     * Le changement de son SIREN en cours est-il sa correction exceptionnelle
+     * par la procédure de l'éditeur (voir changerLeSirenParLaProcedure()) ?
+     * Le seul qui passe la garde du SIREN.
+     */
+    private bool $correctionDuSiren = false;
+
+    protected $fillable = [
+        'raison_sociale',
+        'forme_juridique',
+        'forme_juridique_autre',
+        'societe_commerciale',
+        'capital_social',
+        'capital_variable',
+        'immatriculation',
+        'numero_tva',
+        'siege_adresse',
+        'siege_complement_adresse',
+        'siege_code_postal',
+        'siege_ville',
+        'assurance_assureur',
+        'assurance_adresse',
+        'assurance_contrat',
+        'assurance_couverture',
+        'regime_tva',
+        'option_debits_tva',
+        'mois_fin_exercice',
+        'membre_assujetti_unique',
+    ];
+
+    protected $casts = [
+        'forme_juridique' => FormeJuridique::class,
+        'societe_commerciale' => 'boolean',
+        'capital_social' => 'decimal:2',
+        'capital_variable' => 'boolean',
+        'numero_tva' => NumeroTvaNormalise::class,
+        'regime_tva' => RegimeTva::class,
+        'option_debits_tva' => 'boolean',
+        'mois_fin_exercice' => 'integer',
+        'membre_assujetti_unique' => 'boolean',
+        'type_activite' => TypeDActivite::class,
+        'statut' => StatutSociete::class,
+        'validee_le' => Instant::class,
+        'close_le' => Instant::class,
+        'motif_cloture' => MotifCloture::class,
+        'verification_conservee_jusqu_au' => Instant::class,
+    ];
+
+    protected static function booted(): void
+    {
+        static::creating(function (Societe $societe): void {
+            $societe->uuid ??= (string) Str::uuid();
+            $societe->statut ??= StatutSociete::Active;
+        });
+
+        static::saving(function (Societe $societe): void {
+            if ($societe->validee_le !== null && $societe->close_le !== null) {
+                throw new LogicException('Une société n\'est jamais à la fois validée et close.');
+            }
+
+            $societe->retirerCeQueSaFormeExclut();
+        });
+
+        static::updating(function (Societe $societe): void {
+            if ($societe->isDirty('siren') && ! $societe->correctionDuSiren) {
+                throw new LogicException('Le SIREN d\'une société ne change jamais : une erreur se traite par la procédure exceptionnelle de l\'éditeur.');
+            }
+
+            if ($societe->isDirty('mois_fin_exercice') && ! $societe->changementLegalDeLaFinDExercice && $societe->aVenduUneFois()) {
+                throw new LogicException('Le mois de fin d\'exercice est verrouillé depuis la première vente de l\'un de vos magasins : seul un changement légal de la date de clôture, par la procédure de l\'éditeur, le modifie.');
+            }
+        });
+    }
+
+    /**
+     * Verrouille la ligne de cette société comme le fait toute entrée de
+     * son journal d'audit, par sa clé étrangère (« for key share ») : un
+     * geste de magasin qui s'inscrit au journal d'audit sans verrouiller le
+     * registre de son magasin (un achat, un avoir fournisseur) le prend en
+     * tête de sa transaction, dans l'ordre des verrous de l'application
+     * (voir RegistreFiscal) : la société, puis la ligne de son magasin,
+     * puis son auteur. Sans lui, son entrée la verrouillerait en dernier,
+     * après le compte de son auteur, et un geste du propriétaire
+     * s'interbloquerait avec la saisie du code du courrier, qui verrouille
+     * la société pour la modifier, puis la ligne du propriétaire (voir
+     * SaisirCodeDeConfirmationAction). Ce verrou n'attend que qui modifie
+     * la société sous « for update », jamais un autre geste de magasin.
+     */
+    public static function verrouillerAvantSonJournalDAudit(int|string $societeId): void
+    {
+        self::query()->whereKey($societeId)->lock('for key share')->firstOrFail();
+    }
+
+    /**
+     * La société d'un identifiant ou d'un uuid tapé par l'éditeur (voir
+     * ProcedureDeLEditeur), null si elle n'existe pas. Un texte qui n'est
+     * ni l'un ni l'autre ne désigne aucune société : la colonne uuid, de
+     * type uuid, n'est alors pas interrogée.
+     */
+    public static function trouverParIdentifiantOuUuid(string $identifiant): ?self
+    {
+        return match (true) {
+            ctype_digit($identifiant) => static::query()->find((int) $identifiant),
+            Str::isUuid($identifiant) => static::query()->firstWhere('uuid', $identifiant),
+            default => null,
+        };
+    }
+
+    /**
+     * Une société ne s'efface jamais : ses documents se conservent dix ans
+     * et son SIREN reste celui de ses documents émis. La base refuse elle
+     * aussi sa suppression (voir DeclencheursDeProtection::sansSuppression()).
+     *
+     * @throws LogicException
+     */
+    public function delete(): never
+    {
+        throw new LogicException('Une société ne se supprime jamais : ses documents sont conservés.');
+    }
+
+    /**
+     * Le changement légal de la date de clôture de son exercice, sur
+     * procès-verbal, par la seule procédure de l'éditeur (voir
+     * ChangerFinExerciceAction), sous les verrous de ses registres, tenus
+     * par l'appelant : son mois de fin d'exercice change même après la
+     * première vente de l'un de ses magasins, et s'inscrit au journal des
+     * événements de chacun (JET 270, voir JournaliseSesParametresDeConformite).
+     */
+    public function changerLeMoisDeFinDExerciceParLaProcedure(int $mois): void
+    {
+        $this->changementLegalDeLaFinDExercice = true;
+
+        try {
+            $this->forceFill(['mois_fin_exercice' => $mois])->save();
+        } finally {
+            $this->changementLegalDeLaFinDExercice = false;
+        }
+    }
+
+    /**
+     * La correction exceptionnelle de son SIREN saisi par erreur, avec son
+     * n° de TVA, par la seule procédure de l'éditeur (voir
+     * CorrigerSirenAction), sous les verrous de ses registres, tenus par
+     * l'appelant : l'un et l'autre s'inscrivent au journal des événements
+     * de chacun de ses magasins réels (JET 270, voir
+     * JournaliseSesParametresDeConformite).
+     */
+    public function changerLeSirenParLaProcedure(string $siren, ?string $numeroTva): void
+    {
+        $this->correctionDuSiren = true;
+
+        try {
+            $this->forceFill(['siren' => $siren, 'numero_tva' => $numeroTva])->save();
+        } finally {
+            $this->correctionDuSiren = false;
+        }
+    }
+
+    /**
+     * Tous ses magasins, magasin de démonstration compris.
+     *
+     * @return HasMany<Magasin, $this>
+     */
+    public function magasins(): HasMany
+    {
+        return $this->hasMany(Magasin::class)->chaperone('societe');
+    }
+
+    /**
+     * Ses établissements, chacun un SIRET : tous ses magasins sauf celui de
+     * démonstration.
+     *
+     * @return HasMany<Magasin, $this>
+     */
+    public function magasinsReels(): HasMany
+    {
+        return $this->hasMany(Magasin::class)->where('est_demonstration', false)->chaperone('societe');
+    }
+
+    /**
+     * Son magasin de démonstration, s'il a été ouvert (voir
+     * OuvrirLaDemonstrationAction).
+     *
+     * @return HasOne<Magasin, $this>
+     */
+    public function demonstration(): HasOne
+    {
+        return $this->hasOne(Magasin::class)->where('est_demonstration', true);
+    }
+
+    /**
+     * @return HasMany<User, $this>
+     */
+    public function membres(): HasMany
+    {
+        return $this->hasMany(User::class)->chaperone('societe');
+    }
+
+    /**
+     * @return HasOne<User, $this>
+     */
+    public function proprietaire(): HasOne
+    {
+        return $this->hasOne(User::class)->where('role_societe', RoleSociete::Proprietaire->value)->chaperone('societe');
+    }
+
+    /**
+     * La dernière décision d'examen de son SIREN par l'éditeur, inscrite à
+     * son journal d'audit (SirenExamine, voir ExaminerSirenAction), dont
+     * la régularisation de ses factures se déduit (voir
+     * RegularisationDUneFacture::estDesignee()). La relation filtre déjà
+     * par la société, et ne lit que cette entrée : elle se lit sans
+     * SocieteScope, une fois par société chargée, pour toutes les factures
+     * d'une liste qui partagent son magasin (voir FactureResource::table()).
+     *
+     * @return HasOne<EntreeAudit, $this>
+     */
+    public function dernierExamenDuSiren(): HasOne
+    {
+        return $this->hasOne(EntreeAudit::class)
+            ->withoutGlobalScope(SocieteScope::class)
+            ->ofMany(['id' => 'max'], fn (Builder $entrees): Builder => $entrees->where('action', ActionAuditee::SirenExamine->value));
+    }
+
+    /**
+     * La société est-elle validée ? Posée par la seule validation de la
+     * société, à la saisie du code de son courrier recommandé (voir
+     * ValiderLaSocieteAction) : avant elle, aucune opération commerciale
+     * réelle (voir Magasin::peutVendre()).
+     */
+    public function estValidee(): bool
+    {
+        return $this->validee_le !== null;
+    }
+
+    /**
+     * A-t-elle été validée par l'invitation acceptée d'un cabinet
+     * d'expertise comptable (voir AccepterLInvitationAction), sans
+     * courrier ni démonstration ? La preuve inscrite au journal d'audit avec
+     * sa validation le dit (voir ValiderLaSocieteAction), lue dans la
+     * société active, qui doit être celle-ci.
+     */
+    public function aEteValideeParLInvitationDUnCabinet(): bool
+    {
+        return $this->estValidee() && EntreeAudit::query()
+            ->where('societe_id', $this->getKey())
+            ->where('action', ActionAuditee::SocieteValidee->value)
+            ->where('nouvelles_valeurs->preuve', PreuveDeValidation::InvitationDuCabinet->value)
+            ->exists();
+    }
+
+    /**
+     * La phrase qui dit, sur le tableau de bord et la page de la
+     * vérification, depuis quand la société est validée : par
+     * l'invitation de son cabinet d'expertise comptable, sans le nom de ce
+     * cabinet, qui a pu changer depuis, quand c'est elle qui l'a validée.
+     */
+    public function phraseDeSaValidation(): string
+    {
+        $depuis = 'Votre société est validée depuis le '.Calendrier::deParis()->afficher(ValeurRequise::de($this->validee_le, 'la date de validation de la société validée'), 'd/m/Y');
+
+        return $this->aEteValideeParLInvitationDUnCabinet()
+            ? $depuis.', par l\'invitation de votre cabinet d\'expertise comptable.'
+            : $depuis.'.';
+    }
+
+    /**
+     * Son inscription est-elle close sans avoir été validée (voir
+     * CloreLInscriptionAction) ? Pour toujours : son SIREN est libéré.
+     */
+    public function estClose(): bool
+    {
+        return $this->close_le !== null;
+    }
+
+    /**
+     * Son inscription attend-elle encore le code de son courrier : ni
+     * validée, ni close, ni révoquée ?
+     */
+    public function attendSonCode(): bool
+    {
+        return ! $this->estValidee() && ! $this->estClose() && $this->statut !== StatutSociete::Revoquee;
+    }
+
+    /**
+     * Est-ce un cabinet d'expertise comptable ? Il n'a aucun magasin, ni
+     * démonstration (voir TypeDActivite::aDesMagasins()).
+     */
+    public function estUnCabinet(): bool
+    {
+        return $this->type_activite === TypeDActivite::Cabinet;
+    }
+
+    /**
+     * La vérification d'un cabinet d'expertise comptable (voir Cabinet),
+     * qui n'existe que pour un cabinet. La relation filtre déjà par la
+     * société : elle se lit sans SocieteScope, hors de tout contexte (la
+     * connexion, la page d'une invitation) comme dans le contexte d'une
+     * autre société (celle d'un client qui désigne ce cabinet), toujours
+     * pour ce seul cabinet.
+     *
+     * @return HasOne<Cabinet, $this>
+     */
+    public function cabinet(): HasOne
+    {
+        return $this->hasOne(Cabinet::class)->withoutGlobalScope(SocieteScope::class);
+    }
+
+    /**
+     * Est-ce un cabinet d'expertise comptable suspendu ? Tant qu'il l'est,
+     * ses liens restent bloqués : aucun client n'accepte son invitation ni
+     * sa demande de lien, qu'il peut refuser, et que le cabinet peut
+     * retirer (décision de l'éditeur du 11/11/2026).
+     */
+    public function estUnCabinetSuspendu(): bool
+    {
+        return $this->estUnCabinet() && $this->statut === StatutSociete::Suspendue;
+    }
+
+    /**
+     * Les cabinets d'expertise comptable vérifiés (voir
+     * estUnCabinetVerifie(), qui dit la même chose pour une société) :
+     * validés, actifs, leur code d'activité contrôlé et leur inscription à
+     * l'Ordre vérifiée sans radiation constatée. La seule condition dont se
+     * servent la recherche des cabinets, le rattachement des déclarations
+     * et sa tâche horaire ; la garde du rattachement l'écrit en SQL (voir
+     * GardesDesCabinets).
+     *
+     * @param  Builder<self>  $requete
+     * @return Builder<self>
+     */
+    public function scopeCabinetsVerifies(Builder $requete): Builder
+    {
+        return $requete
+            ->where('societes.type_activite', TypeDActivite::Cabinet->value)
+            ->whereNotNull('societes.validee_le')
+            ->where('societes.statut', StatutSociete::Active->value)
+            ->whereIn('societes.id', Cabinet::query()->withoutGlobalScope(SocieteScope::class)
+                ->whereNotNull('activite_controlee_le')
+                ->whereNotNull('ordre_verifie_le')
+                ->whereNull('ordre_retire_le')
+                ->select('societe_id'));
+    }
+
+    /**
+     * Est-ce un cabinet d'expertise comptable vérifié, qui peut inviter,
+     * lier, voir et ouvrir ses clients ? Validé (le code de son courrier
+     * saisi), actif (ni suspendu, ni résilié, ni révoqué), son code
+     * d'activité contrôlé et son inscription au tableau de l'Ordre vérifiée,
+     * sans radiation constatée depuis. Relue en base à chaque question.
+     */
+    public function estUnCabinetVerifie(): bool
+    {
+        if (! $this->estUnCabinet() || ! $this->estValidee() || $this->statut !== StatutSociete::Active) {
+            return false;
+        }
+
+        $verification = $this->cabinet()->first(['id', 'societe_id', 'activite_controlee_le', 'ordre_verifie_le', 'ordre_retire_le']);
+
+        return $verification !== null && $verification->aSonActiviteControlee() && $verification->estVerifieALOrdre();
+    }
+
+    /**
+     * A-t-elle des articles (voir TypeDActivite::aDesArticles()) ? Une
+     * société « Commerce ou atelier » seule.
+     */
+    public function aDesArticles(): bool
+    {
+        return $this->type_activite->aDesArticles();
+    }
+
+    /**
+     * Ses magasins sont-ils tous en lecture seule ? Suspendue, résiliée ou
+     * révoquée par l'éditeur, ou son inscription close : consultation et
+     * téléchargements seulement, et aucun réglage ne se modifie.
+     */
+    public function estEnLectureSeule(): bool
+    {
+        return $this->statut->estEnLectureSeule() || $this->estClose();
+    }
+
+    /**
+     * Ce SIREN est-il déjà celui d'une société qui le garde : une
+     * inscription qui attend son code, ou une société validée, ni close ni
+     * révoquée ? La seule lecture d'une autre société permise à
+     * l'inscription : un booléen, jamais son identité ni son état.
+     */
+    public static function sirenPris(string $siren): bool
+    {
+        return static::query()
+            ->where('siren', $siren)
+            ->whereNull('close_le')
+            ->where('statut', '<>', StatutSociete::Revoquee->value)
+            ->exists();
+    }
+
+    /**
+     * La société qui garde ce SIREN (voir sirenPris()), réduite à son
+     * identifiant et à son type d'activité, null s'il est libre : la seule
+     * lecture d'une autre société permise à l'invitation d'un cabinet
+     * d'expertise comptable, qui en fait une demande de rattachement à
+     * cette société, ou la refuse par un message neutre pour un cabinet
+     * (voir InviterUneEntrepriseAction), sans jamais rien en dire d'autre
+     * au cabinet.
+     *
+     * @return array{id: int, type_activite: TypeDActivite}|null
+     */
+    public static function societeQuiTientLeSiren(string $siren): ?array
+    {
+        $tenante = static::query()
+            ->where('siren', $siren)
+            ->whereNull('close_le')
+            ->where('statut', '<>', StatutSociete::Revoquee->value)
+            ->first(['id', 'type_activite']);
+
+        return $tenante === null ? null : ['id' => CleDuModele::de($tenante), 'type_activite' => $tenante->type_activite];
+    }
+
+    /**
+     * L'un de ses magasins réels a-t-il déjà vendu ? Un enregistrement de
+     * la chaîne des ventes dans le registre fiscal de l'un d'eux : la
+     * première vente de la société, qui verrouille son mois de fin
+     * d'exercice ; les ventes du magasin de démonstration ne comptent pas.
+     * Lecture hors du magasin courant, filtrée par les magasins réels de
+     * cette société et limitée à l'existence d'un enregistrement.
+     */
+    public function aVenduUneFois(): bool
+    {
+        return EnregistrementFiscal::withoutGlobalScope(MagasinScope::class)
+            ->whereIn('magasin_id', $this->magasinsReels()->select('id'))
+            ->where('chaine', ChaineFiscale::Vente->value)
+            ->exists();
+    }
+
+    /**
+     * La société vend-elle aujourd'hui en franchise en base de TVA (B10) ?
+     * Un brouillon note la réponse quand il s'enregistre (voir
+     * ContexteDeVente) ; l'émission la contrôle.
+     */
+    public function estEnFranchiseDeTva(): bool
+    {
+        return $this->regime_tva?->estFranchise() ?? false;
+    }
+
+    public function estEntrepreneurIndividuel(): bool
+    {
+        return $this->forme_juridique?->estEntrepreneurIndividuel() ?? false;
+    }
+
+    /**
+     * Retire ce que sa forme juridique exclut : la réponse « société
+     * commerciale ? », qui n'a de sens que pour une autre forme ; le
+     * capital, le capital variable et le libellé de forme d'un entrepreneur
+     * individuel, qui n'en a pas. Appelé à chaque enregistrement : une
+     * forme changée par le propriétaire ou par le répertoire Sirene ne
+     * laisse rien de la précédente.
+     */
+    public function retirerCeQueSaFormeExclut(): void
+    {
+        if ($this->forme_juridique !== FormeJuridique::Autre) {
+            $this->societe_commerciale = null;
+        }
+
+        if ($this->estEntrepreneurIndividuel()) {
+            $this->forceFill(['capital_social' => null, 'capital_variable' => false, 'forme_juridique_autre' => null]);
+        }
+    }
+
+    /**
+     * Son identité telle que le journal d'audit la retient (voir
+     * JournalAudit::inscrireLesChangements()).
+     *
+     * @return array<string, mixed>
+     */
+    public function identiteAuditee(): array
+    {
+        return array_map(JournalAudit::valeur(...), $this->only(self::CHAMPS_DE_L_IDENTITE));
+    }
+
+    /**
+     * La dénomination que le répertoire Sirene donne de son entreprise, à
+     * son dernier contrôle concluant (voir ControleSirene::noterUnite()) ;
+     * null quand aucun ne la donne (diffusion partielle). Lue dans le
+     * registre des vérifications de la société active, et de cette société
+     * seulement.
+     */
+    public function denominationSirene(): ?string
+    {
+        $details = VerificationSociete::query()
+            ->where('societe_id', $this->getKey())
+            ->where('type', TypeVerification::SireneUnite->value)
+            ->where('resultat', ResultatVerification::Concluante->value)
+            ->whereNull('magasin_id')
+            ->orderByDesc('id')
+            ->first()
+            ?->details;
+
+        return ValeursLues::texteOuNul($details['denomination'] ?? null);
+    }
+
+    /**
+     * La forme telle qu'une facture l'imprime : le libellé exact saisi
+     * pour une autre forme ou une variante (SELARL...), sinon celui de la
+     * forme ; aucun pour un entrepreneur individuel, dont la dénomination
+     * porte déjà la mention « EI » (voir Emetteur::denominationImprimee()).
+     */
+    public function formeImprimee(): ?string
+    {
+        if ($this->forme_juridique === null || $this->estEntrepreneurIndividuel()) {
+            return null;
+        }
+
+        return filled($this->forme_juridique_autre) ? $this->forme_juridique_autre : $this->forme_juridique->getLabel();
+    }
+
+    /**
+     * Les mentions de son identité légale qui manquent encore pour émettre
+     * une facture à un professionnel (S3, S4, S5, B11, K7), dans l'ordre de
+     * l'identité : raison sociale, forme juridique (et, pour une autre
+     * forme, si la société est commerciale), capital social pour toute
+     * société commerciale, SIREN, immatriculation (registre, ou mention de
+     * la dispense), siège ou adresse de l'entreprise, et n° de TVA
+     * intracommunautaire, sauf en franchise en base (« le cas échéant »,
+     * art. 242 nonies A de l'annexe II au CGI). Celles de l'établissement
+     * s'y ajoutent (voir Magasin::mentionsLegalesManquantes()).
+     *
+     * @return list<string>
+     */
+    public function mentionsLegalesManquantes(): array
+    {
+        $capitalExige = $this->forme_juridique?->exigeUnCapital($this->societe_commerciale);
+        $siege = $this->estEntrepreneurIndividuel() ? 'adresse de l\'entreprise' : 'adresse du siège';
+
+        $mentions = [
+            'raison sociale' => filled($this->raison_sociale),
+            'forme juridique' => $this->forme_juridique !== null,
+            'société commerciale ou non' => $this->forme_juridique === null || $capitalExige !== null,
+            'capital social' => $capitalExige !== true || $this->capital_social !== null,
+            'SIREN' => filled($this->siren),
+            'immatriculation' => filled($this->immatriculation),
+            $siege => filled($this->siege_adresse) && filled($this->siege_code_postal) && filled($this->siege_ville),
+            'n° de TVA intracommunautaire' => $this->estEnFranchiseDeTva() || filled($this->numero_tva),
+        ];
+
+        return array_keys(array_filter($mentions, fn (bool $renseignee): bool => ! $renseignee));
+    }
+
+    /**
+     * L'avis « Identité incomplète pour facturer un professionnel » de la
+     * page « Identité » et du tableau de bord de son espace, vrai dans
+     * chaque état de la société : en lecture seule, son motif, sans aucune
+     * vente annoncée ; en cours de vérification, aucune vente dans ses
+     * magasins réels avant sa validation, ces mentions servant ensuite ;
+     * validée, ses tickets restent possibles, mais aucune facture à un
+     * professionnel tant que ces mentions manquent. Null quand rien ne
+     * manque, et pour un cabinet d'expertise comptable, qui n'a aucun
+     * magasin.
+     */
+    public function avisDIdentiteIncomplete(): ?string
+    {
+        $manquantes = $this->mentionsLegalesManquantes();
+
+        if ($manquantes === [] || ! $this->type_activite->aDesMagasins()) {
+            return null;
+        }
+
+        $mentions = implode(', ', $manquantes);
+
+        return match (true) {
+            $this->estClose() => "L'inscription de votre société est close : vos magasins sont en lecture seule, et aucune vente n'y est possible. Ces mentions manquent pour facturer un professionnel : {$mentions}.",
+            $this->statut->estEnLectureSeule() => 'Votre société est '.mb_strtolower($this->statut->getLabel())." : vos magasins sont en lecture seule, et aucune vente n'y est possible. Ces mentions manquent pour facturer un professionnel : {$mentions}.",
+            ! $this->estValidee() => "Votre société est en cours de vérification : aucune vente n'est possible dans vos magasins réels avant sa validation, et le magasin de démonstration vous permet de vous essayer. Ces mentions seront nécessaires pour facturer un professionnel : {$mentions}.",
+            default => "Vos tickets de caisse restent possibles, mais aucune facture à un professionnel ne peut être émise, dans aucun de vos magasins, tant que ces mentions manquent : {$mentions}.",
+        };
+    }
+
+    /**
+     * Les magasins dont le journal des événements note un changement de
+     * ses réglages : ses magasins réels, fermés compris, par ordre de
+     * création, dont les registres se verrouillent dans cet ordre (voir
+     * JournaliseSesParametresDeConformite) ; le magasin de démonstration ne
+     * reçoit pas les réglages de la société. Un réglage ne se modifie que
+     * dans le contexte de cette société, jamais dans celui d'une autre.
+     *
+     * @return Collection<int, Magasin>
+     *
+     * @throws LogicException
+     */
+    protected function magasinsDuJournal(): Collection
+    {
+        $contexte = app(TenantContext::class);
+
+        if ($contexte->aUneSociete() && $contexte->societe()->getKey() !== $this->getKey()) {
+            throw new LogicException('Les réglages d\'une société ne se modifient que dans son propre contexte.');
+        }
+
+        return $this->magasinsReels()->orderBy('id')->get();
+    }
+
+    public static function parametresDeConformite(): array
+    {
+        return ['regime_tva', 'option_debits_tva', 'mois_fin_exercice', 'membre_assujetti_unique', 'siren', 'numero_tva'];
+    }
+
+    /**
+     * Une raison sociale porte-t-elle la mention de l'entrepreneur
+     * individuel, en mot entier (« EI » ou « Entrepreneur individuel »),
+     * quel que soit le signe qui l'entoure : « Jeanne Dupont EI »,
+     * « Jeanne Dupont (EI) » ou « Jeanne Dupont EI. » la portent ;
+     * « SEIGNEUR » ou « Peinture » non.
+     */
+    public static function porteLaMentionEi(?string $raisonSociale): bool
+    {
+        return $raisonSociale !== null && preg_match('/(?<![\p{L}\p{N}])(EI|Entrepreneur individuel)(?![\p{L}\p{N}])/iu', $raisonSociale) === 1;
+    }
+
+    public function getFilamentName(): string
+    {
+        return filled($this->raison_sociale) ? $this->raison_sociale : "SIREN {$this->siren}";
+    }
+}

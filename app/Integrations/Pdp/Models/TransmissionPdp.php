@@ -1,0 +1,87 @@
+<?php
+
+namespace App\Integrations\Pdp\Models;
+
+use App\Domain\Calendrier\Casts\Instant;
+use App\Domain\Tenancy\Concerns\BelongsToMagasin;
+use App\Integrations\Pdp\Enums\StatutTransmissionPdp;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphTo;
+use Illuminate\Support\Str;
+
+/**
+ * Une transmission d'un document à la plateforme agréée (une facture
+ * aujourd'hui), avec l'historique de ses états (voir
+ * EvenementTransmissionPdp). Sa référence de dépôt est tirée à sa
+ * création et ne change plus : chaque reprise après une panne dépose sous
+ * elle (voir SubmitFactureToPdpJob).
+ */
+class TransmissionPdp extends Model
+{
+    use BelongsToMagasin;
+
+    protected $table = 'transmissions_pdp';
+
+    protected $fillable = [
+        'transmissible_type',
+        'transmissible_id',
+        'direction',
+        'prestataire_pdp',
+        'transmission_externe_id',
+        'format',
+        'statut',
+        'chemin_fichier_archive',
+        'code_erreur',
+        'message_erreur',
+        'soumise_le',
+        'statut_maj_le',
+    ];
+
+    protected $casts = [
+        'statut' => StatutTransmissionPdp::class,
+        'soumise_le' => Instant::class,
+        'statut_maj_le' => Instant::class,
+    ];
+
+    protected static function booted(): void
+    {
+        static::creating(function (TransmissionPdp $transmission) {
+            $transmission->statut ??= StatutTransmissionPdp::Soumise;
+            $transmission->reference_depot = (string) Str::uuid();
+        });
+    }
+
+    /**
+     * @return MorphTo<Model, $this>
+     */
+    public function transmissible(): MorphTo
+    {
+        return $this->morphTo();
+    }
+
+    /**
+     * @return HasMany<EvenementTransmissionPdp, $this>
+     */
+    public function evenements(): HasMany
+    {
+        return $this->hasMany(EvenementTransmissionPdp::class);
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $chargeUtile  ce que la plateforme a envoyé avec ce statut
+     */
+    public function enregistrerChangementStatut(StatutTransmissionPdp $statut, ?array $chargeUtile = null): void
+    {
+        $this->forceFill([
+            'statut' => $statut,
+            'statut_maj_le' => now(),
+        ])->save();
+
+        $this->evenements()->create([
+            'statut' => $statut->value,
+            'charge_utile' => $chargeUtile,
+            'survenu_le' => now(),
+        ]);
+    }
+}

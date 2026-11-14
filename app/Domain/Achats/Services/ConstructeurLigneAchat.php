@@ -1,0 +1,698 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Domain\Achats\Services;
+
+use App\Domain\Achats\Enums\SourceFactureAchat;
+use App\Domain\Achats\Enums\StatutFactureAchat;
+use App\Domain\Achats\Models\FactureAchat;
+use App\Domain\Achats\Models\LigneAchat;
+use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
+use App\Domain\Catalogue\Enums\OrigineProduit;
+use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Catalogue\Services\OrigineDesProduits;
+use App\Domain\Facturation\Services\CalculateurLigne;
+use App\Domain\Facturation\Services\DocumentChiffre;
+use App\Domain\Facturation\Services\QuantiteEntiere;
+use App\Domain\Facturation\Services\SaisieDecimale;
+use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\FicheLue;
+use App\Domain\Tenancy\Support\ValeurRequise;
+use App\Domain\Tenancy\Support\ValeurSimple;
+use App\Domain\Tenancy\Support\ValeursLues;
+use App\Models\User;
+use Illuminate\Support\Facades\Gate;
+use InvalidArgumentException;
+use LogicException;
+
+/**
+ * Enregistre les lignes d'une facture d'achat et ses totaux, à la
+ * création comme à la modification (voir CreerFactureAchatAction et
+ * ModifierFactureAchatAction).
+ *
+ * Chaque ligne reçoit un produit du catalogue, jamais une ligne libre : la
+ * traçabilité de l'avoir fournisseur (voir LigneAchat) n'a de sens que
+ * pour un produit suivi. C'est un produit existant (produit_id), dont la
+ * fiche peut être corrigée au passage, tout de suite ; ou un nouveau
+ * produit, dont la ligne d'un brouillon garde seulement la fiche
+ * (LigneAchat::$nouveau_produit) : il n'est créé qu'à la validation de la
+ * facture (voir creerLesNouveauxProduits()).
+ * Un brouillon supprimé ne laisse ainsi aucun produit derrière lui, et ne
+ * consomme aucune référence automatique. Seule la correction d'une
+ * facture déjà validée, dont la marchandise est déjà reçue, crée son
+ * nouveau produit tout de suite. Un produit archivé ne se reçoit plus : la
+ * ligne qui le garde est refusée, avec un message, tant qu'il n'est pas
+ * restauré.
+ *
+ * Le prix d'achat de la ligne et le prix de vente du produit sont deux
+ * prix distincts : le prix de vente ne change jamais le prix d'achat, et
+ * seul le barème du magasin, s'il l'a activé, donne son prix de vente à un
+ * nouveau produit reçu sans prix (voir BaremePrixDeVente).
+ *
+ * Les montants d'une ligne sont ceux qu'écrit la facture du fournisseur
+ * (décision de l'éditeur du 02/11/2026, T1 et T2) : son PU HT, six
+ * décimales au plus, jamais arrondi en silence, et, quand elle l'écrit
+ * autrement que PILIQI ne le calcule, son HT (montant_ht_saisi) ; la TVA
+ * de chaque taux, que la facture écrit aussi, se retient avec les écarts
+ * qu'elle confirme (voir chiffrer() et TvaDuFournisseur).
+ *
+ * Créer ou corriger un produit depuis une ligne suit les droits de la page
+ * Produits (voir ProduitPolicy), vérifiés ici, à l'enregistrement des
+ * lignes, et non seulement dans le formulaire, dont l'état se forge : la
+ * fiche d'un produit existant se corrige avec le droit de la modifier, et
+ * celle d'un nouveau produit se saisit ou se change avec le droit d'en
+ * créer (voir verifierLesNouveauxProduits()). Valider une facture qui crée
+ * des produits exige aussi ce droit de celui qui la valide (voir
+ * ValiderFactureAchatAction). Sans utilisateur connecté (facture récupérée automatiquement chez le
+ * fournisseur), il n'y a aucun droit à vérifier.
+ *
+ * La ligne d'un produit existant saisie à l'écran garde la fiche du
+ * produit telle qu'elle l'a lue (sa clé "fiche_lue", voir FicheLue) : elle
+ * ne corrige que ce que son auteur y a changé. Ce qu'une autre personne a
+ * changé depuis sur la fiche reste ; une correction qui porte sur un
+ * attribut changé entre-temps est refusée, avec un message (voir
+ * produitDeLaLigne()). Les produits existants des lignes se verrouillent,
+ * par identifiant croissant, avant d'être relus : leur fiche ne change
+ * plus jusqu'à la fin de l'enregistrement. Une ligne sans fiche lue (une
+ * facture récupérée automatiquement, un appel direct) dit toute la fiche
+ * de son produit.
+ *
+ * Corriger le taux de TVA d'un produit existant s'inscrit au journal des
+ * événements du magasin (voir JournaliseSesParametresDeConformite) : l'action
+ * qui enregistre les lignes verrouille d'abord le registre fiscal, en tête
+ * de sa transaction (voir verrouillerLeRegistreSiUnTauxChange()).
+ */
+class ConstructeurLigneAchat
+{
+    /**
+     * Ce qu'une ligne peut dire de son produit, sous sa clé "produit".
+     */
+    public const ATTRIBUTS_DU_PRODUIT = [
+        'reference',
+        'code_barres',
+        'nom',
+        'taille',
+        'couleur',
+        'prix_vente_ttc',
+        'taux_tva',
+        'suivi_stock',
+        'seuil_alerte',
+    ];
+
+    /**
+     * Le refus d'une ligne qui corrige un attribut de la fiche qu'une autre
+     * personne a changé depuis que la ligne l'a lue.
+     */
+    public const REFUS_FICHE_PERIMEE = 'La fiche du produit « %s » a été modifiée depuis que cette ligne l\'a lue : choisissez de nouveau ce produit dans la ligne pour repartir de sa fiche actuelle, puis refaites votre correction.';
+
+    /**
+     * Le refus d'un produit du catalogue sur deux lignes d'une facture
+     * d'achat (voir refuserUnProduitSurDeuxLignes()).
+     */
+    public const REFUS_PRODUIT_SUR_DEUX_LIGNES = '« %s » figure sur deux lignes : une facture d\'achat n\'a qu\'une ligne par produit. Faites-en une seule ligne de la quantité totale, au prix moyen si le fournisseur le facture à deux prix.';
+
+    /**
+     * Ce qu'une ligne peut effacer de la fiche de son produit ; un autre
+     * attribut laissé vide garde sa valeur (ou prend sa valeur par défaut
+     * pour un nouveau produit).
+     */
+    private const ATTRIBUTS_EFFACABLES = ['code_barres', 'taille', 'couleur'];
+
+    public function __construct(
+        private readonly CalculateurLigne $calculateur,
+        private readonly RegistreFiscal $registre,
+        private readonly OrigineDesProduits $origine,
+    ) {}
+
+    /**
+     * Verrouille le registre fiscal du magasin actif quand une ligne change
+     * le taux de TVA d'un produit existant, paramètre ayant un impact sur la
+     * conformité dont le changement s'inscrit au journal des événements : le
+     * registre est le premier verrou de la transaction qui l'inscrit (voir
+     * RegistreFiscal::sousVerrou()). L'action qui enregistre les lignes
+     * l'appelle donc en tête de sa transaction, avant de verrouiller la
+     * facture d'achat ou d'écrire un produit : sinon une vente, qui
+     * verrouille le registre puis ses produits, et l'achat, qui tiendrait
+     * un produit déjà corrigé en attendant le registre, s'attendraient
+     * l'un l'autre. Une facture d'achat qui ne change aucun taux ne touche
+     * pas au registre. Une ligne qui garde la fiche lue change le taux
+     * quand son auteur l'a corrigé (voir FicheLue::corrections()) : un taux
+     * changé entre-temps par une autre personne ne s'écrit pas ; une ligne
+     * sans fiche lue, quand le taux qu'elle dit n'est pas celui du produit.
+     *
+     * @param  array<array-key, array<string, mixed>>  $lignes  voir enregistrer()
+     */
+    public function verrouillerLeRegistreSiUnTauxChange(array $lignes): void
+    {
+        $changeUnTaux = collect($lignes)->contains(function (array $donnees): bool {
+            $produit = filled($donnees['produit_id'] ?? null) ? Produit::withTrashed()->whereKey(ValeursLues::cle($donnees['produit_id']))->first() : null;
+
+            return $produit !== null && self::corrigeUnParametreDeConformite($produit, $donnees);
+        });
+
+        if ($changeUnTaux) {
+            $this->registre->verrouiller(app(TenantContext::class)->magasin());
+        }
+    }
+
+    /**
+     * La ligne corrige-t-elle le taux de TVA de ce produit existant ? Avec
+     * la fiche lue, quand son auteur l'y a changé, quoi que la fiche vaille
+     * à cet instant ; sans, quand le taux qu'elle dit n'est pas celui du
+     * produit.
+     *
+     * @param  array<string, mixed>  $donnees
+     */
+    private static function corrigeUnParametreDeConformite(Produit $produit, array $donnees): bool
+    {
+        $corrections = array_intersect_key(self::correctionsDeLaFiche($produit, $donnees), array_flip(Produit::parametresDeConformite()));
+
+        return is_array($donnees['fiche_lue'] ?? null) ? $corrections !== [] : $produit->fill($corrections)->isDirty();
+    }
+
+    /**
+     * Enregistre les lignes de la facture d'achat, à la place de celles
+     * qu'elle avait, calculées ensemble avec ce qu'écrit la facture du
+     * fournisseur (voir chiffrer()) : le HT de chaque ligne (sa clé
+     * « montant_ht »), la TVA de chaque taux ; puis ses totaux, sommes
+     * exactes de ses lignes. Une base écrite qui n'est pas la somme des HT
+     * de ses lignes, ou un total TTC saisi qui ne vaut pas le total HT plus
+     * la TVA, est refusé (voir MontantsDuFournisseur::verifier()). La fiche
+     * de chaque nouveau produit est vérifiée une fois toutes les lignes
+     * enregistrées (voir verifierLesNouveauxProduits()). Une facture déjà
+     * validée crée tout de suite ses nouveaux produits (voir
+     * creerLesNouveauxProduits()). Un produit du catalogue n'y a qu'une
+     * ligne (voir refuserUnProduitSurDeuxLignes()).
+     *
+     * Rend le document chiffré : l'action qui l'appelle en retient la TVA
+     * de chaque taux en dernier (voir TvaDuFournisseur::retenir()).
+     *
+     * Le droit de créer ou de corriger un produit se demande à son auteur,
+     * relu par l'action qui l'appelle (voir verifierLeDroitDEnregistrer()).
+     * Les produits existants des lignes se verrouillent d'abord, par
+     * identifiant croissant (voir Produit::verrouillerPourLeStock()), après
+     * la facture d'achat que l'action a verrouillée ou créée.
+     *
+     * @param  array<array-key, array<string, mixed>>  $lignes  chaque ligne telle que l'écran ou l'API la saisit (produit_id ou produit, fiche_lue, quantite, prix_unitaire_ht, taux_tva, remise_pourcentage, montant_ht), chaque valeur lue par sa vérification
+     *
+     * @throws InvalidArgumentException
+     * @throws LogicException
+     */
+    public function enregistrer(User $auteur, FactureAchat $factureAchat, array $lignes, MontantsDuFournisseur $montants): DocumentChiffre
+    {
+        if ($lignes === []) {
+            throw new InvalidArgumentException('Une facture d\'achat doit contenir au moins une ligne.');
+        }
+
+        Produit::verrouillerPourLeStock(array_column($lignes, 'produit_id'));
+        $fichesDejaSaisies = $factureAchat->lignes()
+            ->whereNull('produit_id')
+            ->get()
+            ->map(fn (LigneAchat $ligne): array => self::ficheComparable(ValeursLues::champs(ValeurRequise::de($ligne->nouveau_produit, 'la fiche du nouveau produit d\'une ligne sans produit'))))
+            ->all();
+        $factureAchat->lignes()->delete();
+
+        $lignes = array_values($lignes);
+        $produits = array_map(fn (array $donnees): Produit => $this->produitDeLaLigne($factureAchat, $donnees), $lignes);
+        self::refuserUnProduitSurDeuxLignes($produits);
+        $lignesPreparees = [];
+
+        foreach ($lignes as $ordre => $donnees) {
+            $lignesPreparees[] = $this->preparerUneLigne($auteur, $factureAchat, $produits[$ordre], $donnees, $ordre);
+        }
+
+        $document = $this->chiffrer($lignesPreparees, $montants->tvaParTaux);
+        $montants->verifier($document);
+        $lignesEnregistrees = array_map(
+            fn (array $ligne): LigneAchat => $factureAchat->lignes()->create(array_diff_key($ligne, ['montant_ht_calcule' => true])),
+            $document->lignes,
+        );
+
+        $this->verifierLesNouveauxProduits($auteur, $lignesEnregistrees, $fichesDejaSaisies);
+
+        $factureAchat->forceFill($document->totaux)->save();
+
+        // Sa marchandise est déjà reçue : le nouveau produit d'une
+        // correction naît tout de suite, pour entrer en stock avec elle
+        // (voir ModifierFactureAchatAction).
+        if ($factureAchat->statut === StatutFactureAchat::Validee) {
+            $this->creerLesNouveauxProduits($factureAchat);
+        }
+
+        return $document;
+    }
+
+    /**
+     * Une facture d'achat n'a qu'une ligne par produit du catalogue
+     * (décision de l'éditeur du 26/10/2026, série 9), même quand le
+     * fournisseur facture le même produit à deux prix : 10 câbles à 4,00 €
+     * HT et 2 offerts font une ligne de 12 câbles au prix moyen, l'écart
+     * d'un centime possible avec la facture du fournisseur étant accepté.
+     * L'écran réunit un produit choisi de nouveau (voir
+     * AjouteDesLignesDAchat) ; l'enregistrement refuse deux lignes du même
+     * produit, d'où qu'elles viennent (écran, API, requête forgée). Les
+     * produits se comparent une fois lus en base, tels que les lignes les
+     * enregistreront : « 12 », « +12 » et « 012 » désignent tous la fiche
+     * 12. Un nouveau produit, qui n'a pas encore de fiche, n'est pas
+     * concerné : deux nouveaux produits de même référence sont refusés à
+     * part (voir verifierLesNouveauxProduits()).
+     *
+     * @param  list<Produit>  $produits  le produit de chaque ligne (voir produitDeLaLigne())
+     *
+     * @throws InvalidArgumentException
+     */
+    private static function refuserUnProduitSurDeuxLignes(array $produits): void
+    {
+        $dejaSurUneLigne = [];
+
+        foreach ($produits as $produit) {
+            if (! $produit->exists) {
+                continue;
+            }
+
+            if (isset($dejaSurUneLigne[$produit->id])) {
+                throw new InvalidArgumentException(sprintf(self::REFUS_PRODUIT_SUR_DEUX_LIGNES, ValeurSimple::enTexte($produit->getOriginal('nom'))));
+            }
+
+            $dejaSurUneLigne[$produit->id] = true;
+        }
+    }
+
+    /**
+     * Crée le produit de chaque ligne qui garde la fiche d'un nouveau
+     * produit, à la validation de la facture d'achat (voir
+     * ValiderFactureAchatAction) ou à la correction d'une facture déjà
+     * validée (voir enregistrer()), dans l'ordre de ses lignes. Son prix de
+     * vente TTC est celui de sa fiche, sinon celui que le barème actif du
+     * magasin prévoit pour son prix d'achat, remise déduite ; sans l'un ni
+     * l'autre, la validation est refusée. Son fournisseur et son coût moyen
+     * lui viennent, dans la même transaction, de l'entrée en stock de la
+     * validation (voir IncrementerStockApresValidationFactureAchat) ou de la
+     * correction de la réception (voir
+     * ModifierFactureAchatAction::corrigerLaReception()), comme à tout
+     * produit de la facture : le fournisseur de la facture et son coût réel
+     * (voir LigneAchat::coutUnitaireHt()). Sa référence, saisie ou générée
+     * (voir Produit), est prise à ce
+     * moment-là : les références automatiques suivent l'ordre des
+     * validations, et une référence saisie qu'un autre produit a prise
+     * entre-temps est refusée (voir Produit::verifierQueSaReferenceEstLibre()).
+     * La ligne reçoit alors le produit et sa référence. C'est la seule
+     * création de produit d'un achat : elle ouvre, le temps de son
+     * enregistrement, le contexte d'origine d'un achat, sans lequel le
+     * modèle refuse toute création (voir OrigineDesProduits).
+     *
+     * @throws LogicException
+     */
+    public function creerLesNouveauxProduits(FactureAchat $factureAchat): void
+    {
+        foreach ($factureAchat->lignes()->whereNull('produit_id')->get() as $ligne) {
+            $produit = new Produit(ValeursLues::champs(ValeurRequise::de($ligne->nouveau_produit, 'la fiche du nouveau produit d\'une ligne sans produit')));
+
+            if (blank($produit->prix_vente_ttc)) {
+                $produit->prix_vente_ttc = $this->prixDuBareme($factureAchat->magasin, ValeurRequise::de($ligne->prix_unitaire_ht, 'le prix unitaire HT de la ligne d\'achat'), $ligne->remise_pourcentage, $produit)
+                    ?? throw new LogicException("Indiquez le prix de vente TTC du nouveau produit « {$produit->nom} » avant de valider la facture d'achat.");
+            }
+
+            $this->origine->pendant(OrigineProduit::Achat, fn (): bool => $produit->save());
+
+            $ligne->update(['produit_id' => $produit->id, 'reference' => $produit->reference, 'nouveau_produit' => null]);
+        }
+    }
+
+    /**
+     * Vérifie la fiche de chaque nouveau produit une fois toutes les lignes
+     * enregistrées, et les fiches des produits existants corrigées : quel
+     * que soit l'ordre des lignes, sa référence n'est ni celle d'un produit
+     * du catalogue, archivé ou corrigé par une autre ligne compris (voir
+     * Produit::verifierQueSaReferenceEstLibre()), ni celle d'un autre
+     * nouveau produit de la facture, sans tenir compte de la casse (voir
+     * Produit::normaliserReference()).
+     *
+     * Le droit de créer des produits se demande à qui saisit une fiche
+     * nouvelle ou changée (voir verifierLeDroitDEnregistrer()). Reprendre
+     * telle quelle une fiche que le brouillon gardait déjà ($fichesDejaSaisies)
+     * ne crée rien de plus que ce que sa saisie a autorisé : un membre qui
+     * ne peut pas créer de produits corrige les autres lignes d'un
+     * brouillon sans toucher au nouveau produit qu'un collègue y a saisi ;
+     * il ne change pas cette fiche et ne la recopie pas sur une seconde
+     * ligne, chaque fiche gardée ne servant qu'une fois, et ne valide pas
+     * ce brouillon (voir ValiderFactureAchatAction).
+     *
+     * @param  array<array-key, LigneAchat>  $lignes  dans leur ordre
+     * @param  array<int, array<string, mixed>>  $fichesDejaSaisies  voir ficheComparable()
+     */
+    private function verifierLesNouveauxProduits(User $auteur, array $lignes, array $fichesDejaSaisies): void
+    {
+        $referencesDesNouveauxProduits = [];
+
+        foreach ($lignes as $ligne) {
+            if ($ligne->nouveau_produit === null) {
+                continue;
+            }
+
+            $fiche = ValeursLues::champs($ligne->nouveau_produit);
+            $produit = new Produit($fiche);
+            $ficheDejaSaisie = array_search(self::ficheComparable($fiche), $fichesDejaSaisies, true);
+
+            if ($ficheDejaSaisie === false) {
+                $this->verifierLeDroitDEnregistrer($auteur, $produit);
+            } else {
+                unset($fichesDejaSaisies[$ficheDejaSaisie]);
+            }
+
+            if (blank($produit->reference)) {
+                continue;
+            }
+
+            $produit->verifierQueSaReferenceEstLibre();
+            $cle = Produit::normaliserReference($produit->reference);
+
+            if (in_array($cle, $referencesDesNouveauxProduits, true)) {
+                throw new InvalidArgumentException("Deux nouveaux produits de cette facture d'achat ont la même référence « {$produit->reference} ».");
+            }
+
+            $referencesDesNouveauxProduits[] = $cle;
+        }
+    }
+
+    /**
+     * La fiche d'un nouveau produit (voir ficheDuNouveauProduit()), ses
+     * attributs dans un ordre fixe, pour la comparer strictement à une
+     * autre.
+     *
+     * @param  array<string, mixed>  $fiche
+     * @return array<string, mixed>
+     */
+    private static function ficheComparable(array $fiche): array
+    {
+        ksort($fiche);
+
+        return $fiche;
+    }
+
+    /**
+     * Les lignes d'achat telles qu'elles sont saisies à l'écran, calculées
+     * comme à l'enregistrement (voir chiffrer()), par clé de ligne, avec la
+     * TVA écrite de chaque taux : une ligne pas encore valable (PU HT ou
+     * quantité à saisir, taux ou remise hors de 0-100 %, prix négatif ou de
+     * plus de six décimales, HT écrit illisible) ou dont les montants ne se
+     * calculent pas, même seule (une quantité absurde), est ignorée, et les
+     * autres se calculent ensemble, sans elle. Une TVA écrite qu'aucune
+     * facture ne porte (voir CalculateurLigne::chiffrerUnAchat()) laisse la
+     * proposition, que l'enregistrement refusera avec son motif ; seules des
+     * lignes valables dont le total dépasse ce que le calcul accepte ne
+     * donnent aucun aperçu.
+     *
+     * @param  array<array-key, mixed>  $lignesSaisies
+     * @param  array<int, int>  $tvaEcriteParTaux  voir MontantsDuFournisseur
+     */
+    public function apercu(array $lignesSaisies, array $tvaEcriteParTaux = []): DocumentChiffre
+    {
+        $lignes = [];
+
+        foreach ($lignesSaisies as $cle => $saisie) {
+            if (! is_array($saisie)) {
+                continue;
+            }
+
+            try {
+                $ligne = $this->prixDeLaLigne(
+                    $saisie['prix_unitaire_ht'] ?? null,
+                    $saisie['quantite'] ?? null,
+                    filled($saisie['taux_tva'] ?? null) ? $saisie['taux_tva'] : 0,
+                    $saisie['remise_pourcentage'] ?? null,
+                    $saisie['montant_ht'] ?? null,
+                );
+            } catch (InvalidArgumentException) {
+                continue;
+            }
+
+            $lignes[$cle] = [...$ligne, 'description' => ValeursLues::valeurAu($saisie, 'produit', 'nom') ?? '', 'reference' => ValeursLues::valeurAu($saisie, 'produit', 'reference')];
+        }
+
+        try {
+            return $this->chiffrer($lignes, $tvaEcriteParTaux);
+        } catch (InvalidArgumentException) {
+            try {
+                return $this->chiffrer($lignes);
+            } catch (InvalidArgumentException) {
+                return DocumentChiffre::vide();
+            }
+        }
+    }
+
+    /**
+     * Les montants des lignes d'un achat, calculés ensemble depuis leurs
+     * PU HT et ce qu'écrit la facture du fournisseur (voir
+     * CalculateurLigne::chiffrerUnAchat()), dans leur ordre : les lignes
+     * d'un même taux se partagent la TVA de ce taux ; chaque ligne garde le
+     * HT que le calcul propose (montant_ht_calcule), et chaque taux la TVA
+     * qu'il propose (montant_tva_calcule).
+     *
+     * @param  array<array-key, array<string, mixed>>  $lignes  chacune avec prix_unitaire_ht, quantite, taux_tva, remise_pourcentage et montant_ht_saisi écrits comme leurs colonnes
+     * @param  array<int, int>  $tvaEcriteParTaux  voir MontantsDuFournisseur
+     *
+     * @throws InvalidArgumentException
+     */
+    private function chiffrer(array $lignes, array $tvaEcriteParTaux = []): DocumentChiffre
+    {
+        return DocumentChiffre::depuisLeCalcul($lignes, $this->calculateur->chiffrerUnAchat(array_map(
+            fn (array $ligne): array => [
+                'prix_unitaire_ht' => $this->calculateur->enMillioniemes($ligne['prix_unitaire_ht']),
+                'quantite' => ValeursLues::entier($ligne['quantite']),
+                'remise_pourcentage' => $this->calculateur->enCentiemes($ligne['remise_pourcentage']),
+                'taux_tva' => $this->calculateur->enCentiemes($ligne['taux_tva']),
+                'montant_ht' => $ligne['montant_ht_saisi'] === null ? null : $this->calculateur->enCentiemes($ligne['montant_ht_saisi']),
+            ],
+            $lignes,
+        ), $tvaEcriteParTaux), $this->calculateur);
+    }
+
+    /**
+     * Le PU HT, la quantité, le taux, la remise et le HT écrit d'une ligne
+     * d'achat saisie, écrits comme leurs colonnes : un PU HT jamais négatif,
+     * tel que le fournisseur l'écrit, six décimales au plus (voir
+     * SaisieDecimale::enMillioniemes()), un taux et une remise entre 0 et
+     * 100 %, un HT écrit au centime, ou aucun.
+     *
+     * @return array{quantite: int, prix_unitaire_ht: string, taux_tva: string, remise_pourcentage: string, montant_ht_saisi: string|null}
+     *
+     * @throws InvalidArgumentException
+     */
+    private function prixDeLaLigne(mixed $prixUnitaireHt, mixed $quantite, mixed $tauxTva, mixed $remise, mixed $montantHt): array
+    {
+        $ligne = [
+            'quantite' => QuantiteEntiere::depuisSaisie($quantite),
+            'prix_unitaire_ht' => $this->calculateur->prixUnitaireExactEnDecimal(SaisieDecimale::enMillioniemes($prixUnitaireHt)),
+            'taux_tva' => $this->calculateur->enDecimal(SaisieDecimale::enCentiemes($tauxTva)),
+            'remise_pourcentage' => $this->calculateur->enDecimal(filled($remise) ? SaisieDecimale::enCentiemes($remise) : 0),
+            'montant_ht_saisi' => filled($montantHt) ? $this->calculateur->enDecimal(SaisieDecimale::montantAuCentime($montantHt)) : null,
+        ];
+
+        // Un PU HT négatif, un taux ou une remise hors de 0-100 %, un HT
+        // écrit négatif : refusés par le calcul de la ligne seule, avant
+        // qu'un barème ne s'y applique ou qu'un produit ne soit corrigé.
+        $this->chiffrer([$ligne]);
+
+        return $ligne;
+    }
+
+    /**
+     * Une ligne prête à enregistrer, sans ses montants, qui se calculent
+     * avec les autres lignes (voir chiffrer()) : son produit, existant et
+     * corrigé tout de suite, ou nouveau et gardé en fiche, et ses prix.
+     *
+     * @param  Produit  $produit  le produit de la ligne (voir produitDeLaLigne())
+     * @param  array<string, mixed>  $donnees
+     * @return array<string, mixed>
+     */
+    private function preparerUneLigne(User $auteur, FactureAchat $factureAchat, Produit $produit, array $donnees, int $ordre): array
+    {
+        // Un achat part toujours du PU HT du fournisseur (voir
+        // CalculateurLigne) : celui saisi, sinon le dernier prix d'achat du
+        // produit.
+        $prix = $this->prixDeLaLigne(
+            filled($donnees['prix_unitaire_ht'] ?? null)
+                ? $donnees['prix_unitaire_ht']
+                : (($produit->exists ? $produit->dernierPrixDAchatHt() : null) ?? throw new InvalidArgumentException('Une ligne d\'achat doit fournir prix_unitaire_ht.')),
+            $donnees['quantite'] ?? null,
+            $donnees['taux_tva'] ?? $produit->taux_tva,
+            $donnees['remise_pourcentage'] ?? null,
+            $donnees['montant_ht'] ?? null,
+        );
+
+        // Sans prix de vente donné, un nouveau produit prend celui du barème
+        // du magasin (voir BaremePrixDeVente), s'il en prévoit un à ce prix
+        // d'achat ; sa fiche est vérifiée avec celles des autres lignes
+        // (voir verifierLesNouveauxProduits()).
+        if (! $produit->exists) {
+            if (blank($produit->prix_vente_ttc)) {
+                $prixDuBareme = $this->prixDuBareme($factureAchat->magasin, $prix['prix_unitaire_ht'], $prix['remise_pourcentage'], $produit);
+
+                if ($prixDuBareme !== null) {
+                    $produit->prix_vente_ttc = $prixDuBareme;
+                }
+            }
+        } elseif ($produit->isDirty()) {
+            $this->verifierLeDroitDEnregistrer($auteur, $produit);
+            $produit->save();
+        }
+
+        return [
+            'produit_id' => $produit->id,
+            'nouveau_produit' => $produit->exists ? null : self::ficheDuNouveauProduit($produit),
+            'description' => $produit->nom,
+            'reference' => $produit->reference,
+            ...$prix,
+            'ordre' => $ordre,
+        ];
+    }
+
+    /**
+     * Le prix de vente TTC que le barème actif du magasin prévoit pour ce
+     * prix d'achat, remise déduite (voir BaremePrixDeVente::prixDeVente()),
+     * au taux de la fiche du produit (aucun taux saisi compte pour 0 %),
+     * écrit comme sa colonne (« 59.00 ») ; null sans barème actif ou
+     * au-delà de son dernier palier.
+     *
+     * @param  string  $prixUnitaireHt  écrit comme sa colonne (voir PrixDAchat)
+     * @param  string  $remise  écrite comme sa colonne (« 10.00 »)
+     * @return numeric-string|null
+     *
+     * @throws InvalidArgumentException
+     */
+    private function prixDuBareme(Magasin $magasin, string $prixUnitaireHt, string $remise, Produit $produit): ?string
+    {
+        $prix = $magasin->baremePrixDeVenteActif()?->prixDeVente(
+            $this->calculateur->coutUnitaireNet($this->calculateur->enMillioniemes($prixUnitaireHt), $this->calculateur->enCentiemes($remise)),
+            blank($produit->taux_tva) ? 0 : $this->calculateur->enCentiemes($produit->taux_tva),
+        );
+
+        return $prix === null ? null : $this->calculateur->enDecimal($prix['prix_vente_ttc']);
+    }
+
+    /**
+     * La fiche qu'un brouillon garde pour le nouveau produit, telle que le
+     * produit la lira (ses casts : prix et taux au centième, suivi du
+     * stock en booléen), sans les attributs laissés vides, qui prendront
+     * leur valeur par défaut. Le suivi du stock et le seuil d'alerte y
+     * figurent toujours, à leur valeur par défaut quand la ligne ne les
+     * donne pas (voir Produit::$attributes) : deux saisies du même produit
+     * donnent la même fiche (voir verifierLesNouveauxProduits()).
+     *
+     * @return array<string, mixed>
+     */
+    private static function ficheDuNouveauProduit(Produit $produit): array
+    {
+        return array_filter($produit->only(self::ATTRIBUTS_DU_PRODUIT), fn (mixed $valeur): bool => filled($valeur));
+    }
+
+    /**
+     * L'auteur de la facture d'achat, relu par son action (voir
+     * LecteurDesDroits), crée-t-il ou corrige-t-il ce produit ? Toujours
+     * contrôlé : il n'y a pas d'enregistrement sans auteur.
+     *
+     * @throws LogicException
+     */
+    private function verifierLeDroitDEnregistrer(User $auteur, Produit $produit): void
+    {
+        $utilisateur = Gate::forUser($auteur);
+
+        if (! $produit->exists && $utilisateur->denies('create', Produit::class)) {
+            throw new LogicException("Vous ne pouvez pas créer de produit : « {$produit->nom} » ne peut être saisi que par une personne autorisée à créer des produits.");
+        }
+
+        if ($produit->exists && $utilisateur->denies('update', $produit)) {
+            throw new LogicException('Vous ne pouvez pas modifier la fiche du produit « '.ValeurSimple::enTexte($produit->getOriginal('nom')).' » : seule la ligne se modifie ici.');
+        }
+    }
+
+    /**
+     * Le produit existant, relu sous son verrou (voir enregistrer()), avec
+     * les corrections apportées depuis la ligne, pas encore enregistrées
+     * (voir correctionsDeLaFiche()) : une correction qui porte sur un
+     * attribut changé depuis que la ligne a lu la fiche est refusée. Ou la
+     * fiche du nouveau produit, au taux de TVA par défaut du magasin si la
+     * ligne n'en donne pas.
+     *
+     * @param  array<string, mixed>  $donnees
+     *
+     * @throws LogicException
+     */
+    private function produitDeLaLigne(FactureAchat $factureAchat, array $donnees): Produit
+    {
+        $attributs = self::attributsDuProduit($donnees);
+
+        if (filled($donnees['produit_id'] ?? null)) {
+            $produit = Produit::withTrashed()->whereKey(ValeursLues::cle($donnees['produit_id']))->firstOrFail();
+
+            if ($produit->trashed()) {
+                throw new LogicException("Le produit « {$produit->nom} » a été archivé : restaurez-le depuis le catalogue, ou retirez-le de la facture.");
+            }
+
+            $corrections = self::correctionsDeLaFiche($produit, $donnees);
+
+            if (is_array($donnees['fiche_lue'] ?? null)) {
+                FicheLue::depuis(Produit::class, ValeursLues::champs($donnees['fiche_lue']))->refuserUneCorrectionPerimee($produit, $corrections, sprintf(self::REFUS_FICHE_PERIMEE, $produit->nom));
+            }
+
+            $produit->fill($corrections);
+
+            // Seule une autre facture récupérée automatiquement, donc la
+            // source elle-même, peut encore corriger ce que le fournisseur
+            // dit du produit.
+            if ($factureAchat->source !== SourceFactureAchat::Api
+                && $produit->isDirty(Produit::ATTRIBUTS_DU_FOURNISSEUR)
+                && $produit->vientDUneFactureAchatApi()) {
+                throw new LogicException('Le produit « '.ValeurSimple::enTexte($produit->getOriginal('nom')).' » vient d\'une facture d\'achat récupérée automatiquement : ses informations fournisseur ne se modifient pas.');
+            }
+
+            return $produit;
+        }
+
+        if (! isset($attributs['nom'])) {
+            throw new InvalidArgumentException('Chaque ligne d\'une facture d\'achat doit référencer un produit du catalogue, existant ou nouveau.');
+        }
+
+        return new Produit([
+            'taux_tva' => $donnees['taux_tva'] ?? $factureAchat->magasin->tauxTvaParDefaut(),
+            ...$attributs,
+        ]);
+    }
+
+    /**
+     * Ce que la ligne corrige de la fiche de ce produit existant : ce que
+     * son auteur y a changé depuis la fiche lue (voir
+     * FicheLue::corrections()) ; sans fiche lue, tout ce qu'elle en dit,
+     * qui remplace la fiche.
+     *
+     * @param  array<string, mixed>  $donnees
+     * @return array<string, mixed>
+     */
+    private static function correctionsDeLaFiche(Produit $produit, array $donnees): array
+    {
+        $attributs = self::attributsDuProduit($donnees);
+
+        return is_array($donnees['fiche_lue'] ?? null)
+            ? FicheLue::depuis(Produit::class, ValeursLues::champs($donnees['fiche_lue']))->corrections($attributs)
+            : $attributs;
+    }
+
+    /**
+     * Ce que la ligne dit de son produit : les attributs qu'elle renseigne,
+     * et ceux qu'elle peut effacer.
+     *
+     * @param  array<string, mixed>  $donnees
+     * @return array<string, mixed>
+     */
+    private static function attributsDuProduit(array $donnees): array
+    {
+        return array_filter(
+            array_intersect_key(ValeursLues::champs($donnees['produit'] ?? []), array_flip(self::ATTRIBUTS_DU_PRODUIT)),
+            fn (mixed $valeur, string $attribut): bool => filled($valeur) || in_array($attribut, self::ATTRIBUTS_EFFACABLES, true),
+            ARRAY_FILTER_USE_BOTH,
+        );
+    }
+}

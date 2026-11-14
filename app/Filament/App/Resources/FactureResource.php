@@ -1,0 +1,1397 @@
+<?php
+
+namespace App\Filament\App\Resources;
+
+use App\Domain\Achats\Models\AvoirFournisseur;
+use App\Domain\Achats\Models\FactureAchat;
+use App\Domain\Achats\Models\LigneAchat;
+use App\Domain\Achats\Models\LigneAvoirFournisseur;
+use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Calendrier\Calendrier;
+use App\Domain\Contacts\Actions\VerifierNumeroTvaAction;
+use App\Domain\Contacts\Models\Client;
+use App\Domain\Facturation\Actions\AjouterPreuveOperationAction;
+use App\Domain\Facturation\Actions\EmettreFactureAction;
+use App\Domain\Facturation\Actions\EncaisserEnPlusieursModesAction;
+use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
+use App\Domain\Facturation\Actions\EnvoyerDocumentAction;
+use App\Domain\Facturation\Actions\SupprimerFactureAction;
+use App\Domain\Facturation\Enums\ModePaiement;
+use App\Domain\Facturation\Enums\NatureLigne;
+use App\Domain\Facturation\Enums\StatutFacture;
+use App\Domain\Facturation\Models\Avoir;
+use App\Domain\Facturation\Models\AvoirAllocation;
+use App\Domain\Facturation\Models\BordereauDetaxe;
+use App\Domain\Facturation\Models\Devis;
+use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Models\LigneAvoir;
+use App\Domain\Facturation\Models\LigneDevis;
+use App\Domain\Facturation\Models\LigneFacture;
+use App\Domain\Facturation\Models\Paiement;
+use App\Domain\Facturation\Models\PaiementAllocation;
+use App\Domain\Facturation\Models\PreuveOperation;
+use App\Domain\Facturation\Models\RecuPaiement;
+use App\Domain\Facturation\Services\ApercuDuReglement;
+use App\Domain\Facturation\Services\CalculateurLigne;
+use App\Domain\Facturation\Services\ContexteDeVente;
+use App\Domain\Facturation\Services\ControleNatureOperation;
+use App\Domain\Facturation\Services\MentionsFiscales;
+use App\Domain\Facturation\Services\PiedDePage;
+use App\Domain\Facturation\Services\PreuvesRequises;
+use App\Domain\Facturation\Services\RecuPaiementPdfGenerator;
+use App\Domain\Facturation\Services\ReglementComptant;
+use App\Domain\Facturation\Services\RegularisationDUneFacture;
+use App\Domain\Fichiers\EnTetesDesFichiers;
+use App\Domain\Recherche\RechercheSansAccents;
+use App\Domain\Stock\Exceptions\ConfirmationVenteSansStockRequiseException;
+use App\Domain\Tenancy\Exceptions\VenteNonAutoriseeException;
+use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Support\CompteConnecte;
+use App\Domain\Tenancy\Support\RequeteDuModele;
+use App\Domain\Tenancy\Support\ValeurRequise;
+use App\Domain\Tenancy\Support\ValeurSimple;
+use App\Domain\Tenancy\Support\ValeursLues;
+use App\Filament\App\FicheDUnDocument;
+use App\Filament\App\Resources\FactureResource\Pages;
+use App\Filament\Concerns\AvertitDUneVenteSansStock;
+use App\Filament\Concerns\ChoisitLaNatureDeLOperation;
+use App\Filament\Concerns\EnvoieLesDocuments;
+use App\Filament\Concerns\GereLesExceptionsMetier;
+use App\Filament\Concerns\PrendLeCalendrierDuMagasin;
+use App\Filament\Concerns\SaisitUneQuantiteRetournee;
+use App\Filament\Concerns\SaisitUnReglementEnParts;
+use App\Filament\Concerns\SupprimeEnMasseLigneParLigne;
+use App\Filament\TableauEntry;
+use Filament\Actions\DeleteAction;
+use Filament\Actions\MountableAction;
+use Filament\Facades\Filament;
+use Filament\Forms\Components\Actions\Action;
+use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\Hidden;
+use Filament\Forms\Components\Placeholder;
+use Filament\Forms\Components\Repeater;
+use Filament\Forms\Components\Section as FormSection;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
+use Filament\Forms\Form;
+use Filament\Forms\Get;
+use Filament\Forms\Set;
+use Filament\Infolists\Components\Actions;
+use Filament\Infolists\Components\Actions\Action as InfolistAction;
+use Filament\Infolists\Components\Section as InfolistSection;
+use Filament\Infolists\Components\TextEntry;
+use Filament\Infolists\Infolist;
+use Filament\Notifications\Notification;
+use Filament\Pages\BasePage;
+use Filament\Resources\Pages\ListRecords;
+use Filament\Resources\Resource;
+use Filament\Tables;
+use Filament\Tables\Table;
+use Illuminate\Contracts\Support\Htmlable;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\HtmlString;
+use LogicException;
+use Symfony\Component\HttpFoundation\StreamedResponse;
+
+class FactureResource extends Resource
+{
+    use AvertitDUneVenteSansStock, PrendLeCalendrierDuMagasin;
+    use ChoisitLaNatureDeLOperation;
+    use EnvoieLesDocuments;
+    use GereLesExceptionsMetier;
+    use SaisitUneQuantiteRetournee;
+    use SaisitUnReglementEnParts;
+    use SupprimeEnMasseLigneParLigne;
+
+    protected static ?string $model = Facture::class;
+
+    protected static ?string $navigationIcon = 'heroicon-o-document-currency-euro';
+
+    protected static ?string $navigationGroup = 'Ventes';
+
+    protected static ?int $navigationSort = 3;
+
+    protected static ?string $modelLabel = 'facture';
+
+    protected static ?string $pluralModelLabel = 'factures';
+
+    /**
+     * Ce que disent les formulaires d'une facture et d'un devis sous leurs
+     * conditions de paiement (décision T50.1) : PILIQI ne fait pas encore
+     * de facture d'acompte, prévue à l'étape 2.
+     */
+    public const INFORMATION_ACOMPTE = 'Un acompte reçu avant la facture ne s\'enregistre pas encore dans PILIQI.';
+
+    /**
+     * Le filtre « À encaisser » de la liste (voir table()).
+     */
+    public const FILTRE_A_ENCAISSER = 'a_encaisser';
+
+    /**
+     * La liste des factures du magasin, filtrée sur celles à encaisser :
+     * celle du magasin actif, ou de ce magasin depuis l'espace de la
+     * société (voir TableauDeBord).
+     */
+    public static function urlDesFacturesAEncaisser(?Magasin $magasin = null): string
+    {
+        return static::getUrl('index', ['tableFilters' => [self::FILTRE_A_ENCAISSER => ['isActive' => true]]], panel: 'app', tenant: $magasin);
+    }
+
+    /**
+     * Le filtre « Preuves à fournir » de la liste (voir table()).
+     */
+    public const FILTRE_PREUVES_A_FOURNIR = 'preuves_a_fournir';
+
+    /**
+     * La liste des factures du magasin actif, filtrée sur les ventes hors
+     * de France qui attendent une preuve de leur exonération : où mène
+     * l'« À faire » du tableau de bord (voir ChosesAFaireDuMagasin).
+     */
+    public static function urlDesPreuvesAFournir(): string
+    {
+        return static::getUrl('index', ['tableFilters' => [self::FILTRE_PREUVES_A_FOURNIR => ['isActive' => true]]]);
+    }
+
+    /**
+     * Le filtre « Exonération non prouvée » de la liste (voir table()).
+     */
+    public const FILTRE_EXONERATIONS_NON_PROUVEES = 'exonerations_non_prouvees';
+
+    /**
+     * La liste des factures du magasin actif, filtrée sur les exports et
+     * les livraisons vers un DOM qui se régularisent faute de preuve de
+     * sortie 150 jours après leur date : où mène l'« À faire » du tableau
+     * de bord (voir ChosesAFaireDuMagasin).
+     */
+    public static function urlDesExonerationsNonProuvees(): string
+    {
+        return static::getUrl('index', ['tableFilters' => [self::FILTRE_EXONERATIONS_NON_PROUVEES => ['isActive' => true]]]);
+    }
+
+    /**
+     * Le filtre « Visa à noter » de la liste (voir table()).
+     */
+    public const FILTRE_VISA_A_NOTER = 'visa_a_noter';
+
+    /**
+     * La liste des factures du magasin actif, filtrée sur les tickets
+     * détaxés dont le bordereau attend la date de son visa : où mène
+     * l'« À faire » du tableau de bord (voir ChosesAFaireDuMagasin).
+     */
+    public static function urlDesVisasANoter(): string
+    {
+        return static::getUrl('index', ['tableFilters' => [self::FILTRE_VISA_A_NOTER => ['isActive' => true]]]);
+    }
+
+    /**
+     * La liste des factures du magasin actif, filtrée sur les brouillons.
+     */
+    public static function urlDesBrouillons(): string
+    {
+        return static::getUrl('index', ['tableFilters' => ['statut' => ['value' => StatutFacture::Brouillon->value]]]);
+    }
+
+    /**
+     * Confidentialité entre vendeurs (B16) : la liste elle-même ne montre
+     * que les factures que l'utilisateur voit (voir
+     * Facture::scopeVisiblesPar()) -- une policy sur l'accès direct ne
+     * suffit pas, un montant visible dans un tableau est déjà une fuite.
+     * Ce que la colonne « À faire » dit d'une preuve, d'une exonération à
+     * régulariser ou d'un visa (voir raisonsAFaire()) se lit dans la même
+     * requête, par les scopes mêmes des filtres et de l'« À faire » (voir
+     * Facture::elleMeme()), au jour du calendrier du magasin actif : une
+     * page de 25 ventes à l'export ne relit pas chaque facture.
+     *
+     * @return Builder<Facture>
+     */
+    public static function getEloquentQuery(): Builder
+    {
+        $calendrier = ValeursLues::instance(Filament::getTenant(), Magasin::class)->calendrier();
+
+        return RequeteDuModele::de(parent::getEloquentQuery(), Facture::class)
+            ->visiblesPar(CompteConnecte::exiger())
+            ->with(['client', 'magasin'])
+            ->withExists([
+                'elleMeme as preuve_a_fournir' => fn (Builder $elleMeme): Builder => RequeteDuModele::deSoiMeme($elleMeme, Facture::class)->preuvesAFournir(),
+                'elleMeme as exoneration_non_prouvee' => fn (Builder $elleMeme): Builder => RequeteDuModele::deSoiMeme($elleMeme, Facture::class)->exonerationsNonProuvees($calendrier, $calendrier->aujourdhui()),
+                'elleMeme as visa_a_noter' => fn (Builder $elleMeme): Builder => RequeteDuModele::deSoiMeme($elleMeme, Facture::class)->visaANoter(),
+            ]);
+    }
+
+    public static function form(Form $form): Form
+    {
+        return $form->schema([
+            FormSection::make('Facture')->schema([
+                Select::make('client_id')
+                    ->label('Client')
+                    // Un client archivé ne reçoit plus de nouveau document,
+                    // même si ceux qu'il a déjà le gardent (voir
+                    // Facture::client() et AppServiceProvider::limiterLesChoixAuMagasin()).
+                    ->relationProposable('client', 'nom', ClientResource::colonnesDeRecherche())
+                    ->searchable()
+                    ->preload()
+                    ->required()
+                    ->live()
+                    ->afterStateUpdated(fn (Get $get, Set $set) => self::ajusterLaNatureAuClient($get, $set))
+                    ->helperText(fn (Get $get) => ClientResource::soldeCrediteurHelperText($get('client_id')))
+                    ->createOptionForm(ClientResource::creationRapideSchema())
+                    ->createOptionModalHeading('Nouveau client')
+                    ->createOptionAction(fn (Action $action) => $action->visible(CompteConnecte::exiger()->can(PermissionRegistry::CLIENT_CREATE)))
+                    ->createOptionUsing(fn (array $data): int => ClientResource::creerUnClient(ValeursLues::champs($data)))
+                    ->suffixAction(ClientResource::actionChercherUnClient()),
+                // L'échéance ne se saisit pas : elle se calcule à l'émission,
+                // date d'émission + délai du client choisi, sinon délai du
+                // magasin (B7, voir EmettreFactureAction).
+                Placeholder::make('echeance')
+                    ->label('Échéance')
+                    ->content(fn (Get $get): string => self::echeanceAnnoncee($get('client_id'))),
+                self::champNatureDeLOperation(),
+                Textarea::make('conditions_paiement')->label('Conditions de paiement')->maxLength(PiedDePage::CARACTERES_DES_CONDITIONS_DE_PAIEMENT)->helperText(self::INFORMATION_ACOMPTE)->columnSpanFull(),
+                Textarea::make('notes')->columnSpanFull(),
+            ])->columns(2),
+
+            self::sectionLivraison(),
+
+            FormSection::make('Lignes')->schema([
+                // Lignes modifiables tant que la facture n'est pas émise :
+                // cette page n'est accessible qu'à un brouillon (voir
+                // FacturePolicy::update()), qui n'a aucune existence légale
+                // à préserver.
+                ...DevisResource::lignesDeVente(),
+                DevisResource::totauxDuDocument(parTaux: true),
+            ]),
+        ]);
+    }
+
+    /**
+     * L'échéance qu'aura la facture : la date de son émission plus le
+     * délai du client choisi, sinon celui du magasin (voir
+     * Magasin::delaiDePaiementPour()). Le client est lu dans le magasin
+     * actif, archivé compris pour un brouillon qui le garde.
+     */
+    private static function echeanceAnnoncee(mixed $clientId): string
+    {
+        $delai = ValeursLues::instance(Filament::getTenant(), Magasin::class)->delaiDePaiementPour(blank($clientId) ? null : Client::withTrashed()->whereKey(ValeursLues::cle($clientId))->first());
+
+        return 'Fixée à l\'émission : date d\'émission + '.$delai.' jour'.($delai > 1 ? 's' : '');
+    }
+
+    /**
+     * La personne voit le détail des paiements de ce document (constat C8,
+     * réponse de l'éditeur à T41 : « cacher ») : « Paiements : voir », dans
+     * sa portée, ses documents ou ceux de toute l'équipe (voir
+     * PaiementPolicy::view()). Le propriétaire, les responsables du magasin
+     * et le cabinet lié à qui le client accorde la consultation des
+     * paiements le voient ; pour les autres, la section « Paiements reçus »
+     * (paiements, références, contre-passations, reçus de paiement)
+     * n'apparaît pas du tout, et seuls « Payé » et « Restant dû » restent
+     * sur la fiche.
+     */
+    public static function voitLesPaiementsDe(Facture $facture): bool
+    {
+        $compte = CompteConnecte::exiger();
+
+        return $compte->can(PermissionRegistry::PAIEMENT_VIEW)
+            && ($compte->can(PermissionRegistry::FACTURE_VIEW_TOUTES) || $facture->cree_par === $compte->getKey());
+    }
+
+    public static function infolist(Infolist $infolist): Infolist
+    {
+        return $infolist->schema([
+            InfolistSection::make('Facture')->schema([
+                TextEntry::make('numero')->label('Numéro')->placeholder('Brouillon (pas encore émise)'),
+                TextEntry::make('statut')->badge(),
+                self::clientEntry(),
+                TextEntry::make('date_emission')->label('Émise le')->dateTime('d/m/Y')->placeholder('—'),
+                TextEntry::make('date_echeance')->label('Échéance')->jour()->placeholder('Fixée à l\'émission'),
+                TextEntry::make('cree_par_nom')->label('Créée par'),
+                self::natureEntry(),
+                TextEntry::make('consultation_vies')
+                    ->label('Vérification VIES retenue')
+                    ->state(fn (Facture $record): ?string => $record->consultationVies?->reference())
+                    ->visible(fn (Facture $record): bool => $record->consultation_vies_id !== null),
+                // La régularisation après la correction du SIREN de la
+                // société (voir RegularisationDUneFacture) : la facture que
+                // rectifie une facture rectificative, et la rectificative
+                // d'une facture régularisée.
+                // Chaque numéro de document de la fiche mène à sa fiche, pour
+                // qui peut la voir (constat C2, voir FicheDUnDocument).
+                // Le devis accepté d'où vient la facture, figé à
+                // l'émission, et un lien vers sa fiche pour qui peut la voir.
+                TextEntry::make('devis_d_origine')
+                    ->label('Devis d\'origine')
+                    ->state(fn (Facture $record): ?string => $record->mentionDuDevis())
+                    ->url(fn (Facture $record): ?string => FicheDUnDocument::adresse($record->devis))
+                    ->color(fn (Facture $record): ?string => FicheDUnDocument::adresse($record->devis) === null ? null : 'primary')
+                    ->visible(fn (Facture $record): bool => $record->devis_id !== null),
+                TextEntry::make('facture_rectifiee')
+                    ->label('Rectifie la facture')
+                    ->state(fn (Facture $record): ?string => $record->factureRectifiee?->numero)
+                    ->url(fn (Facture $record): ?string => FicheDUnDocument::adresse($record->factureRectifiee))
+                    ->color(fn (Facture $record): ?string => FicheDUnDocument::adresse($record->factureRectifiee) === null ? null : 'primary')
+                    ->visible(fn (Facture $record): bool => $record->estUneRectificative()),
+                TextEntry::make('rectificative')
+                    ->label('Facture rectificative')
+                    ->state(fn (Facture $record): ?string => $record->rectificative?->numero)
+                    ->url(fn (Facture $record): ?string => FicheDUnDocument::adresse($record->rectificative))
+                    ->color(fn (Facture $record): ?string => FicheDUnDocument::adresse($record->rectificative) === null ? null : 'primary')
+                    ->visible(fn (Facture $record): bool => $record->rectificative !== null),
+            ])->columns(3),
+
+            self::livraisonSection(),
+            self::preuvesSection(),
+            self::detaxeSection(),
+
+            InfolistSection::make('Lignes')->schema([
+                self::lignesEntry($infolist->getRecord()),
+            ]),
+
+            InfolistSection::make('Totaux et règlement')->schema([
+                TextEntry::make('total_ht')->label('Total HT')->money('EUR'),
+                TextEntry::make('total_tva')->label('Total TVA')->money('EUR'),
+                TextEntry::make('total_ttc')->label('Total TTC')->money('EUR'),
+                self::ventilationTvaEntry(),
+                // Un avoir n'est jamais remboursé par ce logiciel : son
+                // crédit réduit le solde dû exactement comme un
+                // encaissement (voir Facture::montantRestantEnCentimes()), c'est
+                // d'ailleurs lui qui explique le statut "Partiellement
+                // payée"/"Payée" d'une facture jamais réellement encaissée.
+                // Le séparer du "Payé" donnerait l'impression contradictoire
+                // d'une facture "partiellement payée" à 0 € payé (même
+                // raisonnement que la colonne "Payé" de la liste) ; le détail
+                // "Crédité par avoir" ci-dessous garde la traçabilité de la
+                // part qui vient spécifiquement d'un avoir.
+                TextEntry::make('montant_paye')
+                    ->label('Payé')
+                    ->state(fn (Facture $record): string => app(CalculateurLigne::class)->enDecimal($record->montantPayeEnCentimes() + $record->montantCrediteParAvoirEnCentimes()))
+                    ->money('EUR'),
+                TextEntry::make('montant_credite_par_avoir')
+                    ->label('Crédité par avoir')
+                    ->state(fn (Facture $record): string => app(CalculateurLigne::class)->enDecimal($record->montantCrediteParAvoirEnCentimes()))
+                    ->money('EUR')
+                    ->visible(fn (Facture $record) => $record->montantCrediteParAvoirEnCentimes() > 0),
+                // La facture rectificative qui attend l'avoir de
+                // régularisation de la facture qu'elle rectifie n'attend
+                // aucun règlement (voir StatutFacture::EnAttenteDeRegularisation) :
+                // sa fiche le dit sous ce qu'il en reste dû.
+                TextEntry::make('montant_restant')
+                    ->label('Restant dû')
+                    ->state(fn (Facture $record): string => app(CalculateurLigne::class)->enDecimal($record->montantRestantEnCentimes()))
+                    ->money('EUR')
+                    ->helperText(fn (Facture $record): ?string => $record->statut === StatutFacture::EnAttenteDeRegularisation
+                        ? sprintf(RegularisationDUneFacture::ATTENTE_DE_L_AVOIR, $record->factureRectifiee?->numero)
+                        : null),
+            ])->columns(3),
+
+            InfolistSection::make('Paiements reçus')
+                ->visible(fn (Facture $record) => self::voitLesPaiementsDe($record) && $record->allocationsPaiement()->exists())
+                ->schema([
+                    // Un paiement saisi par erreur y figure avec sa
+                    // contre-passation, en négatif (voir
+                    // ContrePasserPaiementAction), dans l'ordre où ils ont
+                    // été enregistrés. Un paiement reçu après l'émission, et
+                    // une contre-passation, ont leur reçu de paiement (R2,
+                    // voir RecusDePaiement), qui se télécharge et s'envoie
+                    // d'ici ; un paiement reçu à l'émission n'en a pas : le
+                    // PDF du document l'imprime. Filament lit chaque champ
+                    // d'une ligne depuis la facture elle-même
+                    // (« allocationsPaiement.0.paiement.recu_le ») : les
+                    // imputations s'y chargent avec leur paiement et son
+                    // reçu, en une requête par relation.
+                    TableauEntry::make('allocationsPaiement')
+                        ->label('')
+                        ->state(fn (Facture $record) => $record->loadMissing(['allocationsPaiement.paiement.recuPaiement.client', 'allocationsPaiement.paiement.recuPaiement.magasin', 'allocationsPaiement.paiement.recuPaiement.lignes.facture'])->allocationsPaiement)
+                        ->schema([
+                            TextEntry::make('nature')
+                                ->label('Nature')
+                                ->state(fn (PaiementAllocation $record): string => app(CalculateurLigne::class)->enCentiemes($record->montant_alloue) < 0 ? 'Contre-passation' : 'Paiement')
+                                ->badge()
+                                ->color(fn (string $state): string => $state === 'Contre-passation' ? 'danger' : 'gray'),
+                            TextEntry::make('paiement.recu_le')->label('Reçu le')->jour(),
+                            TextEntry::make('paiement.mode_paiement')->label('Mode')->badge(),
+                            TextEntry::make('montant_alloue')
+                                ->label('Montant imputé')
+                                ->money('EUR')
+                                ->alignEnd()
+                                ->color(fn (PaiementAllocation $record): ?string => app(CalculateurLigne::class)->enCentiemes($record->montant_alloue) < 0 ? 'danger' : null),
+                            TextEntry::make('paiement.reference')->label('Référence')->placeholder('—'),
+                            TextEntry::make('recu')
+                                ->label('Reçu')
+                                ->state(fn (PaiementAllocation $record): ?string => self::paiementDe($record)->recuPaiement?->numero)
+                                ->placeholder('Imprimé sur le document'),
+                            Actions::make([
+                                self::telechargerLeRecu(InfolistAction::make('telecharger_recu')),
+                                self::envoyerLeRecu(InfolistAction::make('envoyer_recu')),
+                            ]),
+                        ]),
+                ]),
+
+            InfolistSection::make('Crédité par avoir')
+                ->visible(fn (Facture $record) => $record->allocationsAvoir()->exists())
+                ->schema([
+                    // Le crédit qu'avait imputé un paiement saisi par
+                    // erreur y figure avec sa contre-passation, en négatif
+                    // (voir ContrePasserPaiementAction), dans l'ordre où ils
+                    // ont été imputés.
+                    TableauEntry::make('allocationsAvoir')
+                        ->label('')
+                        ->state(fn (Facture $record) => $record->loadMissing('allocationsAvoir.avoir')->allocationsAvoir)
+                        ->schema([
+                            TextEntry::make('avoir.numero')
+                                ->label('Avoir')
+                                ->url(fn (AvoirAllocation $record): ?string => FicheDUnDocument::adresse($record->avoir))
+                                ->color(fn (AvoirAllocation $record): ?string => FicheDUnDocument::adresse($record->avoir) === null ? null : 'primary'),
+                            TextEntry::make('montant_alloue')
+                                ->label('Montant crédité')
+                                ->money('EUR')
+                                ->alignEnd()
+                                ->color(fn (AvoirAllocation $record): ?string => app(CalculateurLigne::class)->enCentiemes($record->montant_alloue) < 0 ? 'danger' : null),
+                        ]),
+                ]),
+
+            InfolistSection::make('Transmission électronique')->schema([
+                TextEntry::make('transmission_pdp_particulier')
+                    ->label('Circuit réglementaire')
+                    ->state("Client particulier : cette facture est incluse dans l'e-reporting agrégé de la prochaine clôture de caisse journalière, pas de transmission PDP individuelle.")
+                    ->visible(fn (Facture $record) => ! $record->relevantDeLeInvoicing()),
+                TextEntry::make('transmission_pdp_statut')
+                    ->label('Statut de transmission au PDP')
+                    ->state(fn (Facture $record) => $record->derniereTransmissionPdp()?->statut)
+                    ->badge()
+                    ->placeholder('Pas encore transmise')
+                    ->visible(fn (Facture $record) => $record->relevantDeLeInvoicing()),
+                TextEntry::make('transmission_pdp_erreur')
+                    ->label('Explication')
+                    ->state(fn (Facture $record) => $record->derniereTransmissionPdp()?->message_erreur)
+                    ->visible(fn (Facture $record) => filled($record->derniereTransmissionPdp()?->message_erreur)),
+            ]),
+
+            InfolistSection::make('Avoirs émis')
+                // Une facture peut recevoir plusieurs avoirs successifs,
+                // chacun partiel (voir CreerAvoirAction).
+                ->visible(fn (Facture $record) => $record->avoirsEmisConcernes()->exists())
+                ->schema([
+                    TableauEntry::make('avoirsEmisListe')
+                        ->label('')
+                        // Un avoir peut couvrir plusieurs factures (voir
+                        // CreerAvoirAction) : seules ses lignes qui
+                        // créditent CETTE facture -- et leur total -- ont
+                        // leur place ici.
+                        ->state(fn (Facture $record) => $record->avoirsEmisConcernes()->get()->each(
+                            fn (Avoir $avoir) => $avoir->setRelation('lignes', $avoir->lignes()
+                                ->whereHas('ligneFacture', fn ($query) => $query->where('facture_id', $record->id))
+                                ->get()),
+                        ))
+                        ->schema([
+                            // ::make('x') seul ne fonctionne pas ici : une
+                            // fois le nom imbriqué sous un TableauEntry
+                            // nourri par un state() arbitraire (pas une
+                            // vraie relation Eloquent du modèle racine), le
+                            // chemin résolu par Filament ("avoirsEmisListe.
+                            // {clé}.x") n'a aucun sens appliqué à un Avoir,
+                            // et renvoie toujours vide -- state() explicite,
+                            // qui reçoit directement le modèle de l'item,
+                            // contourne complètement ce calcul de chemin.
+                            TextEntry::make('numero')
+                                ->label('Numéro')
+                                ->state(fn (Avoir $record) => $record->numero)
+                                ->url(fn (Avoir $record): ?string => FicheDUnDocument::adresse($record))
+                                ->color(fn (Avoir $record): ?string => FicheDUnDocument::adresse($record) === null ? null : 'primary'),
+                            TextEntry::make('motif')->label('Motif')->state(fn (Avoir $record) => $record->motif)->placeholder('—'),
+                            TextEntry::make('total_ttc')
+                                ->label('Crédité sur cette facture (TTC)')
+                                ->state(fn (Avoir $record): string => app(CalculateurLigne::class)->enDecimal(app(CalculateurLigne::class)->sommer($record->lignes->map(fn (LigneAvoir $ligne): string => $ligne->montant_ttc))))
+                                ->money('EUR')
+                                ->alignEnd(),
+                            // Le résumé (numéro/motif/total) ne dit pas CE QUI
+                            // a été retourné : le détail des lignes créditées
+                            // (produit, quantité, montant) doit être visible
+                            // directement ici, pas seulement sur la page
+                            // dédiée de l'avoir.
+                            TableauEntry::make('lignes')
+                                ->label(fn (Avoir $record): string => $record->estUneRegularisation() ? 'Lignes régularisées, sans retour en stock' : 'Produits retournés')
+                                ->columnSpanFull()
+                                ->state(fn (Avoir $record) => $record->lignes)
+                                ->schema([
+                                    TextEntry::make('description')->state(fn (LigneAvoir $record) => $record->description),
+                                    TextEntry::make('quantite')->label('Quantité')->state(fn (LigneAvoir $record) => $record->quantite)->numeric()->alignEnd(),
+                                    TextEntry::make('montant_ht')->label('Total HT')->state(fn (LigneAvoir $record) => $record->montant_ht)->money('EUR')->alignEnd(),
+                                    TextEntry::make('montant_tva')->label('TVA')->state(fn (LigneAvoir $record) => $record->montant_tva)->money('EUR')->alignEnd(),
+                                    TextEntry::make('montant_ttc')->label('Total TTC')->state(fn (LigneAvoir $record) => $record->montant_ttc)->money('EUR')->alignEnd(),
+                                ]),
+                        ]),
+                ]),
+
+            self::envoisSection(),
+        ]);
+    }
+
+    /**
+     * La nature de l'opération d'une facture ou d'un devis, avec la mention
+     * qu'elle imprime (voir NatureOperation).
+     */
+    public static function natureEntry(): TextEntry
+    {
+        return TextEntry::make('nature_operation')
+            ->label('Nature de l\'opération')
+            ->helperText(fn (Facture|Devis $record): ?string => $record->nature_operation->mention());
+    }
+
+    /**
+     * La livraison d'une facture ou d'un devis qui en demande une (voir
+     * NoteSaNatureDOperation::lignesDeLivraison()).
+     */
+    public static function livraisonSection(): InfolistSection
+    {
+        return InfolistSection::make('Livraison')
+            ->visible(fn (Facture|Devis $record): bool => $record->nature_operation->exigeUneLivraison())
+            ->schema([
+                TextEntry::make('livraison')
+                    ->hiddenLabel()
+                    ->state(fn (Facture|Devis $record): array => $record->lignesDeLivraison())
+                    ->listWithLineBreaks()
+                    ->placeholder('Livraison à renseigner'),
+            ]);
+    }
+
+    /**
+     * Les preuves de l'exonération d'une facture émise d'une nature qui en
+     * admet (voir PreuvesRequises) : « Complet », ou ce qui reste à
+     * fournir, l'attestation de l'acquéreur avec le jour où elle est
+     * attendue ; puis les références enregistrées, relues à chaque
+     * affichage, pour qu'une preuve ajoutée depuis la fiche (voir
+     * ViewFacture) y paraisse aussitôt.
+     */
+    private static function preuvesSection(): InfolistSection
+    {
+        return InfolistSection::make('Preuves de l\'exonération')
+            ->description('Les références des documents qui prouvent l\'expédition des biens et justifient l\'exonération. Sans preuve de sortie 150 jours après sa date, un export ou une livraison vers un DOM se régularise par un avoir sans retour en stock et une facture à la TVA française au même prix TTC.')
+            ->visible(fn (Facture $record): bool => AjouterPreuveOperationAction::refusPour($record) === null)
+            ->schema([
+                TextEntry::make('etat_des_preuves')
+                    ->label('État')
+                    ->state(fn (Facture $record): array => self::etatDesPreuves($record))
+                    ->listWithLineBreaks()
+                    ->color(fn (string $state): string => str_starts_with($state, 'À fournir') ? 'warning' : 'success'),
+                TableauEntry::make('preuves_enregistrees')
+                    ->label('Preuves enregistrées')
+                    ->state(fn (Facture $record) => $record->preuvesOperation()->get())
+                    ->visible(fn (Facture $record): bool => $record->preuvesOperation()->exists())
+                    ->schema([
+                        TextEntry::make('type')->label('Type')->state(fn (PreuveOperation $record): string => $record->type->getLabel()),
+                        TextEntry::make('reference')->label('Référence')->state(fn (PreuveOperation $record): string => $record->reference),
+                        TextEntry::make('date_document')->label('Date du document')->state(fn (PreuveOperation $record) => $record->date_document)->jour()->placeholder('—'),
+                        TextEntry::make('emetteur')->label('Établie par')->state(fn (PreuveOperation $record): ?string => $record->emetteur)->placeholder('—'),
+                        TextEntry::make('note')
+                            ->label('Enregistrée')
+                            ->state(fn (PreuveOperation $record): string => 'le '.self::calendrierDuMagasin()->afficher($record->created_at, 'd/m/Y à H:i').($record->note_par_nom === null ? '' : ' par '.$record->note_par_nom)),
+                    ]),
+            ]);
+    }
+
+    /**
+     * Ce que la fiche dit des preuves d'une facture : « Complet », ou une
+     * ligne « À fournir » par preuve qui manque, ou rien à fournir pour
+     * une vente entièrement corrigée par des avoirs.
+     *
+     * @return list<string>
+     */
+    private static function etatDesPreuves(Facture $facture): array
+    {
+        $preuves = app(PreuvesRequises::class);
+
+        if (! $preuves->concerne($facture)) {
+            return ['Aucune preuve à fournir : la vente est entièrement corrigée par des avoirs'];
+        }
+
+        $manquantes = $preuves->manquantes($facture);
+
+        return $manquantes === [] ? ['Complet'] : array_map(fn (string $manquante): string => "À fournir : {$manquante}", $manquantes);
+    }
+
+    /**
+     * Le n° du bordereau de détaxe d'un ticket (voir
+     * NoterBordereauDetaxeAction), affiché ici et jamais sur le ticket, qui
+     * reproduit le document tel qu'émis : le dernier noté, qui fait foi,
+     * avec l'avertissement quand les biens taxés emportés ne dépassent pas
+     * 100 € TTC (voir BordereauDetaxe::avertissement()), la date de son
+     * visa une fois notée (voir NoterLeVisaDuBordereauAction), puis ceux
+     * qu'il a remplacés. Relus à chaque affichage, comme les preuves.
+     */
+    private static function detaxeSection(): InfolistSection
+    {
+        return InfolistSection::make('Détaxe')
+            ->description('Le ticket reste à la TVA française : sa TVA ne se régularise qu\'après le visa du bordereau à la sortie de l\'Union européenne.')
+            ->visible(fn (Facture $record): bool => $record->bordereauxDetaxe()->exists())
+            ->schema([
+                TextEntry::make('bordereau_detaxe')
+                    ->label('N° du bordereau de détaxe (BVE)')
+                    ->state(fn (Facture $record): ?string => self::bordereauQuiFaitFoi($record)?->numero)
+                    ->helperText(fn (Facture $record): ?string => self::bordereauQuiFaitFoi($record)?->avertissement()),
+                TextEntry::make('bordereau_detaxe_note')
+                    ->label('Noté')
+                    ->state(function (Facture $record): ?string {
+                        $bordereau = self::bordereauQuiFaitFoi($record);
+
+                        return $bordereau === null ? null : 'le '.self::calendrierDuMagasin()->afficher($bordereau->created_at, 'd/m/Y à H:i').($bordereau->note_par_nom === null ? '' : ' par '.$bordereau->note_par_nom);
+                    }),
+                TextEntry::make('visa_du_bordereau')
+                    ->label('Visa à la sortie de l\'Union')
+                    ->state(function (Facture $record): string {
+                        $visa = self::bordereauQuiFaitFoi($record)?->visa;
+
+                        return $visa === null
+                            ? 'À noter dès qu\'il est connu'
+                            : 'le '.Calendrier::afficherJour(ValeurRequise::de($visa->date_visa, 'la date du visa noté'), 'd/m/Y').($visa->note_par_nom === null ? '' : ', noté par '.$visa->note_par_nom);
+                    })
+                    ->color(fn (Facture $record): ?string => self::bordereauQuiFaitFoi($record)?->visa === null ? 'warning' : null),
+                TextEntry::make('bordereaux_detaxe_remplaces')
+                    ->label('N° remplacés')
+                    ->state(fn (Facture $record): array => $record->bordereauxDetaxe->slice(0, -1)
+                        ->map(fn (BordereauDetaxe $bordereau): string => "{$bordereau->numero}, noté le ".self::calendrierDuMagasin()->afficher($bordereau->created_at, 'd/m/Y à H:i'))
+                        ->values()
+                        ->all())
+                    ->listWithLineBreaks()
+                    ->visible(fn (Facture $record): bool => $record->bordereauxDetaxe->count() > 1),
+            ])
+            ->columns(3);
+    }
+
+    /**
+     * Le dernier n° de bordereau de détaxe noté sur le ticket, relu en base,
+     * avec qui l'a noté.
+     */
+    private static function bordereauQuiFaitFoi(Facture $ticket): ?BordereauDetaxe
+    {
+        return $ticket->bordereauDetaxe()->with('visa')->first()?->setRelation('facture', $ticket);
+    }
+
+    /**
+     * Lignes d'un document (facture, avoir, devis, facture d'achat, avoir
+     * fournisseur) : pour chaque article son PU HT, son PU TTC et son taux,
+     * puis le HT, la TVA et le TTC de la ligne, tels qu'enregistrés (voir
+     * CalculateurLigne). Le PU HT d'une vente s'affiche comme partout :
+     * son PU TTC moins la TVA d'un article arrondie au centime (voir
+     * CalculateurLigne::prixUnitaireHtAffiche(), décision de l'éditeur du
+     * 14/11/2026) ; celui d'un achat, tel que le fournisseur l'écrit (voir
+     * CalculateurLigne::prixUnitaireExact()). Un achat n'a pas de PU TTC :
+     * sa TVA est sa part de celle que la facture du fournisseur écrit pour
+     * son taux (voir TvaDuFournisseur) ; le HT d'une ligne d'achat que la
+     * facture écrit autrement que le calcul depuis le PU montre ce calcul
+     * en dessous. La remise
+     * n'apparaît que si une ligne du document en a une : c'est elle qui
+     * explique alors que PU x quantité diffère du total. Sur tout document
+     * de vente soumis à la TVA, la note de calcul dit le calcul de chaque
+     * ligne depuis son TTC, et l'écart qui peut en résulter avec la quantité
+     * x le PU HT affiché, celui d'un article (voir
+     * MentionsFiscales::calcul()).
+     * La ligne d'une facture d'achat brouillon
+     * qui garde la fiche d'un nouveau produit dit qu'il ne naîtra qu'à sa
+     * validation (voir LigneAchat). Sous chaque ligne d'une facture d'achat
+     * validée, en orange, ce qu'en a retourné chaque avoir fournisseur émis
+     * (voir FactureAchatResource::retoursDeLaLigne()), et, sur une ligne
+     * qui peut encore l'être, « Retourner ce produit » (voir
+     * FactureAchatResource::creerUnAvoirFournisseur()). Sous la quantité de
+     * chaque ligne de produit suivi en stock d'un devis dont la facture
+     * n'est pas émise, le stock disponible du magasin et l'avertissement
+     * quand sa quantité le dépasse, comme dans son formulaire (voir
+     * Devis::stocksDeSesProduits() et
+     * AjouteDesLignesDeVente::texteDuStockDUneLigne()), lus une fois pour
+     * toutes ses lignes.
+     *
+     * Une vente sans TVA française (voir
+     * ContexteDeVente::documentRetireLaTvaDuPrix()) montre, comme ses PDF,
+     * le prix TTC du catalogue de chaque produit et la TVA qui en est
+     * retirée, à côté de son taux de 0 % : ce que le client n'a pas payé
+     * ne passe pas pour un PU TTC, et le calcul se vérifie (3 x 7,00 € ÷
+     * 1,20 = 17,50 €). Un service, saisi sans TVA, n'a ni l'un ni l'autre.
+     */
+    public static function lignesEntry(?Model $document): TableauEntry
+    {
+        $estUnAchat = $document instanceof FactureAchat || $document instanceof AvoirFournisseur;
+        $estUneVente = $document instanceof Facture || $document instanceof Avoir || $document instanceof Devis;
+
+        if ($document instanceof FactureAchat) {
+            // Le bouton « Retourner ce produit » de chaque ligne lit son
+            // produit (voir LigneAchat::quantiteRetournableRestante()).
+            $document->loadMissing('lignes.produit');
+        }
+
+        $calculateur = app(CalculateurLigne::class);
+        $avecRemise = ($estUnAchat || $estUneVente) && $document->lignes->contains(fn (LigneFacture|LigneAvoir|LigneDevis|LigneAchat|LigneAvoirFournisseur $ligne): bool => $calculateur->enCentiemes($ligne->remise_pourcentage) !== 0);
+        $sansTvaFrancaise = $estUneVente && ContexteDeVente::documentRetireLaTvaDuPrix($document);
+        // Un produit, ou un service à son prix de référence : un prix du
+        // catalogue dont la TVA est retirée (voir lignes.blade.php).
+        $prixCatalogueSansTvaFrancaise = fn (LigneFacture|LigneAvoir|LigneDevis $ligne): bool => $sansTvaFrancaise && ($ligne->nature === NatureLigne::Bien || $calculateur->enCentiemes($ligne->taux_tva_du_prix) > 0);
+        $prixUnitaire = fn (string $state): string => $calculateur->prixUnitaireAffiche($calculateur->enMillioniemes($state));
+        $prixExact = fn (string $state): string => $calculateur->prixUnitaireExact($calculateur->enMillioniemes($state));
+        $stocks = $document instanceof Devis && $document->montreLeStockDeSesLignes() ? $document->stocksDeSesProduits() : [];
+
+        return TableauEntry::make('lignes')
+            ->label('')
+            ->helperText($estUneVente ? app(MentionsFiscales::class)->calcul($document) : null)
+            ->schema([
+                TextEntry::make('description')
+                    ->helperText(fn (?Model $record): string|Htmlable|null => match (true) {
+                        ! $record instanceof LigneAchat => null,
+                        $record->nouveau_produit !== null => 'Nouveau produit, créé à la validation',
+                        default => FactureAchatResource::retoursDeLaLigne($record),
+                    }),
+                TextEntry::make('quantite')
+                    ->label('Quantité')
+                    ->numeric()
+                    ->alignEnd()
+                    ->helperText(fn (?Model $record): ?string => $record instanceof LigneDevis && $record->produit_id !== null && isset($stocks[$record->produit_id])
+                        ? DevisResource::texteDuStockDUneLigne($stocks[$record->produit_id]['disponible'], $record->quantite)
+                        : null),
+                TextEntry::make('prix_unitaire_ht')
+                    ->label('PU HT')
+                    ->alignEnd()
+                    ->formatStateUsing(fn (string $state, Model $record): string => $record instanceof LigneFacture || $record instanceof LigneAvoir || $record instanceof LigneDevis
+                        ? $calculateur->prixUnitaireHtAfficheEnEuros($calculateur->enCentiemes($record->prix_unitaire_ttc), $calculateur->enCentiemes($record->taux_tva_du_prix))
+                        : $prixExact($state)),
+                TextEntry::make('prix_unitaire_ttc')
+                    ->label($sansTvaFrancaise ? 'Prix catalogue TTC' : 'PU TTC')
+                    ->alignEnd()
+                    ->state(fn (LigneFacture|LigneAvoir|LigneDevis $record): mixed => ! $sansTvaFrancaise || $prixCatalogueSansTvaFrancaise($record) ? $record->prix_unitaire_ttc : null)
+                    ->placeholder('—')
+                    ->formatStateUsing($prixUnitaire)
+                    ->hidden($estUnAchat),
+                TextEntry::make('taux_tva_du_prix')
+                    ->label('TVA retirée')
+                    ->alignEnd()
+                    ->state(fn (LigneFacture|LigneAvoir|LigneDevis $record): mixed => $prixCatalogueSansTvaFrancaise($record) ? $record->taux_tva_du_prix : null)
+                    ->placeholder('—')
+                    ->numeric(maxDecimalPlaces: 2)
+                    ->suffix(' %')
+                    ->visible($sansTvaFrancaise),
+                TextEntry::make('taux_tva')->label('Taux TVA')->numeric(maxDecimalPlaces: 2)->suffix(' %')->alignEnd(),
+                TextEntry::make('remise_pourcentage')->label('Remise')->numeric(maxDecimalPlaces: 2)->suffix(' %')->alignEnd()->visible($avecRemise),
+                TextEntry::make('montant_ht')
+                    ->label('Total HT')
+                    ->money('EUR')
+                    ->alignEnd()
+                    ->helperText(fn (?Model $record): ?string => $record instanceof LigneAchat && $record->montant_ht_saisi !== null && $calculateur->enCentiemes($record->montant_ht_saisi) !== $record->montantHtPropose()
+                        ? 'HT de la facture du fournisseur ; calcul depuis le PU : '.$calculateur->enEuros($record->montantHtPropose())
+                        : null),
+                TextEntry::make('montant_tva')->label('TVA')->money('EUR')->alignEnd(),
+                TextEntry::make('montant_ttc')->label('Total TTC')->money('EUR')->alignEnd(),
+                Actions::make([FactureAchatResource::creerUnAvoirFournisseur(InfolistAction::make('retourner_ce_produit'))])
+                    ->visible(fn (?Model $record): bool => $record instanceof LigneAchat),
+            ]);
+    }
+
+    /**
+     * Le nom du client (voir FigeLeClient::nomDuClient()) : celui figé à
+     * l'émission, celui de la fiche tant que le document est un brouillon.
+     * Un document numéroté dont la copie a été effacée en base s'affiche
+     * quand même, sans nom. Partagé par les fiches des factures et des
+     * avoirs.
+     */
+    public static function clientEntry(): TextEntry
+    {
+        return TextEntry::make('client_nom')
+            ->label('Client')
+            ->state(fn (Facture|Avoir $record): ?string => $record->nomDuClient())
+            ->placeholder('—');
+    }
+
+    /**
+     * La même colonne dans les listes des factures et des avoirs ; la
+     * recherche, sans casse ni accents, trouve le nom imprimé sur le
+     * document comme celui de la fiche du client aujourd'hui.
+     */
+    public static function clientColumn(): Tables\Columns\TextColumn
+    {
+        return Tables\Columns\TextColumn::make('client_nom')
+            ->label('Client')
+            ->state(fn (Facture|Avoir $record): ?string => $record->nomDuClient())
+            ->placeholder('—')
+            ->searchable(query: RechercheSansAccents::dans('client_nom', 'client.nom'));
+    }
+
+    /**
+     * Récapitulatif par taux (voir VentileLaTvaParTaux), partagé par les
+     * fiches de tous les documents à lignes.
+     */
+    public static function ventilationTvaEntry(): TableauEntry
+    {
+        return TableauEntry::make('ventilation_tva')
+            ->label('TVA par taux')
+            ->columnSpanFull()
+            ->schema([
+                TextEntry::make('taux_tva')->label('Taux')->numeric(maxDecimalPlaces: 2)->suffix(' %')->alignEnd(),
+                TextEntry::make('montant_ht')->label('Base HT')->money('EUR')->alignEnd(),
+                TextEntry::make('montant_tva')->label('TVA')->money('EUR')->alignEnd(),
+                TextEntry::make('montant_ttc')->label('Total TTC')->money('EUR')->alignEnd(),
+            ]);
+    }
+
+    /**
+     * Ce que la facture a reçu, paiements et crédit d'avoir compris, écrit
+     * comme sa colonne (« 12.50 ») : ses imputations, chargées avec les
+     * factures de la liste (voir table()), sommées en centimes (voir
+     * Facture::regleEnCentimes()).
+     */
+    private static function paye(Facture $facture): string
+    {
+        return app(CalculateurLigne::class)->enDecimal($facture->regleEnCentimes());
+    }
+
+    public static function table(Table $table): Table
+    {
+        return $table
+            // Les montants imputés, chargés avec les factures de la liste
+            // et sommés en centimes par la colonne « Payé » (jamais une
+            // somme que la base ferait sur une colonne décimale), sans une
+            // requête par facture. La fiche, qui montre la date, le mode et
+            // la référence de chaque paiement, lit ses imputations en
+            // entier. La facture rectificative de chacune, après une
+            // correction du SIREN de la société, et la dernière décision
+            // d'examen de ce SIREN, et l'existence de lignes encore à
+            // créditer (voir Facture::possedeDesLignesCreditables()), disent
+            // si l'action « Avoir » s'y propose (voir
+            // AvoirResource::peutCrediter()) : tout se lit avec la page, le
+            // magasin, sa société et cette décision une seule fois, quel que
+            // soit le nombre de factures.
+            ->modifyQueryUsing(fn (Builder $query): Builder => $query
+                ->with(['allocationsPaiement:id,facture_id,montant_alloue', 'allocationsAvoir:id,facture_id,montant_alloue', 'rectificative:id,facture_rectifiee_id', 'client', 'magasin.societe.dernierExamenDuSiren'])
+                ->withExists(['lignes as lignes_creditables_exists' => fn (Builder $lignes): Builder => ValeursLues::instance($lignes->scopes('creditables'), Builder::class)]))
+            ->columns([
+                Tables\Columns\TextColumn::make('numero')->label('Numéro')->placeholder('Brouillon')->rechercheSansAccents(),
+                self::clientColumn(),
+                Tables\Columns\TextColumn::make('statut')->badge(),
+                Tables\Columns\TextColumn::make('total_ttc')->label('Total TTC')->money('EUR')->sortable(),
+                // Un avoir n'est jamais remboursé par ce logiciel : son
+                // crédit réduit le solde dû exactement comme un encaissement
+                // (voir Facture::montantRestantEnCentimes()), c'est d'ailleurs lui qui
+                // explique le statut "Partiellement payée"/"Payée" d'une
+                // facture jamais réellement encaissée. Le séparer du "Payé"
+                // ici donnerait l'impression contradictoire d'une facture
+                // "partiellement payée" à 0 € payé.
+                Tables\Columns\TextColumn::make('montant_paye')
+                    ->label('Payé')
+                    ->state(fn (Facture $record): string => self::paye($record))
+                    ->money('EUR'),
+                Tables\Columns\TextColumn::make('cree_par_nom')->label('Créée par')->toggleable(),
+                Tables\Columns\TextColumn::make('date_echeance')->label('Échéance')->jour(),
+                self::colonneAFaire(),
+            ])
+            ->filters([
+                Tables\Filters\SelectFilter::make('statut')->options(StatutFacture::class),
+                // Les factures exonérées dont une preuve manque encore (voir
+                // Facture::scopePreuvesAFournir()), où mène l'« À faire » du
+                // tableau de bord (voir ChosesAFaireDuMagasin) ; aucun menu
+                // n'affiche plus de nombre (décision de l'éditeur du
+                // 26/10/2026).
+                Tables\Filters\Filter::make(self::FILTRE_PREUVES_A_FOURNIR)
+                    ->label('Preuves à fournir')
+                    ->toggle()
+                    ->query(fn (Builder $query): Builder => RequeteDuModele::de($query, Facture::class)->preuvesAFournir()),
+                // Les exports et les livraisons vers un DOM dont la preuve de
+                // sortie manque 150 jours après leur date (voir
+                // Facture::scopeExonerationsNonProuvees()), où mène aussi
+                // l'« À faire ».
+                Tables\Filters\Filter::make(self::FILTRE_EXONERATIONS_NON_PROUVEES)
+                    ->label('Exonération non prouvée')
+                    ->toggle()
+                    ->query(function (Builder $query): Builder {
+                        $calendrier = ValeursLues::instance(Filament::getTenant(), Magasin::class)->calendrier();
+
+                        return RequeteDuModele::de($query, Facture::class)->exonerationsNonProuvees($calendrier, $calendrier->aujourdhui());
+                    }),
+                // Les tickets détaxés dont le bordereau attend la date de son
+                // visa (voir Facture::scopeVisaANoter()), où mène aussi
+                // l'« À faire ».
+                Tables\Filters\Filter::make(self::FILTRE_VISA_A_NOTER)
+                    ->label('Visa à noter')
+                    ->toggle()
+                    ->query(fn (Builder $query): Builder => RequeteDuModele::de($query, Facture::class)->visaANoter()),
+                // Les factures et les tickets émis dont il reste quelque
+                // chose à régler (voir Facture::scopeAEncaisser()), où mène
+                // l'« À faire » du tableau de bord (voir
+                // ChosesAFaireDuMagasin).
+                Tables\Filters\Filter::make(self::FILTRE_A_ENCAISSER)
+                    ->label('À encaisser')
+                    ->toggle()
+                    ->query(fn (Builder $query): Builder => RequeteDuModele::de($query, Facture::class)->aEncaisser()),
+            ])
+            ->actions([
+                Tables\Actions\ViewAction::make(),
+                // Un brouillon n'a jamais reçu de numéro légal : il reste
+                // librement modifiable (lignes comprises, voir EditFacture)
+                // et supprimable (voir FacturePolicy et actionSupprimer()),
+                // sa suppression inscrite au journal des événements (voir
+                // Facture::delete()). Dès l'émission, ces deux actions
+                // disparaissent définitivement : une facture émise se
+                // corrige par un avoir, jamais en la modifiant ou en la
+                // supprimant.
+                Tables\Actions\EditAction::make()
+                    ->visible(fn (Facture $record) => $record->statut === StatutFacture::Brouillon),
+                self::actionSupprimer(Tables\Actions\DeleteAction::make())
+                    ->visible(fn (Facture $record) => $record->statut === StatutFacture::Brouillon),
+                self::emettre(Tables\Actions\Action::make('emettre')),
+                self::emettreEtEncaisser(Tables\Actions\Action::make('emettre_et_encaisser')),
+                self::encaisser(Tables\Actions\Action::make('encaisser')),
+                self::telechargerLePdf(Tables\Actions\Action::make('telecharger_pdf')),
+                self::envoyerParEmail(Tables\Actions\Action::make('envoyer_par_email')),
+                self::relancer(Tables\Actions\Action::make('relancer')),
+                Tables\Actions\Action::make('avoir')
+                    ->label('Avoir')
+                    ->icon('heroicon-o-receipt-refund')
+                    ->color('danger')
+                    ->form(fn (Facture $record) => [
+                        self::champDuJeton(),
+                        // Sélection des lignes/quantités à créditer plutôt
+                        // qu'un crédit total forcé : un avoir partiel est
+                        // légal (voir le docblock de CreerAvoirAction).
+                        // Pré-rempli avec la quantité restante créditable
+                        // de chaque ligne ; retirer une ligne ou réduire sa
+                        // quantité exclut le reste du crédit.
+                        Repeater::make('lignes')
+                            ->label('Lignes à créditer')
+                            ->schema([
+                                Hidden::make('ligne_facture_id'),
+                                TextInput::make('description')
+                                    ->label('Produit / description')
+                                    ->disabled()
+                                    ->dehydrated(false),
+                                self::champQuantiteRetournee('Quantité à créditer', fn (Get $get): ?int => AvoirResource::ligneVisible($get('ligne_facture_id'))?->quantiteCreditableRestante()),
+                            ])
+                            ->columns(3)
+                            ->addable(false)
+                            ->deletable(true)
+                            ->default(
+                                $record->lignes
+                                    ->map(fn (LigneFacture $ligne) => [
+                                        'ligne_facture_id' => $ligne->id,
+                                        'description' => $ligne->description,
+                                        'quantite' => $ligne->quantiteCreditableRestante(),
+                                    ])
+                                    ->filter(fn (array $ligne) => $ligne['quantite'] > 0)
+                                    ->values()
+                                    ->all()
+                            ),
+                        Textarea::make('motif')->label('Motif de l\'avoir')->required(),
+                    ])
+                    ->requiresConfirmation()
+                    ->modalDescription(fn (Facture $record): string => 'Seules les lignes et quantités conservées ci-dessous seront créditées, et leur stock restauré. Retirez les lignes à ne pas créditer. Cette action est irréversible. '.AvoirResource::imputationDuCredit($record->client))
+                    ->visible(fn (Facture $record): bool => AvoirResource::peutCrediter($record))
+                    ->action(function (Facture $record, array $data): void {
+                        $lignes = AvoirResource::lignesACrediter($data['lignes']);
+                        AvoirResource::autoriserLesLignesACrediter($lignes);
+                        static::executerSansCasser(fn () => app(EnregistrerAvoirAction::class)->handle(CompteConnecte::exiger(), ValeurRequise::de($record->client, 'le client de la facture'), $lignes, ValeurSimple::enTexteOuNul($data['motif']), ValeurSimple::enTexteOuNul($data['jeton'])));
+                    }),
+            ])
+            // Seuls les brouillons partent : une facture déjà émise se
+            // corrige par un avoir (voir l'action "avoir" ci-dessus).
+            ->bulkActions([
+                Tables\Actions\BulkActionGroup::make([
+                    static::suppressionEnMasse(Facture::class, fn (Facture $facture) => app(SupprimerFactureAction::class)->handle(CompteConnecte::exiger(), $facture)),
+                ]),
+            ]);
+    }
+
+    /**
+     * La colonne « À faire » de la liste : ce qui attend encore sur chaque
+     * facture, dit sur sa ligne (règle 1 de l'« À faire », voir
+     * ChosesAFaireDuMagasin) : « À émettre » pour un brouillon, « À
+     * encaisser » pour ce qui reste dû (voir Facture::scopeAEncaisser()),
+     * « En retard » tant qu'un montant reste dû après l'échéance, jamais
+     * pour une facture réglée ou soldée par un avoir (voir
+     * Facture::estEnRetard()), « Preuve à fournir » pour
+     * une vente hors de France qui attend une preuve de son exonération
+     * (voir Facture::attendUnePreuve()), « Exonération non prouvée » pour
+     * une vente qui se régularise faute de preuve de sortie 150 jours
+     * après sa date (voir
+     * Facture::attendLaRegularisationDeSonExoneration()), « Visa à noter »
+     * pour un ticket
+     * détaxé dont le bordereau attend la date de son visa (voir
+     * Facture::attendSonVisa()).
+     */
+    public static function colonneAFaire(): Tables\Columns\TextColumn
+    {
+        return Tables\Columns\TextColumn::make('a_faire')
+            ->label('À faire')
+            ->badge()
+            ->state(fn (Facture $record): array => self::raisonsAFaire($record))
+            ->color(fn (string $state): string => in_array($state, ['En retard', 'Exonération non prouvée'], true) ? 'danger' : 'warning')
+            ->placeholder('—');
+    }
+
+    /**
+     * Ce qui attend encore sur cette facture, dans l'ordre de l'« À faire ».
+     *
+     * @return list<string>
+     */
+    public static function raisonsAFaire(Facture $facture): array
+    {
+        return array_values(array_filter([
+            $facture->statut === StatutFacture::Brouillon ? 'À émettre' : null,
+            in_array($facture->statut, StatutFacture::quiAttendentUnReglement(), true) ? 'À encaisser' : null,
+            $facture->statut !== StatutFacture::Brouillon && $facture->estEnRetard() ? 'En retard' : null,
+            $facture->attendUnePreuve() ? 'Preuve à fournir' : null,
+            $facture->attendLaRegularisationDeSonExoneration() ? 'Exonération non prouvée' : null,
+            $facture->attendSonVisa() ? 'Visa à noter' : null,
+        ]));
+    }
+
+    /**
+     * « Supprimer » un brouillon, depuis la liste ou la page de
+     * modification : par l'action du domaine, qui relit sous verrou le
+     * registre, le magasin, l'auteur et le brouillon, et inscrit l'abandon
+     * de la vente au journal des événements (voir SupprimerFactureAction et
+     * Facture::delete()). Un refus (brouillon émis ou supprimé pendant la
+     * requête, magasin fermé, droit retiré, journal qui ne s'écrit pas) se
+     * lit en notification, et le brouillon reste. Un brouillon supprimé
+     * avant le clic n'est plus dans l'écran : la liste le dit (voir
+     * SignaleUneLigneDisparue), et sa page revient à la liste, qui le dit
+     * aussi (voir ReponseAUnDocumentDisparu).
+     *
+     * @template TAction of DeleteAction|Tables\Actions\DeleteAction
+     *
+     * @param  TAction  $action
+     * @return TAction
+     */
+    public static function actionSupprimer(DeleteAction|Tables\Actions\DeleteAction $action): DeleteAction|Tables\Actions\DeleteAction
+    {
+        return $action->using(fn (Facture $record): bool => static::executerOuInterrompre(function () use ($record): bool {
+            app(SupprimerFactureAction::class)->handle(CompteConnecte::exiger(), $record);
+
+            return true;
+        }));
+    }
+
+    /**
+     * « Encaisser » une facture ou un ticket émis, sur la liste comme sur
+     * la fiche, d'un seul geste, en un ou plusieurs modes (point 23, voir
+     * SaisitUnReglementEnParts et EncaisserEnPlusieursModesAction) : la
+     * première part prend le mode préféré du client (B8) et ce qui reste
+     * dû, le crédit d'avoir déjà imputé se montre en lecture, et un ticket
+     * du client comptoir accepte en plus des bons d'avoir (Q6). Les parts
+     * ne dépassent jamais ce qui reste dû : un trop-perçu ne devient pas un
+     * crédit, seul un acompte reste permis. La fenêtre porte le jeton de la
+     * demande (R3). La facture se relit ensuite : la fiche montre aussitôt
+     * son nouveau statut.
+     *
+     * @template TAction of MountableAction
+     *
+     * @param  TAction  $action
+     * @return TAction
+     */
+    public static function encaisser(MountableAction $action): MountableAction
+    {
+        return $action
+            ->label('Encaisser')
+            ->icon('heroicon-o-banknotes')
+            ->color('success')
+            ->modalHeading('Encaisser')
+            ->form([
+                self::champDuJeton(),
+                ...self::composantsDuReglement(
+                    fn (Get $get, ?Model $record, string $racine): ApercuDuReglement => $record instanceof Facture
+                        ? ApercuDuReglement::surLaFacture($record, self::bonsDesParts($get($racine.'parts')))
+                        : new ApercuDuReglement(0, 0, [], [], 0),
+                    fn (Get $get, ?Model $record, string $racine): ?ModePaiement => $record instanceof Facture ? $record->client?->mode_paiement_prefere : null,
+                    false,
+                    'Avoir (crédit déjà imputé)',
+                ),
+                DatePicker::make('recu_le')
+                    ->label('Reçu le')
+                    ->required()
+                    ->default(fn (): string => self::calendrierDuMagasin()->aujourdhui())
+                    ->maxDate(fn (): string => self::calendrierDuMagasin()->aujourdhui())
+                    ->validationMessages(['before_or_equal' => 'Un paiement ne peut pas être reçu à une date future.']),
+            ])
+            ->visible(fn (Facture $record): bool => CompteConnecte::exiger()->can('encaisser', $record))
+            ->action(function (Facture $record, array $data): void {
+                static::executerSansCasser(fn () => app(EncaisserEnPlusieursModesAction::class)->handle(
+                    CompteConnecte::exiger(),
+                    $record,
+                    self::partsPayees($data['parts'] ?? []),
+                    self::bonsDesParts($data['parts'] ?? []),
+                    ValeurSimple::enTexte($data['recu_le']),
+                    ValeurSimple::enTexteOuNul($data['jeton']),
+                ));
+                $record->refresh();
+            });
+    }
+
+    /**
+     * « Reçu (PDF) » d'un paiement reçu après l'émission, ou d'une
+     * contre-passation, sur sa ligne des « Paiements reçus » de la fiche
+     * (R2) : le reçu de paiement de tout l'encaissement dont il est une
+     * part, produit depuis ce qui a été enregistré (voir
+     * RecuPaiementPdfGenerator), pour qui voit ce paiement (voir
+     * RecuPaiementPolicy::view()), un compte du cabinet lié qui voit les
+     * paiements du client compris.
+     *
+     * @template TAction of MountableAction
+     *
+     * @param  TAction  $action
+     * @return TAction
+     */
+    public static function telechargerLeRecu(MountableAction $action): MountableAction
+    {
+        return $action
+            ->label('Reçu (PDF)')
+            ->icon('heroicon-o-arrow-down-tray')
+            ->link()
+            ->visible(fn (PaiementAllocation $record): bool => ($recu = self::paiementDe($record)->recuPaiement) !== null && CompteConnecte::exiger()->can('view', $recu))
+            ->action(function (PaiementAllocation $record): ?StreamedResponse {
+                $recu = self::recuDe($record);
+                Gate::authorize('view', $recu);
+                $generateur = app(RecuPaiementPdfGenerator::class);
+
+                try {
+                    $pdf = $generateur->generer($recu)->output();
+                } catch (VenteNonAutoriseeException $refus) {
+                    static::notifierLeRefus($refus);
+
+                    return null;
+                }
+
+                return response()->streamDownload(fn () => print ($pdf), $generateur->nomFichier($recu), EnTetesDesFichiers::fichierProduit('application/pdf'));
+            });
+    }
+
+    /**
+     * « Envoyer le reçu » d'un paiement reçu après l'émission, ou d'une
+     * contre-passation, par e-mail au client, PDF en pièce jointe (R2), à
+     * l'adresse du client préremplie, avec toutes les règles des e-mails
+     * (voir EnvoyerDocumentAction : limites, droit au moment de l'envoi,
+     * lecture seule, jeton de la demande) : pour qui peut envoyer les
+     * documents qu'il règle (voir RecuPaiementPolicy::envoyer()), jamais un
+     * compte du cabinet lié, qui n'envoie rien, jamais dans le magasin de
+     * démonstration, qui n'écrit à aucun client, ni pour le client comptoir
+     * sans adresse.
+     *
+     * @template TAction of MountableAction
+     *
+     * @param  TAction  $action
+     * @return TAction
+     */
+    public static function envoyerLeRecu(MountableAction $action): MountableAction
+    {
+        return $action
+            ->label('Envoyer le reçu')
+            ->icon('heroicon-o-envelope')
+            ->link()
+            ->modalHeading(fn (PaiementAllocation $record): string => 'Envoyer par e-mail : '.self::recuDe($record)->libelleDocument().' '.self::recuDe($record)->numero)
+            ->modalSubmitActionLabel('Envoyer')
+            ->visible(function (PaiementAllocation $record): bool {
+                $recu = self::paiementDe($record)->recuPaiement;
+
+                if ($recu === null) {
+                    return false;
+                }
+
+                return ! $recu->magasin->est_demonstration
+                    && ! (($client = ValeurRequise::de($recu->client, 'le client du reçu'))->estComptoir() && blank($client->email))
+                    && CompteConnecte::exiger()->can('envoyer', $recu);
+            })
+            ->fillForm(fn (PaiementAllocation $record): array => ['destinataire' => ValeurRequise::de(self::recuDe($record)->client, 'le client du reçu')->email])
+            ->form([
+                static::champDuJeton(),
+                self::champDestinataire(),
+                Textarea::make('message')
+                    ->label('Message (facultatif)')
+                    ->helperText('Ajouté au texte de l\'e-mail, avant votre signature.')
+                    ->rows(4)
+                    ->maxLength(2000)
+                    ->validationMessages(['max' => 'Un message de 2 000 caractères au plus.']),
+            ])
+            ->action(fn (PaiementAllocation $record, array $data) => static::executerSansCasser(function () use ($record, $data): void {
+                $envoi = app(EnvoyerDocumentAction::class)->handle(CompteConnecte::exiger(), self::recuDe($record), ValeurSimple::enTexte($data['destinataire']), ValeurSimple::enTexteOuNul($data['message'] ?? null), ValeurSimple::enTexteOuNul($data['jeton']));
+
+                Notification::make()
+                    ->title(self::envoiDemande($envoi))
+                    ->body('Le reçu de paiement part par e-mail, PDF en pièce jointe ; s\'il ne part pas, vous en serez prévenu.')
+                    ->success()
+                    ->send();
+            }));
+    }
+
+    /**
+     * « Émettre » un brouillon, depuis la liste ou sa fiche. Une vente
+     * au-delà du stock (R1) garde la fenêtre ouverte et y montre
+     * l'avertissement que renvoie l'émission (« Le stock de Câble USB
+     * passera à −2 : confirmer la vente ? »), avec la confirmation qui
+     * l'accepte, que la personne autorisée valide ; renouvelé si le stock a
+     * encore baissé entre-temps. La fenêtre porte le jeton de la demande
+     * (R3) : une émission renvoyée après une réponse perdue rend la facture
+     * déjà émise.
+     *
+     * @template TAction of MountableAction
+     *
+     * @param  TAction  $action
+     * @return TAction
+     */
+    public static function emettre(MountableAction $action): MountableAction
+    {
+        return $action
+            ->label('Émettre')
+            ->icon('heroicon-o-paper-airplane')
+            ->color('success')
+            ->requiresConfirmation()
+            ->modalHeading(fn (array $arguments): string => filled($arguments['avertissements'] ?? null) ? 'Vendre sans stock ?' : 'Émettre')
+            ->modalDescription(fn (array $arguments): string|HtmlString => filled($arguments['avertissements'] ?? null)
+                ? static::descriptionDeLAvertissement(ValeursLues::champs($arguments))
+                : 'Un numéro définitif sera attribué, l\'échéance fixée et le stock décrémenté. Cette action est irréversible : une facture émise ne se corrige plus que par un avoir.')
+            ->form([self::champDuJeton()])
+            ->visible(fn (Facture $record) => $record->statut === StatutFacture::Brouillon && CompteConnecte::exiger()->can('emettre', $record))
+            ->action(fn (Facture $record, array $data, array $arguments, MountableAction $action) => self::emettreLeBrouillon($record, ValeursLues::champs($data), ValeursLues::champs($arguments), $action, null));
+    }
+
+    /**
+     * « Émettre et encaisser » un brouillon fait hors de la caisse (R1),
+     * depuis la liste ou sa fiche, à côté de « Émettre » : un seul geste
+     * émet le document et enregistre son règlement, dans la même
+     * transaction signée (voir EmettreFactureAction et
+     * ReglementComptant::horsDeLaCaisse()). Le règlement se saisit comme
+     * dans « Encaisser » (voir SaisitUnReglementEnParts) : un ou plusieurs
+     * modes, chacun avec sa référence et son montant, la première part
+     * préremplie avec le mode préféré du client (B8) et ce que laisse dû
+     * son crédit d'avoir, qui s'imputera d'office à l'émission et se montre
+     * en lecture ; jamais un bon d'avoir (Q6). Les parts ne dépassent jamais
+     * ce qui restera dû, un paiement partiel laisse le reste dû avec
+     * l'échéance de la facture, et un montant à zéro n'est pas un
+     * règlement : sans aucun montant, ou à zéro, le geste revient à
+     * « Émettre ». Seulement pour qui peut émettre ce document et enregistrer
+     * un encaissement dans ce magasin (voir FacturePolicy::emettreEtEncaisser()).
+     * Une vente au-delà du stock garde la fenêtre ouverte comme « Émettre ».
+     * La fenêtre porte le jeton de la demande (R3).
+     *
+     * @template TAction of MountableAction
+     *
+     * @param  TAction  $action
+     * @return TAction
+     */
+    public static function emettreEtEncaisser(MountableAction $action): MountableAction
+    {
+        return $action
+            ->label('Émettre et encaisser')
+            ->icon('heroicon-o-banknotes')
+            ->color('success')
+            ->modalHeading(fn (array $arguments): string => filled($arguments['avertissements'] ?? null) ? 'Vendre sans stock ?' : 'Émettre et encaisser')
+            ->modalDescription(fn (array $arguments): string|HtmlString => filled($arguments['avertissements'] ?? null)
+                ? static::descriptionDeLAvertissement(ValeursLues::champs($arguments))
+                : 'Un numéro définitif sera attribué, l\'échéance fixée, le stock décrémenté et le règlement enregistré : il s\'imprimera sur le document. Cette action est irréversible : une facture émise ne se corrige plus que par un avoir.')
+            ->modalSubmitActionLabel('Émettre et encaisser')
+            ->form([
+                self::champDuJeton(),
+                ...self::composantsDuReglement(
+                    fn (Get $get, ?Model $record, string $racine): ApercuDuReglement => $record instanceof Facture
+                        ? ApercuDuReglement::aLEmission($record)
+                        : new ApercuDuReglement(0, 0, [], [], 0),
+                    fn (Get $get, ?Model $record, string $racine): ?ModePaiement => $record instanceof Facture ? $record->client?->mode_paiement_prefere : null,
+                    false,
+                    'Avoir (crédit du client)',
+                ),
+            ])
+            ->visible(fn (Facture $record): bool => CompteConnecte::exiger()->can('emettreEtEncaisser', $record))
+            ->action(function (Facture $record, array $data, array $arguments, MountableAction $action): void {
+                static::executerSansCasser(function () use ($record, $data, $arguments, $action): void {
+                    $parts = self::partsPayees($data['parts'] ?? []);
+
+                    self::emettreLeBrouillon($record, ValeursLues::champs($data), ValeursLues::champs($arguments), $action, $parts === [] ? null : ReglementComptant::horsDeLaCaisse($parts));
+                });
+            });
+    }
+
+    /**
+     * Émet le brouillon, avec le règlement de « Émettre et encaisser » s'il
+     * y en a un, puis relit la facture, que sa fiche montre aussitôt émise.
+     * Une vente au-delà du stock garde la fenêtre ouverte, avec
+     * l'avertissement et la confirmation qui l'accepte (voir emettre()).
+     *
+     * @param  array<string, mixed>  $data
+     * @param  array<string, mixed>  $arguments
+     */
+    private static function emettreLeBrouillon(Facture $record, array $data, array $arguments, MountableAction $action, ?ReglementComptant $reglement): void
+    {
+        $avertissement = null;
+
+        static::executerSansCasser(function () use ($record, $data, $arguments, $reglement, &$avertissement): void {
+            self::verifierLeNumeroTvaSurViesSiBesoin($record);
+
+            try {
+                app(EmettreFactureAction::class)->handle(CompteConnecte::exiger(), $record, $reglement, static::confirmationDesArguments($arguments), ValeurSimple::enTexteOuNul($data['jeton']));
+            } catch (ConfirmationVenteSansStockRequiseException $exception) {
+                $avertissement = $exception;
+            }
+        });
+
+        if ($avertissement === null) {
+            $record->refresh();
+
+            return;
+        }
+
+        $nouveaux = static::argumentsDeLAvertissement($avertissement);
+        $livewire = $action->getLivewire();
+
+        if ($action instanceof Tables\Actions\Action) {
+            $liste = $livewire instanceof ListRecords ? $livewire : throw new LogicException('L\'émission d\'une facture depuis un tableau se fait dans la liste des factures.');
+            $liste->mountedTableActionsArguments[array_key_last(ValeurRequise::de($liste->mountedTableActionsArguments, 'les arguments des actions ouvertes du tableau'))] = $nouveaux;
+        } else {
+            $page = $livewire instanceof BasePage ? $livewire : throw new LogicException('L\'émission d\'une facture se fait depuis une page.');
+            $page->mountedActionsArguments[array_key_last(ValeurRequise::de($page->mountedActionsArguments, 'les arguments des actions ouvertes de la page'))] = $nouveaux;
+        }
+
+        $action->arguments($nouveaux);
+        $action->halt();
+    }
+
+    /**
+     * Le paiement d'une imputation de la fiche : sa clé étrangère ne
+     * manque jamais (voir ValeurRequise).
+     */
+    private static function paiementDe(PaiementAllocation $allocation): Paiement
+    {
+        return ValeurRequise::de($allocation->paiement, 'le paiement de l\'imputation');
+    }
+
+    /**
+     * Le reçu du paiement d'une imputation, là où l'action n'est visible
+     * que pour un paiement qui en a un.
+     */
+    private static function recuDe(PaiementAllocation $allocation): RecuPaiement
+    {
+        return ValeurRequise::de(self::paiementDe($allocation)->recuPaiement, 'le reçu du paiement');
+    }
+
+    /**
+     * Une livraison intracommunautaire ou une prestation autoliquidée ne
+     * s'émet qu'avec le n° de TVA du client trouvé valide sur VIES le jour
+     * même, par la dernière vérification du jour (voir
+     * ControleNatureOperation::consultationDuJour()) : quand aucune
+     * vérification d'aujourd'hui ne l'a trouvé valide, ou que la dernière
+     * l'a trouvé inconnu, l'émission interroge d'abord VIES, hors de toute
+     * transaction (voir VerifierNumeroTvaAction). VIES injoignable, rien
+     * n'est émis, et le refus le dit.
+     */
+    private static function verifierLeNumeroTvaSurViesSiBesoin(Facture $facture): void
+    {
+        $client = ValeurRequise::de($facture->client, 'le client de la facture');
+
+        if ($facture->nature_operation->exigeVies()
+            && $client->aUnNumeroTvaVerifiableSurVies()
+            && app(ControleNatureOperation::class)->consultationDuJour($client, $facture->magasin->calendrier()->aujourdhui()) === null) {
+            app(VerifierNumeroTvaAction::class)->handle(CompteConnecte::exiger(), $client);
+        }
+    }
+
+    public static function getPages(): array
+    {
+        return [
+            'index' => Pages\ListFactures::route('/'),
+            'create' => Pages\CreateFacture::route('/create'),
+            'view' => Pages\ViewFacture::route('/{record}'),
+            'edit' => Pages\EditFacture::route('/{record}/edit'),
+        ];
+    }
+}

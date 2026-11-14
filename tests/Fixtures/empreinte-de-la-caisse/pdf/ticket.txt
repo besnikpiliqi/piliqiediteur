@@ -1,0 +1,77 @@
+fichier : ticket-TK-LYON1-2026-000001.pdf
+--- page 1 (0.000 0.000 595.280 841.890)
+Ma Boutique
+12 rue Mercière
+69002 Lyon
+FR
+SIRET : 10000000900017
+Tél. 04 72 00 00 00 · contact@ma-boutique.example
+TICKET DE CAISSE
+N° TK-LYON1-2026-000001
+Émise le 09/10/2026
+CLIENT
+Client comptoir
+CONDITIONS
+Réglé à l'émission
+DÉTAIL DES ARTICLES ET PRESTATIONS
+RÉF.
+ARTICLE
+QTÉ
+PU TTC
+REM.
+TVA
+TOTAL TTC
+CAF-250
+Café moulu 250 g
+2
+12,00 €
+—
+20 %
+24,00 €
+THE-100
+Thé vert 100 g
+1
+6,50 €
+—
+5,5 %
+6,50 €
+Montants calculés depuis les prix TTC : pour chaque ligne, la TVA est le TTC × taux ÷ (1 + taux), arrondie une fois au centime, et le HT est le TTC moins cette TVA ; un centime peut
+être ajusté sur une ligne pour que la TVA de chaque taux soit celle de son TTC total, calculée de même.
+Récapitulatif TVA
+Taux
+Base HT
+TVA
+TTC
+20 %
+20,00 €
+4,00 €
+24,00 €
+5,5 %
+6,16 €
+0,34 €
+6,50 €
+RÈGLEMENTS
+DATE
+MODE
+RÉFÉRENCE
+MONTANT
+09/10/2026
+Espèces
+10,50 €
+09/10/2026
+Carte bancaire
+CB-0930
+20,00 €
+Restant dû à l'émission
+0,00 €
+Montant à régler
+Total HT
+26,16 €
+Total TVA
+4,34 €
+NET À PAYER
+30,50 €
+Les Délices de Jeanne SAS au capital de 10 000,00 € · Siège social : 1 rue de la République, 69002 Lyon · SIREN : 100000009 · RCS Lyon · TVA intracommunautaire :
+FR88100000009
+Catégorie de l'opération : Livraison de biens
+Page 1 sur 1

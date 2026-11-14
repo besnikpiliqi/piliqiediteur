@@ -1,0 +1,235 @@
+<?php
+
+namespace App\Filament\Concerns;
+
+use App\Domain\CaisseSecurisee\Exceptions\DocumentSansEnregistrementSigneException;
+use App\Domain\Facturation\Actions\EnvoyerDocumentAction;
+use App\Domain\Facturation\Enums\StatutEnvoi;
+use App\Domain\Facturation\Models\Avoir;
+use App\Domain\Facturation\Models\Devis;
+use App\Domain\Facturation\Models\EnvoiDocument;
+use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Models\RecuPaiement;
+use App\Domain\Facturation\Services\AvoirPdfGenerator;
+use App\Domain\Facturation\Services\DevisPdfGenerator;
+use App\Domain\Facturation\Services\FacturePdfGenerator;
+use App\Domain\Fichiers\EnTetesDesFichiers;
+use App\Domain\Tenancy\Exceptions\VenteNonAutoriseeException;
+use App\Domain\Tenancy\Support\CompteConnecte;
+use App\Domain\Tenancy\Support\ValeurRequise;
+use App\Domain\Tenancy\Support\ValeurSimple;
+use App\Filament\TableauEntry;
+use Filament\Actions\MountableAction;
+use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
+use Filament\Infolists\Components\Section;
+use Filament\Infolists\Components\TextEntry;
+use Filament\Notifications\Notification;
+use Illuminate\Database\Eloquent\Model;
+use Symfony\Component\HttpFoundation\StreamedResponse;
+
+/**
+ * Les gestes d'envoi communs aux devis, factures et avoirs : télécharger
+ * le PDF, l'envoyer par e-mail, relancer une facture impayée, et la
+ * section « Envois » de leur fiche.
+ *
+ * Chaque geste se configure sur une action de tableau comme sur une action
+ * de fiche (les deux sont des MountableAction) : par exemple
+ * static::envoyerParEmail(Tables\Actions\Action::make('envoyer_par_email'))
+ * dans la liste, FactureResource::envoyerParEmail(Actions\Action::make(...))
+ * dans ViewFacture. La ressource qui l'utilise utilise aussi
+ * GereLesExceptionsMetier, qui en affiche les refus. Un envoi et une
+ * relance portent le jeton de leur fenêtre (R3, voir PorteUnJeton) : un
+ * envoi renvoyé après une réponse perdue ne part qu'une fois.
+ */
+trait EnvoieLesDocuments
+{
+    use PorteUnJeton;
+
+    /**
+     * Dès que le document a son numéro : un brouillon n'a encore aucune
+     * existence pour le client. Le PDF se produit avant le téléchargement :
+     * un ticket, une facture ou un avoir qui ne peut pas être reproduit tel
+     * qu'il a été émis (voir DocumentSansEnregistrementSigneException), ou
+     * tout document d'une société pas encore validée (voir
+     * Magasin::verifierQuIlPeutImprimer()), ne se télécharge pas, et
+     * l'écran dit pourquoi.
+     *
+     * @template TAction of MountableAction
+     *
+     * @param  TAction  $action
+     * @return TAction
+     */
+    public static function telechargerLePdf(MountableAction $action): MountableAction
+    {
+        return $action
+            ->label('PDF')
+            ->icon('heroicon-o-arrow-down-tray')
+            ->visible(fn (Facture|Avoir|Devis|RecuPaiement $record): bool => filled($record->numero))
+            ->action(function (Facture|Devis|Avoir $record): ?StreamedResponse {
+                $generateur = match (true) {
+                    $record instanceof Facture => app(FacturePdfGenerator::class),
+                    $record instanceof Devis => app(DevisPdfGenerator::class),
+                    $record instanceof Avoir => app(AvoirPdfGenerator::class),
+                };
+
+                try {
+                    $pdf = $generateur->generer($record)->output();
+                } catch (DocumentSansEnregistrementSigneException|VenteNonAutoriseeException $refus) {
+                    static::notifierLeRefus($refus);
+
+                    return null;
+                }
+
+                return response()->streamDownload(fn () => print ($pdf), $generateur->nomFichier($record), EnTetesDesFichiers::fichierProduit('application/pdf'));
+            });
+    }
+
+    /**
+     * Destinataire prérempli avec l'adresse du client, modifiable ; un
+     * message facultatif s'ajoute au texte de l'e-mail. Le magasin de
+     * démonstration n'écrit à aucun client (voir
+     * Magasin::peutEcrireAuxClients()).
+     *
+     * @template TAction of MountableAction
+     *
+     * @param  TAction  $action
+     * @return TAction
+     */
+    public static function envoyerParEmail(MountableAction $action): MountableAction
+    {
+        return $action
+            ->label('Envoyer par e-mail')
+            ->icon('heroicon-o-envelope')
+            ->color('success')
+            ->modalHeading(fn (Facture|Avoir|Devis|RecuPaiement $record): string => "Envoyer par e-mail : {$record->libelleDocument()} ".($record->numero ?? '(brouillon)'))
+            ->modalDescription(fn (Facture|Avoir|Devis|RecuPaiement $record): ?string => $record instanceof Devis && blank($record->numero)
+                ? 'Ce devis reçoit son numéro en partant : il ne sera plus un brouillon.'
+                : null)
+            ->modalSubmitActionLabel('Envoyer')
+            ->visible(fn (Facture|Avoir|Devis|RecuPaiement $record): bool => $record->peutEtreEnvoye() && ! $record->magasin->est_demonstration && CompteConnecte::exiger()->can('envoyer', $record))
+            ->fillForm(fn (Facture|Avoir|Devis|RecuPaiement $record): array => ['destinataire' => ValeurRequise::de($record->client, 'le client du document envoyé')->email])
+            ->form([
+                static::champDuJeton(),
+                self::champDestinataire(),
+                Textarea::make('message')
+                    ->label('Message (facultatif)')
+                    ->helperText('Ajouté au texte de l\'e-mail, avant votre signature.')
+                    ->rows(4)
+                    ->maxLength(2000)
+                    ->validationMessages(['max' => 'Un message de 2 000 caractères au plus.']),
+            ])
+            ->action(fn (Facture|Avoir|Devis|RecuPaiement $record, array $data) => static::executerSansCasser(function () use ($record, $data) {
+                $envoi = app(EnvoyerDocumentAction::class)->handle(CompteConnecte::exiger(), $record, ValeurSimple::enTexte($data['destinataire']), ValeurSimple::enTexteOuNul($data['message'] ?? null), ValeurSimple::enTexteOuNul($data['jeton']));
+
+                self::confirmerLEnvoi($envoi, $record);
+            }));
+    }
+
+    /**
+     * La relance qui suit la dernière, facture jointe, avec le rappel de
+     * ce qu'il reste à payer (voir EnvoyerDocumentAction::relancer()). Elle
+     * ne s'offre jamais sur un ticket du client comptoir, anonyme : personne
+     * n'y est à relancer (lot DEMO-V) ; « Envoyer par e-mail » reste, pour
+     * un ticket donné par e-mail au client présent.
+     *
+     * @template TAction of MountableAction
+     *
+     * @param  TAction  $action
+     * @return TAction
+     */
+    public static function relancer(MountableAction $action): MountableAction
+    {
+        return $action
+            ->label('Relancer')
+            ->icon('heroicon-o-bell-alert')
+            ->color('warning')
+            ->modalHeading(fn (Facture $record): string => 'Relance n°'.($record->niveauDeRelanceAtteint() + 1)." : {$record->libelleDocument()} {$record->numero}")
+            ->modalDescription('Le client reçoit la facture en pièce jointe, avec le rappel de son montant, de son échéance et de ce qu\'il reste à payer.')
+            ->modalSubmitActionLabel('Relancer')
+            ->visible(fn (Facture $record): bool => ! ($record->client?->estComptoir() ?? false) && $record->estEchueEtImpayee() && ! $record->magasin->est_demonstration && CompteConnecte::exiger()->can('envoyer', $record))
+            ->fillForm(fn (Facture $record): array => ['destinataire' => ValeurRequise::de($record->client, 'le client de la facture relancée')->email])
+            ->form([static::champDuJeton(), self::champDestinataire()])
+            ->action(fn (Facture $record, array $data) => static::executerSansCasser(function () use ($record, $data) {
+                $envoi = app(EnvoyerDocumentAction::class)->relancer(CompteConnecte::exiger(), $record, ValeurSimple::enTexte($data['destinataire']), ValeurSimple::enTexteOuNul($data['jeton']));
+
+                self::confirmerLEnvoi($envoi, $record);
+            }));
+    }
+
+    /**
+     * Chaque envoi et chaque relance du document, du plus récent au plus
+     * ancien, aboutis ou non, avec le nom de la personne qui l'a demandé
+     * tel qu'il était ce jour-là (ou, sans personne, la relance automatique
+     * ou la réponse en ligne du client, voir NatureEnvoi::demandeSansPersonne()),
+     * et le détail de son résultat (voir
+     * EnvoiDocument::detail()). Tant qu'un envoi attend, la fiche se relit
+     * toutes les 5 secondes (wire:poll), sans rechargement : le résultat
+     * s'y affiche dès qu'il est connu ; ensuite, plus rien ne se relit.
+     */
+    public static function envoisSection(): Section
+    {
+        return Section::make('Envois')
+            ->visible(fn (Facture|Avoir|Devis|RecuPaiement $record): bool => $record->envois()->exists())
+            ->extraAttributes(fn (Facture|Avoir|Devis|RecuPaiement $record): array => $record->envois()->where('statut', StatutEnvoi::EnAttente)->exists() ? ['wire:poll.5s' => ''] : [])
+            ->schema([
+                TableauEntry::make('envois')
+                    ->label('')
+                    ->state(fn (Facture|Avoir|Devis|RecuPaiement $record) => $record->envois()->with('magasin')->latest('id')->get())
+                    ->schema([
+                        TextEntry::make('created_at')->label('Date')->state(fn (EnvoiDocument $record) => $record->envoye_le ?? $record->created_at)->dateTime('d/m/Y à H:i'),
+                        TextEntry::make('destinataire')->label('Destinataire')->state(fn (EnvoiDocument $record) => $record->destinataire),
+                        TextEntry::make('nature')->label('Nature')->state(fn (EnvoiDocument $record) => $record->nature)->badge(),
+                        TextEntry::make('niveau_relance')->label('Niveau')->state(fn (EnvoiDocument $record) => $record->niveau_relance)->prefix('n°')->placeholder('—'),
+                        TextEntry::make('statut')->label('Statut')->state(fn (EnvoiDocument $record) => $record->statut)->badge(),
+                        TextEntry::make('detail')->label('Détail')->state(fn (EnvoiDocument $record): ?string => $record->detail())->placeholder('—'),
+                        TextEntry::make('envoye_par_nom')->label('Demandé par')->state(fn (EnvoiDocument $record): ?string => $record->envoye_par_nom ?? $record->nature->demandeSansPersonne())->placeholder('—'),
+                    ]),
+            ]);
+    }
+
+    /**
+     * La même exigence que EnvoyerDocumentAction : une adresse sans
+     * commentaire, guillemets ni domaine sans point, que le serveur d'envoi
+     * accepte.
+     */
+    private static function champDestinataire(): TextInput
+    {
+        return TextInput::make('destinataire')
+            ->label('Destinataire')
+            ->type('email')
+            ->rule('email:strict')
+            ->required()
+            ->maxLength(254)
+            ->validationMessages([
+                'required' => 'Indiquez l\'adresse e-mail du destinataire.',
+                'email' => 'Cette adresse e-mail n\'est pas valide.',
+                'max' => 'Cette adresse e-mail est trop longue.',
+            ]);
+    }
+
+    /**
+     * Le document de la fiche est relu : son statut (« Envoyée ») et sa
+     * section « Envois » montrent la demande aussitôt ; l'e-mail part
+     * ensuite par la file d'attente, et la section, qui se relit seule
+     * tant qu'il attend (voir envoisSection()), en montre le résultat.
+     */
+    private static function confirmerLEnvoi(EnvoiDocument $envoi, Model $document): void
+    {
+        $document->refresh();
+
+        Notification::make()
+            ->title(self::envoiDemande($envoi).' ; son résultat s\'affiche dans « Envois »')
+            ->success()
+            ->send();
+    }
+
+    /**
+     * Ce que dit l'écran d'un envoi demandé : il part par la file
+     * d'attente, dans quelques secondes, et non au moment du clic.
+     */
+    private static function envoiDemande(EnvoiDocument $envoi): string
+    {
+        return "Envoi à {$envoi->destinataire} demandé : il part dans quelques secondes";
+    }
+}

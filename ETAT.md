@@ -1,19 +1,20 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 14/11/2026 à 09:13 UTC par pilotage-sync.sh : « Reprise de la chaîne avec REGLE-B (w8modrmzp) ».
+Mis à jour le 14/11/2026 à 09:24 UTC par pilotage-sync.sh : « Après le lot MAT-PRO ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
-Tête poussée : `6bf1d94`. Commits locaux pas encore poussés :
+Tête poussée : `fbf139f`. Commits locaux pas encore poussés :
 
 ```
-beddf30 Relie les 295 décisions de Claude de l'onglet à leurs tests (lot MAT-PRO)
-a7df29e Répare la CI : un test sans base de test n'écrit plus en base
 ```
 
 Derniers commits poussés :
 
 ```
+fbf139f Relecture du lot MAT-PRO
+beddf30 Relie les 295 décisions de Claude de l'onglet à leurs tests (lot MAT-PRO)
+a7df29e Répare la CI : un test sans base de test n'écrit plus en base
 6bf1d94 Relecture du lot STAT
 565f1ba Passe Larastan et l'analyse des flux de Psalm à chaque envoi (lot STAT)
 eba4bc8 Relecture du lot ER-PRO
@@ -31,25 +32,11 @@ c54c221 Relecture du lot EC2 de l’expert-comptable de la société
 f159294 Donne à la société un expert-comptable déclaré par le SIREN de son cabinet, rattaché tout seul au cabinet vérifié (lot EC2)
 b10d2e8 Relecture du lot DV du devis en ligne
 496da9c Laisse le client répondre à son devis en ligne et transformer un devis accepté en facture (lot DV)
-0b7e734 Écrit chaque jour de la relance en navigateur sans calcul sur un instant (CI)
-d4a8247 Relecture du lot ML des e-mails vérifiés
-0ad0710 Vérifie les e-mails sur Mailtrap et explique chaque échec d'envoi (lot ML)
 ```
 
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
- M app/Domain/Facturation/Services/ControleNatureOperation.php
- M app/Domain/Tenancy/Support/AvertissementsDuCodeDActivite.php
- M tests/Browser/inventaire-des-actions.php
- M tests/Feature/EcrituresSansBaseDeTestTest.php
- M tests/Feature/Facturation/NatureOperationTest.php
- M tests/Feature/Facturation/RegularisationDUneFactureTest.php
- M tests/Feature/Societe/TypeDActiviteTest.php
- M tests/Fixtures/EcrituresDurables.php
- M tests/Unit/MatriceDesDecisionsTest.php
- M tests/Unit/matrice-des-decisions.php
-?? tests/Browser/Parcours/AntillesUnSeulTerritoireTest.php
 ```
 
 ## Dernière course de la chaîne
@@ -57,8 +44,6 @@ d4a8247 Relecture du lot ML des e-mails vérifiés
 Course `wf_ee9b6e6e-908`, étapes commencées (de la plus ancienne à la plus récente) :
 
 ```
-SEED:implementation-2
-SEED:relecture1
 SEED:relecture2
 SEED:correction
 SEED:poussee
@@ -82,4 +67,6 @@ MAT-PRO:implementation-2
 MAT-PRO:relecture1
 MAT-PRO:relecture2
 MAT-PRO:correction
+MAT-PRO:poussee
+MAT-PRO:notes
 ```

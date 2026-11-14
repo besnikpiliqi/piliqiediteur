@@ -2506,3 +2506,7 @@ ici il y a un problem car quand il y a en bcp de produit alors les buttons en ba
 
 si tu peux arrete et recommncé à 10h10 ce matin
 
+## 277. 2026-11-14 09:23 UTC
+
+il faut que creer dans le tableaux de bord que pour le proprietaire tes tableaux avec chart.js de ([www.chartjs.org](https://www.chartjs.org)) qui est deja installer sur js/ widgets/chart.js. il faut creer pour tout dont pour compare les ventes/achats, la tva redevable, par moi,par an donc tout tout. et il faut que tu laisse en choix libre dans un menu deroulant pour tout les modeles de charts afin que le proprietaire chosis lequelle il veux apparaitre. et aussi pour les comptables pareille qui voit les comptes de leurs client, donc meme si c'est un comptable qui est declare par la societet ou c'est dans le compte du comptable elle meme. montre moi ce que t as compris et montre des modeles
+

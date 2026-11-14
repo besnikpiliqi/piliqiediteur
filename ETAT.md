@@ -1,18 +1,19 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 14/11/2026 à 19:31 UTC par pilotage-sync.sh : « Mesure des durées des tests et consigne des tests en navigateur resserrée ».
+Mis à jour le 14/11/2026 à 19:34 UTC par pilotage-sync.sh : « Après le lot REGLE-B ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
-Tête poussée : `31a5a13`. Commits locaux pas encore poussés :
+Tête poussée : `036841d`. Commits locaux pas encore poussés :
 
 ```
-f9e4ea1 Ventes calculées ligne par ligne (règle (b)) et PDF aux modèles M6-b et P1
 ```
 
 Derniers commits poussés :
 
 ```
+036841d Relecture du lot REGLE-B
+f9e4ea1 Ventes calculées ligne par ligne (règle (b)) et PDF aux modèles M6-b et P1
 31a5a13 Relecture du lot DEMO-V
 0b89116 Démonstration masquée après la validation, PU HT d'un article, tableaux au modèle D et cartes des notifications (lot DEMO-V)
 fbf139f Relecture du lot MAT-PRO
@@ -31,36 +32,11 @@ eba4bc8 Relecture du lot ER-PRO
 9ef56b6 Répare la CI : une seule aide pour choisir le client en navigateur
 9b258e5 Relecture du lot S9-L de la série 9
 4e2b320 Un produit n'a qu'une ligne d'un document
-c54c221 Relecture du lot EC2 de l’expert-comptable de la société
-f159294 Donne à la société un expert-comptable déclaré par le SIREN de son cabinet, rattaché tout seul au cabinet vérifié (lot EC2)
 ```
 
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
- M CLAUDE.md
- M app/Domain/Catalogue/Services/MargeDuCatalogue.php
- M app/Domain/Facturation/Models/LigneFacture.php
- M app/Domain/Facturation/Services/CalculateurLigne.php
- M app/Domain/Facturation/Services/MentionsFiscales.php
- M app/Filament/App/Resources/FactureResource.php
- M resources/views/documents/pdf/lignes.blade.php
- M tests/Browser/Parcours/PuHtAfficheTest.php
- M tests/Feature/Facturation/AvoirActionsTest.php
- M tests/Feature/Facturation/AvoirPdfGeneratorTest.php
- M tests/Feature/Facturation/DevisPdfGeneratorTest.php
- M tests/Feature/Facturation/FacturePdfGeneratorTest.php
- M tests/Feature/Facturation/MentionsFiscalesTest.php
- M tests/Feature/Facturation/TotauxDeLaNormeEuropeenneTest.php
- M tests/Feature/Filament/FactureResourceTest.php
- M tests/Fixtures/empreinte-de-la-caisse/pdf/avoir.txt
- M tests/Fixtures/empreinte-de-la-caisse/pdf/bon-d-avoir.txt
- M tests/Fixtures/empreinte-de-la-caisse/pdf/devis.txt
- M tests/Fixtures/empreinte-de-la-caisse/pdf/facture.txt
- M tests/Fixtures/empreinte-de-la-caisse/pdf/ticket.txt
- M tests/Unit/CalculateurLigneAuHasardTest.php
- M tests/Unit/CalculateurLigneTest.php
- M tests/Unit/matrice-des-decisions.php
 ```
 
 ## Dernière course de la chaîne
@@ -68,8 +44,6 @@ f159294 Donne à la société un expert-comptable déclaré par le SIREN de son 
 Course `wf_ee9b6e6e-908`, étapes commencées (de la plus ancienne à la plus récente) :
 
 ```
-STAT:implementation-2
-STAT:relecture1
 STAT:relecture2
 STAT:correction
 STAT:poussee
@@ -93,4 +67,6 @@ REGLE-B:implementation
 REGLE-B:relecture1
 REGLE-B:relecture2
 REGLE-B:correction
+REGLE-B:poussee
+REGLE-B:notes
 ```

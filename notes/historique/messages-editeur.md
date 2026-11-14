@@ -2578,3 +2578,11 @@ Mais je t ai dit je crois que tu mette que sur github et pas ici larastan car il
 
 D'accord, mais dit moi: tu dit 50 minutes par lot et alors combien de lot se passe
 
+## 289. 2026-11-14 19:25 UTC
+
+Dit moi quand le github envoi rouge alors il envoie tous les rouges donc tout les erreurs et toi les répares et u envoie sur github et lui fait encore les tests et si tout va bien il envoie verts. Donc toi tu juste corrige les rouges dans un lot séparé et tu arrête pas le travail pour corrige les rouges ? Dit moi en détails
+
+## 290. 2026-11-14 19:31 UTC
+
+Et toi tu fais postgresql ici c'est ca? Si oui alors il prend combien de temps ?
+

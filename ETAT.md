@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 14/11/2026 à 19:14 UTC par pilotage-sync.sh : « Décision de l'éditeur : plus de suite complète avant le commit sauf calculs, caisse, isolation ; bascule préparée ».
+Mis à jour le 14/11/2026 à 19:31 UTC par pilotage-sync.sh : « Mesure des durées des tests et consigne des tests en navigateur resserrée ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

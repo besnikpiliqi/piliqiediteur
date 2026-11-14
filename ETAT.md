@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 14/11/2026 à 11:17 UTC par pilotage-sync.sh : « Point de suivi 11:20 : sauvegarde DEMO-V, T118 dans le document ».
+Mis à jour le 14/11/2026 à 12:21 UTC par pilotage-sync.sh : « point de suivi 14/11 12:20 UTC : DEMO-V en fin de lot, sauvegarde ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -39,6 +39,7 @@ b10d2e8 Relecture du lot DV du devis en ligne
 ```
  M .env.example
  M CLAUDE.md
+ M README.md
  M app/Domain/Catalogue/Models/Service.php
  M app/Domain/Catalogue/Services/MargeDuCatalogue.php
  M app/Domain/Facturation/Actions/EnvoyerDocumentAction.php
@@ -80,7 +81,9 @@ b10d2e8 Relecture du lot DV du devis en ligne
  M database/migrations/0001_01_01_000001_create_users_table.php
  M resources/views/filament/app/livewire/selecteur-de-clients.blade.php
  M resources/views/filament/app/livewire/selecteur-de-produits.blade.php
+ M tests/Browser/Parcours/EnvoiParEMailTest.php
 RM tests/Browser/Parcours/PuHtExactTest.php -> tests/Browser/Parcours/PuHtAfficheTest.php
+ M tests/Browser/Parcours/RecuDePaiementTest.php
  M tests/Browser/inventaire-des-actions.php
  M tests/Feature/DatabaseSeederTest.php
  M tests/Feature/Facturation/AvoirPdfGeneratorTest.php
@@ -94,9 +97,6 @@ RM tests/Browser/Parcours/PuHtExactTest.php -> tests/Browser/Parcours/PuHtAffich
  M tests/Feature/Facturation/PolitiqueDArrondiTest.php
  M tests/Feature/Facturation/RepartitionTvaParCumulTest.php
  M tests/Feature/Facturation/ReponseAuDevisEnLigneTest.php
- M tests/Feature/Filament/CaisseTest.php
- M tests/Feature/Filament/ClotureCaisseResourceTest.php
- M tests/Feature/Filament/EnvoieLesDocumentsTest.php
 ```
 
 ## Dernière course de la chaîne

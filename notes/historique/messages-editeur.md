@@ -2456,3 +2456,13 @@ je choisi : A — Glisse de la droite, en haut à droite, sous la cloche.
 
 Règle (b) et M6 mais sans pu ttc
 
+## 268. 2026-11-14 01:20 UTC
+
+<!-- attach -->
+
+> Une seule fois : une carte déjà montrée ne revient jamais, même si on change de page ou qu’on se reconnecte. Une notification déjà lue ne s’affiche pas.
+
+
+
+non la notification s affiche comme j ai choisi mais les noitification reste toujours telle qu'il sont . moi je dis juste pour ca pour qu'il affiche directement mais pas changer ce qu'il y a dans les notification
+

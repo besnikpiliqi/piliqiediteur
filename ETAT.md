@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 14/11/2026 à 01:19 UTC par pilotage-sync.sh : « Règle (b) et M6 : lot REGLE-B ajouté à la chaîne (bascule à faire) ».
+Mis à jour le 14/11/2026 à 01:20 UTC par pilotage-sync.sh : « Notification : la cloche ne change pas ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 14/11/2026 à 20:11 UTC par pilotage-sync.sh : « CI rouge de 036841d relevée, réparation confiée à GRAPH ».
+Mis à jour le 14/11/2026 à 20:18 UTC par pilotage-sync.sh : « Même échec sur la course PR ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 14/11/2026 à 15:57 UTC par pilotage-sync.sh : « Après le lot DEMO-V ».
+Mis à jour le 14/11/2026 à 16:21 UTC par pilotage-sync.sh : « 14/11 16:20 UTC : DEMO-V poussé, bascule GRAPH/CHARGES faite (tâche wtuoplfzq) ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -37,6 +37,27 @@ f159294 Donne à la société un expert-comptable déclaré par le SIREN de son 
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
+ M app/Domain/Catalogue/Services/MargeDuCatalogue.php
+ M app/Domain/Facturation/Actions/CreerAvoirAction.php
+ M app/Domain/Facturation/Actions/EmettreAvoirAction.php
+ M app/Domain/Facturation/Models/LigneFacture.php
+ M app/Domain/Facturation/Services/CalculateurLigne.php
+ M app/Domain/Facturation/Services/ConstructeurLigneDocument.php
+ M app/Domain/Facturation/Services/ContexteDeVente.php
+ M app/Domain/Facturation/Services/RegularisationDUneExoneration.php
+ M app/Domain/Facturation/Services/RegularisationDUneFacture.php
+ M app/Domain/Facturation/Services/TableauDesLignes.php
+ M app/Filament/Concerns/AjouteDesLignesDeVente.php
+ M app/Filament/Concerns/ChoisitLaNatureDeLOperation.php
+ M resources/views/avoirs/pdf.blade.php
+ M resources/views/devis/pdf.blade.php
+ M resources/views/documents/pdf/en-tete.blade.php
+ M resources/views/documents/pdf/lignes.blade.php
+ M resources/views/documents/pdf/styles.blade.php
+ M resources/views/factures/pdf.blade.php
+ M tests/Unit/CalculateurLigneAuHasardTest.php
+ M tests/Unit/CalculateurLigneTest.php
+?? resources/views/documents/pdf/blocs.blade.php
 ```
 
 ## Dernière course de la chaîne
@@ -44,7 +65,6 @@ f159294 Donne à la société un expert-comptable déclaré par le SIREN de son 
 Course `wf_ee9b6e6e-908`, étapes commencées (de la plus ancienne à la plus récente) :
 
 ```
-ER-PRO:correction
 ER-PRO:poussee
 ER-PRO:notes
 STAT:implementation
@@ -69,4 +89,5 @@ DEMO-V:relecture2
 DEMO-V:correction
 DEMO-V:poussee
 DEMO-V:notes
+REGLE-B:implementation
 ```

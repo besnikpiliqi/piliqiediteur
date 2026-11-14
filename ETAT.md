@@ -1,12 +1,14 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 14/11/2026 à 01:38 UTC par pilotage-sync.sh : « P1 choisi ».
+Mis à jour le 14/11/2026 à 02:43 UTC par pilotage-sync.sh : « Sélecteur de produits : tableau qui défile (DEMO-V) ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
 Tête poussée : `6bf1d94`. Commits locaux pas encore poussés :
 
 ```
+beddf30 Relie les 295 décisions de Claude de l'onglet à leurs tests (lot MAT-PRO)
+a7df29e Répare la CI : un test sans base de test n'écrit plus en base
 ```
 
 Derniers commits poussés :
@@ -37,10 +39,12 @@ d4a8247 Relecture du lot ML des e-mails vérifiés
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
- M tests/Feature/Tenancy/RequeteDuModeleTest.php
- M tests/TestCase.php
-?? tests/Feature/EcrituresSansBaseDeTestTest.php
-?? tests/Fixtures/EcrituresDurables.php
+ M app/Domain/Facturation/Services/ControleNatureOperation.php
+ M app/Domain/Tenancy/Support/AvertissementsDuCodeDActivite.php
+ M tests/Feature/EcrituresSansBaseDeTestTest.php
+ M tests/Feature/Facturation/NatureOperationTest.php
+ M tests/Feature/Societe/TypeDActiviteTest.php
+ M tests/Fixtures/EcrituresDurables.php
 ```
 
 ## Dernière course de la chaîne
@@ -48,7 +52,6 @@ d4a8247 Relecture du lot ML des e-mails vérifiés
 Course `wf_ee9b6e6e-908`, étapes commencées (de la plus ancienne à la plus récente) :
 
 ```
-SEED:implementation
 SEED:implementation-2
 SEED:relecture1
 SEED:relecture2
@@ -71,4 +74,7 @@ STAT:poussee
 STAT:notes
 MAT-PRO:implementation
 MAT-PRO:implementation-2
+MAT-PRO:relecture1
+MAT-PRO:relecture2
+MAT-PRO:correction
 ```

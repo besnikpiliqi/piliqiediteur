@@ -2482,3 +2482,23 @@ non non tu fait pareille comme M6-b mais juste dans le tableau tu met ce que je 
 
 je choisi P1 pour les comptoires
 
+## 273. 2026-11-14 01:43 UTC
+
+montre moi qu est qui fait les ER-PRO, STAT, MAT-PRO
+
+## 274. 2026-11-14 01:49 UTC
+
+<!-- attach -->
+
+> pour une faille signalée hier.
+
+
+
+c est quoi la faille
+
+## 275. 2026-11-14 02:42 UTC
+
+[1 capture(s) d'écran jointe(s)]
+
+ici il y a un problem car quand il y a en bcp de produit alors les buttons en bas se disparait car la tables n est pas en overflow, tu vois quand il y en bcp de produits il faut decendre la coursol, donc la parti en desus de la tables des produits doit reste intact donc non caché ou disparaitre
+

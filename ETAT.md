@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 14/11/2026 à 02:49 UTC par pilotage-sync.sh : « Arrêt de la chaîne à la demande de l'éditeur, reprise 10 h 10 Paris ».
+Mis à jour le 14/11/2026 à 09:13 UTC par pilotage-sync.sh : « Reprise de la chaîne avec REGLE-B (w8modrmzp) ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

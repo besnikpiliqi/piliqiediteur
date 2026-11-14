@@ -2586,3 +2586,35 @@ Dit moi quand le github envoi rouge alors il envoie tous les rouges donc tout le
 
 Et toi tu fais postgresql ici c'est ca? Si oui alors il prend combien de temps ?
 
+## 291. 2026-11-14 20:36 UTC
+
+Pourquoi mtn tu fair plus implémentation par lot, avant tu faisais un seul
+
+## 292. 2026-11-14 21:37 UTC
+
+Démonstration : une fois la société validée, le magasin de démonstration disparaît de tous les écrans de la société et de ses magasins, y compris la page « Comptes » et le choix des magasins d'un administrateur. Son adresse mène à une page introuvable, mais ses données restent en base. == ces données doivent etre peut être archivé et pouvoir télécharger car je crois que la loi impose de garder tout meme en demo.
+
+
+
+Relancer doit etre donc que pour les professionnels et pas pour le reste donc pas pour les particuliers, di moi qu'est-ce que tu penses ?.
+
+
+
+
+
+Tu m'expliques tout ca: 4.	REGUL
+
+	5.	DATEOP
+
+	6.	DEVIS-RET
+
+	7.	MDP
+
+	8.	IDENT
+
+	9.	CESSION
+
+	10.	NAF25
+
+	11.	VIES-DEP
+

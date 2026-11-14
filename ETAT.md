@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 14/11/2026 à 19:35 UTC par pilotage-sync.sh : « REGLE-B poussé, chaîne relancée avec la méthode du 14/11 ».
+Mis à jour le 14/11/2026 à 20:11 UTC par pilotage-sync.sh : « CI rouge de 036841d relevée, réparation confiée à GRAPH ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -37,6 +37,36 @@ eba4bc8 Relecture du lot ER-PRO
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
+ M app/Domain/Authorization/PermissionRegistry.php
+ M app/Domain/Stock/Services/StockLedgerService.php
+ M app/Domain/Tenancy/Models/Affectation.php
+ M app/Domain/Tenancy/Services/AffectationsDesMembres.php
+ M app/Domain/Tenancy/Support/GardesDesDroits.php
+ M app/Filament/Cabinet/Resources/ClientDuCabinetResource.php
+ M app/Filament/Cabinet/Resources/ClientDuCabinetResource/Pages/FicheDuClient.php
+ M app/Filament/Concerns/CocheLesAutorisationsDeMagasin.php
+ M app/Filament/Societe/Pages/CabinetComptable.php
+ M app/Filament/Societe/Pages/RattachementDUnCabinet.php
+ M app/Filament/Societe/Pages/TableauDeBord.php
+ M app/Models/User.php
+ M app/Providers/AppServiceProvider.php
+ M app/Providers/Filament/AppPanelProvider.php
+ M app/Providers/Filament/CabinetPanelProvider.php
+ M app/Providers/Filament/SocietePanelProvider.php
+ M resources/views/filament/societe/pages/tableau-de-bord.blade.php
+?? app/Domain/TableauDeBord/
+?? app/Filament/App/Pages/TableauDeBordDeLaSociete.php
+?? app/Filament/App/Widgets/GraphiquesDuMagasin.php
+?? app/Filament/Cabinet/Resources/ClientDuCabinetResource/Pages/GraphiquesDuClient.php
+?? app/Filament/GrilleDesGraphiques.php
+?? database/migrations/2026_10_14_100009_create_preferences_tableau_de_bord_table.php
+?? public/css/app/graphiques.css
+?? resources/css/graphiques.css
+?? resources/views/filament/app/pages/tableau-de-bord-de-la-societe.blade.php
+?? resources/views/filament/cabinet/resources/graphiques-du-client.blade.php
+?? resources/views/filament/graphiques-du-panneau.blade.php
+?? resources/views/filament/grille-des-graphiques.blade.php
+?? tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php
 ```
 
 ## Dernière course de la chaîne

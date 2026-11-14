@@ -156,3 +156,39 @@ test('le collaborateur voit glisser dans l’espace du cabinet la carte de chaqu
 
     $parcoursDesCartes->call($this, $equipe->collaborateur, 'cabinet', fn (string $titre, ?string $url): Notification => new AvisDuCabinet($equipe->cabinet, $titre, 'Le texte de la notification.', $url), $fiche, (string) $equipe->societe->siren);
 });
+
+/*
+ * Une carte qui arrive à la place d'une carte fermée par sa croix glisse
+ * sous la souris restée immobile sur cette croix : elle n'a pas été
+ * survolée par la personne, qui n'a pas bougé, et s'en va seule au bout de
+ * son temps, comme toute carte. Seule une souris qui bouge sur une carte
+ * la retient (constat de la CI de 036841d, où une carte arrivée sous la
+ * souris restait sans fin).
+ */
+test('une carte arrivée sous la souris immobile s’en va seule au bout de son temps', function () {
+    $equipe = $this->societeComplete();
+    $compte = $equipe->proprietaire;
+    config(['piliqi.intervalle_des_notifications_en_secondes' => 1]);
+    $avertir = fn (string $titre) => $compte->notify(new AvisDeLEquipe($equipe->societe, $titre, 'Le texte de la notification.', null));
+    $this->travel(1)->seconds();
+
+    $avertir('Avis déjà là avant la connexion');
+    $this->travel(1)->seconds();
+
+    $onglet = $this->seConnecter($compte, panneau: 'societe')->fermerLesAvis();
+    $onglet->attendreQue('document.querySelector(".piliqi-carte") !== null', 'la carte de l\'avis déjà là ne s\'affiche pas')
+        ->attendreQue('document.querySelector(".piliqi-carte") === null', 'la carte de l\'avis déjà là ne s\'en va pas seule');
+    $avertir('Première notification');
+    $this->travel(2)->seconds();
+    $onglet->attendreQue('document.querySelector(".piliqi-carte") !== null', 'la carte de la première notification ne s\'affiche pas')
+        ->voir('Première notification')
+        ->cliquer('.piliqi-carte .piliqi-carte__fermer')
+        ->attendreQue('document.querySelector(".piliqi-carte") === null', 'la croix ne ferme pas la carte');
+
+    $avertir('Notification arrivée sous la souris');
+    $this->travel(2)->seconds();
+    $onglet->attendreQue('document.querySelector(".piliqi-carte") !== null', 'la carte arrivée sous la souris ne s\'affiche pas')
+        ->voir('Notification arrivée sous la souris');
+    $onglet->attendreQue('document.querySelector(".piliqi-carte") === null', 'la carte arrivée sous la souris immobile ne s\'en va pas seule');
+    $onglet->seDeconnecter();
+});

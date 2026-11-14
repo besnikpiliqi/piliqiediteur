@@ -6,7 +6,10 @@
     plus récente en haut, en garde trois au plus, fait bouger la cloche un
     instant et la met à jour ; chaque carte reste le temps dit, suspendu
     tant que la souris ou le clavier est dessus et reparti en entier quand
-    ils la quittent, puis s'en va. Sa croix et la fin de son temps ne
+    ils la quittent, puis s'en va. Seule une souris qui bouge sur la carte
+    la retient : une carte qui arrive sous la souris immobile (à la place
+    d'une carte que sa croix vient de fermer) n'a pas été survolée, et son
+    temps court. Sa croix et la fin de son temps ne
     touchent pas la notification. Un bouton qui marque la notification
     comme lue (le markAsRead() de Filament) la marque par la cloche, puis
     ouvre son adresse. Avec « réduire les animations », la carte apparaît
@@ -84,13 +87,18 @@
 
                 aMarquerCommeLue: false,
 
+                // Vrai dès que la souris bouge sur la carte, faux quand elle
+                // la quitte : une carte arrivée sous la souris immobile
+                // n'est pas survolée.
+                survolee: false,
+
                 init() {
                     this.$root.addEventListener('piliqi-fermer-la-carte', () => this.fermer())
                     this.reprendre()
                 },
 
                 reprendre() {
-                    if (this.$root.matches(':hover') || this.$root.matches(':focus-within') || this.$root.classList.contains('piliqi-carte--partante')) {
+                    if (this.survolee || this.$root.matches(':focus-within') || this.$root.classList.contains('piliqi-carte--partante')) {
                         return
                     }
 
@@ -104,6 +112,18 @@
                 suspendre() {
                     clearTimeout(this.minuterie)
                     this.$refs.temps.classList.remove('piliqi-carte__temps--en-cours')
+                },
+
+                survoler() {
+                    if (! this.survolee) {
+                        this.survolee = true
+                        this.suspendre()
+                    }
+                },
+
+                quitter() {
+                    this.survolee = false
+                    this.reprendre()
                 },
 
                 fermer() {

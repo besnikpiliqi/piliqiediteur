@@ -18,9 +18,11 @@ use InvalidArgumentException;
  * collectivités d'outre-mer (Saint-Barthélemy, Saint-Martin,
  * Saint-Pierre-et-Miquelon, Polynésie française, Nouvelle-Calédonie,
  * Wallis-et-Futuna) sont hors du territoire de TVA français, et le
- * logiciel ne gère pas encore la Guyane et Mayotte (voir
- * Territoire::estPrisEnCharge()) : leurs taux propres viendront avec la
- * table des taux par territoire, à valider par un expert-comptable.
+ * logiciel refuse les magasins de Guyane et de Mayotte, où la TVA ne
+ * s'applique pas (voir Territoire::estPrisEnCharge() ; décisions de
+ * Claude T81.1 et T81.2 de l'onglet « À faire vérifier par un
+ * professionnel ») : ils ne s'ouvriraient que sur décision de l'éditeur,
+ * leurs ventes alors sans TVA (art. 294 du CGI).
  */
 enum TerritoireTva: string
 {

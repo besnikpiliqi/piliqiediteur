@@ -49,4 +49,33 @@ class TerritoireTvaTest extends TestCase
     {
         $this->assertSame($aide, $territoire->aideSiTauxInhabituel($taux));
     }
+
+    /**
+     * Les taux particuliers de la Corse et des départements d'outre-mer
+     * se saisissent sans avertissement (décisions de Claude T25.1, T25.3,
+     * T25.4 et T25.5 de l'onglet « À faire vérifier par un
+     * professionnel ») : en Corse, 10 % (alcool servi sur place), 13 % et
+     * 2,1 % (alimentation, livres) ; en Guadeloupe, en Martinique et à La
+     * Réunion, 2,1 %, 1,75 % (animaux vivants de boucherie) et 1,05 %
+     * (presse, spectacles).
+     *
+     * @return array<string, array{TerritoireTva, string}>
+     */
+    public static function tauxParticuliers(): array
+    {
+        return [
+            'Corse, 10 %' => [TerritoireTva::Corse, '10'],
+            'Corse, 13 %' => [TerritoireTva::Corse, '13'],
+            'Corse, 2,1 %' => [TerritoireTva::Corse, '2.1'],
+            'Antilles et La Réunion, 2,1 %' => [TerritoireTva::AntillesReunion, '2.1'],
+            'Antilles et La Réunion, 1,75 %' => [TerritoireTva::AntillesReunion, '1.75'],
+            'Antilles et La Réunion, 1,05 %' => [TerritoireTva::AntillesReunion, '1.05'],
+        ];
+    }
+
+    #[DataProvider('tauxParticuliers')]
+    public function test_les_taux_particuliers_de_la_corse_et_des_departements_d_outre_mer_passent_sans_avertissement(TerritoireTva $territoire, string $taux): void
+    {
+        $this->assertNull($territoire->aideSiTauxInhabituel($taux));
+    }
 }

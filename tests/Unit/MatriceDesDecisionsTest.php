@@ -20,7 +20,11 @@ use PHPUnit\Framework\TestCase;
  *   une étape de la feuille de route qui n'est pas encore faite ; une
  *   explication donnée à l'éditeur, qui ne décide rien ; une décision
  *   remplacée en partie garde ses règles pour la part qui tient, et une
- *   décision que le code contredit dit la question proposée à l'éditeur.
+ *   décision que le code contredit dit la question proposée à l'éditeur ;
+ * - les 295 décisions de Claude de l'onglet « À faire vérifier par un
+ *   professionnel » y sont, chacune sous son numéro, sans aucune question
+ *   à trancher (D76), et chacune qui reste à faire nomme son étape ou son
+ *   lot.
  * Ce test lit les fichiers, sans base de données. Que la matrice recopie
  * chaque décision de chaque fichier de notes de l'éditeur, hors du dépôt,
  * ne se contrôle pas ici : la relecture de chaque lot qui la tient à jour
@@ -53,6 +57,16 @@ class MatriceDesDecisionsTest extends TestCase
      * ce que le code fait en attendant sa réponse.
      */
     private const QUESTION_A_TRANCHER = 'a_trancher';
+
+    /**
+     * La source des décisions de Claude de l'onglet « À faire vérifier par
+     * un professionnel » du document de pilotage (D76), et leur nombre :
+     * une entrée par ligne de l'onglet, la question au comptable et celle
+     * au prestataire d'un même numéro sous deux clés.
+     */
+    private const SOURCE_DE_L_ONGLET = 'Décisions de Claude de l\'onglet « À faire vérifier par un professionnel » (D76), appliquées sans attendre ; une réponse du professionnel prime (decisions-affichage/sortie/section-*.md)';
+
+    private const DECISIONS_DE_L_ONGLET = 295;
 
     public function test_chaque_partie_de_claude_md_a_ses_regles_et_chaque_regle_nomme_une_partie_qui_existe(): void
     {
@@ -99,6 +113,25 @@ class MatriceDesDecisionsTest extends TestCase
         }
 
         $this->assertSame([], $fautes);
+    }
+
+    /**
+     * Les décisions de Claude de l'onglet y sont toutes, chacune sous son
+     * numéro (« T2.1-comptable », « T90.1-prestataire-4 »…) ; aucune
+     * n'attend une réponse (D76 interdit « a_trancher ») et chacune qui
+     * reste à faire nomme l'étape ou le lot qui l'appliquera.
+     */
+    public function test_les_decisions_de_claude_de_l_onglet_y_sont_toutes_et_aucune_n_attend(): void
+    {
+        $decisions = self::matrice()['decisions'][self::SOURCE_DE_L_ONGLET] ?? [];
+        $malNumerotees = array_filter(array_keys($decisions), fn (string $cle): bool => preg_match('/^[TP]\d+(\.\d+)?(-(comptable|prestataire))?(-\d)?$/', $cle) !== 1);
+        $quiAttendent = array_filter($decisions, fn (array $decision): bool => array_key_exists(self::QUESTION_A_TRANCHER, $decision));
+        $sansEtapeNiLot = array_filter($decisions, fn (array $decision): bool => isset($decision['a_venir']) && preg_match('/(étapes? \d|\blots?\b)/iu', $decision['a_venir']) !== 1);
+
+        $this->assertCount(self::DECISIONS_DE_L_ONGLET, $decisions);
+        $this->assertSame([], array_values($malNumerotees));
+        $this->assertSame([], array_keys($quiAttendent));
+        $this->assertSame([], array_keys($sansEtapeNiLot));
     }
 
     /**

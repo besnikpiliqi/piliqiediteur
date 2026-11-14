@@ -8,9 +8,11 @@
  * porte (« puce » : le titre de la puce des décisions de l'éditeur, ou
  * « Protocole de rigueur », « Développement », « Produit »), ou que seul
  * le code applique (« Hors de CLAUDE.md » : décisions de la conversation
- * que l'éditeur n'a pas encore fait écrire dans CLAUDE.md), avec les tests
- * qui la prouvent, chacun nommé « chemin::méthode » pour un test PHPUnit,
- * « chemin › nom » pour un test Pest.
+ * que l'éditeur n'a pas encore fait écrire dans CLAUDE.md, et décisions de
+ * Claude de l'onglet « À faire vérifier par un professionnel » que
+ * CLAUDE.md n'écrit pas), avec les tests qui la prouvent, chacun nommé
+ * « chemin::méthode » pour un test PHPUnit, « chemin › nom » pour un test
+ * Pest.
  *
  * « decisions » : chaque décision de l'éditeur, par le fichier de notes qui
  * la porte (page d'arbitrages du 09/10/2026 ; séries 4, 5, 6 et 8 ;
@@ -20,7 +22,9 @@
  * T3 et PU ; décision du 01/11/2026 sur l'expert-comptable de la société ;
  * réponses du 26/10/2026 sur deux règles d'écran et du 01/11/2026 sur le
  * client comptoir ; directives et décisions de la conversation réunies
- * dans historique/DIRECTIVES.md ; série 9), avec les règles qui la font
+ * dans historique/DIRECTIVES.md ; série 9 ; décisions de Claude de
+ * l'onglet « À faire vérifier par un professionnel » du document de
+ * pilotage, appliquées sans attendre, D76), avec les règles qui la font
  * vivre (« regles »), ou la raison pour laquelle aucun test ne la porte :
  * « hors_logiciel » (une façon de travailler, que suivent le protocole de
  * rigueur, la CI et les relectures), « remplacee » (par la décision qui la
@@ -30,7 +34,12 @@
  * « regles », celles de la part qui tient. Une décision qui tient, ou la
  * part d'une décision qui tient, que le code contredit porte
  * « a_trancher » : la question proposée à l'éditeur et ce que le code fait
- * en attendant sa réponse.
+ * en attendant sa réponse. Une décision de Claude de l'onglet ne porte
+ * jamais « a_trancher » (D76 : rien n'attend) : quand le code la
+ * contredit, elle porte « a_venir », avec le lot qui corrigera le code. Si
+ * la colonne « Réponse du professionnel » de l'onglet est remplie, la
+ * réponse prime (D76) : la décision change alors dans la matrice et dans
+ * le code, au lot qui l'applique.
  *
  * MatriceDesDecisionsTest échoue si une partie de CLAUDE.md n'a aucune
  * règle, si une règle ne nomme aucun test ou nomme un test qui n'existe
@@ -863,6 +872,11 @@ return [
                 'tests/Feature/Facturation/RegularisationDUneFactureTest.php::test_la_regularisation_ne_fait_jamais_payer_deux_fois',
                 'tests/Feature/Facturation/RegularisationDUneFactureTest.php::test_une_regularisation_ne_declare_aucun_encaissement_supplementaire',
                 'tests/Feature/Facturation/RegularisationDUneFactureTest.php::test_le_proprietaire_fait_l_avoir_de_regularisation_mais_jamais_la_facture_rectificative',
+                'tests/Feature/Facturation/RegularisationDUneFactureTest.php::test_seules_les_factures_listees_par_l_examen_se_regularisent',
+                'tests/Feature/Facturation/RegularisationDUneFactureTest.php::test_une_facture_de_plusieurs_lignes_a_deux_taux_se_regularise_ligne_par_ligne_au_centime',
+                'tests/Feature/Facturation/RegularisationDUneFactureTest.php::test_un_retour_fait_avant_la_regularisation_reste_hors_de_l_avoir_et_de_la_rectificative',
+                'tests/Feature/Facturation/RegularisationDUneFactureTest.php::test_tant_que_la_rectificative_manque_le_credit_lui_reste_reserve',
+                'tests/Feature/Facturation/RegularisationDUneFactureTest.php::test_quel_que_soit_l_ordre_des_gestes_le_credit_regle_la_rectificative',
             ],
         ],
         'societe.changement-de-siret' => [
@@ -984,6 +998,10 @@ return [
                 'tests/Feature/Societe/TerritoireDuMagasinTest.php::test_l_editeur_corrige_un_territoire_mal_lu_avant_le_premier_document_numerote_et_jamais_apres',
                 'tests/Feature/Societe/TerritoireDuMagasinTest.php::test_apres_un_document_numerote_le_siret_libere_par_l_editeur_sert_a_un_nouveau_magasin',
                 'tests/Feature/Societe/PorteDeValidationTest.php::test_un_magasin_dont_l_etablissement_n_est_pas_verifie_ne_vend_pas',
+                'tests/Feature/Societe/TerritoireDuMagasinTest.php::test_un_etablissement_en_diffusion_partielle_prend_le_territoire_de_sa_commune',
+                'tests/Feature/Societe/TerritoireDuMagasinTest.php::test_un_etablissement_qu_aucune_commune_francaise_ne_situe_est_refuse',
+                'tests/Feature/Societe/TerritoireDuMagasinTest.php::test_un_etablissement_d_une_collectivite_d_outre_mer_est_refuse_par_sa_commune',
+                'tests/Feature/Societe/CreerEtablissementActionTest.php::test_hors_des_territoires_geres_le_magasin_est_refuse',
             ],
         ],
         'verification.reverification-et-ecarts' => [
@@ -1051,6 +1069,7 @@ return [
                 'tests/Feature/Filament/EcransSelonLeTypeTest.php::test_sans_articles_la_caisse_les_devis_et_les_factures_n_ajoutent_que_des_services',
                 'tests/Feature/Filament/EcransSelonLeTypeTest.php::test_sans_articles_seules_les_natures_sans_biens_sont_proposees_et_acceptees_au_brouillon',
                 'tests/Feature/Filament/EcransSelonLeTypeTest.php::test_sans_articles_les_apercus_de_stock_n_apparaissent_pas',
+                'tests/Feature/Facturation/AssuranceProfessionnelleTest.php::test_sans_assurance_un_devis_se_numerote_et_une_vente_s_emet_dans_le_commerce_et_les_services',
             ],
         ],
         'type.cabinet-sans-magasin' => [
@@ -1419,6 +1438,11 @@ return [
                 'tests/Feature/Facturation/FacturePdfGeneratorTest.php::test_un_capital_social_non_renseigne_ne_s_imprime_pas',
                 'tests/Feature/Facturation/EmetteurFigeTest.php::test_le_siege_identique_a_l_adresse_du_magasin_n_est_imprime_qu_une_fois',
                 'tests/Feature/Facturation/EmetteurFigeTest.php::test_le_pdf_d_une_facture_emise_garde_le_siege_la_forme_et_le_capital_du_jour_de_son_emission',
+                'tests/Feature/Facturation/EmetteurFigeTest.php::test_le_pdf_d_un_ticket_emis_garde_son_emetteur',
+                'tests/Feature/Facturation/FacturePdfGeneratorTest.php::test_la_mention_de_loption_pour_les_debits_suit_le_choix_du_magasin',
+                'tests/Feature/Facturation/AvoirPdfGeneratorTest.php::test_lavoir_porte_la_mention_de_loption_pour_les_debits_du_magasin',
+                'tests/Feature/Facturation/FacturePdfGeneratorTest.php::test_l_identite_de_la_societe_et_toutes_les_mentions_sont_dans_le_pied_de_page',
+                'tests/Feature/Facturation/FacturePdfGeneratorTest.php::test_le_siege_n_est_pas_repete_quand_il_est_l_etablissement',
             ],
         ],
         'documents.pdf-en-a4' => [
@@ -1532,12 +1556,14 @@ return [
         // Prix et TVA des ventes.
         'prix.taux-par-defaut' => [
             'puce' => 'Prix et TVA des ventes',
-            'regle' => 'Le taux de TVA se saisit librement, 20 % par défaut (8,5 % pour un magasin de la Guadeloupe, de la Martinique ou de La Réunion) ; une ligne de produit prend le taux de sa fiche.',
+            'regle' => 'Le taux de TVA se saisit librement, 20 % par défaut (8,5 % pour un magasin de la Guadeloupe, de la Martinique ou de La Réunion) ; une ligne de produit prend le taux de sa fiche ; les taux en vigueur du territoire du magasin passent sans avertissement (10, 13 et 2,1 % en Corse ; 2,1, 1,75 et 1,05 % en Guadeloupe, en Martinique et à La Réunion ; décisions de Claude T25.1 à T25.5, D76).',
             'tests' => [
                 'tests/Unit/TerritoireTvaTest.php::test_le_taux_propose_est_le_taux_normal_du_territoire',
                 'tests/Unit/TerritoireTvaTest.php::test_un_taux_hors_de_ceux_en_vigueur_est_signale',
                 'tests/Feature/Societe/ParametresFiscauxSocieteTest.php::test_un_magasin_de_la_martinique_propose_8_5_pour_cent_sur_un_service',
                 'tests/Feature/Facturation/CreerFactureActionTest.php::test_une_ligne_de_service_prend_le_taux_de_sa_fiche',
+                'tests/Unit/TerritoireTvaTest.php::test_les_taux_particuliers_de_la_corse_et_des_departements_d_outre_mer_passent_sans_avertissement',
+                'tests/Feature/Facturation/CreerFactureActionTest.php::test_une_ligne_de_service_sans_taux_prend_celui_du_territoire_du_magasin',
             ],
         ],
         'prix.prix-de-vente-arrondi-une-fois' => [
@@ -1573,6 +1599,8 @@ return [
                 'tests/Unit/CalculateurLigneTest.php::test_un_demi_centime_exact_arrondit_le_ht_au_centime_superieur',
                 'tests/Unit/CalculateurLigneAuHasardTest.php::test_2000_ventes_aleatoires_se_calculent_taux_par_taux_sur_leur_ttc',
                 'tests/Feature/Facturation/ExempleDeQuinzeLignesTest.php::test_le_meme_panier_en_ticket_a_les_memes_montants_et_imprime_les_pu_ttc',
+                'tests/Feature/Proprietes/CalculsAuHasardTest.php::test_la_tva_de_chaque_taux_reste_a_six_dixiemes_de_centime_de_sa_base_fois_le_taux',
+                'tests/Feature/Proprietes/CalculsAuHasardTest.php::test_une_vente_tiree_au_hasard_suit_la_regle_du_ttc_et_du_ht_par_taux',
             ],
         ],
         'prix.pu-ht-a-six-decimales' => [
@@ -1599,12 +1627,15 @@ return [
         ],
         'prix.exoneration-et-franchise' => [
             'puce' => 'Prix et TVA des ventes',
-            'regle' => 'Une vente exonérée se paie au prix hors taxe, calculé de la même façon, sans TVA ; un magasin en franchise en base vend à 0 % au même prix TTC, avec la mention « TVA non applicable, art. 293 B du CGI ».',
+            'regle' => 'Une vente exonérée se paie au prix hors taxe, calculé de la même façon, sans TVA ; un magasin en franchise en base vend à 0 % au même prix TTC, avec la mention « TVA non applicable, art. 293 B du CGI », seule mention de ses ventes à un client établi hors de France, et ses achats dans l\'Union ne changent pas son régime (décisions de Claude T8.6 et T8.7, D76).',
             'tests' => [
                 'tests/Feature/Facturation/NatureOperationTest.php::test_un_export_a_un_professionnel_se_paie_au_prix_hors_taxe_sans_tva_avec_sa_mention',
                 'tests/Feature/Facturation/FranchiseEnBaseTest.php::test_un_ticket_en_franchise_est_a_zero_pour_cent_au_meme_prix_ttc_avec_la_mention',
                 'tests/Feature/Facturation/FranchiseEnBaseTest.php::test_le_meme_ticket_au_reel_coute_le_meme_prix_ttc_sans_la_mention',
                 'tests/Feature/Facturation/CreerFactureActionTest.php::test_une_vente_a_un_professionnel_en_franchise_est_sans_tva_au_meme_prix',
+                'tests/Feature/Facturation/NatureOperationTest.php::test_un_magasin_en_franchise_ne_vend_qu_en_france',
+                'tests/Feature/Facturation/NatureOperationTest.php::test_une_facture_en_franchise_a_un_client_etranger_ne_porte_que_la_mention_de_franchise',
+                'tests/Feature/Facturation/NatureOperationTest.php::test_un_achat_dans_l_union_ne_change_pas_la_franchise_de_la_societe',
             ],
         ],
         'prix.achats-aux-montants-du-fournisseur' => [
@@ -1634,7 +1665,7 @@ return [
         // Ventes hors de France.
         'hors-france.natures-d-operation' => [
             'puce' => 'Ventes hors de France',
-            'regle' => 'La nature d\'opération de la facture (export, livraison vers un DOM, livraison intracommunautaire, prestation autoliquidée à un professionnel de l\'UE, prestation hors UE) n\'exonère que si toutes ses conditions sont réunies, dont un n° de TVA de l\'UE valide sur VIES le jour même, consultation conservée ; une société de services ne voit et n\'accepte que les natures qui ne portent pas sur des biens.',
+            'regle' => 'La nature d\'opération de la facture (export, livraison vers un DOM, livraison intracommunautaire, prestation autoliquidée à un professionnel de l\'UE, prestation hors UE) n\'exonère que si toutes ses conditions sont réunies, dont un n° de TVA de l\'UE valide sur VIES le jour même, consultation conservée ; la Guadeloupe et la Martinique formant un seul territoire de TVA, aucune livraison de l\'une vers l\'autre n\'exonère (décision de Claude T2.2, D76) ; une société de services ne voit et n\'accepte que les natures qui ne portent pas sur des biens.',
             'tests' => [
                 'tests/Feature/Facturation/NatureOperationTest.php::test_une_livraison_intracommunautaire_retient_la_consultation_vies_du_jour',
                 'tests/Feature/Facturation/NatureOperationTest.php::test_une_livraison_intracommunautaire_sans_toutes_ses_conditions_est_refusee',
@@ -1642,6 +1673,8 @@ return [
                 'tests/Feature/Facturation/NatureOperationTest.php::test_une_prestation_autoliquidee_exige_un_client_etabli_dans_un_autre_etat_membre',
                 'tests/Feature/Facturation/NatureOperationTest.php::test_une_prestation_hors_ue_exige_l_identifiant_du_client',
                 'tests/Feature/Filament/EcransSelonLeTypeTest.php::test_sans_articles_seules_les_natures_sans_biens_sont_proposees_et_acceptees_au_brouillon',
+                'tests/Feature/Facturation/NatureOperationTest.php::test_une_livraison_entre_la_guadeloupe_et_la_martinique_reste_au_taux_du_magasin',
+                'tests/Feature/Facturation/NatureOperationTest.php::test_un_magasin_de_martinique_ne_livre_pas_en_exoneration_dans_son_propre_departement',
             ],
         ],
         'hors-france.preuves-d-export' => [
@@ -1654,6 +1687,8 @@ return [
                 'tests/Feature/Filament/AFaireDuMagasinTest.php::test_la_preuve_d_un_export_se_note_encore_apres_la_fermeture_du_magasin',
                 'tests/Feature/Facturation/PreuvesOperationTest.php::test_le_bouton_ajouter_une_preuve_est_reserve_a_qui_est_autorise_a_noter_les_preuves_d_une_vente_exoneree',
                 'tests/Feature/Facturation/FacturePolicyTest.php::test_justifier_une_vente_selon_le_role',
+                'tests/Feature/Facturation/PreuvesOperationTest.php::test_une_preuve_notee_apres_la_cession_du_magasin_justifie_encore_l_export',
+                'tests/Feature/Facturation/PreuvesOperationTest.php::test_un_magasin_suspendu_enregistre_encore_une_preuve',
             ],
         ],
         'hors-france.exoneration-non-prouvee' => [
@@ -1670,13 +1705,15 @@ return [
         ],
         'hors-france.detaxe' => [
             'puce' => 'Ventes hors de France',
-            'regle' => 'Détaxe : le ticket reste à la TVA française, on note le n° du bordereau, la TVA n\'est régularisée qu\'après le visa, dont la date se note une fois par bordereau, inscrite au journal d\'audit ; jusque-là, le ticket attend son visa dans l\'« À faire ».',
+            'regle' => 'Détaxe : le ticket reste à la TVA française, on note le n° du bordereau, la TVA n\'est régularisée qu\'après le visa, dont la date se note une fois par bordereau, inscrite au journal d\'audit ; jusque-là, le ticket attend son visa dans l\'« À faire » ; la détaxe vaut aussi dans un magasin d\'un département d\'outre-mer, au taux du département (décision de Claude T5.4, D76).',
             'tests' => [
                 'tests/Feature/Facturation/BordereauDetaxeTest.php::test_noter_le_bordereau_ne_change_pas_le_ticket',
                 'tests/Feature/Facturation/BordereauDetaxeTest.php::test_le_bouton_noter_le_bordereau_est_reserve_a_qui_est_autorise_a_noter_les_preuves_sur_un_ticket_detaxable',
                 'tests/Feature/Facturation/VisaDuBordereauTest.php::test_le_visa_se_note_une_fois_sur_le_bordereau_qui_fait_foi_et_s_inscrit_au_journal_d_audit',
                 'tests/Feature/Facturation/VisaDuBordereauTest.php::test_le_ticket_detaxe_attend_son_visa_dans_l_a_faire_jusqu_a_ce_qu_il_soit_note',
                 'tests/Feature/Facturation/VisaDuBordereauTest.php::test_la_fiche_note_le_visa_meme_dans_un_magasin_ferme',
+                'tests/Feature/Facturation/BordereauDetaxeTest.php::test_un_ticket_d_un_magasin_de_la_martinique_se_detaxe_au_taux_du_departement',
+                'tests/Feature/Facturation/BordereauDetaxeTest.php::test_un_magasin_suspendu_note_encore_un_bordereau',
             ],
         ],
 
@@ -1748,6 +1785,7 @@ return [
                 'tests/Feature/Facturation/ReglementEnPlusieursModesTest.php::test_un_bon_d_avoir_ne_regle_hors_de_la_caisse_qu_un_ticket_du_client_comptoir_avec_une_part_payee',
                 'tests/Feature/Facturation/ReglementEnPlusieursModesTest.php::test_un_bon_qui_couvre_tout_ce_que_doit_un_ticket_deja_emis_est_refuse_sans_rien_enregistrer',
                 'tests/Feature/Facturation/ReglementEnPlusieursModesTest.php::test_contre_passer_la_part_qui_signe_le_bon_le_rend_et_contre_passer_une_autre_part_le_laisse_impute',
+                'tests/Feature/Facturation/EnregistrerVenteCaisseActionTest.php::test_une_vente_reglee_par_un_bon_d_avoir_est_taxee_en_entier',
             ],
         ],
         'paiements.facture-en-retard' => [
@@ -2128,6 +2166,8 @@ return [
                 'tests/Feature/Facturation/EReportingDesParticuliersTest.php::test_une_vente_en_france_a_zero_pour_cent_se_range_par_la_nature_de_sa_ligne',
                 'tests/Feature/Facturation/EReportingDesParticuliersTest.php::test_une_journee_sans_operation_n_a_rien_a_declarer',
                 'tests/Feature/Facturation/EReportingDesParticuliersTest.php::test_l_apercu_ne_lit_que_les_documents_du_magasin_de_la_cloture',
+                'tests/Feature/Facturation/EReportingDesParticuliersTest.php::test_un_avoir_du_jour_se_deduit_de_sa_categorie_et_de_son_taux',
+                'tests/Feature/Facturation/EReportingDesParticuliersTest.php::test_une_journee_qui_n_a_que_des_avoirs_donne_des_montants_negatifs',
             ],
         ],
         'caisse.menu-ma-caisse-ou-les-caisses' => [
@@ -2164,6 +2204,8 @@ return [
                 'tests/Feature/Editeur/ChangerFinExerciceTest.php::test_une_fin_qui_repousserait_la_cloture_est_refusee',
                 'tests/Feature/Editeur/ChangerFinExerciceTest.php::test_un_changement_sans_expert_comptable_consulte_est_accepte',
                 'tests/Feature/Editeur/ChangerFinExerciceTest.php::test_un_changement_sans_organe_de_la_decision_est_refuse',
+                'tests/Feature/Editeur/ChangerFinExerciceTest.php::test_une_decision_posterieure_a_la_fin_qu_elle_fixe_est_refusee',
+                'tests/Feature/Editeur/ChangerFinExerciceTest.php::test_un_changement_de_l_exercice_en_cours_prend_la_date_du_proces_verbal',
             ],
         ],
         'caisse.fermeture-et-reouverture-du-magasin' => [
@@ -2187,6 +2229,9 @@ return [
                 'tests/Feature/Societe/JournalAuditResourceTest.php::test_la_fin_de_conservation_d_une_entree_de_la_verification_suit_le_reglage_puis_la_date_de_la_societe',
                 'tests/Feature/Facturation/TelechargementDesDocumentsTest.php::test_le_lien_ne_sert_que_son_auteur_pendant_sept_jours_puis_s_efface_avec_son_fichier',
                 'tests/Feature/Stock/GrandLivreEnBaseTest.php::test_la_base_refuse_de_reecrire_ou_de_supprimer_un_mouvement_du_grand_livre',
+                'tests/Feature/Societe/JournalAuditTest.php::test_les_entrees_de_la_gestion_des_acces_s_effacent_apres_cinq_ans',
+                'tests/Feature/Cabinets/CommandesDesCabinetsTest.php::test_la_purge_efface_les_invitations_closes_depuis_quarante_huit_heures_quel_que_soit_leur_etat',
+                'tests/Feature/Facturation/ActionsUniquesTest.php::test_les_jetons_de_plus_de_30_jours_sont_effaces',
             ],
         ],
         'caisse.demonstration-mode-distinct' => [
@@ -2684,6 +2729,24 @@ return [
                 'tests/Feature/DatabaseSeederTest.php::test_sans_mot_de_passe_commun_chaque_compte_recoit_un_mot_de_passe_tire_au_hasard',
                 'tests/Browser/Parcours/DonneesDeDemonstrationTest.php › les comptes de la liste du semis se connectent et retrouvent leurs données',
                 'tests/Browser/Parcours/DonneesDeDemonstrationTest.php › le vendeur qui garde son identifiant pour mot de passe ne se connecte que depuis un poste reconnu',
+            ],
+        ],
+
+        // Hors de CLAUDE.md : décisions de Claude de l'onglet « À faire vérifier par un professionnel » (D76) appliquées dans le code, que CLAUDE.md n'écrit pas.
+        'hors.version-du-module-fiscal' => [
+            'puce' => 'Hors de CLAUDE.md',
+            'regle' => 'Le module fiscal porte sa version « majeure.mineure », constante du code (ModuleFiscal) : la majeure change pour toute modification qui touche l\'inaltérabilité, la sécurisation, la conservation ou l\'archivage (chaînage, signature, contenu signé, déclencheurs, clôtures, archives, moteur de base de données), la mineure sinon ; chaque changement s\'inscrit au journal des événements avant l\'enregistrement suivant (JET 250 ou 255), et l\'empreinte de la caisse et des PDF signale toute sortie changée (décisions de Claude T32.5 et T69.4, D76).',
+            'tests' => [
+                'tests/Feature/CaisseSecurisee/RegistreFiscalTest.php::test_un_changement_de_version_du_module_est_journalise_avant_l_enregistrement',
+                'tests/Feature/CaisseSecurisee/EmpreinteDeLaCaisseEtDesPdfTest.php::test_la_caisse_et_les_pdf_rendent_au_caractere_pres_leur_empreinte_d_avant_l_analyse_statique',
+            ],
+        ],
+        'hors.limites-annoncees-a-l-ecran' => [
+            'puce' => 'Hors de CLAUDE.md',
+            'regle' => 'Les formulaires de devis et de facture disent qu\'un acompte reçu avant la facture ne s\'enregistre pas encore ; la liste et le formulaire des avoirs fournisseur, qu\'un rabais ou une ristourne sans retour de marchandise ne se saisit pas encore (décisions de Claude T50.1, T50.2 et T71.2, D76).',
+            'tests' => [
+                'tests/Feature/Filament/DevisResourceTest.php::test_les_formulaires_du_devis_et_de_la_facture_disent_qu_un_acompte_ne_s_enregistre_pas_encore',
+                'tests/Feature/Filament/AvoirFournisseurResourceTest.php::test_la_liste_et_le_formulaire_disent_qu_une_ristourne_ne_se_saisit_pas_encore',
             ],
         ],
     ],
@@ -4855,6 +4918,1188 @@ return [
             'SIENNES-02-11' => [
                 'decision' => 'Le 02/11/2026 vers 01 h 40 : chacun voit toutes ses factures à encaisser ; « voir celles de toute l\'équipe » reste une autorisation à cocher.',
                 'regles' => ['vendeurs.factures-a-encaisser', 'vendeurs.ses-factures'],
+            ],
+        ],
+        'Décisions de Claude de l\'onglet « À faire vérifier par un professionnel » (D76), appliquées sans attendre ; une réponse du professionnel prime (decisions-affichage/sortie/section-*.md)' => [
+            'T1.1' => [
+                'decision' => 'Paiements de services par des particuliers dans l\'e-reporting : Les paiements de particuliers pour des services seront déclarés dans l\'e-reporting, TTC par taux et par jour, sauf option pour les débits ; en franchise, à 0 %, tous les deux mois.',
+                'regles' => ['pdp.e-reporting-et-encaissements-des-services'],
+            ],
+            'T1.3' => [
+                'decision' => 'Paiement partiel d\'une prestation dans l\'e-reporting : Un paiement partiel se déclarera à sa date, réparti entre les taux au prorata de leur TTC dans le document ; l\'avoir d\'un service payé se déduira le jour où son crédit sert.',
+                'regles' => ['pdp.e-reporting-et-encaissements-des-services'],
+            ],
+            'T1.4' => [
+                'decision' => 'Paiement d\'une vente mêlant biens et services : D\'une vente qui mêle biens et services, seule la part des services entrera dans la déclaration des paiements, au prorata en cas de paiement partiel.',
+                'regles' => ['pdp.e-reporting-et-encaissements-des-services'],
+            ],
+            'T2.1-comptable' => [
+                'decision' => 'Codes de TVA d\'un export hors de l\'Union : Un export hors de l\'Union partira avec la catégorie G, le taux 0, le code VATEX-EU-G et sa mention d\'exonération, en facture électronique pour un client établi en France, sinon en e-reporting.',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP) : catégorie G, code VATEX-EU-G et circuit (facture électronique pour un client établi en France, sinon e-reporting) ; l\'aperçu de l\'étape 1 range déjà l\'export à un particulier en TNT1 sans marque d\'attente.',
+            ],
+            'T2.2-comptable' => [
+                'decision' => 'Codes de TVA d\'une livraison vers un DOM : Une livraison vers un DOM partira en catégorie G, taux 0, code VATEX-EU-G avec sa mention, en facture électronique pour un professionnel de Guadeloupe, Martinique ou La Réunion, en e-reporting vers la Guyane ou Mayotte.',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP) : catégorie G, code VATEX-EU-G et circuit de la livraison vers un DOM.',
+            ],
+            'T2.3-comptable' => [
+                'decision' => 'Codes de TVA d\'une société en franchise : Les factures d\'une société en franchise partiront en catégorie E, taux 0, avec « TVA non applicable, art. 293 B du CGI », le code VATEX-FR-FRANCHISE et son n° de TVA ; sans n° de TVA, autre règle (T2.10).',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP) : catégorie E, code VATEX-FR-FRANCHISE et n° de TVA des factures d\'une société en franchise (T2.10 sans n° de TVA).',
+            ],
+            'T2.4-comptable' => [
+                'decision' => 'Catégorie d\'un export à un particulier : Un export ou une livraison vers un DOM à un particulier se déclarera avec les ventes du jour en catégorie TNT1, au taux 0 %, pour le prix payé.',
+                'regles' => ['caisse.fiche-de-la-cloture-et-apercu-de-l-e-reporting'],
+            ],
+            'T2.5-comptable' => [
+                'decision' => 'Catégorie des ventes en franchise aux particuliers : Les ventes aux particuliers d\'une société en franchise, comme toute vente en France à 0 %, se déclareront par nature, biens en TLB1 et services en TPS1, au taux 0.',
+                'regles' => ['caisse.fiche-de-la-cloture-et-apercu-de-l-e-reporting'],
+            ],
+            'T2.6-comptable' => [
+                'decision' => 'Codes de TVA d\'une livraison intracommunautaire : Une livraison à un professionnel d\'un autre pays de l\'Union partira dans l\'e-reporting en catégorie K, taux 0, code VATEX-EU-IC, avec sa mention, les deux n° de TVA, la date et le pays de livraison.',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP) : e-reporting international de la livraison intracommunautaire en catégorie K (VATEX-EU-IC).',
+            ],
+            'T2.7-comptable' => [
+                'decision' => 'Catégorie E ou O d\'une prestation hors Union : Une prestation à un professionnel hors de l\'Union partira dans l\'e-reporting international en catégorie O, taux 0, code VATEX-EU-O, avec « TVA non applicable, art. 259-1° du CGI » et le n° de TVA de la société, que ce flux exige.',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP) : e-reporting international de la prestation hors UE en catégorie O (VATEX-EU-O).',
+            ],
+            'T3.1-comptable' => [
+                'decision' => 'Code d\'exigibilité des services vendus aux particuliers : Dans l\'e-reporting des particuliers, le code d\'exigibilité sera omis, sauf pour une société qui a opté pour les débits : 3 sur ses services, dont les encaissements ne se déclarent pas.',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP) : code d\'exigibilité des lignes TPS1 ; l\'aperçu de l\'étape 1 ne compte déjà aucun encaissement de services d\'une société qui a opté pour les débits (règle pdp.e-reporting-et-encaissements-des-services).',
+            ],
+            'T4.5-comptable' => [
+                'decision' => 'Achats à Monaco dans l\'e-reporting des achats : Un fournisseur de Monaco est traité comme un fournisseur français (TVA française déduite, sans autoliquidation), mais ses achats se déclareront dans l\'e-reporting des achats, sauf des biens déjà entreposés en France.',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP) : e-reporting des achats auprès d\'un fournisseur de Monaco ; la règle est écrite dans CLAUDE.md (« Achats et stock »).',
+            ],
+            'T1.2-prestataire' => [
+                'decision' => 'Paiements des particuliers pour des services dans l\'e-reporting : Les paiements de particuliers pour des services, sans option pour les débits, se déclareront par jour d\'encaissement, en TTC par taux, catégorie TPS1 ; l\'aperçu perdra sa marque d\'attente.',
+                'regles' => ['pdp.e-reporting-et-encaissements-des-services'],
+            ],
+            'T2.1-prestataire' => [
+                'decision' => 'Catégorie G et code VATEX-EU-G pour l\'export : L\'aperçu perdra sa marque d\'attente ; à l\'étape 2, un export hors de l\'Union partira en catégorie G, taux 0, code VATEX-EU-G, avec la mention et le n° de TVA de la société.',
+                'regles' => ['caisse.fiche-de-la-cloture-et-apercu-de-l-e-reporting'],
+            ],
+            'T2.2-prestataire' => [
+                'decision' => 'Livraison vers un DOM en catégorie G : L\'aperçu perdra sa marque d\'attente ; à l\'étape 2, une livraison vers un DOM partira en catégorie G, taux 0. PILIQI refusera cette nature entre Guadeloupe et Martinique, où la vente reste à 8,5 %.',
+                'regles' => ['hors-france.natures-d-operation', 'caisse.fiche-de-la-cloture-et-apercu-de-l-e-reporting'],
+            ],
+            'T2.4-prestataire' => [
+                'decision' => 'Export ou envoi vers un DOM à un particulier : Un export ou une livraison vers un DOM à un particulier se déclare en TNT1, taux 0, base égale au prix payé, comme l\'aperçu le fait déjà ; la marque d\'attente disparaîtra.',
+                'regles' => ['caisse.fiche-de-la-cloture-et-apercu-de-l-e-reporting'],
+            ],
+            'T2.5-prestataire' => [
+                'decision' => 'Ventes en franchise dans l\'e-reporting des particuliers : Une vente en franchise à un particulier se rangera en TLB1 (biens) ou TPS1 (services), taux 0, et le régime de TVA de la société sera déclaré chez SUPER PDP.',
+                'regles' => ['caisse.fiche-de-la-cloture-et-apercu-de-l-e-reporting'],
+            ],
+            'T29.3' => [
+                'decision' => 'Preuve de sortie jamais reçue : régularisation : Sans preuve 150 jours après la vente, l\'export passera dans « À faire », à régulariser par un avoir sans retour en stock et une facture à la TVA française, même prix TTC.',
+                'regles' => ['hors-france.exoneration-non-prouvee'],
+            ],
+            'T4.1-prestataire' => [
+                'decision' => 'Achat monégasque reçu par le réseau français : Tout achat de biens venus de Monaco ou de services d\'un prestataire monégasque se déclarera à l\'e-reporting des achats, même si la facture arrive par le réseau français ; un doublon est accepté.',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP) : déclaration à l\'e-reporting des achats monégasques ; la règle est écrite dans CLAUDE.md (« Achats et stock »).',
+            ],
+            'T9.3' => [
+                'decision' => 'TVA d\'un service payé en plusieurs fois : La TVA de chaque encaissement d\'un service se tirera de celle du document, au prorata de l\'encaissé cumulé, si bien que le dernier encaissement retombe juste ; même calcul pour l\'e-reporting des paiements.',
+                'regles' => ['pdp.e-reporting-et-encaissements-des-services'],
+            ],
+            'T51.1' => [
+                'decision' => 'Sous-traitance du bâtiment en autoliquidation : PILIQI ajoutera la nature « Travaux immobiliers en sous-traitance (autoliquidation) » : facture de services sans TVA, avec « Autoliquidation », à un client professionnel établi en France.',
+                'a_venir' => 'Étape 1, lot BTP de la chaîne TVA, avant la campagne de tests 1 bis.',
+            ],
+            'T51.2' => [
+                'decision' => 'Certification du client pour les travaux à taux réduit : Un service à taux réduit pourra être marqué « travaux dans un logement » : devis et facture demanderont l\'adresse et imprimeront la certification du client ; sans elle, PILIQI avertira sans refuser.',
+                'a_venir' => 'Étape 1, lot BTP de la chaîne TVA, avant la campagne de tests 1 bis.',
+            ],
+            'T51.3' => [
+                'decision' => 'Retenue de garantie sur les factures de travaux : Une facture de services pourra porter une retenue de garantie, 5 % au plus, due un an après la réception des travaux, hors retard et relances avant cette date.',
+                'a_venir' => 'Étape 1, lot BTP de la chaîne TVA, avant la campagne de tests 1 bis.',
+            ],
+            'T51.7' => [
+                'decision' => 'Facture des travaux chez un particulier : Une vente de services marquée « travaux immobiliers » à un particulier exigera une facture à son nom, avec l\'adresse et la date des travaux ; les fournitures posées pourront s\'imprimer à part.',
+                'a_venir' => 'Étape 1, lot BTP de la chaîne TVA, avant la campagne de tests 1 bis.',
+            ],
+            'T60.1' => [
+                'decision' => 'Mentions des ventes sous le régime de la marge : Une ligne sous la marge s\'imprimera sans taux ni TVA, avec la mention de son régime et « (art. 297 A du CGI) ». En facture électronique : code VATEX-EU-F, I ou J.',
+                'a_venir' => 'Étape 1, lot de la marge de la chaîne TVA, avant l\'étape 2 ; registre des objets achetés à l\'étape 14.',
+            ],
+            'T60.2' => [
+                'decision' => 'Marge négative sous le régime de la marge : Une ligne sous la marge dont la marge est négative ou nulle aura 0 € de TVA ; la perte ne se retranche d\'aucune autre ligne, clôture ni e-reporting.',
+                'a_venir' => 'Étape 1, lot de la marge de la chaîne TVA, avant l\'étape 2 ; registre des objets achetés à l\'étape 14.',
+            ],
+            'T60.3' => [
+                'decision' => 'Retour d\'un article vendu sous la marge : L\'avoir d\'une ligne sous la marge annulera seulement la TVA de sa marge, s\'imprimera sans TVA avec la mention du régime et remettra l\'objet en stock à son prix d\'achat d\'origine.',
+                'a_venir' => 'Étape 1, lot de la marge de la chaîne TVA, avant l\'étape 2 ; registre des objets achetés à l\'étape 14.',
+            ],
+            'T60.4' => [
+                'decision' => 'Déclaration des ventes sous la marge : Chaque clôture du jour gardera à part le total des ventes sous la marge (prix, marge hors taxe, TVA) ; l\'e-reporting et l\'état de TVA déclareront la marge, pas le prix.',
+                'a_venir' => 'Étape 1, lot de la marge de la chaîne TVA, avant l\'étape 2 ; registre des objets achetés à l\'étape 14.',
+            ],
+            'T60.5' => [
+                'decision' => 'Conditions de la case « marge » à l\'achat : La case « marge » sera refusée sur un achat avec TVA ; sans pièce qui prouve le prix d\'achat, la TVA portera sur tout le prix, sinon sur la marge de chaque objet.',
+                'a_venir' => 'Étape 1, lot de la marge de la chaîne TVA, avant l\'étape 2 ; registre des objets achetés à l\'étape 14.',
+            ],
+            'T60.6' => [
+                'decision' => 'Vente sous la marge à un professionnel : Un objet marqué « marge » se vendra toujours sous la marge, même à un professionnel : facture sans PU HT, taux ni TVA, avec la mention du régime.',
+                'a_venir' => 'Étape 1, lot de la marge de la chaîne TVA, avant l\'étape 2 ; registre des objets achetés à l\'étape 14.',
+            ],
+            'T60.7' => [
+                'decision' => 'Vente sous la marge hors de France : Un objet sous la marge vendu dans l\'Union reste taxé en France : PILIQI refusera « Livraison intracommunautaire » et « Livraison vers un DOM » ; l\'export hors de l\'Union restera exonéré.',
+                'a_venir' => 'Étape 1, lot de la marge de la chaîne TVA, avant l\'étape 2 ; registre des objets achetés à l\'étape 14.',
+            ],
+            'T105' => [
+                'decision' => 'Note de calcul sous les lignes des factures : La phrase « à moins de deux centimes près » ne s\'imprimera que si chaque ligne la vérifie ; sinon, une phrase dira qu\'un petit écart est possible, sans changer les montants.',
+                'regles' => ['documents.note-de-calcul-a-moins-de-deux-centimes'],
+            ],
+            'T51.6' => [
+                'decision' => 'Mentions du devis de dépannage à domicile : Un réglage facultatif du magasin, décoché par défaut, ajoutera aux devis à un particulier les mentions du dépannage à domicile : lieu d\'intervention, devis gratuit ou payant, frais de déplacement, pièces remplacées à garder.',
+                'a_venir' => 'Étape 1, lot DEVIS-RET (devis de dépannage à domicile et rétractation), après le lot MAT-PRO.',
+            ],
+            'T13.1' => [
+                'decision' => 'Escompte et TVA déductible d\'un achat : Un escompte se saisira selon trois cas ; seul l\'escompte conditionnel pris plus tard, sans mention « net de taxes », réduira la TVA déductible, le mois où il est obtenu.',
+                'a_venir' => 'Étape 1, lot M5c de la chaîne TVA (escompte saisi selon son cas) ; réduction de la TVA déductible à l\'étape 5.',
+            ],
+            'T13.2' => [
+                'decision' => 'Escompte déduit ou conditionnel sur un achat : La personne choisira le cas de l\'escompte ; un escompte conditionnel pris plus tard réduira la TVA déduite, en ligne 15 de la déclaration du mois où il est obtenu.',
+                'a_venir' => 'Étape 1, lot M5c de la chaîne TVA (escompte saisi selon son cas) ; réduction de la TVA déductible à l\'étape 5.',
+            ],
+            'T14' => [
+                'decision' => 'Coefficient de déduction des sociétés en partie exonérées : Une société qui a aussi des opérations exonérées saisira dans ses réglages fiscaux son coefficient de déduction, provisoire puis définitif avant le 25 avril ; l\'état de TVA l\'appliquera aux seules dépenses mixtes.',
+                'a_venir' => 'Étape 1, lot CH2 de la chaîne TVA (coefficient de déduction) ; état de TVA à l\'étape 5.',
+            ],
+            'T15' => [
+                'decision' => 'Coût du stock d\'une société en franchise : Une société en franchise aura son stock au coût TVA comprise, et ses marges calculées sur ce coût ; le stock restant sera revalorisé quand elle entre dans la franchise ou en sort.',
+                'a_venir' => 'Étape 1, lot M7 de la chaîne TVA, puis étape 5 : aujourd\'hui le stock d\'une société en franchise est au coût hors taxe, ce que ce lot corrige.',
+            ],
+            'T20.1' => [
+                'decision' => 'TVA des péages et parkings d\'une voiture de tourisme : La TVA des péages et parkings d\'une voiture de tourisme ne sera jamais déduite ; celle d\'un utilitaire, ou d\'un parking loué pour les clients ou l\'équipe, le sera avec le reçu complété.',
+                'a_venir' => 'Étape 1, lots M5c et CH2 de la chaîne TVA (charges et TVA déductible).',
+            ],
+            'T20.2' => [
+                'decision' => 'TVA des repas au restaurant : Un repas d\'affaires sera déductible à 100 % sur facture au nom de la société, ou note de 150 € HT au plus complétée ; repas privé ou fête d\'équipe : 0 %.',
+                'a_venir' => 'Étape 1, lots M5c et CH2 de la chaîne TVA (charges et TVA déductible).',
+            ],
+            'T20.3' => [
+                'decision' => 'TVA d\'une prime d\'assurance : La catégorie « Assurances » mettra 0 % de TVA déductible, avertira si une TVA apparaît et conseillera de ranger ailleurs un service vendu à part, comme la télésurveillance.',
+                'a_venir' => 'Étape 1, lots M5c et CH2 de la chaîne TVA (charges et TVA déductible).',
+            ],
+            'T20.4' => [
+                'decision' => 'Seuil de 73 € TTC des cadeaux : La TVA d\'un cadeau se déduira seulement si le total de l\'année au même bénéficiaire reste sous 73 € TTC ; au-delà, 0 %, et PILIQI rappellera de reverser la TVA déjà déduite.',
+                'a_venir' => 'Étape 1, lots M5c et CH2 de la chaîne TVA (charges et TVA déductible).',
+            ],
+            'T20.5' => [
+                'decision' => 'Électricité et GNV d\'une voiture de tourisme : L\'électricité d\'une voiture 100 % électrique, le GNV et le GPL seront déductibles à 100 % ; pour une hybride rechargeable, électricité à 0 % et carburant à 80 %.',
+                'a_venir' => 'Étape 1, lots M5c et CH2 de la chaîne TVA (charges et TVA déductible).',
+            ],
+            'T20.6' => [
+                'decision' => 'Déduction de la TVA de l\'électricité du magasin : La TVA de l\'électricité, du gaz ou de l\'eau se déduira à 100 %, le mois où la facture est reçue ; avec un échéancier qui montre la TVA, à chaque échéance payée.',
+                'a_venir' => 'Étape 1, lots M5c et CH2 de la chaîne TVA (charges et TVA déductible), puis état de TVA à l\'étape 5.',
+            ],
+            'T20.7' => [
+                'decision' => 'TVA du GPL carburant : La TVA du GPL d\'une voiture de tourisme se déduira à 100 %, comme l\'électricité et le GNV, et non à 80 % comme le gazole ; usage privé : 0 %.',
+                'a_venir' => 'Étape 1, lots M5c et CH2 de la chaîne TVA (charges et TVA déductible).',
+            ],
+            'T20.8' => [
+                'decision' => 'TVA d\'une charge justifiée par un simple ticket : Un ticket ordinaire donnera 0 % de TVA déductible ; reçu de péage, ticket d\'automate de parking et note de restaurant de 150 € HT au plus comptent comme facture une fois complétés.',
+                'a_venir' => 'Étape 1, lots M5c et CH2 de la chaîne TVA (charges et TVA déductible).',
+            ],
+            'T20.9' => [
+                'decision' => 'Logement et transport du personnel déductibles par exception : La TVA du logement gratuit du personnel et du transport de personnes ne se déduira pas, sauf gardien logé sur place, logement loué avec TVA et transport du personnel sous contrat ou en car.',
+                'a_venir' => 'Étape 1, lots M5c et CH2 de la chaîne TVA (charges et TVA déductible).',
+            ],
+            'T21.1' => [
+                'decision' => 'Frais de transport d\'un achat à plusieurs taux : Les frais de transport d\'un fournisseur établi en France garderont le taux et la TVA de sa facture ; s\'ils sont taxés à un seul taux pour des articles à plusieurs taux, PILIQI avertira.',
+                'a_venir' => 'Étape 1, lots M5c et M7 de la chaîne TVA (frais de transport d\'un achat).',
+            ],
+            'T21.2' => [
+                'decision' => 'Frais de transport en autoliquidation à plusieurs taux : En autoliquidation, PILIQI répartira les frais facturés avec les marchandises entre leurs taux, selon leur montant hors taxe, et laissera corriger ; un transport facturé à part par un transporteur restera au taux normal.',
+                'a_venir' => 'Étape 1, lots M5c et M7 de la chaîne TVA (frais de transport d\'un achat).',
+            ],
+            'T23.1' => [
+                'decision' => 'Taux de change d\'une facture d\'achat en devise : Le taux de change se saisira sur la facture avec sa source, que PILIQI proposera selon l\'achat (Banque centrale européenne ou douane) ; le même taux servira au coût du stock.',
+                'a_venir' => 'Étape 1, lot M5e de la chaîne TVA (achats en devise et importations).',
+            ],
+            'T23.2' => [
+                'decision' => 'Taux de change d\'une importation : Pour une importation, le taux de change et la base de la TVA seront ceux de la déclaration en douane, comme vous l\'avez décidé, et le même taux servira au coût du stock.',
+                'a_venir' => 'Étape 1, lot M5e de la chaîne TVA (achats en devise et importations).',
+            ],
+            'T59.1' => [
+                'decision' => 'Charge commune à des magasins de territoires différents : Une charge commune ne se répartira qu\'entre magasins d\'un même territoire de TVA ; si vous levez cette limite, chaque part identifiée suivra le taux de son territoire, 20 % ou 8,5 %.',
+                'a_venir' => 'Étape 1, lot CH5 de la chaîne TVA (charges communes à plusieurs magasins).',
+            ],
+            'T49' => [
+                'decision' => 'Date de livraison ou de prestation sur la facture : La facture portera une date de livraison ou de fin de prestation, ou une période, imprimée quand elle diffère de la date d\'émission ; une facture qui remplace un ticket prendra sa date.',
+                'a_venir' => 'Étape 1, lot T49 (date de la livraison ou de la prestation sur la facture), après le lot MAT-PRO ; transmise dans la facture électronique à l\'étape 2. Aujourd\'hui seule la date d\'émission s\'imprime.',
+            ],
+            'T86' => [
+                'decision' => 'Valeur de l\'acceptation d\'un devis en ligne : L\'acceptation en ligne (nom tapé et « Bon pour accord ») reste une signature simple, pour tout montant, sans code par SMS ; un particulier recevra l\'information sur ses 14 jours de rétractation, avec le formulaire.',
+                'a_venir' => 'Étape 1, lot DEVIS-RET (acceptation en ligne et information sur la rétractation), après le lot MAT-PRO.',
+            ],
+            'T40.1' => [
+                'decision' => 'Articles du nouveau code (CIBS) dans les mentions : Les mentions garderont les articles du CGI pour les documents émis jusqu\'au 31/12/2027, puis citeront ceux du nouveau code (CIBS), relus un à un sur Légifrance, pour les documents émis dès le 01/01/2028.',
+                'a_venir' => 'Table datée des mentions de la chaîne TVA, livrée avant le 01/01/2028 par le lot de mise à jour des paquets de décembre 2027 (CLAUDE.md, « Outillage »).',
+            ],
+            'T40.2' => [
+                'decision' => 'Date limite des articles du CGI sur les factures : Les articles du CGI restent admis jusqu\'au 30/06/2028 selon la date d\'émission ; PILIQI passera au nouveau code (CIBS) dès le 01/01/2028, six mois avant, sans jamais changer un document déjà émis.',
+                'a_venir' => 'Table datée des mentions de la chaîne TVA, livrée avant le 01/01/2028 par le lot de mise à jour des paquets de décembre 2027 (CLAUDE.md, « Outillage »).',
+            ],
+            'T27.2' => [
+                'decision' => 'Facture rectificative après correction du SIREN : La facture rectificative, faite sous le SIREN corrigé sans mouvement de stock, imprimera aussi la date de l\'opération d\'origine ; en facture électronique, elle partira comme facture ordinaire citant l\'originale.',
+                'a_venir' => 'Étape 1, lot de la régularisation, après le lot MAT-PRO (date de l\'opération d\'origine sur la rectificative) ; facture électronique à l\'étape 2.',
+            ],
+            'T58.1' => [
+                'decision' => 'Stock quand un ticket payé devient facture : « Transformer en facture » un ticket payé fera, d\'un clic, l\'avoir d\'annulation et la facture soldée par cet avoir, sans aucun mouvement de stock : la marchandise reste sortie au jour du ticket.',
+                'a_venir' => 'Étape 1, lot C-b de la chaîne TVA : « Transformer en facture » d\'un ticket payé n\'existe pas encore.',
+            ],
+            'T58.2' => [
+                'decision' => 'Paiement d\'un ticket transformé en facture : Quand un ticket payé devient une facture, la compensation par l\'avoir ne sera jamais comptée comme un encaissement ni transmise comme « Encaissée » : l\'argent compte une seule fois, au jour du ticket.',
+                'a_venir' => 'Étape 1, lot C-b de la chaîne TVA : « Transformer en facture » d\'un ticket payé n\'existe pas encore.',
+            ],
+            'T58.3' => [
+                'decision' => 'Journée de caisse d\'un ticket transformé : L\'avoir d\'annulation et la facture compteront chacun à part dans la journée de la transformation ; le ticket reste dans la clôture de son jour, et la facture imprimera la date du ticket.',
+                'a_venir' => 'Étape 1, lot C-b de la chaîne TVA : « Transformer en facture » d\'un ticket payé n\'existe pas encore.',
+            ],
+            'T58.4' => [
+                'decision' => 'Refus de transformer un ticket déjà repris : PILIQI refusera de transformer en facture un ticket déjà transformé, déjà repris par un avoir ou pas entièrement payé, avec un message qui dit pourquoi et propose un duplicata du ticket.',
+                'a_venir' => 'Étape 1, lot C-b de la chaîne TVA : « Transformer en facture » d\'un ticket payé n\'existe pas encore.',
+            ],
+            'T68.1' => [
+                'decision' => 'Ordre de l\'avoir de régularisation et de la rectificative : La facture rectificative ne s\'émettra qu\'après l\'avoir de régularisation, dont le crédit la règle aussitôt : son PDF montrera la part imputée et le vrai reste dû.',
+                'a_venir' => 'Étape 1, lot de la régularisation, après le lot MAT-PRO : aujourd\'hui la rectificative peut s\'émettre avant l\'avoir de régularisation et l\'attend sans rien recevoir.',
+            ],
+            'T68.3' => [
+                'decision' => 'Contre-passation d\'un paiement d\'une facture régularisée : Si un paiement d\'une facture régularisée est contre-passé, le crédit de l\'avoir quittera la rectificative pour garder cette facture soldée ; la rectificative portera le dû et sera relancée.',
+                'a_venir' => 'Étape 1, lot de la régularisation, après le lot MAT-PRO : aujourd\'hui la contre-passation rouvre le dû sur la facture régularisée.',
+            ],
+            'T28.1' => [
+                'decision' => 'Validation de la durée d\'un exercice modifié : Pour un changement de fin d\'exercice, la procédure de l\'éditeur enregistrera qui a décidé, la date de la décision et sa pièce ; le nom d\'un expert-comptable deviendra facultatif.',
+                'regles' => ['caisse.exercice-de-la-societe'],
+            ],
+            'T28.2' => [
+                'decision' => 'Durée d\'un exercice de transition : PILIQI garde votre limite : la procédure n\'accepte qu\'un exercice raccourci, fini le dernier jour d\'un mois, et refuse un exercice prolongé ; ses refus diront cette limite en clair.',
+                'regles' => ['caisse.exercice-de-la-societe'],
+            ],
+            'T38.1' => [
+                'decision' => 'Revue fiscale indépendante avant la mise en production : Une seule revue indépendante, en quatre blocs, se fera avant la mise en production, sans rien bloquer : ses réponses seront appliquées ensuite.',
+                'hors_logiciel' => 'Revue fiscale indépendante, une seule fois avant la mise en production, sans rien bloquer ; son dossier se prépare à l\'étape 15, et ses réponses s\'appliquent ensuite (D76).',
+            ],
+            'P3.1' => [
+                'decision' => 'Sociétés membres d\'un groupe TVA : Une case des réglages fiscaux déclarera la société membre d\'un groupe TVA : PILIQI refusera alors toute opération commerciale réelle, avec un message, et la page d\'inscription dira que ce cas n\'est pas géré.',
+                'regles' => ['societe.membre-d-un-assujetti-unique'],
+            ],
+            'P3.2' => [
+                'decision' => 'Factures d\'une société membre d\'un groupe TVA : PILIQI ne laissera pas facturer une société membre d\'un groupe TVA, faute de savoir imprimer l\'identité du groupe et « Membre d\'un assujetti unique ».',
+                'regles' => ['societe.membre-d-un-assujetti-unique'],
+            ],
+            'P3.3' => [
+                'decision' => 'Déclarations de TVA d\'un membre de groupe TVA : Une société membre d\'un groupe TVA ne vendra pas dans PILIQI : rien ne sera déclaré ni transmis en son nom, la déclaration revenant au groupe.',
+                'regles' => ['societe.membre-d-un-assujetti-unique'],
+            ],
+            'T99' => [
+                'decision' => 'Champs du registre national lus pour l\'identité : PILIQI lit déjà l\'identité aux bons endroits du registre national ; l\'immatriculation, par exemple « RCS Lyon », se lira dans deux champs du registre, sinon le propriétaire la complète.',
+                'regles' => ['societe.immatriculation-lue-au-registre-national'],
+            ],
+            'T36.4' => [
+                'decision' => 'Refus des mots de passe courants : PILIQI refusera les mots de passe courants, d\'après une liste locale d\'au moins 10 000, sans service extérieur ; un compte qui en a un devra le changer à sa connexion.',
+                'a_venir' => 'Étape 1, lot des mots de passe (T36.1 à T36.4), après le lot MAT-PRO : aujourd\'hui aucun mot de passe courant n\'est refusé.',
+            ],
+            'T29.1' => [
+                'decision' => 'Rappel d\'une preuve de sortie manquante à l\'export : Un export hors de l\'Union sans preuve de sortie sera rappelé dans « À faire », en orange, puis en rouge dès le 31e jour après la facture, sans rien bloquer.',
+                'regles' => ['hors-france.preuves-d-export'],
+            ],
+            'T29.2' => [
+                'decision' => 'Délai légal pour la preuve de sortie : Aucun délai légal : la preuve de sortie doit seulement pouvoir être montrée lors d\'un contrôle ; PILIQI présente ses 30 jours comme un simple rappel interne et garde la preuve avec la facture, 10 ans.',
+                'regles' => ['hors-france.preuves-d-export'],
+            ],
+            'T29.4' => [
+                'decision' => 'Preuve notée après fermeture ou cession du magasin : Une preuve d\'export ou de livraison, ou un n° de bordereau, reçus après la fermeture, la cession ou la suspension du magasin pourront encore se noter, sans rouvrir les ventes.',
+                'regles' => ['hors-france.preuves-d-export'],
+            ],
+            'T29.5' => [
+                'decision' => 'Effet d\'une preuve reçue après la fermeture : Une preuve notée après la fermeture du magasin garde la vente exonérée si elle prouve la sortie : la vente passera de « preuve manquante » à « justifiée »',
+                'regles' => ['hors-france.preuves-d-export'],
+            ],
+            'T1.2-comptable' => [
+                'decision' => 'Montant TTC par taux des paiements de services : Les paiements de particuliers pour des services se déclareront pour le montant encaissé TTC, réparti par taux et additionné par jour, jamais en hors taxe.',
+                'regles' => ['pdp.e-reporting-et-encaissements-des-services'],
+            ],
+            'T1.7' => [
+                'decision' => 'Avoirs dans l\'e-reporting journalier des ventes aux particuliers : Chaque journée déclarera ses ventes aux particuliers moins ses avoirs du jour, par catégorie et par taux ; un avoir compte le jour de son émission, même si la journée devient négative.',
+                'regles' => ['caisse.fiche-de-la-cloture-et-apercu-de-l-e-reporting'],
+            ],
+            'T2.8-comptable' => [
+                'decision' => 'Identifiants du vendeur dans la facture électronique : Chaque facture électronique et chaque déclaration portera le SIRET, le SIREN et le n° de TVA de la société, sans l\'identifiant BT-32, même en catégorie O dans l\'e-reporting international (règle G2.33) ; une société en franchise sans n° de TVA suit T2.10.',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP) : règle corrigée le 13/11 avec T2.7 ; avec SUPER PDP.',
+            ],
+            'T3.2-comptable' => [
+                'decision' => 'Code d\'exigibilité sous option pour les débits : Pour une société qui a opté pour les débits, chaque facture électronique avec au moins un service portera le code 3, sans note en plus ; une facture de biens seuls n\'en aura pas.',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP) : avec SUPER PDP.',
+            ],
+            'T3.3-comptable' => [
+                'decision' => 'Code d\'exigibilité des biens vendus aux particuliers : Pour les ventes de biens aux particuliers, le code d\'exigibilité ne sera jamais envoyé, même sous option pour les débits : le champ est omis, jamais laissé vide.',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP) : avec SUPER PDP.',
+            ],
+            'T3.4-comptable' => [
+                'decision' => 'Envoi ou omission des codes d\'exigibilité : Le code d\'exigibilité sera omis, sauf pour les services d\'une société qui a opté pour les débits (code 3) et dans l\'e-reporting international, toujours envoyé : 35 pour des biens, 432 pour des services sans option.',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP) : avec SUPER PDP.',
+            ],
+            'P37.1' => [
+                'decision' => 'Catégorie d\'un achat de marchandises dans l\'Union : Un achat de marchandises dans l\'Union se déclarera dans l\'e-reporting des achats en catégorie K, taux 0, TVA 0 ; la TVA française due ira sur la déclaration de TVA.',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP) : avec SUPER PDP ; TVA due à l\'étape 5.',
+            ],
+            'P37.2' => [
+                'decision' => 'TVA déclarée pour un achat dans l\'Union : L\'e-reporting d\'un achat dans l\'Union reprendra le taux 0 et la TVA 0 de la facture du fournisseur, jamais la TVA française autoliquidée, qui ira seulement sur la déclaration de TVA.',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP) : avec SUPER PDP ; TVA due à l\'étape 5.',
+            ],
+            'P37.3' => [
+                'decision' => 'Catégorie d\'un service acheté à l\'étranger : Un service acheté à un prestataire établi hors de France se déclarera dans l\'e-reporting des achats en catégorie AE (autoliquidation), taux 0, code VATEX-EU-AE, que PILIQI pose si la facture ne les porte pas.',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP) : avec SUPER PDP.',
+            ],
+            'P37.4' => [
+                'decision' => 'TVA déclarée pour un service acheté à l\'étranger : L\'e-reporting d\'un service acheté à l\'étranger reprendra le taux 0 et la TVA 0 de la facture ; la TVA française ira sur la déclaration de TVA, déduite si la société en a le droit.',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP) : avec SUPER PDP ; TVA due à l\'étape 5.',
+            ],
+            'P37.5' => [
+                'decision' => 'Achat en opération triangulaire dans l\'e-reporting : Dans une opération triangulaire, le magasin destinataire fera une seule transmission à l\'e-reporting : l\'intermédiaire avec son n° de TVA, catégorie AE, taux 0 ; il déclarera la TVA comme un achat dans l\'Union.',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP) : avec SUPER PDP ; TVA due à l\'étape 5.',
+            ],
+            'P71.3' => [
+                'decision' => 'Amende pour une transmission d\'e-reporting manquée : PILIQI ne calcule aucune amende (500 € par envoi manqué, 15 000 € par an au plus) ; il enverra chaque clôture une fois à SUPER PDP et suivra l\'envoi jusqu\'à l\'accusé de réception.',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP).',
+            ],
+            'P71.4' => [
+                'decision' => 'Amende pour un e-reporting erroné : Un envoi faux peut coûter 500 €. À l\'étape 2, PILIQI contrôlera l\'aperçu avant chaque envoi et aura une procédure de correction, à définir avec SUPER PDP.',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP) : procédure de correction à définir avec SUPER PDP.',
+            ],
+            'P71.5' => [
+                'decision' => 'Première infraction à l\'e-reporting réparée sans amende : Une première infraction réparée à temps échappe à l\'amende ; à l\'étape 2, PILIQI suivra chaque envoi jusqu\'à son accusé de réception, préviendra le propriétaire de tout échec et rattrapera les journées manquées.',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP).',
+            ],
+            'T2.3-prestataire' => [
+                'decision' => 'Catégorie E pour une facture en franchise en base : La facture d\'une société en franchise qui a un n° de TVA partira en catégorie E, taux 0, code VATEX-FR-FRANCHISE, avec ce numéro et « TVA non applicable, art. 293 B du CGI ».',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP).',
+            ],
+            'T2.6-prestataire' => [
+                'decision' => 'Livraison intracommunautaire en catégorie K : Une livraison intracommunautaire partira dans l\'e-reporting international en catégorie K, taux 0, code VATEX-EU-IC, avec la mention, les deux n° de TVA, la date et le pays de livraison, déjà exigés.',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP).',
+            ],
+            'T2.7-prestataire' => [
+                'decision' => 'Prestation à un professionnel hors de l\'Union : Une prestation à un professionnel hors de l\'Union ira dans l\'e-reporting international en catégorie O, code VATEX-EU-O, avec la mention et le n° de TVA de la société (aujourd\'hui prévu : E sans code, que la DGFiP refuse).',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP) : règle corrigée avant l\'étape 2.',
+            ],
+            'T2.8-prestataire' => [
+                'decision' => 'Identifiant fiscal du vendeur en catégorie O : À l\'étape 2, PILIQI enverra toujours le SIRET, le SIREN et le n° de TVA de la société, même en catégorie O, et laissera vide l\'identifiant fiscal local.',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP).',
+            ],
+            'T2.10' => [
+                'decision' => 'Franchisé sans n° de TVA dans la facture électronique : La facture électronique d\'un franchisé partira en catégorie E s\'il a un n° de TVA, sinon en catégorie Z, avec son SIREN pour identifiant fiscal et la mention de l\'art. 293 B en note.',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP).',
+            ],
+            'T3.1-prestataire' => [
+                'decision' => 'Code d\'exigibilité des services aux particuliers : À l\'étape 2, l\'e-reporting des services aux particuliers n\'enverra pas de code de date d\'exigibilité, sauf pour une société qui a opté pour les débits : code 3 (date de facture).',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP).',
+            ],
+            'T3.2-prestataire' => [
+                'decision' => 'Code d\'option pour les débits sur les factures : À l\'étape 2, les factures électroniques d\'une société qui a opté pour les débits porteront le code 3 (date de la facture), et l\'option sera aussi déclarée chez SUPER PDP.',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP).',
+            ],
+            'T3.3-prestataire' => [
+                'decision' => 'Code d\'exigibilité des ventes de biens aux particuliers : À l\'étape 2, l\'e-reporting des ventes de biens aux particuliers n\'enverra jamais de code de date d\'exigibilité, même pour une société qui a opté pour les débits.',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP).',
+            ],
+            'T3.4-prestataire' => [
+                'decision' => 'Codes d\'exigibilité facultatifs ou exigés par SUPER PDP : Le code d\'exigibilité sera omis, sauf option pour les débits. Dans l\'e-reporting international, où SUPER PDP l\'exige : 3 (service avec option), 35 (biens) ou 432 (service sans option), prestation hors de France comprise.',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP).',
+            ],
+            'T4.5-prestataire' => [
+                'decision' => 'Achat auprès de Monaco dans l\'e-reporting des achats : Un achat à un fournisseur monégasque garde déjà la TVA française de sa facture ; à l\'étape 2, il se déclarera à l\'e-reporting international des achats, sauf pour des biens déjà en France.',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP).',
+            ],
+            'T30.1' => [
+                'decision' => 'Prix unitaire HT à six décimales : À l\'étape 2, le prix unitaire HT partira dans la facture électronique tel qu\'enregistré, jusqu\'à six décimales ; un écart constaté au bac à sable vous serait signalé avant tout choix.',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP).',
+            ],
+            'T30.2' => [
+                'decision' => 'Règle européenne BR-CO-17 et contrôle d\'un centime : Avant chaque envoi, PILIQI contrôlera la facture selon les règles officielles, dont un écart de TVA d\'un centime au plus par taux ; une facture en échec ne partira pas et l\'écart s\'affichera.',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP).',
+            ],
+            'T65.1' => [
+                'decision' => 'Facture reçue par un magasin suspendu : Une facture reçue par un magasin suspendu sera importée chez lui, en lecture seule ; le propriétaire et les administrateurs autorisés pourront la refuser ou la contester. L\'adresse de réception restera jusqu\'à la fermeture définitive.',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP).',
+            ],
+            'T65.2' => [
+                'decision' => 'Encaissement déclaré puis contre-passé : La contre-passation d\'un paiement de service déjà déclaré enverra un statut d\'encaissement négatif, par taux, puis le bon paiement un nouveau statut positif ; pour un ticket, elle se déduit de sa journée.',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP).',
+            ],
+            'T65.3' => [
+                'decision' => 'Journée déjà transmise puis corrigée : Une journée envoyée n\'est jamais renvoyée ni retouchée, toute correction comptant à son propre jour ; après un envoi faux, PILIQI arrêtera les envois, comparera avec SUPER PDP et enverra une correction tracée.',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP).',
+            ],
+            'T65.4' => [
+                'decision' => 'Facture mêlant biens et services : Chaque ligne suit sa nature, produit ou service : une facture mixte à un professionnel partira en cadre M1, M2 ou M4, son encaissement ne déclarant que les services.',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP).',
+            ],
+            'T65.5' => [
+                'decision' => 'Calendrier de l\'e-reporting d\'une société en franchise : La franchise sera déclarée pour toute la société chez SUPER PDP, qui regroupera et transmettra par bimestre ; PILIQI enverra chaque clôture dès qu\'elle est faite, ventes et paiements de services au taux 0.',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP).',
+            ],
+            'T65.6' => [
+                'decision' => 'Périmètre de l\'e-reporting international : PILIQI déclarera par SUPER PDP les ventes à des professionnels étrangers, les achats à des fournisseurs étrangers et les paiements des prestations ; les importations n\'y entrent pas.',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP) : phase 9, avant la mise en production.',
+            ],
+            'T76.3' => [
+                'decision' => 'Documents déjà transmis après restauration d\'une sauvegarde : Chaque document recevra un identifiant tiré au hasard. Après une restauration, PILIQI relira SUPER PDP avant toute vente ou tout envoi, réintégrera ce qui manque et n\'enverra jamais rien deux fois.',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP) : reprise après restauration à l\'étape 15.',
+            ],
+            'T87.1-prestataire-1' => [
+                'decision' => 'Paramètre d\'adresse de réception à la connexion SUPER PDP : Ce paramètre, qui fixe d\'avance l\'adresse de réception ouverte à l\'inscription, est désormais documenté par SUPER PDP ; PILIQI ne l\'envoie pas, car il n\'est pas indispensable.',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP) : CLAUDE.md et la fiche à mettre à jour.',
+            ],
+            'T87.1-prestataire-2' => [
+                'decision' => 'Format du paramètre d\'adresse de réception : PILIQI n\'enverra jamais ce paramètre, dont le format n\'est pas documenté : après la connexion, il créera l\'adresse de réception SIREN_SIRET de chaque magasin par l\'annuaire de SUPER PDP.',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP).',
+            ],
+            'T87.2-prestataire-1' => [
+                'decision' => 'Paramètre d\'envoi et de réception à la connexion : CLAUDE.md sera corrigé et la connexion imposera la réception par SUPER PDP, si chaque société doit y recevoir ses factures ; l\'écran préviendra qu\'une réception ouverte ailleurs y sera transférée.',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP) : le lot de cette étape réécrit la phrase de CLAUDE.md sur superpdp_send_and_receive et impose la réception par SUPER PDP à la connexion, sauf si l\'éditeur choisit de laisser la réception à une autre plateforme.',
+            ],
+            'T87.2-prestataire-2' => [
+                'decision' => 'Adresse de réception du deuxième magasin d\'une société : Une seule connexion SUPER PDP par société : l\'adresse de réception de chaque nouveau magasin se créera par l\'annuaire, sans nouvelle autorisation.',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP).',
+            ],
+            'T87.3' => [
+                'decision' => 'Une seule connexion SUPER PDP par société : Une seule connexion à SUPER PDP par société, faite par son propriétaire, jamais une seconde ; l\'écran préviendra de la vérification de SUPER PDP, puis affichera « en vérification » ou « refusé ».',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP).',
+            ],
+            'T87.4' => [
+                'decision' => 'Adresse de réception SIREN_SIRET de chaque magasin : À l\'ouverture d\'un magasin, PILIQI créera son adresse de réception SIREN_SIRET dans l\'annuaire de SUPER PDP ; un déménagement ouvrira une adresse pour le nouveau SIRET et fermera l\'ancienne.',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP).',
+            ],
+            'T87.5' => [
+                'decision' => 'Protection PKCE de la connexion à SUPER PDP : À la connexion à SUPER PDP, PILIQI ajoutera la protection PKCE contre le vol du code d\'autorisation, en plus du secret de l\'application, même si SUPER PDP ne l\'exige pas.',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP).',
+            ],
+            'T88.1' => [
+                'decision' => 'Motifs de refus et de contestation d\'une facture reçue : Pour refuser ou contester une facture reçue, PILIQI proposera les codes motifs de la DGFiP, séparés entre refus (non conforme, mal adressée) et litige (prix, quantité, qualité), avec un commentaire obligatoire pour un refus.',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP).',
+            ],
+            'T88.2' => [
+                'decision' => 'Statuts de refus, de contestation et d\'approbation : Sur une facture reçue, le propriétaire et les administrateurs autorisés pourront « Refuser » (210, motif et commentaire obligatoires), « Contester » (207) ou « Approuver » (205), chaque geste inscrit au journal d\'audit.',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP).',
+            ],
+            'T88.3' => [
+                'decision' => 'Statut de prise en charge d\'une facture reçue : PILIQI n\'enverra jamais le statut 204 (prise en charge) pour une facture reçue, ni d\'office ni par un bouton ; seuls « Refuser », « Contester » et « Approuver » existeront.',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP).',
+            ],
+            'T88.4' => [
+                'decision' => 'Facture refusée déjà importée en achat : Pas de statut à part : un brouillon d\'achat refusé sera verrouillé, puis rétablissable ; un achat validé sera marqué « facture refusée », sans TVA déduite jusqu\'à la facture de remplacement.',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP) : TVA déductible à l\'étape 5.',
+            ],
+            'T89.1' => [
+                'decision' => 'Facture d\'un fournisseur étranger reçue par Peppol : Une facture d\'un fournisseur étranger reçue par Peppol s\'importera comme les autres ; si un achat du magasin porte déjà ce fournisseur et ce numéro, elle en deviendra la pièce, sans second achat.',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP).',
+            ],
+            'T89.2' => [
+                'decision' => 'Magasin destinataire d\'une facture étrangère reçue : Une facture étrangère reçue suivra la même attribution : au magasin désigné avec certitude, sinon dans « À attribuer » ; chaque fiche de magasin montrera son adresse SIREN_SIRET, à donner aux fournisseurs.',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP).',
+            ],
+            'T89.3' => [
+                'decision' => 'Déclaration des achats à des fournisseurs étrangers : PILIQI déclarera lui-même les achats étrangers à déclarer (acquisitions dans l\'Union, services situés en France…), jamais les importations ; la saisie portera leur nature, et il vérifiera avant chaque envoi qu\'aucune déclaration n\'existe déjà.',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP) : phase 9.',
+            ],
+            'T89.4' => [
+                'decision' => 'Voie de déclaration d\'un achat étranger : Chaque achat étranger à déclarer partira en déclaration de données, aux montants de la facture, sans détail des lignes, au taux français avec la TVA autoliquidée ; jamais par envoi de la facture.',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP) : phase 9.',
+            ],
+            'T90.1-prestataire-1' => [
+                'decision' => 'Tolérance du contrôle de la TVA par taux : Avant chaque envoi, PILIQI bloquera toute facture dont la TVA d\'un taux s\'écarte de plus de 0,01 € de la base × le taux, au lieu de 1 €, et affichera l\'écart.',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP).',
+            ],
+            'T90.1-prestataire-2' => [
+                'decision' => 'Règles françaises plus strictes que la norme européenne : PILIQI appliquera avant l\'envoi les règles françaises, plus strictes : 0,01 € au plus entre la TVA d\'un taux et la base × le taux, et 0,01 € par ligne entre la base et ses lignes.',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP).',
+            ],
+            'T90.1-prestataire-3' => [
+                'decision' => 'Total de TVA égal à la somme des taux : Avant chaque envoi, PILIQI contrôlera sans tolérance que le total de TVA, la somme des lignes et le total TTC tombent juste ; ses totaux additionnent déjà exactement les montants enregistrés.',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP).',
+            ],
+            'T90.1-prestataire-4' => [
+                'decision' => 'Facture à un centime d\'écart de TVA : Pour toute vente de PILIQI, la TVA de chaque taux reste à 0,6 centime au plus de la base × le taux, sous le seuil français de 0,01 €, que PILIQI contrôlera aussi avant chaque envoi.',
+                'regles' => ['prix.calcul-depuis-le-ttc'],
+            ],
+            'T90.1-prestataire-5' => [
+                'decision' => 'Avoir dont la TVA dépasse un centime d\'écart : Le calcul des avoirs ne change pas : un avoir qui dépasse 0,01 € d\'écart sur un taux partira tel qu\'émis, avec une alerte au propriétaire et à l\'éditeur ; un rejet s\'affichera.',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP) : autre calcul seulement sur votre accord.',
+            ],
+            'T90.1-prestataire-6' => [
+                'decision' => 'Règles appliquées avant l\'envoi des factures électroniques : Avant chaque envoi, PILIQI appliquera lui-même les règles officielles européennes et françaises, mises à jour à chaque nouvelle version ; les contrôles de SUPER PDP seront relevés à la recette au bac à sable.',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP).',
+            ],
+            'T90.2-prestataire-1' => [
+                'decision' => 'Prix unitaire HT à six décimales chez SUPER PDP : PILIQI enregistre déjà le prix unitaire HT avec au plus six décimales ; à l\'étape 2, il l\'enverra tel quel dans la facture électronique, et le bac à sable vérifiera qu\'il est accepté.',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP).',
+            ],
+            'T90.2-prestataire-2' => [
+                'decision' => 'Contrôle quantité × prix de chaque ligne : Le prix unitaire HT partira tel qu\'enregistré ; avant l\'envoi, PILIQI vérifiera que quantité × prix retombe sur la ligne à 0,02 € près, sinon l\'émission conseillera de couper la ligne.',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP).',
+            ],
+            'T90.3-prestataire-1' => [
+                'decision' => 'Qualification au bac à sable et reprise sans doublon : PILIQI se qualifiera au bac à sable entre Tricatel et Burger Queen. Chaque envoi portera un identifiant tiré au hasard ; après une coupure, PILIQI relira les factures envoyées avant de renvoyer, sans doublon.',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP) : recette faite par vous (phase 10).',
+            ],
+            'T90.3-prestataire-2' => [
+                'decision' => 'Essais à réussir avant la production SUPER PDP : La production SUPER PDP s\'ouvrira aux sociétés après sept essais réussis au bac à sable (factures, avoirs, refus, encaissements, reprise sans doublon…) ; le label facultatif « Solution compatible » ne sera pas demandé.',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP) : recette faite par vous (phase 10).',
+            ],
+            'T90.4' => [
+                'decision' => 'Champs obligatoires des paiements de particuliers : Chaque paiement de particulier déclaré portera l\'identifiant de la société chez SUPER PDP, lu à la connexion, et la catégorie TPS1 par sous-total ; un refus s\'affichera et sera corrigé.',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP).',
+            ],
+            'T90.5' => [
+                'decision' => 'Journée qui ne compte que des avoirs : Une journée qui ne compte que des avoirs aux particuliers partira avec ses montants négatifs, par catégorie (biens ou services) et par taux.',
+                'regles' => ['caisse.fiche-de-la-cloture-et-apercu-de-l-e-reporting'],
+            ],
+            'T91.1' => [
+                'decision' => 'Vente à un professionnel établi hors de France : Toute vente à un professionnel établi hors de France, hors Monaco, se déclarera une seule fois à l\'e-reporting international, jamais aussi par l\'envoi de la facture ; sa fiche le dira.',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP) : phase 9.',
+            ],
+            'T91.2' => [
+                'decision' => 'Circuit de transmission de chaque vente : Un circuit par vente : facture électronique (professionnel assujetti en France), e-reporting international (hors de France), déclaration du jour (particulier ou professionnel non assujetti), message renvoyant à Chorus Pro (client public).',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP).',
+            ],
+            'P71.1' => [
+                'decision' => 'Échéances de l\'e-reporting selon le régime de TVA : PILIQI ne tient aucun calendrier : à l\'étape 2, il enverra chaque clôture dès qu\'elle est faite, et SUPER PDP transmettra selon le régime de TVA déclaré (décades, mois ou bimestre).',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP).',
+            ],
+            'P71.2' => [
+                'decision' => 'Date limite de la deuxième décade : SUPER PDP transmet la deuxième décade (du 11 au 20) au plus tard le 30 du mois ; PILIQI enverra chaque clôture dès qu\'elle est faite, même rattrapée en retard.',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP).',
+            ],
+            'P71.6' => [
+                'decision' => 'Calendrier de l\'e-reporting tenu par SUPER PDP : SUPER PDP applique seul le calendrier du régime de TVA ; PILIQI enverra chaque clôture dès qu\'elle est faite et déclarera le régime de la société à la connexion et à chaque changement.',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP).',
+            ],
+            'P74.1' => [
+                'decision' => 'Date d\'effet de l\'adresse de réception : L\'adresse de réception d\'un magasin prendra effet le jour même, jamais plus tard, et sa fiche montrera son état (en cours, active, en erreur) ; jusque-là, l\'attribution habituelle s\'applique.',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP).',
+            ],
+            'P74.2' => [
+                'decision' => 'Relecture régulière des événements SUPER PDP : Toutes les 15 minutes, et par un bouton « Actualiser », PILIQI relira pour chaque société les factures et événements de SUPER PDP après le dernier enregistré, sans jamais reprendre par une date.',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP).',
+            ],
+            'P74.3' => [
+                'decision' => 'Mandats de facturation entre sociétés : PILIQI n\'utilisera pas les mandats de SUPER PDP : chaque société émettra et recevra ses factures par sa propre connexion, jamais au nom d\'une autre, et un cabinet lié ne facturera jamais pour son client.',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP).',
+            ],
+            'T4.1-comptable' => [
+                'decision' => 'Achat monégasque reçu par le réseau français : Tout achat de biens venus de Monaco ou de services d\'un prestataire monégasque se déclarera dans l\'e-reporting des achats, même si la facture arrive par le réseau français, quitte à être connu deux fois.',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP) : avec SUPER PDP.',
+            ],
+            'T4.2-comptable' => [
+                'decision' => 'Achat monégasque de biens déjà en France : La saisie d\'un achat monégasque demandera d\'où partent les biens, « de Monaco » par défaut ; « déjà en France » écarte l\'achat de l\'e-reporting et fait joindre une preuve.',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP) : avec SUPER PDP.',
+            ],
+            'T4.3-comptable' => [
+                'decision' => 'Biens livrés à Monaco à un client français : Des biens livrés à Monaco à un client établi en France partiront en facture électronique et aussi dans l\'e-reporting ; leur TVA ira en plus en ligne 18 de la déclaration de TVA.',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP) : avec SUPER PDP ; ligne 18 à l\'étape 5.',
+            ],
+            'T4.4-comptable' => [
+                'decision' => 'Vente à un professionnel établi à Monaco : Une vente à un professionnel de Monaco garde la TVA française ; biens envoyés à Monaco ou service : e-reporting ; biens remis en France : facture électronique s\'il est à l\'annuaire, sinon avec les ventes aux particuliers.',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP) : avec SUPER PDP ; ligne 18 à l\'étape 5.',
+            ],
+            'T5.1' => [
+                'decision' => 'Détaxe : déclaration du ticket et régularisation après visa : Un ticket détaxé se déclarera le jour de la vente avec sa TVA française ; après le visa, la TVA se régularisera sur la déclaration de TVA, sans retoucher l\'e-reporting.',
+                'a_venir' => 'Étapes 2 et 5 : le ticket détaxé est déjà déclaré le jour de la vente avec sa TVA française dans l\'aperçu ; la régularisation après le visa ira sur la déclaration de TVA.',
+            ],
+            'T6.2' => [
+                'decision' => 'Assurance ou banque étrangère hors e-reporting : Une assurance ou une opération bancaire exonérée achetée à l\'étranger restera hors de l\'e-reporting, seulement si la saisie choisit expressément cette nature ; sinon le service se déclare.',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP) : avec SUPER PDP.',
+            ],
+            'T4.2-prestataire' => [
+                'decision' => 'Achat monégasque de biens déjà en France : La saisie d\'un achat à un fournisseur monégasque demandera d\'où partent les biens, de Monaco par défaut ; déjà en France, l\'achat sort de l\'e-reporting et la preuve se joint.',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP).',
+            ],
+            'T4.3-prestataire' => [
+                'decision' => 'Biens livrés à Monaco à un client français : Des biens livrés à Monaco à un client établi en France auront une facture électronique et un e-reporting ; leur taxe ira aussi en ligne 18 de la déclaration de TVA.',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP) : ligne 18 de la déclaration à l\'étape 5.',
+            ],
+            'T4.4-prestataire' => [
+                'decision' => 'Vente à un client professionnel établi à Monaco : Un client professionnel de Monaco paie la TVA française et n\'est jamais traité comme étranger ; selon l\'opération et l\'annuaire, PILIQI choisira e-reporting, facture électronique ou déclaration du jour.',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP) : ligne 18 de la déclaration à l\'étape 5.',
+            ],
+            'T25.2' => [
+                'decision' => 'Taux corse de l\'électricité au-delà de 36 kVA : Au-delà de 36 kVA, l\'abonnement corse est à 10 %, taux déjà dans la liste de PILIQI. Sur une facture d\'énergie reçue, PILIQI gardera toujours la TVA écrite par le fournisseur.',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP) : factures d\'énergie reçues, puis comptabilité à l\'étape 5.',
+            ],
+            'T71.1' => [
+                'decision' => 'Avoir fournisseur « net de taxes » sans retour : Un avoir fournisseur sans retour « net de taxes » laissera la TVA déduite intacte ; il baissera le coût moyen des articles en stock et le coût des articles déjà vendus.',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP) : avoirs reçus par SUPER PDP.',
+            ],
+            'T71.2' => [
+                'decision' => 'Ristournes et remises fournisseur après la facture : L\'écran des avoirs fournisseur dira qu\'une ristourne sans retour ne se saisit pas encore ; dès l\'étape 2, elle réduira le coût et la TVA déduite de la période où elle est reçue.',
+                'regles' => ['hors.limites-annoncees-a-l-ecran'],
+            ],
+            'T50.1' => [
+                'decision' => 'Factures d\'acompte pour un client professionnel : Pour un client professionnel, PILIQI fera une facture d\'acompte payée en entier, avec la date du versement, puis la déduira par une ligne négative sur la facture finale.',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP) : facture d\'acompte payée en entier pour un client professionnel, avec la date du versement, déduite par une ligne négative de la facture finale ; d\'ici là, les formulaires de devis et de facture disent qu\'un acompte reçu avant la facture ne s\'enregistre pas encore (règle hors.limites-annoncees-a-l-ecran).',
+            ],
+            'T50.2' => [
+                'decision' => 'Acompte reçu avant la facture : Un acompte s\'enregistrera par un document d\'acompte payé en entier (facture pour un professionnel, ticket pour un particulier), compté le jour de son encaissement, puis déduit par une ligne négative du document final.',
+                'a_venir' => 'Étape 2 (intégration SUPER PDP) : document d\'acompte payé en entier (facture pour un professionnel, ticket pour un particulier), compté le jour de son encaissement, déduit par une ligne négative du document final ; d\'ici là, les formulaires de devis et de facture disent qu\'un acompte reçu avant la facture ne s\'enregistre pas encore (règle hors.limites-annoncees-a-l-ecran).',
+            ],
+            'T5.2' => [
+                'decision' => 'Remboursement de la TVA de détaxe en caisse : Quand le magasin rend la TVA après le visa, la caisse enregistrera une opération « Remboursement de détaxe » signée, liée au ticket et au bordereau, comptée à part dans la clôture, sans toucher le ticket.',
+                'a_venir' => 'Étape 3 (caisse sécurisée, fin) : caisse sécurisée ; TVA régularisée à l\'étape 5.',
+            ],
+            'T68.2' => [
+                'decision' => 'Facture rectificative dans le relevé de caisse : La facture rectificative compte déjà dans le TTC vendu du relevé de caisse, son crédit d\'avoir n\'étant jamais un encaissement ; le relevé ajoutera « dont factures rectificatives ».',
+                'a_venir' => 'Étape 3 (caisse sécurisée, fin) : le reste est déjà en place.',
+            ],
+            'T32.1' => [
+                'decision' => 'Relecture de l\'attestation de la caisse sécurisée : L\'attestation de l\'éditeur et sa notice suivront le modèle officiel et n\'attesteront que ce que PILIQI fait, chaque condition prouvée par un test ; la revue indépendante les relira avant la mise en production.',
+                'a_venir' => 'Étape 3 (caisse sécurisée, fin) : relecture dans la revue de l\'étape 15.',
+            ],
+            'T32.2' => [
+                'decision' => 'Attestation de l\'éditeur ou certification de la caisse : La caisse sera justifiée par l\'attestation de l\'éditeur, une par magasin, sans certification avant la mise en production ; chaque version majeure aura une nouvelle attestation, et une certification reste possible plus tard, sur votre décision.',
+                'a_venir' => 'Étape 3 (caisse sécurisée, fin) : certification seulement sur votre décision.',
+            ],
+            'T31.1' => [
+                'decision' => 'Attestation de l\'éditeur admise pour la caisse : PILIQI prouvera la conformité de sa caisse par une attestation de l\'éditeur par magasin, au modèle officiel, refaite à chaque version majeure ; si un texte exigeait un jour une certification payante, elle vous serait soumise.',
+                'a_venir' => 'Étape 3 (caisse sécurisée, fin).',
+            ],
+            'T31.2' => [
+                'decision' => 'Une attestation de caisse par magasin : PILIQI garde une attestation de l\'éditeur par magasin, au texte exact du modèle officiel, chacune avec la date de mise en service du magasin ; une seule par société serait admise aussi, si vous préférez simplifier.',
+                'a_venir' => 'Étape 3 (caisse sécurisée, fin) : simplification possible sur votre décision.',
+            ],
+            'T31.3' => [
+                'decision' => 'Version du BOFiP citée dans l\'attestation : L\'attestation citera la version du BOFiP en vigueur le jour de sa signature, au 12/11/2026 celle du 25/03/2026 avec son modèle, et gardera cet identifiant daté pour savoir quand la refaire.',
+                'a_venir' => 'Étape 3 (caisse sécurisée, fin) : doctrine relue juste avant la signature.',
+            ],
+            'T32.4' => [
+                'decision' => 'Tickets Z à zéro décrits dans l\'attestation : La notice et l\'attestation de l\'éditeur diront qu\'un ticket Z est produit chaque jour, même à 0,00 €, sans transmission un jour sans opération, et décriront le mode démonstration.',
+                'a_venir' => 'Étape 3 (caisse sécurisée, fin).',
+            ],
+            'T6.1' => [
+                'decision' => 'Assurance ou banque étrangère sur la déclaration de TVA : Une assurance ou un service bancaire exonéré acheté à l\'étranger ne figurera sur aucune ligne de la déclaration de TVA ; un service taxable ira en ligne A3, TVA autoliquidée puis déduite.',
+                'a_venir' => 'Étape 5 (comptabilité et état de TVA) : état de TVA.',
+            ],
+            'T9.1' => [
+                'decision' => 'Lignes de la déclaration de TVA : L\'état de TVA placera chaque montant sur sa ligne de la déclaration de TVA, selon le territoire et la notice 2026, avec une table relue chaque année, arrondi à l\'euro, jamais négatif.',
+                'a_venir' => 'Étape 5 (comptabilité et état de TVA) : état de TVA.',
+            ],
+            'T9.2' => [
+                'decision' => 'Avoirs clients sur la déclaration de TVA : Sur la déclaration de TVA, les ventes ne seront pas diminuées des avoirs : tous les avoirs clients, de la même période ou non, iront en ligne B5 (base) et 21 (TVA).',
+                'a_venir' => 'Étape 5 (comptabilité et état de TVA) : état de TVA.',
+            ],
+            'T11.1' => [
+                'decision' => 'Une seule déclaration de TVA par société : PILIQI préparera une seule déclaration de TVA par société, chaque magasin sur les lignes de son territoire, et donnera aussi l\'état par territoire pour qui déclare à part en outre-mer.',
+                'a_venir' => 'Étape 5 (comptabilité et état de TVA) : état de TVA.',
+            ],
+            'T11.2' => [
+                'decision' => 'Taux de chaque territoire sur la déclaration de TVA : Sur la même déclaration de TVA, chaque territoire portera ses taux sur ses lignes (métropole, Corse, outre-mer) ; une vente de Corse à 20 % ou 5,5 % ira sur les lignes de la métropole.',
+                'a_venir' => 'Étape 5 (comptabilité et état de TVA) : état de TVA.',
+            ],
+            'T10.1' => [
+                'decision' => 'Date de la TVA d\'un service acheté à l\'étranger : La TVA autoliquidée d\'un service acheté à l\'étranger sera due et déduite à son exécution ou à un acompte versé avant ; certains services (immeuble, transport de personnes, restauration…) le seront au paiement.',
+                'a_venir' => 'Étape 5 (comptabilité et état de TVA) : comptabilité et état de TVA.',
+            ],
+            'T10.2' => [
+                'decision' => 'Date de déduction de la TVA de l\'énergie : La TVA de l\'énergie se déduira à chaque acompte payé avec sa pièce (facture ou échéancier), puis le solde en fin de période ; sans pièce, à la facture de régularisation.',
+                'a_venir' => 'Étape 5 (comptabilité et état de TVA) : factures d\'énergie reçues dès l\'étape 2.',
+            ],
+            'T10.3' => [
+                'decision' => 'Date de la TVA d\'un achat dans l\'Union : Pour un achat dans l\'Union, la TVA sera due et déduite le 15 du mois suivant la livraison, ou à la date de la facture si elle tombe entre les deux.',
+                'a_venir' => 'Étape 5 (comptabilité et état de TVA).',
+            ],
+            'T10.4' => [
+                'decision' => 'Déduction de la TVA d\'un service acheté en France : La TVA d\'un service acheté en France se déduira à chaque paiement ou acompte, ou à la date de la facture si le fournisseur y écrit l\'option pour les débits.',
+                'a_venir' => 'Étape 5 (comptabilité et état de TVA).',
+            ],
+            'T12.1' => [
+                'decision' => 'Comptes proposés pour les catégories de charges : PILIQI proposera par défaut un compte du plan comptable pour chaque charge (loyer 6132, eau et énergie 6061, salaires 641, assurances 616…), modifiable par chaque société.',
+                'a_venir' => 'Étape 5 (comptabilité et état de TVA).',
+            ],
+            'T12.2' => [
+                'decision' => 'Écritures comptables générées depuis chaque document : Chaque document produira une fois ses écritures en partie double, avec sa référence, jamais modifiées, dans des journaux de ventes, d\'achats et de caisse par magasin et un journal de banque.',
+                'a_venir' => 'Étape 5 (comptabilité et état de TVA) : avec des écritures d\'essai.',
+            ],
+            'T12.3' => [
+                'decision' => 'Format de l\'export comptable (FEC) : PILIQI produira un export comptable (FEC) par exercice et par société, au format officiel, écritures numérotées sans trou, avec sa notice, contrôlé par un test et par l\'outil officiel Test Compta Demat.',
+                'a_venir' => 'Étape 5 (comptabilité et état de TVA).',
+            ],
+            'T12.4' => [
+                'decision' => 'Un seul FEC par société, journaux par magasin : PILIQI produira un seul FEC par SIREN et par exercice, tous magasins réunis, avec des journaux par magasin numérotés chacun à part et expliqués dans la notice ; la démonstration n\'y entre jamais.',
+                'a_venir' => 'Étape 5 (comptabilité et état de TVA).',
+            ],
+            'T16.1' => [
+                'decision' => 'TVA à reverser sur les marchandises disparues : Chaque sortie hors vente portera un motif : vol avec plainte, destruction prouvée, don ou démarque inconnue évitent de reverser la TVA déduite ; une casse ou perte sans preuve l\'oblige.',
+                'a_venir' => 'Étape 7 (stock) : TVA à reverser portée à l\'étape 5.',
+            ],
+            'T16.2' => [
+                'decision' => 'Preuves des marchandises volées, cassées ou détruites : Chaque sortie hors vente recevra ses preuves en pièces jointes gardées 10 ans (plainte, procès-verbal et photos, attestation de don…) ; sans preuve en fin de période, la TVA sera à reverser.',
+                'a_venir' => 'Étape 7 (stock).',
+            ],
+            'T51.5' => [
+                'decision' => 'Attestation d\'assurance décennale jointe aux devis et factures : Toute société pourra déposer son attestation d\'assurance décennale : PILIQI la joindra d\'office aux devis et factures envoyés par e-mail et préviendra avant sa fin de validité ; rien n\'est exigé.',
+                'a_venir' => 'Étape 8 (pièces jointes) : avec les pièces jointes.',
+            ],
+            'T33.1' => [
+                'decision' => 'Analyse d\'impact de la vérification par courrier : PILIQI fera l\'analyse d\'impact de la vérification des sociétés par courrier, comme si elle était obligatoire, terminée avant de brancher le vrai envoi recommandé ; d\'ici là, seul l\'envoi factice fonctionne.',
+                'a_venir' => 'Étape 9 (RGPD).',
+            ],
+            'T33.2' => [
+                'decision' => 'Rédaction et mise à jour de l\'analyse d\'impact : Claude rédigera l\'analyse d\'impact selon la méthode de la CNIL, en quatre parties ; vous la signerez comme responsable du traitement, et elle sera revue chaque année et avant tout changement du traitement.',
+                'a_venir' => 'Étape 9 (RGPD).',
+            ],
+            'T33.3' => [
+                'decision' => 'Information des personnes vérifiées par courrier : La page d\'inscription informera le propriétaire sur ses données ; la lettre recommandée informera le représentant légal en quelques lignes, avec son droit d\'opposition, un lien et un QR code vers la notice complète.',
+                'a_venir' => 'Étape 9 (RGPD) : avant le vrai envoi recommandé.',
+            ],
+            'T33.4' => [
+                'decision' => 'Consultation de la CNIL sur la vérification : PILIQI ne consultera la CNIL que si l\'analyse d\'impact de l\'étape 9 montre un risque élevé que les mesures prises ne réduisent pas.',
+                'a_venir' => 'Étape 9 : consultation de la CNIL seulement si l\'analyse d\'impact montre un risque élevé que les mesures ne réduisent pas.',
+            ],
+            'T34.4' => [
+                'decision' => 'Durée de garde des preuves de vérification : La vérification d\'une société et ses codes de courrier s\'effaceront cinq ans après la fin de la relation, y compris quand une inscription se clôt sans validation.',
+                'a_venir' => 'Étape 9 (RGPD) : avec les délais des inscriptions closes (T35.3).',
+            ],
+            'T35.1' => [
+                'decision' => 'Données d\'une inscription close sans validation : Douze mois après la clôture d\'une inscription jamais validée, ses comptes seront rendus anonymes et ses données sans document effacées, après un e-mail un mois avant ; ses documents restent gardés dix ans.',
+                'a_venir' => 'Étape 9 (RGPD).',
+            ],
+            'T35.2' => [
+                'decision' => 'Démonstration d\'une inscription close sans validation : La démonstration d\'une inscription close sera gardée fermée comme un registre de caisse, dix ans après sa dernière opération, puis effacée en bloc, avec une trace au journal d\'audit.',
+                'a_venir' => 'Étape 9 (RGPD).',
+            ],
+            'T35.3' => [
+                'decision' => 'Délais d\'effacement d\'une inscription close : Pour une inscription close : comptes anonymisés et données sans document effacées après 12 mois, vérification après 5 ans, documents et registres 10 ans après leur dernière opération.',
+                'a_venir' => 'Étape 9 (RGPD).',
+            ],
+            'T37.1' => [
+                'decision' => 'Paiement en ligne sans agrément de paiement : Chaque société reliera son propre compte chez un prestataire de paiement agréé : l\'argent ira directement sur ce compte, jamais chez l\'éditeur, et PILIQI n\'enregistrera que le paiement confirmé.',
+                'a_venir' => 'Étape 11 (intégrations externes).',
+            ],
+            'T37.2' => [
+                'decision' => 'Autres obligations de l\'éditeur pour le paiement en ligne : La carte se tapera chez le prestataire de paiement, jamais dans PILIQI ; chaque paiement confirmé sera signé au registre du magasin, et un contrat de sous-traitance des données liera l\'éditeur à chaque société.',
+                'a_venir' => 'Étape 11 (intégrations externes) : contrat de sous-traitance à l\'étape 9.',
+            ],
+            'T100.4' => [
+                'decision' => 'Prix d\'un recommandé de La Poste : Le prix ne change rien au code, et le courrier reste factice. Au tarif public 2026, un courrier d\'une page avec avis de réception coûte environ 8,60 €, coût à compter dans les abonnements de l\'étape 12.',
+                'a_venir' => 'Étape 12 : le coût du courrier recommandé (environ 8,60 €) entre dans les abonnements ; le courrier reste factice et le prix ne change rien au code.',
+            ],
+            'T75.1' => [
+                'decision' => 'Registre des objets achetés à des particuliers : PILIQI tiendra le registre des objets achetés, conforme au modèle officiel, rempli le jour même, en ajout seul et gardé 10 ans, et rappellera la déclaration à la préfecture.',
+                'a_venir' => 'Étape 14 (achats auprès de particuliers).',
+            ],
+            'T75.2' => [
+                'decision' => 'Pièces à demander au particulier qui vend : À chaque achat à un particulier, PILIQI enregistrera les références de sa pièce d\'identité, sans copie, fera signer un bon d\'achat et refusera les espèces au-delà de 1 000 €.',
+                'a_venir' => 'Étape 14 (achats auprès de particuliers).',
+            ],
+            'T75.3' => [
+                'decision' => 'Achat à un particulier et régime de la marge : Un objet acheté à un particulier gardera son prix d\'achat, tiré du registre et du bon d\'achat, pour la TVA sur sa marge ; sans prix prouvé, TVA sur tout le prix.',
+                'a_venir' => 'Étape 14 (achats auprès de particuliers).',
+            ],
+            'T76.2' => [
+                'decision' => 'Numérotation après la restauration d\'une sauvegarde : Les sauvegardes ne perdront aucun document validé ; si une restauration en perd, une procédure de l\'éditeur reprendra chaque série après le plus grand numéro remis et reconstituera les documents perdus sous leur numéro.',
+                'a_venir' => 'Étape 15 (mise en production) : procédure décrite dans l\'attestation à l\'étape 3.',
+            ],
+            'T38.3' => [
+                'decision' => 'Date de la revue fiscale indépendante : La revue se fera une fois, avant la mise en production, après les étapes 2 et 3 et avant le premier client réel ; la facture électronique sera relue au plus tard avant le 01/09/2027.',
+                'hors_logiciel' => 'Calendrier de la revue fiscale indépendante : une fois, avant la mise en production, après les étapes 2 et 3 ; rien dans le code n\'en dépend.',
+            ],
+            'T38.4' => [
+                'decision' => 'Budget de la revue fiscale indépendante : À l\'étape 15, Claude préparera un dossier en quatre blocs, à envoyer à deux ou trois professionnels pour un forfait écrit par bloc ; vous choisirez le montant au vu des devis, rien dans PILIQI n\'en dépend.',
+                'hors_logiciel' => 'Budget de la revue fiscale : dossier en quatre blocs préparé à l\'étape 15, montant choisi par l\'éditeur ; rien dans le code n\'en dépend.',
+            ],
+            'T76.1' => [
+                'decision' => 'Reprise de la caisse après restauration d\'une sauvegarde : La base se restaurera au dernier instant ; s\'il manque des opérations, chaque série reprendra après le plus grand numéro remis, sans rien réécrire, et les opérations perdues seront ressaisies, marquées « reconstituées ».',
+                'a_venir' => 'Étape 15 (mise en production) : procédure décrite dans la notice de l\'attestation.',
+            ],
+            'T95.1' => [
+                'decision' => 'Audit de sécurité et test d\'intrusion : À l\'étape 15, Claude fera un audit de sécurité interne (méthode OWASP, niveau 2) et corrigera chaque faille avec un test ; un test d\'intrusion extérieur, payant, se fera si vous le commandez.',
+                'a_venir' => 'Étape 15 (mise en production) : test extérieur sur votre commande, sans bloquer la production.',
+            ],
+            'T95.5' => [
+                'decision' => 'Périmètre de l\'audit et du test d\'intrusion : L\'audit interne de l\'étape 15, et un éventuel test d\'intrusion, couvriront sept points : isolation, droits des rôles, pages publiques, fichiers déposés, retour de SUPER PDP puis l\'API, espace de l\'éditeur, configuration.',
+                'a_venir' => 'Étape 15 (mise en production).',
+            ],
+            'P14.5' => [
+                'decision' => 'Immatriculation imprimée sur les factures : Avec votre accord, PILIQI n\'exigera l\'immatriculation que d\'une entreprise inscrite au RCS (aide « RCS suivi de la ville du greffe ») ; « RM » et « mention de dispense » disparaîtront.',
+                'regles' => ['documents.identite-legale-complete'],
+            ],
+            'T81.1' => [
+                'decision' => 'Magasins en Guyane ou à Mayotte : PILIQI refuse déjà les magasins de Guyane et de Mayotte, où la TVA ne s\'applique pas. Si vous les ouvrez : ventes sans TVA, mention « TVA non applicable, art. 294 du CGI », aucun envoi à SUPER PDP.',
+                'regles' => ['verification.controle-sirene-et-territoire'],
+            ],
+            'T81.2' => [
+                'decision' => 'Magasins dans les collectivités d\'outre-mer : PILIQI refuse déjà les magasins des collectivités d\'outre-mer et de Nouvelle-Calédonie : la TVA française ne s\'y applique pas et aucune ne passe par SUPER PDP. Chacune ne s\'ouvrirait que comme un produit à part, sur votre décision.',
+                'regles' => ['verification.controle-sirene-et-territoire'],
+            ],
+            'T100.2' => [
+                'decision' => 'Remise du recommandé au représentant légal en personne : La Poste ne garantit pas la remise au seul représentant légal : un mandataire ou une personne habilitée peut signer. Vous choisirez d\'accepter cette remise ou de chercher une autre garantie.',
+                'hors_logiciel' => 'Choix contractuel de l\'éditeur sur la remise du recommandé (La Poste) ; le courrier reste factice jusque-là (seule implémentation de l\'envoi recommandé).',
+            ],
+            'T100.3' => [
+                'decision' => 'Clauses RGPD du contrat de La Poste : Aucun vrai courrier ne partira avant un accord de sous-traitance des données à jour avec La Poste, complété des clauses manquantes (confidentialité, violations de données, suppression en fin de contrat…) ; d\'ici là, le courrier reste factice.',
+                'hors_logiciel' => 'Accord de sous-traitance des données à signer avec La Poste avant tout vrai courrier ; d\'ici là, seule l\'implémentation factice de l\'envoi recommandé existe.',
+            ],
+            'T95.3' => [
+                'decision' => 'Calendrier de l\'audit et du test d\'intrusion : L\'audit interne de Claude se fera à l\'étape 15 ; un test d\'intrusion commandé suivrait : devis fin de l\'étape 13, essais à l\'étape 14, corrections et second passage avant la campagne finale.',
+                'hors_logiciel' => 'Calendrier d\'un test d\'intrusion commandé par l\'éditeur ; l\'audit interne se fait à l\'étape 15 dans tous les cas.',
+            ],
+            'T95.4' => [
+                'decision' => 'Prix de l\'audit et du test d\'intrusion : L\'audit interne de Claude ne coûte rien de plus. Un test d\'intrusion extérieur, payant, ne se commande que sur votre décision, après deux ou trois devis comparés sur un cahier des charges rédigé par Claude.',
+                'hors_logiciel' => 'Prix d\'un test d\'intrusion extérieur, commandé seulement sur décision de l\'éditeur ; rien dans le code n\'en dépend.',
+            ],
+            'T5.3' => [
+                'decision' => 'Bordereau de détaxe jamais visé : PILIQI garde déjà la TVA sur le ticket : sans visa au bout de six mois, elle reste acquise à l\'État et il n\'y a rien à faire, sauf signaler la vente dans le relevé mensuel des détaxes.',
+                'regles' => ['hors-france.detaxe'],
+            ],
+            'T5.4' => [
+                'decision' => 'Détaxe dans un magasin d\'outre-mer : La détaxe vaut aussi dans un magasin de Guadeloupe, de Martinique ou de La Réunion, au taux du département, pour un voyageur résidant hors de France et de l\'Union ; PILIQI la traite déjà comme ailleurs.',
+                'regles' => ['hors-france.detaxe'],
+            ],
+            'T5.5' => [
+                'decision' => 'Regroupement des achats pour la détaxe : Le regroupement reste permis, mais le bordereau d\'un centre commercial est émis par la société du centre, pas par le magasin ; PILIQI note déjà le n° du bordereau sur chaque ticket, sans regroupement.',
+                'regles' => ['hors-france.detaxe'],
+            ],
+            'T8.6' => [
+                'decision' => 'Franchise gardée malgré les achats étrangers : Une société en franchise la garde même si elle achète dans l\'Union ou importe : ces achats ne changent jamais son régime, et ses ventes restent avec la mention de franchise ; PILIQI le fait déjà.',
+                'regles' => ['prix.exoneration-et-franchise'],
+            ],
+            'T8.7' => [
+                'decision' => 'Franchise : mention sur les ventes hors de France : Une société en franchise met déjà la seule mention « TVA non applicable, art. 293 B du CGI » sur toutes ses factures de marchandises, même vendues hors de France.',
+                'regles' => ['prix.exoneration-et-franchise'],
+            ],
+            'T25.1' => [
+                'decision' => 'Taux de l\'alcool servi sur place en Corse : En Corse, l\'alcool servi sur place est à 10 % et l\'alcool à emporter à 20 %. PILIQI laisse déjà saisir le taux, 20 % par défaut, et accepte 10 % sans avertissement dans un magasin corse.',
+                'regles' => ['prix.taux-par-defaut'],
+            ],
+            'T25.3' => [
+                'decision' => 'Produits à 2,1 % en Corse : En Corse, presque toute l\'alimentation, les livres et certains services sont à 2,1 %, la confiserie à 20 %. PILIQI n\'a pas de liste de produits : il accepte déjà 2,1 % sans avertissement.',
+                'regles' => ['prix.taux-par-defaut'],
+            ],
+            'T25.4' => [
+                'decision' => 'Taux de 1,05 % et 1,75 % des DOM : En Guadeloupe, en Martinique et à La Réunion, 1,05 % vise la presse et certains spectacles nouveaux, 1,75 % les animaux vivants de boucherie vendus à des particuliers. PILIQI accepte déjà ces taux sans avertissement.',
+                'regles' => ['prix.taux-par-defaut'],
+            ],
+            'T25.5' => [
+                'decision' => 'Taux par défaut de 8,5 % des DOM : PILIQI propose déjà 8,5 % par défaut en Guadeloupe, en Martinique et à La Réunion, accepte 2,1 ; 1,75 et 1,05 % sans avertissement, et tire le HT en divisant exactement par 1,085.',
+                'regles' => ['prix.taux-par-defaut'],
+            ],
+            'T25.6' => [
+                'decision' => 'Loi de finances 2026 et table des taux : La loi de finances 2026 n\'a changé aucun taux : la table reste juste. PILIQI retirera 13 % des taux corses à la date fixée par un décret, et revoira au 01/01/2027 les articles cités dans ses mentions.',
+                'regles' => ['prix.taux-par-defaut'],
+            ],
+            'T26' => [
+                'decision' => 'Calcul des ventes depuis les prix TTC : PILIQI calcule déjà toute vente une fois depuis les prix TTC : HT de chaque taux arrondi une fois, TVA = TTC − HT. Si SUPER PDP refuse l\'écart d\'un centime à l\'étape 2, le choix vous sera soumis.',
+                'regles' => ['prix.calcul-depuis-le-ttc'],
+            ],
+            'T51.4' => [
+                'decision' => 'Factures de situation de travaux : Une situation de travaux est une facture ordinaire : une société de services la fait déjà, avec son taux ; le récapitulatif du marché peut s\'écrire en note, sans être imposé.',
+                'regles' => ['type.societe-de-services'],
+            ],
+            'P8.1' => [
+                'decision' => 'TVA des cartes cadeaux à plusieurs taux : PILIQI ne vend aucune carte cadeau, selon votre choix. Son bon d\'avoir n\'est pas un bon au sens de la loi : la vente où il sert est taxée en entier, le crédit ne servant qu\'à payer.',
+                'regles' => ['paiements.bon-d-avoir', 'paiements.mode-avoir'],
+            ],
+            'P8.2' => [
+                'decision' => 'TVA d\'une carte cadeau jamais utilisée : PILIQI ne vend pas de cartes cadeaux, selon votre choix : la question ne se pose pas. Si vous changiez d\'avis, chaque bon vendu devrait être suivi jusqu\'à son emploi ou son expiration.',
+                'explication' => 'PILIQI ne vend aucune carte cadeau : la question de la TVA d\'une carte jamais utilisée ne se pose pas ; le bon d\'avoir suit P8.1.',
+            ],
+            'P77' => [
+                'decision' => 'PU HT à six décimales sur les factures : PILIQI imprime déjà le PU HT tel qu\'il est enregistré, jusqu\'à six décimales, sur les factures, avoirs sur facture et devis à un professionnel et sur les ventes sans TVA française ; les montants restent au centime.',
+                'regles' => ['prix.pu-ht-a-six-decimales', 'documents.colonnes-ht-ou-ttc'],
+            ],
+            'P78' => [
+                'decision' => 'Répartition du HT entre les lignes d\'une facture : PILIQI calcule déjà le HT de chaque taux une fois, puis le répartit sur les lignes par cumul : deux lignes de 25,00 € TTC à 20 % reçoivent 20,83 € et 20,84 € HT.',
+                'regles' => ['prix.calcul-depuis-le-ttc'],
+            ],
+            'P79' => [
+                'decision' => 'Totaux des clôtures et déclarations par addition : Clôtures, relevés et tableaux de bord additionnent déjà les montants enregistrés des documents, sans recalculer la TVA d\'un total ; l\'e-reporting (étape 2) et l\'état de TVA (étape 5) feront de même.',
+                'regles' => ['prix.sommes-des-montants-enregistres'],
+            ],
+            'P80' => [
+                'decision' => 'Prix hors taxe d\'une vente exonérée : Une vente exonérée (export, livraison vers un DOM ou intracommunautaire) se paie déjà au HT tiré une fois par taux des prix TTC du catalogue, sans TVA : 30,00 € TTC à 20 % donnent 25,00 €.',
+                'regles' => ['prix.exoneration-et-franchise'],
+            ],
+            'P81' => [
+                'decision' => 'Tolérances de saisie des factures d\'achat : PILIQI garde déjà les montants de la facture du fournisseur. Il accepte 2 centimes d\'écart par ligne pour le HT et 1 centime par ligne du taux pour la TVA ; au-delà, l\'achat porte « TVA à vérifier ».',
+                'regles' => ['achats.tva-des-achats-recopiee'],
+            ],
+            'P82' => [
+                'decision' => 'TVA des avoirs fournisseur en plusieurs retours : Pour des retours en plusieurs fois, PILIQI propose déjà la TVA de tous les articles retournés moins celle des avoirs précédents ; la note d\'avoir du fournisseur prime, sans jamais rendre plus que la TVA restante.',
+                'regles' => ['achats.avoir-fournisseur', 'achats.tva-des-achats-recopiee'],
+            ],
+            'T17' => [
+                'decision' => 'Mention de l\'option pour les débits : Quand la société a opté pour les débits, PILIQI imprime déjà « Option pour le paiement de la taxe d\'après les débits » sur tous ses tickets, factures et avoirs, même de biens seuls.',
+                'regles' => ['documents.mentions-et-assurance'],
+            ],
+            'P14.2' => [
+                'decision' => 'Place de la mention « à capital variable » : PILIQI imprime déjà « à capital variable » collé au nom et à la forme de la société, avec le capital, dans le pied répété sur chaque page ; ce pied doit rester lisible.',
+                'regles' => ['documents.mentions-et-assurance'],
+            ],
+            'P14.6' => [
+                'decision' => 'Adresse du siège et adresse du magasin : Quand le siège est au magasin, PILIQI n\'imprime déjà qu\'une adresse, avec « Siège social et établissement » ; sinon il imprime les deux, figées à l\'émission.',
+                'regles' => ['documents.mentions-et-assurance'],
+            ],
+            'T56' => [
+                'decision' => 'Assurance professionnelle sur les devis et factures : L\'assurance professionnelle reste facultative : PILIQI l\'imprime déjà au pied des devis et factures quand elle est renseignée, avec un rappel pour le bâtiment ; les conditions générales diront que l\'utilisateur répond de ses mentions.',
+                'regles' => ['documents.mentions-et-assurance'],
+            ],
+            'T40.3' => [
+                'decision' => 'Décret sur les mentions par nature d\'opération : Tant que le décret n\'est pas paru, PILIQI garde les mentions actuelles du CGI ; à sa parution, une nouvelle version datée des mentions vaudra pour les documents émis ensuite, sans toucher aux anciens.',
+                'regles' => ['prix.exoneration-et-franchise', 'hors-france.natures-d-operation'],
+            ],
+            'T1.6' => [
+                'decision' => 'Service réglé par un crédit d\'avoir et encaissement : Une prestation réglée par un crédit d\'avoir compte comme encaissée le jour où le crédit est utilisé, sauf l\'avoir de régularisation ; l\'aperçu de la clôture la range déjà parmi les encaissements.',
+                'regles' => ['pdp.e-reporting-et-encaissements-des-services'],
+            ],
+            'T27.1' => [
+                'decision' => 'Avoir de régularisation sous l\'ancien SIREN : L\'avoir de régularisation reprend déjà l\'ancien SIREN de la facture, avec la mention du SIREN correct. À l\'étape 2, il sera essayé chez SUPER PDP ; en cas de refus, une autre voie vous sera proposée.',
+                'regles' => ['societe.regularisation-apres-correction-du-siren'],
+            ],
+            'T27.3' => [
+                'decision' => 'Crédit réservé de l\'avoir de régularisation : Le crédit de l\'avoir de régularisation sert déjà d\'abord à ce que doit encore la facture régularisée, puis à sa rectificative, dont le PDF montre le crédit imputé et le reste dû.',
+                'regles' => ['societe.regularisation-apres-correction-du-siren'],
+            ],
+            'T27.4' => [
+                'decision' => 'Crédit de régularisation jamais déclaré comme encaissement : PILIQI ne compte déjà jamais l\'imputation du crédit d\'un avoir de régularisation comme un encaissement ; seul un vrai paiement reçu ensuite sur la rectificative le sera, à sa date.',
+                'regles' => ['societe.regularisation-apres-correction-du-siren'],
+            ],
+            'T27.5' => [
+                'decision' => 'Factures à régulariser après correction du SIREN : PILIQI ne régularise déjà que les factures à un professionnel listées par l\'examen du SIREN, jamais les tickets. Chaque avoir de régularisation et rectificative s\'inscrira au journal d\'audit.',
+                'regles' => ['societe.regularisation-apres-correction-du-siren'],
+            ],
+            'T27.6' => [
+                'decision' => 'Calcul de la facture rectificative : La facture rectificative reprend déjà, ligne par ligne, le HT, la TVA et le TTC d\'origine moins ceux des avoirs déjà émis, exactement ce que l\'avoir de régularisation retire, sans recalcul.',
+                'regles' => ['societe.regularisation-apres-correction-du-siren'],
+            ],
+            'P19' => [
+                'decision' => 'Avoirs partiels calculés par cumul : PILIQI calcule déjà chaque avoir partiel par cumul : tous les articles rendus jusqu\'ici, moins les avoirs précédents ; jamais trop de TVA, et quand tout est rendu, les avoirs égalent exactement la facture.',
+                'regles' => ['prix.retours', 'paiements.avoirs-partiels-et-multiples'],
+            ],
+            'T28.3' => [
+                'decision' => 'Date d\'effet d\'un changement de fin d\'exercice : PILIQI applique déjà un changement de date de clôture dès la décision, sur procès-verbal, sans attendre sa publication ; il refuse une décision prise après la fin qu\'elle fixe ou qui touche un exercice clos.',
+                'regles' => ['caisse.exercice-de-la-societe'],
+            ],
+            'T28.4' => [
+                'decision' => 'Modification d\'un exercice après sa date de clôture : Un changement de date de clôture n\'est jamais rétroactif : PILIQI ne touche déjà jamais un exercice clos, une clôture ni une archive, et accepte un procès-verbal transmis tard si la décision précède la fin fixée.',
+                'regles' => ['caisse.exercice-de-la-societe'],
+            ],
+            'T32.3' => [
+                'decision' => 'Ticket Z chaque jour, même à zéro : PILIQI produit déjà un ticket Z chaque jour du calendrier depuis la première vente, dimanches et jours de fermeture compris, même à 0,00 €, signé et chaîné ; rien n\'est transmis pour un jour sans opération.',
+                'regles' => ['caisse.cloture-automatique-et-rattrapage'],
+            ],
+            'T32.5' => [
+                'decision' => 'Changements qui imposent une nouvelle attestation : PILIQI classe déjà en version majeure, qui exige une nouvelle attestation, tout changement du chaînage, de la signature, du contenu signé, des déclencheurs, des clôtures, des archives ou du moteur de base de données ; un écran reste mineur.',
+                'regles' => ['hors.version-du-module-fiscal'],
+            ],
+            'T69.4' => [
+                'decision' => 'Heure locale d\'outre-mer et version du module fiscal : Le passage des magasins d\'outre-mer à leur heure locale, fait avant toute attestation, reste mineur ; ensuite, tout changement des dates signées ou de la journée de caisse sera classé majeur.',
+                'regles' => ['hors.version-du-module-fiscal'],
+            ],
+            'T34.2' => [
+                'decision' => 'Un an pour l\'adresse IP et le navigateur : PILIQI garde déjà un an l\'adresse IP et le navigateur des journaux d\'audit et de caisse, à part du contenu signé, puis les efface ; leur accès reste limité à ceux qui en ont besoin.',
+                'regles' => ['audit.traces-a-part-sans-donnee-inutile'],
+            ],
+            'T34.3' => [
+                'decision' => 'Cinq ans pour l\'audit de la gestion des accès : PILIQI garde déjà cinq ans les entrées d\'audit de la gestion des accès (droits donnés, suspensions, mots de passe redonnés), lisibles par le seul propriétaire, puis les efface.',
+                'regles' => ['caisse.conservation-et-effacements'],
+            ],
+            'T34.5' => [
+                'decision' => 'Effacement des invitations d\'un cabinet : PILIQI efface déjà une invitation de cabinet 48 heures après sa fin, ou sept jours après un refus ; le journal d\'audit ne garde que le SIREN, jamais l\'adresse e-mail.',
+                'regles' => ['caisse.conservation-et-effacements', 'cabinets.invitation-d-un-siren'],
+            ],
+            'T34.6' => [
+                'decision' => 'Trente jours pour les jetons des demandes répétées : PILIQI garde déjà trente jours les jetons qui évitent un doublon quand une réponse se perd, puis les efface chaque nuit.',
+                'regles' => ['demandes-repetees.autres-gestes'],
+            ],
+            'T34.7' => [
+                'decision' => 'Sept jours pour les téléchargements par période : PILIQI garde déjà sept jours le fichier des documents par période, servi au seul compte qui l\'a demandé s\'il a encore le droit de les voir, puis l\'efface ; chaque téléchargement reste au journal d\'audit.',
+                'regles' => ['caisse.conservation-et-effacements', 'telechargement.calendrier-types-zip-et-csv'],
+            ],
+            'T35.4' => [
+                'decision' => 'Conservation des données du magasin de démonstration : Les tickets, avoirs et clôtures d\'entraînement de la démonstration sont des données de caisse : PILIQI les sécurise, les marque et les garde dix ans comme les autres, même pour une inscription jamais validée.',
+                'regles' => ['caisse.demonstration-mode-distinct'],
+            ],
+            'T98' => [
+                'decision' => 'Commune d\'un établissement en diffusion partielle : PILIQI situe déjà le magasin d\'après le code commune donné par l\'INSEE, même en diffusion partielle ; sans commune, il refuse l\'établissement, sans jamais deviner le territoire, et vous décidez.',
+                'regles' => ['verification.controle-sirene-et-territoire'],
+            ],
+            'T100.1' => [
+                'decision' => 'Contrat de La Poste pour le recommandé en ligne : Le courrier de vérification part par une interface d\'envoi recommandé, factice tant que le contrat avec La Poste n\'est pas signé ; sa page A4 respecte déjà les limites de l\'offre, la transmission de l\'adresse restant à vérifier.',
+                'regles' => ['verification.courrier-recommande', 'outillage.fournisseurs-externes-derriere-une-interface'],
+            ],
+            'T101.1' => [
+                'decision' => 'Accès automatique à l\'annuaire de l\'Ordre : Faute d\'accès officiel à l\'annuaire de l\'Ordre, PILIQI fait déjà vérifier l\'inscription d\'un cabinet par la procédure de l\'éditeur, inscrite au journal d\'audit, jamais par un robot ; un accès officiel pourra se brancher plus tard.',
+                'regles' => ['cabinets.inscription-et-verification'],
+            ],
+            'T101.2' => [
+                'decision' => 'Vérification à la main de l\'inscription à l\'Ordre : Vous vérifiez un cabinet en trois temps : sa fiche dans l\'annuaire de l\'Ordre, la comparaison avec le répertoire Sirene et le registre national, au besoin une confirmation écrite du conseil régional ; preuve au journal d\'audit.',
+                'regles' => ['cabinets.inscription-et-verification'],
+            ],
+            'T2.9-comptable' => [
+                'decision' => 'Catégorie des ventes à distance déclarées à l\'OSS : Quand le guichet OSS existera, une vente à distance à un particulier de l\'Union se déclarera en TNT1, hors taxe, au taux 0, la TVA étrangère restant à part pour l\'OSS.',
+                'a_venir' => 'Lot du guichet OSS, après l\'étape 2 : aujourd\'hui PILIQI n\'a pas de guichet OSS.',
+            ],
+            'T2.9-prestataire' => [
+                'decision' => 'Ventes à distance sous le guichet OSS : Au-delà du seuil européen de 10 000 €, une vente à distance à un particulier de l\'Union se déclarera en TNT1, hors taxe, taux 0 ; la TVA étrangère passera par le guichet OSS.',
+                'a_venir' => 'Lot du guichet OSS, après l\'étape 2 : aujourd\'hui PILIQI n\'a pas de guichet OSS.',
+            ],
+            'T6.3' => [
+                'decision' => 'Assurance ou banque étrangère sans TVA : Une assurance ou une opération bancaire exonérée achetée à l\'étranger ne portera aucune TVA, ni autoliquidée ni déductible : c\'est une charge pour son total ; PILIQI rappellera seulement la taxe sur les conventions d\'assurance.',
+                'a_venir' => 'Chaîne TVA, lot M5c (étape 1).',
+            ],
+            'T7.1' => [
+                'decision' => 'TVA d\'un export emporté par le client : Un client qui emporte les biens hors de France sera facturé avec la TVA française ; à la preuve de sortie, un avoir sans retour en stock et une facture exonérée suivront, l\'écart restant son crédit.',
+                'a_venir' => 'Chaîne TVA, lot M9 (après l\'étape 2).',
+            ],
+            'T7.2' => [
+                'decision' => 'Conditions d\'exonération d\'un export emporté par le client : La facture exonérée ne s\'émettra qu\'avec ses preuves : hors de l\'Union, la déclaration d\'export certifiée ; dans l\'Union, un n° de TVA valide, la déclaration du client et deux preuves de tiers indépendants.',
+                'a_venir' => 'Chaîne TVA, lot M9 (après l\'étape 2).',
+            ],
+            'T7.3' => [
+                'decision' => 'Export emporté : documents transmis à l\'e-reporting : Chaque document de l\'export emporté sera transmis une fois : facture taxée, avoir, puis facture exonérée ; pour un particulier, l\'avoir et la vente exonérée iront en TNT1 au taux 0.',
+                'a_venir' => 'Chaîne TVA, lot M9 (après l\'étape 2).',
+            ],
+            'T8.1' => [
+                'decision' => 'Coût du stock d\'une société en franchise : Dans une société en franchise, toute TVA payée sur un achat, française ou étrangère, entrera dans le coût du stock, faute de pouvoir la déduire.',
+                'a_venir' => 'Chaîne TVA, lot M7 (étape 1) : aujourd\'hui le coût du stock d\'une société en franchise est hors taxe, ce que ce lot corrige.',
+            ],
+            'T8.2' => [
+                'decision' => 'Franchise : achats dans l\'Union au-delà du seuil : Au-delà de 10 000 € HT d\'achats de biens dans l\'Union par an, tous magasins réunis, la société en franchise déclarera la TVA française de ces achats, sans la déduire, ajoutée au coût.',
+                'a_venir' => 'Chaîne TVA, lots M5c et M9 (étape 1).',
+            ],
+            'T8.3' => [
+                'decision' => 'Franchise : option pour taxer les achats dans l\'Union : Une société en franchise pourra noter son option pour taxer ses achats dans l\'Union, datée, valable l\'année en cours et les deux suivantes ; PILIQI taxera alors ces achats même sous le seuil, sans déduction.',
+                'a_venir' => 'Chaîne TVA, lot M9 (après l\'étape 2).',
+            ],
+            'T8.4' => [
+                'decision' => 'Franchise : achats dans l\'Union et e-reporting : Une société en franchise déclarera tous les deux mois ses achats dans l\'Union taxables en France (au-delà du seuil, sur option ou en opération triangulaire) ; les autres ne se déclarent pas.',
+                'a_venir' => 'Chaîne TVA, lot M9 (après l\'étape 2).',
+            ],
+            'T8.5' => [
+                'decision' => 'Franchise : TVA à l\'importation : Pour une société en franchise, la TVA d\'importation se déclarera sur la déclaration de TVA, sans déduction, et s\'ajoutera au coût du stock avec les droits de douane ; hors e-reporting.',
+                'a_venir' => 'Chaîne TVA, lots M5c et M9 (étape 1).',
+            ],
+            'T8.8' => [
+                'decision' => 'Franchise : services vendus à un professionnel étranger : Une société en franchise pourra facturer un service à un professionnel étranger sans mention de franchise : « Autoliquidation » et deux n° de TVA dans l\'Union, aucune TVA française ailleurs.',
+                'a_venir' => 'Chaîne TVA, lot M4 (étape 1).',
+            ],
+            'T8.9' => [
+                'decision' => 'Franchise : service acheté à l\'étranger : Une société en franchise qui achète un service à l\'étranger doit la TVA française, sans jamais la déduire : PILIQI la calculera ainsi, comme une charge.',
+                'a_venir' => 'Chaîne TVA, lots M3 et M5 (étape 1).',
+            ],
+            'T18.1' => [
+                'decision' => 'Service immatériel vendu à un particulier hors Union : Un service immatériel (conseil, licence, publicité…) pour un particulier domicilié hors de l\'Union se vendra sans TVA française, avec « TVA non applicable, art. 259 B du CGI », preuve du domicile notée.',
+                'a_venir' => 'Chaîne TVA, lot M9 (après l\'étape 2).',
+            ],
+            'T18.2' => [
+                'decision' => 'Marqueur « service immatériel » sur les services : La fiche d\'un service portera si besoin sa catégorie de service immatériel, choisie dans une liste fermée, chaque changement au journal d\'audit ; seul un service marqué se vendra sans TVA française à un particulier hors Union.',
+                'a_venir' => 'Chaîne TVA, lot M9 (après l\'étape 2).',
+            ],
+            'T22.1' => [
+                'decision' => 'TVA étrangère facturée par erreur par un fournisseur : Une facture d\'un fournisseur de l\'Union portant sa TVA par erreur se validera : TVA étrangère notée à part, TVA française calculée et déduite, facture dans la liste « TVA étrangère à régulariser »',
+                'a_venir' => 'Chaîne TVA, lots M5e et M6 (étape 1).',
+            ],
+            'T22.2' => [
+                'decision' => 'Récupération de la TVA étrangère facturée à tort : La TVA étrangère facturée à tort se réclamera au fournisseur, demande et réponse jointes à l\'achat ; l\'achat quittera la liste une fois la facture rectifiée, la TVA remboursée ou notée perdue, alors une charge.',
+                'a_venir' => 'Chaîne TVA, lots M5e et M6 (étape 1).',
+            ],
+            'T22.3' => [
+                'decision' => 'Fournisseur de l\'Union en franchise : TVA due : Un achat à un fournisseur de l\'Union en franchise ou non assujetti ne porte aucune TVA ; à un professionnel ordinaire sans n° affiché, la TVA s\'autoliquide et se déduit ; la saisie choisit le cas.',
+                'a_venir' => 'Chaîne TVA, lot M5e (étape 1).',
+            ],
+            'T22.4' => [
+                'decision' => 'Fournisseur de l\'Union en franchise : e-reporting : Un achat à un fournisseur de l\'Union en franchise ou non assujetti ne se déclarera pas à l\'e-reporting ; celui d\'un professionnel ordinaire sans n° affiché se déclarera comme un achat dans l\'Union.',
+                'a_venir' => 'Chaîne TVA, lot M5e (étape 1).',
+            ],
+            'T24.1' => [
+                'decision' => 'Preuve d\'un transport d\'importation facturé à 0 % : Pour un transport d\'importation facturé à 0 %, PILIQI rattachera la facture du transporteur à l\'importation, avec la déclaration en douane qui compte ce transport et l\'attestation remise au transporteur.',
+                'a_venir' => 'Chaîne TVA, lot M7 (étape 1).',
+            ],
+            'T24.2' => [
+                'decision' => 'Transport à 0 % non compté par la douane : Si le transporteur facture à 0 % et que la déclaration en douane ne compte aucun frais, PILIQI avertira sans bloquer et conseillera une facture du transporteur avec TVA française, ou la rectification de la déclaration.',
+                'a_venir' => 'Chaîne TVA, lot M7 (étape 1).',
+            ],
+            'T66.1' => [
+                'decision' => 'Prix payé par un client européen sous l\'OSS : Avec le guichet OSS, un particulier d\'un autre pays de l\'Union paiera le même prix TTC ; PILIQI en tirera le HT et la TVA au taux de son pays.',
+                'a_venir' => 'Chaîne TVA, lot M9 (après l\'étape 2).',
+            ],
+            'T66.2' => [
+                'decision' => 'Expéditions d\'un magasin d\'outre-mer hors de son département : Un magasin des DOM pourra expédier hors de son département en exportation exonérée, preuve de sortie gardée, sauf vente à distance à un particulier de métropole, refusée ; Guadeloupe-Martinique : comme sur place.',
+                'a_venir' => 'Chaîne TVA, lot M9 (après l\'étape 2).',
+            ],
+            'P41.1' => [
+                'decision' => 'Importation par un magasin d\'outre-mer : L\'importation d\'un magasin des DOM se saisira à la main avec sa TVA au taux du département, autoliquidée et déduite comme en métropole, octroi de mer compris dans la base.',
+                'a_venir' => 'Chaîne TVA, lot M5e (étape 1).',
+            ],
+            'P41.2' => [
+                'decision' => 'Marchandises de métropole reçues outre-mer : Un magasin des DOM qui reçoit des marchandises de métropole saisira la facture sans TVA et, à part, la TVA d\'importation du département, autoliquidée et déduite.',
+                'a_venir' => 'Chaîne TVA, lot M5e (étape 1).',
+            ],
+            'P41.3' => [
+                'decision' => 'Octroi de mer dans le coût du stock : L\'octroi de mer payé à l\'importation entrera dans le coût des articles, réparti au prorata de leur HT net ; seul un fabricant au-delà du seuil peut le déduire, cas que PILIQI rappelle sans le gérer.',
+                'a_venir' => 'Chaîne TVA, lots M5c et M7 (étape 1).',
+            ],
+            'P41.4' => [
+                'decision' => 'Échanges entre la Guadeloupe et la Martinique : Entre la Guadeloupe et la Martinique, les ventes se feront comme sur place, au taux du magasin (8,5 % ou 2,1 %), sans export ni import.',
+                'a_venir' => 'Chaîne TVA, lot M9 (après l\'étape 2).',
+            ],
+            'P47' => [
+                'decision' => 'Date de la vérification VIES d\'une livraison intracommunautaire : PILIQI permettra de joindre à la facture une consultation VIES datée d\'avant le départ des biens, et la demandera quand la livraison précède la facture, en plus de celle du jour d\'émission.',
+                'a_venir' => 'Étape 1, lot VIES avant le départ des biens, après le lot MAT-PRO : aujourd\'hui seule la consultation du jour de l\'émission est retenue.',
+            ],
+            'T19' => [
+                'decision' => 'Documents émis après la fin de la franchise : À la sortie de franchise, PILIQI listera par magasin les documents émis sans TVA depuis le dépassement : avoir et nouvelle facture pour un client professionnel, TVA comprise dans le prix déclarée pour un particulier.',
+                'a_venir' => 'Chaîne TVA, lot M5a (étape 1).',
+            ],
+            'P14.1' => [
+                'decision' => 'Mention « à capital variable » sur les factures : PILIQI imprimera « à capital variable » dès que la case est cochée, même sans montant, et n\'exigera plus le capital d\'une société à capital variable.',
+                'a_venir' => 'Étape 1, lot des mentions d\'identité, après le lot MAT-PRO (CLAUDE.md, « Documents de vente » et « Société et établissements », à réécrire avec lui).',
+            ],
+            'P14.3' => [
+                'decision' => 'Formes de société qui doivent imprimer le capital : PILIQI n\'exigera le capital que des SARL, EURL, SA, SAS, SASU, SCA et SE, hors capital variable ; pour une SNC ou une SCS, il l\'imprimera seulement s\'il est saisi.',
+                'a_venir' => 'Étape 1, lot des mentions d\'identité, après le lot MAT-PRO (CLAUDE.md, « Documents de vente » et « Société et établissements », à réécrire avec lui).',
+            ],
+            'P14.4' => [
+                'decision' => 'Dénomination d\'un entrepreneur individuel et mention « EI » : La dénomination d\'un entrepreneur individuel devra contenir son nom, prérempli depuis le répertoire Sirene, et PILIQI n\'ajoutera plus « EI » à un nom qui porte « EIRL ».',
+                'a_venir' => 'Étape 1, lot des mentions d\'identité, après le lot MAT-PRO (CLAUDE.md, « Documents de vente » et « Société et établissements », à réécrire avec lui).',
+            ],
+            'P14.7' => [
+                'decision' => 'Mentions d\'identité à ajouter dans certains cas : L\'identité de la société aura des cases facultatives (en liquidation, locataire-gérant ou gérant-mandataire, EIRL et objet, membre d\'un groupe TVA), imprimées dans le pied quand elles sont remplies.',
+                'a_venir' => 'Étape 1, lot des mentions d\'identité, après le lot MAT-PRO (CLAUDE.md, « Documents de vente » et « Société et établissements », à réécrire avec lui).',
+            ],
+            'P4.1' => [
+                'decision' => 'Cession d\'un magasin avec son stock : Avant une cession, PILIQI préviendra que le stock vendu seul se facture avec TVA et permettra cette facture, même depuis un magasin fermé ; céder le magasin entier reste sans TVA.',
+                'a_venir' => 'Étape 1, lot de la cession, après le lot MAT-PRO : aujourd\'hui le stock sort sans facture et l\'avis part après la cession.',
+            ],
+            'P4.2' => [
+                'decision' => 'Message au propriétaire à la cession d\'un magasin : Le message viendra avant de confirmer la cession, distinguera la transmission sans TVA de la vente du stock seul à facturer avant, et citera le nouveau code (CIBS) dès le 01/01/2027.',
+                'a_venir' => 'Étape 1, lot de la cession, après le lot MAT-PRO : aujourd\'hui le stock sort sans facture et l\'avis part après la cession.',
+            ],
+            'T36.1' => [
+                'decision' => 'Premier mot de passe égal à l\'identifiant : Chaque compte, vendeurs et observateurs compris, devra choisir son mot de passe à la première connexion, ou recevra un mot de passe provisoire tiré au hasard, à usage unique et de courte durée.',
+                'a_venir' => 'Étape 1, lot des mots de passe (T36.1 à T36.4), après le lot MAT-PRO, qui réécrit la règle de CLAUDE.md (« Comptes et équipe ») : aujourd\'hui le premier mot de passe est l\'identifiant, 8 caractères suffisent et les plafonds d\'essais sont plus larges.',
+            ],
+            'T36.2' => [
+                'decision' => 'Longueur et composition des mots de passe : Un mot de passe choisi devra compter au moins 12 caractères, ou 8 de trois sortes parmi majuscules, minuscules, chiffres et signes, et ne pas être courant, avec la nouvelle limite des essais.',
+                'a_venir' => 'Étape 1, lot des mots de passe (T36.1 à T36.4), après le lot MAT-PRO, qui réécrit la règle de CLAUDE.md (« Comptes et équipe ») : aujourd\'hui le premier mot de passe est l\'identifiant, 8 caractères suffisent et les plafonds d\'essais sont plus larges.',
+            ],
+            'T36.3' => [
+                'decision' => 'Limitation des essais de connexion manqués : Les essais manqués feront toujours attendre sans blocage définitif, mais plus d\'une minute au 5e échec, avec au plus environ 10 essais par heure et 25 par jour par identifiant hors poste connu.',
+                'a_venir' => 'Étape 1, lot des mots de passe (T36.1 à T36.4), après le lot MAT-PRO, qui réécrit la règle de CLAUDE.md (« Comptes et équipe ») : aujourd\'hui le premier mot de passe est l\'identifiant, 8 caractères suffisent et les plafonds d\'essais sont plus larges.',
+            ],
+            'T34.1' => [
+                'decision' => 'Conservation dix ans des documents et registres : Documents et registres restent gardés dix ans, même après la résiliation, puis seront effacés ou anonymisés, avec un export proposé avant ; le contrat de sous-traitance réglera cette garde et la restitution.',
+                'a_venir' => 'Étape 9 (RGPD) : effacement ou anonymisation des documents et registres au bout de leurs dix ans, avec un export proposé avant.',
+            ],
+            'T39.1' => [
+                'decision' => 'Code NAF 2025 des cabinets d\'expertise comptable : PILIQI acceptera 69.20Y, le code NAF 2025 qui remplace 69.20Z, pour reconnaître un cabinet, et traduira la table des avertissements ; la vérification à l\'Ordre reste nécessaire.',
+                'a_venir' => 'Étape 1, lot du code d\'activité NAF 2025, à livrer avant le 5 janvier 2027 : aujourd\'hui seul 69.20Z reconnaît un cabinet.',
+            ],
+            'T39.2' => [
+                'decision' => 'Passage du répertoire Sirene à la NAF 2025 : PILIQI lira les codes d\'activité en NAF 2025 tout en acceptant l\'ancienne nomenclature : 69.20Y pour les cabinets, table des avertissements traduite pour les autres types.',
+                'a_venir' => 'Étape 1, lot du code d\'activité NAF 2025, à livrer avant le 5 janvier 2027 : aujourd\'hui seul 69.20Z reconnaît un cabinet.',
             ],
         ],
     ],

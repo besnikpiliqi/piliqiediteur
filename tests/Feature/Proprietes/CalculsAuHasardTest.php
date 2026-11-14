@@ -68,6 +68,30 @@ class CalculsAuHasardTest extends TestCase
         );
     }
 
+    /**
+     * La TVA de chaque taux d'une vente reste à six dixièmes de centime au
+     * plus de sa base × son taux, sans arrondi (décision de Claude T90.1
+     * de l'onglet « À faire vérifier par un professionnel », sous le seuil
+     * français de 0,01 €) : le HT du taux est arrondi une fois au
+     * demi-centime près, et la TVA est le TTC moins ce HT, d'où un écart
+     * d'au plus un demi-centime × (1 + taux), 0,6 centime à 20 %.
+     */
+    public function test_la_tva_de_chaque_taux_reste_a_six_dixiemes_de_centime_de_sa_base_fois_le_taux(): void
+    {
+        $this->pourChaqueCas(
+            self::GRAINE + 3,
+            self::NOMBRE_DE_CAS,
+            fn (Tirage $tirage): array => self::lignesDeVente($tirage),
+            function (array $lignes): void {
+                foreach ($this->calculateur->chiffrerUneVente($lignes)['taux'] as $taux => $montants) {
+                    Assert::assertLessThanOrEqual(6000, abs($montants['montant_tva'] * 10000 - $montants['montant_ht'] * $taux), "La TVA à {$taux} centièmes de point s'écarte de plus de 0,6 centime de sa base x taux");
+                }
+            },
+            fn (array $lignes): iterable => self::lignesReduites($lignes),
+            isoler: false,
+        );
+    }
+
     public function test_les_retours_tires_au_hasard_d_une_ligne_ne_rendent_jamais_plus_qu_elle(): void
     {
         $this->pourChaqueCas(

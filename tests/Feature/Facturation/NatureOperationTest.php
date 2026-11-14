@@ -2,12 +2,15 @@
 
 namespace Tests\Feature\Facturation;
 
+use App\Domain\Achats\Actions\CreerFactureAchatAction;
+use App\Domain\Achats\Actions\ValiderFactureAchatAction;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\ConsultationVies;
+use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Facturation\Actions\AccepterDevisAction;
 use App\Domain\Facturation\Actions\CreerAvoirAction;
 use App\Domain\Facturation\Actions\CreerDevisAction;
@@ -353,6 +356,27 @@ class NatureOperationTest extends TestCase
         $this->assertEmissionRefusee($brouillon, 'Impossible d\'émettre en « Livraison vers un DOM » : la livraison reste dans le département d\'outre-mer du magasin. Choisissez « Vente en France » (TVA française) si ces conditions ne sont pas remplies.');
     }
 
+    /**
+     * La Guadeloupe et la Martinique forment un seul territoire de TVA
+     * (décision de Claude T2.2 de l'onglet « À faire vérifier par un
+     * professionnel ») : un magasin de la Guadeloupe ne livre pas en
+     * exonération à Fort-de-France, la vente reste au taux du magasin ; il
+     * livre en exonération à La Réunion.
+     */
+    public function test_une_livraison_entre_la_guadeloupe_et_la_martinique_reste_au_taux_du_magasin(): void
+    {
+        $this->magasin(['territoire' => Territoire::Guadeloupe, 'code_postal' => '97110', 'ville' => 'Pointe-à-Pitre']);
+        $client = Client::factory()->create();
+        $produit = $this->produit('108.50');
+        $versLaMartinique = $this->brouillon($client, [['produit_id' => $produit->id, 'quantite' => 1]], NatureOperation::LivraisonDom, self::LIVRAISON_FORT_DE_FRANCE);
+
+        $this->assertEmissionRefusee($versLaMartinique, 'Impossible d\'émettre en « Livraison vers un DOM » : la Guadeloupe et la Martinique forment un seul territoire de TVA, où la vente reste au taux du magasin. Choisissez « Vente en France » (TVA française) si ces conditions ne sont pas remplies.');
+
+        $versLaReunion = app(EmettreFactureAction::class)->handle(self::auteur(), $this->brouillon($client, [['produit_id' => $produit->id, 'quantite' => 1]], NatureOperation::LivraisonDom, [...self::LIVRAISON_FORT_DE_FRANCE, 'livraison_code_postal' => '97400', 'livraison_ville' => 'Saint-Denis']));
+
+        $this->assertSame(['0.00', StatutFacture::Emise], [$versLaReunion->total_tva, $versLaReunion->statut]);
+    }
+
     public function test_une_livraison_intracommunautaire_retient_la_consultation_vies_du_jour(): void
     {
         $this->magasin();
@@ -585,6 +609,50 @@ class NatureOperationTest extends TestCase
         );
 
         $this->assertSame(0, Facture::query()->count());
+    }
+
+    /**
+     * Une société en franchise met la seule mention de la franchise sur sa
+     * facture de marchandises à un client établi hors de France, sans
+     * aucune mention d'exonération (décision de Claude T8.7 de l'onglet
+     * « À faire vérifier par un professionnel ») : 3 clés à 49,90 € TTC
+     * se vendent 149,70 € sans TVA.
+     */
+    public function test_une_facture_en_franchise_a_un_client_etranger_ne_porte_que_la_mention_de_franchise(): void
+    {
+        $this->magasin(['regime_tva' => RegimeTva::FranchiseEnBase]);
+
+        $facture = app(EmettreFactureAction::class)->handle(self::auteur(), $this->brouillon($this->clientAllemand(), [['produit_id' => $this->produit('49.90')->id, 'quantite' => 3]], NatureOperation::VenteEnFrance));
+        $pdf = $this->pdf($facture);
+
+        $this->assertSame(['149.70', '0.00', '149.70'], [$facture->total_ht, $facture->total_tva, $facture->total_ttc]);
+        $this->assertStringContainsString('TVA non applicable, art. 293 B du CGI', $pdf);
+        foreach (['Exonération de TVA', '262 ter', '262 I', 'article 294', 'Autoliquidation'] as $exoneration) {
+            $this->assertStringNotContainsString($exoneration, $pdf);
+        }
+    }
+
+    /**
+     * Une société en franchise la garde quand elle achète dans l'Union
+     * (décision de Claude T8.6 de l'onglet « À faire vérifier par un
+     * professionnel ») : les clés USB achetées sans TVA à un fournisseur
+     * allemand se revendent sans TVA, avec la seule mention de la
+     * franchise, et le régime de la société ne change pas.
+     */
+    public function test_un_achat_dans_l_union_ne_change_pas_la_franchise_de_la_societe(): void
+    {
+        $magasin = $this->magasin(['regime_tva' => RegimeTva::FranchiseEnBase]);
+        $fournisseur = Fournisseur::factory()->create(['nom' => 'Speicher GmbH', 'pays' => 'DE']);
+        $brouillon = app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [
+            ['produit' => ['nom' => 'Clé USB', 'prix_vente_ttc' => '12.00', 'taux_tva' => 20, 'suivi_stock' => false], 'quantite' => 10, 'prix_unitaire_ht' => '4.00', 'taux_tva' => 0],
+        ], ['date_facture' => '2026-10-08']);
+        $cle = app(ValiderFactureAchatAction::class)->handle(self::auteur(), $brouillon)->lignes()->sole()->produit()->firstOrFail();
+
+        $ticket = app(EmettreFactureAction::class)->handle(self::auteur(), $this->brouillon(Client::factory()->create(), [['produit_id' => $cle->id, 'quantite' => 2]], NatureOperation::VenteEnFrance));
+
+        $this->assertSame(RegimeTva::FranchiseEnBase, $magasin->societe()->firstOrFail()->regime_tva);
+        $this->assertSame(['24.00', '0.00', '24.00'], [$ticket->total_ht, $ticket->total_tva, $ticket->total_ttc]);
+        $this->assertStringContainsString('TVA non applicable, art. 293 B du CGI', $this->pdf($ticket));
     }
 
     /**

@@ -243,6 +243,25 @@ class EnregistrerVenteCaisseActionTest extends TestCase
     }
 
     /**
+     * Un bon d'avoir n'est pas un bon au sens de la loi (décision de Claude
+     * P8.1 de l'onglet « À faire vérifier par un professionnel ») : la
+     * vente qu'il règle en entier est taxée en entier, 20,00 € TTC à 20 %
+     * pour 16,67 € HT et 3,33 € de TVA, le crédit ne servant qu'à payer.
+     */
+    public function test_une_vente_reglee_par_un_bon_d_avoir_est_taxee_en_entier(): void
+    {
+        $comptoir = $this->clientComptoir();
+        $this->bonDAvoir($comptoir, 30);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 20, 'taux_tva' => 20, 'suivi_stock' => false]);
+
+        $ticket = self::vendreAuComptant(self::auteur(), $comptoir, [['produit_id' => $produit->id, 'quantite' => 1]], ModePaiement::Especes, bonsDAvoir: ['AV-MABOUT-2026-000001']);
+
+        $this->assertSame(['16.67', '3.33', '20.00'], [$ticket->total_ht, $ticket->total_tva, $ticket->total_ttc]);
+        $this->assertSame(['16.67', '3.33'], [$ticket->lignes->sole()->montant_ht, $ticket->lignes->sole()->montant_tva]);
+        $this->assertSame(2000, $ticket->montantCrediteParAvoirEnCentimes());
+    }
+
+    /**
      * Un bon d'avoir épuisé est refusé avant que la vente ne commence :
      * aucun ticket, aucun numéro consommé, aucun paiement.
      */

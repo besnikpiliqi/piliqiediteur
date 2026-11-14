@@ -39,7 +39,10 @@ use Illuminate\Support\Collection;
  *   accessoires, expédiés par le magasin à une adresse complète dans un
  *   département d'outre-mer autre que celui du magasin, que dit son
  *   territoire (voir Territoire::departement()), jamais son code postal,
- *   que le répertoire Sirene peut ne pas diffuser.
+ *   que le répertoire Sirene peut ne pas diffuser. La Guadeloupe et la
+ *   Martinique forment un seul territoire (art. 294 du CGI) : entre
+ *   elles, la vente reste au taux du magasin, comme sur place (décision de
+ *   Claude T2.2 de l'onglet « À faire vérifier par un professionnel »).
  * - Livraison intracommunautaire (art. 262 ter I du CGI) : des biens, et
  *   leurs frais accessoires, livrés à un professionnel à une adresse
  *   complète d'un autre État membre (l'Irlande du Nord comprise), à une
@@ -62,6 +65,15 @@ use Illuminate\Support\Collection;
  */
 class ControleNatureOperation
 {
+    /**
+     * La Guadeloupe et la Martinique, un seul territoire pour la TVA
+     * (art. 294 du CGI) : aucune livraison exonérée de l'une vers
+     * l'autre.
+     *
+     * @var list<string>
+     */
+    private const ANTILLES = ['971', '972'];
+
     /**
      * Refuse une facture dont la nature n'a pas toutes ses conditions, et
      * donne la consultation VIES qu'elle retient quand sa nature en exige
@@ -192,6 +204,7 @@ class ControleNatureOperation
             NatureOperation::LivraisonDom => match (true) {
                 $departement === null => 'la livraison doit aller dans un département d\'outre-mer (Guadeloupe, Martinique, Guyane, La Réunion ou Mayotte)',
                 $departement === $departementDuMagasin => 'la livraison reste dans le département d\'outre-mer du magasin',
+                in_array($departement, self::ANTILLES, true) && in_array($departementDuMagasin, self::ANTILLES, true) => 'la Guadeloupe et la Martinique forment un seul territoire de TVA, où la vente reste au taux du magasin',
                 default => null,
             },
             default => TerritoireFiscal::estDestinationUePourDesBiens($pays, $codePostal) ? null : 'la livraison doit arriver dans un autre État membre de l\'Union européenne',

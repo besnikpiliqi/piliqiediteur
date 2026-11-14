@@ -16,6 +16,7 @@ use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\FacturePdfGenerator;
 use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Domain\Tenancy\Enums\Territoire;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Resources\FactureResource\Pages\ViewFacture;
@@ -334,6 +335,32 @@ class BordereauDetaxeTest extends TestCase
         $this->noter($ticket, '2026FR000123456');
 
         $this->assertSame(['2026FR000123456'], BordereauDetaxe::query()->pluck('numero')->all());
+    }
+
+    /**
+     * La détaxe vaut aussi dans un magasin d'un département d'outre-mer, au
+     * taux du département (décision de Claude T5.4 de l'onglet « À faire
+     * vérifier par un professionnel ») : le sac à main de 217,00 € d'un
+     * magasin de Fort-de-France, au taux de 8,5 % de la Martinique, garde
+     * ses 17,00 € de TVA française sur le ticket, qui reçoit son bordereau
+     * sans avertissement, comme ailleurs.
+     */
+    public function test_un_ticket_d_un_magasin_de_la_martinique_se_detaxe_au_taux_du_departement(): void
+    {
+        $this->travelTo(self::aParis('2026-10-09 10:15:00'));
+        $magasin = $this->completerIdentiteLegale($this->ouvrirUneSocieteSituee(Territoire::Martinique));
+        $this->actingAs($this->proprietaireDe($magasin));
+        Filament::setTenant($magasin);
+
+        $sac = Produit::factory()->create(['nom' => 'Sac à main', 'prix_vente_ttc' => '217.00', 'taux_tva' => '8.50', 'suivi_stock' => false]);
+
+        $ticket = $this->emettre([['produit_id' => $sac->id, 'quantite' => 1]]);
+        $bordereau = $this->noter($ticket, '2026FR000123456');
+
+        $this->assertSame(Territoire::Martinique, $magasin->territoire);
+        $this->assertSame(['8.50', '200.00', '17.00', '217.00'], [$ticket->lignes->sole()->taux_tva, $ticket->total_ht, $ticket->total_tva, $ticket->total_ttc]);
+        $this->assertNull($bordereau->avertissement());
+        $this->assertSame([$ticket->id, '2026FR000123456'], [$bordereau->refresh()->facture_id, $bordereau->numero]);
     }
 
     /**

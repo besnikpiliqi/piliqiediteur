@@ -200,6 +200,32 @@ class JournalAuditTest extends TestCase
     }
 
     /**
+     * Les entrées de la gestion des accès (comptes, droits, connexions) se
+     * gardent cinq ans, celles des opérations dix (décision de Claude T34.3
+     * de l'onglet « À faire vérifier par un professionnel ») : au 2 mars
+     * 2025, une première connexion du 1er mars 2020 s'efface, une identité
+     * modifiée le même jour reste, comme une première connexion de 2021.
+     */
+    public function test_les_entrees_de_la_gestion_des_acces_s_effacent_apres_cinq_ans(): void
+    {
+        $this->travelTo(self::enUtc('2020-03-01 10:00:00'));
+        $societe = Societe::factory()->create();
+        $acces = $this->inscrire($societe, null, ActionAuditee::PremiereConnexion, ['compte' => 'Paul Lefèvre']);
+        $operation = $this->inscrire($societe, null);
+        $this->travelTo(self::enUtc('2021-03-01 10:00:00'));
+        $accesRecent = $this->inscrire($societe, null, ActionAuditee::PremiereConnexion, ['compte' => 'Inès Morel']);
+        $this->travelTo(self::enUtc('2025-03-02 10:00:00'));
+
+        $this->artisan('app:purger-journal-audit')
+            ->expectsOutput('1 entrée(s) du journal d\'audit effacée(s).')
+            ->assertSuccessful();
+
+        $this->assertSame([CategorieAudit::Acces, CategorieAudit::Operations], [$acces->categorie, $operation->categorie]);
+        $this->assertEqualsCanonicalizing([$operation->id, $accesRecent->id], $this->entrees($societe)->pluck('id')->all());
+        $this->assertSame([], app(VerificateurJournalAudit::class)->verifier($societe));
+    }
+
+    /**
      * Les dernières entrées d'une chaîne effacées par qui contournerait la
      * base, ou une entrée altérée, se voient : la tête retient la dernière
      * séquence, et chaque empreinte se recalcule.

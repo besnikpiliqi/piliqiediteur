@@ -16,6 +16,8 @@ use App\Domain\Facturation\Enums\TypePreuve;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\PreuveOperation;
 use App\Domain\Facturation\Services\PreuvesRequises;
+use App\Domain\Tenancy\Actions\FermerMagasinAction;
+use App\Domain\Tenancy\Enums\MotifFermeture;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\ChosesAFaireDuMagasin;
@@ -429,6 +431,26 @@ class PreuvesOperationTest extends TestCase
 
         $this->assertSame(['26FR000000123456E1'], PreuveOperation::query()->pluck('reference')->all());
         $this->assertSame($export->id, $preuve->facture_id);
+    }
+
+    /**
+     * Une preuve de sortie reçue après la cession du magasin s'y note
+     * encore, sans rouvrir les ventes, et justifie l'export : il n'attend
+     * plus aucune preuve (décisions de Claude T29.4 et T29.5 de l'onglet
+     * « À faire vérifier par un professionnel »).
+     */
+    public function test_une_preuve_notee_apres_la_cession_du_magasin_justifie_encore_l_export(): void
+    {
+        $magasin = $this->magasin();
+        $export = $this->venteEmise('export');
+        app(FermerMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin->fresh() ?? $magasin, MotifFermeture::Cession, 'password', $magasin->nom);
+        $cede = Magasin::query()->findOrFail($magasin->id);
+        app(TenantContext::class)->set($cede);
+
+        $this->ajouter($export, TypePreuve::Mrn, '26FR000000123456E1');
+
+        $this->assertSame([MotifFermeture::Cession, []], [$cede->motif_fermeture, $this->manquantes($export)]);
+        $this->assertFalse($cede->peutVendre());
     }
 
     public function test_une_preuve_ne_se_modifie_ni_ne_se_supprime_par_le_modele(): void

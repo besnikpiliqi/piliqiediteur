@@ -216,6 +216,22 @@ for (const l of LOTS) {
   }
 }
 
+// Décisions de l'éditeur du 14/11/2026 (vers 18 h 45 UTC : « que sur github et pas ici larastan car il prend du temps » ;
+// vers 19 h 05 UTC : « D'accord » à la proposition « plus de suite complète ici, sauf calculs, caisse, isolation »).
+// Ajoutée seulement aux lots qui n'avaient pas commencé (GRAPH et suivants), pour garder intactes les invites des lots déjà faits (reprise).
+const METHODE_14_11 = `MÉTHODE DU 14/11/2026 (décisions de l'éditeur du 14/11/2026 vers 18 h 45 et 19 h 05 UTC ; elles priment sur ANALYSE STATIQUE À CHAQUE ENVOI ci-dessus, sur le point (4) de MÉTHODE RAPIDE, sur le point 3 de CLAUDE.md, sur le README et sur tout cahier contraire) :
+(a) Ne lance ni Larastan (phpstan), ni php tests/Qualite/qualite.php seuils, ni Psalm, ni pendant le travail ni avant le commit, et n'écris rien pour eux : seule la CI de GitHub les passe après chaque envoi ; ce qu'ils y trouvent se répare au début du lot suivant, comme une CI rouge de tests.
+(b) Avant ton commit, ne lance PAS la suite PostgreSQL complète. Lance, chacun avec son code de sortie contrôlé à 0 (echo $? juste après), sur l'arbre exact du commit : 1) les tests liés à ton travail : les fichiers de tests des classes, écrans, actions, vues et migrations que tu as touchés, et ceux qui les utilisent (cherche-les par git grep des noms des classes et des méthodes changées) ; 2) toujours : tous les tests en navigateur (DB_PASSWORD="$PILIQI_PG_MOT_DE_PASSE" php artisan test tests/Browser) ; 3) toujours : le groupe de concurrence (php artisan test --group=concurrence). Une migration changée impose php artisan migrate:fresh avant. La CI de GitHub passe la suite complète après l'envoi ; le lot suivant répare d'abord une CI rouge.
+(c) EXCEPTION : si ton lot touche les calculs d'argent (montants, TVA, arrondis, paiements, avoirs, imputation du crédit), la caisse sécurisée (registre, signature, chaînage, clôtures, journal des événements) ou l'isolation des sociétés, des magasins et des clients d'un cabinet (scopes, gardes de la base, droits, accès d'un cabinet), lance encore, une seule fois juste avant ton commit, la suite PostgreSQL complète (DB_PASSWORD="$PILIQI_PG_MOT_DE_PASSE" php artisan test --parallel, code de sortie 0). Dis dans « faits » si ton lot y était soumis, et pourquoi.
+(d) La correction de relecture ne se vérifie que par ses tests ciblés, plus tests/Browser et le groupe concurrence si elle touche un écran ou un verrou.
+(e) Le lot GRAPH réécrit le point 3 de CLAUDE.md pour qu'il dise exactement (a) à (d), avec ces dates, sans rien changer d'autre au protocole ; si un test lit ce texte (matrice des décisions, OutilDeQualiteTest), il le suit sans être affaibli.`
+const LOTS_METHODE_14_11 = ['GRAPH', 'CHARGES', 'REGUL', 'DATEOP', 'DEVIS-RET', 'MDP', 'IDENT', 'CESSION', 'NAF25', 'VIES-DEP']
+for (const l of LOTS) {
+  if (LOTS_METHODE_14_11.includes(l.id)) {
+    l.complement = `${l.complement}\n\n${METHODE_14_11}`
+  }
+}
+
 const APRES_CHAINE = ['SEED', 'ER-PRO', 'STAT', 'MAT-PRO', 'DEMO-V', 'REGLE-B', 'GRAPH', 'CHARGES', 'REGUL', 'DATEOP', 'DEVIS-RET', 'MDP', 'IDENT', 'CESSION', 'NAF25', 'VIES-DEP']
 const OUVERTS = args && Array.isArray(args.ouverts) ? args.ouverts : []
 const INCONNUS = OUVERTS.filter(id => !LOTS.some(l => l.id === id))

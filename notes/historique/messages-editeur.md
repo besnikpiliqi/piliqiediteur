@@ -2574,3 +2574,7 @@ Tu utilises larastan ici? Car tu as dit avant le commit, ici
 
 Mais je t ai dit je crois que tu mette que sur github et pas ici larastan car il prend du temps
 
+## 288. 2026-11-14 19:12 UTC
+
+D'accord, mais dit moi: tu dit 50 minutes par lot et alors combien de lot se passe
+

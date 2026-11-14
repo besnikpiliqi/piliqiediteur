@@ -2354,3 +2354,7 @@ malgre que tout est regle = payé il montre à faire =  en retard. je crois qu '
 
 si tu veux prend l 'exemple sur ce model. montre moi tes modeles ce que tu vas creer en se basant sur le pdf que je t ai mis
 
+## 256. 2026-11-14 00:05 UTC
+
+je t ai donne le pdf pour que tu regare comme il a mis les prix ht en desus du description, car la il affiche plusieurs decimal sans arrondir et dans la colone tu affiches arrondi
+

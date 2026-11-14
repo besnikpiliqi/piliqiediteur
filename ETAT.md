@@ -1,18 +1,19 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 14/11/2026 à 00:02 UTC par pilotage-sync.sh : « Modèles de facture pro ».
+Mis à jour le 14/11/2026 à 00:05 UTC par pilotage-sync.sh : « Après le lot STAT ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
-Tête poussée : `eba4bc8`. Commits locaux pas encore poussés :
+Tête poussée : `6bf1d94`. Commits locaux pas encore poussés :
 
 ```
-565f1ba Passe Larastan et l'analyse des flux de Psalm à chaque envoi (lot STAT)
 ```
 
 Derniers commits poussés :
 
 ```
+6bf1d94 Relecture du lot STAT
+565f1ba Passe Larastan et l'analyse des flux de Psalm à chaque envoi (lot STAT)
 eba4bc8 Relecture du lot ER-PRO
 175df0f Applique les décisions de Claude sans attendre un professionnel (lot ER-PRO)
 58ad4de Relecture du lot SEED
@@ -31,19 +32,11 @@ b10d2e8 Relecture du lot DV du devis en ligne
 0b7e734 Écrit chaque jour de la relance en navigateur sans calcul sur un instant (CI)
 d4a8247 Relecture du lot ML des e-mails vérifiés
 0ad0710 Vérifie les e-mails sur Mailtrap et explique chaque échec d'envoi (lot ML)
-8feeb83 Relecture du lot UI des écrans
-238f430 Corrige les constats de l'éditeur sur les écrans de vente (lot UI)
 ```
 
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
- M README.md
- M app/Domain/Tenancy/Support/LigneDeCourriel.php
- M tests/Feature/Facturation/ReponseAuDevisEnLigneTest.php
- M tests/Feature/Qualite/OutilDeQualiteTest.php
- M tests/Feature/Tenancy/LigneDeCourrielTest.php
- M tests/Qualite/qualite.php
 ```
 
 ## Dernière course de la chaîne
@@ -70,4 +63,6 @@ STAT:implementation-2
 STAT:relecture1
 STAT:relecture2
 STAT:correction
+STAT:poussee
+STAT:notes
 ```

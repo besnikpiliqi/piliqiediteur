@@ -160,7 +160,7 @@ class CabinetComptable extends Page implements HasForms
             'magasins' => array_map(strval(...), $lien->magasinsChoisis()),
             'consultations' => PermissionRegistry::casesDuCabinet(array_values(array_intersect($accordees, PermissionRegistry::parDefautDuCabinet($type)))),
             'achats' => array_values(array_intersect($accordees, PermissionRegistry::ajoutablesAuCabinet($type))),
-            'telechargements' => array_values(array_intersect($accordees, PermissionRegistry::cocheesParLeProprietaire($type))),
+            'telechargements' => array_values(array_intersect($accordees, PermissionRegistry::accordeesAuCabinetParLeProprietaireSeul($type))),
         ];
     }
 
@@ -307,7 +307,7 @@ class CabinetComptable extends Page implements HasForms
                 CheckboxList::make('telechargements')
                     ->label('Téléchargement des documents par période')
                     ->helperText(self::AIDE_TELECHARGEMENTS)
-                    ->options(array_intersect_key($libelles, array_flip(PermissionRegistry::cocheesParLeProprietaire($type))))
+                    ->options(array_intersect_key($libelles, array_flip(PermissionRegistry::accordeesAuCabinetParLeProprietaireSeul($type))))
                     ->hidden(fn (): bool => $this->lienEnCours() === null),
                 Placeholder::make('jamais')->hiddenLabel()->content(self::TEXTE_JAMAIS)->hidden(fn (): bool => $this->lienEnCours() === null),
             ])
@@ -505,7 +505,7 @@ class CabinetComptable extends Page implements HasForms
                 CheckboxList::make('achats')->label('Achats et stock')->options(array_intersect_key($libelles, array_flip(PermissionRegistry::ajoutablesAuCabinet($type))))->columns(2)
                     ->visible(PermissionRegistry::ajoutablesAuCabinet($type) !== []),
                 CheckboxList::make('telechargements')->label('Téléchargement des documents par période')->helperText(self::AIDE_TELECHARGEMENTS)
-                    ->options(array_intersect_key($libelles, array_flip(PermissionRegistry::cocheesParLeProprietaire($type)))),
+                    ->options(array_intersect_key($libelles, array_flip(PermissionRegistry::accordeesAuCabinetParLeProprietaireSeul($type)))),
                 Placeholder::make('jamais')->hiddenLabel()->content(self::TEXTE_JAMAIS),
                 Checkbox::make('remplacer')->label(fn (): string => $this->texteDuRemplacement())->visible(fn (): bool => $this->texteDuRemplacement() !== ''),
                 TextInput::make('mot_de_passe')->label('Votre mot de passe')->password()->required(),

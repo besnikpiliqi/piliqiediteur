@@ -204,7 +204,7 @@ class ActionsForgeesTest extends TestCase
                 return fn (): bool => $this->proprietaireDe($magasin)->is($proprietaire) && $administrateur->fresh()->estAdministrateur() && $responsable->fresh()->estMembre();
             })(),
             'créer un vendeur' => (function () use ($magasin): Closure {
-                $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, PermissionRegistry::toutes());
+                $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, self::toutesCellesDUnVendeur());
                 $this->dansLeMagasin($magasin, $vendeur);
                 Livewire::test(ListEquipeDuMagasin::class)->assertForbidden();
 

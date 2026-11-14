@@ -19,6 +19,7 @@ use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\CaissesDeLaSociete;
 use App\Domain\Facturation\Services\FacturesAEncaisserDeLaSociete;
 use App\Domain\Stock\Models\MouvementStock;
+use App\Domain\TableauDeBord\Models\PreferencesDuTableauDeBord;
 use App\Domain\Tenancy\Actions\AccepterLaTransmissionDeLaProprieteAction;
 use App\Domain\Tenancy\Actions\CloreLInscriptionAction;
 use App\Domain\Tenancy\Actions\EnvoyerCodeDeConfirmationAction;
@@ -103,6 +104,7 @@ class IsolationDesSocietesTest extends TestCase
         InvitationCabinet::class,
         LienCabinet::class,
         PieceVerification::class,
+        PreferencesDuTableauDeBord::class,
         TelechargementDeDocuments::class,
         TraceAudit::class,
         TransmissionPropriete::class,

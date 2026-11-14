@@ -8,6 +8,7 @@ use App\Domain\Cabinets\Models\LienCabinet;
 use App\Domain\Cabinets\Services\ExpertsComptablesDeclares;
 use App\Domain\Calendrier\Calendrier;
 use App\Domain\Facturation\Services\FacturesAEncaisserDeLaSociete;
+use App\Domain\TableauDeBord\Services\PerimetreDesGraphiques;
 use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
 use App\Domain\Tenancy\Actions\VerifierUnEcartSireneAction;
 use App\Domain\Tenancy\Enums\RoleSociete;
@@ -41,7 +42,9 @@ use Illuminate\Database\Eloquent\Collection;
  * attend la personne (voir chosesAFaireDeLaSociete()) ; pour le
  * propriétaire seul, la liste de ses premières étapes, chacune avec son
  * état et l'écran qui la fait (voir etapes()), tant qu'il en reste une à
- * faire ; où en est sa vérification ; ce qui manque à son identité pour
+ * faire ; les chiffres clés et les graphiques de ses magasins, pour le
+ * propriétaire et un administrateur à qui il en coche la case (voir
+ * voitLesGraphiques()) ; où en est sa vérification ; ce qui manque à son identité pour
  * facturer un professionnel ; ses magasins réels de la portée de la
  * personne connectée (tous pour le propriétaire et un administrateur de
  * tous les magasins, ceux de sa sélection pour un autre administrateur),
@@ -291,6 +294,17 @@ class TableauDeBord extends Dashboard
     public function chosesAFaireDeLaSociete(): array
     {
         return app(ChosesAFaireDeLaSociete::class)->delaSociete(CompteConnecte::exiger(), $this->societe());
+    }
+
+    /**
+     * Les chiffres clés et les graphiques de ses magasins (voir
+     * GrilleDesGraphiques), pour le propriétaire et un administrateur à qui
+     * il a coché « Tableau de bord : voir les graphiques » dans un magasin
+     * au moins de sa portée (voir PerimetreDesGraphiques::deLaSociete()).
+     */
+    public function voitLesGraphiques(): bool
+    {
+        return app(PerimetreDesGraphiques::class)->voitLesGraphiquesDeLaSociete(CompteConnecte::exiger(), $this->societe());
     }
 
     /**

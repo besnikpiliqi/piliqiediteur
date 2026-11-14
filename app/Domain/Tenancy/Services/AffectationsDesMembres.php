@@ -32,6 +32,12 @@ final class AffectationsDesMembres
 {
     public const MESSAGE_RESPONSABLE_SANS_CASE = 'Un responsable n\'a de case que celles que le propriétaire est seul à cocher : il a sans case toutes les autres autorisations de son magasin.';
 
+    /**
+     * Le refus des graphiques du tableau de bord cochés à un vendeur ou à
+     * un observateur (voir PermissionRegistry::refuseesAuxVendeursEtObservateurs()).
+     */
+    public const MESSAGE_GRAPHIQUES_DES_VENDEURS = 'Les graphiques du tableau de bord ne se cochent qu\'à un responsable ou à un administrateur, jamais à un vendeur ni à un observateur.';
+
     public function __construct(private readonly PorteeDesDroits $portee) {}
 
     /**
@@ -76,6 +82,10 @@ final class AffectationsDesMembres
             throw new LogicException(self::MESSAGE_RESPONSABLE_SANS_CASE);
         }
 
+        if ($demandee['role']->aDesCases() && array_intersect($demandees, PermissionRegistry::refuseesAuxVendeursEtObservateurs()) !== []) {
+            throw new LogicException(self::MESSAGE_GRAPHIQUES_DES_VENDEURS);
+        }
+
         if ($auteur->estProprietaire()) {
             return $this->portee->verifierCochables($auteur, $magasin, $demandees);
         }
@@ -90,8 +100,11 @@ final class AffectationsDesMembres
      * cases. Un responsable que nomme un administrateur garde la trace de
      * sa nomination (son auteur, et le rôle et les cases d'avant pour une
      * promotion) ; toute autre écriture l'efface. Les cases d'une
-     * affectation qui devient celle d'un responsable s'effacent avant son
-     * nouveau rôle (voir GardesDesDroits), puis il reçoit les siennes.
+     * affectation qui change de rôle, ou qui reste celle d'un responsable,
+     * s'effacent avant son nouveau rôle (voir GardesDesDroits : un
+     * responsable n'a que les cases réservées au propriétaire, un vendeur
+     * ou un observateur jamais les graphiques), puis elle reçoit les
+     * siennes.
      *
      * @param  list<string>  $autorisations
      */
@@ -106,7 +119,7 @@ final class AffectationsDesMembres
 
         $resteResponsable = $role === RoleMagasin::Responsable && $affectation->role === RoleMagasin::Responsable;
 
-        if ($affectation->exists && ! $role->aDesCases()) {
+        if ($affectation->exists && ($affectation->role !== $role || ! $role->aDesCases())) {
             $affectation->effacerLesCases();
         }
 

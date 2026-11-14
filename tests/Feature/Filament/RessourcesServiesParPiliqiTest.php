@@ -79,6 +79,20 @@ class RessourcesServiesParPiliqiTest extends TestCase
     }
 
     /**
+     * La feuille écrite à la main de la grille des graphiques du tableau de
+     * bord (lot GRAPH) se sert de même dans chaque panneau, publiée telle
+     * qu'elle est dans le dépôt ; Chart.js est celui de Filament, servi par
+     * PILIQI, jamais par un autre site.
+     */
+    #[DataProvider('pagesDeConnexion')]
+    public function test_chaque_panneau_sert_la_feuille_des_graphiques_publiee_telle_quelle(string $page): void
+    {
+        $this->get($page)->assertOk()->assertSee('css/app/graphiques.css', false);
+        $this->assertFileEquals(resource_path('css/graphiques.css'), public_path('css/app/graphiques.css'));
+        $this->assertFileExists(public_path('js/filament/widgets/components/chart.js'));
+    }
+
+    /**
      * @return array<string, array{0: string, 1: string}>
      */
     public static function noms(): array

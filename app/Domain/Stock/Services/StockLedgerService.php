@@ -505,11 +505,19 @@ class StockLedgerService
      * sans stock, et seul ce service le fait varier, toujours par un
      * mouvement) serait valorisé au coût moyen actuel.
      *
+     * Après chaque mouvement rejoué, $apresChaqueMouvement, quand il est
+     * donné, reçoit le mouvement, le stock et le coût moyen qui le suivent
+     * (en dix-millièmes d'euro) : les graphiques du tableau de bord y lisent
+     * le coût des articles vendus et la valeur du stock à la fin de chaque
+     * mois (voir StockDuTableauDeBord). Les mouvements d'une même réception
+     * entrent ensemble, au premier d'entre eux.
+     *
      * @param  Collection<int, MouvementStock>  $grandLivre  dans l'ordre
      * @param  array<int|string, array{repere: int, lots: non-empty-list<array{quantite: int, cout_unitaire: int}>}>  $receptions  chaque coût en dix-millièmes d'euro
+     * @param  (Closure(MouvementStock, int, int): void)|null  $apresChaqueMouvement
      * @return int|null en dix-millièmes d'euro
      */
-    public function coutMoyenRejoue(Produit $produit, Collection $grandLivre, array $receptions): ?int
+    public function coutMoyenRejoue(Produit $produit, Collection $grandLivre, array $receptions, ?Closure $apresChaqueMouvement = null): ?int
     {
         $typeDeReception = (new FactureAchat)->getMorphClass();
         $entreesEnStock = [];
@@ -548,10 +556,18 @@ class StockLedgerService
 
                 $stock += $mouvement->type->variation($mouvement->quantite);
 
+                if ($apresChaqueMouvement !== null) {
+                    $apresChaqueMouvement($mouvement, $stock, $cmup);
+                }
+
                 continue;
             }
 
             if (isset($receptionsVues[$receptionId])) {
+                if ($apresChaqueMouvement !== null) {
+                    $apresChaqueMouvement($mouvement, $stock, $cmup);
+                }
+
                 continue;
             }
 
@@ -562,6 +578,10 @@ class StockLedgerService
             if ($quantite <= 0 || $lots === []) {
                 $stock += $quantite;
 
+                if ($apresChaqueMouvement !== null) {
+                    $apresChaqueMouvement($mouvement, $stock, $cmup);
+                }
+
                 continue;
             }
 
@@ -571,6 +591,10 @@ class StockLedgerService
             }
 
             $unCoutEstConnu = true;
+
+            if ($apresChaqueMouvement !== null) {
+                $apresChaqueMouvement($mouvement, $stock, $cmup);
+            }
         }
 
         foreach ($sansStock as $reception) {

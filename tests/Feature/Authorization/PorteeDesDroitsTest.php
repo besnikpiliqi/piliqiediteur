@@ -80,7 +80,7 @@ class PorteeDesDroitsTest extends TestCase
         $this->avantLesVerrous($retrograder);
         $this->assertThrows(fn () => app(CreerMembreAction::class)->handle($responsable, $magasin, ['name' => 'Paul'], RoleMagasin::Vendeur), AuthorizationException::class);
         $this->avantLesVerrous($retrograder);
-        $this->assertThrows(fn () => app(ModifierMembreAction::class)->handle($responsable, $vendeur, RoleMagasin::Vendeur, PermissionRegistry::toutes()), AuthorizationException::class);
+        $this->assertThrows(fn () => app(ModifierMembreAction::class)->handle($responsable, $vendeur, RoleMagasin::Vendeur, self::toutesCellesDUnVendeur()), AuthorizationException::class);
 
         $this->assertFalse(User::query()->where('name', 'Paul')->exists());
         $this->assertSame([PermissionRegistry::FACTURE_VIEW], Affectation::query()->where('user_id', $vendeur->id)->sole()->autorisations());
@@ -371,7 +371,7 @@ class PorteeDesDroitsTest extends TestCase
             'A-' => $this->administrateur($this->m, null, [AutorisationsSociete::MAGASINS_GERER, AutorisationsSociete::PARAMETRES_GERER], PermissionRegistry::toutes()),
             'R(M)' => $this->responsable($this->m),
             'R(N)' => $this->responsable($this->n),
-            'V' => $this->membre($this->m, RoleMagasin::Vendeur, PermissionRegistry::toutes()),
+            'V' => $this->membre($this->m, RoleMagasin::Vendeur, self::toutesCellesDUnVendeur()),
             'PC' => $this->proprietaireDuCabinet($this->cabinet()),
             'C' => $this->collaborateurQuiSuitM('Paul Lefèvre'),
             'C2' => $this->collaborateurQuiSuitM('Marc Girard'),

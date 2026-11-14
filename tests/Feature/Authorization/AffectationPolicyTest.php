@@ -85,7 +85,7 @@ class AffectationPolicyTest extends TestCase
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $vendeur = $this->affectationDe($magasin, $this->membre($magasin, RoleMagasin::Vendeur));
         $comptes = [
-            $this->membre($magasin, RoleMagasin::Vendeur, PermissionRegistry::toutes()),
+            $this->membre($magasin, RoleMagasin::Vendeur, self::toutesCellesDUnVendeur()),
             $this->administrateur($magasin, null, AutorisationsSociete::toutes(), PermissionRegistry::toutes()),
             $this->collaborateurDuCabinetLie($magasin),
         ];

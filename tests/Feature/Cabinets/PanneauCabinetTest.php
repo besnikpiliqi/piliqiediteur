@@ -16,6 +16,7 @@ use App\Filament\App\Pages\LaSociete;
 use App\Filament\App\Pages\ParametresFactures;
 use App\Filament\App\Pages\ParametresPrixDeVente;
 use App\Filament\App\Pages\ParametresRelances;
+use App\Filament\App\Pages\TableauDeBordDeLaSociete;
 use App\Filament\App\Pages\TelechargerLesDocuments;
 use App\Filament\App\Resources\AvoirFournisseurResource;
 use App\Filament\App\Resources\AvoirResource;
@@ -283,6 +284,7 @@ class PanneauCabinetTest extends TestCase
             ParametresFactures::class => false,
             ParametresPrixDeVente::class => false,
             ParametresRelances::class => false,
+            TableauDeBordDeLaSociete::class => false,
             TelechargerLesDocuments::class => true,
             Dashboard::class => true,
         ];

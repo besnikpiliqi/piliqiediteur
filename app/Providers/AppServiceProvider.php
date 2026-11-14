@@ -38,6 +38,7 @@ use App\Domain\Tenancy\Support\NomsPolymorphes;
 use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\CartesDesNotifications;
+use App\Filament\GrilleDesGraphiques;
 use App\Http\Controllers\ReponseAuDevisController;
 use App\Http\Responses\ReponseDeConnexion;
 use App\Models\User;
@@ -221,6 +222,7 @@ class AppServiceProvider extends ServiceProvider
         $this->dessinerLesTableauxDesFiches();
         $this->tenirLesFenetresDeSelectionDansLEcran();
         $this->montrerLesCartesDesNotifications();
+        $this->montrerLesGraphiquesDuTableauDeBord();
         $this->limiterLesEssaisDuLienDUnDevis();
     }
 
@@ -312,6 +314,21 @@ class AppServiceProvider extends ServiceProvider
     {
         Livewire::component(CartesDesNotifications::NOM, CartesDesNotifications::class);
         FilamentAsset::register([Css::make('cartes-des-notifications', resource_path('css/cartes-des-notifications.css'))], 'app');
+    }
+
+    /**
+     * Les chiffres clés et les graphiques du tableau de bord (voir
+     * App\Filament\GrilleDesGraphiques), que l'espace de la société, la page
+     * d'un client du cabinet et celle de l'expert-comptable déclaré montent
+     * par leur nom, retrouvé à chacune de leurs requêtes, et leur feuille
+     * écrite à la main (resources/css/graphiques.css), servie de même depuis
+     * public/css/app. Le panneau d'un magasin les monte par son widget (voir
+     * GraphiquesDuMagasin).
+     */
+    private function montrerLesGraphiquesDuTableauDeBord(): void
+    {
+        Livewire::component(GrilleDesGraphiques::NOM, GrilleDesGraphiques::class);
+        FilamentAsset::register([Css::make('graphiques', resource_path('css/graphiques.css'))], 'app');
     }
 
     /**

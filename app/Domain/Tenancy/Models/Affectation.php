@@ -125,12 +125,14 @@ class Affectation extends Model
      * PermissionRegistry::verifierConnues()), puis par la clé étrangère du
      * référentiel et la garde des articles (voir GardesDesTypesDActivite) ;
      * une affectation de responsable n'a de case que celles que le
-     * propriétaire est seul à cocher. Ce que l'auteur a le droit de cocher
+     * propriétaire est seul à cocher, et celle d'un vendeur ou d'un
+     * observateur jamais les graphiques du tableau de bord (voir
+     * PermissionRegistry::refuseesAuxVendeursEtObservateurs()). Ce que l'auteur a le droit de cocher
      * se contrôle avant, par l'action (voir AffectationsDesMembres::cases()).
      *
      * @param  array<array-key, mixed>  $autorisations
      *
-     * @throws LogicException quand l'affectation d'un responsable recevrait une autre case
+     * @throws LogicException quand l'affectation d'un responsable recevrait une autre case, ou celle d'un vendeur ou d'un observateur les graphiques
      */
     public function cocher(array $autorisations): void
     {
@@ -139,6 +141,10 @@ class Affectation extends Model
 
         if ($this->estDeResponsable() && array_diff($connues, PermissionRegistry::cocheesParLeProprietaire($type)) !== []) {
             throw new LogicException(AffectationsDesMembres::MESSAGE_RESPONSABLE_SANS_CASE);
+        }
+
+        if ($this->role !== null && $this->role->aDesCases() && array_intersect($connues, PermissionRegistry::refuseesAuxVendeursEtObservateurs()) !== []) {
+            throw new LogicException(AffectationsDesMembres::MESSAGE_GRAPHIQUES_DES_VENDEURS);
         }
 
         DB::table('autorisations_affectations')->where('affectation_id', $this->getKey())->delete();

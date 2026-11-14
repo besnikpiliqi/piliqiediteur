@@ -70,7 +70,7 @@ class ChangementDeRoleTest extends TestCase
     public function test_un_vendeur_devient_administrateur_avec_le_meme_compte_sans_aucune_autorisation_de_vente(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, PermissionRegistry::toutes());
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, self::toutesCellesDUnVendeur());
         $identifiant = $vendeur->identifiantDeConnexion();
 
         $this->dansLEspaceDeLaSociete($magasin->societe, $this->proprietaireDe($magasin));
@@ -154,7 +154,7 @@ class ChangementDeRoleTest extends TestCase
     public function test_les_ventes_passees_restent_au_nom_du_compte_apres_un_changement_de_role(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, PermissionRegistry::toutes(), ['name' => 'Paul Vendeur']);
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, self::toutesCellesDUnVendeur(), ['name' => 'Paul Vendeur']);
         $vente = self::vendreAuComptant($vendeur, Client::factory()->create(), [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes);
 
         app(ChangerLeRoleDeSocieteAction::class)->versAdministrateur($this->proprietaireDe($magasin), $vendeur, null, [], []);

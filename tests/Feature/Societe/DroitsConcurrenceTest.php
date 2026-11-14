@@ -192,7 +192,7 @@ class DroitsConcurrenceTest extends TestCase
     public function test_un_retrait_d_autorisation_et_une_emission_simultanes_dans_le_meme_magasin_ne_laissent_jamais_passer_une_vente_non_autorisee(string $geste, string $autorisation): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, PermissionRegistry::toutes());
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, self::toutesCellesDUnVendeur());
         [$documentId, $compter] = $this->preparerLeGeste($geste, $vendeur);
         $avant = $compter();
         [$vendeurId, $magasinId] = [$vendeur->id, $magasin->id];
@@ -202,7 +202,7 @@ class DroitsConcurrenceTest extends TestCase
             self::faireLeGeste($geste, User::query()->findOrFail($vendeurId), $documentId);
         }, $concurrente);
 
-        app(ModifierMembreAction::class)->handle($this->proprietaireDe($magasin), $vendeur, RoleMagasin::Vendeur, array_values(array_diff(PermissionRegistry::toutes(), [$autorisation])));
+        app(ModifierMembreAction::class)->handle($this->proprietaireDe($magasin), $vendeur, RoleMagasin::Vendeur, array_values(array_diff(self::toutesCellesDUnVendeur(), [$autorisation])));
 
         $this->assertStringContainsString(LecteurDesDroits::REFUS, $this->attendreLEchec($concurrente));
         $this->assertSame($avant, $compter());

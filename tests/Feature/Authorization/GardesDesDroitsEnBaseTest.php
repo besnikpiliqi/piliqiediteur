@@ -206,6 +206,30 @@ class GardesDesDroitsEnBaseTest extends TestCase
     }
 
     /**
+     * Les graphiques du tableau de bord ne se cochent jamais à un vendeur
+     * ni à un observateur (décision de l'éditeur du 14/11/2026) : ni une
+     * case ajoutée sur son affectation, ni l'affectation d'un responsable
+     * coché qui redevient celle d'un observateur en gardant la case ; un
+     * responsable la garde.
+     */
+    public function test_la_base_refuse_la_case_des_graphiques_a_un_vendeur_ou_a_un_observateur(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW]);
+        $responsable = $this->membre($magasin, RoleMagasin::Responsable, [PermissionRegistry::GRAPHIQUES_VOIR]);
+        $affectationDuVendeur = Affectation::query()->where('user_id', $vendeur->id)->sole();
+        $affectationDuResponsable = Affectation::query()->where('user_id', $responsable->id)->sole();
+        $regle = 'les graphiques du tableau de bord ne se cochent jamais à un vendeur ni à un observateur';
+
+        $this->refusee(fn () => DB::table('autorisations_affectations')->insert(['affectation_id' => $affectationDuVendeur->id, 'autorisation' => PermissionRegistry::GRAPHIQUES_VOIR]), self::refus(GardesDesDroits::CASES, $regle));
+        $this->refusee(fn () => DB::table('affectations')->where('id', $affectationDuResponsable->id)->update(['role' => RoleMagasin::Observateur->value]), self::refus(GardesDesDroits::AFFECTATIONS, $regle));
+
+        $this->assertSame([PermissionRegistry::FACTURE_VIEW], $affectationDuVendeur->autorisations());
+        $this->assertSame(RoleMagasin::Responsable, $affectationDuResponsable->fresh()->role);
+        $this->assertSame([PermissionRegistry::GRAPHIQUES_VOIR], $affectationDuResponsable->autorisations());
+    }
+
+    /**
      * Écrite par le modèle (voir Affectation), une affectation incohérente
      * avec le rôle de société du compte est refusée avant d'atteindre la
      * base, avec le message qui dit la règle, comme une case cochée sur

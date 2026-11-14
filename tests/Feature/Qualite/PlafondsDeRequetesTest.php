@@ -21,9 +21,15 @@ use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\FacturePdfGenerator;
 use App\Domain\Facturation\Services\PartDeReglement;
 use App\Domain\Facturation\Services\ReglementComptant;
+use App\Domain\TableauDeBord\Enums\EcranDuTableauDeBord;
+use App\Domain\TableauDeBord\Enums\Graphique;
+use App\Domain\TableauDeBord\Services\PreferencesDesGraphiques;
+use App\Domain\TableauDeBord\Support\CarteDuTableauDeBord;
+use App\Domain\TableauDeBord\Support\ReglagesDuTableauDeBord;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\Cabinet\Pages\TableauDeBordDuCabinet;
+use App\Filament\GrilleDesGraphiques;
 use App\Filament\Societe\Pages\LesCaisses;
 use App\Filament\Societe\Pages\TableauDeBord;
 use App\Models\User;
@@ -31,6 +37,7 @@ use Closure;
 use Filament\Pages\Page;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Livewire\Livewire;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
@@ -40,7 +47,8 @@ use Tests\TestCase;
  * listes des ventes, des paiements, des avoirs, des clients, des produits,
  * des factures d'achat et des clôtures, la caisse, et le PDF d'une
  * facture ; dans l'espace de la société, le tableau de bord et « Les
- * caisses » ; dans celui d'un cabinet, le tableau de bord de ses clients.
+ * caisses » ; dans celui d'un cabinet, le tableau de bord de ses clients ;
+ * et la grille des graphiques du tableau de bord sur ses quatre écrans.
  * Chacune lit la base le même nombre de fois avec peu ou beaucoup de
  * lignes, de magasins ou de clients (une requête par ligne serait une
  * requête « N+1 »), sous un plafond qui n'en dépend pas.
@@ -230,6 +238,67 @@ class PlafondsDeRequetesTest extends TestCase
 
         $this->assertSame($requetes[1], $requetes[3], 'Le tableau de bord du cabinet lit la base une fois de plus par client.');
         $this->assertLessThanOrEqual(60, $requetes[3]);
+    }
+
+    /**
+     * @return array<string, array{0: string}>
+     */
+    public static function ecransDesGraphiques(): array
+    {
+        return [
+            'espace de la société' => [EcranDuTableauDeBord::Societe->value],
+            'panneau d’un magasin' => [EcranDuTableauDeBord::Magasin->value],
+            'page d’un client du cabinet' => [EcranDuTableauDeBord::Cabinet->value],
+            'page de l’expert-comptable déclaré' => [EcranDuTableauDeBord::ExpertComptable->value],
+        ];
+    }
+
+    /**
+     * Les chiffres clés et la grille de graphiques (décision de l'éditeur
+     * du 14/11/2026, lot GRAPH), avec les dix-huit graphiques affichés et
+     * la comparaison cochée : chaque source se lit au plus une fois par
+     * page, quel que soit le nombre de cartes, et la grille lit la base
+     * autant de fois avec un magasin ou trois (dans le panneau d'un
+     * magasin, avec les documents d'une journée ou de trois), sous un
+     * plafond qui n'en dépend pas, pour le propriétaire, le propriétaire du
+     * cabinet lié et l'expert-comptable déclaré.
+     */
+    #[DataProvider('ecransDesGraphiques')]
+    public function test_la_grille_des_graphiques_lit_la_base_autant_de_fois_avec_un_magasin_ou_trois(string $ecran): void
+    {
+        $societe = $this->magasin->societe;
+        $compte = match (EcranDuTableauDeBord::from($ecran)) {
+            EcranDuTableauDeBord::Societe, EcranDuTableauDeBord::Magasin => $this->proprietaireDe($this->magasin),
+            EcranDuTableauDeBord::Cabinet => $this->proprietaireDuCabinet($cabinet = $this->ouvrirUnCabinet()),
+            EcranDuTableauDeBord::ExpertComptable => $this->expertComptable($this->magasin),
+        };
+        $lien = isset($cabinet) ? $this->lierLeCabinet($cabinet, $this->magasin) : null;
+        $magasins = [$this->magasin];
+        $this->remplirLaCaisseEtLesFactures($this->magasin);
+        $requetes = [];
+
+        foreach ([1, 3] as $nombre) {
+            app(TenantContext::class)->clear();
+
+            while (count($magasins) < $nombre) {
+                $magasins[] = $this->ouvrirUnAutreMagasin($this->magasin, ['nom' => 'Boutique '.count($magasins), 'code' => 'BOUT'.count($magasins)]);
+                $this->remplirLaCaisseEtLesFactures($ecran === EcranDuTableauDeBord::Magasin->value ? $this->magasin : $magasins[count($magasins) - 1]);
+            }
+
+            match (EcranDuTableauDeBord::from($ecran)) {
+                EcranDuTableauDeBord::Societe => $this->dansLEspaceDeLaSociete($societe, $compte),
+                EcranDuTableauDeBord::Cabinet => $this->dansLEspaceDuCabinet($compte->societe()->firstOrFail(), $compte),
+                EcranDuTableauDeBord::Magasin, EcranDuTableauDeBord::ExpertComptable => $this->dansLeMagasin($this->magasin, $compte),
+            };
+            $parametres = ['ecran' => $ecran, 'lien' => $lien === null ? null : (string) $lien->uuid];
+            $cartes = array_map(fn (Graphique $graphique): CarteDuTableauDeBord => CarteDuTableauDeBord::parDefaut($graphique), Graphique::cases());
+            app(PreferencesDesGraphiques::class)->enregistrer($compte, EcranDuTableauDeBord::from($ecran), new ReglagesDuTableauDeBord($cartes, comparer: true));
+            Livewire::test(GrilleDesGraphiques::class, $parametres)->assertSee('CA HT du mois');
+            $requetes[$nombre] = $this->requetes(fn () => Livewire::test(GrilleDesGraphiques::class, $parametres)->assertSee('Valeur du stock au coût moyen'));
+        }
+
+        $this->assertSame($requetes[1], $requetes[3], "La grille de l'écran {$ecran} lit la base une fois de plus par magasin.");
+        $this->assertLessThanOrEqual(45, $requetes[3], $ecran);
     }
 
     /**

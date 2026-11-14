@@ -1087,6 +1087,19 @@ abstract class TestCase extends BaseTestCase
     }
 
     /**
+     * Toutes les autorisations de magasin qu'un vendeur ou un observateur
+     * peut recevoir : toutes, sauf les graphiques du tableau de bord, qui ne
+     * se cochent jamais à eux (décision de l'éditeur du 14/11/2026, voir
+     * PermissionRegistry::refuseesAuxVendeursEtObservateurs()).
+     *
+     * @return list<string>
+     */
+    protected static function toutesCellesDUnVendeur(): array
+    {
+        return array_values(array_diff(PermissionRegistry::toutes(), PermissionRegistry::refuseesAuxVendeursEtObservateurs()));
+    }
+
+    /**
      * Un vendeur du magasin, comme membre(), créé au début de l'activité
      * des magasins de test (MagasinFactory::DEBUT_D_ACTIVITE), avant toute
      * opération du test : un test qui voyage ensuite dans le temps ne

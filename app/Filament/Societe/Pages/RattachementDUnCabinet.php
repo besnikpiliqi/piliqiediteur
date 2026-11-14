@@ -230,7 +230,7 @@ class RattachementDUnCabinet extends Page
                 CheckboxList::make('telechargements')
                     ->label('Téléchargement des documents par période')
                     ->helperText(CabinetComptable::AIDE_TELECHARGEMENTS)
-                    ->options(array_intersect_key($libelles, array_flip(PermissionRegistry::cocheesParLeProprietaire($type)))),
+                    ->options(array_intersect_key($libelles, array_flip(PermissionRegistry::accordeesAuCabinetParLeProprietaireSeul($type)))),
                 Placeholder::make('jamais')->hiddenLabel()->content(CabinetComptable::TEXTE_JAMAIS),
                 Placeholder::make('vide')->hiddenLabel()->content('Sans aucune autorisation, votre cabinet reste lié et voit votre identité, vos réglages fiscaux et vos magasins, mais n\'ouvre aucun document, aucune fiche ni aucun téléchargement.'),
             ])

@@ -786,6 +786,38 @@ class User extends Authenticatable implements FilamentUser, HasTenants
     }
 
     /**
+     * Les cases de toutes ses affectations, lues en une fois avant de lire
+     * ses autorisations dans plusieurs magasins (voir autorisationsDans()) :
+     * un administrateur affecté à une sélection de magasins ne relit pas
+     * ses cases magasin par magasin (voir PerimetreDesGraphiques). Aucune
+     * pour un compte sans affectation.
+     *
+     * @return list<string>
+     */
+    public function casesDeSesAffectations(): array
+    {
+        $affectations = $this->affectationsLues();
+
+        if ($affectations->isEmpty()) {
+            return [];
+        }
+
+        $cases = DB::table('autorisations_affectations')
+            ->whereIn('affectation_id', $affectations->modelKeys())
+            ->orderBy('autorisation')
+            ->get(['affectation_id', 'autorisation'])
+            ->groupBy('affectation_id');
+
+        $toutes = [];
+
+        foreach ($affectations as $affectation) {
+            $toutes = [...$toutes, ...$this->autorisationsParAffectation[CleDuModele::de($affectation)] ??= ValeursLues::textes($cases->get(CleDuModele::de($affectation), collect())->pluck('autorisation'))];
+        }
+
+        return array_values(array_unique($toutes));
+    }
+
+    /**
      * Suit-il toutes les factures à encaisser de ce magasin, pour en lire
      * les totaux hors du magasin : dans l'espace de la société (voir
      * FacturesAEncaisserDeLaSociete) et au tableau de bord d'un cabinet

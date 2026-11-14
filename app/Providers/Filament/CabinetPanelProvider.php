@@ -111,6 +111,9 @@ class CabinetPanelProvider extends PanelProvider
             // est ouverte s'y montre en carte, en haut à droite (voir
             // CartesDesNotifications).
             ->renderHook(PanelsRenderHook::SCRIPTS_BEFORE, fn (): View => view('filament.cartes-des-notifications-du-panneau'))
+            // La mise en forme des graphiques du tableau de bord (voir
+            // GrilleDesGraphiques), avant le composant « chart » de Filament.
+            ->renderHook(PanelsRenderHook::SCRIPTS_BEFORE, fn (): View => view('filament.graphiques-du-panneau'))
             // Une requête refusée (419, 404) dit en français quoi faire, au
             // lieu de la question en anglais de Livewire.
             ->renderHook(PanelsRenderHook::SCRIPTS_BEFORE, fn (): View => view('filament.requete-refusee'));

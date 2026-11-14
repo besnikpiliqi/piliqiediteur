@@ -34,8 +34,10 @@ use Tests\TestCase;
  *   administrateur, selon sa portée, jamais le magasin de l'autre
  *   société ;
  * - ses autorisations dans chaque magasin sont celles que le cas lui
- *   donne : les cases tirées pour un vendeur, un observateur ou un
- *   administrateur (à qui le propriétaire peut cocher la vente), toutes
+ *   donne : les cases tirées pour un vendeur, un observateur (jamais
+ *   les graphiques du tableau de bord, qui ne se cochent pas à eux,
+ *   décision de l'éditeur du 14/11/2026) ou un administrateur (à qui le
+ *   propriétaire peut cocher la vente), toutes
  *   celles du type d'activité sauf celles que le propriétaire est seul à cocher
  *   pour un responsable, aucune dans un magasin qu'il n'ouvre pas ;
  * - aucune fiche ni aucun document d'un autre magasin, ou d'une autre
@@ -109,12 +111,18 @@ class DroitsEtIsolationAuHasardTest extends TestCase
         $this->pourChaqueCas(
             self::GRAINE,
             self::NOMBRE_DE_CAS,
-            fn (Tirage $tirage): array => [
-                'role' => $tirage->parmi(['vendeur', 'vendeur', 'observateur', 'observateur', 'responsable', 'administrateur']),
-                'magasin' => $tirage->entier(0, 1),
-                'autorisations' => array_values(array_filter($cases, fn (): bool => $tirage->uneFoisSur(2))),
-                'tous_les_magasins' => $tirage->uneFoisSur(2),
-            ],
+            function (Tirage $tirage) use ($cases): array {
+                $role = $tirage->parmi(['vendeur', 'vendeur', 'observateur', 'observateur', 'responsable', 'administrateur']);
+                $magasin = $tirage->entier(0, 1);
+                $autorisations = array_values(array_filter($cases, fn (): bool => $tirage->uneFoisSur(2)));
+
+                return [
+                    'role' => $role,
+                    'magasin' => $magasin,
+                    'autorisations' => in_array($role, ['vendeur', 'observateur'], true) ? array_values(array_diff($autorisations, PermissionRegistry::refuseesAuxVendeursEtObservateurs())) : $autorisations,
+                    'tous_les_magasins' => $tirage->uneFoisSur(2),
+                ];
+            },
             function (array $cas): void {
                 // Un compte créé par jour : jamais la limite de création du jour.
                 $this->travelTo(self::aParis(Calendrier::ajouterJours('2026-10-14', ++$this->jour).' 10:00:00'));

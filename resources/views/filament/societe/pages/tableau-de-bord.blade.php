@@ -66,6 +66,10 @@
         </x-filament::section>
     @endif
 
+    @if ($this->voitLesGraphiques())
+        @livewire(\App\Filament\GrilleDesGraphiques::NOM, ['ecran' => \App\Domain\TableauDeBord\Enums\EcranDuTableauDeBord::Societe->value], key('graphiques-de-la-societe'))
+    @endif
+
     <x-filament::section icon="heroicon-o-shield-check">
         <x-slot name="heading">Vérification de la société</x-slot>
 

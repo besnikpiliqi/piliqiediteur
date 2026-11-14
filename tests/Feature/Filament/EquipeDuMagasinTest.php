@@ -288,7 +288,7 @@ class EquipeDuMagasinTest extends TestCase
     public function test_un_vendeur_qui_a_toutes_les_cases_ne_gere_aucun_compte(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, PermissionRegistry::toutes());
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, self::toutesCellesDUnVendeur());
         $collegue = $this->membre($magasin, RoleMagasin::Vendeur);
 
         $this->dansLeMagasin($magasin, $vendeur);

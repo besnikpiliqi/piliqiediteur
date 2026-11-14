@@ -43,6 +43,7 @@ use App\Filament\App\Pages\LaSociete;
 use App\Filament\App\Pages\ParametresFactures;
 use App\Filament\App\Pages\ParametresPrixDeVente;
 use App\Filament\App\Pages\ParametresRelances;
+use App\Filament\App\Pages\TableauDeBordDeLaSociete;
 use App\Filament\App\Pages\TelechargerLesDocuments;
 use App\Filament\App\Resources\AvoirFournisseurResource;
 use App\Filament\App\Resources\AvoirResource;
@@ -242,7 +243,9 @@ class AccesDeLExpertComptableTest extends TestCase
      * Ce qu'un expert-comptable de la société, à qui la déclaration accorde
      * toutes les autorisations d'un cabinet, ouvre dans un magasin réel :
      * exactement ce qu'ouvre un compte d'un cabinet lié aux mêmes
-     * autorisations (voir PanneauCabinetTest), plus « La société ».
+     * autorisations (voir PanneauCabinetTest), plus « La société » et
+     * « Tableau de bord de la société », sa page des graphiques (décision
+     * de l'éditeur du 14/11/2026).
      */
     public function test_chaque_ressource_et_page_du_panneau_app_a_une_reponse_attendue_pour_un_expert_comptable(): void
     {
@@ -272,6 +275,7 @@ class AccesDeLExpertComptableTest extends TestCase
             ParametresFactures::class => false,
             ParametresPrixDeVente::class => false,
             ParametresRelances::class => false,
+            TableauDeBordDeLaSociete::class => true,
             TelechargerLesDocuments::class => true,
             Dashboard::class => true,
         ];

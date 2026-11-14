@@ -2914,6 +2914,83 @@ return [
                 'tests/Feature/Facturation/BordereauDetaxeTest.php::test_un_ticket_d_un_magasin_de_la_martinique_se_detaxe_au_taux_du_departement',
             ],
         ],
+        'graphiques.chiffres-cles-et-catalogue' => [
+            'puce' => 'Graphiques du tableau de bord',
+            'regle' => 'En haut du tableau de bord, quatre chiffres clés du mois en cours (CA HT net des avoirs et sa variation sur un an, achats HT nets, TVA à payer dite « estimation », restant dû et sa part en retard), puis dix-huit graphiques à composer, chacun calculé depuis les montants enregistrés des documents émis ou validés, additionnés en centimes, chaque opération dans le mois de son magasin, jamais un brouillon ni la démonstration ; la comparaison ajoute la même période un an plus tôt ; un exercice décalé compte par exercice ; en franchise en base, pas de TVA à estimer ; une société de services n\'a ni achats, ni marge, ni stock (décision de l\'éditeur du 14/11/2026).',
+            'tests' => [
+                'tests/Feature/TableauDeBord/SeriesDesGraphiquesTest.php::test_chaque_graphique_compte_les_montants_enregistres_des_documents_emis',
+                'tests/Feature/TableauDeBord/SeriesDesGraphiquesTest.php::test_les_chiffres_cles_sont_ceux_du_mois_en_cours',
+                'tests/Feature/TableauDeBord/SeriesDesGraphiquesTest.php::test_la_variation_compare_le_meme_mois_un_an_plus_tot',
+                'tests/Feature/TableauDeBord/SeriesDesGraphiquesTest.php::test_la_comparaison_ajoute_la_meme_periode_un_an_plus_tot',
+                'tests/Feature/TableauDeBord/SeriesDesGraphiquesTest.php::test_un_brouillon_n_est_jamais_compte',
+                'tests/Feature/TableauDeBord/SeriesDesGraphiquesTest.php::test_la_demonstration_n_entre_jamais_dans_les_graphiques',
+                'tests/Feature/TableauDeBord/SeriesDesGraphiquesTest.php::test_une_vente_a_23_h_30_en_martinique_le_31_janvier_compte_en_janvier',
+                'tests/Feature/TableauDeBord/SeriesDesGraphiquesTest.php::test_un_exercice_decale_a_juin_compte_par_exercice',
+                'tests/Feature/TableauDeBord/SeriesDesGraphiquesTest.php::test_la_franchise_en_base_n_a_pas_de_tva_a_estimer',
+                'tests/Feature/TableauDeBord/SeriesDesGraphiquesTest.php::test_une_societe_de_services_n_a_ni_achats_ni_marge_ni_stock',
+                'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › le propriétaire voit les quatre chiffres et les graphiques par défaut, ajoute la marge, passe un graphique en camembert, en retire un, et retrouve tout après le rechargement',
+            ],
+        ],
+        'graphiques.qui-les-voit' => [
+            'puce' => 'Graphiques du tableau de bord',
+            'regle' => 'Les graphiques se montrent au propriétaire, à l\'administrateur et au responsable à qui il coche la case, au cabinet lié et à l\'expert-comptable déclaré, jamais à un vendeur, un observateur ni un compte d\'entraînement ; un graphique ne compte que les magasins où la personne voit tous ses documents, une phrase grise dit les autres sans les nommer ; le panneau d\'un magasin n\'a ni filtre ni comparaison des magasins ; une adresse directe ne donne rien à qui ne les voit pas (décision de l\'éditeur du 14/11/2026).',
+            'tests' => [
+                'tests/Feature/TableauDeBord/QuiVoitLesGraphiquesTest.php::test_le_proprietaire_voit_tout_sur_tous_ses_magasins_reels',
+                'tests/Feature/TableauDeBord/QuiVoitLesGraphiquesTest.php::test_un_vendeur_ou_un_observateur_ne_les_voit_jamais',
+                'tests/Feature/TableauDeBord/QuiVoitLesGraphiquesTest.php::test_l_adresse_directe_ne_donne_aucun_graphique_a_un_vendeur',
+                'tests/Feature/TableauDeBord/QuiVoitLesGraphiquesTest.php::test_l_adresse_directe_ne_donne_aucun_graphique_a_un_administrateur_sans_la_case',
+                'tests/Feature/TableauDeBord/SeriesDesGraphiquesTest.php::test_un_magasin_ou_l_on_ne_voit_qu_une_partie_des_ventes_sort_du_graphique_sans_etre_nomme',
+                'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › un responsable à qui le propriétaire coche les graphiques les voit dans le panneau de son magasin, sans filtre ni comparaison des magasins',
+                'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › un vendeur ne voit ni les chiffres clés ni les graphiques, ni la page de la société',
+            ],
+        ],
+        'graphiques.preferences' => [
+            'puce' => 'Graphiques du tableau de bord',
+            'regle' => 'Les graphiques affichés, leur ordre, leur type et les filtres se retiennent en base, par compte et par écran, dans la société du compte ; une valeur forgée est refusée et rien ne change, une valeur illisible en base reprend le défaut, et le réglage d\'un compte ne touche jamais celui d\'un autre (décision de l\'éditeur du 14/11/2026).',
+            'tests' => [
+                'tests/Feature/TableauDeBord/PreferencesDesGraphiquesTest.php::test_ajout_retrait_type_ordre_et_filtres_sont_retenus_apres_une_nouvelle_connexion',
+                'tests/Feature/TableauDeBord/PreferencesDesGraphiquesTest.php::test_une_valeur_forgee_est_refusee_et_rien_ne_change',
+                'tests/Feature/TableauDeBord/PreferencesDesGraphiquesTest.php::test_une_preference_illisible_en_base_reprend_le_defaut',
+                'tests/Feature/TableauDeBord/PreferencesDesGraphiquesTest.php::test_le_reglage_d_un_compte_ne_touche_jamais_celui_d_un_autre',
+                'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › le propriétaire choisit la période, un magasin et la comparaison, classe les meilleurs produits par quantité, déplace deux cartes, lit les chiffres d’une carte, et retrouve tout après le rechargement',
+            ],
+        ],
+        'comptes.case-des-graphiques' => [
+            'puce' => 'Comptes et équipe',
+            'regle' => '« Tableau de bord : voir les graphiques », jamais précochée, seul le propriétaire la coche, à un administrateur (sa portée) ou à un responsable (son magasin), qui ne l\'a pas d\'office ; elle ne se coche jamais à un vendeur ni à un observateur, et la base le refuse (décision de l\'éditeur du 14/11/2026).',
+            'tests' => [
+                'tests/Feature/TableauDeBord/QuiVoitLesGraphiquesTest.php::test_un_administrateur_ne_les_voit_qu_avec_la_case_et_dans_sa_portee',
+                'tests/Feature/TableauDeBord/QuiVoitLesGraphiquesTest.php::test_un_responsable_ne_les_voit_qu_avec_la_case_dans_son_magasin',
+                'tests/Feature/TableauDeBord/QuiVoitLesGraphiquesTest.php::test_un_vendeur_ou_un_observateur_ne_les_voit_jamais',
+                'tests/Feature/Authorization/GardesDesDroitsEnBaseTest.php::test_la_base_refuse_la_case_des_graphiques_a_un_vendeur_ou_a_un_observateur',
+                'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › un administrateur à qui le propriétaire coche les graphiques ne voit que les magasins de sa portée',
+            ],
+        ],
+        'cabinets.graphiques-du-client' => [
+            'puce' => 'Cabinets d\'expertise comptable',
+            'regle' => 'Le cabinet lié (son propriétaire et le collaborateur à qui le client est confié) et l\'expert-comptable déclaré voient les chiffres clés et les graphiques du client, sans case à eux, sur les magasins que le client leur ouvre et selon les consultations qu\'il leur accorde ; rien pour un cabinet qui n\'est plus vérifié ni après la fin du lien (décision de l\'éditeur du 14/11/2026).',
+            'tests' => [
+                'tests/Feature/TableauDeBord/QuiVoitLesGraphiquesTest.php::test_seul_le_collaborateur_a_qui_le_client_est_confie_voit_ses_graphiques',
+                'tests/Feature/TableauDeBord/QuiVoitLesGraphiquesTest.php::test_un_cabinet_a_qui_le_client_retire_les_achats_n_a_aucun_graphique_d_achats',
+                'tests/Feature/TableauDeBord/QuiVoitLesGraphiquesTest.php::test_l_expert_comptable_declare_limite_a_un_magasin_ne_voit_que_lui',
+                'tests/Feature/TableauDeBord/QuiVoitLesGraphiquesTest.php::test_un_cabinet_non_verifie_ou_dont_le_lien_a_pris_fin_ne_voit_rien',
+                'tests/Feature/TableauDeBord/QuiVoitLesGraphiquesTest.php::test_l_adresse_directe_de_la_page_d_un_client_ne_s_ouvre_qu_au_collaborateur_confie',
+                'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › le collaborateur à qui le client est confié ouvre la page de ses graphiques depuis la liste des clients',
+                'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › le propriétaire du cabinet ouvre les graphiques d’un client depuis sa fiche',
+                'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › l’expert-comptable déclaré ouvre « Tableau de bord de la société » depuis son menu',
+            ],
+        ],
+        'produit.lectures-des-graphiques' => [
+            'puce' => 'Produit',
+            'regle' => 'Les chiffres clés et les graphiques se lisent hors du magasin courant par des requêtes filtrées par magasin, sur les seuls magasins que le périmètre du compte permet pour chaque source (un garde refuse tout autre magasin), jamais un magasin d\'une autre société, une source au plus une fois par page quel que soit le nombre de cartes ou de magasins (décision de l\'éditeur du 14/11/2026).',
+            'tests' => [
+                'tests/Feature/TableauDeBord/SeriesDesGraphiquesTest.php::test_un_magasin_hors_de_la_portee_n_est_jamais_compte',
+                'tests/Feature/TableauDeBord/SeriesDesGraphiquesTest.php::test_une_autre_societe_n_est_jamais_comptee',
+                'tests/Feature/TableauDeBord/SeriesDesGraphiquesTest.php::test_le_garde_refuse_un_magasin_ou_une_source_hors_du_perimetre',
+                'tests/Feature/Qualite/PlafondsDeRequetesTest.php::test_la_grille_des_graphiques_lit_la_base_autant_de_fois_avec_un_magasin_ou_trois',
+                'tests/Feature/Tenancy/IsolationDesSocietesTest.php::test_chaque_modele_de_societe_est_liste_ici',
+            ],
+        ],
     ],
 
     'decisions' => [
@@ -4440,6 +4517,14 @@ return [
             'REGLE-B-M6-14-11' => [
                 'decision' => 'Le 14/11/2026, modèle M6 sans colonne PU TTC choisi vers 02 h 25 UTC, M6-b (la petite ligne « PU HT exact » sous l\'article) vers 02 h 45 UTC, P1 pour les particuliers et le client comptoir vers 03 h 05 UTC (« tu fais pareil comme M6-b mais juste dans le tableau tu mets ce que je viens de te dire ») (lot REGLE-B, a-faire-apres-chaine.md).',
                 'regles' => ['documents.colonnes-ht-ou-ttc', 'documents.note-de-calcul-du-pu-ht-d-un-article', 'documents.note-de-calcul'],
+            ],
+            'GRAPH-14-11' => [
+                'decision' => 'Le 14/11/2026 vers 09 h 40 UTC : « dans le tableau de bord, pour le propriétaire, des tableaux avec Chart.js […] pour tout : comparer les ventes et les achats, la TVA redevable, par mois, par an […] un menu déroulant pour tous les modèles de graphiques […] et pareil pour les comptables » ; vers 09 h 55 UTC : modèle G1 avec les chiffres clés de G2, une case pour les administrateurs et les responsables, une page pour l\'expert-comptable déclaré, le panneau de chaque magasin ; vers 10 h 05 UTC : « oui c\'est bon, fais le lot GRAPH » (lot GRAPH).',
+                'regles' => ['graphiques.chiffres-cles-et-catalogue', 'graphiques.qui-les-voit', 'graphiques.preferences', 'comptes.case-des-graphiques', 'cabinets.graphiques-du-client', 'produit.lectures-des-graphiques'],
+            ],
+            'METHODE-14-11' => [
+                'decision' => 'Le 14/11/2026 vers 18 h 45 UTC : « tu mette que sur github et pas ici larastan car il prend du temps » ; vers 19 h 05 UTC : avant son commit, un lot ne lance plus la suite complète mais les tests liés à son travail, les tests en navigateur de ses écrans, l\'inventaire des actions et le groupe de concurrence, sauf un lot qui touche les calculs d\'argent, la caisse sécurisée ou l\'isolation ; la CI rouge se relit au début du lot et avant son commit, et se répare dans un commit à part.',
+                'hors_logiciel' => 'Méthode des lots (CLAUDE.md, protocole de rigueur, point 3).',
             ],
             'T115' => [
                 'decision' => 'Le 12/11/2026 vers 00 h 30 UTC, constat de l\'éditeur, puis décision de Claude (D76) : une fois la société validée, la démonstration disparaît de tous les écrans de la société et de ses magasins et plus personne n\'y entre, sans rien effacer (lot DEMO-V).',

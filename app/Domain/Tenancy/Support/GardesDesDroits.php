@@ -23,7 +23,9 @@ use Illuminate\Support\Facades\DB;
  *   affectation sans rôle hors d'un administrateur, ou avec rôle pour un
  *   administrateur ; une affectation à tous les magasins avec un rôle ;
  *   une affectation qui devient celle d'un responsable avec d'autres cases
- *   que celles que le propriétaire est seul à cocher ; un
+ *   que celles que le propriétaire est seul à cocher ; une affectation
+ *   qui devient celle d'un vendeur ou d'un observateur avec la case des
+ *   graphiques du tableau de bord ; un
  *   administrateur à la fois affecté à tous les magasins et à une
  *   sélection ; une affectation de membre hors du magasin de rattachement
  *   de l'identifiant du compte (voir la table identifiants) : un compte de
@@ -32,6 +34,9 @@ use Illuminate\Support\Facades\DB;
  *   une case sur l'affectation d'un responsable, qui a sans case toutes
  *   les autorisations de son magasin, sauf celles que le propriétaire est
  *   seul à cocher (voir PermissionRegistry::cocheesParLeProprietaire()) ;
+ *   la case des graphiques du tableau de bord sur l'affectation d'un
+ *   vendeur ou d'un observateur (voir
+ *   PermissionRegistry::refuseesAuxVendeursEtObservateurs()) ;
  * - autorisations_societe_administrateur_seul (autorisations_societe) :
  *   une autorisation de société pour un compte qui n'est pas
  *   administrateur ;
@@ -148,6 +153,8 @@ final class GardesDesDroits
         $membre = "'".RoleSociete::Membre->value."'";
         $responsable = "'".RoleMagasin::Responsable->value."'";
         $cocheesParLeProprietaire = self::liste(PermissionRegistry::cocheesParLeProprietaire(TypeDActivite::Commerce));
+        $refuseesAuxVendeurs = self::liste(PermissionRegistry::refuseesAuxVendeursEtObservateurs());
+        $avecDesCases = self::liste([RoleMagasin::Vendeur->value, RoleMagasin::Observateur->value]);
         $roleDuCompte = 'COALESCE((SELECT role_societe FROM users WHERE id = NEW.user_id), \'\')';
         $autresAffectations = 'SELECT 1 FROM affectations WHERE user_id = NEW.user_id AND id <> NEW.id';
         $magasinDeSonIdentifiant = 'COALESCE((SELECT magasin_id FROM identifiants WHERE user_id = NEW.user_id), -1)';
@@ -166,12 +173,14 @@ final class GardesDesDroits
                 ["NEW.role IS NOT NULL AND {$roleDuCompte} = {$administrateur}", 'un administrateur n\'a aucun rôle de magasin'],
                 ['NEW.magasin_id IS NULL AND NEW.role IS NOT NULL', 'une affectation à tous les magasins n\'a pas de rôle de magasin'],
                 ["NEW.role = {$responsable} AND EXISTS (SELECT 1 FROM autorisations_affectations WHERE affectation_id = NEW.id AND autorisation NOT IN ({$cocheesParLeProprietaire}))", 'un responsable n\'a de case que celles que le propriétaire est seul à cocher'],
+                ["NEW.role IN ({$avecDesCases}) AND EXISTS (SELECT 1 FROM autorisations_affectations WHERE affectation_id = NEW.id AND autorisation IN ({$refuseesAuxVendeurs}))", 'les graphiques du tableau de bord ne se cochent jamais à un vendeur ni à un observateur'],
                 ["NEW.magasin_id IS NULL AND EXISTS ({$autresAffectations} AND magasin_id IS NOT NULL)", 'un administrateur a accès à tous les magasins ou à une sélection, jamais aux deux'],
                 ["NEW.magasin_id IS NOT NULL AND EXISTS ({$autresAffectations} AND magasin_id IS NULL)", 'un administrateur a accès à tous les magasins ou à une sélection, jamais aux deux'],
                 ["NEW.role IS NOT NULL AND {$magasinDeSonIdentifiant} <> COALESCE(NEW.magasin_id, -2)", 'un membre n\'a d\'affectation que dans le magasin de son identifiant'],
             ],
             self::CASES => [
                 ["COALESCE((SELECT role FROM affectations WHERE id = NEW.affectation_id), '') = {$responsable} AND NEW.autorisation NOT IN ({$cocheesParLeProprietaire})", 'un responsable n\'a de case que celles que le propriétaire est seul à cocher'],
+                ["COALESCE((SELECT role FROM affectations WHERE id = NEW.affectation_id), '') IN ({$avecDesCases}) AND NEW.autorisation IN ({$refuseesAuxVendeurs})", 'les graphiques du tableau de bord ne se cochent jamais à un vendeur ni à un observateur'],
             ],
             self::AUTORISATIONS_SOCIETE => [
                 ["{$roleDuCompte} <> {$administrateur}", 'seul un administrateur a des autorisations de société'],

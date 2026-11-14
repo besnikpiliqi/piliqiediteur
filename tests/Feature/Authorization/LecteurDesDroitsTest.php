@@ -245,7 +245,7 @@ class LecteurDesDroitsTest extends TestCase
     public function test_le_paiement_l_avoir_la_contre_passation_la_cloture_la_caisse_la_fermeture_de_la_caisse_d_un_autre_et_l_avoir_fournisseur_relisent_l_auteur_sous_le_verrou(Closure $preparer, string $autorisation, Closure $compter): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        $membre = $this->membre($magasin, RoleMagasin::Vendeur, PermissionRegistry::toutes());
+        $membre = $this->membre($magasin, RoleMagasin::Vendeur, self::toutesCellesDUnVendeur());
         $geste = $preparer($this, $magasin, $membre);
         $avant = $compter();
         $this->assertTrue($membre->can($autorisation), 'L\'écran a vu le droit.');

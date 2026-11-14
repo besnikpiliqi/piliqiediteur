@@ -116,11 +116,24 @@ class ClientDuCabinetResource extends RessourceDuPanneauCabinet
             ->filters([])
             ->actions([
                 Tables\Actions\ViewAction::make()->label('Ouvrir'),
+                self::actionGraphiques(),
                 self::actionConfier(),
                 self::actionMettreFin(),
             ])
             ->bulkActions([])
             ->defaultSort('actif_depuis', 'desc');
+    }
+
+    /**
+     * Le tableau de bord du client : ses chiffres clés et ses graphiques
+     * (voir GraphiquesDuClient), pour qui ouvre ce client.
+     */
+    public static function actionGraphiques(): Tables\Actions\Action
+    {
+        return Tables\Actions\Action::make('graphiques')
+            ->label('Graphiques')
+            ->icon('heroicon-o-chart-bar')
+            ->url(fn (LienCabinet $record): string => static::getUrl('graphiques', ['record' => $record]));
     }
 
     /**
@@ -226,6 +239,7 @@ class ClientDuCabinetResource extends RessourceDuPanneauCabinet
         return [
             'index' => Pages\ListClientsDuCabinet::route('/'),
             'view' => Pages\FicheDuClient::route('/{record}'),
+            'graphiques' => Pages\GraphiquesDuClient::route('/{record}/graphiques'),
         ];
     }
 }

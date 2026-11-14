@@ -17,15 +17,17 @@ use App\Domain\Tenancy\Models\Affectation;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\PorteeDesDroits;
 use App\Domain\Tenancy\Services\TenantContext;
-use App\Filament\App\Resources\EquipeDuMagasinResource;
+use App\Filament\App\Resources\EquipeDuMagasinResource\Pages\ListEquipeDuMagasin;
 use App\Filament\Societe\Resources\MembreResource;
 use App\Models\User;
 use Closure;
+use Filament\Forms\Components\CheckboxList;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
+use Livewire\Livewire;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
@@ -60,8 +62,9 @@ class AutorisationsSelonLeTypeTest extends TestCase
         $communes = array_values(array_diff(PermissionRegistry::toutes(), PermissionRegistry::articles()));
 
         $this->assertEqualsCanonicalizing(self::ARTICLES, PermissionRegistry::articles());
-        $this->assertSame([48, 18, 30], [count(PermissionRegistry::toutes()), count(PermissionRegistry::articles()), count($communes)]);
+        $this->assertSame([49, 18, 31], [count(PermissionRegistry::toutes()), count(PermissionRegistry::articles()), count($communes)]);
         $this->assertContains(PermissionRegistry::DOCUMENTS_TELECHARGER, $communes);
+        $this->assertContains(PermissionRegistry::GRAPHIQUES_VOIR, $communes);
         $this->assertSame([], array_values(array_diff(PermissionRegistry::articles(), PermissionRegistry::toutes())));
         $this->assertContains(PermissionRegistry::SERVICE_VIEW, $communes);
         $this->assertContains(PermissionRegistry::SERVICE_CREATE, $communes);
@@ -100,13 +103,17 @@ class AutorisationsSelonLeTypeTest extends TestCase
             $this->assertFalse($compte->fresh()->can(PermissionRegistry::PRODUIT_VIEW), $role);
         }
         $this->assertEqualsCanonicalizing(array_values(array_diff(PermissionRegistry::toutes(), self::ARTICLES, PermissionRegistry::deVente())), $comptes['propriétaire']->autorisationsDans($magasin));
-        $this->assertEqualsCanonicalizing(array_values(array_diff(PermissionRegistry::toutes(), self::ARTICLES, [PermissionRegistry::DOCUMENTS_TELECHARGER])), $comptes['responsable']->fresh()->autorisationsDans($magasin));
+        $this->assertEqualsCanonicalizing(array_values(array_diff(PermissionRegistry::toutes(), self::ARTICLES, [PermissionRegistry::DOCUMENTS_TELECHARGER, PermissionRegistry::GRAPHIQUES_VOIR])), $comptes['responsable']->fresh()->autorisationsDans($magasin));
     }
 
     /**
      * Les cases que le propriétaire peut cocher, celles que précochent les
      * modèles des rôles et de l'administrateur, et celles que proposent les
-     * écrans de l'équipe sont celles du type d'activité de la société.
+     * écrans de l'équipe sont celles du type d'activité de la société ; les
+     * cases réservées au propriétaire dépendent du rôle choisi (jamais les
+     * graphiques pour un vendeur ni un observateur, décision de l'éditeur du
+     * 14/11/2026) : elles se lisent dans la fenêtre « Créer un compte »
+     * ouverte, avant le choix d'un rôle.
      */
     public function test_les_cases_proposees_cochables_et_precochees_sont_celles_du_type(): void
     {
@@ -122,11 +129,17 @@ class AutorisationsSelonLeTypeTest extends TestCase
         $this->assertSame([], PermissionRegistry::pourLeType(TypeDActivite::Cabinet));
 
         $this->dansLeMagasin($services, $proprietaire);
-        $options = [
-            ...EquipeDuMagasinResource::champsAutorisations()[0]->getOptions(),
-            ...EquipeDuMagasinResource::champsAutorisations()[1]->getOptions(),
-            ...EquipeDuMagasinResource::champsAutorisations()[2]->getOptions(),
-        ];
+        $options = [];
+        $equipe = Livewire::test(ListEquipeDuMagasin::class)->mountAction('creerUnCompte');
+
+        foreach (['autorisations', 'autorisations_vente', 'autorisations_proprietaire'] as $champ) {
+            $equipe->assertFormFieldExists($champ, 'mountedActionForm', function (CheckboxList $cases) use (&$options): bool {
+                $options = [...$options, ...$cases->getOptions()];
+
+                return true;
+            });
+        }
+
         $this->assertEqualsCanonicalizing($duType, array_keys($options));
 
         $this->dansLEspaceDeLaSociete($services->societe, $proprietaire);
@@ -274,9 +287,10 @@ class AutorisationsSelonLeTypeTest extends TestCase
      * Le commerce garde toutes les autorisations d'aujourd'hui : toutes
      * existent dans ses magasins, le propriétaire les a toutes sauf celles
      * de la vente, un responsable toutes sauf le téléchargement des
-     * documents par période, que seul le propriétaire lui coche (décision
-     * de l'éditeur du 03/11/2026, E3), et les modèles gardent celles des
-     * articles.
+     * documents par période (décision de l'éditeur du 03/11/2026, E3) et
+     * les graphiques du tableau de bord (décision de l'éditeur du
+     * 14/11/2026), que seul le propriétaire lui coche, et les modèles
+     * gardent celles des articles.
      */
     public function test_le_commerce_garde_toutes_les_autorisations_d_aujourd_hui(): void
     {
@@ -286,10 +300,10 @@ class AutorisationsSelonLeTypeTest extends TestCase
 
         $this->assertSame(PermissionRegistry::toutes(), PermissionRegistry::pourLeType(TypeDActivite::Commerce));
         $this->assertEqualsCanonicalizing(array_values(array_diff(PermissionRegistry::toutes(), PermissionRegistry::deVente())), $this->proprietaireDe($magasin)->autorisationsDans($magasin));
-        $this->assertSame(array_values(array_diff($toutes, [PermissionRegistry::DOCUMENTS_TELECHARGER])), $this->responsable($magasin)->autorisationsDans($magasin));
+        $this->assertSame(array_values(array_diff($toutes, [PermissionRegistry::DOCUMENTS_TELECHARGER, PermissionRegistry::GRAPHIQUES_VOIR])), $this->responsable($magasin)->autorisationsDans($magasin));
         $this->assertContains(PermissionRegistry::PRODUIT_VIEW, RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Commerce));
         $this->assertContains(PermissionRegistry::FACTURE_JUSTIFIER, RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Commerce));
-        $this->assertEqualsCanonicalizing(array_values(array_diff(PermissionRegistry::toutes(), [PermissionRegistry::PARAMETRES_GERER, PermissionRegistry::DOCUMENTS_TELECHARGER], PermissionRegistry::deVente())), PermissionRegistry::modeleDeLAdministrateur(TypeDActivite::Commerce));
+        $this->assertEqualsCanonicalizing(array_values(array_diff(PermissionRegistry::toutes(), [PermissionRegistry::PARAMETRES_GERER, PermissionRegistry::DOCUMENTS_TELECHARGER, PermissionRegistry::GRAPHIQUES_VOIR], PermissionRegistry::deVente())), PermissionRegistry::modeleDeLAdministrateur(TypeDActivite::Commerce));
     }
 
     /**

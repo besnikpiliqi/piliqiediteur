@@ -33,6 +33,11 @@ class FicheDuClient extends ViewRecord
     protected function getHeaderActions(): array
     {
         return [
+            Action::make('graphiques')
+                ->label('Graphiques')
+                ->icon('heroicon-o-chart-bar')
+                ->color('gray')
+                ->url(fn (): string => ClientDuCabinetResource::getUrl('graphiques', ['record' => $this->lien()])),
             Action::make('mettreFin')
                 ->label('Mettre fin au lien')
                 ->icon('heroicon-o-link-slash')

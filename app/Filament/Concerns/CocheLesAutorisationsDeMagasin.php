@@ -3,6 +3,7 @@
 namespace App\Filament\Concerns;
 
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\TenantContext;
@@ -11,6 +12,7 @@ use App\Domain\Tenancy\Support\ValeursLues;
 use Closure;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\CheckboxList;
+use Filament\Forms\Get;
 use UnexpectedValueException;
 
 /**
@@ -22,7 +24,9 @@ use UnexpectedValueException;
  * PermissionRegistry::deVente()), que le propriétaire coche pour qui il
  * veut sans les exercer lui-même, et celles que le propriétaire est seul à cocher
  * (voir PermissionRegistry::cocheesParLeProprietaire()), montrées à lui
- * seul, pour tout rôle, responsable compris, jamais précochées. Le
+ * seul, pour tout rôle, responsable compris, jamais précochées, sans les
+ * graphiques pour un vendeur ou un observateur (voir
+ * PermissionRegistry::refuseesAuxVendeursEtObservateurs()). Le
  * formulaire garde chaque groupe sous son nom ($nom, $nom_vente, puis
  * $nom_proprietaire) ; l'action reçoit leur réunion (voir
  * autorisationsSaisies()), et refuse elle-même ce que l'auteur ne peut pas
@@ -59,9 +63,9 @@ trait CocheLesAutorisationsDeMagasin
                 ->hidden($masque ?? false)
                 ->columnSpanFull(),
             CheckboxList::make("{$nom}_proprietaire")
-                ->label('Réservée au propriétaire')
-                ->helperText('Vous seul la cochez, compte par compte : elle n\'est jamais précochée, pas même pour un responsable ; ce compte ne télécharge que les documents qu\'il peut voir.')
-                ->options(fn (): array => self::libellesDe(self::cocheesParLeProprietaire()))
+                ->label('Réservées au propriétaire')
+                ->helperText('Vous seul les cochez, compte par compte : elles ne sont jamais précochées, pas même pour un responsable ; ce compte ne télécharge et ne voit en graphiques que les documents qu\'il peut voir. Les graphiques ne se cochent qu\'à un responsable ou à un administrateur.')
+                ->options(fn (Get $get): array => self::libellesDe(self::reserveesAuProprietairePourLeRole($get('role'))))
                 ->columns(2)
                 ->visible(fn (): bool => auth()->user()?->estProprietaire() ?? false)
                 ->columnSpanFull(),
@@ -130,6 +134,24 @@ trait CocheLesAutorisationsDeMagasin
     private static function cocheesParLeProprietaire(): array
     {
         return PermissionRegistry::cocheesParLeProprietaire(self::typeDuPanneau());
+    }
+
+    /**
+     * Celles que le propriétaire est seul à cocher pour le rôle choisi dans
+     * la fenêtre : toutes pour un responsable et un administrateur, dont
+     * la fenêtre n'a pas de rôle de magasin ; sans les graphiques pour un
+     * vendeur ou un observateur, à qui elles ne se cochent jamais (voir
+     * PermissionRegistry::refuseesAuxVendeursEtObservateurs()).
+     *
+     * @return list<string>
+     */
+    private static function reserveesAuProprietairePourLeRole(mixed $role): array
+    {
+        $role = $role instanceof RoleMagasin ? $role : RoleMagasin::tryFrom(is_string($role) ? $role : '');
+
+        return $role !== null && $role->aDesCases()
+            ? array_values(array_diff(self::cocheesParLeProprietaire(), PermissionRegistry::refuseesAuxVendeursEtObservateurs()))
+            : self::cocheesParLeProprietaire();
     }
 
     private static function typeDuPanneau(): TypeDActivite

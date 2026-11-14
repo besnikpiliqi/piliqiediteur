@@ -272,6 +272,20 @@ final class PermissionRegistry
     public const DOCUMENTS_TELECHARGER = 'documents.telecharger';
 
     /**
+     * Voir les chiffres clés et les graphiques du tableau de bord (décision
+     * de l'éditeur du 14/11/2026, lot GRAPH ; voir PerimetreDesGraphiques) :
+     * le tableau de bord du magasin, et ce magasin dans celui de l'espace
+     * de la société pour un administrateur. Seul le propriétaire la coche,
+     * à un administrateur ou à un responsable (voir
+     * cocheesParLeProprietaire()), jamais à un vendeur ni à un observateur
+     * (voir refuseesAuxVendeursEtObservateurs()) ; elle ne montre que les
+     * graphiques des documents que les autres autorisations laissent voir.
+     * Le cabinet lié et l'expert-comptable déclaré ne la reçoivent jamais :
+     * leurs graphiques suivent les consultations que le client leur accorde.
+     */
+    public const GRAPHIQUES_VOIR = 'tableau_de_bord.graphiques';
+
+    /**
      * La famille des articles (voir articles()) et la famille commune, telles
      * que le référentiel en base les porte.
      */
@@ -300,6 +314,7 @@ final class PermissionRegistry
             self::AVOIR_FOURNISSEUR_VIEW, self::AVOIR_FOURNISSEUR_CREER,
             self::CAISSE_SECURISEE_CONSULTER,
             self::DOCUMENTS_TELECHARGER,
+            self::GRAPHIQUES_VOIR,
         ];
     }
 
@@ -339,7 +354,7 @@ final class PermissionRegistry
     /**
      * Les autorisations qui restent permises quand le magasin est suspendu
      * ou fermé (voir ControleDesDroits) : tout consulter et télécharger,
-     * documents par période compris ; clôturer la journée, car les
+     * documents par période compris, et voir les graphiques ; clôturer la journée, car les
      * clôtures continuent jusqu'au bout ; noter les preuves d'exonération,
      * le bordereau de détaxe et son visa, qui arrivent souvent après la
      * fermeture (décision de l'éditeur du 01/11/2026, Q-AF12). L'équipe
@@ -351,7 +366,7 @@ final class PermissionRegistry
      */
     public static function permisesEnLectureSeule(): array
     {
-        return [...self::consultations(), self::DOCUMENTS_TELECHARGER, self::CLOTURE_CAISSE_GERER, self::FACTURE_JUSTIFIER];
+        return [...self::consultations(), self::DOCUMENTS_TELECHARGER, self::GRAPHIQUES_VOIR, self::CLOTURE_CAISSE_GERER, self::FACTURE_JUSTIFIER];
     }
 
     /**
@@ -404,6 +419,7 @@ final class PermissionRegistry
             self::AVOIR_FOURNISSEUR_VIEW, self::AVOIR_FOURNISSEUR_CREER,
             self::CAISSE_SECURISEE_CONSULTER,
             self::DOCUMENTS_TELECHARGER,
+            self::GRAPHIQUES_VOIR,
         ];
     }
 
@@ -502,21 +518,54 @@ final class PermissionRegistry
     /**
      * Les autorisations que le propriétaire est seul à cocher, compte par compte,
      * dans un magasin d'une société de ce type : le téléchargement des
-     * documents par période (décision de l'éditeur du 03/11/2026, E3). Le
-     * propriétaire l'a toujours ; aucun modèle ne la précoche, pas même
-     * celui de l'administrateur ; un responsable, qui a sans case toutes
-     * les autres autorisations de son magasin, ne l'a que cochée par le
-     * propriétaire, et ne la coche jamais pour un vendeur ou un
-     * observateur, dont la case cochée par le propriétaire reste telle
-     * quelle quand le responsable change ses autres cases (voir
-     * AffectationsDesMembres::cases()) ; le cabinet lié ne l'a que cochée
-     * par le propriétaire du client, jamais par défaut (voir duCabinet()).
+     * documents par période (décision de l'éditeur du 03/11/2026, E3) et
+     * les graphiques du tableau de bord (décision de l'éditeur du
+     * 14/11/2026, lot GRAPH). Le propriétaire les a toujours ; aucun modèle
+     * ne les précoche, pas même celui de l'administrateur ; un responsable,
+     * qui a sans case toutes les autres autorisations de son magasin, ne
+     * les a que cochées par le propriétaire, et ne les coche jamais pour
+     * un vendeur ou un observateur, dont la case cochée par le propriétaire
+     * reste telle quelle quand le responsable change ses autres cases (voir
+     * AffectationsDesMembres::cases()) ; les graphiques ne se cochent
+     * jamais à un vendeur ni à un observateur (voir
+     * refuseesAuxVendeursEtObservateurs()) ; le cabinet lié ne reçoit que
+     * le téléchargement, coché par le propriétaire du client, jamais par
+     * défaut (voir accordeesAuCabinetParLeProprietaireSeul()).
      *
      * @return list<literal-string>
      */
     public static function cocheesParLeProprietaire(TypeDActivite $type): array
     {
-        return array_values(array_intersect([self::DOCUMENTS_TELECHARGER], self::pourLeType($type)));
+        return array_values(array_intersect([self::DOCUMENTS_TELECHARGER, self::GRAPHIQUES_VOIR], self::pourLeType($type)));
+    }
+
+    /**
+     * Les autorisations qui ne se cochent jamais à un vendeur ni à un
+     * observateur, même par le propriétaire : les graphiques du tableau de
+     * bord, réservés au propriétaire, aux administrateurs et aux
+     * responsables à qui il les coche (décision de l'éditeur du
+     * 14/11/2026) ; la base le refuse (voir GardesDesDroits).
+     *
+     * @return list<literal-string>
+     */
+    public static function refuseesAuxVendeursEtObservateurs(): array
+    {
+        return [self::GRAPHIQUES_VOIR];
+    }
+
+    /**
+     * Celles des autorisations que le propriétaire est seul à cocher (voir
+     * cocheesParLeProprietaire()) qu'un client accorde aussi à son cabinet
+     * lié ou à l'expert-comptable qu'il déclare, jamais par défaut : le
+     * téléchargement des documents par période ; jamais les graphiques,
+     * que le cabinet voit selon les consultations que le client lui
+     * accorde (voir PerimetreDesGraphiques).
+     *
+     * @return list<literal-string>
+     */
+    public static function accordeesAuCabinetParLeProprietaireSeul(TypeDActivite $typeDuClient): array
+    {
+        return array_values(array_intersect([self::DOCUMENTS_TELECHARGER], self::pourLeType($typeDuClient)));
     }
 
     /**
@@ -579,7 +628,7 @@ final class PermissionRegistry
      * Toutes les autorisations qu'un client de ce type peut accorder à son
      * cabinet lié (voir parDefautDuCabinet() et ajoutablesAuCabinet()), et
      * le téléchargement des documents par période, qu'il ne lui accorde
-     * jamais par défaut (voir cocheesParLeProprietaire()), dans l'ordre
+     * jamais par défaut (voir accordeesAuCabinetParLeProprietaireSeul()), dans l'ordre
      * alphabétique ; aucune pour un cabinet, qui n'est jamais client. La liste d'un client qui a des articles est celle que la
      * base écrit en toutes lettres (voir GardesDesCabinets).
      *
@@ -587,7 +636,7 @@ final class PermissionRegistry
      */
     public static function duCabinet(TypeDActivite $typeDuClient): array
     {
-        $autorisations = array_values(array_unique([...self::parDefautDuCabinet($typeDuClient), ...self::ajoutablesAuCabinet($typeDuClient), ...self::cocheesParLeProprietaire($typeDuClient)]));
+        $autorisations = array_values(array_unique([...self::parDefautDuCabinet($typeDuClient), ...self::ajoutablesAuCabinet($typeDuClient), ...self::accordeesAuCabinetParLeProprietaireSeul($typeDuClient)]));
         sort($autorisations);
 
         return $autorisations;
@@ -815,6 +864,7 @@ final class PermissionRegistry
             self::AVOIR_FOURNISSEUR_CREER => 'Avoirs fournisseur : créer',
             self::CAISSE_SECURISEE_CONSULTER => 'Caisse sécurisée : consulter le registre et exporter le journal des événements',
             self::DOCUMENTS_TELECHARGER => 'Documents : télécharger les documents par période (ZIP ou CSV)',
+            self::GRAPHIQUES_VOIR => 'Tableau de bord : voir les graphiques',
         ];
     }
 }

@@ -524,8 +524,9 @@ class AdministrateursTest extends TestCase
      * paramètres du magasin et celles de la vente, qui restent dans leur
      * groupe à part, jamais précochées (Q3-a) : un administrateur créé
      * sans y toucher ne vend pas ; ni le téléchargement des documents par
-     * période, que le propriétaire coche compte par compte (décision de
-     * l'éditeur du 03/11/2026, E3).
+     * période (décision de l'éditeur du 03/11/2026, E3), ni les graphiques
+     * du tableau de bord (décision de l'éditeur du 14/11/2026), que le
+     * propriétaire coche compte par compte.
      */
     public function test_le_modele_de_l_administrateur_ne_precoche_aucune_autorisation_de_vente(): void
     {
@@ -535,7 +536,7 @@ class AdministrateursTest extends TestCase
         $page = Livewire::test(ListMembres::class)->mountAction('creerUnAdministrateur')->assertSee('Vente (seulement si cet administrateur vend)');
 
         $this->assertSame([], array_values(array_intersect(PermissionRegistry::deVente(), PermissionRegistry::modeleDeLAdministrateur(TypeDActivite::Commerce))));
-        $this->assertEqualsCanonicalizing(array_values(array_diff(PermissionRegistry::horsVente(), [PermissionRegistry::PARAMETRES_GERER, PermissionRegistry::DOCUMENTS_TELECHARGER])), PermissionRegistry::modeleDeLAdministrateur(TypeDActivite::Commerce));
+        $this->assertEqualsCanonicalizing(array_values(array_diff(PermissionRegistry::horsVente(), [PermissionRegistry::PARAMETRES_GERER, PermissionRegistry::DOCUMENTS_TELECHARGER, PermissionRegistry::GRAPHIQUES_VOIR])), PermissionRegistry::modeleDeLAdministrateur(TypeDActivite::Commerce));
         $this->assertEmpty($page->get('mountedActionsData.0.autorisations_magasin_vente'));
         $this->assertEmpty($page->get('mountedActionsData.0.autorisations_magasin_proprietaire'));
         $page->setActionData(['name' => 'Alix', 'portee' => 'tous'])

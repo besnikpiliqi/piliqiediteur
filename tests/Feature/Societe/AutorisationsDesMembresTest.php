@@ -87,7 +87,7 @@ class AutorisationsDesMembresTest extends TestCase
         app(ModifierMembreAction::class)->handle($responsable, $vendeur, RoleMagasin::Vendeur, [PermissionRegistry::PARAMETRES_GERER, PermissionRegistry::FACTURE_VIEW]);
         $this->assertSame([PermissionRegistry::FACTURE_VIEW, PermissionRegistry::PARAMETRES_GERER], $vendeur->refresh()->autorisationsDans($magasin));
 
-        $this->assertThrows(fn () => app(ModifierMembreAction::class)->handle($responsable, $vendeurDeLAutre, RoleMagasin::Vendeur, PermissionRegistry::toutes()), AuthorizationException::class);
+        $this->assertThrows(fn () => app(ModifierMembreAction::class)->handle($responsable, $vendeurDeLAutre, RoleMagasin::Vendeur, self::toutesCellesDUnVendeur()), AuthorizationException::class);
         $this->assertEqualsCanonicalizing(RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Commerce), $vendeurDeLAutre->refresh()->autorisationsDans($autre));
         $this->assertSame([$magasin->id], Affectation::query()->where('user_id', $vendeur->id)->pluck('magasin_id')->all());
     }
@@ -119,7 +119,7 @@ class AutorisationsDesMembresTest extends TestCase
     public function test_un_simple_membre_ne_coche_rien(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        $vendeurQuiATout = $this->membre($magasin, RoleMagasin::Vendeur, PermissionRegistry::toutes());
+        $vendeurQuiATout = $this->membre($magasin, RoleMagasin::Vendeur, self::toutesCellesDUnVendeur());
         $collegue = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW]);
 
         $this->assertThrows(fn () => app(ModifierMembreAction::class)->handle($vendeurQuiATout, $collegue, RoleMagasin::Vendeur, [PermissionRegistry::AVOIR_CREER]), AuthorizationException::class);
@@ -517,7 +517,10 @@ class AutorisationsDesMembresTest extends TestCase
      * paramètres du magasin compris, sous son libellé, celles de la vente,
      * qu'il n'exerce pas lui-même, dans leur groupe à part, et le
      * téléchargement des documents par période dans le groupe qu'il est
-     * seul à voir (décision de l'éditeur du 03/11/2026, E3).
+     * seul à voir (décision de l'éditeur du 03/11/2026, E3) ; les
+     * graphiques du tableau de bord, dans ce même groupe, seulement pour
+     * un responsable, jamais pour un vendeur (décision de l'éditeur du
+     * 14/11/2026).
      */
     public function test_le_proprietaire_peut_cocher_chaque_autorisation_sous_son_libelle(): void
     {
@@ -546,10 +549,19 @@ class AutorisationsDesMembresTest extends TestCase
             })
             ->assertFormFieldIsEnabled('autorisations', 'mountedActionForm')
             ->assertFormFieldIsEnabled('autorisations_vente', 'mountedActionForm')
-            ->assertFormFieldIsVisible('autorisations_proprietaire', 'mountedActionForm');
+            ->assertFormFieldIsVisible('autorisations_proprietaire', 'mountedActionForm')
+            ->setActionData(['role' => RoleMagasin::Responsable->value])
+            ->assertFormFieldExists('autorisations_proprietaire', 'mountedActionForm', function (CheckboxList $reservees) use (&$proposees): bool {
+                $proposees = array_merge($proposees, array_keys($reservees->getOptions()));
 
-        $this->assertCount(count(PermissionRegistry::toutes()), $proposees);
-        $this->assertEqualsCanonicalizing(PermissionRegistry::toutes(), $proposees);
+                return $reservees->getOptions() === [
+                    PermissionRegistry::DOCUMENTS_TELECHARGER => PermissionRegistry::libelles()[PermissionRegistry::DOCUMENTS_TELECHARGER],
+                    PermissionRegistry::GRAPHIQUES_VOIR => PermissionRegistry::libelles()[PermissionRegistry::GRAPHIQUES_VOIR],
+                ];
+            });
+
+        $this->assertEqualsCanonicalizing(PermissionRegistry::toutes(), array_values(array_unique($proposees)));
+        $this->assertCount(count(PermissionRegistry::toutes()) + 1, $proposees);
     }
 
     /**

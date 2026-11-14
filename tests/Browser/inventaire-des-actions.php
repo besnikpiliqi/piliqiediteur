@@ -2052,6 +2052,9 @@ return [
         ]],
     ],
     'app/Filament/Cabinet/Resources/ClientDuCabinetResource.php' => [
+        'action:graphiques' => ['lot' => 'NAV-5', 'tests' => [
+            'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › le collaborateur à qui le client est confié ouvre la page de ses graphiques depuis la liste des clients',
+        ]],
         'action:confier' => ['lot' => 'NAV-5', 'tests' => [
             'tests/Browser/Balayage/BalayageDeLEspaceDuCabinetTest.php › le propriétaire du cabinet ouvre chaque page et chaque action de l’espace du cabinet sans erreur',
         ]],
@@ -2068,6 +2071,9 @@ return [
         ]],
     ],
     'app/Filament/Cabinet/Resources/ClientDuCabinetResource/Pages/FicheDuClient.php' => [
+        'action:graphiques' => ['lot' => 'NAV-5', 'tests' => [
+            'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › le propriétaire du cabinet ouvre les graphiques d’un client depuis sa fiche',
+        ]],
         'action:mettreFin' => ['lot' => 'NAV-5', 'tests' => [
             'tests/Browser/Balayage/BalayageDeLEspaceDuCabinetTest.php › le propriétaire du cabinet ouvre chaque page et chaque action de l’espace du cabinet sans erreur',
         ]],
@@ -3028,6 +3034,59 @@ return [
     'resources/views/filament/app/pages/aucun-magasin.blade.php' => [
         'formulaire:{{ filament()->getLogoutUrl() }}' => ['lot' => 'NAV-4', 'tests' => [
             'tests/Browser/Parcours/ExpertComptableDeclareTest.php › la personne de l’expert-comptable d’une société sans magasin réel arrive sur la page qui le lui dit et s’en déconnecte',
+        ]],
+    ],
+    'app/Filament/App/Pages/TableauDeBordDeLaSociete.php' => [
+        'page' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › l’expert-comptable déclaré ouvre « Tableau de bord de la société » depuis son menu',
+            'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › un vendeur ne voit ni les chiffres clés ni les graphiques, ni la page de la société',
+        ]],
+    ],
+    'app/Filament/Cabinet/Resources/ClientDuCabinetResource/Pages/GraphiquesDuClient.php' => [
+        'page' => ['lot' => 'NAV-5', 'tests' => [
+            'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › le collaborateur à qui le client est confié ouvre la page de ses graphiques depuis la liste des clients',
+            'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › le propriétaire du cabinet ouvre les graphiques d’un client depuis sa fiche',
+        ]],
+    ],
+    'app/Filament/GrilleDesGraphiques.php' => [
+        'widget' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › le propriétaire voit les quatre chiffres et les graphiques par défaut, ajoute la marge, passe un graphique en camembert, en retire un, et retrouve tout après le rechargement',
+            'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › un administrateur à qui le propriétaire coche les graphiques ne voit que les magasins de sa portée',
+            'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › un responsable à qui le propriétaire coche les graphiques les voit dans le panneau de son magasin, sans filtre ni comparaison des magasins',
+            'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › le collaborateur à qui le client est confié ouvre la page de ses graphiques depuis la liste des clients',
+            'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › l’expert-comptable déclaré ouvre « Tableau de bord de la société » depuis son menu',
+            'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › un vendeur ne voit ni les chiffres clés ni les graphiques, ni la page de la société',
+            'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › le propriétaire choisit la période, un magasin et la comparaison, classe les meilleurs produits par quantité, déplace deux cartes, lit les chiffres d’une carte, et retrouve tout après le rechargement',
+        ]],
+    ],
+    'resources/views/filament/grille-des-graphiques.blade.php' => [
+        'changement:ajouterUnGraphique' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › le propriétaire voit les quatre chiffres et les graphiques par défaut, ajoute la marge, passe un graphique en camembert, en retire un, et retrouve tout après le rechargement',
+            'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › le propriétaire choisit la période, un magasin et la comparaison, classe les meilleurs produits par quantité, déplace deux cartes, lit les chiffres d’une carte, et retrouve tout après le rechargement',
+        ]],
+        'changement:changerLaMesure' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › le propriétaire choisit la période, un magasin et la comparaison, classe les meilleurs produits par quantité, déplace deux cartes, lit les chiffres d’une carte, et retrouve tout après le rechargement',
+        ]],
+        'changement:changerLeType' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › le propriétaire voit les quatre chiffres et les graphiques par défaut, ajoute la marge, passe un graphique en camembert, en retire un, et retrouve tout après le rechargement',
+        ]],
+        'changement:choisirLaPeriode' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › le propriétaire choisit la période, un magasin et la comparaison, classe les meilleurs produits par quantité, déplace deux cartes, lit les chiffres d’une carte, et retrouve tout après le rechargement',
+        ]],
+        'changement:choisirLeMagasin' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › le propriétaire choisit la période, un magasin et la comparaison, classe les meilleurs produits par quantité, déplace deux cartes, lit les chiffres d’une carte, et retrouve tout après le rechargement',
+        ]],
+        'changement:comparer' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › le propriétaire choisit la période, un magasin et la comparaison, classe les meilleurs produits par quantité, déplace deux cartes, lit les chiffres d’une carte, et retrouve tout après le rechargement',
+        ]],
+        'clic:descendre' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › le propriétaire choisit la période, un magasin et la comparaison, classe les meilleurs produits par quantité, déplace deux cartes, lit les chiffres d’une carte, et retrouve tout après le rechargement',
+        ]],
+        'clic:monter' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › le propriétaire choisit la période, un magasin et la comparaison, classe les meilleurs produits par quantité, déplace deux cartes, lit les chiffres d’une carte, et retrouve tout après le rechargement',
+        ]],
+        'clic:retirerLeGraphique' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › le propriétaire voit les quatre chiffres et les graphiques par défaut, ajoute la marge, passe un graphique en camembert, en retire un, et retrouve tout après le rechargement',
         ]],
     ],
 ];

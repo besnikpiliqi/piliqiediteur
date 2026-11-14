@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 14/11/2026 à 21:41 UTC par pilotage-sync.sh : « Point de suivi 21:45 : GRAPH partie 4, sauvegarde ».
+Mis à jour le 14/11/2026 à 22:11 UTC par pilotage-sync.sh : « Décisions de l'éditeur du 14/11 au soir : archive de la démo, relances ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

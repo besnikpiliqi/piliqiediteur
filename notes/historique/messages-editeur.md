@@ -2330,3 +2330,27 @@ le prix ht "11,279621" me plait pas car bcp de nombre. pourquoi tu n as pas arro
 
 malgre que tout est regle = payé il montre à faire =  en retard. je crois qu 'il a un problem au niveau de code
 
+## 255. 2026-11-14 00:00 UTC
+
+@"/root/.claude/uploads/00d7e3b2-c4d1-5536-95c0-3e77e19552bb/8da37f47-PILIQI_Proposition_Facture_Professionnelle_2026-11-09.pdf" <!-- attach -->
+
+> La seule conséquence à connaître. Pour une grande quantité, « quantité × PU HT affiché » peut s’écarter d’un ou deux centimes du total de la ligne. Exemple avec 20 bouteilles d’huile :
+
+> 
+
+>     20 × 11,28 € = 225,60 € ;
+
+>     le vrai total HT est 225,59 €.
+
+> 
+
+> La petite note sous les lignes le dira : « la quantité × le prix unitaire affiché, arrondi au centime, peut s’écarter de quelques centimes du total de la ligne ». C’est déjà le cas aujourd’hui pour le PU TTC des tickets.
+
+> 
+
+> Ma décision pour les achats (vous pouvez la changer). Sur une facture d’achat, le PU HT reste écrit comme sur la facture du fournisseur, par exemple 4,125 €. C’est la copie de son document : l’arrondir la rendrait différente de sa facture.
+
+
+
+si tu veux prend l 'exemple sur ce model. montre moi tes modeles ce que tu vas creer en se basant sur le pdf que je t ai mis
+

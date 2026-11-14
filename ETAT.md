@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 14/11/2026 à 01:31 UTC par pilotage-sync.sh : « Modèle P1 particuliers et comptoir ».
+Mis à jour le 14/11/2026 à 01:36 UTC par pilotage-sync.sh : « P1 = M6-b avec tableau TTC ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 14/11/2026 à 10:15 UTC par pilotage-sync.sh : « Modèles des charges et TVA réelle ».
+Mis à jour le 14/11/2026 à 10:16 UTC par pilotage-sync.sh : « CI MAT-PRO verte ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -64,6 +64,7 @@ b10d2e8 Relecture du lot DV du devis en ligne
  M tests/Browser/inventaire-des-actions.php
  M tests/Feature/DatabaseSeederTest.php
  M tests/Feature/Facturation/EnvoyerDocumentActionTest.php
+ M tests/Feature/Facturation/FacturePdfGeneratorTest.php
  M tests/Feature/Filament/EnvoieLesDocumentsTest.php
  M tests/Feature/Societe/MagasinDeDemonstrationTest.php
  M tests/Feature/Societe/PanneauSocieteTest.php

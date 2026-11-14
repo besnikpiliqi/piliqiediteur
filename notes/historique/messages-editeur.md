@@ -2470,3 +2470,7 @@ non la notification s affiche comme j ai choisi mais les noitification reste tou
 
 je choisi M6-b
 
+## 270. 2026-11-14 01:30 UTC
+
+mais M6-b ne doit affichee les decimal en desus de l article que pour les professionel ou pour ceux qui demande la facture meme les particulier et ceux on comptoir doit affiche que le prix ttc , tva, remise, qte, total ttc et en bas il affiche normal comme pour les professione
+

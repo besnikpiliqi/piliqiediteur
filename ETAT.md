@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 14/11/2026 à 01:27 UTC par pilotage-sync.sh : « M6-b choisi ».
+Mis à jour le 14/11/2026 à 01:31 UTC par pilotage-sync.sh : « Modèle P1 particuliers et comptoir ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

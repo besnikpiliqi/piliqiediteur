@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 14/11/2026 à 22:11 UTC par pilotage-sync.sh : « Décisions de l'éditeur du 14/11 au soir : archive de la démo, relances ».
+Mis à jour le 14/11/2026 à 22:14 UTC par pilotage-sync.sh : « Onglet professionnel : T119.1-4 et T120 ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

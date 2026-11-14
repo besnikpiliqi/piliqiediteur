@@ -396,3 +396,4 @@
 - 14/11 ~02:45 UTC — l'éditeur choisit M6-b (petite ligne « PU HT exact » sous l'article). Écrit en tête de a-faire-apres-chaine.md et au cahier REGLE-B § 4.
 - 14/11 ~02:55 UTC — précision de l'éditeur : M6-b (PU HT et petite ligne) seulement pour les professionnels ; particuliers et client comptoir : modèle P1 (Réf., Article, Qté, PU TTC, Rem., TVA, Total TTC ; bas de page comme M6-b). Cahier REGLE-B § 4 bis. Question posée : facture demandée par un particulier → P1 (défaut) ou M6-b ?
 - 14/11 ~03:00 UTC — l'éditeur : P1 = exactement la page M6-b, seul le tableau change (Réf., Article, Qté, PU TTC, Rem., TVA, Total TTC) ; vaut pour tickets et factures des particuliers et le client comptoir. Page des modèles et cahier REGLE-B § 4 bis mis à jour.
+- 14/11 ~03:05 UTC — l'éditeur choisit P1 pour le comptoir (et les particuliers, cahier REGLE-B § 4 bis).

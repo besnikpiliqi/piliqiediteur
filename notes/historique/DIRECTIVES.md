@@ -751,3 +751,4 @@ Elles sont appliquées dans le code depuis leur demande (sauf la règle (1) du p
 - 14/11 ~02:20 : notification qui s'affiche toute seule, modèle A choisi (glisse de la droite, en haut à droite, sous la cloche).
 - 14/11 ~02:30 : règle (b) adoptée (TVA de chaque ligne arrondie, HT = TTC − TVA, un centime ajusté par taux) ; facture pro au modèle M6 sans colonne PU TTC (petite ligne du PU HT exact : M6-a sans / M6-b avec, choix attendu).
 - 14/11 ~02:45 : facture pro M6-b (PU HT exact en petit sous l'article).
+- 14/11 ~03:05 : modèle P1 choisi (comptoir et particuliers : page M6-b, tableau Qté, PU TTC, Rem., TVA, Total TTC).

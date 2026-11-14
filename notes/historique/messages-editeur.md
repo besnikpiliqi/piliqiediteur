@@ -2528,3 +2528,33 @@ j ai une idée pour le comptable de la societe, donc le comptable doit pouvoir a
 
 oui pour tout, fais le lot CHARGES , Mes questions avant d'écrire le lot: tous sont bon, donc tu peux faire tout ca
 
+## 282. 2026-11-14 10:33 UTC
+
+<!-- attach -->
+
+> Mes décisions sur les règles de TVA (D76), qui ne sont pas l’avis d’un professionnel
+
+> 
+
+>     Charges dont la TVA n’est en principe pas déductible : la TVA déductible proposée est 0 €. Le comptable corrige toujours au besoin.
+
+
+
+de quoi tu parle ?
+
+## 283. 2026-11-14 10:34 UTC
+
+<!-- attach -->
+
+> C’est seulement une proposition :
+
+> 
+
+>     le comptable voit la case et la corrige s’il le faut, par exemple un cadeau de moins de 73 € ou un véhicule utilitaire ;
+
+>     dans tous les autres cas (loyer, électricité, téléphone, fournitures…), PILIQI propose toute la TVA de la pièce.
+
+
+
+donc elle corrige dans la parti charge ce qu'on vient de faire c 'est ca?
+

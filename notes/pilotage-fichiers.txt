@@ -240,3 +240,4 @@ reprises/lot-STAT-travail-non-commite-complet.patch
 reprises/lot-MAT-PRO-commits-locaux-complet.patch
 reprises/lot-MAT-PRO-travail-non-commite-complet.patch
 reprises/cahier-SIGN-DEVIS-brouillon.md
+reprises/lot-DEMO-V-travail-non-commite-complet.patch

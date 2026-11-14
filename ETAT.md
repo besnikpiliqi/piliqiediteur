@@ -1,18 +1,19 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 14/11/2026 à 15:20 UTC par pilotage-sync.sh : « point de suivi 14/11 15:20 UTC : DEMO-V commité 0b89116, correction en cours ».
+Mis à jour le 14/11/2026 à 15:57 UTC par pilotage-sync.sh : « Après le lot DEMO-V ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
-Tête poussée : `fbf139f`. Commits locaux pas encore poussés :
+Tête poussée : `31a5a13`. Commits locaux pas encore poussés :
 
 ```
-0b89116 Démonstration masquée après la validation, PU HT d'un article, tableaux au modèle D et cartes des notifications (lot DEMO-V)
 ```
 
 Derniers commits poussés :
 
 ```
+31a5a13 Relecture du lot DEMO-V
+0b89116 Démonstration masquée après la validation, PU HT d'un article, tableaux au modèle D et cartes des notifications (lot DEMO-V)
 fbf139f Relecture du lot MAT-PRO
 beddf30 Relie les 295 décisions de Claude de l'onglet à leurs tests (lot MAT-PRO)
 a7df29e Répare la CI : un test sans base de test n'écrit plus en base
@@ -31,21 +32,11 @@ eba4bc8 Relecture du lot ER-PRO
 4e2b320 Un produit n'a qu'une ligne d'un document
 c54c221 Relecture du lot EC2 de l’expert-comptable de la société
 f159294 Donne à la société un expert-comptable déclaré par le SIREN de son cabinet, rattaché tout seul au cabinet vérifié (lot EC2)
-b10d2e8 Relecture du lot DV du devis en ligne
-496da9c Laisse le client répondre à son devis en ligne et transformer un devis accepté en facture (lot DV)
 ```
 
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
- M app/Domain/Tenancy/Services/PorteeDesAdministrateurs.php
- M app/Filament/Societe/Resources/MembreResource.php
- M app/Filament/Societe/Resources/MembreResource/Pages/FicheDuMembre.php
- M app/Filament/TableauEntry.php
- M tests/Browser/Parcours/DemonstrationApresLaValidationTest.php
- M tests/Browser/inventaire-des-actions.php
- M tests/Feature/Filament/TableauxDesFichesTest.php
- M tests/Feature/Societe/DemonstrationApresLaValidationTest.php
 ```
 
 ## Dernière course de la chaîne
@@ -53,8 +44,6 @@ b10d2e8 Relecture du lot DV du devis en ligne
 Course `wf_ee9b6e6e-908`, étapes commencées (de la plus ancienne à la plus récente) :
 
 ```
-ER-PRO:relecture1
-ER-PRO:relecture2
 ER-PRO:correction
 ER-PRO:poussee
 ER-PRO:notes
@@ -78,4 +67,6 @@ DEMO-V:implementation-3
 DEMO-V:relecture1
 DEMO-V:relecture2
 DEMO-V:correction
+DEMO-V:poussee
+DEMO-V:notes
 ```

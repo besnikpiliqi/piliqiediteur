@@ -2558,3 +2558,7 @@ de quoi tu parle ?
 
 donc elle corrige dans la parti charge ce qu'on vient de faire c 'est ca?
 
+## 284. 2026-11-14 18:17 UTC
+
+Pourquoi que le demo-v et regle-b ont pris tout ma journée ?? C'est bizarre
+

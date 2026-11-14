@@ -243,3 +243,4 @@ reprises/cahier-SIGN-DEVIS-brouillon.md
 reprises/lot-DEMO-V-travail-non-commite-complet.patch
 reprises/lot-DEMO-V-commits-locaux-complet.patch
 reprises/lot-REGLE-B-travail-non-commite-complet.patch
+reprises/lot-REGLE-B-commits-locaux-complet.patch

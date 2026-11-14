@@ -1,12 +1,13 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 14/11/2026 à 16:50 UTC par pilotage-sync.sh : « 14/11 16:50 UTC : CI de DEMO-V verte ».
+Mis à jour le 14/11/2026 à 18:22 UTC par pilotage-sync.sh : « Point de suivi 18:25 UTC : REGLE-B commité en local, relectures en cours, disque libéré ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
 Tête poussée : `31a5a13`. Commits locaux pas encore poussés :
 
 ```
+f9e4ea1 Ventes calculées ligne par ligne (règle (b)) et PDF aux modèles M6-b et P1
 ```
 
 Derniers commits poussés :
@@ -37,54 +38,6 @@ f159294 Donne à la société un expert-comptable déclaré par le SIREN de son 
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
- M CLAUDE.md
- M app/Domain/Catalogue/Services/MargeDuCatalogue.php
- M app/Domain/Facturation/Actions/CreerAvoirAction.php
- M app/Domain/Facturation/Actions/EmettreAvoirAction.php
- M app/Domain/Facturation/Models/LigneFacture.php
- M app/Domain/Facturation/Services/CalculateurLigne.php
- M app/Domain/Facturation/Services/ConstructeurLigneDocument.php
- M app/Domain/Facturation/Services/ContexteDeVente.php
- M app/Domain/Facturation/Services/MentionsFiscales.php
- M app/Domain/Facturation/Services/RegularisationDUneExoneration.php
- M app/Domain/Facturation/Services/RegularisationDUneFacture.php
- M app/Domain/Facturation/Services/TableauDesLignes.php
- M app/Filament/Concerns/AjouteDesLignesDeVente.php
- M app/Filament/Concerns/ChoisitLaNatureDeLOperation.php
- M resources/views/avoirs/pdf.blade.php
- M resources/views/devis/pdf.blade.php
- M resources/views/documents/pdf/en-tete.blade.php
- M resources/views/documents/pdf/lignes.blade.php
- M resources/views/documents/pdf/styles.blade.php
- M resources/views/documents/pdf/totaux.blade.php
- M resources/views/factures/pdf.blade.php
- M tests/Feature/Facturation/AvoirActionsTest.php
- M tests/Feature/Facturation/AvoirPdfGeneratorTest.php
- M tests/Feature/Facturation/ConstructeurLigneDocumentTest.php
- M tests/Feature/Facturation/CreerFactureActionTest.php
- M tests/Feature/Facturation/DevisPdfGeneratorTest.php
- M tests/Feature/Facturation/EmetteurFigeTest.php
- M tests/Feature/Facturation/EnregistrerVenteCaisseActionConcurrenceTest.php
- M tests/Feature/Facturation/ExempleDeQuinzeLignesTest.php
- M tests/Feature/Facturation/FacturePdfGeneratorTest.php
- M tests/Feature/Facturation/MentionsFiscalesTest.php
- M tests/Feature/Facturation/NatureOperationTest.php
- M tests/Feature/Facturation/PolitiqueDArrondiTest.php
- M tests/Feature/Facturation/RegularisationDUneFactureTest.php
- M tests/Feature/Facturation/ReponseAuDevisEnLigneTest.php
-RM tests/Feature/Facturation/RepartitionTvaParCumulTest.php -> tests/Feature/Facturation/TvaLigneParLigneTest.php
- M tests/Feature/Filament/FactureResourceTest.php
- M tests/Feature/Filament/TableauxDesFichesTest.php
- M tests/Feature/Proprietes/CalculsAuHasardTest.php
- M tests/Fixtures/empreinte-de-la-caisse/pdf/avoir.txt
- M tests/Fixtures/empreinte-de-la-caisse/pdf/bon-d-avoir.txt
- M tests/Fixtures/empreinte-de-la-caisse/pdf/devis.txt
- M tests/Fixtures/empreinte-de-la-caisse/pdf/facture.txt
- M tests/Fixtures/empreinte-de-la-caisse/pdf/ticket.txt
- M tests/Unit/CalculateurLigneAuHasardTest.php
- M tests/Unit/CalculateurLigneTest.php
- M tests/Unit/matrice-des-decisions.php
-?? resources/views/documents/pdf/blocs.blade.php
 ```
 
 ## Dernière course de la chaîne
@@ -92,8 +45,6 @@ RM tests/Feature/Facturation/RepartitionTvaParCumulTest.php -> tests/Feature/Fac
 Course `wf_ee9b6e6e-908`, étapes commencées (de la plus ancienne à la plus récente) :
 
 ```
-ER-PRO:poussee
-ER-PRO:notes
 STAT:implementation
 STAT:implementation-2
 STAT:relecture1
@@ -117,4 +68,6 @@ DEMO-V:correction
 DEMO-V:poussee
 DEMO-V:notes
 REGLE-B:implementation
+REGLE-B:relecture1
+REGLE-B:relecture2
 ```

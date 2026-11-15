@@ -2660,3 +2660,15 @@ mais les hacker attaque parmis milion de ip et alors ce sera pas possible de les
 
 oui tu fait
 
+## 299. 2026-11-15 09:42 UTC
+
+[1 capture(s) d'écran jointe(s)]
+
+la ici dans la menu par periode il affiche les exercise en cours ou precedent de janvier 2026 à decembre 2026 et affiche aussi "annes 2026 ou 2025" alors que c 'est la meme chose donc il cherche les memes donnes c'est ca? si oui alors pas besoin d affiche comme ca mais affiche par année! dit moi si il y  a qqch que j'ai pas compirs pourqoui ca , car peut tu a bien fait mais j'ai pas compirs peut etre ?
+
+## 300. 2026-11-15 09:50 UTC
+
+[1 capture(s) d'écran jointe(s)]
+
+la sur "Chiffre d'affaires par magasin" je vois le X (croix) en bas mais s 'est à cause des lettres de "Chiffre d'affaires par magasin" qui sont long et le crox tombe en bas. donc il faut pas que le X tombe en bas à cause des lettres mais il faut que les lettres continue en bas de chez lui si il y a bcp de lettre mais pas bouger ses voisins
+

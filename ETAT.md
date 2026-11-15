@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 15/11/2026 à 08:53 UTC par pilotage-sync.sh : « Doc Mes questions rev 132 ».
+Mis à jour le 15/11/2026 à 09:50 UTC par pilotage-sync.sh : « Constats graphiques ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -60,6 +60,7 @@ eba4bc85 Relecture du lot ER-PRO
  M app/Filament/App/Resources/FactureResource/Pages/ViewFacture.php
  M app/Filament/Concerns/EnvoieLesDocuments.php
  M database/migrations/0001_01_01_000000_create_magasins_table.php
+ M tests/Browser/Parcours/LiensVersLesDocumentsTest.php
  M tests/Browser/inventaire-des-actions.php
  M tests/Feature/Facturation/RegularisationDUneFactureConcurrenceTest.php
  M tests/Feature/Facturation/RegularisationDUneFactureTest.php

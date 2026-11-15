@@ -470,3 +470,4 @@
 - 15/11 17:00 UTC — Éditeur : démonstrations remplies (magasin rempli + démo cabinet) proposées → avis donné, Q1–Q4 posées ; REMPLACÉ à 17:30 UTC.
 - 15/11 17:50 UTC — Éditeur : site de démonstration commun (base à part, semis pour tous, entrée par lien de 5 min depuis le compte, jamais public) → maquette Jm2F3GNdYLaYZLHo9uYH9b, lot DEMO-SITE (a-faire-apres-chaine.md, après TVA27, avant RLS), onglet « Vos décisions » rev 41 (« Le 15 novembre », 245 décisions, 52 à appliquer). Q1–Q3 en attente (défauts conseillés).
 - Ordre après la chaîne : … VIES-DEP, TVA27, DEMO-SITE, RLS, VER …
+- 15/11 18:08 UTC — Point de suivi : DATEOP:implementation-6 en cours (partie 5 sans commit, SemisCompletTest rouge sur 7 états). Sauvegarde arbre 4b018927. Disque 9,8 Go libres. Prochain point 20:08 UTC.

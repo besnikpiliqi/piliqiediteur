@@ -2984,3 +2984,11 @@ Tout est fictif, jamais mélangé aux vrais clients, jamais facturé, et fermé 
 
 tu fait plutot comme ca : Démonstration commune : un site de démonstration séparé, avec sa propre base et les mêmes données fictives pour tous (tous les cas, sociétés et cabinets compris). Il est réservé aux comptes inscrits : on y entre seulement depuis son compte connecté, après confirmation de l’adresse e-mail, par un lien secret de courte durée. Il n’est jamais ouvert au public. Il ne reçoit aucune donnée du compte. Le magasin de démonstration de chaque société reste pour s’entraîner. Montre-moi le modèle avant, ajoute-le à un lot et note-le dans le document. dit moi ce que pense comme ca
 
+## 336. 2026-11-15 17:54 UTC
+
+j 'ia une autre idée. chaque compte doit avoir un compte demo dans un autre base de donnée. donc la societe inscrit doit avoir un lien qui peux acceder dans le demo, le lien doit etre un mois valable, le temps de s'entrainer bien. donc pour chaque compte ce creer aussi ses donnees comme avec le seed, mais tout au nom de la societe donc comme si s 'etais la societe, et donc la elle peux faire ce qu'elle veux donc traviailler comme dans le reel. apre un moi tout ces donnees se supprimes. dit moi ce que tu pense
+
+## 337. 2026-11-15 17:55 UTC
+
+donc le lien demo.piliqi.com par exemple
+

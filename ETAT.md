@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 15/11/2026 à 17:47 UTC par pilotage-sync.sh : « DEMO-SITE : lot, maquette, décision ».
+Mis à jour le 15/11/2026 à 18:08 UTC par pilotage-sync.sh : « Point de suivi 18:08 UTC ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

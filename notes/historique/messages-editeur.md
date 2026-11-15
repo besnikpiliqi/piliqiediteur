@@ -2720,3 +2720,21 @@ ici tu mets une abreviation pour chaque mode de paiement comme ex carte bancaire
 
 non tu ajoute pas le texte car c 'est comprehensible pour tout le monde. et si il y a plusieur paiments alors vont etre pareile melanger? peut etre c 'est mieux pour la parti des mode de paiement tu fait par ligne par mode de paiment
 
+## 307. 2026-11-15 10:24 UTC
+
+montre moi comment se resemble en vrais montre moir
+
+## 308. 2026-11-15 10:28 UTC
+
+<!-- attach -->
+
+> Deux modes (exemple) : ESP 18,00 €, puis CB 30,00 € en dessous, puis Total 48,00 € en gras.
+
+
+
+c 'est bien mais tu met pas le total car il est deja sur "TTC vendu"? qu est tu pense!
+
+## 309. 2026-11-15 10:29 UTC
+
+A
+

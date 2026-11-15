@@ -443,3 +443,4 @@
 - 15/11 10:20 UTC — « oui » de l'éditeur : colonne « N° du reçu » et phrase grise sous « Paiements reçus », ajoutées au cahier DATEOP, point 4.
 - 15/11 10:30 UTC — Abréviations des modes de paiement dans les relevés de caisse ajoutées au cahier DATEOP, point 5.
 - 15/11 10:40 UTC — Point 5 du cahier DATEOP réécrit (une ligne par mode, pas de légende). REGUL:correction en cours, avec la réparation des cartes en tâche 1.
+- 15/11 10:50 UTC — Choix A (garder « Total » des modes) écrit au cahier DATEOP point 5.

@@ -1,19 +1,21 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 15/11/2026 à 12:04 UTC par pilotage-sync.sh : « Onglet protections section 8 ».
+Mis à jour le 15/11/2026 à 12:09 UTC par pilotage-sync.sh : « Après le lot REGUL ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
-Tête poussée : `8ce8bd4a`. Commits locaux pas encore poussés :
+Tête poussée : `b6015883`. Commits locaux pas encore poussés :
 
 ```
-e405d27b Régularisation après une correction de SIREN et relances (lot REGUL)
-220d40b4 Réparation de la CI rouge de 8ce8bd4
 ```
 
 Derniers commits poussés :
 
 ```
+b6015883 Relecture du lot REGUL
+be209079 Réparation de la CI rouge de 8ce8bd4 (cartes des notifications)
+e405d27b Régularisation après une correction de SIREN et relances (lot REGUL)
+220d40b4 Réparation de la CI rouge de 8ce8bd4
 8ce8bd4a Relecture du lot CHARGES
 68531b28 Charges de la société et TVA réelle (lot CHARGES)
 fcbf1166 Réparation de la CI rouge de 743f9bc
@@ -30,29 +32,11 @@ a7df29ee Répare la CI : un test sans base de test n'écrit plus en base
 6bf1d949 Relecture du lot STAT
 565f1ba8 Passe Larastan et l'analyse des flux de Psalm à chaque envoi (lot STAT)
 eba4bc85 Relecture du lot ER-PRO
-175df0fd Applique les décisions de Claude sans attendre un professionnel (lot ER-PRO)
-58ad4deb Relecture du lot SEED
-8847d246 Sème des données de démonstration pour le poste de l'éditeur (lot SEED)
-3b695ece Relecture du lot 21 des décisions
 ```
 
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
- M app/Domain/Facturation/Services/RegularisationDUneFacture.php
- M app/Domain/Tenancy/Services/ChosesAFaireDuMagasin.php
- M app/Filament/App/Resources/AvoirResource.php
- M app/Filament/App/Resources/FactureResource.php
- M app/Filament/App/Resources/PaiementResource.php
- M app/Filament/Concerns/EnvoieLesDocuments.php
- M resources/views/filament/carte-de-notification.blade.php
- M tests/Browser/Parcours/CartesDesNotificationsTest.php
- M tests/Browser/Parcours/RegularisationEtRelancesTest.php
- M tests/Browser/Support/Navigation.php
- M tests/Browser/inventaire-des-actions.php
- M tests/Feature/Facturation/RegularisationDUneFactureTest.php
-?? resources/views/vendor/filament-notifications/
-?? resources/views/vendor/filament-panels/
 ```
 
 ## Dernière course de la chaîne
@@ -60,8 +44,6 @@ eba4bc85 Relecture du lot ER-PRO
 Course `wf_ee9b6e6e-908`, étapes commencées (de la plus ancienne à la plus récente) :
 
 ```
-REGLE-B:correction
-REGLE-B:poussee
 REGLE-B:notes
 GRAPH:implementation
 GRAPH:implementation-2
@@ -85,4 +67,6 @@ REGUL:implementation-2
 REGUL:relecture1
 REGUL:relecture2
 REGUL:correction
+REGUL:poussee
+REGUL:notes
 ```

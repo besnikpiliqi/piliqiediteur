@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 15/11/2026 à 11:32 UTC par pilotage-sync.sh : « SEED-TOUT 4 bis ».
+Mis à jour le 15/11/2026 à 11:44 UTC par pilotage-sync.sh : « Constat cases Charges : classes absentes ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

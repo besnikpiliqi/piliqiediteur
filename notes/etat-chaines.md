@@ -449,3 +449,4 @@
 - 15/11 11:25 UTC — SEED-TOUT § 3 bis 1 bis : double contrôle Laravel + SQL.
 - 15/11 11:40 UTC — « A et B » : A (contrôle nocturne, prod + dev) dans SEED-TOUT § 3 ter ; B = lot RLS (cahier rls/cahier-RLS.md) JUSTE APRÈS la chaîne (après VIES-DEP), avant VER. Nouvel onglet du document à faire : « Protections et rigueur » (inventaire complet + propositions non retenues).
 - 15/11 12:20 UTC — Liste des comptes du semis relue avec l'éditeur ; manques ajoutés au cahier SEED-TOUT § 4 bis (observateur, comptes d'entraînement nommés, clients confiés, 2e client du cabinet, colonne « À regarder », comptes des nouveaux cas).
+- 15/11 12:50 UTC — Constat de l'éditeur (cases de la page Charges sans carré coloré) : cause trouvée (classes absentes de la feuille de Filament, 24 classes sur ~12 écrans), rangée au cahier DATEOP, commit « Écrans : classes de style absentes de la feuille de Filament » avec test durable.

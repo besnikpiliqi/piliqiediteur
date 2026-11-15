@@ -65,6 +65,10 @@
                 serie.yAxisID = 'y2'
             }
 
+            if (jeu.pointilles) {
+                serie.borderDash = [6, 4]
+            }
+
             return serie
         })
 

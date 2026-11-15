@@ -2,6 +2,8 @@
 
 namespace App\Filament\App\Pages;
 
+use App\Domain\Charges\Services\ChargesAFaire;
+use App\Domain\Charges\Services\DroitsSurLesCharges;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Models\User;
 use Filament\Facades\Filament;
@@ -30,6 +32,19 @@ class TableauDeBordDeLaSociete extends Page
     protected static ?int $navigationSort = 89;
 
     protected static string $view = 'filament.app.pages.tableau-de-bord-de-la-societe';
+
+    /**
+     * Le nombre de charges de la société qu'il a à valider (voir
+     * ChargesAFaire), quand sa déclaration lui accorde les charges.
+     */
+    public function chargesAValider(): int
+    {
+        $compte = auth()->user();
+        $magasin = Filament::getTenant();
+        $acces = $compte instanceof User && $magasin instanceof Magasin ? app(DroitsSurLesCharges::class)->pour($compte, $magasin->societe) : null;
+
+        return $acces === null || ! $acces->valide() ? 0 : app(ChargesAFaire::class)->compter($acces)['a_valider'];
+    }
 
     public static function canAccess(): bool
     {

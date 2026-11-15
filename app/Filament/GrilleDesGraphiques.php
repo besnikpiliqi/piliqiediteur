@@ -223,7 +223,7 @@ class GrilleDesGraphiques extends Widget
      * les séries en euros (un nombre reste un nombre) et les précisions des
      * info-bulles.
      *
-     * @return array{type: string, titre: string, etiquettes: list<string>, jeux: list<array{libelle: string, valeurs: list<float|int|null>, unite: string, en_ligne: bool, axe_de_droite: bool}>, info_bulles: array<int, string>}
+     * @return array{type: string, titre: string, etiquettes: list<string>, jeux: list<array{libelle: string, valeurs: list<float|int|null>, unite: string, en_ligne: bool, axe_de_droite: bool, pointilles: bool}>, info_bulles: array<int, string>}
      */
     public static function configuration(CarteDuTableauDeBord $carte, SerieDuGraphique $serie): array
     {

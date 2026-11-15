@@ -55,6 +55,7 @@
                             <th class="py-2 pe-4">Fin d'exercice</th>
                             <th class="py-2 pe-4">Magasins réels</th>
                             <th class="py-2 pe-4">Factures à encaisser</th>
+                            <th class="py-2 pe-4">Charges</th>
                             <th class="py-2 pe-4">Lié depuis</th>
                             <th class="py-2"></th>
                         </tr>
@@ -73,6 +74,13 @@
                                         —
                                     @else
                                         {{ $ligne['factures']['nombre'] }} · {{ $calculateur->enEuros($ligne['factures']['restant_du']) }}@if ($ligne['factures']['nombre_en_retard'] > 0), dont {{ $calculateur->enEuros($ligne['factures']['restant_du_en_retard']) }} en retard @endif
+                                    @endif
+                                </td>
+                                <td class="py-2 pe-4" data-charges-a-valider="{{ $ligne['charges_a_valider'] }}">
+                                    @if ($ligne['charges_a_valider'] > 0)
+                                        <x-filament::link :href="$ligne['url_des_charges']">{{ trans_choice('{1} 1 charge à valider|[2,*] :count charges à valider', $ligne['charges_a_valider']) }}</x-filament::link>
+                                    @else
+                                        —
                                     @endif
                                 </td>
                                 <td class="py-2 pe-4">{{ \App\Domain\Calendrier\Calendrier::deParis()->afficher($ligne['actif_depuis'], 'd/m/Y') }}</td>

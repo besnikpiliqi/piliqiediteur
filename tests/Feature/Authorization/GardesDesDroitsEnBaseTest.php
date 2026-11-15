@@ -219,7 +219,7 @@ class GardesDesDroitsEnBaseTest extends TestCase
         $responsable = $this->membre($magasin, RoleMagasin::Responsable, [PermissionRegistry::GRAPHIQUES_VOIR]);
         $affectationDuVendeur = Affectation::query()->where('user_id', $vendeur->id)->sole();
         $affectationDuResponsable = Affectation::query()->where('user_id', $responsable->id)->sole();
-        $regle = 'les graphiques du tableau de bord ne se cochent jamais à un vendeur ni à un observateur';
+        $regle = 'les graphiques du tableau de bord et l\'ajout des charges ne se cochent jamais à un vendeur ni à un observateur';
 
         $this->refusee(fn () => DB::table('autorisations_affectations')->insert(['affectation_id' => $affectationDuVendeur->id, 'autorisation' => PermissionRegistry::GRAPHIQUES_VOIR]), self::refus(GardesDesDroits::CASES, $regle));
         $this->refusee(fn () => DB::table('affectations')->where('id', $affectationDuResponsable->id)->update(['role' => RoleMagasin::Observateur->value]), self::refus(GardesDesDroits::AFFECTATIONS, $regle));
@@ -227,6 +227,36 @@ class GardesDesDroitsEnBaseTest extends TestCase
         $this->assertSame([PermissionRegistry::FACTURE_VIEW], $affectationDuVendeur->autorisations());
         $this->assertSame(RoleMagasin::Responsable, $affectationDuResponsable->fresh()->role);
         $this->assertSame([PermissionRegistry::GRAPHIQUES_VOIR], $affectationDuResponsable->autorisations());
+    }
+
+    /**
+     * L'ajout des charges de la société ne se coche jamais à un vendeur ni
+     * à un observateur, et la validation des charges, qui ne s'accorde
+     * qu'au cabinet lié ou à l'expert-comptable déclaré, ne se coche à
+     * aucune affectation, pas même celle d'un responsable ou d'un
+     * administrateur (décision de l'éditeur du 14/11/2026, lot CHARGES) ;
+     * un responsable garde l'ajout que le propriétaire lui coche.
+     */
+    public function test_la_base_refuse_les_cases_des_charges_hors_des_comptes_permis(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW]);
+        $responsable = $this->membre($magasin, RoleMagasin::Responsable, [PermissionRegistry::CHARGES_AJOUTER]);
+        $administrateur = $this->administrateur($magasin, [$magasin->id]);
+        $affectationDuVendeur = Affectation::query()->where('user_id', $vendeur->id)->sole();
+        $affectationDuResponsable = Affectation::query()->where('user_id', $responsable->id)->sole();
+        $affectationDeLAdministrateur = Affectation::query()->where('user_id', $administrateur->id)->sole();
+        $auxVendeurs = 'les graphiques du tableau de bord et l\'ajout des charges ne se cochent jamais à un vendeur ni à un observateur';
+        $auxComptables = 'la validation des charges ne s\'accorde qu\'au cabinet lié ou à l\'expert-comptable déclaré, jamais à un compte de la société';
+
+        $this->refusee(fn () => DB::table('autorisations_affectations')->insert(['affectation_id' => $affectationDuVendeur->id, 'autorisation' => PermissionRegistry::CHARGES_AJOUTER]), self::refus(GardesDesDroits::CASES, $auxVendeurs));
+        $this->refusee(fn () => DB::table('affectations')->where('id', $affectationDuResponsable->id)->update(['role' => RoleMagasin::Vendeur->value]), self::refus(GardesDesDroits::AFFECTATIONS, $auxVendeurs));
+        $this->refusee(fn () => DB::table('autorisations_affectations')->insert(['affectation_id' => $affectationDeLAdministrateur->id, 'autorisation' => PermissionRegistry::CHARGES_VALIDER]), self::refus(GardesDesDroits::CASES, $auxComptables));
+        $this->refusee(fn () => DB::table('autorisations_affectations')->insert(['affectation_id' => $affectationDuVendeur->id, 'autorisation' => PermissionRegistry::CHARGES_VALIDER]), self::refus(GardesDesDroits::CASES, $auxComptables));
+
+        $this->assertSame([PermissionRegistry::FACTURE_VIEW], $affectationDuVendeur->autorisations());
+        $this->assertSame([PermissionRegistry::CHARGES_AJOUTER], $affectationDuResponsable->fresh()->autorisations());
+        $this->assertNotContains(PermissionRegistry::CHARGES_VALIDER, $affectationDeLAdministrateur->autorisations());
     }
 
     /**

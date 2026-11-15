@@ -620,7 +620,7 @@ class MagasinDeDemonstrationTest extends TestCase
     {
         $societe = $this->inscrireUneSociete();
         $reel = $this->creerLeMagasinDuSiege($societe);
-        $administrateur = $this->administrateur($reel, null, AutorisationsSociete::toutes(), PermissionRegistry::toutes());
+        $administrateur = $this->administrateur($reel, null, AutorisationsSociete::toutes(), self::toutesCellesDUnCompteDeLaSociete());
         $demonstration = app(OuvrirLaDemonstrationAction::class)->handle($societe->proprietaire, $societe->fresh());
 
         foreach ([RoleMagasin::Responsable, RoleMagasin::Vendeur] as $role) {

@@ -343,7 +343,7 @@ class AdministrateursTest extends TestCase
     public function test_un_administrateur_suspendu_n_ouvre_plus_rien(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        $administrateur = $this->administrateur($magasin, null, AutorisationsSociete::toutes(), PermissionRegistry::toutes());
+        $administrateur = $this->administrateur($magasin, null, AutorisationsSociete::toutes(), self::toutesCellesDUnCompteDeLaSociete());
         app(TenantContext::class)->set($magasin);
         $produit = Produit::factory()->create(['nom' => 'Origine', 'suivi_stock' => false]);
         $page = $this->actingAs($administrateur)->get(ProduitResource::getUrl('edit', ['record' => $produit, 'tenant' => $magasin]))->assertOk();
@@ -366,7 +366,7 @@ class AdministrateursTest extends TestCase
     public function test_un_administrateur_ne_nomme_ni_ne_cree_ni_ne_modifie_un_administrateur(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        $administrateur = $this->administrateur($magasin, null, AutorisationsSociete::toutes(), PermissionRegistry::toutes());
+        $administrateur = $this->administrateur($magasin, null, AutorisationsSociete::toutes(), self::toutesCellesDUnCompteDeLaSociete());
         $autreAdministrateur = $this->administrateur($magasin, [$magasin->id]);
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
 
@@ -525,8 +525,10 @@ class AdministrateursTest extends TestCase
      * groupe à part, jamais précochées (Q3-a) : un administrateur créé
      * sans y toucher ne vend pas ; ni le téléchargement des documents par
      * période (décision de l'éditeur du 03/11/2026, E3), ni les graphiques
-     * du tableau de bord (décision de l'éditeur du 14/11/2026), que le
-     * propriétaire coche compte par compte.
+     * du tableau de bord, ni l'ajout des charges (décisions de l'éditeur du
+     * 14/11/2026, lots GRAPH et CHARGES), que le propriétaire coche compte
+     * par compte, ni la validation des charges, qui ne s'accorde jamais à
+     * un compte de la société.
      */
     public function test_le_modele_de_l_administrateur_ne_precoche_aucune_autorisation_de_vente(): void
     {
@@ -536,7 +538,7 @@ class AdministrateursTest extends TestCase
         $page = Livewire::test(ListMembres::class)->mountAction('creerUnAdministrateur')->assertSee('Vente (seulement si cet administrateur vend)');
 
         $this->assertSame([], array_values(array_intersect(PermissionRegistry::deVente(), PermissionRegistry::modeleDeLAdministrateur(TypeDActivite::Commerce))));
-        $this->assertEqualsCanonicalizing(array_values(array_diff(PermissionRegistry::horsVente(), [PermissionRegistry::PARAMETRES_GERER, PermissionRegistry::DOCUMENTS_TELECHARGER, PermissionRegistry::GRAPHIQUES_VOIR])), PermissionRegistry::modeleDeLAdministrateur(TypeDActivite::Commerce));
+        $this->assertEqualsCanonicalizing(array_values(array_diff(PermissionRegistry::horsVente(), [PermissionRegistry::PARAMETRES_GERER, PermissionRegistry::DOCUMENTS_TELECHARGER, PermissionRegistry::GRAPHIQUES_VOIR, PermissionRegistry::CHARGES_AJOUTER, PermissionRegistry::CHARGES_VALIDER])), PermissionRegistry::modeleDeLAdministrateur(TypeDActivite::Commerce));
         $this->assertEmpty($page->get('mountedActionsData.0.autorisations_magasin_vente'));
         $this->assertEmpty($page->get('mountedActionsData.0.autorisations_magasin_proprietaire'));
         $page->setActionData(['name' => 'Alix', 'portee' => 'tous'])

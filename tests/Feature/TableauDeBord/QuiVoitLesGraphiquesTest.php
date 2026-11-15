@@ -120,7 +120,7 @@ class QuiVoitLesGraphiquesTest extends TestCase
         [$lyon] = $this->deuxMagasins();
 
         foreach ([RoleMagasin::Vendeur, RoleMagasin::Observateur] as $role) {
-            $this->assertThrows(fn () => $this->membre($lyon, $role, [PermissionRegistry::GRAPHIQUES_VOIR]), LogicException::class, AffectationsDesMembres::MESSAGE_GRAPHIQUES_DES_VENDEURS);
+            $this->assertThrows(fn () => $this->membre($lyon, $role, [PermissionRegistry::GRAPHIQUES_VOIR]), LogicException::class, AffectationsDesMembres::MESSAGE_REFUSEES_AUX_VENDEURS);
             $compte = $this->membre($lyon, $role, self::toutesCellesDUnVendeur());
             app(TenantContext::class)->clear();
 

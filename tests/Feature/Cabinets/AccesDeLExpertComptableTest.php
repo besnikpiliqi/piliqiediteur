@@ -38,6 +38,8 @@ use App\Domain\Tenancy\Services\DestinatairesDesAlertes;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Pages\AucunMagasin;
 use App\Filament\App\Pages\Caisse;
+use App\Filament\App\Pages\ChargesDeLaSociete;
+use App\Filament\App\Pages\ChargesDuMagasin;
 use App\Filament\App\Pages\CoordonneesMagasin;
 use App\Filament\App\Pages\LaSociete;
 use App\Filament\App\Pages\ParametresFactures;
@@ -243,9 +245,11 @@ class AccesDeLExpertComptableTest extends TestCase
      * Ce qu'un expert-comptable de la société, à qui la déclaration accorde
      * toutes les autorisations d'un cabinet, ouvre dans un magasin réel :
      * exactement ce qu'ouvre un compte d'un cabinet lié aux mêmes
-     * autorisations (voir PanneauCabinetTest), plus « La société » et
+     * autorisations (voir PanneauCabinetTest), plus « La société »,
      * « Tableau de bord de la société », sa page des graphiques (décision
-     * de l'éditeur du 14/11/2026).
+     * de l'éditeur du 14/11/2026), et « Charges de la société », que sa
+     * déclaration lui accorde par défaut (lot CHARGES) ; « Charges du
+     * magasin » n'est qu'au responsable à qui le propriétaire les coche.
      */
     public function test_chaque_ressource_et_page_du_panneau_app_a_une_reponse_attendue_pour_un_expert_comptable(): void
     {
@@ -270,6 +274,8 @@ class AccesDeLExpertComptableTest extends TestCase
         ];
         $pagesAttendues = [
             Caisse::class => false,
+            ChargesDeLaSociete::class => true,
+            ChargesDuMagasin::class => false,
             CoordonneesMagasin::class => false,
             LaSociete::class => true,
             ParametresFactures::class => false,

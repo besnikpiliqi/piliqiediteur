@@ -7,6 +7,7 @@ use App\Domain\Cabinets\Models\LienCabinet;
 use App\Domain\Cabinets\Services\AccesDesCabinets;
 use App\Domain\Cabinets\Services\ExpertsComptablesDeclares;
 use App\Domain\Calendrier\Calendrier;
+use App\Domain\Charges\Services\DroitsSurLesCharges;
 use App\Domain\TableauDeBord\Enums\EcranDuTableauDeBord;
 use App\Domain\TableauDeBord\Enums\SourceDesGraphiques;
 use App\Domain\TableauDeBord\Support\Perimetre;
@@ -44,7 +45,9 @@ use Illuminate\Database\Eloquent\Collection;
  * cases, ou, pour un cabinet ou l'expert-comptable déclaré, les
  * consultations que le client leur accorde) ; une source des articles
  * seulement dans une société qui en a. Chaque lecture filtre
- * explicitement par la société et les magasins du compte.
+ * explicitement par la société et les magasins du compte. Les charges de
+ * la société s'ajoutent à la TVA pour qui les voit (voir
+ * DroitsSurLesCharges et Perimetre::chargesComptees()).
  */
 final class PerimetreDesGraphiques
 {
@@ -53,6 +56,7 @@ final class PerimetreDesGraphiques
     public function __construct(
         private readonly AccesDesCabinets $cabinets,
         private readonly ExpertsComptablesDeclares $expertsComptables,
+        private readonly DroitsSurLesCharges $charges,
     ) {}
 
     /**
@@ -222,6 +226,6 @@ final class PerimetreDesGraphiques
             throw new AuthorizationException(self::REFUS);
         }
 
-        return new Perimetre($ecran, $societe, $magasins, $sources, $calendrier);
+        return new Perimetre($ecran, $societe, $magasins, $sources, $calendrier, $this->charges->pourLesGraphiques($compte, $societe, $magasins));
     }
 }

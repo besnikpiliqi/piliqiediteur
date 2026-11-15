@@ -39,6 +39,7 @@ use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\CartesDesNotifications;
 use App\Filament\GrilleDesGraphiques;
+use App\Filament\PageDesCharges;
 use App\Http\Controllers\ReponseAuDevisController;
 use App\Http\Responses\ReponseDeConnexion;
 use App\Models\User;
@@ -223,6 +224,7 @@ class AppServiceProvider extends ServiceProvider
         $this->tenirLesFenetresDeSelectionDansLEcran();
         $this->montrerLesCartesDesNotifications();
         $this->montrerLesGraphiquesDuTableauDeBord();
+        Livewire::component(PageDesCharges::NOM, PageDesCharges::class);
         $this->limiterLesEssaisDuLienDUnDevis();
     }
 

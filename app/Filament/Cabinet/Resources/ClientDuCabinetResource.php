@@ -2,6 +2,7 @@
 
 namespace App\Filament\Cabinet\Resources;
 
+use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Cabinets\Actions\ConfierDesClientsAction;
 use App\Domain\Cabinets\Actions\MettreFinAuLienAction;
 use App\Domain\Cabinets\Models\ClientConfie;
@@ -83,7 +84,7 @@ class ClientDuCabinetResource extends RessourceDuPanneauCabinet
         return $compte instanceof User
             ? app(AccesDesCabinets::class)->liensOuverts($compte)
                 ->with(['client' => fn ($client) => $client->select(['id', 'uuid', 'siren', 'raison_sociale', 'siege_ville'])])
-                ->addSelect(['magasins_reels' => self::magasinsReels()])
+                ->addSelect(['magasins_reels' => self::magasinsReels(), 'charges_accordees' => self::chargesAccordees()])
             : LienCabinet::query()->withoutGlobalScopes()->whereRaw('1 = 0');
     }
 
@@ -107,6 +108,52 @@ class ClientDuCabinetResource extends RessourceDuPanneauCabinet
                     ->whereColumn('magasins_cabinet.lien_id', 'liens_cabinet.id')
                     ->whereColumn('magasins_cabinet.societe_id', 'liens_cabinet.societe_id')
                     ->select('magasins_cabinet.magasin_id')));
+    }
+
+    /**
+     * Le client accorde-t-il au cabinet, par ce lien, « Charges : voir,
+     * ajouter, saisir et valider » (voir ChargesDuClient) ? Lu dans la
+     * requête de la liste, filtré par la société du lien.
+     */
+    private static function chargesAccordees(): RequeteSql
+    {
+        return DB::table('autorisations_cabinet')
+            ->selectRaw('COUNT(*) > 0')
+            ->whereColumn('autorisations_cabinet.lien_id', 'liens_cabinet.id')
+            ->whereColumn('autorisations_cabinet.societe_id', 'liens_cabinet.societe_id')
+            ->where('autorisations_cabinet.autorisation', PermissionRegistry::CHARGES_VALIDER);
+    }
+
+    /**
+     * Le client accorde-t-il les charges au cabinet par ce lien ? Lu dans
+     * la requête de la liste ; un lien relu par Livewire (la fiche du
+     * client, à chaque requête après son ouverture) ne porte plus cette
+     * colonne : elle se lit alors pour ce seul lien, filtrée par sa société.
+     */
+    public static function accordeLesCharges(LienCabinet $lien): bool
+    {
+        if (array_key_exists('charges_accordees', $lien->getAttributes())) {
+            return (bool) $lien->getAttribute('charges_accordees');
+        }
+
+        return DB::table('autorisations_cabinet')
+            ->where('lien_id', $lien->getKey())
+            ->where('societe_id', $lien->societe_id)
+            ->where('autorisation', PermissionRegistry::CHARGES_VALIDER)
+            ->exists();
+    }
+
+    /**
+     * Les charges du client (voir ChargesDuClient), quand il les accorde au
+     * cabinet.
+     */
+    public static function actionCharges(): Tables\Actions\Action
+    {
+        return Tables\Actions\Action::make('charges')
+            ->label('Charges')
+            ->icon('heroicon-o-receipt-percent')
+            ->visible(fn (LienCabinet $record): bool => self::accordeLesCharges($record))
+            ->url(fn (LienCabinet $record): string => static::getUrl('charges', ['record' => $record]));
     }
 
     /**
@@ -151,6 +198,7 @@ class ClientDuCabinetResource extends RessourceDuPanneauCabinet
             ->actions([
                 Tables\Actions\ViewAction::make()->label('Ouvrir'),
                 self::actionGraphiques(),
+                self::actionCharges(),
                 self::actionConfier(),
                 self::actionMettreFin(),
             ])
@@ -278,6 +326,7 @@ class ClientDuCabinetResource extends RessourceDuPanneauCabinet
             'index' => Pages\ListClientsDuCabinet::route('/'),
             'view' => Pages\FicheDuClient::route('/{record}'),
             'graphiques' => Pages\GraphiquesDuClient::route('/{record}/graphiques'),
+            'charges' => Pages\ChargesDuClient::route('/{record}/charges'),
         ];
     }
 }

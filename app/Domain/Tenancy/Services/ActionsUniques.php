@@ -3,6 +3,7 @@
 namespace App\Domain\Tenancy\Services;
 
 use App\Domain\Tenancy\Models\ActionTraitee;
+use App\Domain\Tenancy\Models\ActionTraiteeDeLaSociete;
 use App\Domain\Tenancy\Support\CleDuModele;
 use App\Models\User;
 use BackedEnum;
@@ -91,6 +92,18 @@ class ActionsUniques
 
     public const VALIDER_INVENTAIRE_OUVERTURE = 'inventaire_ouverture.valider';
 
+    public const DEPOSER_UNE_CHARGE = 'charge.deposer';
+
+    public const SAISIR_UNE_CHARGE = 'charge.saisir';
+
+    public const VALIDER_UNE_CHARGE = 'charge.valider';
+
+    public const RENVOYER_UNE_CHARGE = 'charge.renvoyer';
+
+    public const CORRIGER_UNE_CHARGE = 'charge.corriger';
+
+    public const SUPPRIMER_UNE_CHARGE = 'charge.supprimer';
+
     /**
      * Exécute l'opération une seule fois pour ce jeton dans le magasin
      * actif, et rend son résultat ; une demande répétée rend le résultat
@@ -134,6 +147,65 @@ class ActionsUniques
             });
         } catch (UniqueConstraintViolationException $doublon) {
             return $this->resultatApresUneCourse($doublon, $jeton, $action, $classe, $auteur, $empreinte) ?? throw new LogicException(self::REFUS);
+        }
+    }
+
+    /**
+     * Comme executer(), pour un geste de la société qui n'appartient à
+     * aucun magasin (les charges de la société, voir
+     * App\Domain\Charges\Actions) : le jeton se range dans la société
+     * active (voir ActionTraiteeDeLaSociete), et l'action peut ne rien
+     * laisser à relire (une suppression), sa demande répétée ne rendant
+     * alors rien.
+     *
+     * @template TResultat of Model
+     *
+     * @param  string|null  $jeton  null pour une action du système ou des tests, qui ne consomme aucun jeton
+     * @param  class-string<TResultat>  $classe  la classe de son résultat, que la demande répétée relit
+     * @param  array<array-key, mixed>  $parametres  le contenu de la demande, ce qui la distingue d'une autre
+     * @param  Closure(): mixed  $verrou  le premier verrou de l'action, pris avant de chercher le jeton
+     * @param  Closure(): (TResultat|null)  $operation  l'action elle-même
+     * @return TResultat|null
+     *
+     * @throws InvalidArgumentException quand le jeton n'est pas un identifiant unique
+     * @throws LogicException quand une demande différente a déjà été enregistrée sous ce jeton
+     */
+    public function executerDansLaSociete(?string $jeton, string $action, string $classe, User $auteur, array $parametres, Closure $verrou, Closure $operation): ?Model
+    {
+        if ($jeton === null) {
+            return DB::transaction(function () use ($verrou, $operation): ?Model {
+                $verrou();
+
+                return $operation();
+            });
+        }
+
+        if (! Str::isUuid($jeton)) {
+            throw new InvalidArgumentException('Cette demande ne porte pas de jeton valable : rechargez la page, puis recommencez.');
+        }
+
+        $empreinte = self::empreinte($parametres);
+
+        try {
+            return DB::transaction(function () use ($jeton, $action, $classe, $auteur, $empreinte, $verrou, $operation): ?Model {
+                $verrou();
+
+                $traitee = $this->traiteeDansLaSociete($jeton);
+
+                if ($traitee !== null) {
+                    return $this->resultatDeja($traitee, $action, $classe, $auteur, $empreinte);
+                }
+
+                return $this->inscrire($jeton, $action, $auteur, $empreinte, $operation(), new ActionTraiteeDeLaSociete);
+            });
+        } catch (UniqueConstraintViolationException $doublon) {
+            $traitee = $this->traiteeDansLaSociete($jeton);
+
+            if ($traitee === null) {
+                throw $doublon;
+            }
+
+            return $this->resultatDeja($traitee, $action, $classe, $auteur, $empreinte);
         }
     }
 
@@ -263,18 +335,24 @@ class ActionsUniques
         return ActionTraitee::query()->where('jeton', $jeton)->first();
     }
 
+    private function traiteeDansLaSociete(string $jeton): ?ActionTraiteeDeLaSociete
+    {
+        return ActionTraiteeDeLaSociete::query()->where('jeton', $jeton)->first();
+    }
+
     /**
      * Inscrit la demande et son résultat sous son jeton, dans la
-     * transaction de l'action, et rend ce résultat.
+     * transaction de l'action, dans le magasin actif, ou dans la société
+     * active pour un geste de la société, et rend ce résultat.
      *
      * @template TResultat of Model|null
      *
      * @param  TResultat  $resultat
      * @return TResultat
      */
-    private function inscrire(string $jeton, string $action, User $auteur, string $empreinte, ?Model $resultat): ?Model
+    private function inscrire(string $jeton, string $action, User $auteur, string $empreinte, ?Model $resultat, ActionTraitee|ActionTraiteeDeLaSociete $traitee = new ActionTraitee): ?Model
     {
-        (new ActionTraitee)->forceFill([
+        $traitee->forceFill([
             'jeton' => $jeton,
             'action' => $action,
             'user_id' => $auteur->getKey(),
@@ -322,7 +400,7 @@ class ActionsUniques
      *
      * @throws LogicException
      */
-    private function resultatDeja(ActionTraitee $traitee, string $action, string $classe, User $auteur, string $empreinte): ?Model
+    private function resultatDeja(ActionTraitee|ActionTraiteeDeLaSociete $traitee, string $action, string $classe, User $auteur, string $empreinte): ?Model
     {
         if ($traitee->action !== $action || $traitee->user_id !== CleDuModele::de($auteur) || ! hash_equals($traitee->empreinte_demande, $empreinte)) {
             throw new LogicException(self::REFUS);

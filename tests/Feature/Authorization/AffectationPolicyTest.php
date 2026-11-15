@@ -3,7 +3,6 @@
 namespace Tests\Feature\Authorization;
 
 use App\Domain\Authorization\AutorisationsSociete;
-use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Affectation;
 use App\Domain\Tenancy\Models\Magasin;
@@ -86,7 +85,7 @@ class AffectationPolicyTest extends TestCase
         $vendeur = $this->affectationDe($magasin, $this->membre($magasin, RoleMagasin::Vendeur));
         $comptes = [
             $this->membre($magasin, RoleMagasin::Vendeur, self::toutesCellesDUnVendeur()),
-            $this->administrateur($magasin, null, AutorisationsSociete::toutes(), PermissionRegistry::toutes()),
+            $this->administrateur($magasin, null, AutorisationsSociete::toutes(), self::toutesCellesDUnCompteDeLaSociete()),
             $this->collaborateurDuCabinetLie($magasin),
         ];
         app(TenantContext::class)->set($magasin);

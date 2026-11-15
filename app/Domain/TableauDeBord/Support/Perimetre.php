@@ -3,6 +3,7 @@
 namespace App\Domain\TableauDeBord\Support;
 
 use App\Domain\Calendrier\Calendrier;
+use App\Domain\Charges\Support\AccesAuxCharges;
 use App\Domain\TableauDeBord\Enums\EcranDuTableauDeBord;
 use App\Domain\TableauDeBord\Enums\Graphique;
 use App\Domain\TableauDeBord\Enums\SourceDesGraphiques;
@@ -28,6 +29,13 @@ use Illuminate\Database\Eloquent\Collection;
  * refuse un magasin dont le périmètre ne permet pas la source (voir
  * exiger()) : aucune lecture hors du magasin courant ne sort de ce que le
  * compte peut voir.
+ *
+ * Les charges de la société (lot CHARGES) entrent dans la TVA à payer
+ * seulement pour qui les voit (voir DroitsSurLesCharges) : celles des
+ * magasins du périmètre qu'il voit, et celles de « Toute la société » sur
+ * un écran qui montre tous ses magasins, jamais quand le filtre en choisit
+ * un, ni dans le panneau d'un magasin (voir chargesComptees()) ; sans
+ * elles, la TVA garde le calcul des ventes et des achats, et le dit.
  */
 final class Perimetre
 {
@@ -41,7 +49,29 @@ final class Perimetre
         private readonly Collection $magasins,
         private readonly array $sourcesParMagasin,
         public readonly Calendrier $calendrier,
+        public readonly ?AccesAuxCharges $charges = null,
+        private readonly bool $unSeulMagasinChoisi = false,
     ) {}
+
+    /**
+     * Les charges que la TVA de ce périmètre compte : celles de ces
+     * magasins (ceux du périmètre que l'accès voit), et celles de « Toute
+     * la société » quand l'écran montre tous les magasins du compte ; null
+     * quand le compte ne voit pas les charges.
+     *
+     * @return array{magasins: list<int>, de_la_societe: bool}|null
+     */
+    public function chargesComptees(): ?array
+    {
+        if ($this->charges === null) {
+            return null;
+        }
+
+        return [
+            'magasins' => array_values(array_filter(CleDuModele::desModeles($this->magasins), fn (int $magasin): bool => $this->charges->voitLeMagasin($magasin))),
+            'de_la_societe' => $this->charges->chargesDeLaSociete && $this->ecran->montrePlusieursMagasins() && ! $this->unSeulMagasinChoisi,
+        ];
+    }
 
     /**
      * Le nom d'un magasin dans le filtre et les graphiques, suivi de
@@ -83,7 +113,7 @@ final class Perimetre
         $magasin = $this->magasins->first(fn (Magasin $candidat): bool => (string) $candidat->uuid === $uuid)
             ?? throw new AuthorizationException(PerimetreDesGraphiques::REFUS);
 
-        return new self($this->ecran, $this->societe, new Collection([CleDuModele::de($magasin) => $magasin]), [CleDuModele::de($magasin) => $this->sourcesParMagasin[CleDuModele::de($magasin)] ?? []], $this->calendrier);
+        return new self($this->ecran, $this->societe, new Collection([CleDuModele::de($magasin) => $magasin]), [CleDuModele::de($magasin) => $this->sourcesParMagasin[CleDuModele::de($magasin)] ?? []], $this->calendrier, $this->charges, true);
     }
 
     /**

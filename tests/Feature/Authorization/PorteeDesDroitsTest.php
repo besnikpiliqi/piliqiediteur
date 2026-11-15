@@ -368,7 +368,7 @@ class PorteeDesDroitsTest extends TestCase
             'A+' => $this->administrateur($this->m, [$this->m->id, $this->n->id], [AutorisationsSociete::RESPONSABLES_NOMMER]),
             'A+ hors de M' => $this->administrateur($this->m, [$this->o->id], [AutorisationsSociete::RESPONSABLES_NOMMER]),
             'A=' => $this->administrateur($this->m, [$this->m->id, $this->n->id], [AutorisationsSociete::ACCES_REDONNER]),
-            'A-' => $this->administrateur($this->m, null, [AutorisationsSociete::MAGASINS_GERER, AutorisationsSociete::PARAMETRES_GERER], PermissionRegistry::toutes()),
+            'A-' => $this->administrateur($this->m, null, [AutorisationsSociete::MAGASINS_GERER, AutorisationsSociete::PARAMETRES_GERER], self::toutesCellesDUnCompteDeLaSociete()),
             'R(M)' => $this->responsable($this->m),
             'R(N)' => $this->responsable($this->n),
             'V' => $this->membre($this->m, RoleMagasin::Vendeur, self::toutesCellesDUnVendeur()),

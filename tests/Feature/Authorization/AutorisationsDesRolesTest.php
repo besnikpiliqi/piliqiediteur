@@ -60,9 +60,12 @@ class AutorisationsDesRolesTest extends TestCase
      * de magasin, sauf les paramètres du magasin, les autorisations de
      * vente (créer et émettre un ticket ou une facture, enregistrer un
      * encaissement, vendre sans stock), le téléchargement des documents
-     * par période (décision de l'éditeur du 03/11/2026, E3) et les
-     * graphiques du tableau de bord (décision de l'éditeur du 14/11/2026),
-     * jamais précochés, que le propriétaire coche pour qui il veut.
+     * par période (décision de l'éditeur du 03/11/2026, E3), les
+     * graphiques du tableau de bord et l'ajout des charges de la société
+     * (décisions de l'éditeur du 14/11/2026, lots GRAPH et CHARGES),
+     * jamais précochés, que le propriétaire coche pour qui il veut, et la
+     * validation des charges, qui ne s'accorde jamais à un compte de la
+     * société.
      */
     public function test_le_modele_de_l_administrateur_coche_tout_sauf_les_parametres_et_les_autorisations_de_vente(): void
     {
@@ -71,7 +74,7 @@ class AutorisationsDesRolesTest extends TestCase
         $administrateur = $this->administrateur($magasin);
 
         $this->assertEqualsCanonicalizing(
-            [PermissionRegistry::PARAMETRES_GERER, PermissionRegistry::FACTURE_CREATE, PermissionRegistry::FACTURE_EMETTRE, PermissionRegistry::PAIEMENT_CREER, PermissionRegistry::STOCK_VENDRE_SANS_STOCK, PermissionRegistry::DOCUMENTS_TELECHARGER, PermissionRegistry::GRAPHIQUES_VOIR],
+            [PermissionRegistry::PARAMETRES_GERER, PermissionRegistry::FACTURE_CREATE, PermissionRegistry::FACTURE_EMETTRE, PermissionRegistry::PAIEMENT_CREER, PermissionRegistry::STOCK_VENDRE_SANS_STOCK, PermissionRegistry::DOCUMENTS_TELECHARGER, PermissionRegistry::GRAPHIQUES_VOIR, PermissionRegistry::CHARGES_AJOUTER, PermissionRegistry::CHARGES_VALIDER],
             array_values(array_diff(PermissionRegistry::toutes(), $administrateur->autorisationsDans($magasin))),
         );
         $this->assertEqualsCanonicalizing(PermissionRegistry::modeleDeLAdministrateur(TypeDActivite::Commerce), $administrateur->autorisationsDans($magasin));

@@ -3,7 +3,6 @@
 namespace Tests\Feature\Authorization;
 
 use App\Domain\Authorization\LecteurDesDroits;
-use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
@@ -171,7 +170,7 @@ class ProprietaireSansVenteConcurrenceTest extends TestCase
     private function magasinDUnAdministrateurQuiVend(string $nom): array
     {
         $magasin = $this->ouvrirUneSociete(['nom' => $nom]);
-        $administrateur = $this->administrateurPretAReprendre($magasin, "repreneur-{$magasin->id}@example.test", PermissionRegistry::toutes());
+        $administrateur = $this->administrateurPretAReprendre($magasin, "repreneur-{$magasin->id}@example.test", self::toutesCellesDUnCompteDeLaSociete());
         $produit = app(TenantContext::class)->runAs($magasin, fn (): int => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id);
 
         return [(int) $magasin->id, (int) $administrateur->id, $produit];

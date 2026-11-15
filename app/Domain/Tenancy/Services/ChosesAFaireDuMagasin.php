@@ -11,6 +11,8 @@ use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
+use App\Domain\Charges\Services\ChargesAFaire;
+use App\Domain\Charges\Services\DroitsSurLesCharges;
 use App\Domain\Facturation\Actions\CloturerLesJourneesAction;
 use App\Domain\Facturation\Contracts\DocumentEnvoyable;
 use App\Domain\Facturation\Enums\StatutAvoir;
@@ -39,6 +41,7 @@ use App\Domain\Tenancy\Models\PosteReconnu;
 use App\Domain\Tenancy\Support\ChoseAFaire;
 use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\App\Pages\Caisse;
+use App\Filament\App\Pages\ChargesDuMagasin;
 use App\Filament\App\Resources\AvoirFournisseurResource;
 use App\Filament\App\Resources\AvoirResource;
 use App\Filament\App\Resources\ClientResource;
@@ -128,6 +131,24 @@ final class ChosesAFaireDuMagasin
     }
 
     /**
+     * Pour un responsable à qui le propriétaire coche « Charges : ajouter »,
+     * les charges de son magasin que son comptable lui renvoie (voir
+     * ChargesAFaire), menant à « Charges du magasin ».
+     *
+     * @return list<ChoseAFaire>
+     */
+    private static function chargesDuResponsable(User $compte, Magasin $magasin): array
+    {
+        if (! $compte->estMembre() || ! $compte->estResponsableDe($magasin)) {
+            return [];
+        }
+
+        $acces = app(DroitsSurLesCharges::class)->pour($compte, $magasin->societe);
+
+        return $acces === null ? [] : app(ChargesAFaire::class)->choses($acces, fn (string $vue): string => ChargesDuMagasin::getUrl(['vue' => $vue], panel: 'app', tenant: $magasin));
+    }
+
+    /**
      * Ce qui reste à faire dans ce magasin, le magasin actif, pour ce
      * compte : les deux parties, chacune dans son ordre.
      *
@@ -145,7 +166,7 @@ final class ChosesAFaireDuMagasin
             return ['a_faire' => [], 'a_surveiller' => []];
         }
 
-        $choses = (new self($compte, $magasin))->toutes();
+        $choses = [...(new self($compte, $magasin))->toutes(), ...self::chargesDuResponsable($compte, $magasin)];
         usort($choses, ChoseAFaire::comparer(...));
 
         return [

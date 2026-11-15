@@ -11,6 +11,8 @@ use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Pages\Caisse;
+use App\Filament\App\Pages\ChargesDeLaSociete;
+use App\Filament\App\Pages\ChargesDuMagasin;
 use App\Filament\App\Pages\CoordonneesMagasin;
 use App\Filament\App\Pages\LaSociete;
 use App\Filament\App\Pages\ParametresFactures;
@@ -279,6 +281,8 @@ class PanneauCabinetTest extends TestCase
         ];
         $pagesAttendues = [
             Caisse::class => false,
+            ChargesDeLaSociete::class => false,
+            ChargesDuMagasin::class => false,
             CoordonneesMagasin::class => false,
             LaSociete::class => false,
             ParametresFactures::class => false,

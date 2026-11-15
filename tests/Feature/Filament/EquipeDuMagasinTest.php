@@ -74,7 +74,7 @@ class EquipeDuMagasinTest extends TestCase
     public function test_un_administrateur_ne_cree_jamais_un_vendeur_ou_un_observateur(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        $administrateur = $this->administrateur($magasin, null, AutorisationsSociete::toutes(), PermissionRegistry::toutes());
+        $administrateur = $this->administrateur($magasin, null, AutorisationsSociete::toutes(), self::toutesCellesDUnCompteDeLaSociete());
 
         $this->dansLeMagasin($magasin, $administrateur);
         $this->get(EquipeDuMagasinResource::getUrl('index', ['tenant' => $magasin]))->assertForbidden();

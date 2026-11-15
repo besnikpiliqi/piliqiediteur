@@ -37,15 +37,18 @@
                         <x-filament::icon
                             icon="heroicon-m-information-circle"
                             class="h-4 w-4"
-                            title="Calculée depuis vos documents. L'état de TVA officiel, avec l'exigibilité des services et les règles de la déclaration, viendra avec la comptabilité."
-                            label="Calculée depuis vos documents. L'état de TVA officiel, avec l'exigibilité des services et les règles de la déclaration, viendra avec la comptabilité."
+                            title="Calculée depuis vos documents et vos charges validées. L'état de TVA officiel, avec l'exigibilité des services et les règles de la déclaration, viendra avec la comptabilité."
+                            label="Calculée depuis vos documents et vos charges validées. L'état de TVA officiel, avec l'exigibilité des services et les règles de la déclaration, viendra avec la comptabilité."
                         />
                     </div>
                     @if ($chiffres['tva']['franchise'])
                         <div class="piliqi-graphiques__valeur">TVA non applicable (franchise en base)</div>
                     @else
-                        <div class="piliqi-graphiques__valeur">{{ $euros($chiffres['tva']['a_payer']) }}</div>
-                        <div class="piliqi-graphiques__precision">collectée {{ $euros($chiffres['tva']['collectee']) }} − déductible {{ $euros($chiffres['tva']['deductible']) }}</div>
+                        <div class="piliqi-graphiques__valeur" data-tva="reelle">{{ $euros($chiffres['tva']['a_payer']) }}</div>
+                        <div class="piliqi-graphiques__precision">collectée {{ $euros($chiffres['tva']['collectee']) }} − déductible {{ $euros($chiffres['tva']['deductible']) }}{{ $chiffres['tva']['avec_les_charges'] ? '' : ' (sans les charges)' }}</div>
+                        @if ($chiffres['tva']['estimation'] !== null)
+                            <div class="piliqi-graphiques__precision" data-tva="estimation">estimation avec les charges à valider : {{ $euros($chiffres['tva']['estimation']) }}</div>
+                        @endif
                     @endif
                 </div>
             @endif

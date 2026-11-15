@@ -29,6 +29,7 @@ use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Resources\EquipeDuMagasinResource\Pages\ListEquipeDuMagasin;
 use App\Filament\Cabinet\Pages\TableauDeBordDuCabinet;
 use App\Filament\Societe\Pages\CabinetComptable;
+use App\Filament\Societe\Pages\Charges;
 use App\Filament\Societe\Pages\IdentiteSociete;
 use App\Filament\Societe\Pages\ParametresFiscauxSociete;
 use App\Filament\Societe\Pages\RattachementDUnCabinet;
@@ -109,8 +110,10 @@ class PanneauSocieteTest extends TestCase
         // « Télécharger les documents » : le propriétaire l'a d'office, un
         // administrateur seulement si le propriétaire la lui coche, ce que
         // le modèle de l'administrateur ne fait jamais (décision de
-        // l'éditeur du 03/11/2026, E3).
-        $pagesDesCasesDuProprietaire = [TelechargerLesDocuments::class];
+        // l'éditeur du 03/11/2026, E3) ; « Charges » de même, par la case
+        // « Charges : ajouter » (décision de l'éditeur du 14/11/2026, lot
+        // CHARGES).
+        $pagesDesCasesDuProprietaire = [TelechargerLesDocuments::class, Charges::class];
 
         $this->assertNotEmpty($pages);
         $this->assertInstanceOf(SocietePolicy::class, Gate::getPolicyFor(Societe::class));

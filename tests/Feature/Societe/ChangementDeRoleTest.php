@@ -173,7 +173,7 @@ class ChangementDeRoleTest extends TestCase
     public function test_seul_le_proprietaire_change_le_role_de_societe_d_un_compte(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        $administrateur = $this->administrateur($magasin, null, AutorisationsSociete::toutes(), PermissionRegistry::toutes());
+        $administrateur = $this->administrateur($magasin, null, AutorisationsSociete::toutes(), self::toutesCellesDUnCompteDeLaSociete());
         $responsable = $this->responsable($magasin);
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
         $responsableNomme = $this->responsable($magasin);

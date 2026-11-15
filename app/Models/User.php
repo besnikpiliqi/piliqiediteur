@@ -802,6 +802,10 @@ class User extends Authenticatable implements FilamentUser, HasTenants
             return [];
         }
 
+        if ($affectations->every(fn (Affectation $affectation): bool => isset($this->autorisationsParAffectation[CleDuModele::de($affectation)]))) {
+            return array_values(array_unique(array_merge(...array_map(fn (Affectation $affectation): array => $this->autorisationsParAffectation[CleDuModele::de($affectation)], $affectations->all()))));
+        }
+
         $cases = DB::table('autorisations_affectations')
             ->whereIn('affectation_id', $affectations->modelKeys())
             ->orderBy('autorisation')

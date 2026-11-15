@@ -10,6 +10,10 @@ use App\Domain\Cabinets\Models\InvitationCabinet;
 use App\Domain\Cabinets\Models\LienCabinet;
 use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Charges\Models\Charge;
+use App\Domain\Charges\Models\LigneDeCharge;
+use App\Domain\Charges\Models\PieceDeCharge;
+use App\Domain\Charges\Models\TypeDeChargeDeLaSociete;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
@@ -34,6 +38,7 @@ use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Enums\TypeVerification;
 use App\Domain\Tenancy\Exceptions\TenantContextMissingException;
+use App\Domain\Tenancy\Models\ActionTraiteeDeLaSociete;
 use App\Domain\Tenancy\Models\ChangementFinExercice;
 use App\Domain\Tenancy\Models\CodeConfirmation;
 use App\Domain\Tenancy\Models\EcartSirene;
@@ -93,7 +98,9 @@ class IsolationDesSocietesTest extends TestCase
      * @var list<class-string<Model>>
      */
     private const MODELES_DE_SOCIETE = [
+        ActionTraiteeDeLaSociete::class,
         Cabinet::class,
+        Charge::class,
         ChangementFinExercice::class,
         ClientConfie::class,
         CodeConfirmation::class,
@@ -103,11 +110,14 @@ class IsolationDesSocietesTest extends TestCase
         Identifiant::class,
         InvitationCabinet::class,
         LienCabinet::class,
+        LigneDeCharge::class,
+        PieceDeCharge::class,
         PieceVerification::class,
         PreferencesDuTableauDeBord::class,
         TelechargementDeDocuments::class,
         TraceAudit::class,
         TransmissionPropriete::class,
+        TypeDeChargeDeLaSociete::class,
         VerificationSociete::class,
     ];
 
@@ -656,7 +666,7 @@ class IsolationDesSocietesTest extends TestCase
         $villeurbanne = $this->ouvrirUnAutreMagasin($lyon, ['nom' => 'Villeurbanne']);
         $venteDeLyon = $this->vendre($lyon);
 
-        foreach ([$this->proprietaireDe($lyon), $this->administrateur($lyon, [$lyon->id, $villeurbanne->id], [], PermissionRegistry::toutes()), $this->collaborateurDuCabinetLie($lyon)] as $compte) {
+        foreach ([$this->proprietaireDe($lyon), $this->administrateur($lyon, [$lyon->id, $villeurbanne->id], [], self::toutesCellesDUnCompteDeLaSociete()), $this->collaborateurDuCabinetLie($lyon)] as $compte) {
             $this->flushSession();
             $this->actingAs($compte);
             $this->get(FactureResource::getUrl('view', ['record' => $venteDeLyon], tenant: $lyon))->assertOk();

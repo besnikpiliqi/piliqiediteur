@@ -681,9 +681,9 @@ class TransfererProprieteTest extends TestCase
         $this->dansLeMagasin($magasin, $ancien);
         $this->get(Caisse::getUrl(tenant: $magasin))->assertForbidden();
 
-        app(ModifierAdministrateurAction::class)->modifier($administrateur->refresh(), $ancien, null, PermissionRegistry::toutes(), AutorisationsSociete::toutes());
+        app(ModifierAdministrateurAction::class)->modifier($administrateur->refresh(), $ancien, null, self::toutesCellesDUnCompteDeLaSociete(), AutorisationsSociete::toutes());
 
-        $this->assertEqualsCanonicalizing(PermissionRegistry::toutes(), $ancien->refresh()->autorisationsDans($autre));
+        $this->assertEqualsCanonicalizing(self::toutesCellesDUnCompteDeLaSociete(), $ancien->refresh()->autorisationsDans($autre));
         $this->assertTrue($ancien->tientUneCaisseDans($autre));
     }
 
@@ -698,7 +698,7 @@ class TransfererProprieteTest extends TestCase
         $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $proprietaire = $this->proprietaireDe($magasin);
-        $vendeur = $this->administrateurPretAReprendre($magasin, 'repreneur@example.test', PermissionRegistry::toutes());
+        $vendeur = $this->administrateurPretAReprendre($magasin, 'repreneur@example.test', self::toutesCellesDUnCompteDeLaSociete());
         self::vendreAuComptant($vendeur, Client::factory()->create(), $this->lignes(), ModePaiement::Especes);
 
         $this->transmettre($proprietaire, $vendeur);
@@ -731,7 +731,7 @@ class TransfererProprieteTest extends TestCase
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $autre = $this->ouvrirUnAutreMagasin($magasin, ['nom' => 'Autre Boutique']);
         $proprietaire = $this->proprietaireDe($magasin);
-        $vendeur = $this->administrateurPretAReprendre($magasin, 'repreneur@example.test', PermissionRegistry::toutes());
+        $vendeur = $this->administrateurPretAReprendre($magasin, 'repreneur@example.test', self::toutesCellesDUnCompteDeLaSociete());
         app(TenantContext::class)->runAs($magasin, fn (): Facture => self::vendreAuComptant($vendeur, Client::factory()->create(), $this->lignes(), ModePaiement::Especes));
         $responsableAilleurs = self::responsableDeTest($autre);
         $paiement = app(TenantContext::class)->runAs($autre, function () use ($responsableAilleurs): Paiement {
@@ -777,7 +777,7 @@ class TransfererProprieteTest extends TestCase
         $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $proprietaire = $this->proprietaireDe($magasin);
-        $vendeur = $this->administrateurPretAReprendre($magasin, 'repreneur@example.test', PermissionRegistry::toutes());
+        $vendeur = $this->administrateurPretAReprendre($magasin, 'repreneur@example.test', self::toutesCellesDUnCompteDeLaSociete());
         $responsable = self::responsableDeTest($magasin);
         $ticketDu = app(EmettreFactureAction::class)->handle($vendeur, app(CreerFactureAction::class)->handle($vendeur, Client::factory()->create(), $this->lignes()));
         $brouillon = app(CreerFactureAction::class)->handle($vendeur, Client::factory()->create(), $this->lignes());

@@ -286,6 +286,33 @@ final class PermissionRegistry
     public const GRAPHIQUES_VOIR = 'tableau_de_bord.graphiques';
 
     /**
+     * Ajouter des charges de la société (décision de l'éditeur du
+     * 14/11/2026, lot CHARGES ; voir DroitsSurLesCharges) : déposer leurs
+     * pièces et écrire leurs chiffres, jamais les valider. Seul le
+     * propriétaire la coche (voir cocheesParLeProprietaire()), à un
+     * administrateur, qui voit et ajoute alors les charges de « Toute la
+     * société » et celles des magasins de sa portée où elle est cochée, ou
+     * à un responsable, qui voit et ajoute celles de son magasin ; jamais à
+     * un vendeur ni à un observateur (voir
+     * refuseesAuxVendeursEtObservateurs()). Le propriétaire les ajoute
+     * toujours.
+     */
+    public const CHARGES_AJOUTER = 'charges.ajouter';
+
+    /**
+     * Voir, ajouter, saisir et valider les charges de la société (décision
+     * de l'éditeur du 14/11/2026, lot CHARGES ; voir DroitsSurLesCharges) :
+     * celle qu'un client accorde par défaut à son cabinet lié et à
+     * l'expert-comptable qu'il déclare (voir parDefautDuCabinet()), et
+     * qu'il leur retire à son gré ; ils valident, corrigent, renvoient au
+     * client et ajoutent les charges de « Toute la société » et des
+     * magasins réels qu'il leur ouvre. Elle ne se coche jamais à un compte
+     * de la société (voir reserveesAuxComptables()) : le propriétaire ne
+     * valide lui-même que quand sa société n'a aucun comptable.
+     */
+    public const CHARGES_VALIDER = 'charges.valider';
+
+    /**
      * La famille des articles (voir articles()) et la famille commune, telles
      * que le référentiel en base les porte.
      */
@@ -315,6 +342,7 @@ final class PermissionRegistry
             self::CAISSE_SECURISEE_CONSULTER,
             self::DOCUMENTS_TELECHARGER,
             self::GRAPHIQUES_VOIR,
+            self::CHARGES_AJOUTER, self::CHARGES_VALIDER,
         ];
     }
 
@@ -357,7 +385,10 @@ final class PermissionRegistry
      * documents par période compris, et voir les graphiques ; clôturer la journée, car les
      * clôtures continuent jusqu'au bout ; noter les preuves d'exonération,
      * le bordereau de détaxe et son visa, qui arrivent souvent après la
-     * fermeture (décision de l'éditeur du 01/11/2026, Q-AF12). L'équipe
+     * fermeture (décision de l'éditeur du 01/11/2026, Q-AF12) ; ajouter et
+     * valider les charges de la société, qui préparent la TVA jusqu'au bout
+     * (lot CHARGES, décision de Claude, D76 ; voir DroitsSurLesCharges, qui
+     * n'arrête les gestes que d'une société révoquée ou close). L'équipe
      * reste gérable, par le propriétaire et les responsables (voir
      * ControleDesDroits), et dans l'administration de la société (voir
      * AutorisationsSociete::permisesEnLectureSeule()).
@@ -366,7 +397,7 @@ final class PermissionRegistry
      */
     public static function permisesEnLectureSeule(): array
     {
-        return [...self::consultations(), self::DOCUMENTS_TELECHARGER, self::GRAPHIQUES_VOIR, self::CLOTURE_CAISSE_GERER, self::FACTURE_JUSTIFIER];
+        return [...self::consultations(), self::DOCUMENTS_TELECHARGER, self::GRAPHIQUES_VOIR, self::CLOTURE_CAISSE_GERER, self::FACTURE_JUSTIFIER, self::CHARGES_AJOUTER, self::CHARGES_VALIDER];
     }
 
     /**
@@ -420,6 +451,7 @@ final class PermissionRegistry
             self::CAISSE_SECURISEE_CONSULTER,
             self::DOCUMENTS_TELECHARGER,
             self::GRAPHIQUES_VOIR,
+            self::CHARGES_AJOUTER, self::CHARGES_VALIDER,
         ];
     }
 
@@ -451,20 +483,38 @@ final class PermissionRegistry
 
     /**
      * Les autorisations qui existent dans les magasins d'une société de ce
-     * type, dans l'ordre du registre : toutes pour une société qui a des
-     * articles, toutes sauf celles des articles (voir articles()) pour une
-     * société de services, aucune pour un cabinet d'expertise comptable,
-     * qui n'a aucun magasin.
+     * type, pour ses comptes, dans l'ordre du registre : toutes pour une
+     * société qui a des articles, toutes sauf celles des articles (voir
+     * articles()) pour une société de services, aucune pour un cabinet
+     * d'expertise comptable, qui n'a aucun magasin ; jamais celles que
+     * seuls le cabinet lié et l'expert-comptable déclaré reçoivent (voir
+     * reserveesAuxComptables()).
      *
      * @return list<string>
      */
     public static function pourLeType(TypeDActivite $type): array
     {
+        $desComptes = array_values(array_diff(self::toutes(), self::reserveesAuxComptables()));
+
         return match (true) {
             ! $type->aDesMagasins() => [],
-            $type->aDesArticles() => self::toutes(),
-            default => array_values(array_diff(self::toutes(), self::articles())),
+            $type->aDesArticles() => $desComptes,
+            default => array_values(array_diff($desComptes, self::articles())),
         };
+    }
+
+    /**
+     * Les autorisations que seuls le cabinet lié et l'expert-comptable
+     * déclaré reçoivent d'un client (voir duCabinet()), jamais un compte de
+     * la société, propriétaire compris : valider les charges (décision de
+     * l'éditeur du 14/11/2026, lot CHARGES). La base refuse de les cocher à
+     * une affectation (voir GardesDesDroits).
+     *
+     * @return list<literal-string>
+     */
+    public static function reserveesAuxComptables(): array
+    {
+        return [self::CHARGES_VALIDER];
     }
 
     /**
@@ -518,39 +568,42 @@ final class PermissionRegistry
     /**
      * Les autorisations que le propriétaire est seul à cocher, compte par compte,
      * dans un magasin d'une société de ce type : le téléchargement des
-     * documents par période (décision de l'éditeur du 03/11/2026, E3) et
-     * les graphiques du tableau de bord (décision de l'éditeur du
-     * 14/11/2026, lot GRAPH). Le propriétaire les a toujours ; aucun modèle
+     * documents par période (décision de l'éditeur du 03/11/2026, E3), les
+     * graphiques du tableau de bord (décision de l'éditeur du 14/11/2026,
+     * lot GRAPH) et l'ajout des charges de la société (décision de
+     * l'éditeur du 14/11/2026, lot CHARGES). Le propriétaire les a toujours ; aucun modèle
      * ne les précoche, pas même celui de l'administrateur ; un responsable,
      * qui a sans case toutes les autres autorisations de son magasin, ne
      * les a que cochées par le propriétaire, et ne les coche jamais pour
      * un vendeur ou un observateur, dont la case cochée par le propriétaire
      * reste telle quelle quand le responsable change ses autres cases (voir
-     * AffectationsDesMembres::cases()) ; les graphiques ne se cochent
-     * jamais à un vendeur ni à un observateur (voir
+     * AffectationsDesMembres::cases()) ; les graphiques et l'ajout des
+     * charges ne se cochent jamais à un vendeur ni à un observateur (voir
      * refuseesAuxVendeursEtObservateurs()) ; le cabinet lié ne reçoit que
      * le téléchargement, coché par le propriétaire du client, jamais par
-     * défaut (voir accordeesAuCabinetParLeProprietaireSeul()).
+     * défaut (voir accordeesAuCabinetParLeProprietaireSeul()), et ses
+     * propres charges (voir reserveesAuxComptables()).
      *
      * @return list<literal-string>
      */
     public static function cocheesParLeProprietaire(TypeDActivite $type): array
     {
-        return array_values(array_intersect([self::DOCUMENTS_TELECHARGER, self::GRAPHIQUES_VOIR], self::pourLeType($type)));
+        return array_values(array_intersect([self::DOCUMENTS_TELECHARGER, self::GRAPHIQUES_VOIR, self::CHARGES_AJOUTER], self::pourLeType($type)));
     }
 
     /**
      * Les autorisations qui ne se cochent jamais à un vendeur ni à un
      * observateur, même par le propriétaire : les graphiques du tableau de
-     * bord, réservés au propriétaire, aux administrateurs et aux
-     * responsables à qui il les coche (décision de l'éditeur du
-     * 14/11/2026) ; la base le refuse (voir GardesDesDroits).
+     * bord et l'ajout des charges de la société, réservés au propriétaire,
+     * aux administrateurs et aux responsables à qui il les coche
+     * (décisions de l'éditeur du 14/11/2026, lots GRAPH et CHARGES) ; la
+     * base le refuse (voir GardesDesDroits).
      *
      * @return list<literal-string>
      */
     public static function refuseesAuxVendeursEtObservateurs(): array
     {
-        return [self::GRAPHIQUES_VOIR];
+        return [self::GRAPHIQUES_VOIR, self::CHARGES_AJOUTER];
     }
 
     /**
@@ -586,15 +639,22 @@ final class PermissionRegistry
 
     /**
      * Les autorisations qu'un client accorde par défaut au cabinet
-     * d'expertise comptable qu'il lie : les consultations (voir
-     * consultations()) qui existent dans les magasins de son type (voir
-     * pourLeType()), dans l'ordre alphabétique.
+     * d'expertise comptable qu'il lie, et à l'expert-comptable qu'il
+     * déclare : les consultations (voir consultations()) qui existent dans
+     * les magasins de son type (voir pourLeType()), et ses charges, voir,
+     * ajouter, saisir et valider (voir reserveesAuxComptables()), dans
+     * l'ordre alphabétique ; aucune pour un cabinet, qui n'est jamais
+     * client.
      *
      * @return list<literal-string>
      */
     public static function parDefautDuCabinet(TypeDActivite $typeDuClient): array
     {
-        $autorisations = array_values(array_intersect(self::consultations(), self::pourLeType($typeDuClient)));
+        if (! $typeDuClient->aDesMagasins()) {
+            return [];
+        }
+
+        $autorisations = [...array_values(array_intersect(self::consultations(), self::pourLeType($typeDuClient))), ...self::reserveesAuxComptables()];
         sort($autorisations);
 
         return $autorisations;
@@ -626,9 +686,9 @@ final class PermissionRegistry
 
     /**
      * Toutes les autorisations qu'un client de ce type peut accorder à son
-     * cabinet lié (voir parDefautDuCabinet() et ajoutablesAuCabinet()), et
-     * le téléchargement des documents par période, qu'il ne lui accorde
-     * jamais par défaut (voir accordeesAuCabinetParLeProprietaireSeul()), dans l'ordre
+     * cabinet lié (voir parDefautDuCabinet(), charges comprises, et
+     * ajoutablesAuCabinet()), et le téléchargement des documents par
+     * période, qu'il ne lui accorde jamais par défaut (voir accordeesAuCabinetParLeProprietaireSeul()), dans l'ordre
      * alphabétique ; aucune pour un cabinet, qui n'est jamais client. La liste d'un client qui a des articles est celle que la
      * base écrit en toutes lettres (voir GardesDesCabinets).
      *
@@ -776,7 +836,8 @@ final class PermissionRegistry
 
     /**
      * Les autorisations cochées pour une affectation dans un magasin d'une
-     * société de ce type, refusées dès que l'une d'elles est inconnue ou
+     * société de ce type, refusées dès que l'une d'elles est inconnue, ne
+     * s'accorde qu'aux comptables (voir reserveesAuxComptables()) ou
      * n'existe pas dans ce type (voir pourLeType()), sans doublon, dans
      * l'ordre alphabétique.
      *
@@ -792,6 +853,10 @@ final class PermissionRegistry
         foreach ($permissions as $permission) {
             if (! is_string($permission) || ! in_array($permission, self::toutes(), true)) {
                 throw new InvalidArgumentException('Autorisation inconnue : '.(is_scalar($permission) ? $permission : get_debug_type($permission)));
+            }
+
+            if (in_array($permission, self::reserveesAuxComptables(), true)) {
+                throw new InvalidArgumentException('Autorisation qui ne s\'accorde qu\'au cabinet lié ou à l\'expert-comptable déclaré : '.self::libelles()[$permission]);
             }
 
             if (! in_array($permission, $duType, true)) {
@@ -865,6 +930,8 @@ final class PermissionRegistry
             self::CAISSE_SECURISEE_CONSULTER => 'Caisse sécurisée : consulter le registre et exporter le journal des événements',
             self::DOCUMENTS_TELECHARGER => 'Documents : télécharger les documents par période (ZIP ou CSV)',
             self::GRAPHIQUES_VOIR => 'Tableau de bord : voir les graphiques',
+            self::CHARGES_AJOUTER => 'Charges : ajouter (déposer leurs pièces et écrire leurs chiffres, sans les valider)',
+            self::CHARGES_VALIDER => 'Charges : voir, ajouter, saisir et valider',
         ];
     }
 }

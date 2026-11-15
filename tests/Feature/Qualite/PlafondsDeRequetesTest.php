@@ -6,6 +6,9 @@ use App\Domain\Achats\Actions\CreerFactureAchatAction;
 use App\Domain\Achats\Actions\ValiderFactureAchatAction;
 use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Charges\Actions\DeposerUneChargeAction;
+use App\Domain\Charges\Services\PiecesDesCharges;
+use App\Domain\Charges\Support\SaisieDeCharge;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\Fournisseur;
@@ -21,6 +24,7 @@ use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\FacturePdfGenerator;
 use App\Domain\Facturation\Services\PartDeReglement;
 use App\Domain\Facturation\Services\ReglementComptant;
+use App\Domain\Fichiers\PieceDeposee;
 use App\Domain\TableauDeBord\Enums\EcranDuTableauDeBord;
 use App\Domain\TableauDeBord\Enums\Graphique;
 use App\Domain\TableauDeBord\Services\PreferencesDesGraphiques;
@@ -30,6 +34,7 @@ use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\Cabinet\Pages\TableauDeBordDuCabinet;
 use App\Filament\GrilleDesGraphiques;
+use App\Filament\Societe\Pages\Charges;
 use App\Filament\Societe\Pages\LesCaisses;
 use App\Filament\Societe\Pages\TableauDeBord;
 use App\Models\User;
@@ -37,8 +42,10 @@ use Closure;
 use Filament\Pages\Page;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
 use PHPUnit\Framework\Attributes\DataProvider;
+use Tests\Fixtures\FichiersDeTest;
 use Tests\TestCase;
 
 /**
@@ -205,6 +212,52 @@ class PlafondsDeRequetesTest extends TestCase
             $this->assertSame($parNombre[1], $parNombre[3], "La page {$page} lit la base une fois de plus par magasin pour le {$role}.");
             $this->assertLessThanOrEqual($plafond, $parNombre[3], $role);
         }
+    }
+
+    /**
+     * La page « Charges » de l'espace de la société (lot CHARGES : le
+     * tableau « type de charge × mois » en une requête, puis la liste) lit
+     * la base autant de fois avec un magasin et deux charges qu'avec trois
+     * magasins et vingt charges de plusieurs types, réparties entre toute
+     * la société et chaque magasin, chacune avec sa pièce et ses lignes.
+     */
+    public function test_la_page_des_charges_lit_la_base_autant_de_fois_avec_un_magasin_et_deux_charges_ou_trois_et_vingt(): void
+    {
+        Storage::fake(PiecesDesCharges::DISQUE);
+        $societe = $this->magasin->societe;
+        $proprietaire = $this->proprietaireDe($this->magasin);
+        $adresse = Charges::getUrl(panel: 'societe', tenant: $societe);
+        $magasins = [$this->magasin];
+        $types = ['loyer', 'electricite', 'gaz', 'eau', 'assurances', 'honoraires', 'fournitures', 'carburant'];
+        $requetes = [];
+        $deposees = 0;
+
+        foreach ([[1, 2], [3, 20]] as [$nombreDeMagasins, $nombreDeCharges]) {
+            while (count($magasins) < $nombreDeMagasins) {
+                $magasins[] = $this->ouvrirUnAutreMagasin($this->magasin, ['nom' => 'Boutique '.count($magasins), 'code' => 'BOUT'.count($magasins)]);
+            }
+
+            for (; $deposees < $nombreDeCharges; $deposees++) {
+                app(TenantContext::class)->clear();
+                app(DeposerUneChargeAction::class)->handle($proprietaire, $societe, SaisieDeCharge::duFormulaire([
+                    'type' => 'piliqi:'.$types[$deposees % count($types)],
+                    'fournisseur' => 'Fournisseur '.$deposees,
+                    'numero_piece' => 'P-'.$deposees,
+                    'date_piece' => '2026-0'.(1 + $deposees % 5).'-02',
+                    'magasin' => $deposees % 2 === 0 ? null : (string) $magasins[$deposees % count($magasins)]->uuid,
+                    'lignes' => [['taux' => '2000', 'ht' => '100,00'], ['taux' => '550', 'ht' => '10,00']],
+                ]), new PieceDeposee('piece-'.$deposees.'.pdf', FichiersDeTest::pdf('Pièce '.$deposees)));
+            }
+
+            app(TenantContext::class)->clear();
+            $this->flushSession();
+            $this->actingAs($proprietaire);
+            $this->get($adresse)->assertOk();
+            $requetes[$nombreDeMagasins] = $this->requetes(fn () => $this->get($adresse)->assertOk()->assertSee('Ce qui est déjà saisi')->assertSee('P-'.($nombreDeCharges - 1)));
+        }
+
+        $this->assertSame($requetes[1], $requetes[3], 'La page des charges lit la base une fois de plus par magasin ou par charge.');
+        $this->assertLessThanOrEqual(45, $requetes[3]);
     }
 
     /**

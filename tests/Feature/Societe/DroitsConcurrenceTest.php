@@ -132,7 +132,7 @@ class DroitsConcurrenceTest extends TestCase
         [$responsableId, $vendeurId] = [$responsable->id, $vendeur->id];
         $concurrente = null;
         $this->concurrencerDesQueLeRegistreEstVerrouille(static function () use ($responsableId, $vendeurId): void {
-            app(ModifierMembreAction::class)->handle(User::query()->findOrFail($responsableId), User::query()->findOrFail($vendeurId), RoleMagasin::Vendeur, PermissionRegistry::toutes());
+            app(ModifierMembreAction::class)->handle(User::query()->findOrFail($responsableId), User::query()->findOrFail($vendeurId), RoleMagasin::Vendeur, self::toutesCellesDUnCompteDeLaSociete());
         }, $concurrente);
 
         app(ModifierMembreAction::class)->handle($this->proprietaireDe($magasin), $responsable, RoleMagasin::Vendeur);

@@ -97,6 +97,12 @@ return new class extends Migration
             // Verrouillé dès la première vente de l'un de ses magasins
             // (voir Societe::aVenduUneFois()).
             $table->unsignedTinyInteger('mois_fin_exercice')->default(12);
+            // Les types de charge de la liste de PILIQI que la société
+            // coche « habituels » : ils gardent une ligne au tableau des
+            // charges même sans charge de l'année, pour voir les mois qui
+            // manquent (décision de l'éditeur du 14/11/2026, lot CHARGES ;
+            // voir TypesDeCharge::habituels()).
+            $table->jsonb('types_de_charge_habituels')->default('["loyer","electricite"]');
             // Membre d'un assujetti unique (groupe TVA, art. 256 C du CGI) :
             // PILIQI n'en gère pas encore les factures ni les déclarations,
             // et refuse alors toute opération commerciale réelle (voir
@@ -138,6 +144,7 @@ return new class extends Migration
         // son code ou qui est validée, tant qu'elle n'est ni close ni
         // révoquée.
         DB::statement("CREATE UNIQUE INDEX societes_siren_unique ON societes (siren) WHERE close_le IS NULL AND statut <> 'revoquee'");
+        DB::statement("ALTER TABLE societes ADD CONSTRAINT societes_types_de_charge_habituels_liste CHECK (jsonb_typeof(types_de_charge_habituels) = 'array')");
 
         DeclencheursDeProtection::sansSuppression('societes');
 

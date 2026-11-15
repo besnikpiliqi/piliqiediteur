@@ -40,6 +40,12 @@ class FicheDuClient extends ViewRecord
                 ->color('gray')
                 ->visible(fn (): bool => app(PerimetreDesGraphiques::class)->voitLesGraphiquesDuClient(CompteConnecte::exiger(), $this->lien()))
                 ->url(fn (): string => ClientDuCabinetResource::getUrl('graphiques', ['record' => $this->lien()])),
+            Action::make('charges')
+                ->label('Charges')
+                ->icon('heroicon-o-receipt-percent')
+                ->color('gray')
+                ->visible(fn (): bool => ClientDuCabinetResource::accordeLesCharges($this->lien()))
+                ->url(fn (): string => ClientDuCabinetResource::getUrl('charges', ['record' => $this->lien()])),
             Action::make('mettreFin')
                 ->label('Mettre fin au lien')
                 ->icon('heroicon-o-link-slash')

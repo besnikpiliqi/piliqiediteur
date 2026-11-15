@@ -126,13 +126,15 @@ class Affectation extends Model
      * référentiel et la garde des articles (voir GardesDesTypesDActivite) ;
      * une affectation de responsable n'a de case que celles que le
      * propriétaire est seul à cocher, et celle d'un vendeur ou d'un
-     * observateur jamais les graphiques du tableau de bord (voir
-     * PermissionRegistry::refuseesAuxVendeursEtObservateurs()). Ce que l'auteur a le droit de cocher
+     * observateur jamais les graphiques du tableau de bord ni l'ajout des
+     * charges (voir PermissionRegistry::refuseesAuxVendeursEtObservateurs()) ;
+     * la validation des charges ne se coche jamais (voir
+     * PermissionRegistry::reserveesAuxComptables()). Ce que l'auteur a le droit de cocher
      * se contrôle avant, par l'action (voir AffectationsDesMembres::cases()).
      *
      * @param  array<array-key, mixed>  $autorisations
      *
-     * @throws LogicException quand l'affectation d'un responsable recevrait une autre case, ou celle d'un vendeur ou d'un observateur les graphiques
+     * @throws LogicException quand l'affectation d'un responsable recevrait une autre case, ou celle d'un vendeur ou d'un observateur les graphiques ou l'ajout des charges
      */
     public function cocher(array $autorisations): void
     {
@@ -144,7 +146,7 @@ class Affectation extends Model
         }
 
         if ($this->role !== null && $this->role->aDesCases() && array_intersect($connues, PermissionRegistry::refuseesAuxVendeursEtObservateurs()) !== []) {
-            throw new LogicException(AffectationsDesMembres::MESSAGE_GRAPHIQUES_DES_VENDEURS);
+            throw new LogicException(AffectationsDesMembres::MESSAGE_REFUSEES_AUX_VENDEURS);
         }
 
         DB::table('autorisations_affectations')->where('affectation_id', $this->getKey())->delete();

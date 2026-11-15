@@ -81,7 +81,7 @@ class ResponsablesTest extends TestCase
     public function test_un_administrateur_sans_l_autorisation_ne_nomme_aucun_responsable(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        $administrateur = $this->administrateur($magasin, null, [AutorisationsSociete::MAGASINS_GERER, AutorisationsSociete::PARAMETRES_GERER], PermissionRegistry::toutes());
+        $administrateur = $this->administrateur($magasin, null, [AutorisationsSociete::MAGASINS_GERER, AutorisationsSociete::PARAMETRES_GERER], self::toutesCellesDUnCompteDeLaSociete());
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
 
         $this->assertFalse($administrateur->can('nommerUnResponsable', $magasin));
@@ -283,7 +283,7 @@ class ResponsablesTest extends TestCase
 
         $vendeur->refresh();
         $this->assertTrue($vendeur->estResponsableDe($magasin));
-        $this->assertEqualsCanonicalizing(array_values(array_diff(PermissionRegistry::toutes(), PermissionRegistry::cocheesParLeProprietaire($magasin->societe->type_activite))), $vendeur->autorisationsDans($magasin));
+        $this->assertEqualsCanonicalizing(array_values(array_diff(self::toutesCellesDUnCompteDeLaSociete(), PermissionRegistry::cocheesParLeProprietaire($magasin->societe->type_activite))), $vendeur->autorisationsDans($magasin));
         $affectation = Affectation::query()->where('user_id', $vendeur->id)->sole();
         $this->assertSame([(int) $administrateur->id, ['role' => 'vendeur', 'autorisations' => [PermissionRegistry::FACTURE_VIEW]]], [(int) $affectation->nomme_par, $affectation->avant_la_nomination]);
     }
@@ -519,7 +519,7 @@ class ResponsablesTest extends TestCase
         $dernier = collect($this->modificationsDesDroits($magasin))->last();
         $this->assertSame(['id' => $vendeur->id, 'nom' => 'Paul'], $dernier['membre']);
         $this->assertSame(['vendeur', 'responsable'], [$dernier['avant']['role_magasin'], $dernier['apres']['role_magasin']]);
-        $this->assertEqualsCanonicalizing(array_values(array_diff(PermissionRegistry::toutes(), PermissionRegistry::cocheesParLeProprietaire($magasin->societe->type_activite))), $dernier['apres']['permissions']);
+        $this->assertEqualsCanonicalizing(array_values(array_diff(self::toutesCellesDUnCompteDeLaSociete(), PermissionRegistry::cocheesParLeProprietaire($magasin->societe->type_activite))), $dernier['apres']['permissions']);
         $this->assertCount(1, $this->entreesDAudit($magasin->societe, ActionAuditee::ResponsableNomme));
     }
 

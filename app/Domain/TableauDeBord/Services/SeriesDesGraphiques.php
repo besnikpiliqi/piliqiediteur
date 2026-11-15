@@ -3,6 +3,8 @@
 namespace App\Domain\TableauDeBord\Services;
 
 use App\Domain\Calendrier\Calendrier;
+use App\Domain\Charges\Services\TvaDeLaPeriode;
+use App\Domain\Charges\Support\MontantsDeTva;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\NatureLigne;
@@ -37,6 +39,7 @@ use Illuminate\Database\Eloquent\Collection;
  * @phpstan-import-type DocumentDeVente from VentesDuTableauDeBord
  * @phpstan-import-type LigneDeVente from VentesDuTableauDeBord
  * @phpstan-import-type DocumentDAchat from AchatsDuTableauDeBord
+ * @phpstan-import-type ChargeDeLaTva from ChargesDuTableauDeBord
  */
 final class SeriesDesGraphiques
 {
@@ -47,12 +50,19 @@ final class SeriesDesGraphiques
 
     private const ANCIENNETES = ['a_echoir' => 'À échoir', 'de_1_a_30' => '1 à 30 j de retard', 'de_31_a_60' => '31 à 60 j de retard', 'plus_de_60' => 'Plus de 60 j de retard'];
 
+    /**
+     * La note du graphique de la TVA et du chiffre clé pour qui ne voit pas
+     * les charges de la société.
+     */
+    public const SANS_LES_CHARGES = 'Sans les charges de la société, que vous ne voyez pas : la TVA déductible ne compte que les achats.';
+
     public function __construct(
         private readonly VentesDuTableauDeBord $ventes,
         private readonly AchatsDuTableauDeBord $achats,
         private readonly PaiementsDuTableauDeBord $paiements,
         private readonly FacturesDuTableauDeBord $factures,
         private readonly StockDuTableauDeBord $stock,
+        private readonly ChargesDuTableauDeBord $charges,
     ) {}
 
     /**
@@ -74,7 +84,8 @@ final class SeriesDesGraphiques
             }
 
             $serie = $this->serie($carte, $perimetre->magasinsDe($carte->graphique), $calcul);
-            $series[$carte->graphique->value] = $serie->avecLaNote($perimetre->phraseDesMagasinsNonComptes(...$carte->graphique->sources($perimetre->societe->aDesArticles())));
+            $notes = array_filter([$perimetre->phraseDesMagasinsNonComptes(...$carte->graphique->sources($perimetre->societe->aDesArticles())), $serie->note]);
+            $series[$carte->graphique->value] = $serie->avecLaNote($notes === [] ? null : implode(' ', $notes));
         }
 
         return $series;
@@ -113,60 +124,66 @@ final class SeriesDesGraphiques
     }
 
     /**
+     * La TVA à payer par mois (voir TvaDeLaPeriode) : la TVA collectée, la
+     * TVA déductible des achats et, pour qui voit les charges de la
+     * société, celle des charges validées, puis la TVA à payer réelle, en
+     * ligne, et, avec les charges, son estimation avec les charges à
+     * valider, en pointillés ; sans les charges, la note le dit.
+     *
      * @param  list<int>  $ids
      */
     private function tvaParMois(CalculDesSeries $calcul, array $ids): SerieDuGraphique
     {
+        if ($this->chargesDeLaTva($calcul) === null) {
+            return $calcul->parMoisMultiple([
+                ['TVA collectée', fn (array $mois): array => array_map(fn (MontantsDeTva $tva): int => $tva->collectee(), $this->tvaDesMois($calcul, $ids, $mois))],
+                ['TVA déductible', fn (array $mois): array => array_map(fn (MontantsDeTva $tva): int => $tva->deductible(), $this->tvaDesMois($calcul, $ids, $mois))],
+                ['TVA à payer', fn (array $mois): array => array_map(fn (MontantsDeTva $tva): int => $tva->reelle(), $this->tvaDesMois($calcul, $ids, $mois)), true],
+            ])->avecLaNote(self::SANS_LES_CHARGES);
+        }
+
         return $calcul->parMoisMultiple([
-            ['TVA collectée', fn (array $mois): array => $this->tvaCollectee($calcul, $ids, $mois)],
-            ['TVA déductible', fn (array $mois): array => $this->tvaDeductible($calcul, $ids, $mois)],
-            ['TVA à payer', fn (array $mois): array => $this->tvaAPayer($calcul, $ids, $mois), true],
+            ['TVA collectée', fn (array $mois): array => array_map(fn (MontantsDeTva $tva): int => $tva->collectee(), $this->tvaDesMois($calcul, $ids, $mois))],
+            ['TVA déductible des achats', fn (array $mois): array => array_map(fn (MontantsDeTva $tva): int => $tva->deductibleDesAchats, $this->tvaDesMois($calcul, $ids, $mois))],
+            ['TVA déductible des charges', fn (array $mois): array => array_map(fn (MontantsDeTva $tva): int => $tva->deductibleDesChargesValidees, $this->tvaDesMois($calcul, $ids, $mois))],
+            ['TVA à payer', fn (array $mois): array => array_map(fn (MontantsDeTva $tva): int => $tva->reelle(), $this->tvaDesMois($calcul, $ids, $mois)), true],
+            ['TVA à payer (estimation)', fn (array $mois): array => array_map(fn (MontantsDeTva $tva): int => $tva->estimee(), $this->tvaDesMois($calcul, $ids, $mois)), true, SerieDuGraphique::EUROS, false, true],
         ]);
     }
 
     /**
-     * La TVA collectée de ces mois : celle des ventes, avoirs déduits.
+     * La TVA de ces mois, sur ces magasins, avec les charges que compte le
+     * périmètre (voir TvaDeLaPeriode::parMois()).
      *
      * @param  list<int>  $ids
      * @param  list<string>  $mois
-     * @return array<string, int>
+     * @return array<string, MontantsDeTva>
      */
-    private function tvaCollectee(CalculDesSeries $calcul, array $ids, array $mois): array
+    public function tvaDesMois(CalculDesSeries $calcul, array $ids, array $mois): array
     {
-        return $calcul->sommeParMois($this->documentsDeVente($calcul), $ids, $mois, fn (array $document): int => $calcul->signe($document) * $document['tva']);
+        return TvaDeLaPeriode::parMois(
+            $mois,
+            $ids,
+            $this->documentsDeVente($calcul),
+            $calcul->perimetre->societe->aDesArticles() ? $this->documentsDAchat($calcul) : [],
+            $this->chargesDeLaTva($calcul),
+        );
     }
 
     /**
-     * La TVA déductible de ces mois : celle des achats de marchandises,
-     * avoirs fournisseur déduits, dans une société qui a des articles.
+     * Les charges que compte la TVA de la page, lues une fois sur tous ses
+     * mois ; null pour qui ne voit pas les charges.
      *
-     * @param  list<int>  $ids
-     * @param  list<string>  $mois
-     * @return array<string, int>
+     * @return list<ChargeDeLaTva>|null
      */
-    private function tvaDeductible(CalculDesSeries $calcul, array $ids, array $mois): array
+    public function chargesDeLaTva(CalculDesSeries $calcul): ?array
     {
-        return $calcul->perimetre->societe->aDesArticles()
-            ? $calcul->sommeParMois($this->documentsDAchat($calcul), $ids, $mois, fn (array $document): int => $calcul->signe($document) * $document['tva'])
-            : $calcul->sommeParMois([], $ids, $mois, fn (array $document): int => 0);
-    }
-
-    /**
-     * @param  list<int>  $ids
-     * @param  list<string>  $mois
-     * @return array<string, int>
-     */
-    private function tvaAPayer(CalculDesSeries $calcul, array $ids, array $mois): array
-    {
-        $collectee = $this->tvaCollectee($calcul, $ids, $mois);
-        $deductible = $this->tvaDeductible($calcul, $ids, $mois);
-        $aPayer = [];
-
-        foreach ($mois as $unMois) {
-            $aPayer[$unMois] = $collectee[$unMois] - $deductible[$unMois];
+        if (! $calcul->chargesDeLaTvaLues) {
+            $calcul->chargesDeLaTva = $this->charges->pourLaTva($calcul->perimetre, Mois::du(substr($calcul->premierJour(), 0, 7), substr($calcul->dernierJour(), 0, 7)));
+            $calcul->chargesDeLaTvaLues = true;
         }
 
-        return $aPayer;
+        return $calcul->chargesDeLaTva;
     }
 
     /**

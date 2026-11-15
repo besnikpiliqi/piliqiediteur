@@ -1088,15 +1088,31 @@ abstract class TestCase extends BaseTestCase
 
     /**
      * Toutes les autorisations de magasin qu'un vendeur ou un observateur
-     * peut recevoir : toutes, sauf les graphiques du tableau de bord, qui ne
-     * se cochent jamais à eux (décision de l'éditeur du 14/11/2026, voir
+     * peut recevoir : toutes celles d'un compte de la société (voir
+     * toutesCellesDUnCompteDeLaSociete()), sauf les graphiques du tableau
+     * de bord et l'ajout des charges, qui ne se cochent jamais à eux
+     * (décisions de l'éditeur du 14/11/2026, voir
      * PermissionRegistry::refuseesAuxVendeursEtObservateurs()).
      *
      * @return list<string>
      */
     protected static function toutesCellesDUnVendeur(): array
     {
-        return array_values(array_diff(PermissionRegistry::toutes(), PermissionRegistry::refuseesAuxVendeursEtObservateurs()));
+        return array_values(array_diff(self::toutesCellesDUnCompteDeLaSociete(), PermissionRegistry::refuseesAuxVendeursEtObservateurs()));
+    }
+
+    /**
+     * Toutes les autorisations de magasin qu'un compte d'une société
+     * « Commerce ou atelier » peut recevoir : toutes, sauf la validation
+     * des charges, qui ne s'accorde qu'au cabinet lié ou à
+     * l'expert-comptable déclaré (décision de l'éditeur du 14/11/2026, lot
+     * CHARGES, voir PermissionRegistry::reserveesAuxComptables()).
+     *
+     * @return list<string>
+     */
+    protected static function toutesCellesDUnCompteDeLaSociete(): array
+    {
+        return array_values(array_diff(PermissionRegistry::toutes(), PermissionRegistry::reserveesAuxComptables()));
     }
 
     /**

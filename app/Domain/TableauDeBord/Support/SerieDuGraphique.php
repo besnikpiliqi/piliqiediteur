@@ -7,10 +7,13 @@ namespace App\Domain\TableauDeBord\Support;
  * ses étiquettes (les mois, les taux, les magasins…) et ses séries, chacune
  * avec son libellé, ses valeurs (en centimes pour un montant, null pour un
  * mois encore à venir) et son unité ; une série en ligne sur l'axe de
- * droite pour le panier moyen ou la TVA à payer. La phrase grise dit les
- * magasins qui ne sont pas comptés (voir Perimetre::phraseDesMagasinsNonComptes()).
+ * droite pour le panier moyen ou la TVA à payer ; une ligne en pointillés
+ * pour une estimation (la TVA à payer avec les charges à valider). La
+ * phrase grise dit les magasins qui ne sont pas comptés (voir
+ * Perimetre::phraseDesMagasinsNonComptes()), et une TVA comptée sans les
+ * charges de la société.
  *
- * @phpstan-type Jeu array{libelle: string, valeurs: list<int|null>, unite: 'euros'|'nombre', en_ligne: bool, axe_de_droite: bool}
+ * @phpstan-type Jeu array{libelle: string, valeurs: list<int|null>, unite: 'euros'|'nombre', en_ligne: bool, axe_de_droite: bool, pointilles: bool}
  */
 final class SerieDuGraphique
 {
@@ -37,9 +40,9 @@ final class SerieDuGraphique
      * @param  'euros'|'nombre'  $unite
      * @return Jeu
      */
-    public static function jeu(string $libelle, array $valeurs, string $unite = self::EUROS, bool $enLigne = false, bool $axeDeDroite = false): array
+    public static function jeu(string $libelle, array $valeurs, string $unite = self::EUROS, bool $enLigne = false, bool $axeDeDroite = false, bool $pointilles = false): array
     {
-        return ['libelle' => $libelle, 'valeurs' => $valeurs, 'unite' => $unite, 'en_ligne' => $enLigne, 'axe_de_droite' => $axeDeDroite];
+        return ['libelle' => $libelle, 'valeurs' => $valeurs, 'unite' => $unite, 'en_ligne' => $enLigne, 'axe_de_droite' => $axeDeDroite, 'pointilles' => $pointilles];
     }
 
     /**

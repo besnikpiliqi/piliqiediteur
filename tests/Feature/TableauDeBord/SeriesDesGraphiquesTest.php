@@ -93,7 +93,7 @@ class SeriesDesGraphiquesTest extends TestCase
         return [
             'chiffre d\'affaires HT par mois' => [Graphique::ChiffreDAffairesParMois, null, ['Chiffre d\'affaires HT' => $parMois(2000, 3000, 7000)]],
             'ventes et achats HT par mois' => [Graphique::VentesEtAchatsParMois, null, ['Ventes HT' => $parMois(2000, 3000, 7000), 'Achats HT' => $parMois(0, 5000, 0)]],
-            'TVA à payer par mois' => [Graphique::TvaAPayerParMois, null, ['TVA collectée' => $parMois(400, 600, 1400), 'TVA déductible' => $parMois(0, 1000, 0), 'TVA à payer' => $parMois(400, -400, 1400)]],
+            'TVA à payer par mois' => [Graphique::TvaAPayerParMois, null, ['TVA collectée' => $parMois(400, 600, 1400), 'TVA déductible des achats' => $parMois(0, 1000, 0), 'TVA déductible des charges' => $parMois(0, 0, 0), 'TVA à payer' => $parMois(400, -400, 1400), 'TVA à payer (estimation)' => $parMois(400, -400, 1400)]],
             'chiffre d\'affaires HT par an' => [Graphique::ChiffreDAffairesParAn, ['2026'], ['Chiffre d\'affaires HT' => [12000]]],
             'marge brute HT par mois' => [Graphique::MargeBruteParMois, null, ['Marge brute HT' => $parMois(0, 1500, 0)], [self::SEPTEMBRE => 'Taux de marge : 50,0 %']],
             'chiffre d\'affaires par magasin' => [Graphique::ChiffreDAffairesParMagasin, ['Ma Boutique'], ['Chiffre d\'affaires HT' => [12000]]],
@@ -151,7 +151,7 @@ class SeriesDesGraphiquesTest extends TestCase
         $this->assertSame([
             'ca' => ['valeur' => 7000, 'variation' => null],
             'achats' => ['valeur' => 0, 'variation' => null],
-            'tva' => ['franchise' => false, 'a_payer' => 1400, 'collectee' => 1400, 'deductible' => 0],
+            'tva' => ['franchise' => false, 'a_payer' => 1400, 'collectee' => 1400, 'deductible' => 0, 'estimation' => null, 'avec_les_charges' => true],
             'restant_du' => ['valeur' => 7600, 'en_retard' => 2400],
         ], $chiffres);
     }
@@ -409,7 +409,7 @@ class SeriesDesGraphiquesTest extends TestCase
         $chiffres = $this->chiffres($perimetre);
 
         $this->assertFalse($perimetre->voit(Graphique::TvaAPayerParMois));
-        $this->assertSame(['franchise' => true, 'a_payer' => 0, 'collectee' => 0, 'deductible' => 0], $chiffres['tva']);
+        $this->assertSame(['franchise' => true, 'a_payer' => 0, 'collectee' => 0, 'deductible' => 0, 'estimation' => null, 'avec_les_charges' => false], $chiffres['tva']);
         $this->assertSame(['valeur' => 2400, 'variation' => null], $chiffres['ca'], 'À 0 %, la lampe se vend 24,00 € HT.');
     }
 
@@ -437,8 +437,8 @@ class SeriesDesGraphiquesTest extends TestCase
         }
 
         $this->assertNull($chiffres['achats']);
-        $this->assertSame(['franchise' => false, 'a_payer' => 1000, 'collectee' => 1000, 'deductible' => 0], $chiffres['tva']);
-        $this->assertSame(1000, $tva->jeux[2]['valeurs'][self::OCTOBRE]);
+        $this->assertSame(['franchise' => false, 'a_payer' => 1000, 'collectee' => 1000, 'deductible' => 0, 'estimation' => null, 'avec_les_charges' => true], $chiffres['tva']);
+        $this->assertSame(['TVA à payer', 1000], [$tva->jeux[3]['libelle'], $tva->jeux[3]['valeurs'][self::OCTOBRE]]);
     }
 
     /**

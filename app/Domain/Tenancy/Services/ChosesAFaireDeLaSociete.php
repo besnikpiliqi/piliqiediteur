@@ -9,6 +9,8 @@ use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Charges\Services\ChargesAFaire;
+use App\Domain\Charges\Services\DroitsSurLesCharges;
 use App\Domain\Facturation\Enums\StatutAvoir;
 use App\Domain\Facturation\Enums\StatutDevis;
 use App\Domain\Facturation\Enums\StatutFacture;
@@ -30,6 +32,7 @@ use App\Domain\Tenancy\Models\TransmissionPropriete;
 use App\Domain\Tenancy\Scopes\MagasinScope;
 use App\Domain\Tenancy\Support\ChoseAFaire;
 use App\Domain\Tenancy\Support\ValeursLues;
+use App\Filament\Societe\Pages\Charges;
 use App\Filament\Societe\Pages\VerificationSociete as VerificationSocietePage;
 use App\Filament\Societe\Resources\MagasinResource;
 use App\Filament\Societe\Resources\MembreResource;
@@ -179,11 +182,26 @@ final class ChosesAFaireDeLaSociete
             $choses[] = $this->motsDePasseIdentifiants();
         }
 
-        array_push($choses, ...$this->transmissions($compte, $societe, $paris), ...$this->magasinsAConfirmer($compte, $societe, $paris), ...$this->ecartsSirene($compte, $societe, $paris));
+        array_push($choses, ...$this->transmissions($compte, $societe, $paris), ...$this->magasinsAConfirmer($compte, $societe, $paris), ...$this->ecartsSirene($compte, $societe, $paris), ...$this->charges($compte, $societe));
         $choses = array_values(array_filter($choses));
         usort($choses, ChoseAFaire::comparer(...));
 
         return $choses;
+    }
+
+    /**
+     * Les charges de la société : pour le propriétaire et l'administrateur
+     * à qui il coche « Charges : ajouter », celles que le comptable leur
+     * renvoie ; pour le propriétaire sans comptable, celles qu'il a à
+     * valider (voir ChargesAFaire), menant à la page « Charges ».
+     *
+     * @return list<ChoseAFaire>
+     */
+    private function charges(User $compte, Societe $societe): array
+    {
+        $acces = app(DroitsSurLesCharges::class)->pour($compte, $societe);
+
+        return $acces === null ? [] : app(ChargesAFaire::class)->choses($acces, fn (string $vue): string => Charges::getUrl(['vue' => $vue], panel: 'societe', tenant: $societe));
     }
 
     /**

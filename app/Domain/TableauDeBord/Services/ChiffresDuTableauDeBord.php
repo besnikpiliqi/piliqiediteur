@@ -2,6 +2,7 @@
 
 namespace App\Domain\TableauDeBord\Services;
 
+use App\Domain\Charges\Support\MontantsDeTva;
 use App\Domain\TableauDeBord\Enums\SourceDesGraphiques;
 use App\Domain\TableauDeBord\Support\CalculDesSeries;
 use App\Domain\TableauDeBord\Support\Mois;
@@ -29,7 +30,7 @@ use App\Domain\Tenancy\Support\CleDuModele;
  * Un chiffre que le compte ne voit dans aucun magasin du filtre n'est pas
  * donné (null). Tout est en centimes.
  *
- * @phpstan-type Chiffres array{ca: array{valeur: int, variation: string|null}|null, achats: array{valeur: int, variation: string|null}|null, tva: array{franchise: bool, a_payer: int, collectee: int, deductible: int}|null, restant_du: array{valeur: int, en_retard: int}|null}
+ * @phpstan-type Chiffres array{ca: array{valeur: int, variation: string|null}|null, achats: array{valeur: int, variation: string|null}|null, tva: array{franchise: bool, a_payer: int, collectee: int, deductible: int, estimation: int|null, avec_les_charges: bool}|null, restant_du: array{valeur: int, en_retard: int}|null}
  */
 final class ChiffresDuTableauDeBord
 {
@@ -65,11 +66,9 @@ final class ChiffresDuTableauDeBord
         }
 
         if ($tva !== []) {
-            $collectee = self::somme($calcul, $documentsDeVente, $tva, $ceMois, 'tva');
-            $deductible = $societe->aDesArticles() ? self::somme($calcul, $documentsDAchat, $tva, $ceMois, 'tva') : 0;
             $chiffres['tva'] = $societe->estEnFranchiseDeTva()
-                ? ['franchise' => true, 'a_payer' => 0, 'collectee' => 0, 'deductible' => 0]
-                : ['franchise' => false, 'a_payer' => $collectee - $deductible, 'collectee' => $collectee, 'deductible' => $deductible];
+                ? ['franchise' => true, 'a_payer' => 0, 'collectee' => 0, 'deductible' => 0, 'estimation' => null, 'avec_les_charges' => false]
+                : self::tva($this->series->tvaDesMois($calcul, $tva, [$ceMois])[$ceMois]);
         }
 
         if ($factures !== []) {
@@ -78,6 +77,25 @@ final class ChiffresDuTableauDeBord
         }
 
         return $chiffres;
+    }
+
+    /**
+     * Le chiffre clé de la TVA à payer du mois (voir TvaDeLaPeriode) : la
+     * réelle, avec les seules charges validées, et, quand des charges à
+     * valider la changent, son estimation avec elles.
+     *
+     * @return array{franchise: bool, a_payer: int, collectee: int, deductible: int, estimation: int|null, avec_les_charges: bool}
+     */
+    private static function tva(MontantsDeTva $tva): array
+    {
+        return [
+            'franchise' => false,
+            'a_payer' => $tva->reelle(),
+            'collectee' => $tva->collectee(),
+            'deductible' => $tva->deductible(),
+            'estimation' => $tva->aDesChargesAValider() ? $tva->estimee() : null,
+            'avec_les_charges' => $tva->avecLesCharges,
+        ];
     }
 
     /**

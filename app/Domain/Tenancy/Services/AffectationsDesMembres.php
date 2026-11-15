@@ -33,10 +33,11 @@ final class AffectationsDesMembres
     public const MESSAGE_RESPONSABLE_SANS_CASE = 'Un responsable n\'a de case que celles que le propriétaire est seul à cocher : il a sans case toutes les autres autorisations de son magasin.';
 
     /**
-     * Le refus des graphiques du tableau de bord cochés à un vendeur ou à
-     * un observateur (voir PermissionRegistry::refuseesAuxVendeursEtObservateurs()).
+     * Le refus des graphiques du tableau de bord ou de l'ajout des charges
+     * cochés à un vendeur ou à un observateur (voir
+     * PermissionRegistry::refuseesAuxVendeursEtObservateurs()).
      */
-    public const MESSAGE_GRAPHIQUES_DES_VENDEURS = 'Les graphiques du tableau de bord ne se cochent qu\'à un responsable ou à un administrateur, jamais à un vendeur ni à un observateur.';
+    public const MESSAGE_REFUSEES_AUX_VENDEURS = 'Les graphiques du tableau de bord et l\'ajout des charges ne se cochent qu\'à un responsable ou à un administrateur, jamais à un vendeur ni à un observateur.';
 
     public function __construct(private readonly PorteeDesDroits $portee) {}
 
@@ -83,7 +84,7 @@ final class AffectationsDesMembres
         }
 
         if ($demandee['role']->aDesCases() && array_intersect($demandees, PermissionRegistry::refuseesAuxVendeursEtObservateurs()) !== []) {
-            throw new LogicException(self::MESSAGE_GRAPHIQUES_DES_VENDEURS);
+            throw new LogicException(self::MESSAGE_REFUSEES_AUX_VENDEURS);
         }
 
         if ($auteur->estProprietaire()) {
@@ -103,7 +104,8 @@ final class AffectationsDesMembres
      * affectation qui change de rôle, ou qui reste celle d'un responsable,
      * s'effacent avant son nouveau rôle (voir GardesDesDroits : un
      * responsable n'a que les cases réservées au propriétaire, un vendeur
-     * ou un observateur jamais les graphiques), puis elle reçoit les
+     * ou un observateur jamais les graphiques ni l'ajout des charges), puis
+     * elle reçoit les
      * siennes.
      *
      * @param  list<string>  $autorisations

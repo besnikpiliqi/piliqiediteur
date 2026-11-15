@@ -100,7 +100,7 @@ class AutorisationsDesMembresTest extends TestCase
     public function test_un_administrateur_ne_coche_jamais_les_autorisations_d_un_vendeur_ou_d_un_observateur(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        $administrateur = $this->administrateur($magasin, null, AutorisationsSociete::toutes(), PermissionRegistry::toutes());
+        $administrateur = $this->administrateur($magasin, null, AutorisationsSociete::toutes(), self::toutesCellesDUnCompteDeLaSociete());
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW]);
         $observateur = $this->membre($magasin, RoleMagasin::Observateur, [PermissionRegistry::FACTURE_VIEW]);
 
@@ -172,7 +172,7 @@ class AutorisationsDesMembresTest extends TestCase
     public function test_un_administrateur_ne_modifie_ne_suspend_ni_ne_retire_aucun_vendeur_ou_observateur(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        $administrateur = $this->administrateur($magasin, null, AutorisationsSociete::toutes(), PermissionRegistry::toutes());
+        $administrateur = $this->administrateur($magasin, null, AutorisationsSociete::toutes(), self::toutesCellesDUnCompteDeLaSociete());
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
         $observateur = $this->membre($magasin, RoleMagasin::Observateur);
 
@@ -518,9 +518,11 @@ class AutorisationsDesMembresTest extends TestCase
      * qu'il n'exerce pas lui-même, dans leur groupe à part, et le
      * téléchargement des documents par période dans le groupe qu'il est
      * seul à voir (décision de l'éditeur du 03/11/2026, E3) ; les
-     * graphiques du tableau de bord, dans ce même groupe, seulement pour
-     * un responsable, jamais pour un vendeur (décision de l'éditeur du
-     * 14/11/2026).
+     * graphiques du tableau de bord et l'ajout des charges, dans ce même
+     * groupe, seulement pour un responsable, jamais pour un vendeur
+     * (décisions de l'éditeur du 14/11/2026, lots GRAPH et CHARGES) ; la
+     * validation des charges, qui ne s'accorde qu'au cabinet lié ou à
+     * l'expert-comptable déclaré, n'y est jamais proposée.
      */
     public function test_le_proprietaire_peut_cocher_chaque_autorisation_sous_son_libelle(): void
     {
@@ -557,11 +559,12 @@ class AutorisationsDesMembresTest extends TestCase
                 return $reservees->getOptions() === [
                     PermissionRegistry::DOCUMENTS_TELECHARGER => PermissionRegistry::libelles()[PermissionRegistry::DOCUMENTS_TELECHARGER],
                     PermissionRegistry::GRAPHIQUES_VOIR => PermissionRegistry::libelles()[PermissionRegistry::GRAPHIQUES_VOIR],
+                    PermissionRegistry::CHARGES_AJOUTER => PermissionRegistry::libelles()[PermissionRegistry::CHARGES_AJOUTER],
                 ];
             });
 
-        $this->assertEqualsCanonicalizing(PermissionRegistry::toutes(), array_values(array_unique($proposees)));
-        $this->assertCount(count(PermissionRegistry::toutes()) + 1, $proposees);
+        $this->assertEqualsCanonicalizing(array_values(array_diff(PermissionRegistry::toutes(), [PermissionRegistry::CHARGES_VALIDER])), array_values(array_unique($proposees)));
+        $this->assertCount(count(PermissionRegistry::toutes()) - 1 + 1, $proposees);
     }
 
     /**

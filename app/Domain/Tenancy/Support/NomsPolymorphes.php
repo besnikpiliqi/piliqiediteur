@@ -9,6 +9,8 @@ use App\Domain\Cabinets\Models\CompteExpertComptable;
 use App\Domain\Cabinets\Models\InvitationCabinet;
 use App\Domain\Cabinets\Models\LienCabinet;
 use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Charges\Models\Charge;
+use App\Domain\Charges\Models\TypeDeChargeDeLaSociete;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
@@ -46,6 +48,7 @@ final class NomsPolymorphes
         'avoir' => Avoir::class,
         'avoir_fournisseur' => AvoirFournisseur::class,
         'cabinet' => Cabinet::class,
+        'charge' => Charge::class,
         'cloture_caisse' => ClotureCaisse::class,
         'cloture_caisse_personnelle' => ClotureCaissePersonnelle::class,
         'devis' => Devis::class,
@@ -62,6 +65,7 @@ final class NomsPolymorphes
         'produit' => Produit::class,
         'recu_paiement' => RecuPaiement::class,
         'societe' => Societe::class,
+        'type_de_charge' => TypeDeChargeDeLaSociete::class,
         'utilisateur' => User::class,
     ];
 

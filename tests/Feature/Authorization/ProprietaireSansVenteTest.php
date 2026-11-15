@@ -440,7 +440,9 @@ class ProprietaireSansVenteTest extends TestCase
      * Chaque autorisation du registre est soit de vente, soit hors vente,
      * jamais les deux ; avec la réponse (a) à Q-V1, l'avoir et le devis
      * sont hors vente, et avec la réponse (b) à Q-V2, noter les preuves
-     * aussi.
+     * aussi ; le propriétaire les a toutes, sauf la validation des
+     * charges, qui ne s'accorde qu'au cabinet lié ou à l'expert-comptable
+     * déclaré (décision de l'éditeur du 14/11/2026, lot CHARGES).
      */
     public function test_chaque_autorisation_du_registre_est_classee_vente_ou_hors_vente(): void
     {
@@ -454,7 +456,7 @@ class ProprietaireSansVenteTest extends TestCase
         foreach ([PermissionRegistry::AVOIR_CREER, PermissionRegistry::DEVIS_CREATE, PermissionRegistry::DEVIS_UPDATE, PermissionRegistry::DEVIS_ENVOYER, PermissionRegistry::FACTURE_JUSTIFIER, PermissionRegistry::PAIEMENT_CONTRE_PASSER, PermissionRegistry::VENTE_REMISES_ET_PRIX] as $autorisation) {
             $this->assertContains($autorisation, $horsVente);
         }
-        $this->assertEqualsCanonicalizing($horsVente, PermissionRegistry::duProprietaire(TypeDActivite::Commerce));
+        $this->assertEqualsCanonicalizing(array_values(array_diff($horsVente, [PermissionRegistry::CHARGES_VALIDER])), PermissionRegistry::duProprietaire(TypeDActivite::Commerce));
     }
 
     /**

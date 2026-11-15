@@ -117,7 +117,7 @@ class RenouvellementDAccesTest extends TestCase
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $horsPortee = $this->ouvrirUnAutreMagasin($magasin, ['nom' => 'Autre Boutique']);
-        $administrateur = $this->administrateur($magasin, [$magasin->id], [AutorisationsSociete::ACCES_REDONNER], PermissionRegistry::toutes());
+        $administrateur = $this->administrateur($magasin, [$magasin->id], [AutorisationsSociete::ACCES_REDONNER], self::toutesCellesDUnCompteDeLaSociete());
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
         $vendeurHorsPortee = $this->membre($horsPortee, RoleMagasin::Vendeur);
 
@@ -181,14 +181,14 @@ class RenouvellementDAccesTest extends TestCase
     public function test_il_ne_cree_aucun_compte_meme_par_une_action_livewire_forgee(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        $administrateur = $this->administrateur($magasin, [$magasin->id], [AutorisationsSociete::ACCES_REDONNER], PermissionRegistry::toutes());
+        $administrateur = $this->administrateur($magasin, [$magasin->id], [AutorisationsSociete::ACCES_REDONNER], self::toutesCellesDUnCompteDeLaSociete());
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW]);
         $comptes = User::query()->count();
 
         $this->dansLEspaceDeLaSociete($magasin->societe, $administrateur);
         $this->forgerLAction(Livewire::test(ListMembres::class), 'creerUnMembre', ['jeton' => (string) Str::uuid(), 'magasin_id' => $magasin->id, 'name' => 'Intrus', 'role' => RoleMagasin::Vendeur->value]);
         $this->forgerLAction(Livewire::test(ListMembres::class), 'nommerUnResponsable', ['magasin_id' => $magasin->id, 'compte' => 'nouveau', 'name' => 'Intrus']);
-        $this->forgerLAction(Livewire::test(FicheDuMembre::class, ['record' => $vendeur->getRouteKey()]), 'modifierSonRole', ['role' => RoleMagasin::Vendeur->value, 'autorisations' => PermissionRegistry::toutes()]);
+        $this->forgerLAction(Livewire::test(FicheDuMembre::class, ['record' => $vendeur->getRouteKey()]), 'modifierSonRole', ['role' => RoleMagasin::Vendeur->value, 'autorisations' => self::toutesCellesDUnCompteDeLaSociete()]);
         $this->forgerLAction(Livewire::test(FicheDuMembre::class, ['record' => $vendeur->getRouteKey()]), 'suspendre');
         $this->forgerLAction(Livewire::test(FicheDuMembre::class, ['record' => $vendeur->getRouteKey()]), 'retirerDeLaSociete');
 
@@ -277,7 +277,7 @@ class RenouvellementDAccesTest extends TestCase
     {
         $societe = $this->inscrireUneSociete();
         $reel = $this->creerLeMagasinDuSiege($societe);
-        $administrateur = $this->administrateur($reel, null, AutorisationsSociete::toutes(), PermissionRegistry::toutes());
+        $administrateur = $this->administrateur($reel, null, AutorisationsSociete::toutes(), self::toutesCellesDUnCompteDeLaSociete());
         $demonstration = app(OuvrirLaDemonstrationAction::class)->handle($societe->proprietaire, $societe->fresh());
         $entrainement = app(TenantContext::class)->runAs($demonstration, fn (): User => app(CreerMembreAction::class)->handle($societe->proprietaire, $demonstration, ['name' => 'Vendeur d\'essai'], RoleMagasin::Vendeur));
         $portee = app(PorteeDesDroits::class);
@@ -298,7 +298,7 @@ class RenouvellementDAccesTest extends TestCase
     {
         $societe = $this->inscrireUneSociete();
         $reel = $this->creerLeMagasinDuSiege($societe);
-        $administrateur = $this->administrateur($reel, null, AutorisationsSociete::toutes(), PermissionRegistry::toutes());
+        $administrateur = $this->administrateur($reel, null, AutorisationsSociete::toutes(), self::toutesCellesDUnCompteDeLaSociete());
         $demonstration = app(OuvrirLaDemonstrationAction::class)->handle($societe->proprietaire, $societe->fresh());
         [$chef, $vendeur] = app(TenantContext::class)->runAs($demonstration, fn (): array => [
             $this->choisirSonMotDePasse(app(CreerMembreAction::class)->handle($societe->proprietaire, $demonstration, ['name' => 'Chef d\'essai'], RoleMagasin::Responsable)),
@@ -316,7 +316,7 @@ class RenouvellementDAccesTest extends TestCase
     public function test_un_administrateur_sans_autorisation_ne_redonne_aucun_acces(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        $administrateur = $this->administrateur($magasin, null, [AutorisationsSociete::MAGASINS_GERER, AutorisationsSociete::PARAMETRES_GERER], PermissionRegistry::toutes());
+        $administrateur = $this->administrateur($magasin, null, [AutorisationsSociete::MAGASINS_GERER, AutorisationsSociete::PARAMETRES_GERER], self::toutesCellesDUnCompteDeLaSociete());
 
         foreach ([$this->membre($magasin, RoleMagasin::Vendeur), $this->membre($magasin, RoleMagasin::Observateur), $this->responsable($magasin)] as $cible) {
             $this->assertFalse($administrateur->can('redonnerLAcces', $cible), $cible->name);
@@ -327,7 +327,7 @@ class RenouvellementDAccesTest extends TestCase
     public function test_seul_le_proprietaire_redonne_l_acces_d_un_administrateur(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        $autreAdministrateur = $this->administrateur($magasin, null, AutorisationsSociete::toutes(), PermissionRegistry::toutes());
+        $autreAdministrateur = $this->administrateur($magasin, null, AutorisationsSociete::toutes(), self::toutesCellesDUnCompteDeLaSociete());
         $responsable = $this->responsable($magasin);
         $cible = $this->administrateur($magasin);
 
@@ -344,7 +344,7 @@ class RenouvellementDAccesTest extends TestCase
         $proprietaire = $this->proprietaireDe($magasin);
         $motDePasse = $proprietaire->password;
 
-        foreach ([$proprietaire, $this->administrateur($magasin, null, AutorisationsSociete::toutes(), PermissionRegistry::toutes()), $this->responsable($magasin)] as $auteur) {
+        foreach ([$proprietaire, $this->administrateur($magasin, null, AutorisationsSociete::toutes(), self::toutesCellesDUnCompteDeLaSociete()), $this->responsable($magasin)] as $auteur) {
             $this->assertFalse($auteur->can('redonnerLAcces', $proprietaire), $auteur->name);
             $this->assertThrows(fn () => app(RedonnerLAccesAction::class)->handle($auteur, $proprietaire, true, self::NOUVEAU_MOT_DE_PASSE, (string) Str::uuid()), AuthorizationException::class);
         }

@@ -7,6 +7,7 @@ use App\Domain\Facturation\Models\Facture;
 use App\Domain\TableauDeBord\Enums\Graphique;
 use App\Domain\TableauDeBord\Enums\SourceDesGraphiques;
 use App\Domain\TableauDeBord\Services\AchatsDuTableauDeBord;
+use App\Domain\TableauDeBord\Services\ChargesDuTableauDeBord;
 use App\Domain\TableauDeBord\Services\FacturesDuTableauDeBord;
 use App\Domain\TableauDeBord\Services\PaiementsDuTableauDeBord;
 use App\Domain\TableauDeBord\Services\StockDuTableauDeBord;
@@ -30,6 +31,7 @@ use Illuminate\Database\Eloquent\Collection;
  * @phpstan-import-type Encaissement from PaiementsDuTableauDeBord
  * @phpstan-import-type CreditImpute from PaiementsDuTableauDeBord
  * @phpstan-import-type Historique from StockDuTableauDeBord
+ * @phpstan-import-type ChargeDeLaTva from ChargesDuTableauDeBord
  */
 final class CalculDesSeries
 {
@@ -59,6 +61,11 @@ final class CalculDesSeries
 
     /** @var Historique|null */
     public ?array $historiqueDuStock = null;
+
+    /** @var list<ChargeDeLaTva>|null les charges que compte la TVA, null sans les charges (voir chargesDeLaTvaLues) */
+    public ?array $chargesDeLaTva = null;
+
+    public bool $chargesDeLaTvaLues = false;
 
     /** @var Collection<int, Facture>|null */
     private ?Collection $facturesAEncaisser = null;
@@ -190,10 +197,10 @@ final class CalculDesSeries
 
     /**
      * Plusieurs séries par mois, chacune avec, au besoin, sa forme (une
-     * ligne), son unité et son axe ; leurs comparaisons suivent, dans le
-     * même ordre.
+     * ligne), son unité, son axe et ses pointillés ; leurs comparaisons
+     * suivent, dans le même ordre.
      *
-     * @param  list<array{0: string, 1: Closure(list<string>): array<string, int>, 2?: bool, 3?: 'euros'|'nombre', 4?: bool}>  $series
+     * @param  list<array{0: string, 1: Closure(list<string>): array<string, int>, 2?: bool, 3?: 'euros'|'nombre', 4?: bool, 5?: bool}>  $series
      */
     public function parMoisMultiple(array $series): SerieDuGraphique
     {
@@ -205,12 +212,13 @@ final class CalculDesSeries
             $enLigne = $serie[2] ?? false;
             $unite = $serie[3] ?? SerieDuGraphique::EUROS;
             $axeDeDroite = $serie[4] ?? false;
+            $pointilles = $serie[5] ?? false;
             $parMois = $valeurs($this->mois);
-            $jeux[] = SerieDuGraphique::jeu($libelle, array_map(fn (string $mois): ?int => $mois > $this->ceMois ? null : $parMois[$mois], $this->mois), $unite, $enLigne, $axeDeDroite);
+            $jeux[] = SerieDuGraphique::jeu($libelle, array_map(fn (string $mois): ?int => $mois > $this->ceMois ? null : $parMois[$mois], $this->mois), $unite, $enLigne, $axeDeDroite, $pointilles);
 
             if ($this->moisCompares !== null) {
                 $compares = $valeurs($this->moisCompares);
-                $comparaisons[] = SerieDuGraphique::jeu($libelle.' (un an plus tôt)', array_map(fn (string $mois): int => $compares[$mois], $this->moisCompares), $unite, $enLigne, $axeDeDroite);
+                $comparaisons[] = SerieDuGraphique::jeu($libelle.' (un an plus tôt)', array_map(fn (string $mois): int => $compares[$mois], $this->moisCompares), $unite, $enLigne, $axeDeDroite, $pointilles);
             }
         }
 

@@ -576,7 +576,7 @@ class ConnexionParIdentifiantTest extends TestCase
         $this->dansLeMagasin($magasin, $prudent);
         $this->get(PosteReconnuResource::getUrl('index', tenant: $magasin))->assertForbidden();
         $this->assertThrows(fn () => app(PostesReconnus::class)->reconnaitre($prudent, $magasin, 'Mon téléphone', request()), AuthorizationException::class);
-        $this->assertThrows(fn () => app(PostesReconnus::class)->reconnaitre($this->administrateur($magasin, null, AutorisationsSociete::toutes(), PermissionRegistry::toutes()), $magasin, 'Poste', request()), AuthorizationException::class);
+        $this->assertThrows(fn () => app(PostesReconnus::class)->reconnaitre($this->administrateur($magasin, null, AutorisationsSociete::toutes(), self::toutesCellesDUnCompteDeLaSociete()), $magasin, 'Poste', request()), AuthorizationException::class);
         $this->assertSame(2, PosteReconnu::withoutGlobalScopes()->count());
     }
 

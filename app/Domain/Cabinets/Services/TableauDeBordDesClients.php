@@ -3,6 +3,7 @@
 namespace App\Domain\Cabinets\Services;
 
 use App\Domain\Cabinets\Models\LienCabinet;
+use App\Domain\Charges\Services\ChargesAFaire;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
@@ -37,7 +38,7 @@ final class TableauDeBordDesClients
     public function __construct(private readonly AccesDesCabinets $acces) {}
 
     /**
-     * @return list<array{lien: string, client: Societe, actif_depuis: mixed, magasins: int, factures: array{nombre: int, restant_du: int, nombre_en_retard: int, restant_du_en_retard: int}|null}>
+     * @return list<array{lien: string, client: Societe, actif_depuis: mixed, magasins: int, factures: array{nombre: int, restant_du: int, nombre_en_retard: int, restant_du_en_retard: int}|null, charges_a_valider: int}>
      */
     public function pour(User $compte): array
     {
@@ -56,11 +57,12 @@ final class TableauDeBordDesClients
         $factures = $this->facturesAEncaisser(ValeursLues::entiers($suivis->keys()))
             ->each(fn (Facture $facture): Facture => $facture->setRelation('magasin', $suivis[$facture->magasin_id]));
 
+        $chargesAValider = app(ChargesAFaire::class)->aValiderParClient($compte, ValeursLues::entiers($clients->keys()));
         $client = fn (LienCabinet $lien): Societe => ValeurRequise::de($clients->get($lien->societe_id), 'le client d\'un lien ouvert');
 
         return array_values($liens
             ->sortBy(fn (LienCabinet $lien): string => mb_strtolower((string) $client($lien)->raison_sociale))
-            ->map(function (LienCabinet $lien) use ($client, $magasins, $suivis, $factures): array {
+            ->map(function (LienCabinet $lien) use ($client, $magasins, $suivis, $factures, $chargesAValider): array {
                 $siens = $suivis->where('societe_id', $lien->societe_id)->keys()->all();
 
                 return [
@@ -69,6 +71,7 @@ final class TableauDeBordDesClients
                     'actif_depuis' => $lien->actif_depuis,
                     'magasins' => $magasins->where('societe_id', $lien->societe_id)->count(),
                     'factures' => $siens === [] ? null : Facture::totauxAEncaisser($factures->whereIn('magasin_id', $siens)),
+                    'charges_a_valider' => $chargesAValider[$lien->societe_id] ?? 0,
                 ];
             })
             ->all());

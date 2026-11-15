@@ -53,7 +53,9 @@ class ControleDesDroitsTest extends TestCase
      * Chaque autorisation, et si elle reste permise dans un magasin en
      * lecture seule : consulter, clôturer la journée, noter les preuves
      * d'exonération et les bordereaux de détaxe (décision de l'éditeur du
-     * 01/11/2026, Q-AF12) et gérer l'équipe seulement.
+     * 01/11/2026, Q-AF12), ajouter et valider les charges de la société,
+     * qui préparent la TVA jusqu'au bout (lot CHARGES, décision de Claude,
+     * D76) et gérer l'équipe seulement.
      *
      * @return array<string, array{0: string, 1: bool}>
      */
@@ -79,6 +81,8 @@ class ControleDesDroitsTest extends TestCase
             PermissionRegistry::DOCUMENTS_TELECHARGER,
             PermissionRegistry::GRAPHIQUES_VOIR,
             PermissionRegistry::FACTURE_JUSTIFIER,
+            PermissionRegistry::CHARGES_AJOUTER,
+            PermissionRegistry::CHARGES_VALIDER,
         ];
         $refusees = [
             PermissionRegistry::CLIENT_CREATE,
@@ -122,7 +126,9 @@ class ControleDesDroitsTest extends TestCase
     /**
      * Chaque autorisation, et si le propriétaire l'a dans un magasin actif :
      * toutes, sauf les quatre de la vente (précision 1 de l'éditeur : il ne
-     * vend jamais).
+     * vend jamais) et la validation des charges, qui ne s'accorde qu'au
+     * cabinet lié ou à l'expert-comptable déclaré (décision de l'éditeur du
+     * 14/11/2026, lot CHARGES).
      *
      * @return array<string, array{0: string, 1: bool}>
      */
@@ -130,7 +136,7 @@ class ControleDesDroitsTest extends TestCase
     {
         $deVente = [PermissionRegistry::FACTURE_CREATE, PermissionRegistry::FACTURE_EMETTRE, PermissionRegistry::PAIEMENT_CREER, PermissionRegistry::STOCK_VENDRE_SANS_STOCK];
 
-        return array_map(static fn (array $regle): array => [$regle[0], ! in_array($regle[0], $deVente, true)], self::autorisationsEnLectureSeule());
+        return array_map(static fn (array $regle): array => [$regle[0], ! in_array($regle[0], [...$deVente, PermissionRegistry::CHARGES_VALIDER], true)], self::autorisationsEnLectureSeule());
     }
 
     /**
@@ -153,6 +159,13 @@ class ControleDesDroitsTest extends TestCase
         $this->assertSame($accordee, $proprietaire->can($permission));
     }
 
+    /**
+     * Le propriétaire d'un magasin suspendu garde chaque autorisation
+     * permise en lecture seule, sauf la validation des charges, qu'il n'a
+     * dans aucun magasin : elle ne s'accorde qu'au cabinet lié ou à
+     * l'expert-comptable déclaré (décision de l'éditeur du 14/11/2026, lot
+     * CHARGES).
+     */
     #[DataProvider('autorisationsEnLectureSeule')]
     public function test_le_proprietaire_d_un_magasin_suspendu_ne_garde_que_les_autorisations_permises(string $permission, bool $permise): void
     {
@@ -160,7 +173,7 @@ class ControleDesDroitsTest extends TestCase
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->suspendre($magasin);
 
-        $this->assertSame($permise, $proprietaire->can($permission));
+        $this->assertSame($permise && $permission !== PermissionRegistry::CHARGES_VALIDER, $proprietaire->can($permission));
     }
 
     /**
@@ -500,9 +513,11 @@ class ControleDesDroitsTest extends TestCase
     /**
      * Un responsable a toutes les autorisations de son magasin, sans case,
      * sauf le téléchargement des documents par période (décision de
-     * l'éditeur du 03/11/2026, E3) et les graphiques du tableau de bord
-     * (décision de l'éditeur du 14/11/2026), que seul le propriétaire lui
-     * coche, et aucune dans un autre magasin de la société.
+     * l'éditeur du 03/11/2026, E3), les graphiques du tableau de bord et
+     * l'ajout des charges (décisions de l'éditeur du 14/11/2026, lots GRAPH
+     * et CHARGES), que seul le propriétaire lui coche, et la validation
+     * des charges, réservée aux comptables, et aucune dans un autre magasin
+     * de la société.
      */
     public function test_un_responsable_a_toutes_les_autorisations_de_son_magasin_et_aucune_ailleurs(): void
     {
@@ -514,7 +529,7 @@ class ControleDesDroitsTest extends TestCase
 
         app(TenantContext::class)->set($magasin);
         foreach (PermissionRegistry::toutes() as $permission) {
-            $this->assertSame(! in_array($permission, [PermissionRegistry::DOCUMENTS_TELECHARGER, PermissionRegistry::GRAPHIQUES_VOIR], true), $responsable->can($permission), "{$permission} dans son magasin");
+            $this->assertSame(! in_array($permission, [PermissionRegistry::DOCUMENTS_TELECHARGER, PermissionRegistry::GRAPHIQUES_VOIR, PermissionRegistry::CHARGES_AJOUTER, PermissionRegistry::CHARGES_VALIDER], true), $responsable->can($permission), "{$permission} dans son magasin");
         }
 
         app(TenantContext::class)->set($autre);

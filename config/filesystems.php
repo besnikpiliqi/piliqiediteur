@@ -71,6 +71,19 @@ return [
             'report' => false,
         ],
 
+        // Les pièces des charges de la société (voir PiecesDesCharges) : un
+        // dossier par société, des noms tirés par l'application, jamais
+        // servies qu'en pièce jointe à qui voit leur charge ; conservées
+        // comme les charges validées.
+        'pieces_de_charge' => [
+            'driver' => 'local',
+            'root' => storage_path('app/private/pieces-de-charge'),
+            'visibility' => 'private',
+            'serve' => false,
+            'throw' => true,
+            'report' => false,
+        ],
+
         // Les fichiers préparés par le téléchargement des documents par
         // période (voir PreparerLeTelechargementDesDocumentsJob) : un ZIP
         // ou un CSV par demande, servi seulement au compte qui l'a

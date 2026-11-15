@@ -114,6 +114,19 @@ enum ActionAuditee: string implements HasLabel
     case VisaDeDetaxeNote = 'visa_de_detaxe_note';
     case NominationGardee = 'nomination_gardee';
     case EcartSireneVerifie = 'ecart_sirene_verifie';
+    case ChargeDeposee = 'charge_deposee';
+    case ChargeSaisie = 'charge_saisie';
+    case ChargeValidee = 'charge_validee';
+    case ChargeRenvoyee = 'charge_renvoyee';
+    case ChargeCorrigee = 'charge_corrigee';
+    case ChargeSupprimee = 'charge_supprimee';
+    case PieceDeChargeDeposee = 'piece_de_charge_deposee';
+    case PieceDeChargeRefusee = 'piece_de_charge_refusee';
+    case PieceDeChargeBloquee = 'piece_de_charge_bloquee';
+    case TypeDeChargeAjoute = 'type_de_charge_ajoute';
+    case TypeDeChargeArchive = 'type_de_charge_archive';
+    case TypeDeChargeRestaure = 'type_de_charge_restaure';
+    case TypesDeChargeHabituelsChoisis = 'types_de_charge_habituels_choisis';
 
     /**
      * Les mots qui, dans un nom de champ (entre ses traits de soulignement,
@@ -226,6 +239,19 @@ enum ActionAuditee: string implements HasLabel
             self::VisaDeDetaxeNote => 'Visa d\'un bordereau de détaxe noté',
             self::NominationGardee => 'Nomination d\'un responsable gardée par le propriétaire',
             self::EcartSireneVerifie => 'Écart relevé au répertoire Sirene vérifié',
+            self::ChargeDeposee => 'Charge déposée',
+            self::ChargeSaisie => 'Chiffres d\'une charge écrits',
+            self::ChargeValidee => 'Charge validée',
+            self::ChargeRenvoyee => 'Charge renvoyée au client',
+            self::ChargeCorrigee => 'Charge validée corrigée',
+            self::ChargeSupprimee => 'Charge supprimée',
+            self::PieceDeChargeDeposee => 'Pièce d\'une charge déposée',
+            self::PieceDeChargeRefusee => 'Pièce d\'une charge refusée par ses contrôles',
+            self::PieceDeChargeBloquee => 'Pièce d\'une charge bloquée par l\'antivirus',
+            self::TypeDeChargeAjoute => 'Type de charge ajouté',
+            self::TypeDeChargeArchive => 'Type de charge archivé',
+            self::TypeDeChargeRestaure => 'Type de charge restauré',
+            self::TypesDeChargeHabituelsChoisis => 'Types de charge habituels choisis',
         };
     }
 
@@ -497,6 +523,26 @@ enum ActionAuditee: string implements HasLabel
             // L'écart relevé au répertoire Sirene dit vérifié : son motif et
             // l'instant où il a été relevé (voir VerifierUnEcartSireneAction).
             self::EcartSireneVerifie => ['motif', 'signale_le'],
+            // Une charge de la société (décision de l'éditeur du 14/11/2026,
+            // lot CHARGES) : avant et après chaque geste, ce qu'en dit
+            // ChargesDeLaSociete::valeurs() ; le mot d'un renvoi et le motif
+            // d'une correction, et qui a validé.
+            self::ChargeDeposee, self::ChargeSaisie, self::ChargeValidee, self::ChargeRenvoyee, self::ChargeCorrigee, self::ChargeSupprimee => [
+                'charge', 'etat', 'magasin', 'type', 'fournisseur', 'numero_piece', 'date_piece', 'date_paiement', 'mois_tva',
+                'fournisseur_hors_france', 'vehicule_utilitaire', 'note', 'lignes', 'total_ht', 'total_tva', 'total_ttc',
+                'total_tva_deductible', 'tva_a_verifier', 'validee_par', 'motif',
+            ],
+            // La pièce d'une charge : la charge, le nom et l'empreinte de la
+            // pièce (de celle qu'elle remplace, en ancienne valeur), et, au
+            // dépôt et au refus, le nom tel que reçu, l'empreinte et la
+            // taille du fichier reçu (voir PiecesDesCharges).
+            self::PieceDeChargeDeposee => ['charge', 'piece', 'nom_recu', 'empreinte_recue', 'taille_recue'],
+            self::PieceDeChargeRefusee => ['charge', 'raison', 'detail', 'nom_recu', 'empreinte_recue', 'taille_recue'],
+            self::PieceDeChargeBloquee => ['charge', 'piece', 'menace'],
+            // Un type de charge de la société, et les types de la liste de
+            // PILIQI qu'elle coche « habituels ».
+            self::TypeDeChargeAjoute, self::TypeDeChargeArchive, self::TypeDeChargeRestaure => ['type', 'nature'],
+            self::TypesDeChargeHabituelsChoisis => ['types'],
         };
     }
 }

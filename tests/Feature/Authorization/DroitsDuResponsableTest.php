@@ -44,9 +44,11 @@ class DroitsDuResponsableTest extends TestCase
      * Les paramètres du magasin, la clôture de la journée, la fermeture de
      * la caisse d'un vendeur, les achats et le stock : tout, sans case,
      * sauf le téléchargement des documents par période (décision de
-     * l'éditeur du 03/11/2026, E3) et les graphiques du tableau de bord
-     * (décision de l'éditeur du 14/11/2026), que seul le propriétaire lui
-     * coche.
+     * l'éditeur du 03/11/2026, E3), les graphiques du tableau de bord et
+     * l'ajout des charges de la société (décisions de l'éditeur du
+     * 14/11/2026, lots GRAPH et CHARGES), que seul le propriétaire lui
+     * coche, et la validation des charges, qui ne s'accorde qu'au cabinet
+     * lié ou à l'expert-comptable déclaré.
      */
     public function test_un_responsable_a_tous_les_droits_de_son_magasin_sans_case(): void
     {
@@ -55,7 +57,7 @@ class DroitsDuResponsableTest extends TestCase
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
         app(TenantContext::class)->set($magasin);
 
-        $this->assertEqualsCanonicalizing(array_values(array_diff(PermissionRegistry::toutes(), [PermissionRegistry::DOCUMENTS_TELECHARGER, PermissionRegistry::GRAPHIQUES_VOIR])), $responsable->autorisationsDans($magasin));
+        $this->assertEqualsCanonicalizing(array_values(array_diff(PermissionRegistry::toutes(), [PermissionRegistry::DOCUMENTS_TELECHARGER, PermissionRegistry::GRAPHIQUES_VOIR, PermissionRegistry::CHARGES_AJOUTER, PermissionRegistry::CHARGES_VALIDER])), $responsable->autorisationsDans($magasin));
         foreach ([PermissionRegistry::PARAMETRES_GERER, PermissionRegistry::RELANCES_REGLER, PermissionRegistry::PRIX_VENTE_REGLER, PermissionRegistry::CLOTURE_CAISSE_GERER, PermissionRegistry::FACTURE_ACHAT_VALIDER, PermissionRegistry::PRODUIT_AJUSTER_STOCK, PermissionRegistry::AVOIR_CREER, PermissionRegistry::PAIEMENT_CONTRE_PASSER] as $autorisation) {
             $this->assertTrue($responsable->can($autorisation), $autorisation);
         }
@@ -142,7 +144,7 @@ class DroitsDuResponsableTest extends TestCase
         $second = $this->responsable($magasin);
 
         $this->assertEqualsCanonicalizing($premier->autorisationsDans($magasin), $second->autorisationsDans($magasin));
-        $this->assertEqualsCanonicalizing(array_values(array_diff(PermissionRegistry::toutes(), [PermissionRegistry::DOCUMENTS_TELECHARGER, PermissionRegistry::GRAPHIQUES_VOIR])), $second->autorisationsDans($magasin));
+        $this->assertEqualsCanonicalizing(array_values(array_diff(PermissionRegistry::toutes(), [PermissionRegistry::DOCUMENTS_TELECHARGER, PermissionRegistry::GRAPHIQUES_VOIR, PermissionRegistry::CHARGES_AJOUTER, PermissionRegistry::CHARGES_VALIDER])), $second->autorisationsDans($magasin));
     }
 
     /**
@@ -159,7 +161,7 @@ class DroitsDuResponsableTest extends TestCase
         foreach ($comptes as [$sonMagasin, $responsable]) {
             /** @var Magasin $sonMagasin */
             /** @var User $responsable */
-            $this->assertEqualsCanonicalizing(array_values(array_diff(PermissionRegistry::toutes(), [PermissionRegistry::DOCUMENTS_TELECHARGER, PermissionRegistry::GRAPHIQUES_VOIR])), $responsable->autorisationsDans($sonMagasin), $sonMagasin->nom);
+            $this->assertEqualsCanonicalizing(array_values(array_diff(PermissionRegistry::toutes(), [PermissionRegistry::DOCUMENTS_TELECHARGER, PermissionRegistry::GRAPHIQUES_VOIR, PermissionRegistry::CHARGES_AJOUTER, PermissionRegistry::CHARGES_VALIDER])), $responsable->autorisationsDans($sonMagasin), $sonMagasin->nom);
             $this->assertTrue($responsable->estResponsableDe($sonMagasin));
 
             foreach ([$magasin, $autre, $troisieme] as $ailleurs) {

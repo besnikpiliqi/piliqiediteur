@@ -438,3 +438,4 @@
 - 15/11 09:10 UTC — Onglet « Mes questions » rev 132 : n° 3 (sécurité de la connexion, « oui tu fait ») ajouté à la série du 14/11, titre « … et la sécurité de la connexion (14 et 15/11) » ; 441 réponses, 152 à appliquer.
 - 15/11 09:55 UTC — Constats de l'éditeur sur les graphiques : en-tête des cartes (croix qui tombe sous un titre long) ajouté au cahier DATEOP ; menu Période (exercice = année quand clos en décembre) en attente du choix A/B.
 - 15/11 10:00 UTC — Réponse « B » (menu Période) écrite au cahier DATEOP ; DIRECTIVES.
+- 15/11 10:00 UTC — Constat « Ajouter un graphique » (menu qui reste sur le choix, message sur « — Choisir — ») ajouté au cahier DATEOP, point 3.

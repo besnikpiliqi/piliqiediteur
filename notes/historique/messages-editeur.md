@@ -2682,3 +2682,9 @@ la sur "Chiffre d'affaires par magasin" je vois le X (croix) en bas mais s 'est 
 
 B
 
+## 302. 2026-11-15 09:57 UTC
+
+[1 capture(s) d'écran jointe(s)]
+
+et ca aussi quand je choisi "Ajouter un graphique" alors quand on choisi le model alors un fois ajouter le model alors cette menu dois revenier à son default "Choisir" et pas rester sur ce qui vient d etre choisi et quand je remet moi meme en "Choisir" alors il affiche se mesage en haut qui existe pas ce choix. il faut que tu regle
+

@@ -2688,3 +2688,13 @@ B
 
 et ca aussi quand je choisi "Ajouter un graphique" alors quand on choisi le model alors un fois ajouter le model alors cette menu dois revenier à son default "Choisir" et pas rester sur ce qui vient d etre choisi et quand je remet moi meme en "Choisir" alors il affiche se mesage en haut qui existe pas ce choix. il faut que tu regle
 
+## 303. 2026-11-15 10:10 UTC
+
+[2 capture(s) d'écran jointe(s)]
+
+tu peux m expliquer pourquoi dans "Paiements reçus" il y en a plusieur recus de different alors que je suis dans "Facture FAC-HALLES-2026-000003" avec numero 000003 et dans les recus il y en a d autre nummero ? tu m explqiue car peut etre je comprends pas
+
+## 304. 2026-11-15 10:13 UTC
+
+oui
+

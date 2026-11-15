@@ -444,3 +444,4 @@
 - 15/11 10:30 UTC — Abréviations des modes de paiement dans les relevés de caisse ajoutées au cahier DATEOP, point 5.
 - 15/11 10:40 UTC — Point 5 du cahier DATEOP réécrit (une ligne par mode, pas de légende). REGUL:correction en cours, avec la réparation des cartes en tâche 1.
 - 15/11 10:50 UTC — Choix A (garder « Total » des modes) écrit au cahier DATEOP point 5.
+- 15/11 11:05 UTC — Demande prioritaire et permanente de l'éditeur : semis complet de toutes les tables et de tous les cas, par compte. Cahier seed2/cahier-SEED-TOUT.md ; DATEOP le fait EN PREMIER (commit à part) avec le point 6 du protocole de rigueur de CLAUDE.md.

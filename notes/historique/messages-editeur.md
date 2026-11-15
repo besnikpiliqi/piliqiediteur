@@ -2738,3 +2738,9 @@ c 'est bien mais tu met pas le total car il est deja sur "TTC vendu"? qu est tu 
 
 A
 
+## 310. 2026-11-15 10:37 UTC
+
+[1 capture(s) d'écran jointe(s)]
+
+pour cette parti tu creer un demo avec seed car je veux voir tout les donnes remplis deja avec seed. mais tu oublie pas ! il faut que tu fasse le seed pour tout tout et pour tout les compte separament afin que je puisse voir les donnes reel comment resemble car t as vu la aujourdhui je viens de voir qq petit defaut grace qu donnes deja existant. donc tu fais pour tous les tables (dans la base de donnees)  qui existent des seed en plusieurs meme bcp de donnes en tout cas, donc il faut avoir des donnnes pour tous les cas du logiciel. met ce que je te dis en priorite dans mes regle strict pour toujours de toujours.
+

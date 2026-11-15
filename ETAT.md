@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 15/11/2026 à 10:29 UTC par pilotage-sync.sh : « Choix A total ».
+Mis à jour le 15/11/2026 à 10:39 UTC par pilotage-sync.sh : « Cahier SEED-TOUT ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -39,8 +39,15 @@ eba4bc85 Relecture du lot ER-PRO
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
+ M app/Domain/Facturation/Services/RegularisationDUneFacture.php
+ M app/Domain/Tenancy/Services/ChosesAFaireDuMagasin.php
+ M app/Filament/App/Resources/AvoirResource.php
+ M app/Filament/App/Resources/FactureResource.php
+ M app/Filament/App/Resources/PaiementResource.php
+ M app/Filament/Concerns/EnvoieLesDocuments.php
  M tests/Browser/Parcours/CartesDesNotificationsTest.php
  M tests/Browser/Support/Navigation.php
+ M tests/Feature/Facturation/RegularisationDUneFactureTest.php
 ```
 
 ## Dernière course de la chaîne

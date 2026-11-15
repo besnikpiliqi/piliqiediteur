@@ -1,12 +1,13 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 15/11/2026 à 20:20 UTC par pilotage-sync.sh : « Course reprise : DATEOP partie 7 (MAX_PARTIES 10) ».
+Mis à jour le 15/11/2026 à 22:21 UTC par pilotage-sync.sh : « Point de suivi 22:20 UTC : DATEOP partie 8 ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
 Tête poussée : `b6015883`. Commits locaux pas encore poussés :
 
 ```
+90a4426c Écrans : classes de style absentes de la feuille de Filament
 9e14f02f Semis complet de toutes les tables et de tous les cas
 93939942 Réparation de la CI rouge de b6015883
 ```
@@ -39,6 +40,37 @@ eba4bc85 Relecture du lot ER-PRO
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
+ M CLAUDE.md
+ M README.md
+ M app/Domain/CaisseSecurisee/Actions/ExporterJournalDesEvenementsAction.php
+ M app/Domain/Charges/Enums/EtatDeLaCharge.php
+ M app/Domain/Charges/Models/Charge.php
+ M app/Domain/Charges/Services/ChargesDeLaSociete.php
+ M app/Domain/Charges/Services/TvaDeLaPeriode.php
+ M app/Domain/Facturation/Services/MiseEnPageA4.php
+ M app/Domain/Facturation/Services/RecapitulatifDesDocuments.php
+ M app/Domain/Fichiers/EnTetesDesFichiers.php
+ M app/Domain/Fichiers/NomDeFichier.php
+ M app/Domain/Tenancy/Enums/ActionAuditee.php
+ M app/Filament/PageDesCharges.php
+ M composer.json
+ M composer.lock
+ M database/seeders/Semis/DerniersGestes.php
+ M resources/views/filament/page-des-charges.blade.php
+ M tests/Browser/Parcours/ChargesTest.php
+ M tests/Browser/inventaire-des-actions.php
+ M tests/Feature/Fichiers/ControleDesFichiersTest.php
+ M tests/Feature/SemisCompletTest.php
+?? app/Domain/Charges/Enums/FormatDeLEtat.php
+?? app/Domain/Charges/Services/EtatDesCharges.php
+?? app/Domain/Charges/Services/EtatDesChargesEnExcel.php
+?? app/Domain/Charges/Services/EtatDesChargesEnPdf.php
+?? app/Domain/Charges/Support/ContenuDeLEtat.php
+?? app/Domain/Charges/Support/FiltresDeLEtat.php
+?? app/Domain/Charges/Support/TextesDesCharges.php
+?? app/Domain/Fichiers/CelluleDeTableur.php
+?? resources/views/charges/
+?? tests/Feature/Charges/EtatDesChargesTest.php
 ```
 
 ## Dernière course de la chaîne
@@ -46,7 +78,6 @@ eba4bc85 Relecture du lot ER-PRO
 Course `wf_ee9b6e6e-908`, étapes commencées (de la plus ancienne à la plus récente) :
 
 ```
-GRAPH:correction
 GRAPH:poussee
 GRAPH:notes
 CHARGES:implementation
@@ -71,4 +102,5 @@ DATEOP:implementation-4
 DATEOP:implementation-5
 DATEOP:implementation-6
 DATEOP:implementation-7
+DATEOP:implementation-8
 ```

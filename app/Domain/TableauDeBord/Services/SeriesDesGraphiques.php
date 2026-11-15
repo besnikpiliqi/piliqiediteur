@@ -426,19 +426,14 @@ final class SeriesDesGraphiques
             return $calcul->historiqueDuStock;
         }
 
-        $htDesLignes = [];
+        $lignesDeLaMarge = [];
 
         if ($calcul->montre(Graphique::MargeBruteParMois)) {
             $marge = $calcul->perimetre->magasinsDe(Graphique::MargeBruteParMois)->modelKeys();
-
-            foreach ($this->lignesDeVente($calcul) as $ligne) {
-                if ($ligne['produit'] !== null && in_array($ligne['magasin'], $marge, true)) {
-                    $htDesLignes[$ligne['document'] === 'facture' ? "facture:{$ligne['document_id']}:{$ligne['produit']}" : "avoir_ligne:{$ligne['ligne_id']}"] = $ligne['ht'];
-                }
-            }
+            $lignesDeLaMarge = array_values(array_filter($this->lignesDeVente($calcul), fn (array $ligne): bool => $ligne['produit'] !== null && in_array($ligne['magasin'], $marge, true)));
         }
 
-        return $calcul->historiqueDuStock = $this->stock->historique($calcul->perimetre, $calcul->perimetre->magasinsAvec(SourceDesGraphiques::Stock), $calcul->tousLesMois(), $htDesLignes);
+        return $calcul->historiqueDuStock = $this->stock->historique($calcul->perimetre, $calcul->perimetre->magasinsAvec(SourceDesGraphiques::Stock), $calcul->tousLesMois(), $lignesDeLaMarge);
     }
 
     /**

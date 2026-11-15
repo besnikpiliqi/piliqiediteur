@@ -29,7 +29,7 @@ use stdClass;
  * ou de cartes.
  *
  * @phpstan-type DocumentDeVente array{document: 'facture'|'avoir', id: int, magasin: int, jour: string, ht: int, tva: int, ttc: int, type_client: string, client: int, client_nom: string|null}
- * @phpstan-type LigneDeVente array{document: 'facture'|'avoir', document_id: int, ligne_id: int, magasin: int, jour: string, nature: string, produit: int|null, service: int|null, description: string, quantite: int, taux: int, ht: int, tva: int, ttc: int}
+ * @phpstan-type LigneDeVente array{document: 'facture'|'avoir', document_id: int, ligne_id: int, magasin: int, jour: string, nature: string, produit: int|null, service: int|null, description: string, quantite: int, taux: int, ht: int, tva: int, ttc: int, sortie_par: int|null}
  */
 final class VentesDuTableauDeBord
 {
@@ -134,7 +134,12 @@ final class VentesDuTableauDeBord
     /**
      * Les lignes des tickets, des factures et des avoirs émis du $du au $au
      * compris ; une ligne d'avoir d'un service porte le service de la ligne
-     * vendue qu'elle corrige.
+     * vendue qu'elle corrige. Une ligne qui ne bouge pas le stock, parce
+     * qu'elle régularise une vente qui l'a déjà fait, porte la facture de
+     * cette vente (sortie_par) : la ligne d'une facture rectificative, la
+     * facture qu'elle rectifie ; la ligne d'un avoir de régularisation, la
+     * facture de la ligne qu'elle corrige (voir RegularisationDUneFacture
+     * et RegularisationDUneExoneration) ; null pour toute autre ligne.
      *
      * @param  Collection<int, Magasin>  $magasins
      * @return list<LigneDeVente>
@@ -153,11 +158,11 @@ final class VentesDuTableauDeBord
         $colonnes = ['nature', 'description', 'quantite', 'taux_tva', 'montant_ht', 'montant_tva', 'montant_ttc', 'produit_id'];
         $vendues = $this->emis('factures', $magasins, $jours)
             ->join('lignes_facture', fn ($jointure) => $jointure->on('lignes_facture.facture_id', '=', 'factures.id')->on('lignes_facture.magasin_id', '=', 'factures.magasin_id'))
-            ->get(['factures.id as document_id', 'lignes_facture.id as ligne_id', 'factures.magasin_id', 'factures.date_emission', 'lignes_facture.service_id', ...array_map(fn (string $colonne): string => "lignes_facture.{$colonne}", $colonnes)]);
+            ->get(['factures.id as document_id', 'lignes_facture.id as ligne_id', 'factures.magasin_id', 'factures.date_emission', 'factures.facture_rectifiee_id as sortie_par', 'lignes_facture.service_id', ...array_map(fn (string $colonne): string => "lignes_facture.{$colonne}", $colonnes)]);
         $rendues = $this->emis('avoirs', $magasins, $jours)
             ->join('lignes_avoir', fn ($jointure) => $jointure->on('lignes_avoir.avoir_id', '=', 'avoirs.id')->on('lignes_avoir.magasin_id', '=', 'avoirs.magasin_id'))
             ->leftJoin('lignes_facture', fn ($jointure) => $jointure->on('lignes_facture.id', '=', 'lignes_avoir.ligne_facture_id')->on('lignes_facture.magasin_id', '=', 'lignes_avoir.magasin_id'))
-            ->get(['avoirs.id as document_id', 'lignes_avoir.id as ligne_id', 'avoirs.magasin_id', 'avoirs.date_emission', 'lignes_facture.service_id', ...array_map(fn (string $colonne): string => "lignes_avoir.{$colonne}", $colonnes)]);
+            ->get(['avoirs.id as document_id', 'lignes_avoir.id as ligne_id', 'avoirs.magasin_id', 'avoirs.date_emission', 'avoirs.motif_regularisation', 'lignes_facture.facture_id as facture_corrigee', 'lignes_facture.service_id', ...array_map(fn (string $colonne): string => "lignes_avoir.{$colonne}", $colonnes)]);
         $lignes = [];
 
         foreach (['facture' => $vendues, 'avoir' => $rendues] as $document => $lues) {
@@ -193,6 +198,9 @@ final class VentesDuTableauDeBord
             'ht' => $this->calculateur->enCentiemes($ligne->montant_ht),
             'tva' => $this->calculateur->enCentiemes($ligne->montant_tva),
             'ttc' => $this->calculateur->enCentiemes($ligne->montant_ttc),
+            'sortie_par' => $document === 'avoir'
+                ? ($ligne->motif_regularisation === null ? null : ValeurSimple::enEntierOuNul($ligne->facture_corrigee))
+                : ValeurSimple::enEntierOuNul($ligne->sortie_par),
         ];
     }
 

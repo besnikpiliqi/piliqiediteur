@@ -9,7 +9,6 @@ use App\Domain\Cabinets\Models\LienCabinet;
 use App\Domain\Cabinets\Services\AccesDesCabinets;
 use App\Domain\Tenancy\Enums\RoleSociete;
 use App\Domain\Tenancy\Enums\StatutCompte;
-use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Support\CleDuModele;
 use App\Domain\Tenancy\Support\CompteConnecte;
@@ -25,6 +24,8 @@ use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Query\Builder as RequeteSql;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Les clients liés d'un cabinet d'expertise comptable, dans l'espace du
@@ -80,8 +81,41 @@ class ClientDuCabinetResource extends RessourceDuPanneauCabinet
         $compte = auth()->user();
 
         return $compte instanceof User
-            ? app(AccesDesCabinets::class)->liensOuverts($compte)->with(['client' => fn ($client) => $client->select(['id', 'uuid', 'siren', 'raison_sociale', 'siege_ville'])])
+            ? app(AccesDesCabinets::class)->liensOuverts($compte)
+                ->with(['client' => fn ($client) => $client->select(['id', 'uuid', 'siren', 'raison_sociale', 'siege_ville'])])
+                ->addSelect(['magasins_reels' => self::magasinsReels()])
             : LienCabinet::query()->withoutGlobalScopes()->whereRaw('1 = 0');
+    }
+
+    /**
+     * Le nombre de magasins réels que le client ouvre au cabinet par ce
+     * lien, lu dans la requête de la liste, quel que soit le nombre de
+     * clients : tous ses magasins réels, présents et futurs, ou ceux de sa
+     * sélection (voir LienCabinet::magasinsChoisis()), chacun filtré par la
+     * société du lien.
+     */
+    private static function magasinsReels(): RequeteSql
+    {
+        return DB::table('magasins')
+            ->selectRaw('count(*)')
+            ->whereColumn('magasins.societe_id', 'liens_cabinet.societe_id')
+            ->where('magasins.est_demonstration', false)
+            ->where(fn (RequeteSql $ouverts) => $ouverts
+                ->where('liens_cabinet.tous_les_magasins', true)
+                ->orWhereIn('magasins.id', fn (RequeteSql $choisis) => $choisis
+                    ->from('magasins_cabinet')
+                    ->whereColumn('magasins_cabinet.lien_id', 'liens_cabinet.id')
+                    ->whereColumn('magasins_cabinet.societe_id', 'liens_cabinet.societe_id')
+                    ->select('magasins_cabinet.magasin_id')));
+    }
+
+    /**
+     * Le nombre de magasins réels que ce client, lu dans la liste, ouvre
+     * au cabinet (voir magasinsReels()).
+     */
+    public static function nombreDeMagasinsReels(LienCabinet $lien): int
+    {
+        return ValeursLues::entier($lien->getAttribute('magasins_reels'));
     }
 
     /**
@@ -105,7 +139,7 @@ class ClientDuCabinetResource extends RessourceDuPanneauCabinet
                 Tables\Columns\TextColumn::make('actif_depuis')->label('Lié depuis')->dateTime('d/m/Y'),
                 Tables\Columns\TextColumn::make('magasins')
                     ->label('Magasins réels')
-                    ->state(fn (LienCabinet $record): int => $record->tous_les_magasins ? Magasin::query()->where('societe_id', $record->societe_id)->where('est_demonstration', false)->count() : count($record->magasinsChoisis())),
+                    ->state(fn (LienCabinet $record): int => self::nombreDeMagasinsReels($record)),
                 Tables\Columns\TextColumn::make('collaborateurs')
                     ->label('Collaborateurs confiés')
                     ->state(fn (LienCabinet $record): array => self::collaborateursConfies($record))
@@ -126,13 +160,17 @@ class ClientDuCabinetResource extends RessourceDuPanneauCabinet
 
     /**
      * Le tableau de bord du client : ses chiffres clés et ses graphiques
-     * (voir GraphiquesDuClient), pour qui ouvre ce client.
+     * (voir GraphiquesDuClient), pour qui ouvre ce client, dès qu'il ouvre
+     * au cabinet un magasin réel au moins (voir
+     * PerimetreDesGraphiques::voitLesGraphiquesDuClient()) ; une société
+     * invitée par le cabinet naît sans magasin.
      */
     public static function actionGraphiques(): Tables\Actions\Action
     {
         return Tables\Actions\Action::make('graphiques')
             ->label('Graphiques')
             ->icon('heroicon-o-chart-bar')
+            ->visible(fn (LienCabinet $record): bool => self::nombreDeMagasinsReels($record) > 0)
             ->url(fn (LienCabinet $record): string => static::getUrl('graphiques', ['record' => $record]));
     }
 

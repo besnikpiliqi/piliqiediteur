@@ -161,6 +161,43 @@ class PreferencesDesGraphiquesTest extends TestCase
     }
 
     /**
+     * « Monter » et « Descendre » déplacent la carte parmi celles que la
+     * grille montre : l'administrateur qui ne voit pas les achats de
+     * Villeurbanne et l'a choisi dans le filtre y voit le chiffre
+     * d'affaires puis les avoirs ; « Monter » sur les avoirs les passe
+     * devant le chiffre d'affaires, « Ventes et achats », qu'il ne voit pas
+     * ici, gardant sa place, et « Descendre » les remet après.
+     */
+    public function test_monter_et_descendre_deplacent_la_carte_parmi_celles_que_la_grille_montre(): void
+    {
+        [$lyon, $villeurbanne] = $this->deuxMagasins();
+        $modele = [...PermissionRegistry::modeleDeLAdministrateur(TypeDActivite::Commerce), PermissionRegistry::GRAPHIQUES_VOIR];
+        $administrateur = $this->administrateur($lyon, [$lyon->id, $villeurbanne->id], autorisationsMagasin: [
+            $lyon->id => $modele,
+            $villeurbanne->id => array_values(array_diff($modele, [PermissionRegistry::FACTURE_ACHAT_VIEW, PermissionRegistry::AVOIR_FOURNISSEUR_VIEW])),
+        ]);
+        $this->dansLEspaceDeLaSociete($lyon->societe, $administrateur);
+        app(PreferencesDesGraphiques::class)->enregistrer($administrateur, EcranDuTableauDeBord::Societe, new ReglagesDuTableauDeBord([
+            CarteDuTableauDeBord::parDefaut(Graphique::ChiffreDAffairesParMois),
+            CarteDuTableauDeBord::parDefaut(Graphique::VentesEtAchatsParMois),
+            CarteDuTableauDeBord::parDefaut(Graphique::AvoirsParMois),
+        ], magasin: (string) $villeurbanne->uuid));
+        $grille = Livewire::test(GrilleDesGraphiques::class, ['ecran' => EcranDuTableauDeBord::Societe->value]);
+        $grille->assertViewHas('cartes', fn (array $cartes): bool => array_column(array_column($cartes, 'carte'), 'graphique') === [Graphique::ChiffreDAffairesParMois, Graphique::AvoirsParMois]);
+
+        $grille->call('monter', Graphique::AvoirsParMois->value)->assertHasNoErrors();
+
+        $grille->assertViewHas('cartes', fn (array $cartes): bool => array_column(array_column($cartes, 'carte'), 'graphique') === [Graphique::AvoirsParMois, Graphique::ChiffreDAffairesParMois]);
+        $this->assertSame([Graphique::AvoirsParMois, Graphique::VentesEtAchatsParMois, Graphique::ChiffreDAffairesParMois], $this->graphiquesDe($administrateur, $lyon));
+
+        $this->dansLEspaceDeLaSociete($lyon->societe, $administrateur);
+        $grille->call('descendre', Graphique::AvoirsParMois->value)->assertHasNoErrors();
+
+        $grille->assertViewHas('cartes', fn (array $cartes): bool => array_column(array_column($cartes, 'carte'), 'graphique') === [Graphique::ChiffreDAffairesParMois, Graphique::AvoirsParMois]);
+        $this->assertSame([Graphique::ChiffreDAffairesParMois, Graphique::VentesEtAchatsParMois, Graphique::AvoirsParMois], $this->graphiquesDe($administrateur, $lyon));
+    }
+
+    /**
      * Les graphiques retenus de ce compte dans l'espace de la société.
      *
      * @return list<Graphique>

@@ -593,6 +593,16 @@ return [
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › l’observateur ouvre chaque page et chaque action du magasin sans erreur',
         ]],
     ],
+    'app/Filament/App/Resources/ClotureCaissePersonnelleResource/Widgets/CaissesOuvertesDeLEquipeApercu.php' => [
+        'widget' => ['lot' => 'NAV-2', 'tests' => [
+            'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action du magasin sans erreur',
+            'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur autorisé à vendre ouvre chaque page et chaque action du magasin sans erreur',
+            'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur sans la vente ouvre chaque page et chaque action du magasin sans erreur',
+            'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le propriétaire d’une société qui attend son code ouvre chaque page et chaque action du magasin de démonstration sans erreur',
+            'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le responsable d’entraînement ouvre chaque page et chaque action du magasin de démonstration sans erreur',
+            'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
+        ]],
+    ],
     'app/Filament/App/Resources/ClotureCaissePersonnelleResource/Pages/ListClotureCaissePersonnelles.php' => [
         'action:fermer_la_caisse_d_un_vendeur' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action du magasin sans erreur',
@@ -3036,16 +3046,32 @@ return [
             'tests/Browser/Parcours/ExpertComptableDeclareTest.php › la personne de l’expert-comptable d’une société sans magasin réel arrive sur la page qui le lui dit et s’en déconnecte',
         ]],
     ],
+    'app/Filament/App/Widgets/GraphiquesDuMagasin.php' => [
+        'widget' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › le propriétaire, dans le panneau d’un magasin, ajoute un graphique, en change le type, le monte, et retrouve tout après le rechargement, sans filtre des magasins',
+            'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › un administrateur à qui le propriétaire coche les graphiques compose sa grille dans l’espace de la société puis dans le panneau de son magasin, et retrouve chacune après le rechargement',
+            'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › un responsable à qui le propriétaire coche les graphiques compose sa grille dans le panneau de son magasin et la retrouve après le rechargement',
+            'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › un responsable à qui le propriétaire coche les graphiques les voit dans le panneau de son magasin, sans filtre ni comparaison des magasins',
+            'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › le propriétaire du cabinet compose la page des graphiques d’un client, la retrouve après le rechargement, puis compose celle du panneau d’un magasin du client',
+            'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › le collaborateur à qui le client est confié compose la page des graphiques du client, la retrouve après le rechargement, puis compose celle du panneau d’un magasin du client',
+            'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › l’expert-comptable déclaré compose « Tableau de bord de la société », la retrouve après le rechargement, puis compose la grille du panneau de son magasin',
+            'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › une observatrice ne voit ni les chiffres clés ni les graphiques dans le panneau de son magasin',
+            'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › un vendeur ne voit ni les chiffres clés ni les graphiques, ni la page de la société',
+        ]],
+    ],
     'app/Filament/App/Pages/TableauDeBordDeLaSociete.php' => [
         'page' => ['lot' => 'NAV-4', 'tests' => [
             'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › l’expert-comptable déclaré ouvre « Tableau de bord de la société » depuis son menu',
             'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › un vendeur ne voit ni les chiffres clés ni les graphiques, ni la page de la société',
+            'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › l’expert-comptable déclaré compose « Tableau de bord de la société », la retrouve après le rechargement, puis compose la grille du panneau de son magasin',
         ]],
     ],
     'app/Filament/Cabinet/Resources/ClientDuCabinetResource/Pages/GraphiquesDuClient.php' => [
         'page' => ['lot' => 'NAV-5', 'tests' => [
             'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › le collaborateur à qui le client est confié ouvre la page de ses graphiques depuis la liste des clients',
             'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › le propriétaire du cabinet ouvre les graphiques d’un client depuis sa fiche',
+            'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › le propriétaire du cabinet compose la page des graphiques d’un client, la retrouve après le rechargement, puis compose celle du panneau d’un magasin du client',
+            'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › le collaborateur à qui le client est confié compose la page des graphiques du client, la retrouve après le rechargement, puis compose celle du panneau d’un magasin du client',
         ]],
     ],
     'app/Filament/GrilleDesGraphiques.php' => [
@@ -3057,18 +3083,37 @@ return [
             'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › l’expert-comptable déclaré ouvre « Tableau de bord de la société » depuis son menu',
             'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › un vendeur ne voit ni les chiffres clés ni les graphiques, ni la page de la société',
             'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › le propriétaire choisit la période, un magasin et la comparaison, classe les meilleurs produits par quantité, déplace deux cartes, lit les chiffres d’une carte, et retrouve tout après le rechargement',
+            'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › le propriétaire, dans le panneau d’un magasin, ajoute un graphique, en change le type, le monte, et retrouve tout après le rechargement, sans filtre des magasins',
+            'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › un administrateur à qui le propriétaire coche les graphiques compose sa grille dans l’espace de la société puis dans le panneau de son magasin, et retrouve chacune après le rechargement',
+            'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › un responsable à qui le propriétaire coche les graphiques compose sa grille dans le panneau de son magasin et la retrouve après le rechargement',
+            'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › le propriétaire du cabinet compose la page des graphiques d’un client, la retrouve après le rechargement, puis compose celle du panneau d’un magasin du client',
+            'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › le collaborateur à qui le client est confié compose la page des graphiques du client, la retrouve après le rechargement, puis compose celle du panneau d’un magasin du client',
+            'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › l’expert-comptable déclaré compose « Tableau de bord de la société », la retrouve après le rechargement, puis compose la grille du panneau de son magasin',
+            'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › une observatrice ne voit ni les chiffres clés ni les graphiques dans le panneau de son magasin',
         ]],
     ],
     'resources/views/filament/grille-des-graphiques.blade.php' => [
         'changement:ajouterUnGraphique' => ['lot' => 'NAV-4', 'tests' => [
             'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › le propriétaire voit les quatre chiffres et les graphiques par défaut, ajoute la marge, passe un graphique en camembert, en retire un, et retrouve tout après le rechargement',
             'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › le propriétaire choisit la période, un magasin et la comparaison, classe les meilleurs produits par quantité, déplace deux cartes, lit les chiffres d’une carte, et retrouve tout après le rechargement',
+            'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › le propriétaire, dans le panneau d’un magasin, ajoute un graphique, en change le type, le monte, et retrouve tout après le rechargement, sans filtre des magasins',
+            'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › un administrateur à qui le propriétaire coche les graphiques compose sa grille dans l’espace de la société puis dans le panneau de son magasin, et retrouve chacune après le rechargement',
+            'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › un responsable à qui le propriétaire coche les graphiques compose sa grille dans le panneau de son magasin et la retrouve après le rechargement',
+            'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › le propriétaire du cabinet compose la page des graphiques d’un client, la retrouve après le rechargement, puis compose celle du panneau d’un magasin du client',
+            'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › le collaborateur à qui le client est confié compose la page des graphiques du client, la retrouve après le rechargement, puis compose celle du panneau d’un magasin du client',
+            'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › l’expert-comptable déclaré compose « Tableau de bord de la société », la retrouve après le rechargement, puis compose la grille du panneau de son magasin',
         ]],
         'changement:changerLaMesure' => ['lot' => 'NAV-4', 'tests' => [
             'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › le propriétaire choisit la période, un magasin et la comparaison, classe les meilleurs produits par quantité, déplace deux cartes, lit les chiffres d’une carte, et retrouve tout après le rechargement',
         ]],
         'changement:changerLeType' => ['lot' => 'NAV-4', 'tests' => [
             'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › le propriétaire voit les quatre chiffres et les graphiques par défaut, ajoute la marge, passe un graphique en camembert, en retire un, et retrouve tout après le rechargement',
+            'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › le propriétaire, dans le panneau d’un magasin, ajoute un graphique, en change le type, le monte, et retrouve tout après le rechargement, sans filtre des magasins',
+            'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › un administrateur à qui le propriétaire coche les graphiques compose sa grille dans l’espace de la société puis dans le panneau de son magasin, et retrouve chacune après le rechargement',
+            'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › un responsable à qui le propriétaire coche les graphiques compose sa grille dans le panneau de son magasin et la retrouve après le rechargement',
+            'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › le propriétaire du cabinet compose la page des graphiques d’un client, la retrouve après le rechargement, puis compose celle du panneau d’un magasin du client',
+            'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › le collaborateur à qui le client est confié compose la page des graphiques du client, la retrouve après le rechargement, puis compose celle du panneau d’un magasin du client',
+            'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › l’expert-comptable déclaré compose « Tableau de bord de la société », la retrouve après le rechargement, puis compose la grille du panneau de son magasin',
         ]],
         'changement:choisirLaPeriode' => ['lot' => 'NAV-4', 'tests' => [
             'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › le propriétaire choisit la période, un magasin et la comparaison, classe les meilleurs produits par quantité, déplace deux cartes, lit les chiffres d’une carte, et retrouve tout après le rechargement',
@@ -3084,6 +3129,12 @@ return [
         ]],
         'clic:monter' => ['lot' => 'NAV-4', 'tests' => [
             'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › le propriétaire choisit la période, un magasin et la comparaison, classe les meilleurs produits par quantité, déplace deux cartes, lit les chiffres d’une carte, et retrouve tout après le rechargement',
+            'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › le propriétaire, dans le panneau d’un magasin, ajoute un graphique, en change le type, le monte, et retrouve tout après le rechargement, sans filtre des magasins',
+            'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › un administrateur à qui le propriétaire coche les graphiques compose sa grille dans l’espace de la société puis dans le panneau de son magasin, et retrouve chacune après le rechargement',
+            'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › un responsable à qui le propriétaire coche les graphiques compose sa grille dans le panneau de son magasin et la retrouve après le rechargement',
+            'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › le propriétaire du cabinet compose la page des graphiques d’un client, la retrouve après le rechargement, puis compose celle du panneau d’un magasin du client',
+            'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › le collaborateur à qui le client est confié compose la page des graphiques du client, la retrouve après le rechargement, puis compose celle du panneau d’un magasin du client',
+            'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › l’expert-comptable déclaré compose « Tableau de bord de la société », la retrouve après le rechargement, puis compose la grille du panneau de son magasin',
         ]],
         'clic:retirerLeGraphique' => ['lot' => 'NAV-4', 'tests' => [
             'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › le propriétaire voit les quatre chiffres et les graphiques par défaut, ajoute la marge, passe un graphique en camembert, en retire un, et retrouve tout après le rechargement',

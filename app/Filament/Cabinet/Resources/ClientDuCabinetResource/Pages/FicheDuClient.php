@@ -5,6 +5,7 @@ namespace App\Filament\Cabinet\Resources\ClientDuCabinetResource\Pages;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Cabinets\Models\LienCabinet;
 use App\Domain\Cabinets\Services\AccesDesCabinets;
+use App\Domain\TableauDeBord\Services\PerimetreDesGraphiques;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Support\CompteConnecte;
@@ -37,6 +38,7 @@ class FicheDuClient extends ViewRecord
                 ->label('Graphiques')
                 ->icon('heroicon-o-chart-bar')
                 ->color('gray')
+                ->visible(fn (): bool => app(PerimetreDesGraphiques::class)->voitLesGraphiquesDuClient(CompteConnecte::exiger(), $this->lien()))
                 ->url(fn (): string => ClientDuCabinetResource::getUrl('graphiques', ['record' => $this->lien()])),
             Action::make('mettreFin')
                 ->label('Mettre fin au lien')

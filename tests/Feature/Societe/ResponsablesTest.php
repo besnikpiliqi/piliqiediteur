@@ -337,6 +337,38 @@ class ResponsablesTest extends TestCase
     }
 
     /**
+     * Le propriétaire coche « Tableau de bord : voir les graphiques » au
+     * responsable qu'un administrateur vient de nommer, puis la nomination
+     * s'annule, par le propriétaire depuis la fiche du compte ou par
+     * l'administrateur qui l'a faite : la personne redevient vendeur avec
+     * ses cases d'avant, sans la case des graphiques, qu'un vendeur n'a
+     * jamais (la base la refuse), sans aucune erreur.
+     */
+    public function test_la_nomination_d_un_responsable_coche_aux_graphiques_s_annule_sans_la_case_des_graphiques(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $proprietaire = $this->proprietaireDe($magasin);
+        $administrateur = $this->administrateur($magasin, null, [AutorisationsSociete::RESPONSABLES_NOMMER]);
+
+        foreach (['proprietaire' => $proprietaire, 'administrateur' => $administrateur] as $qui => $auteur) {
+            $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW, PermissionRegistry::PRODUIT_VIEW]);
+            app(ModifierMembreAction::class)->handle($administrateur, $vendeur, RoleMagasin::Responsable);
+            app(ModifierMembreAction::class)->handle($proprietaire, $vendeur->refresh(), RoleMagasin::Responsable, [PermissionRegistry::GRAPHIQUES_VOIR]);
+            $nomination = Affectation::query()->where('user_id', $vendeur->id)->sole();
+            $this->assertSame([(int) $administrateur->id, [PermissionRegistry::GRAPHIQUES_VOIR]], [(int) $nomination->nomme_par, $nomination->autorisations()], $qui);
+
+            $this->dansLEspaceDeLaSociete($magasin->societe, $auteur);
+            Livewire::test(FicheDuMembre::class, ['record' => $vendeur->getRouteKey()])
+                ->callAction('annulerLaNomination', ['affectation' => $nomination->id])
+                ->assertHasNoActionErrors();
+
+            $affectation = Affectation::query()->where('user_id', $vendeur->id)->sole();
+            $this->assertSame([RoleMagasin::Vendeur, null, null], [$affectation->role, $affectation->nomme_par, $affectation->avant_la_nomination], $qui);
+            $this->assertSame([PermissionRegistry::FACTURE_VIEW, PermissionRegistry::PRODUIT_VIEW], $affectation->autorisations(), $qui);
+        }
+    }
+
+    /**
      * Un autre administrateur, même autorisé à nommer les responsables du
      * même magasin, n'annule pas la nomination d'un collègue : le bouton
      * n'apparaît pas, et l'action la refuse.

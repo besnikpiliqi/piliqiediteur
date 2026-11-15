@@ -155,8 +155,10 @@ class Affectation extends Model
     }
 
     /**
-     * Efface toutes ses cases : avant qu'elle devienne celle d'un
-     * responsable, qui n'a que celles que le propriétaire est seul à cocher.
+     * Efface toutes ses cases, avant qu'elle change de rôle : un
+     * responsable n'a que celles que le propriétaire est seul à cocher, un
+     * vendeur ou un observateur jamais les graphiques du tableau de bord
+     * (voir GardesDesDroits).
      */
     public function effacerLesCases(): void
     {

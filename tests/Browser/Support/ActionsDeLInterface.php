@@ -3,6 +3,7 @@
 namespace Tests\Browser\Support;
 
 use Filament\Pages\Page;
+use Filament\Widgets\Widget;
 use Illuminate\Routing\Route;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Route as Routes;
@@ -18,8 +19,11 @@ use ReflectionClass;
  *   de connexion, d'inscription, de profil...), d'après les routes de
  *   Filament ; « page:Classe » : une page qu'une classe de Filament sert
  *   (le tableau de bord d'un magasin), dans le fournisseur de son panneau ;
- * - « widget » et « composant » : chaque widget et chaque composant
- *   Livewire monté par une vue (app/Filament) ;
+ * - « widget » et « composant » : chaque widget (une classe dont le parent
+ *   finit par « Widget », ou qui hérite d'un widget de Filament par une
+ *   classe de l'application, comme GraphiquesDuMagasin de
+ *   GrilleDesGraphiques) et chaque composant Livewire monté par une vue
+ *   (app/Filament) ;
  * - « action:nom » : chaque action de Filament (d'en-tête, de ligne,
  *   groupée, de formulaire, de fiche, d'un avis), par le nom qu'elle reçoit
  *   à sa création (Action::make('nom')), ou celui de sa classe (« edit »
@@ -182,7 +186,11 @@ final class ActionsDeLInterface
 
         $parent = preg_match('/^(?:final\s+|abstract\s+)?class\s+\w+\s+extends\s+([\w\\\\]+)/m', $code, $extends) === 1 ? ($alias[self::nomCourt($extends[1])] ?? self::nomCourt($extends[1])) : null;
 
-        if ($parent !== null && str_ends_with($parent, 'Widget')) {
+        $declaree = preg_match('/^namespace\s+([\w\\\\]+);/m', $code, $espace) === 1 && preg_match('/^(?:final\s+|abstract\s+)?class\s+(\w+)/m', $code, $nomDeLaClasse) === 1
+            ? $espace[1].'\\'.$nomDeLaClasse[1]
+            : null;
+
+        if (($parent !== null && str_ends_with($parent, 'Widget')) || ($declaree !== null && class_exists($declaree) && is_subclass_of($declaree, Widget::class))) {
             $elements[] = 'widget';
         }
 

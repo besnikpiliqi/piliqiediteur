@@ -19,13 +19,18 @@ use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Pages\TableauDeBordDeLaSociete;
 use App\Filament\App\Widgets\GraphiquesDuMagasin;
 use App\Filament\Cabinet\Resources\ClientDuCabinetResource;
+use App\Filament\Cabinet\Resources\ClientDuCabinetResource\Pages\FicheDuClient;
+use App\Filament\Cabinet\Resources\ClientDuCabinetResource\Pages\GraphiquesDuClient;
+use App\Filament\Cabinet\Resources\ClientDuCabinetResource\Pages\ListClientsDuCabinet;
 use App\Filament\GrilleDesGraphiques;
 use App\Filament\Societe\Pages\TableauDeBord;
+use Database\Factories\SocieteFactory;
 use Filament\Pages\Dashboard;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 use LogicException;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
@@ -264,6 +269,85 @@ class QuiVoitLesGraphiquesTest extends TestCase
         $this->flushSession();
         $this->actingAs($confie);
         $this->get($adresse)->assertOk()->assertSeeLivewire(GrilleDesGraphiques::NOM);
+    }
+
+    /**
+     * Un client que le cabinet a invité naît validé et lié, sans magasin :
+     * ni la liste des clients ni sa fiche n'offrent « Graphiques », et sa
+     * page, ouverte par l'adresse directe, dit qu'il n'a encore aucun
+     * magasin au lieu de monter la grille ; un client qui a un magasin
+     * réel offre « Graphiques » et monte la grille.
+     */
+    public function test_un_client_sans_magasin_n_offre_pas_de_graphiques_et_sa_page_le_dit(): void
+    {
+        [$lyon] = $this->deuxMagasins();
+        $proprietaireDuCabinet = $this->proprietaireDuCabinet($this->collaborateurDuCabinetLie($lyon)->societe()->firstOrFail());
+        $cabinet = $proprietaireDuCabinet->societe()->firstOrFail();
+        $invite = $this->accepterLInvitation($this->inviterUneEntreprise($cabinet, SocieteFactory::sirenFictif(), 'dirigeant@entreprise.test'))->societe()->firstOrFail();
+        $sansMagasin = $this->lienActif($invite);
+        $avecMagasin = $this->lienActif($lyon->societe);
+
+        $this->assertFalse(app(PerimetreDesGraphiques::class)->voitLesGraphiquesDuClient($proprietaireDuCabinet, $sansMagasin));
+        $this->assertTrue(app(PerimetreDesGraphiques::class)->voitLesGraphiquesDuClient($proprietaireDuCabinet, $avecMagasin));
+        $this->dansLEspaceDuCabinet($cabinet, $proprietaireDuCabinet);
+        Livewire::test(ListClientsDuCabinet::class)
+            ->assertTableActionHidden('graphiques', $sansMagasin->getKey())
+            ->assertTableActionVisible('graphiques', $avecMagasin->getKey())
+            ->assertTableColumnStateSet('magasins', 0, $sansMagasin->getKey())
+            ->assertTableColumnStateSet('magasins', 2, $avecMagasin->getKey());
+        Livewire::test(FicheDuClient::class, ['record' => $sansMagasin->getRouteKey()])->assertActionHidden('graphiques');
+        Livewire::test(FicheDuClient::class, ['record' => $avecMagasin->getRouteKey()])->assertActionVisible('graphiques');
+
+        app(TenantContext::class)->clear();
+        $this->flushSession();
+        $this->actingAs($proprietaireDuCabinet);
+        $this->get(ClientDuCabinetResource::getUrl('graphiques', ['record' => $sansMagasin], panel: 'cabinet', tenant: $cabinet))
+            ->assertOk()
+            ->assertSee(GraphiquesDuClient::SANS_MAGASIN)
+            ->assertDontSeeLivewire(GrilleDesGraphiques::NOM);
+        $this->get(ClientDuCabinetResource::getUrl('graphiques', ['record' => $avecMagasin], panel: 'cabinet', tenant: $cabinet))
+            ->assertOk()
+            ->assertSeeLivewire(GrilleDesGraphiques::NOM);
+    }
+
+    /**
+     * Les trois pages qui montent la grille.
+     *
+     * @return array<string, array{0: string}>
+     */
+    public static function pagesDeLaGrille(): array
+    {
+        return [
+            'espace de la société' => ['societe'],
+            'page d\'un client du cabinet' => ['cabinet'],
+            'page de l\'expert-comptable déclaré' => ['expert-comptable'],
+        ];
+    }
+
+    /**
+     * La grille se charge en différé sur les trois pages qui la montent
+     * (l'espace de la société, la page d'un client du cabinet, celle de
+     * l'expert-comptable déclaré) : la page s'ouvre sans ses calculs, ni
+     * chiffres clés ni filtres dans sa première réponse, et la grille vient
+     * ensuite, quand le navigateur la demande.
+     */
+    #[DataProvider('pagesDeLaGrille')]
+    public function test_la_grille_se_charge_en_differe_sur_les_pages_qui_la_montent(string $page): void
+    {
+        [$lyon] = $this->deuxMagasins();
+        [$compte, $adresse] = match ($page) {
+            'societe' => [$this->proprietaireDe($lyon), TableauDeBord::getUrl(panel: 'societe', tenant: $lyon->societe)],
+            'cabinet' => [$collaborateur = $this->collaborateurDuCabinetLie($lyon), ClientDuCabinetResource::getUrl('graphiques', ['record' => $this->lienActif($lyon->societe)], panel: 'cabinet', tenant: $collaborateur->societe()->firstOrFail())],
+            default => [$this->expertComptable($lyon), TableauDeBordDeLaSociete::getUrl(panel: 'app', tenant: $lyon)],
+        };
+        app(TenantContext::class)->clear();
+
+        $this->actingAs($compte);
+        $reponse = $this->get($adresse)->assertOk()->assertSeeLivewire(GrilleDesGraphiques::NOM);
+
+        $this->assertStringContainsString('__lazyLoad', (string) $reponse->getContent());
+        $this->assertStringNotContainsString('CA HT du mois', (string) $reponse->getContent());
+        $this->assertStringNotContainsString('piliqi-graphiques__filtres', (string) $reponse->getContent());
     }
 
     /**

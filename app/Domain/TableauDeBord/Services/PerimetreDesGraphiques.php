@@ -150,6 +150,24 @@ final class PerimetreDesGraphiques
     }
 
     /**
+     * Voit-il les graphiques de ce client dans l'espace du cabinet ? Le
+     * lien est l'un de ceux que le cabinet lui ouvre, et le client lui
+     * ouvre au moins un magasin réel : une société invitée par le cabinet
+     * naît sans magasin. La fiche du client et la page de ses graphiques
+     * le demandent avant d'offrir « Graphiques » ou d'y monter la grille.
+     */
+    public function voitLesGraphiquesDuClient(User $compte, LienCabinet $lien): bool
+    {
+        try {
+            $this->duClient($compte, $lien);
+        } catch (AuthorizationException) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
      * Le périmètre de la page « Tableau de bord de la société » de
      * l'expert-comptable déclaré : les magasins de sa déclaration.
      *

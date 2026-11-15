@@ -24,7 +24,11 @@ use Illuminate\Auth\Access\AuthorizationException;
  * l'affectation est celle de cette nomination.
  *
  * Le rôle de responsable disparaît de ce magasin :
- * - une promotion rend à la personne son rôle et ses cases d'avant ;
+ * - une promotion rend à la personne son rôle et ses cases d'avant : les
+ *   cases du responsable (celles que le propriétaire a pu lui cocher depuis,
+ *   comme les graphiques du tableau de bord, qu'un vendeur ou un
+ *   observateur n'a jamais) s'effacent avant que son rôle change (voir
+ *   GardesDesDroits) ;
  * - une affectation que la nomination avait créée disparaît, avec elle le
  *   seul magasin du compte (créé par la nomination) : la personne est
  *   retirée de la société, ses sessions se ferment.
@@ -70,6 +74,7 @@ class AnnulerUneNominationAction
                     return;
                 }
 
+                $relue->effacerLesCases();
                 $relue->forceFill(['role' => RoleMagasin::from(ValeursLues::texteDe($avant, 'role')), 'nomme_par' => null, 'avant_la_nomination' => null])->save();
                 $relue->cocher(ValeursLues::tableauDe($avant, 'autorisations'));
             });

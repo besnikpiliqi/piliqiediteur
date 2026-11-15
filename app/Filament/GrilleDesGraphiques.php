@@ -54,7 +54,14 @@ use LogicException;
  * graphique, un type, une période ou un magasin hors de ce que le compte
  * peut voir : la valeur est refusée, rien ne change.
  *
- * Chargé en différé (lazy) : la page s'ouvre sans attendre ses calculs.
+ * Chargé en différé (lazy) sur chaque écran, avec un emplacement à la
+ * hauteur de la grille en attendant : par le tableau de bord du magasin
+ * pour son widget (voir GraphiquesDuMagasin), quand elle paraît à l'écran
+ * ; par le paramètre « lazy » de la vue sur les trois autres pages, dès
+ * que la page est ouverte (« on-load »). La page s'ouvre sans attendre ses
+ * calculs, et un écran qui ne doit pas la montrer ne la monte pas (voir
+ * PerimetreDesGraphiques::voitLesGraphiquesDeLaSociete() et
+ * voitLesGraphiquesDuClient()).
  */
 class GrilleDesGraphiques extends Widget
 {
@@ -70,6 +77,8 @@ class GrilleDesGraphiques extends Widget
     protected static string $view = 'filament.grille-des-graphiques';
 
     protected int|string|array $columnSpan = 'full';
+
+    protected ?string $placeholderHeight = '24rem';
 
     #[Locked]
     public string $ecran = 'magasin';
@@ -290,9 +299,18 @@ class GrilleDesGraphiques extends Widget
         return $reglages->carte($graphique) ?? throw new LogicException(self::REFUS_DE_LA_VALEUR);
     }
 
+    /**
+     * « Monter » ou « Descendre » : la carte change de rang parmi celles
+     * que la grille montre, sur le magasin du filtre (voir
+     * ReglagesDuTableauDeBord::avecLaCarteDeplacee()).
+     */
     private function deplacer(string $graphique, int $sens): void
     {
-        $this->modifier(fn (ReglagesDuTableauDeBord $reglages): ReglagesDuTableauDeBord => $reglages->avecLaCarteDeplacee(Graphique::tryFrom($graphique) ?? throw new LogicException(self::REFUS_DE_LA_VALEUR), $sens));
+        $this->modifier(fn (ReglagesDuTableauDeBord $reglages, Perimetre $perimetre): ReglagesDuTableauDeBord => $reglages->avecLaCarteDeplacee(
+            Graphique::tryFrom($graphique) ?? throw new LogicException(self::REFUS_DE_LA_VALEUR),
+            $sens,
+            $perimetre->restreintA($this->magasinDuFiltre($reglages, $perimetre)),
+        ));
     }
 
     /**

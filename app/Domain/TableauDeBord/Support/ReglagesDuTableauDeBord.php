@@ -140,16 +140,22 @@ final class ReglagesDuTableauDeBord
 
     /**
      * La carte de ce graphique déplacée d'un rang vers le haut (-1) ou vers
-     * le bas (+1) ; rien ne change en bout de grille.
+     * le bas (+1) parmi les cartes que ce périmètre montre (voir
+     * cartesVisibles()) : elle prend la place de la plus proche carte
+     * visible dans ce sens, qui prend la sienne ; les cartes que le
+     * périmètre ne montre pas (un graphique d'un autre magasin du filtre,
+     * d'un autre client du cabinet) gardent leur place. Rien ne change en
+     * bout de grille, ni pour une carte que le périmètre ne montre pas.
      */
-    public function avecLaCarteDeplacee(Graphique $graphique, int $sens): self
+    public function avecLaCarteDeplacee(Graphique $graphique, int $sens, Perimetre $perimetre): self
     {
-        $cartes = $this->cartes;
+        $visibles = array_keys(array_filter($this->cartes, fn (CarteDuTableauDeBord $carte): bool => $perimetre->voit($carte->graphique)));
 
-        foreach ($cartes as $rang => $carte) {
-            $cible = $rang + $sens;
+        foreach ($visibles as $rangVisible => $rang) {
+            $cible = $visibles[$rangVisible + $sens] ?? null;
 
-            if ($carte->graphique === $graphique && isset($cartes[$cible])) {
+            if ($this->cartes[$rang]->graphique === $graphique && $cible !== null) {
+                $cartes = $this->cartes;
                 [$cartes[$rang], $cartes[$cible]] = [$cartes[$cible], $cartes[$rang]];
 
                 return $this->avecLesCartes($cartes);

@@ -67,7 +67,7 @@
     @endif
 
     @if ($this->voitLesGraphiques())
-        @livewire(\App\Filament\GrilleDesGraphiques::NOM, ['ecran' => \App\Domain\TableauDeBord\Enums\EcranDuTableauDeBord::Societe->value], key('graphiques-de-la-societe'))
+        @livewire(\App\Filament\GrilleDesGraphiques::NOM, ['ecran' => \App\Domain\TableauDeBord\Enums\EcranDuTableauDeBord::Societe->value, 'lazy' => 'on-load'], key('graphiques-de-la-societe'))
     @endif
 
     <x-filament::section icon="heroicon-o-shield-check">

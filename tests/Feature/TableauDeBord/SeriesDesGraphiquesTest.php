@@ -7,13 +7,16 @@ use App\Domain\Achats\Actions\ValiderFactureAchatAction;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
+use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
 use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
+use App\Domain\Facturation\Actions\RegulariserUneExonerationNonProuveeAction;
 use App\Domain\Facturation\Enums\ModePaiement;
+use App\Domain\Facturation\Enums\NatureOperation;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\TableauDeBord\Enums\Graphique;
 use App\Domain\TableauDeBord\Enums\PeriodeDuTableauDeBord;
@@ -436,6 +439,46 @@ class SeriesDesGraphiquesTest extends TestCase
         $this->assertNull($chiffres['achats']);
         $this->assertSame(['franchise' => false, 'a_payer' => 1000, 'collectee' => 1000, 'deductible' => 0], $chiffres['tva']);
         $this->assertSame(1000, $tva->jeux[2]['valeurs'][self::OCTOBRE]);
+    }
+
+    /**
+     * Une exonération non prouvée se régularise par un avoir sans retour
+     * en stock et une facture rectificative sans sortie de stock : la
+     * marge du mois de la régularisation en déduit le HT de l'avoir et y
+     * ajoute celui de la rectificative, sans coût de plus. Une lampe suivie
+     * en stock, achetée 52,78 € HT, exportée le 2 octobre 2026 à 500,00 €
+     * HT (600,00 € TTC sans la TVA française), sans preuve de sortie le
+     * 1er mars 2027 : octobre fait 447,22 € de marge (500,00 − 52,78), mars
+     * −83,33 € (−500,00 + 416,67), soit 363,89 € en tout, le chiffre
+     * d'affaires des articles moins leur coût (416,67 − 52,78).
+     */
+    public function test_une_exoneration_regularisee_corrige_la_marge_du_mois_de_sa_regularisation(): void
+    {
+        $this->travelTo(self::aParis('2026-10-01 09:00:00'));
+        $magasin = $this->completerIdentiteLegale($this->ouvrirUneSociete());
+        $responsable = self::responsableDeTest($magasin);
+        $this->actingAs($responsable);
+        $lampe = Produit::factory()->create(['nom' => 'Lampe', 'prix_vente_ttc' => '600.00', 'taux_tva' => 20, 'suivi_stock' => true, 'stock_quantite' => 0]);
+        app(ValiderFactureAchatAction::class)->handle($responsable, app(CreerFactureAchatAction::class)->handle($responsable, Fournisseur::factory()->create(['nom' => 'Grossiste Est']), [
+            ['produit_id' => $lampe->id, 'quantite' => 5, 'prix_unitaire_ht' => '52.78', 'taux_tva' => 20],
+        ], ['date_facture' => '2026-10-01']));
+
+        $this->travelTo(self::aParis('2026-10-02 10:00:00'));
+        $client = Client::factory()->create(['nom' => 'Acme Inc.', 'type_client' => TypeClient::Professionnel, 'pays' => 'US', 'etabli_en_france' => false, 'identifiant_etranger' => 'EIN 12-3456789']);
+        $export = app(EmettreFactureAction::class)->handle($responsable, app(CreerFactureAction::class)->handle($responsable, $client, [['produit_id' => $lampe->id, 'quantite' => 1]], [
+            'nature_operation' => NatureOperation::ExportHorsUe, 'livraison_adresse' => '1 Main Street', 'livraison_code_postal' => '10001', 'livraison_ville' => 'New York', 'livraison_pays' => 'US',
+        ]));
+
+        $this->travelTo(self::aParis('2027-03-01 09:00:00'));
+        $rectificative = app(RegulariserUneExonerationNonProuveeAction::class)->handle($responsable, $export->fresh() ?? $export);
+        $this->assertSame(['500.00', '416.67'], [(string) $export->total_ht, (string) $rectificative->total_ht]);
+
+        $this->travelTo(self::aParis('2027-03-15 12:00:00'));
+        $serie = $this->series($this->perimetreDuProprietaire($magasin), [Graphique::MargeBruteParMois])[Graphique::MargeBruteParMois->value];
+        $marge = array_combine($serie->etiquettes, $serie->jeux[0]['valeurs']);
+
+        $this->assertSame([44722, -8333], [$marge['oct. 2026'], $marge['mars 2027']]);
+        $this->assertSame(36389, array_sum($marge));
     }
 
     /**

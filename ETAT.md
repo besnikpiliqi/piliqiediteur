@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 15/11/2026 à 08:51 UTC par pilotage-sync.sh : « MDP : trois contrôles ajoutés ».
+Mis à jour le 15/11/2026 à 08:53 UTC par pilotage-sync.sh : « Doc Mes questions rev 132 ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 15/11/2026 à 14:13 UTC par pilotage-sync.sh : « Semis : tous les cas sans demande (règle permanente) ».
+Mis à jour le 15/11/2026 à 14:14 UTC par pilotage-sync.sh : « Onglet Protections : règle du semis ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

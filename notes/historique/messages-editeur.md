@@ -2922,3 +2922,13 @@ attend
 
 quand une societe vient s'inscrit chez piliqi alors il faut afficher un bloc qui demande pour la tva si un credit existe deja sur la societe. donc il faut accepte meme negatif car il peut y avoir deja un credit. et ca doit etre apparu chez la societe et chez le comptable. donc le credit de la tva doit etre conseiller verifier par expert comptable pour ne pas faire des erreurs sur le credit. ET pour regime obligatoire je suis d accord avec toi, donc tu peux le faire 1 et 2
 
+## 332. 2026-11-15 15:13 UTC
+
+<!-- attach -->
+
+> Demandé dès l’arrivée de la société.
+
+
+
+c'est tres bien mais il faut pas bloquer le compte demo car il peux s entrainer la desus et une fois valider ce que t as montré alors la societe demmarre son activité sur piliqi
+

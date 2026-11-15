@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 15/11/2026 à 14:44 UTC par pilotage-sync.sh : « Crédit de départ : étape, négatif, vérification du comptable ».
+Mis à jour le 15/11/2026 à 15:14 UTC par pilotage-sync.sh : « TVA27 : démonstration jamais bloquée ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -40,6 +40,8 @@ eba4bc85 Relecture du lot ER-PRO
 ```
  M CLAUDE.md
  M app/Console/Commands/DiagnostiquerCaisseSecurisee.php
+ M app/Domain/Tenancy/Models/DemandeInscription.php
+ M app/Filament/App/Pages/Auth/InscriptionSociete.php
  M bootstrap/app.php
  M database/seeders/DatabaseSeeder.php
  M database/seeders/Semis/ActiviteDesMagasins.php
@@ -52,6 +54,7 @@ eba4bc85 Relecture du lot ER-PRO
 ?? app/Console/Commands/VerifierLIsolation.php
 ?? app/Domain/Tenancy/Isolation/
 ?? database/seeders/Semis/ChargesDesSocietes.php
+?? database/seeders/Semis/CommandesDesProfessionnels.php
 ?? database/seeders/Semis/ComptesDesCas.php
 ?? database/seeders/Semis/DerniersGestes.php
 ?? database/seeders/Semis/DocumentsDesCas.php
@@ -65,7 +68,6 @@ eba4bc85 Relecture du lot ER-PRO
 Course `wf_ee9b6e6e-908`, étapes commencées (de la plus ancienne à la plus récente) :
 
 ```
-GRAPH:implementation-4
 GRAPH:relecture1
 GRAPH:relecture2
 GRAPH:correction
@@ -90,4 +92,5 @@ DATEOP:implementation
 DATEOP:implementation-2
 DATEOP:implementation-3
 DATEOP:implementation-4
+DATEOP:implementation-5
 ```

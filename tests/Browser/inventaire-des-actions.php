@@ -266,7 +266,10 @@ return [
     ],
     'app/Filament/App/Pages/ParametresRelances.php' => [
         'champ:actif' => ['lot' => 'NAV-3', 'tests' => [
+            'tests/Browser/Parcours/RegularisationEtRelancesTest.php › la propriétaire coche « Relancer aussi les particuliers » avec les relances automatiques, et le réglage s’enregistre',
             'tests/Browser/Parcours/RegularisationEtRelancesTest.php › le responsable coche « Relancer aussi les particuliers » avec les relances automatiques, et le réglage s’enregistre',
+            'tests/Browser/Parcours/RegularisationEtRelancesTest.php › le vendeur à qui « Régler les relances » est cochée coche « Relancer aussi les particuliers », et le réglage s’enregistre',
+            'tests/Browser/Parcours/RegularisationEtRelancesTest.php › l’administrateur coche « Relancer aussi les particuliers » avec les relances automatiques, et le réglage s’enregistre',
         ]],
         'page' => ['lot' => 'NAV-3', 'tests' => [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action du magasin sans erreur',
@@ -1489,6 +1492,8 @@ return [
         ]],
         'action:emettreLaFactureRectificative' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Parcours/RegularisationEtRelancesTest.php › le responsable fait l’avoir de régularisation d’une facture désignée, puis seulement émet sa facture rectificative, réglée du crédit de l’avoir',
+            'tests/Browser/Parcours/RegularisationEtRelancesTest.php › le vendeur émet la facture rectificative de la facture qu’il a faite, une fois l’avoir de régularisation fait',
+            'tests/Browser/Parcours/RegularisationEtRelancesTest.php › l’administrateur autorisé à vendre émet la facture rectificative, une fois l’avoir de régularisation fait',
         ]],
         'action:regulariserLExoneration' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Parcours/ExonerationNonProuveeTest.php › le responsable ouvre depuis son « À faire » la liste « Exonération non prouvée », puis régularise chaque export resté sans preuve de sortie 150 jours après sa date, et chaque facture rectificative s’ouvre',
@@ -1509,6 +1514,7 @@ return [
             'tests/Browser/Parcours/EnvoiParEMailTest.php › avec la file d’attente sync, un serveur d’envoi muet fait échouer l’envoi aussitôt, et « Envois » le dit sans annoncer de nouvelle tentative',
         ]],
         'action:faireLAvoirDeRegularisation' => ['lot' => 'NAV-2', 'tests' => [
+            'tests/Browser/Parcours/RegularisationEtRelancesTest.php › la propriétaire fait l’avoir de régularisation d’une facture désignée, et « Émettre la facture rectificative » ne s’offre jamais à elle, qui ne vend pas',
             'tests/Browser/Parcours/RegularisationEtRelancesTest.php › le responsable fait l’avoir de régularisation d’une facture désignée, puis seulement émet sa facture rectificative, réglée du crédit de l’avoir',
         ]],
         'action:noter_bordereau_detaxe' => ['lot' => 'NAV-2', 'tests' => [
@@ -1517,6 +1523,7 @@ return [
         ]],
         'action:relancer' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Parcours/EnvoiParEMailTest.php › chaque compte qui relance une facture échue lit, depuis la liste comme depuis sa fiche, que la relance est demandée, puis son résultat dans « Envois », relu sans rechargement',
+            'tests/Browser/Parcours/RegularisationEtRelancesTest.php › la propriétaire contre-passe le paiement de la facture régularisée : la fenêtre nomme la rectificative, qui porte le dû rouvert et se relance, et la facture régularisée ne se relance pas',
             'tests/Browser/Parcours/RegularisationEtRelancesTest.php › le vendeur relance à la main le ticket échu d’un client particulier qui a une adresse e-mail',
             'tests/Browser/Parcours/RetardEtRelanceDesTicketsTest.php › ni le responsable ni le vendeur ne trouvent « Relancer » sur un ticket du client comptoir échu et resté dû, ni sur la liste ni sur sa fiche, quand ils le trouvent sur la facture échue d’un client nommé',
         ]],
@@ -1709,6 +1716,7 @@ return [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur autorisé à vendre ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur sans la vente ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
+            'tests/Browser/Parcours/RegularisationEtRelancesTest.php › la propriétaire contre-passe le paiement de la facture régularisée : la fenêtre nomme la rectificative, qui porte le dû rouvert et se relance, et la facture régularisée ne se relance pas',
         ]],
         'champ:client_id' => ['lot' => 'NAV-2', 'tests' => []],
         'champ:facture_id' => ['lot' => 'NAV-2', 'tests' => []],

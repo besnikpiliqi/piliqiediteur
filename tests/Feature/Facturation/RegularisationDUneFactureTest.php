@@ -29,6 +29,7 @@ use App\Domain\Facturation\Models\AvoirAllocation;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\LigneAvoir;
 use App\Domain\Facturation\Models\Paiement;
+use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\EReportingDesParticuliers;
 use App\Domain\Facturation\Services\FacturePdfGenerator;
 use App\Domain\Facturation\Services\MentionsFiscales;
@@ -46,6 +47,7 @@ use App\Domain\Tenancy\Enums\DecisionExamenSiren;
 use App\Domain\Tenancy\Enums\MotifCode;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\TypeDActivite;
+use App\Domain\Tenancy\Enums\UrgenceAFaire;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\ChosesAFaireDuMagasin;
@@ -53,6 +55,7 @@ use App\Domain\Tenancy\Services\IdentifiantsInsee;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\ChoseAFaire;
 use App\Domain\Tenancy\Support\InterventionDeLEditeur;
+use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Filament\App\FicheDUnDocument;
 use App\Filament\App\Resources\AvoirResource;
 use App\Filament\App\Resources\AvoirResource\Pages\CreateAvoir;
@@ -60,6 +63,7 @@ use App\Filament\App\Resources\AvoirResource\Pages\ViewAvoir;
 use App\Filament\App\Resources\FactureResource;
 use App\Filament\App\Resources\FactureResource\Pages\ListFactures;
 use App\Filament\App\Resources\FactureResource\Pages\ViewFacture;
+use App\Filament\App\Resources\PaiementResource\Pages\ListPaiements;
 use Brick\Math\BigDecimal;
 use Closure;
 use Database\Factories\SocieteFactory;
@@ -800,6 +804,42 @@ class RegularisationDUneFactureTest extends TestCase
     }
 
     /**
+     * Une facture de deux articles entièrement rendue par un avoir
+     * ordinaire avant la correction du SIREN n'a plus rien à régulariser :
+     * ni avoir de régularisation ni rectificative ne s'y offrent, et
+     * « Nouvel avoir » dit qu'elle n'a plus rien à rendre, sans demander de
+     * la régulariser d'abord. Une facture dont l'avoir de régularisation
+     * est émis, sa rectificative restant à émettre, n'a pas davantage de
+     * ligne à créditer, mais « Nouvel avoir » demande toujours d'en finir
+     * la régularisation.
+     */
+    public function test_une_facture_designee_deja_entierement_creditee_n_a_plus_rien_a_rendre(): void
+    {
+        [$magasin, $facture, $client] = $this->factureDuMagasinDeLyon();
+        $responsable = self::responsableDeTest($magasin);
+        app(EnregistrerAvoirAction::class)->handle($responsable, $client, [['ligne_facture_id' => $facture->lignes()->sole()->id, 'quantite' => 2]], 'Retour');
+        $enAttente = $this->facturer($magasin, $client);
+        $this->corrigerLeSirenDeLaSociete($magasin);
+        app(FaireLAvoirDeRegularisationAction::class)->handle($this->proprietaireDe($magasin), $enAttente->fresh());
+        $regularisation = app(RegularisationDUneFacture::class);
+        $facture = $facture->fresh();
+
+        $this->assertSame(
+            [true, RegularisationDUneFacture::REFUS_RIEN_A_REGULARISER, RegularisationDUneFacture::REFUS_RIEN_A_REGULARISER, null],
+            [$regularisation->estDesignee($facture), $regularisation->refusDeLAvoir($facture), $regularisation->refusDeLaRectificative($facture), $regularisation->refusDUnAvoirOrdinaire($facture)],
+        );
+        $this->dansLeMagasin($magasin->fresh(), $responsable);
+        Livewire::test(ViewFacture::class, ['record' => $facture->getRouteKey()])
+            ->assertActionHidden('faireLAvoirDeRegularisation')
+            ->assertActionHidden('emettreLaFactureRectificative')
+            ->assertActionHidden('avoir');
+        $recherche = Livewire::test(CreateAvoir::class)->fillForm(['recherche' => $facture->numero])->callFormComponentAction('recherche', 'chercher');
+        $this->assertSame(['La facture FAC-LYON-2026-000001 est déjà entièrement créditée : elle n\'a plus rien à rendre.'], $recherche->errors()->get('data.recherche'));
+        $recherche = Livewire::test(CreateAvoir::class)->fillForm(['recherche' => $enAttente->numero])->callFormComponentAction('recherche', 'chercher');
+        $this->assertSame([sprintf(RegularisationDUneFacture::REFUS_RETOUR_AVANT_REGULARISATION, $enAttente->numero)], $recherche->errors()->get('data.recherche'));
+    }
+
+    /**
      * La liste des factures ne propose « Avoir » sur aucune facture désignée
      * qui attend sa régularisation, et lit pour cela la dernière décision
      * d'examen du SIREN une seule fois, quel que soit le nombre de ses
@@ -1019,6 +1059,97 @@ class RegularisationDUneFactureTest extends TestCase
         $this->assertSame([StatutFacture::Payee, 0, StatutFacture::PartiellementPayee, 50000, 0], [$facture->fresh()->statut, $facture->fresh()->resteDuEnCentimes(), $rectificative->fresh()->statut, $rectificative->fresh()->resteDuEnCentimes(), $avoir->fresh()->creditEnCentimes()]);
         $this->assertSame([$rectificative->id], Facture::query()->aEncaisser()->where('client_id', $client->id)->pluck('id')->all());
         $this->assertSame([], app(VerificateurIntegrite::class)->verifier($magasin->fresh())->anomalies());
+    }
+
+    /**
+     * La fenêtre de la contre-passation d'un paiement d'une facture
+     * régularisée dit ce qui va se passer (T68.3) : la facture reste soldée
+     * par son avoir de régularisation, et ce que le paiement y réglait
+     * devient dû sur sa facture rectificative, qu'elle nomme ; elle ne dit
+     * pas que la facture redeviendra due. Après la contre-passation,
+     * l'« À faire » du responsable compte la rectificative parmi les
+     * factures dont un paiement a été contre-passé, en rouge, avec le
+     * badge, comme une facture ordinaire rouverte.
+     */
+    public function test_la_contre_passation_d_un_paiement_de_la_facture_regularisee_se_dit_dans_sa_fenetre_et_son_a_faire(): void
+    {
+        [$magasin, $facture] = $this->factureDUneSocieteCorrigee(quantite: 5);
+        $cinqCents = $this->payer($facture, '500.00');
+        $this->payer($facture, '100.00');
+        [$avoir, $rectificative] = $this->regulariser($magasin, $facture);
+        $proprietaire = $this->proprietaireDe($magasin);
+        $this->dansLeMagasin($magasin->fresh(), $proprietaire);
+
+        Livewire::test(ListPaiements::class)
+            ->mountTableAction('contre_passer', $cinqCents)
+            ->assertSee("La facture {$facture->numero}, régularisée par l'avoir {$avoir->numero}, restera soldée : ce que ce paiement y réglait deviendra dû sur sa facture rectificative {$rectificative->numero}.")
+            ->assertDontSee('redeviendront dues');
+        app(ContrePasserPaiementAction::class)->handle($proprietaire, $cinqCents->fresh(), 'Chèque impayé');
+
+        $responsable = self::responsableDeTest($magasin);
+        $this->dansLeMagasin($magasin->fresh(), $responsable);
+        $aEncaisser = collect(ChosesAFaireDuMagasin::pour($responsable->fresh(), $magasin->fresh())['a_faire'])->firstWhere('cle', 'a_encaisser');
+        $this->assertInstanceOf(ChoseAFaire::class, $aEncaisser);
+        $this->assertSame(
+            [UrgenceAFaire::Rouge, app(CalculateurLigne::class)->enEuros(50000).' restant dû, dont 1 dont un paiement a été contre-passé.', [(string) $rectificative->numero], ['Paiement contre-passé']],
+            [$aEncaisser->urgence, $aEncaisser->precision, array_column($aEncaisser->lignes, 'libelle'), array_column($aEncaisser->lignes, 'badge')],
+        );
+    }
+
+    /**
+     * La fenêtre de la contre-passation d'un paiement qui réglait une
+     * facture ordinaire et une facture régularisée dit l'une et l'autre :
+     * les autres factures redeviendront dues, la régularisée restera soldée
+     * et sa rectificative devra ce qu'il y réglait.
+     */
+    public function test_la_fenetre_de_la_contre_passation_distingue_la_facture_regularisee_des_autres(): void
+    {
+        [$magasin, $facture, $client] = $this->factureDuMagasinDeLyon(quantite: 1);
+        $autre = $this->facturer($magasin, $client);
+        $paiement = app(EnregistrerPaiementAction::class)->handle(self::responsableDeTest($magasin), $client, [
+            'mode_paiement' => ModePaiement::Virement->value,
+            'montant' => '240.00',
+            'recu_le' => $magasin->calendrier()->aujourdhui(),
+        ], [['facture_id' => $facture->id, 'montant' => '120.00'], ['facture_id' => $autre->id, 'montant' => '120.00']]);
+        $this->corrigerLeSirenDeLaSociete($magasin);
+        [$avoir, $rectificative] = $this->regulariser($magasin, $facture);
+        $this->dansLeMagasin($magasin->fresh(), $this->proprietaireDe($magasin));
+
+        Livewire::test(ListPaiements::class)
+            ->mountTableAction('contre_passer', $paiement)
+            ->assertSee('daté d\'aujourd\'hui, et les autres factures qu\'il réglait redeviendront dues.')
+            ->assertSee("La facture {$facture->numero}, régularisée par l'avoir {$avoir->numero}, restera soldée : ce que ce paiement y réglait deviendra dû sur sa facture rectificative {$rectificative->numero}.");
+    }
+
+    /**
+     * La liste des factures lit avec sa page si chaque facture a son avoir
+     * de régularisation, pour l'action « Relancer » de chaque facture échue
+     * et due : autant de lectures pour deux factures échues que pour six,
+     * jamais une par facture.
+     */
+    public function test_la_liste_des_factures_lit_avec_sa_page_si_chaque_facture_est_regularisee(): void
+    {
+        $magasin = $this->magasinDeLyon();
+        $client = Client::factory()->professionnel()->create(['nom' => 'Dupont SAS', 'email' => 'compta@dupont.example']);
+        $responsable = self::responsableDeTest($magasin);
+        $lectures = function () use ($magasin, $responsable): int {
+            $this->dansLeMagasin($magasin->fresh(), $responsable);
+            DB::flushQueryLog();
+            DB::enableQueryLog();
+            $liste = Livewire::test(ListFactures::class);
+            $nombre = collect(DB::getQueryLog())->filter(fn (array $requete): bool => str_contains($requete['query'], 'motif_regularisation'))->count();
+            DB::disableQueryLog();
+            Facture::query()->whereNotNull('numero')->pluck('id')->each(fn (mixed $id) => $liste->assertTableActionVisible('relancer', ValeurSimple::enTexte($id)));
+
+            return $nombre;
+        };
+        collect([1, 2])->each(fn (): Facture => $this->facturer($magasin, $client));
+        $this->travelTo(self::aParis('2026-12-01 10:00:00'));
+        $pourDeux = $lectures();
+        collect([1, 2, 3, 4])->each(fn (): Facture => $this->facturer($magasin->fresh(), $client));
+        $this->travelTo(self::aParis('2027-02-01 10:00:00'));
+
+        $this->assertSame([1, 1], [$pourDeux, $lectures()]);
     }
 
     /**

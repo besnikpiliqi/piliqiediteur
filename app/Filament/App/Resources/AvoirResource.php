@@ -384,8 +384,8 @@ class AvoirResource extends Resource
      * Un avoir se fait sur ce ticket ou cette facture : émis, avec encore
      * une ligne à créditer, par une personne qui peut créer un avoir, et
      * que sa régularisation n'en empêche pas (une facture désignée par
-     * l'examen du SIREN de la société, ou sa facture rectificative qui
-     * attend encore l'avoir de régularisation, voir
+     * l'examen du SIREN de la société qui a encore quelque chose à
+     * régulariser, ou une facture qui a sa rectificative, voir
      * RegularisationDUneFacture::refusDUnAvoirOrdinaire()). Le bouton
      * « Avoir » de la liste des factures, une fenêtre qui ne quitte pas la
      * liste, apparaît ainsi (la liste charge avec ses factures leur

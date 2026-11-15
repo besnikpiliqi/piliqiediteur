@@ -134,7 +134,8 @@ trait EnvoieLesDocuments
      * n'y est à relancer (lot DEMO-V) ; « Envoyer par e-mail » reste, pour
      * un ticket donné par e-mail au client présent. Ni sur une facture
      * régularisée, dont le dû se porte sur sa facture rectificative (T68.3,
-     * voir RegularisationDUneFacture::refusDeLaRelance()).
+     * voir RegularisationDUneFacture::refusDeLaRelance()) : la liste des
+     * factures le lit avec sa page (voir FactureResource::table()).
      *
      * @template TAction of MountableAction
      *
@@ -150,7 +151,7 @@ trait EnvoieLesDocuments
             ->modalHeading(fn (Facture $record): string => 'Relance n°'.($record->niveauDeRelanceAtteint() + 1)." : {$record->libelleDocument()} {$record->numero}")
             ->modalDescription('Le client reçoit la facture en pièce jointe, avec le rappel de son montant, de son échéance et de ce qu\'il reste à payer.')
             ->modalSubmitActionLabel('Relancer')
-            ->visible(fn (Facture $record): bool => ! ($record->client?->estComptoir() ?? false) && $record->estEchueEtImpayee() && ! $record->magasin->est_demonstration && CompteConnecte::exiger()->can('envoyer', $record) && app(RegularisationDUneFacture::class)->refusDeLaRelance($record) === null)
+            ->visible(fn (Facture $record): bool => ! ($record->client?->estComptoir() ?? false) && $record->estEchueEtImpayee() && ! $record->magasin->est_demonstration && CompteConnecte::exiger()->can('envoyer', $record) && ! app(RegularisationDUneFacture::class)->estRegularisee($record))
             ->fillForm(fn (Facture $record): array => ['destinataire' => ValeurRequise::de($record->client, 'le client de la facture relancée')->email])
             ->form([static::champDuJeton(), self::champDestinataire()])
             ->action(fn (Facture $record, array $data) => static::executerSansCasser(function () use ($record, $data) {

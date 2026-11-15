@@ -224,7 +224,11 @@ final class ChosesAFaireDuMagasin
      * encaisser, et pour un membre autorisé à contre-passer (point 16 de
      * la série 8). Leur nombre, leur restant dû, ceux en retard et ceux
      * dont un paiement a été contre-passé, puis les dix plus anciens par
-     * échéance.
+     * échéance. Une facture rectificative compte parmi ces derniers quand
+     * la contre-passation d'un paiement de la facture qu'elle rectifie lui
+     * a repris le crédit de l'avoir de régularisation : le dû rouvert porte
+     * sur elle (T68.3, voir ContrePasserPaiementAction), la facture
+     * régularisée restant soldée.
      */
     private function facturesAEncaisser(): ?ChoseAFaire
     {
@@ -238,8 +242,13 @@ final class ChosesAFaireDuMagasin
             ->aEncaisser()
             ->visiblesPar($this->compte)
             ->with(['allocationsPaiement:id,facture_id,montant_alloue', 'allocationsAvoir:id,facture_id,montant_alloue'])
-            ->withExists(['allocationsPaiement as paiement_contre_passe' => fn (Builder $allocations): Builder => $allocations
-                ->whereHas('paiement', fn (Builder $paiements): Builder => $paiements->whereNotNull('contre_passe_paiement_id'))])
+            ->withExists([
+                'allocationsPaiement as paiement_contre_passe' => fn (Builder $allocations): Builder => $allocations
+                    ->whereHas('paiement', fn (Builder $paiements): Builder => $paiements->whereNotNull('contre_passe_paiement_id')),
+                'allocationsAvoir as credit_repris_par_une_contre_passation' => fn (Builder $imputations): Builder => $imputations
+                    ->where('montant_alloue', '<', 0)
+                    ->whereHas('paiement', fn (Builder $paiements): Builder => $paiements->whereNotNull('contre_passe_paiement_id')),
+            ])
             ->orderBy('date_echeance')
             ->orderBy('id')
             ->get()
@@ -250,7 +259,8 @@ final class ChosesAFaireDuMagasin
         }
 
         $totaux = Facture::totauxAEncaisser($factures);
-        $contrePassees = $factures->filter(fn (Facture $facture): bool => (bool) $facture->getAttribute('paiement_contre_passe'))->count();
+        $contrePassee = fn (Facture $facture): bool => (bool) $facture->getAttribute('paiement_contre_passe') || (bool) $facture->getAttribute('credit_repris_par_une_contre_passation');
+        $contrePassees = $factures->filter($contrePassee)->count();
         $precision = $this->euros($totaux['restant_du']).' restant dû'
             .($totaux['nombre_en_retard'] > 0 ? ', dont '.trans_choice('{1} 1 en retard|[2,*] :count en retard', $totaux['nombre_en_retard']).' ('.$this->euros($totaux['restant_du_en_retard']).')' : '')
             .($contrePassees > 0 ? ($totaux['nombre_en_retard'] > 0 ? ' et ' : ', dont ').trans_choice('{1} 1 dont un paiement a été contre-passé|[2,*] :count dont un paiement a été contre-passé', $contrePassees) : '')
@@ -275,7 +285,7 @@ final class ChosesAFaireDuMagasin
                 'montant' => $this->euros($facture->resteDuEnCentimes()),
                 'date' => $facture->date_echeance === null ? null : Calendrier::afficherJour($facture->date_echeance, 'd/m/Y'),
                 'date_en_rouge' => $facture->estEnRetard(),
-                'badge' => $facture->getAttribute('paiement_contre_passe') ? 'Paiement contre-passé' : null,
+                'badge' => $contrePassee($facture) ? 'Paiement contre-passé' : null,
             ])->all()),
             lienDesLignes: ['libelle' => 'Voir toutes les factures à encaisser', 'url' => FactureResource::urlDesFacturesAEncaisser()],
         );

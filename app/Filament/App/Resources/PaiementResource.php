@@ -13,7 +13,9 @@ use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Models\PaiementAllocation;
 use App\Domain\Facturation\Services\CalculateurLigne;
+use App\Domain\Facturation\Services\RegularisationDUneFacture;
 use App\Domain\Facturation\Services\SaisieDecimale;
+use App\Domain\Tenancy\Support\CleDuModele;
 use App\Domain\Tenancy\Support\CompteConnecte;
 use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Domain\Tenancy\Support\ValeurSimple;
@@ -276,19 +278,37 @@ class PaiementResource extends Resource
      * imputé (le paiement de la première part d'un encaissement les signe,
      * voir EncaisserEnPlusieursModesAction), et imputer aussitôt le crédit
      * disponible : celui du client, ou pour le client comptoir, seulement
-     * celui des avoirs qui corrigent les tickets rouverts.
+     * celui des avoirs qui corrigent les tickets rouverts. Une facture
+     * régularisée qui a sa facture rectificative reste soldée par son avoir
+     * de régularisation, et ce que le paiement y réglait devient dû sur sa
+     * rectificative, que la fenêtre nomme (T68.3, voir
+     * ImputationDuCredit::reportsDesRegularisations()).
      */
     private static function descriptionDeLaContrePassation(Paiement $paiement): string
     {
         $calculateur = app(CalculateurLigne::class);
+        $regularisation = app(RegularisationDUneFacture::class);
         $bons = $paiement->creditsImputes()->with('avoir')->orderBy('id')->get()
             ->map(fn (AvoirAllocation $credit): string => sprintf('%s (%s)', ValeurRequise::de($credit->avoir, 'l\'avoir de l\'imputation')->numero, $calculateur->enEuros($calculateur->enCentiemes($credit->montant_alloue))));
+        $factures = $paiement->allocations()->with('facture.rectificative')->orderBy('id')->get()
+            ->map(fn (PaiementAllocation $allocation): Facture => ValeurRequise::de($allocation->facture, 'la facture de l\'imputation'))
+            ->unique(fn (Facture $facture): int => CleDuModele::de($facture));
+        $reportees = $factures
+            ->map(fn (Facture $facture): ?string => $facture->rectificative === null || ($avoir = $regularisation->avoirDeRegularisation($facture)) === null
+                ? null
+                : sprintf('La facture %s, régularisée par l\'avoir %s, restera soldée : ce que ce paiement y réglait deviendra dû sur sa facture rectificative %s.', $facture->numero, $avoir->numero, $facture->rectificative->numero))
+            ->filter();
         $phrases = [sprintf(
-            'Ce paiement de %s (%s, reçu le %s) sera annulé par un paiement opposé daté d\'aujourd\'hui, et les factures qu\'il réglait redeviendront dues.',
+            'Ce paiement de %s (%s, reçu le %s) sera annulé par un paiement opposé daté d\'aujourd\'hui%s',
             $calculateur->enEuros($calculateur->enCentiemes($paiement->montant)),
             $paiement->mode_paiement->getLabel(),
             Calendrier::afficherJour($paiement->recu_le, 'd/m/Y'),
-        )];
+            match ($reportees->count()) {
+                0 => ', et les factures qu\'il réglait redeviendront dues.',
+                $factures->count() => '.',
+                default => ', et les autres factures qu\'il réglait redeviendront dues.',
+            },
+        ), ...$reportees->values()->all()];
 
         if ($bons->count() === 1) {
             $phrases[] = "Le bon d'avoir {$bons->sole()}, présenté avec lui, retrouvera le crédit qu'il y avait imputé, que le ticket devra de nouveau : son numéro pourra resservir.";

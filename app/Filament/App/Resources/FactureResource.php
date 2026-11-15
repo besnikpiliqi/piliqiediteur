@@ -40,6 +40,7 @@ use App\Domain\Facturation\Services\PiedDePage;
 use App\Domain\Facturation\Services\PreuvesRequises;
 use App\Domain\Facturation\Services\RecuPaiementPdfGenerator;
 use App\Domain\Facturation\Services\ReglementComptant;
+use App\Domain\Facturation\Services\RegularisationDUneFacture;
 use App\Domain\Fichiers\EnTetesDesFichiers;
 use App\Domain\Recherche\RechercheSansAccents;
 use App\Domain\Stock\Exceptions\ConfirmationVenteSansStockRequiseException;
@@ -846,12 +847,17 @@ class FactureResource extends Resource
             // d'examen de ce SIREN, et l'existence de lignes encore à
             // créditer (voir Facture::possedeDesLignesCreditables()), disent
             // si l'action « Avoir » s'y propose (voir
-            // AvoirResource::peutCrediter()) : tout se lit avec la page, le
-            // magasin, sa société et cette décision une seule fois, quel que
-            // soit le nombre de factures.
+            // AvoirResource::peutCrediter()), et l'existence de son avoir de
+            // régularisation si l'action « Relancer » s'y propose (voir
+            // RegularisationDUneFacture::estRegularisee()) : tout se lit avec
+            // la page, le magasin, sa société et cette décision une seule
+            // fois, quel que soit le nombre de factures.
             ->modifyQueryUsing(fn (Builder $query): Builder => $query
                 ->with(['allocationsPaiement:id,facture_id,montant_alloue', 'allocationsAvoir:id,facture_id,montant_alloue', 'rectificative:id,facture_rectifiee_id', 'client', 'magasin.societe.dernierExamenDuSiren'])
-                ->withExists(['lignes as lignes_creditables_exists' => fn (Builder $lignes): Builder => ValeursLues::instance($lignes->scopes('creditables'), Builder::class)]))
+                ->withExists([
+                    'lignes as lignes_creditables_exists' => fn (Builder $lignes): Builder => ValeursLues::instance($lignes->scopes('creditables'), Builder::class),
+                    ...RegularisationDUneFacture::avecLExistenceDeLAvoirDeRegularisation(),
+                ]))
             ->columns([
                 Tables\Columns\TextColumn::make('numero')->label('Numéro')->placeholder('Brouillon')->rechercheSansAccents(),
                 self::clientColumn(),

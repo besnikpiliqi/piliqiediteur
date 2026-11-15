@@ -13,6 +13,7 @@ use App\Domain\Tenancy\Enums\DecisionExamenSiren;
 use App\Domain\Tenancy\Support\CleDuModele;
 use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Domain\Tenancy\Support\ValeursLues;
+use Closure;
 use Illuminate\Database\Eloquent\Builder;
 
 /**
@@ -61,7 +62,7 @@ use Illuminate\Database\Eloquent\Builder;
  * crédit referme : il quitte la rectificative pour la facture, qui reste
  * soldée, et la rectificative porte le dû rouvert (T68.3, voir
  * ImputationDuCredit::reportsDesRegularisations()) ; une facture
- * régularisée n'est jamais relancée (voir estRegularisee()). Ce crédit
+ * régularisée n'est jamais relancée (voir refusDeLaRelance()). Ce crédit
  * n'est jamais un encaissement : il ne s'inscrit dans aucun e-reporting
  * (seuls les tickets y entrent, voir EReportingDesParticuliers), et la
  * facture électronique de l'étape 2 ne le déclarera pas comme tel, la
@@ -96,6 +97,12 @@ class RegularisationDUneFacture
 
     public const MOTIF_DE_L_AVOIR = 'Régularisation de la facture %s après la correction du SIREN du vendeur';
 
+    /**
+     * L'attribut d'une facture lue par une liste qui dit si son avoir de
+     * régularisation est émis (voir avecLExistenceDeLAvoirDeRegularisation()).
+     */
+    private const AVOIR_DE_REGULARISATION_EXISTE = 'avoir_de_regularisation_exists';
+
     public function __construct(private readonly CalculateurLigne $calculateur) {}
 
     /**
@@ -126,19 +133,23 @@ class RegularisationDUneFacture
      * régularisation ; null quand rien ne l'en empêche :
      * - une facture qui a sa rectificative : le retour se fait sur celle-ci,
      *   qui en a repris les lignes ;
-     * - une facture désignée qui n'a pas encore sa rectificative (son avoir
-     *   de régularisation émis ou non) : un avoir
-     *   ordinaire la corrigerait sous le SIREN corrigé, qu'elle n'a jamais
-     *   porté, et sa régularisation n'en reprendrait plus toutes les lignes ;
-     *   elle se régularise d'abord.
+     * - une facture désignée qui n'a pas encore sa rectificative et a
+     *   encore quelque chose à régulariser (une ligne à créditer, ou son
+     *   avoir de régularisation émis, sa rectificative restant à émettre) :
+     *   un avoir ordinaire la corrigerait sous le SIREN corrigé, qu'elle n'a
+     *   jamais porté, et sa régularisation n'en reprendrait plus toutes les
+     *   lignes ; elle se régularise d'abord.
      * Seul son avoir de régularisation la crédite alors (voir
-     * CreerAvoirAction).
+     * CreerAvoirAction). Une facture désignée dont des avoirs ordinaires
+     * ont crédité toutes les lignes avant l'examen n'a plus rien à
+     * régulariser (voir refusDeLAvoir()) : rien ne la retient ici, et
+     * « Nouvel avoir » dit qu'elle n'a plus rien à rendre.
      */
     public function refusDUnAvoirOrdinaire(Facture $facture): ?string
     {
         return match (true) {
             $facture->rectificative !== null => sprintf(self::REFUS_FACTURE_RECTIFIEE, $facture->numero),
-            $this->estDesignee($facture) => sprintf(self::REFUS_RETOUR_AVANT_REGULARISATION, $facture->numero),
+            $this->estDesignee($facture) && ($facture->possedeDesLignesCreditables() || $this->avoirDeRegularisation($facture) !== null) => sprintf(self::REFUS_RETOUR_AVANT_REGULARISATION, $facture->numero),
             default => null,
         };
     }
@@ -189,6 +200,35 @@ class RegularisationDUneFacture
         $avoir = $this->avoirDeRegularisation($facture);
 
         return $avoir === null ? null : sprintf(self::REFUS_RELANCE_DE_LA_FACTURE_REGULARISEE, $facture->numero, $avoir->numero);
+    }
+
+    /**
+     * La facture est-elle régularisée, son avoir de régularisation émis
+     * (voir refusDeLaRelance()) ? Lu sur l'attribut que la liste des
+     * factures charge avec sa page (voir avecLExistenceDeLAvoirDeRegularisation()),
+     * sans une requête par facture, sinon en base.
+     */
+    public function estRegularisee(Facture $facture): bool
+    {
+        return array_key_exists(self::AVOIR_DE_REGULARISATION_EXISTE, $facture->getAttributes())
+            ? (bool) $facture->getAttribute(self::AVOIR_DE_REGULARISATION_EXISTE)
+            : $this->avoirDeRegularisation($facture) !== null;
+    }
+
+    /**
+     * Ce qu'une requête de factures ajoute à son withExists() pour lire,
+     * avec la page, si chacune a son avoir de régularisation émis (voir
+     * estRegularisee()) : une ligne de la facture que crédite un avoir de
+     * régularisation émis, dans le magasin actif.
+     *
+     * @return array<string, Closure(Builder<LigneFacture>): Builder<LigneFacture>>
+     */
+    public static function avecLExistenceDeLAvoirDeRegularisation(): array
+    {
+        return ['lignes as '.self::AVOIR_DE_REGULARISATION_EXISTE => fn (Builder $lignes): Builder => $lignes->whereHas(
+            'lignesAvoir.avoir',
+            fn (Builder $avoirs): Builder => $avoirs->whereNotNull('motif_regularisation')->where('statut', StatutAvoir::Emise),
+        )];
     }
 
     /**

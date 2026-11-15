@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 15/11/2026 à 09:50 UTC par pilotage-sync.sh : « Constats graphiques ».
+Mis à jour le 15/11/2026 à 09:52 UTC par pilotage-sync.sh : « Choix B période ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

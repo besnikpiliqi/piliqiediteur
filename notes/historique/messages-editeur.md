@@ -2672,3 +2672,13 @@ la ici dans la menu par periode il affiche les exercise en cours ou precedent de
 
 la sur "Chiffre d'affaires par magasin" je vois le X (croix) en bas mais s 'est à cause des lettres de "Chiffre d'affaires par magasin" qui sont long et le crox tombe en bas. donc il faut pas que le X tombe en bas à cause des lettres mais il faut que les lettres continue en bas de chez lui si il y a bcp de lettre mais pas bouger ses voisins
 
+## 301. 2026-11-15 09:52 UTC
+
+<!-- attach -->
+
+> Répondez « A » ou « B ». J’ajouterai la correction au cahier d’un des lots qui viennent (DATEOP, le prochain), avec ses tests.
+
+
+
+B
+

@@ -4,7 +4,9 @@ namespace App\Console\Commands;
 
 use App\Domain\CaisseSecurisee\Exceptions\RefusFiscalException;
 use App\Domain\Calendrier\Calendrier;
+use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Facturation\Actions\EnvoyerDocumentAction;
+use App\Domain\Facturation\Enums\StatutAvoir;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Enums\StatutMagasin;
@@ -38,7 +40,17 @@ use LogicException;
  * Magasin::relanceDue()) : dans l'ordre, au plus une par jour, jamais deux
  * fois le même niveau, les jours se comptant dans le calendrier de son
  * magasin (voir Magasin::calendrier()). Une relance manuelle compte comme les autres ; une
- * relance en échec repart (voir Facture::relancesComptees()).
+ * relance en échec repart (voir Facture::relancesComptees()). Seules
+ * partent d'elles-mêmes les relances des documents à un client
+ * professionnel, d'après le type que le document a figé, sauf si le
+ * magasin coche « Relancer aussi les particuliers » (décision de
+ * l'éditeur du 14/11/2026) ; le client comptoir, anonyme, ne se relance
+ * jamais, et une facture régularisée non plus, son avoir de
+ * régularisation émis (T68.3, voir
+ * RegularisationDUneFacture::refusDeLaRelance()). Une relance ne parle
+ * jamais de pénalités de retard ni de l'indemnité forfaitaire (voir
+ * Facture::messageDeRelance()), et le document joint d'un particulier ne
+ * les imprime pas (voir PiedDePage).
  */
 #[Signature('app:relancer-factures-impayees')]
 #[Description('Relance par e-mail les factures échues et impayées des magasins qui ont activé les relances automatiques')]
@@ -89,7 +101,9 @@ class RelancerFacturesImpayees extends Command
             ->with('client')
             ->whereIn('statut', StatutFacture::quiAttendentUnReglement())
             ->where('date_echeance', '<', $aujourdhui)
-            ->whereHas('client', fn (Builder $client) => $client->whereNotNull('email')->where('email', '!=', ''))
+            ->when(! $magasin->relancer_aussi_les_particuliers, fn (Builder $factures) => $factures->where('type_client', TypeClient::Professionnel))
+            ->whereHas('client', fn (Builder $client) => $client->where(fn (Builder $nommes) => $nommes->whereNull('est_comptoir')->orWhere('est_comptoir', false))->whereNotNull('email')->where('email', '!=', ''))
+            ->whereDoesntHave('lignes.lignesAvoir.avoir', fn (Builder $avoirs) => $avoirs->whereNotNull('motif_regularisation')->where('statut', StatutAvoir::Emise))
             ->lazyById()
             ->each(function (Facture $facture) use ($magasin, $envoyer, $aujourdhui, &$relancees) {
                 $facture->setRelation('magasin', $magasin);

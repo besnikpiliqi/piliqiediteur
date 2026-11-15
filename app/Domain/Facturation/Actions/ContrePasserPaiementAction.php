@@ -46,14 +46,19 @@ use LogicException;
  * encaissement les laisse imputés. La fenêtre de la contre-passation le
  * dit (voir PaiementResource).
  *
- * Aussitôt, dans la même transaction, le crédit d'avoir disponible du
- * client s'impute sur ce qui reste dû, dans le même ordre qu'à l'émission
- * d'un avoir (complément 1, voir ImputationDuCredit) : d'abord sur les
- * factures que chaque avoir corrige, puis sur les autres factures dues du
- * client, de la plus ancienne à la plus récente, jamais sur une autre
- * vente du client comptoir. Ces imputations désignent la contre-passation,
- * qui les signe avec les siennes. On saisit ensuite le bon paiement, qui
- * ne règle que ce qui reste dû.
+ * Aussitôt, dans la même transaction, une facture régularisée qui a sa
+ * facture rectificative reprend à celle-ci le crédit de son avoir de
+ * régularisation, dans la limite de ce qu'elle a rouvert : elle reste
+ * soldée, et la rectificative porte le dû rouvert, qui se relance (T68.3,
+ * voir ImputationDuCredit::reportsDesRegularisations()). Puis le crédit
+ * d'avoir disponible du client s'impute sur ce qui reste dû, dans le même
+ * ordre qu'à l'émission d'un avoir (complément 1, voir
+ * ImputationDuCredit) : d'abord sur les factures que chaque avoir corrige,
+ * puis sur les autres factures dues du client, de la plus ancienne à la
+ * plus récente, jamais sur une autre vente du client comptoir. Ces
+ * imputations désignent la contre-passation, qui les signe avec les
+ * siennes. On saisit ensuite le bon paiement, qui ne règle que ce qui
+ * reste dû.
  *
  * Elle est datée du jour du calendrier où elle est faite, jamais
  * d'une journée déjà clôturée : une fois la journée clôturée, elle attend
@@ -183,6 +188,7 @@ class ContrePasserPaiementAction
             $facture->constaterUnReglement();
         }
 
+        $this->reporterLeCreditDesRegularisations($contrePassation, $factures);
         $this->reimputerLeCreditDisponible($contrePassation);
         $this->recus->clore($recu);
 
@@ -190,6 +196,33 @@ class ContrePasserPaiementAction
         $this->registre->enregistrer(ChaineFiscale::Encaissement, 'contre_passation', $this->contenuFiscal->encaissement($contrePassation), $contrePassation);
 
         return $contrePassation;
+    }
+
+    /**
+     * Le crédit de l'avoir de régularisation d'une facture que la
+     * contre-passation vient de rouvrir quitte sa rectificative pour elle
+     * (T68.3, voir ImputationDuCredit::reportsDesRegularisations()) : une
+     * imputation négative sur la rectificative et la même, positive, sur la
+     * facture, l'une et l'autre désignant la contre-passation, qui les
+     * signe. La facture régularisée reste soldée, et la rectificative porte
+     * le dû rouvert.
+     *
+     * @param  array<int, Facture>  $factures  les factures rouvertes, relues verrouillées
+     */
+    private function reporterLeCreditDesRegularisations(Paiement $contrePassation, array $factures): void
+    {
+        foreach ($this->imputation->reportsDesRegularisations($factures) as ['avoir' => $avoir, 'depuis' => $rectificative, 'vers' => $facture, 'montant' => $montant]) {
+            foreach ([[$rectificative, -$montant], [$facture, $montant]] as [$reglee, $credit]) {
+                AvoirAllocation::create([
+                    'avoir_id' => $avoir->getKey(),
+                    'facture_id' => $reglee->getKey(),
+                    'paiement_id' => $contrePassation->getKey(),
+                    'montant_alloue' => $this->calculateur->enDecimal($credit),
+                ]);
+
+                $reglee->constaterUnReglement();
+            }
+        }
     }
 
     /**

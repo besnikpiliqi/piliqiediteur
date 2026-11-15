@@ -253,8 +253,8 @@ class AvoirResource extends Resource
         $refusDeLaRegularisation = app(RegularisationDUneFacture::class)->refusDUnAvoirOrdinaire($document);
 
         return match (true) {
-            ! $document->possedeDesLignesCreditables() => "{$designation} est déjà entièrement {$credite} : {$pronom} n'a plus rien à rendre.",
             $refusDeLaRegularisation !== null => $refusDeLaRegularisation,
+            ! $document->possedeDesLignesCreditables() => "{$designation} est déjà entièrement {$credite} : {$pronom} n'a plus rien à rendre.",
             $premier === null => null,
             (int) $document->client_id !== (int) $premier->client_id => "{$designation} est {$autre} d'un autre client : un avoir ne corrige que les documents d'un même client.",
             default => CreerAvoirAction::incompatibilite($premier, $document),

@@ -5,6 +5,7 @@ namespace Tests\Feature\Facturation;
 use App\Domain\CaisseSecurisee\Services\VerificateurIntegrite;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
+use App\Domain\Facturation\Actions\ContrePasserPaiementAction;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\EmettreLaFactureRectificativeAction;
@@ -15,6 +16,7 @@ use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\AvoirAllocation;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Services\RegularisationDUneFacture;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\IdentifiantsInsee;
@@ -23,6 +25,7 @@ use App\Models\User;
 use Database\Factories\SocieteFactory;
 use Illuminate\Foundation\Testing\DatabaseMigrations;
 use Illuminate\Process\InvokedProcess;
+use LogicException;
 use PHPUnit\Framework\Attributes\Group;
 use Tests\TestCase;
 
@@ -33,9 +36,12 @@ use Tests\TestCase;
  * : la seconde attend le verrou du registre fiscal du magasin que tient la
  * première, puis relit sous ce verrou ce que la première a émis. Deux
  * avoirs de régularisation, ou deux factures rectificatives, ne naissent
- * jamais ; l'avoir et la rectificative faits en même temps naissent tous
- * deux, dans un ordre comme dans l'autre, et le crédit de l'avoir ne règle
- * la rectificative qu'une fois.
+ * jamais ; la rectificative demandée pendant que l'avoir s'émet l'attend,
+ * puis s'émet, réglée une seule fois de son crédit ; demandée la première,
+ * au même instant, elle est refusée, car elle ne s'émet qu'après l'avoir
+ * (T68.1) ; deux contre-passations simultanées de deux paiements de la
+ * facture régularisée reportent son crédit sans jamais le compter deux
+ * fois (T68.3).
  *
  * DatabaseMigrations, pas RefreshDatabase : l'autre processus ne voit que
  * ce que le test a validé.
@@ -81,6 +87,7 @@ class RegularisationDUneFactureConcurrenceTest extends TestCase
     {
         [$magasin, $facture] = $this->factureDUneSocieteCorrigee();
         $responsable = self::responsableDeTest($magasin);
+        app(FaireLAvoirDeRegularisationAction::class)->handle($this->proprietaireDe($magasin), $facture);
         $magasinId = $magasin->id;
         $factureId = $facture->id;
         $concurrente = null;
@@ -90,7 +97,7 @@ class RegularisationDUneFactureConcurrenceTest extends TestCase
             app(EmettreLaFactureRectificativeAction::class)->handle(self::responsableDeTest($magasin), Facture::query()->findOrFail($factureId));
         }, $concurrente);
 
-        $rectificative = app(EmettreLaFactureRectificativeAction::class)->handle($responsable, $facture);
+        $rectificative = app(EmettreLaFactureRectificativeAction::class)->handle($responsable, $facture->fresh());
 
         $this->assertInstanceOf(InvokedProcess::class, $concurrente);
         $resultat = $this->attendreLeProcessusConcurrent($concurrente);
@@ -136,20 +143,17 @@ class RegularisationDUneFactureConcurrenceTest extends TestCase
     }
 
     /**
-     * L'ordre inverse : la rectificative passe la première et attend
-     * l'avoir de régularisation, qui, passé second dans l'autre processus,
-     * la règle une seule fois de tout son crédit et la fait sortir de son
-     * attente.
+     * L'ordre inverse : la rectificative, demandée au même instant que
+     * l'avoir de régularisation, passe la première et est refusée, car elle
+     * ne s'émet qu'après lui ; l'avoir, passé second dans l'autre processus,
+     * naît, et la rectificative demandée ensuite reçoit une seule fois tout
+     * son crédit.
      */
     #[Group('concurrence')]
-    public function test_la_rectificative_puis_l_avoir_simultanes_reglent_une_seule_fois_la_rectificative(): void
+    public function test_la_rectificative_demandee_avant_l_avoir_au_meme_instant_est_refusee(): void
     {
         [$magasin, $facture] = $this->factureDUneSocieteCorrigee();
-        app(EnregistrerPaiementAction::class)->handle(self::responsableDeTest($magasin), $facture->client, [
-            'mode_paiement' => ModePaiement::Virement->value,
-            'montant' => '240.00',
-            'recu_le' => '2026-11-02',
-        ], [['facture_id' => $facture->id, 'montant' => '240.00']]);
+        $this->payer($magasin, $facture, '240.00');
         $magasinId = $magasin->id;
         $factureId = $facture->id;
         $proprietaireId = $this->proprietaireDe($magasin)->id;
@@ -159,20 +163,82 @@ class RegularisationDUneFactureConcurrenceTest extends TestCase
             app(FaireLAvoirDeRegularisationAction::class)->handle(User::query()->findOrFail($proprietaireId), Facture::query()->findOrFail($factureId));
         }, $concurrente);
 
-        $rectificative = app(EmettreLaFactureRectificativeAction::class)->handle(self::responsableDeTest($magasin), $facture->fresh());
+        $this->assertThrows(fn () => app(EmettreLaFactureRectificativeAction::class)->handle(self::responsableDeTest($magasin), $facture->fresh()), LogicException::class, sprintf(RegularisationDUneFacture::REFUS_RECTIFICATIVE_AVANT_L_AVOIR, $facture->numero));
 
         $this->assertInstanceOf(InvokedProcess::class, $concurrente);
         $resultat = $this->attendreLeProcessusConcurrent($concurrente);
         $this->assertTrue($resultat->successful(), $resultat->errorOutput());
-        $this->assertSame(StatutFacture::EnAttenteDeRegularisation, $rectificative->statut);
+        $this->assertSame(0, Facture::query()->whereNotNull('facture_rectifiee_id')->count());
         $avoir = Avoir::query()->sole();
-        $this->assertSame([[$rectificative->id, '240.00']], AvoirAllocation::query()->where('avoir_id', $avoir->id)->get()->map(fn (AvoirAllocation $allocation): array => [(int) $allocation->facture_id, $allocation->montant_alloue])->all());
-        $this->assertSame([StatutFacture::Payee, 0], [$rectificative->fresh()->statut, $avoir->creditEnCentimes()]);
+        $rectificative = app(EmettreLaFactureRectificativeAction::class)->handle(self::responsableDeTest($magasin), $facture->fresh());
+        $this->assertSame([[$rectificative->id, '240.00']], $this->imputationsDe($avoir));
+        $this->assertSame([StatutFacture::Payee, 0], [$rectificative->fresh()->statut, $avoir->fresh()->creditEnCentimes()]);
         $this->assertSame([], app(VerificateurIntegrite::class)->verifier($magasin->fresh())->anomalies());
     }
 
     /**
-     * Une facture de deux articles à 120,00 € TTC, émise à 9 h 55 par le
+     * Une facture de 600,00 € payée 500,00 € puis 100,00 €, régularisée
+     * (la rectificative a reçu les 600,00 € de l'avoir) : les deux
+     * paiements contre-passés au même instant, chacun dans son processus,
+     * la seconde contre-passation attendant la première, reportent chacun
+     * sur la facture ce qu'il a rouvert, une seule fois : la facture est
+     * soldée par l'avoir, la rectificative, dont l'avoir ne règle plus
+     * rien, est due de ses 600,00 €, et le registre reste intègre.
+     */
+    #[Group('concurrence')]
+    public function test_deux_contre_passations_simultanees_reportent_le_credit_une_seule_fois(): void
+    {
+        [$magasin, $facture] = $this->factureDUneSocieteCorrigee(quantite: 5);
+        $cinqCents = $this->payer($magasin, $facture, '500.00');
+        $cent = $this->payer($magasin, $facture, '100.00');
+        $proprietaire = $this->proprietaireDe($magasin);
+        $avoir = app(FaireLAvoirDeRegularisationAction::class)->handle($proprietaire, $facture->fresh());
+        $rectificative = app(EmettreLaFactureRectificativeAction::class)->handle(self::responsableDeTest($magasin), $facture->fresh());
+        $magasinId = $magasin->id;
+        $centId = $cent->id;
+        $proprietaireId = $proprietaire->id;
+        $concurrente = null;
+        $this->concurrencerDesQueLeRegistreEstVerrouille(static function () use ($magasinId, $centId, $proprietaireId): void {
+            app(TenantContext::class)->set(Magasin::query()->findOrFail($magasinId));
+            app(ContrePasserPaiementAction::class)->handle(User::query()->findOrFail($proprietaireId), Paiement::query()->findOrFail($centId), 'Chèque impayé');
+        }, $concurrente);
+
+        app(ContrePasserPaiementAction::class)->handle($proprietaire, $cinqCents->fresh(), 'Chèque impayé');
+
+        $this->assertInstanceOf(InvokedProcess::class, $concurrente);
+        $resultat = $this->attendreLeProcessusConcurrent($concurrente);
+        $this->assertTrue($resultat->successful(), $resultat->errorOutput());
+        $imputations = $this->imputationsDe($avoir);
+        $netSur = fn (int $factureId): int => array_sum(array_map(fn (array $imputation): int => (int) str_replace('.', '', $imputation[1]), array_filter($imputations, fn (array $imputation): bool => $imputation[0] === $factureId)));
+        $this->assertSame([60000, 0], [$netSur($facture->id), $netSur($rectificative->id)]);
+        $this->assertSame([StatutFacture::Payee, 0, 60000, 0], [$facture->fresh()->statut, $facture->fresh()->resteDuEnCentimes(), $rectificative->fresh()->resteDuEnCentimes(), $avoir->fresh()->creditEnCentimes()]);
+        $this->assertSame([], app(VerificateurIntegrite::class)->verifier($magasin->fresh())->anomalies());
+    }
+
+    private function payer(Magasin $magasin, Facture $facture, string $montant): Paiement
+    {
+        return app(EnregistrerPaiementAction::class)->handle(self::responsableDeTest($magasin), $facture->client, [
+            'mode_paiement' => ModePaiement::Virement->value,
+            'montant' => $montant,
+            'recu_le' => '2026-11-02',
+        ], [['facture_id' => $facture->id, 'montant' => $montant]]);
+    }
+
+    /**
+     * Les imputations de l'avoir, dans leur ordre : la facture et le
+     * montant de chacune.
+     *
+     * @return list<array{0: int, 1: string}>
+     */
+    private function imputationsDe(Avoir $avoir): array
+    {
+        return AvoirAllocation::query()->where('avoir_id', $avoir->id)->orderBy('id')->get()
+            ->map(fn (AvoirAllocation $allocation): array => [(int) $allocation->facture_id, $allocation->montant_alloue])
+            ->all();
+    }
+
+    /**
+     * Une facture de ce nombre d'articles à 120,00 € TTC, émise à 9 h 55 par le
      * responsable du magasin de Lyon à un client professionnel, puis le
      * SIREN de la société corrigé par l'éditeur à 10 h, après un examen qui
      * l'a désignée (l'examen ne liste que les documents émis avant lui,
@@ -180,7 +246,7 @@ class RegularisationDUneFactureConcurrenceTest extends TestCase
      *
      * @return array{0: Magasin, 1: Facture}
      */
-    private function factureDUneSocieteCorrigee(): array
+    private function factureDUneSocieteCorrigee(int $quantite = 2): array
     {
         $this->travelTo(self::aParis('2026-11-02 09:55:00'));
         $magasin = $this->completerIdentiteLegale($this->ouvrirUneSociete(['nom' => 'Lyon', 'code' => 'LYON']));
@@ -188,7 +254,7 @@ class RegularisationDUneFactureConcurrenceTest extends TestCase
         $responsable = self::responsableDeTest($magasin);
         $client = Client::factory()->professionnel()->create(['nom' => 'Dupont SAS']);
         $produit = Produit::factory()->create(['prix_vente_ttc' => 120, 'taux_tva' => 20, 'suivi_stock' => false]);
-        $facture = app(EmettreFactureAction::class)->handle($responsable, app(CreerFactureAction::class)->handle($responsable, $client, [['produit_id' => $produit->id, 'quantite' => 2]]));
+        $facture = app(EmettreFactureAction::class)->handle($responsable, app(CreerFactureAction::class)->handle($responsable, $client, [['produit_id' => $produit->id, 'quantite' => $quantite]]));
         $sirenCorrect = SocieteFactory::sirenFictif();
         $this->travelTo(self::aParis('2026-11-02 10:00:00'));
         $this->corrigerLeSirenParLEditeur($magasin->societe, $sirenCorrect, ['LYON' => IdentifiantsInsee::avecSaCle($sirenCorrect.'0001')]);

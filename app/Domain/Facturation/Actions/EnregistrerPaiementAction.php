@@ -12,7 +12,6 @@ use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Calendrier\Calendrier;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Enums\NatureRecuPaiement;
-use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\AvoirAllocation;
 use App\Domain\Facturation\Models\Facture;
@@ -21,14 +20,12 @@ use App\Domain\Facturation\Models\PaiementAllocation;
 use App\Domain\Facturation\Models\RecuPaiement;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\RecusDePaiement;
-use App\Domain\Facturation\Services\RegularisationDUneFacture;
 use App\Domain\Facturation\Services\SaisieDecimale;
 use App\Domain\Facturation\Services\VerificateurCaissesPersonnelles;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\ActionsUniques;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\ModeleRelu;
-use App\Domain\Tenancy\Support\ValeursLues;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
@@ -262,10 +259,6 @@ class EnregistrerPaiementAction
     {
         if ((int) $facture->client_id !== $client->getKey()) {
             throw new LogicException("La facture {$facture->numero} n'appartient pas au client de ce paiement.");
-        }
-
-        if ($facture->statut === StatutFacture::EnAttenteDeRegularisation) {
-            throw new LogicException(sprintf(RegularisationDUneFacture::REFUS_PAIEMENT_EN_ATTENTE, $facture->numero, ValeursLues::texteOuNul($facture->factureRectifiee()->value('numero'))));
         }
 
         if (! $facture->statut->attendUnReglement()) {

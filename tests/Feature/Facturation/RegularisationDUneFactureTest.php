@@ -18,6 +18,7 @@ use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\EmettreLaFactureRectificativeAction;
 use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
 use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
+use App\Domain\Facturation\Actions\EnvoyerDocumentAction;
 use App\Domain\Facturation\Actions\FaireLAvoirDeRegularisationAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\NatureOperation;
@@ -29,6 +30,7 @@ use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\LigneAvoir;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Services\EReportingDesParticuliers;
+use App\Domain\Facturation\Services\FacturePdfGenerator;
 use App\Domain\Facturation\Services\MentionsFiscales;
 use App\Domain\Facturation\Services\PiedDePage;
 use App\Domain\Facturation\Services\RegularisationDUneFacture;
@@ -69,7 +71,6 @@ use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Livewire\Livewire;
 use LogicException;
-use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
@@ -80,10 +81,16 @@ use Tests\TestCase;
  * régularisation se fait comme tout avoir (le propriétaire compris), la
  * facture rectificative par un compte autorisé à vendre, jamais par le
  * propriétaire ni par un compte d'un cabinet lié ; ni l'un ni l'autre ne
- * bouge le stock ; le crédit de l'avoir ne règle que la facture puis sa
- * rectificative, quel que soit l'ordre des gestes, sans jamais faire payer
- * deux fois ni rien déclarer comme un encaissement. La concurrence est
- * essayée dans RegularisationDUneFactureConcurrenceTest.
+ * bouge le stock. La rectificative ne s'émet qu'après l'avoir (décision
+ * T68.1 de l'onglet « À faire vérifier par un professionnel »), qui la
+ * règle, dans la transaction signée de son émission, de ce que la facture
+ * avait reçu ; le crédit de l'avoir ne règle que la facture puis sa
+ * rectificative, et la contre-passation d'un paiement de la facture
+ * régularisée en reporte ce qu'il faut sur elle, le dû se rouvrant sur la
+ * rectificative (T68.3), sans jamais faire payer deux fois ni rien déclarer
+ * comme un encaissement ; la facture régularisée ne se relance jamais ; la
+ * rectificative imprime la date de l'opération d'origine (T27.2). La
+ * concurrence est essayée dans RegularisationDUneFactureConcurrenceTest.
  */
 class RegularisationDUneFactureTest extends TestCase
 {
@@ -103,9 +110,10 @@ class RegularisationDUneFactureTest extends TestCase
      * l'émetteur que la facture a signé (l'ancien SIREN et l'ancien SIRET)
      * et la mention de la régularisation avec le SIREN correct, dans le
      * pied de son PDF ; la facture rectificative, émise par le responsable,
-     * imprime l'identité corrigée et la mention de la facture qu'elle
-     * rectifie, la date de livraison de l'opération d'origine ; l'une et
-     * l'autre se signent au registre, qui reste intègre.
+     * imprime l'identité corrigée, la mention de la facture qu'elle
+     * rectifie et la date de la livraison de l'opération d'origine (T27.2),
+     * l'une et l'autre dans son contenu signé ; les deux documents se
+     * signent au registre, qui reste intègre.
      */
     public function test_l_avoir_de_regularisation_porte_l_emetteur_choisi_par_l_editeur(): void
     {
@@ -124,10 +132,12 @@ class RegularisationDUneFactureTest extends TestCase
         $this->assertSame([$sirenCorrect, (string) $magasin->fresh()->siret], [$rectificative->emetteur()->siren, $rectificative->emetteur()->siret]);
         $this->assertNotSame($ancienSiret, (string) $magasin->fresh()->siret);
         $this->assertSame([$facture->id, '2026-10-15', 'FAC-LYON-2026-000002'], [$rectificative->facture_rectifiee_id, $rectificative->livraison_date, $rectificative->numero]);
-        $this->assertContains('Facture rectificative de la facture n° FAC-LYON-2026-000001 du 15/10/2026', PiedDePage::pour($rectificative, $rectificative->emetteur())->lignes);
+        $piedDeLaRectificative = PiedDePage::pour($rectificative, $rectificative->emetteur())->lignes;
+        $this->assertContains('Facture rectificative de la facture n° FAC-LYON-2026-000001 du 15/10/2026', $piedDeLaRectificative);
+        $this->assertContains('Date de la livraison ou de la prestation d\'origine : 15/10/2026', $piedDeLaRectificative);
         $signeDeLaRectificative = $this->contenuSigne($rectificative)['donnees'];
         $this->assertSame($facture->id, $signeDeLaRectificative['document']['facture_rectifiee_id']);
-        $this->assertSame(sprintf(MentionsFiscales::RECTIFICATIVE, 'FAC-LYON-2026-000001', '15/10/2026'), $signeDeLaRectificative['contexte']['mentions'][0]);
+        $this->assertSame([sprintf(MentionsFiscales::RECTIFICATIVE, 'FAC-LYON-2026-000001', '15/10/2026'), sprintf(MentionsFiscales::DATE_DE_L_OPERATION_D_ORIGINE, '15/10/2026')], array_slice($signeDeLaRectificative['contexte']['mentions'], 0, 2));
         $signeDeLAvoir = $this->contenuSigne($avoir)['donnees'];
         $this->assertSame([true, $ancienSiren, $mention], [$signeDeLAvoir['document']['regularisation'], $signeDeLAvoir['contexte']['emetteur']['siren'], $signeDeLAvoir['contexte']['regularisation']]);
         $this->assertSame([], app(VerificateurIntegrite::class)->verifier($magasin->fresh())->anomalies());
@@ -157,8 +167,10 @@ class RegularisationDUneFactureTest extends TestCase
     /**
      * La rectificative d'une livraison intracommunautaire reproduit son
      * opération : elle garde la vérification VIES de la facture, sans en
-     * exiger une du jour de son émission, et sa livraison, date comprise ;
-     * elle s'émet à 0 %, avec la mention de son exonération.
+     * exiger une du jour de son émission, et sa livraison, date comprise,
+     * qu'elle imprime comme celle de l'opération d'origine ; elle s'émet à
+     * 0 %, après l'avoir de régularisation, avec la mention de son
+     * exonération.
      */
     public function test_la_rectificative_d_une_livraison_intracommunautaire_garde_sa_verification_vies_et_sa_livraison(): void
     {
@@ -183,11 +195,13 @@ class RegularisationDUneFactureTest extends TestCase
         ]);
         $this->corrigerLeSirenDeLaSociete($magasin);
 
-        $rectificative = app(EmettreLaFactureRectificativeAction::class)->handle(self::responsableDeTest($magasin), $facture->fresh());
+        [, $rectificative] = $this->regulariser($magasin, $facture);
 
         $this->assertSame([$consultation->id, NatureOperation::LivraisonIntracommunautaire, '2026-10-12', 'Berlin', TransportPar::Acquereur], [$rectificative->consultation_vies_id, $rectificative->nature_operation, $rectificative->livraison_date, $rectificative->livraison_ville, $rectificative->transport_par]);
         $this->assertSame(['250.00', '0.00', '250.00'], [$rectificative->total_ht, $rectificative->total_tva, $rectificative->total_ttc]);
-        $this->assertContains(NatureOperation::LivraisonIntracommunautaire->mention(), app(MentionsFiscales::class)->pour($rectificative, $rectificative->emetteur()));
+        $mentions = app(MentionsFiscales::class)->pour($rectificative, $rectificative->emetteur());
+        $this->assertContains(NatureOperation::LivraisonIntracommunautaire->mention(), $mentions);
+        $this->assertContains('Date de la livraison ou de la prestation d\'origine : 12/10/2026', $mentions);
     }
 
     /**
@@ -202,26 +216,25 @@ class RegularisationDUneFactureTest extends TestCase
         [$magasin, $facture, $client] = $this->factureDUneSocieteCorrigee();
         $client->forceFill(['nom' => 'Dupont et Fils', 'adresse' => '9 rue Neuve', 'type_client' => TypeClient::Particulier, 'siren' => null])->save();
 
-        $rectificative = app(EmettreLaFactureRectificativeAction::class)->handle(self::responsableDeTest($magasin), $facture->fresh());
+        [, $rectificative] = $this->regulariser($magasin, $facture);
 
         $this->assertSame([TypeClient::Professionnel, 'Dupont SAS'], [$rectificative->type_client, $rectificative->client_nom]);
         $this->assertSame($facture->copieClient()->enTableau(), $rectificative->copieClient()->enTableau());
     }
 
     /**
-     * Une facture de 240,00 € payée 100,00 € : quel que soit l'ordre des
-     * deux gestes, l'avoir de régularisation règle les 140,00 € qui en
-     * restent dus et donne 100,00 € à la rectificative, qui en reste due de
-     * 140,00 € (émise avant lui, elle l'attendait sans rien recevoir) ; le
-     * client paie ces 140,00 €, et a payé en tout 240,00 €, une seule fois.
+     * Une facture de 240,00 € payée 100,00 € : l'avoir de régularisation
+     * règle les 140,00 € qui en restent dus et réserve 100,00 € à la
+     * rectificative, émise après lui, qui les reçoit et reste due de
+     * 140,00 € ; le client paie ces 140,00 €, et a payé en tout 240,00 €,
+     * une seule fois.
      */
-    #[DataProvider('ordresDesGestes')]
-    public function test_la_regularisation_ne_fait_jamais_payer_deux_fois(bool $avoirDAbord): void
+    public function test_la_regularisation_ne_fait_jamais_payer_deux_fois(): void
     {
         [$magasin, $facture, $client] = $this->factureDUneSocieteCorrigee();
         $this->payer($facture, '100.00');
 
-        [$avoir, $rectificative] = $this->regulariser($magasin, $facture, $avoirDAbord);
+        [$avoir, $rectificative] = $this->regulariser($magasin, $facture);
 
         $this->assertSame([[$facture->id, '140.00'], [$rectificative->id, '100.00']], $this->imputationsDe($avoir));
         $this->assertSame([StatutFacture::Payee, StatutFacture::PartiellementPayee, 0, 14000], [$facture->fresh()->statut, $rectificative->fresh()->statut, $avoir->fresh()->creditEnCentimes(), $rectificative->fresh()->resteDuEnCentimes()]);
@@ -298,7 +311,7 @@ class RegularisationDUneFactureTest extends TestCase
     {
         [$magasin, $facture] = $this->factureDUneSocieteCorrigee();
         $responsable = self::responsableDeTest($magasin);
-        $rectificative = app(EmettreLaFactureRectificativeAction::class)->handle($responsable, $facture);
+        [, $rectificative] = $this->regulariser($magasin, $facture);
         $this->dansLeMagasin($magasin->fresh(), $responsable);
 
         Livewire::test(ViewFacture::class, ['record' => $facture->getRouteKey()])
@@ -322,7 +335,7 @@ class RegularisationDUneFactureTest extends TestCase
     {
         [$magasin, $facture, $client] = $this->factureDUneSocieteCorrigee(quantite: 3);
         $responsable = self::responsableDeTest($magasin);
-        app(EmettreLaFactureRectificativeAction::class)->handle($responsable, $facture);
+        $this->regulariser($magasin, $facture);
 
         $this->assertThrows(fn () => app(EmettreLaFactureRectificativeAction::class)->handle($responsable, $facture->fresh()), LogicException::class, RegularisationDUneFacture::REFUS_RECTIFICATIVE_DEJA_EMISE);
         $this->assertThrows(fn () => app(EnregistrerAvoirAction::class)->handle($responsable, $client, [['ligne_facture_id' => $facture->lignes()->sole()->id, 'quantite' => 1]], 'Retour'), LogicException::class, sprintf(RegularisationDUneFacture::REFUS_FACTURE_RECTIFIEE, 'FAC-LYON-2026-000001'));
@@ -330,7 +343,6 @@ class RegularisationDUneFactureTest extends TestCase
         Livewire::test(ViewFacture::class, ['record' => $facture->getRouteKey()])->assertActionHidden('avoir');
         $recherche = Livewire::test(CreateAvoir::class)->fillForm(['recherche' => $facture->numero])->callFormComponentAction('recherche', 'chercher');
         $this->assertSame([sprintf(RegularisationDUneFacture::REFUS_FACTURE_RECTIFIEE, 'FAC-LYON-2026-000001')], $recherche->errors()->get('data.recherche'));
-        app(FaireLAvoirDeRegularisationAction::class)->handle($this->proprietaireDe($magasin), $facture->fresh());
         $this->assertThrows(fn () => app(FaireLAvoirDeRegularisationAction::class)->handle($this->proprietaireDe($magasin), $facture->fresh()), LogicException::class, RegularisationDUneFacture::REFUS_AVOIR_DEJA_EMIS);
 
         $this->assertSame([1, 2], [Avoir::query()->count(), Facture::query()->count()]);
@@ -407,8 +419,8 @@ class RegularisationDUneFactureTest extends TestCase
      * 2,03 € TTC. Sa TVA s'écarte ainsi de 1,4 centime de la base × le
      * taux (0,336 €), au-delà des 0,6 centime que garde toute autre vente
      * (décision T90.1-prestataire-4) et des 0,01 € qu'un envoi à la
-     * plateforme agréée contrôlera : le lot de la régularisation tranche
-     * entre ces deux décisions avant l'étape 2 (la matrice des décisions
+     * plateforme agréée contrôlera : l'étape 2, qui branche la plateforme
+     * agréée, tranche entre ces deux décisions (la matrice des décisions
      * note T90.1-prestataire-4 « a_venir » pour la rectificative).
      */
     public function test_la_rectificative_reprend_sans_recalcul_le_reste_des_lignes_rendues_par_plusieurs_avoirs(): void
@@ -493,8 +505,8 @@ class RegularisationDUneFactureTest extends TestCase
      * Un vendeur qui ne voit que ses factures, même autorisé à faire les
      * avoirs, ne fait ni l'avoir de régularisation ni la facture
      * rectificative d'une facture du responsable, comme pour tout avoir ;
-     * avec « voir celles de toute l'équipe », il émet la rectificative, en
-     * son nom.
+     * avec « voir celles de toute l'équipe », il émet la rectificative, une
+     * fois l'avoir de régularisation fait, en son nom.
      */
     public function test_un_vendeur_ne_regularise_que_les_factures_qu_il_voit(): void
     {
@@ -505,22 +517,13 @@ class RegularisationDUneFactureTest extends TestCase
         $this->assertThrows(fn () => app(FaireLAvoirDeRegularisationAction::class)->handle($sesVentes, $facture->fresh()), AuthorizationException::class);
         $this->assertThrows(fn () => app(EmettreLaFactureRectificativeAction::class)->handle($sesVentes, $facture->fresh()), AuthorizationException::class);
         $this->assertSame([0, 1], [Avoir::query()->count(), Facture::query()->count()]);
+        app(FaireLAvoirDeRegularisationAction::class)->handle($this->proprietaireDe($magasin), $facture->fresh());
 
         $rectificative = app(EmettreLaFactureRectificativeAction::class)->handle($toutes, $facture->fresh());
 
         $this->assertSame([$toutes->id, $facture->id], [$rectificative->cree_par, $rectificative->facture_rectifiee_id]);
     }
 
-    /**
-     * Tant que la rectificative manque, le crédit de l'avoir de
-     * régularisation lui reste réservé : ni une autre facture due du
-     * client, ni une facture émise ensuite, ni une facture que rouvre la
-     * contre-passation de son paiement ne le reçoivent, et il ne compte pas
-     * dans le crédit disponible du client ; la fiche de l'avoir le dit
-     * réservé, ses lignes régularisées sans retour en stock, avec la
-     * mention de la régularisation ; la rectificative le reçoit à son
-     * émission.
-     */
     /**
      * Ce qui reste du crédit d'un avoir de régularisation figure parmi les
      * avoirs non utilisés du tableau de bord, avec « Réservé à la facture
@@ -548,6 +551,16 @@ class RegularisationDUneFactureTest extends TestCase
         $this->assertNull($credits());
     }
 
+    /**
+     * Tant que la rectificative manque, le crédit de l'avoir de
+     * régularisation lui reste réservé : ni une autre facture due du
+     * client, ni une facture émise ensuite, ni une facture que rouvre la
+     * contre-passation de son paiement ne le reçoivent, et il ne compte pas
+     * dans le crédit disponible du client ; la fiche de l'avoir le dit
+     * réservé, ses lignes régularisées sans retour en stock, avec la
+     * mention de la régularisation ; la rectificative le reçoit à son
+     * émission.
+     */
     public function test_tant_que_la_rectificative_manque_le_credit_lui_reste_reserve(): void
     {
         [$magasin, $facture, $client] = $this->factureDUneSocieteCorrigee();
@@ -572,52 +585,35 @@ class RegularisationDUneFactureTest extends TestCase
     }
 
     /**
-     * Quel que soit l'ordre des deux gestes, le crédit de l'avoir de
-     * régularisation d'une facture payée règle sa rectificative, dans la
-     * transaction signée du geste qui le rend possible : la rectificative
-     * signe ce crédit quand l'avoir la précède, l'avoir signe son
-     * imputation quand la rectificative le précède.
+     * Le crédit de l'avoir de régularisation d'une facture payée règle sa
+     * rectificative, émise après lui, dans la transaction signée de son
+     * émission : la rectificative signe ce crédit, et l'avoir, qui n'a rien
+     * pu imputer à la sienne, n'en a signé aucune imputation.
      */
-    #[DataProvider('ordresDesGestes')]
-    public function test_quel_que_soit_l_ordre_des_gestes_le_credit_regle_la_rectificative(bool $avoirDAbord): void
+    public function test_la_rectificative_signe_le_credit_reserve_de_l_avoir_de_regularisation(): void
     {
         [$magasin, $facture] = $this->factureDUneSocieteCorrigee();
         $this->payer($facture, '240.00');
-        $avoirDeRegularisation = fn (): Avoir => app(FaireLAvoirDeRegularisationAction::class)->handle($this->proprietaireDe($magasin), $facture->fresh());
-        $rectificativeDe = fn (): Facture => app(EmettreLaFactureRectificativeAction::class)->handle(self::responsableDeTest($magasin), $facture->fresh());
 
-        [$avoir, $rectificative] = $avoirDAbord ? [$avoirDeRegularisation(), $rectificativeDe()] : array_reverse([$rectificativeDe(), $avoirDeRegularisation()]);
+        [$avoir, $rectificative] = $this->regulariser($magasin, $facture);
 
         $this->assertSame([[$rectificative->id, '240.00']], $this->imputationsDe($avoir));
         $this->assertSame([StatutFacture::Payee, 0], [$rectificative->fresh()->statut, $avoir->fresh()->creditEnCentimes()]);
-        $creditSigneParLaRectificative = $this->contenuSigne($rectificative)['donnees']['contexte']['credits_avoir'];
-        $imputationsSigneesParLAvoir = $this->contenuSigne($avoir)['donnees']['contexte']['imputations'];
         $this->assertSame(
-            $avoirDAbord ? [[['avoir_id' => $avoir->id, 'numero' => $avoir->numero, 'montant' => 24000]], []] : [[], [['facture_id' => $rectificative->id, 'numero' => $rectificative->numero, 'montant' => 24000]]],
-            [$creditSigneParLaRectificative, $imputationsSigneesParLAvoir],
+            [[['avoir_id' => $avoir->id, 'numero' => $avoir->numero, 'montant' => 24000]], []],
+            [$this->contenuSigne($rectificative)['donnees']['contexte']['credits_avoir'], $this->contenuSigne($avoir)['donnees']['contexte']['imputations']],
         );
         $this->assertSame([], app(VerificateurIntegrite::class)->verifier($magasin->fresh())->anomalies());
     }
 
     /**
-     * @return array<string, array{0: bool}>
-     */
-    public static function ordresDesGestes(): array
-    {
-        return ['l\'avoir puis la rectificative' => [true], 'la rectificative puis l\'avoir' => [false]];
-    }
-
-    /**
      * Une facture de 240,00 € payée en entier, et un client qui a 120,00 €
      * de crédit disponible, venu du retour d'un article d'une autre facture
-     * déjà payée : quel que soit l'ordre des deux gestes, le crédit de
-     * l'avoir de régularisation règle seul la rectificative, sans rien en
-     * garder de côté, et le client garde ses 120,00 € (constat 1 de la
-     * relecture du lot A7b : émise avant l'avoir, la rectificative recevait
-     * ce crédit, et celui de l'avoir restait bloqué).
+     * déjà payée : le crédit de l'avoir de régularisation règle seul la
+     * rectificative, émise après lui, sans rien en garder de côté, et le
+     * client garde ses 120,00 € (constat 1 de la relecture du lot A7b).
      */
-    #[DataProvider('ordresDesGestes')]
-    public function test_quel_que_soit_l_ordre_des_gestes_le_client_garde_son_autre_credit(bool $avoirDAbord): void
+    public function test_le_client_garde_son_autre_credit(): void
     {
         [$magasin, $facture, $client] = $this->factureDuMagasinDeLyon();
         $this->payer($facture, '240.00');
@@ -626,7 +622,7 @@ class RegularisationDUneFactureTest extends TestCase
         $retour = app(EnregistrerAvoirAction::class)->handle(self::responsableDeTest($magasin), $client, [['ligne_facture_id' => $autre->lignes()->sole()->id, 'quantite' => 1]], 'Retour');
         $this->corrigerLeSirenDeLaSociete($magasin);
 
-        [$avoir, $rectificative] = $this->regulariser($magasin, $facture, $avoirDAbord);
+        [$avoir, $rectificative] = $this->regulariser($magasin, $facture);
 
         $this->assertSame([[$rectificative->id, '240.00']], $this->imputationsDe($avoir));
         $this->assertSame([], $this->imputationsDe($retour));
@@ -634,15 +630,14 @@ class RegularisationDUneFactureTest extends TestCase
     }
 
     /**
-     * Une facture de 240,00 € payée en entier : quel que soit l'ordre des
-     * deux gestes, le retour d'un article d'une autre facture payée, fait
-     * entre les deux, ne règle pas la rectificative et reste un crédit du
+     * Une facture de 240,00 € payée en entier : le retour d'un article
+     * d'une autre facture payée, fait entre l'avoir de régularisation et la
+     * rectificative, ne règle pas la rectificative et reste un crédit du
      * client ; le crédit de l'avoir de régularisation la règle seul, et
      * elle n'accepte ensuite aucun paiement (constat 6 de la relecture du
      * lot A7b).
      */
-    #[DataProvider('ordresDesGestes')]
-    public function test_un_avoir_fait_entre_les_deux_gestes_ne_regle_pas_la_rectificative(bool $avoirDAbord): void
+    public function test_un_avoir_fait_entre_les_deux_gestes_ne_regle_pas_la_rectificative(): void
     {
         [$magasin, $facture, $client] = $this->factureDUneSocieteCorrigee();
         $this->payer($facture, '240.00');
@@ -651,7 +646,7 @@ class RegularisationDUneFactureTest extends TestCase
         $this->payer($autre, '120.00');
         $retour = null;
 
-        [$avoir, $rectificative] = $this->regulariser($magasin, $facture, $avoirDAbord, function () use ($magasin, $client, $autre, &$retour): void {
+        [$avoir, $rectificative] = $this->regulariser($magasin, $facture, function () use ($magasin, $client, $autre, &$retour): void {
             $retour = app(EnregistrerAvoirAction::class)->handle(self::responsableDeTest($magasin), $client, [['ligne_facture_id' => $autre->lignes()->sole()->id, 'quantite' => 1]], 'Retour');
         });
 
@@ -663,56 +658,46 @@ class RegularisationDUneFactureTest extends TestCase
     }
 
     /**
-     * Émise avant l'avoir de régularisation de la facture qu'elle rectifie,
-     * la rectificative l'attend : elle ne reçoit ni paiement (refusé, ce que
-     * le client doit encore se réglant sur la facture), ni le crédit d'un
-     * avoir fait entre-temps, qui règle une autre facture due du client ;
-     * elle n'est ni à encaisser, ni passée en retard, ni relancée après son
-     * échéance, quand cette autre facture l'est ; sa fiche dit qu'elle
-     * attend cet avoir et que ce que le client doit encore se règle sur la
-     * facture, sans proposer « Encaisser » ni « Avoir » (constat 6 de la
-     * relecture du lot A7b).
+     * La facture rectificative ne s'émet qu'après l'avoir de régularisation
+     * de la facture qu'elle rectifie (décision T68.1 de l'onglet « À faire
+     * vérifier par un professionnel ») : avant lui, l'action la refuse en
+     * disant de faire d'abord cet avoir, la fiche ne propose que « Faire
+     * l'avoir de régularisation », et une demande forgée n'émet rien ;
+     * l'avoir fait, la fiche propose « Émettre la facture rectificative ».
      */
-    public function test_la_rectificative_emise_avant_son_avoir_l_attend_sans_rien_recevoir(): void
+    public function test_la_rectificative_ne_s_emet_qu_apres_l_avoir_de_regularisation(): void
     {
-        Mail::fake();
-        [$magasin, $facture, $client] = $this->factureDUneSocieteCorrigee();
-        $this->payer($facture, '240.00');
-        $magasin->forceFill(['relances_automatiques' => true, 'delais_relance' => [7]])->save();
-        $this->travelTo(self::aParis('2026-11-02 10:05:00'));
-        $due = $this->facturer($magasin->fresh(), $client, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 120, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 2]]);
-        $autre = $this->facturer($magasin->fresh(), $client);
-        $this->payer($autre, '120.00');
+        [$magasin, $facture] = $this->factureDUneSocieteCorrigee();
         $responsable = self::responsableDeTest($magasin);
+        $refus = sprintf(RegularisationDUneFacture::REFUS_RECTIFICATIVE_AVANT_L_AVOIR, 'FAC-LYON-2026-000001');
 
-        $rectificative = app(EmettreLaFactureRectificativeAction::class)->handle($responsable, $facture->fresh());
-
-        $this->assertSame([StatutFacture::EnAttenteDeRegularisation, 24000], [$rectificative->statut, $rectificative->resteDuEnCentimes()]);
-        $this->assertThrows(fn () => $this->payer($rectificative->fresh(), '240.00'), LogicException::class, sprintf(RegularisationDUneFacture::REFUS_PAIEMENT_EN_ATTENTE, $rectificative->numero, 'FAC-LYON-2026-000001'));
-        $retour = app(EnregistrerAvoirAction::class)->handle($responsable, $client, [['ligne_facture_id' => $autre->lignes()->sole()->id, 'quantite' => 1]], 'Retour');
-        $this->assertSame([[$due->id, '120.00']], $this->imputationsDe($retour));
-        $this->assertSame([$due->id], Facture::query()->aEncaisser()->pluck('id')->all());
-        $this->travelTo(self::aParis('2026-12-10 10:00:00'));
-        $this->artisan('app:marquer-factures-en-retard')->assertSuccessful();
-        $this->artisan('app:relancer-factures-impayees')->assertSuccessful();
-        $this->assertSame([StatutFacture::EnRetard, 1], [$due->fresh()->statut, $due->fresh()->relancesComptees()->count()]);
-        $this->assertSame([StatutFacture::EnAttenteDeRegularisation, 0], [$rectificative->fresh()->statut, $rectificative->fresh()->relancesComptees()->count()]);
+        $this->assertSame($refus, app(RegularisationDUneFacture::class)->refusDeLaRectificative($facture->fresh()));
+        $this->assertThrows(fn () => app(EmettreLaFactureRectificativeAction::class)->handle($responsable, $facture->fresh()), LogicException::class, $refus);
         $this->dansLeMagasin($magasin->fresh(), $responsable);
-        Livewire::test(ViewFacture::class, ['record' => $rectificative->getRouteKey()])
-            ->assertSee(['En attente de régularisation', sprintf(RegularisationDUneFacture::ATTENTE_DE_L_AVOIR, 'FAC-LYON-2026-000001')])
-            ->assertActionHidden('encaisser')
-            ->assertActionHidden('avoir');
+        $fiche = Livewire::test(ViewFacture::class, ['record' => $facture->getRouteKey()])
+            ->assertActionVisible('faireLAvoirDeRegularisation')
+            ->assertActionHidden('emettreLaFactureRectificative');
+        $this->forgerLAction($fiche, 'emettreLaFactureRectificative', ['jeton' => (string) Str::uuid()]);
+        $this->assertSame([0, 1], [Avoir::query()->count(), Facture::query()->count()]);
+
+        app(FaireLAvoirDeRegularisationAction::class)->handle($this->proprietaireDe($magasin), $facture->fresh());
+
+        $this->assertNull(app(RegularisationDUneFacture::class)->refusDeLaRectificative($facture->fresh()));
+        Livewire::test(ViewFacture::class, ['record' => $facture->getRouteKey()])
+            ->assertActionHidden('faireLAvoirDeRegularisation')
+            ->assertActionVisible('emettreLaFactureRectificative');
     }
 
     /**
-     * Le paiement de la facture contre-passé pendant que sa rectificative
-     * attend l'avoir de régularisation : le crédit disponible du client
-     * règle la facture rouverte, jamais la rectificative ; l'avoir de
-     * régularisation règle ensuite ce qui reste dû de la facture, puis donne
-     * le reste à la rectificative, qui reste due de ce que le client devait
-     * encore (constat 6 de la relecture du lot A7b).
+     * Le paiement de la facture contre-passé entre l'avoir de
+     * régularisation et la rectificative : le crédit réservé de l'avoir
+     * règle d'abord la facture rouverte, seule exception à l'ordre
+     * d'imputation, et n'en garde rien pour la rectificative ; le crédit
+     * disponible du client (le retour d'un article d'une autre facture,
+     * 120,00 €) n'y touche pas, puis règle la rectificative à son émission,
+     * comme toute facture, qui reste due de ce que le client doit encore.
      */
-    public function test_une_contre_passation_pendant_l_attente_ne_regle_pas_la_rectificative(): void
+    public function test_une_contre_passation_avant_la_rectificative_se_regle_sur_le_credit_reserve(): void
     {
         [$magasin, $facture, $client] = $this->factureDuMagasinDeLyon();
         $paiement = $this->payer($facture, '240.00');
@@ -720,15 +705,15 @@ class RegularisationDUneFactureTest extends TestCase
         $this->payer($autre, '120.00');
         $retour = app(EnregistrerAvoirAction::class)->handle(self::responsableDeTest($magasin), $client, [['ligne_facture_id' => $autre->lignes()->sole()->id, 'quantite' => 1]], 'Retour');
         $this->corrigerLeSirenDeLaSociete($magasin);
-        $rectificative = app(EmettreLaFactureRectificativeAction::class)->handle(self::responsableDeTest($magasin), $facture->fresh());
+        $avoir = app(FaireLAvoirDeRegularisationAction::class)->handle($this->proprietaireDe($magasin), $facture->fresh());
 
         app(ContrePasserPaiementAction::class)->handle($this->proprietaireDe($magasin), $paiement->fresh(), 'Virement rejeté par la banque');
 
-        $this->assertSame([[$facture->id, '120.00']], $this->imputationsDe($retour));
-        $this->assertSame([StatutFacture::EnAttenteDeRegularisation, []], [$rectificative->fresh()->statut, $rectificative->fresh()->allocationsAvoir->all()]);
-        $avoir = app(FaireLAvoirDeRegularisationAction::class)->handle($this->proprietaireDe($magasin), $facture->fresh());
-        $this->assertSame([[$facture->id, '120.00'], [$rectificative->id, '120.00']], $this->imputationsDe($avoir));
-        $this->assertSame([StatutFacture::PartiellementPayee, 12000, 0, 0], [$rectificative->fresh()->statut, $rectificative->fresh()->resteDuEnCentimes(), $avoir->fresh()->creditEnCentimes(), $client->fresh()->soldeCrediteurEnCentimes()]);
+        $this->assertSame([[[$facture->id, '240.00']], [], StatutFacture::Payee, 0, 12000], [$this->imputationsDe($avoir), $this->imputationsDe($retour), $facture->fresh()->statut, $avoir->fresh()->creditEnCentimes(), $client->fresh()->soldeCrediteurEnCentimes()]);
+        $rectificative = app(EmettreLaFactureRectificativeAction::class)->handle(self::responsableDeTest($magasin), $facture->fresh());
+        $this->assertSame([[$rectificative->id, '120.00']], $this->imputationsDe($retour));
+        $this->assertSame([StatutFacture::PartiellementPayee, 12000, 0], [$rectificative->fresh()->statut, $rectificative->fresh()->resteDuEnCentimes(), $client->fresh()->soldeCrediteurEnCentimes()]);
+        $this->assertSame([], app(VerificateurIntegrite::class)->verifier($magasin->fresh())->anomalies());
     }
 
     /**
@@ -747,7 +732,7 @@ class RegularisationDUneFactureTest extends TestCase
         $responsable = self::responsableDeTest($magasin);
         $avantLaCorrection = app(EnregistrerAvoirAction::class)->handle($responsable, $client, [['ligne_facture_id' => $facture->lignes()->sole()->id, 'quantite' => 1]], 'Retour avant la correction');
         $this->corrigerLeSirenDeLaSociete($magasin);
-        [, $rectificative] = $this->regulariser($magasin, $facture, avoirDAbord: true);
+        [, $rectificative] = $this->regulariser($magasin, $facture);
         $ligne = $rectificative->lignes()->sole();
         $coutMoyen = $produit->fresh()->cmup_ht;
         $this->assertSame(8, $produit->fresh()->stock_quantite);
@@ -780,7 +765,7 @@ class RegularisationDUneFactureTest extends TestCase
         $facture = $this->facturer($magasin, $client, [['produit_id' => $produit->id, 'quantite' => 2]]);
         $produit->forceFill(['suivi_stock' => true])->save();
         $this->corrigerLeSirenDeLaSociete($magasin);
-        [, $rectificative] = $this->regulariser($magasin, $facture, avoirDAbord: false);
+        [, $rectificative] = $this->regulariser($magasin, $facture);
 
         app(EnregistrerAvoirAction::class)->handle(self::responsableDeTest($magasin), $client, [['ligne_facture_id' => $rectificative->lignes()->sole()->id, 'quantite' => 2]], 'Retour');
 
@@ -842,30 +827,26 @@ class RegularisationDUneFactureTest extends TestCase
     }
 
     /**
-     * Un retour se fait sur la rectificative, une fois l'avoir de
-     * régularisation émis : avant lui, la rectificative qui l'attend le
-     * refuse en le disant, sans proposer « Avoir » ; l'avoir, qui a crédité
-     * toute la facture jamais payée, la fait sortir de son attente, due de
-     * tout son montant ; ensuite, l'avoir du retour s'émet sous l'identité
-     * corrigée de la société, que la rectificative porte aussi.
+     * Un retour se fait sur la rectificative, émise après l'avoir de
+     * régularisation, qui a crédité toute la facture jamais payée : la
+     * rectificative est due de tout son montant, sa fiche propose
+     * « Avoir », et l'avoir du retour s'émet sous l'identité corrigée de la
+     * société, que la rectificative porte aussi.
      */
-    public function test_un_retour_se_fait_sur_la_rectificative_une_fois_l_avoir_de_regularisation_emis(): void
+    public function test_un_retour_se_fait_sur_la_rectificative_sous_l_identite_corrigee(): void
     {
         [$magasin, $facture, $client] = $this->factureDUneSocieteCorrigee(quantite: 3);
         $responsable = self::responsableDeTest($magasin);
-        $rectificative = app(EmettreLaFactureRectificativeAction::class)->handle($responsable, $facture->fresh());
-        $retourSurLaRectificative = fn (): Avoir => app(EnregistrerAvoirAction::class)->handle($responsable, $client, [['ligne_facture_id' => $rectificative->lignes()->sole()->id, 'quantite' => 1]], 'Retour');
-        $this->assertThrows($retourSurLaRectificative, LogicException::class, sprintf(RegularisationDUneFacture::REFUS_RETOUR_RECTIFICATIVE_EN_ATTENTE, $rectificative->numero, 'FAC-LYON-2026-000001'));
+        [$avoirDeRegularisation, $rectificative] = $this->regulariser($magasin, $facture);
+        $this->assertSame([StatutFacture::Emise, 36000, [[$facture->id, '360.00']]], [$rectificative->fresh()->statut, $rectificative->fresh()->resteDuEnCentimes(), $this->imputationsDe($avoirDeRegularisation)]);
         $this->dansLeMagasin($magasin->fresh(), $responsable);
-        Livewire::test(ViewFacture::class, ['record' => $rectificative->getRouteKey()])->assertActionHidden('avoir');
-        $avoirDeRegularisation = app(FaireLAvoirDeRegularisationAction::class)->handle($this->proprietaireDe($magasin), $facture->fresh());
-        $this->assertSame([StatutFacture::Emise, 36000], [$rectificative->fresh()->statut, $rectificative->fresh()->resteDuEnCentimes()]);
-
-        $retour = $retourSurLaRectificative();
-
-        $this->assertSame([(string) $magasin->societe->fresh()->siren, (string) $rectificative->emetteur()->siren], [(string) $retour->emetteur()->siren, (string) $retour->emetteur()->siren]);
-        $this->assertSame([3, '360.00'], [$avoirDeRegularisation->lignes()->sole()->quantite, $avoirDeRegularisation->total_ttc]);
         Livewire::test(ViewFacture::class, ['record' => $rectificative->getRouteKey()])->assertActionVisible('avoir');
+
+        $retour = app(EnregistrerAvoirAction::class)->handle($responsable, $client, [['ligne_facture_id' => $rectificative->lignes()->sole()->id, 'quantite' => 1]], 'Retour');
+
+        $this->assertSame([(string) $magasin->societe->fresh()->siren, (string) $magasin->societe->fresh()->siren], [(string) $retour->emetteur()->siren, (string) $rectificative->emetteur()->siren]);
+        $this->assertSame([3, '360.00'], [$avoirDeRegularisation->lignes()->sole()->quantite, $avoirDeRegularisation->total_ttc]);
+        $this->assertSame([[$rectificative->id, '120.00']], $this->imputationsDe($retour));
     }
 
     /**
@@ -892,7 +873,9 @@ class RegularisationDUneFactureTest extends TestCase
 
     /**
      * Sur la fiche d'une facture désignée, le responsable trouve les deux
-     * gestes : chacun s'émet par sa fenêtre et ouvre le document émis ;
+     * gestes, l'un après l'autre : l'avoir de régularisation d'abord, puis
+     * la rectificative ; chacun s'émet par sa fenêtre et ouvre le document
+     * émis ;
      * ensuite, ni l'un ni l'autre ne s'y propose plus, ni un avoir
      * ordinaire, et la fiche dit quelle facture la rectifie et que les
      * lignes de son avoir sont régularisées, sans retour en stock. La fiche
@@ -909,6 +892,7 @@ class RegularisationDUneFactureTest extends TestCase
             ->assertActionHidden('faireLAvoirDeRegularisation')
             ->assertActionHidden('emettreLaFactureRectificative');
         Livewire::test(ViewFacture::class, ['record' => $facture->getRouteKey()])
+            ->assertActionHidden('emettreLaFactureRectificative')
             ->callAction('faireLAvoirDeRegularisation')
             ->assertHasNoActionErrors()
             ->assertRedirect(AvoirResource::getUrl('view', ['record' => Avoir::query()->sole()]));
@@ -959,8 +943,8 @@ class RegularisationDUneFactureTest extends TestCase
     }
 
     /**
-     * Le magasin de Lyon d'une société validée, son identité légale
-     * complète, magasin actif.
+     * Un avoir ordinaire ne régularise aucune facture : lui demander la
+     * facture qu'il régularise est une erreur du code.
      */
     public function test_un_avoir_ordinaire_ne_regularise_aucune_facture(): void
     {
@@ -970,6 +954,135 @@ class RegularisationDUneFactureTest extends TestCase
         $this->assertThrows(fn () => $retour->factureRegularisee(), LogicException::class, "L'avoir {$retour->numero} n'est pas un avoir de régularisation.");
     }
 
+    /**
+     * Une facture de 600,00 € (5 × 120,00 € TTC) payée en entier :
+     * l'avoir de régularisation n'a rien à régler sur elle et réserve ses
+     * 600,00 € à la rectificative, qui les reçoit à son émission et n'est
+     * due de rien ; son PDF imprime ce crédit, avec le numéro de l'avoir,
+     * et « Restant dû à l'émission » à 0,00 €.
+     */
+    public function test_une_facture_payee_en_entier_se_rectifie_sans_rien_de_du(): void
+    {
+        [$magasin, $facture] = $this->factureDUneSocieteCorrigee(quantite: 5);
+        $this->payer($facture, '600.00');
+
+        [$avoir, $rectificative] = $this->regulariser($magasin, $facture);
+
+        $this->assertSame([[$rectificative->id, '600.00']], $this->imputationsDe($avoir));
+        $this->assertSame([StatutFacture::Payee, 0, StatutFacture::Payee, 0], [$facture->fresh()->statut, $facture->fresh()->resteDuEnCentimes(), $rectificative->fresh()->statut, $rectificative->fresh()->resteDuEnCentimes()]);
+        $html = html_entity_decode(app(FacturePdfGenerator::class)->html($rectificative->fresh()), ENT_QUOTES);
+        $this->assertStringContainsString('Règlements', $html);
+        $this->assertStringContainsString($avoir->numero, $html);
+        $this->assertStringContainsString('600,00 €', $html);
+        $this->assertMatchesRegularExpression('/Restant dû à l\'émission.*?0,00 €/s', $html);
+        $this->assertSame([], app(VerificateurIntegrite::class)->verifier($magasin->fresh())->anomalies());
+    }
+
+    /**
+     * Une facture de 600,00 € payée 200,00 € : l'avoir de régularisation
+     * règle les 400,00 € qui en restent dus et réserve 200,00 € à la
+     * rectificative, qui les reçoit et reste due de 400,00 €, ce que le
+     * client devait encore.
+     */
+    public function test_une_facture_payee_en_partie_laisse_son_reste_du_a_la_rectificative(): void
+    {
+        [$magasin, $facture, $client] = $this->factureDUneSocieteCorrigee(quantite: 5);
+        $this->payer($facture, '200.00');
+
+        [$avoir, $rectificative] = $this->regulariser($magasin, $facture);
+
+        $this->assertSame([[$facture->id, '400.00'], [$rectificative->id, '200.00']], $this->imputationsDe($avoir));
+        $this->assertSame([StatutFacture::Payee, StatutFacture::PartiellementPayee, 40000, 0], [$facture->fresh()->statut, $rectificative->fresh()->statut, $rectificative->fresh()->resteDuEnCentimes(), $client->fresh()->soldeCrediteurEnCentimes()]);
+    }
+
+    /**
+     * Une facture de 600,00 € payée 500,00 € puis 100,00 €, régularisée :
+     * la rectificative a reçu les 600,00 € de l'avoir. La contre-passation
+     * du paiement de 500,00 € (décision T68.3) rouvre ce montant sur la
+     * facture régularisée ; le crédit de l'avoir s'y reporte, en deux
+     * imputations qui désignent la contre-passation (−500,00 € sur la
+     * rectificative, +500,00 € sur la facture) : la facture reste payée et
+     * la rectificative est due de 500,00 €, seule à attendre le règlement ;
+     * le registre reste intègre.
+     */
+    public function test_la_contre_passation_d_un_paiement_de_la_facture_regularisee_rouvre_le_du_sur_la_rectificative(): void
+    {
+        [$magasin, $facture, $client] = $this->factureDUneSocieteCorrigee(quantite: 5);
+        $cinqCents = $this->payer($facture, '500.00');
+        $this->payer($facture, '100.00');
+        [$avoir, $rectificative] = $this->regulariser($magasin, $facture);
+
+        $contrePassation = app(ContrePasserPaiementAction::class)->handle($this->proprietaireDe($magasin), $cinqCents->fresh(), 'Chèque impayé');
+
+        $this->assertSame([[$rectificative->id, '600.00'], [$rectificative->id, '-500.00'], [$facture->id, '500.00']], $this->imputationsDe($avoir));
+        $this->assertSame([$contrePassation->id, $contrePassation->id], array_slice(AvoirAllocation::query()->where('avoir_id', $avoir->id)->orderBy('id')->pluck('paiement_id')->map(fn (mixed $id): int => (int) $id)->all(), 1));
+        $this->assertSame([StatutFacture::Payee, 0, StatutFacture::PartiellementPayee, 50000, 0], [$facture->fresh()->statut, $facture->fresh()->resteDuEnCentimes(), $rectificative->fresh()->statut, $rectificative->fresh()->resteDuEnCentimes(), $avoir->fresh()->creditEnCentimes()]);
+        $this->assertSame([$rectificative->id], Facture::query()->aEncaisser()->where('client_id', $client->id)->pluck('id')->all());
+        $this->assertSame([], app(VerificateurIntegrite::class)->verifier($magasin->fresh())->anomalies());
+    }
+
+    /**
+     * Une facture de 600,00 € payée 200,00 € : l'avoir de régularisation en
+     * a réglé les 400,00 € dus et la rectificative a reçu ses 200,00 €. La
+     * contre-passation de ces 200,00 € reporte sur la facture tout ce que la
+     * rectificative avait reçu : la facture est soldée par l'avoir, et la
+     * rectificative est due de ses 600,00 €.
+     */
+    public function test_la_contre_passation_du_seul_paiement_rouvre_toute_la_rectificative(): void
+    {
+        [$magasin, $facture] = $this->factureDUneSocieteCorrigee(quantite: 5);
+        $paiement = $this->payer($facture, '200.00');
+        [$avoir, $rectificative] = $this->regulariser($magasin, $facture);
+
+        app(ContrePasserPaiementAction::class)->handle($this->proprietaireDe($magasin), $paiement->fresh(), 'Virement rejeté par la banque');
+
+        $this->assertSame([[$facture->id, '400.00'], [$rectificative->id, '200.00'], [$rectificative->id, '-200.00'], [$facture->id, '200.00']], $this->imputationsDe($avoir));
+        $this->assertSame([StatutFacture::Payee, 0, StatutFacture::Emise, 60000], [$facture->fresh()->statut, $facture->fresh()->resteDuEnCentimes(), $rectificative->fresh()->statut, $rectificative->fresh()->resteDuEnCentimes()]);
+        $this->assertSame([], app(VerificateurIntegrite::class)->verifier($magasin->fresh())->anomalies());
+    }
+
+    /**
+     * Une facture régularisée ne se relance jamais, même encore due : ici,
+     * un article rendu avant la correction a réglé de son crédit une autre
+     * facture du client, puis le paiement de la facture a été contre-passé
+     * après sa régularisation, et elle reste due de 120,00 €, sa
+     * rectificative aussi. Passé l'échéance, la relance automatique ne part
+     * que pour la rectificative ; « Relancer » à la main est caché sur la
+     * fiche de la facture régularisée et refusé en le disant, même par une
+     * demande directe, et reste possible sur la rectificative.
+     */
+    public function test_la_facture_regularisee_ne_se_relance_jamais_et_sa_rectificative_se_relance(): void
+    {
+        Mail::fake();
+        [$magasin, $facture, $client] = $this->factureDuMagasinDeLyon();
+        $magasin->forceFill(['relances_automatiques' => true, 'delais_relance' => [7]])->save();
+        $autre = $this->facturer($magasin, $client);
+        $paiement = $this->payer($facture, '240.00');
+        $responsable = self::responsableDeTest($magasin);
+        $retour = app(EnregistrerAvoirAction::class)->handle($responsable, $client, [['ligne_facture_id' => $facture->lignes()->sole()->id, 'quantite' => 1]], 'Retour');
+        $this->corrigerLeSirenDeLaSociete($magasin);
+        [$avoir, $rectificative] = $this->regulariser($magasin, $facture);
+        app(ContrePasserPaiementAction::class)->handle($this->proprietaireDe($magasin), $paiement->fresh(), 'Virement rejeté par la banque');
+        $this->assertSame([[[$autre->id, '120.00']], 12000, 12000], [$this->imputationsDe($retour), $facture->fresh()->resteDuEnCentimes(), $rectificative->fresh()->resteDuEnCentimes()]);
+        $refus = sprintf(RegularisationDUneFacture::REFUS_RELANCE_DE_LA_FACTURE_REGULARISEE, 'FAC-LYON-2026-000001', $avoir->numero);
+
+        $this->travelTo(self::aParis('2026-12-10 10:00:00'));
+        $this->artisan('app:marquer-factures-en-retard')->assertSuccessful();
+        $this->artisan('app:relancer-factures-impayees')->assertSuccessful();
+
+        $this->assertSame([0, 1], [$facture->fresh()->relancesComptees()->count(), $rectificative->fresh()->relancesComptees()->count()]);
+        $this->assertThrows(fn () => app(EnvoyerDocumentAction::class)->relancer($responsable, $facture->fresh(), (string) $client->email), LogicException::class, $refus);
+        $this->dansLeMagasin($magasin->fresh(), $responsable);
+        $fiche = Livewire::test(ViewFacture::class, ['record' => $facture->getRouteKey()])->assertActionHidden('relancer');
+        $this->forgerLAction($fiche, 'relancer', ['destinataire' => (string) $client->email, 'jeton' => (string) Str::uuid()]);
+        Livewire::test(ViewFacture::class, ['record' => $rectificative->getRouteKey()])->assertActionVisible('relancer');
+        $this->assertSame([0, 1], [$facture->fresh()->relancesComptees()->count(), $rectificative->fresh()->relancesComptees()->count()]);
+    }
+
+    /**
+     * Le magasin de Lyon d'une société validée, son identité légale
+     * complète, magasin actif.
+     */
     private function magasinDeLyon(): Magasin
     {
         $magasin = $this->completerIdentiteLegale($this->ouvrirUneSociete(['nom' => 'Lyon', 'code' => 'LYON']));
@@ -1018,26 +1131,21 @@ class RegularisationDUneFactureTest extends TestCase
     }
 
     /**
-     * Les deux gestes de la régularisation de la facture, dans cet ordre ou
-     * dans l'autre : l'avoir de régularisation, fait par le propriétaire, et
-     * la facture rectificative, émise par le responsable du magasin, avec
-     * ce qui se passe entre les deux. Rend l'avoir et la rectificative.
+     * Les deux gestes de la régularisation de la facture, dans leur seul
+     * ordre (T68.1) : l'avoir de régularisation, fait par le propriétaire,
+     * puis la facture rectificative, émise par le responsable du magasin,
+     * avec ce qui se passe entre les deux. Rend l'avoir et la
+     * rectificative.
      *
      * @param  (Closure(): void)|null  $entreLesDeuxGestes
      * @return array{0: Avoir, 1: Facture}
      */
-    private function regulariser(Magasin $magasin, Facture $facture, bool $avoirDAbord, ?Closure $entreLesDeuxGestes = null): array
+    private function regulariser(Magasin $magasin, Facture $facture, ?Closure $entreLesDeuxGestes = null): array
     {
-        $gestes = [
-            'avoir' => fn (): Avoir => app(FaireLAvoirDeRegularisationAction::class)->handle($this->proprietaireDe($magasin), $facture->fresh()),
-            'rectificative' => fn (): Facture => app(EmettreLaFactureRectificativeAction::class)->handle(self::responsableDeTest($magasin), $facture->fresh()),
-        ];
-        [$premier, $second] = $avoirDAbord ? ['avoir', 'rectificative'] : ['rectificative', 'avoir'];
-        $faits = [$premier => $gestes[$premier]()];
+        $avoir = app(FaireLAvoirDeRegularisationAction::class)->handle($this->proprietaireDe($magasin), $facture->fresh());
         ($entreLesDeuxGestes ?? static fn (): null => null)();
-        $faits[$second] = $gestes[$second]();
 
-        return [$faits['avoir'], $faits['rectificative']];
+        return [$avoir, app(EmettreLaFactureRectificativeAction::class)->handle(self::responsableDeTest($magasin), $facture->fresh())];
     }
 
     /**

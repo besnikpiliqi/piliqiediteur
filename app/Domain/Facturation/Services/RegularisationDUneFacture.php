@@ -5,7 +5,6 @@ namespace App\Domain\Facturation\Services;
 use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Facturation\Enums\NatureLigne;
 use App\Domain\Facturation\Enums\StatutAvoir;
-use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\LigneAvoir;
@@ -32,34 +31,40 @@ use Illuminate\Database\Eloquent\Builder;
  * émises avant l'instant de l'examen, exactement celles de sa liste (voir
  * ExaminerSirenAction) ; les tickets restent tels quels
  * (BOI-TVA-DECLA-30-20-20-20). Chacune se régularise une fois, par deux
- * gestes, dans son magasin, quand il peut vendre, dans l'ordre que l'on
- * veut :
+ * gestes, dans son magasin, quand il peut vendre, toujours dans cet ordre
+ * (T68.1) :
  * - son avoir de régularisation (voir FaireLAvoirDeRegularisationAction),
  *   fait comme tout avoir, jamais par un compte d'un cabinet lié : il
  *   crédite ce qui reste à créditer de chaque ligne, ce que les avoirs
  *   déjà émis n'en ont pas crédité (voir lignesDeLAvoir()), sans retour en
  *   stock, imprime l'émetteur figé de la facture (l'ancien SIREN) et la
- *   mention de la régularisation ;
- * - sa facture rectificative (voir EmettreLaFactureRectificativeAction),
- *   émise par un compte autorisé à créer et émettre une facture dans ce
- *   magasin, jamais par le propriétaire ni par un compte d'un cabinet lié :
- *   elle reprend ces mêmes lignes et montants (voir
+ *   mention de la régularisation ; son crédit règle d'abord ce qui reste
+ *   dû de la facture ;
+ * - puis sa facture rectificative (voir
+ *   EmettreLaFactureRectificativeAction), qui ne s'émet qu'une fois cet
+ *   avoir émis (voir REFUS_RECTIFICATIVE_AVANT_L_AVOIR), par un compte
+ *   autorisé à créer et émettre une facture dans ce magasin, jamais par le
+ *   propriétaire ni par un compte d'un cabinet lié : elle reprend les
+ *   lignes et montants que l'avoir a crédités (voir
  *   lignesDeLaRectificative()), sans sortie de stock, sous l'identité
- *   corrigée de la société ; émise avant l'avoir, elle l'attend (voir
- *   StatutFacture::EnAttenteDeRegularisation) : elle ne reçoit ni
- *   paiement ni crédit, n'est ni relancée ni en retard, et ne compte pas
- *   parmi les factures à encaisser, ce que le client doit encore se
- *   réglant sur la facture.
+ *   corrigée de la société, avec la date de la livraison ou de la
+ *   prestation d'origine (T27.2, voir MentionsFiscales) ; ce qui reste du
+ *   crédit de l'avoir la règle aussitôt, dans la transaction signée de son
+ *   émission (voir AppliquerAvoirsDisponiblesAction), et son PDF montre ce
+ *   crédit et le vrai reste dû.
  * Le crédit de l'avoir ne règle que ce qui reste dû de la facture, puis sa
  * rectificative, avant toute autre imputation, et lui reste réservé tant
- * qu'elle manque ; tant qu'elle l'attend, la rectificative ne reçoit aucun
- * autre crédit du client (voir ImputationDuCredit et
- * AppliquerAvoirsDisponiblesAction). Quel que soit l'ordre des deux
- * gestes, elle reçoit ainsi ce que la facture avait reçu, et reste due de
- * ce que le client y devait encore. Ce crédit n'est jamais un
- * encaissement : il ne s'inscrit dans aucun e-reporting (seuls
- * les tickets y entrent, voir EReportingDesParticuliers), et la facture
- * électronique de l'étape 2 ne le déclarera pas comme tel, la
+ * qu'elle manque (voir ImputationDuCredit et
+ * AppliquerAvoirsDisponiblesAction). La rectificative reçoit ainsi ce que
+ * la facture avait reçu, et reste due de ce que le client y devait encore.
+ * Un paiement de la facture contre-passé ensuite y rouvre un dû que ce
+ * crédit referme : il quitte la rectificative pour la facture, qui reste
+ * soldée, et la rectificative porte le dû rouvert (T68.3, voir
+ * ImputationDuCredit::reportsDesRegularisations()) ; une facture
+ * régularisée n'est jamais relancée (voir estRegularisee()). Ce crédit
+ * n'est jamais un encaissement : il ne s'inscrit dans aucun e-reporting
+ * (seuls les tickets y entrent, voir EReportingDesParticuliers), et la
+ * facture électronique de l'étape 2 ne le déclarera pas comme tel, la
  * rectificative reprenant les encaissements déjà déclarés de la facture.
  *
  * Une facture désignée ne reçoit plus d'avoir ordinaire : un retour se
@@ -79,15 +84,13 @@ class RegularisationDUneFacture
 
     public const REFUS_FACTURE_RECTIFIEE = 'La facture %s a sa facture rectificative : un retour se fait sur la rectificative.';
 
-    public const REFUS_RETOUR_RECTIFICATIVE_EN_ATTENTE = 'La facture rectificative %s attend l\'avoir de régularisation de la facture %s : un retour s\'y fait une fois cet avoir émis.';
-
-    public const REFUS_PAIEMENT_EN_ATTENTE = 'La facture rectificative %s attend l\'avoir de régularisation de la facture %s : ce que le client doit encore se règle sur cette facture.';
-
-    public const ATTENTE_DE_L_AVOIR = 'Elle attend l\'avoir de régularisation de la facture %1$s, qui la réglera de ce que la facture %1$s a reçu : d\'ici là, ce que le client doit encore se règle sur la facture %1$s.';
-
     public const REFUS_AVOIR_DEJA_EMIS = 'L\'avoir de régularisation de cette facture est déjà émis.';
 
     public const REFUS_RECTIFICATIVE_DEJA_EMISE = 'La facture rectificative de cette facture est déjà émise.';
+
+    public const REFUS_RECTIFICATIVE_AVANT_L_AVOIR = 'Faites d\'abord l\'avoir de régularisation de la facture %s : la facture rectificative ne s\'émet qu\'après lui, qui la règle de ce que la facture a reçu.';
+
+    public const REFUS_RELANCE_DE_LA_FACTURE_REGULARISEE = 'La facture %s est régularisée par l\'avoir %s : elle ne se relance pas.';
 
     public const REFUS_RIEN_A_REGULARISER = 'Les lignes de cette facture ont déjà été entièrement créditées par des avoirs : elle n\'a plus rien à régulariser.';
 
@@ -121,13 +124,10 @@ class RegularisationDUneFacture
     /**
      * Pourquoi cette facture ne reçoit pas d'avoir ordinaire, du fait de sa
      * régularisation ; null quand rien ne l'en empêche :
-     * - une facture rectificative qui attend l'avoir de régularisation de
-     *   la facture qu'elle rectifie (voir
-     *   StatutFacture::EnAttenteDeRegularisation) : le retour s'y fait une
-     *   fois cet avoir émis ;
      * - une facture qui a sa rectificative : le retour se fait sur celle-ci,
      *   qui en a repris les lignes ;
-     * - une facture désignée qui n'a pas encore sa rectificative : un avoir
+     * - une facture désignée qui n'a pas encore sa rectificative (son avoir
+     *   de régularisation émis ou non) : un avoir
      *   ordinaire la corrigerait sous le SIREN corrigé, qu'elle n'a jamais
      *   porté, et sa régularisation n'en reprendrait plus toutes les lignes ;
      *   elle se régularise d'abord.
@@ -137,7 +137,6 @@ class RegularisationDUneFacture
     public function refusDUnAvoirOrdinaire(Facture $facture): ?string
     {
         return match (true) {
-            $facture->statut === StatutFacture::EnAttenteDeRegularisation => sprintf(self::REFUS_RETOUR_RECTIFICATIVE_EN_ATTENTE, $facture->numero, ValeursLues::texteOuNul($facture->factureRectifiee()->value('numero'))),
             $facture->rectificative !== null => sprintf(self::REFUS_FACTURE_RECTIFIEE, $facture->numero),
             $this->estDesignee($facture) => sprintf(self::REFUS_RETOUR_AVANT_REGULARISATION, $facture->numero),
             default => null,
@@ -161,9 +160,9 @@ class RegularisationDUneFacture
 
     /**
      * Pourquoi la facture rectificative de cette facture ne s'émet pas :
-     * elle n'est pas désignée, sa rectificative est déjà émise, ou des
-     * avoirs ont déjà crédité toutes ses lignes ; null quand rien ne
-     * l'empêche.
+     * elle n'est pas désignée, sa rectificative est déjà émise, des avoirs
+     * ont déjà crédité toutes ses lignes, ou son avoir de régularisation
+     * n'est pas encore émis (T68.1) ; null quand rien ne l'empêche.
      */
     public function refusDeLaRectificative(Facture $facture): ?string
     {
@@ -171,15 +170,33 @@ class RegularisationDUneFacture
             ! $this->estDesignee($facture) => self::REFUS_NON_DESIGNEE,
             $facture->rectificative()->exists() => self::REFUS_RECTIFICATIVE_DEJA_EMISE,
             $this->lignesDeLaRectificative($facture) === [] => self::REFUS_RIEN_A_REGULARISER,
+            $this->avoirDeRegularisation($facture) === null => sprintf(self::REFUS_RECTIFICATIVE_AVANT_L_AVOIR, $facture->numero),
             default => null,
         };
+    }
+
+    /**
+     * Pourquoi cette facture ne se relance pas, du fait de sa
+     * régularisation ; null quand rien ne l'en empêche : une facture dont
+     * l'avoir de régularisation est émis, après la correction du SIREN ou
+     * pour une exonération non prouvée, est régularisée, son dû se portant
+     * sur sa facture rectificative (voir
+     * ImputationDuCredit::reportsDesRegularisations()) : elle ne se relance
+     * jamais, ni à la main ni d'elle-même (voir RelancerFacturesImpayees).
+     */
+    public function refusDeLaRelance(Facture $facture): ?string
+    {
+        $avoir = $this->avoirDeRegularisation($facture);
+
+        return $avoir === null ? null : sprintf(self::REFUS_RELANCE_DE_LA_FACTURE_REGULARISEE, $facture->numero, $avoir->numero);
     }
 
     /**
      * L'avoir de régularisation émis de cette facture, s'il existe : au
      * plus un, ses lignes créditant tout ce qui restait à créditer. Relu
      * verrouillé quand son crédit va s'imputer (voir
-     * AppliquerAvoirsDisponiblesAction).
+     * AppliquerAvoirsDisponiblesAction et
+     * ImputationDuCredit::reportsDesRegularisations()).
      */
     public function avoirDeRegularisation(Facture $facture, bool $verrouille = false): ?Avoir
     {
@@ -212,8 +229,8 @@ class RegularisationDUneFacture
      * taux et sa remise, pour ce que les avoirs émis qui ne la régularisent
      * pas n'en ont pas crédité, quantité et montants (le HT, la TVA et le
      * TTC de la ligne moins ceux de ces avoirs, en centimes) : exactement ce
-     * que son avoir de régularisation crédite, qu'il soit émis avant ou
-     * après elle (le dernier retour d'une ligne en rend le solde exact, voir
+     * que son avoir de régularisation, émis avant elle, a crédité (le
+     * dernier retour d'une ligne en rend le solde exact, voir
      * LigneFacture::montantsDesRetours()). Aucune quand tout a été crédité.
      *
      * @return list<array{produit_id: int|null, service_id: int|null, nature: NatureLigne, description: string, reference: string|null, quantite: int, prix_unitaire_ht: numeric-string, prix_unitaire_ttc: numeric-string, taux_tva: numeric-string, taux_tva_du_prix: numeric-string, remise_pourcentage: numeric-string, montant_ht: numeric-string, montant_tva: numeric-string, montant_ttc: numeric-string, ordre: int}>

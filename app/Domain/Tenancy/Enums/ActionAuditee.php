@@ -2,6 +2,7 @@
 
 namespace App\Domain\Tenancy\Enums;
 
+use App\Domain\Tenancy\Actions\ModifierLesParametresDuMagasinAction;
 use App\Domain\Tenancy\Models\Societe;
 use Filament\Support\Contracts\HasLabel;
 
@@ -38,6 +39,7 @@ enum ActionAuditee: string implements HasLabel
     case OrdreARefaire = 'ordre_a_refaire';
     case MagasinCree = 'magasin_cree';
     case MagasinModifie = 'magasin_modifie';
+    case ParametresDuMagasinModifies = 'parametres_du_magasin_modifies';
     case SiretChange = 'siret_change';
     case MagasinFerme = 'magasin_ferme';
     case MagasinCede = 'magasin_cede';
@@ -164,6 +166,7 @@ enum ActionAuditee: string implements HasLabel
             self::OrdreARefaire => 'Inscription à l\'Ordre à vérifier de nouveau',
             self::MagasinCree => 'Magasin créé',
             self::MagasinModifie => 'Magasin modifié',
+            self::ParametresDuMagasinModifies => 'Paramètres du magasin modifiés',
             self::SiretChange => 'SIRET du magasin changé',
             self::MagasinFerme => 'Magasin fermé',
             self::MagasinCede => 'Magasin cédé après sa fermeture',
@@ -355,6 +358,9 @@ enum ActionAuditee: string implements HasLabel
             // CorrigerSirenAction).
             self::OrdreRefuse, self::OrdreRetire, self::OrdreARefaire => ['motif'],
             self::MagasinCree, self::MagasinModifie => ['nom', 'code_magasin', 'siret', 'adresse', 'complement_adresse', 'code_postal', 'ville', 'pays', 'territoire', 'etablissement_verifie'],
+            // Ce qu'une page de paramètres du magasin a corrigé (voir
+            // ModifierLesParametresDuMagasinAction).
+            self::ParametresDuMagasinModifies => ModifierLesParametresDuMagasinAction::tousLesParametres(),
             self::SiretChange => ['siret', 'adresse', 'complement_adresse', 'code_postal', 'ville', 'territoire', 'etablissement_verifie'],
             // Pour une cession, l'indication d'établissement principal
             // retirée, s'il la portait, la valeur hors taxe du stock sorti

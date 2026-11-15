@@ -5,7 +5,11 @@ namespace App\Domain\Tenancy\Actions;
 use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\Authorization\OperateurCourant;
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Catalogue\Services\BaremePrixDeVente;
+use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Models\Societe;
+use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\FicheLue;
 use App\Models\User;
@@ -52,13 +56,26 @@ class ModifierLesParametresDuMagasinAction
     private const PARAMETRES = [
         PermissionRegistry::PARAMETRES_GERER => ['email', 'telephone', 'references_acheteur', 'delai_paiement_jours', 'mention_penalites_retard', 'mention_indemnite_recouvrement', 'mention_escompte'],
         PermissionRegistry::PRIX_VENTE_REGLER => ['prix_vente_automatique', 'bareme_prix_vente'],
-        PermissionRegistry::RELANCES_REGLER => ['relances_automatiques', 'delais_relance'],
+        PermissionRegistry::RELANCES_REGLER => ['relances_automatiques', 'delais_relance', 'relancer_aussi_les_particuliers'],
     ];
 
     public function __construct(
         private readonly LecteurDesDroits $lecteur,
         private readonly OperateurCourant $operateur,
+        private readonly JournalAudit $journalAudit,
     ) {}
+
+    /**
+     * Tous les paramètres que règlent les pages du magasin : ceux que
+     * retient leur entrée au journal d'audit (voir
+     * ActionAuditee::ParametresDuMagasinModifies).
+     *
+     * @return list<string>
+     */
+    public static function tousLesParametres(): array
+    {
+        return array_values(array_merge(...array_values(self::PARAMETRES)));
+    }
 
     /**
      * Les paramètres du magasin que règle cette autorisation : ceux que sa
@@ -91,14 +108,48 @@ class ModifierLesParametresDuMagasinAction
 
         return DB::transaction(function () use ($auteur, $autorisation, $lue, $corrections): array {
             $magasin = app(TenantContext::class)->magasin();
+
+            // Une correction s'inscrit au journal d'audit : la société se
+            // verrouille d'abord, puis la ligne du magasin, puis l'auteur,
+            // l'ordre de tout geste qui écrit à ce journal (voir
+            // Societe::verrouillerAvantSonJournalDAudit()).
+            if ($corrections !== []) {
+                Societe::verrouillerAvantSonJournalDAudit($magasin->societe_id);
+            }
+
             $relu = Magasin::query()->whereKey($magasin->getKey())->lock('for no key update')->firstOrFail();
             $relu->verifierQuIlEstOuvert();
             $compte = $this->lecteur->exigerSousVerrou($auteur, $autorisation, $magasin);
             $lue->refuserUneCorrectionPerimee($relu, $corrections, self::REFUS_PERIMES);
 
+            $avant = self::valeursAuJournal($relu, array_keys($corrections));
             $this->operateur->pendant($compte, fn (): bool => $relu->fill($corrections)->save());
+
+            if ($corrections !== []) {
+                $this->journalAudit->inscrire(ActionAuditee::ParametresDuMagasinModifies, $compte, $relu, $avant, self::valeursAuJournal($relu, array_keys($corrections)), $relu);
+            }
 
             return $corrections;
         });
+    }
+
+    /**
+     * Les valeurs de ces paramètres telles que le journal d'audit les garde :
+     * le barème de prix de vente en tableau, tout autre paramètre tel que
+     * le magasin le lit.
+     *
+     * @param  list<string>  $parametres
+     * @return array<string, mixed>
+     */
+    private static function valeursAuJournal(Magasin $magasin, array $parametres): array
+    {
+        $valeurs = [];
+
+        foreach ($parametres as $parametre) {
+            $valeur = $magasin->getAttribute($parametre);
+            $valeurs[$parametre] = $valeur instanceof BaremePrixDeVente ? $valeur->versTableau() : $valeur;
+        }
+
+        return $valeurs;
     }
 }

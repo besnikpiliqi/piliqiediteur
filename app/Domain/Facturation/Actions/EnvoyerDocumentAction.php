@@ -16,6 +16,7 @@ use App\Domain\Facturation\Models\EnvoiDocument;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\LienDuDevis;
 use App\Domain\Facturation\Models\RecuPaiement;
+use App\Domain\Facturation\Services\RegularisationDUneFacture;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\ActionsUniques;
 use App\Domain\Tenancy\Services\DebitDesEmails;
@@ -82,6 +83,7 @@ class EnvoyerDocumentAction
         private readonly LecteurDesDroits $lecteur,
         private readonly DebitDesEmails $debit,
         private readonly ActionsUniques $actionsUniques,
+        private readonly RegularisationDUneFacture $regularisation,
     ) {}
 
     /**
@@ -154,7 +156,9 @@ class EnvoyerDocumentAction
      * Facture::relancesComptees()) : c'est elle qui repart, à sa place dans
      * l'historique, vers l'adresse donnée cette fois.
      *
-     * Demandée par une personne, à l'adresse qu'elle donne. Un ticket du
+     * Demandée par une personne, à l'adresse qu'elle donne. Une facture
+     * régularisée, son avoir de régularisation émis, ne se relance jamais
+     * (voir RegularisationDUneFacture::refusDeLaRelance()). Un ticket du
      * client comptoir, anonyme, ne se relance jamais, même par une requête
      * forgée (lot DEMO-V).
      *
@@ -199,6 +203,11 @@ class EnvoyerDocumentAction
 
         $facture->magasin->verifierQuIlPeutEcrireAuxClients();
         $this->verifierLeDebit($facture, $expediteur);
+        $refusDeLaRegularisation = $this->regularisation->refusDeLaRelance($facture);
+
+        if ($refusDeLaRegularisation !== null) {
+            throw new LogicException($refusDeLaRegularisation);
+        }
 
         if (! $facture->estEchueEtImpayee()) {
             throw new LogicException("La facture {$facture->numero} n'est pas une facture échue et impayée : elle ne se relance pas.");

@@ -265,7 +265,9 @@ return [
         ]],
     ],
     'app/Filament/App/Pages/ParametresRelances.php' => [
-        'champ:actif' => ['lot' => 'NAV-3', 'tests' => []],
+        'champ:actif' => ['lot' => 'NAV-3', 'tests' => [
+            'tests/Browser/Parcours/RegularisationEtRelancesTest.php › le responsable coche « Relancer aussi les particuliers » avec les relances automatiques, et le réglage s’enregistre',
+        ]],
         'page' => ['lot' => 'NAV-3', 'tests' => [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur autorisé à vendre ouvre chaque page et chaque action du magasin sans erreur',
@@ -1485,7 +1487,9 @@ return [
             'tests/Browser/Parcours/EmettreEtEncaisserTest.php › le responsable émet et encaisse une facture en espèces et par carte depuis sa fiche, et son PDF imprime chaque règlement à gauche du montant à régler',
             'tests/Browser/Parcours/ProprietaireEnDemonstrationTest.php › le propriétaire fait une facture dans la démonstration, l’émet et l’encaisse depuis sa fiche',
         ]],
-        'action:emettreLaFactureRectificative' => ['lot' => 'NAV-2', 'tests' => []],
+        'action:emettreLaFactureRectificative' => ['lot' => 'NAV-2', 'tests' => [
+            'tests/Browser/Parcours/RegularisationEtRelancesTest.php › le responsable fait l’avoir de régularisation d’une facture désignée, puis seulement émet sa facture rectificative, réglée du crédit de l’avoir',
+        ]],
         'action:regulariserLExoneration' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Parcours/ExonerationNonProuveeTest.php › le responsable ouvre depuis son « À faire » la liste « Exonération non prouvée », puis régularise chaque export resté sans preuve de sortie 150 jours après sa date, et chaque facture rectificative s’ouvre',
             'tests/Browser/Parcours/ExonerationNonProuveeTest.php › l’administrateur autorisé à vendre régularise depuis son « À faire » l’export resté sans preuve de sortie 150 jours après sa date, et la facture rectificative s’ouvre à son nom',
@@ -1504,13 +1508,16 @@ return [
             'tests/Browser/Parcours/EnvoiParEMailTest.php › chaque compte qui envoie un document lit, depuis sa liste comme depuis sa fiche, que l’envoi est demandé, puis son résultat dans « Envois », relu sans rechargement',
             'tests/Browser/Parcours/EnvoiParEMailTest.php › avec la file d’attente sync, un serveur d’envoi muet fait échouer l’envoi aussitôt, et « Envois » le dit sans annoncer de nouvelle tentative',
         ]],
-        'action:faireLAvoirDeRegularisation' => ['lot' => 'NAV-2', 'tests' => []],
+        'action:faireLAvoirDeRegularisation' => ['lot' => 'NAV-2', 'tests' => [
+            'tests/Browser/Parcours/RegularisationEtRelancesTest.php › le responsable fait l’avoir de régularisation d’une facture désignée, puis seulement émet sa facture rectificative, réglée du crédit de l’avoir',
+        ]],
         'action:noter_bordereau_detaxe' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le vendeur ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Parcours/AFaireTest.php › dans le magasin fermé, le responsable note le bordereau de détaxe d’un ticket sur sa fiche, puis la date de son visa depuis son « À faire »',
         ]],
         'action:relancer' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Parcours/EnvoiParEMailTest.php › chaque compte qui relance une facture échue lit, depuis la liste comme depuis sa fiche, que la relance est demandée, puis son résultat dans « Envois », relu sans rechargement',
+            'tests/Browser/Parcours/RegularisationEtRelancesTest.php › le vendeur relance à la main le ticket échu d’un client particulier qui a une adresse e-mail',
             'tests/Browser/Parcours/RetardEtRelanceDesTicketsTest.php › ni le responsable ni le vendeur ne trouvent « Relancer » sur un ticket du client comptoir échu et resté dû, ni sur la liste ni sur sa fiche, quand ils le trouvent sur la facture échue d’un client nommé',
         ]],
         'action:relancerLaTransmission' => ['lot' => 'NAV-2', 'tests' => [

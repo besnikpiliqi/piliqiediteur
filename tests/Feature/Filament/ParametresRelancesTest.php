@@ -4,6 +4,7 @@ namespace Tests\Feature\Filament;
 
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Tenancy\Actions\ModifierLesParametresDuMagasinAction;
+use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Filament\App\Pages\ParametresRelances;
@@ -38,6 +39,48 @@ class ParametresRelancesTest extends TestCase
             ->assertSee('Voici un exemple')
             ->fillForm(['actif' => true])
             ->assertFormFieldIsEnabled('delais');
+    }
+
+    /**
+     * « Relancer aussi les particuliers » (décision de l'éditeur du
+     * 14/11/2026) : décochée au départ et grisée tant que les relances sont
+     * désactivées ; le propriétaire la coche avec les relances, et le
+     * changement s'inscrit au journal d'audit de la société, dans la chaîne
+     * du magasin, avec les anciennes et les nouvelles valeurs des seuls
+     * paramètres corrigés ; un vendeur à qui l'on a coché « Régler les
+     * relances » la décoche de même.
+     */
+    public function test_relancer_aussi_les_particuliers_se_coche_et_s_inscrit_au_journal_d_audit(): void
+    {
+        $magasin = $this->connecterLeProprietaire();
+        Livewire::test(ParametresRelances::class)
+            ->assertFormSet(['actif' => false, 'particuliers' => false])
+            ->assertFormFieldIsDisabled('particuliers')
+            ->fillForm(['actif' => true, 'particuliers' => true])
+            ->call('save')
+            ->assertHasNoFormErrors()
+            ->assertNotified('Relances automatiques enregistrées');
+
+        $this->assertTrue($magasin->fresh()->relancer_aussi_les_particuliers);
+        [$entree] = $this->entreesDAudit($magasin->societe, ActionAuditee::ParametresDuMagasinModifies);
+        $parNom = function (mixed $valeurs): mixed {
+            if (is_array($valeurs)) {
+                ksort($valeurs);
+            }
+
+            return $valeurs;
+        };
+        $this->assertSame([$magasin->id, ['relancer_aussi_les_particuliers' => false, 'relances_automatiques' => false], ['relancer_aussi_les_particuliers' => true, 'relances_automatiques' => true]], [$entree->magasin_id, $parNom($entree->anciennes_valeurs), $parNom($entree->nouvelles_valeurs)]);
+
+        $this->dansLeMagasin($magasin->fresh(), $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::RELANCES_REGLER]));
+        Livewire::test(ParametresRelances::class)
+            ->assertFormSet(['actif' => true, 'particuliers' => true])
+            ->fillForm(['particuliers' => false])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $this->assertFalse($magasin->fresh()->relancer_aussi_les_particuliers);
+        $this->assertCount(2, $this->entreesDAudit($magasin->societe, ActionAuditee::ParametresDuMagasinModifies));
     }
 
     /**
@@ -224,7 +267,7 @@ class ParametresRelancesTest extends TestCase
 
         $page = Livewire::test(ParametresRelances::class);
 
-        $this->assertSame(['relances_automatiques', 'delais_relance'], array_keys($page->get('parametresLus')));
+        $this->assertSame(['relances_automatiques', 'delais_relance', 'relancer_aussi_les_particuliers'], array_keys($page->get('parametresLus')));
         $page->assertDontSee('bareme_prix_vente')->assertDontSee('benefice_au_dela');
     }
 

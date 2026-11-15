@@ -13,6 +13,7 @@ use App\Domain\Facturation\Models\RecuPaiement;
 use App\Domain\Facturation\Services\AvoirPdfGenerator;
 use App\Domain\Facturation\Services\DevisPdfGenerator;
 use App\Domain\Facturation\Services\FacturePdfGenerator;
+use App\Domain\Facturation\Services\RegularisationDUneFacture;
 use App\Domain\Fichiers\EnTetesDesFichiers;
 use App\Domain\Tenancy\Exceptions\VenteNonAutoriseeException;
 use App\Domain\Tenancy\Support\CompteConnecte;
@@ -131,7 +132,9 @@ trait EnvoieLesDocuments
      * ce qu'il reste à payer (voir EnvoyerDocumentAction::relancer()). Elle
      * ne s'offre jamais sur un ticket du client comptoir, anonyme : personne
      * n'y est à relancer (lot DEMO-V) ; « Envoyer par e-mail » reste, pour
-     * un ticket donné par e-mail au client présent.
+     * un ticket donné par e-mail au client présent. Ni sur une facture
+     * régularisée, dont le dû se porte sur sa facture rectificative (T68.3,
+     * voir RegularisationDUneFacture::refusDeLaRelance()).
      *
      * @template TAction of MountableAction
      *
@@ -147,7 +150,7 @@ trait EnvoieLesDocuments
             ->modalHeading(fn (Facture $record): string => 'Relance n°'.($record->niveauDeRelanceAtteint() + 1)." : {$record->libelleDocument()} {$record->numero}")
             ->modalDescription('Le client reçoit la facture en pièce jointe, avec le rappel de son montant, de son échéance et de ce qu\'il reste à payer.')
             ->modalSubmitActionLabel('Relancer')
-            ->visible(fn (Facture $record): bool => ! ($record->client?->estComptoir() ?? false) && $record->estEchueEtImpayee() && ! $record->magasin->est_demonstration && CompteConnecte::exiger()->can('envoyer', $record))
+            ->visible(fn (Facture $record): bool => ! ($record->client?->estComptoir() ?? false) && $record->estEchueEtImpayee() && ! $record->magasin->est_demonstration && CompteConnecte::exiger()->can('envoyer', $record) && app(RegularisationDUneFacture::class)->refusDeLaRelance($record) === null)
             ->fillForm(fn (Facture $record): array => ['destinataire' => ValeurRequise::de($record->client, 'le client de la facture relancée')->email])
             ->form([static::champDuJeton(), self::champDestinataire()])
             ->action(fn (Facture $record, array $data) => static::executerSansCasser(function () use ($record, $data) {

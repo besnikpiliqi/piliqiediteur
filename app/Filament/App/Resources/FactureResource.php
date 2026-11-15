@@ -40,7 +40,6 @@ use App\Domain\Facturation\Services\PiedDePage;
 use App\Domain\Facturation\Services\PreuvesRequises;
 use App\Domain\Facturation\Services\RecuPaiementPdfGenerator;
 use App\Domain\Facturation\Services\ReglementComptant;
-use App\Domain\Facturation\Services\RegularisationDUneFacture;
 use App\Domain\Fichiers\EnTetesDesFichiers;
 use App\Domain\Recherche\RechercheSansAccents;
 use App\Domain\Stock\Exceptions\ConfirmationVenteSansStockRequiseException;
@@ -373,17 +372,10 @@ class FactureResource extends Resource
                     ->state(fn (Facture $record): string => app(CalculateurLigne::class)->enDecimal($record->montantCrediteParAvoirEnCentimes()))
                     ->money('EUR')
                     ->visible(fn (Facture $record) => $record->montantCrediteParAvoirEnCentimes() > 0),
-                // La facture rectificative qui attend l'avoir de
-                // régularisation de la facture qu'elle rectifie n'attend
-                // aucun règlement (voir StatutFacture::EnAttenteDeRegularisation) :
-                // sa fiche le dit sous ce qu'il en reste dû.
                 TextEntry::make('montant_restant')
                     ->label('Restant dû')
                     ->state(fn (Facture $record): string => app(CalculateurLigne::class)->enDecimal($record->montantRestantEnCentimes()))
-                    ->money('EUR')
-                    ->helperText(fn (Facture $record): ?string => $record->statut === StatutFacture::EnAttenteDeRegularisation
-                        ? sprintf(RegularisationDUneFacture::ATTENTE_DE_L_AVOIR, $record->factureRectifiee?->numero)
-                        : null),
+                    ->money('EUR'),
             ])->columns(3),
 
             InfolistSection::make('Paiements reçus')

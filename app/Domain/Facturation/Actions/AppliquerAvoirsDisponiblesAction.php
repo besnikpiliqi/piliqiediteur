@@ -33,18 +33,14 @@ use Illuminate\Support\Facades\DB;
  * EmettreFactureAction), jamais à la vente comptoir suivante.
  *
  * Le crédit de l'avoir de régularisation d'une facture, après la
- * correction du SIREN de la société, n'est pas un crédit disponible : il
- * est réservé à cette facture, puis à sa facture rectificative (voir
- * RegularisationDUneFacture), et il ne règle jamais une autre facture.
- * Émise après cet avoir, la rectificative reçoit d'abord ce qui lui en
- * reste, puis, comme toute facture, le crédit disponible du client. Émise
- * avant, elle attend cet avoir (voir
- * StatutFacture::EnAttenteDeRegularisation) et ne reçoit rien ici : tant
- * qu'elle attend, aucun crédit du client ne la règle, et c'est l'avoir qui
- * la règle à son émission (voir ImputationDuCredit). Quel que soit l'ordre
- * des deux gestes, la rectificative reçoit ainsi ce que la facture avait
- * reçu, et reste due de ce que le client devait encore sur la facture.
- * Cette imputation n'est jamais un encaissement.
+ * correction du SIREN de la société ou pour une exonération non prouvée,
+ * n'est pas un crédit disponible : il est réservé à cette facture, puis à
+ * sa facture rectificative (voir RegularisationDUneFacture), et il ne
+ * règle jamais une autre facture. La rectificative, qui ne s'émet
+ * qu'après cet avoir (T68.1), reçoit d'abord ce qui lui en reste, puis,
+ * comme toute facture, le crédit disponible du client : elle reçoit ainsi
+ * ce que la facture avait reçu, et reste due de ce que le client devait
+ * encore sur la facture. Cette imputation n'est jamais un encaissement.
  */
 class AppliquerAvoirsDisponiblesAction
 {

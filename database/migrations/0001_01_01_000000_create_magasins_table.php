@@ -112,6 +112,11 @@ return new class extends Migration
             // et restent gardés quand le magasin les désactive.
             $table->boolean('relances_automatiques')->default(false);
             $table->json('delais_relance');
+            // Les relances automatiques ne partent qu'aux clients
+            // professionnels, sauf si le magasin coche « Relancer aussi les
+            // particuliers » (décision de l'éditeur du 14/11/2026) ; le
+            // client comptoir ne se relance jamais.
+            $table->boolean('relancer_aussi_les_particuliers')->default(false);
             // Échéance d'une facture : date d'émission + délai du client,
             // sinon ce délai (voir Magasin::delaiDePaiementPour()).
             $table->unsignedSmallInteger('delai_paiement_jours')->default(30);

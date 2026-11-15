@@ -54,10 +54,11 @@ use Illuminate\Contracts\Support\Htmlable;
  * la recherche par numéro de « Nouvel avoir » sur ce document (voir
  * faireUnAvoir()). Après la correction du SIREN de la société par
  * l'éditeur, une facture que désigne son examen se régularise ici, en deux
- * gestes faits dans l'ordre que l'on veut (voir RegularisationDUneFacture)
- * : « Faire l'avoir de régularisation », pour qui peut faire un avoir dans
- * ce magasin, et « Émettre la facture rectificative », pour qui peut créer
- * et émettre une facture dans ce magasin, jamais le propriétaire. Un
+ * gestes faits dans cet ordre (T68.1, voir RegularisationDUneFacture) :
+ * « Faire l'avoir de régularisation », pour qui peut faire un avoir dans
+ * ce magasin, puis, une fois cet avoir émis, « Émettre la facture
+ * rectificative », pour qui peut créer et émettre une facture dans ce
+ * magasin, jamais le propriétaire. Un
  * export ou une livraison vers un DOM sans preuve de sortie 150 jours après
  * sa date se régularise ici d'un seul geste, « Régulariser l'exonération »
  * (voir RegulariserUneExonerationNonProuveeAction), pour qui vend dans ce
@@ -165,7 +166,8 @@ class ViewFacture extends ViewRecord
 
     /**
      * « Émettre la facture rectificative » d'une facture que désigne
-     * l'examen du SIREN de la société, tant qu'elle n'est pas émise (voir
+     * l'examen du SIREN de la société, une fois son avoir de régularisation
+     * émis et tant qu'elle n'est pas émise (voir
      * EmettreLaFactureRectificativeAction), pour qui peut créer et émettre
      * une facture dans ce magasin, jamais le propriétaire ni un compte d'un
      * cabinet lié. La fenêtre de confirmation porte le jeton de la demande
@@ -179,7 +181,7 @@ class ViewFacture extends ViewRecord
             ->color('warning')
             ->requiresConfirmation()
             ->modalHeading('Émettre la facture rectificative')
-            ->modalDescription('La facture rectificative reprend les lignes de cette facture, que personne ne modifie, sous l\'identité actuelle de la société, avec la mention de la facture qu\'elle rectifie, sans sortie de stock. Un numéro définitif lui est attribué.')
+            ->modalDescription('La facture rectificative reprend les lignes que l\'avoir de régularisation a créditées, que personne ne modifie, sous l\'identité actuelle de la société, avec la mention de la facture qu\'elle rectifie et la date de son opération, sans sortie de stock. Ce qui reste du crédit de l\'avoir la règle aussitôt. Un numéro définitif lui est attribué.')
             ->form([FactureResource::champDuJeton()])
             ->visible(fn (Facture $record): bool => (auth()->user()?->can('create', Facture::class) ?? false)
                 && auth()->user()->can(PermissionRegistry::FACTURE_EMETTRE)

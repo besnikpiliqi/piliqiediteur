@@ -33,16 +33,19 @@ use Illuminate\Support\Collection;
  *    crédit d'un avoir fait au comptoir n'appartient qu'à qui en présente
  *    le numéro, son bon d'avoir, et ne s'impute d'office que sur les
  *    tickets qu'il corrige. L'avoir de régularisation d'une facture, après
- *    la correction du SIREN de la société, ne règle, avant les autres, que
- *    la facture rectificative de cette facture qui attend cet avoir (voir
- *    StatutFacture::EnAttenteDeRegularisation) : rien d'autre ne règle
- *    celle-ci, ni l'étape 2, ni la contre-passation d'un paiement, qui ne
- *    prennent que les factures qui attendent un règlement. Une
- *    rectificative émise après l'avoir a pris son crédit à sa propre
- *    émission (voir EmettreLaFactureRectificativeAction). Ce qui reste du
- *    crédit de cet avoir est réservé à la rectificative tant qu'elle manque
- *    (voir RegularisationDUneFacture), et cette imputation n'est jamais un
+ *    la correction du SIREN de la société ou pour une exonération non
+ *    prouvée, ne règle jamais que la facture qu'il régularise : ce qui
+ *    reste de son crédit est réservé à la facture rectificative, qui ne
+ *    s'émet qu'après lui et le prend à sa propre émission (voir
+ *    AppliquerAvoirsDisponiblesAction), et cette imputation n'est jamais un
  *    encaissement.
+ *
+ * Avant ces deux étapes, la contre-passation d'un paiement d'une facture
+ * régularisée qui a sa rectificative rend à cette facture ce que le
+ * crédit de son avoir de régularisation avait donné à la rectificative,
+ * dans la limite de ce qu'elle a rouvert (T68.3, voir
+ * reportsDesRegularisations()) : la facture régularisée reste soldée, et
+ * la rectificative porte le dû rouvert.
  *
  * Chaque facture reçoit au plus une imputation de chaque avoir, son
  * montant des deux étapes réunies, en centimes. Les factures et les avoirs
@@ -54,7 +57,10 @@ use Illuminate\Support\Collection;
  */
 class ImputationDuCredit
 {
-    public function __construct(private readonly CalculateurLigne $calculateur) {}
+    public function __construct(
+        private readonly CalculateurLigne $calculateur,
+        private readonly RegularisationDUneFacture $regularisation,
+    ) {}
 
     /**
      * Ce qu'un avoir, à son émission, impute de son crédit (tout son total
@@ -99,6 +105,50 @@ class ImputationDuCredit
     }
 
     /**
+     * Ce que la contre-passation d'un paiement reporte, pour chaque facture
+     * régularisée qu'elle vient de rouvrir, du crédit de son avoir de
+     * régularisation (T68.3) : ce crédit, réservé à la facture puis à sa
+     * rectificative, quitte la rectificative pour la facture, dans la
+     * limite de ce qui reste dû de la facture et de ce qu'il avait donné à
+     * la rectificative, en centimes. La facture régularisée reste ainsi
+     * soldée, et la rectificative, qui se relance, porte le dû rouvert. Une
+     * facture désignée qui n'a pas encore sa rectificative ne reporte
+     * rien : le crédit encore réservé de son avoir la règle à l'étape 1
+     * (voir apresUneContrePassation()). L'avoir et la rectificative se
+     * relisent verrouillés, dans le magasin actif.
+     *
+     * @param  iterable<Facture>  $factures  les factures que la contre-passation vient de rouvrir, relues verrouillées
+     * @return list<array{avoir: Avoir, depuis: Facture, vers: Facture, montant: int}>
+     */
+    public function reportsDesRegularisations(iterable $factures): array
+    {
+        $reports = [];
+
+        foreach ($factures as $facture) {
+            $resteDu = $facture->statut->attendUnReglement() ? $facture->resteDuEnCentimes() : 0;
+            $rectificative = $resteDu > 0 ? $facture->rectificative()->lockForUpdate()->first() : null;
+            $avoir = $rectificative === null ? null : $this->regularisation->avoirDeRegularisation($facture, verrouille: true);
+
+            if ($rectificative === null || $avoir === null) {
+                continue;
+            }
+
+            $surLaRectificative = (int) AvoirAllocation::query()
+                ->where('avoir_id', $avoir->getKey())
+                ->where('facture_id', $rectificative->getKey())
+                ->get(['montant_alloue'])
+                ->sum(fn (AvoirAllocation $allocation): int => $this->calculateur->enCentiemes($allocation->montant_alloue));
+            $montant = min($resteDu, $surLaRectificative);
+
+            if ($montant > 0) {
+                $reports[] = ['avoir' => $avoir, 'depuis' => $rectificative, 'vers' => $facture, 'montant' => $montant];
+            }
+        }
+
+        return $reports;
+    }
+
+    /**
      * @param  Collection<int, Avoir>  $avoirs  du plus ancien au plus récent
      * @return list<array{avoir: Avoir, facture: Facture, montant: int}>
      */
@@ -131,25 +181,9 @@ class ImputationDuCredit
             }
         }
 
-        [$regularisations, $autres] = $avoirs->partition(fn (Avoir $avoir): bool => $avoir->estUneRegularisation())->all();
-
-        foreach ($regularisations as $avoir) {
-            // Seule une rectificative qui attend encore cet avoir peut en
-            // recevoir le crédit : émise après lui, elle l'a pris à son
-            // émission (voir EmettreLaFactureRectificativeAction), et son
-            // crédit ne reste jamais à côté d'elle.
-            $rectificative = $avoir->factureRegularisee()->rectificative()
-                ->where('statut', StatutFacture::EnAttenteDeRegularisation)
-                ->lockForUpdate()
-                ->first();
-
-            if ($rectificative !== null) {
-                // Elle n'attend aucun autre règlement : ce qui en reste dû
-                // ne compte que pour lui.
-                $restes[CleDuModele::de($rectificative)] = $rectificative->resteDuEnCentimes();
-                $imputer($avoir, $rectificative, PHP_INT_MAX);
-            }
-        }
+        // L'avoir de régularisation n'entre pas à l'étape 2 : son crédit
+        // est réservé à la rectificative de la facture qu'il régularise.
+        $autres = $avoirs->reject(fn (Avoir $avoir): bool => $avoir->estUneRegularisation());
 
         if (! $client->estComptoir() && $autres->sum(fn (Avoir $avoir): int => $credits[CleDuModele::de($avoir)]) > 0) {
             $facturesDues = Facture::query()

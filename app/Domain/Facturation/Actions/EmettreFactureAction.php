@@ -24,7 +24,6 @@ use App\Domain\Facturation\Services\ContexteDeVente;
 use App\Domain\Facturation\Services\ControleNatureOperation;
 use App\Domain\Facturation\Services\DocumentNumberingService;
 use App\Domain\Facturation\Services\ReglementComptant;
-use App\Domain\Facturation\Services\RegularisationDUneFacture;
 use App\Domain\Facturation\Services\VerificateurCaissesPersonnelles;
 use App\Domain\Stock\Events\StockDevenuNegatif;
 use App\Domain\Stock\Exceptions\ConfirmationVenteSansStockRequiseException;
@@ -110,10 +109,10 @@ use LogicException;
  * garde la vérification VIES de cette facture et la copie de son client
  * (voir Facture::clientAFiger()) ; elle ne sort rien du stock et n'en
  * contrôle aucun. Elle s'émet sous l'identité actuelle de la société, qui
- * doit être complète. Émise avant l'avoir de régularisation de cette
- * facture, elle est en attente de régularisation (voir
- * StatutFacture::EnAttenteDeRegularisation) : elle ne reçoit rien jusqu'à
- * l'émission de cet avoir.
+ * doit être complète, toujours après l'avoir de régularisation de cette
+ * facture (voir RegularisationDUneFacture::refusDeLaRectificative()), dont
+ * le crédit encore réservé la règle à l'étape 4, avant d'être signé avec
+ * elle (voir AppliquerAvoirsDisponiblesAction).
  *
  * Tout se fait dans une seule transaction, dans cet ordre (art. 286 I-3°
  * bis du CGI) :
@@ -196,7 +195,6 @@ class EmettreFactureAction
         private readonly JournalAudit $journalAudit,
         private readonly ActionsUniques $actionsUniques,
         private readonly CalculateurLigne $calculateur,
-        private readonly RegularisationDUneFacture $regularisation,
     ) {}
 
     /**
@@ -289,7 +287,7 @@ class EmettreFactureAction
         $facture->figerLeClient();
         $facture->forceFill([
             'numero' => $numero,
-            'statut' => $rectifiee !== null && $this->regularisation->avoirDeRegularisation($rectifiee) === null ? StatutFacture::EnAttenteDeRegularisation : StatutFacture::Emise,
+            'statut' => StatutFacture::Emise,
             'consultation_vies_id' => $consultationVies?->getKey(),
             'date_emission' => $instant->utc,
             'date_echeance' => Calendrier::ajouterJours($instant->jour(), $facture->magasin->delaiDePaiementPour($facture->client)),

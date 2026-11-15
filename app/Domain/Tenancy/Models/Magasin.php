@@ -188,6 +188,7 @@ class Magasin extends Model implements HasName
         'bareme_prix_vente',
         'relances_automatiques',
         'delais_relance',
+        'relancer_aussi_les_particuliers',
         'delai_paiement_jours',
         'mention_penalites_retard',
         'mention_indemnite_recouvrement',
@@ -208,6 +209,7 @@ class Magasin extends Model implements HasName
         'prix_vente_automatique' => 'boolean',
         'bareme_prix_vente' => BaremePrixDeVente::class,
         'relances_automatiques' => 'boolean',
+        'relancer_aussi_les_particuliers' => 'boolean',
         'delai_paiement_jours' => 'integer',
     ];
 
@@ -238,6 +240,7 @@ class Magasin extends Model implements HasName
             $magasin->prix_vente_automatique ??= false;
             $magasin->bareme_prix_vente ??= BaremePrixDeVente::parDefaut();
             $magasin->relances_automatiques ??= false;
+            $magasin->relancer_aussi_les_particuliers ??= false;
             $magasin->delais_relance ??= self::DELAIS_RELANCE_PAR_DEFAUT;
             $magasin->delai_paiement_jours ??= self::DELAI_PAIEMENT_PAR_DEFAUT;
             $magasin->mention_penalites_retard ??= self::MENTION_PENALITES_PAR_DEFAUT;

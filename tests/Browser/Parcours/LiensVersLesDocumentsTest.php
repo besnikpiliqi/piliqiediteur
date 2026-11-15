@@ -8,6 +8,7 @@ use App\Domain\Facturation\Actions\CloturerCaisseAction;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\EmettreLaFactureRectificativeAction;
+use App\Domain\Facturation\Actions\FaireLAvoirDeRegularisationAction;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\ClotureCaisse;
@@ -194,7 +195,8 @@ test('chaque numéro de la fiche d’une clôture ouvre son document ; un vendeu
  * Le SIREN de la société de test corrigé par la procédure de l'éditeur
  * (courrier d'examen au SIREN correct, son code saisi, examen qui désigne
  * la facture du vendeur à l'Hôtel des Pins, SIRET de ses deux magasins et
- * n° de TVA corrigés), le responsable émet la facture rectificative : la fiche de la
+ * n° de TVA corrigés), le propriétaire fait l'avoir de régularisation, puis
+ * le responsable émet la facture rectificative : la fiche de la
  * facture rectifiée et celle de la rectificative mènent l'une à l'autre
  * pour lui ; le vendeur, qui voit sa facture mais pas la rectificative du
  * responsable, en lit le numéro, sans lien.
@@ -218,6 +220,7 @@ test('la facture rectifiée et sa rectificative mènent l’une à l’autre ; l
     ], IdentifiantsInsee::numeroTvaPropose($sirenCorrect), $editeur);
     app(TenantContext::class)->clear();
     $this->travelTo(self::aParis('2026-03-10 10:50:00'));
+    app(TenantContext::class)->runAs($societe->magasin->fresh(), fn () => app(FaireLAvoirDeRegularisationAction::class)->handle($societe->proprietaire, $facture->fresh()));
     $rectificative = app(TenantContext::class)->runAs($societe->magasin->fresh(), fn (): Facture => app(EmettreLaFactureRectificativeAction::class)->handle($societe->responsable, $facture->fresh()));
     $magasin = '/app/'.$societe->magasin->uuid;
 

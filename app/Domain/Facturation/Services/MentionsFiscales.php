@@ -2,6 +2,7 @@
 
 namespace App\Domain\Facturation\Services;
 
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Facturation\Enums\CategorieOperation;
 use App\Domain\Facturation\Enums\MotifDeRegularisation;
 use App\Domain\Facturation\Enums\NatureLigne;
@@ -44,7 +45,10 @@ use App\Domain\Tenancy\Support\ValeurRequise;
  * ou une exonération non prouvée, dit d'abord quelle facture elle rectifie
  * (« Facture rectificative de la facture n° FAC-LYON-2026-000001 du
  * 15/10/2026 », « Ticket rectificatif du ticket n° … » pour un ticket, voir
- * RegularisationDUneFacture et RegularisationDUneExoneration). S'y ajoute,
+ * RegularisationDUneFacture et RegularisationDUneExoneration), puis la date
+ * de l'opération qu'elle reprend, celle de la livraison de la facture
+ * rectifiée, ou à défaut le jour de son émission (T27.2 : « Date de la
+ * livraison ou de la prestation d'origine : 15/10/2026 »). S'y ajoute,
  * sous les lignes de tout document hors franchise en base, l'explication
  * de son calcul (voir calcul()), qui ne se signe pas ; sur l'avoir d'un
  * client comptoir, la mention de son bon d'avoir (voir bonDAvoir()) ; sur
@@ -60,6 +64,8 @@ class MentionsFiscales
     public const RECTIFICATIVE = 'Facture rectificative de la facture n° %s du %s';
 
     public const TICKET_RECTIFICATIF = 'Ticket rectificatif du ticket n° %s du %s';
+
+    public const DATE_DE_L_OPERATION_D_ORIGINE = 'Date de la livraison ou de la prestation d\'origine : %s';
 
     public const REGULARISATION = 'Avoir de régularisation émis après correction de l\'identité du vendeur (SIREN correct : %s)';
 
@@ -88,6 +94,10 @@ class MentionsFiscales
         if ($document instanceof Facture && $document->estUneRectificative()) {
             $rectifiee = $document->factureRectifiee()->firstOrFail();
             $mentions[] = sprintf($rectifiee->serie() === TypeDocument::TicketCaisse ? self::TICKET_RECTIFICATIF : self::RECTIFICATIVE, $rectifiee->numero, $rectifiee->magasin->calendrier()->afficher(ValeurRequise::de($rectifiee->date_emission, 'la date d\'émission de la facture rectifiée'), 'd/m/Y'));
+
+            if ($document->livraison_date !== null) {
+                $mentions[] = sprintf(self::DATE_DE_L_OPERATION_D_ORIGINE, Calendrier::afficherJour($document->livraison_date, 'd/m/Y'));
+            }
         }
 
         if (! $document instanceof Devis) {

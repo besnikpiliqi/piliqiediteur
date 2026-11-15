@@ -18,6 +18,7 @@ use App\Domain\Facturation\Enums\StatutEnvoi;
 use App\Domain\Facturation\Mail\DocumentMail;
 use App\Domain\Facturation\Models\EnvoiDocument;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Services\FacturePdfGenerator;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use Illuminate\Console\Scheduling\Event;
@@ -32,6 +33,11 @@ use Tests\TestCase;
  * Délais de relance de chaque magasin dans ces tests : 7, 15 et 30 jours
  * après l'échéance (l'exemple du logiciel), échéance au 1er octobre 2026 :
  * les factures y sont émises ce jour-là à des clients payables comptant.
+ * Les magasins de ces tests relancent aussi les particuliers (décision de
+ * l'éditeur du 14/11/2026 : sans cette case, seules les factures des
+ * professionnels se relancent d'elles-mêmes, voir
+ * test_seuls_les_professionnels_sont_relances_sauf_si_le_magasin_relance_aussi_les_particuliers) :
+ * leurs ventes sont des tickets de clients particuliers.
  */
 class RelancerFacturesImpayeesTest extends TestCase
 {
@@ -296,6 +302,76 @@ class RelancerFacturesImpayeesTest extends TestCase
         $this->assertSame([1], $this->niveauxRelances($factureTardive));
     }
 
+    /**
+     * Sans « Relancer aussi les particuliers » (décision de l'éditeur du
+     * 14/11/2026), les relances automatiques ne partent qu'aux clients
+     * professionnels : la facture échue du professionnel est relancée, le
+     * ticket échu du particulier ne l'est pas ; la case cochée, il l'est au
+     * passage suivant ; le ticket du client comptoir, même avec une adresse,
+     * ne l'est jamais. Le réglage d'un magasin ne joue que pour ses
+     * factures : le particulier d'un autre magasin de la société, qui ne
+     * coche pas la case, n'est jamais relancé.
+     */
+    public function test_seuls_les_professionnels_sont_relances_sauf_si_le_magasin_relance_aussi_les_particuliers(): void
+    {
+        Mail::fake();
+        $this->travelTo(self::aParis('2026-10-01 09:00:00'));
+        $reglages = ['relances_automatiques' => true, 'delais_relance' => [7, 15, 30]];
+        $lyon = $this->completerIdentiteLegale($this->ouvrirUneSociete(['nom' => 'Lyon', 'code' => 'LYON']));
+        $lyon->forceFill($reglages)->save();
+        $villeurbanne = $this->ouvrirUnAutreMagasin($lyon, ['nom' => 'Villeurbanne', 'code' => 'VILL']);
+        $villeurbanne->forceFill($reglages)->save();
+        $professionnel = $this->factureImpayee($lyon->fresh(), 'pro@exemple.fr', professionnel: true);
+        $particulier = $this->factureImpayee($lyon->fresh(), 'particulier@exemple.fr');
+        $comptoir = Client::query()->where('est_comptoir', true)->sole();
+        $comptoir->forceFill(['email' => 'comptoir@exemple.fr', 'delai_paiement_jours' => 0])->save();
+        $ticketDuComptoir = app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), $comptoir, [['produit_id' => $this->produit()->id, 'quantite' => 1]]));
+        $dAilleurs = $this->factureImpayee($villeurbanne->fresh(), 'ailleurs@exemple.fr');
+        $niveaux = fn (): array => array_map(fn (Facture $facture): array => $this->niveauxRelances($facture), [$professionnel, $particulier, $ticketDuComptoir, $dAilleurs]);
+
+        $this->relancerLe('2026-10-08');
+        $this->assertSame([[1], [], [], []], $niveaux());
+
+        $lyon->fresh()->forceFill(['relancer_aussi_les_particuliers' => true])->save();
+        $this->relancerLe('2026-10-09');
+
+        $this->assertSame([[1], [1], [], []], $niveaux());
+        Mail::assertSent(DocumentMail::class, 2);
+    }
+
+    /**
+     * Une relance à un particulier, automatique ou à la main, ne parle
+     * jamais des pénalités de retard ni de l'indemnité forfaitaire de 40 €,
+     * qui ne valent qu'entre professionnels : ni son message, ni le PDF du
+     * ticket qu'elle joint.
+     */
+    public function test_une_relance_a_un_particulier_ne_parle_ni_de_penalites_ni_de_l_indemnite(): void
+    {
+        Mail::fake();
+        $this->travelTo(self::aParis('2026-10-01 09:00:00'));
+        $facture = $this->factureImpayee($this->magasinQuiRelance(), 'particulier@exemple.fr');
+
+        $this->relancerLe('2026-10-08');
+        $this->travelTo(self::aParis('2026-10-09 09:00:00'));
+        app(TenantContext::class)->set($facture->magasin);
+        app(EnvoyerDocumentAction::class)->relancer(self::responsableDeTest($facture->magasin), $facture->fresh(), 'particulier@exemple.fr');
+
+        $this->assertSame([1, 2], $this->niveauxRelances($facture));
+        $textes = [$facture->fresh()->messageDeRelance(), html_entity_decode(app(FacturePdfGenerator::class)->html($facture->fresh()), ENT_QUOTES)];
+        Mail::assertSent(DocumentMail::class, function (DocumentMail $mail) use (&$textes): bool {
+            $textes[] = html_entity_decode($mail->render(), ENT_QUOTES);
+
+            return true;
+        });
+        $this->assertCount(4, $textes);
+        foreach ($textes as $texte) {
+            $this->assertStringNotContainsStringIgnoringCase('pénalité', $texte);
+            $this->assertStringNotContainsStringIgnoringCase('indemnité forfaitaire', $texte);
+            $this->assertStringNotContainsString('40,00 €', $texte);
+            $this->assertStringNotContainsString('40 €', $texte);
+        }
+    }
+
     private function relanceDue(): bool
     {
         return app(Schedule::class)->dueEvents($this->app)
@@ -304,7 +380,7 @@ class RelancerFacturesImpayeesTest extends TestCase
 
     private function magasinQuiRelance(): Magasin
     {
-        return Magasin::factory()->create(['relances_automatiques' => true, 'delais_relance' => [7, 15, 30]]);
+        return Magasin::factory()->create(['relances_automatiques' => true, 'delais_relance' => [7, 15, 30], 'relancer_aussi_les_particuliers' => true]);
     }
 
     private function produit(): Produit
@@ -313,13 +389,14 @@ class RelancerFacturesImpayeesTest extends TestCase
     }
 
     /**
-     * Une facture de 120,00 € TTC émise maintenant à un client payable
-     * comptant (délai de 0 jour) : échue le jour même (B7).
+     * Une vente de 120,00 € TTC émise maintenant à un client payable
+     * comptant (délai de 0 jour), particulier (un ticket) ou professionnel
+     * (une facture) : échue le jour même (B7).
      */
-    private function factureImpayee(Magasin $magasin, ?string $emailDuClient): Facture
+    private function factureImpayee(Magasin $magasin, ?string $emailDuClient, bool $professionnel = false): Facture
     {
         app(TenantContext::class)->set($magasin);
-        $client = Client::factory()->create(['email' => $emailDuClient, 'delai_paiement_jours' => 0]);
+        $client = ($professionnel ? Client::factory()->professionnel() : Client::factory())->create(['email' => $emailDuClient, 'delai_paiement_jours' => 0]);
         $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
 
         return app(EmettreFactureAction::class)->handle(self::auteur(), $facture);

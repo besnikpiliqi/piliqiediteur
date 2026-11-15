@@ -37,10 +37,13 @@ use LogicException;
  * actif se verrouille d'abord ; le magasin, relu, doit pouvoir vendre ;
  * l'auteur est relu sous le verrou de sa ligne et doit pouvoir créer une
  * facture et voir celle qu'il rectifie ; la facture, relue dans le magasin
- * actif sous ce verrou, doit encore recevoir sa rectificative (voir
+ * actif sous ce verrou, doit encore recevoir sa rectificative, son avoir
+ * de régularisation déjà émis (T68.1, voir
  * RegularisationDUneFacture::refusDeLaRectificative()) : deux demandes
  * simultanées passent l'une après l'autre, la seconde est refusée, et
- * l'index unique de la facture rectifiée en reste le dernier rempart. Le
+ * l'index unique de la facture rectifiée en reste le dernier rempart ;
+ * une rectificative demandée pendant que l'avoir s'émet attend le verrou
+ * du registre et le relit émis. Le
  * brouillon naît au nom de l'auteur, avec le client, la nature
  * d'opération, la franchise de TVA, la livraison et les conditions de
  * paiement de la facture, sa date de livraison, ou à défaut le jour de
@@ -49,12 +52,13 @@ use LogicException;
  * modifie : il s'émet aussitôt (voir EmettreFactureAction), sous l'identité
  * actuelle de la société, sans sortie de stock (voir
  * DecrementerStockApresEmissionFacture), avec la copie du client que la
- * facture a figée et la mention qui la rectifie (voir MentionsFiscales) ;
- * le crédit encore réservé de son avoir de régularisation déjà émis la
- * règle avant tout autre (voir AppliquerAvoirsDisponiblesAction) ; émise
- * avant cet avoir, elle l'attend, sans rien recevoir d'ici là (voir
- * StatutFacture::EnAttenteDeRegularisation). Elle s'inscrit enfin au
- * journal d'audit, dans la chaîne du magasin.
+ * facture a figée, la mention qui la rectifie et la date de la livraison
+ * ou de la prestation d'origine (T27.2, voir MentionsFiscales) ; le crédit
+ * encore réservé de son avoir de régularisation la règle avant tout
+ * autre, dans la transaction signée de son émission (voir
+ * AppliquerAvoirsDisponiblesAction), et son PDF montre ce crédit et le
+ * vrai reste dû. Elle s'inscrit enfin au journal d'audit, dans la chaîne
+ * du magasin.
  *
  * La demande porte un jeton (R3, voir ActionsUniques), cherché sous le
  * verrou du registre : répétée après une réponse perdue, elle rend la

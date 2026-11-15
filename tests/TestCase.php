@@ -1564,12 +1564,13 @@ abstract class TestCase extends BaseTestCase
      * qui conclut à une erreur, puis la correction par deux opérateurs
      * (voir CorrigerSirenAction), avec le nouveau SIRET de chaque magasin
      * qui peut encore vendre, par son code (aucun pour un cabinet
-     * d'expertise comptable). Rend la société corrigée ; aucun contexte
-     * n'est actif ensuite.
+     * d'expertise comptable), et le nouveau n° de TVA quand celui de la
+     * société n'est pas celui que formait son SIREN. Rend la société
+     * corrigée ; aucun contexte n'est actif ensuite.
      *
      * @param  array<string, string>  $sirets
      */
-    protected function corrigerLeSirenParLEditeur(Societe $societe, string $sirenCorrect, array $sirets = []): Societe
+    protected function corrigerLeSirenParLEditeur(Societe $societe, string $sirenCorrect, array $sirets = [], ?string $numeroTva = null): Societe
     {
         $editeur = new InterventionDeLEditeur('SIREN d\'une filiale saisi à la place de celui de la société', 'DOSSIER-2026-0095', ['alice', 'bruno']);
         app(TenantContext::class)->clear();
@@ -1578,7 +1579,7 @@ abstract class TestCase extends BaseTestCase
         app(TenantContext::class)->clear();
         app(ExaminerSirenAction::class)->handle($societe->fresh(), $sirenCorrect, DecisionExamenSiren::Erreur, $editeur);
         app(TenantContext::class)->clear();
-        $corrigee = app(CorrigerSirenAction::class)->handle($societe->fresh(), $sirenCorrect, $sirets, null, $editeur);
+        $corrigee = app(CorrigerSirenAction::class)->handle($societe->fresh(), $sirenCorrect, $sirets, $numeroTva, $editeur);
         app(TenantContext::class)->clear();
 
         return $corrigee->fresh();

@@ -867,7 +867,7 @@ return [
         ],
         'societe.regularisation-apres-correction-du-siren' => [
             'puce' => 'Société et établissements',
-            'regle' => 'Après une correction du SIREN, l\'avoir de régularisation reprend l\'émetteur figé de la facture d\'origine, avec sa mention, la facture rectificative porte le nouveau SIREN et est émise par un compte autorisé à vendre, jamais par le propriétaire ; aucun mouvement de stock ni encaissement compté deux fois.',
+            'regle' => 'Après une correction du SIREN, l\'avoir de régularisation reprend l\'émetteur figé de la facture d\'origine, avec sa mention, la facture rectificative porte le nouveau SIREN et est émise par un compte autorisé à vendre, jamais par le propriétaire, seulement après l\'avoir, dont elle reçoit le crédit réservé dans la transaction signée de son émission, et imprime la date de la livraison ou de la prestation d\'origine ; la contre-passation d\'un paiement de la facture régularisée reporte ce crédit sur elle, le dû se rouvrant sur la rectificative, et une facture régularisée ne se relance jamais ; aucun mouvement de stock ni encaissement compté deux fois.',
             'tests' => [
                 'tests/Feature/Facturation/RegularisationDUneFactureTest.php::test_l_avoir_de_regularisation_porte_l_emetteur_choisi_par_l_editeur',
                 'tests/Feature/Facturation/RegularisationDUneFactureTest.php::test_la_regularisation_ne_fait_aucun_mouvement_de_stock',
@@ -879,7 +879,16 @@ return [
                 'tests/Feature/Facturation/RegularisationDUneFactureTest.php::test_un_retour_fait_avant_la_regularisation_reste_hors_de_l_avoir_et_de_la_rectificative',
                 'tests/Feature/Facturation/RegularisationDUneFactureTest.php::test_la_rectificative_reprend_sans_recalcul_le_reste_des_lignes_rendues_par_plusieurs_avoirs',
                 'tests/Feature/Facturation/RegularisationDUneFactureTest.php::test_tant_que_la_rectificative_manque_le_credit_lui_reste_reserve',
-                'tests/Feature/Facturation/RegularisationDUneFactureTest.php::test_quel_que_soit_l_ordre_des_gestes_le_credit_regle_la_rectificative',
+                'tests/Feature/Facturation/RegularisationDUneFactureTest.php::test_la_rectificative_signe_le_credit_reserve_de_l_avoir_de_regularisation',
+                'tests/Feature/Facturation/RegularisationDUneFactureTest.php::test_la_rectificative_ne_s_emet_qu_apres_l_avoir_de_regularisation',
+                'tests/Feature/Facturation/RegularisationDUneFactureTest.php::test_une_facture_payee_en_entier_se_rectifie_sans_rien_de_du',
+                'tests/Feature/Facturation/RegularisationDUneFactureTest.php::test_une_facture_payee_en_partie_laisse_son_reste_du_a_la_rectificative',
+                'tests/Feature/Facturation/RegularisationDUneFactureTest.php::test_une_contre_passation_avant_la_rectificative_se_regle_sur_le_credit_reserve',
+                'tests/Feature/Facturation/RegularisationDUneFactureTest.php::test_la_contre_passation_d_un_paiement_de_la_facture_regularisee_rouvre_le_du_sur_la_rectificative',
+                'tests/Feature/Facturation/RegularisationDUneFactureTest.php::test_la_contre_passation_du_seul_paiement_rouvre_toute_la_rectificative',
+                'tests/Feature/Facturation/RegularisationDUneFactureTest.php::test_la_facture_regularisee_ne_se_relance_jamais_et_sa_rectificative_se_relance',
+                'tests/Feature/Facturation/RegularisationDUneFactureConcurrenceTest.php::test_la_rectificative_demandee_avant_l_avoir_au_meme_instant_est_refusee',
+                'tests/Feature/Facturation/RegularisationDUneFactureConcurrenceTest.php::test_deux_contre_passations_simultanees_reportent_le_credit_une_seule_fois',
             ],
         ],
         'societe.changement-de-siret' => [
@@ -2386,6 +2395,15 @@ return [
                 'tests/Feature/Facturation/RelancerFacturesImpayeesTest.php::test_une_relance_manuelle_n_est_jamais_redoublee',
                 'tests/Feature/Facturation/RelancerFacturesImpayeesTest.php::test_un_magasin_suspendu_ne_relance_rien',
                 'tests/Feature/Facturation/RelancerFacturesImpayeesTest.php::test_chaque_magasin_relance_selon_ses_reglages_et_ses_factures',
+            ],
+        ],
+        'emails.relances-des-particuliers' => [
+            'puce' => 'E-mails',
+            'regle' => 'Les relances automatiques ne partent qu\'aux clients professionnels, sauf si le magasin coche « Relancer aussi les particuliers » (Paramètres du magasin, avec les relances, chaque changement inscrit au journal d\'audit), un réglage qui ne joue que pour ses factures ; le client comptoir n\'est jamais relancé ; une relance à un particulier ne parle jamais de pénalités de retard ni de l\'indemnité forfaitaire de 40 € (décision de l\'éditeur du 14/11/2026).',
+            'tests' => [
+                'tests/Feature/Facturation/RelancerFacturesImpayeesTest.php::test_seuls_les_professionnels_sont_relances_sauf_si_le_magasin_relance_aussi_les_particuliers',
+                'tests/Feature/Facturation/RelancerFacturesImpayeesTest.php::test_une_relance_a_un_particulier_ne_parle_ni_de_penalites_ni_de_l_indemnite',
+                'tests/Feature/Filament/ParametresRelancesTest.php::test_relancer_aussi_les_particuliers_se_coche_et_s_inscrit_au_journal_d_audit',
             ],
         ],
         // Facture électronique (SUPER PDP) : la connexion de chaque société, l'adresse de réception des magasins et la réception des factures sont à l'étape 2 (décisions « a_venir »).
@@ -4634,6 +4652,14 @@ return [
                 'decision' => 'Décisions de Claude (D76) du lot CHARGES, reportées dans l\'onglet « À faire vérifier par un professionnel » : TVA déductible proposée selon le type (véhicule de tourisme, hébergement, transport de personnes, cadeaux, carburant à 80 %), mois de TVA des biens et des services, autoliquidation d\'un fournisseur établi hors de France, pièce obligatoire pour valider.',
                 'regles' => ['charges.propositions-de-tva', 'charges.circuit'],
             ],
+            'RELANCES-14-11' => [
+                'decision' => 'Le 14/11/2026 vers 23 h 15 à Paris, « d\'accord avec ta proposition » : « Relancer » à la main reste possible pour un client particulier qui a une adresse e-mail ; les relances automatiques ne partent qu\'aux clients professionnels, sauf si le magasin coche « Relancer aussi les particuliers » ; une relance à un particulier ne parle jamais de pénalités ni de l\'indemnité de 40 € (lot REGUL).',
+                'regles' => ['emails.relances-des-particuliers'],
+            ],
+            'ARCHIVE-DEMO-14-11' => [
+                'decision' => 'Le 14/11/2026 vers 23 h 15 à Paris, « oui pour l\'archive » : à sa fermeture définitive, le magasin de démonstration reçoit une archive finale signée, que le propriétaire seul télécharge dans l\'espace de la société, chaque téléchargement inscrit au journal d\'audit, sans jamais rouvrir l\'entrée dans ce magasin.',
+                'a_venir' => 'Étape 3, avec les archives signées (CLAUDE.md, « Vérification de la société », « Caisse et clôtures » et feuille de route) ; le lot REGUL n\'en écrit que le texte.',
+            ],
             'METHODE-14-11' => [
                 'decision' => 'Le 14/11/2026 vers 18 h 45 UTC : « tu mette que sur github et pas ici larastan car il prend du temps » ; vers 19 h 05 UTC : avant son commit, un lot ne lance plus la suite complète mais les tests liés à son travail, les tests en navigateur de ses écrans, l\'inventaire des actions et le groupe de concurrence, sauf un lot qui touche les calculs d\'argent, la caisse sécurisée ou l\'isolation ; la CI rouge se relit au début du lot et avant son commit, et se répare dans un commit à part.',
                 'hors_logiciel' => 'Méthode des lots (CLAUDE.md, protocole de rigueur, point 3).',
@@ -5556,7 +5582,8 @@ return [
             ],
             'T27.2' => [
                 'decision' => 'Facture rectificative après correction du SIREN : La facture rectificative, faite sous le SIREN corrigé sans mouvement de stock, imprimera aussi la date de l\'opération d\'origine ; en facture électronique, elle partira comme facture ordinaire citant l\'originale.',
-                'a_venir' => 'Étape 1, lot de la régularisation, après le lot MAT-PRO (date de l\'opération d\'origine sur la rectificative) ; facture électronique à l\'étape 2.',
+                'regles' => ['societe.regularisation-apres-correction-du-siren'],
+                'a_venir' => 'Étape 2 : la rectificative partira en facture électronique comme facture ordinaire citant l\'originale.',
             ],
             'T58.1' => [
                 'decision' => 'Stock quand un ticket payé devient facture : « Transformer en facture » un ticket payé fera, d\'un clic, l\'avoir d\'annulation et la facture soldée par cet avoir, sans aucun mouvement de stock : la marchandise reste sortie au jour du ticket.',
@@ -5576,11 +5603,11 @@ return [
             ],
             'T68.1' => [
                 'decision' => 'Ordre de l\'avoir de régularisation et de la rectificative : La facture rectificative ne s\'émettra qu\'après l\'avoir de régularisation, dont le crédit la règle aussitôt : son PDF montrera la part imputée et le vrai reste dû.',
-                'a_venir' => 'Étape 1, lot de la régularisation, après le lot MAT-PRO : aujourd\'hui la rectificative peut s\'émettre avant l\'avoir de régularisation et l\'attend sans rien recevoir.',
+                'regles' => ['societe.regularisation-apres-correction-du-siren'],
             ],
             'T68.3' => [
                 'decision' => 'Contre-passation d\'un paiement d\'une facture régularisée : Si un paiement d\'une facture régularisée est contre-passé, le crédit de l\'avoir quittera la rectificative pour garder cette facture soldée ; la rectificative portera le dû et sera relancée.',
-                'a_venir' => 'Étape 1, lot de la régularisation, après le lot MAT-PRO : aujourd\'hui la contre-passation rouvre le dû sur la facture régularisée.',
+                'regles' => ['societe.regularisation-apres-correction-du-siren'],
             ],
             'T28.1' => [
                 'decision' => 'Validation de la durée d\'un exercice modifié : Pour un changement de fin d\'exercice, la procédure de l\'éditeur enregistrera qui a décidé, la date de la décision et sa pièce ; le nom d\'un expert-comptable deviendra facultatif.',

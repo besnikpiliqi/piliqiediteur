@@ -36,6 +36,7 @@ class PlanificateurTest extends TestCase
         ['app:purger-journal-audit', '15 4 * * *'],
         ['app:purger-verifications', '20 4 * * *'],
         ['app:purger-actions-traitees', '30 4 * * *'],
+        ['app:verifier-isolation --prevenir-l-editeur', '40 4 * * *'],
         ['app:fermer-demonstrations-inactives', '45 4 * * *'],
         ['app:effacer-pieces-verification', '0 * * * *'],
         ['app:purger-demandes-inscription', '0 * * * *'],

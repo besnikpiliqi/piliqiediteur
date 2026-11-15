@@ -418,3 +418,84 @@ jobs:
           name: captures-php-${{ matrix.php }}-postgresql-${{ matrix.postgres }}
           path: tests/Browser/Screenshots
           if-no-files-found: ignore
+
+  # Le semis complet de la démonstration (php artisan db:seed, plus de
+  # treize mois de données sur toutes les tables, puis la vérification de
+  # l'isolation) et ses tests : SemisCompletTest et le parcours en
+  # navigateur des comptes de la liste. Chaque semis prend plusieurs
+  # minutes : le groupe « semis » est hors de la suite par défaut
+  # (phpunit.xml) et tourne ici, à chaque envoi.
+  semis:
+    runs-on: ubuntu-latest
+
+    name: Semis complet (PHP 8.3, PostgreSQL 17)
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_INITDB_ARGS: --encoding=UTF8 --locale=C.UTF-8
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DB_CONNECTION: pgsql
+      DB_HOST: 127.0.0.1
+      DB_PORT: 5432
+      DB_DATABASE: piliqi_test
+      DB_USERNAME: piliqi
+      DB_PASSWORD: piliqi
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Create test role and database
+        run: |
+          docker exec ${{ job.services.postgres.id }} psql -v ON_ERROR_STOP=1 -U postgres -c "CREATE ROLE piliqi LOGIN CREATEDB PASSWORD 'piliqi'"
+          docker exec ${{ job.services.postgres.id }} psql -v ON_ERROR_STOP=1 -U postgres -c "CREATE DATABASE piliqi_test OWNER piliqi"
+
+      - name: Install qpdf
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends qpdf
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
+        with:
+          php-version: 8.3
+          extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, pdo_pgsql, sockets, gd, :pdo_sqlite, :sqlite3
+          coverage: none
+
+      - name: Install Composer dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Copy environment file
+        run: cp .env.example .env
+
+      - name: Generate app key
+        run: php artisan key:generate
+
+      - name: Setup Node
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install Playwright and its browser
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Semis complet et ses tests
+        run: php artisan test --group=semis --log-junit storage/logs/junit-semis.xml --log-teamcity storage/logs/teamcity-semis.txt
+
+      - name: Résumé des tests du semis
+        if: always()
+        run: php tests/Qualite/resume-des-tests.php storage/logs/junit-semis.xml storage/logs/teamcity-semis.txt

@@ -2,9 +2,11 @@
 
 namespace Database\Seeders\Semis;
 
+use App\Domain\Authorization\AutorisationsSociete;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Cabinets\Actions\AccepterLaDemandeDeLienAction;
 use App\Domain\Cabinets\Actions\AccepterLInvitationAction;
+use App\Domain\Cabinets\Actions\AjouterUnExpertComptableAction;
 use App\Domain\Cabinets\Actions\ChoisirLeMotDePasseDeLExpertComptableAction;
 use App\Domain\Cabinets\Actions\ConfierDesClientsAction;
 use App\Domain\Cabinets\Actions\CreerCollaborateurAction;
@@ -16,15 +18,19 @@ use App\Domain\Cabinets\Enums\EtatDuLien;
 use App\Domain\Cabinets\Mail\InvitationDuCabinetMail;
 use App\Domain\Cabinets\Mail\LienDuMotDePasseDeLExpertComptableMail;
 use App\Domain\Cabinets\Models\LienCabinet;
+use App\Domain\Facturation\Models\PanierCaisse;
+use App\Domain\Facturation\Services\PanierDeCaisse;
 use App\Domain\Tenancy\Actions\ChangerSonMotDePasseAction;
 use App\Domain\Tenancy\Actions\CreerAdministrateurAction;
 use App\Domain\Tenancy\Actions\CreerEtablissementAction;
 use App\Domain\Tenancy\Actions\CreerMembreAction;
 use App\Domain\Tenancy\Actions\CreerSocieteAction;
 use App\Domain\Tenancy\Actions\ModifierIdentiteSocieteAction;
+use App\Domain\Tenancy\Actions\ModifierParametresFiscauxSocieteAction;
 use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
 use App\Domain\Tenancy\Actions\RedonnerLAccesAction;
 use App\Domain\Tenancy\Actions\SaisirCodeDeConfirmationAction;
+use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Magasin;
@@ -79,10 +85,12 @@ use LogicException;
 final class SemisDeDemonstration
 {
     /**
-     * Le nombre de jours de l'histoire semée : assez pour qu'une facture à
-     * 30 jours émise au début soit en retard à la fin.
+     * Le nombre de jours de l'histoire semée, qui finit la veille du semis :
+     * plus de treize mois, pour que les graphiques aient leurs douze derniers
+     * mois et « Comparer avec l'année précédente » de quoi comparer, et
+     * qu'une facture à 30 jours émise au début soit en retard à la fin.
      */
-    public const JOURS = 35;
+    public const JOURS = 400;
 
     public const SIREN_COMMERCE = '000000109';
 
@@ -110,6 +118,8 @@ final class SemisDeDemonstration
     public const ADRESSE_INSCRIPTION = 'proprietaire@inscription.exemple.test';
 
     public const ADRESSE_EXPERT_COMPTABLE = 'marc.petit@petit-associes.exemple.test';
+
+    public const ADRESSE_SECONDE_EXPERTE_COMPTABLE = 'sophie.petit@petit-associes.exemple.test';
 
     /**
      * La catégorie juridique (nomenclature de l'INSEE) des sociétés semées,
@@ -155,6 +165,14 @@ final class SemisDeDemonstration
      */
     private array $motsDePasseDesProprietaires = [];
 
+    /**
+     * Le mot de passe que chaque autre compte a choisi, par sa clé, qu'il
+     * redonne pour les gestes qui le demandent.
+     *
+     * @var array<string, string>
+     */
+    private array $motsDePasseDesComptes = [];
+
     public function __construct(
         private readonly HorlogeDuSemis $horloge,
         private readonly MotsDePasseDuSemis $motsDePasse,
@@ -168,11 +186,14 @@ final class SemisDeDemonstration
     public function semer(): void
     {
         $this->nommerLesEntreprises();
+        $societesDesCas = new SocietesDesCas($this->horloge, $this, $this->motsDePasse, $this->liste);
+        $societesDesCas->nommer();
 
         $this->horloge->aller(0, '09:00');
         $this->inscrire('commerce', self::SIREN_COMMERCE, TypeDActivite::Commerce, self::ADRESSE_COMMERCE);
         $this->inscrire('services', self::SIREN_SERVICES, TypeDActivite::Services, self::ADRESSE_SERVICES);
         $this->inscrire('cabinet', FauxRepertoireSirene::SIREN_CABINET, TypeDActivite::Cabinet, self::ADRESSE_CABINET);
+        $societesDesCas->inscrire();
 
         $this->horloge->aller(0, '10:30');
         $this->sEssayerDansLaDemonstration('commerce', [['Romain Lefort', RoleMagasin::Vendeur]]);
@@ -191,6 +212,8 @@ final class SemisDeDemonstration
             'assurance_contrat' => 'RCP-2026-4471',
             'assurance_couverture' => 'France métropolitaine',
         ]);
+        $this->reglerLaFiscalite('commerce', ['regime_tva' => RegimeTva::ReelNormalMensuel->value]);
+        $this->reglerLaFiscalite('services', ['regime_tva' => RegimeTva::ReelSimplifie->value]);
         $this->verifierLeCabinet();
 
         $this->horloge->aller(1, '10:00');
@@ -199,7 +222,7 @@ final class SemisDeDemonstration
         $this->ouvrirUnMagasin('services', 'conseil', 'Conseil Vasseur Paris', 'PARIS', 'siege');
 
         $this->horloge->aller(1, '11:00');
-        $this->administrateur('commerce', 'Nadia Benali', null, []);
+        $this->administrateur('commerce', 'Nadia Benali', null, [], [PermissionRegistry::GRAPHIQUES_VOIR, PermissionRegistry::CHARGES_AJOUTER], AutorisationsSociete::modeleDeLAdministrateur());
         $this->administrateur('commerce', 'Thomas Girard', ['halles', 'republique'], PermissionRegistry::deVente());
         $this->membre('halles', 'Camille Laurent', RoleMagasin::Responsable);
         $this->membre('halles', 'Lucas Moreau', RoleMagasin::Vendeur);
@@ -221,9 +244,15 @@ final class SemisDeDemonstration
         $this->lierLeCabinetA('commerce');
         $this->confier('Paul Lefèvre', 'commerce');
 
+        $this->horloge->aller(1, '15:00');
+        $societesDesCas->valider();
+        $this->horloge->aller(1, '16:00');
+        $societesDesCas->remplir();
+
         $this->horloge->aller(2, '09:00');
         $this->accepterLInvitationDuCabinet();
         $this->confier('Emma Rousseau', 'client');
+        $this->reglerLaFiscalite('client', ['regime_tva' => RegimeTva::ReelNormalTrimestriel->value]);
         $this->ouvrirUnMagasin('client', 'epicerie', 'Épicerie Lemoine', 'EPICERIE', 'siege');
         $this->administrateur('client', 'Romane Gauthier', null, []);
         $this->administrateur('client', 'Bastien Leroy', ['epicerie'], PermissionRegistry::deVente());
@@ -233,15 +262,112 @@ final class SemisDeDemonstration
 
         $this->horloge->aller(2, '10:00');
         $this->declarerLExpertComptable();
+        $comptesDesCas = new ComptesDesCas($this->horloge, $this, $this->liste);
+        $comptesDesCas->creer();
+        $this->horloge->aller(2, '10:30');
+        $societesDesCas->lierAuCabinet();
+        $societesDesCas->inviterCeQuiExpirera();
 
-        (new ActiviteDesMagasins($this->horloge, $this))->semer();
+        (new ActiviteDesMagasins($this->horloge, $this, $comptesDesCas, $societesDesCas))->semer();
 
         $this->horloge->aller(self::JOURS - 1, '09:00');
         $this->inscrire('inscription', self::SIREN_INSCRIPTION, TypeDActivite::Commerce, self::ADRESSE_INSCRIPTION);
         $this->horloge->aller(self::JOURS - 1, '09:30');
         $this->sEssayerDansLaDemonstration('inscription', [['Karim Haddad', RoleMagasin::Responsable], ['Zoé Marchand', RoleMagasin::Vendeur]]);
+        $this->horloge->aller(self::JOURS - 1, '11:00');
+        (new DerniersGestes($this, $this->motsDePasse))->semer();
 
-        $this->liste->oublierLesComptesRetires();
+        $this->liste->oublierLesComptesRetires($comptesDesCas->retiresGardes());
+        $this->direCeQuIlFautRegarder();
+    }
+
+    /**
+     * À l'instant du semis, après l'histoire : le vendeur des Halles a une
+     * vente en cours à la caisse, que la clôture de la journée
+     * abandonnera si elle n'est pas encaissée avant (voir PanierDeCaisse).
+     */
+    public function laisserUneVenteEnCours(): void
+    {
+        $halles = new GestesDuMagasin($this->magasin('halles'));
+        $halles->dans(fn (): ?PanierCaisse => app(PanierDeCaisse::class)->enregistrer($this->compte('Lucas Moreau'), GestesDuMagasin::jeton(), $halles->comptoir()->id, [
+            'ligne-1' => [...$halles->ligne('BOUGIE-FIGUE', 2), 'prix_unitaire_ttc' => '18.00'],
+            'ligne-2' => [...$halles->ligne('CARNET-A5', 1), 'prix_unitaire_ttc' => '4.90'],
+        ]));
+    }
+
+    /**
+     * Pour chaque compte de la liste, ce qu'il faut regarder avec lui
+     * (demande de l'éditeur du 15/11/2026, cahier SEED-TOUT § 4).
+     */
+    private function direCeQuIlFautRegarder(): void
+    {
+        foreach ([
+            'propriétaire commerce' => 'Espace de la société : tableau de bord et graphiques des deux magasins, « Les caisses », charges, équipe, cabinet lié, téléchargements (prêts, et un en préparation) ; ne vend pas',
+            'propriétaire services' => 'Espace de la société : expert-comptable déclaré (deux comptes), charges validées par lui, magasin de services',
+            'propriétaire cabinet' => 'Espace du cabinet : clients liés, invitations et demandes dans chaque état, collaborateurs et clients confiés',
+            'Nadia Benali' => 'Administratrice sans vente : tableau de bord de la société avec graphiques, charges qu\'elle ajoute, magasins de sa portée',
+            'Thomas Girard' => 'Administrateur qui vend dans deux magasins : sa caisse aux Halles puis à la République, ses relevés',
+            'Camille Laurent' => 'Responsable des Halles : « À faire » (exports sans preuve, détaxe, devis), graphiques, charges du magasin, vente sans stock, facture rejetée par la plateforme agréée et facture non transmise (incident technique), envoi en échec et envoi en attente',
+            'Lucas Moreau' => 'Vendeur des Halles : ses tickets, sa caisse fermée par sa responsable, ses factures d\'export et de détaxe',
+            'Inès Garcia' => 'Vendeuse des Halles qui garde son identifiant : connexion seulement depuis le poste reconnu « Caisse des Halles »',
+            'Hugo Lefebvre' => 'Responsable de la République : inventaire d\'ouverture, réassorts, avoir du Studio Nord',
+            'Lucas Moreau (République)' => 'La même personne que le vendeur des Halles, avec un autre compte, promue responsable de la République',
+            'Sarah Petit' => 'Vendeuse de la République qui voit les factures de toute l\'équipe',
+            'Léa Fontaine' => 'Administratrice sans vente de la société de services',
+            'Antoine Roux' => 'Administrateur qui vend au magasin de services',
+            'Claire Dubois' => 'Responsable du magasin de services : prestations à l\'étranger (autoliquidation, hors UE), mairie, prélèvement',
+            'Maxime Henry' => 'Vendeur de services : ses tickets à la caisse',
+            'Julie Mercier' => 'Vendeuse de services : ses tickets à la caisse',
+            'Paul Lefèvre' => 'Collaborateur du cabinet : Maison Ferrand confiée, charges à valider et validées, graphiques du client',
+            'Emma Rousseau' => 'Collaboratrice du cabinet : Épicerie Lemoine confiée (seul magasin ouvert au cabinet)',
+            'propriétaire client' => 'Société née de l\'invitation du cabinet : cabinet lié, magasins ouverts au cabinet',
+            'Romane Gauthier' => 'Administratrice devenue responsable de l\'Épicerie',
+            'Bastien Leroy' => 'Administrateur qui vend à l\'Épicerie',
+            'Nicolas Lemoine' => 'Responsable de l\'Épicerie : équipe (vendeuse suspendue puis réactivée, accès redonné)',
+            'Chloé Bernard' => 'Vendeuse de l\'Épicerie : ses tickets et ses relevés',
+            'Mehdi Brahimi' => 'Vendeur de l\'Épicerie : ses tickets et ses relevés',
+            'Marc Petit' => 'Expert-comptable déclaré : « Tableau de bord de la société », charges à valider, magasins en lecture',
+            'propriétaire inscription' => 'Inscription qui attend le code du courrier : magasin de démonstration ouvert',
+            'Karim Haddad' => 'Compte d\'entraînement : ventes dans le magasin de démonstration',
+            'Zoé Marchand' => 'Compte d\'entraînement : ventes dans le magasin de démonstration',
+            'Élodie Fabre' => 'Observatrice des Halles : tout en lecture, aucune vente ; reçoit les alertes de stock (la propriétaire lui a coché « ajuster le stock »)',
+            'Victor Blanchard' => 'Observateur du magasin de services',
+            'Margaux Perrin' => 'Observatrice de l\'Épicerie',
+            'Yanis Morel' => 'Compte suspendu : la connexion est refusée ; ses anciens tickets restent',
+            'Bruno Caron' => 'Compte retiré de la société : la connexion est refusée',
+            'Anaïs Lambert' => 'Vendeuse retirée puis réintégrée : ses tickets d\'avant et d\'après, le ZIP de ses ventes demandé juste avant son retrait, en échec',
+            'Léna Roussel' => 'Accès redonné en son absence : son mot de passe est redevenu son identifiant',
+            'propriétaire comptoir' => 'Cinq magasins : Martinique (8,5 %), Lyon fermé temporairement, Bordeaux rouvert, Nantes cédé, Lille suspendu ; transmission en attente',
+            'Gaëlle Hoarau' => 'Administratrice à qui la propriété est proposée (lien pas encore suivi)',
+            'Joël Sainte-Rose' => 'Responsable en Martinique : heure des Antilles, TVA à 8,5 % et 2,1 %',
+            'Maëva Jean-Louis' => 'Vendeuse en Martinique : ses tickets à l\'heure locale',
+            'Bastien Royer' => 'Responsable de Lyon : inventaire d\'ouverture en brouillon, magasin fermé temporairement',
+            'Inès Lafitte' => 'Responsable de Bordeaux : magasin fermé pour cessation puis rouvert',
+            'Ronan Guillou' => 'Responsable de Nantes : magasin cédé, en lecture seule',
+            'Chloé Vandamme' => 'Responsable de Lille : magasin suspendu par l\'éditeur, en lecture seule',
+            'Mathilde Brun (atelier)' => 'Franchise en base : ventes à 0 %, « TVA non applicable, art. 293 B du CGI »',
+            'Rémi Lacroix' => 'Option pour les débits : factures de services encaissées ; après la correction du SIREN, une facture rectificative émise et les autres factures à régulariser',
+            'Julien Delattre' => 'Membre d\'un assujetti unique : ventes refusées',
+            'Sophie Duval' => 'Société suspendue : lecture seule',
+            'Hervé Noël' => 'Société résiliée : lecture seule',
+            'Étienne Vidal' => 'Devenu propriétaire de la Librairie par transmission',
+            'propriétaire librairie' => 'Ancienne propriétaire devenue administratrice à la transmission',
+            'propriétaire sans code' => 'Inscription close faute de code : se connecte seulement avec son identifiant',
+            'propriétaire type erroné' => 'Inscription close par l\'éditeur (type d\'activité choisi par erreur)',
+            'propriétaire cabinet non vérifié' => 'Cabinet inscrit, pas encore vérifié à l\'Ordre : aucun client',
+            'propriétaire cabinet suspendu' => 'Cabinet vérifié puis suspendu',
+            'propriétaire cabinet radié' => 'Cabinet radié du tableau de l\'Ordre (constat de l\'éditeur) : plus vérifié, son lien avec la Boulangerie Duval a pris fin',
+            'propriétaire atelier' => 'Franchise en base ; sa demande de lien au cabinet attend la réponse',
+            'propriétaire studio' => 'Option pour les débits ; sa demande de lien a expiré ; SIREN corrigé par l\'éditeur : une facture régularisée par son avoir de régularisation, les autres à régulariser',
+            'propriétaire groupe' => 'Assujetti unique ; son lien avec le cabinet a pris fin',
+            'propriétaire boulangerie' => 'Société suspendue ; lien terminé par le cabinet Martin, puis par la radiation du cabinet Faure',
+            'propriétaire refusée' => 'Inscription close par l\'éditeur (refus) : se connecte seulement avec son identifiant',
+            'propriétaire révoquée' => 'Société révoquée par l\'éditeur (SIREN pris à tort) : lecture seule, son magasin fermé',
+            'propriétaire caduque' => 'Inscrite d\'elle-même pendant que le cabinet Martin l\'invitait (son invitation est devenue caduque) : attend le code de son courrier',
+            'propriétaire pièces' => 'Inscription dont les courriers ne sont pas parvenus : nouveau courrier demandé, pièces déposées, en attente de l\'éditeur',
+        ] as $cle => $aRegarder) {
+            $this->liste->regarder($this->compte($cle), $aRegarder);
+        }
     }
 
     /**
@@ -250,6 +376,15 @@ final class SemisDeDemonstration
     public function compte(string $nom): User
     {
         return $this->comptes[$nom] ?? throw new LogicException("Aucun compte semé ne s'appelle {$nom}.");
+    }
+
+    /**
+     * Relit ce magasin en base, après un changement de son statut (fermeture,
+     * réouverture, suspension), pour que les gestes suivants le voient.
+     */
+    public function relireLeMagasin(string $cle): Magasin
+    {
+        return $this->magasins[$cle] = $this->magasin($cle)->refresh();
     }
 
     public function magasin(string $cle): Magasin
@@ -265,6 +400,23 @@ final class SemisDeDemonstration
     public function proprietaire(string $societe): User
     {
         return $this->compte("propriétaire {$societe}");
+    }
+
+    /**
+     * Le mot de passe que le propriétaire de cette société redonne pour les
+     * gestes qui le demandent.
+     */
+    public function motDePasseDuProprietaire(string $societe): string
+    {
+        return $this->motsDePasseDesProprietaires[$societe] ?? throw new LogicException("La société {$societe} n'a pas de propriétaire semé.");
+    }
+
+    /**
+     * Le mot de passe que ce compte a choisi.
+     */
+    public function motDePasseDe(string $compte): string
+    {
+        return $this->motsDePasseDesComptes[$compte] ?? throw new LogicException("Le compte {$compte} n'a pas choisi de mot de passe pendant le semis.");
     }
 
     /**
@@ -302,7 +454,7 @@ final class SemisDeDemonstration
      * légal, son adresse de connexion confirmée par ce lien, et son premier
      * courrier recommandé.
      */
-    private function inscrire(string $cle, string $siren, TypeDActivite $type, string $adresse): void
+    public function inscrire(string $cle, string $siren, TypeDActivite $type, string $adresse): void
     {
         if (! IdentifiantsInsee::sirenValide($siren)) {
             throw new LogicException("Le SIREN semé {$siren} n'est pas valide.");
@@ -325,7 +477,7 @@ final class SemisDeDemonstration
      * l'adresse et le mot de passe de son inscription : la société est
      * validée, et son magasin de démonstration se ferme.
      */
-    private function saisirLeCode(string $cle): void
+    public function saisirLeCode(string $cle): void
     {
         $proprietaire = $this->proprietaire($cle);
         $code = $this->codeDe($cle);
@@ -341,6 +493,15 @@ final class SemisDeDemonstration
         $this->societes[$cle] = $this->societe($cle)->refresh();
     }
 
+    /**
+     * Le code du dernier courrier recommandé parti, tel que son
+     * destinataire le lit sur le pli.
+     */
+    public function codeDuDernierCourrier(): string
+    {
+        return $this->codes->dernier();
+    }
+
     private function codeDe(string $cle): string
     {
         return $this->codesDesCourriers[$cle] ?? throw new LogicException("Aucun courrier n'est parti pour la société {$cle}.");
@@ -354,9 +515,24 @@ final class SemisDeDemonstration
      *
      * @param  array<string, string>  $donnees
      */
-    private function completerLIdentite(string $cle, array $donnees): void
+    public function completerLIdentite(string $cle, array $donnees): void
     {
         $this->societes[$cle] = $this->horsDeToutContexte(fn (): Societe => app(ModifierIdentiteSocieteAction::class)->handle($this->proprietaire($cle), $this->societe($cle), $donnees));
+    }
+
+    /**
+     * Le propriétaire règle les paramètres fiscaux communs de sa société
+     * (voir ModifierParametresFiscauxSocieteAction) : chaque société qui a
+     * un magasin réel choisit son régime de TVA, les sociétés semées se
+     * répartissant entre le réel normal mensuel, le réel normal
+     * trimestriel, le réel simplifié et la franchise en base (constat de
+     * l'éditeur du 15/11/2026 : aucune société qui vend sans régime).
+     *
+     * @param  array<string, mixed>  $reglages
+     */
+    public function reglerLaFiscalite(string $cle, array $reglages): void
+    {
+        $this->societes[$cle] = $this->horsDeToutContexte(fn (): Societe => app(TenantContext::class)->runAsSociete($this->societe($cle), fn (): Societe => app(ModifierParametresFiscauxSocieteAction::class)->handle($this->proprietaire($cle), $this->societe($cle)->refresh(), $reglages)));
     }
 
     /**
@@ -374,13 +550,18 @@ final class SemisDeDemonstration
     /**
      * Le magasin que le propriétaire crée dans l'espace de sa société, sur
      * l'un des établissements actifs que le répertoire Sirene factice
-     * liste pour son SIREN : son siège ou sa boutique (voir
+     * liste pour son SIREN : son siège, sa boutique, ou l'établissement de
+     * ce NIC sans sa clé (« 0003 »), que le répertoire connaît (voir
      * CreerEtablissementAction).
      */
-    private function ouvrirUnMagasin(string $societe, string $cle, string $nom, string $code, string $etablissement): void
+    public function ouvrirUnMagasin(string $societe, string $cle, string $nom, string $code, string $etablissement): Magasin
     {
         $siren = (string) $this->societe($societe)->siren;
-        $nic = substr($etablissement === 'siege' ? FauxRepertoireSirene::siretDuSiege($siren) : FauxRepertoireSirene::siretDeLaBoutique($siren), 9);
+        $nic = substr(match ($etablissement) {
+            'siege' => FauxRepertoireSirene::siretDuSiege($siren),
+            'boutique' => FauxRepertoireSirene::siretDeLaBoutique($siren),
+            default => IdentifiantsInsee::avecSaCle($siren.$etablissement),
+        }, 9);
 
         $this->magasins[$cle] = $this->horsDeToutContexte(fn (): Magasin => app(CreerEtablissementAction::class)->handle($this->proprietaire($societe), $this->societe($societe), [
             'nom' => $nom,
@@ -388,9 +569,11 @@ final class SemisDeDemonstration
             'nic' => $nic,
         ]));
         $this->nomsDesSocietes[$cle] = $this->nomDeLaSociete($societe);
+
+        return $this->magasins[$cle];
     }
 
-    private function nomDeLaSociete(string $cle): string
+    public function nomDeLaSociete(string $cle): string
     {
         return (string) $this->societe($cle)->refresh()->raison_sociale;
     }
@@ -404,18 +587,20 @@ final class SemisDeDemonstration
      *
      * @param  list<string>|null  $magasins
      * @param  list<string>  $vente
+     * @param  list<string>  $autresCases  les cases réservées au propriétaire, qu'il coche ici (graphiques, ajout des charges)
+     * @param  list<string>  $casesDeSociete  les autorisations de société (voir AutorisationsSociete)
      */
-    private function administrateur(string $societe, string $nom, ?array $magasins, array $vente): void
+    public function administrateur(string $societe, string $nom, ?array $magasins, array $vente, array $autresCases = [], array $casesDeSociete = []): void
     {
         $type = $this->societe($societe)->type_activite;
-        $cases = array_values(array_intersect(PermissionRegistry::pourLeType($type), [...PermissionRegistry::modeleDeLAdministrateur($type), ...$vente]));
+        $cases = array_values(array_intersect(PermissionRegistry::pourLeType($type), [...PermissionRegistry::modeleDeLAdministrateur($type), ...$vente, ...$autresCases]));
         $compte = $this->horsDeToutContexte(fn (): User => app(CreerAdministrateurAction::class)->handle(
             $this->proprietaire($societe),
             $this->societe($societe),
             ['name' => $nom],
             $magasins === null ? null : array_map(fn (string $cle): int => $this->magasin($cle)->id, $magasins),
             $cases,
-            [],
+            $casesDeSociete,
             GestesDuMagasin::jeton(),
         ));
 
@@ -429,20 +614,20 @@ final class SemisDeDemonstration
      * identifiant, qui n'ouvre alors son compte que depuis un poste
      * reconnu du magasin.
      */
-    private function membre(string $magasin, string $nom, RoleMagasin $role, bool $gardeSonIdentifiant = false, ?string $cle = null): void
+    public function membre(string $magasin, string $nom, RoleMagasin $role, bool $gardeSonIdentifiant = false, ?string $cle = null): User
     {
         $leMagasin = $this->magasin($magasin);
         $proprietaire = $this->compte('propriétaire '.$this->cleDeLaSocieteDe($leMagasin));
         $compte = app(TenantContext::class)->runAs($leMagasin, fn (): User => app(CreerMembreAction::class)->handle($proprietaire, $leMagasin, ['name' => $nom], $role, null, GestesDuMagasin::jeton()));
+        $libelle = $leMagasin->est_demonstration === true ? 'Compte d\'entraînement ('.mb_strtolower($role->getLabel()).')' : $role->getLabel();
 
         if ($gardeSonIdentifiant) {
-            $this->comptes[$cle ?? $nom] = $compte->refresh();
-            $this->liste->noter($compte, $this->nomsDesSocietes[$magasin], (string) $leMagasin->nom, $role->getLabel(), null);
+            $this->liste->noter($compte, $this->nomsDesSocietes[$magasin], (string) $leMagasin->nom, $libelle, null);
 
-            return;
+            return $this->comptes[$cle ?? $nom] = $compte->refresh();
         }
 
-        $this->choisirSonMotDePasse($compte, $cle ?? $nom, $this->nomsDesSocietes[$magasin], (string) $leMagasin->nom, $role->getLabel());
+        return $this->choisirSonMotDePasse($compte, $cle ?? $nom, $this->nomsDesSocietes[$magasin], (string) $leMagasin->nom, $libelle);
     }
 
     /**
@@ -463,12 +648,14 @@ final class SemisDeDemonstration
      * La personne choisit son mot de passe dans son profil, ou à sa
      * première connexion (voir ChangerSonMotDePasseAction).
      */
-    private function choisirSonMotDePasse(User $compte, string $cle, string $societe, string $magasin, string $role): void
+    private function choisirSonMotDePasse(User $compte, string $cle, string $societe, string $magasin, string $role): User
     {
         $motDePasse = $this->motsDePasse->pour((string) $compte->identifiantDeConnexion());
         app(ChangerSonMotDePasseAction::class)->handle($compte, $motDePasse);
-        $this->comptes[$cle] = $compte->refresh();
         $this->liste->noter($compte, $societe, $magasin, $role, $motDePasse);
+        $this->motsDePasseDesComptes[$cle] = $motDePasse;
+
+        return $this->comptes[$cle] = $compte->refresh();
     }
 
     private function cleDeLaSocieteDe(Magasin $magasin): string
@@ -547,6 +734,7 @@ final class SemisDeDemonstration
             ->sole();
 
         $this->horsDeToutContexte(fn () => app(ConfierDesClientsAction::class)->handle($this->proprietaire('cabinet'), $this->compte($collaborateur), [$lien->id]));
+        $this->liste->confier($this->compte($collaborateur), $this->nomDeLaSociete($societe));
     }
 
     /**
@@ -600,6 +788,36 @@ final class SemisDeDemonstration
         $this->motsDePasse->controlerAvec($motDePasse, (string) $compte->identifiantDeConnexion());
         $this->comptes['Marc Petit'] = $compte;
         $this->liste->noter($compte, $this->nomDeLaSociete('services'), 'Tous les magasins', 'Expert-comptable déclaré', $motDePasse);
+
+        $declaration = LienCabinet::query()->withoutGlobalScopes()
+            ->where('societe_id', $this->societe('services')->getKey())
+            ->where('etat', EtatDuLien::Declare->value)
+            ->sole();
+        $sophie = $this->horsDeToutContexte(fn (): User => app(AjouterUnExpertComptableAction::class)->handle($this->proprietaire('services'), $declaration, [
+            'name' => 'Sophie Petit',
+            'email' => self::ADRESSE_SECONDE_EXPERTE_COMPTABLE,
+            'email_confirmation' => self::ADRESSE_SECONDE_EXPERTE_COMPTABLE,
+        ], $this->motsDePasseDesProprietaires['services'], GestesDuMagasin::jeton()));
+        $this->comptes['Sophie Petit'] = $sophie;
+        $this->liste->noter($sophie, $this->nomDeLaSociete('services'), 'Tous les magasins', 'Expert-comptable déclarée', null, 'Lien du mot de passe envoyé, pas encore suivi : elle ne se connecte pas encore', 'pas encore choisi (lien de 7 jours envoyé)');
+    }
+
+    /**
+     * Le propriétaire de la société de services redonne l'accès à son
+     * expert-comptable, absent, par un nouveau lien de sept jours : son
+     * mot de passe d'avant ne sert plus, et il en choisit un autre par ce
+     * lien.
+     */
+    public function redonnerLAccesALExpertComptable(): void
+    {
+        $marc = $this->compte('Marc Petit');
+        $this->horsDeToutContexte(fn (): bool => app(RedonnerLAccesAction::class)->parUnNouveauLien($this->proprietaire('services'), $marc, GestesDuMagasin::jeton()));
+        $mail = Mail::sent(LienDuMotDePasseDeLExpertComptableMail::class, fn (LienDuMotDePasseDeLExpertComptableMail $mail): bool => $mail->hasTo(self::ADRESSE_EXPERT_COMPTABLE))->last();
+        $jeton = Str::afterLast(ValeursLues::instance($mail, LienDuMotDePasseDeLExpertComptableMail::class)->lien, '/');
+        $motDePasse = $this->motsDePasse->pour((string) $marc->identifiantDeConnexion());
+        $this->horsDeToutContexte(fn (): User => app(ChoisirLeMotDePasseDeLExpertComptableAction::class)->handle($jeton, $motDePasse, $motDePasse));
+        $this->comptes['Marc Petit'] = $marc->refresh();
+        $this->liste->changerLeMotDePasse($marc, $motDePasse);
     }
 
     /**
@@ -611,7 +829,7 @@ final class SemisDeDemonstration
      * @param  Closure(): TResultat  $geste
      * @return TResultat
      */
-    private function horsDeToutContexte(Closure $geste): mixed
+    public function horsDeToutContexte(Closure $geste): mixed
     {
         app(TenantContext::class)->clear();
 

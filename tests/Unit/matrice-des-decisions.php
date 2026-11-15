@@ -140,7 +140,7 @@ return [
             'regle' => 'Aucune donnée réelle n\'existe : les seules données semées sont les données de démonstration, toutes fictives (SIREN fictifs, adresses sur le domaine réservé exemple.test), qui ne se sèment qu\'en développement local et dans les tests, jamais en production (décision de l\'éditeur du 13/11/2026, lot SEED).',
             'tests' => [
                 'tests/Feature/DatabaseSeederTest.php::test_le_semis_est_refuse_en_production_sans_rien_ecrire',
-                'tests/Feature/DatabaseSeederTest.php::test_le_semis_remplit_la_base_par_les_vraies_actions_et_donne_la_liste_des_comptes',
+                'tests/Feature/SemisCompletTest.php::test_le_semis_complet_remplit_toute_la_base_et_tous_les_cas',
             ],
         ],
         'developpement.commentaires-devenus-inutiles-supprimes' => [
@@ -2865,10 +2865,9 @@ return [
         ],
         'hors.donnees-de-demonstration' => [
             'puce' => 'Hors de CLAUDE.md',
-            'regle' => 'php artisan migrate:fresh --seed remplit la base de développement par les vraies actions et les fournisseurs factices, et donne la liste des comptes pour se connecter, chacun avec un mot de passe tiré au hasard ou celui, commun, de PILIQI_DEMO_MOT_DE_PASSE ; le planificateur ne lance aucune tâche tant qu\'il dure ; il refuse, sans rien écrire, la production, un fournisseur réel (répertoire Sirene, registre national des entreprises, courrier recommandé, annuaire de l\'Ordre, plateforme agréée, antivirus), une base qui a déjà des sociétés et un mot de passe commun hors de la règle.',
+            'regle' => 'php artisan migrate:fresh --seed remplit la base de développement par les vraies actions et les fournisseurs factices, toutes les tables et tous les cas sur plus de treize mois, toujours avec les mêmes nombres de lignes, se termine par la vérification de l\'isolation de toute la base, et donne la liste des comptes pour se connecter, chacun avec ce qu\'il faut regarder et un mot de passe tiré au hasard ou celui, commun, de PILIQI_DEMO_MOT_DE_PASSE ; le planificateur ne lance aucune tâche tant qu\'il dure ; il refuse, sans rien écrire, la production, un fournisseur réel (répertoire Sirene, registre national des entreprises, courrier recommandé, annuaire de l\'Ordre, plateforme agréée, antivirus), une base qui a déjà des sociétés et un mot de passe commun hors de la règle (décisions de l\'éditeur du 13/11/2026 et du 15/11/2026, point 6 du protocole de rigueur).',
             'tests' => [
-                'tests/Feature/DatabaseSeederTest.php::test_le_semis_remplit_la_base_par_les_vraies_actions_et_donne_la_liste_des_comptes',
-                'tests/Feature/DatabaseSeederTest.php::test_le_planificateur_ne_lance_aucune_tache_pendant_le_semis',
+                'tests/Feature/SemisCompletTest.php::test_le_semis_complet_remplit_toute_la_base_et_tous_les_cas',
                 'tests/Feature/Calendrier/PlanificateurTest.php::test_aucune_tache_planifiee_ne_part_pendant_le_semis_des_donnees_de_demonstration',
                 'tests/Feature/DatabaseSeederTest.php::test_le_semis_est_refuse_en_production_sans_rien_ecrire',
                 'tests/Feature/DatabaseSeederTest.php::test_le_semis_est_refuse_avec_un_fournisseur_reel_sans_rien_ecrire',
@@ -2876,8 +2875,8 @@ return [
                 'tests/Feature/DatabaseSeederTest.php::test_un_mot_de_passe_commun_hors_de_la_regle_est_refuse_sans_rien_ecrire',
                 'tests/Feature/DatabaseSeederTest.php::test_le_mot_de_passe_commun_va_a_chaque_compte_sauf_s_il_contient_son_identifiant',
                 'tests/Feature/DatabaseSeederTest.php::test_sans_mot_de_passe_commun_chaque_compte_recoit_un_mot_de_passe_tire_au_hasard',
-                'tests/Browser/Parcours/DonneesDeDemonstrationTest.php › les comptes de la liste du semis se connectent et retrouvent leurs données',
-                'tests/Browser/Parcours/DonneesDeDemonstrationTest.php › le vendeur qui garde son identifiant pour mot de passe ne se connecte que depuis un poste reconnu',
+                'tests/Browser/Parcours/DonneesDeDemonstrationTest.php › chaque rôle de la liste du semis se connecte et retrouve ses propres données',
+                'tests/Feature/Tenancy/VerificationDeLIsolationTest.php::test_deux_societes_justes_ne_donnent_aucun_probleme_et_le_code_0',
             ],
         ],
 

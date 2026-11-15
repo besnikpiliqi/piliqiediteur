@@ -3,8 +3,8 @@
 namespace Database\Seeders\Semis;
 
 use App\Domain\Achats\Models\FactureAchat;
+use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Calendrier\Calendrier;
-use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
@@ -25,9 +25,10 @@ use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\PartDeReglement;
 use App\Domain\Fichiers\PieceDeposee;
 use App\Domain\Tenancy\Actions\CreerMandatPdpAction;
+use App\Domain\Tenancy\Actions\ModifierLesParametresDuMagasinAction;
 use App\Domain\Tenancy\Services\IdentifiantsInsee;
 use App\Domain\Tenancy\Services\TenantContext;
-use Barryvdh\DomPDF\Facade\Pdf;
+use App\Domain\Tenancy\Support\FicheLue;
 use Illuminate\Support\Facades\Mail;
 use LogicException;
 
@@ -50,6 +51,8 @@ final class ActiviteDesMagasins
     public function __construct(
         private readonly HorlogeDuSemis $horloge,
         private readonly SemisDeDemonstration $semis,
+        private readonly ComptesDesCas $comptesDesCas,
+        private readonly SocietesDesCas $societesDesCas,
     ) {}
 
     public function semer(): void
@@ -61,13 +64,14 @@ final class ActiviteDesMagasins
 
         $this->horloge->aller(2, '11:00');
         $halles->dans(fn () => app(CreerMandatPdpAction::class)->handle($halles->magasin, $this->semis->proprietaire('commerce')));
+        $halles->dans(fn (): array => app(ModifierLesParametresDuMagasinAction::class)->handle($this->semis->compte('Camille Laurent'), PermissionRegistry::RELANCES_REGLER, FicheLue::de($halles->magasin->refresh())->valeurs(), ['relances_automatiques' => true]));
         $this->remplirLesHalles($halles);
         $this->remplirLaRepublique($republique);
         $this->remplirLeConseil($conseil);
         $this->remplirLEpicerie($epicerie);
 
         $this->premieresSemaines($halles, $republique, $conseil, $epicerie);
-        $this->joursSuivants($halles, $republique, $epicerie);
+        $this->joursSuivants($halles, $republique, $conseil, $epicerie);
     }
 
     /**
@@ -92,7 +96,7 @@ final class ActiviteDesMagasins
             ['produit' => ['nom' => 'Diffuseur en bambou', 'reference' => 'DIFF-BAMBOU', 'prix_vente_ttc' => '29.90', 'taux_tva' => '20', 'suivi_stock' => true, 'seuil_alerte' => 3], 'quantite' => 15, 'prix_unitaire_ht' => '11.50'],
             ['produit' => ['nom' => 'Tasse en grès', 'reference' => 'TASSE-GRES', 'prix_vente_ttc' => '12.50', 'taux_tva' => '20', 'suivi_stock' => true, 'seuil_alerte' => 6], 'quantite' => 30, 'prix_unitaire_ht' => '4.20'],
             ['produit' => ['nom' => 'Thé vert Sencha 100 g', 'reference' => 'THE-SENCHA', 'prix_vente_ttc' => '7.90', 'taux_tva' => '5.5', 'suivi_stock' => true, 'seuil_alerte' => 5], 'quantite' => 25, 'prix_unitaire_ht' => '3.10'],
-        ], ['date_facture' => $this->horloge->jour(1), 'numero_fournisseur' => 'GL-2026-118'], [new PieceDeposee('Facture GL-2026-118.pdf', self::pieceDuFournisseur('Grossiste Lumière', 'GL-2026-118'))]);
+        ], ['date_facture' => $this->horloge->jour(1), 'numero_fournisseur' => 'GL-2026-118'], [new PieceDeposee('Facture GL-2026-118.pdf', PieceDuSemis::pdf('Grossiste Lumière', 'Facture n° GL-2026-118'))]);
 
         $halles->acheter($camille, $papeterie, [
             ['produit' => ['nom' => 'Carnet A5 ligné', 'reference' => 'CARNET-A5', 'prix_vente_ttc' => '4.90', 'taux_tva' => '20', 'suivi_stock' => true, 'seuil_alerte' => 10], 'quantite' => 50, 'prix_unitaire_ht' => '1.40'],
@@ -243,13 +247,37 @@ final class ActiviteDesMagasins
     }
 
     /**
-     * Les jours suivants, jusqu'à l'avant-veille du semis : quelques
-     * tickets presque chaque jour, dimanches compris, dans les magasins qui
-     * ont des articles, chaque vendeur se reposant un jour sur trois selon
-     * son rang, sans jamais vendre au-delà du stock.
+     * Les jours suivants, jusqu'à l'avant-veille du semis, sur plus de
+     * treize mois : chaque vendeur fait un ou deux tickets presque chaque
+     * jour, entre 9 h et 21 h, dimanches compris, en se reposant un jour
+     * sur trois selon son rang, sans jamais vendre au-delà du stock ; le
+     * soir, les sociétés des cas vendent et changent (voir SocietesDesCas),
+     * puis les comptes des cas (voir ComptesDesCas), puis les documents
+     * des cas se font (voir DocumentsDesCas) ;
+     * toutes les deux semaines, le responsable de chaque magasin
+     * réassortit son stock par une facture d'achat validée (un peu plus
+     * que ce qui se vend en deux semaines), à un prix qui varie (le coût
+     * moyen évolue) ; les charges des sociétés suivent leur calendrier du
+     * mois (voir ChargesDesSocietes) ; les clients professionnels
+     * commandent, avant l'ouverture de la caisse (voir
+     * CommandesDesProfessionnels).
      */
-    private function joursSuivants(GestesDuMagasin $halles, GestesDuMagasin $republique, GestesDuMagasin $epicerie): void
+    private function joursSuivants(GestesDuMagasin $halles, GestesDuMagasin $republique, GestesDuMagasin $conseil, GestesDuMagasin $epicerie): void
     {
+        $this->horloge->aller(16, '18:00');
+        $documents = new DocumentsDesCas($this->horloge, $this->semis);
+        $charges = new ChargesDesSocietes($this->horloge, $this->semis);
+        $charges->preparer();
+        $commandes = new CommandesDesProfessionnels($this->horloge, $this->semis);
+        $commandes->preparer();
+        $atelier = $republique->fiche($this->semis->compte('Hugo Lefebvre'), Fournisseur::class, ['nom' => 'Atelier Lin et Laine', 'siret' => IdentifiantsInsee::avecSaCle('0000002170001'), 'adresse' => '12 quai de la Loire', 'code_postal' => '44000', 'ville' => 'Nantes', 'pays' => 'FR']);
+        $cooperative = $epicerie->fiche($this->semis->compte('Nicolas Lemoine'), Fournisseur::class, ['nom' => 'Coopérative du Sud', 'adresse' => '4 chemin des Oliviers', 'code_postal' => '13100', 'ville' => 'Aix-en-Provence', 'pays' => 'FR']);
+        $grossiste = $halles->dans(fn (): Fournisseur => Fournisseur::query()->where('nom', 'Grossiste Lumière')->sole());
+        $reassorts = [
+            [$halles, 'Camille Laurent', $grossiste, 'GL', ['BOUGIE-FIGUE' => [20, 600], 'TASSE-GRES' => [24, 420], 'THE-SENCHA' => [24, 310], 'CARNET-A5' => [44, 140]]],
+            [$republique, 'Hugo Lefebvre', $atelier, 'ALL', ['COUSSIN-LIN' => [28, 850], 'BOUGIE-FIGUE' => [24, 600]]],
+            [$epicerie, 'Nicolas Lemoine', $cooperative, 'CDS', ['MIEL-LAVANDE' => [24, 410], 'HUILE-OLIVE' => [48, 620]]],
+        ];
         $ventes = [
             [$halles, 'Lucas Moreau', ['BOUGIE-FIGUE' => 1, 'TASSE-GRES' => 1]],
             [$halles, 'Inès Garcia', ['CARNET-A5' => 2, 'THE-SENCHA' => 1]],
@@ -257,18 +285,45 @@ final class ActiviteDesMagasins
             [$republique, 'Sarah Petit', ['BOUGIE-FIGUE' => 1]],
             [$epicerie, 'Chloé Bernard', ['MIEL-LAVANDE' => 1, 'HUILE-OLIVE' => 1]],
             [$epicerie, 'Mehdi Brahimi', ['HUILE-OLIVE' => 1]],
+            [$conseil, 'Maxime Henry', ['Heure de conseil' => 1]],
+            [$conseil, 'Julie Mercier', ['Heure de conseil' => 2, 'Forfait déplacement' => 1]],
         ];
+        $modes = [ModePaiement::CarteBancaire, ModePaiement::Especes, ModePaiement::CarteBancaire, ModePaiement::Cheque];
 
         for ($jour = 17; $jour <= SemisDeDemonstration::JOURS - 2; $jour++) {
-            foreach ($ventes as $rang => [$gestes, $vendeur, $quantites]) {
-                if (($jour + $rang) % 3 === 0) {
-                    continue;
-                }
+            $charges->auJour($jour);
 
-                $this->horloge->aller($jour, sprintf('%02d:%02d', 10 + $rang, 15));
-                $lignes = array_map(fn (string $reference, int $quantite): array => $this->ligne($gestes, $reference, $quantite), array_keys($quantites), $quantites);
-                $gestes->vendreALaCaisse($this->semis->compte($vendeur), $gestes->comptoir(), $lignes, $jour % 2 === 0 ? ModePaiement::CarteBancaire : ModePaiement::Especes);
+            if ($jour % 14 === 3) {
+                $this->horloge->aller($jour, '08:30');
+
+                foreach ($reassorts as [$gestes, $responsable, $fournisseur, $prefixe, $produits]) {
+                    $variation = ($jour / 14) % 3;
+                    $gestes->acheter($this->semis->compte($responsable), $fournisseur, array_map(
+                        fn (string $reference, array $achat): array => ['produit_id' => $gestes->produit($reference)->id, 'quantite' => $achat[0], 'prix_unitaire_ht' => number_format(($achat[1] + 10 * $variation) / 100, 2, '.', '')],
+                        array_keys($produits),
+                        $produits,
+                    ), ['date_facture' => $this->horloge->jour($jour - 1), 'numero_fournisseur' => sprintf('%s-R%03d', $prefixe, $jour)]);
+                }
             }
+
+            $commandes->auJour($jour);
+
+            foreach ([0, 1] as $passage) {
+                foreach ($ventes as $rang => [$gestes, $vendeur, $quantites]) {
+                    if (($jour + $rang) % 3 === 0 || ($passage === 1 && ($jour + $rang) % 4 !== 1)) {
+                        continue;
+                    }
+
+                    $minute = 9 * 60 + 40 * $rang + 6 * 60 * $passage;
+                    $this->horloge->aller($jour, sprintf('%02d:%02d', intdiv($minute, 60), $minute % 60));
+                    $lignes = array_map(fn (string $reference, int $quantite): array => $this->ligne($gestes, $reference, $quantite), array_keys($quantites), $quantites);
+                    $gestes->vendreALaCaisse($this->semis->compte($vendeur), $gestes->comptoir(), $lignes, $modes[($jour + $rang + $passage) % count($modes)]);
+                }
+            }
+
+            $this->societesDesCas->auJour($jour);
+            $this->comptesDesCas->auJour($jour);
+            $documents->auJour($jour);
         }
     }
 
@@ -283,18 +338,11 @@ final class ActiviteDesMagasins
     }
 
     /**
-     * Une ligne de vente : le produit de cette référence, ou le service de
-     * ce nom, en cette quantité.
-     *
      * @return array{produit_id?: int, service_id?: int, quantite: int}
      */
     private function ligne(GestesDuMagasin $gestes, string $referenceOuService, int $quantite): array
     {
-        $produit = $gestes->dans(fn () => Produit::query()->where('reference', $referenceOuService)->first());
-
-        return $produit !== null
-            ? ['produit_id' => $produit->id, 'quantite' => $quantite]
-            : ['service_id' => $gestes->service($referenceOuService)->id, 'quantite' => $quantite];
+        return $gestes->ligne($referenceOuService, $quantite);
     }
 
     private function client(GestesDuMagasin $gestes, string $nom): Client
@@ -317,14 +365,5 @@ final class ActiviteDesMagasins
         }
 
         return $trouve[1];
-    }
-
-    /**
-     * La facture du fournisseur, en PDF, telle qu'il l'a envoyée : une page
-     * qui porte son nom et son numéro.
-     */
-    private static function pieceDuFournisseur(string $fournisseur, string $numero): string
-    {
-        return Pdf::loadHTML('<html><body style="font-family: DejaVu Sans"><h1>'.e($fournisseur).'</h1><p>Facture n° '.e($numero).'</p><p>Document fictif du jeu de démonstration de PILIQI.</p></body></html>')->setPaper('a4')->output();
     }
 }

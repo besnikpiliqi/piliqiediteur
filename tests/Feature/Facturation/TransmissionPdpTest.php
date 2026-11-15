@@ -17,10 +17,12 @@ use App\Domain\Tenancy\Enums\StatutMandatPdp;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\MandatPdp;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Integrations\Pdp\Contracts\PdpGatewayInterface;
 use App\Integrations\Pdp\Contracts\ResultatMandatPdp;
 use App\Integrations\Pdp\Contracts\ResultatSoumissionPdp;
 use App\Integrations\Pdp\Enums\StatutTransmissionPdp;
+use App\Integrations\Pdp\FakePdpGateway;
 use App\Integrations\Pdp\Models\TransmissionPdp;
 use Closure;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -430,5 +432,46 @@ class TransmissionPdpTest extends TestCase
         Queue::assertPushed(SubmitFactureToPdpJob::class, 2);
         Queue::assertPushed(SubmitFactureToPdpJob::class, fn ($job) => $job->factureId === $enEchec->id && $job->magasinId === $this->magasin->id);
         Queue::assertPushed(SubmitFactureToPdpJob::class, fn ($job) => $job->factureId === $ailleurs->id && $job->magasinId === $autreMagasin->id);
+    }
+
+    /**
+     * La passerelle factice, réglée comme les autres fournisseurs factices
+     * (voir FakePdpGateway), rejette le prochain dépôt d'une facture
+     * qu'elle n'a pas encore reçue, avec le code et le motif donnés, puis
+     * accepte de nouveau les suivants.
+     */
+    public function test_la_passerelle_factice_rejette_le_prochain_depot_quand_on_le_lui_demande(): void
+    {
+        MandatPdp::factory()->create(['magasin_id' => $this->magasin->id]);
+        $passerelle = ValeursLues::instance(app(PdpGatewayInterface::class), FakePdpGateway::class);
+        $passerelle->rejeterLeProchainDepot('BR-FR-10', 'Le SIREN de l\'acheteur ne figure pas à l\'annuaire.');
+
+        $rejetee = $this->transmissionDe($this->emettreFacturePour(Client::factory()->professionnel()->create()));
+        $acceptee = $this->transmissionDe($this->emettreFacturePour(Client::factory()->professionnel()->create()));
+
+        $this->assertSame([StatutTransmissionPdp::Rejetee, 'BR-FR-10', 'Le SIREN de l\'acheteur ne figure pas à l\'annuaire.'], [$rejetee->statut, $rejetee->code_erreur, $rejetee->message_erreur]);
+        $this->assertSame(StatutTransmissionPdp::Acceptee, $acceptee->statut);
+    }
+
+    /**
+     * La passerelle factice rendue injoignable ne répond ni au dépôt ni à
+     * la recherche d'un dépôt, comme pendant une panne du réseau ; de
+     * nouveau joignable, elle reçoit le dépôt sous la même référence.
+     */
+    public function test_la_passerelle_factice_injoignable_ne_repond_plus_jusqu_a_son_retour(): void
+    {
+        $facture = $this->factureATransmettre();
+        $passerelle = ValeursLues::instance(app(PdpGatewayInterface::class), FakePdpGateway::class);
+        $job = new SubmitFactureToPdpJob($this->magasin->id, $facture->id);
+        $passerelle->rendreInjoignable();
+
+        $this->assertThrows(fn () => $job->handle($passerelle), ConnectionException::class, 'Connection refused');
+        $this->assertSame(StatutTransmissionPdp::Soumise, $this->transmissionDe($facture)->statut);
+        $this->assertThrows(fn () => $job->handle($passerelle), ConnectionException::class, 'Connection refused');
+
+        $passerelle->rendreInjoignable(false);
+        $job->handle($passerelle);
+
+        $this->assertSame(StatutTransmissionPdp::Acceptee, $this->transmissionDe($facture)->statut);
     }
 }

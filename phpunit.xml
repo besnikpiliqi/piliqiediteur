@@ -15,10 +15,11 @@
             <directory>tests/Browser</directory>
         </testsuite>
     </testsuites>
-    <!-- Le groupe courriels-reels envoie de vrais e-mails à la boîte de test de Mailtrap : jamais dans la suite ni en CI, seulement à la demande (voir le README). -->
+    <!-- Le groupe courriels-reels envoie de vrais e-mails à la boîte de test de Mailtrap : jamais dans la suite ni en CI, seulement à la demande (voir le README). Le groupe semis sème toute la démonstration (plusieurs minutes par semis) : hors de la suite par défaut, une tâche de la CI le lance à part (php artisan test - -group=semis, voir le README). -->
     <groups>
         <exclude>
             <group>courriels-reels</group>
+            <group>semis</group>
         </exclude>
     </groups>
     <source>

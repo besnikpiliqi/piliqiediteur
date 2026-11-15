@@ -14,9 +14,11 @@ use App\Integrations\Antivirus\AntivirusFactice;
 use App\Integrations\Antivirus\AntivirusInjoignableException;
 use App\Integrations\Antivirus\Contracts\Antivirus;
 use App\Providers\AntivirusServiceProvider;
+use Carbon\CarbonImmutable;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use LogicException;
 use RuntimeException;
@@ -57,10 +59,14 @@ use ZipArchive;
  *   l'extension gd, qui réenregistre les photos ; qpdf, qui lit les PDF
  *   (QPDF_BINAIRE), en version 11 au moins ; l'antivirus, qui doit
  *   reconnaître le fichier de test EICAR, et ne jamais être l'antivirus
- *   factice en production.
+ *   factice en production ;
+ * - la vérification de l'isolation de toute la base (voir
+ *   VerifierLIsolation), qui doit avoir réussi, sans aucun problème, depuis
+ *   moins de 36 heures : la tâche de chaque nuit qui ne tourne plus, ou qui
+ *   trouve des problèmes, ne passe jamais inaperçue.
  */
 #[Signature('caisse:diagnostiquer')]
-#[Description('Vérifie que la caisse sécurisée peut signer et le journal d\'audit s\'inscrire, et que les fichiers reçus se contrôlent : extensions, génération d\'une clé, clés épinglées, clé de signature, clé du journal d\'audit, version du module fiscal, fuseaux de l\'application et de la base, horloge du serveur, gd, qpdf, antivirus')]
+#[Description('Vérifie que la caisse sécurisée peut signer et le journal d\'audit s\'inscrire, et que les fichiers reçus se contrôlent : extensions, génération d\'une clé, clés épinglées, clé de signature, clé du journal d\'audit, version du module fiscal, fuseaux de l\'application et de la base, horloge du serveur, gd, qpdf, antivirus, vérification de l\'isolation depuis moins de 36 heures')]
 class DiagnostiquerCaisseSecurisee extends Command
 {
     /**
@@ -85,6 +91,7 @@ class DiagnostiquerCaisseSecurisee extends Command
             'Extension gd' => fn (): string => $this->controlerGd(),
             'Analyseur des PDF (qpdf)' => fn (): string => $this->controlerQpdf(),
             'Antivirus' => fn (): string => $this->controlerLAntivirus($antivirus),
+            'Vérification de l\'isolation' => fn (): string => self::controlerLaVerificationDeLIsolation(),
         ];
 
         $lignes = [];
@@ -110,6 +117,30 @@ class DiagnostiquerCaisseSecurisee extends Command
         $this->info('Caisse sécurisée opérationnelle.');
 
         return self::SUCCESS;
+    }
+
+    /**
+     * La dernière vérification de l'isolation sans aucun problème (voir
+     * VerifierLIsolation) date de moins de 36 heures. Elle se retient dans
+     * le cache de l'application : un cache vidé (php artisan cache:clear ou
+     * optimize:clear) l'oublie jusqu'au passage suivant.
+     */
+    private static function controlerLaVerificationDeLIsolation(): string
+    {
+        $derniereReussite = Cache::get(VerifierLIsolation::CLE_DE_LA_DERNIERE_REUSSITE);
+
+        if (! is_int($derniereReussite)) {
+            throw new RuntimeException('Aucune vérification de l\'isolation n\'a réussi ici, ou le cache de l\'application a été vidé depuis : lancez php artisan app:verifier-isolation, et vérifiez que le planificateur tourne (php artisan schedule:work, ou la tâche cron de php artisan schedule:run), pour qu\'elle passe chaque nuit à 4 h 40.');
+        }
+
+        $instant = CarbonImmutable::createFromTimestamp($derniereReussite);
+        $libelle = Calendrier::deParis()->afficher($instant, 'd/m/Y à H:i').' (heure de Paris)';
+
+        if ($instant->lessThan(now()->subHours(VerifierLIsolation::HEURES_SANS_REUSSITE))) {
+            throw new RuntimeException('La vérification de l\'isolation n\'a pas réussi depuis plus de '.VerifierLIsolation::HEURES_SANS_REUSSITE." heures (dernière vérification sans problème le {$libelle}) : lisez le journal de l'application et les alertes reçues, corrigez la cause, puis lancez php artisan app:verifier-isolation.");
+        }
+
+        return "dernière vérification sans problème le {$libelle}";
     }
 
     /**

@@ -3,8 +3,12 @@
 namespace App\Domain\Tenancy\Models;
 
 use App\Domain\Calendrier\Casts\Instant;
+use App\Domain\Tenancy\Enums\TypeDActivite;
+use App\Integrations\Sirene\UniteSirene;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Str;
+use SensitiveParameter;
 
 /**
  * Une demande d'inscription d'une société, avant toute société (voir
@@ -45,6 +49,35 @@ class DemandeInscription extends Model
         'expire_le' => Instant::class,
         'consommee_le' => Instant::class,
     ];
+
+    /**
+     * Enregistre la demande d'inscription faite sur la page d'inscription :
+     * le SIREN, le type d'activité choisi, ce que le répertoire Sirene dit
+     * de son activité et le mot de passe, valables
+     * DUREE_DE_VALIDITE_EN_HEURES heures. Rend la demande et le jeton de
+     * son lien de confirmation, que seul l'e-mail porte : la base n'en
+     * garde que l'empreinte.
+     *
+     * @return array{0: self, 1: string}
+     */
+    public static function enregistrer(string $email, string $siren, TypeDActivite $type, ?UniteSirene $unite, #[SensitiveParameter] string $motDePasse): array
+    {
+        $jeton = Str::random(64);
+        $demande = tap((new self)->forceFill([
+            'email' => $email,
+            'jeton_hache' => self::empreinte($jeton),
+            'donnees' => [
+                'siren' => $siren,
+                'type_activite' => $type->value,
+                'code_activite' => $unite?->activitePrincipale,
+                'nomenclature_activite' => $unite?->nomenclatureActivite,
+                'mot_de_passe' => $motDePasse,
+            ],
+            'expire_le' => now()->addHours(self::DUREE_DE_VALIDITE_EN_HEURES),
+        ]))->save();
+
+        return [$demande, $jeton];
+    }
 
     /**
      * L'empreinte d'un jeton, telle qu'elle se garde et se cherche : le

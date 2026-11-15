@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\CaisseSecurisee;
 
+use App\Console\Commands\VerifierLIsolation;
 use App\Domain\CaisseSecurisee\ModuleFiscal;
 use App\Domain\CaisseSecurisee\Services\SignataireFiscal;
 use App\Domain\CaisseSecurisee\Support\HorlogeDuSysteme;
@@ -10,6 +11,7 @@ use App\Domain\Calendrier\Connexions\FuseauParDefautDeLaBase;
 use App\Domain\Fichiers\AnalyseurDePdf;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Process;
@@ -23,6 +25,43 @@ use Tests\TestCase;
  */
 class CommandesModuleFiscalTest extends TestCase
 {
+    /**
+     * Le serveur des tests a réussi la vérification de l'isolation il y a
+     * une heure, comme après la tâche de la nuit : chaque test lit le seul
+     * contrôle dont il parle (ceux de la vérification de l'isolation sont
+     * plus bas).
+     */
+    protected function setUp(): void
+    {
+        parent::setUp();
+        Cache::forever(VerifierLIsolation::CLE_DE_LA_DERNIERE_REUSSITE, now()->subHour()->getTimestamp());
+    }
+
+    /**
+     * Le diagnostic signale une vérification de l'isolation qui n'a pas
+     * réussi depuis plus de 36 heures, ou jamais (cache vidé compris), et dit
+     * quoi faire ; réussie depuis moins, il donne son heure de Paris.
+     */
+    public function test_le_diagnostic_signale_une_verification_de_l_isolation_sans_reussite_depuis_plus_de_36_heures(): void
+    {
+        $this->travelTo(self::aParis('2026-11-15 10:00:00'));
+        Cache::forever(VerifierLIsolation::CLE_DE_LA_DERNIERE_REUSSITE, self::aParis('2026-11-13 22:01:00')->getTimestamp());
+        $code = Artisan::call('caisse:diagnostiquer');
+        $sortie = Artisan::output();
+        $this->assertSame(0, $code, $sortie);
+        $this->assertMatchesRegularExpression("/\\| Vérification de l'isolation +\\| OK +\\| dernière vérification sans problème le 13\\/11\\/2026 à 22:01 \\(heure de Paris\\)/u", $sortie);
+
+        Cache::forever(VerifierLIsolation::CLE_DE_LA_DERNIERE_REUSSITE, self::aParis('2026-11-13 21:59:00')->getTimestamp());
+        $this->assertSame(1, Artisan::call('caisse:diagnostiquer'));
+        $sortie = Artisan::output();
+        $this->assertMatchesRegularExpression("/\\| Vérification de l'isolation +\\| ÉCHEC +\\| La vérification de l'isolation n'a pas réussi depuis plus de 36 heures \\(dernière vérification sans problème le 13\\/11\\/2026 à 21:59 \\(heure de Paris\\)\\)/u", $sortie);
+        $this->assertStringContainsString('Caisse sécurisée non opérationnelle : 1 contrôle(s) en échec.', $sortie);
+
+        Cache::forget(VerifierLIsolation::CLE_DE_LA_DERNIERE_REUSSITE);
+        $this->assertSame(1, Artisan::call('caisse:diagnostiquer'));
+        $this->assertStringContainsString("Aucune vérification de l'isolation n'a réussi ici, ou le cache de l'application a été vidé depuis : lancez php artisan app:verifier-isolation", Artisan::output());
+    }
+
     /**
      * Le cle_id d'une clé publique PEM, calculé sans le signataire : le
      * SHA-256 du DER SubjectPublicKeyInfo, corps base64 du PEM.

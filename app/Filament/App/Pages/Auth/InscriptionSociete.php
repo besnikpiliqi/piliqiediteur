@@ -34,7 +34,6 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\HtmlString;
-use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -184,19 +183,7 @@ class InscriptionSociete extends Register
             return null;
         }
 
-        $jeton = Str::random(64);
-        $demande = tap((new DemandeInscription)->forceFill([
-            'email' => $email,
-            'jeton_hache' => DemandeInscription::empreinte($jeton),
-            'donnees' => [
-                'siren' => $donnees['siren'],
-                'type_activite' => $type->value,
-                'code_activite' => $unite?->activitePrincipale,
-                'nomenclature_activite' => $unite?->nomenclatureActivite,
-                'mot_de_passe' => $donnees['password'],
-            ],
-            'expire_le' => now()->addHours(DemandeInscription::DUREE_DE_VALIDITE_EN_HEURES),
-        ]))->save();
+        [$demande, $jeton] = DemandeInscription::enregistrer($email, ValeurSimple::enTexte($donnees['siren']), $type, $unite, ValeurSimple::enTexte($donnees['password']));
 
         if (! $this->envoyerOuDireQueRienNEstParti(fn () => Mail::to($email)->send(new DemandeInscriptionMail(self::lienDeConfirmation($jeton), $demande->expire_le, $type)))) {
             $demande->delete();

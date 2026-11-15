@@ -6,14 +6,18 @@ use App\Console\SemisEnCours;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\CodesDeConfirmation;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\Reglage;
 use App\Providers\AntivirusServiceProvider;
 use Database\Seeders\Semis\CodesLusDansLesCourriers;
 use Database\Seeders\Semis\ComptesSemes;
+use Database\Seeders\Semis\FileDAttenteDuSemis;
 use Database\Seeders\Semis\HorlogeDuSemis;
 use Database\Seeders\Semis\MotsDePasseDuSemis;
 use Database\Seeders\Semis\SemisDeDemonstration;
 use Illuminate\Console\Command;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use RuntimeException;
@@ -30,9 +34,18 @@ use Throwable;
  * PILOTES_FACTICES), et dans une base qui a déjà des sociétés, avant d'y
  * rien écrire. Aucun e-mail ne part pendant le semis : les liens qu'il
  * suit (invitation du cabinet, mot de passe de l'expert-comptable,
- * réponse au devis) se lisent dans les e-mails retenus, et ses tâches
- * s'exécutent aussitôt, sans file d'attente ; le planificateur ne lance
- * aucune tâche tant qu'il dure (voir SemisEnCours).
+ * réponse au devis) se lisent dans les e-mails retenus, aucune requête HTTP
+ * ne sort (VIES répond par une réponse factice), et ses tâches
+ * s'exécutent aussitôt, sans file d'attente, sauf celles que quelques
+ * gestes laissent en file, comme en production, dans des files à eux
+ * qu'aucun travailleur du poste n'écoute (voir FileDAttenteDuSemis :
+ * préparation des téléchargements, un envoi qui attend sa tentative
+ * suivante, une transmission en panne) ; le planificateur ne lance
+ * aucune tâche tant qu'il dure (voir SemisEnCours). Le semis se termine
+ * par la vérification de l'isolation de toute la base (voir
+ * VerifierLIsolation), dont il affiche le tableau : au moindre problème, il
+ * n'est pas accepté (code de sortie 1) et la liste des comptes ne s'affiche
+ * pas.
  * Les données de démonstration de la production restent à l'étape 15 de
  * la feuille de route.
  */
@@ -43,6 +56,8 @@ class DatabaseSeeder extends Seeder
     public const MESSAGE_HORS_DU_DEVELOPPEMENT = 'Les données de démonstration ne se sèment qu\'en développement local ou dans les tests (APP_ENV=local ou testing), jamais en production : rien n\'a été écrit.';
 
     public const MESSAGE_FOURNISSEURS_REELS = 'Les données de démonstration exigent les fournisseurs factices, qui seuls connaissent les entreprises fictives semées et n\'envoient rien hors de PILIQI : réglez SIRENE_PILOTE=faux, RNE_PILOTE=faux, RECOMMANDE_PILOTE=faux, ORDRE_PILOTE=faux, PDP_PILOTE=faux et ANTIVIRUS_PILOTE=factice dans le .env, comme dans .env.example, puis php artisan optimize:clear. Rien n\'a été écrit.';
+
+    public const MESSAGE_ISOLATION_EN_DEFAUT = 'Le semis n\'est pas accepté : la vérification de l\'isolation a trouvé des problèmes (tableau ci-dessus). Corrigez le semis ou le code qui a écrit ces lignes, puis relancez php artisan migrate:fresh --seed.';
 
     public const MESSAGE_BASE_DEJA_REMPLIE = 'La base contient déjà des sociétés : les données de démonstration se sèment dans une base vide, par php artisan migrate:fresh --seed, qui efface toute la base. Rien n\'a été écrit.';
 
@@ -67,6 +82,20 @@ class DatabaseSeeder extends Seeder
     ];
 
     /**
+     * La réponse de VIES aux vérifications de n° de TVA du semis, qui ne
+     * joint jamais le vrai service : chaque n° de l'Union semé est valide
+     * (voir ClientVies). Toute autre requête HTTP du semis est refusée.
+     *
+     * @var array<string, bool|string>
+     */
+    private const REPONSE_DE_VIES = [
+        'valid' => true,
+        'name' => '---',
+        'address' => '---',
+        'requestIdentifier' => 'WAPIAAAAW0SEMIS',
+    ];
+
+    /**
      * La commande de la console qui lance le semis (db:seed), qui la donne
      * par setCommand() ; aucune quand le semeur est lancé autrement.
      * Seeder::$command se dit toujours présente, mais reste vide jusque-là.
@@ -81,7 +110,7 @@ class DatabaseSeeder extends Seeder
     }
 
     /**
-     * @throws RuntimeException quand l'environnement, les fournisseurs, la base ou le mot de passe commun ne permettent pas le semis
+     * @throws RuntimeException quand l'environnement, les fournisseurs, la base ou le mot de passe commun ne permettent pas le semis, ou que l'isolation des données semées n'est pas juste
      */
     public function run(): void
     {
@@ -103,15 +132,18 @@ class DatabaseSeeder extends Seeder
         $comptes = new ComptesSemes;
         $codes = new CodesLusDansLesCourriers;
         app()->instance(CodesDeConfirmation::class, $codes);
-        config(['queue.default' => 'sync']);
         Mail::fake();
+        Http::preventStrayRequests();
+        Http::fake([rtrim(Reglage::texte('services.vies.url'), '/').'/*' => Http::response(self::REPONSE_DE_VIES)]);
 
-        SemisEnCours::pendant(function () use ($motsDePasse, $codes, $comptes): void {
+        SemisEnCours::pendant(fn () => FileDAttenteDuSemis::pendantLeSemis(function () use ($motsDePasse, $codes, $comptes): void {
             $horloge = new HorlogeDuSemis(SemisDeDemonstration::JOURS);
 
             try {
-                (new SemisDeDemonstration($horloge, $motsDePasse, $codes, $comptes))->semer();
+                $semis = new SemisDeDemonstration($horloge, $motsDePasse, $codes, $comptes);
+                $semis->semer();
                 $horloge->terminer();
+                $semis->laisserUneVenteEnCours();
             } catch (Throwable $erreur) {
                 $horloge->rendre();
 
@@ -119,7 +151,14 @@ class DatabaseSeeder extends Seeder
             } finally {
                 app(TenantContext::class)->clear();
             }
-        });
+        }));
+
+        $isolation = Artisan::call('app:verifier-isolation');
+        $this->commande?->getOutput()->write(Artisan::output());
+
+        if ($isolation !== 0) {
+            throw new RuntimeException(self::MESSAGE_ISOLATION_EN_DEFAUT);
+        }
 
         Storage::disk('local')->put(self::FICHIER_DES_COMPTES, $this->texteDuFichier($comptes, $motsDePasse));
         $this->commande?->info('Données de démonstration semées. Connexion : '.url('/app/login'));

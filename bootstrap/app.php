@@ -22,6 +22,7 @@ use App\Console\Commands\SuivreEnvoisRecommandes;
 use App\Console\Commands\SurveillerLaFileDAttente;
 use App\Console\Commands\VerifierIntegriteFiscale;
 use App\Console\Commands\VerifierJournalAudit;
+use App\Console\Commands\VerifierLIsolation;
 use App\Console\SemisEnCours;
 use App\Http\Middleware\AjouterLesEnTetesDeSecurite;
 use App\Http\Middleware\FaireConfianceAuxMandataires;
@@ -106,6 +107,13 @@ return Application::configure(basePath: dirname(__DIR__))
         // À 4 h 30 : les jetons des demandes traitées depuis plus de 30
         // jours s'effacent (voir PurgerActionsTraitees).
         $schedule->command(PurgerActionsTraitees::class)->dailyAt('04:30')->withoutOverlapping();
+        // À 4 h 40, en développement comme en production : la vérification
+        // de l'isolation de toute la base, par la base et par l'application,
+        // en lecture seule, sur un seul serveur ; au moindre problème, ou si
+        // elle ne finit pas, l'éditeur est prévenu, une fois par nuit, et
+        // caisse:diagnostiquer signale une vérification qui n'a pas réussi
+        // depuis 36 heures (voir VerifierLIsolation).
+        $schedule->command(VerifierLIsolation::class, ['--prevenir-l-editeur'])->dailyAt('04:40')->onOneServer()->withoutOverlapping();
         // À 4 h 45, les magasins de démonstration inactifs depuis trente
         // jours, ou d'une société validée ou close, se ferment (voir
         // FermerDemonstrationsInactives).

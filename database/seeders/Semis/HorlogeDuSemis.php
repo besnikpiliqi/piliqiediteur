@@ -6,30 +6,52 @@ use App\Domain\Calendrier\Calendrier;
 use Carbon\Carbon;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\DB;
 use LogicException;
 use RuntimeException;
 
 /**
  * L'horloge du semis : l'histoire semée se déroule dans l'ordre, du
  * premier au dernier jour, jour après jour, chacun dans le calendrier de
- * Paris, celui de tous les magasins semés (en métropole), et finit la
- * veille de l'instant où le semis commence. Chaque geste se date ainsi
- * après le précédent, jamais avant le dernier verrou du registre de son
- * magasin (voir RegistreFiscal). À chaque minuit franchi, à 00 h 05, les
- * tâches que le planificateur passe chaque heure s'exécutent, comme sur un
- * serveur qui tourne : la clôture des journées et la fermeture d'office
- * des caisses personnelles, le passage en retard des factures et
- * l'expiration des devis. À la fin, l'horloge revient à l'instant du début
+ * Paris, et finit la veille de l'instant où le semis commence. Chaque
+ * geste se date ainsi après le précédent, jamais avant le dernier verrou
+ * du registre de son magasin (voir RegistreFiscal). Chaque jour, à 00 h 05
+ * et à 06 h 05 (après le minuit des Antilles), les tâches que le
+ * planificateur passe chaque heure s'exécutent, comme sur un serveur qui
+ * tourne (voir TACHES) ; chaque premier du mois, PostgreSQL analyse les
+ * tables (ANALYZE) après les tâches de 00 h 05, pour choisir ses plans de
+ * requête sur des statistiques à jour, même quand tout le semis tient
+ * dans une seule transaction (dans les tests), où l'analyse automatique ne
+ * voit rien, et la revérification de toutes les sociétés au répertoire
+ * Sirene passe à 06 h 05. À la fin, l'horloge revient à l'instant du début
  * (les tâches rattrapent la dernière journée), puis telle qu'elle était
  * avant le semis : figée au même instant dans un test, libre sinon.
  */
 final class HorlogeDuSemis
 {
     /**
-     * Les tâches horaires du calendrier des magasins que le semis exécute à
-     * chaque minuit franchi (voir bootstrap/app.php).
+     * Les tâches horaires que le semis exécute chaque jour, à chaque heure
+     * de Paris où elles passent (voir bootstrap/app.php) : à 00 h 05, celles
+     * du calendrier des magasins, les relances des factures impayées, la
+     * clôture des inscriptions sans code et l'expiration des invitations et
+     * des demandes des cabinets ; à 06 h 05, après le minuit des Antilles,
+     * la clôture des journées, pour que celle d'un magasin de la Martinique
+     * se fasse avant ses ventes du lendemain. Les purges, qui effaceraient
+     * ce que le semis veut montrer, n'y sont pas.
+     *
+     * @var array<string, list<string>>
      */
-    private const TACHES = ['app:cloturer-caisses-automatiquement', 'app:marquer-factures-en-retard', 'app:expirer-devis'];
+    private const TACHES = [
+        '00:05' => [
+            'app:cloturer-caisses-automatiquement',
+            'app:marquer-factures-en-retard',
+            'app:expirer-devis',
+            'app:relancer-factures-impayees',
+            'app:clore-inscriptions-sans-code',
+            'app:expirer-invitations-cabinets',
+        ],
+        '06:05' => ['app:cloturer-caisses-automatiquement'],
+    ];
 
     private readonly ?CarbonImmutable $avant;
 
@@ -105,15 +127,21 @@ final class HorlogeDuSemis
 
         $calendrier = Calendrier::deParis();
 
-        for ($jour = Calendrier::ajouterJours($calendrier->jourDe($this->maintenant), 1); $calendrier->debutDuJour($jour)->lessThanOrEqualTo($instant); $jour = Calendrier::ajouterJours($jour, 1)) {
-            $taches = $calendrier->heureMurale($jour.' 00:05');
+        for ($jour = $calendrier->jourDe($this->maintenant); $calendrier->debutDuJour($jour)->lessThanOrEqualTo($instant); $jour = Calendrier::ajouterJours($jour, 1)) {
+            foreach (array_keys(self::TACHES) as $heure) {
+                $taches = $calendrier->heureMurale($jour.' '.$heure);
 
-            if ($taches->greaterThan($instant)) {
-                break;
+                if ($taches->lessThanOrEqualTo($this->maintenant)) {
+                    continue;
+                }
+
+                if ($taches->greaterThan($instant)) {
+                    break 2;
+                }
+
+                $this->poser($taches);
+                $this->executerLesTaches($heure);
             }
-
-            $this->poser($taches);
-            $this->executerLesTaches();
         }
 
         return $this->poser($instant);
@@ -137,12 +165,22 @@ final class HorlogeDuSemis
     /**
      * @throws RuntimeException quand une tâche échoue
      */
-    private function executerLesTaches(): void
+    private function executerLesTaches(string $heure): void
     {
-        foreach (self::TACHES as $tache) {
+        foreach (self::TACHES[$heure] as $tache) {
             if (Artisan::call($tache) !== 0) {
                 throw new RuntimeException("La tâche {$tache} a échoué pendant le semis, le ".self::aParis($this->maintenant).' : '.trim(Artisan::output()));
             }
+        }
+
+        $premierDuMois = str_ends_with(Calendrier::deParis()->jourDe($this->maintenant), '-01');
+
+        if ($premierDuMois && $heure === '00:05') {
+            DB::statement('analyze');
+        }
+
+        if ($premierDuMois && $heure === '06:05' && Artisan::call('app:reverifier-sirene', ['--toutes' => true]) !== 0) {
+            throw new RuntimeException('La revérification mensuelle au répertoire Sirene a échoué pendant le semis, le '.self::aParis($this->maintenant).' : '.trim(Artisan::output()));
         }
     }
 }

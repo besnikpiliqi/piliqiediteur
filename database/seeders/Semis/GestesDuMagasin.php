@@ -32,7 +32,9 @@ use App\Domain\Facturation\Services\ReglementComptant;
 use App\Domain\Fichiers\PieceDeposee;
 use App\Domain\Stock\Actions\CreerInventaireOuvertureAction;
 use App\Domain\Stock\Actions\ValiderInventaireOuvertureAction;
+use App\Domain\Stock\Exceptions\ConfirmationVenteSansStockRequiseException;
 use App\Domain\Stock\Models\InventaireOuverture;
+use App\Domain\Stock\Services\ConfirmationVenteSansStock;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
@@ -152,10 +154,11 @@ final class GestesDuMagasin
      * @param  list<array<string, mixed>>  $lignes  voir ConstructeurLigneDocument
      * @param  list<array{0: ModePaiement, 1: int}>  $partsDonnees  les premières parts, en centimes
      * @param  list<string>  $bonsDAvoir  les numéros des bons d'avoir présentés
+     * @param  bool  $sansStock  une vente au-delà du stock, que la personne autorisée confirme après l'avertissement
      */
-    public function vendreALaCaisse(User $vendeur, Client $client, array $lignes, ModePaiement $dernierMode = ModePaiement::Especes, array $partsDonnees = [], array $bonsDAvoir = []): Facture
+    public function vendreALaCaisse(User $vendeur, Client $client, array $lignes, ModePaiement $dernierMode = ModePaiement::Especes, array $partsDonnees = [], array $bonsDAvoir = [], bool $sansStock = false): Facture
     {
-        return $this->dans(function () use ($vendeur, $client, $lignes, $dernierMode, $partsDonnees, $bonsDAvoir): Facture {
+        return $this->dans(function () use ($vendeur, $client, $lignes, $dernierMode, $partsDonnees, $bonsDAvoir, $sansStock): Facture {
             $totalTtc = app(ConstructeurLigneDocument::class)->apercu($lignes, ContexteDeVente::pour($client, $this->magasin))->totaux['total_ttc'];
             $reste = ApercuDuReglement::aLaCaisse($client, app(CalculateurLigne::class)->enCentiemes($totalTtc), $bonsDAvoir)->resteARepartir;
             $parts = array_map(static fn (array $part): PartDeReglement => new PartDeReglement($part[0], $part[1]), $partsDonnees);
@@ -169,8 +172,35 @@ final class GestesDuMagasin
                 $parts[] = new PartDeReglement($dernierMode, $dernierePart);
             }
 
-            return app(EnregistrerVenteCaisseAction::class)->handle($vendeur, $client, $lignes, new ReglementComptant($parts, $bonsDAvoir), null, self::jeton());
+            $reglement = new ReglementComptant($parts, $bonsDAvoir);
+
+            if (! $sansStock) {
+                return app(EnregistrerVenteCaisseAction::class)->handle($vendeur, $client, $lignes, $reglement, null, self::jeton());
+            }
+
+            try {
+                app(EnregistrerVenteCaisseAction::class)->handle($vendeur, $client, $lignes, $reglement, null, self::jeton());
+            } catch (ConfirmationVenteSansStockRequiseException $avertissement) {
+                return app(EnregistrerVenteCaisseAction::class)->handle($vendeur, $client, $lignes, $reglement, ConfirmationVenteSansStock::de($avertissement->manques), self::jeton());
+            }
+
+            throw new LogicException('La vente sans stock semée n\'a demandé aucune confirmation : le stock suffisait.');
         });
+    }
+
+    /**
+     * Une ligne de vente : le produit de cette référence, ou le service de
+     * ce nom, en cette quantité.
+     *
+     * @return array{produit_id?: int, service_id?: int, quantite: int}
+     */
+    public function ligne(string $referenceOuService, int $quantite): array
+    {
+        $produit = $this->dans(fn (): ?Produit => Produit::query()->where('reference', $referenceOuService)->first());
+
+        return $produit !== null
+            ? ['produit_id' => $produit->id, 'quantite' => $quantite]
+            : ['service_id' => $this->service($referenceOuService)->id, 'quantite' => $quantite];
     }
 
     /**

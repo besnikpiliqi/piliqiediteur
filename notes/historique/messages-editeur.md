@@ -2888,3 +2888,37 @@ donc tu doit creer alors le seed avec ces valeurs pour voir comment ressemble, e
 
 donc tu te base sur ce que declare la societe sur ici ? c'est ca!
 
+## 329. 2026-11-15 14:21 UTC
+
++
+
+## 330. 2026-11-15 14:21 UTC
+
+attend
+
+## 331. 2026-11-15 14:42 UTC
+
+<!-- attach -->
+
+> Ce qu’on saisit : le montant (0 € accepté, jamais négatif) et la période de cette déclaration (un mois si vous déclarez au mois, un trimestre si vous déclarez au trimestre). Le crédit s’ajoute à la période qui suit.
+
+
+
+<!-- attach -->
+
+> Régime obligatoire avant de vendre (lot TVA27). Tant qu’il n’est pas choisi, PILIQI refuse tout ticket, facture, avoir, encaissement et devis numéroté réel, et la base de données le refuse aussi.
+
+> Le message dit au propriétaire, ou à l’administrateur qui peut modifier les paramètres fiscaux, d’aller le choisir, avec le lien.
+
+> Les autres comptes lisent qu’il faut le demander au propriétaire.
+
+> L’« À faire » de la société le rappelle, et la liste d’étapes après l’inscription l’ajoute avant « créer le premier magasin ».
+
+> Le magasin de démonstration reste utilisable.
+
+> Données de démonstration (lot DATEOP en cours). Chaque société qui vend reçoit un régime : au moins une au mensuel, une au trimestriel, une en franchise en base et une avec l’option pour les débits. Seule une société qui n’a encore rien vendu garde un régime vide, pour que vous voyiez ce cas et la ligne de son « À faire ». Le test des données de démonstration vérifiera qu’aucune société qui vend n’a de régime vide.
+
+
+
+quand une societe vient s'inscrit chez piliqi alors il faut afficher un bloc qui demande pour la tva si un credit existe deja sur la societe. donc il faut accepte meme negatif car il peut y avoir deja un credit. et ca doit etre apparu chez la societe et chez le comptable. donc le credit de la tva doit etre conseiller verifier par expert comptable pour ne pas faire des erreurs sur le credit. ET pour regime obligatoire je suis d accord avec toi, donc tu peux le faire 1 et 2
+

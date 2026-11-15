@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 15/11/2026 à 14:17 UTC par pilotage-sync.sh : « Régime de TVA obligatoire avant de vendre (TVA27) et semé (DATEOP) ».
+Mis à jour le 15/11/2026 à 14:44 UTC par pilotage-sync.sh : « Crédit de départ : étape, négatif, vérification du comptable ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -38,6 +38,7 @@ eba4bc85 Relecture du lot ER-PRO
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
+ M CLAUDE.md
  M app/Console/Commands/DiagnostiquerCaisseSecurisee.php
  M bootstrap/app.php
  M database/seeders/DatabaseSeeder.php

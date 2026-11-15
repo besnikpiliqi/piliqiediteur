@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 15/11/2026 à 10:17 UTC par pilotage-sync.sh : « Abréviations modes de paiement ».
+Mis à jour le 15/11/2026 à 10:23 UTC par pilotage-sync.sh : « Point 5 réécrit ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -46,7 +46,6 @@ eba4bc85 Relecture du lot ER-PRO
 Course `wf_ee9b6e6e-908`, étapes commencées (de la plus ancienne à la plus récente) :
 
 ```
-REGLE-B:relecture2
 REGLE-B:correction
 REGLE-B:poussee
 REGLE-B:notes
@@ -71,4 +70,5 @@ REGUL:implementation
 REGUL:implementation-2
 REGUL:relecture1
 REGUL:relecture2
+REGUL:correction
 ```

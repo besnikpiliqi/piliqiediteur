@@ -2704,3 +2704,19 @@ oui
 
 ici tu mets une abreviation pour chaque mode de paiement comme ex carte bancaire tu met "CB" etc car il prend de l ecpace pour rien du tout
 
+## 306. 2026-11-15 10:23 UTC
+
+<!-- attach -->
+
+> (ESP 18,00 € · CB 30,00 €)
+
+
+
+<!-- attach -->
+
+> une ligne grise sous le tableau rappelle les abréviations des modes présents, par exemple « CB : carte bancaire · ESP : espèces ».
+
+
+
+non tu ajoute pas le texte car c 'est comprehensible pour tout le monde. et si il y a plusieur paiments alors vont etre pareile melanger? peut etre c 'est mieux pour la parti des mode de paiement tu fait par ligne par mode de paiment
+

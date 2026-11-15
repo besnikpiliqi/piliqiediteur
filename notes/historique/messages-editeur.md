@@ -2824,3 +2824,9 @@ Un compte dont le mot de passe est encore son identifiant ne s'ouvre que depuis 
 
 @"/root/.claude/uploads/00d7e3b2-c4d1-5536-95c0-3e77e19552bb/44f1b85b-Charges_et_TVA_r_elle.html" dans le model que j'ai choisi il avait un carre vert et pas juste une signe de fleche comme dans le html qui est la !!
 
+## 320. 2026-11-15 11:45 UTC
+
+[2 capture(s) d'écran jointe(s)]
+
+tu vois les menus deroulant ils sont pas compatible les couleur quand il est sombre ou pas. donc acoute moi, il faut que tu fasse dans tout les cas les couleur en sombre ou pas
+

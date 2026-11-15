@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 15/11/2026 à 11:44 UTC par pilotage-sync.sh : « Constat cases Charges : classes absentes ».
+Mis à jour le 15/11/2026 à 11:46 UTC par pilotage-sync.sh : « Menus sombres + inventaire protections ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

@@ -466,3 +466,4 @@
 - 15/11 14:22 UTC — Constat éditeur : régime de TVA vide sur une société qui vend → SEED-TOUT (régimes semés) + TVA27 3 bis (régime obligatoire avant toute opération réelle, D76).
 - 15/11 14:40 UTC — Éditeur : crédit de départ demandé dès l'arrivée, saisi en négatif, vérifié par le comptable → TVA27 point 3 réécrit, maquette G1iRHvTj49FLoEZ5qT5rhe ; accord sur régime obligatoire (1) et semis (2).
 - 15/11 14:48 UTC — Éditeur : démonstration jamais bloquée par les étapes TVA ; régime + réponse au crédit requis pour l'activité réelle → TVA27 point 2 ter.
+- 15/11 16:07 UTC — Point de suivi : PG 16/18 en marche ; DATEOP:implementation-5 (partie 4 finie : semis étendu, 887 s, isolation 0 problème / 222 377 lignes ; reste test du semis, suite PG, commit) ; 31 entrées non commitées sauvegardées ; 9,9 Go libres.

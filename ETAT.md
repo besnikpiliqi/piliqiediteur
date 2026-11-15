@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 15/11/2026 à 15:14 UTC par pilotage-sync.sh : « TVA27 : démonstration jamais bloquée ».
+Mis à jour le 15/11/2026 à 16:06 UTC par pilotage-sync.sh : « Point de suivi 16:07 UTC ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -38,7 +38,9 @@ eba4bc85 Relecture du lot ER-PRO
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
+ M .github/workflows/tests.yml
  M CLAUDE.md
+ M README.md
  M app/Console/Commands/DiagnostiquerCaisseSecurisee.php
  M app/Domain/Tenancy/Models/DemandeInscription.php
  M app/Filament/App/Pages/Auth/InscriptionSociete.php
@@ -49,8 +51,11 @@ eba4bc85 Relecture du lot ER-PRO
  M database/seeders/Semis/GestesDuMagasin.php
  M database/seeders/Semis/HorlogeDuSemis.php
  M database/seeders/Semis/SemisDeDemonstration.php
+ M phpunit.xml
+ M tests/Browser/Parcours/DonneesDeDemonstrationTest.php
  M tests/Feature/CaisseSecurisee/CommandesModuleFiscalTest.php
  M tests/Feature/Calendrier/PlanificateurTest.php
+ M tests/Feature/DatabaseSeederTest.php
 ?? app/Console/Commands/VerifierLIsolation.php
 ?? app/Domain/Tenancy/Isolation/
 ?? database/seeders/Semis/ChargesDesSocietes.php
@@ -58,9 +63,12 @@ eba4bc85 Relecture du lot ER-PRO
 ?? database/seeders/Semis/ComptesDesCas.php
 ?? database/seeders/Semis/DerniersGestes.php
 ?? database/seeders/Semis/DocumentsDesCas.php
+?? database/seeders/Semis/PieceDuSemis.php
 ?? database/seeders/Semis/RequeteDuPoste.php
 ?? database/seeders/Semis/SocietesDesCas.php
+?? tests/Feature/SemisCompletTest.php
 ?? tests/Feature/Tenancy/VerificationDeLIsolationTest.php
+?? tests/SemeSansTransaction.php
 ```
 
 ## Dernière course de la chaîne

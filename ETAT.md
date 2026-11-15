@@ -1,12 +1,13 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 15/11/2026 à 07:23 UTC par pilotage-sync.sh : « CI 8ce8bd4 cartes ».
+Mis à jour le 15/11/2026 à 08:00 UTC par pilotage-sync.sh : « Point de suivi 15/11 08:00 ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
 Tête poussée : `8ce8bd4a`. Commits locaux pas encore poussés :
 
 ```
+220d40b4 Réparation de la CI rouge de 8ce8bd4
 ```
 
 Derniers commits poussés :
@@ -37,15 +38,33 @@ eba4bc85 Relecture du lot ER-PRO
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
- M app/Domain/Charges/Models/Charge.php
- M app/Domain/Charges/Services/ChargesAFaire.php
- M app/Domain/Charges/Services/ChargesDeLaSociete.php
- M app/Domain/Charges/Services/ChiffrageDUneCharge.php
- M app/Domain/Charges/Services/GestesSurLesCharges.php
- M app/Domain/Charges/Services/PiecesDesCharges.php
- M app/Domain/Charges/Support/GardesDesCharges.php
- M app/Filament/PageDesCharges.php
- M tests/Feature/Charges/PiecesDesChargesTest.php
+ M CLAUDE.md
+ M app/Console/Commands/RelancerFacturesImpayees.php
+ M app/Domain/Facturation/Actions/AppliquerAvoirsDisponiblesAction.php
+ M app/Domain/Facturation/Actions/ContrePasserPaiementAction.php
+ M app/Domain/Facturation/Actions/EmettreFactureAction.php
+ M app/Domain/Facturation/Actions/EmettreLaFactureRectificativeAction.php
+ M app/Domain/Facturation/Actions/EnregistrerPaiementAction.php
+ M app/Domain/Facturation/Actions/EnvoyerDocumentAction.php
+ M app/Domain/Facturation/Actions/FaireLAvoirDeRegularisationAction.php
+ M app/Domain/Facturation/Enums/StatutFacture.php
+ M app/Domain/Facturation/Services/ImputationDuCredit.php
+ M app/Domain/Facturation/Services/MentionsFiscales.php
+ M app/Domain/Facturation/Services/RegularisationDUneFacture.php
+ M app/Domain/Tenancy/Actions/ModifierLesParametresDuMagasinAction.php
+ M app/Domain/Tenancy/Enums/ActionAuditee.php
+ M app/Domain/Tenancy/Models/Magasin.php
+ M app/Filament/App/Pages/ParametresRelances.php
+ M app/Filament/App/Resources/AvoirResource.php
+ M app/Filament/App/Resources/FactureResource.php
+ M app/Filament/App/Resources/FactureResource/Pages/ViewFacture.php
+ M app/Filament/Concerns/EnvoieLesDocuments.php
+ M database/migrations/0001_01_01_000000_create_magasins_table.php
+ M tests/Feature/Facturation/RegularisationDUneFactureConcurrenceTest.php
+ M tests/Feature/Facturation/RegularisationDUneFactureTest.php
+ M tests/Feature/Facturation/RelancerFacturesImpayeesTest.php
+ M tests/Feature/Filament/ParametresRelancesTest.php
+ M tests/Unit/matrice-des-decisions.php
 ```
 
 ## Dernière course de la chaîne

@@ -250,3 +250,5 @@ etape3-ajouts.md
 reprises/lot-CHARGES-commits-locaux-complet.patch
 reprises/lot-CHARGES-travail-non-commite-complet.patch
 reprises/cahier-ER-PRO.avant-ci-8ce8bd4.md
+reprises/lot-REGUL-commits-locaux.patch
+reprises/lot-REGUL-travail-non-commite.patch

@@ -1,0 +1,476 @@
+From 220d40b4f201cc7b65da6144a0fd1f8a916fae8d Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Sun, 15 Nov 2026 07:35:57 +0000
+Subject: [PATCH] =?UTF-8?q?R=C3=A9paration=20de=20la=20CI=20rouge=20de=208?=
+ =?UTF-8?q?ce8bd4?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- Analyse statique et seuils (Larastan, 16 erreurs du lot CHARGES),
+  corrigées par de vraies preuves de type : Charge::nature() lit la
+  nature du type de la société sans « ?-> » inutile à gauche de « ?? » ;
+  ChargesAFaire::aValiderParClient() bâtit son tableau client par
+  client, chaque clé et chaque nombre lus par ValeursLues::entier() ;
+  ChargesDeLaSociete::dejaSaisiesCeMois() rend une vraie liste
+  (array_values) ; ChiffrageDUneCharge::chiffrer() ne repasse plus une
+  liste par array_values() et additionne ses totaux en entiers
+  (ValeursLues::entiers()), sans array_sum() ; la clé de la société
+  verrouillée se lit par CleDuModele::de() (GestesSurLesCharges,
+  PiecesDesCharges) ; GardesDesCharges::retirer() déclare sa table
+  literal-string ; PageDesCharges passe l'état de ses fenêtres par
+  ValeursLues::champs(), lit le nom d'un type de la société par
+  ValeursLues::texteOuNul(), l'uuid du magasin par ValeursLues::texte(),
+  la clé de la charge par CleDuModele::de(), et phraseDuMois() rend
+  toujours un texte. Larastan, lancé sur ces seuls fichiers comme le
+  cahier le permet : 0 erreur.
+- Analyse des flux de données (Psalm, PageDesCharges.php:504,
+  TaintedHtml et TaintedTextWithQuotes) : le contenu servi passait par la
+  fonction anonyme de TenantContext::runAsSociete(), qui portait jusqu'à
+  lui l'identifiant de la charge reçu de l'écran.
+  PiecesDesCharges::contenuServable() pose désormais lui-même la société
+  de la pièce pour ses seules écritures (l'analyse et le blocage), quel
+  que soit l'espace qui la demande ; la page l'appelle directement, comme
+  la fiche d'un document le fait pour une pièce du fournisseur, et sert
+  la pièce en pièce jointe avec les seuls en-têtes de
+  EnTetesDesFichiers::fichierRecu(), son nom compris, sans annotation ni
+  exclusion. Psalm (PHP 8.4) sur l'arbre d'avant : les deux chemins ;
+  après : aucun.
+- Test ajouté : PiecesDesChargesTest
+  (test_le_cabinet_lie_telecharge_la_piece_en_piece_jointe_et_son_analyse_s_ecrit_chez_le_client)
+  : la réponse a exactement les en-têtes d'une pièce reçue (pièce jointe,
+  nosniff, bac à sable, sans cache) et le contenu de la pièce ; son
+  analyse due s'écrit dans la société du client ; reconnue plus tard
+  comme une menace, la pièce s'y bloque au nom du collaborateur, jamais
+  au journal du cabinet. Aucun test réécrit ni affaibli.
+- Vérification (décision du 14/11/2026) : tests liés au code 0 sur
+  PostgreSQL (Charges 79, TableauDeBord 52, TableauDeBordDuCabinetTest,
+  PanneauCabinetTest, AccesDeLExpertComptableTest, À faire de la société
+  et du magasin, PlafondsDeRequetesTest) ; en navigateur, ChargesTest (26)
+  et InventaireDesActionsTest ; groupe de concurrence (369) ; pint.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01K3593fBCSfG8EcbWrZryb6
+---
+ app/Domain/Charges/Models/Charge.php          |  2 +-
+ app/Domain/Charges/Services/ChargesAFaire.php | 13 ++--
+ .../Charges/Services/ChargesDeLaSociete.php   |  5 +-
+ .../Charges/Services/ChiffrageDUneCharge.php  | 13 +++-
+ .../Charges/Services/GestesSurLesCharges.php  |  5 +-
+ .../Charges/Services/PiecesDesCharges.php     | 15 +++--
+ .../Charges/Support/GardesDesCharges.php      |  1 +
+ app/Filament/PageDesCharges.php               | 29 +++++----
+ .../Feature/Charges/PiecesDesChargesTest.php  | 65 +++++++++++++++++++
+ 9 files changed, 119 insertions(+), 29 deletions(-)
+
+diff --git a/app/Domain/Charges/Models/Charge.php b/app/Domain/Charges/Models/Charge.php
+index 3547d154..3f35dc56 100644
+--- a/app/Domain/Charges/Models/Charge.php
++++ b/app/Domain/Charges/Models/Charge.php
+@@ -191,7 +191,7 @@ public function cleDuType(): string
+ 
+     public function nature(): NatureDeCharge
+     {
+-        return $this->type?->nature() ?? $this->typeDeLaSociete?->nature ?? NatureDeCharge::Services;
++        return $this->type?->nature() ?? $this->typeDeLaSociete->nature ?? NatureDeCharge::Services;
+     }
+ 
+     public function estValidee(): bool
+diff --git a/app/Domain/Charges/Services/ChargesAFaire.php b/app/Domain/Charges/Services/ChargesAFaire.php
+index 61d79607..558db288 100644
+--- a/app/Domain/Charges/Services/ChargesAFaire.php
++++ b/app/Domain/Charges/Services/ChargesAFaire.php
+@@ -119,15 +119,20 @@ public function aValiderParClient(User $compte, array $clients): array
+ 
+         $ouverts = $this->cabinets->idsDesMagasinsOuverts($compte);
+ 
+-        return Charge::query()->withoutGlobalScope(SocieteScope::class)
++        $nombres = [];
++        $lus = Charge::query()->withoutGlobalScope(SocieteScope::class)
+             ->whereIn('charges.societe_id', $accordes)
+             ->whereIn('charges.etat', EtatDeLaCharge::attendantLaValidation())
+             ->where(fn (Builder $requete): Builder => $requete->whereNull('charges.magasin_id')->orWhereIn('charges.magasin_id', $ouverts))
+             ->groupBy('charges.societe_id')
+             ->toBase()
+             ->selectRaw('charges.societe_id, COUNT(*) AS nombre')
+-            ->pluck('nombre', 'societe_id')
+-            ->map(fn (mixed $nombre): int => ValeursLues::entier($nombre))
+-            ->all();
++            ->pluck('nombre', 'societe_id');
++
++        foreach ($lus as $client => $nombre) {
++            $nombres[ValeursLues::entier($client)] = ValeursLues::entier($nombre);
++        }
++
++        return $nombres;
+     }
+ }
+diff --git a/app/Domain/Charges/Services/ChargesDeLaSociete.php b/app/Domain/Charges/Services/ChargesDeLaSociete.php
+index 17d22b56..d5fd2753 100644
+--- a/app/Domain/Charges/Services/ChargesDeLaSociete.php
++++ b/app/Domain/Charges/Services/ChargesDeLaSociete.php
+@@ -159,7 +159,7 @@ public function dejaSaisiesCeMois(AccesAuxCharges $acces, string $cleDuType, str
+             return [];
+         }
+ 
+-        return $this->visibles($acces)
++        return array_values($this->visibles($acces)
+             ->where('charges.mois_tva', $mois)
+             ->when($type !== null, fn (Builder $requete): Builder => $requete->where('charges.type', $type?->value))
+             ->when($propre !== null, fn (Builder $requete): Builder => $requete->where('charges.type_de_la_societe_id', $propre?->getKey()))
+@@ -167,8 +167,7 @@ public function dejaSaisiesCeMois(AccesAuxCharges $acces, string $cleDuType, str
+             ->orderBy('charges.id')
+             ->get(['charges.id', 'charges.etat', 'charges.fournisseur', 'charges.numero_piece'])
+             ->map(fn (Charge $charge): array => ['etat' => $charge->etat, 'fournisseur' => $charge->fournisseur, 'numero_piece' => $charge->numero_piece])
+-            ->values()
+-            ->all();
++            ->all());
+     }
+ 
+     /**
+diff --git a/app/Domain/Charges/Services/ChiffrageDUneCharge.php b/app/Domain/Charges/Services/ChiffrageDUneCharge.php
+index 9f326f25..ab889cbc 100644
+--- a/app/Domain/Charges/Services/ChiffrageDUneCharge.php
++++ b/app/Domain/Charges/Services/ChiffrageDUneCharge.php
+@@ -6,6 +6,7 @@
+ use App\Domain\Charges\Enums\TypeDeCharge;
+ use App\Domain\Charges\Exceptions\ConfirmationRequiseException;
+ use App\Domain\Facturation\Services\CalculateurLigne;
++use App\Domain\Tenancy\Support\ValeursLues;
+ use InvalidArgumentException;
+ 
+ /**
+@@ -68,7 +69,7 @@ public function chiffrer(array $lignes, ?TypeDeCharge $type, bool $vehiculeUtili
+         $chiffrees = [];
+         $ecarts = [];
+ 
+-        foreach (array_values($lignes) as $rang => $ligne) {
++        foreach ($lignes as $rang => $ligne) {
+             $calculee = self::tvaCalculee($ligne['ht'], $ligne['taux']);
+             $tva = $ligne['tva'] ?? $calculee;
+             $ttcCalcule = self::ttcCalcule($ligne['ht'], $tva, $horsDeFrance);
+@@ -94,7 +95,15 @@ public function chiffrer(array $lignes, ?TypeDeCharge $type, bool $vehiculeUtili
+             throw new ConfirmationRequiseException(ConfirmationRequiseException::ECARTS, implode(' ', [...$ecarts, ConfirmationRequiseException::CONSIGNE_ECARTS]));
+         }
+ 
+-        $total = fn (string $champ): int => array_sum(array_column($chiffrees, $champ));
++        $total = static function (string $champ) use ($chiffrees): int {
++            $somme = 0;
++
++            foreach (ValeursLues::entiers(array_column($chiffrees, $champ)) as $montant) {
++                $somme += $montant;
++            }
++
++            return $somme;
++        };
+ 
+         return [
+             'lignes' => $chiffrees,
+diff --git a/app/Domain/Charges/Services/GestesSurLesCharges.php b/app/Domain/Charges/Services/GestesSurLesCharges.php
+index 8add8340..05ea77ae 100644
+--- a/app/Domain/Charges/Services/GestesSurLesCharges.php
++++ b/app/Domain/Charges/Services/GestesSurLesCharges.php
+@@ -8,6 +8,7 @@
+ use App\Domain\Tenancy\Models\Societe;
+ use App\Domain\Tenancy\Services\ActionsUniques;
+ use App\Domain\Tenancy\Services\TenantContext;
++use App\Domain\Tenancy\Support\CleDuModele;
+ use App\Models\User;
+ use Closure;
+ use Illuminate\Auth\Access\AuthorizationException;
+@@ -72,7 +73,7 @@ public function executer(User $auteur, Societe $societe, string $action, ?string
+             $auteur,
+             [...$parametres, 'societe' => $societe->uuid],
+             function () use ($auteur, $societe): void {
+-                Societe::verrouillerAvantSonJournalDAudit($societe->getKey());
++                Societe::verrouillerAvantSonJournalDAudit(CleDuModele::de($societe));
+                 User::query()->whereKey($auteur->getKey())->lock('for no key update')->first();
+             },
+             fn (): ?Charge => $geste($this->accesDeLAuteurRelu($auteur, $societe)),
+@@ -97,7 +98,7 @@ function () use ($auteur, $societe): void {
+     public function executerSansJeton(User $auteur, Societe $societe, Closure $geste): mixed
+     {
+         return $this->contexte->runAsSociete($societe, fn (): mixed => DB::transaction(function () use ($auteur, $societe, $geste): mixed {
+-            Societe::verrouillerAvantSonJournalDAudit($societe->getKey());
++            Societe::verrouillerAvantSonJournalDAudit(CleDuModele::de($societe));
+             User::query()->whereKey($auteur->getKey())->lock('for no key update')->first();
+ 
+             return $geste($this->accesDeLAuteurRelu($auteur, $societe));
+diff --git a/app/Domain/Charges/Services/PiecesDesCharges.php b/app/Domain/Charges/Services/PiecesDesCharges.php
+index 605740f0..a5e4afe1 100644
+--- a/app/Domain/Charges/Services/PiecesDesCharges.php
++++ b/app/Domain/Charges/Services/PiecesDesCharges.php
+@@ -18,6 +18,7 @@
+ use App\Domain\Tenancy\Notifications\AvisDeLAntivirus;
+ use App\Domain\Tenancy\Services\JournalAudit;
+ use App\Domain\Tenancy\Services\TenantContext;
++use App\Domain\Tenancy\Support\CleDuModele;
+ use App\Domain\Tenancy\Support\ValeurRequise;
+ use App\Integrations\Antivirus\AntivirusInjoignableException;
+ use App\Models\User;
+@@ -144,7 +145,11 @@ public function effacer(Charge $charge): void
+      * d'une pièce bloquée ; analysé de nouveau quand sa dernière analyse
+      * date de plus de 24 heures (voir RevueAntivirus). Reconnue alors comme
+      * une menace, la pièce est bloquée, au nom de ce compte, et le
+-     * propriétaire de la société en est prévenu.
++     * propriétaire de la société en est prévenu. L'analyse et le blocage
++     * s'écrivent dans le contexte de la société de la pièce, que ce service
++     * pose lui-même, quel que soit l'espace qui la demande (celui d'un
++     * cabinet lié n'est pas la société de la charge) ; le contenu se lit
++     * hors de ce contexte, sur le disque des pièces.
+      *
+      * @throws PieceBloqueeException quand la pièce est bloquée
+      * @throws AntivirusInjoignableException quand l'antivirus ne répond pas pour une analyse due
+@@ -164,13 +169,15 @@ public function contenuServable(User $compte, PieceDeCharge $piece): string
+         $resultat = $this->revue->analyser($contenu);
+         $maintenant = CarbonImmutable::now();
+ 
++        $societe = Societe::query()->findOrFail($piece->societe_id);
++
+         if ($resultat->estSain()) {
+-            PieceDeCharge::query()->whereKey($piece->getKey())->where('analysee_le', '<', Instant::enBase($maintenant))->update(['analysee_le' => Instant::enBase($maintenant)]);
++            app(TenantContext::class)->runAsSociete($societe, fn (): int => PieceDeCharge::query()->whereKey($piece->getKey())->where('analysee_le', '<', Instant::enBase($maintenant))->update(['analysee_le' => Instant::enBase($maintenant)]));
+ 
+             return $contenu;
+         }
+ 
+-        $this->bloquer($compte, $piece, (string) $resultat->menace, $maintenant);
++        app(TenantContext::class)->runAsSociete($societe, fn () => $this->bloquer($compte, $piece, (string) $resultat->menace, $maintenant));
+ 
+         throw new PieceBloqueeException;
+     }
+@@ -223,7 +230,7 @@ private function bloquer(User $compte, PieceDeCharge $piece, string $menace, Car
+     private function inscrireLeRefus(User $auteur, Societe $societe, ?Charge $charge, FichierRefuseException $refus): void
+     {
+         app(TenantContext::class)->runAsSociete($societe, fn () => DB::transaction(function () use ($auteur, $societe, $charge, $refus): void {
+-            Societe::verrouillerAvantSonJournalDAudit($societe->getKey());
++            Societe::verrouillerAvantSonJournalDAudit(CleDuModele::de($societe));
+             $this->journalAudit->inscrire(ActionAuditee::PieceDeChargeRefusee, $auteur, $charge?->magasin, null, [
+                 'charge' => $charge === null ? null : ChargesDeLaSociete::designation($charge),
+                 ...$refus->valeursAuditees(),
+diff --git a/app/Domain/Charges/Support/GardesDesCharges.php b/app/Domain/Charges/Support/GardesDesCharges.php
+index e4b96886..6cb61312 100644
+--- a/app/Domain/Charges/Support/GardesDesCharges.php
++++ b/app/Domain/Charges/Support/GardesDesCharges.php
+@@ -210,6 +210,7 @@ private static function fonction(string $nom, string $corps): void
+     /**
+      * Retire les déclencheurs de cette table, puis leurs fonctions.
+      *
++     * @param  literal-string  $table
+      * @param  list<literal-string>  $gardes
+      */
+     private static function retirer(string $table, array $gardes): void
+diff --git a/app/Filament/PageDesCharges.php b/app/Filament/PageDesCharges.php
+index a42a4994..071de52a 100644
+--- a/app/Filament/PageDesCharges.php
++++ b/app/Filament/PageDesCharges.php
+@@ -47,7 +47,6 @@
+ use App\Domain\Tenancy\Models\Societe;
+ use App\Domain\Tenancy\Scopes\MagasinScope;
+ use App\Domain\Tenancy\Scopes\SocieteScope;
+-use App\Domain\Tenancy\Services\TenantContext;
+ use App\Domain\Tenancy\Support\CleDuModele;
+ use App\Domain\Tenancy\Support\CompteConnecte;
+ use App\Domain\Tenancy\Support\ValeursLues;
+@@ -441,7 +440,7 @@ public function table(Table $table): Table
+             ->query(fn (): Builder => $this->requeteDeLaListe())
+             ->columns([
+                 TextColumn::make('mois_tva')->label('Mois de TVA')->formatStateUsing(fn (string $state): string => ucfirst(self::nomDuMois($state))),
+-                TextColumn::make('type')->label('Type')->state(fn (Charge $record): string => $record->type?->getLabel() ?? (string) ($record->getAttributes()['type_nom'] ?? '')),
++                TextColumn::make('type')->label('Type')->state(fn (Charge $record): string => $record->type?->getLabel() ?? ValeursLues::texteOuNul($record->getAttributes()['type_nom'] ?? null) ?? ''),
+                 TextColumn::make('magasin_nom')->label('Magasin')->placeholder(self::TOUTE_LA_SOCIETE)->visible($this->ecran !== self::MAGASIN),
+                 TextColumn::make('fournisseur')->label('Fournisseur')->placeholder('—'),
+                 TextColumn::make('numero_piece')->label('N° de la pièce')->placeholder('—'),
+@@ -477,8 +476,12 @@ public function table(Table $table): Table
+ 
+     /**
+      * La pièce de cette charge, servie en pièce jointe, jamais affichée
+-     * dans la page (comme les pièces du fournisseur) ; refusée quand elle
+-     * est bloquée par l'antivirus.
++     * dans la page (comme les pièces du fournisseur), avec les seuls
++     * en-têtes de toute pièce reçue (EnTetesDesFichiers::fichierRecu(), son
++     * nom en pièce jointe compris) ; refusée quand elle est bloquée par
++     * l'antivirus. PiecesDesCharges::contenuServable() pose lui-même la
++     * société de la charge pour l'analyse et le blocage, même depuis
++     * l'espace d'un cabinet lié.
+      */
+     public function telechargerLaPiece(string $charge): ?StreamedResponse
+     {
+@@ -491,7 +494,7 @@ public function telechargerLaPiece(string $charge): ?StreamedResponse
+         }
+ 
+         try {
+-            $contenu = app(TenantContext::class)->runAsSociete($this->acces()->societe, fn (): string => app(PiecesDesCharges::class)->contenuServable(CompteConnecte::exiger(), $piece));
++            $contenu = app(PiecesDesCharges::class)->contenuServable(CompteConnecte::exiger(), $piece);
+         } catch (PieceBloqueeException $bloquee) {
+             return $this->refuserLeTelechargement($bloquee->getMessage());
+         } catch (AntivirusInjoignableException $injoignable) {
+@@ -502,7 +505,7 @@ public function telechargerLaPiece(string $charge): ?StreamedResponse
+ 
+         return response()->streamDownload(function () use ($contenu): void {
+             echo $contenu;
+-        }, $piece->nom, EnTetesDesFichiers::fichierRecu($piece->nom, $piece->type_mime));
++        }, null, EnTetesDesFichiers::fichierRecu($piece->nom, $piece->type_mime));
+     }
+ 
+     /**
+@@ -574,7 +577,7 @@ private function ajouterUneCharge(): Action
+             })
+             ->visible(fn (): bool => ! GestesSurLesCharges::touchePlusASesCharges($this->acces()->societe))
+             ->action(function (array $data): void {
+-                $this->executerAvecConfirmation($data, function (SaisieDeCharge $saisie, array $data): void {
++                $this->executerAvecConfirmation(ValeursLues::champs($data), function (SaisieDeCharge $saisie, array $data): void {
+                     app(DeposerUneChargeAction::class)->handle(CompteConnecte::exiger(), $this->acces()->societe, $saisie, self::pieceDeposee($data), ValeursLues::texteOuNul($data['jeton'] ?? null));
+                     Notification::make()->title('Charge enregistrée.')->success()->send();
+                 });
+@@ -597,7 +600,7 @@ private function ecrireLesChiffres(): Action
+             })
+             ->visible(fn (Charge $record): bool => ! $record->estValidee() && ! GestesSurLesCharges::touchePlusASesCharges($this->acces()->societe))
+             ->action(function (Charge $record, array $data): void {
+-                $this->executerAvecConfirmation($data, function (SaisieDeCharge $saisie, array $data) use ($record): void {
++                $this->executerAvecConfirmation(ValeursLues::champs($data), function (SaisieDeCharge $saisie, array $data) use ($record): void {
+                     app(SaisirUneChargeAction::class)->handle(CompteConnecte::exiger(), $this->acces()->societe, (string) $record->uuid, $saisie, self::pieceDeposee($data), ValeursLues::texteOuNul($data['jeton'] ?? null));
+                     Notification::make()->title('Chiffres enregistrés.')->success()->send();
+                 });
+@@ -617,7 +620,7 @@ private function corriger(): Action
+             ->modalSubmitActionLabel('Corriger')
+             ->visible(fn (Charge $record): bool => $record->estValidee() && $this->acces()->valide() && ! GestesSurLesCharges::touchePlusASesCharges($this->acces()->societe))
+             ->action(function (Charge $record, array $data): void {
+-                $this->executerAvecConfirmation($data, function (SaisieDeCharge $saisie, array $data) use ($record): void {
++                $this->executerAvecConfirmation(ValeursLues::champs($data), function (SaisieDeCharge $saisie, array $data) use ($record): void {
+                     app(CorrigerUneChargeAction::class)->handle(CompteConnecte::exiger(), $this->acces()->societe, (string) $record->uuid, $saisie, ValeursLues::texte($data['motif'] ?? ''), ValeursLues::texteOuNul($data['jeton'] ?? null));
+                     Notification::make()->title('Charge corrigée.')->success()->send();
+                 });
+@@ -838,7 +841,7 @@ private function champsDeLaCharge(bool $avecLaPiece): array
+                 DatePicker::make('date_paiement')->label('Date de paiement')->native()->live()
+                     ->afterStateUpdated(fn (Get $get, Set $set, mixed $old) => $this->suivreLeMois($get, $set, $this->moisPropose($get('type'), $get('date_piece'), $old))),
+                 TextInput::make('mois_tva')->label($acces->valide() ? 'Mois de TVA' : 'Mois de TVA proposé')->type('month')->live()
+-                    ->helperText(fn (Get $get): ?string => $this->phraseDuMois($get))
++                    ->helperText(fn (Get $get): string => $this->phraseDuMois($get))
+                     ->disabled(! $acces->valide()),
+                 Select::make('magasin')->label('Magasin concerné')->options(fn (): array => $this->magasinsDeLaSaisie())->selectablePlaceholder(false)
+                     ->required($this->ecran === self::MAGASIN || ! $acces->chargesDeLaSociete),
+@@ -941,7 +944,7 @@ private function executerAvecConfirmation(array $data, \Closure $geste): void
+      * La phrase grise du mois de TVA : « à confirmer au paiement » pour une
+      * charge de services sans date de paiement.
+      */
+-    private function phraseDuMois(Get $get): ?string
++    private function phraseDuMois(Get $get): string
+     {
+         $date = self::saisi($get('date_piece'));
+         $type = self::saisi($get('type'));
+@@ -972,7 +975,7 @@ private function avertissementDesDoublons(Get $get, ?Charge $record): ?HtmlStrin
+         $mois = self::saisi($get('mois_tva')) ?? PropositionsDeTva::moisDeTva($this->natureDuType($type), $date, self::saisi($get('date_paiement')));
+ 
+         try {
+-            $deja = app(ChargesDeLaSociete::class)->dejaSaisiesCeMois($this->acces(), $type, $mois, $record?->getKey());
++            $deja = app(ChargesDeLaSociete::class)->dejaSaisiesCeMois($this->acces(), $type, $mois, $record === null ? null : CleDuModele::de($record));
+         } catch (InvalidArgumentException) {
+             return null;
+         }
+@@ -1165,7 +1168,7 @@ private function donneesDe(Charge $charge): array
+             'date_piece' => $charge->date_piece,
+             'date_paiement' => $charge->date_paiement,
+             'mois_tva' => $charge->mois_tva,
+-            'magasin' => $charge->magasin_id === null ? '' : (string) Magasin::query()->whereKey($charge->magasin_id)->where('societe_id', $charge->societe_id)->value('uuid'),
++            'magasin' => $charge->magasin_id === null ? '' : ValeursLues::texte(Magasin::query()->whereKey($charge->magasin_id)->where('societe_id', $charge->societe_id)->value('uuid')),
+             'fournisseur_hors_france' => $charge->fournisseur_hors_france,
+             'vehicule_utilitaire' => (bool) $charge->vehicule_utilitaire,
+             'note' => $charge->note,
+diff --git a/tests/Feature/Charges/PiecesDesChargesTest.php b/tests/Feature/Charges/PiecesDesChargesTest.php
+index ad223acc..eefe424d 100644
+--- a/tests/Feature/Charges/PiecesDesChargesTest.php
++++ b/tests/Feature/Charges/PiecesDesChargesTest.php
+@@ -2,10 +2,12 @@
+ 
+ namespace Tests\Feature\Charges;
+ 
++use App\Domain\Cabinets\Models\LienCabinet;
+ use App\Domain\Charges\Actions\DeposerUneChargeAction;
+ use App\Domain\Charges\Models\Charge;
+ use App\Domain\Charges\Models\PieceDeCharge;
+ use App\Domain\Charges\Services\PiecesDesCharges;
++use App\Domain\Fichiers\EnTetesDesFichiers;
+ use App\Domain\Fichiers\Enums\RaisonDuRefus;
+ use App\Domain\Fichiers\Exceptions\FichierRefuseException;
+ use App\Domain\Fichiers\Exceptions\PieceBloqueeException;
+@@ -24,6 +26,7 @@
+ use Illuminate\Support\Facades\Notification;
+ use Illuminate\Support\Facades\Storage;
+ use Livewire\Livewire;
++use Symfony\Component\HttpFoundation\StreamedResponse;
+ use Tests\Fixtures\FichiersDeTest;
+ use Tests\TestCase;
+ 
+@@ -160,6 +163,68 @@ public function description(): string
+         $this->assertThrows(fn () => app(TenantContext::class)->runAsSociete($this->societe, fn (): string => app(PiecesDesCharges::class)->contenuServable($this->proprietaire, $bloquee)), PieceBloqueeException::class);
+     }
+ 
++    /**
++     * Le collaborateur du cabinet lié télécharge, depuis l'espace du
++     * cabinet, la pièce d'une charge du client : en pièce jointe, avec les
++     * seuls en-têtes de toute pièce reçue (EnTetesDesFichiers). Son analyse,
++     * due après 24 heures, s'écrit dans la société du client ; reconnue
++     * plus tard comme une menace, la pièce s'y bloque, au nom du
++     * collaborateur, jamais au journal du cabinet : le service pose lui-même
++     * la société de la pièce.
++     */
++    public function test_le_cabinet_lie_telecharge_la_piece_en_piece_jointe_et_son_analyse_s_ecrit_chez_le_client(): void
++    {
++        $charge = $this->deposer($this->proprietaire, $this->societe);
++        $piece = PieceDeCharge::query()->withoutGlobalScopes()->where('charge_id', $charge->getKey())->sole();
++        $collaborateur = $this->collaborateurDuCabinetLie($this->lyon);
++        $cabinet = $collaborateur->societe()->firstOrFail();
++        $lien = LienCabinet::query()->withoutGlobalScopes()->where('societe_id', $this->societe->getKey())->sole();
++        $this->travelTo(self::aParis('2026-05-21 10:00:01'));
++        $this->dansLEspaceDuCabinet($cabinet, $collaborateur);
++
++        $reponse = Livewire::test(PageDesCharges::class, ['ecran' => PageDesCharges::CABINET, 'lien' => (string) $lien->uuid])
++            ->instance()
++            ->telechargerLaPiece((string) $charge->uuid);
++
++        $this->assertInstanceOf(StreamedResponse::class, $reponse);
++        $this->assertSame(array_keys(EnTetesDesFichiers::fichierRecu('quittance.pdf', 'application/pdf')), ['Content-Type', 'Content-Disposition', 'X-Content-Type-Options', 'Content-Security-Policy', 'Cache-Control', 'Cross-Origin-Resource-Policy']);
++        $this->assertSame([
++            'application/pdf',
++            'attachment; filename=quittance.pdf',
++            'nosniff',
++            "sandbox; default-src 'none'",
++            'no-store, private',
++            'same-origin',
++        ], array_map(fn (string $entete): ?string => $reponse->headers->get($entete), array_keys(EnTetesDesFichiers::fichierRecu('quittance.pdf', 'application/pdf'))), 'La pièce part comme toute pièce reçue : en pièce jointe, dans un bac à sable, jamais gardée en cache.');
++        ob_start();
++        $reponse->sendContent();
++        $this->assertSame(FichiersDeTest::pdf('Quittance de loyer'), ob_get_clean());
++        $this->assertMemeInstant(self::aParis('2026-05-21 10:00:01'), PieceDeCharge::query()->withoutGlobalScopes()->findOrFail($piece->getKey())->analysee_le);
++
++        $this->app->instance(Antivirus::class, new class implements Antivirus
++        {
++            public function analyser(string $contenu): ResultatDeLAntivirus
++            {
++                return ResultatDeLAntivirus::menace('Pdf.Exploit.Nouveau');
++            }
++
++            public function description(): string
++            {
++                return 'antivirus des tests';
++            }
++        });
++        $this->travelTo(self::aParis('2026-05-22 10:00:02'));
++
++        Livewire::test(PageDesCharges::class, ['ecran' => PageDesCharges::CABINET, 'lien' => (string) $lien->uuid])
++            ->callTableAction('voirLaPiece', $charge)
++            ->assertNotified('Cette pièce ne se télécharge pas')
++            ->assertNoFileDownloaded();
++
++        $this->assertNotNull(PieceDeCharge::query()->withoutGlobalScopes()->findOrFail($piece->getKey())->bloquee_le);
++        $this->assertSame([$collaborateur->id], array_map(fn ($entree): ?int => $entree->auteur_id, $this->entreesDAudit($this->societe, ActionAuditee::PieceDeChargeBloquee)));
++        $this->assertSame([], $this->entreesDAudit($cabinet, ActionAuditee::PieceDeChargeBloquee));
++    }
++
+     private function deposerLaPiece(PieceDeposee $piece): Charge
+     {
+         app(TenantContext::class)->clear();
+-- 
+2.43.0
+

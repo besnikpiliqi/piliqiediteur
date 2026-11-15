@@ -2846,3 +2846,9 @@ E3, état et montant, les trois parties, oui mais juste "Les pièces en ZIP par 
 
 quand on telecharge alors il se met pas à jour l 'etat donc il met pas le lien automatiquement pour telecharger sauf si recharge la page
 
+## 324. 2026-11-15 13:55 UTC
+
+[1 capture(s) d'écran jointe(s)]
+
+sur "TVA à payer 	TVA à payer (estimation)" on vois les tva sur deux mois, mais j 'ai une question: alors quand c'est negatif la tva alors qu est ce qui se passe avec la tva negatif ? car normalement la tva negatif passe sur prochan mois, donc se cumule. le tva collecté - tva acheté - la tva des charges etc etc  = resultat peut tombre "-" et quand c'est "-" alors il passer pour le prochain mois pour apliquee la tva "-" pour deduire du prochain fois. je crois que tu dois savoir ca dans les normes des tva et je sais pas si t as prevu ca ou pas encore ? mais si non montre moi comment tu vas faire
+

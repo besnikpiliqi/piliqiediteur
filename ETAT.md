@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 15/11/2026 à 12:46 UTC par pilotage-sync.sh : « Constat téléchargements non rafraîchis ».
+Mis à jour le 15/11/2026 à 13:56 UTC par pilotage-sync.sh : « Maquette du crédit de TVA reporté, en attente du choix ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -40,9 +40,19 @@ eba4bc85 Relecture du lot ER-PRO
 ```
  M app/Console/Commands/DiagnostiquerCaisseSecurisee.php
  M bootstrap/app.php
+ M database/seeders/DatabaseSeeder.php
+ M database/seeders/Semis/ActiviteDesMagasins.php
+ M database/seeders/Semis/ComptesSemes.php
+ M database/seeders/Semis/GestesDuMagasin.php
+ M database/seeders/Semis/HorlogeDuSemis.php
+ M database/seeders/Semis/SemisDeDemonstration.php
  M tests/Feature/CaisseSecurisee/CommandesModuleFiscalTest.php
+ M tests/Feature/Calendrier/PlanificateurTest.php
 ?? app/Console/Commands/VerifierLIsolation.php
 ?? app/Domain/Tenancy/Isolation/
+?? database/seeders/Semis/ChargesDesSocietes.php
+?? database/seeders/Semis/ComptesDesCas.php
+?? database/seeders/Semis/DocumentsDesCas.php
 ?? tests/Feature/Tenancy/VerificationDeLIsolationTest.php
 ```
 
@@ -51,7 +61,6 @@ eba4bc85 Relecture du lot ER-PRO
 Course `wf_ee9b6e6e-908`, étapes commencées (de la plus ancienne à la plus récente) :
 
 ```
-GRAPH:implementation-3
 GRAPH:implementation-4
 GRAPH:relecture1
 GRAPH:relecture2
@@ -76,4 +85,5 @@ REGUL:notes
 DATEOP:implementation
 DATEOP:implementation-2
 DATEOP:implementation-3
+DATEOP:implementation-4
 ```

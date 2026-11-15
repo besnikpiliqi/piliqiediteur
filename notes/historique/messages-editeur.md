@@ -2882,3 +2882,9 @@ mon choix est K2
 
 donc tu doit creer alors le seed avec ces valeurs pour voir comment ressemble, et je veux pas que je te dise à chaque fois pour le seed car tu sais deja que je veux tout voir, tout les cas possibles qui peuvent arriver, donc il faut imagener tout avec des vrais donnees, donc on laisse rien à l inconnu
 
+## 328. 2026-11-15 14:17 UTC
+
+[1 capture(s) d'écran jointe(s)]
+
+donc tu te base sur ce que declare la societe sur ici ? c'est ca!
+

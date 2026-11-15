@@ -463,3 +463,4 @@
 - 15/11 14:06 UTC — Point de suivi : PG 16/18 en marche ; DATEOP:implementation-4 (SEED-TOUT C, semis 400 jours vérifié sans faute) ; commit local 93939942 (réparation CI b6015883, non poussé) ; CI b6015883 : 6 tâches de tests vertes, analyse statique rouge seule ; sauvegarde arbre b3f1d805 ; 11 Go libres ; onglet pro inchangé depuis rev 1212, aucun commentaire.
 - 15/11 14:12 UTC — Éditeur : K2 choisi → lot TVA27 mis à jour (crédit de départ saisi dès ce lot).
 - 15/11 14:25 UTC — Règle permanente de l'éditeur : semer tous les cas, sans qu'il le demande → cahier SEED-TOUT (point 6 précisé, DATEOP le lit) + section Semis du lot TVA27.
+- 15/11 14:22 UTC — Constat éditeur : régime de TVA vide sur une société qui vend → SEED-TOUT (régimes semés) + TVA27 3 bis (régime obligatoire avant toute opération réelle, D76).

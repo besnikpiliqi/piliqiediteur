@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 15/11/2026 à 01:32 UTC par pilotage-sync.sh : « CI 743f9bc : test des cartes confié à CHARGES ».
+Mis à jour le 15/11/2026 à 01:56 UTC par pilotage-sync.sh : « Point de suivi 02:00 : CHARGES partie 2 ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -59,7 +59,16 @@ eba4bc85 Relecture du lot ER-PRO
  M database/migrations/0001_01_00_000000_create_societes_table.php
  M resources/views/filament/graphiques-du-panneau.blade.php
  M resources/views/filament/grille-des-graphiques.blade.php
+ M tests/Feature/Authorization/AutorisationsDesRolesTest.php
+ M tests/Feature/Authorization/AutorisationsSelonLeTypeTest.php
+ M tests/Feature/Authorization/ControleDesDroitsTest.php
+ M tests/Feature/Authorization/DroitsDuResponsableTest.php
+ M tests/Feature/Authorization/GardesDesDroitsEnBaseTest.php
+ M tests/Feature/Authorization/ProprietaireSansVenteTest.php
+ M tests/Feature/Societe/AdministrateursTest.php
+ M tests/Feature/Societe/AutorisationsDesMembresTest.php
  M tests/Feature/TableauDeBord/QuiVoitLesGraphiquesTest.php
+ M tests/Feature/TableauDeBord/SeriesDesGraphiquesTest.php
  M tests/Feature/Tenancy/HistoriqueAuNomFigeTest.php
  M tests/Feature/Tenancy/IsolationDesSocietesTest.php
  M tests/Unit/matrice-des-decisions.php
@@ -79,7 +88,6 @@ eba4bc85 Relecture du lot ER-PRO
 Course `wf_ee9b6e6e-908`, étapes commencées (de la plus ancienne à la plus récente) :
 
 ```
-MAT-PRO:notes
 DEMO-V:implementation
 DEMO-V:implementation-2
 DEMO-V:implementation-3
@@ -104,4 +112,5 @@ GRAPH:correction
 GRAPH:poussee
 GRAPH:notes
 CHARGES:implementation
+CHARGES:implementation-2
 ```

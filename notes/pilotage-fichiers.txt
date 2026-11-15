@@ -247,3 +247,5 @@ reprises/lot-REGLE-B-commits-locaux-complet.patch
 reprises/lot-GRAPH-commits-locaux-complet.patch
 reprises/lot-GRAPH-travail-non-commite-complet.patch
 etape3-ajouts.md
+reprises/lot-CHARGES-commits-locaux-complet.patch
+reprises/lot-CHARGES-travail-non-commite-complet.patch

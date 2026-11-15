@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 15/11/2026 à 18:08 UTC par pilotage-sync.sh : « Point de suivi 18:08 UTC ».
+Mis à jour le 15/11/2026 à 19:50 UTC par pilotage-sync.sh : « Directive : copie de démonstration par type, changement de rôle, lien unique ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -54,10 +54,12 @@ eba4bc85 Relecture du lot ER-PRO
  M database/seeders/Semis/SemisDeDemonstration.php
  M phpunit.xml
  M tests/Browser/Parcours/DonneesDeDemonstrationTest.php
+ M tests/Browser/inventaire-des-actions.php
  M tests/Feature/CaisseSecurisee/CommandesModuleFiscalTest.php
  M tests/Feature/Calendrier/PlanificateurTest.php
  M tests/Feature/DatabaseSeederTest.php
  M tests/Feature/Facturation/TransmissionPdpTest.php
+ M tests/Unit/matrice-des-decisions.php
 ?? app/Console/Commands/VerifierLIsolation.php
 ?? app/Domain/Tenancy/Isolation/
 ?? database/seeders/Semis/ChargesDesSocietes.php

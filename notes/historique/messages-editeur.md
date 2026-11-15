@@ -2992,3 +2992,7 @@ j 'ia une autre idée. chaque compte doit avoir un compte demo dans un autre bas
 
 donc le lien demo.piliqi.com par exemple
 
+## 338. 2026-11-15 19:49 UTC
+
+Il faut creer un compte société fictive identique pour chaque type et après la société utilise comme de vrais. Donc il doit pouvoir passer en tant que propriétaire, administrateur, responsable, vendeur etc pour voir comment ça marche dans tous les cas. Il faut avoir l'acces par le lien unique chiffré qui se crée uniquement pour le magasin et donc pour accéder alors pas besoin d'être connecté sur le compte reel mais pour avoir le lien il faut se connecter et/ou recevoir le lien par mail après confirmation de mail pour son compte. Donc aller voir sur ce lien sans connecter car le lien est chiffré et personne peut deviner. Dit moi tu pense quoi et tes solutions et idée
+

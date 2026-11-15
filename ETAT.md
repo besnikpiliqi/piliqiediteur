@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 15/11/2026 à 00:38 UTC par pilotage-sync.sh : « Après le lot GRAPH ».
+Mis à jour le 15/11/2026 à 00:40 UTC par pilotage-sync.sh : « GRAPH poussé, CI analyse rouge confiée à CHARGES ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -44,7 +44,6 @@ eba4bc85 Relecture du lot ER-PRO
 Course `wf_ee9b6e6e-908`, étapes commencées (de la plus ancienne à la plus récente) :
 
 ```
-MAT-PRO:poussee
 MAT-PRO:notes
 DEMO-V:implementation
 DEMO-V:implementation-2
@@ -69,4 +68,5 @@ GRAPH:relecture2
 GRAPH:correction
 GRAPH:poussee
 GRAPH:notes
+CHARGES:implementation
 ```

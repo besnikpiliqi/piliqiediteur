@@ -2744,3 +2744,7 @@ A
 
 pour cette parti tu creer un demo avec seed car je veux voir tout les donnes remplis deja avec seed. mais tu oublie pas ! il faut que tu fasse le seed pour tout tout et pour tout les compte separament afin que je puisse voir les donnes reel comment resemble car t as vu la aujourdhui je viens de voir qq petit defaut grace qu donnes deja existant. donc tu fais pour tous les tables (dans la base de donnees)  qui existent des seed en plusieurs meme bcp de donnes en tout cas, donc il faut avoir des donnnes pour tous les cas du logiciel. met ce que je te dis en priorite dans mes regle strict pour toujours de toujours.
 
+## 311. 2026-11-15 10:46 UTC
+
+et une chose il faut que fasse quand je lance php artisan migrate:fresh --seed, alors la normalement on doit pouvoir voir si exite des probleme de l’isolation des sociétés et des magasins si est respectée, donc quand  les donnees se mettent alors la si qq donees ne va pas dans son son isolation donc dans sa societe et magasin donc normalement la si une donnes va ailleur doit afficher le problem car tout les donnees appartion comme on a dis isolation par societe, magasin, responsable, vendeur, comptable etc etc etc donc tout tout
+

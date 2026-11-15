@@ -47,6 +47,45 @@ Propriétaire, administrateur sans vente, administrateur vendeur dans deux magas
 - Beaucoup de données : de l'ordre de plusieurs milliers de tickets et de centaines de factures, devis, achats et charges au total, réparties entre les comptes, assez pour que les listes aient plusieurs pages et que les graphiques aient des courbes réelles ; les nombres exacts sont écrits dans le README.
 - `php artisan migrate:fresh --seed` doit finir en moins de 15 minutes sur la machine de l'éditeur (mesurer ici et écrire la durée dans le README ; si c'est plus long, une option `--seed` légère n'est PAS une réponse : optimiser).
 
+## 3 bis. Vérification de l'isolation à la fin du semis (demande de l'éditeur du 15/11/2026, vers 12 h 10 à Paris)
+
+Les mots de l'éditeur : « quand je lance php artisan migrate:fresh --seed, alors la normalement on doit pouvoir voir si exite des probleme de l'isolation des sociétés et des magasins si est respectée, donc quand les donnees se mettent alors la si qq donees ne va pas dans son isolation donc dans sa societe et magasin donc normalement la si une donnes va ailleur doit afficher le problem car tout les donnees appartion comme on a dis isolation par societe, magasin, responsable, vendeur, comptable etc etc etc donc tout tout ».
+
+1. Une commande 
+   ERROR  There are no commands defined in the "piliqi" namespace.   (nom libre en français, cohérent avec les commandes existantes), lançable à tout moment en local et en production (lecture seule, aucune écriture, aucune donnée personnelle affichée : seulement table, colonne, identifiants internes et motif), qui parcourt TOUTE la base et vérifie, ligne par ligne :
+   - **Sociétés** : chaque ligne d'une table d'une société (BelongsToSociete) et chaque ligne d'un magasin a une société existante ; toute référence d'une ligne vers une autre ligne porte la même société (client, fournisseur, produit, document, paiement, allocation, avoir, charge, pièce, type de charge, journal d'audit, notification, préférence, téléchargement…), sauf les liens permis par CLAUDE.md (cabinet ↔ client lié, déclaration d'expert-comptable), vérifiés selon leurs propres règles.
+   - **Magasins** : chaque ligne d'une table d'un magasin (BelongsToMagasin) n'a de références que vers des lignes du même magasin (clés composées), et ce magasin appartient à la société de la ligne ; aucun mouvement de stock, paiement, allocation, ligne, clôture, enregistrement fiscal ou transmission ne pointe vers un autre magasin.
+   - **Comptes** : chaque compte appartient à une seule société ; chaque affectation d'un responsable, vendeur, observateur ou compte d'entraînement vise un magasin de sa société, un seul ; chaque document, paiement, relevé de caisse, clôture personnelle, envoi, téléchargement est au nom d'un compte de la même société qui avait accès à ce magasin (et, pour une vente ou un encaissement, le droit de vendre dans ce magasin ; jamais le propriétaire hors de la démonstration, jamais un compte d'un cabinet ni un expert-comptable de la société) ; un compte d'entraînement n'a rien dans un magasin réel ; une caisse personnelle ouverte à la fois par compte et par magasin.
+   - **Cabinet et comptables** : un compte d'un cabinet n'a d'affectation ni de droit dans aucune société cliente ; ses gestes chez un client (charges validées, exports, consultations) ne visent que des clients liés par un lien actif à ce moment et des magasins que le client lui ouvre ; chaque client confié l'est par un lien actif ; un compte d'expert-comptable de la société n'agit que dans sa société et ses magasins déclarés.
+   - **Magasin de démonstration** : rien n'en sort vers un magasin réel (aucun document, stock, client, produit partagé), ses séries et son registre sont à part.
+   - **Registre et journaux** : chaque chaîne (registre fiscal, journal des événements, journal d'audit) ne contient que des maillons de son magasin ou de sa société.
+2. La commande affiche, en français, un tableau des contrôles (contrôle, nombre de lignes vérifiées, nombre de problèmes) puis chaque problème trouvé (table, identifiant, colonne, valeur attendue, valeur trouvée, règle de CLAUDE.md qu'il viole) ; elle sort avec le code 0 si tout est juste, 1 sinon.
+3. **Le semis la lance tout seul à la fin** : 
+
+   Illuminate\Database\QueryException 
+
+  SQLSTATE[08006] [7] connection to server at "127.0.0.1", port 5432 failed: FATAL:  password authentication failed for user "piliqi"
+connection to server at "127.0.0.1", port 5432 failed: FATAL:  password authentication failed for user "piliqi" (Connection: pgsql, Host: 127.0.0.1, Port: 5432, Database: piliqi, SQL: select exists (select 1 from pg_class c, pg_namespace n where n.nspname = current_schema() and c.relname = 'migrations' and c.relkind in ('r', 'p') and n.oid = c.relnamespace))
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:864
+    860▕             $exceptionType = ($isUniqueConstraintError = $this->isUniqueConstraintError($e))
+    861▕                 ? UniqueConstraintViolationException::class
+    862▕                 : QueryException::class;
+    863▕ 
+  ➜ 864▕             $exception = new $exceptionType(
+    865▕                 $this->getNameWithReadWriteType(),
+    866▕                 $query,
+    867▕                 $this->prepareBindings($bindings),
+    868▕                 $e,
+
+      [2m+50 vendor frames [22m
+
+  51  artisan:16
+      Illuminate\Foundation\Application::handleCommand() se termine par ce tableau ; s'il y a un problème, il l'affiche en rouge et la commande sort avec le code 1 (le semis n'est pas accepté). La liste des comptes ne s'affiche qu'après un contrôle réussi.
+4. **Elle doit vraiment trouver les problèmes** : un test par contrôle introduit volontairement une ligne fautive (par une écriture SQL de test qui contourne les gardes quand elles existent, dans une base de test) et vérifie que la commande la signale avec le bon motif et le code 1 ; un test vérifie le code 0 et zéro problème sur les données semées ; un test vérifie que la commande n'écrit rien et ne montre aucune donnée personnelle (ni nom, ni adresse, ni montant). Les contrôles se lisent depuis le schéma réel (tables qui ont societe_id ou magasin_id, clés étrangères) pour qu'une table nouvelle soit vérifiée sans qu'on pense à l'ajouter ; une table nouvelle sans règle connue fait échouer le test jusqu'à ce que sa règle soit écrite.
+5. CLAUDE.md, le point 6 du protocole de rigueur ajoute : « … et le semis se termine par la vérification de l'isolation de toute la base (sociétés, magasins, comptes, cabinet, comptables, démonstration), qui doit trouver zéro problème. »
+6. README : la commande, ce qu'elle vérifie, comment lire son tableau.
+
 ## 4. Liste des comptes
 Le fichier comptes-de-demonstration.txt (jamais suivi par git) et l'affichage de fin de semis donnent, pour chaque compte : société, magasin, rôle, identifiant, mot de passe (PILIQI_DEMO_MOT_DE_PASSE ou identifiant), et une phrase « ce qu'il faut regarder avec ce compte » (ex. « Inès Garnier, vendeuse des Halles : sa caisse, ses tickets, son relevé du jour, la carte des notifications »).
 

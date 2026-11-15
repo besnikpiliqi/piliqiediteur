@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 15/11/2026 à 10:39 UTC par pilotage-sync.sh : « Cahier SEED-TOUT ».
+Mis à jour le 15/11/2026 à 10:46 UTC par pilotage-sync.sh : « SEED-TOUT isolation ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -46,7 +46,9 @@ eba4bc85 Relecture du lot ER-PRO
  M app/Filament/App/Resources/PaiementResource.php
  M app/Filament/Concerns/EnvoieLesDocuments.php
  M tests/Browser/Parcours/CartesDesNotificationsTest.php
+ M tests/Browser/Parcours/RegularisationEtRelancesTest.php
  M tests/Browser/Support/Navigation.php
+ M tests/Browser/inventaire-des-actions.php
  M tests/Feature/Facturation/RegularisationDUneFactureTest.php
 ```
 

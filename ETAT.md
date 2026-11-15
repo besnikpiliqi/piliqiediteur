@@ -1,13 +1,13 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 15/11/2026 à 01:56 UTC par pilotage-sync.sh : « Point de suivi 02:00 : CHARGES partie 2 ».
+Mis à jour le 15/11/2026 à 03:59 UTC par pilotage-sync.sh : « Point de suivi 15/11 03:59 UTC ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
 Tête poussée : `743f9bc2`. Commits locaux pas encore poussés :
 
 ```
-7ea99bc4 Réparation de la CI rouge de 743f9bc
+fcbf1166 Réparation de la CI rouge de 743f9bc
 ```
 
 Derniers commits poussés :
@@ -41,6 +41,7 @@ eba4bc85 Relecture du lot ER-PRO
  M CLAUDE.md
  M app/Console/Commands/PurgerActionsTraitees.php
  M app/Domain/Authorization/PermissionRegistry.php
+ M app/Domain/Cabinets/Services/TableauDeBordDesClients.php
  M app/Domain/TableauDeBord/Services/ChiffresDuTableauDeBord.php
  M app/Domain/TableauDeBord/Services/PerimetreDesGraphiques.php
  M app/Domain/TableauDeBord/Services/SeriesDesGraphiques.php
@@ -51,36 +52,52 @@ eba4bc85 Relecture du lot ER-PRO
  M app/Domain/Tenancy/Models/Affectation.php
  M app/Domain/Tenancy/Services/ActionsUniques.php
  M app/Domain/Tenancy/Services/AffectationsDesMembres.php
+ M app/Domain/Tenancy/Services/ChosesAFaireDeLaSociete.php
+ M app/Domain/Tenancy/Services/ChosesAFaireDuMagasin.php
  M app/Domain/Tenancy/Support/GardesDesDroits.php
  M app/Domain/Tenancy/Support/NomsPolymorphes.php
+ M app/Filament/App/Pages/TableauDeBordDeLaSociete.php
+ M app/Filament/Cabinet/Pages/TableauDeBordDuCabinet.php
+ M app/Filament/Cabinet/Resources/ClientDuCabinetResource.php
+ M app/Filament/Cabinet/Resources/ClientDuCabinetResource/Pages/FicheDuClient.php
  M app/Filament/Concerns/CocheLesAutorisationsDeMagasin.php
  M app/Filament/GrilleDesGraphiques.php
+ M app/Models/User.php
+ M app/Providers/AppServiceProvider.php
  M config/filesystems.php
  M database/migrations/0001_01_00_000000_create_societes_table.php
+ M resources/views/filament/app/pages/tableau-de-bord-de-la-societe.blade.php
+ M resources/views/filament/cabinet/pages/tableau-de-bord-du-cabinet.blade.php
  M resources/views/filament/graphiques-du-panneau.blade.php
  M resources/views/filament/grille-des-graphiques.blade.php
+ M tests/Browser/inventaire-des-actions.php
+ M tests/Feature/Authorization/AffectationPolicyTest.php
  M tests/Feature/Authorization/AutorisationsDesRolesTest.php
  M tests/Feature/Authorization/AutorisationsSelonLeTypeTest.php
  M tests/Feature/Authorization/ControleDesDroitsTest.php
  M tests/Feature/Authorization/DroitsDuResponsableTest.php
  M tests/Feature/Authorization/GardesDesDroitsEnBaseTest.php
+ M tests/Feature/Authorization/PorteeDesDroitsTest.php
+ M tests/Feature/Authorization/ProprietaireSansVenteConcurrenceTest.php
  M tests/Feature/Authorization/ProprietaireSansVenteTest.php
+ M tests/Feature/Cabinets/AccesDeLExpertComptableTest.php
+ M tests/Feature/Cabinets/PanneauCabinetTest.php
+ M tests/Feature/Filament/EquipeDuMagasinTest.php
+ M tests/Feature/Qualite/PlafondsDeRequetesTest.php
  M tests/Feature/Societe/AdministrateursTest.php
  M tests/Feature/Societe/AutorisationsDesMembresTest.php
+ M tests/Feature/Societe/ChangementDeRoleTest.php
+ M tests/Feature/Societe/ConnexionParIdentifiantTest.php
+ M tests/Feature/Societe/DroitsConcurrenceTest.php
+ M tests/Feature/Societe/MagasinDeDemonstrationTest.php
+ M tests/Feature/Societe/PanneauSocieteTest.php
+ M tests/Feature/Societe/RenouvellementDAccesTest.php
+ M tests/Feature/Societe/ResponsablesTest.php
+ M tests/Feature/Societe/TransfererProprieteTest.php
  M tests/Feature/TableauDeBord/QuiVoitLesGraphiquesTest.php
  M tests/Feature/TableauDeBord/SeriesDesGraphiquesTest.php
  M tests/Feature/Tenancy/HistoriqueAuNomFigeTest.php
  M tests/Feature/Tenancy/IsolationDesSocietesTest.php
- M tests/Unit/matrice-des-decisions.php
-?? app/Domain/Charges/
-?? app/Domain/TableauDeBord/Services/ChargesDuTableauDeBord.php
-?? app/Domain/Tenancy/Models/ActionTraiteeDeLaSociete.php
-?? database/migrations/2026_10_14_100010_create_actions_traitees_de_la_societe_table.php
-?? database/migrations/2026_10_15_100001_create_types_de_charge_de_la_societe_table.php
-?? database/migrations/2026_10_15_100002_create_charges_table.php
-?? database/migrations/2026_10_15_100003_create_lignes_de_charge_table.php
-?? database/migrations/2026_10_15_100004_create_pieces_de_charge_table.php
-?? tests/Feature/Charges/
 ```
 
 ## Dernière course de la chaîne
@@ -88,7 +105,6 @@ eba4bc85 Relecture du lot ER-PRO
 Course `wf_ee9b6e6e-908`, étapes commencées (de la plus ancienne à la plus récente) :
 
 ```
-DEMO-V:implementation
 DEMO-V:implementation-2
 DEMO-V:implementation-3
 DEMO-V:relecture1
@@ -113,4 +129,5 @@ GRAPH:poussee
 GRAPH:notes
 CHARGES:implementation
 CHARGES:implementation-2
+CHARGES:implementation-3
 ```

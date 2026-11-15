@@ -1,12 +1,13 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 15/11/2026 à 12:10 UTC par pilotage-sync.sh : « REGUL poussé, CI analyse rouge ».
+Mis à jour le 15/11/2026 à 12:46 UTC par pilotage-sync.sh : « Constat téléchargements non rafraîchis ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
 Tête poussée : `b6015883`. Commits locaux pas encore poussés :
 
 ```
+93939942 Réparation de la CI rouge de b6015883
 ```
 
 Derniers commits poussés :
@@ -37,6 +38,12 @@ eba4bc85 Relecture du lot ER-PRO
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
+ M app/Console/Commands/DiagnostiquerCaisseSecurisee.php
+ M bootstrap/app.php
+ M tests/Feature/CaisseSecurisee/CommandesModuleFiscalTest.php
+?? app/Console/Commands/VerifierLIsolation.php
+?? app/Domain/Tenancy/Isolation/
+?? tests/Feature/Tenancy/VerificationDeLIsolationTest.php
 ```
 
 ## Dernière course de la chaîne
@@ -44,8 +51,6 @@ eba4bc85 Relecture du lot ER-PRO
 Course `wf_ee9b6e6e-908`, étapes commencées (de la plus ancienne à la plus récente) :
 
 ```
-GRAPH:implementation
-GRAPH:implementation-2
 GRAPH:implementation-3
 GRAPH:implementation-4
 GRAPH:relecture1
@@ -69,4 +74,6 @@ REGUL:correction
 REGUL:poussee
 REGUL:notes
 DATEOP:implementation
+DATEOP:implementation-2
+DATEOP:implementation-3
 ```

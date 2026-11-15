@@ -458,3 +458,4 @@
 - 15/11 12:08 UTC — Réponse de l'éditeur sur l'export des charges : E3, état + montant, 3 parties, pièces en ZIP maintenant → cahier DATEOP (2 commits) ; D76 : état = droit de voir la page.
 - 15/11 12:10 UTC — Onglet « Protections et rigueur » : section 8 « Ajouts » créée (rev 13), 3 lignes de l'export des charges.
 - 15/11 12:15 UTC — REGUL poussé : 220d40b4, e405d27b, be209079 (réparation des cartes), b6015883 (relecture). CI : Analyse statique rouge (1 erreur Larastan, ModifierLesParametresDuMagasinAction:77) → cahier DATEOP en tête ; autres courses en cours.
+- 15/11 12:47 UTC — Constat éditeur : liste des téléchargements non rafraîchie → cahier DATEOP (wire:poll de la section).

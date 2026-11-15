@@ -2840,3 +2840,9 @@ je pense creer une fonction pour pouvoir telecherger tout donc tout ce qui est d
 
 E3, état et montant, les trois parties, oui mais juste "Les pièces en ZIP par « Télécharger les documents »" tu fait mnt pour pouvoir telecherager tout les documents car sinon il faut faire un par un ce qui est pas bon,donc tu le fait mtn
 
+## 323. 2026-11-15 12:45 UTC
+
+[1 capture(s) d'écran jointe(s)]
+
+quand on telecharge alors il se met pas à jour l 'etat donc il met pas le lien automatiquement pour telecharger sauf si recharge la page
+

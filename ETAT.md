@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 15/11/2026 à 08:00 UTC par pilotage-sync.sh : « Point de suivi 15/11 08:00 ».
+Mis à jour le 15/11/2026 à 08:51 UTC par pilotage-sync.sh : « MDP : trois contrôles ajoutés ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -60,11 +60,14 @@ eba4bc85 Relecture du lot ER-PRO
  M app/Filament/App/Resources/FactureResource/Pages/ViewFacture.php
  M app/Filament/Concerns/EnvoieLesDocuments.php
  M database/migrations/0001_01_01_000000_create_magasins_table.php
+ M tests/Browser/inventaire-des-actions.php
  M tests/Feature/Facturation/RegularisationDUneFactureConcurrenceTest.php
  M tests/Feature/Facturation/RegularisationDUneFactureTest.php
  M tests/Feature/Facturation/RelancerFacturesImpayeesTest.php
  M tests/Feature/Filament/ParametresRelancesTest.php
+ M tests/TestCase.php
  M tests/Unit/matrice-des-decisions.php
+?? tests/Browser/Parcours/RegularisationEtRelancesTest.php
 ```
 
 ## Dernière course de la chaîne

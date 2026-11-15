@@ -2638,3 +2638,25 @@ j ai pas compris quoi ajouter
 
 mais les hacker attaque parmis milion de ip et alors ce sera pas possible de les arrete
 
+## 298. 2026-11-15 08:51 UTC
+
+<!-- attach -->
+
+> Ma proposition pour le cahier du lot MDP, qui remplace celle de tout à l’heure :
+
+> 
+
+> un test pour chaque limite, y compris l’attaque depuis plusieurs adresses sur un même compte ;
+
+> l’alerte à l’éditeur étendue à toute montée anormale des échecs sur la plateforme ;
+
+> une limite d’essais vérifiée sur « Mot de passe oublié » et sur le lien qui sert à choisir son mot de passe.
+
+> 
+
+> Voulez-vous que je l’ajoute ? Répondez « oui » ou « non ».
+
+
+
+oui tu fait
+

@@ -2698,3 +2698,9 @@ tu peux m expliquer pourquoi dans "Paiements reçus" il y en a plusieur recus de
 
 oui
 
+## 305. 2026-11-15 10:17 UTC
+
+[2 capture(s) d'écran jointe(s)]
+
+ici tu mets une abreviation pour chaque mode de paiement comme ex carte bancaire tu met "CB" etc car il prend de l ecpace pour rien du tout
+

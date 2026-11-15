@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 15/11/2026 à 10:13 UTC par pilotage-sync.sh : « Reçus : N° du reçu ».
+Mis à jour le 15/11/2026 à 10:17 UTC par pilotage-sync.sh : « Abréviations modes de paiement ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

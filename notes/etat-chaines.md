@@ -441,3 +441,4 @@
 - 15/11 10:00 UTC — Constat « Ajouter un graphique » (menu qui reste sur le choix, message sur « — Choisir — ») ajouté au cahier DATEOP, point 3.
 - 15/11 10:02 UTC — POINT DE SUIVI : REGUL commité localement e405d27b (09:58, suite PG 7 273/7 273, concurrence 370) après 220d40b4 ; relectures 1 et 2 en cours. Cartes des notifications PAS réparées : bloc ajouté au cahier (REGUL:correction ou, à défaut, DATEOP en premier). CI de 8ce8bd4 : push vert sur les 8 tâches de tests ; PR : 1 échec cartes (8.5/PG17), autres annulées.
 - 15/11 10:20 UTC — « oui » de l'éditeur : colonne « N° du reçu » et phrase grise sous « Paiements reçus », ajoutées au cahier DATEOP, point 4.
+- 15/11 10:30 UTC — Abréviations des modes de paiement dans les relevés de caisse ajoutées au cahier DATEOP, point 5.

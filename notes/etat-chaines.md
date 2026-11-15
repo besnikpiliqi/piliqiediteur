@@ -459,3 +459,4 @@
 - 15/11 12:10 UTC — Onglet « Protections et rigueur » : section 8 « Ajouts » créée (rev 13), 3 lignes de l'export des charges.
 - 15/11 12:15 UTC — REGUL poussé : 220d40b4, e405d27b, be209079 (réparation des cartes), b6015883 (relecture). CI : Analyse statique rouge (1 erreur Larastan, ModifierLesParametresDuMagasinAction:77) → cahier DATEOP en tête ; autres courses en cours.
 - 15/11 12:47 UTC — Constat éditeur : liste des téléchargements non rafraîchie → cahier DATEOP (wire:poll de la section).
+- 15/11 13:20 UTC — Demande éditeur : fin du réel simplifié à ne pas oublier → lot TVA27 (a-faire-apres-chaine.md, après VIES-DEP, avant RLS), avec le crédit de TVA reporté (K1/K2 en attente). Onglet pro rev 1212 : T121.1, T121.2.

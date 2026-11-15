@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 15/11/2026 à 13:56 UTC par pilotage-sync.sh : « Maquette du crédit de TVA reporté, en attente du choix ».
+Mis à jour le 15/11/2026 à 14:03 UTC par pilotage-sync.sh : « Lot TVA27 : fin du réel simplifié et crédit de TVA reporté ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -53,6 +53,7 @@ eba4bc85 Relecture du lot ER-PRO
 ?? database/seeders/Semis/ChargesDesSocietes.php
 ?? database/seeders/Semis/ComptesDesCas.php
 ?? database/seeders/Semis/DocumentsDesCas.php
+?? database/seeders/Semis/SocietesDesCas.php
 ?? tests/Feature/Tenancy/VerificationDeLIsolationTest.php
 ```
 

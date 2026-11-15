@@ -2852,3 +2852,17 @@ quand on telecharge alors il se met pas à jour l 'etat donc il met pas le lien 
 
 sur "TVA à payer 	TVA à payer (estimation)" on vois les tva sur deux mois, mais j 'ai une question: alors quand c'est negatif la tva alors qu est ce qui se passe avec la tva negatif ? car normalement la tva negatif passe sur prochan mois, donc se cumule. le tva collecté - tva acheté - la tva des charges etc etc  = resultat peut tombre "-" et quand c'est "-" alors il passer pour le prochain mois pour apliquee la tva "-" pour deduire du prochain fois. je crois que tu dois savoir ca dans les normes des tva et je sais pas si t as prevu ca ou pas encore ? mais si non montre moi comment tu vas faire
 
+## 325. 2026-11-15 13:57 UTC
+
+<!-- attach -->
+
+> Le régime "réel simplifié" est amené à disparaître (loi n°2025-127,
+
+>  * art. 38, à compter du 1er janvier 2027, migration automatique vers le
+
+>  * réel normal) : conservé ici tel quel, à retirer le moment venu.
+
+
+
+mais alors tu note pour aplique ca, il faut pas oublier
+

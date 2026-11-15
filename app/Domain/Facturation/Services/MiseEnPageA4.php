@@ -14,7 +14,8 @@ use Barryvdh\DomPDF\PDF as PdfDocument;
  * chaque page (voir PiedDePage), et chaque page porte, sous lui,
  * « Page x sur y », dessiné une fois le document mis en pages, quand le
  * nombre de pages est connu (un compteur CSS de pages n'en donne aucun
- * dans dompdf).
+ * dans dompdf). L'état des charges (voir EtatDesChargesEnPdf) est la
+ * seule page A4 à l'horizontale, mise en pages et numérotée de même.
  */
 final class MiseEnPageA4
 {
@@ -58,7 +59,24 @@ final class MiseEnPageA4
      */
     public function pdf(string $html): PdfDocument
     {
-        $pdf = Pdf::loadHTML($html)->setPaper('a4', 'portrait');
+        return $this->mettreEnPages($html, 'portrait');
+    }
+
+    /**
+     * Le document mis en pages A4 à l'horizontale, numéros de page
+     * compris, aux mêmes marges.
+     */
+    public function pdfALHorizontale(string $html): PdfDocument
+    {
+        return $this->mettreEnPages($html, 'landscape');
+    }
+
+    /**
+     * @param  'portrait'|'landscape'  $orientation
+     */
+    private function mettreEnPages(string $html, string $orientation): PdfDocument
+    {
+        $pdf = Pdf::loadHTML($html)->setPaper('a4', $orientation);
         $pdf->render();
 
         $dompdf = $pdf->getDomPDF();

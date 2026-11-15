@@ -7,11 +7,15 @@ use App\Domain\Charges\Enums\TypeDeCharge;
 use App\Domain\Charges\Exceptions\ConfirmationRequiseException;
 use App\Domain\Charges\Models\Charge;
 use App\Domain\Charges\Models\LigneDeCharge;
+use App\Domain\Charges\Models\PieceDeCharge;
+use App\Domain\Charges\Models\TypeDeChargeDeLaSociete;
 use App\Domain\Charges\Support\AccesAuxCharges;
 use App\Domain\Facturation\Services\CalculateurLigne;
+use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Scopes\SocieteScope;
 use App\Domain\Tenancy\Support\ValeursLues;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Database\Query\JoinClause;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
@@ -54,6 +58,17 @@ final class ChargesDeLaSociete
         'charges.deposee_par', 'charges.validee_par', 'charges.motif_renvoi', 'charges.corrections',
     ];
 
+    /**
+     * Les vues de la page et de son état téléchargeable : toutes les
+     * charges, celles qui attendent leur validation (à valider et pièces
+     * sans chiffres), ou celles renvoyées au client.
+     */
+    public const VUES = [
+        'toutes' => 'Toutes les charges',
+        'a_valider' => 'À valider',
+        'renvoyees' => 'Renvoyées au client',
+    ];
+
     public function __construct(
         private readonly TypesDeCharge $types,
         private readonly CalculateurLigne $calculateur,
@@ -67,6 +82,56 @@ final class ChargesDeLaSociete
     public function visibles(AccesAuxCharges $acces): Builder
     {
         return $acces->filtrer(Charge::query()->withoutGlobalScope(SocieteScope::class));
+    }
+
+    /**
+     * La liste de la page des charges et de son état téléchargeable : les
+     * charges que l'accès voit sur ces mois de TVA, selon la vue (voir
+     * VUES ; « À valider » : les charges à valider et les pièces sans
+     * chiffres) et le magasin du filtre ($magasin, ou « Toute la société »
+     * seulement avec $sansMagasin), limitées aux colonnes de la liste (voir
+     * COLONNES_DE_LA_LISTE), avec le nom de leur magasin, le nom et l'uuid
+     * de leur type de la société et le nom de leur pièce non bloquée, lus
+     * dans la même requête, chacun filtré par la société de la charge ;
+     * triées par mois de TVA, puis par type.
+     *
+     * @param  list<string>  $mois  « AAAA-MM »
+     * @return Builder<Charge>
+     */
+    public function liste(AccesAuxCharges $acces, array $mois, ?int $magasin, bool $sansMagasin, string $vue): Builder
+    {
+        return $this->visibles($acces)
+            ->select(self::COLONNES_DE_LA_LISTE)
+            ->addSelect([
+                'magasin_nom' => Magasin::query()->select('nom')->whereColumn('magasins.id', 'charges.magasin_id')->whereColumn('magasins.societe_id', 'charges.societe_id')->limit(1),
+                'type_nom' => TypeDeChargeDeLaSociete::query()->withoutGlobalScope(SocieteScope::class)->select('nom')
+                    ->whereColumn('types_de_charge_de_la_societe.id', 'charges.type_de_la_societe_id')->whereColumn('types_de_charge_de_la_societe.societe_id', 'charges.societe_id')->limit(1),
+                'type_uuid' => TypeDeChargeDeLaSociete::query()->withoutGlobalScope(SocieteScope::class)->select('uuid')
+                    ->whereColumn('types_de_charge_de_la_societe.id', 'charges.type_de_la_societe_id')->whereColumn('types_de_charge_de_la_societe.societe_id', 'charges.societe_id')->limit(1),
+                'piece_nom' => PieceDeCharge::query()->withoutGlobalScope(SocieteScope::class)->select('nom')
+                    ->whereColumn('pieces_de_charge.charge_id', 'charges.id')->whereColumn('pieces_de_charge.societe_id', 'charges.societe_id')->whereNull('bloquee_le')->limit(1),
+            ])
+            ->whereIn('charges.mois_tva', $mois)
+            ->when($vue === 'a_valider', fn (Builder $requete): Builder => $requete->whereIn('charges.etat', EtatDeLaCharge::attendantLaValidation()))
+            ->when($vue === 'renvoyees', fn (Builder $requete): Builder => $requete->where('charges.etat', EtatDeLaCharge::Renvoyee->value))
+            ->when($sansMagasin, fn (Builder $requete): Builder => $requete->whereNull('charges.magasin_id'))
+            ->when($magasin !== null, fn (Builder $requete): Builder => $requete->where('charges.magasin_id', $magasin))
+            ->orderBy('charges.mois_tva')
+            ->orderBy('charges.type')
+            ->orderBy('charges.type_de_la_societe_id')
+            ->orderBy('charges.id');
+    }
+
+    /**
+     * Les magasins réels de la société de l'accès qu'il voit, par nom.
+     *
+     * @return EloquentCollection<int, Magasin>
+     */
+    public function magasinsVus(AccesAuxCharges $acces): EloquentCollection
+    {
+        return Magasin::query()->where('societe_id', $acces->societe->getKey())->where('est_demonstration', false)
+            ->when($acces->magasins !== null, fn (Builder $requete): Builder => $requete->whereKey($acces->magasins ?? []))
+            ->orderBy('nom')->get(['id', 'uuid', 'nom', 'code', 'societe_id']);
     }
 
     /**

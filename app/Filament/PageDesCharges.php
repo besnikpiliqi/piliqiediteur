@@ -13,6 +13,7 @@ use App\Domain\Charges\Actions\SaisirUneChargeAction;
 use App\Domain\Charges\Actions\SupprimerUneChargeAction;
 use App\Domain\Charges\Actions\ValiderUneChargeAction;
 use App\Domain\Charges\Enums\EtatDeLaCharge;
+use App\Domain\Charges\Enums\FormatDeLEtat;
 use App\Domain\Charges\Enums\NatureDeCharge;
 use App\Domain\Charges\Enums\TauxDeCharge;
 use App\Domain\Charges\Enums\TypeDeCharge;
@@ -24,14 +25,17 @@ use App\Domain\Charges\Models\TypeDeChargeDeLaSociete;
 use App\Domain\Charges\Services\ChargesDeLaSociete;
 use App\Domain\Charges\Services\ChiffrageDUneCharge;
 use App\Domain\Charges\Services\DroitsSurLesCharges;
+use App\Domain\Charges\Services\EtatDesCharges;
 use App\Domain\Charges\Services\GestesSurLesCharges;
 use App\Domain\Charges\Services\PiecesDesCharges;
 use App\Domain\Charges\Services\PropositionsDeTva;
 use App\Domain\Charges\Services\TvaDeLaPeriode;
 use App\Domain\Charges\Services\TypesDeCharge;
 use App\Domain\Charges\Support\AccesAuxCharges;
+use App\Domain\Charges\Support\FiltresDeLEtat;
 use App\Domain\Charges\Support\MontantsDeTva;
 use App\Domain\Charges\Support\SaisieDeCharge;
+use App\Domain\Charges\Support\TextesDesCharges;
 use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\SaisieDecimale;
@@ -40,7 +44,6 @@ use App\Domain\Fichiers\EnTetesDesFichiers;
 use App\Domain\Fichiers\Exceptions\PieceBloqueeException;
 use App\Domain\Fichiers\NomDeFichier;
 use App\Domain\Fichiers\PieceDeposee;
-use App\Domain\TableauDeBord\Services\ChargesDuTableauDeBord;
 use App\Domain\TableauDeBord\Services\PerimetreDesGraphiques;
 use App\Domain\TableauDeBord\Support\Perimetre;
 use App\Domain\Tenancy\Models\Magasin;
@@ -157,11 +160,6 @@ final class PageDesCharges extends Component implements HasActions, HasForms, Ha
     public const MAGASIN = 'magasin';
 
     public const REFUS = 'Vous ne voyez pas les charges de cette société.';
-
-    /** Les mois abrégés de l'en-tête du tableau des mois. */
-    private const ABREVIATIONS_DES_MOIS = ['Janv.', 'Févr.', 'Mars', 'Avr.', 'Mai', 'Juin', 'Juil.', 'Août', 'Sept.', 'Oct.', 'Nov.', 'Déc.'];
-
-    public const TOUTE_LA_SOCIETE = 'Toute la société';
 
     #[Locked]
     public string $ecran = self::SOCIETE;
@@ -287,47 +285,47 @@ final class PageDesCharges extends Component implements HasActions, HasForms, Ha
     }
 
     /**
-     * La TVA du mois choisi, sur le magasin du filtre : telle que le
-     * tableau de bord de la personne la montre, ventes et achats compris
-     * (voir TvaDeLaPeriode::duPerimetre()) ; pour qui ne voit pas les
-     * graphiques de cet écran, celle des seules charges qu'il voit, sans
-     * les ventes ni les achats ; null dans une société en franchise en base
-     * (TVA non applicable).
+     * La TVA du mois choisi, sur le magasin du filtre, telle que la page la
+     * montre (voir tvaDesMois()) ; null dans une société en franchise en
+     * base (TVA non applicable).
      *
      * @return array{mois: string, montants: MontantsDeTva, avec_les_ventes: bool, sans_celles_de_la_societe: bool}|null
      */
     public function tvaDuMois(): ?array
     {
+        $mois = in_array($this->moisDeLaTva, $this->mois(), true) ? $this->moisDeLaTva : $this->moisDeLaTvaParDefaut();
+        $tva = $this->tvaDesMois([$mois]);
+
+        return $tva === null ? null : ['mois' => $mois, 'montants' => $tva['montants'][$mois], 'avec_les_ventes' => $tva['avec_les_ventes'], 'sans_celles_de_la_societe' => $tva['sans_celles_de_la_societe']];
+    }
+
+    /**
+     * La TVA de ces mois, sur le magasin du filtre : telle que le tableau
+     * de bord de la personne la montre, ventes et achats compris ; pour qui
+     * ne voit pas les graphiques de cet écran, celle des seules charges
+     * qu'il voit (voir TvaDeLaPeriode::pourLaPageDesCharges()) ; null dans
+     * une société en franchise en base.
+     *
+     * @param  list<string>  $mois
+     * @return array{montants: array<string, MontantsDeTva>, avec_les_ventes: bool, sans_celles_de_la_societe: bool, magasins_non_comptes: string|null}|null
+     */
+    private function tvaDesMois(array $mois): ?array
+    {
         $acces = $this->acces();
 
-        if ($acces->societe->estEnFranchiseDeTva()) {
-            return null;
-        }
-
-        $mois = in_array($this->moisDeLaTva, $this->mois(), true) ? $this->moisDeLaTva : $this->moisDeLaTvaParDefaut();
-        $perimetre = $this->perimetreDeLaTva();
-
-        if ($perimetre !== null) {
-            $montants = app(TvaDeLaPeriode::class)->duPerimetre($perimetre, $mois);
-
-            return $montants === null ? null : ['mois' => $mois, 'montants' => $montants, 'avec_les_ventes' => true, 'sans_celles_de_la_societe' => $perimetre->laisseLesChargesDeLaSociete(TvaDeLaPeriode::magasinsComptes($perimetre))];
-        }
-
-        $magasin = $this->magasinDuFiltre();
-        $magasins = match (true) {
-            $magasin !== null => [$magasin],
-            $this->magasinFiltre === 'societe' => [],
-            default => CleDuModele::desModeles($this->magasinsVus()),
-        };
-        $deLaSociete = $acces->chargesDeLaSociete && $magasin === null;
-        $charges = ChargesDuTableauDeBord::lire($acces->societe, [$mois], $magasins, $deLaSociete);
-
-        return ['mois' => $mois, 'montants' => TvaDeLaPeriode::parMois([$mois], $magasins, [], [], $charges, $deLaSociete)[$mois], 'avec_les_ventes' => false, 'sans_celles_de_la_societe' => false];
+        return $acces->societe->estEnFranchiseDeTva() ? null : app(TvaDeLaPeriode::class)->pourLaPageDesCharges(
+            $acces,
+            $this->perimetreDeLaTva(),
+            $mois,
+            $this->magasinDuFiltre(),
+            $this->magasinFiltre === 'societe',
+            CleDuModele::desModeles($this->magasinsVus()),
+        );
     }
 
     public function updatedVue(): void
     {
-        $this->vue = in_array($this->vue, ['toutes', 'a_valider', 'renvoyees'], true) ? $this->vue : 'toutes';
+        $this->vue = array_key_exists($this->vue, ChargesDeLaSociete::VUES) ? $this->vue : 'toutes';
         $this->resetTable();
     }
 
@@ -359,7 +357,7 @@ final class PageDesCharges extends Component implements HasActions, HasForms, Ha
 
             foreach ([$finEnCours, $finEnCours - 1] as $finAnnee) {
                 $mois = self::moisDeLExercice($finAnnee, $fin);
-                $periodes['exercice:'.$finAnnee] = 'Exercice de '.self::nomDuMois($mois[0]).' à '.self::nomDuMois($mois[11]);
+                $periodes['exercice:'.$finAnnee] = 'Exercice de '.TextesDesCharges::nomDuMois($mois[0]).' à '.TextesDesCharges::nomDuMois($mois[11]);
             }
         }
 
@@ -397,7 +395,7 @@ final class PageDesCharges extends Component implements HasActions, HasForms, Ha
         $choix = ['' => 'Toute la société et tous les magasins'];
 
         if ($this->acces()->chargesDeLaSociete) {
-            $choix['societe'] = self::TOUTE_LA_SOCIETE.' seulement';
+            $choix['societe'] = TextesDesCharges::TOUTE_LA_SOCIETE.' seulement';
         }
 
         foreach ($this->magasinsVus() as $magasin) {
@@ -417,28 +415,6 @@ final class PageDesCharges extends Component implements HasActions, HasForms, Ha
         return new HtmlString('<span class="piliqi-charges__etat" data-etat-de-la-charge="'.e($etat->value).'"><span class="piliqi-charges__case piliqi-charges__case--'.e($etat->value).'" aria-hidden="true">'.e($etat->symbole()).'</span>'.e($etat->getLabel()).'</span>');
     }
 
-    /**
-     * Le mois « AAAA-MM » en toutes lettres (« mars 2026 »), tel quel s'il
-     * n'est pas un mois.
-     */
-    public static function nomDuMois(string $mois): string
-    {
-        return preg_match('/^(\d{4})-(0[1-9]|1[0-2])$/D', $mois, $parties) === 1
-            ? mb_strtolower(Calendrier::nomDuMois((int) $parties[2])).' '.$parties[1]
-            : $mois;
-    }
-
-    /**
-     * L'abréviation du mois « AAAA-MM » dans l'en-tête du tableau des mois
-     * (« Janv. », « Févr. »…), tel quel s'il n'est pas un mois.
-     */
-    public static function abregeDuMois(string $mois): string
-    {
-        return preg_match('/^\d{4}-(0[1-9]|1[0-2])$/D', $mois, $parties) === 1
-            ? self::ABREVIATIONS_DES_MOIS[(int) $parties[1] - 1]
-            : $mois;
-    }
-
     public static function enEuros(int $centimes): string
     {
         return app(CalculateurLigne::class)->enEuros($centimes);
@@ -449,9 +425,9 @@ final class PageDesCharges extends Component implements HasActions, HasForms, Ha
         return $table
             ->query(fn (): Builder => $this->requeteDeLaListe())
             ->columns([
-                TextColumn::make('mois_tva')->label('Mois de TVA')->formatStateUsing(fn (string $state): string => ucfirst(self::nomDuMois($state))),
-                TextColumn::make('type')->label('Type')->state(fn (Charge $record): string => $record->type?->getLabel() ?? ValeursLues::texteOuNul($record->getAttributes()['type_nom'] ?? null) ?? ''),
-                TextColumn::make('magasin_nom')->label('Magasin')->placeholder(self::TOUTE_LA_SOCIETE)->visible($this->ecran !== self::MAGASIN),
+                TextColumn::make('mois_tva')->label('Mois de TVA')->formatStateUsing(fn (string $state): string => ucfirst(TextesDesCharges::nomDuMois($state))),
+                TextColumn::make('type')->label('Type')->state(fn (Charge $record): string => $record->libelleDuType()),
+                TextColumn::make('magasin_nom')->label('Magasin')->placeholder(TextesDesCharges::TOUTE_LA_SOCIETE)->visible($this->ecran !== self::MAGASIN),
                 TextColumn::make('fournisseur')->label('Fournisseur')->placeholder('—'),
                 TextColumn::make('numero_piece')->label('N° de la pièce')->placeholder('—'),
                 TextColumn::make('total_ht')->label('HT')->alignEnd()->state(fn (Charge $record): string => self::enEuros($record->total_ht)),
@@ -481,6 +457,32 @@ final class PageDesCharges extends Component implements HasActions, HasForms, Ha
             ])
             ->emptyStateHeading('Aucune charge sur cette période')
             ->emptyStateDescription('Ajoutez une charge par « Ajouter une charge » : sa pièce, puis ses chiffres.');
+    }
+
+    /**
+     * L'état des charges de cette page dans ce format (« pdf » ou
+     * « xlsx », le menu « Télécharger » à droite des filtres) : ce que la
+     * page montre à la personne, avec sa période, sa vue et son magasin
+     * (voir EtatDesCharges), servi en pièce jointe avec les en-têtes d'un
+     * fichier que PILIQI produit et son nom ; l'accès relu à cette requête.
+     * Un format inconnu, qui ne vient jamais du menu, est refusé sans rien
+     * produire ni inscrire.
+     */
+    public function telechargerLEtat(string $format): ?StreamedResponse
+    {
+        $leFormat = FormatDeLEtat::tryFrom($format);
+
+        if ($leFormat === null) {
+            Notification::make()->title('Ce format n\'existe pas : rien n\'a été téléchargé.')->danger()->send();
+
+            return null;
+        }
+
+        $acces = $this->acces();
+        $fichier = app(EtatDesCharges::class)->telecharger($acces, $this->filtresDeLEtat(), $this->tvaDesMois($this->mois()), $this->edition(), $leFormat);
+        $contenu = $fichier['contenu'];
+
+        return response()->streamDownload(fn () => print ($contenu), null, EnTetesDesFichiers::fichierProduitEnPieceJointe($fichier['nom'], $fichier['type']));
     }
 
     /**
@@ -518,40 +520,16 @@ final class PageDesCharges extends Component implements HasActions, HasForms, Ha
     }
 
     /**
-     * La liste : les charges que l'accès voit sur les mois de la période,
-     * selon la vue (« À valider » : les charges à valider et les pièces sans
-     * chiffres), le magasin et la case choisis, limitées aux colonnes que la
-     * liste et ses gestes demandent, avec le nom de leur magasin, de leur
-     * type de la société et leur pièce, lus dans la même requête, chacun
-     * filtré par la société de la charge.
+     * La liste : celle de l'état téléchargeable (voir
+     * ChargesDeLaSociete::liste()), sur la période, la vue et le magasin
+     * choisis, restreinte à la case choisie dans le tableau des mois.
      *
      * @return Builder<Charge>
      */
     private function requeteDeLaListe(): Builder
     {
-        $magasin = $this->magasinDuFiltre();
-
-        return app(ChargesDeLaSociete::class)->visibles($this->acces())
-            ->select(ChargesDeLaSociete::COLONNES_DE_LA_LISTE)
-            ->addSelect([
-                'magasin_nom' => Magasin::query()->select('nom')->whereColumn('magasins.id', 'charges.magasin_id')->whereColumn('magasins.societe_id', 'charges.societe_id')->limit(1),
-                'type_nom' => TypeDeChargeDeLaSociete::query()->withoutGlobalScope(SocieteScope::class)->select('nom')
-                    ->whereColumn('types_de_charge_de_la_societe.id', 'charges.type_de_la_societe_id')->whereColumn('types_de_charge_de_la_societe.societe_id', 'charges.societe_id')->limit(1),
-                'type_uuid' => TypeDeChargeDeLaSociete::query()->withoutGlobalScope(SocieteScope::class)->select('uuid')
-                    ->whereColumn('types_de_charge_de_la_societe.id', 'charges.type_de_la_societe_id')->whereColumn('types_de_charge_de_la_societe.societe_id', 'charges.societe_id')->limit(1),
-                'piece_nom' => PieceDeCharge::query()->withoutGlobalScope(SocieteScope::class)->select('nom')
-                    ->whereColumn('pieces_de_charge.charge_id', 'charges.id')->whereColumn('pieces_de_charge.societe_id', 'charges.societe_id')->whereNull('bloquee_le')->limit(1),
-            ])
-            ->whereIn('charges.mois_tva', $this->mois())
-            ->when($this->vue === 'a_valider', fn (Builder $requete): Builder => $requete->whereIn('charges.etat', EtatDeLaCharge::attendantLaValidation()))
-            ->when($this->vue === 'renvoyees', fn (Builder $requete): Builder => $requete->where('charges.etat', EtatDeLaCharge::Renvoyee->value))
-            ->when($this->magasinFiltre === 'societe', fn (Builder $requete): Builder => $requete->whereNull('charges.magasin_id'))
-            ->when($magasin !== null, fn (Builder $requete): Builder => $requete->where('charges.magasin_id', $magasin))
-            ->when($this->caseType !== null && $this->caseMois !== null, fn (Builder $requete): Builder => $this->filtrerParLeType($requete->where('charges.mois_tva', $this->caseMois), (string) $this->caseType))
-            ->orderBy('charges.mois_tva')
-            ->orderBy('charges.type')
-            ->orderBy('charges.type_de_la_societe_id')
-            ->orderBy('charges.id');
+        return app(ChargesDeLaSociete::class)->liste($this->acces(), $this->mois(), $this->magasinDuFiltre(), $this->magasinFiltre === 'societe', $this->vue)
+            ->when($this->caseType !== null && $this->caseMois !== null, fn (Builder $requete): Builder => $this->filtrerParLeType($requete->where('charges.mois_tva', $this->caseMois), (string) $this->caseType));
     }
 
     /**
@@ -965,7 +943,7 @@ final class PageDesCharges extends Component implements HasActions, HasForms, Ha
         $nature = $this->natureDuType($type);
         $propose = PropositionsDeTva::moisDeTva($nature, $date, self::saisi($get('date_paiement')));
 
-        return 'Proposé : '.self::nomDuMois($propose).(PropositionsDeTva::aConfirmerAuPaiement($nature, self::saisi($get('date_paiement'))) ? '. '.PropositionsDeTva::A_CONFIRMER_AU_PAIEMENT : '.');
+        return 'Proposé : '.TextesDesCharges::nomDuMois($propose).(PropositionsDeTva::aConfirmerAuPaiement($nature, self::saisi($get('date_paiement'))) ? '. '.PropositionsDeTva::A_CONFIRMER_AU_PAIEMENT : '.');
     }
 
     /**
@@ -995,7 +973,7 @@ final class PageDesCharges extends Component implements HasActions, HasForms, Ha
 
         $lignes = array_map(fn (array $charge): string => '<li>'.e($charge['etat']->symbole().' '.$charge['etat']->getLabel()).($charge['fournisseur'] !== null ? ' — '.e($charge['fournisseur']) : '').($charge['numero_piece'] !== null ? ', pièce n° '.e($charge['numero_piece']) : '').'</li>', $deja);
 
-        return new HtmlString('<div data-doublon-de-charge class="piliqi-charges__avertissement"><p class="font-medium">'.e(count($deja) > 1 ? count($deja).' charges de ce type sont déjà saisies pour '.self::nomDuMois($mois).' :' : 'Une charge de ce type est déjà saisie pour '.self::nomDuMois($mois).' :').'</p><ul>'.implode('', $lignes).'</ul></div>');
+        return new HtmlString('<div data-doublon-de-charge class="piliqi-charges__avertissement"><p class="font-medium">'.e(count($deja) > 1 ? count($deja).' charges de ce type sont déjà saisies pour '.TextesDesCharges::nomDuMois($mois).' :' : 'Une charge de ce type est déjà saisie pour '.TextesDesCharges::nomDuMois($mois).' :').'</p><ul>'.implode('', $lignes).'</ul></div>');
     }
 
     private function natureDuType(string $cle): NatureDeCharge
@@ -1229,17 +1207,14 @@ final class PageDesCharges extends Component implements HasActions, HasForms, Ha
     }
 
     /**
-     * Les magasins que l'accès voit, réels, de la société de l'accès.
+     * Les magasins réels de la société de l'accès qu'il voit (voir
+     * ChargesDeLaSociete::magasinsVus()).
      *
      * @return Collection<int, Magasin>
      */
     private function magasinsVus(): Collection
     {
-        $acces = $this->acces();
-
-        return Magasin::query()->where('societe_id', $acces->societe->getKey())->where('est_demonstration', false)
-            ->when($acces->magasins !== null, fn (Builder $requete): Builder => $requete->whereKey($acces->magasins ?? []))
-            ->orderBy('nom')->get(['id', 'uuid', 'nom', 'societe_id']);
+        return app(ChargesDeLaSociete::class)->magasinsVus($this->acces());
     }
 
     /**
@@ -1247,7 +1222,7 @@ final class PageDesCharges extends Component implements HasActions, HasForms, Ha
      */
     private function magasinsDeLaSaisie(): array
     {
-        $choix = $this->acces()->chargesDeLaSociete && $this->ecran !== self::MAGASIN ? ['' => self::TOUTE_LA_SOCIETE] : [];
+        $choix = $this->acces()->chargesDeLaSociete && $this->ecran !== self::MAGASIN ? ['' => TextesDesCharges::TOUTE_LA_SOCIETE] : [];
 
         foreach ($this->magasinsVus() as $magasin) {
             $choix[(string) $magasin->uuid] = (string) $magasin->nom;
@@ -1317,6 +1292,40 @@ final class PageDesCharges extends Component implements HasActions, HasForms, Ha
     private function lienDuClient(): ?LienCabinet
     {
         return $this->lien === null ? null : app(AccesDesCabinets::class)->liensOuverts(CompteConnecte::exiger())->parUuid($this->lien)->first();
+    }
+
+    /**
+     * Les filtres de la page que reprend son état téléchargeable : les mois
+     * et le libellé de la période, la vue, le magasin et son libellé (celui
+     * du responsable dans « Charges du magasin »).
+     */
+    private function filtresDeLEtat(): FiltresDeLEtat
+    {
+        $periodes = $this->periodes();
+        $magasins = $this->magasinsDuFiltre();
+
+        return new FiltresDeLEtat(
+            mois: $this->mois(),
+            periode: $periodes[$this->periode] ?? (string) reset($periodes),
+            vue: array_key_exists($this->vue, ChargesDeLaSociete::VUES) ? $this->vue : 'toutes',
+            magasin: $this->magasinDuFiltre(),
+            sansMagasin: $this->magasinFiltre === 'societe' && $this->acces()->chargesDeLaSociete,
+            libelleDuMagasin: $this->ecran === self::MAGASIN ? (string) ($this->magasinsVus()->first()->nom ?? $magasins['']) : ($magasins[$this->magasinFiltre] ?? $magasins['']),
+        );
+    }
+
+    /**
+     * « Édité le 15/11/2026 à 13:20 par Nom (rôle) », à l'heure de Paris :
+     * la personne connectée et son rôle tel que le dit son tableau de bord.
+     */
+    private function edition(): string
+    {
+        $compte = CompteConnecte::exiger();
+        $tenant = Filament::getTenant();
+        $maintenant = CarbonImmutable::now();
+        $role = $this->ecran === self::MAGASIN && $tenant instanceof Magasin ? $compte->libelleDuRoleDans($tenant) : $compte->libelleDuRoleDeSociete();
+
+        return 'Édité le '.Calendrier::deParis()->afficher($maintenant, 'd/m/Y').' à '.Calendrier::deParis()->afficher($maintenant, 'H:i').' par '.$compte->name.' ('.$role.')';
     }
 
     /**

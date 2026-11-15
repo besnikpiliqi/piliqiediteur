@@ -130,6 +130,7 @@ enum ActionAuditee: string implements HasLabel
     case TypeDeChargeRestaure = 'type_de_charge_restaure';
     case TypeDeChargeSupprime = 'type_de_charge_supprime';
     case TypesDeChargeHabituelsChoisis = 'types_de_charge_habituels_choisis';
+    case EtatDesChargesTelecharge = 'etat_des_charges_telecharge';
 
     /**
      * Les mots qui, dans un nom de champ (entre ses traits de soulignement,
@@ -257,6 +258,7 @@ enum ActionAuditee: string implements HasLabel
             self::TypeDeChargeRestaure => 'Type de charge restauré',
             self::TypeDeChargeSupprime => 'Type de charge supprimé',
             self::TypesDeChargeHabituelsChoisis => 'Types de charge habituels choisis',
+            self::EtatDesChargesTelecharge => 'État des charges téléchargé',
         };
     }
 
@@ -551,6 +553,9 @@ enum ActionAuditee: string implements HasLabel
             // PILIQI qu'elle coche « habituels ».
             self::TypeDeChargeAjoute, self::TypeDeChargeArchive, self::TypeDeChargeRestaure, self::TypeDeChargeSupprime => ['type', 'nature'],
             self::TypesDeChargeHabituelsChoisis => ['types'],
+            // L'état des charges téléchargé (voir EtatDesCharges) : ce qu'il
+            // couvre, ses filtres et son format, jamais son contenu.
+            self::EtatDesChargesTelecharge => ['periode', 'vue', 'magasin', 'format', 'nombre_charges'],
         };
     }
 }

@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "0503264d4ea80e5df6c020ee7a59d89a",
+    "content-hash": "2fe0663edd77b1bfc931e02cc86914fc",
     "packages": [
         {
             "name": "anourvalar/eloquent-serialize",
@@ -4213,7 +4213,8 @@
                     "type": "github"
                 }
             ],
-            "time": "2025-09-03T16:03:54+00:00"
+            "time": "2025-09-03T16:03:54+00:00",
+            "published-time": "2025-09-03T16:17:36+00:00"
         },
         {
             "name": "phpoption/phpoption",

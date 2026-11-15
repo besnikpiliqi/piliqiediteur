@@ -18,6 +18,7 @@ use App\Domain\Facturation\Models\LigneAvoir;
 use App\Domain\Facturation\Models\LigneFacture;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Models\PaiementAllocation;
+use App\Domain\Fichiers\CelluleDeTableur;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Support\CleDuModele;
 use App\Domain\Tenancy\Support\ResultatDePhp;
@@ -45,7 +46,7 @@ use Illuminate\Support\Collection;
  * chaque taux de ses ventes aux particuliers ; un relevé des encaissements
  * une ligne par mode, avec son mode, et une ligne pour le crédit d'avoir
  * utilisé ; un texte qui commencerait comme une formule est désamorcé
- * (voir texte()). Les montants sont ceux qu'enregistre chaque document,
+ * (voir CelluleDeTableur). Les montants sont ceux qu'enregistre chaque document,
  * additionnés en centimes par taux, jamais recalculés ni additionnés par la
  * base. Chaque document se relit dans son magasin, comme magasin actif
  * (voir DocumentsDeLaPeriode::dansLeMagasin()), les documents d'un magasin
@@ -220,11 +221,11 @@ final class RecapitulatifDesDocuments
     {
         return [
             $document->type->libelleDUnDocument(),
-            self::texte($document->magasin),
-            self::texte($document->numero),
+            CelluleDeTableur::texte($document->magasin),
+            CelluleDeTableur::texte($document->numero),
             Calendrier::afficherJour($document->jour, 'd/m/Y'),
-            self::texte($document->tiers ?? ''),
-            self::texte($identifiant ?? ''),
+            CelluleDeTableur::texte($document->tiers ?? ''),
+            CelluleDeTableur::texte($identifiant ?? ''),
             $document->origine ?? '',
             $document->pieceManquante ? self::PIECE_MANQUANTE : '',
             $mode ?? '',
@@ -339,18 +340,6 @@ final class RecapitulatifDesDocuments
     private static function taux(int $taux): string
     {
         return str_replace('.', ',', CalculateurLigne::centiemesDansUnChamp($taux));
-    }
-
-    /**
-     * Un texte saisi par une personne (un nom de magasin, de client ou de
-     * fournisseur, un numéro, un identifiant) tel qu'il s'écrit dans le
-     * fichier : précédé d'une apostrophe quand il commence comme une
-     * formule (=, +, -, @, une tabulation ou un retour chariot), qu'Excel
-     * exécuterait à l'ouverture au lieu de l'afficher.
-     */
-    private static function texte(string $valeur): string
-    {
-        return preg_match('/^[=+\-@\t\r]/', $valeur) === 1 ? "'".$valeur : $valeur;
     }
 
     /**

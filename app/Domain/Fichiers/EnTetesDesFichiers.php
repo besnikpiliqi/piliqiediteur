@@ -15,7 +15,8 @@ namespace App\Domain\Fichiers;
  *   gardé en cache, jamais chargé par un autre site.
  * - Un fichier que PILIQI produit lui-même (PDF d'un document, reçu,
  *   archive fiscale) garde son mode d'affichage, avec son type exact,
- *   nosniff et sans cache.
+ *   nosniff et sans cache ; celui qui se télécharge toujours (l'état des
+ *   charges) y ajoute son nom en pièce jointe.
  */
 final class EnTetesDesFichiers
 {
@@ -53,5 +54,16 @@ final class EnTetesDesFichiers
             'X-Content-Type-Options' => 'nosniff',
             'Cache-Control' => self::SANS_CACHE,
         ];
+    }
+
+    /**
+     * Les en-têtes d'un fichier que PILIQI produit, de ce type, téléchargé
+     * en pièce jointe sous ce nom.
+     *
+     * @return array<string, string>
+     */
+    public static function fichierProduitEnPieceJointe(string $nom, string $type): array
+    {
+        return [...self::fichierProduit($type), 'Content-Disposition' => NomDeFichier::enPieceJointe($nom)];
     }
 }

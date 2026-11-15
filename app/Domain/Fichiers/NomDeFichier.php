@@ -89,6 +89,30 @@ final class NomDeFichier
     }
 
     /**
+     * Le nom d'un fichier que PILIQI produit ou range à partir de textes
+     * saisis (l'état des charges, la pièce d'une charge dans un ZIP), suivi
+     * de cette extension : sans caractère de contrôle, invisible ni de sens
+     * d'écriture, chaque caractère interdit dans un nom de fichier (/ \ < >
+     * : " | ? *) remplacé par « _ », espaces répétés réunis, borné à
+     * LONGUEUR_MAXIMALE_EN_OCTETS octets ; un nom réservé de Windows est
+     * préfixé de « _ ». Rien n'y est pris pour une extension : « S.A.S. »
+     * garde ses points.
+     */
+    public static function dUnFichierProduit(string $nom, string $extension): string
+    {
+        $nom = (string) preg_replace('/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u', '', mb_scrub($nom, 'UTF-8'));
+        $nom = str_replace("\u{FFFD}", '_', $nom);
+        $nom = (string) preg_replace('#[/\\\\<>:"|?*]#', '_', $nom);
+        $nom = self::borner((string) preg_replace('/\s+/u', ' ', $nom));
+
+        if (preg_match(self::NOMS_RESERVES, $nom) === 1) {
+            $nom = '_'.$nom;
+        }
+
+        return ($nom === '' ? 'fichier' : $nom).'.'.$extension;
+    }
+
+    /**
      * Un nom tel que reçu, comme il s'écrit dans un message : son seul nom
      * de base, sans caractère de contrôle, invisible ni de sens d'écriture,
      * borné à LONGUEUR_MAXIMALE_EN_OCTETS octets ; « pièce » quand il n'en

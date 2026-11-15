@@ -3302,6 +3302,9 @@ return [
         ]],
     ],
     'resources/views/filament/page-des-charges.blade.php' => [
+        'clic:telechargerLEtat' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Parcours/ChargesTest.php › chaque rôle qui voit une page des charges télécharge l’état des charges en PDF et en Excel par le menu « Télécharger »',
+        ]],
         'clic:filtrerLaCase' => ['lot' => 'NAV-4', 'tests' => [
             'tests/Browser/Parcours/ChargesTest.php › le propriétaire dépose une quittance de loyer avec ses chiffres, voit la case orange, filtre la liste par la case et télécharge la pièce',
         ]],

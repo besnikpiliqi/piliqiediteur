@@ -3,6 +3,12 @@
 namespace Database\Seeders\Semis;
 
 use App\Domain\Calendrier\Calendrier;
+use App\Domain\Charges\Enums\FormatDeLEtat;
+use App\Domain\Charges\Services\ChargesDeLaSociete;
+use App\Domain\Charges\Services\DroitsSurLesCharges;
+use App\Domain\Charges\Services\EtatDesCharges;
+use App\Domain\Charges\Services\TvaDeLaPeriode;
+use App\Domain\Charges\Support\FiltresDeLEtat;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\EnvoyerDocumentAction;
 use App\Domain\Facturation\Enums\FormatDuTelechargement;
@@ -26,6 +32,7 @@ use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\IdentifiantsInsee;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\CleDuModele;
 use App\Domain\Tenancy\Support\ValeursLues;
 use App\Integrations\Pdp\Contracts\PdpGatewayInterface;
 use App\Integrations\Pdp\FakePdpGateway;
@@ -33,6 +40,7 @@ use App\Integrations\Sirene\Contracts\RepertoireSirene;
 use App\Integrations\Sirene\FauxRepertoireSirene;
 use App\Models\User;
 use Illuminate\Notifications\DatabaseNotification;
+use LogicException;
 
 /**
  * Les derniers gestes de l'histoire semée, la veille du semis : une
@@ -42,7 +50,8 @@ use Illuminate\Notifications\DatabaseNotification;
  * déclaré), les notifications que certains comptes ont lues (les autres
  * restent non lues dans leur cloche), et les téléchargements des
  * documents par période, en ZIP et en CSV, que la propriétaire de Maison
- * Ferrand a demandés.
+ * Ferrand a demandés, et l'état de ses charges, que cette propriétaire a
+ * téléchargé en PDF et le collaborateur de son cabinet en Excel.
  */
 final class DerniersGestes
 {
@@ -57,6 +66,7 @@ final class DerniersGestes
         $this->choisirLesGraphiques();
         $this->lireDesNotifications();
         $this->telechargerDesDocuments();
+        $this->telechargerLEtatDesCharges();
         $this->laisserDesTachesEnFile();
     }
 
@@ -132,6 +142,28 @@ final class DerniersGestes
         }
 
         $this->demanderUnTelechargement($proprietaire, $societe, $halles, Calendrier::ajouterJours($aujourdhui, -7), Calendrier::ajouterJours($aujourdhui, -1), [TypeDeDocumentTelechargeable::Ventes], FormatDuTelechargement::Zip);
+    }
+
+    /**
+     * L'état des charges de l'année de Maison Ferrand (voir
+     * EtatDesCharges), téléchargé en PDF par sa propriétaire depuis
+     * l'espace de la société, et en Excel par Paul Lefèvre, le
+     * collaborateur du cabinet à qui elle est confiée, la vue « À valider »
+     * : chacun s'inscrit au journal d'audit de la société.
+     */
+    private function telechargerLEtatDesCharges(): void
+    {
+        $societe = $this->semis->societe('commerce');
+        $annee = substr(Calendrier::deParis()->aujourdhui(), 0, 4);
+        $mois = array_map(static fn (int $mois): string => sprintf('%s-%02d', $annee, $mois), range(1, 12));
+
+        foreach ([[$this->semis->proprietaire('commerce'), 'toutes', FormatDeLEtat::Pdf], [$this->semis->compte('Paul Lefèvre'), 'a_valider', FormatDeLEtat::Excel]] as [$compte, $vue, $format]) {
+            $acces = app(DroitsSurLesCharges::class)->pour($compte, $societe) ?? throw new LogicException('Ce compte du semis voit les charges de Maison Ferrand.');
+            $filtres = new FiltresDeLEtat($mois, 'Année '.$annee, $vue, null, false, 'Toute la société et tous les magasins');
+            $tva = app(TvaDeLaPeriode::class)->pourLaPageDesCharges($acces, null, $mois, null, false, CleDuModele::desModeles(app(ChargesDeLaSociete::class)->magasinsVus($acces)));
+            app(EtatDesCharges::class)->telecharger($acces, $filtres, $tva, 'Édité par '.$compte->name, $format);
+            app(TenantContext::class)->clear();
+        }
     }
 
     /**

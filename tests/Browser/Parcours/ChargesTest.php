@@ -14,8 +14,10 @@ use App\Domain\Charges\Services\PiecesDesCharges;
 use App\Domain\Charges\Services\TypesDeCharge;
 use App\Domain\Charges\Support\SaisieDeCharge;
 use App\Domain\Fichiers\PieceDeposee;
+use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\TypeDActivite;
+use App\Domain\Tenancy\Models\EntreeAudit;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
@@ -35,8 +37,9 @@ use Tests\Fixtures\FichiersDeTest;
  * × mois », la liste et ses gestes : déposer et saisir une pièce, valider,
  * renvoyer au client, corriger, voir la pièce, supprimer, gérer les types ;
  * puis l'« À faire » et la TVA à payer, réelle et estimée, du tableau de
- * bord. Les charges que le test prépare passent par la vraie action du
- * domaine, avec leur pièce.
+ * bord ; enfin l'état des charges téléchargé en PDF et en Excel par le
+ * menu « Télécharger » de chaque page. Les charges que le test prépare
+ * passent par la vraie action du domaine, avec leur pièce.
  */
 
 beforeEach(function () {
@@ -679,3 +682,32 @@ test('le propriétaire lit la TVA du mois sous le tableau, change de mois, puis 
     expect([$ajoutee->total_tva, $ajoutee->tva_a_verifier, Charge::query()->withoutGlobalScopes()->where('societe_id', $societe->societe->getKey())->count()])->toBe([1995, true, 2]);
     expect(PieceDeCharge::query()->withoutGlobalScopes()->where('charge_id', $ajoutee->getKey())->value('nom'))->toBe('edf.pdf');
 });
+
+test('chaque rôle qui voit une page des charges télécharge l’état des charges en PDF et en Excel par le menu « Télécharger »', function (string $role) {
+    [$compte, $panneau, $page, , , $societeDuCompte] = pageDesChargesDe($this, $role);
+    chargeDeposee($societeDuCompte->proprietaire()->firstOrFail(), $societeDuCompte, ['numero_piece' => 'Q-ETAT', 'magasin' => $role === 'responsable' ? (string) $societeDuCompte->magasinsReels()->orderBy('id')->firstOrFail()->uuid : '']);
+    $nom = 'Charges 2026 — '.$societeDuCompte->raison_sociale;
+
+    $onglet = $this->seConnecter($compte, panneau: $panneau)->aller($page)->attendre()->verifier()
+        ->voir('Q-ETAT')
+        ->cliquerSur('Télécharger')
+        ->cliquerSur('PDF : état des charges');
+    $pdf = $onglet->telechargements();
+    expect($pdf)->toHaveCount(1);
+    expect([$pdf[0]['nom'], $pdf[0]['type'], substr((string) base64_decode($pdf[0]['contenu']), 0, 5)])->toBe([$nom.'.pdf', 'application/pdf', '%PDF-']);
+
+    $onglet->cliquerSur('Télécharger')->cliquerSur('Excel : état des charges');
+    $excel = $onglet->telechargements();
+    expect($excel)->toHaveCount(1);
+    expect([$excel[0]['nom'], $excel[0]['type'], substr((string) base64_decode($excel[0]['contenu']), 0, 2)])->toBe([$nom.'.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'PK']);
+
+    expect(EntreeAudit::query()->withoutGlobalScopes()->where('societe_id', $societeDuCompte->getKey())->where('action', ActionAuditee::EtatDesChargesTelecharge->value)->pluck('nouvelles_valeurs')->map(fn (mixed $valeurs): mixed => is_array($valeurs) ? ($valeurs['format'] ?? null) : null)->all())
+        ->toBe(['pdf', 'xlsx']);
+})->with([
+    'le propriétaire' => ['proprietaire'],
+    'l’administrateur coché' => ['administrateur'],
+    'le responsable coché' => ['responsable'],
+    'le propriétaire du cabinet' => ['proprietaire_du_cabinet'],
+    'le collaborateur confié' => ['collaborateur'],
+    'l’expert-comptable déclaré' => ['expert_comptable'],
+]);

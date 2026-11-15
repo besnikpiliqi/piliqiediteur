@@ -117,7 +117,7 @@ class SemisCompletTest extends TestCase
         'identifiants' => 68,
         'inventaires_ouverture' => 10,
         'invitations_cabinet' => 6,
-        'journal_audit' => 1489,
+        'journal_audit' => 1491,
         'liens_cabinet' => 15,
         'liens_des_devis' => 6,
         'lignes_achat' => 238,

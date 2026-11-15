@@ -15,7 +15,8 @@
         "brick/math": "^1.0",
         "filament/filament": "^3.3",
         "laravel/framework": "^13.17",
-        "laravel/tinker": "^3.0"
+        "laravel/tinker": "^3.0",
+        "openspout/openspout": "^4.32"
     },
     "require-dev": {
         "brianium/paratest": "^7.20",

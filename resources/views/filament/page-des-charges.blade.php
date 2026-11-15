@@ -8,6 +8,8 @@
 --}}
 @php
     use App\Domain\Charges\Enums\EtatDeLaCharge;
+    use App\Domain\Charges\Enums\FormatDeLEtat;
+    use App\Domain\Charges\Support\TextesDesCharges;
     use App\Filament\PageDesCharges;
 @endphp
 
@@ -27,9 +29,9 @@
             <span class="block font-medium text-gray-700 dark:text-gray-200">Vue</span>
             <x-filament::input.wrapper class="mt-1">
                 <x-filament::input.select wire:model.live="vue" data-filtre-vue>
-                    <option value="toutes">Toutes les charges</option>
-                    <option value="a_valider">À valider</option>
-                    <option value="renvoyees">Renvoyées au client</option>
+                    @foreach (\App\Domain\Charges\Services\ChargesDeLaSociete::VUES as $valeur => $libelle)
+                        <option value="{{ $valeur }}">{{ $libelle }}</option>
+                    @endforeach
                 </x-filament::input.select>
             </x-filament::input.wrapper>
         </label>
@@ -45,6 +47,18 @@
                 </x-filament::input.wrapper>
             </label>
         @endif
+        <div class="ms-auto" data-telecharger-l-etat>
+            <x-filament::dropdown placement="bottom-end">
+                <x-slot name="trigger">
+                    <x-filament::button color="gray" icon="heroicon-m-arrow-down-tray">Télécharger</x-filament::button>
+                </x-slot>
+                <x-filament::dropdown.list>
+                    @foreach (FormatDeLEtat::cases() as $format)
+                        <x-filament::dropdown.list.item wire:click="telechargerLEtat('{{ $format->value }}')" data-format-de-l-etat="{{ $format->value }}">{{ $format->getLabel() }}</x-filament::dropdown.list.item>
+                    @endforeach
+                </x-filament::dropdown.list>
+            </x-filament::dropdown>
+        </div>
     </div>
 
     <x-filament::section heading="Ce qui est déjà saisi" description="Une case par charge du mois : verte quand elle est validée, orange quand elle attend sa validation, grise quand la pièce est déposée sans ses chiffres, rouge quand elle est renvoyée au client. Cliquez sur une case pour voir ses charges dans la liste.">
@@ -54,7 +68,7 @@
                     <tr class="text-left text-gray-500 dark:text-gray-400">
                         <th class="py-1 pe-3 font-medium">Type</th>
                         @foreach ($mois as $unMois)
-                            <th class="px-1 py-1 text-center font-medium">{{ PageDesCharges::abregeDuMois($unMois) }}</th>
+                            <th class="px-1 py-1 text-center font-medium">{{ TextesDesCharges::abregeDuMois($unMois) }}</th>
                         @endforeach
                     </tr>
                 </thead>
@@ -73,7 +87,7 @@
                                             wire:click="filtrerLaCase(@js($cle), @js($unMois))"
                                             @class(['piliqi-charges__case', 'piliqi-charges__case--'.$case['etat']->value, 'piliqi-charges__case--choisie' => $this->caseType === $cle && $this->caseMois === $unMois])
                                             title="{{ $case['etat']->getLabel() }}{{ $case['nombre'] > 1 ? ' ('.$case['nombre'].' charges)' : '' }}"
-                                            aria-label="{{ $ligne['libelle'] }}, {{ PageDesCharges::nomDuMois($unMois) }} : {{ $case['etat']->getLabel() }}{{ $case['nombre'] > 1 ? ' ('.$case['nombre'].' charges)' : '' }}"
+                                            aria-label="{{ $ligne['libelle'] }}, {{ TextesDesCharges::nomDuMois($unMois) }} : {{ $case['etat']->getLabel() }}{{ $case['nombre'] > 1 ? ' ('.$case['nombre'].' charges)' : '' }}"
                                             data-case="{{ $case['etat']->value }}"
                                             data-mois="{{ $unMois }}"
                                         >{{ $case['etat']->symbole() }}@if ($case['nombre'] > 1)<span>{{ $case['nombre'] }}</span>@endif</button>
@@ -95,7 +109,7 @@
         </div>
         @if ($this->caseType !== null)
             <p class="mt-3 text-sm">
-                Liste filtrée sur une case, {{ PageDesCharges::nomDuMois((string) $this->caseMois) }}.
+                Liste filtrée sur une case, {{ TextesDesCharges::nomDuMois((string) $this->caseMois) }}.
                 <button type="button" wire:click="oublierLaCase" class="font-medium text-primary-600 underline dark:text-primary-400">Voir toute la période</button>
             </p>
         @endif
@@ -115,7 +129,7 @@
                 <x-filament::input.wrapper class="mt-1">
                     <x-filament::input.select wire:model.live="moisDeLaTva" data-filtre-mois-de-la-tva>
                         @foreach ($mois as $unMois)
-                            <option value="{{ $unMois }}">{{ ucfirst(PageDesCharges::nomDuMois($unMois)) }}</option>
+                            <option value="{{ $unMois }}">{{ ucfirst(TextesDesCharges::nomDuMois($unMois)) }}</option>
                         @endforeach
                     </x-filament::input.select>
                 </x-filament::input.wrapper>

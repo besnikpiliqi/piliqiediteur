@@ -9,9 +9,12 @@ use App\Domain\Charges\Enums\NatureDeCharge;
 use App\Domain\Charges\Enums\OrigineDeLaCharge;
 use App\Domain\Charges\Enums\TypeDeCharge;
 use App\Domain\Charges\Enums\ValideePar;
+use App\Domain\Charges\Services\TypesDeCharge;
+use App\Domain\Charges\Support\TextesDesCharges;
 use App\Domain\Tenancy\Concerns\BelongsToSociete;
 use App\Domain\Tenancy\Concerns\FigeLeNomDeSesAuteurs;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Support\ValeursLues;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -177,16 +180,32 @@ class Charge extends Model
      */
     public function libelleDuType(): string
     {
-        return $this->type?->getLabel() ?? (string) $this->typeDeLaSociete?->nom;
+        return $this->type?->getLabel() ?? ValeursLues::texteOuNul($this->getAttributes()['type_nom'] ?? null) ?? (string) $this->typeDeLaSociete?->nom;
     }
 
     /**
-     * La clé de son type dans le tableau des mois : « piliqi:loyer », ou
-     * « societe:{uuid} » pour un type de la société.
+     * La clé de son type dans le tableau des mois (voir
+     * ChargesDeLaSociete::tableauDesMois()) : « piliqi:loyer », ou
+     * « societe: » suivi de l'uuid d'un type de la société, lu avec la
+     * charge par ChargesDeLaSociete::liste() quand elle l'a lue ainsi.
      */
     public function cleDuType(): string
     {
-        return $this->type !== null ? 'piliqi:'.$this->type->value : 'societe:'.$this->typeDeLaSociete?->uuid;
+        return $this->type !== null
+            ? TypesDeCharge::PILIQI.$this->type->value
+            : TypesDeCharge::SOCIETE.(ValeursLues::texteOuNul($this->getAttributes()['type_uuid'] ?? null) ?? (string) $this->typeDeLaSociete?->uuid);
+    }
+
+    /**
+     * Le nom de son magasin, lu avec la charge par
+     * ChargesDeLaSociete::liste() quand elle l'a lue ainsi ; « Toute la
+     * société » pour une charge qui n'est d'aucun magasin.
+     */
+    public function nomDuMagasin(): string
+    {
+        return $this->magasin_id === null
+            ? TextesDesCharges::TOUTE_LA_SOCIETE
+            : ValeursLues::texteOuNul($this->getAttributes()['magasin_nom'] ?? null) ?? (string) $this->magasin?->nom;
     }
 
     public function nature(): NatureDeCharge

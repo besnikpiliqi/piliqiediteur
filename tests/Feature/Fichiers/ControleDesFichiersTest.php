@@ -130,6 +130,20 @@ class ControleDesFichiersTest extends TestCase
     }
 
     /**
+     * Le nom d'un fichier que PILIQI produit à partir de textes saisis (l'état
+     * des charges) : les caractères interdits deviennent « _ », les
+     * caractères invisibles disparaissent, les points d'une dénomination
+     * restent, et l'extension est celle qu'on lui donne.
+     */
+    public function test_le_nom_d_un_fichier_produit_garde_ses_points_et_perd_ses_caracteres_interdits(): void
+    {
+        $this->assertSame('Charges 2026 — MAISON FERRAND S.A.S.xlsx', NomDeFichier::dUnFichierProduit('Charges 2026 — MAISON FERRAND S.A.S', 'xlsx'));
+        $this->assertSame('Charges 2026 — A_B_C_D__ x.pdf', NomDeFichier::dUnFichierProduit("Charges 2026 — A/B\\C:D*?\u{202E} \t x", 'pdf'));
+        $this->assertSame('_CON.pdf', NomDeFichier::dUnFichierProduit('CON', 'pdf'));
+        $this->assertSame('fichier.pdf', NomDeFichier::dUnFichierProduit("\u{200B}", 'pdf'));
+    }
+
+    /**
      * @return array<string, array{0: string, 1: list<ContenuActif>}>
      */
     public static function pdfActifs(): array

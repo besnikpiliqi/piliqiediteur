@@ -406,11 +406,13 @@ final class Calendrier
     }
 
     /**
-     * Le jour, à minuit UTC, pour calculer en jours entiers sans fuseau.
+     * Le jour, à minuit UTC, pour calculer en jours entiers sans fuseau, ou
+     * pour l'écrire en date sans heure dans un tableur, qui n'en lit que
+     * l'année, le mois et le jour (voir EtatDesChargesEnExcel).
      *
      * @throws InvalidArgumentException
      */
-    private static function lireUnJour(string $jour): DateTimeImmutable
+    public static function lireUnJour(string $jour): DateTimeImmutable
     {
         return new DateTimeImmutable(self::exigerUnJour($jour).' 00:00:00', new DateTimeZone('UTC'));
     }

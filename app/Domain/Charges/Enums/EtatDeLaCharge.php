@@ -55,6 +55,24 @@ enum EtatDeLaCharge: string implements HasColor, HasLabel
     }
 
     /**
+     * Les couleurs de sa pastille dans l'état téléchargeable des charges
+     * (PDF et Excel, voir EtatDesCharges) : son fond pâle et son texte
+     * foncé, en hexadécimal, celles du modèle E3 choisi par l'éditeur, lues
+     * aussi en noir et blanc par leur symbole.
+     *
+     * @return array{fond: string, texte: string}
+     */
+    public function couleursImprimees(): array
+    {
+        return match ($this) {
+            self::PieceSansChiffres => ['fond' => 'ECEEF2', 'texte' => '4B5563'],
+            self::AValider => ['fond' => 'FDEFD6', 'texte' => '8A5200'],
+            self::Validee => ['fond' => 'DCFCE7', 'texte' => '166534'],
+            self::Renvoyee => ['fond' => 'FDE4E8', 'texte' => 'A61B2F'],
+        };
+    }
+
+    /**
      * @return 'gray'|'warning'|'success'|'danger'
      */
     public function getColor(): string

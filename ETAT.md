@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 15/11/2026 à 06:45 UTC par pilotage-sync.sh : « CI 8ce8bd4 flux ».
+Mis à jour le 15/11/2026 à 07:23 UTC par pilotage-sync.sh : « CI 8ce8bd4 cartes ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -37,6 +37,15 @@ eba4bc85 Relecture du lot ER-PRO
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
+ M app/Domain/Charges/Models/Charge.php
+ M app/Domain/Charges/Services/ChargesAFaire.php
+ M app/Domain/Charges/Services/ChargesDeLaSociete.php
+ M app/Domain/Charges/Services/ChiffrageDUneCharge.php
+ M app/Domain/Charges/Services/GestesSurLesCharges.php
+ M app/Domain/Charges/Services/PiecesDesCharges.php
+ M app/Domain/Charges/Support/GardesDesCharges.php
+ M app/Filament/PageDesCharges.php
+ M tests/Feature/Charges/PiecesDesChargesTest.php
 ```
 
 ## Dernière course de la chaîne
@@ -44,7 +53,6 @@ eba4bc85 Relecture du lot ER-PRO
 Course `wf_ee9b6e6e-908`, étapes commencées (de la plus ancienne à la plus récente) :
 
 ```
-DEMO-V:notes
 REGLE-B:implementation
 REGLE-B:relecture1
 REGLE-B:relecture2
@@ -69,4 +77,5 @@ CHARGES:correction
 CHARGES:poussee
 CHARGES:notes
 REGUL:implementation
+REGUL:implementation-2
 ```

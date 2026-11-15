@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 15/11/2026 à 11:59 UTC par pilotage-sync.sh : « Point de suivi 11:59 ».
+Mis à jour le 15/11/2026 à 12:04 UTC par pilotage-sync.sh : « Export charges tranché ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

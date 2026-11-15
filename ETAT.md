@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 15/11/2026 à 06:42 UTC par pilotage-sync.sh : « Après le lot CHARGES ».
+Mis à jour le 15/11/2026 à 06:44 UTC par pilotage-sync.sh : « CHARGES poussé, CI 8ce8bd4 ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -44,7 +44,6 @@ eba4bc85 Relecture du lot ER-PRO
 Course `wf_ee9b6e6e-908`, étapes commencées (de la plus ancienne à la plus récente) :
 
 ```
-DEMO-V:poussee
 DEMO-V:notes
 REGLE-B:implementation
 REGLE-B:relecture1
@@ -69,4 +68,5 @@ CHARGES:relecture2
 CHARGES:correction
 CHARGES:poussee
 CHARGES:notes
+REGUL:implementation
 ```

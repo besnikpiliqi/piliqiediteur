@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 15/11/2026 à 10:50 UTC par pilotage-sync.sh : « SEED-TOUT Laravel + SQL ».
+Mis à jour le 15/11/2026 à 11:00 UTC par pilotage-sync.sh : « A et B : contrôle nocturne, lot RLS ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

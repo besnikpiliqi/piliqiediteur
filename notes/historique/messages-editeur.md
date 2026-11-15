@@ -2752,3 +2752,11 @@ et une chose il faut que fasse quand je lance php artisan migrate:fresh --seed, 
 
 car toi t as fait deja les regle strict qui controle donc par laravel et par sql donc tout les deux doivent controler les regles
 
+## 313. 2026-11-15 10:51 UTC
+
+ca m inquite vrament bcp que qq donees puisse se melanger avec qq un d'autre et si arrive alors sera vraiment un desastre
+
+## 314. 2026-11-15 10:59 UTC
+
+A et B et sera que pour developement ou aussi en production ? il faut note ca peut etre dans la fiche, de ce qui je doit faire, mais si tu aplique mnt et sera la meme en production alors pas besoin de mettre dans la fiche mais quand meme il faut noter meme peut etre dans une nouvelle tab, qu est ce qu'on apliquer comme rigoureux et tout tout ce qu'on a decide de genre de protection car pour l instan je me rappel pas de tout se qu on a fait mais tu les sais deja et tu les notes pour toujour et meme tu notes tes proposition s 'il ne sont pas accepter par moi, donc savoir tout
+

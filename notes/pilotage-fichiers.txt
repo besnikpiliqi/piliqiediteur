@@ -255,3 +255,4 @@ reprises/lot-REGUL-travail-non-commite.patch
 reprises/cahier-ER-PRO.avant-mdp-15-11.md
 reprises/cahier-ER-PRO.avant-graph-ecran-15-11.md
 reprises/cahier-SEED-TOUT.md
+reprises/cahier-RLS.md

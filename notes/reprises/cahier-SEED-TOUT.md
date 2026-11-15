@@ -91,6 +91,15 @@ connection to server at "127.0.0.1", port 5432 failed: FATAL:  password authenti
 5. CLAUDE.md, le point 6 du protocole de rigueur ajoute : « … et le semis se termine par la vérification de l'isolation de toute la base (sociétés, magasins, comptes, cabinet, comptables, démonstration), qui doit trouver zéro problème. »
 6. README : la commande, ce qu'elle vérifie, comment lire son tableau.
 
+## 3 ter. Le même contrôle chaque nuit, en production comme en développement (choix « A » de l'éditeur, le 15/11/2026 vers 12 h 35 à Paris)
+
+1. La commande de vérification de l'isolation (§ 3 bis, Laravel et SQL) est planifiée chaque nuit, dans tous les environnements (développement, production), à une heure de Paris fixe hors de 2 h à 3 h (4 h 40 par exemple), sur un seul serveur, sans chevauchement (withoutOverlapping), en lecture seule, par paquets pour ne pas charger la base (durée et nombre de lignes écrits dans son journal technique).
+2. Si elle trouve au moins un problème : une alerte à l'éditeur (PILIQI_EDITEUR_EMAIL) et une ligne au journal technique, dans l'heure, avec le nombre de problèmes par contrôle et les identifiants internes seulement (aucun nom, adresse, montant, identifiant de connexion ni adresse IP) ; une seule alerte par nuit ; rien n'est bloqué ni corrigé automatiquement (la correction est une procédure de l'éditeur, à l'étape 13).
+3. Si elle ne peut pas finir (erreur, délai), l'éditeur est prévenu aussi (« contrôle de l'isolation non terminé »), car un contrôle qui ne tourne plus ne doit jamais passer inaperçu.
+4. `caisse:diagnostiquer` (ou le diagnostic de production) signale si cette tâche n'a pas réussi depuis plus de 36 heures.
+5. Tests : la planification (heure, fuseau, un seul serveur), l'alerte envoyée sur une faute introduite, son absence quand tout est juste, son contenu sans donnée personnelle, l'alerte « non terminé », le signal du diagnostic.
+6. CLAUDE.md, point 6 du protocole de rigueur : « … et ce contrôle tourne aussi chaque nuit, en production comme en développement, et prévient l'éditeur au moindre problème. » README : la tâche, son heure, ce que dit l'alerte.
+
 ## 4. Liste des comptes
 Le fichier comptes-de-demonstration.txt (jamais suivi par git) et l'affichage de fin de semis donnent, pour chaque compte : société, magasin, rôle, identifiant, mot de passe (PILIQI_DEMO_MOT_DE_PASSE ou identifiant), et une phrase « ce qu'il faut regarder avec ce compte » (ex. « Inès Garnier, vendeuse des Halles : sa caisse, ses tickets, son relevé du jour, la carte des notifications »).
 

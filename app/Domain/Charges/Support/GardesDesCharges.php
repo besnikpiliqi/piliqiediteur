@@ -210,6 +210,7 @@ final class GardesDesCharges
     /**
      * Retire les déclencheurs de cette table, puis leurs fonctions.
      *
+     * @param  literal-string  $table
      * @param  list<literal-string>  $gardes
      */
     private static function retirer(string $table, array $gardes): void

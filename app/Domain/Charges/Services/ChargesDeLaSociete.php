@@ -159,7 +159,7 @@ final class ChargesDeLaSociete
             return [];
         }
 
-        return $this->visibles($acces)
+        return array_values($this->visibles($acces)
             ->where('charges.mois_tva', $mois)
             ->when($type !== null, fn (Builder $requete): Builder => $requete->where('charges.type', $type?->value))
             ->when($propre !== null, fn (Builder $requete): Builder => $requete->where('charges.type_de_la_societe_id', $propre?->getKey()))
@@ -167,8 +167,7 @@ final class ChargesDeLaSociete
             ->orderBy('charges.id')
             ->get(['charges.id', 'charges.etat', 'charges.fournisseur', 'charges.numero_piece'])
             ->map(fn (Charge $charge): array => ['etat' => $charge->etat, 'fournisseur' => $charge->fournisseur, 'numero_piece' => $charge->numero_piece])
-            ->values()
-            ->all();
+            ->all());
     }
 
     /**

@@ -191,7 +191,7 @@ class Charge extends Model
 
     public function nature(): NatureDeCharge
     {
-        return $this->type?->nature() ?? $this->typeDeLaSociete?->nature ?? NatureDeCharge::Services;
+        return $this->type?->nature() ?? $this->typeDeLaSociete->nature ?? NatureDeCharge::Services;
     }
 
     public function estValidee(): bool

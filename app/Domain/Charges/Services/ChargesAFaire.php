@@ -119,15 +119,20 @@ final class ChargesAFaire
 
         $ouverts = $this->cabinets->idsDesMagasinsOuverts($compte);
 
-        return Charge::query()->withoutGlobalScope(SocieteScope::class)
+        $nombres = [];
+        $lus = Charge::query()->withoutGlobalScope(SocieteScope::class)
             ->whereIn('charges.societe_id', $accordes)
             ->whereIn('charges.etat', EtatDeLaCharge::attendantLaValidation())
             ->where(fn (Builder $requete): Builder => $requete->whereNull('charges.magasin_id')->orWhereIn('charges.magasin_id', $ouverts))
             ->groupBy('charges.societe_id')
             ->toBase()
             ->selectRaw('charges.societe_id, COUNT(*) AS nombre')
-            ->pluck('nombre', 'societe_id')
-            ->map(fn (mixed $nombre): int => ValeursLues::entier($nombre))
-            ->all();
+            ->pluck('nombre', 'societe_id');
+
+        foreach ($lus as $client => $nombre) {
+            $nombres[ValeursLues::entier($client)] = ValeursLues::entier($nombre);
+        }
+
+        return $nombres;
     }
 }

@@ -6,6 +6,7 @@ use App\Domain\Charges\Enums\TauxDeCharge;
 use App\Domain\Charges\Enums\TypeDeCharge;
 use App\Domain\Charges\Exceptions\ConfirmationRequiseException;
 use App\Domain\Facturation\Services\CalculateurLigne;
+use App\Domain\Tenancy\Support\ValeursLues;
 use InvalidArgumentException;
 
 /**
@@ -68,7 +69,7 @@ final class ChiffrageDUneCharge
         $chiffrees = [];
         $ecarts = [];
 
-        foreach (array_values($lignes) as $rang => $ligne) {
+        foreach ($lignes as $rang => $ligne) {
             $calculee = self::tvaCalculee($ligne['ht'], $ligne['taux']);
             $tva = $ligne['tva'] ?? $calculee;
             $ttcCalcule = self::ttcCalcule($ligne['ht'], $tva, $horsDeFrance);
@@ -94,7 +95,15 @@ final class ChiffrageDUneCharge
             throw new ConfirmationRequiseException(ConfirmationRequiseException::ECARTS, implode(' ', [...$ecarts, ConfirmationRequiseException::CONSIGNE_ECARTS]));
         }
 
-        $total = fn (string $champ): int => array_sum(array_column($chiffrees, $champ));
+        $total = static function (string $champ) use ($chiffrees): int {
+            $somme = 0;
+
+            foreach (ValeursLues::entiers(array_column($chiffrees, $champ)) as $montant) {
+                $somme += $montant;
+            }
+
+            return $somme;
+        };
 
         return [
             'lignes' => $chiffrees,

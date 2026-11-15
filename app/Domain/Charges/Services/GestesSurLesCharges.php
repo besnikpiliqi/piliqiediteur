@@ -8,6 +8,7 @@ use App\Domain\Tenancy\Enums\StatutSociete;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\ActionsUniques;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\CleDuModele;
 use App\Models\User;
 use Closure;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -72,7 +73,7 @@ final class GestesSurLesCharges
             $auteur,
             [...$parametres, 'societe' => $societe->uuid],
             function () use ($auteur, $societe): void {
-                Societe::verrouillerAvantSonJournalDAudit($societe->getKey());
+                Societe::verrouillerAvantSonJournalDAudit(CleDuModele::de($societe));
                 User::query()->whereKey($auteur->getKey())->lock('for no key update')->first();
             },
             fn (): ?Charge => $geste($this->accesDeLAuteurRelu($auteur, $societe)),
@@ -97,7 +98,7 @@ final class GestesSurLesCharges
     public function executerSansJeton(User $auteur, Societe $societe, Closure $geste): mixed
     {
         return $this->contexte->runAsSociete($societe, fn (): mixed => DB::transaction(function () use ($auteur, $societe, $geste): mixed {
-            Societe::verrouillerAvantSonJournalDAudit($societe->getKey());
+            Societe::verrouillerAvantSonJournalDAudit(CleDuModele::de($societe));
             User::query()->whereKey($auteur->getKey())->lock('for no key update')->first();
 
             return $geste($this->accesDeLAuteurRelu($auteur, $societe));

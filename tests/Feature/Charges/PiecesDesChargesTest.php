@@ -2,10 +2,12 @@
 
 namespace Tests\Feature\Charges;
 
+use App\Domain\Cabinets\Models\LienCabinet;
 use App\Domain\Charges\Actions\DeposerUneChargeAction;
 use App\Domain\Charges\Models\Charge;
 use App\Domain\Charges\Models\PieceDeCharge;
 use App\Domain\Charges\Services\PiecesDesCharges;
+use App\Domain\Fichiers\EnTetesDesFichiers;
 use App\Domain\Fichiers\Enums\RaisonDuRefus;
 use App\Domain\Fichiers\Exceptions\FichierRefuseException;
 use App\Domain\Fichiers\Exceptions\PieceBloqueeException;
@@ -24,6 +26,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 use Tests\Fixtures\FichiersDeTest;
 use Tests\TestCase;
 
@@ -158,6 +161,68 @@ class PiecesDesChargesTest extends TestCase
         $this->assertCount(1, $this->entreesDAudit($this->societe, ActionAuditee::PieceDeChargeBloquee));
         Notification::assertSentToTimes($this->proprietaire, AvisDeLAntivirus::class, 1);
         $this->assertThrows(fn () => app(TenantContext::class)->runAsSociete($this->societe, fn (): string => app(PiecesDesCharges::class)->contenuServable($this->proprietaire, $bloquee)), PieceBloqueeException::class);
+    }
+
+    /**
+     * Le collaborateur du cabinet lié télécharge, depuis l'espace du
+     * cabinet, la pièce d'une charge du client : en pièce jointe, avec les
+     * seuls en-têtes de toute pièce reçue (EnTetesDesFichiers). Son analyse,
+     * due après 24 heures, s'écrit dans la société du client ; reconnue
+     * plus tard comme une menace, la pièce s'y bloque, au nom du
+     * collaborateur, jamais au journal du cabinet : le service pose lui-même
+     * la société de la pièce.
+     */
+    public function test_le_cabinet_lie_telecharge_la_piece_en_piece_jointe_et_son_analyse_s_ecrit_chez_le_client(): void
+    {
+        $charge = $this->deposer($this->proprietaire, $this->societe);
+        $piece = PieceDeCharge::query()->withoutGlobalScopes()->where('charge_id', $charge->getKey())->sole();
+        $collaborateur = $this->collaborateurDuCabinetLie($this->lyon);
+        $cabinet = $collaborateur->societe()->firstOrFail();
+        $lien = LienCabinet::query()->withoutGlobalScopes()->where('societe_id', $this->societe->getKey())->sole();
+        $this->travelTo(self::aParis('2026-05-21 10:00:01'));
+        $this->dansLEspaceDuCabinet($cabinet, $collaborateur);
+
+        $reponse = Livewire::test(PageDesCharges::class, ['ecran' => PageDesCharges::CABINET, 'lien' => (string) $lien->uuid])
+            ->instance()
+            ->telechargerLaPiece((string) $charge->uuid);
+
+        $this->assertInstanceOf(StreamedResponse::class, $reponse);
+        $this->assertSame(array_keys(EnTetesDesFichiers::fichierRecu('quittance.pdf', 'application/pdf')), ['Content-Type', 'Content-Disposition', 'X-Content-Type-Options', 'Content-Security-Policy', 'Cache-Control', 'Cross-Origin-Resource-Policy']);
+        $this->assertSame([
+            'application/pdf',
+            'attachment; filename=quittance.pdf',
+            'nosniff',
+            "sandbox; default-src 'none'",
+            'no-store, private',
+            'same-origin',
+        ], array_map(fn (string $entete): ?string => $reponse->headers->get($entete), array_keys(EnTetesDesFichiers::fichierRecu('quittance.pdf', 'application/pdf'))), 'La pièce part comme toute pièce reçue : en pièce jointe, dans un bac à sable, jamais gardée en cache.');
+        ob_start();
+        $reponse->sendContent();
+        $this->assertSame(FichiersDeTest::pdf('Quittance de loyer'), ob_get_clean());
+        $this->assertMemeInstant(self::aParis('2026-05-21 10:00:01'), PieceDeCharge::query()->withoutGlobalScopes()->findOrFail($piece->getKey())->analysee_le);
+
+        $this->app->instance(Antivirus::class, new class implements Antivirus
+        {
+            public function analyser(string $contenu): ResultatDeLAntivirus
+            {
+                return ResultatDeLAntivirus::menace('Pdf.Exploit.Nouveau');
+            }
+
+            public function description(): string
+            {
+                return 'antivirus des tests';
+            }
+        });
+        $this->travelTo(self::aParis('2026-05-22 10:00:02'));
+
+        Livewire::test(PageDesCharges::class, ['ecran' => PageDesCharges::CABINET, 'lien' => (string) $lien->uuid])
+            ->callTableAction('voirLaPiece', $charge)
+            ->assertNotified('Cette pièce ne se télécharge pas')
+            ->assertNoFileDownloaded();
+
+        $this->assertNotNull(PieceDeCharge::query()->withoutGlobalScopes()->findOrFail($piece->getKey())->bloquee_le);
+        $this->assertSame([$collaborateur->id], array_map(fn ($entree): ?int => $entree->auteur_id, $this->entreesDAudit($this->societe, ActionAuditee::PieceDeChargeBloquee)));
+        $this->assertSame([], $this->entreesDAudit($cabinet, ActionAuditee::PieceDeChargeBloquee));
     }
 
     private function deposerLaPiece(PieceDeposee $piece): Charge

@@ -18,6 +18,7 @@ use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Notifications\AvisDeLAntivirus;
 use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\CleDuModele;
 use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Integrations\Antivirus\AntivirusInjoignableException;
 use App\Models\User;
@@ -144,7 +145,11 @@ final class PiecesDesCharges
      * d'une pièce bloquée ; analysé de nouveau quand sa dernière analyse
      * date de plus de 24 heures (voir RevueAntivirus). Reconnue alors comme
      * une menace, la pièce est bloquée, au nom de ce compte, et le
-     * propriétaire de la société en est prévenu.
+     * propriétaire de la société en est prévenu. L'analyse et le blocage
+     * s'écrivent dans le contexte de la société de la pièce, que ce service
+     * pose lui-même, quel que soit l'espace qui la demande (celui d'un
+     * cabinet lié n'est pas la société de la charge) ; le contenu se lit
+     * hors de ce contexte, sur le disque des pièces.
      *
      * @throws PieceBloqueeException quand la pièce est bloquée
      * @throws AntivirusInjoignableException quand l'antivirus ne répond pas pour une analyse due
@@ -164,13 +169,15 @@ final class PiecesDesCharges
         $resultat = $this->revue->analyser($contenu);
         $maintenant = CarbonImmutable::now();
 
+        $societe = Societe::query()->findOrFail($piece->societe_id);
+
         if ($resultat->estSain()) {
-            PieceDeCharge::query()->whereKey($piece->getKey())->where('analysee_le', '<', Instant::enBase($maintenant))->update(['analysee_le' => Instant::enBase($maintenant)]);
+            app(TenantContext::class)->runAsSociete($societe, fn (): int => PieceDeCharge::query()->whereKey($piece->getKey())->where('analysee_le', '<', Instant::enBase($maintenant))->update(['analysee_le' => Instant::enBase($maintenant)]));
 
             return $contenu;
         }
 
-        $this->bloquer($compte, $piece, (string) $resultat->menace, $maintenant);
+        app(TenantContext::class)->runAsSociete($societe, fn () => $this->bloquer($compte, $piece, (string) $resultat->menace, $maintenant));
 
         throw new PieceBloqueeException;
     }
@@ -223,7 +230,7 @@ final class PiecesDesCharges
     private function inscrireLeRefus(User $auteur, Societe $societe, ?Charge $charge, FichierRefuseException $refus): void
     {
         app(TenantContext::class)->runAsSociete($societe, fn () => DB::transaction(function () use ($auteur, $societe, $charge, $refus): void {
-            Societe::verrouillerAvantSonJournalDAudit($societe->getKey());
+            Societe::verrouillerAvantSonJournalDAudit(CleDuModele::de($societe));
             $this->journalAudit->inscrire(ActionAuditee::PieceDeChargeRefusee, $auteur, $charge?->magasin, null, [
                 'charge' => $charge === null ? null : ChargesDeLaSociete::designation($charge),
                 ...$refus->valeursAuditees(),

@@ -47,7 +47,6 @@ use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Scopes\MagasinScope;
 use App\Domain\Tenancy\Scopes\SocieteScope;
-use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\CleDuModele;
 use App\Domain\Tenancy\Support\CompteConnecte;
 use App\Domain\Tenancy\Support\ValeursLues;
@@ -441,7 +440,7 @@ final class PageDesCharges extends Component implements HasActions, HasForms, Ha
             ->query(fn (): Builder => $this->requeteDeLaListe())
             ->columns([
                 TextColumn::make('mois_tva')->label('Mois de TVA')->formatStateUsing(fn (string $state): string => ucfirst(self::nomDuMois($state))),
-                TextColumn::make('type')->label('Type')->state(fn (Charge $record): string => $record->type?->getLabel() ?? (string) ($record->getAttributes()['type_nom'] ?? '')),
+                TextColumn::make('type')->label('Type')->state(fn (Charge $record): string => $record->type?->getLabel() ?? ValeursLues::texteOuNul($record->getAttributes()['type_nom'] ?? null) ?? ''),
                 TextColumn::make('magasin_nom')->label('Magasin')->placeholder(self::TOUTE_LA_SOCIETE)->visible($this->ecran !== self::MAGASIN),
                 TextColumn::make('fournisseur')->label('Fournisseur')->placeholder('—'),
                 TextColumn::make('numero_piece')->label('N° de la pièce')->placeholder('—'),
@@ -477,8 +476,12 @@ final class PageDesCharges extends Component implements HasActions, HasForms, Ha
 
     /**
      * La pièce de cette charge, servie en pièce jointe, jamais affichée
-     * dans la page (comme les pièces du fournisseur) ; refusée quand elle
-     * est bloquée par l'antivirus.
+     * dans la page (comme les pièces du fournisseur), avec les seuls
+     * en-têtes de toute pièce reçue (EnTetesDesFichiers::fichierRecu(), son
+     * nom en pièce jointe compris) ; refusée quand elle est bloquée par
+     * l'antivirus. PiecesDesCharges::contenuServable() pose lui-même la
+     * société de la charge pour l'analyse et le blocage, même depuis
+     * l'espace d'un cabinet lié.
      */
     public function telechargerLaPiece(string $charge): ?StreamedResponse
     {
@@ -491,7 +494,7 @@ final class PageDesCharges extends Component implements HasActions, HasForms, Ha
         }
 
         try {
-            $contenu = app(TenantContext::class)->runAsSociete($this->acces()->societe, fn (): string => app(PiecesDesCharges::class)->contenuServable(CompteConnecte::exiger(), $piece));
+            $contenu = app(PiecesDesCharges::class)->contenuServable(CompteConnecte::exiger(), $piece);
         } catch (PieceBloqueeException $bloquee) {
             return $this->refuserLeTelechargement($bloquee->getMessage());
         } catch (AntivirusInjoignableException $injoignable) {
@@ -502,7 +505,7 @@ final class PageDesCharges extends Component implements HasActions, HasForms, Ha
 
         return response()->streamDownload(function () use ($contenu): void {
             echo $contenu;
-        }, $piece->nom, EnTetesDesFichiers::fichierRecu($piece->nom, $piece->type_mime));
+        }, null, EnTetesDesFichiers::fichierRecu($piece->nom, $piece->type_mime));
     }
 
     /**
@@ -574,7 +577,7 @@ final class PageDesCharges extends Component implements HasActions, HasForms, Ha
             })
             ->visible(fn (): bool => ! GestesSurLesCharges::touchePlusASesCharges($this->acces()->societe))
             ->action(function (array $data): void {
-                $this->executerAvecConfirmation($data, function (SaisieDeCharge $saisie, array $data): void {
+                $this->executerAvecConfirmation(ValeursLues::champs($data), function (SaisieDeCharge $saisie, array $data): void {
                     app(DeposerUneChargeAction::class)->handle(CompteConnecte::exiger(), $this->acces()->societe, $saisie, self::pieceDeposee($data), ValeursLues::texteOuNul($data['jeton'] ?? null));
                     Notification::make()->title('Charge enregistrée.')->success()->send();
                 });
@@ -597,7 +600,7 @@ final class PageDesCharges extends Component implements HasActions, HasForms, Ha
             })
             ->visible(fn (Charge $record): bool => ! $record->estValidee() && ! GestesSurLesCharges::touchePlusASesCharges($this->acces()->societe))
             ->action(function (Charge $record, array $data): void {
-                $this->executerAvecConfirmation($data, function (SaisieDeCharge $saisie, array $data) use ($record): void {
+                $this->executerAvecConfirmation(ValeursLues::champs($data), function (SaisieDeCharge $saisie, array $data) use ($record): void {
                     app(SaisirUneChargeAction::class)->handle(CompteConnecte::exiger(), $this->acces()->societe, (string) $record->uuid, $saisie, self::pieceDeposee($data), ValeursLues::texteOuNul($data['jeton'] ?? null));
                     Notification::make()->title('Chiffres enregistrés.')->success()->send();
                 });
@@ -617,7 +620,7 @@ final class PageDesCharges extends Component implements HasActions, HasForms, Ha
             ->modalSubmitActionLabel('Corriger')
             ->visible(fn (Charge $record): bool => $record->estValidee() && $this->acces()->valide() && ! GestesSurLesCharges::touchePlusASesCharges($this->acces()->societe))
             ->action(function (Charge $record, array $data): void {
-                $this->executerAvecConfirmation($data, function (SaisieDeCharge $saisie, array $data) use ($record): void {
+                $this->executerAvecConfirmation(ValeursLues::champs($data), function (SaisieDeCharge $saisie, array $data) use ($record): void {
                     app(CorrigerUneChargeAction::class)->handle(CompteConnecte::exiger(), $this->acces()->societe, (string) $record->uuid, $saisie, ValeursLues::texte($data['motif'] ?? ''), ValeursLues::texteOuNul($data['jeton'] ?? null));
                     Notification::make()->title('Charge corrigée.')->success()->send();
                 });
@@ -838,7 +841,7 @@ final class PageDesCharges extends Component implements HasActions, HasForms, Ha
                 DatePicker::make('date_paiement')->label('Date de paiement')->native()->live()
                     ->afterStateUpdated(fn (Get $get, Set $set, mixed $old) => $this->suivreLeMois($get, $set, $this->moisPropose($get('type'), $get('date_piece'), $old))),
                 TextInput::make('mois_tva')->label($acces->valide() ? 'Mois de TVA' : 'Mois de TVA proposé')->type('month')->live()
-                    ->helperText(fn (Get $get): ?string => $this->phraseDuMois($get))
+                    ->helperText(fn (Get $get): string => $this->phraseDuMois($get))
                     ->disabled(! $acces->valide()),
                 Select::make('magasin')->label('Magasin concerné')->options(fn (): array => $this->magasinsDeLaSaisie())->selectablePlaceholder(false)
                     ->required($this->ecran === self::MAGASIN || ! $acces->chargesDeLaSociete),
@@ -941,7 +944,7 @@ final class PageDesCharges extends Component implements HasActions, HasForms, Ha
      * La phrase grise du mois de TVA : « à confirmer au paiement » pour une
      * charge de services sans date de paiement.
      */
-    private function phraseDuMois(Get $get): ?string
+    private function phraseDuMois(Get $get): string
     {
         $date = self::saisi($get('date_piece'));
         $type = self::saisi($get('type'));
@@ -972,7 +975,7 @@ final class PageDesCharges extends Component implements HasActions, HasForms, Ha
         $mois = self::saisi($get('mois_tva')) ?? PropositionsDeTva::moisDeTva($this->natureDuType($type), $date, self::saisi($get('date_paiement')));
 
         try {
-            $deja = app(ChargesDeLaSociete::class)->dejaSaisiesCeMois($this->acces(), $type, $mois, $record?->getKey());
+            $deja = app(ChargesDeLaSociete::class)->dejaSaisiesCeMois($this->acces(), $type, $mois, $record === null ? null : CleDuModele::de($record));
         } catch (InvalidArgumentException) {
             return null;
         }
@@ -1165,7 +1168,7 @@ final class PageDesCharges extends Component implements HasActions, HasForms, Ha
             'date_piece' => $charge->date_piece,
             'date_paiement' => $charge->date_paiement,
             'mois_tva' => $charge->mois_tva,
-            'magasin' => $charge->magasin_id === null ? '' : (string) Magasin::query()->whereKey($charge->magasin_id)->where('societe_id', $charge->societe_id)->value('uuid'),
+            'magasin' => $charge->magasin_id === null ? '' : ValeursLues::texte(Magasin::query()->whereKey($charge->magasin_id)->where('societe_id', $charge->societe_id)->value('uuid')),
             'fournisseur_hors_france' => $charge->fournisseur_hors_france,
             'vehicule_utilitaire' => (bool) $charge->vehicule_utilitaire,
             'note' => $charge->note,

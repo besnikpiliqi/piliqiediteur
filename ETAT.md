@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 15/11/2026 à 19:50 UTC par pilotage-sync.sh : « Directive : copie de démonstration par type, changement de rôle, lien unique ».
+Mis à jour le 15/11/2026 à 20:09 UTC par pilotage-sync.sh : « Point de suivi 20:09 UTC ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

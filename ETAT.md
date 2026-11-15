@@ -1,12 +1,13 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 15/11/2026 à 00:40 UTC par pilotage-sync.sh : « GRAPH poussé, CI analyse rouge confiée à CHARGES ».
+Mis à jour le 15/11/2026 à 01:32 UTC par pilotage-sync.sh : « CI 743f9bc : test des cartes confié à CHARGES ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
 Tête poussée : `743f9bc2`. Commits locaux pas encore poussés :
 
 ```
+7ea99bc4 Réparation de la CI rouge de 743f9bc
 ```
 
 Derniers commits poussés :
@@ -37,6 +38,40 @@ eba4bc85 Relecture du lot ER-PRO
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
+ M CLAUDE.md
+ M app/Console/Commands/PurgerActionsTraitees.php
+ M app/Domain/Authorization/PermissionRegistry.php
+ M app/Domain/TableauDeBord/Services/ChiffresDuTableauDeBord.php
+ M app/Domain/TableauDeBord/Services/PerimetreDesGraphiques.php
+ M app/Domain/TableauDeBord/Services/SeriesDesGraphiques.php
+ M app/Domain/TableauDeBord/Support/CalculDesSeries.php
+ M app/Domain/TableauDeBord/Support/Perimetre.php
+ M app/Domain/TableauDeBord/Support/SerieDuGraphique.php
+ M app/Domain/Tenancy/Enums/ActionAuditee.php
+ M app/Domain/Tenancy/Models/Affectation.php
+ M app/Domain/Tenancy/Services/ActionsUniques.php
+ M app/Domain/Tenancy/Services/AffectationsDesMembres.php
+ M app/Domain/Tenancy/Support/GardesDesDroits.php
+ M app/Domain/Tenancy/Support/NomsPolymorphes.php
+ M app/Filament/Concerns/CocheLesAutorisationsDeMagasin.php
+ M app/Filament/GrilleDesGraphiques.php
+ M config/filesystems.php
+ M database/migrations/0001_01_00_000000_create_societes_table.php
+ M resources/views/filament/graphiques-du-panneau.blade.php
+ M resources/views/filament/grille-des-graphiques.blade.php
+ M tests/Feature/TableauDeBord/QuiVoitLesGraphiquesTest.php
+ M tests/Feature/Tenancy/HistoriqueAuNomFigeTest.php
+ M tests/Feature/Tenancy/IsolationDesSocietesTest.php
+ M tests/Unit/matrice-des-decisions.php
+?? app/Domain/Charges/
+?? app/Domain/TableauDeBord/Services/ChargesDuTableauDeBord.php
+?? app/Domain/Tenancy/Models/ActionTraiteeDeLaSociete.php
+?? database/migrations/2026_10_14_100010_create_actions_traitees_de_la_societe_table.php
+?? database/migrations/2026_10_15_100001_create_types_de_charge_de_la_societe_table.php
+?? database/migrations/2026_10_15_100002_create_charges_table.php
+?? database/migrations/2026_10_15_100003_create_lignes_de_charge_table.php
+?? database/migrations/2026_10_15_100004_create_pieces_de_charge_table.php
+?? tests/Feature/Charges/
 ```
 
 ## Dernière course de la chaîne

@@ -260,3 +260,4 @@ reprises/cahier-ER-PRO.avant-styles-15-11.md
 reprises/classes-absentes.py
 reprises/classes-absentes2.py
 reprises/protections-et-rigueur.md
+reprises/charges-export.html

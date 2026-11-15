@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 15/11/2026 à 11:46 UTC par pilotage-sync.sh : « Menus sombres + inventaire protections ».
+Mis à jour le 15/11/2026 à 11:58 UTC par pilotage-sync.sh : « Onglet protections + modèle export charges ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

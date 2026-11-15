@@ -2830,3 +2830,9 @@ Un compte dont le mot de passe est encore son identifiant ne s'ouvre que depuis 
 
 tu vois les menus deroulant ils sont pas compatible les couleur quand il est sombre ou pas. donc acoute moi, il faut que tu fasse dans tout les cas les couleur en sombre ou pas
 
+## 321. 2026-11-15 11:56 UTC
+
+[1 capture(s) d'écran jointe(s)]
+
+je pense creer une fonction pour pouvoir telecherger tout donc tout ce qui est declaré de "Ce qui est déjà saisi" pour voir l etat ou de mettre dans un pdf ou exel. quest ce tu pense. montre moi comment peux ressembler avec des modeles
+

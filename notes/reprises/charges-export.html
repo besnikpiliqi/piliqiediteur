@@ -1,0 +1,309 @@
+<title>Export des charges</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<style>
+/* Mise en page : ce que j'ai compris, le bouton sur la page, puis trois modèles côte à côte de lecture (PDF, Excel, les deux), et les questions. */
+:root{
+  --bg:#f3f4f6; --fg:#16181d; --doux:#5d6472; --trait:#d9dce3; --carte:#ffffff; --panneau:#f8f9fb;
+  --vert:#15803d; --accent:#15803d; --accent-doux:#e6f4ea;
+  --ok:#166534; --ok-f:#dcfce7; --att:#9a5b00; --att-f:#fdefd6; --gris:#4b5563; --gris-f:#eceef2; --ren:#b42335; --ren-f:#fde4e8; --vide:#c4c8d0;
+  --papier:#ffffff; --encre:#1a1d24; --xl-grille:#e3e5ea; --xl-entete:#f1f3f6; --xl-vert:#1d6f42;
+  --police:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#121418; --fg:#eceef3; --doux:#a3a9b6; --trait:#2d3139; --carte:#1b1e24; --panneau:#16191e;
+  --vert:#4ade80; --accent:#4ade80; --accent-doux:#173523;
+  --ok:#86efac; --ok-f:#163a24; --att:#fbbf5b; --att-f:#3b2c10; --gris:#c3c8d2; --gris-f:#2a2e36; --ren:#fb8a9c; --ren-f:#3d1b23; --vide:#4b505b;
+  --papier:#f7f7f5; --encre:#1a1d24; --xl-grille:#3a3e47; --xl-entete:#23262d; --xl-vert:#3fb27a; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#121418; --fg:#eceef3; --doux:#a3a9b6; --trait:#2d3139; --carte:#1b1e24; --panneau:#16191e;
+  --vert:#4ade80; --accent:#4ade80; --accent-doux:#173523;
+  --ok:#86efac; --ok-f:#163a24; --att:#fbbf5b; --att-f:#3b2c10; --gris:#c3c8d2; --gris-f:#2a2e36; --ren:#fb8a9c; --ren-f:#3d1b23; --vide:#4b505b;
+  --papier:#f7f7f5; --encre:#1a1d24; --xl-grille:#3a3e47; --xl-entete:#23262d; --xl-vert:#3fb27a; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--police);font-size:15px;line-height:1.5;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:24px 56px}
+.page{max-width:1160px;margin:0 auto;display:flex;flex-direction:column;gap:30px}
+h1{font-size:24px;margin:0;text-wrap:balance} h2{font-size:18px;margin:0;text-wrap:balance} h3{font-size:15px;margin:0}
+p{margin:0}
+.intro{color:var(--doux);margin-top:6px;max-width:78ch}
+.boite{background:var(--carte);border:1px solid var(--trait);border-radius:10px;padding:16px 20px}
+.boite ul,.boite ol{margin:8px 0 0;padding-left:20px;display:flex;flex-direction:column;gap:6px;max-width:96ch}
+.lettre{font-weight:700;color:var(--accent);background:var(--accent-doux);border-radius:6px;padding:2px 9px;font-size:14px}
+.etiquette{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.etiquette p{color:var(--doux);font-size:14px;flex-basis:100%;max-width:90ch}
+.defile{overflow-x:auto;min-width:0}
+button,select{font:inherit;font-size:13.5px;color:var(--fg);background:var(--carte);border:1px solid var(--trait);border-radius:8px;padding:6px 10px;cursor:pointer}
+button:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.prim{background:var(--vert);border-color:var(--vert);color:#fff;font-weight:600}
+:root[data-theme="dark"] .prim{color:#0b1a10}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .prim{color:#0b1a10}}
+
+/* Barre de la page */
+.ecran{background:var(--panneau);border:1px solid var(--trait);border-radius:12px;padding:16px}
+.barre{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end}
+.champ{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--doux)}
+.espace{flex:1}
+.menu{position:relative}
+.menu-liste{position:absolute;right:0;top:calc(100% + 6px);background:var(--carte);border:1px solid var(--trait);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.14);padding:6px;min-width:290px;z-index:2;display:flex;flex-direction:column}
+.menu-liste button{border:0;text-align:left;border-radius:6px;padding:8px 10px;display:flex;flex-direction:column;gap:1px;background:transparent}
+.menu-liste button:hover{background:var(--gris-f)}
+.menu-liste small{color:var(--doux);font-size:12px}
+.note{font-size:13px;color:var(--doux);margin-top:10px;max-width:90ch}
+
+/* Pastilles d'état (comme le modèle C1 choisi) */
+.c{display:inline-flex;align-items:center;justify-content:center;gap:2px;min-width:26px;height:20px;border-radius:5px;font-size:11px;font-weight:700;padding:0 4px}
+.c.v{background:var(--ok-f);color:var(--ok)} .c.a{background:var(--att-f);color:var(--att)} .c.p{background:var(--gris-f);color:var(--gris)} .c.r{background:var(--ren-f);color:var(--ren)}
+.vide{color:var(--vide)}
+
+/* Feuille PDF : toujours sur papier blanc, comme le vrai fichier */
+.feuille-cadre{background:var(--panneau);border:1px solid var(--trait);border-radius:12px;padding:18px;display:flex;flex-direction:column;gap:18px;align-items:center}
+.feuille{background:var(--papier);color:var(--encre);width:100%;max-width:1040px;aspect-ratio:297/210;box-shadow:0 2px 10px rgba(0,0,0,.18);padding:3.2% 3.6% 2.4%;display:flex;flex-direction:column;gap:10px;font-size:11px;min-width:760px}
+.feuille .tete{display:flex;justify-content:space-between;gap:20px;border-bottom:2px solid #1a1d24;padding-bottom:8px}
+.feuille .tete strong{font-size:16px;display:block}
+.feuille .meta{text-align:right;color:#4b5160;line-height:1.45}
+.feuille table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}
+.feuille th,.feuille td{border-bottom:1px solid #e3e5ea;padding:3px 4px;text-align:center;white-space:nowrap}
+.feuille th{font-size:10px;color:#4b5160;font-weight:600}
+.feuille td:first-child,.feuille th:first-child{text-align:left}
+.feuille tr.total td{font-weight:700;border-top:1.5px solid #1a1d24;border-bottom:0}
+.feuille .pc{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:16px;border-radius:4px;font-size:9.5px;font-weight:700;padding:0 3px}
+.feuille .pc.v{background:#dcfce7;color:#166534} .feuille .pc.a{background:#fdefd6;color:#8a5200} .feuille .pc.p{background:#eceef2;color:#4b5563} .feuille .pc.r{background:#fde4e8;color:#a61b2f}
+.feuille .m{display:block;font-size:9px;color:#4b5160;margin-top:1px}
+.feuille .legende{display:flex;gap:14px;flex-wrap:wrap;color:#4b5160;font-size:10px}
+.feuille .pied{margin-top:auto;display:flex;justify-content:space-between;color:#6b7180;font-size:9.5px;border-top:1px solid #e3e5ea;padding-top:5px}
+.feuille .titre-sec{font-weight:700;font-size:12px}
+.feuille td.n,.feuille th.n{text-align:right}
+.feuille .gris{color:#8a90a0}
+.bascule{display:flex;gap:6px;align-items:center;font-size:13px;color:var(--doux);flex-wrap:wrap}
+.bascule button[aria-pressed="true"]{background:var(--accent-doux);border-color:var(--accent);color:var(--fg);font-weight:600}
+
+/* Classeur Excel */
+.xl{background:var(--carte);border:1px solid var(--trait);border-radius:10px;overflow:hidden}
+.xl-barre{display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--xl-vert);color:#fff;font-size:13px;font-weight:600}
+.xl-formule{display:flex;gap:8px;align-items:center;padding:5px 10px;border-bottom:1px solid var(--xl-grille);font-size:12.5px;color:var(--doux);font-family:ui-monospace,Consolas,monospace}
+.xl table{border-collapse:collapse;font-size:12.5px;font-variant-numeric:tabular-nums}
+.xl th,.xl td{border:1px solid var(--xl-grille);padding:3px 8px;white-space:nowrap;height:24px}
+.xl thead th,.xl td.ln{background:var(--xl-entete);color:var(--doux);font-weight:500;text-align:center;font-size:11.5px}
+.xl td.ln{min-width:32px}
+.xl td.n{text-align:right}
+.xl td.b{font-weight:700}
+.xl td.cv{background:var(--ok-f);color:var(--ok);text-align:right} .xl td.ca{background:var(--att-f);color:var(--att);text-align:right}
+.xl td.cp{background:var(--gris-f);color:var(--gris);text-align:center} .xl td.cr{background:var(--ren-f);color:var(--ren);text-align:right}
+.xl-onglets{display:flex;gap:2px;padding:0 8px;border-top:1px solid var(--xl-grille);background:var(--xl-entete);flex-wrap:wrap}
+.xl-onglets button{border:0;border-radius:0;background:transparent;padding:7px 14px;font-size:12.5px;color:var(--doux);border-bottom:3px solid transparent}
+.xl-onglets button[aria-selected="true"]{color:var(--fg);font-weight:600;border-bottom-color:var(--xl-vert);background:var(--carte)}
+
+.reco{border-left:4px solid var(--accent);background:var(--accent-doux)}
+.questions{background:var(--carte);border:1px solid var(--trait);border-radius:10px;padding:14px 20px}
+.questions ol{margin:8px 0 0;padding-left:20px;display:flex;flex-direction:column;gap:8px;max-width:96ch}
+@media (max-width:600px){.ecran,.feuille-cadre{padding:12px}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="page">
+<header>
+  <h1>Télécharger « Ce qui est déjà saisi » : trois modèles</h1>
+  <p class="intro">Les chiffres ci-dessous sont des exemples (une boutique fictive, année 2026) pour montrer à quoi ressembleraient les fichiers. Les vrais fichiers reprennent exactement ce que montre la page au moment du clic : la même période, la même vue, le même magasin.</p>
+</header>
+
+<section class="boite" aria-labelledby="t-c">
+  <h2 id="t-c">Ce que j'ai compris</h2>
+  <ul>
+    <li>Un bouton sur la page « Charges » télécharge l'état des charges : le tableau « type × mois » avec l'état de chaque case, et si possible les montants, pour le garder, l'imprimer ou l'envoyer.</li>
+    <li>En PDF, pour lire et archiver, ou en Excel, pour retravailler les chiffres.</li>
+    <li>Je trouve l'idée bonne : c'est le document que le comptable demande en fin de mois (« qu'est-ce qui manque ? ») et que le client veut garder. Les autres téléchargements existent déjà ailleurs (pièces, documents par période) ; celui-ci manque.</li>
+  </ul>
+</section>
+
+<section aria-labelledby="t-b">
+  <div class="etiquette"><h2 id="t-b">Le bouton sur la page</h2>
+    <p>À droite des filtres, un bouton « Télécharger » ouvre un petit menu. Il prend toujours les filtres choisis. Cliquez sur le bouton pour voir le menu.</p></div>
+  <div class="ecran">
+    <div class="barre">
+      <label class="champ" for="f-per">Période<select id="f-per"><option>Année 2026</option><option>Année 2025</option></select></label>
+      <label class="champ" for="f-vue">Vue<select id="f-vue"><option>Toutes les charges</option><option>À valider</option><option>Renvoyées au client</option></select></label>
+      <label class="champ" for="f-mag">Magasin<select id="f-mag"><option>Toute la société et tous les magasins</option><option>Toute la société</option><option>Boutique Centre</option></select></label>
+      <span class="espace"></span>
+      <div class="menu">
+        <button type="button" id="b-tel" aria-haspopup="true" aria-expanded="false">⤓ Télécharger ▾</button>
+        <div class="menu-liste" id="m-tel" hidden>
+          <button type="button" data-aller="m-pdf"><b>PDF : état des charges</b><small>Le tableau en couleurs, puis la liste et la TVA de chaque mois</small></button>
+          <button type="button" data-aller="m-xl"><b>Excel : état des charges</b><small>Trois feuilles : tableau, liste des charges, TVA par mois</small></button>
+        </div>
+      </div>
+    </div>
+    <p class="note">Nom du fichier : « Charges 2026 — Boutique Exemple.pdf » (ou .xlsx). Chaque téléchargement s'inscrit au journal d'audit, comme les autres téléchargements.</p>
+  </div>
+</section>
+
+<section aria-labelledby="t-pdf" id="m-pdf">
+  <div class="etiquette"><span class="lettre">E1</span><h2 id="t-pdf">Le PDF : état des charges</h2>
+    <p>Une page A4 à l'horizontale pour le tableau, en couleurs comme la page, puis la liste détaillée et la TVA par mois sur les pages suivantes. Choisissez ce que montre chaque case.</p></div>
+  <div class="bascule" role="group" aria-label="Contenu des cases du PDF">Cases :
+    <button type="button" data-mode="etat" aria-pressed="false">État seul</button>
+    <button type="button" data-mode="mixte" aria-pressed="true">État et montant TTC</button>
+  </div>
+  <div class="feuille-cadre defile" style="margin-top:10px">
+    <div class="feuille" aria-label="Page 1 du PDF">
+      <div class="tete">
+        <div><strong>État des charges — année 2026</strong>BOUTIQUE EXEMPLE SAS · SIREN 000 000 000<br>Toute la société et tous les magasins · Toutes les charges</div>
+        <div class="meta">Édité le 15/11/2026 à 13:20<br>par Hélène Exemple (propriétaire)</div>
+      </div>
+      <table id="pdf-grille"></table>
+      <div class="legende"><span><span class="pc v">✓</span> validée</span><span><span class="pc a">!</span> à valider</span><span><span class="pc p">◦</span> pièce sans chiffres</span><span><span class="pc r">↩</span> renvoyée au client</span><span>· rien de saisi</span><span>Montants : TTC des charges de la case</span></div>
+      <div class="pied"><span>PILIQI — état des charges, document de travail (n'est pas une déclaration de TVA)</span><span>Page 1 sur 3</span></div>
+    </div>
+    <div class="feuille" aria-label="Page 2 du PDF">
+      <div class="tete"><div><strong>Liste des charges — année 2026</strong>Triées par mois de TVA, puis par type</div><div class="meta">BOUTIQUE EXEMPLE SAS</div></div>
+      <table id="pdf-liste"></table>
+      <div class="pied"><span>PILIQI — état des charges</span><span>Page 2 sur 3</span></div>
+    </div>
+    <div class="feuille" aria-label="Page 3 du PDF">
+      <div class="tete"><div><strong>TVA par mois — année 2026</strong>Telle que le tableau de bord la compte</div><div class="meta">BOUTIQUE EXEMPLE SAS</div></div>
+      <table id="pdf-tva"></table>
+      <p class="gris" style="font-size:10px">Estimation : la TVA à payer si les charges à valider l'étaient telles qu'elles sont saisies. L'état de TVA officiel viendra avec la comptabilité (étape 5).</p>
+      <div class="pied"><span>PILIQI — état des charges</span><span>Page 3 sur 3</span></div>
+    </div>
+  </div>
+</section>
+
+<section aria-labelledby="t-xl" id="m-xl">
+  <div class="etiquette"><span class="lettre">E2</span><h2 id="t-xl">L'Excel : état des charges</h2>
+    <p>Un classeur de trois feuilles. Les montants sont de vrais nombres (on peut faire des sommes et des filtres), les cases gardent la couleur de leur état. Changez de feuille avec les onglets du bas.</p></div>
+  <div class="xl">
+    <div class="xl-barre">Charges 2026 — Boutique Exemple.xlsx</div>
+    <div class="xl-formule" id="xl-formule">A1 · État des charges — année 2026</div>
+    <div class="defile"><table id="xl-table"></table></div>
+    <div class="xl-onglets" role="tablist" aria-label="Feuilles du classeur">
+      <button type="button" role="tab" aria-selected="true" data-feuille="tableau">Tableau</button>
+      <button type="button" role="tab" aria-selected="false" data-feuille="liste">Liste des charges</button>
+      <button type="button" role="tab" aria-selected="false" data-feuille="tva">TVA par mois</button>
+    </div>
+  </div>
+</section>
+
+<section aria-labelledby="t-r">
+  <div class="etiquette"><span class="lettre">E3</span><h2 id="t-r">Ma proposition : les deux, dans le même menu</h2></div>
+  <div class="boite reco">
+    <ul>
+      <li><b>PDF</b> (E1) pour garder, imprimer et envoyer ; <b>Excel</b> (E2) pour le comptable qui retravaille les chiffres. Les deux partent du même calcul que la page, sans rien recalculer.</li>
+      <li><b>Cases du PDF : état et montant TTC.</b> L'état seul dit ce qui manque, mais pas combien ; avec le montant, le tableau suffit souvent.</li>
+      <li><b>Qui :</b> toute personne qui voit la page « Charges » (propriétaire, cabinet lié, expert-comptable déclaré, administrateur ou responsable coché), avec seulement ce qu'elle voit : un responsable n'a que les charges de son magasin.</li>
+      <li><b>Les pièces ne sont pas dans ces fichiers.</b> Pour avoir les factures elles-mêmes, j'ajouterais plus tard le type « Charges et leurs pièces » à « Télécharger les documents », qui fait déjà des ZIP.</li>
+      <li><b>Pour l'Excel</b>, il faut un petit paquet qui écrit des fichiers .xlsx (OpenSpout, gratuit, licence MIT, maintenu) ; la règle de l'outillage permet de l'ajouter sans vous demander, je le note au README.</li>
+    </ul>
+  </div>
+</section>
+
+<section class="questions" aria-labelledby="t-q">
+  <h2 id="t-q">Mes questions</h2>
+  <ol>
+    <li><b>Format :</b> PDF et Excel (E3, ma proposition), ou seulement l'un des deux ?</li>
+    <li><b>Cases du PDF :</b> « état et montant TTC » (ma proposition) ou « état seul » ?</li>
+    <li><b>Contenu :</b> le PDF avec ses trois parties (tableau, liste, TVA par mois), ou le tableau seul sur une page ?</li>
+    <li><b>Les pièces</b> en ZIP par « Télécharger les documents », plus tard : d'accord ?</li>
+  </ol>
+  <p class="intro">Vous pouvez répondre en une ligne, par exemple « E3, état et montant, les trois parties, oui ».</p>
+</section>
+</div>
+
+<script>
+(function(){
+  var TYPES=['Loyer','Électricité','Eau','Téléphone et internet','Assurances','Honoraires','Fournitures','Carburant','Frais bancaires','Publicité'];
+  var MOIS=['Janv.','Févr.','Mars','Avr.','Mai','Juin','Juil.','Août','Sept.','Oct.','Nov.','Déc.'];
+  var NOMS=['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
+  var SYM={v:'✓',a:'!',p:'◦',r:'↩'}, LIB={v:'Validée',a:'À valider',p:'Pièce sans chiffres',r:'Renvoyée au client'};
+  var ORDRE={p:0,r:1,a:2,v:3};
+  /* charges d'exemple : [type, mois (0-11), fournisseur, n°, HT en centimes, taux, état, magasin] */
+  var C=[];
+  for(var m=0;m<11;m++){
+    C.push(['Loyer',m,'SCI des Halles','Q-2026-'+String(m+1).padStart(2,'0'),120000,20,m<10?'v':'a','Boutique Centre']);
+    C.push(['Électricité',m,'Fournisseur d’énergie','E-'+(4100+m),31000+m*900,20,m<9?'v':(m===9?'a':'p'),'Boutique Centre']);
+    C.push(['Téléphone et internet',m,'Opérateur','T-'+(870+m),4166,20,m<10?'v':'a','Toute la société']);
+    C.push(['Frais bancaires',m,'Banque','—',1850,0,m<10?'v':'a','Toute la société']);
+  }
+  C.push(['Assurances',0,'Assureur','A-2026',64000,0,'v','Toute la société']);
+  C.push(['Honoraires',2,'Cabinet Exemple','H-0312',45000,20,'v','Toute la société']);
+  C.push(['Honoraires',8,'Cabinet Exemple','H-0918',45000,20,'v','Toute la société']);
+  C.push(['Eau',3,'Régie des eaux','O-2604',8200,5.5,'v','Boutique Centre']);
+  C.push(['Eau',9,'Régie des eaux','O-2610',8900,5.5,'a','Boutique Centre']);
+  C.push(['Fournitures',4,'Papeterie','F-551',8600,20,'v','Boutique Centre']);
+  C.push(['Fournitures',10,'Papeterie','F-602',5400,20,'r','Boutique Centre']);
+  C.push(['Carburant',10,'Station-service','ticket',6042,20,'a','Toute la société']);
+  C.push(['Publicité',5,'Imprimeur','P-77',18000,20,'v','Boutique Centre']);
+  C.push(['Publicité',5,'Réseau social','RS-12',5000,20,'v','Toute la société']);
+  function tva(c){return c[6]==='p'?0:Math.round(c[4]*c[5]/100);}
+  function ht(c){return c[6]==='p'?0:c[4];}
+  function eur(cts){return (cts/100).toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2})+' €';}
+  function num(cts){return (cts/100).toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2});}
+  function caseDe(t,m){var l=C.filter(function(c){return c[0]===t&&c[1]===m;});if(!l.length)return null;
+    var e=l.reduce(function(a,c){return ORDRE[c[6]]<ORDRE[a]?c[6]:a;},'v');
+    return {etat:e,n:l.length,ttc:l.reduce(function(s,c){return s+ht(c)+tva(c);},0)};}
+  var mode='mixte';
+  function grillePdf(){
+    var h='<thead><tr><th>Type de charge</th>'+MOIS.map(function(m){return '<th>'+m+'</th>';}).join('')+'<th class="n">Total TTC</th></tr></thead><tbody>';
+    var totM=new Array(12).fill(0),totG=0;
+    TYPES.forEach(function(t){var tot=0;h+='<tr><td>'+t+'</td>';
+      for(var m=0;m<12;m++){var k=caseDe(t,m);
+        if(!k){h+='<td class="gris">·</td>';continue;}
+        tot+=k.ttc;totM[m]+=k.ttc;
+        h+='<td><span class="pc '+k.etat+'">'+SYM[k.etat]+(k.n>1?' '+k.n:'')+'</span>'+(mode==='mixte'?'<span class="m">'+(k.etat==='p'?'—':num(k.ttc))+'</span>':'')+'</td>';}
+      totG+=tot;h+='<td class="n">'+(tot?num(tot):'—')+'</td></tr>';});
+    h+='<tr class="total"><td>Total TTC du mois</td>'+totM.map(function(x){return '<td>'+(x?num(x):'—')+'</td>';}).join('')+'<td class="n">'+num(totG)+'</td></tr></tbody>';
+    document.getElementById('pdf-grille').innerHTML=h;}
+  function listePdf(){
+    var l=C.slice().sort(function(a,b){return b[1]-a[1]||a[0].localeCompare(b[0]);}).slice(0,16);
+    var h='<thead><tr><th>Mois de TVA</th><th>Type</th><th>Magasin</th><th>Fournisseur</th><th>N° de la pièce</th><th class="n">HT</th><th class="n">TVA</th><th class="n">TTC</th><th>État</th></tr></thead><tbody>';
+    l.forEach(function(c){h+='<tr><td>'+NOMS[c[1]]+' 2026</td><td>'+c[0]+'</td><td>'+c[7]+'</td><td>'+c[2]+'</td><td>'+c[3]+'</td><td class="n">'+(c[6]==='p'?'—':num(ht(c)))+'</td><td class="n">'+(c[6]==='p'?'—':num(tva(c)))+'</td><td class="n">'+(c[6]==='p'?'—':num(ht(c)+tva(c)))+'</td><td><span class="pc '+c[6]+'">'+SYM[c[6]]+'</span> '+LIB[c[6]]+'</td></tr>';});
+    h+='<tr><td colspan="9" class="gris">… la liste continue sur la page suivante si besoin (toutes les charges de la période, aucune coupée)</td></tr></tbody>';
+    document.getElementById('pdf-liste').innerHTML=h;}
+  var COL=[368000,371000,402000,388500,379000,395500,381000,366000,404000,390000,372500,0];
+  var ACH=[120000,98000,141000,110500,97000,132000,118000,86000,125000,115000,104000,0];
+  function tvaMois(m){var v=0,a=0;C.forEach(function(c){if(c[1]!==m)return;if(c[6]==='v')v+=tva(c);else if(c[6]==='a')a+=tva(c);});return {v:v,a:a};}
+  function tvaPdf(){
+    var h='<thead><tr><th>Mois</th><th class="n">TVA collectée</th><th class="n">Déductible des achats</th><th class="n">Déductible des charges validées</th><th class="n">TVA à payer (réelle)</th><th class="n">Charges à valider</th><th class="n">TVA à payer (estimation)</th></tr></thead><tbody>';
+    for(var m=0;m<11;m++){var t=tvaMois(m),r=COL[m]-ACH[m]-t.v;
+      h+='<tr><td>'+NOMS[m]+' 2026</td><td class="n">'+num(COL[m])+'</td><td class="n">'+num(ACH[m])+'</td><td class="n">'+num(t.v)+'</td><td class="n"><b>'+num(r)+'</b></td><td class="n">'+(t.a?num(t.a):'—')+'</td><td class="n">'+num(r-t.a)+'</td></tr>';}
+    document.getElementById('pdf-tva').innerHTML=h+'</tbody>';}
+  function lettres(n){return String.fromCharCode(65+n);}
+  function feuille(nom){
+    var t=document.getElementById('xl-table'),f=document.getElementById('xl-formule'),h='';
+    if(nom==='tableau'){
+      var nc=15;h='<thead><tr><th></th>';for(var i=0;i<nc;i++)h+='<th>'+lettres(i)+'</th>';h+='</tr></thead><tbody>';
+      h+='<tr><td class="ln">1</td><td class="b" colspan="'+nc+'">État des charges — année 2026 · Toute la société et tous les magasins · Toutes les charges</td></tr>';
+      h+='<tr><td class="ln">2</td><td class="b">Type de charge</td>'+MOIS.map(function(m){return '<td class="b" style="text-align:center">'+m+'</td>';}).join('')+'<td class="b">Total TTC</td><td class="b">Dernier état</td></tr>';
+      TYPES.forEach(function(ty,i){var tot=0;h+='<tr><td class="ln">'+(i+3)+'</td><td>'+ty+'</td>';
+        for(var m=0;m<12;m++){var k=caseDe(ty,m);if(!k){h+='<td></td>';continue;}tot+=k.ttc;
+          h+='<td class="c'+k.etat+'" title="'+LIB[k.etat]+'">'+(k.etat==='p'?'◦':num(k.ttc))+'</td>';}
+        var d=C.filter(function(c){return c[0]===ty;}).sort(function(a,b){return b[1]-a[1];})[0];
+        h+='<td class="n b">'+num(tot)+'</td><td>'+(d?LIB[d[6]]:'')+'</td></tr>';});
+      h+='<tr><td class="ln">'+(TYPES.length+3)+'</td><td></td><td colspan="14" style="color:var(--doux)">Couleur de la case = état le moins avancé (vert validée, orange à valider, gris pièce sans chiffres, rouge renvoyée) ; nombre = TTC en euros</td></tr></tbody>';
+      f.textContent='B3 · Loyer   |   C3 · =1440 (nombre, format « 1 440,00 »)';
+    } else if(nom==='liste'){
+      var cols=['Mois de TVA','Type','Magasin','Fournisseur','N° de la pièce','Date de la pièce','Date de paiement','HT','TVA','TTC','TVA déductible','Autoliquidation','Origine','État','Validée par','Validée le'];
+      h='<thead><tr><th></th>'+cols.map(function(c,i){return '<th>'+lettres(i)+'</th>';}).join('')+'</tr></thead><tbody><tr><td class="ln">1</td>'+cols.map(function(c){return '<td class="b">'+c+'</td>';}).join('')+'</tr>';
+      C.slice().sort(function(a,b){return a[1]-b[1]||a[0].localeCompare(b[0]);}).slice(0,14).forEach(function(c,i){
+        var j=String(c[1]+1).padStart(2,'0');
+        h+='<tr><td class="ln">'+(i+2)+'</td><td>2026-'+j+'</td><td>'+c[0]+'</td><td>'+c[7]+'</td><td>'+c[2]+'</td><td>'+c[3]+'</td><td>02/'+j+'/2026</td><td>'+(c[6]==='v'?'05/'+j+'/2026':'')+'</td><td class="n">'+(c[6]==='p'?'':num(ht(c)))+'</td><td class="n">'+(c[6]==='p'?'':num(tva(c)))+'</td><td class="n">'+(c[6]==='p'?'':num(ht(c)+tva(c)))+'</td><td class="n">'+(c[6]==='p'?'':num(tva(c)))+'</td><td>Non</td><td>Saisie du client</td><td class="c'+c[6]+'" style="text-align:left">'+LIB[c[6]]+'</td><td>'+(c[6]==='v'?'le cabinet':'')+'</td><td>'+(c[6]==='v'?'06/'+j+'/2026':'')+'</td></tr>';});
+      h+='<tr><td class="ln">…</td><td colspan="16" style="color:var(--doux)">une ligne par charge, filtres automatiques sur la ligne 1, colonnes figées à gauche</td></tr></tbody>';
+      f.textContent='H2 · =1200 (nombre)   |   J2 · =1440 (nombre)';
+    } else {
+      var cs=['Mois','TVA collectée','Déductible des achats','Déductible des charges validées','TVA à payer (réelle)','Charges à valider','TVA à payer (estimation)'];
+      h='<thead><tr><th></th>'+cs.map(function(c,i){return '<th>'+lettres(i)+'</th>';}).join('')+'</tr></thead><tbody><tr><td class="ln">1</td>'+cs.map(function(c){return '<td class="b">'+c+'</td>';}).join('')+'</tr>';
+      for(var m=0;m<11;m++){var tm=tvaMois(m),r=COL[m]-ACH[m]-tm.v;
+        h+='<tr><td class="ln">'+(m+2)+'</td><td>'+NOMS[m]+' 2026</td><td class="n">'+num(COL[m])+'</td><td class="n">'+num(ACH[m])+'</td><td class="n">'+num(tm.v)+'</td><td class="n b">'+num(r)+'</td><td class="n">'+(tm.a?num(tm.a):'')+'</td><td class="n">'+num(r-tm.a)+'</td></tr>';}
+      h+='</tbody>';f.textContent='E2 · valeur écrite par PILIQI (pas de formule qui recalculerait la TVA)';
+    }
+    t.innerHTML=h;}
+  Array.prototype.forEach.call(document.querySelectorAll('[data-mode]'),function(b){b.addEventListener('click',function(){mode=b.dataset.mode;
+    document.querySelectorAll('[data-mode]').forEach(function(x){x.setAttribute('aria-pressed',x===b?'true':'false');});grillePdf();});});
+  Array.prototype.forEach.call(document.querySelectorAll('[data-feuille]'),function(b){b.addEventListener('click',function(){
+    document.querySelectorAll('[data-feuille]').forEach(function(x){x.setAttribute('aria-selected',x===b?'true':'false');});feuille(b.dataset.feuille);});});
+  var bt=document.getElementById('b-tel'),ml=document.getElementById('m-tel');
+  bt.addEventListener('click',function(){ml.hidden=!ml.hidden;bt.setAttribute('aria-expanded',String(!ml.hidden));});
+  Array.prototype.forEach.call(ml.querySelectorAll('[data-aller]'),function(b){b.addEventListener('click',function(){ml.hidden=true;bt.setAttribute('aria-expanded','false');document.getElementById(b.dataset.aller).scrollIntoView({behavior:'smooth'});});});
+  grillePdf();listePdf();tvaPdf();feuille('tableau');
+})();
+</script>

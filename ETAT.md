@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 15/11/2026 à 10:46 UTC par pilotage-sync.sh : « SEED-TOUT isolation ».
+Mis à jour le 15/11/2026 à 10:50 UTC par pilotage-sync.sh : « SEED-TOUT Laravel + SQL ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

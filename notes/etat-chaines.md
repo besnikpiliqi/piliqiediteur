@@ -446,3 +446,4 @@
 - 15/11 10:50 UTC — Choix A (garder « Total » des modes) écrit au cahier DATEOP point 5.
 - 15/11 11:05 UTC — Demande prioritaire et permanente de l'éditeur : semis complet de toutes les tables et de tous les cas, par compte. Cahier seed2/cahier-SEED-TOUT.md ; DATEOP le fait EN PREMIER (commit à part) avec le point 6 du protocole de rigueur de CLAUDE.md.
 - 15/11 11:15 UTC — Cahier SEED-TOUT § 3 bis : vérification de l'isolation de toute la base à la fin du semis (commande, tableau, code 1, tests par faute introduite).
+- 15/11 11:25 UTC — SEED-TOUT § 3 bis 1 bis : double contrôle Laravel + SQL.

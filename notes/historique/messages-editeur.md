@@ -2748,3 +2748,7 @@ pour cette parti tu creer un demo avec seed car je veux voir tout les donnes rem
 
 et une chose il faut que fasse quand je lance php artisan migrate:fresh --seed, alors la normalement on doit pouvoir voir si exite des probleme de l’isolation des sociétés et des magasins si est respectée, donc quand  les donnees se mettent alors la si qq donees ne va pas dans son son isolation donc dans sa societe et magasin donc normalement la si une donnes va ailleur doit afficher le problem car tout les donnees appartion comme on a dis isolation par societe, magasin, responsable, vendeur, comptable etc etc etc donc tout tout
 
+## 312. 2026-11-15 10:50 UTC
+
+car toi t as fait deja les regle strict qui controle donc par laravel et par sql donc tout les deux doivent controler les regles
+

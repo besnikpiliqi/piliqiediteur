@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 15/11/2026 à 12:04 UTC par pilotage-sync.sh : « Export charges tranché ».
+Mis à jour le 15/11/2026 à 12:04 UTC par pilotage-sync.sh : « Onglet protections section 8 ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

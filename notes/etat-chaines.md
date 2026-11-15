@@ -456,3 +456,4 @@
 - 15/11 11:58 UTC — Proposition à l'éditeur : téléchargement de l'état des charges (PDF/Excel), maquette https://claude.ai/artifact/78uCLUaFBxtthMWN8hA2Nx (fichier modeles/charges-export.html), réponse attendue (E1/E2/E3, cases, contenu, pièces).
 - 15/11 11:59 UTC — Point de suivi : PG 16/18 en marche, REGUL:correction en cours (cartes des notifications), sauvegarde b5b556e6, 9,9 Go libres.
 - 15/11 12:08 UTC — Réponse de l'éditeur sur l'export des charges : E3, état + montant, 3 parties, pièces en ZIP maintenant → cahier DATEOP (2 commits) ; D76 : état = droit de voir la page.
+- 15/11 12:10 UTC — Onglet « Protections et rigueur » : section 8 « Ajouts » créée (rev 13), 3 lignes de l'export des charges.

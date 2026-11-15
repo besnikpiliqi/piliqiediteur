@@ -567,3 +567,11 @@ Tout le reste est automatique.
 | Faire valider l'architecture avant de coder, en 17 étapes (cahier initial) | « Tu fais beaucoup mieux », puis mandat d'autonomie | 02/10 → 08/10/2026 | Claude mène seul, seules les règles métier vous sont posées. |
 | MySQL, Livewire, paquet Spatie (cahier initial) | « Si c'est mieux d'avoir son propre système, tu le fais » | Début du projet | Filament, PostgreSQL, autorisations propres à PILIQI. |
 | Annuler une facture, saisir le prix en HT (cahier initial) | Avoir et prix TTC | 05/10/2026 | Une facture se corrige par un avoir, et le prix de vente se saisit en TTC. |
+
+## 8. Ajouts depuis la création de cet onglet
+
+| Date | Protection ou règle | Ce que ça empêche | État | Développement / production |
+|---|---|---|---|---|
+| 15/11/2026 | Téléchargements des charges limités à ce que la personne voit | État des charges (PDF, Excel) = seulement ce que la page montre à la même personne ; test ; audit. D76 : état avec le droit de voir la page ; ZIP des pièces exige « télécharger les documents par période ». | À faire (DATEOP) | Les deux |
+| 15/11/2026 | Pièces des charges : même contrôle au téléchargement | Antivirus à nouveau, pièce bloquée jamais servie, noms réécrits. | À faire (DATEOP) | Les deux |
+| 15/11/2026 | Excel sans formule cachée | Texte commençant par = + - @ écrit comme texte ; montants écrits par PILIQI. | À faire (DATEOP) | Les deux |

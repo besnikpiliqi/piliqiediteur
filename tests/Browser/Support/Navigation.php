@@ -175,9 +175,13 @@ final class Navigation
     /**
      * Attend que cette expression JavaScript soit vraie, en laissant le
      * serveur de l'application répondre pendant l'attente ; échoue avec ce
-     * motif au bout du délai.
+     * motif au bout du délai, suivi, s'il est donné, du relevé que rend
+     * cette fonction au moment de l'échec (l'état de la page et de la base
+     * qu'un échec rare de la CI doit montrer).
+     *
+     * @param  (Closure(): string)|null  $releve
      */
-    public function attendreQue(string $expression, string $motif): self
+    public function attendreQue(string $expression, string $motif, ?Closure $releve = null): self
     {
         $fin = microtime(true) + self::delai();
 
@@ -189,7 +193,7 @@ final class Navigation
             }
 
             if (microtime(true) > $fin) {
-                Assert::fail('Au bout de '.self::delai().' s, '.$motif.' (page '.$this->page()->url().').');
+                Assert::fail('Au bout de '.self::delai().' s, '.$motif.' (page '.$this->page()->url().').'.($releve === null ? '' : PHP_EOL.$releve()));
             }
 
             Execution::instance()->wait(0.05);
@@ -514,9 +518,13 @@ final class Navigation
     /**
      * Ce texte se lit dans la page, au plus tard au bout du délai d'un
      * geste : le résultat visible d'un geste (un avis, un statut changé)
-     * qu'un test attend avant de lire la base.
+     * qu'un test attend avant de lire la base. L'échec porte, s'il est
+     * donné, le relevé que rend cette fonction à ce moment (voir
+     * attendreQue()).
+     *
+     * @param  (Closure(): string)|null  $releve
      */
-    public function voir(string $texte): self
+    public function voir(string $texte, ?Closure $releve = null): self
     {
         $fin = microtime(true) + self::delai();
 
@@ -527,6 +535,10 @@ final class Navigation
                 return $this;
             } catch (ExpectationFailedException $absent) {
                 if (microtime(true) > $fin) {
+                    if ($releve !== null) {
+                        Assert::fail($absent->getMessage().PHP_EOL.$releve());
+                    }
+
                     throw $absent;
                 }
             }

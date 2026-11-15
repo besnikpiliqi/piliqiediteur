@@ -51,11 +51,19 @@
             @endif
         </div>
 
+        {{--
+            La croix ne fait aucune requête : elle reste active pendant que
+            la page regarde s'il y a du nouveau (:wire:loading.attr="false"
+            retire la désactivation que le bouton de Filament pose pendant
+            chaque requête de son composant, qui perdait un clic tombé à ce
+            moment et enlevait le focus du clavier à la croix).
+        --}}
         <x-filament::icon-button
             color="gray"
             icon="heroicon-m-x-mark"
             label="Fermer"
             x-on:click="fermer()"
+            :wire:loading.attr="false"
             class="piliqi-carte__fermer"
         />
     </div>

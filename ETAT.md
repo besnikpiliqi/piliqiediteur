@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 15/11/2026 à 12:09 UTC par pilotage-sync.sh : « Après le lot REGUL ».
+Mis à jour le 15/11/2026 à 12:10 UTC par pilotage-sync.sh : « REGUL poussé, CI analyse rouge ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -44,7 +44,6 @@ eba4bc85 Relecture du lot ER-PRO
 Course `wf_ee9b6e6e-908`, étapes commencées (de la plus ancienne à la plus récente) :
 
 ```
-REGLE-B:notes
 GRAPH:implementation
 GRAPH:implementation-2
 GRAPH:implementation-3
@@ -69,4 +68,5 @@ REGUL:relecture2
 REGUL:correction
 REGUL:poussee
 REGUL:notes
+DATEOP:implementation
 ```

@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 15/11/2026 à 14:06 UTC par pilotage-sync.sh : « K2 choisi : crédit de départ dans le lot TVA27 ».
+Mis à jour le 15/11/2026 à 14:13 UTC par pilotage-sync.sh : « Semis : tous les cas sans demande (règle permanente) ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

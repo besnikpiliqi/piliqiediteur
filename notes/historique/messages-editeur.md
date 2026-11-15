@@ -2870,3 +2870,15 @@ mais alors tu note pour aplique ca, il faut pas oublier
 
 mon choix est K2
 
+## 327. 2026-11-15 14:12 UTC
+
+<!-- attach -->
+
+> Sous le champ du régime, une aide expliquera la règle des seuils.
+
+> Une société au trimestriel dont le chiffre d’affaires de l’année dans PILIQI dépasse 1 100 000 € verra une ligne dans son « À faire ». La ligne dit que sa déclaration devient mensuelle, avec deux boutons : « Ouvrir les réglages fiscaux » et « C’est vérifié ». Elle ne bloque rien, car PILIQI ne voit pas les ventes faites ailleurs.
+
+
+
+donc tu doit creer alors le seed avec ces valeurs pour voir comment ressemble, et je veux pas que je te dise à chaque fois pour le seed car tu sais deja que je veux tout voir, tout les cas possibles qui peuvent arriver, donc il faut imagener tout avec des vrais donnees, donc on laisse rien à l inconnu
+

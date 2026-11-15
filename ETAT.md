@@ -1,12 +1,13 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 15/11/2026 à 09:58 UTC par pilotage-sync.sh : « Constat menu ajouter un graphique ».
+Mis à jour le 15/11/2026 à 10:00 UTC par pilotage-sync.sh : « Point de suivi 15/11 10:02 ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
 Tête poussée : `8ce8bd4a`. Commits locaux pas encore poussés :
 
 ```
+e405d27b Régularisation après une correction de SIREN et relances (lot REGUL)
 220d40b4 Réparation de la CI rouge de 8ce8bd4
 ```
 
@@ -38,37 +39,6 @@ eba4bc85 Relecture du lot ER-PRO
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
- M CLAUDE.md
- M app/Console/Commands/RelancerFacturesImpayees.php
- M app/Domain/Facturation/Actions/AppliquerAvoirsDisponiblesAction.php
- M app/Domain/Facturation/Actions/ContrePasserPaiementAction.php
- M app/Domain/Facturation/Actions/EmettreFactureAction.php
- M app/Domain/Facturation/Actions/EmettreLaFactureRectificativeAction.php
- M app/Domain/Facturation/Actions/EnregistrerPaiementAction.php
- M app/Domain/Facturation/Actions/EnvoyerDocumentAction.php
- M app/Domain/Facturation/Actions/FaireLAvoirDeRegularisationAction.php
- M app/Domain/Facturation/Enums/StatutFacture.php
- M app/Domain/Facturation/Services/ImputationDuCredit.php
- M app/Domain/Facturation/Services/MentionsFiscales.php
- M app/Domain/Facturation/Services/RegularisationDUneFacture.php
- M app/Domain/Tenancy/Actions/ModifierLesParametresDuMagasinAction.php
- M app/Domain/Tenancy/Enums/ActionAuditee.php
- M app/Domain/Tenancy/Models/Magasin.php
- M app/Filament/App/Pages/ParametresRelances.php
- M app/Filament/App/Resources/AvoirResource.php
- M app/Filament/App/Resources/FactureResource.php
- M app/Filament/App/Resources/FactureResource/Pages/ViewFacture.php
- M app/Filament/Concerns/EnvoieLesDocuments.php
- M database/migrations/0001_01_01_000000_create_magasins_table.php
- M tests/Browser/Parcours/LiensVersLesDocumentsTest.php
- M tests/Browser/inventaire-des-actions.php
- M tests/Feature/Facturation/RegularisationDUneFactureConcurrenceTest.php
- M tests/Feature/Facturation/RegularisationDUneFactureTest.php
- M tests/Feature/Facturation/RelancerFacturesImpayeesTest.php
- M tests/Feature/Filament/ParametresRelancesTest.php
- M tests/TestCase.php
- M tests/Unit/matrice-des-decisions.php
-?? tests/Browser/Parcours/RegularisationEtRelancesTest.php
 ```
 
 ## Dernière course de la chaîne
@@ -76,8 +46,6 @@ eba4bc85 Relecture du lot ER-PRO
 Course `wf_ee9b6e6e-908`, étapes commencées (de la plus ancienne à la plus récente) :
 
 ```
-REGLE-B:implementation
-REGLE-B:relecture1
 REGLE-B:relecture2
 REGLE-B:correction
 REGLE-B:poussee
@@ -101,4 +69,6 @@ CHARGES:poussee
 CHARGES:notes
 REGUL:implementation
 REGUL:implementation-2
+REGUL:relecture1
+REGUL:relecture2
 ```

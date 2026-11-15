@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 15/11/2026 à 14:03 UTC par pilotage-sync.sh : « Lot TVA27 : fin du réel simplifié et crédit de TVA reporté ».
+Mis à jour le 15/11/2026 à 14:05 UTC par pilotage-sync.sh : « Point de suivi 14:06 UTC ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -52,7 +52,9 @@ eba4bc85 Relecture du lot ER-PRO
 ?? app/Domain/Tenancy/Isolation/
 ?? database/seeders/Semis/ChargesDesSocietes.php
 ?? database/seeders/Semis/ComptesDesCas.php
+?? database/seeders/Semis/DerniersGestes.php
 ?? database/seeders/Semis/DocumentsDesCas.php
+?? database/seeders/Semis/RequeteDuPoste.php
 ?? database/seeders/Semis/SocietesDesCas.php
 ?? tests/Feature/Tenancy/VerificationDeLIsolationTest.php
 ```

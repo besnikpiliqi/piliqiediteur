@@ -1,12 +1,13 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 15/11/2026 à 03:59 UTC par pilotage-sync.sh : « Point de suivi 15/11 03:59 UTC ».
+Mis à jour le 15/11/2026 à 06:00 UTC par pilotage-sync.sh : « Point de suivi 15/11 06:00 UTC ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
 Tête poussée : `743f9bc2`. Commits locaux pas encore poussés :
 
 ```
+68531b28 Charges de la société et TVA réelle (lot CHARGES)
 fcbf1166 Réparation de la CI rouge de 743f9bc
 ```
 
@@ -39,65 +40,36 @@ eba4bc85 Relecture du lot ER-PRO
 
 ```
  M CLAUDE.md
- M app/Console/Commands/PurgerActionsTraitees.php
- M app/Domain/Authorization/PermissionRegistry.php
- M app/Domain/Cabinets/Services/TableauDeBordDesClients.php
+ M app/Domain/Charges/Actions/CorrigerUneChargeAction.php
+ M app/Domain/Charges/Actions/DeposerUneChargeAction.php
+ M app/Domain/Charges/Actions/GererLesTypesDeChargeAction.php
+ M app/Domain/Charges/Actions/SaisirUneChargeAction.php
+ M app/Domain/Charges/Enums/EtatDeLaCharge.php
+ M app/Domain/Charges/Services/ChargesAFaire.php
+ M app/Domain/Charges/Services/ChargesDeLaSociete.php
+ M app/Domain/Charges/Services/DroitsSurLesCharges.php
+ M app/Domain/Charges/Services/EcritureDUneCharge.php
+ M app/Domain/Charges/Services/TvaDeLaPeriode.php
+ M app/Domain/Charges/Services/TypesDeCharge.php
+ M app/Domain/Charges/Support/AccesAuxCharges.php
+ M app/Domain/Charges/Support/GardesDesCharges.php
+ M app/Domain/TableauDeBord/Services/ChargesDuTableauDeBord.php
  M app/Domain/TableauDeBord/Services/ChiffresDuTableauDeBord.php
- M app/Domain/TableauDeBord/Services/PerimetreDesGraphiques.php
  M app/Domain/TableauDeBord/Services/SeriesDesGraphiques.php
- M app/Domain/TableauDeBord/Support/CalculDesSeries.php
  M app/Domain/TableauDeBord/Support/Perimetre.php
- M app/Domain/TableauDeBord/Support/SerieDuGraphique.php
  M app/Domain/Tenancy/Enums/ActionAuditee.php
- M app/Domain/Tenancy/Models/Affectation.php
- M app/Domain/Tenancy/Services/ActionsUniques.php
- M app/Domain/Tenancy/Services/AffectationsDesMembres.php
- M app/Domain/Tenancy/Services/ChosesAFaireDeLaSociete.php
- M app/Domain/Tenancy/Services/ChosesAFaireDuMagasin.php
- M app/Domain/Tenancy/Support/GardesDesDroits.php
- M app/Domain/Tenancy/Support/NomsPolymorphes.php
- M app/Filament/App/Pages/TableauDeBordDeLaSociete.php
- M app/Filament/Cabinet/Pages/TableauDeBordDuCabinet.php
- M app/Filament/Cabinet/Resources/ClientDuCabinetResource.php
- M app/Filament/Cabinet/Resources/ClientDuCabinetResource/Pages/FicheDuClient.php
- M app/Filament/Concerns/CocheLesAutorisationsDeMagasin.php
- M app/Filament/GrilleDesGraphiques.php
- M app/Models/User.php
- M app/Providers/AppServiceProvider.php
- M config/filesystems.php
- M database/migrations/0001_01_00_000000_create_societes_table.php
- M resources/views/filament/app/pages/tableau-de-bord-de-la-societe.blade.php
- M resources/views/filament/cabinet/pages/tableau-de-bord-du-cabinet.blade.php
- M resources/views/filament/graphiques-du-panneau.blade.php
+ M app/Filament/PageDesCharges.php
  M resources/views/filament/grille-des-graphiques.blade.php
+ M resources/views/filament/page-des-charges.blade.php
+ M tests/Browser/Parcours/ChargesTest.php
  M tests/Browser/inventaire-des-actions.php
- M tests/Feature/Authorization/AffectationPolicyTest.php
- M tests/Feature/Authorization/AutorisationsDesRolesTest.php
- M tests/Feature/Authorization/AutorisationsSelonLeTypeTest.php
- M tests/Feature/Authorization/ControleDesDroitsTest.php
- M tests/Feature/Authorization/DroitsDuResponsableTest.php
- M tests/Feature/Authorization/GardesDesDroitsEnBaseTest.php
- M tests/Feature/Authorization/PorteeDesDroitsTest.php
- M tests/Feature/Authorization/ProprietaireSansVenteConcurrenceTest.php
- M tests/Feature/Authorization/ProprietaireSansVenteTest.php
- M tests/Feature/Cabinets/AccesDeLExpertComptableTest.php
- M tests/Feature/Cabinets/PanneauCabinetTest.php
- M tests/Feature/Filament/EquipeDuMagasinTest.php
- M tests/Feature/Qualite/PlafondsDeRequetesTest.php
- M tests/Feature/Societe/AdministrateursTest.php
- M tests/Feature/Societe/AutorisationsDesMembresTest.php
- M tests/Feature/Societe/ChangementDeRoleTest.php
- M tests/Feature/Societe/ConnexionParIdentifiantTest.php
- M tests/Feature/Societe/DroitsConcurrenceTest.php
- M tests/Feature/Societe/MagasinDeDemonstrationTest.php
- M tests/Feature/Societe/PanneauSocieteTest.php
- M tests/Feature/Societe/RenouvellementDAccesTest.php
- M tests/Feature/Societe/ResponsablesTest.php
- M tests/Feature/Societe/TransfererProprieteTest.php
- M tests/Feature/TableauDeBord/QuiVoitLesGraphiquesTest.php
+ M tests/Feature/Charges/AFaireDesChargesTest.php
+ M tests/Feature/Charges/DroitsSurLesChargesTest.php
+ M tests/Feature/Charges/GardesDesChargesEnBaseTest.php
+ M tests/Feature/Charges/GestesSurLesChargesTest.php
+ M tests/Feature/Charges/PagesDesChargesTest.php
+ M tests/Feature/Charges/TvaDeLaPeriodeTest.php
  M tests/Feature/TableauDeBord/SeriesDesGraphiquesTest.php
- M tests/Feature/Tenancy/HistoriqueAuNomFigeTest.php
- M tests/Feature/Tenancy/IsolationDesSocietesTest.php
 ```
 
 ## Dernière course de la chaîne
@@ -105,9 +77,6 @@ eba4bc85 Relecture du lot ER-PRO
 Course `wf_ee9b6e6e-908`, étapes commencées (de la plus ancienne à la plus récente) :
 
 ```
-DEMO-V:implementation-2
-DEMO-V:implementation-3
-DEMO-V:relecture1
 DEMO-V:relecture2
 DEMO-V:correction
 DEMO-V:poussee
@@ -130,4 +99,7 @@ GRAPH:notes
 CHARGES:implementation
 CHARGES:implementation-2
 CHARGES:implementation-3
+CHARGES:relecture1
+CHARGES:relecture2
+CHARGES:correction
 ```

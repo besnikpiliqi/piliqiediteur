@@ -2760,3 +2760,61 @@ ca m inquite vrament bcp que qq donees puisse se melanger avec qq un d'autre et 
 
 A et B et sera que pour developement ou aussi en production ? il faut note ca peut etre dans la fiche, de ce qui je doit faire, mais si tu aplique mnt et sera la meme en production alors pas besoin de mettre dans la fiche mais quand meme il faut noter meme peut etre dans une nouvelle tab, qu est ce qu'on apliquer comme rigoureux et tout tout ce qu'on a decide de genre de protection car pour l instan je me rappel pas de tout se qu on a fait mais tu les sais deja et tu les notes pour toujour et meme tu notes tes proposition s 'il ne sont pas accepter par moi, donc savoir tout
 
+## 315. 2026-11-15 11:09 UTC
+
+[1 capture(s) d'écran jointe(s)]
+
+tu peux me dire de quoi s 'agit ca?
+
+## 316. 2026-11-15 11:12 UTC
+
+[1 capture(s) d'écran jointe(s)]
+
+transport de marchandis c'est quoi ca ? on peut parle de quoi?
+
+## 317. 2026-11-15 11:31 UTC
+
+et frais bancaires c'est quoi ?
+
+## 318. 2026-11-15 11:31 UTC
+
+Comptes de démonstration de PILIQI (php artisan migrate:fresh --seed)
+Fichier local, que git ne suit pas, réécrit à chaque semis.
+Connexion : http://localhost:8000/app/login ; un propriétaire se connecte avec son adresse ou son identifiant, tout autre compte avec son identifiant.
+Mots de passe : celui de PILIQI_DEMO_MOT_DE_PASSE, pour tous les comptes qui ont choisi le leur.
+Un compte dont le mot de passe est encore son identifiant ne s'ouvre que depuis un poste reconnu du magasin (reconnu par le propriétaire ou un responsable).
+
++----------------------------+--------------------------------------------------+-----------------------------+-----------------+-------------+---------------------------------------------+---------------------------------------+
+| Société                    | Magasin                                          | Rôle                        | Nom             | Identifiant | Adresse de connexion                        | Mot de passe                          |
++----------------------------+--------------------------------------------------+-----------------------------+-----------------+-------------+---------------------------------------------+---------------------------------------+
+| MAISON FERRAND             |                                                  | Propriétaire                | Hélène FERRAND  | 26600032    | proprietaire@commerce.exemple.test          | 1171515803                            |
+| CONSEIL VASSEUR            |                                                  | Propriétaire                | Julien VASSEUR  | 46612329    | proprietaire@services.exemple.test          | 1171515803                            |
+| MARTIN EXPERTISE COMPTABLE |                                                  | Propriétaire                | Isabelle MARTIN | 58123486    | proprietaire@cabinet.exemple.test           | 1171515803                            |
+| MAISON FERRAND             | Tous les magasins                                | Administrateur (sans vente) | Nadia Benali    | 34079149    |                                             | 1171515803                            |
+| MAISON FERRAND             | Maison Ferrand Halles, Maison Ferrand République | Administrateur (vend)       | Thomas Girard   | 52600634    |                                             | 1171515803                            |
+| MAISON FERRAND             | Maison Ferrand Halles                            | Responsable                 | Camille Laurent | 51698703    |                                             | 1171515803                            |
+| MAISON FERRAND             | Maison Ferrand Halles                            | Vendeur                     | Lucas Moreau    | 97811666    |                                             | 1171515803                            |
+| MAISON FERRAND             | Maison Ferrand Halles                            | Vendeur                     | Inès Garcia     | 41578086    |                                             | son identifiant (poste reconnu exigé) |
+| MAISON FERRAND             | Maison Ferrand République                        | Responsable                 | Hugo Lefebvre   | 97727943    |                                             | 1171515803                            |
+| MAISON FERRAND             | Maison Ferrand République                        | Vendeur                     | Lucas Moreau    | 97250367    |                                             | 1171515803                            |
+| MAISON FERRAND             | Maison Ferrand République                        | Vendeur                     | Sarah Petit     | 50114008    |                                             | 1171515803                            |
+| CONSEIL VASSEUR            | Tous les magasins                                | Administrateur (sans vente) | Léa Fontaine    | 48798966    |                                             | 1171515803                            |
+| CONSEIL VASSEUR            | Conseil Vasseur Paris                            | Administrateur (vend)       | Antoine Roux    | 34226861    |                                             | 1171515803                            |
+| CONSEIL VASSEUR            | Conseil Vasseur Paris                            | Responsable                 | Claire Dubois   | 13565400    |                                             | 1171515803                            |
+| CONSEIL VASSEUR            | Conseil Vasseur Paris                            | Vendeur                     | Maxime Henry    | 61158343    |                                             | 1171515803                            |
+| CONSEIL VASSEUR            | Conseil Vasseur Paris                            | Vendeur                     | Julie Mercier   | 44719408    |                                             | 1171515803                            |
+| MARTIN EXPERTISE COMPTABLE |                                                  | Collaborateur du cabinet    | Paul Lefèvre    | 99221836    |                                             | 1171515803                            |
+| MARTIN EXPERTISE COMPTABLE |                                                  | Collaborateur du cabinet    | Emma Rousseau   | 73663268    |                                             | 1171515803                            |
+| EPICERIE LEMOINE           |                                                  | Propriétaire                | Bernard LEMOINE | 87672167    | proprietaire@client-du-cabinet.exemple.test | 1171515803                            |
+| EPICERIE LEMOINE           | Tous les magasins                                | Administrateur (sans vente) | Romane Gauthier | 27580584    |                                             | 1171515803                            |
+| EPICERIE LEMOINE           | Épicerie Lemoine                                 | Administrateur (vend)       | Bastien Leroy   | 54570258    |                                             | 1171515803                            |
+| EPICERIE LEMOINE           | Épicerie Lemoine                                 | Responsable                 | Nicolas Lemoine | 27606330    |                                             | 1171515803                            |
+| EPICERIE LEMOINE           | Épicerie Lemoine                                 | Vendeur                     | Chloé Bernard   | 11170566    |                                             | 1171515803                            |
+| EPICERIE LEMOINE           | Épicerie Lemoine                                 | Vendeur                     | Mehdi Brahimi   | 55925563    |                                             | 1171515803                            |
+| CONSEIL VASSEUR            | Tous les magasins                                | Expert-comptable déclaré    | Marc Petit      | 90092865    |                                             | 1171515803                            |
+| FLEURS DE SAISON           |                                                  | Propriétaire                | Aurélie BLANC   | 49952813    | proprietaire@inscription.exemple.test       | 1171515803                            |
+| FLEURS DE SAISON           | Démonstration                                    | Responsable                 | Karim Haddad    | 29562415    |                                             | 1171515803                            |
+| FLEURS DE SAISON           | Démonstration                                    | Vendeur                     | Zoé Marchand    | 82390584    |                                             | 1171515803                            |
++----------------------------+--------------------------------------------------+-----------------------------+-----------------+-------------+---------------------------------------------+---------------------------------------+
+ ====  tu crois qu'ils sont bonees ?
+

@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 15/11/2026 à 11:00 UTC par pilotage-sync.sh : « A et B : contrôle nocturne, lot RLS ».
+Mis à jour le 15/11/2026 à 11:32 UTC par pilotage-sync.sh : « SEED-TOUT 4 bis ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -45,11 +45,14 @@ eba4bc85 Relecture du lot ER-PRO
  M app/Filament/App/Resources/FactureResource.php
  M app/Filament/App/Resources/PaiementResource.php
  M app/Filament/Concerns/EnvoieLesDocuments.php
+ M resources/views/filament/carte-de-notification.blade.php
  M tests/Browser/Parcours/CartesDesNotificationsTest.php
  M tests/Browser/Parcours/RegularisationEtRelancesTest.php
  M tests/Browser/Support/Navigation.php
  M tests/Browser/inventaire-des-actions.php
  M tests/Feature/Facturation/RegularisationDUneFactureTest.php
+?? resources/views/vendor/filament-notifications/
+?? resources/views/vendor/filament-panels/
 ```
 
 ## Dernière course de la chaîne

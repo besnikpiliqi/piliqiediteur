@@ -448,3 +448,4 @@
 - 15/11 11:15 UTC — Cahier SEED-TOUT § 3 bis : vérification de l'isolation de toute la base à la fin du semis (commande, tableau, code 1, tests par faute introduite).
 - 15/11 11:25 UTC — SEED-TOUT § 3 bis 1 bis : double contrôle Laravel + SQL.
 - 15/11 11:40 UTC — « A et B » : A (contrôle nocturne, prod + dev) dans SEED-TOUT § 3 ter ; B = lot RLS (cahier rls/cahier-RLS.md) JUSTE APRÈS la chaîne (après VIES-DEP), avant VER. Nouvel onglet du document à faire : « Protections et rigueur » (inventaire complet + propositions non retenues).
+- 15/11 12:20 UTC — Liste des comptes du semis relue avec l'éditeur ; manques ajoutés au cahier SEED-TOUT § 4 bis (observateur, comptes d'entraînement nommés, clients confiés, 2e client du cabinet, colonne « À regarder », comptes des nouveaux cas).

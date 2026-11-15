@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 15/11/2026 à 11:58 UTC par pilotage-sync.sh : « Onglet protections + modèle export charges ».
+Mis à jour le 15/11/2026 à 11:59 UTC par pilotage-sync.sh : « Point de suivi 11:59 ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

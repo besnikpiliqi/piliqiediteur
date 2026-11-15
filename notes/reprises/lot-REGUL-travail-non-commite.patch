@@ -1,0 +1,1355 @@
+diff --git a/app/Domain/Facturation/Services/RegularisationDUneFacture.php b/app/Domain/Facturation/Services/RegularisationDUneFacture.php
+index 9a31db13..385f625c 100644
+--- a/app/Domain/Facturation/Services/RegularisationDUneFacture.php
++++ b/app/Domain/Facturation/Services/RegularisationDUneFacture.php
+@@ -13,6 +13,7 @@
+ use App\Domain\Tenancy\Support\CleDuModele;
+ use App\Domain\Tenancy\Support\ValeurSimple;
+ use App\Domain\Tenancy\Support\ValeursLues;
++use Closure;
+ use Illuminate\Database\Eloquent\Builder;
+ 
+ /**
+@@ -61,7 +62,7 @@
+  * crédit referme : il quitte la rectificative pour la facture, qui reste
+  * soldée, et la rectificative porte le dû rouvert (T68.3, voir
+  * ImputationDuCredit::reportsDesRegularisations()) ; une facture
+- * régularisée n'est jamais relancée (voir estRegularisee()). Ce crédit
++ * régularisée n'est jamais relancée (voir refusDeLaRelance()). Ce crédit
+  * n'est jamais un encaissement : il ne s'inscrit dans aucun e-reporting
+  * (seuls les tickets y entrent, voir EReportingDesParticuliers), et la
+  * facture électronique de l'étape 2 ne le déclarera pas comme tel, la
+@@ -96,6 +97,12 @@ class RegularisationDUneFacture
+ 
+     public const MOTIF_DE_L_AVOIR = 'Régularisation de la facture %s après la correction du SIREN du vendeur';
+ 
++    /**
++     * L'attribut d'une facture lue par une liste qui dit si son avoir de
++     * régularisation est émis (voir avecLExistenceDeLAvoirDeRegularisation()).
++     */
++    private const AVOIR_DE_REGULARISATION_EXISTE = 'avoir_de_regularisation_exists';
++
+     public function __construct(private readonly CalculateurLigne $calculateur) {}
+ 
+     /**
+@@ -126,19 +133,23 @@ public function estDesignee(Facture $facture): bool
+      * régularisation ; null quand rien ne l'en empêche :
+      * - une facture qui a sa rectificative : le retour se fait sur celle-ci,
+      *   qui en a repris les lignes ;
+-     * - une facture désignée qui n'a pas encore sa rectificative (son avoir
+-     *   de régularisation émis ou non) : un avoir
+-     *   ordinaire la corrigerait sous le SIREN corrigé, qu'elle n'a jamais
+-     *   porté, et sa régularisation n'en reprendrait plus toutes les lignes ;
+-     *   elle se régularise d'abord.
++     * - une facture désignée qui n'a pas encore sa rectificative et a
++     *   encore quelque chose à régulariser (une ligne à créditer, ou son
++     *   avoir de régularisation émis, sa rectificative restant à émettre) :
++     *   un avoir ordinaire la corrigerait sous le SIREN corrigé, qu'elle n'a
++     *   jamais porté, et sa régularisation n'en reprendrait plus toutes les
++     *   lignes ; elle se régularise d'abord.
+      * Seul son avoir de régularisation la crédite alors (voir
+-     * CreerAvoirAction).
++     * CreerAvoirAction). Une facture désignée dont des avoirs ordinaires
++     * ont crédité toutes les lignes avant l'examen n'a plus rien à
++     * régulariser (voir refusDeLAvoir()) : rien ne la retient ici, et
++     * « Nouvel avoir » dit qu'elle n'a plus rien à rendre.
+      */
+     public function refusDUnAvoirOrdinaire(Facture $facture): ?string
+     {
+         return match (true) {
+             $facture->rectificative !== null => sprintf(self::REFUS_FACTURE_RECTIFIEE, $facture->numero),
+-            $this->estDesignee($facture) => sprintf(self::REFUS_RETOUR_AVANT_REGULARISATION, $facture->numero),
++            $this->estDesignee($facture) && ($facture->possedeDesLignesCreditables() || $this->avoirDeRegularisation($facture) !== null) => sprintf(self::REFUS_RETOUR_AVANT_REGULARISATION, $facture->numero),
+             default => null,
+         };
+     }
+@@ -191,6 +202,35 @@ public function refusDeLaRelance(Facture $facture): ?string
+         return $avoir === null ? null : sprintf(self::REFUS_RELANCE_DE_LA_FACTURE_REGULARISEE, $facture->numero, $avoir->numero);
+     }
+ 
++    /**
++     * La facture est-elle régularisée, son avoir de régularisation émis
++     * (voir refusDeLaRelance()) ? Lu sur l'attribut que la liste des
++     * factures charge avec sa page (voir avecLExistenceDeLAvoirDeRegularisation()),
++     * sans une requête par facture, sinon en base.
++     */
++    public function estRegularisee(Facture $facture): bool
++    {
++        return array_key_exists(self::AVOIR_DE_REGULARISATION_EXISTE, $facture->getAttributes())
++            ? (bool) $facture->getAttribute(self::AVOIR_DE_REGULARISATION_EXISTE)
++            : $this->avoirDeRegularisation($facture) !== null;
++    }
++
++    /**
++     * Ce qu'une requête de factures ajoute à son withExists() pour lire,
++     * avec la page, si chacune a son avoir de régularisation émis (voir
++     * estRegularisee()) : une ligne de la facture que crédite un avoir de
++     * régularisation émis, dans le magasin actif.
++     *
++     * @return array<string, Closure(Builder<LigneFacture>): Builder<LigneFacture>>
++     */
++    public static function avecLExistenceDeLAvoirDeRegularisation(): array
++    {
++        return ['lignes as '.self::AVOIR_DE_REGULARISATION_EXISTE => fn (Builder $lignes): Builder => $lignes->whereHas(
++            'lignesAvoir.avoir',
++            fn (Builder $avoirs): Builder => $avoirs->whereNotNull('motif_regularisation')->where('statut', StatutAvoir::Emise),
++        )];
++    }
++
+     /**
+      * L'avoir de régularisation émis de cette facture, s'il existe : au
+      * plus un, ses lignes créditant tout ce qui restait à créditer. Relu
+diff --git a/app/Domain/Tenancy/Services/ChosesAFaireDuMagasin.php b/app/Domain/Tenancy/Services/ChosesAFaireDuMagasin.php
+index 607fc1dc..f0f649e4 100644
+--- a/app/Domain/Tenancy/Services/ChosesAFaireDuMagasin.php
++++ b/app/Domain/Tenancy/Services/ChosesAFaireDuMagasin.php
+@@ -224,7 +224,11 @@ private function toutes(): array
+      * encaisser, et pour un membre autorisé à contre-passer (point 16 de
+      * la série 8). Leur nombre, leur restant dû, ceux en retard et ceux
+      * dont un paiement a été contre-passé, puis les dix plus anciens par
+-     * échéance.
++     * échéance. Une facture rectificative compte parmi ces derniers quand
++     * la contre-passation d'un paiement de la facture qu'elle rectifie lui
++     * a repris le crédit de l'avoir de régularisation : le dû rouvert porte
++     * sur elle (T68.3, voir ContrePasserPaiementAction), la facture
++     * régularisée restant soldée.
+      */
+     private function facturesAEncaisser(): ?ChoseAFaire
+     {
+@@ -238,8 +242,13 @@ private function facturesAEncaisser(): ?ChoseAFaire
+             ->aEncaisser()
+             ->visiblesPar($this->compte)
+             ->with(['allocationsPaiement:id,facture_id,montant_alloue', 'allocationsAvoir:id,facture_id,montant_alloue'])
+-            ->withExists(['allocationsPaiement as paiement_contre_passe' => fn (Builder $allocations): Builder => $allocations
+-                ->whereHas('paiement', fn (Builder $paiements): Builder => $paiements->whereNotNull('contre_passe_paiement_id'))])
++            ->withExists([
++                'allocationsPaiement as paiement_contre_passe' => fn (Builder $allocations): Builder => $allocations
++                    ->whereHas('paiement', fn (Builder $paiements): Builder => $paiements->whereNotNull('contre_passe_paiement_id')),
++                'allocationsAvoir as credit_repris_par_une_contre_passation' => fn (Builder $imputations): Builder => $imputations
++                    ->where('montant_alloue', '<', 0)
++                    ->whereHas('paiement', fn (Builder $paiements): Builder => $paiements->whereNotNull('contre_passe_paiement_id')),
++            ])
+             ->orderBy('date_echeance')
+             ->orderBy('id')
+             ->get()
+@@ -250,7 +259,8 @@ private function facturesAEncaisser(): ?ChoseAFaire
+         }
+ 
+         $totaux = Facture::totauxAEncaisser($factures);
+-        $contrePassees = $factures->filter(fn (Facture $facture): bool => (bool) $facture->getAttribute('paiement_contre_passe'))->count();
++        $contrePassee = fn (Facture $facture): bool => (bool) $facture->getAttribute('paiement_contre_passe') || (bool) $facture->getAttribute('credit_repris_par_une_contre_passation');
++        $contrePassees = $factures->filter($contrePassee)->count();
+         $precision = $this->euros($totaux['restant_du']).' restant dû'
+             .($totaux['nombre_en_retard'] > 0 ? ', dont '.trans_choice('{1} 1 en retard|[2,*] :count en retard', $totaux['nombre_en_retard']).' ('.$this->euros($totaux['restant_du_en_retard']).')' : '')
+             .($contrePassees > 0 ? ($totaux['nombre_en_retard'] > 0 ? ' et ' : ', dont ').trans_choice('{1} 1 dont un paiement a été contre-passé|[2,*] :count dont un paiement a été contre-passé', $contrePassees) : '')
+@@ -275,7 +285,7 @@ private function facturesAEncaisser(): ?ChoseAFaire
+                 'montant' => $this->euros($facture->resteDuEnCentimes()),
+                 'date' => $facture->date_echeance === null ? null : Calendrier::afficherJour($facture->date_echeance, 'd/m/Y'),
+                 'date_en_rouge' => $facture->estEnRetard(),
+-                'badge' => $facture->getAttribute('paiement_contre_passe') ? 'Paiement contre-passé' : null,
++                'badge' => $contrePassee($facture) ? 'Paiement contre-passé' : null,
+             ])->all()),
+             lienDesLignes: ['libelle' => 'Voir toutes les factures à encaisser', 'url' => FactureResource::urlDesFacturesAEncaisser()],
+         );
+diff --git a/app/Filament/App/Resources/AvoirResource.php b/app/Filament/App/Resources/AvoirResource.php
+index 6f6240aa..508d8395 100644
+--- a/app/Filament/App/Resources/AvoirResource.php
++++ b/app/Filament/App/Resources/AvoirResource.php
+@@ -384,8 +384,8 @@ public static function clientDuPremierDocument(array $lignes): Client
+      * Un avoir se fait sur ce ticket ou cette facture : émis, avec encore
+      * une ligne à créditer, par une personne qui peut créer un avoir, et
+      * que sa régularisation n'en empêche pas (une facture désignée par
+-     * l'examen du SIREN de la société, ou sa facture rectificative qui
+-     * attend encore l'avoir de régularisation, voir
++     * l'examen du SIREN de la société qui a encore quelque chose à
++     * régulariser, ou une facture qui a sa rectificative, voir
+      * RegularisationDUneFacture::refusDUnAvoirOrdinaire()). Le bouton
+      * « Avoir » de la liste des factures, une fenêtre qui ne quitte pas la
+      * liste, apparaît ainsi (la liste charge avec ses factures leur
+diff --git a/app/Filament/App/Resources/FactureResource.php b/app/Filament/App/Resources/FactureResource.php
+index 46750cf9..04d881d1 100644
+--- a/app/Filament/App/Resources/FactureResource.php
++++ b/app/Filament/App/Resources/FactureResource.php
+@@ -40,6 +40,7 @@
+ use App\Domain\Facturation\Services\PreuvesRequises;
+ use App\Domain\Facturation\Services\RecuPaiementPdfGenerator;
+ use App\Domain\Facturation\Services\ReglementComptant;
++use App\Domain\Facturation\Services\RegularisationDUneFacture;
+ use App\Domain\Fichiers\EnTetesDesFichiers;
+ use App\Domain\Recherche\RechercheSansAccents;
+ use App\Domain\Stock\Exceptions\ConfirmationVenteSansStockRequiseException;
+@@ -846,12 +847,17 @@ public static function table(Table $table): Table
+             // d'examen de ce SIREN, et l'existence de lignes encore à
+             // créditer (voir Facture::possedeDesLignesCreditables()), disent
+             // si l'action « Avoir » s'y propose (voir
+-            // AvoirResource::peutCrediter()) : tout se lit avec la page, le
+-            // magasin, sa société et cette décision une seule fois, quel que
+-            // soit le nombre de factures.
++            // AvoirResource::peutCrediter()), et l'existence de son avoir de
++            // régularisation si l'action « Relancer » s'y propose (voir
++            // RegularisationDUneFacture::estRegularisee()) : tout se lit avec
++            // la page, le magasin, sa société et cette décision une seule
++            // fois, quel que soit le nombre de factures.
+             ->modifyQueryUsing(fn (Builder $query): Builder => $query
+                 ->with(['allocationsPaiement:id,facture_id,montant_alloue', 'allocationsAvoir:id,facture_id,montant_alloue', 'rectificative:id,facture_rectifiee_id', 'client', 'magasin.societe.dernierExamenDuSiren'])
+-                ->withExists(['lignes as lignes_creditables_exists' => fn (Builder $lignes): Builder => ValeursLues::instance($lignes->scopes('creditables'), Builder::class)]))
++                ->withExists([
++                    'lignes as lignes_creditables_exists' => fn (Builder $lignes): Builder => ValeursLues::instance($lignes->scopes('creditables'), Builder::class),
++                    ...RegularisationDUneFacture::avecLExistenceDeLAvoirDeRegularisation(),
++                ]))
+             ->columns([
+                 Tables\Columns\TextColumn::make('numero')->label('Numéro')->placeholder('Brouillon')->rechercheSansAccents(),
+                 self::clientColumn(),
+diff --git a/app/Filament/App/Resources/PaiementResource.php b/app/Filament/App/Resources/PaiementResource.php
+index dfb4d44f..f81c8a19 100644
+--- a/app/Filament/App/Resources/PaiementResource.php
++++ b/app/Filament/App/Resources/PaiementResource.php
+@@ -13,7 +13,9 @@
+ use App\Domain\Facturation\Models\Paiement;
+ use App\Domain\Facturation\Models\PaiementAllocation;
+ use App\Domain\Facturation\Services\CalculateurLigne;
++use App\Domain\Facturation\Services\RegularisationDUneFacture;
+ use App\Domain\Facturation\Services\SaisieDecimale;
++use App\Domain\Tenancy\Support\CleDuModele;
+ use App\Domain\Tenancy\Support\CompteConnecte;
+ use App\Domain\Tenancy\Support\ValeurRequise;
+ use App\Domain\Tenancy\Support\ValeurSimple;
+@@ -276,19 +278,37 @@ private static function totalImpute(mixed $allocations): ?int
+      * imputé (le paiement de la première part d'un encaissement les signe,
+      * voir EncaisserEnPlusieursModesAction), et imputer aussitôt le crédit
+      * disponible : celui du client, ou pour le client comptoir, seulement
+-     * celui des avoirs qui corrigent les tickets rouverts.
++     * celui des avoirs qui corrigent les tickets rouverts. Une facture
++     * régularisée qui a sa facture rectificative reste soldée par son avoir
++     * de régularisation, et ce que le paiement y réglait devient dû sur sa
++     * rectificative, que la fenêtre nomme (T68.3, voir
++     * ImputationDuCredit::reportsDesRegularisations()).
+      */
+     private static function descriptionDeLaContrePassation(Paiement $paiement): string
+     {
+         $calculateur = app(CalculateurLigne::class);
++        $regularisation = app(RegularisationDUneFacture::class);
+         $bons = $paiement->creditsImputes()->with('avoir')->orderBy('id')->get()
+             ->map(fn (AvoirAllocation $credit): string => sprintf('%s (%s)', ValeurRequise::de($credit->avoir, 'l\'avoir de l\'imputation')->numero, $calculateur->enEuros($calculateur->enCentiemes($credit->montant_alloue))));
++        $factures = $paiement->allocations()->with('facture.rectificative')->orderBy('id')->get()
++            ->map(fn (PaiementAllocation $allocation): Facture => ValeurRequise::de($allocation->facture, 'la facture de l\'imputation'))
++            ->unique(fn (Facture $facture): int => CleDuModele::de($facture));
++        $reportees = $factures
++            ->map(fn (Facture $facture): ?string => $facture->rectificative === null || ($avoir = $regularisation->avoirDeRegularisation($facture)) === null
++                ? null
++                : sprintf('La facture %s, régularisée par l\'avoir %s, restera soldée : ce que ce paiement y réglait deviendra dû sur sa facture rectificative %s.', $facture->numero, $avoir->numero, $facture->rectificative->numero))
++            ->filter();
+         $phrases = [sprintf(
+-            'Ce paiement de %s (%s, reçu le %s) sera annulé par un paiement opposé daté d\'aujourd\'hui, et les factures qu\'il réglait redeviendront dues.',
++            'Ce paiement de %s (%s, reçu le %s) sera annulé par un paiement opposé daté d\'aujourd\'hui%s',
+             $calculateur->enEuros($calculateur->enCentiemes($paiement->montant)),
+             $paiement->mode_paiement->getLabel(),
+             Calendrier::afficherJour($paiement->recu_le, 'd/m/Y'),
+-        )];
++            match ($reportees->count()) {
++                0 => ', et les factures qu\'il réglait redeviendront dues.',
++                $factures->count() => '.',
++                default => ', et les autres factures qu\'il réglait redeviendront dues.',
++            },
++        ), ...$reportees->values()->all()];
+ 
+         if ($bons->count() === 1) {
+             $phrases[] = "Le bon d'avoir {$bons->sole()}, présenté avec lui, retrouvera le crédit qu'il y avait imputé, que le ticket devra de nouveau : son numéro pourra resservir.";
+diff --git a/app/Filament/Concerns/EnvoieLesDocuments.php b/app/Filament/Concerns/EnvoieLesDocuments.php
+index aaae4bfc..f1a22d64 100644
+--- a/app/Filament/Concerns/EnvoieLesDocuments.php
++++ b/app/Filament/Concerns/EnvoieLesDocuments.php
+@@ -134,7 +134,8 @@ public static function envoyerParEmail(MountableAction $action): MountableAction
+      * n'y est à relancer (lot DEMO-V) ; « Envoyer par e-mail » reste, pour
+      * un ticket donné par e-mail au client présent. Ni sur une facture
+      * régularisée, dont le dû se porte sur sa facture rectificative (T68.3,
+-     * voir RegularisationDUneFacture::refusDeLaRelance()).
++     * voir RegularisationDUneFacture::refusDeLaRelance()) : la liste des
++     * factures le lit avec sa page (voir FactureResource::table()).
+      *
+      * @template TAction of MountableAction
+      *
+@@ -150,7 +151,7 @@ public static function relancer(MountableAction $action): MountableAction
+             ->modalHeading(fn (Facture $record): string => 'Relance n°'.($record->niveauDeRelanceAtteint() + 1)." : {$record->libelleDocument()} {$record->numero}")
+             ->modalDescription('Le client reçoit la facture en pièce jointe, avec le rappel de son montant, de son échéance et de ce qu\'il reste à payer.')
+             ->modalSubmitActionLabel('Relancer')
+-            ->visible(fn (Facture $record): bool => ! ($record->client?->estComptoir() ?? false) && $record->estEchueEtImpayee() && ! $record->magasin->est_demonstration && CompteConnecte::exiger()->can('envoyer', $record) && app(RegularisationDUneFacture::class)->refusDeLaRelance($record) === null)
++            ->visible(fn (Facture $record): bool => ! ($record->client?->estComptoir() ?? false) && $record->estEchueEtImpayee() && ! $record->magasin->est_demonstration && CompteConnecte::exiger()->can('envoyer', $record) && ! app(RegularisationDUneFacture::class)->estRegularisee($record))
+             ->fillForm(fn (Facture $record): array => ['destinataire' => ValeurRequise::de($record->client, 'le client de la facture relancée')->email])
+             ->form([static::champDuJeton(), self::champDestinataire()])
+             ->action(fn (Facture $record, array $data) => static::executerSansCasser(function () use ($record, $data) {
+diff --git a/resources/views/filament/carte-de-notification.blade.php b/resources/views/filament/carte-de-notification.blade.php
+index caa44970..85c2a592 100644
+--- a/resources/views/filament/carte-de-notification.blade.php
++++ b/resources/views/filament/carte-de-notification.blade.php
+@@ -51,11 +51,19 @@ class="piliqi-carte"
+             @endif
+         </div>
+ 
++        {{--
++            La croix ne fait aucune requête : elle reste active pendant que
++            la page regarde s'il y a du nouveau (:wire:loading.attr="false"
++            retire la désactivation que le bouton de Filament pose pendant
++            chaque requête de son composant, qui perdait un clic tombé à ce
++            moment et enlevait le focus du clavier à la croix).
++        --}}
+         <x-filament::icon-button
+             color="gray"
+             icon="heroicon-m-x-mark"
+             label="Fermer"
+             x-on:click="fermer()"
++            :wire:loading.attr="false"
+             class="piliqi-carte__fermer"
+         />
+     </div>
+diff --git a/resources/views/vendor/filament-notifications/components/close-button.blade.php b/resources/views/vendor/filament-notifications/components/close-button.blade.php
+new file mode 100644
+index 00000000..5c96753e
+--- /dev/null
++++ b/resources/views/vendor/filament-notifications/components/close-button.blade.php
+@@ -0,0 +1,17 @@
++{{--
++    La croix d'une notification de Filament
++    (filament-notifications::components.close-button), la même, qui reste
++    active pendant les requêtes de son composant : dans la liste de la
++    cloche, qui regarde s'il y a du nouveau (voir
++    App\Filament\CartesDesNotifications::intervalle()), le bouton de
++    Filament se désactivait pendant chaque regard (wire:loading.attr), et un
++    clic tombé à ce moment se perdait.
++--}}
++<x-filament::icon-button
++    color="gray"
++    icon="heroicon-m-x-mark"
++    icon-alias="notifications::notification.close-button"
++    x-on:click="close"
++    :wire:loading.attr="false"
++    class="fi-no-notification-close-btn"
++/>
+diff --git a/resources/views/vendor/filament-notifications/components/database/modal/index.blade.php b/resources/views/vendor/filament-notifications/components/database/modal/index.blade.php
+new file mode 100644
+index 00000000..aaca2525
+--- /dev/null
++++ b/resources/views/vendor/filament-notifications/components/database/modal/index.blade.php
+@@ -0,0 +1,107 @@
++{{--
++    La liste de la cloche (filament-notifications::components.database.modal.index),
++    la même, sauf sa croix, posée ici dans l'en-tête à la place de celle de
++    la fenêtre de Filament, à la même place : elle reste active pendant que
++    la cloche regarde s'il y a du nouveau (voir
++    App\Filament\CartesDesNotifications::intervalle()). Le bouton de
++    Filament se désactivait pendant chaque regard (wire:loading.attr), et un
++    clic tombé à ce moment se perdait ; la fenêtre de Filament ne laisse rien
++    changer à sa croix. Sans notification, l'en-tête reprend l'icône, le
++    titre et la phrase que la fenêtre de Filament y met.
++--}}
++@props([
++    'notifications',
++    'unreadNotificationsCount',
++])
++
++@php
++    use Filament\Support\Enums\Alignment;
++
++    $hasNotifications = $notifications->count();
++    $isPaginated = $notifications instanceof \Illuminate\Contracts\Pagination\Paginator && $notifications->hasPages();
++@endphp
++
++<x-filament::modal
++    :alignment="$hasNotifications ? null : Alignment::Center"
++    :aria-labelledby="$hasNotifications ? null : 'database-notifications.heading'"
++    :close-button="false"
++    id="database-notifications"
++    slide-over
++    :sticky-header="$hasNotifications"
++    width="md"
++>
++    <x-slot name="header">
++        <div class="absolute end-6 top-6">
++            <x-filament::icon-button
++                color="gray"
++                icon="heroicon-o-x-mark"
++                icon-alias="modal.close-button"
++                icon-size="lg"
++                :label="__('filament::components/modal.actions.close.label')"
++                tabindex="-1"
++                x-on:click="$dispatch('close-modal', { id: 'database-notifications' })"
++                :wire:loading.attr="false"
++                class="fi-modal-close-btn"
++            />
++        </div>
++
++        @if ($hasNotifications)
++            <div>
++                <x-filament-notifications::database.modal.heading
++                    :unread-notifications-count="$unreadNotificationsCount"
++                />
++
++                <x-filament-notifications::database.modal.actions
++                    :notifications="$notifications"
++                    :unread-notifications-count="$unreadNotificationsCount"
++                />
++            </div>
++        @else
++            <div class="mb-5 flex items-center justify-center">
++                <div class="fi-color-gray rounded-full bg-gray-100 p-3 dark:bg-gray-500/20">
++                    <x-filament::icon
++                        alias="notifications::database.modal.empty-state"
++                        icon="heroicon-o-bell-slash"
++                        class="fi-modal-icon h-6 w-6 text-gray-500 dark:text-gray-400"
++                    />
++                </div>
++            </div>
++
++            <div class="text-center">
++                <x-filament::modal.heading id="database-notifications.heading">
++                    {{ __('filament-notifications::database.modal.empty.heading') }}
++                </x-filament::modal.heading>
++
++                <x-filament::modal.description class="mt-2">
++                    {{ __('filament-notifications::database.modal.empty.description') }}
++                </x-filament::modal.description>
++            </div>
++        @endif
++    </x-slot>
++
++    @if ($hasNotifications)
++        <div
++            @class([
++                '-mx-6 -mt-6 divide-y divide-gray-200 dark:divide-white/10',
++                '-mb-6' => ! $isPaginated,
++                'border-b border-gray-200 dark:border-white/10' => $isPaginated,
++            ])
++        >
++            @foreach ($notifications as $notification)
++                <div
++                    @class([
++                        'relative before:absolute before:start-0 before:h-full before:w-0.5 before:bg-primary-600 dark:before:bg-primary-500' => $notification->unread(),
++                    ])
++                >
++                    {{ $this->getNotification($notification)->inline() }}
++                </div>
++            @endforeach
++        </div>
++
++        @if ($isPaginated)
++            <x-slot name="footer">
++                <x-filament::pagination :paginator="$notifications" />
++            </x-slot>
++        @endif
++    @endif
++</x-filament::modal>
+diff --git a/resources/views/vendor/filament-panels/components/topbar/database-notifications-trigger.blade.php b/resources/views/vendor/filament-panels/components/topbar/database-notifications-trigger.blade.php
+new file mode 100644
+index 00000000..9c9e5e15
+--- /dev/null
++++ b/resources/views/vendor/filament-panels/components/topbar/database-notifications-trigger.blade.php
+@@ -0,0 +1,19 @@
++{{--
++    La cloche des trois espaces : le bouton de Filament
++    (filament-panels::components.topbar.database-notifications-trigger), le
++    même, qui reste actif pendant que la cloche regarde s'il y a du nouveau
++    (voir App\Filament\CartesDesNotifications::intervalle()). Le bouton de
++    Filament se désactive pendant chaque requête de son composant
++    (wire:loading.attr="disabled"), et un clic tombé pendant ce regard se
++    perdait sans ouvrir la liste ; l'ouvrir ne fait aucune requête.
++--}}
++<x-filament::icon-button
++    :badge="$unreadNotificationsCount ?: null"
++    color="gray"
++    icon="heroicon-o-bell"
++    icon-alias="panels::topbar.open-database-notifications-button"
++    icon-size="lg"
++    :label="__('filament-panels::layout.actions.open_database_notifications.label')"
++    :wire:loading.attr="false"
++    class="fi-topbar-database-notifications-btn"
++/>
+diff --git a/tests/Browser/Parcours/CartesDesNotificationsTest.php b/tests/Browser/Parcours/CartesDesNotificationsTest.php
+index 5621bd7c..21274f9c 100644
+--- a/tests/Browser/Parcours/CartesDesNotificationsTest.php
++++ b/tests/Browser/Parcours/CartesDesNotificationsTest.php
+@@ -5,6 +5,7 @@
+ use App\Domain\Facturation\Models\Devis;
+ use App\Domain\Tenancy\Notifications\AvisDeLEquipe;
+ use App\Domain\Tenancy\Services\TenantContext;
++use App\Domain\Tenancy\Support\ValeurSimple;
+ use App\Filament\App\Resources\DevisResource;
+ use App\Filament\Cabinet\Resources\ClientDuCabinetResource;
+ use App\Filament\Societe\Resources\MembreResource;
+@@ -53,30 +54,31 @@
+     $test->travel(1)->seconds();
+ 
+     $onglet = $test->seConnecter($compte, panneau: $panneau)->fermerLesAvis();
+-    $onglet->attendreQue('document.querySelector(".piliqi-carte") !== null', 'la carte de l\'avis déjà là ne s\'affiche pas')
+-        ->voir('Avis déjà là avant la connexion')
+-        ->attendreQue('document.querySelector(".piliqi-carte") === null', 'la carte de l\'avis déjà là ne s\'en va pas seule');
++    poserLeReleveDesCartes($onglet);
++    $onglet->attendreQue('document.querySelector(".piliqi-carte") !== null', 'la carte de l\'avis déjà là ne s\'affiche pas', releveDesCartes($onglet, $compte))
++        ->voir('Avis déjà là avant la connexion', releveDesCartes($onglet, $compte))
++        ->attendreQue('document.querySelector(".piliqi-carte") === null', 'la carte de l\'avis déjà là ne s\'en va pas seule', releveDesCartes($onglet, $compte));
+ 
+     $nouvelle = $avertir('Nouvelle notification de PILIQI', $fiche);
+     $test->travel(2)->seconds();
+ 
+-    $onglet->attendreQue('document.querySelector(".piliqi-carte") !== null', 'la carte de la nouvelle notification ne s\'affiche pas')
+-        ->voir('Nouvelle notification de PILIQI');
++    $onglet->attendreQue('document.querySelector(".piliqi-carte") !== null', 'la carte de la nouvelle notification ne s\'affiche pas', releveDesCartes($onglet, $compte))
++        ->voir('Nouvelle notification de PILIQI', releveDesCartes($onglet, $compte));
+     expect(placeDeLaCarte($onglet))->toBe(['sousLaBarre' => true, 'aDroite' => true, 'annoncee' => true, 'boutons' => ['Voir']]);
+     expect(pastilleDeLaCloche($onglet))->toBe((string) $compte->unreadNotifications()->count());
+ 
+     $onglet->cliquer('.piliqi-carte .piliqi-carte__fermer')
+-        ->attendreQue('document.querySelector(".piliqi-carte") === null', 'la croix ne ferme pas la carte');
++        ->attendreQue('document.querySelector(".piliqi-carte") === null', 'la croix ne ferme pas la carte', releveDesCartes($onglet, $compte));
+     expect(DatabaseNotification::query()->findOrFail($nouvelle->getKey())->getAttributes())->toBe($nouvelle->getAttributes())
+         ->and(pastilleDeLaCloche($onglet))->toBe((string) $compte->unreadNotifications()->count());
+     $onglet->cliquer('.fi-topbar-database-notifications-btn')
+-        ->voir('Nouvelle notification de PILIQI')
++        ->voir('Nouvelle notification de PILIQI', releveDesCartes($onglet, $compte))
+         ->fermerLaFenetre();
+ 
+     $aOuvrir = $avertir('Notification à ouvrir', $fiche);
+     $test->travel(2)->seconds();
+-    $onglet->attendreQue('document.querySelector(".piliqi-carte") !== null', 'la carte de la notification à ouvrir ne s\'affiche pas')
+-        ->voir('Notification à ouvrir')
++    $onglet->attendreQue('document.querySelector(".piliqi-carte") !== null', 'la carte de la notification à ouvrir ne s\'affiche pas', releveDesCartes($onglet, $compte))
++        ->voir('Notification à ouvrir', releveDesCartes($onglet, $compte))
+         ->cliquer('.piliqi-carte a.fi-ac-link-action')
+         ->attendreLaPage('^'.preg_quote((string) parse_url($fiche, PHP_URL_PATH), '#').'$')
+         ->voir($texteDeLaFiche);
+@@ -109,6 +111,200 @@ function placeDeLaCarte(Navigation $onglet): array
+         JS);
+ }
+ 
++/**
++ * Pose dans la page le journal des cartes, que relit releveDesCartes() :
++ * chaque carte ajoutée ou retirée de la pile, chaque changement de la
++ * place de la pile et de la classe d'une carte ou de sa barre du temps
++ * (la minuterie qui repart ou s'arrête), chaque appui, relâchement, clic
++ * et sortie de la souris, chaque arrivée et départ du focus, chaque
++ * passage des cartes et chaque requête de Livewire, avec son composant,
++ * ses appels et sa réponse.
++ */
++function poserLeReleveDesCartes(Navigation $onglet): void
++{
++    $onglet->page()->evaluate(<<<'JS'
++        () => {
++            const pile = document.querySelector('.piliqi-cartes');
++            const debut = performance.now();
++            const releve = { journal: [], souris: null };
++            window.__releveDesCartes = releve;
++            const noter = (quoi) => {
++                releve.journal.push(Math.round(performance.now() - debut) + ' ms : ' + quoi);
++                releve.journal.splice(0, Math.max(0, releve.journal.length - 300));
++            };
++            const titre = (carte) => (carte.querySelector('.fi-no-notification-title') ?? carte).textContent.trim().replace(/\s+/g, ' ').slice(0, 60);
++            const place = (element) => {
++                const rectangle = element.getBoundingClientRect();
++
++                return '(' + Math.round(rectangle.left) + ', ' + Math.round(rectangle.top) + ', ' + Math.round(rectangle.width) + ' x ' + Math.round(rectangle.height) + ')';
++            };
++            const decrire = (cible) => {
++                if (! (cible instanceof Element)) {
++                    return String(cible);
++                }
++
++                const carte = cible.closest('.piliqi-carte');
++                const nom = cible.tagName.toLowerCase() + (typeof cible.className === 'string' && cible.className.trim() !== '' ? '.' + cible.className.trim().split(/\s+/).slice(0, 2).join('.') : '');
++
++                return carte === null ? nom : nom + ' de la carte « ' + titre(carte) + ' » ' + place(carte);
++            };
++
++            new MutationObserver((mutations) => {
++                for (const mutation of mutations) {
++                    mutation.addedNodes.forEach((noeud) => noeud instanceof Element && noeud.classList.contains('piliqi-carte') && noter('carte ajoutée « ' + titre(noeud) + ' » ' + place(noeud)));
++                    mutation.removedNodes.forEach((noeud) => noeud instanceof Element && noeud.classList.contains('piliqi-carte') && noter('carte retirée « ' + titre(noeud) + ' »'));
++
++                    if (mutation.type === 'attributes' && mutation.target === pile) {
++                        noter('pile : style « ' + pile.getAttribute('style') + ' »');
++                    } else if (mutation.type === 'attributes' && mutation.target instanceof Element && mutation.target.closest('.piliqi-carte') !== null) {
++                        noter('classe « ' + mutation.target.getAttribute('class') + ' » sur ' + decrire(mutation.target));
++                    }
++                }
++            }).observe(pile, { childList: true, subtree: true, attributes: true, attributeFilter: ['style', 'class'] });
++
++            for (const genre of ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click']) {
++                window.addEventListener(genre, (evenement) => noter(genre + ' sur ' + decrire(evenement.target) + ' en (' + evenement.clientX + ', ' + evenement.clientY + ')' + (evenement.isTrusted ? '' : ', simulé')), true);
++                window.addEventListener(genre, (evenement) => noter('… ' + genre + ' arrivé à la fenêtre' + (evenement.defaultPrevented ? ', empêché' : '') + (evenement.target instanceof Node && ! evenement.target.isConnected ? ', cible détachée' : '')));
++            }
++
++            const barre = document.querySelector('.fi-topbar');
++
++            if (barre !== null) {
++                new MutationObserver((mutations) => {
++                    const retires = mutations.reduce((nombre, mutation) => nombre + mutation.removedNodes.length, 0);
++                    const ajoutes = mutations.reduce((nombre, mutation) => nombre + mutation.addedNodes.length, 0);
++                    const attributs = mutations.filter((mutation) => mutation.type === 'attributes').map((mutation) => mutation.attributeName + ' de ' + decrire(mutation.target));
++                    noter('barre du haut : ' + retires + ' nœud(s) retiré(s), ' + ajoutes + ' ajouté(s)' + (attributs.length > 0 ? ', ' + attributs.slice(0, 4).join(' ; ') : ''));
++                }).observe(barre, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'style', 'disabled', 'aria-hidden'] });
++            }
++
++            new MutationObserver((mutations) => {
++                for (const mutation of mutations) {
++                    mutation.removedNodes.forEach((noeud) => noeud instanceof Element && (noeud.matches('.fi-topbar-database-notifications-btn') || noeud.querySelector('.fi-topbar-database-notifications-btn') !== null) && noter('la cloche est retirée de la page'));
++                    mutation.addedNodes.forEach((noeud) => noeud instanceof Element && (noeud.matches('.fi-topbar-database-notifications-btn') || noeud.querySelector('.fi-topbar-database-notifications-btn') !== null) && noter('la cloche est ajoutée à la page'));
++                }
++            }).observe(document.body, { childList: true, subtree: true });
++            window.addEventListener('open-modal', (evenement) => noter('ouverture de la fenêtre ' + JSON.stringify(evenement.detail)));
++            window.addEventListener('close-modal', (evenement) => noter('fermeture de la fenêtre ' + JSON.stringify(evenement.detail)));
++
++            for (const genre of ['focusin', 'focusout']) {
++                document.addEventListener(genre, (evenement) => noter(genre + ' sur ' + decrire(evenement.target) + ', vers ' + decrire(evenement.relatedTarget) + ', page ' + (document.hasFocus() ? 'au premier plan' : 'sans le focus')), true);
++            }
++
++            for (const genre of ['blur', 'focus']) {
++                window.addEventListener(genre, (evenement) => evenement.target === window && noter('la fenêtre reçoit ' + genre));
++            }
++
++            document.addEventListener('mouseleave', (evenement) => evenement.target instanceof Element && evenement.target.classList.contains('piliqi-carte') && noter('la souris quitte ' + decrire(evenement.target)), true);
++            document.addEventListener('mousemove', (evenement) => {
++                const carte = evenement.target instanceof Element ? evenement.target.closest('.piliqi-carte') : null;
++                const ici = carte === null ? 'hors des cartes' : 'la carte « ' + titre(carte) + ' »';
++
++                if (releve.souris === null || releve.souris.ici !== ici) {
++                    noter('la souris bouge sur ' + ici + ' en (' + evenement.clientX + ', ' + evenement.clientY + ')');
++                }
++
++                releve.souris = { ici, x: evenement.clientX, y: evenement.clientY };
++            }, true);
++            window.addEventListener('piliqi-cartes-des-notifications', (evenement) => noter('passage des cartes : ' + evenement.detail.cartes.map((carte) => {
++                const modele = document.createElement('template');
++                modele.innerHTML = carte;
++
++                return '« ' + titre(modele.content.firstElementChild ?? modele.content) + ' »';
++            }).join(', ')));
++            window.Livewire.hook('commit', ({ component, commit, succeed, fail }) => {
++                const nom = component.name + ' ' + commit.calls.map((appel) => appel.method).join(', ');
++                noter('requête Livewire : ' + nom);
++                succeed(() => noter('réponse Livewire : ' + nom));
++                fail(() => noter('échec Livewire : ' + nom));
++            });
++            noter('relevé posé, pile ' + place(pile) + ', ' + pile.children.length + ' carte(s)');
++        }
++        JS);
++}
++
++/**
++ * Le relevé des cartes au moment d'un échec : pour chaque carte, son
++ * titre, sa classe, sa place (et si elle bouge encore 200 ms après), son
++ * temps (survolée, minuterie, barre), si la souris ou le focus est
++ * dessus ; le focus et la souris de la page, les requêtes en cours ; puis
++ * le journal posé par poserLeReleveDesCartes() ; et, en base, l'heure du
++ * serveur, les cartes déjà montrées au compte et ses notifications.
++ *
++ * @return Closure(): string
++ */
++function releveDesCartes(Navigation $onglet, User $compte): Closure
++{
++    return function () use ($onglet, $compte): string {
++        $page = $onglet->page()->evaluate(<<<'JS'
++            async () => {
++                const titre = (carte) => (carte.querySelector('.fi-no-notification-title') ?? carte).textContent.trim().replace(/\s+/g, ' ').slice(0, 60);
++                const place = (carte) => {
++                    const rectangle = carte.getBoundingClientRect();
++
++                    return [Math.round(rectangle.left * 10) / 10, Math.round(rectangle.top * 10) / 10, Math.round(rectangle.width), Math.round(rectangle.height)];
++                };
++                const cartes = [...document.querySelectorAll('.piliqi-carte')];
++                const avant = cartes.map(place);
++                await new Promise((fini) => setTimeout(fini, 200));
++                const actif = document.activeElement;
++
++                return JSON.stringify({
++                    cartes: cartes.map((carte, rang) => {
++                        const donnees = window.Alpine ? window.Alpine.$data(carte) : {};
++
++                        return {
++                            titre: titre(carte),
++                            classe: carte.className,
++                            dansLaPage: document.contains(carte),
++                            place: avant[rang],
++                            placeApres200ms: place(carte),
++                            survolee: donnees.survolee ?? null,
++                            minuterie: donnees.minuterie ?? null,
++                            barre: carte.querySelector('.piliqi-carte__temps i')?.className ?? null,
++                            sousLaSouris: carte.matches(':hover'),
++                            focus: carte.contains(actif),
++                            focusDuClavier: carte.querySelector(':focus-visible') !== null,
++                        };
++                    }),
++                    pile: document.querySelector('.piliqi-cartes')?.getAttribute('style') ?? null,
++                    focus: actif ? actif.tagName.toLowerCase() + '.' + String(actif.className).trim().split(/\s+/).slice(0, 2).join('.') : null,
++                    souris: window.__releveDesCartes ? window.__releveDesCartes.souris : null,
++                    requetes: window.__piliqi ? { enCours: window.__piliqi.enCours, lancees: window.__piliqi.lancees, finies: window.__piliqi.finies } : null,
++                    avisDeFilament: [...document.querySelectorAll('.fi-no .fi-no-notification')].map((avis) => avis.textContent.trim().replace(/\s+/g, ' ').slice(0, 60)),
++                    cloche: (() => {
++                        const boutons = [...document.querySelectorAll('.fi-topbar-database-notifications-btn')];
++                        const bouton = boutons[0];
++
++                        if (bouton === undefined) {
++                            return 'absente';
++                        }
++
++                        const rectangle = bouton.getBoundingClientRect();
++                        const auCentre = document.elementFromPoint(rectangle.left + rectangle.width / 2, rectangle.top + rectangle.height / 2);
++
++                        return {
++                            nombre: boutons.length,
++                            place: [Math.round(rectangle.left), Math.round(rectangle.top), Math.round(rectangle.width), Math.round(rectangle.height)],
++                            auCentre: auCentre === null ? null : auCentre.tagName.toLowerCase() + '.' + String(auCentre.className).trim().split(/\s+/).slice(0, 3).join('.') + (bouton.contains(auCentre) ? ' (dans la cloche)' : ' (hors de la cloche)'),
++                        };
++                    })(),
++                    fenetresOuvertes: [...document.querySelectorAll('.fi-modal.fi-modal-open')].map((fenetre) => (fenetre.id || fenetre.getAttribute('x-data') || '').slice(0, 60) + ' : ' + fenetre.textContent.trim().replace(/\s+/g, ' ').slice(0, 120)),
++                    notificationsDeLaCloche: [...document.querySelectorAll('.fi-topbar-database-notifications-btn ~ * .fi-no-notification-title, .fi-modal .fi-no-notification-title')].map((titre) => titre.textContent.trim()),
++                    journal: window.__releveDesCartes ? window.__releveDesCartes.journal : ['relevé non posé'],
++                }, null, 1);
++            }
++            JS);
++        $notifications = $compte->notifications()->reorder('created_at')->get()
++            ->map(fn (DatabaseNotification $notification): string => $notification->created_at?->toIso8601String().' « '.ValeurSimple::enTexte($notification->data['title'] ?? '').' » '.($notification->read_at === null ? 'non lue' : 'lue'))
++            ->implode(PHP_EOL.'  ');
++
++        return 'Relevé des cartes : '.ValeurSimple::enTexte($page).PHP_EOL
++            .'Heure du serveur : '.now()->toIso8601String().', cartes montrées jusqu\'au '.($compte->fresh()?->cartes_montrees_jusqu_au?->toIso8601String() ?? 'jamais').PHP_EOL
++            .'Notifications du compte :'.PHP_EOL.'  '.$notifications;
++    };
++}
++
+ /**
+  * Le nombre de la pastille de la cloche.
+  */
+@@ -176,20 +372,21 @@ function ficheDuDevisEnvoye(SocieteDeTest $equipe): array
+     $this->travel(1)->seconds();
+ 
+     $onglet = $this->seConnecter($compte, panneau: 'societe')->fermerLesAvis();
+-    $onglet->attendreQue('document.querySelector(".piliqi-carte") !== null', 'la carte de l\'avis déjà là ne s\'affiche pas')
+-        ->attendreQue('document.querySelector(".piliqi-carte") === null', 'la carte de l\'avis déjà là ne s\'en va pas seule');
++    poserLeReleveDesCartes($onglet);
++    $onglet->attendreQue('document.querySelector(".piliqi-carte") !== null', 'la carte de l\'avis déjà là ne s\'affiche pas', releveDesCartes($onglet, $compte))
++        ->attendreQue('document.querySelector(".piliqi-carte") === null', 'la carte de l\'avis déjà là ne s\'en va pas seule', releveDesCartes($onglet, $compte));
+     $avertir('Première notification');
+     $this->travel(2)->seconds();
+-    $onglet->attendreQue('document.querySelector(".piliqi-carte") !== null', 'la carte de la première notification ne s\'affiche pas')
+-        ->voir('Première notification')
++    $onglet->attendreQue('document.querySelector(".piliqi-carte") !== null', 'la carte de la première notification ne s\'affiche pas', releveDesCartes($onglet, $compte))
++        ->voir('Première notification', releveDesCartes($onglet, $compte))
+         ->cliquer('.piliqi-carte .piliqi-carte__fermer')
+-        ->attendreQue('document.querySelector(".piliqi-carte") === null', 'la croix ne ferme pas la carte');
++        ->attendreQue('document.querySelector(".piliqi-carte") === null', 'la croix ne ferme pas la carte', releveDesCartes($onglet, $compte));
+ 
+     $avertir('Notification arrivée sous la souris');
+     $this->travel(2)->seconds();
+-    $onglet->attendreQue('document.querySelector(".piliqi-carte") !== null', 'la carte arrivée sous la souris ne s\'affiche pas')
+-        ->voir('Notification arrivée sous la souris');
+-    $onglet->attendreQue('document.querySelector(".piliqi-carte") === null', 'la carte arrivée sous la souris immobile ne s\'en va pas seule');
++    $onglet->attendreQue('document.querySelector(".piliqi-carte") !== null', 'la carte arrivée sous la souris ne s\'affiche pas', releveDesCartes($onglet, $compte))
++        ->voir('Notification arrivée sous la souris', releveDesCartes($onglet, $compte));
++    $onglet->attendreQue('document.querySelector(".piliqi-carte") === null', 'la carte arrivée sous la souris immobile ne s\'en va pas seule', releveDesCartes($onglet, $compte));
+     $onglet->seDeconnecter();
+ });
+ 
+@@ -213,26 +410,101 @@ function ficheDuDevisEnvoye(SocieteDeTest $equipe): array
+     $this->travel(1)->seconds();
+ 
+     $onglet = $this->seConnecter($compte, panneau: 'cabinet')->fermerLesAvis();
+-    $onglet->attendreQue('document.querySelector(".piliqi-carte") !== null', 'la carte de l\'avis déjà là ne s\'affiche pas')
+-        ->attendreQue('document.querySelector(".piliqi-carte") === null', 'la carte de l\'avis déjà là ne s\'en va pas seule');
++    poserLeReleveDesCartes($onglet);
++    $onglet->attendreQue('document.querySelector(".piliqi-carte") !== null', 'la carte de l\'avis déjà là ne s\'affiche pas', releveDesCartes($onglet, $compte))
++        ->attendreQue('document.querySelector(".piliqi-carte") === null', 'la carte de l\'avis déjà là ne s\'en va pas seule', releveDesCartes($onglet, $compte));
+ 
+     $avertir('Carte dont la croix a pris le focus de la souris');
+     $this->travel(2)->seconds();
+-    $onglet->attendreQue('document.querySelector(".piliqi-carte") !== null', 'la carte ne s\'affiche pas')
+-        ->voir('Carte dont la croix a pris le focus de la souris');
++    $onglet->attendreQue('document.querySelector(".piliqi-carte") !== null', 'la carte ne s\'affiche pas', releveDesCartes($onglet, $compte))
++        ->voir('Carte dont la croix a pris le focus de la souris', releveDesCartes($onglet, $compte));
+     $onglet->appuyerPuisRelacherAilleurs('.piliqi-carte .piliqi-carte__fermer');
+     expect($onglet->page()->evaluate('() => document.activeElement.matches(".piliqi-carte__fermer") && ! document.activeElement.matches(":focus-visible")'))->toBeTrue('La croix n\'a pas pris le focus de l\'appui de la souris.');
+-    $onglet->attendreQue('document.querySelector(".piliqi-carte") === null', 'la carte dont la croix a pris le focus de la souris ne s\'en va pas seule');
++    $onglet->attendreQue('document.querySelector(".piliqi-carte") === null', 'la carte dont la croix a pris le focus de la souris ne s\'en va pas seule', releveDesCartes($onglet, $compte));
+ 
+     $avertir('Carte tenue au clavier');
+     $this->travel(2)->seconds();
+-    $onglet->attendreQue('document.querySelector(".piliqi-carte") !== null', 'la carte tenue au clavier ne s\'affiche pas')
+-        ->voir('Carte tenue au clavier');
++    $onglet->attendreQue('document.querySelector(".piliqi-carte") !== null', 'la carte tenue au clavier ne s\'affiche pas', releveDesCartes($onglet, $compte))
++        ->voir('Carte tenue au clavier', releveDesCartes($onglet, $compte));
+     $onglet->page()->evaluate('() => document.querySelector(".piliqi-carte .piliqi-carte__fermer").focus({ focusVisible: true })');
+     expect($onglet->page()->evaluate('() => document.activeElement.matches(".piliqi-carte__fermer:focus-visible")'))->toBeTrue();
+     $onglet->page()->evaluate('() => new Promise((fini) => setTimeout(fini, 9000))');
+-    expect($onglet->page()->evaluate('() => document.querySelector(".piliqi-carte") !== null'))->toBeTrue('La carte tenue au clavier est partie avant que le clavier la quitte.');
++    $restee = $onglet->page()->evaluate('() => document.querySelector(".piliqi-carte") !== null');
++    expect($restee)->toBeTrue($restee === true ? '' : 'La carte tenue au clavier est partie avant que le clavier la quitte.'.PHP_EOL.releveDesCartes($onglet, $compte)());
+     $onglet->page()->evaluate('() => document.activeElement.blur()');
+-    $onglet->attendreQue('document.querySelector(".piliqi-carte") === null', 'la carte quittée par le clavier ne s\'en va pas seule');
++    $onglet->attendreQue('document.querySelector(".piliqi-carte") === null', 'la carte quittée par le clavier ne s\'en va pas seule', releveDesCartes($onglet, $compte));
+     $onglet->seDeconnecter();
+ });
++
++/*
++ * La croix d'une carte, la cloche, la croix de sa liste et celle de chaque
++ * notification de la liste ne font aucune requête : elles restent actives
++ * pendant que la page regarde s'il y a du nouveau. Le bouton de Filament
++ * se désactivait pendant chaque requête de son composant, si bien qu'un
++ * clic tombé pendant ce regard se perdait (constat de la CI de 8ce8bd4 :
++ * la cloche ne s'ouvrait pas, ou la carte restait sous la souris) et que
++ * la croix tenue au clavier perdait son focus. Les réponses du serveur
++ * sont ici retenues, pour que les clics tombent pendant le regard.
++ */
++test('la croix d’une carte, la cloche et les croix de sa liste restent actives pendant que la page regarde les notifications', function () {
++    $equipe = $this->societeComplete();
++    $compte = $equipe->vendeur;
++    config(['piliqi.intervalle_des_notifications_en_secondes' => 1]);
++
++    $onglet = $this->seConnecter($compte, panneau: 'app')->fermerLesAvis();
++    poserLeReleveDesCartes($onglet);
++    $this->travel(1)->seconds();
++    $compte->notify(new AvisDeLEquipe($equipe->societe, 'Notification arrivée pendant la visite', 'Le texte de la notification.', null));
++    $this->travel(2)->seconds();
++    $onglet->attendreQue('document.querySelector(".piliqi-carte") !== null', 'la carte de la notification ne s\'affiche pas', releveDesCartes($onglet, $compte))
++        ->voir('Notification arrivée pendant la visite', releveDesCartes($onglet, $compte))
++        ->attendreQue('document.querySelectorAll(".fi-modal .fi-no-notification-close-btn").length === 1', 'la liste de la cloche n\'a pas la notification', releveDesCartes($onglet, $compte));
++    $onglet->page()->evaluate('() => document.querySelector(".piliqi-carte .piliqi-carte__fermer").focus({ focusVisible: true })');
++
++    retenirLesReponses($onglet);
++    $onglet->attendreQue('window.__regardsRetenus.has("cartes-des-notifications") && window.__regardsRetenus.has("filament.livewire.database-notifications")', 'la page ne regarde pas les notifications', releveDesCartes($onglet, $compte));
++    $etat = $onglet->page()->evaluate('() => ({ croix: document.querySelector(".piliqi-carte .piliqi-carte__fermer").disabled, cloche: document.querySelector(".fi-topbar-database-notifications-btn").disabled, focusDuClavier: document.activeElement.matches(".piliqi-carte__fermer:focus-visible"), croixDeLaListe: document.querySelector(".fi-modal .fi-modal-close-btn").disabled, croixDeLaNotification: document.querySelector(".fi-modal .fi-no-notification-close-btn").disabled })');
++    expect($etat)->toBe(['croix' => false, 'cloche' => false, 'focusDuClavier' => true, 'croixDeLaListe' => false, 'croixDeLaNotification' => false], 'Pendant le regard : '.ValeurSimple::enTexte(json_encode($etat)).PHP_EOL.releveDesCartes($onglet, $compte)());
++
++    $onglet->element('.piliqi-carte .piliqi-carte__fermer')->click();
++    $onglet->attendreQue('document.querySelector(".piliqi-carte") === null', 'la croix cliquée pendant le regard ne ferme pas la carte', releveDesCartes($onglet, $compte));
++    $onglet->element('.fi-topbar-database-notifications-btn')->click();
++    $onglet->attendreQue('document.querySelector(".fi-modal.fi-modal-open") !== null', 'la cloche cliquée pendant le regard ne s\'ouvre pas', releveDesCartes($onglet, $compte));
++    $onglet->element('.fi-modal.fi-modal-open .fi-modal-close-btn')->click();
++    $onglet->attendreQue('document.querySelector(".fi-modal.fi-modal-open") === null', 'la croix de la liste cliquée pendant le regard ne la ferme pas', releveDesCartes($onglet, $compte));
++    expect($onglet->page()->evaluate('() => window.__regardsRetenus.size > 0'))->toBeTrue('Les clics ne sont pas tombés pendant le regard.');
++
++    $onglet->page()->evaluate('() => window.__relacherLesReponses()');
++    $onglet->attendre()
++        ->cliquer('.fi-topbar-database-notifications-btn')
++        ->voir('Notification arrivée pendant la visite', releveDesCartes($onglet, $compte))
++        ->fermerLaFenetre()
++        ->seDeconnecter();
++});
++
++/**
++ * Retient dans la page chaque réponse du serveur jusqu'à
++ * window.__relacherLesReponses() ; window.__regardsRetenus nomme les
++ * composants de Livewire dont une requête attend sa réponse.
++ */
++function retenirLesReponses(Navigation $onglet): void
++{
++    $onglet->page()->evaluate(<<<'JS'
++        () => {
++            const fetchDeLaPage = window.fetch;
++            let relacher;
++            const relachees = new Promise((fini) => { relacher = fini; });
++            const regards = new Set();
++            window.__regardsRetenus = regards;
++            window.__relacherLesReponses = relacher;
++            window.Livewire.hook('commit', ({ component, succeed, fail }) => {
++                regards.add(component.name);
++                succeed(() => regards.delete(component.name));
++                fail(() => regards.delete(component.name));
++            });
++            window.fetch = function (...arguments_) {
++                return fetchDeLaPage.apply(this, arguments_).then((reponse) => relachees.then(() => reponse));
++            };
++        }
++        JS);
++}
+diff --git a/tests/Browser/Parcours/RegularisationEtRelancesTest.php b/tests/Browser/Parcours/RegularisationEtRelancesTest.php
+index 32a28c51..1d538a5d 100644
+--- a/tests/Browser/Parcours/RegularisationEtRelancesTest.php
++++ b/tests/Browser/Parcours/RegularisationEtRelancesTest.php
+@@ -1,31 +1,47 @@
+ <?php
+ 
++use App\Domain\Authorization\PermissionRegistry;
+ use App\Domain\Catalogue\Models\Produit;
+ use App\Domain\Contacts\Models\Client;
+ use App\Domain\Facturation\Actions\CreerFactureAction;
+ use App\Domain\Facturation\Actions\EmettreFactureAction;
++use App\Domain\Facturation\Actions\EmettreLaFactureRectificativeAction;
++use App\Domain\Facturation\Actions\FaireLAvoirDeRegularisationAction;
+ use App\Domain\Facturation\Enums\NatureEnvoi;
+ use App\Domain\Facturation\Models\Avoir;
+ use App\Domain\Facturation\Models\EnvoiDocument;
+ use App\Domain\Facturation\Models\Facture;
++use App\Domain\Tenancy\Enums\RoleMagasin;
+ use App\Domain\Tenancy\Models\Magasin;
+ use App\Domain\Tenancy\Services\IdentifiantsInsee;
+ use App\Domain\Tenancy\Services\TenantContext;
++use App\Models\User;
+ use Database\Factories\SocieteFactory;
+ use Tests\Browser\Support\Navigation;
++use Tests\Browser\Support\SocieteDeTest;
+ 
+ /*
+  * Lot REGUL. La régularisation d'une facture après la correction du SIREN
+  * de la société : sur la fiche de la facture désignée, « Émettre la
+  * facture rectificative » ne s'offre qu'après « Faire l'avoir de
+- * régularisation » (T68.1), et la rectificative reçoit le crédit de
+- * l'avoir. Les relances (décision de l'éditeur du 14/11/2026) : « Relancer
+- * aussi les particuliers » dans Paramètres > Relances, et « Relancer », à
+- * la main, sur le ticket échu d'un particulier.
++ * régularisation » (T68.1), à qui peut vendre dans le magasin (le
++ * responsable, l'administrateur autorisé à vendre, le vendeur qui voit la
++ * facture), jamais au propriétaire, qui fait l'avoir ; la rectificative
++ * reçoit le crédit de l'avoir. La contre-passation d'un paiement de la
++ * facture régularisée (T68.3) : sa fenêtre nomme la rectificative, qui
++ * porte le dû rouvert et se relance, la facture régularisée ne se
++ * relançant jamais. Les relances (décision de l'éditeur du 14/11/2026) :
++ * « Relancer aussi les particuliers » dans Paramètres > Relances, pour
++ * chaque compte qui règle les relances, et « Relancer », à la main, sur le
++ * ticket échu d'un particulier.
+  */
+ 
+-test('le responsable fait l’avoir de régularisation d’une facture désignée, puis seulement émet sa facture rectificative, réglée du crédit de l’avoir', function () {
+-    $societe = $this->societeComplete();
++/*
++ * La facture émise de l'Hôtel des Pins (3 bougies, 54,00 € TTC, réglée de
++ * 20,00 € par virement), désignée par la correction du SIREN de la société
++ * par l'éditeur le 15/04/2026 à 10 h ; l'horloge passe ensuite à 10 h 05.
++ */
++$factureDesignee = function (SocieteDeTest $societe): Facture {
+     $facture = app(TenantContext::class)->runAs($societe->magasin, fn (): Facture => Facture::query()->whereNotNull('numero')->whereRelation('client', 'nom', 'Hôtel des Pins')->sole());
+     $this->travelTo(self::aParis('2026-04-15 10:00:00'));
+     $sirenCorrect = SocieteFactory::sirenFictif();
+@@ -34,6 +50,51 @@
+         'GARE' => IdentifiantsInsee::avecSaCle($sirenCorrect.'0002'),
+     ], IdentifiantsInsee::numeroTvaPropose($sirenCorrect));
+     $this->travelTo(self::aParis('2026-04-15 10:05:00'));
++
++    return $facture;
++};
++
++/*
++ * Ce compte émet, depuis la fiche de la facture désignée dont la
++ * propriétaire a fait l'avoir de régularisation, sa facture rectificative,
++ * qui reçoit les 20,00 € réservés de l'avoir et reste due de 34,00 €.
++ */
++$rectificativePar = function (SocieteDeTest $societe, User $compte) use ($factureDesignee): void {
++    $facture = $factureDesignee->call($this, $societe);
++    $avoir = app(TenantContext::class)->runAs($societe->magasin, fn (): Avoir => app(FaireLAvoirDeRegularisationAction::class)->handle($societe->proprietaire, $facture->fresh()));
++    $fiche = '/app/'.$societe->magasin->uuid.'/factures/'.$facture->getRouteKey();
++
++    $onglet = $this->seConnecter($compte)->aller($fiche)
++        ->voir((string) $facture->numero)
++        ->cliquerSur('Émettre la facture rectificative')
++        ->soumettre('Confirmer');
++    $rectificative = app(TenantContext::class)->runAs($societe->magasin, fn (): Facture => Facture::query()->where('facture_rectifiee_id', $facture->id)->sole());
++    $onglet->voir('Facture rectificative '.$rectificative->numero.' émise.');
++
++    expect(app(TenantContext::class)->runAs($societe->magasin, fn (): array => [$rectificative->fresh()?->cree_par, $rectificative->fresh()?->resteDuEnCentimes(), $facture->fresh()?->resteDuEnCentimes(), $avoir->fresh()?->creditEnCentimes()]))
++        ->toBe([$compte->id, 3400, 0, 0]);
++};
++
++/*
++ * Ce compte, qui règle les relances, coche « Relancer aussi les
++ * particuliers » avec les relances automatiques, et le réglage
++ * s'enregistre pour le magasin.
++ */
++$caseDesParticuliersPar = function (SocieteDeTest $societe, User $compte): void {
++    $onglet = $this->seConnecter($compte)->aller('/app/'.$societe->magasin->uuid.'/parametres-relances')
++        ->voir('Relancer aussi les particuliers');
++    $onglet->cliquer('label:has-text('.Navigation::texte('Relancer automatiquement les factures impayées').') >> button[role="switch"]')
++        ->cliquer('label:has-text('.Navigation::texte('Relancer aussi les particuliers').') >> button[role="switch"]')
++        ->soumettre('Enregistrer')
++        ->voir('Relances automatiques enregistrées');
++
++    expect(Magasin::query()->whereKey($societe->magasin->id)->sole()->only(['relances_automatiques', 'relancer_aussi_les_particuliers']))
++        ->toBe(['relances_automatiques' => true, 'relancer_aussi_les_particuliers' => true]);
++};
++
++test('le responsable fait l’avoir de régularisation d’une facture désignée, puis seulement émet sa facture rectificative, réglée du crédit de l’avoir', function () use ($factureDesignee) {
++    $societe = $this->societeComplete();
++    $facture = $factureDesignee->call($this, $societe);
+     $fiche = '/app/'.$societe->magasin->uuid.'/factures/'.$facture->getRouteKey();
+ 
+     $onglet = $this->seConnecter($societe->responsable)->aller($fiche)
+@@ -58,18 +119,94 @@
+         ->toBe([$societe->responsable->id, 0, 0]);
+ });
+ 
+-test('le responsable coche « Relancer aussi les particuliers » avec les relances automatiques, et le réglage s’enregistre', function () {
++test('la propriétaire fait l’avoir de régularisation d’une facture désignée, et « Émettre la facture rectificative » ne s’offre jamais à elle, qui ne vend pas', function () use ($factureDesignee) {
+     $societe = $this->societeComplete();
++    $facture = $factureDesignee->call($this, $societe);
++    $fiche = '/app/'.$societe->magasin->uuid.'/factures/'.$facture->getRouteKey();
+ 
+-    $onglet = $this->seConnecter($societe->responsable)->aller('/app/'.$societe->magasin->uuid.'/parametres-relances')
+-        ->voir('Relancer aussi les particuliers');
+-    $onglet->cliquer('label:has-text('.Navigation::texte('Relancer automatiquement les factures impayées').') >> button[role="switch"]')
+-        ->cliquer('label:has-text('.Navigation::texte('Relancer aussi les particuliers').') >> button[role="switch"]')
+-        ->soumettre('Enregistrer')
+-        ->voir('Relances automatiques enregistrées');
++    $onglet = $this->seConnecter($societe->proprietaire)->aller($fiche)
++        ->voir((string) $facture->numero)
++        ->cliquerSur('Faire l\'avoir de régularisation')
++        ->soumettre('Confirmer');
++    $avoir = app(TenantContext::class)->runAs($societe->magasin, fn (): Avoir => Avoir::query()->whereNotNull('motif_regularisation')->sole());
++    $onglet->voir('Avoir de régularisation '.$avoir->numero.' émis.');
++    $onglet->aller($fiche)->voir((string) $facture->numero);
+ 
+-    expect(Magasin::query()->whereKey($societe->magasin->id)->sole()->only(['relances_automatiques', 'relancer_aussi_les_particuliers']))
+-        ->toBe(['relances_automatiques' => true, 'relancer_aussi_les_particuliers' => true]);
++    expect([$onglet->element(Navigation::bouton('Émettre la facture rectificative'))->count(), $onglet->element(Navigation::bouton('Faire l\'avoir de régularisation'))->count()])->toBe([0, 0])
++        ->and(app(TenantContext::class)->runAs($societe->magasin, fn (): array => [$avoir->cree_par, $facture->fresh()?->resteDuEnCentimes(), $avoir->fresh()?->creditEnCentimes(), Facture::query()->where('facture_rectifiee_id', $facture->id)->count()]))
++        ->toBe([$societe->proprietaire->id, 0, 2000, 0]);
++});
++
++test('l’administrateur autorisé à vendre émet la facture rectificative, une fois l’avoir de régularisation fait', function () use ($rectificativePar) {
++    $societe = $this->societeComplete();
++
++    $rectificativePar->call($this, $societe, $societe->administrateurVendeur);
++});
++
++test('le vendeur émet la facture rectificative de la facture qu’il a faite, une fois l’avoir de régularisation fait', function () use ($rectificativePar) {
++    $societe = $this->societeComplete();
++
++    $rectificativePar->call($this, $societe, $societe->vendeur);
++});
++
++test('la propriétaire contre-passe le paiement de la facture régularisée : la fenêtre nomme la rectificative, qui porte le dû rouvert et se relance, et la facture régularisée ne se relance pas', function () use ($factureDesignee) {
++    $societe = $this->societeComplete();
++    $facture = $factureDesignee->call($this, $societe);
++    [$avoir, $rectificative] = app(TenantContext::class)->runAs($societe->magasin, fn (): array => [
++        app(FaireLAvoirDeRegularisationAction::class)->handle($societe->proprietaire, $facture->fresh()),
++        app(EmettreLaFactureRectificativeAction::class)->handle($societe->responsable, $facture->fresh()),
++    ]);
++    $this->travelTo(self::aParis('2026-06-01 10:00:00'));
++
++    $onglet = $this->seConnecter($societe->proprietaire)->aller('/app/'.$societe->magasin->uuid.'/paiements')
++        ->voir('Hôtel des Pins')
++        ->cliquer('.fi-ta-row:has-text("Hôtel des Pins") >> '.Navigation::bouton('Contre-passer'))
++        ->voir('La facture '.$facture->numero.', régularisée par l\'avoir '.$avoir->numero.', restera soldée : ce que ce paiement y réglait deviendra dû sur sa facture rectificative '.$rectificative->numero.'.')
++        ->remplir('Motif', 'Virement rejeté par la banque')
++        ->soumettre('Confirmer');
++    $onglet->attendreQue('document.querySelector('.Navigation::texte(Navigation::FENETRE).') === null', 'la fenêtre de la contre-passation ne se ferme pas');
++
++    expect(app(TenantContext::class)->runAs($societe->magasin, fn (): array => [$facture->fresh()?->resteDuEnCentimes(), $rectificative->fresh()?->resteDuEnCentimes()]))->toBe([0, 5400]);
++
++    $onglet->aller('/app/'.$societe->magasin->uuid.'/factures/'.$facture->getRouteKey())->voir((string) $facture->numero);
++    expect($onglet->element(Navigation::bouton('Relancer'))->count())->toBe(0);
++
++    $onglet->aller('/app/'.$societe->magasin->uuid.'/factures/'.$rectificative->getRouteKey())
++        ->voir((string) $rectificative->numero)
++        ->voir('54,00')
++        ->cliquerSur('Relancer')
++        ->remplir('Destinataire', 'compta@hotel-des-pins.example')
++        ->soumettre('Relancer')
++        ->voir('Envoi à compta@hotel-des-pins.example demandé');
++
++    $relance = app(TenantContext::class)->runAs($societe->magasin, fn (): EnvoiDocument => EnvoiDocument::query()->where('destinataire', 'compta@hotel-des-pins.example')->sole());
++    expect([$relance->nature, $relance->document_id])->toBe([NatureEnvoi::Relance, $rectificative->id]);
++});
++
++test('le responsable coche « Relancer aussi les particuliers » avec les relances automatiques, et le réglage s’enregistre', function () use ($caseDesParticuliersPar) {
++    $societe = $this->societeComplete();
++
++    $caseDesParticuliersPar->call($this, $societe, $societe->responsable);
++});
++
++test('la propriétaire coche « Relancer aussi les particuliers » avec les relances automatiques, et le réglage s’enregistre', function () use ($caseDesParticuliersPar) {
++    $societe = $this->societeComplete();
++
++    $caseDesParticuliersPar->call($this, $societe, $societe->proprietaire);
++});
++
++test('l’administrateur coche « Relancer aussi les particuliers » avec les relances automatiques, et le réglage s’enregistre', function () use ($caseDesParticuliersPar) {
++    $societe = $this->societeComplete();
++
++    $caseDesParticuliersPar->call($this, $societe, $societe->administrateur);
++});
++
++test('le vendeur à qui « Régler les relances » est cochée coche « Relancer aussi les particuliers », et le réglage s’enregistre', function () use ($caseDesParticuliersPar) {
++    $societe = $this->societeComplete();
++    $vendeuse = $this->membre($societe->magasin, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut($societe->societe->type_activite), PermissionRegistry::RELANCES_REGLER], ['name' => 'Valérie Roux']);
++    app(TenantContext::class)->clear();
++
++    $caseDesParticuliersPar->call($this, $societe, $vendeuse);
+ });
+ 
+ test('le vendeur relance à la main le ticket échu d’un client particulier qui a une adresse e-mail', function () {
+diff --git a/tests/Browser/Support/Navigation.php b/tests/Browser/Support/Navigation.php
+index dce6ee41..3f07aa55 100644
+--- a/tests/Browser/Support/Navigation.php
++++ b/tests/Browser/Support/Navigation.php
+@@ -175,9 +175,13 @@ public function attendre(): self
+     /**
+      * Attend que cette expression JavaScript soit vraie, en laissant le
+      * serveur de l'application répondre pendant l'attente ; échoue avec ce
+-     * motif au bout du délai.
++     * motif au bout du délai, suivi, s'il est donné, du relevé que rend
++     * cette fonction au moment de l'échec (l'état de la page et de la base
++     * qu'un échec rare de la CI doit montrer).
++     *
++     * @param  (Closure(): string)|null  $releve
+      */
+-    public function attendreQue(string $expression, string $motif): self
++    public function attendreQue(string $expression, string $motif, ?Closure $releve = null): self
+     {
+         $fin = microtime(true) + self::delai();
+ 
+@@ -189,7 +193,7 @@ public function attendreQue(string $expression, string $motif): self
+             }
+ 
+             if (microtime(true) > $fin) {
+-                Assert::fail('Au bout de '.self::delai().' s, '.$motif.' (page '.$this->page()->url().').');
++                Assert::fail('Au bout de '.self::delai().' s, '.$motif.' (page '.$this->page()->url().').'.($releve === null ? '' : PHP_EOL.$releve()));
+             }
+ 
+             Execution::instance()->wait(0.05);
+@@ -514,9 +518,13 @@ public function choisirDansLaListe(string $etiquette, string $option): self
+     /**
+      * Ce texte se lit dans la page, au plus tard au bout du délai d'un
+      * geste : le résultat visible d'un geste (un avis, un statut changé)
+-     * qu'un test attend avant de lire la base.
++     * qu'un test attend avant de lire la base. L'échec porte, s'il est
++     * donné, le relevé que rend cette fonction à ce moment (voir
++     * attendreQue()).
++     *
++     * @param  (Closure(): string)|null  $releve
+      */
+-    public function voir(string $texte): self
++    public function voir(string $texte, ?Closure $releve = null): self
+     {
+         $fin = microtime(true) + self::delai();
+ 
+@@ -527,6 +535,10 @@ public function voir(string $texte): self
+                 return $this;
+             } catch (ExpectationFailedException $absent) {
+                 if (microtime(true) > $fin) {
++                    if ($releve !== null) {
++                        Assert::fail($absent->getMessage().PHP_EOL.$releve());
++                    }
++
+                     throw $absent;
+                 }
+             }
+diff --git a/tests/Browser/inventaire-des-actions.php b/tests/Browser/inventaire-des-actions.php
+index f48fb214..7298b935 100644
+--- a/tests/Browser/inventaire-des-actions.php
++++ b/tests/Browser/inventaire-des-actions.php
+@@ -266,7 +266,10 @@
+     ],
+     'app/Filament/App/Pages/ParametresRelances.php' => [
+         'champ:actif' => ['lot' => 'NAV-3', 'tests' => [
++            'tests/Browser/Parcours/RegularisationEtRelancesTest.php › la propriétaire coche « Relancer aussi les particuliers » avec les relances automatiques, et le réglage s’enregistre',
+             'tests/Browser/Parcours/RegularisationEtRelancesTest.php › le responsable coche « Relancer aussi les particuliers » avec les relances automatiques, et le réglage s’enregistre',
++            'tests/Browser/Parcours/RegularisationEtRelancesTest.php › le vendeur à qui « Régler les relances » est cochée coche « Relancer aussi les particuliers », et le réglage s’enregistre',
++            'tests/Browser/Parcours/RegularisationEtRelancesTest.php › l’administrateur coche « Relancer aussi les particuliers » avec les relances automatiques, et le réglage s’enregistre',
+         ]],
+         'page' => ['lot' => 'NAV-3', 'tests' => [
+             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action du magasin sans erreur',
+@@ -1489,6 +1492,8 @@
+         ]],
+         'action:emettreLaFactureRectificative' => ['lot' => 'NAV-2', 'tests' => [
+             'tests/Browser/Parcours/RegularisationEtRelancesTest.php › le responsable fait l’avoir de régularisation d’une facture désignée, puis seulement émet sa facture rectificative, réglée du crédit de l’avoir',
++            'tests/Browser/Parcours/RegularisationEtRelancesTest.php › le vendeur émet la facture rectificative de la facture qu’il a faite, une fois l’avoir de régularisation fait',
++            'tests/Browser/Parcours/RegularisationEtRelancesTest.php › l’administrateur autorisé à vendre émet la facture rectificative, une fois l’avoir de régularisation fait',
+         ]],
+         'action:regulariserLExoneration' => ['lot' => 'NAV-2', 'tests' => [
+             'tests/Browser/Parcours/ExonerationNonProuveeTest.php › le responsable ouvre depuis son « À faire » la liste « Exonération non prouvée », puis régularise chaque export resté sans preuve de sortie 150 jours après sa date, et chaque facture rectificative s’ouvre',
+@@ -1509,6 +1514,7 @@
+             'tests/Browser/Parcours/EnvoiParEMailTest.php › avec la file d’attente sync, un serveur d’envoi muet fait échouer l’envoi aussitôt, et « Envois » le dit sans annoncer de nouvelle tentative',
+         ]],
+         'action:faireLAvoirDeRegularisation' => ['lot' => 'NAV-2', 'tests' => [
++            'tests/Browser/Parcours/RegularisationEtRelancesTest.php › la propriétaire fait l’avoir de régularisation d’une facture désignée, et « Émettre la facture rectificative » ne s’offre jamais à elle, qui ne vend pas',
+             'tests/Browser/Parcours/RegularisationEtRelancesTest.php › le responsable fait l’avoir de régularisation d’une facture désignée, puis seulement émet sa facture rectificative, réglée du crédit de l’avoir',
+         ]],
+         'action:noter_bordereau_detaxe' => ['lot' => 'NAV-2', 'tests' => [
+@@ -1517,6 +1523,7 @@
+         ]],
+         'action:relancer' => ['lot' => 'NAV-2', 'tests' => [
+             'tests/Browser/Parcours/EnvoiParEMailTest.php › chaque compte qui relance une facture échue lit, depuis la liste comme depuis sa fiche, que la relance est demandée, puis son résultat dans « Envois », relu sans rechargement',
++            'tests/Browser/Parcours/RegularisationEtRelancesTest.php › la propriétaire contre-passe le paiement de la facture régularisée : la fenêtre nomme la rectificative, qui porte le dû rouvert et se relance, et la facture régularisée ne se relance pas',
+             'tests/Browser/Parcours/RegularisationEtRelancesTest.php › le vendeur relance à la main le ticket échu d’un client particulier qui a une adresse e-mail',
+             'tests/Browser/Parcours/RetardEtRelanceDesTicketsTest.php › ni le responsable ni le vendeur ne trouvent « Relancer » sur un ticket du client comptoir échu et resté dû, ni sur la liste ni sur sa fiche, quand ils le trouvent sur la facture échue d’un client nommé',
+         ]],
+@@ -1709,6 +1716,7 @@
+             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur autorisé à vendre ouvre chaque page et chaque action du magasin sans erreur',
+             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur sans la vente ouvre chaque page et chaque action du magasin sans erreur',
+             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
++            'tests/Browser/Parcours/RegularisationEtRelancesTest.php › la propriétaire contre-passe le paiement de la facture régularisée : la fenêtre nomme la rectificative, qui porte le dû rouvert et se relance, et la facture régularisée ne se relance pas',
+         ]],
+         'champ:client_id' => ['lot' => 'NAV-2', 'tests' => []],
+         'champ:facture_id' => ['lot' => 'NAV-2', 'tests' => []],
+diff --git a/tests/Feature/Facturation/RegularisationDUneFactureTest.php b/tests/Feature/Facturation/RegularisationDUneFactureTest.php
+index 4ba6b98b..d5bda559 100644
+--- a/tests/Feature/Facturation/RegularisationDUneFactureTest.php
++++ b/tests/Feature/Facturation/RegularisationDUneFactureTest.php
+@@ -29,6 +29,7 @@
+ use App\Domain\Facturation\Models\Facture;
+ use App\Domain\Facturation\Models\LigneAvoir;
+ use App\Domain\Facturation\Models\Paiement;
++use App\Domain\Facturation\Services\CalculateurLigne;
+ use App\Domain\Facturation\Services\EReportingDesParticuliers;
+ use App\Domain\Facturation\Services\FacturePdfGenerator;
+ use App\Domain\Facturation\Services\MentionsFiscales;
+@@ -46,6 +47,7 @@
+ use App\Domain\Tenancy\Enums\MotifCode;
+ use App\Domain\Tenancy\Enums\RoleMagasin;
+ use App\Domain\Tenancy\Enums\TypeDActivite;
++use App\Domain\Tenancy\Enums\UrgenceAFaire;
+ use App\Domain\Tenancy\Models\Magasin;
+ use App\Domain\Tenancy\Models\Societe;
+ use App\Domain\Tenancy\Services\ChosesAFaireDuMagasin;
+@@ -53,6 +55,7 @@
+ use App\Domain\Tenancy\Services\TenantContext;
+ use App\Domain\Tenancy\Support\ChoseAFaire;
+ use App\Domain\Tenancy\Support\InterventionDeLEditeur;
++use App\Domain\Tenancy\Support\ValeurSimple;
+ use App\Filament\App\FicheDUnDocument;
+ use App\Filament\App\Resources\AvoirResource;
+ use App\Filament\App\Resources\AvoirResource\Pages\CreateAvoir;
+@@ -60,6 +63,7 @@
+ use App\Filament\App\Resources\FactureResource;
+ use App\Filament\App\Resources\FactureResource\Pages\ListFactures;
+ use App\Filament\App\Resources\FactureResource\Pages\ViewFacture;
++use App\Filament\App\Resources\PaiementResource\Pages\ListPaiements;
+ use Brick\Math\BigDecimal;
+ use Closure;
+ use Database\Factories\SocieteFactory;
+@@ -799,6 +803,42 @@ public function test_entre_la_correction_et_la_regularisation_une_facture_design
+         $this->assertSame([0, 3], [Avoir::query()->count(), $facture->fresh()->lignes()->sole()->quantiteCreditableRestante()]);
+     }
+ 
++    /**
++     * Une facture de deux articles entièrement rendue par un avoir
++     * ordinaire avant la correction du SIREN n'a plus rien à régulariser :
++     * ni avoir de régularisation ni rectificative ne s'y offrent, et
++     * « Nouvel avoir » dit qu'elle n'a plus rien à rendre, sans demander de
++     * la régulariser d'abord. Une facture dont l'avoir de régularisation
++     * est émis, sa rectificative restant à émettre, n'a pas davantage de
++     * ligne à créditer, mais « Nouvel avoir » demande toujours d'en finir
++     * la régularisation.
++     */
++    public function test_une_facture_designee_deja_entierement_creditee_n_a_plus_rien_a_rendre(): void
++    {
++        [$magasin, $facture, $client] = $this->factureDuMagasinDeLyon();
++        $responsable = self::responsableDeTest($magasin);
++        app(EnregistrerAvoirAction::class)->handle($responsable, $client, [['ligne_facture_id' => $facture->lignes()->sole()->id, 'quantite' => 2]], 'Retour');
++        $enAttente = $this->facturer($magasin, $client);
++        $this->corrigerLeSirenDeLaSociete($magasin);
++        app(FaireLAvoirDeRegularisationAction::class)->handle($this->proprietaireDe($magasin), $enAttente->fresh());
++        $regularisation = app(RegularisationDUneFacture::class);
++        $facture = $facture->fresh();
++
++        $this->assertSame(
++            [true, RegularisationDUneFacture::REFUS_RIEN_A_REGULARISER, RegularisationDUneFacture::REFUS_RIEN_A_REGULARISER, null],
++            [$regularisation->estDesignee($facture), $regularisation->refusDeLAvoir($facture), $regularisation->refusDeLaRectificative($facture), $regularisation->refusDUnAvoirOrdinaire($facture)],
++        );
++        $this->dansLeMagasin($magasin->fresh(), $responsable);
++        Livewire::test(ViewFacture::class, ['record' => $facture->getRouteKey()])
++            ->assertActionHidden('faireLAvoirDeRegularisation')
++            ->assertActionHidden('emettreLaFactureRectificative')
++            ->assertActionHidden('avoir');
++        $recherche = Livewire::test(CreateAvoir::class)->fillForm(['recherche' => $facture->numero])->callFormComponentAction('recherche', 'chercher');
++        $this->assertSame(['La facture FAC-LYON-2026-000001 est déjà entièrement créditée : elle n\'a plus rien à rendre.'], $recherche->errors()->get('data.recherche'));
++        $recherche = Livewire::test(CreateAvoir::class)->fillForm(['recherche' => $enAttente->numero])->callFormComponentAction('recherche', 'chercher');
++        $this->assertSame([sprintf(RegularisationDUneFacture::REFUS_RETOUR_AVANT_REGULARISATION, $enAttente->numero)], $recherche->errors()->get('data.recherche'));
++    }
++
+     /**
+      * La liste des factures ne propose « Avoir » sur aucune facture désignée
+      * qui attend sa régularisation, et lit pour cela la dernière décision
+@@ -1021,6 +1061,97 @@ public function test_la_contre_passation_d_un_paiement_de_la_facture_regularisee
+         $this->assertSame([], app(VerificateurIntegrite::class)->verifier($magasin->fresh())->anomalies());
+     }
+ 
++    /**
++     * La fenêtre de la contre-passation d'un paiement d'une facture
++     * régularisée dit ce qui va se passer (T68.3) : la facture reste soldée
++     * par son avoir de régularisation, et ce que le paiement y réglait
++     * devient dû sur sa facture rectificative, qu'elle nomme ; elle ne dit
++     * pas que la facture redeviendra due. Après la contre-passation,
++     * l'« À faire » du responsable compte la rectificative parmi les
++     * factures dont un paiement a été contre-passé, en rouge, avec le
++     * badge, comme une facture ordinaire rouverte.
++     */
++    public function test_la_contre_passation_d_un_paiement_de_la_facture_regularisee_se_dit_dans_sa_fenetre_et_son_a_faire(): void
++    {
++        [$magasin, $facture] = $this->factureDUneSocieteCorrigee(quantite: 5);
++        $cinqCents = $this->payer($facture, '500.00');
++        $this->payer($facture, '100.00');
++        [$avoir, $rectificative] = $this->regulariser($magasin, $facture);
++        $proprietaire = $this->proprietaireDe($magasin);
++        $this->dansLeMagasin($magasin->fresh(), $proprietaire);
++
++        Livewire::test(ListPaiements::class)
++            ->mountTableAction('contre_passer', $cinqCents)
++            ->assertSee("La facture {$facture->numero}, régularisée par l'avoir {$avoir->numero}, restera soldée : ce que ce paiement y réglait deviendra dû sur sa facture rectificative {$rectificative->numero}.")
++            ->assertDontSee('redeviendront dues');
++        app(ContrePasserPaiementAction::class)->handle($proprietaire, $cinqCents->fresh(), 'Chèque impayé');
++
++        $responsable = self::responsableDeTest($magasin);
++        $this->dansLeMagasin($magasin->fresh(), $responsable);
++        $aEncaisser = collect(ChosesAFaireDuMagasin::pour($responsable->fresh(), $magasin->fresh())['a_faire'])->firstWhere('cle', 'a_encaisser');
++        $this->assertInstanceOf(ChoseAFaire::class, $aEncaisser);
++        $this->assertSame(
++            [UrgenceAFaire::Rouge, app(CalculateurLigne::class)->enEuros(50000).' restant dû, dont 1 dont un paiement a été contre-passé.', [(string) $rectificative->numero], ['Paiement contre-passé']],
++            [$aEncaisser->urgence, $aEncaisser->precision, array_column($aEncaisser->lignes, 'libelle'), array_column($aEncaisser->lignes, 'badge')],
++        );
++    }
++
++    /**
++     * La fenêtre de la contre-passation d'un paiement qui réglait une
++     * facture ordinaire et une facture régularisée dit l'une et l'autre :
++     * les autres factures redeviendront dues, la régularisée restera soldée
++     * et sa rectificative devra ce qu'il y réglait.
++     */
++    public function test_la_fenetre_de_la_contre_passation_distingue_la_facture_regularisee_des_autres(): void
++    {
++        [$magasin, $facture, $client] = $this->factureDuMagasinDeLyon(quantite: 1);
++        $autre = $this->facturer($magasin, $client);
++        $paiement = app(EnregistrerPaiementAction::class)->handle(self::responsableDeTest($magasin), $client, [
++            'mode_paiement' => ModePaiement::Virement->value,
++            'montant' => '240.00',
++            'recu_le' => $magasin->calendrier()->aujourdhui(),
++        ], [['facture_id' => $facture->id, 'montant' => '120.00'], ['facture_id' => $autre->id, 'montant' => '120.00']]);
++        $this->corrigerLeSirenDeLaSociete($magasin);
++        [$avoir, $rectificative] = $this->regulariser($magasin, $facture);
++        $this->dansLeMagasin($magasin->fresh(), $this->proprietaireDe($magasin));
++
++        Livewire::test(ListPaiements::class)
++            ->mountTableAction('contre_passer', $paiement)
++            ->assertSee('daté d\'aujourd\'hui, et les autres factures qu\'il réglait redeviendront dues.')
++            ->assertSee("La facture {$facture->numero}, régularisée par l'avoir {$avoir->numero}, restera soldée : ce que ce paiement y réglait deviendra dû sur sa facture rectificative {$rectificative->numero}.");
++    }
++
++    /**
++     * La liste des factures lit avec sa page si chaque facture a son avoir
++     * de régularisation, pour l'action « Relancer » de chaque facture échue
++     * et due : autant de lectures pour deux factures échues que pour six,
++     * jamais une par facture.
++     */
++    public function test_la_liste_des_factures_lit_avec_sa_page_si_chaque_facture_est_regularisee(): void
++    {
++        $magasin = $this->magasinDeLyon();
++        $client = Client::factory()->professionnel()->create(['nom' => 'Dupont SAS', 'email' => 'compta@dupont.example']);
++        $responsable = self::responsableDeTest($magasin);
++        $lectures = function () use ($magasin, $responsable): int {
++            $this->dansLeMagasin($magasin->fresh(), $responsable);
++            DB::flushQueryLog();
++            DB::enableQueryLog();
++            $liste = Livewire::test(ListFactures::class);
++            $nombre = collect(DB::getQueryLog())->filter(fn (array $requete): bool => str_contains($requete['query'], 'motif_regularisation'))->count();
++            DB::disableQueryLog();
++            Facture::query()->whereNotNull('numero')->pluck('id')->each(fn (mixed $id) => $liste->assertTableActionVisible('relancer', ValeurSimple::enTexte($id)));
++
++            return $nombre;
++        };
++        collect([1, 2])->each(fn (): Facture => $this->facturer($magasin, $client));
++        $this->travelTo(self::aParis('2026-12-01 10:00:00'));
++        $pourDeux = $lectures();
++        collect([1, 2, 3, 4])->each(fn (): Facture => $this->facturer($magasin->fresh(), $client));
++        $this->travelTo(self::aParis('2027-02-01 10:00:00'));
++
++        $this->assertSame([1, 1], [$pourDeux, $lectures()]);
++    }
++
+     /**
+      * Une facture de 600,00 € payée 200,00 € : l'avoir de régularisation en
+      * a réglé les 400,00 € dus et la rectificative a reçu ses 200,00 €. La

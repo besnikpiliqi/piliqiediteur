@@ -1,12 +1,13 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 15/11/2026 à 20:09 UTC par pilotage-sync.sh : « Point de suivi 20:09 UTC ».
+Mis à jour le 15/11/2026 à 20:20 UTC par pilotage-sync.sh : « Course reprise : DATEOP partie 7 (MAX_PARTIES 10) ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
 Tête poussée : `b6015883`. Commits locaux pas encore poussés :
 
 ```
+9e14f02f Semis complet de toutes les tables et de tous les cas
 93939942 Réparation de la CI rouge de b6015883
 ```
 
@@ -38,43 +39,6 @@ eba4bc85 Relecture du lot ER-PRO
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
- M .github/workflows/tests.yml
- M CLAUDE.md
- M README.md
- M app/Console/Commands/DiagnostiquerCaisseSecurisee.php
- M app/Domain/Tenancy/Models/DemandeInscription.php
- M app/Filament/App/Pages/Auth/InscriptionSociete.php
- M app/Integrations/Pdp/FakePdpGateway.php
- M bootstrap/app.php
- M database/seeders/DatabaseSeeder.php
- M database/seeders/Semis/ActiviteDesMagasins.php
- M database/seeders/Semis/ComptesSemes.php
- M database/seeders/Semis/GestesDuMagasin.php
- M database/seeders/Semis/HorlogeDuSemis.php
- M database/seeders/Semis/SemisDeDemonstration.php
- M phpunit.xml
- M tests/Browser/Parcours/DonneesDeDemonstrationTest.php
- M tests/Browser/inventaire-des-actions.php
- M tests/Feature/CaisseSecurisee/CommandesModuleFiscalTest.php
- M tests/Feature/Calendrier/PlanificateurTest.php
- M tests/Feature/DatabaseSeederTest.php
- M tests/Feature/Facturation/TransmissionPdpTest.php
- M tests/Unit/matrice-des-decisions.php
-?? app/Console/Commands/VerifierLIsolation.php
-?? app/Domain/Tenancy/Isolation/
-?? database/seeders/Semis/ChargesDesSocietes.php
-?? database/seeders/Semis/CommandesDesProfessionnels.php
-?? database/seeders/Semis/ComptesDesCas.php
-?? database/seeders/Semis/DerniersGestes.php
-?? database/seeders/Semis/DocumentsDesCas.php
-?? database/seeders/Semis/FileDAttenteDuSemis.php
-?? database/seeders/Semis/PieceDuSemis.php
-?? database/seeders/Semis/RequeteDuPoste.php
-?? database/seeders/Semis/ServeurDEnvoiEnPanne.php
-?? database/seeders/Semis/SocietesDesCas.php
-?? tests/Feature/SemisCompletTest.php
-?? tests/Feature/Tenancy/VerificationDeLIsolationTest.php
-?? tests/SemeSansTransaction.php
 ```
 
 ## Dernière course de la chaîne
@@ -82,7 +46,6 @@ eba4bc85 Relecture du lot ER-PRO
 Course `wf_ee9b6e6e-908`, étapes commencées (de la plus ancienne à la plus récente) :
 
 ```
-GRAPH:relecture2
 GRAPH:correction
 GRAPH:poussee
 GRAPH:notes
@@ -107,4 +70,5 @@ DATEOP:implementation-3
 DATEOP:implementation-4
 DATEOP:implementation-5
 DATEOP:implementation-6
+DATEOP:implementation-7
 ```

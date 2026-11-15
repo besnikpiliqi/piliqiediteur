@@ -14,6 +14,7 @@ use App\Domain\Tenancy\Support\ValeursLues;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Query\Builder;
+use Illuminate\Database\Query\JoinClause;
 use Illuminate\Support\Facades\DB;
 use stdClass;
 
@@ -157,11 +158,11 @@ final class VentesDuTableauDeBord
         $jours = new JoursDesMagasins($magasins, $du, $au);
         $colonnes = ['nature', 'description', 'quantite', 'taux_tva', 'montant_ht', 'montant_tva', 'montant_ttc', 'produit_id'];
         $vendues = $this->emis('factures', $magasins, $jours)
-            ->join('lignes_facture', fn ($jointure) => $jointure->on('lignes_facture.facture_id', '=', 'factures.id')->on('lignes_facture.magasin_id', '=', 'factures.magasin_id'))
+            ->join('lignes_facture', fn (JoinClause $jointure): JoinClause => $jointure->on('lignes_facture.facture_id', '=', 'factures.id')->on('lignes_facture.magasin_id', '=', 'factures.magasin_id'))
             ->get(['factures.id as document_id', 'lignes_facture.id as ligne_id', 'factures.magasin_id', 'factures.date_emission', 'factures.facture_rectifiee_id as sortie_par', 'lignes_facture.service_id', ...array_map(fn (string $colonne): string => "lignes_facture.{$colonne}", $colonnes)]);
         $rendues = $this->emis('avoirs', $magasins, $jours)
-            ->join('lignes_avoir', fn ($jointure) => $jointure->on('lignes_avoir.avoir_id', '=', 'avoirs.id')->on('lignes_avoir.magasin_id', '=', 'avoirs.magasin_id'))
-            ->leftJoin('lignes_facture', fn ($jointure) => $jointure->on('lignes_facture.id', '=', 'lignes_avoir.ligne_facture_id')->on('lignes_facture.magasin_id', '=', 'lignes_avoir.magasin_id'))
+            ->join('lignes_avoir', fn (JoinClause $jointure): JoinClause => $jointure->on('lignes_avoir.avoir_id', '=', 'avoirs.id')->on('lignes_avoir.magasin_id', '=', 'avoirs.magasin_id'))
+            ->leftJoin('lignes_facture', fn (JoinClause $jointure): JoinClause => $jointure->on('lignes_facture.id', '=', 'lignes_avoir.ligne_facture_id')->on('lignes_facture.magasin_id', '=', 'lignes_avoir.magasin_id'))
             ->get(['avoirs.id as document_id', 'lignes_avoir.id as ligne_id', 'avoirs.magasin_id', 'avoirs.date_emission', 'avoirs.motif_regularisation', 'lignes_facture.facture_id as facture_corrigee', 'lignes_facture.service_id', ...array_map(fn (string $colonne): string => "lignes_avoir.{$colonne}", $colonnes)]);
         $lignes = [];
 

@@ -9,6 +9,7 @@ use App\Domain\Tenancy\Support\CleDuModele;
 use Carbon\CarbonImmutable;
 use DateTimeInterface;
 use Illuminate\Database\Eloquent\Collection;
+use LogicException;
 
 /**
  * Les jours « AAAA-MM-JJ » du $du au $au compris, dans le calendrier de
@@ -48,6 +49,10 @@ final class JoursDesMagasins
         foreach ($this->calendriers as $calendrier) {
             $debuts[] = $calendrier->debutDuJour($this->du);
             $fins[] = $calendrier->bornesDuJour($this->au)[1];
+        }
+
+        if ($debuts === []) {
+            throw new LogicException('Les bornes des jours se lisent dans le calendrier d\'un magasin au moins.');
         }
 
         return [min($debuts), max($fins)];

@@ -5,6 +5,7 @@ namespace App\Domain\TableauDeBord\Services;
 use App\Domain\TableauDeBord\Enums\SourceDesGraphiques;
 use App\Domain\TableauDeBord\Support\CalculDesSeries;
 use App\Domain\TableauDeBord\Support\Mois;
+use App\Domain\Tenancy\Support\CleDuModele;
 
 /**
  * Les quatre chiffres clés du mois en cours, en tête du tableau de bord
@@ -46,28 +47,26 @@ final class ChiffresDuTableauDeBord
         $societe = $perimetre->societe;
         $ceMois = $calcul->ceMois();
         $ilYAUnAn = Mois::decaler($ceMois, -12);
-        $ventes = $perimetre->magasinsAvec(SourceDesGraphiques::Ventes)->modelKeys();
-        $achats = $societe->aDesArticles() ? $perimetre->magasinsAvec(SourceDesGraphiques::Achats)->modelKeys() : [];
-        $factures = $perimetre->magasinsAvec(SourceDesGraphiques::Factures)->modelKeys();
-        $tva = $societe->aDesArticles() ? $perimetre->magasinsAvec(SourceDesGraphiques::Ventes, SourceDesGraphiques::Achats)->modelKeys() : $ventes;
-
-        $somme = fn (array $lignes, array $magasins, string $mois, string $champ): int => $calcul->sommeParMois($lignes, $magasins, [$mois], fn (array $ligne): int => $calcul->signe($ligne) * $ligne[$champ])[$mois];
+        $ventes = CleDuModele::desModeles($perimetre->magasinsAvec(SourceDesGraphiques::Ventes));
+        $achats = $societe->aDesArticles() ? CleDuModele::desModeles($perimetre->magasinsAvec(SourceDesGraphiques::Achats)) : [];
+        $factures = CleDuModele::desModeles($perimetre->magasinsAvec(SourceDesGraphiques::Factures));
+        $tva = $societe->aDesArticles() ? CleDuModele::desModeles($perimetre->magasinsAvec(SourceDesGraphiques::Ventes, SourceDesGraphiques::Achats)) : $ventes;
         $documentsDeVente = $ventes === [] && $tva === [] ? [] : $this->series->documentsDeVente($calcul);
         $documentsDAchat = $achats === [] ? [] : $this->series->documentsDAchat($calcul);
 
         $chiffres = ['ca' => null, 'achats' => null, 'tva' => null, 'restant_du' => null];
 
         if ($ventes !== []) {
-            $chiffres['ca'] = self::avecSaVariation($somme($documentsDeVente, $ventes, $ceMois, 'ht'), $somme($documentsDeVente, $ventes, $ilYAUnAn, 'ht'));
+            $chiffres['ca'] = self::avecSaVariation(self::somme($calcul, $documentsDeVente, $ventes, $ceMois, 'ht'), self::somme($calcul, $documentsDeVente, $ventes, $ilYAUnAn, 'ht'));
         }
 
         if ($achats !== []) {
-            $chiffres['achats'] = self::avecSaVariation($somme($documentsDAchat, $achats, $ceMois, 'ht'), $somme($documentsDAchat, $achats, $ilYAUnAn, 'ht'));
+            $chiffres['achats'] = self::avecSaVariation(self::somme($calcul, $documentsDAchat, $achats, $ceMois, 'ht'), self::somme($calcul, $documentsDAchat, $achats, $ilYAUnAn, 'ht'));
         }
 
         if ($tva !== []) {
-            $collectee = $somme($documentsDeVente, $tva, $ceMois, 'tva');
-            $deductible = $societe->aDesArticles() ? $somme($documentsDAchat, $tva, $ceMois, 'tva') : 0;
+            $collectee = self::somme($calcul, $documentsDeVente, $tva, $ceMois, 'tva');
+            $deductible = $societe->aDesArticles() ? self::somme($calcul, $documentsDAchat, $tva, $ceMois, 'tva') : 0;
             $chiffres['tva'] = $societe->estEnFranchiseDeTva()
                 ? ['franchise' => true, 'a_payer' => 0, 'collectee' => 0, 'deductible' => 0]
                 : ['franchise' => false, 'a_payer' => $collectee - $deductible, 'collectee' => $collectee, 'deductible' => $deductible];
@@ -79,6 +78,19 @@ final class ChiffresDuTableauDeBord
         }
 
         return $chiffres;
+    }
+
+    /**
+     * La somme, sur ce mois, de ce montant de ces documents de ces
+     * magasins, un avoir se déduisant.
+     *
+     * @param  list<array{document: string, magasin: int, jour: string, ht: int, tva: int}>  $documents
+     * @param  list<int>  $magasins
+     * @param  'ht'|'tva'  $champ
+     */
+    private static function somme(CalculDesSeries $calcul, array $documents, array $magasins, string $mois, string $champ): int
+    {
+        return $calcul->sommeParMois($documents, $magasins, [$mois], fn (array $document): int => $calcul->signe($document) * $document[$champ])[$mois];
     }
 
     /**

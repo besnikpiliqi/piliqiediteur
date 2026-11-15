@@ -15,6 +15,7 @@ use App\Domain\TableauDeBord\Support\Perimetre;
 use App\Domain\TableauDeBord\Support\SerieDuGraphique;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Support\CleDuModele;
+use Closure;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Collection;
 
@@ -84,7 +85,7 @@ final class SeriesDesGraphiques
      */
     private function serie(CarteDuTableauDeBord $carte, Collection $magasins, CalculDesSeries $calcul): SerieDuGraphique
     {
-        $ids = $magasins->modelKeys();
+        $ids = CleDuModele::desModeles($magasins);
 
         return match ($carte->graphique) {
             Graphique::ChiffreDAffairesParMois => $calcul->parMois('Chiffre d\'affaires HT', fn (array $mois): array => $calcul->sommeParMois($this->documentsDeVente($calcul), $ids, $mois, fn (array $document): int => $calcul->signe($document) * $document['ht'])),
@@ -116,22 +117,56 @@ final class SeriesDesGraphiques
      */
     private function tvaParMois(CalculDesSeries $calcul, array $ids): SerieDuGraphique
     {
-        $collectee = fn (array $mois): array => $calcul->sommeParMois($this->documentsDeVente($calcul), $ids, $mois, fn (array $document): int => $calcul->signe($document) * $document['tva']);
-        $deductible = fn (array $mois): array => $calcul->perimetre->societe->aDesArticles()
-            ? $calcul->sommeParMois($this->documentsDAchat($calcul), $ids, $mois, fn (array $document): int => $calcul->signe($document) * $document['tva'])
-            : array_fill_keys($mois, 0);
-        $aPayer = function (array $mois) use ($collectee, $deductible): array {
-            $c = $collectee($mois);
-            $d = $deductible($mois);
-
-            return array_map(fn (string $unMois): int => $c[$unMois] - $d[$unMois], array_combine($mois, $mois));
-        };
-
         return $calcul->parMoisMultiple([
-            ['TVA collectée', $collectee],
-            ['TVA déductible', $deductible],
-            ['TVA à payer', $aPayer, true],
+            ['TVA collectée', fn (array $mois): array => $this->tvaCollectee($calcul, $ids, $mois)],
+            ['TVA déductible', fn (array $mois): array => $this->tvaDeductible($calcul, $ids, $mois)],
+            ['TVA à payer', fn (array $mois): array => $this->tvaAPayer($calcul, $ids, $mois), true],
         ]);
+    }
+
+    /**
+     * La TVA collectée de ces mois : celle des ventes, avoirs déduits.
+     *
+     * @param  list<int>  $ids
+     * @param  list<string>  $mois
+     * @return array<string, int>
+     */
+    private function tvaCollectee(CalculDesSeries $calcul, array $ids, array $mois): array
+    {
+        return $calcul->sommeParMois($this->documentsDeVente($calcul), $ids, $mois, fn (array $document): int => $calcul->signe($document) * $document['tva']);
+    }
+
+    /**
+     * La TVA déductible de ces mois : celle des achats de marchandises,
+     * avoirs fournisseur déduits, dans une société qui a des articles.
+     *
+     * @param  list<int>  $ids
+     * @param  list<string>  $mois
+     * @return array<string, int>
+     */
+    private function tvaDeductible(CalculDesSeries $calcul, array $ids, array $mois): array
+    {
+        return $calcul->perimetre->societe->aDesArticles()
+            ? $calcul->sommeParMois($this->documentsDAchat($calcul), $ids, $mois, fn (array $document): int => $calcul->signe($document) * $document['tva'])
+            : $calcul->sommeParMois([], $ids, $mois, fn (array $document): int => 0);
+    }
+
+    /**
+     * @param  list<int>  $ids
+     * @param  list<string>  $mois
+     * @return array<string, int>
+     */
+    private function tvaAPayer(CalculDesSeries $calcul, array $ids, array $mois): array
+    {
+        $collectee = $this->tvaCollectee($calcul, $ids, $mois);
+        $deductible = $this->tvaDeductible($calcul, $ids, $mois);
+        $aPayer = [];
+
+        foreach ($mois as $unMois) {
+            $aPayer[$unMois] = $collectee[$unMois] - $deductible[$unMois];
+        }
+
+        return $aPayer;
     }
 
     /**
@@ -145,8 +180,8 @@ final class SeriesDesGraphiques
     {
         $annees = [];
 
-        foreach ($calcul->annees() as $libelle => [$premier, $dernier]) {
-            $annees[] = [(string) $libelle, array_sum($calcul->sommeParMois($this->documentsDeVente($calcul), $ids, Mois::du($premier, $dernier), fn (array $document): int => $calcul->signe($document) * $document['ht']))];
+        foreach ($calcul->annees() as [$libelle, $premier, $dernier]) {
+            $annees[] = [$libelle, array_sum($calcul->sommeParMois($this->documentsDeVente($calcul), $ids, Mois::du($premier, $dernier), fn (array $document): int => $calcul->signe($document) * $document['ht']))];
         }
 
         while (count($annees) > 1 && $annees[0][1] === 0) {
@@ -166,9 +201,9 @@ final class SeriesDesGraphiques
     private function margeParMois(CalculDesSeries $calcul, Collection $magasins): SerieDuGraphique
     {
         $historique = $this->historiqueDuStock($calcul);
-        $ventes = $calcul->sommerParMagasin($historique['ventes'], $magasins->modelKeys(), $calcul->tousLesMois());
-        $couts = $calcul->sommerParMagasin($historique['couts'], $magasins->modelKeys(), $calcul->tousLesMois());
-        $serie = $calcul->parMois('Marge brute HT', fn (array $mois): array => array_map(fn (string $unMois): int => $ventes[$unMois] - $couts[$unMois], array_combine($mois, $mois)));
+        $ventes = $calcul->sommerParMagasin($historique['ventes'], CleDuModele::desModeles($magasins), $calcul->tousLesMois());
+        $couts = $calcul->sommerParMagasin($historique['couts'], CleDuModele::desModeles($magasins), $calcul->tousLesMois());
+        $serie = $calcul->parMois('Marge brute HT', fn (array $mois): array => self::parMois($mois, fn (string $unMois): int => $ventes[$unMois] - $couts[$unMois]));
         $infoBulles = [];
 
         foreach ($calcul->mois as $rang => $unMois) {
@@ -258,7 +293,7 @@ final class SeriesDesGraphiques
     {
         $classes = [];
 
-        foreach ($calcul->dansLaPeriode($this->lignesDeVente($calcul), $magasins->modelKeys()) as $ligne) {
+        foreach ($calcul->dansLaPeriode($this->lignesDeVente($calcul), CleDuModele::desModeles($magasins)) as $ligne) {
             $cle = $ligne['produit'] !== null ? "p:{$ligne['magasin']}:{$ligne['produit']}" : 's:'.$ligne['magasin'].':'.($ligne['service'] ?? mb_strtolower($ligne['description']));
             $classes[$cle]['libelle'] = $ligne['description'];
             $classes[$cle]['magasin'] = $ligne['magasin'];
@@ -275,7 +310,7 @@ final class SeriesDesGraphiques
     {
         $parClient = [];
 
-        foreach ($calcul->dansLaPeriode($this->documentsDeVente($calcul), $magasins->modelKeys()) as $document) {
+        foreach ($calcul->dansLaPeriode($this->documentsDeVente($calcul), CleDuModele::desModeles($magasins)) as $document) {
             $parClient[$document['client']] = ['magasin' => $document['magasin'], 'valeur' => ($parClient[$document['client']]['valeur'] ?? 0) + $calcul->signe($document) * $document['ht']];
         }
 
@@ -298,7 +333,7 @@ final class SeriesDesGraphiques
     {
         $parFournisseur = [];
 
-        foreach ($calcul->dansLaPeriode($this->documentsDAchat($calcul), $magasins->modelKeys()) as $document) {
+        foreach ($calcul->dansLaPeriode($this->documentsDAchat($calcul), CleDuModele::desModeles($magasins)) as $document) {
             $parFournisseur[$document['fournisseur']] = ['magasin' => $document['magasin'], 'valeur' => ($parFournisseur[$document['fournisseur']]['valeur'] ?? 0) + $calcul->signe($document) * $document['ht']];
         }
 
@@ -319,7 +354,7 @@ final class SeriesDesGraphiques
     {
         $tranches = $this->factures->anciennete($calcul->facturesAEncaisser($this->factures)->whereIn('magasin_id', $magasins->modelKeys()));
 
-        return new SerieDuGraphique(array_values(self::ANCIENNETES), [SerieDuGraphique::jeu('Restant dû', array_values(array_map(fn (string $tranche): int => $tranches[$tranche], array_keys(self::ANCIENNETES))))]);
+        return new SerieDuGraphique(array_values(self::ANCIENNETES), [SerieDuGraphique::jeu('Restant dû', array_map(fn (string $tranche): int => $tranches[$tranche], array_keys(self::ANCIENNETES)))]);
     }
 
     /**
@@ -327,9 +362,9 @@ final class SeriesDesGraphiques
      */
     private function valeurDuStock(CalculDesSeries $calcul, Collection $magasins): SerieDuGraphique
     {
-        $valeurs = $calcul->sommerParMagasin($this->historiqueDuStock($calcul)['valeurs'], $magasins->modelKeys(), $calcul->tousLesMois());
+        $valeurs = $calcul->sommerParMagasin($this->historiqueDuStock($calcul)['valeurs'], CleDuModele::desModeles($magasins), $calcul->tousLesMois());
 
-        return $calcul->parMois('Valeur du stock HT', fn (array $mois): array => array_map(fn (string $unMois): int => $valeurs[$unMois], array_combine($mois, $mois)));
+        return $calcul->parMois('Valeur du stock HT', fn (array $mois): array => self::parMois($mois, fn (string $unMois): int => $valeurs[$unMois]));
     }
 
     /**
@@ -337,19 +372,65 @@ final class SeriesDesGraphiques
      */
     private function nombreDeVentesEtPanierMoyen(CalculDesSeries $calcul, array $ids): SerieDuGraphique
     {
-        $ventes = array_values(array_filter($this->documentsDeVente($calcul), fn (array $document): bool => $document['document'] === 'facture'));
-        $nombre = fn (array $mois): array => $calcul->sommeParMois($ventes, $ids, $mois, fn (): int => 1);
-        $panier = function (array $mois) use ($calcul, $ventes, $ids, $nombre): array {
-            $ttc = $calcul->sommeParMois($ventes, $ids, $mois, fn (array $document): int => $document['ttc']);
-            $nombres = $nombre($mois);
-
-            return array_map(fn (string $unMois): int => $nombres[$unMois] === 0 ? 0 : CalculDesSeries::diviserArrondi($ttc[$unMois], $nombres[$unMois]), array_combine($mois, $mois));
-        };
-
         return $calcul->parMoisMultiple([
-            ['Nombre de ventes', $nombre, false, SerieDuGraphique::NOMBRE],
-            ['Panier moyen TTC', $panier, true, SerieDuGraphique::EUROS, true],
+            ['Nombre de ventes', fn (array $mois): array => $this->nombreDeVentes($calcul, $ids, $mois), false, SerieDuGraphique::NOMBRE],
+            ['Panier moyen TTC', fn (array $mois): array => $this->panierMoyen($calcul, $ids, $mois), true, SerieDuGraphique::EUROS, true],
         ]);
+    }
+
+    /**
+     * Le nombre des ventes (factures et tickets, sans les avoirs) de ces
+     * mois.
+     *
+     * @param  list<int>  $ids
+     * @param  list<string>  $mois
+     * @return array<string, int>
+     */
+    private function nombreDeVentes(CalculDesSeries $calcul, array $ids, array $mois): array
+    {
+        return $calcul->sommeParMois($this->ventesSansLesAvoirs($calcul), $ids, $mois, fn (array $document): int => 1);
+    }
+
+    /**
+     * Le panier moyen TTC de ces mois : le TTC des ventes divisé par leur
+     * nombre, zéro pour un mois sans vente.
+     *
+     * @param  list<int>  $ids
+     * @param  list<string>  $mois
+     * @return array<string, int>
+     */
+    private function panierMoyen(CalculDesSeries $calcul, array $ids, array $mois): array
+    {
+        $ttc = $calcul->sommeParMois($this->ventesSansLesAvoirs($calcul), $ids, $mois, fn (array $document): int => $document['ttc']);
+        $nombres = $this->nombreDeVentes($calcul, $ids, $mois);
+
+        return self::parMois($mois, fn (string $unMois): int => $nombres[$unMois] === 0 ? 0 : CalculDesSeries::diviserArrondi($ttc[$unMois], $nombres[$unMois]));
+    }
+
+    /**
+     * @return list<DocumentDeVente>
+     */
+    private function ventesSansLesAvoirs(CalculDesSeries $calcul): array
+    {
+        return array_values(array_filter($this->documentsDeVente($calcul), fn (array $document): bool => $document['document'] === 'facture'));
+    }
+
+    /**
+     * La valeur de chacun de ces mois, par mois.
+     *
+     * @param  list<string>  $mois
+     * @param  Closure(string): int  $valeur
+     * @return array<string, int>
+     */
+    private static function parMois(array $mois, Closure $valeur): array
+    {
+        $valeurs = [];
+
+        foreach ($mois as $unMois) {
+            $valeurs[$unMois] = $valeur($unMois);
+        }
+
+        return $valeurs;
     }
 
     /**
@@ -396,7 +477,7 @@ final class SeriesDesGraphiques
      * Les dix premiers de ce classement, par valeur décroissante puis par
      * nom ; le nom dit le magasin quand la carte en compte plusieurs.
      *
-     * @param  array<string, array{libelle: string, magasin: int, valeur: int}>  $classes
+     * @param  array<int|string, array{libelle: string, magasin: int, valeur: int}>  $classes
      * @param  Collection<int, Magasin>  $magasins
      * @param  'euros'|'nombre'  $unite
      */
@@ -409,7 +490,7 @@ final class SeriesDesGraphiques
 
         return new SerieDuGraphique(
             array_values(array_map(fn (array $classe): string => $classe['libelle'].($plusieurs ? ' · '.$noms[$classe['magasin']] : ''), $premiers)),
-            [SerieDuGraphique::jeu($libelle, array_values(array_column($premiers, 'valeur')), $unite)],
+            [SerieDuGraphique::jeu($libelle, array_column($premiers, 'valeur'), $unite)],
         );
     }
 
@@ -429,7 +510,7 @@ final class SeriesDesGraphiques
         $lignesDeLaMarge = [];
 
         if ($calcul->montre(Graphique::MargeBruteParMois)) {
-            $marge = $calcul->perimetre->magasinsDe(Graphique::MargeBruteParMois)->modelKeys();
+            $marge = CleDuModele::desModeles($calcul->perimetre->magasinsDe(Graphique::MargeBruteParMois));
             $lignesDeLaMarge = array_values(array_filter($this->lignesDeVente($calcul), fn (array $ligne): bool => $ligne['produit'] !== null && in_array($ligne['magasin'], $marge, true)));
         }
 

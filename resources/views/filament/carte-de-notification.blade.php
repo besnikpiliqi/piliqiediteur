@@ -17,7 +17,7 @@
     x-data="carteDeNotification({ notification: @js($notification), duree: @js($duree) })"
     x-on:mousemove="survoler()"
     x-on:mouseleave="quitter()"
-    x-on:focusin="suspendre()"
+    x-on:focusin="prendreLeFocus()"
     x-on:focusout="reprendre()"
     x-on:click="suivre($event)"
     data-carte="{{ $carte }}"

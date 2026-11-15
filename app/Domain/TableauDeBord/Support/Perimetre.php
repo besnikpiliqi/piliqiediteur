@@ -64,7 +64,7 @@ final class Perimetre
      */
     public function magasins(): Collection
     {
-        return $this->magasins->sortBy(fn (Magasin $magasin): string => mb_strtolower((string) $magasin->nom).'|'.str_pad((string) $magasin->getKey(), 20, '0', STR_PAD_LEFT))->values();
+        return $this->magasins->sortBy(fn (Magasin $magasin): string => mb_strtolower((string) $magasin->nom).'|'.str_pad((string) CleDuModele::de($magasin), 20, '0', STR_PAD_LEFT))->values();
     }
 
     /**
@@ -136,7 +136,7 @@ final class Perimetre
      */
     public function magasinsAvec(SourceDesGraphiques ...$sources): Collection
     {
-        return $this->magasins()->filter(fn (Magasin $magasin): bool => self::manquantes($sources, $this->sourcesParMagasin[CleDuModele::de($magasin)] ?? []) === [])->values();
+        return $this->magasins()->filter(fn (Magasin $magasin): bool => self::manquantes(array_values($sources), $this->sourcesParMagasin[CleDuModele::de($magasin)] ?? []) === [])->values();
     }
 
     /**
@@ -151,7 +151,7 @@ final class Perimetre
         $nonComptes = 0;
 
         foreach ($this->magasins as $magasin) {
-            $absentes = self::manquantes($sources, $this->sourcesParMagasin[CleDuModele::de($magasin)] ?? []);
+            $absentes = self::manquantes(array_values($sources), $this->sourcesParMagasin[CleDuModele::de($magasin)] ?? []);
 
             if ($absentes !== []) {
                 $nonComptes++;
@@ -184,7 +184,7 @@ final class Perimetre
         foreach ($magasins as $magasin) {
             $permises = $this->sourcesParMagasin[CleDuModele::de($magasin)] ?? null;
 
-            if ($permises === null || ! $this->magasins->has(CleDuModele::de($magasin)) || self::manquantes($sources, $permises) !== []) {
+            if ($permises === null || ! $this->magasins->has(CleDuModele::de($magasin)) || self::manquantes(array_values($sources), $permises) !== []) {
                 throw new AuthorizationException(PerimetreDesGraphiques::REFUS);
             }
         }

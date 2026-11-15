@@ -10,8 +10,9 @@ use UnexpectedValueException;
 
 /**
  * La clé d'un enregistrement (voir CleDuModele) : l'entier qu'Eloquent
- * rend pour un enregistrement en base, même lue en texte ; un modèle qui
- * n'est pas en base est refusé.
+ * rend pour un enregistrement en base, même lue en texte, seule ou celles
+ * de plusieurs enregistrements dans leur ordre ; un modèle qui n'est pas
+ * en base est refusé.
  */
 class CleDuModeleTest extends TestCase
 {
@@ -25,6 +26,19 @@ class CleDuModeleTest extends TestCase
         $this->assertIsInt($cle);
         $this->assertSame($cle, CleDuModele::de($magasin));
         $this->assertSame($cle, CleDuModele::de((new Magasin)->setRawAttributes(['id' => (string) $cle])));
+    }
+
+    public function test_les_cles_de_plusieurs_enregistrements_sont_rendues_dans_leur_ordre(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $autre = (new Magasin)->setRawAttributes(['id' => (string) ($magasin->getKey() + 7)]);
+
+        $this->assertSame([CleDuModele::de($autre), CleDuModele::de($magasin)], CleDuModele::desModeles([$autre, $magasin]));
+        $this->assertSame([], CleDuModele::desModeles([]));
+
+        $this->expectException(UnexpectedValueException::class);
+
+        CleDuModele::desModeles([$magasin, new Magasin]);
     }
 
     public function test_un_modele_qui_n_est_pas_en_base_est_refuse(): void

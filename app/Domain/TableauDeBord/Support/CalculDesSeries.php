@@ -6,7 +6,11 @@ use App\Domain\Calendrier\Calendrier;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\TableauDeBord\Enums\Graphique;
 use App\Domain\TableauDeBord\Enums\SourceDesGraphiques;
+use App\Domain\TableauDeBord\Services\AchatsDuTableauDeBord;
 use App\Domain\TableauDeBord\Services\FacturesDuTableauDeBord;
+use App\Domain\TableauDeBord\Services\PaiementsDuTableauDeBord;
+use App\Domain\TableauDeBord\Services\StockDuTableauDeBord;
+use App\Domain\TableauDeBord\Services\VentesDuTableauDeBord;
 use Closure;
 use Illuminate\Database\Eloquent\Collection;
 
@@ -19,6 +23,13 @@ use Illuminate\Database\Eloquent\Collection;
  * centimes, sur les montants lus.
  *
  * @phpstan-type Ligne array{magasin: int, jour: string}
+ *
+ * @phpstan-import-type DocumentDeVente from VentesDuTableauDeBord
+ * @phpstan-import-type LigneDeVente from VentesDuTableauDeBord
+ * @phpstan-import-type DocumentDAchat from AchatsDuTableauDeBord
+ * @phpstan-import-type Encaissement from PaiementsDuTableauDeBord
+ * @phpstan-import-type CreditImpute from PaiementsDuTableauDeBord
+ * @phpstan-import-type Historique from StockDuTableauDeBord
  */
 final class CalculDesSeries
 {
@@ -31,22 +42,22 @@ final class CalculDesSeries
     /** @var list<string>|null les mêmes mois un an plus tôt, quand la comparaison est cochée */
     public readonly ?array $moisCompares;
 
-    /** @var list<array{document: 'facture'|'avoir', id: int, magasin: int, jour: string, ht: int, tva: int, ttc: int, type_client: string, client: int, client_nom: string|null}>|null */
+    /** @var list<DocumentDeVente>|null */
     public ?array $documentsDeVente = null;
 
-    /** @var list<array{document: 'facture'|'avoir', document_id: int, ligne_id: int, magasin: int, jour: string, nature: string, produit: int|null, service: int|null, description: string, quantite: int, taux: int, ht: int, tva: int, ttc: int}>|null */
+    /** @var list<LigneDeVente>|null */
     public ?array $lignesDeVente = null;
 
-    /** @var list<array{document: 'facture'|'avoir', id: int, magasin: int, jour: string, ht: int, tva: int, ttc: int, type_client: string, client: int, client_nom: string|null}>|null */
+    /** @var list<DocumentDeVente>|null */
     public ?array $avoirs = null;
 
-    /** @var list<array{document: 'achat'|'avoir_fournisseur', id: int, magasin: int, jour: string, ht: int, tva: int, ttc: int, fournisseur: int}>|null */
+    /** @var list<DocumentDAchat>|null */
     public ?array $documentsDAchat = null;
 
-    /** @var array{paiements: list<array{magasin: int, jour: string, mode: string, montant: int}>, credits: list<array{magasin: int, jour: string, montant: int}>}|null */
+    /** @var array{paiements: list<Encaissement>, credits: list<CreditImpute>}|null */
     public ?array $encaissements = null;
 
-    /** @var array{valeurs: array<int, array<string, int>>, ventes: array<int, array<string, int>>, couts: array<int, array<string, int>>}|null */
+    /** @var Historique|null */
     public ?array $historiqueDuStock = null;
 
     /** @var Collection<int, Facture>|null */
@@ -110,7 +121,7 @@ final class CalculDesSeries
         $debuts = [$this->mois[0], Mois::decaler($this->ceMois, -12), ...($this->moisCompares === null ? [] : [$this->moisCompares[0]])];
 
         if ($this->montre(Graphique::ChiffreDAffairesParAn)) {
-            $debuts[] = array_values($this->annees())[0][0];
+            $debuts[] = $this->annees()[0][1];
         }
 
         return min($debuts).'-01';
@@ -138,9 +149,10 @@ final class CalculDesSeries
     /**
      * Les années civiles, ou les exercices quand la période en est un, du
      * chiffre d'affaires par an : les cinq qui finissent avec la période,
-     * chacune par son libellé, avec son premier et son dernier mois.
+     * dans l'ordre, chacune avec son libellé, son premier et son dernier
+     * mois.
      *
-     * @return non-empty-array<string, array{0: string, 1: string}>
+     * @return non-empty-list<array{0: string, 1: string, 2: string}>
      */
     public function annees(): array
     {
@@ -152,13 +164,13 @@ final class CalculDesSeries
                 $fin = Mois::decaler($dernier, -12 * $rang);
                 $debut = Mois::decaler($fin, -11);
                 $libelle = Mois::annee($debut) === Mois::annee($fin) ? 'Exercice '.Mois::annee($fin) : 'Exercice '.Mois::annee($debut).'-'.Mois::annee($fin);
-                $annees[$libelle] = [$debut, $fin];
+                $annees[] = [$libelle, $debut, $fin];
 
                 continue;
             }
 
             $annee = Mois::annee($dernier) - $rang;
-            $annees[(string) $annee] = [sprintf('%04d-01', $annee), sprintf('%04d-12', $annee)];
+            $annees[] = [(string) $annee, sprintf('%04d-01', $annee), sprintf('%04d-12', $annee)];
         }
 
         return $annees;
@@ -341,7 +353,7 @@ final class CalculDesSeries
     {
         $mois = $this->perimetre->societe->mois_fin_exercice;
 
-        return is_int($mois) && $mois >= 1 && $mois <= 12 ? $mois : 12;
+        return $mois >= 1 && $mois <= 12 ? $mois : 12;
     }
 
     private static function dernierJourDu(string $mois): string

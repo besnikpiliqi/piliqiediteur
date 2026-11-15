@@ -181,7 +181,10 @@ final class ReglagesDuTableauDeBord
     }
 
     /**
-     * @param  list<CarteDuTableauDeBord>  $cartes
+     * Les mêmes réglages avec ces cartes, remises dans l'ordre de leurs
+     * rangs.
+     *
+     * @param  array<int, CarteDuTableauDeBord>  $cartes
      */
     private function avecLesCartes(array $cartes): self
     {

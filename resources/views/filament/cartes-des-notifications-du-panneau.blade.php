@@ -9,7 +9,11 @@
     ils la quittent, puis s'en va. Seule une souris qui bouge sur la carte
     la retient : une carte qui arrive sous la souris immobile (à la place
     d'une carte que sa croix vient de fermer) n'a pas été survolée, et son
-    temps court. Sa croix et la fin de son temps ne
+    temps court. Seul le clavier la retient par le focus (:focus-visible) :
+    le focus qu'un appui de la souris donne à un bouton de la carte ne la
+    retient pas, sinon un clic perdu (la carte déplacée entre l'appui et le
+    relâchement, quand une autre carte arrive au-dessus d'elle) la
+    laisserait sans fin, la souris partie. Sa croix et la fin de son temps ne
     touchent pas la notification. Un bouton qui marque la notification
     comme lue (le markAsRead() de Filament) la marque par la cloche, puis
     ouvre son adresse. Avec « réduire les animations », la carte apparaît
@@ -98,7 +102,7 @@
                 },
 
                 reprendre() {
-                    if (this.survolee || this.$root.matches(':focus-within') || this.$root.classList.contains('piliqi-carte--partante')) {
+                    if (this.survolee || this.auClavier() || this.$root.classList.contains('piliqi-carte--partante')) {
                         return
                     }
 
@@ -112,6 +116,18 @@
                 suspendre() {
                     clearTimeout(this.minuterie)
                     this.$refs.temps.classList.remove('piliqi-carte__temps--en-cours')
+                },
+
+                // Le focus arrivé dans la carte ne la retient que s'il vient
+                // du clavier.
+                prendreLeFocus() {
+                    if (this.auClavier()) {
+                        this.suspendre()
+                    }
+                },
+
+                auClavier() {
+                    return this.$root.querySelector(':focus-visible') !== null
                 },
 
                 survoler() {

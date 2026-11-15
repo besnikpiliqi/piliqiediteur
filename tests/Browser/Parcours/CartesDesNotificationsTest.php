@@ -192,3 +192,47 @@ test('une carte arrivée sous la souris immobile s’en va seule au bout de son 
     $onglet->attendreQue('document.querySelector(".piliqi-carte") === null', 'la carte arrivée sous la souris immobile ne s\'en va pas seule');
     $onglet->seDeconnecter();
 });
+
+/*
+ * Le focus qu'un appui de la souris donne à la croix ne retient pas la
+ * carte : un clic perdu (la carte déplacée entre l'appui et le
+ * relâchement, quand une autre carte arrive au-dessus d'elle, constat de
+ * la CI de 743f9bc dans l'espace du cabinet) la laissait sans fin, la
+ * souris partie, le focus resté sur sa croix ; elle s'en va au bout de son
+ * temps. Le clavier, lui, la retient tant qu'il est dessus, puis elle s'en
+ * va à son tour.
+ */
+test('le focus d’un appui de la souris ne retient pas la carte, celui du clavier la retient', function () {
+    $equipe = $this->societeComplete();
+    $compte = $equipe->collaborateur;
+    config(['piliqi.intervalle_des_notifications_en_secondes' => 1]);
+    $avertir = fn (string $titre) => $compte->notify(new AvisDuCabinet($equipe->cabinet, $titre, 'Le texte de la notification.', null));
+    $this->travel(1)->seconds();
+
+    $avertir('Avis déjà là avant la connexion');
+    $this->travel(1)->seconds();
+
+    $onglet = $this->seConnecter($compte, panneau: 'cabinet')->fermerLesAvis();
+    $onglet->attendreQue('document.querySelector(".piliqi-carte") !== null', 'la carte de l\'avis déjà là ne s\'affiche pas')
+        ->attendreQue('document.querySelector(".piliqi-carte") === null', 'la carte de l\'avis déjà là ne s\'en va pas seule');
+
+    $avertir('Carte dont la croix a pris le focus de la souris');
+    $this->travel(2)->seconds();
+    $onglet->attendreQue('document.querySelector(".piliqi-carte") !== null', 'la carte ne s\'affiche pas')
+        ->voir('Carte dont la croix a pris le focus de la souris');
+    $onglet->appuyerPuisRelacherAilleurs('.piliqi-carte .piliqi-carte__fermer');
+    expect($onglet->page()->evaluate('() => document.activeElement.matches(".piliqi-carte__fermer") && ! document.activeElement.matches(":focus-visible")'))->toBeTrue('La croix n\'a pas pris le focus de l\'appui de la souris.');
+    $onglet->attendreQue('document.querySelector(".piliqi-carte") === null', 'la carte dont la croix a pris le focus de la souris ne s\'en va pas seule');
+
+    $avertir('Carte tenue au clavier');
+    $this->travel(2)->seconds();
+    $onglet->attendreQue('document.querySelector(".piliqi-carte") !== null', 'la carte tenue au clavier ne s\'affiche pas')
+        ->voir('Carte tenue au clavier');
+    $onglet->page()->evaluate('() => document.querySelector(".piliqi-carte .piliqi-carte__fermer").focus({ focusVisible: true })');
+    expect($onglet->page()->evaluate('() => document.activeElement.matches(".piliqi-carte__fermer:focus-visible")'))->toBeTrue();
+    $onglet->page()->evaluate('() => new Promise((fini) => setTimeout(fini, 9000))');
+    expect($onglet->page()->evaluate('() => document.querySelector(".piliqi-carte") !== null'))->toBeTrue('La carte tenue au clavier est partie avant que le clavier la quitte.');
+    $onglet->page()->evaluate('() => document.activeElement.blur()');
+    $onglet->attendreQue('document.querySelector(".piliqi-carte") === null', 'la carte quittée par le clavier ne s\'en va pas seule');
+    $onglet->seDeconnecter();
+});

@@ -8,6 +8,7 @@ use Illuminate\Support\Str;
 use InvalidArgumentException;
 use Pest\Browser\Api\PendingAwaitablePage;
 use Pest\Browser\Execution;
+use Pest\Browser\Playwright\Client;
 use Pest\Browser\Playwright\Locator;
 use Pest\Browser\Playwright\Page;
 use Pest\Browser\Support\ComputeUrl;
@@ -272,6 +273,24 @@ final class Navigation
     public function element(string $selecteur): Locator
     {
         return $this->page()->locator($selecteur);
+    }
+
+    /**
+     * Un clic perdu sur l'élément de ce sélecteur : la souris le survole,
+     * s'appuie dessus, puis part en haut à gauche de la page et s'y relâche,
+     * comme quand l'élément bouge entre l'appui et le relâchement ; il
+     * garde le focus de l'appui, et ne reçoit pas de clic.
+     */
+    public function appuyerPuisRelacherAilleurs(string $selecteur): self
+    {
+        $this->element($selecteur)->hover();
+        $page = (fn (): string => $this->guid)->call($this->page());
+
+        foreach ([['mouseDown', ['button' => 'left', 'clickCount' => 1]], ['mouseMove', ['x' => 2, 'y' => 2, 'steps' => 5]], ['mouseUp', ['button' => 'left', 'clickCount' => 1]]] as [$geste, $parametres]) {
+            iterator_to_array(Client::instance()->execute($page, $geste, $parametres), false);
+        }
+
+        return $this;
     }
 
     /**

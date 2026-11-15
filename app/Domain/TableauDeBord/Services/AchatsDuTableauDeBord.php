@@ -13,6 +13,8 @@ use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Domain\Tenancy\Support\ValeursLues;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Query\Builder;
+use Illuminate\Database\Query\JoinClause;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -53,9 +55,9 @@ final class AchatsDuTableauDeBord
         $achats = DB::table('factures_achat')
             ->whereIn('magasin_id', $magasins->modelKeys())
             ->where('statut', StatutFactureAchat::Validee->value)
-            ->where(fn ($dates) => $dates
+            ->where(fn (Builder $dates): Builder => $dates
                 ->whereBetween('date_facture', [$du, $au])
-                ->orWhere(fn ($sansDate) => $sansDate->whereNull('date_facture')->where('date_validation', '>=', $debut)->where('date_validation', '<', $fin)))
+                ->orWhere(fn (Builder $sansDate): Builder => $sansDate->whereNull('date_facture')->where('date_validation', '>=', $debut)->where('date_validation', '<', $fin)))
             ->orderBy('id')
             ->get(['id', 'magasin_id', 'date_facture', 'date_validation', 'total_ht', 'total_tva', 'total_ttc', 'fournisseur_id']);
 
@@ -70,7 +72,7 @@ final class AchatsDuTableauDeBord
         }
 
         $avoirs = DB::table('avoirs_fournisseur')
-            ->join('factures_achat', fn ($jointure) => $jointure->on('factures_achat.id', '=', 'avoirs_fournisseur.facture_achat_id')->on('factures_achat.magasin_id', '=', 'avoirs_fournisseur.magasin_id'))
+            ->join('factures_achat', fn (JoinClause $jointure): JoinClause => $jointure->on('factures_achat.id', '=', 'avoirs_fournisseur.facture_achat_id')->on('factures_achat.magasin_id', '=', 'avoirs_fournisseur.magasin_id'))
             ->whereIn('avoirs_fournisseur.magasin_id', $magasins->modelKeys())
             ->where('avoirs_fournisseur.statut', StatutAvoirFournisseur::Emise->value)
             ->where('avoirs_fournisseur.date_emission', '>=', $debut)

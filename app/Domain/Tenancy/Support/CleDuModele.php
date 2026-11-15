@@ -30,4 +30,23 @@ final class CleDuModele
 
         return is_int($cle) ? $cle : throw new UnexpectedValueException(sprintf(self::REFUS, $modele::class, get_debug_type($cle)));
     }
+
+    /**
+     * Les clés de ces enregistrements, dans leur ordre (voir de()).
+     *
+     * @param  iterable<Model>  $modeles
+     * @return list<int>
+     *
+     * @throws UnexpectedValueException une clé qui n'est pas un entier
+     */
+    public static function desModeles(iterable $modeles): array
+    {
+        $cles = [];
+
+        foreach ($modeles as $modele) {
+            $cles[] = self::de($modele);
+        }
+
+        return $cles;
+    }
 }

@@ -8,6 +8,7 @@ use App\Domain\TableauDeBord\Enums\SourceDesGraphiques;
 use App\Domain\TableauDeBord\Support\Perimetre;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Scopes\MagasinScope;
+use App\Domain\Tenancy\Support\CleDuModele;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -91,7 +92,7 @@ final class FacturesDuTableauDeBord
         }
 
         $ids = $magasins->modelKeys();
-        $parId = $magasins->keyBy(fn (Magasin $magasin): int => (int) $magasin->getKey());
+        $parId = $magasins->keyBy(fn (Magasin $magasin): int => CleDuModele::de($magasin));
         $imputations = fn (HasMany $allocations): HasMany => $allocations
             ->withoutGlobalScope(MagasinScope::class)
             ->whereIn($allocations->qualifyColumn('magasin_id'), $ids)

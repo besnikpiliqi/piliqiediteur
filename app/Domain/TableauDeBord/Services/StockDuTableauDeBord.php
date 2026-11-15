@@ -17,6 +17,7 @@ use App\Domain\TableauDeBord\Support\Perimetre;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Scopes\MagasinScope;
 use App\Domain\Tenancy\Support\CleDuModele;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Domain\Tenancy\Support\ValeurSimple;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Collection;
@@ -97,8 +98,13 @@ final class StockDuTableauDeBord
             return $historique;
         }
 
-        $ids = $magasins->modelKeys();
-        $calendriers = $magasins->mapWithKeys(fn (Magasin $magasin): array => [CleDuModele::de($magasin) => $magasin->calendrier()]);
+        $ids = CleDuModele::desModeles($magasins);
+        $calendriers = [];
+
+        foreach ($magasins as $magasin) {
+            $calendriers[CleDuModele::de($magasin)] = $magasin->calendrier();
+        }
+
         $produits = Produit::withoutGlobalScope(MagasinScope::class)->withTrashed()->whereIn('magasin_id', $ids)->orderBy('id')->get(['id', 'magasin_id', 'stock_quantite', 'cmup_ht']);
         $grandsLivres = MouvementStock::withoutGlobalScope(MagasinScope::class)->whereIn('magasin_id', $ids)->orderBy('id')
             ->get(['id', 'magasin_id', 'produit_id', 'type', 'quantite', 'cout_unitaire_ht', 'source_type', 'source_id', 'survenu_le'])
@@ -132,7 +138,7 @@ final class StockDuTableauDeBord
                     $retours[$mouvement->source_id] = true;
                 }
 
-                $leMois = Mois::duJour($calendrier->jourDe($mouvement->survenu_le));
+                $leMois = Mois::duJour($calendrier->jourDe(ValeurRequise::de($mouvement->survenu_le, 'l\'instant d\'un mouvement du grand livre')));
 
                 if ($leMois > $dernier) {
                     return;

@@ -467,3 +467,6 @@
 - 15/11 14:40 UTC — Éditeur : crédit de départ demandé dès l'arrivée, saisi en négatif, vérifié par le comptable → TVA27 point 3 réécrit, maquette G1iRHvTj49FLoEZ5qT5rhe ; accord sur régime obligatoire (1) et semis (2).
 - 15/11 14:48 UTC — Éditeur : démonstration jamais bloquée par les étapes TVA ; régime + réponse au crédit requis pour l'activité réelle → TVA27 point 2 ter.
 - 15/11 16:07 UTC — Point de suivi : PG 16/18 en marche ; DATEOP:implementation-5 (partie 4 finie : semis étendu, 887 s, isolation 0 problème / 222 377 lignes ; reste test du semis, suite PG, commit) ; 31 entrées non commitées sauvegardées ; 9,9 Go libres.
+- 15/11 17:00 UTC — Éditeur : démonstrations remplies (magasin rempli + démo cabinet) proposées → avis donné, Q1–Q4 posées ; REMPLACÉ à 17:30 UTC.
+- 15/11 17:50 UTC — Éditeur : site de démonstration commun (base à part, semis pour tous, entrée par lien de 5 min depuis le compte, jamais public) → maquette Jm2F3GNdYLaYZLHo9uYH9b, lot DEMO-SITE (a-faire-apres-chaine.md, après TVA27, avant RLS), onglet « Vos décisions » rev 41 (« Le 15 novembre », 245 décisions, 52 à appliquer). Q1–Q3 en attente (défauts conseillés).
+- Ordre après la chaîne : … VIES-DEP, TVA27, DEMO-SITE, RLS, VER …

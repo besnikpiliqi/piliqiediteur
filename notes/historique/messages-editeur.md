@@ -2932,3 +2932,55 @@ quand une societe vient s'inscrit chez piliqi alors il faut afficher un bloc qui
 
 c'est tres bien mais il faut pas bloquer le compte demo car il peux s entrainer la desus et une fois valider ce que t as montré alors la societe demmarre son activité sur piliqi
 
+## 333. 2026-11-15 17:08 UTC
+
+[1 capture(s) d'écran jointe(s)]
+
+Ces trois mondes ne se mélangent jamais, et des tests le prouvent. DIT moi ce que pense !
+
+## 334. 2026-11-15 17:09 UTC
+
+Démonstrations remplies et données de démonstration : tout dans un même lot.
+
+
+
+1. Magasin de démonstration d’une société, rempli dès son ouverture.
+
+   * Contenu : des données d’exemple qui montrent tous les états et tous les cas possibles, créées par les vraies actions et adaptées au type d’activité (commerce ou services).
+
+   * Tout est marqué « Démonstration — sans valeur ».
+
+   * Rien ne passe jamais aux magasins réels, et la démonstration se ferme à la validation.
+
+   * Le propriétaire peut ajouter ses propres essais par-dessus.
+
+   * Graphiques : oui. Je change ma décision du 14/11 pour la démonstration seulement : les graphiques et la TVA s’affichent avec ses seules données.
+
+2. Espace de démonstration pour un cabinet d’expertise comptable, rempli dès son ouverture, même si la règle actuelle dit qu’un cabinet n’a pas de démonstration. Il contient :
+
+   * des clients fictifs : commerce, services, plusieurs magasins, autorisations retirées, magasins choisis ;
+
+   * des collaborateurs fictifs avec leurs clients confiés ;les invitations et demandes de lien dans tous leurs états ;
+
+   * les chiffres et graphiques de chaque client ;
+
+   * les charges dans tous leurs états ;
+
+   * un crédit de TVA de départ à vérifier ;
+
+   * le téléchargement des documents par période.
+
+Tout est fictif, jamais mélangé aux vrais clients, jamais facturé, et fermé à la validation du cabinet.
+
+3. Trois mondes séparés, écrits noir sur blanc :
+
+   * a. Les données de démonstration de mon PC (`migrate:fresh --seed`) : fournisseurs factices, refusées en production. Elles doivent contenir tous les cas, cabinets compris : collaborateurs, clients, autorisations, invitations, charges, chiffres.
+
+   * b. Les vraies inscriptions en ligne : vrais contrôles (répertoire Sirene, INPI, lettre recommandée, lien d’invitation), vraies données.
+
+   * c. La démonstration à l’intérieur d’un vrai compte : contenu fictif propre à ce compte, jamais montré à d’autres.  Ces trois mondes ne se mélangent jamais, et des tests le prouvent. DIT moi ce que pense!
+
+## 335. 2026-11-15 17:42 UTC
+
+tu fait plutot comme ca : Démonstration commune : un site de démonstration séparé, avec sa propre base et les mêmes données fictives pour tous (tous les cas, sociétés et cabinets compris). Il est réservé aux comptes inscrits : on y entre seulement depuis son compte connecté, après confirmation de l’adresse e-mail, par un lien secret de courte durée. Il n’est jamais ouvert au public. Il ne reçoit aucune donnée du compte. Le magasin de démonstration de chaque société reste pour s’entraîner. Montre-moi le modèle avant, ajoute-le à un lot et note-le dans le document. dit moi ce que pense comme ca
+

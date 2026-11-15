@@ -213,6 +213,124 @@ Un seul commit pour les points 2 à 8 ; le point 1 a son commit à part.
 - **CLAUDE.md :** « réglages fiscaux communs (régime de TVA : réel normal mensuel ou trimestriel, ou franchise en base ; le régime simplifié n'existe plus depuis le 1er janvier 2027, loi de finances 2025, art. 38) » ; dans « Charges et TVA », la phrase du report du crédit ; à l'étape 5, l'état de TVA reprend le crédit reporté (ligne 22 de la CA3), note les remboursements demandés (formulaire 3519, ligne 26) et le crédit de la dernière déclaration avant PILIQI. Matrice des décisions : nouvelle source.
 - **Rappel pour l'étape 2 (SUPER PDP) :** dire à la plateforme le régime de chaque société (réel normal mensuel ou trimestriel, franchise) pour la cadence de l'e-reporting à partir du 1er septembre 2027.
 
+## Lot « DEMO-SITE » : site de démonstration commun (décision de l'éditeur du 15/11/2026 vers 18 h 30, heure de Paris)
+
+**Vos mots** : « tu fait plutot comme ca : Démonstration commune : un site de démonstration séparé, avec sa propre base et les mêmes données fictives pour tous (tous les cas, sociétés et cabinets compris). Il est réservé aux comptes inscrits : on y entre seulement depuis son compte connecté, après confirmation de l'adresse e-mail, par un lien secret de courte durée. Il n'est jamais ouvert au public. Il ne reçoit aucune donnée du compte. Le magasin de démonstration de chaque société reste pour s'entraîner. Montre-moi le modèle avant, ajoute-le à un lot et note-le dans le document. »
+
+Elle **remplace** la proposition de la même soirée (vers 18 h, heure de Paris) : magasin de démonstration rempli dans chaque compte et espace de démonstration propre à chaque cabinet. Ni l'un ni l'autre ne se fait. Les trois mondes séparés restent la règle (point 3 de cette proposition). Maquette : https://claude.ai/artifact/Jm2F3GNdYLaYZLHo9uYH9b (copie : reprises/site-demonstration.html).
+
+**Place : après TVA27, avant RLS.** Ainsi le semis montre déjà le régime et le crédit de TVA, et RLS couvre aussitôt le rôle de base du site. Commits par partie (A à D), relus comme un seul lot. Le lot touche l'isolation : exception (c), suite PostgreSQL complète une fois avant le dernier commit. La mise en ligne réelle du site (serveur, domaine, base, coût d'hébergement, décision de l'éditeur) se fait à l'étape 15. Ce lot livre tout ce qu'il faut pour la faire.
+
+**Choix en attente** (Q1 à Q3 de la maquette). Sans réponse au départ du lot, les choix conseillés s'appliquent :
+- Q1 : consultation seulement ;
+- Q2 : seul le propriétaire de chaque société et de chaque cabinet entre, avec son adresse de connexion confirmée ;
+- Q3 : le magasin de démonstration de chaque société reste comme aujourd'hui, sans graphiques ; la décision du 14/11 tient.
+
+### A. Le mode « démonstration » de l'application (même code, autre site)
+1. Le réglage `PILIQI_SITE=reel|demonstration` est lu une fois au démarrage. Il vaut `reel` par défaut, et une valeur inconnue empêche de démarrer.
+2. En mode `demonstration` :
+   - **fournisseurs** : tous les fournisseurs extérieurs sont les faux (INSEE, INPI, recommandé, Ordre, SUPER PDP, VIES, antivirus factice) ; le démarrage refuse toute clé ou URL réelle présente dans l'environnement ;
+   - **envois** : le transport des e-mails est `array` et aucune file ne part vers l'extérieur ;
+   - **planificateur** : il ne lance que la reconstruction de la nuit ;
+   - **pages** : réponses en `X-Robots-Tag: noindex, nofollow` et page `robots.txt` qui refuse tout ;
+   - **connexions** : la page de connexion, « Mot de passe oublié », l'inscription, les liens publics (devis, invitations, rattachements, mots de passe) et l'API sont fermés et répondent par la page introuvable française ;
+   - **accès** : sans visite ouverte, chaque adresse répond par la page introuvable.
+3. En mode `reel`, la production refuse de démarrer avec un faux fournisseur, ce qui existe déjà en partie : le lot le vérifie pour chaque fournisseur. Elle refuse aussi le semis, ce qui existe déjà.
+
+### B. Le passage du compte au site (côté PILIQI réel)
+1. **La carte.** Une carte « Site de démonstration » s'affiche dans l'espace de la société et dans l'espace du cabinet, pour le propriétaire (Q2), y compris avant la validation de la société.
+   - **Le bouton.** « Ouvrir le site de démonstration » n'est actif que si l'adresse de connexion est confirmée. Sinon, une phrase dit de la confirmer, avec « Renvoyer le lien ».
+   - **La limite.** Au plus 10 entrées par heure et par compte.
+2. **Le jeton.** Le clic crée un jeton :
+   - **son contenu** : 32 octets tirés au hasard, une expiration à 5 minutes, et rien d'autre (ni compte, ni société, ni adresse) ;
+   - **sa signature** : faite par une clé Ed25519 propre au passage, dont la clé privée est seulement sur le site réel et la clé publique seulement sur le site de démonstration (variables d'environnement, jamais dans le dépôt) ;
+   - **son envoi** : la page envoie le jeton par un formulaire POST qui s'envoie seul, jamais dans l'adresse, avec `Referrer-Policy: no-referrer`.
+3. **L'audit.** L'entrée s'inscrit au journal d'audit de la société, catégorie « gestion des accès », sans le jeton. Elle n'est pas inscrite dans une société close ou révoquée.
+
+### C. Le site de démonstration
+1. **L'entrée** `POST /entrer` contrôle :
+   - la signature et l'expiration du jeton ;
+   - que le jeton n'a jamais servi : son empreinte est gardée dans une table à elle, effacée après 1 jour.
+
+   La visite ouverte ensuite :
+   - dure 2 heures au plus ;
+   - s'appuie sur un témoin `Secure`, `HttpOnly`, `SameSite=Lax`, dans des sessions en fichiers ou en cache, jamais dans la base ;
+   - ne s'ouvre qu'une fois par jeton.
+2. **« Choisissez qui vous êtes ».**
+   - **Les comptes proposés** sont les comptes fictifs du semis, groupés par société et par cabinet : propriétaire, administrateurs, responsables, vendeurs, observateurs, comptes d'entraînement, cabinet et collaborateurs, expert-comptable déclaré.
+   - **L'entrée** dans un compte se fait sans mot de passe. Les comptes du site n'ont aucun mot de passe utilisable.
+   - **« Changer »** est toujours visible dans la barre « Vous voyez PILIQI comme : … ».
+3. **La consultation seulement (Q1).** Elle est tenue par la base, pas par l'écran :
+   - le compte de base du site a `default_transaction_read_only = on` ;
+   - il n'a aucun droit INSERT, UPDATE ni DELETE sur les tables métier, la table des jetons servis exceptée ;
+   - les préférences des graphiques et les notifications lues restent dans la visite et ne s'écrivent pas en base ;
+   - toute écriture refusée (SQLSTATE 25006 ou 42501) se traduit par l'alerte « Ici, on regarde sans rien changer. … ouvrez le magasin de démonstration de votre société. », jamais par une erreur technique ;
+   - les boutons des gestes restent visibles, comme dans PILIQI, pour qu'on voie ce qui existe.
+4. **Le bandeau** violet, sur toutes les pages des trois espaces, dit : « Site de démonstration PILIQI · Données fictives, sans valeur · Consultation seulement · Fin de la visite dans … · Quitter ». Chaque PDF porte « Démonstration — sans valeur », comme dans le magasin de démonstration.
+5. **La reconstruction de chaque nuit**, `demonstration:reconstruire` :
+   - **comment** : `migrate:fresh --seed` dans une seconde base, contrôle d'isolation à zéro problème, puis bascule par un nom de base lu au démarrage de chaque requête ;
+   - **pourquoi** : les dates restent actuelles (retards, devis qui expirent, clôtures d'hier) ;
+   - **si elle échoue** : l'ancienne base reste en service et l'éditeur est prévenu ;
+   - **quand** : à une heure hors de 2 h–3 h, selon la règle du planificateur.
+
+### D. Le semis du monde a, qui est aussi le contenu du site
+- Le semis couvre déjà, ou doit couvrir à ce lot, tous les cas des cabinets :
+  - collaborateurs et clients confiés ;
+  - autorisations retirées et magasins choisis ;
+  - invitations et demandes de lien dans tous leurs états ;
+  - chiffres et graphiques de chaque client ;
+  - charges dans tous leurs états ;
+  - crédit de TVA de départ dans chacun de ses états (TVA27) ;
+  - téléchargements par période ;
+  - expert-comptable déclaré.
+- Tout manque trouvé est ajouté et listé dans le compte rendu, avec le compte qui le voit.
+- **Les numéros fictifs.** Les SIREN et SIRET du semis ne doivent désigner aucune vraie entreprise. Le lot les vérifie absents du fichier public du répertoire Sirene (téléchargement public, rien n'est envoyé) et le note dans le compte rendu. Le site ne montrant que ces numéros, aucune vraie entreprise n'y apparaît.
+- **Les adresses e-mail** du semis sont toutes en `example.com`, `example.org` ou `example.net`, des domaines réservés. Le site réel refuse ces domaines à toute saisie d'une adresse de connexion ou d'une invitation, et un test le prouve.
+
+### E. Tests (tous en PostgreSQL ; navigateur pour les écrans)
+- **Mode démonstration** :
+  - un vrai fournisseur ou une clé réelle empêche le démarrage ;
+  - aucun e-mail ne part ;
+  - chaque route publique ou de connexion répond « introuvable » ;
+  - sans visite, chaque page répond « introuvable » ;
+  - `noindex` est présent.
+- **Mode réel** : un faux fournisseur empêche le démarrage, et le semis est refusé (existant).
+- **Jeton** :
+  - accepté une fois ;
+  - refusé expiré, déjà servi, contrefait, signé par une autre clé ou mal formé ;
+  - il ne contient aucune donnée du compte (test qui décode le jeton) ;
+  - il n'apparaît jamais dans une adresse ni dans un journal ;
+  - la limite de 10 par heure est tenue ;
+  - le bouton est inactif sans adresse confirmée ;
+  - un compte autre que le propriétaire ne voit pas la carte (Q2) ;
+  - l'entrée est inscrite au journal d'audit, sans le jeton.
+- **Consultation seulement** :
+  - toute écriture par le compte de base du site est refusée par PostgreSQL ;
+  - un geste d'écran (émettre, encaisser, déposer une charge, inviter, cocher une autorisation) montre l'alerte française, jamais une erreur 500 ;
+  - les préférences des graphiques restent dans la visite.
+- **« Choisissez qui vous êtes »** : chaque compte fictif s'ouvre et voit ce que PILIQI lui montre, ni plus ni moins, en balayage navigateur par rôle.
+- **Reconstruction** :
+  - la bascule a lieu seulement quand le contrôle d'isolation est à zéro ;
+  - l'échec garde l'ancienne base et prévient l'éditeur.
+- **Trois mondes** :
+  - le contrôle d'isolation (`app:verifier-isolation`) est inchangé dans le monde b ;
+  - aucune table du site réel ne contient une adresse en `example.*` ni un numéro fictif du semis ;
+  - le magasin de démonstration de chaque société reste celui d'aujourd'hui (Q3).
+- **Tests en navigateur** : la carte et son bouton dans l'espace de la société et du cabinet, l'entrée, le choix du compte, le changement de compte, l'alerte de consultation, le bandeau, « Quitter » ; plus `InventaireDesActionsTest`.
+
+### F. Textes
+- **CLAUDE.md, « Produit »** : les trois mondes et le site de démonstration commun.
+- **CLAUDE.md, décisions** : la puce « Vérification de la société » (démonstration de la société inchangée) et la puce « Outillage » (mode du site, clé du passage) ; le point 6 dit que le semis est aussi le contenu du site de démonstration.
+- **CLAUDE.md, étape 15** : mettre en ligne le site de démonstration, avec sa base, son domaine et sa clé.
+- **README** (variables, reconstruction, rôle de base en lecture seule), **.env.example** (noms seulement, aucune valeur) et matrice des décisions.
+
+### G. Compte rendu
+Le compte rendu donne :
+- la durée, comparée aux 3–6 h habituelles ; elle est estimée à 6–9 h ;
+- les données ajoutées au semis et le compte qui les voit ;
+- le résultat de la vérification des numéros fictifs ;
+- « À faire sur votre PC » : `git pull`, `composer install`, `php artisan migrate:fresh --seed`, et pour essayer le site en local, la commande qui le lance en mode démonstration sur un second port.
+
 ## Lot VER (décision de l'éditeur du 12/11/2026 vers 14 h 30 UTC) : seulement PHP 8.5 et PostgreSQL 18
 - Voir historique/DIRECTIVES.md (même date) : CI réduite à PHP 8.5 × PostgreSQL 18 ; composer.json ^8.5 ; CLAUDE.md, README ; d'abord installer PHP 8.5 et PostgreSQL 18 dans le conteneur (installer-session.sh), chaîne arrêtée.
 - 12/11 16 h 35 UTC : l'éditeur veut que le lot VER attende la fin de toute la chaîne. Préparé : commit e389c22 (worktree scratchpad/ver-wt, branche locale ver-dernieres-versions, sur 0b7e734 ; suite PHP 8.5 + PG18 : 6 379 tests, code 0). À la fin de la chaîne : rejouer e389c22 sur la tête finale (corriger les nouvelles mentions de 8.3/17 éventuelles), suite complète sous PHP 8.5 + PG18 (cluster 18 sur le port 5433, DB_PORT=5433), envoyer, puis basculer le conteneur (php → 8.5, PG16 arrêté et retiré, PG18 sur 5432, base piliqi) ; installer-session.sh est déjà à 8.5/18.

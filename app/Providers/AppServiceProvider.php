@@ -224,6 +224,8 @@ class AppServiceProvider extends ServiceProvider
         $this->tenirLesFenetresDeSelectionDansLEcran();
         $this->montrerLesCartesDesNotifications();
         $this->montrerLesGraphiquesDuTableauDeBord();
+        $this->colorerLesCasesDesCharges();
+        $this->lireLesTextesDansLesDeuxModes();
         Livewire::component(PageDesCharges::NOM, PageDesCharges::class);
         $this->limiterLesEssaisDuLienDUnDevis();
     }
@@ -331,6 +333,30 @@ class AppServiceProvider extends ServiceProvider
     {
         Livewire::component(GrilleDesGraphiques::NOM, GrilleDesGraphiques::class);
         FilamentAsset::register([Css::make('graphiques', resource_path('css/graphiques.css'))], 'app');
+    }
+
+    /**
+     * La feuille écrite à la main de la page « Charges », au modèle C1
+     * (cases colorées du tableau des mois, légende, état des charges,
+     * avertissement de doublon, tuiles de la TVA ; voir
+     * resources/css/charges.css), dans les trois panneaux, servie de même
+     * depuis public/css/app : aucune classe de couleur que la feuille de
+     * Filament n'a pas (voir ClassesDeStyleConnuesTest).
+     */
+    private function colorerLesCasesDesCharges(): void
+    {
+        FilamentAsset::register([Css::make('charges', resource_path('css/charges.css'))], 'app');
+    }
+
+    /**
+     * La feuille écrite à la main qui rend lisibles, en clair comme en
+     * sombre, les textes que Filament écrit trop pâles (voir
+     * resources/css/deux-modes.css et ContrasteDesDeuxModesTest), dans les
+     * trois panneaux, servie de même depuis public/css/app.
+     */
+    private function lireLesTextesDansLesDeuxModes(): void
+    {
+        FilamentAsset::register([Css::make('deux-modes', resource_path('css/deux-modes.css'))], 'app');
     }
 
     /**

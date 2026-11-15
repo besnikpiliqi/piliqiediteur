@@ -9,41 +9,40 @@
 @php
     use App\Domain\Charges\Enums\EtatDeLaCharge;
     use App\Filament\PageDesCharges;
-
-    $couleurs = [
-        'success' => 'bg-success-100 text-success-700 dark:bg-success-500/20 dark:text-success-400',
-        'warning' => 'bg-warning-100 text-warning-700 dark:bg-warning-500/20 dark:text-warning-400',
-        'gray' => 'bg-gray-100 text-gray-700 dark:bg-white/10 dark:text-gray-300',
-        'danger' => 'bg-danger-100 text-danger-700 dark:bg-danger-500/20 dark:text-danger-400',
-    ];
 @endphp
 
 <div class="space-y-6" data-page-des-charges>
     <div class="flex flex-wrap items-end gap-4">
         <label class="text-sm">
             <span class="block font-medium text-gray-700 dark:text-gray-200">Période</span>
-            <select wire:model.live="periode" class="mt-1 rounded-lg border-gray-300 text-sm dark:border-white/10 dark:bg-white/5" data-filtre-periode>
-                @foreach ($this->periodes() as $valeur => $libelle)
-                    <option value="{{ $valeur }}">{{ $libelle }}</option>
-                @endforeach
-            </select>
+            <x-filament::input.wrapper class="mt-1">
+                <x-filament::input.select wire:model.live="periode" data-filtre-periode>
+                    @foreach ($this->periodes() as $valeur => $libelle)
+                        <option value="{{ $valeur }}">{{ $libelle }}</option>
+                    @endforeach
+                </x-filament::input.select>
+            </x-filament::input.wrapper>
         </label>
         <label class="text-sm">
             <span class="block font-medium text-gray-700 dark:text-gray-200">Vue</span>
-            <select wire:model.live="vue" class="mt-1 rounded-lg border-gray-300 text-sm dark:border-white/10 dark:bg-white/5" data-filtre-vue>
-                <option value="toutes">Toutes les charges</option>
-                <option value="a_valider">À valider</option>
-                <option value="renvoyees">Renvoyées au client</option>
-            </select>
+            <x-filament::input.wrapper class="mt-1">
+                <x-filament::input.select wire:model.live="vue" data-filtre-vue>
+                    <option value="toutes">Toutes les charges</option>
+                    <option value="a_valider">À valider</option>
+                    <option value="renvoyees">Renvoyées au client</option>
+                </x-filament::input.select>
+            </x-filament::input.wrapper>
         </label>
         @if (count($this->magasinsDuFiltre()) > 1)
             <label class="text-sm">
                 <span class="block font-medium text-gray-700 dark:text-gray-200">Magasin</span>
-                <select wire:model.live="magasinFiltre" class="mt-1 rounded-lg border-gray-300 text-sm dark:border-white/10 dark:bg-white/5" data-filtre-magasin>
-                    @foreach ($this->magasinsDuFiltre() as $valeur => $libelle)
-                        <option value="{{ $valeur }}">{{ $libelle }}</option>
-                    @endforeach
-                </select>
+                <x-filament::input.wrapper class="mt-1">
+                    <x-filament::input.select wire:model.live="magasinFiltre" data-filtre-magasin>
+                        @foreach ($this->magasinsDuFiltre() as $valeur => $libelle)
+                            <option value="{{ $valeur }}">{{ $libelle }}</option>
+                        @endforeach
+                    </x-filament::input.select>
+                </x-filament::input.wrapper>
             </label>
         @endif
     </div>
@@ -67,13 +66,14 @@
                                 @php($case = $ligne['mois'][$unMois] ?? null)
                                 <td class="px-1 py-1 text-center">
                                     @if ($case === null)
-                                        <span class="text-gray-300 dark:text-gray-600" title="Rien de saisi">·</span>
+                                        <span class="piliqi-charges__rien" title="Rien de saisi" aria-hidden="true">·</span>
                                     @else
                                         <button
                                             type="button"
                                             wire:click="filtrerLaCase(@js($cle), @js($unMois))"
-                                            class="inline-flex min-w-8 items-center justify-center gap-0.5 rounded-md px-1.5 py-0.5 text-xs font-semibold {{ $couleurs[$case['etat']->getColor()] }} {{ $this->caseType === $cle && $this->caseMois === $unMois ? 'ring-2 ring-primary-500' : '' }}"
+                                            @class(['piliqi-charges__case', 'piliqi-charges__case--'.$case['etat']->value, 'piliqi-charges__case--choisie' => $this->caseType === $cle && $this->caseMois === $unMois])
                                             title="{{ $case['etat']->getLabel() }}{{ $case['nombre'] > 1 ? ' ('.$case['nombre'].' charges)' : '' }}"
+                                            aria-label="{{ $ligne['libelle'] }}, {{ PageDesCharges::nomDuMois($unMois) }} : {{ $case['etat']->getLabel() }}{{ $case['nombre'] > 1 ? ' ('.$case['nombre'].' charges)' : '' }}"
                                             data-case="{{ $case['etat']->value }}"
                                             data-mois="{{ $unMois }}"
                                         >{{ $case['etat']->symbole() }}@if ($case['nombre'] > 1)<span>{{ $case['nombre'] }}</span>@endif</button>
@@ -87,11 +87,11 @@
                 </tbody>
             </table>
         </div>
-        <div class="mt-3 flex flex-wrap gap-3 text-xs text-gray-500 dark:text-gray-400">
+        <div class="piliqi-charges__legende" data-legende-des-charges>
             @foreach (EtatDeLaCharge::cases() as $etat)
-                <span class="inline-flex items-center gap-1"><span class="rounded px-1 font-semibold {{ $couleurs[$etat->getColor()] }}">{{ $etat->symbole() }}</span>{{ $etat->getLabel() }}</span>
+                <span><span class="piliqi-charges__case piliqi-charges__case--{{ $etat->value }}" aria-hidden="true">{{ $etat->symbole() }}</span>{{ $etat->getLabel() }}</span>
             @endforeach
-            <span class="inline-flex items-center gap-1"><span class="px-1">·</span>Rien de saisi</span>
+            <span><span class="piliqi-charges__rien" aria-hidden="true">·</span>Rien de saisi</span>
         </div>
         @if ($this->caseType !== null)
             <p class="mt-3 text-sm">
@@ -103,47 +103,49 @@
 
     @if ($tva === null)
         <x-filament::section heading="La TVA du mois" data-tva-du-mois="franchise">
-            <p class="text-sm text-gray-600 dark:text-gray-300">TVA non applicable (franchise en base).</p>
+            <p class="text-sm text-gray-600 dark:text-gray-400">TVA non applicable (franchise en base).</p>
         </x-filament::section>
     @else
         @php($montants = $tva['montants'])
         <x-filament::section data-tva-du-mois="{{ $tva['avec_les_ventes'] ? 'complete' : 'charges' }}">
             <x-slot name="heading">La TVA du mois</x-slot>
             <x-slot name="description">{{ $tva['avec_les_ventes'] ? 'Telle que votre tableau de bord la compte : les ventes, les achats et les charges validées, puis l\'estimation avec les charges à valider.' : 'Les seules charges que vous voyez, sans les ventes ni les achats, que vous ne voyez pas.' }}</x-slot>
-            <label class="mb-3 inline-block text-sm">
+            <label class="mb-4 inline-block text-sm">
                 <span class="block font-medium text-gray-700 dark:text-gray-200">Mois</span>
-                <select wire:model.live="moisDeLaTva" class="mt-1 rounded-lg border-gray-300 text-sm dark:border-white/10 dark:bg-white/5" data-filtre-mois-de-la-tva>
-                    @foreach ($mois as $unMois)
-                        <option value="{{ $unMois }}">{{ ucfirst(PageDesCharges::nomDuMois($unMois)) }}</option>
-                    @endforeach
-                </select>
+                <x-filament::input.wrapper class="mt-1">
+                    <x-filament::input.select wire:model.live="moisDeLaTva" data-filtre-mois-de-la-tva>
+                        @foreach ($mois as $unMois)
+                            <option value="{{ $unMois }}">{{ ucfirst(PageDesCharges::nomDuMois($unMois)) }}</option>
+                        @endforeach
+                    </x-filament::input.select>
+                </x-filament::input.wrapper>
             </label>
-            <dl class="grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
+            <dl class="piliqi-charges__tuiles text-sm">
                 @if ($tva['avec_les_ventes'])
-                    <div data-tva="collectee">
+                    <div class="piliqi-charges__tuile" data-tva="collectee">
                         <dt class="text-gray-500 dark:text-gray-400">TVA collectée</dt>
                         <dd class="text-lg font-semibold">{{ PageDesCharges::enEuros($montants->collectee()) }}</dd>
                         <dd class="text-xs text-gray-500 dark:text-gray-400">ventes nettes des avoirs{{ $montants->autoliquideeValidee > 0 ? ', dont '.PageDesCharges::enEuros($montants->autoliquideeValidee).' autoliquidés' : '' }}</dd>
                     </div>
                 @endif
-                <div data-tva="deductible">
+                <div class="piliqi-charges__tuile" data-tva="deductible">
                     <dt class="text-gray-500 dark:text-gray-400">TVA déductible</dt>
                     <dd class="text-lg font-semibold">{{ PageDesCharges::enEuros($montants->deductible()) }}</dd>
                     <dd class="text-xs text-gray-500 dark:text-gray-400">{{ $tva['avec_les_ventes'] ? 'achats '.PageDesCharges::enEuros($montants->deductibleDesAchats).' + ' : '' }}charges validées {{ PageDesCharges::enEuros($montants->deductibleDesChargesValidees) }}</dd>
                 </div>
                 @if ($tva['avec_les_ventes'])
-                    <div data-tva="reelle">
+                    <div class="piliqi-charges__tuile" data-tva="reelle">
                         <dt class="text-gray-500 dark:text-gray-400">TVA à payer (réelle)</dt>
                         <dd class="text-lg font-semibold">{{ PageDesCharges::enEuros($montants->reelle()) }}</dd>
                         <dd class="text-xs text-gray-500 dark:text-gray-400">avec les seules charges validées</dd>
                     </div>
-                    <div data-tva="estimation">
+                    <div class="piliqi-charges__tuile" data-tva="estimation">
                         <dt class="text-gray-500 dark:text-gray-400">TVA à payer (estimation)</dt>
                         <dd class="text-lg font-semibold">{{ PageDesCharges::enEuros($montants->estimee()) }}</dd>
                         <dd class="text-xs text-gray-500 dark:text-gray-400">avec {{ PageDesCharges::enEuros($montants->deductibleDesChargesAValider) }} de TVA de charges à valider</dd>
                     </div>
                 @else
-                    <div data-tva="a-valider">
+                    <div class="piliqi-charges__tuile" data-tva="a-valider">
                         <dt class="text-gray-500 dark:text-gray-400">TVA déductible des charges à valider</dt>
                         <dd class="text-lg font-semibold">{{ PageDesCharges::enEuros($montants->deductibleDesChargesAValider) }}</dd>
                         <dd class="text-xs text-gray-500 dark:text-gray-400">elle ne compte qu'en estimation tant qu'elles ne sont pas validées</dd>

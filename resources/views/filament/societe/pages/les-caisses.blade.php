@@ -22,7 +22,7 @@
                 <x-filament::link :href="$caissesDuMagasin['url']">Ouvrir dans le magasin</x-filament::link>
             </x-slot>
 
-            <p class="mb-3">
+            <p class="mb-4">
                 @if ($caissesDuMagasin['caisses_ouvertes'] === [])
                     Caisses encore ouvertes : aucune.
                 @else

@@ -31,7 +31,7 @@
             @endif
 
             {{-- Un cabinet suspendu ne se lie pas : seul « Refuser » se montre. --}}
-            <div class="mt-4 flex flex-wrap gap-3">
+            <div class="mt-6 flex flex-wrap gap-3">
                 @if (! $this->cabinetSuspendu($demande))
                     {{ $this->accepterParDefautAction }}
                     {{ $this->accepterEnAjustantAction }}

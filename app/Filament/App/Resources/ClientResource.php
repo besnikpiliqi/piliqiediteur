@@ -555,6 +555,6 @@ class ClientResource extends Resource
      */
     public static function enEvidence(string|Htmlable $texte): Htmlable
     {
-        return new HtmlString('<span style="color: #c2410c; font-weight: 600;">'.($texte instanceof Htmlable ? $texte->toHtml() : e($texte)).'</span>');
+        return new HtmlString('<span class="piliqi-en-evidence">'.($texte instanceof Htmlable ? $texte->toHtml() : e($texte)).'</span>');
     }
 }

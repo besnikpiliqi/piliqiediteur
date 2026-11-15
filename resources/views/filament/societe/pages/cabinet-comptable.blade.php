@@ -16,7 +16,7 @@
 
             <p>{{ \App\Filament\Societe\Pages\CabinetComptable::TEXTE_EN_ATTENTE }}</p>
 
-            <table class="mt-4 w-full text-sm">
+            <table class="mt-3 w-full text-sm">
                 <thead>
                     <tr class="text-start">
                         <th class="py-1 text-start">Nom</th>
@@ -41,11 +41,11 @@
                 </tbody>
             </table>
 
-            <div class="mt-4">
+            <div class="mt-3">
                 {{ $this->form }}
             </div>
 
-            <div class="mt-4 flex flex-wrap gap-3">
+            <div class="mt-3 flex flex-wrap gap-3">
                 {{ $this->enregistrerLesAutorisationsAction }}
                 {{ $this->ajouterUnePersonneAction }}
                 {{ $this->mettreFinAction }}
@@ -62,11 +62,11 @@
             <p>Lié depuis le {{ $calendrier->afficher($lien->actif_depuis, 'd/m/Y') }}.</p>
             <p>Ont accès à votre société : {{ implode(', ', $this->personnesQuiOntAcces($lien)) ?: 'personne pour le moment' }}.</p>
 
-            <div class="mt-4">
+            <div class="mt-3">
                 {{ $this->form }}
             </div>
 
-            <div class="mt-4 flex gap-3">
+            <div class="mt-3 flex gap-3">
                 {{ $this->enregistrerLesAutorisationsAction }}
                 {{ $this->mettreFinAction }}
             </div>
@@ -121,7 +121,7 @@
             </div>
         @endforeach
 
-        <p class="mt-4">Votre expert-comptable n'est pas encore sur {{ config('app.name') }} ?</p>
+        <p class="mt-6">Votre expert-comptable n'est pas encore sur {{ config('app.name') }} ?</p>
         <div class="mt-2">{{ $this->inviterSonExpertAction }}</div>
     </x-filament::section>
 </x-filament-panels::page>

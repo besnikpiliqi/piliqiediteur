@@ -111,12 +111,25 @@ function taperLeHt(Navigation $onglet, int $rang, string $ht): array
 }
 
 /**
- * La case du tableau des mois de ce type pour mars 2026 : son état, et si
- * sa couleur est celle de cet état.
+ * La case du tableau des mois de ce type pour mars 2026, pour lire son
+ * état.
  */
 function caseDeMars(string $type): string
 {
     return 'document.querySelector(\'tr[data-type-de-charge="'.$type.'"] [data-mois="2026-03"]\')';
+}
+
+/**
+ * Vrai quand la couleur de fond calculée de la case de mars 2026 de ce
+ * type est de cette teinte (« orangée » : rouge, puis vert, puis bleu
+ * décroissants ; « verte » : le vert domine) : la couleur que la page
+ * dessine vraiment, pas le nom d'une classe, qui peut ne rien faire.
+ */
+function caseDeMarsDeTeinte(string $type, string $teinte): string
+{
+    $condition = $teinte === 'orangée' ? 'r > g && g > b' : 'g > r && g > b';
+
+    return '(() => { const [r, g, b, a] = (getComputedStyle('.caseDeMars($type).').backgroundColor.match(/[\\d.]+/g) ?? []).map(Number); return (a === undefined || a > 0) && '.$condition.'; })()';
 }
 
 /**
@@ -150,7 +163,7 @@ test('le propriétaire dépose une quittance de loyer avec ses chiffres, voit la
     $onglet->soumettre('Enregistrer (à valider par le comptable)')
         ->voir('Charge enregistrée.')
         ->attendreQue(caseDeMars('piliqi:loyer').'?.dataset.case === "a_valider"', 'la case du loyer de mars n’est pas « à valider »')
-        ->attendreQue(caseDeMars('piliqi:loyer').'.className.includes("bg-warning-100")', 'la case « à valider » n’est pas orange');
+        ->attendreQue(caseDeMarsDeTeinte('piliqi:loyer', 'orangée'), 'la case « à valider » n’est pas orange');
 
     $charge = Charge::query()->withoutGlobalScopes()->where('societe_id', $societe->societe->getKey())->sole();
     expect([$charge->etat, $charge->origine, $charge->mois_tva, $charge->total_ht, $charge->total_tva, $charge->total_ttc])
@@ -183,7 +196,7 @@ test('le collaborateur à qui le client est confié ouvre ses charges depuis la 
         ->soumettre('Valider')
         ->voir('Charge validée.')
         ->attendreQue(caseDeMars('piliqi:loyer').'?.dataset.case === "validee"', 'la case du loyer n’est pas validée')
-        ->attendreQue(caseDeMars('piliqi:loyer').'.className.includes("bg-success-100")', 'la case validée n’est pas verte')
+        ->attendreQue(caseDeMarsDeTeinte('piliqi:loyer', 'verte'), 'la case validée n’est pas verte')
         ->voir('Validée par le cabinet');
 
     expect([chargeRelue($charge)->etat, chargeRelue($charge)->validee_par])->toBe([EtatDeLaCharge::Validee, ValideePar::Cabinet]);

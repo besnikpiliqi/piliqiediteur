@@ -20,7 +20,7 @@
                             </div>
                             <p class="mt-1 font-semibold">{{ $chose->phrase }}</p>
                             @if ($chose->precision !== null)
-                                <p class="text-sm text-gray-600 dark:text-gray-300">{{ $chose->precision }}</p>
+                                <p class="text-sm text-gray-600 dark:text-gray-400">{{ $chose->precision }}</p>
                             @endif
                         </div>
 
@@ -29,7 +29,7 @@
                         @elseif ($chose->url !== null)
                             <x-filament::button tag="a" :href="$chose->url" size="sm" :color="$chose->aSurveiller ? 'gray' : 'primary'">{{ $chose->bouton }}</x-filament::button>
                         @else
-                            <span class="text-sm text-gray-600 dark:text-gray-300">{{ $chose->bouton }}</span>
+                            <span class="text-sm text-gray-600 dark:text-gray-400">{{ $chose->bouton }}</span>
                         @endif
                     </li>
                 @endforeach
@@ -45,7 +45,7 @@
                 @foreach ($this->etapes() as $etape)
                     <li class="flex items-start gap-3">
                         @if ($etape['faite'])
-                            <x-filament::icon icon="heroicon-o-check-circle" class="h-6 w-6 text-success-600" label="Faite" />
+                            <x-filament::icon icon="heroicon-o-check-circle" class="h-6 w-6 text-custom-600 dark:text-custom-400" style="{{ \Filament\Support\get_color_css_variables('success', shades: [400, 600]) }}" label="Faite" />
                         @else
                             <x-filament::icon icon="heroicon-o-ellipsis-horizontal-circle" class="h-6 w-6 text-gray-400" label="À faire" />
                         @endif

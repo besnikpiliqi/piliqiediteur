@@ -408,6 +408,16 @@ final class PageDesCharges extends Component implements HasActions, HasForms, Ha
     }
 
     /**
+     * L'état d'une charge dans la liste : la même pastille colorée que sa
+     * case du tableau des mois (modèle C1, resources/css/charges.css),
+     * suivie de son libellé.
+     */
+    public static function pastilleDeLEtat(EtatDeLaCharge $etat): HtmlString
+    {
+        return new HtmlString('<span class="piliqi-charges__etat" data-etat-de-la-charge="'.e($etat->value).'"><span class="piliqi-charges__case piliqi-charges__case--'.e($etat->value).'" aria-hidden="true">'.e($etat->symbole()).'</span>'.e($etat->getLabel()).'</span>');
+    }
+
+    /**
      * Le mois « AAAA-MM » en toutes lettres (« mars 2026 »), tel quel s'il
      * n'est pas un mois.
      */
@@ -450,9 +460,8 @@ final class PageDesCharges extends Component implements HasActions, HasForms, Ha
                 TextColumn::make('total_tva_deductible')->label('TVA déductible')->alignEnd()->state(fn (Charge $record): string => self::enEuros($record->total_tva_deductible))
                     ->description(fn (Charge $record): ?string => $record->tva_a_verifier ? 'TVA à vérifier' : null),
                 TextColumn::make('origine')->label('Origine')->formatStateUsing(fn (Charge $record): string => $record->origine->getLabel()),
-                TextColumn::make('etat')->label('État')->badge()
-                    ->formatStateUsing(fn (Charge $record): string => $record->etat->symbole().' '.$record->etat->getLabel())
-                    ->color(fn (Charge $record): string => $record->etat->getColor())
+                TextColumn::make('etat')->label('État')
+                    ->formatStateUsing(fn (Charge $record): HtmlString => self::pastilleDeLEtat($record->etat))
                     ->description(fn (Charge $record): ?string => match ($record->etat) {
                         EtatDeLaCharge::Validee => $record->validee_par?->getLabel(),
                         EtatDeLaCharge::Renvoyee => 'Mot du comptable : '.$record->motif_renvoi,
@@ -986,7 +995,7 @@ final class PageDesCharges extends Component implements HasActions, HasForms, Ha
 
         $lignes = array_map(fn (array $charge): string => '<li>'.e($charge['etat']->symbole().' '.$charge['etat']->getLabel()).($charge['fournisseur'] !== null ? ' — '.e($charge['fournisseur']) : '').($charge['numero_piece'] !== null ? ', pièce n° '.e($charge['numero_piece']) : '').'</li>', $deja);
 
-        return new HtmlString('<div data-doublon-de-charge class="rounded-lg bg-warning-50 p-3 text-sm text-warning-700 dark:bg-warning-400/10 dark:text-warning-400"><p class="font-medium">'.e(count($deja) > 1 ? count($deja).' charges de ce type sont déjà saisies pour '.self::nomDuMois($mois).' :' : 'Une charge de ce type est déjà saisie pour '.self::nomDuMois($mois).' :').'</p><ul class="mt-1 list-disc ps-5">'.implode('', $lignes).'</ul></div>');
+        return new HtmlString('<div data-doublon-de-charge class="piliqi-charges__avertissement"><p class="font-medium">'.e(count($deja) > 1 ? count($deja).' charges de ce type sont déjà saisies pour '.self::nomDuMois($mois).' :' : 'Une charge de ce type est déjà saisie pour '.self::nomDuMois($mois).' :').'</p><ul>'.implode('', $lignes).'</ul></div>');
     }
 
     private function natureDuType(string $cle): NatureDeCharge

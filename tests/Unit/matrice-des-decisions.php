@@ -1880,6 +1880,28 @@ return [
                 'tests/Feature/Filament/FactureEnRetardTest.php::test_une_facture_payee_en_partie_apres_son_echeance_reste_en_retard',
             ],
         ],
+        'ecrans.classes-de-style-connues' => [
+            'puce' => 'Écrans',
+            'regle' => 'Aucun écran n\'utilise une classe de style absente de la feuille de Filament ou de nos feuilles de public/css/app (15/11/2026) : la page des charges suit le modèle C1, ses cases étant des carrés colorés de leur état, et chaque grille a les colonnes de son dessin.',
+            'tests' => [
+                'tests/Feature/Ecrans/ClassesDeStyleConnuesTest.php::test_aucun_ecran_n_utilise_une_classe_absente_des_feuilles',
+                'tests/Feature/Filament/RessourcesServiesParPiliqiTest.php::test_chaque_panneau_sert_la_feuille_des_charges_publiee_telle_quelle',
+                'tests/Browser/Parcours/StylesDesEcransTest.php › chaque case du tableau des charges est un carré coloré de son état, en clair comme en sombre',
+                'tests/Browser/Parcours/StylesDesEcransTest.php › les grilles à deux colonnes de « Télécharger les documents » et de la fiche d’un client du cabinet en ont deux sur un écran de 1 024 px',
+                'tests/Browser/Parcours/StylesDesEcransTest.php › la grille à deux colonnes de « La société » de l’expert-comptable déclaré en a deux sur un écran de 1 024 px',
+            ],
+        ],
+        'ecrans.contraste-des-deux-modes' => [
+            'puce' => 'Écrans',
+            'regle' => 'Chaque écran, chaque fenêtre, chaque menu déroulant ouvert, chaque carte et chaque pastille se lit aussi bien en clair qu\'en sombre, au contraste AA (15/11/2026), contrôlé sur chaque page de chaque panneau dans les deux modes ; les couleurs des panneaux sont des palettes lisibles.',
+            'tests' => [
+                'tests/Unit/CouleursLisiblesTest.php::test_chaque_couleur_d_un_panneau_se_lit_dans_les_deux_modes',
+                'tests/Browser/Balayage/ContrasteDesDeuxModesTest.php › chaque page de l’espace de la société se lit en clair et en sombre, pour son propriétaire',
+                'tests/Browser/Balayage/ContrasteDesDeuxModesTest.php › chaque page de l’espace du cabinet se lit en clair et en sombre, pour son propriétaire',
+                'tests/Browser/Balayage/ContrasteDesDeuxModesTest.php › chaque page de l’expert-comptable déclaré se lit en clair et en sombre',
+                'tests/Browser/Balayage/ContrasteDesDeuxModesTest.php › le contrôle relève le menu déroulant nu d’avant, illisible en sombre, et un texte gris trop pâle, et rien sur la page corrigée',
+            ],
+        ],
         'ecrans.tableaux-des-fiches-modele-d' => [
             'puce' => 'Écrans',
             'regle' => 'Une liste d\'une fiche s\'affiche en un seul tableau, au modèle D (13/11/2026) : titres une fois en haut, une ligne par élément dans l\'ordre fixe, « – » en gris pour une valeur nulle et la ligne en gris quand toutes ses valeurs le sont, total en dernière ligne, en gras, informations dessous, en gris ; le tableau défile de côté sur un téléphone.',

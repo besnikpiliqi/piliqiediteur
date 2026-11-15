@@ -364,7 +364,7 @@ class AvoirFournisseurResourceTest extends TestCase
         $page = Livewire::test(ViewFactureAchat::class, ['record' => $factureAchat->getRouteKey()]);
 
         foreach ([[$premier, 2], [$second, 1]] as [$avoir, $quantite]) {
-            $page->assertSeeHtml('<span style="color: #c2410c; font-weight: 600;">Retourné : '.$quantite.' (avoir <a href="'.e(AvoirFournisseurResource::getUrl('view', ['record' => $avoir])).'" style="text-decoration: underline;">'.$avoir->numero.'</a> du 17/10/2026)</span>');
+            $page->assertSeeHtml('<span class="piliqi-en-evidence">Retourné : '.$quantite.' (avoir <a href="'.e(AvoirFournisseurResource::getUrl('view', ['record' => $avoir])).'" style="text-decoration: underline;">'.$avoir->numero.'</a> du 17/10/2026)</span>');
         }
         $this->assertSame(['AF-MABOUT-2026-000001', 'AF-MABOUT-2026-000002'], [$premier->numero, $second->numero]);
         $this->assertSame(2, substr_count($page->html(), 'Retourné :'));

@@ -63,9 +63,9 @@
 
         <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">Les jours sont ceux du calendrier de chaque magasin : le jour d'émission d'une vente ou d'un avoir, la date de la facture du fournisseur d'un achat, la journée d'une clôture, le jour d'enregistrement d'un paiement.</p>
 
-        <fieldset class="mt-4">
+        <fieldset class="mt-6">
             <legend class="text-sm font-medium">Types de documents</legend>
-            <div class="mt-2 grid gap-2 sm:grid-cols-2">
+            <div class="mt-2 grid gap-2 md:grid-cols-2">
                 @foreach ($typesProposes as $type)
                     <label class="flex items-center gap-2">
                         <x-filament::input.checkbox wire:model.live="types" value="{{ $type->value }}" />
@@ -76,7 +76,7 @@
         </fieldset>
 
         @if ($avecLesAchats)
-            <fieldset class="mt-4">
+            <fieldset class="mt-6">
                 <legend class="text-sm font-medium">Origine des factures d'achat et des avoirs fournisseurs</legend>
                 <div class="mt-2 flex flex-wrap gap-4">
                     @foreach ($origines as $origine)
@@ -94,9 +94,9 @@
         @endif
 
         @if ($plusieursMagasins)
-            <fieldset class="mt-4">
+            <fieldset class="mt-6">
                 <legend class="text-sm font-medium">Magasins</legend>
-                <div class="mt-2 grid gap-2 sm:grid-cols-2">
+                <div class="mt-2 grid gap-2 md:grid-cols-2">
                     @foreach ($magasinsProposes as $magasin)
                         <label class="flex items-center gap-2">
                             <x-filament::input.checkbox wire:model.live="magasinsCoches" value="{{ $magasin->getKey() }}" />
@@ -141,7 +141,7 @@
                             <td class="py-1 pe-3">
                                 {{ $document->type->libelleDUnDocument() }}{{ $document->origine === null ? '' : ' ('.$document->origine.')' }}
                                 @if ($document->pieceManquante)
-                                    <x-filament::badge color="warning" class="mt-1 w-fit">Pièce du fournisseur manquante</x-filament::badge>
+                                    <x-filament::badge color="warning" class="mt-1 w-max">Pièce du fournisseur manquante</x-filament::badge>
                                 @endif
                             </td>
                             <td class="py-1 pe-3">{{ $document->magasin }}</td>

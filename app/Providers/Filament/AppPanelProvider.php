@@ -12,6 +12,7 @@ use App\Filament\App\Pages\Auth\InscriptionSociete;
 use App\Filament\App\Pages\Auth\ModifierProfil;
 use App\Filament\App\Pages\Auth\PageDuLien;
 use App\Filament\CartesDesNotifications;
+use App\Filament\CouleursLisibles;
 use App\Filament\EspaceDeLaSociete;
 use App\Filament\InitialesDuCompte;
 use App\Filament\PoliceServieParPiliqi;
@@ -126,9 +127,7 @@ class AppPanelProvider extends PanelProvider
                 BindTenantContextFromFilamentTenant::class,
                 JournaliserOuvertureDeSession::class,
             ], isPersistent: true)
-            ->colors([
-                'primary' => Color::Indigo,
-            ])
+            ->colors(CouleursLisibles::duPanneau(Color::Indigo))
             // La cloche des notifications en base (voir
             // NotificationDuMagasin) : envois échoués, factures passées en
             // retard, stocks bas.

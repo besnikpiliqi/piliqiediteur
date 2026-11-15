@@ -7,6 +7,7 @@ use App\Filament\App\Pages\Auth\ChoisirSonMotDePasse;
 use App\Filament\App\Pages\Auth\Connexion;
 use App\Filament\App\Pages\Auth\ModifierProfil;
 use App\Filament\CartesDesNotifications;
+use App\Filament\CouleursLisibles;
 use App\Filament\InitialesDuCompte;
 use App\Filament\PoliceServieParPiliqi;
 use App\Filament\Societe\Pages\AccepterLaTransmission;
@@ -85,9 +86,7 @@ class SocietePanelProvider extends PanelProvider
             ->tenantMiddleware([
                 BindTenantContextFromFilamentTenant::class,
             ], isPersistent: true)
-            ->colors([
-                'primary' => Color::Emerald,
-            ])
+            ->colors(CouleursLisibles::duPanneau(Color::Emerald))
             ->databaseNotifications()
             // La cloche et les cartes des notifications regardent s'il y a
             // du nouveau au même rythme (voir CartesDesNotifications).

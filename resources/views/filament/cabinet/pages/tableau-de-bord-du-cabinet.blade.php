@@ -12,7 +12,7 @@
                 @foreach ($this->etapes() as $etape)
                     <li class="flex items-start gap-3">
                         @if ($etape['faite'])
-                            <x-filament::icon icon="heroicon-o-check-circle" class="h-6 w-6 text-success-600" label="Faite" />
+                            <x-filament::icon icon="heroicon-o-check-circle" class="h-6 w-6 text-custom-600 dark:text-custom-400" style="{{ \Filament\Support\get_color_css_variables('success', shades: [400, 600]) }}" label="Faite" />
                         @else
                             <x-filament::icon icon="heroicon-o-ellipsis-horizontal-circle" class="h-6 w-6 text-gray-400" label="À faire" />
                         @endif
@@ -92,7 +92,7 @@
             </div>
         @endif
 
-        <p class="mt-4 text-sm text-gray-600 dark:text-gray-400">Les écritures, l'export comptable, l'état de TVA et les rapports de chaque client s'afficheront ici avec les prochaines étapes de {{ config('app.name') }}.</p>
+        <p class="mt-6 text-sm text-gray-600 dark:text-gray-400">Les écritures, l'export comptable, l'état de TVA et les rapports de chaque client s'afficheront ici avec les prochaines étapes de {{ config('app.name') }}.</p>
     </x-filament::section>
 
     @if ($liensActifs->isNotEmpty())

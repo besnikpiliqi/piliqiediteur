@@ -17,7 +17,7 @@
     <form wire:submit="encaisser">
         {{ $this->form }}
 
-        <x-filament::button type="submit" class="mt-4" size="lg" :disabled="$journeeCloturee !== null">
+        <x-filament::button type="submit" class="mt-6" size="lg" :disabled="$journeeCloturee !== null">
             Encaisser
         </x-filament::button>
     </form>

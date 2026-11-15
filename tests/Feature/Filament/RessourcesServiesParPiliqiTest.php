@@ -93,6 +93,32 @@ class RessourcesServiesParPiliqiTest extends TestCase
     }
 
     /**
+     * La feuille écrite à la main de la page « Charges », au modèle C1
+     * (lot DATEOP : les couleurs de ses cases n'existaient dans aucune
+     * feuille), se sert de même dans chaque panneau, publiée telle qu'elle
+     * est dans le dépôt.
+     */
+    #[DataProvider('pagesDeConnexion')]
+    public function test_chaque_panneau_sert_la_feuille_des_charges_publiee_telle_quelle(string $page): void
+    {
+        $this->get($page)->assertOk()->assertSee('css/app/charges.css', false);
+        $this->assertFileEquals(resource_path('css/charges.css'), public_path('css/app/charges.css'));
+    }
+
+    /**
+     * La feuille écrite à la main qui rend lisibles, en clair comme en
+     * sombre, les textes que Filament écrit trop pâles (lot DATEOP), se
+     * sert de même dans chaque panneau, publiée telle qu'elle est dans le
+     * dépôt.
+     */
+    #[DataProvider('pagesDeConnexion')]
+    public function test_chaque_panneau_sert_la_feuille_des_deux_modes_publiee_telle_quelle(string $page): void
+    {
+        $this->get($page)->assertOk()->assertSee('css/app/deux-modes.css', false);
+        $this->assertFileEquals(resource_path('css/deux-modes.css'), public_path('css/app/deux-modes.css'));
+    }
+
+    /**
      * @return array<string, array{0: string, 1: string}>
      */
     public static function noms(): array

@@ -26,7 +26,7 @@
                 :full-width="$this->hasFullWidthFormActions()"
             />
 
-            <p class="text-sm text-gray-600 dark:text-gray-300">{{ \App\Filament\App\Pages\Auth\InscriptionSociete::INFORMATION_ASSUJETTI_UNIQUE }}</p>
+            <p class="text-sm text-gray-600 dark:text-gray-400">{{ \App\Filament\App\Pages\Auth\InscriptionSociete::INFORMATION_ASSUJETTI_UNIQUE }}</p>
         </x-filament-panels::form>
     @endif
 </x-filament-panels::page.simple>

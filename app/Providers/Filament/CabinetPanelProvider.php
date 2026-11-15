@@ -7,6 +7,7 @@ use App\Filament\App\Pages\Auth\Connexion;
 use App\Filament\App\Pages\Auth\ModifierProfil;
 use App\Filament\Cabinet\Pages\TableauDeBordDuCabinet;
 use App\Filament\CartesDesNotifications;
+use App\Filament\CouleursLisibles;
 use App\Filament\InitialesDuCompte;
 use App\Filament\PoliceServieParPiliqi;
 use App\Filament\Societe\Pages\AccepterLaTransmission;
@@ -79,9 +80,7 @@ class CabinetPanelProvider extends PanelProvider
             ->tenantMiddleware([
                 BindTenantContextFromFilamentTenant::class,
             ], isPersistent: true)
-            ->colors([
-                'primary' => Color::Sky,
-            ])
+            ->colors(CouleursLisibles::duPanneau(Color::Sky))
             ->databaseNotifications()
             // La cloche et les cartes des notifications regardent s'il y a
             // du nouveau au même rythme (voir CartesDesNotifications).

@@ -22,7 +22,7 @@
                                     </div>
                                     <p class="mt-1 font-semibold">{{ $chose->phrase }}</p>
                                     @if ($chose->precision !== null)
-                                        <p class="text-sm text-gray-600 dark:text-gray-300">{{ $chose->precision }}</p>
+                                        <p class="text-sm text-gray-600 dark:text-gray-400">{{ $chose->precision }}</p>
                                     @endif
 
                                     @if ($chose->lignes !== [])

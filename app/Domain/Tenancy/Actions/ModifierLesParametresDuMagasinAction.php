@@ -74,7 +74,7 @@ class ModifierLesParametresDuMagasinAction
      */
     public static function tousLesParametres(): array
     {
-        return array_values(array_merge(...array_values(self::PARAMETRES)));
+        return array_merge(...array_values(self::PARAMETRES));
     }
 
     /**

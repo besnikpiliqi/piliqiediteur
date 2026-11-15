@@ -2866,3 +2866,7 @@ sur "TVA à payer 	TVA à payer (estimation)" on vois les tva sur deux mois, mai
 
 mais alors tu note pour aplique ca, il faut pas oublier
 
+## 326. 2026-11-15 14:05 UTC
+
+mon choix est K2
+

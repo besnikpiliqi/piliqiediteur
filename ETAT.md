@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 15/11/2026 à 14:05 UTC par pilotage-sync.sh : « Point de suivi 14:06 UTC ».
+Mis à jour le 15/11/2026 à 14:06 UTC par pilotage-sync.sh : « K2 choisi : crédit de départ dans le lot TVA27 ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

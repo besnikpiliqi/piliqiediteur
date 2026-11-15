@@ -461,3 +461,4 @@
 - 15/11 12:47 UTC — Constat éditeur : liste des téléchargements non rafraîchie → cahier DATEOP (wire:poll de la section).
 - 15/11 13:20 UTC — Demande éditeur : fin du réel simplifié à ne pas oublier → lot TVA27 (a-faire-apres-chaine.md, après VIES-DEP, avant RLS), avec le crédit de TVA reporté (K1/K2 en attente). Onglet pro rev 1212 : T121.1, T121.2.
 - 15/11 14:06 UTC — Point de suivi : PG 16/18 en marche ; DATEOP:implementation-4 (SEED-TOUT C, semis 400 jours vérifié sans faute) ; commit local 93939942 (réparation CI b6015883, non poussé) ; CI b6015883 : 6 tâches de tests vertes, analyse statique rouge seule ; sauvegarde arbre b3f1d805 ; 11 Go libres ; onglet pro inchangé depuis rev 1212, aucun commentaire.
+- 15/11 14:12 UTC — Éditeur : K2 choisi → lot TVA27 mis à jour (crédit de départ saisi dès ce lot).

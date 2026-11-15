@@ -4,11 +4,16 @@ namespace Tests\Feature\Charges;
 
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Cabinets\Models\LienCabinet;
+use App\Domain\Charges\Actions\GererLesTypesDeChargeAction;
 use App\Domain\Charges\Enums\EtatDeLaCharge;
+use App\Domain\Charges\Enums\NatureDeCharge;
 use App\Domain\Charges\Enums\OrigineDeLaCharge;
 use App\Domain\Charges\Enums\ValideePar;
 use App\Domain\Charges\Models\Charge;
+use App\Domain\Charges\Models\PieceDeCharge;
+use App\Domain\Charges\Models\TypeDeChargeDeLaSociete;
 use App\Domain\Charges\Services\DroitsSurLesCharges;
+use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
@@ -316,5 +321,182 @@ class PagesDesChargesTest extends TestCase
             ->assertCanNotSeeTableRecords([$charge])
             ->assertDontSee('SCI des Halles');
         $this->assertNull(app(\App\Domain\Charges\Services\ChargesDeLaSociete::class)->trouver(app(DroitsSurLesCharges::class)->pour($this->proprietaireDe($autre), $autre->societe) ?? throw new \LogicException, (string) $charge->uuid));
+    }
+
+    /**
+     * Le collaborateur du cabinet lié écrit les chiffres d'une charge à
+     * valider qui a déjà les siens, en corrigeant la TVA déductible d'un
+     * cadeau de moins de 73 €, et la valide d'un même geste.
+     */
+    public function test_le_comptable_ecrit_les_chiffres_d_une_charge_qui_a_les_siens_et_la_valide(): void
+    {
+        $collaborateur = $this->collaborateurDuCabinetLie($this->lyon);
+        $lien = LienCabinet::query()->withoutGlobalScopes()->where('societe_id', $this->societe->getKey())->sole();
+        $cadeau = $this->deposer($this->proprietaire, $this->societe, $this->saisie('piliqi:cadeaux', '50.00', champs: ['fournisseur' => 'Chocolatier', 'numero_piece' => 'C-1']));
+        $this->dansLEspaceDuCabinet($collaborateur->societe()->firstOrFail(), $collaborateur);
+
+        Livewire::test(PageDesCharges::class, ['ecran' => PageDesCharges::CABINET, 'lien' => (string) $lien->uuid])
+            ->mountTableAction('ecrireLesChiffres', $cadeau)
+            ->set('mountedTableActionsData.0.lignes', ['ligne' => ['taux' => '2000', 'ht' => '50,00', 'tva' => '10,00', 'ttc' => '60,00', 'tva_deductible' => '10,00']])
+            ->callMountedTableAction()
+            ->assertHasNoTableActionErrors();
+
+        $this->assertSame([EtatDeLaCharge::Validee, ValideePar::Cabinet, 1000], [$cadeau->fresh()?->etat, $cadeau->fresh()?->validee_par, $cadeau->fresh()?->total_tva_deductible]);
+    }
+
+    /**
+     * La TVA déductible préremplie suit la TVA quand le comptable change le
+     * HT (elle valait la proposition) ; celle qu'il a écrite lui-même ne se
+     * réécrit pas ; le mois de TVA suit la date de paiement ajoutée.
+     */
+    public function test_la_tva_deductible_et_le_mois_de_tva_se_recalculent_en_direct(): void
+    {
+        $collaborateur = $this->collaborateurDuCabinetLie($this->lyon);
+        $lien = LienCabinet::query()->withoutGlobalScopes()->where('societe_id', $this->societe->getKey())->sole();
+        $loyer = $this->deposer($collaborateur, $this->societe, $this->saisie(ht: '1000.00', champs: ['numero_piece' => 'Q-1']));
+        $electricite = $this->deposer($this->proprietaire, $this->societe, $this->saisie('piliqi:electricite', null));
+        $this->dansLEspaceDuCabinet($collaborateur->societe()->firstOrFail(), $collaborateur);
+
+        Livewire::test(PageDesCharges::class, ['ecran' => PageDesCharges::CABINET, 'lien' => (string) $lien->uuid])
+            ->mountTableAction('corriger', $loyer)
+            ->set('mountedTableActionsData.0.lignes', ['ligne' => ['taux' => '2000', 'ht' => '1000,00', 'tva' => '200,00', 'ttc' => '1200,00', 'tva_deductible' => '200,00']])
+            ->set('mountedTableActionsData.0.lignes.ligne.ht', '1200,00')
+            ->assertSet('mountedTableActionsData.0.lignes.ligne.tva', '240,00')
+            ->assertSet('mountedTableActionsData.0.lignes.ligne.tva_deductible', '240,00')
+            ->setTableActionData(['motif' => 'HT mal recopié'])
+            ->callMountedTableAction()
+            ->assertHasNoTableActionErrors()
+            ->mountTableAction('ecrireLesChiffres', $electricite)
+            ->setTableActionData(['fournisseur' => 'EDF', 'date_piece' => '2026-05-28'])
+            ->assertSet('mountedTableActionsData.0.mois_tva', '2026-05')
+            ->setTableActionData(['date_paiement' => '2026-06-04'])
+            ->assertSet('mountedTableActionsData.0.mois_tva', '2026-06')
+            ->set('mountedTableActionsData.0.lignes', ['ligne' => ['taux' => '2000', 'ht' => '100,00', 'tva' => '20,00', 'ttc' => '120,00', 'tva_deductible' => '15,00']])
+            ->set('mountedTableActionsData.0.lignes.ligne.ht', '200,00')
+            ->assertSet('mountedTableActionsData.0.lignes.ligne.tva_deductible', '15,00');
+
+        $this->assertSame([144000, 24000, 24000], [$loyer->fresh()?->total_ttc, $loyer->fresh()?->total_tva, $loyer->fresh()?->total_tva_deductible]);
+    }
+
+    /**
+     * Un écart de TVA et un doublon probable sur la même saisie : chaque
+     * confirmation se donne une fois, sa case décochée quand elle est
+     * demandée, et la charge s'enregistre après les deux, avec la pièce
+     * envoyée au premier envoi.
+     */
+    public function test_un_ecart_de_tva_et_un_doublon_probable_se_confirment_l_un_apres_l_autre(): void
+    {
+        $this->deposer($this->proprietaire, $this->societe, $this->saisie('piliqi:electricite', '100.00', champs: ['fournisseur' => 'EDF']));
+        $this->dansLEspaceDeLaSociete($this->societe, $this->proprietaire);
+        $donnees = ['piece' => [UploadedFile::fake()->createWithContent('edf.pdf', FichiersDeTest::pdf('Facture EDF'))], 'type' => 'piliqi:electricite', 'fournisseur' => 'EDF', 'date_piece' => '2026-05-02', 'magasin' => '', 'lignes' => [['taux' => '2000', 'ht' => '100,00', 'tva' => '19,95', 'ttc' => '120,00']]];
+
+        $page = Livewire::test(PageDesCharges::class, ['ecran' => PageDesCharges::SOCIETE])
+            ->callTableAction('ajouterUneCharge', data: $donnees)
+            ->assertSet('confirmationDemandee', 'ecarts');
+        $page->setTableActionData(['confirmer' => true])->callMountedTableAction()
+            ->assertSet('confirmationDemandee', 'doublon')
+            ->assertSet('mountedTableActionsData.0.confirmer', false);
+        $this->assertSame(1, Charge::query()->withoutGlobalScopes()->where('societe_id', $this->societe->getKey())->count());
+
+        $page->setTableActionData(['confirmer' => true])->callMountedTableAction()->assertHasNoTableActionErrors();
+        $this->assertSame(2, Charge::query()->withoutGlobalScopes()->where('societe_id', $this->societe->getKey())->count());
+        $ajoutee = Charge::query()->withoutGlobalScopes()->where('societe_id', $this->societe->getKey())->latest('id')->firstOrFail();
+        $this->assertSame([true, 'edf.pdf'], [$ajoutee->tva_a_verifier, PieceDeCharge::query()->withoutGlobalScopes()->where('charge_id', $ajoutee->getKey())->value('nom')]);
+    }
+
+    /**
+     * « Toute la société seulement » filtre le tableau des mois comme la
+     * liste ; la vue « À valider » montre aussi les pièces sans chiffres.
+     */
+    public function test_le_tableau_suit_le_filtre_et_la_vue_a_valider_montre_les_pieces_sans_chiffres(): void
+    {
+        $deLyon = $this->deposer($this->proprietaire, $this->societe, $this->saisie(champs: ['numero_piece' => 'L-1', 'magasin' => (string) $this->lyon->uuid]));
+        $piece = $this->deposer($this->proprietaire, $this->societe, $this->saisie('piliqi:eau', null));
+        $this->dansLEspaceDeLaSociete($this->societe, $this->proprietaire);
+
+        Livewire::test(PageDesCharges::class, ['ecran' => PageDesCharges::SOCIETE])
+            ->set('magasinFiltre', 'societe')
+            ->assertCanNotSeeTableRecords([$deLyon])
+            ->assertDontSeeHtml('data-case="a_valider"')
+            ->assertSeeHtml('data-case="piece_sans_chiffres"')
+            ->set('magasinFiltre', '')
+            ->set('vue', 'a_valider')
+            ->assertCanSeeTableRecords([$deLyon, $piece]);
+    }
+
+    /**
+     * Le client voit, sans les écrire, le mois de TVA et la TVA déductible
+     * que PILIQI propose ; le fournisseur se choisit aussi parmi ceux des
+     * magasins, sans en créer de fiche.
+     */
+    public function test_le_client_voit_le_mois_et_la_deductible_proposes_et_les_fournisseurs_des_magasins(): void
+    {
+        $this->collaborateurDuCabinetLie($this->lyon);
+        app(TenantContext::class)->runAs($this->paris, fn () => Fournisseur::factory()->create(['nom' => 'Grossiste Est']));
+        $this->dansLEspaceDeLaSociete($this->societe, $this->proprietaire);
+
+        Livewire::test(PageDesCharges::class, ['ecran' => PageDesCharges::SOCIETE])
+            ->mountTableAction('ajouterUneCharge')
+            ->setTableActionData(['type' => 'piliqi:carburant', 'date_piece' => '2026-05-12'])
+            ->set('mountedTableActionsData.0.lignes', ['ligne' => ['taux' => '2000', 'ht' => '50,00']])
+            ->set('mountedTableActionsData.0.lignes.ligne.ht', '72,50')
+            ->assertSet('mountedTableActionsData.0.mois_tva', '2026-05')
+            ->assertSet('mountedTableActionsData.0.lignes.ligne.tva_deductible', '11,60')
+            ->assertSee('Mois de TVA proposé')
+            ->assertSee('TVA déductible proposée')
+            ->assertSee('Grossiste Est');
+
+        $this->assertSame(1, Fournisseur::query()->withoutGlobalScopes()->count());
+    }
+
+    /**
+     * La TVA du mois, sous le tableau : complète pour le propriétaire, qui
+     * voit les graphiques ; les seules charges pour l'administrateur coché
+     * qui ne les voit pas.
+     */
+    public function test_la_page_montre_la_tva_du_mois(): void
+    {
+        $this->deposer($this->proprietaire, $this->societe, $this->saisie(champs: ['numero_piece' => 'Q-1']));
+        $administrateur = $this->administrateur($this->lyon, [$this->lyon->id], [], [PermissionRegistry::CHARGES_AJOUTER]);
+        $this->dansLEspaceDeLaSociete($this->societe, $this->proprietaire);
+
+        Livewire::test(PageDesCharges::class, ['ecran' => PageDesCharges::SOCIETE])
+            ->assertSeeHtml('data-tva-du-mois="complete"')
+            ->assertSet('moisDeLaTva', '2026-05')
+            ->assertSee('-240,00')
+            ->set('moisDeLaTva', '2026-04')
+            ->assertSee('avec 0,00');
+
+        $this->dansLEspaceDeLaSociete($this->societe, $this->choisirSonMotDePasse($administrateur));
+        Livewire::test(PageDesCharges::class, ['ecran' => PageDesCharges::SOCIETE])
+            ->assertSeeHtml('data-tva-du-mois="charges"')
+            ->assertSee('TVA déductible des charges à valider')
+            ->assertSee('240,00');
+    }
+
+    /**
+     * Le propriétaire supprime un type de la société qu'aucune charge ne
+     * porte ; le comptable n'a ni « Types de charge », ni « Ajouter un
+     * type », ni « Supprimer un type ».
+     */
+    public function test_le_proprietaire_supprime_un_type_inutilise_et_le_comptable_n_a_pas_les_types(): void
+    {
+        $type = app(GererLesTypesDeChargeAction::class)->ajouter($this->proprietaire, $this->societe, 'Ménnage', NatureDeCharge::Services);
+        $collaborateur = $this->collaborateurDuCabinetLie($this->lyon);
+        $lien = LienCabinet::query()->withoutGlobalScopes()->where('societe_id', $this->societe->getKey())->sole();
+        $this->dansLEspaceDuCabinet($collaborateur->societe()->firstOrFail(), $collaborateur);
+
+        Livewire::test(PageDesCharges::class, ['ecran' => PageDesCharges::CABINET, 'lien' => (string) $lien->uuid])
+            ->assertTableActionHidden('typesDeCharge')
+            ->assertTableActionHidden('ajouterUnType')
+            ->assertTableActionHidden('supprimerUnType');
+
+        $this->dansLEspaceDeLaSociete($this->societe, $this->proprietaire);
+        Livewire::test(PageDesCharges::class, ['ecran' => PageDesCharges::SOCIETE])
+            ->callTableAction('supprimerUnType', data: ['type' => (string) $type->uuid])
+            ->assertHasNoTableActionErrors()
+            ->assertTableActionHidden('supprimerUnType');
+
+        $this->assertNull(TypeDeChargeDeLaSociete::query()->withoutGlobalScopes()->find($type->getKey()));
     }
 }

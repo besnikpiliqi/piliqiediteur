@@ -6,6 +6,8 @@ use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Cabinets\Services\TableauDeBordDesClients;
 use App\Domain\Charges\Actions\RenvoyerUneChargeAction;
 use App\Domain\Charges\Models\Charge;
+use App\Domain\Charges\Services\ChargesAFaire;
+use App\Domain\Charges\Services\DroitsSurLesCharges;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\UrgenceAFaire;
 use App\Domain\Tenancy\Models\Magasin;
@@ -174,5 +176,25 @@ class AFaireDesChargesTest extends TestCase
         $choses = ChosesAFaireDuMagasin::pour($compte->fresh() ?? $compte, $this->lyon);
 
         return collect([...$choses['a_faire'], ...$choses['a_surveiller']])->first(fn (ChoseAFaire $chose): bool => $chose->cle === $cle);
+    }
+
+    /**
+     * Une pièce sans chiffres attend le comptable, qui écrit ses chiffres
+     * avant de la valider : elle compte dans « N charges à valider », dont
+     * la phrase le dit, et dans la colonne « Charges » du tableau de bord
+     * du cabinet.
+     */
+    public function test_les_pieces_sans_chiffres_comptent_dans_les_charges_a_valider_du_comptable(): void
+    {
+        $collaborateur = $this->collaborateurDuCabinetLie($this->lyon);
+        $this->deposer($this->proprietaire, $this->societe, $this->saisie('piliqi:honoraires', null));
+        $this->deposer($this->proprietaire, $this->societe, $this->saisie('piliqi:eau', null));
+        $this->deposer($this->proprietaire, $this->societe, $this->saisie(champs: ['numero_piece' => 'Q-1']));
+        $acces = app(DroitsSurLesCharges::class)->pour($collaborateur, $this->societe) ?? throw new \LogicException;
+
+        $this->assertSame(['a_valider' => 3, 'pieces_sans_chiffres' => 2, 'renvoyees' => 0], app(ChargesAFaire::class)->compter($acces));
+        [$chose] = app(ChargesAFaire::class)->choses($acces, fn (string $vue): string => '/charges?vue='.$vue);
+        $this->assertStringStartsWith('3 charges à valider, dont 2 pièces sans chiffres à saisir', $chose->phrase);
+        $this->assertSame([$this->societe->getKey() => 3], app(ChargesAFaire::class)->aValiderParClient($collaborateur, [$this->societe->getKey()]));
     }
 }

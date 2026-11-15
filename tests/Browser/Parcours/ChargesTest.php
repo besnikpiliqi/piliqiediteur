@@ -8,6 +8,7 @@ use App\Domain\Charges\Enums\OrigineDeLaCharge;
 use App\Domain\Charges\Enums\TypeDeCharge;
 use App\Domain\Charges\Enums\ValideePar;
 use App\Domain\Charges\Models\Charge;
+use App\Domain\Charges\Models\PieceDeCharge;
 use App\Domain\Charges\Models\TypeDeChargeDeLaSociete;
 use App\Domain\Charges\Services\PiecesDesCharges;
 use App\Domain\Charges\Services\TypesDeCharge;
@@ -501,3 +502,167 @@ test('chaque rôle qui voit une page des charges y ajoute une charge avec sa pi�
     'le collaborateur confié' => ['collaborateur'],
     'l’expert-comptable déclaré' => ['expert_comptable'],
 ]);
+
+/**
+ * Pour ce comptable d'un client (le propriétaire du cabinet lié, le
+ * collaborateur à qui le client est confié, l'expert-comptable déclaré) :
+ * le compte, son panneau, l'adresse de la page des charges du client, le
+ * propriétaire du client et sa société.
+ *
+ * @return array{0: User, 1: string, 2: string, 3: User, 4: Societe}
+ */
+function comptableDuClient(TestCaseDuNavigateur $test, string $role): array
+{
+    return (function () use ($role): array {
+        if ($role === 'expert_comptable') {
+            $this->travelTo(self::aParis('2026-03-09 08:00:00'));
+            $magasin = $this->completerIdentiteLegale($this->ouvrirUneSociete(['nom' => 'Lyon 1']));
+            $marc = $this->expertComptable($magasin);
+            $proprietaire = $this->choisirSonMotDePasse($this->proprietaireDe($magasin));
+            $this->travelTo(self::instantDuTest());
+            app(TenantContext::class)->clear();
+
+            return [$marc, 'app', '/app/'.$magasin->uuid.'/charges-de-la-societe', $proprietaire, $magasin->societe()->firstOrFail()];
+        }
+
+        $societe = $this->societeComplete();
+        $client = '/cabinet/'.$societe->cabinet->uuid.'/clients/'.LienCabinet::query()->withoutGlobalScopes()->where('societe_id', $societe->societe->getKey())->sole()->uuid.'/charges';
+        app(TenantContext::class)->clear();
+
+        return [$role === 'collaborateur' ? $societe->collaborateur : $societe->proprietaireDuCabinet, 'cabinet', $client, $societe->proprietaire, $societe->societe];
+    })->call($test);
+}
+
+/**
+ * Le champ de cette ligne de la fenêtre ouverte (« tva_deductible »…).
+ */
+function champDeLaLigne(int $rang, string $nom): string
+{
+    return Navigation::FENETRE.' [id*=".lignes."][id$=".'.$nom.'"] >> nth='.$rang;
+}
+
+test('chaque comptable écrit les chiffres d’une charge du client qui a les siens et la valide, en valide une autre, en renvoie une, corrige une charge validée, en supprime une et télécharge une pièce', function (string $role) {
+    [$comptable, $panneau, $page, $proprietaire, $societe] = comptableDuClient($this, $role);
+    $cadeau = chargeDeposee($proprietaire, $societe, ['type' => 'piliqi:cadeaux', 'fournisseur' => 'Chocolatier', 'numero_piece' => 'C-1', 'lignes' => [['taux' => '2000', 'ht' => '50,00']]]);
+    $loyer = chargeDeposee($proprietaire, $societe, ['numero_piece' => 'Q-1']);
+    $gaz = chargeDeposee($proprietaire, $societe, ['type' => 'piliqi:gaz', 'fournisseur' => 'Gaz du Sud', 'numero_piece' => 'G-1']);
+    $eau = chargeDeposee($proprietaire, $societe, ['type' => 'piliqi:eau', 'fournisseur' => 'Eaux du Nord', 'numero_piece' => 'E-1']);
+    expect($cadeau->total_tva_deductible)->toBe(0);
+
+    $onglet = $this->seConnecter($comptable, panneau: $panneau)->aller($page)->attendre()->verifier()
+        ->nePasVoir('Types de charge')
+        ->nePasVoir('Ajouter un type');
+    cliquerDansLaLigneDeLaCharge($onglet, 'C-1', 'Écrire les chiffres')
+        ->remplirLaLigne('lignes', 0, 'tva_deductible', '10,00')
+        ->soumettre('Enregistrer et valider')
+        ->voir('Chiffres enregistrés.');
+    cliquerDansLaLigneDeLaCharge($onglet, 'Q-1', 'Valider')
+        ->soumettre('Valider')
+        ->voir('Charge validée.');
+    cliquerDansLaLigneDeLaCharge($onglet, 'G-1', 'Renvoyer au client')
+        ->remplir('Votre mot au client', 'Pièce illisible')
+        ->soumettre('Renvoyer')
+        ->voir('Charge renvoyée au client.');
+    cliquerDansLaLigneDeLaCharge($onglet, 'Q-1', 'Corriger');
+    expect(taperLeHt($onglet, 0, '1100,00'))->toBe(['220,00', '1320,00']);
+    expect($onglet->element(champDeLaLigne(0, 'tva_deductible'))->inputValue())->toBe('220,00');
+    $onglet->remplir('Motif de la correction', 'HT mal recopié')
+        ->soumettre('Corriger')
+        ->voir('Charge corrigée.');
+    cliquerDansLaLigneDeLaCharge($onglet, 'E-1', 'Supprimer')
+        ->soumettre('Supprimer')
+        ->voir('Charge supprimée.');
+    cliquerDansLaLigneDeLaCharge($onglet, 'G-1', 'Voir la pièce');
+    expect(array_column($onglet->telechargements(), 'nom'))->toBe(['quittance.pdf']);
+
+    expect([chargeRelue($cadeau)->etat, chargeRelue($cadeau)->total_tva_deductible])->toBe([EtatDeLaCharge::Validee, 1000]);
+    expect([chargeRelue($loyer)->etat, chargeRelue($loyer)->total_tva_deductible, chargeRelue($loyer)->corrections])->toBe([EtatDeLaCharge::Validee, 22000, 1]);
+    expect([chargeRelue($gaz)->etat, chargeRelue($gaz)->motif_renvoi])->toBe([EtatDeLaCharge::Renvoyee, 'Pièce illisible']);
+    expect(Charge::query()->withoutGlobalScopes()->whereKey($eau->getKey())->exists())->toBeFalse();
+})->with([
+    'le propriétaire du cabinet' => ['proprietaire_du_cabinet'],
+    'le collaborateur confié' => ['collaborateur'],
+    'l’expert-comptable déclaré' => ['expert_comptable'],
+]);
+
+test('chaque rôle du client qui dépose une charge en télécharge la pièce et la supprime', function (string $role) {
+    [$compte, $panneau, $page, , , $societeDuCompte] = pageDesChargesDe($this, $role);
+    chargeDeposee($compte, $societeDuCompte, ['type' => 'piliqi:fournitures', 'fournisseur' => 'Papeterie', 'numero_piece' => 'F-9']);
+
+    $onglet = $this->seConnecter($compte, panneau: $panneau)->aller($page)->attendre()->verifier();
+    cliquerDansLaLigneDeLaCharge($onglet, 'F-9', 'Voir la pièce');
+    expect(array_column($onglet->telechargements(), 'nom'))->toBe(['quittance.pdf']);
+    cliquerDansLaLigneDeLaCharge($onglet, 'F-9', 'Supprimer')
+        ->soumettre('Supprimer')
+        ->voir('Charge supprimée.')
+        ->nePasVoir('F-9');
+
+    expect(Charge::query()->withoutGlobalScopes()->where('societe_id', $societeDuCompte->getKey())->count())->toBe(0);
+})->with([
+    'le propriétaire' => ['proprietaire'],
+    'l’administrateur coché' => ['administrateur'],
+    'le responsable coché' => ['responsable'],
+]);
+
+test('le propriétaire et l’administrateur coché choisissent les types habituels, ajoutent un type de la société et le suppriment tant qu’aucune charge ne le porte', function (string $role) {
+    [$compte, $panneau, $page, , , $societeDuCompte] = pageDesChargesDe($this, $role);
+
+    $onglet = $this->seConnecter($compte, panneau: $panneau)->aller($page)->attendre()->verifier()
+        ->nePasVoir('Supprimer un type')
+        ->cliquerSur('Types de charge');
+    $onglet->geste(fn () => $onglet->element(Navigation::FENETRE.' >> label:has-text("Gaz") >> input[type=checkbox]')->check(), 'la case du gaz')
+        ->soumettre('Enregistrer')
+        ->voir('Types de charge enregistrés.')
+        ->attendreQue('document.querySelector(\'tr[data-type-de-charge="piliqi:gaz"]\') !== null', 'le gaz, coché habituel, n’a pas sa ligne');
+    $onglet->cliquerSur('Ajouter un type')
+        ->remplir('Nom du type', 'Ménnage')
+        ->soumettre('Ajouter')
+        ->voir('Type ajouté.')
+        ->cliquerSur('Supprimer un type')
+        ->choisir('Type de la société', 'Ménnage')
+        ->soumettre('Supprimer')
+        ->voir('Type supprimé.')
+        ->nePasVoir('Supprimer un type');
+
+    expect(TypeDeChargeDeLaSociete::query()->withoutGlobalScopes()->where('societe_id', $societeDuCompte->getKey())->count())->toBe(0);
+    expect(in_array(TypeDeCharge::Gaz, app(TypesDeCharge::class)->habituels($societeDuCompte->refresh()), true))->toBeTrue();
+})->with([
+    'le propriétaire' => ['proprietaire'],
+    'l’administrateur coché' => ['administrateur'],
+]);
+
+test('le propriétaire lit la TVA du mois sous le tableau, change de mois, puis confirme un écart de TVA et un doublon probable sur la même charge', function () {
+    $societe = $this->societeComplete();
+    chargeDeposee($societe->proprietaire, $societe->societe, ['type' => 'piliqi:electricite', 'fournisseur' => 'EDF', 'numero_piece' => null, 'lignes' => [['taux' => '2000', 'ht' => '99,96']]]);
+
+    $onglet = $this->seConnecter($societe->proprietaire, panneau: 'societe')
+        ->aller('/societe/'.$societe->societe->uuid.'/charges')->attendre()->verifier()
+        ->attendreQue('document.querySelector(\'[data-tva-du-mois="complete"]\') !== null', 'la page ne montre pas la TVA du mois')
+        ->attendreQue('document.querySelector(\'[data-tva="estimation"]\').textContent.includes("avec 19,99")', 'l’estimation ne compte pas la charge à valider');
+    $onglet->geste(fn () => $onglet->element('[data-filtre-mois-de-la-tva]')->selectOption('2026-02'), 'le choix de février')
+        ->attendreQue('document.querySelector(\'[data-tva="estimation"]\').textContent.includes("avec 0,00")', 'la TVA ne suit pas le mois choisi');
+
+    $onglet->cliquerSur('Ajouter une charge')
+        ->envoyerLeFichier(pieceDeChargeSurLePoste('edf.pdf', 'Facture EDF'))
+        ->choisirDansLaListe('Type de charge', 'Électricité')
+        ->remplir('Fournisseur', 'EDF')
+        ->remplir('Date de la pièce', '2026-03-01');
+    taperLeHt($onglet, 0, '100,00');
+    $onglet->remplirLaLigne('lignes', 0, 'tva', '19,95')
+        ->geste(fn () => $onglet->element(champDeLaLigne(0, 'tva'))->press('Tab'), 'la sortie du champ TVA')
+        ->attendreQue('document.querySelector('.json_encode(Navigation::FENETRE.' [id*=".lignes."][id$=".ttc"]').').value === "119,95"', 'le TTC ne suit pas la TVA recopiée')
+        ->soumettre('Enregistrer (à valider par le comptable)')
+        ->voir('écarte de 0,05 €');
+    $confirmer = Navigation::FENETRE.' input[type=checkbox][id$="confirmer"]';
+    $onglet->geste(fn () => $onglet->element($confirmer)->check(), 'la confirmation de l’écart')
+        ->soumettre('Enregistrer (à valider par le comptable)')
+        ->voir('du même mois et du même montant')
+        ->attendreQue('document.querySelector('.json_encode($confirmer).').checked === false', 'la case n’est pas décochée pour la seconde confirmation')
+        ->geste(fn () => $onglet->element($confirmer)->check(), 'la confirmation du doublon')
+        ->soumettre('Enregistrer (à valider par le comptable)')
+        ->voir('Charge enregistrée.');
+
+    $ajoutee = Charge::query()->withoutGlobalScopes()->where('societe_id', $societe->societe->getKey())->latest('id')->firstOrFail();
+    expect([$ajoutee->total_tva, $ajoutee->tva_a_verifier, Charge::query()->withoutGlobalScopes()->where('societe_id', $societe->societe->getKey())->count()])->toBe([1995, true, 2]);
+    expect(PieceDeCharge::query()->withoutGlobalScopes()->where('charge_id', $ajoutee->getKey())->value('nom'))->toBe('edf.pdf');
+});

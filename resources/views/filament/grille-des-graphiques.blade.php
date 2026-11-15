@@ -45,7 +45,7 @@
                         <div class="piliqi-graphiques__valeur">TVA non applicable (franchise en base)</div>
                     @else
                         <div class="piliqi-graphiques__valeur" data-tva="reelle">{{ $euros($chiffres['tva']['a_payer']) }}</div>
-                        <div class="piliqi-graphiques__precision">collectée {{ $euros($chiffres['tva']['collectee']) }} − déductible {{ $euros($chiffres['tva']['deductible']) }}{{ $chiffres['tva']['avec_les_charges'] ? '' : ' (sans les charges)' }}</div>
+                        <div class="piliqi-graphiques__precision">collectée {{ $euros($chiffres['tva']['collectee']) }} − déductible {{ $euros($chiffres['tva']['deductible']) }}{{ $chiffres['tva']['avec_les_charges'] ? ($chiffres['tva']['sans_celles_de_la_societe'] ? ' (sans les charges de « Toute la société »)' : '') : ' (sans les charges)' }}</div>
                         @if ($chiffres['tva']['estimation'] !== null)
                             <div class="piliqi-graphiques__precision" data-tva="estimation">estimation avec les charges à valider : {{ $euros($chiffres['tva']['estimation']) }}</div>
                         @endif

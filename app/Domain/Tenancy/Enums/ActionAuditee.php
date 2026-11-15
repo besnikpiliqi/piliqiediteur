@@ -126,6 +126,7 @@ enum ActionAuditee: string implements HasLabel
     case TypeDeChargeAjoute = 'type_de_charge_ajoute';
     case TypeDeChargeArchive = 'type_de_charge_archive';
     case TypeDeChargeRestaure = 'type_de_charge_restaure';
+    case TypeDeChargeSupprime = 'type_de_charge_supprime';
     case TypesDeChargeHabituelsChoisis = 'types_de_charge_habituels_choisis';
 
     /**
@@ -251,6 +252,7 @@ enum ActionAuditee: string implements HasLabel
             self::TypeDeChargeAjoute => 'Type de charge ajouté',
             self::TypeDeChargeArchive => 'Type de charge archivé',
             self::TypeDeChargeRestaure => 'Type de charge restauré',
+            self::TypeDeChargeSupprime => 'Type de charge supprimé',
             self::TypesDeChargeHabituelsChoisis => 'Types de charge habituels choisis',
         };
     }
@@ -541,7 +543,7 @@ enum ActionAuditee: string implements HasLabel
             self::PieceDeChargeBloquee => ['charge', 'piece', 'menace'],
             // Un type de charge de la société, et les types de la liste de
             // PILIQI qu'elle coche « habituels ».
-            self::TypeDeChargeAjoute, self::TypeDeChargeArchive, self::TypeDeChargeRestaure => ['type', 'nature'],
+            self::TypeDeChargeAjoute, self::TypeDeChargeArchive, self::TypeDeChargeRestaure, self::TypeDeChargeSupprime => ['type', 'nature'],
             self::TypesDeChargeHabituelsChoisis => ['types'],
         };
     }

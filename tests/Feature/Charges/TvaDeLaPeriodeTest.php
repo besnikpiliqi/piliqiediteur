@@ -11,6 +11,7 @@ use App\Domain\Charges\Enums\NatureDeCharge;
 use App\Domain\Charges\Enums\TypeDeCharge;
 use App\Domain\Charges\Services\PropositionsDeTva;
 use App\Domain\Charges\Services\TvaDeLaPeriode;
+use App\Domain\Charges\Support\MontantsDeTva;
 use App\Domain\Charges\Support\SaisieDeCharge;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\Fournisseur;
@@ -59,7 +60,7 @@ class TvaDeLaPeriodeTest extends TestCase
     {
         $magasin = $this->preparer();
 
-        $tva = app(TvaDeLaPeriode::class)->deLaSociete($magasin->societe()->firstOrFail(), '2026-05');
+        $tva = $this->tvaDuProprietaire($magasin->societe()->firstOrFail(), '2026-05');
 
         $this->assertNotNull($tva);
         $this->assertSame(2400, $tva->collectee());
@@ -68,7 +69,7 @@ class TvaDeLaPeriodeTest extends TestCase
         $this->assertSame(7360, $tva->deductibleDesChargesAValider);
         $this->assertSame(-24600, $tva->reelle());
         $this->assertSame(-31960, $tva->estimee());
-        $this->assertSame(0, app(TvaDeLaPeriode::class)->deLaSociete($magasin->societe()->firstOrFail(), '2026-04')?->estimee());
+        $this->assertSame(0, $this->tvaDuProprietaire($magasin->societe()->firstOrFail(), '2026-04')?->estimee());
     }
 
     public function test_l_autoliquidation_d_un_fournisseur_hors_de_france_est_sans_effet_sur_la_tva_a_payer(): void
@@ -80,7 +81,7 @@ class TvaDeLaPeriodeTest extends TestCase
         $charge = $this->deposer($proprietaire, $magasin->societe, SaisieDeCharge::duFormulaire(['type' => 'piliqi:abonnements_logiciels', 'fournisseur' => 'Logiciel Ltd', 'numero_piece' => 'INV-1', 'date_piece' => '2026-05-03', 'fournisseur_hors_france' => true, 'lignes' => [['taux' => 2000, 'ht' => '100.00']]]));
         app(ValiderUneChargeAction::class)->handle($proprietaire, $magasin->societe, $charge->uuid);
 
-        $tva = app(TvaDeLaPeriode::class)->deLaSociete($magasin->societe()->firstOrFail(), '2026-05');
+        $tva = $this->tvaDuProprietaire($magasin->societe()->firstOrFail(), '2026-05');
 
         $this->assertSame([10000, 2000, 10000], [$charge->total_ht, $charge->total_tva, $charge->total_ttc]);
         $this->assertSame(2000, $tva?->autoliquideeValidee);
@@ -92,7 +93,7 @@ class TvaDeLaPeriodeTest extends TestCase
     {
         $magasin = $this->ouvrirUneSociete(['regime_tva' => RegimeTva::FranchiseEnBase]);
 
-        $this->assertNull(app(TvaDeLaPeriode::class)->deLaSociete($magasin->societe()->firstOrFail(), '2026-05'));
+        $this->assertNull($this->tvaDuProprietaire($magasin->societe()->firstOrFail(), '2026-05'));
     }
 
     public function test_les_propositions_de_tva_deductible_et_de_mois(): void
@@ -143,13 +144,64 @@ class TvaDeLaPeriodeTest extends TestCase
         $duProprietaire = $this->chiffres($this->proprietaireDe($magasin), $societe);
         $delAdministrateur = $this->chiffres($administrateur, $societe);
 
-        $this->assertSame(['franchise' => false, 'a_payer' => -24600, 'collectee' => 2400, 'deductible' => 27000, 'estimation' => -31960, 'avec_les_charges' => true], $duProprietaire['tva']);
-        $this->assertSame(['franchise' => false, 'a_payer' => -600, 'collectee' => 400, 'deductible' => 1000, 'estimation' => null, 'avec_les_charges' => false], $delAdministrateur['tva']);
+        $this->assertSame(['franchise' => false, 'a_payer' => -24600, 'collectee' => 2400, 'deductible' => 27000, 'estimation' => -31960, 'avec_les_charges' => true, 'sans_celles_de_la_societe' => false], $duProprietaire['tva']);
+        $this->assertSame(['franchise' => false, 'a_payer' => -600, 'collectee' => 400, 'deductible' => 1000, 'estimation' => null, 'avec_les_charges' => false, 'sans_celles_de_la_societe' => false], $delAdministrateur['tva']);
 
         $carte = CarteDuTableauDeBord::parDefaut(Graphique::TvaAPayerParMois);
         $serie = app(SeriesDesGraphiques::class)->pour(new CalculDesSeries(app(PerimetreDesGraphiques::class)->deLaSociete($administrateur, $societe), new ReglagesDuTableauDeBord([$carte]), [$carte]))[Graphique::TvaAPayerParMois->value];
         $this->assertSame(SeriesDesGraphiques::SANS_LES_CHARGES, $serie->note);
         $this->assertSame(['TVA collectée', 'TVA déductible', 'TVA à payer'], array_column($serie->jeux, 'libelle'));
+    }
+
+    /**
+     * Un administrateur qui ne voit pas toutes les ventes de Paris : la TVA
+     * de son tableau de bord ne compte que Lyon, avec les seules charges de
+     * Lyon ; ni celles de Paris, qu'il voit pourtant, ni celles de « Toute
+     * la société », que l'on opposerait aux seules ventes de Lyon, et la
+     * phrase grise le dit. Le propriétaire compte tout : 240,00 € + 20,00 €
+     * + 10,00 € de TVA déductible à valider.
+     */
+    public function test_la_tva_du_tableau_de_bord_ne_compte_que_les_charges_des_magasins_qu_elle_compte(): void
+    {
+        $this->disqueDesCharges();
+        $this->travelTo(self::aParis('2026-05-20 12:00:00'));
+        $lyon = $this->completerIdentiteLegale($this->ouvrirUneSociete(['nom' => 'Lyon']));
+        $paris = $this->ouvrirUnAutreMagasin($lyon, ['nom' => 'Paris']);
+        $societe = $lyon->societe()->firstOrFail();
+        $modele = [...PermissionRegistry::modeleDeLAdministrateur($societe->type_activite), PermissionRegistry::GRAPHIQUES_VOIR, PermissionRegistry::CHARGES_AJOUTER];
+        $administrateur = $this->administrateur($lyon, [$lyon->id, $paris->id], autorisationsMagasin: [
+            $lyon->id => $modele,
+            $paris->id => array_values(array_diff($modele, [PermissionRegistry::FACTURE_VIEW_TOUTES])),
+        ]);
+        $proprietaire = $this->proprietaireDe($lyon);
+        app(TenantContext::class)->clear();
+        $this->deposer($proprietaire, $societe, $this->saisie(champs: ['numero_piece' => 'P-1', 'magasin' => (string) $paris->uuid]));
+        $this->deposer($proprietaire, $societe, $this->saisie('piliqi:honoraires', '100.00', champs: ['fournisseur' => 'Avocat', 'numero_piece' => 'H-1']));
+        $this->deposer($proprietaire, $societe, $this->saisie('piliqi:fournitures', '50.00', champs: ['fournisseur' => 'Papeterie', 'numero_piece' => 'F-1', 'magasin' => (string) $lyon->uuid]));
+
+        $delAdministrateur = $this->chiffres($administrateur, $societe)['tva'];
+        $duProprietaire = $this->chiffres($proprietaire, $societe)['tva'];
+
+        $this->assertSame([-1000, true, true], [$delAdministrateur['estimation'], $delAdministrateur['avec_les_charges'], $delAdministrateur['sans_celles_de_la_societe']]);
+        $this->assertSame([-27000, false], [$duProprietaire['estimation'], $duProprietaire['sans_celles_de_la_societe']]);
+
+        $carte = CarteDuTableauDeBord::parDefaut(Graphique::TvaAPayerParMois);
+        $serie = app(SeriesDesGraphiques::class)->pour(new CalculDesSeries(app(PerimetreDesGraphiques::class)->deLaSociete($administrateur, $societe), new ReglagesDuTableauDeBord([$carte]), [$carte]))[Graphique::TvaAPayerParMois->value];
+        $this->assertStringContainsString(SeriesDesGraphiques::SANS_LES_CHARGES_DE_LA_SOCIETE, (string) $serie->note);
+        $this->assertStringContainsString('1 magasin n\'est pas compté', (string) $serie->note);
+        $estimation = array_values(array_filter($serie->jeux, fn (array $jeu): bool => $jeu['libelle'] === 'TVA à payer (estimation)'))[0]['valeurs'] ?? [];
+        $this->assertSame(-1000, end($estimation));
+    }
+
+    /**
+     * La TVA du mois telle que le propriétaire la voit, dans l'espace de la
+     * société (voir TvaDeLaPeriode::duPerimetre()).
+     */
+    private function tvaDuProprietaire(Societe $societe, string $mois): ?MontantsDeTva
+    {
+        app(TenantContext::class)->clear();
+
+        return app(TvaDeLaPeriode::class)->duPerimetre(app(PerimetreDesGraphiques::class)->deLaSociete($societe->proprietaire()->firstOrFail(), $societe), $mois);
     }
 
     private function preparer(): Magasin

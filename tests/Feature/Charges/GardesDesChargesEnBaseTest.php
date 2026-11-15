@@ -66,6 +66,27 @@ class GardesDesChargesEnBaseTest extends TestCase
         $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('pieces_de_charge')->where('id', $piece->id)->update(['nom' => 'autre.pdf'])), QueryException::class, 'pieces_de_charge_jamais_modifiees');
     }
 
+    /**
+     * Les lignes d'une charge validée ne s'ajoutent ni ne s'effacent hors de
+     * la transaction de sa correction, même de sa version : une ligne
+     * fantôme à 10 % ne s'ajoute pas à une charge validée jamais corrigée.
+     */
+    public function test_les_lignes_d_une_charge_validee_ne_s_ecrivent_que_dans_sa_correction(): void
+    {
+        $charge = $this->deposer($this->proprietaire, $this->societe);
+        app(ValiderUneChargeAction::class)->handle($this->proprietaire, $this->societe, $charge->uuid);
+        $ligne = DB::table('lignes_de_charge')->where('charge_id', $charge->id)->first();
+        $this->assertNotNull($ligne);
+
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('lignes_de_charge')->insert([...(array) $ligne, 'id' => null, 'taux' => 1000, 'version' => 0])), QueryException::class, 'lignes_de_charge_d_une_charge_validee');
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('lignes_de_charge')->where('id', $ligne->id)->delete()), QueryException::class, 'lignes_de_charge_d_une_charge_validee');
+        $this->assertSame(1, DB::table('lignes_de_charge')->where('charge_id', $charge->id)->count());
+
+        DB::table('charges')->where('id', $charge->id)->update(['corrections' => 1]);
+        $this->assertSame(1, DB::table('lignes_de_charge')->where('id', $ligne->id)->delete());
+        $this->assertTrue(DB::table('lignes_de_charge')->insert(array_diff_key([...(array) $ligne, 'version' => 1], ['id' => true])));
+    }
+
     public function test_avant_sa_validation_une_charge_n_a_aucune_correction(): void
     {
         $charge = $this->deposer($this->proprietaire, $this->societe);

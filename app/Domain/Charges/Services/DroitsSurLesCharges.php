@@ -37,7 +37,10 @@ use App\Models\User;
  *   accorde « Charges : voir, ajouter, saisir et valider » (accordée par
  *   défaut, voir PermissionRegistry::parDefautDuCabinet()) : ils voient,
  *   ajoutent, valident, corrigent et renvoient les charges de « Toute la
- *   société » et des magasins réels que le client leur ouvre ;
+ *   société » et des magasins réels que le client leur ouvre, parmi les
+ *   types que la société propose ; jamais ils ne touchent aux types de la
+ *   société ni à ses types habituels, réglages de la société (décision de
+ *   Claude, D76) ;
  * - les vendeurs, les observateurs et les comptes d'entraînement : rien.
  * Une lecture hors de la société courante, pour un compte d'un cabinet :
  * ses liens ouverts et ses autorisations par client (voir
@@ -175,7 +178,7 @@ final class DroitsSurLesCharges
             return null;
         }
 
-        return new AccesAuxCharges($compte, $societe, true, $this->expertsComptables->idsDesMagasinsOuverts($compte), ValideePar::ExpertComptable, true);
+        return new AccesAuxCharges($compte, $societe, true, $this->expertsComptables->idsDesMagasinsOuverts($compte), ValideePar::ExpertComptable, false);
     }
 
     private function duClient(User $compte, LienCabinet $lien, Societe $client): ?AccesAuxCharges
@@ -186,6 +189,6 @@ final class DroitsSurLesCharges
 
         $ouverts = ValeursLues::entiers(Magasin::query()->where('societe_id', $client->getKey())->whereKey($this->cabinets->idsDesMagasinsOuverts($compte))->orderBy('id')->pluck('id'));
 
-        return new AccesAuxCharges($compte, $client, true, $ouverts, ValideePar::Cabinet, true);
+        return new AccesAuxCharges($compte, $client, true, $ouverts, ValideePar::Cabinet, false);
     }
 }

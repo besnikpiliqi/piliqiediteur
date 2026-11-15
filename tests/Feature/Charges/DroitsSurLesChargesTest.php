@@ -6,15 +6,20 @@ use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Cabinets\Actions\ReglerLesAutorisationsDuCabinetAction;
 use App\Domain\Cabinets\Models\LienCabinet;
 use App\Domain\Charges\Actions\DeposerUneChargeAction;
+use App\Domain\Charges\Actions\GererLesTypesDeChargeAction;
 use App\Domain\Charges\Actions\ValiderUneChargeAction;
 use App\Domain\Charges\Enums\EtatDeLaCharge;
+use App\Domain\Charges\Enums\NatureDeCharge;
 use App\Domain\Charges\Enums\OrigineDeLaCharge;
+use App\Domain\Charges\Enums\TypeDeCharge;
 use App\Domain\Charges\Enums\ValideePar;
 use App\Domain\Charges\Models\Charge;
 use App\Domain\Charges\Services\ChargesDeLaSociete;
 use App\Domain\Charges\Services\DroitsSurLesCharges;
 use App\Domain\Charges\Services\EcritureDUneCharge;
 use App\Domain\Charges\Services\GestesSurLesCharges;
+use App\Domain\Charges\Services\TypesDeCharge;
+use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
@@ -233,5 +238,57 @@ class DroitsSurLesChargesTest extends TestCase
 
         $this->assertNull(app(DroitsSurLesCharges::class)->pour($this->proprietaireDuCabinet($cabinet), $cabinet));
         $this->assertNull(app(DroitsSurLesCharges::class)->pour($this->proprietaire, $cabinet));
+    }
+
+    /**
+     * Les types de la société et ses types habituels sont des réglages de
+     * la société (décision de Claude, D76) : le cabinet lié et
+     * l'expert-comptable déclaré n'y touchent jamais ; le propriétaire et
+     * l'administrateur coché les gèrent.
+     */
+    public function test_ni_le_cabinet_ni_l_expert_comptable_ne_touchent_aux_types_de_la_societe(): void
+    {
+        $collaborateur = $this->collaborateurDuCabinetLie($this->lyon);
+        $type = app(GererLesTypesDeChargeAction::class)->ajouter($this->proprietaire, $this->societe, 'Ménage', NatureDeCharge::Services);
+        app(TenantContext::class)->clear();
+
+        $this->assertFalse(app(DroitsSurLesCharges::class)->pour($collaborateur, $this->societe)?->gereLesTypes);
+        $this->assertThrows(fn () => app(GererLesTypesDeChargeAction::class)->choisirLesHabituels($collaborateur, $this->societe, [TypeDeCharge::Gaz]), AuthorizationException::class, GererLesTypesDeChargeAction::REFUS_DROIT);
+        $this->assertThrows(fn () => app(GererLesTypesDeChargeAction::class)->ajouter($collaborateur, $this->societe, 'Jardinage', NatureDeCharge::Services), AuthorizationException::class, GererLesTypesDeChargeAction::REFUS_DROIT);
+        $this->assertThrows(fn () => app(GererLesTypesDeChargeAction::class)->archiver($collaborateur, $this->societe, (string) $type->uuid, true), AuthorizationException::class, GererLesTypesDeChargeAction::REFUS_DROIT);
+        $this->assertThrows(fn () => app(GererLesTypesDeChargeAction::class)->supprimer($collaborateur, $this->societe, (string) $type->uuid), AuthorizationException::class, GererLesTypesDeChargeAction::REFUS_DROIT);
+        $this->assertSame([TypeDeCharge::Loyer, TypeDeCharge::Electricite], app(TypesDeCharge::class)->habituels($this->societe));
+
+        $autre = $this->ouvrirUneSociete(['nom' => 'Déclarante']);
+        $expert = $this->expertComptable($autre);
+        app(TenantContext::class)->clear();
+        $this->assertFalse(app(DroitsSurLesCharges::class)->pour($expert, $autre->societe)?->gereLesTypes);
+        $this->assertThrows(fn () => app(GererLesTypesDeChargeAction::class)->choisirLesHabituels($expert, $autre->societe, [TypeDeCharge::Gaz]), AuthorizationException::class, GererLesTypesDeChargeAction::REFUS_DROIT);
+
+        $administrateur = $this->administrateur($this->lyon, [CleDuModele::de($this->lyon)], autorisationsMagasin: [PermissionRegistry::CHARGES_AJOUTER]);
+        app(TenantContext::class)->clear();
+        app(GererLesTypesDeChargeAction::class)->choisirLesHabituels($administrateur, $this->societe, [TypeDeCharge::Gaz]);
+        $this->assertSame([TypeDeCharge::Gaz], app(TypesDeCharge::class)->habituels($this->societe));
+    }
+
+    /**
+     * Un type de la société qu'aucune charge ne porte se supprime, inscrit
+     * au journal d'audit ; un type porté par une charge ne se supprime pas :
+     * il s'archive.
+     */
+    public function test_un_type_de_la_societe_jamais_utilise_se_supprime_et_un_type_utilise_s_archive(): void
+    {
+        $erreur = app(GererLesTypesDeChargeAction::class)->ajouter($this->proprietaire, $this->societe, 'Ménnage', NatureDeCharge::Services);
+        $utilise = app(GererLesTypesDeChargeAction::class)->ajouter($this->proprietaire, $this->societe, 'Ménage', NatureDeCharge::Services);
+        app(TenantContext::class)->clear();
+        $this->deposer($this->proprietaire, $this->societe, $this->saisie('societe:'.$utilise->uuid, champs: ['fournisseur' => 'Nettoyage Pro', 'numero_piece' => 'N-1']));
+
+        app(GererLesTypesDeChargeAction::class)->supprimer($this->proprietaire, $this->societe, (string) $erreur->uuid);
+        app(TenantContext::class)->clear();
+        $this->assertThrows(fn () => app(GererLesTypesDeChargeAction::class)->supprimer($this->proprietaire, $this->societe, (string) $utilise->uuid), LogicException::class, GererLesTypesDeChargeAction::REFUS_UTILISE);
+
+        $this->assertSame(['Ménage'], app(TypesDeCharge::class)->tousDeLaSociete($this->societe)->pluck('nom')->all());
+        [$entree] = $this->entreesDAudit($this->societe, ActionAuditee::TypeDeChargeSupprime);
+        $this->assertSame('Ménnage', $entree->anciennes_valeurs['type'] ?? null);
     }
 }

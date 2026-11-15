@@ -31,9 +31,11 @@ use LogicException;
  * autre est déposée. Écrite par le client, elle redevient « à valider »
  * (une charge renvoyée revient ainsi au comptable, son mot effacé), ou
  * « pièce sans chiffres » sans ses chiffres ; écrite par le comptable avec
- * ses chiffres, elle est validée. Une charge validée ne s'écrit plus que
- * par « Corriger » (voir CorrigerUneChargeAction). La saisie s'inscrit au
- * journal d'audit, avec les anciennes et les nouvelles valeurs.
+ * ses chiffres, elle est validée, ses lignes et sa pièce écrites d'abord.
+ * Une charge validée ne s'écrit plus que par « Corriger » (voir
+ * CorrigerUneChargeAction). La saisie s'inscrit au journal d'audit, dans
+ * la chaîne du magasin qu'elle a ensuite, avec les anciennes et les
+ * nouvelles valeurs.
  */
 class SaisirUneChargeAction
 {
@@ -76,27 +78,32 @@ class SaisirUneChargeAction
                 throw new InvalidArgumentException($validee ? DeposerUneChargeAction::REFUS_COMPTABLE_SANS_PIECE : self::REFUS_SANS_PIECE);
             }
 
+            // Les lignes et la pièce s'écrivent tant que la charge n'est pas
+            // validée : ensuite, la base ne les laisse plus changer que par
+            // une correction (voir GardesDesCharges). La validation par le
+            // comptable est la dernière écriture.
             $relue->forceFill([
-                'etat' => match (true) {
-                    $chiffree === null => EtatDeLaCharge::PieceSansChiffres,
-                    $validee => EtatDeLaCharge::Validee,
-                    default => EtatDeLaCharge::AValider,
-                },
+                'etat' => $chiffree === null ? EtatDeLaCharge::PieceSansChiffres : EtatDeLaCharge::AValider,
                 'motif_renvoi' => null,
                 'renvoyee_par' => null,
                 'renvoyee_le' => null,
-                'validee_par' => $validee ? $acces->valideComme : null,
-                'validee_par_compte' => $validee ? $acces->compte->getKey() : null,
-                'validee_le' => $validee ? now() : null,
-            ]);
-
-            $relue->save();
+            ])->save();
             $this->ecriture->ecrireLesLignes($relue, $chiffree, 0);
-            $this->journalAudit->inscrire(ActionAuditee::ChargeSaisie, $acces->compte, $relue->magasin, $avant, ChargesDeLaSociete::valeurs($relue), $relue);
 
             if ($fichier !== null) {
                 $this->pieces->ranger($acces->compte, $relue, $fichier);
             }
+
+            if ($validee) {
+                $relue->forceFill([
+                    'etat' => EtatDeLaCharge::Validee,
+                    'validee_par' => $acces->valideComme,
+                    'validee_par_compte' => $acces->compte->getKey(),
+                    'validee_le' => now(),
+                ])->save();
+            }
+
+            $this->journalAudit->inscrire(ActionAuditee::ChargeSaisie, $acces->compte, $relue->magasin, $avant, ChargesDeLaSociete::valeurs($relue), $relue);
 
             return $relue;
         });

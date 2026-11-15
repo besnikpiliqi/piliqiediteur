@@ -15,7 +15,8 @@ use Illuminate\Database\Eloquent\Builder;
  * « Toute la société », et celles de ces magasins réels (tous pour le
  * propriétaire), les valider (et donc les corriger après leur validation,
  * les renvoyer au client et les supprimer avant), et gérer les types de
- * charge de la société. Le comptable est le cabinet lié ou
+ * charge de la société, réglage de la société que seuls son propriétaire
+ * et l'administrateur coché touchent. Le comptable est le cabinet lié ou
  * l'expert-comptable déclaré : la charge qu'il ajoute naît validée.
  */
 final readonly class AccesAuxCharges

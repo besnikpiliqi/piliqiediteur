@@ -74,6 +74,33 @@ final class Perimetre
     }
 
     /**
+     * La TVA de ces magasins compte-t-elle les charges de « Toute la
+     * société » : seulement quand le périmètre les compte (voir
+     * chargesComptees()) et que tous ses magasins le sont ; sinon la TVA
+     * déductible de toute la société s'opposerait aux ventes de quelques
+     * magasins.
+     *
+     * @param  list<int>  $comptes  les magasins que compte la TVA
+     */
+    public function compteLesChargesDeLaSociete(array $comptes): bool
+    {
+        return ($this->chargesComptees()['de_la_societe'] ?? false)
+            && array_diff(CleDuModele::desModeles($this->magasins), $comptes) === [];
+    }
+
+    /**
+     * Le périmètre compterait les charges de « Toute la société », mais un
+     * de ses magasins n'est pas compté par cette TVA : elle s'en passe, et
+     * le dit.
+     *
+     * @param  list<int>  $comptes  les magasins que compte la TVA
+     */
+    public function laisseLesChargesDeLaSociete(array $comptes): bool
+    {
+        return ($this->chargesComptees()['de_la_societe'] ?? false) && ! $this->compteLesChargesDeLaSociete($comptes);
+    }
+
+    /**
      * Le nom d'un magasin dans le filtre et les graphiques, suivi de
      * « (fermé) » ou « (cédé) » : un magasin fermé compte pour les
      * périodes où il a vendu.

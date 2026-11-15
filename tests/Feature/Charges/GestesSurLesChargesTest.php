@@ -10,6 +10,7 @@ use App\Domain\Charges\Actions\SaisirUneChargeAction;
 use App\Domain\Charges\Actions\SupprimerUneChargeAction;
 use App\Domain\Charges\Actions\ValiderUneChargeAction;
 use App\Domain\Charges\Enums\EtatDeLaCharge;
+use App\Domain\Charges\Enums\ValideePar;
 use App\Domain\Charges\Exceptions\ConfirmationRequiseException;
 use App\Domain\Charges\Models\Charge;
 use App\Domain\Charges\Models\LigneDeCharge;
@@ -17,7 +18,9 @@ use App\Domain\Charges\Models\PieceDeCharge;
 use App\Domain\Charges\Services\ChargesDeLaSociete;
 use App\Domain\Charges\Services\DroitsSurLesCharges;
 use App\Domain\Charges\Services\PiecesDesCharges;
+use App\Domain\Charges\Services\TypesDeCharge;
 use App\Domain\Charges\Support\SaisieDeCharge;
+use App\Domain\Fichiers\PieceDeposee;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
@@ -238,5 +241,100 @@ class GestesSurLesChargesTest extends TestCase
         $this->assertSame('cabinet', $validation->nouvelles_valeurs['validee_par'] ?? null);
         $this->assertSame('quittance.pdf', $piece->nouvelles_valeurs['piece']['nom'] ?? null);
         $this->assertSame('operations', $depot->categorie->value);
+    }
+
+    /**
+     * Le comptable écrit les chiffres d'une charge à valider qui a déjà les
+     * siens, en corrigeant la TVA déductible (un cadeau de moins de 73 €),
+     * puis la valide d'un même geste : les lignes s'écrivent avant la
+     * validation, que la base ne laisse plus les changer ensuite.
+     */
+    public function test_le_comptable_ecrit_les_chiffres_d_une_charge_qui_a_deja_les_siens_et_la_valide(): void
+    {
+        $cadeau = $this->deposer($this->proprietaire, $this->societe, $this->saisie('piliqi:cadeaux', '50.00', champs: ['fournisseur' => 'Chocolatier', 'numero_piece' => 'C-1']));
+        $this->assertSame([EtatDeLaCharge::AValider, 0], [$cadeau->etat, $cadeau->total_tva_deductible]);
+
+        $validee = $this->saisir($this->collaborateur, $this->societe, $cadeau, $this->saisie('piliqi:cadeaux', champs: ['fournisseur' => 'Chocolatier', 'numero_piece' => 'C-1', 'lignes' => [['taux' => 2000, 'ht' => '50.00', 'tva_deductible' => '10.00']]]));
+
+        $this->assertSame([EtatDeLaCharge::Validee, 1000, 1000], [$validee->etat, $validee->total_tva, $validee->total_tva_deductible]);
+        $this->assertSame([[0, 1000]], LigneDeCharge::query()->withoutGlobalScopes()->where('charge_id', $cadeau->getKey())->get()->map(fn (LigneDeCharge $ligne): array => [$ligne->version, $ligne->tva_deductible])->all());
+    }
+
+    public function test_le_comptable_ecrit_les_chiffres_d_une_charge_renvoyee_qui_a_ses_lignes_et_la_valide(): void
+    {
+        $charge = $this->deposer($this->proprietaire, $this->societe, $this->saisie(champs: ['numero_piece' => 'Q-1']));
+        app(RenvoyerUneChargeAction::class)->handle($this->collaborateur, $this->societe, $charge->uuid, 'Mauvais montant');
+
+        $validee = $this->saisir($this->collaborateur, $this->societe, $charge, $this->saisie(ht: '1100.00', champs: ['numero_piece' => 'Q-1']));
+
+        $this->assertSame([EtatDeLaCharge::Validee, null, 22000], [$validee->etat, $validee->motif_renvoi, $validee->total_tva]);
+    }
+
+    /**
+     * Sur une pièce sans chiffres, le comptable écrit les chiffres en
+     * remplaçant la pièce : la pièce d'avant s'efface avant la validation,
+     * et son fichier aussi.
+     */
+    public function test_le_comptable_ecrit_les_chiffres_d_une_piece_sans_chiffres_en_remplacant_sa_piece(): void
+    {
+        $charge = $this->deposer($this->proprietaire, $this->societe, $this->saisie('piliqi:eau', null));
+
+        $validee = $this->saisir($this->collaborateur, $this->societe, $charge, $this->saisie('piliqi:eau', '40.00', taux: 550, champs: ['fournisseur' => 'Eaux du Nord', 'numero_piece' => 'E-7']), $this->piece('facture-eau.pdf'));
+
+        $this->assertSame(EtatDeLaCharge::Validee, $validee->etat);
+        $this->assertSame(['facture-eau.pdf'], PieceDeCharge::query()->withoutGlobalScopes()->where('charge_id', $charge->getKey())->pluck('nom')->all());
+        $this->assertCount(1, Storage::disk(PiecesDesCharges::DISQUE)->allFiles());
+    }
+
+    public function test_l_expert_comptable_declare_ecrit_les_chiffres_d_une_charge_qui_a_les_siens_et_la_valide(): void
+    {
+        $autre = $this->ouvrirUneSociete(['nom' => 'Déclarante']);
+        $expert = $this->expertComptable($autre);
+        $proprietaire = $this->proprietaireDe($autre);
+        app(TenantContext::class)->clear();
+        $charge = $this->deposer($proprietaire, $autre->societe, $this->saisie(champs: ['numero_piece' => 'Q-1']));
+
+        $validee = $this->saisir($expert, $autre->societe, $charge, $this->saisie(ht: '1000.00', champs: ['numero_piece' => 'Q-1', 'lignes' => [['taux' => 2000, 'ht' => '1000.00', 'tva_deductible' => '150.00']]]));
+
+        $this->assertSame([EtatDeLaCharge::Validee, ValideePar::ExpertComptable, 15000], [$validee->etat, $validee->validee_par, $validee->total_tva_deductible]);
+    }
+
+    /**
+     * Une saisie, puis une correction, qui changent le magasin de la charge
+     * s'inscrivent au journal d'audit dans la chaîne du magasin qu'elle a
+     * ensuite, avec l'ancien et le nouveau magasin.
+     */
+    public function test_une_saisie_et_une_correction_qui_changent_le_magasin_l_inscrivent_au_journal(): void
+    {
+        $paris = $this->ouvrirUnAutreMagasin($this->magasin, ['nom' => 'Paris', 'code' => 'PARIS']);
+        app(TenantContext::class)->clear();
+        $charge = $this->deposer($this->proprietaire, $this->societe, $this->saisie(champs: ['numero_piece' => 'Q-1', 'magasin' => (string) $this->magasin->uuid]));
+
+        $this->saisir($this->proprietaire, $this->societe, $charge, $this->saisie(champs: ['numero_piece' => 'Q-1', 'magasin' => (string) $paris->uuid]));
+        [$saisie] = $this->entreesDAudit($this->societe, ActionAuditee::ChargeSaisie);
+        $this->assertSame($paris->getKey(), $saisie->magasin_id);
+        $this->assertSame([$this->magasin->code, 'PARIS'], [$saisie->anciennes_valeurs['magasin']['code_magasin'] ?? null, $saisie->nouvelles_valeurs['magasin']['code_magasin'] ?? null]);
+
+        app(ValiderUneChargeAction::class)->handle($this->collaborateur, $this->societe, $charge->uuid);
+        app(TenantContext::class)->clear();
+        app(CorrigerUneChargeAction::class)->handle($this->collaborateur, $this->societe, $charge->uuid, $this->saisie(champs: ['numero_piece' => 'Q-1', 'magasin' => (string) $this->magasin->uuid]), 'Mauvais magasin');
+        [$correction] = $this->entreesDAudit($this->societe, ActionAuditee::ChargeCorrigee);
+        $this->assertSame($this->magasin->getKey(), $correction->magasin_id);
+        $this->assertSame(['PARIS', $this->magasin->code], [$correction->anciennes_valeurs['magasin']['code_magasin'] ?? null, $correction->nouvelles_valeurs['magasin']['code_magasin'] ?? null]);
+    }
+
+    public function test_un_type_de_la_societe_forge_est_refuse_sans_interroger_la_base(): void
+    {
+        $this->assertThrows(fn () => app(TypesDeCharge::class)->resoudre($this->societe, 'societe:pas-un-uuid'), InvalidArgumentException::class, TypesDeCharge::REFUS_TYPE);
+        $this->assertThrows(fn () => $this->deposer($this->proprietaire, $this->societe, $this->saisie('societe:abc')), InvalidArgumentException::class, TypesDeCharge::REFUS_TYPE);
+    }
+
+    private function saisir(User $auteur, Societe $societe, Charge $charge, SaisieDeCharge $saisie, ?PieceDeposee $piece = null): Charge
+    {
+        app(TenantContext::class)->clear();
+        $saisie = app(SaisirUneChargeAction::class)->handle($auteur, $societe, $charge->uuid, $saisie, $piece);
+        app(TenantContext::class)->clear();
+
+        return Charge::query()->withoutGlobalScopes()->findOrFail($saisie->getKey());
     }
 }

@@ -2,6 +2,7 @@
 
 namespace App\Filament;
 
+use App\Domain\Cabinets\Models\LienCabinet;
 use App\Domain\Cabinets\Services\AccesDesCabinets;
 use App\Domain\Calendrier\Calendrier;
 use App\Domain\Charges\Actions\CorrigerUneChargeAction;
@@ -26,9 +27,12 @@ use App\Domain\Charges\Services\DroitsSurLesCharges;
 use App\Domain\Charges\Services\GestesSurLesCharges;
 use App\Domain\Charges\Services\PiecesDesCharges;
 use App\Domain\Charges\Services\PropositionsDeTva;
+use App\Domain\Charges\Services\TvaDeLaPeriode;
 use App\Domain\Charges\Services\TypesDeCharge;
 use App\Domain\Charges\Support\AccesAuxCharges;
+use App\Domain\Charges\Support\MontantsDeTva;
 use App\Domain\Charges\Support\SaisieDeCharge;
+use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\SaisieDecimale;
 use App\Domain\Fichiers\ControleDesFichiers;
@@ -36,8 +40,12 @@ use App\Domain\Fichiers\EnTetesDesFichiers;
 use App\Domain\Fichiers\Exceptions\PieceBloqueeException;
 use App\Domain\Fichiers\NomDeFichier;
 use App\Domain\Fichiers\PieceDeposee;
+use App\Domain\TableauDeBord\Services\ChargesDuTableauDeBord;
+use App\Domain\TableauDeBord\Services\PerimetreDesGraphiques;
+use App\Domain\TableauDeBord\Support\Perimetre;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
+use App\Domain\Tenancy\Scopes\MagasinScope;
 use App\Domain\Tenancy\Scopes\SocieteScope;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\CleDuModele;
@@ -109,11 +117,23 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  * calculent en direct depuis le HT, sans réécrire le champ en cours de
  * frappe), dit si une charge de ce type est déjà saisie pour ce mois, et
  * demande une confirmation pour un écart de TVA ou un doublon probable.
+ * La TVA déductible et le mois de TVA proposés suivent en direct les
+ * chiffres, le type et les dates, tant que personne ne les a changés ; le
+ * client les voit sans les écrire. Les confirmations données dans une
+ * fenêtre (écart de TVA, doublon probable) valent toutes jusqu'à sa
+ * fermeture. Sous le tableau, la TVA du mois choisi : collectée,
+ * déductible des achats et des charges validées, à payer réelle et
+ * estimée, telle que le tableau de bord de la personne la montre (voir
+ * TvaDeLaPeriode::duPerimetre()), ou, pour qui ne voit pas les graphiques,
+ * celle des seules charges.
+ *
  * Chaque geste passe par l'action du domaine, avec son jeton de demande
  * répétée. Les charges se lisent hors du scope de la société courante,
- * filtrées par la société de l'accès et ses magasins (voir
+ * filtrées par la société de l'accès et ses magasins, limitées aux
+ * colonnes que la page montre et que ses gestes demandent (voir
  * ChargesDeLaSociete) ; les gestes s'exécutent dans le contexte de la
- * société de la charge (voir GestesSurLesCharges).
+ * société de la charge, qu'ils relisent sous son verrou (voir
+ * GestesSurLesCharges).
  */
 final class PageDesCharges extends Component implements HasActions, HasForms, HasTable
 {
@@ -169,6 +189,18 @@ final class PageDesCharges extends Component implements HasActions, HasForms, Ha
 
     public ?string $messageDeConfirmation = null;
 
+    /**
+     * Les confirmations déjà données depuis l'ouverture de la fenêtre : un
+     * écart de TVA et un doublon probable se confirment chacun une fois.
+     *
+     * @var list<string>
+     */
+    #[Locked]
+    public array $confirmationsDonnees = [];
+
+    /** Le mois « AAAA-MM » de la TVA montrée sous le tableau, l'un de ceux de la période. */
+    public string $moisDeLaTva = '';
+
     private ?AccesAuxCharges $accesLu = null;
 
     public function mount(string $ecran = self::SOCIETE, ?string $lien = null): void
@@ -182,6 +214,7 @@ final class PageDesCharges extends Component implements HasActions, HasForms, Ha
         $this->periode = 'civile:'.Calendrier::deParis()->anneeDe(CarbonImmutable::now());
         $this->updatedVue();
         $this->acces();
+        $this->moisDeLaTva = $this->moisDeLaTvaParDefaut();
     }
 
     /**
@@ -217,8 +250,9 @@ final class PageDesCharges extends Component implements HasActions, HasForms, Ha
     public function render(): View
     {
         return view('filament.page-des-charges', [
-            'tableau' => app(ChargesDeLaSociete::class)->tableauDesMois($this->acces(), $this->mois(), $this->magasinDuFiltre()),
+            'tableau' => app(ChargesDeLaSociete::class)->tableauDesMois($this->acces(), $this->mois(), $this->magasinDuFiltre(), $this->magasinFiltre === 'societe'),
             'mois' => $this->mois(),
+            'tva' => $this->tvaDuMois(),
         ]);
     }
 
@@ -242,7 +276,54 @@ final class PageDesCharges extends Component implements HasActions, HasForms, Ha
             $this->periode = array_key_first($this->periodes()) ?? '';
         }
 
+        $this->moisDeLaTva = $this->moisDeLaTvaParDefaut();
         $this->oublierLaCase();
+    }
+
+    public function updatedMoisDeLaTva(): void
+    {
+        if (! in_array($this->moisDeLaTva, $this->mois(), true)) {
+            $this->moisDeLaTva = $this->moisDeLaTvaParDefaut();
+        }
+    }
+
+    /**
+     * La TVA du mois choisi, sur le magasin du filtre : telle que le
+     * tableau de bord de la personne la montre, ventes et achats compris
+     * (voir TvaDeLaPeriode::duPerimetre()) ; pour qui ne voit pas les
+     * graphiques de cet écran, celle des seules charges qu'il voit, sans
+     * les ventes ni les achats ; null dans une société en franchise en base
+     * (TVA non applicable).
+     *
+     * @return array{mois: string, montants: MontantsDeTva, avec_les_ventes: bool, sans_celles_de_la_societe: bool}|null
+     */
+    public function tvaDuMois(): ?array
+    {
+        $acces = $this->acces();
+
+        if ($acces->societe->estEnFranchiseDeTva()) {
+            return null;
+        }
+
+        $mois = in_array($this->moisDeLaTva, $this->mois(), true) ? $this->moisDeLaTva : $this->moisDeLaTvaParDefaut();
+        $perimetre = $this->perimetreDeLaTva();
+
+        if ($perimetre !== null) {
+            $montants = app(TvaDeLaPeriode::class)->duPerimetre($perimetre, $mois);
+
+            return $montants === null ? null : ['mois' => $mois, 'montants' => $montants, 'avec_les_ventes' => true, 'sans_celles_de_la_societe' => $perimetre->laisseLesChargesDeLaSociete(TvaDeLaPeriode::magasinsComptes($perimetre))];
+        }
+
+        $magasin = $this->magasinDuFiltre();
+        $magasins = match (true) {
+            $magasin !== null => [$magasin],
+            $this->magasinFiltre === 'societe' => [],
+            default => CleDuModele::desModeles($this->magasinsVus()),
+        };
+        $deLaSociete = $acces->chargesDeLaSociete && $magasin === null;
+        $charges = ChargesDuTableauDeBord::lire($acces->societe, [$mois], $magasins, $deLaSociete);
+
+        return ['mois' => $mois, 'montants' => TvaDeLaPeriode::parMois([$mois], $magasins, [], [], $charges, $deLaSociete)[$mois], 'avec_les_ventes' => false, 'sans_celles_de_la_societe' => false];
     }
 
     public function updatedVue(): void
@@ -381,7 +462,7 @@ final class PageDesCharges extends Component implements HasActions, HasForms, Ha
             ])
             ->paginated([50])
             ->defaultPaginationPageOption(50)
-            ->headerActions([$this->ajouterUneCharge(), $this->typesDeCharge(), $this->ajouterUnType()])
+            ->headerActions([$this->ajouterUneCharge(), $this->typesDeCharge(), $this->ajouterUnType(), $this->supprimerUnType()])
             ->actions([
                 $this->ecrireLesChiffres(),
                 $this->valider(),
@@ -426,9 +507,11 @@ final class PageDesCharges extends Component implements HasActions, HasForms, Ha
 
     /**
      * La liste : les charges que l'accès voit sur les mois de la période,
-     * selon la vue, le magasin et la case choisis, avec le nom de leur
-     * magasin, de leur type de la société et leur pièce, lus dans la même
-     * requête, chacun filtré par la société de la charge.
+     * selon la vue (« À valider » : les charges à valider et les pièces sans
+     * chiffres), le magasin et la case choisis, limitées aux colonnes que la
+     * liste et ses gestes demandent, avec le nom de leur magasin, de leur
+     * type de la société et leur pièce, lus dans la même requête, chacun
+     * filtré par la société de la charge.
      *
      * @return Builder<Charge>
      */
@@ -437,7 +520,7 @@ final class PageDesCharges extends Component implements HasActions, HasForms, Ha
         $magasin = $this->magasinDuFiltre();
 
         return app(ChargesDeLaSociete::class)->visibles($this->acces())
-            ->select('charges.*')
+            ->select(ChargesDeLaSociete::COLONNES_DE_LA_LISTE)
             ->addSelect([
                 'magasin_nom' => Magasin::query()->select('nom')->whereColumn('magasins.id', 'charges.magasin_id')->whereColumn('magasins.societe_id', 'charges.societe_id')->limit(1),
                 'type_nom' => TypeDeChargeDeLaSociete::query()->withoutGlobalScope(SocieteScope::class)->select('nom')
@@ -448,7 +531,7 @@ final class PageDesCharges extends Component implements HasActions, HasForms, Ha
                     ->whereColumn('pieces_de_charge.charge_id', 'charges.id')->whereColumn('pieces_de_charge.societe_id', 'charges.societe_id')->whereNull('bloquee_le')->limit(1),
             ])
             ->whereIn('charges.mois_tva', $this->mois())
-            ->when($this->vue === 'a_valider', fn (Builder $requete): Builder => $requete->where('charges.etat', EtatDeLaCharge::AValider->value))
+            ->when($this->vue === 'a_valider', fn (Builder $requete): Builder => $requete->whereIn('charges.etat', EtatDeLaCharge::attendantLaValidation()))
             ->when($this->vue === 'renvoyees', fn (Builder $requete): Builder => $requete->where('charges.etat', EtatDeLaCharge::Renvoyee->value))
             ->when($this->magasinFiltre === 'societe', fn (Builder $requete): Builder => $requete->whereNull('charges.magasin_id'))
             ->when($magasin !== null, fn (Builder $requete): Builder => $requete->where('charges.magasin_id', $magasin))
@@ -492,12 +575,7 @@ final class PageDesCharges extends Component implements HasActions, HasForms, Ha
             ->visible(fn (): bool => ! GestesSurLesCharges::touchePlusASesCharges($this->acces()->societe))
             ->action(function (array $data): void {
                 $this->executerAvecConfirmation($data, function (SaisieDeCharge $saisie, array $data): void {
-                    try {
-                        app(DeposerUneChargeAction::class)->handle(CompteConnecte::exiger(), $this->acces()->societe, $saisie, self::pieceDeposee($data), ValeursLues::texteOuNul($data['jeton'] ?? null));
-                    } finally {
-                        PieceDeposee::effacerLesEnvois($data['piece'] ?? []);
-                    }
-
+                    app(DeposerUneChargeAction::class)->handle(CompteConnecte::exiger(), $this->acces()->societe, $saisie, self::pieceDeposee($data), ValeursLues::texteOuNul($data['jeton'] ?? null));
                     Notification::make()->title('Charge enregistrée.')->success()->send();
                 });
             });
@@ -520,12 +598,7 @@ final class PageDesCharges extends Component implements HasActions, HasForms, Ha
             ->visible(fn (Charge $record): bool => ! $record->estValidee() && ! GestesSurLesCharges::touchePlusASesCharges($this->acces()->societe))
             ->action(function (Charge $record, array $data): void {
                 $this->executerAvecConfirmation($data, function (SaisieDeCharge $saisie, array $data) use ($record): void {
-                    try {
-                        app(SaisirUneChargeAction::class)->handle(CompteConnecte::exiger(), $this->acces()->societe, (string) $record->uuid, $saisie, self::pieceDeposee($data), ValeursLues::texteOuNul($data['jeton'] ?? null));
-                    } finally {
-                        PieceDeposee::effacerLesEnvois($data['piece'] ?? []);
-                    }
-
+                    app(SaisirUneChargeAction::class)->handle(CompteConnecte::exiger(), $this->acces()->societe, (string) $record->uuid, $saisie, self::pieceDeposee($data), ValeursLues::texteOuNul($data['jeton'] ?? null));
                     Notification::make()->title('Chiffres enregistrés.')->success()->send();
                 });
             });
@@ -685,6 +758,51 @@ final class PageDesCharges extends Component implements HasActions, HasForms, Ha
     }
 
     /**
+     * Supprimer un type de la société qu'aucune charge ne porte (créé par
+     * erreur) ; un type porté par une charge ne se supprime pas, il
+     * s'archive (voir GererLesTypesDeChargeAction::supprimer()).
+     */
+    private function supprimerUnType(): Action
+    {
+        return Action::make('supprimerUnType')
+            ->label('Supprimer un type')
+            ->icon('heroicon-o-trash')
+            ->color('gray')
+            ->modalHeading('Supprimer un type de charge')
+            ->modalDescription('Seul un type de la société qu\'aucune charge ne porte se supprime ; un type déjà utilisé s\'archive, dans « Types de charge ».')
+            ->form(fn (): array => [
+                Select::make('type')->label('Type de la société')->options(fn (): array => $this->typesSupprimables())->required(),
+            ])
+            ->modalSubmitActionLabel('Supprimer')
+            ->visible(fn (): bool => $this->acces()->gereLesTypes && ! GestesSurLesCharges::touchePlusASesCharges($this->acces()->societe) && $this->typesSupprimables() !== [])
+            ->action(function (array $data): void {
+                static::executerLeGeste(function () use ($data): void {
+                    app(GererLesTypesDeChargeAction::class)->supprimer(CompteConnecte::exiger(), $this->acces()->societe, ValeursLues::texte($data['type'] ?? ''));
+                    Notification::make()->title('Type supprimé.')->success()->send();
+                });
+            });
+    }
+
+    /**
+     * Les types de la société qu'aucune charge ne porte, par nom : ceux qui
+     * se suppriment.
+     *
+     * @return array<string, string>
+     */
+    private function typesSupprimables(): array
+    {
+        $acces = $this->acces();
+
+        return TypeDeChargeDeLaSociete::query()->withoutGlobalScope(SocieteScope::class)
+            ->where('societe_id', $acces->societe->getKey())
+            ->whereNotIn('id', Charge::query()->withoutGlobalScope(SocieteScope::class)->select('type_de_la_societe_id')->where('societe_id', $acces->societe->getKey())->whereNotNull('type_de_la_societe_id'))
+            ->orderBy('nom_cle')
+            ->get(['uuid', 'nom'])
+            ->mapWithKeys(fn (TypeDeChargeDeLaSociete $type): array => [(string) $type->uuid => (string) $type->nom])
+            ->all();
+    }
+
+    /**
      * Les champs de la fenêtre C2.
      *
      * @return list<\Filament\Forms\Components\Component>
@@ -707,21 +825,28 @@ final class PageDesCharges extends Component implements HasActions, HasForms, Ha
         return [
             ...$champs,
             Grid::make(3)->schema([
-                Select::make('type')->label('Type de charge')->options(app(TypesDeCharge::class)->options($acces->societe))->required()->live()->searchable(),
+                Select::make('type')->label('Type de charge')->options(app(TypesDeCharge::class)->options($acces->societe))->required()->live()->searchable()
+                    ->afterStateUpdated(function (Get $get, Set $set, mixed $old): void {
+                        $this->suivreLeMois($get, $set, $this->moisPropose($old, $get('date_piece'), $get('date_paiement')));
+                        self::suivreLesDeductibles($get, $set, self::typeDePiliqi($old), (bool) $get('vehicule_utilitaire'));
+                    }),
                 TextInput::make('fournisseur')->label('Fournisseur')->datalist(fn (): array => $this->fournisseursProposes())->maxLength(120)
-                    ->helperText('Texte libre ou un fournisseur déjà connu ; aucune fiche de fournisseur de marchandises n\'est créée.'),
+                    ->helperText('Texte libre, ou un fournisseur de vos magasins ou de vos charges ; aucune fiche de fournisseur n\'est créée.'),
                 TextInput::make('numero_piece')->label('N° de la pièce')->maxLength(60)->helperText('Facultatif pour un ticket.'),
-                DatePicker::make('date_piece')->label('Date de la pièce')->native()->required()->live(),
-                DatePicker::make('date_paiement')->label('Date de paiement')->native()->live(),
-                TextInput::make('mois_tva')->label('Mois de TVA')->type('month')->live()
+                DatePicker::make('date_piece')->label('Date de la pièce')->native()->required()->live()
+                    ->afterStateUpdated(fn (Get $get, Set $set, mixed $old) => $this->suivreLeMois($get, $set, $this->moisPropose($get('type'), $old, $get('date_paiement')))),
+                DatePicker::make('date_paiement')->label('Date de paiement')->native()->live()
+                    ->afterStateUpdated(fn (Get $get, Set $set, mixed $old) => $this->suivreLeMois($get, $set, $this->moisPropose($get('type'), $get('date_piece'), $old))),
+                TextInput::make('mois_tva')->label($acces->valide() ? 'Mois de TVA' : 'Mois de TVA proposé')->type('month')->live()
                     ->helperText(fn (Get $get): ?string => $this->phraseDuMois($get))
-                    ->visible($acces->valide()),
+                    ->disabled(! $acces->valide()),
                 Select::make('magasin')->label('Magasin concerné')->options(fn (): array => $this->magasinsDeLaSaisie())->selectablePlaceholder(false)
                     ->required($this->ecran === self::MAGASIN || ! $acces->chargesDeLaSociete),
                 Checkbox::make('fournisseur_hors_france')->label('Fournisseur établi hors de France')->live()
                     ->afterStateUpdated(fn (Get $get, Set $set) => self::recalculerLesLignes($get, $set))
                     ->helperText('Autoliquidation : la ligne se saisit HT, sa TVA est à la fois due et déductible, sans effet sur la TVA à payer.'),
                 Checkbox::make('vehicule_utilitaire')->label('Véhicule utilitaire (100 %)')->live()
+                    ->afterStateUpdated(fn (Get $get, Set $set, mixed $old) => self::suivreLesDeductibles($get, $set, self::typeDePiliqi($get('type')), (bool) $old))
                     ->helperText('Sinon véhicule de tourisme (80 % de la TVA déductible).')
                     ->visible(fn (Get $get): bool => $get('type') === TypesDeCharge::PILIQI.TypeDeCharge::Carburant->value),
             ]),
@@ -735,25 +860,26 @@ final class PageDesCharges extends Component implements HasActions, HasForms, Ha
                     TextInput::make('ht')->label('HT')->inputMode('decimal')->live(onBlur: true)
                         ->afterStateUpdated(fn (Get $get, Set $set) => self::calculerDepuisLeHt($get, $set)),
                     TextInput::make('tva')->label('TVA')->inputMode('decimal')->live(onBlur: true)
-                        ->afterStateUpdated(function (Get $get, Set $set): void {
+                        ->afterStateUpdated(function (Get $get, Set $set, mixed $old): void {
                             $ht = self::centimes($get('ht'));
                             $tva = self::centimes($get('tva'));
 
                             if ($ht !== null && $tva !== null) {
                                 $set('ttc', self::enSaisie(ChiffrageDUneCharge::ttcCalcule($ht, $tva, (bool) $get('../../fournisseur_hors_france'))));
                             }
+
+                            self::suivreLaDeductible($get, $set, '', self::centimes($old), $tva, self::typeDePiliqi($get('../../type')), (bool) $get('../../vehicule_utilitaire'), self::typeDePiliqi($get('../../type')), (bool) $get('../../vehicule_utilitaire'));
                         }),
                     TextInput::make('ttc')->label('TTC')->inputMode('decimal'),
-                    TextInput::make('tva_deductible')->label('TVA déductible')->inputMode('decimal')
+                    TextInput::make('tva_deductible')->label($acces->valide() ? 'TVA déductible' : 'TVA déductible proposée')->inputMode('decimal')
                         ->helperText(fn (Get $get): ?string => PropositionsDeTva::raisonDeLaDeduction(self::typeDePiliqi($get('../../type')), (bool) $get('../../vehicule_utilitaire')))
-                        ->visible($acces->valide()),
+                        ->disabled(! $acces->valide()),
                 ])
-                ->columns($acces->valide() ? 5 : 4)
+                ->columns(5)
                 ->addActionLabel('Ajouter un autre taux')
                 ->defaultItems(0)
                 ->reorderable(false)
-                ->columnSpanFull()
-                ->helperText(fn (Get $get): ?string => $acces->valide() ? null : PropositionsDeTva::raisonDeLaDeduction(self::typeDePiliqi($get('type')), (bool) $get('vehicule_utilitaire'))),
+                ->columnSpanFull(),
             Textarea::make('note')->label('Note')->maxLength(1000)->rows(2)->columnSpanFull(),
             Checkbox::make('confirmer')->label(fn (): string => (string) $this->messageDeConfirmation)->columnSpanFull()
                 ->visible(fn (): bool => $this->confirmationDemandee !== null),
@@ -763,28 +889,44 @@ final class PageDesCharges extends Component implements HasActions, HasForms, Ha
     /**
      * Enregistre la saisie de la fenêtre ; quand l'action demande une
      * confirmation (un écart de TVA au-delà d'un centime, un doublon
-     * probable), la fenêtre reste ouverte et montre la case qui la donne.
+     * probable), la fenêtre reste ouverte et montre la case, décochée, qui
+     * la donne ; chaque confirmation donnée vaut jusqu'à la fermeture de la
+     * fenêtre, et l'envoi suivant les passe toutes.
      *
      * @param  array<string, mixed>  $data
      * @param  \Closure(SaisieDeCharge, array<string, mixed>): void  $geste
      */
     private function executerAvecConfirmation(array $data, \Closure $geste): void
     {
-        $confirme = (bool) ($data['confirmer'] ?? false);
-        $deja = $this->confirmationDemandee;
+        if ((bool) ($data['confirmer'] ?? false) && $this->confirmationDemandee !== null && ! in_array($this->confirmationDemandee, $this->confirmationsDonnees, true)) {
+            $this->confirmationsDonnees[] = $this->confirmationDemandee;
+        }
 
         try {
             $saisie = SaisieDeCharge::duFormulaire(
                 [...$data, 'magasin' => self::saisi($data['magasin'] ?? null)],
-                confirmeLesEcarts: $confirme && $deja === ConfirmationRequiseException::ECARTS,
-                confirmeLeDoublon: $confirme && $deja === ConfirmationRequiseException::DOUBLON,
+                confirmeLesEcarts: in_array(ConfirmationRequiseException::ECARTS, $this->confirmationsDonnees, true),
+                confirmeLeDoublon: in_array(ConfirmationRequiseException::DOUBLON, $this->confirmationsDonnees, true),
             );
             $geste($saisie, $data);
+            // Le fichier envoyé ne s'efface qu'une fois la charge enregistrée :
+            // après une confirmation demandée ou un refus, la fenêtre reste
+            // ouverte et l'envoi suivant le reprend.
+            PieceDeposee::effacerLesEnvois($data['piece'] ?? []);
             $this->confirmationDemandee = null;
+            $this->confirmationsDonnees = [];
             $this->accesLu = null;
         } catch (ConfirmationRequiseException $demande) {
+            // Une nouvelle confirmation se donne pour elle-même : sa case se
+            // décoche, celles d'avant restent données.
             $this->confirmationDemandee = $demande->motif;
             $this->messageDeConfirmation = $demande->getMessage();
+            $rang = array_key_last($this->mountedTableActionsData ?? []);
+
+            if ($rang !== null) {
+                $this->mountedTableActionsData[$rang]['confirmer'] = false;
+            }
+
             Notification::make()->title($demande->getMessage())->warning()->send();
 
             throw new Halt;
@@ -866,9 +1008,13 @@ final class PageDesCharges extends Component implements HasActions, HasForms, Ha
             return;
         }
 
+        $tvaAvant = self::centimes($get('tva'));
         $tva = ChiffrageDUneCharge::tvaCalculee($ht, $taux);
         $set('tva', self::enSaisie($tva));
         $set('ttc', self::enSaisie(ChiffrageDUneCharge::ttcCalcule($ht, $tva, (bool) $get('../../fournisseur_hors_france'))));
+        $type = self::typeDePiliqi($get('../../type'));
+        $vehicule = (bool) $get('../../vehicule_utilitaire');
+        self::suivreLaDeductible($get, $set, '', $tvaAvant, $tva, $type, $vehicule, $type, $vehicule);
     }
 
     /**
@@ -887,8 +1033,81 @@ final class PageDesCharges extends Component implements HasActions, HasForms, Ha
                 $tva = ChiffrageDUneCharge::tvaCalculee($ht, $taux);
                 $set('lignes.'.$cle.'.tva', self::enSaisie($tva));
                 $set('lignes.'.$cle.'.ttc', self::enSaisie(ChiffrageDUneCharge::ttcCalcule($ht, $tva, (bool) $get('fournisseur_hors_france'))));
+                $type = self::typeDePiliqi($get('type'));
+                $vehicule = (bool) $get('vehicule_utilitaire');
+                self::suivreLaDeductible($get, $set, 'lignes.'.$cle.'.', self::centimes($ligne['tva'] ?? null), $tva, $type, $vehicule, $type, $vehicule);
             }
         }
+    }
+
+    /**
+     * Le type ou le véhicule du carburant change : la TVA déductible de
+     * chaque ligne suit la nouvelle proposition, tant qu'elle valait celle
+     * d'avant.
+     */
+    private static function suivreLesDeductibles(Get $get, Set $set, ?TypeDeCharge $typeAvant, bool $vehiculeAvant): void
+    {
+        $type = self::typeDePiliqi($get('type'));
+        $vehicule = (bool) $get('vehicule_utilitaire');
+
+        foreach (array_keys(ValeursLues::tableau($get('lignes') ?? [])) as $cle) {
+            $tva = self::centimes($get('lignes.'.$cle.'.tva'));
+            self::suivreLaDeductible($get, $set, 'lignes.'.$cle.'.', $tva, $tva, $typeAvant, $vehiculeAvant, $type, $vehicule);
+        }
+    }
+
+    /**
+     * La TVA déductible de la ligne de ce chemin suit, en direct, ce que
+     * PILIQI propose (voir PropositionsDeTva) quand sa TVA, son type ou le
+     * véhicule changent, tant qu'elle est vide ou vaut la proposition
+     * d'avant : celle qu'une personne a écrite elle-même ne se réécrit
+     * jamais.
+     */
+    private static function suivreLaDeductible(Get $get, Set $set, string $chemin, ?int $tvaAvant, ?int $tva, ?TypeDeCharge $typeAvant, bool $vehiculeAvant, ?TypeDeCharge $type, bool $vehicule): void
+    {
+        $actuelle = self::centimes($get($chemin.'tva_deductible'));
+
+        if ($actuelle !== null && ($tvaAvant === null || $actuelle !== PropositionsDeTva::tvaDeductible($typeAvant, $vehiculeAvant, $tvaAvant))) {
+            return;
+        }
+
+        $set($chemin.'tva_deductible', $tva === null ? null : self::enSaisie(PropositionsDeTva::tvaDeductible($type, $vehicule, $tva)));
+    }
+
+    /**
+     * Le mois de TVA suit, en direct, celui que PILIQI propose quand le
+     * type ou une date change, tant qu'il est vide ou vaut la proposition
+     * d'avant : celui que le comptable a choisi lui-même ne se réécrit
+     * jamais.
+     */
+    private function suivreLeMois(Get $get, Set $set, ?string $proposeAvant): void
+    {
+        $actuel = self::saisi($get('mois_tva'));
+        $propose = $this->moisPropose($get('type'), $get('date_piece'), $get('date_paiement'));
+
+        if ($propose === null || ($actuel !== null && $actuel !== $proposeAvant)) {
+            return;
+        }
+
+        $set('mois_tva', $propose);
+    }
+
+    /**
+     * Le mois de TVA que PILIQI propose pour ce type et ces dates ; null
+     * sans type ou sans date de pièce valable.
+     */
+    private function moisPropose(mixed $type, mixed $datePiece, mixed $datePaiement): ?string
+    {
+        $type = self::saisi($type);
+        $date = self::saisi($datePiece);
+
+        if ($type === null || $date === null || Calendrier::jourValide($date) === null) {
+            return null;
+        }
+
+        $paiement = self::saisi($datePaiement);
+
+        return PropositionsDeTva::moisDeTva($this->natureDuType($type), $date, $paiement !== null && Calendrier::jourValide($paiement) !== null ? $paiement : null);
     }
 
     private static function centimes(mixed $saisie): ?int
@@ -970,6 +1189,7 @@ final class PageDesCharges extends Component implements HasActions, HasForms, Ha
     {
         $this->confirmationDemandee = null;
         $this->messageDeConfirmation = null;
+        $this->confirmationsDonnees = [];
 
         return $donnees;
     }
@@ -1045,15 +1265,26 @@ final class PageDesCharges extends Component implements HasActions, HasForms, Ha
     }
 
     /**
-     * Les fournisseurs proposés à la saisie : ceux des charges que l'accès
-     * voit déjà, sans doublon, par nom.
+     * Les fournisseurs proposés à la saisie, sans en créer de fiche : ceux
+     * des charges que l'accès voit déjà, et les fournisseurs non archivés
+     * des magasins réels qu'il voit, leur nom seulement, lus filtrés par la
+     * société et ces magasins ; sans doublon, par nom.
      *
      * @return list<string>
      */
     private function fournisseursProposes(): array
     {
-        return ValeursLues::textes(app(ChargesDeLaSociete::class)->visibles($this->acces())
+        $acces = $this->acces();
+        $desCharges = ValeursLues::textes(app(ChargesDeLaSociete::class)->visibles($acces)
             ->whereNotNull('charges.fournisseur')->distinct()->orderBy('charges.fournisseur')->limit(200)->pluck('charges.fournisseur'));
+        $desMagasins = ValeursLues::textes(Fournisseur::query()->withoutGlobalScope(MagasinScope::class)
+            ->whereIn('magasin_id', Magasin::query()->select('id')->where('societe_id', $acces->societe->getKey())->where('est_demonstration', false)
+                ->when($acces->magasins !== null, fn (Builder $requete): Builder => $requete->whereKey($acces->magasins ?? [])))
+            ->distinct()->orderBy('nom')->limit(200)->pluck('nom'));
+        $noms = array_values(array_unique([...$desCharges, ...$desMagasins]));
+        sort($noms);
+
+        return $noms;
     }
 
     /**
@@ -1066,9 +1297,52 @@ final class PageDesCharges extends Component implements HasActions, HasForms, Ha
 
     private function clientDuLien(): ?Societe
     {
-        $lien = $this->lien === null ? null : app(AccesDesCabinets::class)->liensOuverts(CompteConnecte::exiger())->parUuid($this->lien)->first();
+        $lien = $this->lienDuClient();
 
         return $lien === null ? null : Societe::query()->whereKey($lien->societe_id)->first();
+    }
+
+    private function lienDuClient(): ?LienCabinet
+    {
+        return $this->lien === null ? null : app(AccesDesCabinets::class)->liensOuverts(CompteConnecte::exiger())->parUuid($this->lien)->first();
+    }
+
+    /**
+     * Le mois de la TVA par défaut : le mois en cours quand il est dans la
+     * période, sinon son dernier mois.
+     */
+    private function moisDeLaTvaParDefaut(): string
+    {
+        $mois = $this->mois();
+        $ceMois = substr(Calendrier::deParis()->aujourdhui(), 0, 7);
+
+        return in_array($ceMois, $mois, true) ? $ceMois : $mois[count($mois) - 1];
+    }
+
+    /**
+     * Le périmètre des graphiques de cet écran pour le compte connecté (voir
+     * PerimetreDesGraphiques), restreint au magasin du filtre ; null pour
+     * qui n'y voit aucun graphique, ou ne voit pas les graphiques de ce
+     * magasin.
+     */
+    private function perimetreDeLaTva(): ?Perimetre
+    {
+        $compte = CompteConnecte::exiger();
+        $perimetres = app(PerimetreDesGraphiques::class);
+        $tenant = Filament::getTenant();
+
+        try {
+            $perimetre = match ($this->ecran) {
+                self::SOCIETE => $perimetres->deLaSociete($compte, $this->acces()->societe),
+                self::CABINET => $perimetres->duClient($compte, $this->lienDuClient() ?? throw new AuthorizationException(self::REFUS)),
+                self::EXPERT_COMPTABLE => $perimetres->delExpertComptable($compte),
+                default => $tenant instanceof Magasin ? $perimetres->duMagasin($compte, $tenant) : throw new AuthorizationException(self::REFUS),
+            };
+
+            return $this->magasinFiltre === '' || $this->magasinFiltre === 'societe' ? $perimetre : $perimetre->restreintA($this->magasinFiltre);
+        } catch (AuthorizationException) {
+            return null;
+        }
     }
 
     /**

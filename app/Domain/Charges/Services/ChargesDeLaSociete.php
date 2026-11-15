@@ -20,8 +20,11 @@ use InvalidArgumentException;
  * Les lectures des charges d'une société, pour un compte (voir
  * AccesAuxCharges) : toujours hors du scope de la société courante, filtrées
  * par la société de l'accès et par les magasins qu'il voit, et limitées
- * aux colonnes nommées. La page d'un client dans l'espace d'un cabinet les
- * lit ainsi, comme l'espace de la société et le panneau d'un magasin.
+ * aux colonnes nommées (voir COLONNES_DE_LA_LISTE). La page d'un client
+ * dans l'espace d'un cabinet les lit ainsi, comme l'espace de la société
+ * et le panneau d'un magasin ; seuls les gestes relisent la charge entière,
+ * sous son verrou, dans le contexte de sa société (voir
+ * GestesSurLesCharges).
  * - le tableau « type de charge × mois » (modèle C1) : une case par type
  *   et par mois, avec le nombre de ses charges et l'état le moins avancé,
  *   en une requête ; un type sans charge de l'année n'a pas de ligne, sauf
@@ -36,6 +39,20 @@ use InvalidArgumentException;
 final class ChargesDeLaSociete
 {
     public const REFUS_DOUBLON = 'Une charge de ce fournisseur porte déjà ce numéro de pièce dans la société : elle est déjà saisie.';
+
+    /**
+     * Les colonnes d'une charge que la liste montre et que ses gestes
+     * demandent (la fenêtre remplie, la visibilité de chaque geste) ; jamais
+     * les clés de comparaison, l'identifiant du fournisseur, les comptes et
+     * les instants de la validation, du renvoi ou des corrections.
+     */
+    public const COLONNES_DE_LA_LISTE = [
+        'charges.id', 'charges.uuid', 'charges.societe_id', 'charges.magasin_id', 'charges.type', 'charges.type_de_la_societe_id',
+        'charges.fournisseur', 'charges.numero_piece', 'charges.date_piece', 'charges.date_paiement', 'charges.mois_tva',
+        'charges.fournisseur_hors_france', 'charges.vehicule_utilitaire', 'charges.note', 'charges.etat', 'charges.origine',
+        'charges.total_ht', 'charges.total_tva', 'charges.total_ttc', 'charges.total_tva_deductible', 'charges.tva_a_verifier',
+        'charges.deposee_par', 'charges.validee_par', 'charges.motif_renvoi', 'charges.corrections',
+    ];
 
     public function __construct(
         private readonly TypesDeCharge $types,
@@ -53,25 +70,27 @@ final class ChargesDeLaSociete
     }
 
     /**
-     * La charge de cet uuid, relue parmi celles que l'accès voit ; null
-     * pour une charge d'une autre société, d'un magasin qu'il ne voit pas,
-     * ou qui n'existe plus.
+     * La charge de cet uuid, relue parmi celles que l'accès voit, réduite à
+     * ce qui la désigne (pour servir sa pièce) ; null pour une charge d'une
+     * autre société, d'un magasin qu'il ne voit pas, ou qui n'existe plus.
      */
     public function trouver(AccesAuxCharges $acces, string $uuid): ?Charge
     {
-        return $this->visibles($acces)->parUuid($uuid)->first();
+        return $this->visibles($acces)->parUuid($uuid)->first(['charges.id', 'charges.uuid', 'charges.societe_id', 'charges.magasin_id']);
     }
 
     /**
      * Le tableau des mois : pour chaque type qui a une charge sur ces mois
      * (ou habituel), son libellé et, par mois, le nombre de ses charges et
      * l'état le moins avancé ; dans l'ordre de la liste de PILIQI, puis les
-     * types de la société par nom. Une seule requête pour les cases.
+     * types de la société par nom. Une seule requête pour les cases. Le
+     * filtre de la liste s'y applique : un magasin, ou « Toute la société »
+     * seulement ($sansMagasin).
      *
      * @param  list<string>  $mois  « AAAA-MM »
      * @return array<string, array{libelle: string, mois: array<string, array{nombre: int, etat: EtatDeLaCharge}>}>
      */
-    public function tableauDesMois(AccesAuxCharges $acces, array $mois, ?int $magasin = null): array
+    public function tableauDesMois(AccesAuxCharges $acces, array $mois, ?int $magasin = null, bool $sansMagasin = false): array
     {
         $cases = $this->visibles($acces)
             ->leftJoin('types_de_charge_de_la_societe', fn (JoinClause $jointure): JoinClause => $jointure
@@ -79,6 +98,7 @@ final class ChargesDeLaSociete
                 ->on('types_de_charge_de_la_societe.societe_id', '=', 'charges.societe_id'))
             ->whereIn('charges.mois_tva', $mois)
             ->when($magasin !== null, fn (Builder $requete): Builder => $requete->where('charges.magasin_id', $magasin))
+            ->when($sansMagasin, fn (Builder $requete): Builder => $requete->whereNull('charges.magasin_id'))
             ->groupBy('charges.type', 'types_de_charge_de_la_societe.uuid', 'types_de_charge_de_la_societe.nom', 'types_de_charge_de_la_societe.nom_cle', 'charges.mois_tva', 'charges.etat')
             ->toBase()
             ->get([

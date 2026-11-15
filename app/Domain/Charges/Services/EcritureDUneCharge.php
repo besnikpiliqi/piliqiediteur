@@ -20,10 +20,12 @@ use InvalidArgumentException;
  * parmi ceux que l'accès voit (un responsable n'en a qu'un, le sien), son
  * type, proposé dans la société, son fournisseur, sa pièce, ses dates, le
  * mois de TVA proposé (voir PropositionsDeTva) ou fixé par qui valide, et
- * ses lignes chiffrées (voir ChiffrageDUneCharge) ; une seconde charge du
- * même fournisseur avec le même numéro de pièce est refusée, une charge
- * sans numéro du même fournisseur, du même mois et du même TTC demande une
- * confirmation (voir ChargesDeLaSociete).
+ * ses lignes chiffrées (voir ChiffrageDUneCharge) ; le mois de TVA n'est
+ * dit « fixé » que quand qui valide en choisit un autre que celui que
+ * PILIQI propose ; une seconde charge du même fournisseur avec le même
+ * numéro de pièce est refusée, une charge sans numéro du même fournisseur,
+ * du même mois et du même TTC demande une confirmation (voir
+ * ChargesDeLaSociete).
  *
  * @phpstan-import-type ChargeChiffree from ChiffrageDUneCharge
  */
@@ -77,11 +79,18 @@ final class EcritureDUneCharge
             'note' => $saisie->note,
         ]);
 
-        if ($acces->valide() && $saisie->moisTva !== null) {
-            $charge->forceFill(['mois_tva' => $saisie->moisTva, 'mois_tva_fixe' => true]);
-        } elseif (! $charge->mois_tva_fixe || $acces->valide()) {
-            $charge->forceFill(['mois_tva' => PropositionsDeTva::moisDeTva($nature, $saisie->datePiece, $saisie->datePaiement), 'mois_tva_fixe' => false]);
+        $propose = PropositionsDeTva::moisDeTva($nature, $saisie->datePiece, $saisie->datePaiement);
+
+        if ($acces->valide()) {
+            $mois = $saisie->moisTva ?? $propose;
+            $charge->forceFill(['mois_tva' => $mois, 'mois_tva_fixe' => $mois !== $propose]);
+        } elseif (! $charge->mois_tva_fixe) {
+            $charge->forceFill(['mois_tva' => $propose, 'mois_tva_fixe' => false]);
         }
+
+        // Le magasin et le type viennent peut-être de changer : leurs
+        // relations se relisent, pour le journal d'audit et sa chaîne.
+        $charge->unsetRelation('magasin')->unsetRelation('typeDeLaSociete');
 
         $chiffree = $saisie->aDesChiffres()
             ? $this->chiffrage->chiffrer($saisie->lignes, $type, (bool) $charge->vehicule_utilitaire, $saisie->fournisseurHorsFrance, $acces->valide(), $saisie->confirmeLesEcarts)

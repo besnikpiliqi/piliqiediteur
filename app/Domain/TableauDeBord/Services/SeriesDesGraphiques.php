@@ -56,6 +56,12 @@ final class SeriesDesGraphiques
      */
     public const SANS_LES_CHARGES = 'Sans les charges de la société, que vous ne voyez pas : la TVA déductible ne compte que les achats.';
 
+    /**
+     * La note de la TVA quand un magasin n'est pas compté : les charges de
+     * « Toute la société » ne le sont pas non plus.
+     */
+    public const SANS_LES_CHARGES_DE_LA_SOCIETE = 'Les charges de « Toute la société » ne sont pas comptées, puisqu\'un magasin ne l\'est pas : seules celles des magasins comptés le sont.';
+
     public function __construct(
         private readonly VentesDuTableauDeBord $ventes,
         private readonly AchatsDuTableauDeBord $achats,
@@ -142,18 +148,22 @@ final class SeriesDesGraphiques
             ])->avecLaNote(self::SANS_LES_CHARGES);
         }
 
-        return $calcul->parMoisMultiple([
+        $serie = $calcul->parMoisMultiple([
             ['TVA collectée', fn (array $mois): array => array_map(fn (MontantsDeTva $tva): int => $tva->collectee(), $this->tvaDesMois($calcul, $ids, $mois))],
             ['TVA déductible des achats', fn (array $mois): array => array_map(fn (MontantsDeTva $tva): int => $tva->deductibleDesAchats, $this->tvaDesMois($calcul, $ids, $mois))],
             ['TVA déductible des charges', fn (array $mois): array => array_map(fn (MontantsDeTva $tva): int => $tva->deductibleDesChargesValidees, $this->tvaDesMois($calcul, $ids, $mois))],
             ['TVA à payer', fn (array $mois): array => array_map(fn (MontantsDeTva $tva): int => $tva->reelle(), $this->tvaDesMois($calcul, $ids, $mois)), true],
             ['TVA à payer (estimation)', fn (array $mois): array => array_map(fn (MontantsDeTva $tva): int => $tva->estimee(), $this->tvaDesMois($calcul, $ids, $mois)), true, SerieDuGraphique::EUROS, false, true],
         ]);
+
+        return $calcul->perimetre->laisseLesChargesDeLaSociete($ids) ? $serie->avecLaNote(self::SANS_LES_CHARGES_DE_LA_SOCIETE) : $serie;
     }
 
     /**
      * La TVA de ces mois, sur ces magasins, avec les charges que compte le
-     * périmètre (voir TvaDeLaPeriode::parMois()).
+     * périmètre, de ces magasins seulement, et celles de « Toute la
+     * société » quand tous ses magasins sont comptés (voir
+     * TvaDeLaPeriode::parMois()).
      *
      * @param  list<int>  $ids
      * @param  list<string>  $mois
@@ -167,6 +177,7 @@ final class SeriesDesGraphiques
             $this->documentsDeVente($calcul),
             $calcul->perimetre->societe->aDesArticles() ? $this->documentsDAchat($calcul) : [],
             $this->chargesDeLaTva($calcul),
+            $calcul->perimetre->compteLesChargesDeLaSociete($ids),
         );
     }
 

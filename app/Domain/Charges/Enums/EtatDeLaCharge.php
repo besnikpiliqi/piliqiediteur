@@ -30,6 +30,18 @@ enum EtatDeLaCharge: string implements HasColor, HasLabel
     }
 
     /**
+     * Ce qu'attend qui valide les charges, la vue « À valider » de la page
+     * et son « À faire » (modèle C1) : les charges à valider, et les pièces
+     * sans chiffres, dont il écrit les chiffres avant de les valider.
+     *
+     * @return list<string>
+     */
+    public static function attendantLaValidation(): array
+    {
+        return [self::AValider->value, self::PieceSansChiffres->value];
+    }
+
+    /**
      * Le symbole de sa case dans le tableau des mois (modèle C1).
      */
     public function symbole(): string

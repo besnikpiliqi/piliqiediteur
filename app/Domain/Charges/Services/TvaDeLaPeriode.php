@@ -7,12 +7,12 @@ use App\Domain\Charges\Support\MontantsDeTva;
 use App\Domain\TableauDeBord\Enums\SourceDesGraphiques;
 use App\Domain\TableauDeBord\Services\AchatsDuTableauDeBord;
 use App\Domain\TableauDeBord\Services\ChargesDuTableauDeBord;
-use App\Domain\TableauDeBord\Services\PerimetreDesGraphiques;
 use App\Domain\TableauDeBord\Services\VentesDuTableauDeBord;
 use App\Domain\TableauDeBord\Support\Mois;
-use App\Domain\Tenancy\Models\Societe;
+use App\Domain\TableauDeBord\Support\Perimetre;
+use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Support\CleDuModele;
-use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Database\Eloquent\Collection;
 use LogicException;
 
 /**
@@ -39,15 +39,17 @@ use LogicException;
 final class TvaDeLaPeriode
 {
     public function __construct(
-        private readonly PerimetreDesGraphiques $perimetres,
         private readonly VentesDuTableauDeBord $ventes,
         private readonly AchatsDuTableauDeBord $achats,
         private readonly ChargesDuTableauDeBord $charges,
     ) {}
 
     /**
-     * La TVA de chacun de ces mois, depuis ces documents déjà lus, ceux de
-     * ces magasins seulement, et ces charges (null : sans les charges).
+     * La TVA de chacun de ces mois, depuis ces documents déjà lus, et ces
+     * charges (null : sans les charges), ceux de ces magasins seulement ;
+     * les charges de « Toute la société » seulement quand elles sont
+     * comptées : jamais la TVA déductible d'un magasin qui n'est pas compté,
+     * ni celle de toute la société contre les ventes de quelques magasins.
      *
      * @param  list<string>  $mois  « AAAA-MM »
      * @param  list<int>  $magasins
@@ -56,7 +58,7 @@ final class TvaDeLaPeriode
      * @param  list<ChargeDeLaTva>|null  $charges
      * @return array<string, MontantsDeTva>
      */
-    public static function parMois(array $mois, array $magasins, array $ventes, array $achats, ?array $charges): array
+    public static function parMois(array $mois, array $magasins, array $ventes, array $achats, ?array $charges, bool $avecCellesDeLaSociete = true): array
     {
         $permis = array_flip($magasins);
         $sommes = array_fill_keys($mois, ['ventes' => 0, 'achats' => 0, 'autoliquidee_validee' => 0, 'deductible_validee' => 0, 'autoliquidee_a_valider' => 0, 'deductible_a_valider' => 0]);
@@ -72,7 +74,9 @@ final class TvaDeLaPeriode
         }
 
         foreach ($charges ?? [] as $charge) {
-            if (isset($sommes[$charge['mois']])) {
+            $comptee = $charge['magasin'] === null ? $avecCellesDeLaSociete : isset($permis[$charge['magasin']]);
+
+            if ($comptee && isset($sommes[$charge['mois']])) {
                 $etat = $charge['validee'] ? 'validee' : 'a_valider';
                 $sommes[$charge['mois']]['autoliquidee_'.$etat] += $charge['autoliquidee'];
                 $sommes[$charge['mois']]['deductible_'.$etat] += $charge['deductible'];
@@ -89,40 +93,58 @@ final class TvaDeLaPeriode
     }
 
     /**
-     * La TVA de toute la société sur ce mois « AAAA-MM » : tous ses magasins
-     * réels, toutes ses charges, comme son propriétaire les voit ; null pour
-     * une société en franchise en base (TVA non applicable).
+     * La TVA de ce mois « AAAA-MM » telle que ce périmètre la montre (voir
+     * PerimetreDesGraphiques) : les ventes et les achats des magasins où il
+     * voit tous ces documents, et les charges qu'il compte (voir
+     * Perimetre::chargesComptees()) de ces magasins, et de « Toute la
+     * société » quand tous ses magasins sont comptés ; null pour une
+     * société en franchise en base (TVA non applicable). La page des
+     * charges la montre pour le mois choisi.
      *
-     * @throws LogicException une société sans propriétaire, ou un mois illisible
+     * @throws LogicException un mois illisible
      */
-    public function deLaSociete(Societe $societe, string $mois): ?MontantsDeTva
+    public function duPerimetre(Perimetre $perimetre, string $mois): ?MontantsDeTva
     {
         if (preg_match('/^\d{4}-(0[1-9]|1[0-2])$/D', $mois) !== 1) {
             throw new LogicException('Le mois s\'écrit « AAAA-MM ».');
         }
 
-        if ($societe->estEnFranchiseDeTva()) {
+        if ($perimetre->societe->estEnFranchiseDeTva()) {
             return null;
         }
 
-        $proprietaire = $societe->proprietaire()->first() ?? throw new LogicException('Une société sans propriétaire n\'a pas de TVA à lire.');
-        $charges = $this->charges->deLaSociete($societe, [$mois]);
-
-        try {
-            $perimetre = $this->perimetres->deLaSociete($proprietaire, $societe);
-        } catch (AuthorizationException) {
-            return self::parMois([$mois], [], [], [], $charges)[$mois];
-        }
-
         [$du, $au] = [$mois.'-01', Calendrier::ajouterJours(Mois::decaler($mois, 1).'-01', -1)];
-        $magasins = $perimetre->magasinsAvec(SourceDesGraphiques::Ventes, ...($societe->aDesArticles() ? [SourceDesGraphiques::Achats] : []));
+        $articles = $perimetre->societe->aDesArticles();
+        $magasins = self::magasinsDeLaTva($perimetre);
+        $ids = CleDuModele::desModeles($magasins);
 
         return self::parMois(
             [$mois],
-            CleDuModele::desModeles($magasins),
+            $ids,
             $magasins->isEmpty() ? [] : $this->ventes->documents($perimetre, $magasins, $du, $au),
-            $magasins->isEmpty() || ! $societe->aDesArticles() ? [] : $this->achats->documents($perimetre, $magasins, $du, $au),
-            $charges,
+            $magasins->isEmpty() || ! $articles ? [] : $this->achats->documents($perimetre, $magasins, $du, $au),
+            $this->charges->pourLaTva($perimetre, [$mois]),
+            $perimetre->compteLesChargesDeLaSociete($ids),
         )[$mois];
+    }
+
+    /**
+     * Les magasins que compte la TVA de ce périmètre : ceux où il voit
+     * toutes les ventes et, dans une société qui a des articles, tous les
+     * achats.
+     *
+     * @return list<int>
+     */
+    public static function magasinsComptes(Perimetre $perimetre): array
+    {
+        return CleDuModele::desModeles(self::magasinsDeLaTva($perimetre));
+    }
+
+    /**
+     * @return Collection<int, Magasin>
+     */
+    private static function magasinsDeLaTva(Perimetre $perimetre): Collection
+    {
+        return $perimetre->magasinsAvec(SourceDesGraphiques::Ventes, ...($perimetre->societe->aDesArticles() ? [SourceDesGraphiques::Achats] : []));
     }
 }

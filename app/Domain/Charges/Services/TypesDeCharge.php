@@ -10,6 +10,7 @@ use App\Domain\Tenancy\Scopes\SocieteScope;
 use App\Domain\Tenancy\Support\ValeursLues;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Str;
 use InvalidArgumentException;
 
 /**
@@ -33,7 +34,9 @@ final class TypesDeCharge
 
     /**
      * Le type de cette clé, de la liste de PILIQI ou de la société ; un
-     * type archivé seulement quand la charge le porte déjà.
+     * type archivé seulement quand la charge le porte déjà. Une clé
+     * « societe: » dont la suite n'est pas un uuid ne désigne rien, sans
+     * interroger la base, où PostgreSQL la refuserait.
      *
      * @return array{0: TypeDeCharge|null, 1: TypeDeChargeDeLaSociete|null}
      *
@@ -46,6 +49,11 @@ final class TypesDeCharge
         }
 
         $uuid = str_starts_with($cle, self::SOCIETE) ? substr($cle, strlen(self::SOCIETE)) : '';
+
+        if (! Str::isUuid($uuid)) {
+            throw new InvalidArgumentException(self::REFUS_TYPE);
+        }
+
         $type = $this->desTypes($societe)->where('uuid', $uuid)->first();
 
         if ($type === null || ($type->estArchive() && $type->getKey() !== $typeDejaPorte)) {

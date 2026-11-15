@@ -30,7 +30,7 @@ use App\Domain\Tenancy\Support\CleDuModele;
  * Un chiffre que le compte ne voit dans aucun magasin du filtre n'est pas
  * donné (null). Tout est en centimes.
  *
- * @phpstan-type Chiffres array{ca: array{valeur: int, variation: string|null}|null, achats: array{valeur: int, variation: string|null}|null, tva: array{franchise: bool, a_payer: int, collectee: int, deductible: int, estimation: int|null, avec_les_charges: bool}|null, restant_du: array{valeur: int, en_retard: int}|null}
+ * @phpstan-type Chiffres array{ca: array{valeur: int, variation: string|null}|null, achats: array{valeur: int, variation: string|null}|null, tva: array{franchise: bool, a_payer: int, collectee: int, deductible: int, estimation: int|null, avec_les_charges: bool, sans_celles_de_la_societe: bool}|null, restant_du: array{valeur: int, en_retard: int}|null}
  */
 final class ChiffresDuTableauDeBord
 {
@@ -67,8 +67,8 @@ final class ChiffresDuTableauDeBord
 
         if ($tva !== []) {
             $chiffres['tva'] = $societe->estEnFranchiseDeTva()
-                ? ['franchise' => true, 'a_payer' => 0, 'collectee' => 0, 'deductible' => 0, 'estimation' => null, 'avec_les_charges' => false]
-                : self::tva($this->series->tvaDesMois($calcul, $tva, [$ceMois])[$ceMois]);
+                ? ['franchise' => true, 'a_payer' => 0, 'collectee' => 0, 'deductible' => 0, 'estimation' => null, 'avec_les_charges' => false, 'sans_celles_de_la_societe' => false]
+                : self::tva($this->series->tvaDesMois($calcul, $tva, [$ceMois])[$ceMois], $perimetre->laisseLesChargesDeLaSociete($tva));
         }
 
         if ($factures !== []) {
@@ -82,11 +82,12 @@ final class ChiffresDuTableauDeBord
     /**
      * Le chiffre clé de la TVA à payer du mois (voir TvaDeLaPeriode) : la
      * réelle, avec les seules charges validées, et, quand des charges à
-     * valider la changent, son estimation avec elles.
+     * valider la changent, son estimation avec elles ; sans les charges de
+     * « Toute la société » quand un magasin n'est pas compté.
      *
-     * @return array{franchise: bool, a_payer: int, collectee: int, deductible: int, estimation: int|null, avec_les_charges: bool}
+     * @return array{franchise: bool, a_payer: int, collectee: int, deductible: int, estimation: int|null, avec_les_charges: bool, sans_celles_de_la_societe: bool}
      */
-    private static function tva(MontantsDeTva $tva): array
+    private static function tva(MontantsDeTva $tva, bool $sansCellesDeLaSociete): array
     {
         return [
             'franchise' => false,
@@ -95,6 +96,7 @@ final class ChiffresDuTableauDeBord
             'deductible' => $tva->deductible(),
             'estimation' => $tva->aDesChargesAValider() ? $tva->estimee() : null,
             'avec_les_charges' => $tva->avecLesCharges,
+            'sans_celles_de_la_societe' => $tva->avecLesCharges && $sansCellesDeLaSociete,
         ];
     }
 

@@ -26,8 +26,9 @@ use LogicException;
  * ses champs et ses lignes sont réécrits (voir EcritureDUneCharge), sa
  * pièce et sa validation restent, et la correction est comptée : la base
  * refuse toute autre écriture d'une charge validée (voir
- * GardesDesCharges). La correction s'inscrit au journal d'audit, avec le
- * motif, les anciennes et les nouvelles valeurs.
+ * GardesDesCharges). La correction s'inscrit au journal d'audit, dans la
+ * chaîne du magasin que la charge a ensuite, avec le motif, les anciennes
+ * et les nouvelles valeurs.
  */
 class CorrigerUneChargeAction
 {

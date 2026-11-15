@@ -3187,6 +3187,10 @@ return [
             'tests/Browser/Parcours/ChargesTest.php › le responsable à qui le propriétaire coche « Charges : ajouter » ajoute un plein de carburant de son magasin, pour un véhicule utilitaire',
             'tests/Browser/Parcours/ChargesTest.php › sans comptable, le propriétaire valide lui-même, supprime une charge, choisit les types habituels, ajoute un type et filtre la liste',
             'tests/Browser/Parcours/ChargesTest.php › chaque rôle qui voit une page des charges y ajoute une charge avec sa pièce',
+            'tests/Browser/Parcours/ChargesTest.php › chaque comptable écrit les chiffres d’une charge du client qui a les siens et la valide, en valide une autre, en renvoie une, corrige une charge validée, en supprime une et télécharge une pièce',
+            'tests/Browser/Parcours/ChargesTest.php › chaque rôle du client qui dépose une charge en télécharge la pièce et la supprime',
+            'tests/Browser/Parcours/ChargesTest.php › le propriétaire et l’administrateur coché choisissent les types habituels, ajoutent un type de la société et le suppriment tant qu’aucune charge ne le porte',
+            'tests/Browser/Parcours/ChargesTest.php › le propriétaire lit la TVA du mois sous le tableau, change de mois, puis confirme un écart de TVA et un doublon probable sur la même charge',
         ]],
         'action:ajouterUneCharge' => ['lot' => 'NAV-4', 'tests' => [
             'tests/Browser/Parcours/ChargesTest.php › le propriétaire dépose une quittance de loyer avec ses chiffres, voit la case orange, filtre la liste par la case et télécharge la pièce',
@@ -3198,29 +3202,42 @@ return [
         ]],
         'action:ajouterUnType' => ['lot' => 'NAV-4', 'tests' => [
             'tests/Browser/Parcours/ChargesTest.php › sans comptable, le propriétaire valide lui-même, supprime une charge, choisit les types habituels, ajoute un type et filtre la liste',
+            'tests/Browser/Parcours/ChargesTest.php › le propriétaire et l’administrateur coché choisissent les types habituels, ajoutent un type de la société et le suppriment tant qu’aucune charge ne le porte',
         ]],
         'action:corriger' => ['lot' => 'NAV-5', 'tests' => [
             'tests/Browser/Parcours/ChargesTest.php › le collaborateur ajoute lui-même une charge, validée aussitôt, à son mois de TVA, puis la corrige avec un motif',
+            'tests/Browser/Parcours/ChargesTest.php › chaque comptable écrit les chiffres d’une charge du client qui a les siens et la valide, en valide une autre, en renvoie une, corrige une charge validée, en supprime une et télécharge une pièce',
         ]],
         'action:ecrireLesChiffres' => ['lot' => 'NAV-4', 'tests' => [
             'tests/Browser/Parcours/ChargesTest.php › le propriétaire du cabinet renvoie une pièce au client avec un mot, le propriétaire la voit dans son « À faire » et en réécrit les chiffres',
+            'tests/Browser/Parcours/ChargesTest.php › chaque comptable écrit les chiffres d’une charge du client qui a les siens et la valide, en valide une autre, en renvoie une, corrige une charge validée, en supprime une et télécharge une pièce',
         ]],
         'action:renvoyer' => ['lot' => 'NAV-5', 'tests' => [
             'tests/Browser/Parcours/ChargesTest.php › le propriétaire du cabinet renvoie une pièce au client avec un mot, le propriétaire la voit dans son « À faire » et en réécrit les chiffres',
+            'tests/Browser/Parcours/ChargesTest.php › chaque comptable écrit les chiffres d’une charge du client qui a les siens et la valide, en valide une autre, en renvoie une, corrige une charge validée, en supprime une et télécharge une pièce',
         ]],
         'action:supprimer' => ['lot' => 'NAV-4', 'tests' => [
             'tests/Browser/Parcours/ChargesTest.php › sans comptable, le propriétaire valide lui-même, supprime une charge, choisit les types habituels, ajoute un type et filtre la liste',
+            'tests/Browser/Parcours/ChargesTest.php › chaque comptable écrit les chiffres d’une charge du client qui a les siens et la valide, en valide une autre, en renvoie une, corrige une charge validée, en supprime une et télécharge une pièce',
+            'tests/Browser/Parcours/ChargesTest.php › chaque rôle du client qui dépose une charge en télécharge la pièce et la supprime',
+        ]],
+        'action:supprimerUnType' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Parcours/ChargesTest.php › le propriétaire et l’administrateur coché choisissent les types habituels, ajoutent un type de la société et le suppriment tant qu’aucune charge ne le porte',
         ]],
         'action:typesDeCharge' => ['lot' => 'NAV-4', 'tests' => [
             'tests/Browser/Parcours/ChargesTest.php › sans comptable, le propriétaire valide lui-même, supprime une charge, choisit les types habituels, ajoute un type et filtre la liste',
+            'tests/Browser/Parcours/ChargesTest.php › le propriétaire et l’administrateur coché choisissent les types habituels, ajoutent un type de la société et le suppriment tant qu’aucune charge ne le porte',
         ]],
         'action:valider' => ['lot' => 'NAV-5', 'tests' => [
             'tests/Browser/Parcours/ChargesTest.php › le collaborateur à qui le client est confié ouvre ses charges depuis la liste des clients, voit la case orange, valide, et la case devient verte',
             'tests/Browser/Parcours/ChargesTest.php › l’expert-comptable déclaré voit « 1 charge à valider » sur « Tableau de bord de la société », ouvre « Charges de la société » et valide',
             'tests/Browser/Parcours/ChargesTest.php › sans comptable, le propriétaire valide lui-même, supprime une charge, choisit les types habituels, ajoute un type et filtre la liste',
+            'tests/Browser/Parcours/ChargesTest.php › chaque comptable écrit les chiffres d’une charge du client qui a les siens et la valide, en valide une autre, en renvoie une, corrige une charge validée, en supprime une et télécharge une pièce',
         ]],
         'action:voirLaPiece' => ['lot' => 'NAV-4', 'tests' => [
             'tests/Browser/Parcours/ChargesTest.php › le propriétaire dépose une quittance de loyer avec ses chiffres, voit la case orange, filtre la liste par la case et télécharge la pièce',
+            'tests/Browser/Parcours/ChargesTest.php › chaque comptable écrit les chiffres d’une charge du client qui a les siens et la valide, en valide une autre, en renvoie une, corrige une charge validée, en supprime une et télécharge une pièce',
+            'tests/Browser/Parcours/ChargesTest.php › chaque rôle du client qui dépose une charge en télécharge la pièce et la supprime',
         ]],
         'champ:date_paiement' => ['lot' => 'NAV-5', 'tests' => [
             'tests/Browser/Parcours/ChargesTest.php › le collaborateur ajoute lui-même une charge, validée aussitôt, à son mois de TVA, puis la corrige avec un motif',
@@ -3236,6 +3253,8 @@ return [
             'tests/Browser/Parcours/ChargesTest.php › le propriétaire dépose une quittance de loyer avec ses chiffres, voit la case orange, filtre la liste par la case et télécharge la pièce',
             'tests/Browser/Parcours/ChargesTest.php › le propriétaire du cabinet renvoie une pièce au client avec un mot, le propriétaire la voit dans son « À faire » et en réécrit les chiffres',
             'tests/Browser/Parcours/ChargesTest.php › le collaborateur ajoute lui-même une charge, validée aussitôt, à son mois de TVA, puis la corrige avec un motif',
+            'tests/Browser/Parcours/ChargesTest.php › chaque comptable écrit les chiffres d’une charge du client qui a les siens et la valide, en valide une autre, en renvoie une, corrige une charge validée, en supprime une et télécharge une pièce',
+            'tests/Browser/Parcours/ChargesTest.php › le propriétaire lit la TVA du mois sous le tableau, change de mois, puis confirme un écart de TVA et un doublon probable sur la même charge',
         ]],
         'champ:mois_tva' => ['lot' => 'NAV-5', 'tests' => [
             'tests/Browser/Parcours/ChargesTest.php › le collaborateur ajoute lui-même une charge, validée aussitôt, à son mois de TVA, puis la corrige avec un motif',
@@ -3245,6 +3264,7 @@ return [
         ]],
         'champ:tva' => ['lot' => 'NAV-3', 'tests' => [
             'tests/Browser/Parcours/ChargesTest.php › le responsable à qui le propriétaire coche « Charges : ajouter » ajoute un plein de carburant de son magasin, pour un véhicule utilitaire',
+            'tests/Browser/Parcours/ChargesTest.php › le propriétaire lit la TVA du mois sous le tableau, change de mois, puis confirme un écart de TVA et un doublon probable sur la même charge',
         ]],
         'champ:type' => ['lot' => 'NAV-4', 'tests' => [
             'tests/Browser/Parcours/ChargesTest.php › le propriétaire dépose une quittance de loyer avec ses chiffres, voit la case orange, filtre la liste par la case et télécharge la pièce',
@@ -3275,6 +3295,9 @@ return [
         ]],
         'saisie:magasinFiltre' => ['lot' => 'NAV-4', 'tests' => [
             'tests/Browser/Parcours/ChargesTest.php › un administrateur à qui le propriétaire coche « Charges : ajouter » ajoute une charge de toute la société auprès d’un fournisseur établi hors de France, puis filtre par magasin',
+        ]],
+        'saisie:moisDeLaTva' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Parcours/ChargesTest.php › le propriétaire lit la TVA du mois sous le tableau, change de mois, puis confirme un écart de TVA et un doublon probable sur la même charge',
         ]],
         'saisie:periode' => ['lot' => 'NAV-4', 'tests' => [
             'tests/Browser/Parcours/ChargesTest.php › sans comptable, le propriétaire valide lui-même, supprime une charge, choisit les types habituels, ajoute un type et filtre la liste',

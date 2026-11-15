@@ -72,27 +72,30 @@ class DeposerUneChargeAction
                 throw new InvalidArgumentException(self::REFUS_COMPTABLE_SANS_PIECE);
             }
 
+            // Les lignes et la pièce s'écrivent avant la validation, qui est
+            // la dernière écriture : ensuite, la base ne les laisse plus
+            // changer que par une correction (voir GardesDesCharges).
             $charge->forceFill([
-                'etat' => match (true) {
-                    $chiffree === null => EtatDeLaCharge::PieceSansChiffres,
-                    $valideeALEnregistrement => EtatDeLaCharge::Validee,
-                    default => EtatDeLaCharge::AValider,
-                },
+                'etat' => $chiffree === null ? EtatDeLaCharge::PieceSansChiffres : EtatDeLaCharge::AValider,
                 'origine' => $acces->origine(),
                 'deposee_par' => $acces->compte->getKey(),
-            ]);
-
-            if ($valideeALEnregistrement) {
-                $charge->forceFill(['validee_par' => $acces->valideComme, 'validee_par_compte' => $acces->compte->getKey(), 'validee_le' => now()]);
-            }
-
-            $charge->save();
+            ])->save();
             $this->ecriture->ecrireLesLignes($charge, $chiffree, 0);
-            $this->journalAudit->inscrire(ActionAuditee::ChargeDeposee, $acces->compte, $charge->magasin, null, ChargesDeLaSociete::valeurs($charge), $charge);
 
             if ($fichier !== null) {
                 $this->pieces->ranger($acces->compte, $charge, $fichier);
             }
+
+            if ($valideeALEnregistrement) {
+                $charge->forceFill([
+                    'etat' => EtatDeLaCharge::Validee,
+                    'validee_par' => $acces->valideComme,
+                    'validee_par_compte' => $acces->compte->getKey(),
+                    'validee_le' => now(),
+                ])->save();
+            }
+
+            $this->journalAudit->inscrire(ActionAuditee::ChargeDeposee, $acces->compte, $charge->magasin, null, ChargesDeLaSociete::valeurs($charge), $charge);
 
             return $charge;
         });

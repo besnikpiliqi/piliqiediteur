@@ -25,9 +25,12 @@ use Illuminate\Support\Facades\DB;
  *   au moins une ligne, une pièce sans chiffres n'en a aucune et a sa
  *   pièce, et une charge validée a sa pièce : une TVA ne se déduit pas
  *   sans pièce ;
- * - les lignes d'une charge validée ne changent que par une correction :
- *   les anciennes s'effacent et les nouvelles, de la version de la
- *   correction, s'ajoutent ; aucune ne se modifie ;
+ * - les lignes d'une charge validée ne changent que par une correction,
+ *   dans la transaction qui l'a écrite : les anciennes s'effacent et les
+ *   nouvelles, de la version de la correction, s'ajoutent ; aucune ne se
+ *   modifie, et aucune ne s'ajoute ni ne s'efface hors d'une correction ;
+ *   les actions écrivent donc les lignes et la pièce d'une charge avant de
+ *   la valider ;
  * - sa pièce ne se modifie jamais : seule avance sa dernière analyse par
  *   l'antivirus, et son blocage se pose une fois, avec sa menace ; elle ne
  *   s'efface que d'une charge qui n'est pas validée.
@@ -53,6 +56,14 @@ final class GardesDesCharges
     private const PIECES_JAMAIS_MODIFIEES = 'pieces_de_charge_jamais_modifiees';
 
     private const PIECES_EFFACEES = 'pieces_de_charge_effacees_avant_la_validation';
+
+    /**
+     * Le réglage de la transaction qui retient les corrections acceptées
+     * d'une charge validée, « ,{id}:{corrections}, » chacune : les lignes
+     * d'une charge validée ne s'écrivent que dans la transaction de sa
+     * correction, et seulement celles de sa version.
+     */
+    private const CORRECTIONS_EN_COURS = 'piliqi.corrections_de_charge';
 
     private const REFUS_SOCIETE = 'une charge n\'existe que dans une société qui a des magasins, jamais dans un cabinet d\'expertise comptable';
 
@@ -89,10 +100,15 @@ final class GardesDesCharges
             .'RETURN NEW; END');
         $connexion->unprepared('CREATE TRIGGER '.self::SOCIETE_ET_MAGASIN.' BEFORE INSERT OR UPDATE OF societe_id, magasin_id ON charges FOR EACH ROW EXECUTE FUNCTION garde_'.self::SOCIETE_ET_MAGASIN.'()');
 
+        // Une correction acceptée se retient jusqu'à la fin de la
+        // transaction (voir CORRECTIONS_EN_COURS) : ses lignes peuvent alors
+        // s'écrire (voir poserSurLesLignes()).
         self::fonction(self::VALIDEE_FIGEE, 'BEGIN '
             ."IF (OLD.etat = 'validee' AND (NEW.etat <> 'validee' OR NEW.corrections <> OLD.corrections + 1 OR ({$figees}) IS DISTINCT FROM ({$figeesAvant}))) "
             ."OR (OLD.etat <> 'validee' AND NEW.corrections <> OLD.corrections) "
-            ."THEN RAISE EXCEPTION '%', ".self::message(self::VALIDEE_FIGEE, self::REFUS_FIGEE).'; END IF; RETURN NEW; END');
+            ."THEN RAISE EXCEPTION '%', ".self::message(self::VALIDEE_FIGEE, self::REFUS_FIGEE).'; END IF; '
+            ."IF OLD.etat = 'validee' THEN PERFORM set_config('".self::CORRECTIONS_EN_COURS."', COALESCE(current_setting('".self::CORRECTIONS_EN_COURS."', TRUE), '') || ',' || NEW.id || ':' || NEW.corrections || ',', TRUE); END IF; "
+            .'RETURN NEW; END');
         $connexion->unprepared('CREATE TRIGGER '.self::VALIDEE_FIGEE.' BEFORE UPDATE ON charges FOR EACH ROW EXECUTE FUNCTION garde_'.self::VALIDEE_FIGEE.'()');
 
         self::fonction(self::VALIDEE_JAMAIS_EFFACEE, "BEGIN IF OLD.etat = 'validee' THEN RAISE EXCEPTION '%', ".self::message(self::VALIDEE_JAMAIS_EFFACEE, self::REFUS_EFFACEMENT).'; END IF; RETURN OLD; END');
@@ -118,10 +134,11 @@ final class GardesDesCharges
     public static function poserSurLesLignes(): void
     {
         self::fonction(self::LIGNES, 'DECLARE la_charge RECORD; BEGIN '
-            .'SELECT etat, corrections INTO la_charge FROM charges WHERE id = (CASE WHEN TG_OP = \'DELETE\' THEN OLD.charge_id ELSE NEW.charge_id END) FOR SHARE; '
+            .'SELECT id, etat, corrections INTO la_charge FROM charges WHERE id = (CASE WHEN TG_OP = \'DELETE\' THEN OLD.charge_id ELSE NEW.charge_id END) FOR SHARE; '
             ."IF FOUND AND la_charge.etat = 'validee' AND ("
-            ."(TG_OP = 'INSERT' AND NEW.version <> la_charge.corrections) "
-            ."OR TG_OP = 'UPDATE' "
+            ."TG_OP = 'UPDATE' "
+            ."OR position(',' || la_charge.id || ':' || la_charge.corrections || ',' IN COALESCE(current_setting('".self::CORRECTIONS_EN_COURS."', TRUE), '')) = 0 "
+            ."OR (TG_OP = 'INSERT' AND NEW.version <> la_charge.corrections) "
             ."OR (TG_OP = 'DELETE' AND OLD.version >= la_charge.corrections)) "
             ."THEN RAISE EXCEPTION '%', ".self::message(self::LIGNES, self::REFUS_LIGNES).'; END IF; '
             ."IF TG_OP = 'DELETE' THEN RETURN OLD; END IF; RETURN NEW; END");

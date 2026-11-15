@@ -1,6 +1,7 @@
 {{--
     La page « Charges » (voir App\Filament\PageDesCharges, modèle C1) : les
-    filtres, le tableau « type de charge × mois », puis la liste. Chaque
+    filtres, le tableau « type de charge × mois », la TVA du mois choisi
+    (collectée, déductible, à payer réelle et estimée), puis la liste. Chaque
     case porte le symbole et la couleur de l'état le moins avancé de ses
     charges, et leur nombre quand il y en a plusieurs ; un clic sur une case
     filtre la liste dessous.
@@ -99,6 +100,61 @@
             </p>
         @endif
     </x-filament::section>
+
+    @if ($tva === null)
+        <x-filament::section heading="La TVA du mois" data-tva-du-mois="franchise">
+            <p class="text-sm text-gray-600 dark:text-gray-300">TVA non applicable (franchise en base).</p>
+        </x-filament::section>
+    @else
+        @php($montants = $tva['montants'])
+        <x-filament::section data-tva-du-mois="{{ $tva['avec_les_ventes'] ? 'complete' : 'charges' }}">
+            <x-slot name="heading">La TVA du mois</x-slot>
+            <x-slot name="description">{{ $tva['avec_les_ventes'] ? 'Telle que votre tableau de bord la compte : les ventes, les achats et les charges validées, puis l\'estimation avec les charges à valider.' : 'Les seules charges que vous voyez, sans les ventes ni les achats, que vous ne voyez pas.' }}</x-slot>
+            <label class="mb-3 inline-block text-sm">
+                <span class="block font-medium text-gray-700 dark:text-gray-200">Mois</span>
+                <select wire:model.live="moisDeLaTva" class="mt-1 rounded-lg border-gray-300 text-sm dark:border-white/10 dark:bg-white/5" data-filtre-mois-de-la-tva>
+                    @foreach ($mois as $unMois)
+                        <option value="{{ $unMois }}">{{ ucfirst(PageDesCharges::nomDuMois($unMois)) }}</option>
+                    @endforeach
+                </select>
+            </label>
+            <dl class="grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
+                @if ($tva['avec_les_ventes'])
+                    <div data-tva="collectee">
+                        <dt class="text-gray-500 dark:text-gray-400">TVA collectée</dt>
+                        <dd class="text-lg font-semibold">{{ PageDesCharges::enEuros($montants->collectee()) }}</dd>
+                        <dd class="text-xs text-gray-500 dark:text-gray-400">ventes nettes des avoirs{{ $montants->autoliquideeValidee > 0 ? ', dont '.PageDesCharges::enEuros($montants->autoliquideeValidee).' autoliquidés' : '' }}</dd>
+                    </div>
+                @endif
+                <div data-tva="deductible">
+                    <dt class="text-gray-500 dark:text-gray-400">TVA déductible</dt>
+                    <dd class="text-lg font-semibold">{{ PageDesCharges::enEuros($montants->deductible()) }}</dd>
+                    <dd class="text-xs text-gray-500 dark:text-gray-400">{{ $tva['avec_les_ventes'] ? 'achats '.PageDesCharges::enEuros($montants->deductibleDesAchats).' + ' : '' }}charges validées {{ PageDesCharges::enEuros($montants->deductibleDesChargesValidees) }}</dd>
+                </div>
+                @if ($tva['avec_les_ventes'])
+                    <div data-tva="reelle">
+                        <dt class="text-gray-500 dark:text-gray-400">TVA à payer (réelle)</dt>
+                        <dd class="text-lg font-semibold">{{ PageDesCharges::enEuros($montants->reelle()) }}</dd>
+                        <dd class="text-xs text-gray-500 dark:text-gray-400">avec les seules charges validées</dd>
+                    </div>
+                    <div data-tva="estimation">
+                        <dt class="text-gray-500 dark:text-gray-400">TVA à payer (estimation)</dt>
+                        <dd class="text-lg font-semibold">{{ PageDesCharges::enEuros($montants->estimee()) }}</dd>
+                        <dd class="text-xs text-gray-500 dark:text-gray-400">avec {{ PageDesCharges::enEuros($montants->deductibleDesChargesAValider) }} de TVA de charges à valider</dd>
+                    </div>
+                @else
+                    <div data-tva="a-valider">
+                        <dt class="text-gray-500 dark:text-gray-400">TVA déductible des charges à valider</dt>
+                        <dd class="text-lg font-semibold">{{ PageDesCharges::enEuros($montants->deductibleDesChargesAValider) }}</dd>
+                        <dd class="text-xs text-gray-500 dark:text-gray-400">elle ne compte qu'en estimation tant qu'elles ne sont pas validées</dd>
+                    </div>
+                @endif
+            </dl>
+            @if ($tva['sans_celles_de_la_societe'])
+                <p class="mt-3 text-xs text-gray-500 dark:text-gray-400">{{ \App\Domain\TableauDeBord\Services\SeriesDesGraphiques::SANS_LES_CHARGES_DE_LA_SOCIETE }}</p>
+            @endif
+        </x-filament::section>
+    @endif
 
     {{ $this->table }}
 

@@ -19,7 +19,8 @@ use Illuminate\Database\Eloquent\Builder;
  * du 14/11/2026, lot CHARGES), compté en une requête parmi les charges que
  * l'accès voit (voir ChargesDeLaSociete) :
  * - pour qui valide (le comptable, ou le propriétaire sans comptable) :
- *   « N charges à valider » ;
+ *   « N charges à valider », pièces sans chiffres comprises, qu'il saisit
+ *   avant de les valider (« dont M pièces sans chiffres à saisir ») ;
  * - pour qui les ajoute sans être le comptable (le propriétaire,
  *   l'administrateur ou le responsable coché) : « N charges renvoyées par
  *   votre comptable ».
@@ -35,16 +36,21 @@ final class ChargesAFaire
     ) {}
 
     /**
-     * @return array{a_valider: int, renvoyees: int}
+     * Les charges qui attendent la validation (voir
+     * EtatDeLaCharge::attendantLaValidation()), dont les pièces sans
+     * chiffres, et les charges renvoyées au client.
+     *
+     * @return array{a_valider: int, pieces_sans_chiffres: int, renvoyees: int}
      */
     public function compter(AccesAuxCharges $acces): array
     {
         $nombres = $this->charges->visibles($acces)->toBase()
-            ->selectRaw('COUNT(*) FILTER (WHERE charges.etat = ?) AS a_valider, COUNT(*) FILTER (WHERE charges.etat = ?) AS renvoyees', [EtatDeLaCharge::AValider->value, EtatDeLaCharge::Renvoyee->value])
+            ->selectRaw('COUNT(*) FILTER (WHERE charges.etat IN (?, ?)) AS a_valider, COUNT(*) FILTER (WHERE charges.etat = ?) AS pieces_sans_chiffres, COUNT(*) FILTER (WHERE charges.etat = ?) AS renvoyees', [...EtatDeLaCharge::attendantLaValidation(), EtatDeLaCharge::PieceSansChiffres->value, EtatDeLaCharge::Renvoyee->value])
             ->first();
 
         return [
             'a_valider' => ValeursLues::entier($nombres->a_valider ?? 0),
+            'pieces_sans_chiffres' => ValeursLues::entier($nombres->pieces_sans_chiffres ?? 0),
             'renvoyees' => ValeursLues::entier($nombres->renvoyees ?? 0),
         ];
     }
@@ -67,7 +73,9 @@ final class ChargesAFaire
                 groupe: 'Charges',
                 urgence: UrgenceAFaire::Orange,
                 nombre: $nombres['a_valider'],
-                phrase: trans_choice('{1} 1 charge à valider|[2,*] :count charges à valider', $nombres['a_valider']).' : leur TVA déductible ne compte qu\'en estimation tant qu\'elles ne le sont pas.',
+                phrase: trans_choice('{1} 1 charge à valider|[2,*] :count charges à valider', $nombres['a_valider'])
+                    .($nombres['pieces_sans_chiffres'] > 0 ? ', '.trans_choice('{1} dont 1 pièce sans chiffres à saisir|[2,*] dont :count pièces sans chiffres à saisir', $nombres['pieces_sans_chiffres']) : '')
+                    .' : leur TVA déductible ne compte qu\'en estimation tant qu\'elles ne le sont pas.',
                 url: $page('a_valider'),
                 bouton: 'Valider',
                 aSurveiller: false,
@@ -91,8 +99,9 @@ final class ChargesAFaire
     }
 
     /**
-     * Le nombre de charges à valider de chacun de ces clients du cabinet
-     * qui lui accorde « Charges : voir, ajouter, saisir et valider » : celles
+     * Le nombre de charges à valider, pièces sans chiffres comprises, de
+     * chacun de ces clients du cabinet qui lui accorde « Charges : voir,
+     * ajouter, saisir et valider » : celles
      * de « Toute la société » et des magasins réels que le client ouvre au
      * compte. Une lecture hors de la société courante, filtrée par client.
      *
@@ -112,7 +121,7 @@ final class ChargesAFaire
 
         return Charge::query()->withoutGlobalScope(SocieteScope::class)
             ->whereIn('charges.societe_id', $accordes)
-            ->where('charges.etat', EtatDeLaCharge::AValider->value)
+            ->whereIn('charges.etat', EtatDeLaCharge::attendantLaValidation())
             ->where(fn (Builder $requete): Builder => $requete->whereNull('charges.magasin_id')->orWhereIn('charges.magasin_id', $ouverts))
             ->groupBy('charges.societe_id')
             ->toBase()

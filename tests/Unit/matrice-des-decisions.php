@@ -445,7 +445,7 @@ return [
         ],
         'comptes.proprietaire-sans-vente' => [
             'puce' => 'Comptes et équipe',
-            'regle' => 'Le propriétaire a tous les droits sans qu\'aucune autorisation ne lui soit demandée, sauf celui de vendre, qu\'il n\'a dans aucun magasin réel : ni ticket, ni facture, ni encaissement, ni bon d\'avoir, ni caisse ; il contre-passe, envoie et relance, clôture la journée, ferme la caisse d\'un vendeur, fait les avoirs et les devis.',
+            'regle' => 'Le propriétaire a tous les droits sans qu\'aucune autorisation ne lui soit demandée, sauf celui de vendre, qu\'il n\'a dans aucun magasin : ni ticket, ni facture, ni encaissement, ni bon d\'avoir, ni caisse ; il contre-passe, envoie et relance, clôture la journée, ferme la caisse d\'un vendeur, fait les avoirs et les devis.',
             'tests' => [
                 'tests/Feature/Authorization/ProprietaireSansVenteTest.php::test_le_proprietaire_n_a_aucune_autorisation_de_vente_dans_aucun_de_ses_magasins',
                 'tests/Feature/Authorization/ProprietaireSansVenteTest.php::test_le_proprietaire_n_ouvre_pas_la_caisse_et_n_a_pas_de_caisse_personnelle',
@@ -482,7 +482,7 @@ return [
         ],
         'comptes.administrateur-et-equipe-des-magasins' => [
             'puce' => 'Comptes et équipe',
-            'regle' => 'Un administrateur ne crée ni ne gère jamais les vendeurs et les observateurs, sauf pour nommer responsable l\'un d\'eux et, si le propriétaire l\'y autorise, pour leur redonner l\'accès dans les magasins réels de sa portée.',
+            'regle' => 'Un administrateur ne crée ni ne gère jamais les vendeurs et les observateurs, sauf pour nommer responsable l\'un d\'eux et, si le propriétaire l\'y autorise, pour leur redonner l\'accès dans les magasins de sa portée.',
             'tests' => [
                 'tests/Feature/Filament/EquipeDuMagasinTest.php::test_un_administrateur_ne_cree_jamais_un_vendeur_ou_un_observateur',
                 'tests/Feature/Societe/AutorisationsDesMembresTest.php::test_un_administrateur_ne_coche_jamais_les_autorisations_d_un_vendeur_ou_d_un_observateur',
@@ -493,7 +493,7 @@ return [
         ],
         'comptes.nomination-des-responsables' => [
             'puce' => 'Comptes et équipe',
-            'regle' => 'Un administrateur ne nomme et ne retire les responsables que si le propriétaire l\'y autorise, et seulement dans les magasins réels de sa portée ; sa nomination prend effet aussitôt, le propriétaire en est prévenu et peut l\'annuler en un clic, et l\'administrateur peut annuler sa propre nomination.',
+            'regle' => 'Un administrateur ne nomme et ne retire les responsables que si le propriétaire l\'y autorise, et seulement dans les magasins de sa portée ; sa nomination prend effet aussitôt, le propriétaire en est prévenu et peut l\'annuler en un clic, et l\'administrateur peut annuler sa propre nomination.',
             'tests' => [
                 'tests/Feature/Societe/ResponsablesTest.php::test_un_administrateur_sans_l_autorisation_ne_nomme_aucun_responsable',
                 'tests/Feature/Societe/ResponsablesTest.php::test_un_administrateur_autorise_nomme_et_retire_les_responsables_de_ses_seuls_magasins',
@@ -1138,7 +1138,7 @@ return [
         ],
         'cabinets.comptes-du-cabinet-chez-le-client' => [
             'puce' => 'Cabinets d\'expertise comptable',
-            'regle' => 'Un compte d\'un cabinet n\'est jamais membre de la société d\'un client, n\'y a ni affectation, ni case, ni autorisation de société, et n\'entre chez un client que par le lien de son cabinet ; un collaborateur ne voit que les clients qui lui sont confiés, et y ouvre chaque magasin réel comme s\'il y était connecté, selon les autorisations du client.',
+            'regle' => 'Un compte d\'un cabinet n\'est jamais membre de la société d\'un client, n\'y a ni affectation, ni case, ni autorisation de société, et n\'entre chez un client que par le lien de son cabinet ; un collaborateur ne voit que les clients qui lui sont confiés, et y ouvre chaque magasin comme s\'il y était connecté, selon les autorisations du client.',
             'tests' => [
                 'tests/Feature/Cabinets/CollaborateursTest.php::test_la_base_refuse_une_affectation_ou_une_autorisation_de_societe_a_un_collaborateur',
                 'tests/Feature/Cabinets/CollaborateursTest.php::test_un_collaborateur_n_ouvre_jamais_l_espace_societe_et_ne_change_jamais_de_role',
@@ -1211,7 +1211,7 @@ return [
         ],
         'cabinets.autorisations-accordees-par-le-client' => [
             'puce' => 'Cabinets d\'expertise comptable',
-            'regle' => 'Par défaut, le cabinet a, dans chacun des magasins réels du client, présents et futurs, toutes les autorisations de consultation, jamais le journal d\'audit ni les traces ; le propriétaire du client en retire et, pour un client « Commerce ou atelier », en ajoute parmi celles des achats et du stock, jamais celles de la vente, de la gestion des comptes, des réglages ou de la caisse ; « voir les factures » et « voir les clôtures » sont une seule case.',
+            'regle' => 'Par défaut, le cabinet a, dans chacun des magasins du client, présents et futurs, toutes les autorisations de consultation, jamais le journal d\'audit ni les traces ; le propriétaire du client en retire et, pour un client « Commerce ou atelier », en ajoute parmi celles des achats et du stock, jamais celles de la vente, de la gestion des comptes, des réglages ou de la caisse ; « voir les factures » et « voir les clôtures » sont une seule case.',
             'tests' => [
                 'tests/Feature/Cabinets/AutorisationsDuCabinetTest.php::test_par_defaut_le_cabinet_a_les_consultations_dans_chaque_magasin_du_client',
                 'tests/Feature/Cabinets/AutorisationsDuCabinetTest.php::test_le_cabinet_lit_un_magasin_cree_apres_le_lien',
@@ -1226,7 +1226,7 @@ return [
         ],
         'cabinets.magasins-choisis' => [
             'puce' => 'Cabinets d\'expertise comptable',
-            'regle' => 'Le propriétaire du client choisit les magasins réels que voit son cabinet ou son expert-comptable déclaré : tous, présents et futurs, ou une sélection d\'au moins un magasin, avec une seule liste de cases ; un magasin non choisi n\'est ni listé, ni ouvert, ni compté, et chaque changement s\'inscrit aux journaux et au JET 130.',
+            'regle' => 'Le propriétaire du client choisit les magasins que voit son cabinet ou son expert-comptable déclaré : tous, présents et futurs, ou une sélection d\'au moins un magasin, avec une seule liste de cases ; un magasin non choisi n\'est ni listé, ni ouvert, ni compté, et chaque changement s\'inscrit aux journaux et au JET 130.',
             'tests' => [
                 'tests/Feature/Cabinets/MagasinsOuvertsAuCabinetTest.php::test_un_magasin_non_choisi_n_est_ni_liste_ni_ouvert_et_tous_les_magasins_couvre_les_futurs',
                 'tests/Feature/Cabinets/MagasinsOuvertsAuCabinetTest.php::test_le_tableau_de_bord_et_la_fiche_du_client_ignorent_un_magasin_non_choisi',
@@ -2306,7 +2306,7 @@ return [
         ],
         'caisse.menu-ma-caisse-ou-les-caisses' => [
             'puce' => 'Caisse et clôtures',
-            'regle' => 'Le menu des relevés de caisse s\'appelle « Ma caisse » pour qui tient une caisse sans voir les relevés de toute l\'équipe, « Les caisses » pour les autres, qui y voient aussi les caisses encore ouvertes ; dans l\'espace d\'administration, la page « Les caisses » réunit les relevés et les caisses ouvertes de chaque magasin réel de la portée où la personne voit les relevés de toute l\'équipe.',
+            'regle' => 'Le menu des relevés de caisse s\'appelle « Ma caisse » pour qui tient une caisse sans voir les relevés de toute l\'équipe, « Les caisses » pour les autres, qui y voient aussi les caisses encore ouvertes ; dans l\'espace d\'administration, la page « Les caisses » réunit les relevés et les caisses ouvertes de chaque magasin de la portée où la personne voit les relevés de toute l\'équipe.',
             'tests' => [
                 'tests/Feature/Filament/ClotureCaissePersonnelleResourceTest.php::test_le_menu_s_appelle_les_caisses_sauf_pour_qui_ne_voit_que_sa_caisse',
                 'tests/Feature/Filament/ClotureCaissePersonnelleResourceTest.php::test_les_caisses_ouvertes_s_affichent_en_tete_de_la_page_des_caisses',
@@ -3581,7 +3581,7 @@ return [
             ],
             'T4' => [
                 'decision' => 'Composition des équipes fictives : par société un propriétaire, des administrateurs avec et sans vente ; par magasin un responsable et deux vendeurs, dont une même personne dans deux magasins ; comptes d\'entraînement ; un cabinet vérifié lié à deux sociétés.',
-                'a_venir' => 'Étape 1 bis (campagne de tests initiale) ; composition écrite dans la feuille de route de CLAUDE.md ; les comptes d\'entraînement n\'existent plus depuis la décision de l\'éditeur du 15/11/2026 en soirée, reprise le 16/11/2026 vers 10 h (Q2, cahier DEMO-COPIE) : le magasin de démonstration du compte réel est retiré : la campagne s\'entraîne dans les copies (lots DEMO-COPIE-2 et DEMO-COPIE-3).',
+                'a_venir' => 'Étape 1 bis (campagne de tests initiale) ; composition écrite dans la feuille de route de CLAUDE.md ; les comptes du magasin de démonstration n\'existent plus depuis la décision de l\'éditeur du 15/11/2026 en soirée, reprise le 16/11/2026 vers 10 h (Q2, cahier DEMO-COPIE) : le magasin de démonstration du compte réel est retiré : la campagne s\'exerce dans les copies (lots DEMO-COPIE-2 et DEMO-COPIE-3).',
             ],
             'T5' => [
                 'decision' => 'Gravité des anomalies : Claude classe et corrige, le rapport montre chaque classement, l\'éditeur ne valide que le déclassement d\'une anomalie bloquante.',
@@ -3789,7 +3789,7 @@ return [
             ],
             'Q4-g' => [
                 'decision' => 'Comptes d\'entraînement dans le magasin de démonstration, créés par le propriétaire ou un responsable, retirés à sa fermeture.',
-                'remplacee' => 'Remplacée par la décision de l\'éditeur du 15/11/2026 en soirée, reprise le 16/11/2026 vers 10 h (Q2, cahier DEMO-COPIE) : le magasin de démonstration du compte réel est retiré, et ses comptes d\'entraînement avec lui.',
+                'remplacee' => 'Remplacée par la décision de l\'éditeur du 15/11/2026 en soirée, reprise le 16/11/2026 vers 10 h (Q2, cahier DEMO-COPIE) : le magasin de démonstration du compte réel est retiré, et ses comptes avec lui.',
             ],
             'Q4-h' => [
                 'decision' => 'Le propriétaire ne réalise pas de ventes en caisse : les ventes sont faites par les responsables, les vendeurs et qui en a l\'autorisation (note de l\'éditeur ; depuis la décision du 12/11/2026, il vend dans le magasin de démonstration).',
@@ -4547,7 +4547,7 @@ return [
             ],
             'D70' => [
                 'decision' => 'Garder la démonstration, réservée au propriétaire, qui peut tout y faire.',
-                'remplacee' => 'Remplacée par D71, puis par la décision de l\'éditeur du 15/11/2026 en soirée, reprise le 16/11/2026 vers 10 h (Q2, cahier DEMO-COPIE) : le magasin de démonstration du compte réel est retiré ; sa raison, la loi qui exige de garder les données du mode d\'entraînement, tient : elle deviendra l\'archive signée de chaque copie avant sa suppression (lot DEMO-COPIE-2).',
+                'remplacee' => 'Remplacée par D71, puis par la décision de l\'éditeur du 15/11/2026 en soirée, reprise le 16/11/2026 vers 10 h (Q2, cahier DEMO-COPIE) : le magasin de démonstration du compte réel est retiré ; sa raison, la loi qui exige de garder les données du mode école, tient : elle deviendra l\'archive signée de chaque copie avant sa suppression (lot DEMO-COPIE-2).',
             ],
             'D71' => [
                 'decision' => 'Dans la démonstration, le propriétaire a toutes les autorisations, vente comprise ; le reste ne change pas.',
@@ -4590,7 +4590,7 @@ return [
                 'hors_logiciel' => 'Tenue du document de l\'éditeur.',
             ],
             'SEED-13-11' => [
-                'decision' => 'Le 13/11/2026 vers 08 h 50 UTC : « donne moi la liste de --seed pour voir ici chez moi avec les donnes remplir par --seed » ; vers 09 h UTC, les identifiants pour s\'y connecter : un mot de passe commun facultatif, PILIQI_DEMO_MOT_DE_PASSE, sinon un mot de passe tiré au hasard par compte, affiché à la fin du semis (lot SEED, a-faire-apres-chaine.md).',
+                'decision' => 'Le 13/11/2026 vers 08 h 50 UTC : « donne moi la liste de --seed pour voir ici chez moi avec les donnes remplir par --seed » ; vers 09 h UTC, les identifiants pour s\'y connecter : un mot de passe commun facultatif (celui de PILIQI_SEMIS_MOT_DE_PASSE depuis le choix 21 du cahier DEMO-COPIE), sinon un mot de passe tiré au hasard par compte, affiché à la fin du semis (lot SEED, a-faire-apres-chaine.md).',
                 'regles' => ['hors.donnees-semees'],
             ],
             'DEMO-V-RETARD-14-11' => [
@@ -6375,7 +6375,7 @@ return [
             ],
             'T35.4' => [
                 'decision' => 'Conservation des données du magasin de démonstration : Les tickets, avoirs et clôtures d\'entraînement de la démonstration sont des données de caisse : PILIQI les sécurise, les marque et les garde dix ans comme les autres, même pour une inscription jamais validée.',
-                'a_venir' => 'Lot DEMO-COPIE-2 : remplacée en partie par la décision de l\'éditeur du 15/11/2026 en soirée, reprise le 16/11/2026 vers 10 h (Q2, cahier DEMO-COPIE) : le magasin de démonstration du compte réel est retiré ; que la loi exige de garder les données du mode d\'entraînement tient : avant toute suppression d\'une copie, l\'archive signée de sa caisse se garde six ans (C.18) ; étape 3 pour la notice et l\'attestation.',
+                'a_venir' => 'Lot DEMO-COPIE-2 : remplacée en partie par la décision de l\'éditeur du 15/11/2026 en soirée, reprise le 16/11/2026 vers 10 h (Q2, cahier DEMO-COPIE) : le magasin de démonstration du compte réel est retiré ; que la loi exige de garder les données du mode école tient : avant toute suppression d\'une copie, l\'archive signée de sa caisse se garde six ans (C.18) ; étape 3 pour la notice et l\'attestation.',
             ],
             'T98' => [
                 'decision' => 'Commune d\'un établissement en diffusion partielle : PILIQI situe déjà le magasin d\'après le code commune donné par l\'INSEE, même en diffusion partielle ; sans commune, il refuse l\'établissement, sans jamais deviner le territoire, et vous décidez.',
@@ -6596,7 +6596,7 @@ return [
                 'regles' => ['hors.donnees-semees'],
             ],
             'choix-23' => [
-                'decision' => 'Choix 23 du cahier (D76) : magasinsReels() devient magasins(), et le mot « réel » ne sert plus à exclure un magasin.',
+                'decision' => 'Choix 23 du cahier (D76) : la relation des magasins réels de la société devient magasins(), et le mot « réel » ne sert plus à exclure un magasin.',
                 'hors_logiciel' => 'Un nom du code et des textes, sans effet sur une règle : chaque magasin d\'une société est un vrai magasin.',
             ],
             'choix-24-25' => [

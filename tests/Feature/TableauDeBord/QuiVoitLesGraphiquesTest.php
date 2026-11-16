@@ -276,7 +276,7 @@ class QuiVoitLesGraphiquesTest extends TestCase
      * ni la liste des clients ni sa fiche n'offrent « Graphiques », et sa
      * page, ouverte par l'adresse directe, dit qu'il n'a encore aucun
      * magasin au lieu de monter la grille ; un client qui a un magasin
-     * réel offre « Graphiques » et monte la grille.
+     * offre « Graphiques » et monte la grille.
      */
     public function test_un_client_sans_magasin_n_offre_pas_de_graphiques_et_sa_page_le_dit(): void
     {

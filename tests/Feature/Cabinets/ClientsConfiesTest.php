@@ -26,7 +26,7 @@ use Tests\TestCase;
  * ses collaborateurs les clients liés qu'il suivra (voir
  * ConfierDesClientsAction) : un collaborateur n'ouvre que ceux-là, et
  * l'accès suit aussitôt chaque changement, au JET 130 de chaque magasin
- * réel du client et au journal d'audit du cabinet.
+ * du client et au journal d'audit du cabinet.
  */
 class ClientsConfiesTest extends TestCase
 {

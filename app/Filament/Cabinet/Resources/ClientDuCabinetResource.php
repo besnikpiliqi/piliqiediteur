@@ -41,8 +41,8 @@ use Illuminate\Support\Facades\DB;
  * est confié ; elle se cherche par dénomination, sans casse ni accents, ou
  * par SIREN, toujours parmi ces seuls liens ; le propriétaire y confie un
  * client à ses collaborateurs et met fin au lien. La fiche (voir FicheDuClient) montre son identité, ses réglages
- * fiscaux, les autorisations qu'il accorde au cabinet et ses magasins
- * réels, chacun avec le bouton qui l'ouvre dans le panneau des magasins.
+ * fiscaux, les autorisations qu'il accorde au cabinet et ses magasins,
+ * chacun avec le bouton qui l'ouvre dans le panneau des magasins.
  */
 class ClientDuCabinetResource extends RessourceDuPanneauCabinet
 {

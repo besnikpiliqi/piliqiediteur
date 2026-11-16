@@ -150,8 +150,8 @@ class CloreLInscriptionAction
 
     /**
      * Exécute la clôture dans le contexte de la société, dans une
-     * transaction qui verrouille d'abord les registres de ses magasins
-     * réels, par identifiant croissant (voir
+     * transaction qui verrouille d'abord les registres de ses magasins,
+     * par identifiant croissant (voir
      * RegistreFiscal::sousVerrouDesMagasins()), puis sa ligne (« for no key
      * update »), comme la saisie du code : la fin du lien avec un cabinet
      * d'expertise comptable s'inscrit au JET 130 de chacun de ces magasins.

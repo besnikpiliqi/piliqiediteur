@@ -17,7 +17,7 @@ use LogicException;
  * compte, avec le même compte et le même identifiant (voir PorteeDesDroits) :
  * - nommer responsable un vendeur ou un observateur : le propriétaire, ou
  *   un administrateur autorisé à nommer les responsables, dans un magasin
- *   réel de sa portée ; le propriétaire en est prévenu, et la nomination
+ *   de sa portée ; le propriétaire en est prévenu, et la nomination
  *   s'annule en un clic (voir AnnulerUneNominationAction) ;
  * - rétrograder un responsable : le propriétaire seul ;
  * - le rôle et les cases d'un vendeur ou d'un observateur : le propriétaire,

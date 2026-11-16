@@ -381,17 +381,20 @@ class OutillageTest extends TestCase
      * Les commentaires devenus inutiles sont supprimés (CLAUDE.md,
      * « Développement ») : aucun texte du code, des migrations ni des vues
      * ne garde une formule que la conception de la société a retirée
-     * (critères de fin de sa section 14), même coupée en fin de ligne
-     * d'un commentaire, où une recherche ligne par ligne ne la voit pas.
+     * (critères de fin de sa section 14), ni un « magasin réel », que le
+     * retrait du magasin de démonstration a rendu sans objet (choix 23 du
+     * cahier DEMO-COPIE, D76), même coupée en fin de ligne d'un
+     * commentaire, où une recherche ligne par ligne ne la voit pas.
      */
     public function test_aucun_texte_du_code_ne_garde_une_formule_retiree_meme_coupee_en_fin_de_ligne(): void
     {
-        $formules = ['Super Admin', 'un seul magasin', 'magasin principal', 'écran de sélection', 'seul le propriétaire coche'];
+        $formules = ['Super Admin', 'un seul magasin', 'magasin principal', 'écran de sélection', 'seul le propriétaire coche', 'magasin réel', 'magasins réels'];
         $enUneLigne = static fn (string $texte): string => (string) preg_replace('/(?:\s|\*|\/\/|#)+/u', ' ', $texte);
         $trouvees = [];
 
         $this->assertStringContainsString('un seul magasin', $enUneLigne("Il n'appartient qu'à un seul\n * magasin de la société"));
         $this->assertStringContainsString('seul le propriétaire coche', $enUneLigne("celles que seul le\n     // propriétaire coche"));
+        $this->assertStringContainsString('magasins réels', $enUneLigne("les responsables des magasins\n *   réels de sa portée"));
 
         foreach (['app', 'database', 'resources'] as $dossier) {
             foreach (File::allFiles(base_path($dossier)) as $fichier) {

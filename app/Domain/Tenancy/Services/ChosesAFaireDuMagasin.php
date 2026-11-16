@@ -356,7 +356,7 @@ final class ChosesAFaireDuMagasin
     /**
      * La société est déclarée membre d'un assujetti unique (groupe TVA,
      * décision P3.1, voir Magasin::REFUS_ASSUJETTI_UNIQUE) : aucun magasin
-     * réel ne vend, et chaque compte du magasin le lit ici, en rouge, avec
+     * ne vend, et chaque compte du magasin le lit ici, en rouge, avec
      * la raison, puisque les gestes de vente ne s'y montrent plus. À faire
      * pour qui règle les paramètres fiscaux de la société (le propriétaire,
      * un administrateur autorisé), qui y mène, à surveiller pour les

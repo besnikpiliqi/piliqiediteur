@@ -267,7 +267,7 @@ class MembresTest extends TestCase
 
     /**
      * Au plus 20 comptes créés par jour et par auteur, plus 10 par magasin
-     * réel ouvert de la société, contre les abus : le compte de trop est
+     * ouvert de la société, contre les abus : le compte de trop est
      * refusé à son auteur, un autre auteur crée encore, et le lendemain la
      * limite repart.
      */

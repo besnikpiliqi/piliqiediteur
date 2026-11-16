@@ -30,7 +30,7 @@ use LogicException;
  * des registres de tous les magasins de la société, puis de la ligne de la
  * société, qui attend encore son code : la société est validée
  * (validee_le, seule écriture de cette colonne) ; chacun de ses magasins
- * réels actifs se met en activité (SIRET réservé, période ouverte, droits
+ * actifs se met en activité (SIRET réservé, période ouverte, droits
  * implicites du propriétaire au JET 130, voir MiseEnActiviteDesMagasins),
  * que son établissement soit déjà confirmé par le répertoire Sirene ou
  * encore à vérifier (il ne vend alors qu'après sa confirmation, comme un

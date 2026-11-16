@@ -1049,8 +1049,7 @@ class MagasinResourceTest extends TestCase
 
     /**
      * Un ticket de 12,00 € TTC au comptoir du magasin, vendu par son
-     * responsable de test : le propriétaire ne vend jamais dans un magasin
-     * réel.
+     * responsable de test : le propriétaire ne vend jamais.
      */
     private function vendre(Magasin $magasin): Facture
     {

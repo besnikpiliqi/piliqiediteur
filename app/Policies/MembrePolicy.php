@@ -12,7 +12,7 @@ use App\Models\User;
  * d'un magasin), selon les règles de PorteeDesDroits :
  * - la liste de l'espace d'administration : tous les comptes pour le
  *   propriétaire ; pour un administrateur, les responsables des magasins
- *   réels de sa portée s'il est autorisé à nommer les responsables, et
+ *   de sa portée s'il est autorisé à nommer les responsables, et
  *   leurs vendeurs et leurs observateurs s'il est autorisé à leur redonner
  *   l'accès ; rien pour tout autre compte ;
  * - créer un compte : le propriétaire, ou un administrateur autorisé à

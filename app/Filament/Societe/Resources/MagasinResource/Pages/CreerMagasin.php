@@ -372,7 +372,7 @@ class CreerMagasin extends CreateRecord
             return null;
         }
 
-        $this->siretsDesMagasins ??= array_flip(ValeursLues::textes($this->societe()->magasins()->whereNotNull('siret')->whereNull('siret_libere_le')->pluck('siret')));
+        $this->siretsDesMagasins ??= array_flip(ValeursLues::textes($this->societe()->magasins()->whereNull('siret_libere_le')->pluck('siret')));
 
         return match (true) {
             array_key_exists($choix, $this->siretsDesMagasins) => self::MARQUE_DEJA_UN_MAGASIN,

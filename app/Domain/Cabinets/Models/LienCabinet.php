@@ -316,9 +316,9 @@ class LienCabinet extends Model
             throw new InvalidArgumentException(self::MESSAGE_SELECTION_VIDE);
         }
 
-        $reels = ValeursLues::entiers(DB::table('magasins')->where('societe_id', $this->societe_id)->whereIn('id', $choisis)->pluck('id'));
+        $magasinsDuClient = ValeursLues::entiers(DB::table('magasins')->where('societe_id', $this->societe_id)->whereIn('id', $choisis)->pluck('id'));
 
-        if (array_diff($choisis, $reels) !== []) {
+        if (array_diff($choisis, $magasinsDuClient) !== []) {
             throw new InvalidArgumentException('Seuls les magasins de votre société s\'ouvrent à votre cabinet.');
         }
 

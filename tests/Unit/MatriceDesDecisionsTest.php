@@ -206,6 +206,30 @@ class MatriceDesDecisionsTest extends TestCase
     }
 
     /**
+     * Le mot « réel » ne distingue plus aucun magasin (choix 23 du cahier
+     * DEMO-COPIE, D76) : chaque magasin d'une société est un vrai magasin.
+     * Ni CLAUDE.md ni le texte d'une règle de la matrice ne parle donc d'un
+     * « magasin réel », même coupé en fin de ligne ; seules les décisions
+     * recopiées gardent les mots du jour où elles ont été prises.
+     */
+    public function test_aucune_regle_ne_distingue_un_magasin_reel(): void
+    {
+        $magasinReel = '/\bmagasins?\s+réels?\b/iu';
+        $this->assertSame(1, preg_match($magasinReel, "dans aucun magasin\n réel :"));
+        $this->assertSame(0, preg_match($magasinReel, 'le magasin réellement ouvert'));
+
+        $fautes = preg_match($magasinReel, self::lire('CLAUDE.md')) === 1 ? ['CLAUDE.md'] : [];
+
+        foreach (self::matrice()['regles'] as $cle => $regle) {
+            if (preg_match($magasinReel, $regle['regle']) === 1) {
+                $fautes[] = $cle;
+            }
+        }
+
+        $this->assertSame([], $fautes);
+    }
+
+    /**
      * @return array{
      *     regles: array<string, array{puce: string, regle: string, tests: list<string>}>,
      *     decisions: array<string, array<string, array{decision: string, regles?: list<string>, hors_logiciel?: string, remplacee?: string, a_venir?: string, explication?: string, a_trancher?: string}>>

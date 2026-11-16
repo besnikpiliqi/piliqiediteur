@@ -28,7 +28,7 @@ use Illuminate\Support\Facades\DB;
  * encore des droits, quel que soit son statut (voir User::droitsDans()) :
  * le propriétaire de la société, un compte affecté à ce magasin ou à
  * tous, ou un compte d'un cabinet d'expertise comptable dans un magasin
- * réel d'un client que son lien actif lui ouvre, dans le contexte de ce
+ * d'un client que son lien actif lui ouvre, dans le contexte de ce
  * client ; qui n'y en a plus n'a plus rien à y inscrire.
  *
  * Une déconnexion n'est jamais bloquée : laisser une session ouverte

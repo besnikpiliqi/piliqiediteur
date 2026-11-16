@@ -51,10 +51,10 @@ use Filament\Support\Contracts\HasLabel;
  *   caisse une fois sa saisie terminée, jamais pour un chiffre en cours de
  *   frappe (Q8, voir LignesRetirees).
  * - L'entrée en mode démonstration (mode école, 100) et sa sortie (105)
- *   ne s'écrivent que dans une copie du site de démonstration : l'entrée
- *   à la construction du modèle, la sortie avant
- *   l'archive de la copie ; jamais dans une base réelle, où le
- *   vérificateur les signale.
+ *   sont réservées aux copies du site de démonstration (l'entrée à la
+ *   construction de la société modèle, la sortie avant l'archive de la
+ *   copie) : le site réel n'a pas de mode école, et aucun de ses gestes
+ *   ne les écrit.
  * - Chaque vérification de l'intégrité du registre (voir
  *   VerifierIntegriteAction) inscrit ses anomalies, une rupture de
  *   séquence ou de numérotation (95) ou un autre défaut d'intégrité (90),

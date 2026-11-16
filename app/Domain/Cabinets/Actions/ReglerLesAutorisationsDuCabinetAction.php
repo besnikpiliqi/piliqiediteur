@@ -34,7 +34,7 @@ use LogicException;
  * JournalDesDroits::modifierLeLien() : le lien doit être encore en cours
  * (actif, ou la déclaration de l'expert-comptable de la société) ; le
  * JET 130 de chaque compte du cabinet qui a accès, dans chaque magasin
- * réel du client où ses droits changent (un magasin ajouté ou retiré de la
+ * du client où ses droits changent (un magasin ajouté ou retiré de la
  * sélection compris), et l'audit dans les deux journaux, avec les
  * autorisations et les magasins ouverts. Un compte du cabinet perd un
  * magasin retiré dès sa requête suivante. Le propriétaire du cabinet est

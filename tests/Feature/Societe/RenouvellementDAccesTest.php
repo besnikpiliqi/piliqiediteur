@@ -43,7 +43,7 @@ use Tests\TestCase;
  * observateur ; par un administrateur autorisé à nommer les responsables
  * pour un responsable d'un magasin de sa portée ; par un administrateur
  * autorisé à redonner l'accès pour un vendeur ou un observateur d'un magasin
- * réel de sa portée ; personne ne redonne celui du propriétaire. La
+ * de sa portée ; personne ne redonne celui du propriétaire. La
  * personne présente tape elle-même son nouveau mot de passe ; absente, il
  * redevient son identifiant. Chaque renouvellement ferme les sessions,
  * s'inscrit au journal d'audit, s'affiche à la personne et, fait par un

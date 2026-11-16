@@ -182,12 +182,12 @@ class ExpertsComptablesConcurrenceTest extends TestCase
     /**
      * @return array<string, array{0: bool}>
      */
-    public static function avecEtSansMagasinReel(): array
+    public static function avecEtSansMagasin(): array
     {
         return ['avec un magasin' => [true], 'sans magasin' => [false]];
     }
 
-    #[DataProvider('avecEtSansMagasinReel')]
+    #[DataProvider('avecEtSansMagasin')]
     public function test_un_rattachement_et_le_retrait_de_la_declaration_simultanes_ne_laissent_qu_une_issue(bool $avecUnMagasin): void
     {
         [$client, $declaration, $cabinet, $marc] = $this->declarationEtCabinetVerifie($avecUnMagasin);
@@ -346,7 +346,7 @@ class ExpertsComptablesConcurrenceTest extends TestCase
      * adresse attend la déclaration (interblocage). Elle passe après lui :
      * le compte est retiré, la correction refusée, l'adresse inchangée.
      */
-    #[DataProvider('avecEtSansMagasinReel')]
+    #[DataProvider('avecEtSansMagasin')]
     public function test_la_correction_de_l_adresse_pendant_le_rattachement_passe_avant_ou_apres_sans_interblocage(bool $avecUnMagasin): void
     {
         [$client, $marc] = $this->declarationSansMotDePasseChoisi($avecUnMagasin);
@@ -405,7 +405,7 @@ class ExpertsComptablesConcurrenceTest extends TestCase
         $this->assertSame(1, LienCabinet::query()->withoutGlobalScopes()->where('societe_id', $magasin->societe_id)->whereIn('etat', [EtatDuLien::Actif->value, EtatDuLien::Declare->value])->count());
     }
 
-    #[DataProvider('avecEtSansMagasinReel')]
+    #[DataProvider('avecEtSansMagasin')]
     public function test_la_revocation_du_client_pendant_le_rattachement_ne_laisse_aucun_lien_actif_ni_compte_ouvert(bool $avecUnMagasin): void
     {
         [$client, $declaration, $cabinet, $marc] = $this->declarationEtCabinetVerifie($avecUnMagasin);

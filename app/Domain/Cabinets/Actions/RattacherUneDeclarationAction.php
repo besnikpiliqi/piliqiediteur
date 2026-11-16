@@ -36,7 +36,7 @@ use LogicException;
  * dans les deux sens, sont retirées, leur jeton effacé. Le tout dans le
  * contexte du client, sous les verrous de
  * JournalDesDroits::modifierLeLien(), avec le JET 130 de chaque magasin
- * réel (comptes retirés, propriétaire du cabinet qui entre) et les entrées
+ * (comptes retirés, propriétaire du cabinet qui entre) et les entrées
  * des deux journaux d'audit ; rien des comptes fermés au journal du
  * cabinet.
  *

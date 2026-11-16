@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 16/11/2026 à 20:55 UTC par pilotage-sync.sh : « Décision : version du module fiscal remise à 1.0 en production (F55) ».
+Mis à jour le 16/11/2026 à 21:23 UTC par pilotage-sync.sh : « Point de suivi 16/11 21:25 UTC : DEMO-COPIE-2 fin de lot ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

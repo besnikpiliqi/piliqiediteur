@@ -3084,3 +3084,13 @@ et pourquoi changer la version en fait ??? tant que n est pas en production ?
 
 tu garde donc tu change rien mais quand se met en production alors tu le met 1.0 pour commencer
 
+## 353. 2026-11-16 21:00 UTC
+
+<!-- attach -->
+
+> DEMO-COPIE-2
+
+
+
+il y aura combien partie
+

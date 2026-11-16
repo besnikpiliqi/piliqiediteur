@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 16/11/2026 à 05:51 UTC par pilotage-sync.sh : « Compte rendu DATEOP ».
+Mis à jour le 16/11/2026 à 06:26 UTC par pilotage-sync.sh : « Point 06:28 ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -37,6 +37,42 @@ f9e4ea17 Ventes calculées ligne par ligne (règle (b)) et PDF aux modèles M6-b
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
+ M app/Domain/Facturation/Actions/CreerDevisAction.php
+ M app/Domain/Facturation/Actions/EmettreDevisAction.php
+ M app/Domain/Facturation/Actions/EnvoyerDocumentAction.php
+ M app/Domain/Facturation/Actions/ModifierDevisAction.php
+ M app/Domain/Facturation/Actions/RepondreAuDevisEnLigneAction.php
+ M app/Domain/Facturation/Enums/TypeDocument.php
+ M app/Domain/Facturation/Jobs/EnvoyerDocumentJob.php
+ M app/Domain/Facturation/Mail/DocumentMail.php
+ M app/Domain/Facturation/Models/Devis.php
+ M app/Domain/Facturation/Models/LienDuDevis.php
+ M app/Domain/Facturation/Models/ReponseDuDevis.php
+ M app/Domain/Facturation/Notifications/ReponseDuClientAuDevis.php
+ M app/Domain/Facturation/Services/DevisPdfGenerator.php
+ M app/Domain/Tenancy/Actions/ModifierLesParametresDuMagasinAction.php
+ M app/Domain/Tenancy/Enums/ActionAuditee.php
+ M app/Domain/Tenancy/Models/Magasin.php
+ M app/Filament/App/Pages/ParametresFactures.php
+ M app/Filament/App/Resources/DevisResource.php
+ M app/Filament/App/Resources/DevisResource/Pages/CreateDevis.php
+ M app/Filament/App/Resources/DevisResource/Pages/EditDevis.php
+ M app/Http/Controllers/ReponseAuDevisController.php
+ M database/migrations/0001_01_01_000000_create_magasins_table.php
+ M database/migrations/2026_10_03_100001_create_devis_table.php
+ M database/migrations/2026_10_14_100008_create_reponses_des_devis_table.php
+ M database/seeders/Semis/DocumentsDesCas.php
+ M resources/views/devis/pdf.blade.php
+ M resources/views/devis/reponse-enregistree.blade.php
+ M resources/views/devis/reponse.blade.php
+ M resources/views/documents/pdf/styles.blade.php
+ M resources/views/mail/document.blade.php
+ M tests/Feature/Facturation/EnvoyerDocumentJobConcurrenceTest.php
+ M tests/Feature/Facturation/EnvoyerDocumentJobTest.php
+ M tests/Feature/Facturation/ReponseAuDevisEnLigneTest.php
+ M tests/Feature/Filament/ParametresFacturesTest.php
+?? app/Domain/Facturation/Services/DepannageADomicile.php
+?? app/Domain/Facturation/Services/DroitDeRetractation.php
 ```
 
 ## Dernière course de la chaîne
@@ -44,7 +80,6 @@ f9e4ea17 Ventes calculées ligne par ligne (règle (b)) et PDF aux modèles M6-b
 Course `wf_ee9b6e6e-908`, étapes commencées (de la plus ancienne à la plus récente) :
 
 ```
-CHARGES:notes
 REGUL:implementation
 REGUL:implementation-2
 REGUL:relecture1
@@ -69,4 +104,5 @@ DATEOP:correction
 DATEOP:poussee
 DATEOP:notes
 DEVIS-RET:implementation
+DEVIS-RET:implementation-2
 ```

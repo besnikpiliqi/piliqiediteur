@@ -3052,3 +3052,13 @@ et est ce que se peux creer des nouveau membre comme en vrai?
 
 je veux pas pour l instan supprimer le compte demo sur le site vrai, car peut etre je vais changer d avis apres mais je vais peut etre quand meme la supprimer plus tard car juste pour supprimer tu m as dit que ca prend des heurs et je veux pas predre des heurs à supprimer. et pour le nouveau demo je veux savoir pourquoi autan de temps alors que tu copi ce qui est deja fait
 
+## 348. 2026-11-16 09:00 UTC
+
+<!-- attach -->
+
+> Une base par société. Aujourd’hui, PILIQI travaille avec une seule base de données. Avec les copies, chaque visite doit être aiguillée vers la bonne base, sans jamais se tromper. Le cache, les sessions, les fichiers et les tâches de fond doivent aussi être séparés par copie. C’est le gros morceau, et le plus délicat pour la sécurité : une erreur ferait voir la démonstration d’une société à une autre.
+
+
+
+et pourqoui une base par societe et pourqoui te fait pas comme dans le reel une base pour tout
+

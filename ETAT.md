@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 16/11/2026 à 08:59 UTC par pilotage-sync.sh : « Q2 suspendue ».
+Mis à jour le 16/11/2026 à 09:01 UTC par pilotage-sync.sh : « DEMO-COPIE : choix A/B posé ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

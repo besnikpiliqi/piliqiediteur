@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 16/11/2026 à 05:49 UTC par pilotage-sync.sh : « Après le lot DATEOP ».
+Mis à jour le 16/11/2026 à 05:51 UTC par pilotage-sync.sh : « DATEOP poussé, CI rouge notée ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -44,7 +44,6 @@ f9e4ea17 Ventes calculées ligne par ligne (règle (b)) et PDF aux modèles M6-b
 Course `wf_ee9b6e6e-908`, étapes commencées (de la plus ancienne à la plus récente) :
 
 ```
-CHARGES:poussee
 CHARGES:notes
 REGUL:implementation
 REGUL:implementation-2
@@ -69,4 +68,5 @@ DATEOP:relecture2
 DATEOP:correction
 DATEOP:poussee
 DATEOP:notes
+DEVIS-RET:implementation
 ```

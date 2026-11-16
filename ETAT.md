@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 16/11/2026 à 05:51 UTC par pilotage-sync.sh : « DATEOP poussé, CI rouge notée ».
+Mis à jour le 16/11/2026 à 05:51 UTC par pilotage-sync.sh : « Compte rendu DATEOP ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

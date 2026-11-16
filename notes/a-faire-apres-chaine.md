@@ -410,3 +410,19 @@ Le compte rendu donne :
    - Le README reçoit une section « Données de démonstration sur votre PC ». La feuille de route de CLAUDE.md est mise à jour : l'étape 15 met en ligne le site de démonstration. Ses trois bases modèles, une par type d'activité, se refont chaque nuit par le semis.
 
 6. Une fois le lot poussé, ajouter le jour même dans l'onglet de l'éditeur « À faire de votre côté » : `git pull`, puis `php artisan migrate:fresh --seed`, puis se connecter avec les comptes affichés.
+
+## Lot « GRAPH-AN » : graphiques par année, sur 10 ans (demande de l'éditeur du 16/11/2026 vers 23 h 30, heure de Paris)
+
+Mots de l'éditeur (capture du tableau de bord de Maison Ferrand Halles, graphiques « Ventes et achats HT par mois » et « TVA à payer par mois ») : « quand tu commence ce qui est arrete alors pour les statistique il faut que tu ajoute aussi par année, donc pour les 10 années, donc si les années arriere sont vide alors tu affiche que les années qui ont des données. »
+
+Place : au départ de la reprise (après DEMO-COPIE-3), juste après les relectures de DEVIS-RET, avant MDP.
+
+Ce que le lot fait (proposition de Claude, maquette à montrer à l'éditeur avant le lot) :
+1. Menu « Période » : un nouveau choix « Par année (10 dernières années) ». Les graphiques mensuels (ventes et achats, TVA, marge brute, encaissements par mode, avoirs, nombre de ventes et panier moyen, factures, etc.) montrent alors une barre (ou un point) par année au lieu d'un par mois.
+2. Années affichées : les 10 dernières années (l'année en cours comprise, jusqu'à aujourd'hui), mais en partant de la première année qui a des données dans les magasins comptés : les années plus anciennes, vides, ne s'affichent pas. Une année vide au milieu (magasin fermé un an) reste affichée à 0, pour ne pas fausser la lecture.
+3. Exercice : quand la société clôt son exercice en décembre, « année » = année civile ; sinon, chaque barre est un exercice (« exercice 2025-2026 »), comme le choix B du 15/11.
+4. « Comparer avec l'année précédente » n'a pas de sens par année : la case se grise avec une phrase grise (« La comparaison se fait mois par mois ; par année, chaque barre est déjà une année. »).
+5. Les chiffres clés du haut (mois en cours) ne changent pas. Le graphique existant « Chiffre d'affaires par an » reste (il deviendrait redondant : à trancher dans la maquette — garder ou le retirer).
+6. Mêmes règles qu'aujourd'hui : magasins où la personne voit tous les documents, montants additionnés en centimes dans le code, préférence retenue en base par compte et par écran, valeur inconnue refusée.
+7. Semis : au moins une société avec des données sur plusieurs années, et une avec une année vide au milieu, pour que chaque cas se voie (le semis couvre aujourd'hui ~13 mois : en ajouter, par les vraies actions, sur 3 ans au moins dans une société).
+8. Tests : domaine (années vides retirées en tête, gardées au milieu, exercice décalé, 10 ans au plus), préférences, navigateur (société, magasin, cabinet, expert-comptable), contraste des deux modes.

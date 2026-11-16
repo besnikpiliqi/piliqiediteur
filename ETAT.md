@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 16/11/2026 à 21:23 UTC par pilotage-sync.sh : « Point de suivi 16/11 21:25 UTC : DEMO-COPIE-2 fin de lot ».
+Mis à jour le 16/11/2026 à 21:32 UTC par pilotage-sync.sh : « Demande : lot GRAPH-AN (graphiques par année, 10 ans) ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -39,6 +39,7 @@ b0d52373 Graphiques du tableau de bord (lot GRAPH)
 ```
  M .env.example
  M .github/workflows/tests.yml
+ M .gitignore
  M CLAUDE.md
  M README.md
  M app/Console/Commands/DiagnostiquerCaisseSecurisee.php
@@ -96,7 +97,6 @@ b0d52373 Graphiques du tableau de bord (lot GRAPH)
  M database/seeders/Semis/HorlogeDuSemis.php
  M database/seeders/Semis/MotsDePasseDuSemis.php
  M database/seeders/Semis/SemisComplet.php
- M database/seeders/Semis/SocietesDesCas.php
 ```
 
 ## Dernière course de la chaîne
@@ -117,4 +117,5 @@ DEMO-COPIE-2:implementation-2
 DEMO-COPIE-2:implementation-3
 DEMO-COPIE-2:implementation-4
 DEMO-COPIE-2:implementation-5
+DEMO-COPIE-2:implementation-6
 ```

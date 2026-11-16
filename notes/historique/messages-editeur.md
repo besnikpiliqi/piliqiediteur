@@ -3094,3 +3094,9 @@ tu garde donc tu change rien mais quand se met en production alors tu le met 1.0
 
 il y aura combien partie
 
+## 354. 2026-11-16 21:32 UTC
+
+[1 capture(s) d'écran jointe(s)]
+
+quand tu commence ce qui est arrete alors pour les statistique il faut que tu ajoute aussi par année, donc pour les  10 années, donc si les années arriere sont vide alors tu affiche que les années qui ont des données.
+

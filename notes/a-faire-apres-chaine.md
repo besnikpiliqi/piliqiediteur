@@ -435,3 +435,22 @@ Mots de l'éditeur, avec la capture de la maquette « G1 + chiffres de G2 » (mo
 3. Cartes des chiffres : plus compactes dans la maquette (libellé petit, chiffre, ligne) : comparer et aligner.
 4. Le menu « Magasin » n'apparaît pas dans le panneau d'un magasin : c'est voulu, comme dans la maquette (écran « Panneau du magasin Centre ») et CLAUDE.md ; il apparaît dans l'espace de la société, du cabinet et de l'expert-comptable.
 Test en navigateur : comparer la barre (une ligne à 1 280 px, libellé et menu sur la même ligne) et la couleur de la variation (hausse / baisse), dans les deux modes.
+
+### GRAPH-AN : choix de l'éditeur (16/11/2026 vers 23 h 59, heure de Paris), d'après la page modeles/options-des-graphiques.html
+
+Mots de l'éditeur : « ouii j'ai vu c'est bon donc tu oublie mais tu ajoute ces que t as proposé : "Par trimestre","Par année, sur 10 ansé", "Cumul depuis le début de l'année","Écart en % sur un an","Par vendeur", "Cliquer pour voir le détail". tu oublie pas que dans le demo tu laisse tout les carte ouvertes afin que la societe voit tout de suite toute. et en reel il faut qq carte prancipal ouverte au demarrege donc au debut. »
+
+Retenu (le lot GRAPH-AN fait exactement ceci, maquette à montrer avant) :
+- Point 0 : barre des filtres sur une ligne (libellé à gauche du menu), couleurs de la ligne sous les chiffres clés (hausse verte, baisse rouge), cartes des chiffres compactes. Le menu « Magasin » absent du panneau d'un magasin reste ainsi (l'éditeur : « c'est bon … tu oublie »).
+- Menu « Découper par » avec trois valeurs : mois (défaut, existant), trimestre, année. (Semaine, jour et « Du … au … » NON retenus.)
+- Par année : 10 dernières années, années vides du début cachées, vides du milieu à 0 ; exercice décalé = une barre par exercice.
+- Par trimestre (T1 … T4, ou trimestres de l'exercice quand il ne finit pas en décembre).
+- Case « Cumul depuis le début de l'année » (ou de l'exercice) : chaque point ajoute les précédents ; avec « Comparer », la courbe de l'année précédente cumulée en pointillés.
+- « Écart en % sur un an » : choix dans le menu de la carte, une barre par période, verte au-dessus de 0, rouge en dessous ; pas d'écart (« – ») quand l'année précédente vaut 0.
+- Nouveau graphique « Ventes par vendeur » (barres couchées) : CA HT net par compte vendeur, nom figé sur chaque vente ; visible seulement par qui voit les ventes de toute l'équipe dans les magasins comptés (propriétaire, responsable et administrateur cochés « Voir les graphiques » ET qui voient toutes les factures) ; jamais au cabinet ni à l'expert-comptable ? → NON : ils voient les documents de toute l'équipe selon leurs consultations ; règle : comme les autres graphiques, le magasin ne compte que si la personne voit toutes les ventes de toute l'équipe. Phrase grise pour les magasins non comptés.
+- « Cliquer pour voir le détail » : clic sur une barre d'un graphique par période → la même carte redécoupe cette période plus finement (année → mois, trimestre → mois, mois → jours) ; clic sur un jour → la liste filtrée des documents de ce jour (lien vers la liste, avec le filtre, pour qui peut voir ces documents) ; bouton « Revenir ». Rien ne se calcule sur un montant affiché.
+- NON retenus : semaine, jour, dates libres, magasins côte à côte, par heure, tendance lissée, objectif.
+
+Cartes ouvertes au départ :
+- Site réel : quelques cartes principales au premier affichage (aujourd'hui : Ventes et achats HT par mois, TVA à payer par mois, CA HT par mois, et CA par magasin quand il y a plusieurs magasins) ; garder ce défaut (éventuellement ajouter « Factures à encaisser par ancienneté » : à montrer dans la maquette).
+- Site de démonstration : TOUTES les cartes que chaque compte peut voir sont ouvertes au départ, pour que la société voie tout de suite tout. Règle générale (« toutes les cartes permises au compte »), pas une liste figée, pour que les graphiques ajoutés plus tard (Ventes par vendeur) s'y ouvrent aussi. Écrit aussi au cahier DEMO-COPIE pour le lot 3.

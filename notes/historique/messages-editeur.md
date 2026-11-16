@@ -3118,3 +3118,13 @@ don tu laisse tel qu ils sont mais je voulais dire plutot des solution ou option
 
 ce que tu m avais proposé et j ai accepté mais toi tu n as pas mis comme j'ai dit
 
+## 359. 2026-11-16 22:19 UTC
+
+<!-- attach -->
+
+> Ce qui est volontaire : le menu « Magasin » n’apparaît pas dans le panneau d’un magasin, comme dans la maquette quand on choisit « Panneau du magasin ». Il est bien là dans l’espace de la société.
+
+
+
+ouii j'ai vu c'est bon donc tu oublie mais tu ajoute ces que t as proposé : "Par trimestre","Par année, sur 10 ansé", "Cumul depuis le début de l'année","Écart en % sur un an","Par vendeur", "Cliquer pour voir le détail". tu oublie pas que dans le demo tu laisse tout les carte ouvertes afin que la societe voit tout de suite toute. et en reel il faut qq carte prancipal ouverte au demarrege donc au debut.
+

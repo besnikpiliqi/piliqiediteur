@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 16/11/2026 à 21:56 UTC par pilotage-sync.sh : « GRAPH-AN point 0 : écarts avec la maquette ».
+Mis à jour le 16/11/2026 à 22:20 UTC par pilotage-sync.sh : « Décision : options GRAPH-AN, cartes ouvertes en démonstration ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

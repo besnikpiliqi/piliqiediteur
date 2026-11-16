@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 16/11/2026 à 00:57 UTC par pilotage-sync.sh : « DEMO-COPIE : créer des membres ».
+Mis à jour le 16/11/2026 à 01:24 UTC par pilotage-sync.sh : « Cahier DEMO-COPIE v2 et précisions ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -43,6 +43,8 @@ eba4bc85 Relecture du lot ER-PRO
 ```
  M CLAUDE.md
  M README.md
+ M app/Domain/Charges/Models/Charge.php
+ M app/Domain/Charges/Services/EtatDesChargesEnExcel.php
  M app/Domain/Facturation/Enums/TypeDeDocumentTelechargeable.php
  M app/Domain/Facturation/Services/ArchiveDesDocuments.php
  M app/Domain/Facturation/Services/DocumentTrouve.php
@@ -59,6 +61,7 @@ eba4bc85 Relecture du lot ER-PRO
  M database/migrations/2026_10_14_100006_create_telechargements_documents_table.php
  M database/seeders/Semis/DerniersGestes.php
  M resources/views/filament/telecharger-les-documents.blade.php
+ M tests/Browser/Parcours/ChargesTest.php
  M tests/Browser/Parcours/TelechargerLesDocumentsTest.php
  M tests/Browser/inventaire-des-actions.php
  M tests/Feature/Cabinets/MagasinsOuvertsAuCabinetTest.php
@@ -87,4 +90,5 @@ redaction
 critique:securite
 critique:caisse
 critique:completude
+revision
 ```

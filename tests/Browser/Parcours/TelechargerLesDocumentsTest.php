@@ -14,6 +14,7 @@ use App\Domain\Charges\Support\SaisieDeCharge;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Enums\OrigineDesAchats;
 use App\Domain\Facturation\Enums\TypeDeDocumentTelechargeable;
+use App\Domain\Facturation\Exceptions\AucunePieceDeChargeAServirException;
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\DocumentsDeLaPeriode;
@@ -457,4 +458,25 @@ test('dans l’espace de la société, le propriétaire choisit les charges de �
 
     expect(array_keys($fichiers))->toContain('Charges/2026-03 Loyer SCI des Halles Q-03.pdf', 'Charges/2026-03 Fournitures Papeterie du centre F-9.pdf')
         ->and(substr($fichiers['Charges/2026-03 Loyer SCI des Halles Q-03.pdf'], 0, 5))->toBe('%PDF-');
+});
+
+test('dans l’espace de la société, le propriétaire qui ne coche qu’une charge sans pièce en « PDF (ZIP) » lit pourquoi le ZIP est refusé, et rien ne se prépare', function () {
+    Storage::fake(PiecesDesCharges::DISQUE);
+    $societe = $this->societeComplete();
+    app(DeposerUneChargeAction::class)->handle($societe->proprietaire, $societe->societe, SaisieDeCharge::duFormulaire(['type' => 'piliqi:fournitures', 'fournisseur' => 'Papeterie du centre', 'numero_piece' => 'F-SANS-PIECE', 'date_piece' => '2026-03-05', 'magasin' => '', 'lignes' => [['taux' => 2000, 'ht' => '40.00']]]), null);
+    app(TenantContext::class)->clear();
+
+    $this->seConnecter($societe->proprietaire, panneau: 'societe')
+        ->aller('/societe/'.$societe->societe->uuid.'/telecharger-les-documents')
+        ->cliquer('label:has-text("Toutes les charges, quel que soit leur état") input[type=radio]')
+        ->voir('Charge : Fournitures, TVA de mars 2026, à valider')
+        ->voir('Pièce manquante')
+        ->cliquer('input[aria-label="Choisir F-SANS-PIECE"]')
+        ->voir('Sélection : 1 document,')
+        ->cliquer('label:has-text("PDF (ZIP)") input[type=radio]')
+        ->cliquerSur('Télécharger')
+        ->voir(AucunePieceDeChargeAServirException::MESSAGE)
+        ->nePasVoir('Votre fichier est en préparation.');
+
+    expect(TelechargementDeDocuments::query()->withoutGlobalScopes()->count())->toBe(0);
 });

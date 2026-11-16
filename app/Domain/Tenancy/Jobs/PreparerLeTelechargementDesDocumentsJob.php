@@ -4,6 +4,7 @@ namespace App\Domain\Tenancy\Jobs;
 
 use App\Domain\Facturation\Enums\FormatDuTelechargement;
 use App\Domain\Facturation\Enums\TypeDeDocumentTelechargeable;
+use App\Domain\Facturation\Exceptions\AucunePieceDeChargeAServirException;
 use App\Domain\Facturation\Services\ArchiveDesDocuments;
 use App\Domain\Facturation\Services\DocumentsDeLaPeriode;
 use App\Domain\Facturation\Services\DocumentTrouve;
@@ -71,8 +72,11 @@ use Throwable;
  * notifications de la démonstration, et une préparation qui suit la
  * validation se tait.
  *
- * Aucun document encore accessible, ou un compte qui n'agit plus : la
- * demande échoue, sans nouvelle tentative, la personne sachant pourquoi ;
+ * Aucun document encore accessible, des charges dont aucune n'a plus de
+ * pièce à mettre dans un ZIP (une pièce bloquée par l'antivirus pendant la
+ * préparation, voir AucunePieceDeChargeAServirException), ou un compte qui
+ * n'agit plus : la demande échoue, sans nouvelle tentative, la personne
+ * sachant pourquoi ;
  * une erreur imprévue, ou un antivirus qui ne répond pas pour une pièce à
  * analyser de nouveau (voir ArchiveDesDocuments), fait réessayer, puis
  * échouer de même, la personne sachant pourquoi (voir failed()). Idempotent : une demande qui n'est plus en préparation ne se
@@ -161,6 +165,9 @@ class PreparerLeTelechargementDesDocumentsJob implements ShouldBeUnique, ShouldQ
             try {
                 $pieces = $this->ecrire($telechargement, $compte, $choisis, $chemin, $archive, $recapitulatif);
                 $this->marquerPret($telechargement, $societe, $compte, $choisis, $pieces, $chemin, $magasins, $journal);
+            } catch (AucunePieceDeChargeAServirException $refus) {
+                Storage::disk(self::DISQUE)->delete($chemin);
+                $this->echouer($telechargement, $refus->getMessage());
             } catch (Throwable $erreur) {
                 Storage::disk(self::DISQUE)->delete($chemin);
 

@@ -4,6 +4,7 @@ namespace Tests\Feature\Calendrier;
 
 use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
+use App\Domain\CaisseSecurisee\ModuleFiscal;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\ConsultationVies;
@@ -47,6 +48,23 @@ class ContenuSigneDeReferenceTest extends TestCase
      * que signe le document.
      */
     private const CLES_TIREES = ['uuid', 'caisse', 'cle_id', 'signature_precedente', 'id', 'cree_par'];
+
+    /**
+     * La structure du contenu signé que signe chaque version du module
+     * fiscal : le SHA-256 des chemins de ses clés dans les fichiers de
+     * référence (voir cheminsDesCles()), qui le fixent octet pour octet.
+     * Toute modification du module fiscal en change la version (voir
+     * ModuleFiscal) : une structure nouvelle prend une nouvelle version,
+     * ajoutée ici, et aucune version ne s'efface. La 2.0 est celle que le
+     * code signait juste avant la date de l'opération de la facture (T49),
+     * qui fait la 2.1 : le bloc « document » d'une facture et d'un ticket
+     * gagne date_operation (début et fin), son bloc « livraison » perd sa
+     * date.
+     */
+    private const STRUCTURES_SIGNEES = [
+        '2.0' => '8d3cf5148390ac0c2b822501bfa82522df919f3ec6a59ab74f84ccc6ee14b3a8',
+        '2.1' => '5e7c5deb1b8ad9421220957cfac7f0609c36aaea4258c415157f086c976d70bd',
+    ];
 
     /**
      * @return array<string, array{CarbonImmutable, string, string}>
@@ -141,6 +159,56 @@ class ContenuSigneDeReferenceTest extends TestCase
         ];
 
         $this->assertSame($this->contenuDeReference('outre-mer'), $contenus);
+    }
+
+    /**
+     * Une structure nouvelle du contenu signé (une clé ajoutée, retirée ou
+     * déplacée dans les fichiers de référence) ne se signe jamais sous la
+     * version d'une autre structure : la version du module fiscal est celle
+     * de la structure que fixent les fichiers de référence, et deux versions
+     * ne signent jamais la même.
+     */
+    public function test_une_structure_nouvelle_du_contenu_signe_prend_une_nouvelle_version_du_module_fiscal(): void
+    {
+        $chemins = [];
+
+        foreach (glob(base_path('tests/Fixtures/contenu-signe/*.json')) ?: [] as $fichier) {
+            $chemins = [...$chemins, ...self::cheminsDesCles(json_decode((string) file_get_contents($fichier), true, flags: JSON_THROW_ON_ERROR))];
+        }
+
+        $chemins = array_values(array_unique($chemins));
+        sort($chemins, SORT_STRING);
+        $structure = hash('sha256', implode("\n", $chemins));
+
+        $this->assertSame(array_values(array_unique(self::STRUCTURES_SIGNEES)), array_values(self::STRUCTURES_SIGNEES), 'Deux versions du module fiscal ne signent jamais la même structure.');
+        $this->assertSame(
+            ModuleFiscal::VERSION,
+            array_search($structure, self::STRUCTURES_SIGNEES, true),
+            "La structure du contenu signé ({$structure}) n'est pas celle de la version ".ModuleFiscal::VERSION.' du module fiscal : passez-le à une nouvelle version et ajoutez-la à STRUCTURES_SIGNEES.',
+        );
+    }
+
+    /**
+     * Les chemins des clés de cette valeur décodée, chacun « a.b.c », un
+     * élément de liste s'écrivant « [] » ; une valeur qui n'est pas un
+     * tableau est une feuille.
+     *
+     * @return list<string>
+     */
+    private static function cheminsDesCles(mixed $valeur, string $chemin = ''): array
+    {
+        if (! is_array($valeur)) {
+            return [$chemin];
+        }
+
+        $chemins = [$chemin];
+
+        foreach ($valeur as $cle => $enfant) {
+            $segment = array_is_list($valeur) ? '[]' : (string) $cle;
+            $chemins = [...$chemins, ...self::cheminsDesCles($enfant, $chemin === '' ? $segment : $chemin.'.'.$segment)];
+        }
+
+        return $chemins;
     }
 
     /**

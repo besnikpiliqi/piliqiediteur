@@ -834,6 +834,7 @@ return [
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le vendeur ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Parcours/PuHtAfficheTest.php › le propriétaire change le client d’un devis, et le PU HT des lignes reste celui d’un article',
+            'tests/Browser/Parcours/DateDeLOperationTest.php › chaque compte qui fait un devis change la date prévue de son brouillon et la retrouve sur la fiche',
         ]],
     ],
     'app/Filament/App/Resources/DevisResource/Pages/ListDevis.php' => [
@@ -890,6 +891,7 @@ return [
             'tests/Browser/Parcours/ReponseAuDevisEnLigneTest.php › le responsable transforme un devis accepté depuis sa fiche et arrive sur la facture brouillon, qui dit d’où elle vient et mène au devis',
             'tests/Browser/Parcours/ReponseAuDevisEnLigneTest.php › le propriétaire, l’observateur et un vendeur sans la création de facture voient « Transformer en facture » désactivé sur la fiche, avec son explication',
             'tests/Browser/Parcours/ReponseAuDevisEnLigneTest.php › le propriétaire transforme un devis accepté dans le magasin de démonstration',
+            'tests/Browser/Parcours/DateDeLOperationTest.php › chaque compte qui transforme un devis accepté en facture retrouve sa date prévue sur la facture, que le PDF de la facture émise imprime',
         ]],
         'action:retirer_le_lien' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Parcours/ReponseAuDevisEnLigneTest.php › le responsable retire le lien de réponse d’un devis envoyé, et le client ne peut plus répondre',
@@ -1416,6 +1418,7 @@ return [
             'tests/Browser/Parcours/DateDeLOperationTest.php › le responsable qui saisit le premier jour d’une prestation sans son dernier jour lit le refus sous le champ, et rien ne s’enregistre',
             'tests/Browser/Parcours/ProprietaireEnDemonstrationTest.php › le propriétaire fait une facture dans la démonstration, l’émet et l’encaisse depuis sa fiche',
             'tests/Browser/Parcours/VentesDeBoutEnBoutTest.php › le responsable fait un devis puis une facture avec la loupe des clients et « Ajouter un produit », l’émet, l’encaisse et la crédite par un avoir',
+            'tests/Browser/Parcours/DateDeLOperationTest.php › chaque compte qui fait une facture de livraison intracommunautaire se voit refuser l’envoi sous la date de la livraison qui manque, puis l’enregistre avec elle',
         ]],
     ],
     'app/Filament/App/Resources/FactureResource/Pages/EditFacture.php' => [
@@ -1429,6 +1432,7 @@ return [
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le vendeur ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Parcours/PuHtAfficheTest.php › le responsable fait sortir de la TVA française la vente d’un particulier, et le PU HT des lignes reste celui d’un article',
             'tests/Browser/Parcours/PuHtAfficheTest.php › le vendeur change le client de son brouillon, et le PU HT des lignes reste celui d’un article, pour un professionnel comme pour un particulier',
+            'tests/Browser/Parcours/DateDeLOperationTest.php › chaque compte qui fait une facture change la période de son brouillon et la retrouve sur la fiche',
         ]],
     ],
     'app/Filament/App/Resources/FactureResource/Pages/ListFactures.php' => [
@@ -1489,6 +1493,9 @@ return [
             'tests/Browser/Parcours/AntillesUnSeulTerritoireTest.php › le responsable d’un magasin de la Guadeloupe ne peut pas émettre une livraison vers un DOM à Fort-de-France : l’alerte dit pourquoi et la facture reste en brouillon',
             'tests/Browser/Parcours/AntillesUnSeulTerritoireTest.php › le vendeur d’un magasin de la Guadeloupe ne peut pas émettre sa livraison vers un DOM à Fort-de-France : l’alerte dit pourquoi et la facture reste en brouillon',
             'tests/Browser/Parcours/AntillesUnSeulTerritoireTest.php › l’administrateur autorisé à vendre dans un magasin de la Guadeloupe ne peut pas émettre une livraison vers un DOM à Fort-de-France : l’alerte dit pourquoi et la facture reste en brouillon',
+            'tests/Browser/Parcours/DateDeLOperationTest.php › chaque compte qui transforme un devis accepté en facture retrouve sa date prévue sur la facture, que le PDF de la facture émise imprime',
+            'tests/Browser/Parcours/DateDeLOperationTest.php › chaque compte qui fait une facture y saisit une prestation de plusieurs jours, la voit sur la fiche et l’imprime sur le PDF de la facture émise',
+            'tests/Browser/Parcours/DateDeLOperationTest.php › la facture livrée le jour de son émission garde sa date sur la fiche sans l’imprimer sur son PDF',
         ]],
         'action:emettre_et_encaisser' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Parcours/EmettreEtEncaisserTest.php › le responsable ramène à zéro la part préremplie, et « Émettre et encaisser » émet le brouillon sans l’encaisser',
@@ -1548,6 +1555,9 @@ return [
             'tests/Browser/Parcours/RegleBDesVentesTest.php › le responsable lit sur le PDF d’une facture à un professionnel les colonnes du modèle M6-b, le PU HT exact sous l’article et « Service » à la place de la référence d’un service',
             'tests/Browser/Parcours/RegleBDesVentesTest.php › le vendeur vend à la caisse un savon à 9,99 € au client comptoir : 8,32 € HT et 1,67 € de TVA, et le PDF du ticket ne montre que ses prix TTC',
             'tests/Browser/Parcours/ReponseAuDevisEnLigneTest.php › le responsable lit sur le PDF de la facture transformée d’après quel devis elle est établie',
+            'tests/Browser/Parcours/DateDeLOperationTest.php › chaque compte qui transforme un devis accepté en facture retrouve sa date prévue sur la facture, que le PDF de la facture émise imprime',
+            'tests/Browser/Parcours/DateDeLOperationTest.php › chaque compte qui fait une facture y saisit une prestation de plusieurs jours, la voit sur la fiche et l’imprime sur le PDF de la facture émise',
+            'tests/Browser/Parcours/DateDeLOperationTest.php › la facture livrée le jour de son émission garde sa date sur la fiche sans l’imprimer sur son PDF',
         ]],
         'page' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action du magasin sans erreur',
@@ -2936,6 +2946,7 @@ return [
             'tests/Browser/Parcours/TelechargerLesDocumentsTest.php › le collaborateur du cabinet lié télécharge les documents de son client quand le client le lui coche',
             'tests/Browser/Parcours/TelechargerLesDocumentsTest.php › le bouton « Télécharger » de la notification fait télécharger le fichier, et un lien expiré mène à une page qui ramène à l’accueil',
             'tests/Browser/Parcours/TelechargerLesDocumentsTest.php › chaque rôle à qui le propriétaire coche la case télécharge les documents qu’il voit, dans le magasin et dans l’espace de la société',
+            'tests/Browser/Parcours/TelechargerLesDocumentsTest.php › dans l’espace de la société, le propriétaire qui ne coche qu’une charge sans pièce en « PDF (ZIP) » lit pourquoi le ZIP est refusé, et rien ne se prépare',
         ]],
         'clic:toutDeselectionner' => ['lot' => 'NAV-3', 'tests' => [
             'tests/Browser/Parcours/TelechargerLesDocumentsTest.php › le propriétaire saisit la période au calendrier, choisit les types, l’origine et la seule marque « pièce manquante », coche un document puis désélectionne tout',
@@ -2959,6 +2970,7 @@ return [
         ]],
         'saisie:etatDesCharges' => ['lot' => 'NAV-4', 'tests' => [
             'tests/Browser/Parcours/TelechargerLesDocumentsTest.php › dans l’espace de la société, le propriétaire choisit les charges de « Toute la société » et leur état, et reçoit le ZIP de leurs pièces',
+            'tests/Browser/Parcours/TelechargerLesDocumentsTest.php › dans l’espace de la société, le propriétaire qui ne coche qu’une charge sans pièce en « PDF (ZIP) » lit pourquoi le ZIP est refusé, et rien ne se prépare',
         ]],
         'saisie:du' => ['lot' => 'NAV-3', 'tests' => [
             'tests/Browser/Parcours/TelechargerLesDocumentsTest.php › le propriétaire saisit la période au calendrier, choisit les types, l’origine et la seule marque « pièce manquante », coche un document puis désélectionne tout',
@@ -2969,6 +2981,7 @@ return [
             'tests/Browser/Parcours/TelechargerLesDocumentsTest.php › le collaborateur du cabinet lié télécharge les documents de son client quand le client le lui coche',
             'tests/Browser/Parcours/TelechargerLesDocumentsTest.php › le bouton « Télécharger » de la notification fait télécharger le fichier, et un lien expiré mène à une page qui ramène à l’accueil',
             'tests/Browser/Parcours/TelechargerLesDocumentsTest.php › chaque rôle à qui le propriétaire coche la case télécharge les documents qu’il voit, dans le magasin et dans l’espace de la société',
+            'tests/Browser/Parcours/TelechargerLesDocumentsTest.php › dans l’espace de la société, le propriétaire qui ne coche qu’une charge sans pièce en « PDF (ZIP) » lit pourquoi le ZIP est refusé, et rien ne se prépare',
         ]],
         'saisie:magasinsCoches' => ['lot' => 'NAV-4', 'tests' => [
             'tests/Browser/Parcours/TelechargerLesDocumentsTest.php › dans l’espace de la société, le propriétaire télécharge le récapitulatif CSV des magasins cochés',
@@ -2982,6 +2995,7 @@ return [
         ]],
         'saisie:selection' => ['lot' => 'NAV-3', 'tests' => [
             'tests/Browser/Parcours/TelechargerLesDocumentsTest.php › le propriétaire saisit la période au calendrier, choisit les types, l’origine et la seule marque « pièce manquante », coche un document puis désélectionne tout',
+            'tests/Browser/Parcours/TelechargerLesDocumentsTest.php › dans l’espace de la société, le propriétaire qui ne coche qu’une charge sans pièce en « PDF (ZIP) » lit pourquoi le ZIP est refusé, et rien ne se prépare',
         ]],
         'saisie:types' => ['lot' => 'NAV-3', 'tests' => [
             'tests/Browser/Parcours/TelechargerLesDocumentsTest.php › le propriétaire saisit la période au calendrier, choisit les types, l’origine et la seule marque « pièce manquante », coche un document puis désélectionne tout',

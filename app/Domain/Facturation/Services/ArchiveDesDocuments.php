@@ -10,6 +10,7 @@ use App\Domain\Charges\Models\Charge;
 use App\Domain\Charges\Models\PieceDeCharge;
 use App\Domain\Charges\Services\PiecesDesCharges;
 use App\Domain\Facturation\Enums\TypeDeDocumentTelechargeable;
+use App\Domain\Facturation\Exceptions\AucunePieceDeChargeAServirException;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\Facture;
@@ -54,7 +55,10 @@ use ZipArchive;
  *   24 heures, une pièce bloquée n'y entrant jamais (voir
  *   PiecesDesCharges::contenuServable()) ; une charge sans pièce n'y a
  *   rien, le récapitulatif CSV la dit « pièce manquante ». Ses charges se
- *   relisent dans leur société, hors de son scope, filtrées par elle.
+ *   relisent dans leur société, hors de son scope, filtrées par elle. Des
+ *   documents qui ne sont que des charges sans pièce à servir ne font
+ *   aucune archive : c'est un refus (voir
+ *   AucunePieceDeChargeAServirException), jamais une erreur à rejouer.
  * Chaque document se relit dans son magasin, comme magasin actif (voir
  * DocumentsDeLaPeriode::dansLeMagasin()) ; chaque fichier s'écrit d'abord dans un dossier
  * temporaire, effacé ensuite, pour ne jamais tenir toute l'archive en
@@ -90,7 +94,8 @@ final class ArchiveDesDocuments
      * @param  list<DocumentTrouve>  $documents
      * @return array{pieces: list<int>, piecesDeCharge: list<int>}
      *
-     * @throws RuntimeException quand aucun document n'y entre ou que l'archive ne s'écrit pas
+     * @throws AucunePieceDeChargeAServirException quand aucun fichier n'y entre : tout autre document en a au moins un, et ces documents ne sont donc que des charges sans pièce à servir
+     * @throws RuntimeException quand l'archive ne s'ouvre ou ne s'écrit pas
      * @throws AntivirusInjoignableException quand l'antivirus ne répond pas pour une pièce à analyser de nouveau
      */
     public function ecrire(User $compte, array $documents, string $du, string $au, string $chemin): array
@@ -137,7 +142,7 @@ final class ArchiveDesDocuments
             }
 
             if ($noms === []) {
-                throw new RuntimeException(self::AUCUN_DOCUMENT);
+                throw new AucunePieceDeChargeAServirException;
             }
 
             if (! $zip->close()) {

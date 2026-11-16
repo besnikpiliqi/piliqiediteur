@@ -14,6 +14,7 @@ use App\Domain\Charges\Services\PiecesDesCharges;
 use App\Domain\Facturation\Enums\FormatDuTelechargement;
 use App\Domain\Facturation\Enums\OrigineDesAchats;
 use App\Domain\Facturation\Enums\TypeDeDocumentTelechargeable;
+use App\Domain\Facturation\Exceptions\AucunePieceDeChargeAServirException;
 use App\Domain\Facturation\Services\ChoixDesCharges;
 use App\Domain\Facturation\Services\DocumentsDeLaPeriode;
 use App\Domain\Facturation\Services\DocumentTrouve;
@@ -27,6 +28,7 @@ use App\Domain\Tenancy\Models\EntreeAudit;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Models\TelechargementDeDocuments;
+use App\Domain\Tenancy\Notifications\AvisDuTelechargementDesDocuments;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Http\Controllers\TelechargerLesDocumentsController;
 use App\Integrations\Antivirus\Contracts\Antivirus;
@@ -34,6 +36,7 @@ use App\Integrations\Antivirus\ResultatDeLAntivirus;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Testing\TestResponse;
 use Tests\Feature\Charges\PrepareDesCharges;
@@ -194,6 +197,60 @@ class TelechargementDesChargesTest extends TestCase
         $this->assertEquals(['magasins' => ['LYON'], 'charges_de_la_societe' => true, 'toutes_les_charges' => true, 'types' => ['charges'], 'nombre_documents' => 5], array_intersect_key($entree->nouvelles_valeurs ?? [], array_flip(['magasins', 'charges_de_la_societe', 'toutes_les_charges', 'types', 'nombre_documents'])));
     }
 
+    public function test_un_zip_qui_ne_choisit_que_des_charges_sans_piece_est_refuse_clairement_a_la_demande(): void
+    {
+        $sansPiece = $this->deposer($this->proprietaire, $this->societe, $this->saisie(ht: '70.00', champs: ['fournisseur' => 'Nettoyage du centre', 'numero_piece' => 'N-7', 'magasin' => (string) $this->lyon->uuid]), avecLaPiece: false);
+        $trouvees = app(DocumentsDeLaPeriode::class)->trouver($this->proprietaire, [$this->lyon], '2026-05-01', '2026-05-31', [TypeDeDocumentTelechargeable::Charges], OrigineDesAchats::Toutes, charges: new ChoixDesCharges(null, true));
+        app(TenantContext::class)->clear();
+        $cle = 'charges:'.$this->lyon->getKey().':'.$sansPiece->getKey();
+        $this->assertSame([['L-05', false], ['N-7', true]], array_map(fn (DocumentTrouve $document): array => [$document->numero, $document->pieceManquante], $trouvees), 'La liste propose la charge sans pièce, marquée « Pièce manquante ».');
+
+        $this->assertThrows(
+            fn () => $this->demanderCes($this->proprietaire, FormatDuTelechargement::Zip, [$cle]),
+            AucunePieceDeChargeAServirException::class,
+            AucunePieceDeChargeAServirException::MESSAGE,
+        );
+        $this->assertSame(0, TelechargementDeDocuments::query()->withoutGlobalScopes()->count(), 'Rien n\'est demandé ni préparé.');
+
+        $this->assertSame(StatutDuTelechargement::Pret, $this->demanderCes($this->proprietaire, FormatDuTelechargement::Csv, [$cle])->statut, 'Le récapitulatif CSV la liste.');
+        $avecUneAutre = $this->demanderCes($this->proprietaire, FormatDuTelechargement::Zip, [$cle, 'charges:'.$this->lyon->getKey().':'.$this->charges['loyer_lyon']->getKey()]);
+        $this->assertSame(StatutDuTelechargement::Pret, $avecUneAutre->statut, 'Avec une charge qui a sa pièce, le ZIP se prépare.');
+        $this->assertSame(['Charges/2026-05 Loyer Bailleur de Lyon L-05.pdf'], array_keys($this->lireLeZip($avecUneAutre)));
+    }
+
+    public function test_une_piece_bloquee_pendant_la_preparation_clot_le_zip_par_un_refus_clair_sans_nouvelle_tentative(): void
+    {
+        Notification::fake();
+        $cle = 'charges:'.$this->lyon->getKey().':'.$this->charges['loyer_lyon']->getKey();
+        $this->app->instance(Antivirus::class, new class implements Antivirus
+        {
+            public function analyser(string $contenu): ResultatDeLAntivirus
+            {
+                return ResultatDeLAntivirus::menace('Pdf.Exploit.Nouveau');
+            }
+
+            public function description(): string
+            {
+                return 'antivirus des tests';
+            }
+        });
+        $this->travelTo(self::aParis('2026-05-21 11:00:00'));
+
+        $telechargement = $this->demanderCes($this->proprietaire, FormatDuTelechargement::Zip, [$cle]);
+
+        $this->assertSame([StatutDuTelechargement::Echec, AucunePieceDeChargeAServirException::MESSAGE, null], [$telechargement->statut, $telechargement->motif_echec, $telechargement->chemin], 'La pièce analysée de nouveau est bloquée : la demande échoue pour ce motif, sans erreur qui la ferait reprendre.');
+        $this->assertSame([], Storage::disk(PreparerLeTelechargementDesDocumentsJob::DISQUE)->allFiles());
+        $this->assertTrue(PieceDeCharge::query()->withoutGlobalScopes()->where('charge_id', $this->charges['loyer_lyon']->getKey())->whereNotNull('bloquee_le')->exists());
+        Notification::assertSentTo($this->proprietaire, AvisDuTelechargementDesDocuments::class, fn (AvisDuTelechargementDesDocuments $avis): bool => $avis->telechargement->is($telechargement));
+        $this->assertSame([], EntreeAudit::query()->withoutGlobalScopes()->where('action', ActionAuditee::DocumentsTelecharges->value)->pluck('id')->all(), 'Aucun téléchargement n\'est inscrit au journal d\'audit.');
+
+        $this->assertThrows(
+            fn () => $this->demanderCes($this->proprietaire, FormatDuTelechargement::Zip, [$cle]),
+            AucunePieceDeChargeAServirException::class,
+            AucunePieceDeChargeAServirException::MESSAGE,
+        );
+    }
+
     public function test_le_csv_liste_chaque_charge_par_taux_avec_ses_colonnes_et_la_piece_manquante(): void
     {
         $sansPiece = $this->deposer($this->proprietaire, $this->societe, $this->saisie(ht: '70.00', champs: ['fournisseur' => 'Nettoyage du centre', 'numero_piece' => 'N-7', 'magasin' => (string) $this->lyon->uuid]), avecLaPiece: false);
@@ -323,6 +380,19 @@ class TelechargementDesChargesTest extends TestCase
             chargesDeLaSociete: $deLaSociete,
             toutesLesCharges: true,
         )->refresh();
+    }
+
+    /**
+     * Ces charges de Lyon, de mai, toutes, choisies par leur clé et
+     * demandées par ce compte dans ce format, préparées par la file.
+     *
+     * @param  list<string>  $cles
+     */
+    private function demanderCes(User $compte, FormatDuTelechargement $format, array $cles): TelechargementDeDocuments
+    {
+        app(TenantContext::class)->clear();
+
+        return app(DemanderLeTelechargementDesDocumentsAction::class)->handle($compte, $this->societe, [$this->lyon], '2026-05-01', '2026-05-31', [TypeDeDocumentTelechargeable::Charges], OrigineDesAchats::Toutes, $format, $cles, toutesLesCharges: true)->refresh();
     }
 
     private function telechargerEnTantQue(User $compte, string $adresse): TestResponse

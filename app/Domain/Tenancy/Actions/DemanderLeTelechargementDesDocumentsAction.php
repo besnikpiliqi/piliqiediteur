@@ -6,7 +6,10 @@ use App\Domain\Calendrier\Calendrier;
 use App\Domain\Facturation\Enums\FormatDuTelechargement;
 use App\Domain\Facturation\Enums\OrigineDesAchats;
 use App\Domain\Facturation\Enums\TypeDeDocumentTelechargeable;
+use App\Domain\Facturation\Exceptions\AucunePieceDeChargeAServirException;
+use App\Domain\Facturation\Services\ChoixDesCharges;
 use App\Domain\Facturation\Services\DocumentsDeLaPeriode;
+use App\Domain\Facturation\Services\DocumentTrouve;
 use App\Domain\Tenancy\Enums\StatutDuTelechargement;
 use App\Domain\Tenancy\Jobs\PreparerLeTelechargementDesDocumentsJob;
 use App\Domain\Tenancy\Models\Magasin;
@@ -39,9 +42,13 @@ use LogicException;
  * DocumentsDeLaPeriode::telechargeLesChargesDeLaSociete(), relu sous le
  * verrou du compte), et toutes ou seulement les validées ; au moins un
  * magasin, ou les charges de « Toute la société » ; au moins un document
- * choisi. Les documents choisis se relisent à la
- * préparation, parmi ceux que la personne voit alors : une clé qui ne
- * désigne rien n'apporte rien.
+ * choisi. Un « PDF (ZIP) » qui ne choisit que des charges, toutes sans
+ * pièce à servir (déposées sans elle, ou dont la pièce est bloquée par
+ * l'antivirus), est refusé, le récapitulatif CSV les listant (voir
+ * AucunePieceDeChargeAServirException) : ces charges se relisent comme la
+ * préparation les relira, parmi celles que la personne voit. Les documents
+ * choisis se relisent à la préparation, parmi ceux que la personne voit
+ * alors : une clé qui ne désigne rien n'apporte rien.
  *
  * Un compte demande au plus dix téléchargements par heure, toutes sociétés
  * confondues : sous le verrou de la ligne du compte, ses demandes de
@@ -77,6 +84,7 @@ class DemanderLeTelechargementDesDocumentsAction
      *
      * @throws AuthorizationException
      * @throws InvalidArgumentException
+     * @throws AucunePieceDeChargeAServirException
      * @throws LogicException
      */
     public function handle(User $auteur, Societe $societe, iterable $magasins, string $du, string $au, array $types, OrigineDesAchats $origine, FormatDuTelechargement $format, array $selection, bool $pieceManquanteSeulement = false, bool $chargesDeLaSociete = false, bool $toutesLesCharges = false): TelechargementDeDocuments
@@ -115,6 +123,14 @@ class DemanderLeTelechargementDesDocumentsAction
                 throw new AuthorizationException(self::REFUS_CHARGES_DE_LA_SOCIETE);
             }
 
+            if ($format === FormatDuTelechargement::Zip && self::neChoisitQueDesCharges($selection)) {
+                $charges = $documents->choisis($compte, $magasins, $du, $au, [TypeDeDocumentTelechargeable::Charges], $origine, $selection, $pieceManquanteSeulement, new ChoixDesCharges($chargesDeLaSociete ? $societe : null, $toutesLesCharges));
+
+                if ($charges !== [] && collect($charges)->every(fn (DocumentTrouve $charge): bool => $charge->pieceManquante)) {
+                    throw new AucunePieceDeChargeAServirException;
+                }
+            }
+
             if (TelechargementDeDocuments::demandesDepuis($compte, now()->subHour())->count() >= TelechargementDeDocuments::PAR_HEURE_AU_PLUS) {
                 throw new LogicException(self::REFUS_PAR_HEURE);
             }
@@ -144,5 +160,16 @@ class DemanderLeTelechargementDesDocumentsAction
         PreparerLeTelechargementDesDocumentsJob::dispatch(CleDuModele::de($telechargement));
 
         return $telechargement;
+    }
+
+    /**
+     * Ces clés (voir DocumentTrouve::cle()) ne désignent-elles que des
+     * charges ?
+     *
+     * @param  list<string>  $selection
+     */
+    private static function neChoisitQueDesCharges(array $selection): bool
+    {
+        return collect($selection)->every(fn (string $cle): bool => str_starts_with($cle, TypeDeDocumentTelechargeable::Charges->value.':'));
     }
 }

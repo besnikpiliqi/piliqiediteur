@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 16/11/2026 à 17:21 UTC par pilotage-sync.sh : « Point de suivi 16/11 17:22 UTC : DEMO-COPIE-2 partie 4 ».
+Mis à jour le 16/11/2026 à 19:22 UTC par pilotage-sync.sh : « Point de suivi 16/11 19:23 UTC : DEMO-COPIE-2 partie 5 ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -67,6 +67,7 @@ b0d52373 Graphiques du tableau de bord (lot GRAPH)
  M app/Filament/Cabinet/Pages/TableauDeBordDuCabinet.php
  M app/Filament/Societe/Pages/TableauDeBord.php
  M app/Http/Middleware/AjouterLesEnTetesDeSecurite.php
+ M app/Integrations/Sirene/FauxRepertoireSirene.php
  M app/Integrations/Vies/ClientVies.php
  M app/Providers/AppServiceProvider.php
  M app/Providers/EventServiceProvider.php
@@ -79,6 +80,7 @@ b0d52373 Graphiques du tableau de bord (lot GRAPH)
  M config/caisse_securisee.php
  M config/database.php
  M config/journal_audit.php
+ M config/mail.php
  M config/piliqi.php
  M config/queue.php
  M config/services.php
@@ -86,17 +88,15 @@ b0d52373 Graphiques du tableau de bord (lot GRAPH)
  M database/migrations/0000_00_00_000000_fixer_le_fuseau_par_defaut_de_la_base.php
  M database/seeders/DatabaseSeeder.php
  M database/seeders/Semis/ActiviteDesMagasins.php
+ M database/seeders/Semis/ChargesDesSocietes.php
+ M database/seeders/Semis/CommandesDesProfessionnels.php
+ M database/seeders/Semis/ComptesDesCas.php
+ M database/seeders/Semis/DerniersGestes.php
+ M database/seeders/Semis/DocumentsDesCas.php
  M database/seeders/Semis/HorlogeDuSemis.php
- M phpunit.xml
-D  public/robots.txt
- M resources/views/cabinets/invitation-invalide.blade.php
- M resources/views/cabinets/invitation-refusee.blade.php
- M resources/views/cabinets/invitation.blade.php
- M resources/views/cabinets/lien-expert-comptable-invalide.blade.php
- M resources/views/cabinets/lien-expert-comptable.blade.php
- M resources/views/cabinets/rattachement-invalide.blade.php
- M resources/views/cabinets/rattachement.blade.php
- M resources/views/code/saisir.blade.php
+ M database/seeders/Semis/MotsDePasseDuSemis.php
+ M database/seeders/Semis/SemisComplet.php
+ M database/seeders/Semis/SocietesDesCas.php
 ```
 
 ## Dernière course de la chaîne
@@ -116,4 +116,5 @@ DEMO-COPIE-2:implementation
 DEMO-COPIE-2:implementation-2
 DEMO-COPIE-2:implementation-3
 DEMO-COPIE-2:implementation-4
+DEMO-COPIE-2:implementation-5
 ```

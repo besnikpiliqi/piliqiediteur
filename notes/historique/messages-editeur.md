@@ -2996,3 +2996,7 @@ donc le lien demo.piliqi.com par exemple
 
 Il faut creer un compte société fictive identique pour chaque type et après la société utilise comme de vrais. Donc il doit pouvoir passer en tant que propriétaire, administrateur, responsable, vendeur etc pour voir comment ça marche dans tous les cas. Il faut avoir l'acces par le lien unique chiffré qui se crée uniquement pour le magasin et donc pour accéder alors pas besoin d'être connecté sur le compte reel mais pour avoir le lien il faut se connecter et/ou recevoir le lien par mail après confirmation de mail pour son compte. Donc aller voir sur ce lien sans connecter car le lien est chiffré et personne peut deviner. Dit moi tu pense quoi et tes solutions et idée
 
+## 339. 2026-11-15 23:58 UTC
+
+Q1 oui, Q2 oui, Q3 oui, Q4 oui et dit moi en ce moment on a pas encore fini le logiciel et meme si modifié alors il sera mis à jours pour toujours et alors comment se met à jour pour les site donc reel et demo?
+

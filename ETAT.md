@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 16/11/2026 à 00:04 UTC par pilotage-sync.sh : « DEMO-COPIE : décision Q1–Q4, maquette, document ».
+Mis à jour le 16/11/2026 à 00:21 UTC par pilotage-sync.sh : « Point de suivi 16/11 00:22 ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -61,9 +61,12 @@ eba4bc85 Relecture du lot ER-PRO
  M resources/views/filament/telecharger-les-documents.blade.php
  M tests/Browser/Parcours/TelechargerLesDocumentsTest.php
  M tests/Browser/inventaire-des-actions.php
+ M tests/Feature/Cabinets/MagasinsOuvertsAuCabinetTest.php
+ M tests/Feature/Facturation/TelechargementDesDocumentsConcurrenceTest.php
  M tests/Feature/Facturation/TelechargementDesDocumentsTest.php
  M tests/Feature/Filament/TelechargerLesDocumentsTest.php
  M tests/Feature/SemisCompletTest.php
+ M tests/Feature/Tenancy/NotificationsDeLaSocieteTest.php
 ?? app/Domain/Facturation/Services/ChoixDesCharges.php
 ?? app/Filament/VosTelechargements.php
 ?? resources/views/filament/vos-telechargements.blade.php
@@ -72,32 +75,12 @@ eba4bc85 Relecture du lot ER-PRO
 
 ## Dernière course de la chaîne
 
-Course `wf_ee9b6e6e-908`, étapes commencées (de la plus ancienne à la plus récente) :
+Course `wf_1a997172-d15`, étapes commencées (de la plus ancienne à la plus récente) :
 
 ```
-GRAPH:notes
-CHARGES:implementation
-CHARGES:implementation-2
-CHARGES:implementation-3
-CHARGES:relecture1
-CHARGES:relecture2
-CHARGES:correction
-CHARGES:poussee
-CHARGES:notes
-REGUL:implementation
-REGUL:implementation-2
-REGUL:relecture1
-REGUL:relecture2
-REGUL:correction
-REGUL:poussee
-REGUL:notes
-DATEOP:implementation
-DATEOP:implementation-2
-DATEOP:implementation-3
-DATEOP:implementation-4
-DATEOP:implementation-5
-DATEOP:implementation-6
-DATEOP:implementation-7
-DATEOP:implementation-8
-DATEOP:implementation-9
+releve:regles
+releve:code
+releve:tests
+releve:notes
+releve:archi
 ```

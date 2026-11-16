@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 16/11/2026 à 09:13 UTC par pilotage-sync.sh : « DEMO-COPIE lancé (A + Q2), chaîne arrêtée, DEVIS-RET mis de côté ».
+Mis à jour le 16/11/2026 à 11:13 UTC par pilotage-sync.sh : « Point de suivi 16/11 11:12 UTC : DEMO-COPIE-1 partie 2 ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -38,6 +38,66 @@ f9e4ea17 Ventes calculées ligne par ligne (règle (b)) et PDF aux modèles M6-b
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
+ M .env.example
+ M CLAUDE.md
+ M README.md
+ M app/Console/Commands/Editeur/CloreLInscription.php
+ M app/Console/Commands/Editeur/ExaminerLeSiren.php
+D  app/Console/Commands/FermerDemonstrationsInactives.php
+ M app/Console/Commands/MarquerFacturesEnRetard.php
+ M app/Console/Commands/RelancerFacturesImpayees.php
+ M app/Console/Commands/ReverifierSirene.php
+ M app/Console/Commands/VerifierLIsolation.php
+ M app/Console/SemisEnCours.php
+ M app/Domain/Authorization/AutorisationsSociete.php
+ M app/Domain/Authorization/ControleDesDroits.php
+ M app/Domain/Authorization/PermissionRegistry.php
+ M app/Domain/Cabinets/Actions/AccepterLaDemandeDeLienAction.php
+ M app/Domain/Cabinets/Actions/ConfierDesClientsAction.php
+ M app/Domain/Cabinets/Actions/DeclarerSonExpertComptableAction.php
+ M app/Domain/Cabinets/Actions/MettreFinAuLienAction.php
+ M app/Domain/Cabinets/Actions/RattacherUneDeclarationAction.php
+ M app/Domain/Cabinets/Actions/ReglerLesAutorisationsDuCabinetAction.php
+ M app/Domain/Cabinets/Models/LienCabinet.php
+ M app/Domain/Cabinets/Services/AccesDesCabinets.php
+ M app/Domain/Cabinets/Services/ExpertsComptablesDeclares.php
+ M app/Domain/Cabinets/Services/TableauDeBordDesClients.php
+ M app/Domain/Cabinets/Support/GardesDesCabinets.php
+ M app/Domain/Cabinets/Support/IdentiteDansLeJournal.php
+ M app/Domain/CaisseSecurisee/Enums/CodeEvenement.php
+ M app/Domain/CaisseSecurisee/Services/RegistreFiscal.php
+ M app/Domain/Charges/Models/Charge.php
+ M app/Domain/Charges/Services/ChargesAFaire.php
+ M app/Domain/Charges/Services/ChargesDeLaSociete.php
+ M app/Domain/Charges/Services/DroitsSurLesCharges.php
+ M app/Domain/Charges/Services/EcritureDUneCharge.php
+ M app/Domain/Charges/Services/TvaDeLaPeriode.php
+ M app/Domain/Charges/Support/AccesAuxCharges.php
+ M app/Domain/Charges/Support/GardesDesCharges.php
+ M app/Domain/Facturation/Actions/CloturerCaisseAction.php
+ M app/Domain/Facturation/Actions/CloturerLesJourneesAction.php
+ M app/Domain/Facturation/Actions/EmettreFactureAction.php
+ M app/Domain/Facturation/Actions/EmettreLaFactureRectificativeAction.php
+ M app/Domain/Facturation/Actions/EnvoyerDocumentAction.php
+ M app/Domain/Facturation/Actions/RegulariserUneExonerationNonProuveeAction.php
+ M app/Domain/Facturation/Jobs/EnvoyerDocumentJob.php
+ M app/Domain/Facturation/Jobs/SubmitFactureToPdpJob.php
+ M app/Domain/Facturation/Listeners/DeclencherTransmissionPdpApresEmissionFacture.php
+ M app/Domain/Facturation/Models/ClotureCaissePersonnelle.php
+ M app/Domain/Facturation/Models/LienDuDevis.php
+ M app/Domain/Facturation/Services/ApercuEReporting.php
+ M app/Domain/Facturation/Services/CaissesDeLaSociete.php
+ M app/Domain/Facturation/Services/ClotureCaissePdfGenerator.php
+ M app/Domain/Facturation/Services/DocumentsDeLaPeriode.php
+ M app/Domain/Facturation/Services/EReportingDesParticuliers.php
+ M app/Domain/Facturation/Services/Emetteur.php
+ M app/Domain/Facturation/Services/FacturesAEncaisserDeLaSociete.php
+ M app/Domain/Facturation/Services/RecuPaiementPdfGenerator.php
+ M app/Domain/Facturation/Services/RegularisationDUneFacture.php
+ M app/Domain/Facturation/Support/GardesDeLaVente.php
+ M app/Domain/TableauDeBord/Services/PerimetreDesGraphiques.php
+ M app/Domain/TableauDeBord/Support/Perimetre.php
+ M app/Domain/Tenancy/Actions/AccepterLaTransmissionDeLaProprieteAction.php
 ```
 
 ## Dernière course de la chaîne
@@ -46,4 +106,5 @@ Course `wf_b2591b35-919`, étapes commencées (de la plus ancienne à la plus r�
 
 ```
 DEMO-COPIE-1:implementation
+DEMO-COPIE-1:implementation-2
 ```

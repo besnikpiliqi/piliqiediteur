@@ -453,5 +453,5 @@ Retenu (le lot GRAPH-AN fait exactement ceci, maquette à montrer avant) :
 - NON retenus : semaine, jour, dates libres, magasins côte à côte, par heure, objectif.
 
 Cartes ouvertes au départ :
-- Site réel : quelques cartes principales au premier affichage (aujourd'hui : Ventes et achats HT par mois, TVA à payer par mois, CA HT par mois, et CA par magasin quand il y a plusieurs magasins) ; garder ce défaut (éventuellement ajouter « Factures à encaisser par ancienneté » : à montrer dans la maquette).
+- Site réel : quelques cartes principales au premier affichage (aujourd'hui : Ventes et achats HT par mois, TVA à payer par mois, CA HT par mois, et CA par magasin quand il y a plusieurs magasins) ; garder ce défaut ET y ajouter « Factures à encaisser par ancienneté » (accord de l'éditeur, 17/11/2026 vers 0 h 10 : « ok »), seulement pour qui voit ces factures dans les magasins comptés ; une préférence déjà enregistrée par le compte prime.
 - Site de démonstration : TOUTES les cartes que chaque compte peut voir sont ouvertes au départ, pour que la société voie tout de suite tout. Règle générale (« toutes les cartes permises au compte »), pas une liste figée, pour que les graphiques ajoutés plus tard (Ventes par vendeur) s'y ouvrent aussi. Écrit aussi au cahier DEMO-COPIE pour le lot 3.

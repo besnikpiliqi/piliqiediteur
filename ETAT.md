@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 16/11/2026 à 22:21 UTC par pilotage-sync.sh : « GRAPH-AN : tendance lissée ajoutée ».
+Mis à jour le 16/11/2026 à 22:23 UTC par pilotage-sync.sh : « GRAPH-AN : factures par ancienneté ouverte au départ ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

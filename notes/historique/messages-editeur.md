@@ -3132,3 +3132,13 @@ ouii j'ai vu c'est bon donc tu oublie mais tu ajoute ces que t as proposé : "Pa
 
 aussi ca "Tendance lissée (moyenne sur 3 mois)"
 
+## 361. 2026-11-16 22:23 UTC
+
+<!-- attach -->
+
+> je vous proposerai d’ajouter « Factures à encaisser par ancienneté ».
+
+
+
+ok
+

@@ -119,6 +119,19 @@ class RessourcesServiesParPiliqiTest extends TestCase
     }
 
     /**
+     * La feuille écrite à la main de la cellule « Encaissé » des relevés de
+     * caisse (lot DATEOP : une ligne par mode abrégé, puis le total) se
+     * sert de même dans chaque panneau, publiée telle qu'elle est dans le
+     * dépôt.
+     */
+    #[DataProvider('pagesDeConnexion')]
+    public function test_chaque_panneau_sert_la_feuille_des_releves_de_caisse_publiee_telle_quelle(string $page): void
+    {
+        $this->get($page)->assertOk()->assertSee('css/app/releves-de-caisse.css', false);
+        $this->assertFileEquals(resource_path('css/releves-de-caisse.css'), public_path('css/app/releves-de-caisse.css'));
+    }
+
+    /**
      * @return array<string, array{0: string, 1: string}>
      */
     public static function noms(): array

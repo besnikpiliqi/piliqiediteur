@@ -11,6 +11,13 @@ use App\Domain\TableauDeBord\Support\Mois;
  * d'exercice de la société. Ses mois se comptent depuis le jour de
  * l'écran : celui de Paris dans l'espace de la société, du cabinet et sur
  * la page de l'expert-comptable, celui du magasin dans son panneau.
+ *
+ * Quand l'exercice finit en décembre, l'exercice est l'année civile (choix
+ * B de l'éditeur, le 15/11/2026) : le menu ne propose que les 12 derniers
+ * mois, « Année 2026 (exercice en cours) » et « Année 2025 (exercice
+ * précédent) » (voir duMenu() et libelle()), et une préférence
+ * « exercice » enregistrée se lit comme l'année correspondante, la même
+ * période (voir pourLaSociete()).
  */
 enum PeriodeDuTableauDeBord: string
 {
@@ -44,16 +51,51 @@ enum PeriodeDuTableauDeBord: string
     }
 
     /**
+     * Les choix du menu « Période » d'une société dont l'exercice finit à
+     * ce mois (1 à 12) : sans « Exercice » quand il finit en décembre,
+     * l'exercice étant alors l'année civile.
+     *
+     * @return list<self>
+     */
+    public static function duMenu(int $moisDeFinDExercice): array
+    {
+        return $moisDeFinDExercice === 12
+            ? [self::DouzeDerniersMois, self::AnneeEnCours, self::AnneePrecedente]
+            : self::cases();
+    }
+
+    /**
+     * La période telle que le menu de cette société la propose : l'exercice
+     * en cours ou le précédent d'une société dont l'exercice finit en
+     * décembre est l'année en cours ou la précédente, la même période.
+     */
+    public function pourLaSociete(int $moisDeFinDExercice): self
+    {
+        if ($moisDeFinDExercice !== 12) {
+            return $this;
+        }
+
+        return match ($this) {
+            self::ExerciceEnCours => self::AnneeEnCours,
+            self::ExercicePrecedent => self::AnneePrecedente,
+            default => $this,
+        };
+    }
+
+    /**
      * Le libellé du menu : « Année 2026 », « Exercice en cours (juil. 2026
-     * à juin 2027) ».
+     * à juin 2027) » ; quand l'exercice finit en décembre, « Année 2026
+     * (exercice en cours) » et « Année 2025 (exercice précédent) ».
      */
     public function libelle(string $aujourdhui, int $moisDeFinDExercice): string
     {
         [$premier, $dernier] = $this->bornes($aujourdhui, $moisDeFinDExercice);
+        $exerciceCivil = $moisDeFinDExercice === 12;
 
         return match ($this) {
             self::DouzeDerniersMois => '12 derniers mois',
-            self::AnneeEnCours, self::AnneePrecedente => 'Année '.Mois::annee($premier),
+            self::AnneeEnCours => 'Année '.Mois::annee($premier).($exerciceCivil ? ' (exercice en cours)' : ''),
+            self::AnneePrecedente => 'Année '.Mois::annee($premier).($exerciceCivil ? ' (exercice précédent)' : ''),
             self::ExerciceEnCours => 'Exercice en cours ('.Mois::libelle($premier).' à '.Mois::libelle($dernier).')',
             self::ExercicePrecedent => 'Exercice précédent ('.Mois::libelle($premier).' à '.Mois::libelle($dernier).')',
         };

@@ -618,6 +618,7 @@ return [
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
         ]],
         'action:fermer_ma_caisse' => ['lot' => 'NAV-2', 'tests' => [
+            'tests/Browser/Parcours/RelevesDeCaisseTest.php › la fenêtre « Fermer ma caisse » du vendeur, « Les caisses » du responsable et « Les caisses » de la société écrivent l’encaissé une ligne par mode abrégé, puis le total en gras, à 1 280 et à 1 024 px',
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur autorisé à vendre ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le propriétaire d’une société qui attend son code ouvre chaque page et chaque action du magasin de démonstration sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le responsable d’entraînement ouvre chaque page et chaque action du magasin de démonstration sans erreur',
@@ -3128,6 +3129,7 @@ return [
     ],
     'resources/views/filament/grille-des-graphiques.blade.php' => [
         'changement:ajouterUnGraphique' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › après l’ajout d’un graphique, le menu « Ajouter un graphique » revient sur « — Choisir — » sans proposer ce graphique, et rechoisir « — Choisir — » ne fait rien, sans message',
             'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › le propriétaire voit les quatre chiffres et les graphiques par défaut, ajoute la marge, passe un graphique en camembert, en retire un, et retrouve tout après le rechargement',
             'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › le propriétaire choisit la période, un magasin et la comparaison, classe les meilleurs produits par quantité, déplace deux cartes, lit les chiffres d’une carte, et retrouve tout après le rechargement',
             'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › le propriétaire, dans le panneau d’un magasin, ajoute un graphique, en change le type, le monte, et retrouve tout après le rechargement, sans filtre des magasins',
@@ -3150,6 +3152,7 @@ return [
             'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › l’expert-comptable déclaré compose « Tableau de bord de la société », la retrouve après le rechargement, puis compose la grille du panneau de son magasin',
         ]],
         'changement:choisirLaPeriode' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › le menu « Période » d’une société dont l’exercice finit en décembre n’a pas de choix « Exercice » et dit « (exercice en cours) » ; celui d’une société dont l’exercice finit en juin a les cinq choix',
             'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › le propriétaire choisit la période, un magasin et la comparaison, classe les meilleurs produits par quantité, déplace deux cartes, lit les chiffres d’une carte, et retrouve tout après le rechargement',
         ]],
         'changement:choisirLeMagasin' => ['lot' => 'NAV-4', 'tests' => [

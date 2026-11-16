@@ -46,7 +46,8 @@ use ReflectionClass;
  *   composant reçoit (wire:submit) ; « saisie:propriété », chaque champ qui
  *   envoie sa saisie au serveur (wire:model.live, .blur, .change, .lazy) ;
  *   « changement:méthode », chaque champ qui appelle une méthode quand il
- *   change (wire:change) ; « formulaire:adresse », chaque formulaire envoyé
+ *   change (wire:change, ou un changement qui appelle $wire) ;
+ *   « formulaire:adresse », chaque formulaire envoyé
  *   par le navigateur (method="post"), par l'expression de son adresse ;
  *   « lien:texte », chaque lien (<a href>, x-filament::link, ou
  *   x-filament::button tag="a"), par son texte tel qu'écrit ;
@@ -142,7 +143,7 @@ final class ActionsDeLInterface
             'clic' => '/(?:wire:click(?:\.[a-z]+)*="|(?:x-on:click|@click)(?:\.[a-z]+)*="[^"]*\$wire\.)([A-Za-z_]\w*)/',
             'envoi' => '/wire:submit(?:\.[a-z]+)*="([A-Za-z_]\w*)/',
             'saisie' => '/wire:model\.(?:live|blur|change|lazy)(?:\.[a-z0-9]+)*="([A-Za-z_][\w.]*)/',
-            'changement' => '/wire:change(?:\.[a-z]+)*="([A-Za-z_]\w*)/',
+            'changement' => '/(?:wire:change(?:\.[a-z]+)*="|(?:x-on:change|@change)(?:\.[a-z]+)*="[^"]*\$wire\.)([A-Za-z_]\w*)/',
         ] as $genre => $motif) {
             preg_match_all($motif, $vue, $trouves);
             array_push($elements, ...array_map(fn (string $nom): string => $genre.':'.$nom, $trouves[1]));

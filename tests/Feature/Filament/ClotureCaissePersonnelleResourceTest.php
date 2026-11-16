@@ -8,11 +8,14 @@ use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
+use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
 use App\Domain\Facturation\Actions\FermerSaCaisseAction;
 use App\Domain\Facturation\Enums\ModeFermetureCaisse;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Services\PartDeReglement;
+use App\Domain\Facturation\Services\ReglementComptant;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Filament\App\Resources\ClotureCaissePersonnelleResource;
@@ -119,17 +122,59 @@ class ClotureCaissePersonnelleResourceTest extends TestCase
         $page = Livewire::test(ListClotureCaissePersonnelles::class)->mountAction('fermer_ma_caisse');
 
         $page->assertSee('TTC vendu : 105,00 € (2 ventes)')
-            ->assertSee('Encaissé : 30,00 € (par mode : Espèces : 30,00 €)')
+            ->assertSeeHtml('Encaissé : <span class="piliqi-encaisse">')
+            ->assertSeeHtmlInOrder(['<abbr class="piliqi-encaisse__mode" title="Espèces">ESP</abbr>', '<span class="piliqi-encaisse__montant">30,00 €</span>'])
+            ->assertDontSeeHtml('piliqi-encaisse__total')
             ->assertSee('Crédit d\'avoir utilisé : 30,00 €')
             ->assertSee('Reste dû : 45,00 €');
         $page->callMountedAction();
         $releve = ClotureCaissePersonnelle::query()->latest('id')->firstOrFail();
         Livewire::test(ListClotureCaissePersonnelles::class)
             ->assertTableColumnStateSet('total_ttc', '105.00', $releve->getKey())
-            ->assertTableColumnStateSet('total_encaisse', 30.0, $releve->getKey())
-            ->assertTableColumnStateSet('encaissements', ['Espèces : 30,00 €'], $releve->getKey())
+            ->assertTableColumnStateSet('encaisse', ClotureCaissePersonnelleResource::encaisseParMode($releve), $releve->getKey())
+            ->assertSeeHtmlInOrder(['<abbr class="piliqi-encaisse__mode" title="Espèces">ESP</abbr>', '<span class="piliqi-encaisse__montant">30,00 €</span>'])
+            ->assertDontSeeHtml('piliqi-encaisse__total')
+            ->assertDontSee('Par mode de paiement')
             ->assertTableColumnStateSet('credit_avoir', '30.00', $releve->getKey())
             ->assertTableColumnStateSet('reste_du', '45.00', $releve->getKey());
+    }
+
+    /**
+     * La colonne « Encaissé » de « Ma caisse » et de la fenêtre « Fermer ma
+     * caisse » (demandes de l'éditeur du 15/11/2026, choix A) : une vente
+     * réglée par 30,00 € par carte puis 18,00 € en espèces s'écrit une
+     * ligne par mode, en abrégé, dans l'ordre fixe (ESP avant CB), puis
+     * « Total 48,00 € » ; aucune légende sous le tableau.
+     */
+    public function test_l_encaisse_en_deux_modes_s_ecrit_une_ligne_par_mode_dans_l_ordre_fixe_puis_le_total(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
+        $this->actingAs($vendeur);
+        Filament::setTenant($magasin);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 48, 'taux_tva' => 20, 'suivi_stock' => false]);
+        app(EnregistrerVenteCaisseAction::class)->handle($vendeur, Client::query()->where('est_comptoir', true)->sole(), [['produit_id' => $produit->id, 'quantite' => 1]], new ReglementComptant([
+            new PartDeReglement(ModePaiement::CarteBancaire, 3000),
+            new PartDeReglement(ModePaiement::Especes, 1800),
+        ]));
+        $enOrdre = [
+            '<abbr class="piliqi-encaisse__mode" title="Espèces">ESP</abbr>',
+            '<span class="piliqi-encaisse__montant">18,00 €</span>',
+            '<abbr class="piliqi-encaisse__mode" title="Carte bancaire">CB</abbr>',
+            '<span class="piliqi-encaisse__montant">30,00 €</span>',
+            '<span class="piliqi-encaisse__mode piliqi-encaisse__total">Total</span>',
+            '<span class="piliqi-encaisse__montant piliqi-encaisse__total">48,00 €</span>',
+        ];
+
+        Livewire::test(ListClotureCaissePersonnelles::class)->mountAction('fermer_ma_caisse')
+            ->assertSeeHtmlInOrder($enOrdre)
+            ->callMountedAction();
+
+        Livewire::test(ListClotureCaissePersonnelles::class)
+            ->assertSeeHtmlInOrder($enOrdre)
+            ->assertDontSee('Carte bancaire :')
+            ->assertDontSee('CB : carte bancaire');
     }
 
     /**

@@ -70,7 +70,7 @@ enum Graphique: string implements HasLabel
             self::ChiffreDAffairesParMois => 'Les ventes HT émises, moins les avoirs émis, mois par mois.',
             self::VentesEtAchatsParMois => 'Les ventes HT nettes des avoirs et les achats de marchandises HT (factures d\'achat validées moins avoirs fournisseur), mois par mois.',
             self::TvaAPayerParMois => 'La TVA collectée des ventes (nette des avoirs), la TVA déductible des achats (nette des avoirs fournisseur) et leur différence. Estimation tirée de vos documents.',
-            self::ChiffreDAffairesParAn => 'Les ventes HT nettes des avoirs de chaque année civile, ou de chaque exercice quand la période choisie est un exercice.',
+            self::ChiffreDAffairesParAn => 'Les ventes HT nettes des avoirs de chaque année civile, qui est aussi l\'exercice quand il finit en décembre, ou de chaque exercice quand la période choisie est un exercice.',
             self::MargeBruteParMois => 'Les ventes HT des articles moins leur coût moyen d\'achat au moment de la vente, rejoué depuis le grand livre du stock ; le taux de marge en info-bulle.',
             self::ChiffreDAffairesParMagasin => 'La part de chaque magasin dans les ventes HT nettes de la période.',
             self::VentesParTauxDeTva => 'Les ventes HT nettes des avoirs, taux par taux.',

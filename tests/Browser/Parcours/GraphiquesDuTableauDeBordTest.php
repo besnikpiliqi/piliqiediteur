@@ -2,6 +2,13 @@
 
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Cabinets\Models\LienCabinet;
+use App\Domain\TableauDeBord\Enums\EcranDuTableauDeBord;
+use App\Domain\TableauDeBord\Enums\Graphique;
+use App\Domain\TableauDeBord\Models\PreferencesDuTableauDeBord;
+use App\Domain\TableauDeBord\Services\PreferencesDesGraphiques;
+use App\Domain\TableauDeBord\Support\CarteDuTableauDeBord;
+use App\Domain\TableauDeBord\Support\ReglagesDuTableauDeBord;
+use App\Domain\Tenancy\Actions\ModifierParametresFiscauxSocieteAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Services\TenantContext;
@@ -259,4 +266,121 @@ test('une observatrice ne voit ni les chiffres clés ni les graphiques dans le p
         ->nePasVoir('CA HT du mois')
         ->nePasVoir('Tableau de bord de la société')
         ->attendreQue('(window.scrollTo(0, document.body.scrollHeight), document.querySelector("[data-graphique]") === null && document.querySelector(\'select[data-filtre="ajouter"]\') === null)', 'un graphique paraît à l’observatrice');
+});
+
+/**
+ * Les défauts de l'en-tête de chaque carte affichée, à la largeur de la
+ * fenêtre (constat de l'éditeur du 15/11/2026) : le choix du type,
+ * « Monter », « Descendre » et la croix n'ont pas le même haut (à 2 px
+ * près), un élément de l'en-tête dépasse la croix à droite, le titre
+ * chevauche une commande, la carte déborde, ou la page défile de côté.
+ *
+ * @return list<string>
+ */
+function defautsDesEnTetes(Navigation $onglet): array
+{
+    return $onglet->page()->evaluate(<<<'JS'
+        () => {
+            const defauts = [];
+            const croise = (a, b) => a.left < b.right - 0.5 && b.left < a.right - 0.5 && a.top < b.bottom - 0.5 && b.top < a.bottom - 0.5;
+
+            for (const carte of document.querySelectorAll('[data-graphique]')) {
+                const nom = carte.dataset.graphique;
+                const tete = carte.querySelector('[data-tete]');
+                const titre = carte.querySelector('[data-titre]').getBoundingClientRect();
+                const commandes = {
+                    type: carte.querySelector('[data-geste="type"]').closest('.fi-input-wrp').getBoundingClientRect(),
+                    monter: carte.querySelector('[data-geste="monter"]').getBoundingClientRect(),
+                    descendre: carte.querySelector('[data-geste="descendre"]').getBoundingClientRect(),
+                    croix: carte.querySelector('[data-geste="retirer"]').getBoundingClientRect(),
+                };
+                const hauts = Object.values(commandes).map((boite) => boite.top);
+
+                if (Math.max(...hauts) - Math.min(...hauts) > 2) {
+                    defauts.push(nom + ' : hauts des commandes ' + hauts.map((haut) => Math.round(haut)).join(', '));
+                }
+
+                for (const element of tete.querySelectorAll('*')) {
+                    const boite = element.getBoundingClientRect();
+
+                    if (boite.width > 0 && boite.right > commandes.croix.right + 0.5) {
+                        defauts.push(nom + ' : ' + element.tagName.toLowerCase() + ' dépasse la croix à droite');
+                    }
+                }
+
+                for (const [commande, boite] of Object.entries(commandes)) {
+                    if (croise(titre, boite)) {
+                        defauts.push(nom + ' : le titre chevauche ' + commande);
+                    }
+                }
+
+                if (carte.scrollWidth > carte.clientWidth + 1 || tete.getBoundingClientRect().right > carte.getBoundingClientRect().right + 0.5) {
+                    defauts.push(nom + ' : la carte déborde');
+                }
+            }
+
+            if (document.documentElement.scrollWidth > window.innerWidth + 1) {
+                defauts.push('la page défile de côté (' + document.documentElement.scrollWidth + ' px pour ' + window.innerWidth + ')');
+            }
+
+            return defauts;
+        }
+        JS);
+}
+
+test('l’en-tête de chacun des dix-huit graphiques garde le type, « Monter », « Descendre » et la croix sur sa première ligne, la croix à droite, à 1 280, 1 024 et 390 px de large', function () {
+    $societe = $this->societeComplete();
+    app(PreferencesDesGraphiques::class)->enregistrer($societe->proprietaire, EcranDuTableauDeBord::Societe, new ReglagesDuTableauDeBord(
+        array_map(fn (Graphique $graphique): CarteDuTableauDeBord => CarteDuTableauDeBord::parDefaut($graphique), Graphique::cases()),
+    ));
+    $onglet = $this->seConnecter($societe->proprietaire, panneau: 'societe')
+        ->attendreQue('document.querySelectorAll("[data-graphique]").length === '.count(Graphique::cases()), 'les dix-huit graphiques ne sont pas là');
+
+    foreach ([1280, 1024, 390] as $largeur) {
+        $onglet->page()->setViewportSize($largeur, 900);
+        $onglet->attendreQue('window.innerWidth === '.$largeur, "la fenêtre n’est pas à {$largeur} px");
+
+        expect(defautsDesEnTetes($onglet))->toBe([], "à {$largeur} px");
+    }
+});
+
+test('le menu « Période » d’une société dont l’exercice finit en décembre n’a pas de choix « Exercice » et dit « (exercice en cours) » ; celui d’une société dont l’exercice finit en juin a les cinq choix', function () {
+    $decembre = $this->societeComplete();
+    $periodes = '() => Array.from(document.querySelectorAll(\'select[data-filtre="periode"] option\')).map((option) => option.textContent.trim())';
+
+    $onglet = $this->seConnecter($decembre->proprietaire, panneau: 'societe')
+        ->attendreQue('document.querySelector(\'select[data-filtre="periode"]\') !== null', 'le menu « Période » n’est pas là');
+    expect($onglet->page()->evaluate($periodes))->toBe(['12 derniers mois', 'Année 2026 (exercice en cours)', 'Année 2025 (exercice précédent)']);
+
+    $this->travelTo(self::aParis('2026-03-09 08:00:00'));
+    $magasin = $this->completerIdentiteLegale($this->ouvrirUneSociete(['nom' => 'Lyon 1']));
+    $proprietaire = $this->proprietaireDe($magasin);
+    app(ModifierParametresFiscauxSocieteAction::class)->handle($proprietaire, $magasin->societe()->firstOrFail(), ['mois_fin_exercice' => 6]);
+    $this->choisirSonMotDePasse($proprietaire);
+    app(TenantContext::class)->clear();
+    $this->travelTo(self::instantDuTest());
+
+    $juin = $this->seConnecter($proprietaire, panneau: 'societe')
+        ->attendreQue('document.querySelector(\'select[data-filtre="periode"]\') !== null', 'le menu « Période » de la société qui clôture en juin n’est pas là');
+    expect($juin->page()->evaluate($periodes))->toBe(['12 derniers mois', 'Année 2026', 'Année 2025', 'Exercice en cours (juil. 2025 à juin 2026)', 'Exercice précédent (juil. 2024 à juin 2025)']);
+});
+
+test('après l’ajout d’un graphique, le menu « Ajouter un graphique » revient sur « — Choisir — » sans proposer ce graphique, et rechoisir « — Choisir — » ne fait rien, sans message', function () {
+    $societe = $this->societeComplete();
+    $menu = 'document.querySelector(\'select[data-filtre="ajouter"]\')';
+    $onglet = $this->seConnecter($societe->proprietaire, panneau: 'societe')
+        ->attendreQue('document.querySelectorAll("[data-graphique]").length === 4', 'les quatre graphiques par défaut ne sont pas là');
+
+    $onglet->gesteQuiAppelleLeServeur(fn () => $onglet->element('select[data-filtre="ajouter"]')->selectOption('marge_par_mois'), 'l’ajout de la marge')
+        ->attendreQue('document.querySelector(\'[data-graphique="marge_par_mois"]\') !== null', 'la marge n’est pas ajoutée')
+        ->attendreQue($menu.'.value === "" && '.$menu.'.selectedOptions[0].textContent.trim() === "— Choisir —"', 'le menu ne revient pas sur « — Choisir — »')
+        ->attendreQue($menu.'.querySelector(\'option[value="marge_par_mois"]\') === null', 'le menu propose encore la marge, déjà affichée');
+    $reglages = PreferencesDuTableauDeBord::query()->withoutGlobalScopes()->where('user_id', $societe->proprietaire->id)->sole()->reglages;
+
+    $onglet->geste(fn () => $onglet->element('select[data-filtre="ajouter"]')->selectOption(''), 'le choix de « — Choisir — »')
+        ->attendreQue($menu.'.value === ""', 'le menu ne reste pas sur « — Choisir — »')
+        ->verifier()
+        ->nePasVoir('Ce choix n\'existe pas dans le tableau de bord')
+        ->attendreQue('document.querySelectorAll("[data-graphique]").length === 5', 'les cinq cartes ne restent pas affichées');
+    expect(PreferencesDuTableauDeBord::query()->withoutGlobalScopes()->where('user_id', $societe->proprietaire->id)->sole()->reglages)->toBe($reglages);
 });

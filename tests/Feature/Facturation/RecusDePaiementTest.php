@@ -35,6 +35,7 @@ use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Exceptions\VenteNonAutoriseeException;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Filament\App\Resources\FactureResource;
 use App\Filament\App\Resources\FactureResource\Pages\ViewFacture;
 use App\Models\User;
 use Filament\Facades\Filament;
@@ -456,6 +457,31 @@ class RecusDePaiementTest extends TestCase
             ->assertInfolistActionVisible('allocationsPaiement.0.telecharger_recuAction', 'telecharger_recu')
             ->callInfolistAction('allocationsPaiement.0.telecharger_recuAction', 'telecharger_recu')
             ->assertFileDownloaded('recu-RP-LYON1-2026-000001.pdf', contentType: 'application/pdf');
+    }
+
+    /**
+     * Le tableau « Paiements reçus » de la fiche (réponse de l'éditeur du
+     * 15/11/2026) : la colonne s'appelle « N° du reçu », et la phrase grise
+     * de la série RP vient sous le tableau seulement quand il montre au
+     * moins un reçu ; un paiement reçu à l'émission n'en a pas.
+     */
+    public function test_la_fiche_titre_la_colonne_n_du_recu_et_dit_la_serie_seulement_avec_un_recu(): void
+    {
+        $magasin = $this->magasin();
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 30, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $payeeALEmission = app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->professionnel()->create(), [['produit_id' => $produit->id, 'quantite' => 1]]), ReglementComptant::horsDeLaCaisse([new PartDeReglement(ModePaiement::Cheque, 1000)]));
+        $payeeEnDeuxFois = $this->facture(Client::factory()->professionnel()->create(), 100);
+        self::encaisser($payeeEnDeuxFois, [new PartDeReglement(ModePaiement::Especes, 3000)]);
+        self::encaisser($payeeEnDeuxFois, [new PartDeReglement(ModePaiement::Virement, 4000)]);
+        $this->actingAs(self::auteur());
+        Filament::setTenant($magasin);
+
+        Livewire::test(ViewFacture::class, ['record' => $payeeEnDeuxFois->getRouteKey()])
+            ->assertSeeInOrder(['N° du reçu', 'RP-LYON1-2026-000001', 'RP-LYON1-2026-000002', FactureResource::PHRASE_DES_RECUS]);
+        Livewire::test(ViewFacture::class, ['record' => $payeeALEmission->getRouteKey()])
+            ->assertSee('N° du reçu')
+            ->assertSee('Imprimé sur le document')
+            ->assertDontSee(FactureResource::PHRASE_DES_RECUS);
     }
 
     /**

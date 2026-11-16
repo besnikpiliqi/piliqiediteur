@@ -14,6 +14,7 @@ use App\Domain\Facturation\Models\RecuPaiement;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Filament\App\Resources\FactureResource;
 use App\Models\User;
 use Tests\Browser\Support\Navigation;
 
@@ -126,4 +127,16 @@ test('« Reçu (PDF) » ne se montre qu’à qui voit le paiement, « Envoyer le
 
         $onglet->seDeconnecter();
     }
+});
+
+test('la fiche d’une facture payée en deux fois après son émission titre la colonne « N° du reçu » et dit, sous le tableau, que chaque paiement a son reçu dans la série RP du magasin', function () {
+    $societe = $this->societeComplete();
+    $facture = factureRegleeApresSonEmission(app(TenantContext::class), $societe->magasin);
+    app(TenantContext::class)->runAs($societe->magasin, fn () => app(EnregistrerPaiementAction::class)->handle($societe->responsable, Client::query()->where('nom', 'Hôtel des Pins')->sole(), ['mode_paiement' => ModePaiement::Cheque->value, 'montant' => '34.00', 'recu_le' => '2026-03-10'], [['facture_id' => $facture->id, 'montant' => '34.00']]));
+
+    $this->seConnecter($societe->responsable)->aller('/app/'.$societe->magasin->uuid.'/factures/'.$facture->id)
+        ->voir('N° du reçu')
+        ->voir('RP-PORT-2026-000001')
+        ->voir('RP-PORT-2026-000002')
+        ->voir(FactureResource::PHRASE_DES_RECUS);
 });

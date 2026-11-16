@@ -101,9 +101,13 @@ final class DerniersGestes
             CarteDuTableauDeBord::parDefaut(Graphique::TvaAPayerParMois),
             CarteDuTableauDeBord::parDefaut(Graphique::FacturesParAnciennete),
         ], PeriodeDuTableauDeBord::AnneePrecedente));
+        // Tous les graphiques qu'il voit sont affichés : son menu
+        // « Ajouter un graphique » dit « Tous les graphiques sont
+        // affichés ».
         $preferences->enregistrer($this->semis->compte('Marc Petit'), EcranDuTableauDeBord::ExpertComptable, new ReglagesDuTableauDeBord([
             CarteDuTableauDeBord::parDefaut(Graphique::ChiffreDAffairesParMois, TypeDeGraphique::Aires),
             CarteDuTableauDeBord::parDefaut(Graphique::VentesParTauxDeTva, TypeDeGraphique::Camembert),
+            ...array_map(fn (Graphique $graphique): CarteDuTableauDeBord => CarteDuTableauDeBord::parDefaut($graphique), array_values(array_filter(Graphique::cases(), fn (Graphique $graphique): bool => ! in_array($graphique, [Graphique::ChiffreDAffairesParMois, Graphique::VentesParTauxDeTva], true)))),
         ], PeriodeDuTableauDeBord::DouzeDerniersMois, null, true));
     }
 

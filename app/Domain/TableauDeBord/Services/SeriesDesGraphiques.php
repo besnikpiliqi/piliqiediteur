@@ -216,7 +216,7 @@ final class SeriesDesGraphiques
             array_shift($annees);
         }
 
-        return new SerieDuGraphique(array_column($annees, 0), [SerieDuGraphique::jeu('Chiffre d\'affaires HT', array_column($annees, 1))]);
+        return new SerieDuGraphique(array_column($annees, 0), [SerieDuGraphique::jeu('Chiffre d\'affaires HT'.($calcul->lesAnneesSontDesExercices() ? ' (exercice)' : ''), array_column($annees, 1))]);
     }
 
     /**

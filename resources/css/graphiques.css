@@ -97,19 +97,80 @@
     padding: 0.75rem 1rem;
 }
 
+/*
+ * L'en-tête d'une carte (constat de l'éditeur du 15/11/2026) : le titre
+ * prend la place qui reste à gauche et passe à la ligne dans sa propre
+ * colonne ; le type, « Monter », « Descendre » et la croix restent
+ * ensemble sur la première ligne, à droite, alignés en haut, sans jamais
+ * passer à la ligne ni bouger, quelle que soit la longueur du titre. Sur
+ * un téléphone, ils passent sous le titre, tous sur une ligne, la croix
+ * toujours à droite ; le menu du type se resserre au besoin.
+ */
 .piliqi-graphiques__tete {
-    align-items: center;
+    align-items: flex-start;
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     gap: 0.5rem;
 }
 
 .piliqi-graphiques__titre {
-    flex: 1 1 12rem;
+    flex: 1 1 0;
     font-size: 0.9375rem;
     font-weight: 600;
+    line-height: 1.5rem;
     margin: 0;
     min-width: 0;
+    overflow-wrap: break-word;
+    hyphens: auto;
+    padding-block: 0.375rem;
+}
+
+.piliqi-graphiques__commandes {
+    align-items: center;
+    display: flex;
+    flex: 0 0 auto;
+    flex-wrap: nowrap;
+    gap: 0.5rem;
+}
+
+/* « Monter » et « Descendre » à la hauteur du menu du type et de la croix. */
+.piliqi-graphiques__commandes .fi-btn {
+    min-height: 2.25rem;
+}
+
+/*
+ * Le menu du type à la largeur du type choisi, là où le navigateur le
+ * permet, pour laisser au titre le plus de place possible ; ailleurs, à
+ * celle du plus long type.
+ */
+.piliqi-graphiques__type select {
+    field-sizing: content;
+}
+
+@media (max-width: 639px) {
+    .piliqi-graphiques__tete {
+        flex-wrap: wrap;
+    }
+
+    .piliqi-graphiques__titre {
+        flex-basis: 100%;
+        padding-block: 0;
+    }
+
+    .piliqi-graphiques__commandes {
+        flex: 1 1 100%;
+        justify-content: flex-end;
+        min-width: 0;
+    }
+
+    .piliqi-graphiques__type {
+        flex: 0 1 auto;
+        min-width: 0;
+    }
+}
+
+.piliqi-graphiques__mesure {
+    display: flex;
 }
 
 .piliqi-graphiques__zone {

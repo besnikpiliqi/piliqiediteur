@@ -80,7 +80,7 @@ final class CalculDesSeries
         public readonly ReglagesDuTableauDeBord $reglages,
         public readonly array $cartes,
     ) {
-        [$premier, $dernier] = $reglages->periode->bornes($perimetre->aujourdhui(), $this->moisDeFinDExercice());
+        [$premier, $dernier] = $reglages->periode->bornes($perimetre->aujourdhui(), $perimetre->moisDeFinDExercice());
         $this->mois = Mois::du($premier, $dernier);
         $this->moisCompares = $reglages->comparer ? array_map(fn (string $mois): string => Mois::decaler($mois, -12), $this->mois) : null;
         $this->ceMois = Mois::duJour($perimetre->aujourdhui());
@@ -157,17 +157,20 @@ final class CalculDesSeries
      * Les années civiles, ou les exercices quand la période en est un, du
      * chiffre d'affaires par an : les cinq qui finissent avec la période,
      * dans l'ordre, chacune avec son libellé, son premier et son dernier
-     * mois.
+     * mois. Quand l'exercice finit en décembre, la période n'est jamais un
+     * exercice (voir PeriodeDuTableauDeBord::pourLaSociete()) : les années
+     * civiles sont alors les exercices (voir lesAnneesSontDesExercices()).
      *
      * @return non-empty-list<array{0: string, 1: string, 2: string}>
      */
     public function annees(): array
     {
         $dernier = $this->mois[count($this->mois) - 1];
+        $parExercice = $this->reglages->periode->pourLaSociete($this->perimetre->moisDeFinDExercice())->estUnExercice();
         $annees = [];
 
         for ($rang = self::ANNEES - 1; $rang >= 0; $rang--) {
-            if ($this->reglages->periode->estUnExercice()) {
+            if ($parExercice) {
                 $fin = Mois::decaler($dernier, -12 * $rang);
                 $debut = Mois::decaler($fin, -11);
                 $libelle = Mois::annee($debut) === Mois::annee($fin) ? 'Exercice '.Mois::annee($fin) : 'Exercice '.Mois::annee($debut).'-'.Mois::annee($fin);
@@ -181,6 +184,16 @@ final class CalculDesSeries
         }
 
         return $annees;
+    }
+
+    /**
+     * Les années civiles du chiffre d'affaires par an sont aussi les
+     * exercices de la société : son exercice finit en décembre (choix B de
+     * l'éditeur, le 15/11/2026 ; la légende le dit).
+     */
+    public function lesAnneesSontDesExercices(): bool
+    {
+        return $this->perimetre->moisDeFinDExercice() === 12;
     }
 
     /**
@@ -355,13 +368,6 @@ final class CalculDesSeries
     public static function jourDeLaSemaine(string $jour): int
     {
         return (int) Calendrier::afficherJour($jour, 'N');
-    }
-
-    private function moisDeFinDExercice(): int
-    {
-        $mois = $this->perimetre->societe->mois_fin_exercice;
-
-        return $mois >= 1 && $mois <= 12 ? $mois : 12;
     }
 
     private static function dernierJourDu(string $mois): string

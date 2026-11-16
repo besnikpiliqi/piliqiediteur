@@ -267,4 +267,15 @@ final class Perimetre
     {
         return $this->calendrier->aujourdhui();
     }
+
+    /**
+     * Le mois de fin d'exercice de la société (1 à 12, décembre par
+     * défaut), dont dépendent le menu « Période » et ses bornes.
+     */
+    public function moisDeFinDExercice(): int
+    {
+        $mois = $this->societe->mois_fin_exercice;
+
+        return $mois >= 1 && $mois <= 12 ? $mois : 12;
+    }
 }

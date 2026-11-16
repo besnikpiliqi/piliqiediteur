@@ -41,7 +41,7 @@
                             <th class="py-1 pe-3 text-start font-medium">Fermeture</th>
                             <th class="py-1 pe-3 text-end font-medium">Ventes</th>
                             <th class="py-1 pe-3 text-end font-medium">TTC vendu</th>
-                            <th class="py-1 pe-3 text-start font-medium">Encaissé</th>
+                            <th class="py-1 pe-3 text-end font-medium">Encaissé</th>
                             <th class="py-1 pe-3 text-end font-medium">Crédit d'avoir</th>
                             <th class="py-1 text-end font-medium">Reste dû</th>
                         </tr>
@@ -54,12 +54,7 @@
                                 <td class="py-1 pe-3">{{ $releve->libelleDeFermeture() }}</td>
                                 <td class="py-1 pe-3 text-end">{{ $releve->nombre_ventes }}</td>
                                 <td class="py-1 pe-3 text-end">{{ $euros($releve->total_ttc) }}</td>
-                                <td class="py-1 pe-3">
-                                    {{ $calculateur->enEuros($releve->totalEncaisseEnCentimes()) }}
-                                    @if ($releve->encaissementsEnClair() !== [])
-                                        ({{ implode(' ; ', $releve->encaissementsEnClair()) }})
-                                    @endif
-                                </td>
+                                <td class="py-1 pe-3 text-end">@include('filament.encaisse-par-mode', ['releve' => $releve])</td>
                                 <td class="py-1 pe-3 text-end">{{ $euros($releve->credit_avoir) }}</td>
                                 <td class="py-1 text-end">{{ $euros($releve->reste_du) }}</td>
                             </tr>

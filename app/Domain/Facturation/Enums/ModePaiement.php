@@ -30,6 +30,35 @@ enum ModePaiement: string implements HasLabel
     }
 
     /**
+     * Le mode en abrégé, usuel en France, que montre la colonne « Encaissé »
+     * des relevés de caisse (demande de l'éditeur du 15/11/2026 ; choix des
+     * abréviations : décision de Claude, D76, que l'éditeur peut changer) :
+     * CB, ESP, CHQ, VIR, PRLV. Le nom entier (getLabel()) reste partout
+     * ailleurs, et en infobulle de l'abréviation.
+     */
+    public function abreviation(): string
+    {
+        return match ($this) {
+            self::CarteBancaire => 'CB',
+            self::Especes => 'ESP',
+            self::Cheque => 'CHQ',
+            self::Virement => 'VIR',
+            self::Prelevement => 'PRLV',
+        };
+    }
+
+    /**
+     * L'ordre fixe des modes dans la colonne « Encaissé » d'un relevé de
+     * caisse : espèces, carte bancaire, chèque, virement, prélèvement.
+     *
+     * @return list<self>
+     */
+    public static function dansLOrdreDesReleves(): array
+    {
+        return [self::Especes, self::CarteBancaire, self::Cheque, self::Virement, self::Prelevement];
+    }
+
+    /**
      * Le mode tel qu'une phrase le dit après un montant : « 40,00 € en
      * espèces », « 30,00 € par carte bancaire ».
      */

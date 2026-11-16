@@ -5,7 +5,6 @@ namespace App\Filament\App\Resources;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Facturation\Enums\ModeFermetureCaisse;
 use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
-use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Tenancy\Support\CompteConnecte;
 use App\Filament\App\Resources\ClotureCaissePersonnelleResource\Pages;
 use App\Models\User;
@@ -14,6 +13,7 @@ use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\HtmlString;
 
 /**
  * Lecture seule : un relevé se crée uniquement par une fermeture (« Fermer
@@ -111,19 +111,27 @@ class ClotureCaissePersonnelleResource extends Resource
                 // Les quatre rubriques du relevé (B18, voir
                 // ClotureCaissePersonnelle), chacune à part.
                 Tables\Columns\TextColumn::make('total_ttc')->label('TTC vendu')->money('EUR'),
-                Tables\Columns\TextColumn::make('total_encaisse')
+                // Une ligne par mode, en abrégé, puis le total quand il y en
+                // a plusieurs (voir encaisse-par-mode.blade.php).
+                Tables\Columns\TextColumn::make('encaisse')
                     ->label('Encaissé')
-                    ->state(fn (ClotureCaissePersonnelle $record): string => app(CalculateurLigne::class)->enDecimal($record->totalEncaisseEnCentimes()))
-                    ->money('EUR'),
-                Tables\Columns\TextColumn::make('encaissements')
-                    ->label('Par mode de paiement')
-                    ->state(fn (ClotureCaissePersonnelle $record): array => $record->encaissementsEnClair())
-                    ->listWithLineBreaks()
-                    ->placeholder('—'),
+                    ->state(fn (ClotureCaissePersonnelle $record): HtmlString => self::encaisseParMode($record))
+                    ->html()
+                    ->alignEnd(),
                 Tables\Columns\TextColumn::make('credit_avoir')->label('Crédit d\'avoir')->money('EUR'),
                 Tables\Columns\TextColumn::make('reste_du')->label('Reste dû')->money('EUR'),
             ])
             ->bulkActions([]);
+    }
+
+    /**
+     * La cellule « Encaissé » d'un relevé, la même dans cette liste, dans
+     * la fenêtre « Fermer ma caisse » et sur la page « Les caisses » de
+     * l'espace de la société.
+     */
+    public static function encaisseParMode(ClotureCaissePersonnelle $releve): HtmlString
+    {
+        return new HtmlString(view('filament.encaisse-par-mode', ['releve' => $releve])->render());
     }
 
     public static function getPages(): array

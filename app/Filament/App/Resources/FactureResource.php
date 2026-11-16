@@ -126,6 +126,13 @@ class FactureResource extends Resource
     public const INFORMATION_ACOMPTE = 'Un acompte reçu avant la facture ne s\'enregistre pas encore dans PILIQI.';
 
     /**
+     * La phrase grise sous « Paiements reçus », quand le tableau montre au
+     * moins un reçu (réponse de l'éditeur du 15/11/2026) : aucun numéro ni
+     * aucune série ne change.
+     */
+    public const PHRASE_DES_RECUS = 'Chaque paiement et chaque annulation d\'un paiement reçoit son propre reçu, numéroté à la suite pour tout le magasin (série RP).';
+
+    /**
      * Le filtre « À encaisser » de la liste (voir table()).
      */
     public const FILTRE_A_ENCAISSER = 'a_encaisser';
@@ -412,7 +419,7 @@ class FactureResource extends Resource
                                 ->color(fn (PaiementAllocation $record): ?string => app(CalculateurLigne::class)->enCentiemes($record->montant_alloue) < 0 ? 'danger' : null),
                             TextEntry::make('paiement.reference')->label('Référence')->placeholder('—'),
                             TextEntry::make('recu')
-                                ->label('Reçu')
+                                ->label('N° du reçu')
                                 ->state(fn (PaiementAllocation $record): ?string => self::paiementDe($record)->recuPaiement?->numero)
                                 ->placeholder('Imprimé sur le document'),
                             Actions::make([
@@ -420,6 +427,15 @@ class FactureResource extends Resource
                                 self::envoyerLeRecu(InfolistAction::make('envoyer_recu')),
                             ]),
                         ]),
+                    // Sous le tableau, seulement quand il montre au moins un
+                    // reçu (réponse de l'éditeur du 15/11/2026) : la série
+                    // des reçus est à part, numérotée à la suite pour tout le
+                    // magasin.
+                    TextEntry::make('phrase_des_recus')
+                        ->hiddenLabel()
+                        ->state(self::PHRASE_DES_RECUS)
+                        ->color('gray')
+                        ->visible(fn (Facture $record): bool => $record->loadMissing('allocationsPaiement.paiement.recuPaiement')->allocationsPaiement->contains(fn (PaiementAllocation $allocation): bool => self::paiementDe($allocation)->recuPaiement !== null)),
                 ]),
 
             InfolistSection::make('Crédité par avoir')

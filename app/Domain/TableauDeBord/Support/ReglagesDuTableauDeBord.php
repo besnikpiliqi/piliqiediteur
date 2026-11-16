@@ -19,7 +19,10 @@ use Illuminate\Support\Str;
  * toute valeur inconnue (un graphique hors du catalogue, un type qu'il ne
  * permet pas, une carte en double, une période ou une comparaison
  * illisible, un magasin qui n'est pas un identifiant) est rejetée et
- * remplacée par le défaut (voir parDefaut()).
+ * remplacée par le défaut (voir parDefaut()). Un exercice retenu par une
+ * société dont l'exercice finit en décembre se lit comme l'année
+ * correspondante, la même période (voir
+ * PeriodeDuTableauDeBord::pourLaSociete()).
  */
 final class ReglagesDuTableauDeBord
 {
@@ -69,7 +72,7 @@ final class ReglagesDuTableauDeBord
             return $defaut;
         }
 
-        $periode = is_string($brut['periode'] ?? null) ? PeriodeDuTableauDeBord::tryFrom($brut['periode']) : null;
+        $periode = is_string($brut['periode'] ?? null) ? PeriodeDuTableauDeBord::tryFrom($brut['periode'])?->pourLaSociete($perimetre->moisDeFinDExercice()) : null;
         $magasin = $brut['magasin'] ?? null;
 
         return new self(

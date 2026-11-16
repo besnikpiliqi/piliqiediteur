@@ -93,9 +93,22 @@ class GrilleDesGraphiques extends Widget
         $this->perimetre();
     }
 
+    /**
+     * Une période du menu de la société (voir
+     * PeriodeDuTableauDeBord::duMenu()) : un exercice, que le menu d'une
+     * société dont l'exercice finit en décembre ne propose pas, est refusé.
+     */
     public function choisirLaPeriode(string $periode): void
     {
-        $this->modifier(fn (ReglagesDuTableauDeBord $reglages): ReglagesDuTableauDeBord => $reglages->avecLaPeriode(PeriodeDuTableauDeBord::tryFrom($periode) ?? throw new LogicException(self::REFUS_DE_LA_VALEUR)));
+        $this->modifier(function (ReglagesDuTableauDeBord $reglages, Perimetre $perimetre) use ($periode): ReglagesDuTableauDeBord {
+            $choisie = PeriodeDuTableauDeBord::tryFrom($periode);
+
+            if ($choisie === null || ! in_array($choisie, PeriodeDuTableauDeBord::duMenu($perimetre->moisDeFinDExercice()), true)) {
+                throw new LogicException(self::REFUS_DE_LA_VALEUR);
+            }
+
+            return $reglages->avecLaPeriode($choisie);
+        });
     }
 
     /**
@@ -123,8 +136,19 @@ class GrilleDesGraphiques extends Widget
         $this->modifier(fn (ReglagesDuTableauDeBord $reglages): ReglagesDuTableauDeBord => $reglages->avecLaComparaison($comparer));
     }
 
+    /**
+     * Le graphique choisi dans le menu « Ajouter un graphique ». « —
+     * Choisir — » n'est jamais une valeur envoyée par le menu (il revient
+     * de lui-même sur ce choix et n'envoie rien quand on le choisit) : une
+     * valeur vide ne fait rien, sans message ; une valeur inconnue est
+     * refusée.
+     */
     public function ajouterUnGraphique(string $graphique): void
     {
+        if ($graphique === '') {
+            return;
+        }
+
         $this->modifier(fn (ReglagesDuTableauDeBord $reglages, Perimetre $perimetre): ReglagesDuTableauDeBord => $reglages->avecLeGraphique($this->graphiqueVisible($graphique, $perimetre)));
     }
 
@@ -194,7 +218,8 @@ class GrilleDesGraphiques extends Widget
         $euros = app(CalculateurLigne::class)->enEuros(...);
         $affiches = array_map(fn (CarteDuTableauDeBord $carte): Graphique => $carte->graphique, $cartes);
         $aujourdhui = $perimetre->aujourdhui();
-        $moisDeFin = $perimetre->societe->mois_fin_exercice ?? 12;
+        $moisDeFin = $perimetre->moisDeFinDExercice();
+        $periodes = PeriodeDuTableauDeBord::duMenu($moisDeFin);
 
         return [
             'chiffres' => app(ChiffresDuTableauDeBord::class)->pour($calcul),
@@ -202,8 +227,8 @@ class GrilleDesGraphiques extends Widget
             'reglages' => $reglages,
             'magasinChoisi' => $this->magasinDuFiltre($reglages, $perimetre),
             'periodes' => array_combine(
-                array_map(fn (PeriodeDuTableauDeBord $periode): string => $periode->value, PeriodeDuTableauDeBord::cases()),
-                array_map(fn (PeriodeDuTableauDeBord $periode): string => $periode->libelle($aujourdhui, $moisDeFin), PeriodeDuTableauDeBord::cases()),
+                array_map(fn (PeriodeDuTableauDeBord $periode): string => $periode->value, $periodes),
+                array_map(fn (PeriodeDuTableauDeBord $periode): string => $periode->libelle($aujourdhui, $moisDeFin), $periodes),
             ),
             'magasins' => $perimetre->ecran->montrePlusieursMagasins() && $perimetre->magasins()->count() > 1
                 ? $perimetre->magasins()->mapWithKeys(fn (Magasin $magasin): array => [(string) $magasin->uuid => Perimetre::nomDuMagasin($magasin)])->all()

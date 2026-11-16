@@ -6,10 +6,13 @@ use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
+use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
 use App\Domain\Facturation\Actions\FermerSaCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\CaissesDeLaSociete;
+use App\Domain\Facturation\Services\PartDeReglement;
+use App\Domain\Facturation\Services\ReglementComptant;
 use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\StatutSociete;
@@ -61,6 +64,47 @@ class CaissesDeLaSocieteTest extends TestCase
             ->set('jour', '2026-10-08')
             ->assertSee('Aucun relevé de caisse fermé le 08/10/2026.')
             ->assertDontSee('12,00 €');
+    }
+
+    /**
+     * La colonne « Encaissé » (demandes de l'éditeur du 15/11/2026, choix
+     * A) : un mode seul s'écrit « ESP 12,00 € », sans total ; plusieurs
+     * modes, une ligne par mode dans l'ordre fixe (espèces avant carte
+     * bancaire, quel que soit l'ordre des parts), puis « Total » ; le nom
+     * entier en infobulle, aucune légende.
+     */
+    public function test_l_encaisse_s_ecrit_une_ligne_par_mode_abrege_puis_le_total_quand_il_y_en_a_plusieurs(): void
+    {
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
+        $lyon = $this->ouvrirUneSociete(['nom' => 'Lyon']);
+        $paul = $this->vendeurQuiVend($lyon, 'Paul', 12);
+        $jeanne = $this->membre($lyon, RoleMagasin::Vendeur, null, ['name' => 'Jeanne']);
+        app(TenantContext::class)->runAs($lyon, function () use ($paul, $jeanne): void {
+            app(EnregistrerVenteCaisseAction::class)->handle($jeanne, Client::query()->where('est_comptoir', true)->sole(), $this->lignes(48), new ReglementComptant([
+                new PartDeReglement(ModePaiement::CarteBancaire, 3000),
+                new PartDeReglement(ModePaiement::Especes, 1800),
+            ]));
+            app(FermerSaCaisseAction::class)->handle($paul, $paul);
+            app(FermerSaCaisseAction::class)->handle($jeanne, $jeanne);
+        });
+        $this->dansLEspaceDeLaSociete($lyon->societe, $this->proprietaireDe($lyon));
+
+        Livewire::test(LesCaisses::class)
+            ->assertSeeHtmlInOrder([
+                'Jeanne',
+                '<abbr class="piliqi-encaisse__mode" title="Espèces">ESP</abbr>',
+                '<span class="piliqi-encaisse__montant">18,00 €</span>',
+                '<abbr class="piliqi-encaisse__mode" title="Carte bancaire">CB</abbr>',
+                '<span class="piliqi-encaisse__montant">30,00 €</span>',
+                '<span class="piliqi-encaisse__mode piliqi-encaisse__total">Total</span>',
+                '<span class="piliqi-encaisse__montant piliqi-encaisse__total">48,00 €</span>',
+                'Paul',
+                '<abbr class="piliqi-encaisse__mode" title="Espèces">ESP</abbr>',
+                '<span class="piliqi-encaisse__montant">12,00 €</span>',
+            ])
+            ->assertDontSee('Carte bancaire :')
+            ->assertDontSee('par mode');
+        $this->assertSame(1, substr_count(Livewire::test(LesCaisses::class)->html(), 'piliqi-encaisse__mode piliqi-encaisse__total'), 'Le relevé de Paul, d\'un seul mode, n\'a pas de ligne « Total ».');
     }
 
     /**

@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Console\SemisEnCours;
 use App\Domain\Achats\Services\PiecesDuFournisseur;
 use App\Domain\Facturation\Events\FactureEmise;
+use App\Domain\TableauDeBord\Enums\Graphique;
 use App\Domain\Tenancy\Enums\StatutCompte;
 use App\Models\User;
 use BackedEnum;
@@ -197,6 +198,7 @@ class SemisCompletTest extends TestCase
         $this->assertChaqueRoleAUnCompteQuiASesDonnees();
         $this->assertChaqueCompteQuiVendASesVentesEtSonReleve();
         $this->assertLesComptesEtLeursMagasins();
+        $this->assertLesCasDesGraphiquesEtDesCaisses();
         $this->assertLaListeDesComptesOuvreChaqueCompteActif();
 
         $this->assertSame(0, Artisan::call('caisse:verifier', ['--complet' => true]), Artisan::output());
@@ -340,6 +342,41 @@ class SemisCompletTest extends TestCase
         $this->assertSame([['EPICERIE']], $this->lignes("select m.code from clients_confies cc join users u on u.id = cc.user_id join liens_cabinet l on l.id = cc.lien_id join magasins m on m.societe_id = l.societe_id where u.name = 'Emma Rousseau' and m.est_demonstration = false"));
         $this->assertSame(['HALLES', 'REPUB'], User::query()->where('name', 'Paul Lefèvre')->sole()->magasinsAccessibles()->pluck('code')->sort()->values()->all());
         $this->assertSame([['EPICERIE']], $this->lignes('select m.code from magasins_cabinet mc join magasins m on m.id = mc.magasin_id'), 'L\'Épicerie n\'ouvre au cabinet que son magasin choisi.');
+    }
+
+    /**
+     * Chaque règle d'écran du lot DATEOP (graphiques, reçus, relevés de
+     * caisse) a une donnée qui la déclenche et une qui ne la déclenche pas :
+     * une société validée dont l'exercice finit en décembre (menu
+     * « Période » sans « Exercice ») et une dont il finit un autre mois ;
+     * un compte dont tous les graphiques sont affichés (« Tous les
+     * graphiques sont affichés ») et d'autres qui en ont à ajouter ; une
+     * facture avec un reçu de paiement (phrase de la série RP) et une
+     * facture payée à son émission, sans reçu ; un relevé de caisse d'un
+     * seul mode et un de plusieurs modes (ligne « Total »).
+     */
+    private function assertLesCasDesGraphiquesEtDesCaisses(): void
+    {
+        $this->assertSame(
+            [[false], [true]],
+            $this->lignes("select distinct mois_fin_exercice = 12 from societes where type_activite <> 'cabinet' and validee_le is not null order by 1"),
+            'Une société finit son exercice en décembre et une autre un autre mois.',
+        );
+        $this->assertSame(
+            [[false], [true]],
+            $this->lignes('select distinct jsonb_array_length(reglages->\'cartes\') = '.count(Graphique::cases()).' from preferences_tableau_de_bord order by 1'),
+            'Un compte a tous les graphiques affichés, les autres en ont encore à ajouter.',
+        );
+        $this->assertSame(
+            [[false], [true]],
+            $this->lignes('select distinct p.recu_paiement_id is not null from paiements p join paiement_allocations pa on pa.paiement_id = p.id order by 1'),
+            'Une facture a un reçu de paiement, une autre a été payée à son émission, sans reçu.',
+        );
+        $this->assertSame(
+            [[false], [true]],
+            $this->lignes('select distinct (select count(*) from json_object_keys(encaissements)) > 1 from clotures_caisse_personnelles where json_typeof(encaissements) = \'object\' order by 1'),
+            'Un relevé de caisse a un seul mode d\'encaissement, un autre en a plusieurs.',
+        );
     }
 
     /**

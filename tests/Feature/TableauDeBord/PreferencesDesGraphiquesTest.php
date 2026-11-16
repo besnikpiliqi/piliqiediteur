@@ -112,6 +112,105 @@ class PreferencesDesGraphiquesTest extends TestCase
     }
 
     /**
+     * Le menu « Ajouter un graphique » (constat de l'éditeur du 15/11/2026)
+     * : après l'ajout, il revient sur « — Choisir — » et ne propose plus le
+     * graphique affiché, qui y revient quand sa croix le retire ; la
+     * valeur vide ne fait rien, sans message ni enregistrement ; une valeur
+     * inconnue reste refusée ; quand tout est affiché, il le dit.
+     */
+    public function test_le_menu_ajouter_revient_sur_choisir_ignore_la_valeur_vide_et_ne_propose_que_les_graphiques_non_affiches(): void
+    {
+        [$lyon] = $this->deuxMagasins();
+        $proprietaire = $this->proprietaireDe($lyon);
+        $this->dansLEspaceDeLaSociete($lyon->societe, $proprietaire);
+        $option = fn (Graphique $graphique): string => '<option value="'.$graphique->value.'">';
+        $grille = Livewire::test(GrilleDesGraphiques::class, ['ecran' => EcranDuTableauDeBord::Societe->value]);
+
+        $grille->call('ajouterUnGraphique', '')
+            ->assertNotNotified()
+            ->assertSeeHtml($option(Graphique::VentesParTauxDeTva));
+        $this->assertSame(0, PreferencesDuTableauDeBord::query()->withoutGlobalScope(SocieteScope::class)->count(), 'La valeur vide n\'enregistre rien.');
+
+        $grille->call('ajouterUnGraphique', Graphique::VentesParTauxDeTva->value)
+            ->assertNotNotified()
+            ->assertSeeHtml('<option value="" selected>— Choisir —</option>')
+            ->assertDontSeeHtml($option(Graphique::VentesParTauxDeTva))
+            ->assertSeeHtml($option(Graphique::MeilleursProduits));
+        $reglages = PreferencesDuTableauDeBord::query()->withoutGlobalScope(SocieteScope::class)->sole()->reglages;
+
+        $grille->call('ajouterUnGraphique', '')->assertNotNotified();
+        $grille->call('ajouterUnGraphique', 'inconnu')->assertNotified(GrilleDesGraphiques::REFUS_DE_LA_VALEUR);
+        $this->assertSame($reglages, PreferencesDuTableauDeBord::query()->withoutGlobalScope(SocieteScope::class)->sole()->reglages);
+
+        $grille->call('retirerLeGraphique', Graphique::VentesParTauxDeTva->value)->assertSeeHtml($option(Graphique::VentesParTauxDeTva));
+
+        foreach (Graphique::cases() as $graphique) {
+            $grille->call('ajouterUnGraphique', $graphique->value);
+        }
+
+        $grille->assertSee('Tous les graphiques sont affichés')
+            ->assertDontSee('— Choisir —')
+            ->assertSeeHtml('data-graphique="'.Graphique::ArticlesEtServices->value.'"');
+    }
+
+    /**
+     * Le menu « Période » (choix B de l'éditeur, le 15/11/2026) : sans
+     * « Exercice » quand l'exercice de la société finit en décembre, où
+     * l'année dit « (exercice en cours) », et un exercice y est refusé ;
+     * avec les cinq choix quand il finit en juin.
+     */
+    public function test_le_menu_periode_n_a_pas_d_exercice_quand_l_exercice_finit_en_decembre(): void
+    {
+        [$lyon] = $this->deuxMagasins();
+        $proprietaire = $this->proprietaireDe($lyon);
+        $this->dansLEspaceDeLaSociete($lyon->societe, $proprietaire);
+
+        Livewire::test(GrilleDesGraphiques::class, ['ecran' => EcranDuTableauDeBord::Societe->value])
+            ->assertSeeHtmlInOrder(['>12 derniers mois</option>', '>Année 2026 (exercice en cours)</option>', '>Année 2025 (exercice précédent)</option>'])
+            ->assertDontSeeHtml('value="exercice_en_cours"')
+            ->assertDontSee('Exercice en cours')
+            ->call('choisirLaPeriode', PeriodeDuTableauDeBord::ExerciceEnCours->value)
+            ->assertNotified(GrilleDesGraphiques::REFUS_DE_LA_VALEUR);
+        $this->assertSame(0, PreferencesDuTableauDeBord::query()->withoutGlobalScope(SocieteScope::class)->count());
+
+        app(TenantContext::class)->clear();
+        $juin = $this->completerIdentiteLegale($this->ouvrirUneSociete(['nom' => 'Annecy', 'mois_fin_exercice' => 6]));
+        $this->dansLEspaceDeLaSociete($juin->societe, $this->proprietaireDe($juin));
+
+        Livewire::test(GrilleDesGraphiques::class, ['ecran' => EcranDuTableauDeBord::Societe->value])
+            ->assertSeeHtmlInOrder(['>12 derniers mois</option>', '>Année 2026</option>', '>Année 2025</option>', '>Exercice en cours (juil. 2026 à juin 2027)</option>', '>Exercice précédent (juil. 2025 à juin 2026)</option>'])
+            ->call('choisirLaPeriode', PeriodeDuTableauDeBord::ExerciceEnCours->value)
+            ->assertNotNotified()
+            ->assertSeeHtml('<option value="exercice_en_cours" selected>');
+    }
+
+    /**
+     * Un « exercice en cours » retenu en base par une société dont
+     * l'exercice finit en décembre se lit comme l'année en cours, la même
+     * période, sans erreur, et le menu montre ce choix.
+     */
+    public function test_un_exercice_retenu_d_une_societe_qui_cloture_en_decembre_se_lit_comme_l_annee(): void
+    {
+        [$lyon] = $this->deuxMagasins();
+        $proprietaire = $this->proprietaireDe($lyon);
+        PreferencesDuTableauDeBord::query()->withoutGlobalScope(SocieteScope::class)->insert([
+            'societe_id' => $proprietaire->societe_id,
+            'user_id' => $proprietaire->id,
+            'ecran' => EcranDuTableauDeBord::Societe->value,
+            'reglages' => json_encode(['cartes' => [['graphique' => Graphique::ChiffreDAffairesParAn->value, 'type' => 'barres']], 'periode' => 'exercice_precedent', 'magasin' => null, 'comparer' => false], JSON_THROW_ON_ERROR),
+        ]);
+        $this->dansLEspaceDeLaSociete($lyon->societe, $proprietaire);
+
+        $reglages = app(PreferencesDesGraphiques::class)->lire($proprietaire, app(PerimetreDesGraphiques::class)->deLaSociete($proprietaire, $lyon->societe));
+
+        $this->assertSame(PeriodeDuTableauDeBord::AnneePrecedente, $reglages->periode);
+        Livewire::test(GrilleDesGraphiques::class, ['ecran' => EcranDuTableauDeBord::Societe->value])
+            ->assertNotNotified()
+            ->assertSeeHtml('<option value="annee_precedente" selected>Année 2025 (exercice précédent)</option>')
+            ->assertSee('Chiffre d\'affaires HT (exercice)');
+    }
+
+    /**
      * Ce qui se lit en base est vérifié valeur par valeur : un graphique
      * inconnu, une carte en double, une période illisible ou un magasin qui
      * n'est pas un identifiant reprennent le défaut, sans rien casser.

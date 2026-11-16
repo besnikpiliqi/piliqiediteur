@@ -94,19 +94,27 @@
             <span>Comparer avec l'année précédente</span>
         </label>
 
-        @if ($aAjouter !== [])
-            <label class="piliqi-graphiques__filtre">
-                <span>Ajouter un graphique</span>
-                <x-filament::input.wrapper>
-                    <x-filament::input.select wire:change="ajouterUnGraphique($event.target.value)" data-filtre="ajouter">
-                        <option value="">— Choisir —</option>
+        {{-- Le menu revient de lui-même sur « — Choisir — » dès qu'un graphique est choisi, et ce choix n'envoie rien (constat de l'éditeur du 15/11/2026) ; un graphique affiché n'y est plus proposé. --}}
+        <label class="piliqi-graphiques__filtre">
+            <span>Ajouter un graphique</span>
+            <x-filament::input.wrapper :disabled="$aAjouter === []">
+                @if ($aAjouter === [])
+                    <x-filament::input.select disabled data-filtre="ajouter">
+                        <option value="" selected>Tous les graphiques sont affichés</option>
+                    </x-filament::input.select>
+                @else
+                    <x-filament::input.select
+                        x-on:change="const graphique = $event.target.value; $event.target.value = ''; if (graphique !== '') { $wire.ajouterUnGraphique(graphique) }"
+                        data-filtre="ajouter"
+                    >
+                        <option value="" selected>— Choisir —</option>
                         @foreach ($aAjouter as $graphique)
                             <option value="{{ $graphique->value }}">{{ $graphique->getLabel() }}</option>
                         @endforeach
                     </x-filament::input.select>
-                </x-filament::input.wrapper>
-            </label>
-        @endif
+                @endif
+            </x-filament::input.wrapper>
+        </label>
     </div>
 
     @if ($cartes === [])
@@ -123,30 +131,35 @@
                 aria-label="{{ $graphique->getLabel() }}"
                 x-data="{ chiffres: false }"
             >
-                <div class="piliqi-graphiques__tete">
-                    <h3 class="piliqi-graphiques__titre">{{ $graphique->getLabel() }}</h3>
+                {{-- Le titre passe à la ligne dans sa colonne ; le type, « Monter », « Descendre » et la croix restent ensemble, à droite de la première ligne, quelle que soit sa longueur (constat de l'éditeur du 15/11/2026). --}}
+                <div class="piliqi-graphiques__tete" data-tete>
+                    <h3 class="piliqi-graphiques__titre" data-titre>{{ $graphique->getLabel() }}</h3>
 
-                    <x-filament::input.wrapper>
-                        <x-filament::input.select aria-label="Type du graphique" wire:change="changerLeType('{{ $graphique->value }}', $event.target.value)" data-geste="type">
-                            @foreach ($graphique->types() as $type)
-                                <option value="{{ $type->value }}" @selected($carte->type === $type)>{{ $type->getLabel() }}</option>
-                            @endforeach
-                        </x-filament::input.select>
-                    </x-filament::input.wrapper>
+                    <div class="piliqi-graphiques__commandes" data-commandes>
+                        <x-filament::input.wrapper class="piliqi-graphiques__type">
+                            <x-filament::input.select aria-label="Type du graphique" wire:change="changerLeType('{{ $graphique->value }}', $event.target.value)" data-geste="type">
+                                @foreach ($graphique->types() as $type)
+                                    <option value="{{ $type->value }}" @selected($carte->type === $type)>{{ $type->getLabel() }}</option>
+                                @endforeach
+                            </x-filament::input.select>
+                        </x-filament::input.wrapper>
 
-                    @if ($graphique === Graphique::MeilleursProduits)
+                        <x-filament::button size="xs" color="gray" wire:click="monter('{{ $graphique->value }}')" :disabled="$rang === 0" data-geste="monter">Monter</x-filament::button>
+                        <x-filament::button size="xs" color="gray" wire:click="descendre('{{ $graphique->value }}')" :disabled="$rang === count($cartes) - 1" data-geste="descendre">Descendre</x-filament::button>
+                        <x-filament::icon-button icon="heroicon-m-x-mark" color="gray" label="Retirer ce graphique" tooltip="Retirer ce graphique" wire:click="retirerLeGraphique('{{ $graphique->value }}')" data-geste="retirer" />
+                    </div>
+                </div>
+
+                @if ($graphique === Graphique::MeilleursProduits)
+                    <div class="piliqi-graphiques__mesure">
                         <x-filament::input.wrapper>
                             <x-filament::input.select aria-label="Classer par" wire:change="changerLaMesure('{{ $graphique->value }}', $event.target.value)" data-geste="mesure">
                                 <option value="{{ CarteDuTableauDeBord::PAR_CHIFFRE_D_AFFAIRES }}" @selected(! $carte->parQuantite())>Par chiffre d'affaires</option>
                                 <option value="{{ CarteDuTableauDeBord::PAR_QUANTITE }}" @selected($carte->parQuantite())>Par quantité</option>
                             </x-filament::input.select>
                         </x-filament::input.wrapper>
-                    @endif
-
-                    <x-filament::button size="xs" color="gray" wire:click="monter('{{ $graphique->value }}')" :disabled="$rang === 0" data-geste="monter">Monter</x-filament::button>
-                    <x-filament::button size="xs" color="gray" wire:click="descendre('{{ $graphique->value }}')" :disabled="$rang === count($cartes) - 1" data-geste="descendre">Descendre</x-filament::button>
-                    <x-filament::icon-button icon="heroicon-m-x-mark" color="gray" label="Retirer ce graphique" tooltip="Retirer ce graphique" wire:click="retirerLeGraphique('{{ $graphique->value }}')" data-geste="retirer" />
-                </div>
+                    </div>
+                @endif
 
                 <p class="piliqi-graphiques__gris">{{ $graphique->ceQuIlCompte() }}</p>
 

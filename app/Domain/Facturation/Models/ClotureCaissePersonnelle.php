@@ -147,18 +147,28 @@ class ClotureCaissePersonnelle extends Model
     }
 
     /**
-     * « Espèces : 30,00 € », un par mode de paiement encaissé, dans
-     * l'ordre des modes.
+     * Les encaissements de ce relevé, un par mode, dans l'ordre fixe de la
+     * colonne « Encaissé » (espèces, carte bancaire, chèque, virement,
+     * prélèvement : voir ModePaiement::dansLOrdreDesReleves()), chacun en
+     * centimes, contre-passations déduites.
      *
-     * @return list<string>
+     * @return list<array{mode: ModePaiement, centimes: int}>
      */
-    public function encaissementsEnClair(): array
+    public function encaissementsParMode(): array
     {
         $calculateur = app(CalculateurLigne::class);
-        $lignes = [];
+        $parMode = [];
 
         foreach ($this->encaissements as $mode => $montant) {
-            $lignes[] = ModePaiement::from(ValeursLues::texte($mode))->getLabel().' : '.$calculateur->enEuros($calculateur->enCentiemes(ValeursLues::texte($montant)));
+            $parMode[ModePaiement::from(ValeursLues::texte($mode))->value] = $calculateur->enCentiemes(ValeursLues::texte($montant));
+        }
+
+        $lignes = [];
+
+        foreach (ModePaiement::dansLOrdreDesReleves() as $mode) {
+            if (array_key_exists($mode->value, $parMode)) {
+                $lignes[] = ['mode' => $mode, 'centimes' => $parMode[$mode->value]];
+            }
         }
 
         return $lignes;

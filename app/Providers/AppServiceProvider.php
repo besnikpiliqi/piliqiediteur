@@ -227,6 +227,7 @@ class AppServiceProvider extends ServiceProvider
         $this->montrerLesGraphiquesDuTableauDeBord();
         $this->colorerLesCasesDesCharges();
         $this->lireLesTextesDansLesDeuxModes();
+        $this->alignerLesEncaissementsDesReleves();
         Livewire::component(PageDesCharges::NOM, PageDesCharges::class);
         Livewire::component(VosTelechargements::NOM, VosTelechargements::class);
         $this->limiterLesEssaisDuLienDUnDevis();
@@ -359,6 +360,17 @@ class AppServiceProvider extends ServiceProvider
     private function lireLesTextesDansLesDeuxModes(): void
     {
         FilamentAsset::register([Css::make('deux-modes', resource_path('css/deux-modes.css'))], 'app');
+    }
+
+    /**
+     * La feuille écrite à la main de la cellule « Encaissé » des relevés de
+     * caisse, une ligne par mode abrégé puis le total (voir
+     * resources/css/releves-de-caisse.css), dans les trois panneaux,
+     * servie de même depuis public/css/app.
+     */
+    private function alignerLesEncaissementsDesReleves(): void
+    {
+        FilamentAsset::register([Css::make('releves-de-caisse', resource_path('css/releves-de-caisse.css'))], 'app');
     }
 
     /**

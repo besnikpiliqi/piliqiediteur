@@ -144,16 +144,15 @@ class ListClotureCaissePersonnelles extends ListRecords
     {
         $calculateur = app(CalculateurLigne::class);
         $euros = fn (string $montant): string => $calculateur->enEuros($calculateur->enCentiemes($montant));
-        $encaissements = $releve->encaissementsEnClair() === [] ? 'aucun' : implode(' ; ', $releve->encaissementsEnClair());
         $ses = $possessif === 'votre' ? 'vos' : 'ses';
         $lignes = [
-            'TTC vendu : '.$euros($releve->total_ttc).' ('.$releve->nombre_ventes.($releve->nombre_ventes > 1 ? ' ventes' : ' vente').')',
-            'Encaissé : '.$calculateur->enEuros($releve->totalEncaisseEnCentimes()).' (par mode : '.$encaissements.')',
-            'Crédit d\'avoir utilisé : '.$euros($releve->credit_avoir),
-            'Reste dû : '.$euros($releve->reste_du),
-            "Ce relevé compte {$ses} ventes et {$ses} paiements qu'aucune fermeture n'a encore comptés, y compris ceux d'un jour précédent. Il part de {$possessif} dernière fermeture de caisse (ou du début de la journée si c'est la première), ou de {$possessif} plus ancienne opération non comptée si elle est antérieure. Ceci ne clôture pas la journée du magasin.",
+            e('TTC vendu : '.$euros($releve->total_ttc).' ('.$releve->nombre_ventes.($releve->nombre_ventes > 1 ? ' ventes' : ' vente').')'),
+            e('Encaissé : ').ClotureCaissePersonnelleResource::encaisseParMode($releve)->toHtml(),
+            e('Crédit d\'avoir utilisé : '.$euros($releve->credit_avoir)),
+            e('Reste dû : '.$euros($releve->reste_du)),
+            e("Ce relevé compte {$ses} ventes et {$ses} paiements qu'aucune fermeture n'a encore comptés, y compris ceux d'un jour précédent. Il part de {$possessif} dernière fermeture de caisse (ou du début de la journée si c'est la première), ou de {$possessif} plus ancienne opération non comptée si elle est antérieure. Ceci ne clôture pas la journée du magasin."),
         ];
 
-        return new HtmlString(implode('<br>', array_map(e(...), $lignes)));
+        return new HtmlString(implode('<br>', $lignes));
     }
 }

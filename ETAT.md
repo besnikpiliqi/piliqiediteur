@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 16/11/2026 à 00:21 UTC par pilotage-sync.sh : « Point de suivi 16/11 00:22 ».
+Mis à jour le 16/11/2026 à 00:21 UTC par pilotage-sync.sh : « T58.1-4 oui ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

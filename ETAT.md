@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 16/11/2026 à 22:20 UTC par pilotage-sync.sh : « Décision : options GRAPH-AN, cartes ouvertes en démonstration ».
+Mis à jour le 16/11/2026 à 22:20 UTC par pilotage-sync.sh : « GRAPH-AN : précision Ventes par vendeur ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

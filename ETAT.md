@@ -1,12 +1,13 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 16/11/2026 à 01:24 UTC par pilotage-sync.sh : « Cahier DEMO-COPIE v2 et précisions ».
+Mis à jour le 16/11/2026 à 02:22 UTC par pilotage-sync.sh : « Point 02:23 ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
 Tête poussée : `b6015883`. Commits locaux pas encore poussés :
 
 ```
+90f7ab33 Télécharger les documents : les charges et leurs pièces
 a9bb1a78 Charges : état téléchargeable en PDF et en Excel
 90a4426c Écrans : classes de style absentes de la feuille de Filament
 9e14f02f Semis complet de toutes les tables et de tous les cas
@@ -43,52 +44,72 @@ eba4bc85 Relecture du lot ER-PRO
 ```
  M CLAUDE.md
  M README.md
- M app/Domain/Charges/Models/Charge.php
- M app/Domain/Charges/Services/EtatDesChargesEnExcel.php
- M app/Domain/Facturation/Enums/TypeDeDocumentTelechargeable.php
- M app/Domain/Facturation/Services/ArchiveDesDocuments.php
- M app/Domain/Facturation/Services/DocumentTrouve.php
- M app/Domain/Facturation/Services/DocumentsDeLaPeriode.php
- M app/Domain/Facturation/Services/RecapitulatifDesDocuments.php
- M app/Domain/Tenancy/Actions/DemanderLeTelechargementDesDocumentsAction.php
- M app/Domain/Tenancy/Enums/ActionAuditee.php
- M app/Domain/Tenancy/Jobs/PreparerLeTelechargementDesDocumentsJob.php
- M app/Domain/Tenancy/Models/TelechargementDeDocuments.php
- M app/Filament/App/Pages/TelechargerLesDocuments.php
- M app/Filament/Concerns/TelechargeLesDocumentsParPeriode.php
- M app/Http/Controllers/TelechargerLesDocumentsController.php
+ M app/Domain/Facturation/Enums/ModePaiement.php
+ M app/Domain/Facturation/Models/ClotureCaissePersonnelle.php
+ M app/Domain/TableauDeBord/Enums/Graphique.php
+ M app/Domain/TableauDeBord/Enums/PeriodeDuTableauDeBord.php
+ M app/Domain/TableauDeBord/Services/SeriesDesGraphiques.php
+ M app/Domain/TableauDeBord/Support/CalculDesSeries.php
+ M app/Domain/TableauDeBord/Support/Perimetre.php
+ M app/Domain/TableauDeBord/Support/ReglagesDuTableauDeBord.php
+ M app/Filament/App/Resources/ClotureCaissePersonnelleResource.php
+ M app/Filament/App/Resources/ClotureCaissePersonnelleResource/Pages/ListClotureCaissePersonnelles.php
+ M app/Filament/App/Resources/FactureResource.php
+ M app/Filament/GrilleDesGraphiques.php
  M app/Providers/AppServiceProvider.php
- M database/migrations/2026_10_14_100006_create_telechargements_documents_table.php
  M database/seeders/Semis/DerniersGestes.php
- M resources/views/filament/telecharger-les-documents.blade.php
- M tests/Browser/Parcours/ChargesTest.php
- M tests/Browser/Parcours/TelechargerLesDocumentsTest.php
+ M database/seeders/Semis/SemisDeDemonstration.php
+ M public/css/app/graphiques.css
+ M resources/css/graphiques.css
+ M resources/views/filament/grille-des-graphiques.blade.php
+ M resources/views/filament/societe/pages/les-caisses.blade.php
+ M tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php
+ M tests/Browser/Parcours/RecuDePaiementTest.php
+ M tests/Browser/Support/ActionsDeLInterface.php
  M tests/Browser/inventaire-des-actions.php
- M tests/Feature/Cabinets/MagasinsOuvertsAuCabinetTest.php
- M tests/Feature/Facturation/TelechargementDesDocumentsConcurrenceTest.php
- M tests/Feature/Facturation/TelechargementDesDocumentsTest.php
- M tests/Feature/Filament/TelechargerLesDocumentsTest.php
+ M tests/Feature/Facturation/RecusDePaiementTest.php
+ M tests/Feature/Filament/ClotureCaissePersonnelleResourceTest.php
+ M tests/Feature/Filament/RessourcesServiesParPiliqiTest.php
  M tests/Feature/SemisCompletTest.php
- M tests/Feature/Tenancy/NotificationsDeLaSocieteTest.php
-?? app/Domain/Facturation/Services/ChoixDesCharges.php
-?? app/Filament/VosTelechargements.php
-?? resources/views/filament/vos-telechargements.blade.php
-?? tests/Feature/Facturation/TelechargementDesChargesTest.php
+ M tests/Feature/Societe/CaissesDeLaSocieteTest.php
+ M tests/Feature/TableauDeBord/PreferencesDesGraphiquesTest.php
+ M tests/Feature/TableauDeBord/SeriesDesGraphiquesTest.php
+?? public/css/app/releves-de-caisse.css
+?? resources/css/releves-de-caisse.css
+?? resources/views/filament/encaisse-par-mode.blade.php
+?? tests/Browser/Parcours/RelevesDeCaisseTest.php
+?? tests/Unit/ModePaiementTest.php
+?? tests/Unit/PeriodeDuTableauDeBordTest.php
 ```
 
 ## Dernière course de la chaîne
 
-Course `wf_1a997172-d15`, étapes commencées (de la plus ancienne à la plus récente) :
+Course `wf_ee9b6e6e-908`, étapes commencées (de la plus ancienne à la plus récente) :
 
 ```
-releve:regles
-releve:code
-releve:tests
-releve:notes
-releve:archi
-redaction
-critique:securite
-critique:caisse
-critique:completude
-revision
+CHARGES:implementation
+CHARGES:implementation-2
+CHARGES:implementation-3
+CHARGES:relecture1
+CHARGES:relecture2
+CHARGES:correction
+CHARGES:poussee
+CHARGES:notes
+REGUL:implementation
+REGUL:implementation-2
+REGUL:relecture1
+REGUL:relecture2
+REGUL:correction
+REGUL:poussee
+REGUL:notes
+DATEOP:implementation
+DATEOP:implementation-2
+DATEOP:implementation-3
+DATEOP:implementation-4
+DATEOP:implementation-5
+DATEOP:implementation-6
+DATEOP:implementation-7
+DATEOP:implementation-8
+DATEOP:implementation-9
+DATEOP:implementation-10
 ```

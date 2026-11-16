@@ -186,7 +186,7 @@ class VerificationDeLIsolationTest extends TestCase
         $this->assertSame([['SQL', 'ecarts_sirene', (string) $ecart, 'un magasin de la société n° '.$second->societe_id]], $problemes);
     }
 
-    public function test_une_vente_au_nom_du_proprietaire_dans_un_magasin_reel_est_signalee_par_la_base(): void
+    public function test_une_vente_au_nom_du_proprietaire_dans_un_magasin_est_signalee_par_la_base(): void
     {
         [$premier] = $this->deuxSocietes();
         $ticket = $this->ticketEmis($premier);

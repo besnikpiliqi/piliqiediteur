@@ -41,7 +41,7 @@ use Tests\TestCase;
 /**
  * La porte de validation (voir Magasin::peutVendre()) : tant que sa
  * société n'est pas validée, ou que son établissement n'est pas confirmé
- * par le répertoire Sirene, un magasin réel se configure mais ne fait
+ * par le répertoire Sirene, un magasin se configure mais ne fait
  * aucune opération commerciale réelle (ticket, facture, avoir, paiement,
  * devis numéroté, PDF d'un document, e-mail à un client).
  */
@@ -193,11 +193,11 @@ class PorteDeValidationTest extends TestCase
     }
 
     /**
-     * Avant la validation, aucun PDF d'un magasin réel ne se produit, pas
+     * Avant la validation, aucun PDF d'un magasin ne se produit, pas
      * même celui d'un brouillon : un usurpateur ne fabrique pas un faux
      * devis au nom d'une entreprise qui n'a rien demandé.
      */
-    public function test_aucun_pdf_d_un_magasin_reel_ne_se_telecharge_avant_la_validation(): void
+    public function test_aucun_pdf_d_un_magasin_ne_se_telecharge_avant_la_validation(): void
     {
         $this->magasinDUneSocieteAVerifier();
         $produit = $this->produit();

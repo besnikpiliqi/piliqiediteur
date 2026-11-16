@@ -211,7 +211,7 @@ class LimitesDesDroitsTest extends TestCase
     }
 
     /**
-     * Avant la validation de sa société, un magasin réel ne fait aucune
+     * Avant la validation de sa société, un magasin ne fait aucune
      * opération commerciale réelle : son responsable, qui y a tous les
      * droits, n'y a aucune des autorisations qu'elles demandent, et garde
      * les autres ; le cabinet que la société a désigné n'en a aucune non

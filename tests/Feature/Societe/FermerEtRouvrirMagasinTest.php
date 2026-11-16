@@ -65,7 +65,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
- * Le cycle de vie d'un magasin réel (voir FermerMagasinAction et
+ * Le cycle de vie d'un magasin (voir FermerMagasinAction et
  * RouvrirMagasinAction) : la société le ferme, temporairement, pour
  * cessation ou pour cession, cède un magasin déjà fermé, et le rouvre,
  * avant comme après sa validation, avec ce que la caisse sécurisée en
@@ -453,8 +453,7 @@ class FermerEtRouvrirMagasinTest extends TestCase
      * Les comptes de l'équipe d'un magasin fermé pour cessation ou cédé
      * sont gardés : ni retirés, ni privés de leur affectation ou de leur
      * identifiant ; ils consultent le magasin en lecture seule, et la
-     * société les gère encore (seuls les comptes d'entraînement de la
-     * démonstration sont retirés à sa fermeture définitive).
+     * société les gère encore.
      */
     public function test_les_comptes_d_un_magasin_cede_ou_ferme_pour_cessation_sont_gardes(): void
     {

@@ -6,7 +6,7 @@ use Closure;
 use Illuminate\Support\Facades\Cache;
 
 /**
- * Le semis des données de démonstration en cours (php artisan
+ * Le semis en cours (php artisan
  * migrate:fresh --seed, en développement, voir DatabaseSeeder), que le
  * planificateur lit avant chaque tâche (voir bootstrap/app.php) : tant
  * qu'il dure, aucune tâche planifiée ne part, même si php artisan
@@ -50,7 +50,7 @@ final class SemisEnCours
     }
 
     /**
-     * Vrai tant qu'un semis des données de démonstration est en cours.
+     * Vrai tant qu'un semis est en cours.
      */
     public static function estEnCours(): bool
     {

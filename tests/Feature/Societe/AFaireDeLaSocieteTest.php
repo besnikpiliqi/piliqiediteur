@@ -31,7 +31,7 @@ use Tests\TestCase;
 
 /**
  * Règle 6 de l'« À faire » (décision de l'éditeur du 26/10/2026) : au
- * tableau de bord de l'espace d'administration, pour chaque magasin réel
+ * tableau de bord de l'espace d'administration, pour chaque magasin
  * de sa portée, des nombres par groupe, sans nom de client ni numéro de
  * document, chacun menant au tableau de bord du magasin (voir
  * ChosesAFaireDeLaSociete) ; une lecture hors du magasin courant, limitée
@@ -100,8 +100,8 @@ class AFaireDeLaSocieteTest extends TestCase
     }
 
     /**
-     * Ni une autre société ni le magasin de démonstration ne comptent ; un
-     * compte d'un cabinet lié n'en lit rien.
+     * Une autre société ne compte pas ; un compte d'un cabinet lié n'en
+     * lit rien.
      */
     public function test_les_nombres_sont_isoles_entre_societes_et_sans_le_cabinet(): void
     {

@@ -32,11 +32,8 @@ use App\Models\User;
  * pour le propriétaire : les règles qui valent pour tous (lecture seule,
  * validation de la société, document émis, journée clôturée) s'appliquent
  * à lui comme aux autres, et c'est par ses autorisations, toutes sans case
- * sauf celles de la vente, qu'il n'a dans aucun magasin réel (voir
- * PermissionRegistry::duProprietaire()), seulement dans le magasin de
- * démonstration tant qu'il est ouvert (voir
- * PermissionRegistry::duProprietaireEnDemonstration()), qu'il passe les
- * policies.
+ * sauf celles de la vente, qu'il n'a dans aucun magasin (voir
+ * PermissionRegistry::duProprietaire()), qu'il passe les policies.
  *
  * Un compte qui ne peut pas agir n'a aucun droit, où que ce soit :
  * suspendu ou retiré (voir User::peutAgir()).
@@ -79,8 +76,7 @@ use App\Models\User;
  * PermissionRegistry : seulement dans un magasin de la société du compte
  * (jamais ailleurs, propriétaire compris) ; oui s'il l'a dans ce magasin
  * (voir User::autorisationsDans() : pour le propriétaire, toutes sauf
- * celles de la vente dans un magasin réel, toutes dans le magasin de
- * démonstration ouvert ; toutes pour un responsable du magasin ; ses cases pour
+ * celles de la vente ; toutes pour un responsable du magasin ; ses cases pour
  * tout autre compte), sinon la question passe aux policies.
  * Quel que soit le compte, il refuse dans ce magasin :
  * - en lecture seule (voir Magasin::estEnLectureSeule()), tout ce qui n'y
@@ -216,7 +212,7 @@ final class ControleDesDroits
      * Un expert-comptable de la société : aucune autorisation de société et
      * rien dans l'espace de sa société, qu'il n'ouvre jamais. Pour l'un et
      * l'autre, dans un magasin, seulement celui qu'il ouvre (voir
-     * User::peutOuvrir() : un magasin réel d'un client, ou de sa société
+     * User::peutOuvrir() : un magasin d'un client, ou de sa société
      * que sa déclaration lui ouvre), avec les règles de cette société
      * (lecture seule, validation) et les seules autorisations qu'elle
      * accorde, un refus net pour toute autre ; et, pour une question de

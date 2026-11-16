@@ -68,7 +68,7 @@ class RattacherUneDeclarationAction
     /**
      * @param  list<string>|null  $autorisations  null : celles de la déclaration
      * @param  bool  $reglerLesMagasins  faux : le choix de magasins de la déclaration ; vrai : celui de $magasins
-     * @param  array<array-key, mixed>|null  $magasins  avec $reglerLesMagasins : null pour tous les magasins réels, présents et futurs, ou une sélection d'au moins un
+     * @param  array<array-key, mixed>|null  $magasins  avec $reglerLesMagasins : null pour tous les magasins, présents et futurs, ou une sélection d'au moins un
      *
      * @throws AuthorizationException
      * @throws InvalidArgumentException

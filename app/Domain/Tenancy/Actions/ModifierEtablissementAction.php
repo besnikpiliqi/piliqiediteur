@@ -44,10 +44,9 @@ use LogicException;
  * validée, le SIRET d'un magasin ne change que par un changement de SIRET
  * (voir ChangerSiretAction), qui passe par le registre des SIRET réservés.
  *
- * Réservé à qui gère les magasins de la société, pour un magasin réel de
+ * Réservé à qui gère les magasins de la société, pour un magasin de
  * sa portée (voir MagasinDeLaSocietePolicy::update()), jamais un
- * responsable ; le magasin de démonstration, à l'identité fictive, ne se
- * modifie pas. Un magasin fermé, temporairement ou pour cessation, se
+ * responsable. Un magasin fermé, temporairement ou pour cessation, se
  * modifie encore (il peut rouvrir) ; un magasin cédé ne se modifie plus
  * (voir Magasin::aEteCede()). Tout se fait sous le verrou du registre du
  * magasin, qui reçoit un changement de SIRET ou la fixation de son

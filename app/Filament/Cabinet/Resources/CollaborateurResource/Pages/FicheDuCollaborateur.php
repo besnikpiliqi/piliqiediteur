@@ -72,7 +72,7 @@ class FicheDuCollaborateur extends ViewRecord
             ->form([
                 CheckboxList::make('liens')
                     ->label('Clients liés')
-                    ->helperText('Il ouvre les magasins réels de chaque client coché, selon les autorisations que ce client accorde au cabinet.')
+                    ->helperText('Il ouvre les magasins de chaque client coché, selon les autorisations que ce client accorde au cabinet.')
                     ->options(fn (): array => self::clientsLies())
                     ->columns(1),
             ])

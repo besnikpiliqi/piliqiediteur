@@ -40,7 +40,7 @@ use Illuminate\Support\Facades\Gate;
  * Les documents du téléchargement par période (décision de l'éditeur du
  * 03/11/2026, lot EX) : une lecture hors du magasin courant, déclarée dans
  * CLAUDE.md, dans l'espace de la société (les magasins de la portée de la
- * personne) et dans l'espace d'un cabinet (les magasins réels d'un client
+ * personne) et dans l'espace d'un cabinet (les magasins d'un client
  * lié qui le lui accorde).
  *
  * Chaque magasin se lit à son tour comme magasin actif, sa société comme
@@ -50,10 +50,8 @@ use Illuminate\Support\Facades\Gate;
  * fermé, suspendu ou d'une société résiliée laissant le téléchargement
  * permis. Un magasin n'est lu que si la personne y a l'autorisation
  * « télécharger les documents par période » (voir peutTelechargerDans()) ;
- * un magasin réel d'une société qui n'est pas validée n'a aucun document
- * réel et n'est jamais lu ; le magasin de démonstration se lit jusqu'à
- * la validation de la société, ses documents marqués comme tels, puis plus
- * jamais (T115). Les droits d'un compte dans un magasin se
+ * un magasin d'une société qui n'est pas validée n'a aucun document et
+ * n'est jamais lu. Les droits d'un compte dans un magasin se
  * lisent une fois par instance (une requête de la page, une préparation,
  * un téléchargement, voir peutTelechargerDans() et lectureDans()), et
  * seulement ceux qui servent : une page qui lit plusieurs magasins ne
@@ -73,12 +71,11 @@ use Illuminate\Support\Facades\Gate;
  * 15/11/2026, lot DATEOP), se lisent par les mêmes requêtes que la page des
  * charges (voir ChargesDeLaSociete::liste()), hors du scope de la société,
  * filtrées par la société et par les magasins que la personne voit (voir
- * DroitsSurLesCharges) : celles d'un magasin réel où elle télécharge et
+ * DroitsSurLesCharges) : celles d'un magasin où elle télécharge et
  * voit les charges (voir voitLesChargesDans()) ; celles de « Toute la
  * société », sans magasin, seulement quand elle voit les charges de toute
  * la société et y a l'autorisation de télécharger (voir
- * telechargeLesChargesDeLaSociete()) ; jamais dans le magasin de
- * démonstration. Elles se choisissent par leur mois de TVA : celles des
+ * telechargeLesChargesDeLaSociete()). Elles se choisissent par leur mois de TVA : celles des
  * mois que la période touche, même en partie ; seulement les validées, ou
  * toutes sur demande (voir ChoixDesCharges). Les jours sont ceux
  * du calendrier de chaque magasin : le jour d'émission d'une vente, d'un
@@ -150,9 +147,8 @@ final class DocumentsDeLaPeriode
     /**
      * Les magasins de sa société dans sa portée (tous pour le propriétaire,
      * la sélection d'un administrateur, voir User::magasinsDeSaPortee()) où
-     * il télécharge (voir peutTelechargerDans()) : le magasin de
-     * démonstration avant la validation de la société, ses magasins réels
-     * ensuite, par nom, chacun avec cette société, qui ne se relit pas.
+     * il télécharge (voir peutTelechargerDans()), une fois la société
+     * validée, par nom, chacun avec cette société, qui ne se relit pas.
      *
      * @return Collection<int, Magasin>
      */
@@ -173,7 +169,7 @@ final class DocumentsDeLaPeriode
     }
 
     /**
-     * Les magasins réels des clients liés que le cabinet ouvre au compte
+     * Les magasins des clients liés que le cabinet ouvre au compte
      * (son propriétaire, ou le collaborateur à qui ils sont confiés, voir
      * AccesDesCabinets::magasinsOuverts()), où chaque client accorde au
      * cabinet le téléchargement par période, rangés par client (l'identifiant
@@ -199,31 +195,25 @@ final class DocumentsDeLaPeriode
     /**
      * A-t-il, dans ce magasin, l'autorisation de télécharger les documents
      * par période, posée à la Gate dans ce magasin ? Jamais dans un magasin
-     * réel d'une société qui n'est pas validée, qui n'a aucun document réel,
-     * ni dans le magasin de démonstration d'une société validée, qui a
-     * disparu de tous ses écrans (T115, lot DEMO-V).
+     * d'une société qui n'est pas validée, qui n'a aucun document.
      */
     public function peutTelechargerDans(User $compte, Magasin $magasin): bool
     {
-        $aDesDocuments = $magasin->est_demonstration === true ? ! $magasin->societe->estValidee() : $magasin->societe->estValidee();
-
-        return $this->telecharge[CleDuModele::de($compte).':'.CleDuModele::de($magasin)] ??= $aDesDocuments
+        return $this->telecharge[CleDuModele::de($compte).':'.CleDuModele::de($magasin)] ??= $magasin->societe->estValidee()
             && $this->dansLeMagasin($magasin, fn (): bool => Gate::forUser($compte)->allows(PermissionRegistry::DOCUMENTS_TELECHARGER));
     }
 
     /**
-     * Voit-il les charges de ce magasin réel, en plus d'y télécharger les
+     * Voit-il les charges de ce magasin, en plus d'y télécharger les
      * documents (voir lectureDans()) : le propriétaire toujours, un
      * administrateur ou un responsable à qui « Charges : ajouter » y est
      * cochée, le cabinet lié et l'expert-comptable déclaré à qui le client
      * accorde « Charges : voir, ajouter, saisir et valider » et ouvre ce
-     * magasin (voir DroitsSurLesCharges) ; jamais dans le magasin de
-     * démonstration, ni avant la validation de la société.
+     * magasin (voir DroitsSurLesCharges).
      */
     public function voitLesChargesDans(User $compte, Magasin $magasin): bool
     {
-        return $magasin->est_demonstration !== true
-            && ($this->accesAuxCharges($compte, $magasin->societe)?->voitLeMagasin(CleDuModele::de($magasin)) ?? false);
+        return $this->accesAuxCharges($compte, $magasin->societe)?->voitLeMagasin(CleDuModele::de($magasin)) ?? false;
     }
 
     /**

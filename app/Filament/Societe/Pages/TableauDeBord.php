@@ -9,11 +9,9 @@ use App\Domain\Cabinets\Services\ExpertsComptablesDeclares;
 use App\Domain\Calendrier\Calendrier;
 use App\Domain\Facturation\Services\FacturesAEncaisserDeLaSociete;
 use App\Domain\TableauDeBord\Services\PerimetreDesGraphiques;
-use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
 use App\Domain\Tenancy\Actions\VerifierUnEcartSireneAction;
 use App\Domain\Tenancy\Enums\RoleSociete;
 use App\Domain\Tenancy\Enums\StatutCompte;
-use App\Domain\Tenancy\Enums\StatutMagasin;
 use App\Domain\Tenancy\Models\EcartSirene;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
@@ -45,7 +43,7 @@ use Illuminate\Database\Eloquent\Collection;
  * faire ; les chiffres clés et les graphiques de ses magasins, pour le
  * propriétaire et un administrateur à qui il en coche la case (voir
  * voitLesGraphiques()) ; où en est sa vérification ; ce qui manque à son identité pour
- * facturer un professionnel ; ses magasins réels de la portée de la
+ * facturer un professionnel ; ses magasins de la portée de la
  * personne connectée (tous pour le propriétaire et un administrateur de
  * tous les magasins, ceux de sa sélection pour un autre administrateur),
  * chacun avec son SIRET, son établissement (vérifié ou à vérifier), son
@@ -57,9 +55,7 @@ use Illuminate\Database\Eloquent\Collection;
  * administrateur autorisé à nommer les responsables, où le faire (voir
  * peutNommerUnResponsable()) ; pour le propriétaire, son cabinet
  * comptable et les demandes de rattachement en cours (voir
- * cabinetComptable()) ; et son magasin de démonstration, ouvert ici
- * tant que la société est en cours de vérification (voir
- * OuvrirLaDemonstrationAction). Les magasins et les comptes se lisent dans
+ * cabinetComptable()). Les magasins et les comptes se lisent dans
  * la société affichée : ceux d'aucune autre société.
  */
 class TableauDeBord extends Dashboard
@@ -73,8 +69,6 @@ class TableauDeBord extends Dashboard
     public const ETAPE_AJOUTER_UN_MAGASIN = 'Ajouter un magasin';
 
     public const ETAPE_EQUIPE = 'Ajouter votre équipe';
-
-    public const ETAPE_DEMONSTRATION = 'Essayer le magasin de démonstration';
 
     protected static ?string $navigationIcon = 'heroicon-o-home';
 
@@ -113,29 +107,24 @@ class TableauDeBord extends Dashboard
             $societe->estClose() => 'L\'inscription de votre société est close.',
             $societe->estValidee() => $societe->phraseDeSaValidation(),
             default => 'Votre société attend le code de son courrier recommandé : la vente, les e-mails aux clients, les PDF et les transmissions sont désactivés jusqu\'à sa validation. Vous pouvez déjà créer vos magasins et les configurer : '
-                .($societe->aDesArticles() ? 'catalogue, équipe, paramètres et achats' : 'catalogue, équipe et paramètres')
-                .', et vous essayer dans le magasin de démonstration.',
+                .($societe->aDesArticles() ? 'catalogue, équipe, paramètres et achats.' : 'catalogue, équipe et paramètres.'),
         };
     }
 
     /**
      * Les premières étapes de la société, celles de son propriétaire, dans
      * l'ordre : saisir le code du courrier recommandé, qui valide la
-     * société ; créer son premier magasin, puis, dès le premier magasin
-     * réel, quel que soit son statut, en ajouter un autre (l'étape reste
-     * cochée, avec le nombre de magasins, sans ordinal, qui deviendrait
-     * faux avec les magasins fermés ou cédés) ; ajouter son équipe ;
-     * essayer le magasin de démonstration. Une société validée par
-     * l'invitation de son cabinet d'expertise comptable n'a jamais reçu de
-     * courrier ni eu de démonstration : ses étapes sont seulement celles
-     * des magasins et de l'équipe (décision de l'éditeur du 01/11/2026).
+     * société ; créer son premier magasin, puis, dès le premier magasin,
+     * quel que soit son statut, en ajouter un autre (l'étape reste cochée,
+     * avec le nombre de magasins, sans ordinal, qui deviendrait faux avec
+     * les magasins fermés ou cédés) ; ajouter son équipe. Une société
+     * validée par l'invitation de son cabinet d'expertise comptable n'a
+     * jamais reçu de courrier : ses étapes sont seulement celles des
+     * magasins et de l'équipe (décision de l'éditeur du 01/11/2026).
      * Chacune dit si elle est faite, où elle en est, et mène à l'écran qui
      * la fait quand il peut l'ouvrir : l'étape des magasins à la création
-     * d'un magasin quand le compte peut en créer un, sinon à leur liste ;
-     * l'essai de la démonstration se fait par le bouton de l'étape (voir
-     * ouvrirLaDemonstrationAction()). Une fois la société validée, la
-     * démonstration disparaît de tous ses écrans (T115, lot DEMO-V) : son
-     * étape n'est plus dans la liste. Aucune pour un
+     * d'un magasin quand le compte peut en créer un, sinon à leur liste.
+     * Aucune pour un
      * administrateur, qui ne voit jamais ici le nombre des magasins ni
      * celui des comptes de la société. Les magasins et les comptes se
      * comptent dans la portée du propriétaire (voir
@@ -154,7 +143,7 @@ class TableauDeBord extends Dashboard
 
         $societe = $this->societe();
         $parSonCabinet = $societe->aEteValideeParLInvitationDUnCabinet();
-        $magasins = $compte->magasinsDeSaPortee()->where('est_demonstration', false)->count();
+        $magasins = $compte->magasinsDeSaPortee()->count();
         $comptes = MembreResource::getEloquentQuery()->whereKeyNot($compte->getKey())->where('statut', '!=', StatutCompte::Retire->value)->where('role_societe', '<>', RoleSociete::ExpertComptable->value)->count();
         $magasinsEtEquipe = [
             [
@@ -179,32 +168,14 @@ class TableauDeBord extends Dashboard
             return $magasinsEtEquipe;
         }
 
-        $code = [
-            'titre' => self::ETAPE_CODE_DU_COURRIER,
-            'faite' => $societe->estValidee(),
-            'etat' => $this->prochaineEtapeDeLaVerification(),
-            'url' => VerificationSociete::getUrl(),
-        ];
-
-        if ($societe->estValidee()) {
-            return [$code, ...$magasinsEtEquipe];
-        }
-
-        $demonstration = $societe->demonstration()->first();
-
         return [
-            $code,
-            ...$magasinsEtEquipe,
             [
-                'titre' => self::ETAPE_DEMONSTRATION,
-                'faite' => $demonstration !== null,
-                'etat' => match (true) {
-                    $demonstration?->statut === StatutMagasin::Actif => 'Ouvert : vous vous y entraînez à vendre, encaisser et clôturer, et votre équipe aussi, avec des comptes d\'entraînement créés ici : ils ne servent qu\'ici et sont retirés à la validation de votre société.',
-                    $demonstration !== null => 'Terminé.',
-                    default => 'Un magasin d\'entraînement, sans valeur, à essayer avant la validation.',
-                },
-                'url' => $demonstration?->statut === StatutMagasin::Actif && $compte->peutOuvrir($demonstration) ? Dashboard::getUrl(panel: 'app', tenant: $demonstration) : null,
+                'titre' => self::ETAPE_CODE_DU_COURRIER,
+                'faite' => $societe->estValidee(),
+                'etat' => $this->prochaineEtapeDeLaVerification(),
+                'url' => VerificationSociete::getUrl(),
             ],
+            ...$magasinsEtEquipe,
         ];
     }
 
@@ -248,18 +219,18 @@ class TableauDeBord extends Dashboard
     }
 
     /**
-     * Ses magasins réels de la portée de la personne connectée.
+     * Ses magasins de la portée de la personne connectée.
      *
      * @return Collection<int, Magasin>
      */
     public function magasins(): Collection
     {
-        return CompteConnecte::exiger()->magasinsDeSaPortee()->where('est_demonstration', false)->orderBy('nom')->orderBy('id')->get();
+        return CompteConnecte::exiger()->magasinsDeSaPortee()->orderBy('nom')->orderBy('id')->get();
     }
 
     /**
      * Le nombre, le restant dû et le retard des factures à encaisser de
-     * chaque magasin réel de la portée où la personne voit toutes les
+     * chaque magasin de la portée où la personne voit toutes les
      * factures, par identifiant de magasin (voir
      * FacturesAEncaisserDeLaSociete) : un magasin qui n'y figure pas n'en
      * montre rien.
@@ -272,7 +243,7 @@ class TableauDeBord extends Dashboard
     }
 
     /**
-     * Ce qui reste à faire dans chaque magasin réel de la portée, par
+     * Ce qui reste à faire dans chaque magasin de la portée, par
      * identifiant de magasin, en nombres par groupe, sans nom de client ni
      * numéro de document (voir ChosesAFaireDeLaSociete) : chaque magasin y
      * mène à son tableau de bord.
@@ -343,50 +314,6 @@ class TableauDeBord extends Dashboard
         $compte = CompteConnecte::exiger();
 
         return $compte->estAdministrateur() && $compte->can(AutorisationsSociete::RESPONSABLES_NOMMER);
-    }
-
-    /**
-     * Le magasin de démonstration, pour qui administre tous les magasins,
-     * tant que la société n'est pas validée : une fois validée, sa section
-     * disparaît, comme la démonstration de tous ses écrans (T115, lot
-     * DEMO-V).
-     */
-    public function demonstration(): ?Magasin
-    {
-        $societe = $this->societe();
-
-        return CompteConnecte::exiger()->administreTousLesMagasins() && ! $societe->estValidee() ? $societe->demonstration()->first() : null;
-    }
-
-    /**
-     * Ouvre, ou rouvre, le magasin de démonstration, puis y mène : le
-     * bouton de l'étape de l'essai tant qu'il n'a jamais été ouvert, puis
-     * celui de la section de la démonstration quand il est fermé. Sa
-     * fenêtre dit au propriétaire qu'il y vend, le seul magasin où il le
-     * fait, et à un administrateur de tous les magasins, qui l'ouvre aussi
-     * (voir SocietePolicy::ouvrirLaDemonstration()), que son équipe y vend
-     * avec des comptes d'entraînement qu'il ne crée pas, et qu'il n'y vend
-     * que si le propriétaire lui a coché la vente.
-     */
-    public function ouvrirLaDemonstrationAction(): Action
-    {
-        return Action::make('ouvrirLaDemonstration')
-            ->label(fn (): string => $this->demonstration() === null ? 'Ouvrir le magasin de démonstration' : 'Rouvrir le magasin de démonstration')
-            ->icon('heroicon-o-academic-cap')
-            ->visible(fn (): bool => (auth()->user()?->can('ouvrirLaDemonstration', $this->societe()) ?? false) && $this->demonstration()?->statut !== StatutMagasin::Actif)
-            ->requiresConfirmation()
-            ->modalDescription(fn (): string => 'Un magasin d\'entraînement, avec un catalogue fictif : '.(CompteConnecte::exiger()->estProprietaire()
-                ? 'vous y vendez, encaissez et clôturez comme pour de vrai, ce que vous ne faites jamais dans vos magasins réels ; pour y faire essayer la caisse à votre équipe, créez-y des comptes d\'entraînement : ils ne servent qu\'ici et sont retirés à la validation de votre société.'
-                : 'votre équipe y vend, encaisse et clôture comme pour de vrai, avec les comptes d\'entraînement qu\'y créent le propriétaire et les responsables de ce magasin : ils ne servent qu\'ici et sont retirés à la validation de votre société ; vous n\'y vendez que si le propriétaire vous a coché la vente.')
-                .' Ses documents sont marqués « Démonstration — sans valeur », il n\'écrit à aucun client et ne transmet rien. Il se ferme à la validation de votre société, et rien n\'en passe à vos magasins réels.')
-            ->action(function () {
-                $demonstration = null;
-                static::executerSansCasser(function () use (&$demonstration): void {
-                    $demonstration = app(OuvrirLaDemonstrationAction::class)->handle(CompteConnecte::exiger(), $this->societe());
-                });
-
-                return $demonstration === null ? null : redirect()->to(Dashboard::getUrl(panel: 'app', tenant: $demonstration));
-            });
     }
 
     /**

@@ -8,14 +8,12 @@ use App\Domain\Tenancy\Actions\CreerAdministrateurAction;
 use App\Domain\Tenancy\Actions\CreerEtablissementAction;
 use App\Domain\Tenancy\Actions\EnvoyerCodeDeConfirmationAction;
 use App\Domain\Tenancy\Actions\ModifierParametresFiscauxSocieteAction;
-use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\MotifCloture;
 use App\Domain\Tenancy\Enums\MotifCode;
 use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Enums\Territoire;
 use App\Domain\Tenancy\Enums\TypeDActivite;
-use App\Domain\Tenancy\Exceptions\VerificationRefuseeException;
 use App\Domain\Tenancy\Mail\DemandeInscriptionMail;
 use App\Domain\Tenancy\Mail\InscriptionCloseMail;
 use App\Domain\Tenancy\Models\DemandeInscription;
@@ -58,9 +56,9 @@ use Tests\TestCase;
  * dès la création de la société, la base refusant toute modification. Le
  * code d'activité ne bloque que le cabinet d'expertise comptable, hors du
  * code 69.20Z ; pour les autres types, il n'affiche que des avertissements.
- * Un cabinet n'a ni magasin ni démonstration, et, jusqu'à l'espace des
- * cabinets, ses textes de l'espace de la société ne lui parlent ni de
- * l'un ni de l'autre. Une inscription faite avec un mauvais type se clôt
+ * Un cabinet n'a aucun magasin, et, jusqu'à l'espace des cabinets, ses
+ * textes de l'espace de la société ne lui parlent ni de magasins ni de
+ * démonstration. Une inscription faite avec un mauvais type se clôt
  * par la procédure de l'éditeur, et la même personne se réinscrit avec le
  * bon type. Aucune requête ne sort des tests (répertoire, registre et
  * prestataire d'envoi factices).
@@ -322,39 +320,33 @@ class TypeDActiviteTest extends TestCase
     }
 
     /**
-     * Un cabinet n'a jamais de magasin ni de démonstration : la politique
-     * le refuse à son propriétaire, les actions le refusent avec leur
-     * motif, et la base elle-même refuse un magasin dans un cabinet, à la
-     * création comme par le déplacement d'un magasin existant.
+     * Un cabinet n'a jamais de magasin : la politique le refuse à son
+     * propriétaire, l'action le refuse avec son motif, et la base elle-même
+     * refuse un magasin dans un cabinet, à la création comme par le
+     * déplacement d'un magasin existant.
      */
-    public function test_un_cabinet_n_a_jamais_de_magasin_ni_de_demonstration(): void
+    public function test_un_cabinet_n_a_jamais_de_magasin(): void
     {
         $cabinet = $this->inscrireUnCabinet();
         $proprietaire = $cabinet->proprietaire()->firstOrFail();
         app(TenantContext::class)->clear();
 
-        $this->assertSame([false, false, false], [
+        $this->assertSame([false, false], [
             $proprietaire->can('creerUnMagasin', $cabinet),
             $proprietaire->can('gererLesMagasins', $cabinet),
-            $proprietaire->can('ouvrirLaDemonstration', $cabinet),
         ]);
         $this->assertThrows(
             fn () => app(CreerEtablissementAction::class)->handle($proprietaire, $cabinet, ['nom' => 'Cabinet', 'nic' => '00010']),
             LogicException::class,
             CreerEtablissementAction::MESSAGE_CABINET_SANS_MAGASIN,
         );
-        $this->assertThrows(
-            fn () => app(OuvrirLaDemonstrationAction::class)->handle($proprietaire, $cabinet),
-            VerificationRefuseeException::class,
-            CreerEtablissementAction::MESSAGE_CABINET_SANS_MAGASIN,
-        );
 
         $ailleurs = Magasin::factory()->create();
         $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => Magasin::forceCreate([
             'societe_id' => $cabinet->id,
-            'nom' => OuvrirLaDemonstrationAction::NOM,
-            'code' => 'DEMO',
-            'est_demonstration' => true,
+            'nom' => 'Cabinet',
+            'code' => 'CABINET',
+            'siret' => $cabinet->siren.'00017',
             'pays' => 'FR',
             'territoire' => Territoire::Metropole,
         ])), QueryException::class, 'un cabinet d\'expertise comptable n\'a aucun magasin');

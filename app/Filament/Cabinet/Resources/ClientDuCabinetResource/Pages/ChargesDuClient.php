@@ -18,7 +18,7 @@ use Illuminate\Contracts\Support\Htmlable;
  * l'éditeur du 14/11/2026, lot CHARGES), pour son propriétaire et le
  * collaborateur à qui le client est confié, quand le client accorde au
  * cabinet « Charges : voir, ajouter, saisir et valider » (accordée par
- * défaut) : celles de « Toute la société » et des magasins réels qu'il lui
+ * défaut) : celles de « Toute la société » et des magasins qu'il lui
  * ouvre (voir DroitsSurLesCharges et PageDesCharges). Le lien se lit parmi
  * ceux que le cabinet ouvre au compte (voir ClientDuCabinetResource) : un
  * lien d'un autre cabinet ou d'un client non confié donne 404 ; un client

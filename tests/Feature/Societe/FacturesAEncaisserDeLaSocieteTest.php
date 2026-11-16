@@ -9,7 +9,6 @@ use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\FacturesAEncaisserDeLaSociete;
-use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
 use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
@@ -35,11 +34,11 @@ class FacturesAEncaisserDeLaSocieteTest extends TestCase
     /**
      * À Lyon, une facture de 50,00 € émise le 1er octobre (échue le 31) et
      * une de 120,00 € émise le 20 octobre ; à Villeurbanne, aucune. Le
-     * 2 novembre, le propriétaire lit une ligne par magasin réel, à zéro
+     * 2 novembre, le propriétaire lit une ligne par magasin, à zéro
      * pour Villeurbanne, et son tableau de bord les montre, chacune menant
      * à la liste filtrée du magasin.
      */
-    public function test_le_proprietaire_voit_une_ligne_par_magasin_reel(): void
+    public function test_le_proprietaire_voit_une_ligne_par_magasin(): void
     {
         $this->travelTo(self::aParis('2026-10-01 10:00:00'));
         $lyon = $this->ouvrirUneSociete(['nom' => 'Lyon Centre']);
@@ -159,29 +158,6 @@ class FacturesAEncaisserDeLaSocieteTest extends TestCase
         $this->assertStringStartsWith('select "id", "facture_id", "montant_alloue" from "avoir_allocations"', $surLesFactures[2]);
         $this->assertStringNotContainsString('Atelier Martin', json_encode($totaux));
         $this->assertStringNotContainsString($facture->numero, json_encode($totaux));
-    }
-
-    /**
-     * Le magasin de démonstration, où l'équipe vend avant la validation de
-     * la société, n'a jamais de ligne : seul le magasin réel en a une, à
-     * zéro.
-     */
-    public function test_le_magasin_de_demonstration_n_a_pas_de_ligne(): void
-    {
-        $societe = $this->inscrireUneSociete();
-        $reel = $this->creerLeMagasinDuSiege($societe);
-        $proprietaire = $societe->proprietaire()->firstOrFail();
-        $demonstration = app(OuvrirLaDemonstrationAction::class)->handle($proprietaire, $societe);
-        $entraine = self::responsableDeTest($demonstration);
-        $vente = app(TenantContext::class)->runAs($demonstration, fn (): Facture => app(EmettreFactureAction::class)->handle($entraine, app(CreerFactureAction::class)->handle($entraine, Client::factory()->create(), [
-            ['produit_id' => Produit::query()->where('reference', 'DEMO-CARNET')->value('id'), 'quantite' => 1],
-        ])));
-        $this->dansLEspaceDeLaSociete($societe, $proprietaire);
-
-        $totaux = app(FacturesAEncaisserDeLaSociete::class)->pour($proprietaire);
-
-        $this->assertTrue($vente->statut->attendUnReglement());
-        $this->assertSame([$reel->id => ['nombre' => 0, 'restant_du' => 0, 'nombre_en_retard' => 0, 'restant_du_en_retard' => 0]], $totaux);
     }
 
     /**

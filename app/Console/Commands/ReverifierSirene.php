@@ -13,7 +13,7 @@ use Throwable;
  * Reprend les contrôles du répertoire Sirene de l'INSEE de chaque société
  * (voir ReverificationSirene) : chaque heure (voir bootstrap/app.php), les
  * contrôles restés impossibles ; avec --toutes, chaque mois, les sociétés
- * validées et leurs magasins réels actifs, sans rien bloquer. La panne
+ * validées et leurs magasins actifs, sans rien bloquer. La panne
  * d'une société n'arrête pas les suivantes : elle est signalée
  * (report()), et reprise au passage suivant.
  */

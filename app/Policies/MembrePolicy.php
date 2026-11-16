@@ -53,7 +53,7 @@ class MembrePolicy
     /**
      * Créer un compte : le propriétaire (tout rôle), ou un administrateur
      * autorisé à nommer les responsables (le compte d'un responsable d'un
-     * magasin réel de sa portée ; voir PorteeDesDroits::peutDonnerLeRole()) ;
+     * magasin de sa portée ; voir PorteeDesDroits::peutDonnerLeRole()) ;
      * jamais dans un cabinet d'expertise comptable (voir aUneEquipe()).
      */
     public function create(User $user): bool
@@ -66,7 +66,7 @@ class MembrePolicy
     /**
      * Gérer ce compte au-delà de son accès : un compte qu'il voit, jamais
      * le sien ni celui du propriétaire ; pour un administrateur, seulement
-     * le compte d'un responsable d'un magasin réel de sa portée, s'il est
+     * le compte d'un responsable d'un magasin de sa portée, s'il est
      * autorisé à nommer les responsables. Un administrateur qui n'est
      * autorisé qu'à redonner l'accès d'un vendeur ou d'un observateur n'a
      * sur sa fiche que « Redonner l'accès » et « Afficher l'identifiant ».
@@ -136,8 +136,8 @@ class MembrePolicy
 
     /**
      * Changer le rôle de société de ce compte (membre ou administrateur) :
-     * le propriétaire seul, pour un compte actif qui n'est pas un compte
-     * d'entraînement, jamais dans un cabinet d'expertise comptable.
+     * le propriétaire seul, pour un compte actif, jamais dans un cabinet
+     * d'expertise comptable.
      */
     public function changerLeRoleDeSociete(User $user, User $membre): bool
     {

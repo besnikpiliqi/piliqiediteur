@@ -7,7 +7,7 @@ use Tests\Browser\Support\Navigation;
 
 /*
  * Un nom de magasin piégé (constat C37 des audits du 07/11/2026) : la
- * société renomme l'un de ses deux magasins réels en un fragment de HTML,
+ * société renomme l'un de ses deux magasins en un fragment de HTML,
  * accepté comme tout nom de 150 caractères au plus ; dans le menu des
  * magasins, survolé puis ouvert, il s'affiche en texte et rien ne
  * s'exécute, pour le propriétaire comme pour le collaborateur du cabinet

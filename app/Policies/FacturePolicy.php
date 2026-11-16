@@ -62,9 +62,8 @@ class FacturePolicy extends MagasinPolicy
     /**
      * « Émettre et encaisser » un brouillon fait hors de la caisse (R1) :
      * pouvoir l'émettre et enregistrer un encaissement dans ce magasin,
-     * comme les deux gestes qu'il réunit. Jamais le propriétaire dans un
-     * magasin réel, où il ne vend jamais (il le fait dans le magasin de
-     * démonstration), ni un compte du cabinet lié, qui n'a aucune de ces
+     * comme les deux gestes qu'il réunit. Jamais le propriétaire, qui ne
+     * vend jamais, ni un compte du cabinet lié, qui n'a aucune de ces
      * autorisations.
      */
     public function emettreEtEncaisser(User $user, Facture $facture): bool

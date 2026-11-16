@@ -28,7 +28,6 @@ use App\Domain\Tenancy\Actions\AccepterLaTransmissionDeLaProprieteAction;
 use App\Domain\Tenancy\Actions\CloreLInscriptionAction;
 use App\Domain\Tenancy\Actions\EnvoyerCodeDeConfirmationAction;
 use App\Domain\Tenancy\Actions\ModifierEtablissementAction;
-use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
 use App\Domain\Tenancy\Actions\SaisirCodeDeConfirmationAction;
 use App\Domain\Tenancy\Concerns\BelongsToSociete;
 use App\Domain\Tenancy\Enums\ActionAuditee;
@@ -344,10 +343,10 @@ class IsolationDesSocietesTest extends TestCase
 
     /**
      * La première vente qui verrouille le mois de fin d'exercice d'une
-     * société est celle de l'un de ses magasins réels, jamais d'une autre
-     * société ni de son magasin de démonstration.
+     * société est celle de l'un de ses magasins, jamais d'une autre
+     * société.
      */
-    public function test_la_lecture_de_la_premiere_vente_ne_compte_que_les_magasins_reels_de_la_societe(): void
+    public function test_la_lecture_de_la_premiere_vente_ne_compte_que_les_magasins_de_la_societe(): void
     {
         $magasinA = $this->ouvrirUneSociete(['nom' => 'A']);
         $autreDeA = $this->ouvrirUnAutreMagasin($magasinA, ['nom' => 'A2']);
@@ -358,10 +357,6 @@ class IsolationDesSocietesTest extends TestCase
 
         $this->vendre($autreDeA);
         $this->assertTrue($magasinA->societe->aVenduUneFois());
-
-        $enVerification = $this->inscrireUneSociete();
-        $this->vendre(app(OuvrirLaDemonstrationAction::class)->handle($enVerification->proprietaire, $enVerification));
-        $this->assertFalse($enVerification->fresh()->aVenduUneFois());
     }
 
     /**
@@ -788,8 +783,7 @@ class IsolationDesSocietesTest extends TestCase
 
     /**
      * Un ticket de 12,00 € TTC réglé en espèces dans ce magasin par son
-     * responsable de test : le propriétaire ne vend que dans le magasin de
-     * démonstration.
+     * responsable de test : le propriétaire ne vend jamais.
      */
     private function vendre(Magasin $magasin): Facture
     {

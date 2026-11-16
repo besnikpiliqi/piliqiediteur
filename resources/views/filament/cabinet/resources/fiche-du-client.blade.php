@@ -35,7 +35,7 @@
     </x-filament::section>
 
     <x-filament::section icon="heroicon-o-building-storefront">
-        <x-slot name="heading">Magasins réels</x-slot>
+        <x-slot name="heading">Magasins</x-slot>
 
         @forelse ($this->magasins() as $magasin)
             <div class="flex items-center justify-between gap-4 py-2">
@@ -46,7 +46,7 @@
                 <x-filament::button tag="a" :href="$magasin['url']" icon="heroicon-o-arrow-top-right-on-square">Ouvrir le magasin</x-filament::button>
             </div>
         @empty
-            <p>Ce client n'a encore aucun magasin réel.</p>
+            <p>Ce client n'a encore aucun magasin.</p>
         @endforelse
     </x-filament::section>
 

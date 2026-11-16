@@ -137,7 +137,7 @@ return [
         ],
         'developpement.aucune-donnee-reelle' => [
             'puce' => 'Développement',
-            'regle' => 'Aucune donnée réelle n\'existe : les seules données semées sont les données de démonstration, toutes fictives (SIREN fictifs, adresses sur le domaine réservé exemple.test), qui ne se sèment qu\'en développement local et dans les tests, jamais en production (décision de l\'éditeur du 13/11/2026, lot SEED).',
+            'regle' => 'Aucune donnée réelle n\'existe : les seules données semées sont celles du semis, toutes fictives (SIREN fictifs, adresses sur le domaine réservé exemple.test), qui ne se sèment qu\'en développement local et dans les tests, jamais en production (décision de l\'éditeur du 13/11/2026, lot SEED).',
             'tests' => [
                 'tests/Feature/DatabaseSeederTest.php::test_le_semis_est_refuse_en_production_sans_rien_ecrire',
                 'tests/Feature/SemisCompletTest.php::test_le_semis_complet_remplit_toute_la_base_et_tous_les_cas',
@@ -197,7 +197,7 @@ return [
             'tests' => [
                 'tests/Feature/Tenancy/IsolationDesSocietesTest.php::test_aucune_somme_d_une_autre_societe_n_entre_dans_les_factures_a_encaisser',
                 'tests/Feature/Tenancy/IsolationDesSocietesTest.php::test_aucune_caisse_d_une_autre_societe_n_entre_dans_les_caisses_de_la_societe',
-                'tests/Feature/Tenancy/IsolationDesSocietesTest.php::test_la_lecture_de_la_premiere_vente_ne_compte_que_les_magasins_reels_de_la_societe',
+                'tests/Feature/Tenancy/IsolationDesSocietesTest.php::test_la_lecture_de_la_premiere_vente_ne_compte_que_les_magasins_de_la_societe',
                 'tests/Feature/Tenancy/IsolationDesSocietesTest.php::test_la_connexion_ne_lit_d_un_identifiant_que_le_compte_qu_il_designe',
                 'tests/Feature/Tenancy/IsolationDesSocietesTest.php::test_la_page_du_lien_de_transmission_ne_lit_que_la_demande_qu_il_designe',
                 'tests/Feature/Tenancy/IsolationDesSocietesTest.php::test_le_tableau_de_bord_de_la_societe_ne_rend_l_adresse_d_aucun_magasin_designe_par_le_navigateur',
@@ -447,21 +447,13 @@ return [
             'puce' => 'Comptes et équipe',
             'regle' => 'Le propriétaire a tous les droits sans qu\'aucune autorisation ne lui soit demandée, sauf celui de vendre, qu\'il n\'a dans aucun magasin réel : ni ticket, ni facture, ni encaissement, ni bon d\'avoir, ni caisse ; il contre-passe, envoie et relance, clôture la journée, ferme la caisse d\'un vendeur, fait les avoirs et les devis.',
             'tests' => [
-                'tests/Feature/Authorization/ProprietaireSansVenteTest.php::test_le_proprietaire_n_a_aucune_autorisation_de_vente_dans_aucun_de_ses_magasins_reels',
+                'tests/Feature/Authorization/ProprietaireSansVenteTest.php::test_le_proprietaire_n_a_aucune_autorisation_de_vente_dans_aucun_de_ses_magasins',
                 'tests/Feature/Authorization/ProprietaireSansVenteTest.php::test_le_proprietaire_n_ouvre_pas_la_caisse_et_n_a_pas_de_caisse_personnelle',
                 'tests/Feature/Authorization/ProprietaireSansVenteTest.php::test_le_proprietaire_ne_vend_pas_par_livewire',
                 'tests/Feature/Authorization/ProprietaireSansVenteTest.php::test_le_proprietaire_ne_vend_pas_par_l_action_appelee_directement',
                 'tests/Feature/Authorization/ProprietaireSansVenteTest.php::test_le_proprietaire_garde_la_consultation_la_cloture_du_jour_la_fermeture_d_une_caisse_la_contre_passation_et_l_envoi',
                 'tests/Feature/Authorization/ProprietaireSansVenteTest.php::test_le_proprietaire_contre_passe_un_paiement_mais_n_enregistre_pas_le_bon_paiement',
                 'tests/Feature/Authorization/ProprietaireSansVenteTest.php::test_le_proprietaire_fait_les_avoirs_et_les_devis',
-            ],
-        ],
-        'comptes.proprietaire-dans-la-demonstration' => [
-            'puce' => 'Comptes et équipe',
-            'regle' => 'Dans le magasin de démonstration de sa société, tant qu\'il est ouvert, le propriétaire a toutes les autorisations qui existent, celles de la vente comprises (décision du 12/11/2026).',
-            'tests' => [
-                'tests/Feature/Authorization/ProprietaireEnDemonstrationTest.php::test_le_proprietaire_vend_encaisse_fait_un_avoir_utilise_un_bon_ferme_sa_caisse_et_cloture_dans_la_demonstration',
-                'tests/Browser/Parcours/ProprietaireEnDemonstrationTest.php › le propriétaire vend à la caisse de la démonstration, encaisse en espèces et par carte, ferme sa caisse et clôture la journée',
             ],
         ],
         'comptes.administrateurs-du-proprietaire' => [
@@ -548,13 +540,12 @@ return [
         ],
         'comptes.changement-de-role' => [
             'puce' => 'Comptes et équipe',
-            'regle' => 'Un changement de rôle garde le compte, son identifiant et son historique, et s\'inscrit au journal d\'audit avec l\'ancien et le nouveau rôle, la date et son auteur ; un compte d\'entraînement et un compte d\'expert-comptable de la société ne changent jamais de rôle de société.',
+            'regle' => 'Un changement de rôle garde le compte, son identifiant et son historique, et s\'inscrit au journal d\'audit avec l\'ancien et le nouveau rôle, la date et son auteur ; un compte d\'expert-comptable de la société ne change jamais de rôle de société.',
             'tests' => [
                 'tests/Feature/Societe/ChangementDeRoleTest.php::test_un_vendeur_devient_responsable_de_son_magasin_avec_le_meme_compte_et_le_meme_identifiant',
                 'tests/Feature/Societe/ChangementDeRoleTest.php::test_un_vendeur_devient_administrateur_avec_le_meme_compte_sans_aucune_autorisation_de_vente',
                 'tests/Feature/Societe/ChangementDeRoleTest.php::test_un_administrateur_ne_redevient_membre_que_dans_le_magasin_de_son_identifiant',
                 'tests/Feature/Societe/ChangementDeRoleTest.php::test_un_changement_de_role_s_inscrit_au_journal_d_audit_avec_l_ancien_et_le_nouveau_role_la_date_et_l_auteur',
-                'tests/Feature/Societe/ChangementDeRoleTest.php::test_un_compte_d_entrainement_ne_devient_pas_administrateur',
             ],
         ],
         'comptes.decisions-du-proprietaire' => [
@@ -631,14 +622,11 @@ return [
                 'tests/Feature/Societe/ConnexionParIdentifiantTest.php::test_un_identifiant_inconnu_fait_la_meme_verification_de_hachage',
             ],
         ],
-        'comptes.magasin-cede-ferme-et-entrainement' => [
+        'comptes.magasin-cede-ou-ferme' => [
             'puce' => 'Comptes et équipe',
-            'regle' => 'Les comptes d\'un magasin cédé ou fermé définitivement sont gardés ; dans le magasin de démonstration, le propriétaire et un responsable créent des comptes d\'entraînement, qui n\'ouvrent jamais un magasin réel et sont retirés quand la démonstration se ferme pour de bon.',
+            'regle' => 'Les comptes d\'un magasin cédé ou fermé définitivement sont gardés.',
             'tests' => [
                 'tests/Feature/Societe/FermerEtRouvrirMagasinTest.php::test_les_comptes_d_un_magasin_cede_ou_ferme_pour_cessation_sont_gardes',
-                'tests/Feature/Societe/MagasinDeDemonstrationTest.php::test_le_proprietaire_et_un_responsable_creent_des_comptes_d_entrainement_dans_la_demonstration',
-                'tests/Feature/Societe/MagasinDeDemonstrationTest.php::test_un_administrateur_ne_cree_aucun_compte_d_entrainement',
-                'tests/Feature/Societe/MagasinDeDemonstrationTest.php::test_les_comptes_d_entrainement_sont_retires_a_la_validation_ou_a_la_cloture_et_gardes_a_la_fermeture_pour_inactivite',
             ],
         ],
         'comptes.se-souvenir-de-moi' => [
@@ -780,12 +768,11 @@ return [
         // Société et établissements.
         'societe.membre-d-un-assujetti-unique' => [
             'puce' => 'Société et établissements',
-            'regle' => 'Une société membre d\'un assujetti unique (groupe TVA) le coche dans ses réglages fiscaux communs, changement inscrit au journal d\'audit et au journal des événements de chaque magasin : PILIQI refuse alors toute opération commerciale réelle, avec son message, que l\'« À faire » de chaque magasin réel répète, le magasin de démonstration restant utilisable ; la page d\'inscription le dit (P3.1).',
+            'regle' => 'Une société membre d\'un assujetti unique (groupe TVA) le coche dans ses réglages fiscaux communs, changement inscrit au journal d\'audit et au journal des événements de chaque magasin : PILIQI refuse alors toute opération commerciale réelle, avec son message, que l\'« À faire » de chaque magasin répète ; la page d\'inscription le dit (P3.1).',
             'tests' => [
                 'tests/Feature/Societe/AssujettiUniqueTest.php::test_la_case_s_inscrit_au_journal_d_audit_et_au_journal_des_evenements_de_chaque_magasin',
                 'tests/Feature/Societe/AssujettiUniqueTest.php::test_case_cochee_chaque_operation_commerciale_reelle_est_refusee',
                 'tests/Feature/Societe/AssujettiUniqueTest.php::test_case_decochee_la_vente_se_fait',
-                'tests/Feature/Societe/AssujettiUniqueTest.php::test_le_magasin_de_demonstration_reste_utilisable',
                 'tests/Feature/Societe/AssujettiUniqueTest.php::test_la_page_d_inscription_le_dit_sans_champ',
                 'tests/Feature/Societe/AssujettiUniqueTest.php::test_l_a_faire_du_magasin_dit_pourquoi_rien_ne_se_vend',
                 'tests/Browser/Parcours/AssujettiUniqueTest.php › le propriétaire déclare dans « Paramètres fiscaux » la société membre d’un assujetti unique, et le vendeur, à qui son « À faire » le dit, ne peut plus émettre sa facture',
@@ -803,6 +790,7 @@ return [
             'puce' => 'Société et établissements',
             'regle' => 'Une société s\'inscrit sans magasin ; ses magasins se créent dans son espace par le propriétaire ou un administrateur autorisé de tous les magasins, avec le SIREN de la société : on ne saisit que le NIC, et le SIRET, valide, actif et rattaché à ce SIREN au répertoire Sirene, n\'est jamais celui d\'un autre magasin.',
             'tests' => [
+                'tests/Feature/Societe/CreerEtablissementActionTest.php::test_le_code_demo_se_choisit_comme_un_autre_et_la_base_refuse_un_magasin_sans_siret',
                 'tests/Feature/Societe/CreerEtablissementActionTest.php::test_le_proprietaire_cree_un_magasin_avec_le_siren_de_la_societe',
                 'tests/Feature/Societe/CreerEtablissementActionTest.php::test_sans_autorisation_aucun_magasin_ne_se_cree',
                 'tests/Feature/Societe/CreerEtablissementActionTest.php::test_un_societe_id_force_dans_la_requete_est_ignore',
@@ -839,6 +827,7 @@ return [
             'puce' => 'Société et établissements',
             'regle' => 'Chaque magasin a un code court, unique dans la société, définitif dès son premier document, inséré dans tous ses numéros (FAC-LYON1-2026-000001).',
             'tests' => [
+                'tests/Feature/Societe/CreerEtablissementActionTest.php::test_le_code_demo_se_choisit_comme_un_autre_et_la_base_refuse_un_magasin_sans_siret',
                 'tests/Feature/Societe/CreerEtablissementActionTest.php::test_le_code_est_unique_dans_la_societe_mais_libre_dans_une_autre',
                 'tests/Feature/Societe/MagasinResourceTest.php::test_le_code_se_verrouille_au_premier_document_numerote',
                 'tests/Feature/Societe/MagasinResourceTest.php::test_le_premier_document_d_un_autre_magasin_ne_rend_pas_le_code_definitif',
@@ -980,41 +969,8 @@ return [
                 'tests/Feature/Societe/PorteDeValidationTest.php::test_une_societe_a_verifier_n_enregistre_aucun_paiement_et_n_ecrit_a_aucun_client',
                 'tests/Feature/Societe/PorteDeValidationTest.php::test_une_societe_a_verifier_se_configure_catalogue_equipe_parametres_et_achats',
                 'tests/Feature/Societe/PorteDeValidationTest.php::test_le_registre_refuse_toute_vente_d_un_magasin_dont_la_societe_n_est_pas_validee',
-                'tests/Feature/Societe/PorteDeValidationTest.php::test_aucun_pdf_d_un_magasin_reel_ne_se_telecharge_avant_la_validation',
+                'tests/Feature/Societe/PorteDeValidationTest.php::test_aucun_pdf_d_un_magasin_ne_se_telecharge_avant_la_validation',
                 'tests/Feature/Societe/VerificationSocieteTest.php::test_la_societe_se_valide_sans_aucun_magasin_et_ne_vend_rien_avant_son_premier_magasin',
-            ],
-        ],
-        'verification.magasin-de-demonstration' => [
-            'puce' => 'Vérification de la société',
-            'regle' => 'La société s\'essaie dans un magasin de démonstration : identité fictive, territoire de son siège, documents marqués « Démonstration — sans valeur », numéros et registre à lui, entrée et sortie au journal des événements, aucun e-mail ni transmission, jamais facturé ; il se ferme à la validation et rien n\'en passe aux magasins réels.',
-            'tests' => [
-                'tests/Feature/Societe/MagasinDeDemonstrationTest.php::test_le_proprietaire_ouvre_une_seule_demonstration_avant_la_validation',
-                'tests/Feature/Societe/MagasinDeDemonstrationTest.php::test_ses_documents_portent_une_identite_fictive_et_le_filigrane',
-                'tests/Feature/Societe/MagasinDeDemonstrationTest.php::test_ses_numeros_portent_le_code_demo_et_ne_touchent_aucune_serie_reelle',
-                'tests/Feature/Societe/MagasinDeDemonstrationTest.php::test_l_ouverture_et_la_fin_de_la_demonstration_s_inscrivent_en_jet_100_et_105',
-                'tests/Feature/Societe/MagasinDeDemonstrationTest.php::test_aucun_e_mail_ni_aucune_transmission_ne_part_de_la_demonstration',
-                'tests/Feature/Societe/MagasinDeDemonstrationTest.php::test_rien_ne_passe_du_magasin_de_demonstration_aux_magasins_reels',
-                'tests/Feature/Societe/MagasinDeDemonstrationTest.php::test_la_validation_ferme_la_demonstration_qui_disparait_sans_rien_effacer',
-                'tests/Feature/Societe/MagasinDeDemonstrationTest.php::test_la_demonstration_prend_le_territoire_du_siege_et_le_garde',
-                'tests/Feature/Societe/MagasinDeDemonstrationTest.php::test_la_demonstration_vend_encaisse_et_cloture_dans_son_propre_registre',
-            ],
-        ],
-        'verification.demonstration-apres-la-validation' => [
-            'puce' => 'Vérification de la société',
-            'regle' => 'Une fois la société validée, son magasin de démonstration disparaît de tous ses écrans et de ceux de ses magasins (tableau de bord, liste et menu des magasins, comptes de l\'équipe et portée des administrateurs, téléchargement des documents par période et ses demandes passées, cloche) et plus personne n\'y entre, son adresse menant à une page introuvable, ses données restant en base (T115).',
-            'tests' => [
-                'tests/Feature/Societe/DemonstrationApresLaValidationTest.php::test_une_fois_la_societe_validee_la_demonstration_disparait_de_ses_ecrans_sans_rien_effacer',
-                'tests/Feature/Societe/DemonstrationApresLaValidationTest.php::test_les_telechargements_de_la_demonstration_disparaissent_une_fois_la_societe_validee',
-                'tests/Feature/Societe/DemonstrationApresLaValidationTest.php::test_les_notifications_de_la_demonstration_s_effacent_a_la_validation',
-                'tests/Feature/Societe/DemonstrationApresLaValidationTest.php::test_une_demande_de_la_demonstration_preparee_apres_la_validation_se_clot_sans_rien_annoncer',
-                'tests/Feature/Societe/DemonstrationApresLaValidationTest.php::test_l_equipe_de_la_societe_ne_nomme_plus_la_demonstration_une_fois_la_societe_validee',
-                'tests/Feature/Societe/DemonstrationApresLaValidationTest.php::test_la_demonstration_d_une_societe_validee_ne_se_choisit_plus_dans_la_portee_d_un_administrateur',
-                'tests/Feature/Facturation/MarquerFacturesEnRetardTest.php::test_une_facture_de_la_demonstration_ne_s_annonce_plus_une_fois_la_societe_validee',
-                'tests/Feature/Facturation/MarquerFacturesEnRetardConcurrenceTest.php::test_le_passage_en_retard_pendant_la_validation_ou_le_refus_de_la_societe_passe_sans_interblocage',
-                'tests/Feature/Societe/DemonstrationApresLaValidationTest.php::test_le_cabinet_lie_ne_voit_jamais_la_demonstration_de_son_client',
-                'tests/Feature/Societe/MagasinDeDemonstrationTest.php::test_la_validation_ferme_la_demonstration_qui_disparait_sans_rien_effacer',
-                'tests/Feature/Societe/PanneauSocieteTest.php::test_le_tableau_de_bord_coche_chaque_premiere_etape_faite',
-                'tests/Browser/Parcours/DemonstrationApresLaValidationTest.php › une fois la société validée, le propriétaire et l’administrateur ne voient plus la démonstration et son adresse est introuvable',
             ],
         ],
         'verification.controle-sirene-et-territoire' => [
@@ -1104,9 +1060,9 @@ return [
         ],
         'type.cabinet-sans-magasin' => [
             'puce' => 'Type d\'activité',
-            'regle' => 'Un cabinet d\'expertise comptable n\'a ni magasin ni démonstration et ne configure que son identité et ses collaborateurs ; la base refuse un magasin dans un cabinet.',
+            'regle' => 'Un cabinet d\'expertise comptable n\'a aucun magasin et ne configure que son identité et ses collaborateurs ; la base refuse un magasin dans un cabinet.',
             'tests' => [
-                'tests/Feature/Societe/TypeDActiviteTest.php::test_un_cabinet_n_a_jamais_de_magasin_ni_de_demonstration',
+                'tests/Feature/Societe/TypeDActiviteTest.php::test_un_cabinet_n_a_jamais_de_magasin',
                 'tests/Feature/Societe/TypeDActiviteTest.php::test_un_cabinet_ne_configure_que_son_identite_et_ses_collaborateurs_ni_equipe_de_magasin_ni_reglages_fiscaux',
                 'tests/Feature/Authorization/GardesDesTypesDActiviteTest.php::test_la_base_refuse_un_magasin_dans_un_cabinet',
                 'tests/Feature/Societe/TypeDActiviteTest.php::test_les_textes_de_la_verification_ne_parlent_a_un_cabinet_ni_de_magasins_ni_de_demonstration',
@@ -1169,7 +1125,7 @@ return [
         ],
         'cabinets.collaborateurs' => [
             'puce' => 'Cabinets d\'expertise comptable',
-            'regle' => 'Un cabinet n\'a ni magasin, ni démonstration, ni administrateur, ni membre : son propriétaire, qui voit tous ses clients, et ses collaborateurs, dont il crée, suspend, réactive, retire et réintègre seul les comptes et redonne l\'accès, en présence du collaborateur, et à qui il confie chaque client lié ; sa propriété se transmet à un collaborateur actif.',
+            'regle' => 'Un cabinet n\'a ni magasin, ni administrateur, ni membre : son propriétaire, qui voit tous ses clients, et ses collaborateurs, dont il crée, suspend, réactive, retire et réintègre seul les comptes et redonne l\'accès, en présence du collaborateur, et à qui il confie chaque client lié ; sa propriété se transmet à un collaborateur actif.',
             'tests' => [
                 'tests/Feature/Cabinets/CollaborateursTest.php::test_seul_le_proprietaire_du_cabinet_cree_suspend_reactive_retire_et_reintegre_un_collaborateur',
                 'tests/Feature/Cabinets/CollaborateursTest.php::test_un_collaborateur_ne_peut_pas_se_connecter_avec_son_identifiant_faute_de_poste_reconnu',
@@ -1186,9 +1142,9 @@ return [
             'tests' => [
                 'tests/Feature/Cabinets/CollaborateursTest.php::test_la_base_refuse_une_affectation_ou_une_autorisation_de_societe_a_un_collaborateur',
                 'tests/Feature/Cabinets/CollaborateursTest.php::test_un_collaborateur_n_ouvre_jamais_l_espace_societe_et_ne_change_jamais_de_role',
-                'tests/Feature/Cabinets/AccesDuCollaborateurChezLeClientTest.php::test_un_collaborateur_ouvre_les_magasins_reels_des_clients_confies_comme_s_il_y_etait_connecte',
+                'tests/Feature/Cabinets/AccesDuCollaborateurChezLeClientTest.php::test_un_collaborateur_ouvre_les_magasins_des_clients_confies_comme_s_il_y_etait_connecte',
                 'tests/Feature/Cabinets/AccesDuCollaborateurChezLeClientTest.php::test_un_collaborateur_ne_voit_pas_un_client_qui_ne_lui_est_pas_confie_et_le_proprietaire_du_cabinet_les_voit_tous',
-                'tests/Feature/Cabinets/AccesDuCollaborateurChezLeClientTest.php::test_un_collaborateur_n_ouvre_ni_l_espace_de_la_societe_du_client_ni_sa_demonstration_ni_sa_caisse',
+                'tests/Feature/Cabinets/AccesDuCollaborateurChezLeClientTest.php::test_un_collaborateur_n_ouvre_ni_l_espace_de_la_societe_du_client_ni_sa_caisse',
                 'tests/Feature/Cabinets/AccesDuCollaborateurChezLeClientTest.php::test_un_collaborateur_ne_lit_ni_le_journal_d_audit_ni_les_traces_ip_et_navigateur_du_client',
             ],
         ],
@@ -1202,7 +1158,6 @@ return [
                 'tests/Feature/Cabinets/TableauDeBordDuCabinetTest.php::test_le_tableau_de_bord_reunit_les_clients_ouverts_au_compte_et_rien_d_autre',
                 'tests/Feature/Cabinets/TableauDeBordDuCabinetTest.php::test_les_factures_a_encaisser_ne_se_montrent_que_pour_les_clients_qui_accordent_les_factures_de_toute_l_equipe',
                 'tests/Feature/Cabinets/TableauDeBordDuCabinetTest.php::test_les_totaux_se_calculent_en_centimes_sans_nom_de_client_ni_numero_de_document',
-                'tests/Feature/Cabinets/TableauDeBordDuCabinetTest.php::test_la_demonstration_d_un_client_n_entre_jamais_dans_les_totaux',
             ],
         ],
         'cabinets.invitation-d-un-siren' => [
@@ -1258,8 +1213,8 @@ return [
             'puce' => 'Cabinets d\'expertise comptable',
             'regle' => 'Par défaut, le cabinet a, dans chacun des magasins réels du client, présents et futurs, toutes les autorisations de consultation, jamais le journal d\'audit ni les traces ; le propriétaire du client en retire et, pour un client « Commerce ou atelier », en ajoute parmi celles des achats et du stock, jamais celles de la vente, de la gestion des comptes, des réglages ou de la caisse ; « voir les factures » et « voir les clôtures » sont une seule case.',
             'tests' => [
-                'tests/Feature/Cabinets/AutorisationsDuCabinetTest.php::test_par_defaut_le_cabinet_a_les_consultations_dans_chaque_magasin_reel_du_client',
-                'tests/Feature/Cabinets/AutorisationsDuCabinetTest.php::test_le_cabinet_lit_un_magasin_reel_cree_apres_le_lien_et_jamais_la_demonstration',
+                'tests/Feature/Cabinets/AutorisationsDuCabinetTest.php::test_par_defaut_le_cabinet_a_les_consultations_dans_chaque_magasin_du_client',
+                'tests/Feature/Cabinets/AutorisationsDuCabinetTest.php::test_le_cabinet_lit_un_magasin_cree_apres_le_lien',
                 'tests/Feature/Cabinets/AutorisationsDuCabinetTest.php::test_le_proprietaire_du_client_retire_des_consultations_et_ajoute_des_autorisations_d_achat_et_de_stock',
                 'tests/Feature/Cabinets/AutorisationsDuCabinetTest.php::test_voir_les_factures_ou_les_clotures_accorde_toutes_celles_du_magasin_et_jamais_l_une_sans_l_autre',
                 'tests/Feature/Cabinets/AutorisationsDuCabinetTest.php::test_aucune_autorisation_de_vente_de_compte_de_reglage_ni_de_caisse_ne_s_accorde_au_cabinet',
@@ -1276,7 +1231,7 @@ return [
                 'tests/Feature/Cabinets/MagasinsOuvertsAuCabinetTest.php::test_un_magasin_non_choisi_n_est_ni_liste_ni_ouvert_et_tous_les_magasins_couvre_les_futurs',
                 'tests/Feature/Cabinets/MagasinsOuvertsAuCabinetTest.php::test_le_tableau_de_bord_et_la_fiche_du_client_ignorent_un_magasin_non_choisi',
                 'tests/Feature/Cabinets/MagasinsOuvertsAuCabinetTest.php::test_retirer_un_magasin_ferme_son_acces_et_s_inscrit_au_jet_130_et_aux_deux_journaux',
-                'tests/Feature/Cabinets/MagasinsOuvertsAuCabinetTest.php::test_une_selection_vide_un_magasin_d_une_autre_societe_ou_la_demonstration_sont_refuses',
+                'tests/Feature/Cabinets/MagasinsOuvertsAuCabinetTest.php::test_une_selection_vide_ou_un_magasin_d_une_autre_societe_sont_refuses',
                 'tests/Feature/Cabinets/MagasinsOuvertsAuCabinetTest.php::test_la_base_refuse_une_autorisation_du_cabinet_utilisee_dans_un_magasin_non_choisi',
             ],
         ],
@@ -1318,13 +1273,13 @@ return [
         ],
         'cabinets.comptes-de-l-expert-comptable-declare' => [
             'puce' => 'Cabinets d\'expertise comptable',
-            'regle' => 'Pour chaque personne déclarée, le propriétaire crée un compte de la société au rôle d\'expert-comptable de la société, qui n\'a jamais son identifiant pour mot de passe et le choisit par un lien de 7 jours, ne vend jamais, n\'envoie aucun e-mail aux clients, ne reçoit aucune alerte de stock, n\'ouvre ni l\'espace de la société ni la démonstration, ne voit ni le journal d\'audit ni les traces, lit l\'identité et les réglages fiscaux, et ouvre chaque magasin réel avec les autorisations de la déclaration.',
+            'regle' => 'Pour chaque personne déclarée, le propriétaire crée un compte de la société au rôle d\'expert-comptable de la société, qui n\'a jamais son identifiant pour mot de passe et le choisit par un lien de 7 jours, ne vend jamais, n\'envoie aucun e-mail aux clients, ne reçoit aucune alerte de stock, n\'ouvre jamais l\'espace de la société, ne voit ni le journal d\'audit ni les traces, lit l\'identité et les réglages fiscaux, et ouvre chaque magasin avec les autorisations de la déclaration.',
             'tests' => [
                 'tests/Feature/Cabinets/ExpertComptableDeclareTest.php::test_la_declaration_cree_un_compte_de_la_societe_dont_le_mot_de_passe_n_est_jamais_l_identifiant',
                 'tests/Feature/Cabinets/LienDeLExpertComptableTest.php::test_le_lien_vaut_sept_jours_a_la_meme_heure_de_paris_meme_au_changement_d_heure',
                 'tests/Feature/Cabinets/LienDeLExpertComptableTest.php::test_choisir_son_mot_de_passe_consomme_le_lien_connecte_la_personne_et_montre_son_identifiant',
                 'tests/Feature/Cabinets/LienDeLExpertComptableTest.php::test_ouvrir_le_lien_n_ecrit_rien_et_ne_montre_ni_l_identifiant_ni_l_adresse_ni_le_proprietaire',
-                'tests/Feature/Cabinets/AccesDeLExpertComptableTest.php::test_l_expert_comptable_n_ouvre_ni_l_espace_de_la_societe_ni_la_demonstration_ni_la_caisse_ni_l_espace_d_un_cabinet',
+                'tests/Feature/Cabinets/AccesDeLExpertComptableTest.php::test_l_expert_comptable_n_ouvre_ni_l_espace_de_la_societe_ni_la_caisse_ni_l_espace_d_un_cabinet',
                 'tests/Feature/Cabinets/AccesDeLExpertComptableTest.php::test_l_expert_comptable_voit_l_identite_et_les_reglages_fiscaux_de_la_societe_en_lecture_seule',
                 'tests/Feature/Cabinets/AccesDeLExpertComptableTest.php::test_l_expert_comptable_ne_lit_ni_le_journal_d_audit_ni_les_traces_ip_et_navigateur',
                 'tests/Feature/Cabinets/AccesDeLExpertComptableTest.php::test_l_expert_comptable_n_envoie_aucun_e_mail_a_un_client_et_ne_recoit_aucune_alerte_de_stock',
@@ -1793,12 +1748,12 @@ return [
         ],
         'hors-france.exoneration-non-prouvee' => [
             'puce' => 'Ventes hors de France',
-            'regle' => 'Sans preuve de sortie 150 jours après la vente, un export ou une livraison vers un DOM se régularise d\'un seul geste d\'un compte autorisé à vendre (jamais le propriétaire hors du magasin de démonstration) : un avoir sans retour en stock et une facture à la TVA française au même prix TTC, que le crédit de l\'avoir règle ; la vente entre dans l\'« À faire » ce jour-là, en rouge.',
+            'regle' => 'Sans preuve de sortie 150 jours après la vente, un export ou une livraison vers un DOM se régularise d\'un seul geste d\'un compte autorisé à vendre (jamais le propriétaire) : un avoir sans retour en stock et une facture à la TVA française au même prix TTC, que le crédit de l\'avoir règle ; la vente entre dans l\'« À faire » ce jour-là, en rouge.',
             'tests' => [
                 'tests/Feature/Facturation/ExonerationNonProuveeTest.php::test_un_export_sans_preuve_au_150e_jour_se_regularise_a_la_tva_francaise_au_meme_prix_ttc',
                 'tests/Feature/Facturation/ExonerationNonProuveeTest.php::test_avant_le_150e_jour_la_regularisation_est_refusee',
                 'tests/Feature/Facturation/ExonerationNonProuveeTest.php::test_une_vente_dont_la_preuve_de_sortie_est_enregistree_ne_se_regularise_pas',
-                'tests/Feature/Facturation/ExonerationNonProuveeTest.php::test_le_proprietaire_ne_regularise_pas_hors_du_magasin_de_demonstration',
+                'tests/Feature/Facturation/ExonerationNonProuveeTest.php::test_le_proprietaire_ne_regularise_pas',
                 'tests/Feature/Facturation/ExonerationNonProuveeTest.php::test_une_demande_repetee_rend_la_meme_facture_sans_doublon',
                 'tests/Feature/Facturation/ExonerationNonProuveeTest.php::test_l_a_faire_et_la_liste_filtree_montrent_l_exoneration_non_prouvee',
             ],
@@ -2019,7 +1974,7 @@ return [
         // Vendeurs.
         'vendeurs.qui-vend' => [
             'puce' => 'Vendeurs',
-            'regle' => 'Les ventes sont faites par les responsables et les vendeurs, et par un administrateur ou un observateur seulement si on lui a coché les autorisations de vente, jamais par le propriétaire, sauf dans le magasin de démonstration.',
+            'regle' => 'Les ventes sont faites par les responsables et les vendeurs, et par un administrateur ou un observateur seulement si on lui a coché les autorisations de vente, jamais par le propriétaire.',
             'tests' => [
                 'tests/Feature/Authorization/ProprietaireSansVenteTest.php::test_le_proprietaire_coche_les_autorisations_de_vente_d_un_vendeur_et_d_un_administrateur',
                 'tests/Feature/Societe/AdministrateursTest.php::test_un_administrateur_a_qui_le_proprietaire_coche_la_vente_vend_avec_une_caisse_a_la_fois',
@@ -2072,7 +2027,7 @@ return [
                 'tests/Feature/Filament/FacturesAEncaisserTest.php::test_le_proprietaire_et_le_responsable_voient_toutes_les_factures_du_magasin',
                 'tests/Feature/Filament/FacturesAEncaisserTest.php::test_un_administrateur_ne_voit_l_alerte_que_s_il_voit_toutes_les_factures',
                 'tests/Feature/Filament/FacturesAEncaisserTest.php::test_une_facture_rouverte_par_une_contre_passation_apparait_avec_son_badge',
-                'tests/Feature/Societe/FacturesAEncaisserDeLaSocieteTest.php::test_le_proprietaire_voit_une_ligne_par_magasin_reel',
+                'tests/Feature/Societe/FacturesAEncaisserDeLaSocieteTest.php::test_le_proprietaire_voit_une_ligne_par_magasin',
                 'tests/Feature/Societe/FacturesAEncaisserDeLaSocieteTest.php::test_un_administrateur_d_une_selection_ne_voit_que_ses_magasins',
                 'tests/Feature/Societe/FacturesAEncaisserDeLaSocieteTest.php::test_la_lecture_ne_rend_aucun_nom_de_client',
             ],
@@ -2217,7 +2172,7 @@ return [
         ],
         'achats.vente-sans-stock' => [
             'puce' => 'Achats et stock',
-            'regle' => 'Une vente au-delà du stock disponible est refusée, sauf pour une personne autorisée à « vendre sans stock » dans ce magasin (les responsables toujours, le propriétaire seulement dans la démonstration, jamais précochée pour les autres, jamais pour un cabinet lié) : elle voit un avertissement qui se renouvelle si le stock a encore baissé, une alerte part, la quantité négative reste visible jusqu\'à sa régularisation, la vente se journalise, et des ventes simultanées laissent le stock cohérent.',
+            'regle' => 'Une vente au-delà du stock disponible est refusée, sauf pour une personne autorisée à « vendre sans stock » dans ce magasin (les responsables toujours, jamais le propriétaire, jamais précochée pour les autres, jamais pour un cabinet lié) : elle voit un avertissement qui se renouvelle si le stock a encore baissé, une alerte part, la quantité négative reste visible jusqu\'à sa régularisation, la vente se journalise, et des ventes simultanées laissent le stock cohérent.',
             'tests' => [
                 'tests/Feature/Stock/VenteSansStockTest.php::test_sans_l_autorisation_une_vente_au_dela_du_stock_est_refusee_sans_numero_ni_signature',
                 'tests/Feature/Stock/VenteSansStockTest.php::test_avec_l_autorisation_la_vente_exige_la_confirmation_de_l_avertissement',
@@ -2355,7 +2310,7 @@ return [
             'tests' => [
                 'tests/Feature/Filament/ClotureCaissePersonnelleResourceTest.php::test_le_menu_s_appelle_les_caisses_sauf_pour_qui_ne_voit_que_sa_caisse',
                 'tests/Feature/Filament/ClotureCaissePersonnelleResourceTest.php::test_les_caisses_ouvertes_s_affichent_en_tete_de_la_page_des_caisses',
-                'tests/Feature/Societe/CaissesDeLaSocieteTest.php::test_le_proprietaire_voit_les_releves_et_les_caisses_ouvertes_de_chaque_magasin_reel',
+                'tests/Feature/Societe/CaissesDeLaSocieteTest.php::test_le_proprietaire_voit_les_releves_et_les_caisses_ouvertes_de_chaque_magasin',
                 'tests/Feature/Calendrier/IsolationDesCalendriersTest.php::test_les_caisses_de_la_societe_ne_lisent_que_les_magasins_de_la_portee_quel_que_soit_leur_fuseau',
             ],
         ],
@@ -2413,15 +2368,6 @@ return [
                 'tests/Feature/Facturation/ActionsUniquesTest.php::test_les_jetons_de_plus_de_30_jours_sont_effaces',
             ],
         ],
-        'caisse.demonstration-mode-distinct' => [
-            'puce' => 'Caisse et clôtures',
-            'regle' => 'Le magasin de démonstration est un mode d\'entraînement distinct (registre et séries propres, documents marqués, exclu des totaux réels, entrée et sortie inscrites au journal des événements, JET 100 et 105).',
-            'tests' => [
-                'tests/Feature/Societe/MagasinDeDemonstrationTest.php::test_l_ouverture_et_la_fin_de_la_demonstration_s_inscrivent_en_jet_100_et_105',
-                'tests/Feature/Societe/MagasinDeDemonstrationTest.php::test_le_verificateur_d_integrite_controle_aussi_la_demonstration',
-                'tests/Feature/Facturation/EReportingDesParticuliersTest.php::test_le_magasin_de_demonstration_n_a_rien_a_declarer',
-            ],
-        ],
 
         'emails.limites-et-relances' => [
             'puce' => 'E-mails',
@@ -2448,13 +2394,12 @@ return [
         // Facture électronique (SUPER PDP) : la connexion de chaque société, l'adresse de réception des magasins et la réception des factures sont à l'étape 2 (décisions « a_venir »).
         'pdp.transmission-par-la-passerelle' => [
             'puce' => 'Facture électronique (SUPER PDP)',
-            'regle' => 'Une facture à un professionnel se transmet par la plateforme agréée, derrière son interface, avec une implémentation factice jusqu\'à l\'étape 2, qui branche la connexion unique de la société faite par son propriétaire ; une vente à un particulier ne se transmet jamais comme facture (elle se déclare par sa clôture journalière), une facture déjà transmise ne se dépose jamais deux fois, et rien ne part du magasin de démonstration.',
+            'regle' => 'Une facture à un professionnel se transmet par la plateforme agréée, derrière son interface, avec une implémentation factice jusqu\'à l\'étape 2, qui branche la connexion unique de la société faite par son propriétaire ; une vente à un particulier ne se transmet jamais comme facture (elle se déclare par sa clôture journalière), et une facture déjà transmise ne se dépose jamais deux fois.',
             'tests' => [
                 'tests/Feature/Facturation/TransmissionPdpTest.php::test_une_facture_a_un_client_professionnel_avec_mandat_actif_declenche_la_transmission',
                 'tests/Feature/Facturation/TransmissionPdpTest.php::test_une_facture_a_un_client_particulier_ne_declenche_jamais_la_transmission',
                 'tests/Feature/Facturation/TransmissionPdpTest.php::test_le_job_execute_reellement_cree_une_transmission_acceptee_via_la_fake_gateway',
                 'tests/Feature/Facturation/TransmissionPdpTest.php::test_le_job_est_idempotent_si_rejoue_sur_une_facture_deja_transmise',
-                'tests/Feature/Societe/MagasinDeDemonstrationTest.php::test_aucun_e_mail_ni_aucune_transmission_ne_part_de_la_demonstration',
             ],
         ],
         'pdp.reprise-apres-une-panne' => [
@@ -2895,26 +2840,26 @@ return [
         ],
         'outillage.fournisseurs-externes-derriere-une-interface' => [
             'puce' => 'Vérification de la société',
-            'regle' => 'Chaque fournisseur externe (INSEE, INPI, envoi recommandé, annuaire de l\'Ordre, SUPER PDP, antivirus) est derrière une interface, avec une implémentation factice pour les tests et la démonstration, jamais acceptée en production ; ses clés ne sont jamais dans le dépôt.',
+            'regle' => 'Chaque fournisseur externe (INSEE, INPI, envoi recommandé, annuaire de l\'Ordre, SUPER PDP, antivirus) est derrière une interface, avec une implémentation factice pour les tests et le développement, jamais acceptée en production ; ses clés ne sont jamais dans le dépôt.',
             'tests' => [
                 'tests/Feature/Providers/FournisseursExternesServiceProviderTest.php::test_aucun_pilote_factice_n_est_accepte_en_production',
                 'tests/Feature/Providers/FournisseursExternesServiceProviderTest.php::test_chaque_fournisseur_suit_son_pilote_et_un_pilote_inconnu_est_refuse',
                 'tests/Feature/Providers/FournisseursExternesServiceProviderTest.php::test_la_plateforme_agreee_suit_son_pilote',
             ],
         ],
-        'hors.donnees-de-demonstration' => [
+        'hors.donnees-semees' => [
             'puce' => 'Hors de CLAUDE.md',
-            'regle' => 'php artisan migrate:fresh --seed remplit la base de développement par les vraies actions et les fournisseurs factices, toutes les tables et tous les cas sur plus de treize mois, toujours avec les mêmes nombres de lignes, se termine par la vérification de l\'isolation de toute la base, et donne la liste des comptes pour se connecter, chacun avec ce qu\'il faut regarder et un mot de passe tiré au hasard ou celui, commun, de PILIQI_DEMO_MOT_DE_PASSE ; le planificateur ne lance aucune tâche tant qu\'il dure ; il refuse, sans rien écrire, la production, un fournisseur réel (répertoire Sirene, registre national des entreprises, courrier recommandé, annuaire de l\'Ordre, plateforme agréée, antivirus), une base qui a déjà des sociétés et un mot de passe commun hors de la règle (décisions de l\'éditeur du 13/11/2026 et du 15/11/2026, point 6 du protocole de rigueur).',
+            'regle' => 'php artisan migrate:fresh --seed remplit la base de développement par les vraies actions et les fournisseurs factices, toutes les tables et tous les cas sur plus de treize mois, toujours avec les mêmes nombres de lignes, se termine par la vérification de l\'isolation de toute la base, et donne la liste des comptes pour se connecter, chacun avec ce qu\'il faut regarder et un mot de passe tiré au hasard ou celui, commun, de PILIQI_SEMIS_MOT_DE_PASSE ; le planificateur ne lance aucune tâche tant qu\'il dure ; il refuse, sans rien écrire, la production, un fournisseur réel (répertoire Sirene, registre national des entreprises, courrier recommandé, annuaire de l\'Ordre, plateforme agréée, antivirus), une base qui a déjà des sociétés et un mot de passe commun hors de la règle (décisions de l\'éditeur du 13/11/2026 et du 15/11/2026, point 6 du protocole de rigueur).',
             'tests' => [
                 'tests/Feature/SemisCompletTest.php::test_le_semis_complet_remplit_toute_la_base_et_tous_les_cas',
-                'tests/Feature/Calendrier/PlanificateurTest.php::test_aucune_tache_planifiee_ne_part_pendant_le_semis_des_donnees_de_demonstration',
+                'tests/Feature/Calendrier/PlanificateurTest.php::test_aucune_tache_planifiee_ne_part_pendant_le_semis',
                 'tests/Feature/DatabaseSeederTest.php::test_le_semis_est_refuse_en_production_sans_rien_ecrire',
                 'tests/Feature/DatabaseSeederTest.php::test_le_semis_est_refuse_avec_un_fournisseur_reel_sans_rien_ecrire',
                 'tests/Feature/DatabaseSeederTest.php::test_le_semis_est_refuse_dans_une_base_qui_a_deja_des_societes',
                 'tests/Feature/DatabaseSeederTest.php::test_un_mot_de_passe_commun_hors_de_la_regle_est_refuse_sans_rien_ecrire',
                 'tests/Feature/DatabaseSeederTest.php::test_le_mot_de_passe_commun_va_a_chaque_compte_sauf_s_il_contient_son_identifiant',
                 'tests/Feature/DatabaseSeederTest.php::test_sans_mot_de_passe_commun_chaque_compte_recoit_un_mot_de_passe_tire_au_hasard',
-                'tests/Browser/Parcours/DonneesDeDemonstrationTest.php › chaque rôle de la liste du semis se connecte et retrouve ses propres données',
+                'tests/Browser/Parcours/DonneesSemeesTest.php › chaque rôle de la liste du semis se connecte et retrouve ses propres données',
                 'tests/Feature/Tenancy/VerificationDeLIsolationTest.php::test_deux_societes_justes_ne_donnent_aucun_probleme_et_le_code_0',
             ],
         ],
@@ -2972,14 +2917,13 @@ return [
         ],
         'graphiques.chiffres-cles-et-catalogue' => [
             'puce' => 'Graphiques du tableau de bord',
-            'regle' => 'En haut du tableau de bord, quatre chiffres clés du mois en cours (CA HT net des avoirs et sa variation sur un an, achats HT nets, TVA à payer dite « estimation », restant dû et sa part en retard), puis dix-huit graphiques à composer, chacun calculé depuis les montants enregistrés des documents émis ou validés, additionnés en centimes, chaque opération dans le mois de son magasin, jamais un brouillon ni la démonstration ; la comparaison ajoute la même période un an plus tôt ; un exercice décalé compte par exercice ; en franchise en base, pas de TVA à estimer ; une société de services n\'a ni achats, ni marge, ni stock (décision de l\'éditeur du 14/11/2026).',
+            'regle' => 'En haut du tableau de bord, quatre chiffres clés du mois en cours (CA HT net des avoirs et sa variation sur un an, achats HT nets, TVA à payer dite « estimation », restant dû et sa part en retard), puis dix-huit graphiques à composer, chacun calculé depuis les montants enregistrés des documents émis ou validés, additionnés en centimes, chaque opération dans le mois de son magasin, jamais un brouillon ; la comparaison ajoute la même période un an plus tôt ; un exercice décalé compte par exercice ; en franchise en base, pas de TVA à estimer ; une société de services n\'a ni achats, ni marge, ni stock (décision de l\'éditeur du 14/11/2026).',
             'tests' => [
                 'tests/Feature/TableauDeBord/SeriesDesGraphiquesTest.php::test_chaque_graphique_compte_les_montants_enregistres_des_documents_emis',
                 'tests/Feature/TableauDeBord/SeriesDesGraphiquesTest.php::test_les_chiffres_cles_sont_ceux_du_mois_en_cours',
                 'tests/Feature/TableauDeBord/SeriesDesGraphiquesTest.php::test_la_variation_compare_le_meme_mois_un_an_plus_tot',
                 'tests/Feature/TableauDeBord/SeriesDesGraphiquesTest.php::test_la_comparaison_ajoute_la_meme_periode_un_an_plus_tot',
                 'tests/Feature/TableauDeBord/SeriesDesGraphiquesTest.php::test_un_brouillon_n_est_jamais_compte',
-                'tests/Feature/TableauDeBord/SeriesDesGraphiquesTest.php::test_la_demonstration_n_entre_jamais_dans_les_graphiques',
                 'tests/Feature/TableauDeBord/SeriesDesGraphiquesTest.php::test_une_vente_a_23_h_30_en_martinique_le_31_janvier_compte_en_janvier',
                 'tests/Feature/TableauDeBord/SeriesDesGraphiquesTest.php::test_un_exercice_decale_a_juin_compte_par_exercice',
                 'tests/Feature/TableauDeBord/SeriesDesGraphiquesTest.php::test_la_franchise_en_base_n_a_pas_de_tva_a_estimer',
@@ -2989,9 +2933,9 @@ return [
         ],
         'graphiques.qui-les-voit' => [
             'puce' => 'Graphiques du tableau de bord',
-            'regle' => 'Les graphiques se montrent au propriétaire, à l\'administrateur et au responsable à qui il coche la case, au cabinet lié et à l\'expert-comptable déclaré, jamais à un vendeur, un observateur ni un compte d\'entraînement ; un graphique ne compte que les magasins où la personne voit tous ses documents, une phrase grise dit les autres sans les nommer ; le panneau d\'un magasin n\'a ni filtre ni comparaison des magasins ; une adresse directe ne donne rien à qui ne les voit pas (décision de l\'éditeur du 14/11/2026).',
+            'regle' => 'Les graphiques se montrent au propriétaire, à l\'administrateur et au responsable à qui il coche la case, au cabinet lié et à l\'expert-comptable déclaré, jamais à un vendeur ni à un observateur ; un graphique ne compte que les magasins où la personne voit tous ses documents, une phrase grise dit les autres sans les nommer ; le panneau d\'un magasin n\'a ni filtre ni comparaison des magasins ; une adresse directe ne donne rien à qui ne les voit pas (décision de l\'éditeur du 14/11/2026).',
             'tests' => [
-                'tests/Feature/TableauDeBord/QuiVoitLesGraphiquesTest.php::test_le_proprietaire_voit_tout_sur_tous_ses_magasins_reels',
+                'tests/Feature/TableauDeBord/QuiVoitLesGraphiquesTest.php::test_le_proprietaire_voit_tout_sur_tous_ses_magasins',
                 'tests/Feature/TableauDeBord/QuiVoitLesGraphiquesTest.php::test_un_vendeur_ou_un_observateur_ne_les_voit_jamais',
                 'tests/Feature/TableauDeBord/QuiVoitLesGraphiquesTest.php::test_l_adresse_directe_ne_donne_aucun_graphique_a_un_vendeur',
                 'tests/Feature/TableauDeBord/QuiVoitLesGraphiquesTest.php::test_l_adresse_directe_ne_donne_aucun_graphique_a_un_administrateur_sans_la_case',
@@ -3103,7 +3047,7 @@ return [
                 'tests/Feature/Charges/GardesDesChargesEnBaseTest.php::test_une_charge_validee_ne_s_efface_ni_ne_s_ecrit_hors_d_une_correction',
                 'tests/Feature/Charges/GardesDesChargesEnBaseTest.php::test_avant_sa_validation_une_charge_n_a_aucune_correction',
                 'tests/Feature/Charges/GardesDesChargesEnBaseTest.php::test_une_charge_validee_a_sa_piece_et_une_charge_a_valider_ses_chiffres',
-                'tests/Feature/Charges/GardesDesChargesEnBaseTest.php::test_une_charge_n_existe_ni_dans_un_cabinet_ni_dans_le_magasin_de_demonstration',
+                'tests/Feature/Charges/GardesDesChargesEnBaseTest.php::test_une_charge_n_existe_ni_dans_un_cabinet_ni_dans_un_magasin_inconnu_ou_d_une_autre_societe',
                 'tests/Feature/Charges/PagesDesChargesTest.php::test_le_proprietaire_ouvre_la_page_et_ajoute_une_charge_avec_sa_piece_a_valider',
                 'tests/Feature/Charges/PagesDesChargesTest.php::test_sans_comptable_le_proprietaire_valide_lui_meme_et_la_case_devient_verte',
                 'tests/Feature/Charges/PagesDesChargesTest.php::test_l_avertissement_dit_qu_une_charge_de_ce_type_est_deja_saisie_pour_ce_mois',
@@ -3520,6 +3464,7 @@ return [
             'S6' => [
                 'decision' => 'Vérification de l\'identité de la société : contrôle au répertoire Sirene à l\'inscription et à chaque nouveau magasin, opérations commerciales réelles désactivées avant la validation, démonstration ; vérification par courrier (note de l\'éditeur, puis décision du 19/10/2026 sur le courrier recommandé).',
                 'regles' => ['verification.controle-sirene-et-territoire', 'verification.avant-la-validation', 'verification.courrier-recommande'],
+                'remplacee' => 'Remplacée en partie par la décision de l\'éditeur du 15/11/2026 en soirée, reprise le 16/11/2026 vers 10 h (Q2, cahier DEMO-COPIE) : le magasin de démonstration du compte réel est retiré ; la société s\'essaiera dans sa copie, sur le site de démonstration (lots DEMO-COPIE-2 et DEMO-COPIE-3).',
             ],
             'S7' => [
                 'decision' => 'SIREN usurpé et SIRET saisi par erreur : procédure de l\'éditeur sur justificatif, documents jamais modifiés, SIREN et SIRET libérés, tout journalisé ; vérification par courrier recommandé (note de l\'éditeur).',
@@ -3636,7 +3581,7 @@ return [
             ],
             'T4' => [
                 'decision' => 'Composition des équipes fictives : par société un propriétaire, des administrateurs avec et sans vente ; par magasin un responsable et deux vendeurs, dont une même personne dans deux magasins ; comptes d\'entraînement ; un cabinet vérifié lié à deux sociétés.',
-                'a_venir' => 'Étape 1 bis (campagne de tests initiale) ; composition écrite dans la feuille de route de CLAUDE.md.',
+                'a_venir' => 'Étape 1 bis (campagne de tests initiale) ; composition écrite dans la feuille de route de CLAUDE.md ; les comptes d\'entraînement n\'existent plus depuis la décision de l\'éditeur du 15/11/2026 en soirée, reprise le 16/11/2026 vers 10 h (Q2, cahier DEMO-COPIE) : le magasin de démonstration du compte réel est retiré : la campagne s\'entraîne dans les copies (lots DEMO-COPIE-2 et DEMO-COPIE-3).',
             ],
             'T5' => [
                 'decision' => 'Gravité des anomalies : Claude classe et corrige, le rapport montre chaque classement, l\'éditeur ne valide que le déclassement d\'une anomalie bloquante.',
@@ -3840,15 +3785,16 @@ return [
             ],
             'Q4-f' => [
                 'decision' => 'Les comptes d\'un magasin cédé ou fermé définitivement sont gardés.',
-                'regles' => ['comptes.magasin-cede-ferme-et-entrainement'],
+                'regles' => ['comptes.magasin-cede-ou-ferme'],
             ],
             'Q4-g' => [
                 'decision' => 'Comptes d\'entraînement dans le magasin de démonstration, créés par le propriétaire ou un responsable, retirés à sa fermeture.',
-                'regles' => ['comptes.magasin-cede-ferme-et-entrainement'],
+                'remplacee' => 'Remplacée par la décision de l\'éditeur du 15/11/2026 en soirée, reprise le 16/11/2026 vers 10 h (Q2, cahier DEMO-COPIE) : le magasin de démonstration du compte réel est retiré, et ses comptes d\'entraînement avec lui.',
             ],
             'Q4-h' => [
                 'decision' => 'Le propriétaire ne réalise pas de ventes en caisse : les ventes sont faites par les responsables, les vendeurs et qui en a l\'autorisation (note de l\'éditeur ; depuis la décision du 12/11/2026, il vend dans le magasin de démonstration).',
-                'regles' => ['comptes.proprietaire-sans-vente', 'comptes.proprietaire-dans-la-demonstration', 'vendeurs.qui-vend'],
+                'regles' => ['comptes.proprietaire-sans-vente', 'vendeurs.qui-vend'],
+                'remplacee' => 'Remplacée en partie par la décision de l\'éditeur du 15/11/2026 en soirée, reprise le 16/11/2026 vers 10 h (Q2, cahier DEMO-COPIE) : le magasin de démonstration du compte réel est retiré : le propriétaire ne vend plus nulle part.',
             ],
             'Q4-i' => [
                 'decision' => 'Le premier mot de passe est l\'identifiant ; l\'utilisateur le change ensuite depuis son profil (note de l\'éditeur).',
@@ -3920,7 +3866,8 @@ return [
             ],
             'precision-1' => [
                 'decision' => 'Le propriétaire ne vend jamais (hors du magasin de démonstration depuis le 12/11/2026) ; un entrepreneur qui vend lui-même se crée un compte de responsable.',
-                'regles' => ['comptes.proprietaire-sans-vente', 'comptes.proprietaire-dans-la-demonstration'],
+                'regles' => ['comptes.proprietaire-sans-vente'],
+                'remplacee' => 'Remplacée en partie par la décision de l\'éditeur du 15/11/2026 en soirée, reprise le 16/11/2026 vers 10 h (Q2, cahier DEMO-COPIE) : le magasin de démonstration du compte réel est retiré : la part « jamais le propriétaire » tient, sans exception.',
             ],
             'precision-2' => [
                 'decision' => 'Un vendeur qui travaille dans deux magasins de la même société a un compte et un identifiant par magasin.',
@@ -4592,7 +4539,7 @@ return [
             ],
             'D68' => [
                 'decision' => 'Rien de la démonstration ne doit rester après la validation : tout supprimer.',
-                'remplacee' => 'Remplacée par D70, elle-même remplacée par D71 : rien n\'est supprimé.',
+                'remplacee' => 'Remplacée par D70 et D71, elles-mêmes remplacées par la décision de l\'éditeur du 15/11/2026 en soirée, reprise le 16/11/2026 vers 10 h (Q2, cahier DEMO-COPIE) : le magasin de démonstration du compte réel est retiré.',
             ],
             'D69' => [
                 'decision' => 'Le code suit les réponses de l\'onglet professionnel, sans attendre aucune confirmation.',
@@ -4600,11 +4547,11 @@ return [
             ],
             'D70' => [
                 'decision' => 'Garder la démonstration, réservée au propriétaire, qui peut tout y faire.',
-                'remplacee' => 'Remplacée par D71.',
+                'remplacee' => 'Remplacée par D71, puis par la décision de l\'éditeur du 15/11/2026 en soirée, reprise le 16/11/2026 vers 10 h (Q2, cahier DEMO-COPIE) : le magasin de démonstration du compte réel est retiré ; sa raison, la loi qui exige de garder les données du mode d\'entraînement, tient : elle deviendra l\'archive signée de chaque copie avant sa suppression (lot DEMO-COPIE-2).',
             ],
             'D71' => [
                 'decision' => 'Dans la démonstration, le propriétaire a toutes les autorisations, vente comprise ; le reste ne change pas.',
-                'regles' => ['comptes.proprietaire-dans-la-demonstration', 'verification.magasin-de-demonstration'],
+                'remplacee' => 'Remplacée par la décision de l\'éditeur du 15/11/2026 en soirée, reprise le 16/11/2026 vers 10 h (Q2, cahier DEMO-COPIE) : le magasin de démonstration du compte réel est retiré.',
             ],
             'D72' => [
                 'decision' => 'Une colonne à part pour les décisions de Claude dans l\'onglet professionnel ; « Réponse du professionnel » reste vide ; ses 19 textes du 11/11 supprimés.',
@@ -4644,7 +4591,7 @@ return [
             ],
             'SEED-13-11' => [
                 'decision' => 'Le 13/11/2026 vers 08 h 50 UTC : « donne moi la liste de --seed pour voir ici chez moi avec les donnes remplir par --seed » ; vers 09 h UTC, les identifiants pour s\'y connecter : un mot de passe commun facultatif, PILIQI_DEMO_MOT_DE_PASSE, sinon un mot de passe tiré au hasard par compte, affiché à la fin du semis (lot SEED, a-faire-apres-chaine.md).',
-                'regles' => ['hors.donnees-de-demonstration'],
+                'regles' => ['hors.donnees-semees'],
             ],
             'DEMO-V-RETARD-14-11' => [
                 'decision' => 'Le 14/11/2026 vers 01 h UTC : « En retard » ne s\'écrit plus sur une facture payée (ticket TK-EPICERIE-2026-000001, payé, vu « En retard » par l\'éditeur) ; seulement tant qu\'un montant reste dû après l\'échéance (lot DEMO-V, a-faire-apres-chaine.md).',
@@ -4696,7 +4643,7 @@ return [
             ],
             'ARCHIVE-DEMO-14-11' => [
                 'decision' => 'Le 14/11/2026 vers 23 h 15 à Paris, « oui pour l\'archive » : à sa fermeture définitive, le magasin de démonstration reçoit une archive finale signée, que le propriétaire seul télécharge dans l\'espace de la société, chaque téléchargement inscrit au journal d\'audit, sans jamais rouvrir l\'entrée dans ce magasin.',
-                'a_venir' => 'Étape 3, avec les archives signées (CLAUDE.md, « Vérification de la société », « Caisse et clôtures » et feuille de route) ; le lot REGUL n\'en écrit que le texte.',
+                'remplacee' => 'Remplacée par la décision de l\'éditeur du 15/11/2026 en soirée, reprise le 16/11/2026 vers 10 h (Q2, cahier DEMO-COPIE) : le magasin de démonstration du compte réel est retiré ; l\'archive signée de chaque copie avant sa suppression la remplace (lot DEMO-COPIE-2).',
             ],
             'METHODE-14-11' => [
                 'decision' => 'Le 14/11/2026 vers 18 h 45 UTC : « tu mette que sur github et pas ici larastan car il prend du temps » ; vers 19 h 05 UTC : avant son commit, un lot ne lance plus la suite complète mais les tests liés à son travail, les tests en navigateur de ses écrans, l\'inventaire des actions et le groupe de concurrence, sauf un lot qui touche les calculs d\'argent, la caisse sécurisée ou l\'isolation ; la CI rouge se relit au début du lot et avant son commit, et se répare dans un commit à part.',
@@ -4704,7 +4651,7 @@ return [
             ],
             'T115' => [
                 'decision' => 'Le 12/11/2026 vers 00 h 30 UTC, constat de l\'éditeur, puis décision de Claude (D76) : une fois la société validée, la démonstration disparaît de tous les écrans de la société et de ses magasins et plus personne n\'y entre, sans rien effacer (lot DEMO-V).',
-                'regles' => ['verification.demonstration-apres-la-validation'],
+                'remplacee' => 'Remplacée par la décision de l\'éditeur du 15/11/2026 en soirée, reprise le 16/11/2026 vers 10 h (Q2, cahier DEMO-COPIE) : le magasin de démonstration du compte réel est retiré : aucune société n\'a plus de magasin de démonstration.',
             ],
         ],
         'Décisions métier tranchées dans la conversation (historique/DIRECTIVES.md, § 2.1)' => [
@@ -5023,6 +4970,7 @@ return [
             '2.1-079' => [
                 'decision' => 'Message 01/11 vers 22 h 10 UTC (01/11) : Trois captures : une société validée par l\'invitation de son cabinet voit « Saisir le code du courrier recommandé » et « Essayer le magasin de démonstration », « pas besoin d\'être affichés » ; ouvrir un client depuis l\'espace du cabinet mène à une page 404',
                 'regles' => ['cabinets.invitation-d-une-entreprise-non-inscrite', 'cabinets.espace-du-cabinet'],
+                'remplacee' => 'Remplacée en partie par la décision de l\'éditeur du 15/11/2026 en soirée, reprise le 16/11/2026 vers 10 h (Q2, cahier DEMO-COPIE) : le magasin de démonstration du compte réel est retiré : l\'étape du courrier reste cachée après une invitation ; celle de la démonstration n\'existe plus.',
             ],
             '2.1-080' => [
                 'decision' => 'Message 01/11 vers 22 h 35 UTC (01/11) : « le client comptoir […] ne doit pas pouvoir aller voir ou editer […] transformer son ticket en facture […] uniquement la transformation en facture en un clique sans pouvoir creer d\'abort l\'avoir et apres la facture […] ce client ne doit jamais avoir un avoir car c\'est inconnu »',
@@ -5154,11 +5102,11 @@ return [
             ],
             '2.1-112' => [
                 'decision' => 'Message 12/11 à 02 h 13 UTC (12/11) : « tu fait rien pour le demo, laisse comme est mtn et juste tu autorise que le proprietaire puisse faire tout dans le compte demo, vendre et tout tout les autorisation qui existe. donc les button tu laisse car les button s affiche uniquement quand on est sur le compte demo »',
-                'regles' => ['comptes.proprietaire-dans-la-demonstration'],
+                'remplacee' => 'Remplacée par la décision de l\'éditeur du 15/11/2026 en soirée, reprise le 16/11/2026 vers 10 h (Q2, cahier DEMO-COPIE) : le magasin de démonstration du compte réel est retiré.',
             ],
             '2.1-113' => [
                 'decision' => 'Message 12/11 à 02 h 06 et 02 h 07 UTC (12/11) : « je pense laisser tombre pour le demo car tu me parle des loi exigant. […] on garde le demo peut etre pour toujours car la loi exige. mais le proprietaire doit pouvour faire tout dans un compte demo car sinon comment il va s entrainer si fait pas des facture et tout le reste. »',
-                'remplacee' => 'Remplacée par la décision de 02 h 13 UTC le même jour (D71) : la démonstration reste, le propriétaire y a toutes les autorisations.',
+                'remplacee' => 'Remplacée par la décision de 02 h 13 UTC le même jour (D71), puis par la décision de l\'éditeur du 15/11/2026 en soirée, reprise le 16/11/2026 vers 10 h (Q2, cahier DEMO-COPIE) : le magasin de démonstration du compte réel est retiré.',
             ],
             '2.1-114' => [
                 'decision' => 'Message 12/11 à 01 h 36 et 01 h 43 UTC (12/11) : « donc tu fait le code en se basant sur "Réponse préparée par Claude" et toi regarde au fur à mesure sur la case "Réponse du professionnel" afin que tu fait ce qui dit cette case […] », puis « qunad tu remplis alors n ecris pas tres courte les phrases car je veux comprendre tes decision en detaillant un peu »',
@@ -5166,8 +5114,7 @@ return [
             ],
             '2.1-115' => [
                 'decision' => 'Message 12/11 de 00 h 33 à 01 h 30 UTC (12/11) : « tout ce qui est fait ou creer sur demonstration ne doit jamais passer en magasin vrai quand la societe confirme avec le code », puis « il faut supprimer ce qui se fait avec demo. peut etre il faut cherche avec son uuid tout ces fait »',
-                'regles' => ['verification.magasin-de-demonstration'],
-                'remplacee' => 'Remplacée en partie par D71 : rien de la démonstration n\'est supprimé ; que rien n\'en passe aux magasins réels tient (CLAUDE.md, « Vérification de la société »).',
+                'remplacee' => 'Remplacée par D71, puis par la décision de l\'éditeur du 15/11/2026 en soirée, reprise le 16/11/2026 vers 10 h (Q2, cahier DEMO-COPIE) : le magasin de démonstration du compte réel est retiré.',
             ],
             '2.1-116' => [
                 'decision' => 'Message 12/11 à 01 h 12 UTC (12/11) : « mais re rempli aussi celles que j ai remplis car tu m as propose meilleur, donc tu remplie meme les miennes »',
@@ -6153,7 +6100,7 @@ return [
             ],
             'T35.2' => [
                 'decision' => 'Démonstration d\'une inscription close sans validation : La démonstration d\'une inscription close sera gardée fermée comme un registre de caisse, dix ans après sa dernière opération, puis effacée en bloc, avec une trace au journal d\'audit.',
-                'a_venir' => 'Étape 9 (RGPD).',
+                'remplacee' => 'Remplacée par la décision de l\'éditeur du 15/11/2026 en soirée, reprise le 16/11/2026 vers 10 h (Q2, cahier DEMO-COPIE) : le magasin de démonstration du compte réel est retiré ; la copie d\'une inscription close est archivée puis supprimée (lot DEMO-COPIE-2).',
             ],
             'T35.3' => [
                 'decision' => 'Délais d\'effacement d\'une inscription close : Pour une inscription close : comptes anonymisés et données sans document effacées après 12 mois, vérification après 5 ans, documents et registres 10 ans après leur dernière opération.',
@@ -6428,8 +6375,7 @@ return [
             ],
             'T35.4' => [
                 'decision' => 'Conservation des données du magasin de démonstration : Les tickets, avoirs et clôtures d\'entraînement de la démonstration sont des données de caisse : PILIQI les sécurise, les marque et les garde dix ans comme les autres, même pour une inscription jamais validée.',
-                'regles' => ['caisse.demonstration-mode-distinct'],
-                'a_venir' => 'Étape 3 (caisse sécurisée, fin) : mode d\'entraînement décrit dans la notice et l\'attestation.',
+                'a_venir' => 'Lot DEMO-COPIE-2 : remplacée en partie par la décision de l\'éditeur du 15/11/2026 en soirée, reprise le 16/11/2026 vers 10 h (Q2, cahier DEMO-COPIE) : le magasin de démonstration du compte réel est retiré ; que la loi exige de garder les données du mode d\'entraînement tient : avant toute suppression d\'une copie, l\'archive signée de sa caisse se garde six ans (C.18) ; étape 3 pour la notice et l\'attestation.',
             ],
             'T98' => [
                 'decision' => 'Commune d\'un établissement en diffusion partielle : PILIQI situe déjà le magasin d\'après le code commune donné par l\'INSEE, même en diffusion partielle ; sans commune, il refuse l\'établissement, sans jamais deviner le territoire, et vous décidez.',
@@ -6614,6 +6560,52 @@ return [
             'T39.2' => [
                 'decision' => 'Passage du répertoire Sirene à la NAF 2025 : PILIQI lira les codes d\'activité en NAF 2025 tout en acceptant l\'ancienne nomenclature : 69.20Y pour les cabinets, table des avertissements traduite pour les autres types.',
                 'a_venir' => 'Étape 1, lot du code d\'activité NAF 2025, à livrer avant le 5 janvier 2027 : aujourd\'hui seul 69.20Z reconnaît un cabinet.',
+            ],
+        ],
+        'Décision du 15/11/2026 en soirée, confirmée le 16/11/2026 vers 0 h 50, précisée vers 1 h 30 et 1 h 40, reprise vers 10 h : une démonstration par société, copiée d\'une société modèle, sur un site à part (demo-copie/cahier-DEMO-COPIE.md)' => [
+            'Q1' => [
+                'decision' => 'Un seul lien par société, que le propriétaire tient, donne à son équipe et renouvelle ; 256 bits tirés au hasard, dont le site réel ne garde que l\'empreinte, échangés contre un témoin à la première visite ; 30 jours.',
+                'a_venir' => 'Lot DEMO-COPIE-2 (site de démonstration, copies et demande).',
+            ],
+            'Q2' => [
+                'decision' => 'Le magasin de démonstration du compte réel est retiré (« tu supprime le demo du site reel ») : plus d\'exception « le propriétaire vend dans le magasin de démonstration », plus de comptes d\'entraînement, plus d\'archive finale de ce magasin, plus de JET 100 ni 105 dans une société réelle.',
+                'regles' => ['comptes.proprietaire-sans-vente', 'vendeurs.qui-vend', 'comptes.magasin-cede-ou-ferme'],
+            ],
+            'Q2-copie' => [
+                'decision' => 'Une société non validée s\'essaie désormais dans sa copie, sur le site de démonstration.',
+                'a_venir' => 'Lots DEMO-COPIE-2 et DEMO-COPIE-3 ; entre DEMO-COPIE-1 et DEMO-COPIE-2, aucune société n\'a de démonstration.',
+            ],
+            'Q3' => [
+                'decision' => 'La copie est supprimée en entier au bout de 30 jours ; « Recommencer à zéro » pendant le mois ; une nouvelle copie sur demande ensuite, une seule à la fois ; l\'archive signée de sa caisse est gardée six ans avant chaque suppression (option (a), D76).',
+                'a_venir' => 'Lots DEMO-COPIE-2 et DEMO-COPIE-3.',
+            ],
+            'Q4' => [
+                'decision' => 'Identité entièrement fictive dans la copie : jamais le nom, le SIREN ni aucune donnée de la vraie société.',
+                'a_venir' => 'Lot DEMO-COPIE-2.',
+            ],
+            'type-unique' => [
+                'decision' => 'Vers 1 h 30 et 1 h 40 : chaque société ne voit que la démonstration de son type, copiée de la société modèle de ce type, et aucun texte ne parle des autres types.',
+                'a_venir' => 'Lots DEMO-COPIE-2 et DEMO-COPIE-3.',
+            ],
+            'choix-A' => [
+                'decision' => 'Le 16/11/2026 vers 10 h : une base PostgreSQL par société, copiée de la base modèle de son type (CREATE DATABASE … TEMPLATE), sur un site de démonstration séparé, même code ; la nuit, seuls les trois modèles sont refaits.',
+                'a_venir' => 'Lots DEMO-COPIE-2 et DEMO-COPIE-3.',
+            ],
+            'choix-21' => [
+                'decision' => 'Choix 21 du cahier (D76) : le mot « démonstration » du semis du poste devient « semis » (SemisComplet, comptes-du-semis.txt, PILIQI_SEMIS_MOT_DE_PASSE, piliqi.semis_mot_de_passe, DonneesSemeesTest).',
+                'regles' => ['hors.donnees-semees'],
+            ],
+            'choix-23' => [
+                'decision' => 'Choix 23 du cahier (D76) : magasinsReels() devient magasins(), et le mot « réel » ne sert plus à exclure un magasin.',
+                'hors_logiciel' => 'Un nom du code et des textes, sans effet sur une règle : chaque magasin d\'une société est un vrai magasin.',
+            ],
+            'choix-24-25' => [
+                'decision' => 'Choix 24 et 25 du cahier (D76) : DEMO redevient un code de magasin libre, et magasins.siret devient obligatoire.',
+                'regles' => ['societe.code-du-magasin', 'societe.magasins-crees-dans-l-espace-de-la-societe'],
+            ],
+            'choix' => [
+                'decision' => 'Les autres choix du cahier (1 à 20, 22, 26 à 34), décisions de Claude (D76), en attendant les réponses de l\'éditeur à demo-copie/questions-editeur.md.',
+                'a_venir' => 'Lots DEMO-COPIE-2 et DEMO-COPIE-3.',
             ],
         ],
     ],

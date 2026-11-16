@@ -37,7 +37,7 @@ use Illuminate\Support\Facades\DB;
  * LienCabinet::query() ; un lien d'un autre cabinet, ou d'un client non
  * confié, donne 404. La liste montre de chaque client sa dénomination, son
  * SIREN, la ville de son siège, la date du lien et le nombre de ses
- * magasins réels, et, au propriétaire seul, les collaborateurs à qui il
+ * magasins, et, au propriétaire seul, les collaborateurs à qui il
  * est confié ; elle se cherche par dénomination, sans casse ni accents, ou
  * par SIREN, toujours parmi ces seuls liens ; le propriétaire y confie un
  * client à ses collaborateurs et met fin au lien. La fiche (voir FicheDuClient) montre son identité, ses réglages
@@ -84,23 +84,22 @@ class ClientDuCabinetResource extends RessourceDuPanneauCabinet
         return $compte instanceof User
             ? app(AccesDesCabinets::class)->liensOuverts($compte)
                 ->with(['client' => fn ($client) => $client->select(['id', 'uuid', 'siren', 'raison_sociale', 'siege_ville'])])
-                ->addSelect(['magasins_reels' => self::magasinsReels(), 'charges_accordees' => self::chargesAccordees()])
+                ->addSelect(['nombre_de_magasins' => self::magasins(), 'charges_accordees' => self::chargesAccordees()])
             : LienCabinet::query()->withoutGlobalScopes()->whereRaw('1 = 0');
     }
 
     /**
-     * Le nombre de magasins réels que le client ouvre au cabinet par ce
+     * Le nombre de magasins que le client ouvre au cabinet par ce
      * lien, lu dans la requête de la liste, quel que soit le nombre de
-     * clients : tous ses magasins réels, présents et futurs, ou ceux de sa
+     * clients : tous ses magasins, présents et futurs, ou ceux de sa
      * sélection (voir LienCabinet::magasinsChoisis()), chacun filtré par la
      * société du lien.
      */
-    private static function magasinsReels(): RequeteSql
+    private static function magasins(): RequeteSql
     {
         return DB::table('magasins')
             ->selectRaw('count(*)')
             ->whereColumn('magasins.societe_id', 'liens_cabinet.societe_id')
-            ->where('magasins.est_demonstration', false)
             ->where(fn (RequeteSql $ouverts) => $ouverts
                 ->where('liens_cabinet.tous_les_magasins', true)
                 ->orWhereIn('magasins.id', fn (RequeteSql $choisis) => $choisis
@@ -157,12 +156,12 @@ class ClientDuCabinetResource extends RessourceDuPanneauCabinet
     }
 
     /**
-     * Le nombre de magasins réels que ce client, lu dans la liste, ouvre
-     * au cabinet (voir magasinsReels()).
+     * Le nombre de magasins que ce client, lu dans la liste, ouvre
+     * au cabinet (voir magasins()).
      */
-    public static function nombreDeMagasinsReels(LienCabinet $lien): int
+    public static function nombreDeMagasins(LienCabinet $lien): int
     {
-        return ValeursLues::entier($lien->getAttribute('magasins_reels'));
+        return ValeursLues::entier($lien->getAttribute('nombre_de_magasins'));
     }
 
     /**
@@ -185,8 +184,8 @@ class ClientDuCabinetResource extends RessourceDuPanneauCabinet
                 Tables\Columns\TextColumn::make('client.siege_ville')->label('Ville du siège')->placeholder('—'),
                 Tables\Columns\TextColumn::make('actif_depuis')->label('Lié depuis')->dateTime('d/m/Y'),
                 Tables\Columns\TextColumn::make('magasins')
-                    ->label('Magasins réels')
-                    ->state(fn (LienCabinet $record): int => self::nombreDeMagasinsReels($record)),
+                    ->label('Magasins')
+                    ->state(fn (LienCabinet $record): int => self::nombreDeMagasins($record)),
                 Tables\Columns\TextColumn::make('collaborateurs')
                     ->label('Collaborateurs confiés')
                     ->state(fn (LienCabinet $record): array => self::collaborateursConfies($record))
@@ -209,7 +208,7 @@ class ClientDuCabinetResource extends RessourceDuPanneauCabinet
     /**
      * Le tableau de bord du client : ses chiffres clés et ses graphiques
      * (voir GraphiquesDuClient), pour qui ouvre ce client, dès qu'il ouvre
-     * au cabinet un magasin réel au moins (voir
+     * au cabinet un magasin au moins (voir
      * PerimetreDesGraphiques::voitLesGraphiquesDuClient()) ; une société
      * invitée par le cabinet naît sans magasin.
      */
@@ -218,7 +217,7 @@ class ClientDuCabinetResource extends RessourceDuPanneauCabinet
         return Tables\Actions\Action::make('graphiques')
             ->label('Graphiques')
             ->icon('heroicon-o-chart-bar')
-            ->visible(fn (LienCabinet $record): bool => self::nombreDeMagasinsReels($record) > 0)
+            ->visible(fn (LienCabinet $record): bool => self::nombreDeMagasins($record) > 0)
             ->url(fn (LienCabinet $record): string => static::getUrl('graphiques', ['record' => $record]));
     }
 

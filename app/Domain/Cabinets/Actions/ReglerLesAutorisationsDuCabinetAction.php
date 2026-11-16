@@ -20,7 +20,7 @@ use InvalidArgumentException;
 use LogicException;
 
 /**
- * Le propriétaire d'un client règle les magasins réels qu'il ouvre à son
+ * Le propriétaire d'un client règle les magasins qu'il ouvre à son
  * cabinet lié, tous, présents et futurs, ou une sélection d'au moins un
  * (décision de l'éditeur du 11/11/2026, voir
  * LienCabinet::choisirLesMagasins()), et les autorisations qu'il lui
@@ -50,7 +50,7 @@ class ReglerLesAutorisationsDuCabinetAction
 
     /**
      * @param  array<array-key, mixed>  $autorisations
-     * @param  array<array-key, mixed>|null  $magasins  les magasins réels ouverts au cabinet, ou null pour tous, présents et futurs
+     * @param  array<array-key, mixed>|null  $magasins  les magasins ouverts au cabinet, ou null pour tous, présents et futurs
      *
      * @throws AuthorizationException
      * @throws InvalidArgumentException

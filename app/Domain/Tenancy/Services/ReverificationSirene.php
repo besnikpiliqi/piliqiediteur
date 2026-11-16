@@ -27,7 +27,7 @@ use Illuminate\Support\Facades\Log;
  * pour le bouton « Revérifier » de la page de la vérification :
  *
  * - les contrôles d'établissement restés impossibles, l'INSEE n'ayant pas
- *   répondu : l'établissement d'un magasin réel actif « à vérifier »
+ *   répondu : l'établissement d'un magasin actif « à vérifier »
  *   devient vérifié, et peut vendre (une fois la société validée), quand
  *   le répertoire le confirme, son adresse reprise de Sirene s'il n'avait
  *   jamais été confirmé sous ce SIRET (créé ou corrigé pendant la panne) ;
@@ -42,7 +42,7 @@ use Illuminate\Support\Facades\Log;
  *   négatif s'inscrit, et le magasin reste à vérifier. L'entreprise d'une
  *   inscription n'a pas de contrôle à reprendre : l'inscription n'existe
  *   qu'une fois son entreprise confirmée active (voir CreerSocieteAction) ;
- * - avec $toutes, une société validée et ses magasins réels actifs. Rien
+ * - avec $toutes, une société validée et ses magasins actifs. Rien
  *   de ce que la société a enregistré ne change : son identité reste celle
  *   qu'elle a saisie, et l'établissement reste vérifié ; seule la
  *   catégorie juridique lue au répertoire suit sa dernière lecture. Un
@@ -84,7 +84,7 @@ class ReverificationSirene
                     $this->reverifierLEntreprise($societe);
                 }
 
-                $societe->magasinsReels()
+                $societe->magasins()
                     ->where('statut', StatutMagasin::Actif)
                     ->orderBy('id')
                     ->each(function (Magasin $magasin) use ($societe, $toutes): void {
@@ -108,7 +108,7 @@ class ReverificationSirene
         $unite = $consultation['unite'];
         $categorieLue = $consultation['resultat'] === ResultatVerification::Concluante && $unite !== null ? $unite->categorieJuridique : null;
 
-        $categorieLueAvant = $this->registre->sousVerrouDesMagasins($societe->magasinsReels()->orderBy('id')->get(), function () use ($societe, $consultation, $unite, $categorieLue): ?string {
+        $categorieLueAvant = $this->registre->sousVerrouDesMagasins($societe->magasins()->orderBy('id')->get(), function () use ($societe, $consultation, $unite, $categorieLue): ?string {
             $this->controle->noterUnite($societe, $consultation);
             $enregistree = Societe::query()->whereKey($societe->getKey())->lockForUpdate()->firstOrFail();
             $avant = $enregistree->identiteAuditee();

@@ -12,8 +12,7 @@ use LogicException;
  * Les périodes d'activité des magasins (voir PeriodeActivite), leur seul
  * écrivain : une période s'ouvre à la validation de la société, à la
  * création ou à la réouverture d'un magasin dans une société validée (voir
- * MiseEnActiviteDesMagasins) ou à l'ouverture du magasin de
- * démonstration, et se ferme à sa fermeture, avec son motif, qu'une
+ * MiseEnActiviteDesMagasins), et se ferme à sa fermeture, avec son motif, qu'une
  * cession faite ensuite ne change pas (voir FermerMagasinAction) ; une seule
  * est ouverte à la fois (index unique partiel
  * periodes_activite_une_ouverte). Les tickets Z ne se produisent que pour

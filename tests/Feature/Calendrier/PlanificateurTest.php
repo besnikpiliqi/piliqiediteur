@@ -37,7 +37,6 @@ class PlanificateurTest extends TestCase
         ['app:purger-verifications', '20 4 * * *'],
         ['app:purger-actions-traitees', '30 4 * * *'],
         ['app:verifier-isolation --prevenir-l-editeur', '40 4 * * *'],
-        ['app:fermer-demonstrations-inactives', '45 4 * * *'],
         ['app:effacer-pieces-verification', '0 * * * *'],
         ['app:purger-demandes-inscription', '0 * * * *'],
         ['app:clore-inscriptions-sans-code', '0 * * * *'],
@@ -143,12 +142,12 @@ class PlanificateurTest extends TestCase
     }
 
     /**
-     * Pendant le semis des données de démonstration, aucune tâche planifiée
+     * Pendant le semis, aucune tâche planifiée
      * ne part, même due (le semis exécute lui-même celles de son histoire,
      * voir SemisEnCours) ; après lui, chacune repart. Une tâche ajoutée au
      * planning suit la même règle.
      */
-    public function test_aucune_tache_planifiee_ne_part_pendant_le_semis_des_donnees_de_demonstration(): void
+    public function test_aucune_tache_planifiee_ne_part_pendant_le_semis(): void
     {
         $this->travelTo(self::enUtc('2026-11-13 09:00:00'));
         $evenements = $this->evenements();

@@ -10,8 +10,8 @@ use Illuminate\Contracts\Validation\ValidationRule;
 
 /**
  * Le code saisi pour un magasin d'une société : lu en majuscules
- * (« lyon1 » est LYON1), au format de CodeMagasin, autre que DEMO, réservé
- * au magasin de démonstration, qu'aucun autre magasin de la société ne
+ * (« lyon1 » est LYON1), au format de CodeMagasin, qu'aucun autre magasin
+ * de la société ne
  * porte, ni aucun magasin d'une autre société qui a numéroté sous son
  * SIREN (voir CodeMagasin::estPris()). Le refus ne dit rien du magasin qui
  * le porte, ni de sa société.
@@ -19,8 +19,6 @@ use Illuminate\Contracts\Validation\ValidationRule;
 class CodeMagasinLibre implements ValidationRule
 {
     public const MESSAGE = 'Le code compte 2 à 10 lettres ou chiffres, sans espace ni tiret.';
-
-    public const MESSAGE_RESERVE = 'Le code DEMO est réservé au magasin de démonstration : choisissez-en un autre.';
 
     public const MESSAGE_DEJA_UTILISE = 'Ce code est déjà utilisé : choisissez-en un autre, par exemple LYON2.';
 
@@ -36,12 +34,6 @@ class CodeMagasinLibre implements ValidationRule
     {
         if (! is_string($value) || ! CodeMagasin::estAuFormat($value)) {
             $fail(self::MESSAGE);
-
-            return;
-        }
-
-        if (CodeMagasin::estReserve($value)) {
-            $fail(self::MESSAGE_RESERVE);
 
             return;
         }

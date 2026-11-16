@@ -14,11 +14,7 @@ use Illuminate\Support\Facades\DB;
  *   redonné, même après le retrait de son compte ;
  * - aucune modification, sauf le magasin de rattachement, de nul à une
  *   valeur, une seule fois, toutes les autres colonnes inchangées : un
- *   compte de membre ne change jamais de magasin ;
- * - le magasin de démonstration n'est accepté qu'à l'insertion, pour un
- *   compte de membre (un compte d'entraînement), jamais au passage de nul
- *   à une valeur : aucun compte réel ne devient pour toujours un compte
- *   d'entraînement.
+ *   compte de membre ne change jamais de magasin.
  *
  * Une contrainte CHECK pour la forme, une fonction plpgsql et ses
  * déclencheurs BEFORE INSERT, UPDATE et DELETE pour chaque ligne, et
@@ -27,17 +23,9 @@ use Illuminate\Support\Facades\DB;
  */
 final class GardesDesIdentifiants
 {
-    private const DEMONSTRATION = 'EXISTS (SELECT 1 FROM magasins WHERE id = NEW.magasin_id AND est_demonstration = TRUE)';
-
-    private const COMPTE_DE_MEMBRE = "COALESCE((SELECT role_societe FROM users WHERE id = NEW.user_id), '') = 'membre'";
-
     private const MESSAGE_EFFACEMENT = 'identifiants : un identifiant ne s\'efface jamais';
 
     private const MESSAGE_MODIFICATION = 'identifiants : seul le magasin de rattachement s\'écrit, une seule fois';
-
-    private const MESSAGE_DEMONSTRATION_APRES_COUP = 'identifiants : aucun compte ne se rattache après coup au magasin de démonstration';
-
-    private const MESSAGE_ENTRAINEMENT = 'identifiants : seul un compte de membre se rattache au magasin de démonstration';
 
     /**
      * Les colonnes qu'aucune modification ne change.
@@ -52,11 +40,7 @@ final class GardesDesIdentifiants
         $connexion->unprepared("ALTER TABLE identifiants ADD CONSTRAINT identifiants_forme CHECK (identifiant ~ '^[1-9][0-9]{7}$')");
         $connexion->unprepared('CREATE OR REPLACE FUNCTION garde_identifiants() RETURNS trigger LANGUAGE plpgsql '.DeclencheursDeProtection::CHEMIN_DE_RECHERCHE.' AS $$ BEGIN '
             ."IF TG_OP IN ('DELETE', 'TRUNCATE') THEN RAISE EXCEPTION '%', ".LitteralSql::de(self::MESSAGE_EFFACEMENT).'; END IF; '
-            ."IF TG_OP = 'INSERT' AND NEW.magasin_id IS NOT NULL AND ".self::DEMONSTRATION.' AND NOT '.self::COMPTE_DE_MEMBRE." THEN RAISE EXCEPTION '%', ".LitteralSql::de(self::MESSAGE_ENTRAINEMENT).'; END IF; '
-            ."IF TG_OP = 'UPDATE' THEN "
-            ."IF {$figees} OR (OLD.magasin_id IS NOT NULL AND NEW.magasin_id IS DISTINCT FROM OLD.magasin_id) THEN RAISE EXCEPTION '%', ".LitteralSql::de(self::MESSAGE_MODIFICATION).'; END IF; '
-            .'IF OLD.magasin_id IS NULL AND NEW.magasin_id IS NOT NULL AND '.self::DEMONSTRATION." THEN RAISE EXCEPTION '%', ".LitteralSql::de(self::MESSAGE_DEMONSTRATION_APRES_COUP).'; END IF; '
-            .'END IF; '
+            ."IF TG_OP = 'UPDATE' AND ({$figees} OR (OLD.magasin_id IS NOT NULL AND NEW.magasin_id IS DISTINCT FROM OLD.magasin_id)) THEN RAISE EXCEPTION '%', ".LitteralSql::de(self::MESSAGE_MODIFICATION).'; END IF; '
             .'RETURN NEW; END $$');
         $connexion->unprepared('CREATE TRIGGER garde_identifiants BEFORE INSERT OR UPDATE OR DELETE ON identifiants FOR EACH ROW EXECUTE FUNCTION garde_identifiants()');
         $connexion->unprepared('CREATE TRIGGER garde_identifiants_vidage BEFORE TRUNCATE ON identifiants FOR EACH STATEMENT EXECUTE FUNCTION garde_identifiants()');

@@ -53,7 +53,7 @@
                             <th class="py-2 pe-4">SIREN</th>
                             <th class="py-2 pe-4">Statut</th>
                             <th class="py-2 pe-4">Fin d'exercice</th>
-                            <th class="py-2 pe-4">Magasins réels</th>
+                            <th class="py-2 pe-4">Magasins</th>
                             <th class="py-2 pe-4">Factures à encaisser</th>
                             <th class="py-2 pe-4">Charges</th>
                             <th class="py-2 pe-4">Lié depuis</th>

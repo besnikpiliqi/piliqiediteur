@@ -241,11 +241,11 @@ class AccesAuxPanneauxTest extends TestCase
     }
 
     /**
-     * Un collaborateur d'un cabinet lié ouvre les magasins réels du client
+     * Un collaborateur d'un cabinet lié ouvre les magasins du client
      * qui lui est confié, jamais ceux d'un client qui ne l'est pas, et
      * jamais l'espace d'administration d'une société.
      */
-    public function test_un_collaborateur_ouvre_les_magasins_reels_des_clients_confies_et_jamais_l_espace_societe(): void
+    public function test_un_collaborateur_ouvre_les_magasins_des_clients_confies_et_jamais_l_espace_societe(): void
     {
         $lyon = $this->ouvrirUneSociete(['nom' => 'Lyon']);
         $villeurbanne = $this->ouvrirUnAutreMagasin($lyon, ['nom' => 'Villeurbanne']);
@@ -273,11 +273,11 @@ class AccesAuxPanneauxTest extends TestCase
 
     /**
      * L'expert-comptable de la société (décision de l'éditeur du
-     * 01/11/2026) ouvre les magasins réels de sa société que sa déclaration
+     * 01/11/2026) ouvre les magasins de sa société que sa déclaration
      * lui ouvre, et jamais l'espace de la société, l'espace d'un cabinet,
      * ni un magasin d'une autre société.
      */
-    public function test_un_expert_comptable_de_la_societe_ouvre_ses_magasins_reels_et_jamais_l_espace_societe_ni_le_cabinet(): void
+    public function test_un_expert_comptable_de_la_societe_ouvre_ses_magasins_et_jamais_l_espace_societe_ni_le_cabinet(): void
     {
         $lyon = $this->ouvrirUneSociete(['nom' => 'Lyon']);
         $villeurbanne = $this->ouvrirUnAutreMagasin($lyon, ['nom' => 'Villeurbanne']);

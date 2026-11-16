@@ -23,8 +23,7 @@ use Illuminate\Support\Facades\DB;
  * ses clients (voir CLAUDE.md, « Cabinets d'expertise comptable », et les
  * lectures permises de « Produit ») : le propriétaire du cabinet ouvre
  * chaque client lié, un collaborateur ceux que le propriétaire lui confie,
- * dans leurs magasins réels, présents et futurs, jamais la démonstration,
- * avec les seules autorisations que le client accorde au cabinet ; rien
+ * dans leurs magasins, présents et futurs, avec les seules autorisations que le client accorde au cabinet ; rien
  * tant que le cabinet n'est pas vérifié (voir Societe::estUnCabinetVerifie()).
  *
  * Sans état. Chaque requête retire SocieteScope et filtre explicitement
@@ -133,7 +132,7 @@ class AccesDesCabinets
     }
 
     /**
-     * Les magasins réels des clients que le compte ouvre, actifs ou non,
+     * Les magasins des clients que le compte ouvre, actifs ou non,
      * par dénomination du client puis nom du magasin : tous ceux d'un
      * client qui les ouvre tous au cabinet, présents et futurs, ou ceux
      * qu'il a choisis (voir LienCabinet::choisirLesMagasins()).
@@ -157,7 +156,7 @@ class AccesDesCabinets
     }
 
     /**
-     * Les identifiants des magasins réels des clients de ses liens que leur
+     * Les identifiants des magasins des clients de ses liens que leur
      * client ouvre au cabinet, sans regarder l'état du cabinet (voir
      * liensDuCompte() et magasinsDuCompte()), en une lecture.
      *
@@ -169,7 +168,7 @@ class AccesDesCabinets
     }
 
     /**
-     * Les magasins réels des clients de ses liens, sans regarder l'état du
+     * Les magasins des clients de ses liens, sans regarder l'état du
      * cabinet (voir liensDuCompte()).
      *
      * @return Collection<int, Magasin>
@@ -185,7 +184,7 @@ class AccesDesCabinets
      * le client accorde au cabinet par le lien actif, croisées avec celles
      * qu'un cabinet peut recevoir d'un client de ce type (voir
      * PermissionRegistry::duCabinet()), triées, par identifiant de la
-     * société cliente ; elles valent dans chacun des magasins réels que le
+     * société cliente ; elles valent dans chacun des magasins que le
      * client ouvre au cabinet (voir idsDesMagasinsDuCompte()).
      * Aucun client pour un compte retiré ou sans lien actif confié. Trois
      * lectures quel que soit le nombre de clients, chacune filtrée par les
@@ -285,10 +284,9 @@ class AccesDesCabinets
     }
 
     /**
-     * Les magasins réels que ces liens ouvrent : tous ceux du client d'un
+     * Les magasins que ces liens ouvrent : tous ceux du client d'un
      * lien qui les ouvre tous, présents et futurs, et ceux qu'il a choisis
-     * pour un lien qui n'en ouvre qu'une sélection ; jamais le magasin de
-     * démonstration. Chaque lien est lu dans la société de son client.
+     * pour un lien qui n'en ouvre qu'une sélection. Chaque lien est lu dans la société de son client.
      *
      * @param  Builder<LienCabinet>  $liens
      * @return Builder<Magasin>
@@ -299,7 +297,6 @@ class AccesDesCabinets
         $selections = (clone $liens)->where('liens_cabinet.tous_les_magasins', false)->select('liens_cabinet.id');
 
         return Magasin::query()
-            ->where('magasins.est_demonstration', false)
             ->where(fn (Builder $ouverts) => $ouverts
                 ->whereIn('magasins.societe_id', $tous)
                 ->orWhereIn('magasins.id', fn (RequeteSql $choisis) => $choisis

@@ -48,8 +48,8 @@ use Illuminate\Support\LazyCollection;
  * traite (voir RevoquerSocieteAction) ; rien à régulariser, qui le clôt.
  *
  * L'instant de l'examen se prend sous les verrous des registres de tous
- * ses magasins réels : le premier des instants que ces verrous notent
- * (voir RegistreFiscal::verrouiller()), ou maintenant sans magasin réel.
+ * ses magasins : le premier des instants que ces verrous notent
+ * (voir RegistreFiscal::verrouiller()), ou maintenant sans magasin.
  * Une émission en cours s'est alors validée, et toute émission qui suit
  * la levée de ces verrous prend un instant qui n'est pas antérieur à celui
  * que le verrou de son registre a noté, donc à celui de l'examen, quelle
@@ -70,7 +70,7 @@ use Illuminate\Support\LazyCollection;
  * dans l'ordre de l'examen : magasin par magasin, par identifiant, ses
  * factures et tickets puis ses avoirs, chacun par date d'émission puis
  * identifiant). Ces documents, qui ne changent jamais, se retrouvent ainsi
- * à l'identique. Lecture des documents des magasins réels de cette seule
+ * à l'identique. Lecture des documents des magasins de cette seule
  * société, chacun sous son magasin : la lecture « l'examen exceptionnel
  * d'un SIREN par l'éditeur » de CLAUDE.md.
  */
@@ -118,7 +118,7 @@ class ExaminerSirenAction
                 throw new VerificationRefuseeException(self::MESSAGE_SANS_CODE);
             }
 
-            $magasins = $societe->magasinsReels()->orderBy('id')->get();
+            $magasins = $societe->magasins()->orderBy('id')->get();
             $avant = $this->registre->sousVerrouDesMagasins($magasins, fn (): CarbonImmutable => $magasins
                 ->map(fn (Magasin $magasin): CarbonImmutable => app(TenantContext::class)->runAs($magasin, fn (): CarbonImmutable => $this->registre->verrouiller($magasin)->utc))
                 ->min() ?? CarbonImmutable::now()->startOfSecond());

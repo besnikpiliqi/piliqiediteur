@@ -26,7 +26,6 @@ use App\Domain\Facturation\Support\GardesDesDocumentsEmis;
 use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
 use App\Domain\Tenancy\Actions\CreerEtablissementAction;
 use App\Domain\Tenancy\Actions\FermerMagasinAction;
-use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
 use App\Domain\Tenancy\Enums\MotifFermeture;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\RoleSociete;
@@ -84,18 +83,18 @@ use Tests\TestCase;
 
 /**
  * Ce que voit et fait l'expert-comptable de la société (décision de
- * l'éditeur du 01/11/2026, § 3) : dans chaque magasin réel de sa société
+ * l'éditeur du 01/11/2026, § 3) : dans chaque magasin de sa société
  * que sa déclaration lui ouvre, présent ou futur, exactement les
  * autorisations de sa déclaration, un refus net pour toute autre, comme un
- * compte d'un cabinet lié ; jamais l'espace de la société, la
- * démonstration, la caisse ni un magasin d'une autre société ; la base
+ * compte d'un cabinet lié ; jamais l'espace de la société, la caisse ni
+ * un magasin d'une autre société ; la base
  * refuse toute vente ou tout encaissement à son nom.
  */
 class AccesDeLExpertComptableTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_l_expert_comptable_ouvre_les_magasins_reels_presents_et_futurs_avec_les_autorisations_declarees(): void
+    public function test_l_expert_comptable_ouvre_les_magasins_presents_et_futurs_avec_les_autorisations_declarees(): void
     {
         $lyon1 = $this->ouvrirUneSociete(['nom' => 'Lyon 1']);
         $lyon2 = $this->ouvrirUnAutreMagasin($lyon1, ['nom' => 'Lyon 2']);
@@ -118,11 +117,9 @@ class AccesDeLExpertComptableTest extends TestCase
         $this->actingAs($expert)->get(ClientResource::getUrl('index', tenant: $lyon1))->assertForbidden();
     }
 
-    public function test_l_expert_comptable_n_ouvre_ni_l_espace_de_la_societe_ni_la_demonstration_ni_la_caisse_ni_l_espace_d_un_cabinet(): void
+    public function test_l_expert_comptable_n_ouvre_ni_l_espace_de_la_societe_ni_la_caisse_ni_l_espace_d_un_cabinet(): void
     {
         $societe = $this->inscrireUneSociete();
-        $demonstration = app(OuvrirLaDemonstrationAction::class)->handle($societe->proprietaire()->firstOrFail(), $societe);
-        app(TenantContext::class)->clear();
         $this->saisirLeCodeDuCourrier($societe)->forceFill(['password' => 'password'])->save();
         $magasin = $this->creerLeMagasinDuSiege($societe->fresh(), 'Lyon 1');
         app(TenantContext::class)->clear();
@@ -131,8 +128,6 @@ class AccesDeLExpertComptableTest extends TestCase
         $this->assertFalse($expert->canAccessPanel(Filament::getPanel('societe')));
         $this->assertFalse($expert->canAccessPanel(Filament::getPanel('cabinet')));
         $this->assertFalse($expert->canAccessTenant($magasin->societe));
-        $this->assertFalse($expert->peutOuvrir($demonstration));
-        $this->assertSame([], $expert->autorisationsDans($demonstration));
         $this->actingAs($expert)->get(TableauDeBord::getUrl(panel: 'societe', tenant: $magasin->societe))->assertForbidden();
         $this->dansLeMagasin($magasin, $expert);
         Livewire::test(Caisse::class)->assertForbidden();
@@ -201,7 +196,7 @@ class AccesDeLExpertComptableTest extends TestCase
         $this->assertSame(RoleSociete::ExpertComptable, $expert->role_societe);
     }
 
-    public function test_l_expert_comptable_d_une_societe_sans_magasin_reel_arrive_sur_une_page_qui_le_lui_dit(): void
+    public function test_l_expert_comptable_d_une_societe_sans_magasin_arrive_sur_une_page_qui_le_lui_dit(): void
     {
         $societe = $this->inscrireUneSociete();
         $this->saisirLeCodeDuCourrier($societe)->forceFill(['password' => 'password'])->save();
@@ -243,7 +238,7 @@ class AccesDeLExpertComptableTest extends TestCase
 
     /**
      * Ce qu'un expert-comptable de la société, à qui la déclaration accorde
-     * toutes les autorisations d'un cabinet, ouvre dans un magasin réel :
+     * toutes les autorisations d'un cabinet, ouvre dans un magasin :
      * exactement ce qu'ouvre un compte d'un cabinet lié aux mêmes
      * autorisations (voir PanneauCabinetTest), plus « La société »,
      * « Tableau de bord de la société », sa page des graphiques (décision

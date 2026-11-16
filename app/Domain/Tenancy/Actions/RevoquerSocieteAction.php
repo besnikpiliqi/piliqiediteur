@@ -73,13 +73,13 @@ use Throwable;
  *
  * Une société qui n'est pas un cabinet d'expertise comptable se révoque en
  * une transaction, sous les verrous de la clôture d'une inscription (voir
- * CloreLInscriptionAction) : les registres de ses magasins réels, puis sa
- * ligne (« for no key update »), puis les lignes de ses magasins réels et
- * de ses comptes. Dans chaque magasin réel ouvert, ses journées en attente
+ * CloreLInscriptionAction) : les registres de ses magasins, puis sa
+ * ligne (« for no key update »), puis les lignes de ses magasins et
+ * de ses comptes. Dans chaque magasin ouvert, ses journées en attente
  * se clôturent, jusqu'au jour même, au nom du système, comme à sa
  * fermeture (voir FermerMagasinAction) ; sa période d'activité se ferme,
  * motif « révocation de la société » (son abonnement s'arrête, étape 12) ;
- * puis, dans chaque magasin réel, le statut de la société s'inscrit au
+ * puis, dans chaque magasin, le statut de la société s'inscrit au
  * journal des événements (JET 270 statut_societe). Son lien avec un
  * cabinet et ses demandes de lien prennent fin, cabinet prévenu (voir
  * MettreFinAuLienAction::pourUnClientRevoque()). Viennent ensuite son
@@ -190,7 +190,7 @@ class RevoquerSocieteAction
 
     /**
      * Une société qui n'est pas un cabinet, en une transaction, sous les
-     * verrous de ses registres, de sa ligne, de ses magasins réels et de
+     * verrous de ses registres, de sa ligne, de ses magasins et de
      * ses comptes.
      *
      * @return array{sirets: list<string>, magasins: array<int, CarbonImmutable>, transmissions: list<int>}
@@ -202,14 +202,14 @@ class RevoquerSocieteAction
     {
         return app(TenantContext::class)->runAsSociete($societe, function () use ($societe, $editeur) {
             for ($essai = 1; $essai <= self::ESSAIS_SI_LES_MAGASINS_CHANGENT; $essai++) {
-                $magasins = $societe->magasinsReels()->orderBy('id')->get();
+                $magasins = $societe->magasins()->orderBy('id')->get();
 
-                // null quand les magasins réels ont changé entre leur lecture
+                // null quand les magasins ont changé entre leur lecture
                 // et leurs verrous : tout reprend alors.
                 $revocation = function () use ($societe, $magasins, $editeur) {
                     $verrouillee = Societe::query()->whereKey($societe->getKey())->lock('for no key update')->firstOrFail();
 
-                    if (ValeursLues::entiers($verrouillee->magasinsReels()->orderBy('id')->pluck('id')) !== ValeursLues::entiers($magasins->modelKeys())) {
+                    if (ValeursLues::entiers($verrouillee->magasins()->orderBy('id')->pluck('id')) !== ValeursLues::entiers($magasins->modelKeys())) {
                         return null;
                     }
 
@@ -218,7 +218,7 @@ class RevoquerSocieteAction
                     }
 
                     $preuve = self::preuveQuElleSeRevoque($verrouillee);
-                    $magasinsVerrouilles = $verrouillee->magasinsReels()->orderBy('id')->lock('for no key update')->get();
+                    $magasinsVerrouilles = $verrouillee->magasins()->orderBy('id')->lock('for no key update')->get();
                     User::query()->where('societe_id', $verrouillee->getKey())->orderBy('id')->lock('for no key update')->get();
                     $fermes = $this->arreterLesMagasins($magasinsVerrouilles);
                     $this->finDesLiens->pourUnClientRevoque($verrouillee, $editeur);
@@ -263,7 +263,7 @@ class RevoquerSocieteAction
             $verrouille->cabinet()->lockForUpdate()->first();
             User::query()->where('societe_id', $verrouille->getKey())->orderBy('id')->lock('for no key update')->get();
 
-            return [...$this->revoquerSousVerrou($verrouille, $editeur, $verrouille->magasinsReels()->get(), $preuve), 'magasins' => []];
+            return [...$this->revoquerSousVerrou($verrouille, $editeur, $verrouille->magasins()->get(), $preuve), 'magasins' => []];
         };
         $revocation = app(TenantContext::class)->runAsSociete($cabinet, fn () => $this->operateur->pendantLeSysteme(fn () => DB::transaction($sousLesVerrous)));
 
@@ -294,7 +294,7 @@ class RevoquerSocieteAction
     }
 
     /**
-     * Dans chaque magasin réel ouvert, sous le verrou de son registre :
+     * Dans chaque magasin ouvert, sous le verrou de son registre :
      * ses journées en attente se clôturent jusqu'au jour même, au nom du
      * système, et sa période d'activité ouverte se ferme, motif
      * « révocation de la société ». Un magasin fermé n'a plus de journée
@@ -327,13 +327,13 @@ class RevoquerSocieteAction
 
     /**
      * La révocation elle-même, sous les verrous de l'appelant : le statut
-     * au journal des événements de chaque magasin réel (JET 270), le statut
+     * au journal des événements de chaque magasin (JET 270), le statut
      * de la société, la preuve de la remise du courrier consommée, ses
      * SIRET libérés, ses pièces effacées, ses codes et ses transmissions en
      * attente annulés, la fin de la relation, puis la révocation au journal
      * d'audit, la tête du journal en dernier.
      *
-     * @param  iterable<Magasin>  $magasins  ses magasins réels, verrouillés
+     * @param  iterable<Magasin>  $magasins  ses magasins, verrouillés
      * @return array{sirets: list<string>, transmissions: list<int>}
      */
     private function revoquerSousVerrou(Societe $verrouillee, InterventionDeLEditeur $editeur, iterable $magasins, CodeConfirmation $preuve): array

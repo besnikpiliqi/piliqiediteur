@@ -60,7 +60,7 @@ class AccepterLaDemandeDeLienAction
 
     /**
      * @param  list<string>|null  $autorisations  null : les autorisations par défaut ; une liste, pour une demande de rattachement acceptée par le propriétaire du client
-     * @param  array<array-key, mixed>|null  $magasins  null : tous les magasins réels du client, présents et futurs ; une sélection d'au moins un, pour une demande de rattachement acceptée par le propriétaire du client
+     * @param  array<array-key, mixed>|null  $magasins  null : tous les magasins du client, présents et futurs ; une sélection d'au moins un, pour une demande de rattachement acceptée par le propriétaire du client
      *
      * @throws AuthorizationException
      * @throws InvalidArgumentException
@@ -212,7 +212,7 @@ class AccepterLaDemandeDeLienAction
             $client->proprietaire()->first()?->notify(new AvisDuCabinet(
                 $client,
                 'Cabinet lié',
-                "Le cabinet {$cabinet->getFilamentName()} a accepté votre demande : il consulte vos magasins réels selon les autorisations que vous lui accordez.",
+                "Le cabinet {$cabinet->getFilamentName()} a accepté votre demande : il consulte vos magasins selon les autorisations que vous lui accordez.",
                 CabinetComptable::getUrl(panel: 'societe', tenant: $client),
                 'Voir le cabinet comptable',
                 AvisDuCabinet::SUCCES,

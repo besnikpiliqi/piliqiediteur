@@ -184,7 +184,7 @@ class ExpertsComptablesConcurrenceTest extends TestCase
      */
     public static function avecEtSansMagasinReel(): array
     {
-        return ['avec un magasin réel' => [true], 'sans magasin réel' => [false]];
+        return ['avec un magasin' => [true], 'sans magasin' => [false]];
     }
 
     #[DataProvider('avecEtSansMagasinReel')]
@@ -661,7 +661,7 @@ class ExpertsComptablesConcurrenceTest extends TestCase
     }
 
     /**
-     * Un client, avec ou sans magasin réel, qui a déclaré son
+     * Un client, avec ou sans magasin, qui a déclaré son
      * expert-comptable ; la personne n'a pas encore choisi son mot de
      * passe : son adresse se corrige encore.
      *

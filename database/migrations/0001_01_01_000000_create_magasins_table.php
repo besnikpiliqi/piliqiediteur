@@ -21,25 +21,17 @@ return new class extends Migration
             // DocumentNumberingService) : unique dans la société, définitif
             // dès son premier document.
             $table->string('code', 10);
-            // Le magasin de démonstration de la société, au plus un (voir
-            // OuvrirLaDemonstrationAction) : son identité est fictive, sans
-            // SIRET, et rien n'en passe aux magasins réels. Le propriétaire
-            // y vend, et nulle part ailleurs (voir GardesDeLaVente) : la
-            // base refuse qu'un magasin le devienne ou cesse de l'être.
-            $table->boolean('est_demonstration')->default(false);
             // L'établissement : son SIRET, que les documents émis gardent
             // signé, ne change qu'avec le registre des SIRET réservés
             // (voir SiretsDesMagasins), et son adresse, reprise du
             // répertoire Sirene. L'identité légale qu'il imprime en plus
-            // est celle de sa société (voir Societe et Emetteur). Nul pour
-            // le magasin de démonstration, et pour lui seul (voir
-            // Magasin::booted()).
-            $table->string('siret', 14)->nullable();
+            // est celle de sa société (voir Societe et Emetteur). Un magasin
+            // a toujours un SIRET.
+            $table->string('siret', 14);
             // Posée au premier contrôle Sirene concluant de l'établissement
-            // (voir CreerEtablissementAction) : un magasin réel dont
+            // (voir CreerEtablissementAction) : un magasin dont
             // l'établissement n'est pas vérifié ne vend pas (voir
-            // Magasin::peutVendre()) ; la démonstration n'a pas
-            // d'établissement.
+            // Magasin::peutVendre()).
             $table->timestamp('etablissement_verifie_le')->nullable();
             $table->string('adresse')->nullable();
             $table->string('complement_adresse')->nullable();
@@ -55,7 +47,7 @@ return new class extends Migration
             // dès que le magasin a numéroté un document ; avant, seule la
             // procédure de l'éditeur le corrige, le modèle refusant tout
             // autre changement (voir DeclencheursDeProtection::colonneFigee()
-            // et Magasin::booted()). Nul seulement pour un magasin réel dont
+            // et Magasin::booted()). Nul seulement pour un magasin dont
             // l'établissement n'a jamais été confirmé, qui ne vend pas et
             // ne numérote rien.
             $table->string('territoire', 20)->nullable();
@@ -142,9 +134,7 @@ return new class extends Migration
 
         DeclencheursDeProtection::auMoins('magasins', 'delai_paiement_jours', 0);
 
-        // Une seule démonstration et un seul établissement principal par
-        // société.
-        DB::statement('CREATE UNIQUE INDEX magasins_une_demonstration_par_societe ON magasins (societe_id) WHERE est_demonstration');
+        // Un seul établissement principal par société.
         DB::statement('CREATE UNIQUE INDEX magasins_un_principal_par_societe ON magasins (societe_id) WHERE est_etablissement_principal');
 
         // Un SIRET n'appartient qu'à un magasin de la société, sauf
@@ -171,13 +161,8 @@ return new class extends Migration
         // d'effacer ou de changer sa libération.
         DeclencheursDeProtection::colonneFigee('magasins', 'siret_libere_le');
 
-        // Un magasin réel ne devient jamais le magasin de démonstration, ni
-        // l'inverse : la garde de la vente du propriétaire en dépend (voir
-        // GardesDeLaVente).
-        DeclencheursDeProtection::colonneFigee('magasins', 'est_demonstration');
-
-        // Un cabinet d'expertise comptable n'a aucun magasin, démonstration
-        // comprise (voir TypeDActivite::aDesMagasins()).
+        // Un cabinet d'expertise comptable n'a aucun magasin (voir
+        // TypeDActivite::aDesMagasins()).
         GardesDesTypesDActivite::poser(GardesDesTypesDActivite::MAGASINS);
     }
 
@@ -188,6 +173,5 @@ return new class extends Migration
         DeclencheursDeProtection::retirer('magasins');
         DeclencheursDeProtection::retirerLaColonneFigee('magasins', 'territoire');
         DeclencheursDeProtection::retirerLaColonneFigee('magasins', 'siret_libere_le');
-        DeclencheursDeProtection::retirerLaColonneFigee('magasins', 'est_demonstration');
     }
 };

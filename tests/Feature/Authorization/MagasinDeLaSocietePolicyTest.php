@@ -3,7 +3,6 @@
 namespace Tests\Feature\Authorization;
 
 use App\Domain\Authorization\AutorisationsSociete;
-use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\StatutCompte;
 use App\Domain\Tenancy\Enums\StatutSociete;
@@ -20,7 +19,7 @@ use Tests\TestCase;
  * portée ; le céder, pour le propriétaire seul ; l'indiquer comme
  * établissement principal, avec tous les magasins dans sa portée. Jamais
  * un responsable, un vendeur, un compte du cabinet lié ni le compte d'une
- * autre société ; jamais le magasin de démonstration ; plus rien dans une
+ * autre société ; plus rien dans une
  * société en lecture seule.
  */
 class MagasinDeLaSocietePolicyTest extends TestCase
@@ -89,45 +88,6 @@ class MagasinDeLaSocietePolicyTest extends TestCase
             'responsable' => [false, false],
             'propriétaire d\'une autre société' => [false, false],
         ], array_map(fn (User $compte): array => [$compte->fresh()->can('viewAny', Magasin::class), $compte->fresh()->can('view', $magasin)], $comptes));
-    }
-
-    /**
-     * Ouvrir le magasin de démonstration d'une société pas encore validée :
-     * son propriétaire, ou un administrateur de tous les magasins autorisé
-     * à les gérer ; jamais un administrateur d'une sélection de magasins,
-     * même autorisé, ni un administrateur sans cette autorisation, ni un
-     * responsable.
-     */
-    public function test_seul_qui_gere_tous_les_magasins_ouvre_la_demonstration(): void
-    {
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique', 'a_verifier' => true]);
-        $comptes = [
-            'propriétaire' => $this->proprietaireDe($magasin),
-            'administrateur de tous les magasins autorisé' => $this->administrateur($magasin, null, [AutorisationsSociete::MAGASINS_GERER]),
-            'administrateur de tous les magasins sans l\'autorisation' => $this->administrateur($magasin),
-            'administrateur de ce magasin autorisé' => $this->administrateur($magasin, [$magasin->id], [AutorisationsSociete::MAGASINS_GERER]),
-            'responsable' => $this->responsable($magasin),
-        ];
-        $this->dansLaSociete($magasin);
-
-        $this->assertSame([
-            'propriétaire' => true,
-            'administrateur de tous les magasins autorisé' => true,
-            'administrateur de tous les magasins sans l\'autorisation' => false,
-            'administrateur de ce magasin autorisé' => false,
-            'responsable' => false,
-        ], array_map(fn (User $compte): bool => $compte->fresh()->can('ouvrirLaDemonstration', $magasin->societe), $comptes));
-    }
-
-    public function test_personne_n_agit_sur_le_magasin_de_demonstration(): void
-    {
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique', 'a_verifier' => true]);
-        $proprietaire = $this->proprietaireDe($magasin);
-        $demonstration = app(OuvrirLaDemonstrationAction::class)->handle($proprietaire, $magasin->societe);
-        $this->dansLaSociete($magasin);
-
-        $this->assertSame(self::gestes(false, false, false), self::permis($proprietaire, $demonstration));
-        $this->assertSame(self::gestes(true, true, true), self::permis($proprietaire, $magasin));
     }
 
     /**

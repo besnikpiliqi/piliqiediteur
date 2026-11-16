@@ -171,7 +171,7 @@ class RevoquerSocieteTest extends TestCase
 
     /**
      * Un magasin que la société crée pendant sa révocation, entre la
-     * lecture de ses magasins réels et leurs verrous, n'y échappe pas : la
+     * lecture de ses magasins et leurs verrous, n'y échappe pas : la
      * révocation reprend sur tous ses magasins, et le nouveau se ferme,
      * motif « révocation de la société », et libère son SIRET comme
      * l'autre.

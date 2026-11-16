@@ -112,7 +112,7 @@ class DroitsDuResponsableTest extends TestCase
         }
 
         $this->assertSame('Ma Boutique', $magasin->fresh()->nom);
-        $this->assertSame(1, $societe->magasinsReels()->count());
+        $this->assertSame(1, $societe->magasins()->count());
         $this->assertSame(12, (int) $societe->fresh()->mois_fin_exercice);
         $this->assertFalse(User::query()->where('societe_id', $societe->id)->whereIn('name', ['Admin', 'Chef'])->exists());
         $this->assertTrue($vendeur->refresh()->estMembre());

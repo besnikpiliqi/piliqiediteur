@@ -158,7 +158,7 @@ class FicheDuMembre extends ViewRecord
      * administrateur), qui garde son identifiant et son
      * historique (voir ChangerLeRoleDeSocieteAction) ; un compte qui n'a pas
      * encore de magasin et devient membre reçoit, une fois pour toutes, le
-     * magasin réel ouvert choisi ici. Quand son mot de passe est encore son
+     * magasin ouvert choisi ici. Quand son mot de passe est encore son
      * identifiant, la fenêtre l'avertit et la personne présente peut
      * choisir le sien maintenant.
      */
@@ -186,8 +186,8 @@ class FicheDuMembre extends ViewRecord
                         ->visible(fn (): bool => $this->compte()->magasinDeSonIdentifiant() !== null),
                     Select::make('magasin_id')
                         ->label('Son magasin, définitif')
-                        ->helperText('Choisi une fois pour toutes, parmi les magasins réels ouverts : un compte de membre ne change jamais de magasin.')
-                        ->options(fn (): array => $this->magasinsReelsOuverts())
+                        ->helperText('Choisi une fois pour toutes, parmi les magasins ouverts : un compte de membre ne change jamais de magasin.')
+                        ->options(fn (): array => $this->magasinsOuverts())
                         ->required(fn (): bool => $this->compte()->magasinDeSonIdentifiant() === null)
                         ->visible(fn (): bool => $this->compte()->magasinDeSonIdentifiant() === null),
                     ...MembreResource::champsDuRoleDeMembre(),
@@ -261,7 +261,7 @@ class FicheDuMembre extends ViewRecord
             ->icon('heroicon-o-key')
             ->color('danger')
             ->visible(fn (): bool => $this->auteur()->can('transmettreLaPropriete', $this->compte()) && $this->transmissionEnAttente() === null)
-            ->modalDescription(fn (): string => "Un lien, valable 24 heures, part à l'adresse que {$this->compte()->name} a renseignée dans son profil : la propriété ne passera que quand il l'aura suivi, connecté à son compte, et vous pourrez annuler d'ici là. Il deviendra alors le propriétaire de la société, avec tous les droits sauf celui de vendre, hors du magasin de démonstration tant qu'il est ouvert ; vous en deviendrez administrateur de tous les magasins, avec toutes les autorisations de magasin sauf celles de la vente, et toutes celles de la société. Il doit avoir choisi son propre mot de passe et renseigné lui-même son adresse.")
+            ->modalDescription(fn (): string => "Un lien, valable 24 heures, part à l'adresse que {$this->compte()->name} a renseignée dans son profil : la propriété ne passera que quand il l'aura suivi, connecté à son compte, et vous pourrez annuler d'ici là. Il deviendra alors le propriétaire de la société, avec tous les droits sauf celui de vendre ; vous en deviendrez administrateur de tous les magasins, avec toutes les autorisations de magasin sauf celles de la vente, et toutes celles de la société. Il doit avoir choisi son propre mot de passe et renseigné lui-même son adresse.")
             ->form([
                 TextInput::make('mot_de_passe')->label('Votre mot de passe')->password()->autocomplete('current-password')->required(),
             ])
@@ -310,7 +310,7 @@ class FicheDuMembre extends ViewRecord
      * Réintégrer un compte retiré, dans son rôle et, pour un membre, dans
      * son magasin, comme une création : le propriétaire choisit son rôle de
      * magasin, ou la portée d'un administrateur ; un administrateur
-     * autorisé réintègre un responsable d'un magasin réel de sa portée.
+     * autorisé réintègre un responsable d'un magasin de sa portée.
      */
     public function reintegrerAction(): Action
     {
@@ -436,16 +436,15 @@ class FicheDuMembre extends ViewRecord
     }
 
     /**
-     * Les magasins réels ouverts de la société, où un compte qui n'a pas
-     * encore de magasin peut devenir membre.
+     * Les magasins ouverts de la société, où un compte qui n'a pas encore
+     * de magasin peut devenir membre.
      *
      * @return array<int, string>
      */
-    private function magasinsReelsOuverts(): array
+    private function magasinsOuverts(): array
     {
         return ValeursLues::textesParCle(Magasin::query()
             ->where('societe_id', MembreResource::societe()->getKey())
-            ->where('est_demonstration', false)
             ->where('statut', StatutMagasin::Actif->value)
             ->orderBy('nom')
             ->pluck('nom', 'id'));
@@ -469,8 +468,7 @@ class FicheDuMembre extends ViewRecord
     /**
      * La portée de l'administrateur, telle que la fenêtre « Modifier » la
      * précoche : ses magasins choisis que l'équipe montre (voir
-     * MembreResource::magasinsDeLaPortee()), jamais le magasin de
-     * démonstration d'une société validée, qui a disparu de ses écrans.
+     * MembreResource::magasinsDeLaPortee()).
      *
      * @return array<string, mixed>
      */

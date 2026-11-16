@@ -12,7 +12,7 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 
 /**
- * Les magasins réels de la société, dans son espace d'administration (voir
+ * Les magasins de la société, dans son espace d'administration (voir
  * MagasinDeLaSocietePolicy) : la liste de ceux de la portée de la personne
  * connectée (tous pour le propriétaire et un administrateur de tous les
  * magasins, ceux de sa sélection pour un autre administrateur), chacun
@@ -21,8 +21,8 @@ use Illuminate\Database\Eloquent\Builder;
  * (voir CreerMagasin), pour qui peut en créer ; et, pour qui gère les
  * magasins, chacun de ceux de sa portée (voir ModifierMagasin) : le
  * modifier, changer son SIRET, le fermer, le rouvrir, le céder, ouvert ou
- * fermé, l'indiquer comme établissement principal. Le magasin de démonstration se trouve sur
- * le tableau de bord. Un magasin ne se supprime jamais. La suspension d'un
+ * fermé, l'indiquer comme établissement principal. Un magasin ne se
+ * supprime jamais. La suspension d'un
  * magasin par l'éditeur se range à part de sa fermeture (suspendu_le) :
  * l'état la montre, et aucune réouverture ne la lève.
  */
@@ -47,7 +47,7 @@ class MagasinResource extends RessourceDuPanneauSociete
     protected static ?int $navigationSort = 1;
 
     /**
-     * Les magasins réels de la portée de la personne connectée, dans sa
+     * Les magasins de la portée de la personne connectée, dans sa
      * société (voir User::magasinsDeSaPortee()).
      *
      * @return Builder<Magasin>
@@ -57,7 +57,7 @@ class MagasinResource extends RessourceDuPanneauSociete
         $auteur = auth()->user();
 
         return $auteur instanceof User
-            ? $auteur->magasinsDeSaPortee()->where('est_demonstration', false)->with('societe')
+            ? $auteur->magasinsDeSaPortee()->with('societe')
             : Magasin::query()->whereRaw('1 = 0');
     }
 

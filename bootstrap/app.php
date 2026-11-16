@@ -6,7 +6,6 @@ use App\Console\Commands\EffacerPiecesVerification;
 use App\Console\Commands\EffacerTelechargementsDeDocuments;
 use App\Console\Commands\ExpirerDevis;
 use App\Console\Commands\ExpirerInvitationsDesCabinets;
-use App\Console\Commands\FermerDemonstrationsInactives;
 use App\Console\Commands\MarquerFacturesEnRetard;
 use App\Console\Commands\PurgerActionsTraitees;
 use App\Console\Commands\PurgerDemandesInscription;
@@ -114,10 +113,6 @@ return Application::configure(basePath: dirname(__DIR__))
         // caisse:diagnostiquer signale une vérification qui n'a pas réussi
         // depuis 36 heures (voir VerifierLIsolation).
         $schedule->command(VerifierLIsolation::class, ['--prevenir-l-editeur'])->dailyAt('04:40')->onOneServer()->withoutOverlapping();
-        // À 4 h 45, les magasins de démonstration inactifs depuis trente
-        // jours, ou d'une société validée ou close, se ferment (voir
-        // FermerDemonstrationsInactives).
-        $schedule->command(FermerDemonstrationsInactives::class)->dailyAt('04:45')->withoutOverlapping();
         // Chaque heure : les pièces de vérification qui atteindraient leurs
         // trente jours avant le passage suivant sans décision de l'éditeur,
         // et les copies restées d'un envoi abandonné ou d'un examen
@@ -173,7 +168,7 @@ return Application::configure(basePath: dirname(__DIR__))
         // au niveau critique et prévient l'éditeur, une fois par incident
         // (voir SurveillerLaFileDAttente). Elle ne fait que lire.
         $schedule->command(SurveillerLaFileDAttente::class)->everyFiveMinutes()->withoutOverlapping();
-        // Pendant le semis des données de démonstration (php artisan
+        // Pendant le semis (php artisan
         // migrate:fresh --seed, en développement), aucune tâche ne part :
         // le semis exécute lui-même les tâches du calendrier des magasins à
         // chaque minuit de son histoire, qui finit la veille, et une tâche

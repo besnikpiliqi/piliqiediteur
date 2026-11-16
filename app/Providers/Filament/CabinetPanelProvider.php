@@ -105,7 +105,7 @@ class CabinetPanelProvider extends PanelProvider
                 Authenticate::class,
             ], isPersistent: true)
             // Tant que le cabinet n'est pas validé, qu'il attend son code.
-            ->renderHook(PanelsRenderHook::CONTENT_START, fn (): View => view('filament.verification-en-cours', ['magasin' => null, 'societe' => Filament::getTenant()]))
+            ->renderHook(PanelsRenderHook::CONTENT_START, fn (): View => view('filament.verification-en-cours', ['societe' => Filament::getTenant()]))
             // Chaque notification de la cloche arrivée pendant qu'une page
             // est ouverte s'y montre en carte, en haut à droite (voir
             // CartesDesNotifications).

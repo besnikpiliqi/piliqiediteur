@@ -14,7 +14,7 @@ use RuntimeException;
 use Tests\TestCase;
 
 /**
- * Les garde-fous des données de démonstration d'un poste de développement
+ * Les garde-fous du semis d'un poste de développement
  * (lot SEED, demande de l'éditeur du 13/11/2026) : php artisan db:seed
  * refuse, sans rien écrire, la production, les fournisseurs réels, une
  * base déjà remplie et un mot de passe commun hors de la règle des mots
@@ -87,7 +87,7 @@ class DatabaseSeederTest extends TestCase
     #[DataProvider('motsDePasseHorsDeLaRegle')]
     public function test_un_mot_de_passe_commun_hors_de_la_regle_est_refuse_sans_rien_ecrire(string $motDePasse, string $reproche): void
     {
-        config(['piliqi.demo_mot_de_passe' => $motDePasse]);
+        config(['piliqi.semis_mot_de_passe' => $motDePasse]);
 
         $this->assertSame(sprintf(MotsDePasseDuSemis::MESSAGE_REFUSE, $reproche), $this->refusDuSemis());
         $this->assertDatabaseEmpty('societes');
@@ -96,7 +96,7 @@ class DatabaseSeederTest extends TestCase
 
     public function test_le_mot_de_passe_commun_va_a_chaque_compte_sauf_s_il_contient_son_identifiant(): void
     {
-        config(['piliqi.demo_mot_de_passe' => 'Clef-48151623']);
+        config(['piliqi.semis_mot_de_passe' => 'Clef-48151623']);
         $motsDePasse = MotsDePasseDuSemis::depuisLaConfiguration();
 
         $this->assertTrue($motsDePasse->sontCommuns());
@@ -113,7 +113,7 @@ class DatabaseSeederTest extends TestCase
 
     public function test_sans_mot_de_passe_commun_chaque_compte_recoit_un_mot_de_passe_tire_au_hasard(): void
     {
-        config(['piliqi.demo_mot_de_passe' => '']);
+        config(['piliqi.semis_mot_de_passe' => '']);
         Str::createRandomStringsUsingSequence(['K7QP', '2MZR', 'XA4D', 'B3NW', 'Q9TE', 'LM2C']);
         $motsDePasse = MotsDePasseDuSemis::depuisLaConfiguration();
 

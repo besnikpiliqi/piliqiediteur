@@ -50,8 +50,6 @@ enum ActionAuditee: string implements HasLabel
     case TicketZNonSigneRetire = 'ticket_z_non_signe_retire';
     case FinExerciceChangee = 'fin_exercice_changee';
     case EtablissementPrincipalChoisi = 'etablissement_principal_choisi';
-    case DemonstrationOuverte = 'demonstration_ouverte';
-    case DemonstrationFermee = 'demonstration_fermee';
     case MembreCree = 'membre_cree';
     case AdministrateurCree = 'administrateur_cree';
     case AdministrateurModifie = 'administrateur_modifie';
@@ -178,8 +176,6 @@ enum ActionAuditee: string implements HasLabel
             self::TicketZNonSigneRetire => 'Ticket Z non signé retiré par l\'éditeur',
             self::FinExerciceChangee => 'Date de clôture de l\'exercice changée par l\'éditeur',
             self::EtablissementPrincipalChoisi => 'Établissement principal indiqué',
-            self::DemonstrationOuverte => 'Magasin de démonstration ouvert',
-            self::DemonstrationFermee => 'Magasin de démonstration fermé',
             self::MembreCree => 'Compte créé',
             self::AdministrateurCree => 'Administrateur créé',
             self::AdministrateurModifie => 'Administrateur modifié',
@@ -325,7 +321,7 @@ enum ActionAuditee: string implements HasLabel
             // activité et, pour une invitation acceptée, le cabinet qui l'a
             // envoyée (son identifiant, son SIREN et sa dénomination).
             self::SocieteValidee => ['preuve', 'proprietaire', 'sirets', 'cabinet'],
-            self::InscriptionClose, self::DemonstrationOuverte, self::DemonstrationFermee => ['motif'],
+            self::InscriptionClose => ['motif'],
             // Le statut de la société avant et après sa révocation par la
             // procédure de l'éditeur, et les SIRET de ses magasins libérés
             // au registre des SIRET réservés (voir RevoquerSocieteAction).
@@ -420,7 +416,7 @@ enum ActionAuditee: string implements HasLabel
             // motif de fin (voir MotifDeFinDuLien), les autorisations d'une
             // demande acceptée sur la page de rattachement (« par_defaut »
             // ou « ajustees ») et les droits des comptes du cabinet touchés
-            // dans les magasins réels du client (voir JournalDesDroits).
+            // dans les magasins du client (voir JournalDesDroits).
             self::LienDemande => ['cabinet', 'client', 'origine'],
             self::LienRefuse, self::DemandeDeLienRetiree, self::DemandeDeLienExpiree => ['cabinet', 'client'],
             self::LienActive => ['cabinet', 'client', 'origine', 'autorisations', 'magasins', 'droits'],

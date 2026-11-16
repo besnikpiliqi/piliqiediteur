@@ -17,7 +17,7 @@ use Illuminate\Support\Facades\Schema;
  * pour une TVA à payer réelle et estimée (voir TvaDeLaPeriode). Elles ne
  * deviennent jamais un achat de marchandises, ne créent jamais de produit
  * et ne touchent jamais le stock. Une charge est de « Toute la société »
- * ou d'un magasin réel de la société (clé étrangère composite) ; son type
+ * ou d'un magasin de la société (clé étrangère composite) ; son type
  * est de la liste de PILIQI ou de la société, jamais les deux ; ses
  * montants, en centimes, sont la somme de ses lignes par taux (voir
  * lignes_de_charge), et sa pièce est rangée à part (voir
@@ -35,7 +35,7 @@ return new class extends Migration
             $table->id();
             $table->uuid('uuid')->unique();
             $table->foreignId('societe_id')->constrained('societes')->restrictOnDelete();
-            // Un magasin réel de la société, ou aucun : « Toute la société ».
+            // Un magasin de la société, ou aucun : « Toute la société ».
             $table->unsignedBigInteger('magasin_id')->nullable();
             // Un type de la liste de PILIQI (voir TypeDeCharge), ou un type
             // de la société.

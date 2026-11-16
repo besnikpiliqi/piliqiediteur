@@ -21,7 +21,6 @@ use App\Domain\Facturation\Services\AvoirPdfGenerator;
 use App\Domain\Facturation\Services\DevisPdfGenerator;
 use App\Domain\Facturation\Services\Emetteur;
 use App\Domain\Facturation\Services\FacturePdfGenerator;
-use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
 use App\Domain\Tenancy\Enums\FormeJuridique;
 use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Models\Magasin;
@@ -550,39 +549,28 @@ class EmetteurFigeTest extends TestCase
     }
 
     /**
-     * Le magasin de démonstration imprime l'émetteur fictif « ENTREPRISE
-     * DE DÉMONSTRATION », sans rien de l'identité réelle de sa société
-     * (dénomination, SIREN, immatriculation, n° de TVA, siège, capital),
-     * avec son filigrane ; son contenu signé le marque et le restitue tel
-     * quel.
+     * L'émetteur d'un magasin ne porte jamais le marqueur
+     * « demonstration » ni de filigrane : il n'est écrit, à vrai, que dans
+     * le contenu signé d'un document du site de démonstration. Un contenu
+     * signé qui le porte se relit avec lui, son filigrane et son bandeau,
+     * quel que soit le moment de l'impression.
      */
-    public function test_un_document_de_demonstration_n_imprime_aucune_identite_reelle(): void
+    public function test_l_emetteur_d_un_magasin_n_a_aucun_marqueur_et_un_contenu_signe_marque_garde_son_filigrane(): void
     {
-        $societe = $this->inscrireUneSociete();
-        $reel = $this->creerLeMagasinDuSiege($societe);
-        app(TenantContext::class)->runAsSociete($societe, fn (): bool => $societe->forceFill([
-            'raison_sociale' => 'Martin et Fils',
-            'forme_juridique' => FormeJuridique::Sarl,
-            'capital_social' => '10000.00',
-            'immatriculation' => 'RCS Lyon',
-            'numero_tva' => 'FR32'.$societe->siren,
-            'siege_adresse' => '1 place Bellecour',
-            'siege_code_postal' => '69002',
-            'siege_ville' => 'Lyon',
-        ])->save());
-        $demonstration = app(OuvrirLaDemonstrationAction::class)->handle($societe->proprietaire, $societe);
-
-        $emetteur = Emetteur::duMagasin($demonstration->fresh());
-
-        $this->assertSame([[], [Emetteur::DENOMINATION_DE_DEMONSTRATION]], [$emetteur->lignesDeLEtablissement(), $emetteur->lignesDeLaSociete()]);
+        $emetteur = Emetteur::duMagasin($this->magasinDuPort());
         $signe = $emetteur->enTableau();
-        $this->assertSame([null, null, null, null, null, true], [$signe['siren'], $signe['siret'], $signe['immatriculation'], $signe['numero_tva'], $signe['siege']['adresse'], $signe['demonstration']]);
-        foreach (['Martin et Fils', (string) $societe->siren, 'RCS Lyon', 'Bellecour'] as $identiteReelle) {
-            $this->assertStringNotContainsString($identiteReelle, json_encode($signe, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE));
-        }
-        $this->assertSame('DÉMONSTRATION — SANS VALEUR', $emetteur->filigrane());
+
+        $this->assertArrayNotHasKey('demonstration', $signe);
+        $this->assertSame([false, null, null], [$emetteur->estDemonstration, $emetteur->filigrane(), $emetteur->bandeau(true)]);
         $this->assertEquals($emetteur, Emetteur::duContenuSigne($signe));
-        $this->assertNull(Emetteur::duMagasin($reel->fresh())->filigrane());
+
+        $marque = Emetteur::duContenuSigne([...$signe, 'demonstration' => true]);
+
+        $this->assertSame(
+            [true, 'DÉMONSTRATION — SANS VALEUR', 'TICKET DE DÉMONSTRATION — NE PAS REMETTRE À UN CLIENT', 'DÉMONSTRATION — SANS VALEUR'],
+            [$marque->estDemonstration, $marque->filigrane(), $marque->bandeau(true), $marque->bandeau(false)],
+        );
+        $this->assertTrue($marque->enTableau()['demonstration']);
     }
 
     /**

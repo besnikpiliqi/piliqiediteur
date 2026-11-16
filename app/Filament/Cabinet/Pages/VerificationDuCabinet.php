@@ -27,8 +27,7 @@ use Illuminate\Contracts\Support\Htmlable;
  * avec son motif ou retirée, et, pour son propriétaire seul, le formulaire
  * qui la fait vérifier (voir VerifierLOrdreAction) : « Vérifier » avec un
  * annuaire automatique, « Demander la vérification » sinon. Ses
- * collaborateurs la consultent. Ni magasin ni démonstration : un cabinet
- * n'en a aucun.
+ * collaborateurs la consultent. Aucun magasin : un cabinet n'en a pas.
  */
 class VerificationDuCabinet extends VerificationSociete
 {

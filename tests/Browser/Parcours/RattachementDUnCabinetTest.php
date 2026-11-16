@@ -92,7 +92,7 @@ test('le propriétaire accepte la demande d’un autre cabinet avec les autorisa
     $this->seConnecter($this->proprietaireDe($magasin), 'password', panneau: 'societe')
         ->aller('/societe/'.$magasin->societe->uuid.'/rattachement-cabinet/'.$demande->uuid)
         ->cliquerSur('Accepter avec les autorisations par défaut')
-        ->voir('Ce cabinet consultera tous vos magasins réels, présents et futurs : '.implode(', ', PermissionRegistry::libellesDe($parDefaut)).'.')
+        ->voir('Ce cabinet consultera tous vos magasins, présents et futurs : '.implode(', ', PermissionRegistry::libellesDe($parDefaut)).'.')
         ->soumettre('Confirmer')
         ->voir('Ce cabinet est désormais votre cabinet.');
 

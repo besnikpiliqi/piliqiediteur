@@ -685,7 +685,7 @@ test('le propriétaire lit la TVA du mois sous le tableau, change de mois, puis 
 
 test('chaque rôle qui voit une page des charges télécharge l’état des charges en PDF et en Excel par le menu « Télécharger »', function (string $role) {
     [$compte, $panneau, $page, , , $societeDuCompte] = pageDesChargesDe($this, $role);
-    chargeDeposee($societeDuCompte->proprietaire()->firstOrFail(), $societeDuCompte, ['numero_piece' => 'Q-ETAT', 'magasin' => $role === 'responsable' ? (string) $societeDuCompte->magasinsReels()->orderBy('id')->firstOrFail()->uuid : '']);
+    chargeDeposee($societeDuCompte->proprietaire()->firstOrFail(), $societeDuCompte, ['numero_piece' => 'Q-ETAT', 'magasin' => $role === 'responsable' ? (string) $societeDuCompte->magasins()->orderBy('id')->firstOrFail()->uuid : '']);
     $nom = 'Charges 2026 — '.$societeDuCompte->raison_sociale;
 
     $onglet = $this->seConnecter($compte, panneau: $panneau)->aller($page)->attendre()->verifier()

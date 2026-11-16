@@ -15,7 +15,7 @@ use Illuminate\Support\Facades\DB;
 use LogicException;
 
 /**
- * La société indique l'un de ses magasins réels comme son établissement
+ * La société indique l'un de ses magasins comme son établissement
  * principal, ou retire cette indication : une simple information, au plus
  * un par société (index unique partiel magasins_un_principal_par_societe),
  * sans aucun effet sur ses réglages, ses documents ni ses autres magasins,

@@ -15,7 +15,6 @@ use App\Domain\Cabinets\Services\AccesDesCabinets;
 use App\Domain\Cabinets\Services\TableauDeBordDesClients;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
-use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
 use App\Domain\Tenancy\Enums\StatutCompte;
 use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Magasin;
@@ -80,7 +79,6 @@ class IsolationDesCabinetsTest extends TestCase
         $this->c1 = $this->ouvrirUnCabinet();
         $this->c2 = $this->ouvrirUnCabinet(SocieteFactory::sirenFictif(), 'Hélène Roux');
         $this->x = $this->ouvrirUneSociete(['nom' => 'X centre', 'raison_sociale' => 'CLIENTE X', 'a_verifier' => true]);
-        app(OuvrirLaDemonstrationAction::class)->handle($this->proprietaireDe($this->x), $this->x->societe);
         $this->xBis = $this->ouvrirUnAutreMagasin($this->x, ['nom' => 'X gare']);
         $this->y = $this->ouvrirUneSociete(['nom' => 'Y', 'raison_sociale' => 'CLIENTE Y']);
         $this->z = $this->ouvrirUneSociete(['nom' => 'Z', 'raison_sociale' => 'CLIENTE Z']);
@@ -397,18 +395,16 @@ class IsolationDesCabinetsTest extends TestCase
     }
 
     /**
-     * La fiche d'un client ne donne que l'adresse de ses magasins réels :
-     * une requête Livewire forgée qui lui passe l'identifiant d'un magasin
-     * d'une autre société, d'un autre client ou de la démonstration ne rend
-     * l'adresse d'aucun magasin.
+     * La fiche d'un client ne donne que l'adresse de ses magasins : une
+     * requête Livewire forgée qui lui passe l'identifiant d'un magasin d'une
+     * autre société ou d'un autre client ne rend l'adresse d'aucun magasin.
      */
     public function test_une_requete_livewire_forgee_de_la_fiche_d_un_client_ne_rend_l_adresse_d_aucun_autre_magasin(): void
     {
-        $demonstration = Magasin::query()->where('societe_id', $this->x->societe_id)->where('est_demonstration', true)->sole();
         $this->dansLEspaceDuCabinet($this->c1, $this->a);
         $fiche = Livewire::test(FicheDuClient::class, ['record' => $this->lienX->uuid]);
 
-        foreach ([$this->z, $this->y, $demonstration] as $magasin) {
+        foreach ([$this->z, $this->y] as $magasin) {
             $this->assertThrows(fn () => $fiche->call('urlDuMagasin', $magasin->id), MethodNotFoundException::class);
             $fiche->assertDontSee($magasin->uuid);
         }

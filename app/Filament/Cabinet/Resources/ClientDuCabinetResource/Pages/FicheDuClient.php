@@ -20,7 +20,7 @@ use Illuminate\Contracts\Support\Htmlable;
  * La fiche d'un client lié que le cabinet ouvre au compte connecté (voir
  * ClientDuCabinetResource) : son identité légale, son type d'activité et
  * ses réglages fiscaux communs, en lecture ; les autorisations qu'il
- * accorde au cabinet ; ses magasins réels (nom, code, ville, statut),
+ * accorde au cabinet ; ses magasins (nom, code, ville, statut),
  * chacun avec le bouton qui l'ouvre dans le panneau des magasins ; pour le
  * propriétaire du cabinet, les collaborateurs à qui il est confié ; et
  * l'origine du lien. Rien d'autre du client, ni d'un autre client.
@@ -76,7 +76,7 @@ class FicheDuClient extends ViewRecord
     }
 
     /**
-     * Ses magasins réels que le client ouvre au cabinet (tous, ou sa
+     * Ses magasins que le client ouvre au cabinet (tous, ou sa
      * sélection), par nom, chacun avec l'adresse qui l'ouvre dans le
      * panneau des magasins : lus par le seul client du lien ouvert, aucun
      * identifiant de magasin n'entre ici par une requête.

@@ -17,8 +17,7 @@ use LogicException;
  * un type d'activité choisi par erreur, à la demande du propriétaire
  * (type_errone), qui inscrit alors de nouveau son entreprise avec le bon
  * type. L'inscription est close pour toujours, en lecture seule, ses
- * pièces s'effacent, ses codes s'annulent, sa démonstration se ferme, son
- * propriétaire est prévenu et perd son adresse de connexion, et son SIREN
+ * pièces s'effacent, ses codes s'annulent, son propriétaire est prévenu et perd son adresse de connexion, et son SIREN
  * est libéré. Un autre motif est refusé, sans rien écrire.
  */
 #[Signature('editeur:societe:clore {societe : Identifiant ou uuid de la société} {--motif= : refus ou type_errone} '.ProcedureDeLEditeur::OPTIONS_COMMUNES)]

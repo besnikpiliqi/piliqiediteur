@@ -36,10 +36,10 @@ test('l’administrateur sans autorisation de société ouvre chaque page et cha
 });
 
 test('le propriétaire d’une société qui attend son code ouvre chaque page et chaque action de l’espace de sa société sans erreur', function () {
-    $demonstration = $this->demonstration();
-    $espace = '/societe/'.$demonstration->societe->uuid;
+    $societe = $this->inscrireUneSociete();
+    $espace = '/societe/'.$societe->uuid;
 
-    $pages = $this->balayer($this->seConnecter($demonstration->proprietaire, panneau: 'societe'), $espace, [$espace], __FILE__);
+    $pages = $this->balayer($this->seConnecter($societe->proprietaire, panneau: 'societe'), $espace, [$espace], __FILE__);
 
     expect($pages)->toContain($espace.'/verification-societe', '/societe/profile');
 });

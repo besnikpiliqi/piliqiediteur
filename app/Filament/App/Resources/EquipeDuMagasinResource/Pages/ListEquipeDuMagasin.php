@@ -16,8 +16,8 @@ use Illuminate\Support\Str;
 /**
  * L'équipe du magasin, avec la création d'un compte de ce magasin, le seul
  * qu'il ouvrira : un vendeur ou un observateur, par le propriétaire ou un
- * responsable du magasin, ou un responsable, par le propriétaire ; dans le
- * magasin de démonstration, des comptes d'entraînement. La fenêtre tire son
+ * responsable du magasin, ou un responsable, par le propriétaire. La
+ * fenêtre tire son
  * jeton à son ouverture (une demande répétée après une réponse perdue ne
  * crée jamais un second compte), ne demande aucune adresse e-mail, propose
  * de réintégrer l'ancien compte retiré du même nom, et elle est suivie de

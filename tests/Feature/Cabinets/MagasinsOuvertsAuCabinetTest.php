@@ -22,7 +22,6 @@ use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Models\Facture;
-use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Magasin;
@@ -42,14 +41,14 @@ use Tests\TestCase;
 
 /**
  * Les magasins qu'un client ouvre à son cabinet lié (décision de l'éditeur
- * du 11/11/2026, § 5 ter) : tous ses magasins réels, présents et futurs, par
+ * du 11/11/2026, § 5 ter) : tous ses magasins, présents et futurs, par
  * défaut, ou une sélection d'au moins un magasin, réglée avec les
  * autorisations, les mêmes dans chaque magasin choisi. Un magasin non
  * choisi n'est ni listé ni ouvert, et un compte du cabinet le perd dès sa
  * requête suivante ; chaque changement s'inscrit au JET 130 de chaque
  * magasin ajouté ou retiré et aux deux journaux d'audit ; la base refuse
- * une sélection vide, la démonstration et une sélection sur un lien qui
- * ouvre tous les magasins.
+ * une sélection vide, un magasin inconnu ou d'une autre société et une
+ * sélection sur un lien qui ouvre tous les magasins.
  */
 class MagasinsOuvertsAuCabinetTest extends TestCase
 {
@@ -150,19 +149,19 @@ class MagasinsOuvertsAuCabinetTest extends TestCase
     }
 
     /**
-     * Une sélection vide, un magasin d'une autre société ou le magasin de
-     * démonstration sont refusés, sans rien changer ; le propriétaire du
+     * Une sélection vide ou un magasin d'une autre société sont refusés,
+     * sans rien changer ; le propriétaire du
      * client qui accepte une demande de rattachement en ajustant choisit
      * aussi ses magasins.
      */
-    public function test_une_selection_vide_un_magasin_d_une_autre_societe_ou_la_demonstration_sont_refuses(): void
+    public function test_une_selection_vide_ou_un_magasin_d_une_autre_societe_sont_refuses(): void
     {
         $cabinet = $this->ouvrirUnCabinet();
-        [$lyon1, $demonstration] = $this->societeAvecSaDemonstration();
+        $lyon1 = $this->societeADeuxMagasins();
         $lien = $this->lierLeCabinet($cabinet, $lyon1);
         $autre = $this->ouvrirUneSociete(['nom' => 'Autre']);
 
-        foreach ([[[], LienCabinet::MESSAGE_SELECTION_VIDE], [[$autre->id], 'Seuls les magasins réels de votre société s\'ouvrent à votre cabinet.'], [[$demonstration->id], 'Seuls les magasins réels de votre société s\'ouvrent à votre cabinet.']] as [$magasins, $message]) {
+        foreach ([[[], LienCabinet::MESSAGE_SELECTION_VIDE], [[$autre->id], 'Seuls les magasins de votre société s\'ouvrent à votre cabinet.']] as [$magasins, $message]) {
             app(TenantContext::class)->clear();
             $this->assertThrows(fn () => $this->regler($lien, $magasins), InvalidArgumentException::class, $message);
         }
@@ -178,14 +177,16 @@ class MagasinsOuvertsAuCabinetTest extends TestCase
     }
 
     /**
-     * La base refuse une ligne de sélection du magasin de démonstration, ou
-     * sur un lien qui ouvre tous les magasins, et, à la validation de la
+     * La base refuse une ligne de sélection d'un magasin inconnu ou d'une
+     * autre société (la clé étrangère composite), ou sur un lien qui ouvre
+     * tous les magasins, et, à la validation de la
      * transaction, un lien actif qui n'ouvre ni tous les magasins ni aucun.
      */
     public function test_la_base_refuse_une_selection_incoherente(): void
     {
         $cabinet = $this->ouvrirUnCabinet();
-        [$lyon1, $demonstration] = $this->societeAvecSaDemonstration();
+        $lyon1 = $this->societeADeuxMagasins();
+        $autre = $this->ouvrirUneSociete(['nom' => 'Autre']);
         $lien = $this->lierLeCabinet($cabinet, $lyon1);
         $ligne = fn (int $magasin): array => ['societe_id' => $lyon1->societe_id, 'lien_id' => $lien->id, 'magasin_id' => $magasin];
         $aLaValidation = fn (Closure $ecriture): Closure => $this->dansUnPointDeSauvegarde(function () use ($ecriture): void {
@@ -197,7 +198,8 @@ class MagasinsOuvertsAuCabinetTest extends TestCase
         $this->assertThrows($aLaValidation(fn () => DB::table('liens_cabinet')->where('id', $lien->id)->update(['tous_les_magasins' => false])), QueryException::class, GardesDesCabinets::SELECTION.' : un lien actif ou une déclaration ouvre tous les magasins du client, ou une sélection d\'au moins un magasin');
         DB::statement('SET CONSTRAINTS ALL DEFERRED');
         DB::table('liens_cabinet')->where('id', $lien->id)->update(['tous_les_magasins' => false]);
-        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('magasins_cabinet')->insert($ligne($demonstration->id))), QueryException::class, GardesDesCabinets::MAGASINS.' : le magasin de démonstration ne s\'ouvre jamais à un cabinet');
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('magasins_cabinet')->insert($ligne((int) DB::table('magasins')->max('id') + 1000))), QueryException::class, 'magasins_cabinet_societe_id_magasin_id_foreign');
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('magasins_cabinet')->insert($ligne($autre->id))), QueryException::class, 'magasins_cabinet_societe_id_magasin_id_foreign');
         DB::table('magasins_cabinet')->insert($ligne($lyon1->id));
         $this->assertThrows($aLaValidation(fn () => DB::table('magasins_cabinet')->where('lien_id', $lien->id)->delete()), QueryException::class, GardesDesCabinets::SELECTION);
         DB::statement('SET CONSTRAINTS ALL DEFERRED');
@@ -398,20 +400,15 @@ class MagasinsOuvertsAuCabinetTest extends TestCase
     }
 
     /**
-     * Une société validée, son magasin du siège et son magasin de
-     * démonstration, essayé avant la validation, puis fermé par elle.
-     *
-     * @return array{0: Magasin, 1: Magasin}
+     * Une société validée à deux magasins, Lyon 1 et Lyon 2 ; rend Lyon 1.
      */
-    private function societeAvecSaDemonstration(): array
+    private function societeADeuxMagasins(): Magasin
     {
-        $societe = $this->inscrireUneSociete();
-        $magasin = $this->creerLeMagasinDuSiege($societe, 'Lyon 1');
-        $demonstration = app(OuvrirLaDemonstrationAction::class)->handle($societe->proprietaire()->firstOrFail(), $societe->fresh());
-        $this->saisirLeCodeDuCourrier($societe->fresh());
+        $lyon1 = $this->ouvrirUneSociete(['nom' => 'Lyon 1']);
+        $this->ouvrirUnAutreMagasin($lyon1, ['nom' => 'Lyon 2']);
         app(TenantContext::class)->clear();
 
-        return [$magasin->fresh(), $demonstration];
+        return $lyon1->fresh();
     }
 
     /**
@@ -420,7 +417,7 @@ class MagasinsOuvertsAuCabinetTest extends TestCase
     private function regler(LienCabinet $lien, ?array $magasins): void
     {
         app(TenantContext::class)->clear();
-        app(ReglerLesAutorisationsDuCabinetAction::class)->handle($this->proprietaireDe($lien->client()->firstOrFail()->magasinsReels()->orderBy('id')->firstOrFail()), $lien, $lien->autorisations(), $magasins);
+        app(ReglerLesAutorisationsDuCabinetAction::class)->handle($this->proprietaireDe($lien->client()->firstOrFail()->magasins()->orderBy('id')->firstOrFail()), $lien, $lien->autorisations(), $magasins);
         app(TenantContext::class)->clear();
     }
 }

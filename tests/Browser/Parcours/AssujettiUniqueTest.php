@@ -15,7 +15,7 @@ use Tests\Browser\Support\SocieteDeTest;
  * La société membre d'un assujetti unique dans le navigateur (P3.1, voir
  * Magasin::REFUS_ASSUJETTI_UNIQUE) : le propriétaire, ou un administrateur
  * autorisé à gérer les paramètres de la société, coche la case de «
- * Paramètres fiscaux » ; ses magasins réels ne vendent plus : l'« À
+ * Paramètres fiscaux » ; ses magasins ne vendent plus : l'« À
  * faire » de chaque compte le dit, et « Émettre » ne se montre plus ;
  * décochée, la vente reprend.
  */

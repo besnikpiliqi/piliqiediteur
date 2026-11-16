@@ -130,14 +130,14 @@ class VerificationSociete extends Page
     }
 
     /**
-     * Les magasins réels actifs dont l'établissement attend la
+     * Les magasins actifs dont l'établissement attend la
      * confirmation du répertoire Sirene.
      *
      * @return Collection<int, Magasin>
      */
     public function etablissementsAVerifier(): Collection
     {
-        return $this->societe()->magasinsReels()->where('statut', 'actif')->whereNull('etablissement_verifie_le')->orderBy('nom')->get();
+        return $this->societe()->magasins()->where('statut', 'actif')->whereNull('etablissement_verifie_le')->orderBy('nom')->get();
     }
 
     /**

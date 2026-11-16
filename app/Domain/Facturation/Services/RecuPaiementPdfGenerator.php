@@ -26,9 +26,9 @@ use Barryvdh\DomPDF\PDF as PdfDocument;
  * Tout se lit dans ce que le reçu, ses paiements et leurs imputations de
  * crédit ont enregistré à sa naissance, jamais recalculé ni relu sur le
  * magasin, la société ou le client d'aujourd'hui : deux téléchargements
- * donnent le même contenu, et le document réglé n'en change jamais. Le
- * magasin de démonstration marque les siens « Démonstration — sans
- * valeur » (voir Emetteur::filigrane()). Rien ne s'imprime avant la
+ * donnent le même contenu, et le document réglé n'en change jamais. Un
+ * reçu du site de démonstration porte « Démonstration — sans valeur »
+ * (voir Emetteur::filigrane()). Rien ne s'imprime avant la
  * validation de la société (voir Magasin::verifierQuIlPeutImprimer()).
  */
 class RecuPaiementPdfGenerator

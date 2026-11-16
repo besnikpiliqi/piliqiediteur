@@ -39,8 +39,8 @@ use LogicException;
  *   un collaborateur n'est pas un membre), et aucun rôle ne change ;
  * - responsable d'un magasin : nommé ou retiré par le propriétaire, ou par
  *   un administrateur autorisé à nommer les responsables, dans les
- *   magasins réels de sa portée (voir peutNommerUnResponsable()), jamais
- *   dans le magasin de démonstration ; rétrogradé, suspendu ou réactivé par
+ *   magasins de sa portée (voir peutNommerUnResponsable()) ; rétrogradé,
+ *   suspendu ou réactivé par
  *   le propriétaire seul ; jamais touché par un autre responsable ;
  * - vendeur ou observateur : créé, coché, modifié, suspendu, réactivé et
  *   retiré par le propriétaire ou un responsable de son magasin (voir
@@ -48,9 +48,9 @@ use LogicException;
  * - accès redonné (voir peutRedonnerLAcces()) : par le propriétaire pour
  *   tout compte ; par un responsable de son magasin pour un vendeur ou un
  *   observateur ; par un administrateur autorisé à nommer les responsables
- *   pour un responsable d'un magasin réel de sa portée, et par un
+ *   pour un responsable d'un magasin de sa portée, et par un
  *   administrateur autorisé à redonner l'accès pour un vendeur ou un
- *   observateur d'un magasin réel de sa portée ; jamais pour le
+ *   observateur d'un magasin de sa portée ; jamais pour le
  *   propriétaire ou un administrateur par un autre que le propriétaire ;
  * - un compte suspendu par le propriétaire ne se réactive, ni ne se retire
  *   de la société, que par le propriétaire ; retiré par lui, il ne se
@@ -107,9 +107,7 @@ final class PorteeDesDroits
     /**
      * Peut-il nommer ou retirer un responsable dans ce magasin, en créer le
      * compte et lui redonner l'accès ? Le propriétaire ; un administrateur
-     * autorisé à nommer les responsables, pour un magasin réel de sa
-     * portée, jamais le magasin de démonstration, dont seuls le
-     * propriétaire et ses responsables créent les comptes d'entraînement.
+     * autorisé à nommer les responsables, pour un magasin de sa portée.
      */
     public function peutNommerUnResponsable(User $auteur, Magasin $magasin): bool
     {
@@ -118,7 +116,7 @@ final class PorteeDesDroits
         }
 
         return $auteur->estProprietaire()
-            || (! $magasin->est_demonstration && $auteur->aLAutorisationDeSociete(AutorisationsSociete::RESPONSABLES_NOMMER) && $auteur->administreLeMagasin($magasin));
+            || ($auteur->aLAutorisationDeSociete(AutorisationsSociete::RESPONSABLES_NOMMER) && $auteur->administreLeMagasin($magasin));
     }
 
     /**
@@ -149,13 +147,11 @@ final class PorteeDesDroits
      * affectation, ou changer celle qu'il y a (son rôle, ses cases) ? Avec
      * un compte nul, pour un compte qu'il crée ou qu'il réintègre. Un
      * compte existant ne reçoit de rôle que dans le magasin de son
-     * identifiant. Jamais dans le magasin de démonstration d'une société
-     * validée ou close, dont les comptes d'entraînement sont retirés pour
-     * de bon (voir Magasin::estUneDemonstrationTerminee()).
+     * identifiant.
      */
     public function peutDonnerLeRole(User $auteur, ?User $compte, Magasin $magasin, RoleMagasin $role): bool
     {
-        if (! $this->gereSonEquipe($auteur) || $magasin->societe_id !== $auteur->societe_id || $magasin->estUneDemonstrationTerminee()) {
+        if (! $this->gereSonEquipe($auteur) || $magasin->societe_id !== $auteur->societe_id) {
             return false;
         }
 
@@ -212,7 +208,7 @@ final class PorteeDesDroits
      * Peut-il retirer ce compte de la société ? Le propriétaire ; un
      * responsable du magasin d'un vendeur ou d'un observateur ; un
      * administrateur autorisé à nommer les responsables, pour un
-     * responsable d'un magasin réel de sa portée. Un compte suspendu par le
+     * responsable d'un magasin de sa portée. Un compte suspendu par le
      * propriétaire, le propriétaire seul : retiré par un autre, puis
      * réintégré par lui, il verrait sa suspension levée sans le
      * propriétaire.
@@ -236,9 +232,9 @@ final class PorteeDesDroits
      * RedonnerLAccesAction) ? Le propriétaire, pour tout compte ; un
      * responsable du magasin d'un vendeur ou d'un observateur ; un
      * administrateur autorisé à nommer les responsables, pour un
-     * responsable d'un magasin réel de sa portée ; un administrateur que le
+     * responsable d'un magasin de sa portée ; un administrateur que le
      * propriétaire autorise à redonner l'accès, pour un vendeur ou un
-     * observateur d'un magasin réel de sa portée. Personne d'autre que le
+     * observateur d'un magasin de sa portée. Personne d'autre que le
      * propriétaire ne redonne l'accès d'un administrateur, et personne
      * celui du propriétaire. Un compte
      * suspendu se réactive d'abord, par qui le peut.
@@ -318,7 +314,7 @@ final class PorteeDesDroits
      * magasin de son identifiant ? Comme une création : le propriétaire
      * pour tout rôle ; un responsable de ce magasin, comme vendeur ou
      * observateur ; un administrateur autorisé, comme responsable d'un
-     * magasin réel de sa portée. Un compte retiré par le propriétaire ne se
+     * magasin de sa portée. Un compte retiré par le propriétaire ne se
      * réintègre que par lui.
      */
     public function peutReintegrer(User $auteur, User $compte, RoleMagasin $role): bool
@@ -379,7 +375,7 @@ final class PorteeDesDroits
      * Peut-il changer le rôle de société de ce compte (membre ou
      * administrateur ; voir
      * ChangerLeRoleDeSocieteAction) ? Le propriétaire seul, pour un compte
-     * actif de sa société qui n'est pas un compte d'entraînement ; jamais
+     * actif de sa société ; jamais
      * dans un cabinet d'expertise comptable, dont les collaborateurs ne
      * changent jamais de rôle, ni pour un expert-comptable de la société,
      * qui n'en change jamais non plus.
@@ -390,7 +386,6 @@ final class PorteeDesDroits
             && $auteur->estProprietaire()
             && ! $auteur->estDUnCabinet()
             && $compte->estActif()
-            && ! $compte->estUnCompteDEntrainement()
             && ! $compte->estExpertComptable();
     }
 
@@ -506,7 +501,7 @@ final class PorteeDesDroits
     /**
      * Les comptes de sa société qu'il voit dans l'espace d'administration :
      * tous pour le propriétaire ; pour un
-     * administrateur, les responsables des magasins réels de sa portée s'il
+     * administrateur, les responsables des magasins de sa portée s'il
      * est autorisé à nommer les responsables, et leurs vendeurs et leurs
      * observateurs s'il est autorisé à leur redonner l'accès ; aucun pour
      * tout autre compte.
@@ -535,7 +530,7 @@ final class PorteeDesDroits
             ->whereIn('users.id', Affectation::query()
                 ->where('societe_id', $auteur->societe_id)
                 ->whereIn('role', $roles)
-                ->whereIn('magasin_id', $auteur->magasinsDeSaPortee()->where('magasins.est_demonstration', false)->select('magasins.id'))
+                ->whereIn('magasin_id', $auteur->magasinsDeSaPortee()->select('magasins.id'))
                 ->select('user_id'));
     }
 
@@ -549,8 +544,7 @@ final class PorteeDesDroits
      * Les comptes qu'il peut nommer responsables de ce magasin : les
      * vendeurs et les observateurs actifs de ce magasin, jamais un autre
      * compte que le sien, ni rien quand il ne peut pas y nommer un
-     * responsable (un administrateur dans le magasin de démonstration, par
-     * exemple). Un compte dont le mot de passe est encore son identifiant
+     * responsable. Un compte dont le mot de passe est encore son identifiant
      * se propose, la fenêtre l'avertissant.
      *
      * @return Builder<User>
@@ -591,7 +585,7 @@ final class PorteeDesDroits
     }
 
     /**
-     * Le compte est-il celui d'un responsable d'un magasin réel de la
+     * Le compte est-il celui d'un responsable d'un magasin de la
      * portée d'un administrateur autorisé à nommer les responsables ?
      */
     private function estResponsableDeSaPortee(User $auteur, User $compte): bool
@@ -609,13 +603,12 @@ final class PorteeDesDroits
 
     /**
      * Est-il un administrateur que le propriétaire autorise à redonner
-     * l'accès aux vendeurs et aux observateurs, pour ce magasin réel de sa
+     * l'accès aux vendeurs et aux observateurs, pour ce magasin de sa
      * portée ?
      */
     private function redonneLAccesDesVendeursDe(User $auteur, Magasin $magasin): bool
     {
         return $auteur->estAdministrateur()
-            && ! $magasin->est_demonstration
             && $auteur->aLAutorisationDeSociete(AutorisationsSociete::ACCES_REDONNER)
             && $auteur->administreLeMagasin($magasin);
     }

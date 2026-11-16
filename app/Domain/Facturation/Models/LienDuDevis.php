@@ -147,7 +147,7 @@ class LienDuDevis extends Model
             && $devis->statut === StatutDevis::Envoye
             && ! $devis->validiteDepassee()
             && ValeurRequise::de($devis->date_emission, 'la date d\'envoi du devis')->lte($this->created_at)
-            && $devis->magasin->peutEcrireAuxClients()
+            && $devis->magasin->peutVendre()
             && $this->reponse()->doesntExist()
             && self::query()->where('devis_id', $this->devis_id)->where('id', '>', $this->getKey())->doesntExist();
     }

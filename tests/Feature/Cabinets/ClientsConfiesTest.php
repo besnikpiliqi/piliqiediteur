@@ -97,7 +97,7 @@ class ClientsConfiesTest extends TestCase
         $this->assertSame(0, DB::table('clients_confies')->count());
     }
 
-    public function test_confier_suspendre_reactiver_retirer_un_collaborateur_inscrit_le_jet_130_dans_chaque_magasin_reel_du_client(): void
+    public function test_confier_suspendre_reactiver_retirer_un_collaborateur_inscrit_le_jet_130_dans_chaque_magasin_du_client(): void
     {
         $cabinet = $this->ouvrirUnCabinet();
         $premier = $this->ouvrirUneSociete(['nom' => 'Première cliente']);

@@ -38,7 +38,7 @@ use Illuminate\Support\Facades\DB;
  *   d'un SIREN (cabinetVerifieDuSiren()) et les SIREN des déclarations en
  *   attente dont le cabinet est vérifié (sirensAvecUnCabinetVerifie()).
  * Aucune lecture ne mêle deux sociétés : un compte d'expert-comptable
- * n'ouvre que les magasins réels de sa société.
+ * n'ouvre que les magasins de sa société.
  */
 class ExpertsComptablesDeclares
 {
@@ -109,11 +109,10 @@ class ExpertsComptablesDeclares
     }
 
     /**
-     * Les magasins réels de sa société que la déclaration de ce compte lui
+     * Les magasins de sa société que la déclaration de ce compte lui
      * ouvre, par identifiant croissant : tous, présents et futurs, ou ceux
      * que le propriétaire a choisis, tant que la déclaration est en
-     * attente ; aucun sinon, ni pour un compte retiré. Jamais le magasin de
-     * démonstration.
+     * attente ; aucun sinon, ni pour un compte retiré.
      *
      * @return list<int>
      */
@@ -127,7 +126,6 @@ class ExpertsComptablesDeclares
 
         return ValeursLues::entiers(Magasin::query()
             ->where('societe_id', $compte->societe_id)
-            ->where('est_demonstration', false)
             ->when(! $declaration->tous_les_magasins, fn (Builder $magasins) => $magasins->whereIn('id', fn (RequeteSql $choisis) => $choisis
                 ->from('magasins_cabinet')
                 ->where('societe_id', $compte->societe_id)
@@ -139,8 +137,8 @@ class ExpertsComptablesDeclares
 
     /**
      * Les autorisations que la déclaration de ce compte porte dans ce
-     * magasin (voir LienCabinet::autorisationsRetenues()) ; null pour le
-     * magasin de démonstration, un magasin d'une autre société ou que la
+     * magasin (voir LienCabinet::autorisationsRetenues()) ; null pour un
+     * magasin d'une autre société ou que la
      * déclaration n'ouvre pas, un compte retiré ou une déclaration qui
      * n'est plus en attente.
      *

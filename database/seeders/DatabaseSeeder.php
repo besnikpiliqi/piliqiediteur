@@ -13,7 +13,7 @@ use Database\Seeders\Semis\ComptesSemes;
 use Database\Seeders\Semis\FileDAttenteDuSemis;
 use Database\Seeders\Semis\HorlogeDuSemis;
 use Database\Seeders\Semis\MotsDePasseDuSemis;
-use Database\Seeders\Semis\SemisDeDemonstration;
+use Database\Seeders\Semis\SemisComplet;
 use Illuminate\Console\Command;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Artisan;
@@ -24,10 +24,10 @@ use RuntimeException;
 use Throwable;
 
 /**
- * Les données de démonstration d'un poste de développement (lot SEED,
+ * Le semis d'un poste de développement (lot SEED,
  * demande de l'éditeur du 13/11/2026) : php artisan migrate:fresh --seed
  * remplit la base par les vraies actions et les fournisseurs factices
- * (voir SemisDeDemonstration), puis affiche la liste des comptes pour se
+ * (voir SemisComplet), puis affiche la liste des comptes pour se
  * connecter et l'écrit dans FICHIER_DES_COMPTES, sur le disque privé, que
  * git ne suit pas. Le semeur refuse de s'exécuter hors du développement
  * local et des tests, sans les fournisseurs factices (voir
@@ -45,21 +45,20 @@ use Throwable;
  * par la vérification de l'isolation de toute la base (voir
  * VerifierLIsolation), dont il affiche le tableau : au moindre problème, il
  * n'est pas accepté (code de sortie 1) et la liste des comptes ne s'affiche
- * pas.
- * Les données de démonstration de la production restent à l'étape 15 de
- * la feuille de route.
+ * pas. Le site de démonstration se met en ligne à l'étape 15 de la feuille
+ * de route.
  */
 class DatabaseSeeder extends Seeder
 {
-    public const FICHIER_DES_COMPTES = 'comptes-de-demonstration.txt';
+    public const FICHIER_DES_COMPTES = 'comptes-du-semis.txt';
 
-    public const MESSAGE_HORS_DU_DEVELOPPEMENT = 'Les données de démonstration ne se sèment qu\'en développement local ou dans les tests (APP_ENV=local ou testing), jamais en production : rien n\'a été écrit.';
+    public const MESSAGE_HORS_DU_DEVELOPPEMENT = 'Le semis ne se fait qu\'en développement local ou dans les tests (APP_ENV=local ou testing), jamais en production : rien n\'a été écrit.';
 
-    public const MESSAGE_FOURNISSEURS_REELS = 'Les données de démonstration exigent les fournisseurs factices, qui seuls connaissent les entreprises fictives semées et n\'envoient rien hors de PILIQI : réglez SIRENE_PILOTE=faux, RNE_PILOTE=faux, RECOMMANDE_PILOTE=faux, ORDRE_PILOTE=faux, PDP_PILOTE=faux et ANTIVIRUS_PILOTE=factice dans le .env, comme dans .env.example, puis php artisan optimize:clear. Rien n\'a été écrit.';
+    public const MESSAGE_FOURNISSEURS_REELS = 'Le semis exige les fournisseurs factices, qui seuls connaissent les entreprises fictives semées et n\'envoient rien hors de PILIQI : réglez SIRENE_PILOTE=faux, RNE_PILOTE=faux, RECOMMANDE_PILOTE=faux, ORDRE_PILOTE=faux, PDP_PILOTE=faux et ANTIVIRUS_PILOTE=factice dans le .env, comme dans .env.example, puis php artisan optimize:clear. Rien n\'a été écrit.';
 
     public const MESSAGE_ISOLATION_EN_DEFAUT = 'Le semis n\'est pas accepté : la vérification de l\'isolation a trouvé des problèmes (tableau ci-dessus). Corrigez le semis ou le code qui a écrit ces lignes, puis relancez php artisan migrate:fresh --seed.';
 
-    public const MESSAGE_BASE_DEJA_REMPLIE = 'La base contient déjà des sociétés : les données de démonstration se sèment dans une base vide, par php artisan migrate:fresh --seed, qui efface toute la base. Rien n\'a été écrit.';
+    public const MESSAGE_BASE_DEJA_REMPLIE = 'La base contient déjà des sociétés : le semis se fait dans une base vide, par php artisan migrate:fresh --seed, qui efface toute la base. Rien n\'a été écrit.';
 
     /**
      * Le pilote factice de chaque fournisseur externe, que le semis exige
@@ -137,10 +136,10 @@ class DatabaseSeeder extends Seeder
         Http::fake([rtrim(Reglage::texte('services.vies.url'), '/').'/*' => Http::response(self::REPONSE_DE_VIES)]);
 
         SemisEnCours::pendant(fn () => FileDAttenteDuSemis::pendantLeSemis(function () use ($motsDePasse, $codes, $comptes): void {
-            $horloge = new HorlogeDuSemis(SemisDeDemonstration::JOURS);
+            $horloge = new HorlogeDuSemis(SemisComplet::JOURS);
 
             try {
-                $semis = new SemisDeDemonstration($horloge, $motsDePasse, $codes, $comptes);
+                $semis = new SemisComplet($horloge, $motsDePasse, $codes, $comptes);
                 $semis->semer();
                 $horloge->terminer();
                 $semis->laisserUneVenteEnCours();
@@ -161,7 +160,7 @@ class DatabaseSeeder extends Seeder
         }
 
         Storage::disk('local')->put(self::FICHIER_DES_COMPTES, $this->texteDuFichier($comptes, $motsDePasse));
-        $this->commande?->info('Données de démonstration semées. Connexion : '.url('/app/login'));
+        $this->commande?->info('Semis terminé. Connexion : '.url('/app/login'));
         $this->commande?->table(ComptesSemes::ENTETES, $comptes->lignes());
         $this->commande?->info('Cette liste est aussi dans '.Storage::disk('local')->path(self::FICHIER_DES_COMPTES).' (fichier local, que git ne suit pas, réécrit à chaque semis).');
     }
@@ -169,12 +168,12 @@ class DatabaseSeeder extends Seeder
     private function texteDuFichier(ComptesSemes $comptes, MotsDePasseDuSemis $motsDePasse): string
     {
         return implode(PHP_EOL, [
-            'Comptes de démonstration de PILIQI (php artisan migrate:fresh --seed)',
+            'Comptes du semis de PILIQI (php artisan migrate:fresh --seed)',
             'Fichier local, que git ne suit pas, réécrit à chaque semis.',
             'Connexion : '.url('/app/login').' ; un propriétaire se connecte avec son adresse ou son identifiant, tout autre compte avec son identifiant.',
             $motsDePasse->sontCommuns()
-                ? 'Mots de passe : celui de PILIQI_DEMO_MOT_DE_PASSE, pour tous les comptes qui ont choisi le leur.'
-                : 'Mots de passe : tirés au hasard à ce semis (PILIQI_DEMO_MOT_DE_PASSE, dans le .env, en donne un seul, stable).',
+                ? 'Mots de passe : celui de PILIQI_SEMIS_MOT_DE_PASSE, pour tous les comptes qui ont choisi le leur.'
+                : 'Mots de passe : tirés au hasard à ce semis (PILIQI_SEMIS_MOT_DE_PASSE, dans le .env, en donne un seul, stable).',
             'Un compte dont le mot de passe est encore son identifiant ne s\'ouvre que depuis un poste reconnu du magasin (reconnu par le propriétaire ou un responsable).',
             '',
             $comptes->enTexte(),

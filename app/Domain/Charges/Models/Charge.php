@@ -26,7 +26,7 @@ use Illuminate\Support\Str;
 /**
  * Une charge de la société (décision de l'éditeur du 14/11/2026, lot
  * CHARGES) : le loyer, l'électricité, les honoraires… d'un mois, de
- * « Toute la société » ou d'un de ses magasins réels, avec sa pièce (voir
+ * « Toute la société » ou d'un de ses magasins, avec sa pièce (voir
  * PieceDeCharge) et ses lignes par taux (voir LigneDeCharge), pour la TVA
  * réelle et estimée de la société (voir TvaDeLaPeriode). Elle ne devient
  * jamais un achat de marchandises, ne crée jamais de produit et ne touche

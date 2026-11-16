@@ -144,7 +144,7 @@ class LienDeLExpertComptableTest extends TestCase
         $this->get(route('experts-comptables.lien.afficher', ['jeton' => $jeton]))->assertStatus(410)->assertSee(LienDeLExpertComptableInvalideException::MESSAGE);
     }
 
-    public function test_sans_magasin_reel_le_mot_de_passe_choisi_mene_a_l_accueil_du_panneau_des_magasins(): void
+    public function test_sans_magasin_le_mot_de_passe_choisi_mene_a_l_accueil_du_panneau_des_magasins(): void
     {
         $societe = $this->inscrireUneSociete();
         $this->saisirLeCodeDuCourrier($societe)->forceFill(['password' => 'password'])->save();
@@ -518,7 +518,7 @@ class LienDeLExpertComptableTest extends TestCase
             ->assertSee('Expert-comptable déclaré · cabinet CABINET PETIT ET ASSOCIES')
             ->assertSee('Lien valable jusqu\'au 12/11/2026')
             ->assertSee('Mot de passe pas encore choisi')
-            ->assertSee('Tous les magasins réels (expert-comptable)');
+            ->assertSee('Tous les magasins (expert-comptable)');
         Livewire::test(FicheDuMembre::class, ['record' => $marc->getRouteKey()])
             ->assertSee('Adresse e-mail professionnelle (reçoit les liens de son mot de passe)')
             ->assertSee('Pas encore choisi')

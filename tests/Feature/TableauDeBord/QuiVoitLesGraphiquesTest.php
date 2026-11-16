@@ -50,10 +50,10 @@ class QuiVoitLesGraphiquesTest extends TestCase
 
     /**
      * Le propriétaire voit tous les graphiques du catalogue sur tous ses
-     * magasins réels, dans l'espace de la société et dans le panneau de
+     * magasins, dans l'espace de la société et dans le panneau de
      * chacun.
      */
-    public function test_le_proprietaire_voit_tout_sur_tous_ses_magasins_reels(): void
+    public function test_le_proprietaire_voit_tout_sur_tous_ses_magasins(): void
     {
         [$lyon, $villeurbanne] = $this->deuxMagasins();
         $proprietaire = $this->proprietaireDe($lyon);
@@ -130,7 +130,7 @@ class QuiVoitLesGraphiquesTest extends TestCase
 
     /**
      * Le collaborateur à qui le client est confié ouvre sa page dans
-     * l'espace du cabinet, sur ses magasins réels ; un autre collaborateur
+     * l'espace du cabinet, sur ses magasins ; un autre collaborateur
      * du même cabinet, à qui il ne l'est pas, est refusé.
      */
     public function test_seul_le_collaborateur_a_qui_le_client_est_confie_voit_ses_graphiques(): void
@@ -351,7 +351,7 @@ class QuiVoitLesGraphiquesTest extends TestCase
     }
 
     /**
-     * Lyon et Villeurbanne, deux magasins réels de la même société, le
+     * Lyon et Villeurbanne, deux magasins de la même société, le
      * 15 octobre 2026 ; aucun contexte n'est actif ensuite.
      *
      * @return array{0: Magasin, 1: Magasin}

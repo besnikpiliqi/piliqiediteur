@@ -18,7 +18,6 @@ use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\LigneFacture;
 use App\Domain\Facturation\Services\FacturePdfGenerator;
-use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
@@ -168,7 +167,7 @@ class TransformerUnDevisEnFactureTest extends TestCase
     public static function comptesSansLaVente(): array
     {
         return [
-            'le propriétaire dans un magasin réel' => ['proprietaire'],
+            'le propriétaire' => ['proprietaire'],
             'un vendeur sans la création de facture' => ['vendeur'],
         ];
     }
@@ -203,25 +202,6 @@ class TransformerUnDevisEnFactureTest extends TestCase
         $this->assertSame(0, Facture::query()->count());
         $this->assertSame(StatutDevis::Accepte, $devis->fresh()->statut);
         $this->assertThrows(fn () => app(CreerFactureDepuisDevisAction::class)->handle($connecte, $devis), AuthorizationException::class);
-    }
-
-    public function test_le_proprietaire_transforme_dans_le_magasin_de_demonstration(): void
-    {
-        $societe = $this->inscrireUneSociete();
-        $proprietaire = $societe->proprietaire()->firstOrFail();
-        $demonstration = app(OuvrirLaDemonstrationAction::class)->handle($proprietaire, $societe);
-        $this->dansLeMagasin($demonstration, $proprietaire);
-        $produit = Produit::factory()->create(['nom' => 'Câble tressé', 'prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => false]);
-        $devis = app(EmettreDevisAction::class)->handle($proprietaire, app(CreerDevisAction::class)->handle($proprietaire, Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]]));
-        $devis = app(AccepterDevisAction::class)->handle($proprietaire, $devis);
-
-        Livewire::test(ViewDevis::class, ['record' => $devis->getRouteKey()])
-            ->assertActionEnabled('convertir')
-            ->assertDontSee(CreerFactureDepuisDevisAction::EXPLICATION_SANS_DROIT)
-            ->callAction('convertir');
-
-        $this->assertSame([$devis->id, $proprietaire->id], [Facture::query()->sole()->devis_id, Facture::query()->sole()->cree_par]);
-        $this->assertSame(StatutDevis::Converti, $devis->fresh()->statut);
     }
 
     public function test_le_devis_montre_le_stock_de_chaque_produit_et_avertit_quand_il_ne_suffit_pas(): void

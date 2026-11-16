@@ -27,7 +27,7 @@ use Tests\TestCase;
  * La fin du lien entre un cabinet d'expertise comptable et un client, par
  * l'un ou l'autre propriétaire (voir MettreFinAuLienAction) : l'accès de
  * chaque compte du cabinet s'arrête dès sa requête suivante, sans fermer
- * ses sessions ; elle s'inscrit au JET 130 de chaque magasin réel du client
+ * ses sessions ; elle s'inscrit au JET 130 de chaque magasin du client
  * et aux journaux des deux sociétés, efface les clients confiés et prévient
  * l'autre propriétaire et les collaborateurs.
  */

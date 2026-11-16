@@ -11,14 +11,14 @@ use Illuminate\Support\Facades\Route;
 /**
  * La page du panneau des magasins pour un expert-comptable de la société
  * (voir DeclarerSonExpertComptableAction) dont la déclaration ne lui ouvre
- * encore aucun magasin réel (voir MenerUnCompteSansMagasin) : elle le lui
+ * encore aucun magasin (voir MenerUnCompteSansMagasin) : elle le lui
  * dit, sans erreur, et lui laisse se déconnecter. Un compte qui a un
  * magasin, ou qui administre sa société, n'y reste pas : il va à l'accueil
  * du panneau.
  */
 class AucunMagasin extends SimplePage
 {
-    public const MESSAGE_EXPERT_COMPTABLE = 'Votre société n\'a encore aucun magasin réel : vous consulterez chacun d\'eux dès que son propriétaire l\'aura créé.';
+    public const MESSAGE_EXPERT_COMPTABLE = 'Votre société n\'a encore aucun magasin : vous consulterez chacun d\'eux dès que son propriétaire l\'aura créé.';
 
     protected static string $view = 'filament.app.pages.aucun-magasin';
 

@@ -43,7 +43,7 @@ use Illuminate\Contracts\Support\Htmlable;
  * changer s'y enregistre, à qui est autorisé à noter les preuves
  * d'exonération et les bordereaux de détaxe (facture.justifier, voir
  * FacturePolicy::justifier()), le propriétaire compris, même dans un
- * magasin réel, où il ne vend pas : les preuves de son exonération (voir
+ * magasin, où il ne vend pas : les preuves de son exonération (voir
  * AjouterPreuveOperationAction), le bordereau de détaxe d'un ticket
  * (voir NoterBordereauDetaxeAction) et la date de son visa (voir
  * NoterLeVisaDuBordereauAction), même dans un magasin en lecture seule :
@@ -89,7 +89,7 @@ class ViewFacture extends ViewRecord
             // Un brouillon se modifie depuis sa fiche comme depuis la liste
             // (constat C9, réponse de l'éditeur à T42), pour qui peut le
             // modifier (voir FacturePolicy::update()) : jamais une facture
-            // émise, ni le propriétaire hors du magasin de démonstration.
+            // émise, ni le propriétaire.
             // Son droit se lit à l'ouverture de la page : l'état du
             // brouillon, relu après son émission (voir
             // FactureResource::emettre()), le cache dès qu'il est émis.
@@ -199,8 +199,7 @@ class ViewFacture extends ViewRecord
      * livraison vers un DOM dont la preuve de sortie manque 150 jours après
      * sa date (voir RegulariserUneExonerationNonProuveeAction), pour qui
      * crée et émet une facture et fait un avoir dans ce magasin, jamais le
-     * propriétaire hors du magasin de démonstration ni un compte d'un
-     * cabinet lié. La fenêtre de confirmation dit ce qui va s'émettre et
+     * propriétaire ni un compte d'un cabinet lié. La fenêtre de confirmation dit ce qui va s'émettre et
      * porte le jeton de la demande (R3) ; la facture rectificative s'ouvre
      * ensuite.
      */

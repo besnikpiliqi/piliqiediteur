@@ -428,7 +428,7 @@ class IdentiteSocieteTest extends TestCase
     {
         return [
             'validée' => [static function (Societe $societe): void {}, 'Vos tickets de caisse restent possibles, mais aucune facture à un professionnel ne peut être émise, dans aucun de vos magasins, tant que ces mentions manquent : capital social, immatriculation.'],
-            'en cours de vérification' => [static fn (Societe $societe) => $societe->validee_le = null, 'Votre société est en cours de vérification : aucune vente n\'est possible dans vos magasins réels avant sa validation, et le magasin de démonstration vous permet de vous essayer. Ces mentions seront nécessaires pour facturer un professionnel : capital social, immatriculation.'],
+            'en cours de vérification' => [static fn (Societe $societe) => $societe->validee_le = null, 'Votre société est en cours de vérification : aucune vente n\'est possible dans vos magasins avant sa validation. Ces mentions seront nécessaires pour facturer un professionnel : capital social, immatriculation.'],
             'suspendue' => [static fn (Societe $societe) => $societe->statut = StatutSociete::Suspendue, 'Votre société est suspendue : vos magasins sont en lecture seule, et aucune vente n\'y est possible. Ces mentions manquent pour facturer un professionnel : capital social, immatriculation.'],
             'résiliée' => [static fn (Societe $societe) => $societe->statut = StatutSociete::Resiliee, 'Votre société est résiliée : vos magasins sont en lecture seule, et aucune vente n\'y est possible. Ces mentions manquent pour facturer un professionnel : capital social, immatriculation.'],
             'révoquée avant sa validation' => [static function (Societe $societe): void {
@@ -475,7 +475,7 @@ class IdentiteSocieteTest extends TestCase
     public function test_la_page_identite_et_le_tableau_de_bord_d_une_societe_en_cours_de_verification_n_annoncent_aucune_vente(): void
     {
         $societe = $this->ouvrirLAdministration($this->inscrireUneSociete());
-        $avis = 'Votre société est en cours de vérification : aucune vente n\'est possible dans vos magasins réels avant sa validation, et le magasin de démonstration vous permet de vous essayer. Ces mentions seront nécessaires pour facturer un professionnel : capital social, immatriculation.';
+        $avis = 'Votre société est en cours de vérification : aucune vente n\'est possible dans vos magasins avant sa validation. Ces mentions seront nécessaires pour facturer un professionnel : capital social, immatriculation.';
 
         $this->assertFalse($societe->estValidee());
         Livewire::test(IdentiteSociete::class)

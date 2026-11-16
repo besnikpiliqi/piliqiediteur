@@ -88,9 +88,7 @@ trait EnvoieLesDocuments
 
     /**
      * Destinataire prérempli avec l'adresse du client, modifiable ; un
-     * message facultatif s'ajoute au texte de l'e-mail. Le magasin de
-     * démonstration n'écrit à aucun client (voir
-     * Magasin::peutEcrireAuxClients()).
+     * message facultatif s'ajoute au texte de l'e-mail.
      *
      * @template TAction of MountableAction
      *
@@ -108,7 +106,7 @@ trait EnvoieLesDocuments
                 ? 'Ce devis reçoit son numéro en partant : il ne sera plus un brouillon.'
                 : null)
             ->modalSubmitActionLabel('Envoyer')
-            ->visible(fn (Facture|Avoir|Devis|RecuPaiement $record): bool => $record->peutEtreEnvoye() && ! $record->magasin->est_demonstration && CompteConnecte::exiger()->can('envoyer', $record))
+            ->visible(fn (Facture|Avoir|Devis|RecuPaiement $record): bool => $record->peutEtreEnvoye() && CompteConnecte::exiger()->can('envoyer', $record))
             ->fillForm(fn (Facture|Avoir|Devis|RecuPaiement $record): array => ['destinataire' => ValeurRequise::de($record->client, 'le client du document envoyé')->email])
             ->form([
                 static::champDuJeton(),
@@ -151,7 +149,7 @@ trait EnvoieLesDocuments
             ->modalHeading(fn (Facture $record): string => 'Relance n°'.($record->niveauDeRelanceAtteint() + 1)." : {$record->libelleDocument()} {$record->numero}")
             ->modalDescription('Le client reçoit la facture en pièce jointe, avec le rappel de son montant, de son échéance et de ce qu\'il reste à payer.')
             ->modalSubmitActionLabel('Relancer')
-            ->visible(fn (Facture $record): bool => ! ($record->client?->estComptoir() ?? false) && $record->estEchueEtImpayee() && ! $record->magasin->est_demonstration && CompteConnecte::exiger()->can('envoyer', $record) && ! app(RegularisationDUneFacture::class)->estRegularisee($record))
+            ->visible(fn (Facture $record): bool => ! ($record->client?->estComptoir() ?? false) && $record->estEchueEtImpayee() && CompteConnecte::exiger()->can('envoyer', $record) && ! app(RegularisationDUneFacture::class)->estRegularisee($record))
             ->fillForm(fn (Facture $record): array => ['destinataire' => ValeurRequise::de($record->client, 'le client de la facture relancée')->email])
             ->form([static::champDuJeton(), self::champDestinataire()])
             ->action(fn (Facture $record, array $data) => static::executerSansCasser(function () use ($record, $data) {

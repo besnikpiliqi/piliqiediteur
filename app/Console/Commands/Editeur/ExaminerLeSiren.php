@@ -31,7 +31,7 @@ class ExaminerLeSiren extends ProcedureDeLEditeur
     {
         return [
             'SIREN correct : '.((string) $this->option('siren-correct') ?: 'aucun, la procédure le refusera').' ; décision : '.($this->decision()?->getLabel() ?? 'inconnue, la procédure la refusera').'.',
-            'Les documents émis de chaque magasin réel seront listés, sans en modifier aucun.',
+            'Les documents émis de chaque magasin seront listés, sans en modifier aucun.',
         ];
     }
 

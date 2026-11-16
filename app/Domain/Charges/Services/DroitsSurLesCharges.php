@@ -27,7 +27,7 @@ use App\Models\User;
  *   marquée « validée par le propriétaire » ;
  * - un administrateur à qui le propriétaire coche « Charges : ajouter »
  *   voit et ajoute les charges de « Toute la société » et celles des
- *   magasins réels de sa portée où la case est cochée ; jamais il ne
+ *   magasins de sa portée où la case est cochée ; jamais il ne
  *   valide ;
  * - un responsable à qui le propriétaire la coche voit et ajoute celles de
  *   son magasin seulement, rien de « Toute la société » ni d'un autre
@@ -37,11 +37,11 @@ use App\Models\User;
  *   accorde « Charges : voir, ajouter, saisir et valider » (accordée par
  *   défaut, voir PermissionRegistry::parDefautDuCabinet()) : ils voient,
  *   ajoutent, valident, corrigent et renvoient les charges de « Toute la
- *   société » et des magasins réels que le client leur ouvre, parmi les
+ *   société » et des magasins que le client leur ouvre, parmi les
  *   types que la société propose ; jamais ils ne touchent aux types de la
  *   société ni à ses types habituels, réglages de la société (décision de
  *   Claude, D76) ;
- * - les vendeurs, les observateurs et les comptes d'entraînement : rien.
+ * - les vendeurs et les observateurs : rien.
  * Une lecture hors de la société courante, pour un compte d'un cabinet :
  * ses liens ouverts et ses autorisations par client (voir
  * AccesDesCabinets), filtrés par le client. Chaque action relit son
@@ -88,7 +88,7 @@ final class DroitsSurLesCharges
 
     /**
      * Ce que ce compte voit des charges de cette société pour les
-     * graphiques de ces magasins réels, qu'il ouvre déjà (voir
+     * graphiques de ces magasins, qu'il ouvre déjà (voir
      * PerimetreDesGraphiques) : un compte qui entre par les autorisations
      * que le client accorde à son cabinet ou à son expert-comptable voit
      * les charges de « Toute la société » et de ceux de ces magasins où il
@@ -112,7 +112,7 @@ final class DroitsSurLesCharges
         $ouverts = [];
 
         foreach ($magasins as $magasin) {
-            if ($magasin->societe_id === $societe->getKey() && ! $magasin->est_demonstration && in_array(PermissionRegistry::CHARGES_VALIDER, $compte->autorisationsDans($magasin), true)) {
+            if ($magasin->societe_id === $societe->getKey() && in_array(PermissionRegistry::CHARGES_VALIDER, $compte->autorisationsDans($magasin), true)) {
                 $ouverts[] = CleDuModele::de($magasin);
             }
         }
@@ -152,7 +152,7 @@ final class DroitsSurLesCharges
             return null;
         }
 
-        $magasins = $compte->magasinsDeSaPortee()->where('est_demonstration', false)->orderBy('id')->get()
+        $magasins = $compte->magasinsDeSaPortee()->orderBy('id')->get()
             ->filter(fn (Magasin $magasin): bool => in_array(PermissionRegistry::CHARGES_AJOUTER, $compte->autorisationsDans($magasin), true));
 
         return new AccesAuxCharges($compte, $societe, true, CleDuModele::desModeles($magasins), null, true);
@@ -162,7 +162,7 @@ final class DroitsSurLesCharges
     {
         $magasin = $compte->magasinDeSonIdentifiant();
 
-        if ($magasin === null || $magasin->est_demonstration || $magasin->societe_id !== $societe->getKey() || ! $compte->estResponsableDe($magasin)
+        if ($magasin === null || $magasin->societe_id !== $societe->getKey() || ! $compte->estResponsableDe($magasin)
             || ! in_array(PermissionRegistry::CHARGES_AJOUTER, $compte->autorisationsDans($magasin), true)) {
             return null;
         }

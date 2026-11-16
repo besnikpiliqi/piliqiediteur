@@ -13,8 +13,8 @@ use Illuminate\Support\Facades\DB;
  * ControlesDeLApplication, couche « Laravel »), qui doivent être d'accord.
  * Elle parcourt toute la base, ne lit que des identifiants internes, n'écrit
  * rien et ne rend jamais une donnée personnelle (voir ProblemeDIsolation).
- * La lancent la commande app:verifier-isolation, la fin du semis des données
- * de démonstration et la tâche de chaque nuit.
+ * La lancent la commande app:verifier-isolation, la fin du semis et la
+ * tâche de chaque nuit.
  */
 final class VerificationDeLIsolation
 {

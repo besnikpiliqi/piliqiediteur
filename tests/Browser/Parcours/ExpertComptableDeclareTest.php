@@ -25,11 +25,11 @@ use Tests\Browser\Support\Navigation;
  * L'expert-comptable de la société, déclaré par le SIREN de son cabinet
  * (décision de l'éditeur du 01/11/2026) : le propriétaire le déclare dans
  * « Cabinet comptable », la personne choisit son mot de passe par le lien
- * reçu, entre dans les magasins réels de la société et y lit « La
+ * reçu, entre dans les magasins de la société et y lit « La
  * société » ; le propriétaire ajoute une personne, puis retire son
  * expert-comptable ; il choisit les magasins qu'il voit ; depuis la fiche
  * d'une personne, il corrige son adresse, la retire et la réintègre ; une
- * personne d'une société sans magasin réel arrive sur une page qui le lui
+ * personne d'une société sans magasin arrive sur une page qui le lui
  * dit, et s'en déconnecte. Le SIREN d'un cabinet déjà vérifié ne se
  * déclare pas : la fenêtre propose de lui demander le lien. Depuis la fiche
  * d'une personne, le propriétaire lui envoie un nouveau lien, la suspend et
@@ -170,7 +170,7 @@ test('le propriétaire ouvre la fiche d’une personne de son expert-comptable, 
         ->and($sophie->fresh()->statut)->toBe(StatutCompte::Actif);
 });
 
-test('la personne de l’expert-comptable d’une société sans magasin réel arrive sur la page qui le lui dit et s’en déconnecte', function () {
+test('la personne de l’expert-comptable d’une société sans magasin arrive sur la page qui le lui dit et s’en déconnecte', function () {
     $societe = $this->inscrireUneSociete();
     $this->saisirLeCodeDuCourrier($societe)->forceFill(['password' => 'password'])->save();
     $marc = $this->expertComptable($societe->fresh());

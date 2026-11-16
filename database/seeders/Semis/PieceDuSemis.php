@@ -19,6 +19,6 @@ final class PieceDuSemis
 
     public static function pdf(string $emetteur, string $objet): string
     {
-        return self::$rendues[$emetteur."\n".$objet] ??= Pdf::loadHTML('<html><body style="font-family: DejaVu Sans"><h1>'.e($emetteur).'</h1><p>'.e($objet).'</p><p>Document fictif du jeu de démonstration de PILIQI.</p></body></html>')->setPaper('a4')->output();
+        return self::$rendues[$emetteur."\n".$objet] ??= Pdf::loadHTML('<html><body style="font-family: DejaVu Sans"><h1>'.e($emetteur).'</h1><p>'.e($objet).'</p><p>Document fictif du semis de PILIQI.</p></body></html>')->setPaper('a4')->output();
     }
 }

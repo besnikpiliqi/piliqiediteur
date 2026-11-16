@@ -17,8 +17,8 @@ use Illuminate\Support\Facades\Log;
 use Throwable;
 
 /**
- * Vérifie l'isolation des sociétés, des magasins, des comptes, du cabinet,
- * des comptables et du magasin de démonstration dans toute la base, par la
+ * Vérifie l'isolation des sociétés, des magasins, des comptes, du cabinet
+ * et des comptables dans toute la base, par la
  * base et par l'application (voir VerificationDeLIsolation), en lecture
  * seule, à tout moment, en local comme en production. Elle affiche le
  * tableau des contrôles (contrôle, couche, lignes vérifiées, problèmes), puis

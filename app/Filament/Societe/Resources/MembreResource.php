@@ -50,12 +50,12 @@ use UnexpectedValueException;
  *   renvoyer ou annuler la transmission de la propriété à un
  *   administrateur ;
  * - pour un administrateur autorisé à nommer les responsables, les
- *   responsables des magasins réels de sa portée : en nommer (un nouveau
+ *   responsables des magasins de sa portée : en nommer (un nouveau
  *   compte, ou un vendeur ou un observateur du magasin), annuler sa propre
  *   nomination, retirer de la société, redonner l'accès et afficher
  *   l'identifiant ;
  * - pour un administrateur autorisé à redonner l'accès, les vendeurs et
- *   les observateurs des magasins réels de sa portée, avec « Redonner
+ *   les observateurs des magasins de sa portée, avec « Redonner
  *   l'accès » et « Afficher l'identifiant » seulement ;
  * - fermée à tout autre compte.
  * Le propriétaire voit les identifiants, et, dans la liste, les comptes
@@ -278,9 +278,7 @@ class MembreResource extends RessourceDuPanneauSociete
     /**
      * Son magasin, comme le voit la personne connectée : tous pour le
      * propriétaire ; pour un administrateur autorisé, ceux de sa portée.
-     * Un membre retiré garde son magasin, sans droit, sauf le magasin de
-     * démonstration d'une société validée, qui ne se nomme plus (voir
-     * porteeAffichee()).
+     * Un membre retiré garde son magasin, sans droit.
      */
     public static function resumeDesMagasins(User $compte): string
     {
@@ -297,7 +295,7 @@ class MembreResource extends RessourceDuPanneauSociete
 
             return match (true) {
                 $declaration === null || ! $declaration->estDeclare() || $compte->estRetire() => '—',
-                $declaration->tous_les_magasins => 'Tous les magasins réels (expert-comptable)',
+                $declaration->tous_les_magasins => 'Tous les magasins (expert-comptable)',
                 default => 'Magasins choisis (expert-comptable)',
             };
         }
@@ -328,7 +326,7 @@ class MembreResource extends RessourceDuPanneauSociete
             return [];
         }
 
-        $portee = ValeursLues::entiers(self::porteeAffichee($auteur)->pluck('magasins.id'));
+        $portee = ValeursLues::entiers($auteur->magasinsDeSaPortee()->pluck('magasins.id'));
 
         return array_values(Affectation::query()
             ->where('societe_id', $auteur->societe_id)
@@ -351,7 +349,7 @@ class MembreResource extends RessourceDuPanneauSociete
 
     /**
      * Les magasins de la société que la personne connectée peut proposer :
-     * ceux de sa portée, par nom (voir porteeAffichee()).
+     * ceux de sa portée, par nom.
      *
      * @return array<int, string>
      */
@@ -363,36 +361,7 @@ class MembreResource extends RessourceDuPanneauSociete
             return [];
         }
 
-        return ValeursLues::textesParCle(self::porteeAffichee($auteur)->orderBy('nom')->pluck('nom', 'magasins.id'));
-    }
-
-    /**
-     * Les magasins de sa portée que l'équipe de la société montre : tous,
-     * sauf le magasin de démonstration une fois la société validée, qui a
-     * disparu de tous ses écrans (T115, voir
-     * PorteeDesAdministrateurs::lire()) : il ne se coche plus dans la
-     * sélection d'un administrateur, et un compte d'entraînement retiré à
-     * la validation se liste sans lui (« — »).
-     *
-     * @return Builder<Magasin>
-     */
-    private static function porteeAffichee(User $auteur): Builder
-    {
-        return $auteur->magasinsDeSaPortee()->when(static::societe()->estValidee(), fn (Builder $magasins): Builder => $magasins->where('magasins.est_demonstration', false));
-    }
-
-    /**
-     * Les magasins de sa portée où un compte peut se créer ou se nommer :
-     * tous, sauf le magasin de démonstration d'une société validée ou
-     * close (voir Magasin::estUneDemonstrationTerminee()).
-     *
-     * @return array<int, string>
-     */
-    public static function magasinsOuCreerUnCompte(): array
-    {
-        return collect(static::magasinsDeLaPortee())
-            ->reject(fn (string $nom, int $id): bool => static::magasin($id)->estUneDemonstrationTerminee())
-            ->all();
+        return ValeursLues::textesParCle($auteur->magasinsDeSaPortee()->orderBy('nom')->pluck('nom', 'magasins.id'));
     }
 
     /**

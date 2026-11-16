@@ -22,7 +22,7 @@ use Illuminate\Support\Facades\Schema;
  * cabinet, d'un client qui en est un ou vers soi, une transition qui n'est
  * pas permise et un jeton hors d'une demande du cabinet (voir
  * GardesDesCabinets) ; l'historique des liens ne se supprime jamais. Le
- * client ouvre au cabinet tous ses magasins réels, présents et futurs, ou
+ * client ouvre au cabinet tous ses magasins, présents et futurs, ou
  * une sélection (voir magasins_cabinet).
  */
 return new class extends Migration
@@ -69,7 +69,7 @@ return new class extends Migration
             $table->timestamp('repondu_le')->nullable();
             // Pour une déclaration, la date de son rattachement.
             $table->timestamp('actif_depuis')->nullable();
-            // Le client ouvre-t-il à son cabinet tous ses magasins réels,
+            // Le client ouvre-t-il à son cabinet tous ses magasins,
             // présents et futurs, ou seulement ceux qu'il choisit (voir
             // magasins_cabinet) ? Tous par défaut, à la naissance du lien.
             $table->boolean('tous_les_magasins')->default(true);

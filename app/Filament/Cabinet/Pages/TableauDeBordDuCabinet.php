@@ -36,7 +36,8 @@ use Illuminate\Database\Eloquent\Collection;
  * ouvre sa fiche ; pour le propriétaire d'un cabinet qui n'est plus
  * vérifié, ses seuls liens actifs, pour y mettre fin (voir
  * getViewData()). Aucune méthode publique ne reçoit l'identifiant d'un
- * client ou d'un magasin : un geste relit son lien parmi ceux du cabinet. Ni magasin ni démonstration : un cabinet n'en a aucun.
+ * client ou d'un magasin : un geste relit son lien parmi ceux du cabinet.
+ * Aucun magasin : un cabinet n'en a pas.
  */
 class TableauDeBordDuCabinet extends Dashboard
 {
@@ -160,7 +161,7 @@ class TableauDeBordDuCabinet extends Dashboard
      * qui peut appeler toute méthode publique d'une page Livewire avec les
      * paramètres qu'il veut, n'obtient jamais un client qu'il désignerait
      * lui-même. Les clients liés que le cabinet ouvre au compte connecté,
-     * chacun avec son identité réduite, ses magasins réels, ses factures à
+     * chacun avec son identité réduite, ses magasins, ses factures à
      * encaisser quand il les lui ouvre et l'adresse de sa fiche (voir
      * TableauDeBordDesClients), aucun tant que le cabinet n'est pas
      * vérifié ; pour le seul propriétaire d'un cabinet qui n'est plus

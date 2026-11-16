@@ -16,7 +16,7 @@ use Filament\Pages\Page;
  * d'activité et ses réglages fiscaux communs, en lecture seule, comme un
  * cabinet lié les lit dans son espace. Il n'a pas d'espace de cabinet ni
  * d'accès à l'espace de la société : cette page ne s'ouvre qu'à lui, dans
- * un magasin réel de sa société que sa déclaration lui ouvre ; elle ne
+ * un magasin de sa société que sa déclaration lui ouvre ; elle ne
  * lit que la société du magasin courant, ses seuls champs montrés.
  */
 class LaSociete extends Page

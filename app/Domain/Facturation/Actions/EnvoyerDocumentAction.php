@@ -49,10 +49,9 @@ use SensitiveParameter;
  * les délais du magasin, n'y sont pas soumises.
  *
  * Un magasin qui ne peut pas vendre n'écrit pas à ses clients (voir
- * Magasin::verifierQuIlPeutEcrireAuxClients()) : ni envoi ni relance tant
+ * Magasin::verifierQuIlPeutVendre()) : ni envoi ni relance tant
  * que sa société est en cours de vérification, ni une fois le magasin
- * suspendu ou fermé, ou sa société suspendue, résiliée ou close ; le
- * magasin de démonstration, jamais.
+ * suspendu ou fermé, ou sa société suspendue, résiliée ou close.
  *
  * L'objet de l'e-mail nomme l'émetteur du document (voir
  * EnvoiDocument::objetPour()) : un ticket, une facture ou un avoir
@@ -201,7 +200,7 @@ class EnvoyerDocumentAction
             throw new LogicException('Un ticket du client comptoir ne se relance pas : le client comptoir est anonyme.');
         }
 
-        $facture->magasin->verifierQuIlPeutEcrireAuxClients();
+        $facture->magasin->verifierQuIlPeutVendre();
         $this->verifierLeDebit($facture, $expediteur);
         $refusDeLaRegularisation = $this->regularisation->refusDeLaRelance($facture);
 
@@ -287,7 +286,7 @@ class EnvoyerDocumentAction
     private function expediteur(User $auteur, DocumentEnvoyable $document): User
     {
         $magasin = app(TenantContext::class)->magasin();
-        Magasin::query()->whereKey($magasin->getKey())->sharedLock()->firstOrFail()->verifierQuIlPeutEcrireAuxClients();
+        Magasin::query()->whereKey($magasin->getKey())->sharedLock()->firstOrFail()->verifierQuIlPeutVendre();
 
         return $this->lecteur->exigerSousVerrou($auteur, 'envoyer', $magasin, $this->relire($document, false));
     }

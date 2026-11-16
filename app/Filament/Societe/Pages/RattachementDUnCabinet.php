@@ -168,7 +168,7 @@ class RattachementDUnCabinet extends Page
     /**
      * Ce que « Accepter » accorde, dit dans sa fenêtre : pour le cabinet
      * déclaré, les magasins et les autorisations de la déclaration ; pour
-     * un autre cabinet, tous les magasins réels, présents et futurs, et les
+     * un autre cabinet, tous les magasins, présents et futurs, et les
      * autorisations par défaut.
      */
     public function texteDeLAcceptation(LienCabinet $demande): string
@@ -176,7 +176,7 @@ class RattachementDUnCabinet extends Page
         $declaration = $this->declarationRattachee($demande);
 
         if ($declaration === null) {
-            return 'Ce cabinet consultera tous vos magasins réels, présents et futurs : '.implode(', ', PermissionRegistry::libellesDe(PermissionRegistry::parDefautDuCabinet($this->societe()->type_activite))).'.';
+            return 'Ce cabinet consultera tous vos magasins, présents et futurs : '.implode(', ', PermissionRegistry::libellesDe(PermissionRegistry::parDefautDuCabinet($this->societe()->type_activite))).'.';
         }
 
         $libelles = PermissionRegistry::libellesDe($declaration->autorisations());

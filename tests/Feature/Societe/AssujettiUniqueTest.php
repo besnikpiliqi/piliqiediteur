@@ -17,7 +17,6 @@ use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Tenancy\Actions\ModifierParametresFiscauxSocieteAction;
-use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Enums\RoleMagasin;
@@ -43,8 +42,7 @@ use Tests\TestCase;
  * journal d'audit et au journal des événements de chaque magasin, comme
  * tout réglage qui touche la conformité ; cochée, PILIQI refuse toute
  * opération commerciale réelle (ticket, facture, avoir, encaissement,
- * devis numéroté) avec son message, le magasin de démonstration restant
- * utilisable ; la page d'inscription le dit. Le temps est figé au 5
+ * devis numéroté) avec son message ; la page d'inscription le dit. Le temps est figé au 5
  * novembre 2026, à Paris.
  */
 class AssujettiUniqueTest extends TestCase
@@ -63,7 +61,7 @@ class AssujettiUniqueTest extends TestCase
     /**
      * Le propriétaire coche la case dans « Paramètres fiscaux » de
      * l'espace de la société : le changement s'inscrit au journal des
-     * événements de chaque magasin réel, avec l'ancienne et la nouvelle
+     * événements de chaque magasin, avec l'ancienne et la nouvelle
      * valeur, et au journal d'audit ; décochée, de même.
      */
     public function test_la_case_s_inscrit_au_journal_d_audit_et_au_journal_des_evenements_de_chaque_magasin(): void
@@ -138,24 +136,6 @@ class AssujettiUniqueTest extends TestCase
     }
 
     /**
-     * Le magasin de démonstration d'une société qui a coché la case reste
-     * utilisable : on s'y entraîne à vendre.
-     */
-    public function test_le_magasin_de_demonstration_reste_utilisable(): void
-    {
-        $societe = $this->inscrireUneSociete();
-        $demonstration = app(OuvrirLaDemonstrationAction::class)->handle($societe->proprietaire, $societe);
-        app(TenantContext::class)->clear();
-        app(ModifierParametresFiscauxSocieteAction::class)->handle($societe->proprietaire, $societe->fresh(), ['membre_assujetti_unique' => true]);
-        app(TenantContext::class)->set($demonstration);
-
-        $ticket = self::vendreAuComptant(self::auteur(), Client::query()->where('est_comptoir', true)->sole(), [['produit_id' => Produit::query()->where('reference', 'DEMO-CARNET')->value('id'), 'quantite' => 1]]);
-
-        $this->assertTrue($societe->fresh()->membre_assujetti_unique);
-        $this->assertNotNull($ticket->numero);
-    }
-
-    /**
      * Case cochée, les gestes de vente ne se montrent plus : l'« À faire »
      * de chaque compte du magasin dit pourquoi, en rouge ; le propriétaire
      * l'a à faire, avec le lien vers « Paramètres fiscaux », le vendeur à
@@ -186,7 +166,7 @@ class AssujettiUniqueTest extends TestCase
         $page = $this->get(route('filament.app.auth.register'));
 
         $page->assertOk()->assertSee(InscriptionSociete::INFORMATION_ASSUJETTI_UNIQUE)->assertDontSee('membre_assujetti_unique');
-        $this->assertSame('Une société membre d\'un assujetti unique (groupe TVA, art. 256 C du CGI) ne peut pas encore vendre dans PILIQI : elle peut s\'inscrire et essayer le magasin de démonstration, mais aucune vente, facture, avoir, encaissement ni devis numéroté réel n\'y sera possible.', InscriptionSociete::INFORMATION_ASSUJETTI_UNIQUE);
+        $this->assertSame('Une société membre d\'un assujetti unique (groupe TVA, art. 256 C du CGI) ne peut pas encore vendre dans PILIQI : elle peut s\'inscrire, mais aucune vente, facture, avoir, encaissement ni devis numéroté réel n\'y sera possible.', InscriptionSociete::INFORMATION_ASSUJETTI_UNIQUE);
     }
 
     private function chose(User $compte, Magasin $magasin): ?ChoseAFaire

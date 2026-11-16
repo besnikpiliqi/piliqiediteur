@@ -151,10 +151,10 @@ class ExonerationNonProuveeTest extends TestCase
     }
 
     /**
-     * Le propriétaire, qui ne vend dans aucun magasin réel, ne régularise
-     * pas : le geste émet une facture. Rien n'est écrit.
+     * Le propriétaire, qui ne vend dans aucun magasin, ne régularise pas :
+     * le geste émet une facture. Rien n'est écrit.
      */
-    public function test_le_proprietaire_ne_regularise_pas_hors_du_magasin_de_demonstration(): void
+    public function test_le_proprietaire_ne_regularise_pas(): void
     {
         [$magasin, $export] = $this->exportDe500Euros();
 

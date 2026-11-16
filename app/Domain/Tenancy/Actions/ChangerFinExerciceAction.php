@@ -48,7 +48,7 @@ use LogicException;
  * avant elle, sera rattrapée par les clôtures d'exercice de l'étape 3,
  * comme les journées manquées.
  *
- * Sous le verrou des registres des magasins réels de la société, puis de
+ * Sous le verrou des registres des magasins de la société, puis de
  * sa ligne : le nouveau mois s'enregistre et s'inscrit au journal des
  * événements de chacun (JET 270 mois_fin_exercice, voir
  * JournaliseSesParametresDeConformite), comme la fin avancée de
@@ -147,7 +147,7 @@ class ChangerFinExerciceAction
         $depotAuRegistre = self::texteFacultatif($depotAuRegistre, 100, self::MESSAGE_DEPOT_AU_REGISTRE);
 
         return app(TenantContext::class)->runAsSociete($societe, fn (): ChangementFinExercice => $this->operateur->pendantLeSysteme(fn (): ChangementFinExercice => $this->registre->sousVerrouDesMagasins(
-            $societe->magasinsReels()->orderBy('id')->get(),
+            $societe->magasins()->orderBy('id')->get(),
             function () use ($societe, $nouveauMois, $fin, $decisionDu, $organe, $dureeValideePar, $depotAuRegistre, $editeur): ChangementFinExercice {
                 $verrouillee = Societe::query()->whereKey($societe->getKey())->lockForUpdate()->firstOrFail();
                 $apercu = $this->verifier($verrouillee, $nouveauMois, $fin, $decisionDu);
@@ -156,7 +156,7 @@ class ChangerFinExerciceAction
                 $verrouillee->changerLeMoisDeFinDExerciceParLaProcedure($nouveauMois);
 
                 if ($fin !== $apercu['fin_d_origine']) {
-                    $this->journaliserLaFinAvancee($verrouillee->magasinsReels()->orderBy('id')->get(), $apercu['fin_d_origine'], $fin);
+                    $this->journaliserLaFinAvancee($verrouillee->magasins()->orderBy('id')->get(), $apercu['fin_d_origine'], $fin);
                 }
 
                 $changement = tap((new ChangementFinExercice)->forceFill([
@@ -247,7 +247,7 @@ class ChangerFinExerciceAction
 
     /**
      * La fin avancée de l'exercice en cours, au journal des événements de
-     * chaque magasin réel (JET 270 fin_exercice_en_cours), sous le verrou de
+     * chaque magasin (JET 270 fin_exercice_en_cours), sous le verrou de
      * son registre, tenu par l'appelant.
      *
      * @param  Collection<int, Magasin>  $magasins

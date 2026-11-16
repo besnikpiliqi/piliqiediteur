@@ -75,7 +75,7 @@ final class ChargesDesSocietes
 
     public function __construct(
         private readonly HorlogeDuSemis $horloge,
-        private readonly SemisDeDemonstration $semis,
+        private readonly SemisComplet $semis,
     ) {}
 
     /**
@@ -108,7 +108,7 @@ final class ChargesDesSocietes
         $jour = $this->horloge->jour($rang);
         $quantieme = (int) substr($jour, 8, 2);
         $moisPrecedent = substr(Calendrier::ajouterJours(Calendrier::premierJourDuMois($jour), -1), 0, 7);
-        $casParticuliers = substr($jour, 0, 7) === substr($this->horloge->jour(SemisDeDemonstration::JOURS - 75), 0, 7);
+        $casParticuliers = substr($jour, 0, 7) === substr($this->horloge->jour(SemisComplet::JOURS - 75), 0, 7);
 
         if ($quantieme === 5) {
             $this->horloge->aller($rang, '08:00');
@@ -120,7 +120,7 @@ final class ChargesDesSocietes
             $this->validerLeMois();
         }
 
-        if ($quantieme === 6 && SemisDeDemonstration::JOURS - $rang < self::DEBUT_DES_CHARGES_DU_COMPTOIR) {
+        if ($quantieme === 6 && SemisComplet::JOURS - $rang < self::DEBUT_DES_CHARGES_DU_COMPTOIR) {
             $this->horloge->aller($rang, '08:00');
             $this->chargesDuComptoir($moisPrecedent);
         }
@@ -142,7 +142,7 @@ final class ChargesDesSocietes
 
     private function estLeDernierMois(int $rang): bool
     {
-        return substr($this->horloge->jour($rang), 0, 7) === substr($this->horloge->jour(SemisDeDemonstration::JOURS - 1), 0, 7);
+        return substr($this->horloge->jour($rang), 0, 7) === substr($this->horloge->jour(SemisComplet::JOURS - 1), 0, 7);
     }
 
     /**
@@ -219,7 +219,7 @@ final class ChargesDesSocietes
      */
     private function estLeDernierMoisDeposable(string $moisOuJour): bool
     {
-        $dernierJour = $this->horloge->jour(SemisDeDemonstration::JOURS - 1);
+        $dernierJour = $this->horloge->jour(SemisComplet::JOURS - 1);
 
         return substr($moisOuJour, 0, 7) === substr(Calendrier::ajouterJours(Calendrier::premierJourDuMois($dernierJour), -1), 0, 7);
     }

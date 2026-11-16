@@ -33,18 +33,12 @@ use UnexpectedValueException;
  * sa prochaine modification (voir Devis::emetteur()) ; un brouillon
  * l'imprime tel qu'ils sont aujourd'hui (voir duMagasin()).
  *
- * Le magasin de démonstration imprime une identité fictive, sans SIREN,
- * SIRET, assurance ni aucun champ libre du magasin, et chacun de ses
- * documents porte « DÉMONSTRATION — SANS VALEUR » (voir deDemonstration(),
- * filigrane() et bandeauDeDemonstration()).
+ * Un document du site de démonstration porte « DÉMONSTRATION — SANS
+ * VALEUR » (voir filigrane() et bandeau()), lu, pour un
+ * document émis, dans son émetteur figé et signé.
  */
 final readonly class Emetteur
 {
-    /**
-     * La dénomination fictive du magasin de démonstration.
-     */
-    public const DENOMINATION_DE_DEMONSTRATION = 'ENTREPRISE DE DÉMONSTRATION';
-
     /**
      * @param  string|null  $formeJuridique  le libellé imprimé de la forme (voir Societe::formeImprimee())
      * @param  int|null  $capitalSocial  en centimes, null s'il n'est pas renseigné
@@ -85,15 +79,10 @@ final readonly class Emetteur
     /**
      * La société et le magasin tels qu'ils sont aujourd'hui : l'émetteur
      * que signe un document à son émission, que fige un devis à son envoi,
-     * et celui qu'imprime un brouillon. Celui du magasin de démonstration
-     * est fictif (voir deDemonstration()).
+     * et celui qu'imprime un brouillon.
      */
     public static function duMagasin(Magasin $magasin): self
     {
-        if ($magasin->est_demonstration) {
-            return self::deDemonstration($magasin);
-        }
-
         $societe = ValeurRequise::de($magasin->societe, 'la société du magasin');
 
         return new self(
@@ -129,55 +118,6 @@ final readonly class Emetteur
     }
 
     /**
-     * L'émetteur fictif du magasin de démonstration : la dénomination
-     * « ENTREPRISE DE DÉMONSTRATION », aucun SIREN, SIRET, immatriculation,
-     * n° de TVA, adresse, coordonnée ni assurance, et les mentions entre
-     * professionnels du logiciel, jamais celles qu'un magasin a saisies ;
-     * seuls le régime de TVA et l'option pour les débits de la société,
-     * qui règlent ses calculs, sont les siens.
-     */
-    public static function deDemonstration(Magasin $magasin): self
-    {
-        $societe = $magasin->societe;
-
-        return new self(
-            nom: $magasin->nom,
-            raisonSociale: self::DENOMINATION_DE_DEMONSTRATION,
-            formeJuridique: null,
-            estEntrepreneurIndividuel: false,
-            capitalSocial: null,
-            capitalVariable: false,
-            siren: null,
-            siret: null,
-            immatriculation: null,
-            numeroTva: null,
-            adresse: null,
-            complementAdresse: null,
-            codePostal: null,
-            ville: null,
-            pays: 'FR',
-            siegeAdresse: null,
-            siegeComplementAdresse: null,
-            siegeCodePostal: null,
-            siegeVille: null,
-            email: null,
-            telephone: null,
-            regimeTva: $societe->regime_tva,
-            optionDebitsTva: (bool) $societe->option_debits_tva,
-            mentionsEntreProfessionnels: [
-                'penalites_retard' => Magasin::MENTION_PENALITES_PAR_DEFAUT,
-                'indemnite_recouvrement' => Magasin::MENTION_INDEMNITE_PAR_DEFAUT,
-                'escompte' => Magasin::MENTION_ESCOMPTE_PAR_DEFAUT,
-            ],
-            assuranceAssureur: null,
-            assuranceAdresse: null,
-            assuranceContrat: null,
-            assuranceCouverture: null,
-            estDemonstration: true,
-        );
-    }
-
-    /**
      * L'émetteur que le contenu signé d'un document a retenu à son
      * émission : le bloc « emetteur » de son contexte (voir ContenuFiscal),
      * écrit par enTableau(), comme celui qu'un devis a figé à son envoi
@@ -185,7 +125,7 @@ final readonly class Emetteur
      *
      * Chaque champ est lu pour ce qu'enTableau() y écrit ; un champ absent
      * ou d'un autre type est refusé. Le marqueur « demonstration » n'est
-     * écrit que pour le magasin de démonstration.
+     * écrit que pour un document du site de démonstration.
      *
      * @param  array<array-key, mixed>  $emetteur
      *
@@ -239,9 +179,8 @@ final readonly class Emetteur
      * L'émetteur champ par champ, tel que le contenu signé au registre
      * fiscal l'écrit (voir ContenuFiscal) : sans nombre à virgule
      * flottante, le capital social en centimes, le régime par sa valeur ;
-     * celui du magasin de démonstration, et lui seul, porte
-     * « demonstration » à vrai, comme l'en-tête de ses enregistrements
-     * (voir RegistreFiscal).
+     * celui d'un document du site de démonstration, et lui seul, porte
+     * « demonstration » à vrai.
      *
      * @return array<string, mixed>
      */
@@ -285,8 +224,8 @@ final readonly class Emetteur
     }
 
     /**
-     * Le filigrane de tout document du magasin de démonstration, ticket
-     * compris, null pour un magasin réel.
+     * Le filigrane de tout document du site de démonstration, ticket
+     * compris, null pour un document du site réel.
      */
     public function filigrane(): ?string
     {
@@ -294,11 +233,11 @@ final readonly class Emetteur
     }
 
     /**
-     * Le bandeau en tête d'un document du magasin de démonstration, null
-     * pour un magasin réel : un ticket dit en plus qu'il ne se remet jamais
-     * à un client.
+     * Le bandeau en tête d'un document du site de démonstration, null pour
+     * un document du site réel : un ticket dit en plus qu'il ne se remet
+     * jamais à un client.
      */
-    public function bandeauDeDemonstration(bool $estUnTicket): ?string
+    public function bandeau(bool $estUnTicket): ?string
     {
         if (! $this->estDemonstration) {
             return null;

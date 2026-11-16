@@ -110,7 +110,7 @@ class FacturesAEncaisserTest extends TestCase
     }
 
     /**
-     * Le propriétaire, qui ne vend jamais dans un magasin réel, les a à
+     * Le propriétaire, qui ne vend jamais, les a à
      * surveiller, avec « Voir » ; le responsable, qui encaisse, les a à
      * faire, avec « Encaisser » : tous deux voient toutes celles du
      * magasin, menant à la liste filtrée.

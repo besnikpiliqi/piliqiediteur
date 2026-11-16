@@ -10,7 +10,7 @@ use App\Domain\Tenancy\Models\SiretMagasin;
 use App\Models\User;
 
 /**
- * Met en activité un magasin réel d'une société validée : à la validation
+ * Met en activité un magasin d'une société validée : à la validation
  * de la société pour chacun de ses magasins actifs (voir
  * ValiderLaSocieteAction), à la création d'un magasin dans une société
  * déjà validée (voir CreerEtablissementAction), et à la réouverture d'un

@@ -445,7 +445,7 @@ class CabinetsConcurrenceTest extends TestCase
     }
 
     /**
-     * L'inscription d'une société sans magasin réel, donc sans registre que
+     * L'inscription d'une société sans magasin, donc sans registre que
      * les deux transactions partageraient, se clôt (trente jours sans code)
      * pendant qu'un administrateur accepte la transmission de la propriété :
      * l'acceptation tient les comptes ; la clôture tient la ligne de la
@@ -471,7 +471,7 @@ class CabinetsConcurrenceTest extends TestCase
         $jeton = $this->demanderLaTransmission($proprietaire->refresh(), $administrateur, self::MOT_DE_PASSE_CHOISI);
         $this->travelTo(self::aParis('2026-11-04 10:00:00'));
         app(TenantContext::class)->clear();
-        $this->assertSame(0, $societe->magasinsReels()->count());
+        $this->assertSame(0, $societe->magasins()->count());
         $societeId = (int) $societe->getKey();
         $limite = self::aParis('2026-10-05 10:00:00')->getTimestamp();
         $connexionDuTest = DB::getDefaultConnection();

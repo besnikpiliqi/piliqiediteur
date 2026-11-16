@@ -156,7 +156,7 @@ class FicheDUneFactureTest extends TestCase
     }
 
     /**
-     * Ni le propriétaire, qui ne vend pas dans un magasin réel, ni le
+     * Ni le propriétaire, qui ne vend pas, ni le
      * collaborateur du cabinet lié, ni un vendeur à qui la création des
      * factures n'est pas cochée ne voient « Modifier » ni « Émettre » sur la
      * fiche d'un brouillon qu'ils voient.

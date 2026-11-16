@@ -26,10 +26,9 @@ use Throwable;
  * bouton « Clôturer la journée » le fait jusqu'à la journée qu'il affiche,
  * au nom de la personne qui le presse (parUnePersonne(), voir
  * ListClotureCaisses) ; la clôture automatique, passé le minuit du
- * magasin, jusqu'à sa veille, et la fermeture du magasin de démonstration
- * jusqu'à son dernier jour, au nom
- * du système (parLeSysteme(), voir ClotureAutomatiqueCaisse et
- * FermerLaDemonstrationAction). Une journée oubliée (un soir sans clôture
+ * magasin, jusqu'à sa veille, au nom du système (parLeSysteme(), voir
+ * ClotureAutomatiqueCaisse), comme la fermeture d'un magasin, sa
+ * révocation et le retrait d'un ticket Z. Une journée oubliée (un soir sans clôture
  * manuelle suivi d'une nuit où la commande n'a pas tourné) est ainsi
  * clôturée la première, avant les suivantes, et aucune vente ne reste
  * hors de toute clôture.
@@ -153,7 +152,7 @@ class CloturerLesJourneesAction
      * Clôture, au nom du système, les journées en attente du magasin, qui
      * doit être le magasin actif. Ses appelants ferment ensuite d'office les
      * caisses personnelles restées ouvertes, hors de leur transaction (voir
-     * ClotureAutomatiqueCaisse et FermerLaDemonstrationAction).
+     * ClotureAutomatiqueCaisse).
      *
      * @return Collection<int, ClotureCaisse> les clôtures créées, dans l'ordre des journées
      *

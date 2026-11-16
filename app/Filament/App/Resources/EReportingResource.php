@@ -84,7 +84,7 @@ class EReportingResource extends Resource
 
     /**
      * Seules les journées du magasin actif qui ont des opérations à
-     * déclarer ; aucune dans le magasin de démonstration.
+     * déclarer.
      *
      * @return Builder<ClotureCaisse>
      */
@@ -105,24 +105,17 @@ class EReportingResource extends Resource
      * la fiche d'une clôture et celle d'une journée de cette page : les
      * totaux journaliers par catégorie et par taux, en français, avec le
      * contrôle de leur total contre le net de la clôture, les encaissements
-     * des prestations de services, par date et par taux, et le statut ;
-     * pour le magasin de démonstration, la seule mention qu'il n'est jamais
-     * déclaré.
+     * des prestations de services, par date et par taux, et le statut.
      */
     public static function sectionDeLApercu(): InfolistSection
     {
         return InfolistSection::make('Aperçu de l\'e-reporting (non transmis)')
             ->description('Ce que l\'e-reporting déclarera pour la journée : les ventes aux particuliers, avoirs déduits, totalisées par catégorie et par taux de TVA, sans nom, sans numéro de ticket ni moyen de paiement. Les factures aux professionnels n\'y entrent pas : elles partiront une à une comme factures électroniques.')
             ->schema([
-                TextEntry::make('ereporting_demonstration')
-                    ->hiddenLabel()
-                    ->state(EReportingDesParticuliers::MENTION_DEMONSTRATION)
-                    ->visible(fn (ClotureCaisse $record): bool => self::apercu($record)->demonstration)
-                    ->columnSpanFull(),
                 TextEntry::make('ereporting_rien')
                     ->hiddenLabel()
                     ->state('Rien à déclarer pour cette journée.')
-                    ->visible(fn (ClotureCaisse $record): bool => ! self::apercu($record)->demonstration && ! self::apercu($record)->aDeclarer())
+                    ->visible(fn (ClotureCaisse $record): bool => ! self::apercu($record)->aDeclarer())
                     ->columnSpanFull(),
                 TableauEntry::make('ereporting_transactions')
                     ->label('Totaux journaliers')
@@ -198,9 +191,7 @@ class EReportingResource extends Resource
         return $table
             ->defaultSort('date_cloture', 'desc')
             ->emptyStateHeading('Aucune journée à déclarer')
-            ->emptyStateDescription(fn (): string => app(TenantContext::class)->magasin()->est_demonstration
-                ? EReportingDesParticuliers::MENTION_DEMONSTRATION
-                : 'Une journée clôturée apparaît ici dès qu\'elle compte une vente ou un avoir à un particulier, ou l\'encaissement d\'une prestation de services.')
+            ->emptyStateDescription('Une journée clôturée apparaît ici dès qu\'elle compte une vente ou un avoir à un particulier, ou l\'encaissement d\'une prestation de services.')
             ->columns([
                 Tables\Columns\TextColumn::make('date_cloture')->label('Journée')->jour()->sortable(),
                 Tables\Columns\TextColumn::make('numero')->label('Clôture'),

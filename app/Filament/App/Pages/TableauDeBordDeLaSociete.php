@@ -13,7 +13,7 @@ use Filament\Pages\Page;
  * « Tableau de bord de la société », dans le panneau des magasins, pour
  * l'expert-comptable que la société a déclaré par le SIREN de son cabinet
  * (décision de l'éditeur du 14/11/2026) : les chiffres clés et les
- * graphiques des magasins réels de sa déclaration, selon les
+ * graphiques des magasins de sa déclaration, selon les
  * autorisations qu'elle lui accorde (voir GrilleDesGraphiques et
  * PerimetreDesGraphiques::delExpertComptable()), en lecture seule. Elle ne
  * s'ouvre qu'à lui, dans un magasin que sa déclaration lui ouvre, comme

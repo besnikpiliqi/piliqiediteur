@@ -326,7 +326,7 @@ class EmettreFactureAction
     }
 
     /**
-     * Dans un magasin réel, un brouillon créé par un administrateur à qui la
+     * Un brouillon créé par un administrateur à qui la
      * propriété de la société a été transmise depuis (voir
      * AccepterLaTransmissionDeLaProprieteAction) devient la vente de qui
      * l'émet : le propriétaire n'y vend jamais et n'y a pas de caisse
@@ -334,16 +334,15 @@ class EmettreFactureAction
      * dans ce magasin à ce moment, ici la seule de la transaction. La
      * facture, son nom figé (voir FigeLeNomDeSesAuteurs), son contenu signé,
      * « Mes ventes » et la caisse personnelle désignent donc qui l'émet ; la
-     * base refuse d'émettre une facture au nom du propriétaire dans un
-     * magasin réel (voir GardesDeLaVente). Le rôle de l'auteur se lit sous
-     * le verrou du registre, que la transmission de la propriété prend
-     * aussi : il ne change pas pendant l'émission. Un brouillon d'un autre
-     * compte garde son auteur, comme, dans le magasin de démonstration, où
-     * il vend, celui du propriétaire.
+     * base refuse d'émettre une facture au nom du propriétaire (voir
+     * GardesDeLaVente). Le rôle de l'auteur se lit sous le verrou du
+     * registre, que la transmission de la propriété prend aussi : il ne
+     * change pas pendant l'émission. Un brouillon d'un autre compte garde
+     * son auteur.
      */
     private function reprendreLeBrouillonDuProprietaire(Facture $facture, User $compte): void
     {
-        if ($facture->cree_par !== null && ! $facture->magasin->est_demonstration && User::query()->whereKey($facture->cree_par)->where('role_societe', RoleSociete::Proprietaire)->exists()) {
+        if ($facture->cree_par !== null && User::query()->whereKey($facture->cree_par)->where('role_societe', RoleSociete::Proprietaire)->exists()) {
             $facture->forceFill(['cree_par' => $compte->getKey()]);
         }
     }

@@ -65,7 +65,7 @@ class ChangerFinExerciceTest extends TestCase
 
     /**
      * Par la commande, le changement à l'exercice suivant s'inscrit au
-     * journal des événements de chaque magasin réel (le mois, de 12 à 6),
+     * journal des événements de chaque magasin (le mois, de 12 à 6),
      * dans changements_fin_exercice avec sa pièce, sa décision, son
      * organe, la référence de son dépôt au registre, l'expert-comptable
      * consulté et ses opérateurs, et au journal d'audit, origine

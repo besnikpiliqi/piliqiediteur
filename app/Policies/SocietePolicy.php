@@ -31,9 +31,8 @@ use App\Models\User;
  * - réservés au propriétaire (voir les gestes ci-dessous) : faire
  *   avancer la vérification de la société (un nouveau courrier, des
  *   pièces pour l'éditeur), transmettre la propriété, gérer son cabinet
- *   d'expertise comptable (voir gererSonCabinet()) ; ouvrir le magasin de
- *   démonstration, aussi pour un administrateur de tous les magasins
- *   autorisé à les gérer. Les gestes sur les comptes, administrateurs
+ *   d'expertise comptable (voir gererSonCabinet()). Les gestes sur les
+ *   comptes, administrateurs
  *   compris, sont dans MembrePolicy.
  *
  * Une société en lecture seule (suspendue, résiliée, révoquée ou close,
@@ -47,8 +46,7 @@ use App\Models\User;
  * ChangerSiretAction, FermerMagasinAction, RouvrirMagasinAction,
  * ChoisirEtablissementPrincipalAction,
  * ModifierIdentiteSocieteAction, ModifierParametresFiscauxSocieteAction,
- * les actions de la vérification,
- * OuvrirLaDemonstrationAction et
+ * les actions de la vérification et
  * DemanderLaTransmissionDeLaProprieteAction), en plus des écrans.
  */
 class SocietePolicy
@@ -138,21 +136,6 @@ class SocietePolicy
     public function verifierLaSociete(User $user, Societe $societe): bool
     {
         return $this->view($user, $societe) && $user->estProprietaire() && ! $societe->estEnLectureSeule() && ! $societe->estValidee();
-    }
-
-    /**
-     * Ouvrir, ou rouvrir, le magasin de démonstration : son propriétaire, ou
-     * un administrateur de tous les magasins autorisé à les gérer, tant que
-     * la société n'est ni validée ni close, ni en lecture seule ; jamais
-     * dans un cabinet d'expertise comptable, qui n'a aucun magasin.
-     */
-    public function ouvrirLaDemonstration(User $user, Societe $societe): bool
-    {
-        return $this->view($user, $societe)
-            && $societe->type_activite->aDesMagasins()
-            && ! $societe->estEnLectureSeule()
-            && ! $societe->estValidee()
-            && ($user->estProprietaire() || ($user->administreTousLesMagasins() && $user->aLAutorisationDeSociete(AutorisationsSociete::MAGASINS_GERER)));
     }
 
     /**

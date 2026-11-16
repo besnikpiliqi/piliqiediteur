@@ -15,7 +15,6 @@ use App\Domain\Tenancy\Actions\CreerMembreAction;
 use App\Domain\Tenancy\Actions\DemanderLaTransmissionDeLaProprieteAction;
 use App\Domain\Tenancy\Actions\ModifierIdentiteSocieteAction;
 use App\Domain\Tenancy\Actions\ModifierMembreAction;
-use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
 use App\Domain\Tenancy\Actions\RedonnerLAccesAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\StatutCompte;
@@ -48,7 +47,6 @@ use Database\Factories\SocieteFactory;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\CheckboxList;
 use Filament\Forms\Components\Select;
-use Filament\Pages\Dashboard;
 use Filament\Pages\Page;
 use Filament\Resources\Resource;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -419,7 +417,7 @@ class PanneauSocieteTest extends TestCase
     /**
      * Le tableau de bord du propriétaire coche chaque première étape
      * faite : le premier magasin créé, un compte ajouté à l'équipe, la
-     * démonstration essayée, la société validée ; chacune mène à son écran
+     * société validée ; chacune mène à son écran
      * (la création d'un magasin, avant comme après le premier, sous le
      * titre « Ajouter un magasin » dès qu'il existe), et la liste disparaît
      * quand tout est fait. Un administrateur n'a pas de premières étapes.
@@ -439,16 +437,14 @@ class PanneauSocieteTest extends TestCase
             TableauDeBord::ETAPE_CODE_DU_COURRIER => [false, VerificationSociete::getUrl(panel: 'societe', tenant: $societe)],
             TableauDeBord::ETAPE_PREMIER_MAGASIN => [false, MagasinResource::getUrl('create', panel: 'societe', tenant: $societe)],
             TableauDeBord::ETAPE_EQUIPE => [true, MembreResource::getUrl('index', panel: 'societe', tenant: $societe)],
-            TableauDeBord::ETAPE_DEMONSTRATION => [false, null],
         ], $etapes($proprietaire));
         $this->assertSame([], $etapes($administrateur));
 
         $magasin = $this->creerLeMagasinDuSiege($societe);
-        $demonstration = app(OuvrirLaDemonstrationAction::class)->handle($proprietaire, $societe->fresh());
 
         $this->assertSame(
-            [[false, VerificationSociete::getUrl(panel: 'societe', tenant: $societe)], [true, MagasinResource::getUrl('create', panel: 'societe', tenant: $societe)], [true, Dashboard::getUrl(panel: 'app', tenant: $demonstration)]],
-            array_values(array_intersect_key($etapes($proprietaire), array_flip([TableauDeBord::ETAPE_CODE_DU_COURRIER, TableauDeBord::ETAPE_AJOUTER_UN_MAGASIN, TableauDeBord::ETAPE_DEMONSTRATION]))),
+            [[false, VerificationSociete::getUrl(panel: 'societe', tenant: $societe)], [true, MagasinResource::getUrl('create', panel: 'societe', tenant: $societe)]],
+            array_values(array_intersect_key($etapes($proprietaire), array_flip([TableauDeBord::ETAPE_CODE_DU_COURRIER, TableauDeBord::ETAPE_AJOUTER_UN_MAGASIN]))),
         );
         $this->get(TableauDeBord::getUrl(panel: 'societe', tenant: $societe))->assertSeeText('Vos premières étapes');
 
@@ -460,7 +456,7 @@ class PanneauSocieteTest extends TestCase
 
     /**
      * L'étape des magasins s'intitule « Créer votre premier magasin » tant
-     * que la société n'en a aucun réel, puis « Ajouter un magasin », cochée,
+     * que la société n'en a aucun, puis « Ajouter un magasin », cochée,
      * avec le nombre de magasins dessous, sans ordinal ; elle mène toujours
      * à la création d'un magasin pour le propriétaire (décision de
      * l'éditeur du 01/11/2026).
@@ -512,27 +508,25 @@ class PanneauSocieteTest extends TestCase
 
     /**
      * Une société validée par l'invitation acceptée de son cabinet n'a
-     * jamais reçu de courrier ni eu de démonstration : ses premières étapes
-     * sont seulement celles des magasins et de l'équipe, et son tableau de
-     * bord comme sa page « Vérification » disent seulement qu'elle est
-     * validée par l'invitation de son cabinet, sans courrier, ni code, ni
-     * démonstration, ni lien ou bouton qui y mène (décision de l'éditeur du
-     * 01/11/2026). Une société qui s'inscrit elle-même a ses quatre étapes
-     * avant sa validation, puis trois : la démonstration disparaît de tous
-     * ses écrans une fois la société validée (T115, lot DEMO-V).
+     * jamais reçu de courrier : ses premières étapes sont seulement celles
+     * des magasins et de l'équipe, et son tableau de bord comme sa page
+     * « Vérification » disent seulement qu'elle est validée par l'invitation
+     * de son cabinet, sans courrier ni code, ni lien qui y mène (décision
+     * de l'éditeur du 01/11/2026). Une société qui s'inscrit elle-même a
+     * ses trois étapes, celle du courrier comprise, avant comme après sa
+     * validation.
      */
-    public function test_une_societe_validee_par_l_invitation_de_son_cabinet_ne_voit_ni_l_etape_du_courrier_ni_celle_de_la_demonstration(): void
+    public function test_une_societe_validee_par_l_invitation_de_son_cabinet_ne_voit_pas_l_etape_du_courrier(): void
     {
         $this->travelTo(self::aParis('2026-11-03 10:00:00'));
         $proprietaire = $this->accepterLInvitation($this->inviterUneEntreprise($this->ouvrirUnCabinet(), SocieteFactory::sirenFictif(), 'dirigeant@entreprise.test'));
         $invitee = $proprietaire->societe()->firstOrFail();
         $phrase = 'Votre société est validée depuis le 03/11/2026, par l\'invitation de votre cabinet d\'expertise comptable.';
-        $absents = ['courrier', 'code', 'démonstration', TableauDeBord::ETAPE_CODE_DU_COURRIER, TableauDeBord::ETAPE_DEMONSTRATION];
+        $absents = ['courrier', 'code', TableauDeBord::ETAPE_CODE_DU_COURRIER];
 
         $this->dansLEspaceDeLaSociete($invitee, $proprietaire);
         $page = Livewire::test(TableauDeBord::class);
         $this->assertSame([TableauDeBord::ETAPE_PREMIER_MAGASIN, TableauDeBord::ETAPE_EQUIPE], array_column($page->instance()->etapes(), 'titre'));
-        $page->assertActionHidden('ouvrirLaDemonstration');
         $this->actingAs($proprietaire)->get(TableauDeBord::getUrl(panel: 'societe', tenant: $invitee))
             ->assertOk()
             ->assertSeeText(['Vos premières étapes', TableauDeBord::ETAPE_PREMIER_MAGASIN, TableauDeBord::ETAPE_EQUIPE, $phrase])
@@ -541,13 +535,13 @@ class PanneauSocieteTest extends TestCase
         $this->get(VerificationSociete::getUrl(panel: 'societe', tenant: $invitee))
             ->assertOk()
             ->assertSeeText($phrase)
-            ->assertDontSeeText(['courrier', 'code', 'démonstration'])
+            ->assertDontSeeText(['courrier', 'code'])
             ->assertDontSee(route('code.afficher'));
 
         $inscrite = $this->inscrireUneSociete();
         $sonProprietaire = $inscrite->proprietaire()->firstOrFail();
         $this->dansLEspaceDeLaSociete($inscrite->fresh(), $sonProprietaire);
-        $this->assertSame([TableauDeBord::ETAPE_CODE_DU_COURRIER, TableauDeBord::ETAPE_PREMIER_MAGASIN, TableauDeBord::ETAPE_EQUIPE, TableauDeBord::ETAPE_DEMONSTRATION], array_column(Livewire::test(TableauDeBord::class)->instance()->etapes(), 'titre'));
+        $this->assertSame([TableauDeBord::ETAPE_CODE_DU_COURRIER, TableauDeBord::ETAPE_PREMIER_MAGASIN, TableauDeBord::ETAPE_EQUIPE], array_column(Livewire::test(TableauDeBord::class)->instance()->etapes(), 'titre'));
         $this->saisirLeCodeDuCourrier($inscrite->fresh());
         $this->dansLEspaceDeLaSociete($inscrite->fresh(), $sonProprietaire);
         $this->assertSame([TableauDeBord::ETAPE_CODE_DU_COURRIER, TableauDeBord::ETAPE_PREMIER_MAGASIN, TableauDeBord::ETAPE_EQUIPE], array_column(Livewire::test(TableauDeBord::class)->instance()->etapes(), 'titre'));
@@ -562,8 +556,8 @@ class PanneauSocieteTest extends TestCase
      * Les premières étapes ne comptent que dans la portée du propriétaire,
      * sans son propre compte ; un administrateur d'une sélection, même
      * autorisé à nommer les responsables, n'y voit ni le nombre des
-     * magasins de la société, ni celui de ses comptes, ni l'état de sa
-     * démonstration : seulement les magasins de sa sélection.
+     * magasins de la société, ni celui de ses comptes : seulement les
+     * magasins de sa sélection.
      */
     public function test_les_premieres_etapes_ne_montrent_a_un_administrateur_aucun_nombre_hors_de_sa_portee(): void
     {
@@ -572,19 +566,18 @@ class PanneauSocieteTest extends TestCase
         $this->membre($paris, RoleMagasin::Vendeur);
         $this->membre($paris, RoleMagasin::Vendeur);
         $administrateur = $this->administrateur($lyon, [$lyon->id], [AutorisationsSociete::RESPONSABLES_NOMMER]);
-        app(OuvrirLaDemonstrationAction::class)->handle($this->proprietaireDe($lyon), $lyon->societe);
         $tableauDeBord = TableauDeBord::getUrl(panel: 'societe', tenant: $lyon->societe);
 
         $this->actingAs($administrateur)
             ->get($tableauDeBord)
             ->assertOk()
             ->assertSeeText('Lyon Centre')
-            ->assertDontSeeText(['Vos premières étapes', 'Paris Bastille', '2 magasins', 'en plus du vôtre', 'Ouvert : vous vous y entraînez']);
+            ->assertDontSeeText(['Vos premières étapes', 'Paris Bastille', '2 magasins', 'en plus du vôtre']);
         $this->flushSession();
         $this->actingAs($this->proprietaireDe($lyon))
             ->get($tableauDeBord)
             ->assertOk()
-            ->assertSeeText(['Vos premières étapes', '2 magasins', '3 comptes en plus du vôtre', 'Ouvert : vous vous y entraînez']);
+            ->assertSeeText(['Vos premières étapes', '2 magasins', '3 comptes en plus du vôtre']);
     }
 
     /**

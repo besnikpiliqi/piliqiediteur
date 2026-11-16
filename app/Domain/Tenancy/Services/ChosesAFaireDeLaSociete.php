@@ -53,9 +53,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * ouvre le tableau de bord du magasin, où chaque chose se détaille (voir
  * ChosesAFaireDuMagasin).
  *
- * Elle ne lit que les magasins réels de la portée de la personne (voir
- * User::magasinsDeSaPortee()), jamais le magasin de démonstration ni un
- * magasin d'une autre société, et, dans chacun, seulement les groupes
+ * Elle ne lit que les magasins de la portée de la personne (voir
+ * User::magasinsDeSaPortee()), jamais un magasin d'une autre société, et, dans chacun, seulement les groupes
  * dont elle voit tous les documents, d'après ses cases cochées dans ce
  * magasin (voir User::autorisationsDans() : toutes pour le propriétaire,
  * celles de sa sélection pour un administrateur) : les ventes (preuves,
@@ -80,7 +79,7 @@ final class ChosesAFaireDeLaSociete
     public function __construct(private readonly CalculateurLigne $calculateur) {}
 
     /**
-     * Les nombres de chaque magasin réel de sa portée, par identifiant de
+     * Les nombres de chaque magasin de sa portée, par identifiant de
      * magasin, dans l'ordre des magasins ; un groupe sans rien n'y figure
      * pas, et un magasin sans rien à faire a une liste vide.
      *
@@ -92,7 +91,7 @@ final class ChosesAFaireDeLaSociete
             return [];
         }
 
-        $magasins = $compte->magasinsDeSaPortee()->where('est_demonstration', false)->orderBy('id')->get()->keyBy('id');
+        $magasins = $compte->magasinsDeSaPortee()->orderBy('id')->get()->keyBy('id');
         $avecArticles = $magasins->filter(fn (Magasin $magasin): bool => $magasin->societe->aDesArticles());
         $factures = $this->ou($magasins, $compte, PermissionRegistry::FACTURE_VIEW, PermissionRegistry::FACTURE_VIEW_TOUTES);
         $devis = $this->ou($magasins, $compte, PermissionRegistry::DEVIS_VIEW);
@@ -357,7 +356,7 @@ final class ChosesAFaireDeLaSociete
     /**
      * Les établissements pas encore confirmés au répertoire Sirene (aucune
      * vente avant), et les adresses de magasin qui manquent pour facturer
-     * un professionnel, de chaque magasin réel ouvert de sa portée, pour
+     * un professionnel, de chaque magasin ouvert de sa portée, pour
      * qui gère les magasins de la société : il modifie alors chacun d'eux
      * (voir MagasinDeLaSocietePolicy::update()), lus en une seule requête.
      *
@@ -370,7 +369,7 @@ final class ChosesAFaireDeLaSociete
         }
 
         $choses = [];
-        $magasins = $compte->magasinsDeSaPortee()->where('est_demonstration', false)->where('statut', StatutMagasin::Actif->value)->orderBy('nom')->orderBy('id')->get();
+        $magasins = $compte->magasinsDeSaPortee()->where('statut', StatutMagasin::Actif->value)->orderBy('nom')->orderBy('id')->get();
 
         foreach ($magasins as $magasin) {
             if ($magasin->etablissement_verifie_le === null) {

@@ -55,8 +55,11 @@ return new class extends Migration
             $table->string('role_societe', 20)->default('membre');
             $table->string('statut', 20)->default('actif');
             // Qui a donné au compte son statut actuel (voir
-            // User::nouveauStatut()) ; nul pour un compte d'entraînement
-            // retiré par la fermeture du magasin de démonstration.
+            // User::nouveauStatut()) ; nul pour le compte d'un expert-comptable
+            // de la société retiré sans geste d'une personne de la société
+            // (rattachement d'office, fin du lien décidée hors de la société,
+            // procédure de l'éditeur ; voir
+            // ExpertsComptablesDeclares::retirerLesComptes()).
             $table->unsignedBigInteger('statut_change_par')->nullable();
             // Ce statut a-t-il été décidé par le propriétaire de la
             // société, au moment même du geste ? Un compte suspendu ou

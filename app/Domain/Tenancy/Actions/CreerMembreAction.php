@@ -28,11 +28,9 @@ use LogicException;
  *   magasin, avec les cases que son rôle précoche ou celles cochées pour
  *   lui ;
  * - un responsable, par le propriétaire, ou par un administrateur autorisé
- *   à nommer les responsables dans un magasin réel de sa portée : la
+ *   à nommer les responsables dans un magasin de sa portée : la
  *   nomination prend effet aussitôt, et le propriétaire est prévenu du
  *   compte créé, dont l'administrateur connaît le premier mot de passe.
- * Dans le magasin de démonstration, le propriétaire et un responsable de ce
- * magasin y créent des comptes d'entraînement.
  *
  * Tout se contrôle sur l'auteur relu sous les verrous du registre du
  * magasin et de sa ligne (voir JournalDesDroits) : ses droits d'abord, puis

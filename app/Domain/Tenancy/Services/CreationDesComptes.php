@@ -44,7 +44,7 @@ use LogicException;
  *   pour un autre auteur ou une autre demande est refusé, sans rien dire du
  *   compte (voir compteDejaCree()) ; l'index unique du jeton dans la
  *   société arrête une seconde demande qui serait passée quand même ;
- * - au plus 20 comptes par jour et par auteur, plus 10 par magasin réel
+ * - au plus 20 comptes par jour et par auteur, plus 10 par magasin
  *   ouvert de la société, comptés sous le verrou de l'auteur que prend
  *   JournalDesDroits : deux créations simultanées du même auteur se
  *   suivent et ne dépassent pas la limite ; une demande répétée n'y compte
@@ -157,13 +157,12 @@ final class CreationDesComptes
 
     /**
      * Combien de comptes un même auteur crée par jour dans cette société :
-     * 20, plus 10 par magasin réel ouvert.
+     * 20, plus 10 par magasin ouvert.
      */
     public static function limiteDuJour(Societe $societe): int
     {
         $magasins = Magasin::query()
             ->where('societe_id', $societe->getKey())
-            ->where('est_demonstration', false)
             ->where('statut', StatutMagasin::Actif->value)
             ->count();
 

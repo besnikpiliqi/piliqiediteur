@@ -47,10 +47,10 @@ use Illuminate\View\Middleware\ShareErrorsFromSession;
  * Panneau applicatif quotidien des magasins : le propriétaire de la
  * société, dans chacun de ses magasins, ses administrateurs, les membres
  * de l'équipe de chaque magasin, et les comptes d'un cabinet d'expertise
- * comptable lié, dans les magasins réels des clients qui leur sont
+ * comptable lié, dans les magasins des clients qui leur sont
  * confiés, selon les autorisations que chaque client accorde au cabinet,
  * y gèrent clients, produits, factures, l'expert-comptable que la société
- * a déclaré par le SIREN de son cabinet y consulte ses magasins réels selon
+ * a déclaré par le SIREN de son cabinet y consulte ses magasins selon
  * les autorisations de sa déclaration, et le propriétaire et les
  * responsables d'un magasin son équipe (voir EquipeDuMagasinResource).
  * C'est le panneau par défaut (->default()), avec la tenancy Filament
@@ -197,13 +197,11 @@ class AppPanelProvider extends PanelProvider
             // En tête de chaque page d'un magasin en lecture seule : ce qui
             // l'y met et ce qui lui reste possible (voir ControleDesDroits).
             ->renderHook(PanelsRenderHook::CONTENT_START, fn (): View => view('filament.app.magasin-en-lecture-seule', ['magasin' => Filament::getTenant()]))
-            // Tant que la société n'est pas validée, ce qui reste désactivé ;
-            // dans le magasin de démonstration, que ses documents n'ont
-            // aucune valeur.
+            // Tant que la société n'est pas validée, ce qui reste désactivé.
             ->renderHook(PanelsRenderHook::CONTENT_START, function (): View {
                 $magasin = Filament::getTenant();
 
-                return view('filament.verification-en-cours', ['magasin' => $magasin, 'societe' => $magasin instanceof Magasin ? $magasin->societe : null]);
+                return view('filament.verification-en-cours', ['societe' => $magasin instanceof Magasin ? $magasin->societe : null]);
             })
             // Dans chaque tableau : après une action groupée en partie
             // refusée, seules les lignes refusées restent cochées (voir

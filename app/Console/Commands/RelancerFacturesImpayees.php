@@ -28,11 +28,10 @@ use LogicException;
  * 9 h à 11 h 59 à son heure locale (voir Magasin::calendrier() et
  * PREMIERE_HEURE_DES_RELANCES) : en matinée, plutôt qu'en pleine nuit ; un
  * passage manqué à 9 h est rattrapé à 10 h ou à 11 h, et rien ne part
- * plus après 11 h 59 ce jour-là. Seul un magasin réel qui peut vendre
- * écrit à ses clients (voir Magasin::peutEcrireAuxClients()) : actif, non
- * suspendu, d'une société active et validée, son établissement confirmé,
- * jamais la démonstration ; la requête ne lit que ceux-là, et chacun se
- * contrôle encore avant ses relances.
+ * plus après 11 h 59 ce jour-là. Seul un magasin qui peut vendre écrit à
+ * ses clients (voir Magasin::peutVendre()) : actif, non suspendu, d'une
+ * société active et validée, son établissement confirmé ; la requête ne
+ * lit que ceux-là, et chacun se contrôle encore avant ses relances.
  *
  * Une facture échue, pas entièrement réglée, dont le client a une adresse
  * e-mail -- même archivé, il doit toujours la facture --, reçoit la
@@ -68,7 +67,6 @@ class RelancerFacturesImpayees extends Command
         $totalRelancees = 0;
 
         Magasin::query()->with('societe')
-            ->where('est_demonstration', false)
             ->where('statut', StatutMagasin::Actif)
             ->whereNull('suspendu_le')
             ->whereNotNull('etablissement_verifie_le')
@@ -80,7 +78,7 @@ class RelancerFacturesImpayees extends Command
             ->each(function (Magasin $magasin) use ($tenantContext, $envoyer, &$totalRelancees) {
                 $heureLocale = $magasin->calendrier()->heureDe(now());
 
-                if ($heureLocale < self::PREMIERE_HEURE_DES_RELANCES || $heureLocale > self::DERNIERE_HEURE_DES_RELANCES || ! $magasin->peutEcrireAuxClients()) {
+                if ($heureLocale < self::PREMIERE_HEURE_DES_RELANCES || $heureLocale > self::DERNIERE_HEURE_DES_RELANCES || ! $magasin->peutVendre()) {
                     return;
                 }
 

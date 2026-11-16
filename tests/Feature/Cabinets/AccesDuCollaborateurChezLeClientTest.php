@@ -19,7 +19,6 @@ use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Support\GardesDeLaVente;
 use App\Domain\Facturation\Support\GardesDesDocumentsEmis;
-use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
 use App\Domain\Tenancy\Enums\StatutSociete;
 use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Magasin;
@@ -44,17 +43,17 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
- * Un compte d'un cabinet d'expertise comptable ouvre les magasins réels
+ * Un compte d'un cabinet d'expertise comptable ouvre les magasins
  * d'un client lié qui lui est confié comme s'il y était connecté, avec
  * exactement les autorisations que le client accorde au cabinet, en son
  * nom avec celui du cabinet ; jamais l'espace de la société du client, sa
- * démonstration, sa caisse, ses envois, son journal d'audit ni ses traces.
+ * caisse, ses envois, son journal d'audit ni ses traces.
  */
 class AccesDuCollaborateurChezLeClientTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_un_collaborateur_ouvre_les_magasins_reels_des_clients_confies_comme_s_il_y_etait_connecte(): void
+    public function test_un_collaborateur_ouvre_les_magasins_des_clients_confies_comme_s_il_y_etait_connecte(): void
     {
         [$cabinet, $magasin, $collaborateur] = $this->collaborateurDUnClient();
         $ticket = $this->ticketDuMagasin($magasin);
@@ -117,18 +116,15 @@ class AccesDuCollaborateurChezLeClientTest extends TestCase
         $this->assertFalse(collect(Filament::getPanel('app')->getResources())->contains(fn (string $ressource): bool => str_contains($ressource, 'Audit')));
     }
 
-    public function test_un_collaborateur_n_ouvre_ni_l_espace_de_la_societe_du_client_ni_sa_demonstration_ni_sa_caisse(): void
+    public function test_un_collaborateur_n_ouvre_ni_l_espace_de_la_societe_du_client_ni_sa_caisse(): void
     {
         $cabinet = $this->ouvrirUnCabinet();
         $magasin = $this->ouvrirUneSociete(['nom' => 'Boutique cliente', 'a_verifier' => true]);
-        $demonstration = app(OuvrirLaDemonstrationAction::class)->handle($this->proprietaireDe($magasin), $magasin->societe);
         $this->lierLeCabinet($cabinet, $magasin);
         $collaborateur = $this->confier($this->collaborateur($cabinet), [$magasin]);
 
         $this->actingAs($collaborateur)->get(TableauDeBord::getUrl(panel: 'societe', tenant: $magasin->societe))->assertForbidden();
         $this->assertFalse($collaborateur->canAccessTenant($magasin->societe));
-        $this->assertFalse($collaborateur->canAccessTenant($demonstration));
-        $this->assertSame([], $collaborateur->autorisationsDans($demonstration));
         $this->dansLeMagasin($magasin, $collaborateur);
         Livewire::test(Caisse::class)->assertForbidden();
     }
@@ -221,7 +217,7 @@ class AccesDuCollaborateurChezLeClientTest extends TestCase
         $this->actingAs($proprietaire)->get(TableauDeBord::getUrl(panel: 'societe', tenant: $magasin->societe))->assertForbidden();
     }
 
-    public function test_le_selecteur_d_un_collaborateur_ne_montre_que_les_magasins_reels_du_client_ouvert(): void
+    public function test_le_selecteur_d_un_collaborateur_ne_montre_que_les_magasins_du_client_ouvert(): void
     {
         [$cabinet, $magasin, $collaborateur] = $this->collaborateurDUnClient();
         $second = $this->ouvrirUnAutreMagasin($magasin, ['nom' => 'Seconde boutique']);

@@ -16,9 +16,8 @@ use Illuminate\Database\Eloquent\Collection;
 
 /**
  * Ce qu'un compte voit sur un écran du tableau de bord (voir
- * PerimetreDesGraphiques, qui seul le construit) : les magasins réels
- * d'une seule société qu'il peut y voir, jamais le magasin de
- * démonstration, et, de chacun, les sources de documents dont il voit
+ * PerimetreDesGraphiques, qui seul le construit) : les magasins
+ * d'une seule société qu'il peut y voir, et, de chacun, les sources de documents dont il voit
  * tout (voir SourceDesGraphiques). Un graphique ne compte que les magasins
  * où la personne voit toutes ses sources (voir magasinsDe()) ; les autres
  * sortent du graphique, et une phrase grise le dit sans les nommer (voir

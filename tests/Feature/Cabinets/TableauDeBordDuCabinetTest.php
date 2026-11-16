@@ -11,7 +11,6 @@ use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Models\Facture;
-use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\Cabinet\Pages\TableauDeBordDuCabinet;
@@ -103,21 +102,9 @@ class TableauDeBordDuCabinetTest extends TestCase
         $lectures = collect($requetes)->filter(fn (string $sql): bool => str_starts_with($sql, 'select'));
         $this->assertTrue($lectures->contains(fn (string $sql): bool => str_starts_with($sql, 'select "liens_cabinet"."id", "liens_cabinet"."uuid", "liens_cabinet"."societe_id", "liens_cabinet"."actif_depuis" from "liens_cabinet"')));
         $this->assertTrue($lectures->contains(fn (string $sql): bool => str_starts_with($sql, 'select "id", "uuid", "siren", "raison_sociale", "siege_ville", "mois_fin_exercice", "statut", "validee_le", "close_le" from "societes"')));
-        $this->assertTrue($lectures->contains(fn (string $sql): bool => str_starts_with($sql, 'select "id", "societe_id", "statut", "territoire", "est_demonstration" from "magasins"')));
+        $this->assertTrue($lectures->contains(fn (string $sql): bool => str_starts_with($sql, 'select "id", "societe_id", "statut", "territoire" from "magasins"')));
         $this->assertTrue($lectures->contains(fn (string $sql): bool => str_starts_with($sql, 'select "id", "magasin_id", "total_ttc", "date_echeance" from "factures"')));
         $this->assertFalse($lectures->contains(fn (string $sql): bool => str_contains($sql, 'from "clients"')));
-    }
-
-    public function test_la_demonstration_d_un_client_n_entre_jamais_dans_les_totaux(): void
-    {
-        $cabinet = $this->ouvrirUnCabinet();
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Boutique cliente', 'a_verifier' => true]);
-        app(OuvrirLaDemonstrationAction::class)->handle($this->proprietaireDe($magasin), $magasin->societe);
-        $this->lierLeCabinet($cabinet, $magasin);
-
-        [$ligne] = app(TableauDeBordDesClients::class)->pour($this->proprietaireDuCabinet($cabinet));
-
-        $this->assertSame(1, $ligne['magasins']);
     }
 
     public function test_une_requete_livewire_forgee_ne_montre_aucun_client_hors_des_liens_ouverts(): void

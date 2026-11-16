@@ -578,7 +578,7 @@ class ExpertComptableDeclareTest extends TestCase
         }
     }
 
-    public function test_declarer_ajouter_regler_suspendre_retirer_et_reintegrer_s_inscrivent_au_jet_130_de_chaque_magasin_reel_et_a_l_audit(): void
+    public function test_declarer_ajouter_regler_suspendre_retirer_et_reintegrer_s_inscrivent_au_jet_130_de_chaque_magasin_et_a_l_audit(): void
     {
         $lyon1 = $this->ouvrirUneSociete(['nom' => 'Lyon 1']);
         $lyon2 = $this->ouvrirUnAutreMagasin($lyon1, ['nom' => 'Lyon 2']);

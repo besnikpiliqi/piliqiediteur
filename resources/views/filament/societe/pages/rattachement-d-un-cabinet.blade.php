@@ -12,7 +12,7 @@
             <x-slot name="heading">{{ $cabinet['societe']->raison_sociale ?? 'Un cabinet' }} demande à suivre votre société</x-slot>
 
             <p>Cabinet d'expertise comptable · SIREN {{ $cabinet['societe']->siren }}@if ($cabinet['societe']->siege_ville) · {{ $cabinet['societe']->siege_code_postal }} {{ $cabinet['societe']->siege_ville }}@endif @if ($cabinet['numero_ordre']) · inscrit à l'Ordre sous le n° {{ $cabinet['numero_ordre'] }}@endif</p>
-            <p>S'il est accepté, le cabinet consultera vos magasins réels selon les autorisations que vous choisissez, que vous réglerez ensuite à tout moment dans « Cabinet comptable ».</p>
+            <p>S'il est accepté, le cabinet consultera vos magasins selon les autorisations que vous choisissez, que vous réglerez ensuite à tout moment dans « Cabinet comptable ».</p>
 
             @if ($this->cabinetSuspendu($demande))
                 <p class="mt-2 font-semibold">{{ \App\Domain\Cabinets\Actions\AccepterLaDemandeDeLienAction::MESSAGE_CABINET_SUSPENDU }}</p>

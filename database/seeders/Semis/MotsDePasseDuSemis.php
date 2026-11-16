@@ -10,8 +10,8 @@ use SensitiveParameter;
 /**
  * Les mots de passe des comptes semés, comme si chaque personne avait
  * choisi le sien : le même pour tous, stable d'un semis à l'autre, quand
- * la variable PILIQI_DEMO_MOT_DE_PASSE du .env le donne (config
- * piliqi.demo_mot_de_passe) ; sinon un mot de passe tiré au hasard pour
+ * la variable PILIQI_SEMIS_MOT_DE_PASSE du .env le donne (config
+ * piliqi.semis_mot_de_passe) ; sinon un mot de passe tiré au hasard pour
  * chaque compte, à chaque semis. Chacun suit la règle des mots de passe
  * choisis (voir RegleDuMotDePasse) : au moins 8 caractères, ni un seul
  * caractère répété, ni une suite de chiffres, ni l'identifiant du compte
@@ -19,21 +19,21 @@ use SensitiveParameter;
  */
 final class MotsDePasseDuSemis
 {
-    public const MESSAGE_REFUSE = 'PILIQI_DEMO_MOT_DE_PASSE ne suit pas la règle des mots de passe (%s) : choisissez-en un autre dans le .env, ou retirez la variable pour des mots de passe tirés au hasard.';
+    public const MESSAGE_REFUSE = 'PILIQI_SEMIS_MOT_DE_PASSE ne suit pas la règle des mots de passe (%s) : choisissez-en un autre dans le .env, ou retirez la variable pour des mots de passe tirés au hasard.';
 
-    public const MESSAGE_IDENTIFIANT = 'PILIQI_DEMO_MOT_DE_PASSE contient l\'identifiant %s, tiré pour un compte semé : choisissez un mot de passe sans cette suite de chiffres, puis relancez php artisan migrate:fresh --seed.';
+    public const MESSAGE_IDENTIFIANT = 'PILIQI_SEMIS_MOT_DE_PASSE contient l\'identifiant %s, tiré pour un compte semé : choisissez un mot de passe sans cette suite de chiffres, puis relancez php artisan migrate:fresh --seed.';
 
     private function __construct(private readonly ?string $commun) {}
 
     /**
      * Les mots de passe que donne la configuration : le mot de passe commun
-     * de PILIQI_DEMO_MOT_DE_PASSE, contrôlé avant tout semis, ou le tirage.
+     * de PILIQI_SEMIS_MOT_DE_PASSE, contrôlé avant tout semis, ou le tirage.
      *
      * @throws RuntimeException quand le mot de passe commun ne suit pas la règle
      */
     public static function depuisLaConfiguration(): self
     {
-        $commun = config('piliqi.demo_mot_de_passe');
+        $commun = config('piliqi.semis_mot_de_passe');
 
         if (! is_string($commun) || $commun === '') {
             return new self(null);

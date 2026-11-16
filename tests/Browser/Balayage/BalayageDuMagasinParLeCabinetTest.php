@@ -12,10 +12,9 @@ use Illuminate\Support\Facades\Mail;
 
 /*
  * Le balayage du panneau d'un magasin par le cabinet lié (son propriétaire
- * et le collaborateur à qui le client est confié), par l'expert-comptable
- * que la société déclare à la place de ce cabinet, et du magasin de
- * démonstration d'une société qui attend son code, par son propriétaire et
- * par ses comptes d'entraînement : chaque page que ses liens atteignent et
+ * et le collaborateur à qui le client est confié) et par l'expert-comptable
+ * que la société déclare à la place de ce cabinet : chaque page que ses
+ * liens atteignent et
  * chaque action visible de chacune, ouverte puis fermée sans rien valider,
  * sans aucune erreur (voir Balayeur et TestCaseDuNavigateur::balayer()). La
  * société de test a tous ses rôles et de quoi remplir chaque page (voir
@@ -62,32 +61,4 @@ test('l’expert-comptable déclaré par la société ouvre chaque page et chaqu
     $pages = $this->balayer($this->seConnecter($marc->refresh()), $magasin, [$magasin], __FILE__);
 
     expect($pages)->toContain($magasin.'/factures', $magasin.'/la-societe', '/app/profile')->not->toContain($magasin.'/caisse', $magasin.'/equipe');
-});
-
-test('le propriétaire d’une société qui attend son code ouvre chaque page et chaque action du magasin de démonstration sans erreur', function () {
-    $demonstration = $this->demonstration();
-    $magasin = '/app/'.$demonstration->magasin->uuid;
-    $onglet = $this->seConnecter($demonstration->proprietaire, panneau: 'societe');
-
-    $pages = $this->balayer($onglet, $magasin, [$magasin], __FILE__);
-
-    expect($pages)->toContain($magasin.'/equipe', $magasin.'/caisse');
-});
-
-test('le responsable d’entraînement ouvre chaque page et chaque action du magasin de démonstration sans erreur', function () {
-    $demonstration = $this->demonstration();
-    $magasin = '/app/'.$demonstration->magasin->uuid;
-
-    $pages = $this->balayer($this->seConnecter($demonstration->responsable), $magasin, [$magasin], __FILE__);
-
-    expect($pages)->toContain($magasin.'/caisse', $magasin.'/equipe');
-});
-
-test('le vendeur d’entraînement ouvre chaque page et chaque action du magasin de démonstration sans erreur', function () {
-    $demonstration = $this->demonstration();
-    $magasin = '/app/'.$demonstration->magasin->uuid;
-
-    $pages = $this->balayer($this->seConnecter($demonstration->vendeur), $magasin, [$magasin], __FILE__);
-
-    expect($pages)->toContain($magasin.'/caisse');
 });

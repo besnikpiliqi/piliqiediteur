@@ -2,7 +2,6 @@
 
 namespace Tests\Feature\Filament;
 
-use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Filament\App\Widgets\BienvenueApercu;
@@ -92,18 +91,6 @@ class BienvenueApercuTest extends TestCase
         $bienvenue = Livewire::test(BienvenueApercu::class);
 
         $bienvenue->assertSeeInOrder(['Bonjour Paul Martin', 'Observateur · Boutique Lyon 1']);
-    }
-
-    public function test_le_magasin_de_demonstration_le_dit(): void
-    {
-        $societe = $this->inscrireUneSociete();
-        $proprietaire = $societe->proprietaire()->firstOrFail();
-        $demonstration = app(OuvrirLaDemonstrationAction::class)->handle($proprietaire, $societe);
-        $this->dansLeMagasin($demonstration, $proprietaire);
-
-        $bienvenue = Livewire::test(BienvenueApercu::class);
-
-        $bienvenue->assertSeeInOrder(['Bonjour Jeanne DUPONT', "Propriétaire de {$societe->raison_sociale} (démonstration)"]);
     }
 
     /**

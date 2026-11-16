@@ -138,7 +138,7 @@ final class CommandesDesProfessionnels
 
     public function __construct(
         private readonly HorlogeDuSemis $horloge,
-        private readonly SemisDeDemonstration $semis,
+        private readonly SemisComplet $semis,
     ) {}
 
     /**
@@ -176,7 +176,7 @@ final class CommandesDesProfessionnels
             unset($this->suites[$rang]);
         }
 
-        if ($rang < self::PREMIER_JOUR || $rang > SemisDeDemonstration::JOURS - 12) {
+        if ($rang < self::PREMIER_JOUR || $rang > SemisComplet::JOURS - 12) {
             return;
         }
 
@@ -232,7 +232,7 @@ final class CommandesDesProfessionnels
     {
         return $gestes->dans(fn (): Devis => app(EmettreDevisAction::class)->handle(
             $vendeur,
-            app(CreerDevisAction::class)->handle($vendeur, $client, $lignes, ['date_validite' => $this->horloge->jour(min($rang + $validite, SemisDeDemonstration::JOURS - 1))]),
+            app(CreerDevisAction::class)->handle($vendeur, $client, $lignes, ['date_validite' => $this->horloge->jour(min($rang + $validite, SemisComplet::JOURS - 1))]),
             GestesDuMagasin::jeton(),
         ));
     }
@@ -353,7 +353,7 @@ final class CommandesDesProfessionnels
      */
     private function plusTard(int $rang, Closure $geste): void
     {
-        if ($rang <= SemisDeDemonstration::JOURS - 2) {
+        if ($rang <= SemisComplet::JOURS - 2) {
             $this->suites[$rang][] = $geste;
         }
     }

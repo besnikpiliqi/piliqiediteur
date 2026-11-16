@@ -41,7 +41,6 @@ use App\Domain\Tenancy\Actions\CreerEtablissementAction;
 use App\Domain\Tenancy\Actions\ModifierEtablissementAction;
 use App\Domain\Tenancy\Actions\ModifierIdentiteSocieteAction;
 use App\Domain\Tenancy\Actions\ModifierParametresFiscauxSocieteAction;
-use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Affectation;
@@ -294,7 +293,6 @@ class LecteurDesDroitsTest extends TestCase
             'effacer le n° de TVA' => ['n° de TVA', CodeEvenement::ParametreDeConformite],
             'créer un magasin dans une société validée' => ['nouveau magasin', CodeEvenement::ModificationDesDroits],
             'changer le SIRET d\'un magasin avant la validation' => ['SIRET', CodeEvenement::ParametreDeConformite],
-            'ouvrir la démonstration' => ['démonstration', CodeEvenement::EntreeEnModeDemonstration],
         ];
     }
 
@@ -307,7 +305,7 @@ class LecteurDesDroitsTest extends TestCase
     #[DataProvider('actionsDeLaSociete')]
     public function test_les_actions_de_la_societe_inscrivent_leurs_evenements_au_nom_de_l_auteur_passe_a_l_action(string $action, CodeEvenement $attendu): void
     {
-        $societe = in_array($action, ['SIRET', 'démonstration'], true) ? $this->inscrireUneSociete() : $this->ouvrirUneSociete(['nom' => 'Lyon'])->societe;
+        $societe = $action === 'SIRET' ? $this->inscrireUneSociete() : $this->ouvrirUneSociete(['nom' => 'Lyon'])->societe;
         $magasinAVerifier = $action === 'SIRET' ? $this->creerLeMagasinDuSiege($societe) : null;
         $proprietaire = $societe->proprietaire()->firstOrFail();
         $this->actingAs(User::factory()->create());
@@ -319,7 +317,6 @@ class LecteurDesDroitsTest extends TestCase
             'n° de TVA' => app(ModifierIdentiteSocieteAction::class)->handle($proprietaire, $societe, ['numero_tva' => '', 'capital_social' => '1000']),
             'nouveau magasin' => app(CreerEtablissementAction::class)->handle($proprietaire, $societe, ['nom' => 'Villeurbanne', 'nic' => MagasinFactory::nicLibre($societe)]),
             'SIRET' => app(ModifierEtablissementAction::class)->handle($proprietaire, $magasinAVerifier, ['nic' => MagasinFactory::nicLibre($societe)]),
-            'démonstration' => app(OuvrirLaDemonstrationAction::class)->handle($proprietaire, $societe),
         };
 
         $inscrits = EnregistrementFiscal::withoutGlobalScopes()

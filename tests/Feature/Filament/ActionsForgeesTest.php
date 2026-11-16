@@ -43,7 +43,6 @@ use App\Filament\Cabinet\Resources\ClientDuCabinetResource\Pages\FicheDuClient;
 use App\Filament\Cabinet\Resources\CollaborateurResource\Pages\FicheDuCollaborateur;
 use App\Filament\Cabinet\Resources\CollaborateurResource\Pages\ListCollaborateurs;
 use App\Filament\Societe\Pages\CabinetComptable;
-use App\Filament\Societe\Pages\TableauDeBord;
 use App\Filament\Societe\Pages\VerificationSociete;
 use App\Filament\Societe\Resources\MagasinResource\Pages\ModifierMagasin;
 use App\Filament\Societe\Resources\MembreResource\Pages\FicheDuMembre;
@@ -132,7 +131,6 @@ class ActionsForgeesTest extends TestCase
             'envoyer un document',
             'clôturer la journée',
             'demander un nouveau courrier',
-            'ouvrir la démonstration',
             'transférer la propriété',
             'créer un vendeur',
             'nommer un responsable',
@@ -152,7 +150,7 @@ class ActionsForgeesTest extends TestCase
     #[DataProvider('actionsMasquees')]
     public function test_une_action_d_en_tete_masquee_appelee_directement_ne_fait_rien(string $nom): void
     {
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique', 'a_verifier' => in_array($nom, ['demander un nouveau courrier', 'ouvrir la démonstration', 'déclarer l\'expert-comptable'], true)]);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique', 'a_verifier' => in_array($nom, ['demander un nouveau courrier', 'déclarer l\'expert-comptable'], true)]);
         $societe = $magasin->societe;
 
         $rienNAEteFait = match ($nom) {
@@ -186,13 +184,6 @@ class ActionsForgeesTest extends TestCase
                 $this->forgerLAction(Livewire::test(VerificationSociete::class)->assertActionHidden('demanderUnNouveauCourrier'), 'demanderUnNouveauCourrier');
 
                 return fn (): bool => CodeConfirmation::withoutGlobalScope(SocieteScope::class)->where('societe_id', $societe->id)->doesntExist();
-            })(),
-            'ouvrir la démonstration' => (function () use ($magasin, $societe): Closure {
-                $administrateur = $this->administrateur($magasin);
-                $this->dansLEspaceDeLaSociete($societe, $administrateur);
-                $this->forgerLAction(Livewire::test(TableauDeBord::class)->assertActionHidden('ouvrirLaDemonstration'), 'ouvrirLaDemonstration');
-
-                return fn (): bool => $societe->demonstration()->doesntExist();
             })(),
             'transférer la propriété' => (function () use ($magasin, $societe): Closure {
                 $proprietaire = $this->proprietaireDe($magasin);
@@ -312,7 +303,7 @@ class ActionsForgeesTest extends TestCase
 
     /**
      * Un ticket émis dans ce magasin par son responsable de test : le
-     * propriétaire ne vend jamais dans un magasin réel.
+     * propriétaire ne vend jamais.
      */
     private function vendreParLeResponsable(Magasin $magasin): Facture
     {

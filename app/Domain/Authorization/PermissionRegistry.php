@@ -18,13 +18,10 @@ use InvalidArgumentException;
  * User::autorisationsDans()) : cocher "client.create" pour un vendeur dans
  * le magasin A ne lui donne rien dans le magasin B. Sans aucune case, le
  * propriétaire de la société les a toutes sauf celles de la vente (voir
- * deVente() et duProprietaire()) dans chacun de ses magasins réels : il
- * supervise et contrôle, et n'y vend jamais ; dans le magasin de
- * démonstration de sa société, tant qu'il est ouvert, il les a toutes,
- * celles de la vente comprises, et s'y entraîne à tout (voir
- * duProprietaireEnDemonstration()) ; un responsable les a toutes dans son
+ * deVente() et duProprietaire()) dans chacun de ses magasins : il
+ * supervise et contrôle, et ne vend jamais ; un responsable les a toutes dans son
  * magasin, et un compte du cabinet d'expertise comptable lié celles que le
- * client accorde au cabinet dans chacun de ses magasins réels (voir
+ * client accorde au cabinet dans chacun de ses magasins (voir
  * parDefautDuCabinet() et ajoutablesAuCabinet()).
  * Un vendeur ou un observateur a celles de son
  * affectation à ce magasin, cochées par le propriétaire ou un responsable
@@ -108,8 +105,8 @@ final class PermissionRegistry
      * Vendre au-delà du stock disponible (R1, voir VerificateurDeStock) :
      * après un avertissement, qui se renouvelle si le stock a encore
      * baissé. Une autorisation de vente (voir deVente()) : les responsables
-     * du magasin l'ont toujours, le propriétaire seulement dans le magasin
-     * de démonstration, le seul où il vend ; aucun modèle ne la coche
+     * du magasin l'ont toujours, le propriétaire jamais, puisqu'il ne vend
+     * pas ; aucun modèle ne la coche
      * d'office, pas même celui de l'administrateur (voir
      * modeleDeLAdministrateur()), et un cabinet lié ne l'a jamais (voir
      * ajoutablesAuCabinet()).
@@ -137,9 +134,8 @@ final class PermissionRegistry
      * DerogationsDePrix). Pas une autorisation de vente : elle ne vaut sur
      * une ligne de ticket ou de facture que pour qui peut aussi la créer.
      * Les responsables du magasin et le propriétaire l'ont toujours (le
-     * propriétaire, qui ne vend que dans le magasin de démonstration, pour
-     * le prix de référence d'un service et les lignes d'un devis, et, dans
-     * ce seul magasin, celles d'un ticket ou d'une facture) ; le modèle de
+     * propriétaire, qui ne vend pas, pour le prix de référence d'un service
+     * et les lignes d'un devis) ; le modèle de
      * l'administrateur la précoche, aucun modèle de vendeur ou
      * d'observateur ; un cabinet lié ne l'a jamais.
      */
@@ -306,7 +302,7 @@ final class PermissionRegistry
      * l'expert-comptable qu'il déclare (voir parDefautDuCabinet()), et
      * qu'il leur retire à son gré ; ils valident, corrigent, renvoient au
      * client et ajoutent les charges de « Toute la société » et des
-     * magasins réels qu'il leur ouvre. Elle ne se coche jamais à un compte
+     * magasins qu'il leur ouvre. Elle ne se coche jamais à un compte
      * de la société (voir reserveesAuxComptables()) : le propriétaire ne
      * valide lui-même que quand sa société n'a aucun comptable.
      */
@@ -404,9 +400,8 @@ final class PermissionRegistry
      * Les autorisations de la vente : créer et émettre un ticket ou une
      * facture, enregistrer un encaissement (les parts d'un règlement et le
      * bon d'avoir compris, à la caisse comme sur un ticket impayé), vendre
-     * sans stock. Le propriétaire ne les a dans aucun magasin réel (voir
-     * duProprietaire()), seulement dans le magasin de démonstration de sa
-     * société (voir duProprietaireEnDemonstration()) ; un administrateur
+     * sans stock. Le propriétaire ne les a dans aucun magasin (voir
+     * duProprietaire()) ; un administrateur
      * seulement quand le propriétaire les lui coche, jamais précochées
      * (voir modeleDeLAdministrateur()). Ni l'avoir, ni le devis, ni la
      * contre-passation, ni l'envoi, ni la clôture ne sont des ventes (voir
@@ -518,48 +513,20 @@ final class PermissionRegistry
     }
 
     /**
-     * Les autorisations du propriétaire dans chacun des magasins réels de
+     * Les autorisations du propriétaire dans chacun des magasins de
      * sa société, sans case : toutes celles du type de la société (voir
      * pourLeType()), sauf celles de la vente (voir deVente()), dans l'ordre
      * alphabétique. Il supervise et contrôle : il fait les avoirs et les
      * devis, contre-passe, envoie et relance, clôture la journée et ferme
      * la caisse d'un vendeur, mais ne crée, n'émet ni n'encaisse jamais
-     * aucune vente dans un magasin réel, et la base le refuse (voir
-     * GardesDeLaVente). Le magasin de démonstration fait seule exception
-     * (voir duProprietaireEnDemonstration()).
+     * aucune vente, et la base le refuse (voir GardesDeLaVente) : le
+     * propriétaire n'a jamais les autorisations de vente.
      *
      * @return list<string>
      */
     public static function duProprietaire(TypeDActivite $type): array
     {
         $autorisations = array_values(array_diff(self::pourLeType($type), self::deVente()));
-        sort($autorisations);
-
-        return $autorisations;
-    }
-
-    /**
-     * Les autorisations du propriétaire dans le magasin de démonstration
-     * de sa société, tant qu'il est ouvert, sans case : toutes celles du
-     * type de la société (voir pourLeType()), celles de la vente comprises,
-     * dans l'ordre alphabétique (décision de l'éditeur du 12/11/2026). Il
-     * s'y entraîne à tout, comme un responsable : il ouvre la caisse, crée
-     * et émet des tickets et des factures, encaisse, vend sans stock,
-     * accorde des remises, utilise un bon d'avoir, ferme sa caisse et
-     * clôture la journée. Fermée, à la validation de la société ou faute
-     * d'opération, la démonstration est en lecture seule et ne vend plus,
-     * pour lui comme pour tout compte (voir ControleDesDroits et
-     * Magasin::peutVendre()), et il n'y a plus que celles de
-     * duProprietaire() : il n'y tient plus de caisse, sinon pour fermer
-     * celle qu'il y aurait laissée ouverte (voir
-     * User::autorisationsEnregistreesDans() et
-     * ClotureCaissePersonnellePolicy::fermer()).
-     *
-     * @return list<string>
-     */
-    public static function duProprietaireEnDemonstration(TypeDActivite $type): array
-    {
-        $autorisations = self::pourLeType($type);
         sort($autorisations);
 
         return $autorisations;

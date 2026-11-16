@@ -37,7 +37,7 @@ use Throwable;
  * parLeSysteme()). Sous les verrous de JournalDesDroits::modifierLeLien() :
  * le lien passe à « terminé », ses clients confiés et ses autorisations
  * s'effacent ; chaque compte du cabinet qui avait accès perd ses droits,
- * au JET 130 de chaque magasin réel du client, et la fin s'inscrit au
+ * au JET 130 de chaque magasin du client, et la fin s'inscrit au
  * journal d'audit des deux sociétés. Un lien déjà terminé ne change rien.
  *
  * Aucune session n'est fermée : chaque session ouverte d'un compte du
@@ -87,7 +87,7 @@ class MettreFinAuLienAction
     /**
      * Le lien actif et les demandes en cours, dans les deux sens, d'un
      * client que l'éditeur révoque prennent fin dans la transaction de sa
-     * révocation, qui tient déjà les registres de ses magasins réels et sa
+     * révocation, qui tient déjà les registres de ses magasins et sa
      * ligne (voir RevoquerSocieteAction) : le lien, ou la déclaration de
      * son expert-comptable, dont les comptes sont retirés sans auteur, par
      * la procédure de l'éditeur (voir parLEditeur()), motif « société
@@ -114,7 +114,7 @@ class MettreFinAuLienAction
      * La fin d'un lien qui suit un geste de la vérification d'une société
      * non validée (la clôture de son inscription, la saisie de son code par
      * une autre personne), sans auteur ni intervention, dans la transaction
-     * de ce geste, qui tient déjà les registres de ses magasins réels et
+     * de ce geste, qui tient déjà les registres de ses magasins et
      * sa ligne.
      */
     public function parLeSysteme(LienCabinet $lien, MotifDeFinDuLien $motif): void

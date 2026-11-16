@@ -39,13 +39,11 @@ class AffectationPolicy
     /**
      * Créer un vendeur ou un observateur du magasin actif : son
      * propriétaire ou un responsable du magasin (l'action contrôle le
-     * rôle : un responsable se nomme par le propriétaire) ; jamais dans le
-     * magasin de démonstration d'une société validée ou close (voir
-     * Magasin::estUneDemonstrationTerminee()).
+     * rôle : un responsable se nomme par le propriétaire).
      */
     public function create(User $user): bool
     {
-        return $this->viewAny($user) && ! app(TenantContext::class)->magasin()->estUneDemonstrationTerminee();
+        return $this->viewAny($user);
     }
 
     /**

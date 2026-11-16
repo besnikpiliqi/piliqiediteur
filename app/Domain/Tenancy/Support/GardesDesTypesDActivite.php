@@ -14,8 +14,8 @@ use Illuminate\Support\Facades\DB;
  * - societes_type_d_activite_connu_et_fixe (societes) : un type hors de
  *   ceux de l'énumération, et toute modification du type, d'aucun type
  *   vers aucun autre ;
- * - magasins_jamais_dans_un_cabinet (magasins) : un magasin, démonstration
- *   comprise, dans une société de type cabinet d'expertise comptable ;
+ * - magasins_jamais_dans_un_cabinet (magasins) : un magasin dans une
+ *   société de type cabinet d'expertise comptable ;
  * - autorisations_d_articles_seulement_avec_des_articles
  *   (autorisations_affectations) : une case de la famille des articles
  *   (lue au référentiel des autorisations de magasin, voir

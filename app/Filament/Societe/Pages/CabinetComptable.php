@@ -178,16 +178,16 @@ class CabinetComptable extends Page implements HasForms
 
     /**
      * Les magasins qu'un lien ouvre, dits en toutes lettres : « tous vos
-     * magasins réels, présents et futurs », ou les noms des magasins
+     * magasins, présents et futurs », ou les noms des magasins
      * choisis.
      */
     public static function magasinsOuvertsEnToutesLettres(LienCabinet $lien, Societe $societe): string
     {
         if ($lien->tous_les_magasins) {
-            return 'tous vos magasins réels, présents et futurs';
+            return 'tous vos magasins, présents et futurs';
         }
 
-        $noms = ValeursLues::textes($societe->magasinsReels()->whereKey($lien->magasinsChoisis())->orderBy('nom')->orderBy('id')->pluck('nom'));
+        $noms = ValeursLues::textes($societe->magasins()->whereKey($lien->magasinsChoisis())->orderBy('nom')->orderBy('id')->pluck('nom'));
 
         return (count($noms) > 1 ? 'les magasins ' : 'le magasin ').implode(', ', $noms);
     }
@@ -206,7 +206,7 @@ class CabinetComptable extends Page implements HasForms
      * Les deux champs du choix des magasins que voit le cabinet, ici comme
      * sur la page de rattachement (décision de l'éditeur du 11/11/2026) :
      * « Tous les magasins, présents et futurs », d'un clic, ou une
-     * sélection cochée magasin par magasin, parmi les magasins réels de la
+     * sélection cochée magasin par magasin, parmi les magasins de la
      * société.
      *
      * @return list<Component>
@@ -224,7 +224,7 @@ class CabinetComptable extends Page implements HasForms
             CheckboxList::make('magasins')
                 ->label('Magasins choisis')
                 ->helperText('Un magasin non coché n\'est ni listé ni ouvert pour votre cabinet. Les mêmes autorisations valent dans chaque magasin coché.')
-                ->options(fn (): array => $societe->magasinsReels()->orderBy('nom')->orderBy('id')->pluck('nom', 'id')->map(fn (mixed $nom): string => ValeursLues::texte($nom))->all())
+                ->options(fn (): array => $societe->magasins()->orderBy('nom')->orderBy('id')->pluck('nom', 'id')->map(fn (mixed $nom): string => ValeursLues::texte($nom))->all())
                 ->columns(2)
                 ->visible(fn (Get $get): bool => $visible() && $get('portee') === self::SELECTION_DE_MAGASINS),
         ];

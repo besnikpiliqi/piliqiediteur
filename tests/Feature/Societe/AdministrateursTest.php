@@ -210,7 +210,7 @@ class AdministrateursTest extends TestCase
         $this->assertThrows(fn () => app(TenantContext::class)->runAsSociete($magasin->societe, fn () => app(CreerEtablissementAction::class)->handle($administrateur, $magasin->societe, ['nom' => 'Pris', 'nic' => MagasinFactory::nicLibre($magasin->societe)])), LogicException::class);
         $this->assertThrows(fn () => app(CreerAdministrateurAction::class)->handle($proprietaire, $magasin->societe, ['name' => 'Alix'], [$magasin->id], [], [AutorisationsSociete::PARAMETRES_GERER]), LogicException::class, PorteeDesAdministrateurs::MESSAGE_TOUS_LES_MAGASINS_EXIGES);
 
-        $this->assertSame(1, $magasin->societe->magasinsReels()->count());
+        $this->assertSame(1, $magasin->societe->magasins()->count());
         $this->assertFalse(User::query()->where('name', 'Alix')->exists());
         $this->assertNotContains(AutorisationsSociete::PARAMETRES_GERER, $administrateur->refresh()->autorisationsDeSociete());
     }

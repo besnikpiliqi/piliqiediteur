@@ -76,10 +76,9 @@ use UnexpectedValueException;
  * déjà reparti dans sa nouvelle version, il ne part pas avec cet e-mail,
  * écrit pour une version que le client ne recevrait pas. Un magasin qui
  * ne peut plus vendre au moment de l'envoi n'écrit pas à ses clients
- * (voir Magasin::peutEcrireAuxClients()) : suspendu ou fermé entre-temps,
- * ou sa société suspendue, résiliée ou close ; le magasin de
- * démonstration, jamais. Dans ces cas, l'envoi échoue sans partir, et le
- * magasin sait pourquoi.
+ * (voir Magasin::peutVendre()) : suspendu ou fermé entre-temps,
+ * ou sa société suspendue, résiliée ou close. Dans ces cas, l'envoi
+ * échoue sans partir, et le magasin sait pourquoi.
  *
  * La personne qui a demandé l'envoi se relit aussi au moment de partir,
  * sous le verrou de sa ligne (voir LecteurDesDroits) : sans plus accès au
@@ -338,10 +337,10 @@ class EnvoyerDocumentJob implements ShouldBeUnique, ShouldQueue
         $magasin = Magasin::query()->whereKey($envoi->magasin_id)->sharedLock()->firstOrFail();
         app(TenantContext::class)->set($magasin);
 
-        if (! $magasin->peutEcrireAuxClients()) {
+        if (! $magasin->peutVendre()) {
             $motif = $magasin->motifDeLectureSeule('Le magasin');
             $this->echouer($envoi, $motif === null
-                ? "{$magasin->refusDEcrireAuxClients()} L'e-mail n'est pas parti."
+                ? "{$magasin->refusDeVente()} L'e-mail n'est pas parti."
                 : "{$motif} : il n'écrit plus à ses clients, l'e-mail n'est pas parti.");
 
             return null;

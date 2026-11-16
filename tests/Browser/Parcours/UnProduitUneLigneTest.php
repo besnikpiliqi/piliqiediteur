@@ -234,39 +234,23 @@ test('sur un devis du magasin, le propriétaire choisit deux fois le même produ
     expect($devis->lignes->map(fn ($ligne): array => [$ligne->description, $ligne->quantite])->all())->toBe([['Savon au lait', 2]]);
 });
 
-test('dans la démonstration, le propriétaire choisit de nouveau un produit à la caisse : sa ligne monte, et il encaisse', function () {
-    $demonstration = $this->demonstration();
-    $onglet = $this->seConnecter($demonstration->proprietaire, panneau: 'societe')->aller('/app/'.$demonstration->magasin->uuid.'/caisse');
+test('le vendeur et le responsable ajoutent un produit sur une facture, le reprennent, puis retirent sa ligne par la corbeille', function (string $compte) {
+    $societe = $this->societeComplete();
+    $onglet = $this->seConnecter($societe->{$compte})->aller('/app/'.$societe->magasin->uuid.'/factures/create');
 
-    ajouterParLeTableau($onglet, 'Carnet A5');
-    ajouterParLeTableau($onglet, 'Carnet A5')
-        ->voir('Déjà sur une ligne : « Carnet A5 » (2), sa quantité a augmenté.');
-    expect(quantitesDesLignes($onglet))->toBe(['2']);
-    $onglet->remplirLaLigne('parts', 0, 'montant', app(TenantContext::class)->runAs($demonstration->magasin, fn (): string => (string) (2 * (float) Produit::query()->where('nom', 'Carnet A5')->value('prix_vente_ttc'))))
-        ->soumettre('Encaisser')
-        ->voir('Vente encaissée');
-
-    $ticket = app(TenantContext::class)->runAs($demonstration->magasin, fn (): Facture => Facture::query()->latest('id')->firstOrFail()->load('lignes'));
-    expect($ticket->lignes->map(fn ($ligne): array => [$ligne->description, $ligne->quantite])->all())->toBe([['Carnet A5', 2]]);
-});
-
-test('le vendeur et le responsable d’entraînement ajoutent un produit sur une facture de la démonstration, le reprennent, puis retirent sa ligne par la corbeille', function (string $compte) {
-    $demonstration = $this->demonstration();
-    $onglet = $this->seConnecter($demonstration->{$compte})->aller('/app/'.$demonstration->magasin->uuid.'/factures/create');
-
-    ajouterParLeTableau($onglet, 'Stylo bille bleu', 'Tasse en céramique');
-    ajouterParLeTableau($onglet, 'Stylo bille bleu')
-        ->voir('Déjà sur une ligne : « Stylo bille bleu » (2), sa quantité a augmenté.');
+    ajouterParLeTableau($onglet, 'Savon au lait', 'Bougie parfumée');
+    ajouterParLeTableau($onglet, 'Savon au lait')
+        ->voir('Déjà sur une ligne : « Savon au lait » (2), sa quantité a augmenté.');
     expect(quantitesDesLignes($onglet))->toBe(['2', '1']);
 
-    // La ligne du stylo, la première, se retire par sa corbeille.
+    // La ligne du savon, la première, se retire par sa corbeille.
     $onglet->cliquer('.fi-fo-repeater-item >> nth=0 >> '.Navigation::bouton('Supprimer'));
-    $onglet->attendreQue('document.querySelectorAll(\'[id*=".lignes."][id$=".quantite"]\').length === 1', 'la ligne du stylo est restée');
+    $onglet->attendreQue('document.querySelectorAll(\'[id*=".lignes."][id$=".quantite"]\').length === 1', 'la ligne du savon est restée');
     expect(quantitesDesLignes($onglet))->toBe(['1'])
-        ->and($onglet->element('[id*=".lignes."][id$=".description"]')->inputValue())->toBe('Tasse en céramique');
+        ->and($onglet->element('[id*=".lignes."][id$=".description"]')->inputValue())->toBe('Bougie parfumée');
 })->with([
-    'le vendeur d’entraînement' => ['vendeur'],
-    'le responsable d’entraînement' => ['responsable'],
+    'le vendeur' => ['vendeur'],
+    'le responsable' => ['responsable'],
 ]);
 
 test('l’administrateur autorisé à vendre choisit de nouveau un produit à la caisse, qu’il encaisse, puis sur une facture : une seule ligne chaque fois', function () {

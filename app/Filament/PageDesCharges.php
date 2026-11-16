@@ -1207,7 +1207,7 @@ final class PageDesCharges extends Component implements HasActions, HasForms, Ha
     }
 
     /**
-     * Les magasins réels de la société de l'accès qu'il voit (voir
+     * Les magasins de la société de l'accès qu'il voit (voir
      * ChargesDeLaSociete::magasinsVus()).
      *
      * @return Collection<int, Magasin>
@@ -1254,7 +1254,7 @@ final class PageDesCharges extends Component implements HasActions, HasForms, Ha
     /**
      * Les fournisseurs proposés à la saisie, sans en créer de fiche : ceux
      * des charges que l'accès voit déjà, et les fournisseurs non archivés
-     * des magasins réels qu'il voit, leur nom seulement, lus filtrés par la
+     * des magasins qu'il voit, leur nom seulement, lus filtrés par la
      * société et ces magasins ; sans doublon, par nom.
      *
      * @return list<string>
@@ -1265,7 +1265,7 @@ final class PageDesCharges extends Component implements HasActions, HasForms, Ha
         $desCharges = ValeursLues::textes(app(ChargesDeLaSociete::class)->visibles($acces)
             ->whereNotNull('charges.fournisseur')->distinct()->orderBy('charges.fournisseur')->limit(200)->pluck('charges.fournisseur'));
         $desMagasins = ValeursLues::textes(Fournisseur::query()->withoutGlobalScope(MagasinScope::class)
-            ->whereIn('magasin_id', Magasin::query()->select('id')->where('societe_id', $acces->societe->getKey())->where('est_demonstration', false)
+            ->whereIn('magasin_id', Magasin::query()->select('id')->where('societe_id', $acces->societe->getKey())
                 ->when($acces->magasins !== null, fn (Builder $requete): Builder => $requete->whereKey($acces->magasins ?? [])))
             ->distinct()->orderBy('nom')->limit(200)->pluck('nom'));
         $noms = array_values(array_unique([...$desCharges, ...$desMagasins]));

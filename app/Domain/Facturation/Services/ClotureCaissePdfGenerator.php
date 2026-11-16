@@ -17,8 +17,9 @@ use Barryvdh\DomPDF\PDF as PdfDocument;
  * avoirs aux particuliers avec le détail de chaque taux, leur net (base de
  * l'e-reporting), factures et avoirs aux professionnels pour information,
  * encaissements par mode, crédit d'avoir utilisé à part et grands totaux.
- * L'identité de la société est dans le pied de chaque page ; la
- * démonstration marque les siens (voir Emetteur::filigrane()).
+ * L'identité de la société est dans le pied de chaque page ; un document
+ * du site de démonstration porte son filigrane (voir
+ * Emetteur::filigrane()).
  */
 class ClotureCaissePdfGenerator
 {

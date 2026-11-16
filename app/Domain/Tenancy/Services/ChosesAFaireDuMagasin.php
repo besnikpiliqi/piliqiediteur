@@ -83,7 +83,7 @@ use LogicException;
  * surveiller », ce que son équipe doit faire, pour le propriétaire, un
  * administrateur ou un responsable du magasin qui voit ces documents sans
  * avoir ce geste, avec « Voir » pour seul bouton. Le propriétaire, qui ne
- * vend jamais dans un magasin réel, n'a donc les ventes et les
+ * vend jamais dans un magasin, n'a donc les ventes et les
  * encaissements qu'à surveiller. Les cases se lisent telles qu'elles sont
  * cochées (voir User::autorisationsDans()), pas le droit d'agir du
  * moment : dans un magasin en lecture seule, ce qui reste dû reste, et
@@ -360,13 +360,13 @@ final class ChosesAFaireDuMagasin
      * la raison, puisque les gestes de vente ne s'y montrent plus. À faire
      * pour qui règle les paramètres fiscaux de la société (le propriétaire,
      * un administrateur autorisé), qui y mène, à surveiller pour les
-     * autres ; jamais dans le magasin de démonstration, qui vend encore.
+     * autres.
      */
     private function membreDUnAssujettiUnique(): ?ChoseAFaire
     {
         $societe = $this->magasin->societe;
 
-        if ($this->magasin->est_demonstration || ! $societe->membre_assujetti_unique) {
+        if (! $societe->membre_assujetti_unique) {
             return null;
         }
 
@@ -1074,17 +1074,13 @@ final class ChosesAFaireDuMagasin
     }
 
     /**
-     * Un magasin réel sans aucun produit ni service au catalogue (sans
+     * Un magasin sans aucun produit ni service au catalogue (sans
      * service, dans une société de services) ne peut rien vendre : à faire
      * pour qui peut créer un service, ou saisir un inventaire d'ouverture
      * avant la première vente (produits).
      */
     private function catalogueVide(): ?ChoseAFaire
     {
-        if ($this->magasin->est_demonstration) {
-            return null;
-        }
-
         $articles = $this->magasin->societe->aDesArticles();
         $inventaire = $articles && ! $this->magasin->aVendu() && $this->a(PermissionRegistry::FACTURE_ACHAT_VALIDER) && $this->a(PermissionRegistry::PRODUIT_CREATE);
         $aFaire = $inventaire || $this->a(PermissionRegistry::SERVICE_CREATE);
@@ -1124,7 +1120,7 @@ final class ChosesAFaireDuMagasin
     {
         $societe = $this->magasin->societe;
 
-        if ($this->magasin->est_demonstration || ! $societe->attendSonCode() || (! $this->compte->estProprietaire() && ! $this->estSuperviseur())) {
+        if (! $societe->attendSonCode() || (! $this->compte->estProprietaire() && ! $this->estSuperviseur())) {
             return null;
         }
 
@@ -1141,7 +1137,7 @@ final class ChosesAFaireDuMagasin
     }
 
     /**
-     * L'établissement de ce magasin réel n'est pas encore confirmé par le
+     * L'établissement de ce magasin n'est pas encore confirmé par le
      * répertoire Sirene, la société étant validée : aucune vente dans ce
      * magasin avant sa confirmation. À faire pour qui gère les magasins de
      * la société (corriger son NIC), à surveiller pour un autre
@@ -1149,7 +1145,7 @@ final class ChosesAFaireDuMagasin
      */
     private function etablissementAConfirmer(): ?ChoseAFaire
     {
-        if ($this->magasin->est_demonstration || ! $this->magasin->societe->estValidee() || $this->magasin->etablissement_verifie_le !== null || ! $this->estSuperviseur()) {
+        if (! $this->magasin->societe->estValidee() || $this->magasin->etablissement_verifie_le !== null || ! $this->estSuperviseur()) {
             return null;
         }
 

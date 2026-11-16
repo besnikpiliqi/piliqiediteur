@@ -49,13 +49,13 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Mot de passe des données de démonstration
+    | Mot de passe du semis
     |--------------------------------------------------------------------------
     |
     | Facultatif, en développement seulement : le mot de passe que reçoivent
     | tous les comptes semés par php artisan migrate:fresh --seed (voir
     | DatabaseSeeder), stable d'un semis à l'autre, dans
-    | PILIQI_DEMO_MOT_DE_PASSE. Il suit la règle des mots de passe choisis :
+    | PILIQI_SEMIS_MOT_DE_PASSE. Il suit la règle des mots de passe choisis :
     | au moins 8 caractères, ni un seul caractère répété, ni une suite de
     | chiffres, ni l'identifiant d'un compte. Vide : chaque compte reçoit un
     | mot de passe tiré au hasard à chaque semis, que la liste des comptes
@@ -63,7 +63,7 @@ return [
     |
     */
 
-    'demo_mot_de_passe' => env('PILIQI_DEMO_MOT_DE_PASSE'),
+    'semis_mot_de_passe' => env('PILIQI_SEMIS_MOT_DE_PASSE'),
 
     /*
     |--------------------------------------------------------------------------

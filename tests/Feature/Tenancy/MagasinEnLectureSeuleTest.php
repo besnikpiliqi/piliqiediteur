@@ -475,7 +475,7 @@ class MagasinEnLectureSeuleTest extends TestCase
 
     /**
      * Le magasin actif du panneau, où son responsable de test est connecté :
-     * le propriétaire ne vend jamais dans un magasin réel.
+     * le propriétaire ne vend jamais.
      */
     private function ouvrirLeMagasin(): Magasin
     {

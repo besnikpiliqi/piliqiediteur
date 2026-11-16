@@ -10,7 +10,7 @@
         @elseif ($societe->estClose())
             <p>L'inscription de votre société est close ({{ $societe->motif_cloture?->getLabel() }}) : vos magasins restent consultables, en lecture seule.</p>
         @else
-            <p>Société en attente du code de son courrier recommandé : la vente, les e-mails aux clients, les PDF et les transmissions sont désactivés jusqu'à sa validation. Configurez-la et essayez {{ config('app.name') }} dans le magasin de démonstration, depuis le tableau de bord.</p>
+            <p>Société en attente du code de son courrier recommandé : la vente, les e-mails aux clients, les PDF et les transmissions sont désactivés jusqu'à sa validation. Vous pouvez déjà la configurer.</p>
         @endif
 
         @if ($societe->attendSonCode())

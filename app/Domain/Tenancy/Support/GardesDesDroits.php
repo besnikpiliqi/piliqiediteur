@@ -52,10 +52,8 @@ use Illuminate\Support\Facades\DB;
  *   confirmation ; un propriétaire sans adresse de connexion passe, voir
  *   SaisirCodeDeConfirmationAction et CloreLInscriptionAction), ou dont le
  *   mot de passe est encore son identifiant ; un expert-comptable de la
- *   société dont le mot de passe est son identifiant ; le rôle de propriétaire,
- *   d'administrateur ou de collaborateur pour un compte d'entraînement
- *   (rattaché au magasin de démonstration), qui n'ouvre jamais un magasin
- *   réel ; un collaborateur hors d'un cabinet d'expertise comptable, un
+ *   société dont le mot de passe est son identifiant ; un collaborateur
+ *   hors d'un cabinet d'expertise comptable, un
  *   administrateur, un membre ou un expert-comptable de la société dans
  *   un cabinet (le type d'une société ne change jamais : lu sans verrou).
  *   Les gardes propres à l'expert-comptable de la société (sa déclaration,
@@ -162,12 +160,10 @@ final class GardesDesDroits
         $roleDuCompte = 'COALESCE((SELECT role_societe FROM users WHERE id = NEW.user_id), \'\')';
         $autresAffectations = 'SELECT 1 FROM affectations WHERE user_id = NEW.user_id AND id <> NEW.id';
         $magasinDeSonIdentifiant = 'COALESCE((SELECT magasin_id FROM identifiants WHERE user_id = NEW.user_id), -1)';
-        $horsDuMagasin = self::liste([RoleSociete::Proprietaire->value, RoleSociete::Administrateur->value, RoleSociete::Collaborateur->value]);
         $collaborateur = "'".RoleSociete::Collaborateur->value."'";
         $typeDeLaSociete = "COALESCE((SELECT type_activite FROM societes WHERE id = NEW.societe_id), '')";
         $cabinet = "'".TypeDActivite::Cabinet->value."'";
         $proprietaire = "'".RoleSociete::Proprietaire->value."'";
-        $compteDEntrainement = 'EXISTS (SELECT 1 FROM identifiants INNER JOIN magasins ON magasins.id = identifiants.magasin_id WHERE identifiants.user_id = NEW.id AND magasins.est_demonstration = TRUE)';
 
         return [
             self::AFFECTATIONS => [
@@ -200,7 +196,6 @@ final class GardesDesDroits
                 ["NEW.role_societe = {$proprietaire} AND NEW.email IS NOT NULL AND NEW.email_verified_at IS NULL", 'l\'adresse de connexion d\'un propriétaire est confirmée par un lien'],
                 ["NEW.role_societe = {$proprietaire} AND NEW.mot_de_passe_est_l_identifiant = TRUE", 'un propriétaire n\'a jamais pour mot de passe son identifiant'],
                 ["NEW.role_societe = {$expertComptable} AND NEW.mot_de_passe_est_l_identifiant = TRUE", 'un expert-comptable de la société n\'a jamais pour mot de passe son identifiant'],
-                ["NEW.role_societe IN ({$horsDuMagasin}) AND {$compteDEntrainement}", 'un compte d\'entraînement ne change jamais de rôle de société'],
             ],
         ];
     }

@@ -268,7 +268,7 @@ class Societe extends Model implements HasName
      * n° de TVA, par la seule procédure de l'éditeur (voir
      * CorrigerSirenAction), sous les verrous de ses registres, tenus par
      * l'appelant : l'un et l'autre s'inscrivent au journal des événements
-     * de chacun de ses magasins réels (JET 270, voir
+     * de chacun de ses magasins (JET 270, voir
      * JournaliseSesParametresDeConformite).
      */
     public function changerLeSirenParLaProcedure(string $siren, ?string $numeroTva): void
@@ -283,35 +283,13 @@ class Societe extends Model implements HasName
     }
 
     /**
-     * Tous ses magasins, magasin de démonstration compris.
+     * Ses magasins, ses établissements, chacun un SIRET.
      *
      * @return HasMany<Magasin, $this>
      */
     public function magasins(): HasMany
     {
         return $this->hasMany(Magasin::class)->chaperone('societe');
-    }
-
-    /**
-     * Ses établissements, chacun un SIRET : tous ses magasins sauf celui de
-     * démonstration.
-     *
-     * @return HasMany<Magasin, $this>
-     */
-    public function magasinsReels(): HasMany
-    {
-        return $this->hasMany(Magasin::class)->where('est_demonstration', false)->chaperone('societe');
-    }
-
-    /**
-     * Son magasin de démonstration, s'il a été ouvert (voir
-     * OuvrirLaDemonstrationAction).
-     *
-     * @return HasOne<Magasin, $this>
-     */
-    public function demonstration(): HasOne
-    {
-        return $this->hasOne(Magasin::class)->where('est_demonstration', true);
     }
 
     /**
@@ -362,7 +340,7 @@ class Societe extends Model implements HasName
     /**
      * A-t-elle été validée par l'invitation acceptée d'un cabinet
      * d'expertise comptable (voir AccepterLInvitationAction), sans
-     * courrier ni démonstration ? La preuve inscrite au journal d'audit avec
+     * courrier ? La preuve inscrite au journal d'audit avec
      * sa validation le dit (voir ValiderLaSocieteAction), lue dans la
      * société active, qui doit être celle-ci.
      */
@@ -409,8 +387,8 @@ class Societe extends Model implements HasName
     }
 
     /**
-     * Est-ce un cabinet d'expertise comptable ? Il n'a aucun magasin, ni
-     * démonstration (voir TypeDActivite::aDesMagasins()).
+     * Est-ce un cabinet d'expertise comptable ? Il n'a aucun magasin (voir
+     * TypeDActivite::aDesMagasins()).
      */
     public function estUnCabinet(): bool
     {
@@ -543,17 +521,16 @@ class Societe extends Model implements HasName
     }
 
     /**
-     * L'un de ses magasins réels a-t-il déjà vendu ? Un enregistrement de
-     * la chaîne des ventes dans le registre fiscal de l'un d'eux : la
-     * première vente de la société, qui verrouille son mois de fin
-     * d'exercice ; les ventes du magasin de démonstration ne comptent pas.
-     * Lecture hors du magasin courant, filtrée par les magasins réels de
-     * cette société et limitée à l'existence d'un enregistrement.
+     * L'un de ses magasins a-t-il déjà vendu ? Un enregistrement de la
+     * chaîne des ventes dans le registre fiscal de l'un d'eux : la première
+     * vente de la société, qui verrouille son mois de fin d'exercice.
+     * Lecture hors du magasin courant, filtrée par les magasins de cette
+     * société et limitée à l'existence d'un enregistrement.
      */
     public function aVenduUneFois(): bool
     {
         return EnregistrementFiscal::withoutGlobalScope(MagasinScope::class)
-            ->whereIn('magasin_id', $this->magasinsReels()->select('id'))
+            ->whereIn('magasin_id', $this->magasins()->select('id'))
             ->where('chaine', ChaineFiscale::Vente->value)
             ->exists();
     }
@@ -676,7 +653,7 @@ class Societe extends Model implements HasName
      * page « Identité » et du tableau de bord de son espace, vrai dans
      * chaque état de la société : en lecture seule, son motif, sans aucune
      * vente annoncée ; en cours de vérification, aucune vente dans ses
-     * magasins réels avant sa validation, ces mentions servant ensuite ;
+     * magasins avant sa validation, ces mentions servant ensuite ;
      * validée, ses tickets restent possibles, mais aucune facture à un
      * professionnel tant que ces mentions manquent. Null quand rien ne
      * manque, et pour un cabinet d'expertise comptable, qui n'a aucun
@@ -695,17 +672,16 @@ class Societe extends Model implements HasName
         return match (true) {
             $this->estClose() => "L'inscription de votre société est close : vos magasins sont en lecture seule, et aucune vente n'y est possible. Ces mentions manquent pour facturer un professionnel : {$mentions}.",
             $this->statut->estEnLectureSeule() => 'Votre société est '.mb_strtolower($this->statut->getLabel())." : vos magasins sont en lecture seule, et aucune vente n'y est possible. Ces mentions manquent pour facturer un professionnel : {$mentions}.",
-            ! $this->estValidee() => "Votre société est en cours de vérification : aucune vente n'est possible dans vos magasins réels avant sa validation, et le magasin de démonstration vous permet de vous essayer. Ces mentions seront nécessaires pour facturer un professionnel : {$mentions}.",
+            ! $this->estValidee() => "Votre société est en cours de vérification : aucune vente n'est possible dans vos magasins avant sa validation. Ces mentions seront nécessaires pour facturer un professionnel : {$mentions}.",
             default => "Vos tickets de caisse restent possibles, mais aucune facture à un professionnel ne peut être émise, dans aucun de vos magasins, tant que ces mentions manquent : {$mentions}.",
         };
     }
 
     /**
      * Les magasins dont le journal des événements note un changement de
-     * ses réglages : ses magasins réels, fermés compris, par ordre de
-     * création, dont les registres se verrouillent dans cet ordre (voir
-     * JournaliseSesParametresDeConformite) ; le magasin de démonstration ne
-     * reçoit pas les réglages de la société. Un réglage ne se modifie que
+     * ses réglages : ses magasins, fermés compris, par ordre de création,
+     * dont les registres se verrouillent dans cet ordre (voir
+     * JournaliseSesParametresDeConformite). Un réglage ne se modifie que
      * dans le contexte de cette société, jamais dans celui d'une autre.
      *
      * @return Collection<int, Magasin>
@@ -720,7 +696,7 @@ class Societe extends Model implements HasName
             throw new LogicException('Les réglages d\'une société ne se modifient que dans son propre contexte.');
         }
 
-        return $this->magasinsReels()->orderBy('id')->get();
+        return $this->magasins()->orderBy('id')->get();
     }
 
     public static function parametresDeConformite(): array

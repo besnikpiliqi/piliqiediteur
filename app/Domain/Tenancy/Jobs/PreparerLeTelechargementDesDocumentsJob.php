@@ -18,7 +18,6 @@ use App\Domain\Tenancy\Notifications\AvisDuTelechargementDesDocuments;
 use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\CleDuModele;
-use App\Domain\Tenancy\Support\ValeursLues;
 use App\Integrations\Antivirus\AntivirusInjoignableException;
 use App\Models\User;
 use Illuminate\Bus\Queueable;
@@ -61,17 +60,6 @@ use Throwable;
  * travailleur ne la reprend pendant qu'un autre la prépare encore, et elle
  * n'arrête jamais le travailleur des e-mails et des courriers.
  *
- * Une demande qui ne porte que sur le magasin de démonstration d'une
- * société validée entre-temps se clôt sans rien dire, son fichier effacé :
- * la démonstration a disparu de tous les écrans de la société, cloche
- * comprise (T115, voir ValiderLaSocieteAction::apresLaValidation()).
- * L'état de la société se relit sous le verrou de sa ligne (« for key
- * share », voir Societe::verrouillerAvantSonJournalDAudit()), que sa
- * validation prend « for update », et l'avis s'écrit dans la même
- * transaction : une validation qui suit l'efface avec les autres
- * notifications de la démonstration, et une préparation qui suit la
- * validation se tait.
- *
  * Aucun document encore accessible, des charges dont aucune n'a plus de
  * pièce à mettre dans un ZIP (une pièce bloquée par l'antivirus pendant la
  * préparation, voir AucunePieceDeChargeAServirException), ou un compte qui
@@ -94,8 +82,6 @@ class PreparerLeTelechargementDesDocumentsJob implements ShouldBeUnique, ShouldQ
     public const MOTIF_ERREUR = 'Le fichier n\'a pas pu être préparé : demandez-le de nouveau.';
 
     public const MOTIF_ANTIVIRUS = 'L\'antivirus ne répondait pas : les pièces du fournisseur ne se servent qu\'après une analyse récente. Demandez le fichier de nouveau dans quelques minutes.';
-
-    public const MOTIF_DEMONSTRATION = 'La société est validée : le magasin de démonstration a disparu, et ses documents ne se téléchargent plus.';
 
     public int $tries = 2;
 
@@ -147,7 +133,6 @@ class PreparerLeTelechargementDesDocumentsJob implements ShouldBeUnique, ShouldQ
             $magasins = Magasin::query()
                 ->where('societe_id', $societe->getKey())
                 ->whereIn('id', $telechargement->magasins)
-                ->orderBy('est_demonstration')
                 ->orderBy('nom')
                 ->orderBy('id')
                 ->get()
@@ -181,9 +166,7 @@ class PreparerLeTelechargementDesDocumentsJob implements ShouldBeUnique, ShouldQ
      * clés des documents qu'il contient et les identifiants de ses pièces
      * du fournisseur, et son entrée au journal d'audit de la société ; la
      * personne en est prévenue. Une demande qui n'est plus en préparation
-     * garde son état, et le fichier écrit s'efface ; une demande qui ne
-     * porte plus que sur une démonstration disparue se clôt sans avis (voir
-     * neVisePlusQuUneDemonstrationDisparue()), son fichier effacé.
+     * garde son état, et le fichier écrit s'efface.
      *
      * @param  list<DocumentTrouve>  $choisis
      * @param  array{pieces: list<int>, piecesDeCharge: list<int>}  $pieces
@@ -197,13 +180,6 @@ class PreparerLeTelechargementDesDocumentsJob implements ShouldBeUnique, ShouldQ
 
             if ($relu->statut !== StatutDuTelechargement::EnPreparation) {
                 Storage::disk(self::DISQUE)->delete($chemin);
-
-                return;
-            }
-
-            if (self::neVisePlusQuUneDemonstrationDisparue($relu)) {
-                Storage::disk(self::DISQUE)->delete($chemin);
-                $this->clore($relu, self::MOTIF_DEMONSTRATION);
 
                 return;
             }
@@ -297,8 +273,7 @@ class PreparerLeTelechargementDesDocumentsJob implements ShouldBeUnique, ShouldQ
     /**
      * La demande échoue pour ce motif, et la personne le sait, dans la même
      * transaction, sous le verrou de la société puis celui de la demande,
-     * dans l'ordre de marquerPret() ; une demande qui ne porte plus que sur
-     * une démonstration disparue se clôt sans rien dire.
+     * dans l'ordre de marquerPret().
      */
     private function echouer(TelechargementDeDocuments $telechargement, string $motif): void
     {
@@ -310,46 +285,8 @@ class PreparerLeTelechargementDesDocumentsJob implements ShouldBeUnique, ShouldQ
                 return;
             }
 
-            if (self::neVisePlusQuUneDemonstrationDisparue($relu)) {
-                $this->clore($relu, self::MOTIF_DEMONSTRATION);
-
-                return;
-            }
-
-            $this->clore($relu, $motif);
+            $relu->forceFill(['statut' => StatutDuTelechargement::Echec, 'motif_echec' => $motif])->save();
             $relu->demandeur->notify(new AvisDuTelechargementDesDocuments($relu));
         });
-    }
-
-    /**
-     * Une demande encore en préparation, relue sous son verrou, échoue
-     * pour ce motif, sans avis.
-     */
-    private function clore(TelechargementDeDocuments $relu, string $motif): void
-    {
-        $relu->forceFill(['statut' => StatutDuTelechargement::Echec, 'motif_echec' => $motif])->save();
-    }
-
-    /**
-     * Cette demande ne porte-t-elle que sur le magasin de démonstration de
-     * sa société, désormais validée ? Avant la validation, la
-     * démonstration est le seul magasin qui ait des documents (voir
-     * DocumentsDeLaPeriode::peutTelechargerDans()) ; après, elle a disparu
-     * de tous les écrans de la société (T115). La société se relit sous le
-     * verrou de sa ligne, déjà pris par l'appelant (voir
-     * Societe::verrouillerAvantSonJournalDAudit()).
-     */
-    private static function neVisePlusQuUneDemonstrationDisparue(TelechargementDeDocuments $telechargement): bool
-    {
-        $societe = Societe::query()->whereKey($telechargement->societe_id)->lock('for key share')->firstOrFail();
-
-        if (! $societe->estValidee()) {
-            return false;
-        }
-
-        $magasins = ValeursLues::entiers($telechargement->magasins ?? []);
-        $demonstration = $societe->demonstration()->value('id');
-
-        return $magasins !== [] && $demonstration !== null && array_diff($magasins, [ValeursLues::entier($demonstration)]) === [];
     }
 }

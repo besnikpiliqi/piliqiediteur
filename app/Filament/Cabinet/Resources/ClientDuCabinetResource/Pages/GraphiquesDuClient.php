@@ -14,12 +14,12 @@ use Illuminate\Contracts\Support\Htmlable;
 /**
  * Le tableau de bord d'un client lié, dans l'espace du cabinet (décision
  * de l'éditeur du 14/11/2026) : ses chiffres clés et ses graphiques, sur
- * les magasins réels que le client ouvre au cabinet, selon les
+ * les magasins que le client ouvre au cabinet, selon les
  * consultations qu'il lui accorde (voir GrilleDesGraphiques et
  * PerimetreDesGraphiques::duClient()). Le lien se lit parmi ceux que le
  * cabinet ouvre au compte (voir ClientDuCabinetResource) : un lien d'un
  * autre cabinet, d'un client non confié ou d'un cabinet qui n'est plus
- * vérifié donne 404. Un client qui n'a encore aucun magasin réel (une
+ * vérifié donne 404. Un client qui n'a encore aucun magasin (une
  * société invitée par le cabinet naît sans magasin) n'a pas de graphiques
  * : la page le dit, sans monter la grille (voir
  * PerimetreDesGraphiques::voitLesGraphiquesDuClient()). Les préférences

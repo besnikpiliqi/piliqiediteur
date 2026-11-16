@@ -9,7 +9,7 @@ use App\Models\User;
 /**
  * Une société validée de « Commerce ou atelier », telle que les tests en
  * navigateur la parcourent (voir TestCaseDuNavigateur::societeComplete()) :
- * deux magasins réels, chaque rôle de la société et du magasin, son
+ * deux magasins, chaque rôle de la société et du magasin, son
  * cabinet d'expertise comptable lié et le collaborateur à qui elle est
  * confiée. Chaque mot de passe est MOT_DE_PASSE_CHOISI.
  */

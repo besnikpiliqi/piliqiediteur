@@ -25,7 +25,7 @@
 <body>
     @include('documents.pdf.pied', ['pied' => $pied])
 
-    <div class="bandeau-demonstration">{{ $marque }}</div>
+    <div class="bandeau">{{ $marque }}</div>
 
     @include('documents.pdf.en-tete', [
         'emetteur' => $emetteur,

@@ -32,12 +32,11 @@ use LogicException;
  *   passées restent à son nom ;
  * - vers membre : dans le magasin de rattachement de son identifiant ; un
  *   compte qui n'en a pas (né administrateur ou propriétaire) reçoit le
- *   magasin réel ouvert que le propriétaire lui choisit, écrit une fois
+ *   magasin ouvert que le propriétaire lui choisit, écrit une fois
  *   pour toutes ; un magasin de rattachement fermé ou cédé refuse le
  *   changement.
  * Jamais pour un compte d'un cabinet d'expertise comptable, qui n'a ni
- * administrateur ni membre, ni pour un compte d'entraînement (rattaché au
- * magasin de démonstration), que la base refuse aussi (voir
+ * administrateur ni membre, ce que la base refuse aussi (voir
  * GardesDesDroits). Les droits avant et après s'inscrivent au JET 130 de
  * chaque magasin touché, puis au journal d'audit (RoleDeSocieteChange),
  * avec l'ancien et le nouveau rôle, la date et l'auteur (voir
@@ -50,11 +49,9 @@ class ChangerLeRoleDeSocieteAction
 {
     use AgitDansLaSociete;
 
-    public const MESSAGE_ENTRAINEMENT = 'Un compte d\'entraînement ne change pas de rôle : créez un compte dans un magasin réel.';
-
     public const MESSAGE_DEJA_CE_ROLE = 'Ce compte a déjà ce rôle.';
 
-    public const MESSAGE_MAGASIN_A_CHOISIR = 'Choisissez le magasin réel ouvert de cette personne : il sera son magasin pour toujours.';
+    public const MESSAGE_MAGASIN_A_CHOISIR = 'Choisissez le magasin ouvert de cette personne : il sera son magasin pour toujours.';
 
     public const MESSAGE_MAGASIN_FERME = 'Son magasin est fermé : créez-lui un compte dans un magasin ouvert.';
 
@@ -90,7 +87,7 @@ class ChangerLeRoleDeSocieteAction
 
     /**
      * @param  list<string>|null  $autorisations  les cases d'un vendeur ou d'un observateur ; null, le modèle de son rôle
-     * @param  int|null  $magasinId  le magasin réel ouvert que le propriétaire choisit pour un compte qui n'a pas encore de magasin de rattachement
+     * @param  int|null  $magasinId  le magasin ouvert que le propriétaire choisit pour un compte qui n'a pas encore de magasin de rattachement
      *
      * @throws AuthorizationException
      * @throws LogicException
@@ -149,10 +146,6 @@ class ChangerLeRoleDeSocieteAction
      */
     private function exigerUnChangement(User $auteur, User $compte, RoleSociete $nouveauRole): void
     {
-        if ($compte->estUnCompteDEntrainement()) {
-            throw new LogicException(self::MESSAGE_ENTRAINEMENT);
-        }
-
         if (! $this->portee->peutChangerLeRoleDeSociete($auteur, $compte)) {
             throw new AuthorizationException(PorteeDesDroits::REFUS);
         }
@@ -164,7 +157,7 @@ class ChangerLeRoleDeSocieteAction
 
     /**
      * Le magasin où ce compte devient membre : celui de son identifiant,
-     * qui doit être ouvert ; sinon le magasin réel ouvert choisi par le
+     * qui doit être ouvert ; sinon le magasin ouvert choisi par le
      * propriétaire.
      *
      * @throws LogicException
@@ -183,7 +176,6 @@ class ChangerLeRoleDeSocieteAction
 
         $choisi = $magasinId === null ? null : Magasin::query()
             ->where('societe_id', $societe->getKey())
-            ->where('est_demonstration', false)
             ->where('statut', StatutMagasin::Actif->value)
             ->find($magasinId);
 

@@ -10,20 +10,14 @@ use InvalidArgumentException;
 
 /**
  * Les gardes par lesquelles la base elle-même refuse une vente ou un
- * encaissement au nom du propriétaire de la société dans un magasin réel,
- * où il ne vend jamais (voir PermissionRegistry::duProprietaire()), ou au
- * nom d'un compte d'un cabinet d'expertise comptable ou d'un
- * expert-comptable de la société, qui n'ont jamais d'autorisation de vente
- * chez un client (voir PermissionRegistry::duCabinet()), même écrits par
- * DB::table(), une
+ * encaissement au nom du propriétaire de la société, qui ne vend jamais
+ * (voir PermissionRegistry::duProprietaire()), ou au nom d'un compte d'un
+ * cabinet d'expertise comptable ou d'un expert-comptable de la société,
+ * qui n'ont jamais d'autorisation de vente chez un client (voir
+ * PermissionRegistry::duCabinet()), même écrits par DB::table(), une
  * requête brute ou une action défectueuse ; elles s'ajoutent aux droits,
- * qui ne leur donnent là aucune autorisation de vente, comme les gardes
- * des droits s'ajoutent aux lectures (voir GardesDesDroits). Seul le
- * magasin de démonstration de sa propre société accepte la vente et
- * l'encaissement du propriétaire, qui s'y entraîne à tout (voir
- * PermissionRegistry::duProprietaireEnDemonstration()) ; un magasin réel
- * ne devient jamais le magasin de démonstration (magasins.est_demonstration
- * figée, voir la migration de création de magasins). Sont gardées :
+ * qui ne leur donnent aucune autorisation de vente, comme les gardes des
+ * droits s'ajoutent aux lectures (voir GardesDesDroits). Sont gardées :
  * - enregistrements_fiscaux : l'enregistrement signé d'un ticket ou d'une
  *   facture (chaîne des ventes) ou d'un paiement (chaîne des
  *   encaissements) dont l'opérateur est le propriétaire ; un avoir, une
@@ -54,7 +48,7 @@ use InvalidArgumentException;
  */
 final class GardesDeLaVente
 {
-    public const MESSAGE = 'Le propriétaire d\'une société ne vend que dans son magasin de démonstration, et l\'expert-comptable de la société et les comptes d\'un cabinet ne vendent jamais : aucune autre vente ni aucun autre encaissement ne s\'inscrit à leur nom.';
+    public const MESSAGE = 'Le propriétaire d\'une société, l\'expert-comptable de la société et les comptes d\'un cabinet ne vendent jamais : aucune vente ni aucun encaissement ne s\'inscrit à leur nom.';
 
     /**
      * Pour chaque table gardée : la colonne de son auteur, la condition
@@ -116,7 +110,7 @@ final class GardesDeLaVente
             ."IF NEW.{$auteur} IS NULL THEN RETURN NEW; END IF; "
             .$estUneVente
             ."PERFORM 1 FROM users WHERE id = NEW.{$auteur} FOR SHARE; "
-            .'IF '.self::auteurQuiNeVendPasDansCeMagasin($auteur)." THEN RAISE EXCEPTION '%', ".self::message().'; END IF; '
+            .'IF '.self::auteurQuiNeVendPas($auteur)." THEN RAISE EXCEPTION '%', ".self::message().'; END IF; '
             .'RETURN NEW; END $$');
         $connexion->unprepared("CREATE TRIGGER {$nom} BEFORE {$quand} ON {$table} FOR EACH ROW EXECUTE FUNCTION {$nom}()");
     }
@@ -157,25 +151,18 @@ final class GardesDeLaVente
 
     /**
      * L'auteur de la ligne écrite est, à cet instant, un compte qui ne vend
-     * pas dans le magasin de cette ligne : un collaborateur d'un cabinet ou
-     * un expert-comptable de la société, qui ne vendent jamais, ou le
-     * propriétaire d'une société (celui d'un
-     * cabinet d'expertise comptable compris), sauf dans le magasin de
-     * démonstration de sa société, le seul où il vend. Le rôle suffit : un
-     * compte d'un cabinet a toujours l'un de ces deux rôles, la garde des
-     * rôles l'impose (voir GardesDesDroits), et un cabinet n'a aucun
-     * magasin, démonstration comprise (voir GardesDesTypesDActivite).
-     * Chaque table gardée porte le magasin de sa ligne (magasin_id), dont
-     * est_demonstration ne change jamais.
+     * jamais : le propriétaire d'une société (celui d'un cabinet
+     * d'expertise comptable compris), un collaborateur d'un cabinet ou un
+     * expert-comptable de la société. Le rôle suffit : un compte d'un
+     * cabinet a toujours l'un de ces rôles, la garde des rôles l'impose
+     * (voir GardesDesDroits).
      *
      * @param  literal-string  $auteur
      * @return literal-string
      */
-    private static function auteurQuiNeVendPasDansCeMagasin(string $auteur): string
+    private static function auteurQuiNeVendPas(string $auteur): string
     {
-        return "EXISTS (SELECT 1 FROM users WHERE id = NEW.{$auteur} AND (role_societe IN ('".RoleSociete::Collaborateur->value."', '".RoleSociete::ExpertComptable->value."')"
-            ." OR (role_societe = '".RoleSociete::Proprietaire->value."' AND NOT EXISTS (SELECT 1 FROM magasins"
-            .' WHERE magasins.id = NEW.magasin_id AND magasins.est_demonstration AND magasins.societe_id = users.societe_id))))';
+        return "EXISTS (SELECT 1 FROM users WHERE id = NEW.{$auteur} AND role_societe IN ('".RoleSociete::Proprietaire->value."', '".RoleSociete::Collaborateur->value."', '".RoleSociete::ExpertComptable->value."'))";
     }
 
     /**

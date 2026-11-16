@@ -182,8 +182,7 @@ final class ControlesDeLaBase
      * un compte de la société de la ligne, ou un compte d'un cabinet lié à
      * cette société (ou, dans une ligne d'un cabinet, un compte d'un de ses
      * clients) ; dans une ligne d'un magasin, un compte de membre (responsable,
-     * vendeur, observateur, compte d'entraînement) n'est jamais celui d'un
-     * autre magasin.
+     * vendeur, observateur) n'est jamais celui d'un autre magasin.
      */
     public function comptesCites(): ResultatDUnControle
     {
@@ -295,23 +294,21 @@ final class ControlesDeLaBase
     /**
      * Chaque vente émise (ticket ou facture) et chaque encaissement (paiement
      * qui n'est pas une contre-passation) est au nom d'un compte de la
-     * société du magasin qui y vend : jamais le propriétaire hors du magasin
-     * de démonstration, jamais un compte d'un cabinet ni un expert-comptable
-     * de la société ; un membre l'est de ce magasin (son affectation, ou le
-     * magasin de son identifiant, que garde un compte d'entraînement retiré à
-     * la fermeture de la démonstration), un administrateur l'a dans sa portée.
+     * société du magasin qui y vend : jamais le propriétaire, jamais un
+     * compte d'un cabinet ni un expert-comptable de la société ; un membre
+     * l'est de ce magasin (son affectation, ou le magasin de son
+     * identifiant, que garde un compte retiré, qui a perdu ses
+     * affectations), un administrateur l'a dans sa portée.
      */
     public function ventesEtEncaissements(): ResultatDUnControle
     {
         $resultat = new ResultatDUnControle('Ventes et encaissements au nom d\'un compte autorisé', self::COUCHE);
-        $proprietaire = RoleSociete::Proprietaire->value;
         $administrateur = RoleSociete::Administrateur->value;
         $membre = RoleSociete::Membre->value;
         $permis = <<<SQL
             u.societe_id = m.societe_id
             and (
-                (u.role_societe = '{$proprietaire}' and m.est_demonstration)
-                or (u.role_societe = '{$membre}' and (exists (select 1 from affectations a where a.user_id = u.id and a.role is not null and a.magasin_id = m.id)
+                (u.role_societe = '{$membre}' and (exists (select 1 from affectations a where a.user_id = u.id and a.role is not null and a.magasin_id = m.id)
                                                        or exists (select 1 from identifiants i where i.user_id = u.id and i.magasin_id = m.id)))
                 or (u.role_societe = '{$administrateur}' and exists (select 1 from affectations a where a.user_id = u.id and a.role is null and (a.magasin_id is null or a.magasin_id = m.id)))
             )

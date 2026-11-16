@@ -50,7 +50,7 @@ final class ActiviteDesMagasins
 {
     public function __construct(
         private readonly HorlogeDuSemis $horloge,
-        private readonly SemisDeDemonstration $semis,
+        private readonly SemisComplet $semis,
         private readonly ComptesDesCas $comptesDesCas,
         private readonly SocietesDesCas $societesDesCas,
     ) {}
@@ -290,7 +290,7 @@ final class ActiviteDesMagasins
         ];
         $modes = [ModePaiement::CarteBancaire, ModePaiement::Especes, ModePaiement::CarteBancaire, ModePaiement::Cheque];
 
-        for ($jour = 17; $jour <= SemisDeDemonstration::JOURS - 2; $jour++) {
+        for ($jour = 17; $jour <= SemisComplet::JOURS - 2; $jour++) {
             $charges->auJour($jour);
 
             if ($jour % 14 === 3) {
@@ -334,7 +334,7 @@ final class ActiviteDesMagasins
      */
     private function validite(): string
     {
-        return Calendrier::ajouterJours($this->horloge->jour(SemisDeDemonstration::JOURS - 1), 30);
+        return Calendrier::ajouterJours($this->horloge->jour(SemisComplet::JOURS - 1), 30);
     }
 
     /**

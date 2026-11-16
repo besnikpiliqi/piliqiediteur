@@ -29,7 +29,6 @@ use App\Domain\Facturation\Services\PartDeReglement;
 use App\Domain\Facturation\Services\RecuPaiementPdfGenerator;
 use App\Domain\Facturation\Services\ReglementComptant;
 use App\Domain\Tenancy\Actions\ModifierMembreAction;
-use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Exceptions\VenteNonAutoriseeException;
@@ -260,24 +259,6 @@ class RecusDePaiementTest extends TestCase
         $this->assertSame([[$facture->numero, '30.00', '0.00', '70.00']], self::documentsDu($recu));
         $this->assertSame($pdfDeLaFactureAvant, app(FacturePdfGenerator::class)->html($facture->fresh()));
         $this->assertSame(2, RecuPaiement::query()->count());
-    }
-
-    /**
-     * Le magasin de démonstration marque ses reçus « Démonstration — sans
-     * valeur ».
-     */
-    public function test_le_magasin_de_demonstration_marque_ses_recus(): void
-    {
-        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
-        $societe = $this->inscrireUneSociete();
-        $demonstration = app(OuvrirLaDemonstrationAction::class)->handle($societe->proprietaire, $societe);
-        $responsable = $this->membre($demonstration, RoleMagasin::Responsable);
-        app(TenantContext::class)->set($demonstration);
-        $facture = $this->facture(Client::factory()->create(), 40, auteur: $responsable);
-
-        self::encaisser($facture, [new PartDeReglement(ModePaiement::Especes, 1000)], auteur: $responsable);
-
-        $this->assertStringContainsString('DÉMONSTRATION — SANS VALEUR', self::texteDu(RecuPaiement::query()->sole()));
     }
 
     /**

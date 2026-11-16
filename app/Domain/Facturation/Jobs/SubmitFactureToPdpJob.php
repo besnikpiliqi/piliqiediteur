@@ -91,12 +91,6 @@ class SubmitFactureToPdpJob implements ShouldBeUnique, ShouldQueue
 
         $facture = Facture::query()->with('magasin')->findOrFail($this->factureId);
 
-        // Le magasin de démonstration ne transmet jamais rien (voir
-        // Magasin::peutEcrireAuxClients()).
-        if ($facture->magasin->est_demonstration) {
-            return;
-        }
-
         $transmission = $this->transmissionAReprendre($facture);
 
         if ($transmission === null) {

@@ -77,7 +77,7 @@ use LogicException;
  * pour cessation, puis l'éditeur libère son SIRET pour un nouveau magasin
  * sur le même établissement (voir LibererLeSiretAction). Sa fixation sur
  * un magasin qui existe déjà et sa correction s'inscrivent à son journal
- * des événements (JET 270). Un magasin réel dont l'établissement n'a
+ * des événements (JET 270). Un magasin dont l'établissement n'a
  * jamais été confirmé n'a pas encore de territoire : il ne vend pas et ne
  * numérote aucun document (voir REFUS_TERRITOIRE_INCONNU).
  *
@@ -99,13 +99,6 @@ use LogicException;
  * booted()). La société peut indiquer l'un de
  * ses magasins comme son établissement principal, une simple information
  * (voir ChoisirEtablissementPrincipalAction).
- *
- * Le magasin de démonstration d'une société (est_demonstration, voir
- * OuvrirLaDemonstrationAction) est un magasin à part entière, avec son
- * registre, ses séries (code DEMO) et ses clôtures, sans SIRET ni identité
- * réelle (voir Emetteur::deDemonstration()) : il vend tant que sa société
- * n'est ni validée ni close, n'écrit à aucun client et ne transmet rien
- * (voir peutEcrireAuxClients()), et rien n'en passe aux magasins réels.
  *
  * Sa société n'est jamais nulle : societe_id ne l'est jamais en base, sa
  * clé étrangère vise une société, qu'aucune société ne s'efface (voir
@@ -146,10 +139,6 @@ class Magasin extends Model implements HasName
     private const REFUS_SOCIETE_A_VERIFIER = 'Votre société est en cours de vérification : la vente, les e-mails aux clients, les PDF et les transmissions sont désactivés jusqu\'à sa validation.';
 
     public const REFUS_ASSUJETTI_UNIQUE = 'PILIQI ne gère pas encore les sociétés membres d\'un assujetti unique (groupe TVA) : aucune vente, facture, avoir, encaissement ni devis numéroté réel n\'est possible.';
-
-    private const REFUS_DEMONSTRATION_TERMINEE = 'Votre société est validée : la démonstration est terminée, vendez dans vos magasins.';
-
-    private const REFUS_DEMONSTRATION_SANS_ENVOI = 'Le magasin de démonstration n\'écrit à aucun client et ne transmet rien.';
 
     /**
      * Le refus de numéroter un document dans un magasin sans territoire
@@ -200,7 +189,6 @@ class Magasin extends Model implements HasName
         'statut' => StatutMagasin::class,
         'motif_fermeture' => MotifFermeture::class,
         'territoire' => Territoire::class,
-        'est_demonstration' => 'boolean',
         'etablissement_verifie_le' => Instant::class,
         'suspendu_le' => Instant::class,
         'siret_libere_le' => Instant::class,
@@ -249,30 +237,18 @@ class Magasin extends Model implements HasName
         });
 
         static::saving(function (Magasin $magasin) {
-            if ((bool) $magasin->est_demonstration !== ($magasin->siret === null)) {
-                throw new LogicException('Seul le magasin de démonstration n\'a pas de SIRET, et il n\'en a jamais.');
-            }
-
             if (! $magasin->estFerme() && $magasin->motif_fermeture !== null) {
                 throw new LogicException('Un magasin ouvert n\'a pas de motif de fermeture : sa réouverture l\'efface.');
             }
 
-            if ($magasin->territoire === null && ($magasin->est_demonstration || $magasin->etablissement_verifie_le !== null)) {
-                throw new LogicException('Un magasin dont l\'établissement est confirmé, comme le magasin de démonstration, a toujours un territoire.');
+            if ($magasin->territoire === null && $magasin->etablissement_verifie_le !== null) {
+                throw new LogicException('Un magasin dont l\'établissement est confirmé a toujours un territoire.');
             }
         });
 
         static::updating(function (Magasin $magasin) {
             if ($magasin->getOriginal('motif_fermeture') === MotifFermeture::Cession && $magasin->isDirty(['statut', 'motif_fermeture']) && ! $magasin->annulationDeLaCession) {
                 throw new LogicException('Un magasin cédé ne se rouvre jamais et reste cédé.');
-            }
-
-            if ($magasin->isDirty('est_demonstration')) {
-                throw new LogicException('Un magasin réel ne devient jamais le magasin de démonstration, ni l\'inverse.');
-            }
-
-            if ($magasin->est_etablissement_principal && $magasin->est_demonstration) {
-                throw new LogicException('Le magasin de démonstration n\'est jamais l\'établissement principal.');
             }
 
             if ($magasin->isDirty('code')) {
@@ -438,8 +414,8 @@ class Magasin extends Model implements HasName
     }
 
     /**
-     * Est-il fermé par sa société (voir FermerMagasinAction), ou, pour le
-     * magasin de démonstration, terminé ? Une suspension par l'éditeur
+     * Est-il fermé par sa société (voir FermerMagasinAction) ? Une
+     * suspension par l'éditeur
      * n'est pas une fermeture (voir estEnLectureSeule()).
      */
     public function estFerme(): bool
@@ -498,23 +474,6 @@ class Magasin extends Model implements HasName
     public function scopePortantLeSiret(Builder $query, string $siret): Builder
     {
         return $query->where('siret', $siret)->whereNull('siret_libere_le');
-    }
-
-    /**
-     * Est-ce le magasin de démonstration d'une société validée ou close,
-     * fermé pour de bon : il ne se rouvre jamais, ses comptes d'entraînement
-     * sont retirés (voir FermerLaDemonstrationAction), et plus aucun compte
-     * n'y est créé, nommé ni réintégré (voir
-     * PorteeDesDroits::peutDonnerLeRole()). Lu en base à chaque appel, sous
-     * les verrous de qui l'appelle. Une démonstration fermée après trente
-     * jours sans opération, qui se rouvre, ne l'est pas.
-     */
-    public function estUneDemonstrationTerminee(): bool
-    {
-        return $this->est_demonstration && Societe::query()
-            ->whereKey($this->societe_id)
-            ->where(fn ($societe) => $societe->whereNotNull('validee_le')->orWhereNotNull('close_le'))
-            ->exists();
     }
 
     /**
@@ -583,15 +542,14 @@ class Magasin extends Model implements HasName
     }
 
     /**
-     * Le magasin peut-il vendre ? Hors lecture seule, un magasin réel une
-     * fois sa société validée (voir Societe::estValidee()), tant qu'elle
-     * n'est pas membre d'un assujetti unique (décision P3.1), et son
-     * établissement confirmé par le répertoire Sirene
-     * (etablissement_verifie_le), le magasin de démonstration tant que sa
-     * société n'est ni validée ni close : ticket, facture, avoir,
-     * paiement, devis numéroté, e-mail à un client et transmission en
-     * dépendent (voir verifierQuIlPeutVendre() et peutEcrireAuxClients()).
-     * Une revérification négative après la validation n'y change rien.
+     * Le magasin peut-il vendre ? Hors lecture seule, une fois sa société
+     * validée (voir Societe::estValidee()), tant qu'elle n'est pas membre
+     * d'un assujetti unique (décision P3.1), et son établissement confirmé
+     * par le répertoire Sirene (etablissement_verifie_le) : ticket,
+     * facture, avoir, paiement, devis numéroté, e-mail à un client,
+     * relance et transmission à la plateforme en dépendent (voir
+     * verifierQuIlPeutVendre()). Une revérification négative après la
+     * validation n'y change rien.
      */
     public function peutVendre(): bool
     {
@@ -608,7 +566,6 @@ class Magasin extends Model implements HasName
 
         return match (true) {
             $refusEnLectureSeule !== null => $refusEnLectureSeule,
-            $this->est_demonstration => $this->societe->estValidee() ? self::REFUS_DEMONSTRATION_TERMINEE : null,
             ! $this->societe->estValidee() => self::REFUS_SOCIETE_A_VERIFIER,
             $this->societe->membre_assujetti_unique => self::REFUS_ASSUJETTI_UNIQUE,
             $this->etablissement_verifie_le === null => "L'établissement de ce magasin (SIRET {$this->siret}) n'est pas encore confirmé par le répertoire Sirene de l'INSEE : aucune vente avant sa confirmation.",
@@ -620,7 +577,8 @@ class Magasin extends Model implements HasName
      * La porte de validation : appelée par le registre fiscal pour toute
      * vente et tout encaissement, juste après son verrou par l'émission
      * d'une facture, et par l'envoi d'un devis ou d'un document, un job
-     * d'envoi, une relance (voir peutVendre()).
+     * d'envoi, une relance et la transmission à la plateforme (voir
+     * peutVendre()).
      *
      * @throws VenteNonAutoriseeException
      */
@@ -650,53 +608,16 @@ class Magasin extends Model implements HasName
     }
 
     /**
-     * Le magasin écrit-il à ses clients et transmet-il à la plateforme ?
-     * Seulement s'il peut vendre (voir peutVendre()), et jamais le magasin
-     * de démonstration : ses documents n'ont aucune valeur.
-     */
-    public function peutEcrireAuxClients(): bool
-    {
-        return $this->refusDEcrireAuxClients() === null;
-    }
-
-    /**
-     * Pourquoi il n'écrit pas à ses clients, tel que l'écran le dit ; null
-     * quand il le peut.
-     */
-    public function refusDEcrireAuxClients(): ?string
-    {
-        return $this->refusDeVente() ?? ($this->est_demonstration ? self::REFUS_DEMONSTRATION_SANS_ENVOI : null);
-    }
-
-    /**
-     * La garde des e-mails aux clients, des relances et des transmissions
-     * (voir EnvoyerDocumentAction, EnvoyerDocumentJob et la transmission à
-     * la plateforme).
-     *
-     * @throws VenteNonAutoriseeException
-     */
-    public function verifierQuIlPeutEcrireAuxClients(): void
-    {
-        $refus = $this->refusDEcrireAuxClients();
-
-        if ($refus !== null) {
-            throw new VenteNonAutoriseeException($refus);
-        }
-    }
-
-    /**
-     * Avant la validation de sa société, aucun PDF d'un magasin réel ne se
+     * Avant la validation de sa société, aucun PDF d'un magasin ne se
      * produit : un usurpateur ne fabrique pas un devis ou une facture au
-     * nom d'une entreprise qui n'a rien demandé. Ceux du magasin de
-     * démonstration, à l'identité fictive et marqués « Démonstration —
-     * sans valeur », se produisent toujours. En lecture seule, les
+     * nom d'une entreprise qui n'a rien demandé. En lecture seule, les
      * téléchargements restent possibles.
      *
      * @throws VenteNonAutoriseeException
      */
     public function verifierQuIlPeutImprimer(): void
     {
-        if (! $this->est_demonstration && ! $this->societe->estValidee()) {
+        if (! $this->societe->estValidee()) {
             throw new VenteNonAutoriseeException(self::REFUS_SOCIETE_A_VERIFIER);
         }
     }
@@ -745,18 +666,12 @@ class Magasin extends Model implements HasName
      * Societe::mentionsLegalesManquantes()), puis celles de
      * l'établissement : adresse, code postal et ville, que le répertoire
      * Sirene n'a pas encore données quand l'INSEE n'a pas répondu (voir
-     * CreerEtablissementAction). Son SIRET, lui, ne manque jamais. Le
-     * magasin de démonstration, qui imprime une identité fictive, n'en
-     * attend aucune.
+     * CreerEtablissementAction). Son SIRET, lui, ne manque jamais.
      *
      * @return list<string>
      */
     public function mentionsLegalesManquantes(): array
     {
-        if ($this->est_demonstration) {
-            return [];
-        }
-
         $etablissement = [
             'adresse du magasin' => $this->adresse,
             'code postal du magasin' => $this->code_postal,

@@ -56,9 +56,6 @@
                                 <span class="font-semibold">{{ $etape['titre'] }}</span>
                             @endif
                             <p class="text-sm text-gray-600 dark:text-gray-400">{{ $etape['etat'] }}</p>
-                            @if ($etape['titre'] === \App\Filament\Societe\Pages\TableauDeBord::ETAPE_DEMONSTRATION && ! $etape['faite'])
-                                {{ $this->ouvrirLaDemonstrationAction }}
-                            @endif
                         </div>
                     </li>
                 @endforeach
@@ -96,20 +93,6 @@
             <x-slot name="heading">Identité incomplète pour facturer un professionnel</x-slot>
 
             <p>{{ $identiteIncomplete }}</p>
-        </x-filament::section>
-    @endif
-
-    @php($demonstration = $this->demonstration())
-    @if ($demonstration !== null)
-        <x-filament::section icon="heroicon-o-academic-cap">
-            <x-slot name="heading">{{ $demonstration->statut === \App\Domain\Tenancy\Enums\StatutMagasin::Ferme ? 'Démonstration (terminée)' : 'Démonstration' }}</x-slot>
-
-            <p>
-                <a href="{{ \Filament\Pages\Dashboard::getUrl(panel: 'app', tenant: $demonstration) }}" class="underline">Ouvrir le magasin de démonstration</a>
-                · ses documents n'ont aucune valeur, et rien n'en passe à vos magasins réels.
-            </p>
-
-            {{ $this->ouvrirLaDemonstrationAction }}
         </x-filament::section>
     @endif
 

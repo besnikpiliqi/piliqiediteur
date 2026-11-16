@@ -13,7 +13,6 @@ use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Models\Facture;
-use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\TypeDActivite;
@@ -29,8 +28,8 @@ use Tests\TestCase;
 
 /**
  * Les autorisations qu'un client accorde au cabinet qu'il lie : par défaut
- * les consultations de son type, dans chacun de ses magasins réels,
- * présents et futurs, jamais la démonstration ; le propriétaire du client
+ * les consultations de son type, dans chacun de ses magasins, présents et
+ * futurs ; le propriétaire du client
  * en retire et n'ajoute que celles des achats et du stock, pour un client
  * qui a des articles ; jamais la vente, les comptes, les réglages ni la
  * caisse, ce que la base refuse aussi.
@@ -39,7 +38,7 @@ class AutorisationsDuCabinetTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_par_defaut_le_cabinet_a_les_consultations_dans_chaque_magasin_reel_du_client(): void
+    public function test_par_defaut_le_cabinet_a_les_consultations_dans_chaque_magasin_du_client(): void
     {
         $cabinet = $this->ouvrirUnCabinet();
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
@@ -56,19 +55,17 @@ class AutorisationsDuCabinetTest extends TestCase
         }
     }
 
-    public function test_le_cabinet_lit_un_magasin_reel_cree_apres_le_lien_et_jamais_la_demonstration(): void
+    public function test_le_cabinet_lit_un_magasin_cree_apres_le_lien(): void
     {
         $cabinet = $this->ouvrirUnCabinet();
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique', 'a_verifier' => true]);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $this->lierLeCabinet($cabinet, $magasin);
-        $demonstration = app(OuvrirLaDemonstrationAction::class)->handle($this->proprietaireDe($magasin), $magasin->societe);
         $nouveau = $this->ouvrirUnAutreMagasin($magasin, ['nom' => 'Ouvert après le lien']);
         $proprietaire = $this->proprietaireDuCabinet($cabinet);
 
         $this->assertTrue($proprietaire->peutOuvrir($nouveau));
-        $this->assertFalse($proprietaire->peutOuvrir($demonstration));
-        $this->assertSame([], $proprietaire->autorisationsDans($demonstration));
-        $this->assertNotContains($demonstration->id, $proprietaire->magasinsAccessibles()->modelKeys());
+        $this->assertSame(PermissionRegistry::parDefautDuCabinet(TypeDActivite::Commerce), $proprietaire->autorisationsDans($nouveau));
+        $this->assertContains($nouveau->id, $proprietaire->magasinsAccessibles()->modelKeys());
     }
 
     public function test_un_nouveau_magasin_du_client_inscrit_les_droits_implicites_du_cabinet(): void

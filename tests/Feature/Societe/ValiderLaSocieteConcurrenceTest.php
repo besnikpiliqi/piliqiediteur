@@ -22,7 +22,7 @@ use Tests\TestCase;
  * La saisie du code du courrier pendant une autre opération sur la même
  * société, chacune dans son processus, sur une vraie base PostgreSQL (voir
  * SaisirCodeDeConfirmationAction) : le code sert une seule fois, et la
- * validation met en activité tous les magasins réels actifs, même celui
+ * validation met en activité tous les magasins actifs, même celui
  * qui se crée pendant qu'elle attend.
  *
  * DatabaseMigrations, pas RefreshDatabase : l'autre processus ne voit que
@@ -103,7 +103,7 @@ class ValiderLaSocieteConcurrenceTest extends TestCase
         $resultat = $this->attendreLeProcessusConcurrent($concurrente);
         $this->assertTrue($resultat->successful(), $resultat->errorOutput());
         $this->assertTrue($societe->fresh()->estValidee());
-        $magasins = $societe->magasinsReels()->orderBy('id')->pluck('id')->all();
+        $magasins = $societe->magasins()->orderBy('id')->pluck('id')->all();
         $this->assertCount(2, $magasins);
         $this->assertSame($magasins, SiretMagasin::query()->orderBy('magasin_id')->pluck('magasin_id')->all());
         $this->assertSame($magasins, PeriodeActivite::query()->whereNull('fin')->orderBy('magasin_id')->pluck('magasin_id')->all());

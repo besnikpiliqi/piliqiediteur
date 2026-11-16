@@ -57,7 +57,7 @@ use LogicException;
 final class DerniersGestes
 {
     public function __construct(
-        private readonly SemisDeDemonstration $semis,
+        private readonly SemisComplet $semis,
         private readonly MotsDePasseDuSemis $motsDePasse,
     ) {}
 

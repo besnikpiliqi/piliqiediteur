@@ -19,7 +19,7 @@ use Illuminate\Support\Collection;
  * TelechargeLesDocumentsParPeriode) : pour un client lié que le cabinet
  * ouvre au compte (son propriétaire : tous ses clients ; un collaborateur :
  * ceux qui lui sont confiés, voir AccesDesCabinets::magasinsOuverts()), les
- * documents de ses magasins réels où le client accorde au cabinet le
+ * documents de ses magasins où le client accorde au cabinet le
  * téléchargement par période, jamais par défaut (voir
  * DocumentsDeLaPeriode::magasinsDesClients()) ; seuls les documents que ses
  * autres autorisations accordées lui laissent voir. Le client se choisit

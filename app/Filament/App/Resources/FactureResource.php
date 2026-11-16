@@ -1195,8 +1195,7 @@ class FactureResource extends Resource
      * (voir EnvoyerDocumentAction : limites, droit au moment de l'envoi,
      * lecture seule, jeton de la demande) : pour qui peut envoyer les
      * documents qu'il règle (voir RecuPaiementPolicy::envoyer()), jamais un
-     * compte du cabinet lié, qui n'envoie rien, jamais dans le magasin de
-     * démonstration, qui n'écrit à aucun client, ni pour le client comptoir
+     * compte du cabinet lié, qui n'envoie rien, ni pour le client comptoir
      * sans adresse.
      *
      * @template TAction of MountableAction
@@ -1219,8 +1218,7 @@ class FactureResource extends Resource
                     return false;
                 }
 
-                return ! $recu->magasin->est_demonstration
-                    && ! (($client = ValeurRequise::de($recu->client, 'le client du reçu'))->estComptoir() && blank($client->email))
+                return ! (($client = ValeurRequise::de($recu->client, 'le client du reçu'))->estComptoir() && blank($client->email))
                     && CompteConnecte::exiger()->can('envoyer', $recu);
             })
             ->fillForm(fn (PaiementAllocation $record): array => ['destinataire' => ValeurRequise::de(self::recuDe($record)->client, 'le client du reçu')->email])

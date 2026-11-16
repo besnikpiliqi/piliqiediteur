@@ -114,7 +114,7 @@ final class DocumentsDesCas
 
     public function __construct(
         private readonly HorlogeDuSemis $horloge,
-        private readonly SemisDeDemonstration $semis,
+        private readonly SemisComplet $semis,
     ) {}
 
     /**
@@ -129,7 +129,7 @@ final class DocumentsDesCas
             $this->fichesCreees = true;
         }
 
-        $avantLaFin = SemisDeDemonstration::JOURS - $rang;
+        $avantLaFin = SemisComplet::JOURS - $rang;
         $halles = $this->gestes('halles');
         $conseil = $this->gestes('conseil');
         $camille = $this->semis->compte('Camille Laurent');
@@ -154,27 +154,27 @@ final class DocumentsDesCas
             80 => $this->aDouzeHeures($rang, fn (): Facture => $conseil->facturer($claire, $this->verifieSurVies($conseil, $claire, 'Bauer Consulting GmbH'), [$this->ligne($conseil, 'Audit de site web', 1)], [], ['nature_operation' => NatureOperation::PrestationUeAutoliquidation])),
             75 => $this->aDouzeHeures($rang, fn (): Facture => $conseil->facturer($claire, $this->client($conseil, 'Northwind Trading Ltd'), [$this->ligne($conseil, 'Heure de conseil', 4)], [], ['nature_operation' => NatureOperation::PrestationHorsUe])),
             70 => $this->aDouzeHeures($rang, function () use ($halles, $camille): void {
-                $this->livraisonExpediee = $halles->facturer($camille, $this->verifieSurVies($halles, $camille, 'Muster GmbH'), [$this->ligne($halles, 'CARNET-A5', 20)], [], ['nature_operation' => NatureOperation::LivraisonIntracommunautaire, ...self::BERLIN, 'date_operation_fin' => $this->horloge->jour(SemisDeDemonstration::JOURS - 68), 'transport_par' => TransportPar::Magasin->value]);
+                $this->livraisonExpediee = $halles->facturer($camille, $this->verifieSurVies($halles, $camille, 'Muster GmbH'), [$this->ligne($halles, 'CARNET-A5', 20)], [], ['nature_operation' => NatureOperation::LivraisonIntracommunautaire, ...self::BERLIN, 'date_operation_fin' => $this->horloge->jour(SemisComplet::JOURS - 68), 'transport_par' => TransportPar::Magasin->value]);
             }),
             66 => $this->aDouzeHeures($rang, function () use ($halles, $camille): void {
-                $this->prouver($halles, $camille, $this->livraisonExpediee, TypePreuve::TransportA, 'LV-2026-8812', $this->horloge->jour(SemisDeDemonstration::JOURS - 68), 'Transports Rapides SA');
-                $this->prouver($halles, $camille, $this->livraisonExpediee, TypePreuve::TransportB, 'CMR-44190', $this->horloge->jour(SemisDeDemonstration::JOURS - 67), 'Transports Rapides SA');
-                $this->livraisonEnlevee = $halles->facturer($camille, $this->verifieSurVies($halles, $camille, 'Muster GmbH'), [$this->ligne($halles, 'BOUGIE-FIGUE', 4)], [new PartDeReglement(ModePaiement::Virement, 6000)], ['nature_operation' => NatureOperation::LivraisonIntracommunautaire, ...self::BERLIN, 'date_operation_fin' => $this->horloge->jour(SemisDeDemonstration::JOURS - 66), 'transport_par' => TransportPar::Acquereur->value]);
+                $this->prouver($halles, $camille, $this->livraisonExpediee, TypePreuve::TransportA, 'LV-2026-8812', $this->horloge->jour(SemisComplet::JOURS - 68), 'Transports Rapides SA');
+                $this->prouver($halles, $camille, $this->livraisonExpediee, TypePreuve::TransportB, 'CMR-44190', $this->horloge->jour(SemisComplet::JOURS - 67), 'Transports Rapides SA');
+                $this->livraisonEnlevee = $halles->facturer($camille, $this->verifieSurVies($halles, $camille, 'Muster GmbH'), [$this->ligne($halles, 'BOUGIE-FIGUE', 4)], [new PartDeReglement(ModePaiement::Virement, 6000)], ['nature_operation' => NatureOperation::LivraisonIntracommunautaire, ...self::BERLIN, 'date_operation_fin' => $this->horloge->jour(SemisComplet::JOURS - 66), 'transport_par' => TransportPar::Acquereur->value]);
             }),
-            64 => $this->aDouzeHeures($rang, fn (): PreuveOperation => $this->prouver($halles, $camille, $this->livraisonEnlevee, TypePreuve::AttestationAcquereur, 'ATT-MUSTER-2026-07', $this->horloge->jour(SemisDeDemonstration::JOURS - 65), 'Muster GmbH')),
+            64 => $this->aDouzeHeures($rang, fn (): PreuveOperation => $this->prouver($halles, $camille, $this->livraisonEnlevee, TypePreuve::AttestationAcquereur, 'ATT-MUSTER-2026-07', $this->horloge->jour(SemisComplet::JOURS - 65), 'Muster GmbH')),
             60 => $this->aDouzeHeures($rang, fn (): Facture => $halles->facturer($camille, $this->client($halles, 'Lucie Bernard'), [$this->ligne($halles, 'DIFF-BAMBOU', 1)], [], ['nature_operation' => NatureOperation::LivraisonDom, 'livraison_adresse' => '1 rue Victor Hugo', 'livraison_code_postal' => '97200', 'livraison_ville' => 'Fort-de-France', 'livraison_pays' => 'FR'])),
             55 => $this->aDouzeHeures($rang, function () use ($halles, $camille): void {
-                $devis = $halles->dans(fn (): Devis => app(CreerDevisAction::class)->handle($camille, $this->client($halles, 'Agence Horizon'), [$this->ligne($halles, 'DIFF-BAMBOU', 6)], ['date_validite' => $this->horloge->jour(SemisDeDemonstration::JOURS - 45), 'date_operation_fin' => $this->horloge->jour(SemisDeDemonstration::JOURS - 42)]));
+                $devis = $halles->dans(fn (): Devis => app(CreerDevisAction::class)->handle($camille, $this->client($halles, 'Agence Horizon'), [$this->ligne($halles, 'DIFF-BAMBOU', 6)], ['date_validite' => $this->horloge->jour(SemisComplet::JOURS - 45), 'date_operation_fin' => $this->horloge->jour(SemisComplet::JOURS - 42)]));
                 $halles->dans(fn (): EnvoiDocument => app(EnvoyerDocumentAction::class)->handle($camille, $devis, 'contact@agence-horizon.exemple.test', 'Bonjour, voici notre devis pour vos bureaux.', GestesDuMagasin::jeton()));
             }),
-            50 => $this->aDouzeHeures($rang, fn (): Facture => $conseil->facturer($claire, $this->client($conseil, 'Mairie de Montreuil'), [$this->ligne($conseil, 'Audit de site web', 1), $this->ligne($conseil, 'Forfait déplacement', 1)], [], ['date_operation_debut' => $this->horloge->jour(SemisDeDemonstration::JOURS - 56), 'date_operation_fin' => $this->horloge->jour(SemisDeDemonstration::JOURS - 52)])),
+            50 => $this->aDouzeHeures($rang, fn (): Facture => $conseil->facturer($claire, $this->client($conseil, 'Mairie de Montreuil'), [$this->ligne($conseil, 'Audit de site web', 1), $this->ligne($conseil, 'Forfait déplacement', 1)], [], ['date_operation_debut' => $this->horloge->jour(SemisComplet::JOURS - 56), 'date_operation_fin' => $this->horloge->jour(SemisComplet::JOURS - 52)])),
             45 => $this->aDouzeHeures($rang, function () use ($halles): void {
                 $halles->facturer($this->semis->compte('Lucas Moreau'), $this->client($halles, 'Acme Inc.'), [$this->ligne($halles, 'CARNET-A5', 10)], [], ['nature_operation' => NatureOperation::ExportHorsUe, ...self::NEW_YORK]);
             }),
             40 => $this->aDouzeHeures($rang, function () use ($halles, $camille): void {
-                $devis = $halles->dans(fn (): Devis => app(CreerDevisAction::class)->handle($camille, $this->client($halles, 'Hôtel des Arts'), [$this->ligne($halles, 'TASSE-GRES', 24)], ['date_validite' => $this->horloge->jour(SemisDeDemonstration::JOURS - 10)]));
+                $devis = $halles->dans(fn (): Devis => app(CreerDevisAction::class)->handle($camille, $this->client($halles, 'Hôtel des Arts'), [$this->ligne($halles, 'TASSE-GRES', 24)], ['date_validite' => $this->horloge->jour(SemisComplet::JOURS - 10)]));
                 $this->devisARefuserEnLigne = $halles->dans(fn (): EnvoiDocument => app(EnvoyerDocumentAction::class)->handle($camille, $devis, 'comptabilite@hotel-des-arts.exemple.test', null, GestesDuMagasin::jeton()));
-                $refuse = $halles->dans(fn (): Devis => app(EmettreDevisAction::class)->handle($camille, app(CreerDevisAction::class)->handle($camille, $this->client($halles, 'Marie Dupuis'), [$this->ligne($halles, 'STYLO-PLUME', 1)], ['date_validite' => $this->horloge->jour(SemisDeDemonstration::JOURS - 20)]), GestesDuMagasin::jeton()));
+                $refuse = $halles->dans(fn (): Devis => app(EmettreDevisAction::class)->handle($camille, app(CreerDevisAction::class)->handle($camille, $this->client($halles, 'Marie Dupuis'), [$this->ligne($halles, 'STYLO-PLUME', 1)], ['date_validite' => $this->horloge->jour(SemisComplet::JOURS - 20)]), GestesDuMagasin::jeton()));
                 $halles->dans(fn (): Devis => app(RefuserDevisAction::class)->handle($camille, $refuse));
             }),
             38 => $this->leSoir($rang, '23:10', fn (): mixed => app(RepondreAuDevisEnLigneAction::class)->refuser(self::jetonDuDevis($this->devisARefuserEnLigne), 'Nous avons choisi un autre fournisseur cette année.')),
@@ -186,15 +186,15 @@ final class DocumentsDesCas
             26 => $this->aDouzeHeures($rang, function () use ($halles): void {
                 $lucas = $this->semis->compte('Lucas Moreau');
                 $ticket = $this->ticketEnDetaxe ?? throw new LogicException('Le ticket en détaxe n\'a pas été semé.');
-                $halles->dans(fn (): VisaDetaxe => app(NoterLeVisaDuBordereauAction::class)->handle($lucas, $ticket->refresh(), $this->horloge->jour(SemisDeDemonstration::JOURS - 27)));
+                $halles->dans(fn (): VisaDetaxe => app(NoterLeVisaDuBordereauAction::class)->handle($lucas, $ticket->refresh(), $this->horloge->jour(SemisComplet::JOURS - 27)));
             }),
             22 => $this->aDouzeHeures($rang, function () use ($halles, $camille): void {
                 $halles->vendreALaCaisse($camille, $this->client($halles, 'Marie Dupuis'), [$this->ligne($halles, 'STYLO-PLUME', 8)], ModePaiement::CarteBancaire, sansStock: true);
                 $halles->dans(fn () => app(ArchiverUneFicheAction::class)->archiver($camille, $this->fournisseur($halles, 'Papeterie du Centre')));
             }),
             18 => $this->aDouzeHeures($rang, function () use ($conseil, $claire): void {
-                $facture = $conseil->facturer($claire, $this->client($conseil, 'Boulangerie Martin'), [$this->ligne($conseil, 'Heure de conseil', 2)], [], ['date_operation_fin' => $this->horloge->jour(SemisDeDemonstration::JOURS - 19)]);
-                $conseil->payer($claire, $facture, ModePaiement::Prelevement, '180.00', $this->horloge->jour(SemisDeDemonstration::JOURS - 18), 'PRLV-2026-0418');
+                $facture = $conseil->facturer($claire, $this->client($conseil, 'Boulangerie Martin'), [$this->ligne($conseil, 'Heure de conseil', 2)], [], ['date_operation_fin' => $this->horloge->jour(SemisComplet::JOURS - 19)]);
+                $conseil->payer($claire, $facture, ModePaiement::Prelevement, '180.00', $this->horloge->jour(SemisComplet::JOURS - 18), 'PRLV-2026-0418');
             }),
             14 => $this->aDouzeHeures($rang, function () use ($halles): void {
                 $lucas = $this->semis->compte('Lucas Moreau');
@@ -206,17 +206,17 @@ final class DocumentsDesCas
             }),
             9 => $this->aDouzeHeures($rang, fn () => $this->transmettreAvecDesIncidents($rang, $halles, $camille)),
             8 => $this->aDouzeHeures($rang, function () use ($halles, $camille): void {
-                $devis = $halles->dans(fn (): Devis => app(CreerDevisAction::class)->handle($camille, $this->client($halles, 'Agence Horizon'), [$this->ligne($halles, 'BOUGIE-FIGUE', 12), $this->ligne($halles, 'Emballage cadeau', 12)], ['date_validite' => $this->horloge->jour(SemisDeDemonstration::JOURS - 1)]));
+                $devis = $halles->dans(fn (): Devis => app(CreerDevisAction::class)->handle($camille, $this->client($halles, 'Agence Horizon'), [$this->ligne($halles, 'BOUGIE-FIGUE', 12), $this->ligne($halles, 'Emballage cadeau', 12)], ['date_validite' => $this->horloge->jour(SemisComplet::JOURS - 1)]));
                 $this->devisAAccepterEnLigne = $halles->dans(fn (): EnvoiDocument => app(EnvoyerDocumentAction::class)->handle($camille, $devis, 'contact@agence-horizon.exemple.test', null, GestesDuMagasin::jeton()));
             }),
             6 => $this->leSoir($rang, '23:10', fn (): mixed => app(RepondreAuDevisEnLigneAction::class)->accepter(self::jetonDuDevis($this->devisAAccepterEnLigne), 'Sophie Arnaud', true)),
             5 => $this->aDouzeHeures($rang, function () use ($halles, $camille): void {
-                $devis = $halles->dans(fn (): Devis => app(CreerDevisAction::class)->handle($camille, $this->client($halles, 'Hôtel des Arts'), [$this->ligne($halles, 'THE-SENCHA', 30)], ['date_validite' => $this->horloge->jour(SemisDeDemonstration::JOURS - 1)]));
+                $devis = $halles->dans(fn (): Devis => app(CreerDevisAction::class)->handle($camille, $this->client($halles, 'Hôtel des Arts'), [$this->ligne($halles, 'THE-SENCHA', 30)], ['date_validite' => $this->horloge->jour(SemisComplet::JOURS - 1)]));
                 $halles->dans(fn (): EnvoiDocument => app(EnvoyerDocumentAction::class)->handle($camille, $devis, 'comptabilite@hotel-des-arts.exemple.test', null, GestesDuMagasin::jeton()));
             }),
             4 => $this->aDouzeHeures($rang, function () use ($halles, $camille): void {
                 $partielle = $halles->facturer($camille, $this->client($halles, 'Agence Horizon'), [$this->ligne($halles, 'DIFF-BAMBOU', 2), $this->ligne($halles, 'CARNET-A5', 10)]);
-                $halles->encaisser($camille, $partielle, [new PartDeReglement(ModePaiement::Cheque, 3000)], $this->horloge->jour(SemisDeDemonstration::JOURS - 4));
+                $halles->encaisser($camille, $partielle, [new PartDeReglement(ModePaiement::Cheque, 3000)], $this->horloge->jour(SemisComplet::JOURS - 4));
                 $envoyee = $halles->facturer($camille, $this->client($halles, 'Hôtel des Arts'), [$this->ligne($halles, 'BOUGIE-FIGUE', 6)]);
                 $halles->dans(fn (): EnvoiDocument => app(EnvoyerDocumentAction::class)->handle($camille, $envoyee, 'comptabilite@hotel-des-arts.exemple.test', 'Bonjour, voici votre facture.', GestesDuMagasin::jeton()));
                 ServeurDEnvoiEnPanne::pendant(fn (): EnvoiDocument => $halles->dans(fn (): EnvoiDocument => app(EnvoyerDocumentAction::class)->handle($camille, $partielle, 'contact@agence-horizon.exemple.test', 'Bonjour, voici votre facture, déjà réglée en partie.', GestesDuMagasin::jeton())));
@@ -229,12 +229,12 @@ final class DocumentsDesCas
             }),
             2 => $this->aDouzeHeures($rang, function () use ($halles, $camille): void {
                 $grossiste = $this->fournisseur($halles, 'Grossiste Lumière');
-                $halles->dans(fn (): FactureAchat => app(CreerFactureAchatAction::class)->handle($camille, $grossiste, [['produit_id' => $halles->produit('TASSE-GRES')->id, 'quantite' => 12, 'prix_unitaire_ht' => '4.30']], ['date_facture' => $this->horloge->jour(SemisDeDemonstration::JOURS - 3), 'numero_fournisseur' => 'GL-2026-990']));
+                $halles->dans(fn (): FactureAchat => app(CreerFactureAchatAction::class)->handle($camille, $grossiste, [['produit_id' => $halles->produit('TASSE-GRES')->id, 'quantite' => 12, 'prix_unitaire_ht' => '4.30']], ['date_facture' => $this->horloge->jour(SemisComplet::JOURS - 3), 'numero_fournisseur' => 'GL-2026-990']));
                 $achat = $halles->dans(fn (): FactureAchat => FactureAchat::query()->where('numero_fournisseur', 'GL-2026-118')->sole());
                 $ligne = $halles->dans(fn (): int => $achat->lignes()->whereHas('produit', fn ($produit) => $produit->where('reference', 'DIFF-BAMBOU'))->sole()->id);
                 $halles->dans(fn (): AvoirFournisseur => app(CreerAvoirFournisseurAction::class)->handle($camille, $achat, [['ligne_achat_id' => $ligne, 'quantite' => 1]], 'Diffuseur fêlé, en attente de la note d\'avoir.', null));
                 $monaco = $halles->fiche($camille, Fournisseur::class, ['nom' => 'Parfums de Monte-Carlo', 'adresse' => '7 avenue des Spélugues', 'code_postal' => '98000', 'ville' => 'Monaco', 'pays' => 'MC']);
-                $halles->acheter($camille, $monaco, [['produit_id' => $halles->produit('BOUGIE-FIGUE')->id, 'quantite' => 10, 'prix_unitaire_ht' => '6.40']], ['date_facture' => $this->horloge->jour(SemisDeDemonstration::JOURS - 3), 'numero_fournisseur' => 'PMC-2026-77']);
+                $halles->acheter($camille, $monaco, [['produit_id' => $halles->produit('BOUGIE-FIGUE')->id, 'quantite' => 10, 'prix_unitaire_ht' => '6.40']], ['date_facture' => $this->horloge->jour(SemisComplet::JOURS - 3), 'numero_fournisseur' => 'PMC-2026-77']);
             }),
             default => null,
         };

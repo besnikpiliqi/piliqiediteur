@@ -37,6 +37,7 @@ use Database\Factories\MagasinFactory;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use LogicException;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -290,6 +291,23 @@ class CreerEtablissementActionTest extends TestCase
     }
 
     /**
+     * Le code « DEMO » n'est réservé à rien : un magasin le prend comme
+     * tout autre code (choix 24 du cahier DEMO-COPIE). Chaque magasin a son
+     * SIRET : la base refuse d'en enregistrer un sans lui (choix 25).
+     */
+    public function test_le_code_demo_se_choisit_comme_un_autre_et_la_base_refuse_un_magasin_sans_siret(): void
+    {
+        $premier = $this->ouvrirUneSociete(['nom' => 'Lyon centre', 'code' => 'LYON1']);
+
+        $demo = $this->creer($premier, ['nom' => 'Lyon démo', 'code' => 'demo', 'nic' => $this->nic($premier->societe, '0002')]);
+
+        $this->assertSame('DEMO', $demo->code);
+        $sansSiret = [...array_diff_key((array) DB::table('magasins')->where('id', $demo->id)->first(), ['id' => true]), 'uuid' => (string) Str::uuid(), 'code' => 'SANS', 'siret' => null];
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn (): bool => DB::table('magasins')->insert($sansSiret)), QueryException::class, 'null value in column "siret"');
+        $this->assertSame(2, $premier->societe->magasins()->count());
+    }
+
+    /**
      * @return array<string, array{string, string}>
      */
     public static function nomsEtCodesProposes(): array
@@ -471,12 +489,12 @@ class CreerEtablissementActionTest extends TestCase
 
     /**
      * Quel que soit le chemin qui l'a créé (inscription validée, autre
-     * magasin d'une société validée, fabrique), chaque magasin réel actif
+     * magasin d'une société validée, fabrique), chaque magasin actif
      * d'une société validée a son SIRET actuel au registre des SIRET
      * réservés, et un seul ; aucun magasin d'une société en cours de
      * vérification n'y figure.
      */
-    public function test_chaque_magasin_reel_actif_d_une_societe_validee_a_son_siret_actuel_au_registre_et_un_seul(): void
+    public function test_chaque_magasin_actif_d_une_societe_validee_a_son_siret_actuel_au_registre_et_un_seul(): void
     {
         $premier = $this->ouvrirUneSociete(['nom' => 'Lyon centre']);
         $this->ouvrirUnAutreMagasin($premier, ['nom' => 'Lyon 2']);

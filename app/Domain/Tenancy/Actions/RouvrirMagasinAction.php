@@ -27,7 +27,7 @@ use LogicException;
 use SensitiveParameter;
 
 /**
- * La société rouvre l'un de ses magasins réels fermés temporairement ou
+ * La société rouvre l'un de ses magasins fermés temporairement ou
  * pour cessation d'activité, avant comme après sa validation ; un magasin
  * cédé ne se rouvre jamais (voir Magasin::aEteCede()), ni un magasin dont
  * l'éditeur a libéré le SIRET pour un nouveau magasin sur le même

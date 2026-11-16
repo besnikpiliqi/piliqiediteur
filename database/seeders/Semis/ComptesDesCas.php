@@ -66,7 +66,7 @@ final class ComptesDesCas
 
     public function __construct(
         private readonly HorlogeDuSemis $horloge,
-        private readonly SemisDeDemonstration $semis,
+        private readonly SemisComplet $semis,
         private readonly ComptesSemes $liste,
     ) {}
 
@@ -122,7 +122,7 @@ final class ComptesDesCas
      */
     public function auJour(int $rang): void
     {
-        $avantLaFin = SemisDeDemonstration::JOURS - $rang;
+        $avantLaFin = SemisComplet::JOURS - $rang;
 
         if ($rang % 5 === 0) {
             $this->vendreLeSoir($rang, $avantLaFin);

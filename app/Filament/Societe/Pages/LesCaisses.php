@@ -20,7 +20,7 @@ use Illuminate\Database\Eloquent\Collection;
  * le propriétaire et chaque administrateur, les caisses encore ouvertes,
  * puis les relevés de caisse fermés le jour choisi (par défaut, la journée
  * en cours de chaque magasin, dans son calendrier ; un jour choisi
- * s'applique à chacun dans le sien), de chaque magasin réel de sa portée
+ * s'applique à chacun dans le sien), de chaque magasin de sa portée
  * où il voit les relevés de
  * toute l'équipe (voir CaissesDeLaSociete), chacun avec un lien vers sa
  * page des relevés dans le magasin. Aucun nom de client, aucun document.

@@ -39,7 +39,7 @@ use Tests\TestCase;
 
 /**
  * Le refus de l'éditeur, qui clôt une inscription, et un geste qui écrit
- * dans un magasin réel de cette société avant sa validation (une facture
+ * dans un magasin de cette société avant sa validation (une facture
  * d'achat ou un inventaire d'ouverture validés, une facture d'achat
  * validée corrigée, une fiche modifiée ou créée, le taux d'un produit
  * changé, un service créé depuis une vente, les paramètres du magasin
@@ -50,7 +50,7 @@ use Tests\TestCase;
  * de toute autre écriture de cette ligne pour les paramètres du magasin,
  * qu'il écrit ; après le registre fiscal du magasin pour un changement de
  * taux) et le dit ouvert tant que l'inscription ne l'est pas ; la
- * clôture verrouille la société, puis les lignes de ses magasins réels,
+ * clôture verrouille la société, puis les lignes de ses magasins,
  * avant de la clore. Un geste commencé avant la clôture passe donc tout
  * entier avant elle, qui ne se date qu'ensuite et ne s'inscrit au journal
  * d'audit qu'après lui ; un geste qui attendait la clôture voit

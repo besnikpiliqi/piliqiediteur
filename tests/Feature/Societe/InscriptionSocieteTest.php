@@ -190,7 +190,7 @@ class InscriptionSocieteTest extends TestCase
      * l'espace de sa société, avec la liste de ses premières étapes, chacune
      * menant à son écran, aucune encore cochée : saisir le code du courrier
      * recommandé, avant la fin de sa validité, créer le premier magasin,
-     * ajouter l'équipe, essayer la démonstration.
+     * ajouter l'équipe.
      */
     public function test_apres_le_lien_le_proprietaire_arrive_sur_la_liste_de_ses_premieres_etapes(): void
     {
@@ -200,10 +200,9 @@ class InscriptionSocieteTest extends TestCase
 
         $this->followingRedirects()->post($this->lienEnvoye(), self::CONFIRMATION)
             ->assertOk()
-            ->assertSeeTextInOrder(['Vos premières étapes', TableauDeBord::ETAPE_CODE_DU_COURRIER, TableauDeBord::ETAPE_PREMIER_MAGASIN, TableauDeBord::ETAPE_EQUIPE, TableauDeBord::ETAPE_DEMONSTRATION])
+            ->assertSeeTextInOrder(['Vos premières étapes', TableauDeBord::ETAPE_CODE_DU_COURRIER, TableauDeBord::ETAPE_PREMIER_MAGASIN, TableauDeBord::ETAPE_EQUIPE])
             ->assertSee([PageDeVerification::getUrl(panel: 'societe', tenant: Societe::query()->sole()), MagasinResource::getUrl('create', panel: 'societe', tenant: Societe::query()->sole())], false)
-            ->assertSeeText('Le courrier recommandé est parti au représentant légal de votre entreprise, à l\'adresse de son siège : saisissez son code avant le 11/11/2026.')
-            ->assertSeeText('Ouvrir le magasin de démonstration');
+            ->assertSeeText('Le courrier recommandé est parti au représentant légal de votre entreprise, à l\'adresse de son siège : saisissez son code avant le 11/11/2026.');
     }
 
     public function test_l_identite_et_l_adresse_du_siege_sont_preremplies_depuis_sirene(): void

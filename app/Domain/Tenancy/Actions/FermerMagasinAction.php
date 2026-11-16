@@ -31,7 +31,7 @@ use SensitiveParameter;
 use Throwable;
 
 /**
- * La société ferme l'un de ses magasins réels, temporairement, pour
+ * La société ferme l'un de ses magasins, temporairement, pour
  * cessation d'activité ou pour cession, ou cède un magasin qu'elle a déjà
  * fermé, temporairement ou pour cessation.
  *
@@ -43,8 +43,7 @@ use Throwable;
  * retapant le nom du magasin, et seulement une fois la société validée
  * (avant, le magasin n'a aucune activité à céder et se ferme pour
  * cessation). Jamais un responsable ni un compte du cabinet lié. Un magasin
- * suspendu par l'éditeur se ferme et se cède aussi, et reste suspendu ;
- * le magasin de démonstration se ferme par FermerLaDemonstrationAction.
+ * suspendu par l'éditeur se ferme et se cède aussi, et reste suspendu.
  *
  * En une transaction, le registre du magasin verrouillé en tête puis sa
  * ligne, relue pour refuser un magasin fermé ou cédé entre-temps :

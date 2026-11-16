@@ -55,13 +55,13 @@ class FonctionsDeGardeTest extends TestCase
 
     /**
      * Une table temporaire users vide ne fait pas accepter un paiement au
-     * nom du propriétaire dans un magasin réel, où il ne vend jamais : la
+     * nom du propriétaire, qui ne vend jamais : la
      * garde lit toujours la table des comptes. Le même paiement est refusé
      * sans table temporaire.
      */
     public function test_une_table_temporaire_des_comptes_ne_trompe_pas_la_garde_de_la_vente(): void
     {
-        $paiement = $this->paiementDuProprietaireDansUnMagasinReel();
+        $paiement = $this->paiementDuProprietaireDansUnMagasin();
 
         $sansOmbre = $this->ecrireDansUnPointDeSauvegarde($paiement);
         $avecOmbre = $this->ecrireDansUnPointDeSauvegarde($paiement, 'CREATE TEMP TABLE users (id bigint, role_societe varchar(30))');
@@ -73,21 +73,20 @@ class FonctionsDeGardeTest extends TestCase
     }
 
     /**
-     * Une table temporaire magasins qui fait passer chaque magasin pour un
-     * magasin de démonstration, le seul où le propriétaire vend, ne fait pas
-     * accepter un paiement à son nom dans un magasin réel : la garde lit
-     * toujours la table des magasins. Le même paiement est refusé sans
-     * table temporaire.
+     * Une table temporaire users qui donne à chaque compte le rôle de
+     * membre ne fait pas accepter un paiement au nom du propriétaire : la
+     * garde lit toujours le rôle dans la table des comptes. Le même paiement
+     * est refusé sans table temporaire.
      */
-    public function test_une_table_temporaire_des_magasins_ne_trompe_pas_la_garde_de_la_vente(): void
+    public function test_une_table_temporaire_des_comptes_au_faux_role_ne_trompe_pas_la_garde_de_la_vente(): void
     {
-        $paiement = $this->paiementDuProprietaireDansUnMagasinReel();
+        $paiement = $this->paiementDuProprietaireDansUnMagasin();
 
         $sansOmbre = $this->ecrireDansUnPointDeSauvegarde($paiement);
-        $avecOmbre = $this->ecrireDansUnPointDeSauvegarde($paiement, 'CREATE TEMP TABLE magasins AS SELECT id, TRUE AS est_demonstration, societe_id FROM public.magasins');
+        $avecOmbre = $this->ecrireDansUnPointDeSauvegarde($paiement, "CREATE TEMP TABLE users AS SELECT id, societe_id, 'membre'::varchar(20) AS role_societe FROM public.users");
 
         $this->assertStringContainsString(GardesDeLaVente::MESSAGE, (string) $sansOmbre?->getMessage());
-        $this->assertSame('P0001', $avecOmbre?->errorInfo[0], 'Une table temporaire magasins fait accepter un paiement au nom du propriétaire.');
+        $this->assertSame('P0001', $avecOmbre?->errorInfo[0], 'Une table temporaire users au faux rôle fait accepter un paiement au nom du propriétaire.');
         $this->assertStringContainsString(GardesDeLaVente::MESSAGE, $avecOmbre->getMessage());
         $this->assertSame(0, DB::table('paiements')->count());
     }
@@ -118,10 +117,10 @@ class FonctionsDeGardeTest extends TestCase
 
     /**
      * Un paiement de 12,00 € écrit directement en base au nom du
-     * propriétaire, dans le magasin réel d'une société ouverte, magasin
+     * propriétaire, dans le magasin d'une société ouverte, magasin
      * actif.
      */
-    private function paiementDuProprietaireDansUnMagasinReel(): Closure
+    private function paiementDuProprietaireDansUnMagasin(): Closure
     {
         $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $magasin = $this->ouvrirUneSociete();

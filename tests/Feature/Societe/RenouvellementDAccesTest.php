@@ -6,20 +6,16 @@ use App\Domain\Authorization\AutorisationsSociete;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Tenancy\Actions\ChangerSonMotDePasseAction;
 use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
-use App\Domain\Tenancy\Actions\CreerMembreAction;
 use App\Domain\Tenancy\Actions\ModifierMembreAction;
-use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
 use App\Domain\Tenancy\Actions\RedonnerLAccesAction;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\ModeDAccesRedonne;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Affectation;
-use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Notifications\AvisDeLEquipe;
 use App\Domain\Tenancy\Services\PorteeDesDroits;
 use App\Domain\Tenancy\Services\PostesConnus;
 use App\Domain\Tenancy\Services\PostesReconnus;
-use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\RegleDuMotDePasse;
 use App\Filament\App\Pages\Auth\Connexion;
 use App\Filament\App\Resources\EquipeDuMagasinResource\Pages\ListEquipeDuMagasin;
@@ -45,7 +41,7 @@ use Tests\TestCase;
  * PorteeDesDroits::peutRedonnerLAcces()) : par le propriétaire pour tout
  * compte ; par un responsable de son magasin pour un vendeur ou un
  * observateur ; par un administrateur autorisé à nommer les responsables
- * pour un responsable d'un magasin réel de sa portée ; par un administrateur
+ * pour un responsable d'un magasin de sa portée ; par un administrateur
  * autorisé à redonner l'accès pour un vendeur ou un observateur d'un magasin
  * réel de sa portée ; personne ne redonne celui du propriétaire. La
  * personne présente tape elle-même son nouveau mot de passe ; absente, il
@@ -136,7 +132,7 @@ class RenouvellementDAccesTest extends TestCase
 
     /**
      * Dans l'espace de la société, un administrateur qui n'a que « redonner
-     * l'accès » voit les vendeurs et les observateurs des magasins réels de
+     * l'accès » voit les vendeurs et les observateurs des magasins de
      * sa portée, et aucun autre compte ; sur leur fiche, seuls « Redonner
      * l'accès » et « Afficher l'identifiant » ; ni identifiant ni badge en
      * liste.
@@ -271,46 +267,6 @@ class RenouvellementDAccesTest extends TestCase
         $page->assertSee("Identifiant : {$chef->identifiantDeConnexion()}")
             ->assertSee('poste reconnu du magasin, où la personne choisira son propre mot de passe à sa première connexion')
             ->assertDontSee($identifiantDuVendeur);
-    }
-
-    public function test_un_administrateur_ne_nomme_aucun_responsable_dans_la_demonstration(): void
-    {
-        $societe = $this->inscrireUneSociete();
-        $reel = $this->creerLeMagasinDuSiege($societe);
-        $administrateur = $this->administrateur($reel, null, AutorisationsSociete::toutes(), self::toutesCellesDUnCompteDeLaSociete());
-        $demonstration = app(OuvrirLaDemonstrationAction::class)->handle($societe->proprietaire, $societe->fresh());
-        $entrainement = app(TenantContext::class)->runAs($demonstration, fn (): User => app(CreerMembreAction::class)->handle($societe->proprietaire, $demonstration, ['name' => 'Vendeur d\'essai'], RoleMagasin::Vendeur));
-        $portee = app(PorteeDesDroits::class);
-
-        $this->assertFalse($portee->peutNommerUnResponsable($administrateur->refresh(), $demonstration));
-        $this->assertSame([], $portee->candidatsResponsables($administrateur, $demonstration)->pluck('id')->all());
-        $this->assertThrows(fn () => app(ModifierMembreAction::class)->handle($administrateur, $entrainement, RoleMagasin::Responsable), AuthorizationException::class);
-        $this->assertThrows(fn () => app(TenantContext::class)->runAs($demonstration, fn () => app(CreerMembreAction::class)->handle($administrateur, $demonstration, ['name' => 'Chef d\'essai'], RoleMagasin::Responsable)), AuthorizationException::class);
-        $this->assertSame(RoleMagasin::Vendeur, Affectation::query()->where('user_id', $entrainement->id)->sole()->role);
-    }
-
-    /**
-     * Même autorisé à tout, un administrateur ne redonne l'accès d'aucun
-     * compte d'entraînement : seuls le propriétaire et un responsable du
-     * magasin de démonstration le font.
-     */
-    public function test_un_administrateur_ne_redonne_pas_l_acces_d_un_compte_d_entrainement(): void
-    {
-        $societe = $this->inscrireUneSociete();
-        $reel = $this->creerLeMagasinDuSiege($societe);
-        $administrateur = $this->administrateur($reel, null, AutorisationsSociete::toutes(), self::toutesCellesDUnCompteDeLaSociete());
-        $demonstration = app(OuvrirLaDemonstrationAction::class)->handle($societe->proprietaire, $societe->fresh());
-        [$chef, $vendeur] = app(TenantContext::class)->runAs($demonstration, fn (): array => [
-            $this->choisirSonMotDePasse(app(CreerMembreAction::class)->handle($societe->proprietaire, $demonstration, ['name' => 'Chef d\'essai'], RoleMagasin::Responsable)),
-            $this->choisirSonMotDePasse(app(CreerMembreAction::class)->handle($societe->proprietaire, $demonstration, ['name' => 'Vendeur d\'essai'], RoleMagasin::Vendeur)),
-        ]);
-
-        foreach ([$chef, $vendeur] as $cible) {
-            $this->assertFalse($administrateur->can('redonnerLAcces', $cible), $cible->name);
-            $this->assertThrows(fn () => app(RedonnerLAccesAction::class)->handle($administrateur, $cible, false), AuthorizationException::class);
-        }
-        $this->assertTrue(app(RedonnerLAccesAction::class)->handle($chef, $vendeur, false));
-        $this->assertTrue(app(RedonnerLAccesAction::class)->handle($societe->proprietaire, $chef, false));
     }
 
     public function test_un_administrateur_sans_autorisation_ne_redonne_aucun_acces(): void

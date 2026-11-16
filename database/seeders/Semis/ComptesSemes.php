@@ -169,9 +169,8 @@ final class ComptesSemes
 
     /**
      * Ôte de la liste les comptes retirés depuis qu'ils ont été notés, qui
-     * ne se connectent plus (les comptes d'entraînement d'une
-     * démonstration que la validation de sa société a fermée, les comptes
-     * de l'expert-comptable d'une déclaration devenue un lien), sauf ceux
+     * ne se connectent plus (les comptes de l'expert-comptable d'une
+     * déclaration devenue un lien), sauf ceux
      * qu'on garde pour voir ce qu'est un compte retiré.
      *
      * @param  list<int>  $gardes

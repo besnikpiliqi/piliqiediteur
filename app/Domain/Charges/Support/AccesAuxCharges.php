@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Builder;
 /**
  * Ce qu'un compte peut faire des charges d'une société (voir
  * DroitsSurLesCharges, qui seul le construit) : voir et ajouter celles de
- * « Toute la société », et celles de ces magasins réels (tous pour le
+ * « Toute la société », et celles de ces magasins (tous pour le
  * propriétaire), les valider (et donc les corriger après leur validation,
  * les renvoyer au client et les supprimer avant), et gérer les types de
  * charge de la société, réglage de la société que seuls son propriétaire
@@ -22,7 +22,7 @@ use Illuminate\Database\Eloquent\Builder;
 final readonly class AccesAuxCharges
 {
     /**
-     * @param  list<int>|null  $magasins  les magasins réels dont il voit et ajoute les charges ; null pour tous
+     * @param  list<int>|null  $magasins  les magasins dont il voit et ajoute les charges ; null pour tous
      */
     public function __construct(
         public User $compte,

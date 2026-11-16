@@ -14,10 +14,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * lecture hors du magasin courant, déclarée dans CLAUDE.md, la seule de ce
  * tableau de bord.
  *
- * Elle ne lit que les magasins réels de la portée de la personne (voir
+ * Elle ne lit que les magasins de la portée de la personne (voir
  * User::magasinsDeSaPortee() : toute sa société pour le propriétaire, la
- * sélection d'un administrateur), jamais le magasin de démonstration ni
- * un magasin d'une autre société, et seulement ceux dont elle suit toutes
+ * sélection d'un administrateur), jamais un magasin d'une autre société, et seulement ceux dont elle suit toutes
  * les factures à encaisser (voir
  * User::suitToutesLesFacturesAEncaisserDe()) : ceux où elle voit les
  * factures et celles de toute l'équipe (toujours pour le propriétaire, les cases
@@ -45,7 +44,6 @@ final class FacturesAEncaisserDeLaSociete
     public function pour(User $compte): array
     {
         $suivis = $compte->magasinsDeSaPortee()
-            ->where('est_demonstration', false)
             ->orderBy('id')
             ->get()
             ->filter(fn (Magasin $magasin): bool => $compte->suitToutesLesFacturesAEncaisserDe($magasin))

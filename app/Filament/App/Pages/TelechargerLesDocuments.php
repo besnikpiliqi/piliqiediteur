@@ -22,7 +22,7 @@ use Illuminate\Support\Collection;
  * un compte du cabinet lié quand le client la lui coche ; les charges de
  * ce magasin pour qui les voit, et celles de « Toute la société » pour
  * l'expert-comptable déclaré seulement. Ouverte même
- * quand le magasin est en lecture seule ; jamais dans un magasin réel
+ * quand le magasin est en lecture seule ; jamais dans un magasin
  * d'une société qui n'est pas validée.
  */
 class TelechargerLesDocuments extends Page

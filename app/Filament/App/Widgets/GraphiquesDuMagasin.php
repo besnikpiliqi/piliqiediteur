@@ -16,7 +16,7 @@ use Filament\Facades\Filament;
  * administrateur ou un responsable à qui il coche « Tableau de bord : voir
  * les graphiques », un compte du cabinet lié et l'expert-comptable déclaré
  * (voir PerimetreDesGraphiques::voitLesGraphiquesDuMagasin()) ; jamais un
- * vendeur, un observateur, ni dans le magasin de démonstration. Après
+ * vendeur ni un observateur. Après
  * l'« À faire ».
  */
 class GraphiquesDuMagasin extends GrilleDesGraphiques

@@ -625,6 +625,6 @@ class ModifierProfilTest extends TestCase
      */
     private function magasinDe(User $compte): Magasin
     {
-        return Magasin::query()->where('societe_id', $compte->societe_id)->where('est_demonstration', false)->orderBy('id')->firstOrFail();
+        return Magasin::query()->where('societe_id', $compte->societe_id)->orderBy('id')->firstOrFail();
     }
 }

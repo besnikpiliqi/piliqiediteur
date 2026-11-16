@@ -46,7 +46,7 @@ use Throwable;
  * conclu à une erreur pour ce même SIREN (voir ExaminerSirenAction).
  *
  * Le nouveau SIREN est celui d'une entreprise active au répertoire Sirene,
- * qu'aucune autre inscription ne garde. Chaque magasin réel qui peut
+ * qu'aucune autre inscription ne garde. Chaque magasin qui peut
  * encore vendre (ouvert, ou fermé temporairement) reçoit son nouveau
  * SIRET : un établissement actif, rattaché au nouveau SIREN, du même
  * territoire, qu'aucun magasin ne réserve ; un magasin fermé pour
@@ -73,9 +73,9 @@ use Throwable;
  * PrevenirLesClientsDuCabinet).
  *
  * Les contrôles du répertoire se font avant toute écriture ; puis, sous
- * les verrous des registres de tous ses magasins réels, de sa ligne, puis
+ * les verrous des registres de tous ses magasins, de sa ligne, puis
  * de chaque magasin qui change de SIRET, seulement si aucun de ses
- * magasins réels n'a émis de facture à un professionnel depuis l'instant
+ * magasins n'a émis de facture à un professionnel depuis l'instant
  * de l'examen, ni dans sa seconde (sa liste, des documents émis avant
  * lui, désigne alors toutes celles que l'ancien SIREN a signées, les
  * seules qui se régularisent ensuite), et si aucun de ces
@@ -180,13 +180,13 @@ class CorrigerSirenAction
                 throw new VerificationRefuseeException(self::MESSAGE_SIREN_PRIS);
             }
 
-            $magasins = $societe->magasinsReels()->orderBy('id')->get();
+            $magasins = $societe->magasins()->orderBy('id')->get();
             $etablissements = $this->etablissementsDesMagasins(self::quiChangentDeSiret($magasins), $siretsParCode, $nouveauSiren);
 
             $correction = function () use ($societe, $nouveauSiren, $numeroTva, $assujettiUnique, $editeur, $magasins, $etablissements, $unite, $examen) {
                 $verrouillee = Societe::query()->whereKey($societe->getKey())->lockForUpdate()->firstOrFail();
                 ExaminerSirenAction::exigerUneSocieteValideeNonRevoquee($verrouillee);
-                $relus = $verrouillee->magasinsReels()->orderBy('id')->get();
+                $relus = $verrouillee->magasins()->orderBy('id')->get();
 
                 if ($relus->modelKeys() !== $magasins->modelKeys() || self::quiChangentDeSiret($relus)->modelKeys() !== array_keys($etablissements)) {
                     throw new VerificationRefuseeException(self::MESSAGE_MAGASINS_CHANGES);
@@ -309,7 +309,7 @@ class CorrigerSirenAction
     }
 
     /**
-     * Les magasins réels qui peuvent encore vendre, et reçoivent donc leur
+     * Les magasins qui peuvent encore vendre, et reçoivent donc leur
      * nouveau SIRET : ouverts, ou fermés temporairement.
      *
      * @param  Collection<int, Magasin>  $magasins

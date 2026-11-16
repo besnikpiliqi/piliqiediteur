@@ -16,9 +16,7 @@ use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\MiseEnActiviteDesMagasins;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
-use Illuminate\Notifications\DatabaseNotification;
 use LogicException;
-use Throwable;
 
 /**
  * La seule validation d'une société, qui reçoit la preuve utilisée (voir
@@ -45,29 +43,21 @@ use Throwable;
  * nom du système (voir OperateurCourant), même quand la personne qui a
  * saisi le code est connectée. L'événement SocieteValidee part une fois la
  * transaction validée, après le MagasinOuvert de chaque magasin mis en
- * activité (étape 12 : les abonnements). Un magasin réel fermé n'est ni
+ * activité (étape 12 : les abonnements). Un magasin fermé n'est ni
  * réservé ni ouvert : sa réouverture le mettra en activité (voir
  * RouvrirMagasinAction). Un SIRET réservé entre-temps par une autre
  * société fait tout refuser (SiretDejaReserveException) : rien n'est
  * écrit.
  *
- * apresLaValidation(), une fois la transaction validée : le magasin de
- * démonstration se ferme pour de bon et ses comptes d'entraînement sont
- * retirés, même s'il était déjà fermé pour inactivité (un échec n'empêche
- * rien : il ne vend plus, la société étant validée, et la commande
- * quotidienne le reprend) ; il disparaît de tous les écrans de la société
- * et de ses magasins, plus personne n'y entrant (T115, lot DEMO-V, voir
- * User::peutOuvrir()), et les notifications à son propos s'effacent des
- * cloches de la société, ses données restant en base (registre, journal
- * des événements, JET 100 et 105) ; le propriétaire est prévenu, sans
- * parler de magasins à un cabinet d'expertise comptable, qui n'en a aucun.
+ * apresLaValidation(), une fois la transaction validée : le propriétaire
+ * est prévenu, sans parler de magasins à un cabinet d'expertise
+ * comptable, qui n'en a aucun.
  */
 class ValiderLaSocieteAction
 {
     public function __construct(
         private readonly MiseEnActiviteDesMagasins $miseEnActivite,
         private readonly JournalAudit $journalAudit,
-        private readonly FermerLaDemonstrationAction $fermerLaDemonstration,
         private readonly OperateurCourant $operateur,
     ) {}
 
@@ -90,7 +80,7 @@ class ValiderLaSocieteAction
         }
 
         $this->operateur->pendantLeSysteme(function () use ($verrouillee, $proprietaire, $preuve, $cabinet): void {
-            $magasins = $verrouillee->magasinsReels()->where('statut', StatutMagasin::Actif->value)->orderBy('id')->get();
+            $magasins = $verrouillee->magasins()->where('statut', StatutMagasin::Actif->value)->orderBy('id')->get();
             $verrouillee->forceFill(['validee_le' => now()])->save();
 
             foreach ($magasins as $magasin) {
@@ -115,31 +105,12 @@ class ValiderLaSocieteAction
     public function apresLaValidation(Societe $societe, User $proprietaire): void
     {
         app(TenantContext::class)->runAsSociete($societe, function () use ($societe, $proprietaire): void {
-            $demonstration = $societe->demonstration()->first();
-            $demonstrationOuverte = $demonstration?->statut === StatutMagasin::Actif;
-
-            if ($demonstration !== null) {
-                try {
-                    $this->fermerLaDemonstration->handle($demonstration);
-                } catch (Throwable $erreur) {
-                    report($erreur);
-                }
-
-                DatabaseNotification::query()
-                    ->where('notifiable_type', (new User)->getMorphClass())
-                    ->whereIn('notifiable_id', User::query()->where('societe_id', $societe->getKey())->select('id'))
-                    ->where('data->societe_id', $societe->getKey())
-                    ->where('data->magasin_id', $demonstration->getKey())
-                    ->delete();
-            }
-
             $proprietaire->notify(new AvisDeVerification(
                 $societe,
                 'Votre société est validée',
                 $societe->estUnCabinet()
                     ? 'Votre cabinet est validé.'
-                    : 'La vente, les e-mails aux clients, les PDF et les transmissions sont ouverts dans vos magasins.'
-                        .($demonstrationOuverte ? ' Le magasin de démonstration est terminé : il n\'apparaît plus, et rien n\'en passe à vos magasins réels.' : ''),
+                    : 'La vente, les e-mails aux clients, les PDF et les transmissions sont ouverts dans vos magasins.',
                 AvisDeVerification::SUCCES,
             ));
         });

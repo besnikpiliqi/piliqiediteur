@@ -129,7 +129,7 @@
                     @foreach ($magasinsProposes as $magasin)
                         <label class="flex items-center gap-2">
                             <x-filament::input.checkbox wire:model.live="magasinsCoches" value="{{ $magasin->getKey() }}" />
-                            <span class="text-sm">{{ $magasin->nom }} ({{ $magasin->code }}){{ $magasin->est_demonstration ? ' — démonstration, documents sans valeur' : '' }}</span>
+                            <span class="text-sm">{{ $magasin->nom }} ({{ $magasin->code }})</span>
                         </label>
                     @endforeach
                 </div>

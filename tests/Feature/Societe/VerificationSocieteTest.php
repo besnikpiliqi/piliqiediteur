@@ -20,7 +20,6 @@ use App\Domain\Tenancy\Actions\CreerEtablissementAction;
 use App\Domain\Tenancy\Actions\CreerSocieteAction;
 use App\Domain\Tenancy\Actions\DeposerUnePieceAction;
 use App\Domain\Tenancy\Actions\EnvoyerCodeDeConfirmationAction;
-use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
 use App\Domain\Tenancy\Actions\SaisirCodeDeConfirmationAction;
 use App\Domain\Tenancy\Actions\SuivreLesEnvoisAction;
 use App\Domain\Tenancy\Enums\ActionAuditee;
@@ -621,13 +620,13 @@ class VerificationSocieteTest extends TestCase
 
     /**
      * Rien n'est réservé avant la validation ; elle réserve le SIRET de
-     * chaque magasin réel actif, ouvre sa période d'activité et inscrit les
+     * chaque magasin actif, ouvre sa période d'activité et inscrit les
      * droits du propriétaire au journal des événements de chacun. Un
      * magasin dont l'établissement attend encore la confirmation du
      * répertoire Sirene ne retient pas la validation : il est mis en
      * activité, mais ne vend qu'après la confirmation de son établissement.
      */
-    public function test_la_validation_met_en_activite_les_magasins_reels_actifs_et_un_etablissement_a_confirmer_ne_vend_qu_apres(): void
+    public function test_la_validation_met_en_activite_les_magasins_actifs_et_un_etablissement_a_confirmer_ne_vend_qu_apres(): void
     {
         $societe = $this->inscrireUneSociete();
         $premier = $this->creerLeMagasinDuSiege($societe);
@@ -658,24 +657,20 @@ class VerificationSocieteTest extends TestCase
 
     /**
      * Une société se valide sans aucun magasin : aucun SIRET ne se
-     * réserve, et aucune période d'activité ne s'ouvre hors de sa
-     * démonstration, qui se ferme à la validation : aucun magasin ne peut
-     * alors vendre. Son premier magasin, créé ensuite, se met aussitôt en
-     * activité.
+     * réserve, et aucune période d'activité ne s'ouvre : aucun magasin ne
+     * peut alors vendre. Son premier magasin, créé ensuite, se met aussitôt
+     * en activité.
      */
     public function test_la_societe_se_valide_sans_aucun_magasin_et_ne_vend_rien_avant_son_premier_magasin(): void
     {
         $societe = $this->inscrireUneSociete();
         $proprietaire = $societe->proprietaire()->firstOrFail();
-        $demonstration = app(OuvrirLaDemonstrationAction::class)->handle($proprietaire, $societe);
 
         $this->saisirLeCodeDuCourrier($societe);
 
         $this->assertTrue($societe->fresh()->estValidee());
-        $this->assertSame([0, 0], [$societe->magasinsReels()->count(), SiretMagasin::query()->count()]);
-        $this->assertSame([$demonstration->id], array_map(intval(...), PeriodeActivite::query()->pluck('magasin_id')->unique()->values()->all()));
-        $this->assertSame(StatutMagasin::Ferme, $demonstration->fresh()->statut);
-        $this->assertFalse($proprietaire->refresh()->magasinsAccessibles()->contains(fn (Magasin $magasin): bool => $magasin->peutVendre()));
+        $this->assertSame([0, 0, 0], [$societe->magasins()->count(), SiretMagasin::query()->count(), PeriodeActivite::query()->count()]);
+        $this->assertSame([], $proprietaire->refresh()->magasinsAccessibles()->all());
 
         $premier = $this->creerLeMagasinDuSiege($societe->fresh());
 
@@ -685,7 +680,7 @@ class VerificationSocieteTest extends TestCase
     }
 
     /**
-     * Un magasin réel fermé avant la validation ne compte pas : la société
+     * Un magasin fermé avant la validation ne compte pas : la société
      * est validée, et lui n'est ni réservé ni ouvert.
      */
     public function test_un_magasin_ferme_avant_la_validation_n_est_ni_reserve_ni_ouvert(): void
@@ -706,8 +701,8 @@ class VerificationSocieteTest extends TestCase
     /**
      * Sans code saisi trente jours après son courrier, l'inscription se
      * clôt au passage horaire qui suit (pas avant) : la société reste,
-     * close, ses magasins en lecture seule ; son code s'annule, sa
-     * démonstration se ferme, son propriétaire est prévenu, la clôture
+     * close, ses magasins en lecture seule ; son code s'annule, son
+     * propriétaire est prévenu, la clôture
      * s'inscrit au journal d'audit, et le SIREN est libéré.
      */
     public function test_sans_code_trente_jours_apres_le_courrier_l_inscription_se_clot_et_libere_le_siren(): void
@@ -715,7 +710,6 @@ class VerificationSocieteTest extends TestCase
         $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $societe = $this->inscrireUneSociete();
         $magasin = $this->creerLeMagasinDuSiege($societe);
-        $demonstration = app(OuvrirLaDemonstrationAction::class)->handle($societe->proprietaire, $societe->fresh());
 
         $this->travelTo(self::aParis('2026-11-04 09:59:00'));
         $this->artisan('app:clore-inscriptions-sans-code')->expectsOutput('0 inscription(s) close(s).')->assertSuccessful();
@@ -728,7 +722,6 @@ class VerificationSocieteTest extends TestCase
         $this->assertSame([true, MotifCloture::DelaiExpire, false], [$close->estClose(), $close->motif_cloture, $close->estValidee()]);
         $this->assertFalse(Societe::sirenPris((string) $societe->siren));
         $this->assertNotNull($this->codeDuSiren($societe)->annule_le);
-        $this->assertSame(StatutMagasin::Ferme, $demonstration->fresh()->statut);
         $this->assertTrue($magasin->fresh()->estEnLectureSeule());
         $this->assertSame('L\'inscription de votre société est close', $societe->proprietaire->notifications()->sole()->data['title']);
         $this->assertSame(['motif' => 'delai_expire'], $this->audit($societe, ActionAuditee::InscriptionClose)->sole()->nouvelles_valeurs);

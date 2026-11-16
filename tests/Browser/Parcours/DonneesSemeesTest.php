@@ -5,16 +5,16 @@ use App\Domain\Calendrier\Calendrier;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Models\User;
-use Database\Seeders\Semis\SemisDeDemonstration;
+use Database\Seeders\Semis\SemisComplet;
 use Illuminate\Support\Facades\Storage;
 use Tests\SemeSansTransaction;
 
 /*
- * Les données de démonstration d'un poste de développement (lot SEED,
+ * Le semis d'un poste de développement (lot SEED,
  * demande de l'éditeur du 13/11/2026, et semis complet du 15/11/2026,
  * cahier SEED-TOUT § 5) : après php artisan db:seed, chaque compte de la
  * liste se connecte avec le mot de passe que la liste donne, ici le mot de
- * passe commun de PILIQI_DEMO_MOT_DE_PASSE ; le propriétaire avec son
+ * passe commun de PILIQI_SEMIS_MOT_DE_PASSE ; le propriétaire avec son
  * adresse de connexion, les autres avec leur identifiant ; et chacun
  * retrouve ses propres données sur ses pages principales : le tableau de
  * bord et ses graphiques, les factures et les tickets, les charges, les
@@ -30,7 +30,7 @@ use Tests\SemeSansTransaction;
 
 uses(SemeSansTransaction::class);
 
-const MOT_DE_PASSE_DE_DEMONSTRATION = 'Fraise-Ete-Demo';
+const MOT_DE_PASSE_DU_SEMIS = 'Fraise-Ete-Semis';
 
 /**
  * Le seul compte actif semé sous ce nom.
@@ -43,16 +43,16 @@ function compteSeme(string $nom): User
 test('chaque rôle de la liste du semis se connecte et retrouve ses propres données', function () {
     Storage::fake('local');
     Storage::fake(PiecesDuFournisseur::DISQUE);
-    config(['piliqi.demo_mot_de_passe' => MOT_DE_PASSE_DE_DEMONSTRATION]);
+    config(['piliqi.semis_mot_de_passe' => MOT_DE_PASSE_DU_SEMIS]);
     $this->artisan('db:seed')->assertSuccessful();
 
-    $proprietaire = User::query()->where('email', SemisDeDemonstration::ADRESSE_COMMERCE)->sole();
+    $proprietaire = User::query()->where('email', SemisComplet::ADRESSE_COMMERCE)->sole();
     $societe = (string) $proprietaire->societe?->uuid;
     $halles = Magasin::query()->where('code', 'HALLES')->sole();
     $conseil = Magasin::query()->where('code', 'PARIS')->sole();
     $cabinet = Societe::query()->where('siren', '000000943')->sole();
 
-    $onglet = $this->seConnecter($proprietaire, MOT_DE_PASSE_DE_DEMONSTRATION, saisie: SemisDeDemonstration::ADRESSE_COMMERCE)
+    $onglet = $this->seConnecter($proprietaire, MOT_DE_PASSE_DU_SEMIS, saisie: SemisComplet::ADRESSE_COMMERCE)
         ->aller('/societe/'.$societe)
         ->voir('Maison Ferrand Halles')
         ->voir('Maison Ferrand République')
@@ -65,12 +65,12 @@ test('chaque rôle de la liste du semis se connecte et retrouve ses propres donn
         ->nePasVoir('Aucun relevé de caisse fermé')
         ->seDeconnecter();
 
-    $onglet = $this->seConnecter(compteSeme('Nadia Benali'), MOT_DE_PASSE_DE_DEMONSTRATION, onglet: $onglet)
+    $onglet = $this->seConnecter(compteSeme('Nadia Benali'), MOT_DE_PASSE_DU_SEMIS, onglet: $onglet)
         ->aller('/societe/'.$societe.'/charges')
         ->voir('EDF')
         ->seDeconnecter();
 
-    $onglet = $this->seConnecter(compteSeme('Camille Laurent'), MOT_DE_PASSE_DE_DEMONSTRATION, onglet: $onglet);
+    $onglet = $this->seConnecter(compteSeme('Camille Laurent'), MOT_DE_PASSE_DU_SEMIS, onglet: $onglet);
     expect($onglet->chemin())->toBe('/app/'.$halles->uuid);
     $onglet->voir('en retard')
         ->aller('/app/'.$halles->uuid.'/factures?tableSearch=Galerie')
@@ -81,19 +81,19 @@ test('chaque rôle de la liste du semis se connecte et retrouve ses propres donn
         ->voir('Agence Horizon')
         ->seDeconnecter();
 
-    $onglet = $this->seConnecter(compteSeme('Lucas Moreau'), MOT_DE_PASSE_DE_DEMONSTRATION, onglet: $onglet)
+    $onglet = $this->seConnecter(compteSeme('Lucas Moreau'), MOT_DE_PASSE_DU_SEMIS, onglet: $onglet)
         ->aller('/app/'.$halles->uuid.'/factures')
         ->voir('Client comptoir')
         ->nePasVoir('Muster GmbH')
         ->seDeconnecter();
 
-    $onglet = $this->seConnecter(compteSeme('Paul Lefèvre'), MOT_DE_PASSE_DE_DEMONSTRATION, onglet: $onglet, panneau: 'cabinet')
+    $onglet = $this->seConnecter(compteSeme('Paul Lefèvre'), MOT_DE_PASSE_DU_SEMIS, onglet: $onglet, panneau: 'cabinet')
         ->aller('/cabinet/'.$cabinet->uuid)
         ->voir('MAISON FERRAND')
         ->nePasVoir('EPICERIE LEMOINE')
         ->seDeconnecter();
 
-    $onglet = $this->seConnecter(compteSeme('Marc Petit'), MOT_DE_PASSE_DE_DEMONSTRATION, onglet: $onglet)
+    $onglet = $this->seConnecter(compteSeme('Marc Petit'), MOT_DE_PASSE_DU_SEMIS, onglet: $onglet)
         ->aller('/app/'.$conseil->uuid.'/charges-de-la-societe')
         ->voir('Bouygues')
         ->aller('/app/'.$conseil->uuid.'/factures?tableSearch=Boulangerie')
@@ -108,7 +108,7 @@ test('chaque rôle de la liste du semis se connecte et retrouve ses propres donn
         ->cliquerSur('Connexion')
         ->voir('poste reconnu');
 
-    $this->reconnaitreCeNavigateur($onglet, $halles, $proprietaire, 'Poste de l\'éditeur', MOT_DE_PASSE_DE_DEMONSTRATION);
+    $this->reconnaitreCeNavigateur($onglet, $halles, $proprietaire, 'Poste de l\'éditeur', MOT_DE_PASSE_DU_SEMIS);
     $this->seConnecter($ines, $identifiant, onglet: $onglet);
 
     expect($onglet->chemin())->toBe('/app/'.$halles->uuid);

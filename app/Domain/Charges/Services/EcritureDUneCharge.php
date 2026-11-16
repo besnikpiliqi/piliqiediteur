@@ -133,7 +133,7 @@ final class EcritureDUneCharge
     /**
      * Le magasin d'une charge : null pour « Toute la société », quand
      * l'accès la voit ; le seul magasin d'un responsable quand il n'en
-     * choisit pas ; sinon un magasin réel de la société que l'accès voit.
+     * choisit pas ; sinon un magasin de la société que l'accès voit.
      *
      * @throws InvalidArgumentException
      */
@@ -149,7 +149,6 @@ final class EcritureDUneCharge
 
         $magasin = Magasin::query()
             ->where('societe_id', $acces->societe->getKey())
-            ->where('est_demonstration', false)
             ->where('uuid', Str::isUuid($uuid) ? $uuid : null)
             ->first(['id']);
 

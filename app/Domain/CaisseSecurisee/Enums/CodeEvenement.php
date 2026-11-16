@@ -27,8 +27,8 @@ use Filament\Support\Contracts\HasLabel;
  *   changement d'un réglage fiscal ou d'un identifiant de la société, du
  *   SIRET d'un magasin et du taux de TVA d'un produit
  *   (JournaliseSesParametresDeConformite), celui du statut d'un magasin
- *   (statut_magasin : ouverture et fermeture de la démonstration,
- *   fermeture, avec son motif, et réouverture d'un magasin réel) et celui
+ *   (statut_magasin : fermeture, avec son motif, et réouverture d'un
+ *   magasin) et celui
  *   du motif de fermeture d'un magasin déjà fermé que la société cède
  *   (motif_fermeture).
  * - La clôture de période s'inscrit à chaque clôture du jour, manuelle,
@@ -50,12 +50,11 @@ use Filament\Support\Contracts\HasLabel;
  *   restant, avec son prix d'avant et d'après, inscrite au panier de la
  *   caisse une fois sa saisie terminée, jamais pour un chiffre en cours de
  *   frappe (Q8, voir LignesRetirees).
- * - L'entrée en mode démonstration (mode école) suit chaque ouverture du
- *   magasin de démonstration, et sa sortie chaque fermeture, dans le
- *   registre de ce magasin distinct (voir OuvrirLaDemonstrationAction et
- *   FermerLaDemonstrationAction) : ses ventes d'entraînement sont signées,
- *   conservées et contrôlées comme les autres, sans jamais toucher le
- *   registre d'un magasin réel.
+ * - L'entrée en mode démonstration (mode école, 100) et sa sortie (105)
+ *   ne s'écrivent que dans une copie du site de démonstration : l'entrée
+ *   à la construction du modèle, la sortie avant
+ *   l'archive de la copie ; jamais dans une base réelle, où le
+ *   vérificateur les signale.
  * - Chaque vérification de l'intégrité du registre (voir
  *   VerifierIntegriteAction) inscrit ses anomalies, une rupture de
  *   séquence ou de numérotation (95) ou un autre défaut d'intégrité (90),

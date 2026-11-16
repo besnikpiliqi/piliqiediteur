@@ -23,14 +23,14 @@ use InvalidArgumentException;
  * - gérer les magasins : modifier, changer le SIRET, fermer et rouvrir
  *   ceux de sa portée ; en créer, seulement avec tous les magasins ;
  * - nommer et retirer les responsables : nommer responsable, dans un
- *   magasin réel de sa portée, un nouveau compte, dont il connaît alors le
+ *   magasin de sa portée, un nouveau compte, dont il connaît alors le
  *   premier mot de passe, ou un vendeur ou un observateur de ce magasin ;
- *   retirer de la société le compte d'un responsable d'un magasin réel de
+ *   retirer de la société le compte d'un responsable d'un magasin de
  *   sa portée, et lui redonner l'accès ; annuler sa propre nomination.
  *   Jamais suspendre, réactiver ni rétrograder un responsable : cela reste
  *   au propriétaire, prévenu de chaque compte créé et de chaque nomination
  *   (voir PorteeDesDroits) ;
- * - redonner l'accès aux vendeurs et aux observateurs des magasins réels
+ * - redonner l'accès aux vendeurs et aux observateurs des magasins
  *   de sa portée, la personne présente choisissant son mot de passe sur
  *   son écran, absente retrouvant son identifiant pour mot de passe (voir
  *   RedonnerLAccesAction) ; jamais précochée, et rien d'autre sur ces

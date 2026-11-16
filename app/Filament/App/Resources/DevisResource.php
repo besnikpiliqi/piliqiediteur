@@ -305,8 +305,7 @@ class DevisResource extends Resource
      * e-mail, avec le numéro qu'il reçoit, ou celui qu'il a gardé s'il a
      * été modifié depuis son envoi (voir EmettreDevisAction) ; sur la ligne
      * de la liste comme sur la fiche, où mène l'« À faire » d'un brouillon
-     * seul (voir ChosesAFaireDuMagasin), y compris dans le magasin de
-     * démonstration, qui n'écrit à aucun client. La fiche relit ensuite le
+     * seul (voir ChosesAFaireDuMagasin). La fiche relit ensuite le
      * devis, numéroté et envoyé.
      *
      * @template TAction of MountableAction
@@ -338,7 +337,7 @@ class DevisResource extends Resource
      * exactement ses lignes, ses prix, ses remises et ses taux (voir
      * CreerFactureDepuisDevisAction), puis la fiche de cette facture, à
      * émettre. Pour qui ne peut pas créer de facture dans ce magasin (le
-     * propriétaire hors du magasin de démonstration, un administrateur ou
+     * propriétaire, un administrateur ou
      * un vendeur sans la vente, un observateur, un compte du cabinet lié),
      * le bouton reste visible, désactivé, au lieu de disparaître ; la fiche
      * en écrit l'explication juste au-dessous (voir infolist()).

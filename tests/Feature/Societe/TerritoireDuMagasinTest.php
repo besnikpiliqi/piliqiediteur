@@ -25,7 +25,6 @@ use App\Domain\Tenancy\Actions\CorrigerLeTerritoireAction;
 use App\Domain\Tenancy\Actions\FermerMagasinAction;
 use App\Domain\Tenancy\Actions\LibererLeSiretAction;
 use App\Domain\Tenancy\Actions\ModifierEtablissementAction;
-use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
 use App\Domain\Tenancy\Actions\RouvrirMagasinAction;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\MotifFermeture;
@@ -647,18 +646,12 @@ class TerritoireDuMagasinTest extends TestCase
     }
 
     /**
-     * Un magasin dont l'établissement est confirmé a toujours un territoire,
-     * comme le magasin de démonstration : le modèle refuse de les
-     * enregistrer sans lui.
+     * Un magasin dont l'établissement est confirmé a toujours un territoire :
+     * le modèle refuse de l'enregistrer sans lui.
      */
-    public function test_un_magasin_verifie_et_la_demonstration_ont_toujours_un_territoire(): void
+    public function test_un_magasin_verifie_a_toujours_un_territoire(): void
     {
-        $societe = $this->inscrireUneSociete();
-        $demonstration = app(OuvrirLaDemonstrationAction::class)->handle($societe->proprietaire, $societe);
-
-        $this->assertSame(Territoire::Metropole, $demonstration->territoire);
         $this->assertThrows(fn () => Magasin::factory()->create(['territoire' => null]), LogicException::class);
-        $this->assertThrows(fn () => Magasin::factory()->create(['est_demonstration' => true, 'siret' => null, 'territoire' => null, 'etablissement_verifie_le' => null]), LogicException::class);
     }
 
     /**

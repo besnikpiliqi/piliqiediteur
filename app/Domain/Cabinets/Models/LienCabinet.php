@@ -25,7 +25,7 @@ use InvalidArgumentException;
  * Le lien entre un cabinet d'expertise comptable et un client (voir
  * EtatDuLien) ; sa société est le client, qui accorde l'accès. Un client
  * n'a qu'un lien actif à la fois (index unique partiel) ; un lien actif
- * ouvre au cabinet tous les magasins réels du client, présents et futurs,
+ * ouvre au cabinet tous les magasins du client, présents et futurs,
  * ou ceux qu'il choisit (voir magasinsChoisis() et choisirLesMagasins()),
  * et porte les autorisations que le client accorde au cabinet, les mêmes
  * dans chacun de ces magasins (voir autorisations() et accorder()), que
@@ -279,7 +279,7 @@ class LienCabinet extends Model
     }
 
     /**
-     * Les magasins réels que le client a choisis d'ouvrir à son cabinet pour
+     * Les magasins que le client a choisis d'ouvrir à son cabinet pour
      * ce lien, par identifiant croissant, lus dans la société du client ;
      * aucun quand il les lui ouvre tous, présents et futurs (voir
      * tous_les_magasins).
@@ -296,11 +296,11 @@ class LienCabinet extends Model
     }
 
     /**
-     * Ouvre au cabinet tous les magasins réels du client, présents et
+     * Ouvre au cabinet tous les magasins du client, présents et
      * futurs (null), ou seulement ceux-ci, dans la transaction de
      * l'appelant (décision de l'éditeur du 11/11/2026) : une sélection vide
-     * est refusée, comme un magasin qui n'est pas un magasin réel du client
-     * (le magasin de démonstration, ou celui d'une autre société) ; la base
+     * est refusée, comme un magasin qui n'est pas un magasin du client
+     * (celui d'une autre société) ; la base
      * refuse elle aussi ces sélections (voir GardesDesCabinets).
      *
      * @param  array<array-key, mixed>|null  $magasins
@@ -316,10 +316,10 @@ class LienCabinet extends Model
             throw new InvalidArgumentException(self::MESSAGE_SELECTION_VIDE);
         }
 
-        $reels = ValeursLues::entiers(DB::table('magasins')->where('societe_id', $this->societe_id)->where('est_demonstration', false)->whereIn('id', $choisis)->pluck('id'));
+        $reels = ValeursLues::entiers(DB::table('magasins')->where('societe_id', $this->societe_id)->whereIn('id', $choisis)->pluck('id'));
 
         if (array_diff($choisis, $reels) !== []) {
-            throw new InvalidArgumentException('Seuls les magasins réels de votre société s\'ouvrent à votre cabinet.');
+            throw new InvalidArgumentException('Seuls les magasins de votre société s\'ouvrent à votre cabinet.');
         }
 
         DB::table('magasins_cabinet')->where('societe_id', $this->societe_id)->where('lien_id', $this->getKey())->delete();

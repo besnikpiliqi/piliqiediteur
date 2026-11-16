@@ -28,7 +28,7 @@ use Illuminate\Database\Eloquent\Builder;
  * d'examen du SIREN de la société, inscrite au journal d'audit
  * (SirenExamine), quand elle a conclu à une erreur que la correction a
  * réparée (le SIREN de la société est désormais le SIREN correct de
- * l'examen) : les factures à un professionnel de ses magasins réels,
+ * l'examen) : les factures à un professionnel de ses magasins,
  * émises avant l'instant de l'examen, exactement celles de sa liste (voir
  * ExaminerSirenAction) ; les tickets restent tels quels
  * (BOI-TVA-DECLA-30-20-20-20). Chacune se régularise une fois, par deux
@@ -109,14 +109,14 @@ class RegularisationDUneFacture
      * La facture est-elle désignée par la dernière décision d'examen du
      * SIREN de sa société (voir Societe::dernierExamenDuSiren()), une
      * erreur que la correction a réparée : une facture à un professionnel
-     * d'un magasin réel, émise avant l'instant de l'examen (une facture
+     * d'un magasin, émise avant l'instant de l'examen (une facture
      * émise dans sa seconde n'est pas de sa liste, et la correction attend
      * alors un nouvel examen, voir ExaminerSirenAction et
      * CorrigerSirenAction) ?
      */
     public function estDesignee(Facture $facture): bool
     {
-        if ($facture->numero === null || $facture->date_emission === null || ! $facture->estPourUnProfessionnel() || $facture->magasin->est_demonstration) {
+        if ($facture->numero === null || $facture->date_emission === null || ! $facture->estPourUnProfessionnel()) {
             return false;
         }
 

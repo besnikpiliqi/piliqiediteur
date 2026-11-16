@@ -83,8 +83,7 @@ use Illuminate\Support\Collection;
  * clôture ; ceux d'avant, des mêmes tickets, disent ce que chacun a déjà
  * encaissé et déclaré.
  *
- * Le magasin de démonstration n'est jamais déclaré. Toutes les lectures
- * restent dans le magasin actif (MagasinScope), celui de la clôture ; le
+ * Toutes les lectures restent dans le magasin actif (MagasinScope), celui de la clôture ; le
  * registre fiscal se lit par MagasinScope, et par le magasin de chaque
  * clôture dans journeesADeclarer().
  */
@@ -96,21 +95,13 @@ class EReportingDesParticuliers
 
     public const MENTION_ENCAISSEMENTS = 'Encaissements des prestations de services payées par des particuliers, déclarés par jour et par taux de TVA. Un crédit d\'avoir compte à la date où il est utilisé, sauf la part qui annule les lignes que son avoir corrige sur ce ticket ; l\'avoir d\'une prestation déjà encaissée se déduit à la date où son crédit règle une autre vente.';
 
-    public const MENTION_DEMONSTRATION = 'Magasin de démonstration : jamais déclaré.';
-
     public const STATUT = 'Non transmis : plateforme pas encore raccordée (étape 2).';
 
     public function __construct(private readonly CalculateurLigne $calculateur) {}
 
     public function apercu(ClotureCaisse $cloture): ApercuEReporting
     {
-        $journee = $cloture->date_cloture;
-
-        if ($cloture->magasin->est_demonstration) {
-            return new ApercuEReporting($journee, true, [], []);
-        }
-
-        return new ApercuEReporting($journee, false, $this->transactions($cloture), $this->encaissements($cloture));
+        return new ApercuEReporting($cloture->date_cloture, $this->transactions($cloture), $this->encaissements($cloture));
     }
 
     /**
@@ -136,16 +127,12 @@ class EReportingDesParticuliers
      * contre-passation, et le crédit d'avoir qu'ils imputent, ou l'avoir,
      * fait à tout client, qui impute son crédit à son émission), puis leur
      * aperçu les garde ou les écarte : des règlements qui s'annulent le
-     * même jour ne déclarent rien. Aucune pour le magasin de démonstration.
+     * même jour ne déclarent rien.
      *
      * @return Builder<ClotureCaisse>
      */
     public function journeesADeclarer(Magasin $magasin): Builder
     {
-        if ($magasin->est_demonstration) {
-            return ClotureCaisse::query()->whereRaw('1 = 0');
-        }
-
         $avecDesTransactions = fn (Builder $clotures): Builder => $clotures->where('clotures_caisse.nombre_ventes', '>', 0)->orWhere('clotures_caisse.nombre_avoirs', '>', 0);
         $parLeursEncaissements = ClotureCaisse::query()
             ->with('magasin')

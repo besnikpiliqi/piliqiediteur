@@ -9,10 +9,10 @@
     signé (voir FigeSonEmetteur), jamais la société ni le magasin
     d'aujourd'hui.
 
-    Un document du magasin de démonstration porte « DÉMONSTRATION — SANS
+    Un document du site de démonstration porte « DÉMONSTRATION — SANS
     VALEUR » en travers de chaque page, et son bandeau en tête, celui d'un
     ticket disant de ne pas le remettre à un client (voir
-    Emetteur::filigrane() et Emetteur::bandeauDeDemonstration()).
+    Emetteur::filigrane() et Emetteur::bandeau()).
 
     @param \App\Domain\Facturation\Services\Emetteur $emetteur
     @param string $titre
@@ -22,7 +22,7 @@
 --}}
 @if ($emetteur->filigrane() !== null)
     <div class="filigrane">{{ $emetteur->filigrane() }}</div>
-    <div class="bandeau-demonstration">{{ $emetteur->bandeauDeDemonstration($estUnTicket ?? false) }}</div>
+    <div class="bandeau">{{ $emetteur->bandeau($estUnTicket ?? false) }}</div>
 @endif
 <div class="bande-haut"></div>
 <table class="en-tete">

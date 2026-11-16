@@ -10,7 +10,6 @@ use App\Domain\Tenancy\Actions\CreerAdministrateurAction;
 use App\Domain\Tenancy\Actions\CreerMembreAction;
 use App\Domain\Tenancy\Actions\CreerSocieteAction;
 use App\Domain\Tenancy\Actions\FermerMagasinAction;
-use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
 use App\Domain\Tenancy\Actions\RedonnerLAccesAction;
 use App\Domain\Tenancy\Contracts\SourceDeHasard;
 use App\Domain\Tenancy\Enums\MotifFermeture;
@@ -333,49 +332,6 @@ class IdentifiantsTest extends TestCase
     }
 
     /**
-     * La base refuse un rôle de société pour un compte d'entraînement, et le
-     * rattachement après coup d'un compte réel à la démonstration.
-     */
-    public function test_la_base_refuse_un_role_de_societe_pour_un_compte_d_entrainement_et_le_rattachement_tardif_a_la_demonstration(): void
-    {
-        $societe = $this->inscrireUneSociete();
-        $reel = $this->creerLeMagasinDuSiege($societe);
-        $administrateur = $this->administrateur($reel);
-        $demonstration = app(OuvrirLaDemonstrationAction::class)->handle($societe->proprietaire, $societe->fresh());
-        $entrainement = app(TenantContext::class)->runAs($demonstration, fn (): User => app(CreerMembreAction::class)->handle($societe->proprietaire, $demonstration, ['name' => 'Essai'], RoleMagasin::Vendeur));
-        DB::table('affectations')->where('user_id', $entrainement->id)->delete();
-
-        foreach ([RoleSociete::Administrateur, RoleSociete::Collaborateur] as $role) {
-            $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('users')->where('id', $entrainement->id)->update(['role_societe' => $role->value])), QueryException::class);
-        }
-        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('identifiants')->where('user_id', $administrateur->id)->update(['magasin_id' => $demonstration->id])), QueryException::class, 'identifiants : aucun compte ne se rattache après coup au magasin de démonstration');
-
-        $this->assertSame([RoleSociete::Membre, true, null], [$entrainement->refresh()->role_societe, $entrainement->estUnCompteDEntrainement(), $administrateur->refresh()->magasinDeSonIdentifiant()]);
-    }
-
-    /**
-     * Seul un compte de membre, un compte d'entraînement, naît rattaché au
-     * magasin de démonstration : la base refuse l'identifiant d'un
-     * administrateur ou du propriétaire écrit directement avec ce magasin,
-     * avant même l'index unique du compte, qui a déjà le sien.
-     */
-    public function test_seul_un_compte_de_membre_nait_rattache_au_magasin_de_demonstration(): void
-    {
-        $societe = $this->inscrireUneSociete();
-        $administrateur = $this->administrateur($this->creerLeMagasinDuSiege($societe));
-        $demonstration = app(OuvrirLaDemonstrationAction::class)->handle($societe->proprietaire, $societe->fresh());
-        $entrainement = app(TenantContext::class)->runAs($demonstration, fn (): User => app(CreerMembreAction::class)->handle($societe->proprietaire, $demonstration, ['name' => 'Essai'], RoleMagasin::Vendeur));
-        $ligne = fn (User $compte): array => ['identifiant' => '48210937', 'societe_id' => $societe->id, 'user_id' => $compte->id, 'magasin_id' => $demonstration->id, 'created_at' => now()];
-
-        foreach ([$administrateur, $societe->proprietaire] as $compte) {
-            $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('identifiants')->insert($ligne($compte))), QueryException::class, 'identifiants : seul un compte de membre se rattache au magasin de démonstration');
-        }
-
-        $this->assertSame((int) $demonstration->id, (int) $entrainement->magasinDeSonIdentifiant()?->id);
-        $this->assertSame(0, DB::table('identifiants')->where('identifiant', '48210937')->count());
-    }
-
-    /**
      * Aucun compte créé par la société ne reçoit d'adresse de qui le crée :
      * une adresse glissée dans la demande, à l'action comme par une requête
      * Livewire forgée, est ignorée.
@@ -491,8 +447,7 @@ class IdentifiantsTest extends TestCase
 
     /**
      * Chaque auteur crée au plus 20 comptes par jour, plus 10 par magasin
-     * réel ouvert de la société (ni la démonstration ni un magasin fermé
-     * ne comptent) ; les créations d'un autre auteur ne comptent pas pour
+     * ouvert de la société (un magasin fermé ne compte pas) ; les créations d'un autre auteur ne comptent pas pour
      * lui.
      */
     public function test_la_limite_du_jour_compte_par_auteur_et_suit_le_nombre_de_magasins(): void

@@ -2,7 +2,6 @@
 
 namespace Tests\Feature\Facturation;
 
-use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
 use App\Domain\Contacts\Enums\TypeClient;
@@ -22,7 +21,6 @@ use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Services\ApercuEReporting;
 use App\Domain\Facturation\Services\EReportingDesParticuliers;
-use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
 use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
@@ -164,7 +162,7 @@ class EReportingDesParticuliersTest extends TestCase
             ['categorie' => CategorieEReporting::LivraisonsDeBiens, 'taux' => 550, 'ht' => 1000, 'tva' => 55, 'motif' => null],
             ['categorie' => CategorieEReporting::PrestationsDeServices, 'taux' => 2000, 'ht' => 5000, 'tva' => 1000, 'motif' => null],
         ], $apercu->transactions);
-        $this->assertSame(['2026-10-05', false], [$apercu->journee, $apercu->demonstration]);
+        $this->assertSame('2026-10-05', $apercu->journee);
     }
 
     /**
@@ -954,25 +952,6 @@ class EReportingDesParticuliersTest extends TestCase
         $this->assertSame([$duCinq->id, $duSix->id], app(EReportingDesParticuliers::class)->journeesADeclarer($this->magasin)->orderBy('date_cloture')->pluck('id')->all());
         $this->assertSame([['date' => '2026-10-06', 'taux' => 2000, 'montant' => 6000]], $this->apercu($duSix)->encaissementsDeServices);
         $this->assertFalse($this->apercu($duSept)->aDeclarer());
-    }
-
-    /**
-     * Le magasin de démonstration n'est jamais déclaré : sa journée, qui a
-     * un ticket, n'a rien à déclarer et n'est pas une journée à déclarer.
-     */
-    public function test_le_magasin_de_demonstration_n_a_rien_a_declarer(): void
-    {
-        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
-        $societe = $this->inscrireUneSociete();
-        $demonstration = app(OuvrirLaDemonstrationAction::class)->handle($societe->proprietaire, $societe);
-        app(TenantContext::class)->set($demonstration);
-        self::vendreAuComptant(self::auteur(), Client::query()->where('est_comptoir', true)->sole(), [['produit_id' => Produit::query()->where('reference', 'DEMO-CARNET')->value('id'), 'quantite' => 1]]);
-        $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $demonstration, Calendrier::deParis()->aujourdhui());
-
-        $apercu = $this->apercu($cloture);
-
-        $this->assertSame([1, true, false, []], [$cloture->nombre_ventes, $apercu->demonstration, $apercu->aDeclarer(), $apercu->transactions]);
-        $this->assertSame(0, app(EReportingDesParticuliers::class)->journeesADeclarer($demonstration)->count());
     }
 
     /**

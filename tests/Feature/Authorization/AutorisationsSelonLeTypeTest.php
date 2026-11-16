@@ -10,7 +10,6 @@ use App\Domain\Tenancy\Actions\ChangerLeRoleDeSocieteAction;
 use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
 use App\Domain\Tenancy\Actions\CreerAdministrateurAction;
 use App\Domain\Tenancy\Actions\ModifierAdministrateurAction;
-use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Affectation;
@@ -263,23 +262,23 @@ class AutorisationsSelonLeTypeTest extends TestCase
     /**
      * Le journal des événements (JET 130) d'un magasin d'une société de
      * services ne liste que les autorisations du type : aux droits
-     * implicites du propriétaire, inscrits à l'ouverture du magasin de
-     * démonstration, où il a toutes celles du type, vente comprise, puis à
-     * la création d'un vendeur d'entraînement.
+     * implicites du propriétaire, inscrits à la mise en activité du
+     * magasin, où il a toutes celles du type sauf celles de la vente, puis
+     * à la création d'un vendeur.
      */
     public function test_le_jet_130_ne_liste_que_les_autorisations_du_type(): void
     {
         $societe = $this->inscrireUneSociete(type: TypeDActivite::Services);
-        $proprietaire = $societe->proprietaire()->firstOrFail();
+        $magasin = $this->creerLeMagasinDuSiege($societe);
+        $proprietaire = $this->saisirLeCodeDuCourrier($societe);
         app(TenantContext::class)->clear();
-        $magasin = app(OuvrirLaDemonstrationAction::class)->handle($proprietaire, $societe);
-        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
+        $vendeur = $this->membre($magasin->fresh(), RoleMagasin::Vendeur);
 
         $modifications = $this->modificationsDesDroits($magasin);
         $duProprietaire = collect($modifications)->where('membre.id', $proprietaire->id)->last();
         $duVendeur = collect($modifications)->where('membre.id', $vendeur->id)->last();
 
-        $this->assertSame(PermissionRegistry::duProprietaireEnDemonstration(TypeDActivite::Services), $duProprietaire['apres']['permissions']);
+        $this->assertSame(PermissionRegistry::duProprietaire(TypeDActivite::Services), $duProprietaire['apres']['permissions']);
         $this->assertSame([], array_values(array_intersect($duProprietaire['apres']['permissions'], self::ARTICLES)));
         $this->assertSame([], array_values(array_intersect($duVendeur['apres']['permissions'], self::ARTICLES)));
         $this->assertContains(PermissionRegistry::SERVICE_VIEW, $duVendeur['apres']['permissions']);

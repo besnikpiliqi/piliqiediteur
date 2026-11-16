@@ -162,11 +162,6 @@ class TelechargementDesChargesTest extends TestCase
         app(TenantContext::class)->clear();
         $this->assertFalse($charges($this->collaborateur->refresh(), $this->lyon), 'Sans « Charges : voir, ajouter, saisir et valider », plus de charges.');
         $this->assertFalse($documents()->telechargeLesChargesDeLaSociete($this->collaborateur, $this->societe));
-
-        $demonstration = Magasin::query()->where('societe_id', $this->societe->getKey())->where('est_demonstration', true)->first();
-        if ($demonstration !== null) {
-            $this->assertFalse($documents()->voitLesChargesDans($this->proprietaire, $demonstration->setRelation('societe', $this->societe)), 'Jamais dans le magasin de démonstration.');
-        }
     }
 
     public function test_le_zip_range_chaque_piece_dans_le_dossier_charges_sous_son_nom_et_numerote_les_doublons(): void

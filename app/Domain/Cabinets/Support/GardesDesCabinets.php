@@ -54,9 +54,11 @@ use Illuminate\Support\Facades\DB;
  *   l'inverse ;
  * - clients_confies_a_un_collaborateur (clients_confies) : un compte qui
  *   n'est pas collaborateur, un lien qui n'est pas actif ;
- * - magasins_cabinet_d_un_lien_actif (magasins_cabinet) : le magasin de
- *   démonstration, une ligne sur un lien qui n'est ni actif ni une
- *   déclaration en attente, ou qui ouvre tous les magasins ;
+ * - magasins_cabinet_d_un_lien_actif (magasins_cabinet) : une ligne sur
+ *   un lien qui n'est ni actif ni une déclaration en attente, ou qui ouvre
+ *   tous les magasins ; un magasin qui n'existe pas ou d'une autre société
+ *   que le client, la clé étrangère composite (societe_id, magasin_id) le
+ *   refuse ;
  * - liens_cabinet_tous_les_magasins_ou_une_selection (liens_cabinet et
  *   magasins_cabinet, déclencheurs de contrainte différés, voir
  *   poserLaSelectionDesMagasins()) : un lien actif ou une déclaration en
@@ -261,7 +263,7 @@ final class GardesDesCabinets
     }
 
     /**
-     * Un lien actif ouvre au cabinet tous les magasins réels du client,
+     * Un lien actif ouvre au cabinet tous les magasins du client,
      * présents et futurs, sans sélection, ou une sélection d'au moins un
      * magasin (voir magasins_cabinet ; décision de l'éditeur du
      * 11/11/2026) : contrôlé à la validation de chaque transaction qui
@@ -296,7 +298,7 @@ final class GardesDesCabinets
 
     /**
      * La fonction compte_ouvre_le_magasin(compte, magasin) dit si un compte
-     * peut agir dans un magasin réel d'une société cliente (§ 5 ter de la
+     * peut agir dans un magasin d'une société cliente (§ 5 ter de la
      * décision de l'éditeur du 01/11/2026, réponse du 11/11/2026) : un
      * compte d'un cabinet d'expertise comptable, seulement par le lien actif
      * de son cabinet avec la société du magasin, qui ouvre tous ses
@@ -435,7 +437,6 @@ final class GardesDesCabinets
                 ["{$etatDuLien} <> {$actif}", 'seul un client lié se confie', self::INSERTION],
             ],
             self::MAGASINS => [
-                ['COALESCE((SELECT est_demonstration FROM magasins WHERE id = NEW.magasin_id), TRUE)', 'le magasin de démonstration ne s\'ouvre jamais à un cabinet ni à un expert-comptable de la société', self::INSERTION],
                 ["{$etatDuLien} NOT IN ({$enCours})", 'une sélection de magasins ne vaut que sur un lien actif ou une déclaration en attente', self::INSERTION],
                 ['COALESCE((SELECT tous_les_magasins FROM liens_cabinet WHERE id = NEW.lien_id), TRUE)', 'un lien qui ouvre tous les magasins n\'a pas de sélection', self::INSERTION],
             ],

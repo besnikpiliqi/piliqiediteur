@@ -310,7 +310,7 @@ class PreferencesDesGraphiquesTest extends TestCase
     }
 
     /**
-     * Lyon et Villeurbanne, deux magasins réels de la même société, le
+     * Lyon et Villeurbanne, deux magasins de la même société, le
      * 15 octobre 2026 ; aucun contexte n'est actif ensuite.
      *
      * @return array{0: Magasin, 1: Magasin}

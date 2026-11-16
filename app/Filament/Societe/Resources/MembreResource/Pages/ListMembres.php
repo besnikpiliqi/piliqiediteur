@@ -32,7 +32,7 @@ use Illuminate\Support\Str;
  * personne connectée : un membre (dont le compte ne vaut que pour un magasin) ou un
  * administrateur pour le propriétaire ; un responsable pour lui et
  * pour un administrateur autorisé à nommer les responsables, dans un
- * magasin réel de sa portée. Chaque fenêtre de création tire son jeton à
+ * magasin de sa portée. Chaque fenêtre de création tire son jeton à
  * son ouverture (une demande répétée après une réponse perdue ne crée
  * jamais un second compte) et ne demande aucune adresse e-mail ; elle est
  * suivie de la fenêtre qui montre l'identifiant du compte créé, aussi son
@@ -58,7 +58,7 @@ class ListMembres extends ListRecords
     }
 
     /**
-     * Nommer un responsable dans un magasin réel de sa portée : un nouveau
+     * Nommer un responsable dans un magasin de sa portée : un nouveau
      * compte de ce magasin, ou un vendeur ou un observateur actif de ce
      * magasin ; un compte dont le mot de passe est encore son identifiant
      * est nommé avec un avertissement, et la personne présente peut choisir
@@ -142,9 +142,9 @@ class ListMembres extends ListRecords
 
     /**
      * Créer le compte d'un membre pour un magasin, le seul qu'il ouvrira :
-     * le propriétaire, dans tout magasin, démonstration comprise (des
-     * comptes d'entraînement) ; jamais dans un cabinet d'expertise
-     * comptable, qui n'a aucun magasin (voir MembrePolicy::create()).
+     * le propriétaire, dans tout magasin ; jamais dans un cabinet
+     * d'expertise comptable, qui n'a aucun magasin (voir
+     * MembrePolicy::create()).
      */
     public function creerUnMembreAction(): Action
     {
@@ -156,7 +156,7 @@ class ListMembres extends ListRecords
             ->form([
                 Select::make('magasin_id')
                     ->label('Magasin')
-                    ->options(fn (): array => MembreResource::magasinsOuCreerUnCompte())
+                    ->options(fn (): array => MembreResource::magasinsDeLaPortee())
                     ->helperText('Un compte de membre ne vaut que pour ce magasin : une personne qui travaille dans plusieurs magasins a un compte dans chacun.')
                     ->required()
                     ->live(),
@@ -215,8 +215,8 @@ class ListMembres extends ListRecords
     }
 
     /**
-     * Le magasin choisi dans la fenêtre, s'il est de sa portée et qu'un
-     * compte peut y être créé (voir MembreResource::magasinsOuCreerUnCompte()).
+     * Le magasin choisi dans la fenêtre, s'il est de sa portée (voir
+     * MembreResource::magasinsDeLaPortee()).
      *
      * @param  callable(string): mixed  $get
      */
@@ -224,7 +224,7 @@ class ListMembres extends ListRecords
     {
         $id = ValeurSimple::enEntier($get('magasin_id'));
 
-        return array_key_exists($id, MembreResource::magasinsOuCreerUnCompte()) ? MembreResource::magasin($id) : null;
+        return array_key_exists($id, MembreResource::magasinsDeLaPortee()) ? MembreResource::magasin($id) : null;
     }
 
     /**
@@ -248,7 +248,7 @@ class ListMembres extends ListRecords
      */
     private function magasinsOuNommerUnResponsable(): array
     {
-        return collect(MembreResource::magasinsOuCreerUnCompte())
+        return collect(MembreResource::magasinsDeLaPortee())
             ->filter(fn (string $nom, int $id): bool => app(PorteeDesDroits::class)->peutNommerUnResponsable($this->auteur(), MembreResource::magasin($id)))
             ->all();
     }

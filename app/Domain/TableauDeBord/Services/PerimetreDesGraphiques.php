@@ -23,23 +23,22 @@ use Illuminate\Database\Eloquent\Collection;
  * sur quels magasins (décision de l'éditeur du 14/11/2026 ; CLAUDE.md,
  * « Tableau de bord ») ; seul constructeur d'un Perimetre :
  *
- * - l'espace de la société : le propriétaire, sur tous ses magasins réels ;
+ * - l'espace de la société : le propriétaire, sur tous ses magasins ;
  *   un administrateur, sur ceux de sa portée où le propriétaire lui a
  *   coché « Tableau de bord : voir les graphiques »
  *   (PermissionRegistry::GRAPHIQUES_VOIR) ; personne d'autre ;
- * - le panneau d'un magasin réel, sur ce seul magasin : le propriétaire ;
+ * - le panneau d'un magasin, sur ce seul magasin : le propriétaire ;
  *   un administrateur ou un responsable à qui la case est cochée dans ce
  *   magasin ; un compte d'un cabinet lié vérifié et l'expert-comptable
- *   déclaré, qui l'ouvrent ; jamais un vendeur, un observateur ni un
- *   compte d'entraînement ;
+ *   déclaré, qui l'ouvrent ; jamais un vendeur ni un observateur ;
  * - l'espace du cabinet : le propriétaire du cabinet et le collaborateur à
- *   qui le client est confié, sur les magasins réels que le client ouvre au
+ *   qui le client est confié, sur les magasins que le client ouvre au
  *   cabinet, tant que le cabinet est vérifié et le lien actif (voir
  *   AccesDesCabinets::liensOuverts()) ;
  * - la page de l'expert-comptable déclaré : lui seul, sur les magasins de
  *   sa déclaration (voir ExpertsComptablesDeclares::idsDesMagasinsOuverts()).
  *
- * Jamais le magasin de démonstration, ni un magasin d'une autre société.
+ * Jamais un magasin d'une autre société.
  * De chaque magasin, les sources que le compte y voit en entier, lues sur
  * ses autorisations dans ce magasin (voir User::autorisationsDans() : ses
  * cases, ou, pour un cabinet ou l'expert-comptable déclaré, les
@@ -71,7 +70,7 @@ final class PerimetreDesGraphiques
         }
 
         $compte->casesDeSesAffectations();
-        $magasins = $compte->magasinsDeSaPortee()->where('est_demonstration', false)->orderBy('id')->get()
+        $magasins = $compte->magasinsDeSaPortee()->orderBy('id')->get()
             ->filter(fn (Magasin $magasin): bool => $compte->estProprietaire() || in_array(PermissionRegistry::GRAPHIQUES_VOIR, $compte->autorisationsDans($magasin), true));
 
         return $this->construire(EcranDuTableauDeBord::Societe, $compte, $societe, $magasins, Calendrier::deParis());
@@ -119,7 +118,7 @@ final class PerimetreDesGraphiques
      */
     public function voitLesGraphiquesDuMagasin(User $compte, Magasin $magasin): bool
     {
-        if ($magasin->est_demonstration || ! $compte->peutOuvrir($magasin)) {
+        if (! $compte->peutOuvrir($magasin)) {
             return false;
         }
 
@@ -145,7 +144,6 @@ final class PerimetreDesGraphiques
         $client = Societe::query()->whereKey($lien->societe_id)->firstOrFail();
         $magasins = Magasin::query()->with('societe')
             ->where('societe_id', $client->getKey())
-            ->where('est_demonstration', false)
             ->whereKey($this->cabinets->idsDesMagasinsOuverts($compte))
             ->orderBy('id')
             ->get();
@@ -156,7 +154,7 @@ final class PerimetreDesGraphiques
     /**
      * Voit-il les graphiques de ce client dans l'espace du cabinet ? Le
      * lien est l'un de ceux que le cabinet lui ouvre, et le client lui
-     * ouvre au moins un magasin réel : une société invitée par le cabinet
+     * ouvre au moins un magasin : une société invitée par le cabinet
      * naît sans magasin. La fiche du client et la page de ses graphiques
      * le demandent avant d'offrir « Graphiques » ou d'y monter la grille.
      */
@@ -185,7 +183,6 @@ final class PerimetreDesGraphiques
 
         $magasins = Magasin::query()->with('societe')
             ->where('societe_id', $compte->societe_id)
-            ->where('est_demonstration', false)
             ->whereKey($this->expertsComptables->idsDesMagasinsOuverts($compte))
             ->orderBy('id')
             ->get();
@@ -207,7 +204,7 @@ final class PerimetreDesGraphiques
         $sources = [];
 
         foreach ($candidats as $magasin) {
-            if ($magasin->societe_id !== $societe->getKey() || $magasin->est_demonstration) {
+            if ($magasin->societe_id !== $societe->getKey()) {
                 continue;
             }
 

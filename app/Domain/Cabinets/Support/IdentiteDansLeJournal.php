@@ -49,7 +49,7 @@ final class IdentiteDansLeJournal
 
     /**
      * Les magasins qu'un lien ouvre au cabinet, tels que le journal les
-     * retient : « tous » (tous les magasins réels du client, présents et
+     * retient : « tous » (tous les magasins du client, présents et
      * futurs), ou chaque magasin choisi, son identifiant et son nom, par
      * identifiant croissant. Le journal du cabinet n'y lit que des magasins
      * qu'il voit désormais.

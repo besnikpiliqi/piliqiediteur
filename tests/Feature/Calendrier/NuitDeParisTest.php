@@ -36,12 +36,9 @@ use App\Domain\Facturation\Services\PreuvesRequises;
 use App\Domain\Stock\Actions\CreerInventaireOuvertureAction;
 use App\Domain\Stock\Actions\ValiderInventaireOuvertureAction;
 use App\Domain\Tenancy\Actions\CreerMembreAction;
-use App\Domain\Tenancy\Actions\FermerLaDemonstrationAction;
 use App\Domain\Tenancy\Actions\FermerMagasinAction;
-use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
 use App\Domain\Tenancy\Enums\MotifFermeture;
 use App\Domain\Tenancy\Enums\RoleMagasin;
-use App\Domain\Tenancy\Enums\StatutMagasin;
 use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Mail\DemandeInscriptionMail;
 use App\Domain\Tenancy\Models\Magasin;
@@ -155,27 +152,6 @@ class NuitDeParisTest extends TestCase
         $clotures = ClotureCaisse::query()->orderBy('date_cloture')->get();
         $this->assertSame([$veille, $jour], $clotures->map(fn (ClotureCaisse $cloture): string => $cloture->date_cloture)->all());
         $this->assertSame($clotures->last()->id, $venteDeLaNuit->fresh()->cloture_caisse_id);
-    }
-
-    /**
-     * Fermé la nuit, le magasin de démonstration clôture lui aussi sa
-     * journée de Paris : la vente faite après minuit à Paris entre dans la
-     * clôture de ce jour.
-     */
-    #[DataProvider('nuits')]
-    public function test_la_demonstration_fermee_la_nuit_cloture_la_journee_de_paris(CarbonImmutable $soir, CarbonImmutable $nuit, string $jour, string $veille): void
-    {
-        $this->travelTo($nuit);
-        $societe = $this->inscrireUneSociete();
-        $demonstration = app(OuvrirLaDemonstrationAction::class)->handle($societe->proprietaire, $societe);
-        app(TenantContext::class)->set($demonstration);
-        $this->actingAs(self::responsableDeTest($demonstration));
-        $venteDeLaNuit = self::vendreAuComptant(self::auteur(), Client::query()->where('est_comptoir', true)->sole(), [['produit_id' => Produit::query()->where('reference', 'DEMO-CARNET')->value('id'), 'quantite' => 1]]);
-
-        app(FermerLaDemonstrationAction::class)->handle($demonstration);
-
-        $cloture = ClotureCaisse::query()->sole();
-        $this->assertSame([$jour, $cloture->id], [$cloture->date_cloture, $venteDeLaNuit->fresh()->cloture_caisse_id]);
     }
 
     /**
@@ -519,33 +495,6 @@ class NuitDeParisTest extends TestCase
 
         Livewire::test(SelecteurDeClients::class)
             ->assertTableColumnFormattedStateSet('factures_max_date_emission', Calendrier::afficherJour($jour, 'd/m/Y'), $client->getKey());
-    }
-
-    /**
-     * Un magasin de démonstration ouvert depuis longtemps se ferme trente
-     * jours exactement après sa dernière vente, à la même heure de Paris :
-     * pas une heure plus tôt, même quand sa dernière vente date de l'heure
-     * d'été et sa fermeture de l'heure d'hiver.
-     */
-    public function test_un_magasin_de_demonstration_se_ferme_apres_trente_jours_d_inactivite_exactement(): void
-    {
-        $this->travelTo(self::aParis('2026-10-01 10:00:00'));
-        $societe = $this->inscrireUneSociete();
-        $demonstration = app(OuvrirLaDemonstrationAction::class)->handle($societe->proprietaire, $societe);
-        app(TenantContext::class)->set($demonstration);
-        $this->actingAs(self::responsableDeTest($demonstration));
-        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
-        self::vendreAuComptant(self::auteur(), Client::query()->where('est_comptoir', true)->sole(), [['produit_id' => Produit::query()->where('reference', 'DEMO-CARNET')->value('id'), 'quantite' => 1]]);
-
-        foreach ([self::aParis('2026-11-08 09:00:00'), self::aParis('2026-11-08 10:00:00')] as $instant) {
-            $this->travelTo($instant);
-            $this->artisan('app:fermer-demonstrations-inactives')->assertSuccessful();
-            $this->assertSame(StatutMagasin::Actif, $demonstration->fresh()->statut, $instant->toIso8601String());
-        }
-
-        $this->travelTo(self::aParis('2026-11-08 10:00:01'));
-        $this->artisan('app:fermer-demonstrations-inactives')->assertSuccessful();
-        $this->assertSame(StatutMagasin::Ferme, $demonstration->fresh()->statut);
     }
 
     /**

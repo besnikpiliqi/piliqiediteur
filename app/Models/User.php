@@ -48,10 +48,8 @@ use Illuminate\Support\Str;
  * que par le lien de son cabinet (voir AccesDesCabinets) :
  * - son propriétaire, qui supervise et contrôle : tous les droits dans la
  *   société et dans chacun de ses magasins, sans case ni affectation, sauf
- *   celui de vendre, qu'il n'a dans aucun magasin réel (voir
- *   PermissionRegistry::duProprietaire()), seulement dans le magasin de
- *   démonstration tant qu'il est ouvert (voir
- *   PermissionRegistry::duProprietaireEnDemonstration()) ;
+ *   celui de vendre, qu'il n'a dans aucun magasin (voir
+ *   PermissionRegistry::duProprietaire()) ;
  * - un administrateur, avec ses autorisations de société et sa portée
  *   (tous les magasins ou une sélection : ses affectations sans rôle, qui
  *   portent ses cases) ;
@@ -338,16 +336,6 @@ class User extends Authenticatable implements FilamentUser, HasTenants
     }
 
     /**
-     * Est-il un compte d'entraînement : un compte rattaché au magasin de
-     * démonstration de sa société, qui n'ouvre jamais un magasin réel et
-     * ne change jamais de rôle de société (voir GardesDesDroits) ?
-     */
-    public function estUnCompteDEntrainement(): bool
-    {
-        return $this->magasinDeSonIdentifiant()->est_demonstration ?? false;
-    }
-
-    /**
      * La ligne de son identifiant, filtrée par son compte et sa société :
      * la seule lecture d'un identifiant hors de la société active, pour ce
      * compte-ci (voir Identifiant).
@@ -495,18 +483,15 @@ class User extends Authenticatable implements FilamentUser, HasTenants
      * rôle dans son cabinet suivi du nom du magasin (« Collaborateur du
      * cabinet Martin · Boutique Lyon 1 ») ; pour le propriétaire ou un
      * administrateur, son rôle de société (voir
-     * libelleDuRoleDeSociete()) ; suivi de « (démonstration) » dans le
-     * magasin de démonstration.
+     * libelleDuRoleDeSociete()).
      */
     public function libelleDuRoleDans(Magasin $magasin): string
     {
-        $libelle = match (true) {
+        return match (true) {
             $this->estMembre() => $this->libelleDuRoleDeMembreDans($magasin).' · '.$magasin->nom,
             $this->entreParLesAutorisationsDUnCabinet() => $this->libelleDuRoleDeSociete().' · '.$magasin->nom,
             default => $this->libelleDuRoleDeSociete(),
         };
-
-        return $magasin->est_demonstration ? "{$libelle} (démonstration)" : $libelle;
     }
 
     /**
@@ -608,8 +593,9 @@ class User extends Authenticatable implements FilamentUser, HasTenants
 
     /**
      * Les colonnes d'un nouveau statut du compte, donné par cet auteur relu
-     * en base, ou par le système (null, la fermeture définitive du magasin
-     * de démonstration pour un compte d'entraînement) : qui l'a donné, et
+     * en base, ou par le système (null, le retrait d'office des comptes
+     * d'un expert-comptable de la société, voir
+     * ExpertsComptablesDeclares::retirerLesComptes()) : qui l'a donné, et
      * si c'était, à cet instant, le propriétaire (voir
      * statutDecideParLeProprietaire()).
      *
@@ -845,9 +831,8 @@ class User extends Authenticatable implements FilamentUser, HasTenants
      * y encaisse-t-il (paiement.creer) ? Lu sur ses autorisations dans ce
      * magasin (voir autorisationsDans()), pas sur le droit d'agir du
      * moment : dans un magasin en lecture seule, où plus rien ne se vend,
-     * chacun ferme toujours sa caisse et consulte ses relevés. Le
-     * propriétaire seulement dans le magasin de démonstration tant qu'il
-     * est ouvert, le seul où il vend ; un administrateur seulement quand le
+     * chacun ferme toujours sa caisse et consulte ses relevés. Jamais le
+     * propriétaire, qui ne vend pas ; un administrateur seulement quand le
      * propriétaire lui a coché la vente.
      */
     public function tientUneCaisseDans(Magasin $magasin): bool
@@ -954,7 +939,7 @@ class User extends Authenticatable implements FilamentUser, HasTenants
      * du type d'activité de la société (voir
      * PermissionRegistry::pourLeType()) : une case d'une autre famille ne
      * s'y lit jamais ; null quand aucune n'y vaut :
-     * - un compte d'un cabinet d'expertise comptable, dans un magasin réel
+     * - un compte d'un cabinet d'expertise comptable, dans un magasin
      *   d'un client lié que son cabinet lui ouvre (son propriétaire, ou un
      *   collaborateur à qui ce client est confié), parmi ceux que le client
      *   ouvre au cabinet (tous, ou sa sélection, voir
@@ -962,17 +947,13 @@ class User extends Authenticatable implements FilamentUser, HasTenants
      *   accorde au cabinet (voir AccesDesCabinets::autorisationsParClient()),
      *   sans regarder si le cabinet est vérifié, ce que contrôlent
      *   peutOuvrir() et ControleDesDroits, comme la lecture seule ;
-     * - un expert-comptable de la société, dans un magasin réel de sa
+     * - un expert-comptable de la société, dans un magasin de sa
      *   société que sa déclaration en attente lui ouvre (tous, ou la
      *   sélection du propriétaire) : les autorisations de sa déclaration
      *   (voir ExpertsComptablesDeclares) ;
-     * - le propriétaire : toutes sauf celles de la vente dans chaque
-     *   magasin réel, où il ne vend jamais, comme dans le magasin de
-     *   démonstration fermé (voir PermissionRegistry::duProprietaire()), et
-     *   toutes, vente comprise, dans le magasin de démonstration tant qu'il
-     *   est ouvert (voir PermissionRegistry::duProprietaireEnDemonstration()) :
-     *   sa fermeture et sa réouverture s'inscrivent à son JET 130 (voir
-     *   JournalDesDroits::autourDuChangementDeStatut()) ;
+     * - le propriétaire : toutes sauf celles de la vente, dans chaque
+     *   magasin, où il ne vend jamais (voir
+     *   PermissionRegistry::duProprietaire()) ;
      * - un administrateur : les cases de son affectation à ce magasin, ou
      *   de son affectation à tous les magasins ; rien s'il a les deux
      *   sortes d'affectations ;
@@ -1001,9 +982,7 @@ class User extends Authenticatable implements FilamentUser, HasTenants
         $duType = PermissionRegistry::pourLeType($magasin->societe->type_activite);
 
         if ($this->estProprietaire()) {
-            return $magasin->est_demonstration && ! $magasin->estFerme()
-                ? PermissionRegistry::duProprietaireEnDemonstration($magasin->societe->type_activite)
-                : PermissionRegistry::duProprietaire($magasin->societe->type_activite);
+            return PermissionRegistry::duProprietaire($magasin->societe->type_activite);
         }
 
         $affectation = $this->affectationQuiVautDans($magasin);
@@ -1078,17 +1057,14 @@ class User extends Authenticatable implements FilamentUser, HasTenants
     /**
      * Peut-il ouvrir ce magasin ? Avec un compte qui peut agir (voir
      * peutAgir()), un compte d'un cabinet d'expertise comptable vérifié
-     * ouvre les magasins réels d'un client lié qui lui est ouvert, tous ou
+     * ouvre les magasins d'un client lié qui lui est ouvert, tous ou
      * ceux que le client a choisis (voir
      * AccesDesCabinets::idsDesMagasinsOuverts()) ; un expert-comptable de
-     * la société, les magasins réels de sa société que sa déclaration en
+     * la société, les magasins de sa société que sa déclaration en
      * attente lui ouvre ; tout autre compte, un magasin de sa
      * société : le propriétaire ouvre tous ceux de sa société ; tout autre
      * compte, ceux où une affectation lui donne des droits (voir
-     * affectationQuiVautDans()). Une fois sa société validée, plus personne
-     * n'ouvre son magasin de démonstration, qui disparaît de tous les
-     * écrans, ses données restant en base (T115, lot DEMO-V) : son adresse
-     * mène à une page introuvable.
+     * affectationQuiVautDans()).
      */
     public function peutOuvrir(Magasin $magasin): bool
     {
@@ -1102,7 +1078,7 @@ class User extends Authenticatable implements FilamentUser, HasTenants
                 && in_array(CleDuModele::de($magasin), $this->magasinsOuverts ??= app(AccesDesCabinets::class)->idsDesMagasinsOuverts($this), true);
         }
 
-        if ($magasin->societe_id !== $this->societe_id || ! $this->peutAgir() || ($magasin->est_demonstration && $this->societe->estValidee())) {
+        if ($magasin->societe_id !== $this->societe_id || ! $this->peutAgir()) {
             return false;
         }
 
@@ -1114,15 +1090,13 @@ class User extends Authenticatable implements FilamentUser, HasTenants
     }
 
     /**
-     * Les magasins qu'il peut ouvrir, par nom, le magasin de démonstration
-     * à part, après les autres (voir peutOuvrir()) ; aucun pour un compte
-     * qui n'est pas actif ; pour un membre, son seul magasin ; pour un
-     * compte d'un cabinet d'expertise comptable, les magasins réels des
-     * clients que son cabinet lui ouvre, par dénomination du client puis
-     * nom du magasin (voir AccesDesCabinets::magasinsOuverts()) ; pour un
-     * expert-comptable de la société, les magasins réels que sa déclaration
-     * lui ouvre, par nom. Le magasin de démonstration d'une société validée
-     * n'y est jamais (T115).
+     * Les magasins qu'il peut ouvrir, par nom (voir peutOuvrir()) ; aucun
+     * pour un compte qui n'est pas actif ; pour un membre, son seul
+     * magasin ; pour un compte d'un cabinet d'expertise comptable, les
+     * magasins des clients que son cabinet lui ouvre, par dénomination du
+     * client puis nom du magasin (voir AccesDesCabinets::magasinsOuverts()) ;
+     * pour un expert-comptable de la société, les magasins que sa
+     * déclaration lui ouvre, par nom.
      *
      * @return Collection<int, Magasin>
      */
@@ -1148,11 +1122,7 @@ class User extends Authenticatable implements FilamentUser, HasTenants
             $magasins->whereIn('id', $this->magasinsDeSaPortee()->select('magasins.id'));
         }
 
-        if ($this->societe->estValidee()) {
-            $magasins->where('est_demonstration', false);
-        }
-
-        return $magasins->orderBy('est_demonstration')->orderBy('nom')->orderBy('id')->get();
+        return $magasins->orderBy('nom')->orderBy('id')->get();
     }
 
     /**

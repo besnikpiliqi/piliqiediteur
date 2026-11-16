@@ -6,7 +6,7 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * Les magasins réels qu'un client ouvre à son cabinet lié quand il ne lui
+ * Les magasins qu'un client ouvre à son cabinet lié quand il ne lui
  * ouvre pas tous ses magasins, présents et futurs (voir
  * liens_cabinet.tous_les_magasins, LienCabinet::magasinsChoisis() et
  * choisirLesMagasins()), dans la société du client (décision de l'éditeur
@@ -14,8 +14,8 @@ use Illuminate\Support\Facades\Schema;
  * son lien ; leur historique est au journal des événements de chaque
  * magasin ajouté ou retiré (JET 130) et au journal d'audit. Les clés
  * étrangères composites gardent chaque ligne dans la société de son lien
- * et de son magasin ; la base refuse le magasin de démonstration, une
- * ligne sur un lien qui n'est pas actif ou qui ouvre tous les magasins, et,
+ * et de son magasin ; la base refuse une ligne sur un lien qui n'est pas
+ * actif ou qui ouvre tous les magasins, et,
  * à la validation de la transaction, un lien actif qui n'ouvre ni tous les
  * magasins ni aucun (voir GardesDesCabinets).
  */

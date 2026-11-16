@@ -27,7 +27,6 @@ use App\Domain\Tenancy\Actions\CreerMembreAction;
 use App\Domain\Tenancy\Actions\CreerSocieteAction;
 use App\Domain\Tenancy\Actions\ModifierIdentiteSocieteAction;
 use App\Domain\Tenancy\Actions\ModifierParametresFiscauxSocieteAction;
-use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
 use App\Domain\Tenancy\Actions\RedonnerLAccesAction;
 use App\Domain\Tenancy\Actions\SaisirCodeDeConfirmationAction;
 use App\Domain\Tenancy\Enums\RegimeTva;
@@ -58,17 +57,15 @@ use Illuminate\Support\Str;
 use LogicException;
 
 /**
- * Le jeu de démonstration de PILIQI pour un poste de développement (lot
- * SEED, demande de l'éditeur du 13/11/2026), celui de la campagne de tests
+ * Le semis complet de PILIQI pour un poste de développement (lot SEED,
+ * demande de l'éditeur du 13/11/2026), celui de la campagne de tests
  * 1 bis : trois sociétés validées par le code de leur courrier (une
- * « Commerce ou atelier » à deux magasins réels, qui s'est essayée dans son
- * magasin de démonstration avant sa validation, une « Services, sans vente
+ * « Commerce ou atelier » à deux magasins, une « Services, sans vente
  * d'articles » à un magasin, qui déclare son expert-comptable par le SIREN
  * d'un cabinet absent de PILIQI, et un cabinet d'expertise comptable
  * vérifié à l'Ordre, à deux collaborateurs), une quatrième société, née de
  * l'invitation du cabinet et validée par elle, et une inscription qui
- * attend le code de son courrier, avec son magasin de démonstration
- * ouvert et ses comptes d'entraînement. Le cabinet est lié à la société
+ * attend le code de son courrier. Le cabinet est lié à la société
  * « Commerce ou atelier » et à la société qu'il a invitée, chacune confiée
  * à un collaborateur.
  *
@@ -82,7 +79,7 @@ use LogicException;
  * (voir HorlogeDuSemis), puis l'activité des magasins se sème (voir
  * ActiviteDesMagasins).
  */
-final class SemisDeDemonstration
+final class SemisComplet
 {
     /**
      * Le nombre de jours de l'histoire semée, qui finit la veille du semis :
@@ -195,9 +192,6 @@ final class SemisDeDemonstration
         $this->inscrire('cabinet', FauxRepertoireSirene::SIREN_CABINET, TypeDActivite::Cabinet, self::ADRESSE_CABINET);
         $societesDesCas->inscrire();
 
-        $this->horloge->aller(0, '10:30');
-        $this->sEssayerDansLaDemonstration('commerce', [['Romain Lefort', RoleMagasin::Vendeur]]);
-
         $this->horloge->aller(1, '09:00');
         $this->saisirLeCode('commerce');
         $this->saisirLeCode('services');
@@ -272,8 +266,6 @@ final class SemisDeDemonstration
 
         $this->horloge->aller(self::JOURS - 1, '09:00');
         $this->inscrire('inscription', self::SIREN_INSCRIPTION, TypeDActivite::Commerce, self::ADRESSE_INSCRIPTION);
-        $this->horloge->aller(self::JOURS - 1, '09:30');
-        $this->sEssayerDansLaDemonstration('inscription', [['Karim Haddad', RoleMagasin::Responsable], ['Zoé Marchand', RoleMagasin::Vendeur]]);
         $this->horloge->aller(self::JOURS - 1, '11:00');
         (new DerniersGestes($this, $this->motsDePasse))->semer();
 
@@ -327,9 +319,7 @@ final class SemisDeDemonstration
             'Chloé Bernard' => 'Vendeuse de l\'Épicerie : ses tickets et ses relevés',
             'Mehdi Brahimi' => 'Vendeur de l\'Épicerie : ses tickets et ses relevés',
             'Marc Petit' => 'Expert-comptable déclaré : « Tableau de bord de la société » avec tous ses graphiques affichés (« Tous les graphiques sont affichés »), charges à valider, magasins en lecture',
-            'propriétaire inscription' => 'Inscription qui attend le code du courrier : magasin de démonstration ouvert',
-            'Karim Haddad' => 'Compte d\'entraînement : ventes dans le magasin de démonstration',
-            'Zoé Marchand' => 'Compte d\'entraînement : ventes dans le magasin de démonstration',
+            'propriétaire inscription' => 'Inscription qui attend le code du courrier : aucune vente avant sa validation',
             'Élodie Fabre' => 'Observatrice des Halles : tout en lecture, aucune vente ; reçoit les alertes de stock (la propriétaire lui a coché « ajuster le stock »)',
             'Victor Blanchard' => 'Observateur du magasin de services',
             'Margaux Perrin' => 'Observatrice de l\'Épicerie',
@@ -475,7 +465,7 @@ final class SemisDeDemonstration
     /**
      * Le propriétaire inscrit saisit le code de son courrier, avec
      * l'adresse et le mot de passe de son inscription : la société est
-     * validée, et son magasin de démonstration se ferme.
+     * validée.
      */
     public function saisirLeCode(string $cle): void
     {
@@ -523,7 +513,7 @@ final class SemisDeDemonstration
     /**
      * Le propriétaire règle les paramètres fiscaux communs de sa société
      * (voir ModifierParametresFiscauxSocieteAction) : chaque société qui a
-     * un magasin réel choisit son régime de TVA, les sociétés semées se
+     * un magasin choisit son régime de TVA, les sociétés semées se
      * répartissant entre le réel normal mensuel, le réel normal
      * trimestriel, le réel simplifié et la franchise en base (constat de
      * l'éditeur du 15/11/2026 : aucune société qui vend sans régime).
@@ -619,7 +609,7 @@ final class SemisDeDemonstration
         $leMagasin = $this->magasin($magasin);
         $proprietaire = $this->compte('propriétaire '.$this->cleDeLaSocieteDe($leMagasin));
         $compte = app(TenantContext::class)->runAs($leMagasin, fn (): User => app(CreerMembreAction::class)->handle($proprietaire, $leMagasin, ['name' => $nom], $role, null, GestesDuMagasin::jeton()));
-        $libelle = $leMagasin->est_demonstration === true ? 'Compte d\'entraînement ('.mb_strtolower($role->getLabel()).')' : $role->getLabel();
+        $libelle = $role->getLabel();
 
         if ($gardeSonIdentifiant) {
             $this->liste->noter($compte, $this->nomsDesSocietes[$magasin], (string) $leMagasin->nom, $libelle, null);
@@ -667,32 +657,6 @@ final class SemisDeDemonstration
         }
 
         throw new LogicException("Le magasin {$magasin->nom} n'est d'aucune société semée.");
-    }
-
-    /**
-     * Le propriétaire de la société ouvre son magasin de démonstration,
-     * avant la validation, y crée ces comptes d'entraînement et y vend
-     * lui-même, comme un responsable ; chaque compte d'entraînement
-     * choisit son mot de passe et vend un ticket.
-     *
-     * @param  list<array{0: string, 1: RoleMagasin}>  $comptes
-     */
-    private function sEssayerDansLaDemonstration(string $societe, array $comptes): void
-    {
-        $proprietaire = $this->proprietaire($societe);
-        $demonstration = $this->horsDeToutContexte(fn (): Magasin => app(OuvrirLaDemonstrationAction::class)->handle($proprietaire, $this->societe($societe)));
-        $this->magasins["démonstration {$societe}"] = $demonstration;
-        $this->nomsDesSocietes["démonstration {$societe}"] = $this->nomDeLaSociete($societe);
-        $gestes = new GestesDuMagasin($demonstration);
-        $gestes->vendreALaCaisse($proprietaire, $gestes->comptoir(), [['produit_id' => $gestes->produit('DEMO-TASSE')->getKey(), 'quantite' => 1]]);
-
-        foreach ($comptes as [$nom, $role]) {
-            $this->membre("démonstration {$societe}", $nom, $role);
-        }
-
-        foreach ($comptes as $rang => [$nom]) {
-            $gestes->vendreALaCaisse($this->compte($nom), $gestes->comptoir(), [['produit_id' => $gestes->produit('DEMO-CARNET')->getKey(), 'quantite' => $rang + 1]]);
-        }
     }
 
     /**

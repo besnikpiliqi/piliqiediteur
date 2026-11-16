@@ -57,11 +57,9 @@ final class ReglesDIsolation
 
     public const REGLE_COMPTES = 'Comptes et équipe : un compte appartient pour toujours à une seule société ; un compte de responsable, de vendeur ou d\'observateur ne vaut que pour un magasin, qu\'il ne quitte jamais.';
 
-    public const REGLE_VENTES = 'Comptes et équipe : chaque vente et chaque encaissement est au nom d\'un compte autorisé à vendre dans ce magasin, jamais le propriétaire hors du magasin de démonstration, ni un compte d\'un cabinet, ni un expert-comptable de la société.';
+    public const REGLE_VENTES = 'Comptes et équipe : chaque vente et chaque encaissement est au nom d\'un compte autorisé à vendre dans ce magasin, jamais le propriétaire, ni un compte d\'un cabinet, ni un expert-comptable de la société.';
 
     public const REGLE_CABINETS = 'Cabinets d\'expertise comptable : un compte d\'un cabinet n\'entre chez un client que par le lien de son cabinet, dans les magasins que le client lui ouvre.';
-
-    public const REGLE_DEMONSTRATION = 'Vérification de la société : rien ne passe du magasin de démonstration aux magasins réels ; un compte d\'entraînement n\'ouvre jamais un magasin réel.';
 
     public const REGLE_CHAINES = 'Caisse et clôtures, Journal d\'audit : chaque chaîne du registre, du journal des événements et du journal d\'audit ne contient que des maillons de son magasin ou de sa société.';
 
@@ -248,7 +246,7 @@ final class ReglesDIsolation
         'bordereaux_detaxe' => ['bordereaux_detaxe_ajout_seul_delete', 'bordereaux_detaxe_ajout_seul_truncate', 'bordereaux_detaxe_ajout_seul_update'],
         'cabinets' => ['cabinets_de_type_cabinet', 'cabinets_sans_suppression_delete', 'cabinets_sans_suppression_truncate'],
         'changements_fin_exercice' => ['changements_fin_exercice_ajout_seul_delete', 'changements_fin_exercice_ajout_seul_truncate', 'changements_fin_exercice_ajout_seul_update'],
-        'charges' => ['charges_coherente', 'charges_societe_et_magasin', 'charges_validee_figee', 'charges_validee_jamais_effacee'],
+        'charges' => ['charges_coherente', 'charges_d_une_societe_a_magasins', 'charges_validee_figee', 'charges_validee_jamais_effacee'],
         'clients_confies' => ['clients_confies_a_un_collaborateur'],
         'clotures_caisse' => ['clotures_caisse_ajout_seul_delete', 'clotures_caisse_ajout_seul_truncate', 'clotures_caisse_ajout_seul_update', 'clotures_caisse_signee'],
         'clotures_caisse_personnelles' => ['clotures_caisse_personnelles_ajout_seul_delete', 'clotures_caisse_personnelles_ajout_seul_truncate', 'clotures_caisse_personnelles_ajout_seul_update'],
@@ -271,7 +269,7 @@ final class ReglesDIsolation
         'lignes_de_charge' => ['charges_coherente_lignes', 'lignes_de_charge_d_une_charge_validee'],
         'lignes_facture' => ['garde_documents_emis_lignes_facture'],
         'lignes_recu_paiement' => ['lignes_recu_paiement_ajout_seul_delete', 'lignes_recu_paiement_ajout_seul_truncate', 'lignes_recu_paiement_ajout_seul_update'],
-        'magasins' => ['magasins_est_demonstration_figee', 'magasins_jamais_dans_un_cabinet', 'magasins_sans_suppression_delete', 'magasins_sans_suppression_truncate', 'magasins_siret_libere_le_figee', 'magasins_territoire_figee'],
+        'magasins' => ['magasins_jamais_dans_un_cabinet', 'magasins_sans_suppression_delete', 'magasins_sans_suppression_truncate', 'magasins_siret_libere_le_figee', 'magasins_territoire_figee'],
         'magasins_cabinet' => ['liens_cabinet_tous_les_magasins_ou_une_selection_magasins', 'magasins_cabinet_d_un_lien_actif'],
         'mouvements_stock' => ['magasins_ouverts_a_l_expert_comptable', 'mouvements_stock_achat_coherent', 'mouvements_stock_ajout_seul_delete', 'mouvements_stock_ajout_seul_truncate', 'mouvements_stock_ajout_seul_update', 'mouvements_stock_auteur_du_document', 'mouvements_stock_compte', 'mouvements_stock_justifies'],
         'paiement_allocations' => ['paiement_allocations_ajout_seul_delete', 'paiement_allocations_ajout_seul_truncate', 'paiement_allocations_ajout_seul_update'],

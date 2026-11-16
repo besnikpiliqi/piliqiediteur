@@ -8,7 +8,7 @@ use Illuminate\Contracts\Events\ShouldDispatchAfterCommit;
 use Illuminate\Foundation\Events\Dispatchable;
 
 /**
- * Un magasin réel d'une société validée, rouvert par sa société, commence
+ * Un magasin d'une société validée, rouvert par sa société, commence
  * une nouvelle période d'activité (voir RouvrirMagasinAction et
  * MiseEnActiviteDesMagasins) : son abonnement reprend avec elle (étape
  * 12). Seulement une fois la transaction validée.

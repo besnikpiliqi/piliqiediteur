@@ -13,9 +13,10 @@ use Illuminate\Support\Facades\DB;
  * Charge), même écrites par DB::table(), une requête brute ou une action
  * défectueuse :
  * - une charge n'existe que dans une société qui a des magasins, jamais
- *   un cabinet d'expertise comptable, et son magasin, quand elle en a un,
- *   est un magasin réel de sa société, jamais celui de démonstration (la
- *   clé étrangère composite garde la société) ;
+ *   un cabinet d'expertise comptable ; son magasin, quand elle en a un,
+ *   est un magasin de sa société : la clé étrangère composite
+ *   (societe_id, magasin_id) refuse un magasin qui n'existe pas ou d'une
+ *   autre société ;
  * - une charge validée ne s'efface jamais, et ne s'écrit plus que par le
  *   geste « Corriger », qui compte chaque correction : son état reste
  *   « validée », sa validation et son dépôt ne changent plus, et le
@@ -43,7 +44,7 @@ use Illuminate\Support\Facades\DB;
  */
 final class GardesDesCharges
 {
-    private const SOCIETE_ET_MAGASIN = 'charges_societe_et_magasin';
+    private const SOCIETE = 'charges_d_une_societe_a_magasins';
 
     private const VALIDEE_FIGEE = 'charges_validee_figee';
 
@@ -66,8 +67,6 @@ final class GardesDesCharges
     private const CORRECTIONS_EN_COURS = 'piliqi.corrections_de_charge';
 
     private const REFUS_SOCIETE = 'une charge n\'existe que dans une société qui a des magasins, jamais dans un cabinet d\'expertise comptable';
-
-    private const REFUS_MAGASIN = 'le magasin d\'une charge est un magasin réel de sa société, jamais celui de démonstration';
 
     private const REFUS_FIGEE = 'une charge validée ne s\'écrit plus que par une correction, qui compte chacune ; avant sa validation, elle n\'a aucune correction';
 
@@ -94,11 +93,10 @@ final class GardesDesCharges
         $figees = implode(', ', array_map(static fn (string $colonne): string => "NEW.{$colonne}", self::FIGEES));
         $figeesAvant = implode(', ', array_map(static fn (string $colonne): string => "OLD.{$colonne}", self::FIGEES));
 
-        self::fonction(self::SOCIETE_ET_MAGASIN, 'BEGIN '
-            ."IF COALESCE((SELECT type_activite FROM societes WHERE id = NEW.societe_id), {$cabinet}) = {$cabinet} THEN RAISE EXCEPTION '%', ".self::message(self::SOCIETE_ET_MAGASIN, self::REFUS_SOCIETE).'; END IF; '
-            ."IF NEW.magasin_id IS NOT NULL AND COALESCE((SELECT est_demonstration FROM magasins WHERE id = NEW.magasin_id), TRUE) THEN RAISE EXCEPTION '%', ".self::message(self::SOCIETE_ET_MAGASIN, self::REFUS_MAGASIN).'; END IF; '
+        self::fonction(self::SOCIETE, 'BEGIN '
+            ."IF COALESCE((SELECT type_activite FROM societes WHERE id = NEW.societe_id), {$cabinet}) = {$cabinet} THEN RAISE EXCEPTION '%', ".self::message(self::SOCIETE, self::REFUS_SOCIETE).'; END IF; '
             .'RETURN NEW; END');
-        $connexion->unprepared('CREATE TRIGGER '.self::SOCIETE_ET_MAGASIN.' BEFORE INSERT OR UPDATE OF societe_id, magasin_id ON charges FOR EACH ROW EXECUTE FUNCTION garde_'.self::SOCIETE_ET_MAGASIN.'()');
+        $connexion->unprepared('CREATE TRIGGER '.self::SOCIETE.' BEFORE INSERT OR UPDATE OF societe_id ON charges FOR EACH ROW EXECUTE FUNCTION garde_'.self::SOCIETE.'()');
 
         // Une correction acceptée se retient jusqu'à la fin de la
         // transaction (voir CORRECTIONS_EN_COURS) : ses lignes peuvent alors
@@ -128,7 +126,7 @@ final class GardesDesCharges
 
     public static function retirerDesCharges(): void
     {
-        self::retirer('charges', [self::SOCIETE_ET_MAGASIN, self::VALIDEE_FIGEE, self::VALIDEE_JAMAIS_EFFACEE, self::COHERENTE]);
+        self::retirer('charges', [self::SOCIETE, self::VALIDEE_FIGEE, self::VALIDEE_JAMAIS_EFFACEE, self::COHERENTE]);
     }
 
     public static function poserSurLesLignes(): void

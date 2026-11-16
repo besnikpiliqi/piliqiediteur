@@ -30,7 +30,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Un magasin réel de la société, pour qui gère les magasins de sa portée
+ * Un magasin de la société, pour qui gère les magasins de sa portée
  * (voir MagasinDeLaSocietePolicy::update()) : son nom, son code tant qu'il
  * n'a numéroté aucun document, son adresse sans changer de territoire et,
  * avant la validation de la société, son NIC, sauf si l'éditeur a libéré

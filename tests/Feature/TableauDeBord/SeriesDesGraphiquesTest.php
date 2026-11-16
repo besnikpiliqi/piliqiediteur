@@ -30,7 +30,6 @@ use App\Domain\TableauDeBord\Support\CarteDuTableauDeBord;
 use App\Domain\TableauDeBord\Support\Perimetre;
 use App\Domain\TableauDeBord\Support\ReglagesDuTableauDeBord;
 use App\Domain\TableauDeBord\Support\SerieDuGraphique;
-use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
 use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Enums\Territoire;
 use App\Domain\Tenancy\Enums\TypeDActivite;
@@ -47,7 +46,7 @@ use Tests\TestCase;
  * (décision de l'éditeur du 14/11/2026, lot GRAPH), sur des montants
  * calculés à la main : les montants enregistrés sur les documents émis ou
  * validés, additionnés en centimes, chaque opération dans le mois de son
- * magasin, jamais un brouillon, jamais la démonstration, un magasin hors
+ * magasin, jamais un brouillon, un magasin hors
  * de la portée ni une autre société.
  *
  * Le magasin du jeu de données (préparer()), à Paris, au 15 octobre 2026 à
@@ -219,33 +218,6 @@ class SeriesDesGraphiquesTest extends TestCase
 
         $this->assertSame(7000, $avant->jeux[0]['valeurs'][self::OCTOBRE]);
         $this->assertSame(9000, $apres->jeux[0]['valeurs'][self::OCTOBRE]);
-    }
-
-    /**
-     * Le magasin de démonstration n'est jamais compté ni listé, même pour
-     * le propriétaire : la vente qu'il y fait avant la validation n'entre
-     * pas dans les graphiques de la société, qui ne comptent que son
-     * magasin réel, et la démonstration n'a pas de graphiques.
-     */
-    public function test_la_demonstration_n_entre_jamais_dans_les_graphiques(): void
-    {
-        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
-        $societe = $this->inscrireUneSociete();
-        $reel = $this->creerLeMagasinDuSiege($societe);
-        $proprietaire = $societe->proprietaire()->firstOrFail();
-        $demonstration = app(OuvrirLaDemonstrationAction::class)->handle($proprietaire, $societe);
-        app(TenantContext::class)->set($demonstration);
-        $this->actingAs(self::responsableDeTest($demonstration));
-        self::vendreAuComptant(self::auteur(), Client::query()->where('est_comptoir', true)->sole(), [['produit_id' => Produit::query()->where('reference', 'DEMO-CARNET')->value('id'), 'quantite' => 1]]);
-        app(TenantContext::class)->clear();
-
-        $perimetre = app(PerimetreDesGraphiques::class)->deLaSociete($proprietaire, $societe->fresh());
-        $serie = $this->series($perimetre, [Graphique::ChiffreDAffairesParMagasin])[Graphique::ChiffreDAffairesParMagasin->value];
-
-        $this->assertSame([$reel->id], $perimetre->magasins()->modelKeys());
-        $this->assertSame(['Ma Boutique'], $serie->etiquettes);
-        $this->assertSame([0], $serie->jeux[0]['valeurs']);
-        $this->assertFalse(app(PerimetreDesGraphiques::class)->voitLesGraphiquesDuMagasin($proprietaire, $demonstration));
     }
 
     /**

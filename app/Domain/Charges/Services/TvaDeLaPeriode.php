@@ -166,7 +166,7 @@ final class TvaDeLaPeriode
      * et la phrase grise des magasins qu'elle ne compte pas.
      *
      * @param  list<string>  $mois  « AAAA-MM »
-     * @param  list<int>  $magasinsVus  les magasins réels que l'accès voit
+     * @param  list<int>  $magasinsVus  les magasins que l'accès voit
      * @return array{montants: array<string, MontantsDeTva>, avec_les_ventes: bool, sans_celles_de_la_societe: bool, magasins_non_comptes: string|null}|null
      *
      * @throws LogicException un mois illisible

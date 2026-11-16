@@ -233,11 +233,10 @@ final class ControlesDeLApplication
      * pour un compte qui n'est pas actif ; pour le propriétaire d'une société,
      * tous ses magasins ; pour un administrateur, ceux de sa portée (tous, ou
      * ceux de ses affectations) ; pour un membre, celui de son affectation ;
-     * le magasin de démonstration d'une société validée jamais ; pour un
-     * compte d'un cabinet vérifié et actif, les magasins réels que les
+     * pour un compte d'un cabinet vérifié et actif, les magasins que les
      * clients de ses liens actifs (tous pour son propriétaire, ceux qui lui
      * sont confiés pour un collaborateur) lui ouvrent ; pour un expert-comptable
-     * de la société, les magasins réels que sa déclaration en attente lui ouvre.
+     * de la société, les magasins que sa déclaration en attente lui ouvre.
      *
      * @return list<int>
      */
@@ -249,10 +248,9 @@ final class ControlesDeLApplication
 
         $id = CleDuModele::de($compte);
         $societe = (int) $compte->societe_id;
-        $sansDemonstration = 'and not (m.est_demonstration and s.validee_le is not null)';
         $role = $compte->role_societe;
         $cabinet = TypeDActivite::Cabinet->value;
-        $magasinsOuverts = 'm.est_demonstration = false and (l.tous_les_magasins or exists (select 1 from magasins_cabinet mc where mc.lien_id = l.id and mc.societe_id = l.societe_id and mc.magasin_id = m.id))';
+        $magasinsOuverts = '(l.tous_les_magasins or exists (select 1 from magasins_cabinet mc where mc.lien_id = l.id and mc.societe_id = l.societe_id and mc.magasin_id = m.id))';
 
         if ($compte->societe->type_activite === TypeDActivite::Cabinet) {
             $verifie = "c.type_activite = '{$cabinet}' and c.validee_le is not null and c.statut = '".StatutSociete::Active->value."' and exists (select 1 from cabinets v where v.societe_id = c.id and v.activite_controlee_le is not null and v.ordre_verifie_le is not null and v.ordre_retire_le is null)";
@@ -262,12 +260,12 @@ final class ControlesDeLApplication
         }
 
         return match ($role) {
-            RoleSociete::Proprietaire => $this->ids("select m.id from magasins m join societes s on s.id = m.societe_id where m.societe_id = ? {$sansDemonstration} order by m.id", [$societe]),
-            RoleSociete::Administrateur => $this->ids("select m.id from magasins m join societes s on s.id = m.societe_id where m.societe_id = ? {$sansDemonstration} and (
+            RoleSociete::Proprietaire => $this->ids('select m.id from magasins m where m.societe_id = ? order by m.id', [$societe]),
+            RoleSociete::Administrateur => $this->ids('select m.id from magasins m where m.societe_id = ? and (
                     (exists (select 1 from affectations a where a.user_id = ? and a.role is null and a.magasin_id is null) and not exists (select 1 from affectations a where a.user_id = ? and a.magasin_id is not null))
                     or (not exists (select 1 from affectations a where a.user_id = ? and a.magasin_id is null) and exists (select 1 from affectations a where a.user_id = ? and a.role is null and a.magasin_id = m.id))
-                ) order by m.id", [$societe, $id, $id, $id, $id]),
-            RoleSociete::Membre => $this->ids("select m.id from magasins m join societes s on s.id = m.societe_id join affectations a on a.magasin_id = m.id and a.user_id = ? and a.role is not null where m.societe_id = ? {$sansDemonstration} order by m.id", [$id, $societe]),
+                ) order by m.id', [$societe, $id, $id, $id, $id]),
+            RoleSociete::Membre => $this->ids('select m.id from magasins m join affectations a on a.magasin_id = m.id and a.user_id = ? and a.role is not null where m.societe_id = ? order by m.id', [$id, $societe]),
             RoleSociete::ExpertComptable => $this->ids("select m.id from comptes_expert_comptable c join liens_cabinet l on l.id = c.lien_id and l.societe_id = c.societe_id join magasins m on m.societe_id = l.societe_id where c.user_id = ? and l.etat = 'declare' and {$magasinsOuverts} order by m.id", [$id]),
             default => [],
         };

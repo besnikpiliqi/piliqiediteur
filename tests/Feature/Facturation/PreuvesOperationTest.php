@@ -567,7 +567,7 @@ class PreuvesOperationTest extends TestCase
      * Le bouton est réservé à qui est autorisé à noter les preuves
      * d'exonération et les bordereaux de détaxe (FacturePolicy::justifier(),
      * réponse (b) de l'éditeur à Q-V2) : le propriétaire, qui ne vend pas
-     * dans un magasin réel, l'a ; un comptable, qui voit toutes les
+     * dans un magasin, l'a ; un comptable, qui voit toutes les
      * factures, ne l'a pas, ni un compte du cabinet lié, qui ne note jamais
      * une preuve. Il n'apparaît pas non plus sur une vente en France.
      */

@@ -10,26 +10,20 @@ use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Actions\ChangerLeRoleDeSocieteAction;
 use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
-use App\Domain\Tenancy\Actions\CreerMembreAction;
 use App\Domain\Tenancy\Actions\FermerMagasinAction;
 use App\Domain\Tenancy\Actions\ModifierMembreAction;
-use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\MotifFermeture;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\RoleSociete;
 use App\Domain\Tenancy\Enums\StatutCompte;
 use App\Domain\Tenancy\Models\Affectation;
-use App\Domain\Tenancy\Models\Magasin;
-use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\Societe\Resources\MembreResource\Pages\FicheDuMembre;
 use App\Filament\Societe\Resources\MembreResource\Pages\ListMembres;
 use App\Models\User;
 use Filament\Forms\Components\Select;
 use Illuminate\Auth\Access\AuthorizationException;
-use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 use LogicException;
 use Tests\TestCase;
@@ -42,7 +36,7 @@ use Throwable;
  * et un administrateur ne redevient membre que dans le
  * magasin de son identifiant, écrit une seule fois. Chaque changement
  * s'inscrit au journal d'audit ; seul le propriétaire change le rôle de
- * société, jamais celui d'un compte d'entraînement.
+ * société.
  */
 class ChangementDeRoleTest extends TestCase
 {
@@ -105,7 +99,7 @@ class ChangementDeRoleTest extends TestCase
 
     /**
      * Un compte né administrateur, sans magasin, reçoit à sa première
-     * rétrogradation le magasin réel ouvert que le propriétaire lui
+     * rétrogradation le magasin ouvert que le propriétaire lui
      * choisit, une fois pour toutes : sans choix, ou avec un magasin fermé,
      * rien ne change ; ensuite, un autre choix ne compte plus.
      */
@@ -255,37 +249,15 @@ class ChangementDeRoleTest extends TestCase
     }
 
     /**
-     * Un compte d'entraînement de la démonstration ne devient jamais
-     * administrateur : l'action le refuse avec son message, la fiche ne le
-     * propose pas, et la base le refuse.
+     * Un administrateur n'est jamais rétrogradé dans un magasin fermé ou
+     * cédé : la fenêtre ne propose que les magasins ouverts, et l'action
+     * appelée directement les refuse.
      */
-    public function test_un_compte_d_entrainement_ne_devient_pas_administrateur(): void
-    {
-        $societe = $this->inscrireUneSociete();
-        $demonstration = app(OuvrirLaDemonstrationAction::class)->handle($societe->proprietaire, $societe);
-        $entrainement = app(TenantContext::class)->runAs($demonstration, fn (): User => app(CreerMembreAction::class)->handle($societe->proprietaire, $demonstration, ['name' => 'Essai'], RoleMagasin::Vendeur));
-
-        $this->assertThrows(fn () => app(ChangerLeRoleDeSocieteAction::class)->versAdministrateur($societe->proprietaire, $entrainement, null, [], []), LogicException::class, ChangerLeRoleDeSocieteAction::MESSAGE_ENTRAINEMENT);
-        $this->dansLEspaceDeLaSociete($societe, $societe->proprietaire);
-        Livewire::test(FicheDuMembre::class, ['record' => $entrainement->getRouteKey()])->assertActionHidden('changerLeRoleDeSociete');
-        DB::table('affectations')->where('user_id', $entrainement->id)->delete();
-        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('users')->where('id', $entrainement->id)->update(['role_societe' => RoleSociete::Administrateur->value])), QueryException::class);
-
-        $this->assertSame(RoleSociete::Membre, $entrainement->refresh()->role_societe);
-    }
-
-    /**
-     * Un administrateur n'est jamais rétrogradé dans la démonstration, ni
-     * dans un magasin fermé ou cédé : la fenêtre ne propose que les
-     * magasins réels ouverts, l'action appelée directement les refuse, et
-     * la base refuse de rattacher après coup un compte à la démonstration.
-     */
-    public function test_un_administrateur_n_est_jamais_retrograde_dans_la_demonstration_ni_dans_un_magasin_ferme_ou_cede(): void
+    public function test_un_administrateur_n_est_jamais_retrograde_dans_un_magasin_ferme_ou_cede(): void
     {
         $societe = $this->inscrireUneSociete();
         $reel = $this->creerLeMagasinDuSiege($societe);
         $proprietaire = $societe->proprietaire;
-        $demonstration = app(OuvrirLaDemonstrationAction::class)->handle($proprietaire, $societe->fresh());
         $this->saisirLeCodeDuCourrier($societe);
         $ferme = $this->ouvrirUnAutreMagasin($reel->fresh(), ['nom' => 'Boutique fermée']);
         $cede = $this->ouvrirUnAutreMagasin($reel->fresh(), ['nom' => 'Boutique cédée']);
@@ -299,15 +271,13 @@ class ChangementDeRoleTest extends TestCase
             ->mountAction('changerLeRoleDeSociete')
             ->setActionData(['role_societe' => RoleSociete::Membre->value])
             ->assertFormFieldExists('magasin_id', 'mountedActionForm', fn (Select $choix): bool => array_keys($choix->getOptions()) === [(int) $reel->id]);
-        foreach ([$demonstration, $ferme, $cede] as $magasin) {
+        foreach ([$ferme, $cede] as $magasin) {
             $this->assertThrows(fn () => $action->versMembre($proprietaire, $administrateur, RoleMagasin::Vendeur, null, $magasin->id), LogicException::class, ChangerLeRoleDeSocieteAction::MESSAGE_MAGASIN_A_CHOISIR);
         }
-        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('identifiants')->where('user_id', $administrateur->id)->update(['magasin_id' => $demonstration->id])), QueryException::class);
 
         $ancienVendeur = $this->membre($ferme->fresh(), RoleMagasin::Vendeur);
         $action->versAdministrateur($proprietaire, $ancienVendeur, null, [], []);
         $this->assertThrows(fn () => $action->versMembre($proprietaire, $ancienVendeur->refresh(), RoleMagasin::Vendeur), LogicException::class, ChangerLeRoleDeSocieteAction::MESSAGE_MAGASIN_FERME);
         $this->assertSame([RoleSociete::Administrateur, null], [$administrateur->refresh()->role_societe, $administrateur->magasinDeSonIdentifiant()]);
-        $this->assertInstanceOf(Magasin::class, $demonstration);
     }
 }

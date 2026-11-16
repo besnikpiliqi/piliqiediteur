@@ -25,14 +25,14 @@ use LogicException;
  * collaborateur les clients liés qu'il suivra (voir
  * PorteeDesDroits::peutConfierDesClients()) : la liste complète des liens
  * confiés après le geste, qui peut être vide. Sous les verrous de
- * JournalDesDroits::modifier() : les registres des magasins réels des
+ * JournalDesDroits::modifier() : les registres des magasins des
  * clients des liens demandés et de ceux qu'on retire (une prise de
  * registres de plusieurs sociétés, voir
  * RegistreFiscal::sousVerrouDesMagasinsDesClients()), puis ces liens, puis
  * la vérification du cabinet (partagée : un cabinet qui n'est plus actif ou
  * vérifié ne confie aucun client, voir PorteeDesDroits), puis les comptes ;
  * chaque lien demandé doit être actif et de ce cabinet. La
- * différence s'écrit (ajouts, retraits), au JET 130 de chaque magasin réel
+ * différence s'écrit (ajouts, retraits), au JET 130 de chaque magasin
  * touché et au journal d'audit du cabinet ; le collaborateur est prévenu,
  * client par client, et, pour un client qui ne lui est plus confié, ses
  * avis sur ce client s'effacent d'abord de sa cloche.
@@ -64,7 +64,7 @@ class ConfierDesClientsAction
             $actuels = ValeursLues::entiers(DB::table('clients_confies')->where('societe_id', $cabinet->getKey())->where('user_id', $collaborateur->getKey())->pluck('lien_id'));
             $concernes = array_values(array_unique([...$liens, ...$actuels]));
             $clients = LienCabinet::query()->duCabinet($cabinet)->whereKey($concernes)->pluck('societe_id')->unique()->values()->all();
-            $magasinsVises = Magasin::query()->with('societe')->whereIn('societe_id', $clients)->where('est_demonstration', false)->orderBy('id')->get();
+            $magasinsVises = Magasin::query()->with('societe')->whereIn('societe_id', $clients)->orderBy('id')->get();
 
             $this->journalDesDroits->modifier($auteur, ActionAuditee::ClientsConfiesModifies, [$collaborateur], $magasinsVises, function (User $auteurRelu, array $relus) use ($cabinet, $liens, &$changements): void {
                 [$collaborateurRelu] = $relus;
@@ -117,7 +117,7 @@ class ConfierDesClientsAction
             $collaborateur->notify(new AvisDuCabinet(
                 $cabinet,
                 "Client confié : {$client->getFilamentName()}",
-                "Le propriétaire du cabinet vous confie {$client->getFilamentName()} : vous ouvrez ses magasins réels selon les autorisations qu'il accorde au cabinet.",
+                "Le propriétaire du cabinet vous confie {$client->getFilamentName()} : vous ouvrez ses magasins selon les autorisations qu'il accorde au cabinet.",
                 ClientDuCabinetResource::getUrl('index', panel: 'cabinet', tenant: $cabinet),
                 'Voir vos clients',
                 clientId: $clientId,

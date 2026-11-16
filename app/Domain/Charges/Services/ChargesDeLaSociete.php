@@ -123,13 +123,13 @@ final class ChargesDeLaSociete
     }
 
     /**
-     * Les magasins réels de la société de l'accès qu'il voit, par nom.
+     * Les magasins de la société de l'accès qu'il voit, par nom.
      *
      * @return EloquentCollection<int, Magasin>
      */
     public function magasinsVus(AccesAuxCharges $acces): EloquentCollection
     {
-        return Magasin::query()->where('societe_id', $acces->societe->getKey())->where('est_demonstration', false)
+        return Magasin::query()->where('societe_id', $acces->societe->getKey())
             ->when($acces->magasins !== null, fn (Builder $requete): Builder => $requete->whereKey($acces->magasins ?? []))
             ->orderBy('nom')->get(['id', 'uuid', 'nom', 'code', 'societe_id']);
     }

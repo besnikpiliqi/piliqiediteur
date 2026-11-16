@@ -39,11 +39,10 @@ use LogicException;
  * d'audit de la société, en une entrée qui donne, pour chaque compte
  * touché, ses droits avant et après. Le propriétaire et un administrateur
  * de tous les magasins touchent tous les magasins de la société ; un
- * compte d'un cabinet d'expertise comptable, les magasins réels des
+ * compte d'un cabinet d'expertise comptable, les magasins des
  * clients de son cabinet qu'il voit (voir
  * AccesDesCabinets::magasinsDuCompte()) ; un expert-comptable de la
- * société, les magasins réels de sa société, jamais la démonstration ;
- * tout autre compte, ceux de ses affectations, avant comme après.
+ * société, les magasins de sa société ; tout autre compte, ceux de ses affectations, avant comme après.
  *
  * Une modification se fait dans une transaction qui verrouille d'abord les
  * registres de ces magasins, par identifiant croissant (voir
@@ -63,9 +62,7 @@ use LogicException;
  * touchés a changé entre sa lecture et ces verrous, tout reprend avec la
  * nouvelle liste. Fermé par défaut : un registre qui ne peut pas inscrire
  * refuse toute la modification. Les modifications sans auteur sont
- * celles du système ou de l'éditeur : le retrait des comptes
- * d'entraînement quand la démonstration se ferme pour de bon (voir
- * FermerLaDemonstrationAction), la reprise de la société à la saisie du
+ * celles du système ou de l'éditeur : la reprise de la société à la saisie du
  * code par une autre personne, la fin d'un lien ou d'une déclaration par
  * le système ou par une procédure de l'éditeur, et le rattachement d'une
  * déclaration par un job (voir RattacherUneDeclarationAction).
@@ -207,7 +204,7 @@ class JournalDesDroits
      * Exécute un changement de l'accès des comptes d'un cabinet chez ce
      * client (un lien activé, remplacé, terminé, ses autorisations
      * réglées), dans le contexte du client, sous les verrous, dans l'ordre :
-     * les registres des magasins réels du client (voir
+     * les registres des magasins du client (voir
      * RegistreFiscal::sousVerrouDesMagasins()), la ligne du client (« for
      * no key update », comme la clôture d'une inscription qui la tient déjà
      * quand elle met fin au lien : ce verrou sérialise les gestes sur les
@@ -221,7 +218,7 @@ class JournalDesDroits
      * propre société (voir exigerDansSaSociete()), le client verrouillé et
      * les liens relus, dans l'ordre donné ; elle écrit au nom de l'auteur
      * relu. Ensuite, les droits de chaque compte qui avait ou a désormais
-     * accès s'inscrivent au JET 130 de chaque magasin réel du client où ils
+     * accès s'inscrivent au JET 130 de chaque magasin du client où ils
      * ont changé, puis les entrées d'audit au journal du client et au
      * journal de chaque cabinet de ces liens : $entrees donne, pour chaque
      * journal, ses entrées (l'action, ses autres valeurs, et le cabinet
@@ -252,7 +249,7 @@ class JournalDesDroits
     {
         return app(TenantContext::class)->runAsSociete($client, function () use ($auteur, $client, $liens, $modification, $entrees, $cabinetsQuiEntrent, $editeur, $visee): mixed {
             for ($essai = 1; $essai <= self::ESSAIS_SI_LES_MAGASINS_CHANGENT; $essai++) {
-                $magasins = $client->magasinsReels()->orderBy('id')->get();
+                $magasins = $client->magasins()->orderBy('id')->get();
 
                 // Le résultat de la modification, dans un tableau d'un élément,
                 // ou null quand la liste des magasins a changé entre sa
@@ -260,7 +257,7 @@ class JournalDesDroits
                 $tenu = $this->registre->sousVerrouDesMagasins($magasins, function () use ($auteur, $client, $liens, $modification, $entrees, $cabinetsQuiEntrent, $editeur, $visee, $magasins) {
                     $clientVerrouille = Societe::query()->whereKey($client->getKey())->lock('for no key update')->firstOrFail();
 
-                    if (ValeursLues::entiers($clientVerrouille->magasinsReels()->orderBy('id')->pluck('id')) !== ValeursLues::entiers($magasins->modelKeys())) {
+                    if (ValeursLues::entiers($clientVerrouille->magasins()->orderBy('id')->pluck('id')) !== ValeursLues::entiers($magasins->modelKeys())) {
                         return null;
                     }
 
@@ -333,11 +330,10 @@ class JournalDesDroits
     /**
      * Inscrit, au JET 130 de ce nouveau magasin, les droits de chaque
      * personne qui y en a sans affectation (le propriétaire de la société,
-     * ses administrateurs de tous les magasins, et, pour un magasin réel,
-     * les comptes du cabinet lié qui ont accès à la société), avant nul :
-     * le magasin doit être le magasin actif, dans la transaction de
-     * l'appelant (voir MiseEnActiviteDesMagasins et
-     * OuvrirLaDemonstrationAction).
+     * ses administrateurs de tous les magasins, et les comptes du cabinet
+     * lié qui ont accès à la société), avant nul : le magasin doit être le
+     * magasin actif, dans la transaction de l'appelant (voir
+     * MiseEnActiviteDesMagasins).
      *
      * @throws ModuleFiscalNonConfigureException
      * @throws HorlogeRegressiveException
@@ -352,39 +348,11 @@ class JournalDesDroits
     }
 
     /**
-     * Exécute ce changement du statut de ce magasin de démonstration (sa
-     * fermeture ou sa réouverture, voir FermerLaDemonstrationAction et
-     * OuvrirLaDemonstrationAction), qui le fait sur cette instance, puis
-     * inscrit à son JET 130 ce qu'il a changé aux droits de chaque personne
-     * qui y en a sans affectation, relus en base avant et après : le
-     * propriétaire n'y a les autorisations de la vente que tant qu'il est
-     * ouvert (voir User::autorisationsEnregistreesDans()). Le magasin doit
-     * être le magasin actif, sous le verrou de son registre, dans la
-     * transaction de l'appelant.
-     *
-     * @param  Closure(): void  $changement
-     *
-     * @throws ModuleFiscalNonConfigureException
-     * @throws HorlogeRegressiveException
-     */
-    public function autourDuChangementDeStatut(Magasin $demonstration, Closure $changement): void
-    {
-        $comptes = $this->comptesSansAffectation($demonstration);
-        $avant = $comptes->mapWithKeys(fn (User $compte): array => [CleDuModele::de($compte) => $compte->droitsDans($demonstration)])->all();
-
-        $changement();
-
-        foreach ($comptes as $compte) {
-            $this->inscrireLeJet130(new Collection([$demonstration]), $compte, [CleDuModele::de($demonstration) => $avant[CleDuModele::de($compte)]], [CleDuModele::de($demonstration) => $compte->droitsDans($demonstration)]);
-        }
-    }
-
-    /**
      * Les personnes qui ont des droits dans ce magasin sans y être
      * affectées, par identifiant : le propriétaire de la société, ses
-     * administrateurs de tous les magasins, hors comptes retirés, et, pour
-     * un magasin réel, les comptes du cabinet lié qui ont accès à la
-     * société, ou ceux de son expert-comptable déclaré.
+     * administrateurs de tous les magasins, hors comptes retirés, et les
+     * comptes du cabinet lié qui ont accès à la société, ou ceux de son
+     * expert-comptable déclaré.
      *
      * @return Collection<int, User>
      */
@@ -400,7 +368,7 @@ class JournalDesDroits
             ->orderBy('id')
             ->get();
 
-        $lien = $magasin->est_demonstration ? null : LienCabinet::query()->withoutGlobalScope(SocieteScope::class)->where('societe_id', $magasin->societe_id)->whereIn('etat', array_map(static fn (EtatDuLien $etat): string => $etat->value, EtatDuLien::enCours()))->first();
+        $lien = LienCabinet::query()->withoutGlobalScope(SocieteScope::class)->where('societe_id', $magasin->societe_id)->whereIn('etat', array_map(static fn (EtatDuLien $etat): string => $etat->value, EtatDuLien::enCours()))->first();
 
         return $lien === null ? $comptes : $comptes->concat($this->acces->comptesQuiOntAcces($lien));
     }
@@ -408,7 +376,7 @@ class JournalDesDroits
     /**
      * Les magasins que touchent les droits actuels de ces comptes, relus en
      * base, et ceux que visent leurs nouveaux droits, par identifiant : pour
-     * les comptes d'un cabinet d'expertise comptable, les magasins réels des
+     * les comptes d'un cabinet d'expertise comptable, les magasins des
      * clients qui leur sont ouverts, et ceux des clients qu'on leur confie.
      *
      * @param  list<int>  $comptes
@@ -422,7 +390,7 @@ class JournalDesDroits
         if ($societe->estUnCabinet()) {
             $touches = $societe->membres()->whereKey($comptes)->orderBy('id')->get()
                 ->flatMap(fn (User $compte) => $this->acces->magasinsDuCompte($compte))
-                ->concat(Magasin::query()->with('societe')->whereKey($vises)->where('est_demonstration', false)->get());
+                ->concat(Magasin::query()->with('societe')->whereKey($vises)->get());
 
             return new Collection($touches->unique(fn (Magasin $magasin): int => CleDuModele::de($magasin))->sortBy(fn (Magasin $magasin): int => CleDuModele::de($magasin))->values()->all());
         }

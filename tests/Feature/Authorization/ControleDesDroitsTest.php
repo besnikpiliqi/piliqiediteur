@@ -544,7 +544,7 @@ class ControleDesDroitsTest extends TestCase
      * d'une sélection, même autorisé à gérer les magasins et à nommer les
      * responsables, ne gère ni ne nomme rien dans un magasin hors de sa
      * sélection, et n'y a aucune autorisation de magasin. Un collaborateur
-     * du cabinet lié, qui lit chaque magasin réel du client, n'a aucune
+     * du cabinet lié, qui lit chaque magasin du client, n'a aucune
      * autorisation de société chez lui et n'y gère ni n'y nomme rien.
      */
     public function test_une_autorisation_de_societe_ne_vaut_jamais_seule_pour_un_magasin_hors_de_la_portee(): void

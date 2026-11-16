@@ -15,8 +15,6 @@ use App\Domain\Facturation\Enums\CategorieEReporting;
  *   livraison vers un DOM) ;
  * - les encaissements des prestations de services, par date et par taux,
  *   la part des services d'un règlement partiel répartie au prorata.
- *
- * Le magasin de démonstration n'a jamais rien à déclarer.
  */
 final readonly class ApercuEReporting
 {
@@ -27,7 +25,6 @@ final readonly class ApercuEReporting
      */
     public function __construct(
         public string $journee,
-        public bool $demonstration,
         public array $transactions,
         public array $encaissementsDeServices,
     ) {}

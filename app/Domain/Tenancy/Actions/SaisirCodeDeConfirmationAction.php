@@ -89,8 +89,7 @@ use Throwable;
  * société est validée. Un magasin créé entre la lecture de leur liste et
  * ces verrous fait tout reprendre ; un échec de la validation (un SIRET
  * réservé entre-temps ailleurs) laisse le code valable et prévient
- * l'éditeur. Ensuite, la démonstration se ferme, le propriétaire est
- * prévenu (voir ValiderLaSocieteAction::apresLaValidation()) et le lien de
+ * l'éditeur. Ensuite, le propriétaire est prévenu (voir ValiderLaSocieteAction::apresLaValidation()) et le lien de
  * l'adresse choisie par une autre personne part (voir
  * envoyerLeLienDeLAdresseChoisie()) : un envoi qui échoue ne défait rien
  * et n'empêche pas la page de connecter la personne et de lui montrer son

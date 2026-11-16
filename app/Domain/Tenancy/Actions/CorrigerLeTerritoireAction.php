@@ -42,8 +42,6 @@ use LogicException;
  */
 class CorrigerLeTerritoireAction
 {
-    public const MESSAGE_DEMONSTRATION = 'Le magasin de démonstration prend le territoire du siège de la société : il ne se corrige pas.';
-
     public const MESSAGE_ETABLISSEMENT_NON_CONFIRME = 'Ce magasin n\'a pas d\'établissement confirmé par le répertoire Sirene : son territoire se fixe à la reprise du contrôle, pas par cette procédure.';
 
     public const MESSAGE_REPERTOIRE_NE_CONFIRME_PAS = 'Le répertoire Sirene de l\'INSEE ne confirme pas l\'établissement du magasin aujourd\'hui : rien n\'est corrigé.';
@@ -68,10 +66,6 @@ class CorrigerLeTerritoireAction
      */
     public function handle(Magasin $magasin, InterventionDeLEditeur $editeur): Territoire
     {
-        if ($magasin->est_demonstration) {
-            throw new LogicException(self::MESSAGE_DEMONSTRATION);
-        }
-
         $societe = $magasin->societe;
 
         return app(TenantContext::class)->runAsSociete($societe, function () use ($magasin, $societe, $editeur): Territoire {

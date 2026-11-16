@@ -64,8 +64,7 @@ use LogicException;
  * encaissements qu'elle compte ; l'en-tête signe son auteur et son
  * instant. Sans cet événement, la base refuse le ticket Z à la validation
  * de la transaction (voir GardesDesClotures). Manuelle, de minuit,
- * rattrapée, à zéro ou dans le magasin de démonstration, chaque clôture
- * en inscrit une, et une clôture refusée aucune.
+ * rattrapée ou à zéro, chaque clôture en inscrit une, et une clôture refusée aucune.
  *
  * La clôture précédente est la dernière clôture signée au registre (voir
  * RegistreFiscal::derniereClotureSignee()), jamais la dernière ligne de la

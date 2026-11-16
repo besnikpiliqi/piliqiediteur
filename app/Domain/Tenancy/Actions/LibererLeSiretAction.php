@@ -50,8 +50,6 @@ class LibererLeSiretAction
 {
     public const MOTIF_TERRITOIRE_MAL_LU = 'Territoire mal lu au répertoire Sirene';
 
-    public const MESSAGE_DEMONSTRATION = 'Le magasin de démonstration n\'a pas de SIRET.';
-
     public const MESSAGE_DEJA_LIBERE = 'Le SIRET de ce magasin est déjà libéré.';
 
     public const MESSAGE_PAS_FERME_POUR_CESSATION = 'Ce magasin n\'est pas fermé pour cessation : la société le ferme d\'abord pour cessation, puis l\'éditeur libère son SIRET pour un nouveau magasin.';
@@ -135,7 +133,7 @@ class LibererLeSiretAction
 
     /**
      * Le magasin, tel qu'il est lu, peut-il voir son SIRET libéré ? Un
-     * magasin réel dont le SIRET n'est pas déjà libéré, dont
+     * magasin dont le SIRET n'est pas déjà libéré, dont
      * l'établissement a été confirmé, qui a numéroté un document et que la
      * société a fermé pour cessation. Le refus dit la suite qui convient :
      * sans document numéroté, l'éditeur corrige le territoire, même d'un
@@ -147,7 +145,6 @@ class LibererLeSiretAction
     private static function verifierQuIlSeLibere(Magasin $magasin): void
     {
         $refus = match (true) {
-            $magasin->est_demonstration => self::MESSAGE_DEMONSTRATION,
             $magasin->aLibereSonSiret() => self::MESSAGE_DEJA_LIBERE,
             $magasin->etablissement_verifie_le === null || $magasin->territoire === null => self::MESSAGE_ETABLISSEMENT_NON_CONFIRME,
             ! $magasin->aNumeroteUnDocument() => self::MESSAGE_AUCUN_DOCUMENT,

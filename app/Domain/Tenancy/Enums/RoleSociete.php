@@ -10,9 +10,7 @@ use Filament\Support\Contracts\HasLabel;
  *   users_un_proprietaire_par_societe), qui supervise et contrôle : tous
  *   les droits dans la société et dans chacun de ses magasins, sans case
  *   ni affectation, sauf celui de vendre, qu'il n'a dans aucun magasin
- *   réel, seulement dans le magasin de démonstration tant qu'il est
- *   ouvert (voir ControleDesDroits, PermissionRegistry::duProprietaire()
- *   et PermissionRegistry::duProprietaireEnDemonstration()) ;
+ *   (voir ControleDesDroits et PermissionRegistry::duProprietaire()) ;
  * - un administrateur, créé ou nommé par le propriétaire seul, avec sa
  *   portée (tous les magasins, présents et futurs, ou une sélection : ses
  *   affectations sans rôle) et les autorisations que le propriétaire coche
@@ -28,7 +26,7 @@ use Filament\Support\Contracts\HasLabel;
  *   propriétaire déclare par son SIREN quand ce cabinet n'a pas d'espace
  *   sur PILIQI (voir DeclarerSonExpertComptableAction) : ni administrateur
  *   ni membre, sans affectation ni case ni autorisation de société, il
- *   ouvre les magasins réels de sa société que la déclaration lui ouvre,
+ *   ouvre les magasins de sa société que la déclaration lui ouvre,
  *   avec les autorisations qu'elle porte, comme un compte d'un cabinet
  *   lié ; il ne vend jamais, n'a jamais son identifiant pour mot de passe,
  *   ne change jamais de rôle, et son compte se retire de lui-même quand le

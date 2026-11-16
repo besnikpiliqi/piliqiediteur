@@ -17,7 +17,6 @@ use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\LienDuDevis;
 use App\Domain\Facturation\Models\ReponseDuDevis;
-use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
@@ -39,8 +38,7 @@ use Tests\Browser\TestCaseDuNavigateur;
  * ; le propriétaire, l'observateur et un vendeur sans la création de
  * facture voient le bouton désactivé sur la fiche, avec son explication,
  * et lisent cette explication dans la fenêtre du bouton grisé de la
- * liste ; le propriétaire transforme dans le magasin de démonstration ; le
- * propriétaire, l'administrateur, le responsable et le vendeur retirent
+ * liste ; le propriétaire, l'administrateur, le responsable et le vendeur retirent
  * le lien ; la ligne d'un devis montre le stock du produit, et
  * l'acceptation par la liste nomme le produit qui manque ; le PDF de la
  * facture transformée dit d'après quel devis elle est établie ; le client
@@ -228,24 +226,6 @@ test('le propriétaire, l’observateur et un vendeur sans la création de factu
     app(TenantContext::class)->set($equipe->magasin);
     expect(Facture::query()->where('devis_id', $devis->id)->exists())->toBeFalse()
         ->and($devis->fresh()->statut)->toBe(StatutDevis::Accepte);
-});
-
-test('le propriétaire transforme un devis accepté dans le magasin de démonstration', function () {
-    $societe = $this->inscrireUneSociete();
-    $proprietaire = $societe->proprietaire()->sole();
-    $demonstration = app(OuvrirLaDemonstrationAction::class)->handle($proprietaire, $societe);
-    $devis = devisAccepteDuMagasin($demonstration, $proprietaire);
-    $onglet = $this->seConnecter($proprietaire);
-
-    $onglet->aller('/app/'.$demonstration->uuid.'/devis/'.$devis->getRouteKey())
-        ->nePasVoir(CreerFactureDepuisDevisAction::EXPLICATION_SANS_DROIT)
-        ->cliquerSur('Transformer en facture')
-        ->soumettre('Transformer en facture')
-        ->attendreLaPage('^/app/'.$demonstration->uuid.'/factures/[^/]+$')
-        ->voir("Établie d'après le devis n° {$devis->numero}");
-
-    app(TenantContext::class)->set($demonstration);
-    expect(Facture::query()->where('devis_id', $devis->id)->sole()->cree_par)->toBe($proprietaire->id);
 });
 
 test('le responsable lit le stock disponible sous la quantité d’une ligne de devis, et l’avertissement quand elle le dépasse', function () {

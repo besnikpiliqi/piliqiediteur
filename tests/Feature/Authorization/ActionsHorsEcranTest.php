@@ -61,7 +61,6 @@ use App\Domain\Tenancy\Actions\ModifierEtablissementAction;
 use App\Domain\Tenancy\Actions\ModifierIdentiteSocieteAction;
 use App\Domain\Tenancy\Actions\ModifierMembreAction;
 use App\Domain\Tenancy\Actions\ModifierParametresFiscauxSocieteAction;
-use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
 use App\Domain\Tenancy\Actions\RedonnerLAccesAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\TypeDActivite;
@@ -110,7 +109,6 @@ class ActionsHorsEcranTest extends TestCase
         CreerEtablissementAction::MESSAGE_SANS_AUTORISATION,
         ModifierEtablissementAction::MESSAGE_SANS_AUTORISATION,
         ModifierIdentiteSocieteAction::MESSAGE_SANS_AUTORISATION,
-        OuvrirLaDemonstrationAction::MESSAGE_SANS_AUTORISATION,
         EnvoyerCodeDeConfirmationAction::MESSAGE_SANS_AUTORISATION,
         DeposerUnePieceAction::MESSAGE_SANS_AUTORISATION,
         DemanderLaTransmissionDeLaProprieteAction::MESSAGE_PROPRIETAIRE_SEUL,
@@ -171,7 +169,7 @@ class ActionsHorsEcranTest extends TestCase
             'créer un magasin', 'modifier un magasin', 'modifier l\'identité de la société', 'modifier les réglages fiscaux',
         ];
         $verification = [
-            'ouvrir la démonstration', 'demander un nouveau courrier', 'déposer une pièce',
+            'demander un nouveau courrier', 'déposer une pièce',
         ];
 
         return [
@@ -372,7 +370,6 @@ class ActionsHorsEcranTest extends TestCase
             'modifier un magasin' => fn (User $auteur) => app(ModifierEtablissementAction::class)->handle($auteur, $magasin, ['nom' => 'Nouveau nom']),
             'modifier l\'identité de la société' => fn (User $auteur) => app(ModifierIdentiteSocieteAction::class)->handle($auteur, $societe, ['capital_social' => '5000']),
             'modifier les réglages fiscaux' => fn (User $auteur) => app(ModifierParametresFiscauxSocieteAction::class)->handle($auteur, $societe, ['mois_fin_exercice' => 6]),
-            'ouvrir la démonstration' => fn (User $auteur) => app(OuvrirLaDemonstrationAction::class)->handle($auteur, $societe),
             'demander un nouveau courrier' => fn (User $auteur) => app(EnvoyerCodeDeConfirmationAction::class)->nouvelEnvoi($auteur, $societe),
             'déposer une pièce' => fn (User $auteur) => app(DeposerUnePieceAction::class)->handle($auteur, $societe, TypePiece::Kbis, new PieceDeposee('kbis.pdf', FichiersDeTest::pdf('Extrait Kbis'))),
         };

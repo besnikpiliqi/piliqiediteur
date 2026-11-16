@@ -36,7 +36,7 @@ use LogicException;
  * Le geste d'un compte autorisé à vendre dans ce magasin, qui crée et émet
  * la facture et fait l'avoir : un responsable, un vendeur, ou un
  * administrateur ou un observateur à qui la vente est cochée ; jamais le
- * propriétaire hors du magasin de démonstration, ni un compte d'un cabinet
+ * propriétaire, ni un compte d'un cabinet
  * lié ou un expert-comptable de la société, qui n'ont pas ces
  * autorisations (voir PermissionRegistry::deVente()).
  *

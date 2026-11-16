@@ -13,7 +13,7 @@ use Filament\Pages\Page;
  * « Charges de la société », dans le panneau des magasins, pour
  * l'expert-comptable que la société a déclaré (décision de l'éditeur du
  * 14/11/2026, lot CHARGES), à côté de son « Tableau de bord de la
- * société » : les charges de « Toute la société » et des magasins réels de
+ * société » : les charges de « Toute la société » et des magasins de
  * sa déclaration, qu'il voit, ajoute, valide, corrige et renvoie, quand la
  * déclaration lui accorde « Charges : voir, ajouter, saisir et valider »
  * (voir DroitsSurLesCharges et PageDesCharges).

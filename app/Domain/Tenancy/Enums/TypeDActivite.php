@@ -22,8 +22,8 @@ use Filament\Support\Contracts\HasLabel;
  * - Services (« Services, sans vente d'articles ») : services seulement,
  *   avec la caisse de comptoir, sans articles (voir aDesArticles()) ; les
  *   métiers du bâtiment s'y inscrivent, sans règle propre ;
- * - Cabinet (« Cabinet d'expertise comptable ») : sans magasin ni
- *   démonstration (voir aDesMagasins()), son code d'activité 69.20Z
+ * - Cabinet (« Cabinet d'expertise comptable ») : sans magasin (voir
+ *   aDesMagasins()), son code d'activité 69.20Z
  *   contrôlé au répertoire Sirene avant tout courrier (voir
  *   ControleSirene::exerceLesActivitesComptables()).
  * Ce qui peut commencer ou s'arrêter sans changer les menus (franchise en
@@ -98,8 +98,7 @@ enum TypeDActivite: string implements HasLabel
     }
 
     /**
-     * Une société de ce type a-t-elle des magasins, démonstration
-     * comprise ? Jamais un cabinet d'expertise comptable : la base refuse
+     * Une société de ce type a-t-elle des magasins ? Jamais un cabinet d'expertise comptable : la base refuse
      * elle-même un magasin dans un cabinet (voir GardesDesTypesDActivite).
      */
     public function aDesMagasins(): bool

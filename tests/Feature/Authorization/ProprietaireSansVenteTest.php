@@ -67,15 +67,14 @@ use Tests\TestCase;
 
 /**
  * Le propriétaire supervise et contrôle : il a tous les droits dans sa
- * société et dans chacun de ses magasins réels, sauf celui de vendre (voir
+ * société et dans chacun de ses magasins, sauf celui de vendre (voir
  * PermissionRegistry::deVente() et duProprietaire()). Il n'y crée ni n'y
  * émet aucun ticket ni aucune facture, n'y enregistre aucun encaissement,
  * n'y utilise aucun bon d'avoir, n'y ouvre pas la caisse et n'y a pas de
  * caisse personnelle, ni par l'écran, ni par Livewire, ni par une action
  * appelée directement, ni par une demande fabriquée ; la base y refuse une
- * vente ou un encaissement à son nom (voir GardesDeLaVente). Seul le
- * magasin de démonstration de sa société fait exception (voir
- * ProprietaireEnDemonstrationTest). Il garde la consultation, la clôture du
+ * vente ou un encaissement à son nom (voir GardesDeLaVente), sans aucune
+ * exception. Il garde la consultation, la clôture du
  * jour, la fermeture de la caisse d'un vendeur, la contre-passation,
  * l'envoi, les avoirs et les devis (réponse (a) à Q-V1), et note les
  * preuves d'exonération et les bordereaux de détaxe (réponse (b) à Q-V2).
@@ -84,7 +83,7 @@ class ProprietaireSansVenteTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_le_proprietaire_n_a_aucune_autorisation_de_vente_dans_aucun_de_ses_magasins_reels(): void
+    public function test_le_proprietaire_n_a_aucune_autorisation_de_vente_dans_aucun_de_ses_magasins(): void
     {
         $lyon = $this->ouvrirUneSociete(['nom' => 'Lyon']);
         $villeurbanne = $this->ouvrirUnAutreMagasin($lyon, ['nom' => 'Villeurbanne']);

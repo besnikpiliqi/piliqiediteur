@@ -1,6 +1,5 @@
 {
     "journee": "2026-10-09",
-    "demonstration": false,
     "transactions": [
         {
             "categorie": "TLB1",

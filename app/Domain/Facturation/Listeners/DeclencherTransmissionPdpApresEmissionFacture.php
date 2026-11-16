@@ -14,8 +14,7 @@ use App\Domain\Tenancy\Models\MandatPdp;
  * Trois conditions, aucune n'est une erreur si elle manque :
  *  - client professionnel (un particulier relève de l'e-reporting agrégé
  *    via la clôture de caisse, pas de l'e-invoicing facture par facture) ;
- *  - un magasin qui transmet (voir Magasin::peutEcrireAuxClients()) :
- *    jamais le magasin de démonstration ;
+ *  - un magasin qui peut vendre (voir Magasin::peutVendre()) ;
  *  - mandat PDP actif pour ce magasin (sans mandat, on ne peut
  *    légalement pas transmettre en son nom).
  */
@@ -25,7 +24,7 @@ class DeclencherTransmissionPdpApresEmissionFacture
     {
         $facture = $event->facture;
 
-        if (! $facture->relevantDeLeInvoicing() || ! $facture->magasin->peutEcrireAuxClients()) {
+        if (! $facture->relevantDeLeInvoicing() || ! $facture->magasin->peutVendre()) {
             return;
         }
 

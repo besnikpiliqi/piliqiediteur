@@ -431,7 +431,7 @@ class BordereauDetaxeTest extends TestCase
      * Le bouton est réservé à qui est autorisé à noter les preuves
      * d'exonération et les bordereaux de détaxe (FacturePolicy::justifier(),
      * réponse (b) de l'éditeur à Q-V2), sur un ticket qui se détaxe : le
-     * propriétaire, qui ne vend pas dans un magasin réel, le voit ; pas sur
+     * propriétaire, qui ne vend pas, le voit ; pas sur
      * une facture à un professionnel, ni pour un vendeur aux cases de
      * l'ancien comptable de magasin, ni pour un compte du cabinet lié, qui
      * ne note jamais un bordereau.

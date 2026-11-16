@@ -84,10 +84,10 @@ class SemisCompletTest extends TestCase
      * @var array<string, int>
      */
     private const NOMBRES_DE_LIGNES = [
-        'actions_traitees' => 4015,
+        'actions_traitees' => 4010,
         'actions_traitees_de_la_societe' => 323,
-        'affectations' => 40,
-        'autorisations_affectations' => 533,
+        'affectations' => 38,
+        'autorisations_affectations' => 517,
         'autorisations_cabinet' => 43,
         'autorisations_societe' => 6,
         'avoir_allocations' => 121,
@@ -97,80 +97,80 @@ class SemisCompletTest extends TestCase
         'cabinets' => 4,
         'changements_fin_exercice' => 1,
         'charges' => 168,
-        'clients' => 48,
+        'clients' => 42,
         'clients_confies' => 2,
-        'clotures_caisse' => 2241,
-        'clotures_caisse_personnelles' => 2824,
-        'clotures_caisse_personnelles_factures' => 3375,
-        'clotures_caisse_personnelles_paiements' => 3286,
+        'clotures_caisse' => 2238,
+        'clotures_caisse_personnelles' => 2819,
+        'clotures_caisse_personnelles_factures' => 3370,
+        'clotures_caisse_personnelles_paiements' => 3281,
         'codes_confirmation' => 26,
         'comptes_expert_comptable' => 3,
         'consultations_vies' => 5,
         'demandes_inscription' => 1,
         'devis' => 225,
         'ecarts_sirene' => 2,
-        'enregistrements_fiscaux' => 9176,
+        'enregistrements_fiscaux' => 9149,
         'envois_documents' => 12,
         'evenements_transmission_pdp' => 61,
-        'factures' => 3376,
-        'factures_achat' => 90,
-        'fournisseurs' => 7,
-        'identifiants' => 68,
+        'factures' => 3371,
+        'factures_achat' => 88,
+        'fournisseurs' => 5,
+        'identifiants' => 65,
         'inventaires_ouverture' => 10,
         'invitations_cabinet' => 6,
-        'journal_audit' => 1492,
+        'journal_audit' => 1481,
         'liens_cabinet' => 15,
         'liens_des_devis' => 6,
-        'lignes_achat' => 238,
+        'lignes_achat' => 232,
         'lignes_avoir' => 146,
         'lignes_avoir_fournisseur' => 2,
         'lignes_de_charge' => 167,
         'lignes_devis' => 393,
-        'lignes_facture' => 5037,
+        'lignes_facture' => 5032,
         'lignes_inventaire_ouverture' => 21,
         'lignes_recu_paiement' => 160,
-        'magasins' => 20,
+        'magasins' => 18,
         'magasins_cabinet' => 1,
         'mandats_pdp' => 2,
-        'mouvements_stock' => 4039,
+        'mouvements_stock' => 4028,
         'notifications' => 189,
-        'paiement_allocations' => 3286,
-        'paiements' => 3286,
+        'paiement_allocations' => 3281,
+        'paiements' => 3281,
         'paniers_caisse' => 1,
-        'periodes_activite' => 21,
+        'periodes_activite' => 19,
         'pieces_de_charge' => 168,
         'pieces_fournisseur' => 1,
         'pieces_verification' => 4,
         'postes_reconnus' => 1,
         'preferences_tableau_de_bord' => 4,
         'preuves_operation' => 5,
-        'produits' => 32,
+        'produits' => 26,
         'recus_paiement' => 160,
         'referentiel_autorisations_magasin' => 51,
         'referentiel_autorisations_societe' => 5,
         'reponses_des_devis' => 3,
-        'sequences_documents' => 93,
-        'services' => 15,
+        'sequences_documents' => 85,
+        'services' => 9,
         'sirets_magasins' => 19,
         'societes' => 21,
         'taux_avoirs_fournisseur' => 2,
-        'taux_factures_achat' => 119,
+        'taux_factures_achat' => 117,
         'telechargements_documents' => 5,
-        'tetes_journal_audit' => 97,
-        'tetes_registre_fiscal' => 20,
+        'tetes_journal_audit' => 94,
+        'tetes_registre_fiscal' => 18,
         'traces_audit' => 8,
         'traces_evenements' => 2,
         'transmissions_pdp' => 57,
         'transmissions_propriete' => 2,
         'types_de_charge_de_la_societe' => 2,
-        'users' => 68,
+        'users' => 65,
         'verifications_societe' => 502,
         'visas_detaxe' => 1,
     ];
 
     public function test_le_semis_complet_remplit_toute_la_base_et_tous_les_cas(): void
     {
-        config(['piliqi.demo_mot_de_passe' => null]);
+        config(['piliqi.semis_mot_de_passe' => null]);
         $debut = self::aParis('2026-11-13 10:00:00');
         $this->travelTo($debut);
         $passages = $this->guetterLePlanificateur($debut);
@@ -179,7 +179,7 @@ class SemisCompletTest extends TestCase
         Storage::fake(PiecesDuFournisseur::DISQUE);
         $this->artisan('db:seed')
             ->expectsOutputToContain('Isolation vérifiée')
-            ->expectsOutputToContain('Données de démonstration semées.')
+            ->expectsOutputToContain('Semis terminé.')
             ->assertSuccessful();
 
         $this->assertTrue(now()->equalTo($debut), 'Le semis rend l\'horloge telle qu\'elle était avant lui.');
@@ -256,7 +256,7 @@ class SemisCompletTest extends TestCase
      */
     private function assertChaqueSocieteQuiVendAUnRegimeDeTva(): void
     {
-        $this->assertSame([], $this->lignes('select s.raison_sociale from societes s where s.regime_tva is null and exists (select 1 from factures f join magasins m on m.id = f.magasin_id where m.societe_id = s.id and m.est_demonstration = false and f.numero is not null)'));
+        $this->assertSame([], $this->lignes('select s.raison_sociale from societes s where s.regime_tva is null and exists (select 1 from factures f join magasins m on m.id = f.magasin_id where m.societe_id = s.id and f.numero is not null)'));
         $this->assertSame(
             [['franchise_en_base'], ['reel_normal_mensuel'], ['reel_normal_trimestriel'], ['reel_simplifie']],
             $this->lignes('select distinct regime_tva from societes where regime_tva is not null order by 1'),
@@ -268,20 +268,17 @@ class SemisCompletTest extends TestCase
      * Chaque rôle a au moins un compte qui a ses propres données : un
      * document à son nom, une charge déposée, une préférence de ses
      * graphiques, une notification ou un geste au journal d'audit. Un
-     * membre retiré n'a plus d'affectation, donc plus de rôle de magasin
-     * (un vendeur retiré, un compte d'entraînement d'une démonstration
-     * fermée) : il ne compte pour aucun rôle.
+     * membre retiré n'a plus d'affectation, donc plus de rôle de magasin :
+     * il ne compte pour aucun rôle.
      */
     private function assertChaqueRoleAUnCompteQuiASesDonnees(): void
     {
         $roles = $this->lignes(<<<'SQL'
             select distinct case
-                when u.role_societe = 'membre' and m.est_demonstration then 'entrainement'
                 when u.role_societe = 'membre' then 'membre ' || a.role
                 else u.role_societe end
             from users u
             left join affectations a on a.user_id = u.id
-            left join magasins m on m.id = a.magasin_id
             where (u.role_societe <> 'membre' or a.id is not null)
               and (exists (select 1 from factures f where f.cree_par = u.id)
                or exists (select 1 from charges c where c.deposee_par = u.id)
@@ -292,7 +289,7 @@ class SemisCompletTest extends TestCase
             SQL);
 
         $this->assertSame([
-            ['administrateur'], ['collaborateur'], ['entrainement'], ['expert_comptable'],
+            ['administrateur'], ['collaborateur'], ['expert_comptable'],
             ['membre observateur'], ['membre responsable'], ['membre vendeur'], ['proprietaire'],
         ], $roles);
     }
@@ -315,8 +312,7 @@ class SemisCompletTest extends TestCase
     /**
      * Les magasins que chaque compte actif ouvre : un membre n'ouvre que le
      * magasin de son compte (une même personne a un compte dans chacun de
-     * ses deux magasins), un compte d'entraînement n'ouvre que la
-     * démonstration, un collaborateur du cabinet n'ouvre que les magasins
+     * ses deux magasins), un collaborateur du cabinet n'ouvre que les magasins
      * des clients qui lui sont confiés, un administrateur ceux de sa
      * portée, et aucun compte n'ouvre un magasin d'une autre société hors
      * le cabinet chez ses clients liés.
@@ -340,7 +336,7 @@ class SemisCompletTest extends TestCase
             $this->lignes("select m.code, a.role from users u join affectations a on a.user_id = u.id join magasins m on m.id = a.magasin_id where u.name = 'Lucas Moreau' order by m.code"),
             'La même personne a un compte dans chacun de ses deux magasins, promu responsable à la République.',
         );
-        $this->assertSame([['EPICERIE']], $this->lignes("select m.code from clients_confies cc join users u on u.id = cc.user_id join liens_cabinet l on l.id = cc.lien_id join magasins m on m.societe_id = l.societe_id where u.name = 'Emma Rousseau' and m.est_demonstration = false"));
+        $this->assertSame([['EPICERIE']], $this->lignes("select m.code from clients_confies cc join users u on u.id = cc.user_id join liens_cabinet l on l.id = cc.lien_id join magasins m on m.societe_id = l.societe_id where u.name = 'Emma Rousseau'"));
         $this->assertSame(['HALLES', 'REPUB'], User::query()->where('name', 'Paul Lefèvre')->sole()->magasinsAccessibles()->pluck('code')->sort()->values()->all());
         $this->assertSame([['EPICERIE']], $this->lignes('select m.code from magasins_cabinet mc join magasins m on m.id = mc.magasin_id'), 'L\'Épicerie n\'ouvre au cabinet que son magasin choisi.');
     }
@@ -510,7 +506,7 @@ class SemisCompletTest extends TestCase
     }
 
     /**
-     * Un écouteur qui, à la première vente d'un magasin réel, fait passer
+     * Un écouteur qui, à la première vente d'un magasin, fait passer
      * le planificateur à l'heure réelle, comme php artisan schedule:work
      * qu'un autre processus garde ouvert : il ne doit rien lancer.
      *

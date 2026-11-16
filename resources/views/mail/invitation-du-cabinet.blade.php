@@ -6,7 +6,7 @@ Le cabinet {{ $cabinet }}@if ($villeDuCabinet !== null) ({{ $villeDuCabinet }})@
 
 En acceptant, vous choisissez votre mot de passe et le type d'activité de la société, qui sera définitif. La société sera validée sans courrier ni QR code, et ses données légales seront lues au registre national des entreprises. Vous en serez le propriétaire.
 
-Par défaut, le cabinet consultera vos magasins réels : {{ implode(', ', $autorisations) }}. Vous pourrez retirer ces autorisations ensuite, dans « Cabinet comptable ».
+Par défaut, le cabinet consultera vos magasins : {{ implode(', ', $autorisations) }}. Vous pourrez retirer ces autorisations ensuite, dans « Cabinet comptable ».
 
 <x-mail::button :url="$lien">
 Voir l'invitation

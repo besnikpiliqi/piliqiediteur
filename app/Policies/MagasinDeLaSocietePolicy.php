@@ -11,16 +11,14 @@ use App\Models\User;
  * propriétaire et ses administrateurs ne lisent que ceux de leur portée
  * (voir User::magasinsDeSaPortee()), jamais ceux d'une autre société. En
  * créer un, c'est la règle de SocietePolicy::creerUnMagasin() dans sa
- * société (voir create()). Les gestes sur un magasin réel de sa portée
+ * société (voir create()). Les gestes sur un magasin de sa portée
  * (le modifier, changer son SIRET, le fermer, le rouvrir) reviennent à qui
  * gère les magasins de la société (voir SocietePolicy::gererLesMagasins() :
  * le propriétaire, ou un administrateur autorisé, tant que la société
  * n'est pas en lecture seule) ; le céder, au propriétaire seul ; indiquer
  * l'établissement principal, à qui a tous les magasins dans sa portée.
  * Jamais un responsable, un vendeur, un observateur ni un compte d'un
- * cabinet, qui n'ont pas d'espace d'administration ; jamais le
- * magasin de démonstration, qui s'ouvre et se ferme à part (voir
- * OuvrirLaDemonstrationAction et FermerLaDemonstrationAction). Ce qu'un
+ * cabinet, qui n'ont pas d'espace d'administration. Ce qu'un
  * geste exige de l'état du magasin (actif, fermé, cédé...), son action le
  * vérifie sous ses verrous, avec son propre message. Nommer un
  * responsable dans un magasin passe par nommerUnResponsable().
@@ -71,13 +69,12 @@ class MagasinDeLaSocietePolicy
      * Modifier le magasin : son nom, son adresse, son code tant qu'il n'a
      * rien numéroté, son NIC avant la validation de la société (voir
      * ModifierEtablissementAction). La base de tous les gestes sur un
-     * magasin : un magasin réel de sa portée, pour qui gère les magasins
+     * magasin : un magasin de sa portée, pour qui gère les magasins
      * d'une société qui n'est pas en lecture seule.
      */
     public function update(User $user, Magasin $magasin): bool
     {
-        return ! $magasin->est_demonstration
-            && $this->societes->gererLesMagasins($user, $magasin->societe)
+        return $this->societes->gererLesMagasins($user, $magasin->societe)
             && $user->administreLeMagasin($magasin);
     }
 

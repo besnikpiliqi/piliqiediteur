@@ -26,7 +26,7 @@ use Illuminate\Database\Eloquent\Builder;
  *   votre comptable ».
  * Pour l'espace d'un cabinet, le nombre de charges à valider de chacun de
  * ses clients qui les lui accorde, en une requête, filtrée par client et
- * par les magasins réels qu'il ouvre au compte.
+ * par les magasins qu'il ouvre au compte.
  */
 final class ChargesAFaire
 {
@@ -102,7 +102,7 @@ final class ChargesAFaire
      * Le nombre de charges à valider, pièces sans chiffres comprises, de
      * chacun de ces clients du cabinet qui lui accorde « Charges : voir,
      * ajouter, saisir et valider » : celles
-     * de « Toute la société » et des magasins réels que le client ouvre au
+     * de « Toute la société » et des magasins que le client ouvre au
      * compte. Une lecture hors de la société courante, filtrée par client.
      *
      * @param  list<int>  $clients

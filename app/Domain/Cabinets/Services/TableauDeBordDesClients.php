@@ -21,9 +21,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * compte (voir AccesDesCabinets::liensOuverts() : aucun tant que le cabinet
  * n'est pas vérifié ; pour un collaborateur, ses seuls clients confiés).
  * De chaque client, son identité réduite (dénomination, SIREN, ville du
- * siège, mois de fin d'exercice, statut), le nombre de ses magasins réels
+ * siège, mois de fin d'exercice, statut), le nombre de ses magasins
  * et la date du lien ; et ses factures à encaisser (nombre, restant dû,
- * dont en retard, en centimes), sommées sur ses magasins réels dont le
+ * dont en retard, en centimes), sommées sur ses magasins dont le
  * compte suit les factures à encaisser (voir
  * User::suitToutesLesFacturesAEncaisserDe() : le client accorde au cabinet les
  * factures et celles de toute l'équipe), null quand il n'en suit aucun ;
@@ -52,7 +52,7 @@ final class TableauDeBordDesClients
             ->get(['id', 'uuid', 'siren', 'raison_sociale', 'siege_ville', 'mois_fin_exercice', 'statut', 'validee_le', 'close_le'])
             ->keyBy('id');
         $magasins = Magasin::query()->whereIn('societe_id', $clients->keys()->all())->whereKey($this->acces->idsDesMagasinsOuverts($compte))->orderBy('id')
-            ->get(['id', 'societe_id', 'statut', 'territoire', 'est_demonstration']);
+            ->get(['id', 'societe_id', 'statut', 'territoire']);
         $suivis = $magasins->filter(fn (Magasin $magasin): bool => $compte->suitToutesLesFacturesAEncaisserDe($magasin))->keyBy('id');
         $factures = $this->facturesAEncaisser(ValeursLues::entiers($suivis->keys()))
             ->each(fn (Facture $facture): Facture => $facture->setRelation('magasin', $suivis[$facture->magasin_id]));

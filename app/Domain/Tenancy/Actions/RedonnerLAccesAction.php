@@ -30,8 +30,8 @@ use SensitiveParameter;
  * (voir PorteeDesDroits::peutRedonnerLAcces()) : le propriétaire pour tout
  * compte ; un responsable de son magasin pour un vendeur ou un observateur ;
  * un administrateur autorisé à nommer les responsables pour un responsable
- * d'un magasin réel de sa portée ; un administrateur autorisé à redonner
- * l'accès pour un vendeur ou un observateur d'un magasin réel de sa portée.
+ * d'un magasin de sa portée ; un administrateur autorisé à redonner
+ * l'accès pour un vendeur ou un observateur d'un magasin de sa portée.
  * Personne ne redonne l'accès du propriétaire, qui passe par « Mot de passe
  * oublié ».
  * - La personne est là : elle tape elle-même deux fois son nouveau mot de

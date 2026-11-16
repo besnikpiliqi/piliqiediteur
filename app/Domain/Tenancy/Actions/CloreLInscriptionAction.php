@@ -45,7 +45,7 @@ use Throwable;
  * est libéré (voir l'index unique partiel societes_siren_unique) ; une
  * nouvelle inscription de ce SIREN peut alors se faire. Toutes les
  * clôtures suivent la même suite :
- * - sous le verrou des registres de ses magasins réels (voir
+ * - sous le verrou des registres de ses magasins (voir
  *   sousLesVerrous()), puis de la ligne de la société, pris « for no key
  *   update »
  *   (comme à la création d'un magasin) : il exclut la saisie du code, un
@@ -53,7 +53,7 @@ use Throwable;
  *   connexion, mais pas une insertion qui la référence, comme l'entrée du
  *   journal d'audit d'une transmission acceptée au même instant, qui tient
  *   déjà les comptes que la clôture attend ; puis sous celui des lignes de
- *   ses magasins réels, qui exclut tout geste en cours dans l'un d'eux,
+ *   ses magasins, qui exclut tout geste en cours dans l'un d'eux,
  *   et de ses comptes (voir cloreSousVerrou()) : le lien avec un cabinet
  *   d'expertise comptable et les demandes de lien en cours prennent fin,
  *   cabinet prévenu (voir
@@ -71,14 +71,11 @@ use Throwable;
  *   (voir annulerLesTransmissionsEnAttente()), et la propriété d'une
  *   inscription close ne se transmet plus (voir
  *   DemanderLaTransmissionDeLaProprieteAction::exigerLesConditions()) ;
- * - après la transaction (voir apresLaCloture()) : son magasin de
- *   démonstration se ferme pour de bon et ses comptes d'entraînement sont
- *   retirés, son propriétaire est prévenu dans l'espace de sa société et,
- *   par e-mail, à l'adresse qu'il vient de perdre, et l'administrateur à
- *   qui la propriété était proposée apprend que sa transmission est
- *   annulée ; un échec de l'une de ces suites n'empêche ni la clôture ni
- *   les autres (la démonstration ne vend plus, et la commande quotidienne
- *   la reprend).
+ * - après la transaction (voir apresLaCloture()) : son propriétaire est
+ *   prévenu dans l'espace de sa société et, par e-mail, à l'adresse qu'il
+ *   vient de perdre, et l'administrateur à qui la propriété était proposée
+ *   apprend que sa transmission est annulée ; un échec de l'une de ces
+ *   suites n'empêche ni la clôture ni les autres.
  */
 class CloreLInscriptionAction
 {
@@ -94,7 +91,6 @@ class CloreLInscriptionAction
         private readonly JournalAudit $journalAudit,
         private readonly PiecesDeVerification $pieces,
         private readonly AnnulationDesCodes $annulationDesCodes,
-        private readonly FermerLaDemonstrationAction $fermerLaDemonstration,
         private readonly JetonsDuLien $jetonsDuLien,
         private readonly RegistreFiscal $registre,
         private readonly MettreFinAuLienAction $finDesLiens,
@@ -159,7 +155,7 @@ class CloreLInscriptionAction
      * RegistreFiscal::sousVerrouDesMagasins()), puis sa ligne (« for no key
      * update »), comme la saisie du code : la fin du lien avec un cabinet
      * d'expertise comptable s'inscrit au JET 130 de chacun de ces magasins.
-     * Si la liste des magasins réels a changé entre sa lecture et ces
+     * Si la liste des magasins a changé entre sa lecture et ces
      * verrous, tout reprend.
      *
      * @template TResultat
@@ -173,12 +169,12 @@ class CloreLInscriptionAction
     {
         return app(TenantContext::class)->runAsSociete($societe, function () use ($societe, $cloture): mixed {
             for ($essai = 1; $essai <= self::ESSAIS_SI_LES_MAGASINS_CHANGENT; $essai++) {
-                $magasins = $societe->magasinsReels()->orderBy('id')->get();
+                $magasins = $societe->magasins()->orderBy('id')->get();
 
                 $resultat = $this->registre->sousVerrouDesMagasins($magasins, function () use ($societe, $magasins, $cloture): mixed {
                     $verrouillee = Societe::query()->whereKey($societe->getKey())->lock('for no key update')->firstOrFail();
 
-                    if (ValeursLues::entiers($verrouillee->magasinsReels()->orderBy('id')->pluck('id')) !== ValeursLues::entiers($magasins->modelKeys())) {
+                    if (ValeursLues::entiers($verrouillee->magasins()->orderBy('id')->pluck('id')) !== ValeursLues::entiers($magasins->modelKeys())) {
                         return self::MAGASINS_CHANGES;
                     }
 
@@ -197,9 +193,9 @@ class CloreLInscriptionAction
     /**
      * Clôt l'inscription, dans la transaction de l'appelant, sa ligne
      * verrouillée et elle-même la société active, qui attend son code.
-     * Les lignes de ses magasins réels se verrouillent d'abord, par
+     * Les lignes de ses magasins se verrouillent d'abord, par
      * identifiant croissant (« for no key update ») : un geste qui
-     * écrit dans un magasin réel avant la validation (une facture d'achat
+     * écrit dans un magasin avant la validation (une facture d'achat
      * validée, un inventaire d'ouverture, un brouillon, une fiche, ses
      * paramètres), qui relit la ligne de son magasin sous un verrou partagé
      * (« for no key update » pour ses paramètres, qui l'écrivent ; voir
@@ -217,21 +213,13 @@ class CloreLInscriptionAction
      * sienne dans la même chaîne, passe tout entière avant la clôture, qui
      * la voit à sa fin ; puis les lignes de ses transmissions en attente,
      * dans le même ordre que l'acceptation d'une transmission (les comptes,
-     * puis la demande). Le magasin de
-     * démonstration, qui se ferme après la clôture (voir apresLaCloture()),
-     * ne se verrouille pas ici : un retour (voir EmettreAvoirAction) et la
-     * clôture du jour (voir CloturerCaisseAction) y verrouillent la ligne
-     * de leur auteur avant de relire celle du magasin sous un verrou
-     * partagé, quand ils créent la série de numérotation de l'année (voir
-     * DocumentNumberingService::prefixe()) ; verrouiller ici ce magasin,
-     * après les magasins réels et avant les comptes, les interbloquerait
-     * avec la clôture de l'inscription.
+     * puis la demande).
      *
      * @return array{adresseRetiree: string|null, destinataires: list<int>} l'adresse de connexion retirée au propriétaire, et les comptes à qui une transmission annulée proposait la propriété
      */
     private function cloreSousVerrou(Societe $verrouillee, MotifCloture $motif, ?InterventionDeLEditeur $editeur = null): array
     {
-        $verrouillee->magasinsReels()->orderBy('id')->lock('for no key update')->get();
+        $verrouillee->magasins()->orderBy('id')->lock('for no key update')->get();
         $comptes = User::query()->where('societe_id', $verrouillee->getKey())->orderBy('id')->lock('for no key update')->get();
         $this->finDesLiens->pourUneSocieteQuiChangeDeMains($verrouillee, MotifDeFinDuLien::InscriptionClose);
         $verrouillee->forceFill(['close_le' => now(), 'motif_cloture' => $motif])->save();
@@ -328,10 +316,7 @@ class CloreLInscriptionAction
 
     /**
      * Après la transaction de la clôture, chaque suite à part, un échec
-     * signalé n'empêchant pas les autres : la démonstration se ferme pour
-     * de bon (ses comptes d'entraînement sont retirés, même si elle était
-     * déjà fermée pour inactivité, voir FermerLaDemonstrationAction) ; le
-     * propriétaire est prévenu dans l'espace de sa société, avec le motif
+     * signalé n'empêchant pas les autres : le propriétaire est prévenu dans l'espace de sa société, avec le motif
      * de la clôture (la justification de l'éditeur reste interne) et le
      * retrait de son adresse de connexion, et par e-mail à l'adresse
      * retirée, sans son identifiant (voir InscriptionCloseMail), sans
@@ -347,16 +332,6 @@ class CloreLInscriptionAction
     private function apresLaCloture(Societe $societe, MotifCloture $motif, ?string $adresseRetiree, array $destinataires): void
     {
         app(TenantContext::class)->runAsSociete($societe, function () use ($societe, $motif, $adresseRetiree, $destinataires): void {
-            $demonstration = $societe->demonstration()->first();
-
-            if ($demonstration !== null) {
-                try {
-                    $this->fermerLaDemonstration->handle($demonstration);
-                } catch (Throwable $erreur) {
-                    report($erreur);
-                }
-            }
-
             $societe->proprietaire?->notify(new AvisDeVerification(
                 $societe,
                 'L\'inscription de votre société est close',

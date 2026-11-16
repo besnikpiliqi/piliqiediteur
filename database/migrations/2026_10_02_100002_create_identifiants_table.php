@@ -17,9 +17,7 @@ use Illuminate\Support\Facades\Schema;
  * collaborateur, il ne s'écrit qu'une fois, de nul à une valeur, quand
  * un tel compte devient membre (voir ChangerLeRoleDeSocieteAction). Un
  * compte de membre ne change donc jamais de magasin, et une affectation de
- * membre n'existe que dans ce magasin (voir GardesDesDroits). Le magasin de
- * démonstration n'est accepté qu'à la création d'un compte de membre (un
- * compte d'entraînement), jamais ensuite.
+ * membre n'existe que dans ce magasin (voir GardesDesDroits).
  *
  * Le jeton de création est celui de l'écran qui a créé le compte, unique
  * dans la société : une demande de création répétée rend le compte déjà

@@ -16,7 +16,6 @@ use App\Domain\Facturation\Services\Emetteur;
 use App\Domain\Tenancy\Actions\ChangerSiretAction;
 use App\Domain\Tenancy\Actions\CloreLInscriptionAction;
 use App\Domain\Tenancy\Actions\ModifierEtablissementAction;
-use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\MotifCloture;
 use App\Domain\Tenancy\Enums\MotifFermeture;
@@ -105,27 +104,25 @@ class MagasinResourceTest extends TestCase
     }
 
     /**
-     * La liste des magasins ne montre que les magasins réels de la portée
-     * de la personne connectée, jamais la démonstration ni un magasin d'une
-     * autre société.
+     * La liste des magasins ne montre que les magasins de la portée de la
+     * personne connectée, jamais un magasin d'une autre société.
      */
-    public function test_la_liste_ne_montre_que_les_magasins_reels_de_la_portee(): void
+    public function test_la_liste_ne_montre_que_les_magasins_de_la_portee(): void
     {
-        $lyon = $this->ouvrirUneSociete(['nom' => 'Lyon', 'a_verifier' => true]);
+        $lyon = $this->ouvrirUneSociete(['nom' => 'Lyon']);
         $villeurbanne = $this->ouvrirUnAutreMagasin($lyon, ['nom' => 'Villeurbanne']);
-        $demonstration = app(OuvrirLaDemonstrationAction::class)->handle($this->proprietaireDe($lyon), $lyon->societe);
         $ailleurs = $this->ouvrirUneSociete(['nom' => 'Ailleurs']);
         $administrateur = $this->administrateur($lyon, [$lyon->id]);
 
         $this->dansLEspaceDeLaSociete($lyon->societe, $this->proprietaireDe($lyon));
         Livewire::test(ListMagasins::class)
             ->assertCanSeeTableRecords([$lyon, $villeurbanne])
-            ->assertCanNotSeeTableRecords([$demonstration, $ailleurs]);
+            ->assertCanNotSeeTableRecords([$ailleurs]);
 
         $this->dansLEspaceDeLaSociete($lyon->societe, $administrateur);
         Livewire::test(ListMagasins::class)
             ->assertCanSeeTableRecords([$lyon])
-            ->assertCanNotSeeTableRecords([$villeurbanne, $demonstration, $ailleurs]);
+            ->assertCanNotSeeTableRecords([$villeurbanne, $ailleurs]);
     }
 
     public function test_la_liste_des_etablissements_actifs_vient_du_repertoire_sirene(): void
@@ -489,7 +486,7 @@ class MagasinResourceTest extends TestCase
             ->fillForm(['etablissement' => $this->boutique($societe)])
             ->call('create')
             ->assertHasNoFormErrors();
-        $this->assertSame(2, $societe->magasinsReels()->count());
+        $this->assertSame(2, $societe->magasins()->count());
 
         $societe->forceFill(['statut' => StatutSociete::Suspendue])->save();
         $this->dansLEspaceDeLaSociete($societe->fresh(), $this->proprietaireDe($magasin));

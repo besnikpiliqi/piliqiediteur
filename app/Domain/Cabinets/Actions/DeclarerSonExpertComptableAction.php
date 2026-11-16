@@ -52,7 +52,7 @@ use Throwable;
  * déclare (voir LienCabinet), avec les autorisations qu'un client accorde
  * à un cabinet lié et son choix de magasins ; le compte de la personne est
  * un compte de la société, au rôle d'expert-comptable de la société, qui
- * ouvre avec ces autorisations les magasins réels qu'elle lui ouvre.
+ * ouvre avec ces autorisations les magasins qu'elle lui ouvre.
  *
  * Dans cet ordre, rien ne s'écrit au premier refus : le SIREN (9 chiffres
  * à clé valide, pas celui de la société) ; le lien en cours de la société

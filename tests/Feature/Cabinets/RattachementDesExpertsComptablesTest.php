@@ -113,7 +113,7 @@ class RattachementDesExpertsComptablesTest extends TestCase
         $this->assertSame('expert_comptable', $marc->fresh()->role_societe->value);
     }
 
-    public function test_le_rattachement_s_inscrit_au_jet_130_de_chaque_magasin_reel_et_aux_journaux_des_deux_societes(): void
+    public function test_le_rattachement_s_inscrit_au_jet_130_de_chaque_magasin_et_aux_journaux_des_deux_societes(): void
     {
         $lyon1 = $this->ouvrirUneSociete(['nom' => 'Lyon 1']);
         $lyon2 = $this->ouvrirUnAutreMagasin($lyon1, ['nom' => 'Lyon 2']);
@@ -392,7 +392,7 @@ class RattachementDesExpertsComptablesTest extends TestCase
         Livewire::test(RattachementDUnCabinet::class, ['lien' => $autreDemande->uuid])
             ->assertActionHasLabel('accepterParDefaut', 'Accepter avec les autorisations par défaut')
             ->mountAction('accepterParDefaut')
-            ->assertSeeText('Ce cabinet consultera tous vos magasins réels, présents et futurs : '.implode(', ', PermissionRegistry::libellesDe(PermissionRegistry::parDefautDuCabinet(TypeDActivite::Commerce))).'.');
+            ->assertSeeText('Ce cabinet consultera tous vos magasins, présents et futurs : '.implode(', ', PermissionRegistry::libellesDe(PermissionRegistry::parDefautDuCabinet(TypeDActivite::Commerce))).'.');
         Livewire::test(RattachementDUnCabinet::class, ['lien' => $autreDemande->uuid])
             ->mountAction('accepterEnAjustant')
             ->assertActionDataSet(CabinetComptable::etatParDefaut(TypeDActivite::Commerce));

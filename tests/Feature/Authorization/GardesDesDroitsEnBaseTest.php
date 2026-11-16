@@ -7,16 +7,13 @@ use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Cabinets\Support\GardesDesCabinets;
 use App\Domain\Tenancy\Actions\ChangerLeRoleDeSocieteAction;
 use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
-use App\Domain\Tenancy\Actions\CreerMembreAction;
 use App\Domain\Tenancy\Actions\ModifierMembreAction;
-use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\RoleSociete;
 use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Affectation;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\AffectationsDesMembres;
-use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\GardesDesDroits;
 use App\Models\User;
 use Closure;
@@ -398,27 +395,6 @@ class GardesDesDroitsEnBaseTest extends TestCase
         $this->refusee(fn () => DB::table('users')->where('id', $sansDroits->id)->update(['role_societe' => RoleSociete::Proprietaire->value, 'email' => null, 'mot_de_passe_est_l_identifiant' => true]), self::refus(GardesDesDroits::ROLES, 'un propriétaire n\'a jamais pour mot de passe son identifiant'));
 
         $this->assertSame([RoleSociete::Membre, RoleSociete::Administrateur, RoleSociete::Collaborateur], [$vendeur->refresh()->role_societe, $sansDroits->refresh()->role_societe, $collaborateur->refresh()->role_societe]);
-    }
-
-    /**
-     * Un compte d'entraînement, rattaché au magasin de démonstration, ne
-     * devient jamais propriétaire ni administrateur, même sans aucune
-     * affectation ni mot de passe égal à son identifiant.
-     */
-    public function test_la_base_refuse_qu_un_compte_d_entrainement_change_de_role_de_societe(): void
-    {
-        $societe = $this->inscrireUneSociete();
-        $this->creerLeMagasinDuSiege($societe);
-        $proprietaire = $societe->proprietaire()->sole();
-        $demonstration = app(OuvrirLaDemonstrationAction::class)->handle($proprietaire, $societe->fresh());
-        $entrainement = app(TenantContext::class)->runAs($demonstration, fn (): User => app(CreerMembreAction::class)->handle($proprietaire, $demonstration, ['name' => 'Essai'], RoleMagasin::Vendeur));
-        DB::table('affectations')->where('user_id', $entrainement->id)->delete();
-        $refus = self::refus(GardesDesDroits::ROLES, 'un compte d\'entraînement ne change jamais de rôle de société');
-
-        $this->refusee(fn () => DB::table('users')->where('id', $entrainement->id)->update(['role_societe' => RoleSociete::Proprietaire->value, 'email' => null, 'mot_de_passe_est_l_identifiant' => false]), $refus);
-        $this->refusee(fn () => DB::table('users')->where('id', $entrainement->id)->update(['role_societe' => RoleSociete::Administrateur->value]), $refus);
-
-        $this->assertSame(RoleSociete::Membre, $entrainement->refresh()->role_societe);
     }
 
     /**

@@ -13,7 +13,6 @@ use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\CaissesDeLaSociete;
 use App\Domain\Facturation\Services\PartDeReglement;
 use App\Domain\Facturation\Services\ReglementComptant;
-use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\StatutSociete;
 use App\Domain\Tenancy\Enums\TypeDActivite;
@@ -33,15 +32,15 @@ use Tests\TestCase;
  * La page « Les caisses » de l'espace d'administration de la société (voir
  * LesCaisses et CaissesDeLaSociete) : pour le propriétaire et chaque
  * administrateur, les caisses encore ouvertes et les relevés de caisse du
- * jour de chaque magasin réel de sa portée où il voit les relevés de toute
- * l'équipe ; jamais la démonstration, jamais une autre société, aucun nom
+ * jour de chaque magasin de sa portée où il voit les relevés de toute
+ * l'équipe ; jamais une autre société, aucun nom
  * de client, aucun document, aucun identifiant de compte.
  */
 class CaissesDeLaSocieteTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_le_proprietaire_voit_les_releves_et_les_caisses_ouvertes_de_chaque_magasin_reel(): void
+    public function test_le_proprietaire_voit_les_releves_et_les_caisses_ouvertes_de_chaque_magasin(): void
     {
         $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $lyon = $this->ouvrirUneSociete(['nom' => 'Lyon']);
@@ -137,25 +136,22 @@ class CaissesDeLaSocieteTest extends TestCase
     }
 
     /**
-     * Le code de la démonstration se cherche tel que la page l'écrirait,
-     * entre parenthèses après le nom du magasin : aucun identifiant de
-     * composant Livewire, fait de lettres et de chiffres, ne contient une
-     * parenthèse.
+     * Les caisses d'une autre société, ouvertes ou fermées, n'y figurent
+     * jamais : ni son magasin, ni son vendeur.
      */
-    public function test_la_demonstration_et_les_magasins_d_une_autre_societe_n_y_figurent_jamais(): void
+    public function test_les_magasins_d_une_autre_societe_n_y_figurent_jamais(): void
     {
-        $reel = $this->ouvrirUneSociete(['nom' => 'Lyon', 'a_verifier' => true]);
-        $demonstration = app(OuvrirLaDemonstrationAction::class)->handle($this->proprietaireDe($reel), $reel->societe);
-        app(TenantContext::class)->runAs($demonstration, fn () => self::vendreAuComptant(self::responsableDeTest($demonstration), Client::query()->where('est_comptoir', true)->sole(), [['produit_id' => Produit::query()->where('reference', 'DEMO-CARNET')->value('id'), 'quantite' => 1]], ModePaiement::Especes));
+        $lyon = $this->ouvrirUneSociete(['nom' => 'Lyon']);
+        $this->vendeurQuiVend($lyon, 'Paul', 12);
         $ailleurs = $this->ouvrirUneSociete(['nom' => 'Bordeaux']);
         $this->vendeurQuiVend($ailleurs, 'Inès', 12);
-        $proprietaire = $this->proprietaireDe($reel);
-        $this->dansLEspaceDeLaSociete($reel->societe, $proprietaire);
+        $proprietaire = $this->proprietaireDe($lyon);
+        $this->dansLEspaceDeLaSociete($lyon->societe, $proprietaire);
 
-        $this->assertSame([$reel->id], array_map(fn (array $magasin): int => $magasin['magasin']->id, app(CaissesDeLaSociete::class)->pour($proprietaire, Calendrier::deParis()->aujourdhui())));
+        $this->assertSame([$lyon->id], array_map(fn (array $magasin): int => $magasin['magasin']->id, app(CaissesDeLaSociete::class)->pour($proprietaire, Calendrier::deParis()->aujourdhui())));
         Livewire::test(LesCaisses::class)
-            ->assertSee('Lyon')
-            ->assertDontSee([$demonstration->nom, '('.$demonstration->code.')', 'Responsable de test', 'Bordeaux', 'Inès']);
+            ->assertSee(['Lyon', 'Caisses encore ouvertes : Paul.'])
+            ->assertDontSee(['Bordeaux', 'Inès']);
     }
 
     /**

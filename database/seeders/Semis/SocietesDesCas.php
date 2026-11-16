@@ -314,7 +314,7 @@ final class SocietesDesCas
 
     public function __construct(
         private readonly HorlogeDuSemis $horloge,
-        private readonly SemisDeDemonstration $semis,
+        private readonly SemisComplet $semis,
         private readonly MotsDePasseDuSemis $motsDePasse,
         private readonly ComptesSemes $liste,
     ) {}
@@ -551,7 +551,7 @@ final class SocietesDesCas
      */
     public function auJour(int $rang): void
     {
-        $avantLaFin = SemisDeDemonstration::JOURS - $rang;
+        $avantLaFin = SemisComplet::JOURS - $rang;
 
         if ($rang === 60) {
             $this->leSoir($rang, '20:00', fn () => $this->semis->horsDeToutContexte(fn () => app(MettreFinAuLienAction::class)->handle($this->semis->proprietaire('groupe'), $this->lien('groupe', EtatDuLien::Actif))));
@@ -592,7 +592,7 @@ final class SocietesDesCas
                 $this->semis->horsDeToutContexte(fn () => app(AccepterLaDemandeDeLienAction::class)->handle($this->semis->proprietaire('cabinet'), $this->demande('révoquée')));
             }),
             self::DECLARATION_A_LA_PLACE_DU_CABINET => $this->leSoir($rang, '21:30', fn () => $this->semis->horsDeToutContexte(fn () => app(DeclarerSonExpertComptableAction::class)->handle($this->semis->proprietaire('révoquée'), $this->semis->societe('révoquée'), [
-                'siren' => SemisDeDemonstration::SIREN_CABINET_DECLARE,
+                'siren' => SemisComplet::SIREN_CABINET_DECLARE,
                 'name' => 'Lucie Garnier',
                 'email' => 'lucie.garnier@petit-associes.exemple.test',
                 'email_confirmation' => 'lucie.garnier@petit-associes.exemple.test',
@@ -626,7 +626,7 @@ final class SocietesDesCas
             ])),
             self::PIECES_EXAMINEES => $this->leSoir($rang, '21:30', fn () => $this->semis->horsDeToutContexte(fn () => app(ExaminerLesPiecesAction::class)->handle(
                 $this->semis->societe('pièces')->refresh(),
-                new InterventionDeLEditeur(self::JUSTIFICATION.' L\'extrait Kbis et la pièce d\'identité concordent avec le registre : nouveau courrier envoyé.', 'Pièces déposées le '.$this->horloge->jour(SemisDeDemonstration::JOURS - self::PIECES_DEPOSEES), ['opérateur A', 'opérateur B']),
+                new InterventionDeLEditeur(self::JUSTIFICATION.' L\'extrait Kbis et la pièce d\'identité concordent avec le registre : nouveau courrier envoyé.', 'Pièces déposées le '.$this->horloge->jour(SemisComplet::JOURS - self::PIECES_DEPOSEES), ['opérateur A', 'opérateur B']),
             ))),
             self::NOUVELLES_PIECES => $this->leSoir($rang, '21:30', fn () => $this->deposerLesPieces([
                 [TypePiece::ExtraitRne, 'Extrait RNE Fromagerie Morin.pdf'],

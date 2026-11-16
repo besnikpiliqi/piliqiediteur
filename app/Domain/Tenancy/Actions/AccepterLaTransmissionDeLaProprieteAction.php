@@ -71,7 +71,7 @@ use SensitiveParameter;
  * (voir User::signeLesAttestationsDansLApplication()). Le changement
  * s'inscrit au JET 130 de chaque magasin et au journal d'audit (ProprieteTransferee,
  * voir JournalDesDroits), et chacun des deux en est prévenu. Le nouveau
- * propriétaire ne vend plus dans les magasins réels : une caisse qu'il y avait
+ * propriétaire ne vend plus dans les magasins : une caisse qu'il y avait
  * ouverte comme administrateur se ferme comme celle de tout vendeur, par
  * lui-même (voir ClotureCaissePersonnellePolicy::fermer()), pour lui par
  * qui peut clôturer la journée, ou d'office par la clôture du jour ; tant
@@ -85,7 +85,7 @@ use SensitiveParameter;
  * mêmes conditions ; l'ancien propriétaire devient collaborateur, sans
  * affectation ni autorisation de société, avec tous les clients liés du
  * cabinet confiés (voir confierTousLesClients()), ses droits dans leurs
- * magasins réels inscrits au JET 130 de chacun.
+ * magasins inscrits au JET 130 de chacun.
  */
 class AccepterLaTransmissionDeLaProprieteAction
 {
@@ -190,7 +190,7 @@ class AccepterLaTransmissionDeLaProprieteAction
         }
 
         $ancien->refresh()->notify(new AvisDeLEquipe($societe, 'Propriété transmise', "{$administrateur->name} a accepté la propriété de {$societe->getFilamentName()} : vous en êtes désormais administrateur de tous les magasins, avec toutes les autorisations de magasin sauf celles de la vente, que le nouveau propriétaire peut vous cocher, et toutes celles de la société. Vous vous connectez désormais avec votre identifiant."));
-        $administrateur->refresh()->notify(new AvisDeLEquipe($societe, 'Vous êtes propriétaire', "{$ancien->name} vous a transmis la propriété de {$societe->getFilamentName()} : vous avez désormais tous les droits dans la société et dans chacun de ses magasins, sauf celui de vendre, hors du magasin de démonstration tant qu'il est ouvert : le propriétaire supervise et contrôle. Votre adresse {$administrateur->email} est désormais votre adresse de connexion.", nature: AvisDeLEquipe::ATTENTION));
+        $administrateur->refresh()->notify(new AvisDeLEquipe($societe, 'Vous êtes propriétaire', "{$ancien->name} vous a transmis la propriété de {$societe->getFilamentName()} : vous avez désormais tous les droits dans la société et dans chacun de ses magasins, sauf celui de vendre : le propriétaire supervise et contrôle. Votre adresse {$administrateur->email} est désormais votre adresse de connexion.", nature: AvisDeLEquipe::ATTENTION));
     }
 
     /**

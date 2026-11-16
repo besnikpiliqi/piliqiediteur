@@ -8,7 +8,7 @@ use Illuminate\Contracts\Events\ShouldDispatchAfterCommit;
 use Illuminate\Foundation\Events\Dispatchable;
 
 /**
- * Un magasin réel termine sa période d'activité, que sa fin date et dont
+ * Un magasin termine sa période d'activité, que sa fin date et dont
  * son motif dit la raison : sa fermeture par sa société (temporaire,
  * cessation, cession ; voir FermerMagasinAction), ou la révocation de sa
  * société par l'éditeur (voir RevoquerSocieteAction) : son abonnement

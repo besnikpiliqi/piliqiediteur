@@ -225,7 +225,7 @@ class EmettreEtEncaisserTest extends TestCase
      * Il faut pouvoir émettre ce document et enregistrer un encaissement
      * dans ce magasin : un vendeur sans « Paiements : enregistrer » est
      * refusé sans rien émettre ; le propriétaire, qui ne vend jamais dans un
-     * magasin réel, et un compte du cabinet lié, qui n'a aucune de ces
+     * magasin, et un compte du cabinet lié, qui n'a aucune de ces
      * autorisations, aussi.
      *
      * @return array<string, array{string}>

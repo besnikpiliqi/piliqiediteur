@@ -16,7 +16,7 @@ use Symfony\Component\HttpFoundation\Response;
  * de son cabinet. Le propriétaire et un administrateur vont à celui de
  * l'espace de leur société, où se créent les magasins (voir
  * EspaceDeLaSociete). Un expert-comptable de la société dont la
- * déclaration n'ouvre encore aucun magasin réel va à la page qui le lui dit
+ * déclaration n'ouvre encore aucun magasin va à la page qui le lui dit
  * (voir AucunMagasin). Un compte de membre a toujours son magasin, où il va,
  * comme Filament l'y mène : aucun autre compte actif n'est sans magasin,
  * et un compte que les données laisseraient sans magasin va de même à

@@ -36,7 +36,7 @@ use SensitiveParameter;
  * (voir ModifierEtablissementAction).
  *
  * Qui : le propriétaire, ou un administrateur autorisé à gérer les
- * magasins, pour un magasin réel de sa portée, tant que la société n'est
+ * magasins, pour un magasin de sa portée, tant que la société n'est
  * pas en lecture seule (voir MagasinDeLaSocietePolicy::changerLeSiret()),
  * en redonnant son mot de passe (voir MotDePasseRedemande) ; jamais pour
  * un magasin cédé, ni pour un magasin dont l'éditeur a libéré le SIRET.

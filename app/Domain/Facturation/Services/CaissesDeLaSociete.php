@@ -19,10 +19,9 @@ use Illuminate\Support\Arr;
  * d'administration de la société (voir LesCaisses) : une lecture hors du
  * magasin courant, déclarée dans CLAUDE.md.
  *
- * Elle ne lit que les magasins réels de la portée de la personne (voir
+ * Elle ne lit que les magasins de la portée de la personne (voir
  * User::magasinsDeSaPortee() : toute sa société pour le propriétaire, la
- * sélection d'un administrateur), jamais le magasin de démonstration ni
- * un magasin d'une autre société, et seulement ceux où elle voit déjà les
+ * sélection d'un administrateur), jamais un magasin d'une autre société, et seulement ceux où elle voit déjà les
  * relevés de toute l'équipe (cloture_caisse.view_toutes : toujours pour le
  * propriétaire, la case cochée pour un administrateur), et dont elle peut
  * donc ouvrir la page des relevés où mène chaque magasin. Leurs relevés et
@@ -68,7 +67,7 @@ final class CaissesDeLaSociete
     public function __construct(private readonly VerificateurCaissesPersonnelles $verificateur) {}
 
     /**
-     * Les magasins réels de sa portée où cette personne voit les relevés
+     * Les magasins de sa portée où cette personne voit les relevés
      * de toute l'équipe, par nom.
      *
      * @return Collection<int, Magasin>
@@ -76,7 +75,6 @@ final class CaissesDeLaSociete
     public function magasins(User $compte): Collection
     {
         return $compte->magasinsDeSaPortee()
-            ->where('est_demonstration', false)
             ->orderBy('nom')
             ->orderBy('id')
             ->get()

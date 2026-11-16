@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 16/11/2026 à 15:26 UTC par pilotage-sync.sh : « CI de 7f9e16ca verte ».
+Mis à jour le 16/11/2026 à 17:21 UTC par pilotage-sync.sh : « Point de suivi 16/11 17:22 UTC : DEMO-COPIE-2 partie 4 ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -38,18 +38,28 @@ b0d52373 Graphiques du tableau de bord (lot GRAPH)
 
 ```
  M .env.example
+ M .github/workflows/tests.yml
+ M CLAUDE.md
  M README.md
  M app/Console/Commands/DiagnostiquerCaisseSecurisee.php
  M app/Domain/Cabinets/Actions/InviterSonCabinetACreerSonEspaceAction.php
  M app/Domain/Cabinets/Actions/InviterUneEntrepriseAction.php
+ M app/Domain/CaisseSecurisee/Actions/ExporterJournalDesEvenementsAction.php
+ M app/Domain/CaisseSecurisee/ModuleFiscal.php
+ M app/Domain/CaisseSecurisee/Services/RegistreFiscal.php
  M app/Domain/CaisseSecurisee/Services/SignataireFiscal.php
+ M app/Domain/CaisseSecurisee/Services/VerificateurIntegrite.php
+ M app/Domain/Calendrier/Calendrier.php
  M app/Domain/Contacts/Actions/VerifierNumeroTvaAction.php
+ M app/Domain/Facturation/Services/Emetteur.php
  M app/Domain/Tenancy/Actions/CloreLInscriptionAction.php
  M app/Domain/Tenancy/Actions/CreerSocieteAction.php
  M app/Domain/Tenancy/Actions/DemanderUneNouvelleAdresseAction.php
  M app/Domain/Tenancy/Actions/RevoquerSocieteAction.php
  M app/Domain/Tenancy/Actions/SaisirCodeDeConfirmationAction.php
  M app/Domain/Tenancy/Enums/ActionAuditee.php
+ M app/Domain/Tenancy/Isolation/ControlesDeLApplication.php
+ M app/Domain/Tenancy/Isolation/ControlesDeLaBase.php
  M app/Domain/Tenancy/Isolation/ReglesDIsolation.php
  M app/Domain/Tenancy/Services/CreationDesComptes.php
  M app/Domain/Tenancy/Support/NomsPolymorphes.php
@@ -63,13 +73,20 @@ b0d52373 Graphiques du tableau de bord (lot GRAPH)
  M app/Providers/FournisseursExternesServiceProvider.php
  M bootstrap/app.php
  M bootstrap/providers.php
+ M composer.json
+ M composer.lock
+ M config/cache.php
  M config/caisse_securisee.php
  M config/database.php
  M config/journal_audit.php
  M config/piliqi.php
+ M config/queue.php
  M config/services.php
  M config/session.php
+ M database/migrations/0000_00_00_000000_fixer_le_fuseau_par_defaut_de_la_base.php
  M database/seeders/DatabaseSeeder.php
+ M database/seeders/Semis/ActiviteDesMagasins.php
+ M database/seeders/Semis/HorlogeDuSemis.php
  M phpunit.xml
 D  public/robots.txt
  M resources/views/cabinets/invitation-invalide.blade.php
@@ -80,23 +97,6 @@ D  public/robots.txt
  M resources/views/cabinets/rattachement-invalide.blade.php
  M resources/views/cabinets/rattachement.blade.php
  M resources/views/code/saisir.blade.php
- M resources/views/devis/reponse-enregistree.blade.php
- M resources/views/devis/reponse-invalide.blade.php
- M resources/views/devis/reponse.blade.php
- M resources/views/errors/mise-en-page.blade.php
- M resources/views/filament/cabinet/pages/tableau-de-bord-du-cabinet.blade.php
- M resources/views/filament/societe/pages/tableau-de-bord.blade.php
- M resources/views/inscription/confirmer.blade.php
- M resources/views/profil/adresse.blade.php
- M routes/web.php
- M tests/Feature/DatabaseSeederTest.php
- M tests/Feature/Integrations/AnnuaireDeLOrdreTest.php
- M tests/Feature/Providers/FournisseursExternesServiceProviderTest.php
- M tests/Feature/SemisCompletTest.php
- M tests/SemeSansTransaction.php
-?? app/Console/Commands/GenererCleDesMessagesDeLaDemonstration.php
-?? app/Console/Commands/MarquerLesFinsDesDemonstrations.php
-?? app/Console/Commands/RelancerLesMessagesDeLaDemonstration.php
 ```
 
 ## Dernière course de la chaîne
@@ -114,4 +114,6 @@ DEMO-COPIE-1:poussee
 DEMO-COPIE-1:notes
 DEMO-COPIE-2:implementation
 DEMO-COPIE-2:implementation-2
+DEMO-COPIE-2:implementation-3
+DEMO-COPIE-2:implementation-4
 ```

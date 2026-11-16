@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 16/11/2026 à 06:26 UTC par pilotage-sync.sh : « Point 06:28 ».
+Mis à jour le 16/11/2026 à 06:37 UTC par pilotage-sync.sh : « CI d15af36 relevée ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -37,6 +37,8 @@ f9e4ea17 Ventes calculées ligne par ligne (règle (b)) et PDF aux modèles M6-b
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
+ M CLAUDE.md
+ M README.md
  M app/Domain/Facturation/Actions/CreerDevisAction.php
  M app/Domain/Facturation/Actions/EmettreDevisAction.php
  M app/Domain/Facturation/Actions/EnvoyerDocumentAction.php
@@ -62,17 +64,22 @@ f9e4ea17 Ventes calculées ligne par ligne (règle (b)) et PDF aux modèles M6-b
  M database/migrations/2026_10_03_100001_create_devis_table.php
  M database/migrations/2026_10_14_100008_create_reponses_des_devis_table.php
  M database/seeders/Semis/DocumentsDesCas.php
+ M database/seeders/Semis/SemisDeDemonstration.php
  M resources/views/devis/pdf.blade.php
  M resources/views/devis/reponse-enregistree.blade.php
  M resources/views/devis/reponse.blade.php
  M resources/views/documents/pdf/styles.blade.php
  M resources/views/mail/document.blade.php
+ M tests/Browser/Parcours/ReponseAuDevisEnLigneTest.php
  M tests/Feature/Facturation/EnvoyerDocumentJobConcurrenceTest.php
  M tests/Feature/Facturation/EnvoyerDocumentJobTest.php
  M tests/Feature/Facturation/ReponseAuDevisEnLigneTest.php
  M tests/Feature/Filament/ParametresFacturesTest.php
+ M tests/Unit/matrice-des-decisions.php
 ?? app/Domain/Facturation/Services/DepannageADomicile.php
 ?? app/Domain/Facturation/Services/DroitDeRetractation.php
+?? tests/Browser/Parcours/DevisDeDepannageADomicileTest.php
+?? tests/Feature/Facturation/DevisDeDepannageADomicileTest.php
 ```
 
 ## Dernière course de la chaîne

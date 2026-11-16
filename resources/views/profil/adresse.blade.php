@@ -52,5 +52,6 @@
         <p class="message erreur">{{ \App\Domain\Tenancy\Actions\ConfirmerNouvelleAdresseAction::MESSAGE_LIEN_INVALIDE }}</p>
     @endif
 </main>
+    @include('pied-de-page-du-site')
 </body>
 </html>

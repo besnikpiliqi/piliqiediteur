@@ -2,6 +2,7 @@
 
 namespace App\Integrations\Sirene;
 
+use App\Domain\Demonstration\SiteDePiliqi;
 use App\Domain\Tenancy\Services\ControleSirene;
 use App\Domain\Tenancy\Services\IdentifiantsInsee;
 use App\Domain\Tenancy\Support\AvertissementsDuCodeDActivite;
@@ -31,6 +32,13 @@ use App\Integrations\Sirene\Contracts\RepertoireSirene;
  *   NAFRev2 (activités comptables) ;
  * - tout établissement dont le NIC commence par 9, fermé.
  *
+ * Sur le site de démonstration (lot DEMO-COPIE, A.6 et F.5), il ne connaît
+ * que les SIREN fictifs du semis (SIREN_DU_SEMIS), avec chacun de leurs
+ * établissements de clé valide, plage réservée aux essais des visiteurs :
+ * tout autre numéro y est inconnu, un SIRET tapé à la main hors de cette
+ * plage répond « Établissement inconnu au répertoire Sirene », et aucune
+ * vraie entreprise n'entre dans une copie.
+ *
  * Un test règle en plus ses propres réponses (voir fermer(), cesser(),
  * exercer(),
  * oublier(), deplacer(), situerHorsDeFrance(), nommer(),
@@ -52,6 +60,17 @@ class FauxRepertoireSirene implements RepertoireSirene
     public const SIREN_CABINET = '000000943';
 
     public const ACTIVITE_PAR_DEFAUT = '47.11B';
+
+    /**
+     * Les SIREN fictifs des entreprises du semis, absents du fichier public
+     * du répertoire Sirene (F.5) : les seuls que connaît le répertoire
+     * factice du site de démonstration.
+     */
+    public const SIREN_DU_SEMIS = [
+        '000000109', '000000117', '000000125', '000000133', '000000141', '000000158', '000000166', '000000174', '000000182', '000000190',
+        '000000208', '000000307', '000000315', '000000323', '000000331', '000000349', '000000356', '000000364', '000000372', '000000380',
+        '000000398', '000000406', '000000414', '000000422', '000000430', '000000448', self::SIREN_CABINET,
+    ];
 
     public const ENSEIGNE_DE_LA_BOUTIQUE = 'BOUTIQUE REPUBLIQUE';
 
@@ -90,7 +109,7 @@ class FauxRepertoireSirene implements RepertoireSirene
     {
         $this->repondre($siren);
 
-        if (! IdentifiantsInsee::sirenValide($siren) || $siren === self::SIREN_INCONNU || isset($this->inconnus[$siren])) {
+        if (! IdentifiantsInsee::sirenValide($siren) || $siren === self::SIREN_INCONNU || isset($this->inconnus[$siren]) || ! self::connuDuSite($siren)) {
             return null;
         }
 
@@ -120,7 +139,7 @@ class FauxRepertoireSirene implements RepertoireSirene
         $siren = substr($siret, 0, 9);
         $this->repondre($siren);
 
-        if (! IdentifiantsInsee::siretValide($siret) || $siren === self::SIREN_INCONNU || isset($this->inconnus[$siren]) || isset($this->inconnus[$siret])) {
+        if (! IdentifiantsInsee::siretValide($siret) || $siren === self::SIREN_INCONNU || isset($this->inconnus[$siren]) || isset($this->inconnus[$siret]) || ! self::connuDuSite($siren)) {
             return null;
         }
 
@@ -174,6 +193,15 @@ class FauxRepertoireSirene implements RepertoireSirene
      * Le SIRET du siège d'une entreprise fictive : son SIREN suivi du NIC
      * 0001 et de sa clé.
      */
+    /**
+     * Vrai pour tout SIREN sur le site réel ; sur le site de démonstration,
+     * seulement pour un SIREN fictif du semis.
+     */
+    private static function connuDuSite(string $siren): bool
+    {
+        return ! SiteDePiliqi::estLaDemonstration() || in_array($siren, self::SIREN_DU_SEMIS, true);
+    }
+
     public static function siretDuSiege(string $siren): string
     {
         return IdentifiantsInsee::avecSaCle($siren.'0001');

@@ -107,8 +107,10 @@ class HistoriqueAuNomFigeTest extends TestCase
      * collaborateur d'un cabinet (un droit actuel), le compte d'un
      * expert-comptable de la société attaché à sa déclaration (un droit
      * actuel), les préférences du tableau de bord d'un compte (un réglage
-     * actuel), ou un nom déjà porté ailleurs (le contenu signé, le libellé
-     * de l'audit).
+     * actuel), la demande d'une démonstration et le dernier tirage de son
+     * lien (la carte « Ma démonstration » ne montre aucun nom ; le journal
+     * d'audit porte celui de qui a fait chaque geste), ou un nom déjà porté
+     * ailleurs (le contenu signé, le libellé de l'audit).
      *
      * @var list<string>
      */
@@ -131,6 +133,8 @@ class HistoriqueAuNomFigeTest extends TestCase
         'clients_confies.user_id',
         'comptes_expert_comptable.user_id',
         'preferences_tableau_de_bord.user_id',
+        'demonstrations.demandee_par',
+        'demonstrations.lien_tire_par',
     ];
 
     public function test_les_ecrans_de_l_historique_affichent_le_nom_tel_qu_il_etait_au_moment_de_l_operation(): void

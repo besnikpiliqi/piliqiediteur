@@ -60,5 +60,6 @@
         <button type="submit">Choisir mon mot de passe</button>
     </form>
 </main>
+    @include('pied-de-page-du-site')
 </body>
 </html>

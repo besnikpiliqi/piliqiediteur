@@ -52,6 +52,53 @@ return [
             'timezone' => 'UTC',
         ],
 
+        /*
+         | Seulement sur le site de démonstration (PILIQI_SITE=demonstration,
+         | lu dans l'environnement : ce fichier se charge avant
+         | config/piliqi.php ; voir SiteDePiliqi), jamais déclarées sur le
+         | site réel : le registre de ses copies, une base à lui
+         | (DB_REGISTRE_DATABASE, piliqi_demo_registre), lu par les pages avec
+         | le rôle demo_app, sans CREATEDB ; et la connexion du rôle
+         | demo_admin (CREATEDB, jamais superutilisateur), qui seule crée,
+         | copie et supprime les bases modèles et les copies, pour les
+         | commandes demonstration:* et le travailleur de la file
+         | demonstration-admin. Le site réel refuse de démarrer avec l'une
+         | d'elles réglée, qu'un cache de la configuration construit pour le
+         | site de démonstration y apporterait (voir
+         | SiteDePiliqiServiceProvider).
+         */
+        ...(env('PILIQI_SITE') !== 'demonstration' ? [] : [
+            'registre' => [
+                'driver' => 'pgsql',
+                'host' => env('DB_REGISTRE_HOST', env('DB_HOST', '127.0.0.1')),
+                'port' => env('DB_REGISTRE_PORT', env('DB_PORT', '5432')),
+                'database' => env('DB_REGISTRE_DATABASE'),
+                'username' => env('DB_REGISTRE_USERNAME'),
+                'password' => env('DB_REGISTRE_PASSWORD', ''),
+                'charset' => 'utf8',
+                'prefix' => '',
+                'prefix_indexes' => true,
+                'search_path' => 'public',
+                'sslmode' => env('DB_SSLMODE', 'prefer'),
+                'timezone' => 'UTC',
+            ],
+
+            'demo_admin' => [
+                'driver' => 'pgsql',
+                'host' => env('DB_REGISTRE_HOST', env('DB_HOST', '127.0.0.1')),
+                'port' => env('DB_REGISTRE_PORT', env('DB_PORT', '5432')),
+                'database' => env('DB_REGISTRE_DATABASE'),
+                'username' => env('DB_DEMO_ADMIN_USERNAME'),
+                'password' => env('DB_DEMO_ADMIN_PASSWORD', ''),
+                'charset' => 'utf8',
+                'prefix' => '',
+                'prefix_indexes' => true,
+                'search_path' => 'public',
+                'sslmode' => env('DB_SSLMODE', 'prefer'),
+                'timezone' => 'UTC',
+            ],
+        ]),
+
     ],
 
     /*

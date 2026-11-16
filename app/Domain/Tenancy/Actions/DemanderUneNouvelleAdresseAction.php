@@ -5,6 +5,7 @@ namespace App\Domain\Tenancy\Actions;
 use App\Domain\Calendrier\Calendrier;
 use App\Domain\Tenancy\Mail\ConfirmationNouvelleAdresseMail;
 use App\Domain\Tenancy\Models\Societe;
+use App\Domain\Tenancy\Rules\PasUnDomaineReserve;
 use App\Domain\Tenancy\Services\DebitDesEmails;
 use App\Domain\Tenancy\Support\Reglage;
 use App\Domain\Tenancy\Support\ValeurRequise;
@@ -80,7 +81,7 @@ class DemanderUneNouvelleAdresseAction
                 throw new LogicException(self::MESSAGE_INSCRIPTION_CLOSE);
             }
 
-            $nouvelleAdresse = ValeursLues::texteDe(Validator::make(['email' => User::normaliserEmail($nouvelleAdresse)], ['email' => ['required', 'string', 'email', 'max:255']])->validate(), 'email');
+            $nouvelleAdresse = ValeursLues::texteDe(Validator::make(['email' => User::normaliserEmail($nouvelleAdresse)], ['email' => ['required', 'string', 'email', 'max:255', new PasUnDomaineReserve]])->validate(), 'email');
             $this->debit->verifier($compte);
             $jeton = $this->mettreEnAttente($compte, $nouvelleAdresse);
             $compte->save();

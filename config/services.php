@@ -30,10 +30,13 @@ return [
 
     /*
      | VIES, le service de la Commission européenne qui vérifie les n° de
-     | TVA de l'Union (voir ClientVies) : son API REST, et le délai en
-     | secondes au-delà duquel il est tenu pour indisponible.
+     | TVA de l'Union (voir ServiceVies) : son pilote (reel, ou faux pour le
+     | semis et le site de démonstration, jamais sur le site réel en
+     | production), son API REST, et le délai en secondes au-delà duquel il
+     | est tenu pour indisponible.
      */
     'vies' => [
+        'pilote' => env('VIES_PILOTE', 'reel'),
         'url' => env('VIES_URL', 'https://ec.europa.eu/taxation_customs/vies/rest-api'),
         'delai' => 10,
     ],
@@ -136,6 +139,17 @@ return [
     'mailtrap' => [
         'jeton' => env('MAILTRAP_API_TOKEN'),
         'boite' => env('MAILTRAP_INBOX_ID'),
+    ],
+
+    /*
+     | La plateforme agréée SUPER PDP (étape 2 de la feuille de route) : les
+     | identifiants de l'application OAuth de l'éditeur, que le site de
+     | démonstration refuse de porter (voir SiteDePiliqiServiceProvider).
+     | Des secrets de l'environnement, jamais du dépôt.
+     */
+    'superpdp' => [
+        'client_id' => env('SUPERPDP_CLIENT_ID'),
+        'client_secret' => env('SUPERPDP_CLIENT_SECRET'),
     ],
 
     'slack' => [

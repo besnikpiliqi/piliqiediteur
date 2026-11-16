@@ -12,6 +12,7 @@ use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\CaisseSecurisee\Models\TeteRegistreFiscal;
 use App\Domain\CaisseSecurisee\Models\TraceEvenement;
 use App\Domain\CaisseSecurisee\ModuleFiscal;
+use App\Domain\Demonstration\SiteDePiliqi;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Scopes\SocieteScope;
@@ -589,7 +590,11 @@ class RegistreFiscal
     /**
      * Les événements techniques à inscrire avant le prochain enregistrement
      * du magasin, d'après le dernier, tel que le note la ligne de tête :
-     * l'initialisation s'il n'y en a aucun, sinon le changement de version
+     * l'initialisation s'il n'y en a aucun, suivie, sur le site de
+     * démonstration, de l'entrée en mode d'entraînement (JET 100, lot
+     * DEMO-COPIE, choix 19) : chaque magasin d'une base modèle ou d'une copie,
+     * même créé par le visiteur, la porte dès son premier enregistrement ;
+     * sinon le changement de version
      * du module fiscal, puis celui de la clé de signature (l'ancienne,
      * nulle quand la ligne de tête n'en note aucune).
      *
@@ -598,7 +603,9 @@ class RegistreFiscal
     private function evenementsAutomatiques(TeteRegistreFiscal $tete): array
     {
         if ($tete->version_module === null) {
-            return [[CodeEvenement::Initialisation, []]];
+            return SiteDePiliqi::estLaDemonstration()
+                ? [[CodeEvenement::Initialisation, []], [CodeEvenement::EntreeEnModeDemonstration, []]]
+                : [[CodeEvenement::Initialisation, []]];
         }
 
         $evenements = [];
@@ -667,6 +674,7 @@ class RegistreFiscal
 
         $contenu = json_encode([
             'format' => self::FORMAT,
+            ...(SiteDePiliqi::estLaDemonstration() ? ['demonstration' => true] : []),
             'magasin' => [
                 'uuid' => $magasin->uuid,
                 'siren' => $magasin->societe->siren,

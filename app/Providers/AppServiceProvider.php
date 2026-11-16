@@ -17,6 +17,10 @@ use App\Domain\Catalogue\Services\OrigineDesProduits;
 use App\Domain\Contacts\Concerns\Proposable;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\Fournisseur;
+use App\Domain\Demonstration\Construction\SemisDuModeleParLeSemeur;
+use App\Domain\Demonstration\Contracts\SemisDUnModele;
+use App\Domain\Demonstration\Contracts\SiteDeDemonstration;
+use App\Domain\Demonstration\Integrations\SiteDeDemonstrationParHttps;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
@@ -39,6 +43,7 @@ use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\CartesDesNotifications;
 use App\Filament\GrilleDesGraphiques;
+use App\Filament\MaDemonstration;
 use App\Filament\PageDesCharges;
 use App\Filament\VosTelechargements;
 use App\Http\Controllers\ReponseAuDevisController;
@@ -148,6 +153,8 @@ class AppServiceProvider extends ServiceProvider
         $this->app->scoped(RegistreFiscal::class);
         $this->app->scoped(OrigineDesProduits::class);
         $this->app->bind(LoginResponse::class, ReponseDeConnexion::class);
+        $this->app->bind(SiteDeDemonstration::class, SiteDeDemonstrationParHttps::class);
+        $this->app->bind(SemisDUnModele::class, SemisDuModeleParLeSemeur::class);
         Connection::resolverFor('pgsql', self::connexionPostgres(...));
 
         foreach (self::PILOTES_REFUSES as $pilote) {
@@ -230,6 +237,7 @@ class AppServiceProvider extends ServiceProvider
         $this->alignerLesEncaissementsDesReleves();
         Livewire::component(PageDesCharges::NOM, PageDesCharges::class);
         Livewire::component(VosTelechargements::NOM, VosTelechargements::class);
+        Livewire::component(MaDemonstration::NOM, MaDemonstration::class);
         $this->limiterLesEssaisDuLienDUnDevis();
     }
 

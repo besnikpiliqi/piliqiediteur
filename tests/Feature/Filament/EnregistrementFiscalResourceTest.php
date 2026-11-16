@@ -337,7 +337,7 @@ class EnregistrementFiscalResourceTest extends TestCase
             $export->signature,
             'ES256',
             $export->cle_id,
-            '2.1',
+            '3.0',
             $export->contenu,
         ], $lignes[3]);
         $clePublique = Arr::first(config('caisse_securisee.cles_publiques'));
@@ -570,7 +570,7 @@ class EnregistrementFiscalResourceTest extends TestCase
         $cleId = hash('sha256', base64_decode(str_replace(['-----BEGIN PUBLIC KEY-----', '-----END PUBLIC KEY-----', "\n"], '', $clePublique)));
 
         Livewire::test(ConformiteApercu::class)
-            ->assertSee('Version 2.1')
+            ->assertSee('Version 3.0')
             ->assertSee('Article 286, I, 3° bis du code général des impôts')
             ->assertSee('Empreinte SHA-256 : '.$cleId)
             ->assertSeeInOrder(['Grand total perpétuel réel', '12,00 €', 'Grand total perpétuel absolu', '36,00 €'])

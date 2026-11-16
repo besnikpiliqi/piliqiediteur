@@ -11,6 +11,7 @@ use App\Domain\Cabinets\Models\LienCabinet;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Charges\Models\Charge;
 use App\Domain\Charges\Models\TypeDeChargeDeLaSociete;
+use App\Domain\Demonstration\Models\Demonstration;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
@@ -51,6 +52,7 @@ final class NomsPolymorphes
         'charge' => Charge::class,
         'cloture_caisse' => ClotureCaisse::class,
         'cloture_caisse_personnelle' => ClotureCaissePersonnelle::class,
+        'demonstration' => Demonstration::class,
         'devis' => Devis::class,
         'envoi_document' => EnvoiDocument::class,
         'facture' => Facture::class,

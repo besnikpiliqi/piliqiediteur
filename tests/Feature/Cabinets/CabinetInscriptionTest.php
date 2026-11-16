@@ -2,6 +2,8 @@
 
 namespace Tests\Feature\Cabinets;
 
+use App\Domain\Demonstration\Actions\DemanderUneDemonstrationAction;
+use App\Domain\Demonstration\Services\CarteDeLaDemonstration;
 use App\Domain\Tenancy\Actions\CloreLInscriptionAction;
 use App\Domain\Tenancy\Actions\ModifierIdentiteSocieteAction;
 use App\Domain\Tenancy\Enums\ActionAuditee;
@@ -29,6 +31,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Livewire\Livewire;
 use PHPUnit\Framework\Attributes\DataProvider;
+use Tests\Feature\Demonstration\DemonstrationDuSiteReel;
 use Tests\TestCase;
 
 /**
@@ -47,7 +50,7 @@ use Tests\TestCase;
  */
 class CabinetInscriptionTest extends TestCase
 {
-    use RefreshDatabase;
+    use DemonstrationDuSiteReel, RefreshDatabase;
 
     private const ADRESSE = 'cabinet@example.test';
 
@@ -255,7 +258,7 @@ class CabinetInscriptionTest extends TestCase
      * démonstration ; toutes faites, elle disparaît ; un collaborateur n'en
      * a aucune.
      */
-    public function test_la_liste_d_etapes_du_cabinet_ne_parle_ni_de_magasins_ni_de_demonstration(): void
+    public function test_la_liste_d_etapes_du_cabinet_ne_parle_pas_de_magasins_et_finit_par_sa_demonstration(): void
     {
         app(RepertoireSirene::class)->exercer(FauxRepertoireSirene::SIREN_CABINET, ControleSirene::CODE_ACTIVITES_COMPTABLES);
         $cabinet = $this->inscrireUneSociete(FauxRepertoireSirene::SIREN_CABINET, type: TypeDActivite::Cabinet);
@@ -264,14 +267,14 @@ class CabinetInscriptionTest extends TestCase
         $tableau = Livewire::test(TableauDeBordDuCabinet::class);
         $etapes = $tableau->instance()->etapes();
 
-        $this->assertSame([TableauDeBordDuCabinet::ETAPE_CODE_DU_COURRIER, TableauDeBordDuCabinet::ETAPE_ACTIVITE, TableauDeBordDuCabinet::ETAPE_ORDRE, TableauDeBordDuCabinet::ETAPE_COLLABORATEURS, TableauDeBordDuCabinet::ETAPE_CLIENTS], array_column($etapes, 'titre'));
-        $this->assertSame([false, true, false, false, false], array_column($etapes, 'faite'));
+        $this->assertSame([TableauDeBordDuCabinet::ETAPE_CODE_DU_COURRIER, TableauDeBordDuCabinet::ETAPE_ACTIVITE, TableauDeBordDuCabinet::ETAPE_ORDRE, TableauDeBordDuCabinet::ETAPE_COLLABORATEURS, TableauDeBordDuCabinet::ETAPE_CLIENTS, CarteDeLaDemonstration::ETAPE], array_column($etapes, 'titre'));
+        $this->assertSame([false, true, false, false, false, false], array_column($etapes, 'faite'));
         $this->assertSame('Votre cabinet attend le code de son courrier recommandé.', $tableau->instance()->etatDeLaVerification());
         foreach ([...array_column($etapes, 'etat'), $tableau->instance()->etatDeLaVerification()] as $texte) {
             $this->assertStringNotContainsStringIgnoringCase('magasin', $texte);
-            $this->assertStringNotContainsStringIgnoringCase('démonstration', $texte);
+            $this->assertStringNotContainsStringIgnoringCase('société fictive', $texte);
         }
-        $tableau->assertSeeText(TableauDeBordDuCabinet::ETAPE_ORDRE)->assertDontSeeText(['magasin', 'démonstration']);
+        $tableau->assertSeeText(TableauDeBordDuCabinet::ETAPE_ORDRE)->assertDontSeeText('magasin');
 
         $verifie = $this->ouvrirUnCabinet(SocieteFactory::sirenFictif());
         $collaborateur = $this->collaborateur($verifie);
@@ -279,6 +282,12 @@ class CabinetInscriptionTest extends TestCase
         $this->assertTrue(Livewire::test(TableauDeBordDuCabinet::class)->instance()->resteDesEtapes());
 
         $this->lierLeCabinet($verifie, $this->ouvrirUneSociete(['nom' => 'Boutique cliente']));
+        $this->dansLEspaceDuCabinet($verifie, $this->proprietaireDuCabinet($verifie));
+        $this->assertTrue(Livewire::test(TableauDeBordDuCabinet::class)->instance()->resteDesEtapes());
+
+        $this->reglerLeSiteDeDemonstration();
+        app(TenantContext::class)->clear();
+        app(DemanderUneDemonstrationAction::class)->handle($this->proprietaireDuCabinet($verifie), null, null);
         $this->dansLEspaceDuCabinet($verifie, $this->proprietaireDuCabinet($verifie));
         $this->assertFalse(Livewire::test(TableauDeBordDuCabinet::class)->instance()->resteDesEtapes());
 

@@ -48,7 +48,7 @@ final class ControlesDeLaBase
     }
 
     /**
-     * Chaque table du schéma a sa règle (voir ReglesDIsolation::PORTEES), et
+     * Chaque table du schéma a sa règle (voir ReglesDIsolation::portees()), et
      * ses colonnes de portée sont celles de sa règle : magasin_id pour une
      * table d'un magasin, societe_id pour une table d'une société, ni l'une
      * ni l'autre pour une table dérivée, globale ou technique.
@@ -81,7 +81,7 @@ final class ControlesDeLaBase
             }
         }
 
-        foreach (array_keys(ReglesDIsolation::PORTEES) as $table) {
+        foreach (array_keys(ReglesDIsolation::portees()) as $table) {
             if (! in_array($table, $this->schema->tables(), true)) {
                 $resultat->signaler($table, '—', '—', 'une table du schéma', 'une règle pour une table absente', ReglesDIsolation::REGLE_TABLES);
             }

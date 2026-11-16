@@ -148,6 +148,10 @@ final class CommandesDesProfessionnels
     public function preparer(): void
     {
         foreach (self::NOUVEAUX_CLIENTS as $magasin => $clients) {
+            if (! $this->semis->semeLeMagasin($magasin)) {
+                continue;
+            }
+
             foreach ($clients as $client) {
                 $this->gestes($magasin)->fiche($this->semis->compte(self::MAGASINS[$magasin]['responsable']), Client::class, [
                     ...$client,
@@ -181,13 +185,15 @@ final class CommandesDesProfessionnels
         }
 
         foreach (self::MAGASINS as $magasin => $reglages) {
-            if ($rang % $reglages['periode'] === $reglages['decalage']) {
+            if ($this->semis->semeLeMagasin($magasin) && $rang % $reglages['periode'] === $reglages['decalage']) {
                 $this->horloge->aller($rang, '08:50');
                 $this->commander($magasin, $rang);
             }
         }
 
-        $this->bonDAvoirDesHalles($rang);
+        if ($this->semis->semeLeMagasin('halles')) {
+            $this->bonDAvoirDesHalles($rang);
+        }
     }
 
     /**

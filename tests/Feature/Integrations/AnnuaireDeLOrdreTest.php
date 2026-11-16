@@ -7,7 +7,7 @@ use App\Integrations\Ordre\AnnuaireTenuParLEditeur;
 use App\Integrations\Ordre\Contracts\AnnuaireDeLOrdre;
 use App\Integrations\Ordre\FauxAnnuaireDeLOrdre;
 use App\Integrations\Sirene\FauxRepertoireSirene;
-use App\Providers\FournisseursExternesServiceProvider;
+use App\Providers\SiteDePiliqiServiceProvider;
 use Illuminate\Support\Facades\Http;
 use LogicException;
 use RuntimeException;
@@ -56,12 +56,12 @@ class AnnuaireDeLOrdreTest extends TestCase
     public function test_le_pilote_faux_de_l_ordre_est_refuse_en_production(): void
     {
         $this->app->detectEnvironment(fn (): string => 'production');
-        config(['services.sirene.pilote' => 'insee', 'services.rne.pilote' => 'inpi', 'services.recommande.pilote' => null, 'services.ordre.pilote' => 'faux', 'services.pdp.pilote' => null]);
+        config(['services.sirene.pilote' => 'insee', 'services.rne.pilote' => 'inpi', 'services.recommande.pilote' => null, 'services.ordre.pilote' => 'faux', 'services.pdp.pilote' => null, 'services.vies.pilote' => 'reel', 'services.antivirus.pilote' => 'clamav', 'session.cookie' => '__Host-piliqi-session', 'session.secure' => true, 'session.domain' => null, 'session.path' => '/']);
 
-        $this->assertThrows(fn () => (new FournisseursExternesServiceProvider($this->app))->boot(), RuntimeException::class, 'Le fournisseur factice de « ordre » (pilote faux) ne sert jamais en production.');
+        $this->assertThrows(fn () => (new SiteDePiliqiServiceProvider($this->app))->boot(), RuntimeException::class, 'Le fournisseur factice de « ordre » (pilote faux) ne sert jamais en production.');
 
         config(['services.ordre.pilote' => 'editeur']);
-        (new FournisseursExternesServiceProvider($this->app))->boot();
+        (new SiteDePiliqiServiceProvider($this->app))->boot();
         $this->app->detectEnvironment(fn (): string => 'testing');
     }
 }

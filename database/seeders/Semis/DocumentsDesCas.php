@@ -130,10 +130,27 @@ final class DocumentsDesCas
         }
 
         $avantLaFin = SemisComplet::JOURS - $rang;
+
+        if ($this->semis->seme('commerce')) {
+            $this->casDesHalles($rang, $avantLaFin);
+        }
+
+        if ($this->semis->seme('services')) {
+            $this->casDuConseil($rang, $avantLaFin);
+        }
+
+        if ($this->semis->seme('commerce') && $rang % 10 === 0) {
+            $this->fermerUneCaisseLeSoir($rang, $this->gestes('halles'), $this->semis->compte('Camille Laurent'));
+        }
+    }
+
+    /**
+     * Le cas des Halles que ce jour porte.
+     */
+    private function casDesHalles(int $rang, int $avantLaFin): void
+    {
         $halles = $this->gestes('halles');
-        $conseil = $this->gestes('conseil');
         $camille = $this->semis->compte('Camille Laurent');
-        $claire = $this->semis->compte('Claire Dubois');
 
         match ($avantLaFin) {
             self::EXPORT_NON_PROUVE => $this->aDouzeHeures($rang, function () use ($halles, $camille): void {
@@ -151,8 +168,6 @@ final class DocumentsDesCas
                 $this->exportAvecCn23 = $halles->facturer($this->semis->compte('Lucas Moreau'), $this->client($halles, 'Acme Inc.'), [$this->ligne($halles, 'THE-SENCHA', 4)], [], ['nature_operation' => NatureOperation::ExportHorsUe, ...self::NEW_YORK]);
             }),
             88 => $this->aDouzeHeures($rang, fn (): PreuveOperation => $this->prouver($halles, $camille, $this->exportAvecCn23, TypePreuve::Cn23, 'CN23-LA-552190', null, 'La Poste')),
-            80 => $this->aDouzeHeures($rang, fn (): Facture => $conseil->facturer($claire, $this->verifieSurVies($conseil, $claire, 'Bauer Consulting GmbH'), [$this->ligne($conseil, 'Audit de site web', 1)], [], ['nature_operation' => NatureOperation::PrestationUeAutoliquidation])),
-            75 => $this->aDouzeHeures($rang, fn (): Facture => $conseil->facturer($claire, $this->client($conseil, 'Northwind Trading Ltd'), [$this->ligne($conseil, 'Heure de conseil', 4)], [], ['nature_operation' => NatureOperation::PrestationHorsUe])),
             70 => $this->aDouzeHeures($rang, function () use ($halles, $camille): void {
                 $this->livraisonExpediee = $halles->facturer($camille, $this->verifieSurVies($halles, $camille, 'Muster GmbH'), [$this->ligne($halles, 'CARNET-A5', 20)], [], ['nature_operation' => NatureOperation::LivraisonIntracommunautaire, ...self::BERLIN, 'date_operation_fin' => $this->horloge->jour(SemisComplet::JOURS - 68), 'transport_par' => TransportPar::Magasin->value]);
             }),
@@ -167,7 +182,6 @@ final class DocumentsDesCas
                 $devis = $halles->dans(fn (): Devis => app(CreerDevisAction::class)->handle($camille, $this->client($halles, 'Agence Horizon'), [$this->ligne($halles, 'DIFF-BAMBOU', 6)], ['date_validite' => $this->horloge->jour(SemisComplet::JOURS - 45), 'date_operation_fin' => $this->horloge->jour(SemisComplet::JOURS - 42)]));
                 $halles->dans(fn (): EnvoiDocument => app(EnvoyerDocumentAction::class)->handle($camille, $devis, 'contact@agence-horizon.exemple.test', 'Bonjour, voici notre devis pour vos bureaux.', GestesDuMagasin::jeton()));
             }),
-            50 => $this->aDouzeHeures($rang, fn (): Facture => $conseil->facturer($claire, $this->client($conseil, 'Mairie de Montreuil'), [$this->ligne($conseil, 'Audit de site web', 1), $this->ligne($conseil, 'Forfait déplacement', 1)], [], ['date_operation_debut' => $this->horloge->jour(SemisComplet::JOURS - 56), 'date_operation_fin' => $this->horloge->jour(SemisComplet::JOURS - 52)])),
             45 => $this->aDouzeHeures($rang, function () use ($halles): void {
                 $halles->facturer($this->semis->compte('Lucas Moreau'), $this->client($halles, 'Acme Inc.'), [$this->ligne($halles, 'CARNET-A5', 10)], [], ['nature_operation' => NatureOperation::ExportHorsUe, ...self::NEW_YORK]);
             }),
@@ -191,10 +205,6 @@ final class DocumentsDesCas
             22 => $this->aDouzeHeures($rang, function () use ($halles, $camille): void {
                 $halles->vendreALaCaisse($camille, $this->client($halles, 'Marie Dupuis'), [$this->ligne($halles, 'STYLO-PLUME', 8)], ModePaiement::CarteBancaire, sansStock: true);
                 $halles->dans(fn () => app(ArchiverUneFicheAction::class)->archiver($camille, $this->fournisseur($halles, 'Papeterie du Centre')));
-            }),
-            18 => $this->aDouzeHeures($rang, function () use ($conseil, $claire): void {
-                $facture = $conseil->facturer($claire, $this->client($conseil, 'Boulangerie Martin'), [$this->ligne($conseil, 'Heure de conseil', 2)], [], ['date_operation_fin' => $this->horloge->jour(SemisComplet::JOURS - 19)]);
-                $conseil->payer($claire, $facture, ModePaiement::Prelevement, '180.00', $this->horloge->jour(SemisComplet::JOURS - 18), 'PRLV-2026-0418');
             }),
             14 => $this->aDouzeHeures($rang, function () use ($halles): void {
                 $lucas = $this->semis->compte('Lucas Moreau');
@@ -238,10 +248,28 @@ final class DocumentsDesCas
             }),
             default => null,
         };
+    }
 
-        if ($rang % 10 === 0) {
-            $this->fermerUneCaisseLeSoir($rang, $halles, $camille);
-        }
+    /**
+     * Le cas du magasin de services que ce jour porte : prestations à un
+     * professionnel de l'Union en autoliquidation et hors de l'Union,
+     * facture à une mairie sur plusieurs jours, prélèvement.
+     */
+    private function casDuConseil(int $rang, int $avantLaFin): void
+    {
+        $conseil = $this->gestes('conseil');
+        $claire = $this->semis->compte('Claire Dubois');
+
+        match ($avantLaFin) {
+            80 => $this->aDouzeHeures($rang, fn (): Facture => $conseil->facturer($claire, $this->verifieSurVies($conseil, $claire, 'Bauer Consulting GmbH'), [$this->ligne($conseil, 'Audit de site web', 1)], [], ['nature_operation' => NatureOperation::PrestationUeAutoliquidation])),
+            75 => $this->aDouzeHeures($rang, fn (): Facture => $conseil->facturer($claire, $this->client($conseil, 'Northwind Trading Ltd'), [$this->ligne($conseil, 'Heure de conseil', 4)], [], ['nature_operation' => NatureOperation::PrestationHorsUe])),
+            50 => $this->aDouzeHeures($rang, fn (): Facture => $conseil->facturer($claire, $this->client($conseil, 'Mairie de Montreuil'), [$this->ligne($conseil, 'Audit de site web', 1), $this->ligne($conseil, 'Forfait déplacement', 1)], [], ['date_operation_debut' => $this->horloge->jour(SemisComplet::JOURS - 56), 'date_operation_fin' => $this->horloge->jour(SemisComplet::JOURS - 52)])),
+            18 => $this->aDouzeHeures($rang, function () use ($conseil, $claire): void {
+                $facture = $conseil->facturer($claire, $this->client($conseil, 'Boulangerie Martin'), [$this->ligne($conseil, 'Heure de conseil', 2)], [], ['date_operation_fin' => $this->horloge->jour(SemisComplet::JOURS - 19)]);
+                $conseil->payer($claire, $facture, ModePaiement::Prelevement, '180.00', $this->horloge->jour(SemisComplet::JOURS - 18), 'PRLV-2026-0418');
+            }),
+            default => null,
+        };
     }
 
     /**
@@ -252,16 +280,31 @@ final class DocumentsDesCas
      */
     private function creerLesFiches(): void
     {
+        if ($this->semis->seme('commerce')) {
+            $this->creerLesFichesDesHalles();
+        }
+
+        if ($this->semis->seme('services')) {
+            $this->creerLesFichesDuConseil();
+        }
+    }
+
+    private function creerLesFichesDesHalles(): void
+    {
         $halles = $this->gestes('halles');
-        $conseil = $this->gestes('conseil');
         $camille = $this->semis->compte('Camille Laurent');
-        $claire = $this->semis->compte('Claire Dubois');
 
         $halles->fiche($camille, Client::class, ['nom' => 'Acme Inc.', 'type_client' => TypeClient::Professionnel, 'pays' => 'US', 'etabli_en_france' => false, 'identifiant_etranger' => 'EIN 12-3456789', 'adresse' => '1 Main Street', 'code_postal' => '10001', 'ville' => 'New York', 'email' => 'purchasing@acme.exemple.test', 'mode_paiement_prefere' => ModePaiement::Virement->value]);
         $muster = $halles->fiche($camille, Client::class, ['nom' => 'Muster GmbH', 'type_client' => TypeClient::Professionnel, 'pays' => 'DE', 'etabli_en_france' => false, 'numero_tva' => 'DE123456789', 'adresse' => 'Musterstraße 1', 'code_postal' => '10115', 'ville' => 'Berlin', 'email' => 'einkauf@muster.exemple.test', 'mode_paiement_prefere' => ModePaiement::Virement->value]);
         $halles->dans(fn (): ConsultationVies => app(VerifierNumeroTvaAction::class)->handle($camille, $muster));
         $halles->fiche($camille, Client::class, ['nom' => 'Lucie Bernard', 'type_client' => TypeClient::Particulier, 'pays' => 'FR', 'adresse' => '1 rue Victor Hugo', 'code_postal' => '97200', 'ville' => 'Fort-de-France', 'email' => 'lucie.bernard@exemple.test', 'mode_paiement_prefere' => ModePaiement::CarteBancaire->value]);
         $halles->fiche($camille, Client::class, ['nom' => 'Brasserie du Pont', 'type_client' => TypeClient::Professionnel, 'siren' => IdentifiantsInsee::avecSaCle('00000027'), 'adresse' => '3 quai de la Tournelle', 'code_postal' => '75005', 'ville' => 'Paris', 'pays' => 'FR', 'mode_paiement_prefere' => ModePaiement::Cheque->value]);
+    }
+
+    private function creerLesFichesDuConseil(): void
+    {
+        $conseil = $this->gestes('conseil');
+        $claire = $this->semis->compte('Claire Dubois');
 
         $bauer = $conseil->fiche($claire, Client::class, ['nom' => 'Bauer Consulting GmbH', 'type_client' => TypeClient::Professionnel, 'pays' => 'DE', 'etabli_en_france' => false, 'numero_tva' => 'DE987654321', 'adresse' => 'Leopoldstraße 20', 'code_postal' => '80802', 'ville' => 'München', 'email' => 'office@bauer.exemple.test']);
         $conseil->dans(fn (): ConsultationVies => app(VerifierNumeroTvaAction::class)->handle($claire, $bauer));

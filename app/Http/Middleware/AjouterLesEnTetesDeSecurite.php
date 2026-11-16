@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Domain\Demonstration\SiteDePiliqi;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -26,6 +27,10 @@ use Symfony\Component\HttpFoundation\Response;
  * script-src n'admettrait pas. Un en-tête déjà posé par la réponse
  * (Referrer-Policy: no-referrer des pages ouvertes par un lien secret) est
  * gardé.
+ *
+ * Sur le site de démonstration (voir SiteDePiliqi), aucune page ne
+ * s'indexe (X-Robots-Tag: noindex, nofollow) et aucune adresse ne part
+ * vers un autre site (Referrer-Policy: no-referrer).
  */
 final class AjouterLesEnTetesDeSecurite
 {
@@ -40,6 +45,13 @@ final class AjouterLesEnTetesDeSecurite
         ."base-uri 'self'; "
         ."form-action 'self'; "
         ."frame-ancestors 'none'";
+
+    /**
+     * L'attribut de la requête qu'un geste pose quand sa réponse porte un
+     * secret à ne jamais garder en cache (le lien d'une démonstration, voir
+     * MaDemonstration) : la réponse porte alors Cache-Control: no-store.
+     */
+    public const SANS_CACHE = 'piliqi.reponse_sans_cache';
 
     public const POLITIQUE_DES_FONCTIONS = 'accelerometer=(), autoplay=(), camera=(), display-capture=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), midi=(), payment=(), usb=()';
 
@@ -66,6 +78,15 @@ final class AjouterLesEnTetesDeSecurite
 
         if (app()->isProduction()) {
             $enTetes['Strict-Transport-Security'] = self::TRANSPORT_STRICT;
+        }
+
+        if (SiteDePiliqi::estLaDemonstration()) {
+            $enTetes['Referrer-Policy'] = 'no-referrer';
+            $enTetes['X-Robots-Tag'] = 'noindex, nofollow';
+        }
+
+        if ($request->attributes->get(self::SANS_CACHE) === true) {
+            $reponse->headers->set('Cache-Control', 'no-store, private');
         }
 
         foreach ($enTetes as $nom => $valeur) {

@@ -3,6 +3,7 @@
 namespace Database\Seeders\Semis;
 
 use App\Domain\Calendrier\Calendrier;
+use App\Domain\Demonstration\SiteDePiliqi;
 use Carbon\Carbon;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Artisan;
@@ -30,6 +31,13 @@ use RuntimeException;
 final class HorlogeDuSemis
 {
     /**
+     * Les tâches du seul site réel, qu'une base modèle du site de
+     * démonstration ne passe pas (lot DEMO-COPIE, F.1) : elle n'a pas de
+     * démonstrations des sociétés.
+     */
+    private const TACHES_DU_SITE_REEL = ['demonstration:marquer-les-fins'];
+
+    /**
      * Les tâches horaires que le semis exécute chaque jour, à chaque heure
      * de Paris où elles passent (voir bootstrap/app.php) : à 00 h 05, celles
      * du calendrier des magasins, les relances des factures impayées, la
@@ -49,6 +57,7 @@ final class HorlogeDuSemis
             'app:relancer-factures-impayees',
             'app:clore-inscriptions-sans-code',
             'app:expirer-invitations-cabinets',
+            'demonstration:marquer-les-fins',
         ],
         '06:05' => ['app:cloturer-caisses-automatiquement'],
     ];
@@ -168,6 +177,10 @@ final class HorlogeDuSemis
     private function executerLesTaches(string $heure): void
     {
         foreach (self::TACHES[$heure] as $tache) {
+            if (in_array($tache, self::TACHES_DU_SITE_REEL, true) && SiteDePiliqi::estLaDemonstration()) {
+                continue;
+            }
+
             if (Artisan::call($tache) !== 0) {
                 throw new RuntimeException("La tâche {$tache} a échoué pendant le semis, le ".self::aParis($this->maintenant).' : '.trim(Artisan::output()));
             }

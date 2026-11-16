@@ -1,6 +1,7 @@
 <?php
 
 use App\Domain\Calendrier\Connexions\FuseauParDefautDeLaBase;
+use App\Domain\Demonstration\Bases\ReglagesDeLaBase;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Support\Facades\DB;
 
@@ -20,12 +21,17 @@ use Illuminate\Support\Facades\DB;
  * Une sauvegarde logique restaurée sans --create le perd, et cette
  * migration, déjà inscrite, ne passe plus : caisse:diagnostiquer le
  * signale et donne la commande qui le rétablit.
+ *
+ * Elle passe par la fonction unique des réglages de la base
+ * (ReglagesDeLaBase), que le site de démonstration rappelle aussitôt après
+ * chaque copie d'un modèle : CREATE DATABASE … TEMPLATE ne recopie pas ce
+ * qui appartient à la base.
  */
 return new class extends Migration
 {
     public function up(): void
     {
-        FuseauParDefautDeLaBase::fixerAUtc(DB::connection());
+        ReglagesDeLaBase::appliquer(DB::connection());
     }
 
     public function down(): void

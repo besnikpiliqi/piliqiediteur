@@ -9,6 +9,7 @@
         "ext-gd": "*",
         "ext-openssl": "*",
         "ext-pdo_pgsql": "*",
+        "ext-sodium": "*",
         "ext-zip": "*",
         "bacon/bacon-qr-code": "^3.1",
         "barryvdh/laravel-dompdf": "^3.1",

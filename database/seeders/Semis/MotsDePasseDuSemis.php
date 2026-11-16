@@ -49,6 +49,16 @@ final class MotsDePasseDuSemis
     }
 
     /**
+     * Les mots de passe d'une base modèle du site de démonstration : celui
+     * du modèle, tiré par sa construction (voir ConstruireUnModele), pour
+     * tous ses comptes (choix 29).
+     */
+    public static function duModele(#[SensitiveParameter] string $motDePasse): self
+    {
+        return new self($motDePasse);
+    }
+
+    /**
      * Vrai quand tous les comptes reçoivent le mot de passe commun.
      */
     public function sontCommuns(): bool

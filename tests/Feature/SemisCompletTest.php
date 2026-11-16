@@ -7,6 +7,7 @@ use App\Domain\Achats\Services\PiecesDuFournisseur;
 use App\Domain\Facturation\Events\FactureEmise;
 use App\Domain\TableauDeBord\Enums\Graphique;
 use App\Domain\Tenancy\Enums\StatutCompte;
+use App\Domain\Tenancy\Isolation\ControlesDeLApplication;
 use App\Models\User;
 use BackedEnum;
 use Carbon\Carbon;
@@ -84,10 +85,10 @@ class SemisCompletTest extends TestCase
      * @var array<string, int>
      */
     private const NOMBRES_DE_LIGNES = [
-        'actions_traitees' => 4010,
-        'actions_traitees_de_la_societe' => 323,
-        'affectations' => 38,
-        'autorisations_affectations' => 517,
+        'actions_traitees' => 4676,
+        'actions_traitees_de_la_societe' => 348,
+        'affectations' => 40,
+        'autorisations_affectations' => 533,
         'autorisations_cabinet' => 43,
         'autorisations_societe' => 6,
         'avoir_allocations' => 121,
@@ -96,75 +97,78 @@ class SemisCompletTest extends TestCase
         'bordereaux_detaxe' => 2,
         'cabinets' => 4,
         'changements_fin_exercice' => 1,
-        'charges' => 168,
-        'clients' => 42,
+        'charges' => 181,
+        'clients' => 43,
         'clients_confies' => 2,
-        'clotures_caisse' => 2238,
-        'clotures_caisse_personnelles' => 2819,
-        'clotures_caisse_personnelles_factures' => 3370,
-        'clotures_caisse_personnelles_paiements' => 3281,
+        'clotures_caisse' => 2621,
+        'clotures_caisse_personnelles' => 3329,
+        'clotures_caisse_personnelles_factures' => 4007,
+        'clotures_caisse_personnelles_paiements' => 3918,
         'codes_confirmation' => 26,
         'comptes_expert_comptable' => 3,
         'consultations_vies' => 5,
         'demandes_inscription' => 1,
+        'demonstrations' => 14,
         'devis' => 225,
         'ecarts_sirene' => 2,
-        'enregistrements_fiscaux' => 9149,
+        'enregistrements_fiscaux' => 10813,
         'envois_documents' => 12,
         'evenements_transmission_pdp' => 61,
-        'factures' => 3371,
-        'factures_achat' => 88,
-        'fournisseurs' => 5,
-        'identifiants' => 65,
-        'inventaires_ouverture' => 10,
+        'factures' => 4008,
+        'factures_achat' => 116,
+        'fournisseurs' => 6,
+        'identifiants' => 67,
+        'inventaires_ouverture' => 11,
         'invitations_cabinet' => 6,
-        'journal_audit' => 1481,
+        'journal_audit' => 1616,
         'liens_cabinet' => 15,
         'liens_des_devis' => 6,
-        'lignes_achat' => 232,
+        'lignes_achat' => 288,
         'lignes_avoir' => 146,
         'lignes_avoir_fournisseur' => 2,
-        'lignes_de_charge' => 167,
+        'lignes_de_charge' => 180,
         'lignes_devis' => 393,
-        'lignes_facture' => 5032,
-        'lignes_inventaire_ouverture' => 21,
+        'lignes_facture' => 5988,
+        'lignes_inventaire_ouverture' => 23,
         'lignes_recu_paiement' => 160,
-        'magasins' => 18,
+        'magasins' => 19,
         'magasins_cabinet' => 1,
         'mandats_pdp' => 2,
-        'mouvements_stock' => 4028,
+        'messages_vers_la_demonstration' => 23,
+        'mouvements_stock' => 5042,
         'notifications' => 189,
-        'paiement_allocations' => 3281,
-        'paiements' => 3281,
+        'paiement_allocations' => 3918,
+        'paiements' => 3918,
         'paniers_caisse' => 1,
-        'periodes_activite' => 19,
-        'pieces_de_charge' => 168,
+        'periodes_activite' => 20,
+        'pieces_de_charge' => 181,
         'pieces_fournisseur' => 1,
         'pieces_verification' => 4,
         'postes_reconnus' => 1,
         'preferences_tableau_de_bord' => 4,
         'preuves_operation' => 5,
-        'produits' => 26,
+        'produits' => 28,
         'recus_paiement' => 160,
         'referentiel_autorisations_magasin' => 51,
         'referentiel_autorisations_societe' => 5,
         'reponses_des_devis' => 3,
-        'sequences_documents' => 85,
+        'sequences_documents' => 93,
         'services' => 9,
-        'sirets_magasins' => 19,
+        'sirets_magasins' => 20,
+        'site_de_la_base' => 1,
         'societes' => 21,
         'taux_avoirs_fournisseur' => 2,
-        'taux_factures_achat' => 117,
+        'taux_factures_achat' => 173,
         'telechargements_documents' => 5,
-        'tetes_journal_audit' => 94,
-        'tetes_registre_fiscal' => 18,
+        'tetes_journal_audit' => 98,
+        'tetes_registre_fiscal' => 19,
         'traces_audit' => 8,
         'traces_evenements' => 2,
         'transmissions_pdp' => 57,
         'transmissions_propriete' => 2,
         'types_de_charge_de_la_societe' => 2,
-        'users' => 65,
-        'verifications_societe' => 502,
+        'users' => 67,
+        'verifications_societe' => 518,
         'visas_detaxe' => 1,
     ];
 
@@ -337,7 +341,7 @@ class SemisCompletTest extends TestCase
             'La même personne a un compte dans chacun de ses deux magasins, promu responsable à la République.',
         );
         $this->assertSame([['EPICERIE']], $this->lignes("select m.code from clients_confies cc join users u on u.id = cc.user_id join liens_cabinet l on l.id = cc.lien_id join magasins m on m.societe_id = l.societe_id where u.name = 'Emma Rousseau'"));
-        $this->assertSame(['HALLES', 'REPUB'], User::query()->where('name', 'Paul Lefèvre')->sole()->magasinsAccessibles()->pluck('code')->sort()->values()->all());
+        $this->assertSame(['FDF', 'HALLES', 'REPUB'], User::query()->where('name', 'Paul Lefèvre')->sole()->magasinsAccessibles()->pluck('code')->sort()->values()->all(), 'Le collaborateur du cabinet ouvre les trois magasins de Maison Ferrand, Fort-de-France compris (« tous les magasins, présents et futurs »).');
         $this->assertSame([['EPICERIE']], $this->lignes('select m.code from magasins_cabinet mc join magasins m on m.id = mc.magasin_id'), 'L\'Épicerie n\'ouvre au cabinet que son magasin choisi.');
     }
 
@@ -474,7 +478,10 @@ class SemisCompletTest extends TestCase
     /**
      * Les colonnes d'état de chaque table : chaque attribut d'un modèle
      * d'app/ converti en une énumération dont le nom commence par Statut,
-     * Etat, Resultat ou Motif, ou qui dit le mode de fermeture d'une caisse.
+     * Etat, Resultat ou Motif, ou qui dit le mode de fermeture d'une caisse ;
+     * pas ceux du registre du site de démonstration, dont les tables vivent
+     * dans une autre base que celle du poste (leurs états se sèment par le
+     * registre semé du site de démonstration, F.8, lot DEMO-COPIE-3).
      *
      * @return array<string, array<string, class-string<BackedEnum>>>
      */
@@ -485,7 +492,7 @@ class SemisCompletTest extends TestCase
         foreach (Finder::create()->files()->in(app_path())->name('*.php') as $fichier) {
             $classe = 'App\\'.str_replace(['/', '.php'], ['\\', ''], Str::after($fichier->getPathname(), app_path().DIRECTORY_SEPARATOR));
 
-            if (! class_exists($classe) || ! is_subclass_of($classe, Model::class) || (new ReflectionClass($classe))->isAbstract()) {
+            if (! class_exists($classe) || ! is_subclass_of($classe, Model::class) || (new ReflectionClass($classe))->isAbstract() || str_starts_with($classe, ControlesDeLApplication::MODELES_DU_REGISTRE)) {
                 continue;
             }
 

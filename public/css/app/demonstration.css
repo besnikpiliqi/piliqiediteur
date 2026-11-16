@@ -1,0 +1,79 @@
+/*
+ * Les pages du site de démonstration servies hors des panneaux (voir
+ * EntrerDansLaDemonstrationController et OuvrirLaCopie) : la page du lien
+ * (/d), sous sa politique de contenu stricte qui ne permet que les feuilles
+ * du site, et les pages d'attente d'une copie. Une carte blanche au centre,
+ * en clair et en sombre (contraste AA).
+ */
+.piliqi-demonstration {
+    background: #f9fafb;
+    color: #111827;
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    margin: 0;
+}
+
+.piliqi-demonstration__carte {
+    background: #ffffff;
+    border-radius: 0.75rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    margin: 4rem auto;
+    max-width: 40rem;
+    padding: 2rem;
+}
+
+.piliqi-demonstration__titre {
+    font-size: 1.25rem;
+    margin-top: 0;
+}
+
+.piliqi-demonstration__texte-gris {
+    color: #4b5563;
+}
+
+.piliqi-demonstration__boutons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-top: 1rem;
+}
+
+.piliqi-demonstration__bouton {
+    background: #1d4ed8;
+    border: 0;
+    border-radius: 0.5rem;
+    color: #ffffff;
+    cursor: pointer;
+    font: inherit;
+    padding: 0.5rem 1rem;
+}
+
+.piliqi-demonstration__bouton--secondaire {
+    background: #e5e7eb;
+    color: #111827;
+}
+
+@media (max-width: 40rem) {
+    .piliqi-demonstration__carte {
+        margin: 1rem;
+    }
+}
+
+@media (prefers-color-scheme: dark) {
+    .piliqi-demonstration {
+        background: #111827;
+        color: #f9fafb;
+    }
+
+    .piliqi-demonstration__carte {
+        background: #1f2937;
+    }
+
+    .piliqi-demonstration__texte-gris {
+        color: #d1d5db;
+    }
+
+    .piliqi-demonstration__bouton--secondaire {
+        background: #374151;
+        color: #f9fafb;
+    }
+}

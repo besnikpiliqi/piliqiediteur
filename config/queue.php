@@ -31,6 +31,35 @@ return [
 
     'connections' => [
 
+        /*
+         | Seulement sur le site de démonstration (PILIQI_SITE=demonstration,
+         | voir config/database.php ; lot DEMO-COPIE, C.13) : les files de son
+         | registre. « demonstration » sert aux pages, qui y déposent les
+         | travaux par le rôle demo_app (files demonstration-admin, default
+         | et telechargements) ; « demonstration-admin » est lue par le seul
+         | travailleur du rôle demo_admin, qui crée, refait, archive et
+         | supprime les copies. Un travail ne part qu'après la validation de
+         | la transaction qui l'envoie (after_commit).
+         */
+        ...(env('PILIQI_SITE') !== 'demonstration' ? [] : [
+            'demonstration' => [
+                'driver' => 'database',
+                'connection' => 'registre',
+                'table' => 'jobs',
+                'queue' => 'default',
+                'retry_after' => 1900,
+                'after_commit' => true,
+            ],
+            'demonstration-admin' => [
+                'driver' => 'database',
+                'connection' => 'demo_admin',
+                'table' => 'jobs',
+                'queue' => 'demonstration-admin',
+                'retry_after' => 1900,
+                'after_commit' => true,
+            ],
+        ]),
+
         'sync' => [
             'driver' => 'sync',
         ],

@@ -790,15 +790,28 @@ final class SocietesDesCas
      */
     private function inviter(): void
     {
-        foreach (['ouverte', 'refusee', 'retiree', 'caduque'] as $etat) {
+        $this->inviterDesEntreprisesQuiNeSInscriventPas();
+        $this->invitation(self::SIRENS_INVITES['caduque']);
+        $this->semis->inscrire('caduque', self::SIRENS_INVITES['caduque'], TypeDActivite::Commerce, 'proprietaire@patisserie-arnaud.exemple.test');
+        $this->invitation(self::SIREN_COMPTOIR);
+        $this->semis->horsDeToutContexte(fn (): LienCabinet => app(DesignerUnCabinetAction::class)->handle($this->semis->proprietaire('atelier'), $this->semis->societe('atelier'), $this->semis->societe('cabinet')));
+    }
+
+    /**
+     * Les invitations du cabinet Martin à des entreprises qui ne
+     * s'inscrivent pas : l'une reste ouverte, une autre est refusée par la
+     * personne qui reçoit le lien, la troisième retirée par le cabinet.
+     * Elles ne créent aucune société : la base modèle « Cabinet » du site
+     * de démonstration les reçoit aussi (F.2).
+     */
+    public function inviterDesEntreprisesQuiNeSInscriventPas(): void
+    {
+        foreach (['ouverte', 'refusee', 'retiree'] as $etat) {
             $this->invitation(self::SIRENS_INVITES[$etat]);
         }
 
         $this->semis->horsDeToutContexte(fn () => app(RefuserLInvitationAction::class)->handle($this->jetonDeLInvitation(self::SIRENS_INVITES['refusee'])));
         $this->semis->horsDeToutContexte(fn () => app(RetirerLInvitationAction::class)->handle($this->semis->proprietaire('cabinet'), $this->invitationOuverte(self::SIRENS_INVITES['retiree'])));
-        $this->semis->inscrire('caduque', self::SIRENS_INVITES['caduque'], TypeDActivite::Commerce, 'proprietaire@patisserie-arnaud.exemple.test');
-        $this->invitation(self::SIREN_COMPTOIR);
-        $this->semis->horsDeToutContexte(fn (): LienCabinet => app(DesignerUnCabinetAction::class)->handle($this->semis->proprietaire('atelier'), $this->semis->societe('atelier'), $this->semis->societe('cabinet')));
     }
 
     /**

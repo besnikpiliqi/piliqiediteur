@@ -17,6 +17,7 @@ use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\ResultatVerification;
 use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Societe;
+use App\Domain\Tenancy\Rules\PasUnDomaineReserve;
 use App\Domain\Tenancy\Rules\SirenValide;
 use App\Domain\Tenancy\Scopes\SocieteScope;
 use App\Domain\Tenancy\Services\ControleSirene;
@@ -103,7 +104,7 @@ class InviterUneEntrepriseAction
     {
         $valides = Validator::make(['siren' => $siren, 'email' => $email], [
             'siren' => ['required', 'string', new SirenValide],
-            'email' => ['required', 'string', 'email', 'max:255'],
+            'email' => ['required', 'string', 'email', 'max:255', new PasUnDomaineReserve],
         ])->validate();
         $siren = ValeursLues::texteDe($valides, 'siren');
         $email = User::normaliserEmail(ValeursLues::texteDe($valides, 'email'));

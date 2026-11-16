@@ -121,5 +121,6 @@
         <button type="submit" class="refus">Refuser l'invitation</button>
     </form>
 </main>
+    @include('pied-de-page-du-site')
 </body>
 </html>

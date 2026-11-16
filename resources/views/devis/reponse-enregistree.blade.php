@@ -33,5 +33,6 @@
     @endif
     <p>Ce lien ne vaut plus : pour toute question, répondez à l'e-mail du magasin.</p>
 </main>
+    @include('pied-de-page-du-site')
 </body>
 </html>

@@ -9,6 +9,7 @@ use App\Domain\Tenancy\Mail\CompteExistantMail;
 use App\Domain\Tenancy\Mail\DemandeInscriptionMail;
 use App\Domain\Tenancy\Models\DemandeInscription;
 use App\Domain\Tenancy\Models\Societe;
+use App\Domain\Tenancy\Rules\PasUnDomaineReserve;
 use App\Domain\Tenancy\Rules\SirenValide;
 use App\Domain\Tenancy\Services\ControleSirene;
 use App\Domain\Tenancy\Services\FournisseurDesComptes;
@@ -283,6 +284,7 @@ class InscriptionSociete extends Register
             ->email()
             ->required()
             ->maxLength(255)
+            ->rule(new PasUnDomaineReserve)
             ->adresseDeConnexion();
     }
 

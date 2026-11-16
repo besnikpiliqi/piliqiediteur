@@ -15,11 +15,12 @@
             <directory>tests/Browser</directory>
         </testsuite>
     </testsuites>
-    <!-- Le groupe courriels-reels envoie de vrais e-mails à la boîte de test de Mailtrap : jamais dans la suite ni en CI, seulement à la demande (voir le README). Le groupe semis sème toute la base (plusieurs minutes par semis) : hors de la suite par défaut, une tâche de la CI le lance à part (php artisan test - -group=semis, voir le README). -->
+    <!-- Le groupe courriels-reels envoie de vrais e-mails à la boîte de test de Mailtrap : jamais dans la suite ni en CI, seulement à la demande (voir le README). Le groupe semis sème toute la base (plusieurs minutes par semis) : hors de la suite par défaut, une tâche de la CI le lance à part (php artisan test - -group=semis, voir le README). Le groupe copies construit les vraies bases modèles du site de démonstration (plusieurs minutes chacune) : hors de la suite par défaut, une tâche de la CI à lui (php artisan test - -group=copies). -->
     <groups>
         <exclude>
             <group>courriels-reels</group>
             <group>semis</group>
+            <group>copies</group>
         </exclude>
     </groups>
     <source>
@@ -50,6 +51,8 @@
         <env name="RECOMMANDE_PILOTE" value="faux"/>
         <env name="ORDRE_PILOTE" value="faux"/>
         <env name="PDP_PILOTE" value="faux"/>
+        <!-- Le vrai VIES, que chaque test simule (Http::fake) ; le semis et le site de démonstration prennent le faux (voir FauxVies). -->
+        <env name="VIES_PILOTE" value="reel"/>
         <env name="APP_FAKER_LOCALE" value="fr_FR" force="true"/>
         <env name="ANTIVIRUS_PILOTE" value="factice"/>
         <env name="PULSE_ENABLED" value="false"/>

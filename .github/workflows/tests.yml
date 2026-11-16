@@ -31,7 +31,7 @@ jobs:
         uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
         with:
           php-version: 8.3
-          extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, pdo_pgsql, sockets, gd, :pdo_sqlite, :sqlite3
+          extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, pdo_pgsql, sockets, gd, sodium, :pdo_sqlite, :sqlite3
           coverage: none
 
       - name: Install Composer dependencies
@@ -68,7 +68,7 @@ jobs:
         uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
         with:
           php-version: 8.3
-          extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, pdo_pgsql, sockets, gd, :pdo_sqlite, :sqlite3
+          extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, pdo_pgsql, sockets, gd, sodium, :pdo_sqlite, :sqlite3
           coverage: none
 
       - name: Install Composer dependencies
@@ -114,7 +114,7 @@ jobs:
         uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
         with:
           php-version: 8.3
-          extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, pdo_pgsql, sockets, gd, :pdo_sqlite, :sqlite3
+          extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, pdo_pgsql, sockets, gd, sodium, :pdo_sqlite, :sqlite3
           coverage: none
 
       - name: Install Composer dependencies
@@ -156,7 +156,7 @@ jobs:
         uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
         with:
           php-version: 8.3
-          extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, pdo_pgsql, sockets, gd, :pdo_sqlite, :sqlite3
+          extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, pdo_pgsql, sockets, gd, sodium, :pdo_sqlite, :sqlite3
           coverage: none
 
       - name: Setup Node
@@ -231,6 +231,7 @@ jobs:
       - name: Create test role and database
         run: |
           docker exec ${{ job.services.postgres.id }} psql -v ON_ERROR_STOP=1 -U postgres -c "CREATE ROLE piliqi LOGIN CREATEDB PASSWORD 'piliqi'"
+          docker exec ${{ job.services.postgres.id }} psql -v ON_ERROR_STOP=1 -U postgres -c "CREATE ROLE demo_admin LOGIN CREATEDB PASSWORD 'piliqi'" -c "GRANT pg_signal_backend TO demo_admin" -c "CREATE ROLE demo_app LOGIN PASSWORD 'piliqi'"
           docker exec ${{ job.services.postgres.id }} psql -v ON_ERROR_STOP=1 -U postgres -c "CREATE DATABASE piliqi_test OWNER piliqi"
 
       - name: Install qpdf
@@ -240,7 +241,7 @@ jobs:
         uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
         with:
           php-version: 8.3
-          extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, pdo_pgsql, sockets, gd, :pdo_sqlite, :sqlite3
+          extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, pdo_pgsql, sockets, gd, sodium, :pdo_sqlite, :sqlite3
           coverage: pcov
 
       - name: Install Composer dependencies
@@ -353,6 +354,7 @@ jobs:
       - name: Create test role and database
         run: |
           docker exec ${{ job.services.postgres.id }} psql -v ON_ERROR_STOP=1 -U postgres -c "CREATE ROLE piliqi LOGIN CREATEDB PASSWORD 'piliqi'"
+          docker exec ${{ job.services.postgres.id }} psql -v ON_ERROR_STOP=1 -U postgres -c "CREATE ROLE demo_admin LOGIN CREATEDB PASSWORD 'piliqi'" -c "GRANT pg_signal_backend TO demo_admin" -c "CREATE ROLE demo_app LOGIN PASSWORD 'piliqi'"
           docker exec ${{ job.services.postgres.id }} psql -v ON_ERROR_STOP=1 -U postgres -c "CREATE DATABASE piliqi_test OWNER piliqi"
 
       # qpdf (licence Apache 2.0) lit en entier chaque PDF reçu (voir
@@ -364,7 +366,7 @@ jobs:
         uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
         with:
           php-version: ${{ matrix.php }}
-          extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, pdo_pgsql, sockets, gd, :pdo_sqlite, :sqlite3
+          extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, pdo_pgsql, sockets, gd, sodium, :pdo_sqlite, :sqlite3
           coverage: none
 
       - name: Install Composer dependencies
@@ -461,6 +463,7 @@ jobs:
       - name: Create test role and database
         run: |
           docker exec ${{ job.services.postgres.id }} psql -v ON_ERROR_STOP=1 -U postgres -c "CREATE ROLE piliqi LOGIN CREATEDB PASSWORD 'piliqi'"
+          docker exec ${{ job.services.postgres.id }} psql -v ON_ERROR_STOP=1 -U postgres -c "CREATE ROLE demo_admin LOGIN CREATEDB PASSWORD 'piliqi'" -c "GRANT pg_signal_backend TO demo_admin" -c "CREATE ROLE demo_app LOGIN PASSWORD 'piliqi'"
           docker exec ${{ job.services.postgres.id }} psql -v ON_ERROR_STOP=1 -U postgres -c "CREATE DATABASE piliqi_test OWNER piliqi"
 
       - name: Install qpdf
@@ -470,7 +473,7 @@ jobs:
         uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
         with:
           php-version: 8.3
-          extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, pdo_pgsql, sockets, gd, :pdo_sqlite, :sqlite3
+          extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, pdo_pgsql, sockets, gd, sodium, :pdo_sqlite, :sqlite3
           coverage: none
 
       - name: Install Composer dependencies
@@ -499,3 +502,73 @@ jobs:
       - name: Résumé des tests du semis
         if: always()
         run: php tests/Qualite/resume-des-tests.php storage/logs/junit-semis.xml storage/logs/teamcity-semis.txt
+
+  # Les vraies bases modèles du site de démonstration (lot DEMO-COPIE,
+  # N15) : chacune construite par la vraie construction et le semis de son
+  # modèle, puis relue dans une copie. Chaque construction prend plusieurs
+  # minutes : le groupe « copies » est hors de la suite par défaut
+  # (phpunit.xml) et tourne ici, à chaque envoi.
+  copies:
+    runs-on: ubuntu-latest
+
+    name: Bases modèles de la démonstration (PHP 8.3, PostgreSQL 17)
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_INITDB_ARGS: --encoding=UTF8 --locale=C.UTF-8
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DB_CONNECTION: pgsql
+      DB_HOST: 127.0.0.1
+      DB_PORT: 5432
+      DB_DATABASE: piliqi_test
+      DB_USERNAME: piliqi
+      DB_PASSWORD: piliqi
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Create test role and database
+        run: |
+          docker exec ${{ job.services.postgres.id }} psql -v ON_ERROR_STOP=1 -U postgres -c "CREATE ROLE piliqi LOGIN CREATEDB PASSWORD 'piliqi'"
+          docker exec ${{ job.services.postgres.id }} psql -v ON_ERROR_STOP=1 -U postgres -c "CREATE ROLE demo_admin LOGIN CREATEDB PASSWORD 'piliqi'" -c "GRANT pg_signal_backend TO demo_admin" -c "CREATE ROLE demo_app LOGIN PASSWORD 'piliqi'"
+          docker exec ${{ job.services.postgres.id }} psql -v ON_ERROR_STOP=1 -U postgres -c "CREATE DATABASE piliqi_test OWNER piliqi"
+
+      - name: Install qpdf
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends qpdf
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
+        with:
+          php-version: 8.3
+          extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, pdo_pgsql, sockets, gd, sodium, :pdo_sqlite, :sqlite3
+          coverage: none
+
+      - name: Install Composer dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Copy environment file
+        run: cp .env.example .env
+
+      - name: Generate app key
+        run: php artisan key:generate
+
+      - name: Bases modèles et leurs tests
+        run: php artisan test --group=copies --log-junit storage/logs/junit-copies.xml --log-teamcity storage/logs/teamcity-copies.txt
+
+      - name: Résumé des tests des bases modèles
+        if: always()
+        run: php tests/Qualite/resume-des-tests.php storage/logs/junit-copies.xml storage/logs/teamcity-copies.txt

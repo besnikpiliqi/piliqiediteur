@@ -8,9 +8,11 @@ use App\Providers\Filament\AppPanelProvider;
 use App\Providers\Filament\CabinetPanelProvider;
 use App\Providers\Filament\SocietePanelProvider;
 use App\Providers\FournisseursExternesServiceProvider;
+use App\Providers\SiteDePiliqiServiceProvider;
 use App\Providers\TenancyServiceProvider;
 
 return [
+    SiteDePiliqiServiceProvider::class,
     AppServiceProvider::class,
     EventServiceProvider::class,
     AppPanelProvider::class,

@@ -11,6 +11,7 @@ use App\Domain\Cabinets\Notifications\AvisDuCabinet;
 use App\Domain\Cabinets\Notifications\AvisDuCabinetEnFile;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
+use App\Domain\Demonstration\Mail\LienDeLaDemonstrationMail;
 use App\Domain\Facturation\Actions\CreerAvoirAction;
 use App\Domain\Facturation\Actions\CreerDevisAction;
 use App\Domain\Facturation\Actions\CreerFactureAction;
@@ -123,6 +124,7 @@ class CourrielsReelsTest extends TestCase
         ReponseDuClientAuDevis::class,
         AvisDeLAntivirus::class,
         LienPourChoisirSonMotDePasse::class,
+        LienDeLaDemonstrationMail::class,
     ];
 
     private const API = 'https://mailtrap.io/api/sandboxes/';
@@ -193,7 +195,8 @@ class CourrielsReelsTest extends TestCase
      * connexion, transmission de la propriété, inscription close, alerte de
      * l'éditeur, invitations et demandes des cabinets, lien du mot de passe
      * et fermeture du compte d'un expert-comptable de la société, nouvelle
-     * adresse d'un expert-comptable, e-mail d'essai.
+     * adresse d'un expert-comptable, lien de la démonstration, e-mail
+     * d'essai.
      *
      * @return int le nombre d'e-mails envoyés
      */
@@ -214,6 +217,7 @@ class CourrielsReelsTest extends TestCase
             new InvitationACreerUnEspaceMail('https://piliqi.test/app/register', 'Boutique Essai'),
             new LienDuMotDePasseDeLExpertComptableMail($lien, 'Marc Petit', 'Boutique Essai', '000000018', 'cabinet Cabinet Essai', '19/11/2026 à 10:00', ['Factures : voir toutes celles du magasin']),
             new CompteDExpertComptableFermeMail('Marc Petit', 'Boutique Essai', 'cabinet Cabinet Essai'),
+            new LienDeLaDemonstrationMail('https://piliqi-demo.test/d#essai', 'K7M2QD', '16/12/2026 à 10:00'),
             new CourrielDEssai('mailtrap'),
         ];
 

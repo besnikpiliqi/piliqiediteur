@@ -49,6 +49,7 @@
                         @else
                             <x-filament::icon icon="heroicon-o-ellipsis-horizontal-circle" class="h-6 w-6 text-gray-400" label="À faire" />
                         @endif
+
                         <div>
                             @if ($etape['url'] !== null)
                                 <a href="{{ $etape['url'] }}" class="font-semibold underline">{{ $etape['titre'] }}</a>
@@ -62,6 +63,10 @@
             </ol>
         </x-filament::section>
     @endif
+
+    <div id="ma-demonstration">
+        @livewire(\App\Filament\MaDemonstration::NOM, ['societe' => $this->societe()], key('ma-demonstration'))
+    </div>
 
     @if ($this->voitLesGraphiques())
         @livewire(\App\Filament\GrilleDesGraphiques::NOM, ['ecran' => \App\Domain\TableauDeBord\Enums\EcranDuTableauDeBord::Societe->value, 'lazy' => 'on-load'], key('graphiques-de-la-societe'))

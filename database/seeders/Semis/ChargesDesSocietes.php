@@ -85,6 +85,10 @@ final class ChargesDesSocietes
      */
     public function preparer(): void
     {
+        if (! $this->semis->seme('commerce')) {
+            return;
+        }
+
         $proprietaire = $this->semis->proprietaire('commerce');
         $societe = $this->semis->societe('commerce');
         $types = app(GererLesTypesDeChargeAction::class);
@@ -108,7 +112,7 @@ final class ChargesDesSocietes
         $jour = $this->horloge->jour($rang);
         $quantieme = (int) substr($jour, 8, 2);
         $moisPrecedent = substr(Calendrier::ajouterJours(Calendrier::premierJourDuMois($jour), -1), 0, 7);
-        $casParticuliers = substr($jour, 0, 7) === substr($this->horloge->jour(SemisComplet::JOURS - 75), 0, 7);
+        $casParticuliers = $this->semis->seme('commerce') && substr($jour, 0, 7) === substr($this->horloge->jour(SemisComplet::JOURS - 75), 0, 7);
 
         if ($quantieme === 5) {
             $this->horloge->aller($rang, '08:00');
@@ -120,7 +124,7 @@ final class ChargesDesSocietes
             $this->validerLeMois();
         }
 
-        if ($quantieme === 6 && SemisComplet::JOURS - $rang < self::DEBUT_DES_CHARGES_DU_COMPTOIR) {
+        if ($quantieme === 6 && $this->semis->surLePoste() && SemisComplet::JOURS - $rang < self::DEBUT_DES_CHARGES_DU_COMPTOIR) {
             $this->horloge->aller($rang, '08:00');
             $this->chargesDuComptoir($moisPrecedent);
         }
@@ -153,11 +157,39 @@ final class ChargesDesSocietes
         $numero = (int) substr($mois, 5, 2);
         $premier = $mois.'-01';
         $paiement = $mois.'-05';
+
+        if ($this->semis->seme('commerce')) {
+            $this->deposerLeMoisDeMaisonFerrand($mois, $numero, $casParticuliers);
+        }
+
+        if ($this->semis->seme('services')) {
+            $this->deposerLeMoisDuConseil($mois, $numero);
+        }
+
+        if ($this->semis->seme('client')) {
+            $epicerie = $this->semis->proprietaire('client');
+            $this->deposer($epicerie, 'client', $this->saisie('piliqi:loyer', 'epicerie', 'SCI Lemoine', 'SL-'.$mois, $premier, [[TauxDeCharge::Vingt, 70000]], $paiement));
+            $this->deposer($epicerie, 'client', $this->saisie('piliqi:electricite', 'epicerie', 'EDF Entreprises', 'EDF-E-'.$mois, $mois.'-27', [[TauxDeCharge::Vingt, 9500 + 500 * ($numero % 5)]]));
+        }
+
+        if ($this->semis->seme('commerce') && $this->estLeDernierMoisDeposable($mois)) {
+            $this->horsDeToutContexte(fn (): Charge => app(DeposerUneChargeAction::class)->handle($this->semis->proprietaire('commerce'), $this->semis->societe('commerce'), $this->saisie('piliqi:fournitures', 'halles', 'Bureau Plus', null, $mois.'-22', []), $this->piece('Bureau Plus'), GestesDuMagasin::jeton()));
+        }
+    }
+
+    /**
+     * Les charges du mois de Maison Ferrand, dont le loyer de son magasin de
+     * Fort-de-France, à 8,5 %.
+     */
+    private function deposerLeMoisDeMaisonFerrand(string $mois, int $numero, bool $casParticuliers): void
+    {
+        $premier = $mois.'-01';
+        $paiement = $mois.'-05';
         $commerce = $this->semis->proprietaire('commerce');
-        $services = $this->semis->proprietaire('services');
 
         $this->deposer($commerce, 'commerce', $this->saisie('piliqi:loyer', 'halles', 'SCI des Halles', 'QH-'.$mois, $premier, [[TauxDeCharge::Vingt, 150000]], $paiement));
         $this->deposer($commerce, 'commerce', $this->saisie('piliqi:loyer', 'republique', 'SCI République', 'QR-'.$mois, $premier, [[TauxDeCharge::Vingt, 110000]], $paiement));
+        $this->deposer($commerce, 'commerce', $this->saisie('piliqi:loyer', 'martinique', 'SCI du Malecon', 'MAL-'.$mois, $premier, [[TauxDeCharge::HuitVirguleCinq, 95000]], $paiement));
         $this->deposer($commerce, 'commerce', $this->saisie('piliqi:telephone_internet', null, 'Orange Pro', null, $mois.'-10', [[TauxDeCharge::Vingt, 4990]], $mois.'-20'));
         $this->deposer($commerce, 'commerce', $this->saisie('piliqi:abonnements_logiciels', null, 'Cloud Software Ltd', 'CS-'.$mois, $premier, [[TauxDeCharge::Vingt, 2900]], $premier, horsDeFrance: true));
         $this->deposer($commerce, 'commerce', $this->saisie($this->typesPropres['Nettoyage de la vitrine'], 'halles', 'Net Vitrines', 'NV-'.$mois, $mois.'-15', [[TauxDeCharge::Vingt, 8000]]));
@@ -189,6 +221,18 @@ final class ChargesDesSocietes
             $this->deposer($commerce, 'commerce', $this->saisie('piliqi:fournitures', 'republique', 'Bureau Plus', 'BP-'.$mois, $mois.'-11', [[TauxDeCharge::Vingt, 12000]], tvaRecopiee: 2405));
         }
 
+    }
+
+    /**
+     * Les charges du mois de Conseil Vasseur, dont l'une, l'avant-dernier
+     * mois, que son expert-comptable renverra.
+     */
+    private function deposerLeMoisDuConseil(string $mois, int $numero): void
+    {
+        $premier = $mois.'-01';
+        $paiement = $mois.'-05';
+        $services = $this->semis->proprietaire('services');
+
         if ($this->estLeDernierMoisDeposable(Calendrier::ajouterJours($mois.'-28', 31))) {
             $this->enAttente = $this->deposer($services, 'services', $this->saisie('piliqi:entretien_reparations', 'conseil', 'Clim Service', 'CL-'.$mois, $mois.'-14', [[TauxDeCharge::Vingt, 24000]]));
         }
@@ -204,13 +248,6 @@ final class ChargesDesSocietes
             $this->deposer($services, 'services', $this->saisie('piliqi:formation', null, 'Institut du Conseil', 'IC-'.$mois, $mois.'-21', [[TauxDeCharge::Vingt, 60000]]));
         }
 
-        $epicerie = $this->semis->proprietaire('client');
-        $this->deposer($epicerie, 'client', $this->saisie('piliqi:loyer', 'epicerie', 'SCI Lemoine', 'SL-'.$mois, $premier, [[TauxDeCharge::Vingt, 70000]], $paiement));
-        $this->deposer($epicerie, 'client', $this->saisie('piliqi:electricite', 'epicerie', 'EDF Entreprises', 'EDF-E-'.$mois, $mois.'-27', [[TauxDeCharge::Vingt, 9500 + 500 * ($numero % 5)]]));
-
-        if ($this->estLeDernierMoisDeposable($mois)) {
-            $this->horsDeToutContexte(fn (): Charge => app(DeposerUneChargeAction::class)->handle($commerce, $this->semis->societe('commerce'), $this->saisie('piliqi:fournitures', 'halles', 'Bureau Plus', null, $mois.'-22', []), $this->piece('Bureau Plus'), GestesDuMagasin::jeton()));
-        }
     }
 
     /**
@@ -233,7 +270,7 @@ final class ChargesDesSocietes
      */
     private function validerLeMois(): void
     {
-        $comptables = ['commerce' => 'Paul Lefèvre', 'services' => 'Marc Petit', 'client' => 'Emma Rousseau'];
+        $comptables = array_filter(['commerce' => 'Paul Lefèvre', 'services' => 'Marc Petit', 'client' => 'Emma Rousseau'], fn (string $societe): bool => $this->semis->seme($societe), ARRAY_FILTER_USE_KEY);
 
         foreach ($comptables as $societe => $nom) {
             $comptable = $this->semis->compte($nom);

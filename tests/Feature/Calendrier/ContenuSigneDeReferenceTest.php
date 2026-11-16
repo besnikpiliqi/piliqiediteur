@@ -59,11 +59,23 @@ class ContenuSigneDeReferenceTest extends TestCase
      * code signait juste avant la date de l'opération de la facture (T49),
      * qui fait la 2.1 : le bloc « document » d'une facture et d'un ticket
      * gagne date_operation (début et fin), son bloc « livraison » perd sa
-     * date.
+     * date. La 3.0 (lot DEMO-COPIE) garde la structure signée du site réel :
+     * seul le vérificateur et les copies du site de démonstration changent.
      */
+    /**
+     * Les versions qui changent le module fiscal sans changer la structure
+     * du contenu signé du site réel, avec la version dont elles gardent la
+     * structure : la 3.0 (lot DEMO-COPIE, D.7) change le vérificateur et
+     * n'ajoute la clé « demonstration » qu'aux en-têtes et aux émetteurs
+     * des copies du site de démonstration, jamais à ceux du site réel, que
+     * fixent les fichiers de référence.
+     */
+    private const MEME_STRUCTURE_QUE = ['3.0' => '2.1'];
+
     private const STRUCTURES_SIGNEES = [
         '2.0' => '8d3cf5148390ac0c2b822501bfa82522df919f3ec6a59ab74f84ccc6ee14b3a8',
         '2.1' => '5e7c5deb1b8ad9421220957cfac7f0609c36aaea4258c415157f086c976d70bd',
+        '3.0' => '5e7c5deb1b8ad9421220957cfac7f0609c36aaea4258c415157f086c976d70bd',
     ];
 
     /**
@@ -166,7 +178,7 @@ class ContenuSigneDeReferenceTest extends TestCase
      * déplacée dans les fichiers de référence) ne se signe jamais sous la
      * version d'une autre structure : la version du module fiscal est celle
      * de la structure que fixent les fichiers de référence, et deux versions
-     * ne signent jamais la même.
+     * ne signent jamais la même, sauf celles de MEME_STRUCTURE_QUE.
      */
     public function test_une_structure_nouvelle_du_contenu_signe_prend_une_nouvelle_version_du_module_fiscal(): void
     {
@@ -180,10 +192,15 @@ class ContenuSigneDeReferenceTest extends TestCase
         sort($chemins, SORT_STRING);
         $structure = hash('sha256', implode("\n", $chemins));
 
-        $this->assertSame(array_values(array_unique(self::STRUCTURES_SIGNEES)), array_values(self::STRUCTURES_SIGNEES), 'Deux versions du module fiscal ne signent jamais la même structure.');
+        $propres = array_diff_key(self::STRUCTURES_SIGNEES, self::MEME_STRUCTURE_QUE);
+        $this->assertSame(array_values(array_unique($propres)), array_values($propres), 'Deux versions du module fiscal ne signent jamais la même structure, sauf une version qui change le module sans changer le contenu signé du site réel.');
+
+        foreach (self::MEME_STRUCTURE_QUE as $version => $precedente) {
+            $this->assertSame(self::STRUCTURES_SIGNEES[$precedente], self::STRUCTURES_SIGNEES[$version], "La version {$version} signe la structure de la {$precedente}.");
+        }
         $this->assertSame(
-            ModuleFiscal::VERSION,
-            array_search($structure, self::STRUCTURES_SIGNEES, true),
+            $structure,
+            self::STRUCTURES_SIGNEES[ModuleFiscal::VERSION] ?? null,
             "La structure du contenu signé ({$structure}) n'est pas celle de la version ".ModuleFiscal::VERSION.' du module fiscal : passez-le à une nouvelle version et ajoutez-la à STRUCTURES_SIGNEES.',
         );
     }

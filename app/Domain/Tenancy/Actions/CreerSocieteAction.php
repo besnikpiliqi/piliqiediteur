@@ -10,6 +10,7 @@ use App\Domain\Tenancy\Enums\StatutCompte;
 use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Exceptions\VerificationRefuseeException;
 use App\Domain\Tenancy\Models\Societe;
+use App\Domain\Tenancy\Rules\PasUnDomaineReserve;
 use App\Domain\Tenancy\Rules\SirenValide;
 use App\Domain\Tenancy\Services\ControleSirene;
 use App\Domain\Tenancy\Services\DestinataireOfficiel;
@@ -105,7 +106,7 @@ class CreerSocieteAction
     {
         $valides = Validator::make(['siren' => $siren, 'email' => $email, 'password' => $motDePasse], [
             'siren' => ['required', 'string', new SirenValide],
-            'email' => ['required', 'string', 'email', 'max:255'],
+            'email' => ['required', 'string', 'email', 'max:255', new PasUnDomaineReserve],
             'password' => ['required', 'string'],
         ])->validate();
         $email = User::normaliserEmail(ValeursLues::texteDe($valides, 'email'));

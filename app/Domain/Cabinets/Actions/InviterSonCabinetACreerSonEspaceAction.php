@@ -6,6 +6,7 @@ use App\Domain\Cabinets\Mail\InvitationACreerUnEspaceMail;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Societe;
+use App\Domain\Tenancy\Rules\PasUnDomaineReserve;
 use App\Domain\Tenancy\Services\DebitDesEmails;
 use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\JournalDesDroits;
@@ -52,7 +53,7 @@ class InviterSonCabinetACreerSonEspaceAction
      */
     public function handle(User $auteur, Societe $client, string $email): void
     {
-        $email = User::normaliserEmail(ValeursLues::texteDe(Validator::make(['email' => $email], ['email' => ['required', 'string', 'email', 'max:255']])->validate(), 'email'));
+        $email = User::normaliserEmail(ValeursLues::texteDe(Validator::make(['email' => $email], ['email' => ['required', 'string', 'email', 'max:255', new PasUnDomaineReserve]])->validate(), 'email'));
         $auteurRelu = $this->journalDesDroits->exigerDansSaSociete($auteur, 'gererSonCabinet', $client);
         $this->debit->verifier($auteurRelu);
 

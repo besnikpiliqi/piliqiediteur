@@ -5,6 +5,8 @@ namespace App\Domain\Tenancy\Actions;
 use App\Domain\Cabinets\Actions\MettreFinAuLienAction;
 use App\Domain\Cabinets\Enums\MotifDeFinDuLien;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
+use App\Domain\Demonstration\Actions\TerminerLaDemonstrationAction;
+use App\Domain\Demonstration\Enums\CauseDeLaFin;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\MotifCode;
 use App\Domain\Tenancy\Enums\PreuveDeValidation;
@@ -16,6 +18,7 @@ use App\Domain\Tenancy\Exceptions\SiretDejaReserveException;
 use App\Domain\Tenancy\Models\CodeConfirmation;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
+use App\Domain\Tenancy\Rules\PasUnDomaineReserve;
 use App\Domain\Tenancy\Scopes\SocieteScope;
 use App\Domain\Tenancy\Services\AlerteEditeur;
 use App\Domain\Tenancy\Services\CodesDeConfirmation;
@@ -331,7 +334,7 @@ class SaisirCodeDeConfirmationAction
     private function exigerUnNouveauCompte(string $email, #[SensitiveParameter] string $motDePasse, #[SensitiveParameter] string $confirmation): void
     {
         Validator::make(['email' => $email, 'password' => $motDePasse, 'password_confirmation' => $confirmation], [
-            'email' => ['required', 'string', 'email', 'max:255'],
+            'email' => ['required', 'string', 'email', 'max:255', new PasUnDomaineReserve],
             'password' => [...RegleDuMotDePasse::regles(null), 'confirmed'],
         ], attributes: ['email' => 'adresse e-mail', 'password' => 'mot de passe'])->validate();
 
@@ -453,6 +456,7 @@ class SaisirCodeDeConfirmationAction
         });
 
         $this->finDesLiens->pourUneSocieteQuiChangeDeMains($verrouillee, MotifDeFinDuLien::ProprietaireRemplace);
+        app(TerminerLaDemonstrationAction::class)->handle($verrouillee, CauseDeLaFin::NouveauProprietaire);
 
         return [$resultat['compte'], $resultat['jeton']];
     }

@@ -9,6 +9,7 @@ use App\Domain\Tenancy\Enums\StatutMagasin;
 use App\Domain\Tenancy\Models\Identifiant;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
+use App\Domain\Tenancy\Rules\PasUnDomaineReserve;
 use App\Domain\Tenancy\Support\CleDuModele;
 use App\Domain\Tenancy\Support\ValeursLues;
 use App\Models\User;
@@ -88,7 +89,7 @@ final class CreationDesComptes
     {
         $valide = Validator::make(
             ['email' => is_string($email) ? trim($email) : $email, 'email_confirmation' => is_string($confirmation) ? trim($confirmation) : $confirmation],
-            ['email' => ['required', 'string', 'email', 'max:255', 'confirmed']],
+            ['email' => ['required', 'string', 'email', 'max:255', 'confirmed', new PasUnDomaineReserve]],
             ['email.confirmed' => 'Les deux adresses ne sont pas les mêmes.'],
             ['email' => 'adresse e-mail professionnelle'],
         )->validate();

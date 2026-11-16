@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "2fe0663edd77b1bfc931e02cc86914fc",
+    "content-hash": "7aeae72b767c23a15f3b330d1f45c2fa",
     "packages": [
         {
             "name": "anourvalar/eloquent-serialize",
@@ -12946,7 +12946,8 @@
                     "type": "github"
                 }
             ],
-            "time": "2026-11-03T12:14:22+00:00"
+            "time": "2026-11-03T12:14:22+00:00",
+            "published-time": "2026-11-03T12:14:36+00:00"
         },
         {
             "name": "phpunit/php-code-coverage",
@@ -15177,6 +15178,7 @@
         "ext-gd": "*",
         "ext-openssl": "*",
         "ext-pdo_pgsql": "*",
+        "ext-sodium": "*",
         "ext-zip": "*"
     },
     "platform-dev": {},

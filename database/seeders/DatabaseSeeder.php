@@ -3,11 +3,12 @@
 namespace Database\Seeders;
 
 use App\Console\SemisEnCours;
+use App\Domain\Demonstration\ConstructionDUnModele;
+use App\Domain\Demonstration\SiteDePiliqi;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\CodesDeConfirmation;
 use App\Domain\Tenancy\Services\TenantContext;
-use App\Domain\Tenancy\Support\Reglage;
-use App\Providers\AntivirusServiceProvider;
+use App\Providers\FournisseursExternesServiceProvider;
 use Database\Seeders\Semis\CodesLusDansLesCourriers;
 use Database\Seeders\Semis\ComptesSemes;
 use Database\Seeders\Semis\FileDAttenteDuSemis;
@@ -17,6 +18,7 @@ use Database\Seeders\Semis\SemisComplet;
 use Illuminate\Console\Command;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
@@ -30,12 +32,13 @@ use Throwable;
  * (voir SemisComplet), puis affiche la liste des comptes pour se
  * connecter et l'écrit dans FICHIER_DES_COMPTES, sur le disque privé, que
  * git ne suit pas. Le semeur refuse de s'exécuter hors du développement
- * local et des tests, sans les fournisseurs factices (voir
- * PILOTES_FACTICES), et dans une base qui a déjà des sociétés, avant d'y
- * rien écrire. Aucun e-mail ne part pendant le semis : les liens qu'il
+ * local et des tests (sur le site de démonstration, hors d'une base modèle
+ * en construction, voir ConstructionDUnModele), sans les fournisseurs
+ * factices (voir FournisseursExternesServiceProvider::PILOTES_FACTICES),
+ * et dans une base qui a déjà des sociétés, avant d'y rien écrire. Aucun e-mail ne part pendant le semis : les liens qu'il
  * suit (invitation du cabinet, mot de passe de l'expert-comptable,
  * réponse au devis) se lisent dans les e-mails retenus, aucune requête HTTP
- * ne sort (VIES répond par une réponse factice), et ses tâches
+ * ne sort (VIES est le faux, voir FauxVies), et ses tâches
  * s'exécutent aussitôt, sans file d'attente, sauf celles que quelques
  * gestes laissent en file, comme en production, dans des files à eux
  * qu'aucun travailleur du poste n'écoute (voir FileDAttenteDuSemis :
@@ -45,54 +48,27 @@ use Throwable;
  * par la vérification de l'isolation de toute la base (voir
  * VerifierLIsolation), dont il affiche le tableau : au moindre problème, il
  * n'est pas accepté (code de sortie 1) et la liste des comptes ne s'affiche
- * pas. Le site de démonstration se met en ligne à l'étape 15 de la feuille
- * de route.
+ * pas. Le même semis remplit les bases modèles du site de démonstration
+ * (lot DEMO-COPIE, F.1), qui se met en ligne à l'étape 15 de la feuille de
+ * route : chacune ne reçoit que les sociétés de son modèle (voir
+ * SemisComplet::SOCIETES_DES_MODELES), tous ses comptes ont le mot de
+ * passe de démonstration du modèle (choix 29), et aucune liste des comptes
+ * ne s'écrit : le bandeau de la copie la donne (voir
+ * ComptesDuBandeauDuModele).
  */
 class DatabaseSeeder extends Seeder
 {
     public const FICHIER_DES_COMPTES = 'comptes-du-semis.txt';
 
+    public const MESSAGE_HORS_D_UNE_CONSTRUCTION = 'Sur le site de démonstration, le semis ne remplit qu\'une base modèle en construction (demo_travail_…), par php artisan demonstration:construire-les-modeles : php artisan db:seed y est refusé. Rien n\'a été écrit.';
+
     public const MESSAGE_HORS_DU_DEVELOPPEMENT = 'Le semis ne se fait qu\'en développement local ou dans les tests (APP_ENV=local ou testing), jamais en production : rien n\'a été écrit.';
 
-    public const MESSAGE_FOURNISSEURS_REELS = 'Le semis exige les fournisseurs factices, qui seuls connaissent les entreprises fictives semées et n\'envoient rien hors de PILIQI : réglez SIRENE_PILOTE=faux, RNE_PILOTE=faux, RECOMMANDE_PILOTE=faux, ORDRE_PILOTE=faux, PDP_PILOTE=faux et ANTIVIRUS_PILOTE=factice dans le .env, comme dans .env.example, puis php artisan optimize:clear. Rien n\'a été écrit.';
+    public const MESSAGE_FOURNISSEURS_REELS = 'Le semis exige les fournisseurs factices, qui seuls connaissent les entreprises fictives semées et n\'envoient rien hors de PILIQI : réglez SIRENE_PILOTE=faux, RNE_PILOTE=faux, RECOMMANDE_PILOTE=faux, ORDRE_PILOTE=faux, PDP_PILOTE=faux, VIES_PILOTE=faux et ANTIVIRUS_PILOTE=factice dans le .env, comme dans .env.example, puis php artisan optimize:clear. Rien n\'a été écrit.';
 
     public const MESSAGE_ISOLATION_EN_DEFAUT = 'Le semis n\'est pas accepté : la vérification de l\'isolation a trouvé des problèmes (tableau ci-dessus). Corrigez le semis ou le code qui a écrit ces lignes, puis relancez php artisan migrate:fresh --seed.';
 
     public const MESSAGE_BASE_DEJA_REMPLIE = 'La base contient déjà des sociétés : le semis se fait dans une base vide, par php artisan migrate:fresh --seed, qui efface toute la base. Rien n\'a été écrit.';
-
-    /**
-     * Le pilote factice de chaque fournisseur externe, que le semis exige
-     * avant d'écrire quoi que ce soit (voir
-     * FournisseursExternesServiceProvider et AntivirusServiceProvider) :
-     * seuls le répertoire Sirene, le registre national des entreprises et
-     * l'annuaire de l'Ordre factices connaissent les entreprises fictives
-     * semées, et le semis ne passe par aucun service réel : ni courrier
-     * recommandé, ni plateforme agréée, ni antivirus.
-     *
-     * @var array<string, string>
-     */
-    private const PILOTES_FACTICES = [
-        'services.sirene.pilote' => 'faux',
-        'services.rne.pilote' => 'faux',
-        'services.recommande.pilote' => 'faux',
-        'services.ordre.pilote' => 'faux',
-        'services.pdp.pilote' => 'faux',
-        'services.antivirus.pilote' => AntivirusServiceProvider::FACTICE,
-    ];
-
-    /**
-     * La réponse de VIES aux vérifications de n° de TVA du semis, qui ne
-     * joint jamais le vrai service : chaque n° de l'Union semé est valide
-     * (voir ClientVies). Toute autre requête HTTP du semis est refusée.
-     *
-     * @var array<string, bool|string>
-     */
-    private const REPONSE_DE_VIES = [
-        'valid' => true,
-        'name' => '---',
-        'address' => '---',
-        'requestIdentifier' => 'WAPIAAAAW0SEMIS',
-    ];
 
     /**
      * La commande de la console qui lance le semis (db:seed), qui la donne
@@ -113,11 +89,15 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        if (! app()->environment(['local', 'testing'])) {
+        if (SiteDePiliqi::estLaDemonstration()) {
+            if (ConstructionDUnModele::enCours() === null || preg_match(ConstructionDUnModele::MOTIF_DE_LA_BASE_DE_TRAVAIL, DB::connection()->getDatabaseName()) !== 1) {
+                throw new RuntimeException(self::MESSAGE_HORS_D_UNE_CONSTRUCTION);
+            }
+        } elseif (! app()->environment(['local', 'testing'])) {
             throw new RuntimeException(self::MESSAGE_HORS_DU_DEVELOPPEMENT);
         }
 
-        foreach (self::PILOTES_FACTICES as $reglage => $pilote) {
+        foreach (FournisseursExternesServiceProvider::PILOTES_FACTICES as $reglage => $pilote) {
             if (config($reglage) !== $pilote) {
                 throw new RuntimeException(self::MESSAGE_FOURNISSEURS_REELS);
             }
@@ -127,19 +107,19 @@ class DatabaseSeeder extends Seeder
             throw new RuntimeException(self::MESSAGE_BASE_DEJA_REMPLIE);
         }
 
-        $motsDePasse = MotsDePasseDuSemis::depuisLaConfiguration();
+        $construction = ConstructionDUnModele::enCours();
+        $motsDePasse = $construction === null ? MotsDePasseDuSemis::depuisLaConfiguration() : MotsDePasseDuSemis::duModele($construction->motDePasse);
         $comptes = new ComptesSemes;
         $codes = new CodesLusDansLesCourriers;
         app()->instance(CodesDeConfirmation::class, $codes);
         Mail::fake();
         Http::preventStrayRequests();
-        Http::fake([rtrim(Reglage::texte('services.vies.url'), '/').'/*' => Http::response(self::REPONSE_DE_VIES)]);
 
-        SemisEnCours::pendant(fn () => FileDAttenteDuSemis::pendantLeSemis(function () use ($motsDePasse, $codes, $comptes): void {
+        SemisEnCours::pendant(fn () => FileDAttenteDuSemis::pendantLeSemis(function () use ($motsDePasse, $codes, $comptes, $construction): void {
             $horloge = new HorlogeDuSemis(SemisComplet::JOURS);
 
             try {
-                $semis = new SemisComplet($horloge, $motsDePasse, $codes, $comptes);
+                $semis = new SemisComplet($horloge, $motsDePasse, $codes, $comptes, $construction?->type);
                 $semis->semer();
                 $horloge->terminer();
                 $semis->laisserUneVenteEnCours();
@@ -157,6 +137,10 @@ class DatabaseSeeder extends Seeder
 
         if ($isolation !== 0) {
             throw new RuntimeException(self::MESSAGE_ISOLATION_EN_DEFAUT);
+        }
+
+        if ($construction !== null) {
+            return;
         }
 
         Storage::disk('local')->put(self::FICHIER_DES_COMPTES, $this->texteDuFichier($comptes, $motsDePasse));

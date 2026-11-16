@@ -7,6 +7,7 @@ use App\Domain\Cabinets\Models\LienCabinet;
 use App\Domain\Cabinets\Services\AccesDesCabinets;
 use App\Domain\Cabinets\Services\TableauDeBordDesClients;
 use App\Domain\Calendrier\Calendrier;
+use App\Domain\Demonstration\Services\CarteDeLaDemonstration;
 use App\Domain\Tenancy\Enums\StatutCompte;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\CourriersDeVerification;
@@ -111,6 +112,8 @@ class TableauDeBordDuCabinet extends Dashboard
         $verification = $cabinet->cabinet()->first();
         $page = VerificationDuCabinet::getUrl();
 
+        $demonstration = app(CarteDeLaDemonstration::class)->etape(CompteConnecte::exiger(), $cabinet, self::getUrl());
+
         return [
             [
                 'titre' => self::ETAPE_CODE_DU_COURRIER,
@@ -153,6 +156,7 @@ class TableauDeBordDuCabinet extends Dashboard
                 'etat' => $clients > 0 ? trans_choice('{1} 1 client lié|[2,*] :count clients liés', $clients) : 'Par leur SIREN, une fois votre cabinet vérifié : chacun accepte et règle ce que votre cabinet peut faire.',
                 'url' => InvitationsEtDemandes::getUrl(),
             ],
+            ...($demonstration === null ? [] : [$demonstration]),
         ];
     }
 

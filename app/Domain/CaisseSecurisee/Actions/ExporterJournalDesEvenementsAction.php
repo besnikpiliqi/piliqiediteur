@@ -126,10 +126,24 @@ class ExporterJournalDesEvenementsAction
             return $exportateur;
         });
 
-        $magasinId = $magasin->getKey();
-        $calendrier = $magasin->calendrier();
-        $avecLesTraces = $exportateur->estProprietaireDuMagasin($magasin);
+        return self::ecrivain($magasin->getKey(), $magasin->calendrier(), $du, $au, $exportateur->estProprietaireDuMagasin($magasin));
+    }
 
+    /**
+     * Ce qui écrit dans un flux le journal des événements de ce magasin
+     * sur la période, au format de l'export, sans rien inscrire au
+     * journal : handle() l'appelle après avoir inscrit l'export (JET 110),
+     * et l'archive d'une copie du site de démonstration (lot DEMO-COPIE,
+     * C.18), qui suit la sortie du mode d'entraînement (JET 105), y écrit
+     * tout le journal de chaque magasin (sans borne), sans adresse IP ni
+     * navigateur.
+     *
+     * @param  string|null  $du  AAAA-MM-JJ, null : depuis le premier événement
+     * @param  string|null  $au  AAAA-MM-JJ, null : jusqu'au dernier
+     * @return Closure(resource): void
+     */
+    public static function ecrivain(int $magasinId, Calendrier $calendrier, ?string $du, ?string $au, bool $avecLesTraces): Closure
+    {
         return static function (mixed $flux) use ($magasinId, $calendrier, $du, $au, $avecLesTraces): void {
             $flux = ResultatDePhp::flux($flux, 'L\'ouverture du fichier de l\'export');
             fwrite($flux, "\u{FEFF}");

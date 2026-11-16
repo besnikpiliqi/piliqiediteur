@@ -13,6 +13,8 @@ use App\Domain\Cabinets\Models\InvitationCabinet;
 use App\Domain\Cabinets\Services\AccesDesCabinets;
 use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
+use App\Domain\Demonstration\Actions\TerminerLaDemonstrationAction;
+use App\Domain\Demonstration\Enums\CauseDeLaFin;
 use App\Domain\Facturation\Actions\CloturerLesJourneesAction;
 use App\Domain\Facturation\Actions\FermerLesCaissesPersonnellesAction;
 use App\Domain\Tenancy\Enums\ActionAuditee;
@@ -356,6 +358,7 @@ class RevoquerSocieteAction
             ->each(fn (CodeConfirmation $code) => $this->annulationDesCodes->annuler($code, AnnulationDesCodes::SOCIETE_REVOQUEE, editeur: $editeur));
 
         $transmissions = $this->annulerLesTransmissionsEnAttente($verrouillee, $editeur);
+        app(TerminerLaDemonstrationAction::class)->handle($verrouillee, CauseDeLaFin::Revocation);
         $this->finDeLaRelation->constater($verrouillee);
         $this->journalAudit->inscrire(ActionAuditee::SocieteRevoquee, null, null, ['statut' => $ancienStatut->value], [
             'statut' => StatutSociete::Revoquee->value,

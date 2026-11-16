@@ -32,5 +32,6 @@
 
     <p><a class="bouton" href="{{ $connexion }}">Se connecter pour répondre</a></p>
 </main>
+    @include('pied-de-page-du-site')
 </body>
 </html>

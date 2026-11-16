@@ -146,6 +146,7 @@ use PHPUnit\Framework\AssertionFailedError;
 use Random\Engine\Xoshiro256StarStar;
 use Random\Randomizer;
 use Tests\Fixtures\EcrituresDurables;
+use Tests\Fixtures\GereSesPropresBases;
 
 abstract class TestCase extends BaseTestCase
 {
@@ -278,11 +279,12 @@ abstract class TestCase extends BaseTestCase
      * un échec qui ne se voit que selon l'ordre des tests. Ses écritures
      * durables sont donc relevées dès le début du test, hors de toute
      * transaction (voir EcrituresDurables), et sa fin le refuse s'il en a
-     * fait (voir refuserLesEcrituresSansBaseDeTest()).
+     * fait (voir refuserLesEcrituresSansBaseDeTest()). Une classe qui gère
+     * ses propres bases (GereSesPropresBases) en est dispensée.
      */
     private function surveillerLesEcrituresSansBaseDeTest(): void
     {
-        if (array_intersect([RefreshDatabase::class, DatabaseMigrations::class, DatabaseTruncation::class, DatabaseTransactions::class], class_uses_recursive(static::class)) !== []) {
+        if ($this instanceof GereSesPropresBases || array_intersect([RefreshDatabase::class, DatabaseMigrations::class, DatabaseTruncation::class, DatabaseTransactions::class], class_uses_recursive(static::class)) !== []) {
             return;
         }
 

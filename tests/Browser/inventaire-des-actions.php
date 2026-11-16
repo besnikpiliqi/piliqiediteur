@@ -2680,6 +2680,9 @@ return [
         ]],
     ],
     'routes/web.php' => [
+        'formulaire:/ma-demonstration/ouvrir' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Parcours/MaDemonstrationTest.php › le propriétaire ouvre sa démonstration par le bouton, dans un nouvel onglet',
+        ]],
         'formulaire:/expert-comptable/{jeton}' => ['lot' => 'NAV-4', 'tests' => [
             'tests/Browser/Parcours/ExpertComptableDeclareTest.php › le propriétaire déclare son expert-comptable, qui choisit son mot de passe par le lien et lit la société',
         ]],
@@ -3004,6 +3007,36 @@ return [
         ]],
         'saisie:vue' => ['lot' => 'NAV-4', 'tests' => [
             'tests/Browser/Parcours/ChargesTest.php › sans comptable, le propriétaire valide lui-même, supprime une charge, choisit les types habituels, ajoute un type et filtre la liste',
+        ]],
+    ],
+    'app/Filament/MaDemonstration.php' => [
+        'composant' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Parcours/MaDemonstrationTest.php › le propriétaire d’une société crée sa démonstration et lit son lien une seule fois',
+            'tests/Browser/Parcours/MaDemonstrationTest.php › le propriétaire d’un cabinet crée la démonstration de son cabinet',
+            'tests/Browser/Parcours/MaDemonstrationTest.php › un administrateur ne voit pas la carte, et sans adresse confirmée la carte mène au profil',
+        ]],
+        'action:creer' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Parcours/MaDemonstrationTest.php › le propriétaire d’une société crée sa démonstration et lit son lien une seule fois',
+            'tests/Browser/Parcours/MaDemonstrationTest.php › le propriétaire d’un cabinet crée la démonstration de son cabinet',
+        ]],
+        'action:renouveler' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Parcours/MaDemonstrationTest.php › le propriétaire renouvelle le lien avec son mot de passe, puis remet sa démonstration à zéro',
+        ]],
+        'action:recommencer' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Parcours/MaDemonstrationTest.php › le propriétaire renouvelle le lien avec son mot de passe, puis remet sa démonstration à zéro',
+        ]],
+    ],
+    'resources/views/demonstration/billet.blade.php' => [
+        'formulaire:{{ $action }}' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Parcours/MaDemonstrationTest.php › le propriétaire ouvre sa démonstration par le bouton, dans un nouvel onglet',
+        ]],
+    ],
+    'resources/views/filament/ma-demonstration.blade.php' => [
+        'formulaire:{{ route(\'ma-demonstration.ouvrir\') }}' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Parcours/MaDemonstrationTest.php › le propriétaire ouvre sa démonstration par le bouton, dans un nouvel onglet',
+        ]],
+        'lien:Renvoyer le lien de confirmation' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Parcours/MaDemonstrationTest.php › un administrateur ne voit pas la carte, et sans adresse confirmée la carte mène au profil',
         ]],
     ],
 ];

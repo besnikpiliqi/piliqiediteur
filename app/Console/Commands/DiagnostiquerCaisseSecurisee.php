@@ -7,6 +7,9 @@ use App\Domain\CaisseSecurisee\Services\SignataireFiscal;
 use App\Domain\CaisseSecurisee\Support\HorlogeDuSysteme;
 use App\Domain\Calendrier\Calendrier;
 use App\Domain\Calendrier\Connexions\FuseauParDefautDeLaBase;
+use App\Domain\Demonstration\Exceptions\SiteMalConfigureException;
+use App\Domain\Demonstration\MarqueDeLaBase;
+use App\Domain\Demonstration\SiteDePiliqi;
 use App\Domain\Fichiers\AnalyseurDePdf;
 use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Support\Reglage;
@@ -60,6 +63,12 @@ use ZipArchive;
  *   (QPDF_BINAIRE), en version 11 au moins ; l'antivirus, qui doit
  *   reconnaître le fichier de test EICAR, et ne jamais être l'antivirus
  *   factice en production ;
+ * - le site servi (PILIQI_SITE) et la marque de la base : « reel » sur le
+ *   site réel, la base sentinelle vide sur le site de démonstration (voir
+ *   MarqueDeLaBase) ; en production, le serveur PostgreSQL du site réel
+ *   n'a aucune base du site de démonstration et son rôle ne crée pas de
+ *   base (CREATEDB) : le site de démonstration a sa machine et son serveur
+ *   à lui (lot DEMO-COPIE, choix 9) ;
  * - la vérification de l'isolation de toute la base (voir
  *   VerifierLIsolation), qui doit avoir réussi, sans aucun problème, depuis
  *   moins de 36 heures : la tâche de chaque nuit qui ne tourne plus, ou qui
@@ -75,9 +84,17 @@ class DiagnostiquerCaisseSecurisee extends Command
      */
     public const ECART_MAXIMAL_DE_L_HORLOGE = 0.5;
 
+    public const MESSAGE_BASES_DE_LA_DEMONSTRATION = 'Le serveur PostgreSQL du site réel porte %d base(s) du site de démonstration (demo_…) : en production, le site de démonstration a son serveur à lui.';
+
+    public const MESSAGE_ROLE_QUI_CREE_DES_BASES = 'Le rôle PostgreSQL du site réel peut créer des bases (CREATEDB) : retirez-lui ce droit (ALTER ROLE … NOCREATEDB), qui n\'existe que sur le serveur du site de démonstration.';
+
+    public const MESSAGE_SENTINELLE_REMPLIE = 'La base sentinelle « %s » du site de démonstration doit rester sans aucune table : elle en a %d. Supprimez-la, recréez-la vide, et vérifiez qu\'aucune migration ne vise la base par défaut de ce serveur.';
+
     public function handle(SignataireFiscal $signataire, Antivirus $antivirus, HorlogeDuSysteme $horloge): int
     {
         $controles = [
+            'Site servi' => fn (): string => SiteDePiliqi::courant()->libelle(),
+            'Marque de la base' => fn (): string => self::controlerLaMarqueDeLaBase(),
             'Extension openssl' => fn (): string => $this->controlerOpenssl(),
             'Génération d\'une clé P-256' => fn (): string => $this->controlerLaGenerationDUneCle(),
             'Extension zip' => fn (): string => $this->controlerZip(),
@@ -117,6 +134,43 @@ class DiagnostiquerCaisseSecurisee extends Command
         $this->info('Caisse sécurisée opérationnelle.');
 
         return self::SUCCESS;
+    }
+
+    /**
+     * Sur le site réel, la base porte la marque « reel » (voir
+     * MarqueDeLaBase) : jamais une base du site de démonstration. Sur le
+     * site de démonstration, la base par défaut est la base sentinelle,
+     * qui reste sans aucune table (chaque copie porte sa propre marque, que
+     * chaque requête contrôle).
+     *
+     * @throws SiteMalConfigureException
+     */
+    private static function controlerLaMarqueDeLaBase(): string
+    {
+        $connexion = DB::connection();
+
+        if (SiteDePiliqi::estLaDemonstration()) {
+            $tables = (int) $connexion->scalar("SELECT count(*) FROM pg_tables WHERE schemaname = 'public'");
+
+            if ($tables > 0) {
+                throw new SiteMalConfigureException(sprintf(self::MESSAGE_SENTINELLE_REMPLIE, $connexion->getDatabaseName(), $tables));
+            }
+
+            return 'base sentinelle '.$connexion->getDatabaseName().', sans table';
+        }
+
+        MarqueDeLaBase::exigerPour(SiteDePiliqi::Reel, $connexion);
+
+        if (app()->isProduction()) {
+            $bases = (int) $connexion->scalar("SELECT count(*) FROM pg_database WHERE datname ~ '^demo_'");
+            $creeDesBases = $connexion->scalar('SELECT rolcreatedb FROM pg_roles WHERE rolname = current_user') === true;
+
+            if ($bases > 0 || $creeDesBases) {
+                throw new SiteMalConfigureException(trim(($bases > 0 ? sprintf(self::MESSAGE_BASES_DE_LA_DEMONSTRATION, $bases) : '').' '.($creeDesBases ? self::MESSAGE_ROLE_QUI_CREE_DES_BASES : '')));
+            }
+        }
+
+        return 'reel';
     }
 
     /**

@@ -2,6 +2,7 @@
 
 namespace Tests;
 
+use App\Integrations\Vies\Contracts\ServiceVies;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -29,11 +30,15 @@ trait SemeSansTransaction
      * n'enveloppe pas : la connexion reçoit le même, pour que les
      * transactions du semis s'y voient (le registre fiscal ne se
      * verrouille que dans une transaction qu'il voit) et que les rappels
-     * après validation partent à la validation de chacune.
+     * après validation partent à la validation de chacune. Le semis exige
+     * le faux VIES, comme les autres fournisseurs factices de phpunit.xml,
+     * où les tests prennent le vrai, qu'ils simulent (Http::fake).
      */
     protected function setUpSemeSansTransaction(): void
     {
         DB::connection()->setTransactionManager(app('db.transactions'));
+        config(['services.vies.pilote' => 'faux']);
+        app()->forgetInstance(ServiceVies::class);
     }
 
     protected function tearDownSemeSansTransaction(): void

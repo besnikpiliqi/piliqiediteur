@@ -6,6 +6,7 @@ use App\Domain\Facturation\Services\NumeroTva;
 use App\Domain\Facturation\Services\TerritoireFiscal;
 use App\Domain\Tenancy\Support\Reglage;
 use App\Domain\Tenancy\Support\ValeurRequise;
+use App\Integrations\Vies\Contracts\ServiceVies;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
@@ -35,8 +36,11 @@ use Throwable;
  *   n° est valide.
  * Le journal de l'application note le pays, le statut HTTP et les codes
  * d'erreur d'une consultation impossible, jamais le n° ni la réponse.
+ *
+ * Le pilote « reel » de VIES_PILOTE (voir ServiceVies) ; le semis et le
+ * site de démonstration prennent le faux (FauxVies).
  */
-class ClientVies
+class ClientVies implements ServiceVies
 {
     /**
      * Ce que VIES écrit à la place du nom ou de l'adresse que l'État membre

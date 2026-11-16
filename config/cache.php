@@ -34,6 +34,27 @@ return [
 
     'stores' => [
 
+        /*
+         | Seulement sur le site de démonstration (PILIQI_SITE=demonstration,
+         | voir config/database.php) : le cache du registre, cache par défaut
+         | du site de démonstration (CACHE_STORE=registre), qui sert à ce qui
+         | passe avant toute copie (limites de /entrer, /entrer-par-le-compte
+         | et /interne/messages, travailleur, planificateur, commandes
+         | demonstration:* ; lot DEMO-COPIE, C.6.11). Sans lui, ces chemins
+         | liraient la base sentinelle, qui n'a pas de table. Dans une copie,
+         | le cache par défaut devient « database », sur la base de la copie
+         | (voir OuvertureDUneCopie).
+         */
+        ...(env('PILIQI_SITE') !== 'demonstration' ? [] : [
+            'registre' => [
+                'driver' => 'database',
+                'connection' => 'registre',
+                'table' => 'cache',
+                'lock_connection' => 'registre',
+                'lock_table' => 'cache_locks',
+            ],
+        ]),
+
         'array' => [
             'driver' => 'array',
             'serialize' => false,

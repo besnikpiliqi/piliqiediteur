@@ -29,5 +29,6 @@
 
     @yield('lien')
 </main>
+    @include('pied-de-page-du-site')
 </body>
 </html>

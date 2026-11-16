@@ -81,44 +81,54 @@ final class ComptesDesCas
      */
     public function creer(): void
     {
-        $this->semis->membre('halles', 'Élodie Fabre', RoleMagasin::Observateur);
-        $this->dans('halles', fn (): User => app(ModifierMembreAction::class)->handle(
-            $this->semis->proprietaire('commerce'),
-            $this->semis->compte('Élodie Fabre'),
-            RoleMagasin::Observateur,
-            [...RoleMagasin::Observateur->permissionsParDefaut(TypeDActivite::Commerce), PermissionRegistry::PRODUIT_AJUSTER_STOCK],
-        ));
-        $this->semis->membre('conseil', 'Victor Blanchard', RoleMagasin::Observateur);
-        $this->semis->membre('epicerie', 'Margaux Perrin', RoleMagasin::Observateur);
-        $this->semis->membre('halles', 'Yanis Morel', RoleMagasin::Vendeur);
-        $this->semis->membre('conseil', 'Bruno Caron', RoleMagasin::Vendeur);
-        $this->semis->membre('conseil', 'Anaïs Lambert', RoleMagasin::Vendeur);
-        $this->dans('conseil', fn (): User => app(ModifierMembreAction::class)->handle(
-            $this->semis->proprietaire('services'),
-            $this->semis->compte('Anaïs Lambert'),
-            RoleMagasin::Vendeur,
-            [...RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Services), PermissionRegistry::DOCUMENTS_TELECHARGER],
-        ));
-        $this->semis->membre('epicerie', 'Léna Roussel', RoleMagasin::Vendeur);
+        if ($this->semis->seme('commerce')) {
+            $this->semis->membre('halles', 'Élodie Fabre', RoleMagasin::Observateur);
+            $this->dans('halles', fn (): User => app(ModifierMembreAction::class)->handle(
+                $this->semis->proprietaire('commerce'),
+                $this->semis->compte('Élodie Fabre'),
+                RoleMagasin::Observateur,
+                [...RoleMagasin::Observateur->permissionsParDefaut(TypeDActivite::Commerce), PermissionRegistry::PRODUIT_AJUSTER_STOCK],
+            ));
+            $this->semis->membre('halles', 'Yanis Morel', RoleMagasin::Vendeur);
+        }
 
-        $this->dans('halles', fn (): User => app(ModifierMembreAction::class)->handle(
-            $this->semis->proprietaire('commerce'),
-            $this->semis->compte('Camille Laurent'),
-            RoleMagasin::Responsable,
-            [PermissionRegistry::GRAPHIQUES_VOIR, PermissionRegistry::CHARGES_AJOUTER],
-        ));
-        $this->dans('republique', fn (): User => app(ModifierMembreAction::class)->handle(
-            $this->semis->compte('Hugo Lefebvre'),
-            $this->semis->compte('Sarah Petit'),
-            RoleMagasin::Vendeur,
-            [...RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Commerce), PermissionRegistry::FACTURE_VIEW_TOUTES],
-        ));
+        if ($this->semis->seme('services')) {
+            $this->semis->membre('conseil', 'Victor Blanchard', RoleMagasin::Observateur);
+            $this->semis->membre('conseil', 'Bruno Caron', RoleMagasin::Vendeur);
+            $this->semis->membre('conseil', 'Anaïs Lambert', RoleMagasin::Vendeur);
+            $this->dans('conseil', fn (): User => app(ModifierMembreAction::class)->handle(
+                $this->semis->proprietaire('services'),
+                $this->semis->compte('Anaïs Lambert'),
+                RoleMagasin::Vendeur,
+                [...RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Services), PermissionRegistry::DOCUMENTS_TELECHARGER],
+            ));
+        }
+
+        if ($this->semis->seme('client')) {
+            $this->semis->membre('epicerie', 'Margaux Perrin', RoleMagasin::Observateur);
+            $this->semis->membre('epicerie', 'Léna Roussel', RoleMagasin::Vendeur);
+        }
+
+        if ($this->semis->seme('commerce')) {
+            $this->dans('halles', fn (): User => app(ModifierMembreAction::class)->handle(
+                $this->semis->proprietaire('commerce'),
+                $this->semis->compte('Camille Laurent'),
+                RoleMagasin::Responsable,
+                [PermissionRegistry::GRAPHIQUES_VOIR, PermissionRegistry::CHARGES_AJOUTER],
+            ));
+            $this->dans('republique', fn (): User => app(ModifierMembreAction::class)->handle(
+                $this->semis->compte('Hugo Lefebvre'),
+                $this->semis->compte('Sarah Petit'),
+                RoleMagasin::Vendeur,
+                [...RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Commerce), PermissionRegistry::FACTURE_VIEW_TOUTES],
+            ));
+        }
     }
 
     /**
      * Le travail de ce jour de l'histoire : le soir, les ventes des comptes
      * des cas tant qu'ils vendent encore, puis le changement de compte que
-     * ce jour porte.
+     * ce jour porte, quand ce semis sème son magasin.
      */
     public function auJour(int $rang): void
     {
@@ -128,48 +138,52 @@ final class ComptesDesCas
             $this->vendreLeSoir($rang, $avantLaFin);
         }
 
-        match ($avantLaFin) {
-            self::PROMOTION => $this->leSoir($rang, '22:30', function (): void {
+        $changement = match ($avantLaFin) {
+            self::PROMOTION => ['republique', function (): void {
                 $lucas = $this->semis->compte('Lucas Moreau (République)');
                 $this->dans('republique', fn (): User => app(ModifierMembreAction::class)->handle($this->semis->proprietaire('commerce'), $lucas, RoleMagasin::Responsable));
                 $this->liste->changerLeRole($lucas, 'Maison Ferrand République', 'Responsable (vendeur promu)');
-            }),
-            self::ADMINISTRATRICE_DEVENUE_RESPONSABLE => $this->leSoir($rang, '22:30', function (): void {
+            }],
+            self::ADMINISTRATRICE_DEVENUE_RESPONSABLE => ['epicerie', function (): void {
                 $romane = $this->semis->compte('Romane Gauthier');
                 $this->horsDeToutContexte(fn (): User => app(ChangerLeRoleDeSocieteAction::class)->versMembre($this->semis->proprietaire('client'), $romane, RoleMagasin::Responsable, null, $this->semis->magasin('epicerie')->id));
                 $this->liste->changerLeRole($romane, 'Épicerie Lemoine', 'Responsable (administratrice devenue membre)');
-            }),
-            self::SUSPENSION => $this->leSoir($rang, '22:30', function (): void {
+            }],
+            self::SUSPENSION => ['halles', function (): void {
                 $yanis = $this->semis->compte('Yanis Morel');
                 $this->dans('halles', fn () => app(ChangerStatutCompteAction::class)->suspendre($this->semis->compte('Camille Laurent'), $yanis));
                 $this->liste->changerLeRole($yanis, 'Maison Ferrand Halles', 'Vendeur (compte suspendu)');
-            }),
-            self::RETRAIT => $this->leSoir($rang, '22:30', function (): void {
+            }],
+            self::RETRAIT => ['conseil', function (): void {
                 $bruno = $this->semis->compte('Bruno Caron');
                 $this->dans('conseil', fn () => app(ChangerStatutCompteAction::class)->retirer($this->semis->compte('Claire Dubois'), $bruno));
                 $this->liste->changerLeRole($bruno, 'Conseil Vasseur Paris', 'Vendeur (compte retiré)');
-            }),
-            self::RETRAIT_AVANT_REINTEGRATION => $this->leSoir($rang, '22:30', function () use ($rang): void {
+            }],
+            self::RETRAIT_AVANT_REINTEGRATION => ['conseil', function () use ($rang): void {
                 $anais = $this->semis->compte('Anaïs Lambert');
                 $this->demanderLeZipDeSesVentes($anais, $rang);
                 $this->dans('conseil', fn () => app(ChangerStatutCompteAction::class)->retirer($this->semis->compte('Claire Dubois'), $anais));
                 FileDAttenteDuSemis::passer(FileDAttenteDuSemis::TELECHARGEMENTS);
-            }),
-            self::REINTEGRATION => $this->leSoir($rang, '22:30', function (): void {
+            }],
+            self::REINTEGRATION => ['conseil', function (): void {
                 $anais = $this->semis->compte('Anaïs Lambert');
                 $this->horsDeToutContexte(fn () => app(ChangerStatutCompteAction::class)->reintegrer($this->semis->proprietaire('services'), $anais, RoleMagasin::Vendeur));
                 $this->liste->changerLeRole($anais, 'Conseil Vasseur Paris', 'Vendeur (retirée puis réintégrée)');
-            }),
-            self::SUSPENSION_PUIS_REACTIVATION => $this->leSoir($rang, '22:30', fn () => $this->dans('epicerie', fn () => app(ChangerStatutCompteAction::class)->suspendre($this->semis->compte('Nicolas Lemoine'), $this->semis->compte('Léna Roussel')))),
-            self::REACTIVATION => $this->leSoir($rang, '22:30', fn () => $this->dans('epicerie', fn () => app(ChangerStatutCompteAction::class)->reactiver($this->semis->compte('Nicolas Lemoine'), $this->semis->compte('Léna Roussel')))),
-            self::ACCES_REDONNE_EN_ABSENCE => $this->leSoir($rang, '22:30', function (): void {
+            }],
+            self::SUSPENSION_PUIS_REACTIVATION => ['epicerie', fn () => $this->dans('epicerie', fn () => app(ChangerStatutCompteAction::class)->suspendre($this->semis->compte('Nicolas Lemoine'), $this->semis->compte('Léna Roussel')))],
+            self::REACTIVATION => ['epicerie', fn () => $this->dans('epicerie', fn () => app(ChangerStatutCompteAction::class)->reactiver($this->semis->compte('Nicolas Lemoine'), $this->semis->compte('Léna Roussel')))],
+            self::ACCES_REDONNE_EN_ABSENCE => ['epicerie', function (): void {
                 $lena = $this->semis->compte('Léna Roussel');
                 $this->dans('epicerie', fn (): bool => app(RedonnerLAccesAction::class)->handle($this->semis->compte('Nicolas Lemoine'), $lena, false, null, GestesDuMagasin::jeton()));
                 $this->liste->oublierSonMotDePasse($lena);
-            }),
-            self::LIEN_DE_L_EXPERT_COMPTABLE => $this->leSoir($rang, '22:30', fn () => $this->semis->redonnerLAccesALExpertComptable()),
+            }],
+            self::LIEN_DE_L_EXPERT_COMPTABLE => ['conseil', fn () => $this->semis->redonnerLAccesALExpertComptable()],
             default => null,
         };
+
+        if ($changement !== null && $this->semis->semeLeMagasin($changement[0])) {
+            $this->leSoir($rang, '22:30', $changement[1]);
+        }
     }
 
     /**
@@ -180,7 +194,7 @@ final class ComptesDesCas
      */
     public function retiresGardes(): array
     {
-        return [$this->semis->compte('Bruno Caron')->id];
+        return $this->semis->seme('services') ? [$this->semis->compte('Bruno Caron')->id] : [];
     }
 
     /**
@@ -193,23 +207,26 @@ final class ComptesDesCas
     private function vendreLeSoir(int $rang, int $avantLaFin): void
     {
         $this->horloge->aller($rang, '21:40');
-        $halles = new GestesDuMagasin($this->semis->magasin('halles'));
-        $conseil = new GestesDuMagasin($this->semis->magasin('conseil'));
-        $epicerie = new GestesDuMagasin($this->semis->magasin('epicerie'));
 
-        if ($avantLaFin > self::SUSPENSION) {
+        if ($this->semis->seme('commerce') && $avantLaFin > self::SUSPENSION) {
+            $halles = new GestesDuMagasin($this->semis->magasin('halles'));
             $halles->vendreALaCaisse($this->semis->compte('Yanis Morel'), $halles->comptoir(), [['produit_id' => $halles->produit('CARNET-A5')->id, 'quantite' => 1]], ModePaiement::Especes);
         }
 
-        if ($avantLaFin > self::RETRAIT) {
-            $conseil->vendreALaCaisse($this->semis->compte('Bruno Caron'), $conseil->comptoir(), [['service_id' => $conseil->service('Heure de conseil')->id, 'quantite' => 1]], ModePaiement::CarteBancaire);
+        if ($this->semis->seme('services')) {
+            $conseil = new GestesDuMagasin($this->semis->magasin('conseil'));
+
+            if ($avantLaFin > self::RETRAIT) {
+                $conseil->vendreALaCaisse($this->semis->compte('Bruno Caron'), $conseil->comptoir(), [['service_id' => $conseil->service('Heure de conseil')->id, 'quantite' => 1]], ModePaiement::CarteBancaire);
+            }
+
+            if ($avantLaFin > self::RETRAIT_AVANT_REINTEGRATION || $avantLaFin < self::REINTEGRATION) {
+                $conseil->vendreALaCaisse($this->semis->compte('Anaïs Lambert'), $conseil->comptoir(), [['service_id' => $conseil->service('Forfait déplacement')->id, 'quantite' => 1]], ModePaiement::CarteBancaire);
+            }
         }
 
-        if ($avantLaFin > self::RETRAIT_AVANT_REINTEGRATION || $avantLaFin < self::REINTEGRATION) {
-            $conseil->vendreALaCaisse($this->semis->compte('Anaïs Lambert'), $conseil->comptoir(), [['service_id' => $conseil->service('Forfait déplacement')->id, 'quantite' => 1]], ModePaiement::CarteBancaire);
-        }
-
-        if ($avantLaFin > self::SUSPENSION_PUIS_REACTIVATION || $avantLaFin < self::REACTIVATION) {
+        if ($this->semis->seme('client') && ($avantLaFin > self::SUSPENSION_PUIS_REACTIVATION || $avantLaFin < self::REACTIVATION)) {
+            $epicerie = new GestesDuMagasin($this->semis->magasin('epicerie'));
             $epicerie->vendreALaCaisse($this->semis->compte('Léna Roussel'), $epicerie->comptoir(), [['produit_id' => $epicerie->produit('MIEL-LAVANDE')->id, 'quantite' => 1]], ModePaiement::CarteBancaire);
         }
     }

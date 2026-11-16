@@ -63,12 +63,18 @@ final class DerniersGestes
 
     public function semer(): void
     {
-        $this->demanderUneInscription();
+        if ($this->semis->surLePoste()) {
+            $this->demanderUneInscription();
+        }
+
         $this->choisirLesGraphiques();
         $this->lireDesNotifications();
-        $this->telechargerDesDocuments();
-        $this->telechargerLEtatDesCharges();
-        $this->laisserDesTachesEnFile();
+
+        if ($this->semis->seme('commerce')) {
+            $this->telechargerDesDocuments();
+            $this->telechargerLEtatDesCharges();
+            $this->laisserDesTachesEnFile();
+        }
     }
 
     /**
@@ -85,6 +91,32 @@ final class DerniersGestes
     private function choisirLesGraphiques(): void
     {
         $preferences = app(PreferencesDesGraphiques::class);
+
+        if ($this->semis->seme('commerce')) {
+            $this->choisirLesGraphiquesDeMaisonFerrand($preferences);
+        }
+
+        if ($this->semis->seme('cabinet')) {
+            $preferences->enregistrer($this->semis->proprietaire('cabinet'), EcranDuTableauDeBord::Cabinet, new ReglagesDuTableauDeBord([
+                CarteDuTableauDeBord::parDefaut(Graphique::TvaAPayerParMois),
+                CarteDuTableauDeBord::parDefaut(Graphique::FacturesParAnciennete),
+            ], PeriodeDuTableauDeBord::AnneePrecedente));
+        }
+
+        if ($this->semis->seme('services')) {
+            // Tous les graphiques qu'il voit sont affichés : son menu
+            // « Ajouter un graphique » dit « Tous les graphiques sont
+            // affichés ».
+            $preferences->enregistrer($this->semis->compte('Marc Petit'), EcranDuTableauDeBord::ExpertComptable, new ReglagesDuTableauDeBord([
+                CarteDuTableauDeBord::parDefaut(Graphique::ChiffreDAffairesParMois, TypeDeGraphique::Aires),
+                CarteDuTableauDeBord::parDefaut(Graphique::VentesParTauxDeTva, TypeDeGraphique::Camembert),
+                ...array_map(fn (Graphique $graphique): CarteDuTableauDeBord => CarteDuTableauDeBord::parDefaut($graphique), array_values(array_filter(Graphique::cases(), fn (Graphique $graphique): bool => ! in_array($graphique, [Graphique::ChiffreDAffairesParMois, Graphique::VentesParTauxDeTva], true)))),
+            ], PeriodeDuTableauDeBord::DouzeDerniersMois, null, true));
+        }
+    }
+
+    private function choisirLesGraphiquesDeMaisonFerrand(PreferencesDesGraphiques $preferences): void
+    {
         $preferences->enregistrer($this->semis->proprietaire('commerce'), EcranDuTableauDeBord::Societe, new ReglagesDuTableauDeBord([
             CarteDuTableauDeBord::parDefaut(Graphique::ChiffreDAffairesParMois, TypeDeGraphique::Lignes),
             CarteDuTableauDeBord::parDefaut(Graphique::ChiffreDAffairesParMagasin),
@@ -97,18 +129,6 @@ final class DerniersGestes
             CarteDuTableauDeBord::parDefaut(Graphique::ValeurDuStock, TypeDeGraphique::Aires),
             CarteDuTableauDeBord::parDefaut(Graphique::VentesParJourDeLaSemaine, TypeDeGraphique::Radar),
         ]));
-        $preferences->enregistrer($this->semis->proprietaire('cabinet'), EcranDuTableauDeBord::Cabinet, new ReglagesDuTableauDeBord([
-            CarteDuTableauDeBord::parDefaut(Graphique::TvaAPayerParMois),
-            CarteDuTableauDeBord::parDefaut(Graphique::FacturesParAnciennete),
-        ], PeriodeDuTableauDeBord::AnneePrecedente));
-        // Tous les graphiques qu'il voit sont affichés : son menu
-        // « Ajouter un graphique » dit « Tous les graphiques sont
-        // affichés ».
-        $preferences->enregistrer($this->semis->compte('Marc Petit'), EcranDuTableauDeBord::ExpertComptable, new ReglagesDuTableauDeBord([
-            CarteDuTableauDeBord::parDefaut(Graphique::ChiffreDAffairesParMois, TypeDeGraphique::Aires),
-            CarteDuTableauDeBord::parDefaut(Graphique::VentesParTauxDeTva, TypeDeGraphique::Camembert),
-            ...array_map(fn (Graphique $graphique): CarteDuTableauDeBord => CarteDuTableauDeBord::parDefaut($graphique), array_values(array_filter(Graphique::cases(), fn (Graphique $graphique): bool => ! in_array($graphique, [Graphique::ChiffreDAffairesParMois, Graphique::VentesParTauxDeTva], true)))),
-        ], PeriodeDuTableauDeBord::DouzeDerniersMois, null, true));
     }
 
     /**
@@ -118,7 +138,12 @@ final class DerniersGestes
      */
     private function lireDesNotifications(): void
     {
-        foreach ([$this->semis->proprietaire('commerce'), $this->semis->compte('Camille Laurent'), $this->semis->proprietaire('cabinet')] as $compte) {
+        $comptes = [
+            ...$this->semis->seme('commerce') ? [$this->semis->proprietaire('commerce'), $this->semis->compte('Camille Laurent')] : [],
+            ...$this->semis->seme('cabinet') ? [$this->semis->proprietaire('cabinet')] : [],
+        ];
+
+        foreach ($comptes as $compte) {
             $nonLues = $compte->unreadNotifications()->reorder('created_at')->get();
             $nonLues->take(intdiv($nonLues->count(), 2))->each(static fn (DatabaseNotification $notification) => $notification->markAsRead());
         }

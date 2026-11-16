@@ -125,6 +125,57 @@ final class SemisComplet
     private const CATEGORIE_SAS = '5710';
 
     /**
+     * Le NIC, sans sa clé, de l'établissement de Maison Ferrand à
+     * Fort-de-France (Martinique), que le répertoire Sirene factice connaît
+     * le temps du semis.
+     */
+    private const NIC_DE_FORT_DE_FRANCE = '0003';
+
+    /**
+     * Les sociétés qui s'inscrivent le premier jour de l'histoire, par
+     * clé : leur SIREN, leur type d'activité et l'adresse de leur
+     * propriétaire.
+     *
+     * @var array<string, array{0: string, 1: TypeDActivite, 2: string}>
+     */
+    private const SOCIETES_INSCRITES_LE_PREMIER_JOUR = [
+        'commerce' => [self::SIREN_COMMERCE, TypeDActivite::Commerce, self::ADRESSE_COMMERCE],
+        'services' => [self::SIREN_SERVICES, TypeDActivite::Services, self::ADRESSE_SERVICES],
+        'cabinet' => [FauxRepertoireSirene::SIREN_CABINET, TypeDActivite::Cabinet, self::ADRESSE_CABINET],
+    ];
+
+    /**
+     * Les sociétés semées dans la base modèle de chaque type du site de
+     * démonstration (lot DEMO-COPIE, F.1 et F.2), par les mêmes gestes que
+     * sur le poste : la société mise en avant du modèle et, dans celui du
+     * cabinet, les clients liés du cabinet, qui ne s'ouvrent que depuis son
+     * espace ; jamais une société qu'aucun compte du bandeau ne peut
+     * ouvrir. Les sociétés des cas (voir SocietesDesCas), l'inscription qui
+     * attend son code et les démonstrations des sociétés (site réel) ne
+     * sont semées que sur le poste.
+     *
+     * @var array<string, list<string>>
+     */
+    private const SOCIETES_DES_MODELES = [
+        'commerce' => ['commerce'],
+        'services' => ['services'],
+        'cabinet' => ['cabinet', 'commerce', 'client'],
+    ];
+
+    /**
+     * La société de chaque magasin des sociétés des modèles.
+     *
+     * @var array<string, string>
+     */
+    private const SOCIETE_DES_MAGASINS = [
+        'halles' => 'commerce',
+        'republique' => 'commerce',
+        'martinique' => 'commerce',
+        'conseil' => 'services',
+        'epicerie' => 'client',
+    ];
+
+    /**
      * Les sociétés, magasins et comptes semés, par nom, que l'activité des
      * magasins reprend.
      *
@@ -170,11 +221,15 @@ final class SemisComplet
      */
     private array $motsDePasseDesComptes = [];
 
+    /**
+     * @param  TypeDActivite|null  $modele  le type de la base modèle du site de démonstration que ce semis remplit (voir ConstructionDUnModele), ou null pour le poste de développement
+     */
     public function __construct(
         private readonly HorlogeDuSemis $horloge,
         private readonly MotsDePasseDuSemis $motsDePasse,
         private readonly CodesLusDansLesCourriers $codes,
         private readonly ComptesSemes $liste,
+        public readonly ?TypeDActivite $modele,
     ) {}
 
     /**
@@ -184,93 +239,189 @@ final class SemisComplet
     {
         $this->nommerLesEntreprises();
         $societesDesCas = new SocietesDesCas($this->horloge, $this, $this->motsDePasse, $this->liste);
-        $societesDesCas->nommer();
+
+        if ($this->surLePoste()) {
+            $societesDesCas->nommer();
+        }
 
         $this->horloge->aller(0, '09:00');
-        $this->inscrire('commerce', self::SIREN_COMMERCE, TypeDActivite::Commerce, self::ADRESSE_COMMERCE);
-        $this->inscrire('services', self::SIREN_SERVICES, TypeDActivite::Services, self::ADRESSE_SERVICES);
-        $this->inscrire('cabinet', FauxRepertoireSirene::SIREN_CABINET, TypeDActivite::Cabinet, self::ADRESSE_CABINET);
-        $societesDesCas->inscrire();
+
+        foreach (self::SOCIETES_INSCRITES_LE_PREMIER_JOUR as $cle => [$siren, $type, $adresse]) {
+            if ($this->seme($cle)) {
+                $this->inscrire($cle, $siren, $type, $adresse);
+            }
+        }
+
+        if ($this->surLePoste()) {
+            $societesDesCas->inscrire();
+        }
 
         $this->horloge->aller(1, '09:00');
-        $this->saisirLeCode('commerce');
-        $this->saisirLeCode('services');
-        $this->saisirLeCode('cabinet');
+
+        foreach (array_keys(self::SOCIETES_INSCRITES_LE_PREMIER_JOUR) as $cle) {
+            if ($this->seme($cle)) {
+                $this->saisirLeCode($cle);
+            }
+        }
 
         $this->horloge->aller(1, '09:30');
-        $this->completerLIdentite('commerce', ['capital_social' => '20000.00', 'immatriculation' => 'RCS Paris 000 000 109']);
-        $this->completerLIdentite('services', [
-            'capital_social' => '5000.00',
-            'immatriculation' => 'RCS Paris 000 000 117',
-            'assurance_assureur' => 'Mutuelle des Professions Libérales, 12 rue de la Paix, 75002 Paris',
-            'assurance_contrat' => 'RCP-2026-4471',
-            'assurance_couverture' => 'France métropolitaine',
-        ]);
-        $this->reglerLaFiscalite('commerce', ['regime_tva' => RegimeTva::ReelNormalMensuel->value]);
-        $this->reglerLaFiscalite('services', ['regime_tva' => RegimeTva::ReelSimplifie->value]);
-        $this->verifierLeCabinet();
+
+        if ($this->seme('commerce')) {
+            $this->completerLIdentite('commerce', ['capital_social' => '20000.00', 'immatriculation' => 'RCS Paris 000 000 109']);
+            $this->reglerLaFiscalite('commerce', ['regime_tva' => RegimeTva::ReelNormalMensuel->value]);
+        }
+
+        if ($this->seme('services')) {
+            $this->completerLIdentite('services', [
+                'capital_social' => '5000.00',
+                'immatriculation' => 'RCS Paris 000 000 117',
+                'assurance_assureur' => 'Mutuelle des Professions Libérales, 12 rue de la Paix, 75002 Paris',
+                'assurance_contrat' => 'RCP-2026-4471',
+                'assurance_couverture' => 'France métropolitaine',
+            ]);
+            $this->reglerLaFiscalite('services', ['regime_tva' => $this->modele === TypeDActivite::Services ? RegimeTva::ReelNormalMensuel->value : RegimeTva::ReelSimplifie->value]);
+        }
+
+        if ($this->seme('cabinet')) {
+            $this->verifierLeCabinet();
+        }
 
         $this->horloge->aller(1, '10:00');
-        $this->ouvrirUnMagasin('commerce', 'halles', 'Maison Ferrand Halles', 'HALLES', 'siege');
-        $this->ouvrirUnMagasin('commerce', 'republique', 'Maison Ferrand République', 'REPUB', 'boutique');
-        $this->ouvrirUnMagasin('services', 'conseil', 'Conseil Vasseur Paris', 'PARIS', 'siege');
+
+        if ($this->seme('commerce')) {
+            $this->ouvrirUnMagasin('commerce', 'halles', 'Maison Ferrand Halles', 'HALLES', 'siege');
+            $this->ouvrirUnMagasin('commerce', 'republique', 'Maison Ferrand République', 'REPUB', 'boutique');
+            $this->ouvrirUnMagasin('commerce', 'martinique', 'Maison Ferrand Fort-de-France', 'FDF', self::NIC_DE_FORT_DE_FRANCE);
+        }
+
+        if ($this->seme('services')) {
+            $this->ouvrirUnMagasin('services', 'conseil', 'Conseil Vasseur Paris', 'PARIS', 'siege');
+        }
 
         $this->horloge->aller(1, '11:00');
-        $this->administrateur('commerce', 'Nadia Benali', null, [], [PermissionRegistry::GRAPHIQUES_VOIR, PermissionRegistry::CHARGES_AJOUTER], AutorisationsSociete::modeleDeLAdministrateur());
-        $this->administrateur('commerce', 'Thomas Girard', ['halles', 'republique'], PermissionRegistry::deVente());
-        $this->membre('halles', 'Camille Laurent', RoleMagasin::Responsable);
-        $this->membre('halles', 'Lucas Moreau', RoleMagasin::Vendeur);
-        $this->membre('halles', 'Inès Garcia', RoleMagasin::Vendeur, gardeSonIdentifiant: true);
-        $this->reconnaitreUnPoste('halles', 'Camille Laurent', 'Caisse des Halles');
-        $this->membre('republique', 'Hugo Lefebvre', RoleMagasin::Responsable);
-        $this->membre('republique', 'Lucas Moreau', RoleMagasin::Vendeur, cle: 'Lucas Moreau (République)');
-        $this->membre('republique', 'Sarah Petit', RoleMagasin::Vendeur);
 
-        $this->administrateur('services', 'Léa Fontaine', null, []);
-        $this->administrateur('services', 'Antoine Roux', ['conseil'], PermissionRegistry::deVente());
-        $this->membre('conseil', 'Claire Dubois', RoleMagasin::Responsable);
-        $this->membre('conseil', 'Maxime Henry', RoleMagasin::Vendeur);
-        $this->membre('conseil', 'Julie Mercier', RoleMagasin::Vendeur);
+        if ($this->seme('commerce')) {
+            $this->administrateur('commerce', 'Nadia Benali', null, [], [PermissionRegistry::GRAPHIQUES_VOIR, PermissionRegistry::CHARGES_AJOUTER], AutorisationsSociete::modeleDeLAdministrateur());
+            $this->administrateur('commerce', 'Thomas Girard', ['halles', 'republique'], PermissionRegistry::deVente());
+            $this->membre('halles', 'Camille Laurent', RoleMagasin::Responsable);
+            $this->membre('halles', 'Lucas Moreau', RoleMagasin::Vendeur);
+            $this->membre('halles', 'Inès Garcia', RoleMagasin::Vendeur, gardeSonIdentifiant: true);
+            $this->reconnaitreUnPoste('halles', 'Camille Laurent', 'Caisse des Halles');
+            $this->membre('republique', 'Hugo Lefebvre', RoleMagasin::Responsable);
+            $this->membre('republique', 'Lucas Moreau', RoleMagasin::Vendeur, cle: 'Lucas Moreau (République)');
+            $this->membre('republique', 'Sarah Petit', RoleMagasin::Vendeur);
+            $this->membre('martinique', 'Joëlle Marie-Sainte', RoleMagasin::Responsable);
+            $this->membre('martinique', 'Kévin Louisy', RoleMagasin::Vendeur);
+        }
+
+        if ($this->seme('services')) {
+            $this->administrateur('services', 'Léa Fontaine', null, []);
+            $this->administrateur('services', 'Antoine Roux', ['conseil'], PermissionRegistry::deVente());
+            $this->membre('conseil', 'Claire Dubois', RoleMagasin::Responsable);
+            $this->membre('conseil', 'Maxime Henry', RoleMagasin::Vendeur);
+            $this->membre('conseil', 'Julie Mercier', RoleMagasin::Vendeur);
+        }
 
         $this->horloge->aller(1, '14:00');
-        $this->collaborateur('Paul Lefèvre');
-        $this->collaborateur('Emma Rousseau');
-        $this->lierLeCabinetA('commerce');
-        $this->confier('Paul Lefèvre', 'commerce');
 
-        $this->horloge->aller(1, '15:00');
-        $societesDesCas->valider();
-        $this->horloge->aller(1, '16:00');
-        $societesDesCas->remplir();
+        if ($this->seme('cabinet')) {
+            $this->collaborateur('Paul Lefèvre');
+            $this->collaborateur('Emma Rousseau');
+            $this->lierLeCabinetA('commerce');
+            $this->confier('Paul Lefèvre', 'commerce');
+        } elseif ($this->seme('commerce')) {
+            $this->declarerLExpertComptableDeMaisonFerrand();
+        }
 
-        $this->horloge->aller(2, '09:00');
-        $this->accepterLInvitationDuCabinet();
-        $this->confier('Emma Rousseau', 'client');
-        $this->reglerLaFiscalite('client', ['regime_tva' => RegimeTva::ReelNormalTrimestriel->value]);
-        $this->ouvrirUnMagasin('client', 'epicerie', 'Épicerie Lemoine', 'EPICERIE', 'siege');
-        $this->administrateur('client', 'Romane Gauthier', null, []);
-        $this->administrateur('client', 'Bastien Leroy', ['epicerie'], PermissionRegistry::deVente());
-        $this->membre('epicerie', 'Nicolas Lemoine', RoleMagasin::Responsable);
-        $this->membre('epicerie', 'Chloé Bernard', RoleMagasin::Vendeur);
-        $this->membre('epicerie', 'Mehdi Brahimi', RoleMagasin::Vendeur);
+        if ($this->surLePoste()) {
+            $this->horloge->aller(1, '15:00');
+            $societesDesCas->valider();
+            $this->horloge->aller(1, '16:00');
+            $societesDesCas->remplir();
+        }
+
+        if ($this->seme('client')) {
+            $this->horloge->aller(2, '09:00');
+            $this->accepterLInvitationDuCabinet();
+            $this->confier('Emma Rousseau', 'client');
+            $this->reglerLaFiscalite('client', ['regime_tva' => RegimeTva::ReelNormalTrimestriel->value]);
+            $this->ouvrirUnMagasin('client', 'epicerie', 'Épicerie Lemoine', 'EPICERIE', 'siege');
+            $this->administrateur('client', 'Romane Gauthier', null, []);
+            $this->administrateur('client', 'Bastien Leroy', ['epicerie'], PermissionRegistry::deVente());
+            $this->membre('epicerie', 'Nicolas Lemoine', RoleMagasin::Responsable);
+            $this->membre('epicerie', 'Chloé Bernard', RoleMagasin::Vendeur);
+            $this->membre('epicerie', 'Mehdi Brahimi', RoleMagasin::Vendeur);
+        }
 
         $this->horloge->aller(2, '10:00');
-        $this->declarerLExpertComptable();
+
+        if ($this->seme('services')) {
+            $this->declarerLExpertComptable();
+        }
+
         $comptesDesCas = new ComptesDesCas($this->horloge, $this, $this->liste);
         $comptesDesCas->creer();
         $this->horloge->aller(2, '10:30');
-        $societesDesCas->lierAuCabinet();
-        $societesDesCas->inviterCeQuiExpirera();
+
+        if ($this->surLePoste()) {
+            $societesDesCas->lierAuCabinet();
+        }
+
+        if ($this->seme('cabinet')) {
+            $societesDesCas->inviterCeQuiExpirera();
+        }
 
         (new ActiviteDesMagasins($this->horloge, $this, $comptesDesCas, $societesDesCas))->semer();
 
         $this->horloge->aller(self::JOURS - 1, '09:00');
-        $this->inscrire('inscription', self::SIREN_INSCRIPTION, TypeDActivite::Commerce, self::ADRESSE_INSCRIPTION);
+
+        if ($this->surLePoste()) {
+            $this->inscrire('inscription', self::SIREN_INSCRIPTION, TypeDActivite::Commerce, self::ADRESSE_INSCRIPTION);
+        } elseif ($this->seme('cabinet')) {
+            $societesDesCas->inviterDesEntreprisesQuiNeSInscriventPas();
+        }
+
         $this->horloge->aller(self::JOURS - 1, '11:00');
         (new DerniersGestes($this, $this->motsDePasse))->semer();
 
         $this->liste->oublierLesComptesRetires($comptesDesCas->retiresGardes());
-        $this->direCeQuIlFautRegarder();
+
+        if ($this->surLePoste()) {
+            $this->direCeQuIlFautRegarder();
+        } else {
+            (new ComptesDuBandeauDuModele($this))->ecrire();
+        }
+    }
+
+    /**
+     * Vrai pour le semis du poste de développement, qui sème toutes les
+     * sociétés ; faux pour celui d'une base modèle du site de
+     * démonstration.
+     */
+    public function surLePoste(): bool
+    {
+        return $this->modele === null;
+    }
+
+    /**
+     * Vrai quand ce semis sème la société de cette clé : toutes sur le
+     * poste, celles du modèle dans une base modèle (voir
+     * SOCIETES_DES_MODELES).
+     */
+    public function seme(string $societe): bool
+    {
+        return $this->modele === null || in_array($societe, self::SOCIETES_DES_MODELES[$this->modele->value], true);
+    }
+
+    /**
+     * Vrai quand ce semis sème le magasin de cette clé, l'un de ceux des
+     * sociétés des modèles (voir SOCIETE_DES_MAGASINS).
+     *
+     * @throws LogicException pour la clé d'un autre magasin
+     */
+    public function semeLeMagasin(string $magasin): bool
+    {
+        return $this->seme(self::SOCIETE_DES_MAGASINS[$magasin] ?? throw new LogicException("Le magasin {$magasin} n'est d'aucune société des modèles."));
     }
 
     /**
@@ -280,6 +431,10 @@ final class SemisComplet
      */
     public function laisserUneVenteEnCours(): void
     {
+        if (! $this->seme('commerce')) {
+            return;
+        }
+
         $halles = new GestesDuMagasin($this->magasin('halles'));
         $halles->dans(fn (): ?PanierCaisse => app(PanierDeCaisse::class)->enregistrer($this->compte('Lucas Moreau'), GestesDuMagasin::jeton(), $halles->comptoir()->id, [
             'ligne-1' => [...$halles->ligne('BOUGIE-FIGUE', 2), 'prix_unitaire_ttc' => '18.00'],
@@ -329,6 +484,8 @@ final class SemisComplet
             'Léna Roussel' => 'Accès redonné en son absence : son mot de passe est redevenu son identifiant',
             'propriétaire comptoir' => 'Cinq magasins : Martinique (8,5 %), Lyon fermé temporairement, Bordeaux rouvert, Nantes cédé, Lille suspendu ; transmission en attente',
             'Gaëlle Hoarau' => 'Administratrice à qui la propriété est proposée (lien pas encore suivi)',
+            'Joëlle Marie-Sainte' => 'Responsable de Maison Ferrand Fort-de-France : heure des Antilles, TVA à 8,5 % et 2,1 %, réassorts, loyer à 8,5 % dans les charges',
+            'Kévin Louisy' => 'Vendeur de Maison Ferrand Fort-de-France : ses tickets à l\'heure de la Martinique',
             'Joël Sainte-Rose' => 'Responsable en Martinique : heure des Antilles, TVA à 8,5 % et 2,1 %',
             'Maëva Jean-Louis' => 'Vendeuse en Martinique : ses tickets à l\'heure locale',
             'Bastien Royer' => 'Responsable de Lyon : inventaire d\'ouverture en brouillon, magasin fermé temporairement',
@@ -433,6 +590,10 @@ final class SemisComplet
             $rne->domicilier($siren, $siege);
             $rne->identifier($siren, new IdentiteRne($denomination, self::CATEGORIE_SAS, '10000.00', 'EUR', false, 'RCS Paris', $siege));
         }
+
+        $fortDeFrance = IdentifiantsInsee::avecSaCle(self::SIREN_COMMERCE.self::NIC_DE_FORT_DE_FRANCE);
+        $sirene->ajouterUnEtablissement($fortDeFrance, null);
+        $sirene->deplacer($fortDeFrance, '97200', 'FORT-DE-FRANCE', '97209');
 
         $sirene->nommer(self::SIREN_CABINET_DECLARE, 'PETIT ET ASSOCIES');
         $sirene->exercer(self::SIREN_CABINET_DECLARE, ControleSirene::CODE_ACTIVITES_COMPTABLES);
@@ -731,39 +892,71 @@ final class SemisComplet
     /**
      * Le propriétaire de la société de services déclare son
      * expert-comptable par le SIREN de son cabinet, absent de PILIQI (voir
-     * DeclarerSonExpertComptableAction), avec les autorisations par défaut ;
-     * la personne choisit son mot de passe par le lien reçu (voir
-     * ChoisirLeMotDePasseDeLExpertComptableAction).
+     * declarerUnExpertComptable()) : Marc Petit, qui choisit son mot de
+     * passe, et Sophie Petit, pas encore.
      */
     private function declarerLExpertComptable(): void
     {
-        $compte = $this->horsDeToutContexte(fn (): User => app(DeclarerSonExpertComptableAction::class)->handle($this->proprietaire('services'), $this->societe('services'), [
-            'siren' => self::SIREN_CABINET_DECLARE,
-            'name' => 'Marc Petit',
-            'email' => self::ADRESSE_EXPERT_COMPTABLE,
-            'email_confirmation' => self::ADRESSE_EXPERT_COMPTABLE,
-            'autorisations' => PermissionRegistry::casesDuCabinet(PermissionRegistry::parDefautDuCabinet(TypeDActivite::Services)),
+        $this->declarerUnExpertComptable('services', self::SIREN_CABINET_DECLARE, ['Marc Petit', self::ADRESSE_EXPERT_COMPTABLE], ['Sophie Petit', self::ADRESSE_SECONDE_EXPERTE_COMPTABLE]);
+    }
+
+    /**
+     * Dans la base modèle « Commerce ou atelier » du site de démonstration,
+     * où le cabinet Martin n'existe pas (F.1), la propriétaire de Maison
+     * Ferrand déclare son expert-comptable par le SIREN fictif de ce
+     * cabinet, absent de cette base, avec les mêmes personnes : Paul
+     * Lefèvre, qui choisit son mot de passe et valide les charges comme le
+     * collaborateur du cabinet le fait sur le poste, et Lina Martin, qui ne
+     * l'a pas encore choisi. C'est le seul geste du poste remplacé dans ce
+     * modèle : le lien de Maison Ferrand avec son cabinet.
+     */
+    private function declarerLExpertComptableDeMaisonFerrand(): void
+    {
+        $this->declarerUnExpertComptable('commerce', FauxRepertoireSirene::SIREN_CABINET, ['Paul Lefèvre', 'paul.lefevre@martin-expertise.exemple.test'], ['Lina Martin', 'lina.martin@martin-expertise.exemple.test']);
+    }
+
+    /**
+     * Le propriétaire de cette société déclare son expert-comptable par le
+     * SIREN d'un cabinet absent de PILIQI (voir
+     * DeclarerSonExpertComptableAction), avec les autorisations par défaut,
+     * pour une première personne, qui choisit son mot de passe par le lien
+     * reçu (voir ChoisirLeMotDePasseDeLExpertComptableAction), puis ajoute
+     * une seconde personne, qui n'a pas encore suivi le sien.
+     *
+     * @param  array{0: string, 1: string}  $premiere  le nom et l'adresse professionnelle de la première personne
+     * @param  array{0: string, 1: string}  $seconde  ceux de la seconde
+     */
+    private function declarerUnExpertComptable(string $societe, string $siren, array $premiere, array $seconde): void
+    {
+        [$nom, $adresse] = $premiere;
+        $compte = $this->horsDeToutContexte(fn (): User => app(DeclarerSonExpertComptableAction::class)->handle($this->proprietaire($societe), $this->societe($societe), [
+            'siren' => $siren,
+            'name' => $nom,
+            'email' => $adresse,
+            'email_confirmation' => $adresse,
+            'autorisations' => PermissionRegistry::casesDuCabinet(PermissionRegistry::parDefautDuCabinet($this->societe($societe)->type_activite)),
             'remplacer' => false,
-        ], $this->motsDePasseDesProprietaires['services'], GestesDuMagasin::jeton()));
+        ], $this->motsDePasseDesProprietaires[$societe], GestesDuMagasin::jeton()));
         $jeton = Str::afterLast(ValeursLues::instance(Mail::sent(LienDuMotDePasseDeLExpertComptableMail::class)->last(), LienDuMotDePasseDeLExpertComptableMail::class)->lien, '/');
         $motDePasse = $this->motsDePasse->nouveau();
         $this->horsDeToutContexte(fn (): User => app(ChoisirLeMotDePasseDeLExpertComptableAction::class)->handle($jeton, $motDePasse, $motDePasse));
         $compte = $compte->refresh();
         $this->motsDePasse->controlerAvec($motDePasse, (string) $compte->identifiantDeConnexion());
-        $this->comptes['Marc Petit'] = $compte;
-        $this->liste->noter($compte, $this->nomDeLaSociete('services'), 'Tous les magasins', 'Expert-comptable déclaré', $motDePasse);
+        $this->comptes[$nom] = $compte;
+        $this->liste->noter($compte, $this->nomDeLaSociete($societe), 'Tous les magasins', 'Expert-comptable déclaré', $motDePasse);
 
         $declaration = LienCabinet::query()->withoutGlobalScopes()
-            ->where('societe_id', $this->societe('services')->getKey())
+            ->where('societe_id', $this->societe($societe)->getKey())
             ->where('etat', EtatDuLien::Declare->value)
             ->sole();
-        $sophie = $this->horsDeToutContexte(fn (): User => app(AjouterUnExpertComptableAction::class)->handle($this->proprietaire('services'), $declaration, [
-            'name' => 'Sophie Petit',
-            'email' => self::ADRESSE_SECONDE_EXPERTE_COMPTABLE,
-            'email_confirmation' => self::ADRESSE_SECONDE_EXPERTE_COMPTABLE,
-        ], $this->motsDePasseDesProprietaires['services'], GestesDuMagasin::jeton()));
-        $this->comptes['Sophie Petit'] = $sophie;
-        $this->liste->noter($sophie, $this->nomDeLaSociete('services'), 'Tous les magasins', 'Expert-comptable déclarée', null, 'Lien du mot de passe envoyé, pas encore suivi : elle ne se connecte pas encore', 'pas encore choisi (lien de 7 jours envoyé)');
+        [$nom, $adresse] = $seconde;
+        $compte = $this->horsDeToutContexte(fn (): User => app(AjouterUnExpertComptableAction::class)->handle($this->proprietaire($societe), $declaration, [
+            'name' => $nom,
+            'email' => $adresse,
+            'email_confirmation' => $adresse,
+        ], $this->motsDePasseDesProprietaires[$societe], GestesDuMagasin::jeton()));
+        $this->comptes[$nom] = $compte;
+        $this->liste->noter($compte, $this->nomDeLaSociete($societe), 'Tous les magasins', 'Expert-comptable déclarée', null, 'Lien du mot de passe envoyé, pas encore suivi : elle ne se connecte pas encore', 'pas encore choisi (lien de 7 jours envoyé)');
     }
 
     /**

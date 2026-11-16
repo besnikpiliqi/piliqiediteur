@@ -74,5 +74,6 @@
         <button type="submit">Valider</button>
     </form>
 </main>
+    @include('pied-de-page-du-site')
 </body>
 </html>

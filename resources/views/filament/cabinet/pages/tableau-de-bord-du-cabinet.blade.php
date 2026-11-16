@@ -16,6 +16,7 @@
                         @else
                             <x-filament::icon icon="heroicon-o-ellipsis-horizontal-circle" class="h-6 w-6 text-gray-400" label="À faire" />
                         @endif
+
                         <div>
                             @if ($etape['url'] !== null)
                                 <a href="{{ $etape['url'] }}" class="font-semibold underline">{{ $etape['titre'] }}</a>
@@ -29,6 +30,10 @@
             </ol>
         </x-filament::section>
     @endif
+
+    <div id="ma-demonstration">
+        @livewire(\App\Filament\MaDemonstration::NOM, ['societe' => $this->cabinet()], key('ma-demonstration'))
+    </div>
 
     <x-filament::section icon="heroicon-o-shield-check">
         <x-slot name="heading">Vérification du cabinet</x-slot>

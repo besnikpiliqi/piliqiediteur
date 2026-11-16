@@ -147,5 +147,6 @@
         </fieldset>
     </form>
 </main>
+    @include('pied-de-page-du-site')
 </body>
 </html>

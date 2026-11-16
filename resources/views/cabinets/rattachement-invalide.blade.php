@@ -24,5 +24,6 @@
     <h1>{{ config('app.name') }}</h1>
     <p>{{ $message }}</p>
 </main>
+    @include('pied-de-page-du-site')
 </body>
 </html>

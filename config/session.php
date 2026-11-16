@@ -125,11 +125,17 @@ return [
     | the framework. Typically, you should not need to change this value
     | since doing so does not grant a meaningful security improvement.
     |
+    | PILIQI : sur le site de démonstration, piliqi-demo-session, pour que
+    | ses témoins ne se mêlent jamais à ceux du site réel sur un poste ; en
+    | production, chaque site écrit le sien avec le préfixe __Host-
+    | (SESSION_COOKIE=__Host-piliqi-session, __Host-piliqi-demo-session),
+    | ce que SiteDePiliqiServiceProvider exige.
+    |
     */
 
     'cookie' => env(
         'SESSION_COOKIE',
-        Str::slug((string) env('APP_NAME', 'laravel')).'-session'
+        env('PILIQI_SITE') === 'demonstration' ? 'piliqi-demo-session' : Str::slug((string) env('APP_NAME', 'laravel')).'-session'
     ),
 
     /*

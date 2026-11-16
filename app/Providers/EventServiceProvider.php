@@ -8,6 +8,7 @@ use App\Domain\Achats\Listeners\DecrementerStockApresEmissionAvoirFournisseur;
 use App\Domain\Achats\Listeners\IncrementerStockApresValidationFactureAchat;
 use App\Domain\Cabinets\Listeners\RattacherLesDeclarationsDuCabinetValide;
 use App\Domain\CaisseSecurisee\Listeners\JournaliserFinDeSession;
+use App\Domain\Demonstration\Listeners\MasquerLeLienDansLeJournal;
 use App\Domain\Facturation\Events\AvoirEmis;
 use App\Domain\Facturation\Events\FactureEmise;
 use App\Domain\Facturation\Listeners\AppliquerAvoirDisponibleApresEmissionFacture;
@@ -22,6 +23,7 @@ use App\Domain\Stock\Listeners\NotifierLeStockSousLeSeuilDAlerte;
 use App\Domain\Tenancy\Events\SocieteValidee;
 use Illuminate\Auth\Events\CurrentDeviceLogout;
 use Illuminate\Auth\Events\Logout;
+use Illuminate\Mail\Events\MessageSending;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
 
@@ -36,6 +38,7 @@ class EventServiceProvider extends ServiceProvider
 {
     public function boot(): void
     {
+        Event::listen(MessageSending::class, MasquerLeLienDansLeJournal::class);
         Event::listen(FactureEmise::class, DecrementerStockApresEmissionFacture::class);
         Event::listen(FactureEmise::class, AppliquerAvoirDisponibleApresEmissionFacture::class);
         Event::listen(FactureEmise::class, DeclencherTransmissionPdpApresEmissionFacture::class);

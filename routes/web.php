@@ -6,6 +6,7 @@ use App\Http\Controllers\CodeDuCourrierController;
 use App\Http\Controllers\ConfirmerInscriptionController;
 use App\Http\Controllers\ConfirmerNouvelleAdresseController;
 use App\Http\Controllers\LienDeLExpertComptableController;
+use App\Http\Controllers\OuvrirMaDemonstrationController;
 use App\Http\Controllers\RappelsDesPrestatairesController;
 use App\Http\Controllers\RattachementAuCabinetController;
 use App\Http\Controllers\ReponseAuDevisController;
@@ -123,3 +124,12 @@ Route::post('/devis/{jeton}/refus', [ReponseAuDevisController::class, 'refuser']
     ->where('jeton', '[^/]+')
     ->middleware('throttle:reponse-au-devis')
     ->name('devis.reponse.refuser');
+
+// « Ouvrir ma démonstration », depuis la carte du tableau de bord de la
+// société ou du cabinet, sur le site réel (voir
+// OuvrirMaDemonstrationController) : un formulaire du compte connecté
+// (jeton CSRF) ouvre, dans un nouvel onglet, la page du billet d'entrée
+// signé, qui part seul vers le site de démonstration.
+Route::post('/ma-demonstration/ouvrir', OuvrirMaDemonstrationController::class)
+    ->middleware(['auth', 'throttle:30,1'])
+    ->name('ma-demonstration.ouvrir');

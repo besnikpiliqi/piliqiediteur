@@ -7,6 +7,7 @@ use App\Domain\Cabinets\Enums\EtatDuLien;
 use App\Domain\Cabinets\Models\LienCabinet;
 use App\Domain\Cabinets\Services\ExpertsComptablesDeclares;
 use App\Domain\Calendrier\Calendrier;
+use App\Domain\Demonstration\Services\CarteDeLaDemonstration;
 use App\Domain\Facturation\Services\FacturesAEncaisserDeLaSociete;
 use App\Domain\TableauDeBord\Services\PerimetreDesGraphiques;
 use App\Domain\Tenancy\Actions\VerifierUnEcartSireneAction;
@@ -163,6 +164,12 @@ class TableauDeBord extends Dashboard
                 'url' => MembreResource::canViewAny() ? MembreResource::getUrl('index') : null,
             ],
         ];
+
+        $demonstration = app(CarteDeLaDemonstration::class)->etape($compte, $societe, self::getUrl());
+
+        if ($demonstration !== null) {
+            $magasinsEtEquipe[] = $demonstration;
+        }
 
         if ($parSonCabinet) {
             return $magasinsEtEquipe;

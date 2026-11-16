@@ -2,6 +2,7 @@
 
 namespace App\Domain\Tenancy\Isolation;
 
+use App\Domain\Demonstration\SiteDePiliqi;
 use App\Domain\Facturation\Models\SequenceDocument;
 use App\Domain\Tenancy\Models\Affectation;
 use App\Domain\Tenancy\Models\DemandeInscription;
@@ -104,6 +105,7 @@ final class ReglesDIsolation
         'comptes_expert_comptable' => self::SOCIETE,
         'consultations_vies' => self::MAGASIN,
         'demandes_inscription' => self::GLOBALE,
+        'demonstrations' => self::SOCIETE,
         'devis' => self::MAGASIN,
         'ecarts_sirene' => self::SOCIETE,
         'enregistrements_fiscaux' => self::MAGASIN,
@@ -132,6 +134,7 @@ final class ReglesDIsolation
         'magasins' => self::SOCIETE,
         'magasins_cabinet' => self::SOCIETE,
         'mandats_pdp' => self::MAGASIN,
+        'messages_vers_la_demonstration' => self::SOCIETE,
         'migrations' => self::TECHNIQUE,
         'mouvements_stock' => self::MAGASIN,
         'notifications' => self::DERIVEE,
@@ -154,6 +157,7 @@ final class ReglesDIsolation
         'sequences_documents' => self::MAGASIN,
         'services' => self::MAGASIN,
         'sessions' => self::TECHNIQUE,
+        'site_de_la_base' => self::GLOBALE,
         'sirets_magasins' => self::SOCIETE,
         'societes' => self::RACINE,
         'taux_avoirs_fournisseur' => self::MAGASIN,
@@ -283,6 +287,7 @@ final class ReglesDIsolation
         'recus_paiement' => ['recus_paiement_ajout_seul_delete', 'recus_paiement_ajout_seul_truncate', 'recus_paiement_ajout_seul_update'],
         'reponses_des_devis' => ['reponses_des_devis_ajout_seul_delete', 'reponses_des_devis_ajout_seul_truncate', 'reponses_des_devis_ajout_seul_update'],
         'sirets_magasins' => ['sirets_magasins_sans_suppression_delete', 'sirets_magasins_sans_suppression_truncate'],
+        'site_de_la_base' => ['garde_site_de_la_base', 'garde_site_de_la_base_vidage'],
         'societes' => ['societes_sans_suppression_delete', 'societes_sans_suppression_truncate', 'societes_type_d_activite_connu_et_fixe', 'societes_verification_conservee_jusqu_au_figee'],
         'telechargements_documents' => ['magasins_ouverts_a_l_expert_comptable'],
         'tetes_journal_audit' => ['tetes_journal_audit_sans_suppression_delete', 'tetes_journal_audit_sans_suppression_truncate'],
@@ -294,11 +299,44 @@ final class ReglesDIsolation
     ];
 
     /**
+     * Les tables qui n'existent que dans les bases du site de démonstration
+     * (database/migrations-demonstration, lot DEMO-COPIE, C.8 et C.9),
+     * jamais dans la base réelle : connues de la vérification de
+     * l'isolation sur ce site seulement, comme des tables de la
+     * démonstration, et non comme un oubli.
+     */
+    public const TABLES_DE_LA_DEMONSTRATION = [
+        'comptes_du_bandeau' => self::SOCIETE,
+    ];
+
+    /**
      * La portée de cette table, ou null quand elle n'a pas de règle.
      */
     public static function porteeDe(string $table): ?string
     {
-        return self::PORTEES[$table] ?? null;
+        return self::portees()[$table] ?? null;
+    }
+
+    /**
+     * La portée de cette table sur l'un ou l'autre site, ou null quand elle
+     * n'a pas de règle : le code des deux sites est le même, et un modèle
+     * d'une table du seul site de démonstration (voir
+     * TABLES_DE_LA_DEMONSTRATION) porte aussi le scope de sa portée.
+     */
+    public static function porteeConnue(string $table): ?string
+    {
+        return self::PORTEES[$table] ?? self::TABLES_DE_LA_DEMONSTRATION[$table] ?? null;
+    }
+
+    /**
+     * Les règles des tables de la base servie : sur le site de
+     * démonstration, aussi celles de ses tables à lui.
+     *
+     * @return array<string, string>
+     */
+    public static function portees(): array
+    {
+        return SiteDePiliqi::estLaDemonstration() ? [...self::PORTEES, ...self::TABLES_DE_LA_DEMONSTRATION] : self::PORTEES;
     }
 
     /**

@@ -7,7 +7,7 @@ use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\ConsultationVies;
 use App\Domain\Facturation\Services\TerritoireFiscal;
 use App\Domain\Tenancy\Services\TenantContext;
-use App\Integrations\Vies\ClientVies;
+use App\Integrations\Vies\Contracts\ServiceVies;
 use App\Integrations\Vies\ViesIndisponibleException;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -35,7 +35,7 @@ use LogicException;
 class VerifierNumeroTvaAction
 {
     public function __construct(
-        private readonly ClientVies $vies,
+        private readonly ServiceVies $vies,
         private readonly LecteurDesDroits $lecteur,
     ) {}
 

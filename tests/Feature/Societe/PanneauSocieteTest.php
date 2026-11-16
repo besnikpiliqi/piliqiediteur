@@ -7,6 +7,8 @@ use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Cabinets\Actions\DesignerUnCabinetAction;
 use App\Domain\Cabinets\Models\LienCabinet;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
+use App\Domain\Demonstration\Actions\DemanderUneDemonstrationAction;
+use App\Domain\Demonstration\Services\CarteDeLaDemonstration;
 use App\Domain\Tenancy\Actions\ChangerLeRoleDeSocieteAction;
 use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
 use App\Domain\Tenancy\Actions\CreerAdministrateurAction;
@@ -59,6 +61,7 @@ use Livewire\Livewire;
 use LogicException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use ReflectionMethod;
+use Tests\Feature\Demonstration\DemonstrationDuSiteReel;
 use Tests\TestCase;
 
 /**
@@ -73,7 +76,7 @@ use Tests\TestCase;
  */
 class PanneauSocieteTest extends TestCase
 {
-    use RefreshDatabase;
+    use DemonstrationDuSiteReel, RefreshDatabase;
 
     /**
      * Chaque page déclare sa propre règle d'accès (Filament ouvre sinon une
@@ -437,6 +440,7 @@ class PanneauSocieteTest extends TestCase
             TableauDeBord::ETAPE_CODE_DU_COURRIER => [false, VerificationSociete::getUrl(panel: 'societe', tenant: $societe)],
             TableauDeBord::ETAPE_PREMIER_MAGASIN => [false, MagasinResource::getUrl('create', panel: 'societe', tenant: $societe)],
             TableauDeBord::ETAPE_EQUIPE => [true, MembreResource::getUrl('index', panel: 'societe', tenant: $societe)],
+            CarteDeLaDemonstration::ETAPE => [false, TableauDeBord::getUrl(panel: 'societe', tenant: $societe).'#ma-demonstration'],
         ], $etapes($proprietaire));
         $this->assertSame([], $etapes($administrateur));
 
@@ -449,8 +453,13 @@ class PanneauSocieteTest extends TestCase
         $this->get(TableauDeBord::getUrl(panel: 'societe', tenant: $societe))->assertSeeText('Vos premières étapes');
 
         $this->saisirLeCodeDuCourrier($societe->fresh());
+        $this->assertSame([TableauDeBord::ETAPE_CODE_DU_COURRIER => true, TableauDeBord::ETAPE_AJOUTER_UN_MAGASIN => true, TableauDeBord::ETAPE_EQUIPE => true, CarteDeLaDemonstration::ETAPE => false], array_map(fn (array $etape): bool => $etape[0], $etapes($proprietaire)));
 
-        $this->assertSame([TableauDeBord::ETAPE_CODE_DU_COURRIER => true, TableauDeBord::ETAPE_AJOUTER_UN_MAGASIN => true, TableauDeBord::ETAPE_EQUIPE => true], array_map(fn (array $etape): bool => $etape[0], $etapes($proprietaire)));
+        $this->reglerLeSiteDeDemonstration();
+        app(TenantContext::class)->clear();
+        app(DemanderUneDemonstrationAction::class)->handle($proprietaire->fresh() ?? $proprietaire, null, null);
+
+        $this->assertSame([TableauDeBord::ETAPE_CODE_DU_COURRIER => true, TableauDeBord::ETAPE_AJOUTER_UN_MAGASIN => true, TableauDeBord::ETAPE_EQUIPE => true, CarteDeLaDemonstration::ETAPE => true], array_map(fn (array $etape): bool => $etape[0], $etapes($proprietaire)));
         $this->get(TableauDeBord::getUrl(panel: 'societe', tenant: $societe))->assertOk()->assertDontSeeText('Vos premières étapes')->assertSeeText($magasin->nom);
     }
 
@@ -526,7 +535,7 @@ class PanneauSocieteTest extends TestCase
 
         $this->dansLEspaceDeLaSociete($invitee, $proprietaire);
         $page = Livewire::test(TableauDeBord::class);
-        $this->assertSame([TableauDeBord::ETAPE_PREMIER_MAGASIN, TableauDeBord::ETAPE_EQUIPE], array_column($page->instance()->etapes(), 'titre'));
+        $this->assertSame([TableauDeBord::ETAPE_PREMIER_MAGASIN, TableauDeBord::ETAPE_EQUIPE, CarteDeLaDemonstration::ETAPE], array_column($page->instance()->etapes(), 'titre'));
         $this->actingAs($proprietaire)->get(TableauDeBord::getUrl(panel: 'societe', tenant: $invitee))
             ->assertOk()
             ->assertSeeText(['Vos premières étapes', TableauDeBord::ETAPE_PREMIER_MAGASIN, TableauDeBord::ETAPE_EQUIPE, $phrase])
@@ -541,10 +550,10 @@ class PanneauSocieteTest extends TestCase
         $inscrite = $this->inscrireUneSociete();
         $sonProprietaire = $inscrite->proprietaire()->firstOrFail();
         $this->dansLEspaceDeLaSociete($inscrite->fresh(), $sonProprietaire);
-        $this->assertSame([TableauDeBord::ETAPE_CODE_DU_COURRIER, TableauDeBord::ETAPE_PREMIER_MAGASIN, TableauDeBord::ETAPE_EQUIPE], array_column(Livewire::test(TableauDeBord::class)->instance()->etapes(), 'titre'));
+        $this->assertSame([TableauDeBord::ETAPE_CODE_DU_COURRIER, TableauDeBord::ETAPE_PREMIER_MAGASIN, TableauDeBord::ETAPE_EQUIPE, CarteDeLaDemonstration::ETAPE], array_column(Livewire::test(TableauDeBord::class)->instance()->etapes(), 'titre'));
         $this->saisirLeCodeDuCourrier($inscrite->fresh());
         $this->dansLEspaceDeLaSociete($inscrite->fresh(), $sonProprietaire);
-        $this->assertSame([TableauDeBord::ETAPE_CODE_DU_COURRIER, TableauDeBord::ETAPE_PREMIER_MAGASIN, TableauDeBord::ETAPE_EQUIPE], array_column(Livewire::test(TableauDeBord::class)->instance()->etapes(), 'titre'));
+        $this->assertSame([TableauDeBord::ETAPE_CODE_DU_COURRIER, TableauDeBord::ETAPE_PREMIER_MAGASIN, TableauDeBord::ETAPE_EQUIPE, CarteDeLaDemonstration::ETAPE], array_column(Livewire::test(TableauDeBord::class)->instance()->etapes(), 'titre'));
         $this->flushSession();
         $this->actingAs($sonProprietaire)->get(VerificationSociete::getUrl(panel: 'societe', tenant: $inscrite))
             ->assertOk()

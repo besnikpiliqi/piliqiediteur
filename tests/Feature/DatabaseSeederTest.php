@@ -26,6 +26,18 @@ class DatabaseSeederTest extends TestCase
 {
     use RefreshDatabase;
 
+    /**
+     * Les tests prennent le vrai VIES, que chaque test simule (Http::fake) :
+     * le semis exige le faux, comme les autres fournisseurs factices de
+     * phpunit.xml.
+     */
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        config(['services.vies.pilote' => 'faux']);
+    }
+
     public function test_le_semis_est_refuse_en_production_sans_rien_ecrire(): void
     {
         $this->app['env'] = 'production';
@@ -51,6 +63,7 @@ class DatabaseSeederTest extends TestCase
             'annuaire de l\'Ordre tenu par l\'éditeur' => ['services.ordre.pilote', 'editeur'],
             'plateforme agréée sans pilote' => ['services.pdp.pilote', null],
             'antivirus ClamAV' => ['services.antivirus.pilote', 'clamav'],
+            'VIES de la Commission européenne' => ['services.vies.pilote', 'reel'],
         ];
     }
 

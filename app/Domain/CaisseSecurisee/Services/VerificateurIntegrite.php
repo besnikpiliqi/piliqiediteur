@@ -10,6 +10,7 @@ use App\Domain\CaisseSecurisee\Models\TeteRegistreFiscal;
 use App\Domain\Calendrier\Calendrier;
 use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Contacts\Enums\TypeClient;
+use App\Domain\Demonstration\SiteDePiliqi;
 use App\Domain\Facturation\Enums\TypeDocument;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\AvoirAllocation;
@@ -465,6 +466,10 @@ class VerificateurIntegrite
             return $suivant;
         }
 
+        if (! SiteDePiliqi::estLaDemonstration()) {
+            $this->signalerUnEnregistrementDeDemonstration($chaine, $enregistrement, $contenu, $situation, $reference);
+        }
+
         $ecarts = $this->ecartsDEnTete($chaine, $enregistrement, $contenu);
 
         if ($ecarts !== []) {
@@ -485,6 +490,32 @@ class VerificateurIntegrite
         }
 
         return $suivant;
+    }
+
+    /**
+     * Sur le site réel, un enregistrement d'une copie du site de
+     * démonstration (lot DEMO-COPIE, choix 18 et 19) : en-tête marqué
+     * « demonstration », émetteur figé d'un document marqué
+     * « demonstration », ou JET 100 (entrée en mode d'entraînement) ou 105
+     * (sortie), que seul le site de démonstration écrit.
+     *
+     * @param  array<array-key, mixed>  $contenu
+     * @param  array<string, int|string>  $reference
+     */
+    private function signalerUnEnregistrementDeDemonstration(ChaineFiscale $chaine, EnregistrementFiscal $enregistrement, array $contenu, string $situation, array $reference): void
+    {
+        $donnees = is_array($contenu['donnees'] ?? null) ? $contenu['donnees'] : [];
+        $contexte = is_array($donnees['contexte'] ?? null) ? $donnees['contexte'] : [];
+        $emetteur = is_array($contexte['emetteur'] ?? null) ? $contexte['emetteur'] : [];
+        $jet = $chaine === ChaineFiscale::Evenement && in_array($enregistrement->type, [(string) CodeEvenement::EntreeEnModeDemonstration->value, (string) CodeEvenement::SortieDuModeDemonstration->value], true);
+
+        if (array_key_exists('demonstration', $contenu) || array_key_exists('demonstration', $emetteur) || $jet) {
+            $this->rapport->signaler(AnomalieFiscale::defaut('demonstration', "{$situation} : il vient d'une copie du site de démonstration (".match (true) {
+                $jet => 'JET '.$enregistrement->type.' du mode d\'entraînement',
+                array_key_exists('demonstration', $contenu) => 'en-tête marqué « demonstration »',
+                default => 'émetteur figé marqué « demonstration »',
+            }.') et n\'a pas sa place dans une base du site réel.', $reference));
+        }
     }
 
     /**
@@ -559,7 +590,7 @@ class VerificateurIntegrite
      */
     private function ecartsDEnTete(ChaineFiscale $chaine, EnregistrementFiscal $enregistrement, array $contenu): array
     {
-        $cles = ['format', 'magasin', 'caisse', 'chaine', 'sequence', 'type', 'horodatage', 'operateur', 'version_module', 'cle_id', 'signature_precedente', ...($chaine === ChaineFiscale::Vente ? ['gt'] : []), 'document', 'donnees'];
+        $cles = ['format', ...(SiteDePiliqi::estLaDemonstration() ? ['demonstration'] : []), 'magasin', 'caisse', 'chaine', 'sequence', 'type', 'horodatage', 'operateur', 'version_module', 'cle_id', 'signature_precedente', ...($chaine === ChaineFiscale::Vente ? ['gt'] : []), 'document', 'donnees'];
         $operateurId = $enregistrement->getRawOriginal('operateur_id');
         $documentType = $enregistrement->getRawOriginal('document_type');
         $documentId = $enregistrement->getRawOriginal('document_id');

@@ -14,13 +14,20 @@ namespace App\Domain\CaisseSecurisee;
  * conservation et d'archivage, la majeure sinon. Une version majeure ne se
  * note jamais comme une mineure.
  *
+ * La 3.0 (lot DEMO-COPIE, D.7) : le site de démonstration, mode
+ * d'entraînement de la caisse, marque « demonstration » l'en-tête de chaque
+ * enregistrement de ses copies et l'émetteur figé de leurs documents, et
+ * le vérificateur du site réel signale un enregistrement, un émetteur
+ * figé, un JET 100 ou un JET 105 de démonstration dans une base réelle.
+ * Le format du contenu signé du site réel ne change pas.
+ *
  * La référence légale qu'affiche l'écran de la caisse sécurisée est elle
  * aussi une constante du code : sa mise à jour (renumérotation du code
  * général des impôts) passe par une nouvelle version mineure.
  */
 final class ModuleFiscal
 {
-    public const VERSION = '2.1';
+    public const VERSION = '3.0';
 
     public const REFERENCE_LEGALE = 'Article 286, I, 3° bis du code général des impôts';
 }

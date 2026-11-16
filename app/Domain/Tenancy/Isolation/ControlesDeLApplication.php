@@ -62,6 +62,14 @@ final class ControlesDeLApplication
 
     public const DESACCORD = 'désaccord entre Laravel et la base';
 
+    /**
+     * Les modèles du registre du site de démonstration (lot DEMO-COPIE,
+     * C.1) : ils lisent une base à part (connexion registre), sans aucune
+     * donnée d'une société, et n'entrent pas dans la vérification de
+     * l'isolation d'une base de PILIQI.
+     */
+    public const MODELES_DU_REGISTRE = 'App\\Domain\\Demonstration\\Registre\\';
+
     public function __construct(
         private readonly ConnectionInterface $base,
         private readonly TenantContext $contexte,
@@ -90,7 +98,7 @@ final class ControlesDeLApplication
         foreach ($modeles ?? self::modeles() as $classe) {
             $resultat->compter(1);
             $table = (new $classe)->getTable();
-            $portee = ReglesDIsolation::porteeDe($table);
+            $portee = ReglesDIsolation::porteeConnue($table);
             $traits = class_uses_recursive($classe);
             $attendus = match ($portee) {
                 ReglesDIsolation::MAGASIN => [BelongsToMagasin::class, MagasinScope::class],
@@ -348,6 +356,10 @@ final class ControlesDeLApplication
             $classe = 'App\\'.str_replace(['/', '.php'], ['\\', ''], $fichier->getRelativePathname());
 
             if (! class_exists($classe) || ! is_subclass_of($classe, Model::class) || (new ReflectionClass($classe))->isAbstract()) {
+                continue;
+            }
+
+            if (str_starts_with($classe, self::MODELES_DU_REGISTRE)) {
                 continue;
             }
 

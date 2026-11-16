@@ -5,6 +5,8 @@ namespace App\Domain\Tenancy\Actions;
 use App\Domain\Cabinets\Actions\MettreFinAuLienAction;
 use App\Domain\Cabinets\Enums\MotifDeFinDuLien;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
+use App\Domain\Demonstration\Actions\TerminerLaDemonstrationAction;
+use App\Domain\Demonstration\Enums\CauseDeLaFin;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\MotifCloture;
 use App\Domain\Tenancy\Enums\MotifCode;
@@ -222,6 +224,7 @@ class CloreLInscriptionAction
         $verrouillee->magasins()->orderBy('id')->lock('for no key update')->get();
         $comptes = User::query()->where('societe_id', $verrouillee->getKey())->orderBy('id')->lock('for no key update')->get();
         $this->finDesLiens->pourUneSocieteQuiChangeDeMains($verrouillee, MotifDeFinDuLien::InscriptionClose);
+        app(TerminerLaDemonstrationAction::class)->handle($verrouillee, CauseDeLaFin::Cloture);
         $verrouillee->forceFill(['close_le' => now(), 'motif_cloture' => $motif])->save();
         $this->journalAudit->inscrire(ActionAuditee::InscriptionClose, null, null, null, ['motif' => $motif->value], $verrouillee, $editeur);
         $this->pieces->effacerToutes($verrouillee, PiecesDeVerification::MOTIF_DECISION, $editeur);

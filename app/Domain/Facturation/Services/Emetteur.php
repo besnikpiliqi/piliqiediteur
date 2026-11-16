@@ -2,6 +2,7 @@
 
 namespace App\Domain\Facturation\Services;
 
+use App\Domain\Demonstration\SiteDePiliqi;
 use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
@@ -114,6 +115,7 @@ final readonly class Emetteur
             assuranceAdresse: $societe->assurance_adresse,
             assuranceContrat: $societe->assurance_contrat,
             assuranceCouverture: $societe->assurance_couverture,
+            estDemonstration: SiteDePiliqi::estLaDemonstration(),
         );
     }
 

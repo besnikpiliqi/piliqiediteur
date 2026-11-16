@@ -155,6 +155,21 @@ class SignataireFiscal
     }
 
     /**
+     * Le cle_id de la clé privée de l'environnement, qu'elle soit épinglée
+     * ou non, ou null quand aucune n'est configurée : les gardes du
+     * démarrage le comparent aux clés épinglées de chaque site (voir
+     * SiteDePiliqiServiceProvider).
+     *
+     * @throws ModuleFiscalNonConfigureException une clé illisible ou d'un autre algorithme
+     */
+    public function empreinteDeLaClePrivee(): ?string
+    {
+        $cle = $this->lireLaClePrivee();
+
+        return $cle === null ? null : self::empreinte($cle);
+    }
+
+    /**
      * La clé privée de l'environnement, une fois vérifiée : ECDSA P-256,
      * et dont la clé publique est épinglée.
      *
@@ -166,10 +181,31 @@ class SignataireFiscal
             return $this->clePrivee;
         }
 
+        $cle = $this->lireLaClePrivee() ?? throw ModuleFiscalNonConfigureException::clePriveeAbsente();
+        $cleId = self::empreinte($cle);
+
+        if (! array_key_exists($cleId, $this->trousseau())) {
+            throw ModuleFiscalNonConfigureException::cleNonEpinglee($cleId);
+        }
+
+        $this->cleId = $cleId;
+
+        return $this->clePrivee = $cle;
+    }
+
+    /**
+     * La clé privée de l'environnement, lue et contrôlée (ECDSA P-256),
+     * sans regarder si elle est épinglée ; null quand aucune n'est
+     * configurée.
+     *
+     * @throws ModuleFiscalNonConfigureException une clé illisible ou d'un autre algorithme
+     */
+    private function lireLaClePrivee(): ?OpenSSLAsymmetricKey
+    {
         $valeur = trim(ValeurSimple::enTexte($this->config->get('caisse_securisee.cle_privee')));
 
         if ($valeur === '') {
-            throw ModuleFiscalNonConfigureException::clePriveeAbsente();
+            return null;
         }
 
         $pem = base64_decode($valeur, true);
@@ -190,15 +226,7 @@ class SignataireFiscal
             throw ModuleFiscalNonConfigureException::clePriveeNonPriseEnCharge();
         }
 
-        $cleId = self::empreinte($cle);
-
-        if (! array_key_exists($cleId, $this->trousseau())) {
-            throw ModuleFiscalNonConfigureException::cleNonEpinglee($cleId);
-        }
-
-        $this->cleId = $cleId;
-
-        return $this->clePrivee = $cle;
+        return $cle;
     }
 
     /**

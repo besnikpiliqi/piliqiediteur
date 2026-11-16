@@ -28,6 +28,9 @@ class PlanificateurTest extends TestCase
      */
     private const TACHES = [
         ['app:cloturer-caisses-automatiquement', '0 * * * *'],
+        ['demonstration:marquer-les-fins', '50 * * * *'],
+        ['demonstration:relancer-les-messages', '*/5 * * * *'],
+        ['demonstration:lire-l-etat', '20 * * * *'],
         ['app:marquer-factures-en-retard', '15 * * * *'],
         ['app:expirer-devis', '30 * * * *'],
         ['caisse:verifier', '0 3 * * *'],

@@ -2,20 +2,27 @@
 
 use App\Console\Commands\CloreInscriptionsSansCode;
 use App\Console\Commands\ClotureAutomatiqueCaisse;
+use App\Console\Commands\ConstruireLesModelesDeLaDemonstration;
 use App\Console\Commands\EffacerPiecesVerification;
 use App\Console\Commands\EffacerTelechargementsDeDocuments;
 use App\Console\Commands\ExpirerDevis;
 use App\Console\Commands\ExpirerInvitationsDesCabinets;
+use App\Console\Commands\LireLEtatDeLaDemonstration;
 use App\Console\Commands\MarquerFacturesEnRetard;
+use App\Console\Commands\MarquerLesFinsDesDemonstrations;
+use App\Console\Commands\NettoyerLaDemonstration;
 use App\Console\Commands\PurgerActionsTraitees;
 use App\Console\Commands\PurgerDemandesInscription;
 use App\Console\Commands\PurgerInvitationsDesCabinets;
 use App\Console\Commands\PurgerJournalAudit;
+use App\Console\Commands\PurgerLesArchivesDeLaDemonstration;
 use App\Console\Commands\PurgerTraces;
 use App\Console\Commands\PurgerVerifications;
 use App\Console\Commands\RattacherLesExpertsComptables;
 use App\Console\Commands\RelancerFacturesImpayees;
+use App\Console\Commands\RelancerLesMessagesDeLaDemonstration;
 use App\Console\Commands\RelancerTransmissionsPdp;
+use App\Console\Commands\ReprendreLesCopiesDeLaDemonstration;
 use App\Console\Commands\ReverifierSirene;
 use App\Console\Commands\SuivreEnvoisRecommandes;
 use App\Console\Commands\SurveillerLaFileDAttente;
@@ -23,8 +30,13 @@ use App\Console\Commands\VerifierIntegriteFiscale;
 use App\Console\Commands\VerifierJournalAudit;
 use App\Console\Commands\VerifierLIsolation;
 use App\Console\SemisEnCours;
+use App\Domain\Demonstration\HotesDeConfiance;
+use App\Domain\Demonstration\SiteDePiliqi;
+use App\Domain\Demonstration\Visites\TemoinsDesVisites;
 use App\Http\Middleware\AjouterLesEnTetesDeSecurite;
 use App\Http\Middleware\FaireConfianceAuxMandataires;
+use App\Http\Middleware\OuvrirLaCopie;
+use App\Http\Middleware\VerifierLeJetonCsrf;
 use App\Http\Responses\ReponseAUnDocumentDisparu;
 use App\Http\Responses\ReponseAUnePageExpiree;
 use App\Http\Responses\ReponseDansUnMagasinEnLectureSeule;
@@ -32,8 +44,10 @@ use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Http\Middleware\TrustProxies;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Route;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
@@ -41,14 +55,31 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
         web: __DIR__.'/../routes/web.php',
         health: '/up',
+        // Les routes du site de démonstration, chargées seulement dans ce
+        // mode (lot DEMO-COPIE, A.2), hors du groupe web : sans session ni
+        // jeton CSRF (voir routes/demonstration.php).
+        then: function (): void {
+            // Le fichier robots.txt de chaque site, hors du groupe web (sans
+            // session : sur le site de démonstration, il se sert sans copie) :
+            // le site réel n'interdit rien, le site de démonstration tout.
+            Route::get('/robots.txt', fn () => response(
+                SiteDePiliqi::estLaDemonstration() ? "User-agent: *\nDisallow: /\n" : "User-agent: *\nDisallow:\n",
+                200,
+                ['Content-Type' => 'text/plain; charset=UTF-8'],
+            ))->name('robots');
+
+            if (SiteDePiliqi::estLaDemonstration()) {
+                Route::middleware([])->group(base_path('routes/demonstration.php'));
+            }
+        },
     )
     ->withMiddleware(function (Middleware $middleware): void {
         // Hors du développement et des tests, une requête n'est servie que
-        // pour l'hôte d'APP_URL (et ses sous-domaines) : une adresse
-        // absolue construite depuis la requête, comme celle d'un e-mail
-        // « Mot de passe oublié », ne peut pas mener ailleurs qu'au
-        // logiciel par un en-tête Host forgé.
-        $middleware->trustHosts();
+        // pour les hôtes exacts de ce serveur, jamais leurs sous-domaines
+        // (voir HotesDeConfiance) : une adresse absolue construite depuis
+        // la requête, comme celle d'un e-mail « Mot de passe oublié », ne
+        // peut pas mener ailleurs qu'au logiciel par un en-tête Host forgé.
+        $middleware->trustHosts(at: HotesDeConfiance::motifs(...), subdomains: false);
         // Seules les adresses exactes du répartiteur de charge, lues de la
         // configuration (PROXIES_DE_CONFIANCE, jamais « * »), donnent
         // l'adresse IP du client par leurs en-têtes : à la place du réglage
@@ -58,9 +89,19 @@ return Application::configure(basePath: dirname(__DIR__))
         // Les rappels des prestataires arrivent sans session : ils se
         // prouvent par leur signature (voir RappelsDesPrestatairesController).
         $middleware->validateCsrfTokens(except: ['rappels/*']);
+        // Sur le site de démonstration, aucun témoin XSRF-TOKEN (lot
+        // DEMO-COPIE, A.10, voir VerifierLeJetonCsrf).
+        $middleware->web(replace: [PreventRequestForgery::class => VerifierLeJetonCsrf::class]);
         // Chaque réponse, page, fichier, réponse JSON ou erreur, porte les
         // en-têtes de sécurité (voir AjouterLesEnTetesDeSecurite).
         $middleware->append(AjouterLesEnTetesDeSecurite::class);
+        // Sur le site de démonstration, chaque requête arrive à sa copie,
+        // avant le groupe web et sa session (voir OuvrirLaCopie) ; son
+        // témoin, dont le registre ne garde que l'empreinte, se lit brut,
+        // jamais chiffré par Laravel. Sur le site réel, l'intergiciel ne
+        // fait rien.
+        $middleware->append(OuvrirLaCopie::class);
+        $middleware->encryptCookies(except: [TemoinsDesVisites::NOM, '__Host-'.TemoinsDesVisites::NOM]);
     })
     ->withSchedule(function (Schedule $schedule): void {
         // Chaque tâche écrit (clôtures, statuts, relances, journal des
@@ -81,6 +122,31 @@ return Application::configure(basePath: dirname(__DIR__))
         // terminées, le passage en retard des factures échues la veille de
         // leur magasin.
         $schedule->command(ClotureAutomatiqueCaisse::class)->hourly()->withoutOverlapping();
+        // Sur le site réel seulement (lot DEMO-COPIE) : chaque heure, à la
+        // minute 50, les démonstrations dont les 30 jours sont passés se
+        // terminent (voir MarquerLesFinsDesDemonstrations) ; toutes les 5
+        // minutes, les messages vers le site de démonstration qui attendent
+        // leur reprise repartent, et l'état des démonstrations en cours se
+        // demande (voir RelancerLesMessagesDeLaDemonstration).
+        // Sur le site de démonstration seulement (lot DEMO-COPIE) : les
+        // bases modèles, refaites chaque nuit à 01 h 10, avant 2 h, puis le
+        // nettoyage des bases et des dossiers orphelins à 03 h 10, après
+        // la construction et hors de 2 h à 3 h (C.2) ; chaque heure, la
+        // reprise des copies en échec et de la demande qui attend une
+        // place (C.3) ; chaque jour, la purge des archives de six ans
+        // (C.18). Tout sur un seul serveur.
+        if (SiteDePiliqi::estLaDemonstration()) {
+            $schedule->command(ConstruireLesModelesDeLaDemonstration::class)->dailyAt('01:10')->onOneServer()->withoutOverlapping();
+            $schedule->command(NettoyerLaDemonstration::class)->dailyAt('03:10')->onOneServer()->withoutOverlapping();
+            $schedule->command(ReprendreLesCopiesDeLaDemonstration::class)->hourlyAt(25)->onOneServer()->withoutOverlapping();
+            $schedule->command(PurgerLesArchivesDeLaDemonstration::class)->dailyAt('04:10')->onOneServer()->withoutOverlapping();
+        }
+
+        if (SiteDePiliqi::courant() === SiteDePiliqi::Reel) {
+            $schedule->command(MarquerLesFinsDesDemonstrations::class)->hourlyAt(50)->onOneServer()->withoutOverlapping();
+            $schedule->command(RelancerLesMessagesDeLaDemonstration::class)->everyFiveMinutes()->onOneServer()->withoutOverlapping();
+            $schedule->command(LireLEtatDeLaDemonstration::class)->hourlyAt(20)->onOneServer()->withoutOverlapping();
+        }
         $schedule->command(MarquerFacturesEnRetard::class)->hourlyAt(15)->withoutOverlapping();
         // À la minute 30 : les devis envoyés dont la date de validité était
         // la veille de leur magasin expirent ; leur client ne peut plus les

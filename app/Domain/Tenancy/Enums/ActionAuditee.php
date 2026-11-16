@@ -86,6 +86,11 @@ enum ActionAuditee: string implements HasLabel
     case IdentifiantConsulte = 'identifiant_consulte';
     case TransmissionDemandee = 'transmission_demandee';
     case TransmissionAnnulee = 'transmission_annulee';
+    case DemonstrationCreee = 'demonstration_creee';
+    case DemonstrationOuverteParLeBouton = 'demonstration_ouverte_par_le_bouton';
+    case LienDeDemonstrationRenouvele = 'lien_de_demonstration_renouvele';
+    case DemonstrationRecommencee = 'demonstration_recommencee';
+    case DemonstrationTerminee = 'demonstration_terminee';
     case ProprieteTransferee = 'propriete_transferee';
     case ProprieteReprise = 'propriete_reprise';
     case AdresseDeConnexionChangee = 'adresse_de_connexion_changee';
@@ -212,6 +217,11 @@ enum ActionAuditee: string implements HasLabel
             self::IdentifiantConsulte => 'Identifiant affiché à un administrateur',
             self::TransmissionDemandee => 'Transmission de la propriété demandée',
             self::TransmissionAnnulee => 'Transmission de la propriété annulée',
+            self::DemonstrationCreee => 'Démonstration créée',
+            self::DemonstrationOuverteParLeBouton => 'Démonstration ouverte depuis le compte',
+            self::LienDeDemonstrationRenouvele => 'Lien de la démonstration renouvelé',
+            self::DemonstrationRecommencee => 'Démonstration remise à zéro',
+            self::DemonstrationTerminee => 'Démonstration terminée',
             self::ProprieteTransferee => 'Propriété transférée',
             self::ProprieteReprise => 'Propriété reprise par le code du courrier',
             self::AdresseDeConnexionChangee => 'Adresse de connexion changée',
@@ -273,7 +283,8 @@ enum ActionAuditee: string implements HasLabel
             self::InvitationAcceptee, self::InvitationRefusee, self::InvitationCaduque, self::LienDemande, self::LienRefuse,
             self::DemandeDeLienRetiree, self::DemandeDeLienExpiree, self::LienActive, self::LienTermine,
             self::AutorisationsDuCabinetModifiees, self::ExpertComptableDeclare, self::ExpertComptableCree, self::ExpertComptableRattache,
-            self::AdresseDExpertComptableChangee => CategorieAudit::Acces,
+            self::AdresseDExpertComptableChangee, self::DemonstrationCreee, self::DemonstrationOuverteParLeBouton, self::LienDeDemonstrationRenouvele,
+            self::DemonstrationRecommencee, self::DemonstrationTerminee => CategorieAudit::Acces,
             default => CategorieAudit::Operations,
         };
     }
@@ -441,6 +452,10 @@ enum ActionAuditee: string implements HasLabel
             // lien renvoyé, la mention qu'il l'a été.
             self::TransmissionDemandee => ['destinataire', 'lien_renvoye'],
             self::TransmissionAnnulee => ['destinataire'],
+            self::DemonstrationCreee => ['repere', 'type_d_activite', 'fin'],
+            self::DemonstrationOuverteParLeBouton, self::DemonstrationRecommencee => ['repere'],
+            self::LienDeDemonstrationRenouvele => ['repere', 'generation'],
+            self::DemonstrationTerminee => ['repere', 'cause'],
             // Le numéro de la vente et, pour chaque produit qu'elle a fait
             // passer sous zéro, sa référence, son stock avant la vente et
             // la quantité vendue (voir EmettreFactureAction).

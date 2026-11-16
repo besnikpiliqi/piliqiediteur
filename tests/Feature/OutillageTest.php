@@ -442,7 +442,7 @@ class OutillageTest extends TestCase
         $this->assertIsArray($composer);
         $this->assertSame('proprietary', $composer['license'] ?? null);
 
-        foreach (['ext-gd', 'ext-openssl', 'ext-zip', 'ext-pdo_pgsql'] as $extension) {
+        foreach (['ext-gd', 'ext-openssl', 'ext-zip', 'ext-pdo_pgsql', 'ext-sodium'] as $extension) {
             $this->assertArrayHasKey($extension, $composer['require'] ?? [], $extension.' n\'est pas déclarée dans composer.json.');
         }
     }

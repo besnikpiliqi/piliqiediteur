@@ -92,5 +92,6 @@
         <p class="refus">{{ \App\Http\Controllers\ConfirmerInscriptionController::MESSAGE_LIEN_INVALIDE }}</p>
     @endif
 </main>
+    @include('pied-de-page-du-site')
 </body>
 </html>

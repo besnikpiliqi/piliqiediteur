@@ -320,6 +320,22 @@ final class Calendrier
     }
 
     /**
+     * L'instant UTC écrit « AAAA-MM-JJTHH:MM:SSZ » (ISO 8601 en Zulu, comme
+     * les messages signés entre les deux sites de PILIQI l'écrivent), ou
+     * null pour tout autre texte.
+     */
+    public static function lireUnInstantUtc(mixed $texte): ?CarbonImmutable
+    {
+        if (! is_string($texte) || preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/', $texte) !== 1) {
+            return null;
+        }
+
+        $instant = CarbonImmutable::createFromFormat('Y-m-d\TH:i:s\Z', $texte, 'UTC');
+
+        return $instant instanceof CarbonImmutable && $instant->utc()->toIso8601ZuluString() === $texte ? $instant->utc() : null;
+    }
+
+    /**
      * L'invariant du démarrage : l'application et PHP sont en UTC, fuseau
      * de tous les instants (voir Casts\Instant). Un autre fuseau décalerait
      * en silence chaque instant écrit, lu ou comparé.

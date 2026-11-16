@@ -16,6 +16,9 @@ use App\Integrations\Rne\InpiRne;
 use App\Integrations\Sirene\Contracts\RepertoireSirene;
 use App\Integrations\Sirene\FauxRepertoireSirene;
 use App\Integrations\Sirene\InseeSirene;
+use App\Integrations\Vies\ClientVies;
+use App\Integrations\Vies\Contracts\ServiceVies;
+use App\Integrations\Vies\FauxVies;
 use Illuminate\Support\ServiceProvider;
 use RuntimeException;
 
@@ -33,10 +36,14 @@ use RuntimeException;
  * facture électronique (PDP_PILOTE), seulement « faux » jusqu'au
  * raccordement de SUPER PDP (étape 2 de la feuille de route), dont le nom
  * du pilote s'inscrit sur chaque mandat et chaque transmission (voir
- * pdpActive()). Le pilote « faux » sert au développement et aux tests,
- * sans aucune requête ; l'application refuse de démarrer en production
- * avec l'un d'eux. L'antivirus, qui demande l'adresse de son démon, a son
- * propre câblage (voir AntivirusServiceProvider).
+ * pdpActive()) ; et VIES (VIES_PILOTE, « reel » ou « faux »), qui vérifie
+ * les n° de TVA de l'Union. Le pilote « faux » sert au développement, aux
+ * tests, au semis et au site de démonstration, sans aucune requête : le
+ * site réel refuse de démarrer en production avec l'un d'eux, le site de
+ * démonstration avec un autre (voir SiteDePiliqiServiceProvider, qui lit
+ * la liste PILOTES_FACTICES, comme le semis). L'antivirus, qui demande
+ * l'adresse de son démon, a son propre câblage (voir
+ * AntivirusServiceProvider).
  */
 class FournisseursExternesServiceProvider extends ServiceProvider
 {
@@ -51,6 +58,7 @@ class FournisseursExternesServiceProvider extends ServiceProvider
         'recommande' => ['faux' => FauxServiceEnvoiRecommande::class],
         'ordre' => ['editeur' => AnnuaireTenuParLEditeur::class, 'faux' => FauxAnnuaireDeLOrdre::class],
         'pdp' => ['faux' => FakePdpGateway::class],
+        'vies' => ['reel' => ClientVies::class, 'faux' => FauxVies::class],
     ];
 
     /**
@@ -64,28 +72,37 @@ class FournisseursExternesServiceProvider extends ServiceProvider
         'recommande' => ServiceEnvoiRecommande::class,
         'ordre' => AnnuaireDeLOrdre::class,
         'pdp' => PdpGatewayInterface::class,
+        'vies' => ServiceVies::class,
+    ];
+
+    /**
+     * Le pilote factice de chaque fournisseur externe, la liste unique
+     * que lisent le semis, qui l'exige avant d'écrire quoi que ce soit
+     * (voir DatabaseSeeder), et les gardes du démarrage : le site réel en
+     * refuse chacun en production, le site de démonstration n'accepte
+     * qu'eux, sauf l'antivirus, qui peut y être le vrai ClamAV, local
+     * (voir SiteDePiliqiServiceProvider). Seuls le répertoire Sirene, le
+     * registre national des entreprises et l'annuaire de l'Ordre factices
+     * connaissent les entreprises fictives semées ; ni le courrier
+     * recommandé, ni la plateforme agréée, ni VIES, ni l'antivirus réels
+     * ne servent.
+     *
+     * @var array<string, string>
+     */
+    public const PILOTES_FACTICES = [
+        'services.sirene.pilote' => 'faux',
+        'services.rne.pilote' => 'faux',
+        'services.recommande.pilote' => 'faux',
+        'services.ordre.pilote' => 'faux',
+        'services.pdp.pilote' => 'faux',
+        'services.vies.pilote' => 'faux',
+        'services.antivirus.pilote' => AntivirusServiceProvider::FACTICE,
     ];
 
     public function register(): void
     {
         foreach (self::CONTRATS as $service => $contrat) {
             $this->app->singleton($contrat, fn (): object => $this->app->make(self::PILOTES[$service][self::pilote($service)]));
-        }
-    }
-
-    /**
-     * @throws RuntimeException
-     */
-    public function boot(): void
-    {
-        if (! $this->app->isProduction()) {
-            return;
-        }
-
-        foreach (array_keys(self::CONTRATS) as $service) {
-            if (config("services.{$service}.pilote") === 'faux') {
-                throw new RuntimeException("Le fournisseur factice de « {$service} » (pilote faux) ne sert jamais en production.");
-            }
         }
     }
 

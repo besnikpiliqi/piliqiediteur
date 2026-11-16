@@ -4,6 +4,52 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Le site que sert ce serveur
+    |--------------------------------------------------------------------------
+    |
+    | PILIQI_SITE : reel (par défaut), le site des vraies sociétés, ou
+    | demonstration, le site qui sert à chaque société la copie d'une
+    | société modèle fictive de son type (voir SiteDePiliqi et
+    | SiteDePiliqiServiceProvider). Lu une seule fois au démarrage ; une
+    | autre valeur empêche de démarrer. Jamais déduit d'APP_ENV.
+    |
+    */
+
+    'site' => env('PILIQI_SITE', 'reel'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Version servie
+    |--------------------------------------------------------------------------
+    |
+    | La date et le court numéro du commit déployé (PILIQI_VERSION, par
+    | exemple « 2026-11-16 7f9e16c »), écrits au déploiement : le pied de
+    | chaque page des deux sites les affiche avec le site servi, pour qu'un
+    | essai mal lancé se voie tout de suite. Vide sur un poste de
+    | développement : le pied dit alors « version de développement ».
+    |
+    */
+
+    'version' => env('PILIQI_VERSION'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Hôtes de confiance
+    |--------------------------------------------------------------------------
+    |
+    | Les noms d'hôte exacts que sert ce serveur, séparés par des virgules
+    | dans HOTES_DE_CONFIANCE : hors du développement et des tests, une
+    | requête pour un autre hôte, sous-domaine compris, répond 400 (voir
+    | HotesDeConfiance). Vide : le seul hôte d'APP_URL. Jamais un motif ni
+    | un domaine ouvert à ses sous-domaines : le site de démonstration a
+    | son propre domaine, jamais un sous-domaine du site réel.
+    |
+    */
+
+    'hotes_de_confiance' => array_values(array_filter(array_map(trim(...), explode(',', (string) env('HOTES_DE_CONFIANCE', ''))), static fn (string $hote): bool => $hote !== '')),
+
+    /*
+    |--------------------------------------------------------------------------
     | Mandataires de confiance (répartiteur de charge)
     |--------------------------------------------------------------------------
     |

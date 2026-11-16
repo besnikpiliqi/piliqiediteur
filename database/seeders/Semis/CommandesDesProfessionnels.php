@@ -297,7 +297,7 @@ final class CommandesDesProfessionnels
     {
         $facture = $gestes->facturer($vendeur, $client, $lignes);
 
-        $this->plusTard($rang + 4, fn (): Avoir => $gestes->rendre($responsable, $client, $gestes->dans(fn (): array => $facture->lignes()->orderBy('ordre')->get()->map(fn ($ligne): array => ['ligne_facture_id' => $ligne->id, 'quantite' => (int) $ligne->quantite])->all()), 'Commande annulée par le client : facture soldée par cet avoir.'));
+        $this->plusTard($rang + 4, fn (): Avoir => $gestes->rendre($responsable, $client, $gestes->dans(fn (): array => array_values($facture->lignes()->orderBy('ordre')->get()->map(fn ($ligne): array => ['ligne_facture_id' => $ligne->id, 'quantite' => (int) $ligne->quantite])->all())), 'Commande annulée par le client : facture soldée par cet avoir.'));
     }
 
     /**

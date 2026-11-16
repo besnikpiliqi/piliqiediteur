@@ -178,6 +178,16 @@
     position: relative;
 }
 
+/*
+ * Le canevas d'un graphique ne dépasse jamais sa carte : quand la fenêtre
+ * rétrécit, Chart.js ne le redimensionne qu'à l'image suivante, et sa
+ * largeur d'avant faisait déborder chaque carte jusque-là (CI rouge de
+ * d15af36, à 1 280 px).
+ */
+.piliqi-graphiques__zone canvas {
+    max-width: 100%;
+}
+
 .piliqi-graphiques__chiffres-de-la-carte {
     overflow-x: auto;
 }

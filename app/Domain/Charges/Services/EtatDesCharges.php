@@ -125,14 +125,14 @@ final class EtatDesCharges
         $contenu = $this->contenu($acces, $filtres, $tva, $edition);
         $fichier = $format === FormatDeLEtat::Pdf ? $this->pdf->generer($contenu) : $this->excel->generer($contenu);
 
-        $this->contexte->runAsSociete($acces->societe, fn (): mixed => DB::transaction(function () use ($acces, $filtres, $format, $contenu): void {
+        $this->contexte->runAsSociete($acces->societe, fn () => DB::transaction(function () use ($acces, $filtres, $format, $contenu): void {
             Societe::verrouillerAvantSonJournalDAudit(CleDuModele::de($acces->societe));
             $magasin = $this->magasinDuJournal($acces, $filtres);
 
             $this->journalAudit->inscrire(ActionAuditee::EtatDesChargesTelecharge, $acces->compte, $magasin, null, [
                 'periode' => ['du' => $filtres->mois[0] ?? null, 'au' => $filtres->mois[count($filtres->mois) - 1] ?? null, 'libelle' => $filtres->periode],
                 'vue' => $filtres->vue,
-                'magasin' => $filtres->sansMagasin ? 'Toute la société' : ($magasin?->code ?? ($filtres->magasin === null ? null : $filtres->libelleDuMagasin)),
+                'magasin' => $filtres->sansMagasin ? 'Toute la société' : ($magasin->code ?? ($filtres->magasin === null ? null : $filtres->libelleDuMagasin)),
                 'format' => $format->value,
                 'nombre_charges' => count($contenu->charges),
             ]);

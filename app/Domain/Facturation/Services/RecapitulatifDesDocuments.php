@@ -96,7 +96,8 @@ final class RecapitulatifDesDocuments
         $flux = ResultatDePhp::flux(fopen('php://temp', 'r+'), 'L\'ouverture du fichier temporaire du récapitulatif');
         fwrite($flux, "\xEF\xBB\xBF");
         fputcsv($flux, self::COLONNES, ';', '"', '', "\r\n");
-        [$charges, $autres] = collect($documents)->partition(fn (DocumentTrouve $document): bool => $document->type === TypeDeDocumentTelechargeable::Charges);
+        $charges = collect($documents)->filter(self::estUneCharge(...))->values();
+        $autres = collect($documents)->reject(self::estUneCharge(...));
         $lues = $this->charges($charges);
 
         foreach ($charges as $document) {
@@ -460,5 +461,14 @@ final class RecapitulatifDesDocuments
         $absolu = abs($centimes);
 
         return ($centimes < 0 ? '-' : '').intdiv($absolu, 100).','.str_pad((string) ($absolu % 100), 2, '0', STR_PAD_LEFT);
+    }
+
+    /**
+     * Ce document est-il une charge, dont la pièce et les lignes se lisent
+     * dans la société et non dans un magasin ?
+     */
+    private static function estUneCharge(DocumentTrouve $document): bool
+    {
+        return $document->type === TypeDeDocumentTelechargeable::Charges;
     }
 }

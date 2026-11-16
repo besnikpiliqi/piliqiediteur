@@ -18,6 +18,8 @@ use Filament\Support\Colors\Color;
  * mode sombre écrit sur une pastille de sa couleur à 10 % posée sur un
  * fond foncé (le gris 800), devient de même la première teinte plus claire
  * qui s'y lit à 4,5:1 au moins.
+ *
+ * @phpstan-type Palette array{50: string, 100: string, 200: string, 300: string, 400: string, 500: string, 600: string, 700: string, 800: string, 900: string, 950: string}
  */
 final class CouleursLisibles
 {
@@ -42,8 +44,8 @@ final class CouleursLisibles
      * Les couleurs d'un panneau : sa couleur principale et celles des
      * pastilles, des boutons et des avis, chacune rendue lisible.
      *
-     * @param  array<int, string>  $principale
-     * @return array<string, array<int, string>>
+     * @param  Palette  $principale
+     * @return array{primary: Palette, danger: Palette, info: Palette, success: Palette, warning: Palette, gray: Palette}
      */
     public static function duPanneau(array $principale): array
     {
@@ -63,8 +65,8 @@ final class CouleursLisibles
      * blanc à 4,5:1 au moins ; la 600 doit aussi se lire à 4,5:1 sur la
      * teinte 50 et sur le gris 100.
      *
-     * @param  array<int, string>  $palette
-     * @return array<int, string>
+     * @param  Palette  $palette
+     * @return Palette
      */
     public static function lisible(array $palette): array
     {
@@ -78,7 +80,19 @@ final class CouleursLisibles
 
         $quatreCents = self::premiere($palette, [400, 300, 200, 100, 50], fn (string $teinte): bool => self::rapport($teinte, self::dessus($teinte, 0.1, self::GRIS_800)) >= self::SEUIL);
 
-        return array_replace($palette, [400 => $quatreCents, 500 => $cinqCents, 600 => $sixCents]);
+        return [
+            50 => $palette[50],
+            100 => $palette[100],
+            200 => $palette[200],
+            300 => $palette[300],
+            400 => $quatreCents,
+            500 => $cinqCents,
+            600 => $sixCents,
+            700 => $palette[700],
+            800 => $palette[800],
+            900 => $palette[900],
+            950 => $palette[950],
+        ];
     }
 
     /**

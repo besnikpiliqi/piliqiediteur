@@ -111,10 +111,11 @@ final class ArchiveDesDocuments
         $noms = [];
         $pieces = [];
         $piecesDeCharge = [];
-        [$charges, $autres] = collect($documents)->partition(fn (DocumentTrouve $document): bool => $document->type === TypeDeDocumentTelechargeable::Charges);
+        $charges = array_values(array_filter($documents, self::estUneCharge(...)));
+        $autres = collect($documents)->reject(self::estUneCharge(...));
 
         try {
-            foreach ($this->piecesDesCharges($compte, $charges->values()->all()) as [$nom, $contenu, $piece]) {
+            foreach ($this->piecesDesCharges($compte, $charges) as [$nom, $contenu, $piece]) {
                 $place = self::placeLibre(self::DOSSIER_DES_CHARGES.'/'.$nom, $noms);
                 $copie = $temporaire.'/'.count($noms);
                 File::put($copie, $contenu);
@@ -289,5 +290,14 @@ final class ArchiveDesDocuments
         $noms[$place] = true;
 
         return $place;
+    }
+
+    /**
+     * Ce document est-il une charge, dont la pièce et les lignes se lisent
+     * dans la société et non dans un magasin ?
+     */
+    private static function estUneCharge(DocumentTrouve $document): bool
+    {
+        return $document->type === TypeDeDocumentTelechargeable::Charges;
     }
 }

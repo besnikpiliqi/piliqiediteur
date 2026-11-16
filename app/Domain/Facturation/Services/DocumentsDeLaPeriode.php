@@ -240,7 +240,7 @@ final class DocumentsDeLaPeriode
      */
     public function telechargeLesChargesDeLaSociete(User $compte, Societe $societe): bool
     {
-        return $this->chargesDeLaSociete[CleDuModele::de($compte).':'.CleDuModele::de($societe)] ??= ($this->accesAuxCharges($compte, $societe)?->chargesDeLaSociete ?? false)
+        return $this->chargesDeLaSociete[CleDuModele::de($compte).':'.CleDuModele::de($societe)] ??= ($this->accesAuxCharges($compte, $societe)->chargesDeLaSociete ?? false)
             && in_array(PermissionRegistry::DOCUMENTS_TELECHARGER, match (true) {
                 $compte->estProprietaire() => [PermissionRegistry::DOCUMENTS_TELECHARGER],
                 $compte->estDUnCabinet() => $this->cabinets->autorisationsParClient($compte)[CleDuModele::de($societe)] ?? [],
@@ -547,7 +547,7 @@ final class DocumentsDeLaPeriode
                 TypeDeDocumentTelechargeable::Charges,
                 $magasin === null ? 0 : CleDuModele::de($magasin),
                 $nom,
-                (string) $charge->getKey(),
+                (string) CleDuModele::de($charge),
                 $charge->numero_piece ?? self::SANS_NUMERO,
                 $charge->date_piece ?? $charge->mois_tva.'-01',
                 $charge->fournisseur,

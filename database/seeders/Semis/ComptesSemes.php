@@ -150,7 +150,7 @@ final class ComptesSemes
     }
 
     /**
-     * @param  Closure(list<string>): list<string>  $modification
+     * @param  Closure(list<string>): array<int, string>  $modification
      *
      * @throws LogicException quand ce compte n'a pas été noté
      */
@@ -158,7 +158,7 @@ final class ComptesSemes
     {
         foreach ($this->comptes as $rang => $note) {
             if ($note['id'] === $compte->id) {
-                $this->comptes[$rang]['ligne'] = $modification($note['ligne']);
+                $this->comptes[$rang]['ligne'] = array_values($modification($note['ligne']));
 
                 return;
             }

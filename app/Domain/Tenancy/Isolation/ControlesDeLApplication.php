@@ -177,7 +177,7 @@ final class ControlesDeLApplication
         $societe = $compte->societe;
         $this->contexte->runAsSociete($societe, function () use ($resultat, $compte): void {
             $this->comparer($resultat, 'charges', $compte, null, ValeursLues::entiers(Charge::query()->orderBy('id')->pluck('id')), $this->ids('select id from charges where societe_id = ? order by id', [$compte->societe_id]));
-            $this->comparer($resultat, 'telechargements_documents', $compte, null, ValeursLues::entiers(TelechargementDeDocuments::query()->where('demande_par', $compte->getKey())->orderBy('id')->pluck('id')), $this->ids('select id from telechargements_documents where societe_id = ? and demande_par = ? order by id', [$compte->societe_id, $compte->getKey()]));
+            $this->comparer($resultat, 'telechargements_documents', $compte, null, ValeursLues::entiers(TelechargementDeDocuments::query()->where('demande_par', $compte->getKey())->orderBy('id')->pluck('id')), $this->ids('select id from telechargements_documents where societe_id = ? and demande_par = ? order by id', [$compte->societe_id, CleDuModele::de($compte)]));
         });
     }
 
@@ -329,7 +329,7 @@ final class ControlesDeLApplication
      */
     private function ids(string $requete, array $liaisons): array
     {
-        return array_map(static fn (mixed $ligne): int => ValeursLues::entier(ValeursLues::champ(SchemaDeLaBase::champsDe($ligne), 'id')), $this->base->select($requete, $liaisons));
+        return array_values(array_map(static fn (mixed $ligne): int => ValeursLues::entier(ValeursLues::champ(SchemaDeLaBase::champsDe($ligne), 'id')), $this->base->select($requete, $liaisons)));
     }
 
     /**

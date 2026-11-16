@@ -344,6 +344,37 @@ test('l’en-tête de chacun des dix-huit graphiques garde le type, « Monter »
     }
 });
 
+/*
+ * Quand la fenêtre rétrécit, Chart.js ne redimensionne un graphique qu'à
+ * l'image suivante : la grille, rétrécie et mesurée dans le même geste,
+ * garde chaque canevas dans sa carte, sans aucun débordement passager
+ * (CI rouge de d15af36, à 1 280 px : les dix-huit cartes débordaient
+ * quand la mesure tombait avant le redimensionnement).
+ */
+test('aucune carte ne déborde pendant que Chart.js redimensionne son graphique, la grille rétrécie gardant chaque canevas dans sa carte', function () {
+    $societe = $this->societeComplete();
+    app(PreferencesDesGraphiques::class)->enregistrer($societe->proprietaire, EcranDuTableauDeBord::Societe, new ReglagesDuTableauDeBord(
+        array_map(fn (Graphique $graphique): CarteDuTableauDeBord => CarteDuTableauDeBord::parDefaut($graphique), Graphique::cases()),
+    ));
+    $onglet = $this->seConnecter($societe->proprietaire, panneau: 'societe')
+        ->attendreQue('document.querySelectorAll("[data-graphique] canvas").length === '.count(Graphique::cases()), 'les dix-huit graphiques ne sont pas dessinés');
+
+    $debordent = $onglet->page()->evaluate(<<<'JS'
+        () => {
+            const grille = document.querySelector('.piliqi-graphiques__grille');
+            grille.style.width = Math.round(grille.clientWidth * 0.7) + 'px';
+            const debordent = [...document.querySelectorAll('[data-graphique]')]
+                .filter((carte) => carte.scrollWidth > carte.clientWidth + 1)
+                .map((carte) => carte.dataset.graphique);
+            grille.style.width = '';
+
+            return debordent;
+        }
+        JS);
+
+    expect($debordent)->toBe([]);
+});
+
 test('le menu « Période » d’une société dont l’exercice finit en décembre n’a pas de choix « Exercice » et dit « (exercice en cours) » ; celui d’une société dont l’exercice finit en juin a les cinq choix', function () {
     $decembre = $this->societeComplete();
     $periodes = '() => Array.from(document.querySelectorAll(\'select[data-filtre="periode"] option\')).map((option) => option.textContent.trim())';

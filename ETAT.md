@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 16/11/2026 à 03:14 UTC par pilotage-sync.sh : « DATEOP reprise MAX_PARTIES 14 ».
+Mis à jour le 16/11/2026 à 04:24 UTC par pilotage-sync.sh : « Point 04:25 ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -43,6 +43,50 @@ eba4bc85 Relecture du lot ER-PRO
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
+ M CLAUDE.md
+ M README.md
+ M app/Domain/CaisseSecurisee/Services/ContenuFiscal.php
+ M app/Domain/Facturation/Actions/CreerFactureDepuisDevisAction.php
+ M app/Domain/Facturation/Actions/EmettreLaFactureRectificativeAction.php
+ M app/Domain/Facturation/Actions/RegulariserUneExonerationNonProuveeAction.php
+ M app/Domain/Facturation/Concerns/NoteSaNatureDOperation.php
+ M app/Domain/Facturation/Models/Devis.php
+ M app/Domain/Facturation/Models/Facture.php
+ M app/Domain/Facturation/Services/ControleNatureOperation.php
+ M app/Domain/Facturation/Services/MentionsFiscales.php
+ M app/Domain/Facturation/Services/PreuvesRequises.php
+ M app/Filament/App/Resources/DevisResource.php
+ M app/Filament/App/Resources/FactureResource.php
+ M app/Filament/Concerns/ChoisitLaNatureDeLOperation.php
+ M database/migrations/2026_10_03_100001_create_devis_table.php
+ M database/migrations/2026_10_03_100003_create_factures_table.php
+ M database/seeders/Semis/DocumentsDesCas.php
+ M tests/Browser/inventaire-des-actions.php
+ M tests/Feature/CaisseSecurisee/EmissionSigneeTest.php
+ M tests/Feature/CaisseSecurisee/EmpreinteDeLaCaisseEtDesPdfTest.php
+ M tests/Feature/Calendrier/ContenuSigneDeReferenceTest.php
+ M tests/Feature/Calendrier/HeureLocaleTest.php
+ M tests/Feature/Calendrier/NuitDeParisTest.php
+ M tests/Feature/Facturation/FacturePdfGeneratorTest.php
+ M tests/Feature/Facturation/NatureOperationTest.php
+ M tests/Feature/Facturation/PreuvesOperationTest.php
+ M tests/Feature/Facturation/RegularisationDUneFactureTest.php
+ M tests/Feature/Filament/DevisResourceTest.php
+ M tests/Feature/Filament/FactureResourceTest.php
+ M tests/Feature/SemisCompletTest.php
+ M tests/Fixtures/contenu-signe/jour.json
+ M tests/Fixtures/contenu-signe/nouvel-an.json
+ M tests/Fixtures/contenu-signe/nuit-d-ete.json
+ M tests/Fixtures/contenu-signe/nuit-d-hiver.json
+ M tests/Fixtures/contenu-signe/outre-mer.json
+ M tests/Fixtures/contenu-signe/premier-passage.json
+ M tests/Fixtures/contenu-signe/second-passage.json
+ M tests/Fixtures/empreinte-de-la-caisse/pdf/devis.txt
+ M tests/Fixtures/empreinte-de-la-caisse/pdf/facture.txt
+ M tests/Fixtures/empreinte-de-la-caisse/registre.txt
+ M tests/Unit/matrice-des-decisions.php
+?? tests/Browser/Parcours/DateDeLOperationTest.php
+?? tests/Feature/Facturation/DateDeLOperationTest.php
 ```
 
 ## Dernière course de la chaîne

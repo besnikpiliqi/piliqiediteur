@@ -3040,3 +3040,11 @@ dit moi. est ce que chaque societe aura sa propre demo ou il va utiliser un demo
 
 tu me parle de chaqu nuit!  il se passe quoi ? il supprime le demo de chaque societe ou qoui
 
+## 345. 2026-11-16 00:54 UTC
+
+donc quand il passe sur vendeur alors les ventes se passe à son c est ca? comme de vrai!
+
+## 346. 2026-11-16 00:56 UTC
+
+et est ce que se peux creer des nouveau membre comme en vrai?
+

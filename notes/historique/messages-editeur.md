@@ -3100,3 +3100,21 @@ il y aura combien partie
 
 quand tu commence ce qui est arrete alors pour les statistique il faut que tu ajoute aussi par année, donc pour les  10 années, donc si les années arriere sont vide alors tu affiche que les années qui ont des données.
 
+## 355. 2026-11-16 21:33 UTC
+
+tu me dit tout les option de graphique donc celles de cart.js
+
+## 356. 2026-11-16 21:34 UTC
+
+montre avec des images
+
+## 357. 2026-11-16 21:39 UTC
+
+don tu laisse tel qu ils sont mais je voulais dire plutot des solution ou option comme la que j'ai dit par année, donc quest ce que tu me propose. avec image stp
+
+## 358. 2026-11-16 21:55 UTC
+
+[1 capture(s) d'écran jointe(s)]
+
+ce que tu m avais proposé et j ai accepté mais toi tu n as pas mis comme j'ai dit
+

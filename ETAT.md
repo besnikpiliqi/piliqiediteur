@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 16/11/2026 à 21:32 UTC par pilotage-sync.sh : « Demande : lot GRAPH-AN (graphiques par année, 10 ans) ».
+Mis à jour le 16/11/2026 à 21:56 UTC par pilotage-sync.sh : « GRAPH-AN point 0 : écarts avec la maquette ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

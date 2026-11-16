@@ -504,3 +504,4 @@
 - 16/11 20:30 UTC — Éditeur : version du module fiscal gardée telle quelle pendant le développement ; remise à 1.0 à la mise en production (F55). Aucune consigne à la course.
 - 16/11 21:25 UTC — Point de suivi : DEMO-COPIE-2:implementation-5 en fin de lot (semis par modèle, Fort-de-France, comptes du bandeau, textes faits ; suite PG 7 550 tests, 3 échecs corrigés ; relances ciblées en cours). Pas encore de commit. Sauvegarde 5d50637c ; 9,2 Go. Prochain point 23:25 UTC.
 - 16/11 22:35 UTC — Éditeur : graphiques par année sur 10 ans (années vides en tête masquées) → lot GRAPH-AN, à la reprise (après DEVIS-RET), maquette avant.
+- 16/11 22:55 UTC — Éditeur : l'écran des graphiques n'est pas comme la maquette acceptée (G1 + chiffres de G2). Écarts relevés (barre des filtres libellés au-dessus au lieu d'à gauche sur une ligne ; couleurs des lignes sous les chiffres clés) → point 0 du lot GRAPH-AN.

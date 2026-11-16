@@ -426,3 +426,12 @@ Ce que le lot fait (proposition de Claude, maquette à montrer à l'éditeur ava
 6. Mêmes règles qu'aujourd'hui : magasins où la personne voit tous les documents, montants additionnés en centimes dans le code, préférence retenue en base par compte et par écran, valeur inconnue refusée.
 7. Semis : au moins une société avec des données sur plusieurs années, et une avec une année vide au milieu, pour que chaque cas se voie (le semis couvre aujourd'hui ~13 mois : en ajouter, par les vraies actions, sur 3 ans au moins dans une société).
 8. Tests : domaine (années vides retirées en tête, gardées au milieu, exercice décalé, 10 ans au plus), préférences, navigateur (société, magasin, cabinet, expert-comptable), contraste des deux modes.
+
+### GRAPH-AN, point 0 : remettre le haut du tableau de bord comme la maquette acceptée (constat de l'éditeur du 16/11/2026 vers 23 h 50, heure de Paris)
+
+Mots de l'éditeur, avec la capture de la maquette « G1 + chiffres de G2 » (modeles/graphiques-tableau-de-bord.html) : « ce que tu m avais proposé et j ai accepté mais toi tu n as pas mis comme j'ai dit ». Écarts relevés par Claude entre la maquette et l'écran réel (capture 144, panneau de Maison Ferrand Halles) :
+1. Barre des filtres : la maquette met chaque libellé À GAUCHE de son menu, tout sur une seule ligne compacte (« Période [12 derniers mois]  Magasin [Tous mes magasins]  ☑ Comparer…  Ajouter un graphique [— Choisir —] ») ; l'écran met le libellé AU-DESSUS du menu (.piliqi-graphiques__filtre en colonne), avec des menus hauts : à refaire comme la maquette.
+2. Chiffres clés : la maquette colore la ligne sous le chiffre (variation sur un an en vert si elle monte, rouge si elle baisse ; « collectée − déductible » et « dont … en retard » dans la couleur de la maquette) ; l'écran les met toutes en gris : à refaire comme la maquette (en gardant le contraste AA des deux modes).
+3. Cartes des chiffres : plus compactes dans la maquette (libellé petit, chiffre, ligne) : comparer et aligner.
+4. Le menu « Magasin » n'apparaît pas dans le panneau d'un magasin : c'est voulu, comme dans la maquette (écran « Panneau du magasin Centre ») et CLAUDE.md ; il apparaît dans l'espace de la société, du cabinet et de l'expert-comptable.
+Test en navigateur : comparer la barre (une ligne à 1 280 px, libellé et menu sur la même ligne) et la couleur de la variation (hausse / baisse), dans les deux modes.

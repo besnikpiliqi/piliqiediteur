@@ -3062,3 +3062,11 @@ je veux pas pour l instan supprimer le compte demo sur le site vrai, car peut et
 
 et pourqoui une base par societe et pourqoui te fait pas comme dans le reel une base pour tout
 
+## 349. 2026-11-16 09:07 UTC
+
+et quand tu travaille sur le logiciel pour terminer tout jusqau à la fin alors tu fait quoi, tu fais les teste pour le vrai site, le demo du vrais site et le nouveau demo?
+
+## 350. 2026-11-16 09:11 UTC
+
+et ben tu commence comm on c 'est dit donc tu fait le A et tu supprime le demo du site reel. et tu arret tout les autre qui tourne mtn et tu t occupe que pour la parti de nouveau demo et le suppression de demo reel. donc le traveil qui tourne mtn tu sauvegare pour continuer apres le demo
+

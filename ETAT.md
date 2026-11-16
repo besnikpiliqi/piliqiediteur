@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 16/11/2026 à 00:21 UTC par pilotage-sync.sh : « T58.1-4 oui ».
+Mis à jour le 16/11/2026 à 00:34 UTC par pilotage-sync.sh : « DEMO-COPIE : un seul type par société ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -83,4 +83,5 @@ releve:code
 releve:tests
 releve:notes
 releve:archi
+redaction
 ```

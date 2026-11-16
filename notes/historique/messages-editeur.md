@@ -3000,3 +3000,13 @@ Il faut creer un compte société fictive identique pour chaque type et après l
 
 Q1 oui, Q2 oui, Q3 oui, Q4 oui et dit moi en ce moment on a pas encore fini le logiciel et meme si modifié alors il sera mis à jours pour toujours et alors comment se met à jour pour les site donc reel et demo?
 
+## 340. 2026-11-16 00:34 UTC
+
+<!-- attach -->
+
+> Nouvelle maquette : Ma démonstration PILIQI. Elle montre :
+
+
+
+sur le "3 · Sur le site de démonstration, en haut de chaque page" je vois que tu affiche les trois type de societe! mais en vrai je veux pas qu'une societe "Commerce ou atelier" puisse partire "Services, sans vente d'articles" ou "Cabinet d'expertise comptable" et au contraire. donc chaque societe doit voir que son type de son model et pas les trois car ca n as pas de sens car pourquoi il doit voir les autre type alors qu'il fait pas parti de ces type. dit moi
+

@@ -3128,3 +3128,7 @@ ce que tu m avais proposé et j ai accepté mais toi tu n as pas mis comme j'ai 
 
 ouii j'ai vu c'est bon donc tu oublie mais tu ajoute ces que t as proposé : "Par trimestre","Par année, sur 10 ansé", "Cumul depuis le début de l'année","Écart en % sur un an","Par vendeur", "Cliquer pour voir le détail". tu oublie pas que dans le demo tu laisse tout les carte ouvertes afin que la societe voit tout de suite toute. et en reel il faut qq carte prancipal ouverte au demarrege donc au debut.
 
+## 360. 2026-11-16 22:21 UTC
+
+aussi ca "Tendance lissée (moyenne sur 3 mois)"
+

@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 16/11/2026 à 00:36 UTC par pilotage-sync.sh : « DEMO-COPIE : rien sur les autres types ».
+Mis à jour le 16/11/2026 à 00:51 UTC par pilotage-sync.sh : « DEMO-COPIE : nuit = modèles seulement ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -84,4 +84,6 @@ releve:tests
 releve:notes
 releve:archi
 redaction
+critique:securite
+critique:caisse
 ```

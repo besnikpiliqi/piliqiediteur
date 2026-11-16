@@ -3022,3 +3022,21 @@ La démonstration se crée d'office sur le type de la société, qu'elle ne choi
 
 * Un cabinet d'expertise comptable reçoit seulement un cabinet : son propriétaire et ses collaborateurs, avec des clients fictifs vus comme le cabinet les voit, selon les autorisations de chacun ; on n'entre jamais dans leur espace de société." car la societe ne doit pas savoir comment ca marche sur les autre type
 
+## 342. 2026-11-16 00:40 UTC
+
+montre moi le DATEOP
+
+## 343. 2026-11-16 00:48 UTC
+
+<!-- attach -->
+
+> DEMO-COPIE.
+
+
+
+dit moi. est ce que chaque societe aura sa propre demo ou il va utiliser un demo existant pour tout le monde pret
+
+## 344. 2026-11-16 00:51 UTC
+
+tu me parle de chaqu nuit!  il se passe quoi ? il supprime le demo de chaque societe ou qoui
+

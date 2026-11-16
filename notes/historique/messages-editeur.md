@@ -3048,3 +3048,7 @@ donc quand il passe sur vendeur alors les ventes se passe à son c est ca? comme
 
 et est ce que se peux creer des nouveau membre comme en vrai?
 
+## 347. 2026-11-16 08:58 UTC
+
+je veux pas pour l instan supprimer le compte demo sur le site vrai, car peut etre je vais changer d avis apres mais je vais peut etre quand meme la supprimer plus tard car juste pour supprimer tu m as dit que ca prend des heurs et je veux pas predre des heurs à supprimer. et pour le nouveau demo je veux savoir pourquoi autan de temps alors que tu copi ce qui est deja fait
+

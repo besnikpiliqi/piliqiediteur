@@ -40,7 +40,7 @@ class FacturePdfGeneratorTest extends TestCase
 {
     use RefreshDatabase;
 
-    private const LIVRAISON_A_BERLIN = ['nature_operation' => NatureOperation::LivraisonIntracommunautaire, 'livraison_adresse' => 'Musterstraße 1', 'livraison_code_postal' => '10115', 'livraison_ville' => 'Berlin', 'livraison_pays' => 'DE', 'livraison_date' => '2026-10-12', 'transport_par' => 'magasin'];
+    private const LIVRAISON_A_BERLIN = ['nature_operation' => NatureOperation::LivraisonIntracommunautaire, 'livraison_adresse' => 'Musterstraße 1', 'livraison_code_postal' => '10115', 'livraison_ville' => 'Berlin', 'livraison_pays' => 'DE', 'date_operation_fin' => '2026-10-12', 'transport_par' => 'magasin'];
 
     private const NOTE_DE_CALCUL = 'Montants calculés depuis les prix TTC : pour chaque ligne, la TVA est le TTC × taux ÷ (1 + taux), arrondie une fois au centime, et le HT est le TTC moins cette TVA ; un centime peut être ajusté sur une ligne pour que la TVA de chaque taux soit celle de son TTC total, calculée de même.';
 

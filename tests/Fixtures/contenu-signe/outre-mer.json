@@ -55,8 +55,11 @@
                     "code_postal": null,
                     "ville": null,
                     "pays": null,
-                    "date": null,
                     "transport_par": null
+                },
+                "date_operation": {
+                    "debut": null,
+                    "fin": null
                 },
                 "consultation_vies_id": null,
                 "cree_par": "…",
@@ -400,8 +403,11 @@
                     "code_postal": null,
                     "ville": null,
                     "pays": null,
-                    "date": null,
                     "transport_par": null
+                },
+                "date_operation": {
+                    "debut": null,
+                    "fin": null
                 },
                 "consultation_vies_id": null,
                 "cree_par": "…",

@@ -72,7 +72,8 @@ use LogicException;
  * qu'émise au registre fiscal (voir EmettreFactureAction), avec la copie de
  * son client et le type de ce client (voir FigeLeClient), l'émetteur
  * qu'elle imprime pour toujours (voir FigeSonEmetteur), sa nature
- * d'opération et sa livraison (voir NoteSaNatureDOperation). Ce qui la
+ * d'opération, sa livraison et la date de l'opération (voir
+ * NoteSaNatureDOperation). Ce qui la
  * suit sans la changer s'enregistre à côté, hors de son contenu signé :
  * les preuves de son exonération (voir preuvesOperation()) et, pour un
  * ticket, le n° du bordereau de détaxe (voir bordereauDetaxe()).
@@ -108,11 +109,11 @@ class Facture extends Model implements DocumentEnvoyable
     protected $table = 'factures';
 
     // numero, statut, date_emission, date_echeance, totaux, type et copie
-    // du client, franchise de TVA, nature d'opération et livraison,
-    // consultation VIES : jamais en mass assignment, uniquement via les
-    // Actions dédiées (voir app/Domain/Facturation/Actions) -- l'échéance
-    // et la consultation VIES se fixent à l'émission (voir
-    // EmettreFactureAction).
+    // du client, franchise de TVA, nature d'opération, livraison et date
+    // de l'opération, consultation VIES : jamais en mass assignment,
+    // uniquement via les Actions dédiées (voir
+    // app/Domain/Facturation/Actions) -- l'échéance et la consultation
+    // VIES se fixent à l'émission (voir EmettreFactureAction).
     protected $fillable = [
         'client_id',
         'devis_id',
@@ -137,7 +138,8 @@ class Facture extends Model implements DocumentEnvoyable
         'client_etabli_en_france' => 'boolean',
         'franchise_en_base' => 'boolean',
         'nature_operation' => NatureOperation::class,
-        'livraison_date' => JourCivil::class,
+        'date_operation_debut' => JourCivil::class,
+        'date_operation_fin' => JourCivil::class,
         'transport_par' => TransportPar::class,
         'date_echeance' => JourCivil::class,
         'devis_accepte_le' => JourCivil::class,

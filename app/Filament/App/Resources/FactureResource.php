@@ -256,6 +256,7 @@ class FactureResource extends Resource
                     ->label('Échéance')
                     ->content(fn (Get $get): string => self::echeanceAnnoncee($get('client_id'))),
                 self::champNatureDeLOperation(),
+                ...self::champsDeLaDateDeLOperation(prevue: false),
                 Textarea::make('conditions_paiement')->label('Conditions de paiement')->maxLength(PiedDePage::CARACTERES_DES_CONDITIONS_DE_PAIEMENT)->helperText(self::INFORMATION_ACOMPTE)->columnSpanFull(),
                 Textarea::make('notes')->columnSpanFull(),
             ])->columns(2),
@@ -316,6 +317,7 @@ class FactureResource extends Resource
                 TextEntry::make('date_echeance')->label('Échéance')->jour()->placeholder('Fixée à l\'émission'),
                 TextEntry::make('cree_par_nom')->label('Créée par'),
                 self::natureEntry(),
+                self::dateDeLOperationEntry(prevue: false),
                 TextEntry::make('consultation_vies')
                     ->label('Vérification VIES retenue')
                     ->state(fn (Facture $record): ?string => $record->consultationVies?->reference())
@@ -547,6 +549,20 @@ class FactureResource extends Resource
         return TextEntry::make('nature_operation')
             ->label('Nature de l\'opération')
             ->helperText(fn (Facture|Devis $record): ?string => $record->nature_operation->mention());
+    }
+
+    /**
+     * La date de l'opération d'une facture, ou celle prévue par un devis,
+     * un jour ou une période (T49, voir NoteSaNatureDOperation), quand
+     * elle est notée : la fiche la montre toujours, même le jour de
+     * l'émission, que le PDF n'imprime pas (voir MentionsFiscales).
+     */
+    public static function dateDeLOperationEntry(bool $prevue): TextEntry
+    {
+        return TextEntry::make('date_de_l_operation')
+            ->label($prevue ? 'Date prévue de la livraison ou de la prestation' : 'Date de la livraison ou de la prestation')
+            ->state(fn (Facture|Devis $record): ?string => $record->dateDeLOperation())
+            ->visible(fn (Facture|Devis $record): bool => $record->date_operation_fin !== null);
     }
 
     /**

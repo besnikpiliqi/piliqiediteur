@@ -93,7 +93,7 @@ class ContenuSigneDeReferenceTest extends TestCase
             'livraison_code_postal' => '10115',
             'livraison_ville' => 'Berlin',
             'livraison_pays' => 'DE',
-            'livraison_date' => $jourDeParis,
+            'date_operation_fin' => $jourDeParis,
             'transport_par' => TransportPar::Acquereur,
         ]));
         $avoir = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $particulier, [['ligne_facture_id' => $ticket->lignes->sole()->id, 'quantite' => 1]], 'Retour');

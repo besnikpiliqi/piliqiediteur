@@ -97,11 +97,11 @@ class PreuvesOperationTest extends TestCase
             ],
             'intracommunautaire' => [
                 $this->clientAllemandVerifie(),
-                ['nature_operation' => NatureOperation::LivraisonIntracommunautaire, ...$berlin, 'livraison_date' => '2026-10-12', 'transport_par' => 'magasin'],
+                ['nature_operation' => NatureOperation::LivraisonIntracommunautaire, ...$berlin, 'date_operation_fin' => '2026-10-12', 'transport_par' => 'magasin'],
             ],
             'intracommunautaire_enlevee' => [
                 $this->clientAllemandVerifie(),
-                ['nature_operation' => NatureOperation::LivraisonIntracommunautaire, ...$berlin, 'livraison_date' => '2026-10-20', 'transport_par' => 'acquereur'],
+                ['nature_operation' => NatureOperation::LivraisonIntracommunautaire, ...$berlin, 'date_operation_fin' => '2026-10-20', 'transport_par' => 'acquereur'],
             ],
             'france' => [Client::factory()->create(), []],
         };

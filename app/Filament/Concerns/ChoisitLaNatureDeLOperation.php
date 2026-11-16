@@ -14,6 +14,7 @@ use App\Domain\Facturation\Services\SaisieDecimale;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Domain\Tenancy\Support\ValeurSimple;
+use Closure;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Radio;
 use Filament\Forms\Components\Section;
@@ -46,10 +47,16 @@ use InvalidArgumentException;
  *
  * La section « Livraison » n'apparaît que pour des biens qui partent hors
  * de France, préremplie avec l'adresse du client : son pays est
- * obligatoire, sa date aussi pour une livraison intracommunautaire, la
- * seule où le client peut transporter lui-même les biens ; un export ou
- * une livraison vers un DOM part toujours par le magasin (voir
- * NatureOperation::transportImpose()).
+ * obligatoire ; une livraison intracommunautaire, la seule où le client
+ * peut transporter lui-même les biens, demande aussi qui les transporte ;
+ * un export ou une livraison vers un DOM part toujours par le magasin
+ * (voir NatureOperation::transportImpose()).
+ *
+ * La date de l'opération (T49, voir NoteSaNatureDOperation), de toute
+ * nature, se saisit à côté de la nature : le jour de la livraison ou de la
+ * fin de la prestation, obligatoire pour une livraison intracommunautaire,
+ * et, pour une prestation de plusieurs jours, son premier jour. Ses refus
+ * sont ceux de l'enregistrement, dits sous le champ avant l'envoi.
  */
 trait ChoisitLaNatureDeLOperation
 {
@@ -58,7 +65,7 @@ trait ChoisitLaNatureDeLOperation
      * factures et des devis notent (voir NoteSaNatureDOperation) : ceux du
      * formulaire, une section cachée n'en envoyant aucun.
      */
-    private const CHAMPS_DE_LA_NATURE = ['nature_operation', 'livraison_adresse', 'livraison_complement', 'livraison_code_postal', 'livraison_ville', 'livraison_pays', 'livraison_date', 'transport_par'];
+    private const CHAMPS_DE_LA_NATURE = ['nature_operation', 'livraison_adresse', 'livraison_complement', 'livraison_code_postal', 'livraison_ville', 'livraison_pays', 'transport_par', 'date_operation_debut', 'date_operation_fin'];
 
     public static function champNatureDeLOperation(): Select
     {
@@ -104,9 +111,6 @@ trait ChoisitLaNatureDeLOperation
                     ->regex('/^[A-Za-z]{2}$/')
                     ->validationMessages(['regex' => 'Le code du pays compte deux lettres : DE, US, GP...'])
                     ->extraInputAttributes(['style' => 'text-transform: uppercase']),
-                DatePicker::make('livraison_date')
-                    ->label('Date de livraison')
-                    ->required($livraisonIntracommunautaire),
                 Radio::make('transport_par')
                     ->label('Transport')
                     ->options(TransportPar::class)
@@ -115,6 +119,42 @@ trait ChoisitLaNatureDeLOperation
                     ->columnSpanFull(),
             ])
             ->columns(2);
+    }
+
+    /**
+     * La date de l'opération d'une facture, ou celle prévue par un devis :
+     * le jour de la livraison ou de la fin de la prestation, obligatoire
+     * pour une livraison intracommunautaire, et le premier jour d'une
+     * prestation de plusieurs jours, qui n'a de sens qu'avant lui.
+     *
+     * @return list<DatePicker>
+     */
+    public static function champsDeLaDateDeLOperation(bool $prevue): array
+    {
+        return [
+            DatePicker::make('date_operation_fin')
+                ->label($prevue ? 'Date prévue de la livraison ou de la prestation' : 'Date de la livraison ou de la prestation')
+                ->helperText($prevue
+                    ? 'Facultative : imprimée sur le devis, la facture tirée du devis la reprend. Pour une prestation de plusieurs jours, son dernier jour.'
+                    : 'Imprimée sur la facture quand elle n\'est pas le jour de son émission ; obligatoire pour une livraison intracommunautaire. Pour une prestation de plusieurs jours, son dernier jour.')
+                ->required(fn (Get $get): bool => NatureOperation::depuisSaisie($get('nature_operation')) === NatureOperation::LivraisonIntracommunautaire),
+            DatePicker::make('date_operation_debut')
+                ->label('Premier jour de la prestation')
+                ->helperText('Seulement pour une prestation de plusieurs jours : la date devient la période « du premier au dernier jour ».')
+                ->rule(fn (Get $get): Closure => function (string $attribut, mixed $debut, Closure $echec) use ($get): void {
+                    $fin = $get('date_operation_fin');
+
+                    if (blank($debut)) {
+                        return;
+                    }
+
+                    if (blank($fin)) {
+                        $echec(Facture::REFUS_DEBUT_SANS_FIN);
+                    } elseif (is_string($debut) && is_string($fin) && $debut > $fin) {
+                        $echec(Facture::REFUS_DEBUT_APRES_FIN);
+                    }
+                }),
+        ];
     }
 
     /**

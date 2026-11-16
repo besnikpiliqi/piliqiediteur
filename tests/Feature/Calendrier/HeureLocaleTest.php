@@ -538,7 +538,7 @@ class HeureLocaleTest extends TestCase
             'livraison_code_postal' => '10115',
             'livraison_ville' => 'Berlin',
             'livraison_pays' => 'DE',
-            'livraison_date' => $livraison,
+            'date_operation_fin' => $livraison,
             'transport_par' => TransportPar::Acquereur,
         ]));
     }

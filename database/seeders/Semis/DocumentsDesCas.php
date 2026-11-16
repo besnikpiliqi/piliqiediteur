@@ -63,7 +63,11 @@ use LogicException;
  * et bientôt expiré, et les derniers jours, une facture de chaque état
  * (brouillon, émise, envoyée, payée en partie), un avoir en brouillon, une
  * facture d'achat et un avoir fournisseur en brouillon, un fournisseur de
- * Monaco et une fiche archivée ; et les incidents : une facture rejetée par
+ * Monaco et une fiche archivée ; la date de l'opération (T49) : une
+ * prestation de plusieurs jours (période imprimée), une facture datée de
+ * la veille de son émission, une livraison expédiée deux jours après la
+ * facture, une livraison enlevée le jour de son émission (date notée sans
+ * mention), et un devis qui prévoit sa livraison ; et les incidents : une facture rejetée par
  * la plateforme agréée et une autre « non transmise : incident technique »
  * (voir transmettreAvecDesIncidents()), et un envoi en échec pendant une
  * panne du serveur d'envoi (voir ServeurDEnvoiEnPanne).
@@ -150,20 +154,20 @@ final class DocumentsDesCas
             80 => $this->aDouzeHeures($rang, fn (): Facture => $conseil->facturer($claire, $this->verifieSurVies($conseil, $claire, 'Bauer Consulting GmbH'), [$this->ligne($conseil, 'Audit de site web', 1)], [], ['nature_operation' => NatureOperation::PrestationUeAutoliquidation])),
             75 => $this->aDouzeHeures($rang, fn (): Facture => $conseil->facturer($claire, $this->client($conseil, 'Northwind Trading Ltd'), [$this->ligne($conseil, 'Heure de conseil', 4)], [], ['nature_operation' => NatureOperation::PrestationHorsUe])),
             70 => $this->aDouzeHeures($rang, function () use ($halles, $camille): void {
-                $this->livraisonExpediee = $halles->facturer($camille, $this->verifieSurVies($halles, $camille, 'Muster GmbH'), [$this->ligne($halles, 'CARNET-A5', 20)], [], ['nature_operation' => NatureOperation::LivraisonIntracommunautaire, ...self::BERLIN, 'livraison_date' => $this->horloge->jour(SemisDeDemonstration::JOURS - 68), 'transport_par' => TransportPar::Magasin->value]);
+                $this->livraisonExpediee = $halles->facturer($camille, $this->verifieSurVies($halles, $camille, 'Muster GmbH'), [$this->ligne($halles, 'CARNET-A5', 20)], [], ['nature_operation' => NatureOperation::LivraisonIntracommunautaire, ...self::BERLIN, 'date_operation_fin' => $this->horloge->jour(SemisDeDemonstration::JOURS - 68), 'transport_par' => TransportPar::Magasin->value]);
             }),
             66 => $this->aDouzeHeures($rang, function () use ($halles, $camille): void {
                 $this->prouver($halles, $camille, $this->livraisonExpediee, TypePreuve::TransportA, 'LV-2026-8812', $this->horloge->jour(SemisDeDemonstration::JOURS - 68), 'Transports Rapides SA');
                 $this->prouver($halles, $camille, $this->livraisonExpediee, TypePreuve::TransportB, 'CMR-44190', $this->horloge->jour(SemisDeDemonstration::JOURS - 67), 'Transports Rapides SA');
-                $this->livraisonEnlevee = $halles->facturer($camille, $this->verifieSurVies($halles, $camille, 'Muster GmbH'), [$this->ligne($halles, 'BOUGIE-FIGUE', 4)], [new PartDeReglement(ModePaiement::Virement, 6000)], ['nature_operation' => NatureOperation::LivraisonIntracommunautaire, ...self::BERLIN, 'livraison_date' => $this->horloge->jour(SemisDeDemonstration::JOURS - 66), 'transport_par' => TransportPar::Acquereur->value]);
+                $this->livraisonEnlevee = $halles->facturer($camille, $this->verifieSurVies($halles, $camille, 'Muster GmbH'), [$this->ligne($halles, 'BOUGIE-FIGUE', 4)], [new PartDeReglement(ModePaiement::Virement, 6000)], ['nature_operation' => NatureOperation::LivraisonIntracommunautaire, ...self::BERLIN, 'date_operation_fin' => $this->horloge->jour(SemisDeDemonstration::JOURS - 66), 'transport_par' => TransportPar::Acquereur->value]);
             }),
             64 => $this->aDouzeHeures($rang, fn (): PreuveOperation => $this->prouver($halles, $camille, $this->livraisonEnlevee, TypePreuve::AttestationAcquereur, 'ATT-MUSTER-2026-07', $this->horloge->jour(SemisDeDemonstration::JOURS - 65), 'Muster GmbH')),
             60 => $this->aDouzeHeures($rang, fn (): Facture => $halles->facturer($camille, $this->client($halles, 'Lucie Bernard'), [$this->ligne($halles, 'DIFF-BAMBOU', 1)], [], ['nature_operation' => NatureOperation::LivraisonDom, 'livraison_adresse' => '1 rue Victor Hugo', 'livraison_code_postal' => '97200', 'livraison_ville' => 'Fort-de-France', 'livraison_pays' => 'FR'])),
             55 => $this->aDouzeHeures($rang, function () use ($halles, $camille): void {
-                $devis = $halles->dans(fn (): Devis => app(CreerDevisAction::class)->handle($camille, $this->client($halles, 'Agence Horizon'), [$this->ligne($halles, 'DIFF-BAMBOU', 6)], ['date_validite' => $this->horloge->jour(SemisDeDemonstration::JOURS - 45)]));
+                $devis = $halles->dans(fn (): Devis => app(CreerDevisAction::class)->handle($camille, $this->client($halles, 'Agence Horizon'), [$this->ligne($halles, 'DIFF-BAMBOU', 6)], ['date_validite' => $this->horloge->jour(SemisDeDemonstration::JOURS - 45), 'date_operation_fin' => $this->horloge->jour(SemisDeDemonstration::JOURS - 42)]));
                 $halles->dans(fn (): EnvoiDocument => app(EnvoyerDocumentAction::class)->handle($camille, $devis, 'contact@agence-horizon.exemple.test', 'Bonjour, voici notre devis pour vos bureaux.', GestesDuMagasin::jeton()));
             }),
-            50 => $this->aDouzeHeures($rang, fn (): Facture => $conseil->facturer($claire, $this->client($conseil, 'Mairie de Montreuil'), [$this->ligne($conseil, 'Audit de site web', 1), $this->ligne($conseil, 'Forfait déplacement', 1)])),
+            50 => $this->aDouzeHeures($rang, fn (): Facture => $conseil->facturer($claire, $this->client($conseil, 'Mairie de Montreuil'), [$this->ligne($conseil, 'Audit de site web', 1), $this->ligne($conseil, 'Forfait déplacement', 1)], [], ['date_operation_debut' => $this->horloge->jour(SemisDeDemonstration::JOURS - 56), 'date_operation_fin' => $this->horloge->jour(SemisDeDemonstration::JOURS - 52)])),
             45 => $this->aDouzeHeures($rang, function () use ($halles): void {
                 $halles->facturer($this->semis->compte('Lucas Moreau'), $this->client($halles, 'Acme Inc.'), [$this->ligne($halles, 'CARNET-A5', 10)], [], ['nature_operation' => NatureOperation::ExportHorsUe, ...self::NEW_YORK]);
             }),
@@ -189,7 +193,7 @@ final class DocumentsDesCas
                 $halles->dans(fn () => app(ArchiverUneFicheAction::class)->archiver($camille, $this->fournisseur($halles, 'Papeterie du Centre')));
             }),
             18 => $this->aDouzeHeures($rang, function () use ($conseil, $claire): void {
-                $facture = $conseil->facturer($claire, $this->client($conseil, 'Boulangerie Martin'), [$this->ligne($conseil, 'Heure de conseil', 2)]);
+                $facture = $conseil->facturer($claire, $this->client($conseil, 'Boulangerie Martin'), [$this->ligne($conseil, 'Heure de conseil', 2)], [], ['date_operation_fin' => $this->horloge->jour(SemisDeDemonstration::JOURS - 19)]);
                 $conseil->payer($claire, $facture, ModePaiement::Prelevement, '180.00', $this->horloge->jour(SemisDeDemonstration::JOURS - 18), 'PRLV-2026-0418');
             }),
             14 => $this->aDouzeHeures($rang, function () use ($halles): void {

@@ -115,6 +115,32 @@ class DevisResourceTest extends TestCase
         $this->assertSame(['124.75', '0.00', '124.75'], [$devis->total_ht, $devis->total_tva, $devis->total_ttc]);
     }
 
+    /**
+     * La date prévue de l'opération (T49) se saisit dans le formulaire du
+     * devis, un seul jour quand le premier égale le dernier, et la fiche
+     * du devis la montre.
+     */
+    public function test_la_date_prevue_de_l_operation_se_saisit_dans_le_formulaire_du_devis(): void
+    {
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $this->actingAs($this->responsableDeTest($magasin));
+        Filament::setTenant($magasin);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => false]);
+
+        Livewire::test(CreateDevis::class)
+            ->fillForm(['client_id' => Client::factory()->create()->id, 'date_operation_debut' => '2026-11-03', 'date_operation_fin' => '2026-11-03'])
+            ->call('recevoirLesProduitsChoisis', [['produit_id' => $produit->id, 'quantite' => 1]])
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $devis = Devis::query()->sole();
+        $this->assertSame([null, '2026-11-03'], [$devis->date_operation_debut, $devis->date_operation_fin]);
+        Livewire::test(ViewDevis::class, ['record' => $devis->getRouteKey()])
+            ->assertSeeText('Date prévue de la livraison ou de la prestation')
+            ->assertSeeText('03/11/2026');
+    }
+
     public function test_creer_un_devis_avec_des_lignes_via_le_formulaire(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);

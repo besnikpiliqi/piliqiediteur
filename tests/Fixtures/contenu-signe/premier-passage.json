@@ -55,8 +55,11 @@
                     "code_postal": null,
                     "ville": null,
                     "pays": null,
-                    "date": null,
                     "transport_par": null
+                },
+                "date_operation": {
+                    "debut": null,
+                    "fin": null
                 },
                 "consultation_vies_id": null,
                 "cree_par": "…",
@@ -270,8 +273,11 @@
                     "code_postal": "10115",
                     "ville": "Berlin",
                     "pays": "DE",
-                    "date": "2026-10-25",
                     "transport_par": "acquereur"
+                },
+                "date_operation": {
+                    "debut": null,
+                    "fin": "2026-10-25"
                 },
                 "consultation_vies_id": "…",
                 "cree_par": "…",

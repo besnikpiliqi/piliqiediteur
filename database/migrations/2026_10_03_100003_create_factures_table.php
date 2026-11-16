@@ -75,8 +75,20 @@ return new class extends Migration
             $table->string('livraison_code_postal', 10)->nullable();
             $table->string('livraison_ville', 100)->nullable();
             $table->string('livraison_pays', 2)->nullable();
-            $table->date('livraison_date')->nullable();
             $table->string('transport_par', 20)->nullable();
+            // La date de la livraison ou de la prestation (T49, voir
+            // NoteSaNatureDOperation), un jour du calendrier du magasin :
+            // vide, l'opération est du jour de l'émission ; un seul jour
+            // (date_operation_fin), celui de la livraison ou de la fin de
+            // la prestation ; une période, pour une prestation de plusieurs
+            // jours, du début (date_operation_debut) à la fin, le début
+            // toujours avant la fin (contrainte
+            // factures_periode_de_l_operation). Obligatoire pour une
+            // livraison intracommunautaire (voir ControleNatureOperation) ;
+            // une facture rectificative reprend celle de la facture qu'elle
+            // rectifie, à défaut le jour de son émission.
+            $table->date('date_operation_debut')->nullable();
+            $table->date('date_operation_fin')->nullable();
             // La vérification sur VIES du n° de TVA du client que retient
             // l'émission d'une livraison intracommunautaire ou d'une
             // prestation autoliquidée : valide, du jour de l'émission, pour
@@ -164,6 +176,7 @@ return new class extends Migration
         });
 
         DB::statement('ALTER TABLE factures ADD CONSTRAINT factures_devis_d_origine CHECK ((devis_id IS NULL AND devis_numero IS NULL AND devis_accepte_le IS NULL) OR (devis_id IS NOT NULL AND devis_numero IS NOT NULL AND devis_accepte_le IS NOT NULL))');
+        DB::statement('ALTER TABLE factures ADD CONSTRAINT factures_periode_de_l_operation CHECK (date_operation_debut IS NULL OR (date_operation_fin IS NOT NULL AND date_operation_debut < date_operation_fin))');
 
         GardesDeLaVente::poser('factures');
         GardesDesDocumentsEmis::poser('factures');

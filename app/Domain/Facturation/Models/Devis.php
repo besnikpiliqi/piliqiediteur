@@ -40,11 +40,11 @@ class Devis extends Model implements DocumentEnvoyable
     protected $table = 'devis';
 
     // numero, statut, date_emission, l'émetteur figé, les totaux, le type
-    // du client, la franchise de TVA, la nature d'opération et la livraison
-    // sont
-    // volontairement absents : ils ne sont écrits que par les actions des
-    // devis (CreerDevisAction, ModifierDevisAction, EmettreDevisAction...),
-    // jamais par mass assignment depuis une requête utilisateur.
+    // du client, la franchise de TVA, la nature d'opération, la livraison
+    // et la date prévue de l'opération sont volontairement absents : ils ne
+    // sont écrits que par les actions des devis (CreerDevisAction,
+    // ModifierDevisAction, EmettreDevisAction...), jamais par mass
+    // assignment depuis une requête utilisateur.
     protected $fillable = [
         'client_id',
         'date_validite',
@@ -67,7 +67,8 @@ class Devis extends Model implements DocumentEnvoyable
         'type_client' => TypeClient::class,
         'franchise_en_base' => 'boolean',
         'nature_operation' => NatureOperation::class,
-        'livraison_date' => JourCivil::class,
+        'date_operation_debut' => JourCivil::class,
+        'date_operation_fin' => JourCivil::class,
         'transport_par' => TransportPar::class,
         'date_emission' => Instant::class,
         'accepte_le' => Instant::class,
@@ -246,10 +247,10 @@ class Devis extends Model implements DocumentEnvoyable
     /**
      * L'empreinte SHA-256 de la version du devis telle que son client la
      * reçoit : son numéro, son envoi, sa validité, son client, son
-     * émetteur figé, sa nature d'opération, sa livraison, ses lignes et ses
-     * totaux, encodés en JSON une seule fois. La réponse en ligne du client
-     * la garde (voir ReponseDuDevis) : une version modifiée depuis a une
-     * autre empreinte.
+     * émetteur figé, sa nature d'opération, sa livraison, la date prévue
+     * de l'opération, ses lignes et ses totaux, encodés en JSON une seule
+     * fois. La réponse en ligne du client la garde (voir ReponseDuDevis) :
+     * une version modifiée depuis a une autre empreinte.
      */
     public function empreinteDeSaVersion(): string
     {
@@ -280,7 +281,7 @@ class Devis extends Model implements DocumentEnvoyable
             'emetteur_fige' => $this->emetteur_fige,
             'nature_operation' => $this->getRawOriginal('nature_operation'),
             'livraison' => $this->only(['livraison_adresse', 'livraison_complement', 'livraison_code_postal', 'livraison_ville', 'livraison_pays', 'transport_par']),
-            'livraison_date' => $this->getRawOriginal('livraison_date'),
+            'date_operation' => [$this->getRawOriginal('date_operation_debut'), $this->getRawOriginal('date_operation_fin')],
             'conditions_paiement' => $this->conditions_paiement,
             'notes' => $this->notes,
             'lignes' => $lignes,

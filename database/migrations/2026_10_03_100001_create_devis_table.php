@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
@@ -31,8 +32,13 @@ return new class extends Migration
             $table->string('livraison_code_postal', 10)->nullable();
             $table->string('livraison_ville', 100)->nullable();
             $table->string('livraison_pays', 2)->nullable();
-            $table->date('livraison_date')->nullable();
             $table->string('transport_par', 20)->nullable();
+            // La date prévue de la livraison ou de la prestation, un jour ou
+            // une période, comme sur la facture (T49, voir
+            // NoteSaNatureDOperation), que la facture tirée du devis
+            // reprend et que son brouillon permet de corriger.
+            $table->date('date_operation_debut')->nullable();
+            $table->date('date_operation_fin')->nullable();
             // nullable tant que le devis est en brouillon : la numérotation
             // n'intervient qu'à l'envoi (voir DocumentNumberingService).
             $table->string('numero', 40)->nullable();
@@ -71,6 +77,8 @@ return new class extends Migration
             $table->unique(['magasin_id', 'id']);
             $table->foreign(['magasin_id', 'client_id'])->references(['magasin_id', 'id'])->on('clients')->restrictOnDelete();
         });
+
+        DB::statement('ALTER TABLE devis ADD CONSTRAINT devis_periode_de_l_operation CHECK (date_operation_debut IS NULL OR (date_operation_fin IS NOT NULL AND date_operation_debut < date_operation_fin))');
     }
 
     public function down(): void

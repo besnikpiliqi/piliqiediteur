@@ -179,7 +179,7 @@ class ControleNatureOperation
             $adresseComplete ? null : 'indiquez l\'adresse de livraison complète (adresse, code postal, ville et pays)',
             ...($adresseComplete ? [$this->manquementDeLaDestination($nature, $pays, $codePostal, $facture->magasin->territoire?->departement())] : []),
             match (true) {
-                $nature === NatureOperation::LivraisonIntracommunautaire && $facture->livraison_date === null => 'indiquez la date de livraison',
+                $nature === NatureOperation::LivraisonIntracommunautaire && $facture->date_operation_fin === null => 'indiquez la date de livraison',
                 default => null,
             },
             match (true) {

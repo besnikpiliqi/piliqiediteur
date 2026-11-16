@@ -41,8 +41,8 @@ use Illuminate\Support\Collection;
  *   prise à l'émission, voir FigeLeClient, ainsi que le drapeau du client
  *   comptoir, lu sur sa fiche où seul CreerEtablissementAction le pose),
  *   franchise de TVA (voir ContexteDeVente), nature d'opération (voir
- *   NatureOperation) et, pour une facture, livraison et vérification VIES
- *   retenue, auteur, devise, échéance, conditions, notes ou motif, lignes,
+ *   NatureOperation) et, pour une facture, livraison, date de l'opération
+ *   (voir NoteSaNatureDOperation) et vérification VIES retenue, auteur, devise, échéance, conditions, notes ou motif, lignes,
  *   ventilation par taux et totaux ; la facture que rectifie une facture
  *   rectificative, et si un avoir est l'avoir de régularisation d'une
  *   facture (voir MotifDeRegularisation).
@@ -188,8 +188,11 @@ class ContenuFiscal
                 'code_postal' => $facture->livraison_code_postal,
                 'ville' => $facture->livraison_ville,
                 'pays' => $facture->livraison_pays,
-                'date' => $facture->livraison_date,
                 'transport_par' => $facture->transport_par?->value,
+            ],
+            'date_operation' => [
+                'debut' => $facture->date_operation_debut,
+                'fin' => $facture->date_operation_fin,
             ],
             'consultation_vies_id' => $this->identifiant($facture->consultation_vies_id),
             'cree_par' => $this->identifiant($facture->cree_par),

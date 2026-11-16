@@ -259,7 +259,8 @@ class EmissionSigneeTest extends TestCase
                 ],
                 'franchise_en_base' => false,
                 'nature_operation' => 'vente_france',
-                'livraison' => ['adresse' => null, 'complement' => null, 'code_postal' => null, 'ville' => null, 'pays' => null, 'date' => null, 'transport_par' => null],
+                'livraison' => ['adresse' => null, 'complement' => null, 'code_postal' => null, 'ville' => null, 'pays' => null, 'transport_par' => null],
+                'date_operation' => ['debut' => null, 'fin' => null],
                 'consultation_vies_id' => null,
                 'cree_par' => $vendeur->id,
                 'devis_id' => null,
@@ -416,7 +417,7 @@ class EmissionSigneeTest extends TestCase
             'livraison_code_postal' => '10115',
             'livraison_ville' => 'Berlin',
             'livraison_pays' => 'DE',
-            'livraison_date' => '2026-10-12',
+            'date_operation_fin' => '2026-10-12',
             'transport_par' => TransportPar::Acquereur,
         ]);
 
@@ -426,12 +427,48 @@ class EmissionSigneeTest extends TestCase
         $this->assertSignatureValide($vente);
         $this->assertSame([
             'nature_operation' => 'livraison_intracommunautaire',
-            'livraison' => ['adresse' => 'Musterstraße 1', 'complement' => null, 'code_postal' => '10115', 'ville' => 'Berlin', 'pays' => 'DE', 'date' => '2026-10-12', 'transport_par' => 'acquereur'],
+            'livraison' => ['adresse' => 'Musterstraße 1', 'complement' => null, 'code_postal' => '10115', 'ville' => 'Berlin', 'pays' => 'DE', 'transport_par' => 'acquereur'],
+            'date_operation' => ['debut' => null, 'fin' => '2026-10-12'],
             'consultation_vies_id' => $consultation->id,
-        ], Arr::only($donnees['document'], ['nature_operation', 'livraison', 'consultation_vies_id']));
+        ], Arr::only($donnees['document'], ['nature_operation', 'livraison', 'date_operation', 'consultation_vies_id']));
         $this->assertSame(['prix_unitaire_ht' => 20833333, 'prix_unitaire_ttc' => 2500, 'taux_tva' => 0, 'taux_tva_du_prix' => 2000, 'ht' => 25000, 'tva' => 0, 'ttc' => 25000], Arr::only($donnees['document']['lignes'][0], ['prix_unitaire_ht', 'prix_unitaire_ttc', 'taux_tva', 'taux_tva_du_prix', 'ht', 'tva', 'ttc']));
-        $this->assertSame(["Catégorie de l'opération : Livraison de biens", 'Exonération de TVA, article 262 ter I du CGI'], $donnees['contexte']['mentions']);
+        $this->assertSame(['Date de la livraison ou de la prestation : 12/10/2026', "Catégorie de l'opération : Livraison de biens", 'Exonération de TVA, article 262 ter I du CGI'], $donnees['contexte']['mentions']);
         $this->assertSame(['numero_tva' => 'DE123456789', 'valide' => true, 'identifiant' => 'WAPIAAAAW1234567', 'consultee_le' => '2026-10-09T09:00:00+02:00'], $donnees['contexte']['consultation_vies']);
+        $this->assertSame([], app(VerificateurIntegrite::class)->verifier($magasin)->anomalies());
+    }
+
+    /**
+     * La date de l'opération (T49) se signe dans le bloc du document, un
+     * jour ou une période ; la mention qui l'imprime se signe dans le
+     * contexte seulement quand elle n'est pas le jour de l'émission, au
+     * calendrier du magasin : une prestation du 5 au 7 octobre facturée le
+     * 9 l'imprime, une livraison du 9 facturée le 9 ne l'imprime pas, une
+     * facture sans date non plus.
+     */
+    public function test_la_date_de_l_operation_se_signe_et_sa_mention_seulement_quand_elle_n_est_pas_le_jour_de_l_emission(): void
+    {
+        $this->travelTo(self::aParis('2026-10-09 10:15:30'));
+        $magasin = $this->magasinActif();
+        $client = Client::factory()->professionnel()->create();
+        $vis = $this->produit('VIS-001', 'Vis à bois', 25);
+        $periode = $this->emettre($client, [[$vis, 1]], ['date_operation_debut' => '2026-10-05', 'date_operation_fin' => '2026-10-07']);
+        $memeJour = $this->emettre($client, [[$vis, 2]], ['date_operation_fin' => '2026-10-09']);
+        $sansDate = $this->emettre($client, [[$vis, 3]]);
+
+        $signes = array_map(fn (Facture $facture): array => $this->contenu($this->enregistrementDe($facture, ChaineFiscale::Vente))['donnees'], [$periode, $memeJour, $sansDate]);
+
+        $this->assertSame(
+            [['debut' => '2026-10-05', 'fin' => '2026-10-07'], ['debut' => null, 'fin' => '2026-10-09'], ['debut' => null, 'fin' => null]],
+            array_map(fn (array $donnees): mixed => $donnees['document']['date_operation'], $signes),
+        );
+        $this->assertSame(
+            [
+                ['Date de la livraison ou de la prestation : du 05/10/2026 au 07/10/2026', "Catégorie de l'opération : Livraison de biens"],
+                ["Catégorie de l'opération : Livraison de biens"],
+                ["Catégorie de l'opération : Livraison de biens"],
+            ],
+            array_map(fn (array $donnees): mixed => $donnees['contexte']['mentions'], $signes),
+        );
         $this->assertSame([], app(VerificateurIntegrite::class)->verifier($magasin)->anomalies());
     }
 

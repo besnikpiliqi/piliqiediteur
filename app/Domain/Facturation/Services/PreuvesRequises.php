@@ -146,9 +146,9 @@ class PreuvesRequises
                 && $sans(TypePreuve::Mrn, TypePreuve::Cn23)
                 && Calendrier::ajouterJours($emission, self::JOURS_POUR_LA_PREUVE_DE_DOUANE) < $aujourdhui,
             NatureOperation::LivraisonIntracommunautaire => $facture->transport_par === TransportPar::Acquereur
-                && $facture->livraison_date !== null
+                && $facture->date_operation_fin !== null
                 && $sans(TypePreuve::AttestationAcquereur)
-                && Calendrier::jourDuMoisSuivant($facture->livraison_date, 10) < $aujourdhui,
+                && Calendrier::jourDuMoisSuivant($facture->date_operation_fin, 10) < $aujourdhui,
             default => false,
         };
     }
@@ -218,7 +218,7 @@ class PreuvesRequises
      */
     private function attestationAttendue(Facture $facture): string
     {
-        $echeance = Calendrier::jourDuMoisSuivant(ValeurRequise::de($facture->livraison_date, 'la date de livraison de la livraison intracommunautaire émise'), 10);
+        $echeance = Calendrier::jourDuMoisSuivant(ValeurRequise::de($facture->date_operation_fin, 'la date de livraison de la livraison intracommunautaire émise'), 10);
 
         return TypePreuve::AttestationAcquereur->getLabel().', attendue au plus tard le '.Calendrier::afficherJour($echeance, 'd/m/Y')
             .($echeance < $facture->magasin->calendrier()->aujourdhui() ? ' : délai dépassé' : '');

@@ -91,6 +91,40 @@ class FactureResourceTest extends TestCase
     }
 
     /**
+     * La date de l'opération (T49) se saisit dans le formulaire de la
+     * facture : une période s'enregistre et la fiche la montre « du … au
+     * … » ; un premier jour sans dernier jour, ou après lui, est dit sous
+     * le champ, et rien ne s'enregistre.
+     */
+    public function test_la_date_de_l_operation_se_saisit_dans_le_formulaire_et_se_lit_sur_la_fiche(): void
+    {
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $this->actingAs($this->responsableDeTest($magasin));
+        Filament::setTenant($magasin);
+        $client = Client::factory()->professionnel()->create();
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $formulaire = fn (array $dates) => Livewire::test(CreateFacture::class)
+            ->fillForm(['client_id' => $client->id, ...$dates])
+            ->call('recevoirLesProduitsChoisis', [['produit_id' => $produit->id, 'quantite' => 1]])
+            ->call('create');
+
+        $this->assertSame([Facture::REFUS_DEBUT_SANS_FIN], $formulaire(['date_operation_debut' => '2026-10-08', 'date_operation_fin' => null])
+            ->assertHasFormErrors(['date_operation_debut'])->errors()->get('data.date_operation_debut'));
+        $this->assertSame([Facture::REFUS_DEBUT_APRES_FIN], $formulaire(['date_operation_debut' => '2026-10-08', 'date_operation_fin' => '2026-10-05'])
+            ->assertHasFormErrors(['date_operation_debut'])->errors()->get('data.date_operation_debut'));
+        $this->assertSame(0, Facture::query()->count());
+
+        $formulaire(['date_operation_debut' => '2026-10-05', 'date_operation_fin' => '2026-10-08'])->assertHasNoFormErrors();
+
+        $facture = Facture::query()->sole();
+        $this->assertSame(['2026-10-05', '2026-10-08'], [$facture->date_operation_debut, $facture->date_operation_fin]);
+        Livewire::test(ViewFacture::class, ['record' => $facture->getRouteKey()])
+            ->assertSeeText('Date de la livraison ou de la prestation')
+            ->assertSeeText('du 05/10/2026 au 08/10/2026');
+    }
+
+    /**
      * Le résumé d'un avoir (numéro/motif/total) ne dit pas CE QUI a été
      * retourné : le détail des lignes créditées (produit, quantité,
      * montant) doit être visible directement sur la page de la facture
@@ -2216,7 +2250,7 @@ class FactureResourceTest extends TestCase
             'livraison_code_postal' => '10115',
             'livraison_ville' => 'Berlin',
             'livraison_pays' => 'DE',
-            'livraison_date' => '2026-10-12',
+            'date_operation_fin' => '2026-10-12',
             'transport_par' => TransportPar::Magasin,
         ]);
     }
@@ -2403,7 +2437,7 @@ class FactureResourceTest extends TestCase
             ->assertHasNoFormErrors();
 
         $brouillon->refresh();
-        $this->assertSame([NatureOperation::LivraisonIntracommunautaire, 'Berlin', '2026-10-12', TransportPar::Magasin], [$brouillon->nature_operation, $brouillon->livraison_ville, $brouillon->livraison_date, $brouillon->transport_par]);
+        $this->assertSame([NatureOperation::LivraisonIntracommunautaire, 'Berlin', '2026-10-12', TransportPar::Magasin], [$brouillon->nature_operation, $brouillon->livraison_ville, $brouillon->date_operation_fin, $brouillon->transport_par]);
         $this->assertSame(['250.00', '0.00', '250.00'], [$brouillon->total_ht, $brouillon->total_tva, $brouillon->total_ttc]);
     }
 
@@ -2418,7 +2452,8 @@ class FactureResourceTest extends TestCase
             ->assertSeeText('Livraison intracommunautaire à un professionnel')
             ->assertSeeText('Exonération de TVA, article 262 ter I du CGI')
             ->assertSeeText('Musterstraße 1')
-            ->assertSeeText('Livraison le 12/10/2026')
+            ->assertSeeText('Date de la livraison ou de la prestation')
+            ->assertSeeText('12/10/2026')
             ->assertSeeText('consultation WAPIAAAAW1234567 du 09/10/2026 à 09:15');
     }
 

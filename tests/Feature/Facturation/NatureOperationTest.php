@@ -59,7 +59,7 @@ class NatureOperationTest extends TestCase
 
     private const LIVRAISON_FORT_DE_FRANCE = ['livraison_adresse' => '1 rue Victor Hugo', 'livraison_code_postal' => '97200', 'livraison_ville' => 'Fort-de-France', 'livraison_pays' => 'FR'];
 
-    private const LIVRAISON_BERLIN = ['livraison_adresse' => 'Musterstraße 1', 'livraison_code_postal' => '10115', 'livraison_ville' => 'Berlin', 'livraison_pays' => 'DE', 'livraison_date' => '2026-10-12', 'transport_par' => 'magasin'];
+    private const LIVRAISON_BERLIN = ['livraison_adresse' => 'Musterstraße 1', 'livraison_code_postal' => '10115', 'livraison_ville' => 'Berlin', 'livraison_pays' => 'DE', 'date_operation_fin' => '2026-10-12', 'transport_par' => 'magasin'];
 
     /**
      * Le magasin LYON1, magasin actif : le n° de TVA et le régime se
@@ -404,7 +404,7 @@ class NatureOperationTest extends TestCase
 
         $this->assertSame(['250.00', '0.00', '250.00'], [$facture->total_ht, $facture->total_tva, $facture->total_ttc]);
         $this->assertSame($consultation->id, $facture->consultation_vies_id);
-        $this->assertSame(['2026-10-12', TransportPar::Magasin], [$facture->livraison_date, $facture->transport_par]);
+        $this->assertSame(['2026-10-12', TransportPar::Magasin], [$facture->date_operation_fin, $facture->transport_par]);
         $this->assertStringContainsString('Exonération de TVA, article 262 ter I du CGI', $this->pdf($facture));
     }
 
@@ -418,7 +418,7 @@ class NatureOperationTest extends TestCase
             'n° inconnu de VIES aujourd\'hui' => [[], 'DE123456789', '2026-10-09 09:00', false, 'le n° de TVA DE123456789 n\'a pas été trouvé valide sur VIES le 09/10/2026'],
             'n° de TVA français' => [[], 'FR56121212120', '2026-10-09 09:00', true, 'le client doit avoir un n° de TVA d\'un autre État membre de l\'Union (ou XI pour l\'Irlande du Nord)'],
             'livraison en France' => [['livraison_code_postal' => '69001', 'livraison_ville' => 'Lyon', 'livraison_pays' => 'FR'], 'DE123456789', '2026-10-09 09:00', true, 'la livraison doit arriver dans un autre État membre de l\'Union européenne'],
-            'sans date de livraison' => [['livraison_date' => null], 'DE123456789', '2026-10-09 09:00', true, 'indiquez la date de livraison'],
+            'sans date de livraison' => [['date_operation_fin' => null], 'DE123456789', '2026-10-09 09:00', true, 'indiquez la date de livraison'],
             'sans transport' => [['transport_par' => null], 'DE123456789', '2026-10-09 09:00', true, 'indiquez qui transporte les biens'],
         ];
     }
@@ -761,13 +761,13 @@ class NatureOperationTest extends TestCase
     public function test_la_facture_tiree_d_un_devis_d_export_garde_sa_nature_et_sa_livraison(): void
     {
         $this->magasin();
-        $devis = app(CreerDevisAction::class)->handle(self::auteur(), $this->clientAmericain(), [['produit_id' => $this->produit()->id, 'quantite' => 1000]], ['nature_operation' => NatureOperation::ExportHorsUe, ...self::LIVRAISON_NEW_YORK, 'livraison_date' => '2026-10-20']);
+        $devis = app(CreerDevisAction::class)->handle(self::auteur(), $this->clientAmericain(), [['produit_id' => $this->produit()->id, 'quantite' => 1000]], ['nature_operation' => NatureOperation::ExportHorsUe, ...self::LIVRAISON_NEW_YORK, 'date_operation_fin' => '2026-10-20']);
         app(AccepterDevisAction::class)->handle(self::auteur(), app(EmettreDevisAction::class)->handle(self::auteur(), $devis));
 
         $facture = app(CreerFactureDepuisDevisAction::class)->handle(self::auteur(), $devis->fresh());
 
         $this->assertSame(NatureOperation::ExportHorsUe, $facture->nature_operation);
-        $this->assertSame(['1 Main Street', '10001', 'New York', 'US', '2026-10-20', TransportPar::Magasin], [$facture->livraison_adresse, $facture->livraison_code_postal, $facture->livraison_ville, $facture->livraison_pays, $facture->livraison_date, $facture->transport_par]);
+        $this->assertSame(['1 Main Street', '10001', 'New York', 'US', '2026-10-20', TransportPar::Magasin], [$facture->livraison_adresse, $facture->livraison_code_postal, $facture->livraison_ville, $facture->livraison_pays, $facture->date_operation_fin, $facture->transport_par]);
         $this->assertSame(['833.33', '0.00', '833.33'], [$facture->total_ht, $facture->total_tva, $facture->total_ttc]);
         $this->assertSame('20.00', $facture->lignes->sole()->taux_tva_du_prix);
     }

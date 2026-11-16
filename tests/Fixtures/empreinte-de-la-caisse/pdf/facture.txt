@@ -69,5 +69,6 @@ FR88100000009
 Pénalités de retard : trois fois le taux d'intérêt légal, exigibles dès le lendemain de la date d'échéance.
 Indemnité forfaitaire pour frais de recouvrement en cas de retard de paiement : 40 €.
 Pas d'escompte pour paiement anticipé.
+Date de la livraison ou de la prestation : 15/10/2026
 Catégorie de l'opération : Livraison de biens et prestation de services
 Page 1 sur 1

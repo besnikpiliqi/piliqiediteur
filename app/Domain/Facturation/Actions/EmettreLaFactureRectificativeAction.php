@@ -46,8 +46,9 @@ use LogicException;
  * du registre et le relit émis. Le
  * brouillon naît au nom de l'auteur, avec le client, la nature
  * d'opération, la franchise de TVA, la livraison et les conditions de
- * paiement de la facture, sa date de livraison, ou à défaut le jour de
- * son émission, et ses lignes (voir
+ * paiement de la facture, la date de son opération (un jour ou une
+ * période, voir NoteSaNatureDOperation), ou à défaut le jour de son
+ * émission, et ses lignes (voir
  * RegularisationDUneFacture::lignesDeLaRectificative()), que personne ne
  * modifie : il s'émet aussitôt (voir EmettreFactureAction), sous l'identité
  * actuelle de la société, sans sortie de stock (voir
@@ -138,8 +139,9 @@ class EmettreLaFactureRectificativeAction
             'livraison_code_postal' => $origine->livraison_code_postal,
             'livraison_ville' => $origine->livraison_ville,
             'livraison_pays' => $origine->livraison_pays,
-            'livraison_date' => $origine->livraison_date ?? $origine->magasin->calendrier()->jourDe(ValeurRequise::de($origine->date_emission, 'la date d\'émission de la facture rectifiée')),
             'transport_par' => $origine->transport_par,
+            'date_operation_debut' => $origine->date_operation_debut,
+            'date_operation_fin' => $origine->date_operation_fin ?? $origine->magasin->calendrier()->jourDe(ValeurRequise::de($origine->date_emission, 'la date d\'émission de la facture rectifiée')),
             ...$this->calculateur->enDecimaux($this->calculateur->totaliser($lignes)),
         ])->save();
 

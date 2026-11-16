@@ -108,7 +108,7 @@ class CreerFactureDepuisDevisAction
             'cree_par' => $compte->getKey(),
             'type_client' => $devis->type_client,
             'franchise_en_base' => $devis->franchise_en_base,
-            ...$devis->only(['nature_operation', 'livraison_adresse', 'livraison_complement', 'livraison_code_postal', 'livraison_ville', 'livraison_pays', 'livraison_date', 'transport_par']),
+            ...$devis->only(['nature_operation', 'livraison_adresse', 'livraison_complement', 'livraison_code_postal', 'livraison_ville', 'livraison_pays', 'transport_par', 'date_operation_debut', 'date_operation_fin']),
         ])->save();
 
         foreach ($devis->lignes as $ligne) {

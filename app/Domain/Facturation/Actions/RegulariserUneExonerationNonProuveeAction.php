@@ -52,11 +52,12 @@ use LogicException;
  * retour en stock, signé avec la mention de la preuve non reçue, son
  * crédit réglant ce qui reste dû de la vente. La facture rectificative
  * naît alors au nom de l'auteur, vente en France, avec le client, la
- * livraison et les conditions de paiement de la vente et les lignes à la
- * TVA française (voir RegularisationDUneExoneration::lignesALaTvaFrancaise()),
- * et s'émet aussitôt (voir EmettreFactureAction) : sans sortie de stock,
- * avec la copie du client que la vente a figée et la mention de la vente
- * qu'elle rectifie, le crédit encore réservé de l'avoir la réglant avant
+ * livraison, la date de l'opération (à défaut le jour de son émission) et
+ * les conditions de paiement de la vente et les lignes à la TVA française
+ * (voir RegularisationDUneExoneration::lignesALaTvaFrancaise()), et s'émet
+ * aussitôt (voir EmettreFactureAction) : sans sortie de stock, avec la
+ * copie du client que la vente a figée, la mention de la vente qu'elle
+ * rectifie et la date de l'opération d'origine, le crédit encore réservé de l'avoir la réglant avant
  * tout autre (voir AppliquerAvoirsDisponiblesAction). Le geste s'inscrit
  * enfin au journal d'audit, dans la chaîne du magasin. Sans clé de
  * signature, rien de tout cela n'a lieu.
@@ -156,8 +157,9 @@ class RegulariserUneExonerationNonProuveeAction
             'livraison_code_postal' => $origine->livraison_code_postal,
             'livraison_ville' => $origine->livraison_ville,
             'livraison_pays' => $origine->livraison_pays,
-            'livraison_date' => $origine->livraison_date ?? $origine->magasin->calendrier()->jourDe(ValeurRequise::de($origine->date_emission, 'la date d\'émission de la vente régularisée')),
             'transport_par' => $origine->transport_par,
+            'date_operation_debut' => $origine->date_operation_debut,
+            'date_operation_fin' => $origine->date_operation_fin ?? $origine->magasin->calendrier()->jourDe(ValeurRequise::de($origine->date_emission, 'la date d\'émission de la vente régularisée')),
             ...$this->calculateur->enDecimaux($this->calculateur->totaliser($lignes)),
         ])->save();
 

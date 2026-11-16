@@ -150,7 +150,7 @@ class EmpreinteDeLaCaisseEtDesPdfTest extends TestCase
             $vendeur,
             $atelier,
             [['produit_id' => $coffret->id, 'quantite' => 3, 'remise_pourcentage' => '10'], ['service_id' => $livraison->id, 'quantite' => 1]],
-            ['conditions_paiement' => null, 'notes' => 'Livraison prévue le 15/10/2026.'],
+            ['conditions_paiement' => null, 'notes' => 'Livraison prévue le 15/10/2026.', 'date_operation_fin' => '2026-10-15'],
         ), jeton: (string) Str::uuid()));
         $this->nommerLesLignes('lignes_facture', 'facture', $facture->lignes()->orderBy('id')->pluck('id')->all());
 
@@ -179,7 +179,7 @@ class EmpreinteDeLaCaisseEtDesPdfTest extends TestCase
             $vendeur,
             $atelier,
             [['produit_id' => $coffret->id, 'quantite' => 2], ['service_id' => $livraison->id, 'quantite' => 1]],
-            ['notes' => 'Devis valable pour une livraison en novembre.'],
+            ['notes' => 'Devis valable pour une livraison en novembre.', 'date_operation_debut' => '2026-11-16', 'date_operation_fin' => '2026-11-20'],
         ), (string) Str::uuid()));
 
         $this->travelTo(self::aParis('2026-10-09 16:00:00'));

@@ -2,7 +2,6 @@
 
 namespace App\Domain\Facturation\Services;
 
-use App\Domain\Calendrier\Calendrier;
 use App\Domain\Facturation\Enums\CategorieOperation;
 use App\Domain\Facturation\Enums\MotifDeRegularisation;
 use App\Domain\Facturation\Enums\NatureLigne;
@@ -41,14 +40,21 @@ use App\Domain\Tenancy\Support\ValeurRequise;
  *   réimprimé après un changement de l'option, il garde la mention de
  *   son émission.
  *
- * Une facture rectificative, après la correction du SIREN de la société
- * ou une exonération non prouvée, dit d'abord quelle facture elle rectifie
- * (« Facture rectificative de la facture n° FAC-LYON-2026-000001 du
- * 15/10/2026 », « Ticket rectificatif du ticket n° … » pour un ticket, voir
- * RegularisationDUneFacture et RegularisationDUneExoneration), puis la date
- * de l'opération qu'elle reprend, celle de la livraison de la facture
- * rectifiée, ou à défaut le jour de son émission (T27.2 : « Date de la
- * livraison ou de la prestation d'origine : 15/10/2026 »). S'y ajoute,
+ * Une facture dit d'abord la date de la livraison ou de la prestation
+ * (T49, art. 242 nonies A de l'annexe II au CGI) quand elle n'est pas le
+ * jour de son émission (« Date de la livraison ou de la prestation :
+ * 12/10/2026 », ou « … : du 03/11/2026 au 07/11/2026 » pour une
+ * prestation de plusieurs jours, voir NoteSaNatureDOperation), et un devis
+ * la date prévue qu'il note (« Date prévue de la livraison ou de la
+ * prestation : … »). Une facture rectificative, après la correction du
+ * SIREN de la société ou une exonération non prouvée, dit d'abord quelle
+ * facture elle rectifie (« Facture rectificative de la facture n°
+ * FAC-LYON-2026-000001 du 15/10/2026 », « Ticket rectificatif du ticket n°
+ * … » pour un ticket, voir RegularisationDUneFacture et
+ * RegularisationDUneExoneration), puis, toujours, la date de l'opération
+ * qu'elle reprend, celle de la facture rectifiée, ou à défaut le jour de
+ * son émission (T27.2 : « Date de la livraison ou de la prestation
+ * d'origine : 15/10/2026 »). S'y ajoute,
  * sous les lignes de tout document hors franchise en base, l'explication
  * de son calcul (voir calcul()), qui ne se signe pas ; sur l'avoir d'un
  * client comptoir, la mention de son bon d'avoir (voir bonDAvoir()) ; sur
@@ -65,7 +71,11 @@ class MentionsFiscales
 
     public const TICKET_RECTIFICATIF = 'Ticket rectificatif du ticket n° %s du %s';
 
+    public const DATE_DE_L_OPERATION = 'Date de la livraison ou de la prestation : %s';
+
     public const DATE_DE_L_OPERATION_D_ORIGINE = 'Date de la livraison ou de la prestation d\'origine : %s';
+
+    public const DATE_PREVUE_DE_L_OPERATION = 'Date prévue de la livraison ou de la prestation : %s';
 
     public const REGULARISATION = 'Avoir de régularisation émis après correction de l\'identité du vendeur (SIREN correct : %s)';
 
@@ -95,9 +105,13 @@ class MentionsFiscales
             $rectifiee = $document->factureRectifiee()->firstOrFail();
             $mentions[] = sprintf($rectifiee->serie() === TypeDocument::TicketCaisse ? self::TICKET_RECTIFICATIF : self::RECTIFICATIVE, $rectifiee->numero, $rectifiee->magasin->calendrier()->afficher(ValeurRequise::de($rectifiee->date_emission, 'la date d\'émission de la facture rectifiée'), 'd/m/Y'));
 
-            if ($document->livraison_date !== null) {
-                $mentions[] = sprintf(self::DATE_DE_L_OPERATION_D_ORIGINE, Calendrier::afficherJour($document->livraison_date, 'd/m/Y'));
+            if (($date = $document->dateDeLOperation()) !== null) {
+                $mentions[] = sprintf(self::DATE_DE_L_OPERATION_D_ORIGINE, $date);
             }
+        } elseif ($document instanceof Facture && $document->date_operation_fin !== null && $document->dateDeLOperationDiffereDu($this->jourDeLEmission($document))) {
+            $mentions[] = sprintf(self::DATE_DE_L_OPERATION, $document->dateDeLOperation());
+        } elseif ($document instanceof Devis && ($date = $document->dateDeLOperation()) !== null) {
+            $mentions[] = sprintf(self::DATE_PREVUE_DE_L_OPERATION, $date);
         }
 
         if (! $document instanceof Devis) {
@@ -115,6 +129,17 @@ class MentionsFiscales
         }
 
         return $mentions;
+    }
+
+    /**
+     * Le jour de l'émission d'une facture, au calendrier de son magasin ;
+     * aujourd'hui pour un brouillon, qui s'imprime comme il s'émettrait.
+     */
+    private function jourDeLEmission(Facture $facture): string
+    {
+        $calendrier = $facture->magasin->calendrier();
+
+        return $facture->date_emission === null ? $calendrier->aujourdhui() : $calendrier->jourDe($facture->date_emission);
     }
 
     /**

@@ -98,6 +98,7 @@ class DevisResource extends Resource
                     ->suffixAction(ClientResource::actionChercherUnClient()),
                 DatePicker::make('date_validite')->label('Valide jusqu\'au'),
                 self::champNatureDeLOperation(),
+                ...self::champsDeLaDateDeLOperation(prevue: true),
                 Textarea::make('conditions_paiement')->label('Conditions de paiement')->maxLength(PiedDePage::CARACTERES_DES_CONDITIONS_DE_PAIEMENT)->helperText(FactureResource::INFORMATION_ACOMPTE)->columnSpanFull(),
                 Textarea::make('notes')->columnSpanFull(),
             ])->columns(2),
@@ -132,6 +133,7 @@ class DevisResource extends Resource
                 TextEntry::make('date_emission')->label('Dernier envoi le')->dateTime('d/m/Y')->placeholder('—'),
                 TextEntry::make('date_validite')->label('Valide jusqu\'au')->jour()->placeholder('—'),
                 FactureResource::natureEntry(),
+                FactureResource::dateDeLOperationEntry(prevue: true),
                 TextEntry::make('accepte_le')
                     ->label('Accepté le')
                     ->state(fn (Devis $record): ?string => $record->accepte_le === null ? null : $record->magasin->calendrier()->afficher($record->accepte_le, 'd/m/Y à H:i'))

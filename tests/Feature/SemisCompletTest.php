@@ -199,6 +199,7 @@ class SemisCompletTest extends TestCase
         $this->assertChaqueCompteQuiVendASesVentesEtSonReleve();
         $this->assertLesComptesEtLeursMagasins();
         $this->assertLesCasDesGraphiquesEtDesCaisses();
+        $this->assertLesDatesDeLOperation();
         $this->assertLaListeDesComptesOuvreChaqueCompteActif();
 
         $this->assertSame(0, Artisan::call('caisse:verifier', ['--complet' => true]), Artisan::output());
@@ -376,6 +377,37 @@ class SemisCompletTest extends TestCase
             [[false], [true]],
             $this->lignes('select distinct (select count(*) from json_object_keys(encaissements)) > 1 from clotures_caisse_personnelles where json_typeof(encaissements) = \'object\' order by 1'),
             'Un relevé de caisse a un seul mode d\'encaissement, un autre en a plusieurs.',
+        );
+    }
+
+    /**
+     * La date de l'opération (T49) : des factures émises sans date, avec
+     * un jour et avec une période ; une qui imprime sa date (un autre jour
+     * que son émission, ou une période) et une qui ne l'imprime pas (le
+     * jour même), et la rectificative qui imprime celle de son origine ;
+     * un devis qui prévoit la sienne.
+     */
+    private function assertLesDatesDeLOperation(): void
+    {
+        $this->assertSame(
+            [['aucune'], ['jour'], ['periode']],
+            $this->lignes("select distinct case when date_operation_fin is null then 'aucune' when date_operation_debut is null then 'jour' else 'periode' end from factures where numero is not null order by 1"),
+            'Des factures émises n\'ont pas de date de l\'opération, d\'autres un jour, une autre une période.',
+        );
+        $this->assertSame(
+            [[false], [true]],
+            $this->lignes("select distinct contenu like '%Date de la livraison ou de la prestation : %' from enregistrements_fiscaux where type = 'facture' and contenu like '%\"date_operation\":{\"debut\":%' and contenu not like '%\"fin\":null}%' order by 1"),
+            'Une facture datée imprime sa date (un autre jour que son émission), une autre ne l\'imprime pas (le jour même).',
+        );
+        $this->assertSame(
+            [[true]],
+            $this->lignes("select count(*) > 0 from enregistrements_fiscaux where contenu like '%Date de la livraison ou de la prestation d''origine : %'"),
+            'La rectificative imprime la date de l\'opération d\'origine.',
+        );
+        $this->assertSame(
+            [[true]],
+            $this->lignes('select count(*) > 0 from devis where date_operation_fin is not null'),
+            'Un devis prévoit la date de sa livraison.',
         );
     }
 

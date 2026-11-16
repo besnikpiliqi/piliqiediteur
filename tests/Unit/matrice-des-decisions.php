@@ -1455,6 +1455,23 @@ return [
                 'tests/Feature/Filament/FactureResourceTest.php::test_l_echeance_s_annonce_fixee_a_l_emission_avec_le_delai_du_client',
             ],
         ],
+        'documents.date-de-l-operation' => [
+            'puce' => 'Documents de vente',
+            'regle' => 'Une facture ou un ticket fait hors de la caisse porte la date de la livraison ou de la prestation, un jour ou une période, obligatoire pour une livraison intracommunautaire, signée à l\'émission et imprimée quand elle n\'est pas le jour de l\'émission ; une rectificative imprime toujours celle de la facture qu\'elle rectifie ; un devis note et imprime une date prévue, que la facture tirée du devis reprend (T49).',
+            'tests' => [
+                'tests/Feature/Facturation/DateDeLOperationTest.php::test_une_facture_note_un_jour_ou_une_periode',
+                'tests/Feature/Facturation/DateDeLOperationTest.php::test_une_date_de_l_operation_incoherente_est_refusee_a_l_enregistrement',
+                'tests/Feature/Facturation/DateDeLOperationTest.php::test_la_base_refuse_une_periode_dont_le_premier_jour_ne_precede_pas_le_dernier',
+                'tests/Feature/Facturation/DateDeLOperationTest.php::test_la_facture_imprime_sa_date_seulement_quand_elle_n_est_pas_le_jour_de_son_emission',
+                'tests/Feature/Facturation/DateDeLOperationTest.php::test_le_jour_de_l_emission_est_celui_du_calendrier_du_magasin',
+                'tests/Feature/Facturation/DateDeLOperationTest.php::test_le_devis_imprime_la_date_prevue_et_la_facture_tiree_du_devis_la_reprend',
+                'tests/Feature/CaisseSecurisee/EmissionSigneeTest.php::test_la_date_de_l_operation_se_signe_et_sa_mention_seulement_quand_elle_n_est_pas_le_jour_de_l_emission',
+                'tests/Feature/Facturation/RegularisationDUneFactureTest.php::test_la_rectificative_d_une_prestation_de_plusieurs_jours_en_reprend_la_periode',
+                'tests/Feature/Facturation/NatureOperationTest.php::test_une_livraison_intracommunautaire_sans_toutes_ses_conditions_est_refusee',
+                'tests/Feature/Filament/FactureResourceTest.php::test_la_date_de_l_operation_se_saisit_dans_le_formulaire_et_se_lit_sur_la_fiche',
+                'tests/Feature/Filament/DevisResourceTest.php::test_la_date_prevue_de_l_operation_se_saisit_dans_le_formulaire_du_devis',
+            ],
+        ],
         'documents.identite-legale-complete' => [
             'puce' => 'Documents de vente',
             'regle' => 'Une facture à un professionnel exige l\'identité légale complète de la société (capital pour toute société commerciale) et le SIRET et l\'adresse du magasin ; les tickets restent possibles.',
@@ -5587,7 +5604,8 @@ return [
             ],
             'T49' => [
                 'decision' => 'Date de livraison ou de prestation sur la facture : La facture portera une date de livraison ou de fin de prestation, ou une période, imprimée quand elle diffère de la date d\'émission ; une facture qui remplace un ticket prendra sa date.',
-                'a_venir' => 'Étape 1, lot T49 (date de la livraison ou de la prestation sur la facture), après le lot MAT-PRO ; transmise dans la facture électronique à l\'étape 2. Aujourd\'hui seule la date d\'émission s\'imprime.',
+                'regles' => ['documents.date-de-l-operation'],
+                'a_venir' => 'Étape 1, lot C-b de la chaîne TVA : une facture qui remplace un ticket prendra la date du ticket (« Transformer en facture » d\'un ticket n\'existe pas encore) ; étape 2 : la date se transmettra dans la facture électronique.',
             ],
             'T86' => [
                 'decision' => 'Valeur de l\'acceptation d\'un devis en ligne : L\'acceptation en ligne (nom tapé et « Bon pour accord ») reste une signature simple, pour tout montant, sans code par SMS ; un particulier recevra l\'information sur ses 14 jours de rétractation, avec le formulaire.',

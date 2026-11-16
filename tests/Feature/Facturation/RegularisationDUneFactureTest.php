@@ -135,7 +135,7 @@ class RegularisationDUneFactureTest extends TestCase
         $this->assertSame('Régularisation de la facture FAC-LYON-2026-000001 après la correction du SIREN du vendeur', $avoir->motif);
         $this->assertSame([$sirenCorrect, (string) $magasin->fresh()->siret], [$rectificative->emetteur()->siren, $rectificative->emetteur()->siret]);
         $this->assertNotSame($ancienSiret, (string) $magasin->fresh()->siret);
-        $this->assertSame([$facture->id, '2026-10-15', 'FAC-LYON-2026-000002'], [$rectificative->facture_rectifiee_id, $rectificative->livraison_date, $rectificative->numero]);
+        $this->assertSame([$facture->id, '2026-10-15', 'FAC-LYON-2026-000002'], [$rectificative->facture_rectifiee_id, $rectificative->date_operation_fin, $rectificative->numero]);
         $piedDeLaRectificative = PiedDePage::pour($rectificative, $rectificative->emetteur())->lignes;
         $this->assertContains('Facture rectificative de la facture n° FAC-LYON-2026-000001 du 15/10/2026', $piedDeLaRectificative);
         $this->assertContains('Date de la livraison ou de la prestation d\'origine : 15/10/2026', $piedDeLaRectificative);
@@ -194,18 +194,39 @@ class RegularisationDUneFactureTest extends TestCase
             'livraison_code_postal' => '10115',
             'livraison_ville' => 'Berlin',
             'livraison_pays' => 'DE',
-            'livraison_date' => '2026-10-12',
+            'date_operation_fin' => '2026-10-12',
             'transport_par' => TransportPar::Acquereur,
         ]);
         $this->corrigerLeSirenDeLaSociete($magasin);
 
         [, $rectificative] = $this->regulariser($magasin, $facture);
 
-        $this->assertSame([$consultation->id, NatureOperation::LivraisonIntracommunautaire, '2026-10-12', 'Berlin', TransportPar::Acquereur], [$rectificative->consultation_vies_id, $rectificative->nature_operation, $rectificative->livraison_date, $rectificative->livraison_ville, $rectificative->transport_par]);
+        $this->assertSame([$consultation->id, NatureOperation::LivraisonIntracommunautaire, '2026-10-12', 'Berlin', TransportPar::Acquereur], [$rectificative->consultation_vies_id, $rectificative->nature_operation, $rectificative->date_operation_fin, $rectificative->livraison_ville, $rectificative->transport_par]);
         $this->assertSame(['250.00', '0.00', '250.00'], [$rectificative->total_ht, $rectificative->total_tva, $rectificative->total_ttc]);
         $mentions = app(MentionsFiscales::class)->pour($rectificative, $rectificative->emetteur());
         $this->assertContains(NatureOperation::LivraisonIntracommunautaire->mention(), $mentions);
         $this->assertContains('Date de la livraison ou de la prestation d\'origine : 12/10/2026', $mentions);
+    }
+
+    /**
+     * La rectificative d'une prestation de plusieurs jours en reprend la
+     * période (T49) : elle la note, la signe et l'imprime comme la date de
+     * l'opération d'origine, « du … au … », et non comme une date à elle.
+     */
+    public function test_la_rectificative_d_une_prestation_de_plusieurs_jours_en_reprend_la_periode(): void
+    {
+        $magasin = $this->magasinDeLyon();
+        $facture = $this->facturer($magasin, Client::factory()->professionnel()->create(), null, ['date_operation_debut' => '2026-10-06', 'date_operation_fin' => '2026-10-09']);
+        $this->corrigerLeSirenDeLaSociete($magasin);
+
+        [, $rectificative] = $this->regulariser($magasin, $facture);
+
+        $this->assertSame(['2026-10-06', '2026-10-09'], [$rectificative->date_operation_debut, $rectificative->date_operation_fin]);
+        $this->assertSame(['debut' => '2026-10-06', 'fin' => '2026-10-09'], $this->contenuSigne($rectificative)['donnees']['document']['date_operation']);
+        $mentions = $this->contenuSigne($rectificative)['donnees']['contexte']['mentions'];
+        $this->assertContains('Date de la livraison ou de la prestation d\'origine : du 06/10/2026 au 09/10/2026', $mentions);
+        $this->assertNotContains('Date de la livraison ou de la prestation : du 06/10/2026 au 09/10/2026', $mentions);
+        $this->assertSame([], app(VerificateurIntegrite::class)->verifier($magasin->fresh())->anomalies());
     }
 
     /**

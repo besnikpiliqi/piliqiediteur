@@ -3070,3 +3070,17 @@ et quand tu travaille sur le logiciel pour terminer tout jusqau à la fin alors 
 
 et ben tu commence comm on c 'est dit donc tu fait le A et tu supprime le demo du site reel. et tu arret tout les autre qui tourne mtn et tu t occupe que pour la parti de nouveau demo et le suppression de demo reel. donc le traveil qui tourne mtn tu sauvegare pour continuer apres le demo
 
+## 351. 2026-11-16 20:51 UTC
+
+<!-- attach -->
+
+> La nouvelle version 3.0 de la caisse sécurisée,
+
+
+
+et pourquoi changer la version en fait ??? tant que n est pas en production ?
+
+## 352. 2026-11-16 20:54 UTC
+
+tu garde donc tu change rien mais quand se met en production alors tu le met 1.0 pour commencer
+

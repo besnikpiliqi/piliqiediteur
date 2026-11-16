@@ -19,13 +19,17 @@ use Illuminate\Support\Collection;
  * documents de ce seul magasin, dans son calendrier, pour tout compte qui
  * y a l'autorisation « télécharger les documents par période » (voir
  * DocumentsDeLaPeriode::peutTelechargerDans()), le propriétaire toujours,
- * un compte du cabinet lié quand le client la lui coche. Ouverte même
+ * un compte du cabinet lié quand le client la lui coche ; les charges de
+ * ce magasin pour qui les voit, et celles de « Toute la société » pour
+ * l'expert-comptable déclaré seulement. Ouverte même
  * quand le magasin est en lecture seule ; jamais dans un magasin réel
  * d'une société qui n'est pas validée.
  */
 class TelechargerLesDocuments extends Page
 {
-    use TelechargeLesDocumentsParPeriode;
+    use TelechargeLesDocumentsParPeriode {
+        proposeLesChargesDeLaSociete as proposeLesChargesDeLaSocieteAQuiLesTelecharge;
+    }
 
     protected static ?string $navigationIcon = 'heroicon-o-arrow-down-tray';
 
@@ -67,6 +71,20 @@ class TelechargerLesDocuments extends Page
         $magasin = Filament::getTenant();
 
         return $magasin instanceof Magasin ? $magasin->societe : null;
+    }
+
+    /**
+     * Dans le panneau d'un magasin, les charges de « Toute la société » ne
+     * se proposent qu'à l'expert-comptable déclaré, qui les voit dans ce
+     * panneau (voir ChargesDeLaSociete) ; les autres comptes n'y ont que
+     * les charges de ce magasin, et le propriétaire celles de toute la
+     * société dans l'espace de la société.
+     */
+    protected function proposeLesChargesDeLaSociete(): bool
+    {
+        $compte = auth()->user();
+
+        return $compte instanceof User && $compte->estExpertComptable() && $this->proposeLesChargesDeLaSocieteAQuiLesTelecharge();
     }
 
     protected function calendrierDesRaccourcis(): Calendrier

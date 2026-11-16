@@ -7,6 +7,7 @@ use App\Domain\Calendrier\Casts\JourCivil;
 use App\Domain\Facturation\Enums\FormatDuTelechargement;
 use App\Domain\Facturation\Enums\OrigineDesAchats;
 use App\Domain\Facturation\Enums\TypeDeDocumentTelechargeable;
+use App\Domain\Facturation\Services\ChoixDesCharges;
 use App\Domain\Tenancy\Concerns\BelongsToSociete;
 use App\Domain\Tenancy\Concerns\FigeLeNomDeSesAuteurs;
 use App\Domain\Tenancy\Enums\StatutDuTelechargement;
@@ -65,6 +66,8 @@ class TelechargementDeDocuments extends Model
 
     protected $casts = [
         'magasins' => 'array',
+        'charges_de_la_societe' => 'boolean',
+        'toutes_les_charges' => 'boolean',
         'du' => JourCivil::class,
         'au' => JourCivil::class,
         'types' => 'array',
@@ -73,6 +76,7 @@ class TelechargementDeDocuments extends Model
         'format' => FormatDuTelechargement::class,
         'selection' => 'array',
         'pieces' => 'array',
+        'pieces_de_charge' => 'array',
         'statut' => StatutDuTelechargement::class,
         'nombre_documents' => 'integer',
         'taille' => 'integer',
@@ -200,6 +204,30 @@ class TelechargementDeDocuments extends Model
     public function piecesContenues(): array
     {
         return ValeursLues::entiers($this->pieces ?? []);
+    }
+
+    /**
+     * Les identifiants des pièces des charges que le fichier prêt contient
+     * (voir ArchiveDesDocuments::ecrire()), tels que la préparation les a
+     * gardés.
+     *
+     * @return list<int>
+     *
+     * @throws UnexpectedValueException une valeur qui n'est pas un entier
+     */
+    public function piecesDeChargeContenues(): array
+    {
+        return ValeursLues::entiers($this->pieces_de_charge ?? []);
+    }
+
+    /**
+     * Les charges que la demande choisit, dans sa société : celles de
+     * « Toute la société » si elle les demande, et toutes ou seulement les
+     * validées.
+     */
+    public function choixDesCharges(Societe $societe): ChoixDesCharges
+    {
+        return new ChoixDesCharges($this->charges_de_la_societe ? $societe : null, $this->toutes_les_charges);
     }
 
     public function estExpire(): bool

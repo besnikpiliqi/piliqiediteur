@@ -701,7 +701,7 @@ test('chaque rôle qui voit une page des charges télécharge l’état des char
     expect($excel)->toHaveCount(1);
     expect([$excel[0]['nom'], $excel[0]['type'], substr((string) base64_decode($excel[0]['contenu']), 0, 2)])->toBe([$nom.'.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'PK']);
 
-    expect(EntreeAudit::query()->withoutGlobalScopes()->where('societe_id', $societeDuCompte->getKey())->where('action', ActionAuditee::EtatDesChargesTelecharge->value)->pluck('nouvelles_valeurs')->map(fn (mixed $valeurs): mixed => is_array($valeurs) ? ($valeurs['format'] ?? null) : null)->all())
+    expect(EntreeAudit::query()->withoutGlobalScopes()->where('societe_id', $societeDuCompte->getKey())->where('action', ActionAuditee::EtatDesChargesTelecharge->value)->orderBy('id')->pluck('nouvelles_valeurs')->map(fn (mixed $valeurs): mixed => is_array($valeurs) ? ($valeurs['format'] ?? null) : null)->all())
         ->toBe(['pdf', 'xlsx']);
 })->with([
     'le propriétaire' => ['proprietaire'],

@@ -2943,18 +2943,17 @@ return [
             'tests/Browser/Parcours/TelechargerLesDocumentsTest.php › le bouton « Télécharger » de la notification fait télécharger le fichier, et un lien expiré mène à une page qui ramène à l’accueil',
             'tests/Browser/Parcours/TelechargerLesDocumentsTest.php › chaque rôle à qui le propriétaire coche la case télécharge les documents qu’il voit, dans le magasin et dans l’espace de la société',
         ]],
-        'lien:télécharger' => ['lot' => 'NAV-3', 'tests' => [
-            'tests/Browser/Parcours/TelechargerLesDocumentsTest.php › le propriétaire choisit le trimestre, coche tout et télécharge le ZIP des documents du magasin',
-            'tests/Browser/Parcours/TelechargerLesDocumentsTest.php › dans l’espace de la société, le propriétaire télécharge le récapitulatif CSV des magasins cochés',
-            'tests/Browser/Parcours/TelechargerLesDocumentsTest.php › le collaborateur du cabinet lié télécharge les documents de son client quand le client le lui coche',
-            'tests/Browser/Parcours/TelechargerLesDocumentsTest.php › le bouton « Télécharger » de la notification fait télécharger le fichier, et un lien expiré mène à une page qui ramène à l’accueil',
-            'tests/Browser/Parcours/TelechargerLesDocumentsTest.php › chaque rôle à qui le propriétaire coche la case télécharge les documents qu’il voit, dans le magasin et dans l’espace de la société',
-        ]],
         'saisie:au' => ['lot' => 'NAV-3', 'tests' => [
             'tests/Browser/Parcours/TelechargerLesDocumentsTest.php › le propriétaire saisit la période au calendrier, choisit les types, l’origine et la seule marque « pièce manquante », coche un document puis désélectionne tout',
         ]],
+        'saisie:chargesDeLaSociete' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Parcours/TelechargerLesDocumentsTest.php › dans l’espace de la société, le propriétaire choisit les charges de « Toute la société » et leur état, et reçoit le ZIP de leurs pièces',
+        ]],
         'saisie:client' => ['lot' => 'NAV-5', 'tests' => [
             'tests/Browser/Parcours/TelechargerLesDocumentsTest.php › le collaborateur du cabinet choisit le client dont il télécharge les documents',
+        ]],
+        'saisie:etatDesCharges' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Parcours/TelechargerLesDocumentsTest.php › dans l’espace de la société, le propriétaire choisit les charges de « Toute la société » et leur état, et reçoit le ZIP de leurs pièces',
         ]],
         'saisie:du' => ['lot' => 'NAV-3', 'tests' => [
             'tests/Browser/Parcours/TelechargerLesDocumentsTest.php › le propriétaire saisit la période au calendrier, choisit les types, l’origine et la seule marque « pièce manquante », coche un document puis désélectionne tout',
@@ -2981,6 +2980,17 @@ return [
         ]],
         'saisie:types' => ['lot' => 'NAV-3', 'tests' => [
             'tests/Browser/Parcours/TelechargerLesDocumentsTest.php › le propriétaire saisit la période au calendrier, choisit les types, l’origine et la seule marque « pièce manquante », coche un document puis désélectionne tout',
+        ]],
+    ],
+    'resources/views/filament/vos-telechargements.blade.php' => [
+        'lien:Télécharger' => ['lot' => 'NAV-3', 'tests' => [
+            'tests/Browser/Parcours/TelechargerLesDocumentsTest.php › le propriétaire choisit le trimestre, coche tout et télécharge le ZIP des documents du magasin',
+            'tests/Browser/Parcours/TelechargerLesDocumentsTest.php › dans l’espace de la société, le propriétaire télécharge le récapitulatif CSV des magasins cochés',
+            'tests/Browser/Parcours/TelechargerLesDocumentsTest.php › le collaborateur du cabinet lié télécharge les documents de son client quand le client le lui coche',
+            'tests/Browser/Parcours/TelechargerLesDocumentsTest.php › le bouton « Télécharger » de la notification fait télécharger le fichier, et un lien expiré mène à une page qui ramène à l’accueil',
+            'tests/Browser/Parcours/TelechargerLesDocumentsTest.php › chaque rôle à qui le propriétaire coche la case télécharge les documents qu’il voit, dans le magasin et dans l’espace de la société',
+            'tests/Browser/Parcours/TelechargerLesDocumentsTest.php › dans les trois espaces, la ligne en préparation devient « prêt » sans recharger la page, et son lien se suit',
+            'tests/Browser/Parcours/TelechargerLesDocumentsTest.php › dans l’espace de la société, le propriétaire choisit les charges de « Toute la société » et leur état, et reçoit le ZIP de leurs pièces',
         ]],
     ],
     'resources/views/inscription/confirmer.blade.php' => [

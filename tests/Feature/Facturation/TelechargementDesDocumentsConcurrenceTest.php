@@ -80,6 +80,8 @@ class TelechargementDesDocumentsConcurrenceTest extends TestCase
                 (new TelechargementDeDocuments)->forceFill([
                     'demande_par' => $proprietaire->id,
                     'magasins' => [$magasin->id],
+                    'charges_de_la_societe' => false,
+                    'toutes_les_charges' => false,
                     'du' => '2026-03-01',
                     'au' => '2026-03-31',
                     'types' => [TypeDeDocumentTelechargeable::Ventes->value],

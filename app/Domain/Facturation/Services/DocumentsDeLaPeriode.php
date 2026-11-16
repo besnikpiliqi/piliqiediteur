@@ -8,7 +8,14 @@ use App\Domain\Achats\Models\AvoirFournisseur;
 use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Cabinets\Services\AccesDesCabinets;
+use App\Domain\Cabinets\Services\ExpertsComptablesDeclares;
 use App\Domain\Calendrier\Calendrier;
+use App\Domain\Charges\Enums\EtatDeLaCharge;
+use App\Domain\Charges\Models\Charge;
+use App\Domain\Charges\Services\ChargesDeLaSociete;
+use App\Domain\Charges\Services\DroitsSurLesCharges;
+use App\Domain\Charges\Support\AccesAuxCharges;
+use App\Domain\Charges\Support\TextesDesCharges;
 use App\Domain\Facturation\Enums\OrigineDesAchats;
 use App\Domain\Facturation\Enums\StatutAvoir;
 use App\Domain\Facturation\Enums\TypeDeDocumentTelechargeable;
@@ -21,6 +28,7 @@ use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\CleDuModele;
 use App\Domain\Tenancy\Support\ValeurRequise;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Models\User;
 use Closure;
 use Illuminate\Database\Eloquent\Builder;
@@ -59,7 +67,20 @@ use Illuminate\Support\Facades\Gate;
  * les avoirs de même (comme Avoir::scopeVisiblesPar()), les achats et les
  * avoirs fournisseur de l'équipe, les clôtures qu'il a déclenchées ou
  * toutes (voir ClotureCaissePolicy), les encaissements qu'il a enregistrés
- * ou tous (voir PaiementPolicy) ; jamais un brouillon. Les jours sont ceux
+ * ou tous (voir PaiementPolicy) ; jamais un brouillon.
+ *
+ * Les charges de la société, avec leurs pièces (décision de l'éditeur du
+ * 15/11/2026, lot DATEOP), se lisent par les mêmes requêtes que la page des
+ * charges (voir ChargesDeLaSociete::liste()), hors du scope de la société,
+ * filtrées par la société et par les magasins que la personne voit (voir
+ * DroitsSurLesCharges) : celles d'un magasin réel où elle télécharge et
+ * voit les charges (voir voitLesChargesDans()) ; celles de « Toute la
+ * société », sans magasin, seulement quand elle voit les charges de toute
+ * la société et y a l'autorisation de télécharger (voir
+ * telechargeLesChargesDeLaSociete()) ; jamais dans le magasin de
+ * démonstration. Elles se choisissent par leur mois de TVA : celles des
+ * mois que la période touche, même en partie ; seulement les validées, ou
+ * toutes sur demande (voir ChoixDesCharges). Les jours sont ceux
  * du calendrier de chaque magasin : le jour d'émission d'une vente, d'un
  * avoir et d'un avoir fournisseur, la date de la facture du fournisseur
  * d'un achat (à défaut, pour un achat reçu par l'API, le jour de sa
@@ -70,6 +91,11 @@ use Illuminate\Support\Facades\Gate;
  */
 final class DocumentsDeLaPeriode
 {
+    /**
+     * Le numéro d'une charge dont la pièce n'en porte pas.
+     */
+    public const SANS_NUMERO = 'Sans numéro';
+
     /**
      * S'il télécharge dans chaque magasin, lu une fois par instance, sous la
      * clé « compte:magasin ».
@@ -86,9 +112,29 @@ final class DocumentsDeLaPeriode
      */
     private array $lectures = [];
 
+    /**
+     * Son accès aux charges de chaque société, lu une fois par instance,
+     * sous la clé « compte:société » ; false quand il n'en a aucun.
+     *
+     * @var array<string, AccesAuxCharges|false>
+     */
+    private array $accesAuxCharges = [];
+
+    /**
+     * S'il télécharge les charges de « Toute la société » de chaque
+     * société, lu une fois par instance, sous la clé « compte:société ».
+     *
+     * @var array<string, bool>
+     */
+    private array $chargesDeLaSociete = [];
+
     public function __construct(
         private readonly TenantContext $contexte,
         private readonly CalculateurLigne $calculateur,
+        private readonly DroitsSurLesCharges $droitsSurLesCharges,
+        private readonly ChargesDeLaSociete $charges,
+        private readonly AccesDesCabinets $cabinets,
+        private readonly ExpertsComptablesDeclares $expertsComptables,
     ) {}
 
     /**
@@ -142,7 +188,7 @@ final class DocumentsDeLaPeriode
             return new Collection;
         }
 
-        return app(AccesDesCabinets::class)->magasinsOuverts($compte)
+        return $this->cabinets->magasinsOuverts($compte)
             ->load('societe')
             ->filter(fn (Magasin $magasin): bool => $this->peutTelechargerDans($compte, $magasin))
             ->toBase()
@@ -166,6 +212,57 @@ final class DocumentsDeLaPeriode
     }
 
     /**
+     * Voit-il les charges de ce magasin réel, en plus d'y télécharger les
+     * documents (voir lectureDans()) : le propriétaire toujours, un
+     * administrateur ou un responsable à qui « Charges : ajouter » y est
+     * cochée, le cabinet lié et l'expert-comptable déclaré à qui le client
+     * accorde « Charges : voir, ajouter, saisir et valider » et ouvre ce
+     * magasin (voir DroitsSurLesCharges) ; jamais dans le magasin de
+     * démonstration, ni avant la validation de la société.
+     */
+    public function voitLesChargesDans(User $compte, Magasin $magasin): bool
+    {
+        return $magasin->est_demonstration !== true
+            && ($this->accesAuxCharges($compte, $magasin->societe)?->voitLeMagasin(CleDuModele::de($magasin)) ?? false);
+    }
+
+    /**
+     * Télécharge-t-il les charges de « Toute la société » de cette société
+     * validée : il les voit (le propriétaire, l'administrateur à qui
+     * « Charges : ajouter » est cochée, le cabinet lié et l'expert-comptable
+     * déclaré qui ont les charges, voir DroitsSurLesCharges) et y a
+     * l'autorisation de télécharger les documents par période, qui ne
+     * dépend pas d'un magasin : toujours pour le propriétaire, cochée à au
+     * moins une de ses affectations pour un administrateur, accordée par
+     * le client au cabinet ou à la déclaration de son expert-comptable
+     * (décision de Claude, D76). Jamais un responsable, qui ne voit que
+     * les charges de son magasin.
+     */
+    public function telechargeLesChargesDeLaSociete(User $compte, Societe $societe): bool
+    {
+        return $this->chargesDeLaSociete[CleDuModele::de($compte).':'.CleDuModele::de($societe)] ??= ($this->accesAuxCharges($compte, $societe)?->chargesDeLaSociete ?? false)
+            && in_array(PermissionRegistry::DOCUMENTS_TELECHARGER, match (true) {
+                $compte->estProprietaire() => [PermissionRegistry::DOCUMENTS_TELECHARGER],
+                $compte->estDUnCabinet() => $this->cabinets->autorisationsParClient($compte)[CleDuModele::de($societe)] ?? [],
+                $compte->estExpertComptable() => $this->expertsComptables->declarationDe($compte)?->autorisationsRetenues() ?? [],
+                $compte->estAdministrateur() => $compte->casesDeSesAffectations(),
+                default => [],
+            }, true);
+    }
+
+    /**
+     * Son accès aux charges de cette société validée, sans lui demander
+     * s'il les valide (voir DroitsSurLesCharges::pour()), lu une fois par
+     * instance ; null quand il n'en a aucun.
+     */
+    private function accesAuxCharges(User $compte, Societe $societe): ?AccesAuxCharges
+    {
+        $acces = $this->accesAuxCharges[CleDuModele::de($compte).':'.CleDuModele::de($societe)] ??= ($societe->estValidee() ? $this->droitsSurLesCharges->pour($compte, $societe, pourValider: false) : null) ?? false;
+
+        return $acces === false ? null : $acces;
+    }
+
+    /**
      * Les types de documents qu'il voit dans ce magasin où il télécharge,
      * dans l'ordre de l'énumération, ceux qui existent dans le type
      * d'activité de sa société seulement ; aucun là où il ne télécharge
@@ -185,21 +282,27 @@ final class DocumentsDeLaPeriode
      * l'ordre de ses jours. L'origine, et, sur demande, la seule marque
      * « pièce du fournisseur manquante », choisissent parmi les factures
      * d'achat et les avoirs fournisseur ; ils ne touchent pas aux autres
-     * types.
+     * types. Les charges choisissent les leurs (voir ChoixDesCharges) :
+     * celles de « Toute la société » d'abord, s'il les télécharge, puis
+     * celles de chaque magasin, chacune dans l'ordre de la page des
+     * charges.
      *
      * @param  iterable<Magasin>  $magasins
      * @param  list<TypeDeDocumentTelechargeable>  $types
      * @return list<DocumentTrouve>
      */
-    public function trouver(User $compte, iterable $magasins, string $du, string $au, array $types, OrigineDesAchats $origine, bool $pieceManquanteSeulement = false): array
+    public function trouver(User $compte, iterable $magasins, string $du, string $au, array $types, OrigineDesAchats $origine, bool $pieceManquanteSeulement = false, ChoixDesCharges $charges = new ChoixDesCharges): array
     {
-        $documents = [];
+        $societe = $charges->deLaSociete;
+        $documents = in_array(TypeDeDocumentTelechargeable::Charges, $types, true) && $societe !== null && $this->telechargeLesChargesDeLaSociete($compte, $societe)
+            ? $this->chargesTrouvees($compte, $societe, null, $du, $au, $charges->toutes)
+            : [];
 
         foreach ($magasins as $magasin) {
             $visibles = array_values(array_filter($this->typesVisibles($compte, $magasin), fn (TypeDeDocumentTelechargeable $type): bool => in_array($type, $types, true)));
 
             if ($visibles !== []) {
-                $documents = [...$documents, ...$this->dansLeMagasin($magasin, fn (): array => $this->duMagasin($compte, $magasin, $du, $au, $visibles, $origine, $pieceManquanteSeulement))];
+                $documents = [...$documents, ...$this->dansLeMagasin($magasin, fn (): array => $this->duMagasin($compte, $magasin, $du, $au, $visibles, $origine, $pieceManquanteSeulement, $charges->toutes))];
             }
         }
 
@@ -216,12 +319,12 @@ final class DocumentsDeLaPeriode
      * @param  list<string>  $cles
      * @return list<DocumentTrouve>
      */
-    public function choisis(User $compte, iterable $magasins, string $du, string $au, array $types, OrigineDesAchats $origine, array $cles, bool $pieceManquanteSeulement = false): array
+    public function choisis(User $compte, iterable $magasins, string $du, string $au, array $types, OrigineDesAchats $origine, array $cles, bool $pieceManquanteSeulement = false, ChoixDesCharges $charges = new ChoixDesCharges): array
     {
         $choisies = array_flip($cles);
 
         return array_values(array_filter(
-            $this->trouver($compte, $magasins, $du, $au, $types, $origine, $pieceManquanteSeulement),
+            $this->trouver($compte, $magasins, $du, $au, $types, $origine, $pieceManquanteSeulement, $charges),
             fn (DocumentTrouve $document): bool => isset($choisies[$document->cle()]),
         ));
     }
@@ -234,14 +337,16 @@ final class DocumentsDeLaPeriode
      * aussi (une vente ou un avoir d'un autre vendeur, une clôture qu'un
      * autre a déclenchée, seulement s'il voit encore ceux de toute
      * l'équipe ; le relevé des encaissements de toute l'équipe, seulement
-     * s'il voit encore ceux de toute l'équipe). Le lien d'un fichier
+     * s'il voit encore ceux de toute l'équipe ; une charge, s'il voit
+     * encore les charges de son magasin, ou celles de « Toute la société »
+     * de cette société et les y télécharge encore). Le lien d'un fichier
      * préparé ne le sert que s'il les voit tous (voir
      * TelechargerLesDocumentsController).
      *
      * @param  iterable<Magasin>  $magasins
      * @param  list<string>  $cles
      */
-    public function nombreEncoreVisibles(User $compte, iterable $magasins, array $cles): int
+    public function nombreEncoreVisibles(User $compte, iterable $magasins, array $cles, ?Societe $chargesDeLaSociete = null): int
     {
         $parMagasin = [];
 
@@ -254,6 +359,11 @@ final class DocumentsDeLaPeriode
         }
 
         $nombre = 0;
+        $deLaSociete = $parMagasin[0][TypeDeDocumentTelechargeable::Charges->value] ?? [];
+
+        if ($deLaSociete !== [] && $chargesDeLaSociete !== null && $this->telechargeLesChargesDeLaSociete($compte, $chargesDeLaSociete)) {
+            $nombre += $this->chargesEncoreVues($compte, $chargesDeLaSociete, null, $deLaSociete);
+        }
 
         foreach ($magasins as $magasin) {
             $lecture = $this->lectureDans($compte, $magasin);
@@ -261,7 +371,9 @@ final class DocumentsDeLaPeriode
             foreach ($parMagasin[CleDuModele::de($magasin)] ?? [] as $type => $designes) {
                 $type = TypeDeDocumentTelechargeable::from($type);
 
-                if (in_array($type, $lecture['types'], true)) {
+                if ($type === TypeDeDocumentTelechargeable::Charges) {
+                    $nombre += in_array($type, $lecture['types'], true) ? $this->chargesEncoreVues($compte, $magasin->societe, CleDuModele::de($magasin), $designes) : 0;
+                } elseif (in_array($type, $lecture['types'], true)) {
                     $nombre += $this->dansLeMagasin($magasin, fn (): int => $this->nombreVisiblesDuType($compte, $type, $designes, $lecture));
                 }
             }
@@ -326,7 +438,8 @@ final class DocumentsDeLaPeriode
 
     /**
      * Ce qu'il voit dans ce magasin où il télécharge, lu une fois, à la
-     * Gate, dans ce magasin : les types qu'il y voit, et s'il voit les
+     * Gate, dans ce magasin : les types qu'il y voit (les charges, selon
+     * voitLesChargesDans()), et s'il voit les
      * ventes, les avoirs et les encaissements de toute l'équipe, puis les
      * clôtures de toute l'équipe ; rien là où il ne télécharge pas.
      *
@@ -344,7 +457,8 @@ final class DocumentsDeLaPeriode
             return [
                 'types' => array_values(array_filter(
                     TypeDeDocumentTelechargeable::cases(),
-                    fn (TypeDeDocumentTelechargeable $type): bool => $type->existeDans($magasin->societe->type_activite) && $gate->allows('viewAny', $type->modele()),
+                    fn (TypeDeDocumentTelechargeable $type): bool => $type->existeDans($magasin->societe->type_activite)
+                        && ($type === TypeDeDocumentTelechargeable::Charges ? $this->voitLesChargesDans($compte, $magasin) : $gate->allows('viewAny', $type->modele())),
                 )),
                 'equipe' => $this->releveDeLEquipe($compte),
                 'cloturesDeLEquipe' => $gate->allows(PermissionRegistry::CLOTURE_CAISSE_VIEW_TOUTES),
@@ -374,7 +488,86 @@ final class DocumentsDeLaPeriode
             TypeDeDocumentTelechargeable::FacturesAchat => FactureAchat::query()->where('statut', StatutFactureAchat::Validee)->whereKey($identifiants)->count(),
             TypeDeDocumentTelechargeable::AvoirsFournisseur => AvoirFournisseur::query()->where('statut', StatutAvoirFournisseur::Emise)->whereKey($identifiants)->count(),
             TypeDeDocumentTelechargeable::Clotures => self::siens(ClotureCaisse::query(), $droits['cloturesDeLEquipe'], $compte)->whereKey($identifiants)->count(),
+            TypeDeDocumentTelechargeable::Charges => 0,
         };
+    }
+
+    /**
+     * Combien de ces charges désignées il voit encore : celles de ce
+     * magasin, ou de « Toute la société » pour null, parmi celles que son
+     * accès voit (voir AccesAuxCharges::filtrer()), quel que soit leur
+     * état.
+     *
+     * @param  list<array{identifiant: string, portee: string|null}>  $designes
+     */
+    private function chargesEncoreVues(User $compte, Societe $societe, ?int $magasin, array $designes): int
+    {
+        $acces = $this->accesAuxCharges($compte, $societe);
+        $identifiants = array_values(array_unique(array_map(intval(...), array_filter(array_column($designes, 'identifiant'), ctype_digit(...)))));
+
+        return $acces === null ? 0 : $this->charges->visibles($acces)
+            ->whereKey($identifiants)
+            ->when($magasin === null, fn (Builder $charges): Builder => $charges->whereNull('charges.magasin_id'), fn (Builder $charges): Builder => $charges->where('charges.magasin_id', $magasin))
+            ->count();
+    }
+
+    /**
+     * Les charges que son accès voit, de ce magasin ou de « Toute la
+     * société » pour null, dont le mois de TVA est un mois que la période
+     * touche, toutes ou seulement les validées, lues par la requête de la
+     * page des charges (voir ChargesDeLaSociete::liste()), dans son ordre :
+     * par mois de TVA, puis par type. Chacune est un document de la liste :
+     * son numéro de pièce, son jour (la date de la pièce, ou le premier
+     * jour de son mois de TVA), son fournisseur, son TTC, sa marque « pièce
+     * manquante » quand elle n'a aucune pièce à servir, et le libellé qui
+     * dit son type, son mois de TVA et son état.
+     *
+     * @return list<DocumentTrouve>
+     */
+    private function chargesTrouvees(User $compte, Societe $societe, ?Magasin $magasin, string $du, string $au, bool $toutes): array
+    {
+        $acces = $this->accesAuxCharges($compte, $societe);
+
+        if ($acces === null) {
+            return [];
+        }
+
+        $mois = [];
+
+        for ($premier = Calendrier::premierJourDuMois($du); $premier <= $au; $premier = Calendrier::jourDuMoisSuivant($premier, 1)) {
+            $mois[] = substr($premier, 0, 7);
+        }
+
+        $nom = $magasin === null ? TextesDesCharges::TOUTE_LA_SOCIETE : "{$magasin->nom} ({$magasin->code})";
+
+        return array_values($this->charges->liste($acces, $mois, $magasin === null ? null : CleDuModele::de($magasin), $magasin === null, 'toutes')
+            ->when(! $toutes, fn (Builder $charges): Builder => $charges->where('charges.etat', EtatDeLaCharge::Validee->value))
+            ->get()
+            ->map(fn (Charge $charge): DocumentTrouve => new DocumentTrouve(
+                TypeDeDocumentTelechargeable::Charges,
+                $magasin === null ? 0 : CleDuModele::de($magasin),
+                $nom,
+                (string) $charge->getKey(),
+                $charge->numero_piece ?? self::SANS_NUMERO,
+                $charge->date_piece ?? $charge->mois_tva.'-01',
+                $charge->fournisseur,
+                $charge->total_ttc,
+                pieceManquante: ValeursLues::texteOuNul($charge->getAttributes()['piece_nom'] ?? null) === null,
+                libelle: 'Charge : '.$charge->libelleDuType().', TVA '.self::duMois($charge->mois_tva).', '.TextesDesCharges::enMinuscule($charge->etat->getLabel()),
+                societeId: CleDuModele::de($societe),
+            ))
+            ->all());
+    }
+
+    /**
+     * « de mars 2026 », « d'avril 2026 » : ce mois (AAAA-MM) après « de »,
+     * élidé devant une voyelle.
+     */
+    private static function duMois(string $mois): string
+    {
+        $nom = TextesDesCharges::nomDuMois($mois);
+
+        return (preg_match('/^[aeiou]/u', $nom) === 1 ? 'd\'' : 'de ').$nom;
     }
 
     /**
@@ -409,7 +602,7 @@ final class DocumentsDeLaPeriode
      * @param  list<TypeDeDocumentTelechargeable>  $types
      * @return list<DocumentTrouve>
      */
-    private function duMagasin(User $compte, Magasin $magasin, string $du, string $au, array $types, OrigineDesAchats $origine, bool $pieceManquanteSeulement): array
+    private function duMagasin(User $compte, Magasin $magasin, string $du, string $au, array $types, OrigineDesAchats $origine, bool $pieceManquanteSeulement, bool $toutesLesCharges): array
     {
         $droits = $this->lectureDans($compte, $magasin);
         $calendrier = $magasin->calendrier();
@@ -456,6 +649,7 @@ final class DocumentsDeLaPeriode
                     ->map(fn (ClotureCaisse $cloture): DocumentTrouve => new DocumentTrouve($type, CleDuModele::de($magasin), $nom, (string) $cloture->id, (string) $cloture->numero, $cloture->date_cloture, null, $this->calculateur->enCentiemes($cloture->total_ttc)))
                     ->all(),
                 TypeDeDocumentTelechargeable::Encaissements => $this->relevesDesEncaissements($compte, $magasin, $nom, $calendrier, $du, $au, $droits['equipe']),
+                TypeDeDocumentTelechargeable::Charges => $this->chargesTrouvees($compte, $magasin->societe, $magasin, $du, $au, $toutesLesCharges),
             }];
         }
 

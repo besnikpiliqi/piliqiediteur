@@ -40,6 +40,7 @@ use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\CartesDesNotifications;
 use App\Filament\GrilleDesGraphiques;
 use App\Filament\PageDesCharges;
+use App\Filament\VosTelechargements;
 use App\Http\Controllers\ReponseAuDevisController;
 use App\Http\Responses\ReponseDeConnexion;
 use App\Models\User;
@@ -227,6 +228,7 @@ class AppServiceProvider extends ServiceProvider
         $this->colorerLesCasesDesCharges();
         $this->lireLesTextesDansLesDeuxModes();
         Livewire::component(PageDesCharges::NOM, PageDesCharges::class);
+        Livewire::component(VosTelechargements::NOM, VosTelechargements::class);
         $this->limiterLesEssaisDuLienDUnDevis();
     }
 

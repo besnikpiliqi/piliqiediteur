@@ -12,6 +12,10 @@ use App\Domain\Cabinets\Actions\ReglerLesAutorisationsDuCabinetAction;
 use App\Domain\Cabinets\Enums\EtatDuLien;
 use App\Domain\Cabinets\Models\LienCabinet;
 use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Charges\Actions\DeposerUneChargeAction;
+use App\Domain\Charges\Actions\ValiderUneChargeAction;
+use App\Domain\Charges\Services\PiecesDesCharges;
+use App\Domain\Charges\Support\SaisieDeCharge;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Facturation\Enums\FormatDuTelechargement;
@@ -32,10 +36,12 @@ use App\Domain\Tenancy\Support\InterventionDeLEditeur;
 use App\Filament\App\Pages\TelechargerLesDocuments;
 use App\Filament\Cabinet\Pages\TelechargerLesDocuments as TelechargerLesDocumentsDuCabinet;
 use App\Filament\Societe\Pages\TelechargerLesDocuments as TelechargerLesDocumentsDeLaSociete;
+use App\Filament\VosTelechargements;
 use App\Http\Controllers\TelechargerLesDocumentsController;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Testing\TestResponse;
 use Livewire\Features\SupportTesting\Testable;
@@ -360,6 +366,136 @@ class TelechargerLesDocumentsTest extends TestCase
      * Le nombre de requêtes d'un clic sur un raccourci de la page, sa
      * réponse comprise.
      */
+    public function test_vos_telechargements_se_relisent_tant_qu_une_demande_est_en_preparation_puis_montrent_le_lien(): void
+    {
+        Queue::fake();
+        $proprietaire = $this->proprietaireDe($this->magasin);
+        $this->vendreDesTickets(1);
+        $this->dansLEspaceDeLaSociete($this->magasin->societe, $proprietaire);
+        $section = Livewire::test(VosTelechargements::class, ['societe' => (string) $this->magasin->societe->uuid])
+            ->assertSeeText('Aucun téléchargement.')
+            ->assertDontSeeHtml('wire:poll');
+
+        Livewire::test(TelechargerLesDocumentsDeLaSociete::class)
+            ->set('types', [TypeDeDocumentTelechargeable::Ventes->value])
+            ->call('toutSelectionner')
+            ->call('telecharger')
+            ->assertDispatched(VosTelechargements::DEMANDE)
+            ->assertSet('types', [TypeDeDocumentTelechargeable::Ventes->value]);
+        $telechargement = $this->telechargementDe($proprietaire);
+        $this->assertSame(StatutDuTelechargement::EnPreparation, $telechargement->statut);
+
+        $section->dispatch(VosTelechargements::DEMANDE)
+            ->assertSeeText('en préparation.')
+            ->assertSeeHtml('wire:poll.5s')
+            ->assertDontSeeText(VosTelechargements::TRAVAILLEUR_ARRETE);
+
+        app()->call([new PreparerLeTelechargementDesDocumentsJob($telechargement->id), 'handle']);
+        app(TenantContext::class)->poserSociete($this->magasin->societe);
+
+        $section->call('$refresh')
+            ->assertSeeText('prêt, 1 document,')
+            ->assertSeeHtml('href="'.e($telechargement->refresh()->lien()).'"')
+            ->assertSeeText('Télécharger')
+            ->assertDontSeeHtml('wire:poll');
+    }
+
+    public function test_une_demande_encore_en_preparation_apres_deux_minutes_dit_que_le_service_des_taches_doit_tourner(): void
+    {
+        Queue::fake();
+        $proprietaire = $this->proprietaireDe($this->magasin);
+        $this->telechargementPret($proprietaire);
+        $this->dansLEspaceDeLaSociete($this->magasin->societe, $proprietaire);
+
+        $this->travelTo(self::aParis('2026-03-10 10:01:59'));
+        Livewire::test(VosTelechargements::class, ['societe' => (string) $this->magasin->societe->uuid])->assertDontSeeText(VosTelechargements::TRAVAILLEUR_ARRETE);
+        $this->travelTo(self::aParis('2026-03-10 10:02:00'));
+        Livewire::test(VosTelechargements::class, ['societe' => (string) $this->magasin->societe->uuid])
+            ->assertSeeText(VosTelechargements::TRAVAILLEUR_ARRETE)
+            ->assertSeeHtml('wire:poll.5s');
+    }
+
+    public function test_un_echec_se_dit_avec_sa_cause_et_arrete_la_relecture(): void
+    {
+        $proprietaire = $this->proprietaireDe($this->magasin);
+        $telechargement = $this->telechargementPret($proprietaire);
+        $telechargement->forceFill(['statut' => StatutDuTelechargement::Echec, 'motif_echec' => PreparerLeTelechargementDesDocumentsJob::MOTIF_ERREUR])->save();
+        $this->dansLEspaceDeLaSociete($this->magasin->societe, $proprietaire);
+
+        Livewire::test(VosTelechargements::class, ['societe' => (string) $this->magasin->societe->uuid])
+            ->assertSeeText('échec : '.PreparerLeTelechargementDesDocumentsJob::MOTIF_ERREUR)
+            ->assertDontSeeHtml('wire:poll');
+    }
+
+    public function test_la_relecture_de_vos_telechargements_ne_lit_que_les_demandes_de_la_personne_en_peu_de_requetes(): void
+    {
+        Queue::fake();
+        $proprietaire = $this->proprietaireDe($this->magasin);
+        $autre = $this->administrateur($this->magasin, null, [], [...PermissionRegistry::modeleDeLAdministrateur($this->magasin->societe->type_activite), PermissionRegistry::DOCUMENTS_TELECHARGER]);
+        $requetes = [];
+
+        foreach ([1, 4] as $nombre) {
+            while (TelechargementDeDocuments::query()->withoutGlobalScopes()->where('demande_par', $proprietaire->id)->count() < $nombre) {
+                $this->telechargementPret($proprietaire);
+            }
+
+            $this->dansLEspaceDeLaSociete($this->magasin->societe, $proprietaire);
+            $section = Livewire::test(VosTelechargements::class, ['societe' => (string) $this->magasin->societe->uuid]);
+            DB::flushQueryLog();
+            DB::enableQueryLog();
+            $section->call('$refresh');
+            $requetes[$nombre] = count(DB::getQueryLog());
+            DB::disableQueryLog();
+        }
+
+        $this->assertSame($requetes[1], $requetes[4], 'Le nombre de requêtes ne dépend pas du nombre de demandes.');
+        $this->assertLessThanOrEqual(4, $requetes[4]);
+        $this->dansLEspaceDeLaSociete($this->magasin->societe, $autre);
+        Livewire::test(VosTelechargements::class, ['societe' => (string) $this->magasin->societe->uuid])->assertSeeText('Aucun téléchargement.');
+    }
+
+    public function test_l_espace_de_la_societe_propose_les_charges_de_toute_la_societe_et_les_prepare(): void
+    {
+        Storage::fake(PiecesDesCharges::DISQUE);
+        $proprietaire = $this->proprietaireDe($this->magasin);
+        $societe = $this->magasin->societe;
+        $loyer = app(DeposerUneChargeAction::class)->handle($proprietaire, $societe, SaisieDeCharge::duFormulaire(['type' => 'piliqi:loyer', 'fournisseur' => 'SCI des Halles', 'numero_piece' => 'Q-03', 'date_piece' => '2026-03-02', 'magasin' => '', 'lignes' => [['taux' => 2000, 'ht' => '1200.00']]]), new PieceDeposee('quittance.pdf', FichiersDeTest::pdf('Quittance de loyer')));
+        app(TenantContext::class)->clear();
+        app(ValiderUneChargeAction::class)->handle($proprietaire, $societe, (string) $loyer->uuid);
+        app(TenantContext::class)->clear();
+        $this->dansLEspaceDeLaSociete($societe, $proprietaire);
+
+        Livewire::test(TelechargerLesDocumentsDeLaSociete::class)
+            ->assertSeeText(TypeDeDocumentTelechargeable::Charges->getLabel())
+            ->assertSeeText('Toute la société (charges sans magasin)')
+            ->assertSeeText('Les charges se choisissent par leur mois de TVA')
+            ->assertSet('chargesDeLaSociete', true)
+            ->assertSet('etatDesCharges', 'validees')
+            ->set('types', [TypeDeDocumentTelechargeable::Charges->value])
+            ->assertSeeText('Charge : Loyer, TVA de mars 2026, validée')
+            ->set('magasinsCoches', [])
+            ->assertSeeText('Documents trouvés : 1')
+            ->call('toutSelectionner')
+            ->call('telecharger')
+            ->assertNotified('Votre fichier est en préparation.');
+
+        $telechargement = $this->telechargementDe($proprietaire);
+        $this->assertSame([[], true, false, StatutDuTelechargement::Pret, 1], [$telechargement->magasins, $telechargement->charges_de_la_societe, $telechargement->toutes_les_charges, $telechargement->statut, $telechargement->nombre_documents]);
+    }
+
+    public function test_le_panneau_d_un_magasin_ne_propose_les_charges_de_toute_la_societe_qu_a_l_expert_comptable_declare(): void
+    {
+        $lesDeux = [PermissionRegistry::CHARGES_AJOUTER, PermissionRegistry::DOCUMENTS_TELECHARGER];
+        $responsable = $this->membre($this->magasin, RoleMagasin::Responsable, $lesDeux);
+        $expertComptable = $this->expertComptable($this->magasin, autorisations: [...PermissionRegistry::parDefautDuCabinet($this->magasin->societe->type_activite), PermissionRegistry::DOCUMENTS_TELECHARGER]);
+
+        foreach ([[$this->proprietaireDe($this->magasin), false], [$responsable, false], [$expertComptable, true]] as [$compte, $deLaSociete]) {
+            $this->dansLeMagasin($this->magasin, $compte);
+            $page = Livewire::test(TelechargerLesDocuments::class)->assertSeeText(TypeDeDocumentTelechargeable::Charges->getLabel());
+            $deLaSociete ? $page->assertSeeText('Aussi les charges de « Toute la société »')->assertSet('chargesDeLaSociete', true) : $page->assertDontSeeText('Aussi les charges de « Toute la société »')->assertSet('chargesDeLaSociete', false);
+        }
+    }
+
     private function requetesDuClic(Testable $page): int
     {
         DB::flushQueryLog();

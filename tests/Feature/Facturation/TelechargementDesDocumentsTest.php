@@ -83,6 +83,13 @@ use ZipArchive;
  */
 class TelechargementDesDocumentsTest extends TestCase
 {
+    /**
+     * Les colonnes des charges, vides sur la ligne de tout autre document
+     * (décision de l'éditeur du 15/11/2026, lot DATEOP : le récapitulatif
+     * ajoute les colonnes des charges).
+     */
+    private const SANS_CHARGE = ';;;;;;;;;';
+
     use RefreshDatabase;
 
     private Magasin $magasin;
@@ -232,17 +239,17 @@ class TelechargementDesDocumentsTest extends TestCase
         $this->assertStringStartsWith("\xEF\xBB\xBF", $csv);
         $this->assertSame(implode(';', RecapitulatifDesDocuments::COLONNES), $lignes[0]);
         $facture = $this->documents['facture'];
-        $this->assertContains("Vente;Boutique du Port (PORT);{$facture->numero};09/03/2026;Hôtel des Pins;{$facture->client_siret};;;;20;30,00;6,00;36,00;20,00;22,33", $lignes);
-        $this->assertContains("Vente;Boutique du Port (PORT);{$facture->numero};09/03/2026;Hôtel des Pins;{$facture->client_siret};;;;5,5;6,00;0,33;6,33;;", $lignes);
+        $this->assertContains("Vente;Boutique du Port (PORT);{$facture->numero};09/03/2026;Hôtel des Pins;{$facture->client_siret};;;;20;30,00;6,00;36,00;20,00;22,33".self::SANS_CHARGE, $lignes);
+        $this->assertContains("Vente;Boutique du Port (PORT);{$facture->numero};09/03/2026;Hôtel des Pins;{$facture->client_siret};;;;5,5;6,00;0,33;6,33;;".self::SANS_CHARGE, $lignes);
         $achat = $this->documents['achatAvecPiece'];
-        $this->assertContains("Facture d'achat;Boutique du Port (PORT);{$achat->numero};02/03/2026;Grossiste du Nord;;Saisie manuelle;;;20;100,00;20,00;120,00;;", $lignes);
-        $this->assertContains("Facture d'achat;Boutique du Port (PORT);{$achat->numero};02/03/2026;Grossiste du Nord;;Saisie manuelle;;;5,5;30,00;1,65;31,65;;", $lignes);
+        $this->assertContains("Facture d'achat;Boutique du Port (PORT);{$achat->numero};02/03/2026;Grossiste du Nord;;Saisie manuelle;;;20;100,00;20,00;120,00;;".self::SANS_CHARGE, $lignes);
+        $this->assertContains("Facture d'achat;Boutique du Port (PORT);{$achat->numero};02/03/2026;Grossiste du Nord;;Saisie manuelle;;;5,5;30,00;1,65;31,65;;".self::SANS_CHARGE, $lignes);
         $sansPiece = $this->documents['achatSansPiece'];
-        $this->assertContains("Facture d'achat;Boutique du Port (PORT);{$sansPiece->numero};05/03/2026;Grossiste du Nord;;Saisie manuelle;Manquante;;20;25,00;5,00;30,00;;", $lignes);
+        $this->assertContains("Facture d'achat;Boutique du Port (PORT);{$sansPiece->numero};05/03/2026;Grossiste du Nord;;Saisie manuelle;Manquante;;20;25,00;5,00;30,00;;".self::SANS_CHARGE, $lignes);
         $cloture = $this->documents['cloture']->numero;
-        $this->assertContains("Clôture du jour;Boutique du Port (PORT);{$cloture};09/03/2026;;;;;;20;0,00;0,00;0,00;;", $lignes);
-        $this->assertContains('Relevé des encaissements;Boutique du Port (PORT);Encaissements 2026-03;31/03/2026;;;;;Espèces;;;;18,00;;', $lignes);
-        $this->assertContains('Relevé des encaissements;Boutique du Port (PORT);Encaissements 2026-03;31/03/2026;;;;;Virement;;;;20,00;;', $lignes);
+        $this->assertContains("Clôture du jour;Boutique du Port (PORT);{$cloture};09/03/2026;;;;;;20;0,00;0,00;0,00;;".self::SANS_CHARGE, $lignes);
+        $this->assertContains('Relevé des encaissements;Boutique du Port (PORT);Encaissements 2026-03;31/03/2026;;;;;Espèces;;;;18,00;;'.self::SANS_CHARGE, $lignes);
+        $this->assertContains('Relevé des encaissements;Boutique du Port (PORT);Encaissements 2026-03;31/03/2026;;;;;Virement;;;;20,00;;'.self::SANS_CHARGE, $lignes);
     }
 
     /**
@@ -259,7 +266,7 @@ class TelechargementDesDocumentsTest extends TestCase
         $csv = app(RecapitulatifDesDocuments::class)->ecrire($proprietaire, $this->trouver($proprietaire, [TypeDeDocumentTelechargeable::Clotures]), '2026-03-01', '2026-03-31');
         $lignes = array_map(fn (string $ligne): string => implode(';', str_getcsv($ligne, ';', '"', '')), explode("\r\n", rtrim(substr($csv, 3), "\r\n")));
 
-        $this->assertContains("Clôture du jour;Boutique du Port (PORT);{$numero};10/03/2026;;;;;;;0,00;0,00;0,00;;", $lignes);
+        $this->assertContains("Clôture du jour;Boutique du Port (PORT);{$numero};10/03/2026;;;;;;;0,00;0,00;0,00;;".self::SANS_CHARGE, $lignes);
     }
 
     public function test_un_nom_qui_commence_comme_une_formule_s_ecrit_desamorce_dans_le_csv(): void
@@ -456,13 +463,15 @@ class TelechargementDesDocumentsTest extends TestCase
         Notification::assertSentTo($proprietaire, AvisDuTelechargementDesDocuments::class, fn (AvisDuTelechargementDesDocuments $avis): bool => $avis->telechargement->is($telechargement));
         $this->assertSame([[
             'au' => '2026-03-31',
+            'charges_de_la_societe' => false,
             'du' => '2026-03-01',
             'format' => 'csv',
             'magasins' => ['PORT'],
             'nombre_documents' => 9,
             'origine' => 'toutes',
             'piece_manquante_seulement' => false,
-            'types' => ['ventes', 'avoirs', 'achats', 'avoirs-fournisseur', 'clotures', 'encaissements'],
+            'toutes_les_charges' => false,
+            'types' => ['ventes', 'avoirs', 'achats', 'avoirs-fournisseur', 'clotures', 'encaissements', 'charges'],
         ]], array_map(fn ($entree): array => $entree->nouvelles_valeurs, $this->entreesDAudit($this->magasin->societe, ActionAuditee::DocumentsTelecharges)));
     }
 
@@ -647,9 +656,9 @@ class TelechargementDesDocumentsTest extends TestCase
 
         $this->assertSame([
             implode(';', RecapitulatifDesDocuments::COLONNES),
-            'Relevé des encaissements;Boutique du Port (PORT);Encaissements 2026-03;31/03/2026;;;;;Espèces;;;;18,00;;',
-            'Relevé des encaissements;Boutique du Port (PORT);Encaissements 2026-03;31/03/2026;;;;;Virement;;;;20,00;;',
-            'Relevé des encaissements;Boutique du Port (PORT);Encaissements 2026-03;31/03/2026;;;;;Avoir (crédit utilisé);;;;6,33;;',
+            'Relevé des encaissements;Boutique du Port (PORT);Encaissements 2026-03;31/03/2026;;;;;Espèces;;;;18,00;;'.self::SANS_CHARGE,
+            'Relevé des encaissements;Boutique du Port (PORT);Encaissements 2026-03;31/03/2026;;;;;Virement;;;;20,00;;'.self::SANS_CHARGE,
+            'Relevé des encaissements;Boutique du Port (PORT);Encaissements 2026-03;31/03/2026;;;;;Avoir (crédit utilisé);;;;6,33;;'.self::SANS_CHARGE,
         ], $lignes);
     }
 

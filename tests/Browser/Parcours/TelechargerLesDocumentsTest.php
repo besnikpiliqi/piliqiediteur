@@ -7,6 +7,10 @@ use App\Domain\Cabinets\Actions\ReglerLesAutorisationsDuCabinetAction;
 use App\Domain\Cabinets\Enums\EtatDuLien;
 use App\Domain\Cabinets\Models\LienCabinet;
 use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Charges\Actions\DeposerUneChargeAction;
+use App\Domain\Charges\Actions\ValiderUneChargeAction;
+use App\Domain\Charges\Services\PiecesDesCharges;
+use App\Domain\Charges\Support\SaisieDeCharge;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Enums\OrigineDesAchats;
 use App\Domain\Facturation\Enums\TypeDeDocumentTelechargeable;
@@ -14,6 +18,7 @@ use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\DocumentsDeLaPeriode;
 use App\Domain\Facturation\Services\DocumentTrouve;
+use App\Domain\Fichiers\PieceDeposee;
 use App\Domain\Tenancy\Actions\ModifierAdministrateurAction;
 use App\Domain\Tenancy\Actions\ModifierMembreAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
@@ -21,11 +26,14 @@ use App\Domain\Tenancy\Jobs\PreparerLeTelechargementDesDocumentsJob;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\TelechargementDeDocuments;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Filament\VosTelechargements;
 use App\Http\Controllers\TelechargerLesDocumentsController;
 use App\Models\User;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Storage;
 use Tests\Browser\Support\Navigation;
+use Tests\Fixtures\FichiersDeTest;
 
 /*
  * Le téléchargement des documents par période dans le navigateur
@@ -47,9 +55,9 @@ beforeEach(function () {
 });
 
 /**
- * Prépare les documents trouvés, tous cochés, dans ce format, puis les
- * télécharge par le lien de « Vos téléchargements », et rend le fichier
- * reçu.
+ * Prépare les documents trouvés, tous cochés, dans ce format, attend que
+ * la ligne de « Vos téléchargements » dise « prêt », puis les télécharge
+ * par son lien, et rend le fichier reçu.
  *
  * @return array{nom: string, type: string, taille: int, debut: string, contenu: string}
  */
@@ -58,8 +66,8 @@ function preparerEtTelecharger(Navigation $onglet, string $format): array
     $onglet->cliquerSur('Tout sélectionner')
         ->cliquer('label:has-text("'.$format.'") input[type=radio]')
         ->cliquerSur('Télécharger')
-        ->voir('Votre fichier est en préparation.')
-        ->voir('télécharger');
+        ->voir('Votre fichier est en préparation.');
+    attendreLaLignePrete($onglet);
     $onglet->geste(fn () => $onglet->page()->evaluate('() => document.querySelector("a[download]").click()'), 'le lien du fichier préparé')
         ->attendre()
         ->verifier();
@@ -76,6 +84,19 @@ function preparerEtTelecharger(Navigation $onglet, string $format): array
 function documentsTrouves(User $compte, Magasin $magasin, string $du, string $au): string
 {
     return 'Documents trouvés : '.count(app(DocumentsDeLaPeriode::class)->trouver($compte, [$magasin], $du, $au, TypeDeDocumentTelechargeable::cases(), OrigineDesAchats::Toutes));
+}
+
+/**
+ * Attend, sans recharger la page, que la section « Vos téléchargements des
+ * sept derniers jours » n'ait plus de ligne « en préparation » et montre
+ * une ligne « prêt » et son lien « Télécharger » (la cloche dit aussi
+ * « prêt » : seule la section compte).
+ */
+function attendreLaLignePrete(Navigation $onglet): void
+{
+    $prete = $onglet->page()->evaluate('() => new Promise((fin) => { const limite = Date.now() + '.(Navigation::delai() * 1000).'; const regard = setInterval(() => { const section = document.querySelector("[data-vos-telechargements]"); if (section && section.querySelector("a[download]") && section.textContent.includes("prêt,") && ! section.textContent.includes("en préparation.")) { clearInterval(regard); fin(true); } else if (Date.now() > limite) { clearInterval(regard); fin(false); } }, 200); })');
+
+    expect($prete)->toBeTrue('La ligne prête et son lien « Télécharger » ne paraissent pas dans « Vos téléchargements ».');
 }
 
 /**
@@ -356,4 +377,84 @@ test('chaque rôle à qui le propriétaire coche la case télécharge les docume
         ->cliquer('label:has-text("Boutique de la Gare (GARE)") input[type=checkbox]');
     $fichier = preparerEtTelecharger($onglet, 'Récapitulatif (CSV)');
     expect(numerosDuRecapitulatif($fichier))->toBe(numerosVus($societe->administrateur, $societe->magasin));
+});
+
+/**
+ * Les téléchargements de la page attendent leur travailleur (connexion de
+ * file « telechargements » en base, comme sur le poste) ; ce geste fait
+ * passer ce travailleur une fois, comme « php artisan queue:work ».
+ */
+function laisserLeTravailleurPasser(): void
+{
+    Artisan::call('queue:work', ['connection' => PreparerLeTelechargementDesDocumentsJob::CONNEXION, '--queue' => 'telechargements', '--once' => true, '--stop-when-empty' => true]);
+    app(TenantContext::class)->clear();
+}
+
+test('dans les trois espaces, la ligne en préparation devient « prêt » sans recharger la page, et son lien se suit', function () {
+    config(['queue.connections.'.PreparerLeTelechargementDesDocumentsJob::CONNEXION.'.driver' => 'database']);
+    $societe = $this->societeComplete();
+    $lien = LienCabinet::query()->withoutGlobalScopes()->where('societe_id', $societe->societe->id)->where('etat', EtatDuLien::Actif->value)->sole();
+    app(ReglerLesAutorisationsDuCabinetAction::class)->handle($societe->proprietaire, $lien, [...PermissionRegistry::parDefautDuCabinet($societe->societe->type_activite), PermissionRegistry::DOCUMENTS_TELECHARGER]);
+    app(TenantContext::class)->clear();
+    $espaces = [
+        'le magasin' => [$societe->proprietaire, 'app', '/app/'.$societe->magasin->uuid.'/telecharger-les-documents'],
+        'l’espace de la société' => [$societe->proprietaire, 'societe', '/societe/'.$societe->societe->uuid.'/telecharger-les-documents'],
+        'l’espace du cabinet' => [$societe->collaborateur, 'cabinet', null],
+    ];
+
+    foreach ($espaces as $qui => [$compte, $panneau, $adresse]) {
+        $onglet = $this->seConnecter($compte, panneau: $panneau);
+        $adresse === null ? $onglet->cliquerSurLeLien('Télécharger les documents')->attendreLaPage('/telecharger-les-documents$') : $onglet->aller($adresse);
+        $onglet->cliquerSur('Tout sélectionner')
+            ->cliquer('label:has-text("Récapitulatif (CSV)") input[type=radio]')
+            ->cliquerSur('Télécharger')
+            ->voir('Votre fichier est en préparation.')
+            ->voir('en préparation.');
+        $onglet->page()->evaluate('() => { window.__sansRechargement = true; }');
+        expect([$qui, $onglet->element('[data-vos-telechargements] [wire\\:poll\\.5s]')->count()])->toBe([$qui, 1]);
+
+        laisserLeTravailleurPasser();
+
+        attendreLaLignePrete($onglet);
+        expect([$qui, $onglet->page()->evaluate('() => window.__sansRechargement === true'), $onglet->element('[data-vos-telechargements] [wire\\:poll\\.5s]')->count()])->toBe([$qui, true, 0]);
+        $onglet->page()->evaluate('() => { window.__relectures = 0; Livewire.hook("commit", ({ component }) => { if (component.name === "'.VosTelechargements::NOM.'") { window.__relectures++; } }); }');
+        $onglet->page()->evaluate('() => new Promise((fin) => setTimeout(fin, 6000))');
+        expect([$qui, $onglet->page()->evaluate('() => window.__relectures')])->toBe([$qui, 0], 'La relecture s\'arrête dès qu\'aucune demande n\'est en préparation.');
+        $onglet->geste(fn () => $onglet->page()->evaluate('() => document.querySelector("[data-vos-telechargements] a[download]").click()'), 'le lien « Télécharger » de la ligne prête')
+            ->attendre()
+            ->verifier();
+        $fichiers = $onglet->telechargements();
+        expect([$qui, count($fichiers), substr(base64_decode($fichiers[0]['contenu'] ?? ''), 0, 3)])->toBe([$qui, 1, "\xEF\xBB\xBF"]);
+        $onglet->seDeconnecter();
+    }
+});
+
+test('dans l’espace de la société, le propriétaire choisit les charges de « Toute la société » et leur état, et reçoit le ZIP de leurs pièces', function () {
+    Storage::fake(PiecesDesCharges::DISQUE);
+    $societe = $this->societeComplete();
+    $loyer = app(DeposerUneChargeAction::class)->handle($societe->proprietaire, $societe->societe, SaisieDeCharge::duFormulaire(['type' => 'piliqi:loyer', 'fournisseur' => 'SCI des Halles', 'numero_piece' => 'Q-03', 'date_piece' => '2026-03-02', 'magasin' => '', 'lignes' => [['taux' => 2000, 'ht' => '1200.00']]]), new PieceDeposee('quittance.pdf', FichiersDeTest::pdf('Quittance de loyer')));
+    app(TenantContext::class)->clear();
+    app(ValiderUneChargeAction::class)->handle($societe->collaborateur, $societe->societe, (string) $loyer->uuid);
+    app(TenantContext::class)->clear();
+    app(DeposerUneChargeAction::class)->handle($societe->proprietaire, $societe->societe, SaisieDeCharge::duFormulaire(['type' => 'piliqi:fournitures', 'fournisseur' => 'Papeterie du centre', 'numero_piece' => 'F-9', 'date_piece' => '2026-03-05', 'magasin' => '', 'lignes' => [['taux' => 2000, 'ht' => '40.00']]]), new PieceDeposee('fournitures.pdf', FichiersDeTest::pdf('Fournitures')));
+    app(TenantContext::class)->clear();
+
+    $onglet = $this->seConnecter($societe->proprietaire, panneau: 'societe')
+        ->aller('/societe/'.$societe->societe->uuid.'/telecharger-les-documents')
+        ->voir('Charges (pièces)')
+        ->voir('Les charges se choisissent par leur mois de TVA')
+        ->voir('Charge : Loyer, TVA de mars 2026, validée')
+        ->nePasVoir('Charge : Fournitures')
+        ->cliquer('label:has-text("Toute la société (charges sans magasin)") input[type=checkbox]')
+        ->nePasVoir('Charge : Loyer')
+        ->cliquer('label:has-text("Toute la société (charges sans magasin)") input[type=checkbox]')
+        ->voir('Charge : Loyer, TVA de mars 2026, validée')
+        ->cliquer('label:has-text("Toutes les charges, quel que soit leur état") input[type=radio]')
+        ->voir('Charge : Fournitures, TVA de mars 2026, à valider');
+
+    $fichier = preparerEtTelecharger($onglet, 'PDF (ZIP)');
+    $fichiers = lireLeZipRecu($fichier['contenu']);
+
+    expect(array_keys($fichiers))->toContain('Charges/2026-03 Loyer SCI des Halles Q-03.pdf', 'Charges/2026-03 Fournitures Papeterie du centre F-9.pdf')
+        ->and(substr($fichiers['Charges/2026-03 Loyer SCI des Halles Q-03.pdf'], 0, 5))->toBe('%PDF-');
 });

@@ -16,6 +16,7 @@ use App\Domain\Facturation\Enums\OrigineDesAchats;
 use App\Domain\Facturation\Enums\TypeDeDocumentTelechargeable;
 use App\Domain\Facturation\Models\EnvoiDocument;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Services\ChoixDesCharges;
 use App\Domain\Facturation\Services\DocumentsDeLaPeriode;
 use App\Domain\Facturation\Services\DocumentTrouve;
 use App\Domain\TableauDeBord\Enums\EcranDuTableauDeBord;
@@ -123,9 +124,11 @@ final class DerniersGestes
      * La propriétaire de Maison Ferrand télécharge les clôtures et le
      * relevé des encaissements du dernier mois écoulé des Halles, en ZIP
      * puis en CSV, depuis l'espace de sa société : le travailleur de la
-     * file prépare chacun (voir FileDAttenteDuSemis). Elle demande ensuite
-     * les ventes de la dernière semaine en ZIP, que le travailleur n'a pas
-     * encore prises : la demande reste « en préparation ».
+     * file prépare chacun (voir FileDAttenteDuSemis), puis les pièces des
+     * charges du même mois (voir telechargerLesPiecesDesCharges()). Elle
+     * demande ensuite les ventes de la dernière semaine en ZIP, que le
+     * travailleur n'a pas encore prises : la demande reste « en
+     * préparation ».
      */
     private function telechargerDesDocuments(): void
     {
@@ -141,7 +144,28 @@ final class DerniersGestes
             FileDAttenteDuSemis::passer(FileDAttenteDuSemis::TELECHARGEMENTS);
         }
 
+        $this->telechargerLesPiecesDesCharges($proprietaire, $societe, [$halles, $this->semis->magasin('republique')], $du, $au);
+        FileDAttenteDuSemis::passer(FileDAttenteDuSemis::TELECHARGEMENTS);
+
         $this->demanderUnTelechargement($proprietaire, $societe, $halles, Calendrier::ajouterJours($aujourdhui, -7), Calendrier::ajouterJours($aujourdhui, -1), [TypeDeDocumentTelechargeable::Ventes], FormatDuTelechargement::Zip);
+    }
+
+    /**
+     * Les pièces de toutes les charges du mois écoulé de Maison Ferrand,
+     * celles de « Toute la société » comprises, quel que soit leur état, en
+     * ZIP, demandées par sa propriétaire depuis l'espace de la société
+     * (décision de l'éditeur du 15/11/2026, lot DATEOP) : le travailleur de
+     * la file les prépare ensuite.
+     *
+     * @param  list<Magasin>  $magasins
+     */
+    private function telechargerLesPiecesDesCharges(User $compte, Societe $societe, array $magasins, string $du, string $au): void
+    {
+        app(TenantContext::class)->runAsSociete($societe, function () use ($compte, $societe, $magasins, $du, $au): void {
+            $types = [TypeDeDocumentTelechargeable::Charges];
+            $cles = array_map(static fn (DocumentTrouve $document): string => $document->cle(), app(DocumentsDeLaPeriode::class)->trouver($compte, $magasins, $du, $au, $types, OrigineDesAchats::Toutes, charges: new ChoixDesCharges($societe, true)));
+            app(DemanderLeTelechargementDesDocumentsAction::class)->handle($compte, $societe, $magasins, $du, $au, $types, OrigineDesAchats::Toutes, FormatDuTelechargement::Zip, $cles, chargesDeLaSociete: true, toutesLesCharges: true);
+        });
     }
 
     /**

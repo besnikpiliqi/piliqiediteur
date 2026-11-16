@@ -15,7 +15,10 @@
     @param int $nombreSelectionnes
     @param string $totalSelectionne
     @param \Closure(int): string $euros
-    @param \Illuminate\Support\Collection<int, \App\Domain\Tenancy\Models\TelechargementDeDocuments> $telechargements
+    @param bool $avecLesCharges
+    @param bool $chargesDeLaSocieteProposees
+    @param array<string, string> $etatsDesCharges
+    @param \App\Domain\Tenancy\Models\Societe|null $societeDesTelechargements
     @param array<string, string>|null $clients  dans l'espace du cabinet : les clients proposés, par uuid
     @param bool $plusieursMagasins  hors d'un magasin : les cases des magasins
 --}}
@@ -61,7 +64,7 @@
             <p class="mt-2 text-sm text-danger-600 dark:text-danger-400">Choisissez une période : son premier jour, puis son dernier, au plus tard le même.</p>
         @endunless
 
-        <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">Les jours sont ceux du calendrier de chaque magasin : le jour d'émission d'une vente ou d'un avoir, la date de la facture du fournisseur d'un achat, la journée d'une clôture, le jour d'enregistrement d'un paiement.</p>
+        <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">Les jours sont ceux du calendrier de chaque magasin : le jour d'émission d'une vente ou d'un avoir, la date de la facture du fournisseur d'un achat, la journée d'une clôture, le jour d'enregistrement d'un paiement.@if ($avecLesCharges) Les charges se choisissent par leur mois de TVA : celles des mois que la période touche, même en partie.@endif</p>
 
         <fieldset class="mt-6">
             <legend class="text-sm font-medium">Types de documents</legend>
@@ -93,10 +96,36 @@
             </fieldset>
         @endif
 
+        @if ($avecLesCharges)
+            <fieldset class="mt-6">
+                <legend class="text-sm font-medium">Charges</legend>
+                <div class="mt-2 flex flex-wrap gap-4">
+                    @foreach ($etatsDesCharges as $etat => $libelle)
+                        <label class="flex items-center gap-2">
+                            <input type="radio" class="fi-radio-input" wire:model.live="etatDesCharges" value="{{ $etat }}" />
+                            <span class="text-sm">{{ $libelle }}</span>
+                        </label>
+                    @endforeach
+                </div>
+                @if ($chargesDeLaSocieteProposees && ! $plusieursMagasins)
+                    <label class="mt-2 flex items-center gap-2">
+                        <x-filament::input.checkbox wire:model.live="chargesDeLaSociete" />
+                        <span class="text-sm">Aussi les charges de « Toute la société »</span>
+                    </label>
+                @endif
+            </fieldset>
+        @endif
+
         @if ($plusieursMagasins)
             <fieldset class="mt-6">
                 <legend class="text-sm font-medium">Magasins</legend>
                 <div class="mt-2 grid gap-2 md:grid-cols-2">
+                    @if ($chargesDeLaSocieteProposees)
+                        <label class="flex items-center gap-2">
+                            <x-filament::input.checkbox wire:model.live="chargesDeLaSociete" />
+                            <span class="text-sm">Toute la société (charges sans magasin)</span>
+                        </label>
+                    @endif
                     @foreach ($magasinsProposes as $magasin)
                         <label class="flex items-center gap-2">
                             <x-filament::input.checkbox wire:model.live="magasinsCoches" value="{{ $magasin->getKey() }}" />
@@ -139,9 +168,9 @@
                                 <x-filament::input.checkbox wire:model.live="selection" value="{{ $document->cle() }}" aria-label="Choisir {{ $document->numero }}" />
                             </td>
                             <td class="py-1 pe-3">
-                                {{ $document->type->libelleDUnDocument() }}{{ $document->origine === null ? '' : ' ('.$document->origine.')' }}
+                                {{ $document->libelleDuType() }}{{ $document->origine === null ? '' : ' ('.$document->origine.')' }}
                                 @if ($document->pieceManquante)
-                                    <x-filament::badge color="warning" class="mt-1 w-max">Pièce du fournisseur manquante</x-filament::badge>
+                                    <x-filament::badge color="warning" class="mt-1 w-max">{{ $document->type === \App\Domain\Facturation\Enums\TypeDeDocumentTelechargeable::Charges ? 'Pièce manquante' : 'Pièce du fournisseur manquante' }}</x-filament::badge>
                                 @endif
                             </td>
                             <td class="py-1 pe-3">{{ $document->magasin }}</td>
@@ -179,28 +208,7 @@
         <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">Le fichier se prépare en arrière-plan : une notification vous prévient quand il est prêt, et son lien vaut sept jours, pour vous seul.</p>
     </x-filament::section>
 
-    <x-filament::section heading="Vos téléchargements des sept derniers jours">
-        @if ($telechargements->isEmpty())
-            <p class="text-sm">Aucun téléchargement.</p>
-        @else
-            <ul class="space-y-1 text-sm">
-                @foreach ($telechargements as $telechargement)
-                    <li>
-                        Du {{ \App\Domain\Calendrier\Calendrier::afficherJour((string) $telechargement->du, 'd/m/Y') }} au {{ \App\Domain\Calendrier\Calendrier::afficherJour((string) $telechargement->au, 'd/m/Y') }}, {{ $telechargement->format->getLabel() }} :
-                        @switch ($telechargement->statut)
-                            @case (\App\Domain\Tenancy\Enums\StatutDuTelechargement::Pret)
-                                {{ $telechargement->nombre_documents }} document{{ $telechargement->nombre_documents > 1 ? 's' : '' }},
-                                <x-filament::link :href="$telechargement->lien()" :download="$telechargement->nomDuFichier()">télécharger</x-filament::link>
-                                @break
-                            @case (\App\Domain\Tenancy\Enums\StatutDuTelechargement::Echec)
-                                {{ $telechargement->motif_echec }}
-                                @break
-                            @default
-                                en préparation.
-                        @endswitch
-                    </li>
-                @endforeach
-            </ul>
-        @endif
-    </x-filament::section>
+    @if ($societeDesTelechargements !== null)
+        @livewire(\App\Filament\VosTelechargements::NOM, ['societe' => (string) $societeDesTelechargements->uuid], key('vos-telechargements-'.$societeDesTelechargements->uuid))
+    @endif
 </x-filament-panels::page>

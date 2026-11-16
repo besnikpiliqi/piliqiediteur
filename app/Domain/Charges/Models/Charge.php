@@ -2,6 +2,7 @@
 
 namespace App\Domain\Charges\Models;
 
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Calendrier\Casts\JourCivil;
 use App\Domain\Charges\Enums\EtatDeLaCharge;
@@ -211,6 +212,16 @@ class Charge extends Model
     public function nature(): NatureDeCharge
     {
         return $this->type?->nature() ?? $this->typeDeLaSociete->nature ?? NatureDeCharge::Services;
+    }
+
+    /**
+     * Le jour de sa validation, dans le calendrier de Paris, celui de la
+     * société dont la charge est une donnée ; null tant qu'elle n'est pas
+     * validée.
+     */
+    public function jourDeValidation(): ?string
+    {
+        return $this->validee_le === null ? null : Calendrier::deParis()->jourDe($this->validee_le);
     }
 
     public function estValidee(): bool

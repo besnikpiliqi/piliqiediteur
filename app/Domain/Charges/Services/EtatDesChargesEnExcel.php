@@ -193,7 +193,7 @@ final class EtatDesChargesEnExcel
             self::texte($charge->origine->getLabel()),
             self::texte($charge->etat->getLabel(), self::styleDeLEtat($charge->etat)),
             self::texte($charge->validee_par?->getLabel() ?? ''),
-            self::date($charge->validee_le === null ? null : Calendrier::deParis()->jourDe($charge->validee_le)),
+            self::date($charge->jourDeValidation()),
             self::texte($charge->motif_renvoi ?? ''),
         ];
     }

@@ -13,7 +13,12 @@ use App\Domain\Facturation\Enums\TypeDeDocumentTelechargeable;
  * achat, son origine et la marque « pièce du fournisseur manquante ». Le
  * relevé des encaissements d'un magasin pour un mois a pour identifiant ce
  * mois (AAAA-MM), et dit s'il réunit les encaissements de toute l'équipe ou
- * ceux de la seule personne.
+ * ceux de la seule personne. Une charge de la société (voir
+ * DocumentsDeLaPeriode::chargesTrouvees()) a pour magasin 0 quand elle est
+ * de « Toute la société », pour numéro celui de sa pièce, pour jour la date
+ * de sa pièce, pour tiers son fournisseur, sa marque « pièce manquante »
+ * quand elle n'a aucune pièce à servir, un libellé qui dit son type, son
+ * mois de TVA et son état, et sa société, où la relire.
  *
  * Sa clé, unique parmi tous les documents de toutes les périodes, est ce
  * que la sélection retient, puis ce que le fichier préparé contient (voir
@@ -45,7 +50,18 @@ final readonly class DocumentTrouve
         public ?string $origine = null,
         public bool $pieceManquante = false,
         public ?string $porteeDuReleve = null,
+        public ?string $libelle = null,
+        public ?int $societeId = null,
     ) {}
+
+    /**
+     * Ce que la liste dit de son type : le libellé d'une charge, sinon le
+     * nom d'un document de son type.
+     */
+    public function libelleDuType(): string
+    {
+        return $this->libelle ?? $this->type->libelleDUnDocument();
+    }
 
     public function cle(): string
     {

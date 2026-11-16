@@ -10,9 +10,11 @@ use Illuminate\Support\Facades\Schema;
  * Les téléchargements des documents par période (décision de l'éditeur du
  * 03/11/2026, lot EX ; voir TelechargementDeDocuments) : chaque demande,
  * dans la société dont elle lit les documents, avec ce qui a été demandé
- * (magasins, période, types, origine des achats et seule marque « pièce du
+ * (magasins, charges de « Toute la société » et état des charges,
+ * période, types, origine des achats et seule marque « pièce du
  * fournisseur manquante », format, documents choisis, puis ceux que le
- * fichier contient et ses pièces du fournisseur), son état dans la file
+ * fichier contient, ses pièces du fournisseur et les pièces de ses
+ * charges), son état dans la file
  * d'attente et, une fois prêt, son fichier sur le disque privé
  * « telechargements ». Le lien vaut sept jours, pour le seul compte qui
  * l'a demandé ; la demande et son fichier s'effacent
@@ -39,6 +41,13 @@ return new class extends Migration
             // DocumentTrouve::cle()), puis, une fois le fichier prêt, celles
             // des documents qu'il contient, en JSON.
             $table->json('magasins');
+            // Les charges de « Toute la société », sans magasin, en plus
+            // de celles des magasins (voir
+            // DocumentsDeLaPeriode::telechargeLesChargesDeLaSociete()), et
+            // toutes les charges ou seulement les validées (décision de
+            // l'éditeur du 15/11/2026, lot DATEOP).
+            $table->boolean('charges_de_la_societe');
+            $table->boolean('toutes_les_charges');
             $table->date('du');
             $table->date('au');
             $table->json('types');
@@ -54,6 +63,9 @@ return new class extends Migration
             // de le servir : aucune bloquée depuis, aucune sans une analyse
             // de moins de 24 heures (voir TelechargerLesDocumentsController).
             $table->json('pieces')->nullable();
+            // De même, les identifiants des pièces des charges qu'il
+            // contient (voir PiecesDesCharges::contenuServable()).
+            $table->json('pieces_de_charge')->nullable();
             $table->string('statut', 20);
             $table->unsignedInteger('nombre_documents')->nullable();
             $table->string('chemin')->nullable();

@@ -45,9 +45,9 @@ use Throwable;
  * transaction, marque la demande prête, avec les clés des documents que le
  * fichier contient (que son lien relit, voir
  * TelechargerLesDocumentsController), et inscrit le téléchargement au
- * journal d'audit de cette société (auteur, magasins, période, types,
- * origine, seule marque « pièce du fournisseur manquante », nombre de
- * documents, format), y compris pour un compte d'un cabinet lié ; la
+ * journal d'audit de cette société (auteur, magasins, charges de « Toute
+ * la société » et état des charges, période, types, origine, seule marque
+ * « pièce du fournisseur manquante », nombre de documents, format), y compris pour un compte d'un cabinet lié ; la
  * personne en est prévenue dans sa cloche (voir
  * AvisDuTelechargementDesDocuments). Un fichier dont l'écriture ou la
  * transaction échoue s'efface.
@@ -148,7 +148,7 @@ class PreparerLeTelechargementDesDocumentsJob implements ShouldBeUnique, ShouldQ
                 ->orderBy('id')
                 ->get()
                 ->each(fn (Magasin $magasin): Magasin => $magasin->setRelation('societe', $societe));
-            $choisis = $documents->choisis($compte, $magasins, (string) $telechargement->du, (string) $telechargement->au, $telechargement->typesDemandes(), $telechargement->origine, $telechargement->clesChoisies(), $telechargement->piece_manquante_seulement);
+            $choisis = $documents->choisis($compte, $magasins, (string) $telechargement->du, (string) $telechargement->au, $telechargement->typesDemandes(), $telechargement->origine, $telechargement->clesChoisies(), $telechargement->piece_manquante_seulement, $telechargement->choixDesCharges($societe));
 
             if ($choisis === []) {
                 $this->echouer($telechargement, ArchiveDesDocuments::AUCUN_DOCUMENT);
@@ -179,7 +179,7 @@ class PreparerLeTelechargementDesDocumentsJob implements ShouldBeUnique, ShouldQ
      * neVisePlusQuUneDemonstrationDisparue()), son fichier effacé.
      *
      * @param  list<DocumentTrouve>  $choisis
-     * @param  list<int>  $pieces
+     * @param  array{pieces: list<int>, piecesDeCharge: list<int>}  $pieces
      * @param  Collection<int, Magasin>  $magasins
      */
     private function marquerPret(TelechargementDeDocuments $telechargement, Societe $societe, User $compte, array $choisis, array $pieces, string $chemin, Collection $magasins, JournalAudit $journal): void
@@ -204,7 +204,8 @@ class PreparerLeTelechargementDesDocumentsJob implements ShouldBeUnique, ShouldQ
             $relu->forceFill([
                 'statut' => StatutDuTelechargement::Pret,
                 'selection' => array_map(fn (DocumentTrouve $document): string => $document->cle(), $choisis),
-                'pieces' => $pieces,
+                'pieces' => $pieces['pieces'],
+                'pieces_de_charge' => $pieces['piecesDeCharge'],
                 'chemin' => $chemin,
                 'taille' => Storage::disk(self::DISQUE)->size($chemin),
                 'nombre_documents' => count($choisis),
@@ -219,6 +220,8 @@ class PreparerLeTelechargementDesDocumentsJob implements ShouldBeUnique, ShouldQ
                 'du' => (string) $relu->du,
                 'au' => (string) $relu->au,
                 'types' => array_map(fn (TypeDeDocumentTelechargeable $type): string => $type->value, $relu->typesDemandes()),
+                'charges_de_la_societe' => collect($choisis)->contains(fn (DocumentTrouve $document): bool => $document->type === TypeDeDocumentTelechargeable::Charges && $document->magasinId === 0),
+                'toutes_les_charges' => $relu->toutes_les_charges,
                 'origine' => $relu->origine->value,
                 'piece_manquante_seulement' => $relu->piece_manquante_seulement,
                 'nombre_documents' => count($choisis),
@@ -244,12 +247,12 @@ class PreparerLeTelechargementDesDocumentsJob implements ShouldBeUnique, ShouldQ
 
     /**
      * Écrit le fichier de ces documents à ce chemin du disque, et rend les
-     * identifiants des pièces du fournisseur qu'il contient (aucune dans un
-     * CSV) : l'archive se compose d'abord dans un fichier local
-     * temporaire, effacé ensuite.
+     * identifiants des pièces du fournisseur et des pièces des charges
+     * qu'il contient (aucune dans un CSV) : l'archive se compose d'abord
+     * dans un fichier local temporaire, effacé ensuite.
      *
      * @param  list<DocumentTrouve>  $choisis
-     * @return list<int>
+     * @return array{pieces: list<int>, piecesDeCharge: list<int>}
      */
     private function ecrire(TelechargementDeDocuments $telechargement, User $compte, array $choisis, string $chemin, ArchiveDesDocuments $archive, RecapitulatifDesDocuments $recapitulatif): array
     {
@@ -259,7 +262,7 @@ class PreparerLeTelechargementDesDocumentsJob implements ShouldBeUnique, ShouldQ
         if ($telechargement->format === FormatDuTelechargement::Csv) {
             Storage::disk(self::DISQUE)->put($chemin, $recapitulatif->ecrire($compte, $choisis, $du, $au));
 
-            return [];
+            return ['pieces' => [], 'piecesDeCharge' => []];
         }
 
         $local = storage_path('framework/cache/telechargement-'.Str::random(32).'.zip');

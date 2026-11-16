@@ -226,7 +226,7 @@ class MagasinsOuvertsAuCabinetTest extends TestCase
         $inventaire = fn (Magasin $magasin, User $compte): int => DB::table('inventaires_ouverture')->insertGetId(['magasin_id' => $magasin->id, 'cree_par' => $compte->id, 'created_at' => now(), 'updated_at' => now()]);
         $telechargement = fn (User $compte, array $magasins): bool => DB::table('telechargements_documents')->insert([
             'uuid' => (string) Str::uuid(), 'societe_id' => $lyon1->societe_id, 'demande_par' => $compte->id, 'demande_par_nom' => $compte->name,
-            'magasins' => json_encode($magasins), 'du' => '2026-03-01', 'au' => '2026-03-09', 'types' => json_encode(['ventes']), 'origine' => 'toutes',
+            'magasins' => json_encode($magasins), 'charges_de_la_societe' => false, 'toutes_les_charges' => false, 'du' => '2026-03-01', 'au' => '2026-03-09', 'types' => json_encode(['ventes']), 'origine' => 'toutes',
             'piece_manquante_seulement' => false, 'format' => 'zip', 'selection' => json_encode([]), 'statut' => 'en_attente',
             'expire_le' => self::aParis('2026-03-16 10:00:00'), 'created_at' => now(), 'updated_at' => now(),
         ]);

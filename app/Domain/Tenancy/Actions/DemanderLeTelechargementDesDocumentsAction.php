@@ -33,8 +33,13 @@ use LogicException;
  * télécharge (voir DocumentsDeLaPeriode::peutTelechargerDans(), relu sous
  * le verrou du compte) parmi ceux que la page propose ; une période d'un
  * jour au moins, dans l'ordre ; au moins un type ; l'origine des achats et,
- * sur demande, leur seule marque « pièce du fournisseur manquante » ; au
- * moins un document choisi. Les documents choisis se relisent à la
+ * sur demande, leur seule marque « pièce du fournisseur manquante » ; pour
+ * les charges, sur demande, celles de « Toute la société », seulement si la
+ * personne les télécharge (voir
+ * DocumentsDeLaPeriode::telechargeLesChargesDeLaSociete(), relu sous le
+ * verrou du compte), et toutes ou seulement les validées ; au moins un
+ * magasin, ou les charges de « Toute la société » ; au moins un document
+ * choisi. Les documents choisis se relisent à la
  * préparation, parmi ceux que la personne voit alors : une clé qui ne
  * désigne rien n'apporte rien.
  *
@@ -57,6 +62,8 @@ class DemanderLeTelechargementDesDocumentsAction
 
     public const REFUS_MAGASINS = 'Vous ne téléchargez pas les documents de ce magasin.';
 
+    public const REFUS_CHARGES_DE_LA_SOCIETE = 'Vous ne téléchargez pas les charges de toute la société.';
+
     public const REFUS_PAR_HEURE = 'Vous avez déjà demandé dix téléchargements dans l\'heure : réessayez un peu plus tard.';
 
     public function __construct(
@@ -72,9 +79,10 @@ class DemanderLeTelechargementDesDocumentsAction
      * @throws InvalidArgumentException
      * @throws LogicException
      */
-    public function handle(User $auteur, Societe $societe, iterable $magasins, string $du, string $au, array $types, OrigineDesAchats $origine, FormatDuTelechargement $format, array $selection, bool $pieceManquanteSeulement = false): TelechargementDeDocuments
+    public function handle(User $auteur, Societe $societe, iterable $magasins, string $du, string $au, array $types, OrigineDesAchats $origine, FormatDuTelechargement $format, array $selection, bool $pieceManquanteSeulement = false, bool $chargesDeLaSociete = false, bool $toutesLesCharges = false): TelechargementDeDocuments
     {
         $magasins = collect($magasins)->values();
+        $chargesDeLaSociete = $chargesDeLaSociete && in_array(TypeDeDocumentTelechargeable::Charges, $types, true);
 
         if (Calendrier::jourValide($du) === null || Calendrier::jourValide($au) === null || $du > $au) {
             throw new InvalidArgumentException(self::REFUS_PERIODE);
@@ -90,11 +98,11 @@ class DemanderLeTelechargementDesDocumentsAction
             throw new InvalidArgumentException(self::REFUS_SELECTION);
         }
 
-        if ($magasins->isEmpty() || $magasins->contains(fn (Magasin $magasin): bool => (int) $magasin->societe_id !== CleDuModele::de($societe))) {
+        if (($magasins->isEmpty() && ! $chargesDeLaSociete) || $magasins->contains(fn (Magasin $magasin): bool => (int) $magasin->societe_id !== CleDuModele::de($societe))) {
             throw new AuthorizationException(self::REFUS_MAGASINS);
         }
 
-        $telechargement = DB::transaction(function () use ($auteur, $societe, $magasins, $du, $au, $types, $origine, $format, $selection, $pieceManquanteSeulement): TelechargementDeDocuments {
+        $telechargement = DB::transaction(function () use ($auteur, $societe, $magasins, $du, $au, $types, $origine, $format, $selection, $pieceManquanteSeulement, $chargesDeLaSociete, $toutesLesCharges): TelechargementDeDocuments {
             Societe::verrouillerAvantSonJournalDAudit(CleDuModele::de($societe));
             $compte = User::query()->whereKey($auteur->getKey())->lock('for no key update')->firstOrFail();
             $documents = app(DocumentsDeLaPeriode::class);
@@ -103,14 +111,20 @@ class DemanderLeTelechargementDesDocumentsAction
                 throw new AuthorizationException(self::REFUS_MAGASINS);
             }
 
+            if ($chargesDeLaSociete && ! $documents->telechargeLesChargesDeLaSociete($compte, $societe)) {
+                throw new AuthorizationException(self::REFUS_CHARGES_DE_LA_SOCIETE);
+            }
+
             if (TelechargementDeDocuments::demandesDepuis($compte, now()->subHour())->count() >= TelechargementDeDocuments::PAR_HEURE_AU_PLUS) {
                 throw new LogicException(self::REFUS_PAR_HEURE);
             }
 
-            return $this->contexte->runAsSociete($societe, function () use ($compte, $magasins, $du, $au, $types, $origine, $format, $selection, $pieceManquanteSeulement): TelechargementDeDocuments {
+            return $this->contexte->runAsSociete($societe, function () use ($compte, $magasins, $du, $au, $types, $origine, $format, $selection, $pieceManquanteSeulement, $chargesDeLaSociete, $toutesLesCharges): TelechargementDeDocuments {
                 $telechargement = (new TelechargementDeDocuments)->forceFill([
                     'demande_par' => $compte->getKey(),
                     'magasins' => $magasins->map(fn (Magasin $magasin): int => CleDuModele::de($magasin))->all(),
+                    'charges_de_la_societe' => $chargesDeLaSociete,
+                    'toutes_les_charges' => $toutesLesCharges,
                     'du' => $du,
                     'au' => $au,
                     'types' => array_map(fn (TypeDeDocumentTelechargeable $type): string => $type->value, $types),

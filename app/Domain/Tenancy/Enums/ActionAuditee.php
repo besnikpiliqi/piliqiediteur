@@ -498,7 +498,7 @@ enum ActionAuditee: string implements HasLabel
             // demandés que marqués « pièce du fournisseur manquante », le
             // nombre de documents et le format ; jamais un document ni un
             // tiers.
-            self::DocumentsTelecharges => ['magasins', 'du', 'au', 'types', 'origine', 'piece_manquante_seulement', 'nombre_documents', 'format'],
+            self::DocumentsTelecharges => ['magasins', 'charges_de_la_societe', 'toutes_les_charges', 'du', 'au', 'types', 'origine', 'piece_manquante_seulement', 'nombre_documents', 'format'],
             // Le numéro de l'inventaire d'ouverture, la valeur hors taxe du
             // stock qu'il fait entrer et, pour chaque ligne, la référence du
             // produit, la quantité inventoriée, si elle est entrée en stock

@@ -7,14 +7,15 @@ use App\Domain\Facturation\Enums\FormatDuTelechargement;
 use App\Domain\Facturation\Enums\OrigineDesAchats;
 use App\Domain\Facturation\Enums\TypeDeDocumentTelechargeable;
 use App\Domain\Facturation\Services\CalculateurLigne;
+use App\Domain\Facturation\Services\ChoixDesCharges;
 use App\Domain\Facturation\Services\DocumentsDeLaPeriode;
 use App\Domain\Facturation\Services\DocumentTrouve;
 use App\Domain\Tenancy\Actions\DemanderLeTelechargementDesDocumentsAction;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
-use App\Domain\Tenancy\Models\TelechargementDeDocuments;
 use App\Domain\Tenancy\Services\ExercicesDeLaSociete;
 use App\Domain\Tenancy\Support\CleDuModele;
+use App\Filament\VosTelechargements;
 use App\Models\User;
 use Filament\Notifications\Notification;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -28,7 +29,10 @@ use LogicException;
  * l'espace du cabinet : une période « du … au … » et ses raccourcis, les
  * cases des types de documents que la personne peut voir, l'origine des
  * achats et la case « pièce du fournisseur manquante seulement » (décision
- * de l'éditeur du 03/11/2026, F1 = b), et, hors d'un magasin, les cases des
+ * de l'éditeur du 03/11/2026, F1 = b), l'état des charges choisies (les
+ * validées seulement, par défaut, ou toutes) et la case des charges de
+ * « Toute la société » quand la personne les télécharge (décision de
+ * l'éditeur du 15/11/2026, lot DATEOP), et, hors d'un magasin, les cases des
  * magasins proposés ; la liste des documents trouvés (voir
  * DocumentsDeLaPeriode::trouver()), par pages, un achat sans sa pièce
  * marqué, une case par document, « Tout sélectionner » (tous les documents
@@ -37,7 +41,8 @@ use LogicException;
  * « Télécharger », qui confie la demande à la file d'attente (voir
  * DemanderLeTelechargementDesDocumentsAction) ; enfin, ses téléchargements
  * des sept derniers jours dans cette société, chacun avec son lien une fois
- * prêt.
+ * prêt, dans leur propre section, qui se relit d'elle-même tant que l'un
+ * d'eux est en préparation (voir VosTelechargements).
  *
  * Ce que le navigateur envoie ne choisit jamais rien hors de ce que la page
  * propose : les magasins cochés se croisent avec ceux que la page propose
@@ -79,6 +84,18 @@ trait TelechargeLesDocumentsParPeriode
      * la pièce du fournisseur (décision de l'éditeur du 03/11/2026, F1 = b).
      */
     public bool $pieceManquanteSeulement = false;
+
+    /**
+     * Les charges de « Toute la société » cochées, quand la page les
+     * propose (voir proposeLesChargesDeLaSociete()).
+     */
+    public bool $chargesDeLaSociete = false;
+
+    /**
+     * Les charges choisies : « validees » (seulement les validées, par
+     * défaut) ou « toutes ».
+     */
+    public string $etatDesCharges = 'validees';
 
     /**
      * Les magasins cochés, par identifiant, parmi ceux que la page propose.
@@ -168,12 +185,26 @@ trait TelechargeLesDocumentsParPeriode
     ];
 
     /**
-     * Ce mois, tous les types proposés, tous les magasins proposés.
+     * Les états des charges que la page propose, chacun sous son libellé.
+     *
+     * @var array<string, string>
+     */
+    public const ETATS_DES_CHARGES = [
+        'validees' => 'Seulement les charges validées',
+        'toutes' => 'Toutes les charges, quel que soit leur état',
+    ];
+
+    /**
+     * Ce mois, tous les types proposés, tous les magasins proposés, les
+     * charges de « Toute la société » quand la page les propose, les
+     * charges validées seulement.
      */
     protected function preparerLaPage(): void
     {
         $this->raccourci('ce_mois');
         $this->magasinsCoches = array_values($this->magasinsProposes()->map(fn (Magasin $magasin): int => CleDuModele::de($magasin))->all());
+        $this->chargesDeLaSociete = $this->proposeLesChargesDeLaSociete();
+        $this->etatDesCharges = 'validees';
         $this->types = array_map(fn (TypeDeDocumentTelechargeable $type): string => $type->value, $this->typesProposes());
     }
 
@@ -251,7 +282,7 @@ trait TelechargeLesDocumentsParPeriode
      */
     public function updated(string $propriete): void
     {
-        if (in_array(explode('.', $propriete)[0], ['du', 'au', 'types', 'origine', 'pieceManquanteSeulement', 'magasinsCoches'], true)) {
+        if (in_array(explode('.', $propriete)[0], ['du', 'au', 'types', 'origine', 'pieceManquanteSeulement', 'magasinsCoches', 'chargesDeLaSociete', 'etatDesCharges'], true)) {
             $this->pageDeLaListe = 1;
         }
     }
@@ -287,6 +318,8 @@ trait TelechargeLesDocumentsParPeriode
                     fn (string $cle): bool => isset($cochees[$cle]),
                 )),
                 $this->pieceManquanteSeulement,
+                $this->choixDesCharges()->deLaSociete !== null,
+                $this->choixDesCharges()->toutes,
             );
         } catch (AuthorizationException|InvalidArgumentException|LogicException $refus) {
             Notification::make()->title($refus->getMessage())->danger()->send();
@@ -295,6 +328,7 @@ trait TelechargeLesDocumentsParPeriode
         }
 
         $this->selection = [];
+        $this->dispatch(VosTelechargements::DEMANDE);
         Notification::make()
             ->title('Votre fichier est en préparation.')
             ->body('Une notification vous préviendra quand il sera prêt ; son lien vaudra sept jours.')
@@ -304,8 +338,9 @@ trait TelechargeLesDocumentsParPeriode
 
     /**
      * Ce que la vue montre : les magasins proposés, les types proposés,
-     * la page de la liste, la sélection comptée et totalisée, les
-     * téléchargements récents de la personne dans cette société.
+     * les choix des charges, la page de la liste, la sélection comptée et
+     * totalisée ; ses téléchargements récents se montrent dans leur
+     * section, qui se relit d'elle-même (voir VosTelechargements).
      *
      * @return array<string, mixed>
      */
@@ -317,12 +352,14 @@ trait TelechargeLesDocumentsParPeriode
         $this->pageDeLaListe = max(1, min($this->pageDeLaListe, $this->nombreDePages()));
         $calculateur = app(CalculateurLigne::class);
         $societe = $this->societeDesDocuments();
-        $compte = auth()->user();
 
         return [
             'magasinsProposes' => $this->magasinsProposes(),
             'typesProposes' => $this->typesProposes(),
             'avecLesAchats' => collect($this->typesProposes())->contains(fn (TypeDeDocumentTelechargeable $type): bool => $type->estUnAchat()),
+            'avecLesCharges' => in_array(TypeDeDocumentTelechargeable::Charges, $this->typesProposes(), true),
+            'chargesDeLaSocieteProposees' => $this->proposeLesChargesDeLaSociete(),
+            'etatsDesCharges' => self::ETATS_DES_CHARGES,
             'raccourcis' => self::RACCOURCIS,
             'origines' => OrigineDesAchats::cases(),
             'formats' => FormatDuTelechargement::cases(),
@@ -333,7 +370,7 @@ trait TelechargeLesDocumentsParPeriode
             'nombreSelectionnes' => count($selectionnes),
             'totalSelectionne' => $calculateur->enEuros(array_sum(array_map(fn (DocumentTrouve $document): int => $document->ttc, $selectionnes))),
             'euros' => fn (int $centimes): string => $calculateur->enEuros($centimes),
-            'telechargements' => $societe instanceof Societe && $compte instanceof User ? TelechargementDeDocuments::recentsDe($compte, $societe)->get()->each->setRelation('demandeur', $compte) : collect(),
+            'societeDesTelechargements' => $societe,
         ];
     }
 
@@ -349,8 +386,9 @@ trait TelechargeLesDocumentsParPeriode
     }
 
     /**
-     * Les types que la personne voit dans au moins un magasin proposé, dans
-     * l'ordre de l'énumération, lus une fois par requête.
+     * Les types que la personne voit dans au moins un magasin proposé (et
+     * les charges, quand la page propose celles de « Toute la société »),
+     * dans l'ordre de l'énumération, lus une fois par requête.
      *
      * @return list<TypeDeDocumentTelechargeable>
      */
@@ -363,7 +401,9 @@ trait TelechargeLesDocumentsParPeriode
         }
 
         return $this->typesLus ??= (function () use ($compte): array {
-            $vus = $this->magasinsProposes()->flatMap(fn (Magasin $magasin): array => $this->documentsDeLaPeriode()->typesVisibles($compte, $magasin))->unique(fn (TypeDeDocumentTelechargeable $type): string => $type->value);
+            $vus = $this->magasinsProposes()->flatMap(fn (Magasin $magasin): array => $this->documentsDeLaPeriode()->typesVisibles($compte, $magasin))
+                ->when($this->proposeLesChargesDeLaSociete(), fn (Collection $types): Collection => $types->push(TypeDeDocumentTelechargeable::Charges))
+                ->unique(fn (TypeDeDocumentTelechargeable $type): string => $type->value);
 
             return array_values(array_filter(TypeDeDocumentTelechargeable::cases(), fn (TypeDeDocumentTelechargeable $type): bool => $vus->contains($type)));
         })();
@@ -423,6 +463,32 @@ trait TelechargeLesDocumentsParPeriode
         return array_values(array_filter($this->selection, 'is_string'));
     }
 
+    /**
+     * La page propose-t-elle les charges de « Toute la société » : la
+     * personne les télécharge (voir
+     * DocumentsDeLaPeriode::telechargeLesChargesDeLaSociete()) ? Le
+     * panneau d'un magasin les réserve à l'expert-comptable déclaré.
+     */
+    protected function proposeLesChargesDeLaSociete(): bool
+    {
+        $compte = auth()->user();
+        $societe = $this->societeDesDocuments();
+
+        return $compte instanceof User && $societe instanceof Societe && $this->documentsDeLaPeriode()->telechargeLesChargesDeLaSociete($compte, $societe);
+    }
+
+    /**
+     * Les charges que la recherche choisit : celles de « Toute la
+     * société » si la case est cochée et que la page les propose, et
+     * toutes ou seulement les validées.
+     */
+    protected function choixDesCharges(): ChoixDesCharges
+    {
+        $societe = $this->societeDesDocuments();
+
+        return new ChoixDesCharges($this->chargesDeLaSociete && $this->proposeLesChargesDeLaSociete() ? $societe : null, $this->etatDesCharges === 'toutes');
+    }
+
     protected function origineChoisie(): OrigineDesAchats
     {
         return OrigineDesAchats::tryFrom($this->origine) ?? OrigineDesAchats::Toutes;
@@ -445,13 +511,14 @@ trait TelechargeLesDocumentsParPeriode
         $magasins = $this->magasinsChoisis();
         $types = $this->typesChoisis();
         $origine = $this->origineChoisie();
-        $cle = json_encode([$this->du, $this->au, $magasins->map(fn (Magasin $magasin): int => CleDuModele::de($magasin))->all(), array_map(fn (TypeDeDocumentTelechargeable $type): string => $type->value, $types), $origine->value, $this->pieceManquanteSeulement]);
+        $charges = $this->choixDesCharges();
+        $cle = json_encode([$this->du, $this->au, $magasins->map(fn (Magasin $magasin): int => CleDuModele::de($magasin))->all(), array_map(fn (TypeDeDocumentTelechargeable $type): string => $type->value, $types), $origine->value, $this->pieceManquanteSeulement, $charges->deLaSociete !== null, $charges->toutes]);
 
         if ($this->trouves !== null && $this->trouves['cle'] === $cle) {
             return $this->trouves['documents'];
         }
 
-        $documents = ! $compte instanceof User || ! $this->periodeValide() || $types === [] ? [] : $this->documentsDeLaPeriode()->trouver($compte, $magasins, $this->du, $this->au, $types, $origine, $this->pieceManquanteSeulement);
+        $documents = ! $compte instanceof User || ! $this->periodeValide() || $types === [] ? [] : $this->documentsDeLaPeriode()->trouver($compte, $magasins, $this->du, $this->au, $types, $origine, $this->pieceManquanteSeulement, $charges);
         $this->trouves = ['cle' => (string) $cle, 'documents' => $documents];
 
         return $documents;

@@ -6,15 +6,22 @@ use App\Domain\Achats\Models\AvoirFournisseur;
 use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Achats\Services\FicheDeSaisiePdfGenerator;
 use App\Domain\Achats\Services\PiecesDuFournisseur;
+use App\Domain\Charges\Models\Charge;
+use App\Domain\Charges\Models\PieceDeCharge;
+use App\Domain\Charges\Services\PiecesDesCharges;
 use App\Domain\Facturation\Enums\TypeDeDocumentTelechargeable;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Fichiers\Exceptions\PieceBloqueeException;
+use App\Domain\Fichiers\NomDeFichier;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Scopes\SocieteScope;
 use App\Domain\Tenancy\Support\CleDuModele;
 use App\Integrations\Antivirus\AntivirusInjoignableException;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
 use RuntimeException;
@@ -38,7 +45,16 @@ use ZipArchive;
  *   l'archive (voir PreparerLeTelechargementDesDocumentsJob) ;
  * - une clôture du jour : son ticket Z (voir ClotureCaissePdfGenerator) ;
  * - un relevé des encaissements : son PDF, par magasin et par mois (voir
- *   ReleveDesEncaissementsPdfGenerator).
+ *   ReleveDesEncaissementsPdfGenerator) ;
+ * - une charge (décision de l'éditeur du 15/11/2026, lot DATEOP) : sa
+ *   pièce (PDF, JPEG ou PNG) telle qu'elle a été enregistrée, dans le
+ *   dossier « Charges », nommée « <mois de TVA> <type> <fournisseur> <n°
+ *   de pièce>.<ext> » (voir NomDeFichier::dUnFichierProduit()), analysée
+ *   de nouveau par l'antivirus quand sa dernière analyse date de plus de
+ *   24 heures, une pièce bloquée n'y entrant jamais (voir
+ *   PiecesDesCharges::contenuServable()) ; une charge sans pièce n'y a
+ *   rien, le récapitulatif CSV la dit « pièce manquante ». Ses charges se
+ *   relisent dans leur société, hors de son scope, filtrées par elle.
  * Chaque document se relit dans son magasin, comme magasin actif (voir
  * DocumentsDeLaPeriode::dansLeMagasin()) ; chaque fichier s'écrit d'abord dans un dossier
  * temporaire, effacé ensuite, pour ne jamais tenir toute l'archive en
@@ -49,6 +65,11 @@ final class ArchiveDesDocuments
 {
     public const AUCUN_DOCUMENT = 'Aucun des documents choisis ne vous est plus accessible.';
 
+    /**
+     * Le dossier des pièces des charges dans l'archive.
+     */
+    public const DOSSIER_DES_CHARGES = 'Charges';
+
     public function __construct(
         private readonly DocumentsDeLaPeriode $documents,
         private readonly FacturePdfGenerator $factures,
@@ -57,15 +78,17 @@ final class ArchiveDesDocuments
         private readonly ReleveDesEncaissementsPdfGenerator $releves,
         private readonly FicheDeSaisiePdfGenerator $fiches,
         private readonly PiecesDuFournisseur $pieces,
+        private readonly PiecesDesCharges $piecesDesCharges,
     ) {}
 
     /**
      * Écrit l'archive de ces documents à ce chemin local, et rend les
-     * identifiants des pièces du fournisseur qu'elle contient, que son lien
-     * revoit avant de la servir (voir TelechargerLesDocumentsController).
+     * identifiants des pièces du fournisseur et des pièces des charges
+     * qu'elle contient, que son lien revoit avant de la servir (voir
+     * TelechargerLesDocumentsController).
      *
      * @param  list<DocumentTrouve>  $documents
-     * @return list<int>
+     * @return array{pieces: list<int>, piecesDeCharge: list<int>}
      *
      * @throws RuntimeException quand aucun document n'y entre ou que l'archive ne s'écrit pas
      * @throws AntivirusInjoignableException quand l'antivirus ne répond pas pour une pièce à analyser de nouveau
@@ -82,9 +105,19 @@ final class ArchiveDesDocuments
         File::ensureDirectoryExists($temporaire);
         $noms = [];
         $pieces = [];
+        $piecesDeCharge = [];
+        [$charges, $autres] = collect($documents)->partition(fn (DocumentTrouve $document): bool => $document->type === TypeDeDocumentTelechargeable::Charges);
 
         try {
-            foreach (collect($documents)->groupBy(fn (DocumentTrouve $document): int => $document->magasinId) as $magasinId => $duMagasin) {
+            foreach ($this->piecesDesCharges($compte, $charges->values()->all()) as [$nom, $contenu, $piece]) {
+                $place = self::placeLibre(self::DOSSIER_DES_CHARGES.'/'.$nom, $noms);
+                $copie = $temporaire.'/'.count($noms);
+                File::put($copie, $contenu);
+                $zip->addFile($copie, $place);
+                $piecesDeCharge[] = $piece;
+            }
+
+            foreach ($autres->groupBy(fn (DocumentTrouve $document): int => $document->magasinId) as $magasinId => $duMagasin) {
                 $magasin = Magasin::query()->findOrFail($magasinId);
 
                 $this->documents->dansLeMagasin($magasin, function () use ($compte, $magasin, $duMagasin, $du, $au, $zip, $temporaire, &$noms, &$pieces): void {
@@ -114,7 +147,68 @@ final class ArchiveDesDocuments
             File::deleteDirectory($temporaire);
         }
 
-        return $pieces;
+        return ['pieces' => $pieces, 'piecesDeCharge' => $piecesDeCharge];
+    }
+
+    /**
+     * Les pièces de ces charges que ce compte peut se faire servir, dans
+     * l'ordre des charges : chacune son nom, son contenu tel qu'enregistré
+     * et son identifiant ; rien pour une charge sans pièce ou dont la pièce
+     * est bloquée. Les charges et leurs pièces se lisent ensemble, dans la
+     * société de chaque charge, hors de son scope, filtrées par elle.
+     *
+     * @param  list<DocumentTrouve>  $charges
+     * @return list<array{0: string, 1: string, 2: int}>
+     *
+     * @throws AntivirusInjoignableException
+     */
+    private function piecesDesCharges(User $compte, array $charges): array
+    {
+        $servies = [];
+
+        foreach (collect($charges)->groupBy(fn (DocumentTrouve $charge): int => (int) $charge->societeId) as $societe => $deLaSociete) {
+            $lues = Charge::query()->withoutGlobalScope(SocieteScope::class)
+                ->where('societe_id', $societe)
+                ->whereKey($deLaSociete->map(fn (DocumentTrouve $charge): int => (int) $charge->identifiant)->all())
+                ->with([
+                    'piece' => fn (HasOne $piece): HasOne => $piece->withoutGlobalScope(SocieteScope::class)->where('pieces_de_charge.societe_id', $societe),
+                    'typeDeLaSociete' => fn (BelongsTo $type): BelongsTo => $type->withoutGlobalScope(SocieteScope::class)->where('types_de_charge_de_la_societe.societe_id', $societe),
+                ])
+                ->get(['id', 'societe_id', 'type', 'type_de_la_societe_id', 'fournisseur', 'numero_piece', 'mois_tva'])
+                ->keyBy(fn (Charge $charge): int => CleDuModele::de($charge));
+
+            foreach ($deLaSociete as $document) {
+                $charge = $lues->get((int) $document->identifiant);
+                $piece = $charge?->piece;
+
+                if ($charge === null || $piece === null) {
+                    continue;
+                }
+
+                try {
+                    $contenu = $this->piecesDesCharges->contenuServable($compte, $piece);
+                } catch (PieceBloqueeException) {
+                    continue;
+                }
+
+                $servies[] = [self::nomDeLaPieceDUneCharge($charge, $piece), $contenu, CleDuModele::de($piece)];
+            }
+        }
+
+        return $servies;
+    }
+
+    /**
+     * Le nom de la pièce d'une charge dans l'archive : « <AAAA-MM> <type>
+     * <fournisseur> <n° de pièce>.<ext> », sans ce qui manque, l'extension
+     * étant celle de son type (voir NomDeFichier::dUnFichierProduit()).
+     */
+    public static function nomDeLaPieceDUneCharge(Charge $charge, PieceDeCharge $piece): string
+    {
+        return NomDeFichier::dUnFichierProduit(
+            implode(' ', array_filter([$charge->mois_tva, $charge->libelleDuType(), $charge->fournisseur, $charge->numero_piece], fn (?string $partie): bool => $partie !== null && trim($partie) !== '')),
+            NomDeFichier::EXTENSIONS[$piece->type_mime] ?? 'pdf',
+        );
     }
 
     /**
@@ -132,6 +226,7 @@ final class ArchiveDesDocuments
             TypeDeDocumentTelechargeable::AvoirsFournisseur => $this->piecesOuFiche($compte, AvoirFournisseur::query()->findOrFail($document->identifiant)),
             TypeDeDocumentTelechargeable::Clotures => [[$document->numero.'.pdf', $this->clotures->generer(ClotureCaisse::query()->findOrFail($document->identifiant))->output(), null]],
             TypeDeDocumentTelechargeable::Encaissements => [[$this->releves->nomFichier($magasin, $document->identifiant), $this->releves->generer($compte, $magasin, $document->identifiant, $du, $au)->output(), null]],
+            TypeDeDocumentTelechargeable::Charges => [],
         };
     }
 

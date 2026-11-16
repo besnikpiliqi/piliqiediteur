@@ -7,6 +7,9 @@ use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Achats\Models\TauxAvoirFournisseur;
 use App\Domain\Achats\Models\TauxFactureAchat;
 use App\Domain\Calendrier\Calendrier;
+use App\Domain\Charges\Enums\EtatDeLaCharge;
+use App\Domain\Charges\Models\Charge;
+use App\Domain\Charges\Models\LigneDeCharge;
 use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\TypeDeDocumentTelechargeable;
@@ -20,6 +23,7 @@ use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Models\PaiementAllocation;
 use App\Domain\Fichiers\CelluleDeTableur;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Scopes\SocieteScope;
 use App\Domain\Tenancy\Support\CleDuModele;
 use App\Domain\Tenancy\Support\ResultatDePhp;
 use App\Domain\Tenancy\Support\ValeurRequise;
@@ -29,6 +33,9 @@ use DateTimeInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Collection;
 
 /**
@@ -45,8 +52,14 @@ use Illuminate\Support\Collection;
  * jour de la période, dans le calendrier de son magasin. Une clôture du jour donne le net de
  * chaque taux de ses ventes aux particuliers ; un relevé des encaissements
  * une ligne par mode, avec son mode, et une ligne pour le crédit d'avoir
- * utilisé ; un texte qui commencerait comme une formule est désamorcé
- * (voir CelluleDeTableur). Les montants sont ceux qu'enregistre chaque document,
+ * utilisé ; une charge de la société (décision de l'éditeur du
+ * 15/11/2026, lot DATEOP), une ligne par taux (une seule, sans montants,
+ * pour une pièce sans chiffres), avec les colonnes de la feuille « Liste
+ * des charges » de l'état des charges (mois de TVA, type, date de
+ * paiement, TVA déductible, autoliquidation, état, validée par et le,
+ * motif du renvoi), son origine, et « Manquante » dans la colonne de la
+ * pièce quand elle n'en a aucune à servir ; un texte qui commencerait
+ * comme une formule est désamorcé (voir CelluleDeTableur). Les montants sont ceux qu'enregistre chaque document,
  * additionnés en centimes par taux, jamais recalculés ni additionnés par la
  * base. Chaque document se relit dans son magasin, comme magasin actif
  * (voir DocumentsDeLaPeriode::dansLeMagasin()), les documents d'un magasin
@@ -55,11 +68,16 @@ use Illuminate\Support\Collection;
  */
 final class RecapitulatifDesDocuments
 {
-    public const COLONNES = ['Type', 'Magasin', 'Numéro', 'Date', 'Tiers', 'Identifiant du tiers', 'Origine', 'Pièce du fournisseur', 'Mode de paiement', 'Taux de TVA', 'Base HT', 'TVA', 'TTC', 'Payé à la fin de la période', 'Restant dû à la fin de la période'];
+    public const COLONNES = ['Type', 'Magasin', 'Numéro', 'Date', 'Tiers', 'Identifiant du tiers', 'Origine', 'Pièce du fournisseur', 'Mode de paiement', 'Taux de TVA', 'Base HT', 'TVA', 'TTC', 'Payé à la fin de la période', 'Restant dû à la fin de la période', ...self::COLONNES_DES_CHARGES];
+
+    /**
+     * Les colonnes que seule une charge remplit, à la fin de chaque ligne.
+     */
+    public const COLONNES_DES_CHARGES = ['Mois de TVA', 'Type de charge', 'Date de paiement', 'TVA déductible', 'Autoliquidation', 'État', 'Validée par', 'Validée le', 'Motif du renvoi'];
 
     /**
      * Ce que la colonne « Pièce du fournisseur » dit d'un achat saisi à la
-     * main sans sa pièce.
+     * main sans sa pièce, ou d'une charge sans pièce à servir.
      */
     public const PIECE_MANQUANTE = 'Manquante';
 
@@ -78,7 +96,16 @@ final class RecapitulatifDesDocuments
         $flux = ResultatDePhp::flux(fopen('php://temp', 'r+'), 'L\'ouverture du fichier temporaire du récapitulatif');
         fwrite($flux, "\xEF\xBB\xBF");
         fputcsv($flux, self::COLONNES, ';', '"', '', "\r\n");
-        $parMagasin = collect($documents)->groupBy(fn (DocumentTrouve $document): int => $document->magasinId);
+        [$charges, $autres] = collect($documents)->partition(fn (DocumentTrouve $document): bool => $document->type === TypeDeDocumentTelechargeable::Charges);
+        $lues = $this->charges($charges);
+
+        foreach ($charges as $document) {
+            foreach ($this->lignesDUneCharge($document, $lues->get((int) $document->identifiant) ?? throw (new ModelNotFoundException)->setModel(Charge::class, [$document->identifiant])) as $ligne) {
+                fputcsv($flux, $ligne, ';', '"', '', "\r\n");
+            }
+        }
+
+        $parMagasin = $autres->groupBy(fn (DocumentTrouve $document): int => $document->magasinId);
         $magasins = Magasin::query()->with('societe')->whereKey($parMagasin->keys()->all())->get()->keyBy(fn (Magasin $magasin): int => CleDuModele::de($magasin));
 
         foreach ($parMagasin as $magasinId => $duMagasin) {
@@ -100,6 +127,85 @@ final class RecapitulatifDesDocuments
         fclose($flux);
 
         return $contenu;
+    }
+
+    /**
+     * Ces charges, lues ensemble avec leurs lignes, leur type de la société
+     * et leur pièce, dans la société de chacune, hors de son scope, filtrées
+     * par elle, par identifiant.
+     *
+     * @param  Collection<int, DocumentTrouve>  $charges
+     * @return Collection<int, Charge>
+     */
+    private function charges(Collection $charges): Collection
+    {
+        $lues = new Collection;
+
+        foreach ($charges->groupBy(fn (DocumentTrouve $charge): int => (int) $charge->societeId) as $societe => $deLaSociete) {
+            $lues = $lues->union(Charge::query()->withoutGlobalScope(SocieteScope::class)
+                ->where('societe_id', $societe)
+                ->whereKey($deLaSociete->map(fn (DocumentTrouve $charge): int => (int) $charge->identifiant)->all())
+                ->with([
+                    'lignes' => fn (HasMany $lignes): HasMany => $lignes->withoutGlobalScope(SocieteScope::class)->where('lignes_de_charge.societe_id', $societe),
+                    'piece' => fn (HasOne $piece): HasOne => $piece->withoutGlobalScope(SocieteScope::class)->where('pieces_de_charge.societe_id', $societe)->whereNull('bloquee_le'),
+                    'typeDeLaSociete' => fn (BelongsTo $type): BelongsTo => $type->withoutGlobalScope(SocieteScope::class)->where('types_de_charge_de_la_societe.societe_id', $societe),
+                ])
+                ->get()
+                ->keyBy(fn (Charge $charge): int => CleDuModele::de($charge))
+                ->toBase());
+        }
+
+        return $lues;
+    }
+
+    /**
+     * Les lignes d'une charge : une par taux, ou une seule, sans montants,
+     * pour une pièce sans chiffres.
+     *
+     * @return list<list<string>>
+     */
+    private function lignesDUneCharge(DocumentTrouve $document, Charge $charge): array
+    {
+        $colonnes = [
+            $charge->mois_tva,
+            CelluleDeTableur::texte($charge->libelleDuType()),
+            $charge->date_paiement === null ? '' : Calendrier::afficherJour($charge->date_paiement, 'd/m/Y'),
+        ];
+        $etat = [
+            $charge->fournisseur_hors_france ? 'Oui' : 'Non',
+            $charge->etat->getLabel(),
+            $charge->validee_par?->getLabel() ?? '',
+            ($validation = $charge->jourDeValidation()) === null ? '' : Calendrier::afficherJour($validation, 'd/m/Y'),
+            CelluleDeTableur::texte($charge->motif_renvoi ?? ''),
+        ];
+        $debut = fn (): array => [
+            $document->type->libelleDUnDocument(),
+            CelluleDeTableur::texte($document->magasin),
+            CelluleDeTableur::texte($document->numero),
+            Calendrier::afficherJour($document->jour, 'd/m/Y'),
+            CelluleDeTableur::texte($document->tiers ?? ''),
+            '',
+            $charge->origine->getLabel(),
+            $charge->piece === null ? self::PIECE_MANQUANTE : '',
+            '',
+        ];
+
+        if ($charge->etat === EtatDeLaCharge::PieceSansChiffres || $charge->lignes->isEmpty()) {
+            return [[...$debut(), '', '', '', '', '', '', ...$colonnes, '', ...$etat]];
+        }
+
+        return array_values($charge->lignes->map(fn (LigneDeCharge $ligne): array => [
+            ...$debut(),
+            self::taux($ligne->taux->value),
+            self::montant($ligne->ht),
+            self::montant($ligne->tva),
+            self::montant($ligne->ttc),
+            '',
+            '',
+            ...$colonnes,
+            self::montant($ligne->tva_deductible),
+            ...$etat,
+        ])->all());
     }
 
     /**
@@ -200,6 +306,8 @@ final class RecapitulatifDesDocuments
                 return $nets === []
                     ? [self::ligne($document, ['ht' => 0, 'tva' => 0, 'ttc' => 0])]
                     : array_map(fn (array $taux): array => self::ligne($document, [...$taux, 'taux' => self::taux($taux['taux'])]), $nets);
+            case TypeDeDocumentTelechargeable::Charges:
+                return [];
             case TypeDeDocumentTelechargeable::Encaissements:
                 return array_map(
                     fn (array $encaisse): array => self::ligne($document, ['ttc' => $encaisse['ttc']], mode: $encaisse['mode']),
@@ -235,6 +343,7 @@ final class RecapitulatifDesDocuments
             self::montant($taux['ttc']),
             $reglement === null ? '' : self::montant($reglement[0]),
             $reglement === null ? '' : self::montant($reglement[1]),
+            ...array_fill(0, count(self::COLONNES_DES_CHARGES), ''),
         ];
     }
 

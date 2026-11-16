@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 16/11/2026 à 15:15 UTC par pilotage-sync.sh : « Point de suivi 16/11 15:20 UTC : DEMO-COPIE-1 poussé ».
+Mis à jour le 16/11/2026 à 15:26 UTC par pilotage-sync.sh : « CI de 7f9e16ca verte ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -38,6 +38,7 @@ b0d52373 Graphiques du tableau de bord (lot GRAPH)
 
 ```
  M .env.example
+ M README.md
  M app/Console/Commands/DiagnostiquerCaisseSecurisee.php
  M app/Domain/Cabinets/Actions/InviterSonCabinetACreerSonEspaceAction.php
  M app/Domain/Cabinets/Actions/InviterUneEntrepriseAction.php
@@ -51,6 +52,7 @@ b0d52373 Graphiques du tableau de bord (lot GRAPH)
  M app/Domain/Tenancy/Enums/ActionAuditee.php
  M app/Domain/Tenancy/Isolation/ReglesDIsolation.php
  M app/Domain/Tenancy/Services/CreationDesComptes.php
+ M app/Domain/Tenancy/Support/NomsPolymorphes.php
  M app/Filament/App/Pages/Auth/InscriptionSociete.php
  M app/Filament/Cabinet/Pages/TableauDeBordDuCabinet.php
  M app/Filament/Societe/Pages/TableauDeBord.php
@@ -95,8 +97,6 @@ D  public/robots.txt
 ?? app/Console/Commands/GenererCleDesMessagesDeLaDemonstration.php
 ?? app/Console/Commands/MarquerLesFinsDesDemonstrations.php
 ?? app/Console/Commands/RelancerLesMessagesDeLaDemonstration.php
-?? app/Domain/Demonstration/
-?? app/Domain/Tenancy/Rules/PasUnDomaineReserve.php
 ```
 
 ## Dernière course de la chaîne

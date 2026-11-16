@@ -1,12 +1,13 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 16/11/2026 à 06:37 UTC par pilotage-sync.sh : « CI d15af36 relevée ».
+Mis à jour le 16/11/2026 à 08:28 UTC par pilotage-sync.sh : « Point 08:30 ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
 Tête poussée : `d15af36b`. Commits locaux pas encore poussés :
 
 ```
+3bdfe83b Réparation de la CI rouge de d15af36
 ```
 
 Derniers commits poussés :
@@ -71,10 +72,15 @@ f9e4ea17 Ventes calculées ligne par ligne (règle (b)) et PDF aux modèles M6-b
  M resources/views/documents/pdf/styles.blade.php
  M resources/views/mail/document.blade.php
  M tests/Browser/Parcours/ReponseAuDevisEnLigneTest.php
+ M tests/Browser/inventaire-des-actions.php
+ M tests/Feature/CaisseSecurisee/ProtectionDesTablesTest.php
+ M tests/Feature/Calendrier/IsolationDesCalendriersTest.php
  M tests/Feature/Facturation/EnvoyerDocumentJobConcurrenceTest.php
  M tests/Feature/Facturation/EnvoyerDocumentJobTest.php
  M tests/Feature/Facturation/ReponseAuDevisEnLigneTest.php
  M tests/Feature/Filament/ParametresFacturesTest.php
+ M tests/Feature/SemisCompletTest.php
+ M tests/Feature/Tenancy/TenantIsolationTest.php
  M tests/Unit/matrice-des-decisions.php
 ?? app/Domain/Facturation/Services/DepannageADomicile.php
 ?? app/Domain/Facturation/Services/DroitDeRetractation.php

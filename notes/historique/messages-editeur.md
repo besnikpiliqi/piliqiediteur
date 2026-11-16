@@ -3142,3 +3142,21 @@ aussi ca "Tendance lissée (moyenne sur 3 mois)"
 
 ok
 
+## 362. 2026-11-16 22:53 UTC
+
+[1 capture(s) d'écran jointe(s)]
+
+je me rappelle pas si tu vais fait des gros calcule pour voir si il y aura des ecart avec la dernier calcule qu on fait?
+
+## 363. 2026-11-16 22:58 UTC
+
+@"/root/.claude/uploads/00d7e3b2-c4d1-5536-95c0-3e77e19552bb/cdaa2802-exemple-calcul-des-prix-15-lignes-regle-a-1.pdf" tu me fait des calcule comme celui pour voir comment se fait les derniers calcule
+
+## 364. 2026-11-16 23:01 UTC
+
+pourquoi tu as pas fais avec le nouveau modele de pdf
+
+## 365. 2026-11-16 23:06 UTC
+
+dit moi, est ce que tu fais le calcule comme ca, par ex: 8.33333 * qty (3)= 24,9999 arrondi 25.00 ?
+

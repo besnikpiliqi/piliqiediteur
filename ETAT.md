@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 16/11/2026 à 02:22 UTC par pilotage-sync.sh : « Point 02:23 ».
+Mis à jour le 16/11/2026 à 02:26 UTC par pilotage-sync.sh : « T58 rangés ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -74,6 +74,7 @@ eba4bc85 Relecture du lot ER-PRO
  M tests/Feature/Societe/CaissesDeLaSocieteTest.php
  M tests/Feature/TableauDeBord/PreferencesDesGraphiquesTest.php
  M tests/Feature/TableauDeBord/SeriesDesGraphiquesTest.php
+?? phpunit.lies-p10.xml
 ?? public/css/app/releves-de-caisse.css
 ?? resources/css/releves-de-caisse.css
 ?? resources/views/filament/encaisse-par-mode.blade.php

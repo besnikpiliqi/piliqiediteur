@@ -274,7 +274,7 @@ const effortDuLot = id => (LOTS_SENSIBLES.includes(id) ? 'max' : 'xhigh')
 // 500 000 mots relus à chaque étape). Un lot est donc écrit par des agents successifs, chacun avec une mémoire neuve,
 // qui se passent la main par une note de passage. Les lots déjà commencés avant cette décision gardent un seul agent.
 const UN_SEUL_AGENT = ['QA', 'PG', 'TY1', 'TY2']
-const MAX_PARTIES = 10
+const MAX_PARTIES = 14
 const PARTIE = {
   type: 'object',
   properties: {

@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 16/11/2026 à 11:13 UTC par pilotage-sync.sh : « Point de suivi 16/11 11:12 UTC : DEMO-COPIE-1 partie 2 ».
+Mis à jour le 16/11/2026 à 13:13 UTC par pilotage-sync.sh : « Point de suivi 16/11 13:14 UTC : DEMO-COPIE-1 partie 3 ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -39,6 +39,7 @@ f9e4ea17 Ventes calculées ligne par ligne (règle (b)) et PDF aux modèles M6-b
 
 ```
  M .env.example
+ M .github/workflows/tests.yml
  M CLAUDE.md
  M README.md
  M app/Console/Commands/Editeur/CloreLInscription.php
@@ -97,7 +98,6 @@ D  app/Console/Commands/FermerDemonstrationsInactives.php
  M app/Domain/Facturation/Support/GardesDeLaVente.php
  M app/Domain/TableauDeBord/Services/PerimetreDesGraphiques.php
  M app/Domain/TableauDeBord/Support/Perimetre.php
- M app/Domain/Tenancy/Actions/AccepterLaTransmissionDeLaProprieteAction.php
 ```
 
 ## Dernière course de la chaîne
@@ -107,4 +107,5 @@ Course `wf_b2591b35-919`, étapes commencées (de la plus ancienne à la plus r�
 ```
 DEMO-COPIE-1:implementation
 DEMO-COPIE-1:implementation-2
+DEMO-COPIE-1:implementation-3
 ```

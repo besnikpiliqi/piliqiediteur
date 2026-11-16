@@ -25,9 +25,9 @@ Sources : conception v2 finale § 13 (T1 à T6 et « Scénarios »), avenant A4 
 
 ### B. Composition des sociétés fictives (remplace la section 5.4)
 
-- Par société : 1 propriétaire, qui ne vend pas dans les magasins réels ; au moins 1 administrateur de tous les magasins **sans la vente** et 1 administrateur **autorisé à vendre dans deux magasins** ; dans une société de plusieurs magasins, un administrateur d'une **sélection** de magasins autorisé à nommer les responsables, un autre sans cette autorisation, et un magasin créé **après** la déclaration de l'expert-comptable.
+- Par société : 1 propriétaire, qui ne vend jamais ; au moins 1 administrateur de tous les magasins **sans la vente** et 1 administrateur **autorisé à vendre dans deux magasins** ; dans une société de plusieurs magasins, un administrateur d'une **sélection** de magasins autorisé à nommer les responsables, un autre sans cette autorisation, et un magasin créé **après** la déclaration de l'expert-comptable.
 - Par magasin réel : au moins 1 responsable et 2 vendeurs ; au moins un magasin à 2 responsables ; **une même personne avec un compte dans deux magasins** (deux identifiants, une caisse ouverte avec chacun) ; au moins un observateur.
-- Magasin de démonstration : des **comptes d'entraînement** (responsable et vendeur), et le propriétaire qui y vend, encaisse et clôture (D71).
+- Site de démonstration : une copie de chaque type (Commerce ou atelier, Services, Cabinet), créée par des sociétés de la campagne, avec plusieurs copies en même temps, sur sa propre machine et son propre serveur PostgreSQL (campagne finale). (Remplace le 16/11/2026, cahier DEMO-COPIE N28, le magasin de démonstration et ses comptes d'entraînement, retirés par DEMO-COPIE-1.)
 - Un **cabinet d'expertise comptable vérifié**, avec son propriétaire et deux collaborateurs, **lié à deux des sociétés**, chaque collaborateur avec un client confié ; une autre société avec un **expert-comptable déclaré** par le SIREN d'un cabinet non inscrit (comptes d'expert-comptable de la société), puis ce cabinet qui s'inscrit et se vérifie pendant la campagne.
 - Des sociétés des deux types qui ont un magasin (« Commerce ou atelier », « Services, sans vente d'articles »), dont une en franchise en base, et des magasins en métropole, en Corse, en Guadeloupe, en Martinique et à La Réunion.
 
@@ -45,7 +45,7 @@ Sources : conception v2 finale § 13 (T1 à T6 et « Scénarios »), avenant A4 
 
 Société et vérification :
 1. Inscriptions concurrentes du même SIREN et réclamation par le vrai titulaire (procédure de l'éditeur) ; validation simultanée par deux saisies du même code ; inscriptions factices sans courrier imposé (limite par adresse IP, une seule lettre par SIREN tant qu'une inscription attend) ; clôture d'une inscription sans code au bout de 30 jours.
-2. Démonstration : aucune fuite vers les magasins réels (numéros, registre, totaux), entrée et sortie au JET (100 et 105), fermeture à la validation pendant que des comptes d'entraînement vendent ; le propriétaire qui vend en démonstration puis tente de vendre dans un magasin réel (refusé par l'écran, Livewire, l'action et la base).
+2. Site de démonstration (remplacé le 16/11/2026, cahier DEMO-COPIE N29) : 1) aucune lecture croisée entre les deux sites (bases, clés, fichiers, files) ; 2) un message signé falsifié, rejoué ou trop vieux refusé ; 3) le lien : 256 bits, empreinte seule, échangé contre un témoin, adresse réécrite, ancien lien refusé après un renouvellement ; 4) des copies demandées pendant la reconstruction de nuit ; 5) une seule copie à la fois, « Recommencer à zéro » pendant une visite, suppression au 30e jour pendant une session ouverte ; 6) le nombre de copies que la machine tient (disque, connexions), écrit au rapport ; 7) une mise à jour : chaque copie refaite, le lien valable, un message ; 8) aucun e-mail réel, la page « E-mails qui seraient partis » ; 9) le propriétaire ne vend nulle part sur le site réel (écran, Livewire, action et base) ; 10) l'archive de la caisse avant chaque suppression, relue ; 11) les rôles `demo_admin` et `demo_app` (une copie ne supprime jamais une autre) ; 12) les quotas et la part réservée aux sociétés validées ; 13) l'état publié lu par le site réel.
 3. Fermeture et réouverture d'un magasin (tickets Z, périodes d'activité, fermeture et réouverture le même jour) ; cession ; suspension décidée par l'éditeur jamais levée par une réouverture ; retrait du dernier magasin.
 
 Comptes et droits :
@@ -350,6 +350,7 @@ D'ici là, la résiliation, la suspension et l'administration ne s'appuient que 
    - tâche de CI pour le groupe `concurrence` sous PostgreSQL ;
    - correction des anomalies qui empêchent la campagne : A4, A6, A3, et ce que R0 confirme.
 4. **C1, campagne initiale**, entre les étapes 1 et 2 : paliers P0 à P3, puis P4 selon votre décision.
+   - Ajout A9 du cahier DEMO-COPIE (16/11/2026) : un palier du site de démonstration (durée de la copie d'un modèle, place prise par une copie, nombre de copies que la machine tient) ; le résultat sert au coût d'hébergement (étapes 12 et 15).
 5. **Relances** : C2 après l'étape 2, C3 après la 3, C4 après les 4 et 5, C5 après les 6 à 9, C6 après les 10 à 13. Chaque relance rejoue d'abord ce que l'étape peut casser (2.2), puis tout le reste, et les graines qui avaient trouvé des anomalies.
 6. **CF, campagne finale**, à l'étape 15.
 7. **Entre deux campagnes** : la suite et le groupe `concurrence` tournent en CI sous SQLite et PostgreSQL à chaque envoi.

@@ -98,7 +98,7 @@ Le code est cité par chemin relatif à l'instantané en lecture seule `scratchp
 | Catégorie EN 16931 et code VATEX | Déduits de la nature, de la franchise et du type de ligne (bien ou service), avec la version des règles : une nature par document, donc une catégorie par taux. Ils ne s'enregistrent pas (P14). | Catégorie attendue sur la facture reçue, pour le contrôle de l'étape 2. | Étape 2 : en_invoice, B2BInt. |
 | Coût du stock | — | Coût unitaire d'entrée de chaque ligne de produit, au dix-millième : prix net, frais d'acheminement, droits, TVA non déductible. | Reçu tel quel par le grand livre du stock. |
 | Mentions | Liste ordonnée (code et texte du jour) et note de calcul, tirées de la table datée. | Mentions attendues sur la facture reçue (contrôlées à l'étape 2 seulement). | Le PDF relit le texte figé. |
-| Circuit | Trois conditions de la FAQ, entité publique (E7), non-assujetti, destination Monaco, démonstration. | Facture reçue, e-reporting international entrant (art. 290 I 3°), Monaco (4° a), aucun (importation). Déduit, non enregistré avant l'étape 2. | Étape 2. |
+| Circuit | Trois conditions de la FAQ, entité publique (E7), non-assujetti, destination Monaco. | Facture reçue, e-reporting international entrant (art. 290 I 3°), Monaco (4° a), aucun (importation). Déduit, non enregistré avant l'étape 2. | Étape 2. |
 | Preuves attendues | Table datée par nature et sortie des biens : MRN ou CN23 ; deux documents de transport de parties indépendantes ; attestation de l'acquéreur. | — | Rappels (I4). |
 | Obligations annexes | Facture au plus tard le 15 du mois suivant (K, AE) ; relevé du mois pour l'état récapitulatif (LIC) et la déclaration européenne de services (AE), à déposer par la société elle-même. | — | Relevé exportable (7.10). |
 | Exigibilité | Étape 2 (statut « encaissée », paiements B2C). | Étape 5 (date de déduction), avec les règles de 8.2. | — |
@@ -220,7 +220,6 @@ final readonly class FaitsDeLaSociete {
         public bool $optionDebits,
         public TerritoireDeTva $territoireDuMagasin,  // métropole, Corse, Guadeloupe-Martinique-La Réunion
         public AdresseFiscale $adresseDuMagasin,
-        public bool $estDemonstration,
         public array $identiteManquante,              // list<string> : identité de la société et du magasin, hors n° de TVA (ExigenceDuNumeroTva)
         public ?CompteurDeSeuil $ventesADistance,     // lot M8 (T7, T8)
         public ?CarbonImmutable $inscriteOssLe,       // lot M8
@@ -408,8 +407,8 @@ final class MoteurTva {
 8. Lignes chiffrées par `CalculDesLignesDeVente` : catégorie et VATEX (déduits), taux, taux du prix, PU HT, PU TTC, PU payé, HT, TVA, TTC ; R4 pour un professionnel ; les frais accessoires suivent les biens.
 9. Vente à distance (lot M8), évaluée **avant la branche de la franchise** dans ses effets et sur le HT des lignes chiffrées : biens expédiés par le magasin vers un autre État membre, à un particulier ou à un client non assujetti, sans n° de TVA valide sur VIES. Au-delà du seuil, ou si la société est inscrite à l'OSS : bloquant (T8).
 10. Mentions et note de calcul, tirées de la table datée.
-11. Circuit (8.1) ; démonstration : aucun.
-12. Preuves attendues (table datée) et obligations annexes ; démonstration : aucune.
+11. Circuit (8.1).
+12. Preuves attendues (table datée) et obligations annexes.
 13. Identité et clients (P8) : identité légale de la société et du magasin (facture à un professionnel, ou facture demandée), n° de TVA de la société selon `ExigenceDuNumeroTva` (facture à un professionnel hors franchise, nature autre que la vente en France), SIREN d'un client établi en France, nom et adresse du client sur une facture (O5).
 14. Avertissements : taux inhabituel (X8), nom VIES très différent de la fiche, vente à distance sous le seuil, service à un particulier domicilié hors UE (art. 259 B), livraison antérieure à l'émission sans vérification VIES à sa date (O3).
 15. Versions et instantané des faits.
@@ -538,7 +537,7 @@ La note de calcul de l'exemple est le texte d'aujourd'hui (`MentionsFiscales.php
 
 Données personnelles : la décision et les gestes ne gardent que l'identifiant de l'utilisateur, jamais son nom, ni adresse IP ni navigateur (CLAUDE.md, « Journal d'audit »).
 
-### 2.8 Un moteur, trois usages ; VIES ; démonstration
+### 2.8 Un moteur, trois usages ; VIES ; site de démonstration
 
 | Usage | Quand | Ce qui se passe |
 |---|---|---|
@@ -556,7 +555,7 @@ Données personnelles : la décision et les gestes ne gardent que l'identifiant 
 
 Jamais d'appel réseau sous le verrou du registre. VIES passe derrière une interface, comme les autres fournisseurs externes (CLAUDE.md:164) : `app/Integrations/Vies/Contracts/RegistreVies.php`, implémentée par le client actuel (`app/Integrations/Vies/ClientVies.php:37`) et par `FauxRegistreVies`, sur le modèle de `FauxRne` et `FauxRepertoireSirene`.
 
-**Magasin de démonstration** (CLAUDE.md:164) : le conteneur résout `RegistreVies` en `FauxRegistreVies` quand le magasin actif est la démonstration ; la décision y a le circuit « aucun » et aucune obligation ; la démonstration est exclue des compteurs et des relevés de la société. Aujourd'hui `VerifierNumeroTvaAction` interrogerait le vrai VIES pour les clients fictifs de la démonstration (`:54`, avec le n° de TVA de la société comme demandeur).
+**Site de démonstration** (remplace le 16/11/2026 le magasin de démonstration, retiré par DEMO-COPIE-1 ; note N35 du cahier DEMO-COPIE) : sur le site de démonstration (`PILIQI_SITE=demonstration`), tous les fournisseurs externes sont les faux, VIES compris, quel que soit le pilote. Sur le site réel, jamais. Le circuit s'y calcule comme au réel ; seule la passerelle est fausse. Test : « le site de démonstration consulte toujours le faux registre VIES ».
 
 ### 2.9 Refus et codes stables
 
@@ -633,7 +632,7 @@ Un avoir qui mélange des factures incompatibles garde son refus actuel : `Inval
   - Compteur des ventes à distance : HT net des avoirs, année précédente et année en cours (lot M8) ;
   - relevé du mois des livraisons intracommunautaires et des prestations autoliquidées : HT net par n° de TVA du client (lot M4, 7.10) ;
   - plus tard, compteur des acquisitions d'une société en franchise (si T10 l'ouvre).
-  - Chacune est écrite dans une seule classe (`CompteurDesVentesADistance`, `ReleveFiscalDeLaSociete`), sur le modèle de `Societe::aVenduUneFois()` : `withoutGlobalScope(MagasinScope::class)` filtré par `whereIn('magasin_id', $societe->magasinsReels()->select('id'))`, démonstration exclue, sous un test nommé ; elle s'ajoute à la liste exhaustive de CLAUDE.md:155 (lot M0).
+  - Chacune est écrite dans une seule classe (`CompteurDesVentesADistance`, `ReleveFiscalDeLaSociete`), sur le modèle de `Societe::aVenduUneFois()` : `withoutGlobalScope(MagasinScope::class)` filtré par `whereIn('magasin_id', $societe->magasins()->select('id'))`, sous un test nommé ; elle s'ajoute à la liste exhaustive de CLAUDE.md:155 (lot M0).
   - Les montants ne se voient que du propriétaire et des administrateurs autorisés à gérer les paramètres de la société ; un vendeur ne voit que l'état (« seuil non atteint », « proche », « atteint »).
 - **Jobs et commandes.** Aucun nouveau dans ces lots. Ceux de l'étape 2 qui liront les décisions passeront par `WithTenantContext`, comme les jobs actuels de transmission.
 
@@ -657,7 +656,7 @@ Règle du projet : réécrire proprement, supprimer ce qui devient inutile, aucu
 | `CategorieOperation`, `NatureLigne`, `TransportPar`, `TypePreuve` | `CategorieOperation` est déplacée vers `Tva` ; `NatureLigne` et `TypePreuve` restent dans `Facturation`, les collecteurs les traduisent ; `TransportPar` est remplacée par `SortieDesBiens`, plus générale (sans réponse, non, expédiés, emportés). | Le moteur ne dépend d'aucune énumération d'un module. | M2, M3 |
 | `TerritoireFiscal` (`app/Domain/Facturation/Services/TerritoireFiscal.php`) et `TerritoireTva` (`app/Domain/Facturation/Enums/TerritoireTva.php`) | **Absorbés** par `GeographieTva` et `TerritoireDeTva` (métropole, Corse, Guadeloupe-Martinique-La Réunion, Guyane-Mayotte, collectivité d'outre-mer, Monaco, autre État membre, Irlande du Nord, territoire exclu de l'UE, pays tiers). Lot M2 : comportement identique. Lot M3 : une seule fonction lit toutes les adresses (C10) ; « identifié au répertoire Sirene » (`PAYS_FRANCE`, `:22`) se sépare du territoire de TVA (C2) ; Monaco se lit par le mouvement des biens et par l'établissement pour les services (1.4, point 4). | Listes dispersées (D7) ; Saint-Barthélemy, Saint-Martin, Saint-Pierre-et-Miquelon, la Guyane et Mayotte comptent aujourd'hui dans le territoire de TVA français (`app/Domain/Contacts/Models/Client.php:140-142`). | M2, M3 |
 | `NumeroTva`, `NumeroTvaAuFormat`, `NumeroTvaNormalise` | **Conservés.** | Format et normalisation, utilisés par les collecteurs. | — |
-| `ClientVies` (`app/Integrations/Vies/ClientVies.php:37`) | **Conservé** derrière l'interface `RegistreVies`, avec `FauxRegistreVies` (tests et démonstration). | Chaque fournisseur externe derrière une interface, avec une implémentation factice (CLAUDE.md:164). | M1 |
+| `ClientVies` (`app/Integrations/Vies/ClientVies.php:37`) | **Conservé** derrière l'interface `RegistreVies`, avec `FauxRegistreVies` (tests, développement et site de démonstration). | Chaque fournisseur externe derrière une interface, avec une implémentation factice (CLAUDE.md:164). | M1 |
 | `VerifierNumeroTvaAction` (`app/Domain/Contacts/Actions/VerifierNumeroTvaAction.php`) | **Conservée** ; elle utilise `RegistreVies` ; étendue aux fournisseurs au lot M5 ; appelée par le domaine avant la transaction d'émission (2.8). | D10. | M1, M5 |
 | `FactureResource::verifierLeNumeroTvaSurViesSiBesoin()` (`app/Filament/App/Resources/FactureResource.php:785-794`) | **Supprimée.** | La consultation passe dans le domaine : une émission sans écran (API v1) consultera aussi. | M1 |
 | `NoteSaNatureDOperation` (`app/Domain/Facturation/Concerns/NoteSaNatureDOperation.php:31-58`) | **Réécrit** : il note les faits (sortie des biens, livraison, lieu des services) et le geste, et efface le geste quand un fait déclencheur change (client, sortie, livraison, composition biens et services, lieu des services). Il n'impose plus le transport (`:52-54`). | D1, C3 ; le geste est une entrée, pas un résultat. | M3 |
@@ -832,7 +831,7 @@ Transmission        SUPER PDP la déclare pour vous (e-reporting : client établ
 | Prestation à une entreprise de l'Union | « Prestation à une entreprise de l'Union : TVA du pays du client » · « Le client déclare la TVA de son pays. Mention : « Autoliquidation ». » |
 | Prestation hors Union | « Prestation à une entreprise hors Union : hors TVA française » · « Cette facture ne doit contenir que ces services. » |
 | Franchise de la société | « Votre société est en franchise de TVA » · « Aucune TVA : « TVA non applicable, art. 293 B du CGI ». » |
-| Transmission | « SUPER PDP la transmet comme facture électronique » ; « SUPER PDP la déclare pour vous (e-reporting) » ; « Hors plateforme : client public, dépôt sur Chorus Pro » ; « Pas encore prise en charge pour ce régime : la facture reste hors plateforme » ; « Aucune : magasin de démonstration ». |
+| Transmission | « SUPER PDP la transmet comme facture électronique » ; « SUPER PDP la déclare pour vous (e-reporting) » ; « Hors plateforme : client public, dépôt sur Chorus Pro » ; « Pas encore prise en charge pour ce régime : la facture reste hors plateforme ». |
 | VIES | « N° valide sur VIES le 14/10/2026 à 10 h 32 (preuve VIES n° … conservée) » : le n° de preuve donné par VIES, jamais l'identifiant interne de la consultation. |
 | Achats | « TVA déductible », jamais « récupérable », comme sur la déclaration de TVA. |
 
@@ -1265,7 +1264,7 @@ Ce qui est sûr (recherche N7, art. 258 A, `reglementation.md` 4.1, vérificatio
 **Proposition recommandée (T8 = a), au lot M8, avant l'étape 2 :**
 1. **Le fait « vente à distance »** : biens expédiés par le magasin vers un autre État membre, à un particulier ou à un client marqué « non assujetti », sans n° de TVA valide sur VIES. Il s'évalue **avant la branche de la franchise** du moteur (2.5) : une société en franchise est comptée et refusée de la même façon (7.8).
 2. **Un professionnel de l'UE sans n° de TVA, non marqué « non assujetti »** : la vente reste en France, non comptée, avec un avertissement (« s'il n'est pas assujetti ou relève du régime dérogatoire de son pays, c'est une vente à distance : marquez-le « non assujetti » sur sa fiche »).
-3. **Le compteur de la société** : HT des ventes à distance net des avoirs, lu sur les décisions (jamais recalculé), magasins réels de la société, démonstration exclue (`CompteurDesVentesADistance`, si T7 = a).
+3. **Le compteur de la société** : HT des ventes à distance net des avoirs, lu sur les décisions (jamais recalculé), magasins de la société (`CompteurDesVentesADistance`, si T7 = a).
 4. **Deux valeurs de départ**, saisies une fois dans les paramètres de la société, à l'arrivée dans PILIQI : le total des ventes à distance de l'année civile précédente, et celles de l'année en cours faites avant l'arrivée. Elles sont journalisées (JET 270).
 5. **La question « Votre société est-elle inscrite au guichet OSS ? Depuis le … »**, dans les mêmes paramètres. Oui : **toute** vente à distance est refusée tant que l'OSS n'est pas construit (`tva.oss_non_gere`).
 6. **Un avertissement à l'approche du seuil**, à partir de 9 000 € (90 %, valeur de la table datée des seuils, modifiable par une version des règles).
@@ -1310,7 +1309,6 @@ Prévu au lot M9, avec I1 « ensuite ». Il vise tout acquéreur non établi en 
 - **Contenu** : pour le mois, par n° de TVA du client, le HT des livraisons intracommunautaires et celui des prestations autoliquidées, **nets des avoirs émis dans le mois**, lus sur les documents émis (nature figée et montants des lignes), sans rien recalculer.
 - **Où** : dans chaque magasin, pour les membres qui voient toutes ses factures ; et, si T7 = a, la somme de la société, dans son espace, pour le propriétaire et les administrateurs autorisés à gérer ses paramètres (`ReleveFiscalDeLaSociete`, 3.4).
 - **Export** : fichier CSV ; le panneau d'une facture concernée dit « relevé du mois, à déposer vous-même sur le portail de la douane ».
-- Démonstration exclue.
 
 ---
 
@@ -1329,10 +1327,9 @@ Prévu au lot M9, avec I1 « ensuite ». Il vise tout acquéreur non établi en 
 | E-reporting des ventes aux particuliers, par jour | Lignes émises le jour au circuit des particuliers, regroupées par catégorie, taux et devise, moins les avoirs du jour | Phase 6 : la clôture agrège par circuit, et non plus par type de client (complément 8) ; elle inclut les factures demandées par des particuliers et les factures aux non-assujettis |
 | Statut « encaissée » (E5) et paiements des particuliers (E6) | Exigibilité calculée à cette étape depuis la nature, le type de ligne et l'option pour les débits figés (services, sans option, non autoliquidés) | Phase 8 ; la colonne d'exigibilité, si elle sert, arrive à cette étape (3.1) |
 | Absence d'opération | Appréciée pour la société (complément 10) | SUPER PDP |
-| Magasin de démonstration | Circuit « aucun » | Rien ne part |
 
 **Les règles du circuit**, que le moteur applique dès le lot M3 :
-1. Démonstration : aucun.
+1. (Retiré le 16/11/2026, DEMO-COPIE-1 : plus de magasin de démonstration ; sur le site de démonstration, le circuit se calcule comme au réel, seule la passerelle est fausse.)
 2. Particulier, en France ou à l'étranger, facture demandée comprise : ventes aux particuliers (art. 290 I 2°).
 3. Professionnel non assujetti : ventes aux particuliers (art. 290 I 2° b), jamais en facture électronique (O2).
 4. Entité publique : Chorus Pro, hors de PILIQI, avec un message (E7).
@@ -1452,13 +1449,13 @@ Pour V38, le calcul article par article donne PU HT 100,00 € et PU TTC 120,00 
 - `test_une_facture_issue_d_un_devis_reprend_ses_faits_et_son_geste` (O8) : devis d'une livraison intracommunautaire, faits et geste repris ; VIES du jour de la facture ; si VIES ne reconnaît plus le n°, refus avec la voie « Rester à la TVA française ».
 - `test_la_derniere_facture_au_meme_client_est_proposee_et_se_confirme_a_l_emission` (T3) : la sortie des biens et la destination sont proposées avec leur source ; l'émission exige la confirmation.
 - `test_une_livraison_anterieure_a_l_emission_sans_verification_a_sa_date_est_signalee` (O3).
-- `test_la_demonstration_n_a_ni_circuit_ni_obligation_et_consulte_le_faux_vies` : magasin de démonstration, livraison intracommunautaire ; circuit « aucun », aucune obligation, `FauxRegistreVies` interrogé.
+- `test_le_site_de_demonstration_consulte_toujours_le_faux_registre_vies` : site de démonstration (`PILIQI_SITE=demonstration`), pilote `europa` ; `FauxRegistreVies` interrogé, aucune requête réseau ; le circuit s'y calcule comme au réel.
 - Ventes à distance (lot M8) :
   - `test_une_societe_arrivee_en_octobre_avec_9500_euros_de_ventes_a_distance_est_refusee_au_dela_du_seuil` : valeur de départ de l'année en cours 9 500,00 € ; 16 Câbles à un particulier belge (HT 533,28 €) → refus (10 033,28 € > 10 000,00 €) ;
   - `test_une_annee_precedente_au_dela_du_seuil_refuse_toute_vente_a_distance` : valeur de départ de l'année précédente 12 000,00 € ;
   - `test_une_societe_inscrite_a_l_oss_ne_peut_pas_faire_de_vente_a_distance` (`tva.oss_non_gere`) ;
   - `test_un_vendeur_ne_voit_pas_le_montant_du_compteur` ; `test_le_proprietaire_voit_le_montant_du_compteur`.
-- Relevé du mois (lot M4) : `test_le_releve_du_mois_somme_les_livraisons_intracommunautaires_nettes_des_avoirs_par_numero_de_tva` : livraison de 100,00 € à DE123456789, avoir de 30,00 € le même mois, prestation autoliquidée de 100,00 € à un client IE → 70,00 € et 100,00 € ; `test_le_releve_d_un_magasin_ignore_les_autres_magasins` ; si T7 = a, `test_le_releve_de_la_societe_somme_ses_magasins_reels_sans_la_demonstration`.
+- Relevé du mois (lot M4) : `test_le_releve_du_mois_somme_les_livraisons_intracommunautaires_nettes_des_avoirs_par_numero_de_tva` : livraison de 100,00 € à DE123456789, avoir de 30,00 € le même mois, prestation autoliquidée de 100,00 € à un client IE → 70,00 € et 100,00 € ; `test_le_releve_d_un_magasin_ignore_les_autres_magasins` ; si T7 = a, `test_le_releve_de_la_societe_somme_ses_magasins`.
 
 ### 10.2 Matrice des achats
 
@@ -1560,7 +1557,7 @@ Mentions attendues sur la facture reçue (rappel dans le panneau, avertissement 
 - `test_la_suggestion_de_sortie_ne_lit_que_les_factures_du_magasin`.
 - `test_les_consultations_vies_d_un_fournisseur_restent_dans_son_magasin`.
 - `test_des_frais_ne_se_rattachent_qu_a_une_facture_d_achat_du_meme_magasin`.
-- `test_le_compteur_des_ventes_a_distance_ne_lit_que_des_sommes_des_magasins_reels_de_la_societe` : démonstration et autre société exclues.
+- `test_le_compteur_des_ventes_a_distance_ne_lit_que_des_sommes_des_magasins_de_la_societe` : autre société exclue.
 - `test_le_regime_de_tva_d_une_societe_est_invisible_d_une_autre` (`regimes_tva_societe`, `SocieteScope`).
 - `test_chaque_modele_de_societe_est_liste_ici` (`tests/Feature/Tenancy/IsolationDesSocietesTest.php:74`) complété par `RegimeTvaSociete`. Aucun nouveau modèle de magasin : `test_chaque_modele_de_magasin_est_liste_ici` (`tests/Feature/Tenancy/TenantIsolationTest.php:211`) ne change pas.
 
@@ -1667,12 +1664,12 @@ Un lot peut se faire en plusieurs commits, chacun vert sur les deux moteurs.
 
 **M1 : calculatrice et VIES dans le domaine** (aucun changement de schéma ni de résultat)
 - `CalculateurLigne` déplacée dans `app/Domain/Tva/Calcul/`, règles inchangées, avec son API en centimes entiers.
-- `RegistreVies` (interface), `ClientVies` derrière elle, `FauxRegistreVies` ; liaison du faux dans le magasin de démonstration.
+- `RegistreVies` (interface), `ClientVies` derrière elle, `FauxRegistreVies` ; liaison du faux sur tout le site de démonstration (`PILIQI_SITE=demonstration`), quel que soit le pilote, jamais sur le site réel.
 - `AssurerUneVerificationViesDuJourAction`, appelée par `EmettreFactureAction` hors transaction, après la recherche du jeton (2.8) ; `FactureResource::verifierLeNumeroTvaSurViesSiBesoin()` supprimée.
 - Test d'égalité des deux ventilations (D3).
-- Tests : `test_une_emission_rejouee_ne_consulte_pas_vies`, `test_un_vies_injoignable_a_l_emission_garde_le_brouillon_et_le_dit`, `test_aucune_consultation_vies_n_a_lieu_sous_le_verrou_du_registre`, test de la démonstration (VIES factice) ; lignes `use` des tests de 4.3.
+- Tests : `test_une_emission_rejouee_ne_consulte_pas_vies`, `test_un_vies_injoignable_a_l_emission_garde_le_brouillon_et_le_dit`, `test_aucune_consultation_vies_n_a_lieu_sous_le_verrou_du_registre`, test du site de démonstration (VIES factice) ; lignes `use` des tests de 4.3.
 - Fin : `git grep -n "verifierLeNumeroTvaSurViesSiBesoin"` vide ; suites vertes sans changement d'assertion.
-- Relecture : un appel réseau sous verrou ; une consultation écrite pour une demande rejouée ; le vrai VIES appelé depuis la démonstration.
+- Relecture : un appel réseau sous verrou ; une consultation écrite pour une demande rejouée ; le vrai VIES appelé depuis le site de démonstration.
 
 **M2 : moteur des ventes, sans changer un seul résultat**
 - Créés : `app/Domain/Tva` (moteur, faits, décisions, `CalculDesLignesDeVente`, `CalculDesRetours`, règles de 2026 reprises mot pour mot, `GeographieTva` à comportement identique, `ExigenceDuNumeroTva`, énumérations, `DecisionTvaRefuseeException`) ; collecteurs de vente, de tiers et de société.
@@ -1724,7 +1721,7 @@ Un lot peut se faire en plusieurs commits, chacun vert sur les deux moteurs.
 **M8 : ventes à distance** (T7, T8)
 - `CompteurDesVentesADistance` ; valeurs de départ et inscription à l'OSS sur la société ; avertissement à l'approche du seuil ; refus au-delà, franchise comprise ; clients non assujettis comptés ; montant visible du seul propriétaire et des administrateurs autorisés.
 - Tests : V19, V19a, V19f, V20, V20a, V20f, tests des ventes à distance de 10.1, isolation du compteur, test d'écran de M8.
-- Relecture : une vente à distance non comptée ; la démonstration comptée ; un montant visible d'un vendeur.
+- Relecture : une vente à distance non comptée ; un montant visible d'un vendeur.
 
 **Après M8** : étape 1 cochée, puis campagne de tests initiale (étape 1 bis), qui couvre les chemins définitifs d'émission et de validation.
 
@@ -1815,7 +1812,7 @@ Raison : (a) garde un régime, une mention et une transmission par document, plu
 
 **T7. Lectures de sommes entre magasins de la société.**
 Le seuil des ventes à distance et les relevés de la douane se comptent pour la société (son SIREN). CLAUDE.md liste toutes les lectures permises hors du magasin courant ; celles-ci n'y sont pas.
-- **(a) Recommandée** : les ajouter à la liste, limitées à des **sommes** (HT net des avoirs) : ventes à distance ; livraisons intracommunautaires et prestations autoliquidées par n° de TVA du client. Seuls les magasins réels comptent (démonstration exclue). Les montants ne se voient que du propriétaire et des administrateurs autorisés ; un vendeur ne voit que l'état du seuil.
+- **(a) Recommandée** : les ajouter à la liste, limitées à des **sommes** (HT net des avoirs) : ventes à distance ; livraisons intracommunautaires et prestations autoliquidées par n° de TVA du client. Seuls les magasins de la société comptent. Les montants ne se voient que du propriétaire et des administrateurs autorisés ; un vendeur ne voit que l'état du seuil.
 - (b) Aucune lecture : le propriétaire saisit lui-même le cumul de la société et additionne les relevés des magasins.
 
 Raison : un cumul saisi à la main se trompe ou s'oublie, et le seuil se franchit sans prévenir.
@@ -2022,7 +2019,7 @@ Verdicts : **retenu** (corrigé comme proposé), **retenu, correction adaptée**
 | 26 | Lots trop gros, format signé changé quatre fois, lot des règles écrites bloquant le premier lot de code | Retenu, correction adaptée | M1 et M2 sans changement de résultat ni attente des réponses ; le format signé change une seule fois, en M3, avec les profils et le circuit qui l'imposent ; achats coupés en M5 et M6 ; amendement du lot 21. | 11.1, 11.3 |
 | 27 | Dépendance circulaire et API en flottants | Retenu | `app/Domain/Facturation/Services/CalculateurLigne.php:73`, `:93`, `:117`. | 2.2, 4.1 |
 | 28 | Colonnes d'étapes futures et codes « à confirmer » signés | Retenu | CLAUDE.md:149. | 3.1, 3.2, 8.1, 8.2 |
-| 29 | Magasin de démonstration sans règle | Retenu | CLAUDE.md:164. | 2.5, 2.8, 8.1, 10.1 |
+| 29 | Magasin de démonstration sans règle | Remplacé le 16/11/2026 (DEMO-COPIE-1 : plus de magasin de démonstration ; sur le site de démonstration, tous les fournisseurs sont les faux et le circuit se calcule comme au réel) | CLAUDE.md:164. | 2.5, 2.8, 8.1, 10.1 |
 | 30 | Saisie manuelle ouverte aux responsables ; taux dans les dérogations | Retenu | `societe/conception-v2-finale.md` l.599 et l.956. | 5.7, T11, A40 |
 | 31 | « Exactement l'un des deux » garanti par le seul modèle | Retenu | `database/migrations/2026_10_02_200006_create_consultations_vies_table.php:46` ; `database/migrations/2026_10_09_100001_create_clotures_caisse_personnelles_table.php:91-105`. | 3.1, 3.2, 10.6 |
 | 32 | Appelants oubliés dans l'inventaire | Retenu | `app/Domain/Facturation/Services/PanierDeCaisse.php:276` ; `app/Domain/Facturation/Actions/CreerFactureDepuisDevisAction.php:43-49`, etc. | 4.1, critère de fin de M3, O8 |

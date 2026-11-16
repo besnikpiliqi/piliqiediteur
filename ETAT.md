@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 16/11/2026 à 00:34 UTC par pilotage-sync.sh : « DEMO-COPIE : un seul type par société ».
+Mis à jour le 16/11/2026 à 00:36 UTC par pilotage-sync.sh : « DEMO-COPIE : rien sur les autres types ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

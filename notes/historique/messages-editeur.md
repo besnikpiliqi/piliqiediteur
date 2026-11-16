@@ -3010,3 +3010,15 @@ Q1 oui, Q2 oui, Q3 oui, Q4 oui et dit moi en ce moment on a pas encore fini le l
 
 sur le "3 · Sur le site de démonstration, en haut de chaque page" je vois que tu affiche les trois type de societe! mais en vrai je veux pas qu'une societe "Commerce ou atelier" puisse partire "Services, sans vente d'articles" ou "Cabinet d'expertise comptable" et au contraire. donc chaque societe doit voir que son type de son model et pas les trois car ca n as pas de sens car pourquoi il doit voir les autre type alors qu'il fait pas parti de ces type. dit moi
 
+## 341. 2026-11-16 00:36 UTC
+
+pas besoin d affiche ce texte : "Chaque société ne voit que la démonstration de son type
+
+La démonstration se crée d'office sur le type de la société, qu'elle ne choisit pas et ne change pas. Ici, une société « Commerce ou atelier » reçoit la Quincaillerie des Tilleuls : deux magasins, articles et services, achats, stock, caisse, devis, avoirs, charges, et son expert-comptable déclaré (un compte de la société), qui montre ce que voit le comptable.
+
+
+
+* Une société « Services, sans vente d'articles » reçoit seulement une société de services : sans articles, ni achats, ni stock.
+
+* Un cabinet d'expertise comptable reçoit seulement un cabinet : son propriétaire et ses collaborateurs, avec des clients fictifs vus comme le cabinet les voit, selon les autorisations de chacun ; on n'entre jamais dans leur espace de société." car la societe ne doit pas savoir comment ca marche sur les autre type
+

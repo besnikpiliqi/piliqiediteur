@@ -1,12 +1,13 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 17/11/2026 à 09:19 UTC par pilotage-sync.sh : « Sonnet écrit, Opus relit ».
+Mis à jour le 17/11/2026 à 09:37 UTC par pilotage-sync.sh : « DEVIS-RET commité ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
 Tête poussée : `7c5edc7a`. Commits locaux pas encore poussés :
 
 ```
+2b75fa23 Devis : dépannage à domicile, rétractation et acceptation signée
 a4ca0549 Réparation de la CI rouge de 7c5edc7a
 ```
 
@@ -38,56 +39,6 @@ e405d27b Régularisation après une correction de SIREN et relances (lot REGUL)
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
-M  CLAUDE.md
-MM README.md
-M  app/Domain/Facturation/Actions/CreerDevisAction.php
-M  app/Domain/Facturation/Actions/EmettreDevisAction.php
-M  app/Domain/Facturation/Actions/EnvoyerDocumentAction.php
-M  app/Domain/Facturation/Actions/ModifierDevisAction.php
-M  app/Domain/Facturation/Actions/RepondreAuDevisEnLigneAction.php
-M  app/Domain/Facturation/Enums/TypeDocument.php
-M  app/Domain/Facturation/Jobs/EnvoyerDocumentJob.php
-M  app/Domain/Facturation/Mail/DocumentMail.php
-M  app/Domain/Facturation/Models/Devis.php
-M  app/Domain/Facturation/Models/LienDuDevis.php
-M  app/Domain/Facturation/Models/ReponseDuDevis.php
-M  app/Domain/Facturation/Notifications/ReponseDuClientAuDevis.php
-A  app/Domain/Facturation/Services/DepannageADomicile.php
-M  app/Domain/Facturation/Services/DevisPdfGenerator.php
-A  app/Domain/Facturation/Services/DroitDeRetractation.php
-M  app/Domain/Tenancy/Actions/ModifierLesParametresDuMagasinAction.php
-M  app/Domain/Tenancy/Enums/ActionAuditee.php
-M  app/Domain/Tenancy/Models/Magasin.php
-M  app/Filament/App/Pages/ParametresFactures.php
-M  app/Filament/App/Resources/DevisResource.php
-M  app/Filament/App/Resources/DevisResource/Pages/CreateDevis.php
-M  app/Filament/App/Resources/DevisResource/Pages/EditDevis.php
-M  app/Http/Controllers/ReponseAuDevisController.php
-M  database/migrations/0001_01_01_000000_create_magasins_table.php
-M  database/migrations/2026_10_03_100001_create_devis_table.php
-M  database/migrations/2026_10_14_100008_create_reponses_des_devis_table.php
-M  database/seeders/Semis/DocumentsDesCas.php
-M  database/seeders/Semis/SemisComplet.php
-M  resources/views/devis/pdf.blade.php
-M  resources/views/devis/reponse-enregistree.blade.php
-M  resources/views/devis/reponse.blade.php
-M  resources/views/documents/pdf/styles.blade.php
-M  resources/views/mail/document.blade.php
-M  tests/Browser/Demonstration/DansLaCopieTest.php
-A  tests/Browser/Parcours/DevisDeDepannageADomicileTest.php
-M  tests/Browser/Parcours/ReponseAuDevisEnLigneTest.php
-M  tests/Browser/inventaire-des-actions.php
-M  tests/Feature/CaisseSecurisee/ProtectionDesTablesTest.php
-M  tests/Feature/Calendrier/IsolationDesCalendriersTest.php
-M  tests/Feature/Demonstration/BasesModelesTest.php
-A  tests/Feature/Facturation/DevisDeDepannageADomicileTest.php
-M  tests/Feature/Facturation/EnvoyerDocumentJobConcurrenceTest.php
-M  tests/Feature/Facturation/EnvoyerDocumentJobTest.php
-M  tests/Feature/Facturation/ReponseAuDevisEnLigneTest.php
-M  tests/Feature/Filament/ParametresFacturesTest.php
- M tests/Feature/SemisCompletTest.php
-M  tests/Feature/Tenancy/TenantIsolationTest.php
-M  tests/Unit/matrice-des-decisions.php
 ```
 
 ## Dernière course de la chaîne
@@ -96,4 +47,6 @@ Course `wf_a558d16d-efa`, étapes commencées (de la plus ancienne à la plus r�
 
 ```
 DEVIS-RET:implementation
+DEVIS-RET:relecture1
+DEVIS-RET:relecture2
 ```

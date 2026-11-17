@@ -3182,3 +3182,97 @@ tu peux commencer avec sonnet 5.5 eleve ultracode sil te plait. donc tu arret et
 
 oui ce que tu pense meilleur
 
+## 370. 2026-11-17 09:20 UTC
+
+écris-moi pas à pas comment lancer les deux sites sur mon PC
+
+## 371. 2026-11-17 09:33 UTC
+
+<!-- attach -->
+
+> php artisan --env=demonstration key:generate
+
+
+
+PS C:\xampp\htdocs\piliqiediteur-v2> php artisan --env=demonstration key:generate
+
+
+
+   Illuminate\Database\QueryException 
+
+
+
+  SQLSTATE[08006] [7] connection to server at "127.0.0.1", port 5432 failed: fe_sendauth: no password supplied (Connection: pgsql, Host: 127.0.0.1, Port: 5432, Database: demo_aucune_copie, SQL: select count(*) from pg_catalog.pg_tables where schemaname = current_schema())
+
+
+
+  at vendor\laravel\framework\src\Illuminate\Database\Connection.php:864
+
+    860▕             $exceptionType = ($isUniqueConstraintError = $this->isUniqueConstraintError($e))
+
+    861▕                 ? UniqueConstraintViolationException::class
+
+    862▕                 : QueryException::class;
+
+    863▕ 
+
+  ➜ 864▕             $exception = new $exceptionType(
+
+    865▕                 $this->getNameWithReadWriteType(),
+
+    866▕                 $query,
+
+    867▕                 $this->prepareBindings($bindings),
+
+    868▕                 $e,
+
+
+
+  1   vendor\laravel\framework\src\Illuminate\Database\Connectors\Connector.php:67
+
+      PDOException::("SQLSTATE[08006] [7] connection to server at "127.0.0.1", port 5432 failed: fe_sendauth: no password supplied")
+
+
+
+  2   vendor\laravel\framework\src\Illuminate\Database\Connectors\Connector.php:67
+
+      PDO::connect("pgsql:host=127.0.0.1;dbname='demo_aucune_copie';port=5432;client_encoding='utf8';sslmode=prefer", "demo_app", Object(SensitiveParameterValue), [])
+
+## 372. 2026-11-17 09:36 UTC
+
+<!-- attach -->
+
+> Ouvrez C:\xampp\htdocs\piliqiediteur-v2\.env.demonstration et remplissez les trois mots de passe avant de lancer la moindre commande :
+
+> DB_PASSWORD= [valeur retirée] le mot de passe de demo_app ;
+
+> DB_REGISTRE_PASSWORD= [valeur retirée] le même ;
+
+> DB_DEMO_ADMIN_PASSWORD= [valeur retirée] le mot de passe de demo_admin.
+
+> 
+
+> Si un mot de passe contient un espace, un # ou un guillemet, mettez-le entre guillemets : DB_PASSWORD=[valeur retirée] mot de passe".
+
+> 
+
+> Vérifiez que le rôle et la base existent, avec cette commande (elle vous demande le mot de passe dans la fenêtre, tapez-le là seulement) :
+
+
+
+chez moi toujours avec "docker exec -it piliqi-pg psql -U piliqi -d piliqi_editeur" et ce que me dit : "PS C:\xampp\htdocs\piliqiediteur-v2> psql -h 127.0.0.1 -U demo_app -d demo_aucune_copie -c "select 1"
+
+psql : Le terme «psql» n'est pas reconnu comme nom d'applet de commande, fonction, fichier de script ou programme exécutable. 
+
+Vérifiez l'orthographe du nom, ou si un chemin d'accès existe, vérifiez que le chemin d'accès est correct et réessayez.
+
+Au caractère Ligne:1 : 1
+
++ psql -h 127.0.0.1 -U demo_app -d demo_aucune_copie -c "select 1"
+
++ ~~~~
+
+    + CategoryInfo          : ObjectNotFound: (psql:String) [], CommandNotFoundException
+
+    + FullyQualifiedErrorId : CommandNotFoundException
+

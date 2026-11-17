@@ -520,3 +520,4 @@
 - 17/11 08:40 UTC — Éditeur : « ce que tu penses meilleur ». Sonnet 5.5 pour écrire, Opus pour relire et corriger. Course wf_a558d16d-efa reprise → TÂCHE wfcq0fe0h ; sauvegarde 1ecb5f8e. Prochain point 10:02 UTC.
 - 17/11 09:40 UTC — DEVIS-RET : 2 commits locaux (a4ca0549 réparation CI de 7c5edc7a, 2b75fa23 lot), relectures Opus à venir, envoi après correction. Prochain point 10:02 UTC (déclencheur déjà armé).
 - 17/11 10:00 UTC — Éditeur, poste : « journal-audit:epingler-la-cle » refusé par la garde quand --env=demonstration précède la commande (runningConsoleCommand ne lit que argv[1]) ; contournement donné (option après la commande) ; défaut écrit dans cahier-ER-PRO et a-faire-apres-chaine.md pour le prochain commit qui touche SiteDePiliqiServiceProvider.
+- 17/11 10:05 UTC — Point de suivi : DEVIS-RET : relectures Opus rendues, correction (Opus) en cours ; rien de poussé ; sauvegarde d3319a9c ; 8,0 Go. Document à relire ci-dessous. Prochain point 12:05 UTC.

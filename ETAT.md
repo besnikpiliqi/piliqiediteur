@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 17/11/2026 à 09:50 UTC par pilotage-sync.sh : « Défaut runningConsoleCommand noté ».
+Mis à jour le 17/11/2026 à 10:03 UTC par pilotage-sync.sh : « Point de suivi 10:05 ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -39,6 +39,15 @@ e405d27b Régularisation après une correction de SIREN et relances (lot REGUL)
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
+ M app/Domain/Facturation/Actions/EmettreDevisAction.php
+ M app/Domain/Facturation/Services/MentionsFiscales.php
+ M app/Filament/App/Resources/DevisResource.php
+ M app/Filament/App/Resources/DevisResource/Pages/EditDevis.php
+ M app/Http/Controllers/ReponseAuDevisController.php
+ M resources/views/devis/pdf.blade.php
+ M resources/views/devis/reponse.blade.php
+ M resources/views/documents/pdf/lignes.blade.php
+?? resources/views/devis/document.blade.php
 ```
 
 ## Dernière course de la chaîne
@@ -49,4 +58,5 @@ Course `wf_a558d16d-efa`, étapes commencées (de la plus ancienne à la plus r�
 DEVIS-RET:implementation
 DEVIS-RET:relecture1
 DEVIS-RET:relecture2
+DEVIS-RET:correction
 ```

@@ -3432,3 +3432,19 @@ PS C:\xampp\htdocs\piliqiediteur-v2> php artisan --env=demonstration journal-aud
 
       Illuminate\Container\BoundMethod::{closure:Illuminate\Container\BoundMethod::call():35}()
 
+## 377. 2026-11-17 09:55 UTC
+
+[1 capture(s) d'écran jointe(s)]
+
+CAISSE_SECURISEE_CLE_PRIVEE= il va  ou? dans .env.demonstration c est ca
+
+## 378. 2026-11-17 10:01 UTC
+
+<!-- attach -->
+
+> Passez à l’étape E : php artisan demonstration:construire-les-modeles --env=demonstration. Elle dure environ 20 minutes.
+
+
+
+il fait quoi cette commande ?
+

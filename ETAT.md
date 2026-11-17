@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 17/11/2026 à 23:39 UTC par pilotage-sync.sh : « Consigne : listes triées du plus récent au plus ancien ».
+Mis à jour le 17/11/2026 à 23:45 UTC par pilotage-sync.sh : « Question : historique repris d'une société qui arrive chez PILIQI ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

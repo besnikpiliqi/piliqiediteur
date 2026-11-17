@@ -3706,3 +3706,7 @@ et pour le devis signe par internet et note sur le devis je crois que t es en tr
 
 je vois que tout, donc devis, facture tout tout il s 'arrange pas par les recents donc les dernier doivent affiche qu debut par defaut
 
+## 401. 2026-11-17 23:45 UTC
+
+j ai une question importante. par ex quand une societe vient chez piliqi alors ce qu'il avait vendu avant alors mtn chez moi il y aura pas de calcule d avant. qu est qu'on peut faire si on pourrais avoir cette possibilete. par ex ou d ajouter les valeurs total ttc,ht,tva par mois dans l'année pour autant d années qu'il veut?
+

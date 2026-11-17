@@ -3168,3 +3168,7 @@ avec ces calcule est ce que l etat peux refuser ou pas
 
 donc super pdp ou les pa demande en six decimale ou deja arrondi
 
+## 368. 2026-11-17 08:03 UTC
+
+tu peux commencer avec sonnet 5.5 eleve ultracode sil te plait. donc tu arret et perd rien mais tu commence avec ce model sonnet 5.5 élevé ultracode
+

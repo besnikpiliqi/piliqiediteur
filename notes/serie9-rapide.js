@@ -270,7 +270,8 @@ const TRAVAIL_COUPE = `Avant de commencer, regarde git status --short dans ${DEP
 const COMMITS_DU_LOT = `Les commits de ce lot sont tous ceux qui ne sont pas encore poussés : lis git -C ${DEPOT} log --oneline origin/${BRANCHE}..HEAD et git -C ${DEPOT} diff origin/${BRANCHE}..HEAD (avant de commencer, git -C ${DEPOT} fetch origin ${BRANCHE} si la référence manque). Attention : la plage « premier..dernier » rendue par l'agent qui a écrit le lot comprend son premier commit, alors que git diff ou git log sur « premier..dernier » l'exclurait ; ne lis donc jamais cette plage telle quelle, et vérifie que tu vois bien chaque commit « (lot <id> k/n) » du lot.`
 
 const LOTS_SENSIBLES = ['CALC'] // D63, réponse de l'éditeur du 11/11 vers 09 h 50 UTC : « max » seulement pour CALC, « extra » pour tous les autres lots
-const effortDuLot = id => (LOTS_SENSIBLES.includes(id) ? 'max' : 'xhigh')
+// 17/11/2026 : demande de l'éditeur, la chaîne repart avec Sonnet 5.5 et l'effort « élevé » (high), ultracode ; « max » reste pour les lots sensibles (CALC).
+const effortDuLot = id => (LOTS_SENSIBLES.includes(id) ? 'max' : 'high')
 
 // Travail par parties (décision de l'éditeur du 11/11/2026, « 1 et 2 », DIRECTIVES.md D62) : l'agent qui écrit un lot
 // relisait à chaque étape toute sa mémoire de travail, qui grossissait au fil du lot (TY1 : 1 562 étapes, environ

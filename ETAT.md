@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 17/11/2026 à 08:00 UTC par pilotage-sync.sh : « Point de suivi 08:02 ».
+Mis à jour le 17/11/2026 à 08:06 UTC par pilotage-sync.sh : « Reprise sous Sonnet 5.5 ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

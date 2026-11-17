@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 17/11/2026 à 10:03 UTC par pilotage-sync.sh : « Point de suivi 10:05 ».
+Mis à jour le 17/11/2026 à 10:05 UTC par pilotage-sync.sh : « qpdf du site de démonstration ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -39,14 +39,22 @@ e405d27b Régularisation après une correction de SIREN et relances (lot REGUL)
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
+ M app/Domain/Facturation/Actions/CreerDevisAction.php
  M app/Domain/Facturation/Actions/EmettreDevisAction.php
+ M app/Domain/Facturation/Enums/NatureEnvoi.php
+ M app/Domain/Facturation/Jobs/EnvoyerDocumentJob.php
+ M app/Domain/Facturation/Models/EnvoiDocument.php
  M app/Domain/Facturation/Services/MentionsFiscales.php
+ M app/Domain/Tenancy/Models/Magasin.php
+ M app/Filament/App/Resources/ClientResource.php
  M app/Filament/App/Resources/DevisResource.php
  M app/Filament/App/Resources/DevisResource/Pages/EditDevis.php
  M app/Http/Controllers/ReponseAuDevisController.php
+ M database/seeders/Semis/DocumentsDesCas.php
  M resources/views/devis/pdf.blade.php
  M resources/views/devis/reponse.blade.php
  M resources/views/documents/pdf/lignes.blade.php
+ M tests/Feature/Calendrier/IsolationDesCalendriersTest.php
 ?? resources/views/devis/document.blade.php
 ```
 

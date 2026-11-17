@@ -3448,3 +3448,13 @@ CAISSE_SECURISEE_CLE_PRIVEE= il va  ou? dans .env.demonstration c est ca
 
 il fait quoi cette commande ?
 
+## 379. 2026-11-17 10:05 UTC
+
+PS C:\xampp\htdocs\piliqiediteur-v2> php artisan demonstration:construire-les-modeles --env=demonstration
+
+La construction du modèle « commerce » a échoué : Le fichier « Facture GL-2026-118.pdf » n'a pas pu être analysé : réessayez dans quelques minutes.
+
+La construction du modèle « services » a échoué : Le fichier « Facture Foncière Mozart.pdf » n'a pas pu être analysé : réessayez dans quelques minutes.
+
+La construction du modèle « cabinet » a échoué : Le fichier « Facture GL-2026-118.pdf » n'a pas pu être analysé : réessayez dans quelques minutes.
+

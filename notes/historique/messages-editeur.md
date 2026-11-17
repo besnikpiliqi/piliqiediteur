@@ -3160,3 +3160,11 @@ pourquoi tu as pas fais avec le nouveau modele de pdf
 
 dit moi, est ce que tu fais le calcule comme ca, par ex: 8.33333 * qty (3)= 24,9999 arrondi 25.00 ?
 
+## 366. 2026-11-16 23:37 UTC
+
+avec ces calcule est ce que l etat peux refuser ou pas
+
+## 367. 2026-11-16 23:45 UTC
+
+donc super pdp ou les pa demande en six decimale ou deja arrondi
+

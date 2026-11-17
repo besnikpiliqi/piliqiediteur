@@ -1,18 +1,19 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 16/11/2026 à 23:27 UTC par pilotage-sync.sh : « Reprise après redémarrage : DEMO-COPIE-2 correction ».
+Mis à jour le 17/11/2026 à 00:30 UTC par pilotage-sync.sh : « Après le lot DEMO-COPIE-2 ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
-Tête poussée : `7f9e16ca`. Commits locaux pas encore poussés :
+Tête poussée : `52dab0ff`. Commits locaux pas encore poussés :
 
 ```
-b5ded45c Démonstration : site séparé, une base par copie, demande depuis le compte
 ```
 
 Derniers commits poussés :
 
 ```
+52dab0ff Relecture du lot DEMO-COPIE-2
+b5ded45c Démonstration : site séparé, une base par copie, demande depuis le compte
 7f9e16ca Relecture du lot DEMO-COPIE-1
 4091e8b2 Démonstration : retrait du magasin de démonstration intérieur
 3bdfe83b Réparation de la CI rouge de d15af36
@@ -31,17 +32,11 @@ e405d27b Régularisation après une correction de SIREN et relances (lot REGUL)
 8ce8bd4a Relecture du lot CHARGES
 68531b28 Charges de la société et TVA réelle (lot CHARGES)
 fcbf1166 Réparation de la CI rouge de 743f9bc
-743f9bc2 Relecture du lot GRAPH
-b0d52373 Graphiques du tableau de bord (lot GRAPH)
 ```
 
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
- M app/Http/Controllers/OuvrirMaDemonstrationController.php
- M resources/views/demonstration/billet.blade.php
- M tests/Browser/Parcours/MaDemonstrationTest.php
- M tests/Feature/Demonstration/BilletEtPolitiqueDeContenuTest.php
 ```
 
 ## Dernière course de la chaîne
@@ -66,4 +61,6 @@ DEMO-COPIE-2:implementation-6
 DEMO-COPIE-2:relecture1
 DEMO-COPIE-2:relecture2
 DEMO-COPIE-2:correction
+DEMO-COPIE-2:poussee
+DEMO-COPIE-2:notes
 ```

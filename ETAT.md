@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 17/11/2026 à 11:07 UTC par pilotage-sync.sh : « Défaut cp Windows noté ».
+Mis à jour le 17/11/2026 à 11:47 UTC par pilotage-sync.sh : « Arrêt demandé : sauvegarde complète ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -62,6 +62,7 @@ e405d27b Régularisation après une correction de SIREN et relances (lot REGUL)
  M tests/Feature/Demonstration/BasesModelesTest.php
  M tests/Feature/Facturation/DevisDeDepannageADomicileTest.php
  M tests/Feature/Facturation/ReponseAuDevisEnLigneTest.php
+ M tests/Feature/SemisCompletTest.php
 ?? resources/views/devis/document.blade.php
 ```
 

@@ -1,0 +1,1490 @@
+diff --git a/README.md b/README.md
+index b8ae1d05..e4249748 100644
+--- a/README.md
++++ b/README.md
+@@ -85,12 +85,12 @@ ## Données semées sur votre PC
+ 
+ **Le jeu semé.** Sur 400 jours, par les vraies actions :
+ 
+-- « MAISON FERRAND » (« Commerce ou atelier », réel normal mensuel, validée par le code de son courrier) : trois magasins, les Halles et la République, et Fort-de-France (Martinique : heure des Antilles, articles à 8,5 % et 2,1 %, réassorts, loyer à 8,5 % dans les charges, une responsable, Joëlle Marie-Sainte, et un vendeur, Kévin Louisy). Une administratrice sans vente cochée aux graphiques et aux charges, un administrateur qui vend dans les deux magasins, une responsable cochée aux graphiques et aux charges, des vendeurs (Lucas Moreau a un compte dans chaque magasin, promu responsable à la République ; Inès Garcia garde son identifiant pour mot de passe ; Sarah Petit voit les factures de toute l'équipe ; Yanis Morel est suspendu), une observatrice. Des milliers de tickets en un et plusieurs modes, des commandes de clients professionnels chaque semaine (devis envoyés, acceptés, refusés, expirés, transformés en factures payées, payées en deux fois, par chèque, en retard et relancées, avoirs successifs, factures soldées par un avoir, crédit d'avoir imputé), bons d'avoir du comptoir utilisés, réassorts toutes les deux semaines (coût moyen qui évolue), avoir fournisseur, contre-passation, exports avec et sans preuve (orange et rouge dans « À faire »), export non prouvé régularisé à 150 jours, livraisons intracommunautaires (VIES ; l'une expédiée deux jours après sa facture, qui imprime la date de la livraison, l'autre enlevée le jour même, sans cette mention), un devis qui prévoit la date de sa livraison, livraison vers un DOM, détaxe avec et sans visa, vente sans stock (stock négatif), fournisseur archivé, achat d'un fournisseur de Monaco, brouillons ; charges sur treize mois validées par le cabinet ; l'état des charges de l'année téléchargé en PDF par la propriétaire et en Excel par Paul Lefèvre (journal d'audit de la société), et le ZIP des pièces de toutes les charges du mois écoulé, « Toute la société » comprise, demandé par la propriétaire dans « Télécharger les documents » de l'espace de la société. À la République, dans les sept derniers jours, le responsable, Hugo Lefebvre, coche le dépannage à domicile dans « Factures et devis » (entretien de tapis ; devis gratuit, puis payant à 20,00 € TTC) : un devis signé chez Sylvie Caron (droit de rétractation et formulaire sur sa dernière page), accepté par le magasin ; un devis envoyé par e-mail, sans PDF, à Laurent Chevalier, accepté en ligne avec la demande d'un début avant la fin du délai de rétractation ; un devis payant envoyé à Françoise Blanc pour sa maison de Crécy-la-Chapelle, accepté en ligne sans cette demande (cadre « Bon pour accord » rempli, référence ACC-…, confirmation avec le devis signé) ; un brouillon qui suit le prix du jour ; un devis envoyé au Studio Nord, professionnel, sans aucune de ces mentions. Le cabinet Martin lui est lié.
+-- « CONSEIL VASSEUR » (« Services, sans vente d'articles », réel simplifié) : un magasin de services avec son assurance professionnelle ; administrateurs, responsable, vendeurs (Bruno Caron retiré, Anaïs Lambert retirée puis réintégrée), un observateur ; commandes de clients professionnels tous les trois jours, prestations autoliquidées dans l'Union et hors de l'Union, facture à une mairie (Chorus Pro) pour une prestation de plusieurs jours (période imprimée, « du … au … »), facture datée de la veille de son émission, prélèvement ; dans les sept derniers jours, le dépannage informatique à domicile de sa responsable, Claire Dubois (devis gratuit, puis payant à 25,00 € TTC) : un devis signé chez Monique Faure, accepté par le magasin, des devis acceptés en ligne par Gérard Lambert, avec la demande d'un début avant la fin du délai de rétractation, et par Nathalie Roy, sans elle, un brouillon et un devis envoyé au Cabinet dentaire Morel, sans ces mentions. Elle a déclaré son expert-comptable par le SIREN d'un cabinet absent de PILIQI (000000158, « PETIT ET ASSOCIES ») : Marc Petit a choisi son mot de passe (accès redonné ensuite par un nouveau lien), Sophie Petit pas encore.
++- « MAISON FERRAND » (« Commerce ou atelier », réel normal mensuel, validée par le code de son courrier) : trois magasins, les Halles et la République, et Fort-de-France (Martinique : heure des Antilles, articles à 8,5 % et 2,1 %, réassorts, loyer à 8,5 % dans les charges, une responsable, Joëlle Marie-Sainte, et un vendeur, Kévin Louisy). Une administratrice sans vente cochée aux graphiques et aux charges, un administrateur qui vend dans les deux magasins, une responsable cochée aux graphiques et aux charges, des vendeurs (Lucas Moreau a un compte dans chaque magasin, promu responsable à la République ; Inès Garcia garde son identifiant pour mot de passe ; Sarah Petit voit les factures de toute l'équipe ; Yanis Morel est suspendu), une observatrice. Des milliers de tickets en un et plusieurs modes, des commandes de clients professionnels chaque semaine (devis envoyés, acceptés, refusés, expirés, transformés en factures payées, payées en deux fois, par chèque, en retard et relancées, avoirs successifs, factures soldées par un avoir, crédit d'avoir imputé), bons d'avoir du comptoir utilisés, réassorts toutes les deux semaines (coût moyen qui évolue), avoir fournisseur, contre-passation, exports avec et sans preuve (orange et rouge dans « À faire »), export non prouvé régularisé à 150 jours, livraisons intracommunautaires (VIES ; l'une expédiée deux jours après sa facture, qui imprime la date de la livraison, l'autre enlevée le jour même, sans cette mention), un devis qui prévoit la date de sa livraison, livraison vers un DOM, détaxe avec et sans visa, vente sans stock (stock négatif), fournisseur archivé, achat d'un fournisseur de Monaco, brouillons ; charges sur treize mois validées par le cabinet ; l'état des charges de l'année téléchargé en PDF par la propriétaire et en Excel par Paul Lefèvre (journal d'audit de la société), et le ZIP des pièces de toutes les charges du mois écoulé, « Toute la société » comprise, demandé par la propriétaire dans « Télécharger les documents » de l'espace de la société. À la République, dans les sept derniers jours, le responsable, Hugo Lefebvre, coche le dépannage à domicile dans « Factures et devis » (entretien de tapis ; devis gratuit, puis payant à 20,00 € TTC) : un brouillon pour Françoise Blanc fait juste avant que le réglage soit coché, sans lieu de l'intervention (son PDF imprime « Lieu de l'intervention : — », « Envoyer par e-mail » le refuse, sa modification préremplit le lieu avec son adresse) ; un devis signé chez Sylvie Caron (droit de rétractation et formulaire sur sa dernière page), envoyé par e-mail puis accepté par le magasin avant le départ de l'e-mail, qui ne part pas (« Le devis a été accepté entre-temps », dans les envois de sa fiche et la cloche du responsable) ; un devis envoyé par e-mail, sans PDF, à Laurent Chevalier, accepté en ligne avec la demande d'un début avant la fin du délai de rétractation ; un devis payant envoyé à Françoise Blanc pour sa maison de Crécy-la-Chapelle, accepté en ligne sans cette demande (cadre « Bon pour accord » rempli, référence ACC-…, confirmation avec le devis signé) ; un brouillon qui suit le prix du jour ; un devis envoyé au Studio Nord, professionnel, sans aucune de ces mentions. Le cabinet Martin lui est lié.
++- « CONSEIL VASSEUR » (« Services, sans vente d'articles », réel simplifié) : un magasin de services avec son assurance professionnelle ; administrateurs, responsable, vendeurs (Bruno Caron retiré, Anaïs Lambert retirée puis réintégrée), un observateur ; commandes de clients professionnels tous les trois jours, prestations autoliquidées dans l'Union et hors de l'Union, facture à une mairie (Chorus Pro) pour une prestation de plusieurs jours (période imprimée, « du … au … »), facture datée de la veille de son émission, prélèvement ; dans les sept derniers jours, le dépannage informatique à domicile de sa responsable, Claire Dubois (devis gratuit, puis payant à 25,00 € TTC) : un brouillon pour Nathalie Roy fait juste avant que le réglage soit coché, sans lieu de l'intervention (refusé à l'envoi), un devis signé chez Monique Faure, accepté par le magasin avant le départ de son e-mail, qui ne part pas, des devis acceptés en ligne par Gérard Lambert, avec la demande d'un début avant la fin du délai de rétractation, et par Nathalie Roy, sans elle, un brouillon et un devis envoyé au Cabinet dentaire Morel, sans ces mentions. Elle a déclaré son expert-comptable par le SIREN d'un cabinet absent de PILIQI (000000158, « PETIT ET ASSOCIES ») : Marc Petit a choisi son mot de passe (accès redonné ensuite par un nouveau lien), Sophie Petit pas encore.
+ - « MARTIN EXPERTISE COMPTABLE » (cabinet vérifié à l'Ordre) : sa propriétaire et deux collaborateurs, Paul Lefèvre (« MAISON FERRAND » confiée) et Emma Rousseau (« EPICERIE LEMOINE » confiée) ; ses invitations dans chaque état (ouverte, refusée, retirée, expirée, caduque) et ses demandes de lien (en attente, refusée, retirée, expirée, terminée).
+ - « EPICERIE LEMOINE » (née de l'invitation du cabinet, réel normal trimestriel) : un magasin, ouvert seul au cabinet ; une administratrice devenue responsable, un administrateur qui vend, une vendeuse suspendue puis réactivée et dont l'accès a été redonné en son absence, une observatrice.
+ - « COMPTOIR DES ILES » (réel normal mensuel) : huit magasins, à Fort-de-France (Martinique, 8,5 % et 2,1 %, heure des Antilles), Lyon (fermé temporairement), Bordeaux (fermé pour cessation puis rouvert), Nantes (cédé), Lille (suspendu par l'éditeur), Pointe-à-Pitre (Guadeloupe), Saint-Denis (La Réunion) et Ajaccio (Corse, fermé pour cessation sans avoir vendu) ; une transmission de la propriété en attente ; un mandat de la plateforme agréée révoqué à Bordeaux.
+-- « ATELIER BRUN » (services en franchise en base) : sa responsable, Mathilde Brun, coche le dépannage à domicile dans « Factures et devis » (devis gratuit, puis payant à 35,00 € TTC) ; un devis de réparation d'une machine à coudre signé chez Jeanne Roussel (droit de rétractation et formulaire sur sa dernière page), accepté par le magasin ; un devis gratuit envoyé par e-mail à Bernard Petit, accepté en ligne avec la demande d'un début avant la fin du délai de rétractation ; un devis payant envoyé à Hélène Garnier pour un autre lieu que son adresse, accepté en ligne sans cette demande (cadre « Bon pour accord » rempli, référence ACC-ATELIER-…) ; un brouillon qui suit le prix du jour, et un devis envoyé à l'Agence Pixel, professionnelle, sans aucune de ces mentions. « STUDIO LUMIERE » (services, option pour les débits, écart Sirene vérifié, fin d'exercice changée par la procédure de l'éditeur, SIREN corrigé par la procédure de l'éditeur : une facture régularisée par son avoir de régularisation et sa facture rectificative, les autres à régulariser), « GROUPE NORD DISTRIBUTION » (membre d'un assujetti unique : ventes refusées), « BOULANGERIE DUVAL » (suspendue ; son lien avec le cabinet Martin terminé par le cabinet, puis celui avec « CABINET FAURE ET ASSOCIES » terminé par la radiation de ce cabinet de l'Ordre, constatée par l'éditeur), « LIBRAIRIE DES QUAIS » (propriété transmise, puis résiliée), « MAROQUINERIE DELMAS » (révoquée par l'éditeur après le courrier de révocation), « VERGER DES COTEAUX » (une autre personne que l'inscrite a saisi le code du courrier : comptes d'avant retirés, lien avec le cabinet Martin terminé), « CABINET ROUSSEL » (cabinet non vérifié), « AUDIT CONSEIL BRETAGNE » (cabinet suspendu).
++- « ATELIER BRUN » (services en franchise en base) : sa responsable, Mathilde Brun, coche le dépannage à domicile dans « Factures et devis » (devis gratuit, puis payant à 35,00 € TTC) ; un brouillon pour Hélène Garnier fait juste avant que le réglage soit coché, sans lieu de l'intervention (refusé à l'envoi) ; un devis de réparation d'une machine à coudre signé chez Jeanne Roussel (droit de rétractation et formulaire sur sa dernière page), accepté par le magasin avant le départ de son e-mail, qui ne part pas ; un devis gratuit envoyé par e-mail à Bernard Petit, accepté en ligne avec la demande d'un début avant la fin du délai de rétractation ; un devis payant envoyé à Hélène Garnier pour un autre lieu que son adresse, accepté en ligne sans cette demande (cadre « Bon pour accord » rempli, référence ACC-ATELIER-…) ; un brouillon qui suit le prix du jour, et un devis envoyé à l'Agence Pixel, professionnelle, sans aucune de ces mentions. « STUDIO LUMIERE » (services, option pour les débits, écart Sirene vérifié, fin d'exercice changée par la procédure de l'éditeur, SIREN corrigé par la procédure de l'éditeur : une facture régularisée par son avoir de régularisation et sa facture rectificative, les autres à régulariser), « GROUPE NORD DISTRIBUTION » (membre d'un assujetti unique : ventes refusées), « BOULANGERIE DUVAL » (suspendue ; son lien avec le cabinet Martin terminé par le cabinet, puis celui avec « CABINET FAURE ET ASSOCIES » terminé par la radiation de ce cabinet de l'Ordre, constatée par l'éditeur), « LIBRAIRIE DES QUAIS » (propriété transmise, puis résiliée), « MAROQUINERIE DELMAS » (révoquée par l'éditeur après le courrier de révocation), « VERGER DES COTEAUX » (une autre personne que l'inscrite a saisi le code du courrier : comptes d'avant retirés, lien avec le cabinet Martin terminé), « CABINET ROUSSEL » (cabinet non vérifié), « AUDIT CONSEIL BRETAGNE » (cabinet suspendu).
+ - Incidents : aux Halles, une facture rejetée par la plateforme agréée factice (code et motif du rejet), une autre « non transmise : incident technique » après ses tentatives pendant une panne de la plateforme, un envoi en échec pendant une panne du serveur d'envoi ; la veille du semis, une transmission encore « soumise » et un envoi « en attente » de leur tentative suivante, et un téléchargement « en préparation » ; chez « CONSEIL VASSEUR », le ZIP qu'Anaïs Lambert avait demandé juste avant son retrait, en échec. Ces trois tâches restent dans des files de la table `jobs` qu'aucun travailleur du poste n'écoute (`semis` et `semis-telechargements`, voir `FileDAttenteDuSemis`) : `php artisan queue:listen` peut tourner pendant et après le semis sans les prendre, et la surveillance de la file ne les compte pas.
+ - Graphiques : la propriétaire de Maison Ferrand, Camille Laurent, le propriétaire du cabinet et Marc Petit ont chacun leurs graphiques, leur ordre et leurs filtres ; Marc Petit les a tous affichés (son menu « Ajouter un graphique » dit « Tous les graphiques sont affichés »). Maison Ferrand finit son exercice en décembre (menu « Période » sans « Exercice », « Année 2026 (exercice en cours) »), le Studio Lumière un autre mois (« Exercice en cours » et « Exercice précédent »).
+ - Inscriptions : « FLEURS DE SAISON » attend le code de son courrier (le code se lit dans le plus récent des PDF de `storage/app/private/courriers-factices` et se saisit sur `/code`), « FROMAGERIE MORIN » attend aussi le sien après un nouveau courrier et le dépôt de ses pièces, l'une close faute de code, deux closes par l'éditeur (refus, type d'activité choisi par erreur), et une demande d'inscription jamais confirmée.
+diff --git a/app/Domain/Facturation/Actions/CreerDevisAction.php b/app/Domain/Facturation/Actions/CreerDevisAction.php
+index b052c043..9e2caa11 100644
+--- a/app/Domain/Facturation/Actions/CreerDevisAction.php
++++ b/app/Domain/Facturation/Actions/CreerDevisAction.php
+@@ -25,10 +25,12 @@
+  * dans le magasin actif avant toute écriture (voir
+  * BelongsToMagasin::relueDansLeMagasin()), et note le type de ce client, si le magasin vend en franchise de TVA, la nature
+  * de l'opération, que ce client et ce régime doivent permettre (voir
+- * ContexteDeVente::pourEnregistrer()), la livraison (voir
+- * NoteSaNatureDOperation) et, pour un dépannage à domicile, le lieu de
+- * l'intervention (voir DepannageADomicile), que reprend la facture qui en est tirée (voir
+- * CreerFactureDepuisDevisAction).
++ * ContexteDeVente::pourEnregistrer()) et la livraison (voir
++ * NoteSaNatureDOperation), que reprend la facture qui en est tirée (voir
++ * CreerFactureDepuisDevisAction) ; pour un dépannage à domicile, il note
++ * aussi le lieu de l'intervention et la case « Devis signé chez le
++ * client » (voir DepannageADomicile), qui restent sur le devis : la
++ * facture ne les reprend pas.
+  *
+  * Un magasin suspendu, fermé ou cédé, ou dont la société est en lecture
+  * seule, n'en crée plus (voir Magasin::verifierQuIlEstOuvert()) : sa ligne
+diff --git a/app/Domain/Facturation/Actions/EmettreDevisAction.php b/app/Domain/Facturation/Actions/EmettreDevisAction.php
+index 512536c9..05bde35e 100644
+--- a/app/Domain/Facturation/Actions/EmettreDevisAction.php
++++ b/app/Domain/Facturation/Actions/EmettreDevisAction.php
+@@ -34,7 +34,11 @@
+  * imprime ensuite quoi qu'ils deviennent (voir Devis::emetteur()), jusqu'à
+  * sa prochaine modification, avec le réglage du dépannage à domicile du
+  * magasin et le prix de ce devis (voir DepannageADomicile) : un devis de
+- * dépannage à un particulier ne part pas sans le lieu de l'intervention.
++ * dépannage à un particulier ne part pas sans le lieu de l'intervention,
++ * et un devis qui part sans dépannage (le magasin a décoché le réglage
++ * depuis son enregistrement) perd le lieu et la case « Devis signé chez le
++ * client » qu'il n'imprime pas : ni sa fiche ni son empreinte ne les
++ * gardent.
+  * Un magasin qui ne peut pas vendre (lecture seule, société
+  * en cours de vérification, établissement pas encore confirmé) n'en envoie
+  * pas (voir Magasin::verifierQuIlPeutVendre()). Un devis dont la date de validité est
+@@ -121,6 +125,7 @@ public function handle(User $auteur, Devis $devis, ?string $jeton = null): Devis
+                 'emetteur_fige' => Emetteur::duMagasin($devis->magasin)->enTableau(),
+                 'depannage_a_domicile' => $depannage,
+                 'prix_du_devis_de_depannage' => $depannage ? $devis->magasin->prix_du_devis_de_depannage : null,
++                ...($depannage ? [] : ['lieu_d_intervention' => null, 'signe_chez_le_client' => false]),
+             ]))->save());
+         }));
+     }
+diff --git a/app/Domain/Facturation/Enums/NatureEnvoi.php b/app/Domain/Facturation/Enums/NatureEnvoi.php
+index 44200c3d..5c5d968d 100644
+--- a/app/Domain/Facturation/Enums/NatureEnvoi.php
++++ b/app/Domain/Facturation/Enums/NatureEnvoi.php
+@@ -9,8 +9,9 @@
+  * Pourquoi un document part par e-mail (voir EnvoiDocument) : un envoi
+  * demandé par le magasin, une relance d'une facture échue et impayée,
+  * numérotée par son niveau, ou la confirmation au client de sa réponse en
+- * ligne à un devis, l'acceptation ou le refus, devis joint (voir
+- * RepondreAuDevisEnLigneAction).
++ * ligne à un devis : l'acceptation, avec le devis signé en PDF, ou le
++ * refus, sans PDF (voir RepondreAuDevisEnLigneAction et
++ * DocumentMail::porteLePdf()).
+  */
+ enum NatureEnvoi: string implements HasColor, HasLabel
+ {
+diff --git a/app/Domain/Facturation/Jobs/EnvoyerDocumentJob.php b/app/Domain/Facturation/Jobs/EnvoyerDocumentJob.php
+index c5cca034..1023de47 100644
+--- a/app/Domain/Facturation/Jobs/EnvoyerDocumentJob.php
++++ b/app/Domain/Facturation/Jobs/EnvoyerDocumentJob.php
+@@ -111,10 +111,10 @@
+  * critique. Une tentative dure au plus $timeout secondes.
+  *
+  * Un devis envoyé part avec le lien secret de son envoi, sans PDF (voir
+- * DocumentMail) : le lien de l'envoi qui ne vaut plus au départ (retiré,
+- * devis refusé ou expiré entre-temps) fait échouer l'envoi sans nouvelle
+- * tentative ; un devis accepté ou transformé repart avec son PDF, sans
+- * lien.
++ * DocumentMail) : le lien de l'envoi qui ne vaut plus au départ fait
++ * échouer l'envoi sans nouvelle tentative, avec sa vraie cause (voir
++ * motifDuLienQuiNeVautPlus()) ; un devis accepté ou transformé renvoyé à
++ * la demande du magasin repart avec son PDF, sans lien.
+  *
+  * Le PDF est généré à chaque tentative depuis le document tel
+  * qu'il est enregistré : une facture ou un avoir figés à leur émission,
+@@ -131,12 +131,23 @@ class EnvoyerDocumentJob implements ShouldBeUnique, ShouldQueue
+     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, WithTenantContext;
+ 
+     /**
+-     * Un devis envoyé dont le lien ne vaut plus au départ de l'e-mail
+-     * (retiré par le magasin, devis refusé ou expiré entre-temps) : sans
++     * Les causes qui font échouer l'envoi d'un devis dont le lien ne vaut
++     * plus au départ de l'e-mail (voir motifDuLienQuiNeVautPlus()) : sans
+      * lien ni PDF, que son client ne reçoit qu'une fois le devis accepté,
+-     * l'e-mail ne lui apporterait rien.
++     * l'e-mail ne lui apporterait rien. Chacune dit ce qui s'est passé et
++     * ce qui reste à faire.
+      */
+-    public const MOTIF_DEVIS_SANS_LIEN = 'Le devis ne peut plus être accepté par le lien de cet envoi (lien retiré, devis refusé ou expiré entre-temps) : l\'e-mail n\'est pas parti. Renvoyez-le à votre client s\'il peut encore l\'accepter.';
++    public const MOTIF_LIEN_RETIRE = 'Le lien de réponse de cet envoi a été retiré entre-temps : l\'e-mail n\'est pas parti. Renvoyez le devis à votre client s\'il doit encore pouvoir l\'accepter en ligne.';
++
++    public const MOTIF_LIEN_REMPLACE = 'Un envoi plus récent de ce devis a remplacé le lien de cet envoi : cet e-mail n\'est pas parti, celui de l\'envoi le plus récent porte le lien valable. Rien d\'autre à faire.';
++
++    public const MOTIF_DEVIS_ACCEPTE_ENTRE_TEMPS = 'Le devis a été accepté entre-temps : l\'e-mail qui demandait sa réponse n\'est pas parti, il n\'y a plus rien à accepter. Envoyez le devis accepté à votre client si vous voulez qu\'il en ait le PDF.';
++
++    public const MOTIF_DEVIS_REFUSE_ENTRE_TEMPS = 'Le devis a été refusé entre-temps : l\'e-mail n\'est pas parti. Établissez un nouveau devis si votre client le souhaite.';
++
++    public const MOTIF_DEVIS_EXPIRE_ENTRE_TEMPS = 'La validité du devis est dépassée : l\'e-mail n\'est pas parti, son client ne pourrait plus l\'accepter. Établissez un nouveau devis si votre client le souhaite encore.';
++
++    public const MOTIF_DEVIS_SANS_LIEN = 'Le devis ne peut plus être accepté par le lien de cet envoi : l\'e-mail n\'est pas parti.';
+ 
+     public const MOTIF_EXPEDITEUR_SANS_DROIT = 'La personne qui a demandé cet envoi n\'a plus accès à ce magasin ou n\'a plus le droit d\'envoyer ce document : l\'e-mail n\'est pas parti.';
+ 
+@@ -224,7 +235,7 @@ public function handle(): void
+         $lienDeLEnvoi = $document instanceof Devis && $envoi->nature === NatureEnvoi::Envoi ? $envoi->lienDuDevis()->first() : null;
+ 
+         if ($document instanceof Devis && $lienDeLEnvoi !== null && ! $lienDeLEnvoi->estValable($document)) {
+-            $this->echouer($envoi, self::MOTIF_DEVIS_SANS_LIEN);
++            $this->echouer($envoi, self::motifDuLienQuiNeVautPlus($lienDeLEnvoi, $document));
+ 
+             return;
+         }
+@@ -255,6 +266,26 @@ public function handle(): void
+         ])->save();
+     }
+ 
++    /**
++     * Pourquoi le lien de l'envoi d'un devis ne vaut plus au départ de
++     * l'e-mail, d'après le lien et le devis relus : retiré par le magasin ;
++     * remplacé par un envoi plus récent, dont l'e-mail porte le lien
++     * valable ; devis accepté (au magasin, signé à la main) ou transformé
++     * en facture entre-temps ; refusé ; expiré ; sinon (le magasin ne peut
++     * plus vendre, par exemple), la cause générale.
++     */
++    private static function motifDuLienQuiNeVautPlus(LienDuDevis $lien, Devis $devis): string
++    {
++        return match (true) {
++            $lien->retire_le !== null => self::MOTIF_LIEN_RETIRE,
++            LienDuDevis::query()->where('devis_id', $lien->devis_id)->where('id', '>', $lien->getKey())->exists() => self::MOTIF_LIEN_REMPLACE,
++            in_array($devis->statut, [StatutDevis::Accepte, StatutDevis::Converti], true) => self::MOTIF_DEVIS_ACCEPTE_ENTRE_TEMPS,
++            $devis->statut === StatutDevis::Refuse => self::MOTIF_DEVIS_REFUSE_ENTRE_TEMPS,
++            $devis->statut === StatutDevis::Expire || $devis->validiteDepassee() => self::MOTIF_DEVIS_EXPIRE_ENTRE_TEMPS,
++            default => self::MOTIF_DEVIS_SANS_LIEN,
++        };
++    }
++
+     /**
+      * Le serveur d'envoi a refusé l'e-mail ou n'a pas répondu : une cause
+      * qui tient à la plateforme s'inscrit au journal au niveau critique,
+diff --git a/app/Domain/Facturation/Models/EnvoiDocument.php b/app/Domain/Facturation/Models/EnvoiDocument.php
+index 42eaae6d..1fe4aac9 100644
+--- a/app/Domain/Facturation/Models/EnvoiDocument.php
++++ b/app/Domain/Facturation/Models/EnvoiDocument.php
+@@ -20,8 +20,10 @@
+ use Illuminate\Support\Str;
+ 
+ /**
+- * Un e-mail parti (ou à partir) avec un devis, une facture ou un avoir en
+- * pièce jointe : créé par EnvoyerDocumentAction, envoyé par
++ * Un e-mail parti (ou à partir) avec un devis, une facture, un avoir ou un
++ * reçu de paiement : en pièce jointe, sauf un devis que son client n'a pas
++ * accepté, qui part avec le lien de sa réponse en ligne, sans PDF (voir
++ * DocumentMail::porteLePdf()). Créé par EnvoyerDocumentAction, envoyé par
+  * EnvoyerDocumentJob, qui en constate le résultat. Seule une relance en
+  * échec en change ensuite : EnvoyerDocumentAction::relancer() la
+  * reprogramme.
+diff --git a/app/Domain/Facturation/Services/MentionsFiscales.php b/app/Domain/Facturation/Services/MentionsFiscales.php
+index 3b3d2684..3addb812 100644
+--- a/app/Domain/Facturation/Services/MentionsFiscales.php
++++ b/app/Domain/Facturation/Services/MentionsFiscales.php
+@@ -232,11 +232,14 @@ public function regularisation(Avoir $avoir): ?string
+      * particulier, qui ne montre que des prix TTC (modèle P1), n'imprime que
+      * l'explication du calcul. Rien en franchise en base, où le HT est le
+      * prix TTC, sans TVA. Une explication, pas une mention : elle ne se
+-     * signe pas avec le document (voir ContenuFiscal).
++     * signe pas avec le document (voir ContenuFiscal). La page du lien d'un
++     * devis, qui montre ses lignes comme son PDF sans le PU HT exact (seul
++     * le PDF l'écrit), en a la note sans la phrase du PU HT exact.
+      *
+-     * @param  bool  $surLePdf  la note du PDF du document, et non celle de sa fiche
++     * @param  bool  $surLePdf  la note du PDF du document, ou de la page du lien d'un devis, et non celle de sa fiche
++     * @param  bool  $avecLePuHtExact  avec $surLePdf, le document écrit le PU HT exact sous chaque article : faux sur la page du lien d'un devis
+      */
+-    public function calcul(Facture|Avoir|Devis $document, bool $surLePdf = false): ?string
++    public function calcul(Facture|Avoir|Devis $document, bool $surLePdf = false, bool $avecLePuHtExact = true): ?string
+     {
+         if ($document->franchise_en_base) {
+             return null;
+@@ -250,6 +253,6 @@ public function calcul(Facture|Avoir|Devis $document, bool $surLePdf = false): ?
+             return $calcul;
+         }
+ 
+-        return implode(' ', [$calcul, self::PU_HT_D_UN_ARTICLE, ...($surLePdf ? [self::PU_HT_EXACT] : [])]);
++        return implode(' ', [$calcul, self::PU_HT_D_UN_ARTICLE, ...($surLePdf && $avecLePuHtExact ? [self::PU_HT_EXACT] : [])]);
+     }
+ }
+diff --git a/app/Domain/Tenancy/Models/Magasin.php b/app/Domain/Tenancy/Models/Magasin.php
+index 4dfda078..f7e53c35 100644
+--- a/app/Domain/Tenancy/Models/Magasin.php
++++ b/app/Domain/Tenancy/Models/Magasin.php
+@@ -121,7 +121,7 @@ class Magasin extends Model implements HasName
+     /**
+      * Les mentions des factures entre professionnels (art. L441-9 du Code
+      * de commerce, B9) que chaque magasin reçoit à sa création et règle
+-     * ensuite (Paramètres > Factures) : pénalités de trois fois le taux
++     * ensuite (Paramètres > Factures et devis) : pénalités de trois fois le taux
+      * d'intérêt légal, indemnité forfaitaire de 40 €, pas d'escompte.
+      */
+     public const MENTION_PENALITES_PAR_DEFAUT = 'Pénalités de retard : trois fois le taux d\'intérêt légal, exigibles dès le lendemain de la date d\'échéance.';
+diff --git a/app/Filament/App/Resources/ClientResource.php b/app/Filament/App/Resources/ClientResource.php
+index 71aab1de..d749733e 100644
+--- a/app/Filament/App/Resources/ClientResource.php
++++ b/app/Filament/App/Resources/ClientResource.php
+@@ -325,7 +325,7 @@ public static function form(Form $form): Form
+             Section::make('Paiement et notes')->schema([
+                 TextInput::make('delai_paiement_jours')
+                     ->label('Délai de paiement (jours)')
+-                    ->helperText('Vide : délai par défaut du magasin (Paramètres > Factures).')
++                    ->helperText('Vide : délai par défaut du magasin (Paramètres > Factures et devis).')
+                     ->integer()
+                     ->minValue(0)
+                     ->maxValue(365),
+diff --git a/app/Filament/App/Resources/DevisResource.php b/app/Filament/App/Resources/DevisResource.php
+index c6eb4f26..0deeaa14 100644
+--- a/app/Filament/App/Resources/DevisResource.php
++++ b/app/Filament/App/Resources/DevisResource.php
+@@ -51,6 +51,7 @@
+ use Filament\Tables\Table;
+ use Illuminate\Database\Eloquent\Builder;
+ use Illuminate\Database\Eloquent\Model;
++use Illuminate\Support\HtmlString;
+ 
+ class DevisResource extends Resource
+ {
+@@ -181,23 +182,45 @@ private static function depannageConcerne(mixed $clientId): bool
+ 
+     /**
+      * Un lieu de l'intervention encore vide prend l'adresse du client
+-     * choisi, une ligne par partie renseignée.
++     * choisi (voir lieuPreremplir()).
+      */
+     private static function preremplirLeLieuDIntervention(Get $get, Set $set): void
+     {
+-        if (filled($get('lieu_d_intervention')) || ! self::depannageConcerne($get('client_id'))) {
+-            return;
++        $lieu = self::lieuPreremplir($get('client_id'), $get('lieu_d_intervention'));
++
++        if ($lieu !== null) {
++            $set('lieu_d_intervention', $lieu);
++        }
++    }
++
++    /**
++     * Le lieu de l'intervention que le formulaire préremplit : l'adresse du
++     * client choisi, une ligne par partie renseignée, quand le magasin
++     * actif a coché le dépannage à domicile, que ce client est un
++     * particulier et que le lieu est encore vide ; null sinon. Au
++     * changement du client, et à l'ouverture d'un brouillon enregistré
++     * avant que le magasin coche le réglage (voir
++     * EditDevis::mutateFormDataBeforeFill()).
++     */
++    public static function lieuPreremplir(mixed $clientId, mixed $lieu): ?string
++    {
++        if (filled($lieu) || ! self::depannageConcerne($clientId)) {
++            return null;
+         }
+ 
+-        $client = Client::withTrashed()->find(ValeursLues::cle($get('client_id')));
++        $client = Client::withTrashed()->find(ValeursLues::cle($clientId));
+ 
+-        if ($client !== null) {
+-            $set('lieu_d_intervention', implode("\n", array_values(array_filter([
+-                $client->adresse,
+-                $client->complement_adresse,
+-                trim("{$client->code_postal} {$client->ville}"),
+-            ], filled(...)))));
++        if ($client === null) {
++            return null;
+         }
++
++        $adresse = implode("\n", array_values(array_filter([
++            $client->adresse,
++            $client->complement_adresse,
++            trim("{$client->code_postal} {$client->ville}"),
++        ], filled(...))));
++
++        return $adresse === '' ? null : $adresse;
+     }
+ 
+     /**
+@@ -219,13 +242,19 @@ public static function infolist(Infolist $infolist): Infolist
+                 TextEntry::make('date_validite')->label('Valide jusqu\'au')->jour()->placeholder('—'),
+                 FactureResource::natureEntry(),
+                 FactureResource::dateDeLOperationEntry(prevue: true),
++                // Ce que le PDF du devis imprime (voir DepannageADomicile::duDevis()) :
++                // rien quand le magasin a décoché le réglage depuis
++                // l'enregistrement d'un brouillon ; le lieu, une ligne par
++                // ligne saisie.
+                 TextEntry::make('lieu_d_intervention')
+                     ->label('Lieu de l\'intervention')
+-                    ->visible(fn (Devis $record): bool => $record->lieu_d_intervention !== null),
++                    ->state(fn (Devis $record): ?string => DepannageADomicile::duDevis($record)?->lieu)
++                    ->formatStateUsing(fn (string $state): HtmlString => new HtmlString(nl2br(e($state), false)))
++                    ->visible(fn (Devis $record): bool => DepannageADomicile::duDevis($record)?->lieu !== null),
+                 TextEntry::make('signe_chez_le_client')
+                     ->label('Devis signé chez le client')
+-                    ->state(fn (Devis $record): string => $record->signe_chez_le_client ? 'Oui : le devis imprime le droit de rétractation et son formulaire' : 'Non')
+-                    ->visible(fn (Devis $record): bool => $record->lieu_d_intervention !== null),
++                    ->state(fn (Devis $record): string => DepannageADomicile::duDevis($record)?->signeChezLeClient === true ? 'Oui : le devis imprime le droit de rétractation et son formulaire' : 'Non')
++                    ->visible(fn (Devis $record): bool => DepannageADomicile::duDevis($record) !== null),
+                 TextEntry::make('accepte_le')
+                     ->label('Accepté le')
+                     ->state(fn (Devis $record): ?string => $record->accepte_le === null ? null : $record->magasin->calendrier()->afficher($record->accepte_le, 'd/m/Y à H:i'))
+diff --git a/app/Filament/App/Resources/DevisResource/Pages/EditDevis.php b/app/Filament/App/Resources/DevisResource/Pages/EditDevis.php
+index 984373f2..939d9675 100644
+--- a/app/Filament/App/Resources/DevisResource/Pages/EditDevis.php
++++ b/app/Filament/App/Resources/DevisResource/Pages/EditDevis.php
+@@ -59,13 +59,20 @@ public function getSubheading(): ?string
+      * ChoisitLaNatureDeLOperation::natureARouvrir()), et, pour qui n'est pas
+      * autorisé à fixer les prix, au prix du catalogue quand l'enregistrement
+      * ne les reprendrait plus telles quelles (voir
+-     * AjouteDesLignesDeVente::lignesAuxPrixPermis()).
++     * AjouteDesLignesDeVente::lignesAuxPrixPermis()) ; le lieu de
++     * l'intervention d'un brouillon enregistré avant que le magasin coche
++     * le dépannage à domicile, prérempli avec l'adresse du client comme à
++     * la création (voir DevisResource::lieuPreremplir()).
+      */
+     protected function mutateFormDataBeforeFill(array $data): array
+     {
+         $donnees = DevisResource::natureARouvrir($this->record, [...$data, 'lignes' => DevisResource::lignesARouvrir($this->record)]);
+ 
+-        return [...$donnees, 'lignes' => DevisResource::lignesAuxPrixPermis(ValeursLues::tableau($donnees['lignes']), $donnees['client_id'] ?? null, $donnees['nature_operation'] ?? null, $this->record)];
++        return [
++            ...$donnees,
++            'lignes' => DevisResource::lignesAuxPrixPermis(ValeursLues::tableau($donnees['lignes']), $donnees['client_id'] ?? null, $donnees['nature_operation'] ?? null, $this->record),
++            'lieu_d_intervention' => DevisResource::lieuPreremplir($donnees['client_id'] ?? null, $donnees['lieu_d_intervention'] ?? null) ?? $donnees['lieu_d_intervention'] ?? null,
++        ];
+     }
+ 
+     protected function handleRecordUpdate(Model $record, array $data): Model
+diff --git a/app/Http/Controllers/ReponseAuDevisController.php b/app/Http/Controllers/ReponseAuDevisController.php
+index 13c1893b..421eaea8 100644
+--- a/app/Http/Controllers/ReponseAuDevisController.php
++++ b/app/Http/Controllers/ReponseAuDevisController.php
+@@ -8,11 +8,11 @@
+ use App\Domain\Facturation\Models\Devis;
+ use App\Domain\Facturation\Models\LienDuDevis;
+ use App\Domain\Facturation\Models\ReponseDuDevis;
+-use App\Domain\Facturation\Services\CalculateurLigne;
+-use App\Domain\Facturation\Services\ContexteDeVente;
+ use App\Domain\Facturation\Services\DepannageADomicile;
+ use App\Domain\Facturation\Services\DevisPdfGenerator;
+ use App\Domain\Facturation\Services\DroitDeRetractation;
++use App\Domain\Facturation\Services\PiedDePage;
++use App\Domain\Facturation\Services\TableauDesLignes;
+ use App\Domain\Fichiers\EnTetesDesFichiers;
+ use App\Domain\Tenancy\Models\Magasin;
+ use App\Domain\Tenancy\Services\TenantContext;
+@@ -28,10 +28,10 @@
+  * La page du lien secret par lequel le client répond à un devis envoyé
+  * par e-mail, sans compte (voir LienDuDevis) :
+  * - ouvrir le lien (GET) n'écrit rien : la page montre ce seul devis, tel
+- *   qu'il a été envoyé (le magasin qui l'envoie, son numéro, sa validité,
+- *   ses mentions de dépannage à domicile, ses lignes, ses totaux), sans
+- *   PDF (demande de l'éditeur du 14/11/2026), rien d'autre du magasin, de
+- *   la société ni d'un autre client, et les deux réponses possibles ; pour
++ *   qu'il a été envoyé, avec tout ce que son PDF imprime (voir
++ *   devis/document), sans PDF (demande de l'éditeur du 14/11/2026), rien
++ *   d'autre du magasin, de la société ni d'un autre client, et les deux
++ *   réponses possibles ; pour
+  *   un particulier, son droit de rétractation de quatorze jours, avec le
+  *   formulaire type, et la case qui demande que la prestation commence
+  *   avant la fin du délai (T86, voir DroitDeRetractation) ;
+@@ -102,8 +102,12 @@ public function refuser(Request $requete, string $jeton, RepondreAuDevisEnLigneA
+     /**
+      * La réponse enregistrée, la page qui la dit ; une saisie refusée
+      * revient au formulaire avec ce qui était tapé ou coché, la demande de
+-     * début anticipé comprise ; un lien qui ne vaut plus donne la page
+-     * neutre.
++     * début anticipé comprise. Un lien qui ne vaut plus pour répondre
++     * montre encore la confirmation de l'acceptation qu'il a enregistrée
++     * (voir LienDuDevis::confirmeLAcceptation()) : le second envoi d'un
++     * double clic sur « Accepter le devis », ou d'un formulaire renvoyé par
++     * le navigateur, ne fait pas croire au client que son acceptation a
++     * échoué ; sinon, la page neutre.
+      *
+      * @param  Closure(): ReponseDuDevis  $reponse
+      */
+@@ -112,15 +116,15 @@ private function repondre(string $jeton, Closure $reponse, ?string $signataire,
+         try {
+             $enregistree = $reponse();
+         } catch (LienDuDevisInvalideException) {
+-            return self::invalide();
++            return $this->dansLeMagasinDuLien($jeton, fn (LienDuDevis $lien, Devis $devis): ReponseHttp => $this->confirmationOuInvalide($jeton, $lien, $devis));
+         } catch (ValidationException $refus) {
+             return $this->dansLeMagasinDuLien($jeton, fn (LienDuDevis $lien, Devis $devis): ReponseHttp => $lien->estValable($devis)
+                 ? $this->page($jeton, $devis, array_values($refus->validator->errors()->all()), $signataire, $motif, $debutAnticipe, 422)
+-                : self::invalide());
++                : $this->confirmationOuInvalide($jeton, $lien, $devis));
+         }
+ 
+         if ($enregistree->reponse === ReponseAuDevis::Acceptation) {
+-            return $this->dansLeMagasinDuLien($jeton, fn (LienDuDevis $lien, Devis $devis): ReponseHttp => $lien->confirmeLAcceptation($devis) ? $this->confirmation($jeton, $devis) : self::invalide());
++            return $this->dansLeMagasinDuLien($jeton, fn (LienDuDevis $lien, Devis $devis): ReponseHttp => $this->confirmationOuInvalide($jeton, $lien, $devis));
+         }
+ 
+         $devis = Devis::query()->withoutGlobalScopes()->whereKey($enregistree->devis_id)->where('magasin_id', $enregistree->magasin_id)->firstOrFail(['id', 'magasin_id', 'numero']);
+@@ -137,6 +141,15 @@ private function repondre(string $jeton, Closure $reponse, ?string $signataire,
+         ]));
+     }
+ 
++    /**
++     * La confirmation de l'acceptation que ce lien a enregistrée, tant que
++     * le devis la garde, sinon la page neutre.
++     */
++    private function confirmationOuInvalide(string $jeton, LienDuDevis $lien, Devis $devis): ReponseHttp
++    {
++        return $lien->confirmeLAcceptation($devis) ? $this->confirmation($jeton, $devis) : self::invalide();
++    }
++
+     /**
+      * La confirmation d'une acceptation, que montre le lien qui l'a
+      * enregistrée (voir LienDuDevis::confirmeLAcceptation()) : « Devis
+@@ -193,39 +206,27 @@ private function dansLeMagasinDuLien(string $jeton, Closure $suite): ReponseHttp
+     }
+ 
+     /**
++     * La page du devis valable : tout ce que son PDF imprime, depuis les
++     * mêmes données (voir devis/document), sans le PU HT exact, que seul le
++     * PDF écrit ; puis les deux réponses.
++     *
+      * @param  list<string>  $erreurs
+      */
+     private function page(string $jeton, Devis $devis, array $erreurs, ?string $signataire, ?string $motif, bool $debutAnticipe = false, int $statut = 200): ReponseHttp
+     {
+-        $calculateur = app(CalculateurLigne::class);
+-        $horsTaxe = $devis->estPourUnProfessionnel() || ContexteDeVente::documentRetireLaTvaDuPrix($devis);
+-        $lignes = $devis->lignes->map(fn ($ligne): array => [
+-            'reference' => $ligne->reference,
+-            'description' => $ligne->description,
+-            'quantite' => $ligne->quantite,
+-            'prix_unitaire' => $horsTaxe
+-                ? $calculateur->prixUnitaireHtAfficheEnEuros($calculateur->enCentiemes($ligne->prix_unitaire_ttc), $calculateur->enCentiemes($ligne->taux_tva_du_prix))
+-                : $calculateur->prixUnitaireAffiche($calculateur->enMillioniemes($ligne->prix_unitaire_ttc)),
+-            'remise' => $calculateur->enCentiemes($ligne->remise_pourcentage) === 0 ? null : CalculateurLigne::tauxEnTexte($calculateur->enCentiemes($ligne->remise_pourcentage)),
+-            'total' => $calculateur->enEuros($calculateur->enCentiemes($horsTaxe ? $ligne->montant_ht : $ligne->montant_ttc)),
+-        ])->all();
++        $emetteur = $devis->emetteur();
+ 
+         return self::protegee(response()->view('devis.reponse', [
+-            'emetteur' => $devis->emetteur(),
++            'emetteur' => $emetteur,
+             'devis' => $devis,
+-            'client' => $devis->client?->nom,
+-            'lignes' => $lignes,
+-            'horsTaxe' => $horsTaxe,
+-            'totalHt' => $calculateur->enEuros($calculateur->enCentiemes($devis->total_ht)),
+-            'totalTva' => $calculateur->enEuros($calculateur->enCentiemes($devis->total_tva)),
+-            'totalTtc' => $calculateur->enEuros($calculateur->enCentiemes($devis->total_ttc)),
+-            'validite' => $devis->date_validite,
++            'pied' => PiedDePage::pour($devis, $emetteur),
++            'tableau' => TableauDesLignes::pour($devis),
+             'erreurs' => $erreurs,
+             'signataire' => $signataire,
+             'motif' => $motif,
+             'debutAnticipe' => $debutAnticipe,
+             'depannage' => DepannageADomicile::duDevis($devis),
+-            'retractation' => $devis->estPourUnProfessionnel() ? null : new DroitDeRetractation($devis->emetteur()),
++            'retractation' => $devis->estPourUnProfessionnel() ? null : new DroitDeRetractation($emetteur),
+             'actionAccepter' => route('devis.reponse.accepter', ['jeton' => $jeton]),
+             'actionRefuser' => route('devis.reponse.refuser', ['jeton' => $jeton]),
+             'signataireMaximum' => RepondreAuDevisEnLigneAction::SIGNATAIRE_MAXIMUM,
+diff --git a/database/seeders/Semis/DocumentsDesCas.php b/database/seeders/Semis/DocumentsDesCas.php
+index 412045cf..9d4dbf91 100644
+--- a/database/seeders/Semis/DocumentsDesCas.php
++++ b/database/seeders/Semis/DocumentsDesCas.php
+@@ -438,12 +438,25 @@ private function casDuDepannage(string $magasin, int $rang, int $avantLaFin): vo
+         };
+     }
+ 
++    /**
++     * Le premier jour du dépannage : les services et les clients, puis un
++     * brouillon pour un particulier enregistré avant que le responsable
++     * coche le réglage, sans lieu de l'intervention (son PDF imprime
++     * « Lieu de l'intervention : — », « Envoyer par e-mail » le refuse, et
++     * sa modification préremplit le lieu avec l'adresse du client) ; le
++     * réglage coché, le devis signé chez le client, dont l'e-mail attend
++     * en file pendant que le responsable enregistre l'acceptation signée à
++     * la main sur place, si bien qu'il ne part pas (« Le devis a été
++     * accepté entre-temps », voir EnvoyerDocumentJob) ; le devis envoyé que
++     * le client acceptera en ligne en demandant que la prestation commence
++     * avant la fin du délai, et un devis à un professionnel, sans rien de
++     * tout cela.
++     */
+     private function semerLeDepannageADomicile(string $magasin): void
+     {
+         $cas = self::DEPANNAGES[$magasin];
+         $gestes = $this->gestes($magasin);
+         $responsable = $this->semis->compte($cas['responsable']);
+-        $gestes->dans(fn (): array => app(ModifierLesParametresDuMagasinAction::class)->handle($responsable, PermissionRegistry::PARAMETRES_GERER, FicheLue::de($gestes->magasin->refresh())->valeurs(), ['depannage_a_domicile' => true]));
+ 
+         foreach ([$cas['intervention'], $cas['deplacement']] as [$nom, $prix]) {
+             if ($prix !== null) {
+@@ -460,8 +473,13 @@ private function semerLeDepannageADomicile(string $magasin): void
+ 
+         $lignes = [$this->ligne($gestes, $cas['intervention'][0], 1), $this->ligne($gestes, $cas['deplacement'][0], 1)];
+         $validite = $this->validiteDesDevisDeDepannage();
+-        $signe = $gestes->dans(fn (): Devis => app(EmettreDevisAction::class)->handle($responsable, app(CreerDevisAction::class)->handle($responsable, $clients['signe'], $lignes, ['date_validite' => $validite, 'lieu_d_intervention' => self::adresseDe($cas['signe']), 'signe_chez_le_client' => true]), GestesDuMagasin::jeton()));
+-        $gestes->dans(fn (): Devis => app(AccepterDevisAction::class)->handle($responsable, $signe));
++        $gestes->dans(fn (): Devis => app(CreerDevisAction::class)->handle($responsable, $clients['payant'], [$this->ligne($gestes, $cas['intervention'][0], 1)], ['date_validite' => $validite]));
++        $gestes->dans(fn (): array => app(ModifierLesParametresDuMagasinAction::class)->handle($responsable, PermissionRegistry::PARAMETRES_GERER, FicheLue::de($gestes->magasin->refresh())->valeurs(), ['depannage_a_domicile' => true]));
++
++        $signe = $gestes->dans(fn (): Devis => app(CreerDevisAction::class)->handle($responsable, $clients['signe'], $lignes, ['date_validite' => $validite, 'lieu_d_intervention' => self::adresseDe($cas['signe']), 'signe_chez_le_client' => true]));
++        FileDAttenteDuSemis::plusTard(fn (): EnvoiDocument => $gestes->dans(fn (): EnvoiDocument => app(EnvoyerDocumentAction::class)->handle($responsable, $signe, $cas['signe']['email'], null, GestesDuMagasin::jeton())));
++        $gestes->dans(fn (): Devis => app(AccepterDevisAction::class)->handle($responsable, $signe->refresh()));
++        FileDAttenteDuSemis::passerCeQuiEstDu();
+         $enLigne = $gestes->dans(fn (): Devis => app(CreerDevisAction::class)->handle($responsable, $clients['avec_debut'], $lignes, ['date_validite' => $validite, 'lieu_d_intervention' => self::adresseDe($cas['avec_debut'])]));
+         $this->depannagesEnvoyes[$magasin]['avec_debut'] = $gestes->dans(fn (): EnvoiDocument => app(EnvoyerDocumentAction::class)->handle($responsable, $enLigne, $cas['avec_debut']['email'], $cas['message'], GestesDuMagasin::jeton()));
+         [$professionnel, $adresse, $article, $quantite] = $cas['professionnel'];
+diff --git a/resources/views/devis/document.blade.php b/resources/views/devis/document.blade.php
+new file mode 100644
+index 00000000..dbbf9666
+--- /dev/null
++++ b/resources/views/devis/document.blade.php
+@@ -0,0 +1,76 @@
++{{--
++    Le devis tel que son PDF l'imprime et tel que la page du lien le montre
++    avant la réponse du client (voir devis/pdf et devis/reponse) : la page
++    est désormais la seule façon de le lire avant de l'accepter (demande de
++    l'éditeur du 14/11/2026), elle en montre donc tout, depuis les mêmes
++    données. L'en-tête (le magasin qui vend, le numéro, l'émission, la
++    validité), le client et les conditions, les mentions du dépannage à
++    domicile, la livraison, les lignes avec leur taux et la note de calcul,
++    le récapitulatif par taux et les totaux, puis ses notes ; l'identité de
++    la société, son assurance professionnelle, les conditions de paiement
++    et les mentions sont dans le pied (voir documents/pdf/pied), que le PDF
++    fixe en bas de chaque page et que la page montre sous le devis.
++
++    Un devis modifié depuis son envoi est un brouillon qui garde son numéro
++    et la date de son dernier envoi (voir ModifierDevisAction) : cette
++    version n'a pas encore été émise, elle ne porte aucune date d'émission.
++
++    @param \App\Domain\Facturation\Models\Devis $devis
++    @param \App\Domain\Facturation\Services\Emetteur $emetteur celui que le devis a figé à son dernier envoi, la société et le magasin d'aujourd'hui pour un brouillon (voir Devis::emetteur())
++    @param \App\Domain\Facturation\Services\TableauDesLignes $tableau ses lignes (voir TableauDesLignes)
++    @param \App\Domain\Facturation\Services\DepannageADomicile|null $depannage ses mentions de dépannage à domicile, null sans elles
++    @param bool $avecLePuHtExact le PU HT exact sous chaque article : sur le PDF seulement
++--}}
++@php($brouillon = $devis->statut === \App\Domain\Facturation\Enums\StatutDevis::Brouillon)
++
++@include('documents.pdf.en-tete', [
++    'emetteur' => $emetteur,
++    'titre' => 'Devis',
++    'classeTitre' => 'majuscules',
++    'details' => array_filter([
++        match (true) {
++            $devis->numero === null => 'Brouillon (non envoyé)',
++            $brouillon => "N° {$devis->numero} (brouillon, modifié depuis son envoi)",
++            default => 'N° '.$devis->numero,
++        },
++        $brouillon ? null : 'Émis le '.$devis->magasin->calendrier()->afficher($devis->date_emission, 'd/m/Y'),
++        $devis->date_validite ? 'Valable jusqu\'au '.\App\Domain\Calendrier\Calendrier::afficherJour($devis->date_validite, 'd/m/Y') : null,
++    ]),
++])
++
++{{-- La fiche du client d'aujourd'hui, présentée selon le type avec
++     lequel le devis a été calculé, comme ses lignes (voir
++     Devis::client()). --}}
++@include('documents.pdf.blocs', [
++    'client' => \App\Domain\Facturation\Services\CopieClient::depuisClient($devis->client),
++    'professionnel' => $devis->estPourUnProfessionnel(),
++    'titre' => 'Établi pour',
++    'titreDesConditions' => 'Conditions',
++    'conditions' => [$devis->date_validite ? 'Valable jusqu\'au '.\App\Domain\Calendrier\Calendrier::afficherJour($devis->date_validite, 'd/m/Y') : 'Sans date de validité'],
++])
++
++{{-- Le dépannage, la réparation ou l'entretien à domicile d'un
++     particulier, quand le magasin l'a coché (voir DepannageADomicile) :
++     le lieu de l'intervention, une ligne par ligne saisie, le prix du
++     devis et les pièces remplacées. --}}
++@if($depannage !== null)
++    <div class="bloc-client depannage">
++        <div class="titre">Dépannage, réparation ou entretien à domicile</div>
++        Lieu de l'intervention : {!! $depannage->lieu === null ? '—' : nl2br(e($depannage->lieu), false) !!}<br>
++        {{ $depannage->mentionDuPrixDuDevis() }}<br>
++        {{ \App\Domain\Facturation\Services\DepannageADomicile::PIECES_REMPLACEES }}
++        @if($depannage->signeChezLeClient)
++            <br>Devis signé chez le client : votre droit de rétractation et son formulaire figurent à la fin de ce devis.
++        @endif
++    </div>
++@endif
++
++@include('documents.pdf.livraison', ['lignes' => $devis->lignesDeLivraison()])
++
++@include('documents.pdf.lignes', ['document' => $devis, 'tableau' => $tableau, 'avecLePuHtExact' => $avecLePuHtExact])
++
++@include('documents.pdf.totaux', ['document' => $devis, 'titreDuMontant' => 'Montant du devis', 'libelleDuTotal' => 'Total TTC'])
++
++@if($devis->notes)
++    <div class="remarque">{{ $devis->notes }}</div>
++@endif
+diff --git a/resources/views/devis/pdf.blade.php b/resources/views/devis/pdf.blade.php
+index 91153f42..c4aa1ec3 100644
+--- a/resources/views/devis/pdf.blade.php
++++ b/resources/views/devis/pdf.blade.php
+@@ -6,75 +6,22 @@
+     @include('documents.pdf.styles', ['pied' => $pied, 'tableau' => $tableau])
+ </head>
+ <body>
+-    {{-- Un devis modifié depuis son envoi est un brouillon qui garde son
+-         numéro et la date de son dernier envoi (voir ModifierDevisAction) :
+-         cette version n'a pas encore été émise, elle ne porte aucune date
+-         d'émission. $emetteur : celui que le devis a figé à son dernier
+-         envoi, la société et le magasin d'aujourd'hui pour un brouillon
+-         (voir Devis::emetteur()) ;
+-         $pied : l'identité de la société, les conditions de paiement, la
+-         nature de l'opération et la franchise de TVA, s'il y a lieu (voir
+-         PiedDePage) ; $tableau : ses lignes, mesurées pour tenir dans la
+-         largeur de la page (voir TableauDesLignes) ; $depannage : ses
+-         mentions de dépannage à domicile, null sans elles ; $acceptation :
+-         son acceptation en ligne, null sans elle ; $retractation : le droit
+-         de rétractation d'un devis de dépannage signé chez le client, null
+-         sinon (voir DevisPdfGenerator). --}}
+-    @php($brouillon = $devis->statut === \App\Domain\Facturation\Enums\StatutDevis::Brouillon)
+-
++    {{-- $emetteur : celui que le devis a figé à son dernier envoi, la
++         société et le magasin d'aujourd'hui pour un brouillon (voir
++         Devis::emetteur()) ; $pied : l'identité de la société, les
++         conditions de paiement, la nature de l'opération et la franchise de
++         TVA, s'il y a lieu (voir PiedDePage), placé avant le contenu pour
++         que chaque page le reprenne ; $tableau : ses lignes, mesurées pour
++         tenir dans la largeur de la page (voir TableauDesLignes) ;
++         $depannage : ses mentions de dépannage à domicile, null sans elles ;
++         $acceptation : son acceptation en ligne, null sans elle ;
++         $retractation : le droit de rétractation d'un devis de dépannage
++         signé chez le client, null sinon (voir DevisPdfGenerator). Le devis
++         lui-même est celui que montre la page du lien (voir
++         devis/document). --}}
+     @include('documents.pdf.pied', ['pied' => $pied])
+ 
+-    @include('documents.pdf.en-tete', [
+-        'emetteur' => $emetteur,
+-        'titre' => 'Devis',
+-        'classeTitre' => 'majuscules',
+-        'details' => array_filter([
+-            match (true) {
+-                $devis->numero === null => 'Brouillon (non envoyé)',
+-                $brouillon => "N° {$devis->numero} (brouillon, modifié depuis son envoi)",
+-                default => 'N° '.$devis->numero,
+-            },
+-            $brouillon ? null : 'Émis le '.$devis->magasin->calendrier()->afficher($devis->date_emission, 'd/m/Y'),
+-            $devis->date_validite ? 'Valable jusqu\'au '.\App\Domain\Calendrier\Calendrier::afficherJour($devis->date_validite, 'd/m/Y') : null,
+-        ]),
+-    ])
+-
+-    {{-- La fiche du client d'aujourd'hui, présentée selon le type avec
+-         lequel le devis a été calculé, comme ses lignes (voir
+-         Devis::client()). --}}
+-    @include('documents.pdf.blocs', [
+-        'client' => \App\Domain\Facturation\Services\CopieClient::depuisClient($devis->client),
+-        'professionnel' => $devis->estPourUnProfessionnel(),
+-        'titre' => 'Établi pour',
+-        'titreDesConditions' => 'Conditions',
+-        'conditions' => [$devis->date_validite ? 'Valable jusqu\'au '.\App\Domain\Calendrier\Calendrier::afficherJour($devis->date_validite, 'd/m/Y') : 'Sans date de validité'],
+-    ])
+-
+-    {{-- Le dépannage, la réparation ou l'entretien à domicile d'un
+-         particulier, quand le magasin l'a coché (voir DepannageADomicile) :
+-         le lieu de l'intervention, le prix du devis et les pièces
+-         remplacées. --}}
+-    @if($depannage !== null)
+-        <div class="bloc-client">
+-            <div class="titre">Dépannage, réparation ou entretien à domicile</div>
+-            Lieu de l'intervention : {{ $depannage->lieu ?? '—' }}<br>
+-            {{ $depannage->mentionDuPrixDuDevis() }}<br>
+-            {{ \App\Domain\Facturation\Services\DepannageADomicile::PIECES_REMPLACEES }}
+-            @if($depannage->signeChezLeClient)
+-                <br>Devis signé chez le client : votre droit de rétractation et son formulaire figurent à la fin de ce devis.
+-            @endif
+-        </div>
+-    @endif
+-
+-    @include('documents.pdf.livraison', ['lignes' => $devis->lignesDeLivraison()])
+-
+-    @include('documents.pdf.lignes', ['document' => $devis, 'tableau' => $tableau])
+-
+-    @include('documents.pdf.totaux', ['document' => $devis, 'titreDuMontant' => 'Montant du devis', 'libelleDuTotal' => 'Total TTC'])
+-
+-    @if($devis->notes)
+-        <div class="remarque">{{ $devis->notes }}</div>
+-    @endif
++    @include('devis.document', ['devis' => $devis, 'emetteur' => $emetteur, 'tableau' => $tableau, 'depannage' => $depannage, 'avecLePuHtExact' => true])
+ 
+     {{-- Le cadre « Bon pour accord » (modèle D1 choisi par l'éditeur le
+          14/11/2026) : vide pour une signature à la main ; rempli quand le
+diff --git a/resources/views/devis/reponse.blade.php b/resources/views/devis/reponse.blade.php
+index 659b4f5b..c4a448eb 100644
+--- a/resources/views/devis/reponse.blade.php
++++ b/resources/views/devis/reponse.blade.php
+@@ -1,29 +1,26 @@
+ {{--
+     La page du lien secret d'un devis envoyé (voir ReponseAuDevisController
+-    et LienDuDevis) : ce seul devis tel qu'il a été envoyé, le magasin qui
+-    l'envoie (son nom et son établissement, comme sur le PDF), son numéro,
+-    sa validité, ses mentions de dépannage à domicile, ses lignes et ses
+-    totaux, sans PDF avant la réponse (demande de l'éditeur du 14/11/2026) ;
+-    pour un particulier, son droit de rétractation de quatorze jours et le
+-    formulaire type (T86) ; puis les deux réponses possibles : accepter, en
+-    tapant son nom et en cochant « Bon pour accord », avec, pour un
+-    particulier, la case qui demande que la prestation commence avant la
+-    fin du délai, ou refuser, avec un motif facultatif. Rien d'autre du
+-    magasin, de la société ni d'un autre client, aucun lien vers le reste
+-    de PILIQI, aucun script.
+-
+-    Les prix suivent le PDF : HT, au prix unitaire tel qu'il est enregistré,
+-    pour un professionnel ou une vente sans TVA française ; TTC sinon.
++    et LienDuDevis) : ce seul devis tel qu'il a été envoyé, sans PDF avant
++    la réponse (demande de l'éditeur du 14/11/2026) ; la page étant la seule
++    façon de le lire avant de l'accepter, elle en montre tout ce que son PDF
++    imprime, depuis les mêmes vues (voir devis/document) : le magasin qui
++    l'envoie, son numéro, son émission et sa validité, le client et ses
++    identifiants, les mentions du dépannage à domicile, la livraison, les
++    lignes avec leur taux et la note de calcul, le récapitulatif par taux,
++    les totaux et les notes, puis le pied (identité de la société, assurance
++    professionnelle, conditions de paiement et mentions) ; sans le PU HT
++    exact, que seul le PDF écrit. Pour un particulier, son droit de
++    rétractation de quatorze jours et le formulaire type (T86) ; puis les
++    deux réponses possibles : accepter, en tapant son nom et en cochant
++    « Bon pour accord », avec, pour un particulier, la case qui demande que
++    la prestation commence avant la fin du délai, ou refuser, avec un motif
++    facultatif. Rien d'autre du magasin, de la société ni d'un autre client,
++    aucun lien vers le reste de PILIQI, aucun script.
+ 
+     @param \App\Domain\Facturation\Services\Emetteur $emetteur
+     @param \App\Domain\Facturation\Models\Devis $devis
+-    @param string|null $client
+-    @param list<array{reference: string|null, description: string, quantite: int, prix_unitaire: string, remise: string|null, total: string}> $lignes
+-    @param bool $horsTaxe
+-    @param string $totalHt
+-    @param string $totalTva
+-    @param string $totalTtc
+-    @param string|null $validite
++    @param \App\Domain\Facturation\Services\PiedDePage $pied
++    @param \App\Domain\Facturation\Services\TableauDesLignes $tableau
+     @param list<string> $erreurs
+     @param string|null $signataire
+     @param string|null $motif
+@@ -44,17 +41,11 @@
+     <meta name="robots" content="noindex, nofollow">
+     <title>Devis {{ $devis->numero }} · {{ $emetteur->nom }}</title>
+     <style>
+-        body { font-family: system-ui, sans-serif; background: #f9fafb; color: #111827; margin: 0; }
+-        main { max-width: 48rem; margin: 2rem auto; padding: 2rem; background: #fff; border-radius: .75rem; box-shadow: 0 1px 3px rgba(0, 0, 0, .1); }
++        body { font-family: system-ui, sans-serif; font-size: 1rem; background: #f9fafb; color: #111827; margin: 0; }
++        main { max-width: 52rem; margin: 2rem auto; padding: 2rem; background: #fff; border-radius: .75rem; box-shadow: 0 1px 3px rgba(0, 0, 0, .1); }
++        @media (max-width: 40rem) { main { margin: 0; padding: 1rem; border-radius: 0; } }
+         h1 { font-size: 1.35rem; margin: 0 0 .25rem; }
+         h2 { font-size: 1.1rem; margin: 2rem 0 .75rem; }
+-        .magasin { color: #374151; margin-bottom: 1.5rem; }
+-        table { width: 100%; border-collapse: collapse; margin: 1rem 0; }
+-        th, td { text-align: left; padding: .5rem; border-bottom: 1px solid #e5e7eb; vertical-align: top; }
+-        td.nombre, th.nombre { text-align: right; white-space: nowrap; }
+-        .reference { color: #4b5563; font-size: .85rem; display: block; }
+-        .totaux td { border: 0; padding: .2rem .5rem; }
+-        .totaux .total { font-weight: 700; font-size: 1.1rem; }
+         .erreurs { background: #fef2f2; border: 1px solid #fca5a5; color: #991b1b; border-radius: .5rem; padding: .75rem 1rem; }
+         fieldset { border: 1px solid #e5e7eb; border-radius: .5rem; margin: 1rem 0; padding: 1rem; }
+         legend { font-weight: 600; padding: 0 .25rem; }
+@@ -64,68 +55,68 @@
+         button { background: #15803d; color: #fff; border: 0; border-radius: .5rem; padding: .75rem 1.25rem; font-size: 1rem; cursor: pointer; }
+         button.refus { background: #fff; color: #b91c1c; border: 1px solid #b91c1c; }
+         .rappel { color: #4b5563; font-size: .9rem; }
+-        .depannage, .retractation { border: 1px solid #e5e7eb; border-radius: .5rem; padding: .75rem 1rem; margin: 1rem 0; }
++        .retractation { border: 1px solid #e5e7eb; border-radius: .5rem; padding: .75rem 1rem; margin: 1rem 0; }
+         .retractation summary { font-weight: 600; cursor: pointer; }
+         .formulaire { border: 1px dashed #9ca3af; border-radius: .375rem; padding: .5rem 1rem; margin-top: .75rem; }
+         .aide { color: #4b5563; font-size: .85rem; font-weight: 400; display: block; }
++        /* Le devis, dessiné avec les vues de son PDF (voir devis/document). */
++        .devis { position: relative; border: 1px solid #e3e7ec; border-radius: .5rem; padding: 1rem; margin: 1rem 0; overflow-x: auto; color: #17283d; font-size: .9rem; }
++        .devis table { border-collapse: collapse; }
++        .devis .bande-haut { height: 6px; background: #14706b; margin-bottom: 1rem; }
++        .devis table.en-tete { width: 100%; margin-bottom: 1rem; }
++        .devis table.en-tete td { vertical-align: top; padding: 0 .5rem 0 0; }
++        .devis td.magasin { border-left: 4px solid #14706b; padding-left: .75rem; color: #4b5563; }
++        .devis .magasin-nom { font-size: 1.15rem; font-weight: 700; color: #16283f; }
++        .devis .titre-document { font-size: 1.35rem; font-weight: 700; text-align: right; color: #16283f; text-transform: uppercase; }
++        .devis .details-document { text-align: right; color: #4b5563; }
++        .devis .details-document .numero-du-document { color: #17283d; font-weight: 700; }
++        .devis table.blocs { width: 100%; margin-bottom: 1rem; }
++        .devis table.blocs td.bloc { background: #f5f7f9; padding: .5rem .75rem; vertical-align: top; }
++        .devis table.blocs td.bloc.conditions { background: #eef5f4; width: 36%; }
++        .devis table.blocs td.espace { width: .5rem; padding: 0; }
++        .devis .titre, .devis .titre-section, .devis .titre-de-boite { font-size: .75rem; font-weight: 700; text-transform: uppercase; color: #14706b; margin-bottom: .25rem; }
++        .devis .titre-section { color: #16283f; }
++        .devis .bloc-client { margin: .75rem 0 1rem; }
++        .devis table.lignes { width: 100%; margin-bottom: .5rem; }
++        .devis table.lignes th { background: #16283f; color: #fff; text-align: left; padding: .4rem .5rem; font-size: .75rem; text-transform: uppercase; }
++        .devis table.lignes td { padding: .4rem .5rem; border-bottom: 1px solid #e3e7ec; vertical-align: top; }
++        .devis table.lignes tr.paire td { background: #f5f7f9; }
++        .devis table.lignes .reference { white-space: nowrap; color: #4b5563; }
++        .devis table.lignes .total-de-la-ligne { color: #14706b; font-weight: 700; }
++        .devis .montant { text-align: right; white-space: nowrap; }
++        .devis .note-calcul { margin-bottom: 1rem; font-size: .8rem; color: #4b5563; }
++        .devis table.bande-des-totaux { width: 100%; }
++        .devis table.bande-des-totaux td { vertical-align: top; padding: 0 .5rem 0 0; }
++        .devis table.bande-des-totaux td.bande-droite { width: 16rem; padding: 0; }
++        .devis .recapitulatif { background: #f5f7f9; padding: .4rem; }
++        .devis table.tva { width: 100%; }
++        .devis table.tva th { text-align: left; font-weight: 400; color: #4b5563; padding: .2rem .4rem; }
++        .devis table.tva td { padding: .2rem .4rem; }
++        .devis table.tva .motif { font-size: .8rem; color: #4b5563; }
++        .devis .a-regler { background: #eef5f4; padding: .4rem; }
++        .devis table.totaux { width: 100%; }
++        .devis table.totaux td { padding: .2rem .4rem; }
++        .devis table.totaux .libelle { color: #4b5563; }
++        .devis table.totaux .total-ttc td { font-weight: 700; color: #16283f; border-top: 1px solid #cfdcda; }
++        .devis table.totaux .total-ttc .montant { font-size: 1.1rem; color: #14706b; }
++        .devis .remarque { margin-top: 1rem; color: #374151; white-space: pre-line; }
++        .devis #pied-de-page { margin-top: 1.5rem; padding-top: .5rem; border-top: 1px solid #e3e7ec; font-size: .8rem; color: #4b5563; }
++        .devis #pied-de-page .identite { font-weight: 700; }
++        .devis .filigrane { position: absolute; top: 40%; left: 0; right: 0; text-align: center; font-size: 2rem; font-weight: 700; color: #b91c1c; opacity: .15; transform: rotate(-20deg); pointer-events: none; }
++        .devis .bandeau { margin-bottom: .75rem; padding: .4rem .5rem; border: 2px solid #b91c1c; color: #b91c1c; font-weight: 700; text-align: center; }
+     </style>
+ </head>
+ <body>
+ <main>
+     <h1>Devis {{ $devis->numero }}</h1>
+-    <div class="magasin">
+-        <strong>{{ $emetteur->nom }}</strong><br>
+-        {!! collect($emetteur->lignesDeLEtablissement())->map(fn (string $ligne): string => e($ligne))->implode('<br>') !!}
+-    </div>
+-
+-    @if ($client)
+-        <p>Pour : <strong>{{ $client }}</strong></p>
++    @if ($devis->date_validite)
++        <p>Valable jusqu'au <strong>{{ \App\Domain\Calendrier\Calendrier::afficherJour($devis->date_validite, 'd/m/Y') }}</strong>.</p>
+     @endif
+-    @if ($validite)
+-        <p>Valable jusqu'au <strong>{{ \App\Domain\Calendrier\Calendrier::afficherJour($validite, 'd/m/Y') }}</strong>.</p>
+-    @endif
+-    @if ($depannage)
+-        <div class="depannage">
+-            <strong>Dépannage, réparation ou entretien à domicile</strong><br>
+-            Lieu de l'intervention : {{ $depannage->lieu ?? '—' }}<br>
+-            {{ $depannage->mentionDuPrixDuDevis() }}<br>
+-            {{ \App\Domain\Facturation\Services\DepannageADomicile::PIECES_REMPLACEES }}
+-        </div>
+-    @endif
+-
+-    <table>
+-        <thead>
+-            <tr>
+-                <th>Désignation</th>
+-                <th class="nombre">Quantité</th>
+-                <th class="nombre">{{ $horsTaxe ? 'PU HT' : 'PU TTC' }}</th>
+-                <th class="nombre">Remise</th>
+-                <th class="nombre">{{ $horsTaxe ? 'Total HT' : 'Total TTC' }}</th>
+-            </tr>
+-        </thead>
+-        <tbody>
+-            @foreach ($lignes as $ligne)
+-                <tr>
+-                    <td>
+-                        {{ $ligne['description'] }}
+-                        @if ($ligne['reference'])
+-                            <span class="reference">Réf. {{ $ligne['reference'] }}</span>
+-                        @endif
+-                    </td>
+-                    <td class="nombre">{{ $ligne['quantite'] }}</td>
+-                    <td class="nombre">{{ $ligne['prix_unitaire'] }}</td>
+-                    <td class="nombre">{{ $ligne['remise'] ?? '—' }}</td>
+-                    <td class="nombre">{{ $ligne['total'] }}</td>
+-                </tr>
+-            @endforeach
+-        </tbody>
+-    </table>
+ 
+-    <table class="totaux">
+-        <tr><td class="nombre">Total HT</td><td class="nombre">{{ $totalHt }}</td></tr>
+-        <tr><td class="nombre">TVA</td><td class="nombre">{{ $totalTva }}</td></tr>
+-        <tr><td class="nombre total">Total TTC</td><td class="nombre total">{{ $totalTtc }}</td></tr>
+-    </table>
++    <div class="devis">
++        @include('devis.document', ['devis' => $devis, 'emetteur' => $emetteur, 'tableau' => $tableau, 'depannage' => $depannage, 'avecLePuHtExact' => false])
++        @include('documents.pdf.pied', ['pied' => $pied])
++    </div>
+ 
+     @if ($retractation)
+         <details class="retractation">
+diff --git a/resources/views/documents/pdf/lignes.blade.php b/resources/views/documents/pdf/lignes.blade.php
+index 37f5d295..1ac2fe6a 100644
+--- a/resources/views/documents/pdf/lignes.blade.php
++++ b/resources/views/documents/pdf/lignes.blade.php
+@@ -10,13 +10,17 @@
+     sarcelle, et le corps réduit d'une référence trop longue pour sa
+     colonne. Les largeurs des colonnes sont dans la règle de la page (voir
+     documents/pdf/styles). Un titre est échappé comme le texte d'un
+-    élément, son apostrophe gardée (« Facture d'origine »).
++    élément, son apostrophe gardée (« Facture d'origine »). La page du lien
++    d'un devis montre ces mêmes lignes sans le PU HT exact, que seul le PDF
++    écrit (voir devis/document).
+ 
+     @param \App\Domain\Facturation\Models\Facture|\App\Domain\Facturation\Models\Avoir|\App\Domain\Facturation\Models\Devis $document
+     @param \App\Domain\Facturation\Services\TableauDesLignes $tableau
++    @param bool $avecLePuHtExact faux sur la page du lien d'un devis, vrai par défaut
+ --}}
+ @php
+-    $noteDeCalcul = app(\App\Domain\Facturation\Services\MentionsFiscales::class)->calcul($document, surLePdf: true);
++    $avecLePuHtExact ??= true;
++    $noteDeCalcul = app(\App\Domain\Facturation\Services\MentionsFiscales::class)->calcul($document, surLePdf: true, avecLePuHtExact: $avecLePuHtExact);
+ @endphp
+ 
+ <div class="titre-section">Détail des articles et prestations</div>
+@@ -44,7 +48,7 @@
+                 @else
+                     <td @class(['reference', 'service' => $ligne['service']]) style="font-size: {{ number_format($ligne['corpsDeLaReference'], 1, '.', '') }}pt">{{ $ligne['reference'] }}</td>
+                 @endif
+-                <td>{{ $ligne['designation'] }}@if($ligne['puHtExact'] !== null)<span class="sous">{{ $ligne['puHtExact'] }}</span>@endif</td>
++                <td>{{ $ligne['designation'] }}@if($avecLePuHtExact && $ligne['puHtExact'] !== null)<span class="sous">{{ $ligne['puHtExact'] }}</span>@endif</td>
+                 @if($ligne['factureDOrigine'] !== null)
+                     <td class="numero">{{ $ligne['factureDOrigine'] }}</td>
+                 @endif
+diff --git a/tests/Browser/Parcours/DevisDeDepannageADomicileTest.php b/tests/Browser/Parcours/DevisDeDepannageADomicileTest.php
+index 21108381..f4463f7c 100644
+--- a/tests/Browser/Parcours/DevisDeDepannageADomicileTest.php
++++ b/tests/Browser/Parcours/DevisDeDepannageADomicileTest.php
+@@ -1,6 +1,8 @@
+ <?php
+ 
++use App\Domain\Catalogue\Models\Produit;
+ use App\Domain\Contacts\Models\Client;
++use App\Domain\Facturation\Actions\CreerDevisAction;
+ use App\Domain\Facturation\Models\Devis;
+ use App\Domain\Facturation\Services\DepannageADomicile;
+ use App\Domain\Facturation\Services\DroitDeRetractation;
+@@ -19,7 +21,9 @@
+  * chez le client », lit les deux sur la fiche, et le PDF du devis numéroté
+  * imprime « Devis gratuit », les pièces remplacées et, sur sa dernière
+  * page, le droit de rétractation et son formulaire, sous leurs titres en
+- * capitales. Le test commence le 10
++ * capitales ; chaque compte qui modifie un brouillon fait avant que le
++ * magasin coche le réglage y trouve le lieu prérempli, et la fiche le
++ * montre une ligne par ligne saisie. Le test commence le 10
+  * mars 2026 à 10 h à Paris (voir TestCaseDuNavigateur).
+  */
+ 
+@@ -107,3 +111,29 @@ function pagesDuPdfDuDevisDeDepannage(Navigation $onglet, Closure $pagesDuPdf):
+         ->toContain(mb_strtoupper(DroitDeRetractation::TITRE_DU_FORMULAIRE))
+         ->toContain('dans un délai de quatorze jours');
+ })->with('comptes qui font un devis de dépannage');
++
++test('chaque compte qui modifie un brouillon fait avant le réglage y trouve le lieu de l’intervention prérempli, l’enregistre, et la fiche le montre ligne par ligne', function (Closure $compte) {
++    $societe = $this->societeComplete();
++    $auteur = $compte($societe);
++    $magasin = '/app/'.$societe->magasin->uuid;
++    $brouillon = app(TenantContext::class)->runAs($societe->magasin, function () use ($auteur): Devis {
++        $client = Client::query()->where('nom', 'Jean Dupont')->sole();
++        $client->forceFill(['adresse' => '7 rue du Port', 'complement_adresse' => 'Escalier C', 'code_postal' => '13002', 'ville' => 'Marseille'])->save();
++
++        return app(CreerDevisAction::class)->handle($auteur, $client, [['produit_id' => Produit::query()->where('reference', 'BOUGIE')->sole()->id, 'quantite' => 1]], ['date_validite' => '2026-04-10']);
++    });
++    app(TenantContext::class)->clear();
++    Magasin::query()->whereKey($societe->magasin->id)->update(['depannage_a_domicile' => true]);
++
++    $onglet = $this->seConnecter($auteur)->aller($magasin.'/devis/'.$brouillon->getRouteKey().'/edit')
++        ->voir('Lieu de l\'intervention')
++        ->attendreQue('document.querySelector(\'textarea[id$="lieu_d_intervention"]\')?.value === '.json_encode("7 rue du Port\nEscalier C\n13002 Marseille"), 'le lieu de l\'intervention n\'est pas prérempli avec l\'adresse du client');
++    $onglet->soumettre('Sauvegarder')
++        ->attendreLaPage('/devis$')
++        ->aller($magasin.'/devis/'.$brouillon->getRouteKey())
++        ->voir('Lieu de l\'intervention');
++    expect($onglet->element('.fi-in-entry-wrp:has-text("Lieu de l\'intervention") br')->count())->toBe(2);
++
++    $relu = app(TenantContext::class)->runAs($societe->magasin, fn (): Devis => $brouillon->fresh());
++    expect($relu->lieu_d_intervention)->toBe("7 rue du Port\nEscalier C\n13002 Marseille");
++})->with('comptes qui font un devis de dépannage');
+diff --git a/tests/Browser/Parcours/ReponseAuDevisEnLigneTest.php b/tests/Browser/Parcours/ReponseAuDevisEnLigneTest.php
+index 714a07b6..007926a2 100644
+--- a/tests/Browser/Parcours/ReponseAuDevisEnLigneTest.php
++++ b/tests/Browser/Parcours/ReponseAuDevisEnLigneTest.php
+@@ -49,7 +49,9 @@
+  * télécharge le devis signé depuis la confirmation de son acceptation
+  * (demande de l'éditeur du 14/11/2026) ; le particulier lit son droit de
+  * rétractation et demande que la prestation commence avant la fin du
+- * délai, le professionnel ne voit ni l'un ni l'autre (T86) ; le
++ * délai, le professionnel ne voit ni l'un ni l'autre (T86) ; la page du
++ * lien montre tout ce que le PDF du devis imprime, et un second envoi de
++ * l'acceptation montre encore sa confirmation ; le
+  * demandeur de l'envoi et le propriétaire lisent la réponse du client
+  * dans la cloche, en texte, puis ouvrent la fiche du devis par « Voir le
+  * devis ».
+@@ -57,11 +59,13 @@
+ 
+ /**
+  * Un devis envoyé par e-mail par le responsable, à un particulier ou à un
+- * professionnel, et le jeton du lien de l'e-mail parti.
++ * professionnel, avec d'autres attributs s'il y a lieu (conditions de
++ * paiement, notes), et le jeton du lien de l'e-mail parti.
+  *
++ * @param  array<string, string>  $attributs
+  * @return array{0: Devis, 1: string}
+  */
+-function devisEnvoyeParEMail(Magasin $magasin, User $responsable, bool $professionnel = false): array
++function devisEnvoyeParEMail(Magasin $magasin, User $responsable, bool $professionnel = false, array $attributs = []): array
+ {
+     if (! Mail::getFacadeRoot() instanceof MailFake) {
+         Mail::fake();
+@@ -70,7 +74,7 @@ function devisEnvoyeParEMail(Magasin $magasin, User $responsable, bool $professi
+     app(TenantContext::class)->set($magasin);
+     $produit = Produit::factory()->create(['nom' => 'Câble tressé', 'prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => false]);
+     $client = $professionnel ? Client::factory()->professionnel()->create(['nom' => 'Atelier Martin']) : Client::factory()->create(['nom' => 'Paul Durand']);
+-    $devis = app(CreerDevisAction::class)->handle($responsable, $client, [['produit_id' => $produit->id, 'quantite' => 2]], ['date_validite' => '2026-12-31']);
++    $devis = app(CreerDevisAction::class)->handle($responsable, $client, [['produit_id' => $produit->id, 'quantite' => 2]], ['date_validite' => '2026-12-31', ...$attributs]);
+     $envoi = app(EnvoyerDocumentAction::class)->handle($responsable, $devis, 'paul@client.fr', null, (string) Str::uuid());
+     $jeton = null;
+     Mail::assertSent(DocumentMail::class, function (DocumentMail $mail) use ($envoi, &$jeton): bool {
+@@ -142,6 +146,44 @@ function vendeurSansLaCreationDeFacture(TestCaseDuNavigateur $test, Magasin $mag
+         ->nePasVoir('Refuser le devis');
+ });
+ 
++test('le client lit sur la page de son lien tout ce que le PDF du devis imprime, puis l’accepte, et un second envoi de son acceptation montre encore la confirmation', function () {
++    $this->travelTo(self::aParis('2026-11-12 10:00:00'));
++    $magasin = $this->completerIdentiteLegale($this->ouvrirUneSociete(['nom' => 'Ma Boutique', 'code' => 'MABOUT']));
++    [$devis, $jeton] = devisEnvoyeParEMail($magasin, self::responsableDeTest($magasin), attributs: ['conditions_paiement' => 'Acompte de 30 % à la commande', 'notes' => 'Intervention prévue le matin entre 8 h et 10 h']);
++
++    // Un second onglet ouvert sur le même lien avant l'acceptation garde
++    // son formulaire : son envoi est celui d'un double clic ou d'un
++    // formulaire renvoyé par le navigateur.
++    $second = $this->naviguer('/devis/'.$jeton)->voir('Accepter le devis');
++
++    $this->naviguer('/devis/'.$jeton)
++        ->voir("N° {$devis->numero}")
++        ->voir('Établi pour')
++        ->voir('Paul Durand')
++        ->voir('Détail des articles et prestations')
++        ->voir('20 %')
++        ->voir('Récapitulatif TVA')
++        ->voir('Montants calculés depuis les prix TTC')
++        ->voir('Intervention prévue le matin entre 8 h et 10 h')
++        ->voir('Acompte de 30 % à la commande')
++        ->voir('RCS Lyon')
++        ->nePasVoir('PU HT exact')
++        ->remplir('Votre nom et votre prénom', 'Paul Durand')
++        ->cliquer('input[name="bon_pour_accord"]')
++        ->cliquerSur('Accepter le devis')
++        ->voir('Devis accepté le 12/11/2026 à 10:00 par Paul Durand');
++
++    $second->remplir('Votre nom et votre prénom', 'Paul Durand')
++        ->cliquer('input[name="bon_pour_accord"]')
++        ->cliquerSur('Accepter le devis')
++        ->voir('Devis accepté le 12/11/2026 à 10:00 par Paul Durand')
++        ->nePasVoir(LienDuDevis::PLUS_VALABLE);
++
++    app(TenantContext::class)->set($magasin);
++    expect(ReponseDuDevis::query()->count())->toBe(1);
++    app(TenantContext::class)->clear();
++});
++
+ test('le client professionnel accepte son devis en ligne sans information sur la rétractation ni demande de début anticipé', function () {
+     $this->travelTo(self::aParis('2026-11-12 10:00:00'));
+     $magasin = $this->completerIdentiteLegale($this->ouvrirUneSociete(['nom' => 'Ma Boutique', 'code' => 'MABOUT']));
+diff --git a/tests/Browser/inventaire-des-actions.php b/tests/Browser/inventaire-des-actions.php
+index 16254414..dddb493d 100644
+--- a/tests/Browser/inventaire-des-actions.php
++++ b/tests/Browser/inventaire-des-actions.php
+@@ -723,6 +723,7 @@
+             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le vendeur ouvre chaque page et chaque action du magasin sans erreur',
+             'tests/Browser/Parcours/PuHtAfficheTest.php › le propriétaire change le client d’un devis, et le PU HT des lignes reste celui d’un article',
+             'tests/Browser/Parcours/DateDeLOperationTest.php › chaque compte qui fait un devis change la date prévue de son brouillon et la retrouve sur la fiche',
++            'tests/Browser/Parcours/DevisDeDepannageADomicileTest.php › chaque compte qui modifie un brouillon fait avant le réglage y trouve le lieu de l’intervention prérempli, l’enregistre, et la fiche le montre ligne par ligne',
+         ]],
+     ],
+     'app/Filament/App/Resources/DevisResource/Pages/ListDevis.php' => [
+@@ -2473,6 +2474,7 @@
+         'formulaire:{{ $actionAccepter }}' => ['lot' => 'NAV-4', 'tests' => [
+             'tests/Browser/Parcours/ReponseAuDevisEnLigneTest.php › le client particulier lit son droit de rétractation, accepte son devis en ligne en tapant son nom, en cochant « Bon pour accord » et la demande de début anticipé, puis le lien ne montre que la confirmation',
+             'tests/Browser/Parcours/ReponseAuDevisEnLigneTest.php › le client professionnel accepte son devis en ligne sans information sur la rétractation ni demande de début anticipé',
++            'tests/Browser/Parcours/ReponseAuDevisEnLigneTest.php › le client lit sur la page de son lien tout ce que le PDF du devis imprime, puis l’accepte, et un second envoi de son acceptation montre encore la confirmation',
+             'tests/Browser/Parcours/ReponseAuDevisEnLigneTest.php › le client ne trouve aucun PDF sur la page de son lien avant de répondre, puis télécharge le devis signé depuis la confirmation de son acceptation',
+             'tests/Browser/Demonstration/DansLaCopieTest.php › la responsable envoie une facture par e-mail, la lit dans « E-mails qui seraient partis » avec sa pièce jointe, puis le client accepte le devis par le lien de son e-mail, sans PDF, et sa confirmation part avec le devis signé',
+         ]],
+diff --git a/tests/Feature/Calendrier/IsolationDesCalendriersTest.php b/tests/Feature/Calendrier/IsolationDesCalendriersTest.php
+index 155445d6..fa340f3a 100644
+--- a/tests/Feature/Calendrier/IsolationDesCalendriersTest.php
++++ b/tests/Feature/Calendrier/IsolationDesCalendriersTest.php
+@@ -112,7 +112,7 @@ public function test_les_caisses_de_la_societe_ne_lisent_que_les_magasins_de_la_
+      * le contexte du magasin de La Réunion ; son envoi, traité dans ce
+      * contexte, part (sans PDF : le client ne reçoit le PDF d'un devis
+      * qu'une fois accepté, demande de l'éditeur du 14/11/2026), et son PDF,
+-     * imprimé dans ce contexte, est daté du 16.
++     * imprimé dans le contexte du magasin de La Réunion, est daté du 16.
+      */
+     public function test_le_calendrier_d_un_document_est_celui_de_son_magasin_et_jamais_celui_du_contexte(): void
+     {
+@@ -137,7 +137,7 @@ public function test_le_calendrier_d_un_document_est_celui_de_son_magasin_et_jam
+ 
+         $this->assertSame(StatutEnvoi::Envoye, app(TenantContext::class)->runAs($martinique, fn (): StatutEnvoi => $envoi->fresh()->statut));
+         $this->assertSame([], Mail::sent(DocumentMail::class)->sole()->attachments());
+-        $this->assertStringContainsString('Émis le 16/11/2026', app(DevisPdfGenerator::class)->html($devis));
++        $this->assertStringContainsString('Émis le 16/11/2026', app(TenantContext::class)->runAs($reunion, fn (): string => app(DevisPdfGenerator::class)->html($devis)));
+     }
+ 
+     /**
+diff --git a/tests/Feature/Demonstration/BasesModelesTest.php b/tests/Feature/Demonstration/BasesModelesTest.php
+index 3b893bb3..4e5da57c 100644
+--- a/tests/Feature/Demonstration/BasesModelesTest.php
++++ b/tests/Feature/Demonstration/BasesModelesTest.php
+@@ -3,6 +3,7 @@
+ namespace Tests\Feature\Demonstration;
+ 
+ use App\Domain\Calendrier\Calendrier;
++use App\Domain\Contacts\Enums\TypeClient;
+ use App\Domain\Demonstration\Bases\BasesDeLaDemonstration;
+ use App\Domain\Demonstration\Bases\BrancherUneBase;
+ use App\Domain\Demonstration\Construction\ConstruireUnModele;
+@@ -11,6 +12,9 @@
+ use App\Domain\Demonstration\Contracts\SemisDUnModele;
+ use App\Domain\Demonstration\Registre\Models\Modele;
+ use App\Domain\Demonstration\Services\CarteDeLaDemonstration;
++use App\Domain\Facturation\Enums\StatutDevis;
++use App\Domain\Facturation\Enums\StatutEnvoi;
++use App\Domain\Facturation\Jobs\EnvoyerDocumentJob;
+ use App\Domain\Tenancy\Enums\TypeDActivite;
+ use Carbon\CarbonImmutable;
+ use Database\Seeders\DatabaseSeeder;
+@@ -173,6 +177,17 @@ private function lireLaCopie(string $copie): array
+                     default => $ligne->prix_du_devis_de_depannage === null ? ', gratuit' : ', payant',
+                 })
+                 ->all(),
++            'brouillons_de_depannage_sans_lieu' => DB::table('devis')
++                ->join('magasins', 'magasins.id', '=', 'devis.magasin_id')
++                ->where('magasins.depannage_a_domicile', true)
++                ->where('devis.statut', StatutDevis::Brouillon->value)
++                ->where('devis.type_client', TypeClient::Particulier->value)
++                ->whereNull('devis.lieu_d_intervention')
++                ->count(),
++            'envois_du_devis_accepte_entre_temps' => DB::table('envois_documents')
++                ->where('statut', StatutEnvoi::Echec->value)
++                ->where('erreur', EnvoyerDocumentJob::MOTIF_DEVIS_ACCEPTE_ENTRE_TEMPS)
++                ->count(),
+             'acceptations_en_ligne' => DB::table('reponses_des_devis')
+                 ->where('reponse', 'acceptation')
+                 ->orderBy('id')
+@@ -239,8 +254,9 @@ private function assertCommunAuxModeles(array $lecture): void
+      * Chaque modèle montre un magasin qui fait le dépannage à domicile
+      * (T51.6 : la République de Maison Ferrand, dans les modèles
+      * « Commerce » et « Cabinet », le cabinet de conseil dans le modèle
+-     * « Services ») : un devis signé chez le client et accepté par le
+-     * magasin, un devis gratuit et un devis payant, figés à leur envoi et
++     * « Services ») : un brouillon fait avant que le magasin coche le
++     * réglage, sans lieu ; un devis signé chez le client et accepté par le
++     * magasin avant le départ de son e-mail, qui ne part pas ; un devis gratuit et un devis payant, figés à leur envoi et
+      * acceptés en ligne, un brouillon qui suit le réglage d'aujourd'hui ;
+      * les acceptations en ligne d'un particulier, avec et sans la demande
+      * d'un début avant la fin du délai de rétractation (T86), chacune avec
+@@ -258,6 +274,8 @@ private function assertDepannageEtAcceptationsSignees(array $lecture): void
+             'accepte, payant',
+             'brouillon, réglage du magasin d\'aujourd\'hui',
+         ], $lecture['devis_de_depannage']);
++        $this->assertSame(1, $lecture['brouillons_de_depannage_sans_lieu'], 'Un brouillon fait avant que le magasin coche le réglage n\'a pas de lieu : son envoi le refuse.');
++        $this->assertSame(1, $lecture['envois_du_devis_accepte_entre_temps'], 'L\'e-mail du devis signé chez le client, accepté au magasin avant son départ, n\'est pas parti.');
+         $acceptations = $lecture['acceptations_en_ligne'];
+         $this->assertIsArray($acceptations);
+         $this->assertContains(true, array_column($acceptations, 'debut_avant_la_fin_du_delai'), 'Un particulier demande que la prestation commence avant la fin du délai.');
+diff --git a/tests/Feature/Facturation/DevisDeDepannageADomicileTest.php b/tests/Feature/Facturation/DevisDeDepannageADomicileTest.php
+index 5e7e872d..967b3623 100644
+--- a/tests/Feature/Facturation/DevisDeDepannageADomicileTest.php
++++ b/tests/Feature/Facturation/DevisDeDepannageADomicileTest.php
+@@ -16,6 +16,7 @@
+ use App\Domain\Tenancy\Models\Magasin;
+ use App\Domain\Tenancy\Services\TenantContext;
+ use App\Filament\App\Resources\DevisResource\Pages\CreateDevis;
++use App\Filament\App\Resources\DevisResource\Pages\EditDevis;
+ use App\Filament\App\Resources\DevisResource\Pages\ViewDevis;
+ use Filament\Facades\Filament;
+ use Illuminate\Database\QueryException;
+@@ -166,6 +167,96 @@ public function test_un_brouillon_devenu_un_devis_de_depannage_ne_part_pas_sans_
+         $this->assertSame(StatutDevis::Envoye, $this->emettre($modifie)->statut);
+     }
+ 
++    /**
++     * Un brouillon de dépannage enregistré avec un lieu et « Devis signé
++     * chez le client », puis le magasin décoche le réglage : la fiche ne
++     * dit plus rien que le PDF n'imprime pas, et le devis qui part perd le
++     * lieu et la case, ni imprimés, ni gardés dans son empreinte. Le
++     * magasin ne croit jamais avoir remis au client l'information sur la
++     * rétractation qu'il n'a pas reçue.
++     */
++    public function test_un_devis_qui_part_apres_que_le_magasin_a_decoche_le_reglage_perd_son_lieu_et_sa_signature(): void
++    {
++        $this->actingAs($this->proprietaireDe($this->magasin));
++        Filament::setTenant($this->magasin);
++        $this->regler(true);
++        $devis = $this->creer(self::particulier(), ['lieu_d_intervention' => '12 rue des Lilas', 'signe_chez_le_client' => true]);
++        $this->regler(false);
++
++        Livewire::test(ViewDevis::class, ['record' => $devis->getRouteKey()])
++            ->assertDontSeeText('Lieu de l\'intervention')
++            ->assertDontSeeText('Oui : le devis imprime le droit de rétractation et son formulaire');
++
++        $envoye = $this->emettre($devis->fresh());
++
++        $this->assertSame([null, false, false], [$envoye->fresh()->lieu_d_intervention, $envoye->fresh()->signe_chez_le_client, $envoye->fresh()->depannage_a_domicile]);
++        $this->assertSame($envoye->fresh()->empreinteDeSaVersion(), (clone $envoye->fresh())->forceFill(['lieu_d_intervention' => null, 'signe_chez_le_client' => false])->empreinteDeSaVersion());
++        $html = $this->html($envoye);
++        foreach (['Lieu de l\'intervention', 'Devis signé chez le client', DroitDeRetractation::TITRE] as $absent) {
++            $this->assertStringNotContainsString($absent, $html);
++        }
++        Livewire::test(ViewDevis::class, ['record' => $devis->getRouteKey()])
++            ->assertDontSeeText('Lieu de l\'intervention')
++            ->assertDontSeeText('Devis signé chez le client');
++    }
++
++    /**
++     * Le lieu de l'intervention saisi sur plusieurs lignes, comme le
++     * formulaire le préremplit, s'imprime une ligne par ligne saisie dans
++     * le PDF, et se lit de même sur la fiche.
++     */
++    public function test_le_lieu_de_l_intervention_s_imprime_une_ligne_par_ligne_saisie(): void
++    {
++        $this->actingAs($this->proprietaireDe($this->magasin));
++        Filament::setTenant($this->magasin);
++        $this->regler(true);
++        $devis = $this->emettre($this->creer(self::particulier(), ['lieu_d_intervention' => "12 rue des Lilas\nBâtiment B\n75012 Paris"]));
++
++        $textes = array_merge(...array_map(fn (array $page): array => $page['textes'], $this->pagesDuPdf(app(DevisPdfGenerator::class)->generer($devis->fresh())->output())));
++        // Chaque ligne saisie s'imprime juste sous la précédente (la hauteur
++        // se compte depuis le bas de la page), à la même marge ; le client,
++        // plus haut, imprime aussi son adresse.
++        $premiere = collect($textes)->first(fn (array $morceau): bool => trim($morceau['texte']) === 'Lieu de l\'intervention : 12 rue des Lilas') ?? $this->fail('Le PDF n\'imprime pas la première ligne du lieu.');
++        $precedente = $premiere;
++
++        foreach (['Bâtiment B', '75012 Paris'] as $texte) {
++            $suivante = collect($textes)->first(fn (array $morceau): bool => trim($morceau['texte']) === $texte && $morceau['y'] < $precedente['y'] && $precedente['y'] - $morceau['y'] < 15)
++                ?? $this->fail("Le PDF n'imprime pas « {$texte} » sur la ligne qui suit la précédente du lieu.");
++            $this->assertEqualsWithDelta($premiere['x'], $suivante['x'], 0.01);
++            $precedente = $suivante;
++        }
++
++        Livewire::test(ViewDevis::class, ['record' => $devis->getRouteKey()])
++            ->assertSeeHtml('12 rue des Lilas<br>'.PHP_EOL.'Bâtiment B<br>'.PHP_EOL.'75012 Paris');
++    }
++
++    /**
++     * Un brouillon pour un particulier fait avant que le magasin coche le
++     * réglage n'a pas de lieu, et son envoi le refuse en demandant de le
++     * modifier : sa modification préremplit le lieu avec l'adresse du
++     * client, comme à la création, et l'enregistre.
++     */
++    public function test_la_modification_d_un_brouillon_fait_avant_le_reglage_preremplit_le_lieu(): void
++    {
++        $this->actingAs($this->proprietaireDe($this->magasin));
++        Filament::setTenant($this->magasin);
++        $devis = $this->creer(self::particulier());
++        $this->regler(true);
++
++        Livewire::test(EditDevis::class, ['record' => $devis->getRouteKey()])
++            ->assertFormFieldIsVisible('lieu_d_intervention')
++            ->assertFormSet(['lieu_d_intervention' => "12 rue des Lilas\nBâtiment B\n75012 Paris"])
++            ->call('save')
++            ->assertHasNoFormErrors();
++
++        $this->assertSame("12 rue des Lilas\nBâtiment B\n75012 Paris", $devis->fresh()->lieu_d_intervention);
++
++        $devisDuProfessionnel = $this->creer(Client::factory()->professionnel()->create());
++        Livewire::test(EditDevis::class, ['record' => $devisDuProfessionnel->getRouteKey()])
++            ->assertFormFieldIsHidden('lieu_d_intervention')
++            ->assertFormSet(['lieu_d_intervention' => null]);
++    }
++
+     /**
+      * Le réglage se lit sur la ligne du magasin relue sous verrou, jamais sur
+      * le magasin du contexte, lu au début de la requête : coché entre-temps,
+diff --git a/tests/Feature/Facturation/ReponseAuDevisEnLigneTest.php b/tests/Feature/Facturation/ReponseAuDevisEnLigneTest.php
+index 6d24be8b..fbaa2a80 100644
+--- a/tests/Feature/Facturation/ReponseAuDevisEnLigneTest.php
++++ b/tests/Feature/Facturation/ReponseAuDevisEnLigneTest.php
+@@ -29,11 +29,13 @@
+ use App\Domain\Facturation\Services\DevisPdfGenerator;
+ use App\Domain\Facturation\Services\DroitDeRetractation;
+ use App\Domain\Tenancy\Enums\ActionAuditee;
++use App\Domain\Tenancy\Enums\RegimeTva;
+ use App\Domain\Tenancy\Enums\RoleMagasin;
+ use App\Domain\Tenancy\Enums\StatutSociete;
+ use App\Domain\Tenancy\Enums\Territoire;
+ use App\Domain\Tenancy\Models\EntreeAudit;
+ use App\Domain\Tenancy\Models\Magasin;
++use App\Domain\Tenancy\Models\Societe;
+ use App\Domain\Tenancy\Models\TraceAudit;
+ use App\Domain\Tenancy\Services\TenantContext;
+ use App\Filament\App\Resources\DevisResource\Pages\ViewDevis;
+@@ -50,6 +52,7 @@
+ use Illuminate\Testing\TestResponse;
+ use Livewire\Livewire;
+ use LogicException;
++use PHPUnit\Framework\Attributes\DataProvider;
+ use Tests\TestCase;
+ 
+ /**
+@@ -155,6 +158,72 @@ public function test_la_page_du_lien_ecrit_une_remise_decimale_avec_une_virgule(
+         $this->repondre('get', $jeton)->assertOk()->assertSee('12,5 %')->assertDontSee('12.5 %');
+     }
+ 
++    /**
++     * Avant sa réponse, la page du lien est la seule façon de lire le devis
++     * (pas de PDF, demande de l'éditeur du 14/11/2026) : elle montre tout
++     * ce que son PDF imprime, depuis les mêmes données -- l'identité de la
++     * société dans le pied, le client et son adresse, le taux de chaque
++     * ligne, le récapitulatif par taux, la note de calcul, les conditions
++     * de paiement et les notes --, sans le PU HT exact, que seul le PDF
++     * écrit.
++     */
++    public function test_la_page_du_lien_montre_tout_ce_que_le_pdf_du_devis_imprime(): void
++    {
++        $client = Client::factory()->create(['nom' => 'Paul Durand', 'adresse' => '12 rue des Lilas', 'code_postal' => '75012', 'ville' => 'Paris']);
++        $devis = $this->devisEnvoyable(['conditions_paiement' => 'Acompte de 30 % à la commande', 'notes' => "Intervention prévue le matin\nentre 8 h et 10 h"], client: $client);
++        $jeton = $this->envoyer($devis);
++        $pdf = app(DevisPdfGenerator::class)->html($devis->fresh());
++
++        $reponse = $this->repondre('get', $jeton)->assertOk();
++
++        foreach (['Acompte de 30 % à la commande', 'Intervention prévue le matin', 'entre 8 h et 10 h', '20 %', 'Récapitulatif TVA', 'Base HT', 'Ma Boutique', 'SAS', 'RCS Lyon', '1 place Bellecour', 'Paul Durand', '12 rue des Lilas', '75012 Paris', 'Détail des articles et prestations', 'Montants calculés depuis les prix TTC'] as $attendu) {
++            $this->assertStringContainsString(e($attendu), $pdf, "Le PDF devrait imprimer : {$attendu}");
++            $reponse->assertSee($attendu);
++        }
++        $reponse->assertDontSee('PU HT exact')->assertDontSee('Le PU HT exact');
++    }
++
++    /**
++     * En franchise en base, la page du lien dit, comme le PDF, que la TVA
++     * n'est pas applicable ; pour un professionnel, elle montre le PU HT
++     * d'un article et l'explique, sans la phrase du PU HT exact.
++     */
++    public function test_la_page_du_lien_montre_la_mention_de_franchise_et_la_note_du_pu_ht(): void
++    {
++        $regimeDeDepart = Societe::query()->whereKey($this->magasin->societe_id)->value('regime_tva');
++        Societe::query()->whereKey($this->magasin->societe_id)->update(['regime_tva' => RegimeTva::FranchiseEnBase]);
++        $this->magasin->refresh();
++        app(TenantContext::class)->set($this->magasin);
++
++        $this->repondre('get', $this->envoyer($this->devisEnvoyable()))->assertOk()->assertSee('TVA non applicable, art. 293 B du CGI');
++
++        Societe::query()->whereKey($this->magasin->societe_id)->update(['regime_tva' => $regimeDeDepart]);
++        $this->magasin->refresh();
++        app(TenantContext::class)->set($this->magasin);
++        $reponse = $this->repondre('get', $this->envoyer($this->devisEnvoyable(client: Client::factory()->professionnel()->create())))->assertOk();
++
++        $reponse->assertSee('PU HT')->assertSee('Le PU HT affiché est celui d\'un article')->assertDontSee('PU HT exact');
++    }
++
++    /**
++     * Un double clic sur « Accepter le devis », ou un formulaire renvoyé
++     * par le navigateur, envoie deux fois l'acceptation : la seconde
++     * réponse montre la même confirmation, jamais « Ce lien n'est plus
++     * valable », et rien n'est enregistré deux fois.
++     */
++    public function test_un_second_envoi_de_l_acceptation_montre_encore_sa_confirmation(): void
++    {
++        Notification::fake();
++        $jeton = $this->envoyer($this->devisEnvoyable());
++        $donnees = ['signataire' => 'Claire Martin', 'bon_pour_accord' => '1'];
++
++        $this->repondre('accepter', $jeton, $donnees)->assertOk()->assertSee('par Claire Martin');
++        $this->repondre('accepter', $jeton, $donnees)->assertOk()->assertSee('par Claire Martin')->assertDontSee(LienDuDevis::PLUS_VALABLE);
++        $this->repondre('accepter', $jeton, ['signataire' => '', 'bon_pour_accord' => ''])->assertOk()->assertSee('par Claire Martin');
++
++        $this->assertSame(1, ReponseDuDevis::query()->count());
++    }
++
+     /**
+      * Avant sa réponse, le client lit le devis sur la page où il signe,
+      * sans PDF ; le PDF, signé, ne se télécharge qu'après son acceptation,
+@@ -251,8 +320,8 @@ public function test_accepter_enregistre_le_nom_la_date_l_empreinte_et_les_trace
+         $this->assertStringNotContainsString('Claire', $evenement->contenu);
+ 
+         $this->repondre('get', $jeton)->assertOk()->assertSee('Devis accepté le 13/11/2026 à 14:05 par Claire Martin')->assertDontSee('Accepter le devis');
+-        $this->repondre('accepter', $jeton, ['signataire' => 'Autre Personne', 'bon_pour_accord' => '1'])->assertStatus(410);
+-        $this->repondre('refuser', $jeton)->assertStatus(410);
++        $this->repondre('accepter', $jeton, ['signataire' => 'Autre Personne', 'bon_pour_accord' => '1'])->assertOk()->assertSee('Devis accepté le 13/11/2026 à 14:05 par Claire Martin')->assertDontSee('Autre Personne');
++        $this->repondre('refuser', $jeton)->assertOk()->assertSee('Devis accepté le 13/11/2026 à 14:05 par Claire Martin')->assertDontSee('Refuser le devis');
+         $this->assertSame(1, ReponseDuDevis::query()->count());
+         $this->assertSame(StatutDevis::Accepte, $devis->fresh()->statut);
+     }
+@@ -882,7 +951,48 @@ public function test_un_devis_dont_le_lien_est_retire_avant_le_depart_de_l_e_mai
+         $tache->handle();
+ 
+         Mail::assertNothingSent();
+-        $this->assertSame([StatutEnvoi::Echec, EnvoyerDocumentJob::MOTIF_DEVIS_SANS_LIEN], [$envoi->fresh()->statut, $envoi->fresh()->erreur]);
++        $this->assertSame([StatutEnvoi::Echec, EnvoyerDocumentJob::MOTIF_LIEN_RETIRE], [$envoi->fresh()->statut, $envoi->fresh()->erreur]);
++    }
++
++    /**
++     * Le lien d'un envoi qui ne vaut plus au départ de son e-mail : la
++     * cause dite à l'expéditeur est la vraie, d'après le devis relu.
++     *
++     * @return array<string, array{string, string}>
++     */
++    public static function causesDUnLienQuiNeVautPlusAuDepart(): array
++    {
++        return [
++            'accepté au magasin entre-temps' => ['accepte', EnvoyerDocumentJob::MOTIF_DEVIS_ACCEPTE_ENTRE_TEMPS],
++            'transformé en facture entre-temps' => ['transforme', EnvoyerDocumentJob::MOTIF_DEVIS_ACCEPTE_ENTRE_TEMPS],
++            'refusé entre-temps' => ['refuse', EnvoyerDocumentJob::MOTIF_DEVIS_REFUSE_ENTRE_TEMPS],
++            'validité dépassée entre-temps' => ['expire', EnvoyerDocumentJob::MOTIF_DEVIS_EXPIRE_ENTRE_TEMPS],
++            'remplacé par un envoi plus récent' => ['renvoye', EnvoyerDocumentJob::MOTIF_LIEN_REMPLACE],
++        ];
++    }
++
++    #[DataProvider('causesDUnLienQuiNeVautPlusAuDepart')]
++    public function test_l_envoi_d_un_devis_dont_le_lien_ne_vaut_plus_au_depart_dit_sa_vraie_cause(string $entreTemps, string $motif): void
++    {
++        Notification::fake();
++        Queue::fake([EnvoyerDocumentJob::class]);
++        $devis = $this->devisEnvoyable(['date_validite' => '2026-11-20']);
++        $responsable = self::responsableDeTest($this->magasin);
++        $envoi = app(EnvoyerDocumentAction::class)->handle($responsable, $devis, 'client@exemple.fr', null, (string) Str::uuid());
++        $tache = Queue::pushed(EnvoyerDocumentJob::class)->sole();
++
++        match ($entreTemps) {
++            'accepte' => app(AccepterDevisAction::class)->handle($responsable, $devis->fresh()),
++            'transforme' => app(CreerFactureDepuisDevisAction::class)->handle($responsable, app(AccepterDevisAction::class)->handle($responsable, $devis->fresh())),
++            'refuse' => $devis->fresh()->forceFill(['statut' => StatutDevis::Refuse])->save(),
++            'expire' => $this->travelTo(self::aParis('2026-11-21 09:00:00')),
++            'renvoye' => app(EnvoyerDocumentAction::class)->handle($responsable, $devis->fresh(), 'client@exemple.fr', null, (string) Str::uuid()),
++        };
++
++        $tache->handle();
++
++        Mail::assertNothingSent();
++        $this->assertSame([StatutEnvoi::Echec, $motif], [$envoi->fresh()->statut, $envoi->fresh()->erreur]);
+     }
+ 
+     /**
+diff --git a/tests/Feature/SemisCompletTest.php b/tests/Feature/SemisCompletTest.php
+index 61feb630..0fee36ac 100644
+--- a/tests/Feature/SemisCompletTest.php
++++ b/tests/Feature/SemisCompletTest.php
+@@ -114,10 +114,10 @@ class SemisCompletTest extends TestCase
+         'consultations_vies' => 5,
+         'demandes_inscription' => 1,
+         'demonstrations' => 15,
+-        'devis' => 240,
++        'devis' => 243,
+         'ecarts_sirene' => 2,
+         'enregistrements_fiscaux' => 10819,
+-        'envois_documents' => 28,
++        'envois_documents' => 31,
+         'evenements_transmission_pdp' => 61,
+         'factures' => 4008,
+         'factures_achat' => 116,
+@@ -127,12 +127,12 @@ class SemisCompletTest extends TestCase
+         'invitations_cabinet' => 6,
+         'journal_audit' => 1631,
+         'liens_cabinet' => 15,
+-        'liens_des_devis' => 15,
++        'liens_des_devis' => 18,
+         'lignes_achat' => 288,
+         'lignes_avoir' => 146,
+         'lignes_avoir_fournisseur' => 2,
+         'lignes_de_charge' => 180,
+-        'lignes_devis' => 417,
++        'lignes_devis' => 420,
+         'lignes_facture' => 5988,
+         'lignes_inventaire_ouverture' => 23,
+         'lignes_recu_paiement' => 160,
+@@ -141,7 +141,7 @@ class SemisCompletTest extends TestCase
+         'mandats_pdp' => 2,
+         'messages_vers_la_demonstration' => 26,
+         'mouvements_stock' => 5042,
+-        'notifications' => 202,
++        'notifications' => 205,
+         'paiement_allocations' => 3918,
+         'paiements' => 3918,
+         'paniers_caisse' => 1,

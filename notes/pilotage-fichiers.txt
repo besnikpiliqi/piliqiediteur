@@ -266,3 +266,14 @@ sauvegardes/lot-DATEOP-*.patch
 demo-copie/
 reprises/lot-DEVIS-RET-a3227944.patch
 serie9-rapide.js.avant-demo-copie
+reprises/lot-DEVIS-RET-commits-locaux.patch
+reprises/lot-DEVIS-RET-travail-non-commite.patch
+reprises/cahier-ER-PRO.pro-d76-17-11.md
+demo-copie/cahier-DEMO-COPIE.md
+demo-copie/questions-editeur.md
+passages/DEVIS-RET.md
+passages/DEMO-COPIE-2.md
+passages/DEMO-COPIE-3.md
+serie9-rapide.js.avant-sonnet-5-5
+serie9-rapide.js.avant-opus-relectures
+reprises/ARRET-DEMANDE-2026-11-17.md

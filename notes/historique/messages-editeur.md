@@ -3676,3 +3676,15 @@ storage\logs\laravel-2026-11-17.log:169:[2026-11-17 11:05:30] demonstration.ERRO
 
 Arret de travail et tu sauvegardes tout ce que tu as fait jusqu'à maintenant. Et après, on va recommencer.
 
+## 395. 2026-11-17 21:31 UTC
+
+[1 capture(s) d'écran jointe(s)]
+
+toujours pas de demo?
+
+## 396. 2026-11-17 21:33 UTC
+
+[1 capture(s) d'écran jointe(s)]
+
+
+

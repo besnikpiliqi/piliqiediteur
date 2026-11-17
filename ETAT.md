@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 17/11/2026 à 11:47 UTC par pilotage-sync.sh : « Arrêt demandé : sauvegarde complète ».
+Mis à jour le 17/11/2026 à 21:35 UTC par pilotage-sync.sh : « Démonstration ouverte sur le poste ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

@@ -100,7 +100,7 @@ class CopieParModeleTest extends DemonstrationTestCase
     public function test_sans_modele_en_service_la_creation_echoue_sans_laisser_de_base_et_compte_l_essai(): void
     {
         $copies = app(CopiesDeLaDemonstration::class);
-        $copies->inscrire(DemandeDeCopie::lire($this->demande('cccccccccccccccccccccccccccccccc', 'DEFGHJ', TypeDActivite::Cabinet)));
+        $copies->inscrire(DemandeDeCopie::lire($this->demande('cccccccccccccccccccccccccccccccc', 'DEFGHJ', TypeDActivite::Cabinet)), 'demo_admin');
 
         try {
             $copies->preparer('cccccccccccccccccccccccccccccccc');

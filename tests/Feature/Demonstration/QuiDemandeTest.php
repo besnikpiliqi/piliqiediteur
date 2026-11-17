@@ -68,6 +68,23 @@ class QuiDemandeTest extends TestCase
         $this->assertNotNull(app(CarteDeLaDemonstration::class)->pour($proprietaire, $magasin->societe));
     }
 
+    /**
+     * La phrase de la carte « À créer » décrit la société modèle de son type
+     * (F.2) : trois magasins pour Maison Ferrand, un seul pour Conseil
+     * Vasseur ; jamais un autre type d'activité.
+     */
+    public function test_la_carte_decrit_la_societe_modele_de_son_type(): void
+    {
+        $this->assertStringContainsString('plusieurs magasins, toute l\'équipe, treize mois de ventes, d\'achats et de clôtures', CarteDeLaDemonstration::phraseACreer(TypeDActivite::Commerce));
+        $this->assertStringContainsString('un magasin, toute l\'équipe, treize mois de ventes et de clôtures', CarteDeLaDemonstration::phraseACreer(TypeDActivite::Services));
+        $this->assertStringNotContainsString('plusieurs magasins', CarteDeLaDemonstration::phraseACreer(TypeDActivite::Services));
+        $this->assertStringNotContainsString('achats', CarteDeLaDemonstration::phraseACreer(TypeDActivite::Services));
+
+        $magasin = $this->ouvrirUneSociete(['type' => TypeDActivite::Services]);
+        $carte = app(CarteDeLaDemonstration::class)->pour($this->proprietaireDe($magasin), $magasin->societe);
+        $this->assertContains(CarteDeLaDemonstration::phraseACreer(TypeDActivite::Services), $carte['phrases'] ?? []);
+    }
+
     public function test_le_proprietaire_d_un_cabinet_cree_la_demonstration_d_un_cabinet(): void
     {
         $cabinet = $this->ouvrirUnCabinet();

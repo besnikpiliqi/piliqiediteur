@@ -2,6 +2,8 @@
 
 namespace App\Domain\Demonstration\Messages;
 
+use App\Domain\Demonstration\Construction\CopiesDeLaDemonstration;
+use App\Domain\Demonstration\Construction\DemandeDeCopie;
 use App\Domain\Demonstration\Enums\EtatDUneCopie;
 use App\Domain\Demonstration\Enums\QuoiDuMessage;
 use App\Domain\Demonstration\Jobs\ArchiverPuisSupprimerUneCopie;
@@ -18,12 +20,16 @@ use Illuminate\Support\Facades\Bus;
  * C.7), et sa réponse au site réel, au format que lit
  * ReponseDuSiteDeDemonstration (code HTTP et JSON {etat, generation,
  * cause}). Les pages (rôle demo_app) n'écrivent au registre que les
- * travaux : chaque changement d'une copie part en travail sur la file
+ * travaux et, par la seule fonction inscrire_une_copie(), une demande
+ * reçue : chaque changement d'une copie part en travail sur la file
  * demonstration-admin, puis la réponse relit le registre.
  *
  * - « creer » : une référence connue rend l'état de sa copie, sans en créer
- *   une seconde ; sinon le travail CreerUneCopie part ; 200 pour une copie
- *   prête, 202 pour une copie en préparation ou en attente d'une place.
+ *   une seconde ; sinon la demande s'inscrit aussitôt au registre, en
+ *   préparation, avec son lien (un lien tout neuf et le bouton du
+ *   propriétaire mènent donc à la page d'attente avant même le passage du
+ *   travail), et le travail CreerUneCopie part ; 200 pour une copie prête,
+ *   202 pour une copie en préparation ou en attente d'une place.
  * - « renouveler_le_lien » : une génération plus ancienne que celle connue
  *   est refusée (422) ; la génération connue, avec la même empreinte, est
  *   déjà faite (200) ; une plus récente fait partir le renouvellement, et
@@ -45,6 +51,8 @@ use Illuminate\Support\Facades\Bus;
  */
 final class TraitementDesMessages
 {
+    public function __construct(private readonly CopiesDeLaDemonstration $copies) {}
+
     /**
      * @param  array<string, mixed>  $champs  les champs d'un message lu par ReceptionDesMessages
      * @return array{0: int, 1: array<string, mixed>}
@@ -70,7 +78,7 @@ final class TraitementDesMessages
     private function creer(string $reference, array $champs): array
     {
         if (! Copie::query()->where('reference', $reference)->exists()) {
-            Bus::dispatch(new CreerUneCopie([
+            $demande = [
                 'reference' => $reference,
                 'repere' => (string) $champs['repere'],
                 'type' => (string) $champs['type'],
@@ -78,16 +86,12 @@ final class TraitementDesMessages
                 'empreinte_du_lien' => (string) $champs['empreinte_du_lien'],
                 'generation' => (int) $champs['generation'],
                 'fin' => (string) $champs['fin'],
-            ]));
+            ];
+            $this->copies->inscrire(DemandeDeCopie::lire($demande), 'registre');
+            Bus::dispatch(new CreerUneCopie($demande));
         }
 
-        $copie = Copie::query()->where('reference', $reference)->first();
-
-        if ($copie === null) {
-            return [202, ['etat' => EtatDUneCopie::EnPreparation->pourLeSiteReel()]];
-        }
-
-        return $this->reponseDe($copie);
+        return $this->reponseDe(Copie::query()->where('reference', $reference)->firstOrFail());
     }
 
     /**

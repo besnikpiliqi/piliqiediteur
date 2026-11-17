@@ -3,12 +3,18 @@
 namespace Tests\Feature\Demonstration;
 
 use App\Domain\Demonstration\Enums\EtatDUneCopie;
+use App\Domain\Demonstration\Jobs\CreerUneCopie;
 use App\Domain\Demonstration\Messages\MessagesSignes;
 use App\Domain\Demonstration\Registre\Models\Copie;
 use App\Domain\Demonstration\Registre\Models\Lien;
 use App\Domain\Demonstration\Registre\Models\Temoin;
+use App\Domain\Demonstration\Visites\TemoinsDesVisites;
 use App\Domain\Tenancy\Enums\TypeDActivite;
+use App\Http\Controllers\Demonstration\MessagesDuSiteReelController;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\Bus;
+use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\DemonstrationTestCase;
 
@@ -37,6 +43,53 @@ class MessagesSignesTest extends DemonstrationTestCase
         $copie = Copie::on('demo_admin')->sole();
         $this->assertSame(EtatDUneCopie::Prete, $copie->etat);
         $this->assertSame('K7M2QD', $copie->repere);
+        $this->assertSame(1, Lien::on('demo_admin')->count());
+    }
+
+    public function test_le_lien_et_le_billet_d_une_copie_tout_juste_demandee_menent_a_la_page_d_attente_avant_le_travail_de_creation(): void
+    {
+        $this->travelTo(self::aParis('2026-11-16 10:00:00'));
+        Bus::fake([CreerUneCopie::class]);
+        $secret = MessagesSignes::enBase64Url(random_bytes(32));
+        $reference = '0123456789abcdef0123456789abcdef';
+
+        $this->postJson('/interne/messages', $this->messageSigne([...$this->creer($reference), 'empreinte_du_lien' => hash('sha256', $secret)]))
+            ->assertStatus(202)
+            ->assertExactJson(['etat' => 'en_preparation', 'generation' => 1]);
+
+        Bus::assertDispatched(CreerUneCopie::class, fn (CreerUneCopie $travail): bool => $travail->demande['reference'] === $reference);
+        $copie = Copie::on('demo_admin')->sole();
+        $this->assertSame(EtatDUneCopie::EnPreparation, $copie->etat);
+        $this->assertNull($copie->nom_de_la_base, 'Le travail de création n\'est pas encore passé.');
+
+        $temoin = $this->entrerParLeLien($secret);
+        $this->withUnencryptedCookie(TemoinsDesVisites::nom(), $temoin)->get('/choisir')
+            ->assertStatus(503)->assertSee('Votre démonstration se prépare')->assertSee('http-equiv="refresh"', false);
+
+        $billet = $this->messageSigne(['aud' => MessagesSignes::AUDIENCE_DE_L_ENTREE, 'quoi' => MessagesSignes::BILLET_D_ENTREE, 'reference' => $reference]);
+        $this->withHeaders(['Origin' => 'https://piliqi.test'])->post('/entrer-par-le-compte', $billet)->assertRedirect('/choisir')->assertStatus(303);
+    }
+
+    public function test_le_role_des_pages_n_inscrit_une_copie_que_par_sa_fonction_et_ne_la_change_jamais(): void
+    {
+        $this->modeleDeTest(TypeDActivite::Services);
+        $this->postJson('/interne/messages', $this->messageSigne($this->creer('0123456789abcdef0123456789abcdef')))->assertOk();
+        $copie = Copie::on('demo_admin')->sole();
+
+        foreach ([
+            fn () => DB::connection('registre')->table('copies')->insert(['reference' => str_repeat('e', 32), 'repere' => 'K7M2QD', 'type' => 'services', 'validee' => true, 'generation_du_lien' => 1, 'etat' => 'prete']),
+            fn () => DB::connection('registre')->table('copies')->where('id', $copie->id)->update(['etat' => 'supprimee']),
+            fn () => DB::connection('registre')->table('liens')->where('copie_id', $copie->id)->delete(),
+        ] as $ecriture) {
+            try {
+                $ecriture();
+                $this->fail('Le rôle des pages a pu écrire les copies ou les liens hors de la fonction d\'inscription.');
+            } catch (QueryException $refus) {
+                $this->assertSame('42501', $refus->errorInfo[0] ?? null, $refus->getMessage());
+            }
+        }
+
+        $this->assertSame(EtatDUneCopie::Prete, $copie->fresh()?->etat);
         $this->assertSame(1, Lien::on('demo_admin')->count());
     }
 
@@ -101,6 +154,26 @@ class MessagesSignesTest extends DemonstrationTestCase
         $this->postJson('/interne/messages', $this->messageSigne([...$etat, 'emis_le' => '2026-11-16T10:00:31Z']))
             ->assertUnprocessable()->assertExactJson(['cause' => 'Le message est émis dans le futur.']);
         $this->postJson('/interne/messages', $this->messageSigne([...$etat, 'emis_le' => '2026-11-16T09:55:01Z']))->assertStatus(410);
+    }
+
+    public function test_au_dela_de_trente_refus_dans_la_minute_l_adresse_recoit_429_sans_que_rien_ne_soit_lu(): void
+    {
+        $this->travelTo(self::aParis('2026-11-16 11:00:00'));
+
+        for ($message = 1; $message <= 5; $message++) {
+            $this->postJson('/interne/messages', $this->messageSigne(['quoi' => 'etat', 'reference' => str_repeat('c', 32)]))->assertStatus(410);
+        }
+
+        for ($refus = 1; $refus <= MessagesDuSiteReelController::REFUS_PAR_MINUTE; $refus++) {
+            $this->postJson('/interne/messages', ['message' => '{}', 'signature' => 'fausse'])->assertUnprocessable();
+        }
+
+        $signe = $this->messageSigne(['quoi' => 'etat', 'reference' => str_repeat('d', 32)]);
+        $this->postJson('/interne/messages', $signe)
+            ->assertTooManyRequests()->assertExactJson(['cause' => MessagesDuSiteReelController::TROP_DE_REFUS]);
+
+        $this->travel(61)->seconds();
+        $this->postJson('/interne/messages', $signe)->assertStatus(410);
     }
 
     public function test_etat_ne_change_rien_et_rend_l_etat_de_la_copie(): void

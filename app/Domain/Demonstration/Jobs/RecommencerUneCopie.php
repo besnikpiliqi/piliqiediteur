@@ -4,6 +4,7 @@ namespace App\Domain\Demonstration\Jobs;
 
 use App\Domain\Demonstration\Archives\FinDesCopies;
 use App\Domain\Demonstration\Construction\CopiesDeLaDemonstration;
+use App\Domain\Demonstration\Exceptions\ArchiveImpossible;
 use App\Domain\Demonstration\Exceptions\CopieImpossible;
 use App\Domain\Demonstration\SiteDePiliqi;
 use Illuminate\Bus\Queueable;
@@ -18,7 +19,10 @@ use Throwable;
  * copie du modèle du jour, même référence, même lien, même fin (voir
  * FinDesCopies::recommencer()). Un échec réessaie 30 secondes, 2 minutes
  * puis 10 minutes plus tard ; après le dernier, une copie dont la base a
- * déjà été supprimée passe « en échec », reprise une heure plus tard.
+ * déjà été supprimée passe « en échec », reprise une heure plus tard ; une
+ * copie dont la base existe encore (son archive a échoué) reste « à
+ * refaire », et sa remise à zéro entière, archive comprise, reprend une
+ * heure plus tard (voir CopiesDeLaDemonstration::marquerEnEchec()).
  */
 final class RecommencerUneCopie implements ShouldQueue
 {
@@ -52,7 +56,7 @@ final class RecommencerUneCopie implements ShouldQueue
     {
         app(CopiesDeLaDemonstration::class)->marquerEnEchec(
             $this->reference,
-            $erreur instanceof CopieImpossible ? $erreur->getMessage() : 'La remise à zéro de la copie a échoué.',
+            $erreur instanceof CopieImpossible || $erreur instanceof ArchiveImpossible ? $erreur->getMessage() : 'La remise à zéro de la copie a échoué.',
         );
     }
 }

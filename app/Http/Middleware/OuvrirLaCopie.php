@@ -4,6 +4,8 @@ namespace App\Http\Middleware;
 
 use App\Domain\Demonstration\Bases\EmpreinteDuSchema;
 use App\Domain\Demonstration\Enums\EtatDUneCopie;
+use App\Domain\Demonstration\Etat\EtatDuSite;
+use App\Domain\Demonstration\Exceptions\NomDeBaseHorsDuMotif;
 use App\Domain\Demonstration\SiteDePiliqi;
 use App\Domain\Demonstration\Visites\OuvertureDUneCopie;
 use App\Domain\Demonstration\Visites\TemoinsDesVisites;
@@ -23,8 +25,10 @@ use Symfony\Component\HttpFoundation\Response;
  * répondent les adresses d'entrée et les adresses internes, qui ne lisent
  * que le registre ; tout le reste répond la page introuvable, sans dire
  * qu'une démonstration existe. Une copie qui ne se sert pas encore montre
- * sa page d'attente, jamais une erreur technique. Sur le site réel, il ne
- * fait rien.
+ * sa page d'attente, jamais une erreur technique. Un nom de base hors du
+ * motif d'une copie, lu au registre (C.6.6), arrête la requête avec la page
+ * « démonstration indisponible » et paraît dans l'état publié (C.19). Sur
+ * le site réel, il ne fait rien.
  */
 final class OuvrirLaCopie
 {
@@ -83,7 +87,14 @@ final class OuvrirLaCopie
             return redirect(EntrerDansLaDemonstrationController::CHEMIN_DU_CHOIX);
         }
 
-        $this->ouverture->ouvrir($copie);
+        try {
+            $this->ouverture->ouvrir($copie);
+        } catch (NomDeBaseHorsDuMotif) {
+            EtatDuSite::signalerUnNomHorsDuMotif();
+
+            return self::attente('indisponible', 503);
+        }
+
         $this->temoins->voir($visite->temoin);
 
         return $next($request);

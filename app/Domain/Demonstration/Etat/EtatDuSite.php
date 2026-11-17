@@ -14,6 +14,7 @@ use App\Domain\Demonstration\VersionServie;
 use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Support\Reglage;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Facades\Cache;
 use RuntimeException;
 use SensitiveParameter;
 
@@ -22,7 +23,8 @@ use SensitiveParameter;
  * site réel lit chaque heure (GET /interne/etat) : pour chaque type, le
  * modèle en service et la date de sa construction, le dernier échec d'une
  * construction ; le nombre de copies par état ; la place libre du disque ;
- * la version ; et la liste des problèmes, chacun une phrase. Aucune
+ * la version ; et la liste des problèmes, chacun une phrase (dont les
+ * requêtes arrêtées par un nom de base hors du motif d'une copie). Aucune
  * référence, aucune donnée d'une copie. Il est signé par la clé Ed25519 de
  * l'état du site de démonstration (DEMONSTRATION_ETAT_CLE_PRIVEE), dont
  * seul le site réel a la clé publique : le site de démonstration n'envoie
@@ -42,6 +44,13 @@ final class EtatDuSite
      * crée (C.16).
      */
     public const PLACE_LIBRE_MINIMALE = 20;
+
+    /**
+     * Le nombre des requêtes arrêtées depuis un jour par un nom de base
+     * hors du motif d'une copie (C.6.6), dans le cache du registre, que le
+     * rôle des pages écrit.
+     */
+    public const CLE_DES_NOMS_HORS_DU_MOTIF = 'demonstration:noms-hors-du-motif';
 
     public const MESSAGE_CLE_ABSENTE = 'La clé de l\'état publié du site de démonstration n\'est pas réglée (DEMONSTRATION_ETAT_CLE_PRIVEE) : tirez-la par php artisan demonstration:generer-cle --etat (voir le README).';
 
@@ -90,6 +99,12 @@ final class EtatDuSite
             $problemes[] = sprintf('%d copie(s) arrêtée(s) par une erreur pendant l\'archive de leur caisse ou leur remise à zéro : leur base n\'est pas supprimée sans archive relue.', $arretees);
         }
 
+        $horsDuMotif = (int) Cache::store('registre')->get(self::CLE_DES_NOMS_HORS_DU_MOTIF, 0);
+
+        if ($horsDuMotif > 0) {
+            $problemes[] = sprintf('%d requête(s) arrêtée(s) depuis un jour : le nom de base d\'une copie au registre n\'est pas du motif d\'une copie.', $horsDuMotif);
+        }
+
         $refusDuNettoyage = NettoyageDeLaDemonstration::dernierRefus();
 
         if ($refusDuNettoyage !== null) {
@@ -126,6 +141,17 @@ final class EtatDuSite
         $etat = MessagesSignes::canonique($this->construire());
 
         return ['etat' => $etat, 'signature' => MessagesSignes::enBase64Url(sodium_crypto_sign_detached($etat, $cle))];
+    }
+
+    /**
+     * Une requête arrêtée par un nom de base hors du motif d'une copie
+     * (voir OuvrirLaCopie) : comptée un jour dans l'état publié.
+     */
+    public static function signalerUnNomHorsDuMotif(): void
+    {
+        $cache = Cache::store('registre');
+        $cache->add(self::CLE_DES_NOMS_HORS_DU_MOTIF, 0, 86400);
+        $cache->increment(self::CLE_DES_NOMS_HORS_DU_MOTIF);
     }
 
     /**

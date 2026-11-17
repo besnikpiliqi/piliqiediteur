@@ -17,6 +17,7 @@ use App\Integrations\Antivirus\AntivirusFactice;
 use App\Integrations\Antivirus\AntivirusInjoignableException;
 use App\Integrations\Antivirus\Contracts\Antivirus;
 use App\Providers\AntivirusServiceProvider;
+use App\Providers\SiteDePiliqiServiceProvider;
 use Carbon\CarbonImmutable;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
@@ -88,8 +89,6 @@ class DiagnostiquerCaisseSecurisee extends Command
 
     public const MESSAGE_ROLE_QUI_CREE_DES_BASES = 'Le rôle PostgreSQL du site réel peut créer des bases (CREATEDB) : retirez-lui ce droit (ALTER ROLE … NOCREATEDB), qui n\'existe que sur le serveur du site de démonstration.';
 
-    public const MESSAGE_SENTINELLE_REMPLIE = 'La base sentinelle « %s » du site de démonstration doit rester sans aucune table : elle en a %d. Supprimez-la, recréez-la vide, et vérifiez qu\'aucune migration ne vise la base par défaut de ce serveur.';
-
     public function handle(SignataireFiscal $signataire, Antivirus $antivirus, HorlogeDuSysteme $horloge): int
     {
         $controles = [
@@ -150,10 +149,10 @@ class DiagnostiquerCaisseSecurisee extends Command
         $connexion = DB::connection();
 
         if (SiteDePiliqi::estLaDemonstration()) {
-            $tables = (int) $connexion->scalar("SELECT count(*) FROM pg_tables WHERE schemaname = 'public'");
+            $refus = SiteDePiliqiServiceProvider::refusDeLaBaseSentinelle($connexion);
 
-            if ($tables > 0) {
-                throw new SiteMalConfigureException(sprintf(self::MESSAGE_SENTINELLE_REMPLIE, $connexion->getDatabaseName(), $tables));
+            if ($refus !== null) {
+                throw new SiteMalConfigureException(sprintf(SiteDePiliqiServiceProvider::MESSAGE_REFUS, SiteDePiliqi::Demonstration->libelle(), $refus));
             }
 
             return 'base sentinelle '.$connexion->getDatabaseName().', sans table';

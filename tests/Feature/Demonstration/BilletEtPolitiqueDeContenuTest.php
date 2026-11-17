@@ -7,6 +7,7 @@ use App\Domain\Demonstration\Actions\OuvrirLaDemonstrationAction;
 use App\Domain\Demonstration\Messages\MessagesSignes;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Http\Controllers\Demonstration\EntrerDansLaDemonstrationController;
+use App\Http\Controllers\OuvrirMaDemonstrationController;
 use App\Http\Middleware\AjouterLesEnTetesDeSecurite;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\File;
@@ -17,7 +18,9 @@ use Tests\TestCase;
 /**
  * N32 (lot DEMO-COPIE, B.4) : la page du billet d'entrée porte sa propre
  * politique de contenu (form-action 'self' et l'origine exacte du site de
- * démonstration), Referrer-Policy: no-referrer et Cache-Control: no-store ;
+ * démonstration), Referrer-Policy: strict-origin, sans balise referrer
+ * (l'en-tête Origin que le site de démonstration exige doit partir, C.5),
+ * et Cache-Control: no-store ;
  * aucune autre page n'élargit form-action ; le formulaire part par un
  * fichier du site, sans script écrit dans la page ; le billet signé a
  * l'audience « entree » et vaut 60 secondes.
@@ -41,9 +44,11 @@ class BilletEtPolitiqueDeContenuTest extends TestCase
         $politique = (string) $reponse->headers->get('Content-Security-Policy');
         $this->assertStringContainsString("form-action 'self' ".self::ORIGINE_DE_LA_DEMONSTRATION.';', $politique);
         $this->assertSame(str_replace("form-action 'self'", "form-action 'self' ".self::ORIGINE_DE_LA_DEMONSTRATION, AjouterLesEnTetesDeSecurite::POLITIQUE_DE_CONTENU), $politique);
-        $this->assertSame('no-referrer', $reponse->headers->get('Referrer-Policy'));
+        $this->assertSame(OuvrirMaDemonstrationController::POLITIQUE_DU_REFERENT, $reponse->headers->get('Referrer-Policy'));
+        $this->assertSame('strict-origin', OuvrirMaDemonstrationController::POLITIQUE_DU_REFERENT, 'Sous no-referrer, le navigateur enverrait « Origin: null » et le site de démonstration refuserait le billet.');
         $this->assertStringContainsString('no-store', (string) $reponse->headers->get('Cache-Control'));
         $html = (string) $reponse->getContent();
+        $this->assertStringNotContainsString('name="referrer"', $html, 'Aucune balise ne remplace la politique de la réponse.');
         $this->assertStringContainsString('action="'.self::ORIGINE_DE_LA_DEMONSTRATION.'/entrer-par-le-compte"', $html);
         $this->assertStringContainsString('src="'.asset('js/demonstration/envoyer-le-billet.js').'"', $html);
         $this->assertSame(0, preg_match('~<script(?![^>]*\bsrc=)[^>]*>~i', $html), 'Aucun script écrit dans la page.');

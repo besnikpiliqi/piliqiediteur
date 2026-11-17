@@ -4,13 +4,13 @@ namespace App\Domain\Demonstration\Visites;
 
 use App\Domain\Demonstration\Bases\BrancherUneBase;
 use App\Domain\Demonstration\Construction\DossiersDeLaDemonstration;
+use App\Domain\Demonstration\Exceptions\NomDeBaseHorsDuMotif;
 use App\Domain\Demonstration\MarqueDeLaBase;
 use App\Domain\Demonstration\Registre\Models\Copie;
 use App\Domain\Demonstration\SiteDePiliqi;
 use Closure;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
-use InvalidArgumentException;
 
 /**
  * Ce qui fait lire et écrire une requête, ou un travail, dans sa copie (lot
@@ -65,13 +65,16 @@ final class OuvertureDUneCopie
         }
     }
 
+    /**
+     * @throws NomDeBaseHorsDuMotif quand le nom de base lu au registre n'est pas du motif d'une copie
+     */
     public function ouvrir(Copie $copie): void
     {
         SiteDePiliqi::exiger(SiteDePiliqi::Demonstration);
         $base = (string) $copie->nom_de_la_base;
 
         if (preg_match('/^demo_copie_[a-z0-9]{26}$/', $base) !== 1) {
-            throw new InvalidArgumentException('Le nom de base « '.$base.' » de la copie n\'est pas du motif d\'une copie : la requête est arrêtée.');
+            throw new NomDeBaseHorsDuMotif('Le nom de base d\'une copie au registre n\'est pas du motif d\'une copie : la requête est arrêtée.');
         }
 
         config(['cache.default' => 'database']);

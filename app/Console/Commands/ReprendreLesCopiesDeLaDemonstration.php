@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Domain\Demonstration\Construction\CopiesDeLaDemonstration;
 use App\Domain\Demonstration\Enums\EtatDUneCopie;
 use App\Domain\Demonstration\Jobs\PreparerUneCopie;
+use App\Domain\Demonstration\Jobs\RecommencerUneCopie;
 use App\Domain\Demonstration\Registre\Models\Copie;
 use App\Domain\Demonstration\SiteDePiliqi;
 use Carbon\CarbonImmutable;
@@ -16,13 +17,15 @@ use Illuminate\Support\Facades\Bus;
 /**
  * Chaque heure, sur le site de démonstration (lot DEMO-COPIE, C.3) : une
  * copie en échec dont l'essai suivant est dû repart (une heure après son
- * dernier échec), et la demande qui attend une place en premier repart
- * aussi, pour le cas où une place s'est libérée sans suppression (plafond
- * relevé, copie en échec). Chaque reprise est un travail de la file
- * demonstration-admin.
+ * dernier échec) ; une remise à zéro arrêtée par l'échec de son archive
+ * (copie « à refaire » dont l'essai suivant est dû) reprend en entier,
+ * archive comprise, avant toute suppression de sa base (C.18) ; et la
+ * demande qui attend une place en premier repart aussi, pour le cas où une
+ * place s'est libérée sans suppression (plafond relevé, copie en échec).
+ * Chaque reprise est un travail de la file demonstration-admin.
  */
 #[Signature('demonstration:reprendre-les-copies')]
-#[Description('Reprend les copies de démonstration en échec et la demande qui attend une place en premier.')]
+#[Description('Reprend les copies de démonstration en échec, les remises à zéro arrêtées par leur archive et la demande qui attend une place en premier.')]
 class ReprendreLesCopiesDeLaDemonstration extends Command
 {
     public function handle(CopiesDeLaDemonstration $copies): int
@@ -37,11 +40,19 @@ class ReprendreLesCopiesDeLaDemonstration extends Command
             $references[] = $enAttente;
         }
 
+        $aRefaire = Copie::on('demo_admin')->where('etat', EtatDUneCopie::ARefaire)
+            ->where('prochain_essai_le', '<=', CarbonImmutable::now())
+            ->orderBy('prochain_essai_le')->orderBy('id')->pluck('reference')->all();
+
         foreach ($references as $reference) {
             Bus::dispatch(new PreparerUneCopie((string) $reference));
         }
 
-        $this->info(count($references).' copie(s) reprise(s).');
+        foreach ($aRefaire as $reference) {
+            Bus::dispatch(new RecommencerUneCopie((string) $reference));
+        }
+
+        $this->info((count($references) + count($aRefaire)).' copie(s) reprise(s).');
 
         return self::SUCCESS;
     }

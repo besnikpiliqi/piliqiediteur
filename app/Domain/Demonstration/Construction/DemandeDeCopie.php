@@ -9,7 +9,7 @@ use InvalidArgumentException;
 
 /**
  * La demande d'une copie telle que le message « creer » l'a apportée, déjà
- * contrôlée par la réception des messages (RecevoirUnMessage), relue en
+ * contrôlée par la réception des messages (ReceptionDesMessages), relue en
  * valeurs typées pour le registre.
  */
 final class DemandeDeCopie

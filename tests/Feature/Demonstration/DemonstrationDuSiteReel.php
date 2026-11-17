@@ -33,6 +33,14 @@ trait DemonstrationDuSiteReel
     protected array $reponseDuSiteDeDemonstration = [200, []];
 
     /**
+     * Ce que le site de démonstration simulé répond à une action, à la
+     * place de la réponse commune : son code et son corps, par action.
+     *
+     * @var array<string, array{0: int, 1: array<string, mixed>}>
+     */
+    protected array $reponsesParActionDuSiteDeDemonstration = [];
+
+    /**
      * Règle le site de démonstration et le fait répondre, à chaque
      * message, ce code et ce corps (par défaut : prête, génération 1).
      *
@@ -49,7 +57,12 @@ trait DemonstrationDuSiteReel
             'demonstration.messages.cle_id' => $paire['cle_id'],
         ]);
         $this->leSiteDeDemonstrationRepond($code, $corps);
-        Http::fake([self::ORIGINE_DE_LA_DEMONSTRATION.'/interne/messages' => fn (): mixed => Http::response($this->reponseDuSiteDeDemonstration[1], $this->reponseDuSiteDeDemonstration[0])]);
+        Http::fake([self::ORIGINE_DE_LA_DEMONSTRATION.'/interne/messages' => function (Request $requete): mixed {
+            $message = json_decode((string) $requete['message'], true);
+            [$code, $corps] = $this->reponsesParActionDuSiteDeDemonstration[is_array($message) ? (string) ($message['quoi'] ?? '') : ''] ?? $this->reponseDuSiteDeDemonstration;
+
+            return Http::response($corps, $code);
+        }]);
     }
 
     /**
@@ -58,6 +71,17 @@ trait DemonstrationDuSiteReel
     protected function leSiteDeDemonstrationRepond(int $code, array $corps): void
     {
         $this->reponseDuSiteDeDemonstration = [$code, $corps];
+    }
+
+    /**
+     * Le site de démonstration simulé répond ce code et ce corps à cette
+     * seule action (creer, etat…), la réponse commune aux autres.
+     *
+     * @param  array<string, mixed>  $corps
+     */
+    protected function leSiteDeDemonstrationRepondA(string $quoi, int $code, array $corps): void
+    {
+        $this->reponsesParActionDuSiteDeDemonstration[$quoi] = [$code, $corps];
     }
 
     /**

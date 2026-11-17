@@ -20,7 +20,9 @@ use Illuminate\Support\Facades\Cache;
 /**
  * Toutes les 5 minutes, sur le site réel (B.13) :
  *  - chaque démonstration dont un message attend sa reprise (après ses
- *    trois premières reprises) repart ;
+ *    trois premières reprises), ou dont un message n'a jamais été essayé
+ *    depuis plus d'une minute (son travail a trouvé l'envoi déjà en
+ *    cours), repart ;
  *  - chaque démonstration ni prête ni finie, et chaque renouvellement sans
  *    accusé, reçoit le message « etat » (référence seule), qui répond
  *    l'état de la copie au registre du site de démonstration ;
@@ -46,7 +48,8 @@ class RelancerLesMessagesDeLaDemonstration extends Command
         $enAttente = MessageVersLaDemonstration::query()
             ->withoutGlobalScopes()
             ->whereNull('accuse_le')
-            ->where('prochain_essai_le', '<=', now())
+            ->where(fn ($aReprendre) => $aReprendre->where('prochain_essai_le', '<=', now())
+                ->orWhere(fn ($jamaisEssaye) => $jamaisEssaye->whereNull('prochain_essai_le')->where('cree_le', '<=', now()->subSeconds(EnvoyerLesMessagesALaDemonstration::MINUTE_SANS_ENVOI))))
             ->get(['demonstration_id', 'societe_id'])
             ->unique('demonstration_id');
 

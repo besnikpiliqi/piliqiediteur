@@ -12,8 +12,10 @@ use Illuminate\Config\Repository;
 use Illuminate\Console\Events\CommandStarting;
 use Illuminate\Contracts\Config\Repository as Configuration;
 use Illuminate\Contracts\View\View;
+use Illuminate\Database\ConnectionInterface;
 use Illuminate\Routing\Router;
 use Illuminate\Support\Env;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\ServiceProvider;
@@ -130,6 +132,8 @@ final class SiteDePiliqiServiceProvider extends ServiceProvider
 
     public const MESSAGE_SERVEUR_EN_MEMOIRE = 'le site de démonstration ne tourne pas sous Laravel Octane ni sous un serveur qui garde l\'application en mémoire d\'une requête à l\'autre : servez-le par PHP-FPM, une requête par processus.';
 
+    public const MESSAGE_SENTINELLE_REMPLIE = 'la base sentinelle « %s » du site de démonstration doit rester sans aucune table : elle en a %d. Supprimez-la, recréez-la vide, et vérifiez qu\'aucune migration ne vise la base par défaut de ce serveur.';
+
     public const MESSAGE_BASE_SENTINELLE = 'la base par défaut du site de démonstration est la base sentinelle vide : écrivez DB_DATABASE=demo_aucune_copie (elle vaut « %s »).';
 
     public const MESSAGE_TEMOIN_DE_SESSION = 'le témoin de session de ce site s\'appelle %1$s : écrivez SESSION_COOKIE=%1$s (il vaut « %2$s »).';
@@ -218,6 +222,13 @@ final class SiteDePiliqiServiceProvider extends ServiceProvider
                 if ($refus !== null) {
                     throw new SiteMalConfigureException($refus);
                 }
+
+                $connexion = DB::connection();
+                $refus = $connexion->getDatabaseName() === self::BASE_SENTINELLE ? self::refusDeLaBaseSentinelle($connexion) : null;
+
+                if ($refus !== null) {
+                    throw new SiteMalConfigureException(sprintf(self::MESSAGE_REFUS, SiteDePiliqi::Demonstration->libelle(), $refus));
+                }
             });
         } else {
             $this->app->booted(fn (): null => $this->refuserLesRoutesDeLaDemonstration());
@@ -256,6 +267,22 @@ final class SiteDePiliqiServiceProvider extends ServiceProvider
     }
 
     /**
+     * Le refus d'une base sentinelle qui a une table (A.3, C.6.7) : la base
+     * par défaut du site de démonstration ne sert qu'à ce qu'une requête ou
+     * un travail qui n'aurait pas rejoint sa copie ne lise et n'écrive rien.
+     * Contrôlé au départ de chaque commande du site de démonstration (ses
+     * travailleurs et son planificateur compris, une commande de plus ne
+     * coûtant qu'une requête), et par caisse:diagnostiquer ; jamais à chaque
+     * page, qui ne lit sa base qu'une fois rejointe sa copie.
+     */
+    public static function refusDeLaBaseSentinelle(ConnectionInterface $connexion): ?string
+    {
+        $tables = (int) $connexion->scalar('select count(*) from pg_catalog.pg_tables where schemaname = current_schema()');
+
+        return $tables === 0 ? null : sprintf(self::MESSAGE_SENTINELLE_REMPLIE, $connexion->getDatabaseName(), $tables);
+    }
+
+    /**
      * L'empreinte épinglée d'une clé du journal d'audit : le SHA-256
      * hexadécimal du texte de la clé, tel qu'il est écrit dans
      * JOURNAL_AUDIT_CLE (voir journal-audit:epingler-la-cle).
@@ -274,7 +301,9 @@ final class SiteDePiliqiServiceProvider extends ServiceProvider
 
         foreach (FournisseursExternesServiceProvider::PILOTES_FACTICES as $reglage => $pilote) {
             if ($reglage === 'services.antivirus.pilote') {
-                if (! in_array(config($reglage), [AntivirusServiceProvider::CLAMAV, AntivirusServiceProvider::FACTICE], true)) {
+                $permis = $this->app->isProduction() ? [AntivirusServiceProvider::CLAMAV] : [AntivirusServiceProvider::CLAMAV, AntivirusServiceProvider::FACTICE];
+
+                if (! in_array(config($reglage), $permis, true)) {
                     $refus[] = self::MESSAGE_ANTIVIRUS;
                 }
 

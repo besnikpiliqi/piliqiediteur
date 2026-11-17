@@ -2,12 +2,12 @@
 
 namespace App\Domain\Demonstration\Construction;
 
+use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Demonstration\Bases\BasesDeLaDemonstration;
 use App\Domain\Demonstration\Enums\EtatDUneCopie;
 use App\Domain\Demonstration\Enums\EtatDUnModele;
 use App\Domain\Demonstration\Exceptions\CopieImpossible;
 use App\Domain\Demonstration\Registre\Models\Copie;
-use App\Domain\Demonstration\Registre\Models\Lien;
 use App\Domain\Demonstration\Registre\Models\Modele;
 use App\Domain\Demonstration\SiteDePiliqi;
 use App\Domain\Demonstration\VersionServie;
@@ -29,11 +29,18 @@ use Throwable;
  *   puis aux autres, dans l'ordre ;
  * - au plus DEMONSTRATION_COPIES_EN_MEME_TEMPS créations en même temps ;
  * - CREATE DATABASE demo_copie_<ulid> TEMPLATE <modèle en service>, sous
- *   le verrou consultatif du type (la bascule d'une construction attend la
- *   fin de la copie), puis les réglages de la base, puis les fichiers du
- *   modèle ;
+ *   un nom neuf à chaque essai, sous le verrou consultatif du type (la
+ *   bascule d'une construction attend la fin de la copie), puis les
+ *   réglages de la base, puis les fichiers du modèle ;
  * - échec ou modèle occupé : aucune base à moitié faite ne reste
- *   (DROP DATABASE … WITH (FORCE)), et le travail réessaie.
+ *   (DROP DATABASE … WITH (FORCE) de la seule base que cet essai a fait
+ *   naître), et le travail réessaie ;
+ * - jamais de DROP DATABASE d'une base qui existait avant l'essai : une
+ *   copie dont la base précédente existe encore n'est pas refaite ici
+ *   (CAUSE_BASE_A_ARCHIVER) ; seule FinDesCopies la supprime, après
+ *   l'archive relue de sa caisse (C.18). Une remise à zéro dont l'archive
+ *   échoue reste donc « à refaire », jamais « en échec » (voir
+ *   marquerEnEchec()), et demonstration:reprendre-les-copies la relance.
  */
 final class CopiesDeLaDemonstration
 {
@@ -41,46 +48,35 @@ final class CopiesDeLaDemonstration
 
     public const CAUSE_CREATIONS_EN_COURS = 'D\'autres copies sont en cours de création : nouvel essai dans un instant.';
 
+    public const CAUSE_BASE_A_ARCHIVER = 'La base précédente de cette copie existe encore : elle n\'est supprimée qu\'après l\'archive relue de sa caisse, par sa remise à zéro ou sa suppression.';
+
     public function __construct(private readonly BasesDeLaDemonstration $bases) {}
 
     /**
      * La demande inscrite au registre, une seule fois par référence, avec
-     * son lien (seulement l'empreinte de son secret).
+     * son lien (seulement l'empreinte de son secret), en préparation et
+     * sans base, par la fonction inscrire_une_copie() (voir
+     * RolesDeLaDemonstration::FONCTION_D_INSCRIPTION) : dès la réception du
+     * message « creer », par le rôle des pages (connexion registre), puis
+     * de nouveau, sans effet, par le travail de création (demo_admin).
      *
      * @param  array{reference: string, repere: string, type: TypeDActivite, validee: bool, empreinte_du_lien: string, generation: int, fin: CarbonImmutable}  $demande
      */
-    public function inscrire(array $demande): Copie
+    public function inscrire(array $demande, string $connexion): Copie
     {
         SiteDePiliqi::exiger(SiteDePiliqi::Demonstration);
+        DB::connection($connexion)->statement('select public.inscrire_une_copie(?, ?, ?, ?::boolean, ?, ?::integer, ?::timestamp, ?::timestamp)', [
+            $demande['reference'],
+            $demande['repere'],
+            $demande['type']->value,
+            $demande['validee'] ? 'true' : 'false',
+            $demande['empreinte_du_lien'],
+            $demande['generation'],
+            Instant::enBase($demande['fin']),
+            Instant::enBase(CarbonImmutable::now()),
+        ]);
 
-        return DB::connection('demo_admin')->transaction(function () use ($demande): Copie {
-            $connue = Copie::on('demo_admin')->where('reference', $demande['reference'])->lockForUpdate()->first();
-
-            if ($connue !== null) {
-                return $connue;
-            }
-
-            $maintenant = CarbonImmutable::now();
-            $copie = Copie::on('demo_admin')->create([
-                'reference' => $demande['reference'],
-                'repere' => $demande['repere'],
-                'type' => $demande['type'],
-                'validee' => $demande['validee'],
-                'creee_le' => $maintenant,
-                'fin' => $demande['fin'],
-                'generation_du_lien' => $demande['generation'],
-                'etat' => EtatDUneCopie::EnPreparation,
-            ]);
-            Lien::on('demo_admin')->create([
-                'copie_id' => $copie->id,
-                'empreinte' => $demande['empreinte_du_lien'],
-                'generation' => $demande['generation'],
-                'fin' => $demande['fin'],
-                'cree_le' => $maintenant,
-            ]);
-
-            return $copie;
-        });
+        return Copie::on($connexion)->where('reference', $demande['reference'])->firstOrFail();
     }
 
     /**
@@ -103,6 +99,10 @@ final class CopiesDeLaDemonstration
             return $copie;
         }
 
+        if ($copie->nom_de_la_base !== null && $this->bases->existe($copie->nom_de_la_base)) {
+            throw new CopieImpossible(self::CAUSE_BASE_A_ARCHIVER);
+        }
+
         $connexion = DB::connection('demo_admin');
         $creneau = $this->prendreUnCreneau();
 
@@ -110,7 +110,7 @@ final class CopiesDeLaDemonstration
             throw new CopieImpossible(self::CAUSE_CREATIONS_EN_COURS);
         }
 
-        $nom = $copie->nom_de_la_base ?? $this->bases->nomDUneCopie();
+        $nom = $this->bases->nomDUneCopie();
 
         try {
             $connexion->select('select pg_advisory_lock(hashtext(?))', ['demonstration-modele-'.$copie->type->value]);
@@ -121,7 +121,6 @@ final class CopiesDeLaDemonstration
             }
 
             $copie->forceFill(['nom_de_la_base' => $nom, 'etat' => EtatDUneCopie::EnPreparation])->save();
-            $this->bases->supprimer($nom);
             $this->bases->copierUnModele($modele->nom_de_la_base, $nom);
             DossiersDeLaDemonstration::copierLesFichiersDuModele($modele->nom_de_la_base, $copie->reference);
             $copie->forceFill([
@@ -149,17 +148,28 @@ final class CopiesDeLaDemonstration
 
     /**
      * La copie marquée en échec après son dernier essai : elle sera reprise
-     * une heure plus tard, et l'état publié le dit.
+     * une heure plus tard, et l'état publié le dit. Une remise à zéro dont
+     * la base existe encore (son archive a échoué) reste « à refaire »,
+     * avec sa cause, pour que sa reprise refasse toute la remise à zéro,
+     * archive comprise : une copie « en échec » se refait depuis le modèle,
+     * et sa base ne doit jamais l'être sans archive.
      */
     public function marquerEnEchec(string $reference, string $cause): void
     {
-        Copie::on('demo_admin')->where('reference', $reference)
+        $copie = Copie::on('demo_admin')->where('reference', $reference)
             ->whereIn('etat', [EtatDUneCopie::EnPreparation->value, EtatDUneCopie::ARefaire->value, EtatDUneCopie::Perdue->value])
-            ->update([
-                'etat' => EtatDUneCopie::EnEchec->value,
-                'cause_de_l_echec' => mb_substr($cause, 0, 2000),
-                'prochain_essai_le' => CarbonImmutable::now()->addHour(),
-            ]);
+            ->first();
+
+        if ($copie === null) {
+            return;
+        }
+
+        $baseGardee = $copie->etat === EtatDUneCopie::ARefaire && $copie->nom_de_la_base !== null && $this->bases->existe($copie->nom_de_la_base);
+        $copie->forceFill([
+            'etat' => $baseGardee ? EtatDUneCopie::ARefaire : EtatDUneCopie::EnEchec,
+            'cause_de_l_echec' => mb_substr($cause, 0, 2000),
+            'prochain_essai_le' => CarbonImmutable::now()->addHour(),
+        ])->save();
     }
 
     /**

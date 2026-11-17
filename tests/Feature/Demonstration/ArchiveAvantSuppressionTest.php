@@ -9,10 +9,13 @@ use App\Domain\Contacts\Models\Client;
 use App\Domain\Demonstration\Archives\ArchiverUneCopie;
 use App\Domain\Demonstration\Archives\FinDesCopies;
 use App\Domain\Demonstration\Bases\BasesDeLaDemonstration;
+use App\Domain\Demonstration\Bases\BrancherUneBase;
+use App\Domain\Demonstration\Construction\CopiesDeLaDemonstration;
 use App\Domain\Demonstration\Construction\DossiersDeLaDemonstration;
 use App\Domain\Demonstration\Enums\EtatDUneCopie;
 use App\Domain\Demonstration\Etat\EtatDuSite;
 use App\Domain\Demonstration\Exceptions\ArchiveImpossible;
+use App\Domain\Demonstration\Exceptions\CopieImpossible;
 use App\Domain\Demonstration\Jobs\RecommencerUneCopie;
 use App\Domain\Demonstration\Messages\MessagesSignes;
 use App\Domain\Demonstration\Registre\Models\Archive;
@@ -163,6 +166,73 @@ class ArchiveAvantSuppressionTest extends DemonstrationTestCase
             '1 copie(s) arrêtée(s) par une erreur pendant l\'archive de leur caisse ou leur remise à zéro : leur base n\'est pas supprimée sans archive relue.',
             app(EtatDuSite::class)->construire()['problemes'],
         );
+    }
+
+    public function test_une_remise_a_zero_dont_l_archive_echoue_garde_sa_base_jusqu_a_ce_que_sa_reprise_l_archive(): void
+    {
+        $this->modeleDeTest(TypeDActivite::Commerce);
+        $this->travelTo(self::aParis('2026-11-20 15:00:00'));
+        ['copie' => $copie] = $this->copieDeTest(TypeDActivite::Commerce);
+        $vente = $this->vendreDansLaCopie($copie, 'Les Halles');
+        $base = (string) $copie->nom_de_la_base;
+        $cle = config('caisse_securisee.cle_privee');
+        config(['caisse_securisee.cle_privee' => null]);
+
+        try {
+            Bus::dispatchSync(new RecommencerUneCopie($copie->reference));
+            $this->fail('L\'archive aurait dû échouer.');
+        } catch (ArchiveImpossible $erreur) {
+            (new RecommencerUneCopie($copie->reference))->failed($erreur);
+        }
+
+        $copie->refresh();
+        $this->assertSame(EtatDUneCopie::ARefaire, $copie->etat, 'Jamais « en échec » : une copie en échec se refait depuis le modèle.');
+        $this->assertSame($base, $copie->nom_de_la_base);
+        $this->assertNotNull($copie->cause_de_l_echec);
+        $this->assertEquals(self::aParis('2026-11-20 16:00:00'), $copie->prochain_essai_le);
+        $this->assertContains(
+            '1 copie(s) arrêtée(s) par une erreur pendant l\'archive de leur caisse ou leur remise à zéro : leur base n\'est pas supprimée sans archive relue.',
+            app(EtatDuSite::class)->construire()['problemes'],
+        );
+
+        $this->travelTo(self::aParis('2026-11-20 16:30:00'));
+
+        try {
+            Artisan::call('demonstration:reprendre-les-copies');
+            $this->fail('L\'archive aurait dû échouer de nouveau.');
+        } catch (ArchiveImpossible) {
+        }
+
+        $this->assertTrue(app(BasesDeLaDemonstration::class)->existe($base), 'La reprise ne supprime jamais une base sans son archive.');
+        $this->assertSame(1, BrancherUneBase::pendant(BrancherUneBase::parLAdministration($base), fn (): int => DB::table('factures')->where('id', $vente->id)->count()));
+        $this->assertSame(0, Archive::on('demo_admin')->count());
+
+        config(['caisse_securisee.cle_privee' => $cle]);
+        $this->travelTo(self::aParis('2026-11-20 18:00:00'));
+        $this->assertSame(0, Artisan::call('demonstration:reprendre-les-copies'));
+
+        $refaite = $copie->fresh();
+        $this->assertSame(EtatDUneCopie::Prete, $refaite?->etat);
+        $this->assertNotSame($base, $refaite->nom_de_la_base);
+        $this->assertFalse(app(BasesDeLaDemonstration::class)->existe($base), 'L\'ancienne base n\'est supprimée qu\'après son archive relue.');
+        $this->assertSame('recommencer', Archive::on('demo_admin')->where('reference', $copie->reference)->sole()->motif);
+    }
+
+    public function test_la_preparation_ne_supprime_jamais_une_base_qui_existait_avant_elle(): void
+    {
+        ['copie' => $copie] = $this->copieDeTest(TypeDActivite::Services);
+        $base = (string) $copie->nom_de_la_base;
+        Copie::on('demo_admin')->whereKey($copie->id)->update(['etat' => EtatDUneCopie::EnEchec->value]);
+
+        try {
+            app(CopiesDeLaDemonstration::class)->preparer($copie->reference);
+            $this->fail('La préparation devait refuser de remplacer une base qui existe encore.');
+        } catch (CopieImpossible $refus) {
+            $this->assertSame(CopiesDeLaDemonstration::CAUSE_BASE_A_ARCHIVER, $refus->getMessage());
+        }
+
+        $this->assertTrue(app(BasesDeLaDemonstration::class)->existe($base));
+        $this->assertSame($base, $copie->fresh()?->nom_de_la_base);
     }
 
     public function test_une_archive_modifiee_ne_se_relit_plus(): void

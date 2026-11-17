@@ -10,6 +10,7 @@ use App\Domain\Demonstration\SiteDePiliqi;
 use App\Domain\Demonstration\VersionServie;
 use App\Providers\FournisseursExternesServiceProvider;
 use App\Providers\SiteDePiliqiServiceProvider;
+use Illuminate\Database\Connection;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Foundation\Testing\WithConsoleEvents;
@@ -18,6 +19,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
+use Mockery;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Symfony\Component\Console\Input\ArrayInput;
 use Symfony\Component\HttpFoundation\Exception\SuspiciousOperationException;
@@ -221,10 +223,63 @@ class SiteDePiliqiTest extends TestCase
         $this->assertSame(sprintf(SiteDePiliqiServiceProvider::MESSAGE_REFUS, 'site de démonstration', SiteDePiliqiServiceProvider::MESSAGE_SERVEUR_EN_MEMOIRE), $this->refusDuDemarrage());
     }
 
+    public function test_en_production_le_site_de_demonstration_refuse_l_antivirus_factice(): void
+    {
+        $this->configurerLeSiteDeDemonstration();
+        $this->demarrer();
+        $this->app->detectEnvironment(fn (): string => 'production');
+        config(['session.cookie' => '__Host-piliqi-demo-session', 'session.secure' => true, 'session.domain' => null, 'session.path' => '/']);
+
+        $this->assertSame('factice', config('services.antivirus.pilote'));
+        $this->assertSame(sprintf(SiteDePiliqiServiceProvider::MESSAGE_REFUS, 'site de démonstration', SiteDePiliqiServiceProvider::MESSAGE_ANTIVIRUS), $this->refusDuDemarrage());
+
+        config(['services.antivirus.pilote' => 'clamav']);
+        $this->demarrer();
+    }
+
+    public function test_la_base_sentinelle_est_refusee_des_qu_elle_a_une_table(): void
+    {
+        $connexion = DB::connection();
+
+        $this->assertMatchesRegularExpression(
+            '/^la base sentinelle « '.preg_quote((string) $connexion->getDatabaseName(), '/').' » du site de démonstration doit rester sans aucune table : elle en a [1-9]\d*\./',
+            (string) SiteDePiliqiServiceProvider::refusDeLaBaseSentinelle($connexion),
+        );
+
+        $connexion->statement('create schema sentinelle_d_essai');
+        $connexion->statement('set local search_path to sentinelle_d_essai');
+        $this->assertNull(SiteDePiliqiServiceProvider::refusDeLaBaseSentinelle($connexion), 'Sans aucune table, la base sentinelle sert.');
+
+        $connexion->statement('create table sentinelle_d_essai.migrations (id integer)');
+        $this->assertSame(sprintf(SiteDePiliqiServiceProvider::MESSAGE_SENTINELLE_REMPLIE, $connexion->getDatabaseName(), 1), SiteDePiliqiServiceProvider::refusDeLaBaseSentinelle($connexion));
+    }
+
+    public function test_le_site_de_demonstration_refuse_de_lancer_une_commande_sur_une_base_sentinelle_qui_a_une_table(): void
+    {
+        $this->configurerLeSiteDeDemonstration();
+        $this->demarrer();
+        $sentinelle = Mockery::mock(Connection::class);
+        $sentinelle->shouldReceive('getDatabaseName')->andReturn(SiteDePiliqiServiceProvider::BASE_SENTINELLE);
+        $sentinelle->shouldReceive('scalar')->andReturn(2);
+        $bases = DB::getFacadeRoot();
+        DB::shouldReceive('connection')->andReturn($sentinelle);
+
+        try {
+            $this->assertThrows(
+                fn () => Artisan::call('list'),
+                SiteMalConfigureException::class,
+                sprintf(SiteDePiliqiServiceProvider::MESSAGE_REFUS, 'site de démonstration', sprintf(SiteDePiliqiServiceProvider::MESSAGE_SENTINELLE_REMPLIE, SiteDePiliqiServiceProvider::BASE_SENTINELLE, 2)),
+            );
+        } finally {
+            DB::swap($bases);
+        }
+    }
+
     public function test_en_production_le_site_de_demonstration_exige_le_temoin_host_securise(): void
     {
         $this->configurerLeSiteDeDemonstration();
         $this->app->detectEnvironment(fn (): string => 'production');
+        config(['services.antivirus.pilote' => 'clamav']);
 
         $this->assertSame(
             sprintf(SiteDePiliqiServiceProvider::MESSAGE_REFUS, 'site de démonstration', sprintf(SiteDePiliqiServiceProvider::MESSAGE_TEMOIN_DE_SESSION, '__Host-piliqi-demo-session', 'piliqi-demo-session').' '.SiteDePiliqiServiceProvider::MESSAGE_TEMOIN_DE_PRODUCTION),

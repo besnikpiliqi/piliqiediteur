@@ -32,8 +32,10 @@ use Symfony\Component\HttpFoundation\Response;
  *   site de démonstration exigé, 10 essais par minute et par adresse IP
  *   (cache du registre). Le secret mène au lien actif de sa copie ; un
  *   témoin valable d'une autre copie demande d'abord une confirmation. Lien
- *   faux, ancien ou d'une copie supprimée : la même réponse introuvable,
- *   après le même délai.
+ *   faux, mal formé, ancien ou d'une copie supprimée : la même réponse
+ *   introuvable, après le même délai (auth.timebox_duration, compté depuis
+ *   le début de la recherche) ; seul un lien valable répond sans attendre,
+ *   comme une connexion réussie.
  * - POST /entrer-par-le-compte : le billet d'entrée signé du bouton du
  *   propriétaire, envoyé depuis la page du site réel (en-tête Origin égal à
  *   l'origine exacte du site réel), lu par ReceptionDesMessages (audience
@@ -82,7 +84,10 @@ final class EntrerDansLaDemonstrationController
 
         $copie = (new Timebox)->call(function (Timebox $timebox) use ($secret): ?Copie {
             $copie = self::copieDuLien(is_string($secret) ? $secret : '');
-            $timebox->returnEarly();
+
+            if ($copie !== null) {
+                $timebox->returnEarly();
+            }
 
             return $copie;
         }, (int) config('auth.timebox_duration'));

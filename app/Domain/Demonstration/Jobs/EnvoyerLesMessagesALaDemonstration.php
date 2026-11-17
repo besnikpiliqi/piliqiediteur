@@ -23,11 +23,17 @@ use Illuminate\Support\Facades\DB;
 /**
  * Le travail d'envoi des messages d'une démonstration (B.13), sur la file
  * « demonstration » : il lit les messages non accusés de cette seule
- * démonstration, dans leur ordre (les démonstrations ne s'attendent pas
- * entre elles, et deux travaux de la même ne se chevauchent pas), les
- * signe au moment de l'envoi (voir MessagesSignes) et les envoie au site
- * de démonstration ; il tire de chaque réponse l'état de la carte (voir
- * EtatsDeLaDemonstration).
+ * démonstration, un à un dans leur ordre, jusqu'au dernier, même déposé
+ * pendant qu'il envoie (les démonstrations ne s'attendent pas entre
+ * elles), les signe au moment de l'envoi (voir MessagesSignes) et les
+ * envoie au site de démonstration ; il tire de chaque réponse l'état de
+ * la carte (voir EtatsDeLaDemonstration).
+ *
+ * Deux travaux de la même démonstration ne se chevauchent pas : celui qui
+ * trouve l'envoi déjà en cours s'arrête aussitôt, sans échec ni nouvelle
+ * tentative, puisque celui en cours lit jusqu'au dernier message ; un
+ * message déposé juste après sa dernière lecture est repris par
+ * demonstration:relancer-les-messages (voir MINUTE_SANS_ENVOI).
  *
  * Un message que le site de démonstration ne reçoit pas (coupure, réponse
  * hors du protocole, 409 « mise à jour en cours », clé non réglée) arrête
@@ -56,6 +62,12 @@ final class EnvoyerLesMessagesALaDemonstration implements ShouldQueue
 
     public const INTERVALLE_DES_RELANCES = 300;
 
+    /**
+     * Au-delà, un message jamais essayé (son travail a trouvé l'envoi de sa
+     * démonstration déjà en cours) est repris par la tâche des relances.
+     */
+    public const MINUTE_SANS_ENVOI = 60;
+
     public int $tries = 1;
 
     public int $timeout = 60;
@@ -72,7 +84,7 @@ final class EnvoyerLesMessagesALaDemonstration implements ShouldQueue
      */
     public function middleware(): array
     {
-        return [(new WithoutOverlapping('demonstration-envoi:'.$this->demonstrationId))->releaseAfter(5)->expireAfter(120)];
+        return [(new WithoutOverlapping('demonstration-envoi:'.$this->demonstrationId))->dontRelease()->expireAfter(120)];
     }
 
     public function handle(SiteDeDemonstration $site, MessagesSignes $signataire, EtatsDeLaDemonstration $etats, TenantContext $contexte): void
@@ -85,14 +97,11 @@ final class EnvoyerLesMessagesALaDemonstration implements ShouldQueue
         }
 
         $contexte->runAsSociete($societe, function () use ($site, $signataire, $etats): void {
-            $messages = MessageVersLaDemonstration::query()
-                ->where('societe_id', $this->societeId)
-                ->where('demonstration_id', $this->demonstrationId)
-                ->whereNull('accuse_le')
-                ->orderBy('id')
-                ->get(['id', 'societe_id', 'demonstration_id', 'quoi', 'contenu', 'tentatives', 'prochain_essai_le']);
+            $dernier = 0;
 
-            foreach ($messages as $message) {
+            while (($message = $this->suivant($dernier)) !== null) {
+                $dernier = (int) $message->getKey();
+
                 if ($message->prochain_essai_le?->isFuture() === true) {
                     return;
                 }
@@ -129,6 +138,21 @@ final class EnvoyerLesMessagesALaDemonstration implements ShouldQueue
                 });
             }
         });
+    }
+
+    /**
+     * Le premier message non accusé de cette démonstration après celui-ci,
+     * relu à chaque tour : un message déposé pendant l'envoi part aussi.
+     */
+    private function suivant(int $apres): ?MessageVersLaDemonstration
+    {
+        return MessageVersLaDemonstration::query()
+            ->where('societe_id', $this->societeId)
+            ->where('demonstration_id', $this->demonstrationId)
+            ->whereNull('accuse_le')
+            ->where('id', '>', $apres)
+            ->orderBy('id')
+            ->first(['id', 'societe_id', 'demonstration_id', 'quoi', 'contenu', 'tentatives', 'prochain_essai_le']);
     }
 
     /**

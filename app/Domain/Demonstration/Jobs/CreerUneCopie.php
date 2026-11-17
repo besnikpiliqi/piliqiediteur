@@ -15,8 +15,10 @@ use Throwable;
 /**
  * La création d'une copie (lot DEMO-COPIE, C.3), sur la file
  * demonstration-admin, que seul le travailleur de demo_admin traite :
- * envoyé par les pages (rôle demo_app, qui n'écrit au registre que les
- * travaux), il inscrit la demande puis crée la copie. Un échec réessaie
+ * envoyé par les pages à la réception du message « creer », après qu'elles
+ * ont inscrit la demande au registre (voir
+ * CopiesDeLaDemonstration::inscrire()), il la retrouve inscrite (ou
+ * l'inscrit, une seule fois par référence) puis crée la copie. Un échec réessaie
  * 30 secondes, 2 minutes puis 10 minutes plus tard, puis la copie passe
  * « en échec », reprise une heure plus tard.
  */
@@ -50,7 +52,7 @@ final class CreerUneCopie implements ShouldQueue
     public function handle(CopiesDeLaDemonstration $copies): void
     {
         SiteDePiliqi::exiger(SiteDePiliqi::Demonstration);
-        $copies->inscrire(DemandeDeCopie::lire($this->demande));
+        $copies->inscrire(DemandeDeCopie::lire($this->demande), 'demo_admin');
         $copies->preparer($this->demande['reference']);
     }
 

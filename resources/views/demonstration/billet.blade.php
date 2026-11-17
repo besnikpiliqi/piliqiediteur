@@ -2,8 +2,10 @@
     La page du billet d'entrée du site réel (voir
     OuvrirMaDemonstrationController) : le formulaire du billet signé part
     seul, par le fichier /js/demonstration/envoyer-le-billet.js, vers le
-    site de démonstration ; sans script, le bouton l'envoie. Un refus ne
-    montre que son message.
+    site de démonstration ; sans script, le bouton l'envoie. Aucune balise
+    referrer : la politique de la réponse (strict-origin) garde l'en-tête
+    Origin que le site de démonstration exige. Un refus ne montre que son
+    message.
 
     @param string|null $action
     @param array{message: string, signature: string}|null $billet
@@ -14,7 +16,6 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="referrer" content="no-referrer">
     <title>Ma démonstration · {{ config('app.name') }}</title>
     <style>
         body { font-family: system-ui, sans-serif; background: #f9fafb; color: #111827; margin: 0; }

@@ -24,12 +24,23 @@ use Symfony\Component\HttpFoundation\Response;
  * page pose sa propre politique de contenu, la politique commune avec
  * form-action 'self' et l'origine exacte du site de démonstration, que
  * l'intergiciel des en-têtes garde ; aucune autre page n'élargit
- * form-action. Elle porte aussi Referrer-Policy: no-referrer et
- * Cache-Control: no-store. Un refus (pas le propriétaire, pas de
+ * form-action. Elle porte aussi Cache-Control: no-store et
+ * Referrer-Policy: strict-origin, qui garde l'en-tête Origin du
+ * formulaire : le site de démonstration n'accepte le billet que de
+ * l'origine exacte du site réel (C.5), et le navigateur écrit « Origin:
+ * null » sur un envoi vers un autre site sous no-referrer. Le billet est
+ * dans le corps du formulaire, jamais dans une adresse : le Referer ne
+ * porte que l'origine du site réel. Un refus (pas le propriétaire, pas de
  * démonstration, trop d'ouvertures) montre seulement son message.
  */
 final class OuvrirMaDemonstrationController
 {
+    /**
+     * La politique du référent de cette seule page : l'origine du site
+     * réel, sans chemin, et rien vers une adresse en http.
+     */
+    public const POLITIQUE_DU_REFERENT = 'strict-origin';
+
     public function __invoke(Request $request, OuvrirLaDemonstrationAction $ouvrir, SiteDeDemonstration $site): Response
     {
         $compte = $request->user();
@@ -64,7 +75,7 @@ final class OuvrirMaDemonstrationController
     private function page(?string $action, ?array $billet, ?string $message, int $statut, ?string $origine): Response
     {
         $reponse = response()->view('demonstration.billet', ['action' => $action, 'billet' => $billet, 'message' => $message], $statut);
-        $reponse->headers->set('Referrer-Policy', 'no-referrer');
+        $reponse->headers->set('Referrer-Policy', self::POLITIQUE_DU_REFERENT);
         $reponse->headers->set('Cache-Control', 'no-store, private');
 
         if ($origine !== null) {

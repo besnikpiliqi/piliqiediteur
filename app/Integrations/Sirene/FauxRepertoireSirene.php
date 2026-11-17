@@ -190,10 +190,6 @@ class FauxRepertoireSirene implements RepertoireSirene
     }
 
     /**
-     * Le SIRET du siège d'une entreprise fictive : son SIREN suivi du NIC
-     * 0001 et de sa clé.
-     */
-    /**
      * Vrai pour tout SIREN sur le site réel ; sur le site de démonstration,
      * seulement pour un SIREN fictif du semis.
      */
@@ -202,6 +198,10 @@ class FauxRepertoireSirene implements RepertoireSirene
         return ! SiteDePiliqi::estLaDemonstration() || in_array($siren, self::SIREN_DU_SEMIS, true);
     }
 
+    /**
+     * Le SIRET du siège d'une entreprise fictive : son SIREN suivi du NIC
+     * 0001 et de sa clé.
+     */
     public static function siretDuSiege(string $siren): string
     {
         return IdentifiantsInsee::avecSaCle($siren.'0001');

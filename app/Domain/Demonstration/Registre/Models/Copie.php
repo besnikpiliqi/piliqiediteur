@@ -14,7 +14,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * Une copie au registre du site de démonstration (lot DEMO-COPIE, C.1) :
  * rien de la vraie société, seulement la référence, le repère, le type, si
  * elle est validée, la génération du lien et la fin. Lue par le rôle des
- * pages (connexion registre), écrite par demo_admin seul.
+ * pages (connexion registre), qui n'y inscrit une demande que par la
+ * fonction inscrire_une_copie() ; changée par demo_admin seul.
  *
  * @property int $id
  * @property string $reference

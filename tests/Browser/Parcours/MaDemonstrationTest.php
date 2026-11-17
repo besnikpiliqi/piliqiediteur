@@ -8,7 +8,10 @@ use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Models\EntreeAudit;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\MaDemonstration;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Route;
+use Tests\Browser\Support\Navigation;
 use Tests\Feature\Demonstration\DemonstrationDuSiteReel;
 
 /*
@@ -16,7 +19,8 @@ use Tests\Feature\Demonstration\DemonstrationDuSiteReel;
  * tableau de bord de l'espace de la société et sur celui du cabinet, pour
  * le seul propriétaire : créer et lire le lien une seule fois, renouveler
  * le lien avec son mot de passe, recommencer à zéro, ouvrir par le
- * bouton ; un administrateur ne voit pas la carte ; sans adresse de
+ * bouton, dont le billet arrive au site de démonstration avec l'origine
+ * du site réel ; un administrateur ne voit pas la carte ; sans adresse de
  * connexion confirmée, la carte mène au profil.
  */
 
@@ -78,6 +82,30 @@ test('le propriétaire ouvre sa démonstration par le bouton, dans un nouvel ong
         ->voir('Ma démonstration');
 
     expect(EntreeAudit::query()->withoutGlobalScopes()->where('action', ActionAuditee::DemonstrationOuverteParLeBouton->value)->count())->toBe(1);
+});
+
+test('le billet du bouton part vers le site de démonstration avec l’origine du site réel', function () {
+    $societe = $this->ouvrirUneSociete()->societe;
+    $proprietaire = $societe->proprietaire()->firstOrFail();
+    app(DemanderUneDemonstrationAction::class)->handle($proprietaire, null, null);
+    app(TenantContext::class)->clear();
+    $onglet = $this->seConnecter($proprietaire, 'password', panneau: 'societe')->aller('/societe/'.$societe->uuid);
+
+    // Le site de démonstration du test : le même serveur, sous l'autre nom
+    // de la boucle locale, donc une autre origine ; il dit l'en-tête Origin
+    // qu'il reçoit, que le vrai site de démonstration compare à l'origine
+    // exacte du site réel (C.5).
+    $adresse = parse_url($onglet->page()->url());
+    $origineDuSiteReel = $adresse['scheme'].'://'.$adresse['host'].':'.$adresse['port'];
+    config(['demonstration.url' => $adresse['scheme'].'://'.($adresse['host'] === 'localhost' ? '127.0.0.1' : 'localhost').':'.$adresse['port']]);
+    Route::post('/entrer-par-le-compte', fn (Request $requete): string => 'Billet reçu, origine : '.$requete->headers->get('Origin', 'aucune').'.');
+
+    // Le formulaire de la carte s'ouvre dans le même onglet, pour que le
+    // test suive la page du billet puis l'envoi qu'elle fait seule.
+    $onglet->page()->evaluate("() => document.querySelector('form[action$=\"/ma-demonstration/ouvrir\"]').removeAttribute('target')");
+    $onglet->cliquerSur('Ouvrir ma démonstration')
+        ->attendreQue('document.body.innerText.includes('.Navigation::texte('Billet reçu').')', 'le billet n\'est pas arrivé au site de démonstration')
+        ->voir('Billet reçu, origine : '.$origineDuSiteReel.'.');
 });
 
 test('le propriétaire d’un cabinet crée la démonstration de son cabinet', function () {

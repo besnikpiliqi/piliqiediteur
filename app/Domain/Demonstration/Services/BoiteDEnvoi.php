@@ -61,6 +61,26 @@ final class BoiteDEnvoi
     }
 
     /**
+     * Le même « creer » que la demande, de nouveau dans la boîte, quand le
+     * site de démonstration ne connaît pas la copie alors qu'elle n'est pas
+     * encore prête (voir EtatsDeLaDemonstration) : même référence, même
+     * repère, même lien, même fin.
+     */
+    public function renvoyerLaCreation(Demonstration $demonstration): void
+    {
+        $creation = MessageVersLaDemonstration::query()
+            ->where('societe_id', $demonstration->societe_id)
+            ->where('demonstration_id', $demonstration->getKey())
+            ->where('quoi', QuoiDuMessage::Creer)
+            ->orderBy('id')
+            ->first(['contenu']);
+
+        if ($creation !== null) {
+            $this->deposer($demonstration, QuoiDuMessage::Creer, array_diff_key($creation->contenu, ['quoi' => true, 'reference' => true]));
+        }
+    }
+
+    /**
      * @param  array<string, bool|int|string>  $champs
      */
     private function deposer(Demonstration $demonstration, QuoiDuMessage $quoi, array $champs): void

@@ -9,6 +9,7 @@ use App\Domain\Demonstration\Construction\DossiersDeLaDemonstration;
 use App\Domain\Demonstration\Construction\SemisDuModeleParLeSemeur;
 use App\Domain\Demonstration\Contracts\SemisDUnModele;
 use App\Domain\Demonstration\Registre\Models\Modele;
+use App\Domain\Demonstration\Services\CarteDeLaDemonstration;
 use App\Domain\Tenancy\Enums\TypeDActivite;
 use Database\Seeders\Semis\ComptesDuBandeauDuModele;
 use Illuminate\Support\Facades\DB;
@@ -39,6 +40,7 @@ class BasesModelesTest extends DemonstrationTestCase
         [$modele, $lecture] = $this->construireEtLire(TypeDActivite::Commerce);
 
         $this->assertSame(['MAISON FERRAND'], $lecture['societes']);
+        $this->assertStringContainsString('plusieurs magasins,', CarteDeLaDemonstration::phraseACreer(TypeDActivite::Commerce), 'La carte « À créer » décrit ce modèle : trois magasins.');
         $this->assertSame([
             ['Maison Ferrand Fort-de-France', 'martinique'],
             ['Maison Ferrand Halles', 'metropole'],
@@ -60,6 +62,7 @@ class BasesModelesTest extends DemonstrationTestCase
 
         $this->assertSame(['CONSEIL VASSEUR'], $lecture['societes']);
         $this->assertSame([['Conseil Vasseur Paris', 'metropole']], $lecture['magasins']);
+        $this->assertStringContainsString('un magasin,', CarteDeLaDemonstration::phraseACreer(TypeDActivite::Services), 'La carte « À créer » décrit ce modèle : un seul magasin.');
         $this->assertSame(0, $lecture['produits']);
         $this->assertSame(0, $lecture['factures_achat']);
         $this->assertSame(['Marc Petit', 'Sophie Petit'], $lecture['experts_comptables_actifs']);

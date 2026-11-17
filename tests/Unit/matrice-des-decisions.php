@@ -3124,6 +3124,8 @@ return [
                 'tests/Feature/Demonstration/ClesDeLaDemonstrationTest.php::test_une_copie_marque_son_registre_et_son_emetteur_et_entre_en_mode_d_entrainement',
                 'tests/Feature/Demonstration/ClesDeLaDemonstrationTest.php::test_le_registre_d_une_copie_ne_se_verifie_pas_avec_une_autre_cle_que_celle_de_la_demonstration',
                 'tests/Feature/Demonstration/VerificateurDuSiteReelTest.php::test_un_enregistrement_d_une_copie_dans_une_base_reelle_est_signale',
+                'tests/Feature/Demonstration/SiteDePiliqiTest.php::test_en_production_le_site_de_demonstration_refuse_l_antivirus_factice',
+                'tests/Feature/Demonstration/SiteDePiliqiTest.php::test_le_site_de_demonstration_refuse_de_lancer_une_commande_sur_une_base_sentinelle_qui_a_une_table',
             ],
         ],
         'demonstration.lien-renouvelable' => [
@@ -3138,6 +3140,9 @@ return [
                 'tests/Feature/Demonstration/EntreeParLeLienTest.php::test_le_lien_pose_un_temoin_de_la_copie_puis_mene_au_choix_du_compte',
                 'tests/Feature/Demonstration/EntreeParLeLienTest.php::test_le_billet_du_bouton_ouvre_la_copie_une_seule_fois_et_depuis_la_seule_page_du_site_reel',
                 'tests/Feature/Demonstration/BilletEtPolitiqueDeContenuTest.php::test_la_page_du_billet_porte_sa_politique_et_son_formulaire_vers_le_site_de_demonstration',
+                'tests/Browser/Parcours/MaDemonstrationTest.php › le billet du bouton part vers le site de démonstration avec l’origine du site réel',
+                'tests/Feature/Demonstration/MessagesSignesTest.php::test_le_lien_et_le_billet_d_une_copie_tout_juste_demandee_menent_a_la_page_d_attente_avant_le_travail_de_creation',
+                'tests/Feature/Demonstration/EntreeParLeLienTest.php::test_un_lien_faux_attend_la_duree_reglee_et_seul_un_lien_valable_repond_sans_attendre',
             ],
         ],
         'demonstration.trente-jours' => [
@@ -3157,6 +3162,8 @@ return [
                 'tests/Feature/Demonstration/ArchiveAvantSuppressionTest.php::test_recommencer_archive_puis_refait_la_copie_avec_la_meme_reference_le_meme_lien_et_la_meme_fin',
                 'tests/Feature/Demonstration/ArchiveAvantSuppressionTest.php::test_une_archive_qui_echoue_arrete_la_suppression_et_l_etat_publie_le_dit',
                 'tests/Feature/Demonstration/ArchiveAvantSuppressionTest.php::test_les_archives_de_six_ans_s_effacent_et_pas_celles_d_avant',
+                'tests/Feature/Demonstration/ArchiveAvantSuppressionTest.php::test_une_remise_a_zero_dont_l_archive_echoue_garde_sa_base_jusqu_a_ce_que_sa_reprise_l_archive',
+                'tests/Feature/Demonstration/ArchiveAvantSuppressionTest.php::test_la_preparation_ne_supprime_jamais_une_base_qui_existait_avant_elle',
             ],
         ],
         'demonstration.identite-fictive' => [
@@ -3177,6 +3184,7 @@ return [
                 'tests/Feature/Demonstration/BasesModelesTest.php::test_le_modele_cabinet_contient_le_cabinet_martin_et_ses_clients_sans_compte_d_un_client_au_bandeau',
                 'tests/Feature/Demonstration/ConstructionDesModelesTest.php::test_une_construction_reussie_met_un_modele_ferme_en_service_avec_son_empreinte_et_son_mot_de_passe',
                 'tests/Feature/Demonstration/ConstructionDesModelesTest.php::test_un_modele_dont_l_isolation_n_est_pas_a_zero_n_est_jamais_mis_en_service',
+                'tests/Feature/Demonstration/QuiDemandeTest.php::test_la_carte_decrit_la_societe_modele_de_son_type',
             ],
         ],
         'demonstration.domaine-et-temoins' => [
@@ -3199,6 +3207,7 @@ return [
                 'tests/Feature/Demonstration/RolesPostgresDeLaDemonstrationTest.php::test_les_travaux_de_l_administration_ont_leur_file_a_eux',
                 'tests/Feature/Demonstration/CachesEtVerrousParCopieTest.php::test_la_meme_cle_de_limite_et_de_verrou_est_independante_dans_deux_copies',
                 'tests/Feature/Demonstration/CachesEtVerrousParCopieTest.php::test_chaque_disque_local_est_regle_sous_le_dossier_de_la_copie_et_disparait_avec_elle',
+                'tests/Feature/Demonstration/MessagesSignesTest.php::test_le_role_des_pages_n_inscrit_une_copie_que_par_sa_fonction_et_ne_la_change_jamais',
             ],
         ],
         'demonstration.etat-publie' => [
@@ -3208,6 +3217,8 @@ return [
                 'tests/Feature/Demonstration/EtatPublieTest.php::test_l_etat_publie_est_signe_et_ne_porte_aucune_reference_ni_donnee_d_une_copie',
                 'tests/Feature/Demonstration/LectureDeLEtatTest.php::test_chaque_probleme_nouveau_du_jour_devient_une_seule_alerte',
                 'tests/Feature/Demonstration/LectureDeLEtatTest.php::test_un_etat_mal_signe_ou_trop_vieux_est_une_alerte',
+                'tests/Feature/Demonstration/EntreeParLeLienTest.php::test_un_nom_de_base_hors_du_motif_arrete_la_requete_en_francais_et_parait_dans_l_etat_publie',
+                'tests/Feature/Demonstration/UneSeuleCopieTest.php::test_un_creer_refuse_previent_l_editeur_puis_se_renvoie_une_fois_par_heure_jusqu_au_troisieme_echec',
             ],
         ],
         'demonstration.journal-d-audit' => [
@@ -6721,6 +6732,14 @@ return [
             'choix-A' => [
                 'decision' => 'Le 16/11/2026 vers 10 h : une base PostgreSQL par société, copiée de la base modèle de son type (CREATE DATABASE … TEMPLATE), sur un site de démonstration séparé, même code ; la nuit, seuls les trois modèles sont refaits.',
                 'a_venir' => 'Lots DEMO-COPIE-2 et DEMO-COPIE-3.',
+            ],
+            'C.13-taches-des-copies' => [
+                'decision' => 'Les tâches du calendrier des magasins (clôture du jour et caisses personnelles, passage en retard, expiration des devis, relances) tournent dans chaque copie, qui rattrape ses journées dans l\'ordre.',
+                'a_venir' => 'Lot DEMO-COPIE-3 (C.13 : demonstration:taches-des-copies, demonstration:taches-d-une-copie et rattrapage à l\'entrée) : aujourd\'hui, le planificateur du site de démonstration ne lance ces tâches que sur sa base sentinelle, jamais dans une copie.',
+            ],
+            'C.17-ni-adresse-ip-ni-navigateur' => [
+                'decision' => 'En mode démonstration, ni l\'adresse IP ni le navigateur ne s\'enregistrent, ni au journal d\'audit, ni au journal des événements, ni dans les sessions.',
+                'a_venir' => 'Lot DEMO-COPIE-3 (C.17) : aujourd\'hui, une copie garde encore l\'adresse IP et le navigateur dans ses traces techniques et ses sessions, qui disparaissent avec elle, au plus 30 jours après sa création.',
             ],
             'choix-21' => [
                 'decision' => 'Choix 21 du cahier (D76) : le mot « démonstration » du semis du poste devient « semis » (SemisComplet, comptes-du-semis.txt, PILIQI_SEMIS_MOT_DE_PASSE, piliqi.semis_mot_de_passe, DonneesSemeesTest).',

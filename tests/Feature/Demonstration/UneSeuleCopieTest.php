@@ -5,12 +5,16 @@ namespace Tests\Feature\Demonstration;
 use App\Domain\Demonstration\Actions\DemanderUneDemonstrationAction;
 use App\Domain\Demonstration\Enums\CauseDeLaFin;
 use App\Domain\Demonstration\Enums\EtatDeLaDemonstration;
+use App\Domain\Demonstration\Jobs\EnvoyerLesMessagesALaDemonstration;
 use App\Domain\Demonstration\Models\Demonstration;
+use App\Domain\Demonstration\Models\MessageVersLaDemonstration;
+use App\Domain\Demonstration\Services\BoiteDEnvoi;
 use App\Domain\Demonstration\Services\CarteDeLaDemonstration;
 use App\Domain\Tenancy\Mail\AlerteEditeurMail;
 use App\Domain\Tenancy\Services\TenantContext;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
@@ -98,6 +102,67 @@ class UneSeuleCopieTest extends TestCase
         $this->leSiteDeDemonstrationRepond(202, ['etat' => 'en_preparation']);
         $nouvelle = app(DemanderUneDemonstrationAction::class)->handle($proprietaire, null, null);
         $this->assertNotSame($demonstration->getKey(), $nouvelle->demonstration->getKey());
+    }
+
+    public function test_un_creer_refuse_previent_l_editeur_puis_se_renvoie_une_fois_par_heure_jusqu_au_troisieme_echec(): void
+    {
+        $this->travelTo(self::aParis('2026-11-16 10:00:00'));
+        config(['editeur.email' => 'editeur@piliqi.test']);
+        $proprietaire = $this->proprietaireDe($this->ouvrirUneSociete());
+        $this->leSiteDeDemonstrationRepondA('creer', 422, ['cause' => 'La clé du message est inconnue.']);
+        $this->leSiteDeDemonstrationRepondA('etat', 410, ['etat' => 'supprimee']);
+
+        $demonstration = app(DemanderUneDemonstrationAction::class)->handle($proprietaire, null, null)->demonstration;
+
+        Mail::assertSent(AlerteEditeurMail::class, 1);
+        $relue = Demonstration::query()->withoutGlobalScopes()->findOrFail($demonstration->getKey());
+        $this->assertSame([EtatDeLaDemonstration::EnEchec, 1], [$relue->etat, $relue->essais_en_echec]);
+
+        foreach (['10:05:00', '10:10:00', '11:01:00', '11:06:00', '12:02:00'] as $heure) {
+            $this->travelTo(self::aParis('2026-11-16 '.$heure));
+            $this->artisan('demonstration:relancer-les-messages')->assertSuccessful();
+        }
+
+        $this->assertSame(['creer', 'etat', 'etat', 'etat', 'creer', 'etat', 'etat', 'supprimer'], array_column($this->messagesRecus(), 'quoi'), 'Le « creer » repart une fois, à l\'heure de l\'échec suivant, jamais toutes les cinq minutes ; la fin envoie « supprimer ».');
+        $relue = Demonstration::query()->withoutGlobalScopes()->findOrFail($demonstration->getKey());
+        $this->assertSame([EtatDeLaDemonstration::Terminee, CauseDeLaFin::Echec, 3], [$relue->etat, $relue->cause_de_la_fin, $relue->essais_en_echec]);
+        Mail::assertSent(AlerteEditeurMail::class, 2);
+        app(TenantContext::class)->clear();
+
+        $this->reponsesParActionDuSiteDeDemonstration = [];
+        $nouvelle = app(DemanderUneDemonstrationAction::class)->handle($proprietaire, null, null);
+        $this->assertNotSame($demonstration->getKey(), $nouvelle->demonstration->getKey());
+        $this->assertNotNull($nouvelle->lien);
+    }
+
+    public function test_un_envoi_qui_trouve_celui_de_sa_demonstration_en_cours_s_arrete_sans_echec_et_la_tache_reprend_son_message(): void
+    {
+        $this->travelTo(self::aParis('2026-11-16 10:00:00'));
+        $this->leSiteDeDemonstrationRepond(200, ['etat' => 'prete', 'generation' => 1]);
+        $proprietaire = $this->proprietaireDe($this->ouvrirUneSociete());
+        $demonstration = app(DemanderUneDemonstrationAction::class)->handle($proprietaire, null, null)->demonstration;
+        app(TenantContext::class)->clear();
+        $travail = new EnvoyerLesMessagesALaDemonstration((int) $demonstration->getKey(), (int) $demonstration->societe_id);
+        $verrou = Cache::lock($travail->middleware()[0]->getLockKey($travail), 120);
+        $this->assertTrue($verrou->get());
+
+        app(TenantContext::class)->runAsSociete($proprietaire->societe, fn () => app(BoiteDEnvoi::class)->demanderLEtat(
+            Demonstration::query()->whereKey($demonstration->getKey())->firstOrFail(),
+        ));
+
+        $this->assertSame(0, DB::table('failed_jobs')->count(), 'Le travail qui trouve l\'envoi en cours s\'arrête sans échec.');
+        $this->assertSame(['creer'], array_column($this->messagesRecus(), 'quoi'));
+        $enAttente = MessageVersLaDemonstration::query()->withoutGlobalScopes()->whereNull('accuse_le')->sole();
+        $this->assertNull($enAttente->prochain_essai_le);
+        $verrou->release();
+
+        $this->travelTo(self::aParis('2026-11-16 10:00:59'));
+        $this->artisan('demonstration:relancer-les-messages')->assertSuccessful();
+        $this->assertNull($enAttente->fresh()?->accuse_le, 'Pas avant une minute : son travail est peut-être encore en route.');
+
+        $this->travelTo(self::aParis('2026-11-16 10:01:01'));
+        $this->artisan('demonstration:relancer-les-messages')->assertSuccessful();
+        $this->assertNotNull($enAttente->fresh()?->accuse_le);
     }
 
     public function test_au_plus_trois_creations_par_heure_depuis_la_meme_adresse_ip_toutes_societes_confondues(): void

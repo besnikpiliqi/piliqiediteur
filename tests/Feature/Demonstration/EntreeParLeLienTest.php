@@ -3,6 +3,7 @@
 namespace Tests\Feature\Demonstration;
 
 use App\Domain\Demonstration\Enums\EtatDUneCopie;
+use App\Domain\Demonstration\Etat\EtatDuSite;
 use App\Domain\Demonstration\Messages\MessagesSignes;
 use App\Domain\Demonstration\Registre\Models\Copie;
 use App\Domain\Demonstration\Registre\Models\Temoin;
@@ -10,7 +11,10 @@ use App\Domain\Demonstration\Visites\TemoinsDesVisites;
 use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Http\Controllers\Demonstration\EntrerDansLaDemonstrationController;
+use Carbon\CarbonInterval;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Sleep;
 use Tests\DemonstrationTestCase;
 
 /**
@@ -40,6 +44,9 @@ class EntreeParLeLienTest extends DemonstrationTestCase
         $this->assertStringNotContainsString('unsafe-eval', EntrerDansLaDemonstrationController::POLITIQUE_DE_CONTENU);
         $page->assertSee('/js/demonstration/entrer-dans-la-demonstration.js', false);
         $this->assertDoesNotMatchRegularExpression('/<script(?![^>]*\bsrc=)[^>]*>/i', $page->getContent(), 'Aucun script écrit dans la page.');
+        $this->assertDoesNotMatchRegularExpression('/<style\b|\sstyle\s*=/i', view('demonstration.entrer')->render(), 'Aucun style écrit dans la page, pied compris : style-src \'self\' le bloquerait.');
+        $page->assertSee('/css/app/pied-du-site.css', false);
+        $this->assertFileExists(public_path('css/app/pied-du-site.css'));
         $page->assertHeader('Referrer-Policy', 'no-referrer');
     }
 
@@ -76,6 +83,24 @@ class EntreeParLeLienTest extends DemonstrationTestCase
             $reponse->assertNotFound()->assertExactJson(['message' => 'Introuvable.']);
             $this->assertNull($reponse->getCookie(TemoinsDesVisites::nom(), false));
         }
+    }
+
+    public function test_un_lien_faux_attend_la_duree_reglee_et_seul_un_lien_valable_repond_sans_attendre(): void
+    {
+        ['secret' => $secret] = $this->copieDeTest();
+        $origine = ['Origin' => rtrim((string) config('app.url'), '/')];
+        config(['auth.timebox_duration' => 1_500_000]);
+        Sleep::fake();
+
+        $this->withHeaders($origine)->postJson('/entrer', ['secret' => MessagesSignes::enBase64Url(random_bytes(32))])->assertNotFound();
+        $this->withHeaders($origine)->postJson('/entrer', ['secret' => 'mal formé'])->assertNotFound();
+
+        Sleep::assertSleptTimes(2);
+        Sleep::assertSlept(fn (CarbonInterval $duree): bool => $duree->totalMicroseconds > 1_000_000 && $duree->totalMicroseconds <= 1_500_000, 2);
+
+        $this->withHeaders($origine)->postJson('/entrer', ['secret' => $secret])->assertOk();
+
+        Sleep::assertSleptTimes(2);
     }
 
     public function test_l_entree_exige_l_origine_du_site_et_se_limite_a_dix_essais_par_minute(): void
@@ -147,6 +172,33 @@ class EntreeParLeLienTest extends DemonstrationTestCase
         $this->travelTo($copie->fin);
         $this->withUnencryptedCookie(TemoinsDesVisites::nom(), $temoin)->get('/essai-de-la-copie')
             ->assertStatus(410)->assertSee('Cette démonstration est terminée')->assertDontSee('http-equiv="refresh"', false);
+    }
+
+    public function test_un_nom_de_base_hors_du_motif_arrete_la_requete_en_francais_et_parait_dans_l_etat_publie(): void
+    {
+        ['copie' => $copie, 'secret' => $secret] = $this->copieDeTest();
+        $temoin = $this->entrerParLeLien($secret);
+        $registre = DB::connection('demo_admin');
+        $nom = (string) $copie->nom_de_la_base;
+        $registre->statement('alter table copies drop constraint copies_nom_du_motif');
+
+        try {
+            $registre->table('copies')->where('id', $copie->id)->update(['nom_de_la_base' => 'piliqi']);
+
+            $this->withUnencryptedCookie(TemoinsDesVisites::nom(), $temoin)->get('/essai-de-la-copie')
+                ->assertStatus(503)
+                ->assertSee('Votre démonstration est indisponible pour le moment')
+                ->assertDontSee('http-equiv="refresh"', false);
+        } finally {
+            $registre->table('copies')->where('id', $copie->id)->update(['nom_de_la_base' => $nom]);
+            $registre->statement("alter table copies add constraint copies_nom_du_motif check (nom_de_la_base is null or nom_de_la_base ~ '^demo_copie_[a-z0-9]{26}\$')");
+        }
+
+        $this->assertContains(
+            '1 requête(s) arrêtée(s) depuis un jour : le nom de base d\'une copie au registre n\'est pas du motif d\'une copie.',
+            app(EtatDuSite::class)->construire()['problemes'],
+        );
+        $this->withUnencryptedCookie(TemoinsDesVisites::nom(), $temoin)->get('/essai-de-la-copie')->assertOk();
     }
 
     public function test_le_billet_du_bouton_ouvre_la_copie_une_seule_fois_et_depuis_la_seule_page_du_site_reel(): void

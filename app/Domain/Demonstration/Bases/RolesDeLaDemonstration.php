@@ -22,7 +22,9 @@ use RuntimeException;
  * l'étape 15 : ni UPDATE, ni DELETE, ni TRUNCATE sur une table en ajout
  * seul (celles que gardent les déclencheurs *_ajout_seul_*). Dans le
  * registre, il lit tout et n'écrit que les témoins, les nonces des
- * messages reçus, les travaux et le cache.
+ * messages reçus, les travaux et le cache ; une demande de copie, il
+ * l'inscrit par la seule fonction inscrire_une_copie() (voir
+ * FONCTION_D_INSCRIPTION), dès la réception du message « creer ».
  */
 final class RolesDeLaDemonstration
 {
@@ -30,6 +32,44 @@ final class RolesDeLaDemonstration
      * Les tables du registre que le rôle des pages écrit.
      */
     public const TABLES_ECRITES_PAR_LES_PAGES = ['temoins', 'messages_recus', 'jobs', 'job_batches', 'failed_jobs', 'cache', 'cache_locks'];
+
+    /**
+     * La seule écriture des copies et des liens que le rôle des pages
+     * peut faire (C.3, C.4) : inscrire une demande reçue du site réel, en
+     * préparation, sans base, avec son lien, une seule fois par
+     * référence, dès la réception du message « creer », pour qu'un lien
+     * tout neuf ou le bouton du propriétaire mène à la page d'attente
+     * avant même le passage du travail de création. La fonction appartient
+     * à demo_admin, propriétaire du registre (SECURITY DEFINER, chemin de
+     * recherche fixé) ; personne d'autre que le rôle des pages ne
+     * l'exécute ; elle ne change ni ne supprime jamais une copie.
+     */
+    public const FONCTION_D_INSCRIPTION = <<<'SQL'
+        create or replace function public.inscrire_une_copie(
+            p_reference text, p_repere text, p_type text, p_validee boolean,
+            p_empreinte text, p_generation integer, p_fin timestamp, p_maintenant timestamp
+        ) returns void
+        language plpgsql
+        security definer
+        set search_path = pg_catalog, public
+        as $$
+        declare
+            v_copie bigint;
+        begin
+            insert into public.copies (reference, repere, type, validee, creee_le, fin, generation_du_lien, etat)
+            values (p_reference, p_repere, p_type, p_validee, p_maintenant, p_fin, p_generation, 'en_preparation')
+            on conflict (reference) do nothing
+            returning id into v_copie;
+
+            if v_copie is not null then
+                insert into public.liens (copie_id, empreinte, generation, fin, cree_le)
+                values (v_copie, p_empreinte, p_generation, p_fin, p_maintenant);
+            end if;
+        end
+        $$
+        SQL;
+
+    public const SIGNATURE_DE_LA_FONCTION_D_INSCRIPTION = 'public.inscrire_une_copie(text, text, text, boolean, text, integer, timestamp, timestamp)';
 
     public const MESSAGE_ROLE_INCONNU = 'Le rôle des pages du site de démonstration n\'est pas réglé (DB_REGISTRE_USERNAME, demo_app) : voir le README.';
 
@@ -121,11 +161,15 @@ final class RolesDeLaDemonstration
         }
 
         $connexion->unprepared("grant usage, select on all sequences in schema public to {$role}");
+        $connexion->unprepared(self::FONCTION_D_INSCRIPTION);
+        $connexion->unprepared('revoke all on function '.self::SIGNATURE_DE_LA_FONCTION_D_INSCRIPTION.' from public');
+        $connexion->unprepared('grant execute on function '.self::SIGNATURE_DE_LA_FONCTION_D_INSCRIPTION." to {$role}");
     }
 
     public static function retirerLesDroitsDuRegistre(ConnectionInterface $connexion): void
     {
         $role = self::identifiant(self::roleDesPages());
+        $connexion->unprepared('drop function if exists '.self::SIGNATURE_DE_LA_FONCTION_D_INSCRIPTION);
         $connexion->unprepared("revoke all on all tables in schema public from {$role}");
         $connexion->unprepared("revoke all on all sequences in schema public from {$role}");
     }

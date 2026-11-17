@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 17/11/2026 à 01:34 UTC par pilotage-sync.sh : « Reprise après 2e redémarrage ».
+Mis à jour le 17/11/2026 à 03:33 UTC par pilotage-sync.sh : « Point de suivi 03:34 ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -38,18 +38,27 @@ fcbf1166 Réparation de la CI rouge de 743f9bc
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
+ M .env.demonstration.example
+ M .env.example
+ M CLAUDE.md
+ M README.md
  M app/Console/Commands/ReprendreLesCopiesDeLaDemonstration.php
  M app/Domain/Charges/Support/ContenuDeLEtat.php
+ M app/Domain/Demonstration/Archives/ArchiverUneCopie.php
  M app/Domain/Demonstration/Archives/FinDesCopies.php
+ M app/Domain/Demonstration/Bases/BrancherUneBase.php
  M app/Domain/Demonstration/Construction/CopiesDeLaDemonstration.php
  M app/Domain/Demonstration/Construction/NettoyageDeLaDemonstration.php
  M app/Domain/Demonstration/Etat/EtatDuSite.php
 RM app/Domain/Demonstration/Jobs/RecommencerUneCopie.php -> app/Domain/Demonstration/Jobs/RefaireUneCopie.php
  M app/Domain/Demonstration/Messages/TraitementDesMessages.php
  M app/Domain/Demonstration/Registre/Models/Temoin.php
+ M app/Domain/Demonstration/VersionServie.php
  M app/Domain/Demonstration/Visites/OuvertureDUneCopie.php
  M app/Domain/Demonstration/Visites/Visite.php
  M app/Domain/Facturation/Services/RecapitulatifDesDocuments.php
+ M app/Domain/Fichiers/ControleDesFichiers.php
+ M app/Domain/Fichiers/Enums/RaisonDuRefus.php
  M app/Domain/TableauDeBord/Support/ReglagesDuTableauDeBord.php
  M app/Domain/Tenancy/Enums/ActionAuditee.php
  M app/Domain/Tenancy/Isolation/ReglesDIsolation.php
@@ -58,6 +67,7 @@ RM app/Domain/Demonstration/Jobs/RecommencerUneCopie.php -> app/Domain/Demonstra
  M app/Domain/Tenancy/Services/TraceDuVisiteur.php
  M app/Http/Controllers/Demonstration/EntrerDansLaDemonstrationController.php
  M app/Http/Middleware/OuvrirLaCopie.php
+ M app/Providers/AppServiceProvider.php
  M app/Providers/CourrielsServiceProvider.php
  M bootstrap/app.php
  M bootstrap/providers.php
@@ -68,36 +78,26 @@ RM app/Domain/Demonstration/Jobs/RecommencerUneCopie.php -> app/Domain/Demonstra
  M database/migrations-registre/2026_11_16_200004_create_temoins_table.php
  M database/seeders/DatabaseSeeder.php
  M database/seeders/Semis/HorlogeDuSemis.php
+ M phpunit.xml
  M public/css/app/demonstration.css
  M resources/views/demonstration/attente.blade.php
  M resources/views/filament/bienvenue.blade.php
  M routes/demonstration.php
+ M tests/Browser/Support/ContrasteDesPages.php
+ M tests/Browser/TestCaseDuNavigateur.php
+ M tests/Browser/inventaire-des-actions.php
  M tests/DemonstrationTestCase.php
  M tests/Feature/Demonstration/ArchiveAvantSuppressionTest.php
  M tests/Feature/Demonstration/BasesModelesTest.php
  M tests/Feature/Demonstration/ClesDeLaDemonstrationTest.php
  M tests/Feature/Demonstration/ConstructionDesModelesTest.php
  M tests/Feature/Demonstration/RolesPostgresDeLaDemonstrationTest.php
+ M tests/Feature/Facturation/ReponseAuDevisEnLigneTest.php
  M tests/Feature/Tenancy/IsolationDesSocietesTest.php
+ M tests/Pest.php
+ M tests/Unit/matrice-des-decisions.php
 ?? app/Console/Commands/MesurerLesCopiesDeLaDemonstration.php
-?? app/Console/Commands/PasserLesTachesDUneCopie.php
-?? app/Console/Commands/PasserLesTachesDesCopies.php
-?? app/Console/Commands/PurgerLesMessagesRecusDeLaDemonstration.php
-?? app/Console/Commands/PurgerLesTravauxEchouesDeLaDemonstration.php
-?? app/Domain/Demonstration/Actions/ChangerDeCompteAction.php
-?? app/Domain/Demonstration/Courriels/
-?? app/Domain/Demonstration/Exceptions/ChangementDeCompteRefuse.php
-?? app/Domain/Demonstration/Jobs/RattraperLesTachesDUneCopie.php
-?? app/Domain/Demonstration/Listeners/AjouterLeCompteAuBandeau.php
-?? app/Domain/Demonstration/Models/CourrielDeLaDemonstration.php
-?? app/Domain/Demonstration/Taches/
-?? app/Domain/Demonstration/Visites/BandeauDeLaDemonstration.php
-?? app/Domain/Demonstration/Visites/SessionsSansTrace.php
-?? app/Domain/Demonstration/Visites/SocieteDeLaCopie.php
-?? app/Domain/Tenancy/Events/CompteCree.php
-?? app/Http/Controllers/Demonstration/ChoisirQuiVousEtesController.php
-?? app/Http/Controllers/Demonstration/CourrielsDeLaDemonstrationController.php
-?? app/Http/Controllers/Demonstration/Redirection.php
+?? app/Console/Commands/MigrerLesCopiesDeLaDemonstration.php
 ```
 
 ## Dernière course de la chaîne
@@ -126,4 +126,5 @@ DEMO-COPIE-2:poussee
 DEMO-COPIE-2:notes
 DEMO-COPIE-3:implementation
 DEMO-COPIE-3:implementation-2
+DEMO-COPIE-3:implementation-3
 ```

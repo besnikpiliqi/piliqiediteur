@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 17/11/2026 à 00:30 UTC par pilotage-sync.sh : « Après le lot DEMO-COPIE-2 ».
+Mis à jour le 17/11/2026 à 00:31 UTC par pilotage-sync.sh : « CI rouge de 52dab0ff notée pour DEMO-COPIE-3 ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -63,4 +63,5 @@ DEMO-COPIE-2:relecture2
 DEMO-COPIE-2:correction
 DEMO-COPIE-2:poussee
 DEMO-COPIE-2:notes
+DEMO-COPIE-3:implementation
 ```

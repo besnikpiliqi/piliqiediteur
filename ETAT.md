@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 17/11/2026 à 21:35 UTC par pilotage-sync.sh : « Démonstration ouverte sur le poste ».
+Mis à jour le 17/11/2026 à 23:02 UTC par pilotage-sync.sh : « Audit du semis de la démonstration, plan en lots ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

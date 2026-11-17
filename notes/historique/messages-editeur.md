@@ -3688,3 +3688,9 @@ toujours pas de demo?
 
 
 
+## 397. 2026-11-17 22:44 UTC
+
+[5 capture(s) d'écran jointe(s)]
+
+il doit pas prendre tout la longeur mais tombre sur la prochain apres le "point" car c est trop long ou meme de laisseer que "Expert Comptable" car se comprends bien de quoi il parle, mais tu mets pour le travail quand il commence. et la 3eme photo la page des notification affiche pas tout à cause de "bandeau en haut". sur demo il y pas de clients ?? il faut avoir !! pareil pour "Services","Avoirs","Devis". en fait moi je vois pas que t as fais tout les cas qui arrive dans le logiciel !! la 4eme photo par ex tout les facture sont payé ? il faut avoir tout les etat et pas que payé. la 5eme photo il y en a que 2 produit alors il faut avoir des disaines et dans tous les etat comme dans les filtres. Pour les factures d achat tu as mis que un seul fournisseur pour tout et dans statue=validée,source=saissi manuel, tva=vide,piece=manquant alors qu'il faut avoir pour tout different pour savoir les differnces. Et fournisseur tu as mis que "Fournisseur=Artisans de la Caraïbe" et est sans fiche donc tu peux pas entre voir sa fiche, donc il faut avoir plusieurs et les achats doivent par tous les fournisseur et pareille pour les avoir il faut avoir plusieurs avoir de different produit de different facture d achat et different fournisseur.
+

@@ -277,3 +277,5 @@ passages/DEMO-COPIE-3.md
 serie9-rapide.js.avant-sonnet-5-5
 serie9-rapide.js.avant-opus-relectures
 reprises/ARRET-DEMANDE-2026-11-17.md
+semis-complet-plan-17-11.md
+reprises/audit-semis-demo-17-11.json

@@ -3458,3 +3458,217 @@ La construction du modèle « services » a échoué : Le fichier « Facture Fon
 
 La construction du modèle « cabinet » a échoué : Le fichier « Facture GL-2026-118.pdf » n'a pas pu être analysé : réessayez dans quelques minutes.
 
+## 380. 2026-11-17 10:06 UTC
+
+<!-- attach -->
+
+> Les trois modèles échouent à lire les PDF parce que QPDF_BINAIRE manque dans .env.demonstration. Copiez la ligne depuis le .env du site réel, videz le cache, puis relancez la commande.
+
+
+
+donc les deux "QPDF_BINAIRE=qpdf
+
+QPDF_BINAIRE=C:\qpdf\bin\qpdf.exe"
+
+## 381. 2026-11-17 10:08 UTC
+
+et donc quand je fait une nouvelle inscription alors je peux aller directemenet depuis reel au demo
+
+## 382. 2026-11-17 10:10 UTC
+
+La construction du modèle « commerce » a échoué : Le fichier « Facture GL-2026-118.pdf » n'a pas pu être analysé : réessayez dans quelques minutes.
+
+La construction du modèle « services » a échoué : Le fichier « Facture Foncière Mozart.pdf » n'a pas pu être analysé : réessayez dans quelques minutes.
+
+La construction du modèle « cabinet » a échoué : Le fichier « Facture GL-2026-118.pdf » n'a pas pu être analysé : réessayez dans quelques minutes.
+
+## 383. 2026-11-17 10:12 UTC
+
+PS C:\xampp\htdocs\piliqiediteur-v2> php artisan config:show piliqi.qpdf --env=demonstration
+
+
+
+  piliqi.qpdf ................................................................................................................. qpdf  
+
+
+
+PS C:\xampp\htdocs\piliqiediteur-v2> C:\qpdf\bin\qpdf.exe --version
+
+qpdf version 12.4.2
+
+Run qpdf --copyright to see copyright and license information.
+
+PS C:\xampp\htdocs\piliqiediteur-v2> Select-String -Path storage\logs\*.log -Pattern "qpdf" | Select-Object -Last 6
+
+
+
+storage\logs\laravel-2026-11-17.log:638:[2026-11-17 10:08:29] demonstration.ERROR: qpdf s'est arrêté avec le code 1 : 'qpdf' n’est 
+
+pas reconnu en tant que commande interne
+
+storage\logs\laravel-2026-11-17.log:639:ou externe, un programme exécutable ou un fichier de commandes. {"exception":"[object] 
+
+(RuntimeException(code: 0): qpdf s'est arrêté avec le code 1 : 'qpdf' n’est pas reconnu en tant que commande interne
+
+storage\logs\laravel-2026-11-17.log:643:#0 C:/xampp/htdocs/piliqiediteur-v2/app/Domain/Fichiers/AnalyseurDePdf.php(183): 
+
+App/Domain/Fichiers/AnalyseurDePdf->qpdf(Object(App/Domain/Fichiers/PieceDeposee), Array)
+
+storage\logs\laravel-2026-11-17.log:710:[2026-11-17 10:08:59] demonstration.ERROR: qpdf s'est arrêté avec le code 1 : 'qpdf' n’est 
+
+pas reconnu en tant que commande interne
+
+storage\logs\laravel-2026-11-17.log:711:ou externe, un programme exécutable ou un fichier de commandes. {"exception":"[object] 
+
+(RuntimeException(code: 0): qpdf s'est arrêté avec le code 1 : 'qpdf' n’est pas reconnu en tant que commande interne
+
+storage\logs\laravel-2026-11-17.log:715:#0 C:/xampp/htdocs/piliqiediteur-v2/app/Domain/Fichiers/AnalyseurDePdf.php(183): 
+
+App/Domain/Fichiers/AnalyseurDePdf->qpdf(Object(App/Domain/Fichiers/PieceDeposee), Array)
+
+## 384. 2026-11-17 10:26 UTC
+
+<!-- attach -->
+
+> Le site de démonstration doit tourner (serve sur le port 8001) et DEMONSTRATION_URL=http://localhost:8001 doit être dans le .env du site réel.
+
+
+
+il faut lancer separement le serce?
+
+## 385. 2026-11-17 10:38 UTC
+
+PS C:\xampp\htdocs\piliqiediteur-v2> php artisan demonstration:construire-les-modeles --env=demonstration
+
+Modèle « commerce » en service : [jeton retiré] (1174 s, 41 992 719 octets).
+
+## 386. 2026-11-17 10:39 UTC
+
+je peux entre voir ou pasencore
+
+## 387. 2026-11-17 10:57 UTC
+
+[1 capture(s) d'écran jointe(s)]
+
+
+
+## 388. 2026-11-17 11:01 UTC
+
+[1 capture(s) d'écran jointe(s)]
+
+la page se recharge en arrier plan
+
+## 389. 2026-11-17 11:02 UTC
+
+PS C:\xampp\htdocs\piliqiediteur-v2> Select-String -Path storage\logs\*.log -Pattern "demonstration" | Select-Object -Last 8
+
+
+
+storage\logs\laravel.log:5640:#46 C:/xampp/htdocs/piliqiediteur-v2/database/seeders/Semis/SemisDeDemonstration.php(271): 
+
+Database/Seeders/Semis/ActiviteDesMagasins->semer()
+
+storage\logs\laravel.log:5641:#47 C:/xampp/htdocs/piliqiediteur-v2/database/seeders/DatabaseSeeder.php(144): 
+
+Database/Seeders/Semis/SemisDeDemonstration->semer()
+
+storage\logs\laravel.log:5732:#46 C:/xampp/htdocs/piliqiediteur-v2/database/seeders/Semis/SemisDeDemonstration.php(271): 
+
+Database/Seeders/Semis/ActiviteDesMagasins->semer()
+
+storage\logs\laravel.log:5733:#47 C:/xampp/htdocs/piliqiediteur-v2/database/seeders/DatabaseSeeder.php(144): 
+
+Database/Seeders/Semis/SemisDeDemonstration->semer()
+
+storage\logs\laravel.log:5824:#46 C:/xampp/htdocs/piliqiediteur-v2/database/seeders/Semis/SemisDeDemonstration.php(271): 
+
+Database/Seeders/Semis/ActiviteDesMagasins->semer()
+
+storage\logs\laravel.log:5825:#47 C:/xampp/htdocs/piliqiediteur-v2/database/seeders/DatabaseSeeder.php(144): 
+
+Database/Seeders/Semis/SemisDeDemonstration->semer()
+
+storage\logs\laravel.log:5916:#40 C:/xampp/htdocs/piliqiediteur-v2/database/seeders/Semis/SemisDeDemonstration.php(278): 
+
+Database/Seeders/Semis/DerniersGestes->semer()
+
+storage\logs\laravel.log:5917:#41 C:/xampp/htdocs/piliqiediteur-v2/database/seeders/DatabaseSeeder.php(144): 
+
+Database/Seeders/Semis/SemisDeDemonstration->semer()
+
+## 390. 2026-11-17 11:03 UTC
+
+PS C:\xampp\htdocs\piliqiediteur-v2> docker exec -it piliqi-pg psql -U piliqi -d postgres -c "\l demo_copie_*"
+
+                                          List of databases
+
+ Name | Owner | Encoding | Locale Provider | Collate | Ctype | Locale | ICU Rules | Access privileges 
+
+------+-------+----------+-----------------+---------+-------+--------+-----------+-------------------
+
+(0 rows)
+
+## 391. 2026-11-17 11:04 UTC
+
+[1 capture(s) d'écran jointe(s)]
+
+
+
+## 392. 2026-11-17 11:06 UTC
+
+PS C:\xampp\htdocs\piliqiediteur-v2> docker exec -it piliqi-pg psql -U piliqi -d postgres -c "\l demo_copie_*"
+
+                                          List of databases
+
+ Name | Owner | Encoding | Locale Provider | Collate | Ctype | Locale | ICU Rules | Access privileges 
+
+------+-------+----------+-----------------+---------+-------+--------+-----------+-------------------
+
+(0 rows)
+
+
+
+
+
+What's next:
+
+    Try Docker Debug for seamless, persistent debugging tools in any container or image → docker debug piliqi-pg
+
+    Learn more at https://docs.docker.com/go/debug-cli/
+
+PS C:\xampp\htdocs\piliqiediteur-v2> docker exec -it piliqi-pg psql -U piliqi -d piliqi_demo_registre -c "select left(exception, 500) as erreur from failed_jobs order by id desc limit 1"
+
+ erreur 
+
+--------
+
+(0 rows)
+
+
+
+
+
+What's next:
+
+    Try Docker Debug for seamless, persistent debugging tools in any container or image → docker debug piliqi-pg
+
+    Learn more at https://docs.docker.com/go/debug-cli/
+
+## 393. 2026-11-17 11:07 UTC
+
+S C:\xampp\htdocs\piliqiediteur-v2> Select-String -Path storage\logs\laravel-2026-11-17.log -Pattern "demonstration\.ERROR" | Select-Object -Last 3
+
+
+
+storage\logs\laravel-2026-11-17.log:1:[2026-11-17 11:02:57] demonstration.ERROR: Les fichiers du modèle n'ont pas pu être recopiés : 
+
+'cp' n’est pas reconnu en tant que commande interne
+
+storage\logs\laravel-2026-11-17.log:85:[2026-11-17 11:03:28] demonstration.ERROR: Les fichiers du modèle n'ont pas pu être recopiés 
+
+: 'cp' n’est pas reconnu en tant que commande interne
+
+storage\logs\laravel-2026-11-17.log:169:[2026-11-17 11:05:30] demonstration.ERROR: Les fichiers du modèle n'ont pas pu être recopiés 
+
+: 'cp' n’est pas reconnu en tant que commande interne
+

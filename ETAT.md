@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 17/11/2026 à 10:05 UTC par pilotage-sync.sh : « qpdf du site de démonstration ».
+Mis à jour le 17/11/2026 à 11:07 UTC par pilotage-sync.sh : « Défaut cp Windows noté ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -39,6 +39,7 @@ e405d27b Régularisation après une correction de SIREN et relances (lot REGUL)
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
+ M README.md
  M app/Domain/Facturation/Actions/CreerDevisAction.php
  M app/Domain/Facturation/Actions/EmettreDevisAction.php
  M app/Domain/Facturation/Enums/NatureEnvoi.php
@@ -54,7 +55,13 @@ e405d27b Régularisation après une correction de SIREN et relances (lot REGUL)
  M resources/views/devis/pdf.blade.php
  M resources/views/devis/reponse.blade.php
  M resources/views/documents/pdf/lignes.blade.php
+ M tests/Browser/Parcours/DevisDeDepannageADomicileTest.php
+ M tests/Browser/Parcours/ReponseAuDevisEnLigneTest.php
+ M tests/Browser/inventaire-des-actions.php
  M tests/Feature/Calendrier/IsolationDesCalendriersTest.php
+ M tests/Feature/Demonstration/BasesModelesTest.php
+ M tests/Feature/Facturation/DevisDeDepannageADomicileTest.php
+ M tests/Feature/Facturation/ReponseAuDevisEnLigneTest.php
 ?? resources/views/devis/document.blade.php
 ```
 

@@ -10,6 +10,7 @@ use App\Domain\Demonstration\Registre\Models\Temoin;
 use App\Domain\Demonstration\SiteDePiliqi;
 use App\Domain\Demonstration\VersionServie;
 use App\Domain\Tenancy\Enums\TypeDActivite;
+use App\Domain\Tenancy\Support\CleDuModele;
 use App\Models\User;
 
 /**
@@ -120,7 +121,7 @@ final readonly class BandeauDeLaDemonstration
 
             $role = RoleAuBandeau::de($titulaire, $estUnCabinet);
             $groupes[$role->groupe][] = [
-                'id' => (int) $titulaire->getKey(),
+                'id' => CleDuModele::de($titulaire),
                 'nom' => $titulaire->name,
                 'role' => $role->cle === $ligne->role ? $ligne->libelle_du_role : $role->libelle,
                 'suspendu' => $titulaire->estSuspendu(),
@@ -143,7 +144,7 @@ final readonly class BandeauDeLaDemonstration
             message: $message,
             enLectureSeule: $copie->etat === EtatDUneCopie::EnLectureSeule,
             groupes: $groupes,
-            compteChoisi: $compte?->getKey() === null ? null : (int) $compte->getKey(),
+            compteChoisi: $compte === null ? null : CleDuModele::de($compte),
         );
     }
 

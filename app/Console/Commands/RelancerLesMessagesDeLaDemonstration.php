@@ -12,6 +12,7 @@ use App\Domain\Demonstration\SiteDePiliqi;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\AlerteEditeur;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\CleDuModele;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
@@ -71,7 +72,7 @@ class RelancerLesMessagesDeLaDemonstration extends Command
                 $boite->demanderLEtat($relue);
 
                 if ($relue->renouvellementSansAccuse() && $relue->lien_tire_le->addMinutes(self::MINUTES_AVANT_L_ALERTE)->isPast()
-                    && Cache::add('demonstration-renouvellement-sans-accuse:'.$relue->getKey().':'.$relue->generation_du_lien, true, 31 * 86400)) {
+                    && Cache::add('demonstration-renouvellement-sans-accuse:'.CleDuModele::de($relue).':'.$relue->generation_du_lien, true, 31 * 86400)) {
                     $alerte->alerter($societe, 'Un renouvellement du lien d\'une démonstration n\'est pas confirmé', [
                         'Le site de démonstration n\'a pas accusé le renouvellement du lien tiré le '.Calendrier::deParis()->afficher($relue->lien_tire_le, 'd/m/Y à H:i').' : l\'ancien lien marche peut-être encore. Les messages repartent toutes les 5 minutes.',
                     ]);

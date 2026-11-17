@@ -13,6 +13,7 @@ use App\Domain\Demonstration\SiteDePiliqi;
 use App\Domain\Fichiers\AnalyseurDePdf;
 use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Support\Reglage;
+use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Integrations\Antivirus\AntivirusFactice;
 use App\Integrations\Antivirus\AntivirusInjoignableException;
 use App\Integrations\Antivirus\Contracts\Antivirus;
@@ -161,7 +162,7 @@ class DiagnostiquerCaisseSecurisee extends Command
         MarqueDeLaBase::exigerPour(SiteDePiliqi::Reel, $connexion);
 
         if (app()->isProduction()) {
-            $bases = (int) $connexion->scalar("SELECT count(*) FROM pg_database WHERE datname ~ '^demo_'");
+            $bases = ValeurSimple::enEntier($connexion->scalar("SELECT count(*) FROM pg_database WHERE datname ~ '^demo_'"));
             $creeDesBases = $connexion->scalar('SELECT rolcreatedb FROM pg_roles WHERE rolname = current_user') === true;
 
             if ($bases > 0 || $creeDesBases) {

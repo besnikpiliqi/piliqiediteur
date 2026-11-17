@@ -13,6 +13,7 @@ use App\Domain\Demonstration\Jobs\RenouvelerLeLienDUneCopie;
 use App\Domain\Demonstration\Registre\Models\Copie;
 use App\Domain\Demonstration\Registre\Models\Lien;
 use App\Domain\Demonstration\SiteDePiliqi;
+use App\Domain\Tenancy\Support\ValeursLues;
 use Illuminate\Support\Facades\Bus;
 
 /**
@@ -60,11 +61,11 @@ final class TraitementDesMessages
     public function traiter(array $champs): array
     {
         SiteDePiliqi::exiger(SiteDePiliqi::Demonstration);
-        $reference = (string) $champs['reference'];
+        $reference = ValeursLues::texteDe($champs, 'reference');
 
-        return match (QuoiDuMessage::from((string) $champs['quoi'])) {
+        return match (QuoiDuMessage::from(ValeursLues::texteDe($champs, 'quoi'))) {
             QuoiDuMessage::Creer => $this->creer($reference, $champs),
-            QuoiDuMessage::RenouvelerLeLien => $this->renouveler($reference, (string) $champs['empreinte_du_lien'], (int) $champs['generation']),
+            QuoiDuMessage::RenouvelerLeLien => $this->renouveler($reference, ValeursLues::texteDe($champs, 'empreinte_du_lien'), ValeursLues::entierDe($champs, 'generation')),
             QuoiDuMessage::Recommencer => $this->recommencer($reference),
             QuoiDuMessage::Supprimer => $this->supprimer($reference),
             QuoiDuMessage::Etat => $this->etat($reference),
@@ -80,12 +81,12 @@ final class TraitementDesMessages
         if (! Copie::query()->where('reference', $reference)->exists()) {
             $demande = [
                 'reference' => $reference,
-                'repere' => (string) $champs['repere'],
-                'type' => (string) $champs['type'],
+                'repere' => ValeursLues::texteDe($champs, 'repere'),
+                'type' => ValeursLues::texteDe($champs, 'type'),
                 'validee' => (bool) $champs['validee'],
-                'empreinte_du_lien' => (string) $champs['empreinte_du_lien'],
-                'generation' => (int) $champs['generation'],
-                'fin' => (string) $champs['fin'],
+                'empreinte_du_lien' => ValeursLues::texteDe($champs, 'empreinte_du_lien'),
+                'generation' => ValeursLues::entierDe($champs, 'generation'),
+                'fin' => ValeursLues::texteDe($champs, 'fin'),
             ];
             $this->copies->inscrire(DemandeDeCopie::lire($demande), 'registre');
             Bus::dispatch(new CreerUneCopie($demande));

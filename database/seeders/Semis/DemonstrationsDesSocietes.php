@@ -255,7 +255,9 @@ final class DemonstrationsDesSocietes
     {
         $this->alHeure($rang, $heure);
         $demonstration = $this->demonstrationDe($societe);
-        $this->semis->horsDeToutContexte(fn () => app(TenantContext::class)->runAsSociete($this->semis->societe($societe), fn () => DB::transaction(fn () => app(BoiteDEnvoi::class)->demanderLEtat($demonstration))));
+        $this->semis->horsDeToutContexte(function () use ($societe, $demonstration): void {
+            app(TenantContext::class)->runAsSociete($this->semis->societe($societe), fn () => DB::transaction(fn () => app(BoiteDEnvoi::class)->demanderLEtat($demonstration)));
+        });
     }
 
     /**

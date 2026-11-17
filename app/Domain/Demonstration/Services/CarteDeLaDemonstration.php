@@ -10,6 +10,8 @@ use App\Domain\Demonstration\Models\Demonstration;
 use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\CleDuModele;
+use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Models\User;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -161,7 +163,7 @@ final class CarteDeLaDemonstration
 
             $this->demanderLEtatSiBesoin($vivante, $societe);
 
-            if ((int) $vivante->lien_tire_par !== (int) $compte->getKey()) {
+            if (ValeurSimple::enEntierOuNul($vivante->lien_tire_par) !== CleDuModele::de($compte)) {
                 $notes[] = self::PHRASE_ANCIEN_PROPRIETAIRE;
             }
 
@@ -180,7 +182,7 @@ final class CarteDeLaDemonstration
      */
     private function derniere(Societe $societe): ?Demonstration
     {
-        $cle = (int) $societe->getKey();
+        $cle = CleDuModele::de($societe);
 
         if (! array_key_exists($cle, $this->dernieres)) {
             $this->dernieres[$cle] = $this->contexte->runAsSociete($societe, fn (): ?Demonstration => Demonstration::query()
@@ -233,7 +235,7 @@ final class CarteDeLaDemonstration
     private function demanderLEtatSiBesoin(Demonstration $demonstration, Societe $societe): void
     {
         if (($demonstration->etat === EtatDeLaDemonstration::Prete && ! $demonstration->renouvellementSansAccuse())
-            || ! Cache::add('demonstration-etat-demande:'.$societe->getKey(), true, 60)) {
+            || ! Cache::add('demonstration-etat-demande:'.CleDuModele::de($societe), true, 60)) {
             return;
         }
 

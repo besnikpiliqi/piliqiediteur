@@ -7,6 +7,7 @@ use App\Domain\Demonstration\Enums\EtatDUneCopie;
 use App\Domain\Demonstration\Jobs\RefaireUneCopie;
 use App\Domain\Demonstration\Registre\Models\Copie;
 use App\Domain\Demonstration\SiteDePiliqi;
+use App\Domain\Tenancy\Support\ValeursLues;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
@@ -29,13 +30,13 @@ class RefaireLesCopiesDeLaDemonstration extends Command
     public function handle(): int
     {
         SiteDePiliqi::exiger(SiteDePiliqi::Demonstration);
-        $references = Copie::on('demo_admin')
+        $references = ValeursLues::textes(Copie::on('demo_admin')
             ->whereIn('etat', [EtatDUneCopie::Prete->value, EtatDUneCopie::EnLectureSeule->value])
             ->orderBy('id')
-            ->pluck('reference')->all();
+            ->pluck('reference'));
 
         foreach ($references as $reference) {
-            Bus::dispatch(new RefaireUneCopie((string) $reference, FinDesCopies::MOTIF_MISE_A_JOUR));
+            Bus::dispatch(new RefaireUneCopie($reference, FinDesCopies::MOTIF_MISE_A_JOUR));
         }
 
         $this->info(count($references).' copie(s) à refaire depuis le nouveau modèle.');

@@ -8,6 +8,7 @@ use App\Domain\Demonstration\Enums\EtatDeLaDemonstration;
 use App\Domain\Demonstration\Models\Demonstration;
 use App\Domain\Demonstration\SiteDePiliqi;
 use App\Domain\Tenancy\Models\Societe;
+use App\Domain\Tenancy\Support\ValeursLues;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
@@ -41,7 +42,7 @@ class MarquerLesFinsDesDemonstrations extends Command
             ->unique();
 
         foreach ($societes as $societeId) {
-            $terminer->handle(Societe::query()->findOrFail($societeId), CauseDeLaFin::TrenteJours);
+            $terminer->handle(Societe::query()->findOrFail(ValeursLues::entier($societeId)), CauseDeLaFin::TrenteJours);
         }
 
         $this->info($societes->count().' démonstration(s) terminée(s).');

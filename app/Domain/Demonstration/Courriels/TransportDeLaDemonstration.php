@@ -66,8 +66,8 @@ final class TransportDeLaDemonstration extends AbstractTransport
         $compte = Auth::user();
         $champs = [
             'user_id' => $compte instanceof User && $compte->societe_id === $societe->getKey() ? $compte->getKey() : null,
-            'expediteur' => self::adresses($email->getFrom()),
-            'destinataires' => self::adresses($email->getTo()),
+            'expediteur' => self::adresses(array_values($email->getFrom())),
+            'destinataires' => self::adresses(array_values($email->getTo())),
             'copies' => self::copies($email),
             'objet' => (string) $email->getSubject(),
             'html' => self::texte($email->getHtmlBody()),
@@ -109,8 +109,8 @@ final class TransportDeLaDemonstration extends AbstractTransport
     private static function copies(Email $email): ?string
     {
         $copies = array_filter([
-            $email->getCc() === [] ? null : 'Cc : '.self::adresses($email->getCc()),
-            $email->getBcc() === [] ? null : 'Cci : '.self::adresses($email->getBcc()),
+            $email->getCc() === [] ? null : 'Cc : '.self::adresses(array_values($email->getCc())),
+            $email->getBcc() === [] ? null : 'Cci : '.self::adresses(array_values($email->getBcc())),
         ]);
 
         return $copies === [] ? null : implode(' ; ', $copies);

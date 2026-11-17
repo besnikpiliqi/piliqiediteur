@@ -5,6 +5,7 @@ namespace App\Domain\Demonstration\Visites;
 use App\Domain\Demonstration\Models\CompteDuBandeau;
 use App\Domain\Demonstration\SiteDePiliqi;
 use App\Domain\Tenancy\Models\Societe;
+use App\Domain\Tenancy\Support\ValeursLues;
 
 /**
  * La société de la copie ouverte (lot DEMO-COPIE, C.8 et C.9) : la société
@@ -21,8 +22,8 @@ final class SocieteDeLaCopie
     public static function trouver(): ?Societe
     {
         SiteDePiliqi::exiger(SiteDePiliqi::Demonstration);
-        $societes = CompteDuBandeau::query()->withoutGlobalScopes()->distinct()->pluck('societe_id');
+        $societes = ValeursLues::entiers(CompteDuBandeau::query()->withoutGlobalScopes()->distinct()->pluck('societe_id'));
 
-        return $societes->count() === 1 ? Societe::query()->find($societes->first()) : null;
+        return count($societes) === 1 ? Societe::query()->find($societes[0]) : null;
     }
 }

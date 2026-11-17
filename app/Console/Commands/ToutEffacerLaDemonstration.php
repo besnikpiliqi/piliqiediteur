@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Domain\Demonstration\Bases\BasesDeLaDemonstration;
 use App\Domain\Demonstration\Construction\DossiersDeLaDemonstration;
 use App\Domain\Demonstration\SiteDePiliqi;
+use App\Domain\Tenancy\Support\ValeursLues;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
@@ -49,7 +50,7 @@ class ToutEffacerLaDemonstration extends Command
         $copies = $registre->table('copies')->whereNotNull('nom_de_la_base')->pluck('nom_de_la_base')->all();
 
         foreach ($copies as $base) {
-            $bases->supprimer((string) $base);
+            $bases->supprimer(ValeursLues::texte($base));
         }
 
         $registre->transaction(function () use ($registre): void {

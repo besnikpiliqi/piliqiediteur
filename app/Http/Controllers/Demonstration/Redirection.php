@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers\Demonstration;
 
+use App\Domain\Tenancy\Support\ValeursLues;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Session\Store;
 
 /**
  * Une redirection des pages du site de démonstration, toujours une
@@ -21,7 +23,7 @@ final class Redirection
         $reponse = new RedirectResponse(url($chemin), $statut);
 
         if ($requete !== null && $requete->hasSession()) {
-            $reponse->setSession($requete->session());
+            $reponse->setSession(ValeursLues::instance($requete->session(), Store::class));
 
             foreach ($aMontrer as $cle => $valeur) {
                 $reponse->with($cle, $valeur);

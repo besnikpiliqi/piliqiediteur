@@ -87,7 +87,21 @@ final class LectureDeLEtat
 
         $champs = json_decode($etat, true);
 
-        return is_array($champs) && ! array_is_list($champs) ? $champs : null;
+        if (! is_array($champs) || array_is_list($champs)) {
+            return null;
+        }
+
+        $lus = [];
+
+        foreach ($champs as $nom => $champ) {
+            if (! is_string($nom)) {
+                return null;
+            }
+
+            $lus[$nom] = $champ;
+        }
+
+        return $lus;
     }
 
     /**

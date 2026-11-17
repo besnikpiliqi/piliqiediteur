@@ -3,10 +3,12 @@
 namespace App\Http\Responses;
 
 use App\Domain\Demonstration\Exceptions\CopieEnLectureSeule;
+use App\Domain\Tenancy\Support\ValeursLues;
 use Filament\Notifications\Notification;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Session\Store;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
@@ -47,7 +49,7 @@ final class ReponseDansUneCopieEnLectureSeule
         $reponse = new RedirectResponse($precedente);
 
         if ($request->hasSession()) {
-            $reponse->setSession($request->session());
+            $reponse->setSession(ValeursLues::instance($request->session(), Store::class));
         }
 
         return $reponse;

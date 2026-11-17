@@ -135,7 +135,13 @@ final class MessagesSignes
             throw new MessageRefuse('Le message n\'est pas un objet JSON.');
         }
 
-        $cle = is_string($champs['kid'] ?? null) ? ($clesPubliques[$champs['kid']] ?? null) : null;
+        $lus = [];
+
+        foreach ($champs as $nom => $champ) {
+            $lus[is_string($nom) ? $nom : throw new MessageRefuse('Le message n\'est pas un objet JSON.')] = $champ;
+        }
+
+        $cle = is_string($lus['kid'] ?? null) ? ($clesPubliques[$lus['kid']] ?? null) : null;
         $publique = is_string($cle) ? base64_decode($cle, true) : false;
         $signatureLue = self::depuisLaBase64Url($signature);
 
@@ -147,7 +153,7 @@ final class MessagesSignes
             throw new MessageRefuse('La signature du message est fausse.');
         }
 
-        return $champs;
+        return $lus;
     }
 
     public static function enBase64Url(string $octets): string
@@ -221,11 +227,14 @@ final class MessagesSignes
         return ['message' => $message, 'signature' => self::enBase64Url(sodium_crypto_sign_detached($message, $cle))];
     }
 
+    /**
+     * @return non-empty-string|null
+     */
     private static function clePrivee(#[SensitiveParameter] mixed $valeur): ?string
     {
         $octets = is_string($valeur) && $valeur !== '' ? base64_decode($valeur, true) : false;
 
-        return $octets !== false && strlen($octets) === SODIUM_CRYPTO_SIGN_SECRETKEYBYTES ? $octets : null;
+        return $octets !== false && $octets !== '' && strlen($octets) === SODIUM_CRYPTO_SIGN_SECRETKEYBYTES ? $octets : null;
     }
 
     /**

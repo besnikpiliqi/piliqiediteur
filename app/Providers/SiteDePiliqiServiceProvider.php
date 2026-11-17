@@ -294,7 +294,7 @@ final class SiteDePiliqiServiceProvider extends ServiceProvider
      */
     public static function refusDeLaBaseSentinelle(ConnectionInterface $connexion): ?string
     {
-        $tables = (int) $connexion->scalar('select count(*) from pg_catalog.pg_tables where schemaname = current_schema()');
+        $tables = ValeurSimple::enEntier($connexion->scalar('select count(*) from pg_catalog.pg_tables where schemaname = current_schema()'));
 
         return $tables === 0 ? null : sprintf(self::MESSAGE_SENTINELLE_REMPLIE, $connexion->getDatabaseName(), $tables);
     }

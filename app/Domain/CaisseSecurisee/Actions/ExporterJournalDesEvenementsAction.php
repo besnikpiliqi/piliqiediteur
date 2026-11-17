@@ -15,6 +15,7 @@ use App\Domain\Calendrier\Calendrier;
 use App\Domain\Fichiers\CelluleDeTableur;
 use App\Domain\Tenancy\Scopes\MagasinScope;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\CleDuModele;
 use App\Domain\Tenancy\Support\ResultatDePhp;
 use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Domain\Tenancy\Support\ValeursLues;
@@ -126,7 +127,7 @@ class ExporterJournalDesEvenementsAction
             return $exportateur;
         });
 
-        return self::ecrivain($magasin->getKey(), $magasin->calendrier(), $du, $au, $exportateur->estProprietaireDuMagasin($magasin));
+        return self::ecrivain(CleDuModele::de($magasin), $magasin->calendrier(), $du, $au, $exportateur->estProprietaireDuMagasin($magasin));
     }
 
     /**

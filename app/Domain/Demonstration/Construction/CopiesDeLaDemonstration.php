@@ -13,6 +13,8 @@ use App\Domain\Demonstration\Registre\Models\Modele;
 use App\Domain\Demonstration\SiteDePiliqi;
 use App\Domain\Demonstration\VersionServie;
 use App\Domain\Tenancy\Enums\TypeDActivite;
+use App\Domain\Tenancy\Support\ValeurSimple;
+use App\Domain\Tenancy\Support\ValeursLues;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Throwable;
@@ -188,8 +190,8 @@ final class CopiesDeLaDemonstration
             return false;
         }
 
-        $maximum = max(0, (int) config('demonstration.copies_max'));
-        $partDesValidees = min(100, max(0, (int) config('demonstration.part_des_validees')));
+        $maximum = max(0, ValeurSimple::enEntier(config('demonstration.copies_max')));
+        $partDesValidees = min(100, max(0, ValeurSimple::enEntier(config('demonstration.part_des_validees'))));
         $occupees = Copie::on('demo_admin')->whereKeyNot($copie->id)->whereIn('etat', self::etatsQuiOccupent());
 
         if ((clone $occupees)->count() >= $maximum) {
@@ -215,9 +217,9 @@ final class CopiesDeLaDemonstration
      */
     public function enAttenteDUnePlace(): array
     {
-        return array_values(Copie::on('demo_admin')->where('etat', EtatDUneCopie::EnAttenteDUnePlace)
+        return ValeursLues::textes(Copie::on('demo_admin')->where('etat', EtatDUneCopie::EnAttenteDUnePlace)
             ->orderByDesc('validee')->orderBy('creee_le')->orderBy('id')
-            ->pluck('reference')->all());
+            ->pluck('reference'));
     }
 
     /**
@@ -237,7 +239,7 @@ final class CopiesDeLaDemonstration
      */
     private function prendreUnCreneau(): ?int
     {
-        $creneaux = max(1, (int) config('demonstration.copies_en_meme_temps'));
+        $creneaux = max(1, ValeurSimple::enEntier(config('demonstration.copies_en_meme_temps')));
 
         for ($creneau = 1; $creneau <= $creneaux; $creneau++) {
             if (DB::connection('demo_admin')->scalar('select pg_try_advisory_lock(hashtext(?))', ['demonstration-creation-'.$creneau]) === true) {

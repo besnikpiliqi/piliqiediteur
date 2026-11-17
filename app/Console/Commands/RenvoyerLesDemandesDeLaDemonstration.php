@@ -8,6 +8,7 @@ use App\Domain\Demonstration\Services\BoiteDEnvoi;
 use App\Domain\Demonstration\SiteDePiliqi;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\CleDuModele;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
@@ -45,7 +46,7 @@ class RenvoyerLesDemandesDeLaDemonstration extends Command
         foreach ($demandes as $demande) {
             $societe = Societe::query()->findOrFail($demande->societe_id);
             $contexte->runAsSociete($societe, function () use ($boite, $demande): void {
-                $boite->renvoyerLaCreation(Demonstration::query()->findOrFail($demande->getKey()));
+                $boite->renvoyerLaCreation(Demonstration::query()->findOrFail(CleDuModele::de($demande)));
             });
         }
 

@@ -23,6 +23,9 @@ use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Services\ClotureCaissePdfGenerator;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\CleDuModele;
+use App\Domain\Tenancy\Support\ResultatDePhp;
+use App\Domain\Tenancy\Support\ValeurSimple;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterval;
 use Illuminate\Support\Facades\Artisan;
@@ -200,7 +203,7 @@ final class ArchiverUneCopie
             $totaux[$magasin->code] = $contexte->runAs($magasin, fn (): array => $registre->sousVerrou($magasin, function () use ($registre, $magasin, $motif): array {
                 $registre->journaliser(CodeEvenement::SortieDuModeDemonstration, ['motif' => $motif]);
 
-                return $registre->grandsTotauxApres($magasin, EnregistrementFiscal::query()->where('chaine', ChaineFiscale::Vente->value)->max('sequence'));
+                return $registre->grandsTotauxApres($magasin, ValeurSimple::enEntierOuNul(EnregistrementFiscal::query()->where('chaine', ChaineFiscale::Vente->value)->max('sequence')));
             }));
         }
 
@@ -226,11 +229,11 @@ final class ArchiverUneCopie
     private function ecrireUnMagasin(Copie $copie, Magasin $magasin, string $dossier): array
     {
         File::ensureDirectoryExists($dossier.'/tickets-z');
-        $flux = fopen($dossier.'/journal-des-evenements.csv', 'wb');
-        ExporterJournalDesEvenementsAction::ecrivain($magasin->getKey(), $magasin->calendrier(), null, null, false)($flux);
+        $flux = ResultatDePhp::flux(fopen($dossier.'/journal-des-evenements.csv', 'wb'), 'L\'ouverture du journal des événements de l\'archive');
+        ExporterJournalDesEvenementsAction::ecrivain(CleDuModele::de($magasin), $magasin->calendrier(), null, null, false)($flux);
         fclose($flux);
 
-        $registre = fopen($dossier.'/registre.csv', 'wb');
+        $registre = ResultatDePhp::flux(fopen($dossier.'/registre.csv', 'wb'), 'L\'ouverture du registre de l\'archive');
         fwrite($registre, "\u{FEFF}");
         fputcsv($registre, ['Chaîne', 'Séquence', 'Type', 'Horodatage signé (UTC)', 'Signature précédente', 'Signature', 'Algorithme', 'Clé (cle_id)', 'Version du module', 'Contenu signé'], ';', '"', '');
         $nombres = [];
@@ -283,7 +286,9 @@ final class ArchiverUneCopie
             'format' => self::FORMAT,
             'reference' => $copie->reference,
             'repere' => $copie->repere,
-            'type' => $copie->type?->value,
+            // Une base orpheline, trouvée par le nettoyage sans ligne au
+            // registre (voir NettoyageDeLaDemonstration), n'a pas de type.
+            'type' => array_key_exists('type', $copie->getAttributes()) ? $copie->type->value : null,
             'motif' => $motif,
             'creee_le' => MessagesSignes::instant($copie->creee_le),
             'prete_le' => $copie->prete_le === null ? null : MessagesSignes::instant($copie->prete_le),

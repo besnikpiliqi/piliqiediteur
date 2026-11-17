@@ -103,7 +103,7 @@ final class RolesDeLaDemonstration
     public static function reglerLaConnexionALaBase(Connection $connexion): void
     {
         SiteDePiliqi::exiger(SiteDePiliqi::Demonstration);
-        $role = self::identifiant(self::roleDesPages());
+        $role = IdentifiantSql::de(self::roleDesPages());
         $connexion->unprepared("do \$\$ begin execute format('revoke all on database %I from public', current_database()); execute format('grant connect on database %I to {$role}', current_database()); end \$\$");
     }
 
@@ -115,13 +115,13 @@ final class RolesDeLaDemonstration
     public static function accorderLesDroitsDUneBase(ConnectionInterface $connexion): void
     {
         SiteDePiliqi::exiger(SiteDePiliqi::Demonstration);
-        $role = self::identifiant(self::roleDesPages());
+        $role = IdentifiantSql::de(self::roleDesPages());
         $connexion->unprepared("grant usage on schema public to {$role}");
         $connexion->unprepared("grant select, insert, update, delete on all tables in schema public to {$role}");
         $connexion->unprepared("grant usage, select, update on all sequences in schema public to {$role}");
 
         foreach (self::tablesEnAjoutSeul($connexion) as $table) {
-            $connexion->unprepared('revoke update, delete, truncate on '.self::identifiant($table)." from {$role}");
+            $connexion->unprepared('revoke update, delete, truncate on '.IdentifiantSql::de($table)." from {$role}");
         }
     }
 
@@ -152,7 +152,7 @@ final class RolesDeLaDemonstration
      */
     public static function accorderLesDroitsDuRegistre(ConnectionInterface $connexion): void
     {
-        $role = self::identifiant(self::roleDesPages());
+        $role = IdentifiantSql::de(self::roleDesPages());
         $connexion->unprepared("grant usage on schema public to {$role}");
         $connexion->unprepared("grant select on all tables in schema public to {$role}");
 
@@ -168,14 +168,9 @@ final class RolesDeLaDemonstration
 
     public static function retirerLesDroitsDuRegistre(ConnectionInterface $connexion): void
     {
-        $role = self::identifiant(self::roleDesPages());
+        $role = IdentifiantSql::de(self::roleDesPages());
         $connexion->unprepared('drop function if exists '.self::SIGNATURE_DE_LA_FONCTION_D_INSCRIPTION);
         $connexion->unprepared("revoke all on all tables in schema public from {$role}");
         $connexion->unprepared("revoke all on all sequences in schema public from {$role}");
-    }
-
-    private static function identifiant(string $nom): string
-    {
-        return '"'.str_replace('"', '""', $nom).'"';
     }
 }

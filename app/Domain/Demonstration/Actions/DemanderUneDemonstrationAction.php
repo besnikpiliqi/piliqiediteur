@@ -16,6 +16,7 @@ use App\Domain\Tenancy\Services\ActionsUniques;
 use App\Domain\Tenancy\Services\DebitDesEmails;
 use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Support\CleDuModele;
+use App\Domain\Tenancy\Support\Reglage;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterval;
@@ -99,8 +100,8 @@ final class DemanderUneDemonstrationAction
                     User::query()->whereKey($auteur->getKey())->lock('for no key update')->first();
                 },
                 function () use ($auteur, $societe, $adresseIp, &$lien): Demonstration {
-                    $relue = Societe::query()->findOrFail($societe->getKey());
-                    $auteurRelu = User::query()->findOrFail($auteur->getKey());
+                    $relue = Societe::query()->findOrFail(CleDuModele::de($societe));
+                    $auteurRelu = User::query()->findOrFail(CleDuModele::de($auteur));
                     $this->conditions->exiger($auteurRelu, $relue, envoieLeLien: true, creeOuRecommence: true);
 
                     $vivante = Demonstration::query()
@@ -167,7 +168,7 @@ final class DemanderUneDemonstrationAction
      */
     public static function adresseDuLien(string $lien): string
     {
-        return rtrim((string) config('demonstration.url'), '/').'/d#'.$lien;
+        return rtrim(Reglage::texteOuNul('demonstration.url') ?? '', '/').'/d#'.$lien;
     }
 
     public static function tirerUnRepere(): string

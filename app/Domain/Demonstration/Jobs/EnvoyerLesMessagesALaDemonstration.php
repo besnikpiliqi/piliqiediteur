@@ -12,6 +12,7 @@ use App\Domain\Demonstration\Services\EtatsDeLaDemonstration;
 use App\Domain\Demonstration\SiteDePiliqi;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\CleDuModele;
 use Carbon\CarbonImmutable;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -100,7 +101,7 @@ final class EnvoyerLesMessagesALaDemonstration implements ShouldQueue
             $dernier = 0;
 
             while (($message = $this->suivant($dernier)) !== null) {
-                $dernier = (int) $message->getKey();
+                $dernier = CleDuModele::de($message);
 
                 if ($message->prochain_essai_le?->isFuture() === true) {
                     return;

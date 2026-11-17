@@ -3,6 +3,7 @@
 namespace App\Domain\Demonstration\Bases;
 
 use App\Domain\Demonstration\SiteDePiliqi;
+use App\Domain\Tenancy\Support\ValeurSimple;
 use Closure;
 use Illuminate\Cache\RateLimiter;
 use Illuminate\Session\Middleware\StartSession;
@@ -47,9 +48,9 @@ final class BrancherUneBase
     public static function pendant(array $acces, Closure $geste): mixed
     {
         $avant = [
-            'database' => (string) config('database.connections.pgsql.database'),
-            'username' => (string) config('database.connections.pgsql.username'),
-            'password' => (string) config('database.connections.pgsql.password'),
+            'database' => ValeurSimple::enTexte(config('database.connections.pgsql.database')),
+            'username' => ValeurSimple::enTexte(config('database.connections.pgsql.username')),
+            'password' => ValeurSimple::enTexte(config('database.connections.pgsql.password')),
         ];
         self::brancher($acces);
 
@@ -69,8 +70,8 @@ final class BrancherUneBase
     {
         return [
             'database' => $base,
-            'username' => (string) config('database.connections.demo_admin.username'),
-            'password' => (string) config('database.connections.demo_admin.password'),
+            'username' => ValeurSimple::enTexte(config('database.connections.demo_admin.username')),
+            'password' => ValeurSimple::enTexte(config('database.connections.demo_admin.password')),
         ];
     }
 
@@ -83,8 +84,8 @@ final class BrancherUneBase
     {
         return [
             'database' => $base,
-            'username' => (string) config('database.connections.registre.username'),
-            'password' => (string) config('database.connections.registre.password'),
+            'username' => ValeurSimple::enTexte(config('database.connections.registre.username')),
+            'password' => ValeurSimple::enTexte(config('database.connections.registre.password')),
         ];
     }
 

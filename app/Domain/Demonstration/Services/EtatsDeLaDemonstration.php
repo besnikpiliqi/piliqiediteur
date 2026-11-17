@@ -10,6 +10,7 @@ use App\Domain\Demonstration\Messages\ReponseDuSiteDeDemonstration;
 use App\Domain\Demonstration\Models\Demonstration;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\AlerteEditeur;
+use App\Domain\Tenancy\Support\CleDuModele;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Cache;
 
@@ -82,7 +83,7 @@ final class EtatsDeLaDemonstration
 
     private function creationRefusee(Demonstration $demonstration, ?string $cause): void
     {
-        if (Cache::add('demonstration-creation-refusee:'.$demonstration->getKey(), true, 31 * 86400)) {
+        if (Cache::add('demonstration-creation-refusee:'.CleDuModele::de($demonstration), true, 31 * 86400)) {
             $this->alerte->alerter(Societe::query()->findOrFail($demonstration->societe_id), 'Le site de démonstration refuse de créer une démonstration', [
                 'Le site de démonstration a refusé le message de création d\'une démonstration : un réglage est sans doute à revoir (clé des messages, destinataire, heure des serveurs).',
                 'Cause donnée par le site de démonstration : '.($cause ?? 'aucune').'.',

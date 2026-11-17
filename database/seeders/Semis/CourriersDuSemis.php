@@ -2,7 +2,9 @@
 
 namespace Database\Seeders\Semis;
 
+use App\Domain\Tenancy\Support\ValeursLues;
 use Illuminate\Contracts\Mail\Mailable;
+use Illuminate\Mail\MailManager;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Testing\Fakes\MailFake;
 
@@ -28,7 +30,7 @@ final class CourriersDuSemis extends MailFake
     public static function poser(): self
     {
         $racine = Mail::getFacadeRoot();
-        $courriers = new self($racine instanceof MailFake ? $racine->manager : $racine);
+        $courriers = new self($racine instanceof MailFake ? $racine->manager : ValeursLues::instance($racine, MailManager::class));
         Mail::swap($courriers);
 
         return $courriers;

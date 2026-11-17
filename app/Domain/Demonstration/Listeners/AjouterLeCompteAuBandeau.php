@@ -8,6 +8,7 @@ use App\Domain\Demonstration\Visites\RoleAuBandeau;
 use App\Domain\Demonstration\Visites\SocieteDeLaCopie;
 use App\Domain\Tenancy\Events\CompteCree;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\ValeurSimple;
 use Illuminate\Contracts\Events\ShouldHandleEventsAfterCommit;
 use Illuminate\Support\Facades\DB;
 
@@ -47,7 +48,7 @@ final class AjouterLeCompteAuBandeau implements ShouldHandleEventsAfterCommit
             }
 
             $dernierDuGroupe = $lignes->where('groupe', $role->groupe)->max('ordre');
-            $ordre = is_int($dernierDuGroupe) ? $dernierDuGroupe + 1 : (int) $lignes->max('ordre') + 1;
+            $ordre = is_int($dernierDuGroupe) ? $dernierDuGroupe + 1 : (ValeurSimple::enEntierOuNul($lignes->max('ordre')) ?? 0) + 1;
             CompteDuBandeau::query()->where('ordre', '>=', $ordre)->increment('ordre');
             CompteDuBandeau::query()->create(['user_id' => $compte->getKey(), 'libelle_du_role' => $role->libelle, 'role' => $role->cle, 'groupe' => $role->groupe, 'ordre' => $ordre]);
         }));

@@ -16,6 +16,7 @@ use App\Domain\Demonstration\Registre\Models\Archive;
 use App\Domain\Demonstration\Registre\Models\Copie;
 use App\Domain\Demonstration\Registre\Models\Modele;
 use App\Domain\Demonstration\SiteDePiliqi;
+use App\Domain\Tenancy\Support\ValeursLues;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Cache;
@@ -86,7 +87,7 @@ final class NettoyageDeLaDemonstration
         $bases = array_values(array_filter($basesDuServeur ?? $this->bases->lister(), static fn (string $nom): bool => preg_match(BasesDeLaDemonstration::MOTIF, $nom) === 1));
         $basesDeCopie = array_values(array_filter($bases, static fn (string $nom): bool => preg_match(BasesDeLaDemonstration::MOTIF_D_UNE_COPIE, $nom) === 1));
         $copies = Copie::on('demo_admin')->get(['id', 'reference', 'repere', 'type', 'validee', 'nom_de_la_base', 'etat', 'creee_le', 'prete_le', 'fin']);
-        $connues = $copies->pluck('nom_de_la_base')->filter()->all();
+        $connues = ValeursLues::textes($copies->pluck('nom_de_la_base')->filter());
         $orphelines = array_values(array_diff($basesDeCopie, $connues));
         $vivantes = $copies->filter(static fn (Copie $copie): bool => $copie->etat !== EtatDUneCopie::Supprimee)->count();
         $refus = match (true) {
@@ -257,7 +258,7 @@ final class NettoyageDeLaDemonstration
         foreach (['copies' => $copies, 'modeles' => $modeles] as $sorte => $gardes) {
             $parent = DossiersDeLaDemonstration::racine().'/'.$sorte;
 
-            foreach (File::isDirectory($parent) ? File::directories($parent) : [] as $dossier) {
+            foreach (File::isDirectory($parent) ? ValeursLues::textes(File::directories($parent)) : [] as $dossier) {
                 if (! in_array(basename($dossier), $gardes, true)) {
                     File::deleteDirectory($dossier);
                     $effaces++;

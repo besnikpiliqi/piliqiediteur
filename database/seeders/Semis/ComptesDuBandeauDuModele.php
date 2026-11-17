@@ -100,7 +100,7 @@ final class ComptesDuBandeauDuModele
         $societe = $this->semis->societe($cle);
         $ordre = 0;
 
-        app(TenantContext::class)->runAsSociete($societe, function () use ($groupes, $societe, &$ordre): void {
+        app(TenantContext::class)->runAsSociete($societe, function () use ($groupes, $societe, $modele, &$ordre): void {
             foreach ($groupes as $groupe => $comptes) {
                 $nomDuGroupe = in_array($groupe, [self::LA_SOCIETE, self::LE_COMPTABLE, self::LE_CABINET], true) ? $groupe : (string) $this->semis->magasin($groupe)->nom;
 

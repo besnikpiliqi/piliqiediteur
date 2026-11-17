@@ -5,6 +5,7 @@ namespace App\Domain\Demonstration\Bases;
 use App\Domain\Calendrier\Calendrier;
 use App\Domain\Demonstration\SiteDePiliqi;
 use App\Domain\Tenancy\Enums\TypeDActivite;
+use App\Domain\Tenancy\Support\Reglage;
 use App\Domain\Tenancy\Support\ValeurSimple;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Connection;
@@ -68,7 +69,7 @@ final class BasesDeLaDemonstration
     public function creerUneBaseVide(string $nom): void
     {
         $this->exigerLeMotif($nom, self::MOTIF_D_UNE_BASE_DE_TRAVAIL);
-        $this->administration()->unprepared('create database '.self::identifiant($nom)." template template0 encoding 'UTF8' locale 'C.UTF-8' owner ".self::identifiant(RolesDeLaDemonstration::roleDeLAdministration()));
+        $this->administration()->unprepared('create database '.IdentifiantSql::de($nom)." template template0 encoding 'UTF8' locale 'C.UTF-8' owner ".IdentifiantSql::de(RolesDeLaDemonstration::roleDeLAdministration()));
     }
 
     /**
@@ -85,8 +86,8 @@ final class BasesDeLaDemonstration
             throw new InvalidArgumentException('Stratégie de copie inconnue : '.$strategie.'.');
         }
 
-        $this->administration()->unprepared('create database '.self::identifiant($copie).' template '.self::identifiant($modele)
-            .' owner '.self::identifiant(RolesDeLaDemonstration::roleDeLAdministration())
+        $this->administration()->unprepared('create database '.IdentifiantSql::de($copie).' template '.IdentifiantSql::de($modele)
+            .' owner '.IdentifiantSql::de(RolesDeLaDemonstration::roleDeLAdministration())
             .' connection limit '.self::CONNEXIONS_PAR_COPIE.' strategy '.$strategie);
 
         $connexion = $this->connexionDAdministration($copie);
@@ -105,7 +106,7 @@ final class BasesDeLaDemonstration
     public function fermerEnModele(string $nom): void
     {
         $this->exigerLeMotif($nom, self::MOTIF_D_UNE_BASE_DE_TRAVAIL);
-        $this->administration()->unprepared('alter database '.self::identifiant($nom).' with allow_connections false is_template true');
+        $this->administration()->unprepared('alter database '.IdentifiantSql::de($nom).' with allow_connections false is_template true');
     }
 
     /**
@@ -121,10 +122,10 @@ final class BasesDeLaDemonstration
         }
 
         if (preg_match(self::MOTIF_D_UNE_BASE_DE_TRAVAIL, $nom) === 1) {
-            $this->administration()->unprepared('alter database '.self::identifiant($nom).' with is_template false');
+            $this->administration()->unprepared('alter database '.IdentifiantSql::de($nom).' with is_template false');
         }
 
-        $this->administration()->unprepared('drop database if exists '.self::identifiant($nom).' with (force)');
+        $this->administration()->unprepared('drop database if exists '.IdentifiantSql::de($nom).' with (force)');
     }
 
     public function existe(string $nom): bool
@@ -152,7 +153,7 @@ final class BasesDeLaDemonstration
     {
         $this->exigerLeMotif($nom, self::MOTIF);
 
-        return (int) $this->administration()->scalar('select pg_database_size(?)', [$nom]);
+        return ValeurSimple::enEntier($this->administration()->scalar('select pg_database_size(?)', [$nom]));
     }
 
     /**
@@ -163,7 +164,7 @@ final class BasesDeLaDemonstration
     {
         $this->exigerLeMotif($nom, self::MOTIF);
         config(['database.connections.'.self::CONNEXION_D_ADMINISTRATION => [
-            ...config('database.connections.demo_admin'),
+            ...Reglage::tableau('database.connections.demo_admin'),
             'database' => $nom,
         ]]);
         DB::purge(self::CONNEXION_D_ADMINISTRATION);
@@ -191,10 +192,5 @@ final class BasesDeLaDemonstration
         SiteDePiliqi::exiger(SiteDePiliqi::Demonstration);
 
         return DB::connection('demo_admin');
-    }
-
-    private static function identifiant(string $nom): string
-    {
-        return '"'.str_replace('"', '""', $nom).'"';
     }
 }

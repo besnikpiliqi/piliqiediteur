@@ -68,20 +68,20 @@ final class ActiviteDesMagasins
         $this->horloge->aller(2, '11:00');
 
         if ($this->semis->seme('commerce')) {
-            $halles = $gestes['halles'];
+            $halles = self::gestesDe($gestes, 'halles');
             $halles->dans(fn () => app(CreerMandatPdpAction::class)->handle($halles->magasin, $this->semis->proprietaire('commerce')));
             $halles->dans(fn (): array => app(ModifierLesParametresDuMagasinAction::class)->handle($this->semis->compte('Camille Laurent'), PermissionRegistry::RELANCES_REGLER, FicheLue::de($halles->magasin->refresh())->valeurs(), ['relances_automatiques' => true]));
             $this->remplirLesHalles($halles);
-            $this->remplirLaRepublique($gestes['republique']);
-            $this->remplirLaMartinique($gestes['martinique']);
+            $this->remplirLaRepublique(self::gestesDe($gestes, 'republique'));
+            $this->remplirLaMartinique(self::gestesDe($gestes, 'martinique'));
         }
 
         if ($this->semis->seme('services')) {
-            $this->remplirLeConseil($gestes['conseil']);
+            $this->remplirLeConseil(self::gestesDe($gestes, 'conseil'));
         }
 
         if ($this->semis->seme('client')) {
-            $this->remplirLEpicerie($gestes['epicerie']);
+            $this->remplirLEpicerie(self::gestesDe($gestes, 'epicerie'));
         }
 
         $this->premieresSemaines($gestes);
@@ -451,6 +451,19 @@ final class ActiviteDesMagasins
     private function ligne(GestesDuMagasin $gestes, string $referenceOuService, int $quantite): array
     {
         return $gestes->ligne($referenceOuService, $quantite);
+    }
+
+    /**
+     * Les gestes de ce magasin, que ce semis sème (voir
+     * SemisComplet::semeLeMagasin()).
+     *
+     * @param  array<string, GestesDuMagasin>  $gestes
+     *
+     * @throws LogicException pour un magasin que ce semis ne sème pas
+     */
+    private static function gestesDe(array $gestes, string $magasin): GestesDuMagasin
+    {
+        return $gestes[$magasin] ?? throw new LogicException("Le magasin {$magasin} n'est pas semé.");
     }
 
     private function client(GestesDuMagasin $gestes, string $nom): Client

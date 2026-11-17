@@ -8,6 +8,7 @@ use App\Domain\Demonstration\Exceptions\MessageRefuse;
 use App\Domain\Demonstration\SiteDePiliqi;
 use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Support\Reglage;
+use App\Domain\Tenancy\Support\ValeursLues;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 
@@ -44,7 +45,7 @@ final class ReceptionDesMessages
     public function lire(string $message, string $signature, string $audience): array
     {
         SiteDePiliqi::exiger(SiteDePiliqi::Demonstration);
-        $champs = MessagesSignes::verifier($message, $signature, (array) config('demonstration.messages.cles_publiques'));
+        $champs = MessagesSignes::verifier($message, $signature, array_filter(ValeursLues::champs(config('demonstration.messages.cles_publiques')), 'is_string'));
         $maintenant = CarbonImmutable::now();
 
         if (array_diff(array_keys($champs), MessagesSignes::CHAMPS) !== []) {

@@ -82,11 +82,11 @@ final class RenouvelerLeLienDeLaDemonstrationAction
                     User::query()->whereKey($auteur->getKey())->lock('for no key update')->first();
                 },
                 function () use ($auteur, $societe, &$lien): Demonstration {
-                    $auteurRelu = User::query()->findOrFail($auteur->getKey());
-                    $this->conditions->exiger($auteurRelu, Societe::query()->findOrFail($societe->getKey()), envoieLeLien: true, creeOuRecommence: false);
+                    $auteurRelu = User::query()->findOrFail(CleDuModele::de($auteur));
+                    $this->conditions->exiger($auteurRelu, Societe::query()->findOrFail(CleDuModele::de($societe)), envoieLeLien: true, creeOuRecommence: false);
                     $demonstration = Demonstration::query()->where('etat', EtatDeLaDemonstration::Prete->value)->lockForUpdate()->first()
                         ?? throw new LogicException(self::MESSAGE_AUCUNE_DEMONSTRATION);
-                    $cle = 'demonstration-renouvellements:'.$societe->getKey();
+                    $cle = 'demonstration-renouvellements:'.CleDuModele::de($societe);
 
                     if (RateLimiter::tooManyAttempts($cle, self::PAR_JOUR)) {
                         throw new LogicException(self::MESSAGE_TROP_DE_RENOUVELLEMENTS);

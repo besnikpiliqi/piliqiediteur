@@ -566,6 +566,19 @@ jobs:
       - name: Generate app key
         run: php artisan key:generate
 
+      # Le module de navigateur de Pest exige Playwright au démarrage de
+      # toute course, même sans test en navigateur.
+      - name: Setup Node
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install Playwright and its browser
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
       - name: Bases modèles et leurs tests
         run: php artisan test --group=copies --log-junit storage/logs/junit-copies.xml --log-teamcity storage/logs/teamcity-copies.txt
 

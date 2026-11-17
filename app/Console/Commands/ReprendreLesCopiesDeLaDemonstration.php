@@ -9,6 +9,7 @@ use App\Domain\Demonstration\Jobs\PreparerUneCopie;
 use App\Domain\Demonstration\Jobs\RefaireUneCopie;
 use App\Domain\Demonstration\Registre\Models\Copie;
 use App\Domain\Demonstration\SiteDePiliqi;
+use App\Domain\Tenancy\Support\ValeursLues;
 use Carbon\CarbonImmutable;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
@@ -49,7 +50,7 @@ class ReprendreLesCopiesDeLaDemonstration extends Command
             ->orderBy('id')->get(['reference', 'etat', 'motif_du_message']);
 
         foreach ($references as $reference) {
-            Bus::dispatch(new PreparerUneCopie((string) $reference));
+            Bus::dispatch(new PreparerUneCopie(ValeursLues::texte($reference)));
         }
 
         foreach ($aRefaire as $copie) {

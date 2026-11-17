@@ -14,6 +14,7 @@ use App\Domain\Demonstration\Registre\Models\Modele;
 use App\Domain\Demonstration\SiteDePiliqi;
 use App\Domain\Demonstration\Taches\PlaceDesCopies;
 use App\Domain\Tenancy\Enums\TypeDActivite;
+use App\Domain\Tenancy\Support\Reglage;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterval;
 use Database\Seeders\DatabaseSeeder;
@@ -97,7 +98,7 @@ class SemerLesEtatsDeLaDemonstration extends Command
         foreach (array_keys(self::ETATS) as $etat) {
             $secret = MessagesSignes::enBase64Url(random_bytes(32));
             $copies[$etat] = $this->creer($secret, $maintenant);
-            $liens[$etat] = rtrim((string) config('app.url'), '/').'/d#'.$secret;
+            $liens[$etat] = rtrim(Reglage::texte('app.url'), '/').'/d#'.$secret;
         }
 
         foreach ($copies as $etat => $copie) {

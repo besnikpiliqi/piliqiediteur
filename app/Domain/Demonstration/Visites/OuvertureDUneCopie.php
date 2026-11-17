@@ -9,7 +9,9 @@ use App\Domain\Demonstration\Exceptions\NomDeBaseHorsDuMotif;
 use App\Domain\Demonstration\MarqueDeLaBase;
 use App\Domain\Demonstration\Registre\Models\Copie;
 use App\Domain\Demonstration\SiteDePiliqi;
+use App\Domain\Tenancy\Support\ValeurSimple;
 use Closure;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Throwable;
@@ -65,17 +67,18 @@ final class OuvertureDUneCopie
      * @return Closure(): void
      *
      * @throws NomDeBaseHorsDuMotif
+     * @throws QueryException quand la base de la copie ne s'ouvre pas (une copie perdue, voir OuvrirLaCopie)
      */
     public function ouvrirJusquA(Copie $copie): Closure
     {
         $acces = [
-            'database' => (string) config('database.connections.pgsql.database'),
-            'username' => (string) config('database.connections.pgsql.username'),
-            'password' => (string) config('database.connections.pgsql.password'),
+            'database' => ValeurSimple::enTexte(config('database.connections.pgsql.database')),
+            'username' => ValeurSimple::enTexte(config('database.connections.pgsql.username')),
+            'password' => ValeurSimple::enTexte(config('database.connections.pgsql.password')),
         ];
         $disques = (array) config('filesystems.disks');
         $cache = config('cache.default');
-        $avant = app()->bound(self::COPIE_OUVERTE) ? app(self::COPIE_OUVERTE) : null;
+        $avant = self::courante();
         $fermer = static function () use ($acces, $disques, $cache, $avant): void {
             config(['cache.default' => $cache]);
             BrancherUneBase::brancher($acces);

@@ -3,7 +3,6 @@
 namespace App\Domain\Demonstration\Listeners;
 
 use Illuminate\Mail\Events\MessageSending;
-use Symfony\Component\Mime\Email;
 
 /**
  * Avec le transport « log » du développement, le lien d'une démonstration
@@ -26,7 +25,7 @@ final class MasquerLeLienDansLeJournal
     {
         $mailer = config('mail.default');
 
-        if (! is_string($mailer) || config('mail.mailers.'.$mailer.'.transport') !== 'log' || ! $evenement->message instanceof Email) {
+        if (! is_string($mailer) || config('mail.mailers.'.$mailer.'.transport') !== 'log') {
             return;
         }
 

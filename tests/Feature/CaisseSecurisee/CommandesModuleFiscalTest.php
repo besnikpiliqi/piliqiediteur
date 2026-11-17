@@ -9,6 +9,7 @@ use App\Domain\CaisseSecurisee\Support\HorlogeDuSysteme;
 use App\Domain\Calendrier\Calendrier;
 use App\Domain\Calendrier\Connexions\FuseauParDefautDeLaBase;
 use App\Domain\Fichiers\AnalyseurDePdf;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
@@ -25,6 +26,13 @@ use Tests\TestCase;
  */
 class CommandesModuleFiscalTest extends TestCase
 {
+    /**
+     * Le diagnostic lit la marque de la base (table site_de_la_base) : la
+     * base de chaque processus doit être migrée, jamais la base de départ de
+     * la CI, qui reste vide.
+     */
+    use RefreshDatabase;
+
     /**
      * Le serveur des tests a réussi la vérification de l'isolation il y a
      * une heure, comme après la tâche de la nuit : chaque test lit le seul
@@ -369,9 +377,9 @@ class CommandesModuleFiscalTest extends TestCase
      * l'application vient de fixer. Chaque cause et sa commande se
      * vérifient dans FuseauParDefautDeLaBaseTest. La base reçoit d'abord,
      * par une connexion à part, le fuseau UTC que lui donnent les
-     * migrations : cette classe ne les passe pas, et un test qui les
-     * défait (DatabaseMigrations) retire ce réglage, si bien que l'ordre
-     * des tests d'un processus ne le garantit pas.
+     * migrations : un test qui les défait (DatabaseMigrations) retire ce
+     * réglage, si bien que l'ordre des tests d'un processus ne le garantit
+     * pas.
      */
     public function test_diagnostiquer_echoue_quand_le_fuseau_par_defaut_de_la_base_n_est_pas_utc(): void
     {

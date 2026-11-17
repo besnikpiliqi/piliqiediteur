@@ -7,6 +7,7 @@ use App\Domain\Demonstration\Mail\LienDeLaDemonstrationMail;
 use App\Domain\Demonstration\Models\Demonstration;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Notifications\AvisDeLEquipe;
+use App\Domain\Tenancy\Support\CleDuModele;
 use App\Models\User;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldBeEncrypted;
@@ -61,7 +62,7 @@ final class EnvoyerLeLienDeLaDemonstration implements ShouldBeEncrypted, ShouldQ
     {
         self::dispatch(
             (int) $demonstration->societe_id,
-            (int) $proprietaire->getKey(),
+            CleDuModele::de($proprietaire),
             $lien,
             $demonstration->repere,
             Calendrier::deParis()->afficher($demonstration->fin_le, 'd/m/Y'),

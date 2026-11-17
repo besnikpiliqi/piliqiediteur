@@ -30,10 +30,10 @@ class ConstruireLesModelesDeLaDemonstration extends Command
         $types = [];
 
         foreach ($this->argument('type') ?: array_map(static fn (TypeDActivite $type): string => $type->value, TypeDActivite::cases()) as $valeur) {
-            $type = is_string($valeur) ? TypeDActivite::tryFrom($valeur) : null;
+            $type = TypeDActivite::tryFrom($valeur);
 
             if ($type === null) {
-                $this->error(sprintf(self::MESSAGE_TYPE_INCONNU, is_string($valeur) ? $valeur : ''));
+                $this->error(sprintf(self::MESSAGE_TYPE_INCONNU, $valeur));
 
                 return self::FAILURE;
             }

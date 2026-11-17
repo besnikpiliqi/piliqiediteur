@@ -92,7 +92,7 @@ final class EntrerDansLaDemonstrationController
             }
 
             return $copie;
-        }, (int) config('auth.timebox_duration'));
+        }, ValeurSimple::enEntier(config('auth.timebox_duration')));
 
         if ($copie === null) {
             return new JsonResponse(['message' => 'Introuvable.'], 404);

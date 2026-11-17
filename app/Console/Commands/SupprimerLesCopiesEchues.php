@@ -6,6 +6,7 @@ use App\Domain\Demonstration\Enums\EtatDUneCopie;
 use App\Domain\Demonstration\Jobs\ArchiverPuisSupprimerUneCopie;
 use App\Domain\Demonstration\Registre\Models\Copie;
 use App\Domain\Demonstration\SiteDePiliqi;
+use App\Domain\Tenancy\Support\ValeursLues;
 use Carbon\CarbonImmutable;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
@@ -37,7 +38,7 @@ class SupprimerLesCopiesEchues extends Command
             ->pluck('reference')->all();
 
         foreach ($references as $reference) {
-            Bus::dispatch(new ArchiverPuisSupprimerUneCopie((string) $reference, 'trente_jours'));
+            Bus::dispatch(new ArchiverPuisSupprimerUneCopie(ValeursLues::texte($reference), 'trente_jours'));
         }
 
         $this->info(count($references).' copie(s) arrivée(s) à leur fin, à supprimer.');

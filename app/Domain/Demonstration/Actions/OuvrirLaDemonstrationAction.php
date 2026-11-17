@@ -66,7 +66,7 @@ final class OuvrirLaDemonstrationAction
                 $demonstration = Demonstration::query()
                     ->whereIn('etat', [...EtatDeLaDemonstration::valeursEnCours(), EtatDeLaDemonstration::EnEchec->value])
                     ->first() ?? throw new LogicException(self::MESSAGE_AUCUNE_DEMONSTRATION);
-                $cle = 'demonstration-ouvertures:'.$societe->getKey();
+                $cle = 'demonstration-ouvertures:'.CleDuModele::de($societe);
 
                 if (RateLimiter::tooManyAttempts($cle, self::PAR_HEURE)) {
                     throw new LogicException(self::MESSAGE_TROP_D_OUVERTURES);

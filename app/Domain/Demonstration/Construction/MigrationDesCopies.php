@@ -19,6 +19,7 @@ use App\Domain\Demonstration\VersionServie;
 use App\Domain\Demonstration\Visites\OuvertureDUneCopie;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\ValeurSimple;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Bus;
@@ -113,10 +114,10 @@ final class MigrationDesCopies
         $tableau = Cache::store('registre')->get(self::CLE_DU_TABLEAU);
 
         return is_array($tableau) ? [
-            'migrees' => (int) ($tableau['migrees'] ?? 0),
-            'refaites' => (int) ($tableau['refaites'] ?? 0),
-            'laissees' => (int) ($tableau['laissees'] ?? 0),
-            'duree_en_secondes' => (int) ($tableau['duree_en_secondes'] ?? 0),
+            'migrees' => ValeurSimple::enEntier($tableau['migrees'] ?? 0),
+            'refaites' => ValeurSimple::enEntier($tableau['refaites'] ?? 0),
+            'laissees' => ValeurSimple::enEntier($tableau['laissees'] ?? 0),
+            'duree_en_secondes' => ValeurSimple::enEntier($tableau['duree_en_secondes'] ?? 0),
         ] : null;
     }
 

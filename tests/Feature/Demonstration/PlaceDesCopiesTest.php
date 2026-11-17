@@ -37,6 +37,8 @@ use Tests\DemonstrationTestCase;
  */
 class PlaceDesCopiesTest extends DemonstrationTestCase
 {
+    private const MARGE_DE_PLACE = 1024 * 1024;
+
     public function test_au_dela_de_sa_place_la_copie_passe_en_lecture_seule_juste_sous_la_limite_non(): void
     {
         ['copie' => $copie] = $this->copieDeTest(TypeDActivite::Services);
@@ -120,11 +122,19 @@ class PlaceDesCopiesTest extends DemonstrationTestCase
     public function test_une_piece_qui_ferait_depasser_la_place_est_refusee_avec_le_meme_message(): void
     {
         ['copie' => $copie] = $this->copieDeTest(TypeDActivite::Services);
-        $modele = $this->modeleAlaTailleDeLaCopie($copie);
-        $piece = new PieceDeposee('facture.pdf', "%PDF-1.4\n%%EOF\n");
+        $modele = $this->modeleAlaTailleDeLaCopie($copie, self::MARGE_DE_PLACE);
+        $petite = new PieceDeposee('petite.pdf', "%PDF-1.4\n%%EOF\n");
+        $piece = new PieceDeposee('facture.pdf', "%PDF-1.4\n".str_repeat(' ', 2 * self::MARGE_DE_PLACE)."%%EOF\n");
 
         try {
-            $this->dansLaCopie($copie, function () use ($piece): void {
+            $this->dansLaCopie($copie, function () use ($petite, $piece): void {
+                try {
+                    app(ControleDesFichiers::class)->controler($petite);
+                    $this->fail('Le PDF vide aurait dû être refusé, mais pas pour sa place.');
+                } catch (FichierRefuseException $refus) {
+                    $this->assertNotSame(RaisonDuRefus::PlaceDeLaDemonstration, $refus->raison, 'Une pièce qui tient dans la place restante n\'est pas refusée pour sa place.');
+                }
+
                 try {
                     app(ControleDesFichiers::class)->controler($piece);
                     $this->fail('La pièce aurait dû être refusée.');
@@ -176,16 +186,19 @@ class PlaceDesCopiesTest extends DemonstrationTestCase
     }
 
     /**
-     * Le modèle de la copie, mesuré comme la copie maintenant : la copie est
-     * juste à sa limite (DEMONSTRATION_FACTEUR_DE_PLACE à 1), le moindre
-     * octet de plus la fait dépasser. La taille d'origine se remet ensuite.
+     * Le modèle de la copie, mesuré comme la copie maintenant, plus une
+     * marge de place (DEMONSTRATION_FACTEUR_DE_PLACE à 1) : sans marge, la
+     * copie est juste à sa limite et le moindre octet de plus la fait
+     * dépasser ; avec elle, la taille d'une base que PostgreSQL fait varier
+     * de quelques pages entre deux mesures (nettoyage, troncature) ne change
+     * pas le résultat. La taille d'origine se remet ensuite.
      */
-    private function modeleAlaTailleDeLaCopie(Copie $copie): Modele
+    private function modeleAlaTailleDeLaCopie(Copie $copie, int $marge = 0): Modele
     {
         config(['demonstration.facteur_de_place' => 1]);
         $modele = Modele::on('demo_admin')->whereKey($copie->modele_id)->sole();
         $copie = PlaceDesCopies::tailleDeLaBase((string) $copie->nom_de_la_base) + PlaceDesCopies::tailleDuDossier(DossiersDeLaDemonstration::dUneCopie($copie->reference));
-        $taille = $copie - PlaceDesCopies::tailleDuDossier(DossiersDeLaDemonstration::duModele($modele->nom_de_la_base));
+        $taille = $copie + $marge - PlaceDesCopies::tailleDuDossier(DossiersDeLaDemonstration::duModele($modele->nom_de_la_base));
         Modele::on('demo_admin')->whereKey($modele->id)->update(['taille' => $taille]);
 
         return $modele;

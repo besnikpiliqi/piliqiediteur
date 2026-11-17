@@ -4,14 +4,18 @@ namespace App\Domain\Demonstration\Taches;
 
 use App\Console\Commands\PasserLesTachesDesCopies;
 use App\Console\Commands\VerifierIntegriteFiscale;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Demonstration\Enums\EtatDUneCopie;
 use App\Domain\Demonstration\Registre\Models\Copie;
 use App\Domain\Demonstration\Registre\Models\Temoin;
 use App\Domain\Demonstration\SiteDePiliqi;
 use App\Domain\Demonstration\Visites\OuvertureDUneCopie;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\ValeursLues;
 use Carbon\CarbonImmutable;
+use Illuminate\Contracts\Cache\LockProvider;
 use Illuminate\Contracts\Cache\LockTimeoutException;
+use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
 
@@ -70,10 +74,10 @@ final class TachesDesCopies
             ->where('fin', '>', $maintenant);
 
         if (! $nuit) {
-            $copies->whereExists(fn ($visite) => $visite->from('temoins')->whereColumn('temoins.copie_id', 'copies.id')->where('temoins.vu_le', '>=', $maintenant->subHours(self::HEURES_DE_VISITE)));
+            $copies->whereExists(fn (QueryBuilder $visite): QueryBuilder => $visite->from('temoins')->whereColumn('temoins.copie_id', 'copies.id')->where('temoins.vu_le', '>=', $maintenant->subHours(self::HEURES_DE_VISITE)));
         }
 
-        return array_values(array_map('strval', $copies->orderBy('id')->pluck('reference')->all()));
+        return ValeursLues::textes($copies->orderBy('id')->pluck('reference'));
     }
 
     /**
@@ -92,7 +96,7 @@ final class TachesDesCopies
             return [];
         }
 
-        $verrou = Cache::store('registre')->lock(self::VERROU_D_UNE_COPIE.$reference, PasserLesTachesDesCopies::DELAI_D_UNE_COPIE + 60);
+        $verrou = ValeursLues::instance(Cache::store('registre')->getStore(), LockProvider::class)->lock(self::VERROU_D_UNE_COPIE.$reference, PasserLesTachesDesCopies::DELAI_D_UNE_COPIE + 60);
 
         try {
             $verrou->block(PasserLesTachesDesCopies::DELAI_D_UNE_COPIE - 60);
@@ -157,7 +161,7 @@ final class TachesDesCopies
      */
     public static function estALHeure(Copie $copie, CarbonImmutable $maintenant): bool
     {
-        return $copie->derniere_passe_des_taches_le !== null && $copie->derniere_passe_des_taches_le->greaterThanOrEqualTo($maintenant->startOfHour()->subHour());
+        return $copie->derniere_passe_des_taches_le !== null && $copie->derniere_passe_des_taches_le->greaterThanOrEqualTo(Calendrier::deParis()->debutDeLHeure($maintenant)->subHour());
     }
 
     /**

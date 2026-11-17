@@ -8,6 +8,7 @@ use App\Domain\Demonstration\Registre\Models\Copie;
 use App\Domain\Demonstration\Registre\Models\Modele;
 use App\Domain\Demonstration\SiteDePiliqi;
 use App\Domain\Demonstration\Visites\OuvertureDUneCopie;
+use App\Domain\Tenancy\Support\ValeurSimple;
 use Closure;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
@@ -100,7 +101,7 @@ final class PlaceDesCopies
             return false;
         }
 
-        $occupee = (int) DB::connection()->scalar('select pg_database_size(current_database())') + self::tailleDuDossier(DossiersDeLaDemonstration::dUneCopie($ouverte['reference']));
+        $occupee = ValeurSimple::enEntier(DB::connection()->scalar('select pg_database_size(current_database())')) + self::tailleDuDossier(DossiersDeLaDemonstration::dUneCopie($ouverte['reference']));
 
         return $occupee + $octets > self::limiteDe($modele);
     }
@@ -114,7 +115,7 @@ final class PlaceDesCopies
     {
         $base = $modele->taille ?? self::tailleDeLaBase($modele->nom_de_la_base);
 
-        return max(1, (int) config('demonstration.facteur_de_place')) * ($base + self::tailleDuDossier(DossiersDeLaDemonstration::duModele($modele->nom_de_la_base)));
+        return max(1, ValeurSimple::enEntier(config('demonstration.facteur_de_place'))) * ($base + self::tailleDuDossier(DossiersDeLaDemonstration::duModele($modele->nom_de_la_base)));
     }
 
     /**
@@ -149,7 +150,7 @@ final class PlaceDesCopies
             $resultat['mesurees']++;
 
             if ($etat === EtatDUneCopie::EnLectureSeule) {
-                $resultat['en_lecture_seule'][] = (string) Copie::on('demo_admin')->whereKey($id)->value('reference');
+                $resultat['en_lecture_seule'][] = ValeurSimple::enTexte(Copie::on('demo_admin')->whereKey($id)->value('reference'));
             }
         }
 
@@ -158,7 +159,7 @@ final class PlaceDesCopies
 
     public static function tailleDeLaBase(string $base): int
     {
-        return (int) DB::connection('demo_admin')->scalar('select coalesce(pg_database_size(datname), 0) from pg_database where datname = ?', [$base]);
+        return ValeurSimple::enEntier(DB::connection('demo_admin')->scalar('select coalesce(pg_database_size(datname), 0) from pg_database where datname = ?', [$base]));
     }
 
     public static function tailleDuDossier(string $dossier): int

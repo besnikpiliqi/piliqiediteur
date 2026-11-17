@@ -16,6 +16,7 @@ use App\Domain\Demonstration\Taches\TachesDesCopies;
 use App\Domain\Demonstration\VersionServie;
 use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Support\Reglage;
+use App\Domain\Tenancy\Support\ValeurSimple;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Cache;
 use RuntimeException;
@@ -84,7 +85,7 @@ final class EtatDuSite
         $copies = [];
 
         foreach (Copie::query()->selectRaw('etat, count(*) as nombre')->groupBy('etat')->orderBy('etat')->toBase()->get() as $ligne) {
-            $copies[(string) $ligne->etat] = (int) $ligne->nombre;
+            $copies[ValeurSimple::enTexte($ligne->etat)] = ValeurSimple::enEntier($ligne->nombre);
         }
 
         if (($copies[EtatDUneCopie::EnEchec->value] ?? 0) > 0) {
@@ -97,7 +98,7 @@ final class EtatDuSite
             $problemes[] = sprintf('%d copie(s) arrêtée(s) par une erreur pendant l\'archive de leur caisse ou leur remise à zéro : leur base n\'est pas supprimée sans archive relue.', $arretees);
         }
 
-        $horsDuMotif = (int) Cache::store('registre')->get(self::CLE_DES_NOMS_HORS_DU_MOTIF, 0);
+        $horsDuMotif = ValeurSimple::enEntier(Cache::store('registre')->get(self::CLE_DES_NOMS_HORS_DU_MOTIF, 0));
 
         if ($horsDuMotif > 0) {
             $problemes[] = sprintf('%d requête(s) arrêtée(s) depuis un jour : le nom de base d\'une copie au registre n\'est pas du motif d\'une copie.', $horsDuMotif);
@@ -112,7 +113,7 @@ final class EtatDuSite
         $fileArretee = Cache::store('registre')->get(SurveillerLaFileDAttente::CLE_DE_L_ETAT_PUBLIE);
 
         foreach (is_array($fileArretee) ? $fileArretee : [] as $ligne) {
-            $problemes[] = 'La file d\'attente du site de démonstration ne part plus. '.$ligne;
+            $problemes[] = 'La file d\'attente du site de démonstration ne part plus. '.ValeurSimple::enTexte($ligne);
         }
 
         $refusDuNettoyage = NettoyageDeLaDemonstration::dernierRefus();
@@ -183,7 +184,7 @@ final class EtatDuSite
      */
     public static function placeLibreInsuffisante(?int $placeLibre = null): bool
     {
-        return ($placeLibre ?? self::placeLibre()) < (int) config('demonstration.place_libre_minimale');
+        return ($placeLibre ?? self::placeLibre()) < ValeurSimple::enEntier(config('demonstration.place_libre_minimale'));
     }
 
     /**
@@ -206,11 +207,14 @@ final class EtatDuSite
         return $total === false || $libre === false || $total <= 0 ? 0 : (int) floor($libre * 100 / $total);
     }
 
+    /**
+     * @return non-empty-string
+     */
     private static function clePrivee(#[SensitiveParameter] mixed $valeur): string
     {
         $octets = is_string($valeur) && $valeur !== '' ? base64_decode($valeur, true) : false;
 
-        if ($octets === false || strlen($octets) !== SODIUM_CRYPTO_SIGN_SECRETKEYBYTES) {
+        if ($octets === false || $octets === '' || strlen($octets) !== SODIUM_CRYPTO_SIGN_SECRETKEYBYTES) {
             throw new RuntimeException(self::MESSAGE_CLE_ABSENTE);
         }
 

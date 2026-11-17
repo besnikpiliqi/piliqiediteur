@@ -198,6 +198,16 @@ final class Calendrier
     }
 
     /**
+     * Le début de l'heure murale d'un instant dans le calendrier, minutes
+     * et secondes à zéro : l'heure ronde d'une passe des tâches de chaque
+     * heure (voir TachesDesCopies).
+     */
+    public function debutDeLHeure(DateTimeInterface $instant): CarbonImmutable
+    {
+        return self::auFuseauDeLApplication($this->dansLeFuseau($instant)->startOfHour());
+    }
+
+    /**
      * Comme afficher(), suivi de « (heure d'été) » ou « (heure d'hiver) »
      * quand l'heure murale de l'instant se répète dans le fuseau du
      * calendrier, au passage à l'heure d'hiver : pour un journal, dont

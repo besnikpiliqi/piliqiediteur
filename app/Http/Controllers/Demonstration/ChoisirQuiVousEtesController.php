@@ -11,6 +11,7 @@ use App\Domain\Demonstration\Taches\PlaceDesCopies;
 use App\Domain\Demonstration\Visites\BandeauDeLaDemonstration;
 use App\Domain\Demonstration\Visites\TemoinsDesVisites;
 use App\Domain\Demonstration\Visites\Visite;
+use App\Domain\Tenancy\Support\CleDuModele;
 use App\Filament\EspaceDeLaSociete;
 use App\Models\User;
 use Filament\Facades\Filament;
@@ -51,7 +52,7 @@ final class ChoisirQuiVousEtesController
             $connecte = Auth::guard('web')->user();
 
             try {
-                $choisi = $connecte instanceof User && $connecte->is($rappele) ? $connecte : PlaceDesCopies::pendantUnGestePermis(fn (): User => $changer->executer($requete, $visite->temoin, (int) $rappele->getKey()));
+                $choisi = $connecte instanceof User && $connecte->is($rappele) ? $connecte : PlaceDesCopies::pendantUnGestePermis(fn (): User => $changer->executer($requete, $visite->temoin, CleDuModele::de($rappele)));
 
                 return Redirection::vers(self::accueilDe($choisi));
             } catch (ChangementDeCompteRefuse) {

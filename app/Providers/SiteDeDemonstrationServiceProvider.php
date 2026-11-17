@@ -74,10 +74,10 @@ final class SiteDeDemonstrationServiceProvider extends ServiceProvider
         });
         Event::listen(CompteCree::class, AjouterLeCompteAuBandeau::class);
         $this->app->resolving('session', static function (SessionManager $sessions, Application $application): void {
-            $sessions->extend('database', static fn (): SessionsSansTrace => new SessionsSansTrace(
+            $sessions->extend('database', fn (): SessionsSansTrace => new SessionsSansTrace(
                 $application->make('db')->connection(ValeurSimple::enTexteOuNul(config('session.connection'))),
                 ValeurSimple::enTexte(config('session.table')),
-                (int) config('session.lifetime'),
+                ValeurSimple::enEntier(config('session.lifetime')),
                 $application,
             ));
         });

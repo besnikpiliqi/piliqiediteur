@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 17/11/2026 à 23:02 UTC par pilotage-sync.sh : « Audit du semis de la démonstration, plan en lots ».
+Mis à jour le 17/11/2026 à 23:30 UTC par pilotage-sync.sh : « Consignes de l'éditeur sur le semis complet, sauvegarde seulement ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

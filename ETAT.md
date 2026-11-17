@@ -1,13 +1,14 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 17/11/2026 à 03:33 UTC par pilotage-sync.sh : « Point de suivi 03:34 ».
+Mis à jour le 17/11/2026 à 05:34 UTC par pilotage-sync.sh : « Point de suivi 05:35 ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
 Tête poussée : `52dab0ff`. Commits locaux pas encore poussés :
 
 ```
-afb4ce96 Réparation de la CI rouge de 52dab0ff
+7d521432 Démonstration : bandeau, e-mails captés, tâches et mises à jour des copies
+33c56754 Réparation de la CI rouge de 52dab0ff
 ```
 
 Derniers commits poussés :
@@ -39,65 +40,49 @@ fcbf1166 Réparation de la CI rouge de 743f9bc
 
 ```
  M .env.demonstration.example
- M .env.example
- M CLAUDE.md
  M README.md
- M app/Console/Commands/ReprendreLesCopiesDeLaDemonstration.php
- M app/Domain/Charges/Support/ContenuDeLEtat.php
- M app/Domain/Demonstration/Archives/ArchiverUneCopie.php
+ M app/Console/Commands/RenvoyerLesDemandesDeLaDemonstration.php
+ M app/Console/Commands/SemerLesEtatsDeLaDemonstration.php
+ M app/Console/Commands/SurveillerLaFileDAttente.php
+ M app/Domain/Cabinets/Services/EnvoiDesLiensDesCabinets.php
+ M app/Domain/Cabinets/Services/EnvoiDesLiensDesExpertsComptables.php
  M app/Domain/Demonstration/Archives/FinDesCopies.php
- M app/Domain/Demonstration/Bases/BrancherUneBase.php
- M app/Domain/Demonstration/Construction/CopiesDeLaDemonstration.php
- M app/Domain/Demonstration/Construction/NettoyageDeLaDemonstration.php
+ M app/Domain/Demonstration/Construction/ConstruireUnModele.php
+ M app/Domain/Demonstration/Construction/MigrationDesCopies.php
  M app/Domain/Demonstration/Etat/EtatDuSite.php
-RM app/Domain/Demonstration/Jobs/RecommencerUneCopie.php -> app/Domain/Demonstration/Jobs/RefaireUneCopie.php
- M app/Domain/Demonstration/Messages/TraitementDesMessages.php
- M app/Domain/Demonstration/Registre/Models/Temoin.php
- M app/Domain/Demonstration/VersionServie.php
+ M app/Domain/Demonstration/Jobs/RattraperLesTachesDUneCopie.php
+ M app/Domain/Demonstration/Jobs/RefaireUneCopie.php
+ M app/Domain/Demonstration/Listeners/AjouterLeCompteAuBandeau.php
+ M app/Domain/Demonstration/Models/CompteDuBandeau.php
+ M app/Domain/Demonstration/Services/BoiteDEnvoi.php
+ M app/Domain/Demonstration/Taches/TachesDesCopies.php
+ M app/Domain/Demonstration/Taches/TachesDesSites.php
+ M app/Domain/Demonstration/Taches/TravauxDesCopies.php
+ M app/Domain/Demonstration/Visites/BandeauDeLaDemonstration.php
  M app/Domain/Demonstration/Visites/OuvertureDUneCopie.php
- M app/Domain/Demonstration/Visites/Visite.php
- M app/Domain/Facturation/Services/RecapitulatifDesDocuments.php
- M app/Domain/Fichiers/ControleDesFichiers.php
- M app/Domain/Fichiers/Enums/RaisonDuRefus.php
- M app/Domain/TableauDeBord/Support/ReglagesDuTableauDeBord.php
- M app/Domain/Tenancy/Enums/ActionAuditee.php
- M app/Domain/Tenancy/Isolation/ReglesDIsolation.php
- M app/Domain/Tenancy/Models/TelechargementDeDocuments.php
- M app/Domain/Tenancy/Services/CreationDesComptes.php
- M app/Domain/Tenancy/Services/TraceDuVisiteur.php
- M app/Http/Controllers/Demonstration/EntrerDansLaDemonstrationController.php
+ M app/Http/Controllers/AccepterLInvitationDuCabinetController.php
  M app/Http/Middleware/OuvrirLaCopie.php
- M app/Providers/AppServiceProvider.php
- M app/Providers/CourrielsServiceProvider.php
  M bootstrap/app.php
- M bootstrap/providers.php
- M config/demonstration.php
- M config/mail.php
  M config/queue.php
- M database/migrations-registre/2026_11_16_200002_create_copies_table.php
- M database/migrations-registre/2026_11_16_200004_create_temoins_table.php
- M database/seeders/DatabaseSeeder.php
- M database/seeders/Semis/HorlogeDuSemis.php
- M phpunit.xml
- M public/css/app/demonstration.css
- M resources/views/demonstration/attente.blade.php
- M resources/views/filament/bienvenue.blade.php
- M routes/demonstration.php
- M tests/Browser/Support/ContrasteDesPages.php
- M tests/Browser/TestCaseDuNavigateur.php
- M tests/Browser/inventaire-des-actions.php
+ M database/migrations-demonstration/2026_11_16_300001_create_comptes_du_bandeau_table.php
+ M database/seeders/Semis/ComptesDuBandeauDuModele.php
+ M database/seeders/Semis/DerniersGestes.php
+ M resources/views/demonstration/choisir.blade.php
  M tests/DemonstrationTestCase.php
- M tests/Feature/Demonstration/ArchiveAvantSuppressionTest.php
+ M tests/Feature/Demonstration/BandeauVousEtesTest.php
  M tests/Feature/Demonstration/BasesModelesTest.php
- M tests/Feature/Demonstration/ClesDeLaDemonstrationTest.php
  M tests/Feature/Demonstration/ConstructionDesModelesTest.php
+ M tests/Feature/Demonstration/CourrielsQuiSeraientPartisTest.php
+ M tests/Feature/Demonstration/EtatPublieTest.php
+ M tests/Feature/Demonstration/FilesDesCopiesTest.php
+ M tests/Feature/Demonstration/MisesAJourDesCopiesTest.php
+ M tests/Feature/Demonstration/PlaceDesCopiesTest.php
+ M tests/Feature/Demonstration/RenvoiDesDemandesTest.php
  M tests/Feature/Demonstration/RolesPostgresDeLaDemonstrationTest.php
- M tests/Feature/Facturation/ReponseAuDevisEnLigneTest.php
- M tests/Feature/Tenancy/IsolationDesSocietesTest.php
- M tests/Pest.php
- M tests/Unit/matrice-des-decisions.php
-?? app/Console/Commands/MesurerLesCopiesDeLaDemonstration.php
-?? app/Console/Commands/MigrerLesCopiesDeLaDemonstration.php
+ M tests/Feature/Demonstration/SemisSurLeSiteDeDemonstrationTest.php
+ M tests/Feature/Demonstration/UnSeulTypeTest.php
+?? app/Domain/Demonstration/Visites/RoleAuBandeau.php
+?? resources/views/demonstration/invitation-du-cabinet.blade.php
 ```
 
 ## Dernière course de la chaîne
@@ -127,4 +112,7 @@ DEMO-COPIE-2:notes
 DEMO-COPIE-3:implementation
 DEMO-COPIE-3:implementation-2
 DEMO-COPIE-3:implementation-3
+DEMO-COPIE-3:relecture1
+DEMO-COPIE-3:relecture2
+DEMO-COPIE-3:correction
 ```

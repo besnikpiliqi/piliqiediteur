@@ -49,7 +49,7 @@ class SemisSurLeSiteDeDemonstrationTest extends DemonstrationTestCase
     {
         $this->artisan('demonstration:semer-les-etats')->assertSuccessful();
 
-        $etats = Copie::on('demo_admin')->orderBy('id')->get();
+        $etats = Copie::on('demo_admin')->where('etat', '!=', EtatDUneCopie::Supprimee->value)->orderBy('id')->get();
         $this->assertCount(count(SemerLesEtatsDeLaDemonstration::ETATS), $etats);
         $this->assertSame(1, $etats->where('etat', EtatDUneCopie::Perdue)->count());
         $this->assertSame(1, $etats->where('etat', EtatDUneCopie::ARefaire)->count());
@@ -59,7 +59,8 @@ class SemisSurLeSiteDeDemonstrationTest extends DemonstrationTestCase
         $this->assertSame(1, $etats->whereNotNull('message')->where('motif_du_message', 'mise_a_jour')->count());
         $this->assertSame(1, $etats->whereNotNull('message')->where('motif_du_message', 'migration_ratee')->count());
         $this->assertSame(1, $etats->filter(fn (Copie $copie): bool => $copie->derniere_passe_des_taches_le !== null && $copie->derniere_passe_des_taches_le->lessThan(now()->subHour()))->count());
-        $this->assertSame(1, Archive::on('demo_admin')->count(), 'Une archive de caisse.');
+        $archive = Archive::on('demo_admin')->sole();
+        $this->assertSame(EtatDUneCopie::Supprimee, Copie::on('demo_admin')->where('reference', $archive->reference)->sole()->etat, 'L\'archive de caisse est celle d\'une copie supprimée ensuite : aucune copie servie ne garde la sortie du mode d\'entraînement (JET 105).');
 
         $fichier = (string) File::get($dossier.'/'.DatabaseSeeder::FICHIER_DES_COMPTES);
         $this->assertStringStartsWith('Liste des comptes du semis', $fichier, 'La liste des comptes du semis est gardée.');

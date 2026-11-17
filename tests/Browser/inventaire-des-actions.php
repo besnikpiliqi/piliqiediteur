@@ -3071,6 +3071,11 @@ return [
             'tests/Browser/Demonstration/DansLaCopieTest.php › la responsable envoie une facture par e-mail, la lit dans « E-mails qui seraient partis » avec sa pièce jointe, puis le client accepte le devis par le lien de son e-mail',
         ]],
     ],
+    'resources/views/demonstration/invitation-du-cabinet.blade.php' => [
+        'lien:Revenir à la démonstration' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Demonstration/DansLaCopieTest.php › dans la copie d’un cabinet, le lien d’une invitation ne crée aucune société et « Revenir à la démonstration » ramène au choix des comptes',
+        ]],
+    ],
     'resources/views/filament/ma-demonstration.blade.php' => [
         'formulaire:{{ route(\'ma-demonstration.ouvrir\') }}' => ['lot' => 'NAV-4', 'tests' => [
             'tests/Browser/Parcours/MaDemonstrationTest.php › le propriétaire ouvre sa démonstration par le bouton, dans un nouvel onglet',

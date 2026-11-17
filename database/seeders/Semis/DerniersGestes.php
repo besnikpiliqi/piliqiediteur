@@ -45,14 +45,15 @@ use LogicException;
 
 /**
  * Les derniers gestes de l'histoire semée, la veille du semis : une
- * demande d'inscription dont le lien n'a pas été suivi, les préférences
- * des graphiques de chaque écran (espace de la société,
- * panneau d'un magasin, espace du cabinet, page de l'expert-comptable
- * déclaré), les notifications que certains comptes ont lues (les autres
+ * demande d'inscription dont le lien n'a pas été suivi et les préférences
+ * des graphiques de chaque écran (espace de la société, panneau d'un
+ * magasin, espace du cabinet, page de l'expert-comptable déclaré), sur le
+ * poste seulement, les notifications que certains comptes ont lues (les autres
  * restent non lues dans leur cloche), et les téléchargements des
  * documents par période, en ZIP et en CSV, que la propriétaire de Maison
  * Ferrand a demandés, et l'état de ses charges, que cette propriétaire a
- * téléchargé en PDF et le collaborateur de son cabinet en Excel.
+ * téléchargé en PDF et le collaborateur de son cabinet en Excel, et la
+ * facture que la responsable du cabinet de conseil envoie par e-mail.
  */
 final class DerniersGestes
 {
@@ -65,9 +66,9 @@ final class DerniersGestes
     {
         if ($this->semis->surLePoste()) {
             $this->demanderUneInscription();
+            $this->choisirLesGraphiques();
         }
 
-        $this->choisirLesGraphiques();
         $this->lireDesNotifications();
 
         if ($this->semis->seme('commerce')) {
@@ -75,6 +76,28 @@ final class DerniersGestes
             $this->telechargerLEtatDesCharges();
             $this->laisserDesTachesEnFile();
         }
+
+        if ($this->semis->seme('services')) {
+            $this->envoyerUneFactureDuConseil();
+        }
+    }
+
+    /**
+     * La responsable du cabinet de conseil envoie par e-mail à la
+     * Boulangerie Martin sa dernière facture : dans le modèle « Services »
+     * du site de démonstration, elle paraît dans « E-mails qui seraient
+     * partis » de chaque copie neuve (lot DEMO-COPIE, F.4).
+     */
+    private function envoyerUneFactureDuConseil(): void
+    {
+        $conseil = new GestesDuMagasin($this->semis->magasin('conseil'));
+        $claire = $this->semis->compte('Claire Dubois');
+        $conseil->dans(function () use ($claire): EnvoiDocument {
+            $boulangerie = Client::query()->where('nom', 'Boulangerie Martin')->sole();
+            $facture = Facture::query()->where('client_id', $boulangerie->getKey())->whereNotNull('numero')->latest('id')->firstOrFail();
+
+            return app(EnvoyerDocumentAction::class)->handle($claire, $facture, 'boulangerie.martin@exemple.test', 'Bonjour, voici votre facture.', GestesDuMagasin::jeton());
+        });
     }
 
     /**
@@ -88,6 +111,13 @@ final class DerniersGestes
         DemandeInscription::enregistrer('proprietaire@cordonnerie-blanc.exemple.test', $siren, TypeDActivite::Services, app(RepertoireSirene::class)->unite($siren), $this->motsDePasse->nouveau());
     }
 
+    /**
+     * Les préférences de quelques comptes du poste. Jamais dans une base
+     * modèle : sur le site de démonstration, chaque compte du bandeau ouvre
+     * son tableau de bord avec toutes les cartes que son écran permet
+     * (précision de l'éditeur du 16/11/2026 vers 23 h 59), et une
+     * préférence enregistrée primerait sur ce défaut.
+     */
     private function choisirLesGraphiques(): void
     {
         $preferences = app(PreferencesDesGraphiques::class);

@@ -20,13 +20,21 @@ use SplFileInfo;
  * temporaires). Au-delà de DEMONSTRATION_FACTEUR_DE_PLACE fois la taille
  * de son modèle (base et dossier), la copie passe en lecture seule : la
  * consultation reste, chaque écriture est refusée avec MESSAGE ; revenue
- * sous la limite, elle se sert de nouveau. Une pièce déposée qui ferait
+ * sous la limite, elle se sert de nouveau. Chaque copie se mesure sous le
+ * verrou de sa ligne au registre, relue dans son état : une copie qu'une
+ * réfection, une migration ou une suppression vient de changer d'état
+ * n'est jamais remise « prête » par la mesure. Une pièce déposée qui ferait
  * dépasser la place est refusée avec le même message (voir
  * ControleDesFichiers), et la consultation reste toujours.
  */
 final class PlaceDesCopies
 {
     public const MESSAGE = 'Votre démonstration a atteint sa place. « Recommencer à zéro », dans votre compte, la libère.';
+
+    /**
+     * Les états des copies mesurées : servies, au-delà de leur place ou non.
+     */
+    private const ETATS_MESURES = [EtatDUneCopie::Prete->value, EtatDUneCopie::EnLectureSeule->value];
 
     private static bool $gestePermis = false;
 
@@ -118,20 +126,30 @@ final class PlaceDesCopies
         $resultat = ['mesurees' => 0, 'en_lecture_seule' => []];
         $modeles = Modele::on('demo_admin')->get()->keyBy('id');
 
-        foreach (Copie::on('demo_admin')->whereIn('etat', [EtatDUneCopie::Prete->value, EtatDUneCopie::EnLectureSeule->value])->orderBy('id')->get() as $copie) {
-            $modele = $modeles->get($copie->modele_id);
+        foreach (Copie::on('demo_admin')->whereIn('etat', self::ETATS_MESURES)->orderBy('id')->pluck('id') as $id) {
+            $etat = DB::connection('demo_admin')->transaction(function () use ($id, $modeles): ?EtatDUneCopie {
+                $copie = Copie::on('demo_admin')->whereKey($id)->whereIn('etat', self::ETATS_MESURES)->lockForUpdate()->first();
+                $modele = $copie === null ? null : $modeles->get($copie->modele_id);
 
-            if ($modele === null || $copie->nom_de_la_base === null) {
+                if ($copie === null || $modele === null || $copie->nom_de_la_base === null) {
+                    return null;
+                }
+
+                $taille = self::tailleDeLaBase($copie->nom_de_la_base) + self::tailleDuDossier(DossiersDeLaDemonstration::dUneCopie($copie->reference));
+                $etat = $taille > self::limiteDe($modele) ? EtatDUneCopie::EnLectureSeule : EtatDUneCopie::Prete;
+                $copie->forceFill(['taille_mesuree' => $taille, 'etat' => $etat])->save();
+
+                return $etat;
+            });
+
+            if ($etat === null) {
                 continue;
             }
 
-            $taille = self::tailleDeLaBase($copie->nom_de_la_base) + self::tailleDuDossier(DossiersDeLaDemonstration::dUneCopie($copie->reference));
-            $etat = $taille > self::limiteDe($modele) ? EtatDUneCopie::EnLectureSeule : EtatDUneCopie::Prete;
-            $copie->forceFill(['taille_mesuree' => $taille, 'etat' => $etat])->save();
             $resultat['mesurees']++;
 
             if ($etat === EtatDUneCopie::EnLectureSeule) {
-                $resultat['en_lecture_seule'][] = $copie->reference;
+                $resultat['en_lecture_seule'][] = (string) Copie::on('demo_admin')->whereKey($id)->value('reference');
             }
         }
 

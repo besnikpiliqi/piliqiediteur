@@ -64,7 +64,7 @@ class EnvoiDesLiensDesExpertsComptables
         $cabinet = $declaration->nomDuCabinetDeclare();
 
         try {
-            EnvoiImmediat::exiger("Le lien de {$compte->name}", fn () => Mail::to(ValeurRequise::de($compte->email, 'l\'adresse d\'un expert-comptable de la société'))->send(new LienDuMotDePasseDeLExpertComptableMail(
+            EnvoiImmediat::exiger("Le lien de {$compte->name}", fn () => app(TenantContext::class)->runAsSociete($societe, fn () => Mail::to(ValeurRequise::de($compte->email, 'l\'adresse d\'un expert-comptable de la société'))->send(new LienDuMotDePasseDeLExpertComptableMail(
                 route('experts-comptables.lien.afficher', ['jeton' => $jeton]),
                 $compte->name,
                 $societe->getFilamentName(),
@@ -73,7 +73,7 @@ class EnvoiDesLiensDesExpertsComptables
                 Calendrier::deParis()->afficher(ValeurRequise::de($attachement->jeton_expire_le, 'l\'échéance du lien'), 'd/m/Y à H:i'),
                 PermissionRegistry::libellesDe(app(TenantContext::class)->runAsSociete($societe, fn (): array => $declaration->autorisations())),
                 $accesRedonne ? $auteur->name : null,
-            )), 'Envoyez-lui un nouveau lien depuis sa fiche.');
+            ))), 'Envoyez-lui un nouveau lien depuis sa fiche.');
         } catch (CourrielNonParti $refus) {
             app(TenantContext::class)->runAsSociete($societe, fn () => DB::transaction(function () use ($attachement): void {
                 CompteExpertComptable::query()->whereKey($attachement->getKey())->lockForUpdate()->first()?->oublierLeLien();

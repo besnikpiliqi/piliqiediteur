@@ -2,6 +2,7 @@
 
 namespace App\Domain\Demonstration\Etat;
 
+use App\Console\Commands\SurveillerLaFileDAttente;
 use App\Domain\Demonstration\Construction\DossiersDeLaDemonstration;
 use App\Domain\Demonstration\Construction\MigrationDesCopies;
 use App\Domain\Demonstration\Construction\NettoyageDeLaDemonstration;
@@ -26,7 +27,8 @@ use SensitiveParameter;
  * modèle en service et la date de sa construction, le dernier échec d'une
  * construction ; le nombre de copies par état ; la place libre du disque ;
  * la version ; et la liste des problèmes, chacun une phrase (dont les
- * requêtes arrêtées par un nom de base hors du motif d'une copie). Aucune
+ * requêtes arrêtées par un nom de base hors du motif d'une copie, et les
+ * files du registre qui ne partent plus, voir SurveillerLaFileDAttente). Aucune
  * référence, aucune donnée d'une copie. Il est signé par la clé Ed25519 de
  * l'état du site de démonstration (DEMONSTRATION_ETAT_CLE_PRIVEE), dont
  * seul le site réel a la clé publique : le site de démonstration n'envoie
@@ -107,6 +109,12 @@ final class EtatDuSite
             $problemes[] = sprintf('%d copie(s) dont la vérification de nuit du registre fiscal a trouvé un défaut.', $verificationsEnDefaut);
         }
 
+        $fileArretee = Cache::store('registre')->get(SurveillerLaFileDAttente::CLE_DE_L_ETAT_PUBLIE);
+
+        foreach (is_array($fileArretee) ? $fileArretee : [] as $ligne) {
+            $problemes[] = 'La file d\'attente du site de démonstration ne part plus. '.$ligne;
+        }
+
         $refusDuNettoyage = NettoyageDeLaDemonstration::dernierRefus();
 
         if ($refusDuNettoyage !== null) {
@@ -179,12 +187,19 @@ final class EtatDuSite
     }
 
     /**
-     * La place libre du disque des copies, en pour cent.
+     * La place libre du disque des copies, en pour cent, mesurée sur le
+     * premier dossier qui existe en remontant de la racine des copies (un
+     * poste neuf ou une racine de production pas encore créée ne la
+     * trouvent pas encore).
      */
     public static function placeLibre(): int
     {
-        $dossier = DossiersDeLaDemonstration::racine();
-        $existant = is_dir($dossier) ? $dossier : dirname($dossier);
+        $existant = DossiersDeLaDemonstration::racine();
+
+        while (! is_dir($existant) && dirname($existant) !== $existant) {
+            $existant = dirname($existant);
+        }
+
         $total = disk_total_space($existant);
         $libre = disk_free_space($existant);
 

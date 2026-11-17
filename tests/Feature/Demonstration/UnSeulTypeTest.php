@@ -2,12 +2,17 @@
 
 namespace Tests\Feature\Demonstration;
 
+use App\Domain\Cabinets\Actions\InviterUneEntrepriseAction;
+use App\Domain\Cabinets\Enums\EtatInvitation;
+use App\Domain\Cabinets\Models\InvitationCabinet;
+use App\Domain\Demonstration\Models\CourrielDeLaDemonstration;
 use App\Domain\Demonstration\Registre\Models\Copie;
 use App\Domain\Demonstration\Visites\OuvertureDUneCopie;
 use App\Domain\Demonstration\Visites\TemoinsDesVisites;
 use App\Domain\Tenancy\Enums\RoleSociete;
 use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Societe;
+use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Tests\DemonstrationTestCase;
 
@@ -15,9 +20,9 @@ use Tests\DemonstrationTestCase;
  * Chaque société ne voit que la démonstration de son type (lot
  * DEMO-COPIE, choix 30, N27) : dans la copie de chaque type, « Choisissez
  * qui vous êtes », le bandeau « Vous êtes : » et son menu, la page « E-mails
- * qui seraient partis » et les pages d'attente ne nomment jamais un autre
- * type d'activité, ni la société d'une copie d'un autre type, ni une autre
- * démonstration. La carte et l'e-mail du lien, sur le site réel : voir
+ * qui seraient partis », les pages d'attente et la page du lien d'une
+ * invitation d'un cabinet ne nomment jamais un autre type d'activité, ni
+ * la société d'une copie d'un autre type, ni une autre démonstration. La carte et l'e-mail du lien, sur le site réel : voir
  * QuiDemandeTest et EnvoiDuLienTest.
  */
 class UnSeulTypeTest extends DemonstrationTestCase
@@ -56,6 +61,50 @@ class UnSeulTypeTest extends DemonstrationTestCase
                 $this->assertStringNotContainsString('autre démonstration', $texte, "La copie « {$type} » parle d'une autre démonstration sur {$page}.");
             }
         }
+    }
+
+    /**
+     * Dans la copie d'un cabinet, le lien d'une invitation capturée dans
+     * « E-mails qui seraient partis » mène à une page qui ne nomme aucun
+     * type d'activité ; ni l'acceptation ni le refus ne s'y font : aucune
+     * société ne se crée, personne ne se connecte, l'invitation reste
+     * ouverte (choix 27 et 30).
+     */
+    public function test_le_lien_d_une_invitation_du_cabinet_ne_nomme_aucun_type_et_n_ouvre_aucune_societe(): void
+    {
+        ['copie' => $copie, 'secret' => $secret] = $this->copieDeTest(TypeDActivite::Cabinet);
+        $motDePasse = (string) Copie::on('demo_admin')->whereKey($copie->id)->sole()->modele?->mot_de_passe;
+        $html = app(OuvertureDUneCopie::class)->pendant($copie, function () use ($motDePasse): string {
+            $cabinet = Societe::query()->where('type_activite', TypeDActivite::Cabinet->value)->sole();
+            app(InviterUneEntrepriseAction::class)->handle($cabinet->proprietaire()->firstOrFail(), $cabinet, '000000141', 'dirigeant@entreprise-invitee.exemple.test', $motDePasse);
+            app(TenantContext::class)->clear();
+
+            return (string) CourrielDeLaDemonstration::query()->withoutGlobalScopes()->where('destinataires', 'like', '%dirigeant@entreprise-invitee.exemple.test%')->sole()->html;
+        });
+        $this->assertSame(1, preg_match('#/invitation-cabinet/([A-Za-z0-9]{64})#', $html, $lien), 'L\'e-mail capturé porte le lien de l\'invitation.');
+        $adresse = '/invitation-cabinet/'.$lien[1];
+        $societesAvant = app(OuvertureDUneCopie::class)->pendant($copie, fn (): int => Societe::query()->count());
+        $temoin = $this->entrerParLeLien($secret);
+
+        $page = $this->withUnencryptedCookie(TemoinsDesVisites::nom(), $temoin)->get($adresse);
+        $page->assertOk()->assertSee('L\'entreprise invitée recevrait ce lien', false)->assertDontSee('<form', false);
+
+        foreach (TypeDActivite::cases() as $type) {
+            $page->assertDontSee($type->getLabel());
+        }
+
+        $this->withUnencryptedCookie(TemoinsDesVisites::nom(), $temoin)->post($adresse, [
+            'password' => 'Un-mot-de-passe-1', 'password_confirmation' => 'Un-mot-de-passe-1', 'type_activite' => TypeDActivite::Commerce->value, 'choix_definitif' => '1',
+        ])->assertForbidden()->assertDontSee(TypeDActivite::Commerce->getLabel());
+        $this->assertGuest();
+        $this->withUnencryptedCookie(TemoinsDesVisites::nom(), $temoin)->post($adresse.'/refus')->assertForbidden();
+
+        [$societesApres, $etat] = app(OuvertureDUneCopie::class)->pendant($copie, fn (): array => [
+            Societe::query()->count(),
+            InvitationCabinet::query()->withoutGlobalScopes()->where('siren', '000000141')->sole()->etat,
+        ]);
+        $this->assertSame($societesAvant, $societesApres, 'Aucune société ne se crée dans la copie du cabinet.');
+        $this->assertSame(EtatInvitation::Ouverte, $etat, 'L\'invitation reste ouverte.');
     }
 
     /**

@@ -13,6 +13,7 @@ use App\Domain\Demonstration\Messages\MessagesSignes;
 use App\Domain\Demonstration\Models\CompteDuBandeau;
 use App\Domain\Demonstration\Registre\Models\Copie;
 use App\Domain\Demonstration\Registre\Models\Modele;
+use App\Domain\Demonstration\Visites\RoleAuBandeau;
 use App\Domain\Demonstration\Visites\TemoinsDesVisites;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\TypeDActivite;
@@ -132,6 +133,7 @@ abstract class DemonstrationTestCase extends TestCase implements GereSesPropresB
             'demonstration.messages.cles_publiques' => ['tests' => base64_encode(self::$paireDesMessages['publique'])],
             'demonstration.origine_du_site_reel' => 'https://piliqi.test',
             'queue.connections.demonstration' => ['driver' => 'sync'],
+            'queue.connections.demonstration-rattrapages' => ['driver' => 'sync'],
         ]);
 
         return $app;
@@ -215,10 +217,16 @@ abstract class DemonstrationTestCase extends TestCase implements GereSesPropresB
         $ordre = 0;
 
         User::query()->update(['password' => bcrypt($motDePasse)]);
-        app(TenantContext::class)->runAsSociete($societe, function () use ($bandeau, &$ordre): void {
+        app(TenantContext::class)->runAsSociete($societe, function () use ($bandeau, $societe, &$ordre): void {
             foreach ($bandeau as $groupe => $comptes) {
                 foreach ($comptes as [$compte, $libelle]) {
-                    CompteDuBandeau::query()->create(['user_id' => $compte->getKey(), 'libelle_du_role' => $libelle, 'groupe' => $groupe, 'ordre' => ++$ordre]);
+                    CompteDuBandeau::query()->create([
+                        'user_id' => $compte->getKey(),
+                        'libelle_du_role' => $libelle,
+                        'role' => RoleAuBandeau::de($compte->load('affectations.magasin'), $societe->estUnCabinet())->cle,
+                        'groupe' => $groupe,
+                        'ordre' => ++$ordre,
+                    ]);
                 }
             }
         });

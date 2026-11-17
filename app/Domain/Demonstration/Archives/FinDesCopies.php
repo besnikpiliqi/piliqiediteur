@@ -13,6 +13,7 @@ use App\Domain\Demonstration\Registre\Models\Copie;
 use App\Domain\Demonstration\Registre\Models\Lien;
 use App\Domain\Demonstration\Registre\Models\Temoin;
 use App\Domain\Demonstration\SiteDePiliqi;
+use App\Domain\Demonstration\Taches\TravauxDesCopies;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\DB;
@@ -32,11 +33,14 @@ use InvalidArgumentException;
  *   production, E.4 ; migration ratée, E.5 ; copie perdue, E.7) :
  *   « à refaire », archive quand la base existe, base supprimée, nouvelle
  *   copie du modèle du jour sous un nouveau nom, avec la même référence,
- *   le même lien et la même fin (choix 11) ; le compte choisi en dernier
- *   de chaque témoin est effacé (la visite suivante choisit de nouveau, et
- *   l'identifiant d'un compte de l'ancienne base ne désigne jamais une
- *   autre personne de la nouvelle), et la copie porte le message de son
- *   motif, montré une fois à chaque témoin. Une visite pendant ce temps
+ *   le même lien et la même fin (choix 11) ; les travaux envoyés depuis
+ *   l'ancienne base sont effacés des files (et un travail qui y reviendrait
+ *   est abandonné, sa base n'étant plus celle de la copie, voir
+ *   TravauxDesCopies), le compte choisi en dernier de chaque témoin est
+ *   effacé (la visite suivante choisit de nouveau : l'identifiant d'un
+ *   compte ou d'une fiche de l'ancienne base ne désigne jamais une autre
+ *   personne ni une autre fiche de la nouvelle), et la copie porte le
+ *   message de son motif, montré une fois à chaque témoin. Une visite pendant ce temps
  *   voit « Votre démonstration se prépare ».
  *
  * Une archive qui échoue arrête tout : la base reste, la cause s'écrit au
@@ -125,6 +129,11 @@ final class FinDesCopies
         }
 
         $this->effacerLaBase($copie);
+
+        foreach (['jobs', 'failed_jobs'] as $table) {
+            DB::connection('demo_admin')->table($table)->where('payload', 'like', TravauxDesCopies::motifDesTravaux($copie->reference))->delete();
+        }
+
         $maintenant = CarbonImmutable::now();
         DB::connection('demo_admin')->transaction(function () use ($copie, $motif, $maintenant): void {
             Temoin::on('demo_admin')->where('copie_id', $copie->id)->update(['compte_choisi' => null]);

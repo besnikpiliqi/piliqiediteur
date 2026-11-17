@@ -7,6 +7,7 @@ use App\Domain\Demonstration\Enums\EtatDUneCopie;
 use App\Domain\Demonstration\Etat\EtatDuSite;
 use App\Domain\Demonstration\Exceptions\NomDeBaseHorsDuMotif;
 use App\Domain\Demonstration\Jobs\RattraperLesTachesDUneCopie;
+use App\Domain\Demonstration\Jobs\RefaireUneCopie;
 use App\Domain\Demonstration\SiteDePiliqi;
 use App\Domain\Demonstration\Taches\TachesDesCopies;
 use App\Domain\Demonstration\Visites\OuvertureDUneCopie;
@@ -16,7 +17,9 @@ use App\Http\Controllers\Demonstration\EntrerDansLaDemonstrationController;
 use App\Http\Controllers\Demonstration\Redirection;
 use Carbon\CarbonImmutable;
 use Closure;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
@@ -30,12 +33,19 @@ use Symfony\Component\HttpFoundation\Response;
  * répondent les adresses d'entrée et les adresses internes, qui ne lisent
  * que le registre ; tout le reste répond la page introuvable, sans dire
  * qu'une démonstration existe. Une copie qui ne se sert pas encore montre
- * sa page d'attente, jamais une erreur technique. Une copie restée plus
- * d'une heure sans passe de ses tâches (C.13) demande leur rattrapage et
- * montre « Nous mettons votre démonstration à l'heure » jusqu'à sa fin. Un
+ * sa page d'attente, jamais une erreur technique. Une copie qu'aucune
+ * passe de l'heure n'a faite (C.13) demande le rattrapage de ses tâches et
+ * montre « Nous mettons votre démonstration à l'heure » jusqu'à sa fin ;
+ * une requête Livewire, un geste en cours sur une page déjà ouverte,
+ * passe sans attendre (Livewire montrerait la page d'attente comme une
+ * erreur), et la page suivante attend la fin du rattrapage. Un
  * nom de base hors du
  * motif d'une copie, lu au registre (C.6.6), arrête la requête avec la page
- * « démonstration indisponible » et paraît dans l'état publié (C.19). La
+ * « démonstration indisponible » et paraît dans l'état publié (C.19). Une
+ * copie dont la base n'existe plus (copie perdue, E.7) demande une seule
+ * fois sa réfection depuis le modèle et montre « Votre démonstration se
+ * prépare », jamais une erreur technique ; la visite suivante, une fois la
+ * copie refaite, lit le message de son motif. La
  * visite de la requête se lit ensuite par Visite::enCours() (le bandeau
  * « Vous êtes : », « Choisissez qui vous êtes »). Sur le site réel, il ne
  * fait rien.
@@ -99,27 +109,45 @@ final class OuvrirLaCopie
             return Redirection::vers(EntrerDansLaDemonstrationController::CHEMIN_DU_CHOIX);
         }
 
-        if (! TachesDesCopies::estALHeure($copie, CarbonImmutable::now())) {
-            RattraperLesTachesDUneCopie::demander($copie->reference);
-            $copie->refresh();
-
-            if (! TachesDesCopies::estALHeure($copie, CarbonImmutable::now())) {
-                return self::attente('a_l_heure', 503);
-            }
-        }
-
         try {
-            $this->ouverture->ouvrir($copie);
+            $this->ouverture->ouvrirJusquA($copie);
         } catch (NomDeBaseHorsDuMotif) {
             EtatDuSite::signalerUnNomHorsDuMotif();
 
             return self::attente('indisponible', 503);
+        } catch (QueryException $erreur) {
+            if (! self::baseAbsente((string) $copie->nom_de_la_base)) {
+                throw $erreur;
+            }
+
+            RefaireUneCopie::demanderPourUneCopiePerdue($copie->reference);
+
+            return self::attente('se_prepare', 503);
+        }
+
+        if (! TachesDesCopies::estALHeure($copie, CarbonImmutable::now())) {
+            RattraperLesTachesDUneCopie::demander($copie->reference);
+            $copie->refresh();
+
+            if (! TachesDesCopies::estALHeure($copie, CarbonImmutable::now()) && ! $request->hasHeader('X-Livewire')) {
+                return self::attente('a_l_heure', 503);
+            }
         }
 
         $this->temoins->voir($visite->temoin);
         app()->instance(Visite::class, $visite);
 
         return $next($request);
+    }
+
+    /**
+     * La base de la copie n'existe plus sur le serveur (une copie perdue,
+     * E.7) : lu au catalogue de PostgreSQL par la connexion du registre,
+     * que le rôle des pages a le droit de lire.
+     */
+    private static function baseAbsente(string $base): bool
+    {
+        return $base !== '' && ! DB::connection('registre')->table('pg_database')->where('datname', $base)->exists();
     }
 
     /**

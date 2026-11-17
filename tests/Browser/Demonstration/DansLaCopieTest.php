@@ -3,6 +3,7 @@
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Cabinets\Actions\ChoisirLeMotDePasseDeLExpertComptableAction;
 use App\Domain\Cabinets\Actions\DeclarerSonExpertComptableAction;
+use App\Domain\Cabinets\Actions\InviterUneEntrepriseAction;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Charges\Actions\DeposerUneChargeAction;
 use App\Domain\Charges\Enums\EtatDeLaCharge;
@@ -276,4 +277,30 @@ test('le propriétaire ferme un magasin avec le mot de passe de démonstration, 
         ->voir('Vous avez quitté la démonstration');
 
     expect(Temoin::on('demo_admin')->where('copie_id', $copie->id)->whereNull('retire_le')->exists())->toBeFalse();
+});
+
+test('dans la copie d’un cabinet, le lien d’une invitation ne crée aucune société et « Revenir à la démonstration » ramène au choix des comptes', function () {
+    ['copie' => $copie, 'secret' => $secret] = $this->copieDeTest(TypeDActivite::Cabinet);
+    $motDePasse = (string) Copie::on('demo_admin')->whereKey($copie->id)->sole()->modele?->mot_de_passe;
+    [$lien, $societes] = $this->dansLaCopie($copie, function () use ($motDePasse): array {
+        $cabinet = Societe::query()->where('type_activite', TypeDActivite::Cabinet->value)->sole();
+        app(InviterUneEntrepriseAction::class)->handle($cabinet->proprietaire()->firstOrFail(), $cabinet, '000000141', 'dirigeant@entreprise-invitee.exemple.test', $motDePasse);
+        app(TenantContext::class)->clear();
+        $html = (string) CourrielDeLaDemonstration::query()->withoutGlobalScopes()->where('destinataires', 'like', '%dirigeant@entreprise-invitee.exemple.test%')->sole()->html;
+        preg_match('#/invitation-cabinet/[A-Za-z0-9]{64}#', $html, $lien);
+
+        return [$lien[0] ?? '', Societe::query()->count()];
+    });
+    expect($lien)->not->toBe('');
+
+    $onglet = $this->suivreLeLien($secret)
+        ->voir('Choisissez qui vous êtes')
+        ->aller($lien)
+        ->voir("L'entreprise invitée recevrait ce lien")
+        ->nePasVoir('Commerce ou atelier')
+        ->cliquerSurLeLien('Revenir à la démonstration')
+        ->voir('Choisissez qui vous êtes');
+
+    expect($onglet->chemin())->toBe('/choisir')
+        ->and($this->dansLaCopie($copie, fn (): int => Societe::query()->count()))->toBe($societes);
 });

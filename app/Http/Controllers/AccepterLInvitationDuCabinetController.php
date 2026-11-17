@@ -7,6 +7,7 @@ use App\Domain\Cabinets\Actions\AccepterLInvitationAction;
 use App\Domain\Cabinets\Actions\RefuserLInvitationAction;
 use App\Domain\Cabinets\Exceptions\InvitationInvalideException;
 use App\Domain\Cabinets\Models\InvitationCabinet;
+use App\Domain\Demonstration\SiteDePiliqi;
 use App\Domain\Tenancy\Enums\ResultatVerification;
 use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Societe;
@@ -15,6 +16,7 @@ use App\Domain\Tenancy\Services\SuiviDesConnexions;
 use App\Domain\Tenancy\Support\AvertissementsDuCodeDActivite;
 use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Filament\EspaceDeLaSociete;
+use App\Http\Controllers\Demonstration\EntrerDansLaDemonstrationController;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -44,7 +46,9 @@ use LogicException;
  * Une invitation absente, close ou périmée donne une page neutre ; une
  * entreprise cessée ou inconnue au répertoire, ou un répertoire qui ne
  * répond pas, une page sans formulaire. Les pages ne transmettent pas leur
- * adresse aux liens qui en partent (Referrer-Policy: no-referrer).
+ * adresse aux liens qui en partent (Referrer-Policy: no-referrer). Sur le
+ * site de démonstration, le lien ne fait que dire ce que l'entreprise
+ * invitée en ferait (voir dansLaDemonstration()).
  */
 class AccepterLInvitationDuCabinetController
 {
@@ -56,11 +60,19 @@ class AccepterLInvitationDuCabinetController
 
     public function afficher(string $jeton): Response
     {
+        if (SiteDePiliqi::estLaDemonstration()) {
+            return $this->dansLaDemonstration($jeton, 200);
+        }
+
         return $this->page($jeton, InvitationCabinet::parSonJeton($jeton), null, [], null);
     }
 
     public function accepter(Request $requete, string $jeton, AccepterLInvitationAction $accepter, SuiviDesConnexions $suivi): Response|RedirectResponse
     {
+        if (SiteDePiliqi::estLaDemonstration()) {
+            return $this->dansLaDemonstration($jeton, 403);
+        }
+
         $type = TypeDActivite::tryFrom(ValeurSimple::enTexte($requete->input('type_activite')));
 
         try {
@@ -88,6 +100,10 @@ class AccepterLInvitationDuCabinetController
 
     public function refuser(string $jeton, RefuserLInvitationAction $refuser): Response
     {
+        if (SiteDePiliqi::estLaDemonstration()) {
+            return $this->dansLaDemonstration($jeton, 403);
+        }
+
         try {
             $refuser->handle($jeton);
         } catch (InvitationInvalideException) {
@@ -136,6 +152,32 @@ class AccepterLInvitationDuCabinetController
             'action' => route('cabinets.invitation.accepter', ['jeton' => $jeton]),
             'actionDuRefus' => route('cabinets.invitation.refuser', ['jeton' => $jeton]),
         ], $motif === null ? 200 : 422)->header('Referrer-Policy', 'no-referrer');
+    }
+
+    /**
+     * Sur le site de démonstration, dans la copie d'un cabinet (lot
+     * DEMO-COPIE, choix 27 et 30) : le lien d'une invitation capturée dans
+     * « E-mails qui seraient partis » mène à une page qui dit ce que
+     * l'entreprise invitée en ferait, sans formulaire ni aucun type
+     * d'activité ; ni l'acceptation ni le refus ne s'y font, aucune société
+     * ne se crée et personne ne se connecte : l'invitation reste ouverte
+     * dans l'espace du cabinet.
+     */
+    private function dansLaDemonstration(string $jeton, int $statut): Response
+    {
+        $invitation = InvitationCabinet::parSonJeton($jeton);
+
+        if ($invitation === null || ! $invitation->estOuverte()) {
+            return $this->invalide();
+        }
+
+        $cabinet = Societe::query()->whereKey($invitation->societe_id)->firstOrFail(['id', 'raison_sociale', 'siren']);
+
+        return response()->view('demonstration.invitation-du-cabinet', [
+            'cabinet' => $cabinet->getFilamentName(),
+            'siren' => (string) $invitation->siren,
+            'choix' => EntrerDansLaDemonstrationController::CHEMIN_DU_CHOIX,
+        ], $statut)->header('Referrer-Policy', 'no-referrer');
     }
 
     private function invalide(): Response

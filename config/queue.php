@@ -38,8 +38,12 @@ return [
          | travaux par le rôle demo_app (files demonstration-admin, default
          | et telechargements) ; « demonstration-admin » est lue par le seul
          | travailleur du rôle demo_admin, qui crée, refait, archive et
-         | supprime les copies. Un travail ne part qu'après la validation de
-         | la transaction qui l'envoie (after_commit).
+         | supprime les copies ; « demonstration-rattrapages » porte le
+         | rattrapage des tâches d'une copie restée sans passe (jusqu'à dix
+         | minutes), lu par le travailleur des copies avant la file default,
+         | pour qu'il ne retarde jamais la création d'une copie. Un travail ne
+         | part qu'après la validation de la transaction qui l'envoie
+         | (after_commit).
          */
         ...(env('PILIQI_SITE') !== 'demonstration' ? [] : [
             'demonstration' => [
@@ -58,6 +62,14 @@ return [
                 'retry_after' => 1900,
                 'after_commit' => true,
             ],
+            'demonstration-rattrapages' => [
+                'driver' => 'database',
+                'connection' => 'registre',
+                'table' => 'jobs',
+                'queue' => 'demonstration-rattrapages',
+                'retry_after' => 700,
+                'after_commit' => true,
+            ],
         ]),
 
         'sync' => [
@@ -67,14 +79,18 @@ return [
         // Sur le site de démonstration, les files sont dans le registre,
         // jamais dans la base d'une copie ni dans la base sentinelle : un
         // travail envoyé depuis une copie y emporte sa référence et s'y
-        // exécute (lot DEMO-COPIE, C.13, voir TravauxDesCopies).
+        // exécute (lot DEMO-COPIE, C.13, voir TravauxDesCopies). Le
+        // registre étant une autre base que la copie, l'annulation de la
+        // transaction de la copie n'efface plus d'elle-même un travail
+        // envoyé : il ne part qu'après sa validation (after_commit), comme
+        // ceux de la file « telechargements ».
         'database' => [
             'driver' => 'database',
             'connection' => env('PILIQI_SITE') === 'demonstration' ? 'registre' : env('DB_QUEUE_CONNECTION'),
             'table' => env('DB_QUEUE_TABLE', 'jobs'),
             'queue' => env('DB_QUEUE', 'default'),
             'retry_after' => (int) env('DB_QUEUE_RETRY_AFTER', 90),
-            'after_commit' => false,
+            'after_commit' => env('PILIQI_SITE') === 'demonstration',
         ],
 
         // La préparation des téléchargements des documents par période (voir
@@ -93,7 +109,7 @@ return [
             'table' => env('DB_QUEUE_TABLE', 'jobs'),
             'queue' => 'telechargements',
             'retry_after' => 1900,
-            'after_commit' => false,
+            'after_commit' => env('PILIQI_SITE') === 'demonstration',
         ],
 
         'beanstalkd' => [
@@ -154,8 +170,12 @@ return [
     |
     */
 
+    // Sur le site de démonstration, les lots et les travaux échoués sont
+    // au registre, avec les files : jamais dans la base d'une copie ni dans
+    // la base sentinelle, qui n'a aucune table (lot DEMO-COPIE, C.13 et
+    // C.17 ; leurs lignes d'une copie s'effacent avec elle).
     'batching' => [
-        'database' => env('DB_CONNECTION', 'pgsql'),
+        'database' => env('PILIQI_SITE') === 'demonstration' ? 'registre' : env('DB_CONNECTION', 'pgsql'),
         'table' => 'job_batches',
     ],
 
@@ -174,7 +194,7 @@ return [
 
     'failed' => [
         'driver' => env('QUEUE_FAILED_DRIVER', 'database-uuids'),
-        'database' => env('DB_CONNECTION', 'pgsql'),
+        'database' => env('PILIQI_SITE') === 'demonstration' ? 'registre' : env('DB_CONNECTION', 'pgsql'),
         'table' => 'failed_jobs',
     ],
 

@@ -16,7 +16,9 @@ use App\Domain\Demonstration\Services\BoiteDEnvoi;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\CleDuModele;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
+use LogicException;
 
 /**
  * Les démonstrations des sociétés du semis (lot DEMO-COPIE, F.7), par les
@@ -45,9 +47,18 @@ use Illuminate\Support\Facades\DB;
  *  - MAISON FERRAND : prête, lien renouvelé avec son accusé (« Ancien lien
  *    coupé le … »), ouverte par le bouton, un message « etat » ;
  *  - CONSEIL VASSEUR : prête, remise à zéro ;
- *  - MARTIN EXPERTISE COMPTABLE : prête, de type « Cabinet » ;
+ *  - MARTIN EXPERTISE COMPTABLE : prête, de type « Cabinet », son lien
+ *    renouvelé pendant une mise à jour du site de démonstration, sans
+ *    accusé : « La démonstration n'a pas encore reçu le renouvellement… » ;
+ *  - BOULANGERIE DUVAL, de plus : son lien renouvelé pendant une panne du
+ *    serveur d'envoi, accusé, mais son e-mail parti en échec après ses
+ *    trois tentatives : avis « Le lien de votre démonstration n'a pas pu
+ *    partir par e-mail… » ;
  *  - CABINET ROUSSEL (non vérifié) : en échec, deuxième essai ;
  *  - FROMAGERIE MORIN (attend son code) : en préparation ;
+ *  - FLEURS DE SAISON (attend son code) : prête avant la validation,
+ *    demandée le dernier jour, après son inscription
+ *    (creerAvantLaValidation()) ;
  *  - GROUPE NORD DISTRIBUTION : en attente d'une place ;
  *  - ATELIER BRUN : demandée, son message « creer » en reprise après deux
  *    tentatives (« La démonstration ne répond pas (délai dépassé). »).
@@ -95,6 +106,16 @@ final class DemonstrationsDesSocietes
         };
     }
 
+    /**
+     * La copie de FLEURS DE SAISON, qui attend encore son code, demandée le
+     * dernier jour de l'histoire, après son inscription : prête avant la
+     * validation de la société.
+     */
+    public function creerAvantLaValidation(): void
+    {
+        $this->creer(SemisComplet::JOURS - 1, '09:30', 'inscription');
+    }
+
     private function veilleDeLaFin(int $rang): void
     {
         $this->creer($rang, '22:00', 'commerce');
@@ -105,7 +126,7 @@ final class DemonstrationsDesSocietes
     private function avantDernierJour(int $rang): void
     {
         $this->alHeure($rang, '22:00');
-        $this->semis->horsDeToutContexte(fn () => app(RenouvelerLeLienDeLaDemonstrationAction::class)->handle($this->semis->proprietaire('commerce'), $this->semis->motDePasseDuProprietaire('commerce'), null));
+        $this->renouveler('commerce');
         $this->creer($rang, '22:30', 'cabinet');
     }
 
@@ -129,6 +150,76 @@ final class DemonstrationsDesSocietes
         $atelier = $this->demonstrationDe('atelier');
         EnvoyerLesMessagesALaDemonstration::dispatch(CleDuModele::de($atelier), (int) $atelier->societe_id);
         $this->site->repondre(200, ['etat' => 'prete']);
+
+        $this->renouvelerSansAccuse($rang, '23:10', 'cabinet');
+        $this->renouvelerPendantUnePanneDeLEnvoi($rang, ['23:15', '23:16', '23:19'], 'boulangerie');
+    }
+
+    /**
+     * Le lien renouvelé pendant une mise à jour du site de démonstration
+     * (réponse 409) : le message reste sans accusé, et la carte du
+     * propriétaire dit, passé un quart d'heure, que l'ancien lien marche
+     * peut-être encore (CarteDeLaDemonstration::PHRASE_COUPURE_EN_RETARD).
+     */
+    private function renouvelerSansAccuse(int $rang, string $heure, string $societe): void
+    {
+        $this->alHeure($rang, $heure);
+        $this->site->repondre(409, []);
+
+        try {
+            $this->renouveler($societe);
+        } finally {
+            $this->site->repondre(200, ['etat' => 'prete']);
+        }
+    }
+
+    /**
+     * Le lien renouvelé pendant une panne du serveur d'envoi : le site de
+     * démonstration accuse le renouvellement, mais l'e-mail du lien échoue
+     * à ses trois tentatives (aussitôt, 30 secondes puis 2 minutes après),
+     * passées par le travailleur de la file à l'heure du semis ; le
+     * propriétaire en reçoit l'avis (EnvoyerLeLienDeLaDemonstration::MESSAGE_NON_PARTI).
+     *
+     * @param  list<string>  $tentatives  l'heure de chaque passage du travailleur
+     */
+    private function renouvelerPendantUnePanneDeLEnvoi(int $rang, array $tentatives, string $societe): void
+    {
+        $this->alHeure($rang, $tentatives[0]);
+        FileDAttenteDuSemis::plusTard(fn () => $this->renouveler($societe));
+
+        ServeurDEnvoiEnPanne::pendant(function () use ($rang, $tentatives): void {
+            foreach ($tentatives as $heure) {
+                $this->alHeure($rang, $heure);
+                $this->passerLaFileDeLaDemonstration();
+            }
+        });
+    }
+
+    private function renouveler(string $societe): void
+    {
+        $this->semis->horsDeToutContexte(fn () => app(RenouvelerLeLienDeLaDemonstrationAction::class)->handle($this->semis->proprietaire($societe), $this->semis->motDePasseDuProprietaire($societe), null));
+    }
+
+    /**
+     * Des passages du travailleur sur la file des travaux de la
+     * démonstration du site réel, tant qu'un travail y est dû à l'heure du
+     * semis.
+     *
+     * @throws LogicException quand le travailleur s'arrête en erreur
+     */
+    private function passerLaFileDeLaDemonstration(): void
+    {
+        $dus = static fn (): bool => DB::table('jobs')
+            ->where('queue', EnvoyerLesMessagesALaDemonstration::FILE)
+            ->whereNull('reserved_at')
+            ->where('available_at', '<=', now()->getTimestamp())
+            ->exists();
+
+        while ($dus()) {
+            if (Artisan::call('queue:work', ['connection' => FileDAttenteDuSemis::BASE, '--queue' => EnvoyerLesMessagesALaDemonstration::FILE, '--once' => true, '--sleep' => 0]) !== 0) {
+                throw new LogicException('Le travailleur de la file de la démonstration s\'est arrêté en erreur : '.trim(Artisan::output()));
+            }
+        }
     }
 
     private function troisiemeEchecDuStudio(int $rang): void

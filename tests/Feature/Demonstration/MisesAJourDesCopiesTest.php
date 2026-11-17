@@ -2,6 +2,9 @@
 
 namespace Tests\Feature\Demonstration;
 
+use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
+use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
+use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\Demonstration\Archives\FinDesCopies;
 use App\Domain\Demonstration\Bases\BasesDeLaDemonstration;
 use App\Domain\Demonstration\Bases\EmpreinteDuSchema;
@@ -9,6 +12,7 @@ use App\Domain\Demonstration\Construction\DossiersDeLaDemonstration;
 use App\Domain\Demonstration\Construction\MigrationDesCopies;
 use App\Domain\Demonstration\Enums\EtatDUneCopie;
 use App\Domain\Demonstration\Etat\EtatDuSite;
+use App\Domain\Demonstration\Jobs\RefaireUneCopie;
 use App\Domain\Demonstration\Registre\Models\Archive;
 use App\Domain\Demonstration\Registre\Models\Copie;
 use App\Domain\Demonstration\Registre\Models\Lien;
@@ -17,6 +21,7 @@ use App\Domain\Demonstration\Registre\Models\Temoin;
 use App\Domain\Demonstration\Visites\OuvertureDUneCopie;
 use App\Domain\Demonstration\Visites\TemoinsDesVisites;
 use App\Domain\Tenancy\Enums\TypeDActivite;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
@@ -111,6 +116,19 @@ class MisesAJourDesCopiesTest extends DemonstrationTestCase
         $this->assertSame(FinDesCopies::MOTIF_MIGRATION_REUSSIE, $migree->motif_du_message);
         $this->assertStringContainsString('vos essais sont gardés', (string) $migree->message);
         $this->assertSame(0, Archive::on('demo_admin')->where('reference', $migree->reference)->count(), 'L\'archive d\'avant une migration réussie est effacée.');
+        $evenements = app(OuvertureDUneCopie::class)->pendant($migree, fn (): array => EnregistrementFiscal::query()->withoutGlobalScopes()
+            ->where('chaine', ChaineFiscale::Evenement->value)
+            ->whereIn('type', [(string) CodeEvenement::EntreeEnModeDemonstration->value, (string) CodeEvenement::SortieDuModeDemonstration->value])
+            ->orderBy('magasin_id')->orderBy('sequence')
+            ->get(['magasin_id', 'type'])
+            ->groupBy('magasin_id')
+            ->map(fn ($lignes): array => $lignes->pluck('type')->map(fn (mixed $type): string => (string) $type)->all())
+            ->values()->all());
+        $this->assertNotSame([], $evenements);
+
+        foreach ($evenements as $suite) {
+            $this->assertSame(['100', '105', '100'], $suite, 'La copie migrée et resservie rentre dans le mode d\'entraînement : aucune vente ne suit la sortie (JET 105) de l\'archive d\'avant la migration sans nouvelle entrée (JET 100).');
+        }
 
         $refaite = Copie::on('demo_admin')->whereKey($ratee->id)->sole();
         $this->assertSame(EtatDUneCopie::Prete, $refaite->etat, 'La copie dont la migration échoue est refaite depuis le nouveau modèle.');
@@ -139,6 +157,50 @@ class MisesAJourDesCopiesTest extends DemonstrationTestCase
         $this->withUnencryptedCookie(TemoinsDesVisites::nom(), $temoin)->get('/choisir')
             ->assertStatus(503)
             ->assertSee('Mise à jour en cours, une minute');
+    }
+
+    public function test_une_copie_dont_la_base_a_disparu_est_refaite_a_la_visite_suivante_sans_erreur_technique(): void
+    {
+        $this->travelTo(self::aParis('2026-11-20 10:00:00'));
+        ['copie' => $copie, 'secret' => $secret] = $this->copieDeTest(TypeDActivite::Services);
+        $temoin = $this->entrerParLeLien($secret);
+        $lien = Lien::on('demo_admin')->where('copie_id', $copie->id)->whereNull('retire_le')->sole();
+        app(BasesDeLaDemonstration::class)->supprimer((string) $copie->nom_de_la_base);
+
+        $this->withUnencryptedCookie(TemoinsDesVisites::nom(), $temoin)->get('/choisir')
+            ->assertStatus(503)
+            ->assertSee('Votre démonstration se prépare');
+
+        $refaite = Copie::on('demo_admin')->whereKey($copie->id)->sole();
+        $this->assertSame(EtatDUneCopie::Prete, $refaite->etat, 'La copie perdue est refaite depuis le modèle (E.7), par le travail que la visite a demandé.');
+        $this->assertSame($copie->reference, $refaite->reference);
+        $this->assertNotSame($copie->nom_de_la_base, $refaite->nom_de_la_base);
+        $this->assertTrue(app(BasesDeLaDemonstration::class)->existe((string) $refaite->nom_de_la_base));
+        $this->assertSame($lien->id, Lien::on('demo_admin')->where('copie_id', $copie->id)->whereNull('retire_le')->sole()->id, 'Même lien.');
+        $this->assertSame($copie->fin->getTimestamp(), $refaite->fin->getTimestamp(), 'Même fin.');
+        $this->assertSame(FinDesCopies::MOTIF_PERDUE, $refaite->motif_du_message);
+        $this->assertSame(0, Archive::on('demo_admin')->where('reference', $copie->reference)->count(), 'Sans base, il n\'y a rien à archiver.');
+
+        $message = 'Votre démonstration a dû être refaite le 20/11/2026 ; votre lien reste le même.';
+        $this->withUnencryptedCookie(TemoinsDesVisites::nom(), $temoin)->get('/choisir')->assertOk()->assertSee($message, false);
+    }
+
+    public function test_une_copie_perdue_ne_demande_sa_refection_qu_une_fois_tant_qu_elle_n_est_pas_finie(): void
+    {
+        ['copie' => $copie, 'secret' => $secret] = $this->copieDeTest(TypeDActivite::Services);
+        $temoin = $this->entrerParLeLien($secret);
+        app(BasesDeLaDemonstration::class)->supprimer((string) $copie->nom_de_la_base);
+        Bus::fake([RefaireUneCopie::class]);
+
+        foreach ([1, 2] as $visite) {
+            $this->withUnencryptedCookie(TemoinsDesVisites::nom(), $temoin)->get('/choisir')
+                ->assertStatus(503)
+                ->assertSee('Votre démonstration se prépare');
+        }
+
+        Bus::assertDispatchedTimes(RefaireUneCopie::class, 1);
+        Bus::assertDispatched(RefaireUneCopie::class, fn (RefaireUneCopie $travail): bool => $travail->reference === $copie->reference && $travail->motif === FinDesCopies::MOTIF_PERDUE);
+        Cache::store('registre')->forget(RefaireUneCopie::CLE_DE_LA_COPIE_PERDUE.$copie->reference);
     }
 
     /**

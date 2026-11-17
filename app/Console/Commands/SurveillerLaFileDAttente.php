@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Domain\Demonstration\SiteDePiliqi;
 use App\Domain\Tenancy\Services\AlerteEditeur;
 use App\Domain\Tenancy\Support\ValeursLues;
 use Illuminate\Console\Attributes\Description;
@@ -31,7 +32,10 @@ use Illuminate\Support\Facades\Log;
  * Tant que l'incident dure, chaque passage l'écrit au journal de
  * l'application au niveau critique ; l'éditeur n'en reçoit qu'une alerte
  * (voir AlerteEditeur), la première fois, et une nouvelle seulement après
- * un passage où la file est repartie.
+ * un passage où la file est repartie. Sur le site de démonstration, qui
+ * n'envoie aucun e-mail, l'incident passe par l'état publié (lot
+ * DEMO-COPIE, C.19), que le site réel lit chaque heure et transforme en
+ * alerte à l'éditeur.
  */
 #[Signature('app:surveiller-la-file-d-attente')]
 #[Description('Prévient l\'éditeur quand des tâches de la file d\'attente ne partent plus')]
@@ -46,12 +50,28 @@ class SurveillerLaFileDAttente extends Command
 
     public const CLE_DE_L_INCIDENT = 'file-d-attente:incident-signale';
 
+    /**
+     * Sur le site de démonstration, qui n'envoie aucun e-mail : l'incident
+     * en cours, ligne par ligne, dans le cache du registre, que l'état
+     * publié reprend (voir EtatDuSite), et que le site réel transforme en
+     * alerte à l'éditeur. Il s'efface au premier passage où les files
+     * repartent, ou de lui-même si la surveillance s'arrête.
+     */
+    public const CLE_DE_L_ETAT_PUBLIE = 'demonstration:file-d-attente-arretee';
+
+    public const DUREE_DANS_L_ETAT_PUBLIE = 1800;
+
     public function handle(AlerteEditeur $alerteEditeur): int
     {
         $retards = $this->retards();
 
         if ($retards === []) {
             Cache::forget(self::CLE_DE_L_INCIDENT);
+
+            if (SiteDePiliqi::estLaDemonstration()) {
+                Cache::store('registre')->forget(self::CLE_DE_L_ETAT_PUBLIE);
+            }
+
             $this->info('La file d\'attente part normalement.');
 
             return self::SUCCESS;
@@ -60,7 +80,9 @@ class SurveillerLaFileDAttente extends Command
         $lignes = array_map(static fn (array $retard): string => "File « {$retard['file']} » : {$retard['en_attente']} tâche(s) disponible(s) depuis plus de 2 minutes, que personne ne prend, et {$retard['reservees']} tâche(s) réservée(s) depuis plus de {$retard['retry_after']} secondes, laissée(s) par un travailleur arrêté.", $retards);
         Log::critical('La file d\'attente ne part plus : '.implode(' ', $lignes));
 
-        if (Cache::add(self::CLE_DE_L_INCIDENT, now()->getTimestamp())) {
+        if (SiteDePiliqi::estLaDemonstration()) {
+            Cache::store('registre')->put(self::CLE_DE_L_ETAT_PUBLIE, $lignes, self::DUREE_DANS_L_ETAT_PUBLIE);
+        } elseif (Cache::add(self::CLE_DE_L_INCIDENT, now()->getTimestamp())) {
             $alerteEditeur->alerterDeLaPlateforme('La file d\'attente ne part plus', [
                 ...$lignes,
                 'Les e-mails des documents et les autres tâches attendent : vérifiez que les travailleurs tournent (php artisan queue:work, et php artisan queue:work telechargements --timeout=1800), puis php artisan queue:monitor default,telechargements.',
@@ -88,16 +110,26 @@ class SurveillerLaFileDAttente extends Command
         $maintenant = now()->getTimestamp();
         $retards = [];
 
+        $vues = [];
+
         foreach (ValeursLues::tableau(config('queue.connections')) as $connexion) {
             if (! is_array($connexion) || ($connexion['driver'] ?? null) !== 'database') {
                 continue;
             }
 
             $file = is_string($connexion['queue'] ?? null) ? $connexion['queue'] : 'default';
+            $base = is_string($connexion['connection'] ?? null) ? $connexion['connection'] : null;
+            $table = is_string($connexion['table'] ?? null) ? $connexion['table'] : 'jobs';
+
+            // Deux connexions sur la même file (sur le site de démonstration,
+            // « database » et « demonstration ») ne la comptent qu'une fois.
+            if (isset($vues["{$base}|{$table}|{$file}"])) {
+                continue;
+            }
+
+            $vues["{$base}|{$table}|{$file}"] = true;
             $retryAfter = is_int($connexion['retry_after'] ?? null) ? $connexion['retry_after'] : 90;
-            $taches = DB::connection(is_string($connexion['connection'] ?? null) ? $connexion['connection'] : null)
-                ->table(is_string($connexion['table'] ?? null) ? $connexion['table'] : 'jobs')
-                ->where('queue', $file);
+            $taches = DB::connection($base)->table($table)->where('queue', $file);
             $enCours = (clone $taches)->where('reserved_at', '>', $maintenant - $retryAfter)->exists();
             $enAttente = $enCours ? 0 : (clone $taches)->whereNull('reserved_at')->where('available_at', '<=', $maintenant - self::ATTENTE_MAXIMALE_EN_SECONDES)->count();
             $reservees = (clone $taches)->whereNotNull('reserved_at')->where('reserved_at', '<=', $maintenant - $retryAfter)->count();

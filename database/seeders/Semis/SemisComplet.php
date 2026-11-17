@@ -377,6 +377,7 @@ final class SemisComplet
 
         if ($this->surLePoste()) {
             $this->inscrire('inscription', self::SIREN_INSCRIPTION, TypeDActivite::Commerce, self::ADRESSE_INSCRIPTION);
+            (new DemonstrationsDesSocietes($this->horloge, $this))->creerAvantLaValidation();
         } elseif ($this->seme('cabinet')) {
             $societesDesCas->inviterDesEntreprisesQuiNeSInscriventPas();
         }

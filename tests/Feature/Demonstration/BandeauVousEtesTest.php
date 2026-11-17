@@ -2,16 +2,25 @@
 
 namespace Tests\Feature\Demonstration;
 
+use App\Domain\Authorization\AutorisationsSociete;
+use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Cabinets\Actions\CreerCollaborateurAction;
+use App\Domain\Cabinets\Actions\DeclarerSonExpertComptableAction;
 use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
 use App\Domain\Demonstration\Actions\ChangerDeCompteAction;
 use App\Domain\Demonstration\Archives\FinDesCopies;
+use App\Domain\Demonstration\Exceptions\SiteMalConfigureException;
+use App\Domain\Demonstration\MarqueDeLaBase;
 use App\Domain\Demonstration\Registre\Models\Copie;
 use App\Domain\Demonstration\Registre\Models\Temoin;
+use App\Domain\Demonstration\SiteDePiliqi;
 use App\Domain\Demonstration\Visites\OuvertureDUneCopie;
 use App\Domain\Demonstration\Visites\TemoinsDesVisites;
+use App\Domain\Tenancy\Actions\AccepterLaTransmissionDeLaProprieteAction;
 use App\Domain\Tenancy\Actions\CreerAdministrateurAction;
 use App\Domain\Tenancy\Actions\CreerMembreAction;
 use App\Domain\Tenancy\Actions\FermerMagasinAction;
+use App\Domain\Tenancy\Actions\ModifierMembreAction;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\MotifFermeture;
 use App\Domain\Tenancy\Enums\RoleMagasin;
@@ -19,8 +28,10 @@ use App\Domain\Tenancy\Enums\RoleSociete;
 use App\Domain\Tenancy\Enums\StatutCompte;
 use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Pages\Caisse;
+use App\Integrations\Sirene\FauxRepertoireSirene;
 use App\Models\User;
 use Closure;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -288,6 +299,158 @@ class BandeauVousEtesTest extends DemonstrationTestCase
             ->assertSeeInOrder(['La société', 'Agathe Roux', 'Les Halles', 'Léo Martin', 'La République']);
         $this->withUnencryptedCookie(TemoinsDesVisites::nom(), $temoin)->post('/demonstration/changer-de-compte', ['compte' => $administrateur->getKey()])->assertRedirect();
         $this->assertAuthenticatedAs($administrateur);
+    }
+
+    /**
+     * Précision 4 de l'éditeur du 16/11/2026 : un administrateur autorisé
+     * nomme un responsable dans la copie, comme en vrai ; l'observatrice,
+     * l'administrateur sans l'autorisation et l'expert-comptable déclaré
+     * sont refusés, comme en vrai.
+     */
+    public function test_un_administrateur_autorise_nomme_un_responsable_et_les_roles_non_autorises_sont_refuses(): void
+    {
+        ['copie' => $copie, 'secret' => $secret] = $this->copieDeTest(TypeDActivite::Commerce);
+        $temoin = $this->entrerParLeLien($secret);
+        $observatrice = $this->compte($copie, 'Élodie Fabre');
+        $motDePasse = (string) Copie::on('demo_admin')->whereKey($copie->id)->sole()->modele?->mot_de_passe;
+
+        $nomme = $this->dansLaCopie($copie, function () use ($observatrice, $motDePasse): User {
+            $halles = Magasin::query()->withoutGlobalScopes()->where('nom', 'Les Halles')->sole();
+            $societe = $halles->societe()->sole();
+            $proprietaire = User::query()->where('societe_id', $societe->getKey())->where('role_societe', RoleSociete::Proprietaire->value)->sole();
+            $contexte = app(TenantContext::class);
+            [$autorise, $sansAutorisation] = $contexte->runAsSociete($societe, fn (): array => [
+                app(CreerAdministrateurAction::class)->handle($proprietaire, $societe, ['name' => 'Agathe Roux'], null, PermissionRegistry::modeleDeLAdministrateur($societe->type_activite), [AutorisationsSociete::RESPONSABLES_NOMMER]),
+                app(CreerAdministrateurAction::class)->handle($proprietaire, $societe, ['name' => 'Bastien Roy'], null, PermissionRegistry::modeleDeLAdministrateur($societe->type_activite), []),
+            ]);
+            $expert = $contexte->runAsSociete($societe, function () use ($proprietaire, $societe, $motDePasse): User {
+                app(DeclarerSonExpertComptableAction::class)->handle($proprietaire, $societe, [
+                    'siren' => FauxRepertoireSirene::SIREN_CABINET,
+                    'name' => 'Nadia Benali',
+                    'email' => 'nadia.benali@cabinet.exemple.test',
+                    'email_confirmation' => 'nadia.benali@cabinet.exemple.test',
+                    'autorisations' => PermissionRegistry::casesDuCabinet(PermissionRegistry::parDefautDuCabinet($societe->type_activite)),
+                    'remplacer' => false,
+                ], $motDePasse);
+
+                return User::query()->where('name', 'Nadia Benali')->sole();
+            });
+
+            foreach (['l\'observatrice' => [$observatrice, RoleMagasin::Vendeur], 'l\'administrateur sans l\'autorisation' => [$sansAutorisation, RoleMagasin::Responsable], 'l\'expert-comptable déclaré' => [$expert, RoleMagasin::Vendeur]] as $qui => [$auteur, $role]) {
+                try {
+                    $contexte->runAs($halles, fn (): User => app(CreerMembreAction::class)->handle(User::query()->findOrFail($auteur->getKey()), $halles, ['name' => 'Refusé Toujours'], $role));
+                    $this->fail("La création par {$qui} aurait dû être refusée, comme au réel.");
+                } catch (AuthorizationException|LogicException) {
+                    $this->assertFalse(User::query()->where('name', 'Refusé Toujours')->exists(), "Aucun compte n'est créé par {$qui}.");
+                }
+            }
+
+            $nomme = $contexte->runAs($halles, fn (): User => app(CreerMembreAction::class)->handle(User::query()->findOrFail($autorise->getKey()), $halles, ['name' => 'Rose Lemaire'], RoleMagasin::Responsable));
+            $contexte->clear();
+
+            return $nomme;
+        });
+
+        $this->withUnencryptedCookie(TemoinsDesVisites::nom(), $temoin)->get('/choisir')
+            ->assertOk()
+            ->assertSeeInOrder(['La société', 'Agathe Roux', 'Bastien Roy', 'Les Halles', 'Élodie Fabre', 'Rose Lemaire', 'Responsable', 'La République', 'Le comptable', 'Nadia Benali', 'Expert-comptable déclaré'])
+            ->assertDontSee('Refusé Toujours');
+        $this->withUnencryptedCookie(TemoinsDesVisites::nom(), $temoin)->post('/demonstration/changer-de-compte', ['compte' => $nomme->getKey()])->assertRedirect();
+        $this->assertAuthenticatedAs($nomme);
+    }
+
+    public function test_un_collaborateur_cree_dans_la_copie_d_un_cabinet_entre_a_la_fin_du_groupe_du_cabinet(): void
+    {
+        ['copie' => $copie, 'secret' => $secret] = $this->copieDeTest(TypeDActivite::Cabinet);
+        $temoin = $this->entrerParLeLien($secret);
+
+        $cree = $this->dansLaCopie($copie, function (): User {
+            $cabinet = Societe::query()->where('type_activite', TypeDActivite::Cabinet->value)->sole();
+            $cree = app(TenantContext::class)->runAsSociete($cabinet, fn (): User => app(CreerCollaborateurAction::class)->handle($cabinet->proprietaire()->firstOrFail(), $cabinet, ['name' => 'Hélène Faure']));
+            app(TenantContext::class)->clear();
+
+            return $cree;
+        });
+
+        $page = $this->withUnencryptedCookie(TemoinsDesVisites::nom(), $temoin)->get('/choisir')->assertOk();
+        $page->assertSeeInOrder(['Le cabinet', 'Propriétaire du cabinet', 'Paul Lefèvre', 'Hélène Faure', 'Collaborateur']);
+        $this->assertStringNotContainsString('Épicerie Lemoine', (string) $page->getContent(), 'Aucun compte d\'un client.');
+        $this->withUnencryptedCookie(TemoinsDesVisites::nom(), $temoin)->post('/demonstration/changer-de-compte', ['compte' => $cree->getKey()])->assertRedirect();
+        $this->assertAuthenticatedAs($cree);
+    }
+
+    /**
+     * Le bandeau lit le rôle de chaque compte tel qu'il est : une vendeuse
+     * nommée responsable n'y est plus « Vendeuse » ; après une transmission
+     * de la propriété, « Commencer en tant que propriétaire » ouvre le
+     * nouveau propriétaire, et l'ancien y est administrateur.
+     */
+    public function test_le_bandeau_lit_le_role_actuel_et_commencer_en_tant_que_proprietaire_ouvre_le_nouveau_proprietaire(): void
+    {
+        ['copie' => $copie, 'secret' => $secret] = $this->copieDeTest(TypeDActivite::Commerce);
+        $temoin = $this->entrerParLeLien($secret);
+        $motDePasse = (string) Copie::on('demo_admin')->whereKey($copie->id)->sole()->modele?->mot_de_passe;
+
+        [$ancien, $nouveau] = $this->dansLaCopie($copie, function () use ($motDePasse): array {
+            $halles = Magasin::query()->withoutGlobalScopes()->where('nom', 'Les Halles')->sole();
+            $ancien = $this->proprietaireDe($halles);
+            $contexte = app(TenantContext::class);
+            $contexte->runAs($halles, fn (): User => app(ModifierMembreAction::class)->handle($ancien, User::query()->where('name', 'Inès Garcia')->sole(), RoleMagasin::Responsable));
+            $repreneur = $this->administrateur($halles, null, AutorisationsSociete::toutes(), null, 'Margaux Perrin');
+            $repreneur = $this->renseignerSonAdresse($repreneur, 'margaux.perrin@exemple-de-test.fr');
+            $contexte->clear();
+            app(AccepterLaTransmissionDeLaProprieteAction::class)->handle($repreneur, $this->demanderLaTransmission($ancien, $repreneur, $motDePasse), self::MOT_DE_PASSE_CHOISI);
+            $contexte->clear();
+
+            return [$ancien, User::query()->findOrFail($repreneur->getKey())];
+        });
+        $this->assertSame(RoleSociete::Proprietaire, $nouveau->role_societe);
+
+        $page = $this->withUnencryptedCookie(TemoinsDesVisites::nom(), $temoin)->get('/choisir')->assertOk();
+        $html = (string) $page->getContent();
+        $this->assertSame(1, preg_match('/<input type="hidden" name="compte" value="(\d+)">\s*<button[^>]*data-commencer-en-tant-que-proprietaire/', $html, $bouton));
+        $this->assertSame((string) $nouveau->getKey(), $bouton[1], '« Commencer en tant que propriétaire » ouvre le propriétaire actuel.');
+        $page->assertSeeInOrder(['La société', $ancien->name, 'Administrateur', 'Margaux Perrin', 'Propriétaire', 'Les Halles', 'Camille Laurent', 'Inès Garcia', 'Responsable']);
+        $this->assertSame(0, preg_match('/Inès Garcia<\/strong> — Vendeuse/', $html), 'La vendeuse nommée responsable n\'est plus « Vendeuse ».');
+        $this->assertSame(0, preg_match('/'.preg_quote($ancien->name, '/').'<\/strong> — Propriétaire/', $html), 'L\'ancien propriétaire ne l\'est plus.');
+
+        $this->withUnencryptedCookie(TemoinsDesVisites::nom(), $temoin)->post('/demonstration/changer-de-compte', ['compte' => $bouton[1]])->assertRedirect();
+        $this->assertAuthenticatedAs($nouveau);
+    }
+
+    /**
+     * Un compte créé dans la copie n'existe que dans sa base : le site réel
+     * refuse de servir une base marquée « demonstration » (MarqueDeLaBase),
+     * et l'identifiant tiré dans la copie n'est écrit nulle part ailleurs
+     * que dans cette base (ni au registre, ni dans une autre copie).
+     */
+    public function test_un_compte_cree_dans_la_copie_n_ouvre_jamais_le_site_reel(): void
+    {
+        ['copie' => $copie] = $this->copieDeTest(TypeDActivite::Commerce);
+        ['copie' => $autre] = $this->copieDeTest(TypeDActivite::Commerce);
+        $responsable = $this->compte($copie, 'Camille Laurent');
+
+        $identifiant = $this->dansLaCopie($copie, function () use ($responsable): string {
+            $halles = Magasin::query()->withoutGlobalScopes()->where('nom', 'Les Halles')->sole();
+            $cree = app(TenantContext::class)->runAs($halles, fn (): User => app(CreerMembreAction::class)->handle($responsable, $halles, ['name' => 'Léo Martin'], RoleMagasin::Vendeur));
+            app(TenantContext::class)->clear();
+
+            try {
+                MarqueDeLaBase::exigerPour(SiteDePiliqi::Reel, DB::connection());
+                $this->fail('Le site réel aurait dû refuser la base d\'une copie.');
+            } catch (SiteMalConfigureException $refus) {
+                $this->assertStringContainsString('est marquée « demonstration »', $refus->getMessage());
+            }
+
+            return (string) User::query()->findOrFail($cree->getKey())->identifiantDeConnexion();
+        });
+
+        $this->assertMatchesRegularExpression('/^\d{8}$/', $identifiant);
+        $this->assertNull($this->dansLaCopie($autre, fn (): ?User => User::query()->where('name', 'Léo Martin')->first()), 'Le compte n\'existe que dans sa copie.');
+
+        foreach (DemonstrationTestCase::tablesDuRegistre() as $table) {
+            $this->assertFalse(DB::connection('demo_admin')->table($table)->get()->contains(fn (object $ligne): bool => str_contains((string) json_encode($ligne), $identifiant)), "L'identifiant n'est écrit nulle part au registre ({$table}).");
+        }
     }
 
     /**

@@ -33,7 +33,8 @@ use Tests\DemonstrationTestCase;
  * n'existe ; Maison Ferrand a son magasin de Fort-de-France ; chaque
  * magasin a son JET 100 ; les tables techniques sont vides ; chaque compte
  * du bandeau est un compte non retiré de la société mise en avant, avec le
- * mot de passe de démonstration du modèle.
+ * mot de passe de démonstration du modèle, sans préférence de tableau de
+ * bord (toutes ses cartes permises s'ouvrent).
  */
 #[Group('copies')]
 class BasesModelesTest extends DemonstrationTestCase
@@ -72,6 +73,8 @@ class BasesModelesTest extends DemonstrationTestCase
         $this->assertSame(0, $lecture['factures_achat']);
         $this->assertSame(['Marc Petit', 'Sophie Petit'], $lecture['experts_comptables_actifs']);
         $this->assertSame([], $lecture['cabinets']);
+        $this->assertNotSame([], $lecture['courriels'], 'La page « E-mails qui seraient partis » d\'une copie neuve montre de vrais exemples de sa société (F.4).');
+        $this->assertSame(['CONSEIL VASSEUR'], array_values(array_unique(array_column($lecture['courriels'], 'raison_sociale'))));
         $this->assertBandeauDuModele($modele, $lecture, TypeDActivite::Services);
         $this->assertCommunAuxModeles($lecture);
     }
@@ -86,6 +89,12 @@ class BasesModelesTest extends DemonstrationTestCase
         $this->assertSame(['actif', 'actif'], $lecture['liens_cabinet'], 'Le cabinet est lié à ses deux clients.');
         $this->assertSame(['acceptee', 'expiree', 'ouverte', 'refusee', 'retiree'], $lecture['invitations'], 'L\'invitation acceptée par l\'Épicerie Lemoine, et celles à des entreprises qui ne s\'inscrivent pas, dans chaque état qui ne demande pas une autre société.');
         $this->assertSame([], $lecture['experts_comptables_actifs']);
+        $objetsDuCabinet = array_column(array_filter($lecture['courriels'], static fn (array $courriel): bool => $courriel['raison_sociale'] === 'MARTIN EXPERTISE COMPTABLE'), 'objet');
+        $this->assertNotSame(
+            [],
+            array_filter($objetsDuCabinet, static fn (string $objet): bool => str_starts_with($objet, 'MARTIN EXPERTISE COMPTABLE vous invite sur ')),
+            'Les invitations du cabinet, envoyées hors de tout contexte après leur transaction, s\'écrivent dans les e-mails du cabinet (F.4).',
+        );
         $this->assertBandeauDuModele($modele, $lecture, TypeDActivite::Cabinet);
         $this->assertCommunAuxModeles($lecture);
     }
@@ -143,6 +152,9 @@ class BasesModelesTest extends DemonstrationTestCase
                 ->get(['users.name', 'users.statut', 'users.password', 'users.societe_id as societe_du_compte', 'comptes_du_bandeau.societe_id', 'comptes_du_bandeau.groupe', 'societes.raison_sociale'])
                 ->map(fn (object $ligne): array => (array) $ligne)
                 ->all(),
+            'preferences_du_bandeau' => DB::table('preferences_tableau_de_bord')
+                ->whereIn('user_id', DB::table('comptes_du_bandeau')->select('user_id'))
+                ->count(),
             'regimes_manquants' => DB::table('societes')->where('type_activite', '!=', TypeDActivite::Cabinet->value)->whereNull('regime_tva')->pluck('raison_sociale')->all(),
             'courriels' => DB::table('courriels_de_la_demonstration')
                 ->join('societes', 'societes.id', '=', 'courriels_de_la_demonstration.societe_id')
@@ -195,6 +207,7 @@ class BasesModelesTest extends DemonstrationTestCase
         $this->assertSame([], $lecture['jet_100_manquants'], 'Chaque magasin d\'une base modèle a son JET 100 (mode d\'entraînement).');
         $this->assertSame(array_fill_keys(ConstruireUnModele::TABLES_TECHNIQUES, 0), $lecture['tables_techniques']);
         $this->assertSame([], $lecture['regimes_manquants'], 'Chaque société qui vend a son régime de TVA.');
+        $this->assertSame(0, $lecture['preferences_du_bandeau'], 'Aucun compte du bandeau n\'a de préférence de tableau de bord : chacun ouvre toutes les cartes que son écran permet (précision du 16/11/2026 vers 23 h 59).');
         $this->assertIsArray($lecture['courriels']);
         $debut = Calendrier::deParis()->debutDuJour(Calendrier::ajouterJours(Calendrier::deParis()->jourDe(CarbonImmutable::now()), -DatabaseSeeder::JOURS_DES_E_MAILS_DES_MODELES));
 

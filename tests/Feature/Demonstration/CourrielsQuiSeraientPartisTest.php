@@ -4,6 +4,7 @@ namespace Tests\Feature\Demonstration;
 
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Cabinets\Actions\DeclarerSonExpertComptableAction;
+use App\Domain\Cabinets\Actions\InviterUneEntrepriseAction;
 use App\Domain\Demonstration\Courriels\TransportDeLaDemonstration;
 use App\Domain\Demonstration\Models\CourrielDeLaDemonstration;
 use App\Domain\Demonstration\Registre\Models\Copie;
@@ -143,6 +144,27 @@ class CourrielsQuiSeraientPartisTest extends DemonstrationTestCase
         $temoin = $this->entrerParLeLien($secret);
         $this->changerPour($copie, $temoin, 'Inès Garcia');
         $this->withUnencryptedCookie(TemoinsDesVisites::nom(), $temoin)->get('/demonstration/courriels')->assertOk()->assertSee('nadia.benali@cabinet.exemple.test');
+    }
+
+    public function test_l_invitation_d_un_cabinet_envoyee_hors_de_tout_contexte_et_sans_compte_connecte_s_ecrit_chez_le_cabinet(): void
+    {
+        ['copie' => $copie] = $this->copieDeTest(TypeDActivite::Cabinet);
+        $motDePasse = (string) Copie::on('demo_admin')->whereKey($copie->id)->sole()->modele?->mot_de_passe;
+
+        $cabinet = $this->dansLaCopie($copie, function () use ($motDePasse): int {
+            $cabinet = Societe::query()->where('type_activite', TypeDActivite::Cabinet->value)->sole();
+            $this->assertFalse(Auth::check());
+            $this->assertFalse(app(TenantContext::class)->aUneSociete());
+            app(InviterUneEntrepriseAction::class)->handle($cabinet->proprietaire()->firstOrFail(), $cabinet, '000000141', 'dirigeant@entreprise-invitee.exemple.test', $motDePasse);
+            app(TenantContext::class)->clear();
+
+            return (int) $cabinet->getKey();
+        });
+
+        $courriel = $this->dansLaCopie($copie, fn (): ?CourrielDeLaDemonstration => CourrielDeLaDemonstration::query()->withoutGlobalScopes()->where('destinataires', 'like', '%dirigeant@entreprise-invitee.exemple.test%')->first());
+        $this->assertNotNull($courriel, 'L\'invitation, envoyée après sa transaction, hors de tout contexte et sans compte connecté (comme le semis du modèle « Cabinet »), s\'écrit dans « E-mails qui seraient partis ».');
+        $this->assertSame($cabinet, (int) $courriel->societe_id, 'Elle s\'écrit dans la société du cabinet qui invite.');
+        $this->assertStringContainsString('vous invite sur', $courriel->objet);
     }
 
     public function test_les_limites_d_envoi_du_reel_decident_dans_chaque_copie(): void

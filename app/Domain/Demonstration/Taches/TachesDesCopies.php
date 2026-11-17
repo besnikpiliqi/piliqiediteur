@@ -2,6 +2,7 @@
 
 namespace App\Domain\Demonstration\Taches;
 
+use App\Console\Commands\PasserLesTachesDesCopies;
 use App\Console\Commands\VerifierIntegriteFiscale;
 use App\Domain\Demonstration\Enums\EtatDUneCopie;
 use App\Domain\Demonstration\Registre\Models\Copie;
@@ -10,6 +11,7 @@ use App\Domain\Demonstration\SiteDePiliqi;
 use App\Domain\Demonstration\Visites\OuvertureDUneCopie;
 use App\Domain\Tenancy\Services\TenantContext;
 use Carbon\CarbonImmutable;
+use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
 
@@ -24,14 +26,15 @@ use Illuminate\Support\Facades\Cache;
  * planificateur (SemisEnCours, qui vit dans le cache de la base courante,
  * n'est jamais posé dans une copie).
  *
- * - aPasser() : chaque heure, les copies servies visitées depuis moins de
- *   48 heures ; la nuit, toutes les copies servies.
+ * - aPasser() : chaque heure, nuit comprise, les copies servies visitées
+ *   depuis moins de 48 heures ; la nuit, toutes les copies servies.
  * - passer() : dans la copie ouverte par le rôle des pages ; la nuit, de
  *   plus, la vérification incrémentale de son registre fiscal (caisse:
  *   verifier, clé publique de démonstration) quand elle a été visitée
  *   depuis sa dernière vérification ; chaque défaut de la nuit compte dans
  *   une seule ligne de l'état publié, sans rien bloquer. La dernière passe
- *   s'écrit au registre, par demo_admin.
+ *   s'écrit au registre, par demo_admin. Deux passes d'une même copie ne
+ *   se font jamais en même temps (VERROU_D_UNE_COPIE).
  *
  * Une copie vieille de 20 jours jamais visitée rattrape ainsi ses journées
  * dans l'ordre, un ticket Z par jour, à l'heure du serveur, jamais avancée
@@ -42,6 +45,14 @@ final class TachesDesCopies
     public const HEURES_DE_VISITE = 48;
 
     public const CLE_DES_VERIFICATIONS_EN_DEFAUT = 'demonstration:verifications-en-defaut';
+
+    /**
+     * Le verrou des tâches d'une copie (cache du registre) : la passe de
+     * chaque heure, celle de la nuit et le rattrapage d'une entrée ne
+     * passent jamais en même temps dans la même copie ; la seconde attend
+     * la fin de la première, puis ne refait que ce qui est encore dû.
+     */
+    public const VERROU_D_UNE_COPIE = 'demonstration:taches-d-une-copie:';
 
     public function __construct(private readonly OuvertureDUneCopie $ouverture) {}
 
@@ -81,6 +92,33 @@ final class TachesDesCopies
             return [];
         }
 
+        $verrou = Cache::store('registre')->lock(self::VERROU_D_UNE_COPIE.$reference, PasserLesTachesDesCopies::DELAI_D_UNE_COPIE + 60);
+
+        try {
+            $verrou->block(PasserLesTachesDesCopies::DELAI_D_UNE_COPIE - 60);
+        } catch (LockTimeoutException) {
+            return ['Les tâches de cette copie passaient déjà depuis plus de neuf minutes : elles sont laissées à la passe suivante.'];
+        }
+
+        try {
+            return $this->passerSousSonVerrou($copie, $nuit, $maintenant);
+        } finally {
+            $verrou->release();
+        }
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function passerSousSonVerrou(Copie $copie, bool $nuit, CarbonImmutable $maintenant): array
+    {
+        $copie->refresh();
+
+        if (! $copie->etat->seSert() || $copie->estEchue($maintenant)) {
+            return [];
+        }
+
+        $reference = $copie->reference;
         $verifier = $nuit && ($copie->derniere_verification_le === null || Temoin::on('demo_admin')->where('copie_id', $copie->id)->where('vu_le', '>', $copie->derniere_verification_le)->exists());
         $echecs = $this->ouverture->pendant($copie, fn (): array => PlaceDesCopies::pendantUnGestePermis(function () use ($verifier): array {
             $echecs = [];
@@ -108,12 +146,18 @@ final class TachesDesCopies
     }
 
     /**
-     * La copie est-elle à l'heure : sa dernière passe date de moins d'une
-     * heure (C.13, entrée dans une copie) ?
+     * La copie est-elle à l'heure (C.13, entrée dans une copie) : sa
+     * dernière passe date de la passe de l'heure précédente au moins (la
+     * passe de chaque heure part à l'heure ronde et met quelques minutes à
+     * faire toutes les copies visitées) ? Une copie visitée suit ainsi les
+     * passes de chaque heure, la nuit comprise, sans jamais attendre ; seule
+     * une copie qu'aucune passe de l'heure n'a faite (plus de 48 heures
+     * sans visite) demande un rattrapage. Les heures rondes sont les mêmes
+     * en UTC et à Paris.
      */
     public static function estALHeure(Copie $copie, CarbonImmutable $maintenant): bool
     {
-        return $copie->derniere_passe_des_taches_le !== null && $copie->derniere_passe_des_taches_le->greaterThan($maintenant->subHour());
+        return $copie->derniere_passe_des_taches_le !== null && $copie->derniere_passe_des_taches_le->greaterThanOrEqualTo($maintenant->startOfHour()->subHour());
     }
 
     /**

@@ -15,7 +15,8 @@ use Illuminate\Console\Command;
 /**
  * Sur le site réel (lot DEMO-COPIE, E.9) : le message « creer » de chaque
  * démonstration en cours repart vers le site de démonstration, avec la
- * même référence, le même repère, la même empreinte du lien et la même
+ * même référence, le même repère, le lien en cours (son empreinte et sa
+ * génération gardées, jamais celles d'un lien renouvelé depuis) et la même
  * fin (voir BoiteDEnvoi::renvoyerLaCreation()). Elle sert quand le
  * registre du site de démonstration a été perdu, et, sur le poste, une
  * fois après chaque semis, pour créer les copies des sociétés semées. Elle

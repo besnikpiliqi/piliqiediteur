@@ -100,18 +100,20 @@ final class OuvertureDUneCopie
 
     /**
      * La copie ouverte dans ce processus (requête, travail, tâche) : sa
-     * référence et son état, ou null hors d'une copie. Un travail envoyé
-     * depuis une copie emporte sa référence (voir
-     * SiteDeDemonstrationServiceProvider), et une copie en lecture seule
-     * refuse toute écriture (C.16).
+     * référence, le nom de sa base et son état, ou null hors d'une copie.
+     * Un travail envoyé depuis une copie emporte sa référence et sa base
+     * (voir TravauxDesCopies), et une copie en lecture seule refuse toute
+     * écriture (C.16).
      *
-     * @return array{reference: string, en_lecture_seule: bool}|null
+     * @return array{reference: string, base: string, en_lecture_seule: bool}|null
      */
     public static function courante(): ?array
     {
         $ouverte = app()->bound(self::COPIE_OUVERTE) ? app(self::COPIE_OUVERTE) : null;
 
-        return is_array($ouverte) && is_string($ouverte['reference'] ?? null) ? ['reference' => $ouverte['reference'], 'en_lecture_seule' => ($ouverte['en_lecture_seule'] ?? false) === true] : null;
+        return is_array($ouverte) && is_string($ouverte['reference'] ?? null) && is_string($ouverte['base'] ?? null)
+            ? ['reference' => $ouverte['reference'], 'base' => $ouverte['base'], 'en_lecture_seule' => ($ouverte['en_lecture_seule'] ?? false) === true]
+            : null;
     }
 
     /**
@@ -131,6 +133,6 @@ final class OuvertureDUneCopie
         DossiersDeLaDemonstration::enracinerLesDisques(DossiersDeLaDemonstration::dUneCopie($copie->reference));
 
         MarqueDeLaBase::exigerPour(SiteDePiliqi::Demonstration, DB::connection());
-        app()->instance(self::COPIE_OUVERTE, ['reference' => $copie->reference, 'en_lecture_seule' => $copie->etat === EtatDUneCopie::EnLectureSeule]);
+        app()->instance(self::COPIE_OUVERTE, ['reference' => $copie->reference, 'base' => $base, 'en_lecture_seule' => $copie->etat === EtatDUneCopie::EnLectureSeule]);
     }
 }

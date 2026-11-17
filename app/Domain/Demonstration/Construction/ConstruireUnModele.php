@@ -2,6 +2,8 @@
 
 namespace App\Domain\Demonstration\Construction;
 
+use App\Console\Commands\VerifierJournalAudit;
+use App\Console\Commands\VerifierLIsolation;
 use App\Domain\Demonstration\Bases\BasesDeLaDemonstration;
 use App\Domain\Demonstration\Bases\BrancherUneBase;
 use App\Domain\Demonstration\Bases\EmpreinteDuSchema;
@@ -11,6 +13,7 @@ use App\Domain\Demonstration\Enums\EtatDUnModele;
 use App\Domain\Demonstration\Exceptions\ConstructionEnEchec;
 use App\Domain\Demonstration\Registre\Models\Modele;
 use App\Domain\Demonstration\SiteDePiliqi;
+use App\Domain\Demonstration\Taches\TachesDesSites;
 use App\Domain\Demonstration\VersionServie;
 use App\Domain\Tenancy\Enums\TypeDActivite;
 use Carbon\CarbonImmutable;
@@ -35,15 +38,20 @@ use Throwable;
  *    documents) sous le dossier du modèle, que chaque copie recopie (voir
  *    DossiersDeLaDemonstration) ;
  * 5. app:verifier-isolation : zéro problème exigé ;
- * 6. caisse:verifier --complet, avec la clé publique de démonstration :
+ * 6. app:verifier-journal-audit (les chaînes du journal d'audit de chaque
+ *    société, avec la clé de démonstration) : code 0 exigé ;
+ * 7. caisse:verifier --complet, avec la clé publique de démonstration :
  *    code 0 exigé ;
- * 7. le nettoyage des tables techniques (sessions, cache, verrous,
+ * 8. le nettoyage des tables techniques (sessions, cache, verrous,
  *    travaux, jetons de mot de passe) ;
- * 8. VACUUM (FREEZE, ANALYZE), pour qu'aucune copie ne refasse ce travail ;
- * 9. la fermeture en modèle (ALLOW_CONNECTIONS false, IS_TEMPLATE true) ;
- * 10. la bascule au registre, sous un verrou consultatif par type : le
+ * 9. VACUUM (FREEZE, ANALYZE), pour qu'aucune copie ne refasse ce travail ;
+ * 10. la fermeture en modèle (ALLOW_CONNECTIONS false, IS_TEMPLATE true) ;
+ * 11. la bascule au registre, sous un verrou consultatif par type : le
  *     nouveau modèle en service, l'ancien « précédent » ;
- * 11. le modèle précédent d'avant est supprimé, sous le même verrou.
+ * 12. le modèle précédent d'avant est supprimé, sous le même verrou.
+ *
+ * Les contrôles des étapes 5 et 6 sont ceux que TachesDesSites range
+ * « pendant la construction d'un modèle » (C.13).
  *
  * Si une étape échoue, l'ancien modèle reste en service, la base de
  * travail et ses fichiers sont supprimés et la cause s'écrit au registre
@@ -58,6 +66,17 @@ final class ConstruireUnModele
     public const TABLES_TECHNIQUES = ['sessions', 'cache', 'cache_locks', 'jobs', 'job_batches', 'failed_jobs', 'password_reset_tokens'];
 
     public const MESSAGE_ISOLATION = 'La vérification de l\'isolation du modèle « %s » a trouvé des problèmes : %s';
+
+    public const MESSAGE_JOURNAL_AUDIT = 'La vérification du journal d\'audit du modèle « %s » a trouvé des problèmes : %s';
+
+    /**
+     * Le message d'échec de chaque contrôle de la construction, dans
+     * l'ordre de TachesDesSites::DE_LA_CONSTRUCTION_D_UN_MODELE.
+     */
+    public const MESSAGES_DES_CONTROLES = [
+        VerifierLIsolation::class => self::MESSAGE_ISOLATION,
+        VerifierJournalAudit::class => self::MESSAGE_JOURNAL_AUDIT,
+    ];
 
     public const MESSAGE_CAISSE = 'La vérification du registre fiscal du modèle « %s » a échoué : %s';
 
@@ -92,7 +111,10 @@ final class ConstruireUnModele
                 $this->migrer($nom);
                 RolesDeLaDemonstration::accorderLesDroitsDUneBase(DB::connection());
                 DossiersDeLaDemonstration::pendantLeGesteDans(DossiersDeLaDemonstration::duModele($nom), fn () => $this->semis->semer($type, $motDePasse));
-                $this->exigerZero('app:verifier-isolation', [], self::MESSAGE_ISOLATION, $nom);
+                foreach (TachesDesSites::DE_LA_CONSTRUCTION_D_UN_MODELE as $controle) {
+                    $this->exigerZero($controle, [], self::MESSAGES_DES_CONTROLES[$controle], $nom);
+                }
+
                 $this->exigerZero('caisse:verifier', ['--complet' => true], self::MESSAGE_CAISSE, $nom);
 
                 foreach (self::TABLES_TECHNIQUES as $table) {

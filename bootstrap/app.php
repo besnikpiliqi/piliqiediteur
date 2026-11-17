@@ -119,9 +119,11 @@ return Application::configure(basePath: dirname(__DIR__))
         // la demande qui attend une place (C.3), la suppression des copies
         // arrivées à leur fin, après l'archive de leur caisse (C.14), les
         // tâches du calendrier des magasins dans chaque copie visitée depuis
-        // moins de 48 heures, et la nuit, à 03 h 40, dans toutes les copies,
-        // avec la vérification de leur registre fiscal (C.13), la mesure de
-        // leur place (C.16) ;
+        // moins de 48 heures, la nuit comprise (une copie passée depuis la
+        // passe de l'heure précédente reste à l'heure : aucune visite
+        // n'attend un rattrapage pendant la construction des modèles), et
+        // la nuit, à 03 h 40, dans toutes les copies, avec la vérification
+        // de leur registre fiscal (C.13), la mesure de leur place (C.16) ;
         // chaque jour, la purge des archives de six ans (C.18), des nonces
         // des messages reçus et des travaux échoués de 30 jours ; la
         // surveillance des files du registre. Tout sur un seul serveur.
@@ -130,7 +132,7 @@ return Application::configure(basePath: dirname(__DIR__))
             $schedule->command(NettoyerLaDemonstration::class)->dailyAt('03:10')->onOneServer()->withoutOverlapping();
             $schedule->command(ReprendreLesCopiesDeLaDemonstration::class)->hourlyAt(25)->onOneServer()->withoutOverlapping();
             $schedule->command(SupprimerLesCopiesEchues::class)->hourlyAt(5)->onOneServer()->withoutOverlapping();
-            $schedule->command(PasserLesTachesDesCopies::class)->hourly()->unlessBetween('01:00', '04:00')->onOneServer()->withoutOverlapping();
+            $schedule->command(PasserLesTachesDesCopies::class)->hourly()->onOneServer()->withoutOverlapping();
             $schedule->command(PasserLesTachesDesCopies::class, ['--nuit'])->dailyAt('03:40')->onOneServer()->withoutOverlapping();
             $schedule->command(MesurerLesCopiesDeLaDemonstration::class)->hourlyAt(45)->onOneServer()->withoutOverlapping();
             $schedule->command(PurgerLesArchivesDeLaDemonstration::class)->dailyAt('04:10')->onOneServer()->withoutOverlapping();

@@ -7,6 +7,7 @@ use App\Domain\Demonstration\Etat\EtatDuSite;
 use App\Domain\Demonstration\Messages\MessagesSignes;
 use App\Domain\Demonstration\Registre\Models\Modele;
 use App\Domain\Tenancy\Enums\TypeDActivite;
+use Illuminate\Support\Facades\DB;
 use Tests\DemonstrationTestCase;
 
 /**
@@ -42,5 +43,31 @@ class EtatPublieTest extends DemonstrationTestCase
         $this->assertStringNotContainsString($copie->reference, $etat);
         $this->assertStringNotContainsString((string) $copie->nom_de_la_base, $etat);
         $this->assertStringNotContainsString($copie->repere, $etat);
+    }
+
+    /**
+     * Le site de démonstration n'envoie aucun e-mail : une file du
+     * registre que personne ne prend paraît dans l'état publié, que le
+     * site réel transforme en alerte à l'éditeur, et s'en efface quand elle
+     * repart.
+     */
+    public function test_une_file_du_registre_qui_ne_part_plus_parait_dans_l_etat_publie_sans_aucun_e_mail(): void
+    {
+        $this->travelTo(self::aParis('2026-11-16 10:00:00'));
+        DB::connection('demo_admin')->table('jobs')->insert([
+            'queue' => 'demonstration-admin', 'payload' => '{}', 'attempts' => 0, 'reserved_at' => null,
+            'available_at' => now()->subMinutes(10)->getTimestamp(), 'created_at' => now()->subMinutes(10)->getTimestamp(),
+        ]);
+
+        $this->artisan('app:surveiller-la-file-d-attente')->assertFailed();
+
+        $file = array_values(array_filter(app(EtatDuSite::class)->construire()['problemes'], static fn (string $ligne): bool => str_starts_with($ligne, 'La file d\'attente du site de démonstration ne part plus.')));
+        $this->assertSame(['La file d\'attente du site de démonstration ne part plus. File « demonstration-admin » : 1 tâche(s) disponible(s) depuis plus de 2 minutes, que personne ne prend, et 0 tâche(s) réservée(s) depuis plus de 1900 secondes, laissée(s) par un travailleur arrêté.'], $file);
+        $this->assertSame(0, DB::connection('demo_admin')->table('jobs')->where('queue', '!=', 'demonstration-admin')->count(), 'Aucun e-mail ni aucun travail de plus.');
+
+        DB::connection('demo_admin')->table('jobs')->delete();
+        $this->artisan('app:surveiller-la-file-d-attente')->assertSuccessful();
+
+        $this->assertSame([], array_filter(app(EtatDuSite::class)->construire()['problemes'], static fn (string $ligne): bool => str_starts_with($ligne, 'La file d\'attente')));
     }
 }

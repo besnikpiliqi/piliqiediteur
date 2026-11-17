@@ -11,6 +11,7 @@ use App\Domain\Cabinets\Notifications\AvisDuCabinet;
 use App\Domain\Calendrier\Calendrier;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Scopes\SocieteScope;
+use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\Cabinet\Pages\InvitationsEtDemandes;
@@ -87,8 +88,12 @@ class EnvoiDesLiensDesCabinets
     }
 
     /**
-     * L'e-mail part ; sinon le propriétaire du cabinet en est prévenu dans
-     * sa cloche, et CourrielNonParti le dit à l'écran.
+     * L'e-mail part, dans le contexte du cabinet (sur le site de
+     * démonstration, il s'écrit ainsi dans les « E-mails qui seraient
+     * partis » du cabinet, même envoyé après la transaction de
+     * l'invitation, hors de tout contexte) ; sinon le propriétaire du
+     * cabinet en est prévenu dans sa cloche, et CourrielNonParti le dit à
+     * l'écran.
      *
      * @param  Closure(): mixed  $envoi
      *
@@ -97,7 +102,7 @@ class EnvoiDesLiensDesCabinets
     private static function envoyerOuPrevenir(Societe $cabinet, string $quoi, string $suite, Closure $envoi): void
     {
         try {
-            EnvoiImmediat::exiger($quoi, $envoi, $suite);
+            EnvoiImmediat::exiger($quoi, fn (): mixed => app(TenantContext::class)->runAsSociete($cabinet, $envoi), $suite);
         } catch (CourrielNonParti $refus) {
             self::prevenirDuNonEnvoi($cabinet, $refus->getMessage());
 

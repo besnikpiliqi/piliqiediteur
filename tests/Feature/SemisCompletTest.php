@@ -4,10 +4,14 @@ namespace Tests\Feature;
 
 use App\Console\SemisEnCours;
 use App\Domain\Achats\Services\PiecesDuFournisseur;
+use App\Domain\Demonstration\Enums\EtatDeLaDemonstration;
+use App\Domain\Demonstration\Jobs\EnvoyerLeLienDeLaDemonstration;
+use App\Domain\Demonstration\Models\Demonstration;
 use App\Domain\Facturation\Events\FactureEmise;
 use App\Domain\TableauDeBord\Enums\Graphique;
 use App\Domain\Tenancy\Enums\StatutCompte;
 use App\Domain\Tenancy\Isolation\ControlesDeLApplication;
+use App\Domain\Tenancy\Notifications\AvisDeLEquipe;
 use App\Models\User;
 use BackedEnum;
 use Carbon\Carbon;
@@ -17,6 +21,7 @@ use Database\Seeders\Semis\ComptesSemes;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Notifications\DatabaseNotification;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
@@ -85,7 +90,7 @@ class SemisCompletTest extends TestCase
      * @var array<string, int>
      */
     private const NOMBRES_DE_LIGNES = [
-        'actions_traitees' => 4676,
+        'actions_traitees' => 4677,
         'actions_traitees_de_la_societe' => 348,
         'affectations' => 40,
         'autorisations_affectations' => 533,
@@ -108,11 +113,11 @@ class SemisCompletTest extends TestCase
         'comptes_expert_comptable' => 3,
         'consultations_vies' => 5,
         'demandes_inscription' => 1,
-        'demonstrations' => 14,
+        'demonstrations' => 15,
         'devis' => 225,
         'ecarts_sirene' => 2,
         'enregistrements_fiscaux' => 10813,
-        'envois_documents' => 12,
+        'envois_documents' => 13,
         'evenements_transmission_pdp' => 61,
         'factures' => 4008,
         'factures_achat' => 116,
@@ -120,7 +125,7 @@ class SemisCompletTest extends TestCase
         'identifiants' => 67,
         'inventaires_ouverture' => 11,
         'invitations_cabinet' => 6,
-        'journal_audit' => 1616,
+        'journal_audit' => 1619,
         'liens_cabinet' => 15,
         'liens_des_devis' => 6,
         'lignes_achat' => 288,
@@ -134,9 +139,9 @@ class SemisCompletTest extends TestCase
         'magasins' => 19,
         'magasins_cabinet' => 1,
         'mandats_pdp' => 2,
-        'messages_vers_la_demonstration' => 23,
+        'messages_vers_la_demonstration' => 26,
         'mouvements_stock' => 5042,
-        'notifications' => 189,
+        'notifications' => 190,
         'paiement_allocations' => 3918,
         'paiements' => 3918,
         'paniers_caisse' => 1,
@@ -160,7 +165,7 @@ class SemisCompletTest extends TestCase
         'taux_avoirs_fournisseur' => 2,
         'taux_factures_achat' => 173,
         'telechargements_documents' => 5,
-        'tetes_journal_audit' => 98,
+        'tetes_journal_audit' => 99,
         'tetes_registre_fiscal' => 19,
         'traces_audit' => 8,
         'traces_evenements' => 2,
@@ -205,11 +210,49 @@ class SemisCompletTest extends TestCase
         $this->assertLesCasDesGraphiquesEtDesCaisses();
         $this->assertLesDatesDeLOperation();
         $this->assertLaListeDesComptesOuvreChaqueCompteActif();
+        $this->assertLesRenouvellementsDesDemonstrations();
 
         $this->assertSame(0, Artisan::call('caisse:verifier', ['--complet' => true]), Artisan::output());
         $this->assertSame(0, Artisan::call('app:verifier-journal-audit'), Artisan::output());
         $this->assertSame(0, Artisan::call('app:verifier-isolation'), Artisan::output());
         $this->assertContains('app:cloturer-caisses-automatiquement', $this->passageDuPlanificateurA($debut), 'Les tâches repartent après le semis.');
+    }
+
+    /**
+     * Les renouvellements des liens des démonstrations (lot DEMO-COPIE, F.7)
+     * de part et d'autre de chaque phrase de la carte : Maison Ferrand,
+     * accusé (« Ancien lien coupé le … ») ; le cabinet Martin, sans accusé
+     * depuis plus d'un quart d'heure (« La démonstration n'a pas encore reçu
+     * le renouvellement… ») ; la Boulangerie Duval, accusé, mais son e-mail
+     * en échec après ses trois tentatives, dont seul son propriétaire a
+     * l'avis ; FLEURS DE SAISON, qui attend son code, a sa copie prête. La
+     * coupure « en cours » (moins d'un quart d'heure) dépend de
+     * l'heure de la consultation : le semis, qui finit la veille, ne peut pas
+     * la laisser à l'écran (voir le compte rendu du lot).
+     */
+    private function assertLesRenouvellementsDesDemonstrations(): void
+    {
+        $demonstrations = Demonstration::query()->withoutGlobalScopes()->where('generation_du_lien', '>', 1)->get();
+        $nom = static fn (Demonstration $demonstration): string => (string) DB::table('societes')->where('id', $demonstration->societe_id)->value('raison_sociale');
+        $sansAccuse = $demonstrations->filter(fn (Demonstration $demonstration): bool => $demonstration->renouvellementSansAccuse());
+
+        $this->assertSame(['MARTIN EXPERTISE COMPTABLE'], $sansAccuse->map($nom)->values()->all());
+        $this->assertTrue($sansAccuse->every(fn (Demonstration $demonstration): bool => $demonstration->lien_tire_le !== null && $demonstration->lien_tire_le->addMinutes(15)->isPast()), 'Sans accusé depuis plus d\'un quart d\'heure : la carte le dit.');
+        $accuses = $demonstrations->reject(fn (Demonstration $demonstration): bool => $demonstration->renouvellementSansAccuse())->map($nom)->sort()->values()->all();
+        $this->assertSame(['BOULANGERIE DUVAL', 'MAISON FERRAND'], $accuses, 'Un renouvellement accusé : « Ancien lien coupé le … ».');
+
+        $avis = DatabaseNotification::query()->where('type', AvisDeLEquipe::class)->get()
+            ->filter(fn (DatabaseNotification $notification): bool => ($notification->data['body'] ?? null) === EnvoyerLeLienDeLaDemonstration::MESSAGE_NON_PARTI)
+            ->map(fn (DatabaseNotification $notification): string => (string) DB::table('users')->join('societes', 'societes.id', '=', 'users.societe_id')->where('users.id', $notification->notifiable_id)->value('societes.raison_sociale'))
+            ->values()->all();
+        $this->assertSame(['BOULANGERIE DUVAL'], $avis, 'Seul le propriétaire dont l\'e-mail du lien n\'est pas parti en a l\'avis.');
+
+        $pretesAvantLaValidation = DB::table('demonstrations')
+            ->join('societes', 'societes.id', '=', 'demonstrations.societe_id')
+            ->where('demonstrations.etat', EtatDeLaDemonstration::Prete->value)
+            ->whereNull('societes.validee_le')
+            ->pluck('societes.raison_sociale')->all();
+        $this->assertSame(['FLEURS DE SAISON'], $pretesAvantLaValidation, 'Une copie prête d\'une société qui attend encore son code.');
     }
 
     /**

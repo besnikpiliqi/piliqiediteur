@@ -7,6 +7,7 @@ use App\Domain\Demonstration\Jobs\EnvoyerLesMessagesALaDemonstration;
 use App\Domain\Demonstration\Messages\MessagesSignes;
 use App\Domain\Demonstration\Models\Demonstration;
 use App\Domain\Demonstration\Models\MessageVersLaDemonstration;
+use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Support\CleDuModele;
 
 /**
@@ -61,23 +62,19 @@ final class BoiteDEnvoi
     }
 
     /**
-     * Le même « creer » que la demande, de nouveau dans la boîte, quand le
-     * site de démonstration ne connaît pas la copie alors qu'elle n'est pas
-     * encore prête (voir EtatsDeLaDemonstration) : même référence, même
-     * repère, même lien, même fin.
+     * Le « creer » de la démonstration telle qu'elle est maintenant, de
+     * nouveau dans la boîte : quand le site de démonstration ne connaît
+     * pas la copie alors qu'elle n'est pas encore prête (voir
+     * EtatsDeLaDemonstration), ou que son registre a été perdu (voir
+     * demonstration:renvoyer-les-demandes). Même référence, même repère,
+     * même fin, et le lien en cours : son empreinte et sa génération
+     * gardées, jamais celles de la demande, pour qu'un lien renouvelé (un
+     * ancien lien coupé) ne rouvre jamais la copie ; la société dite
+     * validée selon son état d'aujourd'hui.
      */
     public function renvoyerLaCreation(Demonstration $demonstration): void
     {
-        $creation = MessageVersLaDemonstration::query()
-            ->where('societe_id', $demonstration->societe_id)
-            ->where('demonstration_id', $demonstration->getKey())
-            ->where('quoi', QuoiDuMessage::Creer)
-            ->orderBy('id')
-            ->first(['contenu']);
-
-        if ($creation !== null) {
-            $this->deposer($demonstration, QuoiDuMessage::Creer, array_diff_key($creation->contenu, ['quoi' => true, 'reference' => true]));
-        }
+        $this->creer($demonstration, Societe::query()->findOrFail($demonstration->societe_id)->estValidee());
     }
 
     /**

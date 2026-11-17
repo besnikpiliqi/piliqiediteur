@@ -4,12 +4,10 @@ namespace App\Domain\Demonstration\Listeners;
 
 use App\Domain\Demonstration\Models\CompteDuBandeau;
 use App\Domain\Demonstration\SiteDePiliqi;
+use App\Domain\Demonstration\Visites\RoleAuBandeau;
 use App\Domain\Demonstration\Visites\SocieteDeLaCopie;
-use App\Domain\Tenancy\Enums\RoleSociete;
 use App\Domain\Tenancy\Events\CompteCree;
-use App\Domain\Tenancy\Models\Affectation;
 use App\Domain\Tenancy\Services\TenantContext;
-use Database\Seeders\Semis\ComptesDuBandeauDuModele;
 use Illuminate\Contracts\Events\ShouldHandleEventsAfterCommit;
 use Illuminate\Support\Facades\DB;
 
@@ -39,31 +37,19 @@ final class AjouterLeCompteAuBandeau implements ShouldHandleEventsAfterCommit
             return;
         }
 
-        [$groupe, $libelle] = match ($compte->role_societe) {
-            RoleSociete::Administrateur => [ComptesDuBandeauDuModele::LA_SOCIETE, 'Administrateur'],
-            RoleSociete::ExpertComptable => [ComptesDuBandeauDuModele::LE_COMPTABLE, 'Expert-comptable déclaré'],
-            RoleSociete::Collaborateur => [ComptesDuBandeauDuModele::LE_CABINET, 'Collaborateur'],
-            default => [(string) $evenement->magasin?->nom, self::roleDansSonMagasin($compte->getKey(), $evenement->magasin?->getKey())],
-        };
+        $role = RoleAuBandeau::de($compte->load('affectations.magasin'), $societe->estUnCabinet());
 
-        app(TenantContext::class)->runAsSociete($societe, fn () => DB::transaction(function () use ($compte, $groupe, $libelle): void {
+        app(TenantContext::class)->runAsSociete($societe, fn () => DB::transaction(function () use ($compte, $role): void {
             $lignes = CompteDuBandeau::query()->lockForUpdate()->orderBy('ordre')->get(['id', 'groupe', 'ordre', 'user_id']);
 
             if ($lignes->contains('user_id', $compte->getKey())) {
                 return;
             }
 
-            $dernierDuGroupe = $lignes->where('groupe', $groupe)->max('ordre');
+            $dernierDuGroupe = $lignes->where('groupe', $role->groupe)->max('ordre');
             $ordre = is_int($dernierDuGroupe) ? $dernierDuGroupe + 1 : (int) $lignes->max('ordre') + 1;
             CompteDuBandeau::query()->where('ordre', '>=', $ordre)->increment('ordre');
-            CompteDuBandeau::query()->create(['user_id' => $compte->getKey(), 'libelle_du_role' => $libelle, 'groupe' => $groupe, 'ordre' => $ordre]);
+            CompteDuBandeau::query()->create(['user_id' => $compte->getKey(), 'libelle_du_role' => $role->libelle, 'role' => $role->cle, 'groupe' => $role->groupe, 'ordre' => $ordre]);
         }));
-    }
-
-    private static function roleDansSonMagasin(int $compteId, ?int $magasinId): string
-    {
-        $affectation = Affectation::query()->where('user_id', $compteId)->where('magasin_id', $magasinId)->first();
-
-        return $affectation?->role->getLabel() ?? 'Membre';
     }
 }

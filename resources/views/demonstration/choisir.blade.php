@@ -1,13 +1,14 @@
 {{--
     « Choisissez qui vous êtes » (lot DEMO-COPIE, C.8) : la première page
     d'une visite, et celle qui suit une réfection de la copie. Les comptes
-    de la seule société de la copie, groupés, le propriétaire en premier.
+    de la seule société de la copie, groupés, le propriétaire en premier ;
+    « Commencer en tant que propriétaire » ouvre le propriétaire actuel.
 
     @param \App\Domain\Demonstration\Visites\BandeauDeLaDemonstration $bandeau
     @param string|null $erreur le refus du dernier changement de compte
 --}}
 @php
-    $proprietaire = collect($bandeau->groupes)->flatten(1)->first();
+    $proprietaire = $bandeau->proprietaire();
 @endphp
 <!DOCTYPE html>
 <html lang="fr">

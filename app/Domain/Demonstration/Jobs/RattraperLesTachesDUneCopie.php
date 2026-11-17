@@ -11,13 +11,17 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Support\Facades\Cache;
 
 /**
- * Le rattrapage des tâches d'une copie restée plus d'une heure sans passe,
- * demandé à l'entrée d'une visite (lot DEMO-COPIE, C.13) : sur la file
- * demonstration-admin (le registre ne s'écrit que par demo_admin), les
- * tâches du calendrier des magasins dans la copie (voir
- * TachesDesCopies::passer()), pendant que la visite voit « Nous mettons
- * votre démonstration à l'heure ». Un seul rattrapage à la fois par copie
- * (verrou du cache du registre, que le travail rend à sa fin).
+ * Le rattrapage des tâches d'une copie qu'aucune passe de l'heure n'a
+ * faite (plus de 48 heures sans visite), demandé à l'entrée d'une visite
+ * (lot DEMO-COPIE, C.13) : sur sa propre file, demonstration-rattrapages,
+ * que le travailleur des copies lit avant la file default (jamais sur la
+ * file demonstration-admin, que le rattrapage, long de dix minutes au
+ * plus, retarderait), les tâches du calendrier des magasins dans la copie
+ * (voir TachesDesCopies::passer(), dont la dernière passe s'écrit au
+ * registre par la connexion de demo_admin), pendant que la visite voit
+ * « Nous mettons votre démonstration à l'heure ». Un seul rattrapage à la
+ * fois par copie (verrou du cache du registre, que le travail rend à sa
+ * fin).
  */
 final class RattraperLesTachesDUneCopie implements ShouldQueue
 {
@@ -25,14 +29,16 @@ final class RattraperLesTachesDUneCopie implements ShouldQueue
 
     public const CLE_DU_VERROU = 'demonstration:rattrapage:';
 
+    public const FILE = 'demonstration-rattrapages';
+
     public int $tries = 1;
 
     public int $timeout = 600;
 
     public function __construct(public readonly string $reference)
     {
-        $this->onConnection('demonstration');
-        $this->onQueue(CreerUneCopie::FILE);
+        $this->onConnection(self::FILE);
+        $this->onQueue(self::FILE);
     }
 
     /**

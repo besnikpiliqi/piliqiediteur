@@ -28,8 +28,8 @@ use Tests\DemonstrationTestCase;
 /**
  * La construction des bases modèles du site de démonstration (lot
  * DEMO-COPIE, C.2, N16), avec le modèle de test (DemonstrationTestCase) :
- * la bascule n'a lieu qu'avec l'isolation à zéro et caisse:verifier au code
- * 0 ; un problème garde l'ancien modèle en service et supprime la base de
+ * la bascule n'a lieu qu'avec l'isolation à zéro, le journal d'audit
+ * intègre et caisse:verifier au code 0 ; un problème garde l'ancien modèle en service et supprime la base de
  * travail ; l'ancien modèle reste « précédent » jusqu'à la construction
  * réussie suivante, qui le supprime. La construction et le nettoyage ne
  * sont planifiés que sur le site de démonstration, la nuit, sur un seul
@@ -103,6 +103,51 @@ class ConstructionDesModelesTest extends DemonstrationTestCase
         } finally {
             $this->assertFalse(Modele::on('demo_admin')->where('etat', EtatDUnModele::EnService)->exists());
         }
+    }
+
+    /**
+     * Une chaîne du journal d'audit cassée par le semis (sa dernière
+     * entrée réécrite en contournant la base, ses gardes remises ensuite :
+     * seule l'empreinte la trahit) : app:verifier-journal-audit,
+     * que la construction passe avant la bascule (C.13), échoue, et
+     * l'ancien modèle reste en service.
+     */
+    public function test_un_modele_dont_une_chaine_du_journal_d_audit_est_cassee_n_est_jamais_mis_en_service(): void
+    {
+        $ancien = $this->modeleDeTest(TypeDActivite::Services);
+        $semer = function (TypeDActivite $type, string $motDePasse): void {
+            $this->semerLeModeleDeTest($type, $motDePasse);
+            $derniere = DB::table('journal_audit')->orderByDesc('id')->first(['id']);
+            $this->assertNotNull($derniere, 'Le semis du modèle de test écrit au journal d\'audit.');
+            DB::statement('alter table journal_audit disable trigger user');
+            DB::table('journal_audit')->where('id', $derniere->id)->update(['auteur_libelle' => 'Auteur réécrit']);
+            DB::statement('alter table journal_audit enable trigger user');
+        };
+        $this->app->instance(SemisDUnModele::class, new class($semer) implements SemisDUnModele
+        {
+            /**
+             * @param  \Closure(TypeDActivite, string): void  $semer
+             */
+            public function __construct(private readonly \Closure $semer) {}
+
+            public function semer(TypeDActivite $type, string $motDePasse): void
+            {
+                ($this->semer)($type, $motDePasse);
+            }
+        });
+        $this->travelTo(self::aParis('2026-11-21 01:10:00')->addMinutes(self::jeton()));
+
+        try {
+            app(ConstruireUnModele::class)->construire(TypeDActivite::Services);
+            $this->fail('La construction devait échouer.');
+        } catch (ConstructionEnEchec $echec) {
+            $this->assertStringContainsString('La vérification du journal d\'audit du modèle', $echec->getMessage());
+            $this->assertStringContainsString('altérée ou hors de sa place dans la chaîne', $echec->getMessage());
+        }
+
+        $rate = Modele::on('demo_admin')->where('etat', EtatDUnModele::EnEchec)->sole();
+        $this->assertFalse(app(BasesDeLaDemonstration::class)->existe($rate->nom_de_la_base), 'La base de travail est supprimée.');
+        $this->assertSame($ancien->nom_de_la_base, Modele::on('demo_admin')->where('type', 'services')->where('etat', EtatDUnModele::EnService)->sole()->nom_de_la_base, 'L\'ancien modèle reste en service.');
     }
 
     public function test_la_bascule_rend_l_ancien_modele_precedent_puis_supprime_celui_d_avant(): void

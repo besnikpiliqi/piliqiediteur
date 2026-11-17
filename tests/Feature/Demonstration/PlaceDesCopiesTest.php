@@ -155,6 +155,26 @@ class PlaceDesCopiesTest extends DemonstrationTestCase
         $this->assertSame([], array_filter(app(EtatDuSite::class)->construire()['problemes'], static fn (string $probleme): bool => str_contains($probleme, 'plus aucune copie neuve ne se crée')));
     }
 
+    public function test_une_copie_se_cree_quand_le_dossier_des_copies_et_son_parent_n_existent_pas_encore(): void
+    {
+        $this->modeleDeTest(TypeDActivite::Services);
+        $neuf = storage_path('framework/testing/demonstration-neuve-'.self::jeton());
+        File::deleteDirectory($neuf);
+        config(['demonstration.dossier' => $neuf.'/absent/racine']);
+
+        try {
+            $this->assertDirectoryDoesNotExist($neuf);
+            $this->assertGreaterThan(0, EtatDuSite::placeLibre(), 'La place se mesure sur le premier dossier qui existe en remontant de la racine.');
+
+            ['copie' => $copie] = $this->copieDeTest(TypeDActivite::Services);
+
+            $this->assertSame(EtatDUneCopie::Prete, $copie->etat, 'Un poste neuf, ou une racine de production pas encore créée, n\'empêche aucune copie.');
+            $this->assertDirectoryExists(DossiersDeLaDemonstration::dUneCopie($copie->reference));
+        } finally {
+            File::deleteDirectory($neuf);
+        }
+    }
+
     /**
      * Le modèle de la copie, mesuré comme la copie maintenant : la copie est
      * juste à sa limite (DEMONSTRATION_FACTEUR_DE_PLACE à 1), le moindre

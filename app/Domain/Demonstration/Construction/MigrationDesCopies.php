@@ -2,6 +2,8 @@
 
 namespace App\Domain\Demonstration\Construction;
 
+use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
+use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Demonstration\Archives\ArchiverUneCopie;
 use App\Domain\Demonstration\Archives\FinDesCopies;
 use App\Domain\Demonstration\Bases\BasesDeLaDemonstration;
@@ -14,6 +16,9 @@ use App\Domain\Demonstration\Registre\Models\Archive;
 use App\Domain\Demonstration\Registre\Models\Copie;
 use App\Domain\Demonstration\SiteDePiliqi;
 use App\Domain\Demonstration\VersionServie;
+use App\Domain\Demonstration\Visites\OuvertureDUneCopie;
+use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Services\TenantContext;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Bus;
@@ -30,7 +35,11 @@ use Throwable;
  * migrations (communes et du site de démonstration) passent sur sa base,
  * chacune dans sa transaction, chaque requête bornée à DELAI_EN_SECONDES.
  *
- * - Réussite : l'archive d'avant la migration est effacée (la copie garde
+ * - Réussite : la copie rentre dans le mode d'entraînement (JET 100 dans
+ *   chaque magasin, après le JET 105 que l'archive a inscrit : chaque
+ *   période d'entraînement reste encadrée, et la copie n'enregistre jamais
+ *   une vente après une sortie du mode d'entraînement sans nouvelle
+ *   entrée) ; l'archive d'avant la migration est effacée (la copie garde
  *   ses données et refera son archive à sa fin) ; nouvelle empreinte du
  *   schéma et nouvelle version au registre, « prête », avec le message
  *   « … vos essais sont gardés… ».
@@ -55,9 +64,12 @@ final class MigrationDesCopies
 
     public const MOTIF_DE_L_ARCHIVE = 'avant_migration';
 
+    public const MOTIF_DE_LA_REPRISE = 'reprise_apres_migration';
+
     public function __construct(
         private readonly ArchiverUneCopie $archive,
         private readonly BasesDeLaDemonstration $bases,
+        private readonly OuvertureDUneCopie $ouverture,
     ) {}
 
     /**
@@ -125,7 +137,7 @@ final class MigrationDesCopies
             return 'laissees';
         }
 
-        $cause = $this->executerLesMigrations($copie, $dossiers);
+        $cause = $this->executerLesMigrations($copie, $dossiers) ?? $this->reprendreLeModeDEntrainement($copie);
 
         if ($cause !== null) {
             $copie->forceFill(['cause_de_l_echec' => mb_substr($cause, 0, 2000)])->save();
@@ -146,6 +158,33 @@ final class MigrationDesCopies
         ])->save();
 
         return 'migrees';
+    }
+
+    /**
+     * Le JET 100 de chaque magasin de la copie migrée, par le nouveau code,
+     * dans la copie, après le JET 105 de l'archive d'avant la migration
+     * (chaque magasin a déjà son registre : l'archive y a écrit). La cause
+     * de l'échec, ou null : une copie qui ne rentre pas dans le mode
+     * d'entraînement n'est pas resservie, elle est refaite.
+     */
+    private function reprendreLeModeDEntrainement(Copie $copie): ?string
+    {
+        try {
+            $this->ouverture->pendant($copie, function (): void {
+                $contexte = app(TenantContext::class);
+                $registre = app(RegistreFiscal::class);
+
+                foreach (Magasin::query()->withoutGlobalScopes()->orderBy('id')->get() as $magasin) {
+                    $contexte->runAs($magasin, fn () => $registre->sousVerrou($magasin, fn () => $registre->journaliser(CodeEvenement::EntreeEnModeDemonstration, ['motif' => self::MOTIF_DE_LA_REPRISE])));
+                }
+
+                $contexte->clear();
+            });
+
+            return null;
+        } catch (Throwable $erreur) {
+            return 'La copie migrée n\'a pas pu rentrer dans le mode d\'entraînement : '.$erreur->getMessage();
+        }
     }
 
     /**

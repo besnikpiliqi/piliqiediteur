@@ -3,6 +3,7 @@
 namespace Database\Seeders\Semis;
 
 use App\Domain\Demonstration\Models\CompteDuBandeau;
+use App\Domain\Demonstration\Visites\RoleAuBandeau;
 use App\Domain\Tenancy\Services\TenantContext;
 use LogicException;
 
@@ -113,6 +114,7 @@ final class ComptesDuBandeauDuModele
                     CompteDuBandeau::query()->create([
                         'user_id' => $compte->getKey(),
                         'libelle_du_role' => $libelle,
+                        'role' => RoleAuBandeau::de($compte->load('affectations.magasin'), $societe->estUnCabinet())->cle,
                         'groupe' => $nomDuGroupe,
                         'ordre' => ++$ordre,
                     ]);

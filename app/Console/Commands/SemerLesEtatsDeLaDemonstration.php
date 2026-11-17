@@ -3,7 +3,6 @@
 namespace App\Console\Commands;
 
 use App\Domain\Calendrier\Calendrier;
-use App\Domain\Demonstration\Archives\ArchiverUneCopie;
 use App\Domain\Demonstration\Archives\FinDesCopies;
 use App\Domain\Demonstration\Bases\BasesDeLaDemonstration;
 use App\Domain\Demonstration\Enums\EtatDUneCopie;
@@ -35,8 +34,8 @@ use RuntimeException;
  * en attente d'une place (celle d'une société non validée, qui passe après
  * les sociétés validées), avec le message d'une mise à jour, avec celui
  * d'une copie refaite, restée plus d'une heure sans passe de ses tâches
- * (« Nous mettons votre démonstration à l'heure »), et une archive de
- * caisse. Les liens s'écrivent à la fin de la liste des comptes du semis
+ * (« Nous mettons votre démonstration à l'heure »), et l'archive de la
+ * caisse d'une copie supprimée. Les liens s'écrivent à la fin de la liste des comptes du semis
  * (DatabaseSeeder::FICHIER_DES_COMPTES, fichier local que git ne suit
  * pas), à la place de ceux d'un passage précédent. Elle refuse en
  * production, comme le semis. Le planificateur du poste, s'il tourne,
@@ -69,12 +68,7 @@ class SemerLesEtatsDeLaDemonstration extends Command
         'a_l_heure' => 'copie restée plus d\'une heure sans passe de ses tâches : « Nous mettons votre démonstration à l\'heure »',
     ];
 
-    /**
-     * La copie juste sous sa place, dont la caisse est archivée.
-     */
-    private string $derniereReference = '';
-
-    public function handle(BasesDeLaDemonstration $bases, ArchiverUneCopie $archive): int
+    public function handle(BasesDeLaDemonstration $bases, FinDesCopies $fin): int
     {
         SiteDePiliqi::exiger(SiteDePiliqi::Demonstration);
 
@@ -92,8 +86,13 @@ class SemerLesEtatsDeLaDemonstration extends Command
 
         $maintenant = CarbonImmutable::now();
         $liens = [];
-
         $copies = [];
+
+        // L'archive : celle d'une copie supprimée ensuite, comme toute
+        // archive (JET 105 juste avant la suppression de sa base, C.18),
+        // faite avant les autres états, pour que la place qu'elle libère ne
+        // serve pas la copie en attente d'une place.
+        $fin->supprimer($this->creer(MessagesSignes::enBase64Url(random_bytes(32)), $maintenant)->reference, 'supprimer');
 
         foreach (array_keys(self::ETATS) as $etat) {
             $secret = MessagesSignes::enBase64Url(random_bytes(32));
@@ -105,8 +104,6 @@ class SemerLesEtatsDeLaDemonstration extends Command
             $this->poser($copie, $etat, $bases, $maintenant);
         }
 
-        $archivee = Copie::on('demo_admin')->where('reference', $this->derniereReference)->sole();
-        $archive->archiver($archivee, 'recommencer');
         $this->ecrireLesLiens($liens);
         $this->info(count($liens).' copie(s) semée(s), une par état, et une archive ; leurs liens sont à la fin de '.Storage::disk('local')->path(DatabaseSeeder::FICHIER_DES_COMPTES).'.');
 
@@ -156,10 +153,6 @@ class SemerLesEtatsDeLaDemonstration extends Command
             'a_l_heure' => ['derniere_passe_des_taches_le' => $maintenant->subHours(2)],
             default => [],
         })->save();
-
-        if ($etat === 'sous_la_limite') {
-            $this->derniereReference = $copie->reference;
-        }
     }
 
     /**

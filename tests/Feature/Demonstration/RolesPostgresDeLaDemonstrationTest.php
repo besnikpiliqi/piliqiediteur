@@ -6,6 +6,7 @@ use App\Domain\Demonstration\Bases\BasesDeLaDemonstration;
 use App\Domain\Demonstration\Jobs\ArchiverPuisSupprimerUneCopie;
 use App\Domain\Demonstration\Jobs\CreerUneCopie;
 use App\Domain\Demonstration\Jobs\PreparerUneCopie;
+use App\Domain\Demonstration\Jobs\RattraperLesTachesDUneCopie;
 use App\Domain\Demonstration\Jobs\RefaireUneCopie;
 use App\Domain\Demonstration\Jobs\RenouvelerLeLienDUneCopie;
 use App\Domain\Tenancy\Enums\TypeDActivite;
@@ -70,6 +71,16 @@ class RolesPostgresDeLaDemonstrationTest extends DemonstrationTestCase
         }
 
         $this->assertNotSame(CreerUneCopie::FILE, config('queue.connections.'.config('queue.default').'.queue'), 'Les travaux des copies ont une autre file : un travail de 30 minutes d\'une copie ne retarde jamais une création.');
+
+        $rattrapage = new RattraperLesTachesDUneCopie(str_repeat('a', 32));
+        $this->assertSame([RattraperLesTachesDUneCopie::FILE, RattraperLesTachesDUneCopie::FILE], [$rattrapage->connection, $rattrapage->queue], 'Le rattrapage des tâches d\'une copie, long de dix minutes au plus, a sa propre file : il ne retarde jamais une création.');
+        $this->assertNotSame(CreerUneCopie::FILE, $rattrapage->queue);
+        $configuration = require config_path('queue.php');
+        $this->assertSame(['registre', RattraperLesTachesDUneCopie::FILE, true], [
+            $configuration['connections'][RattraperLesTachesDUneCopie::FILE]['connection'],
+            $configuration['connections'][RattraperLesTachesDUneCopie::FILE]['queue'],
+            $configuration['connections'][RattraperLesTachesDUneCopie::FILE]['after_commit'],
+        ]);
     }
 
     private function connexionDesPages(string $base): PDO

@@ -17,8 +17,10 @@ use App\Models\User;
  * copie et la page « Choisissez qui vous êtes » (lot DEMO-COPIE, C.8) :
  * la société de la copie et ses seuls comptes, rangés par groupe (« La
  * société », chaque magasin, « Le comptable » ; « Le cabinet » dans la
- * copie d'un cabinet), dans l'ordre du menu, un compte suspendu grisé, un
- * compte retiré absent ; le mot de passe de démonstration du modèle, que
+ * copie d'un cabinet), dans l'ordre du menu, chacun avec son rôle et son
+ * groupe tels qu'ils sont maintenant (voir RoleAuBandeau : une nomination
+ * ou une transmission de la propriété se lit aussitôt), un compte
+ * suspendu grisé, un compte retiré absent ; le mot de passe de démonstration du modèle, que
  * redemandent les gestes qui le redemandent ; le nombre des e-mails qui
  * seraient partis de la société ; la date de fin, le repère, la date de
  * création et la version ; et, tant que la copie a dépassé sa place, que
@@ -28,7 +30,7 @@ use App\Models\User;
 final readonly class BandeauDeLaDemonstration
 {
     /**
-     * @param  array<string, list<array{id: int, nom: string, role: string, suspendu: bool}>>  $groupes
+     * @param  array<string, list<array{id: int, nom: string, role: string, suspendu: bool, proprietaire: bool}>>  $groupes
      */
     public function __construct(
         public string $societe,
@@ -44,6 +46,26 @@ final readonly class BandeauDeLaDemonstration
         public array $groupes,
         public ?int $compteChoisi,
     ) {}
+
+    /**
+     * Le compte du propriétaire actuel de la société, s'il est au bandeau
+     * (« Commencer en tant que propriétaire ») : après une transmission de
+     * la propriété, le nouveau propriétaire, jamais l'ancien.
+     *
+     * @return array{id: int, nom: string, role: string, suspendu: bool, proprietaire: bool}|null
+     */
+    public function proprietaire(): ?array
+    {
+        foreach ($this->groupes as $comptes) {
+            foreach ($comptes as $compte) {
+                if ($compte['proprietaire']) {
+                    return $compte;
+                }
+            }
+        }
+
+        return null;
+    }
 
     /**
      * Le nom du compte connecté, s'il est au bandeau.
@@ -81,9 +103,11 @@ final readonly class BandeauDeLaDemonstration
         }
 
         $groupes = [];
+        $copie = $visite->copie;
+        $estUnCabinet = $copie->type === TypeDActivite::Cabinet;
         $lignes = CompteDuBandeau::query()->withoutGlobalScopes()
             ->where('societe_id', $societe->getKey())
-            ->with('compte:id,name,statut')
+            ->with(['compte:id,societe_id,name,statut,role_societe', 'compte.affectations.magasin:id,nom'])
             ->orderBy('ordre')
             ->get();
 
@@ -94,21 +118,22 @@ final readonly class BandeauDeLaDemonstration
                 continue;
             }
 
-            $groupes[$ligne->groupe][] = [
+            $role = RoleAuBandeau::de($titulaire, $estUnCabinet);
+            $groupes[$role->groupe][] = [
                 'id' => (int) $titulaire->getKey(),
                 'nom' => $titulaire->name,
-                'role' => $ligne->libelle_du_role,
+                'role' => $role->cle === $ligne->role ? $ligne->libelle_du_role : $role->libelle,
                 'suspendu' => $titulaire->estSuspendu(),
+                'proprietaire' => $role->estProprietaire,
             ];
         }
 
         $paris = Calendrier::deParis();
-        $copie = $visite->copie;
         $message = self::messageAMontrer($visite);
 
         return new self(
             societe: $societe->getFilamentName(),
-            estUnCabinet: $copie->type === TypeDActivite::Cabinet,
+            estUnCabinet: $estUnCabinet,
             repere: $copie->repere,
             creeeLe: $paris->afficher($copie->creee_le, 'd/m/Y'),
             fin: $paris->afficher($copie->fin, 'd/m/Y'),

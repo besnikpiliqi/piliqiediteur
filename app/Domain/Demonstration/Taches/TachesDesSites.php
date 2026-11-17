@@ -50,9 +50,10 @@ use App\Console\Commands\VerifierLIsolation;
  * - DE_LA_NUIT_DES_COPIES : la vérification du registre fiscal, en mode
  *   incrémental, chaque nuit, dans chaque copie visitée depuis sa dernière
  *   vérification ; au site réel, chaque nuit.
- * - DE_LA_CONSTRUCTION_D_UN_MODELE : le contrôle de l'isolation, que la
- *   construction d'un modèle passe sur sa base de travail (voir
- *   ConstruireUnModele) ; au site réel, chaque nuit.
+ * - DE_LA_CONSTRUCTION_D_UN_MODELE : le contrôle de l'isolation et celui
+ *   des chaînes du journal d'audit, que la construction d'un modèle passe
+ *   sur sa base de travail, zéro problème exigé avant sa mise en service
+ *   (voir ConstruireUnModele) ; au site réel, chaque nuit.
  * - DU_SITE_DE_DEMONSTRATION : ce que le planificateur du site de
  *   démonstration fait passer, et rien d'autre.
  * - DU_SITE_REEL_SEUL : ce que le site réel planifie en plus des tâches de
@@ -85,7 +86,7 @@ final class TachesDesSites
     /**
      * @var list<class-string>
      */
-    public const DE_LA_CONSTRUCTION_D_UN_MODELE = [VerifierLIsolation::class];
+    public const DE_LA_CONSTRUCTION_D_UN_MODELE = [VerifierLIsolation::class, VerifierJournalAudit::class];
 
     /**
      * @var list<class-string>

@@ -11,6 +11,8 @@ use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 use Throwable;
 
 /**
@@ -30,6 +32,8 @@ final class RefaireUneCopie implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable;
 
+    public const CLE_DE_LA_COPIE_PERDUE = 'demonstration:copie-perdue:';
+
     public int $tries = 4;
 
     public int $timeout = 1800;
@@ -38,8 +42,7 @@ final class RefaireUneCopie implements ShouldQueue
         public readonly string $reference,
         public readonly string $motif = FinDesCopies::MOTIF_REMISE_A_ZERO,
         public readonly bool $archiveFaite = false,
-    )
-    {
+    ) {
         $this->onConnection('demonstration');
         $this->onQueue(CreerUneCopie::FILE);
     }
@@ -52,10 +55,33 @@ final class RefaireUneCopie implements ShouldQueue
         return [30, 120, 600];
     }
 
+    /**
+     * La réfection d'une copie dont la base n'existe plus, trouvée à une
+     * visite (voir OuvrirLaCopie) : demandée une seule fois tant qu'elle
+     * n'est pas finie (verrou du cache du registre, que le travail rend à
+     * sa fin) ; l'événement s'écrit au journal du site. Le rôle des pages
+     * ne fait qu'envoyer le travail : demo_admin seul écrit au registre et
+     * refait la copie.
+     */
+    public static function demanderPourUneCopiePerdue(string $reference): void
+    {
+        if (Cache::store('registre')->add(self::CLE_DE_LA_COPIE_PERDUE.$reference, true, 1800)) {
+            Log::warning('Une copie de la démonstration n\'a plus de base : elle est refaite depuis le modèle de son type (E.7).', ['reference' => $reference]);
+            self::dispatch($reference, FinDesCopies::MOTIF_PERDUE);
+        }
+    }
+
     public function handle(FinDesCopies $fin): void
     {
         SiteDePiliqi::exiger(SiteDePiliqi::Demonstration);
-        $fin->refaire($this->reference, $this->motif, $this->archiveFaite);
+
+        try {
+            $fin->refaire($this->reference, $this->motif, $this->archiveFaite);
+        } finally {
+            if ($this->motif === FinDesCopies::MOTIF_PERDUE) {
+                Cache::store('registre')->forget(self::CLE_DE_LA_COPIE_PERDUE.$this->reference);
+            }
+        }
     }
 
     public function failed(?Throwable $erreur): void

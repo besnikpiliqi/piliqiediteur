@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 17/11/2026 à 07:07 UTC par pilotage-sync.sh : « CI rouge de 7c5edc7a notée ».
+Mis à jour le 17/11/2026 à 07:50 UTC par pilotage-sync.sh : « CI 7c5edc7a : 15 échecs notés ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -37,8 +37,8 @@ e405d27b Régularisation après une correction de SIREN et relances (lot REGUL)
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
-UU CLAUDE.md
-UU README.md
+M  CLAUDE.md
+M  README.md
 M  app/Domain/Facturation/Actions/CreerDevisAction.php
 M  app/Domain/Facturation/Actions/EmettreDevisAction.php
 M  app/Domain/Facturation/Actions/EnvoyerDocumentAction.php
@@ -65,24 +65,25 @@ M  app/Http/Controllers/ReponseAuDevisController.php
 M  database/migrations/0001_01_01_000000_create_magasins_table.php
 M  database/migrations/2026_10_03_100001_create_devis_table.php
 M  database/migrations/2026_10_14_100008_create_reponses_des_devis_table.php
-UU database/seeders/Semis/DocumentsDesCas.php
+M  database/seeders/Semis/DocumentsDesCas.php
 M  database/seeders/Semis/SemisComplet.php
 M  resources/views/devis/pdf.blade.php
 M  resources/views/devis/reponse-enregistree.blade.php
 M  resources/views/devis/reponse.blade.php
 M  resources/views/documents/pdf/styles.blade.php
 M  resources/views/mail/document.blade.php
+M  tests/Browser/Demonstration/DansLaCopieTest.php
 A  tests/Browser/Parcours/DevisDeDepannageADomicileTest.php
-UU tests/Browser/Parcours/ReponseAuDevisEnLigneTest.php
+M  tests/Browser/Parcours/ReponseAuDevisEnLigneTest.php
 M  tests/Browser/inventaire-des-actions.php
 M  tests/Feature/CaisseSecurisee/ProtectionDesTablesTest.php
 M  tests/Feature/Calendrier/IsolationDesCalendriersTest.php
+M  tests/Feature/Demonstration/BasesModelesTest.php
 A  tests/Feature/Facturation/DevisDeDepannageADomicileTest.php
 M  tests/Feature/Facturation/EnvoyerDocumentJobConcurrenceTest.php
 M  tests/Feature/Facturation/EnvoyerDocumentJobTest.php
-UU tests/Feature/Facturation/ReponseAuDevisEnLigneTest.php
+M  tests/Feature/Facturation/ReponseAuDevisEnLigneTest.php
 M  tests/Feature/Filament/ParametresFacturesTest.php
-UU tests/Feature/SemisCompletTest.php
 M  tests/Feature/Tenancy/TenantIsolationTest.php
 M  tests/Unit/matrice-des-decisions.php
 ```

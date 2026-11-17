@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 17/11/2026 à 01:31 UTC par pilotage-sync.sh : « Point de suivi 01:32 ».
+Mis à jour le 17/11/2026 à 01:34 UTC par pilotage-sync.sh : « Reprise après 2e redémarrage ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -55,6 +55,7 @@ RM app/Domain/Demonstration/Jobs/RecommencerUneCopie.php -> app/Domain/Demonstra
  M app/Domain/Tenancy/Isolation/ReglesDIsolation.php
  M app/Domain/Tenancy/Models/TelechargementDeDocuments.php
  M app/Domain/Tenancy/Services/CreationDesComptes.php
+ M app/Domain/Tenancy/Services/TraceDuVisiteur.php
  M app/Http/Controllers/Demonstration/EntrerDansLaDemonstrationController.php
  M app/Http/Middleware/OuvrirLaCopie.php
  M app/Providers/CourrielsServiceProvider.php
@@ -91,13 +92,12 @@ RM app/Domain/Demonstration/Jobs/RecommencerUneCopie.php -> app/Domain/Demonstra
 ?? app/Domain/Demonstration/Models/CourrielDeLaDemonstration.php
 ?? app/Domain/Demonstration/Taches/
 ?? app/Domain/Demonstration/Visites/BandeauDeLaDemonstration.php
+?? app/Domain/Demonstration/Visites/SessionsSansTrace.php
 ?? app/Domain/Demonstration/Visites/SocieteDeLaCopie.php
 ?? app/Domain/Tenancy/Events/CompteCree.php
 ?? app/Http/Controllers/Demonstration/ChoisirQuiVousEtesController.php
 ?? app/Http/Controllers/Demonstration/CourrielsDeLaDemonstrationController.php
 ?? app/Http/Controllers/Demonstration/Redirection.php
-?? app/Providers/SiteDeDemonstrationServiceProvider.php
-?? database/migrations-demonstration/2026_11_16_300002_create_courriels_de_la_demonstration_table.php
 ```
 
 ## Dernière course de la chaîne

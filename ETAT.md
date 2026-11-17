@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 17/11/2026 à 23:30 UTC par pilotage-sync.sh : « Consignes de l'éditeur sur le semis complet, sauvegarde seulement ».
+Mis à jour le 17/11/2026 à 23:39 UTC par pilotage-sync.sh : « Consigne : listes triées du plus récent au plus ancien ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

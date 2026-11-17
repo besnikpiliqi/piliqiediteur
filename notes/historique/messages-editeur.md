@@ -3698,3 +3698,11 @@ il doit pas prendre tout la longeur mais tombre sur la prochain apres le "point"
 
 ah non  c 'est bien j ai pas vu les autre magasin, eux sont bien remplis mais quand meme tu fait ce que tu vas faire, donc remplir tout tout les etat dans tous les magasin. Et j'ai dit tu commence pas mtn mais juste tu sauvegarde pour quand tu commnce à travaille alors tu sais ce que je t ai deja dit
 
+## 399. 2026-11-17 23:31 UTC
+
+et pour le devis signe par internet et note sur le devis je crois que t es en train de le faire
+
+## 400. 2026-11-17 23:38 UTC
+
+je vois que tout, donc devis, facture tout tout il s 'arrange pas par les recents donc les dernier doivent affiche qu debut par defaut
+

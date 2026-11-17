@@ -527,3 +527,4 @@
 - 17/11 22:35 UTC — Poste de l éditeur : la démonstration de Maison Ferrand s ouvre (page « Choisissez qui vous êtes », bandeau, 4 e-mails captés) après 4 corrections manuelles. Défaut cosmétique noté : « (compte suspendu) » écrit deux fois. Course toujours arrêtée, aucune reprise sans consigne.
 - 17/11 23:5x UTC — Audit du semis (7 agents, lecture seule) terminé : le magasin de Fort-de-France est vide, 8 lots proposés (semis-complet-plan-17-11.md). En attente de la consigne de l'éditeur.
 - 17/11 23:5x UTC — Consigne de l'éditeur : ne rien commencer (semis complet, pastille, bandeau) ; tout est sauvegardé dans semis-complet-plan-17-11.md. Attente de la consigne de départ.
+- 17/11 nuit — Consigne de l'éditeur : listes triées par défaut du plus récent au plus ancien (noté, pas commencé).

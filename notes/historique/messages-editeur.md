@@ -3172,3 +3172,13 @@ donc super pdp ou les pa demande en six decimale ou deja arrondi
 
 tu peux commencer avec sonnet 5.5 eleve ultracode sil te plait. donc tu arret et perd rien mais tu commence avec ce model sonnet 5.5 élevé ultracode
 
+## 369. 2026-11-17 09:19 UTC
+
+<!-- attach -->
+
+> Sonnet 5.5 ne reproduit pas tout à fait la qualité d’Opus sur les points fins (argent, isolation, caisse, concurrence), et j’ai baissé l’effort à « élevé ». Les garde-fous restent (tests, suite PostgreSQL, deux relectures, CI), mais je peux aussi garder Opus pour les lots sensibles ou les relectures si vous le souhaitez ; je reprends avec Sonnet 5.5 sauf indication contraire.
+
+
+
+oui ce que tu pense meilleur
+

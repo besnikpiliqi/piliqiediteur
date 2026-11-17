@@ -1,12 +1,13 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 17/11/2026 à 08:06 UTC par pilotage-sync.sh : « Reprise sous Sonnet 5.5 ».
+Mis à jour le 17/11/2026 à 09:19 UTC par pilotage-sync.sh : « Sonnet écrit, Opus relit ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
 Tête poussée : `7c5edc7a`. Commits locaux pas encore poussés :
 
 ```
+a4ca0549 Réparation de la CI rouge de 7c5edc7a
 ```
 
 Derniers commits poussés :
@@ -38,7 +39,7 @@ e405d27b Régularisation après une correction de SIREN et relances (lot REGUL)
 
 ```
 M  CLAUDE.md
-M  README.md
+MM README.md
 M  app/Domain/Facturation/Actions/CreerDevisAction.php
 M  app/Domain/Facturation/Actions/EmettreDevisAction.php
 M  app/Domain/Facturation/Actions/EnvoyerDocumentAction.php
@@ -84,6 +85,7 @@ M  tests/Feature/Facturation/EnvoyerDocumentJobConcurrenceTest.php
 M  tests/Feature/Facturation/EnvoyerDocumentJobTest.php
 M  tests/Feature/Facturation/ReponseAuDevisEnLigneTest.php
 M  tests/Feature/Filament/ParametresFacturesTest.php
+ M tests/Feature/SemisCompletTest.php
 M  tests/Feature/Tenancy/TenantIsolationTest.php
 M  tests/Unit/matrice-des-decisions.php
 ```

@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 17/11/2026 à 07:04 UTC par pilotage-sync.sh : « Après le lot DEMO-COPIE-3 ».
+Mis à jour le 17/11/2026 à 07:06 UTC par pilotage-sync.sh : « DEMO-COPIE-3 poussé ; DEVIS-RET lancé ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -41,32 +41,8 @@ e405d27b Régularisation après une correction de SIREN et relances (lot REGUL)
 
 ## Dernière course de la chaîne
 
-Course `wf_b2591b35-919`, étapes commencées (de la plus ancienne à la plus récente) :
+Course `wf_a558d16d-efa`, étapes commencées (de la plus ancienne à la plus récente) :
 
 ```
-DEMO-COPIE-1:implementation-3
-DEMO-COPIE-1:relecture1
-DEMO-COPIE-1:relecture2
-DEMO-COPIE-1:correction
-DEMO-COPIE-1:poussee
-DEMO-COPIE-1:notes
-DEMO-COPIE-2:implementation
-DEMO-COPIE-2:implementation-2
-DEMO-COPIE-2:implementation-3
-DEMO-COPIE-2:implementation-4
-DEMO-COPIE-2:implementation-5
-DEMO-COPIE-2:implementation-6
-DEMO-COPIE-2:relecture1
-DEMO-COPIE-2:relecture2
-DEMO-COPIE-2:correction
-DEMO-COPIE-2:poussee
-DEMO-COPIE-2:notes
-DEMO-COPIE-3:implementation
-DEMO-COPIE-3:implementation-2
-DEMO-COPIE-3:implementation-3
-DEMO-COPIE-3:relecture1
-DEMO-COPIE-3:relecture2
-DEMO-COPIE-3:correction
-DEMO-COPIE-3:poussee
-DEMO-COPIE-3:notes
+DEVIS-RET:implementation
 ```

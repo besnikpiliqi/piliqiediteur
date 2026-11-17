@@ -26,7 +26,9 @@ use Symfony\Component\Console\Input\InputInterface;
  * il lit le site que sert ce serveur (PILIQI_SITE, voir SiteDePiliqi) et
  * refuse de démarrer, avec la cause en français et ce qu'il faut écrire,
  * quand la configuration ne convient pas à ce site (lot DEMO-COPIE, A.3 et
- * A.4). Il ne remplace jamais un réglage en silence.
+ * A.4). Il ne remplace jamais un réglage en silence. Seules les commandes
+ * que Composer lance en construisant le paquet, sans .env, démarrent sans
+ * cette garde (voir COMMANDES_DE_LA_CONSTRUCTION_DU_PAQUET).
  *
  * Sur le site de démonstration, il refuse :
  * - un vrai fournisseur extérieur (Sirene, registre national des
@@ -90,6 +92,17 @@ final class SiteDePiliqiServiceProvider extends ServiceProvider
     public const MOTIF_DES_BASES_DE_LA_DEMONSTRATION = '/^demo_(travail|copie)_[a-z0-9_]+$/';
 
     public const CHEMIN_DES_MIGRATIONS_DU_REGISTRE = 'database/migrations-registre';
+
+    /**
+     * Les commandes que Composer lance en construisant le paquet (scripts
+     * post-autoload-dump et post-update-cmd de composer.json), avant
+     * qu'aucun .env ne soit posé : le paquet se construit une fois, pour
+     * les deux sites, et chaque serveur refait ses caches après la pose de
+     * son .env (lot DEMO-COPIE, E.1). Elles ne servent aucune page, ne
+     * lisent aucune base et ne signent rien : elles démarrent sans la
+     * garde, qui ne pourrait lire qu'une configuration absente.
+     */
+    public const COMMANDES_DE_LA_CONSTRUCTION_DU_PAQUET = ['package:discover', 'filament:upgrade', 'vendor:publish'];
 
     /**
      * Les commandes qui écrivent ou effacent le schéma d'une base.
@@ -207,6 +220,10 @@ final class SiteDePiliqiServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        if ($this->app->runningConsoleCommand(self::COMMANDES_DE_LA_CONSTRUCTION_DU_PAQUET)) {
+            return;
+        }
+
         $site = SiteDePiliqi::courant();
         $refus = $site === SiteDePiliqi::Demonstration ? $this->refusDeLaDemonstration() : $this->refusDuSiteReel();
 

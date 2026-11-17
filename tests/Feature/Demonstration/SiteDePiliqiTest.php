@@ -23,6 +23,7 @@ use Mockery;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Symfony\Component\Console\Input\ArrayInput;
 use Symfony\Component\HttpFoundation\Exception\SuspiciousOperationException;
+use Symfony\Component\Process\Process;
 use Tests\TestCase;
 
 /**
@@ -361,6 +362,66 @@ class SiteDePiliqiTest extends TestCase
         config(['session.cookie' => '__Host-piliqi-session', 'session.domain' => null, 'session.path' => '/', 'piliqi.hotes_de_confiance' => ['piliqi.fr', '*.piliqi.fr']]);
 
         $this->assertSame(sprintf(SiteDePiliqiServiceProvider::MESSAGE_REFUS, 'site réel', sprintf(SiteDePiliqiServiceProvider::MESSAGE_HOTE_DE_CONFIANCE, '*.piliqi.fr')), $this->refusDuDemarrage());
+    }
+
+    /**
+     * Composer construit le paquet sans .env (E.1) : ses commandes
+     * démarrent sans la garde, que toute autre commande garde, même
+     * lancée par Composer. Le serveur de production, lui, refuse toujours
+     * de démarrer avec ce témoin de session.
+     */
+    public function test_seules_les_commandes_de_la_construction_du_paquet_demarrent_sans_la_garde(): void
+    {
+        $this->app->detectEnvironment(fn (): string => 'production');
+        config(['session.cookie' => 'piliqi-session']);
+        $argumentsDuProcessus = $_SERVER['argv'];
+
+        try {
+            foreach (SiteDePiliqiServiceProvider::COMMANDES_DE_LA_CONSTRUCTION_DU_PAQUET as $commande) {
+                $_SERVER['argv'] = ['artisan', $commande];
+                $this->demarrer();
+            }
+
+            $_SERVER['argv'] = ['artisan', 'about'];
+            $this->assertStringContainsString(SiteDePiliqiServiceProvider::MESSAGE_TEMOIN_DE_PRODUCTION, $this->refusDuDemarrage());
+        } finally {
+            $_SERVER['argv'] = $argumentsDuProcessus;
+        }
+
+        $composer = json_decode((string) file_get_contents(base_path('composer.json')), true, flags: JSON_THROW_ON_ERROR);
+        $this->assertIsArray($composer);
+        $this->assertIsArray($composer['scripts']);
+        $lancees = [];
+
+        foreach (['post-autoload-dump', 'post-update-cmd', 'post-install-cmd'] as $etape) {
+            foreach ((array) ($composer['scripts'][$etape] ?? []) as $script) {
+                if (is_string($script) && preg_match('/^@php artisan ([a-z:-]+)/', $script, $commande) === 1) {
+                    $lancees[] = $commande[1];
+                }
+            }
+        }
+
+        $this->assertNotSame([], $lancees);
+        $this->assertSame([], array_values(array_diff($lancees, SiteDePiliqiServiceProvider::COMMANDES_DE_LA_CONSTRUCTION_DU_PAQUET)), 'Chaque commande que Composer lance en construisant le paquet démarre sans .env.');
+    }
+
+    /**
+     * Le script de Composer, tel que la CI et le déploiement le lancent :
+     * en production, sans .env qui règle le témoin de session,
+     * package:discover passe, une autre commande s'arrête sur la garde.
+     */
+    public function test_composer_construit_le_paquet_en_production_sans_env(): void
+    {
+        $environnement = ['APP_ENV' => 'production', 'SESSION_COOKIE' => 'piliqi-session'];
+
+        $construction = Process::fromShellCommandline(PHP_BINARY.' artisan package:discover', base_path(), $environnement);
+        $construction->run();
+        $this->assertSame(0, $construction->getExitCode(), $construction->getOutput().$construction->getErrorOutput());
+
+        $autre = Process::fromShellCommandline(PHP_BINARY.' artisan about --only=environment', base_path(), $environnement);
+        $autre->run();
+        $this->assertSame(1, $autre->getExitCode());
+        $this->assertStringContainsString('le témoin de session porte le préfixe __Host-', $autre->getOutput().$autre->getErrorOutput());
     }
 
     /**

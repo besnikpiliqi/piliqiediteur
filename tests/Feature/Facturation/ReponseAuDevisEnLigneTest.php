@@ -108,9 +108,13 @@ class ReponseAuDevisEnLigneTest extends TestCase
             ->assertSee('Bon pour accord')
             ->assertSee('Accepter le devis')
             ->assertSee('Refuser le devis')
-            ->assertDontSee('/app', false)
-            ->assertDontSee('/societe', false);
-        $this->assertSame(1, preg_match_all('/href="([^"]+)"/', (string) $reponse->getContent(), $liens));
+            ->assertDontSee(url('/app'), false)
+            ->assertDontSee(url('/societe'), false)
+            ->assertDontSee('href="/app', false)
+            ->assertDontSee('href="/societe', false);
+        // Le seul lien de la page est celui du PDF ; la feuille du pied de
+        // page (<link rel="stylesheet">) n'est pas un lien qu'on suit.
+        $this->assertSame(1, preg_match_all('/<a\b[^>]*\bhref="([^"]+)"/', (string) $reponse->getContent(), $liens));
         $this->assertSame([route('devis.reponse.pdf', ['jeton' => $jeton])], $liens[1]);
     }
 
@@ -191,7 +195,7 @@ class ReponseAuDevisEnLigneTest extends TestCase
                     ->assertDontSee('Revenir à l\'accueil', false)
                     ->assertHeader('X-Robots-Tag', 'noindex, nofollow')
                     ->assertHeader('Referrer-Policy', 'no-referrer');
-                $this->assertSame(0, preg_match_all('/href="/', (string) $reponse->getContent()));
+                $this->assertSame(0, preg_match_all('/<a\b[^>]*\bhref="/', (string) $reponse->getContent()));
             }
         }
 

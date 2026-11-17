@@ -3276,3 +3276,159 @@ Au caractère Ligne:1 : 1
 
     + FullyQualifiedErrorId : CommandNotFoundException
 
+## 373. 2026-11-17 09:41 UTC
+
+PS C:\xampp\htdocs\piliqiediteur-v2> php artisan --env=demonstration key:generate
+
+
+
+   App\Domain\Demonstration\Exceptions\SiteMalConfigureException 
+
+
+
+  Ce serveur ne peut pas servir le site de démonstration : la clé du journal d'audit courante (JOURNAL_AUDIT_CLE) n'est pas épinglée « démonstration » dans resources/journal-audit/cles-demonstration.txt : tirez une clé propre à ce site, puis php artisan journal-audit:epingler-la-cle, jamais celle du site réel.
+
+
+
+  at app\Providers\SiteDePiliqiServiceProvider.php:231
+
+    227▕         $site = SiteDePiliqi::courant();
+
+    228▕         $refus = $site === SiteDePiliqi::Demonstration ? $this->refusDeLaDemonstration() : $this->refusDuSiteReel();
+
+    229▕ 
+
+    230▕         if ($refus !== []) {
+
+  ➜ 231▕             throw new SiteMalConfigureException(sprintf(self::MESSAGE_REFUS, $site->libelle(), implode(' ', $refus)));
+
+    232▕         }
+
+    233▕ 
+
+    234▕         if ($site === SiteDePiliqi::Demonstration) {
+
+    235▕             Http::preventStrayRequests();
+
+
+
+  1   vendor\laravel\framework\src\Illuminate\Container\BoundMethod.php:36
+
+      App\Providers\SiteDePiliqiServiceProvider::boot()
+
+
+
+  2   vendor\laravel\framework\src\Illuminate\Container\Util.php:43
+
+      Illuminate\Container\BoundMethod::{closure:Illuminate\Container\BoundMethod::call():35}()
+
+## 374. 2026-11-17 09:46 UTC
+
+PS C:\xampp\htdocs\piliqiediteur-v2> php artisan --env=demonstration key:generate
+
+
+
+   App\Domain\Demonstration\Exceptions\SiteMalConfigureException 
+
+
+
+  Ce serveur ne peut pas servir le site de démonstration : la clé du journal d'audit courante (JOURNAL_AUDIT_CLE) n'est pas épinglée « démonstration » dans resources/journal-audit/cles-demonstration.txt : tirez une clé propre à ce site, puis php artisan journal-audit:epingler-la-cle, jamais celle du site réel.
+
+
+
+  at app\Providers\SiteDePiliqiServiceProvider.php:231
+
+    227▕         $site = SiteDePiliqi::courant();
+
+    228▕         $refus = $site === SiteDePiliqi::Demonstration ? $this->refusDeLaDemonstration() : $this->refusDuSiteReel();
+
+    229▕ 
+
+    230▕         if ($refus !== []) {
+
+  ➜ 231▕             throw new SiteMalConfigureException(sprintf(self::MESSAGE_REFUS, $site->libelle(), implode(' ', $refus)));
+
+    232▕         }
+
+    233▕ 
+
+    234▕         if ($site === SiteDePiliqi::Demonstration) {
+
+    235▕             Http::preventStrayRequests();
+
+
+
+  1   vendor\laravel\framework\src\Illuminate\Container\BoundMethod.php:36
+
+      App\Providers\SiteDePiliqiServiceProvider::boot()
+
+
+
+  2   vendor\laravel\framework\src\Illuminate\Container\Util.php:43
+
+      Illuminate\Container\BoundMethod::{closure:Illuminate\Container\BoundMethod::call():35}()
+
+## 375. 2026-11-17 09:48 UTC
+
+PS C:\xampp\htdocs\piliqiediteur-v2> type resources\journal-audit\cles-demonstration.txt
+
+type : Impossible de trouver le chemin d'accès «C:\xampp\htdocs\piliqiediteur-v2\resources\journal-audit\cles-demonstration.txt», 
+
+car il n'existe pas.
+
+Au caractère Ligne:1 : 1
+
++ type resources\journal-audit\cles-demonstration.txt
+
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+    + CategoryInfo          : ObjectNotFound: (C:\xampp\htdocs...monstration.txt:String) [Get-Content], ItemNotFoundException
+
+    + FullyQualifiedErrorId : PathNotFound,Microsoft.PowerShell.Commands.GetContentCommand
+
+## 376. 2026-11-17 09:49 UTC
+
+PS C:\xampp\htdocs\piliqiediteur-v2> php artisan --env=demonstration journal-audit:epingler-la-cle
+
+
+
+   App\Domain\Demonstration\Exceptions\SiteMalConfigureException 
+
+
+
+  Ce serveur ne peut pas servir le site de démonstration : la clé du journal d'audit courante (JOURNAL_AUDIT_CLE) n'est pas épinglée « démonstration » dans resources/journal-audit/cles-demonstration.txt : tirez une clé propre à ce site, puis php artisan journal-audit:epingler-la-cle, jamais celle du site réel.
+
+
+
+  at app\Providers\SiteDePiliqiServiceProvider.php:231
+
+    227▕         $site = SiteDePiliqi::courant();
+
+    228▕         $refus = $site === SiteDePiliqi::Demonstration ? $this->refusDeLaDemonstration() : $this->refusDuSiteReel();
+
+    229▕ 
+
+    230▕         if ($refus !== []) {
+
+  ➜ 231▕             throw new SiteMalConfigureException(sprintf(self::MESSAGE_REFUS, $site->libelle(), implode(' ', $refus)));
+
+    232▕         }
+
+    233▕ 
+
+    234▕         if ($site === SiteDePiliqi::Demonstration) {
+
+    235▕             Http::preventStrayRequests();
+
+
+
+  1   vendor\laravel\framework\src\Illuminate\Container\BoundMethod.php:36
+
+      App\Providers\SiteDePiliqiServiceProvider::boot()
+
+
+
+  2   vendor\laravel\framework\src\Illuminate\Container\Util.php:43
+
+      Illuminate\Container\BoundMethod::{closure:Illuminate\Container\BoundMethod::call():35}()
+

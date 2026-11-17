@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 17/11/2026 à 09:37 UTC par pilotage-sync.sh : « DEVIS-RET commité ».
+Mis à jour le 17/11/2026 à 09:50 UTC par pilotage-sync.sh : « Défaut runningConsoleCommand noté ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

@@ -3031,6 +3031,46 @@ return [
             'tests/Browser/Parcours/MaDemonstrationTest.php › le propriétaire ouvre sa démonstration par le bouton, dans un nouvel onglet',
         ]],
     ],
+    'resources/views/demonstration/bandeau.blade.php' => [
+        'formulaire:{{ route(\'demonstration.changer-de-compte\') }}' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Demonstration/DansLaCopieTest.php › le visiteur entre par le lien, choisit la vendeuse, vend à la caisse en son nom, puis passe au propriétaire, qui voit sa caisse ouverte',
+            'tests/Browser/Demonstration/DansLaCopieTest.php › le propriétaire ferme un magasin avec le mot de passe de démonstration, l’expert-comptable déclaré valide une charge, puis « Quitter » retire le témoin',
+        ]],
+        'formulaire:{{ route(\'demonstration.quitter\') }}' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Demonstration/DansLaCopieTest.php › le propriétaire ferme un magasin avec le mot de passe de démonstration, l’expert-comptable déclaré valide une charge, puis « Quitter » retire le témoin',
+        ]],
+        'lien:E-mails qui seraient partis : {{ $bandeau->courriels }}' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Demonstration/DansLaCopieTest.php › la responsable envoie une facture par e-mail, la lit dans « E-mails qui seraient partis » avec sa pièce jointe, puis le client accepte le devis par le lien de son e-mail',
+            'tests/Browser/Demonstration/DansLaCopieTest.php › « E-mails qui seraient partis » se lit par pages de cinquante',
+        ]],
+    ],
+    'resources/views/demonstration/choisir.blade.php' => [
+        'formulaire:{{ route(\'demonstration.changer-de-compte\') }}' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Demonstration/DansLaCopieTest.php › le visiteur entre par le lien, choisit la vendeuse, vend à la caisse en son nom, puis passe au propriétaire, qui voit sa caisse ouverte',
+            'tests/Browser/Demonstration/DansLaCopieTest.php › la responsable envoie une facture par e-mail, la lit dans « E-mails qui seraient partis » avec sa pièce jointe, puis le client accepte le devis par le lien de son e-mail',
+            'tests/Browser/Demonstration/DansLaCopieTest.php › « E-mails qui seraient partis » se lit par pages de cinquante',
+            'tests/Browser/Demonstration/DansLaCopieTest.php › le propriétaire ferme un magasin avec le mot de passe de démonstration, l’expert-comptable déclaré valide une charge, puis « Quitter » retire le témoin',
+        ]],
+    ],
+    'resources/views/demonstration/courriel.blade.php' => [
+        'lien:Tous les e-mails qui seraient partis' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Demonstration/DansLaCopieTest.php › la responsable envoie une facture par e-mail, la lit dans « E-mails qui seraient partis » avec sa pièce jointe, puis le client accepte le devis par le lien de son e-mail',
+        ]],
+        'lien:{{ $piece[\'nom\'] }}' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Demonstration/DansLaCopieTest.php › la responsable envoie une facture par e-mail, la lit dans « E-mails qui seraient partis » avec sa pièce jointe, puis le client accepte le devis par le lien de son e-mail',
+        ]],
+    ],
+    'resources/views/demonstration/courriels.blade.php' => [
+        'lien:Page précédente' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Demonstration/DansLaCopieTest.php › « E-mails qui seraient partis » se lit par pages de cinquante',
+        ]],
+        'lien:Page suivante' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Demonstration/DansLaCopieTest.php › « E-mails qui seraient partis » se lit par pages de cinquante',
+        ]],
+        'lien:{{ $courriel->objet }}' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Demonstration/DansLaCopieTest.php › la responsable envoie une facture par e-mail, la lit dans « E-mails qui seraient partis » avec sa pièce jointe, puis le client accepte le devis par le lien de son e-mail',
+        ]],
+    ],
     'resources/views/filament/ma-demonstration.blade.php' => [
         'formulaire:{{ route(\'ma-demonstration.ouvrir\') }}' => ['lot' => 'NAV-4', 'tests' => [
             'tests/Browser/Parcours/MaDemonstrationTest.php › le propriétaire ouvre sa démonstration par le bouton, dans un nouvel onglet',

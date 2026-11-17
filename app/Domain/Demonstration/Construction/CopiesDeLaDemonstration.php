@@ -6,6 +6,7 @@ use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Demonstration\Bases\BasesDeLaDemonstration;
 use App\Domain\Demonstration\Enums\EtatDUneCopie;
 use App\Domain\Demonstration\Enums\EtatDUnModele;
+use App\Domain\Demonstration\Etat\EtatDuSite;
 use App\Domain\Demonstration\Exceptions\CopieImpossible;
 use App\Domain\Demonstration\Registre\Models\Copie;
 use App\Domain\Demonstration\Registre\Models\Modele;
@@ -129,6 +130,7 @@ final class CopiesDeLaDemonstration
                 'version' => VersionServie::courante(),
                 'empreinte_du_schema' => $modele->empreinte_du_schema,
                 'prete_le' => CarbonImmutable::now(),
+                'derniere_passe_des_taches_le' => CarbonImmutable::now(),
                 'essais' => 0,
                 'prochain_essai_le' => null,
                 'cause_de_l_echec' => null,
@@ -173,13 +175,19 @@ final class CopiesDeLaDemonstration
     }
 
     /**
-     * Une place pour cette copie : sous le plafond, sous la part des
-     * sociétés non validées pour une société non validée, et aucune
-     * demande plus prioritaire n'attend (une société validée d'abord, puis
-     * la plus ancienne).
+     * Une place pour cette copie : le disque des copies a encore sa place
+     * libre minimale (C.16 : sous 20 %, plus aucune copie neuve, et l'état
+     * publié alerte l'éditeur), sous le plafond, sous la part des sociétés
+     * non validées pour une société non validée, et aucune demande plus
+     * prioritaire n'attend (une société validée d'abord, puis la plus
+     * ancienne).
      */
     public function aUnePlace(Copie $copie): bool
     {
+        if (EtatDuSite::placeLibreInsuffisante()) {
+            return false;
+        }
+
         $maximum = max(0, (int) config('demonstration.copies_max'));
         $partDesValidees = min(100, max(0, (int) config('demonstration.part_des_validees')));
         $occupees = Copie::on('demo_admin')->whereKeyNot($copie->id)->whereIn('etat', self::etatsQuiOccupent());

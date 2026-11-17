@@ -5,13 +5,14 @@
     terminée le dit ; une copie indisponible (une anomalie du registre, que
     l'état publié signale à l'éditeur) le dit sans se relire.
 
-    @param string $cas se_prepare, en_attente_d_une_place, mise_a_jour, terminee ou indisponible
+    @param string $cas se_prepare, en_attente_d_une_place, mise_a_jour, a_l_heure, terminee ou indisponible
 --}}
 @php
     $textes = [
         'se_prepare' => ['Votre démonstration se prépare', 'Cette page se relit seule dans quelques secondes.'],
         'en_attente_d_une_place' => ['Votre démonstration sera prête dès qu\'une place se libère', 'Cette page se relit seule ; vous pouvez aussi revenir plus tard par le même lien.'],
         'mise_a_jour' => ['Mise à jour en cours, une minute', 'Cette page se relit seule.'],
+        'a_l_heure' => ['Nous mettons votre démonstration à l\'heure', 'Les clôtures, les relances et les échéances depuis votre dernière visite se rattrapent. Cette page se relit seule.'],
         'terminee' => ['Cette démonstration est terminée', 'Le propriétaire de la société peut en créer une nouvelle depuis son compte.'],
         'indisponible' => ['Votre démonstration est indisponible pour le moment', 'L\'éditeur en est prévenu. Réessayez plus tard par le même lien.'],
     ];

@@ -5,6 +5,7 @@ namespace App\Domain\Charges\Support;
 use App\Domain\Charges\Enums\EtatDeLaCharge;
 use App\Domain\Charges\Enums\FormatDeLEtat;
 use App\Domain\Charges\Models\Charge;
+use App\Domain\Demonstration\SiteDePiliqi;
 use App\Domain\Fichiers\NomDeFichier;
 
 /**
@@ -40,11 +41,22 @@ final readonly class ContenuDeLEtat
     ) {}
 
     /**
-     * Le titre de l'état : « État des charges — année 2026 ».
+     * Le titre de l'état : « État des charges — année 2026 » ; sur le site
+     * de démonstration, précédé de « Démonstration — sans valeur · » (lot
+     * DEMO-COPIE, C.10), comme le nom du fichier.
      */
     public function titre(): string
     {
-        return 'État des charges — '.TextesDesCharges::enMinuscule($this->filtres->periode);
+        return self::marqueDeLaDemonstration(' · ').'État des charges — '.TextesDesCharges::enMinuscule($this->filtres->periode);
+    }
+
+    /**
+     * « Démonstration — sans valeur » suivi de ce séparateur, sur le site de
+     * démonstration seulement ; rien au réel.
+     */
+    public static function marqueDeLaDemonstration(string $separateur): string
+    {
+        return SiteDePiliqi::estLaDemonstration() ? 'Démonstration — sans valeur'.$separateur : '';
     }
 
     /**
@@ -60,7 +72,7 @@ final readonly class ContenuDeLEtat
         $civile = str_ends_with($premier, '-01') && $dernier === substr($premier, 0, 4).'-12';
         $periode = $civile ? substr($premier, 0, 4) : TextesDesCharges::enMinuscule($this->filtres->periode);
 
-        return NomDeFichier::dUnFichierProduit("Charges {$periode} — {$this->denomination}", $format->value);
+        return NomDeFichier::dUnFichierProduit(self::marqueDeLaDemonstration(' — ')."Charges {$periode} — {$this->denomination}", $format->value);
     }
 
     /**

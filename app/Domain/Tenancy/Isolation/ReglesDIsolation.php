@@ -307,6 +307,7 @@ final class ReglesDIsolation
      */
     public const TABLES_DE_LA_DEMONSTRATION = [
         'comptes_du_bandeau' => self::SOCIETE,
+        'courriels_de_la_demonstration' => self::SOCIETE,
     ];
 
     /**

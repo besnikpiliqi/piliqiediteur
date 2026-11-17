@@ -82,7 +82,7 @@ final class ArchiverUneCopie
     /**
      * L'archive faite, enregistrée au registre et relue.
      *
-     * @param  string  $motif  pourquoi la copie est archivée : trente_jours, recommencer, supprimer, nettoyage
+     * @param  string  $motif  pourquoi la copie est archivée : trente_jours, recommencer, supprimer, nettoyage, mise_a_jour, avant_migration, migration_ratee, perdue
      *
      * @throws ArchiveImpossible
      */

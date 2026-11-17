@@ -53,6 +53,7 @@ return new class extends Migration
         DB::statement("alter table copies add constraint copies_etat_connu check (etat in ('en_preparation', 'en_attente_d_une_place', 'prete', 'en_echec', 'a_refaire', 'en_migration', 'en_lecture_seule', 'en_archivage', 'en_suppression', 'supprimee', 'perdue'))");
         DB::statement("alter table copies add constraint copies_servie_avec_sa_base check (etat not in ('prete', 'en_lecture_seule') or (nom_de_la_base is not null and modele_id is not null and empreinte_du_schema is not null))");
         DB::statement("alter table copies add constraint copies_supprimee_datee check ((etat = 'supprimee') = (supprimee_le is not null))");
+        DB::statement("alter table copies add constraint copies_motif_connu check (motif_du_message is null or motif_du_message in ('remise_a_zero', 'mise_a_jour', 'migration_reussie', 'migration_ratee', 'perdue'))");
         DB::statement('alter table copies add constraint copies_fin_apres_la_creation check (fin > creee_le)');
         DB::statement('alter table copies add constraint copies_generation_positive check (generation_du_lien >= 1)');
     }

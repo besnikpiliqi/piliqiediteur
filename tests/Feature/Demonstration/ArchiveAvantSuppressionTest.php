@@ -16,7 +16,7 @@ use App\Domain\Demonstration\Enums\EtatDUneCopie;
 use App\Domain\Demonstration\Etat\EtatDuSite;
 use App\Domain\Demonstration\Exceptions\ArchiveImpossible;
 use App\Domain\Demonstration\Exceptions\CopieImpossible;
-use App\Domain\Demonstration\Jobs\RecommencerUneCopie;
+use App\Domain\Demonstration\Jobs\RefaireUneCopie;
 use App\Domain\Demonstration\Messages\MessagesSignes;
 use App\Domain\Demonstration\Registre\Models\Archive;
 use App\Domain\Demonstration\Registre\Models\Copie;
@@ -101,6 +101,24 @@ class ArchiveAvantSuppressionTest extends DemonstrationTestCase
         }
     }
 
+    public function test_la_tache_de_chaque_heure_archive_puis_supprime_la_seule_copie_arrivee_a_sa_fin(): void
+    {
+        $this->travelTo(self::aParis('2026-11-20 15:00:00'));
+        ['copie' => $echue] = $this->copieDeTest(TypeDActivite::Services);
+        $this->travelTo(self::aParis('2026-11-21 15:00:00'));
+        ['copie' => $vivante] = $this->copieDeTest(TypeDActivite::Services);
+
+        $this->travelTo($echue->fin->addSecond());
+        $this->artisan('demonstration:supprimer-les-copies-echues')->assertSuccessful();
+
+        $this->assertSame(EtatDUneCopie::Supprimee, $echue->fresh()?->etat, 'La copie arrivée à sa fin est supprimée par la tâche de chaque heure (C.14).');
+        $this->assertFalse(app(BasesDeLaDemonstration::class)->existe((string) $echue->nom_de_la_base));
+        $this->assertSame('trente_jours', Archive::on('demo_admin')->where('reference', $echue->reference)->sole()->motif, 'Son archive est faite et relue avant le DROP DATABASE.');
+        $this->assertSame(EtatDUneCopie::Prete, $vivante->fresh()?->etat, 'Une copie qui n\'est pas à sa fin reste.');
+        $this->assertTrue(app(BasesDeLaDemonstration::class)->existe((string) $vivante->nom_de_la_base));
+        $this->assertSame(0, Archive::on('demo_admin')->where('reference', $vivante->reference)->count());
+    }
+
     public function test_recommencer_archive_puis_refait_la_copie_avec_la_meme_reference_le_meme_lien_et_la_meme_fin(): void
     {
         ['copie' => $copie, 'secret' => $secret] = $this->copieDeTest(TypeDActivite::Commerce);
@@ -132,16 +150,16 @@ class ArchiveAvantSuppressionTest extends DemonstrationTestCase
     public function test_recommencer_dit_en_preparation_tant_que_le_travail_attend_son_tour_et_n_en_lance_qu_un(): void
     {
         ['copie' => $copie] = $this->copieDeTest(TypeDActivite::Services);
-        Bus::fake([RecommencerUneCopie::class]);
+        Bus::fake([RefaireUneCopie::class]);
 
         $this->postJson('/interne/messages', $this->messageSigne(['quoi' => 'recommencer', 'reference' => $copie->reference]))
             ->assertStatus(202)
             ->assertExactJson(['etat' => 'en_preparation', 'generation' => 1]);
-        Bus::assertDispatched(RecommencerUneCopie::class, fn (RecommencerUneCopie $travail): bool => $travail->reference === $copie->reference);
+        Bus::assertDispatched(RefaireUneCopie::class, fn (RefaireUneCopie $travail): bool => $travail->reference === $copie->reference);
 
         Copie::on('demo_admin')->whereKey($copie->id)->update(['etat' => EtatDUneCopie::ARefaire->value]);
         $this->postJson('/interne/messages', $this->messageSigne(['quoi' => 'recommencer', 'reference' => $copie->reference]))->assertStatus(202);
-        Bus::assertDispatchedTimes(RecommencerUneCopie::class, 1);
+        Bus::assertDispatchedTimes(RefaireUneCopie::class, 1);
         $this->postJson('/interne/messages', $this->messageSigne(['quoi' => 'recommencer', 'reference' => str_repeat('f', 32)]))->assertStatus(410);
     }
 
@@ -179,10 +197,10 @@ class ArchiveAvantSuppressionTest extends DemonstrationTestCase
         config(['caisse_securisee.cle_privee' => null]);
 
         try {
-            Bus::dispatchSync(new RecommencerUneCopie($copie->reference));
+            Bus::dispatchSync(new RefaireUneCopie($copie->reference));
             $this->fail('L\'archive aurait dû échouer.');
         } catch (ArchiveImpossible $erreur) {
-            (new RecommencerUneCopie($copie->reference))->failed($erreur);
+            (new RefaireUneCopie($copie->reference))->failed($erreur);
         }
 
         $copie->refresh();

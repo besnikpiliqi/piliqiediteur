@@ -21,6 +21,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property CarbonImmutable|null $vu_le
  * @property CarbonImmutable|null $retire_le
  * @property int|null $compte_choisi
+ * @property string|null $message_vu
  */
 class Temoin extends Model
 {

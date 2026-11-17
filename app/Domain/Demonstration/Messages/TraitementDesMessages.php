@@ -8,7 +8,7 @@ use App\Domain\Demonstration\Enums\EtatDUneCopie;
 use App\Domain\Demonstration\Enums\QuoiDuMessage;
 use App\Domain\Demonstration\Jobs\ArchiverPuisSupprimerUneCopie;
 use App\Domain\Demonstration\Jobs\CreerUneCopie;
-use App\Domain\Demonstration\Jobs\RecommencerUneCopie;
+use App\Domain\Demonstration\Jobs\RefaireUneCopie;
 use App\Domain\Demonstration\Jobs\RenouvelerLeLienDUneCopie;
 use App\Domain\Demonstration\Registre\Models\Copie;
 use App\Domain\Demonstration\Registre\Models\Lien;
@@ -37,7 +37,7 @@ use Illuminate\Support\Facades\Bus;
  *   fait, 409 sinon (le site réel renvoie le message plus tard).
  * - « recommencer » : la copie est archivée, sa base supprimée et refaite
  *   depuis le modèle du jour, même référence, même lien, même fin
- *   (travail RecommencerUneCopie) ; une remise à zéro déjà en cours n'en
+ *   (travail RefaireUneCopie) ; une remise à zéro déjà en cours n'en
  *   lance pas une seconde ; la réponse dit « en préparation » tant que
  *   la copie n'est pas refaite, puis son état ; une copie inconnue ou
  *   supprimée répond 410.
@@ -139,7 +139,7 @@ final class TraitementDesMessages
         }
 
         if ($copie->etat !== EtatDUneCopie::ARefaire) {
-            Bus::dispatch(new RecommencerUneCopie($reference));
+            Bus::dispatch(new RefaireUneCopie($reference));
         }
 
         $apres = $copie->fresh() ?? $copie;

@@ -6,10 +6,15 @@ use App\Domain\Demonstration\Bases\EmpreinteDuSchema;
 use App\Domain\Demonstration\Enums\EtatDUneCopie;
 use App\Domain\Demonstration\Etat\EtatDuSite;
 use App\Domain\Demonstration\Exceptions\NomDeBaseHorsDuMotif;
+use App\Domain\Demonstration\Jobs\RattraperLesTachesDUneCopie;
 use App\Domain\Demonstration\SiteDePiliqi;
+use App\Domain\Demonstration\Taches\TachesDesCopies;
 use App\Domain\Demonstration\Visites\OuvertureDUneCopie;
 use App\Domain\Demonstration\Visites\TemoinsDesVisites;
+use App\Domain\Demonstration\Visites\Visite;
 use App\Http\Controllers\Demonstration\EntrerDansLaDemonstrationController;
+use App\Http\Controllers\Demonstration\Redirection;
+use Carbon\CarbonImmutable;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -25,10 +30,15 @@ use Symfony\Component\HttpFoundation\Response;
  * répondent les adresses d'entrée et les adresses internes, qui ne lisent
  * que le registre ; tout le reste répond la page introuvable, sans dire
  * qu'une démonstration existe. Une copie qui ne se sert pas encore montre
- * sa page d'attente, jamais une erreur technique. Un nom de base hors du
+ * sa page d'attente, jamais une erreur technique. Une copie restée plus
+ * d'une heure sans passe de ses tâches (C.13) demande leur rattrapage et
+ * montre « Nous mettons votre démonstration à l'heure » jusqu'à sa fin. Un
+ * nom de base hors du
  * motif d'une copie, lu au registre (C.6.6), arrête la requête avec la page
- * « démonstration indisponible » et paraît dans l'état publié (C.19). Sur
- * le site réel, il ne fait rien.
+ * « démonstration indisponible » et paraît dans l'état publié (C.19). La
+ * visite de la requête se lit ensuite par Visite::enCours() (le bandeau
+ * « Vous êtes : », « Choisissez qui vous êtes »). Sur le site réel, il ne
+ * fait rien.
  */
 final class OuvrirLaCopie
 {
@@ -55,6 +65,8 @@ final class OuvrirLaCopie
      */
     public function handle(Request $request, Closure $next): Response
     {
+        app()->forgetInstance(Visite::class);
+
         if (! SiteDePiliqi::estLaDemonstration() || in_array(trim($request->path(), '/'), self::ADRESSES_SANS_COPIE, true)) {
             return $next($request);
         }
@@ -84,7 +96,16 @@ final class OuvrirLaCopie
         }
 
         if ($request->is(...self::PAGES_FERMEES)) {
-            return redirect(EntrerDansLaDemonstrationController::CHEMIN_DU_CHOIX);
+            return Redirection::vers(EntrerDansLaDemonstrationController::CHEMIN_DU_CHOIX);
+        }
+
+        if (! TachesDesCopies::estALHeure($copie, CarbonImmutable::now())) {
+            RattraperLesTachesDUneCopie::demander($copie->reference);
+            $copie->refresh();
+
+            if (! TachesDesCopies::estALHeure($copie, CarbonImmutable::now())) {
+                return self::attente('a_l_heure', 503);
+            }
         }
 
         try {
@@ -96,17 +117,21 @@ final class OuvrirLaCopie
         }
 
         $this->temoins->voir($visite->temoin);
+        app()->instance(Visite::class, $visite);
 
         return $next($request);
     }
 
     /**
      * La page d'attente d'une copie, en français, qui se relit seule tant
-     * que la copie peut encore s'ouvrir.
+     * que la copie peut encore s'ouvrir. Rendue avant le routeur, elle dit
+     * elle-même son type (le routeur le pose sur les autres réponses) :
+     * sans lui, un serveur qui n'en ajoute pas la montrerait en texte brut.
      */
     public static function attente(string $cas, int $statut): Response
     {
         return response()->view('demonstration.attente', ['cas' => $cas], $statut)
+            ->header('Content-Type', 'text/html; charset=UTF-8')
             ->header('Cache-Control', 'no-store, private');
     }
 }

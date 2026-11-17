@@ -64,9 +64,13 @@ return [
             'driver' => 'sync',
         ],
 
+        // Sur le site de démonstration, les files sont dans le registre,
+        // jamais dans la base d'une copie ni dans la base sentinelle : un
+        // travail envoyé depuis une copie y emporte sa référence et s'y
+        // exécute (lot DEMO-COPIE, C.13, voir TravauxDesCopies).
         'database' => [
             'driver' => 'database',
-            'connection' => env('DB_QUEUE_CONNECTION'),
+            'connection' => env('PILIQI_SITE') === 'demonstration' ? 'registre' : env('DB_QUEUE_CONNECTION'),
             'table' => env('DB_QUEUE_TABLE', 'jobs'),
             'queue' => env('DB_QUEUE', 'default'),
             'retry_after' => (int) env('DB_QUEUE_RETRY_AFTER', 90),
@@ -85,7 +89,7 @@ return [
         // synchrone (TELECHARGEMENTS_QUEUE_DRIVER=sync, phpunit.xml).
         'telechargements' => [
             'driver' => env('TELECHARGEMENTS_QUEUE_DRIVER', 'database'),
-            'connection' => env('DB_QUEUE_CONNECTION'),
+            'connection' => env('PILIQI_SITE') === 'demonstration' ? 'registre' : env('DB_QUEUE_CONNECTION'),
             'table' => env('DB_QUEUE_TABLE', 'jobs'),
             'queue' => 'telechargements',
             'retry_after' => 1900,

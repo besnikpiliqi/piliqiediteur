@@ -6,6 +6,7 @@ use App\Domain\Calendrier\Calendrier;
 use App\Domain\Demonstration\SiteDePiliqi;
 use Carbon\Carbon;
 use Carbon\CarbonImmutable;
+use Closure;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use LogicException;
@@ -71,6 +72,14 @@ final class HorlogeDuSemis
     private CarbonImmutable $maintenant;
 
     /**
+     * Ce qui se fait une fois, quand l'horloge entre dans les derniers jours
+     * de l'histoire (voir auxDerniersJours()), et leur nombre.
+     *
+     * @var array{0: int, 1: Closure(): void}|null
+     */
+    private ?array $auxDerniersJours = null;
+
+    /**
      * @param  int  $jours  le nombre de jours de l'histoire semée, le dernier étant la veille du semis
      */
     public function __construct(public readonly int $jours)
@@ -103,6 +112,21 @@ final class HorlogeDuSemis
     public function aller(int $rang, string $heure): CarbonImmutable
     {
         return $this->avancerJusquA(Calendrier::deParis()->heureMurale($this->jour($rang).' '.$heure));
+    }
+
+    /**
+     * Fait ce geste une fois, à minuit (heure de Paris) du premier des
+     * $jours derniers jours de l'histoire, avant les tâches de ce jour : le
+     * semis d'un modèle du site de démonstration y rend leur vrai transport
+     * aux e-mails, pour que la page « E-mails qui seraient partis » de
+     * chaque copie neuve en montre de vrais exemples (lot DEMO-COPIE, F.4).
+     *
+     * @param  Closure(): void  $geste
+     */
+    public function auxDerniersJours(int $jours, Closure $geste): void
+    {
+        $this->auxDerniersJours = [$jours, $geste];
+        $this->entrerDansLesDerniersJours();
     }
 
     /**
@@ -167,8 +191,24 @@ final class HorlogeDuSemis
     private function poser(CarbonImmutable $instant): CarbonImmutable
     {
         Carbon::setTestNow($instant);
+        $this->maintenant = $instant;
+        $this->entrerDansLesDerniersJours();
 
-        return $this->maintenant = $instant;
+        return $instant;
+    }
+
+    private function entrerDansLesDerniersJours(): void
+    {
+        if ($this->auxDerniersJours === null) {
+            return;
+        }
+
+        [$jours, $geste] = $this->auxDerniersJours;
+
+        if ($this->maintenant->greaterThanOrEqualTo(Calendrier::deParis()->debutDuJour($this->jour(max(0, $this->jours - $jours))))) {
+            $this->auxDerniersJours = null;
+            $geste();
+        }
     }
 
     /**

@@ -5,6 +5,7 @@ namespace App\Domain\Demonstration\Bases;
 use App\Domain\Demonstration\SiteDePiliqi;
 use Closure;
 use Illuminate\Cache\RateLimiter;
+use Illuminate\Session\Middleware\StartSession;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Facade;
@@ -91,14 +92,19 @@ final class BrancherUneBase
      * Les services oubliés, dans le conteneur et derrière leurs façades,
      * qui gardent l'instance qu'elles ont résolue la première fois (un
      * travailleur qui passe d'une copie à l'autre, ou un test, garde le même
-     * processus) : le limiteur de débit garde son magasin de cache.
+     * processus) : le limiteur de débit garde son magasin de cache, et
+     * l'intergiciel des sessions (StartSession, unique dans le conteneur)
+     * garde le gestionnaire des sessions qu'il a reçu : sans lui, la requête
+     * suivante du même processus lirait sa session par l'ancien
+     * gestionnaire, et la garde d'authentification par le nouveau, si bien
+     * qu'une connexion faite dans l'une ne se retrouverait pas dans l'autre.
      */
     private static function oublierLesServicesResolus(): void
     {
         DB::purge('pgsql');
         Cache::forgetDriver(array_keys((array) config('cache.stores')));
 
-        foreach (['cache.store', RateLimiter::class, 'session', 'session.store'] as $service) {
+        foreach (['cache.store', RateLimiter::class, 'session', 'session.store', StartSession::class] as $service) {
             app()->forgetInstance($service);
             Facade::clearResolvedInstance($service);
         }

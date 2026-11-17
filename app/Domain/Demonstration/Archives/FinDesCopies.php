@@ -16,6 +16,7 @@ use App\Domain\Demonstration\SiteDePiliqi;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\DB;
+use InvalidArgumentException;
 
 /**
  * La fin d'une base de copie, par demo_admin seul (travailleur de la file
@@ -27,12 +28,16 @@ use Illuminate\Support\Facades\DB;
  *   supprimée, dossier de fichiers effacé, travaux de la copie effacés des
  *   files, liens et témoins retirés, « supprimée ». La place libérée va à
  *   la demande qui l'attend en premier.
- * - recommencer() (message « recommencer », C.7) : « à refaire », archive,
- *   base supprimée, nouvelle copie du modèle du jour sous un nouveau nom,
- *   avec la même référence, le même lien et la même fin (choix 11) ; le
- *   compte choisi en dernier de chaque témoin est effacé, et la copie
- *   porte le message de sa remise à zéro. Une visite pendant ce temps voit
- *   « Votre démonstration se prépare ».
+ * - refaire() (message « recommencer », C.7 ; mise à jour avant la mise en
+ *   production, E.4 ; migration ratée, E.5 ; copie perdue, E.7) :
+ *   « à refaire », archive quand la base existe, base supprimée, nouvelle
+ *   copie du modèle du jour sous un nouveau nom, avec la même référence,
+ *   le même lien et la même fin (choix 11) ; le compte choisi en dernier
+ *   de chaque témoin est effacé (la visite suivante choisit de nouveau, et
+ *   l'identifiant d'un compte de l'ancienne base ne désigne jamais une
+ *   autre personne de la nouvelle), et la copie porte le message de son
+ *   motif, montré une fois à chaque témoin. Une visite pendant ce temps
+ *   voit « Votre démonstration se prépare ».
  *
  * Une archive qui échoue arrête tout : la base reste, la cause s'écrit au
  * registre, l'état publié la montre, et le travail réessaie.
@@ -40,6 +45,25 @@ use Illuminate\Support\Facades\DB;
 final class FinDesCopies
 {
     public const MOTIF_REMISE_A_ZERO = 'remise_a_zero';
+
+    public const MOTIF_MISE_A_JOUR = 'mise_a_jour';
+
+    public const MOTIF_MIGRATION_REUSSIE = 'migration_reussie';
+
+    public const MOTIF_MIGRATION_RATEE = 'migration_ratee';
+
+    public const MOTIF_PERDUE = 'perdue';
+
+    /**
+     * Les motifs d'une réfection, avec ce que l'archive de la caisse en dit
+     * (ArchiverUneCopie).
+     */
+    public const MOTIFS_DE_REFECTION = [
+        self::MOTIF_REMISE_A_ZERO => 'recommencer',
+        self::MOTIF_MISE_A_JOUR => 'mise_a_jour',
+        self::MOTIF_MIGRATION_RATEE => 'migration_ratee',
+        self::MOTIF_PERDUE => 'perdue',
+    ];
 
     public function __construct(
         private readonly ArchiverUneCopie $archive,
@@ -80,29 +104,58 @@ final class FinDesCopies
     }
 
     /**
+     * La copie refaite depuis le modèle du jour pour ce motif (une clé de
+     * MOTIFS_DE_REFECTION), après l'archive relue de sa caisse quand sa
+     * base existe encore, sauf quand elle est déjà faite (une migration
+     * ratée, archivée juste avant, voir MigrationDesCopies).
+     *
      * @throws ArchiveImpossible
      */
-    public function recommencer(string $reference): void
+    public function refaire(string $reference, string $motif, bool $archiveFaite = false): void
     {
-        $copie = $this->passer($reference, EtatDUneCopie::ARefaire, [EtatDUneCopie::Supprimee, EtatDUneCopie::EnSuppression, EtatDUneCopie::EnArchivage]);
+        $archive = self::MOTIFS_DE_REFECTION[$motif] ?? throw new InvalidArgumentException("Motif de réfection inconnu : {$motif}.");
+        $copie = $this->passer($reference, EtatDUneCopie::ARefaire, [EtatDUneCopie::Supprimee, EtatDUneCopie::EnSuppression, EtatDUneCopie::EnArchivage], ['motif_du_message' => $motif]);
 
         if ($copie === null) {
             return;
         }
 
-        $this->archiverSiElleALieu($copie, 'recommencer');
+        if (! $archiveFaite) {
+            $this->archiverSiElleALieu($copie, $archive);
+        }
+
         $this->effacerLaBase($copie);
         $maintenant = CarbonImmutable::now();
-        DB::connection('demo_admin')->transaction(function () use ($copie, $maintenant): void {
+        DB::connection('demo_admin')->transaction(function () use ($copie, $motif, $maintenant): void {
             Temoin::on('demo_admin')->where('copie_id', $copie->id)->update(['compte_choisi' => null]);
             $copie->forceFill([
                 'nom_de_la_base' => null,
                 'cause_de_l_echec' => null,
-                'message' => 'Votre démonstration a été remise à zéro le '.Calendrier::deParis()->afficher($maintenant, 'd/m/Y à H:i').'.',
-                'motif_du_message' => self::MOTIF_REMISE_A_ZERO,
+                'message' => self::message($motif, $maintenant),
+                'motif_du_message' => $motif,
             ])->save();
         });
         $this->copies->preparer($reference);
+    }
+
+    /**
+     * Le message que la copie montre une fois à chaque témoin après cet
+     * événement (C.7, E.4, E.5, E.7) : jamais par e-mail, le site de
+     * démonstration ne connaissant aucune adresse de la société (E.8).
+     */
+    public static function message(string $motif, CarbonImmutable $le): string
+    {
+        $paris = Calendrier::deParis();
+        $jour = $paris->afficher($le, 'd/m/Y');
+
+        return match ($motif) {
+            self::MOTIF_REMISE_A_ZERO => 'Votre démonstration a été remise à zéro le '.$paris->afficher($le, 'd/m/Y à H:i').'.',
+            self::MOTIF_MISE_A_JOUR => "PILIQI a été mis à jour le {$jour}. Votre démonstration repart de la société fictive de départ, avec les nouveautés. Votre lien reste le même.",
+            self::MOTIF_MIGRATION_REUSSIE => "PILIQI a été mis à jour le {$jour}. Votre démonstration a reçu les nouveautés ; vos essais sont gardés. Pour voir les nouveautés avec leurs données, choisissez « Recommencer à zéro » dans votre compte.",
+            self::MOTIF_MIGRATION_RATEE => "PILIQI a été mis à jour le {$jour}. Votre démonstration a dû être refaite : vos essais n'ont pas pu être gardés. Votre lien reste le même.",
+            self::MOTIF_PERDUE => "Votre démonstration a dû être refaite le {$jour} ; votre lien reste le même.",
+            default => throw new InvalidArgumentException("Motif de message inconnu : {$motif}."),
+        };
     }
 
     /**
@@ -110,19 +163,20 @@ final class FinDesCopies
      * n'existe pas ou est déjà dans un état qui ne revient pas.
      *
      * @param  list<EtatDUneCopie>  $etatsFinals
+     * @param  array<string, string>  $champs  écrits avec l'état
      */
-    private function passer(string $reference, EtatDUneCopie $etat, array $etatsFinals): ?Copie
+    private function passer(string $reference, EtatDUneCopie $etat, array $etatsFinals, array $champs = []): ?Copie
     {
         SiteDePiliqi::exiger(SiteDePiliqi::Demonstration);
 
-        return DB::connection('demo_admin')->transaction(function () use ($reference, $etat, $etatsFinals): ?Copie {
+        return DB::connection('demo_admin')->transaction(function () use ($reference, $etat, $etatsFinals, $champs): ?Copie {
             $copie = Copie::on('demo_admin')->where('reference', $reference)->lockForUpdate()->first();
 
             if ($copie === null || in_array($copie->etat, $etatsFinals, true)) {
                 return null;
             }
 
-            $copie->forceFill(['etat' => $etat])->save();
+            $copie->forceFill(['etat' => $etat, ...$champs])->save();
 
             return $copie;
         });

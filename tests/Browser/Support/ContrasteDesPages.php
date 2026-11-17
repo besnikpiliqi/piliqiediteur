@@ -2,6 +2,8 @@
 
 namespace Tests\Browser\Support;
 
+use Pest\Browser\Playwright\Client;
+
 /**
  * Le contrôle du contraste des deux modes d'un panneau (décision de
  * l'éditeur du 15/11/2026, lot DATEOP) : depuis une page, il ouvre chaque
@@ -108,6 +110,23 @@ final class ContrasteDesPages
             static fn (array $defaut): string => $defaut['element'].', '.$defaut['rapport'].':1 pour '.$defaut['seuil'].':1',
             array_values(array_filter(is_array($defauts) ? $defauts : [], is_array(...))),
         );
+    }
+
+    /**
+     * Comme defautsDeLaPage(), pour une page qui suit la préférence du
+     * système (les pages du site de démonstration servies hors des
+     * panneaux, et le bandeau « Vous êtes : ») : le navigateur se dit
+     * aussi en mode clair ou sombre (prefers-color-scheme), en plus de la
+     * classe dark sur <html>.
+     *
+     * @return list<string>
+     */
+    public function defautsDeLaPageSelonLeSysteme(string $mode): array
+    {
+        $page = (fn (): string => $this->guid)->call($this->onglet->page());
+        iterator_to_array(Client::instance()->execute($page, 'emulateMedia', ['colorScheme' => $mode === 'sombre' ? 'dark' : 'light']), false);
+
+        return $this->defautsDeLaPage($mode);
     }
 
     /**

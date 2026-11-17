@@ -3,6 +3,7 @@
 namespace Tests\Feature\Demonstration;
 
 use App\Domain\Calendrier\Calendrier;
+use App\Domain\Demonstration\Archives\FinDesCopies;
 use App\Domain\Demonstration\Bases\BasesDeLaDemonstration;
 use App\Domain\Demonstration\Bases\EmpreinteDuSchema;
 use App\Domain\Demonstration\Construction\ConstruireUnModele;
@@ -15,6 +16,7 @@ use App\Domain\Demonstration\Exceptions\ConstructionEnEchec;
 use App\Domain\Demonstration\Registre\Models\Archive;
 use App\Domain\Demonstration\Registre\Models\Copie;
 use App\Domain\Demonstration\Registre\Models\Modele;
+use App\Domain\Demonstration\Registre\Models\Temoin;
 use App\Domain\Tenancy\Enums\TypeDActivite;
 use Carbon\CarbonImmutable;
 use Illuminate\Console\Scheduling\Event;
@@ -33,7 +35,7 @@ use Tests\DemonstrationTestCase;
  * sont planifiés que sur le site de démonstration, la nuit, sur un seul
  * serveur. Le nettoyage ne supprime que le motif exact des bases de la
  * démonstration, archive la caisse d'une base de copie orpheline avant de
- * la supprimer, marque perdue une copie sans base, supprime les bases de
+ * la supprimer, refait une copie perdue (sans base), supprime les bases de
  * travail abandonnées, et refuse d'agir quand le registre est vide alors
  * que des copies existent ou que plus de 10 % des copies vivantes
  * seraient supprimées.
@@ -205,13 +207,15 @@ class ConstructionDesModelesTest extends DemonstrationTestCase
         }
     }
 
-    public function test_le_nettoyage_marque_perdue_une_copie_sans_base_et_supprime_les_bases_de_travail_abandonnees(): void
+    public function test_le_nettoyage_refait_une_copie_perdue_et_supprime_les_bases_de_travail_abandonnees(): void
     {
         $this->travelTo(self::aParis('2026-11-18 12:00:00'));
         $modele = $this->modeleDeTest(TypeDActivite::Services);
         ['copie' => $copie] = $this->copieDeTest(TypeDActivite::Services);
+        $perdue = (string) $copie->nom_de_la_base;
+        Temoin::on('demo_admin')->create(['empreinte' => hash('sha256', 'perdue'), 'copie_id' => $copie->id, 'generation_du_lien' => $copie->generation_du_lien, 'entree' => 'lien', 'cree_le' => CarbonImmutable::now(), 'fin' => $copie->fin, 'compte_choisi' => 7]);
         $bases = app(BasesDeLaDemonstration::class);
-        $bases->supprimer((string) $copie->nom_de_la_base);
+        $bases->supprimer($perdue);
         $abandonnee = $bases->nomDUneBaseDeTravail(TypeDActivite::Services, self::aParis('2026-11-18 05:00:00')->addMinutes(self::jeton()));
         $recente = $bases->nomDUneBaseDeTravail(TypeDActivite::Services, self::aParis('2026-11-18 07:00:00')->addMinutes(self::jeton()));
         $bases->supprimer($abandonnee);
@@ -223,7 +227,14 @@ class ConstructionDesModelesTest extends DemonstrationTestCase
             $resultat = app(NettoyageDeLaDemonstration::class)->nettoyer([$modele->nom_de_la_base, $abandonnee, $recente]);
 
             $this->assertSame([$copie->reference], $resultat['perdues']);
-            $this->assertSame(EtatDUneCopie::Perdue, $copie->fresh()?->etat);
+            $refaite = Copie::on('demo_admin')->whereKey($copie->id)->sole();
+            $this->assertSame(EtatDUneCopie::Prete, $refaite->etat, 'Une copie perdue est refaite aussitôt depuis le modèle (E.7).');
+            $this->assertNotSame($perdue, $refaite->nom_de_la_base);
+            $this->assertTrue($bases->existe((string) $refaite->nom_de_la_base));
+            $this->assertSame($copie->fin->getTimestamp(), $refaite->fin->getTimestamp(), 'Même fin.');
+            $this->assertSame(FinDesCopies::MOTIF_PERDUE, $refaite->motif_du_message);
+            $this->assertSame('Votre démonstration a dû être refaite le 18/11/2026 ; votre lien reste le même.', $refaite->message);
+            $this->assertNull(Temoin::on('demo_admin')->where('copie_id', $copie->id)->sole()->compte_choisi, 'Le compte choisi en dernier désigne un compte de la base perdue : il est effacé.');
             $this->assertFalse($bases->existe($abandonnee), 'Une base de travail de plus de 6 heures est supprimée.');
             $this->assertTrue($bases->existe($recente), 'Une base de travail de moins de 6 heures reste : sa construction peut tourner encore.');
             $this->assertTrue($bases->existe($modele->nom_de_la_base), 'Un modèle en service reste, quel que soit son âge.');

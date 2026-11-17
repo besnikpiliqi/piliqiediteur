@@ -3,6 +3,7 @@
 namespace App\Domain\Demonstration\Etat;
 
 use App\Domain\Demonstration\Construction\DossiersDeLaDemonstration;
+use App\Domain\Demonstration\Construction\MigrationDesCopies;
 use App\Domain\Demonstration\Construction\NettoyageDeLaDemonstration;
 use App\Domain\Demonstration\Enums\EtatDUneCopie;
 use App\Domain\Demonstration\Enums\EtatDUnModele;
@@ -10,6 +11,7 @@ use App\Domain\Demonstration\Messages\MessagesSignes;
 use App\Domain\Demonstration\Registre\Models\Copie;
 use App\Domain\Demonstration\Registre\Models\Modele;
 use App\Domain\Demonstration\SiteDePiliqi;
+use App\Domain\Demonstration\Taches\TachesDesCopies;
 use App\Domain\Demonstration\VersionServie;
 use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Support\Reglage;
@@ -38,12 +40,6 @@ final class EtatDuSite
      * Au-delà, un type sans construction réussie est un problème.
      */
     public const JOURS_SANS_CONSTRUCTION = 3;
-
-    /**
-     * Sous ce pourcentage de place libre, plus aucune copie neuve ne se
-     * crée (C.16).
-     */
-    public const PLACE_LIBRE_MINIMALE = 20;
 
     /**
      * Le nombre des requêtes arrêtées depuis un jour par un nom de base
@@ -105,15 +101,33 @@ final class EtatDuSite
             $problemes[] = sprintf('%d requête(s) arrêtée(s) depuis un jour : le nom de base d\'une copie au registre n\'est pas du motif d\'une copie.', $horsDuMotif);
         }
 
+        $verificationsEnDefaut = TachesDesCopies::verificationsEnDefaut();
+
+        if ($verificationsEnDefaut > 0) {
+            $problemes[] = sprintf('%d copie(s) dont la vérification de nuit du registre fiscal a trouvé un défaut.', $verificationsEnDefaut);
+        }
+
         $refusDuNettoyage = NettoyageDeLaDemonstration::dernierRefus();
 
         if ($refusDuNettoyage !== null) {
             $problemes[] = $refusDuNettoyage;
         }
 
+        $miseAJour = MigrationDesCopies::dernierTableau();
+
+        if ($miseAJour !== null) {
+            $problemes[] = sprintf(
+                'Dernière mise à jour des copies : %d migrée(s), %d refaite(s) faute de migration, %d laissée(s) faute d\'archive, en %d s.',
+                $miseAJour['migrees'],
+                $miseAJour['refaites'],
+                $miseAJour['laissees'],
+                $miseAJour['duree_en_secondes'],
+            );
+        }
+
         $placeLibre = self::placeLibre();
 
-        if ($placeLibre < self::PLACE_LIBRE_MINIMALE) {
+        if (self::placeLibreInsuffisante($placeLibre)) {
             $problemes[] = sprintf('Il reste %d %% de place sur le disque des copies : plus aucune copie neuve ne se crée.', $placeLibre);
         }
 
@@ -152,6 +166,16 @@ final class EtatDuSite
         $cache = Cache::store('registre');
         $cache->add(self::CLE_DES_NOMS_HORS_DU_MOTIF, 0, 86400);
         $cache->increment(self::CLE_DES_NOMS_HORS_DU_MOTIF);
+    }
+
+    /**
+     * Sous ce pourcentage de place libre du disque des copies
+     * (DEMONSTRATION_PLACE_LIBRE_MINIMALE, 20 au départ), plus aucune copie
+     * neuve ne se crée et l'état publié alerte l'éditeur (C.16).
+     */
+    public static function placeLibreInsuffisante(?int $placeLibre = null): bool
+    {
+        return ($placeLibre ?? self::placeLibre()) < (int) config('demonstration.place_libre_minimale');
     }
 
     /**

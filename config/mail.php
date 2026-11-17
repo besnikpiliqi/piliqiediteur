@@ -105,13 +105,13 @@ return [
             'transport' => 'array',
         ],
 
-        // Le transport du seul site de démonstration (lot DEMO-COPIE), que
-        // son démarrage exige et que le site réel refuse (voir
-        // SiteDePiliqiServiceProvider) : aucun e-mail n'en part. La page
-        // « E-mails qui seraient partis » de chaque copie les gardera au lot
-        // DEMO-COPIE-3 (C.9).
+        // Le transport du seul site de démonstration (lot DEMO-COPIE, C.9),
+        // que son démarrage exige et que le site réel refuse (voir
+        // SiteDePiliqiServiceProvider) : aucun e-mail n'en part ; chacun
+        // s'écrit dans la copie, que la page « E-mails qui seraient partis »
+        // montre (voir TransportDeLaDemonstration).
         'demonstration' => [
-            'transport' => 'array',
+            'transport' => 'demonstration',
         ],
 
         'failover' => [

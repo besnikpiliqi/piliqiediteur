@@ -2,6 +2,7 @@
 
 namespace App\Domain\Fichiers;
 
+use App\Domain\Demonstration\Taches\PlaceDesCopies;
 use App\Domain\Fichiers\Enums\RaisonDuRefus;
 use App\Domain\Fichiers\Exceptions\FichierRefuseException;
 use App\Integrations\Antivirus\AntivirusInjoignableException;
@@ -16,6 +17,8 @@ use Carbon\CarbonImmutable;
  * (voir DeposerUnePieceAction). Dans cet ordre :
  *
  * - un fichier vide, ou de plus de TAILLE_MAXIMALE_EN_OCTETS, est refusé ;
+ * - dans une copie du site de démonstration, un fichier qui lui ferait
+ *   dépasser sa place est refusé (voir PlaceDesCopies) ;
  * - l'antivirus l'analyse tel que reçu, avant toute lecture par PILIQI
  *   (voir Antivirus) : une menace le fait refuser ; un antivirus
  *   injoignable aussi, sans le juger (« réessayez dans quelques
@@ -59,6 +62,10 @@ final class ControleDesFichiers
 
         if (strlen($piece->contenu) > self::TAILLE_MAXIMALE_EN_OCTETS) {
             throw FichierRefuseException::pour($piece, RaisonDuRefus::TropGros);
+        }
+
+        if (PlaceDesCopies::depasseraitLaPlace(strlen($piece->contenu))) {
+            throw FichierRefuseException::pour($piece, RaisonDuRefus::PlaceDeLaDemonstration);
         }
 
         try {

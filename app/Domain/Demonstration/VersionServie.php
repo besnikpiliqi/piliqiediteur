@@ -20,7 +20,16 @@ final class VersionServie
     {
         $version = self::courante();
 
-        return 'PILIQI · '.($version === self::SANS_VERSION ? $version : 'version '.$version).' · '.SiteDePiliqi::courant()->libelle();
+        return 'PILIQI · '.self::enMots($version).' · '.SiteDePiliqi::courant()->libelle();
+    }
+
+    /**
+     * « version 2026-11-16 7f9e16c », ou « version de développement » (le
+     * pied de page, le bandeau « Vous êtes : » d'une copie).
+     */
+    public static function enMots(string $version): string
+    {
+        return $version === self::SANS_VERSION ? $version : 'version '.$version;
     }
 
     /**

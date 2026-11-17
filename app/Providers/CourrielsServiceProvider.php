@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Domain\Demonstration\Courriels\SocieteDuCourriel;
+use App\Domain\Demonstration\Courriels\TransportDeLaDemonstration;
 use App\Domain\Tenancy\Support\Reglage;
 use App\Integrations\Courriel\CanalDesCourriels;
 use App\Integrations\Courriel\TransportMailtrap;
@@ -16,7 +18,9 @@ use Illuminate\Support\ServiceProvider;
  * de test de Mailtrap jointe par son API HTTPS, avec le jeton et la boîte
  * de config/services.php et le délai MAIL_TIMEOUT de config/mail.php (un
  * jeton ou une boîte absents ne bloquent rien au démarrage : l'envoi
- * échoue alors en le disant) ; et le canal « mail » des notifications,
+ * échoue alors en le disant) ; le transport « demonstration » du seul
+ * site de démonstration, qui garde chaque e-mail dans la copie au lieu de
+ * l'envoyer (voir TransportDeLaDemonstration) ; et le canal « mail » des notifications,
  * qu'un serveur d'envoi en panne ne fait jamais échouer (voir
  * CanalDesCourriels).
  */
@@ -35,5 +39,6 @@ class CourrielsServiceProvider extends ServiceProvider
             Reglage::texteOuNul('services.mailtrap.boite'),
             is_int($config['timeout'] ?? null) ? $config['timeout'] : 10,
         ));
+        Mail::extend('demonstration', fn (): TransportDeLaDemonstration => new TransportDeLaDemonstration($this->app->make(SocieteDuCourriel::class)));
     }
 }

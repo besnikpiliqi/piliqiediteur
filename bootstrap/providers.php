@@ -8,6 +8,7 @@ use App\Providers\Filament\AppPanelProvider;
 use App\Providers\Filament\CabinetPanelProvider;
 use App\Providers\Filament\SocietePanelProvider;
 use App\Providers\FournisseursExternesServiceProvider;
+use App\Providers\SiteDeDemonstrationServiceProvider;
 use App\Providers\SiteDePiliqiServiceProvider;
 use App\Providers\TenancyServiceProvider;
 
@@ -22,4 +23,5 @@ return [
     FournisseursExternesServiceProvider::class,
     AntivirusServiceProvider::class,
     CourrielsServiceProvider::class,
+    SiteDeDemonstrationServiceProvider::class,
 ];

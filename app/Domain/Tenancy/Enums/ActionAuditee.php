@@ -83,6 +83,7 @@ enum ActionAuditee: string implements HasLabel
     case CompteReintegre = 'compte_reintegre';
     case AccesRedonne = 'acces_redonne';
     case PremiereConnexion = 'premiere_connexion';
+    case ConnexionDepuisLeBandeau = 'connexion_depuis_le_bandeau';
     case IdentifiantConsulte = 'identifiant_consulte';
     case TransmissionDemandee = 'transmission_demandee';
     case TransmissionAnnulee = 'transmission_annulee';
@@ -214,6 +215,7 @@ enum ActionAuditee: string implements HasLabel
             self::CompteReintegre => 'Compte réintégré',
             self::AccesRedonne => 'Accès redonné',
             self::PremiereConnexion => 'Première connexion',
+            self::ConnexionDepuisLeBandeau => 'Connexion depuis le bandeau de la démonstration',
             self::IdentifiantConsulte => 'Identifiant affiché à un administrateur',
             self::TransmissionDemandee => 'Transmission de la propriété demandée',
             self::TransmissionAnnulee => 'Transmission de la propriété annulée',
@@ -277,7 +279,7 @@ enum ActionAuditee: string implements HasLabel
             self::OrdreARefaire, self::EcartSireneVerifie => CategorieAudit::Verification,
             self::MembreCree, self::AdministrateurCree, self::AdministrateurModifie, self::RoleDeSocieteChange, self::CollaborateurCree, self::DroitsModifies,
             self::ResponsableNomme, self::ResponsableRetire, self::NominationAnnulee, self::NominationGardee, self::CompteSuspendu, self::CompteReactive, self::CompteRetire,
-            self::CompteReintegre, self::AccesRedonne, self::PremiereConnexion, self::IdentifiantConsulte, self::TransmissionDemandee,
+            self::CompteReintegre, self::AccesRedonne, self::PremiereConnexion, self::ConnexionDepuisLeBandeau, self::IdentifiantConsulte, self::TransmissionDemandee,
             self::TransmissionAnnulee, self::ProprieteTransferee, self::ProprieteReprise, self::AdresseDeConnexionChangee,
             self::AdresseDeConnexionRetiree, self::ClientsConfiesModifies, self::InvitationEnvoyee, self::InvitationRetiree,
             self::InvitationAcceptee, self::InvitationRefusee, self::InvitationCaduque, self::LienDemande, self::LienRefuse,
@@ -446,7 +448,9 @@ enum ActionAuditee: string implements HasLabel
             // l'opération), jamais son identifiant de connexion, qui serait
             // son mot de passe tant qu'il ne l'a pas changé ; pour un accès
             // redonné, si la personne était présente.
-            self::PremiereConnexion, self::IdentifiantConsulte, self::AdresseDeConnexionChangee, self::AdresseDeConnexionRetiree => ['compte'],
+            // Pour la connexion depuis le bandeau « Vous êtes : » d'une copie
+            // du site de démonstration, le compte choisi.
+            self::PremiereConnexion, self::ConnexionDepuisLeBandeau, self::IdentifiantConsulte, self::AdresseDeConnexionChangee, self::AdresseDeConnexionRetiree => ['compte'],
             self::AccesRedonne => ['compte', 'mode'],
             // L'administrateur à qui la propriété est proposée ; pour un
             // lien renvoyé, la mention qu'il l'a été.

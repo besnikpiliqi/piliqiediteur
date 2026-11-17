@@ -2,6 +2,8 @@
 
 namespace App\Domain\Fichiers\Enums;
 
+use App\Domain\Demonstration\Taches\PlaceDesCopies;
+
 /**
  * Pourquoi un fichier reçu est refusé (voir ControleDesFichiers). Un refus
  * pour une raison de sécurité s'inscrit au journal d'audit de la société
@@ -22,6 +24,7 @@ enum RaisonDuRefus: string
     case Menace = 'menace';
     case AntivirusInjoignable = 'antivirus_injoignable';
     case AnalyseIndisponible = 'analyse_indisponible';
+    case PlaceDeLaDemonstration = 'place_de_la_demonstration';
 
     /**
      * Comment obtenir une copie propre d'un PDF refusé.
@@ -32,7 +35,7 @@ enum RaisonDuRefus: string
     {
         return match ($this) {
             self::Type, self::PdfActif, self::PdfIllisible, self::PdfProtege, self::ImageIllisible, self::ImageTropGrande, self::Menace => true,
-            self::Vide, self::TropGros, self::AntivirusInjoignable, self::AnalyseIndisponible => false,
+            self::Vide, self::TropGros, self::AntivirusInjoignable, self::AnalyseIndisponible, self::PlaceDeLaDemonstration => false,
         };
     }
 
@@ -56,6 +59,7 @@ enum RaisonDuRefus: string
             self::Menace => "Le fichier « {$nom} » est refusé : l'antivirus y a trouvé une menace. Ne l'ouvrez pas sur votre poste, et demandez une copie saine à son expéditeur.",
             self::AntivirusInjoignable => "Le fichier « {$nom} » n'a pas pu être analysé par l'antivirus : réessayez dans quelques minutes.",
             self::AnalyseIndisponible => "Le fichier « {$nom} » n'a pas pu être analysé : réessayez dans quelques minutes.",
+            self::PlaceDeLaDemonstration => "Le fichier « {$nom} » est refusé. ".PlaceDesCopies::MESSAGE,
         };
     }
 

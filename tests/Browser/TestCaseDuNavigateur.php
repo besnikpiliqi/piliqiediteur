@@ -29,15 +29,8 @@ use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Database\Factories\SocieteFactory;
-use Illuminate\Contracts\Http\Kernel;
-use Illuminate\Foundation\Http\Events\RequestHandled;
-use Illuminate\Support\Facades\Event;
-use Tests\Browser\Support\Balayeur;
-use Tests\Browser\Support\CouvertureDuBalayage;
-use Tests\Browser\Support\Inventaire;
-use Tests\Browser\Support\JournalDesReponses;
 use Tests\Browser\Support\Navigation;
-use Tests\Browser\Support\NoyauDUneRequeteNeuve;
+use Tests\Browser\Support\PiloteLeNavigateur;
 use Tests\Browser\Support\SocieteDeTest;
 use Tests\TestCase;
 
@@ -58,7 +51,7 @@ use Tests\TestCase;
  */
 abstract class TestCaseDuNavigateur extends TestCase
 {
-    protected JournalDesReponses $journal;
+    use PiloteLeNavigateur;
 
     /**
      * L'instant auquel chaque test en navigateur commence : un mardi, à
@@ -74,38 +67,14 @@ abstract class TestCaseDuNavigateur extends TestCase
         parent::setUp();
 
         $this->travelTo(self::instantDuTest());
-        config(['session.driver' => 'database']);
-        $this->app->extend(Kernel::class, fn (Kernel $noyau): Kernel => $noyau instanceof NoyauDUneRequeteNeuve ? $noyau : new NoyauDUneRequeteNeuve($noyau, fn (): array => $this->prepareCookiesForRequest()));
-        $this->journal = new JournalDesReponses;
-        Event::listen(RequestHandled::class, $this->journal->noter(...));
+        $this->preparerLeNavigateur();
     }
 
     protected function tearDown(): void
     {
-        if ($this->status()->isSuccess()) {
-            $this->journal->verifier();
-            $this->assertSame([], $this->journal->attendusNonArrives(), 'Un refus attendu par le test n\'est pas arrivé.');
-        }
+        $this->verifierLeJournal();
 
         parent::tearDown();
-    }
-
-    /**
-     * Un onglet d'un navigateur neuf, sans témoin ni session, ouvert sur
-     * cette adresse de l'application.
-     */
-    protected function naviguer(string $chemin): Navigation
-    {
-        return Navigation::ouvrir($chemin, $this->journal);
-    }
-
-    /**
-     * Le prochain refus de ce statut sur une requête dont le chemin contient
-     * ce morceau est attendu par le test.
-     */
-    protected function tolerer(int $statut, string $chemin = ''): void
-    {
-        $this->journal->tolerer($statut, $chemin);
     }
 
     /**
@@ -148,43 +117,6 @@ abstract class TestCaseDuNavigateur extends TestCase
             ->voir($nom);
 
         return $onglet->seDeconnecter();
-    }
-
-    /**
-     * Balaye, dans cet onglet connecté, chaque page atteignable depuis ce
-     * chemin dans ces préfixes, et chaque action visible de chacune (voir
-     * Balayeur) ; puis vérifie que tout ce qui a été ouvert est déclaré
-     * dans le code (voir ActionsDeLInterface), et que ce balayage a ouvert
-     * chaque action que l'inventaire des actions dit couverte par ce test,
-     * dont le fichier est donné (__FILE__). Rend les pages balayées.
-     *
-     * @param  list<string>  $prefixes
-     * @return list<string>
-     */
-    protected function balayer(Navigation $onglet, string $depart, array $prefixes, string $fichierDuTest): array
-    {
-        $couverture = new CouvertureDuBalayage;
-        $couverture->ecouter();
-        $pages = (new Balayeur($onglet, $couverture))->balayer($depart, $prefixes);
-        $bilan = $couverture->bilan();
-
-        if ($bilan['inconnus'] !== []) {
-            $this->fail('Le balayage a ouvert des actions que la lecture du code ne trouve pas (voir ActionsDeLInterface) :'.PHP_EOL.implode(PHP_EOL, $bilan['inconnus']));
-        }
-
-        $manquantes = [];
-
-        foreach (Inventaire::promisesPar(Inventaire::reference($fichierDuTest, $this->getPrintableTestCaseMethodName())) as $fichier => $actions) {
-            foreach (array_diff($actions, $bilan['couverts'][$fichier] ?? []) as $action) {
-                $manquantes[] = $fichier.' : '.$action;
-            }
-        }
-
-        if ($manquantes !== []) {
-            $this->fail('L\'inventaire des actions dit ce balayage couvrir des actions qu\'il n\'a pas ouvertes :'.PHP_EOL.implode(PHP_EOL, $manquantes));
-        }
-
-        return $pages;
     }
 
     /**

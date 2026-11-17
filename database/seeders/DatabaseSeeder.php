@@ -11,6 +11,7 @@ use App\Domain\Tenancy\Services\TenantContext;
 use App\Providers\FournisseursExternesServiceProvider;
 use Database\Seeders\Semis\CodesLusDansLesCourriers;
 use Database\Seeders\Semis\ComptesSemes;
+use Database\Seeders\Semis\CourriersDuSemis;
 use Database\Seeders\Semis\FileDAttenteDuSemis;
 use Database\Seeders\Semis\HorlogeDuSemis;
 use Database\Seeders\Semis\MotsDePasseDuSemis;
@@ -59,6 +60,15 @@ use Throwable;
 class DatabaseSeeder extends Seeder
 {
     public const FICHIER_DES_COMPTES = 'comptes-du-semis.txt';
+
+    /**
+     * Les derniers jours de l'histoire d'un modèle du site de démonstration
+     * dont les e-mails passent aussi par son vrai transport, qui les écrit
+     * dans « E-mails qui seraient partis » (lot DEMO-COPIE, F.4) ; tous
+     * restent retenus, pour que le semis y lise ses liens, et aucun ne part
+     * (voir CourriersDuSemis).
+     */
+    public const JOURS_DES_E_MAILS_DES_MODELES = 7;
 
     public const MESSAGE_HORS_D_UNE_CONSTRUCTION = 'Sur le site de démonstration, le semis ne remplit qu\'une base modèle en construction (demo_travail_…), par php artisan demonstration:construire-les-modeles : php artisan db:seed y est refusé. Rien n\'a été écrit.';
 
@@ -112,11 +122,15 @@ class DatabaseSeeder extends Seeder
         $comptes = new ComptesSemes;
         $codes = new CodesLusDansLesCourriers;
         app()->instance(CodesDeConfirmation::class, $codes);
-        Mail::fake();
+        $courriers = CourriersDuSemis::poser();
         Http::preventStrayRequests();
 
-        SemisEnCours::pendant(fn () => FileDAttenteDuSemis::pendantLeSemis(function () use ($motsDePasse, $codes, $comptes, $construction): void {
+        SemisEnCours::pendant(fn () => FileDAttenteDuSemis::pendantLeSemis(function () use ($motsDePasse, $codes, $comptes, $construction, $courriers): void {
             $horloge = new HorlogeDuSemis(SemisComplet::JOURS);
+
+            if ($construction !== null) {
+                $horloge->auxDerniersJours(self::JOURS_DES_E_MAILS_DES_MODELES, $courriers->envoyerAussiParLeTransport(...));
+            }
 
             try {
                 $semis = new SemisComplet($horloge, $motsDePasse, $codes, $comptes, $construction?->type);

@@ -2,6 +2,7 @@
 
 namespace App\Domain\TableauDeBord\Support;
 
+use App\Domain\Demonstration\SiteDePiliqi;
 use App\Domain\TableauDeBord\Enums\EcranDuTableauDeBord;
 use App\Domain\TableauDeBord\Enums\Graphique;
 use App\Domain\TableauDeBord\Enums\PeriodeDuTableauDeBord;
@@ -43,9 +44,23 @@ final class ReglagesDuTableauDeBord
      * de la société quand il y a plus d'un magasin, « Chiffre d'affaires
      * par magasin » en anneau ; un graphique que le compte ne voit pas est
      * omis. Les 12 derniers mois, tous ses magasins, sans comparaison.
+     *
+     * Sur le site de démonstration, toutes les cartes que le compte voit
+     * sur cet écran, dans l'ordre du catalogue, chacune à son type par
+     * défaut, pour que la société fictive se voie tout de suite en entier
+     * (précision de l'éditeur du 16/11/2026 vers 23 h 59) : une règle, pas
+     * une liste, qui ouvre aussi les graphiques ajoutés plus tard. Une
+     * préférence déjà enregistrée prime, partout.
      */
     public static function parDefaut(Perimetre $perimetre): self
     {
+        if (SiteDePiliqi::estLaDemonstration()) {
+            return new self(array_values(array_map(
+                static fn (Graphique $graphique): CarteDuTableauDeBord => CarteDuTableauDeBord::parDefaut($graphique),
+                array_filter(Graphique::cases(), static fn (Graphique $graphique): bool => $perimetre->voit($graphique)),
+            )));
+        }
+
         $cartes = [
             CarteDuTableauDeBord::parDefaut(Graphique::VentesEtAchatsParMois, TypeDeGraphique::Barres),
             CarteDuTableauDeBord::parDefaut(Graphique::TvaAPayerParMois, TypeDeGraphique::Barres),

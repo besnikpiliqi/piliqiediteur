@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Demonstration;
 
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Demonstration\Bases\BasesDeLaDemonstration;
 use App\Domain\Demonstration\Bases\BrancherUneBase;
 use App\Domain\Demonstration\Construction\ConstruireUnModele;
@@ -11,6 +12,8 @@ use App\Domain\Demonstration\Contracts\SemisDUnModele;
 use App\Domain\Demonstration\Registre\Models\Modele;
 use App\Domain\Demonstration\Services\CarteDeLaDemonstration;
 use App\Domain\Tenancy\Enums\TypeDActivite;
+use Carbon\CarbonImmutable;
+use Database\Seeders\DatabaseSeeder;
 use Database\Seeders\Semis\ComptesDuBandeauDuModele;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
@@ -52,6 +55,8 @@ class BasesModelesTest extends DemonstrationTestCase
         $this->assertSame(['Lina Martin', 'Paul Lefèvre'], $lecture['experts_comptables_actifs'], 'L\'expert-comptable déclaré par le SIREN du cabinet Martin, absent du modèle, a ses comptes actifs (Paul Lefèvre, qui a choisi son mot de passe, est au bandeau).');
         $this->assertSame(['declare'], $lecture['liens_cabinet'], 'Maison Ferrand déclare son expert-comptable au lieu d\'être liée au cabinet Martin, absent du modèle.');
         $this->assertSame([], $lecture['cabinets']);
+        $this->assertNotSame([], $lecture['courriels'], 'La page « E-mails qui seraient partis » d\'une copie neuve montre de vrais exemples de sa société (F.4).');
+        $this->assertSame(['MAISON FERRAND'], array_values(array_unique(array_column($lecture['courriels'], 'raison_sociale'))));
         $this->assertBandeauDuModele($modele, $lecture, TypeDActivite::Commerce);
         $this->assertCommunAuxModeles($lecture);
     }
@@ -139,6 +144,12 @@ class BasesModelesTest extends DemonstrationTestCase
                 ->map(fn (object $ligne): array => (array) $ligne)
                 ->all(),
             'regimes_manquants' => DB::table('societes')->where('type_activite', '!=', TypeDActivite::Cabinet->value)->whereNull('regime_tva')->pluck('raison_sociale')->all(),
+            'courriels' => DB::table('courriels_de_la_demonstration')
+                ->join('societes', 'societes.id', '=', 'courriels_de_la_demonstration.societe_id')
+                ->orderBy('courriels_de_la_demonstration.id')
+                ->get(['societes.raison_sociale', 'courriels_de_la_demonstration.objet', 'courriels_de_la_demonstration.envoye_le'])
+                ->map(fn (object $ligne): array => (array) $ligne)
+                ->all(),
         ]);
     }
 
@@ -184,5 +195,11 @@ class BasesModelesTest extends DemonstrationTestCase
         $this->assertSame([], $lecture['jet_100_manquants'], 'Chaque magasin d\'une base modèle a son JET 100 (mode d\'entraînement).');
         $this->assertSame(array_fill_keys(ConstruireUnModele::TABLES_TECHNIQUES, 0), $lecture['tables_techniques']);
         $this->assertSame([], $lecture['regimes_manquants'], 'Chaque société qui vend a son régime de TVA.');
+        $this->assertIsArray($lecture['courriels']);
+        $debut = Calendrier::deParis()->debutDuJour(Calendrier::ajouterJours(Calendrier::deParis()->jourDe(CarbonImmutable::now()), -DatabaseSeeder::JOURS_DES_E_MAILS_DES_MODELES));
+
+        foreach ($lecture['courriels'] as $courriel) {
+            $this->assertGreaterThanOrEqual($debut->getTimestamp(), CarbonImmutable::parse((string) $courriel['envoye_le'], 'UTC')->getTimestamp(), 'Seuls les e-mails des 7 derniers jours de l\'histoire semée sont écrits dans « E-mails qui seraient partis » (F.4).');
+        }
     }
 }

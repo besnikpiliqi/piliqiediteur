@@ -43,7 +43,9 @@ use Symfony\Component\HttpFoundation\Response;
  *   introuvable.
  *
  * Le témoin créé porte la génération courante du lien, puis la visite
- * passe à « Choisissez qui vous êtes ».
+ * passe à « Choisissez qui vous êtes ». Un navigateur qui a déjà un témoin
+ * valable de la même copie le garde : la visite suivante rouvre ainsi le
+ * compte qu'il avait choisi (choix 15).
  */
 final class EntrerDansLaDemonstrationController
 {
@@ -106,6 +108,10 @@ final class EntrerDansLaDemonstrationController
             )], 409);
         }
 
+        if ($actuelle !== null && ! $actuelle->estTerminee && $actuelle->copie->id === $copie->id) {
+            return new JsonResponse(['aller' => self::CHEMIN_DU_CHOIX]);
+        }
+
         return (new JsonResponse(['aller' => self::CHEMIN_DU_CHOIX]))->withCookie($temoins->creer($copie, 'lien'));
     }
 
@@ -141,7 +147,13 @@ final class EntrerDansLaDemonstrationController
             abort(404);
         }
 
-        return redirect(self::CHEMIN_DU_CHOIX, 303)->withCookie($temoins->creer($copie, 'bouton'));
+        $actuelle = $temoins->retrouver($request->cookies->get(TemoinsDesVisites::nom()));
+
+        if ($actuelle !== null && ! $actuelle->estTerminee && $actuelle->copie->id === $copie->id) {
+            return Redirection::vers(self::CHEMIN_DU_CHOIX, 303);
+        }
+
+        return Redirection::vers(self::CHEMIN_DU_CHOIX, 303)->withCookie($temoins->creer($copie, 'bouton'));
     }
 
     /**

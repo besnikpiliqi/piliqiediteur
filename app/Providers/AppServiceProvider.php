@@ -84,6 +84,7 @@ use Filament\Infolists\Components\TextEntry;
 use Filament\Support\Assets\Css;
 use Filament\Support\Facades\FilamentAsset;
 use Filament\Tables\Columns\TextColumn;
+use Illuminate\Cache\RateLimiter as Limiteur;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Contracts\Support\Htmlable;
@@ -102,7 +103,6 @@ use Illuminate\Mail\Markdown;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
-use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
@@ -247,14 +247,25 @@ class AppServiceProvider extends ServiceProvider
      * par minute, 10 réponses par minute. Au-delà, la page du client le
      * dit en français, avec les en-têtes de toute page du lien (voir
      * ReponseAuDevisController::tropDEssais()), au lieu de la page
-     * technique de Laravel.
+     * technique de Laravel. Chaque limiteur que le conteneur fait naître
+     * reçoit ces limites : le site de démonstration en refait un à
+     * l'ouverture de chaque copie, pour qu'il compte dans le cache de la
+     * copie (voir BrancherUneBase).
      */
     private function limiterLesEssaisDuLienDUnDevis(): void
     {
-        RateLimiter::for('lien-du-devis', static fn (Request $requete): Limit => Limit::perMinute(30)
+        $this->app->resolving(Limiteur::class, static function (Limiteur $limiteur): void {
+            self::limiterLeLienDUnDevis($limiteur);
+        });
+        self::limiterLeLienDUnDevis($this->app->make(Limiteur::class));
+    }
+
+    private static function limiterLeLienDUnDevis(Limiteur $limiteur): void
+    {
+        $limiteur->for('lien-du-devis', static fn (Request $requete): Limit => Limit::perMinute(30)
             ->by((string) $requete->ip())
             ->response(static fn (Request $requete, array $entetes): Response => ReponseAuDevisController::tropDEssais(self::entetesDeLAttente($entetes))));
-        RateLimiter::for('reponse-au-devis', static fn (Request $requete): Limit => Limit::perMinute(10)
+        $limiteur->for('reponse-au-devis', static fn (Request $requete): Limit => Limit::perMinute(10)
             ->by((string) $requete->ip())
             ->response(static fn (Request $requete, array $entetes): Response => ReponseAuDevisController::tropDEssais(self::entetesDeLAttente($entetes))));
     }

@@ -3,6 +3,7 @@
 namespace App\Domain\Tenancy\Services;
 
 use App\Domain\Calendrier\Calendrier;
+use App\Domain\Demonstration\SiteDePiliqi;
 use App\Domain\Tenancy\Support\Reglage;
 use Carbon\CarbonImmutable;
 use Closure;
@@ -59,7 +60,9 @@ final class TraceDuVisiteur
      * Les colonnes de la trace de l'écriture en cours : l'adresse IP, le
      * navigateur (255 caractères au plus) et la date d'effacement, après la
      * durée de config/conservation.php ; null quand rien ne se note (hors
-     * d'une requête HTTP routée, ou hors de la société du visiteur).
+     * d'une requête HTTP routée, hors de la société du visiteur, ou sur le
+     * site de démonstration, qui ne garde ni adresse IP ni navigateur : lot
+     * DEMO-COPIE, C.17).
      *
      * @return array{ip: string|null, agent_utilisateur: string|null, expire_le: CarbonImmutable}|null
      */
@@ -67,7 +70,7 @@ final class TraceDuVisiteur
     {
         $requete = request();
 
-        if ($this->ecrituresHorsDeSaSociete > 0 || $requete->route() === null) {
+        if ($this->ecrituresHorsDeSaSociete > 0 || $requete->route() === null || SiteDePiliqi::estLaDemonstration()) {
             return null;
         }
 

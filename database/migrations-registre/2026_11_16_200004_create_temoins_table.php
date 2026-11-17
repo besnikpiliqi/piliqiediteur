@@ -10,8 +10,10 @@ use Illuminate\Support\Facades\Schema;
  * l'empreinte SHA-256 de la valeur du témoin (256 bits tirés au hasard),
  * la génération du lien à sa création (un renouvellement retire tous les
  * témoins d'une génération plus ancienne, choix 10), sa fin, qui ne
- * dépasse jamais celle de la copie, et le dernier compte choisi dans le
- * bandeau. Au plus 50 témoins actifs par copie : au-delà, le plus ancien
+ * dépasse jamais celle de la copie, le dernier compte choisi dans le
+ * bandeau (la visite suivante le rouvre) et le message de la copie déjà
+ * montré à ce témoin (chaque message ne se montre qu'une fois par
+ * témoin, E.4). Au plus 50 témoins actifs par copie : au-delà, le plus ancien
  * est retiré.
  */
 return new class extends Migration
@@ -29,6 +31,7 @@ return new class extends Migration
             $table->timestamp('vu_le')->nullable();
             $table->timestamp('retire_le')->nullable();
             $table->unsignedBigInteger('compte_choisi')->nullable();
+            $table->text('message_vu')->nullable();
             $table->index(['copie_id', 'retire_le']);
         });
 

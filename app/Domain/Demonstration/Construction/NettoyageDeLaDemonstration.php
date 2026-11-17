@@ -10,12 +10,14 @@ use App\Domain\Demonstration\Bases\BrancherUneBase;
 use App\Domain\Demonstration\Enums\EtatDUneCopie;
 use App\Domain\Demonstration\Enums\EtatDUnModele;
 use App\Domain\Demonstration\Exceptions\ArchiveImpossible;
+use App\Domain\Demonstration\Jobs\RefaireUneCopie;
 use App\Domain\Demonstration\MarqueDeLaBase;
 use App\Domain\Demonstration\Registre\Models\Archive;
 use App\Domain\Demonstration\Registre\Models\Copie;
 use App\Domain\Demonstration\Registre\Models\Modele;
 use App\Domain\Demonstration\SiteDePiliqi;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
@@ -37,8 +39,11 @@ use Throwable;
  * - une base de travail de plus de 6 heures qu'aucun modèle vivant ne
  *   pointe : suppression (elle n'a jamais servi de copie) ;
  * - un dossier de fichiers sans copie ni modèle vivants : effacé ;
- * - une copie servie dont la base n'existe plus : marquée « perdue »,
- *   refaite depuis le modèle à la visite suivante.
+ * - une copie servie dont la base n'existe plus : marquée « perdue » et
+ *   refaite aussitôt depuis le modèle, même référence, même lien, même
+ *   fin, avec le message « Votre démonstration a dû être refaite le … »
+ *   (E.7 ; sans base, il n'y a rien à archiver). La visite suivante la
+ *   trouve refaite, ou « Votre démonstration se prépare ».
  *
  * Il refuse d'agir, et le dit dans l'état publié (une alerte à l'éditeur),
  * quand le registre ne compte aucune copie alors que des bases de copie
@@ -113,6 +118,7 @@ final class NettoyageDeLaDemonstration
                 $this->terminer($copie, $resultat);
             } elseif ($copie->etat->seSert() && ! $existe) {
                 $copie->forceFill(['etat' => EtatDUneCopie::Perdue])->save();
+                Bus::dispatch(new RefaireUneCopie($copie->reference, FinDesCopies::MOTIF_PERDUE));
                 $resultat['perdues'][] = $copie->reference;
             }
         }

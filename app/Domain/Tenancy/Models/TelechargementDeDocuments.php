@@ -4,6 +4,7 @@ namespace App\Domain\Tenancy\Models;
 
 use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Calendrier\Casts\JourCivil;
+use App\Domain\Demonstration\SiteDePiliqi;
 use App\Domain\Facturation\Enums\FormatDuTelechargement;
 use App\Domain\Facturation\Enums\OrigineDesAchats;
 use App\Domain\Facturation\Enums\TypeDeDocumentTelechargeable;
@@ -246,10 +247,12 @@ class TelechargementDeDocuments extends Model
     }
 
     /**
-     * Le nom sous lequel le fichier se télécharge.
+     * Le nom sous lequel le fichier se télécharge ; sur le site de
+     * démonstration, il commence par « demonstration-sans-valeur- » (lot
+     * DEMO-COPIE, C.10).
      */
     public function nomDuFichier(): string
     {
-        return 'documents-'.$this->du.'-au-'.$this->au.'.'.$this->format->value;
+        return (SiteDePiliqi::estLaDemonstration() ? 'demonstration-sans-valeur-' : '').'documents-'.$this->du.'-au-'.$this->au.'.'.$this->format->value;
     }
 }

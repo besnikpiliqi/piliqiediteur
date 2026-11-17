@@ -6,6 +6,7 @@ use App\Domain\Calendrier\Calendrier;
 use App\Domain\Tenancy\Enums\RoleSociete;
 use App\Domain\Tenancy\Enums\StatutCompte;
 use App\Domain\Tenancy\Enums\StatutMagasin;
+use App\Domain\Tenancy\Events\CompteCree;
 use App\Domain\Tenancy\Models\Identifiant;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
@@ -207,6 +208,8 @@ final class CreationDesComptes
         if ($adresseDuLien === null) {
             $compte->forceFill(['password' => $identifiant, 'mot_de_passe_est_l_identifiant' => true])->save();
         }
+
+        CompteCree::dispatch($compte, $magasin);
 
         return $compte;
     }

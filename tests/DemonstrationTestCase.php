@@ -10,18 +10,23 @@ use App\Domain\Demonstration\Contracts\SemisDUnModele;
 use App\Domain\Demonstration\Enums\EtatDUnModele;
 use App\Domain\Demonstration\Jobs\CreerUneCopie;
 use App\Domain\Demonstration\Messages\MessagesSignes;
+use App\Domain\Demonstration\Models\CompteDuBandeau;
 use App\Domain\Demonstration\Registre\Models\Copie;
 use App\Domain\Demonstration\Registre\Models\Modele;
 use App\Domain\Demonstration\Visites\TemoinsDesVisites;
+use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\TypeDActivite;
+use App\Domain\Tenancy\Notifications\AvisDeLEquipe;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use App\Providers\SiteDePiliqiServiceProvider;
 use Carbon\CarbonImmutable;
+use Carbon\CarbonInterface;
 use Closure;
 use Dotenv\Dotenv;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Application;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Env;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Bus;
@@ -170,12 +175,14 @@ abstract class DemonstrationTestCase extends TestCase implements GereSesPropresB
         $this->app->instance(SemisDUnModele::class, $this->semisDuModeleDeTest());
         $instant = self::aParis('2026-11-16 01:10:00')->addMinutes(self::jeton() * 3 + array_search($type, TypeDActivite::cases(), true));
         $bases->supprimer($bases->nomDUneBaseDeTravail($type, $instant));
+        // L'heure du test, s'il en a figé une, revient après la construction.
+        $heureDuTest = Carbon::getTestNow();
         $this->travelTo($instant);
 
         try {
             $modele = app(ConstruireUnModele::class)->construire($type);
         } finally {
-            $this->travelBack();
+            $heureDuTest instanceof CarbonInterface ? $this->travelTo($heureDuTest) : $this->travelBack();
         }
 
         self::$modelesDeTest[$type->value] = collect($modele->getAttributes())->except('id')->all();
@@ -187,20 +194,92 @@ abstract class DemonstrationTestCase extends TestCase implements GereSesPropresB
     /**
      * Le semis du modèle de test : une société du type, sous un SIREN
      * fictif du semis (le seul que connaît le répertoire factice du site de
-     * démonstration), par les vraies actions des tests (deux magasins pour une société « Commerce ou
-     * atelier », un pour une société de services, aucun pour un cabinet),
-     * chaque compte avec le mot de passe de démonstration du modèle.
+     * démonstration), par les vraies actions des tests (deux magasins pour une
+     * société « Commerce ou atelier », un pour une société de services, aucun
+     * pour un cabinet), chaque compte avec le mot de passe de démonstration
+     * du modèle, les comptes de son bandeau « Vous êtes : » (le propriétaire
+     * d'abord, puis chaque magasin ; dans un cabinet, un collaborateur, et
+     * un client lié dont aucun compte n'est au bandeau) et un e-mail qui
+     * serait parti : l'avis par e-mail au propriétaire de la première
+     * connexion d'un compte.
      */
     protected function semerLeModeleDeTest(TypeDActivite $type, string $motDePasse): void
     {
-        match ($type) {
-            TypeDActivite::Commerce => $this->ouvrirUnAutreMagasin($this->ouvrirUneSociete(['nom' => 'Les Halles', 'siren' => '000000109']), ['nom' => 'La République']),
-            TypeDActivite::Services => $this->ouvrirUneSociete(['nom' => 'Conseil Vasseur', 'type' => TypeDActivite::Services, 'siren' => '000000117']),
-            TypeDActivite::Cabinet => $this->ouvrirUnCabinet(),
+        $bandeau = match ($type) {
+            TypeDActivite::Commerce => $this->comptesDuModeleDeCommerce(),
+            TypeDActivite::Services => $this->comptesDuModeleDeServices(),
+            TypeDActivite::Cabinet => $this->comptesDuModeleDeCabinet(),
         };
+        $proprietaire = array_values($bandeau)[0][0][0];
+        $societe = $proprietaire->societe()->firstOrFail();
+        $ordre = 0;
 
-        User::query()->withoutGlobalScopes()->update(['password' => bcrypt($motDePasse)]);
+        User::query()->update(['password' => bcrypt($motDePasse)]);
+        app(TenantContext::class)->runAsSociete($societe, function () use ($bandeau, &$ordre): void {
+            foreach ($bandeau as $groupe => $comptes) {
+                foreach ($comptes as [$compte, $libelle]) {
+                    CompteDuBandeau::query()->create(['user_id' => $compte->getKey(), 'libelle_du_role' => $libelle, 'groupe' => $groupe, 'ordre' => ++$ordre]);
+                }
+            }
+        });
+        $proprietaire->notify(new AvisDeLEquipe($societe, 'Première connexion', 'Un compte de votre équipe s\'est connecté pour la première fois.', parCourriel: true));
         app(TenantContext::class)->clear();
+    }
+
+    /**
+     * @return array<string, list<array{0: User, 1: string}>>
+     */
+    private function comptesDuModeleDeCommerce(): array
+    {
+        $halles = $this->ouvrirUneSociete(['nom' => 'Les Halles', 'siren' => '000000109']);
+        $republique = $this->ouvrirUnAutreMagasin($halles, ['nom' => 'La République']);
+
+        return [
+            'La société' => [[$this->proprietaireDe($halles), 'Propriétaire']],
+            'Les Halles' => [
+                [$this->membre($halles, RoleMagasin::Responsable, identite: ['name' => 'Camille Laurent']), 'Responsable'],
+                [$this->membre($halles, RoleMagasin::Vendeur, identite: ['name' => 'Inès Garcia']), 'Vendeuse'],
+                [$this->membre($halles, RoleMagasin::Observateur, identite: ['name' => 'Élodie Fabre']), 'Observatrice'],
+            ],
+            'La République' => [
+                [$this->membre($republique, RoleMagasin::Vendeur, identite: ['name' => 'Sarah Petit']), 'Vendeuse'],
+            ],
+        ];
+    }
+
+    /**
+     * @return array<string, list<array{0: User, 1: string}>>
+     */
+    private function comptesDuModeleDeServices(): array
+    {
+        $conseil = $this->ouvrirUneSociete(['nom' => 'Conseil Vasseur', 'type' => TypeDActivite::Services, 'siren' => '000000117']);
+
+        return [
+            'La société' => [[$this->proprietaireDe($conseil), 'Propriétaire']],
+            'Conseil Vasseur' => [
+                [$this->membre($conseil, RoleMagasin::Responsable, identite: ['name' => 'Claire Dubois']), 'Responsable'],
+                [$this->membre($conseil, RoleMagasin::Vendeur, identite: ['name' => 'Maxime Henry']), 'Vendeur'],
+            ],
+        ];
+    }
+
+    /**
+     * @return array<string, list<array{0: User, 1: string}>>
+     */
+    private function comptesDuModeleDeCabinet(): array
+    {
+        $cabinet = $this->ouvrirUnCabinet();
+        $collaborateur = $this->collaborateur($cabinet);
+        $client = $this->ouvrirUneSociete(['nom' => 'Épicerie Lemoine', 'siren' => '000000125']);
+        $this->lierLeCabinet($cabinet, $client);
+        app(TenantContext::class)->clear();
+
+        return [
+            'Le cabinet' => [
+                [$this->proprietaireDuCabinet($cabinet), 'Propriétaire du cabinet'],
+                [$collaborateur, 'Collaborateur'],
+            ],
+        ];
     }
 
     /**

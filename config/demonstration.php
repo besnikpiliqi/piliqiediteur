@@ -83,6 +83,17 @@ return [
 
     'part_des_validees' => (int) env('DEMONSTRATION_PART_DES_VALIDEES', 50),
 
+    // La place d'une copie (C.16) : au-delà de ce multiple de la taille de
+    // son modèle (base et dossier de fichiers), la copie passe en lecture
+    // seule (demonstration:mesurer-les-copies, chaque heure).
+    'facteur_de_place' => (int) env('DEMONSTRATION_FACTEUR_DE_PLACE', 3),
+
+    // La place libre minimale du disque des copies, en pour cent (C.16) :
+    // en dessous, plus aucune copie neuve ne se crée (« en attente d'une
+    // place ») et l'état publié alerte l'éditeur. Les tests la mettent à 0
+    // (phpunit.xml), pour ne pas dépendre du disque de la machine.
+    'place_libre_minimale' => (int) env('DEMONSTRATION_PLACE_LIBRE_MINIMALE', 20),
+
     /*
      | Sur le site de démonstration : la stratégie de CREATE DATABASE …
      | TEMPLATE (DEMONSTRATION_STRATEGIE_DE_COPIE, FILE_COPY ou WAL_LOG ;

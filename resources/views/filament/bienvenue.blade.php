@@ -2,7 +2,8 @@
     La bienvenue en tête d'un tableau de bord : « Bonjour » et le nom de
     la personne connectée, puis son rôle tel que l'écran le donne ($role,
     voir User::libelleDuRoleDans() et User::libelleDuRoleDeSociete()), et
-    le bouton de déconnexion. Partagée par le tableau de bord d'un magasin
+    le bouton de déconnexion. Sur le site de démonstration, le rôle est
+    suivi de « (démonstration) » (lot DEMO-COPIE, C.8). Partagée par le tableau de bord d'un magasin
     (voir BienvenueApercu) et celui de l'espace de la société (voir
     TableauDeBord).
 --}}
@@ -16,7 +17,7 @@
             </h2>
 
             <p class="text-sm text-gray-500 dark:text-gray-400">
-                {{ $role }}
+                {{ $role }}{{ \App\Domain\Demonstration\SiteDePiliqi::estLaDemonstration() ? ' (démonstration)' : '' }}
             </p>
         </div>
 

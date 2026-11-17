@@ -16,6 +16,7 @@ use App\Domain\Charges\Models\PieceDeCharge;
 use App\Domain\Charges\Models\TypeDeChargeDeLaSociete;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Demonstration\Models\CompteDuBandeau;
+use App\Domain\Demonstration\Models\CourrielDeLaDemonstration;
 use App\Domain\Demonstration\Models\Demonstration;
 use App\Domain\Demonstration\Models\MessageVersLaDemonstration;
 use App\Domain\Facturation\Actions\CreerFactureAction;
@@ -104,6 +105,7 @@ class IsolationDesSocietesTest extends TestCase
         Cabinet::class,
         Charge::class,
         CompteDuBandeau::class,
+        CourrielDeLaDemonstration::class,
         ChangementFinExercice::class,
         ClientConfie::class,
         CodeConfirmation::class,

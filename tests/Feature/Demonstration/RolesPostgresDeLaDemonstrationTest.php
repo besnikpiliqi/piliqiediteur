@@ -6,7 +6,7 @@ use App\Domain\Demonstration\Bases\BasesDeLaDemonstration;
 use App\Domain\Demonstration\Jobs\ArchiverPuisSupprimerUneCopie;
 use App\Domain\Demonstration\Jobs\CreerUneCopie;
 use App\Domain\Demonstration\Jobs\PreparerUneCopie;
-use App\Domain\Demonstration\Jobs\RecommencerUneCopie;
+use App\Domain\Demonstration\Jobs\RefaireUneCopie;
 use App\Domain\Demonstration\Jobs\RenouvelerLeLienDUneCopie;
 use App\Domain\Tenancy\Enums\TypeDActivite;
 use PDO;
@@ -59,7 +59,7 @@ class RolesPostgresDeLaDemonstrationTest extends DemonstrationTestCase
         $travaux = [
             new CreerUneCopie(['reference' => str_repeat('a', 32), 'repere' => 'K7M2QD', 'type' => 'services', 'validee' => true, 'empreinte_du_lien' => str_repeat('b', 64), 'generation' => 1, 'fin' => '2026-12-16T09:00:00Z']),
             new PreparerUneCopie(str_repeat('a', 32)),
-            new RecommencerUneCopie(str_repeat('a', 32)),
+            new RefaireUneCopie(str_repeat('a', 32)),
             new ArchiverPuisSupprimerUneCopie(str_repeat('a', 32), 'supprimer'),
             new RenouvelerLeLienDUneCopie(str_repeat('a', 32), str_repeat('c', 64), 2),
         ];

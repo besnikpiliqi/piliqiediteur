@@ -11,6 +11,7 @@ use App\Domain\Charges\Enums\EtatDeLaCharge;
 use App\Domain\Charges\Models\Charge;
 use App\Domain\Charges\Models\LigneDeCharge;
 use App\Domain\Contacts\Models\Fournisseur;
+use App\Domain\Demonstration\SiteDePiliqi;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\TypeDeDocumentTelechargeable;
 use App\Domain\Facturation\Models\Avoir;
@@ -81,6 +82,12 @@ final class RecapitulatifDesDocuments
      */
     public const PIECE_MANQUANTE = 'Manquante';
 
+    /**
+     * La première ligne du récapitulatif sur le site de démonstration (lot
+     * DEMO-COPIE, C.10), avant celle des titres.
+     */
+    public const DEMONSTRATION = 'Démonstration — sans valeur';
+
     public function __construct(
         private readonly CalculateurLigne $calculateur,
         private readonly DocumentsDeLaPeriode $documents,
@@ -95,6 +102,11 @@ final class RecapitulatifDesDocuments
     {
         $flux = ResultatDePhp::flux(fopen('php://temp', 'r+'), 'L\'ouverture du fichier temporaire du récapitulatif');
         fwrite($flux, "\xEF\xBB\xBF");
+
+        if (SiteDePiliqi::estLaDemonstration()) {
+            fputcsv($flux, [self::DEMONSTRATION], ';', '"', '', "\r\n");
+        }
+
         fputcsv($flux, self::COLONNES, ';', '"', '', "\r\n");
         $charges = collect($documents)->filter(self::estUneCharge(...))->values();
         $autres = collect($documents)->reject(self::estUneCharge(...));

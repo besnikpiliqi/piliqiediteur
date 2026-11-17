@@ -53,8 +53,9 @@ class ClesDeLaDemonstrationTest extends DemonstrationTestCase
             });
         });
 
-        $this->assertSame(['260', '100', '110'], array_slice($lu['types'], 0, 3), 'Le registre d\'un magasin de la copie s\'ouvre en mode d\'entraînement (JET 100).');
-        $this->assertSame([true, true, true], array_slice($lu['marques'], 0, 3), 'Chaque en-tête signé d\'une copie porte « demonstration ».');
+        $this->assertSame(['260', '100'], array_slice($lu['types'], 0, 2), 'Le registre d\'un magasin de la copie s\'ouvre en mode d\'entraînement (JET 100).');
+        $this->assertSame('110', $lu['types'][array_key_last($lu['types'])], 'L\'export écrit dans la copie est son dernier enregistrement.');
+        $this->assertSame(array_fill(0, count($lu['marques']), true), $lu['marques'], 'Chaque en-tête signé d\'une copie porte « demonstration », ceux du modèle comme celui de la copie.');
         $this->assertTrue($lu['emetteur']);
         $this->assertSame('DÉMONSTRATION — SANS VALEUR', $lu['filigrane']);
         $this->assertTrue($lu['verification'], 'caisse:verifier d\'une copie passe avec la clé publique de démonstration.');

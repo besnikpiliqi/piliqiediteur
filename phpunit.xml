@@ -43,6 +43,7 @@
         <env name="DB_USERNAME" value="piliqi"/>
         <env name="DB_URL" value=""/>
         <env name="MAIL_MAILER" value="array"/>
+        <env name="DEMONSTRATION_PLACE_LIBRE_MINIMALE" value="0"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="TELECHARGEMENTS_QUEUE_DRIVER" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>

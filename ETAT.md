@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 17/11/2026 à 23:45 UTC par pilotage-sync.sh : « Question : historique repris d'une société qui arrive chez PILIQI ».
+Mis à jour le 18/11/2026 à 00:06 UTC par pilotage-sync.sh : « Question : régime de TVA obligatoire avant la première vente ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

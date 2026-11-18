@@ -529,3 +529,4 @@
 - 17/11 23:5x UTC — Consigne de l'éditeur : ne rien commencer (semis complet, pastille, bandeau) ; tout est sauvegardé dans semis-complet-plan-17-11.md. Attente de la consigne de départ.
 - 17/11 nuit — Consigne de l'éditeur : listes triées par défaut du plus récent au plus ancien (noté, pas commencé).
 - 17/11 nuit — Question de l'éditeur : historique repris (totaux par mois et par année d'une société qui arrive). Proposition notée, pas commencée.
+- 18/11 — Question de l'éditeur : régime de TVA obligatoire avant la première vente ? Réponse donnée et notée, pas commencée.

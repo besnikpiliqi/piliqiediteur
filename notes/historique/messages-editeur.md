@@ -3710,3 +3710,7 @@ je vois que tout, donc devis, facture tout tout il s 'arrange pas par les recent
 
 j ai une question importante. par ex quand une societe vient chez piliqi alors ce qu'il avait vendu avant alors mtn chez moi il y aura pas de calcule d avant. qu est qu'on peut faire si on pourrais avoir cette possibilete. par ex ou d ajouter les valeurs total ttc,ht,tva par mois dans l'année pour autant d années qu'il veut?
 
+## 402. 2026-11-18 00:05 UTC
+
+donc pour savoir: tu vas obliger la societe de choisir regim de tva sur "Paramètres fiscaux de la société" avant tout c 'est ca ? et qu'il doit declare sa tva d avant afin de calcule la tva reel de la societe ?
+

@@ -4090,3 +4090,9 @@ Conçu avec amour à Paris, France ♥︎
 
 alors tant qu il gere pas le mixe en service et bien alors il me rassure d adopter super pdp comme mon pa
 
+## 434. 2026-11-18 23:44 UTC
+
+[1 capture(s) d'écran jointe(s)]
+
+j ai vu dans ce PA. donc c est comme ca que s envoie l e reporting
+

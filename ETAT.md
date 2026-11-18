@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 18/11/2026 à 21:39 UTC par pilotage-sync.sh : « Chasse aux cas manquants : script sauvegardé, non lancé ».
+Mis à jour le 18/11/2026 à 21:52 UTC par pilotage-sync.sh : « Fermeture de caisse : options A et B ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

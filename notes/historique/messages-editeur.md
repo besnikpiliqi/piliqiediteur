@@ -3828,3 +3828,39 @@ oui il faut que fasse mais juste tu sauvegarde pour quand tu commnce à traviail
 
 non non j ai dit tu commence pas mtn
 
+## 419. 2026-11-18 21:42 UTC
+
+<!-- attach -->
+
+> Plusieurs fermetures dans une même journée, oui. Mais les relevés à zéro que vous montrez, non, ce n’est pas normal.
+
+> 
+
+> Ce que dit le code. J’ai relu l’action « Fermer ma caisse ». Un vendeur peut la fermer aussi souvent qu’il veut, même sans aucune vente ni aucun encaissement depuis la fois d’avant, ce qui produit un relevé à zéro. C’est écrit en toutes lettres dans le code, mais aucune de vos règles ne demande cela.
+
+
+
+est ce que meme s ils sont plusieurs alors pour le e reporting va uniqument une fois avec tous les fermeture de caisses ou repeter pour autant de fois de fermetur de caisse !
+
+## 420. 2026-11-18 21:44 UTC
+
+[1 capture(s) d'écran jointe(s)]
+
+<!-- attach -->
+
+> La clôture du jour est celle du magasin, avec son ticket Z. C’est elle seule qui fait l’e-reporting. Le service d’e-reporting des ventes aux particuliers lit la clôture du jour, et jamais les relevés des vendeurs.
+
+
+
+je sais si  t as bien vu que je suis dans les caisses !
+
+## 421. 2026-11-18 21:51 UTC
+
+<!-- attach -->
+
+> La règle que vous avez validée, refuser un relevé sans aucune vente ni encaissement, ne change donc rien à l’e-reporting. Elle évite seulement des relevés inutiles dans la liste « Les caisses ».
+
+
+
+est ce que c est possible et est ce que c est permis par ex de fermer la caisse pour la premier fois de la journéée meme sans vente mais bloquer pour deuxieme fois si il y pas de nouvelles ventes et si il y en a alors est ce qu'il peut fermer alors qu'il y a des nouvelles ventes! donc fermer autent de fois tant qu 'il des ventes et si non alors bloquer? ca est ce que ca doit etre permis et est ce que font pareille dans les marchées donc les casier ouvre et vends et ferme et apres il revient et encore ouvre e vente et ferm
+

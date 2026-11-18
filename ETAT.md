@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 18/11/2026 à 08:54 UTC par pilotage-sync.sh : « Maquette du message TVA avant PILIQI ».
+Mis à jour le 18/11/2026 à 09:22 UTC par pilotage-sync.sh : « Message TVA conditionné au jour d'arrivée ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

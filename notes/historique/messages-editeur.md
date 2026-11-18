@@ -3742,3 +3742,7 @@ ban il faut toujours obliger des le mois suivant. comme ca il fait sa declaretio
 
 non non la tva doit fonctioner comme aujourdhui, donc calculer normalement des la premiere jour,mais juste il faut rester un message qui attend toujours la declaration de tva d avant afin de bien calculer en vrai la tva de la socieete. montre moi comment tu vas afficher ce message ?
 
+## 407. 2026-11-18 09:21 UTC
+
+d'abord il faut etre conditioné car la tva credit doit à partire du moins prochain, quand se fait la declaration du mois restant car s il est venu dans piliqi apres le premiere du mois alors faut avoir la tva du mois en cours car lui a deja fait des facture ailleurs. dit moi toi
+

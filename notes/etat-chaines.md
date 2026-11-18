@@ -534,3 +534,4 @@
 - 18/11 — Correction : la TVA d'ouverture, le régime obligatoire et le retrait du réel simplifié sont déjà le lot TVA27 (K2). Notes corrigées ; point ouvert : période commencée avant PILIQI.
 - 18/11 — Réponse de l'éditeur : TVA de PILIQI à partir de la première période complète suivante (période de transition déclarée hors PILIQI). Notée, à confirmer.
 - 18/11 — Précision de l'éditeur : TVA calculée dès le premier jour, message permanent en attente de la déclaration d'avant ; maquette publiée, en attente de son avis.
+- 18/11 — Précision de l'éditeur : message conditionné au jour d'arrivée (TVA du mois en cours déjà faite ailleurs). Proposition notée, avis demandé.

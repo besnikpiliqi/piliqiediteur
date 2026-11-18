@@ -555,3 +555,4 @@
 - 18/11 nuit — Texte complet de la page e-reporting de SUPER PDP reçu et rangé dans superpdp/e-reporting-documentation-15.md.
 - 18/11 nuit — Inquiétude de l'éditeur sur les factures mixtes avec SUPER PDP : analyse et six questions à poser notées.
 - 18/11 nuit — Documentation d'une autre PA (déclaration de transaction) rangée comme référence ; point à vérifier : TaxPaymentOption pour TPS1, libellé TMA1.
+- 18/11 nuit — Capture lisible des champs de l'API d'une autre PA : TMA1 = marge confirmé, codes d'exigibilité confirmés.

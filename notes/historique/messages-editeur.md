@@ -4096,3 +4096,15 @@ alors tant qu il gere pas le mixe en service et bien alors il me rassure d adopt
 
 j ai vu dans ce PA. donc c est comme ca que s envoie l e reporting
 
+## 435. 2026-11-18 23:52 UTC
+
+[1 capture(s) d'écran jointe(s)]
+
+je t envoie encore une fois avec tout ouverte
+
+## 436. 2026-11-18 23:55 UTC
+
+[1 capture(s) d'écran jointe(s)]
+
+
+

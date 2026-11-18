@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 18/11/2026 à 23:44 UTC par pilotage-sync.sh : « Référence d'une autre plateforme agréée pour l'e-reporting ».
+Mis à jour le 18/11/2026 à 23:55 UTC par pilotage-sync.sh : « Champs de l'API d'e-reporting d'une autre PA : codes confirmés ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 18/11/2026 à 21:52 UTC par pilotage-sync.sh : « Fermeture de caisse : options A et B ».
+Mis à jour le 18/11/2026 à 21:57 UTC par pilotage-sync.sh : « Décision : fermeture de caisse bloquée sans vente ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

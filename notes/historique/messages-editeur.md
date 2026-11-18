@@ -3864,3 +3864,19 @@ je sais si  t as bien vu que je suis dans les caisses !
 
 est ce que c est possible et est ce que c est permis par ex de fermer la caisse pour la premier fois de la journéée meme sans vente mais bloquer pour deuxieme fois si il y pas de nouvelles ventes et si il y en a alors est ce qu'il peut fermer alors qu'il y a des nouvelles ventes! donc fermer autent de fois tant qu 'il des ventes et si non alors bloquer? ca est ce que ca doit etre permis et est ce que font pareille dans les marchées donc les casier ouvre et vends et ferme et apres il revient et encore ouvre e vente et ferm
 
+## 422. 2026-11-18 21:56 UTC
+
+<!-- attach -->
+
+> A, ma recommandation. Aucune fermeture sans activité, même la première du jour.
+
+> PILIQI n’a pas de geste « ouvrir la caisse ». Une caisse est ouverte quand elle a des ventes ou des paiements non comptés.
+
+> Un vendeur sans activité n’a donc rien à fermer.
+
+> Une fermeture à zéro ne dit rien de plus et ne sert qu’à encombrer la liste.
+
+
+
+voila, alors tant qu'il n as pas vendu dans la caisse alors pourquoi afficher fermer la caisse? donc ma decision est de bloquer la fermeture tant qu'il n y a pas de ventes, et si ferme apres une vente alors il faut bloquer le button apres quand il ferme la caisse. donc la caisse s ouvre une fois vendu
+

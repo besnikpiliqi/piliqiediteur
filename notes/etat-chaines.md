@@ -545,3 +545,4 @@
 - 18/11 soir — Remarque de l'éditeur sur la couverture des tests : constat et lot COUVERTURE proposé (notes).
 - 18/11 soir — Chasse aux cas manquants lancée par erreur puis arrêtée sur ordre de l'éditeur ; script sauvegardé, à lancer à son départ.
 - 18/11 nuit — Fermeture de caisse : règle A (exiger de l'activité) vs option B (une fermeture à zéro par jour) ; avis noté.
+- 18/11 nuit — Décision de l'éditeur : fermeture de caisse bloquée sans vente, bouton bloqué après chaque fermeture ; notée pour le lot écrans.

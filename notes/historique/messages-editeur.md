@@ -3814,3 +3814,17 @@ tu trouve normal que la caisse peut se fermer autant de fois dans une meme date 
 
 oui. mais j ai l impression que tu fait pas tout les testes dans tout les sens et tous les cas pour voir dans tout les sens?
 
+## 417. 2026-11-18 21:37 UTC
+
+<!-- attach -->
+
+> Voulez-vous que je lance la chasse aux cas manquants maintenant ? Elle est en lecture seule : elle ne touche pas au dépôt et vous donne la liste écran par écran. Le lot est noté dans les notes (commit 8d62b48), rien n’est commencé dans le logiciel.
+
+
+
+oui il faut que fasse mais juste tu sauvegarde pour quand tu commnce à traviailler.
+
+## 418. 2026-11-18 21:38 UTC
+
+non non j ai dit tu commence pas mtn
+

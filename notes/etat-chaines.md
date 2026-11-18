@@ -543,3 +543,4 @@
 - 18/11 — Maquette du message TVA approuvée par l'éditeur : à appliquer dans TVA27 au départ du travail.
 - 18/11 soir — Question de l'éditeur : fermer la caisse plusieurs fois dans la journée, relevés à zéro. Avis noté (refuser une fermeture à zéro).
 - 18/11 soir — Remarque de l'éditeur sur la couverture des tests : constat et lot COUVERTURE proposé (notes).
+- 18/11 soir — Chasse aux cas manquants lancée par erreur puis arrêtée sur ordre de l'éditeur ; script sauvegardé, à lancer à son départ.

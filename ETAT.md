@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 18/11/2026 à 08:31 UTC par pilotage-sync.sh : « Période de transition de la TVA à l'arrivée ».
+Mis à jour le 18/11/2026 à 08:54 UTC par pilotage-sync.sh : « Maquette du message TVA avant PILIQI ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

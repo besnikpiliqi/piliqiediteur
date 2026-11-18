@@ -3738,3 +3738,7 @@ donc tu vas enlever un regim car tu mas dit que 2027 va se supprimer
 
 ban il faut toujours obliger des le mois suivant. comme ca il fait sa declaretion aux impots, donc celles de 11 jours et le reste dans piliqi. comme ca la tva se calcule exacte, non? donc dans piliqi la tva se calcule des sa premiere ouverture et prend en compte la tva declarare si a du tva credit ou pas
 
+## 406. 2026-11-18 08:52 UTC
+
+non non la tva doit fonctioner comme aujourdhui, donc calculer normalement des la premiere jour,mais juste il faut rester un message qui attend toujours la declaration de tva d avant afin de bien calculer en vrai la tva de la socieete. montre moi comment tu vas afficher ce message ?
+

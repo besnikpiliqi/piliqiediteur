@@ -531,3 +531,4 @@
 - 17/11 nuit — Question de l'éditeur : historique repris (totaux par mois et par année d'une société qui arrive). Proposition notée, pas commencée.
 - 18/11 — Question de l'éditeur : régime de TVA obligatoire avant la première vente ? Réponse donnée et notée, pas commencée.
 - 18/11 — Décision de l'éditeur : situation de TVA d'ouverture + régime obligatoires avant la première vente, report du crédit de TVA par période. Notée, pas commencée.
+- 18/11 — Correction : la TVA d'ouverture, le régime obligatoire et le retrait du réel simplifié sont déjà le lot TVA27 (K2). Notes corrigées ; point ouvert : période commencée avant PILIQI.

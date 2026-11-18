@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 18/11/2026 à 00:15 UTC par pilotage-sync.sh : « Décision : situation de TVA d'ouverture et report du crédit ».
+Mis à jour le 18/11/2026 à 00:19 UTC par pilotage-sync.sh : « Correction : TVA d'ouverture déjà cadrée par TVA27 ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

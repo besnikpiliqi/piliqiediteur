@@ -3718,3 +3718,13 @@ donc pour savoir: tu vas obliger la societe de choisir regim de tva sur "Paramè
 
 moi je dis obligé des l'ouverture de donner sa tva d avant afin de calcule les tva prochain dans piliqi. et aussi obliger de choisir le regim de la tva afin de calculer les tva à declarer car comme j'ai dit que il faut calculer les tva par mois car il peut avoir des tva credit qui se repport sur le prochain mois et il faut que tu calcule ce tva. tu vois ce que je veux dire ou pas?
 
+## 404. 2026-11-18 00:18 UTC
+
+<!-- attach -->
+
+> Le régime : les quatre existent déjà dans PILIQI : réel normal mensuel, réel normal trimestriel, réel simplifié, franchise en base. La franchise n’a aucun calcul de TVA.
+
+
+
+donc tu vas enlever un regim car tu mas dit que 2027 va se supprimer
+

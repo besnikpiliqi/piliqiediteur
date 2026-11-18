@@ -3880,3 +3880,13 @@ est ce que c est possible et est ce que c est permis par ex de fermer la caisse 
 
 voila, alors tant qu'il n as pas vendu dans la caisse alors pourquoi afficher fermer la caisse? donc ma decision est de bloquer la fermeture tant qu'il n y a pas de ventes, et si ferme apres une vente alors il faut bloquer le button apres quand il ferme la caisse. donc la caisse s ouvre une fois vendu
 
+## 423. 2026-11-18 22:00 UTC
+
+<!-- attach -->
+
+> Un détail à choisir. Vous demandez pourquoi afficher le bouton s’il n’y a rien à fermer. Je propose de le laisser visible mais grisé, avec une phrase grise en dessous : « Aucune vente depuis votre dernière fermeture : votre caisse s’ouvre à votre prochaine vente. » Cela évite qu’un vendeur se demande où il est passé. Si vous préférez qu’il soit caché, c’est aussi simple : dites-le-moi.
+
+
+
+oui button grisé avec message en tooltip il y pas de vente pour ferma la caisse
+

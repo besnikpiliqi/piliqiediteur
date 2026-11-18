@@ -551,3 +551,4 @@
 - 18/11 nuit — Capture de la documentation SUPER PDP sur l'e-reporting : une déclaration par magasin et par jour est autorisée ; points à vérifier à l'étape 2 notés.
 - 18/11 nuit — Capture complète de la page e-reporting SUPER PDP reçue ; illisible en détail, à relire à l'étape 2.
 - 18/11 nuit — Seconde capture de la page e-reporting de SUPER PDP lue ; points utiles notés (régime obligatoire confirmé, factures mixtes non gérées à vérifier).
+- 18/11 nuit — Troisième capture SUPER PDP lue : règle de ne jamais déclarer en double notée pour l'étape 2.

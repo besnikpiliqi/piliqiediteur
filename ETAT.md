@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 18/11/2026 à 22:42 UTC par pilotage-sync.sh : « Page e-reporting de SUPER PDP : points utiles ».
+Mis à jour le 18/11/2026 à 22:50 UTC par pilotage-sync.sh : « SUPER PDP e-reporting : ne jamais déclarer en double ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

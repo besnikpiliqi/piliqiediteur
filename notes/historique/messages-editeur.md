@@ -3924,3 +3924,17 @@ et quand le cloture de caisse qui creer des tickets Z, alors dans l e reporting 
 
 
 
+## 429. 2026-11-18 22:48 UTC
+
+[1 capture(s) d'écran jointe(s)]
+
+
+
+## 430. 2026-11-18 22:49 UTC
+
+[1 capture(s) d'écran jointe(s)]
+
+<!-- attach -->
+
+> La page dit que les factures mixtes, qui mélangent biens et services, ne sont pas gérées. Il faut des factures de biens ou des factures de services. Pour une vente à un particulier qui mêle les deux, PILIQI passe par les données de transaction et de paiement, avec seulement la part de services côté paiements. Je confirmerai au bac à sable que cela convient à SUPER PDP.
+

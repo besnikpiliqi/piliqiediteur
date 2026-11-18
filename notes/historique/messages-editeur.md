@@ -3788,3 +3788,13 @@ et quand on affiche les tva et tout dans les statistique et quand on choisi pour
 
 mais il faut imaginer que si piliqi gere 5000 mille societe alors tout travaille en meme temps ! alors sera tres lent normalement
 
+## 414. 2026-11-18 21:07 UTC
+
+<!-- attach -->
+
+> La maquette est refaite avec toutes vos règles : Message TVA avant PILIQI. Je n’ai rien commencé dans le logiciel.
+
+
+
+bon tu aplique cette maquette dans le travaille à faire des que tu commence à travailler quand je te dit
+

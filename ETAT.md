@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 18/11/2026 à 20:57 UTC par pilotage-sync.sh : « Montée en charge : 5000 sociétés ».
+Mis à jour le 18/11/2026 à 21:07 UTC par pilotage-sync.sh : « Maquette du message TVA approuvée ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

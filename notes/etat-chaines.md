@@ -540,3 +540,4 @@
 - 18/11 — Avis demandé sur des totaux mensuels sauvegardés : recommandé en deuxième temps après mesure ; noté dans le plan et l'onglet « À trancher plus tard ».
 - 18/11 — Question de l'éditeur sur une période de 2 ans : constat de code noté ; mesure à faire sur 2 ans (étape 15).
 - 18/11 — Remarque de l'éditeur sur 5 000 sociétés en même temps : section « Montée en charge » ajoutée à l'onglet « À trancher plus tard ».
+- 18/11 — Maquette du message TVA approuvée par l'éditeur : à appliquer dans TVA27 au départ du travail.

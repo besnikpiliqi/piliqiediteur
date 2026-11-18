@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 18/11/2026 à 22:38 UTC par pilotage-sync.sh : « Documentation SUPER PDP sur l'e-reporting : granularité par jour ».
+Mis à jour le 18/11/2026 à 22:39 UTC par pilotage-sync.sh : « Page e-reporting de SUPER PDP : capture reçue ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

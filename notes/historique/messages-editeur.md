@@ -3912,3 +3912,9 @@ et quand le cloture de caisse qui creer des tickets Z, alors dans l e reporting 
 
 > Un point que je ne peux pas encore garantir. Je ne sais pas encore si SUPER PDP et la norme veulent une déclaration par établissement, ou un total par société et par jour. PILIQI fait aujourd’hui par magasin. Je le vérifierai à l’étape 2, dans le bac à sable de SUPER PDP, avec les exemples officiels, avant d’envoyer quoi que ce soit en vrai. Si la plateforme préfère un regroupement par société, la clôture de chaque magasin resterait la même et seul l’envoi changerait.
 
+## 427. 2026-11-18 22:39 UTC
+
+[1 capture(s) d'écran jointe(s)]
+
+
+

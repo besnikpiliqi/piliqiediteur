@@ -3714,3 +3714,7 @@ j ai une question importante. par ex quand une societe vient chez piliqi alors c
 
 donc pour savoir: tu vas obliger la societe de choisir regim de tva sur "Paramètres fiscaux de la société" avant tout c 'est ca ? et qu'il doit declare sa tva d avant afin de calcule la tva reel de la societe ?
 
+## 403. 2026-11-18 00:15 UTC
+
+moi je dis obligé des l'ouverture de donner sa tva d avant afin de calcule les tva prochain dans piliqi. et aussi obliger de choisir le regim de la tva afin de calculer les tva à declarer car comme j'ai dit que il faut calculer les tva par mois car il peut avoir des tva credit qui se repport sur le prochain mois et il faut que tu calcule ce tva. tu vois ce que je veux dire ou pas?
+

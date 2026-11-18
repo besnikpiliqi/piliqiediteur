@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 18/11/2026 à 00:06 UTC par pilotage-sync.sh : « Question : régime de TVA obligatoire avant la première vente ».
+Mis à jour le 18/11/2026 à 00:15 UTC par pilotage-sync.sh : « Décision : situation de TVA d'ouverture et report du crédit ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

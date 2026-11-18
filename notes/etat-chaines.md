@@ -530,3 +530,4 @@
 - 17/11 nuit — Consigne de l'éditeur : listes triées par défaut du plus récent au plus ancien (noté, pas commencé).
 - 17/11 nuit — Question de l'éditeur : historique repris (totaux par mois et par année d'une société qui arrive). Proposition notée, pas commencée.
 - 18/11 — Question de l'éditeur : régime de TVA obligatoire avant la première vente ? Réponse donnée et notée, pas commencée.
+- 18/11 — Décision de l'éditeur : situation de TVA d'ouverture + régime obligatoires avant la première vente, report du crédit de TVA par période. Notée, pas commencée.

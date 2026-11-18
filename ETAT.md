@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 18/11/2026 à 09:22 UTC par pilotage-sync.sh : « Message TVA conditionné au jour d'arrivée ».
+Mis à jour le 18/11/2026 à 09:39 UTC par pilotage-sync.sh : « Règle finale proposée : crédit de TVA déclaré pour un mois choisi ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

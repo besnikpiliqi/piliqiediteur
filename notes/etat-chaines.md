@@ -535,3 +535,4 @@
 - 18/11 — Réponse de l'éditeur : TVA de PILIQI à partir de la première période complète suivante (période de transition déclarée hors PILIQI). Notée, à confirmer.
 - 18/11 — Précision de l'éditeur : TVA calculée dès le premier jour, message permanent en attente de la déclaration d'avant ; maquette publiée, en attente de son avis.
 - 18/11 — Précision de l'éditeur : message conditionné au jour d'arrivée (TVA du mois en cours déjà faite ailleurs). Proposition notée, avis demandé.
+- 18/11 — Règle finale proposée pour la TVA d'avant (un mois choisi, ancre la plus récente, calcul à chaque affichage). Avis de l'éditeur attendu.

@@ -3766,3 +3766,13 @@ non  ecoute. si il arrive apres 1er alors il faut demander la tva du credit si l
 
 oui je suis d accord de retire ce blocage mais le blocage reste pour declare son regim de tva car c 'est avec ca piliqi va calculer les tva reel à declarer. Et pour le cache tu met ca dans la note (peut etre une nouvelle tab pour les decisions de l'avenir qu'on doit voir, et tu mets tout dans ce tab pour ce qu'on doit trancher à l'avenir ) pour que toi et moi oublie pas. Alors que refait les calcule sans cache alors mon idée est meilleur car peu import quand il declare sa tva credit alors tu recalcule tva exacte à partir du mois declare. Donc il faut que tu mettes le message qu'il faut declarer sa tva credit à partir du prochain moi et ca depend du regim qu 'il a donc si regim est mensuelle alors à partir du prochain moi et si trimestrielle alors apres ca et si franchisse alors il y aura pas de conditon de message pour la tva credit car il a pas mais juste obliger de declare sa regime. E tu fais comment pour ceux en franchise? tu affiche quand meme la tva zero ou tu affiche du tout la tva zero, moi je veux pas afficher rien du tout par rapport à tva meme zero pour ceux en franchisse car pas besoin et si un jour eux change sa regim avec tva alors tu affiche, donc la tva tu affiche selon le regim declarer. montre  moi le model mtn avec mes regles
 
+## 410. 2026-11-18 10:37 UTC
+
+<!-- attach -->
+
+> Calcul sans cache : PILIQI recalcule toujours depuis les documents, à partir du mois déclaré. Votre idée est meilleure : elle évite de stocker des totaux qui peuvent devenir faux.
+
+
+
+ecoute peut etre c est mieux que tu met tous les tva de chaque moi en cache ou dans une base de données afin de ne pas recalculer à chaque recharge de page, donc tu peut sauvegarder que les moins passer et si un jour surtout dans les charges qui peuvent se modifier alors tu met à jours les tva de ce mois ci car les facture ne sont pas modifiable à part les retours des produits achetes ou vendu ? qu est ce que tu pense? je dit pour ne pas ralentir le site en calculant à chaque fois les tva, donc ca pour tout donc pour les ventes, achet tout tout mais c est toi qui doit me dire si c 'est bon ou pas meme pour les statistiques ?
+

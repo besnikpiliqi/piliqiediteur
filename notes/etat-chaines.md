@@ -537,3 +537,4 @@
 - 18/11 — Précision de l'éditeur : message conditionné au jour d'arrivée (TVA du mois en cours déjà faite ailleurs). Proposition notée, avis demandé.
 - 18/11 — Règle finale proposée pour la TVA d'avant (un mois choisi, ancre la plus récente, calcul à chaque affichage). Avis de l'éditeur attendu.
 - 18/11 — Décisions de l'éditeur sur la TVA d'avant (blocage retiré, régime obligatoire, sans cache, franchise sans TVA affichée) ; maquette v2 publiée ; onglet « À trancher plus tard » créé dans le document.
+- 18/11 — Avis demandé sur des totaux mensuels sauvegardés : recommandé en deuxième temps après mesure ; noté dans le plan et l'onglet « À trancher plus tard ».

@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 18/11/2026 à 10:09 UTC par pilotage-sync.sh : « Décisions TVA d'avant : maquette v2, sans cache, franchise sans TVA ».
+Mis à jour le 18/11/2026 à 10:38 UTC par pilotage-sync.sh : « Totaux mensuels sauvegardés : avis et condition de mesure ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

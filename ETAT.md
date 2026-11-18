@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 18/11/2026 à 22:39 UTC par pilotage-sync.sh : « Page e-reporting de SUPER PDP : capture reçue ».
+Mis à jour le 18/11/2026 à 22:42 UTC par pilotage-sync.sh : « Page e-reporting de SUPER PDP : points utiles ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

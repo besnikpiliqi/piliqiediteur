@@ -3918,3 +3918,9 @@ et quand le cloture de caisse qui creer des tickets Z, alors dans l e reporting 
 
 
 
+## 428. 2026-11-18 22:41 UTC
+
+[1 capture(s) d'écran jointe(s)]
+
+
+

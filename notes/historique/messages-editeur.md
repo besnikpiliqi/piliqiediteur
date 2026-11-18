@@ -3776,3 +3776,11 @@ oui je suis d accord de retire ce blocage mais le blocage reste pour declare son
 
 ecoute peut etre c est mieux que tu met tous les tva de chaque moi en cache ou dans une base de données afin de ne pas recalculer à chaque recharge de page, donc tu peut sauvegarder que les moins passer et si un jour surtout dans les charges qui peuvent se modifier alors tu met à jours les tva de ce mois ci car les facture ne sont pas modifiable à part les retours des produits achetes ou vendu ? qu est ce que tu pense? je dit pour ne pas ralentir le site en calculant à chaque fois les tva, donc ca pour tout donc pour les ventes, achet tout tout mais c est toi qui doit me dire si c 'est bon ou pas meme pour les statistiques ?
 
+## 411. 2026-11-18 20:48 UTC
+
+et comment ca fonction en cache? tu peux m expliquer!
+
+## 412. 2026-11-18 20:51 UTC
+
+et quand on affiche les tva et tout dans les statistique et quand on choisi pour 2 ans alors piliqi doit calculer toutes pour les 2 ans c est ca?
+

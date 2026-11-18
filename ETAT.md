@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 18/11/2026 à 10:38 UTC par pilotage-sync.sh : « Totaux mensuels sauvegardés : avis et condition de mesure ».
+Mis à jour le 18/11/2026 à 20:53 UTC par pilotage-sync.sh : « Période de 2 ans : constat et mesure à faire ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

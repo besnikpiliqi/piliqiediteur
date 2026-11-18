@@ -3804,3 +3804,13 @@ bon tu aplique cette maquette dans le travaille à faire des que tu commence à 
 
 tu trouve normal que la caisse peut se fermer autant de fois dans une meme date ?
 
+## 416. 2026-11-18 21:29 UTC
+
+<!-- attach -->
+
+> Êtes-vous d’accord avec cette règle ?
+
+
+
+oui. mais j ai l impression que tu fait pas tout les testes dans tout les sens et tous les cas pour voir dans tout les sens?
+

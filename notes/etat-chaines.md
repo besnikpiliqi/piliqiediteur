@@ -542,3 +542,4 @@
 - 18/11 — Remarque de l'éditeur sur 5 000 sociétés en même temps : section « Montée en charge » ajoutée à l'onglet « À trancher plus tard ».
 - 18/11 — Maquette du message TVA approuvée par l'éditeur : à appliquer dans TVA27 au départ du travail.
 - 18/11 soir — Question de l'éditeur : fermer la caisse plusieurs fois dans la journée, relevés à zéro. Avis noté (refuser une fermeture à zéro).
+- 18/11 soir — Remarque de l'éditeur sur la couverture des tests : constat et lot COUVERTURE proposé (notes).

@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 18/11/2026 à 21:20 UTC par pilotage-sync.sh : « Fermeture de caisse à zéro : avis ».
+Mis à jour le 18/11/2026 à 21:30 UTC par pilotage-sync.sh : « Couverture des tests : constat et lot proposé ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

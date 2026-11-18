@@ -3938,3 +3938,151 @@ et quand le cloture de caisse qui creer des tickets Z, alors dans l e reporting 
 
 > La page dit que les factures mixtes, qui mélangent biens et services, ne sont pas gérées. Il faut des factures de biens ou des factures de services. Pour une vente à un particulier qui mêle les deux, PILIQI passe par les données de transaction et de paiement, avec seulement la part de services côté paiements. Je confirmerai au bac à sable que cela convient à SUPER PDP.
 
+## 431. 2026-11-18 22:50 UTC
+
+ou je te donne li lien : https://www.superpdp.tech/documentation/15
+
+## 432. 2026-11-18 22:52 UTC
+
+[Démarrage rapide](https://www.superpdp.tech/documentation/2)[Calendrier](https://www.superpdp.tech/documentation/13)[Introduction](https://www.superpdp.tech/documentation/3)[Authentification](https://www.superpdp.tech/documentation/4)[Erreurs](https://www.superpdp.tech/documentation/5)[Formats de facture](https://www.superpdp.tech/documentation/6)[Annuaire](https://www.superpdp.tech/documentation/7)[Synchronisation](https://www.superpdp.tech/documentation/14)[E-reporting](https://www.superpdp.tech/documentation/15)[Mandat de facturation](https://www.superpdp.tech/documentation/19)[Belgique](https://www.superpdp.tech/documentation/12)[FAQ](https://www.superpdp.tech/documentation/10)[API AFNOR](https://www.superpdp.tech/documentation/9)[Notes de version](https://www.superpdp.tech/documentation/8)[Référence OpenAPI](https://www.superpdp.tech/openapi)
+E-reporting
+La réforme de la facturation électronique comporte 2 obligations :
+
+1. Obligation d’e-invoicing : envoyer et recevoir des factures électroniques dans un format structuré
+2. Obligation d’e-reporting : envoyer les données de transaction et de paiement à l’Administration
+
+Cet article traite de l’obligation d’e-reporting : vous devez vous assurer que vous envoyez bien toutes les données réglementaires à l’Administration.
+Base légale
+Les données à déclarer à l’Administration Fiscales sont décrites dans les [articles 289 E à 290 A de l’annexe II du Code général des impôts](https://www.legifrance.gouv.fr/codes/section_lc/LEGITEXT000006069577/LEGISCTA000006179905/#LEGISCTA000046195631).
+Le calendrier de déclaration de l’e-reporting dépend du régime de TVA de l’entreprise. Pour faire fonctionner l’e-reporting, il faut paramétrer le régime de TVA au niveau de son entreprise.
+E-reporting des factures B2B
+Quand vous envoyez une facture B2B à travers SUPER PDP, non seulement nous acheminons la facture au destinataire (e-invoicing), mais nous envoyons également une copie de la facture à l’Administration (e-reporting) à travers le « Flux 1 ».
+Dans ce cas, vous n’avez rien à faire de plus : en nous confiant une facture, nous satisfaisons les deux obligations d’e-invoicing et d’e-reporting.
+E-reporting des factures B2C
+Bien qu’il ne soit pas obligatoire d’éditer des factures B2C dans le cas de ventes à des particuliers, cela reste une pratique courante.
+Par exemple, un site internet e-commerce édite systématiquement une facture à chaque vente. Autre exemple, un avocat fait indistinctement des factures pour tous ses clients, qu’ils soient des entreprises (facture B2B) ou des particuliers (facture B2C).
+Dans ce cas, il est possible d’envoyer à l’API SUPER PDP les factures B2C.
+Ces factures ne seront pas acheminés au destinataire car celui-ci est un particulier, et n’a donc pas de Plateforme Agréée.
+Par contre, nous faisons automatiquement l’extraction des données de e-reporting :
+
+* données de transaction, à partir de la facture
+* données de paiement, à partir du message de cycle de vie « Encaissée (212)
+
+En pratique, il suffit donc d’envoyer les factures B2C de la même manière que vous envoyez les factures B2B et nous les traiterons automatiquement. Il faut veiller à ne pas envoyer les données d’e-reporting en double, et donc ne pas déclarer les données de transaction et de paiement par ailleurs.
+Les factures B2C sont détectées de la manière suivante :
+
+* présence de la note `BAR` avec la valeur `B2C`
+
+Les factures mixtes (appelées aussi doubles) comportant des ventes de biens et services ne sont pas gérées. Il faut impérativement que les factures soient des factures de biens, ou des factures de services.
+Les données d’e-reporting de paiement sont créées à partir du message de cycle de vie « Encaissée (212) », qu’il faut donc envoyer à l’encaissement de la facture. Pour les factures déjà encaissées à l’émission, il faut envoyer ce message de cycle de vie juste après sa création. Pour les factures qui ne nécessitent pas d’e-reporting de paiement (vente de marchandise), le message de cycle de vie « Encaissée (212) » n’aura aucun effet.
+E-reporting des factures B2Bi
+Factures B2Bi de d’achat
+Les factures d’achat internationales doivent être déclarées, au choix :
+
+* avec l’API `b2bint_invoices` en envoyant les données d’e-reporting
+* avec l’API AFNOR en envoyant les données d’e-reporting
+
+Il n’est pas possible d’envoyer directement des factures, il faut déclarer les données d’e-reporting. Il n’est pas obligatoire de déclarer les lignes pour les factures d’achat.
+Factures B2Bi de vente
+Les factures de vente internationales doivent être déclarées, au choix :
+
+* avec l’API `invoices` en envoyant une facture
+* avec l’API `b2bint_invoices` en envoyant les données d’e-reporting
+* avec l’API AFNOR en envoyant une facture
+* avec l’API AFNOR en envoyant les données d’e-reporting
+
+E-reporting des données de transaction et de paiement B2C
+Certains secteurs d’activité vendent à des particuliers sans établir de facture, puisque ça n’est pas une obligation légale. Par exemple les salons de coiffure font leurs ventes sur une caisse enregistreuse. Dans ce cas, il y a obligation de déclarer les transactions et paiements B2C.
+Les transactions, ce sont les ventes B2C. Dans le cas du salon de coiffure c’est le ticket de caisse édité lors du passage à la caisse avec le total à payer.
+Les paiements, ce sont les encaissements. Dans le cas du salons de coiffure, c’est l’étape qui a lieu juste après l’édition du ticket de caisse, c’est l’encaissement par carte bancaire ou en espèces.
+À noter qu’il n’y a pas d’obligation de déclarer les paiements pour les ventes de biens pour lesquelles la TVA est exigible à la livraison, ou si l’entreprise a opté pour acquitter la TVA d’après les débits (Article 290 A de l’annexe II du CGI).
+Concrètement, cela signifique que :
+
+* un restaurant doit déclarer les transactions uniquement, car il s’agit de ventes de bien
+* un salon de coiffure doit déclarer les transactions et les paiements car il s’agit d’une vente de service, sauf si le salon de coiffure a opté pour acquitter la TVA d’après les débits
+
+Nos APIs d’e-reporting permettent d’envoyer les données de transaction et de paiement. Nous stockons les données, nous les accumulons, et nous déclenchons automatiquement l’envoi des flux à l’Administration (« Flux 10.3 » et « Flux 10.4 ») selon un calendrier qui est défini par le régime de TVA de l’entreprise.
+Il faut, a minima, envoyer les données avec une granularité à la journée, mais vous pouvez envoyer les données plus fréquemment également. Prenons l’exemple d’un restaurant qui possède 2 caisses enregistreuses, voici des exemples de ce qu’il est autorisé de faire :
+
+* envoyer tous les soirs les données de la journée agrégées pour les 2 caisses
+* envoyer tous les soirs les données de la journées en 2 fois : 1 fois par caisse
+* envoyer 2 fois par jour (service du midi, service du soir) les données des 2 caisses en 2 fois : 4 envois au total
+* envoyer tous les 3 jours les données agrégées des 2 caisses des 3 derniers jours mais avec une granularité jour par jour : 1 seul envoi tous les 3 jours
+
+Ce qu’il n’est pas autorisé de faire :
+
+* envoyer le 10 du mois en une fois les données agrégées des 2 caisses avec comme date le 10 : il n’y a pas la granularité par jour, ça n’est pas autorisé
+* envoyer en fin de mois les données concernant le mois en cours, avec une granularité par jour, quand le régime de TVA impose de déclarer tous les 10 jours : ça n’est pas autorisé, il faut respecter le calendrier de déclaration et ne pas envoyer les données trop tard
+
+Les APIs sont documentés dans la [référence OpenAPI](https://www.superpdp.tech/openapi/#superpdp/tag/ereporting).
+E-reporting des transactions
+Exemple pour le cas d’un encaissement dans la journée pour un restaurant qui a vendu un repas avec 2 taux de TVA différents :
+
+```
+curl https://api.superpdp.tech/v1.beta/b2c_transactions \
+  --request POST \
+  --header 'Content-Type: application/json' \
+  --header 'Authorization: Bearer YOUR_SECRET_TOKEN' \
+  --data '{
+  "data": [
+    {
+      "category_code": "TLB1",
+      "currency": "EUR",
+      "date": "2026-06-05",
+      "role_code": "SE",
+      "tax_exclusive_amount": "15.00",
+      "tax_total": "1.55",
+      "tax_subtotals": [
+        {
+          "tax_percent": "5.50",
+          "tax_total": "0.55",
+          "taxable_amount": "10.00"
+        },
+        {
+          "tax_percent": "20.0",
+          "tax_total": "1.00",
+          "taxable_amount": "5.00"
+        }
+      ],
+    },
+  ]
+}'
+
+```
+
+E-reporting des paiements
+Exemple pour le cas d’un paiement pour un salon de coiffure qui a réalisé une prestation de coupe de cheveux :
+
+```
+curl https://api.superpdp.tech/v1.beta/b2c_payments \
+  --request POST \
+  --header 'Content-Type: application/json' \
+  --header 'Authorization: Bearer YOUR_SECRET_TOKEN' \
+  --data '{
+  "data": [
+    {
+      "company_id": 1,
+      "date": "2026-06-05",
+      "subtotals": [
+        {
+          "amount": "35.00",
+          "currency_code": "EUR",
+          "tax_percent": "20.00"
+        }
+      ]
+    }
+  ]
+}'
+
+```
+
+Produit
+[Actualités](https://www.superpdp.tech/actualites)[Fonctionnalités](https://www.superpdp.tech/fonctionnalites)[Tarifs](https://www.superpdp.tech/tarifs)
+Ressources
+[Documentation](https://www.superpdp.tech/documentation)[Validateur de facture](https://www.superpdp.tech/outils/validateur-facture-electronique)[Info Annuaire](https://www.superpdp.tech/outils/info-annuaire)[À propos](https://www.superpdp.tech/a-propos)[Contact](https://www.superpdp.tech/contact)
+Légal
+[Conditions générales](https://www.superpdp.tech/legal/11)[Informations légales](https://www.superpdp.tech/legal/17)[Données personnelles](https://www.superpdp.tech/legal/16)[Cookies](https://www.superpdp.tech/legal/18)
+Liens
+[Page LinkedIn](https://www.linkedin.com/showcase/super-pdp)[Page de statut](https://status.superpdp.tech/)
+Conçu avec amour à Paris, France ♥︎
+

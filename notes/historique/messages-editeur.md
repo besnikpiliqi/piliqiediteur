@@ -3798,3 +3798,9 @@ mais il faut imaginer que si piliqi gere 5000 mille societe alors tout travaille
 
 bon tu aplique cette maquette dans le travaille à faire des que tu commence à travailler quand je te dit
 
+## 415. 2026-11-18 21:19 UTC
+
+[1 capture(s) d'écran jointe(s)]
+
+tu trouve normal que la caisse peut se fermer autant de fois dans une meme date ?
+

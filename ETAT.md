@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 18/11/2026 à 21:07 UTC par pilotage-sync.sh : « Maquette du message TVA approuvée ».
+Mis à jour le 18/11/2026 à 21:20 UTC par pilotage-sync.sh : « Fermeture de caisse à zéro : avis ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

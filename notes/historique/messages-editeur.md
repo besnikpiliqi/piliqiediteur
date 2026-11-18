@@ -3900,3 +3900,15 @@ oui button grisé avec message en tooltip il y pas de vente pour ferma la caisse
 
 tu mets commme ca "Aucune vente à fermer" mais tu ajuste par rapport ce que fais la caisse donc vente , encaissement etc. donc petit phrase comprhensible
 
+## 425. 2026-11-18 22:14 UTC
+
+et quand le cloture de caisse qui creer des tickets Z, alors dans l e reporting se font par magasin ou par societe?
+
+## 426. 2026-11-18 22:38 UTC
+
+[1 capture(s) d'écran jointe(s)]
+
+<!-- attach -->
+
+> Un point que je ne peux pas encore garantir. Je ne sais pas encore si SUPER PDP et la norme veulent une déclaration par établissement, ou un total par société et par jour. PILIQI fait aujourd’hui par magasin. Je le vérifierai à l’étape 2, dans le bac à sable de SUPER PDP, avec les exemples officiels, avant d’envoyer quoi que ce soit en vrai. Si la plateforme préfère un regroupement par société, la clôture de chaque magasin resterait la même et seul l’envoi changerait.
+

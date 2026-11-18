@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 18/11/2026 à 22:03 UTC par pilotage-sync.sh : « Texte de l'info-bulle de fermeture de caisse ».
+Mis à jour le 18/11/2026 à 22:38 UTC par pilotage-sync.sh : « Documentation SUPER PDP sur l'e-reporting : granularité par jour ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

@@ -3750,3 +3750,19 @@ d'abord il faut etre conditioné car la tva credit doit à partire du moins proc
 
 non  ecoute. si il arrive apres 1er alors il faut demander la tva du credit si l a pour le prochain mois, donc il doit etre conditioné pour le mois prochain mais piliqi il fait ses calcule normalement mais juste manque le tva declarer du mois c est à dire du mois prochain. si arrivé en janvier et lui n as pas toujoure declarare la tva credit alors il doit etre possible qu il le declare meme apres des mois car ce qu il faut c est le dernier tva credit et si on est en mois de Mai alors lui peut declare peut importe de quel mois donc meme celui de Janvier declarer en Mai car toi tu va te basé sur la declaration qui fait, c 'est à dire lui declare sa tva credit dans le mois choisi et toi fait les clacule à partire du mois choisi, c'est à dire le moment ou il declare sa tva alors à partir de mtn tu sais la tva. ou meme si c 'est mieux pour toi de calculer car je sais pas comment tu calcule donc (est ce que tu calcule à chaque recharge de la page les tva à partire des données ou tu deja sauvegarde les tva à part pour ne pas recalculer à chaque rechargement de la page) tu peux conditioner qu'il declara sa tva credit juste à partir du mois quand il est arrive chez piliqi ou meme s il declare apres des mois car l importance qu il declare un mois precis et à partire de ce mois tu sais la tva credit. mais je sais pas comment tu calcule? dit moi
 
+## 409. 2026-11-18 10:06 UTC
+
+<!-- attach -->
+
+> Une conséquence à trancher. Le lot TVA27 bloque la première vente tant que la société n’a pas répondu à la question du crédit de départ. Avec votre règle, une société ne peut pas connaître le crédit de son mois d’arrivée avant de l’avoir déclaré. Je recommande de retirer ce blocage : le message permanent suffit. Le régime de TVA, lui, reste obligatoire avant la première vente. Êtes-vous d’accord ?
+
+
+
+<!-- attach -->
+
+> Si ça devient lent : on pourra ajouter un cache par mois plus tard, après mesure. Aujourd’hui, je ne le recommande pas.
+
+
+
+oui je suis d accord de retire ce blocage mais le blocage reste pour declare son regim de tva car c 'est avec ca piliqi va calculer les tva reel à declarer. Et pour le cache tu met ca dans la note (peut etre une nouvelle tab pour les decisions de l'avenir qu'on doit voir, et tu mets tout dans ce tab pour ce qu'on doit trancher à l'avenir ) pour que toi et moi oublie pas. Alors que refait les calcule sans cache alors mon idée est meilleur car peu import quand il declare sa tva credit alors tu recalcule tva exacte à partir du mois declare. Donc il faut que tu mettes le message qu'il faut declarer sa tva credit à partir du prochain moi et ca depend du regim qu 'il a donc si regim est mensuelle alors à partir du prochain moi et si trimestrielle alors apres ca et si franchisse alors il y aura pas de conditon de message pour la tva credit car il a pas mais juste obliger de declare sa regime. E tu fais comment pour ceux en franchise? tu affiche quand meme la tva zero ou tu affiche du tout la tva zero, moi je veux pas afficher rien du tout par rapport à tva meme zero pour ceux en franchisse car pas besoin et si un jour eux change sa regim avec tva alors tu affiche, donc la tva tu affiche selon le regim declarer. montre  moi le model mtn avec mes regles
+

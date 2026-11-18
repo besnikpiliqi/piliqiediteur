@@ -556,3 +556,4 @@
 - 18/11 nuit — Inquiétude de l'éditeur sur les factures mixtes avec SUPER PDP : analyse et six questions à poser notées.
 - 18/11 nuit — Documentation d'une autre PA (déclaration de transaction) rangée comme référence ; point à vérifier : TaxPaymentOption pour TPS1, libellé TMA1.
 - 18/11 nuit — Capture lisible des champs de l'API d'une autre PA : TMA1 = marge confirmé, codes d'exigibilité confirmés.
+- 18/11 nuit — Piège de vocabulaire noté : PAYMENT_DATE (432/72) n'est pas l'option pour les débits (INVOICE_DATE, 3/5).

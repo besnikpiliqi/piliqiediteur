@@ -4108,3 +4108,15 @@ je t envoie encore une fois avec tout ouverte
 
 
 
+## 437. 2026-11-18 23:58 UTC
+
+donc la il parle de la meme facon pour eux qui opte pour les debits:  "Code	Label
+
+UNKNOWN	Inconnu - non exporté, par défaut en fonction du profil
+
+INVOICE_DATE	La TVA est facturable à la date de facturation (CII: 5 | UBL: 3)
+
+DELIVERY_DATE	La TVA est débitable à la date de livraison (CII: 29 | UBL: 35)
+
+PAYMENT_DATE	La TVA est débitable à la date de paiement (CII: 72 | UBL: 432)"
+

@@ -532,3 +532,4 @@
 - 18/11 — Question de l'éditeur : régime de TVA obligatoire avant la première vente ? Réponse donnée et notée, pas commencée.
 - 18/11 — Décision de l'éditeur : situation de TVA d'ouverture + régime obligatoires avant la première vente, report du crédit de TVA par période. Notée, pas commencée.
 - 18/11 — Correction : la TVA d'ouverture, le régime obligatoire et le retrait du réel simplifié sont déjà le lot TVA27 (K2). Notes corrigées ; point ouvert : période commencée avant PILIQI.
+- 18/11 — Réponse de l'éditeur : TVA de PILIQI à partir de la première période complète suivante (période de transition déclarée hors PILIQI). Notée, à confirmer.

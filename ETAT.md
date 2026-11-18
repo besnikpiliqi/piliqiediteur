@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 18/11/2026 à 00:19 UTC par pilotage-sync.sh : « Correction : TVA d'ouverture déjà cadrée par TVA27 ».
+Mis à jour le 18/11/2026 à 08:31 UTC par pilotage-sync.sh : « Période de transition de la TVA à l'arrivée ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

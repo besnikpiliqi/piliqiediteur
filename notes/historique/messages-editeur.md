@@ -3728,3 +3728,13 @@ moi je dis obligé des l'ouverture de donner sa tva d avant afin de calcule les 
 
 donc tu vas enlever un regim car tu mas dit que 2027 va se supprimer
 
+## 405. 2026-11-18 08:30 UTC
+
+<!-- attach -->
+
+> Une question reste ouverte. Prenons une société qui commence le 12 du mois. La TVA déjà collectée et déductible du 1er au 11, dans son ancien outil, n’est pas connue de PILIQI. TVA27 ne demande que le crédit de la période d’avant. Voulez-vous deux montants de plus, « TVA collectée et déductible de la période commencée avant PILIQI » ? Sans eux, la première période est affichée « partielle ».
+
+
+
+ban il faut toujours obliger des le mois suivant. comme ca il fait sa declaretion aux impots, donc celles de 11 jours et le reste dans piliqi. comme ca la tva se calcule exacte, non? donc dans piliqi la tva se calcule des sa premiere ouverture et prend en compte la tva declarare si a du tva credit ou pas
+

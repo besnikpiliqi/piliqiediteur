@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 18/11/2026 à 22:00 UTC par pilotage-sync.sh : « Fermeture de caisse : bouton grisé avec info-bulle ».
+Mis à jour le 18/11/2026 à 22:03 UTC par pilotage-sync.sh : « Texte de l'info-bulle de fermeture de caisse ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

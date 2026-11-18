@@ -547,3 +547,4 @@
 - 18/11 nuit — Fermeture de caisse : règle A (exiger de l'activité) vs option B (une fermeture à zéro par jour) ; avis noté.
 - 18/11 nuit — Décision de l'éditeur : fermeture de caisse bloquée sans vente, bouton bloqué après chaque fermeture ; notée pour le lot écrans.
 - 18/11 nuit — Fermeture de caisse : bouton grisé avec info-bulle. Noté.
+- 18/11 nuit — Texte de l'info-bulle de fermeture de caisse fixé : « Aucune vente ni encaissement à fermer. »

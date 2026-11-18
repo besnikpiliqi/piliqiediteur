@@ -3890,3 +3890,13 @@ voila, alors tant qu'il n as pas vendu dans la caisse alors pourquoi afficher fe
 
 oui button grisé avec message en tooltip il y pas de vente pour ferma la caisse
 
+## 424. 2026-11-18 22:03 UTC
+
+<!-- attach -->
+
+> Info-bulle : « Aucune vente à fermer : votre caisse s’ouvre à votre prochaine vente. » J’ai mis votre idée en phrase plus complète ; dites-moi si vous préférez la vôtre telle quelle : « Il n’y a pas de vente pour fermer la caisse ».
+
+
+
+tu mets commme ca "Aucune vente à fermer" mais tu ajuste par rapport ce que fais la caisse donc vente , encaissement etc. donc petit phrase comprhensible
+

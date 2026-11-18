@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 18/11/2026 à 22:52 UTC par pilotage-sync.sh : « SUPER PDP e-reporting : texte complet et exemples d'appels ».
+Mis à jour le 18/11/2026 à 22:57 UTC par pilotage-sync.sh : « SUPER PDP et factures mixtes : analyse et questions ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

@@ -3784,3 +3784,7 @@ et comment ca fonction en cache? tu peux m expliquer!
 
 et quand on affiche les tva et tout dans les statistique et quand on choisi pour 2 ans alors piliqi doit calculer toutes pour les 2 ans c est ca?
 
+## 413. 2026-11-18 20:56 UTC
+
+mais il faut imaginer que si piliqi gere 5000 mille societe alors tout travaille en meme temps ! alors sera tres lent normalement
+

@@ -5556,3 +5556,9 @@ Invoice payment reporting with multiple tax rates+
 [Next](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/reporting/reportingTransaction)
 [Report transaction](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/reporting/reportingTransaction)
 
+## 462. 2026-11-19 20:20 UTC
+
+[1 capture(s) d'écran jointe(s)]
+
+qu est ce que tu comprends la chez ipole
+

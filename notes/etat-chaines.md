@@ -571,3 +571,4 @@
 - 19/11 — Choix de la plateforme agréée : l'éditeur veut écarter SUPER PDP ; décision ouverte, comparaison avec Iopole proposée avant l'étape 2.
 - 19/11 — Texte complet de « Déclaration de transaction » de l'autre PA rangé : storeId, registerId, fermetureId, prérequis de réclamation, TPS1 exige l'option.
 - 19/11 — Page « L'objet de reporting » de l'autre PA rangée : corrections par identifiant, rapports regroupés par la PA, paiement par taux, plusieurs catégories dans un appel.
+- 19/11 — Schémas « API flows » (factures reçues/émises, PULL/PUSH) de l'autre PA rangés dans e-reporting-documentation-15.md.

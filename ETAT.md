@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 19/11/2026 à 10:44 UTC par pilotage-sync.sh : « L'objet de reporting de l'autre PA : synthèse ».
+Mis à jour le 19/11/2026 à 20:21 UTC par pilotage-sync.sh : « API flows de l'autre PA : factures reçues et émises ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

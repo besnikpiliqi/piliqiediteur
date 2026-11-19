@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 19/11/2026 à 20:21 UTC par pilotage-sync.sh : « API flows de l'autre PA : factures reçues et émises ».
+Mis à jour le 19/11/2026 à 21:58 UTC par pilotage-sync.sh : « Catégories de TVA des lignes de facture électronique ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

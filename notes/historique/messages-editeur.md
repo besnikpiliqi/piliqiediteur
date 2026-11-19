@@ -5562,3 +5562,41 @@ Invoice payment reporting with multiple tax rates+
 
 qu est ce que tu comprends la chez ipole
 
+## 463. 2026-11-19 20:36 UTC
+
+[1 capture(s) d'écran jointe(s)]
+
+je peux faire avec ces ?
+
+## 464. 2026-11-19 20:44 UTC
+
+[1 capture(s) d'écran jointe(s)]
+
+
+
+## 465. 2026-11-19 21:56 UTC
+
+<!-- attach -->
+
+> S : taux standard.
+
+> Z : taux égal à 0.
+
+> E : exonéré.
+
+> AE : autoliquidation.
+
+> K : livraison intracommunautaire.
+
+> G : exportation hors UE.
+
+> O : hors champ de la TVA.
+
+> L : Îles Canaries.
+
+> M : Ceuta et Melilla.
+
+
+
+il faut que tu note ces pour savoir qoui tu mette pour les facturations
+

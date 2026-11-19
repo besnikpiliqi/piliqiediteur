@@ -100,3 +100,20 @@ Quatre schémas : factures reçues (inbound) et émises (outbound), chacune en P
 - Note de la plateforme elle-même : le PULL n'est pas recommandé en production (latence, charge) ; le PUSH est conseillé.
 - Pour PILIQI (à vérifier avant l'étape 2) : un point d'entrée public hors panneau pour les rappels, qui rattache chaque identifiant de facture à sa société et à son magasin avant toute écriture (règle d'isolation), répond vite en 2xx, est idempotent (essais répétés) et authentifié ; un relevé de secours en PULL pour rattraper un rappel perdu ; stockage de l'identifiant de la plateforme et de chaque statut par facture (déposée, rejetée, refusée, encaissée…) ; accusés et « mise à disposition » sont émis par la plateforme, pas par nous.
 - Ce que les schémas ne disent pas : idempotence à l'envoi (même numéro envoyé deux fois), liste exacte des statuts permis, authentification des rappels, taille des fichiers, un seul compte opérateur pour plusieurs sociétés (la « réclamation » de chaque société), prix.
+
+## Catégories de TVA d'une ligne de facture électronique : quoi mettre pour chaque vente de PILIQI (à garder pour l'étape 2 ; liste vue sur le générateur de l'autre PA le 19/11/2026, c'est la liste de la norme européenne, la même chez toutes les plateformes)
+Liste : S taux standard ; Z taux égal à 0 ; E exonéré ; AE autoliquidation ; K livraison intracommunautaire ; G exportation hors UE ; O hors champ de la TVA ; L Îles Canaries ; M Ceuta et Melilla.
+Correspondance retenue (décisions déjà écrites dans CLAUDE.md, « Facture électronique ») :
+| Vente de PILIQI | Catégorie | Motif / mention |
+|---|---|---|
+| Vente en France, taux normal ou réduit (20, 10, 8,5, 5,5, 2,1 %) | S | aucun |
+| Vente en France à 0 % hors franchise | Z | aucun |
+| Franchise en base | E | VATEX-FR-FRANCHISE ; « TVA non applicable, art. 293 B du CGI » |
+| Export hors UE expédié par le magasin | G | VATEX-EU-G |
+| Livraison vers un DOM | G | VATEX-EU-G |
+| Livraison intracommunautaire à un professionnel (n° de TVA valide sur VIES le jour même) | K | VATEX-EU-IC |
+| Prestation à un professionnel hors UE | O | VATEX-EU-O ; n° de TVA de la société (règle G2.33 de l'e-reporting international) ; « TVA non applicable, art. 259-1° du CGI » |
+| Prestation à un professionnel de l'UE en autoliquidation | À DÉCIDER : AE ou O ; pas encore de code dans PILIQI, non transmise avant l'étape 2 | à vérifier sur la norme française et à demander à la plateforme choisie |
+| Îles Canaries (L), Ceuta et Melilla (M) | non utilisées | PILIQI ne vend pas vers ces territoires |
+Point à vérifier, non tranché : la catégorie AE sert aussi à l'autoliquidation « intérieure » ; à ma connaissance, la sous-traitance dans le bâtiment en relève (art. 283-2 nonies du CGI : le sous-traitant facture sans TVA et le client la déclare). CLAUDE.md dit que les métiers du bâtiment s'inscrivent en « Services » « sans règle propre » : à confirmer si une facture de sous-traitance du bâtiment doit être émise en AE avec la mention d'autoliquidation. Réponse de Claude, pas l'avis d'un professionnel.
+Le code de date d'exigibilité et la mention « option pour les débits » restent ceux de CLAUDE.md (BT-8 = 3 seulement sous option pour les débits).

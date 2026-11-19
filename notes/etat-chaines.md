@@ -572,3 +572,4 @@
 - 19/11 — Texte complet de « Déclaration de transaction » de l'autre PA rangé : storeId, registerId, fermetureId, prérequis de réclamation, TPS1 exige l'option.
 - 19/11 — Page « L'objet de reporting » de l'autre PA rangée : corrections par identifiant, rapports regroupés par la PA, paiement par taux, plusieurs catégories dans un appel.
 - 19/11 — Schémas « API flows » (factures reçues/émises, PULL/PUSH) de l'autre PA rangés dans e-reporting-documentation-15.md.
+- 19/11 — Catégories de TVA des lignes (S, Z, E, AE, K, G, O, L, M) et correspondance avec les ventes de PILIQI rangées ; deux points ouverts : prestation UE en autoliquidation (AE ou O) et sous-traitance du bâtiment (AE ?).

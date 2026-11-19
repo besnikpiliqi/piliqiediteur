@@ -568,3 +568,4 @@
 - 19/11 — Idée de l'éditeur : lire le régime de TVA par SIREN via la PA ; avis : aide seulement ; question 8 ajoutée.
 - 19/11 — Page annuaire français d'une autre PA lue : aucun régime de TVA visible (champs repliés) ; à déplier.
 - 19/11 — L'annuaire français lit bien le régime de TVA (vatRegime, nextVatRegime) : l'éditeur avait raison ; proposition de préremplissage notée.
+- 19/11 — Choix de la plateforme agréée : l'éditeur veut écarter SUPER PDP ; décision ouverte, comparaison avec Iopole proposée avant l'étape 2.

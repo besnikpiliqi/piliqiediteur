@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 19/11/2026 à 10:14 UTC par pilotage-sync.sh : « L'annuaire français lit le régime de TVA : correction ».
+Mis à jour le 19/11/2026 à 10:21 UTC par pilotage-sync.sh : « Choix de la plateforme agréée : comparaison avant l'étape 2 ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

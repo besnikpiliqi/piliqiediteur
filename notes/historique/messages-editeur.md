@@ -4350,3 +4350,7 @@ il est la : <body style="overflow: visible;">
 
 
 
+## 459. 2026-11-19 10:20 UTC
+
+je veux enlever super pdp car il accepte pas les facture mix, donc comment on va des mixes et du coup il n a qu'à enlever et cherche un autre plus performant et pour l'instan je trouver tres detaille ce pa "lepole"
+

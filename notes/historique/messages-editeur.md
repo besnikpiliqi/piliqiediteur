@@ -5747,3 +5747,47 @@ Compatibilite avec les systemes de caisse
 
 Le format des donnees de transaction B2C est concu pour etre compatible avec les recapitulatifs journaliers (ticket Z) des systemes de caisse certifies. Les editeurs de logiciels de caisse pourront integrer directement la generation du e-reporting dans leurs solutions.
 
+## 467. 2026-11-19 22:25 UTC
+
+Comment prepare le e-reporting
+
+
+
+est concu pour accompagner les auto-entrepreneurs et micro-entreprises dans leur mise en conformite avec la reforme 2026, e-invoicing et e-reporting compris.
+
+Suivi des operations B2C
+
+
+
+Chaque recette enregistree dans FrenchInvoice est categorisee (B2B, B2C, international). Les operations B2C sont automatiquement identifiees pour le e-reporting.
+
+Agregation journaliere automatique
+
+
+
+Les donnees de transaction B2C sont agregees par jour d'activite, par devise et par taux de TVA, conformement au format du bloc 10.3 du flux F10.
+
+Suivi des encaissements
+
+
+
+Le passage d'une facture au statut "Payee" declenche l'enregistrement des donnees de paiement necessaires au e-reporting, avec la date d'encaissement effective.
+
+Factures internationales
+
+
+
+Les factures emises a destination de clients etrangers sont identifiees et leurs donnees preparees pour le bloc 10.1 (donnees de facture) et 10.2 (donnees de paiement).
+
+Compatibilite avec les plateformes agreees
+
+
+
+Les donnees de e-reporting generees par FrenchInvoice seront exportables dans un format compatible avec les principales plateformes agreees (PAE et PAR).
+
+Alertes de periodicite
+
+
+
+FrenchInvoice integrera des rappels lies a la periodicite de votre regime de TVA pour ne jamais manquer une echeance de transmission.
+

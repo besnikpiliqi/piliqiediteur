@@ -574,3 +574,4 @@
 - 19/11 — Schémas « API flows » (factures reçues/émises, PULL/PUSH) de l'autre PA rangés dans e-reporting-documentation-15.md.
 - 19/11 — Catégories de TVA des lignes (S, Z, E, AE, K, G, O, L, M) et correspondance avec les ventes de PILIQI rangées ; deux points ouverts : prestation UE en autoliquidation (AE ou O) et sous-traitance du bâtiment (AE ?).
 - 19/11 — Page e-reporting d'un éditeur tiers rangée : périodicité par régime, rapport par SIREN, correction = remplacement de la période, deux accusés à prévoir.
+- 19/11 — Fin de la page de l'éditeur tiers (préparation de l'e-reporting) rangée : déclencheur « Payée » écarté, idée de rappel d'échéance, question de la devise.

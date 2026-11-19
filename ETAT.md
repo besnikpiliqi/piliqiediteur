@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 19/11/2026 à 00:42 UTC par pilotage-sync.sh : « Acompte : déduction hors des lignes de vente ».
+Mis à jour le 19/11/2026 à 00:46 UTC par pilotage-sync.sh : « Escompte et affaires officielles comme tests de réception ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

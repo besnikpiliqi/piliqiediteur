@@ -4152,3 +4152,9 @@ et qunad se regle tout la facture alors on doit creer une nouvelle facture? car 
 
 c est naissecaire d avoir la ligne ? car la ligne normal sert que pour les ventes et dans ce cas cette linge c est pas une vente  mais une declaration de l etat. et donc on peut pas mettre par exemle en haut du document ?
 
+## 442. 2026-11-19 00:46 UTC
+
+[1 capture(s) d'écran jointe(s)]
+
+et ca
+

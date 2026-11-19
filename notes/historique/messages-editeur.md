@@ -5815,3 +5815,7 @@ Les operations B2C ne sont pas transmises individuellement. Elles sont agregees 
 
 il faut prendre en compte tout
 
+## 470. 2026-11-19 22:44 UTC
+
+en fait mon logiciel piliqi je veux qui se peut utiliser que en europe mais si eux vende hors eu alors comment doit calculer? toujour en euro ? ca pourra marcher
+

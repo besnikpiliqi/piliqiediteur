@@ -313,3 +313,10 @@ Ce que cela touche (à concevoir, mockup avant tout écran) :
 - Clôtures, tableau de bord, TVA, export comptable : toujours en euros, additionnés en centimes d'euro.
 - Semis : au moins une facture, un avoir et un devis par devise courante (dollar, livre, franc suisse, yen pour tester les décimales), un paiement en devise, et une facture avec taux manquant refusé.
 Questions à trancher avant le lot : liste des devises (toutes celles que publie la BCE, environ 30 ? ou une liste réduite) ; source du taux ; devis en devise permis ; devise du client fixée sur sa fiche ; une facture d'avoir dans la devise de sa facture d'origine (oui, par principe).
+
+## Décision de l'éditeur du 19/11/2026 (plus tard le même jour) : EUROS SEULEMENT ; REMPLACE la décision « devises » ci-dessus (lot DEVISES annulé)
+Mots de l'éditeur : PILIQI ne doit s'utiliser qu'en Europe ; quand une société vend hors de l'Union européenne, « toujours en euro ? ca pourra marcher ».
+Décision : tout reste en euros, partout : devis, factures, avoirs, paiements, clôtures, e-reporting, comptabilité. Le client étranger paie l'équivalent dans sa devise par sa banque ; la facture et la société restent en euros. Aucune devise, aucun taux de change, aucun écart de change à gérer.
+Pourquoi cela marche (lecture de Claude, pas l'avis d'un professionnel) : une facture libellée en euros est toujours valable, même pour un client hors UE ; l'export est exonéré (pas de TVA à convertir) ; l'e-reporting et les déclarations se font en euros ; la société encaisse des euros.
+Limite connue, à garder en tête : un client étranger qui exige une facture dans sa devise (certains clients américains ou britanniques) ne sera pas servi ; on pourra ajouter les devises plus tard, sans rien casser, si l'éditeur le décide.
+Conséquences : la question « PILIQI facture-t-il seulement en euros ? » (page e-reporting tierce, « par devise ») est tranchée : oui, devise EUR partout ; les champs « devise » des plateformes se remplissent toujours par EUR ; rien à ajouter au semis ni aux écrans.

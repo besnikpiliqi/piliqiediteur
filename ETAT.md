@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 19/11/2026 à 22:40 UTC par pilotage-sync.sh : « Décision de l'éditeur : les devises ».
+Mis à jour le 19/11/2026 à 22:45 UTC par pilotage-sync.sh : « Décision : euros seulement, devises annulées ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

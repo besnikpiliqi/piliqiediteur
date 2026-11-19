@@ -4327,3 +4327,7 @@ Validation rule: at least one of {code, iopCode} must be provided (both can be p
 
 </body></html> . === je veux que tu regarde ce code html que j ai pris. qu est ce que tu peux trouver comme info important
 
+## 456. 2026-11-19 10:08 UTC
+
+sur ce pa on peux aller chercher avec siren le regim de la societe, peut etre pas besoin de bloquer comme on a dit mais si on peut recupere à partir de ce pa alors on peut valider automatiquement son regim, qu est ce que tu pense?
+

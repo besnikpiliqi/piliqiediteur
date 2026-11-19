@@ -565,3 +565,4 @@
 - 19/11 — Question de l'éditeur sur la déclaration du paiement avec crédit d'avoir : exemple détaillé noté ; question des montants négatifs ajoutée pour SUPER PDP.
 - 19/11 — Liste processusType (cadre de facturation B1, S1, M1, B2..., B4...) gardée dans superpdp/e-reporting-documentation-15.md pour l'étape 2.
 - 19/11 — Page HTML « Générer une facture Factur-X » d'une autre PA lue : synthèse rangée (cas officiels, corrections d'e-reporting, champs BT/BG).
+- 19/11 — Idée de l'éditeur : lire le régime de TVA par SIREN via la PA ; avis : aide seulement ; question 8 ajoutée.

@@ -4354,3 +4354,272 @@ il est la : <body style="overflow: visible;">
 
 je veux enlever super pdp car il accepte pas les facture mix, donc comment on va des mixes et du coup il n a qu'à enlever et cherche un autre plus performant et pour l'instan je trouver tres detaille ce pa "lepole"
 
+## 460. 2026-11-19 10:43 UTC
+
+regarde ici pour e reporting : Déclaration de transaction
+Information
+
+Cette API vous permet de signaler les transactions B2C.
+
+Chaque appel API doit être unique par identifiant représentant une entreprise.
+
+Toutes les transactions reçues sur ce critère d'évaluation seront déclarées conformément aux exigences de déclaration électronique en fonction du pays ciblé, en fonction du régime de TVA du déclarant.
+Vous devez avoir réclamé l'unité légale avant de pouvoir faire des rapports.
+
+Ce point final est asynchronous
+Les rôles operator, user, invoicing, et apisont nécessaires pour utiliser ce point de terminaison
+Points d'extrémité
+POST /v1/reporting/transaction/scheme/{identifierScheme}/value/{identifierValue}
+Codes de catégorie 
+
+Chaque transaction doit être associée à une categoryCodequi qualifie la nature de l'opération déclarée:
+Code	Label	Description
+TLB1	Livraison de marchandises	Couvre la vente de marchandises physiques livrées au client.
+TPS1	Prestation de services	Couvre la prestation de services. Lorsque cette catégorie est sélectionnée, la taxPaymentOptionLe champ devient obligatoire.
+TNT1	Transaction non imposable	Couvre les transactions qui ne relèvent pas du champ d'application de la TVA (par exemple, les opérations exonérées).
+TMA1	Transaction mixte	Couvre les transactions combinant à la fois des biens et des services dans une seule déclaration.
+Quand categoryCodeest TPS1, le taxPaymentOptionLe champ est requis et doit être fourni dans la transaction.
+En-têtes
+client-id
+string
+Facultatif
+Paramètres de requête
+rapportIdentifier
+string
+Facultatif
+
+Id du rapport IOPOLE pour associer cette transaction.
+Paramètres de chemin
+identifiantScheme
+string
+Requis
+
+Régime de la SIREN française. Seules les entités françaises sont soutenues jusqu'à présent.
+identifiantValeur
+string
+Requis
+
+Valeur de l'identifiant.
+Paramètres du corps
+transactionDate
+string
+Requis
+
+Date à laquelle la transaction a été enregistrée par le système de point de vente.
+registerId
+string
+Facultatif
+
+Identifiant de la caisse ou du terminal POS qui a enregistré les transactions.
+StoreId
+string
+Facultatif
+
+Identifiant du point de vente physique ou logique où les transactions ont été enregistrées.
+fermetureId
+string
+Facultatif
+
+Identifiant de la fermeture du registre qui a produit les totaux déclarés.
+transactions
+array
+Requis
+Masquer les attributs enfants
+monnaie
+enum
+Requis
+Afficher les valeurs enum
+catégorieCode
+enum
+Requis
+
+Code de catégorie de la transaction.
+Masquer les valeurs enum
+Code	Label
+TLB1	Fourniture de biens soumis à la taxe sur la valeur ajoutée.
+TPS1	Services soumis à la taxe sur la valeur ajoutée.
+TNT1	Fourniture de biens et prestation de services non soumis à la taxe sur la valeur ajoutée en France, y compris les ventes à distance intracommunautaires mentionnées au 1° I de l’article 258 A et à l’article 259 B du code général des impôts.
+TMA1	Opérations soumises aux régimes prévus à l’article 266, e), e), de l’article 266 et aux articles 268 et 297 A du code général des impôts (système de marge de TVA).
+monétaires
+object
+Requis
+Masquer les attributs enfants
+TaxeBasisTotalMontant
+object
+Requis
+Masquer les attributs enfants
+montant
+number
+Requis
+TaxeTotalMontant
+object
+Requis
+Masquer les attributs enfants
+montant
+number
+Requis
+TaxDétails
+array
+Requis
+Masquer les attributs enfants
+TaxableMontant
+object
+Requis
+Masquer les attributs enfants
+montant
+number
+Requis
+TaxeAmount
+object
+Requis
+Masquer les attributs enfants
+montant
+number
+Requis
+Pourcentage
+number
+Requis
+Code
+enum
+Facultatif
+
+Code de catégorie TVA. Requis pour les factures, optionnel pour les transactions.
+Masquer les valeurs enum
+Code	Label
+S	Taux standard
+E	Exonéré d'impôt
+AE	Charge Inverse De TVA
+K	Exonération de la TVA pour la fourniture intracommunautaire de biens et de services de l'EEE
+G	Article d'exportation gratuit, taxe non facturé
+O	Services hors du champ d'application de l'impôt
+Z	Produits nuls
+L	États-Unis des Canaries impôt indirect général
+M	Taxe pour la production, les services et l'importation à Ceuta et Melilla
+TaxPayementOption
+object
+Facultatif
+
+Option de paiement d'impôt (configuration de la date du point de TVA). Exactement l'un de 'code' ou 'iopCode' est requis (pas les deux).
+Masquer les attributs enfants
+Code
+enum
+
+Code précisant la date à laquelle la TVA devient facturable pour le Vendeur et l’Acheteur.
+Masquer les valeurs enum
+Code	Label
+3	La TVA est facturable à la date de facturation (UBL)
+5	La TVA est à la charge à la date de facturation (CII)
+29	La TVA est payante à la date de livraison (CII)
+35	La TVA est à la charge à la date de livraison (UBL)
+72	La TVA est débitable à la date de paiement (CII)
+432	La TVA est débitable à la date de paiement (UBL)
+iopCode
+enum
+
+Date du point de TVA IOPOLE (plateforme enum).
+Masquer les valeurs enum
+Code	Label
+UNKNOWN	Inconnu - non exporté, par défaut en fonction du profil
+INVOICE_DATE	La TVA est facturable à la date de facturation (CII: 5 | UBL: 3)
+DELIVERY_DATE	La TVA est débitable à la date de livraison (CII: 29 | UBL: 35)
+PAYMENT_DATE	La TVA est débitable à la date de paiement (CII: 72 | UBL: 432)
+débitTaxPaymentActive
+boolean
+
+Paiement de l'impôt sur le débit actif.
+Demande
+POST/v1/reporting/transaction/scheme/0002/value/123456789
+
+    Node.js
+    Bash
+    Python
+    PHP
+    Java
+    C#
+
+request.php
+
+<?php
+
+$url   = 'https://docs.iopole.com/v1/reporting/transaction/scheme/0002/value/123456789';
+$token = [valeur retirée]
+
+$headers = [
+    'Accept: application/json',
+    'Authorization: Bearer ' . $token,
+    'customer-id: [jeton retiré]',
+    'Content-Type: application/json',
+];
+
+$ch = curl_init();
+curl_setopt_array($ch, [
+    CURLOPT_URL            => $url,
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_CUSTOMREQUEST  => 'POST',
+    CURLOPT_HTTPHEADER     => $headers,
+    CURLOPT_POSTFIELDS     => json_encode({
+      "transactionDate": "2026-03-11",
+      "transactions": [
+        {
+          "categoryCode": "TLB1",
+          "currency": "EUR",
+          "monetary": {
+            "currency": "EUR",
+            "taxBasisTotalAmount": {
+              "amount": 1000
+            },
+            "taxTotalAmount": {
+              "amount": 200,
+              "currency": "EUR"
+            }
+          },
+          "taxDetails": [
+            {
+              "taxableAmount": {
+                "amount": 1000
+              },
+              "taxAmount": {
+                "amount": 200
+              },
+              "percent": 20
+            }
+          ]
+        }
+      ]
+    }),
+]);
+
+$response = curl_exec($ch);
+$error    = curl_error($ch);
+curl_close($ch);
+
+if ($error) {
+    throw new RuntimeException('cURL error: ' . $error);
+}
+
+$data = json_decode($response, true);
+print_r($data);
+
+
+Réponse
+Catégorie: 202
+application/json
+E-reportage pris en compte. Retourne un identifiant pour cette soumission, qui peut être utilisé pour le suivre ultérieurement.
+Type
+enum
+TRANSACTION
+Id
+string
+Afficher l'exemple
+Afficher l'exemple
+400
+application/json
+Demander des problèmes de validation
+statutMessage
+string
+Détails
+object
+invalid_enum_value
+401Non autorisé - L'authentification est nécessaire et a échoué ou n'a pas encore été fournie.
+403In
+

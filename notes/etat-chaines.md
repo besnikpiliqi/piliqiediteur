@@ -569,3 +569,4 @@
 - 19/11 — Page annuaire français d'une autre PA lue : aucun régime de TVA visible (champs repliés) ; à déplier.
 - 19/11 — L'annuaire français lit bien le régime de TVA (vatRegime, nextVatRegime) : l'éditeur avait raison ; proposition de préremplissage notée.
 - 19/11 — Choix de la plateforme agréée : l'éditeur veut écarter SUPER PDP ; décision ouverte, comparaison avec Iopole proposée avant l'étape 2.
+- 19/11 — Texte complet de « Déclaration de transaction » de l'autre PA rangé : storeId, registerId, fermetureId, prérequis de réclamation, TPS1 exige l'option.

@@ -4186,3 +4186,39 @@ oui t as raison j ai cree un nouveau client et j ai fait la meme chose car lui d
 
 @"/root/.claude/uploads/00d7e3b2-c4d1-5536-95c0-3e77e19552bb/0e5b69a3-facture-FAC-REPUB-2026-0000366.pdf" qu est que tu vois dans cette facture
 
+## 448. 2026-11-19 01:20 UTC
+
+tu vois pas que la tva declare est 53.17 donc celui de 319 sans prendre en compte l avoir
+
+## 449. 2026-11-19 01:22 UTC
+
+@"/root/.claude/uploads/00d7e3b2-c4d1-5536-95c0-3e77e19552bb/b7e516df-avoir-AV-REPUB-2026-000018.pdf" mais la tu a enlever la tva ? sur l avoir avec qui j ai payé ?
+
+## 450. 2026-11-19 01:27 UTC
+
+mais comment tu va declare l encaissement pour cette facture de 319 alors que 91 sont enlver
+
+## 451. 2026-11-19 01:30 UTC
+
+<!-- attach -->
+
+> Ce que le client a vraiment payé compte : les 228 € par carte.
+
+> Le crédit d’avoir utilisé compte comme un paiement, le jour où il sert : 91 €.
+
+> Mais si l’avoir annulait une prestation déjà payée et déclarée, la part de service annulée se déduit, au taux de sa ligne, des encaissements du jour. L’avoir n’est alors pas un vrai nouveau paiement
+
+
+
+je comprend pas
+
+## 452. 2026-11-19 08:01 UTC
+
+<!-- attach -->
+
+> Et si le crédit paie un autre service ? Le crédit compte alors comme un vrai paiement : +60 € pour ce nouveau service, et −60 € pour l’ancien service annulé. Net 0 € ce jour-là, et +60 € au total pour un seul service payé. C’est aussi exact.
+
+
+
+et alors comment tu vas declarare à l etat la transaction de paiment ?
+

@@ -4174,3 +4174,15 @@ pourquoi pas ? et quand le client pay avec avoir alors tu calcule encore la tva 
 
 ici le client n as pas de credit malgre que j ai fait des retour donc avoir?
 
+## 445. 2026-11-19 01:06 UTC
+
+j ai fait 2 fois sur une facture maruqé payé
+
+## 446. 2026-11-19 01:11 UTC
+
+oui t as raison j ai cree un nouveau client et j ai fait la meme chose car lui devais rien donc il affiche le credit
+
+## 447. 2026-11-19 01:18 UTC
+
+@"/root/.claude/uploads/00d7e3b2-c4d1-5536-95c0-3e77e19552bb/0e5b69a3-facture-FAC-REPUB-2026-0000366.pdf" qu est que tu vois dans cette facture
+

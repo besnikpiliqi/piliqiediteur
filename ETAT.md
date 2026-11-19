@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 19/11/2026 à 01:02 UTC par pilotage-sync.sh : « Solde créditeur : explication et cas à semer ».
+Mis à jour le 19/11/2026 à 01:18 UTC par pilotage-sync.sh : « Lecture d'une facture PDF : détails d'impression ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

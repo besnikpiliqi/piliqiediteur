@@ -561,3 +561,4 @@
 - 19/11 — Question de l'éditeur sur la ligne négative de l'acompte : élément à part dans PILIQI, ligne négative seulement dans le fichier structuré ; noté.
 - 19/11 — Affaire 22b (escompte) expliquée ; idée de tests de réception avec les affaires officielles notée.
 - 19/11 — Question de l'éditeur sur le solde créditeur à zéro après des retours : explication donnée, semis à compléter (client avec crédit positif).
+- 19/11 — Facture PDF lue à la demande de l'éditeur : calculs justes ; 4 détails d'impression notés pour le lot écrans.

@@ -299,3 +299,17 @@ Précision (18/11) : les demandes de l'éditeur sur le régime obligatoire, la T
 Réponse de l'éditeur (18/11) sur la période commencée avant PILIQI : la TVA de PILIQI ne compte qu'à partir de la première période complète suivante (période de transition déclarée par la société avec son ancien outil) ; crédit de départ = solde de cette déclaration. Voir la dernière section de N/semis-complet-plan-17-11.md ; à confirmer au départ du lot TVA27.
 Précision définitive de l'éditeur (18/11) : la TVA se calcule normalement dès le premier jour ; un message permanent attend la déclaration de TVA d'avant PILIQI. Maquette : https://claude.ai/artifact/NTHpC8aDNs4RLVnooijaGB ; texte et règles : dernière section de N/semis-complet-plan-17-11.md. La « période de transition » est abandonnée.
 Décisions de l'éditeur (18/11, fin) : blocage de la première vente par le crédit de départ retiré, blocage par le régime conservé ; calcul sans cache recalculé depuis le mois déclaré ; franchise en base : aucune TVA affichée ; message selon le régime. Voir la dernière section de N/semis-complet-plan-17-11.md et la maquette (version 2).
+
+## Décision de l'éditeur du 19/11/2026 : les devises (lot DEVISES, à placer avant l'étape 2 ; RIEN n'est implémenté)
+Mots de l'éditeur : à propos d'une facture à un client hors zone euro, « il faut prendre en compte tout ».
+Sens retenu : PILIQI doit pouvoir émettre devis, factures et avoirs dans la devise du client (pas seulement en euros), pour tous les cas de client hors zone euro, et déclarer correctement ces ventes (facture, TVA en euros, e-reporting international, comptabilité).
+Ce que cela touche (à concevoir, mockup avant tout écran) :
+- Montants : aujourd'hui tout est en centimes entiers d'euro ; une devise a sa propre plus petite unité (le yen n'a pas de centime) : il faudra un montant avec sa devise et son nombre de décimales (ISO 4217).
+- Taux de change : une source et une date de référence à fixer (proposition de Claude : taux de référence de la Banque centrale européenne du jour de l'opération, conservé et signé avec le document ; le taux ne change plus après l'émission).
+- Facture : devise, taux et date du taux imprimés ; la TVA à payer s'écrit AUSSI en euros quand la facture est dans une autre devise (règle à confirmer, décision de Claude, pas l'avis d'un professionnel) ; les ventes exonérées (export, livraison intracommunautaire, prestation hors UE) n'ont pas de TVA, mais le total en euros sert aux déclarations.
+- Encaissements : paiement dans la devise, contre-valeur en euros au jour du paiement, écart de change à passer en comptabilité (étape 5).
+- Caisse (tickets) : reste en euros uniquement (les territoires acceptés sont tous en euro) ; à confirmer par l'éditeur.
+- E-reporting et facture électronique : la devise et les montants (euros ou devise) selon le format de la plateforme choisie ; à demander (blocs « par devise » de la page tierce).
+- Clôtures, tableau de bord, TVA, export comptable : toujours en euros, additionnés en centimes d'euro.
+- Semis : au moins une facture, un avoir et un devis par devise courante (dollar, livre, franc suisse, yen pour tester les décimales), un paiement en devise, et une facture avec taux manquant refusé.
+Questions à trancher avant le lot : liste des devises (toutes celles que publie la BCE, environ 30 ? ou une liste réduite) ; source du taux ; devis en devise permis ; devise du client fixée sur sa fiche ; une facture d'avoir dans la devise de sa facture d'origine (oui, par principe).

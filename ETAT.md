@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 19/11/2026 à 22:32 UTC par pilotage-sync.sh : « Correction : deux niveaux d'agrégation de l'e-reporting ».
+Mis à jour le 19/11/2026 à 22:40 UTC par pilotage-sync.sh : « Décision de l'éditeur : les devises ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

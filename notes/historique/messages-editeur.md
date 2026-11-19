@@ -5805,3 +5805,13 @@ tu parle de ca : "Agregation par jour d'activite
 
 Les operations B2C ne sont pas transmises individuellement. Elles sont agregees a la maille journaliere, ce qui simplifie considerablement le volume de donnees a transmettre. Un commercant realisant 50 ventes dans une journee ne transmet qu'une seule ligne de donnees agregees par taux de TVA."
 
+## 469. 2026-11-19 22:39 UTC
+
+<!-- attach -->
+
+> Sinon, une facture à un client hors zone euro demandera une décision de votre part.
+
+
+
+il faut prendre en compte tout
+

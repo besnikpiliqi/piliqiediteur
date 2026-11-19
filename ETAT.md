@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 19/11/2026 à 10:08 UTC par pilotage-sync.sh : « Régime de TVA lu via la plateforme : aide, pas validation ».
+Mis à jour le 19/11/2026 à 10:11 UTC par pilotage-sync.sh : « Annuaire français d'une autre PA : pas de régime de TVA visible ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

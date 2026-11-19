@@ -566,3 +566,4 @@
 - 19/11 — Liste processusType (cadre de facturation B1, S1, M1, B2..., B4...) gardée dans superpdp/e-reporting-documentation-15.md pour l'étape 2.
 - 19/11 — Page HTML « Générer une facture Factur-X » d'une autre PA lue : synthèse rangée (cas officiels, corrections d'e-reporting, champs BT/BG).
 - 19/11 — Idée de l'éditeur : lire le régime de TVA par SIREN via la PA ; avis : aide seulement ; question 8 ajoutée.
+- 19/11 — Page annuaire français d'une autre PA lue : aucun régime de TVA visible (champs repliés) ; à déplier.

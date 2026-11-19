@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 18/11/2026 à 23:58 UTC par pilotage-sync.sh : « Codes d'exigibilité : piège de vocabulaire ».
+Mis à jour le 19/11/2026 à 00:32 UTC par pilotage-sync.sh : « Acomptes : déjà prévus pour les professionnels, cas du particulier à trancher ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

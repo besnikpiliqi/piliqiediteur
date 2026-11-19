@@ -4120,3 +4120,19 @@ DELIVERY_DATE	La TVA est débitable à la date de livraison (CII: 29 | UBL: 35)
 
 PAYMENT_DATE	La TVA est débitable à la date de paiement (CII: 72 | UBL: 432)"
 
+## 438. 2026-11-19 00:24 UTC
+
+[1 capture(s) d'écran jointe(s)]
+
+de quoi parle facture d acompt
+
+## 439. 2026-11-19 00:30 UTC
+
+<!-- attach -->
+
+> Voulez-vous que j’ajoute l’acompte à votre note « À trancher plus tard » avec ces trois points, pour ne pas l’oublier ? Je n’ai rien modifié dans le logiciel.
+
+
+
+mais tu me dit que c'est prevu a l etap 2 ?
+

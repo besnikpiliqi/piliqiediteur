@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 19/11/2026 à 08:03 UTC par pilotage-sync.sh : « Déclaration du paiement avec crédit d'avoir : exemple et montants négatifs ».
+Mis à jour le 19/11/2026 à 10:02 UTC par pilotage-sync.sh : « processusType : cadres de facturation pour l'étape 2 ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

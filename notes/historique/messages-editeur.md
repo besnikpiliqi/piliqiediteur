@@ -4222,3 +4222,85 @@ je comprend pas
 
 et alors comment tu vas declarare à l etat la transaction de paiment ?
 
+## 453. 2026-11-19 08:35 UTC
+
+je sais pas si tu sais ca ou pas ?: "
+
+statuts officiels du cycle de vie
+
+
+
+La norme française (AFNOR XP Z12-012) définit une liste officielle de statuts (messages CDAR), dont 4 sont strictement obligatoires et transmis automatiquement à l'administration fiscale (DGFiP).
+
+Pour votre ERP, vous devez principalement écouter les webhooks ou l'API de votre Plateforme Agréée (PA) pour récupérer ces codes et mettre à jour l'état de vos factures.
+
+
+
+1. Les 4 statuts obligatoires (Transmis à la DGFiP)
+
+
+
+Ces 4 statuts doivent impérativement être gérés par votre logiciel, car ils déclenchent les obligations fiscales et comptables :
+
+
+
+Code	Statut officiel	Émetteur du statut	Signification et action dans votre ERP
+
+200	Déposée	Votre PA (vendeur)	Preuve que votre PA a bien pris en charge la facture. Elle est validée techniquement et part vers le client.
+
+213	Rejetée	PA vendeur ou PA acheteur	Erreur technique ou de format (ex. : SIRET invalide, TVA incohérente). La facture est bloquée. Votre ERP doit afficher le motif de rejet pour correction et réémission.
+
+210	Refusée	Acheteur (client)	Refus commercial motivé par le client (erreur de prix, commande non livrée). La facture est annulée. Votre ERP doit proposer de générer un avoir ou une facture rectificative.
+
+212	Encaissée	Vendeur (via votre ERP)	Vous informez votre PA que le paiement a été reçu. Obligatoire uniquement pour les prestations de services (TVA sur les encaissements) afin de pré-remplir la déclaration de TVA.
+
+
+
+
+
+2. Les statuts recommandés (Suivi commercial et relances)
+
+
+
+Bien qu'ils soient facultatifs sur le plan fiscal, ces statuts transitent de PA à PA. Ils sont très utiles dans votre ERP pour savoir où en est le règlement d'une facture et automatiser vos relances :
+
+
+
+Code	Statut officiel	Émetteur	Utilité pour votre ERP
+
+203	Mise à disposition	PA acheteur	La facture est arrivée dans le logiciel ou la boîte de réception du client.
+
+204	Prise en charge	Acheteur	Le service comptable du client a ouvert et commencé à traiter la facture.
+
+205	Approuvée	Acheteur	Le client valide le « bon à payer ». Votre ERP sait que la facture sera payée à l'échéance.
+
+206	Approuvée partiellement	Acheteur	Le client accepte une partie du montant et conteste le reste.
+
+207	En litige	Acheteur	Le client signale un désaccord sans rejeter la facture en bloc. Votre ERP peut déclencher une alerte commerciale.
+
+208	Suspendue	Acheteur	Le traitement est mis en pause car il manque un document (bon de livraison, numéro de commande).
+
+209	Complétée	Vendeur	Vous renvoyez la pièce ou l'information manquante suite à un statut 208.
+
+211	Paiement transmis	Acheteur	Le client indique que le virement a été émis. Permet d'éviter une relance inutile pendant le délai bancaire.
+
+
+
+
+
+Ce que vous devez implémenter en priorité
+
+
+
+• En réception (Webhooks PA -> ERP). Écoutez les codes 200, 213, 210, 205, 207 et 208 pour afficher un badge visuel clair sur chaque facture dans votre logiciel (ex. : Validée, À corriger, En litige, Bon à payer).
+
+• En émission (ERP -> PA). Prévoyez un appel API depuis votre module de trésorerie/rapprochement bancaire pour envoyer le statut 212 (Encaissée) avec la date et le montant encaissé dès qu'une facture de prestation de services est marquée comme payée par votre utilisateur.
+
+• Côté factures fournisseurs (Achats). Si votre ERP gère aussi les achats de vos clients, ajoutez des boutons permettant à vos utilisateurs d'émettre les statuts 205 (Approuver), 208 (Suspendre) ou 210 (Refuser avec motif) sur les factures qu'ils reçoivent." j'ai vu sur internet
+
+## 454. 2026-11-19 10:00 UTC
+
+[1 capture(s) d'écran jointe(s)]
+
+tout ca il faut que garde dans ta tete pour les facture à envoyer
+

@@ -567,3 +567,4 @@
 - 19/11 — Page HTML « Générer une facture Factur-X » d'une autre PA lue : synthèse rangée (cas officiels, corrections d'e-reporting, champs BT/BG).
 - 19/11 — Idée de l'éditeur : lire le régime de TVA par SIREN via la PA ; avis : aide seulement ; question 8 ajoutée.
 - 19/11 — Page annuaire français d'une autre PA lue : aucun régime de TVA visible (champs repliés) ; à déplier.
+- 19/11 — L'annuaire français lit bien le régime de TVA (vatRegime, nextVatRegime) : l'éditeur avait raison ; proposition de préremplissage notée.

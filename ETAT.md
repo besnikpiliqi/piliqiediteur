@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 19/11/2026 à 10:11 UTC par pilotage-sync.sh : « Annuaire français d'une autre PA : pas de régime de TVA visible ».
+Mis à jour le 19/11/2026 à 10:14 UTC par pilotage-sync.sh : « L'annuaire français lit le régime de TVA : correction ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

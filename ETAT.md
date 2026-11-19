@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 19/11/2026 à 21:58 UTC par pilotage-sync.sh : « Catégories de TVA des lignes de facture électronique ».
+Mis à jour le 19/11/2026 à 22:24 UTC par pilotage-sync.sh : « Page e-reporting tiers : lecture et recoupement ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

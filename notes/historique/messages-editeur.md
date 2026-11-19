@@ -5600,3 +5600,150 @@ je peux faire avec ces ?
 
 il faut que tu note ces pour savoir qoui tu mette pour les facturations
 
+## 466. 2026-11-19 22:23 UTC
+
+lis tou ca pour comprendre l ereporting: E-reporting : transmettre vos donnees de transaction et de paiement
+
+La reforme de la facturation electronique 2026 ne se limite pas au e-invoicing entre entreprises. Elle impose egalement un dispositif de e-reportingpour les operations qui echappent a la facturation electronique obligatoire : ventes aux particuliers (B2C), transactions internationales et operations hors champ de la TVA. Voici tout ce qu'il faut savoir.
+L'essentiel du e-reporting
+
+    Le e-reporting concerne les operations
+    B2C
+    (ventes aux particuliers) et les transactions
+    internationales
+    (B2Bi, Bi2B)
+    Deux types de donnees a transmettre :
+    donnees de transaction
+    et
+    donnees de paiement
+    La transmission se fait via une
+    plateforme agreee
+    (PAE ou PAR) vers le portail public de facturation (PPF)
+    La periodicite depend du
+    regime de TVA
+    du declarant (mensuelle, bimestrielle ou par decade)
+    Des
+    simplifications
+    sont prevues : pas de e-reporting blanc, nombre de transactions facultatif
+
+Sommaire
+
+    [Qu'est-ce que le e-reporting ?](https://frenchinvoice.fr/reforme-2026/e-reporting#definition)
+    [Quelles operations sont concernees ?](https://frenchinvoice.fr/reforme-2026/e-reporting#operations-concernees)
+    [Les donnees de transaction a transmettre](https://frenchinvoice.fr/reforme-2026/e-reporting#donnees-transaction)
+    [Les donnees de paiement a transmettre](https://frenchinvoice.fr/reforme-2026/e-reporting#donnees-paiement)
+    [Les modalites de transmission](https://frenchinvoice.fr/reforme-2026/e-reporting#modalites)
+    [Simplifications annoncees](https://frenchinvoice.fr/reforme-2026/e-reporting#simplifications)
+    [Comment FrenchInvoice prepare le e-reporting](https://frenchinvoice.fr/reforme-2026/e-reporting#frenchinvoice)
+
+Qu'est-ce que le e-reporting ?
+
+Le e-reportingest l'obligation de transmettre a l'administration fiscale les donnees relatives aux operations commerciales qui ne sont pas couvertes par le e-invoicing (la facturation electronique interentreprises domestique B2B).
+
+Alors que le e-invoicing couvre les factures echangees entre entreprises etablies en France (B2B domestique), le e-reporting vient completer le dispositif en capturant les flux qui echappent a ce circuit : les ventes aux particuliers, les transactions avec des entreprises etrangereset certaines operations specifiques.
+
+L'objectif est de fournir a l'administration fiscale une vision exhaustive de l'activite economiquedes entreprises etablies en France, afin de lutter contre la fraude a la TVA et, a terme, de permettre le pre-remplissage des declarations de TVA.
+E-invoicing
+
+    Factures electroniques B2B domestique
+    Transmission de la facture elle-meme (Factur-X)
+    Entre entreprises etablies en France
+    Via PDP ou PPF
+
+E-reporting
+
+    Donnees de transaction et de paiement
+    Transmission de donnees agregees (pas la facture)
+    B2C, international, hors champ TVA
+    Via plateforme agreee vers le PPF
+
+Quelles operations sont concernees ?
+
+Le e-reporting couvre trois grandes categories d'operations, definies par l'article 290 du Code general des impots (CGI). Toutes les entreprises assujetties a la TVA francaise et etablies en France sont concernees, y compris les auto-entrepreneurs en franchise de TVA.
+Operations B2C (ventes aux particuliers)
+
+Toutes les ventes de biens ou prestations de services a des particuliers ou a des personnes morales non assujetties (comme les associations). Cela inclut les ventes en boutique, les prestations en ligne, les ventes sur marche, etc.
+
+Les donnees peuvent etre transmises de maniere agregee par jour d'activite, ce qui correspond au concept de ticket Z (recapitulatif journalier) des systemes de caisse.
+Operations internationales (B2Bi, Bi2B, Bi2Bi)
+
+Les transactions avec des entreprises non etablies en France: exportations, livraisons intracommunautaires, prestations de services transfrontalieres, acquisitions intracommunautaires. Ces operations, bien qu'elles fassent l'objet de factures, ne transitent pas par le circuit e-invoicing domestique.
+
+Chaque facture internationale donne lieu a une occurrence distincte dans le bloc de donnees de facture (bloc 10.1 du flux F10), contrairement aux operations B2C qui sont agregees.
+Operations hors champ de la TVA
+
+Certaines operations exonerees ou hors du champ d'application de la TVA mais realisees par des assujettis etablis en France sont egalement soumises au e-reporting. L'objectif est de garantir a l'administration une vision complete de l'activite, meme pour les operations non taxables.
+Les donnees de transaction a transmettre
+
+Les donnees de transaction constituent le coeur du e-reporting. Elles permettent a l'administration fiscale de connaitre le volume et la nature des operations realisees. Le flux de transmission (F10) est structure en plusieurs blocs, chacun correspondant a un type d'operation.
+Pour les operations internationales (bloc 10.1)
+Identification du declarant (SIREN) et son role (fournisseur ou acheteur)
+Numero de la facture et date de l'operation
+Identification du partenaire commercial etranger
+Montants HT, TVA et TTC par taux de TVA applicable
+Nature de l'operation (livraison, prestation, acquisition)
+Devise de la transaction
+Pour les operations B2C (bloc 10.3)
+
+Contrairement aux factures internationales transmises individuellement, les operations B2C sont transmises de maniere agregee par jour d'activite, par devise et par type de transaction. Chaque occurrence du bloc 10.3 correspond a l'ensemble des transactions d'une journee.
+Date du jour d'activite concerne
+Type de transaction (vente de biens, prestation de services)
+Montant total HT et TVA collectee pour la journee
+Ventilation par taux de TVA applicable
+Devise utilisee
+Nombre de transactions (facultatif, cf. simplifications)
+Les donnees de paiement a transmettre
+
+En complement des donnees de transaction, le e-reporting impose la transmission des donnees de paiement. Cette obligation est particulierement importante pour les prestations de services, ou la TVA est exigible a l'encaissement (sauf option pour la TVA sur les debits).
+
+L'exigibilite de la TVA a l'encaissement signifie que la TVA n'est due a l'administration qu'au moment ou le paiement est effectivement recu. Il est donc essentiel de transmettre les donnees de paiement pour permettre le calcul correct de la TVA collectee.
+Paiement de factures internationales (bloc 10.2)
+
+    Chaque encaissement correspond a une facture unique
+    Uniquement pour les prestations de services
+    Hors autoliquidation de la TVA
+    Hors option TVA sur les debits
+
+Paiement des operations B2C (bloc 10.4)
+
+    Encaissements agreges par jour d'activite
+    Inclut les paiements recus avant rapprochement facture
+    Rectification obligatoire apres rapprochement
+    Que les operations aient fait l'objet d'une facture ou non
+
+Point d'attention :lorsqu'un paiement est recu avant d'etre rapproche de la facture correspondante, il doit etre declare dans le bloc de donnees de paiement (10.4). Une fois le rapprochement effectue, la declaration doit etre rectifiee et le paiement transmis via le cycle de vie de la facture ou le bloc 10.2 pour les operations internationales.
+Les modalites de transmission
+
+La periodicite de transmission des donnees de e-reporting depend du regime de TVA du declarant. Les donnees sont transmises de maniere agregee par declarant, a la maille SIREN. Le fait generateur est la date de realisation de l'operation pour les donnees de transaction, et la date d'encaissement pour les donnees de paiement.
+Regime de TVA	Periodicite transactions	Periodicite paiements	Delai de depot
+Reel normal mensuel	Par decade (1-10, 11-20, 21-fin)	Mensuelle	10 jours apres la fin de la periode
+Reel normal trimestriel	Mensuelle	Mensuelle	Le 10 du mois suivant
+Regime simplifie (RSI)	Mensuelle	Mensuelle	Entre le 25 et 30 du mois suivant
+Franchise de TVA	Bimestrielle	Bimestrielle	Entre le 25 et 30 du mois suivant le bimestre
+
+Auto-entrepreneurs en franchise de TVA : la periodicite est bimestrielle. Les bimestres civils commencent le 1er janvier, 1er mars, 1er mai, 1er juillet, 1er septembre et 1er novembre. Le delai de depot est fixe entre le 25 et le 30 du mois suivant la fin du bimestre.
+Rectification des donnees
+
+En cas d'erreur sur les donnees transmises au titre d'une periode, la plateforme agreee peut envoyer un flux rectificatif au portail public de facturation. Ce flux rectificatif annule et remplace l'integralitedes donnees precedemment transmises pour cette periode. Il n'est pas possible de rectifier partiellement : c'est un remplacement complet.
+
+Les plateformes agreees disposent d'un delai de 8 heuresapres le dernier jour du delai de depot pour transmettre les flux au portail public de facturation et permettre leur integration par l'administration fiscale.
+Simplifications annoncees
+
+L'administration fiscale a annonce plusieurs mesures de simplification pour faciliter la mise en oeuvre du e-reporting, en particulier pour les petites entreprises et les auto-entrepreneurs.
+1
+Pas de e-reporting blanc
+
+Contrairement a certaines obligations declaratives, il n'est pas necessaire de transmettre un e-reporting a neantlorsqu'aucune operation n'a ete realisee au cours d'une periode. Si vous n'avez eu aucune vente B2C ni transaction internationale pendant un bimestre, vous n'avez rien a declarer.
+2
+Nombre de transactions facultatif
+
+Pour les donnees de transaction B2C agregees (bloc 10.3), le nombre de transactions realisees dans la journee est une donnee facultative. Seuls les montants agreges (HT et TVA par taux) sont obligatoires. Cette simplification reduit la charge de saisie pour les commercants et prestataires.
+3
+Agregation par jour d'activite
+
+Les operations B2C ne sont pas transmises individuellement. Elles sont agregees a la maille journaliere, ce qui simplifie considerablement le volume de donnees a transmettre. Un commercant realisant 50 ventes dans une journee ne transmet qu'une seule ligne de donnees agregees par taux de TVA.
+4
+Compatibilite avec les systemes de caisse
+
+Le format des donnees de transaction B2C est concu pour etre compatible avec les recapitulatifs journaliers (ticket Z) des systemes de caisse certifies. Les editeurs de logiciels de caisse pourront integrer directement la generation du e-reporting dans leurs solutions.
+

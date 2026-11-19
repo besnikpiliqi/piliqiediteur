@@ -4623,3 +4623,936 @@ invalid_enum_value
 401Non autorisé - L'authentification est nécessaire et a échoué ou n'a pas encore été fournie.
 403In
 
+## 461. 2026-11-19 10:44 UTC
+
+ca aussi : [Aller au contenu principal](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/reporting/reportingObject#__docusaurus_skipToContent_fallback)
+🚨 Important: À partir du 1er février 2026, toutes les demandes d'API doivent inclure l'en-tête client-id.
+✦Utilisation avec l'IA▾
+
+* [🚀Démarrage rapide](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/reporting/reportingObject#)
+* [📖Introduction](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/reporting/reportingObject#)
+   * [📄API Référence](https://docs.ppd.iopole.fr/docs/iopole-api/reference)
+   * [🔑Authentification](https://docs.ppd.iopole.fr/docs/iopole-api/authentication)
+   * [📑La Pagination](https://docs.ppd.iopole.fr/docs/iopole-api/pagination)
+   * [⚠️Erreurs](https://docs.ppd.iopole.fr/docs/iopole-api/errors)
+   * [🔍Recherche](https://docs.ppd.iopole.fr/docs/iopole-api/search)
+   * [🛡️Sécurité](https://docs.ppd.iopole.fr/docs/iopole-api/security)
+* [💡Concept de base](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/reporting/reportingObject#)
+* [📦Ressources](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/reporting/reportingObject#)
+   * [👤Compte](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/reporting/reportingObject#)
+      * [OBTENEZObtenez l'identifiant client](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/account/getCustomerId)
+   * [🗂️Annuaire](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/reporting/reportingObject#)
+      * [🧩L'objet de répertoire](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/directory/directoryObject)
+      * [OBTENEZRecherche dans Peppol](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/directory/readDirectoryIntSearch)
+      * [OBTENEZRechercher dans l'annuaire français](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/directory/readDirectoryFrSearch)
+      * [OBTENEZVérifiez l'enregistrement Peppol](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/directory/checkPeppolRegistration)
+   * [🏢Entité commerciale de l'opérateur](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/reporting/reportingObject#)
+      * [🧩L'entité commerciale de l'opérateur objet](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/operatorBusinessEntity/businessEntityObject)
+      * [📋Annuaire](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/reporting/reportingObject#)
+         * [OBTENEZRecherche par id](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/operatorBusinessEntity/directory/searchBusinessEntityById)
+         * [OBTENEZRecherche par filtre](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/operatorBusinessEntity/directory/searchBusinessEntityByFilter)
+      * [📝Inscription](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/reporting/reportingObject#)
+         * [POSTCréer l'inscription d'entité française](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/operatorBusinessEntity/enrollment/createFrenchEnrollment)
+         * [POSTCréer l'inscription internationale d'entités](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/operatorBusinessEntity/enrollment/createInternationalEnrollment)
+         * [OBTENEZTélécharger les preuves d'inscription◈ WL](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/operatorBusinessEntity/enrollment/enrollmentEvidences)
+         * [OBTENEZObtenir le lien d'intégration d'inscription](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/operatorBusinessEntity/enrollment/enrollmentLink)
+         * [OBTENEZObtenir le lien d'intégration des inscriptions par l'identifiant de l'entreprise](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/operatorBusinessEntity/enrollment/enrollmentLinkByCompanyIdentifier)
+         * [MISEInscription de l'entité française](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/operatorBusinessEntity/enrollment/frenchEnrollment)
+         * [MISEInscription internationale d'entités](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/operatorBusinessEntity/enrollment/internationalEnrollment)
+         * [MISEMettre à jour l'inscription](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/operatorBusinessEntity/enrollment/updateEnrollment)
+         * [SUPPRIMERAnnuler l'inscription](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/operatorBusinessEntity/enrollment/cancelEnrollment)
+         * [OBTENEZTélécharger les preuves d'inscription◈ WL](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/operatorBusinessEntity/enrollment/enrollmentEvidences)
+         * [OBTENEZObtenir des données de portabilité◈ WL](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/operatorBusinessEntity/enrollment/enrollmentPortability)
+         * [OBTENEZTélécharger les livrables de portabilité◈ WL](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/operatorBusinessEntity/enrollment/enrollmentPortabilityDownload)
+         * [MISEMettre à jour une migration d'adresse◈ WL](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/operatorBusinessEntity/enrollment/enrollmentPortabilityMigrate)
+         * [OBTENEZObtenez les détails de l'inscription](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/operatorBusinessEntity/enrollment/getEnrollment)
+         * [OBTENEZRechercher les inscriptions par filtre](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/operatorBusinessEntity/enrollment/searchEnrollmentByFilter)
+      * [🤝Réclamation](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/reporting/reportingObject#)
+         * [POSTRéclamation par l'entité commerciale id](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/operatorBusinessEntity/claim/claimByBusinessEntity)
+         * [POSTRéclamation par identifiant](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/operatorBusinessEntity/claim/claimByIdentifier)
+         * [MISEMettre à jour la configuration de la réclamation](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/operatorBusinessEntity/claim/updateClaimedBusinessEntity)
+         * [SUPPRIMERUnclaim une entité commerciale](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/operatorBusinessEntity/claim/unclaimBusinessEntity)
+      * [⚙️Gestion](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/reporting/reportingObject#)
+         * [POSTCréer une unité juridique](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/operatorBusinessEntity/manage/createLegalUnit)
+         * [POSTCréer un bureau](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/operatorBusinessEntity/manage/createOffice)
+         * [POSTConfigurez votre entité commerciale](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/operatorBusinessEntity/manage/configure)
+         * [SUPPRIMERSupprimer une entité commerciale](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/operatorBusinessEntity/manage/deleteBusinessEntity)
+         * [🔖Identifiant](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/reporting/reportingObject#)
+            * [POSTCréer un identifiant](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/operatorBusinessEntity/manage/identifier/createIdentifier)
+            * [POSTCréer un identifiant par schéma](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/operatorBusinessEntity/manage/identifier/createIdentifierByScheme)
+            * [SUPPRIMERSupprimer l'identifiant](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/operatorBusinessEntity/manage/identifier/removeIdentifier)
+      * [📡Enregistrement entrant](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/reporting/reportingObject#)
+         * [POSTS'inscrire en réseau par id](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/operatorBusinessEntity/inboundRegistration/registerIdentifierIntoNetworkById)
+         * [POSTEnregistrez-vous dans le réseau par l'identificateur d'](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/operatorBusinessEntity/inboundRegistration/registerIdentifierIntoNetworkByIdentifier)
+         * [SUPPRIMERSe désinscrire de network by directory id](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/operatorBusinessEntity/inboundRegistration/unRegisterIdentifierIntoNetworkById)
+         * [POSTActiver L'autofacturation](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/operatorBusinessEntity/inboundRegistration/updateSelfBilling)
+         * [POSTActiver l'auto-facturation par identificateur](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/operatorBusinessEntity/inboundRegistration/updateSelfBillingByValue)
+      * [🔀La migration de Peppol](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/reporting/reportingObject#)
+         * [POSTDémarrer une migration sortante de Peppol](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/operatorBusinessEntity/peppolMigration/startPeppolOutboundMigration)
+         * [SUPPRIMERAnnuler une migration sortante de Peppol](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/operatorBusinessEntity/peppolMigration/cancelPeppolOutboundMigration)
+   * [🧾Facture](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/reporting/reportingObject#)
+      * [🧩La facture Objet](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/invoice/InvoiceObject)
+      * [POSTEnvoyer la facture](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/invoice/emitInvoice)
+      * [MISEMarquer la facture comme vu](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/invoice/markInvoiceAsSeen)
+      * [OBTENEZRécupérer les factures non vues](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/invoice/searchInvoiceNotseen)
+      * [OBTENEZTélécharger la facture](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/invoice/downloadInvoice)
+      * [OBTENEZTélécharger le fichier de facture](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/invoice/downloadInvoiceFile)
+      * [OBTENEZTélécharger lisible](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/invoice/downloadReadable)
+      * [OBTENEZLister les fichiers de facture](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/invoice/getInvoiceFiles)
+      * [OBTENEZRécupérer les métadonnées de fichier jointes de facture entrante](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/invoice/getAttachments)
+      * [🔍Recherche](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/reporting/reportingObject#)
+         * [OBTENEZRecherche par id](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/invoice/searchInvoiceById)
+         * [OBTENEZRecherche par filtre](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/invoice/searchInvoiceByFilter)
+      * [🛠️Outils](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/reporting/reportingObject#)
+         * [POSTGénérer la facture UBL format](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/invoice/tools/generateUBL)
+         * [POSTGénérer une facture Factur-x format](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/invoice/tools/generateFacturX)
+         * [POSTGénérer la facture CII format](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/invoice/tools/generateCii)
+      * [📚Cas d'utilisation](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/reporting/reportingObject#)
+         * [Cas 0 — Facture standard avec lignes](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/invoice/useCases/fr-en16931-case-0)
+         * [Cas 1 — Facture multicommande/multi-livraison (B1)](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/invoice/useCases/fr-en16931-case-1)
+         * [Cas 2 — Note de crédit annulant une facture déjà payée](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/invoice/useCases/fr-en16931-case-2)
+         * [Affaire 20 — Facture de prépaiement (facture d'acompte)](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/invoice/useCases/fr-en16931-case-20)
+         * [Cas 21 — Facture finale après paiement anticipé (B4)](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/invoice/useCases/fr-en16931-case-21)
+         * [Affaire 22b — Facture avec indemnité de paiement anticipé](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/invoice/useCases/fr-en16931-case-22b)
+         * [Affaire 33 — Facture de base de marge (agence de voyage)](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/invoice/useCases/fr-en16931-case-33)
+         * [Cas 3 — Facture payable par un tiers payeur](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/invoice/useCases/fr-extended-case-3)
+         * [Cas 8 — Facture facturée payable à un facteur](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/invoice/useCases/fr-extended-case-8)
+         * [Affaire 13 — Facture de services aux sous-traitants (S5)](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/invoice/useCases/fr-extended-case-13)
+         * [Affaire 14 — Facture de services aux cocontractants (S6)](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/invoice/useCases/fr-extended-case-14)
+         * [Décision 19a — Facture émise en vertu d'un mandat de facturation](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/invoice/useCases/fr-extended-case-19a)
+         * [Décision 38 — Facture avec sous-lignes et groupes de lignes](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/invoice/useCases/fr-extended-case-38)
+         * [Affaire 39 — Facture multi-fournisseur (S8)](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/invoice/useCases/fr-extended-case-39)
+         * [Cas 40 — Facture de compensation autofacturée (bidirectionnelle)](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/invoice/useCases/fr-extended-case-40)
+         * [Affaire 44 — Facture à une entité DROM/COM (octroi de mer)](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/invoice/useCases/fr-extended-case-44)
+         * [Facture d'un vendeur dans le cadre du régime d'exonération de TVA](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/invoice/useCases/fr-en16931-invoice-from-a-seller-under-the-vat-exem)
+         * [Facture minimale (BE to BE)](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/invoice/useCases/int-peppol_bis_3-minimum-invoice-be-to-be)
+         * [Facture minimale (FR à BE)](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/invoice/useCases/int-peppol_bis_3-minimum-invoice-fr-to-be)
+         * [Facture avec notes, charges et indemnités](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/invoice/useCases/int-peppol_bis_3-invoice-with-notes-charges-and-allowance)
+         * [Facture avec frais de port, moyens de paiement et période de facturation](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/invoice/useCases/int-peppol_bis_3-invoice-with-shipping-payment-means-and)
+         * [Facture avec une pièce jointe PDF intégrée](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/invoice/useCases/int-peppol_bis_3-invoice-with-an-embedded-pdf-attachment)
+   * [📬Statut](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/reporting/reportingObject#)
+      * [POSTEnvoyer le statut](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/status/sendStatus)
+      * [OBTENEZRecherche par facture id](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/status/searchStatusById)
+      * [OBTENEZRécupérer le statut non vu](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/status/searchStatusNotseen)
+      * [MISEStatut de marque comme on le voit](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/status/markStatusAsSeen)
+   * [📊Rapports](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/reporting/reportingObject#)
+      * [🧩L'objet de reporting](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/reporting/reportingObject)
+      * [POSTDéclaration de transaction](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/reporting/reportingTransaction)
+      * [POSTSignaler la transaction de facture](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/reporting/reportingInvoiceTransaction)
+      * [SUPPRIMERSupprimer une transaction](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/reporting/reportingDeleteTransaction)
+      * [POSTCorriger une transaction](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/reporting/reportingCorrectTransaction)
+      * [POSTCorriger une transaction de facture](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/reporting/reportingCorrectTransactionInvoice)
+      * [💳Paiement](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/reporting/reportingObject#)
+         * [POSTRapport Paiement de la transaction](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/reporting/payment/reportingPaymentTransaction)
+         * [POSTRapport Paiement de la facture](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/reporting/payment/reportingPaymentInvoice)
+         * [SUPPRIMERSupprimer un paiement](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/reporting/payment/reportingDeletePayment)
+         * [POSTCorriger un paiement de facture](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/reporting/payment/reportingCorrectPaymentInvoice)
+         * [POSTCorriger un paiement de transaction](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/reporting/payment/reportingCorrectPaymentTransaction)
+      * [📋Rapport](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/reporting/reportingObject#)
+         * [OBTENEZRechercher des dossiers de rapport électronique](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/reporting/report/reportingSearchFolders)
+* [🔔Webhook](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/reporting/reportingObject#)
+   * [🧩L'objet Webhook](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/webhook/webhookObject)
+   * [OBTENEZListe mes webhooks](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/webhook/getAllWebhook)
+   * [OBTENEZObtenez webhook](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/webhook/getWebhook)
+   * [POSTCréer un webhook](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/webhook/createWebhook)
+   * [MISEMise à jour webhook](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/webhook/updateWebhook)
+   * [SUPPRIMERSupprimer webhook par id](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/webhook/deleteWebhook)
+   * [🔁Stratégie de réécriture](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/reporting/reportingObject#)
+      * [🧩L'objet de stratégie de réessai](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/webhook/retryStrategy/retryStrategyObject)
+      * [OBTENEZObtenez la stratégie de réessayer](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/webhook/retryStrategy/getRetryStrategy)
+      * [POSTCréer une stratégie de réessai](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/webhook/retryStrategy/createRetryStrategy)
+      * [SUPPRIMERSupprimer la stratégie de réessai](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/webhook/retryStrategy/deleteRetryStrategy)
+* [📊Statistiques](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/reporting/reportingObject#)
+   * [OBTENEZDernières erreurs](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/stats/lastErrors)
+   * [OBTENEZErreurs de messages](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/stats/messageErrors)
+   * [OBTENEZMessages reçus](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/stats/messageReceived)
+   * [OBTENEZMessages envoyés](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/stats/messageSent)
+   * [OBTENEZMessages erreurs de réussite](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/stats/messageSuccessError)
+   * [OBTENEZRésumé des messages](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/stats/summary)
+   * [OBTENEZDistribution de messages](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/stats/distribution)
+* [❓FAQ](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/reporting/reportingObject#)
+   * [Foire aux questions](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/faq/frequentlyAskedQuestions)
+
+* 
+* Ressources
+* Rapports
+* L'objet de reporting
+
+L'objet de reporting
+Rapports électroniques
+L'évaluation électronique est l'obligation de transmettre des données de transaction commerciale à l'administration fiscale pour les opérations qui ne sont pas couvertes par la facturation électronique B2B, à savoir les ventes B2C et les transactions transfrontalières. Les exigences varient selon les pays (p. ex. Le mandat de la DGFiP en France) mais la plateforme gère les obligations de reporting à l'échelle mondiale.
+Points d'extrémité
+POST /v1/reporting/transaction/scheme/{identifierScheme}/value/{identifierValue}
+POST /v1/reporting/transaction/invoice/scheme/{identifierScheme}/value/{identifierValue}
+POST /v1/reporting/payment/invoice/scheme/{identifierScheme}/value/{identifierValue}
+POST /v1/reporting/payment/transaction/scheme/{identifierScheme}/value/{identifierValue}
+GET /v1/reporting/report/scheme/{identifierScheme}/value/{identifierValue}
+GET /v1/reporting/report/transmission/{transmissionId}/content
+SUPPRIMER /v1/reporting/transaction/{transactionId}
+SUPPRIMER /v1/reporting/payment/{paymentId}
+POST /v1/reporting/transaction/{transactionId}/correction
+POST /v1/reporting/transaction/{transactionId}/facture/correction
+POST /v1/reporting/payment/{paymentId}/transaction/correction
+POST /v1/reporting/payment/{paymentId}/invoice/correction
+🗂️ Rapport
+Un lot d'opérations transmises à l'autorité fiscale sur la base du régime de TVA de l'entité commerciale. La plate-forme regroupe les transactions avant de les transmettre à l'administration fiscale, en fonction des règles du pays applicables.
+Un rapport contient généralement:
+
+* multiples transactions
+* métadonnées sur l'entité déclarante
+* la période ou le contexte de déclaration
+
+💳 Transaction
+Une opération économique unique qui doit être signalée. Cela inclut:
+
+* un reçu de point de vente (B2C)
+* une facture émise à une entité étrangère
+* toute opération imposable en dehors de l'échange national de facturation électronique
+
+💰 Paiement
+Le règlement d'une transaction, utilisé pour soutenir différents régimes de perception de la TVA (par ex. TVA sur débit vs. TVA sur la perception en France). Un paiement fait référence à une transaction, indique le montant payé et la date de recouvrement.
+⚙️ Comment ça marche
+Votre système envoie des transactions et des factures une à une, car elles se produisent tout au long de la journée. IOPOLE reçoit chaque opération individuellement et les accumule par entité commerciale (identifiée par une paire schéma/valeur, par exemple un SIREN français).
+Au moment de la déclaration, IOPOLE regroupe toutes les transactions et factures collectées dans un objet de rapport structuré lié à cet identifiant. La logique d'agrégation et le format de rapport résultant dépendent du régime de TVA du déclarant — différents régimes appliquent des règles de regroupement, de la périodicité et des méthodes de calcul de la taxe.
+Une fois le rapport réuni, l'IOPOLE le transmet automatiquement à l'autorité fiscale compétente en fonction du règlement sur l'établissement des rapports électroniques du pays (p. ex. DGFiP en France). Vous n’avez pas besoin de gérer la planification, le formatage ou la soumission – seulement le flux de données unitaire.
+1
+📤
+Vous envoyez
+Transactions et factures individuellement, une par une, au fur et à mesure qu'elles se produisent.
+›
+2
+🗄️
+IOPOLE agrégats
+Les opérations sont regroupées par identificateur et régime de TVA dans un rapport consolidé.
+›
+3
+🏛️
+IOPOLE transmet
+Le rapport est envoyé à l'autorité fiscale en votre nom, conformément à la réglementation du pays applicable.
+📋 Table des matières
+
+* [Déclaration de transactions B2C](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/reporting/reportingObject#[jeton retiré])
+* [Rapports de facture B2B](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/reporting/reportingObject#b2b-invoice-reporting)
+* [B2C Déclaration de paiement de transaction](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/reporting/reportingObject#[jeton retiré])
+* [Déclaration de paiement de facture B2B](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/reporting/reportingObject#[jeton retiré])
+
+📊 Déclaration de transactions B2C 
+Attributs
+transactionDate`string`vérification personnaliséeFacultatif
+Date à laquelle la transaction a été enregistrée par le système de point de vente.
+registerId`string`Facultatif
+Identifiant de la caisse ou du terminal POS qui a enregistré les transactions.
+StoreId`string`Facultatif
+Identifiant du point de vente physique ou logique où les transactions ont été enregistrées.
+fermetureId`string`Facultatif
+Identifiant de la fermeture du registre qui a produit les totaux déclarés.
+transactions`array`Facultatif
+Afficher les attributs enfant
+Objets
+Déclaration de transactions minimale+
+
+```json
+{
+  "transactionDate": "2026-03-11",
+  "transactions": [
+    {
+      "categoryCode": "TLB1",
+      "currency": "EUR",
+      "monetary": {
+        "taxBasisTotalAmount": {
+          "amount": 1000
+        },
+        "taxTotalAmount": {
+          "amount": 200
+        }
+      },
+      "taxDetails": [
+        {
+          "taxableAmount": {
+            "amount": 1000
+          },
+          "taxAmount": {
+            "amount": 200
+          },
+          "percent": 20
+        }
+      ]
+    }
+  ]
+}
+```
+
+Déclaration de transactions avec taux d'imposition multiple+
+
+```json
+{
+  "transactionDate": "2026-03-11",
+  "transactions": [
+    {
+      "categoryCode": "TLB1",
+      "currency": "EUR",
+      "monetary": {
+        "taxBasisTotalAmount": {
+          "amount": 1000
+        },
+        "taxTotalAmount": {
+          "amount": 141
+        }
+      },
+      "taxDetails": [
+        {
+          "taxableAmount": {
+            "amount": 500
+          },
+          "taxAmount": {
+            "amount": 100
+          },
+          "percent": 20
+        },
+        {
+          "taxableAmount": {
+            "amount": 300
+          },
+          "taxAmount": {
+            "amount": 30
+          },
+          "percent": 10
+        },
+        {
+          "taxableAmount": {
+            "amount": 200
+          },
+          "taxAmount": {
+            "amount": 11
+          },
+          "percent": 5.5
+        }
+      ]
+    }
+  ]
+}
+```
+
+Déclaration de transactions avec plusieurs catégories+
+
+```json
+{
+  "transactionDate": "2026-03-11",
+  "transactions": [
+    {
+      "categoryCode": "TLB1",
+      "currency": "EUR",
+      "monetary": {
+        "taxBasisTotalAmount": {
+          "amount": 1000
+        },
+        "taxTotalAmount": {
+          "amount": 200
+        }
+      },
+      "taxDetails": [
+        {
+          "taxableAmount": {
+            "amount": 1000
+          },
+          "taxAmount": {
+            "amount": 200
+          },
+          "percent": 20
+        }
+      ]
+    },
+    {
+      "categoryCode": "TPS1",
+      "currency": "EUR",
+      "monetary": {
+        "taxBasisTotalAmount": {
+          "amount": 500
+        },
+        "taxTotalAmount": {
+          "amount": 50
+        }
+      },
+      "taxDetails": [
+        {
+          "taxableAmount": {
+            "amount": 500
+          },
+          "taxAmount": {
+            "amount": 50
+          },
+          "percent": 10
+        }
+      ]
+    },
+    {
+      "categoryCode": "TNT1",
+      "currency": "EUR",
+      "monetary": {
+        "taxBasisTotalAmount": {
+          "amount": 300
+        },
+        "taxTotalAmount": {
+          "amount": 0
+        }
+      },
+      "taxDetails": [
+        {
+          "taxableAmount": {
+            "amount": 300
+          },
+          "taxAmount": {
+            "amount": 0
+          },
+          "percent": 0
+        }
+      ]
+    },
+    {
+      "categoryCode": "TMA1",
+      "currency": "EUR",
+      "monetary": {
+        "taxBasisTotalAmount": {
+          "amount": 200
+        },
+        "taxTotalAmount": {
+          "amount": 11
+        }
+      },
+      "taxDetails": [
+        {
+          "taxableAmount": {
+            "amount": 200
+          },
+          "taxAmount": {
+            "amount": 11
+          },
+          "percent": 5.5
+        }
+      ]
+    }
+  ]
+}
+```
+
+Déclaration de transactions avec des identifiants de magasin, de registre et de fermeture+
+
+```json
+{
+  "transactionDate": "2026-03-11",
+  "storeId": "STORE-001",
+  "registerId": "REG-001",
+  "closureId": "CLOSURE-001",
+  "transactions": [
+    {
+      "categoryCode": "TLB1",
+      "currency": "EUR",
+      "monetary": {
+        "taxBasisTotalAmount": {
+          "amount": 1000
+        },
+        "taxTotalAmount": {
+          "amount": 200
+        }
+      },
+      "taxDetails": [
+        {
+          "taxableAmount": {
+            "amount": 1000
+          },
+          "taxAmount": {
+            "amount": 200
+          },
+          "percent": 20
+        }
+      ]
+    }
+  ]
+}
+```
+
+🧾 Déclaration des factures B2B 
+Attributs
+facture`object`vérification personnaliséeFacultatif
+Afficher les attributs enfant
+Objets
+Rapports de facture minimes+
+
+```json
+{
+  "invoice": {
+    "invoiceId": "INV-001",
+    "invoiceDate": "2026-03-11",
+    "type": "380",
+    "processType": "B1",
+    "taxPaymentOption": {
+      "iopCode": "INVOICE_DATE"
+    },
+    "monetary": {
+      "invoiceCurrency": "EUR",
+      "taxBasisTotalAmount": {
+        "amount": 1000
+      },
+      "taxTotalAmount": {
+        "amount": 200,
+        "currency": "EUR"
+      }
+    },
+    "taxDetails": [
+      {
+        "taxableAmount": {
+          "amount": 1000
+        },
+        "taxAmount": {
+          "amount": 200
+        },
+        "percent": 20,
+        "code": "S"
+      }
+    ],
+    "buyer": {
+      "identifier": {
+        "scheme": "0002",
+        "value": "987654321"
+      },
+      "vatNumber": "FR987654321",
+      "postalAddress": {
+        "country": "FR"
+      }
+    },
+    "seller": {
+      "identifier": {
+        "scheme": "0227",
+        "value": "98765432100"
+      },
+      "vatNumber": "US987654321",
+      "postalAddress": {
+        "country": "US"
+      }
+    }
+  }
+}
+```
+
+Déclaration de facture avec lignes et taux d'imposition de 20%+
+
+```json
+{
+  "invoice": {
+    "invoiceId": "INV-2024-001",
+    "invoiceDate": "2024-03-11",
+    "invoiceDueDate": "2026-04-11",
+    "type": "380",
+    "processType": "B1",
+    "taxPaymentOption": {
+      "code": 35
+    },
+    "monetary": {
+      "invoiceCurrency": "EUR",
+      "taxBasisTotalAmount": {
+        "amount": 1000
+      },
+      "taxTotalAmount": {
+        "amount": 200,
+        "currency": "EUR"
+      }
+    },
+    "taxDetails": [
+      {
+        "taxableAmount": {
+          "amount": 1000
+        },
+        "taxAmount": {
+          "amount": 200
+        },
+        "percent": 20,
+        "code": "S"
+      }
+    ],
+    "buyer": {
+      "identifier": {
+        "scheme": "0002",
+        "value": "987654321"
+      },
+      "vatNumber": "FR987654321",
+      "postalAddress": {
+        "country": "FR"
+      }
+    },
+    "seller": {
+      "identifier": {
+        "scheme": "0227",
+        "value": "98765432100"
+      },
+      "vatNumber": "US987654321",
+      "postalAddress": {
+        "country": "US"
+      }
+    },
+    "lines": [
+      {
+        "id": "1",
+        "totalAmount": {
+          "amount": 500
+        },
+        "billedQuantity": {
+          "quantity": 2,
+          "unitCode": "C62"
+        },
+        "taxDetail": {
+          "categoryCode": "S",
+          "percent": 20
+        },
+        "price": {
+          "netAmount": {
+            "amount": 250
+          }
+        }
+      },
+      {
+        "id": "2",
+        "totalAmount": {
+          "amount": 500
+        },
+        "billedQuantity": {
+          "quantity": 5,
+          "unitCode": "HUR"
+        },
+        "taxDetail": {
+          "categoryCode": "S",
+          "percent": 20
+        },
+        "price": {
+          "netAmount": {
+            "amount": 100
+          }
+        }
+      }
+    ]
+  }
+}
+```
+
+Déclaration de facture avec lignes et taux d'imposition multiples+
+
+```json
+{
+  "invoice": {
+    "invoiceId": "INV-2024-002",
+    "invoiceDate": "2024-03-11",
+    "invoiceDueDate": "2026-04-11",
+    "type": "380",
+    "processType": "B1",
+    "taxPaymentOption": {
+      "code": 35
+    },
+    "monetary": {
+      "invoiceCurrency": "EUR",
+      "taxBasisTotalAmount": {
+        "amount": 1000
+      },
+      "taxTotalAmount": {
+        "amount": 141,
+        "currency": "EUR"
+      }
+    },
+    "taxDetails": [
+      {
+        "taxableAmount": {
+          "amount": 500
+        },
+        "taxAmount": {
+          "amount": 100
+        },
+        "percent": 20,
+        "code": "S"
+      },
+      {
+        "taxableAmount": {
+          "amount": 300
+        },
+        "taxAmount": {
+          "amount": 30
+        },
+        "percent": 10,
+        "code": "S"
+      },
+      {
+        "taxableAmount": {
+          "amount": 200
+        },
+        "taxAmount": {
+          "amount": 11
+        },
+        "percent": 5.5,
+        "code": "S"
+      }
+    ],
+    "buyer": {
+      "postalAddress": {
+        "country": "BE"
+      },
+      "vatNumber": "BE987654321",
+      "identifier": {
+        "scheme": "0208",
+        "value": "457812698"
+      }
+    },
+    "seller": {
+      "identifier": {
+        "scheme": "0002",
+        "value": "123456789"
+      },
+      "vatNumber": "FR12345678901",
+      "postalAddress": {
+        "country": "FR"
+      }
+    },
+    "lines": [
+      {
+        "id": "1",
+        "totalAmount": {
+          "amount": 500
+        },
+        "billedQuantity": {
+          "quantity": 2,
+          "unitCode": "C62"
+        },
+        "taxDetail": {
+          "categoryCode": "S",
+          "percent": 20
+        },
+        "price": {
+          "netAmount": {
+            "amount": 250
+          }
+        }
+      },
+      {
+        "id": "2",
+        "totalAmount": {
+          "amount": 300
+        },
+        "billedQuantity": {
+          "quantity": 3,
+          "unitCode": "C62"
+        },
+        "taxDetail": {
+          "categoryCode": "S",
+          "percent": 10
+        },
+        "price": {
+          "netAmount": {
+            "amount": 100
+          }
+        }
+      },
+      {
+        "id": "3",
+        "totalAmount": {
+          "amount": 200
+        },
+        "billedQuantity": {
+          "quantity": 1,
+          "unitCode": "C62"
+        },
+        "taxDetail": {
+          "categoryCode": "S",
+          "percent": 5.5
+        },
+        "price": {
+          "netAmount": {
+            "amount": 200
+          }
+        }
+      }
+    ]
+  }
+}
+```
+
+Invoice reporting with a VAT-exempt tax detail+
+
+```json
+{
+  "invoice": {
+    "invoiceId": "INV-2026-002",
+    "invoiceDate": "2026-03-11",
+    "type": "380",
+    "processType": "B1",
+    "monetary": {
+      "invoiceCurrency": "EUR",
+      "taxBasisTotalAmount": {
+        "amount": 1000
+      },
+      "taxTotalAmount": {
+        "amount": 160,
+        "currency": "EUR"
+      }
+    },
+    "taxDetails": [
+      {
+        "taxableAmount": {
+          "amount": 800
+        },
+        "taxAmount": {
+          "amount": 160
+        },
+        "percent": 20,
+        "code": "S"
+      },
+      {
+        "taxableAmount": {
+          "amount": 200
+        },
+        "taxAmount": {
+          "amount": 0
+        },
+        "percent": 0,
+        "code": "E",
+        "exemptionReasonCode": "VATEX-EU-79-C",
+        "exemptionReason": "Exempt based on article 79, point c of Council Directive 2006/112/EC"
+      }
+    ],
+    "buyer": {
+      "identifier": {
+        "scheme": "0002",
+        "value": "987654321"
+      },
+      "vatNumber": "FR987654321",
+      "postalAddress": {
+        "country": "FR"
+      }
+    },
+    "seller": {
+      "identifier": {
+        "scheme": "0227",
+        "value": "98765432100"
+      },
+      "postalAddress": {
+        "country": "US"
+      }
+    }
+  }
+}
+```
+
+💳 B2C Transaction payment reporting
+Headers
+customer-id`string`Optional
+Query parameters
+reportIdentifier`string`Optional
+Id of the IOPOLE report to associate this payment with.
+Path parameters
+identifierScheme`string`Required
+French SIREN scheme. Only French entities are supported so far.
+identifierValue`string`Required
+Value of the identifier.
+Body parameters
+transaction`object`Required
+Show child attributes
+Objects
+Minimal transaction payment reporting+
+
+```json
+{
+  "transaction": {
+    "payment": {
+      "paymentDate": "2026-03-11",
+      "taxDetails": [
+        {
+          "taxRate": 20,
+          "collectedAmount": "1200.00"
+        }
+      ]
+    }
+  }
+}
+```
+
+Transaction payment reporting with multiple tax rates+
+
+```json
+{
+  "transaction": {
+    "payment": {
+      "paymentDate": "2026-03-11",
+      "taxDetails": [
+        {
+          "taxRate": 5.5,
+          "collectedAmount": "650.00"
+        },
+        {
+          "taxRate": 20,
+          "collectedAmount": "2400.00"
+        }
+      ]
+    }
+  }
+}
+```
+
+💰 B2B Invoice payment reporting
+Headers
+customer-id`string`Optional
+Query parameters
+reportIdentifier`string`Optional
+Id of the IOPOLE report to associate this payment with.
+Path parameters
+identifierScheme`string`Required
+French SIREN scheme. Only French entities are supported so far.
+identifierValue`string`Required
+Value of the identifier.
+Body parameters
+invoice`object`Required
+Show child attributes
+Objects
+Minimal invoice payment reporting+
+
+```json
+{
+  "invoice": {
+    "invoiceId": "INV-001",
+    "invoiceDate": "2026-03-11",
+    "payment": {
+      "paymentDate": "2026-03-11",
+      "taxDetails": [
+        {
+          "taxRate": 20,
+          "collectedAmount": "1200.00"
+        }
+      ]
+    }
+  }
+}
+```
+
+Invoice payment reporting with multiple tax rates+
+
+```json
+{
+  "invoice": {
+    "invoiceId": "INV-2024-001",
+    "invoiceDate": "2024-03-11",
+    "payment": {
+      "paymentDate": "2024-03-11",
+      "taxDetails": [
+        {
+          "taxRate": 5.5,
+          "collectedAmount": "650.00"
+        },
+        {
+          "taxRate": 20,
+          "collectedAmount": "2400.00"
+        }
+      ]
+    }
+  }
+}
+```
+
+[Previous](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/status/markStatusAsSeen)
+[Mark status as seen](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/status/markStatusAsSeen)
+[Next](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/reporting/reportingTransaction)
+[Report transaction](https://docs.ppd.iopole.fr/docs/iopole-api/apiDescriptions/reporting/reportingTransaction)
+

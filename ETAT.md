@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 19/11/2026 à 10:43 UTC par pilotage-sync.sh : « Déclaration de transaction de l'autre PA : texte complet ».
+Mis à jour le 19/11/2026 à 10:44 UTC par pilotage-sync.sh : « L'objet de reporting de l'autre PA : synthèse ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

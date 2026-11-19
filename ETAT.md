@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 19/11/2026 à 10:02 UTC par pilotage-sync.sh : « processusType : cadres de facturation pour l'étape 2 ».
+Mis à jour le 19/11/2026 à 10:05 UTC par pilotage-sync.sh : « Synthèse de la page Factur-X d'une autre plateforme agréée ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

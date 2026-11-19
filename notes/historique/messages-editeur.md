@@ -4158,3 +4158,19 @@ c est naissecaire d avoir la ligne ? car la ligne normal sert que pour les vente
 
 et ca
 
+## 443. 2026-11-19 00:49 UTC
+
+<!-- attach -->
+
+> Ses avoirs corrigent toujours la TVA.
+
+
+
+pourquoi pas ? et quand le client pay avec avoir alors tu calcule encore la tva avec l avoir?
+
+## 444. 2026-11-19 01:01 UTC
+
+[1 capture(s) d'écran jointe(s)]
+
+ici le client n as pas de credit malgre que j ai fait des retour donc avoir?
+

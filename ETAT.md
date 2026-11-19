@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 19/11/2026 à 00:46 UTC par pilotage-sync.sh : « Escompte et affaires officielles comme tests de réception ».
+Mis à jour le 19/11/2026 à 01:02 UTC par pilotage-sync.sh : « Solde créditeur : explication et cas à semer ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 19/11/2026 à 22:45 UTC par pilotage-sync.sh : « Décision : euros seulement, devises annulées ».
+Mis à jour le 19/11/2026 à 23:33 UTC par pilotage-sync.sh : « Trois factures Factur-X du générateur : lecture ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

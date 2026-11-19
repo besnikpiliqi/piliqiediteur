@@ -5819,3 +5819,7 @@ il faut prendre en compte tout
 
 en fait mon logiciel piliqi je veux qui se peut utiliser que en europe mais si eux vende hors eu alors comment doit calculer? toujour en euro ? ca pourra marcher
 
+## 471. 2026-11-19 23:32 UTC
+
+@"/root/.claude/uploads/00d7e3b2-c4d1-5536-95c0-3e77e19552bb/13b22ae0-F20261119_232911_287.factur-x.pdf" @"/root/.claude/uploads/00d7e3b2-c4d1-5536-95c0-3e77e19552bb/3c224aa9-F20261119_232435_368.factur-x.pdf" @"/root/.claude/uploads/00d7e3b2-c4d1-5536-95c0-3e77e19552bb/4f30e8d9-F20261119_232016_725.factur-x.pdf" tu vois comment sont cree ces fc avec Adresse électronique
+

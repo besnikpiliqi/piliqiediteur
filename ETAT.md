@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 19/11/2026 à 22:25 UTC par pilotage-sync.sh : « Fin de la page e-reporting tiers ».
+Mis à jour le 19/11/2026 à 22:32 UTC par pilotage-sync.sh : « Correction : deux niveaux d'agrégation de l'e-reporting ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

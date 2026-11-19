@@ -4136,3 +4136,19 @@ de quoi parle facture d acompt
 
 mais tu me dit que c'est prevu a l etap 2 ?
 
+## 440. 2026-11-19 00:35 UTC
+
+[1 capture(s) d'écran jointe(s)]
+
+et qunad se regle tout la facture alors on doit creer une nouvelle facture? car "invoiceId": "F202600121" est differente!!
+
+## 441. 2026-11-19 00:41 UTC
+
+<!-- attach -->
+
+> une ligne négative sur la facture finale, avec la référence de la facture d’acompte. Rien n’est modifié dans le logiciel.
+
+
+
+c est naissecaire d avoir la ligne ? car la ligne normal sert que pour les ventes et dans ce cas cette linge c est pas une vente  mais une declaration de l etat. et donc on peut pas mettre par exemle en haut du document ?
+

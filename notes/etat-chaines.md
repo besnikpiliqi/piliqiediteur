@@ -558,3 +558,4 @@
 - 18/11 nuit — Capture lisible des champs de l'API d'une autre PA : TMA1 = marge confirmé, codes d'exigibilité confirmés.
 - 18/11 nuit — Piège de vocabulaire noté : PAYMENT_DATE (432/72) n'est pas l'option pour les débits (INVOICE_DATE, 3/5).
 - 19/11 — Question de l'éditeur sur la facture d'acompte : déjà prévue à l'étape 2 pour les professionnels ; ligne à ajouter au CLAUDE.md ; cas du particulier noté.
+- 19/11 — Question de l'éditeur sur la ligne négative de l'acompte : élément à part dans PILIQI, ligne négative seulement dans le fichier structuré ; noté.

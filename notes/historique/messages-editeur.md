@@ -5823,3 +5823,9 @@ en fait mon logiciel piliqi je veux qui se peut utiliser que en europe mais si e
 
 @"/root/.claude/uploads/00d7e3b2-c4d1-5536-95c0-3e77e19552bb/13b22ae0-F20261119_232911_287.factur-x.pdf" @"/root/.claude/uploads/00d7e3b2-c4d1-5536-95c0-3e77e19552bb/3c224aa9-F20261119_232435_368.factur-x.pdf" @"/root/.claude/uploads/00d7e3b2-c4d1-5536-95c0-3e77e19552bb/4f30e8d9-F20261119_232016_725.factur-x.pdf" tu vois comment sont cree ces fc avec Adresse électronique
 
+## 472. 2026-11-20 08:10 UTC
+
+[2 capture(s) d'écran jointe(s)]
+
+tu vois ici les nom produit ne s affiche pas tout. si faut commencer ecrire le nom par à gauche et si il y en a bcp de lettre alors il faut chacher le reste mais quand la sourris et au dessus alors il doit afficher en tooltip tout le texte et meme il faut prendre en compte pour les telephones et tabletes, dans ces cas la il faut affiche en cliquant sur le textet diretct le tooltip
+

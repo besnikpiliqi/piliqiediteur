@@ -320,3 +320,13 @@ Décision : tout reste en euros, partout : devis, factures, avoirs, paiements, c
 Pourquoi cela marche (lecture de Claude, pas l'avis d'un professionnel) : une facture libellée en euros est toujours valable, même pour un client hors UE ; l'export est exonéré (pas de TVA à convertir) ; l'e-reporting et les déclarations se font en euros ; la société encaisse des euros.
 Limite connue, à garder en tête : un client étranger qui exige une facture dans sa devise (certains clients américains ou britanniques) ne sera pas servi ; on pourra ajouter les devises plus tard, sans rien casser, si l'éditeur le décide.
 Conséquences : la question « PILIQI facture-t-il seulement en euros ? » (page e-reporting tierce, « par devise ») est tranchée : oui, devise EUR partout ; les champs « devise » des plateformes se remplissent toujours par EUR ; rien à ajouter au semis ni aux écrans.
+
+## Demande de l'éditeur du 20/11/2026 : noms longs des graphiques en barres couchées (lot « écrans » ; RIEN n'est implémenté)
+Constat (captures du tableau de bord de Maison Ferrand, carte « Meilleurs produits », barres couchées) : les noms de produits sont COUPÉS À GAUCHE (« …nnelle 100 g · Maison Ferrand Fort-de-France », « …fumée coco… »), on ne lit plus le début du nom.
+Règle voulue par l'éditeur :
+1. Le nom s'écrit à partir de la GAUCHE, début visible ; s'il est trop long, la fin est cachée par « … » (jamais le début).
+2. Souris au-dessus du nom : une info-bulle montre le nom COMPLET.
+3. Téléphone et tablette (pas de souris) : un APPUI sur le nom affiche directement l'info-bulle.
+Code concerné (lu, non modifié) : `resources/views/filament/graphiques-du-panneau.blade.php` (Chart.js, `indexAxis: 'y'` pour `barres_couchees`, ligne 78 ; graduations ligne 95) ; la définition des types est dans `app/Domain/TableauDeBord/Enums/TypeDeGraphique.php`. Les noms sont dessinés sur le canevas de Chart.js, qui ne propose pas de survol natif d'un nom : le lot devra soit raccourcir le nom dans la graduation et ouvrir l'info-bulle (nom complet) quand on survole ou touche la rangée entière, nom compris, soit écrire les noms en HTML à côté du canevas ; à choisir avec une maquette montrée à l'éditeur avant tout code.
+Portée : TOUTES les cartes à noms (Meilleurs produits, Meilleurs clients, Achats par fournisseur, Chiffre d'affaires par magasin, légendes d'anneaux), dans les trois espaces (société, magasin, cabinet) et la page de l'expert-comptable, clair et sombre (contraste AA de l'info-bulle).
+Tests : test en navigateur au format ordinateur ET téléphone (appui), avec un nom très long et un nom court ; semis (règle 6) : au moins un produit, un client et un fournisseur au nom très long, de part et d'autre de la limite de coupure.

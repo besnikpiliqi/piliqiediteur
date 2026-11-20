@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 19/11/2026 à 23:33 UTC par pilotage-sync.sh : « Trois factures Factur-X du générateur : lecture ».
+Mis à jour le 20/11/2026 à 08:12 UTC par pilotage-sync.sh : « Noms longs des graphiques en barres couchées ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

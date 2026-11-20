@@ -5895,3 +5895,13 @@ dit moi ca sert quoi de relancer les facture non payé par mail alors que les re
 
 non non dans les magasin ils payent sur place mais il faut penser la solution aussi par distnace
 
+## 484. 2026-11-20 10:25 UTC
+
+<!-- attach -->
+
+> Un point faible aujourd’hui. PILIQI n’a aucun IBAN : ni sur la fiche du magasin, ni sur les factures, ni dans les relances. Le client qui veut payer par virement doit donc demander les coordonnées.
+
+
+
+non, je t ai deja dit que les paiment en distnace par stripe doit se faire uniqument par leur compte donc chaque societe doit avoir son compte de stripe et eux donne sur piliqi les api ou les acces pour mettre dans le formulaire de paiment, donc chaque societe leur compte stripe. que ce tu pense ?
+

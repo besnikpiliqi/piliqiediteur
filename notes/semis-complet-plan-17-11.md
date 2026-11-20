@@ -415,3 +415,7 @@ Maquette version 16 : https://claude.ai/artifact/4mAYp9cWfYLTRkEauxTGBC
 
 ## Précision de l'éditeur du 20/11/2026 (suite) : la quantité du premier achat du mois s'affiche dans la colonne « Qté » (maquette version 17)
 L'éditeur valide le tableau d'un mois de la version 16 (« c'est bien ») et demande que le premier achat du produit dans le mois affiche aussi sa quantité dans la colonne « Qté ». Fait : la ligne du prix de départ du mois montre la quantité du premier achat dans « Qté » ; sa colonne « Écart » reste vide (c'est la référence du mois). Maquette version 17 : https://claude.ai/artifact/4mAYp9cWfYLTRkEauxTGBC
+
+## Demande de l'éditeur du 20/11/2026 (suite) : montrer PLUSIEURS achats du même produit dans le même mois, pour voir les écarts (maquette version 18)
+L'éditeur demande que la maquette montre des produits achetés plusieurs fois dans le même mois, pour voir la différence. Fait : le jeu d'achats fictifs donne à chaque produit un à trois achats par mois, à des prix différents (le prix monte en cours de mois) ; le tableau d'un mois montre donc plusieurs achats du même produit, comparés au premier achat du mois. Même exigence pour le semis réel (règle 6) : des produits achetés une, deux et trois fois dans le même mois, à des prix qui montent, baissent ou restent égaux, dans chaque magasin de « Commerce ou atelier ».
+Maquette version 18 : https://claude.ai/artifact/4mAYp9cWfYLTRkEauxTGBC

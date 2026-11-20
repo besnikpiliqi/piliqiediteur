@@ -611,3 +611,4 @@
 - 20/11 — Carte Écart des prix d'achat : colonne « Prix de départ » retirée du tableau d'un mois ; maquette v15.
 - 20/11 — Carte Écart des prix d'achat : tableau d'un mois = prix de départ du mois puis achats suivants (choix C) ; maquette v16 ; deux totaux différents signalés.
 - 20/11 — Carte Écart des prix d'achat : tableau d'un mois validé par l'éditeur ; quantité du premier achat du mois ajoutée (v17).
+- 20/11 — Carte Écart des prix d'achat : jeu fictif avec un à trois achats par mois et par produit ; maquette v18 ; même exigence pour le semis.

@@ -6081,3 +6081,7 @@ mais j ai pas di enleve tout mais tu  affiche le premier achat du mois donc prix
 
 c est bien mais le premier achat du produit dans le mois il affiche pas le qte
 
+## 510. 2026-11-20 22:36 UTC
+
+il faut que tu affiche plusiereurs achat dans les meme mois pour voir la difference
+

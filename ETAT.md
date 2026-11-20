@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 20/11/2026 à 21:22 UTC par pilotage-sync.sh : « Cas d'essai de la carte Écart des prix d'achat ».
+Mis à jour le 20/11/2026 à 21:55 UTC par pilotage-sync.sh : « Écart des prix d'achat : calcul final par rapport au premier achat ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

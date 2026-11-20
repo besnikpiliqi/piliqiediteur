@@ -6019,3 +6019,27 @@ non c etais juste un exemple de difference
 
 donc je te donne un exemple:  achat 1: 12€, achat 2 : 15€ donc la fait +3€, achat 3: 12€ donc la fait 0€, achat 4: 17€ donc fait +7, achat 5: 15€ donc fait +5, achat 6: 16€ donc fait +6, achat 7: 13€ donc fait +3. donc le resultat à la fin est +3€. t as compris la facon de calcule
 
+## 502. 2026-11-20 21:53 UTC
+
+donc je te donne un exemple:  
+
+achat 1: 12€, 
+
+achat 2 : 15€ donc resultat entre achat 1 est +3€, 
+
+achat 3: 12€ donc resultat achat 1 est 0€ + 3€ celui d avant = 3€
+
+achat 4: 17€ donc resultat entre achat 1 est 5€  + 3€ celui d avant = 8€
+
+achat 5: 15€ donc resultat entre achat 1 est 3€ +8€ celui d avant = 11€ 
+
+achat 6: 16€ donc resultat entre achat 1 est 4€ + 11€ celui d avant = 15€ 
+
+achat 7: 13€ donc resultat entre achat 1 est 1€ + 15 celui d avant = 16€. 
+
+achat 8: 12€ donc resultat entre achat 1 est 0€ + 16€ celui d avant = 16€. 
+
+achat 9: 10€ donc resultat entre achat 1 est -2€ + 16€ celui d avant = 14€
+
+T as commpris comment calculer. est ce que c 'est comme ca qu on peux savoit combien on a payé plus par rapport au premier achat du premier mois
+

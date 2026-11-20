@@ -6111,3 +6111,9 @@ mais il y en a pas de "-" mais que de "+"
 
 j 'ai dit que si c est egale tu affiche pas car pas besoin car nous on cherche que les produit qui ont des acart dans le mois ou dans l années
 
+## 516. 2026-11-20 23:38 UTC
+
+[2 capture(s) d'écran jointe(s)]
+
+il affiche pas pareille les deux tableau du meme mlis
+

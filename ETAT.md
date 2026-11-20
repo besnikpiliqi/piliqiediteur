@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 20/11/2026 à 23:37 UTC par pilotage-sync.sh : « Écart des prix d'achat : plus de ligne à prix égal ».
+Mis à jour le 20/11/2026 à 23:39 UTC par pilotage-sync.sh : « Écart des prix d'achat : tableau et graphique accordés ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

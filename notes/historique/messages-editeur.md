@@ -5939,3 +5939,7 @@ Et comme les comptes connectés avec piliqi alors quand il client final fait un 
 
 Dit moi en très détails comment ca marche
 
+## 489. 2026-11-20 16:26 UTC
+
+J'ai une ide pour ajouter une carte dans le tableau de bord pour afficher les différence entre nouveau prix d'achat d'un produit et le dernier prix d'achat pour voir la différence donc si on achète plus cher ou moins cher. Donc donc calculer au total les produits et pas par produit donc tu fais pour mois. Montre moi la maquette comment se semble
+

@@ -595,3 +595,4 @@
 - 20/11 — Stripe : mécanisme A retenu par l'éditeur ; vérifications sur les pages publiques (OAuth Standard, direct charges, DOM acceptés).
 - 20/11 — Question de l'éditeur : litige Stripe et statut de la facture ; comportement proposé rangé, rien décidé.
 - 20/11 — Fonctionnement détaillé du paiement à distance Stripe Connect expliqué à l'éditeur et rangé dans le plan.
+- 20/11 — Idée de l'éditeur : carte « Écart des prix d'achat » ; maquette publiée (lien dans le plan), en attente de son accord.

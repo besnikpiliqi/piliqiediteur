@@ -6049,3 +6049,13 @@ T as commpris comment calculer. est ce que c 'est comme ca qu on peux savoit com
 
 la tu montre ACHAT - PREMIER ACHAT mais dans le mois peux avoir plusieurs achat , donc il faut aussi par moi montre depuis le premier achat du mois et le dernier achat du mois pour montre les ecarts à partire de tous les achat dans le mois du meme produit
 
+## 504. 2026-11-20 22:16 UTC
+
+[1 capture(s) d'écran jointe(s)]
+
+donc la tu affiche bien un produit repeter autant de fois dans le moin si il y des differences mais tu affiche le premier achat 12 dec dernier achat 6 fevrier alors comment tu peux calculer comme ca dans un mois alors dans un mois tu doit affiche un produit si il y a des premier achat dans le mois si non tu affiche pas le produit. donc le premier achat dans le moi tu affiche toujours et si plusieurs achat dans le moi alors tu affiche tout les dates si le prix differe .
+
+## 505. 2026-11-20 22:16 UTC
+
+et meme ca en gris tu enleve
+

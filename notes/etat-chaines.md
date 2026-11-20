@@ -606,3 +606,4 @@
 - 20/11 — Cas d'essai de l'éditeur (12,15,12,17,15,16,13 → +1 €) rangé pour les tests de la carte Écart des prix d'achat.
 - 20/11 — Carte Écart des prix d'achat : calcul final = chaque achat comparé au premier achat, écarts cumulés ; maquette v10 (exemple de l'éditeur = +14 €).
 - 20/11 — Carte Écart des prix d'achat : lignes « dans le mois » (premier → dernier achat du mois) dans le calcul d'un mois ; maquette v11.
+- 20/11 — Carte Écart des prix d'achat : calcul d'un mois = produits achetés dans le mois, un prix = une ligne, lignes grises supprimées ; maquette v12.

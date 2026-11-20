@@ -5835,3 +5835,7 @@ tu vois ici les nom produit ne s affiche pas tout. si faut commencer ecrire le n
 
 ici quand je met les charge et quand je met le prix ht alors il affiche tout seul la tva et ttc mais il calcule pas bien? tu vois dans la photo
 
+## 474. 2026-11-20 09:17 UTC
+
+Je propose, en maquette d'abord : tu a fais ?
+

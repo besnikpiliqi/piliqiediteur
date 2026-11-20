@@ -599,3 +599,4 @@
 - 20/11 — Carte Écart des prix d'achat : calcul sur le prix moyen du mois par produit ; maquette v2 avec exemple.
 - 20/11 — Maquette de la carte Écart des prix d'achat v4 : chiffres calculés par la méthode du prix moyen du mois (jeu d'achats fictifs).
 - 20/11 — Carte Écart des prix d'achat : option « du début des 12 mois » ajoutée à la maquette (v5).
+- 20/11 — Carte Écart des prix d'achat : mode début des 12 mois = un seul total pour la période ; maquette v6.

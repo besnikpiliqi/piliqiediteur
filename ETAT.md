@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 20/11/2026 à 20:32 UTC par pilotage-sync.sh : « Écart des prix d'achat : option début des 12 mois ».
+Mis à jour le 20/11/2026 à 20:37 UTC par pilotage-sync.sh : « Écart des prix d'achat : un seul total pour la période ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

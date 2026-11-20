@@ -5965,3 +5965,7 @@ mais sont les meme chiffres et juste le text t as changé
 
 peut etre c est mieux d ajoute une option pour compare aussi au total des 12 dernier mois pour comparer les total des pris d ecart. par ex un produi qui est acheté en decembre 2025 à 15€ht et au fur à mesur jusqu'au ce mois ci est acheté 18€ht ou 12€ht donc voir la difference des prix depuis le premier mois donc la on dit 12 mois et donc tu calcule toujours à partir du premier achat du premier mois des 12
 
+## 494. 2026-11-20 20:35 UTC
+
+non t as mis encor par moi meme si je choisi par 12 mois. tu fait pour tout l'anne complet mais le calcule du fait à partir du premier achat du premier mois
+

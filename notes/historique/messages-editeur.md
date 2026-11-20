@@ -6059,3 +6059,9 @@ donc la tu affiche bien un produit repeter autant de fois dans le moin si il y d
 
 et meme ca en gris tu enleve
 
+## 506. 2026-11-20 22:20 UTC
+
+[1 capture(s) d'écran jointe(s)]
+
+non non dans un mois quand je select à voir les produit du mois alors tu affiche premier achat du mois par ex: 10 octobre à 15€ et l achat suivant tu affiche dans le mois et si le meme produit acheté dans le meme mois alors tu affiche separement
+

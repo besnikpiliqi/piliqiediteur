@@ -5843,3 +5843,9 @@ Je propose, en maquette d'abord : tu a fais ?
 
 Je pense juste afficher le texte en bas du ttc quand c'est coché "Fournisseur établi hors de France", comme ça laisse comprendre de quoi s agit et si sera mieux de mettre en orange comme tout les autres oranges texte qon met ailleurs ? Quest tu penses
 
+## 476. 2026-11-20 09:26 UTC
+
+[1 capture(s) d'écran jointe(s)]
+
+C'est bon le reste mais juste la tu peux mettre en orange et le reste tu enlève car c'est déjà expliqué ? Qu'est ce que tu penses
+

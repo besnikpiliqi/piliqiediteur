@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 20/11/2026 à 10:10 UTC par pilotage-sync.sh : « Liens absolus des notifications : défaut et correction voulue ».
+Mis à jour le 20/11/2026 à 10:16 UTC par pilotage-sync.sh : « Liens des e-mails capturés de la démonstration ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

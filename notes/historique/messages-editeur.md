@@ -5871,3 +5871,13 @@ la est ce que c est bien pris en compte la tva autoliquidée ou pas
 
 quand je clique sur [Voir le document](http://localhost/app/46de7bdc-245f-4140-9470-d69093487711/factures/2120)  ou [Voir le devis](http://localhost/app/46de7bdc-245f-4140-9470-d69093487711/devis/89) ou Voir le produit alors il envoie sur la page mais erreur pour [Voir le document](http://localhost/app/46de7bdc-245f-4140-9470-d69093487711/factures/2120)   ? et le devis et prod danc leur url
 
+## 481. 2026-11-20 10:15 UTC
+
+<!-- attach -->
+
+> Les liens seront rangés sans adresse, avec seulement le chemin, et suivront le site qui sert la page.
+
+
+
+et aussi tu oublie pas pour d apliquer sur les mails sur démo "[E-mails qui seraient partis :](http://localhost:8001/demonstration/courriels)"
+

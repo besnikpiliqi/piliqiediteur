@@ -5885,3 +5885,13 @@ et aussi tu oublie pas pour d apliquer sur les mails sur démo "[E-mails qui ser
 
 dit moi ca sert quoi de relancer les facture non payé par mail alors que les reglementes de ces factures se fait uniqument sur place et pas sur internet par carte bancaire etc. ou peut etre il faut avoir cette option pour regler les paimenant à distance avec stripe ?  donc le relances dans les mail donne le lien pour regler la facture concerner, donc le lien ramene sur le lien de paiment ? sera mieux ou pas ?
 
+## 483. 2026-11-20 10:23 UTC
+
+<!-- attach -->
+
+> Les clients professionnels paient surtout par virement ou chèque après avoir reçu la facture, pas sur place
+
+
+
+non non dans les magasin ils payent sur place mais il faut penser la solution aussi par distnace
+

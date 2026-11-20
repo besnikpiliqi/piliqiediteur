@@ -589,3 +589,4 @@
 - 20/11 — Défaut : liens des notifications absolus (sans le port) ; correction voulue : liens relatifs ; rangé dans le plan et le cahier, rien corrigé.
 - 20/11 — Même correction des liens pour les e-mails capturés de la démonstration (repère remplacé à l'affichage) ; rangé dans le plan et le cahier, rien corrigé.
 - 20/11 — Question de l'éditeur : utilité des relances et paiement en ligne (Stripe) ; réponse et options rangées, rien décidé.
+- 20/11 — Correction de l'éditeur : les clients paient sur place ; conception du paiement à distance à faire ; points de règle à trancher avant l'étape 3.

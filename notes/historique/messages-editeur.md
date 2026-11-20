@@ -6117,3 +6117,7 @@ j 'ai dit que si c est egale tu affiche pas car pas besoin car nous on cherche q
 
 il affiche pas pareille les deux tableau du meme mlis
 
+## 517. 2026-11-20 23:41 UTC
+
+je comprends pas qu est ce que tu fait. j ai dit que tu mets par date si le prix augment ou baisse donc c est par date et pas par total
+

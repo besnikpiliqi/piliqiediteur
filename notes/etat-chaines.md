@@ -618,3 +618,4 @@
 - 20/11 — Carte Écart des prix d'achat : jeu fictif avec baisses et hausses dans le mois ; maquette v22 ; exigence reprise pour le semis.
 - 20/11 — Carte Écart des prix d'achat : plus d'achat à prix égal, produits sans écart masqués (mois et année) ; maquette v23.
 - 20/11 — Carte Écart des prix d'achat : trois lignes de total dans le tableau d'un mois pour qu'il s'accorde avec le graphique ; maquette v24.
+- 20/11 — Carte Écart des prix d'achat : l'éditeur veut un affichage par date, pas par total ; question X/Y posée, rien modifié.

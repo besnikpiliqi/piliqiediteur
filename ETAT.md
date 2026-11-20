@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 20/11/2026 à 08:12 UTC par pilotage-sync.sh : « Noms longs des graphiques en barres couchées ».
+Mis à jour le 20/11/2026 à 08:36 UTC par pilotage-sync.sh : « TTC d'une charge autoliquidée : libellé trompeur ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

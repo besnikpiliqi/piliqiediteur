@@ -580,3 +580,4 @@
 - 19/11 — Décision de l'éditeur : euros seulement, lot DEVISES annulé (remplace la décision précédente).
 - 19/11 — Trois factures Factur-X du générateur de l'autre PA lues (adresse électronique BT-34/BT-49, cadre M1 mixte, quantité décimale en kg) ; rangé dans e-reporting-documentation-15.md.
 - 20/11 — Demande de l'éditeur : noms longs des barres couchées (début visible, « … », info-bulle au survol, appui sur téléphone) ; rangée dans le plan et le cahier, rien implémenté.
+- 20/11 — Constat de l'éditeur : TTC d'une charge autoliquidée (comportement voulu, libellé trompeur) ; rangé dans le plan et le cahier, rien implémenté.

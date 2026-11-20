@@ -5829,3 +5829,9 @@ en fait mon logiciel piliqi je veux qui se peut utiliser que en europe mais si e
 
 tu vois ici les nom produit ne s affiche pas tout. si faut commencer ecrire le nom par à gauche et si il y en a bcp de lettre alors il faut chacher le reste mais quand la sourris et au dessus alors il doit afficher en tooltip tout le texte et meme il faut prendre en compte pour les telephones et tabletes, dans ces cas la il faut affiche en cliquant sur le textet diretct le tooltip
 
+## 473. 2026-11-20 08:36 UTC
+
+[1 capture(s) d'écran jointe(s)]
+
+ici quand je met les charge et quand je met le prix ht alors il affiche tout seul la tva et ttc mais il calcule pas bien? tu vois dans la photo
+

@@ -5977,3 +5977,7 @@ non t as mis encor par moi meme si je choisi par 12 mois. tu fait pour tout l'an
 
 est ce que  c 'est bien calcule car un produit peut s acheter le premier mois à 15€ht et le mois suivant à 12€h et le mois l autre suivant 16€ donc est ce que tu calcule entre tout les difference , parce que je veut pas que calcule les prix d achat mais la differnce payé donc depuis la premier achat du premier mois jusqu à 12 mois les differece payé donc calcule entre tout les mois les difference payé pour savoir au dernimer mois 12 commbien c est payé comme difference? dit moi et refait si c est pas fait comme ca
 
+## 497. 2026-11-20 21:04 UTC
+
+donc comme ca il faut pas calcular au moyen mais par produit à chaque achat car comme ca c 'est le vrai calcule
+

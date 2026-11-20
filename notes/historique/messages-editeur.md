@@ -5849,3 +5849,9 @@ Je pense juste afficher le texte en bas du ttc quand c'est coché "Fournisseur �
 
 C'est bon le reste mais juste la tu peux mettre en orange et le reste tu enlève car c'est déjà expliqué ? Qu'est ce que tu penses
 
+## 477. 2026-11-20 09:28 UTC
+
+[1 capture(s) d'écran jointe(s)]
+
+Tu fais pareil pour cette partie
+

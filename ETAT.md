@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 20/11/2026 à 09:26 UTC par pilotage-sync.sh : « Liste des charges autoliquidées : mot orange seul ».
+Mis à jour le 20/11/2026 à 09:29 UTC par pilotage-sync.sh : « Charge autoliquidée : mot orange sous la TVA, maquette v4 ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

@@ -6105,3 +6105,9 @@ non non dans "Achats suivants du mois" tu mets "Un seul achat dans le mois". et 
 
 mais il y en a pas de "-" mais que de "+"
 
+## 515. 2026-11-20 23:36 UTC
+
+[1 capture(s) d'écran jointe(s)]
+
+j 'ai dit que si c est egale tu affiche pas car pas besoin car nous on cherche que les produit qui ont des acart dans le mois ou dans l années
+

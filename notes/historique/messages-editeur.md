@@ -6071,3 +6071,7 @@ non non dans un mois quand je select à voir les produit du mois alors tu affich
 
 mais tu vois pas que tu fait la meme chose ou quoiii?? dans un mois de fevrier tu affiche prix de deppart 12 decembre alors que je suis au mois de fevrier
 
+## 508. 2026-11-20 22:25 UTC
+
+mais j ai pas di enleve tout mais tu  affiche le premier achat du mois donc prix de deppart du mois fevrier et le dernier achat tu affiche par achat du meme produit
+

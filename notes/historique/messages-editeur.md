@@ -5981,3 +5981,41 @@ est ce que  c 'est bien calcule car un produit peut s acheter le premier mois à
 
 donc comme ca il faut pas calcular au moyen mais par produit à chaque achat car comme ca c 'est le vrai calcule
 
+## 498. 2026-11-20 21:12 UTC
+
+<!-- attach -->
+
+> Chaque achat est comparé à l’achat précédent du même produit : (prix HT de l’achat − prix HT de l’achat d’avant) × la quantité achetée.
+
+
+
+donc si c 'est acheté à 15€ht le derniher fois et apres ca 12€ht alors est ce que t as enleve 3€ht donc moin chere et apres ca achat à 16€ht alors est ce que t as fait 4€ht plus chere et etc etc.  t as calculer comme ca ?
+
+## 499. 2026-11-20 21:15 UTC
+
+<!-- attach -->
+
+> Achat à 15 € HT, puis à 12 € HT : j’enlève 3 € HT par pièce, donc moins cher.
+
+> Puis achat à 16 € HT : j’ajoute 4 € HT par pièce par rapport à 12 €, donc plus cher.
+
+> Et ainsi de suite pour chaque achat suivant du même produit.
+
+
+
+donc t as fait -3 + 4 donc = +1  et ainsi de suite ?
+
+## 500. 2026-11-20 21:17 UTC
+
+<!-- attach -->
+
+> +1 € par pièce : de combien le prix a monté depuis le début.
+
+
+
+non c etais juste un exemple de difference
+
+## 501. 2026-11-20 21:21 UTC
+
+donc je te donne un exemple:  achat 1: 12€, achat 2 : 15€ donc la fait +3€, achat 3: 12€ donc la fait 0€, achat 4: 17€ donc fait +7, achat 5: 15€ donc fait +5, achat 6: 16€ donc fait +6, achat 7: 13€ donc fait +3. donc le resultat à la fin est +3€. t as compris la facon de calcule
+

@@ -6043,3 +6043,9 @@ achat 9: 10€ donc resultat entre achat 1 est -2€ + 16€ celui d avant = 14�
 
 T as commpris comment calculer. est ce que c 'est comme ca qu on peux savoit combien on a payé plus par rapport au premier achat du premier mois
 
+## 503. 2026-11-20 22:08 UTC
+
+[1 capture(s) d'écran jointe(s)]
+
+la tu montre ACHAT - PREMIER ACHAT mais dans le mois peux avoir plusieurs achat , donc il faut aussi par moi montre depuis le premier achat du mois et le dernier achat du mois pour montre les ecarts à partire de tous les achat dans le mois du meme produit
+

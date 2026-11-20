@@ -6121,3 +6121,23 @@ il affiche pas pareille les deux tableau du meme mlis
 
 je comprends pas qu est ce que tu fait. j ai dit que tu mets par date si le prix augment ou baisse donc c est par date et pas par total
 
+## 518. 2026-11-20 23:46 UTC
+
+[2 capture(s) d'écran jointe(s)]
+
+je comprends pas ce que t as fait la? ici t as mis au total en "-" alors que dans le tableau il y en pas de "-" mais juste de "+". Dit moi comment tu calcule la 2eme photo??
+
+## 519. 2026-11-20 23:49 UTC
+
+tu calcule ceux "12 févr. : 25 × 18,72 €	Un seul achat dans le mois	25 " qui ont pas des ecart comme "-" ??
+
+## 520. 2026-11-20 23:51 UTC
+
+<!-- attach -->
+
+> Oui, vous avez bien repéré : ces lignes « Un seul achat dans le mois », qui n’affichent aucun écart, sont comptées dans le total, et parfois en négatif. C’est justement ce qui rend le tableau incompréhensible.
+
+
+
+non non tu calcule pas comme ca mais "-" juste quand il y un ecart entre deux achats
+

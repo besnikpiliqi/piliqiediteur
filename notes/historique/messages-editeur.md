@@ -5881,3 +5881,7 @@ quand je clique sur [Voir le document](http://localhost/app/46de7bdc-245f-4140-9
 
 et aussi tu oublie pas pour d apliquer sur les mails sur démo "[E-mails qui seraient partis :](http://localhost:8001/demonstration/courriels)"
 
+## 482. 2026-11-20 10:21 UTC
+
+dit moi ca sert quoi de relancer les facture non payé par mail alors que les reglementes de ces factures se fait uniqument sur place et pas sur internet par carte bancaire etc. ou peut etre il faut avoir cette option pour regler les paimenant à distance avec stripe ?  donc le relances dans les mail donne le lien pour regler la facture concerner, donc le lien ramene sur le lien de paiment ? sera mieux ou pas ?
+

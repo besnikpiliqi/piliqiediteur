@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 20/11/2026 à 10:16 UTC par pilotage-sync.sh : « Liens des e-mails capturés de la démonstration ».
+Mis à jour le 20/11/2026 à 10:22 UTC par pilotage-sync.sh : « Relances et paiement en ligne : options ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

@@ -588,3 +588,4 @@
 - 20/11 — Charge autoliquidée : mention orange « TVA autoliquidée » sous la TVA ; maquette v5.
 - 20/11 — Défaut : liens des notifications absolus (sans le port) ; correction voulue : liens relatifs ; rangé dans le plan et le cahier, rien corrigé.
 - 20/11 — Même correction des liens pour les e-mails capturés de la démonstration (repère remplacé à l'affichage) ; rangé dans le plan et le cahier, rien corrigé.
+- 20/11 — Question de l'éditeur : utilité des relances et paiement en ligne (Stripe) ; réponse et options rangées, rien décidé.

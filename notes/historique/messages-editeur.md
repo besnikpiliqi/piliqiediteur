@@ -6101,3 +6101,7 @@ je vois il y en a ou rouge ou vert et dedans il y en a pas des haut et des bas d
 
 non non dans "Achats suivants du mois" tu mets "Un seul achat dans le mois". et dans "Écart par pièce, Écart dans le mois" tu affiche ici si il y en a des prix basse ou hausse entre les dates du mois et tu met pas "Écart depuis le 1er achat" car pas besoin
 
+## 514. 2026-11-20 23:33 UTC
+
+mais il y en a pas de "-" mais que de "+"
+

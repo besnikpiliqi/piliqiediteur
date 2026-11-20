@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 20/11/2026 à 23:53 UTC par pilotage-sync.sh : « Écart des prix d'achat : chaque écart entre deux achats ».
+Mis à jour le 20/11/2026 à 23:56 UTC par pilotage-sync.sh : « Écart des prix d'achat : colonne Achat d'avant ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

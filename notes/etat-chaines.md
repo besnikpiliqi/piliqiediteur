@@ -620,3 +620,4 @@
 - 20/11 — Carte Écart des prix d'achat : trois lignes de total dans le tableau d'un mois pour qu'il s'accorde avec le graphique ; maquette v24.
 - 20/11 — Carte Écart des prix d'achat : l'éditeur veut un affichage par date, pas par total ; question X/Y posée, rien modifié.
 - 20/11 — Carte Écart des prix d'achat : calcul achat par achat précédent, aucun calcul caché ; maquette v25 ; exemple des neuf achats = −2 €.
+- 20/11 — Carte Écart des prix d'achat : colonne « Achat d'avant » pour que chaque écart soit visible ; maquette v26.

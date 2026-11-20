@@ -5973,3 +5973,7 @@ non t as mis encor par moi meme si je choisi par 12 mois. tu fait pour tout l'an
 
 "Voir les chiffres" c est pour les 12 mois, donc quand c 'est pas selecter alors il faut enlever le buttuon "Voir les chiffres" et son tableau, donc il afficher ce qui est choisi dans le menu
 
+## 496. 2026-11-20 20:59 UTC
+
+est ce que  c 'est bien calcule car un produit peut s acheter le premier mois à 15€ht et le mois suivant à 12€h et le mois l autre suivant 16€ donc est ce que tu calcule entre tout les difference , parce que je veut pas que calcule les prix d achat mais la differnce payé donc depuis la premier achat du premier mois jusqu à 12 mois les differece payé donc calcule entre tout les mois les difference payé pour savoir au dernimer mois 12 commbien c est payé comme difference? dit moi et refait si c est pas fait comme ca
+

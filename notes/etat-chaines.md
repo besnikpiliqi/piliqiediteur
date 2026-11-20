@@ -601,3 +601,4 @@
 - 20/11 — Carte Écart des prix d'achat : option « du début des 12 mois » ajoutée à la maquette (v5).
 - 20/11 — Carte Écart des prix d'achat : mode début des 12 mois = un seul total pour la période ; maquette v6.
 - 20/11 — Carte Écart des prix d'achat : « Voir les chiffres » seulement pour la vue par mois ; maquette v7.
+- 20/11 — Carte Écart des prix d'achat : le total des 12 mois cumule les écarts mois après mois ; maquette v8.

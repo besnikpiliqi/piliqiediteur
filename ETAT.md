@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 20/11/2026 à 20:53 UTC par pilotage-sync.sh : « Écart des prix d'achat : Voir les chiffres selon le menu ».
+Mis à jour le 20/11/2026 à 21:01 UTC par pilotage-sync.sh : « Écart des prix d'achat : cumul mois après mois ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

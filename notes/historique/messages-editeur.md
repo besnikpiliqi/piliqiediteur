@@ -5839,3 +5839,7 @@ ici quand je met les charge et quand je met le prix ht alors il affiche tout seu
 
 Je propose, en maquette d'abord : tu a fais ?
 
+## 475. 2026-11-20 09:22 UTC
+
+Je pense juste afficher le texte en bas du ttc quand c'est coché "Fournisseur établi hors de France", comme ça laisse comprendre de quoi s agit et si sera mieux de mettre en orange comme tout les autres oranges texte qon met ailleurs ? Quest tu penses
+

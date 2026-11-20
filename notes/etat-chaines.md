@@ -582,3 +582,4 @@
 - 20/11 — Demande de l'éditeur : noms longs des barres couchées (début visible, « … », info-bulle au survol, appui sur téléphone) ; rangée dans le plan et le cahier, rien implémenté.
 - 20/11 — Constat de l'éditeur : TTC d'une charge autoliquidée (comportement voulu, libellé trompeur) ; rangé dans le plan et le cahier, rien implémenté.
 - 20/11 — Maquette de la charge autoliquidée publiée (lien dans le plan et le cahier), en attente de l'accord de l'éditeur.
+- 20/11 — Charge autoliquidée : libellé TTC gardé, phrase orange sous la ligne ; maquette v2 ; rangé.

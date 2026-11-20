@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 20/11/2026 à 09:19 UTC par pilotage-sync.sh : « Maquette de la charge autoliquidée ».
+Mis à jour le 20/11/2026 à 09:23 UTC par pilotage-sync.sh : « Charge autoliquidée : phrase orange, TTC gardé ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

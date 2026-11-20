@@ -5969,3 +5969,7 @@ peut etre c est mieux d ajoute une option pour compare aussi au total des 12 der
 
 non t as mis encor par moi meme si je choisi par 12 mois. tu fait pour tout l'anne complet mais le calcule du fait à partir du premier achat du premier mois
 
+## 495. 2026-11-20 20:52 UTC
+
+"Voir les chiffres" c est pour les 12 mois, donc quand c 'est pas selecter alors il faut enlever le buttuon "Voir les chiffres" et son tableau, donc il afficher ce qui est choisi dans le menu
+

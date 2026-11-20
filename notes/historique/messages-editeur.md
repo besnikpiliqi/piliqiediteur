@@ -6065,3 +6065,9 @@ et meme ca en gris tu enleve
 
 non non dans un mois quand je select à voir les produit du mois alors tu affiche premier achat du mois par ex: 10 octobre à 15€ et l achat suivant tu affiche dans le mois et si le meme produit acheté dans le meme mois alors tu affiche separement
 
+## 507. 2026-11-20 22:24 UTC
+
+[1 capture(s) d'écran jointe(s)]
+
+mais tu vois pas que tu fait la meme chose ou quoiii?? dans un mois de fevrier tu affiche prix de deppart 12 decembre alors que je suis au mois de fevrier
+

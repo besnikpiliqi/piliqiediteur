@@ -608,3 +608,4 @@
 - 20/11 — Carte Écart des prix d'achat : lignes « dans le mois » (premier → dernier achat du mois) dans le calcul d'un mois ; maquette v11.
 - 20/11 — Carte Écart des prix d'achat : calcul d'un mois = produits achetés dans le mois, un prix = une ligne, lignes grises supprimées ; maquette v12.
 - 20/11 — Carte Écart des prix d'achat : une ligne par achat dans le calcul d'un mois ; v13 cassée corrigée en v14 ; question sur la référence d'un achat du mois ouverte.
+- 20/11 — Carte Écart des prix d'achat : colonne « Prix de départ » retirée du tableau d'un mois ; maquette v15.

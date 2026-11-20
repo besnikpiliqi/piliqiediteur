@@ -5943,3 +5943,7 @@ Dit moi en très détails comment ca marche
 
 J'ai une ide pour ajouter une carte dans le tableau de bord pour afficher les différence entre nouveau prix d'achat d'un produit et le dernier prix d'achat pour voir la différence donc si on achète plus cher ou moins cher. Donc donc calculer au total les produits et pas par produit donc tu fais pour mois. Montre moi la maquette comment se semble
 
+## 490. 2026-11-20 20:17 UTC
+
+je sais pas si t as bien compris, donc ex: produit  1 acheté 30€ht le mois dernier et ce mois ci 35€ht, donc calculer pour chaque mois les difference de prix par produit mais afficher au total par moi. et peut etre pour mieux savoir et calculer car le meme produit  peut s acheter dans le meme mois au different prix et alors comme ca sera pris que le dernier et donc c 'est mieux le prix moyen par mois du produit,comme tu fait quand on ajoute les prix dans des factures d achat, donc tu met toujours le prix moyen. donc tu calcule comm ca les prix des prix de produit par mois
+

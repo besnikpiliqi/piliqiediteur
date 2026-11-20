@@ -593,3 +593,4 @@
 - 20/11 — Décision de l'éditeur : paiement à distance par Stripe avec le compte de chaque société, pas d'IBAN ; mécanisme (Connect ou clés) à trancher.
 - 20/11 — Question de l'éditeur : IBAN obligatoire ? (non à la lecture de Claude, à confirmer à l'étape 2).
 - 20/11 — Stripe : mécanisme A retenu par l'éditeur ; vérifications sur les pages publiques (OAuth Standard, direct charges, DOM acceptés).
+- 20/11 — Question de l'éditeur : litige Stripe et statut de la facture ; comportement proposé rangé, rien décidé.

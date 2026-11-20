@@ -5931,3 +5931,7 @@ en fait je crois que l iban est deja obligatoir de mettre dans les facture meme 
 
 	•	Il faut que PILIQI ait son propre compte « plateforme » chez Stripe. Les conditions et les coûts sont à vérifier auprès de Stripe, et c'est votre décision." Ca peut marcher comme ca ?? Bien sûr que piliqi aura son compte chez stripe et après autorisé son stripe chez piliqi ca marche tout bien?
 
+## 487. 2026-11-20 13:44 UTC
+
+Et comme les comptes connectés avec piliqi alors quand il client final fait un litige alors piliqi saura pour mettre à jour le statut d'une facture, c'est ca ou j ai pas bien compris ce que tu m'as dit
+

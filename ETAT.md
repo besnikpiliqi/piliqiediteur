@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 20/11/2026 à 12:19 UTC par pilotage-sync.sh : « Stripe Connect : mécanisme retenu et vérifications ».
+Mis à jour le 20/11/2026 à 13:45 UTC par pilotage-sync.sh : « Litige Stripe : mise à jour de la facture ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

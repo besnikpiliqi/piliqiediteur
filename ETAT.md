@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 20/11/2026 à 09:29 UTC par pilotage-sync.sh : « Charge autoliquidée : mot orange sous la TVA, maquette v4 ».
+Mis à jour le 20/11/2026 à 09:30 UTC par pilotage-sync.sh : « Charge autoliquidée : mention TVA autoliquidée ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

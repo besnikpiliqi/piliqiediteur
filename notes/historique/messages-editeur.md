@@ -5855,3 +5855,7 @@ C'est bon le reste mais juste la tu peux mettre en orange et le reste tu enlève
 
 Tu fais pareil pour cette partie
 
+## 478. 2026-11-20 09:30 UTC
+
+Non tu met "TVA autoliquidée"
+

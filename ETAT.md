@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 20/11/2026 à 10:33 UTC par pilotage-sync.sh : « IBAN : obligation sur la facture et la facture électronique ».
+Mis à jour le 20/11/2026 à 12:19 UTC par pilotage-sync.sh : « Stripe Connect : mécanisme retenu et vérifications ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

@@ -5917,3 +5917,17 @@ non, je t ai deja dit que les paiment en distnace par stripe doit se faire uniqu
 
 en fait je crois que l iban est deja obligatoir de mettre dans les facture meme pour afficher dans les facture mais aussi pour la facturation electronique je crois que c est demandé à declarer
 
+## 486. 2026-11-20 12:17 UTC
+
+"A. Stripe Connect, ma recommandation
+
+
+
+	•	Le propriétaire clique sur « Connecter mon compte Stripe ». Stripe lui demande d'autoriser PILIQI.
+
+	•	PILIQI reçoit un accès limité, sans jamais voir la clé secrète de la société. La société peut le retirer à tout moment depuis son tableau de bord Stripe.
+
+	•	C'est le même principe que la connexion à la plateforme agréée.
+
+	•	Il faut que PILIQI ait son propre compte « plateforme » chez Stripe. Les conditions et les coûts sont à vérifier auprès de Stripe, et c'est votre décision." Ca peut marcher comme ca ?? Bien sûr que piliqi aura son compte chez stripe et après autorisé son stripe chez piliqi ca marche tout bien?
+

@@ -614,3 +614,4 @@
 - 20/11 — Carte Écart des prix d'achat : jeu fictif avec un à trois achats par mois et par produit ; maquette v18 ; même exigence pour le semis.
 - 20/11 — Carte Écart des prix d'achat : total par mois = total des 12 mois (203,11 + 341,10 = 544,21) ; maquette v19.
 - 20/11 — Carte Écart des prix d'achat : graphique par mois avec hausses au-dessus, baisses en dessous, net en losange ; maquette v20.
+- 20/11 — Carte Écart des prix d'achat : tableau d'un mois à six colonnes, colonne « depuis le 1er achat » supprimée ; maquette v21.

@@ -5859,3 +5859,15 @@ Tu fais pareil pour cette partie
 
 Non tu met "TVA autoliquidée"
 
+## 479. 2026-11-20 09:52 UTC
+
+[1 capture(s) d'écran jointe(s)]
+
+la est ce que c est bien pris en compte la tva autoliquidée ou pas
+
+## 480. 2026-11-20 10:10 UTC
+
+[2 capture(s) d'écran jointe(s)]
+
+quand je clique sur [Voir le document](http://localhost/app/46de7bdc-245f-4140-9470-d69093487711/factures/2120)  ou [Voir le devis](http://localhost/app/46de7bdc-245f-4140-9470-d69093487711/devis/89) ou Voir le produit alors il envoie sur la page mais erreur pour [Voir le document](http://localhost/app/46de7bdc-245f-4140-9470-d69093487711/factures/2120)   ? et le devis et prod danc leur url
+

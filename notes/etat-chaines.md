@@ -586,3 +586,4 @@
 - 20/11 — Liste des charges autoliquidées : seulement « autoliquidée » en orange sous la TVA ; maquette v3.
 - 20/11 — Charge autoliquidée : mot orange seul sous la TVA aussi dans la fenêtre ; maquette v4 (calcul de la TVA corrigé dans la maquette).
 - 20/11 — Charge autoliquidée : mention orange « TVA autoliquidée » sous la TVA ; maquette v5.
+- 20/11 — Défaut : liens des notifications absolus (sans le port) ; correction voulue : liens relatifs ; rangé dans le plan et le cahier, rien corrigé.

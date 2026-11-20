@@ -6085,3 +6085,9 @@ c est bien mais le premier achat du produit dans le mois il affiche pas le qte
 
 il faut que tu affiche plusiereurs achat dans les meme mois pour voir la difference
 
+## 511. 2026-11-20 22:56 UTC
+
+[2 capture(s) d'écran jointe(s)]
+
+dans le tableaux par mois de l année total 203.11€ et dans le total image 2 et 544.21€
+

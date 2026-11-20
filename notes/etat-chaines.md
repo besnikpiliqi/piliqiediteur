@@ -591,3 +591,4 @@
 - 20/11 — Question de l'éditeur : utilité des relances et paiement en ligne (Stripe) ; réponse et options rangées, rien décidé.
 - 20/11 — Correction de l'éditeur : les clients paient sur place ; conception du paiement à distance à faire ; points de règle à trancher avant l'étape 3.
 - 20/11 — Décision de l'éditeur : paiement à distance par Stripe avec le compte de chaque société, pas d'IBAN ; mécanisme (Connect ou clés) à trancher.
+- 20/11 — Question de l'éditeur : IBAN obligatoire ? (non à la lecture de Claude, à confirmer à l'étape 2).

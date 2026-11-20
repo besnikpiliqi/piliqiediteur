@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 20/11/2026 à 10:26 UTC par pilotage-sync.sh : « Paiement à distance : un compte Stripe par société ».
+Mis à jour le 20/11/2026 à 10:33 UTC par pilotage-sync.sh : « IBAN : obligation sur la facture et la facture électronique ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

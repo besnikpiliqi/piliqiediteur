@@ -5905,3 +5905,15 @@ non non dans les magasin ils payent sur place mais il faut penser la solution au
 
 non, je t ai deja dit que les paiment en distnace par stripe doit se faire uniqument par leur compte donc chaque societe doit avoir son compte de stripe et eux donne sur piliqi les api ou les acces pour mettre dans le formulaire de paiment, donc chaque societe leur compte stripe. que ce tu pense ?
 
+## 485. 2026-11-20 10:33 UTC
+
+<!-- attach -->
+
+> Ajouter l’IBAN du magasin sur les factures et les relances. C’est un petit lot, sans prestataire, qui facilite déjà le virement.
+
+> Faire le lien de paiement en ligne à l’étape 11.
+
+
+
+en fait je crois que l iban est deja obligatoir de mettre dans les facture meme pour afficher dans les facture mais aussi pour la facturation electronique je crois que c est demandé à declarer
+

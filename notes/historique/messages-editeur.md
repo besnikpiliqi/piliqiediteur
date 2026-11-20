@@ -5947,3 +5947,17 @@ J'ai une ide pour ajouter une carte dans le tableau de bord pour afficher les di
 
 je sais pas si t as bien compris, donc ex: produit  1 acheté 30€ht le mois dernier et ce mois ci 35€ht, donc calculer pour chaque mois les difference de prix par produit mais afficher au total par moi. et peut etre pour mieux savoir et calculer car le meme produit  peut s acheter dans le meme mois au different prix et alors comme ca sera pris que le dernier et donc c 'est mieux le prix moyen par mois du produit,comme tu fait quand on ajoute les prix dans des factures d achat, donc tu met toujours le prix moyen. donc tu calcule comm ca les prix des prix de produit par mois
 
+## 491. 2026-11-20 20:20 UTC
+
+mais t as fait pareil comme la premier fois ?
+
+## 492. 2026-11-20 20:22 UTC
+
+<!-- attach -->
+
+> Oui, le graphique est le même, et c’est voulu. Vous avez demandé un seul total par mois, donc la carte montre toujours un total par mois, comme à la première version. Seul le calcul qui donne ce total a changé : on compare maintenant les prix moyens du mois produit par produit, au lieu du dernier achat. Ce changement ne se voit pas dans le graphique.
+
+
+
+mais sont les meme chiffres et juste le text t as changé
+

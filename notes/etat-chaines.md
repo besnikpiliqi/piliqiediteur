@@ -597,3 +597,4 @@
 - 20/11 — Fonctionnement détaillé du paiement à distance Stripe Connect expliqué à l'éditeur et rangé dans le plan.
 - 20/11 — Idée de l'éditeur : carte « Écart des prix d'achat » ; maquette publiée (lien dans le plan), en attente de son accord.
 - 20/11 — Carte Écart des prix d'achat : calcul sur le prix moyen du mois par produit ; maquette v2 avec exemple.
+- 20/11 — Maquette de la carte Écart des prix d'achat v4 : chiffres calculés par la méthode du prix moyen du mois (jeu d'achats fictifs).

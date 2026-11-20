@@ -5935,3 +5935,7 @@ en fait je crois que l iban est deja obligatoir de mettre dans les facture meme 
 
 Et comme les comptes connectés avec piliqi alors quand il client final fait un litige alors piliqi saura pour mettre à jour le statut d'une facture, c'est ca ou j ai pas bien compris ce que tu m'as dit
 
+## 488. 2026-11-20 13:53 UTC
+
+Dit moi en très détails comment ca marche
+

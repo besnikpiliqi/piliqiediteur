@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 20/11/2026 à 13:45 UTC par pilotage-sync.sh : « Litige Stripe : mise à jour de la facture ».
+Mis à jour le 20/11/2026 à 13:54 UTC par pilotage-sync.sh : « Paiement à distance Stripe : fonctionnement détaillé ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

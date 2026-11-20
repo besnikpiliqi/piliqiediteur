@@ -594,3 +594,4 @@
 - 20/11 — Question de l'éditeur : IBAN obligatoire ? (non à la lecture de Claude, à confirmer à l'étape 2).
 - 20/11 — Stripe : mécanisme A retenu par l'éditeur ; vérifications sur les pages publiques (OAuth Standard, direct charges, DOM acceptés).
 - 20/11 — Question de l'éditeur : litige Stripe et statut de la facture ; comportement proposé rangé, rien décidé.
+- 20/11 — Fonctionnement détaillé du paiement à distance Stripe Connect expliqué à l'éditeur et rangé dans le plan.

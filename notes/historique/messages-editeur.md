@@ -6091,3 +6091,7 @@ il faut que tu affiche plusiereurs achat dans les meme mois pour voir la differe
 
 dans le tableaux par mois de l année total 203.11€ et dans le total image 2 et 544.21€
 
+## 512. 2026-11-20 23:20 UTC
+
+je vois il y en a ou rouge ou vert et dedans il y en a pas des haut et des bas du tout, dans des peux y avoir des differente ou hausse ou basse
+

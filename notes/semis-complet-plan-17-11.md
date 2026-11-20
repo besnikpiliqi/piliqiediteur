@@ -412,3 +412,6 @@ Retenu (version 16) : affichage « un total par mois » = choix C : la référen
 « Un seul total pour les 12 mois » reste la méthode de l'éditeur (chaque achat comparé au premier achat de la PÉRIODE, hausses et baisses, exemple +14 €). Les deux affichages sont donc deux calculs différents et leurs totaux ne sont plus égaux (dans la maquette : +82,83 € en additionnant les mois, +318,08 € en comparant au premier achat de la période) ; écrit sur la page.
 CONSÉQUENCE à signaler à l'éditeur : avec le choix C, un produit acheté une seule fois dans le mois n'a aucun écart ce mois-là et la variation de prix d'un mois à l'autre n'est pas comptée dans l'affichage par mois (seulement dans l'affichage des 12 mois). À confirmer.
 Maquette version 16 : https://claude.ai/artifact/4mAYp9cWfYLTRkEauxTGBC
+
+## Précision de l'éditeur du 20/11/2026 (suite) : la quantité du premier achat du mois s'affiche dans la colonne « Qté » (maquette version 17)
+L'éditeur valide le tableau d'un mois de la version 16 (« c'est bien ») et demande que le premier achat du produit dans le mois affiche aussi sa quantité dans la colonne « Qté ». Fait : la ligne du prix de départ du mois montre la quantité du premier achat dans « Qté » ; sa colonne « Écart » reste vide (c'est la référence du mois). Maquette version 17 : https://claude.ai/artifact/4mAYp9cWfYLTRkEauxTGBC

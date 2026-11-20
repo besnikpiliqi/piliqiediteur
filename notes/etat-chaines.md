@@ -610,3 +610,4 @@
 - 20/11 — Carte Écart des prix d'achat : une ligne par achat dans le calcul d'un mois ; v13 cassée corrigée en v14 ; question sur la référence d'un achat du mois ouverte.
 - 20/11 — Carte Écart des prix d'achat : colonne « Prix de départ » retirée du tableau d'un mois ; maquette v15.
 - 20/11 — Carte Écart des prix d'achat : tableau d'un mois = prix de départ du mois puis achats suivants (choix C) ; maquette v16 ; deux totaux différents signalés.
+- 20/11 — Carte Écart des prix d'achat : tableau d'un mois validé par l'éditeur ; quantité du premier achat du mois ajoutée (v17).

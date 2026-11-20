@@ -6075,3 +6075,9 @@ mais tu vois pas que tu fait la meme chose ou quoiii?? dans un mois de fevrier t
 
 mais j ai pas di enleve tout mais tu  affiche le premier achat du mois donc prix de deppart du mois fevrier et le dernier achat tu affiche par achat du meme produit
 
+## 509. 2026-11-20 22:31 UTC
+
+[1 capture(s) d'écran jointe(s)]
+
+c est bien mais le premier achat du produit dans le mois il affiche pas le qte
+

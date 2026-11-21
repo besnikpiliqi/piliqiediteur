@@ -67,6 +67,13 @@ test('un second navigateur ouvert dans le même test ne trouve pas connecté le 
     expect($this->naviguer('/app/login')->chemin())->toBe('/app/login');
 });
 
+test('un geste sur un élément absent échoue au bout de son délai : le serveur de Playwright en reçoit le délai là où il le lit', function () {
+    $onglet = $this->naviguer('/app/login');
+
+    expect(fn () => $onglet->element('#element-absent')->click(['timeout' => 500]))
+        ->toThrow(AssertionFailedError::class, 'Timeout 500ms exceeded');
+});
+
 test('un vendeur dont le mot de passe est encore son identifiant se connecte depuis un poste reconnu', function () {
     $magasin = $this->ouvrirUneSociete();
     [$vendeur, $identifiant] = $this->compteAuMotDePasseIdentifiant($magasin, RoleMagasin::Vendeur);

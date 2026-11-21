@@ -16,9 +16,12 @@ permissions:
   contents: read
 
 # Image fixée à Ubuntu 24.04 : « ubuntu-latest » est passé à Ubuntu 26.04, que
-# Playwright 1.59.1 ne gère pas (« Playwright does not support chromium on
+# Playwright 1.59.1 ne gérait pas (« Playwright does not support chromium on
 # ubuntu26.04-x64 »), ce qui arrêtait tous les jobs qui installent le navigateur.
-# Une montée de version de l'image se décide avec une montée de Playwright.
+# Playwright est maintenant en version 1.65.1 (package.json), qui gère
+# Ubuntu 26.04 : l'image « ubuntu-latest » (26.04) s'essaie à part, et l'image
+# ne change ici qu'une fois cet essai passé sur la CI. Une montée de version
+# de l'image se décide avec une montée de Playwright.
 jobs:
   style:
     runs-on: ubuntu-24.04

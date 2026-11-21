@@ -84,6 +84,8 @@ final class Navigation
      */
     public static function ouvrir(string $chemin, JournalDesReponses $journal): self
     {
+        ProtocoleDePlaywright::adapter();
+
         $onglet = visit('/robots.txt', ['proxy' => ['server' => self::MANDATAIRE_SANS_ISSUE, 'bypass' => '127.0.0.1,localhost']])->withLocale('fr-FR')->withTimezone(Calendrier::deParis()->fuseau());
         $onglet->page()->context()->addInitScript((string) file_get_contents(__DIR__.'/surveillance.js'));
         $navigation = new self($onglet, $journal);

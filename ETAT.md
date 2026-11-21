@@ -1,10 +1,10 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 21/11/2026 à 22:03 UTC par pilotage-sync.sh : « Mise à jour des notes de reprise ».
+Mis à jour le 21/11/2026 à 22:07 UTC par pilotage-sync.sh : « Mise à jour des notes de reprise ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
-Tête poussée : `de1e2c95`. Commits locaux pas encore poussés :
+Tête poussée : `075b9f20`. Commits locaux pas encore poussés :
 
 ```
 ```
@@ -12,6 +12,7 @@ Tête poussée : `de1e2c95`. Commits locaux pas encore poussés :
 Derniers commits poussés :
 
 ```
+075b9f20 Retour à Ubuntu 24.04 : l'essai d'« ubuntu-latest » échoue au semis
 de1e2c95 Essai de la CI sur « ubuntu-latest » (Ubuntu 26.04) avec Playwright 1.65.1
 c571221e Montée de Playwright de 1.59.1 à 1.65.1
 fca01c39 Réparation de la CI rouge de a4ca0549
@@ -31,7 +32,6 @@ ad18faca Date de la livraison ou de la prestation sur la facture (T49)
 a9bb1a78 Charges : état téléchargeable en PDF et en Excel
 90a4426c Écrans : classes de style absentes de la feuille de Filament
 9e14f02f Semis complet de toutes les tables et de tous les cas
-93939942 Réparation de la CI rouge de b6015883
 ```
 
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
@@ -41,10 +41,8 @@ a9bb1a78 Charges : état téléchargeable en PDF et en Excel
 
 ## Dernière course de la chaîne
 
-Course `wf_1c7f2eef-6fd`, étapes commencées (de la plus ancienne à la plus récente) :
+Course `wf_bbdbefd3-771`, étapes commencées (de la plus ancienne à la plus récente) :
 
 ```
-pw:implementation
-pw:relecture-diff-1
-pw:relecture-tests-1
+lot-1:implementation
 ```

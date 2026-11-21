@@ -1,12 +1,13 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 21/11/2026 à 17:03 UTC par pilotage-sync.sh : « 21/11 soir : carte Écart des prix d'achat mise de côté (relecture faite), reprise des travaux de la semaine : Playwright 1.65.1 puis DEVIS-RET ».
+Mis à jour le 21/11/2026 à 21:00 UTC par pilotage-sync.sh : « Mise à jour des notes de reprise ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
 Tête poussée : `fca01c39`. Commits locaux pas encore poussés :
 
 ```
+c571221e Montée de Playwright de 1.59.1 à 1.65.1
 ```
 
 Derniers commits poussés :
@@ -41,11 +42,10 @@ be209079 Réparation de la CI rouge de 8ce8bd4 (cartes des notifications)
 
 ## Dernière course de la chaîne
 
-Course `wf_a558d16d-efa`, étapes commencées (de la plus ancienne à la plus récente) :
+Course `wf_1c7f2eef-6fd`, étapes commencées (de la plus ancienne à la plus récente) :
 
 ```
-DEVIS-RET:implementation
-DEVIS-RET:relecture1
-DEVIS-RET:relecture2
-DEVIS-RET:correction
+pw:implementation
+pw:relecture-diff-1
+pw:relecture-tests-1
 ```

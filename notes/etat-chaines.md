@@ -628,3 +628,4 @@
 - 21/11 — Carte Écart des prix d'achat : total des quantités par produit et pour les 12 mois dans le tableau de l'année ; maquette v31.
 - 21/11 — Carte Écart des prix d'achat : total des prix (quantité × prix, prix de départ compris) dans la colonne « Achats suivants de l'année » du tableau de l'année ; maquette v32 ; vérification indépendante en cours.
 - 21/11 — Carte Écart des prix d'achat : cinq relecteurs indépendants sur le total des prix (aucune erreur de chiffre) ; colonne « Écart » coupée corrigée, traits des totaux visibles, « départ compris », note en quatre phrases ; maquette v33 ; question posée : compter les achats au même prix ?
+- 21/11 — Carte Écart des prix d'achat : un seul total des achats pour les 12 mois (carte = tableau = 15 928,61 €), pourcentage défini sur le total moins l'écart ; maquette v34.

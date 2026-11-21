@@ -6185,3 +6185,9 @@ mets aussi le total de prix de produits "Achats suivants de l’année" mais tu 
 
 pourqoui t as fait mnt comme ca
 
+## 529. 2026-11-21 01:32 UTC
+
+[2 capture(s) d'écran jointe(s)]
+
+"14 498,65 € d’achats au prix du premier achat de l’année," et "Total des 12 mois	départ compris	15 928,61 €	1 510		+281,36 €" , donc entre les deux totaux ils sont pas pareille alors que les deux sont pour les memes 12 mois
+

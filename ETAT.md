@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 21/11/2026 à 01:25 UTC par pilotage-sync.sh : « Carte Écart des prix d'achat : résultat de la vérification indépendante et corrections (maquette v33) ».
+Mis à jour le 21/11/2026 à 01:36 UTC par pilotage-sync.sh : « Carte Écart des prix d'achat : un seul total des achats pour la carte et le tableau (maquette v34) ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

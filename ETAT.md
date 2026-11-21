@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 21/11/2026 à 12:25 UTC par pilotage-sync.sh : « Carte Écart des prix d'achat : étape 1 finie (spec, plan, maquette 37), étape 2 lancée ».
+Mis à jour le 21/11/2026 à 12:28 UTC par pilotage-sync.sh : « Carte Écart : étape 2 lancée (wf_42a84362-40e) ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

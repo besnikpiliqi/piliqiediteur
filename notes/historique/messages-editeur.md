@@ -6147,3 +6147,7 @@ non non tu calcule pas comme ca mais "-" juste quand il y un ecart entre deux ac
 
 je comprends pas ou tu prends ca "-0.03 et -0.30" alors que la il y pas deux achat pour voir difference et il y en a d autre aussi pareill
 
+## 522. 2026-11-20 23:58 UTC
+
+la t es revenu à l encien model. tu doit pas calculer par d autre mois mais que dans le mois selecter
+

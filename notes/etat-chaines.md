@@ -630,3 +630,4 @@
 - 21/11 — Carte Écart des prix d'achat : cinq relecteurs indépendants sur le total des prix (aucune erreur de chiffre) ; colonne « Écart » coupée corrigée, traits des totaux visibles, « départ compris », note en quatre phrases ; maquette v33 ; question posée : compter les achats au même prix ?
 - 21/11 — Carte Écart des prix d'achat : un seul total des achats pour les 12 mois (carte = tableau = 15 928,61 €), pourcentage défini sur le total moins l'écart ; maquette v34.
 - 21/11 — Carte Écart des prix d'achat : l'éditeur relève que « total des achats / 8 produits comparés » est faux (les totaux ne comptent que les produits avec écart) ; libellés exacts, quatre produits sans écart ajoutés au jeu d'essai, règle de rédaction du périmètre ; maquette v35.
+- 21/11 — Carte Écart des prix d'achat : phrase de la carte remise courte et exacte (« Total des 8 produits avec écart ») à la demande de l'éditeur ; maquette v36 ; audit de portée en cours.

@@ -6201,3 +6201,7 @@ mais alors pourquoi t es trompé ??
 
 mais la les calcule se font que pour les produits qui ont des ecarts, donc l année peux avoir des produit qui ont jamais des ecart car on peut achete juste une fois et jamais plus mais toi tu te trompe toujours apparament avec ca. donc la tu dit "Total des achats sur les 12 mois : 15 928,61 € HT. 8 produits comparés." donc tu parle pour tout les achat des 12 mois mais tu dit en meme temps que t as calcule que les 8 produits qui sont comparer mais il y en pas que ces 8 produit car il peut y avoir des cantaines mais il y pas des ecarts. et la tu parle "Total des 12 mois	départ compris	15 928,61 €" que pour les produits que t as calculer avec des ecarts. donc ce que tu dit c est pas vrais et tu calcule vraiment tres mal ces.
 
+## 532. 2026-11-21 01:57 UTC
+
+"8 produits ont un écart : leurs achats (prix de départ compris, hors achats au même prix que le départ) totalisent 15 928,61 € HT, soit +1,8 % par rapport au prix du premier achat de l’année. 4 autres produits n’ont pas d’écart et ne sont pas comptés (2 achetés une seule fois, 2 toujours au même prix)." non non tu laisse alors comme il etais, c etais mieux le texte plus court plus simple à comprendre
+

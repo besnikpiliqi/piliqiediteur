@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 21/11/2026 à 01:52 UTC par pilotage-sync.sh : « Carte Écart des prix d'achat : libellés exacts du périmètre, produits sans écart au jeu d'essai (maquette v35) ».
+Mis à jour le 21/11/2026 à 01:58 UTC par pilotage-sync.sh : « Carte Écart des prix d'achat : phrase courte et exacte (maquette v36) ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

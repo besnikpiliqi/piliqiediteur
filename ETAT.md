@@ -1,10 +1,10 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 21/11/2026 à 21:08 UTC par pilotage-sync.sh : « Mise à jour des notes de reprise ».
+Mis à jour le 21/11/2026 à 22:03 UTC par pilotage-sync.sh : « Mise à jour des notes de reprise ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
-Tête poussée : `c571221e`. Commits locaux pas encore poussés :
+Tête poussée : `de1e2c95`. Commits locaux pas encore poussés :
 
 ```
 ```
@@ -12,6 +12,7 @@ Tête poussée : `c571221e`. Commits locaux pas encore poussés :
 Derniers commits poussés :
 
 ```
+de1e2c95 Essai de la CI sur « ubuntu-latest » (Ubuntu 26.04) avec Playwright 1.65.1
 c571221e Montée de Playwright de 1.59.1 à 1.65.1
 fca01c39 Réparation de la CI rouge de a4ca0549
 a4ca0549 Réparation de la CI rouge de 7c5edc7a
@@ -31,7 +32,6 @@ a9bb1a78 Charges : état téléchargeable en PDF et en Excel
 90a4426c Écrans : classes de style absentes de la feuille de Filament
 9e14f02f Semis complet de toutes les tables et de tous les cas
 93939942 Réparation de la CI rouge de b6015883
-b6015883 Relecture du lot REGUL
 ```
 
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)

@@ -6305,3 +6305,37 @@ non non tu fait avec sonnet 5.5 eleve ultracode. tu arret et tu commence avec ca
 
 donc  tu fais la maquette ce que je t ai donné et tu supprime ce que t as fait
 
+## 553. 2026-11-21 21:58 UTC
+
+<!-- attach -->
+
+> Relecture DEVIS-RET : 14 défauts (mis de côté le 21/11 dans la branche lot/devis-ret-reprise, reprise après la carte Écart des prix d'achat)
+
+> 
+
+> PLAYWRIGHT-165 : monter Playwright 1.59.1 → 1.65.1, tout retester, remettre ubuntu-latest si la CI passe (après la carte Écart des prix d'achat, Sonnet 5.5 extra)
+
+> 
+
+> CARTE-36 1 : vérité de la maquette, repères du dépôt, spécification, plan (workflow wf_7e9ad94e-3f9, Sonnet 5.5 élevé)
+
+> 
+
+> CARTE-36 2 : lot 1 calcul pur, textes, dessin et tests contre la vérité de la maquette (après Playwright)
+
+> 
+
+> CARTE-36 3 : lots 2 et 3 catalogue, carte, réglages, lecture des achats, grille, vue Livewire, styles, navigateur
+
+> 
+
+> CARTE-36 4 : lot 4 semis (règle 6), inventaire des actions, matrice, CLAUDE.md, README
+
+> 
+
+> CARTE-36 5 : vérification jusqu'à zéro défaut, protocole, suite PG, commit, push, CI
+
+
+
+je comprend pas pourquoi autant de temps pour cette carte
+

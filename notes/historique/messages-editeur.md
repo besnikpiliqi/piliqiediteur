@@ -6411,3 +6411,25 @@ montre moi l'avancement de la carte
 
 ban tu la creer ou tu fait ce que tu veux pour que tu teste alors si c est besoin !!
 
+## 563. 2026-11-21 23:02 UTC
+
+dit moi comment ca marche pour les facture de vente quand un client à payer en avance et demande sa facture apres qq jours ou semaines, comme on fait pour ces cas ? est c'est legal si on cree une facture aujourd hui mais avec la date encien donc comme 10/11/2026 ?
+
+## 564. 2026-11-21 23:11 UTC
+
+[1 capture(s) d'écran jointe(s)]
+
+<!-- attach -->
+
+> Sur une facture faite hors de la caisse, un champ « date de l’opération » existe à côté de la nature de l’opération (règle T49). On y met le 10/11, un jour ou une période.
+
+
+
+donc je fait comment ici. donc le client a deja payé le 10/11/2026 mais il demande la facture le 22/11/2026
+
+## 565. 2026-11-21 23:51 UTC
+
+[1 capture(s) d'écran jointe(s)]
+
+la pour les Prix de vente je veux que tu ajoute la case aussi pour mettre les prix pil poil donc  la il est la case pour arrondir les prix mais je veux aussi avoir la possibilité de pouvoir ramener les prix pil poil par ex: si le prix devient à 18.4€ alors remettre à 18€ ou si 18.5 ou  18.55 alors remettre à 19€ ou ajouter aussi un autre option en plus quand la case est coché, donc de donner la possibilité de choisir quelle formule donc: si le prix devient à 18.4€ alors remettre à 18€ ou si 18.5 ou  18.55 alors remettre à 19€. OU si le prix devient 11€ alors remettre à 10€ et si 12.5€ remettre à 15€ et si 17€ alors remettre à 15€ et si 17.5€ alors remmetre à 20€.  t as compris la formule ? montre la maquette comment tu va apliquer .
+

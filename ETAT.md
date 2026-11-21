@@ -1,12 +1,13 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 21/11/2026 à 23:01 UTC par pilotage-sync.sh : « Mise à jour des notes de reprise ».
+Mis à jour le 21/11/2026 à 23:53 UTC par pilotage-sync.sh : « Mise à jour des notes de reprise ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
 Tête poussée : `075b9f20`. Commits locaux pas encore poussés :
 
 ```
+37fce91a Carte « Écart des prix d'achat » (lot 2) : catalogue, réglage, lecture des achats et série
 8e9df41e Carte « Écart des prix d'achat » (lot 1) : calcul pur, textes, formats, dessin et fixtures figées
 ```
 
@@ -38,25 +39,25 @@ a9bb1a78 Charges : état téléchargeable en PDF et en Excel
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
- M app/Domain/Facturation/Services/CalculateurLigne.php
- M app/Domain/TableauDeBord/Enums/Graphique.php
- M app/Domain/TableauDeBord/Services/AchatsDuTableauDeBord.php
- M app/Domain/TableauDeBord/Services/SeriesDesGraphiques.php
- M app/Domain/TableauDeBord/Support/CalculDesSeries.php
- M app/Domain/TableauDeBord/Support/CarteDuTableauDeBord.php
- M app/Domain/TableauDeBord/Support/ReglagesDuTableauDeBord.php
- M app/Domain/TableauDeBord/Support/SerieDuGraphique.php
+ M app/Domain/TableauDeBord/Support/DessinDeLEcartDesPrixDAchat.php
  M app/Filament/GrilleDesGraphiques.php
- M tests/Feature/Demonstration/CartesOuvertesDansLaDemonstrationTest.php
- M tests/Feature/Qualite/PlafondsDeRequetesTest.php
- M tests/Feature/TableauDeBord/PreferencesDesGraphiquesTest.php
- M tests/Feature/TableauDeBord/QuiVoitLesGraphiquesTest.php
- M tests/Feature/TableauDeBord/SeriesDesGraphiquesTest.php
- M tests/Unit/CalculateurLigneTest.php
-?? app/Domain/TableauDeBord/Support/AchatsParProduit.php
-?? tests/Feature/TableauDeBord/EcartDesPrixDAchatLectureTest.php
-?? tests/Fixtures/EcartDesPrixDAchat/AchatsDeLaMaquette.php
-?? tests/Unit/AchatsParProduitTest.php
+ M public/css/app/graphiques.css
+ M resources/css/graphiques.css
+ M resources/views/filament/graphiques-du-panneau.blade.php
+ M resources/views/filament/grille-des-graphiques.blade.php
+ M tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php
+ M tests/Browser/Support/ActionsDeLInterface.php
+ M tests/Browser/inventaire-des-actions.php
+?? app/Domain/TableauDeBord/Support/SvgDeLEcartDesPrixDAchat.php
+?? resources/views/filament/ecart-des-prix-d-achat.blade.php
+?? tests/Browser/Balayage/ContrasteDeLaCarteEcartDesPrixDAchatTest.php
+?? tests/Browser/Parcours/EcartDesPrixDAchatTest.php
+?? tests/Browser/Support/CarteDeLEcartDesPrixDAchat.php
+?? tests/Feature/TableauDeBord/EcartDesPrixDAchatGrilleTest.php
+?? tests/Feature/TableauDeBord/EcartDesPrixDAchatVolumeDeLaPageTest.php
+?? tests/Feature/TableauDeBord/SvgDeLEcartDesPrixDAchatTest.php
+?? tests/Fixtures/EcartDesPrixDAchat/LectureDeLaPage.php
+?? tests/Unit/EcartDesPrixDAchatVolumeTest.php
 ```
 
 ## Dernière course de la chaîne
@@ -66,4 +67,5 @@ Course `wf_bbdbefd3-771`, étapes commencées (de la plus ancienne à la plus r�
 ```
 lot-1:implementation
 lot-2:implementation
+lot-3:implementation
 ```

@@ -15,16 +15,18 @@ on:
 permissions:
   contents: read
 
-# Image « ubuntu-latest » (Ubuntu 26.04 depuis son passage) : Playwright 1.59.1
-# ne la gérait pas (« Playwright does not support chromium on ubuntu26.04-x64 »),
-# ce qui avait arrêté tous les jobs qui installent le navigateur, et les jobs
-# étaient fixés à Ubuntu 24.04. Playwright 1.65.1 (package.json) la gère, et cet
-# essai de la CI le confirme. Si une course s'arrête de nouveau à l'étape
-# « Install Playwright and its browser » avec ce message, remettre
-# « ubuntu-24.04 » dans les neuf jobs (ici et dans audit-quotidien.yml).
+# Image fixée à Ubuntu 24.04 : « ubuntu-latest » est passé à Ubuntu 26.04.
+# Playwright 1.59.1 ne la gérait pas (« Playwright does not support chromium on
+# ubuntu26.04-x64 ») ; Playwright 1.65.1 (package.json) l'installe, comme
+# l'a montré l'essai de la CI du 21/11/2026. Mais sur cette image le semis
+# s'arrête : « qpdf --check » (AnalyseurDePdf) refuse le PDF
+# « Facture GL-2026-118.pdf » que le semis dépose, alors qu'il passe sur
+# Ubuntu 24.04. La cause (version de qpdf, ou PDF que le semis fabrique) se
+# cherche à part, avant de changer l'image : une production avec le qpdf de
+# 26.04 refuserait de même ce PDF.
 jobs:
   style:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     name: Pint
 
@@ -55,7 +57,7 @@ jobs:
   # seuils.json l'enregistre, sans rien relâcher ni cacher (paramètres lus
   # par phpstan dump-parameters, voir qualite.php seuils).
   analyse:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # Décision de l'éditeur du 13/11/2026 : Larastan et les seuils passent à
     # chaque envoi et à chaque demande de fusion. Pour un envoi, la base des
     # seuils est le commit précédent de la branche (github.event.before) ;
@@ -105,7 +107,7 @@ jobs:
   # redirection, un autre site ou un e-mail sans contrôle ; puis le témoin,
   # dont l'analyse doit voir exactement les chemins qu'il annonce.
   flux:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # Décision de l'éditeur du 13/11/2026 : l'analyse des flux de Psalm et
     # son témoin passent à chaque envoi et à chaque demande de fusion.
 
@@ -149,7 +151,7 @@ jobs:
   # Sécurité des dépendances : une faille connue d'un paquet du dépôt fait
   # échouer la CI ; elle se corrige par la mise à jour du paquet.
   audit:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     name: Audit des dépendances
 
@@ -192,7 +194,7 @@ jobs:
   # chaque processus d'Infection a sa base (TEST_TOKEN,
   # LARAVEL_PARALLEL_TESTING). Rapports gardés en artefact.
   couverture:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # Décision de l'éditeur du 11/11/2026 (D63, méthode rapide) : cette tâche
     # ne se lance plus à chaque envoi, seulement à la main (workflow_dispatch),
     # jusqu'à l'étape 15 de la feuille de route, où elle repasse sur tout le
@@ -320,7 +322,7 @@ jobs:
   # leurs tables et leurs fonctions, comme le propriétaire de la base de
   # production.
   tests:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     strategy:
       fail-fast: true
@@ -435,7 +437,7 @@ jobs:
   # minutes : le groupe « semis » est hors de la suite par défaut
   # (phpunit.xml) et tourne ici, à chaque envoi.
   semis:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     name: Semis complet (PHP 8.3, PostgreSQL 17)
 
@@ -516,7 +518,7 @@ jobs:
   # minutes : le groupe « copies » est hors de la suite par défaut
   # (phpunit.xml) et tourne ici, à chaque envoi.
   copies:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     name: Bases modèles de la démonstration (PHP 8.3, PostgreSQL 17)
 

@@ -16,7 +16,7 @@ permissions:
 
 jobs:
   audit:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
 
     name: Audit des dépendances de la branche de travail
 

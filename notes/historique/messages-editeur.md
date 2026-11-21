@@ -6245,3 +6245,41 @@ et pourquoi tu passer pas ?
 
 fais le après la carte
 
+## 540. 2026-11-21 14:27 UTC
+
+Je comprends pas pourquoi tu fais tu ce travail alors que je t ai dit juste regarde si il est bien fait
+
+## 541. 2026-11-21 15:47 UTC
+
+Je comprends pas pourquoi tu prends autant de temps pour vérifié ????
+
+## 542. 2026-11-21 16:02 UTC
+
+Fait rapide ok je comprends pas pourquoi autant de vérification ???
+
+Fini rapidement car  est deja fait et reste juste à verifier rapidement
+
+## 543. 2026-11-21 16:08 UTC
+
+Ce n'est pas le total des achats du mois » est faux quand tous les achats du mois sont affichés. == il parle pour les achats du moins avec les prix des produits qui ont des écarts dans le mois et pas tout les achats du mois meme sans ecart
+
+## 544. 2026-11-21 16:10 UTC
+
+Je crois que tu fais pas bien. Ce qui était fais était bien mais toi tu exagères un peu
+
+## 545. 2026-11-21 16:12 UTC
+
+Il y avais que les 12 derniers moi et l année du dernier mois donc decembre 2025 à novembre 2026 ce qui était super bien et je comprend pas pourquoi tu dit autrement
+
+## 546. 2026-11-21 16:14 UTC
+
+Mais toi t as tout mélanger. Moi jai dit que pour la carte avec des écarts des prix qui est fait hier
+
+## 547. 2026-11-21 16:56 UTC
+
+Bon tu commences les autres travail que  t as mis en sauvegarde pendant la semaine et laisse à coté pour l’instant cette carte
+
+## 548. 2026-11-21 16:56 UTC
+
+Mais le travail tu fais avec sonnet 5.5 effort extra avec ultracode
+

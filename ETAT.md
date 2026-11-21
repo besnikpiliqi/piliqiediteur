@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 21/11/2026 à 12:28 UTC par pilotage-sync.sh : « Carte Écart : étape 2 lancée (wf_42a84362-40e) ».
+Mis à jour le 21/11/2026 à 17:03 UTC par pilotage-sync.sh : « 21/11 soir : carte Écart des prix d'achat mise de côté (relecture faite), reprise des travaux de la semaine : Playwright 1.65.1 puis DEVIS-RET ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

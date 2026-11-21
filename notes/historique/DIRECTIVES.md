@@ -815,3 +815,5 @@ Elles sont appliquées dans le code depuis leur demande (sauf la règle (1) du p
 - 17/11/2026, vers 0 h 10 (Paris) — Accord de l'éditeur (« ok ») : « Factures à encaisser par ancienneté » ouverte au départ du tableau de bord sur le site réel, avec les cartes principales (lot GRAPH-AN).
 
 - 21/11/2026 (matin, Paris) — Moteurs des agents : « uniquement tout ce qui s'agit de TVA avec Opus 5.5 effort MAX avec ultracode, tout le reste avec Sonnet 5.5 avec effort extra avec ultracode » ; ordre de départ : la carte « Écart des prix d'achat » d'abord, puis le reste comme prévu avec les sauvegardes (DEVIS-RET, écrans, semis, TVA…).
+
+- 21/11/2026 (matin, Paris) — CORRECTION des moteurs : la carte « Écart des prix d'achat » se finit ENTIÈREMENT avec Opus 5.5 effort MAX ultracode ; après elle, uniquement la TVA avec Opus 5.5 effort MAX ultracode et tout le reste avec Sonnet 5.5 effort extra ultracode.

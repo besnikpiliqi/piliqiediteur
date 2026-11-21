@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 21/11/2026 à 09:57 UTC par pilotage-sync.sh : « Consigne de l'éditeur : TVA en Opus 5.5 max, le reste en Sonnet 5.5 extra ».
+Mis à jour le 21/11/2026 à 09:59 UTC par pilotage-sync.sh : « Moteurs : la carte entière en Opus 5.5 max, ensuite TVA en Opus max et le reste en Sonnet extra ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

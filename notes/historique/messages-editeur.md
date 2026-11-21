@@ -6161,3 +6161,7 @@ la t es revenu à l encien model. tu doit pas calculer par d autre mois mais que
 
 il faut compter pour les 12 mois seperement les produit comme pour les mois, donc c est autre chose par mois et autre chose par année. et je vois mtn par 12 mois c est changé  ??
 
+## 524. 2026-11-21 00:23 UTC
+
+car il peux y avoir un produit qui est acheté le premier mois mais est achete dans les mois suivant à plusieurs fois , donc peut dans un mois il apparait pas mais entre par ex entre mars et juillet peut avoir des ecarts
+

@@ -626,3 +626,4 @@
 - 20/11 — Carte Écart des prix d'achat : explication de l'éditeur (produits sans écart dans le mois mais avec écart dans l'année) ; phrase ajoutée ; maquette v29.
 - 21/11 — Carte Écart des prix d'achat : total par produit dans le tableau de l'année ; maquette v30.
 - 21/11 — Carte Écart des prix d'achat : total des quantités par produit et pour les 12 mois dans le tableau de l'année ; maquette v31.
+- 21/11 — Carte Écart des prix d'achat : total des prix (quantité × prix, prix de départ compris) dans la colonne « Achats suivants de l'année » du tableau de l'année ; maquette v32 ; vérification indépendante en cours.

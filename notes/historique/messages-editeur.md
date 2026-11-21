@@ -6177,3 +6177,11 @@ c est bien mais juste tu affiche a la fin des produit le total ecart, donc par p
 
 met  aussi le total des qte comme total des ecart
 
+## 527. 2026-11-21 00:47 UTC
+
+mets aussi le total de prix de produits "Achats suivants de l’année" mais tu calcule aussi la premier achat de "Prix de départ de l’année" pour calculer tout
+
+## 528. 2026-11-21 00:52 UTC
+
+pourqoui t as fait mnt comme ca
+

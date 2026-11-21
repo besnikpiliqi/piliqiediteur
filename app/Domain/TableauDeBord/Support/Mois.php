@@ -72,6 +72,15 @@ final class Mois
     }
 
     /**
+     * « janv. », « déc. » : le nom court du mois, sans l'année, pour l'étiquette
+     * d'une colonne et le jour d'un achat (« 6 déc. »).
+     */
+    public static function nomCourt(string $mois): string
+    {
+        return self::NOMS_COURTS[self::lire($mois)[1]];
+    }
+
+    /**
      * @return array{0: int, 1: int}
      */
     private static function lire(string $mois): array

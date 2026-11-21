@@ -6151,3 +6151,13 @@ je comprends pas ou tu prends ca "-0.03 et -0.30" alors que la il y pas deux ach
 
 la t es revenu à l encien model. tu doit pas calculer par d autre mois mais que dans le mois selecter
 
+## 523. 2026-11-21 00:20 UTC
+
+<!-- attach -->
+
+> Une conséquence à savoir. Les changements de prix d’un mois à l’autre ne sont plus comptés nulle part. Une phrase sur la page le dit. Si un jour vous voulez aussi les compter, ce serait un autre calcul à ajouter.
+
+
+
+il faut compter pour les 12 mois seperement les produit comme pour les mois, donc c est autre chose par mois et autre chose par année. et je vois mtn par 12 mois c est changé  ??
+

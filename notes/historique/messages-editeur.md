@@ -6205,3 +6205,11 @@ mais la les calcule se font que pour les produits qui ont des ecarts, donc l ann
 
 "8 produits ont un écart : leurs achats (prix de départ compris, hors achats au même prix que le départ) totalisent 15 928,61 € HT, soit +1,8 % par rapport au prix du premier achat de l’année. 4 autres produits n’ont pas d’écart et ne sont pas comptés (2 achetés une seule fois, 2 toujours au même prix)." non non tu laisse alors comme il etais, c etais mieux le texte plus court plus simple à comprendre
 
+## 533. 2026-11-21 02:13 UTC
+
+bon tu commence à 10h05 le travaille comme prevu avec les sauvegarde que tu as fait, mais tu commence par celui la ce qu'on vient de construire  les écarts des prix d achat, donc regarde tres tres bien avec haute intention pour qu'il ai zero erreur cette carte, donc cette carte tu fais avec opus 5.5 max ultracode et le reste tu fait avec sonnet 5.5 extra ultracode, d accord
+
+## 534. 2026-11-21 09:35 UTC
+
+bon tu commence le travaille comme prevu avec les sauvegarde que tu as fait, mais tu commence par celui la ce qu'on vient de construire  les écarts des prix d achat, donc regarde tres tres bien avec haute intention pour qu'il ai zero erreur cette carte, donc cette carte tu fais avec opus 5.5 max ultracode et le reste tu fait avec sonnet 5.5 extra ultracode, d accord, et tout ce qui s agit des tva tu fait comme tu a deja prevu.
+

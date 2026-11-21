@@ -1,19 +1,19 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 21/11/2026 à 01:58 UTC par pilotage-sync.sh : « Carte Écart des prix d'achat : phrase courte et exacte (maquette v36) ».
+Mis à jour le 21/11/2026 à 09:51 UTC par pilotage-sync.sh : « Reprise du travail : carte Écart des prix d'achat en premier, CI réparée (Ubuntu 24.04) ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
-Tête poussée : `7c5edc7a`. Commits locaux pas encore poussés :
+Tête poussée : `fca01c39`. Commits locaux pas encore poussés :
 
 ```
-2b75fa23 Devis : dépannage à domicile, rétractation et acceptation signée
-a4ca0549 Réparation de la CI rouge de 7c5edc7a
 ```
 
 Derniers commits poussés :
 
 ```
+fca01c39 Réparation de la CI rouge de a4ca0549
+a4ca0549 Réparation de la CI rouge de 7c5edc7a
 7c5edc7a Relecture du lot DEMO-COPIE-3
 7d521432 Démonstration : bandeau, e-mails captés, tâches et mises à jour des copies
 33c56754 Réparation de la CI rouge de 52dab0ff
@@ -32,38 +32,11 @@ a9bb1a78 Charges : état téléchargeable en PDF et en Excel
 93939942 Réparation de la CI rouge de b6015883
 b6015883 Relecture du lot REGUL
 be209079 Réparation de la CI rouge de 8ce8bd4 (cartes des notifications)
-e405d27b Régularisation après une correction de SIREN et relances (lot REGUL)
-220d40b4 Réparation de la CI rouge de 8ce8bd4
 ```
 
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
- M README.md
- M app/Domain/Facturation/Actions/CreerDevisAction.php
- M app/Domain/Facturation/Actions/EmettreDevisAction.php
- M app/Domain/Facturation/Enums/NatureEnvoi.php
- M app/Domain/Facturation/Jobs/EnvoyerDocumentJob.php
- M app/Domain/Facturation/Models/EnvoiDocument.php
- M app/Domain/Facturation/Services/MentionsFiscales.php
- M app/Domain/Tenancy/Models/Magasin.php
- M app/Filament/App/Resources/ClientResource.php
- M app/Filament/App/Resources/DevisResource.php
- M app/Filament/App/Resources/DevisResource/Pages/EditDevis.php
- M app/Http/Controllers/ReponseAuDevisController.php
- M database/seeders/Semis/DocumentsDesCas.php
- M resources/views/devis/pdf.blade.php
- M resources/views/devis/reponse.blade.php
- M resources/views/documents/pdf/lignes.blade.php
- M tests/Browser/Parcours/DevisDeDepannageADomicileTest.php
- M tests/Browser/Parcours/ReponseAuDevisEnLigneTest.php
- M tests/Browser/inventaire-des-actions.php
- M tests/Feature/Calendrier/IsolationDesCalendriersTest.php
- M tests/Feature/Demonstration/BasesModelesTest.php
- M tests/Feature/Facturation/DevisDeDepannageADomicileTest.php
- M tests/Feature/Facturation/ReponseAuDevisEnLigneTest.php
- M tests/Feature/SemisCompletTest.php
-?? resources/views/devis/document.blade.php
 ```
 
 ## Dernière course de la chaîne

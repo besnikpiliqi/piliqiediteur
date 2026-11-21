@@ -1,0 +1,369 @@
+<?php
+
+namespace App\Filament\App\Resources;
+
+use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Calendrier\Calendrier;
+use App\Domain\Facturation\Models\Avoir;
+use App\Domain\Facturation\Models\ClotureCaisse;
+use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Services\CalculateurLigne;
+use App\Domain\Tenancy\Support\CompteConnecte;
+use App\Domain\Tenancy\Support\ValeurRequise;
+use App\Domain\Tenancy\Support\ValeursLues;
+use App\Filament\App\FicheDUnDocument;
+use App\Filament\App\Resources\ClotureCaisseResource\Pages;
+use App\Filament\Concerns\PrendLeCalendrierDuMagasin;
+use App\Filament\TableauEntry;
+use Closure;
+use Filament\Infolists\Components\Section as InfolistSection;
+use Filament\Infolists\Components\TextEntry;
+use Filament\Infolists\Infolist;
+use Filament\Resources\Resource;
+use Filament\Tables;
+use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Collection;
+
+/**
+ * Lecture seule : une clôture se crée uniquement via l'action « Clôturer
+ * la journée » (voir ListClotureCaisses) ou la commande planifiée
+ * app:cloturer-caisses-automatiquement, jamais via un formulaire
+ * create/edit classique. Document fiscal au même titre qu'une facture :
+ * jamais modifiable ni supprimable une fois créée (voir
+ * ClotureCaissePolicy et ClotureCaisse).
+ *
+ * La fiche montre le récapitulatif écrit à la clôture, sans rien
+ * recalculer (points 15 et 24, voir RecapitulatifDeCloture) : ventes et
+ * avoirs, net, factures aux professionnels, encaissements par mode, crédit
+ * d'avoir utilisé et grands totaux ; puis l'aperçu de ce que l'e-reporting
+ * déclarera pour la journée (point 26, voir EReportingResource). Chaque ticket et chaque avoir qu'elle
+ * compte s'ouvre d'un clic (point 25) pour qui peut voir ce document ; une
+ * personne qui ne voit que ses ventes y voit les totaux du magasin et le
+ * détail de ses seuls documents, les autres comptés en nombre et en total,
+ * sans numéro ni client (règle « Vendeurs »).
+ */
+class ClotureCaisseResource extends Resource
+{
+    use PrendLeCalendrierDuMagasin;
+
+    protected static ?string $model = ClotureCaisse::class;
+
+    protected static ?string $navigationIcon = 'heroicon-o-calculator';
+
+    protected static ?string $navigationGroup = 'Ventes';
+
+    protected static ?int $navigationSort = 6;
+
+    protected static ?string $modelLabel = 'clôture de caisse';
+
+    protected static ?string $pluralModelLabel = 'clôtures de caisse';
+
+    /**
+     * Confidentialité par vendeur (voir ClotureCaissePolicy) : sans
+     * cloture_caisse.view_toutes, la liste elle-même ne doit montrer que
+     * les clôtures déclenchées par l'utilisateur courant.
+     *
+     * @return Builder<Model>
+     */
+    public static function getEloquentQuery(): Builder
+    {
+        $query = parent::getEloquentQuery();
+
+        if (! CompteConnecte::exiger()->can(PermissionRegistry::CLOTURE_CAISSE_VIEW_TOUTES)) {
+            $query->where('cree_par', auth()->id());
+        }
+
+        return $query;
+    }
+
+    /**
+     * « 08/10/2026 (oubliée) et 09/10/2026 » : des journées de caisse
+     * (AAAA-MM-JJ), une journée d'avant aujourd'hui encore à clôturer
+     * étant une journée oubliée.
+     *
+     * @param  Collection<int, string>  $journees
+     */
+    public static function libelleDesJournees(Collection $journees): string
+    {
+        $aujourdhui = self::calendrierDuMagasin()->aujourdhui();
+
+        return $journees
+            ->map(fn (string $journee): string => Calendrier::afficherJour($journee, 'd/m/Y').($journee < $aujourdhui ? ' (oubliée)' : ''))
+            ->join(', ', ' et ');
+    }
+
+    /**
+     * Ce que la clôture de ces journées regroupera, avec les mêmes
+     * critères que CloturerCaisseAction : les ventes au comptoir de chaque
+     * journée et les avoirs du même jour, pas encore clôturés, et leur
+     * total net TTC, en centimes.
+     *
+     * @param  Collection<int, string>  $journees
+     * @return array{ventes: int, avoirs: int, total_ttc: int}
+     */
+    public static function enAttenteDeCloture(Collection $journees): array
+    {
+        $calendrier = self::calendrierDuMagasin();
+        $ventes = $journees->flatMap(fn (string $journee) => Facture::query()->enAttenteDeCloture($calendrier, $journee)->get());
+        $avoirs = $journees->flatMap(fn (string $journee) => Avoir::query()->enAttenteDeCloture($calendrier, $journee)->get());
+        $calculateur = app(CalculateurLigne::class);
+
+        return [
+            'ventes' => $ventes->count(),
+            'avoirs' => $avoirs->count(),
+            'total_ttc' => $calculateur->deduire($calculateur->cumuler($ventes), $calculateur->cumuler($avoirs))['total_ttc'],
+        ];
+    }
+
+    public static function infolist(Infolist $infolist): Infolist
+    {
+        return $infolist->schema([
+            InfolistSection::make('Clôture')->schema([
+                TextEntry::make('numero')->label('Numéro'),
+                TextEntry::make('date_cloture')->label('Journée clôturée')->jour(),
+                TextEntry::make('cloturee_a')->label('Clôturée le')->dateTime('d/m/Y à H:i'),
+                TextEntry::make('cree_par_nom')->label('Déclenchée par')->placeholder('Automatique (planifiée à minuit)'),
+            ])->columns(2),
+
+            // Le récapitulatif écrit à la clôture (voir
+            // RecapitulatifDeCloture), jamais recalculé ici.
+            InfolistSection::make('Ventes et avoirs')
+                ->description('Montants enregistrés des documents, additionnés une seule fois à la clôture. Le net des ventes aux particuliers est la base de l\'e-reporting : « TVA par taux » le détaille, et l\'aperçu de l\'e-reporting le range par catégorie.')
+                ->schema([
+                    // Modèle D (lot DEMO-V) : les ventes aux particuliers et
+                    // leurs avoirs, leur net en dernière ligne, puis les
+                    // factures aux professionnels et leurs avoirs, pour
+                    // information, en gris.
+                    TableauEntry::make('rubriques')
+                        ->hiddenLabel()
+                        ->state(fn (ClotureCaisse $record): array => self::rubriques($record, 'particuliers'))
+                        ->schema([
+                            TextEntry::make('rubrique')->label('Rubrique'),
+                            TextEntry::make('nombre')->label('Nombre')->placeholder('')->alignEnd(),
+                            TextEntry::make('ht')->label('Total HT')->alignEnd(),
+                            TextEntry::make('tva')->label('TVA')->alignEnd(),
+                            TextEntry::make('ttc')->label('Total TTC')->alignEnd(),
+                        ])
+                        ->ligneDeTotal(fn (ClotureCaisse $record): ?array => self::rubriques($record, 'net')[0] ?? null)
+                        ->lignesDInformation(fn (ClotureCaisse $record): array => self::rubriques($record, 'information')),
+                    FactureResource::ventilationTvaEntry(),
+                ]),
+
+            InfolistSection::make('Encaissements')
+                ->description('Paiements enregistrés depuis la clôture précédente jusqu\'à la fin de la journée, par mode, contre-passations déduites : un paiement enregistré après la clôture de sa journée compte dans la suivante. Ventes et encaissements diffèrent quand un client garde un crédit d\'avoir ou paie plus tard.')
+                ->schema([
+                    // Modèle D (lot DEMO-V) : les cinq modes dans leur
+                    // ordre, le total encaissé en dernière ligne, puis le
+                    // crédit d'avoir utilisé, qui n'en fait pas partie.
+                    TableauEntry::make('encaissements')
+                        ->hiddenLabel()
+                        ->state(fn (ClotureCaisse $record): array => self::encaissements($record))
+                        ->schema([
+                            TextEntry::make('libelle')->label('Mode de paiement'),
+                            TextEntry::make('paiements')->label('Paiements')->alignEnd(),
+                            TextEntry::make('contre_passations')->label('Contre-passations')->alignEnd(),
+                            TextEntry::make('montant')->label('Montant encaissé')->alignEnd(),
+                        ])
+                        ->ligneDeTotal(fn (ClotureCaisse $record): array => [
+                            'libelle' => 'Total encaissé',
+                            'paiements' => array_sum(array_column($record->encaissementsParMode(), 'paiements')),
+                            'contre_passations' => array_sum(array_column($record->encaissementsParMode(), 'contre_passations')),
+                            'montant' => app(CalculateurLigne::class)->enEuros($record->totalEncaisseEnCentimes()),
+                        ])
+                        ->lignesDInformation(fn (ClotureCaisse $record): array => [[
+                            'libelle' => 'Crédit d\'avoir utilisé (n\'entre pas dans les encaissements)',
+                            'montant' => app(CalculateurLigne::class)->enEuros($record->creditAvoirImpute()),
+                        ]]),
+                ]),
+
+            InfolistSection::make('Grands totaux')
+                ->description('Grands totaux perpétuels du magasin après le dernier document que compte la clôture, jamais remis à zéro : toutes ses ventes, factures aux professionnels comprises, avoirs déduits (réel) ou ajoutés en valeur absolue (absolu).')
+                ->schema([
+                    TextEntry::make('grand_total_reel')
+                        ->label('Grand total perpétuel réel')
+                        ->state(fn (ClotureCaisse $record): string => app(CalculateurLigne::class)->enEuros($record->grandsTotaux()['perpetuel_reel'])),
+                    TextEntry::make('grand_total_absolu')
+                        ->label('Grand total perpétuel absolu')
+                        ->state(fn (ClotureCaisse $record): string => app(CalculateurLigne::class)->enEuros($record->grandsTotaux()['perpetuel_absolu'])),
+                ])
+                ->columns(2),
+
+            EReportingResource::sectionDeLApercu(),
+
+            // Le détail des documents que la personne peut voir (règle
+            // « Vendeurs ») : chaque numéro ouvre sa fiche ; les autres ne
+            // se comptent qu'en nombre et en total.
+            InfolistSection::make('Ventes agrégées')->schema([
+                self::detailDesDocuments('tickets', fn (ClotureCaisse $record): array => self::documentsVisibles($record->factures(), $record->factures()->visiblesPar(CompteConnecte::exiger()))['visibles']),
+                TextEntry::make('autres_tickets')
+                    ->label('Autres tickets de l\'équipe')
+                    ->state(fn (ClotureCaisse $record): ?string => self::documentsVisibles($record->factures(), $record->factures()->visiblesPar(CompteConnecte::exiger()))['autres'])
+                    ->visible(fn (?string $state): bool => $state !== null),
+            ]),
+
+            InfolistSection::make('Avoirs déduits')
+                ->visible(fn (ClotureCaisse $record) => $record->avoirs()->exists())
+                ->schema([
+                    self::detailDesDocuments('avoirs', fn (ClotureCaisse $record): array => self::documentsVisibles($record->avoirs(), $record->avoirs()->visiblesPar(CompteConnecte::exiger()))['visibles']),
+                    TextEntry::make('autres_avoirs')
+                        ->label('Autres avoirs de l\'équipe')
+                        ->state(fn (ClotureCaisse $record): ?string => self::documentsVisibles($record->avoirs(), $record->avoirs()->visiblesPar(CompteConnecte::exiger()))['autres'])
+                        ->visible(fn (?string $state): bool => $state !== null),
+                ]),
+        ]);
+    }
+
+    /**
+     * Le tableau des documents que la personne voit, chaque numéro en lien
+     * vers sa fiche quand elle peut l'ouvrir (voir FicheDUnDocument).
+     *
+     * @param  Closure(ClotureCaisse): list<array<string, string|null>>  $documents
+     */
+    private static function detailDesDocuments(string $nom, Closure $documents): TableauEntry
+    {
+        return TableauEntry::make($nom)
+            ->hiddenLabel()
+            ->state($documents)
+            ->schema([
+                TextEntry::make('numero')->label('Numéro')
+                    ->url(fn (TextEntry $component): ?string => self::adresseDuDocument($component))
+                    ->color(fn (TextEntry $component): ?string => self::adresseDuDocument($component) === null ? null : 'primary'),
+                TextEntry::make('client_nom')->label('Client'),
+                TextEntry::make('ht')->label('Total HT')->alignEnd(),
+                TextEntry::make('tva')->label('TVA')->alignEnd(),
+                TextEntry::make('ttc')->label('Total TTC')->alignEnd(),
+            ]);
+    }
+
+    /**
+     * L'adresse de la fiche du document de cette rangée, null quand la
+     * personne ne peut pas l'ouvrir (voir FicheDUnDocument).
+     */
+    private static function adresseDuDocument(TextEntry $component): ?string
+    {
+        $adresse = ValeursLues::tableau($component->getContainer()->getState())['url'] ?? null;
+
+        return is_string($adresse) ? $adresse : null;
+    }
+
+    /**
+     * Les tickets ou les avoirs de la clôture que la personne voit (règle
+     * « Vendeurs », voir Facture::scopeVisiblesPar() et
+     * Avoir::scopeVisiblesPar()), avec le lien vers leur fiche et leurs
+     * montants, les avoirs en négatif ; et, pour les autres, leur seul
+     * nombre et leur total TTC (« 2 tickets, 24,00 € TTC »), sans aucun
+     * numéro ni client, null quand elle les voit tous. Les totaux
+     * s'additionnent en centimes (voir CalculateurLigne).
+     *
+     * @param  HasMany<Facture, ClotureCaisse>|HasMany<Avoir, ClotureCaisse>  $tous
+     * @param  HasMany<Facture, ClotureCaisse>|HasMany<Avoir, ClotureCaisse>  $visibles
+     * @return array{visibles: list<array{numero: string, url: string|null, client_nom: string|null, ht: string, tva: string, ttc: string}>, autres: string|null}
+     */
+    private static function documentsVisibles(HasMany $tous, HasMany $visibles): array
+    {
+        $estUnAvoir = $tous->getRelated() instanceof Avoir;
+        $calculateur = app(CalculateurLigne::class);
+        $sens = $estUnAvoir ? -1 : 1;
+        $montant = fn (Facture|Avoir $document, string $colonne): string => $calculateur->enEuros($sens * $calculateur->enCentiemes($document->{$colonne}));
+        $idsVisibles = $visibles->pluck('id')->all();
+        $documents = $tous->orderBy('numero')->get();
+        $estVu = fn (Facture|Avoir $document): bool => in_array($document->getKey(), $idsVisibles, true);
+        $vus = $documents->filter($estVu);
+        $autres = $documents->reject($estVu);
+        $nature = $estUnAvoir ? 'avoir' : 'ticket';
+
+        return [
+            'visibles' => array_values($vus->map(fn (Facture|Avoir $document): array => [
+                'numero' => ValeurRequise::de($document->numero, 'le numéro d\'un document de la clôture'),
+                'url' => FicheDUnDocument::adresse($document),
+                'client_nom' => $document->client_nom,
+                'ht' => $montant($document, 'total_ht'),
+                'tva' => $montant($document, 'total_tva'),
+                'ttc' => $montant($document, 'total_ttc'),
+            ])->all()),
+            'autres' => $autres->isEmpty() ? null : sprintf(
+                '%d %s%s, %s TTC',
+                $autres->count(),
+                $nature,
+                $autres->count() > 1 ? 's' : '',
+                $calculateur->enEuros($sens * (int) $autres->sum(fn (Facture|Avoir $document): int => $calculateur->enCentiemes($document->total_ttc))),
+            ),
+        ];
+    }
+
+    /**
+     * Les lignes d'une partie de la rubrique « Ventes et avoirs » telles
+     * que la clôture les a écrites (voir ClotureCaisse::rubriques()) : les
+     * ventes aux particuliers et leurs avoirs, leur net, ou les factures
+     * aux professionnels et leurs avoirs ; leurs montants en euros, le
+     * détail d'un taux en retrait.
+     *
+     * @param  'particuliers'|'net'|'information'  $partie
+     * @return list<array{rubrique: string, nombre: int|null, ht: string, tva: string, ttc: string}>
+     */
+    private static function rubriques(ClotureCaisse $cloture, string $partie): array
+    {
+        $calculateur = app(CalculateurLigne::class);
+
+        return array_values(array_map(fn (array $rubrique): array => [
+            'rubrique' => ($rubrique['detail'] ? "\u{2003}" : '').$rubrique['rubrique'],
+            'nombre' => $rubrique['nombre'],
+            'ht' => $calculateur->enEuros($rubrique['ht']),
+            'tva' => $calculateur->enEuros($rubrique['tva']),
+            'ttc' => $calculateur->enEuros($rubrique['ttc']),
+        ], array_filter($cloture->rubriques(), fn (array $rubrique): bool => $rubrique['partie'] === $partie)));
+    }
+
+    /**
+     * Les encaissements du récapitulatif, par mode, leur montant écrit en
+     * euros.
+     *
+     * @return list<array{libelle: string, paiements: int, contre_passations: int, montant: string}>
+     */
+    private static function encaissements(ClotureCaisse $cloture): array
+    {
+        return array_map(fn (array $mode): array => [
+            'libelle' => $mode['libelle'],
+            'paiements' => $mode['paiements'],
+            'contre_passations' => $mode['contre_passations'],
+            'montant' => app(CalculateurLigne::class)->enEuros($mode['montant']),
+        ], $cloture->encaissementsParMode());
+    }
+
+    public static function table(Table $table): Table
+    {
+        return $table
+            ->defaultSort('date_cloture', 'desc')
+            ->columns([
+                Tables\Columns\TextColumn::make('numero')->label('Numéro')->rechercheSansAccents(),
+                Tables\Columns\TextColumn::make('date_cloture')->label('Journée')->jour()->sortable(),
+                Tables\Columns\TextColumn::make('nombre_ventes')->label('Ventes'),
+                Tables\Columns\TextColumn::make('nombre_avoirs')->label('Avoirs'),
+                Tables\Columns\TextColumn::make('total_ttc')->label('Total TTC')->money('EUR'),
+                Tables\Columns\TextColumn::make('encaisse')
+                    ->label('Encaissé')
+                    ->state(fn (ClotureCaisse $record): string => app(CalculateurLigne::class)->enEuros($record->totalEncaisseEnCentimes())),
+                Tables\Columns\TextColumn::make('cree_par')
+                    ->label('Déclenchée par')
+                    ->state(fn (ClotureCaisse $record) => $record->cree_par_nom ?? 'Automatique')
+                    ->badge()
+                    ->color(fn (ClotureCaisse $record) => $record->cree_par === null ? 'gray' : 'info'),
+                Tables\Columns\TextColumn::make('cloturee_a')->label('Clôturée le')->dateTime('d/m/Y H:i'),
+            ])
+            ->actions([
+                Tables\Actions\ViewAction::make(),
+            ])
+            ->bulkActions([]);
+    }
+
+    public static function getPages(): array
+    {
+        return [
+            'index' => Pages\ListClotureCaisses::route('/'),
+            'view' => Pages\ViewClotureCaisse::route('/{record}'),
+        ];
+    }
+}

@@ -1,0 +1,365 @@
+<?php
+
+namespace App\Domain\Tenancy\Actions;
+
+use App\Domain\Cabinets\Actions\CreerCollaborateurAction;
+use App\Domain\Cabinets\Actions\MettreFinAuLienAction;
+use App\Domain\Cabinets\Enums\MotifDeFinDuLien;
+use App\Domain\Cabinets\Jobs\RattacherUneDeclaration;
+use App\Domain\Cabinets\Models\LienCabinet;
+use App\Domain\Cabinets\Services\ExpertsComptablesDeclares;
+use App\Domain\Cabinets\Support\IdentiteDansLeJournal;
+use App\Domain\Tenancy\Concerns\AgitDansLaSociete;
+use App\Domain\Tenancy\Enums\ActionAuditee;
+use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Domain\Tenancy\Enums\StatutCompte;
+use App\Domain\Tenancy\Models\Affectation;
+use App\Domain\Tenancy\Scopes\SocieteScope;
+use App\Domain\Tenancy\Services\AffectationsDesMembres;
+use App\Domain\Tenancy\Services\JournalAudit;
+use App\Domain\Tenancy\Services\JournalDesDroits;
+use App\Domain\Tenancy\Services\PorteeDesAdministrateurs;
+use App\Domain\Tenancy\Services\PorteeDesDroits;
+use App\Domain\Tenancy\Services\SessionsDesComptes;
+use App\Domain\Tenancy\Support\CleDuModele;
+use App\Models\User;
+use Closure;
+use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Support\Facades\DB;
+use LogicException;
+
+/**
+ * Les gestes qui touchent tout un compte de la société, selon les règles
+ * de PorteeDesDroits, sur l'auteur et le compte relus sous les verrous des
+ * registres de tous les magasins du compte (tous les magasins de la
+ * société pour un administrateur de tous les magasins, ceux des clients
+ * confiés pour un collaborateur d'un cabinet) et de leurs lignes, avec le JET 130 de chacun et
+ * l'entrée d'audit (voir JournalDesDroits) :
+ * - suspendre : le compte n'ouvre plus rien et n'a plus aucun droit dès la
+ *   requête suivante, ses sessions se ferment et ses notifications, qui ne
+ *   le regardent plus, s'effacent ; il garde son affectation ;
+ * - réactiver : un compte suspendu par le propriétaire ne se réactive que
+ *   par le propriétaire ;
+ * - retirer de la société (retirer un membre de son magasin, son seul
+ *   magasin, revient au même) : ses affectations et ses autorisations de
+ *   société disparaissent, ses notifications s'effacent, ses sessions se
+ *   ferment ; le compte ne s'efface jamais et garde son rôle de société,
+ *   son identifiant, son magasin de rattachement et son historique. Un
+ *   compte suspendu par le propriétaire ne se retire que par le
+ *   propriétaire ;
+ * - réintégrer un compte retiré, dans son rôle et, pour un membre, dans son
+ *   magasin, selon les règles de la création de ce rôle : comme membre
+ *   (voir PorteeDesDroits::peutReintegrer()), comme administrateur par le
+ *   propriétaire seul, comme collaborateur d'un
+ *   cabinet par le propriétaire du cabinet seul, sans client confié. Un
+ *   compte retiré par le propriétaire ne se réintègre que par le
+ *   propriétaire.
+ *
+ * Un compte d'expert-comptable de la société (voir
+ * DeclarerSonExpertComptableAction) ne se gère que par le propriétaire,
+ * tant que sa déclaration est en attente, celle-ci verrouillée avant les
+ * comptes (voir ExpertsComptablesDeclares::verrouillerLaDeclarationDe()) :
+ * le suspendre efface aussi le lien de son mot de passe en cours, qui ne
+ * revit pas à la réactivation ; retirer la dernière personne non retirée
+ * de la déclaration met fin à celle-ci, dans la même modification, par le
+ * client ; la réactivation et la réintégration (voir
+ * reintegrerLExpertComptable()) relancent, après le commit, le
+ * rattachement de la déclaration au cabinet vérifié de son SIREN, qui
+ * attendait une personne active (voir RattacherUneDeclarationAction).
+ *
+ * Chaque nouveau statut note qui l'a donné, et si c'était alors le
+ * propriétaire (voir User::nouveauStatut()) : la décision du propriétaire
+ * tient après une transmission de la propriété.
+ */
+class ChangerStatutCompteAction
+{
+    use AgitDansLaSociete;
+
+    public const MESSAGE_DEJA_DANS_CE_STATUT = 'Ce compte est déjà dans ce statut.';
+
+    public function __construct(
+        private readonly JournalDesDroits $journalDesDroits,
+        private readonly PorteeDesDroits $portee,
+        private readonly AffectationsDesMembres $affectations,
+        private readonly SessionsDesComptes $sessions,
+        private readonly PorteeDesAdministrateurs $porteeDesAdministrateurs,
+        private readonly ExpertsComptablesDeclares $experts,
+        private readonly JournalAudit $journalAudit,
+    ) {}
+
+    /**
+     * @throws AuthorizationException
+     */
+    public function suspendre(User $auteur, User $compte): void
+    {
+        $this->changer($auteur, $compte, ActionAuditee::CompteSuspendu, function (User $auteurRelu, User $compteRelu): void {
+            if (! $compteRelu->estActif()) {
+                throw new LogicException(self::MESSAGE_DEJA_DANS_CE_STATUT);
+            }
+
+            if (! $this->portee->peutSuspendreOuReactiver($auteurRelu, $compteRelu)) {
+                throw new AuthorizationException(PorteeDesDroits::REFUS);
+            }
+
+            $compteRelu->forceFill($compteRelu->nouveauStatut(StatutCompte::Suspendu, $auteurRelu))->save();
+            self::oublierLeLienDeLExpertComptable($compteRelu);
+            $compteRelu->effacerToutesSesNotifications();
+            $this->sessions->fermer($compteRelu);
+        });
+    }
+
+    /**
+     * @throws AuthorizationException
+     */
+    public function reactiver(User $auteur, User $compte): void
+    {
+        $this->changer($auteur, $compte, ActionAuditee::CompteReactive, function (User $auteurRelu, User $compteRelu): void {
+            if (! $compteRelu->estSuspendu()) {
+                throw new LogicException(self::MESSAGE_DEJA_DANS_CE_STATUT);
+            }
+
+            if (! $this->portee->peutSuspendreOuReactiver($auteurRelu, $compteRelu)) {
+                throw new AuthorizationException(PorteeDesDroits::REFUS);
+            }
+
+            $compteRelu->forceFill($compteRelu->nouveauStatut(StatutCompte::Actif, $auteurRelu))->save();
+        });
+
+        $this->relancerLeRattachement($compte);
+    }
+
+    /**
+     * @throws AuthorizationException
+     */
+    public function retirer(User $auteur, User $compte): void
+    {
+        $this->changer($auteur, $compte, ActionAuditee::CompteRetire, function (User $auteurRelu, User $compteRelu): void {
+            if (! $this->portee->peutRetirerDeLaSociete($auteurRelu, $compteRelu)) {
+                throw new AuthorizationException(PorteeDesDroits::REFUS);
+            }
+
+            self::retirerLesDroits($compteRelu);
+            $compteRelu->forceFill($compteRelu->nouveauStatut(StatutCompte::Retire, $auteurRelu))->save();
+            $compteRelu->effacerToutesSesNotifications();
+            $this->sessions->fermer($compteRelu);
+            $this->terminerUneDeclarationSansPersonne($auteurRelu, $compteRelu);
+        });
+    }
+
+    /**
+     * Réintègre un compte de membre retiré dans le magasin de son
+     * identifiant, avec ce rôle et ces cases, comme une création (voir
+     * PorteeDesDroits::peutReintegrer()).
+     *
+     * @param  list<string>|null  $autorisations  les cases d'un vendeur ou d'un observateur ; null, le modèle de son rôle
+     *
+     * @throws AuthorizationException
+     * @throws LogicException
+     */
+    public function reintegrer(User $auteur, User $compte, RoleMagasin|string $role, ?array $autorisations = null): void
+    {
+        $societe = $compte->societe()->firstOrFail();
+        $demandee = $this->affectations->lire($role, $autorisations);
+        $magasin = $compte->magasinDeSonIdentifiant() ?? throw new AuthorizationException(PorteeDesDroits::REFUS);
+
+        $this->dansLaSociete($societe, PorteeDesDroits::REFUS, function () use ($auteur, $compte, $demandee, $magasin): void {
+            $ecrite = $this->journalDesDroits->modifier($auteur, ActionAuditee::CompteReintegre, [$compte], [$magasin], function (User $auteurRelu, array $relus) use ($demandee, $magasin) {
+                [$compteRelu] = $relus;
+
+                if (! $this->portee->peutReintegrer($auteurRelu, $compteRelu, $demandee['role'])) {
+                    throw new AuthorizationException(PorteeDesDroits::REFUS);
+                }
+
+                $cases = $this->affectations->cases($auteurRelu, $magasin, $demandee);
+                $compteRelu->forceFill($compteRelu->nouveauStatut(StatutCompte::Actif, $auteurRelu))->save();
+
+                return $this->affectations->ecrire($auteurRelu, $compteRelu, $magasin, $demandee['role'], $cases);
+            });
+
+            $this->affectations->prevenirDUneNomination($compte, $ecrite, compteCree: false);
+        });
+
+        $compte->refresh();
+    }
+
+    /**
+     * Réintègre un administrateur retiré, avec la portée et les
+     * autorisations que le propriétaire, seul, lui choisit, comme à sa
+     * création (voir PorteeDesAdministrateurs).
+     *
+     * @param  list<int>|null  $magasins  null : tous les magasins, présents et futurs
+     * @param  array<int|string, mixed>  $autorisationsMagasin
+     * @param  array<array-key, mixed>  $autorisationsSociete
+     *
+     * @throws AuthorizationException
+     * @throws LogicException
+     */
+    public function reintegrerLAdministrateur(User $auteur, User $compte, ?array $magasins, array $autorisationsMagasin, array $autorisationsSociete): void
+    {
+        $societe = $compte->societe()->firstOrFail();
+
+        $this->dansLaSociete($societe, PorteeDesDroits::REFUS, function () use ($auteur, $compte, $societe, $magasins, $autorisationsMagasin, $autorisationsSociete): void {
+            CreerAdministrateurAction::exigerLeProprietaire($auteur, $societe);
+            $portee = $this->porteeDesAdministrateurs->lire($societe, $magasins, $autorisationsMagasin, $autorisationsSociete);
+
+            $this->journalDesDroits->modifier($auteur, ActionAuditee::CompteReintegre, [$compte], $this->porteeDesAdministrateurs->magasinsTouches($societe, $portee), function (User $auteurRelu, array $relus) use ($societe, $portee): void {
+                [$compteRelu] = $relus;
+                CreerAdministrateurAction::exigerLeProprietaire($auteurRelu, $societe);
+
+                if (! $compteRelu->estRetire() || ! $compteRelu->estAdministrateur() || (int) $compteRelu->societe_id !== $societe->getKey()) {
+                    throw new AuthorizationException(PorteeDesDroits::REFUS);
+                }
+
+                $compteRelu->forceFill($compteRelu->nouveauStatut(StatutCompte::Actif, $auteurRelu))->save();
+                $this->porteeDesAdministrateurs->ecrire($compteRelu, $portee);
+            });
+        });
+
+        $compte->refresh();
+    }
+
+    /**
+     * Réintègre un collaborateur retiré d'un cabinet d'expertise comptable :
+     * le propriétaire du cabinet seul, tant qu'il gère son équipe ; le
+     * collaborateur revient sans aucun client confié.
+     *
+     * @throws AuthorizationException
+     */
+    public function reintegrerLeCollaborateur(User $auteur, User $compte): void
+    {
+        $cabinet = $compte->societe()->firstOrFail();
+
+        $this->dansLaSociete($cabinet, CreerCollaborateurAction::MESSAGE_PROPRIETAIRE_DU_CABINET_SEUL, function () use ($auteur, $compte, $cabinet): void {
+            $this->journalDesDroits->modifier($auteur, ActionAuditee::CompteReintegre, [$compte], [], function (User $auteurRelu, array $relus) use ($cabinet): void {
+                [$compteRelu] = $relus;
+                CreerCollaborateurAction::exigerLeProprietaireDuCabinet($auteurRelu, $cabinet);
+
+                if (! $compteRelu->estRetire() || ! $compteRelu->estCollaborateur() || (int) $compteRelu->societe_id !== $cabinet->getKey()) {
+                    throw new AuthorizationException(PorteeDesDroits::REFUS);
+                }
+
+                $compteRelu->forceFill($compteRelu->nouveauStatut(StatutCompte::Actif, $auteurRelu))->save();
+            });
+        });
+
+        $compte->refresh();
+    }
+
+    /**
+     * Réintègre un expert-comptable de la société retiré : le propriétaire
+     * seul, tant que sa déclaration est en attente (voir
+     * PorteeDesDroits::peutReintegrerLExpertComptable()). Il garde son mot
+     * de passe, comme tout compte réintégré ; aucun lien ne revit : celui
+     * qui n'a pas encore choisi le sien reçoit un nouveau lien ou choisit
+     * son mot de passe en présence du propriétaire (voir
+     * RedonnerLAccesAction).
+     *
+     * @throws AuthorizationException
+     */
+    public function reintegrerLExpertComptable(User $auteur, User $compte): void
+    {
+        $this->changer($auteur, $compte, ActionAuditee::CompteReintegre, function (User $auteurRelu, User $compteRelu): void {
+            if (! $this->portee->peutReintegrerLExpertComptable($auteurRelu, $compteRelu)) {
+                throw new AuthorizationException(PorteeDesDroits::REFUS);
+            }
+
+            $compteRelu->forceFill($compteRelu->nouveauStatut(StatutCompte::Actif, $auteurRelu))->save();
+        });
+
+        $this->relancerLeRattachement($compte);
+    }
+
+    /**
+     * Supprime les affectations, les autorisations de société et, pour un
+     * collaborateur d'un cabinet d'expertise comptable, les clients confiés
+     * d'un compte qui quitte la société, et, pour un expert-comptable de la
+     * société, le lien de son mot de passe en cours : il garde son rôle de
+     * société, son identifiant et son magasin de rattachement, sans aucun
+     * droit.
+     */
+    public static function retirerLesDroits(User $compte): void
+    {
+        Affectation::query()->where('user_id', $compte->getKey())->delete();
+        DB::table('autorisations_societe')->where('user_id', $compte->getKey())->delete();
+        DB::table('clients_confies')->where('societe_id', $compte->societe_id)->where('user_id', $compte->getKey())->delete();
+        self::oublierLeLienDeLExpertComptable($compte);
+    }
+
+    /**
+     * Efface le lien du mot de passe en cours d'un expert-comptable de la
+     * société, dans sa ligne d'attachement, verrouillée par l'appelant
+     * après le compte : il ne sert plus quand le compte est suspendu ou
+     * retiré. Rien pour un autre compte.
+     */
+    private static function oublierLeLienDeLExpertComptable(User $compte): void
+    {
+        DB::table('comptes_expert_comptable')->where('societe_id', $compte->societe_id)->where('user_id', $compte->getKey())->whereNotNull('jeton_hache')
+            ->update(['jeton_hache' => null, 'jeton_expire_le' => null, 'updated_at' => now()]);
+    }
+
+    /**
+     * Met fin à la déclaration de cet expert-comptable de la société, tout
+     * juste retiré, quand plus aucune de ses personnes n'a de compte non
+     * retiré : par le client, au nom du propriétaire, dans la même
+     * modification, sa déclaration étant déjà verrouillée ; l'entrée
+     * LienTermine, avec l'identité déclarée, ne s'inscrit qu'au journal de
+     * la société, aucun cabinet n'existant.
+     */
+    private function terminerUneDeclarationSansPersonne(User $auteur, User $compte): void
+    {
+        $attachee = $this->experts->declarationDe($compte);
+
+        if ($attachee === null || ! $attachee->estDeclare() || $this->experts->comptesDe($attachee)->isNotEmpty()) {
+            return;
+        }
+
+        $declaration = LienCabinet::query()->withoutGlobalScope(SocieteScope::class)->where('societe_id', $compte->societe_id)->findOrFail($attachee->id);
+        MettreFinAuLienAction::terminerSousVerrou($declaration, $auteur, MotifDeFinDuLien::ParLeClient);
+        $this->journalAudit->inscrire(ActionAuditee::LienTermine, $auteur, null, null, [
+            'cabinet' => IdentiteDansLeJournal::declaree($declaration),
+            'client' => IdentiteDansLeJournal::de($compte->societe()->firstOrFail()),
+            'motif' => MotifDeFinDuLien::ParLeClient->value,
+        ], $declaration);
+    }
+
+    /**
+     * Relance, après le commit, le rattachement de la déclaration de cet
+     * expert-comptable de la société au cabinet vérifié de son SIREN, s'il
+     * y en a un : une déclaration sans personne active attendait (voir
+     * RattacherUneDeclarationAction). Rien pour un autre compte.
+     */
+    private function relancerLeRattachement(User $compte): void
+    {
+        if (! $compte->estExpertComptable() || ! $compte->estActif()) {
+            return;
+        }
+
+        $declaration = $this->experts->declarationDe($compte);
+        $cabinet = $declaration?->estDeclare() === true && $declaration->siren_cabinet !== null ? $this->experts->cabinetVerifieDuSiren((string) $declaration->siren_cabinet) : null;
+
+        if ($declaration !== null && $cabinet !== null) {
+            RattacherUneDeclaration::dispatch(CleDuModele::de($declaration), CleDuModele::de($cabinet));
+        }
+    }
+
+    /**
+     * Exécute ce geste sur tout le compte, sous les verrous de
+     * JournalDesDroits::modifier() ; pour un expert-comptable de la
+     * société, sa déclaration se verrouille avant les comptes, dans l'ordre
+     * de tout geste sur les liens.
+     *
+     * @param  Closure(User, User): void  $geste
+     *
+     * @throws AuthorizationException
+     */
+    private function changer(User $auteur, User $compte, ActionAuditee $action, Closure $geste): void
+    {
+        $this->dansLaSociete($compte->societe()->firstOrFail(), PorteeDesDroits::REFUS, function () use ($auteur, $compte, $action, $geste): void {
+            $this->journalDesDroits->modifier($auteur, $action, [$compte], [], function (User $auteurRelu, array $relus) use ($geste): void {
+                $geste($auteurRelu, $relus[0]);
+            }, $compte->estExpertComptable() ? fn () => $this->experts->verrouillerLaDeclarationDe($compte) : null);
+        });
+
+        $compte->refresh();
+    }
+}

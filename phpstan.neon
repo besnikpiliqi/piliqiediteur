@@ -1,0 +1,20 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+
+parameters:
+    paths:
+        - app
+        - routes
+        - bootstrap
+        - config
+        - database
+        - tests/Qualite
+    excludePaths:
+        - bootstrap/cache
+        - tests/Qualite/Psalm
+        - tests/Qualite/Temoins (?)
+    level: 10
+    tmpDir: storage/framework/cache/phpstan
+    parseModelCastsMethod: true
+    stubFiles:
+        - tests/Qualite/macros.stub

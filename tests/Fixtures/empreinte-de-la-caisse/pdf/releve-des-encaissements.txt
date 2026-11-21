@@ -1,0 +1,58 @@
+fichier : encaissements-LYON1-2026-10.pdf
+--- page 1 (0.000 0.000 595.280 841.890)
+Ma Boutique
+12 rue Mercière
+69002 Lyon
+FR
+SIRET : 10000000900017
+Tél. 04 72 00 00 00 · contact@ma-boutique.example
+Relevé des encaissements
+Octobre 2026
+Du 01/10/2026 au 31/10/2026
+MODE DE PAIEMENT
+PAIEMENTS
+CONTRE-PASSATIONS
+MONTANT ENCAISSÉ
+Espèces
+1
+0
+10,50 €
+Carte bancaire
+1
+0
+20,00 €
+Virement
+1
+1
+0,00 €
+Total encaissé
+30,50 €
+Crédit d'avoir utilisé (n'entre pas dans les encaissements)
+40,50 €
+JOUR
+MODE
+RÉFÉRENCE
+DOCUMENTS RÉGLÉS
+MONTANT
+09/10/2026
+Espèces
+TK-LYON1-2026-000001
+10,50 €
+09/10/2026
+Carte bancaire
+CB-0930
+TK-LYON1-2026-000001
+20,00 €
+09/10/2026
+Virement
+VIR-2026-0042
+FAC-LYON1-2026-000001
+50,00 €
+09/10/2026
+Virement (contre-passation)
+VIR-2026-0042
+FAC-LYON1-2026-000001
+-50,00 €
+Les Délices de Jeanne SAS au capital de 10 000,00 € · Siège social : 1 rue de la République, 69002 Lyon · SIREN : 100000009 · RCS Lyon · TVA intracommunautaire :
+FR88100000009
+Page 1 sur 1

@@ -1,0 +1,52 @@
+<?php
+
+namespace App\Domain\Demonstration\Models;
+
+use App\Domain\Tenancy\Concerns\BelongsToSociete;
+use App\Models\User;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+
+/**
+ * Un compte du bandeau « Vous êtes : » d'une copie du site de
+ * démonstration (lot DEMO-COPIE, C.8 et F.3) : un compte de la société mise
+ * en avant de la base modèle, avec le libellé de son rôle, le rôle que ce
+ * libellé décrit, le groupe où il est entré (« La société », un magasin,
+ * « Le comptable » ; dans la copie « Cabinet » : « Le cabinet ») et son
+ * rang dans le menu. Le bandeau montre le rôle et le groupe du compte tels
+ * qu'ils sont (voir RoleAuBandeau). Le semis du
+ * modèle les écrit (voir ComptesDuBandeauDuModele) ; la table n'existe
+ * que dans les bases du site de démonstration (database/migrations-demonstration).
+ *
+ * @property int $user_id
+ * @property string $libelle_du_role
+ * @property string $role la clé du rôle que décrit le libellé (voir RoleAuBandeau)
+ * @property string $groupe
+ * @property int $ordre
+ */
+class CompteDuBandeau extends Model
+{
+    use BelongsToSociete;
+
+    public $timestamps = false;
+
+    protected $table = 'comptes_du_bandeau';
+
+    protected $fillable = ['user_id', 'libelle_du_role', 'role', 'groupe', 'ordre'];
+
+    protected function casts(): array
+    {
+        return [
+            'user_id' => 'integer',
+            'ordre' => 'integer',
+        ];
+    }
+
+    /**
+     * @return BelongsTo<User, $this>
+     */
+    public function compte(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'user_id');
+    }
+}

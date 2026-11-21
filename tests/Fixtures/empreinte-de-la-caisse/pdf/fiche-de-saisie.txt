@@ -1,0 +1,54 @@
+fichier : fiche-de-saisie-FA-LYON1-2026-000001.pdf
+--- page 1 (0.000 0.000 595.280 841.890)
+Saisie PILIQI — l'original est la facture du fournisseur
+Ma Boutique
+12 rue Mercière
+69002 Lyon
+FR
+SIRET : 10000000900017
+Tél. 04 72 00 00 00 · contact@ma-boutique.example
+Facture d'achat
+FA-LYON1-2026-000001
+N° du fournisseur : GR-2026-118
+Facture du 08/10/2026
+Saisie manuelle
+FOURNISSEUR
+Grossiste du Rhône
+SIRET 40000000600017
+N° de TVA FR32400000006
+RÉFÉRENCE
+DÉSIGNATION
+QUANTITÉ
+PU HT
+TVA
+TOTAL HT
+CAF-250
+Café moulu 250 g
+10
+4,25 €
+20 %
+42,50 €
+THE-100
+Thé vert 100 g
+6
+2,10 €
+5,5 %
+12,60 €
+TAUX
+BASE HT
+TVA
+20 %
+42,50 €
+8,50 €
+5,5 %
+12,60 €
+0,69 €
+Total HT
+55,10 €
+Total TVA
+9,19 €
+Total TTC
+64,29 €
+Les Délices de Jeanne SAS au capital de 10 000,00 € · Siège social : 1 rue de la République, 69002 Lyon · SIREN : 100000009 · RCS Lyon · TVA intracommunautaire :
+FR88100000009
+Page 1 sur 1

@@ -1,0 +1,1889 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Domain\Facturation\Services;
+
+use App\Domain\Tenancy\Support\ValeurSimple;
+use App\Domain\Tenancy\Support\ValeursLues;
+use Brick\Math\BigInteger;
+use Brick\Math\RoundingMode;
+use InvalidArgumentException;
+use LogicException;
+use UnexpectedValueException;
+
+/**
+ * Les montants d'une vente, d'un achat et de leurs retours, tous en
+ * centimes entiers. Le seul prix arrondi est le prix de vente TTC, une
+ * fois, quand il est enregistré ; ensuite chaque montant s'arrondit une
+ * seule fois, quand il se calcule.
+ *
+ * 1. Toute vente, à un particulier comme à un professionnel, ticket,
+ *    facture ou devis, part de ses prix TTC (chiffrerUneVente(), décision
+ *    de l'éditeur du 14/11/2026) : le TTC de chaque ligne est quantité x
+ *    PU TTC, remise déduite, la remise arrondie une fois au centime ; la
+ *    TVA de chaque ligne est son TTC x taux ÷ (1 + taux), arrondie une
+ *    fois au centime le plus proche (un demi-centime exact au centime
+ *    supérieur), et son HT son TTC moins cette TVA ; pour chaque taux, la
+ *    TVA est celle du TTC de ses lignes, arrondie de même (décision de
+ *    Claude, D76 : la TVA de son TTC plutôt que son TTC moins son HT
+ *    arrondi), et si la somme des TVA des lignes s'en écarte, l'écart se
+ *    corrige d'un centime par ligne au plus ; elle s'écarte ainsi de sa
+ *    base HT x le taux d'un demi-centime x (1 + taux) au plus. 9,99 € TTC
+ *    à 20 % font 1,67 € de TVA et 8,32 € HT (8,32 x 20 % = 1,664 €) ;
+ *    un même document de 50,00 € TTC à 20 % fait 41,67 € HT et 8,33 € de
+ *    TVA, en une ligne, en 2 x 25,00 € ou en deux lignes de 25,00 €
+ *    (20,84 € puis 20,83 € HT, la première rendant le centime de TVA en
+ *    trop).
+ * 2. Une vente hors de la TVA française (export, livraison vers un DOM,
+ *    livraison intracommunautaire...) se calcule de même, au taux compris
+ *    dans le prix de son catalogue, puis sans TVA : le client paie le HT,
+ *    2 x 40,00 € TTC à 20 % font 66,67 € (voir
+ *    ContexteDeVente::retireLaTvaDuPrix()). Un magasin en franchise en
+ *    base vend à 0 % : le HT est le TTC, sans TVA.
+ * 3. Un retour (retourDeLigne()) rend, pour tous les articles d'une ligne
+ *    rendus jusqu'ici, le calcul de la vente sur leur TTC (sa TVA arrondie
+ *    une fois, son HT le TTC moins cette TVA), sans jamais dépasser le HT
+ *    ni la TVA de la ligne, moins ce que les retours précédents ont rendu :
+ *    2 x 40,00 € (66,67 € HT + 13,33 €) se rendent en 33,33 € + 6,67 €,
+ *    puis 33,34 € + 6,66 € ; le retour de toute la ligne rend exactement
+ *    ses montants. Dans un avoir (chiffrerUnAvoir()), la TVA de chaque
+ *    taux se ramène vers celle de son TTC, d'un centime par ligne rendue
+ *    en partie, seulement si ce centime garde la ligne de l'avoir et ce
+ *    qui reste de la ligne vendue dans leurs bornes ; un avoir qui ne rend
+ *    que des lignes entières en garde les montants, et les écarts de leurs
+ *    TVA s'additionnent.
+ * 4. Un achat garde les montants qu'écrit la facture du fournisseur
+ *    (chiffrerUnAchat(), décision de l'éditeur du 02/11/2026, T1) : son PU
+ *    HT a six décimales au plus ; le HT proposé de chaque ligne est
+ *    quantité x PU HT, remise déduite, arrondi une fois, et la TVA
+ *    proposée de chaque taux est le total HT du taux x taux, arrondie une
+ *    fois et répartie sur ses lignes par cumul, dans leur ordre : 3
+ *    lignes de 10,01 € HT à 20 % font 30,03 € HT + 6,01 € de TVA (6,006
+ *    arrondi une fois), répartis 2,00 + 2,00 + 2,01. Un HT de ligne ou une
+ *    TVA de taux écrits par le fournisseur remplacent ces propositions ;
+ *    l'écart entre la TVA retenue et la proposée se répartit sur les
+ *    lignes du taux au prorata de leur HT, par cumul : avec 6,00 € de TVA
+ *    du fournisseur sur les mêmes lignes, l'écart de -1 centime vaut, au
+ *    cumul des HT, -0,33, -0,67 puis -1 centime, arrondis à 0, -1 puis -1 :
+ *    seule la deuxième ligne perd un centime, soit 2,00 + 1,99 + 2,01. Un
+ *    retour au fournisseur (retourDAchat()) propose la TVA du HT des
+ *    articles retournés jusqu'ici, sans dépasser celle de la ligne, moins
+ *    les retours précédents ; quand la note d'avoir du fournisseur écrit
+ *    un autre HT, la TVA proposée suit ce HT.
+ * 5. Le PU HT qu'une ligne de vente enregistre est son PU TTC ÷ (1 +
+ *    taux), au millionième d'euro (prixUnitaireHtExact()) : 1 000
+ *    articles à 1,00 € TTC à 20 % ont un PU HT de 0,833333 €, et 1 000 x
+ *    0,833333 retombe à moins de deux centimes sur les 833,33 € HT de la
+ *    ligne (puHtRetombeSurLeHt()) : c'est le PU HT de la facture
+ *    électronique. Partout où PILIQI le montre, le PU HT d'une vente est
+ *    celui d'un article, son PU TTC moins sa TVA arrondie au centime,
+ *    8,32 € pour 9,99 € TTC à 20 % (prixUnitaireHtAffiche(), décision de
+ *    l'éditeur du 14/11/2026) ; seul le PDF d'un document qui montre le PU
+ *    HT imprime aussi, en petit sous l'article, ce PU HT exact (modèle
+ *    M6-b) ; tout autre prix unitaire de vente montré en lecture
+ *    s'affiche arrondi au centime (prixUnitaireAffiche()).
+ *    Aucun montant ne se calcule sur un prix affiché : 4 x 65,00 € TTC à
+ *    20 % font 216,67 € HT, et non 4 x 54,17 € = 216,68 € ; la note de
+ *    calcul du document l'explique.
+ *
+ * Ces calculs n'acceptent et ne rendent que des entiers, chacun dans son
+ * unité : centimes d'un montant, dix-millièmes d'euro d'un coût d'achat
+ * ou d'un coût moyen, millionièmes d'euro d'un PU HT, nombre d'articles,
+ * centièmes de point d'un taux, d'une remise ou d'un escompte. Aucun
+ * nombre à virgule flottante n'y entre ni n'en sort : un flottant comme
+ * 8.325 vaut réellement 8,32499999..., et un seul centime d'écart avec le
+ * montant transmis à l'administration suffit à faire rejeter une
+ * facture. Une saisie se lit par SaisieDecimale, une colonne décimale par
+ * enCentiemes(), enDixMilliemes() ou enMillioniemes(), et un entier
+ * s'écrit dans sa colonne par enDecimal(), enDecimalAuDixMillieme() ou
+ * enDecimalAuMillionieme().
+ */
+class CalculateurLigne
+{
+    /**
+     * Bien au-delà de tout montant réel (les colonnes s'arrêtent à
+     * 9 999 999 999,99 €, soit 1e12 centimes) : un montant absurde est
+     * refusé plutôt que converti.
+     */
+    private const UNITES_MAXIMUM = 100_000_000_000_000;
+
+    /**
+     * La même borne pour un prix unitaire en millionièmes d'euro (voir
+     * prixUnitaireHtExact()).
+     */
+    private const MILLIONIEMES_MAXIMUM = 1_000_000_000_000_000_000;
+
+    /**
+     * La tolérance de la facture électronique entre le HT d'une ligne et sa
+     * quantité x son PU HT, remise déduite (règle Peppol R120 : 0,02 €), en
+     * cent millionièmes de centime (voir ecartAuPuHt()).
+     */
+    private const ECART_R120 = 200_000_000;
+
+    private const NOMBRE_A_VIRGULE = 'Le calcul attend des montants en centimes et des taux et remises en centièmes de point, en nombres entiers, jamais un nombre à virgule.';
+
+    public const REFUS_HT_NEGATIF = 'Le HT d\'une ligne de la facture du fournisseur ne peut pas être négatif.';
+
+    public const REFUS_TVA_SANS_LIGNE = 'Aucune ligne de la facture n\'est à %s : sa TVA ne se saisit pas.';
+
+    public const REFUS_TVA_NEGATIVE = 'La TVA à %s ne peut pas être négative.';
+
+    public const REFUS_TVA_A_ZERO = 'Une ligne à 0 % n\'a pas de TVA : la TVA à 0 % vaut 0,00 €.';
+
+    public const REFUS_TVA_AU_DELA_DE_LA_BASE = 'La TVA à %s (%s) ne peut pas dépasser sa base (%s).';
+
+    /**
+     * Les lignes d'une vente, dans leur ordre (voir le point 1 du
+     * commentaire de classe) : chacune avec son PU TTC, celui de son
+     * catalogue ou celui saisi, et le taux que comprend ce prix, et le
+     * taux qu'elle facture -- le même, ou 0 quand la vente retire la TVA
+     * du prix (point 2). Rend les montants de chaque ligne, dans le même
+     * ordre, ceux de chaque taux facturé, dans l'ordre où il apparaît, et
+     * ceux du document : chaque total est la somme exacte de ses lignes.
+     *
+     * La TVA de chaque ligne s'arrondit une fois sur son TTC ; les lignes
+     * qui comprennent le même taux dans leur prix et facturent le même
+     * taux forment un groupe, dont la somme des TVA se ramène, d'un centime
+     * par ligne au plus, à la TVA du TTC du groupe arrondie une fois (voir
+     * lignesQuiRecoiventLEcart()).
+     *
+     * @param  array<array-key, array{prix_unitaire_ttc: int, quantite: int, remise_pourcentage: int, taux_tva_du_prix: int, taux_tva: int}>  $lignes  PU TTC en centimes, taux et remise en centièmes de point
+     * @return array{lignes: list<array{montant_ht: int, montant_tva: int, montant_ttc: int}>, taux: array<int, array{montant_ht: int, montant_tva: int, montant_ttc: int}>, total: array{montant_ht: int, montant_tva: int, montant_ttc: int}}
+     *
+     * @throws InvalidArgumentException
+     */
+    public function chiffrerUneVente(array $lignes): array
+    {
+        $calculees = [];
+        $groupes = [];
+
+        foreach (array_values($lignes) as $rang => $ligne) {
+            $tauxDuPrix = $this->taux($ligne, 'taux_tva_du_prix');
+            $taux = $this->tauxFacture($ligne, $tauxDuPrix);
+            $ttc = $this->montantNetCentimes($this->prix($ligne, 'prix_unitaire_ttc'), $this->quantite($ligne), $this->remise($ligne));
+            $calculees[$rang] = ['taux' => $taux, 'sans_tva' => $taux !== $tauxDuPrix, 'ttc' => $ttc, 'tva' => $this->tvaDuTtc($ttc, $tauxDuPrix)];
+            $groupes["{$tauxDuPrix}|{$taux}"] = ['taux' => $tauxDuPrix, 'rangs' => [...($groupes["{$tauxDuPrix}|{$taux}"]['rangs'] ?? []), $rang]];
+        }
+
+        // Le centime que reçoit une ligne de son groupe, retiré de sa TVA :
+        // 1 quand la somme du groupe est trop haute, -1 quand elle est trop
+        // basse ; une ligne n'est que dans un groupe.
+        $ajustements = [];
+
+        foreach ($groupes as ['taux' => $tauxDuPrix, 'rangs' => $rangs]) {
+            $duGroupe = array_intersect_key($calculees, array_flip($rangs));
+            $ecart = array_sum(array_column($duGroupe, 'tva')) - $this->tvaDuTtc($this->borne(array_sum(array_column($duGroupe, 'ttc'))), $tauxDuPrix);
+
+            foreach ($this->lignesQuiRecoiventLEcart($duGroupe, $tauxDuPrix, $ecart) as $rang) {
+                $ajustements[$rang] = $ecart <=> 0;
+            }
+        }
+
+        return $this->ventiler(array_map(function (array $ligne, int $rang) use ($ajustements): array {
+            $ht = $ligne['ttc'] - ($ligne['tva'] - ($ajustements[$rang] ?? 0));
+            // Sans la TVA française, le client paie le HT.
+            $ttc = $ligne['sans_tva'] ? $ht : $ligne['ttc'];
+
+            return ['taux' => $ligne['taux'], 'montant_ht' => $ht, 'montant_tva' => $ttc - $ht, 'montant_ttc' => $ttc];
+        }, $calculees, array_keys($calculees)));
+    }
+
+    /**
+     * Ce que rend un retour d'une ligne vendue (voir le point 3 du
+     * commentaire de classe) : pour tous les articles rendus jusqu'ici, le
+     * TTC payé pour eux, sa TVA arrondie une fois au centime et son HT, le
+     * TTC moins cette TVA, gardés entre ce que la ligne permet -- jamais
+     * plus que son HT, ni une TVA plus grande que la sienne -- et ce que
+     * les retours précédents ont rendu, que ce retour ne réduit jamais,
+     * moins ce qu'ils ont rendu. Aucun retour n'est donc jamais négatif,
+     * même quand un avoir a reçu un centime d'ajustement (voir
+     * chiffrerUnAvoir()), et le retour de toute la ligne rend exactement ses
+     * montants. Vendue sans la TVA française, la ligne rend le HT de ces
+     * articles, au taux que comprend son prix, sans TVA.
+     *
+     * @param  array{prix_unitaire_ttc: int, quantite: int, remise_pourcentage: int, taux_tva_du_prix: int, taux_tva: int, montant_ht: int, montant_tva: int}  $ligne  la ligne vendue, telle qu'enregistrée, en centimes et centièmes de point
+     * @param  int  $quantiteRendue  tous les articles rendus jusqu'ici, ce retour compris
+     * @param  array{montant_ht: int, montant_tva: int}  $dejaRendu  ce que les retours précédents de la ligne ont rendu
+     * @return array{montant_ht: int, montant_tva: int, montant_ttc: int}
+     *
+     * @throws InvalidArgumentException
+     */
+    public function retourDeLigne(array $ligne, int $quantiteRendue, array $dejaRendu): array
+    {
+        $tauxDuPrix = $this->taux($ligne, 'taux_tva_du_prix');
+        $taux = $this->tauxFacture($ligne, $tauxDuPrix);
+        $quantite = $this->quantiteRendue($ligne, $quantiteRendue);
+        $htDeLaLigne = $this->entier($ligne, 'montant_ht');
+        $tvaDeLaLigne = $this->entier($ligne, 'montant_tva');
+
+        if ($quantite === $this->quantite($ligne)) {
+            return $this->moins($htDeLaLigne, $tvaDeLaLigne, $dejaRendu);
+        }
+
+        $ttc = $this->montantNetCentimes($this->prix($ligne, 'prix_unitaire_ttc'), $quantite, $this->remise($ligne));
+        $tva = $this->tvaDuTtc($ttc, $tauxDuPrix);
+
+        if ($taux !== $tauxDuPrix) {
+            return $this->moins(min($ttc - $tva, $htDeLaLigne), 0, $dejaRendu);
+        }
+
+        $tva = min($tvaDeLaLigne, $ttc - $this->entier($dejaRendu, 'montant_ht'), max($this->entier($dejaRendu, 'montant_tva'), $ttc - $htDeLaLigne, $tva));
+
+        return $this->moins($ttc - $tva, $tva, $dejaRendu);
+    }
+
+    /**
+     * Les montants d'un avoir, dans l'ordre de ses lignes (voir le point 3
+     * du commentaire de classe) : chacune rend ce que rend son retour (voir
+     * retourDeLigne()) ; puis, pour chaque taux soumis à la TVA, la somme
+     * des TVA de ses lignes se ramène vers la TVA du TTC du taux, arrondie
+     * une fois, comme dans une vente, d'un centime par ligne au plus (voir
+     * lignesQuiRecoiventLEcart()), mais seulement sur une ligne rendue en
+     * partie, et seulement si ce centime ne fait sortir ni la ligne de
+     * l'avoir ni ce qui reste de la ligne vendue de leurs bornes, ni ne les
+     * en éloigne (voir leCentimeGardeLesBornes(), décision de Claude, D76) :
+     * ce qui reste garde une TVA à un centime au plus de celle de son TTC,
+     * et l'une et l'autre un HT à moins de deux centimes de leur quantité x
+     * le PU HT de la ligne, remise déduite. Le retour qui solde une ligne,
+     * comme celui d'une ligne entière, rend donc une TVA à un centime au
+     * plus de celle de son TTC.
+     *
+     * La TVA d'un taux de l'avoir s'écarte de celle de son TTC quand il faut
+     * plus de centimes que de lignes rendues en partie qui peuvent en
+     * recevoir un : sur plusieurs lignes, les écarts des lignes rendues en
+     * entier ou soldées, chacun d'un centime au plus, et ceux de leurs
+     * arrondis s'additionnent. 9 articles différents à 25,00 € TTC à 20 %,
+     * dont les trois premiers ont reçu le centime à la vente (20,84 € HT et
+     * 4,16 € de TVA), rendus en entier, font 62,52 € HT et 12,48 € de TVA
+     * pour 75,00 €, dont la TVA est 12,50 €. Un avoir qui rend toute la
+     * facture en rend exactement les montants.
+     *
+     * @param  array<array-key, array{ligne: array{prix_unitaire_ttc: int, prix_unitaire_ht: int, quantite: int, remise_pourcentage: int, taux_tva_du_prix: int, taux_tva: int, montant_ht: int, montant_tva: int}, quantite_rendue: int, deja_rendu: array{quantite: int, montant_ht: int, montant_tva: int}}>  $retours  pour chaque ligne de l'avoir, la ligne vendue avec son PU HT en millionièmes d'euro, tous ses articles rendus jusqu'ici, ce retour compris, et ce que ses retours précédents ont rendu (articles, HT et TVA), en centimes et centièmes de point
+     * @return array{lignes: list<array{montant_ht: int, montant_tva: int, montant_ttc: int}>, taux: array<int, array{montant_ht: int, montant_tva: int, montant_ttc: int}>, total: array{montant_ht: int, montant_tva: int, montant_ttc: int}}
+     *
+     * @throws InvalidArgumentException
+     */
+    public function chiffrerUnAvoir(array $retours): array
+    {
+        $calculees = [];
+        // Pour chaque ligne rendue en partie, les sens où elle peut recevoir
+        // le centime (voir leCentimeGardeLesBornes()).
+        $sensPossibles = [];
+
+        foreach (array_values($retours) as $rang => ['ligne' => $ligne, 'quantite_rendue' => $quantite, 'deja_rendu' => $dejaRendu]) {
+            $rendu = $this->retourDeLigne($ligne, $quantite, $dejaRendu);
+            $calculees[$rang] = ['taux' => $this->taux($ligne, 'taux_tva'), 'ttc' => $rendu['montant_ttc'], 'tva' => $rendu['montant_tva']];
+
+            if ($quantite < $this->quantite($ligne) && $calculees[$rang]['taux'] !== 0) {
+                $sensPossibles[$rang] = array_values(array_filter([1, -1], fn (int $sens): bool => $this->leCentimeGardeLesBornes($ligne, $quantite, $dejaRendu, $rendu, $sens)));
+            }
+        }
+
+        // Comme dans une vente, le centime que reçoit une ligne de son taux.
+        $ajustements = [];
+
+        foreach (array_unique(array_column($calculees, 'taux')) as $taux) {
+            $duTaux = array_filter($calculees, fn (array $ligne): bool => $ligne['taux'] === $taux);
+            $ecart = $taux === 0 ? 0 : array_sum(array_column($duTaux, 'tva')) - $this->tvaDuTtc($this->borne(array_sum(array_column($duTaux, 'ttc'))), $taux);
+            $possibles = array_filter($duTaux, fn (int $rang): bool => in_array($ecart <=> 0, $sensPossibles[$rang] ?? [], true), ARRAY_FILTER_USE_KEY);
+
+            foreach ($this->lignesQuiRecoiventLEcart($possibles, $taux, $ecart) as $rang) {
+                $ajustements[$rang] = $ecart <=> 0;
+            }
+        }
+
+        return $this->ventiler(array_map(function (array $ligne, int $rang) use ($ajustements): array {
+            $tva = $ligne['tva'] - ($ajustements[$rang] ?? 0);
+
+            return ['taux' => $ligne['taux'], 'montant_ht' => $ligne['ttc'] - $tva, 'montant_tva' => $tva, 'montant_ttc' => $ligne['ttc']];
+        }, $calculees, array_keys($calculees)));
+    }
+
+    /**
+     * Une ligne rendue en partie peut-elle recevoir le centime d'un avoir
+     * dans ce sens -- 1 : un centime de TVA en moins, donc un de HT en
+     * plus ; -1 : l'inverse -- (voir chiffrerUnAvoir()) ? Seulement si ni
+     * la ligne de l'avoir ni ce qui reste de la ligne vendue ne deviennent
+     * négatifs, et si chacun garde ses bornes, ou s'en rapproche : ce qui
+     * reste, une TVA à un centime au plus de celle de son TTC ; la ligne de
+     * l'avoir et ce qui reste, un HT à moins de deux centimes de leur
+     * quantité x le PU HT de la ligne, remise déduite (règle Peppol R120).
+     * Le retour qui solde la ligne garde ainsi ces bornes : sans elles, des
+     * avoirs successifs y reportaient leurs centimes -- 7 x 0,26 € TTC à
+     * 10 % crédités article par article finissaient par 0,22 € HT et 0,04 €
+     * de TVA, quand la TVA de 0,26 € est 0,02 €.
+     *
+     * @param  array<string, mixed>  $ligne  la ligne vendue, avec son PU HT en millionièmes d'euro (prix_unitaire_ht)
+     * @param  int  $quantiteRendue  tous les articles rendus jusqu'ici, ce retour compris
+     * @param  array<string, mixed>  $dejaRendu  ce que les retours précédents ont rendu : articles, HT et TVA
+     * @param  array{montant_ht: int, montant_tva: int, montant_ttc: int}  $rendu  ce que rend ce retour, sans le centime
+     *
+     * @throws InvalidArgumentException
+     */
+    private function leCentimeGardeLesBornes(array $ligne, int $quantiteRendue, array $dejaRendu, array $rendu, int $sens): bool
+    {
+        $articlesDuRetour = $quantiteRendue - $this->entier($dejaRendu, 'quantite');
+
+        if ($articlesDuRetour < 1) {
+            throw new InvalidArgumentException('Un retour rend entre 1 article et la quantité de la ligne.');
+        }
+
+        $prix = $this->prixAuMillionieme($ligne);
+        $remise = $this->remise($ligne);
+        $resteHt = $this->entier($ligne, 'montant_ht') - $this->entier($dejaRendu, 'montant_ht') - $rendu['montant_ht'];
+        $resteTva = $this->entier($ligne, 'montant_tva') - $this->entier($dejaRendu, 'montant_tva') - $rendu['montant_tva'];
+        $tvaDuReste = $this->tvaDuTtc($resteHt + $resteTva, $this->taux($ligne, 'taux_tva'));
+        $articlesRestants = $this->quantite($ligne) - $quantiteRendue;
+        // Un écart garde sa borne, ou s'en rapproche.
+        $tient = fn (BigInteger $avant, BigInteger $apres, int $borne): bool => $apres->isLessThan($borne) || $apres->isLessThan($avant);
+
+        return min($rendu['montant_tva'] - $sens, $rendu['montant_ht'] + $sens, $resteHt - $sens, $resteTva + $sens) >= 0
+            && $tient(BigInteger::of(abs($resteTva - $tvaDuReste)), BigInteger::of(abs($resteTva + $sens - $tvaDuReste)), 2)
+            && $tient($this->ecartAuPuHt($articlesRestants, $prix, $remise, $resteHt), $this->ecartAuPuHt($articlesRestants, $prix, $remise, $resteHt - $sens), self::ECART_R120)
+            && $tient($this->ecartAuPuHt($articlesDuRetour, $prix, $remise, $rendu['montant_ht']), $this->ecartAuPuHt($articlesDuRetour, $prix, $remise, $rendu['montant_ht'] + $sens), self::ECART_R120);
+    }
+
+    /**
+     * Les lignes d'un taux qui reçoivent chacune un centime quand la somme
+     * de leurs TVA s'écarte de la TVA du taux (voir chiffrerUneVente() et
+     * chiffrerUnAvoir()), au plus une par centime d'écart : une somme trop
+     * haute retire un centime de TVA aux lignes dont la TVA arrondie dépasse
+     * le plus sa TVA exacte, TTC x taux ÷ (1 + taux) ; une somme trop basse
+     * en ajoute un à celles dont la TVA arrondie est la plus en dessous ; à
+     * égalité, la ligne au plus gros TTC, puis la première dans l'ordre du
+     * document. Deux lignes de 25,00 € à 20 % (4,17 € de TVA chacune, 8,34 €
+     * pour une TVA du taux de 8,33 €) : la première rend un centime, 4,16 €.
+     *
+     * @param  array<int, array{ttc: int, tva: int}>  $lignes  par rang dans le document, en centimes
+     * @param  int  $taux  en centièmes de point
+     * @param  int  $ecart  la somme des TVA des lignes moins la TVA du taux, en centimes
+     * @return list<int> les rangs des lignes qui reçoivent un centime
+     *
+     * @throws InvalidArgumentException
+     */
+    private function lignesQuiRecoiventLEcart(array $lignes, int $taux, int $ecart): array
+    {
+        $sens = $ecart <=> 0;
+        // L'écart de chaque TVA arrondie à sa TVA exacte, multiplié par
+        // (10 000 + taux), le même pour toutes les lignes du taux : un
+        // entier exact, qui se compare sans arrondi.
+        $exces = array_map(fn (array $ligne): int => $sens * ($this->multiplier($ligne['tva'], 10000 + $taux) - $this->multiplier($ligne['ttc'], $taux)), $lignes);
+        $rangs = array_keys($lignes);
+        usort($rangs, fn (int $a, int $b): int => [$exces[$b], $lignes[$b]['ttc'], $a] <=> [$exces[$a], $lignes[$a]['ttc'], $b]);
+
+        return array_slice($rangs, 0, abs($ecart));
+    }
+
+    /**
+     * Les lignes d'un achat, dans leur ordre (voir le point 4 du
+     * commentaire de classe), et la TVA qu'écrit la facture du fournisseur
+     * pour les taux où elle n'est pas celle que le calcul propose. Rend les
+     * montants de chaque ligne, dans le même ordre, avec le HT que le calcul
+     * propose (montant_ht_calcule), ceux de chaque taux, dans l'ordre où il
+     * apparaît, avec la TVA que le calcul propose (montant_tva_calcule), et
+     * ceux de la facture : chaque total est la somme exacte de ses lignes.
+     *
+     * Le HT d'une ligne est celui qu'écrit le fournisseur (montant_ht),
+     * sinon celui que le calcul propose (voir htDUnAchat()) ; la base d'un
+     * taux est la somme exacte des HT de ses lignes. La TVA proposée d'un
+     * taux est sa base x taux, arrondie une fois, et chaque ligne en reçoit
+     * la part arrondie du cumul des HT de son taux jusqu'à elle, moins
+     * celle des lignes précédentes. Quand la facture écrit une autre TVA,
+     * l'écart se répartit sur les lignes du taux de même, au prorata de
+     * leur HT, par cumul, dans leur ordre ; aucune ligne ne reçoit une TVA
+     * négative ni plus grande que son HT : ce que l'arrondi lui donnerait
+     * en trop ou en moins se reporte sur la ligne suivante, puis, après la
+     * dernière, sur les précédentes. La TVA du taux est toujours exactement
+     * la somme de ses lignes.
+     *
+     * Sont refusés : un HT écrit négatif ; une TVA écrite pour un taux sans
+     * ligne, négative, non nulle à 0 % ou plus grande que sa base -- des
+     * montants qu'aucune facture valable ne porte.
+     *
+     * @param  array<array-key, array{prix_unitaire_ht: int, quantite: int, remise_pourcentage: int, taux_tva: int, montant_ht?: int|null}>  $lignes  PU HT en millionièmes d'euro, taux et remise en centièmes de point, HT écrit par le fournisseur en centimes
+     * @param  array<int, int>  $tvaEcriteParTaux  la TVA qu'écrit la facture, en centimes, par taux en centièmes de point
+     * @return array{lignes: list<array{montant_ht: int, montant_tva: int, montant_ttc: int, montant_ht_calcule: int}>, taux: array<int, array{montant_ht: int, montant_tva: int, montant_ttc: int, montant_tva_calcule: int}>, total: array{montant_ht: int, montant_tva: int, montant_ttc: int}}
+     *
+     * @throws InvalidArgumentException
+     */
+    public function chiffrerUnAchat(array $lignes, array $tvaEcriteParTaux = []): array
+    {
+        $cumuls = [];
+        $montants = [];
+
+        foreach ($lignes as $ligne) {
+            $taux = $this->taux($ligne, 'taux_tva');
+            $htCalcule = $this->htDUnAchat($this->prixAuMillionieme($ligne), $this->quantite($ligne), $this->remise($ligne));
+            $ht = ($ligne['montant_ht'] ?? null) === null ? $htCalcule : $this->htEcrit($ligne);
+
+            // Chaque ligne reçoit la TVA arrondie du cumul des HT de son taux
+            // jusqu'à elle, moins celle des lignes précédentes.
+            $precedent = $cumuls[$taux] ?? ['ht' => 0, 'tva' => 0];
+            $cumulHt = $this->borne($precedent['ht'] + $ht);
+            $cumulTva = $this->tvaDuHt($cumulHt, $taux);
+            $cumuls[$taux] = ['ht' => $cumulHt, 'tva' => $cumulTva];
+
+            $montants[] = ['taux' => $taux, 'montant_ht' => $ht, 'montant_tva' => $cumulTva - $precedent['tva'], 'montant_ht_calcule' => $htCalcule];
+        }
+
+        $tvaParTaux = [];
+
+        foreach ($tvaEcriteParTaux as $taux => $tva) {
+            if (! isset($cumuls[$taux])) {
+                throw new InvalidArgumentException(sprintf(self::REFUS_TVA_SANS_LIGNE, self::tauxEnTexte($taux)));
+            }
+
+            $tvaParTaux[$taux] = $this->entier(['tva' => $tva], 'tva');
+        }
+
+        foreach ($cumuls as $taux => ['ht' => $base, 'tva' => $tvaCalculee]) {
+            $tva = $tvaParTaux[$taux] ?? $tvaCalculee;
+            $this->refuserUneTvaImpossible($taux, $base, $tva);
+
+            if ($tva !== $tvaCalculee) {
+                $montants = $this->repartirLEcart($montants, $taux, $base, $tva - $tvaCalculee);
+            }
+        }
+
+        // Les montants de chaque ligne, relus comme des entiers (la
+        // répartition d'un écart les rend sans forme connue), et son TTC.
+        $lignesAvecTtc = [];
+
+        foreach ($montants as $ligne) {
+            $ht = ValeursLues::entier($ligne['montant_ht']);
+            $tva = ValeursLues::entier($ligne['montant_tva']);
+            $lignesAvecTtc[] = ['taux' => ValeursLues::entier($ligne['taux']), 'montant_ht' => $ht, 'montant_tva' => $tva, 'montant_ht_calcule' => ValeursLues::entier($ligne['montant_ht_calcule']), 'montant_ttc' => $ht + $tva];
+        }
+
+        $ventilation = $this->ventiler($lignesAvecTtc);
+        $parTaux = [];
+
+        foreach ($ventilation['taux'] as $taux => $montantsDuTaux) {
+            $parTaux[$taux] = [...$montantsDuTaux, 'montant_tva_calcule' => $cumuls[$taux]['tva']];
+        }
+
+        return [
+            'lignes' => array_map(
+                fn (array $montantsDeLigne, array $ligne): array => [...$montantsDeLigne, 'montant_ht_calcule' => $ligne['montant_ht_calcule']],
+                $ventilation['lignes'],
+                $lignesAvecTtc,
+            ),
+            'taux' => $parTaux,
+            'total' => $ventilation['total'],
+        ];
+    }
+
+    /**
+     * Ce que propose un retour au fournisseur d'une ligne d'achat (voir le
+     * point 4 du commentaire de classe) : pour tous les articles retournés
+     * jusqu'ici, leur HT, quantité x PU HT remise déduite, jamais plus que
+     * le HT de la ligne, et la TVA de ce HT, jamais plus grande que celle
+     * de la ligne -- sa part de la TVA de son taux peut être inférieure
+     * d'un centime à la TVA de son propre HT --, moins ce que les retours
+     * précédents ont rendu ; le retour de toute la ligne, ce qui en reste.
+     * Rien n'est jamais négatif : la note d'avoir du fournisseur, qui
+     * prime, a pu rendre plus que la proposition d'un retour précédent.
+     *
+     * Quand la note d'avoir écrit pour ce retour un autre HT que celui
+     * proposé (montant_ht_calcule, gardé pour l'y comparer), il le remplace,
+     * et la TVA proposée suit ce HT, comme celle d'une facture d'achat suit
+     * sa base (voir chiffrerUnAchat()) : la TVA de tout le HT retenu des
+     * retours de la ligne, ce HT compris, jamais plus grande que celle de
+     * la ligne, moins ce que les retours précédents ont rendu, et jamais
+     * plus grande que le HT de ce retour, qu'aucune note d'avoir valable ne
+     * dépasse. 2 articles d'une ligne de 5 x 20,00 € HT à 20 %, proposés
+     * 40,00 € + 8,00 €, dont la note écrit 5,00 € HT, proposent 1,00 € de
+     * TVA ; écrit 45,00 €, 9,00 €. Un HT écrit égal à la proposition la
+     * garde, TVA comprise : le retour de toute la ligne rend encore
+     * exactement ce qu'il en reste.
+     *
+     * @param  array{prix_unitaire_ht: int, quantite: int, remise_pourcentage: int, taux_tva: int, montant_ht: int, montant_tva: int}  $ligne  la ligne achetée, telle qu'enregistrée : PU HT en millionièmes d'euro, montants en centimes, taux et remise en centièmes de point
+     * @param  int  $quantiteRetournee  tous les articles retournés jusqu'ici, ce retour compris
+     * @param  array{montant_ht: int, montant_tva: int}  $dejaRendu  ce que les retours précédents de la ligne ont rendu
+     * @param  int|null  $htEcrit  le HT qu'écrit la note d'avoir du fournisseur pour ce retour, en centimes ; aucun, la proposition
+     * @return array{montant_ht: int, montant_tva: int, montant_ttc: int, montant_ht_calcule: int}
+     *
+     * @throws InvalidArgumentException
+     */
+    public function retourDAchat(array $ligne, int $quantiteRetournee, array $dejaRendu, ?int $htEcrit = null): array
+    {
+        $taux = $this->taux($ligne, 'taux_tva');
+        $quantite = $this->quantiteRendue($ligne, $quantiteRetournee);
+        $htDeLaLigne = $this->entier($ligne, 'montant_ht');
+        $tvaDeLaLigne = $this->entier($ligne, 'montant_tva');
+
+        if ($quantite === $this->quantite($ligne)) {
+            $retour = $this->moins($htDeLaLigne, $tvaDeLaLigne, $dejaRendu);
+        } else {
+            $ht = min($htDeLaLigne, $this->htDUnAchat($this->prixAuMillionieme($ligne), $quantite, $this->remise($ligne)));
+            $retour = $this->moins($ht, min($tvaDeLaLigne, $this->tvaDuHt($ht, $taux)), $dejaRendu);
+        }
+
+        $htPropose = max(0, $retour['montant_ht']);
+        $ht = $htPropose;
+        $tva = max(0, $retour['montant_tva']);
+
+        if ($htEcrit !== null && $htEcrit !== $htPropose) {
+            $ht = $this->htEcrit(['montant_ht' => $htEcrit]);
+            $htCumule = $this->borne($this->entier($dejaRendu, 'montant_ht') + $ht);
+            $tva = min($ht, max(0, min($tvaDeLaLigne, $this->tvaDuHt($htCumule, $taux)) - $this->entier($dejaRendu, 'montant_tva')));
+        }
+
+        return ['montant_ht' => $ht, 'montant_tva' => $tva, 'montant_ttc' => $ht + $tva, 'montant_ht_calcule' => $htPropose];
+    }
+
+    /**
+     * Répartit sur les lignes d'un taux, à leur proposition, ce que la TVA
+     * retenue d'un retour au fournisseur (la note d'avoir du fournisseur)
+     * a de plus ou de moins que la somme de ces propositions, comme sur une
+     * facture d'achat (voir chiffrerUnAchat()) : au prorata de leur HT,
+     * par cumul, dans leur ordre, sans qu'aucune ligne ne reçoive une TVA
+     * négative ni plus grande que son HT. Les autres lignes ne changent
+     * pas.
+     *
+     * @template TCle of array-key
+     *
+     * @param  array<TCle, array<string, mixed>>  $lignes  chacune avec taux, montant_ht et montant_tva, en centimes, taux en centièmes de point, dans leur ordre
+     * @return array<TCle, array<string, mixed>> les mêmes lignes, sous les mêmes clés, avec leur montant_ttc
+     *
+     * @throws InvalidArgumentException
+     */
+    public function repartirUneTvaRetenue(array $lignes, int $taux, int $tvaRetenue): array
+    {
+        $base = 0;
+        $proposee = 0;
+
+        foreach ($lignes as $ligne) {
+            if ($ligne['taux'] === $taux) {
+                $base = $this->borne($base + $this->entier($ligne, 'montant_ht'));
+                $proposee += $this->entier($ligne, 'montant_tva');
+            }
+        }
+
+        $this->refuserUneTvaImpossible($taux, $base, $tvaRetenue);
+
+        if ($tvaRetenue !== $proposee) {
+            $lignes = $this->repartirLEcart($lignes, $taux, $base, $tvaRetenue - $proposee);
+        }
+
+        return array_map(fn (array $ligne): array => [...$ligne, 'montant_ttc' => $this->entier($ligne, 'montant_ht') + $this->entier($ligne, 'montant_tva')], $lignes);
+    }
+
+    /**
+     * Un montant réparti entre des parts au prorata de leur poids, en
+     * cumul dans leur ordre : la part cumulée jusqu'à chacune est le
+     * montant x le cumul des poids jusqu'à elle ÷ leur total, arrondie une
+     * fois au centime le plus proche (un demi-centime au centime
+     * supérieur), et chaque part est sa part cumulée moins celle des parts
+     * précédentes ; leur somme égale toujours le montant. 50,02 € répartis
+     * sur 120,00 € puis 40,00 € font 37,52 € (37,515 arrondi au centime
+     * supérieur) et 12,50 €. Un total de poids nul ne donne que des parts
+     * nulles.
+     *
+     * @template TCle of array-key
+     *
+     * @param  int  $montant  en centimes
+     * @param  array<TCle, int>  $poids  chacun en centimes, positif ou nul, dans leur ordre
+     * @return array<TCle, int> la part de chacun, en centimes, sous les mêmes clés
+     *
+     * @throws InvalidArgumentException
+     */
+    public function repartirAuProrata(int $montant, array $poids): array
+    {
+        $total = 0;
+
+        foreach ($poids as $unPoids) {
+            if ($unPoids < 0) {
+                throw new InvalidArgumentException('Un poids de la répartition ne peut pas être négatif.');
+            }
+
+            $total = $this->borne($total + $unPoids);
+        }
+
+        $cumul = 0;
+        $partCumuleePrecedente = 0;
+        $parts = [];
+
+        foreach ($poids as $cle => $unPoids) {
+            $cumul += $unPoids;
+            $partCumulee = $total === 0 ? 0 : $this->diviserArrondi($this->multiplier($this->borne($montant), $cumul), $total);
+            $parts[$cle] = $partCumulee - $partCumuleePrecedente;
+            $partCumuleePrecedente = $partCumulee;
+        }
+
+        return $parts;
+    }
+
+    /**
+     * Le coût réel d'un article dont la facture du fournisseur écrit le
+     * HT de la ligne (voir chiffrerUnAchat()) : ce HT ÷ la quantité, moins
+     * l'escompte de la facture, au dix-millième d'euro comme le CMUP qu'il
+     * alimente, arrondi une seule fois -- 10,00 € HT pour 3 articles font
+     * 3,3333 € chacun (33333).
+     *
+     * @param  int  $htCentimes  le HT de la ligne, en centimes
+     * @param  int  $escompteCentiemes  l'escompte de la facture, en centièmes de point
+     * @return int en dix-millièmes d'euro
+     *
+     * @throws InvalidArgumentException
+     */
+    public function coutUnitaireDuHt(int $htCentimes, int $quantite, int $escompteCentiemes = 0): int
+    {
+        $quantite = $this->quantite(['quantite' => $quantite]);
+        $ht = $this->entier(['montant_ht' => $htCentimes], 'montant_ht');
+
+        // HT x (100 % - escompte) en centièmes de point, soit au plus 10^18
+        // : en dix-millièmes d'euro, ÷ (100 x quantité).
+        return $this->diviserArrondi($this->multiplier($ht, 10000 - $this->remise(['remise_pourcentage' => $escompteCentiemes])), $this->multiplier(100, $quantite));
+    }
+
+    /**
+     * Le PU HT d'un article vendu, tel que PILIQI l'affiche partout
+     * (décision de l'éditeur du 14/11/2026, lot DEMO-V) : son PU TTC moins
+     * la TVA d'un article, cette TVA étant le PU TTC x taux ÷ (1 + taux),
+     * arrondie une fois au centime le plus proche, un demi-centime au
+     * centime supérieur -- 9,99 € TTC à 20 % : TVA 1,665 €, soit 1,67 €, et
+     * PU HT 8,32 € ; 10,00 € : 8,33 € ; 0,99 € : 0,82 € ; à 0 %, le PU TTC.
+     * Le seul calcul du PU HT de vente que montrent les fiches des produits
+     * et des services, la caisse, les lignes des formulaires de vente, les
+     * fiches et les listes des documents, leurs PDF, la page publique du
+     * devis, les aides et les messages ; c'est aussi le HT d'un seul
+     * article vendu, calculé comme toute vente (voir chiffrerUneVente()),
+     * et le prix sans TVA française d'un service vendu à ce prix TTC (voir
+     * ChoisitLaNatureDeLOperation), mais aucun montant d'une ligne de
+     * plusieurs articles ne se calcule dessus : la quantité x ce prix peut
+     * s'écarter de quelques centimes du total HT de la ligne, calculé sur
+     * toute la quantité. Le PU HT qu'enregistre la ligne, au millionième
+     * (voir prixUnitaireHtExact()), reste celui de la facture électronique.
+     *
+     * @param  int  $prixUnitaireTtc  en centimes
+     * @param  int  $tauxDuPrix  le taux que comprend ce prix, en centièmes de point
+     * @return int en centimes
+     *
+     * @throws InvalidArgumentException
+     */
+    public function prixUnitaireHtAffiche(int $prixUnitaireTtc, int $tauxDuPrix): int
+    {
+        $ttc = $this->prix(['prix_unitaire_ttc' => $prixUnitaireTtc], 'prix_unitaire_ttc');
+        $taux = $this->taux(['taux_tva' => $tauxDuPrix], 'taux_tva');
+
+        return $ttc - $this->tvaDuTtc($ttc, $taux);
+    }
+
+    /**
+     * Le PU HT d'un article vendu, affiché (voir prixUnitaireHtAffiche()),
+     * écrit comme un montant : « 8,32 € ».
+     *
+     * @param  int  $prixUnitaireTtc  en centimes
+     * @param  int  $tauxDuPrix  en centièmes de point
+     *
+     * @throws InvalidArgumentException
+     */
+    public function prixUnitaireHtAfficheEnEuros(int $prixUnitaireTtc, int $tauxDuPrix): string
+    {
+        return $this->enEuros($this->prixUnitaireHtAffiche($prixUnitaireTtc, $tauxDuPrix));
+    }
+
+    /**
+     * Le PU HT qu'enregistre une ligne de vente (Q1-b) : son PU TTC ÷ (1 +
+     * le taux compris dans ce prix), au millionième d'euro le plus proche,
+     * un demi-millionième au millionième supérieur -- 1,00 € TTC à 20 %
+     * fait 0,833333 € ; 12,00 €, 10,00 € ; 9,99 €, 8,325 €. Les montants de
+     * la ligne se calculent sur son TTC (voir chiffrerUneVente()), et la
+     * quantité x ce PU HT, remise déduite, s'écarte du HT de la ligne de
+     * moins de deux centimes jusqu'à 10 000 articles : moins d'un centime
+     * pour le HT de la ligne (sa TVA arrondie une fois, et le centime
+     * d'ajustement qu'elle peut recevoir, toujours vers sa TVA exacte), un
+     * demi-centime au plus pour la remise, arrondie une fois au centime sur
+     * son TTC, et un demi-centime au plus pour le millionième (0,0000005 € x
+     * 10 000). C'est la tolérance de la facture électronique (règle Peppol
+     * R120 : 0,02 €). Une ligne d'avoir, qui rend le calcul de la vente sur
+     * ses articles (voir retourDeLigne()), ne reçoit le centime de l'avoir
+     * que s'il ne l'en fait pas sortir, ni ce qui reste de la ligne vendue
+     * (voir chiffrerUnAvoir()).
+     *
+     * @param  int  $prixUnitaireTtc  en centimes
+     * @param  int  $tauxTva  en centièmes de point
+     * @return int en millionièmes d'euro
+     *
+     * @throws InvalidArgumentException
+     */
+    public function prixUnitaireHtExact(int $prixUnitaireTtc, int $tauxTva): int
+    {
+        $diviseur = 10000 + $this->taux(['taux_tva' => $tauxTva], 'taux_tva');
+        $ttcEnMillioniemes = $this->multiplier($this->prix(['prix_unitaire_ttc' => $prixUnitaireTtc], 'prix_unitaire_ttc'), 10000);
+
+        // TTC x 10 000 ÷ (10 000 + taux), en deux temps : le produit
+        // dépasserait les entiers pour les plus grands prix des colonnes.
+        return $this->multiplier(intdiv($ttcEnMillioniemes, $diviseur), 10000)
+            + $this->diviserArrondi(($ttcEnMillioniemes % $diviseur) * 10000, $diviseur);
+    }
+
+    /**
+     * Le PU HT d'une ligne qui retombe sur son HT : ce HT ÷ (la quantité x
+     * (100 % - la remise)), au millionième d'euro le plus proche, un
+     * demi-millionième au millionième supérieur, si bien que la quantité x
+     * ce PU HT, remise déduite, s'écarte du HT de la ligne d'au plus un
+     * demi-centime jusqu'à 10 000 articles : 694,44 € HT pour 100 articles
+     * font 6,9444 € ; 69 444,44 € pour 10 000, 6,944444 €. Le PU HT d'une
+     * ligne dont le prix unitaire payé n'est pas un prix au centime, comme
+     * celle d'une facture rectificative qui reprend le TTC payé d'une vente
+     * sans TVA française (voir RegularisationDUneExoneration). Une remise
+     * de 100 % ne laisse aucun HT à diviser : null.
+     *
+     * @param  int  $htCentimes  le HT de la ligne, en centimes
+     * @param  int  $remiseCentiemes  en centièmes de point
+     * @return int|null en millionièmes d'euro
+     *
+     * @throws InvalidArgumentException
+     */
+    public function prixUnitaireHtDuMontant(int $htCentimes, int $quantite, int $remiseCentiemes): ?int
+    {
+        $ht = $this->entier(['montant_ht' => $htCentimes], 'montant_ht');
+        $articlesPayes = BigInteger::of($this->quantite(['quantite' => $quantite]))->multipliedBy(10000 - $this->remise(['remise_pourcentage' => $remiseCentiemes]));
+
+        if ($articlesPayes->isZero()) {
+            return null;
+        }
+
+        // Centimes en millionièmes (x 10 000), et la remise en centièmes de
+        // point (x 10 000) : HT x 10^8 ÷ (quantité x (10 000 - remise)).
+        return BigInteger::of($ht)->multipliedBy(100_000_000)->dividedBy($articlesPayes, RoundingMode::HalfUp)->toInt();
+    }
+
+    /**
+     * Un prix HT au centime avec sa TVA : HT + HT x taux, la TVA arrondie
+     * une fois au centime le plus proche -- 16,67 € HT à 20 % font
+     * 20,00 € TTC. Le prix d'un service qui revient dans la TVA française,
+     * quand une vente sans TVA française y revient (voir
+     * ChoisitLaNatureDeLOperation).
+     *
+     * @param  int  $prixUnitaireHt  en centimes
+     * @param  int  $tauxTva  en centièmes de point
+     * @return int en centimes
+     *
+     * @throws InvalidArgumentException
+     */
+    public function prixUnitaireTtcDepuisHt(int $prixUnitaireHt, int $tauxTva): int
+    {
+        $ht = $this->entier(['prix_unitaire_ht' => $prixUnitaireHt], 'prix_unitaire_ht');
+
+        return $ht + $this->tvaDuHt($ht, $this->taux(['taux_tva' => $tauxTva], 'taux_tva'));
+    }
+
+    /**
+     * Le prix de vente TTC d'un prix HT exact -- un coût d'achat au
+     * dix-millième plus un bénéfice (voir BaremePrixDeVente) : HT x (1 +
+     * TVA), arrondi une seule fois, au multiple de $pasCentimes le plus
+     * proche (au centime, ou à la dizaine d'euros pour un prix en X9).
+     * C'est le seul prix arrondi, lors de l'enregistrement du produit.
+     *
+     * @param  int  $prixHt  en dix-millièmes d'euro
+     * @param  int  $tauxTva  en centièmes de point
+     * @return int en centimes
+     *
+     * @throws InvalidArgumentException
+     */
+    public function prixTtcArrondi(int $prixHt, int $tauxTva, int $pasCentimes = 1): int
+    {
+        $taux = $this->taux(['taux_tva' => $tauxTva], 'taux_tva');
+
+        // Dix-millièmes d'euro x (100 % + taux) en centièmes de point :
+        // 10^-8 €, soit 10^6 par centime.
+        $prixExact = $this->multiplier($this->entier(['prix_ht' => $prixHt], 'prix_ht'), 10000 + $taux);
+
+        return $this->multiplier($this->diviserArrondi($prixExact, $this->multiplier(1_000_000, $pasCentimes)), $pasCentimes);
+    }
+
+    /**
+     * Valeur d'un stock au coût moyen (voir coutMoyenPondere()) : la
+     * quantité x le CMUP au dix-millième, arrondie une seule fois au
+     * centime -- 2 000 articles à 0,045 € valent 90,00 € HT, pas 2 000 x
+     * 0,05 €. La TVA se calcule sur ce montant HT.
+     *
+     * @param  int  $coutMoyenHt  en dix-millièmes d'euro
+     * @param  int  $tauxTva  en centièmes de point
+     * @return array{montant_ht: int, montant_tva: int, montant_ttc: int} en centimes
+     *
+     * @throws InvalidArgumentException
+     */
+    public function valeurAuCoutMoyen(int $quantite, int $coutMoyenHt, int $tauxTva): array
+    {
+        $taux = $this->taux(['taux_tva' => $tauxTva], 'taux_tva');
+
+        $htCentimes = $this->borne($this->diviserArrondi($this->multiplier($this->entier(['cout' => $coutMoyenHt], 'cout'), $quantite), 100));
+        $tvaCentimes = $this->tvaDuHt($htCentimes, $taux);
+
+        return [
+            'montant_ht' => $htCentimes,
+            'montant_tva' => $tvaCentimes,
+            'montant_ttc' => $htCentimes + $tvaCentimes,
+        ];
+    }
+
+    /**
+     * Le coût réel d'un article acheté : son PU HT, tel que le fournisseur
+     * l'écrit (six décimales au plus), moins la remise de la ligne, puis
+     * l'escompte de la facture, au dix-millième d'euro comme le CMUP qu'il
+     * alimente (voir coutMoyenPondere()) -- jamais arrondi au centime :
+     * 1,18 € remisé de 15 % coûte 1,003 €, et 3 articles valent bien les
+     * 3,01 € HT de la ligne, pas 3 x 1,00 € ; 0,1234 € coûte 0,1234 €.
+     *
+     * @param  int  $prixUnitaireHt  en millionièmes d'euro (voir enMillioniemes() et SaisieDecimale::enMillioniemes())
+     * @param  int  $remise  la remise de la ligne, en centièmes de point
+     * @param  int  $escompte  l'escompte de la facture, en centièmes de point
+     * @return int en dix-millièmes d'euro
+     *
+     * @throws InvalidArgumentException
+     */
+    public function coutUnitaireNet(int $prixUnitaireHt, int $remise, int $escompte = 0): int
+    {
+        // (100 % - remise) x (100 % - escompte), en (centièmes de point)²,
+        // soit au plus 10^8. Le coût vaut millionièmes x facteur / 10^10,
+        // au dix-millième ; les millionièmes sont découpés autour de 10^10
+        // pour que le produit ne déborde jamais, avec un seul arrondi.
+        $facteur = (10000 - $this->remise(['remise_pourcentage' => $remise])) * (10000 - $this->remise(['remise_pourcentage' => $escompte]));
+
+        return $this->multiplier(intdiv($prixUnitaireHt, 10_000_000_000), $facteur)
+            + $this->diviserArrondi($this->multiplier($prixUnitaireHt % 10_000_000_000, $facteur), 10_000_000_000);
+    }
+
+    /**
+     * Ce que rapporte un article : son prix de vente HT moins son coût
+     * d'achat exact (voir coutUnitaireNet()), arrondi une seule fois au
+     * centime -- 11,00 € - 1,005 € = 9,995 € -> 10,00 €.
+     *
+     * @param  int  $prixVenteHt  en centimes
+     * @param  int  $coutUnitaireHt  en dix-millièmes d'euro
+     * @return int en centimes
+     *
+     * @throws InvalidArgumentException
+     */
+    public function beneficeUnitaire(int $prixVenteHt, int $coutUnitaireHt): int
+    {
+        return $this->diviserArrondi(
+            $this->multiplier($this->entier(['prix' => $prixVenteHt], 'prix'), 100) - $this->entier(['cout' => $coutUnitaireHt], 'cout'),
+            100,
+        );
+    }
+
+    /**
+     * Le taux de marque d'un article : son bénéfice ÷ son prix de vente
+     * HT, en centièmes de point, arrondi une seule fois au plus proche --
+     * 12,50 € de bénéfice sur 20,83 € HT font 60,01 % (6001). Un bénéfice
+     * négatif donne un taux négatif ; sans prix de vente, aucun taux
+     * (null).
+     *
+     * @param  int  $benefice  en centimes
+     * @param  int  $prixVenteHt  en centimes
+     */
+    public function tauxDeMarque(int $benefice, int $prixVenteHt): ?int
+    {
+        return $prixVenteHt <= 0 ? null : $this->diviserArrondi($this->multiplier($benefice, 10000), $prixVenteHt);
+    }
+
+    /**
+     * Coût unitaire moyen de lots (quantité, coût unitaire) pondéré par
+     * leurs quantités, au dix-millième d'euro : Σ(quantité x coût) /
+     * Σ quantité. Des lots de coût nul (marchandise offerte) coûtent 0 ;
+     * des lots qui ne pèsent rien (aucun article) n'ont pas de coût moyen :
+     * null. Une quantité ou un coût négatif n'a pas de sens.
+     *
+     * @param  iterable<array{quantite: int, cout_unitaire: int}>  $lots  chaque coût en dix-millièmes d'euro
+     * @return int|null en dix-millièmes d'euro
+     *
+     * @throws InvalidArgumentException
+     */
+    public function coutMoyenPondere(iterable $lots): ?int
+    {
+        $quantiteTotale = 0;
+        $valeurTotaleDixMilliemes = 0;
+
+        foreach ($lots as $lot) {
+            $coutDixMilliemes = $this->entier($lot, 'cout_unitaire');
+
+            if ($lot['quantite'] < 0 || $coutDixMilliemes < 0) {
+                throw new InvalidArgumentException('Un lot de stock ne peut avoir ni quantité ni coût négatif.');
+            }
+
+            $quantiteTotale += $lot['quantite'];
+            $valeurTotaleDixMilliemes += $this->multiplier($coutDixMilliemes, $lot['quantite']);
+        }
+
+        if ($quantiteTotale === 0) {
+            return null;
+        }
+
+        return $this->diviserArrondi($valeurTotaleDixMilliemes, $quantiteTotale);
+    }
+
+    /**
+     * Le coût moyen du stock restant quand $quantite articles en sortent à
+     * un autre coût que le sien -- un retour au fournisseur, au coût de la
+     * ligne d'achat retournée (voir StockLedgerService::retournerAuFournisseur()) :
+     * (stock x coût moyen - quantité x coût) / (stock - quantité), au
+     * dix-millième d'euro. 10 articles achetés à 2 €, puis 10 à 10 € (20 à
+     * 6 €) : retourner les 10 à 10 € laisse 10 articles à 2 €. Sans stock
+     * restant, il n'y a plus de coût moyen à recalculer : null, le coût
+     * moyen ne change pas. Un stock ne vaut jamais moins que rien : un
+     * retour qui rendrait négative la valeur du stock restant la ramène à
+     * 0 € -- 5 articles à 6 € dont 4 retournés à 10 € : le dernier vaut 0 €,
+     * pas -10 €. Une quantité ou un coût négatif n'a pas de sens.
+     *
+     * @param  int  $coutMoyen  en dix-millièmes d'euro
+     * @param  int  $coutUnitaire  en dix-millièmes d'euro
+     * @return int|null en dix-millièmes d'euro
+     *
+     * @throws InvalidArgumentException
+     */
+    public function coutMoyenApresUneSortie(int $stock, int $coutMoyen, int $quantite, int $coutUnitaire): ?int
+    {
+        $coutMoyenDixMilliemes = $this->entier(['cout' => $coutMoyen], 'cout');
+        $coutUnitaireDixMilliemes = $this->entier(['cout' => $coutUnitaire], 'cout');
+
+        if ($stock < 0 || $quantite < 0 || $coutMoyenDixMilliemes < 0 || $coutUnitaireDixMilliemes < 0) {
+            throw new InvalidArgumentException('Un lot de stock ne peut avoir ni quantité ni coût négatif.');
+        }
+
+        $reste = $stock - $quantite;
+
+        if ($reste <= 0) {
+            return null;
+        }
+
+        $valeurRestanteDixMilliemes = $this->multiplier($coutMoyenDixMilliemes, $stock) - $this->multiplier($coutUnitaireDixMilliemes, $quantite);
+
+        // La valeur d'un stock ne descend jamais sous 0 €.
+        return $this->diviserArrondi(max(0, $valeurRestanteDixMilliemes), $reste);
+    }
+
+    /**
+     * Les sommes des HT, des TVA et des TTC de ces lignes, tableaux ou
+     * lignes enregistrées, en centimes : chaque montant est écrit comme sa
+     * colonne (« 41.67 », voir enCentiemes()), et la somme se fait en
+     * entiers, jamais en flottants ni par la base. Pour les enregistrer
+     * dans les colonnes d'un document, voir enDecimaux().
+     *
+     * @param  iterable<array{montant_ht: mixed, montant_tva: mixed, montant_ttc: mixed}|\ArrayAccess<string, mixed>>  $lignes
+     * @return array{total_ht: int, total_tva: int, total_ttc: int}
+     *
+     * @throws UnexpectedValueException un montant qui n'est pas une valeur simple
+     * @throws InvalidArgumentException un montant qui n'est pas écrit comme sa colonne
+     */
+    public function totaliser(iterable $lignes): array
+    {
+        $totalHtCentimes = 0;
+        $totalTvaCentimes = 0;
+        $totalTtcCentimes = 0;
+
+        foreach ($lignes as $ligne) {
+            $totalHtCentimes = $this->borne($totalHtCentimes + $this->enCentiemes(ValeurSimple::simple($ligne['montant_ht'])));
+            $totalTvaCentimes = $this->borne($totalTvaCentimes + $this->enCentiemes(ValeurSimple::simple($ligne['montant_tva'])));
+            $totalTtcCentimes = $this->borne($totalTtcCentimes + $this->enCentiemes(ValeurSimple::simple($ligne['montant_ttc'])));
+        }
+
+        return [
+            'total_ht' => $totalHtCentimes,
+            'total_tva' => $totalTvaCentimes,
+            'total_ttc' => $totalTtcCentimes,
+        ];
+    }
+
+    /**
+     * Cumul de documents déjà totalisés (tickets en attente de clôture,
+     * chiffre d'affaires, relevé « Fermer ma caisse ») : les mêmes sommes
+     * séparées des HT, des TVA et des TTC qu'entre les lignes d'un
+     * document, en centimes.
+     *
+     * @param  iterable<array{total_ht: string, total_tva: string, total_ttc: string}|\ArrayAccess<string, mixed>>  $documents
+     * @return array{total_ht: int, total_tva: int, total_ttc: int}
+     *
+     * @throws UnexpectedValueException
+     * @throws InvalidArgumentException
+     */
+    public function cumuler(iterable $documents): array
+    {
+        $totaux = [];
+
+        foreach ($documents as $document) {
+            $totaux[] = [
+                'montant_ht' => $document['total_ht'],
+                'montant_tva' => $document['total_tva'],
+                'montant_ttc' => $document['total_ttc'],
+            ];
+        }
+
+        return $this->totaliser($totaux);
+    }
+
+    /**
+     * Des totaux moins ceux des documents qui les corrigent (les ventes
+     * d'une journée de caisse moins ses avoirs), en centimes, séparément
+     * pour les HT, les TVA et les TTC.
+     *
+     * @param  array{total_ht: int, total_tva: int, total_ttc: int}  $totaux
+     * @param  array{total_ht: int, total_tva: int, total_ttc: int}  $totauxDeduits
+     * @return array{total_ht: int, total_tva: int, total_ttc: int}
+     *
+     * @throws InvalidArgumentException
+     */
+    public function deduire(array $totaux, array $totauxDeduits): array
+    {
+        return [
+            'total_ht' => $this->borne($totaux['total_ht'] - $totauxDeduits['total_ht']),
+            'total_tva' => $this->borne($totaux['total_tva'] - $totauxDeduits['total_tva']),
+            'total_ttc' => $this->borne($totaux['total_ttc'] - $totauxDeduits['total_ttc']),
+        ];
+    }
+
+    /**
+     * Somme exacte de montants écrits comme leurs colonnes (paiements,
+     * crédits d'avoir...), en centimes : chaque montant lu par
+     * enCentiemes(), rien ou un texte vide comptant pour zéro -- jamais une
+     * somme de flottants.
+     *
+     * @param  iterable<int|string|null>  $montants
+     *
+     * @throws InvalidArgumentException
+     */
+    public function sommer(iterable $montants): int
+    {
+        $totalCentimes = 0;
+
+        foreach ($montants as $montant) {
+            if ($montant !== null && $montant !== '') {
+                $totalCentimes = $this->borne($totalCentimes + $this->enCentiemes($montant));
+            }
+        }
+
+        return $totalCentimes;
+    }
+
+    /**
+     * Des montants en centimes écrits comme leurs colonnes (voir
+     * enDecimal()), sous les mêmes clés : les totaux d'un document à
+     * enregistrer (voir totaliser()).
+     *
+     * @template TCle of array-key
+     *
+     * @param  array<TCle, int>  $centimes
+     * @return array<TCle, numeric-string>
+     *
+     * @throws InvalidArgumentException
+     */
+    public function enDecimaux(array $centimes): array
+    {
+        return array_map($this->enDecimal(...), $centimes);
+    }
+
+    /**
+     * Un montant, un taux ou une remise enregistré au centième
+     * (decimal(12,2) ou decimal(5,2), lu en chaîne par le cast decimal:2),
+     * en centièmes entiers : « 120.00 » vaut 12000, « -0.05 » vaut -5, un
+     * entier compte des unités entières (20 vaut 2000). Seule une écriture
+     * décimale exacte est acceptée : des chiffres, au plus deux décimales
+     * après un point, un « - » facultatif, aucun espace ni signe « + » ;
+     * des zéros de tête ne changent rien (« 0007.5 » vaut 750). Comme
+     * partout dans la classe, la borne est UNITES_MAXIMUM, au-delà des
+     * colonnes : un montant qu'aucune colonne ne contiendrait se lit
+     * encore sous cette borne. Un flottant est refusé, même rond : rien ne
+     * dit qu'il soit la valeur exacte d'une colonne (0.1 + 0.2 vaut
+     * 0.30000000000000004), et PHP le convertirait en silence avant
+     * l'appel (1.5 deviendrait l'entier 1) si le paramètre n'acceptait que
+     * des chaînes et des entiers.
+     *
+     * @param  mixed  $valeur  une chaîne décimale ou un entier ; toute autre valeur est refusée
+     *
+     * @throws InvalidArgumentException
+     */
+    public function enCentiemes(mixed $valeur): int
+    {
+        if (! is_int($valeur)) {
+            return $this->lireUneEcriture($valeur, 2, 'Montant illisible : une chaîne décimale exacte (deux décimales au plus) ou un entier est attendu.');
+        }
+
+        return $this->borne($this->multiplier($valeur, 100));
+    }
+
+    /**
+     * L'inverse d'enCentiemes() : 12000 s'écrit « 120.00 », -5 s'écrit
+     * « -0.05 », comme le cast decimal:2.
+     *
+     * @return numeric-string
+     *
+     * @throws InvalidArgumentException
+     */
+    public function enDecimal(int $centiemes): string
+    {
+        if (abs($centiemes) >= self::UNITES_MAXIMUM) {
+            throw new InvalidArgumentException('Montant hors limites.');
+        }
+
+        return self::ecritureDecimale(sprintf('%s%d.%02d', $centiemes < 0 ? '-' : '', intdiv(abs($centiemes), 100), abs($centiemes) % 100));
+    }
+
+    /**
+     * Un montant en centimes tel qu'un écran l'écrit : 123450 s'écrit
+     * « 1 234,50 € », -5 s'écrit « -0,05 € » ; même borne qu'enDecimal().
+     *
+     * @throws InvalidArgumentException
+     */
+    public function enEuros(int $centiemes): string
+    {
+        [, $decimales] = explode('.', $this->enDecimal($centiemes));
+
+        return self::ecrireEnEuros($centiemes, 100, $decimales);
+    }
+
+    /**
+     * Un PU HT de ligne de vente enregistré au millionième d'euro
+     * (decimal(18,6), lu en chaîne par le cast decimal:6, voir
+     * prixUnitaireHtExact()), ou tout prix enregistré au centime, en
+     * millionièmes entiers : « 0.833333 » vaut 833333, « 10.01 » vaut
+     * 10010000, un entier compte des euros (12 vaut 12000000). Mêmes règles
+     * qu'enCentiemes() : une écriture décimale exacte, six décimales au
+     * plus, jamais un flottant, et la même borne, en millionièmes.
+     *
+     * @param  mixed  $valeur  une chaîne décimale ou un entier ; toute autre valeur est refusée
+     *
+     * @throws InvalidArgumentException
+     */
+    public function enMillioniemes(mixed $valeur): int
+    {
+        if (! is_int($valeur)) {
+            return $this->lireUneEcriture($valeur, 6, 'Prix illisible : une chaîne décimale exacte (six décimales au plus) ou un entier est attendu.');
+        }
+
+        $millioniemes = $this->multiplier($valeur, 1_000_000);
+
+        if (abs($millioniemes) >= self::MILLIONIEMES_MAXIMUM) {
+            throw new InvalidArgumentException('Montant hors limites.');
+        }
+
+        return $millioniemes;
+    }
+
+    /**
+     * L'inverse d'enMillioniemes(), comme le cast decimal:6 : 833333
+     * s'écrit « 0.833333 », 10000000 « 10.000000 ».
+     *
+     * @return numeric-string
+     *
+     * @throws InvalidArgumentException
+     */
+    public function enDecimalAuMillionieme(int $millioniemes): string
+    {
+        if (abs($millioniemes) >= self::MILLIONIEMES_MAXIMUM) {
+            throw new InvalidArgumentException('Montant hors limites.');
+        }
+
+        return self::ecritureDecimale(sprintf('%s%d.%06d', $millioniemes < 0 ? '-' : '', intdiv(abs($millioniemes), 1_000_000), abs($millioniemes) % 1_000_000));
+    }
+
+    /**
+     * Un coût enregistré au dix-millième d'euro (decimal(14,4), lu en
+     * chaîne par le cast decimal:4 : le coût moyen d'un produit, le coût
+     * d'un mouvement de stock), en dix-millièmes entiers : « 3.3333 » vaut
+     * 33333, un entier compte des euros (2 vaut 20000). Mêmes règles
+     * qu'enCentiemes() : une écriture décimale exacte, quatre décimales au
+     * plus, jamais un flottant, et la même borne, en dix-millièmes.
+     *
+     * @param  mixed  $valeur  une chaîne décimale ou un entier ; toute autre valeur est refusée
+     *
+     * @throws InvalidArgumentException
+     */
+    public function enDixMilliemes(mixed $valeur): int
+    {
+        if (! is_int($valeur)) {
+            return $this->lireUneEcriture($valeur, 4, 'Coût illisible : une chaîne décimale exacte (quatre décimales au plus) ou un entier est attendu.');
+        }
+
+        return $this->borne($this->multiplier($valeur, 10000));
+    }
+
+    /**
+     * L'inverse d'enDixMilliemes(), comme le cast decimal:4 : 33333
+     * s'écrit « 3.3333 », 20000 « 2.0000 ».
+     *
+     * @return numeric-string
+     *
+     * @throws InvalidArgumentException
+     */
+    public function enDecimalAuDixMillieme(int $dixMilliemes): string
+    {
+        $this->borne($dixMilliemes);
+
+        return self::ecritureDecimale(sprintf('%s%d.%04d', $dixMilliemes < 0 ? '-' : '', intdiv(abs($dixMilliemes), 10000), abs($dixMilliemes) % 10000));
+    }
+
+    /**
+     * Un prix unitaire en millionièmes, tel qu'il s'affiche (décision de
+     * l'éditeur du 25/10/2026), en centimes : arrondi une fois au centime
+     * le plus proche, un demi-centime exact au centime supérieur --
+     * 54,166667 € s'affiche 54,17 € ; 8,325 €, 8,33 € ; 0,833333 €, 0,83 €.
+     * Seul l'affichage s'arrondit : le prix enregistré ne change pas, et
+     * aucun montant ne se calcule sur ce prix affiché (voir
+     * MentionsFiscales::calcul(), qui explique l'écart). Le PU HT d'une
+     * vente ne s'affiche jamais ainsi, mais comme celui d'un article (voir
+     * prixUnitaireHtAffiche(), décision de l'éditeur du 14/11/2026).
+     *
+     * @throws InvalidArgumentException
+     */
+    public function prixUnitaireAuCentime(int $millioniemes): int
+    {
+        if (abs($millioniemes) >= self::MILLIONIEMES_MAXIMUM) {
+            throw new InvalidArgumentException('Montant hors limites.');
+        }
+
+        return $this->diviserArrondi($millioniemes, 10_000);
+    }
+
+    /**
+     * La mise en forme de tout prix unitaire de vente que montre en lecture
+     * un document, une fiche, une liste, une aide, un message ou la caisse,
+     * hors du PU HT : PU TTC, prix de vente, prix de référence, et du coût
+     * moyen d'un produit : arrondi au centime (voir
+     * prixUnitaireAuCentime()), écrit comme un montant (voir enEuros()) :
+     * « 54,17 € », « 0,83 € », « 1 000,00 € ». Un prix enregistré au
+     * centime s'y écrit tel quel. Le champ du coût moyen, qui ne se saisit
+     * pas, le montre de même au centime (voir prixUnitaireDansUnChamp()) ;
+     * un champ où un prix se saisit, tel qu'il est enregistré. Le PU HT
+     * d'une vente s'affiche partout comme celui d'un article (voir
+     * prixUnitaireHtAffiche(), décision de l'éditeur du 14/11/2026), et un
+     * prix d'achat tel qu'il est enregistré (voir prixUnitaireExact()).
+     *
+     * @throws InvalidArgumentException
+     */
+    public function prixUnitaireAffiche(int $millioniemes): string
+    {
+        return $this->enEuros($this->prixUnitaireAuCentime($millioniemes));
+    }
+
+    /**
+     * Un prix unitaire en millionièmes écrit tel qu'il est enregistré, sans
+     * zéro inutile au-delà du centime, comme le relit sa colonne (voir
+     * PrixDAchat) et le montre un champ : « 0.1234 », « 12.50 »,
+     * « 8.333333 ». Le PU HT d'une ligne d'achat ou un coût d'inventaire
+     * d'ouverture, où il se saisit (décision de l'éditeur du 02/11/2026,
+     * T2) ; le PU HT d'une vente ne s'écrit jamais ainsi, mais comme celui
+     * d'un article (voir prixUnitaireHtAffiche(), décision de l'éditeur du
+     * 14/11/2026).
+     *
+     * @return numeric-string
+     *
+     * @throws InvalidArgumentException
+     */
+    public function prixUnitaireExactEnDecimal(int $millioniemes): string
+    {
+        $decimal = $this->enDecimalAuMillionieme($millioniemes);
+        [$entiers, $decimales] = explode('.', $decimal);
+
+        return self::ecritureDecimale($entiers.'.'.str_pad(rtrim($decimales, '0'), 2, '0'));
+    }
+
+    /**
+     * Une écriture décimale que le code vient de composer (« 120.00 »,
+     * « -0.05 », « 8.333333 »), contrôlée avant d'être rendue : une
+     * écriture qui ne serait pas un nombre est refusée.
+     *
+     * @return numeric-string
+     *
+     * @throws LogicException une écriture qui n'est pas un nombre
+     */
+    private static function ecritureDecimale(string $ecriture): string
+    {
+        return is_numeric($ecriture) ? $ecriture : throw new LogicException("Écriture décimale invalide : {$ecriture}.");
+    }
+
+    /**
+     * Le PU HT enregistré d'une ligne de vente, au millionième, écrit avec
+     * ses six décimales comme un montant : « 8,325000 € », « 1 040,833333 € ».
+     * Seul le PDF d'un document qui montre le PU HT l'imprime, en petit sous
+     * l'article (« PU HT exact », modèle M6-b, choix de l'éditeur du
+     * 14/11/2026, voir TableauDesLignes) : c'est le PU HT de la facture
+     * électronique (voir prixUnitaireHtExact()) ; partout ailleurs, le PU HT
+     * d'une vente est celui d'un article (voir prixUnitaireHtAffiche()).
+     *
+     * @throws InvalidArgumentException
+     */
+    public function prixUnitaireAuMillionieme(int $millioniemes): string
+    {
+        [, $decimales] = explode('.', $this->enDecimalAuMillionieme($millioniemes));
+
+        return self::ecrireEnEuros($millioniemes, 1_000_000, $decimales);
+    }
+
+    /**
+     * La seule mise en forme d'un prix unitaire montré tel qu'il est
+     * enregistré, jusqu'à six décimales, sans zéro inutile au-delà du
+     * centime, écrit comme un montant : « 8,333333 € », « 8,325 € »,
+     * « 0,825 € », « 1 040,833333 € », « 45,00 € ». Il ne s'arrondit jamais
+     * au centime : c'est le PU HT d'un achat ou le coût d'un inventaire
+     * d'ouverture dans les fiches, les listes, les aides et les messages des
+     * achats, tel que le fournisseur l'écrit (décision de l'éditeur du
+     * 02/11/2026, T2) : 1 000 x 0,1234 € font bien 123,40 € HT. Le PU HT
+     * d'une vente s'affiche autrement (voir prixUnitaireHtAffiche()).
+     *
+     * @throws InvalidArgumentException
+     */
+    public function prixUnitaireExact(int $millioniemes): string
+    {
+        [, $decimales] = explode('.', $this->prixUnitaireExactEnDecimal($millioniemes));
+
+        return self::ecrireEnEuros($millioniemes, 1_000_000, $decimales);
+    }
+
+    /**
+     * Le coût moyen d'un produit tel que le montre son champ, où il ne se
+     * saisit pas : seuls les achats, les retours et les inventaires le font
+     * évoluer. Arrondi au centime comme tout prix unitaire montré en
+     * lecture (voir prixUnitaireAuCentime()), il s'écrit comme une colonne
+     * au centime (voir enDecimal()) : « 54.17 » pour 54,166667 €, « 0.83 »,
+     * « 12.00 ». Le champ du PU HT d'une ligne de vente montre celui d'un
+     * article (voir prixUnitaireHtAffiche()).
+     *
+     * @throws InvalidArgumentException
+     */
+    public function prixUnitaireDansUnChamp(int $millioniemes): string
+    {
+        return $this->enDecimal($this->prixUnitaireAuCentime($millioniemes));
+    }
+
+    /**
+     * Prix unitaire x quantité, remise déduite, en centimes : le montant
+     * brut tombe toujours pile au centime, seule la remise s'arrondit.
+     */
+    private function montantNetCentimes(int $prixUnitaireCentimes, int $quantite, int $remiseCentiemes): int
+    {
+        $montantBrutCentimes = $this->multiplier($prixUnitaireCentimes, $quantite);
+
+        if (abs($montantBrutCentimes) >= self::UNITES_MAXIMUM) {
+            throw new InvalidArgumentException('Montant hors limites.');
+        }
+
+        return $montantBrutCentimes - $this->diviserArrondi($this->multiplier($montantBrutCentimes, $remiseCentiemes), 10000);
+    }
+
+    /**
+     * Le prix d'achat moyen d'une ligne, en millionièmes d'euro : son HT ÷
+     * sa quantité, arrondi une fois au plus proche, un demi au-dessus --
+     * 40,00 € HT pour 12 câbles font 3,333333 € (3333333). Une facture
+     * d'achat n'a qu'une ligne par produit (décision de l'éditeur du
+     * 26/10/2026, série 9) : le même produit facturé à deux prix (10 câbles
+     * à 4,00 € HT et 2 offerts) y tient sur une ligne, à ce prix moyen.
+     *
+     * @param  int  $htCentimes  le HT de la ligne, en centimes
+     * @return int en millionièmes d'euro
+     *
+     * @throws InvalidArgumentException
+     */
+    public function prixMoyenDUnAchat(int $htCentimes, int $quantite): int
+    {
+        $quantite = $this->quantite(['quantite' => $quantite]);
+        $ht = $this->entier(['montant_ht' => $htCentimes], 'montant_ht');
+
+        return $this->diviserArrondi($this->multiplier($ht, 10000), $quantite);
+    }
+
+    /**
+     * La quantité x le PU HT d'une ligne de vente (en millionièmes d'euro),
+     * remise déduite, calculée exactement, sans arrondi, s'écarte-t-elle de
+     * moins de deux centimes de son HT enregistré ? Vrai jusqu'à 10 000
+     * articles (voir prixUnitaireHtExact()) : 1 000 x 0,833333 € font
+     * 833,333 €, à 0,003 € des 833,33 € HT ; au-delà, l'écart peut
+     * l'atteindre : 100 000 x 0,833333 € font 83 333,30 €, à 0,03 € des
+     * 83 333,33 € HT. C'est la tolérance que la facture électronique
+     * attend de son PU HT (règle Peppol R120 : 0,02 €).
+     *
+     * @param  int  $prixMillioniemes  le PU HT, en millionièmes d'euro
+     * @param  int  $remiseCentiemes  en centièmes de point
+     * @param  int  $htCentimes  le HT de la ligne, en centimes
+     */
+    public function puHtRetombeSurLeHt(int $quantite, int $prixMillioniemes, int $remiseCentiemes, int $htCentimes): bool
+    {
+        return $this->ecartAuPuHt($quantite, $prixMillioniemes, $remiseCentiemes, $htCentimes)->isLessThan(self::ECART_R120);
+    }
+
+    /**
+     * L'écart entre le HT d'une ligne et la quantité x son PU HT (en
+     * millionièmes d'euro), remise déduite, calculé exactement, en cent
+     * millionièmes de centime : 2 centimes valent ECART_R120.
+     *
+     * @param  int  $prixMillioniemes  le PU HT, en millionièmes d'euro
+     * @param  int  $remiseCentiemes  en centièmes de point
+     * @param  int  $htCentimes  le HT de la ligne, en centimes
+     */
+    private function ecartAuPuHt(int $quantite, int $prixMillioniemes, int $remiseCentiemes, int $htCentimes): BigInteger
+    {
+        $produit = BigInteger::of($quantite)->multipliedBy($prixMillioniemes)->multipliedBy(10000 - $remiseCentiemes);
+
+        return $produit->minus(BigInteger::of($htCentimes)->multipliedBy(100_000_000))->abs();
+    }
+
+    /**
+     * Le HT que le calcul propose pour une ligne d'achat (voir htDUnAchat()),
+     * pour la montrer à côté du HT qu'écrit la facture du fournisseur.
+     *
+     * @param  int  $prixMillioniemes  le PU HT, en millionièmes d'euro
+     * @param  int  $remiseCentiemes  en centièmes de point
+     * @return int en centimes
+     *
+     * @throws InvalidArgumentException
+     */
+    public function htProposeDUneLigneDAchat(int $prixMillioniemes, int $quantite, int $remiseCentiemes): int
+    {
+        $ligne = ['prix_unitaire_ht' => $prixMillioniemes, 'quantite' => $quantite, 'remise_pourcentage' => $remiseCentiemes];
+
+        return $this->htDUnAchat($this->prixAuMillionieme($ligne), $this->quantite($ligne), $this->remise($ligne));
+    }
+
+    /**
+     * Le HT que le calcul propose pour une ligne d'achat : quantité x PU HT
+     * (en millionièmes d'euro), remise déduite, arrondi une fois au centime
+     * le plus proche ; un demi-centime exact s'arrondit au centime
+     * inférieur, ce qui revient, pour un PU au centime, à déduire la remise
+     * arrondie au centime supérieur, comme sur une vente (voir
+     * montantNetCentimes()) : 3 x 1,18 € remisés de 15 % font 3,54 € - 0,53
+     * € = 3,01 € ; 1 000 x 0,1234 € font 123,40 €.
+     *
+     * Le brut se découpe en centimes entiers et en millionièmes restants,
+     * et le net en centimes entiers et en cent-millionièmes de centime, pour
+     * que les produits ne débordent jamais.
+     *
+     * @throws InvalidArgumentException
+     */
+    private function htDUnAchat(int $prixMillioniemes, int $quantite, int $remiseCentiemes): int
+    {
+        $brut = $this->multiplier($prixMillioniemes, $quantite);
+
+        if (abs($brut) >= self::MILLIONIEMES_MAXIMUM) {
+            throw new InvalidArgumentException('Montant hors limites.');
+        }
+
+        // Le net vaut brut x (100 % - remise) ÷ 10^8 centimes : les centimes
+        // entiers du brut x le facteur (en dix-millièmes de centime), puis
+        // le reste, en cent-millionièmes de centime, moins d'un centime.
+        $facteur = 10000 - $remiseCentiemes;
+        $centimesRemises = $this->multiplier(intdiv($brut, 10000), $facteur);
+        $fraction = ($centimesRemises % 10000) * 10000 + ($brut % 10000) * $facteur;
+        $net = intdiv($centimesRemises, 10000) + intdiv($fraction, 100_000_000);
+
+        return $this->borne($net + ($fraction % 100_000_000 > 50_000_000 ? 1 : 0));
+    }
+
+    /**
+     * Le PU HT d'une ligne d'achat en millionièmes d'euro : jamais négatif.
+     * La borne des prix unitaires se contrôle sur le HT de la ligne (voir
+     * htDUnAchat()), où il sert toujours : quantité x PU, au moins le PU.
+     *
+     * @param  array<string, mixed>  $ligne
+     *
+     * @throws InvalidArgumentException
+     */
+    private function prixAuMillionieme(array $ligne): int
+    {
+        $prix = $ligne['prix_unitaire_ht'] ?? null;
+
+        if (! is_int($prix)) {
+            throw new InvalidArgumentException(self::NOMBRE_A_VIRGULE);
+        }
+
+        if ($prix < 0) {
+            throw new InvalidArgumentException('Un prix unitaire ne peut pas être négatif.');
+        }
+
+        return $prix;
+    }
+
+    /**
+     * Le HT d'une ligne d'achat qu'écrit la facture du fournisseur, en
+     * centimes : jamais négatif.
+     *
+     * @param  array<string, mixed>  $ligne
+     *
+     * @throws InvalidArgumentException
+     */
+    private function htEcrit(array $ligne): int
+    {
+        $ht = $this->entier($ligne, 'montant_ht');
+
+        if ($ht < 0) {
+            throw new InvalidArgumentException(self::REFUS_HT_NEGATIF);
+        }
+
+        return $ht;
+    }
+
+    /**
+     * Refuse la TVA d'un taux qu'aucune facture valable ne porte : négative,
+     * non nulle à 0 %, ou plus grande que sa base.
+     *
+     * @throws InvalidArgumentException
+     */
+    private function refuserUneTvaImpossible(int $taux, int $base, int $tva): void
+    {
+        if ($tva < 0) {
+            throw new InvalidArgumentException(sprintf(self::REFUS_TVA_NEGATIVE, self::tauxEnTexte($taux)));
+        }
+
+        if ($taux === 0 && $tva !== 0) {
+            throw new InvalidArgumentException(self::REFUS_TVA_A_ZERO);
+        }
+
+        if ($tva > $base) {
+            throw new InvalidArgumentException(sprintf(self::REFUS_TVA_AU_DELA_DE_LA_BASE, self::tauxEnTexte($taux), $this->enEuros($tva), $this->enEuros($base)));
+        }
+    }
+
+    /**
+     * Ajoute aux lignes de ce taux l'écart entre sa TVA retenue et sa TVA
+     * proposée, au prorata de leur HT, par cumul, dans leur ordre : chaque
+     * ligne reçoit la part arrondie du cumul de leurs HT jusqu'à elle, moins
+     * celle des lignes précédentes. Aucune ligne ne reçoit une TVA négative
+     * ni plus grande que son HT : ce qu'elle ne peut pas recevoir se reporte
+     * sur la ligne suivante, puis, après la dernière, sur les précédentes,
+     * en remontant. La TVA retenue étant comprise entre 0 et la base, tout
+     * l'écart se place.
+     *
+     * @template TCle of array-key
+     *
+     * @param  array<TCle, array<string, mixed>>  $lignes  chacune avec taux, montant_ht et montant_tva, dans leur ordre
+     * @return array<TCle, array<string, mixed>>
+     *
+     * @throws InvalidArgumentException
+     */
+    private function repartirLEcart(array $lignes, int $taux, int $base, int $ecart): array
+    {
+        $rangs = array_keys(array_filter($lignes, fn (array $ligne): bool => $ligne['taux'] === $taux));
+        $cumulHt = 0;
+        $partPrecedente = 0;
+        $report = 0;
+
+        foreach ($rangs as $rang) {
+            $ht = $this->entier($lignes[$rang], 'montant_ht');
+            $cumulHt += $ht;
+            // Une base nulle n'a que des lignes à 0 € HT : aucune part.
+            $part = $this->diviserArrondi($this->multiplier($ecart, $cumulHt), max($base, 1));
+            $voulue = $this->entier($lignes[$rang], 'montant_tva') + $part - $partPrecedente + $report;
+            $partPrecedente = $part;
+            $tva = max(0, min($ht, $voulue));
+            $report = $voulue - $tva;
+            $lignes[$rang]['montant_tva'] = $tva;
+        }
+
+        foreach (array_reverse($rangs) as $rang) {
+            $tvaPlacee = $this->entier($lignes[$rang], 'montant_tva');
+            $tva = max(0, min($this->entier($lignes[$rang], 'montant_ht'), $tvaPlacee + $report));
+            $report -= $tva - $tvaPlacee;
+            $lignes[$rang]['montant_tva'] = $tva;
+        }
+
+        return $lignes;
+    }
+
+    /**
+     * Un taux ou une remise en centièmes de point tel qu'il s'écrit à
+     * l'écran et sur les documents, sans zéro inutile : « 20 % »,
+     * « 5,5 % », « 2,1 % », « 0,05 % ».
+     */
+    public static function tauxEnTexte(int $taux): string
+    {
+        return str_replace('.', ',', self::centiemesDansUnChamp($taux)).' %';
+    }
+
+    /**
+     * Un nombre en centièmes -- un taux ou une remise en centièmes de
+     * point, un montant du barème des prix de vente en centimes -- tel que
+     * l'écrit un champ où il se saisit, sans zéro inutile, avec un point :
+     * « 20 », « 5.5 », « 0 », « 12.34 » ; comme le relit la saisie (voir
+     * SaisieDecimale::enCentiemes()).
+     */
+    public static function centiemesDansUnChamp(int $centiemes): string
+    {
+        $decimales = rtrim(sprintf('%02d', abs($centiemes) % 100), '0');
+
+        return ($centiemes < 0 ? '-' : '').intdiv(abs($centiemes), 100).($decimales === '' ? '' : '.'.$decimales);
+    }
+
+    /**
+     * La TVA comprise dans un TTC : TTC x taux ÷ (1 + taux), arrondie une
+     * fois au centime le plus proche, un demi-centime au centime
+     * supérieur -- 1,67 € dans 9,99 € TTC à 20 %.
+     */
+    private function tvaDuTtc(int $ttcCentimes, int $tauxCentiemes): int
+    {
+        return $this->diviserArrondi($this->multiplier($ttcCentimes, $tauxCentiemes), 10000 + $tauxCentiemes);
+    }
+
+    /**
+     * La TVA d'un HT : HT x taux, arrondie une fois au centime le plus
+     * proche, un demi-centime au centime supérieur.
+     */
+    private function tvaDuHt(int $htCentimes, int $tauxCentiemes): int
+    {
+        return $this->diviserArrondi($this->multiplier($htCentimes, $tauxCentiemes), 10000);
+    }
+
+    /**
+     * Ce que rend un retour : le cumul de la quantité rendue jusqu'ici,
+     * moins ce que les retours précédents ont rendu ; son TTC est la somme
+     * de son HT et de sa TVA.
+     *
+     * @param  array{montant_ht: int, montant_tva: int}  $dejaRendu
+     * @return array{montant_ht: int, montant_tva: int, montant_ttc: int}
+     *
+     * @throws InvalidArgumentException
+     */
+    private function moins(int $htCumule, int $tvaCumulee, array $dejaRendu): array
+    {
+        $ht = $htCumule - $this->entier($dejaRendu, 'montant_ht');
+        $tva = $tvaCumulee - $this->entier($dejaRendu, 'montant_tva');
+
+        return ['montant_ht' => $ht, 'montant_tva' => $tva, 'montant_ttc' => $ht + $tva];
+    }
+
+    /**
+     * Les montants de chaque ligne, ceux de chaque taux (somme de ses
+     * lignes, dans l'ordre où il apparaît) et ceux du document (somme de
+     * toutes les lignes).
+     *
+     * @param  list<array{taux: int, montant_ht: int, montant_tva: int, montant_ttc: int}>  $montants
+     * @return array{lignes: list<array{montant_ht: int, montant_tva: int, montant_ttc: int}>, taux: array<int, array{montant_ht: int, montant_tva: int, montant_ttc: int}>, total: array{montant_ht: int, montant_tva: int, montant_ttc: int}}
+     */
+    private function ventiler(array $montants): array
+    {
+        $zero = ['montant_ht' => 0, 'montant_tva' => 0, 'montant_ttc' => 0];
+        $lignes = [];
+        $parTaux = [];
+        $total = $zero;
+
+        foreach ($montants as ['taux' => $taux, 'montant_ht' => $ht, 'montant_tva' => $tva, 'montant_ttc' => $ttc]) {
+            $lignes[] = ['montant_ht' => $ht, 'montant_tva' => $tva, 'montant_ttc' => $ttc];
+            $duTaux = $parTaux[$taux] ?? $zero;
+            $parTaux[$taux] = ['montant_ht' => $duTaux['montant_ht'] + $ht, 'montant_tva' => $duTaux['montant_tva'] + $tva, 'montant_ttc' => $duTaux['montant_ttc'] + $ttc];
+            $total = ['montant_ht' => $total['montant_ht'] + $ht, 'montant_tva' => $total['montant_tva'] + $tva, 'montant_ttc' => $total['montant_ttc'] + $ttc];
+        }
+
+        return ['lignes' => $lignes, 'taux' => $parTaux, 'total' => $total];
+    }
+
+    /**
+     * Une écriture décimale exacte, en unités de 10^-$decimales (voir
+     * enCentiemes() et enMillioniemes()) : des chiffres, $decimales
+     * décimales au plus après un point, un « - » facultatif, aucun espace
+     * ni signe « + » ; ses chiffres se lisent bout à bout, signe compris,
+     * sans calcul ni arrondi (« -12.5 » vaut -1250 centièmes). Douze
+     * chiffres entiers au plus, des zéros de tête ne comptant pas : treize
+     * atteignent la borne de la classe, en centièmes comme en
+     * millionièmes, et un entier plus long saturerait en silence.
+     *
+     * @throws InvalidArgumentException
+     */
+    private function lireUneEcriture(mixed $valeur, int $decimales, string $illisible): int
+    {
+        if (! is_string($valeur) || preg_match('/^(-?)(\d+)(?:\.(\d{1,'.$decimales.'}))?$/D', $valeur, $morceaux) !== 1) {
+            throw new InvalidArgumentException($illisible);
+        }
+
+        $unites = ltrim($morceaux[2], '0');
+
+        if (strlen($unites) > 12) {
+            throw new InvalidArgumentException('Montant hors limites.');
+        }
+
+        return (int) ($morceaux[1].$unites.str_pad($morceaux[3] ?? '', $decimales, '0'));
+    }
+
+    /**
+     * Un montant tel qu'un écran l'écrit (voir enEuros() et
+     * prixUnitaireExact()) : son signe, ses euros entiers, les milliers
+     * séparés par une espace, une virgule, ses décimales telles qu'elles
+     * s'écrivent, puis « € ».
+     */
+    private static function ecrireEnEuros(int $valeur, int $unitesParEuro, string $decimales): string
+    {
+        return ($valeur < 0 ? '-' : '').number_format(intdiv(abs($valeur), $unitesParEuro), 0, ',', ' ').','.$decimales.' €';
+    }
+
+    /**
+     * Une valeur entière d'une ligne : jamais un nombre à virgule, que PHP
+     * tronquerait en silence (1,5 deviendrait 1), ni une chaîne à
+     * interpréter.
+     *
+     * @param  array<string, mixed>  $ligne
+     *
+     * @throws InvalidArgumentException
+     */
+    private function entier(array $ligne, string $cle): int
+    {
+        $valeur = $ligne[$cle] ?? null;
+
+        if (! is_int($valeur)) {
+            throw new InvalidArgumentException(self::NOMBRE_A_VIRGULE);
+        }
+
+        if (abs($valeur) >= self::UNITES_MAXIMUM) {
+            throw new InvalidArgumentException('Montant hors limites.');
+        }
+
+        return $valeur;
+    }
+
+    /**
+     * Un prix unitaire en centimes : jamais négatif, une vente ne
+     * rembourse rien, c'est le rôle d'un avoir.
+     *
+     * @param  array<string, mixed>  $ligne
+     *
+     * @throws InvalidArgumentException
+     */
+    private function prix(array $ligne, string $cle): int
+    {
+        $prix = $this->entier($ligne, $cle);
+
+        if ($prix < 0) {
+            throw new InvalidArgumentException('Un prix unitaire ne peut pas être négatif.');
+        }
+
+        return $prix;
+    }
+
+    /**
+     * Un taux de TVA en centièmes de point : hors de 0-100 %, il n'existe
+     * pas -- et -100 % diviserait par zéro en passant du TTC au HT.
+     *
+     * @param  array<string, mixed>  $ligne
+     *
+     * @throws InvalidArgumentException
+     */
+    private function taux(array $ligne, string $cle): int
+    {
+        $taux = $this->entier($ligne, $cle);
+
+        if ($taux < 0 || $taux > 10000) {
+            throw new InvalidArgumentException('Le taux de TVA doit être compris entre 0 et 100 %.');
+        }
+
+        return $taux;
+    }
+
+    /**
+     * Le taux qu'une ligne de vente facture : celui que comprend son prix,
+     * ou 0 quand la vente retire la TVA du prix (voir le point 2 du
+     * commentaire de classe) ; aucun autre.
+     *
+     * @param  array<string, mixed>  $ligne
+     *
+     * @throws InvalidArgumentException
+     */
+    private function tauxFacture(array $ligne, int $tauxDuPrix): int
+    {
+        $taux = $this->taux($ligne, 'taux_tva');
+
+        if ($taux !== $tauxDuPrix && $taux !== 0) {
+            throw new InvalidArgumentException('Une ligne facture le taux que comprend son prix, ou aucun.');
+        }
+
+        return $taux;
+    }
+
+    /**
+     * La remise d'une ligne en centièmes de point, entre 0 et 100 %.
+     *
+     * @param  array<string, mixed>  $ligne
+     *
+     * @throws InvalidArgumentException
+     */
+    private function remise(array $ligne): int
+    {
+        $remise = $this->entier($ligne, 'remise_pourcentage');
+
+        if ($remise < 0 || $remise > 10000) {
+            throw new InvalidArgumentException('La remise doit être comprise entre 0 et 100 %.');
+        }
+
+        return $remise;
+    }
+
+    /**
+     * Le nombre d'articles d'une ligne : un entier, au moins 1 (voir
+     * QuantiteEntiere).
+     *
+     * @param  array<string, mixed>  $ligne
+     *
+     * @throws InvalidArgumentException
+     */
+    private function quantite(array $ligne): int
+    {
+        $quantite = $this->entier($ligne, 'quantite');
+
+        if ($quantite < 1) {
+            throw new InvalidArgumentException('La quantité doit être un nombre entier d\'articles, au moins 1.');
+        }
+
+        return $quantite;
+    }
+
+    /**
+     * Les articles d'une ligne rendus jusqu'ici : entre 1 et sa quantité.
+     *
+     * @param  array<string, mixed>  $ligne
+     *
+     * @throws InvalidArgumentException
+     */
+    private function quantiteRendue(array $ligne, int $quantiteRendue): int
+    {
+        if ($quantiteRendue < 1 || $quantiteRendue > $this->quantite($ligne)) {
+            throw new InvalidArgumentException('Un retour rend entre 1 article et la quantité de la ligne.');
+        }
+
+        return $quantiteRendue;
+    }
+
+    /**
+     * Un cumul de montants refusé au-delà de la borne de la classe.
+     *
+     * @throws InvalidArgumentException
+     */
+    private function borne(int $centimes): int
+    {
+        if (abs($centimes) >= self::UNITES_MAXIMUM) {
+            throw new InvalidArgumentException('Montant hors limites.');
+        }
+
+        return $centimes;
+    }
+
+    /**
+     * Produit d'entiers : en PHP, un produit qui déborde devient un
+     * flottant (approché) au lieu d'échouer -- il est refusé. Le produit
+     * passe par array_product(), qui calcule comme « * » et dit, par son
+     * type (int|float), qu'il peut déborder.
+     */
+    private function multiplier(int $a, int $b): int
+    {
+        $produit = array_product([$a, $b]);
+
+        if (! is_int($produit)) {
+            throw new InvalidArgumentException('Montant hors limites.');
+        }
+
+        return $produit;
+    }
+
+    /**
+     * Division entière arrondie au plus proche (demi vers l'extérieur),
+     * sans jamais passer par un flottant.
+     */
+    private function diviserArrondi(int $numerateur, int $denominateur): int
+    {
+        $quotient = intdiv($numerateur, $denominateur);
+
+        if (2 * abs($numerateur % $denominateur) >= $denominateur) {
+            $quotient += $numerateur <=> 0;
+        }
+
+        return $quotient;
+    }
+}

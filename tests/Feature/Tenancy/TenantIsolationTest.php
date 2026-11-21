@@ -1,0 +1,947 @@
+<?php
+
+namespace Tests\Feature\Tenancy;
+
+use App\Domain\Achats\Actions\CreerFactureAchatAction;
+use App\Domain\Achats\Actions\ModifierFactureAchatAction;
+use App\Domain\Achats\Models\AvoirFournisseur;
+use App\Domain\Achats\Models\FactureAchat;
+use App\Domain\Achats\Models\LigneAchat;
+use App\Domain\Achats\Models\LigneAvoirFournisseur;
+use App\Domain\Achats\Models\PieceDuFournisseur;
+use App\Domain\Achats\Models\TauxAvoirFournisseur;
+use App\Domain\Achats\Models\TauxFactureAchat;
+use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
+use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
+use App\Domain\CaisseSecurisee\Models\TeteRegistreFiscal;
+use App\Domain\CaisseSecurisee\Models\TraceEvenement;
+use App\Domain\Calendrier\Calendrier;
+use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Catalogue\Models\Service;
+use App\Domain\Contacts\Actions\ArchiverUneFicheAction;
+use App\Domain\Contacts\Actions\ModifierUneFicheAction;
+use App\Domain\Contacts\Enums\TypeClient;
+use App\Domain\Contacts\Models\Client;
+use App\Domain\Contacts\Models\ConsultationVies;
+use App\Domain\Contacts\Models\Fournisseur;
+use App\Domain\Facturation\Actions\AjouterPreuveOperationAction;
+use App\Domain\Facturation\Actions\CreerAvoirAction;
+use App\Domain\Facturation\Actions\CreerDevisAction;
+use App\Domain\Facturation\Actions\CreerFactureAction;
+use App\Domain\Facturation\Actions\EmettreFactureAction;
+use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
+use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
+use App\Domain\Facturation\Actions\FermerSaCaisseAction;
+use App\Domain\Facturation\Actions\ModifierDevisAction;
+use App\Domain\Facturation\Actions\ModifierFactureAction;
+use App\Domain\Facturation\Actions\NoterBordereauDetaxeAction;
+use App\Domain\Facturation\Enums\ModePaiement;
+use App\Domain\Facturation\Enums\NatureOperation;
+use App\Domain\Facturation\Enums\NatureRecuPaiement;
+use App\Domain\Facturation\Enums\ReponseAuDevis;
+use App\Domain\Facturation\Enums\StatutFacture;
+use App\Domain\Facturation\Enums\TypePreuve;
+use App\Domain\Facturation\Models\Avoir;
+use App\Domain\Facturation\Models\AvoirAllocation;
+use App\Domain\Facturation\Models\BordereauDetaxe;
+use App\Domain\Facturation\Models\ClotureCaisse;
+use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
+use App\Domain\Facturation\Models\Devis;
+use App\Domain\Facturation\Models\EnvoiDocument;
+use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Models\LienDuDevis;
+use App\Domain\Facturation\Models\LigneAvoir;
+use App\Domain\Facturation\Models\LigneDevis;
+use App\Domain\Facturation\Models\LigneFacture;
+use App\Domain\Facturation\Models\LigneRecuPaiement;
+use App\Domain\Facturation\Models\Paiement;
+use App\Domain\Facturation\Models\PaiementAllocation;
+use App\Domain\Facturation\Models\PanierCaisse;
+use App\Domain\Facturation\Models\PreuveOperation;
+use App\Domain\Facturation\Models\RecuPaiement;
+use App\Domain\Facturation\Models\ReponseDuDevis;
+use App\Domain\Facturation\Models\VisaDetaxe;
+use App\Domain\Stock\Models\InventaireOuverture;
+use App\Domain\Stock\Models\LigneInventaireOuverture;
+use App\Domain\Stock\Models\MouvementStock;
+use App\Domain\Tenancy\Actions\CreerMembreAction;
+use App\Domain\Tenancy\Concerns\BelongsToMagasin;
+use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Domain\Tenancy\Exceptions\TenantContextMissingException;
+use App\Domain\Tenancy\Models\ActionTraitee;
+use App\Domain\Tenancy\Models\Affectation;
+use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Models\PosteReconnu;
+use App\Domain\Tenancy\Scopes\MagasinScope;
+use App\Domain\Tenancy\Services\ActionsUniques;
+use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\FicheLue;
+use App\Filament\App\Resources\AvoirFournisseurResource;
+use App\Filament\App\Resources\AvoirResource;
+use App\Filament\App\Resources\ClientResource;
+use App\Filament\App\Resources\ClotureCaisseResource;
+use App\Filament\App\Resources\DevisResource;
+use App\Filament\App\Resources\EnregistrementFiscalResource;
+use App\Filament\App\Resources\EquipeDuMagasinResource;
+use App\Filament\App\Resources\EReportingResource;
+use App\Filament\App\Resources\FactureAchatResource;
+use App\Filament\App\Resources\FactureResource;
+use App\Filament\App\Resources\FournisseurResource;
+use App\Filament\App\Resources\InventaireOuvertureResource;
+use App\Filament\App\Resources\ProduitResource;
+use App\Integrations\Pdp\Models\TransmissionPdp;
+use App\Models\User;
+use Closure;
+use Filament\Resources\Resource as RessourceFilament;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
+use InvalidArgumentException;
+use LogicException;
+use PHPUnit\Framework\Attributes\DataProvider;
+use Symfony\Component\Finder\SplFileInfo;
+use Tests\TestCase;
+
+/**
+ * Isolation des magasins sur les modèles qui utilisent BelongsToMagasin.
+ *
+ * Sans magasin actif, toute lecture échoue au lieu de tout renvoyer : vérifié
+ * sur chaque modèle de magasin (modelesDeMagasin()). Un magasin ne lit ni ne
+ * trouve par son identifiant un enregistrement d'un autre magasin, et un
+ * enregistrement créé avec le magasin_id d'un autre magasin reste rattaché
+ * au magasin actif : vérifié sur chaque modèle que ces tests créent
+ * (modelesCrees()).
+ *
+ * Un nouveau modèle de magasin qui n'apparaît ni dans MODELES_AVEC_FABRIQUE
+ * ni dans MODELES_SANS_FABRIQUE fait échouer
+ * test_chaque_modele_de_magasin_est_liste_ici().
+ *
+ * Côté panneau, chaque ressource dont un enregistrement a sa propre URL
+ * répond 404 à un membre d'un autre magasin, sans révéler que
+ * l'enregistrement existe.
+ *
+ * Deux magasins d'une même société restent isolés de la même façon : un
+ * retour ou un paiement se fait dans le magasin qui a vendu (J6). Seuls
+ * l'identité légale et les réglages fiscaux leur sont communs, portés par
+ * leur société (voir IsolationDesSocietesTest).
+ */
+class TenantIsolationTest extends TestCase
+{
+    use RefreshDatabase;
+
+    /**
+     * Modèles de magasin qui ont une fabrique.
+     *
+     * @var list<class-string<Model>>
+     */
+    private const MODELES_AVEC_FABRIQUE = [
+        AvoirFournisseur::class,
+        Client::class,
+        ClotureCaisse::class,
+        ClotureCaissePersonnelle::class,
+        Devis::class,
+        EnvoiDocument::class,
+        Facture::class,
+        FactureAchat::class,
+        Fournisseur::class,
+        InventaireOuverture::class,
+        PanierCaisse::class,
+        Produit::class,
+        Service::class,
+    ];
+
+    /**
+     * Modèles de magasin qui n'ont pas de fabrique : les documents fiscaux
+     * et le registre ne s'écrivent que signés, par leurs actions, la trace
+     * d'un événement technique qu'avec lui, une vérification VIES, une
+     * preuve d'exonération, un bordereau de détaxe ou son visa, que par la
+     * sienne, un
+     * reçu de paiement et ses lignes, qu'avec leur encaissement, la TVA
+     * d'un taux d'une facture d'achat ou d'un avoir fournisseur, qu'avec
+     * son document, le jeton d'une demande traitée, que par
+     * ActionsUniques, et le lien d'un devis et la réponse du client, qu'avec
+     * l'envoi du devis et cette réponse. ActionTraitee, Avoir, AvoirAllocation,
+     * BordereauDetaxe, ConsultationVies, EnregistrementFiscal,
+     * LienDuDevis, LigneRecuPaiement, Paiement, PaiementAllocation,
+     * PieceDuFournisseur, PreuveOperation, RecuPaiement, ReponseDuDevis,
+     * TauxAvoirFournisseur, TauxFactureAchat, TeteRegistreFiscal,
+     * TraceEvenement et VisaDetaxe sont aussi dans modelesCrees(),
+     * écrits directement par ces tests (voir creerEnregistrement()).
+     *
+     * @var list<class-string<Model>>
+     */
+    private const MODELES_SANS_FABRIQUE = [
+        ActionTraitee::class,
+        Avoir::class,
+        AvoirAllocation::class,
+        BordereauDetaxe::class,
+        ConsultationVies::class,
+        EnregistrementFiscal::class,
+        LienDuDevis::class,
+        LigneAchat::class,
+        LigneAvoir::class,
+        LigneAvoirFournisseur::class,
+        LigneDevis::class,
+        LigneFacture::class,
+        LigneInventaireOuverture::class,
+        LigneRecuPaiement::class,
+        MouvementStock::class,
+        Paiement::class,
+        PaiementAllocation::class,
+        PieceDuFournisseur::class,
+        PosteReconnu::class,
+        PreuveOperation::class,
+        RecuPaiement::class,
+        ReponseDuDevis::class,
+        TauxAvoirFournisseur::class,
+        TauxFactureAchat::class,
+        TeteRegistreFiscal::class,
+        TraceEvenement::class,
+        TransmissionPdp::class,
+        VisaDetaxe::class,
+    ];
+
+    private Magasin $magasinA;
+
+    private Magasin $magasinB;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->magasinA = Magasin::factory()->create();
+        $this->magasinB = Magasin::factory()->create();
+    }
+
+    /**
+     * Tous les modèles de magasin, pour les tests qui ne créent aucun
+     * enregistrement.
+     *
+     * @return array<string, array{0: class-string<Model>}>
+     */
+    public static function modelesDeMagasin(): array
+    {
+        return collect([...self::MODELES_AVEC_FABRIQUE, ...self::MODELES_SANS_FABRIQUE])
+            ->mapWithKeys(static fn (string $modele): array => [class_basename($modele) => [$modele]])
+            ->all();
+    }
+
+    /**
+     * Les modèles de magasin que ces tests créent, chacun avec la création
+     * d'un enregistrement aux attributs imposés, même hors $fillable comme
+     * le permet une fabrique : par sa fabrique, ou par
+     * creerEnregistrement() avec les attributs qu'exige sa table.
+     *
+     * @return array<string, array{0: class-string<Model>, 1: Closure(array<string, mixed>=): Model}>
+     */
+    public static function modelesCrees(): array
+    {
+        return collect(self::MODELES_AVEC_FABRIQUE)
+            ->mapWithKeys(static fn (string $modele): array => [class_basename($modele) => [
+                $modele,
+                static fn (array $attributs = []): Model => $modele::factory()->create($attributs),
+            ]])
+            ->merge(collect([ActionTraitee::class, Avoir::class, AvoirAllocation::class, BordereauDetaxe::class, ConsultationVies::class, EnregistrementFiscal::class, LienDuDevis::class, LigneRecuPaiement::class, Paiement::class, PaiementAllocation::class, PieceDuFournisseur::class, PreuveOperation::class, RecuPaiement::class, ReponseDuDevis::class, TauxAvoirFournisseur::class, TauxFactureAchat::class, TeteRegistreFiscal::class, TraceEvenement::class, VisaDetaxe::class])
+                ->mapWithKeys(static fn (string $modele): array => [class_basename($modele) => [
+                    $modele,
+                    static fn (array $attributs = []): Model => self::creerEnregistrement($modele, $attributs),
+                ]]))
+            ->all();
+    }
+
+    public function test_chaque_modele_de_magasin_est_liste_ici(): void
+    {
+        $modelesListes = [...self::MODELES_AVEC_FABRIQUE, ...self::MODELES_SANS_FABRIQUE];
+        sort($modelesListes);
+
+        $this->assertSame($this->modelesQuiUtilisentBelongsToMagasin(), $modelesListes);
+    }
+
+    /**
+     * @param  class-string<Model>  $modelClass
+     * @param  Closure(array<string, mixed>=): Model  $creer
+     */
+    #[DataProvider('modelesCrees')]
+    public function test_un_magasin_ne_voit_pas_les_enregistrements_dun_autre(string $modelClass, Closure $creer): void
+    {
+        $contexte = app(TenantContext::class);
+
+        $contexte->set($this->magasinA);
+        $enregistrementA = $creer();
+
+        $contexte->set($this->magasinB);
+        $enregistrementB = $creer();
+
+        // Sous le contexte B, seule la liste de B doit apparaître.
+        $ids = $modelClass::query()->pluck($enregistrementB->getKeyName())->all();
+        $this->assertSame([$enregistrementB->getKey()], $ids);
+
+        // Un find() direct sur l'ID de A doit échouer comme si l'enregistrement n'existait pas.
+        $this->assertNull($modelClass::find($enregistrementA->getKey()));
+
+        $this->expectException(ModelNotFoundException::class);
+        $modelClass::findOrFail($enregistrementA->getKey());
+    }
+
+    /**
+     * @param  class-string<Model>  $modelClass
+     * @param  Closure(array<string, mixed>=): Model  $creer
+     */
+    #[DataProvider('modelesCrees')]
+    public function test_magasin_id_est_toujours_force_par_le_contexte_actif(string $modelClass, Closure $creer): void
+    {
+        $contexte = app(TenantContext::class);
+        $contexte->set($this->magasinA);
+
+        // Même si on tente de forcer magasin_id vers B via le payload
+        // (simulant un payload HTTP malveillant), le trait BelongsToMagasin
+        // doit l'écraser par le tenant réellement actif.
+        $enregistrement = $creer(['magasin_id' => $this->magasinB->id]);
+
+        $this->assertSame($this->magasinA->id, $enregistrement->fresh()->magasin_id);
+    }
+
+    /**
+     * Sans magasin actif, toute lecture d'un modèle de magasin échoue, et
+     * le message nomme le modèle, le scope à retirer (MagasinScope) et le
+     * filtre à poser (par magasin) pour un accès voulu hors du magasin.
+     *
+     * @param  class-string<Model>  $modelClass
+     */
+    #[DataProvider('modelesDeMagasin')]
+    public function test_acces_sans_contexte_tenant_echoue_fermee(string $modelClass): void
+    {
+        app(TenantContext::class)->clear();
+
+        $this->assertThrows(
+            fn () => $modelClass::query()->get(),
+            fn (TenantContextMissingException $refus): bool => str_starts_with($refus->getMessage(), "Tentative d'accès au modèle [{$modelClass}] sans magasin actif.")
+                && str_ends_with($refus->getMessage(), 'passez explicitement par withoutGlobalScope(MagasinScope::class) et filtrez la requête par magasin.'),
+        );
+    }
+
+    /**
+     * La seule lecture de plusieurs magasins à la fois : retirer
+     * MagasinScope par son nom, ce que conseille
+     * TenantContextMissingException. Le retrait fonctionne même sans
+     * magasin actif.
+     */
+    public function test_retirer_explicitement_magasin_scope_lit_tous_les_magasins_sans_contexte(): void
+    {
+        $contexte = app(TenantContext::class);
+
+        $contexte->set($this->magasinA);
+        Client::factory()->create();
+
+        $contexte->set($this->magasinB);
+        Client::factory()->create();
+
+        $contexte->clear();
+
+        $tous = Client::query()->withoutGlobalScope(MagasinScope::class)->get();
+
+        $this->assertCount(2, $tous);
+    }
+
+    /**
+     * Les fiches qui s'archivent (voir Proposable).
+     *
+     * @return array<string, array{0: class-string<Model>}>
+     */
+    public static function fichesArchivables(): array
+    {
+        return [
+            'client' => [Client::class],
+            'fournisseur' => [Fournisseur::class],
+            'produit' => [Produit::class],
+        ];
+    }
+
+    /**
+     * Une fiche archivée reste au magasin qui l'a créée : withTrashed() ne
+     * retire que le filtre des fiches archivées, jamais MagasinScope. La
+     * règle « exists » d'un formulaire du magasin B refuse les fiches du
+     * magasin A, qu'elle exclue les fiches archivées ou qu'elle les accepte
+     * (voir BelongsToMagasin::regleExisteDansLeMagasin()), alors qu'elle
+     * accepte les mêmes fiches du magasin B.
+     *
+     * @param  class-string<Model>  $modelClass
+     */
+    #[DataProvider('fichesArchivables')]
+    public function test_une_fiche_archivee_d_un_autre_magasin_reste_invisible(string $modelClass): void
+    {
+        $contexte = app(TenantContext::class);
+        $contexte->set($this->magasinA);
+        $ficheA = $modelClass::factory()->create();
+        $ficheArchiveeA = $modelClass::factory()->trashed()->create();
+        $contexte->set($this->magasinB);
+        $ficheB = $modelClass::factory()->create();
+        $ficheArchiveeB = $modelClass::factory()->trashed()->create();
+        $existe = fn (Model $fiche, ?Builder $parmi = null): bool => Validator::make(['fiche' => $fiche->getKey()], ['fiche' => [$modelClass::regleExisteDansLeMagasin($parmi)]])->passes();
+
+        $this->assertNull($modelClass::withTrashed()->find($ficheArchiveeA->id));
+        $this->assertSame([$ficheArchiveeB->id], $modelClass::onlyTrashed()->pluck('id')->all());
+
+        $this->assertFalse($existe($ficheA));
+        $this->assertTrue($existe($ficheB));
+        $this->assertFalse($existe($ficheArchiveeA, $modelClass::withTrashed()));
+        $this->assertTrue($existe($ficheArchiveeB, $modelClass::withTrashed()));
+    }
+
+    /**
+     * Le fournisseur d'un produit se lit archivé compris (voir
+     * Produit::fournisseur()), mais jamais celui d'un autre magasin, même
+     * si l'identifiant y pointe. La base refuse d'abord une telle
+     * référence (clé composée) ; le test la fabrique malgré elle, comme le
+     * propriétaire des tables, pour éprouver la relation.
+     */
+    public function test_le_fournisseur_archive_d_un_autre_magasin_ne_se_lit_pas_par_la_relation(): void
+    {
+        $contexte = app(TenantContext::class);
+        $contexte->set($this->magasinA);
+        $fournisseurA = Fournisseur::factory()->trashed()->create();
+
+        $contexte->set($this->magasinB);
+        $produitB = Produit::factory()->create();
+        $pointerVersA = fn () => Produit::query()->whereKey($produitB->id)->update(['fournisseur_id' => $fournisseurA->id]);
+        $this->assertRefuseeParLaCleDuMagasin($pointerVersA, 'produits', 'fournisseur_id');
+        $this->falsifierMalgreLaCleDuMagasin('produits', 'fournisseur_id');
+        $pointerVersA();
+
+        $this->assertNull($produitB->fresh()->fournisseur);
+    }
+
+    /**
+     * Un retour se fait dans le magasin qui a vendu (J6), même entre deux
+     * magasins d'une même société : depuis l'autre magasin, la ligne de
+     * la facture est introuvable, et aucun avoir ne naît.
+     */
+    public function test_un_magasin_de_la_meme_societe_ne_fait_pas_d_avoir_sur_une_vente_d_un_autre(): void
+    {
+        $memeSociete = $this->ouvrirUnAutreMagasin($this->magasinA);
+        $contexte = app(TenantContext::class);
+        $contexte->set($this->magasinA);
+        $ligneVendue = $this->venteEmise()->lignes()->sole();
+        $contexte->set($memeSociete);
+
+        $this->assertThrows(
+            fn () => app(CreerAvoirAction::class)->handle(self::auteur(), Client::factory()->create(), [['ligne_facture_id' => $ligneVendue->id, 'quantite' => 1]]),
+            InvalidArgumentException::class,
+            'Cette ligne de facture est introuvable.',
+        );
+
+        $this->assertSame(0, Avoir::query()->withoutGlobalScope(MagasinScope::class)->count());
+    }
+
+    /**
+     * Un paiement se fait dans le magasin qui a vendu (J6) : depuis un
+     * autre magasin de la même société, la facture est introuvable, et
+     * rien n'est encaissé. La personne a fermé sa caisse du magasin qui a
+     * vendu : elle peut encaisser dans l'autre.
+     */
+    public function test_un_magasin_de_la_meme_societe_n_encaisse_pas_une_vente_d_un_autre(): void
+    {
+        $memeSociete = $this->ouvrirUnAutreMagasin($this->magasinA);
+        $contexte = app(TenantContext::class);
+        $contexte->set($this->magasinA);
+        $vente = $this->venteEmise();
+        app(FermerSaCaisseAction::class)->handle(self::auteur(), self::auteur());
+        $contexte->set($memeSociete);
+
+        $this->assertThrows(
+            fn () => app(EnregistrerPaiementAction::class)->handle(self::auteur(), Client::factory()->create(), ['mode_paiement' => ModePaiement::Especes->value, 'montant' => '12.00', 'recu_le' => Calendrier::deParis()->aujourdhui()], [['facture_id' => $vente->id, 'montant' => '12.00']]),
+            ModelNotFoundException::class,
+        );
+
+        $this->assertSame(0, Paiement::query()->withoutGlobalScope(MagasinScope::class)->count());
+        $contexte->set($this->magasinA);
+        $this->assertSame(StatutFacture::Emise, $vente->fresh()->statut);
+    }
+
+    /**
+     * Une preuve d'exonération ou un bordereau de détaxe se note dans le
+     * magasin qui a vendu : depuis un autre magasin de la même société,
+     * la vente est introuvable, et rien ne s'enregistre.
+     */
+    public function test_un_magasin_de_la_meme_societe_ne_justifie_pas_une_vente_d_un_autre(): void
+    {
+        $memeSociete = $this->ouvrirUnAutreMagasin($this->magasinA);
+        $contexte = app(TenantContext::class);
+        $contexte->set($this->magasinA);
+        $ticket = $this->venteEmise();
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $export = app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]], [
+            'nature_operation' => NatureOperation::ExportHorsUe, 'livraison_adresse' => '1 Main Street', 'livraison_code_postal' => '10001', 'livraison_ville' => 'New York', 'livraison_pays' => 'US',
+        ]));
+        $contexte->set($memeSociete);
+
+        $this->assertThrows(fn () => app(AjouterPreuveOperationAction::class)->handle(self::auteur(), $export, TypePreuve::Mrn, '26FR000000123456E1'), LogicException::class, Facture::REFUS_INTROUVABLE);
+        $this->assertThrows(fn () => app(NoterBordereauDetaxeAction::class)->handle(self::auteur(), $ticket, '2026FR000123456'), LogicException::class, Facture::REFUS_INTROUVABLE);
+
+        $this->assertSame(0, PreuveOperation::query()->withoutGlobalScope(MagasinScope::class)->count());
+        $this->assertSame(0, BordereauDetaxe::query()->withoutGlobalScope(MagasinScope::class)->count());
+    }
+
+    /**
+     * Les fiches que corrige ModifierUneFicheAction.
+     *
+     * @return array<string, array{0: class-string<Client|Fournisseur|Produit|Service>}>
+     */
+    public static function fichesModifiables(): array
+    {
+        return [
+            'client' => [Client::class],
+            'fournisseur' => [Fournisseur::class],
+            'produit' => [Produit::class],
+            'service' => [Service::class],
+        ];
+    }
+
+    /**
+     * Une fiche se corrige dans le magasin qui l'a créée : depuis un autre
+     * magasin de la même société, l'action qui enregistre la correction ne
+     * la retrouve pas sous son verrou, même quand on la lui passe, le dit,
+     * et la fiche reste telle qu'elle était.
+     *
+     * @param  class-string<Client|Fournisseur|Produit|Service>  $modelClass
+     */
+    #[DataProvider('fichesModifiables')]
+    public function test_un_magasin_de_la_meme_societe_ne_corrige_pas_la_fiche_d_un_autre(string $modelClass): void
+    {
+        $memeSociete = $this->ouvrirUnAutreMagasin($this->magasinA);
+        $contexte = app(TenantContext::class);
+        $contexte->set($this->magasinA);
+        $fiche = $modelClass::factory()->create(['nom' => 'Nom d\'origine']);
+        $lue = FicheLue::de($fiche)->valeurs();
+        $contexte->set($memeSociete);
+
+        $this->assertThrows(
+            fn () => app(ModifierUneFicheAction::class)->handle(self::auteur(), $fiche, $lue, ['nom' => 'Nom corrigé']),
+            LogicException::class,
+            ArchiverUneFicheAction::REFUS_INTROUVABLE,
+        );
+
+        $contexte->set($this->magasinA);
+        $this->assertSame('Nom d\'origine', $fiche->fresh()?->getAttribute('nom'));
+    }
+
+    /**
+     * Les tables qu'écrit une vente, un devis, un encaissement ou un avoir.
+     *
+     * @var list<string>
+     */
+    private const TABLES_DES_VENTES = [
+        'factures', 'lignes_facture', 'devis', 'lignes_devis', 'paiements', 'paiement_allocations',
+        'avoirs', 'lignes_avoir', 'avoir_allocations', 'recus_paiement', 'lignes_recu_paiement',
+        'sequences_documents', 'enregistrements_fiscaux', 'mouvements_stock', 'paniers_caisse', 'actions_traitees',
+    ];
+
+    /**
+     * Les tables qu'écrit une facture d'achat saisie ou corrigée.
+     *
+     * @var list<string>
+     */
+    private const TABLES_DES_ACHATS = ['factures_achat', 'lignes_achat', 'taux_factures_achat', 'pieces_fournisseur', 'journal_audit'];
+
+    /**
+     * Chaque geste avec le client d'un autre magasin, de la même société ou
+     * d'une autre, tel qu'il a été chargé là-bas ou avec son magasin_id
+     * changé en mémoire pour celui du magasin actif.
+     *
+     * @param  array<string, Closure>  $gestes
+     * @return array<string, array{0: Closure, 1: bool, 2: bool}>
+     */
+    private static function avecUneFicheDUnAutreMagasin(array $gestes): array
+    {
+        $cas = [];
+
+        foreach ($gestes as $nom => $geste) {
+            foreach (['autre magasin de la même société' => true, 'autre société' => false] as $origine => $memeSociete) {
+                foreach (['telle que chargée' => false, 'magasin_id changé en mémoire' => true] as $etat => $magasinChange) {
+                    $cas["{$nom}, {$origine}, fiche {$etat}"] = [$geste, $memeSociete, $magasinChange];
+                }
+            }
+        }
+
+        return $cas;
+    }
+
+    /**
+     * @return array<string, array{0: Closure(User, Client, list<array<string, mixed>>, Facture, Devis): mixed, 1: bool, 2: bool}>
+     */
+    public static function documentsAvecLeClientDUnAutreMagasin(): array
+    {
+        return self::avecUneFicheDUnAutreMagasin([
+            'facture créée' => static fn (User $auteur, Client $client, array $lignes): Facture => app(CreerFactureAction::class)->handle($auteur, $client, $lignes),
+            'devis créé' => static fn (User $auteur, Client $client, array $lignes): Devis => app(CreerDevisAction::class)->handle($auteur, $client, $lignes),
+            'brouillon de facture modifié' => static fn (User $auteur, Client $client, array $lignes, Facture $brouillon): Facture => app(ModifierFactureAction::class)->handle($auteur, $brouillon, $client, $lignes),
+            'devis modifié' => static fn (User $auteur, Client $client, array $lignes, Facture $brouillon, Devis $devis): Devis => app(ModifierDevisAction::class)->handle($auteur, $devis, $client, $lignes),
+        ]);
+    }
+
+    /**
+     * Une action qui reçoit un client déjà chargé le relit dans le magasin
+     * actif avant toute écriture (voir
+     * BelongsToMagasin::relueDansLeMagasin()) : MagasinScope filtre les
+     * requêtes, jamais un objet reçu, qu'une tâche, une commande ou l'API
+     * pourrait lui passer. Le même geste réussit avec un client du
+     * magasin ; avec celui d'un autre magasin, il est refusé et rien ne
+     * s'écrit.
+     *
+     * @param  Closure(User, Client, list<array<string, mixed>>, Facture, Devis): mixed  $geste
+     */
+    #[DataProvider('documentsAvecLeClientDUnAutreMagasin')]
+    public function test_le_client_d_un_autre_magasin_deja_charge_est_refuse_sans_rien_ecrire(Closure $geste, bool $memeSociete, bool $magasinChange): void
+    {
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
+        $etranger = $this->ficheDUnAutreMagasin(Client::class, $memeSociete);
+        $local = Client::factory()->create();
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $lignes = [['produit_id' => $produit->id, 'quantite' => 1]];
+        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), $local, $lignes);
+        $devis = app(CreerDevisAction::class)->handle(self::auteur(), $local, $lignes);
+        $this->assertInstanceOf(Model::class, $geste(self::auteur(), $local, $lignes, $brouillon, $devis));
+
+        if ($magasinChange) {
+            $etranger->setAttribute('magasin_id', $this->magasinA->id);
+        }
+
+        $avant = $this->instantaneDesTables(...self::TABLES_DES_VENTES);
+
+        $this->assertThrows(fn () => $geste(self::auteur(), $etranger, $lignes, $brouillon, $devis), LogicException::class, Client::REFUS_AUTRE_MAGASIN);
+
+        $this->assertSame($avant, $this->instantaneDesTables(...self::TABLES_DES_VENTES));
+        $this->assertSame($local->id, $brouillon->fresh()?->client_id);
+        $this->assertSame($local->id, $devis->fresh()?->client_id);
+    }
+
+    /**
+     * @return array<string, array{0: Closure(User, Client, Facture): mixed, 1: bool, 2: bool}>
+     */
+    public static function encaissementsAvecLeClientDUnAutreMagasin(): array
+    {
+        return self::avecUneFicheDUnAutreMagasin([
+            'vente à la caisse' => static fn (User $auteur, Client $client): Facture => self::vendreAuComptant($auteur, $client, [['produit_id' => Produit::query()->sole()->id, 'quantite' => 1]]),
+            'paiement d\'un ticket dû' => static fn (User $auteur, Client $client, Facture $ticket): Paiement => app(EnregistrerPaiementAction::class)->handle($auteur, $client, ['mode_paiement' => ModePaiement::Especes->value, 'montant' => '12.00', 'recu_le' => '2026-10-09'], [['facture_id' => $ticket->id, 'montant' => '12.00']]),
+            'avoir sur un ticket émis' => static fn (User $auteur, Client $client, Facture $ticket): Avoir => app(EnregistrerAvoirAction::class)->handle($auteur, $client, [['ligne_facture_id' => $ticket->lignes()->sole()->id, 'quantite' => 1]]),
+            'avoir créé sur un ticket émis' => static fn (User $auteur, Client $client, Facture $ticket): Avoir => app(CreerAvoirAction::class)->handle($auteur, $client, [['ligne_facture_id' => $ticket->lignes()->sole()->id, 'quantite' => 1]]),
+        ]);
+    }
+
+    /**
+     * La caisse, l'encaissement et l'avoir relisent eux aussi le client
+     * reçu dans le magasin actif, avant d'ouvrir un reçu ou de numéroter
+     * quoi que ce soit : le client d'un autre magasin est refusé au même
+     * message, rien ne s'écrit, et le même geste réussit avec le client du
+     * ticket.
+     *
+     * @param  Closure(User, Client, Facture): mixed  $geste
+     */
+    #[DataProvider('encaissementsAvecLeClientDUnAutreMagasin')]
+    public function test_la_caisse_l_encaissement_et_l_avoir_refusent_le_client_d_un_autre_magasin(Closure $geste, bool $memeSociete, bool $magasinChange): void
+    {
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
+        $etranger = $this->ficheDUnAutreMagasin(Client::class, $memeSociete);
+        $local = Client::factory()->create();
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $emettre = fn (): Facture => app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), $local, [['produit_id' => $produit->id, 'quantite' => 1]]));
+        $this->assertInstanceOf(Model::class, $geste(self::auteur(), $local, $emettre()));
+        $ticket = $emettre();
+
+        if ($magasinChange) {
+            $etranger->setAttribute('magasin_id', $this->magasinA->id);
+        }
+
+        $avant = $this->instantaneDesTables(...self::TABLES_DES_VENTES);
+
+        $this->assertThrows(fn () => $geste(self::auteur(), $etranger, $ticket), LogicException::class, Client::REFUS_AUTRE_MAGASIN);
+
+        $this->assertSame($avant, $this->instantaneDesTables(...self::TABLES_DES_VENTES));
+    }
+
+    /**
+     * @return array<string, array{0: Closure(User, Fournisseur, list<array<string, mixed>>, FactureAchat): FactureAchat, 1: bool, 2: bool}>
+     */
+    public static function achatsAvecLeFournisseurDUnAutreMagasin(): array
+    {
+        return self::avecUneFicheDUnAutreMagasin([
+            'facture d\'achat créée' => static fn (User $auteur, Fournisseur $fournisseur, array $lignes): FactureAchat => app(CreerFactureAchatAction::class)->handle($auteur, $fournisseur, $lignes, ['date_facture' => '2026-10-09']),
+            'brouillon d\'achat modifié' => static fn (User $auteur, Fournisseur $fournisseur, array $lignes, FactureAchat $brouillon): FactureAchat => app(ModifierFactureAchatAction::class)->handle($auteur, $brouillon, $fournisseur, $lignes, ['date_facture' => '2026-10-09']),
+        ]);
+    }
+
+    /**
+     * Une facture d'achat saisie ou corrigée relit le fournisseur reçu
+     * dans le magasin actif avant toute écriture : celui d'un autre
+     * magasin est refusé, le brouillon garde son fournisseur et rien ne
+     * s'écrit ; le même geste réussit avec un fournisseur du magasin.
+     *
+     * @param  Closure(User, Fournisseur, list<array<string, mixed>>, FactureAchat): FactureAchat  $geste
+     */
+    #[DataProvider('achatsAvecLeFournisseurDUnAutreMagasin')]
+    public function test_le_fournisseur_d_un_autre_magasin_deja_charge_est_refuse_sans_rien_ecrire(Closure $geste, bool $memeSociete, bool $magasinChange): void
+    {
+        Storage::fake('local');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
+        $etranger = $this->ficheDUnAutreMagasin(Fournisseur::class, $memeSociete);
+        $local = Fournisseur::factory()->create();
+        $produit = Produit::factory()->create();
+        $lignes = [['produit_id' => $produit->id, 'quantite' => 2, 'prix_unitaire_ht' => 1]];
+        $brouillon = app(CreerFactureAchatAction::class)->handle(self::auteur(), $local, $lignes, ['date_facture' => '2026-10-09']);
+        $this->assertSame($local->id, $geste(self::auteur(), $local, $lignes, $brouillon)->fournisseur_id);
+
+        if ($magasinChange) {
+            $etranger->setAttribute('magasin_id', $this->magasinA->id);
+        }
+
+        $avant = $this->instantaneDesTables(...self::TABLES_DES_ACHATS);
+
+        $this->assertThrows(fn () => $geste(self::auteur(), $etranger, $lignes, $brouillon), LogicException::class, Fournisseur::REFUS_AUTRE_MAGASIN);
+
+        $this->assertSame($avant, $this->instantaneDesTables(...self::TABLES_DES_ACHATS));
+        $this->assertSame($local->id, $brouillon->fresh()?->fournisseur_id);
+    }
+
+    /**
+     * @return array<string, array{0: class-string<RessourceFilament>, 1: string, 2: Closure(Magasin): Model}>
+     */
+    public static function pagesDUnEnregistrement(): array
+    {
+        return [
+            'avoir fournisseur, détail' => [AvoirFournisseurResource::class, 'view', static fn (): Model => AvoirFournisseur::factory()->create()],
+            'avoir, détail' => [AvoirResource::class, 'view', static fn (): Model => self::creerEnregistrement(Avoir::class)],
+            'caisse sécurisée, détail' => [EnregistrementFiscalResource::class, 'view', static fn (): Model => self::creerEnregistrement(EnregistrementFiscal::class)],
+            'client, modification' => [ClientResource::class, 'edit', static fn (): Model => Client::factory()->create()],
+            'clôture de caisse, détail' => [ClotureCaisseResource::class, 'view', static fn (): Model => ClotureCaisse::factory()->create()],
+            'devis, détail' => [DevisResource::class, 'view', static fn (): Model => Devis::factory()->create()],
+            'e-reporting, journée' => [EReportingResource::class, 'view', static fn (): Model => ClotureCaisse::factory()->create(['nombre_ventes' => 1])],
+            'devis, modification' => [DevisResource::class, 'edit', static fn (): Model => Devis::factory()->create()],
+            'facture d\'achat, détail' => [FactureAchatResource::class, 'view', static fn (): Model => FactureAchat::factory()->create()],
+            'facture d\'achat, modification' => [FactureAchatResource::class, 'edit', static fn (): Model => FactureAchat::factory()->create()],
+            'facture, détail' => [FactureResource::class, 'view', static fn (): Model => Facture::factory()->create()],
+            'facture, modification' => [FactureResource::class, 'edit', static fn (): Model => Facture::factory()->create()],
+            'fournisseur, modification' => [FournisseurResource::class, 'edit', static fn (): Model => Fournisseur::factory()->create()],
+            'inventaire d\'ouverture, détail' => [InventaireOuvertureResource::class, 'view', static fn (): Model => InventaireOuverture::factory()->create()],
+            'inventaire d\'ouverture, modification' => [InventaireOuvertureResource::class, 'edit', static fn (): Model => InventaireOuverture::factory()->create()],
+            'membre de l\'équipe, modification' => [EquipeDuMagasinResource::class, 'edit', static fn (Magasin $magasin): Model => Affectation::query()
+                ->where('magasin_id', $magasin->getKey())
+                ->where('user_id', app(CreerMembreAction::class)->handle($magasin->societe->proprietaire, $magasin, ['name' => 'Paul'], RoleMagasin::Vendeur)->getKey())
+                ->firstOrFail()],
+            'produit, modification' => [ProduitResource::class, 'edit', static fn (): Model => Produit::factory()->create()],
+        ];
+    }
+
+    /**
+     * L'URL d'un enregistrement du magasin A, placée sous le magasin B
+     * dont le visiteur est responsable (tous les droits du magasin, vente
+     * comprise, que le propriétaire n'a pas) : 404, comme pour un
+     * identifiant qui n'existe pas. La même page s'ouvre sous le magasin A
+     * pour son responsable : le 404 ne vient pas d'une URL fausse.
+     *
+     * @param  class-string<RessourceFilament>  $ressource
+     * @param  Closure(Magasin): Model  $creerEnregistrement
+     */
+    #[DataProvider('pagesDUnEnregistrement')]
+    public function test_l_url_d_un_enregistrement_d_un_autre_magasin_repond_404(string $ressource, string $page, Closure $creerEnregistrement): void
+    {
+        $magasinA = $this->ouvrirUneSociete(['nom' => 'Boutique A']);
+        $enregistrementDeA = $creerEnregistrement($magasinA);
+        $responsableA = $this->responsableDeTest($magasinA);
+        $magasinB = $this->ouvrirUneSociete(['nom' => 'Boutique B']);
+        $responsableB = $this->responsableDeTest($magasinB);
+        $this->actingAs($responsableA)
+            ->get($ressource::getUrl($page, ['record' => $enregistrementDeA, 'tenant' => $magasinA]))
+            ->assertSuccessful();
+        $this->flushSession();
+
+        $reponse = $this->actingAs($responsableB)
+            ->get($ressource::getUrl($page, ['record' => $enregistrementDeA, 'tenant' => $magasinB]));
+
+        $reponse->assertNotFound();
+    }
+
+    /**
+     * Un enregistrement du magasin actif d'un modèle sans fabrique, écrit
+     * directement, sans l'action qui l'écrit d'ordinaire : un avoir
+     * brouillon, un paiement, une imputation ou un reçu non signés, une
+     * vérification VIES sans appel à VIES, une preuve d'exonération ou un
+     * bordereau de détaxe sur un brouillon, une ligne du registre fiscal
+     * sans l'événement d'initialisation du magasin, une ligne de verrou.
+     * Seule l'isolation est vérifiée ici. Comme une fabrique, il accepte
+     * des attributs hors $fillable.
+     *
+     * @param  class-string<Model>  $modele
+     * @param  array<string, mixed>  $attributs
+     */
+    private static function creerEnregistrement(string $modele, array $attributs = []): Model
+    {
+        $exiges = match ($modele) {
+            ActionTraitee::class => [
+                'jeton' => (string) Str::uuid(),
+                'action' => ActionsUniques::EMETTRE_FACTURE,
+                'user_id' => User::factory()->create()->getKey(),
+                'empreinte_demande' => str_repeat('0', 64),
+                'created_at' => self::enUtc('2026-10-09 08:00:00'),
+            ],
+            Avoir::class => ['client_id' => Client::factory()->create()->getKey(), 'type_client' => TypeClient::Particulier],
+            AvoirAllocation::class => [
+                'avoir_id' => self::creerEnregistrement(Avoir::class)->getKey(),
+                'facture_id' => Facture::factory()->create()->getKey(),
+                'montant_alloue' => '20.00',
+            ],
+            BordereauDetaxe::class => [
+                'facture_id' => Facture::factory()->create()->getKey(),
+                'numero' => '2026FR000123456',
+            ],
+            VisaDetaxe::class => [
+                'bordereau_detaxe_id' => self::creerEnregistrement(BordereauDetaxe::class)->getKey(),
+                'date_visa' => '2026-10-10',
+            ],
+            ConsultationVies::class => [
+                'client_id' => Client::factory()->etranger('DE', 'DE123456789')->create()->getKey(),
+                'numero_tva' => 'DE123456789',
+                'valide' => true,
+                'consultee_le' => self::enUtc('2026-10-09 12:32:10'),
+                'reponse' => '{"valid":true}',
+            ],
+            EnregistrementFiscal::class => [
+                'chaine' => ChaineFiscale::Vente,
+                'sequence' => 1,
+                'type' => 'ticket',
+                'horodatage' => self::enUtc('2026-10-09 08:00:00'),
+                'contenu' => '{"format":1}',
+                'signature' => 'signature',
+                'algorithme' => 'ES256',
+                'cle_id' => str_repeat('0', 64),
+                'version_module' => '1.0',
+            ],
+            Paiement::class => [
+                'client_id' => Client::factory()->create()->getKey(),
+                'mode_paiement' => ModePaiement::Virement,
+                'montant' => '120.00',
+                'recu_le' => '2026-10-09',
+            ],
+            PaiementAllocation::class => [
+                'paiement_id' => self::creerEnregistrement(Paiement::class)->getKey(),
+                'facture_id' => Facture::factory()->create()->getKey(),
+                'montant_alloue' => '120.00',
+            ],
+            PreuveOperation::class => [
+                'facture_id' => Facture::factory()->create()->getKey(),
+                'type' => TypePreuve::Mrn,
+                'reference' => '26FR000000123456E1',
+            ],
+            RecuPaiement::class => [
+                'client_id' => Client::factory()->create()->getKey(),
+                'numero' => 'RP-TEST-2026-'.Str::upper(Str::random(6)),
+                'nature' => NatureRecuPaiement::Encaissement,
+                'recu_le' => '2026-10-09',
+                'emetteur' => ['nom' => 'Boutique de test'],
+            ],
+            LigneRecuPaiement::class => [
+                'recu_paiement_id' => self::creerEnregistrement(RecuPaiement::class)->getKey(),
+                'facture_id' => Facture::factory()->create()->getKey(),
+                'montant' => '12.00',
+                'credit' => '0.00',
+                'reste_du' => '0.00',
+                'ordre' => 0,
+            ],
+            TauxAvoirFournisseur::class => [
+                'avoir_fournisseur_id' => AvoirFournisseur::factory()->create()->getKey(),
+                'taux_tva' => '20.00',
+                'base_ht' => '10.00',
+                'montant_tva' => '2.00',
+                'montant_tva_calcule' => '2.00',
+                'ordre' => 0,
+            ],
+            PieceDuFournisseur::class => [
+                'facture_achat_id' => FactureAchat::factory()->create()->getKey(),
+                'nom' => 'facture-fournisseur.pdf',
+                'type_mime' => 'application/pdf',
+                'taille' => 1024,
+                'empreinte' => str_repeat('a', 64),
+                'chemin' => 'magasin-0/'.Str::random(32).'.pdf',
+                'analysee_le' => self::enUtc('2026-10-09 12:32:10'),
+            ],
+            TauxFactureAchat::class => [
+                'facture_achat_id' => FactureAchat::factory()->create()->getKey(),
+                'taux_tva' => '20.00',
+                'base_ht' => '10.00',
+                'montant_tva' => '2.00',
+                'montant_tva_calcule' => '2.00',
+                'ordre' => 0,
+            ],
+            LienDuDevis::class => [
+                'devis_id' => Devis::factory()->create()->getKey(),
+                'envoi_document_id' => EnvoiDocument::factory()->create()->getKey(),
+                'jeton_hache' => hash('sha256', Str::random(64)),
+            ],
+            ReponseDuDevis::class => [
+                'devis_id' => ($lien = self::creerEnregistrement(LienDuDevis::class))->devis_id,
+                'lien_du_devis_id' => $lien->getKey(),
+                'reponse' => ReponseAuDevis::Acceptation,
+                'signataire' => 'Claire Martin',
+                'empreinte_du_devis' => str_repeat('b', 64),
+                'created_at' => self::enUtc('2026-10-09 08:00:00'),
+            ],
+            TeteRegistreFiscal::class => [],
+            TraceEvenement::class => [
+                'enregistrement_fiscal_id' => self::creerEnregistrement(EnregistrementFiscal::class)->getKey(),
+                'ip' => '203.0.113.7',
+                'agent_utilisateur' => 'Navigateur de test',
+                'expire_le' => self::enUtc('2027-10-09 08:00:00'),
+            ],
+        };
+
+        return Model::unguarded(static fn (): Model => $modele::create([...$exiges, ...$attributs]));
+    }
+
+    /**
+     * Une fiche créée dans un autre magasin, de la même société ou d'une
+     * autre, telle que ce magasin l'a enregistrée ; le magasin A redevient
+     * le magasin actif.
+     *
+     * @template TFiche of Client|Fournisseur
+     *
+     * @param  class-string<TFiche>  $modele
+     * @return TFiche
+     */
+    private function ficheDUnAutreMagasin(string $modele, bool $memeSociete): Model
+    {
+        $ailleurs = $memeSociete ? $this->ouvrirUnAutreMagasin($this->magasinA) : $this->magasinB;
+        $fiche = app(TenantContext::class)->runAs($ailleurs, fn (): Model => $modele::factory()->create());
+        app(TenantContext::class)->set($this->magasinA);
+
+        return $fiche;
+    }
+
+    /**
+     * Un ticket de 12,00 € émis dans le magasin actif, non réglé.
+     */
+    private function venteEmise(): Facture
+    {
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
+
+        return app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]]));
+    }
+
+    /**
+     * @return list<class-string<Model>>
+     */
+    private function modelesQuiUtilisentBelongsToMagasin(): array
+    {
+        $modeles = collect(File::allFiles(app_path()))
+            ->map(fn (SplFileInfo $fichier): string => 'App\\'.Str::of($fichier->getRelativePathname())->beforeLast('.php')->replace('/', '\\'))
+            ->filter(fn (string $classe): bool => class_exists($classe) && in_array(BelongsToMagasin::class, class_uses_recursive($classe), true))
+            ->values()
+            ->all();
+        sort($modeles);
+
+        return $modeles;
+    }
+}

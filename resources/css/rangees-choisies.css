@@ -1,0 +1,46 @@
+/*
+ * La rangée choisie d'une fenêtre de sélection (les produits ajoutés à une
+ * vente), la ligne cochée d'une liste qui a des actions groupées et le
+ * service coché de la fenêtre « Ajouter un service » (sa liste porte la
+ * classe piliqi-liste-de-choix ; les autres listes à cocher, celles des
+ * autorisations par exemple, gardent le fond de Filament) (constat C5 de
+ * l'éditeur) : une teinte légère de la couleur principale du panneau,
+ * celle de ses boutons, au texte bien lisible, au repos comme au survol,
+ * en clair comme en sombre. Écrite à la main, sans aucun outil Node, elle
+ * ne lit que les variables de couleur que Filament pose pour le panneau ;
+ * ses sélecteurs l'emportent sur les fonds gris de Filament.
+ */
+.fi-ta-table .fi-ta-row.piliqi-rangee-choisie,
+.fi-ta-table .fi-ta-row.piliqi-rangee-choisie:hover,
+.fi-ta-table .fi-ta-row:has(.fi-ta-record-checkbox:checked),
+.fi-ta-table .fi-ta-row:has(.fi-ta-record-checkbox:checked):hover,
+.piliqi-liste-de-choix .fi-fo-checkbox-list-option-label:has(input:checked) {
+    background-color: rgba(var(--primary-50), 1);
+}
+
+.dark .fi-ta-table .fi-ta-row.piliqi-rangee-choisie,
+.dark .fi-ta-table .fi-ta-row.piliqi-rangee-choisie:hover,
+.dark .fi-ta-table .fi-ta-row:has(.fi-ta-record-checkbox:checked),
+.dark .fi-ta-table .fi-ta-row:has(.fi-ta-record-checkbox:checked):hover,
+.dark .piliqi-liste-de-choix .fi-fo-checkbox-list-option-label:has(input:checked) {
+    background-color: rgba(var(--primary-500), 0.15);
+}
+
+/*
+ * En mode clair, sur cette teinte, les textes secondaires de Filament
+ * passent d'un cran plus foncé pour garder au moins 4,5 pour 1 (niveau AA
+ * des règles d'accessibilité WCAG) : le gris des descriptions
+ * (« À régulariser ») et des textes vides, et la couleur d'une cellule
+ * (le stock épuisé en rouge), assombrie d'un quart. En mode sombre, leurs
+ * teintes claires restent lisibles sur le fond teinté.
+ */
+html:not(.dark) .fi-ta-table .fi-ta-row.piliqi-rangee-choisie :is(.text-gray-400, .text-gray-500),
+html:not(.dark) .fi-ta-table .fi-ta-row:has(.fi-ta-record-checkbox:checked) :is(.text-gray-400, .text-gray-500),
+html:not(.dark) .piliqi-liste-de-choix .fi-fo-checkbox-list-option-label:has(input:checked) :is(.text-gray-400, .text-gray-500) {
+    color: rgba(var(--gray-600), 1);
+}
+
+html:not(.dark) .fi-ta-table .fi-ta-row.piliqi-rangee-choisie .text-custom-600,
+html:not(.dark) .fi-ta-table .fi-ta-row:has(.fi-ta-record-checkbox:checked) .text-custom-600 {
+    color: color-mix(in srgb, rgba(var(--c-600), 1) 75%, black);
+}

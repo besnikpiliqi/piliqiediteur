@@ -1,0 +1,43 @@
+<?php
+
+// Les saisies des formulaires de Filament, sources de l'analyse des flux
+// de données de Psalm (voir tests/Qualite/Psalm/SaisiesDesEcrans.php et
+// psalm.xml) : l'état d'un formulaire et la lecture d'un autre champ sont
+// ce que la personne a saisi. Seules ces méthodes sont redéclarées ; Psalm
+// lit les autres dans Filament.
+
+namespace Filament\Forms\Concerns;
+
+use Closure;
+use Illuminate\Contracts\Support\Arrayable;
+
+trait HasState
+{
+    /**
+     * @return array<string, mixed>
+     *
+     * @psalm-taint-source input
+     */
+    public function getState(bool $shouldCallHooksBefore = true, ?Closure $afterValidate = null): array {}
+
+    /**
+     * @return array<string, mixed>|Arrayable
+     *
+     * @psalm-taint-source input
+     */
+    public function getRawState(): array|Arrayable {}
+}
+
+namespace Filament\Forms;
+
+use Filament\Forms\Components\Component;
+
+class Get
+{
+    public function __construct(protected Component $component) {}
+
+    /**
+     * @psalm-taint-source input
+     */
+    public function __invoke(string|Component $path = '', bool $isAbsolute = false): mixed {}
+}

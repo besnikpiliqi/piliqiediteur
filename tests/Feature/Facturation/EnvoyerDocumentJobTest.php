@@ -1,0 +1,1001 @@
+<?php
+
+namespace Tests\Feature\Facturation;
+
+use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\CaisseSecurisee\Exceptions\DocumentSansEnregistrementSigneException;
+use App\Domain\Calendrier\Calendrier;
+use App\Domain\Calendrier\Casts\Instant;
+use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Contacts\Models\Client;
+use App\Domain\Facturation\Actions\CreerAvoirAction;
+use App\Domain\Facturation\Actions\CreerDevisAction;
+use App\Domain\Facturation\Actions\CreerFactureAction;
+use App\Domain\Facturation\Actions\EmettreAvoirAction;
+use App\Domain\Facturation\Actions\EmettreDevisAction;
+use App\Domain\Facturation\Actions\EmettreFactureAction;
+use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
+use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
+use App\Domain\Facturation\Actions\EnvoyerDocumentAction;
+use App\Domain\Facturation\Actions\ModifierDevisAction;
+use App\Domain\Facturation\Enums\ModePaiement;
+use App\Domain\Facturation\Enums\StatutDevis;
+use App\Domain\Facturation\Enums\StatutEnvoi;
+use App\Domain\Facturation\Jobs\EnvoyerDocumentJob;
+use App\Domain\Facturation\Mail\DocumentMail;
+use App\Domain\Facturation\Models\EnvoiDocument;
+use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Models\LienDuDevis;
+use App\Domain\Facturation\Notifications\EnvoiDocumentEchoue;
+use App\Domain\Facturation\Services\PartDeReglement;
+use App\Domain\Facturation\Services\ReglementComptant;
+use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
+use App\Domain\Tenancy\Actions\ModifierMembreAction;
+use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Domain\Tenancy\Enums\TypeDActivite;
+use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Services\TenantContext;
+use App\Models\User;
+use Carbon\Carbon;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Mail\Mailables\Attachment;
+use Illuminate\Queue\MaxAttemptsExceededException;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Exceptions;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Queue;
+use LogicException;
+use PHPUnit\Framework\Attributes\DataProvider;
+use Symfony\Component\Mailer\Exception\TransportException;
+use Symfony\Component\Mailer\Exception\UnexpectedResponseException;
+use Symfony\Component\Mailer\Exception\UnsupportedSchemeException;
+use Symfony\Component\Mailer\SentMessage;
+use Symfony\Component\Mailer\Transport\AbstractTransport;
+use Symfony\Component\Mailer\Transport\Dsn;
+use Symfony\Component\Mime\Email;
+use Tests\TestCase;
+use UnexpectedValueException;
+
+class EnvoyerDocumentJobTest extends TestCase
+{
+    use RefreshDatabase;
+
+    public function test_la_facture_part_au_destinataire_avec_son_pdf_au_nom_du_magasin(): void
+    {
+        Mail::fake();
+        $this->magasin(['nom' => 'Ma Boutique', 'email' => 'contact@ma-boutique.fr']);
+        $facture = $this->emettreFacture(Client::factory()->professionnel()->create());
+
+        $envoi = app(EnvoyerDocumentAction::class)->handle(self::auteur(), $facture, 'compta@client.fr', "Bonjour Paul,\nVoici la facture de la réparation.");
+
+        Mail::assertSent(DocumentMail::class, function (DocumentMail $mail) use ($facture): bool {
+            $pdf = $mail->attachments()[0];
+
+            return $mail->hasTo('compta@client.fr')
+                && $mail->hasFrom(config('mail.from.address'), 'Ma Boutique')
+                && $mail->hasReplyTo('contact@ma-boutique.fr', 'Ma Boutique')
+                && $mail->hasSubject("Facture {$facture->numero} — Ma Boutique")
+                && [$pdf->as, $pdf->mime] === ["facture-{$facture->numero}.pdf", 'application/pdf']
+                && str_starts_with($this->contenuDe($pdf), '%PDF');
+        });
+        $envoi->refresh();
+        $this->assertSame(StatutEnvoi::Envoye, $envoi->statut);
+        $this->assertNotNull($envoi->envoye_le);
+        $this->assertNull($envoi->erreur);
+    }
+
+    /**
+     * Émise le 31 octobre, au délai de paiement du magasin (30 jours), la
+     * facture est à régler au plus tard le 30 novembre.
+     */
+    public function test_l_e_mail_presente_le_document_puis_le_message_de_l_expediteur(): void
+    {
+        $this->travelTo(self::aParis('2026-10-31 10:00:00'));
+        $this->magasin(['nom' => 'Ma Boutique', 'telephone' => '01 23 45 67 89']);
+        $facture = $this->emettreFacture(Client::factory()->professionnel()->create());
+        $envoi = EnvoiDocument::factory()->for($facture, 'document')->create(['message' => "Bonjour Paul,\n\nVoici la facture de la réparation."]);
+
+        $mail = new DocumentMail($envoi, '%PDF', 'facture.pdf');
+
+        // Le rendu de l'e-mail ne réencode pas les apostrophes.
+        $mail->assertSeeInOrderInHtml([
+            'Ma Boutique',
+            "Veuillez trouver ci-joint notre facture {$facture->numero} d'un montant de 120,00 € TTC, à régler au plus tard le 30/11/2026.",
+            'Bonjour Paul,',
+            'Voici la facture de la réparation.',
+            'Cordialement,',
+            'Tél. 01 23 45 67 89',
+        ], escape: false);
+    }
+
+    /**
+     * Vendue au comptoir et payée par carte à son émission, la facture a
+     * bien une échéance (B7), mais son e-mail ne demande plus de la régler.
+     */
+    public function test_l_e_mail_d_une_facture_reglee_a_son_emission_ne_demande_pas_de_la_regler(): void
+    {
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
+        $this->magasin();
+        $facture = app(EmettreFactureAction::class)->handle(self::auteur(),
+            app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->professionnel()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]]),
+            new ReglementComptant([new PartDeReglement(ModePaiement::CarteBancaire, 12000)]),
+        );
+        $envoi = EnvoiDocument::factory()->for($facture, 'document')->create(['message' => 'Merci de votre visite.']);
+
+        $mail = new DocumentMail($envoi, '%PDF', 'facture.pdf');
+
+        $mail->assertSeeInHtml("Veuillez trouver ci-joint notre facture {$facture->numero} d'un montant de 120,00 € TTC, déjà réglée.", escape: false);
+        $mail->assertDontSeeInHtml('à régler');
+        $this->assertSame(['2026-11-08', 0], [$facture->date_echeance, $facture->montantRestantEnCentimes()]);
+    }
+
+    /**
+     * Le message de l'expéditeur arrive tel qu'il l'a écrit : jamais
+     * interprété comme du HTML.
+     */
+    public function test_le_message_de_l_expediteur_n_est_jamais_interprete(): void
+    {
+        $this->magasin();
+        $facture = $this->emettreFacture(Client::factory()->create());
+        $envoi = EnvoiDocument::factory()->for($facture, 'document')->create(['message' => '<script>alert(1)</script>']);
+
+        $mail = new DocumentMail($envoi, '%PDF', 'facture.pdf');
+
+        $mail->assertDontSeeInHtml('<script>alert(1)</script>', escape: false);
+        $mail->assertSeeInHtml('<script>alert(1)</script>');
+    }
+
+    /**
+     * Ni le Markdown de l'e-mail : un lien, un titre, une liste ou une mise
+     * en forme écrits dans le message arrivent comme du texte -- jamais un
+     * lien cliquable qui mènerait ailleurs que ce qu'il annonce, envoyé
+     * depuis le domaine de l'éditeur. La version texte le reprend mot pour
+     * mot.
+     */
+    public function test_le_message_de_l_expediteur_n_est_jamais_mis_en_forme(): void
+    {
+        $this->magasin(['nom' => 'Boutique *étoilée*']);
+        $facture = $this->emettreFacture(Client::factory()->create());
+        $message = "# Urgent\nRéglez ici : [payer](https://pirate.example/payer)\nmerci *beaucoup*\n1. vite";
+        $envoi = EnvoiDocument::factory()->for($facture, 'document')->create(['message' => $message]);
+
+        $mail = new DocumentMail($envoi, '%PDF', 'facture.pdf');
+
+        foreach (['href="https://pirate.example/payer"', '<h1', '<em>', '<ol'] as $balise) {
+            $mail->assertDontSeeInHtml($balise, escape: false);
+        }
+        $mail->assertSeeInOrderInHtml(['# Urgent', 'Réglez ici : [payer](https://pirate.example/payer)', 'merci *beaucoup*', '1. vite', 'Boutique *étoilée*'], escape: false);
+        $mail->assertSeeInOrderInText(['# Urgent', 'Réglez ici : [payer](https://pirate.example/payer)', 'merci *beaucoup*', '1. vite', 'Cordialement,']);
+        $mail->assertDontSeeInText('<p>');
+    }
+
+    public function test_le_devis_part_avec_son_pdf_et_sa_date_de_validite(): void
+    {
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
+        Mail::fake();
+        $this->magasin();
+        $devis = app(CreerDevisAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]], ['date_validite' => '2026-12-31']);
+
+        app(EnvoyerDocumentAction::class)->handle(self::auteur(), $devis, 'client@exemple.fr', null);
+
+        $devis->refresh();
+        Mail::assertSent(DocumentMail::class, fn (DocumentMail $mail): bool => $mail->attachments()[0]->as === "devis-{$devis->numero}.pdf");
+        $this->assertStringContainsString(
+            "notre devis {$devis->numero} d'un montant de 120,00 € TTC, valable jusqu'au 31/12/2026.",
+            (new DocumentMail($devis->envois()->firstOrFail(), '%PDF', 'devis.pdf'))->render(),
+        );
+    }
+
+    public function test_l_avoir_part_avec_son_pdf(): void
+    {
+        Mail::fake();
+        $this->magasin();
+        $facture = $this->emettreFacture(Client::factory()->create());
+        $avoir = app(EmettreAvoirAction::class)->handle(self::auteur(), app(CreerAvoirAction::class)->handle(self::auteur(), $facture->client, [['ligne_facture_id' => $facture->lignes->first()->id, 'quantite' => 1]]));
+
+        app(EnvoyerDocumentAction::class)->handle(self::auteur(), $avoir, 'client@exemple.fr', null);
+
+        Mail::assertSent(DocumentMail::class, fn (DocumentMail $mail): bool => $mail->attachments()[0]->as === "avoir-{$avoir->numero}.pdf"
+            && str_starts_with($this->contenuDe($mail->attachments()[0]), '%PDF'));
+    }
+
+    /**
+     * Une relance n'a pas l'introduction d'un envoi : son rappel dit déjà
+     * tout de la facture.
+     */
+    public function test_une_relance_part_avec_son_rappel_et_la_facture(): void
+    {
+        $this->travelTo(self::aParis('2026-10-15 10:00:00'));
+        Mail::fake();
+        $this->magasin();
+        $facture = $this->emettreFactureEchueLe(Client::factory()->create(), '2026-09-30');
+
+        app(EnvoyerDocumentAction::class)->relancer(self::auteur(), $facture, 'client@exemple.fr');
+
+        Mail::assertSent(DocumentMail::class, function (DocumentMail $mail) use ($facture): bool {
+            $html = $mail->render();
+
+            return $mail->attachments()[0]->as === "ticket-{$facture->numero}.pdf"
+                && str_contains($html, 'il reste 120,00 € à payer')
+                && ! str_contains($html, 'Veuillez trouver ci-joint');
+        });
+    }
+
+    public function test_un_envoi_deja_envoye_ne_repart_jamais(): void
+    {
+        Mail::fake();
+        $magasin = $this->magasin();
+        $envoi = EnvoiDocument::factory()->for($this->emettreFacture(Client::factory()->create()), 'document')->envoye()->create();
+
+        (new EnvoyerDocumentJob($magasin->id, $envoi->id))->handle();
+
+        Mail::assertNothingSent();
+    }
+
+    /**
+     * La relance a été programmée, puis la facture réglée avant qu'elle ne
+     * parte (file d'attente chargée, nouvelle tentative) : elle ne part
+     * pas, et le magasin sait pourquoi.
+     */
+    public function test_une_relance_ne_part_pas_si_la_facture_a_ete_reglee_entre_temps(): void
+    {
+        $this->travelTo(self::aParis('2026-10-15 10:00:00'));
+        Mail::fake();
+        $magasin = $this->magasinAvecProprietaire('Ma Boutique');
+        $facture = $this->emettreFactureEchueLe(Client::factory()->create(), '2026-09-30');
+        Queue::fake([EnvoyerDocumentJob::class]);
+        $relance = app(EnvoyerDocumentAction::class)->relancer($this->proprietaireDe($magasin), $facture, 'client@exemple.fr');
+        $this->payer($facture, 120);
+
+        (new EnvoyerDocumentJob($magasin->id, $relance->id))->handle();
+
+        Mail::assertNothingSent();
+        $relance->refresh();
+        $this->assertSame([StatutEnvoi::Echec, 'La facture a été réglée ou soldée par un avoir entre-temps : la relance n\'est pas partie.'], [$relance->statut, $relance->erreur]);
+        $this->assertSame(1, $this->proprietaireDe($magasin)->notifications()->count());
+    }
+
+    /**
+     * L'envoi a été programmé, puis le magasin suspendu avant qu'il ne
+     * parte (file d'attente chargée, nouvelle tentative) : un magasin en
+     * lecture seule n'écrit plus à ses clients, et il sait pourquoi.
+     */
+    public function test_un_envoi_ne_part_pas_si_le_magasin_a_ete_suspendu_entre_temps(): void
+    {
+        Mail::fake();
+        $magasin = $this->magasinAvecProprietaire('Ma Boutique');
+        $facture = $this->emettreFacture(Client::factory()->create());
+        Queue::fake([EnvoyerDocumentJob::class]);
+        $envoi = app(EnvoyerDocumentAction::class)->handle($this->proprietaireDe($magasin), $facture, 'client@exemple.fr', null);
+        $magasin->forceFill(['suspendu_le' => now()])->save();
+
+        (new EnvoyerDocumentJob($magasin->id, $envoi->id))->handle();
+
+        Mail::assertNothingSent();
+        $envoi->refresh();
+        $this->assertSame([StatutEnvoi::Echec, 'Le magasin est suspendu : il n\'écrit plus à ses clients, l\'e-mail n\'est pas parti.'], [$envoi->statut, $envoi->erreur]);
+        $this->assertSame(1, $this->proprietaireDe($magasin)->notifications()->count());
+    }
+
+    /**
+     * Payée en partie entre la programmation de la relance et son départ :
+     * le rappel dit ce qu'il reste à payer au moment où elle part.
+     */
+    public function test_le_rappel_d_une_relance_dit_ce_qu_il_reste_a_payer_quand_elle_part(): void
+    {
+        $this->travelTo(self::aParis('2026-10-15 10:00:00'));
+        Mail::fake();
+        $magasin = $this->magasin();
+        $facture = $this->emettreFactureEchueLe(Client::factory()->create(), '2026-09-30');
+        Queue::fake([EnvoyerDocumentJob::class]);
+        $relance = app(EnvoyerDocumentAction::class)->relancer(self::auteur(), $facture, 'client@exemple.fr');
+        $this->payer($facture, 50);
+
+        (new EnvoyerDocumentJob($magasin->id, $relance->id))->handle();
+
+        Mail::assertSent(DocumentMail::class, fn (DocumentMail $mail): bool => str_contains($mail->render(), 'il reste 70,00 € à payer'));
+        $this->assertStringContainsString('il reste 70,00 € à payer', $relance->fresh()->message);
+        $this->assertSame(StatutEnvoi::Envoye, $relance->fresh()->statut);
+    }
+
+    /**
+     * La facture a été corrigée par un avoir entre la programmation de son
+     * envoi et son départ : elle reste le document émis de son client, et
+     * part quand même.
+     */
+    public function test_une_facture_corrigee_par_un_avoir_entre_temps_part_quand_meme(): void
+    {
+        Mail::fake();
+        $magasin = $this->magasin();
+        $facture = $this->emettreFacture(Client::factory()->create());
+        Queue::fake([EnvoyerDocumentJob::class]);
+        $envoi = app(EnvoyerDocumentAction::class)->handle(self::auteur(), $facture, 'client@exemple.fr', null);
+        app(EnregistrerAvoirAction::class)->handle(self::auteur(), $facture->client, [['ligne_facture_id' => $facture->lignes->first()->id, 'quantite' => 1]], 'Erreur de client');
+
+        (new EnvoyerDocumentJob($magasin->id, $envoi->id))->handle();
+
+        Mail::assertSent(DocumentMail::class, fn (DocumentMail $mail): bool => $mail->hasTo('client@exemple.fr')
+            && $mail->attachments()[0]->as === "ticket-{$facture->numero}.pdf");
+        $this->assertSame(StatutEnvoi::Envoye, $envoi->fresh()->statut);
+    }
+
+    /**
+     * Une adresse que le composant d'envoi refuse (ici celle du magasin,
+     * pour les réponses, enregistrée avant les règles actuelles) : l'envoi
+     * passe tout de suite en échec, sans nouvelle tentative inutile, avec
+     * une explication qui dit quoi corriger.
+     */
+    public function test_une_adresse_refusee_par_le_composant_d_envoi_echoue_sans_nouvelle_tentative(): void
+    {
+        $magasin = $this->magasinAvecProprietaire('Ma Boutique');
+        $magasin->update(['email' => 'contact(boutique)@ma-boutique.fr']);
+        $envoi = EnvoiDocument::factory()->for($this->emettreFacture(Client::factory()->create()), 'document')->create(['destinataire' => 'client@exemple.fr']);
+
+        (new EnvoyerDocumentJob($magasin->id, $envoi->id))->handle();
+
+        $envoi->refresh();
+        $this->assertSame(StatutEnvoi::Echec, $envoi->statut);
+        $this->assertSame('Une adresse e-mail n\'est pas valide (celle du destinataire, ou celle du magasin, à laquelle le client répond) : corrigez-la, puis renvoyez-le.', $envoi->erreur);
+        $this->assertSame(1, $this->proprietaireDe($magasin)->notifications()->count());
+    }
+
+    /**
+     * Un ticket numéroté directement en base n'a aucun enregistrement
+     * signé : il ne part pas avec un PDF reconstitué depuis le magasin
+     * d'aujourd'hui. L'envoi échoue sans nouvelle tentative, le magasin
+     * sait pourquoi, et l'incident est signalé au journal de
+     * l'application.
+     */
+    public function test_un_document_numerote_sans_enregistrement_signe_ne_part_pas(): void
+    {
+        Mail::fake();
+        Exceptions::fake([DocumentSansEnregistrementSigneException::class]);
+        $magasin = $this->magasinAvecProprietaire('Ma Boutique');
+        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
+        DB::table('factures')->where('magasin_id', $magasin->id)->where('id', $brouillon->id)->update(['numero' => 'TK-MABOUT-2026-000009', 'statut' => 'emise', 'date_emission' => Instant::enBase(self::enUtc('2026-10-09 08:00:00'))]);
+        $envoi = EnvoiDocument::factory()->for($brouillon->fresh(), 'document')->create(['destinataire' => 'client@exemple.fr']);
+
+        (new EnvoyerDocumentJob($magasin->id, $envoi->id))->handle();
+
+        Mail::assertNothingSent();
+        $envoi->refresh();
+        $this->assertSame(StatutEnvoi::Echec, $envoi->statut);
+        $this->assertSame('Le ticket TK-MABOUT-2026-000009 n\'a aucun enregistrement signé au registre fiscal : son PDF n\'est pas produit. Lancez la vérification de l\'intégrité (Ventes > Caisse sécurisée) et contactez le support. L\'e-mail n\'est pas parti.', $envoi->erreur);
+        $this->assertSame(1, $this->proprietaireDe($magasin)->notifications()->count());
+        Exceptions::assertReported(DocumentSansEnregistrementSigneException::class);
+    }
+
+    /**
+     * Un document introuvable au départ de son envoi -- un brouillon de
+     * devis jamais numéroté, supprimé après qu'un envoi lui a été rattaché
+     * directement en base, état qu'aucun écran ne produit -- ne fait pas
+     * retenter le job : l'envoi échoue aussitôt, comme pour tout autre
+     * refus du départ, le magasin sait pourquoi, et le propriétaire en est
+     * prévenu.
+     */
+    public function test_un_envoi_dont_le_document_n_existe_plus_echoue_sans_nouvelle_tentative(): void
+    {
+        Mail::fake();
+        $magasin = $this->magasinAvecProprietaire('Ma Boutique');
+        $devis = app(CreerDevisAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
+        $envoi = EnvoiDocument::factory()->for($devis, 'document')->create(['destinataire' => 'client@exemple.fr']);
+        $devis->delete();
+
+        EnvoyerDocumentJob::dispatchSync($magasin->id, $envoi->id);
+
+        Mail::assertNothingSent();
+        $envoi->refresh();
+        $this->assertSame([StatutEnvoi::Echec, 'Ce document n\'existe pas, ou plus, dans ce magasin. L\'e-mail n\'est pas parti.'], [$envoi->statut, $envoi->erreur]);
+        $notification = $this->proprietaireDe($magasin)->notifications()->sole();
+        $this->assertSame(['Ma Boutique : Échec de l\'envoi : document supprimé', 'L\'e-mail à client@exemple.fr n\'est pas parti. Ce document n\'existe pas, ou plus, dans ce magasin. L\'e-mail n\'est pas parti.'], [$notification->data['title'], $notification->data['body']]);
+    }
+
+    /**
+     * Un envoi dont le document n'est ni une facture, ni un devis, ni un
+     * avoir, ni un reçu de paiement -- son type changé directement en
+     * base, état qu'aucun écran ne produit -- est refusé avant toute
+     * lecture du document, par une exception qui nomme sa classe : rien
+     * ne part.
+     */
+    public function test_un_envoi_d_un_document_qui_ne_s_envoie_pas_est_refuse(): void
+    {
+        Mail::fake();
+        $magasin = $this->magasinAvecProprietaire('Ma Boutique');
+        $devis = app(CreerDevisAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
+        $envoi = EnvoiDocument::factory()->for($devis, 'document')->create(['destinataire' => 'client@exemple.fr']);
+        DB::table('envois_documents')->where('id', $envoi->id)->update(['document_type' => 'produit']);
+
+        try {
+            (new EnvoyerDocumentJob($magasin->id, $envoi->id))->handle();
+            $this->fail('L\'envoi d\'un document qui ne s\'envoie pas aurait dû être refusé.');
+        } catch (UnexpectedValueException $refus) {
+            $this->assertSame('Un envoi porte sur un document qui ne s\'envoie pas : '.Produit::class.'.', $refus->getMessage());
+        }
+
+        Mail::assertNothingSent();
+    }
+
+    /**
+     * Toutes les tentatives ont échoué : l'envoi passe en échec avec une
+     * explication pour le magasin -- jamais la réponse du serveur, qui
+     * contient l'identifiant SMTP de la plateforme -- et l'expéditeur est
+     * prévenu, dans une notification qui nomme le magasin ; des
+     * identifiants refusés tiennent à la plateforme, jamais à l'adresse du
+     * destinataire : le propriétaire, qui peut prévenir l'éditeur, l'est
+     * aussi.
+     */
+    public function test_un_echec_passe_l_envoi_en_echec_et_previent_l_expediteur(): void
+    {
+        $magasin = $this->completerIdentiteLegale($this->magasinAvecProprietaire('Ma Boutique'));
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, null, ['name' => 'Vendeur', 'email' => 'vendeur@ma-boutique.fr']);
+        $this->actingAs($vendeur);
+        $facture = $this->emettreFacture(Client::factory()->professionnel()->create());
+        $envoi = EnvoiDocument::factory()->for($facture, 'document')->create(['destinataire' => 'compta@client.fr', 'envoye_par' => $vendeur->id]);
+        Mail::shouldReceive('to')->andThrow(self::identifiantsRefuses());
+
+        $this->derniereTentative($magasin, $envoi)->handle();
+
+        $envoi->refresh();
+        $this->assertSame(StatutEnvoi::Echec, $envoi->statut);
+        $this->assertSame('L\'e-mail n\'est pas parti : le serveur d\'envoi a refusé les identifiants de la plateforme, un incident de la plateforme, sans rapport avec l\'adresse du destinataire. Prévenez l\'éditeur ; une fois le service rétabli, renvoyez-le.', $envoi->erreur);
+        $notification = $vendeur->notifications()->sole();
+        $this->assertSame(EnvoiDocumentEchoue::class, $notification->type);
+        $this->assertSame("Ma Boutique : Échec de l'envoi : Facture {$facture->numero}", $notification->data['title']);
+        $this->assertStringContainsString('L\'e-mail à compta@client.fr n\'est pas parti.', $notification->data['body']);
+        $this->assertStringNotContainsString('smtp-user', $notification->data['body']);
+        $this->assertSame($magasin->id, $notification->data['magasin_id']);
+        $this->assertSame($notification->data['body'], $this->proprietaireDe($magasin)->notifications()->sole()->data['body']);
+    }
+
+    /**
+     * Chaque refus du serveur d'envoi, tel que le lève le transport SMTP de
+     * Symfony, se dit au magasin par sa cause, sur l'envoi et dans la
+     * notification, sans l'identifiant SMTP que porte le message du
+     * serveur ; une adresse refusée échoue dès la première tentative.
+     *
+     * @param  callable(): \Throwable  $refus
+     */
+    #[DataProvider('refusDuServeurDEnvoi')]
+    public function test_chaque_refus_du_serveur_se_dit_par_sa_cause_sans_l_identifiant(callable $refus, int $tentative, string $erreur): void
+    {
+        $magasin = $this->magasinAvecProprietaire('Ma Boutique');
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
+        $this->actingAs($vendeur);
+        $envoi = EnvoiDocument::factory()->for($this->emettreFacture(Client::factory()->create()), 'document')->create(['destinataire' => 'client@exemple.fr', 'envoye_par' => $vendeur->id]);
+        Mail::shouldReceive('to')->andThrow($refus());
+        $job = (new EnvoyerDocumentJob($magasin->id, $envoi->id))->withFakeQueueInteractions();
+        $job->job->attempts = $tentative;
+
+        $job->handle();
+
+        $job->assertNotReleased();
+        $envoi->refresh();
+        $this->assertSame(StatutEnvoi::Echec, $envoi->statut);
+        $this->assertSame($erreur, $envoi->erreur);
+        $this->assertStringContainsString($erreur, $vendeur->notifications()->sole()->data['body']);
+        $this->assertStringNotContainsString('smtp-user', (string) $envoi->erreur);
+    }
+
+    /**
+     * @return array<string, array{callable(): \Throwable, int, string}>
+     */
+    public static function refusDuServeurDEnvoi(): array
+    {
+        return [
+            'identifiants refusés (535)' => [self::identifiantsRefuses(...), 3, 'L\'e-mail n\'est pas parti : le serveur d\'envoi a refusé les identifiants de la plateforme, un incident de la plateforme, sans rapport avec l\'adresse du destinataire. Prévenez l\'éditeur ; une fois le service rétabli, renvoyez-le.'],
+            'serveur muet' => [fn () => new TransportException('Connection to "sandbox.smtp.mailtrap.io:2525" timed out.'), 3, 'L\'e-mail n\'est pas parti : le serveur d\'envoi ne répond pas, à chaque tentative. Plus tard, renvoyez-le ; si cela se répète, prévenez l\'éditeur.'],
+            'connexion chiffrée refusée' => [fn () => new TransportException('Unable to connect with STARTTLS: stream_socket_enable_crypto(): SSL operation failed with code 1. OpenSSL Error messages: error:0A000086:SSL routines::certificate verify failed'), 3, 'L\'e-mail n\'est pas parti : la connexion chiffrée au serveur d\'envoi a échoué, un incident de la plateforme, sans rapport avec l\'adresse du destinataire. Prévenez l\'éditeur ; une fois le service rétabli, renvoyez-le.'],
+            'MAIL_SCHEME=tls' => [fn () => new UnsupportedSchemeException(new Dsn('tls', 'sandbox.smtp.mailtrap.io')), 3, 'L\'e-mail n\'est pas parti : le chiffrement du serveur d\'envoi est mal réglé, un incident de la plateforme, sans rapport avec l\'adresse du destinataire. Prévenez l\'éditeur ; une fois le service rétabli, renvoyez-le.'],
+            'destinataire refusé (550), dès la première tentative' => [fn () => new UnexpectedResponseException('Expected response code "250/251/252" but got code "550", with message "550 5.1.1 <client@exemple.fr>: Recipient address rejected: User unknown".', 550), 1, 'Le serveur d\'envoi des e-mails a refusé une adresse de ce message : vérifiez l\'adresse du destinataire, puis renvoyez-le ; si elle est juste, prévenez l\'éditeur.'],
+        ];
+    }
+
+    /**
+     * Rythme des tentatives d'un envoi demandé par une personne (décision
+     * de l'éditeur du 02/11/2026) : la première aussitôt, la deuxième 30
+     * secondes après, la troisième 2 minutes après. Une tentative ratée
+     * laisse l'envoi en attente, avec la cause traduite et l'heure de la
+     * suivante ; la troisième le fait échouer, en le disant à qui l'a
+     * demandé et au propriétaire.
+     */
+    public function test_un_serveur_muet_fait_trois_tentatives_a_trente_secondes_puis_deux_minutes_d_ecart(): void
+    {
+        $this->travelTo(self::aParis('2026-11-12 10:00:00'));
+        $magasin = $this->magasinAvecProprietaire('Ma Boutique');
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
+        $this->actingAs($vendeur);
+        $envoi = EnvoiDocument::factory()->for($this->emettreFacture(Client::factory()->create()), 'document')->create(['destinataire' => 'client@exemple.fr', 'envoye_par' => $vendeur->id]);
+        Mail::shouldReceive('to')->andThrow(new TransportException('Connection to "sandbox.smtp.mailtrap.io:2525" timed out.'));
+
+        foreach ([[1, 30, self::aParis('2026-11-12 10:00:30')], [2, 120, self::aParis('2026-11-12 10:02:30')]] as [$tentative, $delai, $suivante]) {
+            $job = (new EnvoyerDocumentJob($magasin->id, $envoi->id))->withFakeQueueInteractions();
+            $job->job->attempts = $tentative;
+
+            $job->handle();
+
+            $job->assertReleased($delai);
+            $envoi->refresh();
+            $this->assertSame(StatutEnvoi::EnAttente, $envoi->statut);
+            $this->assertSame($tentative, $envoi->tentatives);
+            $this->assertSame('le serveur d\'envoi ne répond pas', $envoi->derniere_erreur);
+            $this->assertEquals($suivante, $envoi->prochaine_tentative_le);
+            $this->assertSame(0, $vendeur->notifications()->count());
+            $this->travelTo($suivante);
+        }
+
+        $this->derniereTentative($magasin, $envoi)->handle();
+
+        $envoi->refresh();
+        $this->assertSame(StatutEnvoi::Echec, $envoi->statut);
+        $this->assertSame(3, $envoi->tentatives);
+        $this->assertNull($envoi->prochaine_tentative_le);
+        $this->assertStringStartsWith('L\'e-mail n\'est pas parti : le serveur d\'envoi ne répond pas', (string) $envoi->erreur);
+        $this->assertSame(1, $vendeur->notifications()->count());
+        $this->assertSame(1, $this->proprietaireDe($magasin)->notifications()->count());
+    }
+
+    /**
+     * Avec QUEUE_CONNECTION=sync, la tâche tourne pendant le geste et rien
+     * ne la relancerait : un serveur muet fait échouer l'envoi aussitôt,
+     * après sa seule tentative, en le disant à qui l'a demandé et au
+     * propriétaire, au lieu de le laisser attendre une tentative qui ne
+     * viendrait jamais ; aucune tâche ne reste dans la file.
+     */
+    public function test_avec_la_file_sync_un_serveur_muet_fait_echouer_l_envoi_aussitot_et_previent(): void
+    {
+        config(['queue.default' => 'sync']);
+        Mail::extend('en-panne', fn (): AbstractTransport => new class extends AbstractTransport
+        {
+            protected function doSend(SentMessage $message): void
+            {
+                throw new TransportException('Connection to "sandbox.smtp.mailtrap.io:2525" timed out.');
+            }
+
+            public function __toString(): string
+            {
+                return 'en-panne';
+            }
+        });
+        config(['mail.mailers.en-panne' => ['transport' => 'en-panne'], 'mail.default' => 'en-panne']);
+        $this->travelTo(self::aParis('2026-11-12 10:00:00'));
+        $magasin = $this->magasinAvecProprietaire('Ma Boutique');
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
+        $this->actingAs($vendeur);
+        $facture = $this->emettreFacture(Client::factory()->create());
+
+        $envoi = app(EnvoyerDocumentAction::class)->handle($vendeur, $facture, 'client@exemple.fr', null);
+
+        $envoi->refresh();
+        $this->assertSame(StatutEnvoi::Echec, $envoi->statut);
+        $this->assertSame(1, $envoi->tentatives);
+        $this->assertNull($envoi->prochaine_tentative_le);
+        $this->assertSame('L\'e-mail n\'est pas parti : le serveur d\'envoi ne répond pas. Plus tard, renvoyez-le ; si cela se répète, prévenez l\'éditeur.', $envoi->erreur);
+        $this->assertSame(EnvoiDocumentEchoue::class, $vendeur->notifications()->sole()->type);
+        $this->assertSame(EnvoiDocumentEchoue::class, $this->proprietaireDe($magasin)->notifications()->sole()->type);
+        $this->assertSame([0, 0], [DB::table('jobs')->count(), DB::table('failed_jobs')->count()]);
+    }
+
+    /**
+     * Le lien de réponse d'un devis se tire une seule fois par envoi : la
+     * tâche le porte, chiffré, dans la file d'attente, et chaque tentative
+     * le remet dans l'e-mail. Un e-mail remis au client mais constaté en
+     * échec (la connexion coupée après son acceptation) lui laisse donc un
+     * lien qui vaut encore après la tentative suivante ; le jeton ne se lit
+     * pas dans la file.
+     */
+    public function test_chaque_tentative_de_l_envoi_d_un_devis_porte_le_meme_lien(): void
+    {
+        $this->travelTo(self::aParis('2026-11-12 10:00:00'));
+        $transport = new class extends AbstractTransport
+        {
+            /** @var list<string> */
+            public array $corps = [];
+
+            protected function doSend(SentMessage $message): void
+            {
+                $email = $message->getOriginalMessage();
+                $this->corps[] = $email instanceof Email ? (string) $email->getHtmlBody() : '';
+
+                if (count($this->corps) === 1) {
+                    throw new TransportException('Connection to "sandbox.smtp.mailtrap.io:2525" timed out.');
+                }
+            }
+
+            public function __toString(): string
+            {
+                return 'coupe-puis-repond';
+            }
+        };
+        Mail::extend('coupe-puis-repond', fn (): AbstractTransport => $transport);
+        config(['mail.mailers.coupe-puis-repond' => ['transport' => 'coupe-puis-repond'], 'mail.default' => 'coupe-puis-repond', 'queue.default' => 'database']);
+        $magasin = $this->magasinAvecProprietaire('Ma Boutique');
+        $devis = app(CreerDevisAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]], ['date_validite' => '2026-12-31']);
+
+        $envoi = app(EnvoyerDocumentAction::class)->handle(self::auteur(), $devis, 'client@exemple.fr', null);
+        $this->assertSame(1, DB::table('jobs')->count());
+        $file = (string) DB::table('jobs')->value('payload');
+        $this->artisan('queue:work', ['connection' => 'database', '--once' => true]);
+        $this->assertSame(StatutEnvoi::EnAttente, $envoi->fresh()->statut);
+        $this->travel(31)->seconds();
+        $this->artisan('queue:work', ['connection' => 'database', '--once' => true]);
+
+        $this->assertSame(StatutEnvoi::Envoye, $envoi->fresh()->statut);
+        $this->assertCount(2, $transport->corps);
+        $jetons = array_map(fn (string $corps): string => preg_match('#/devis/([A-Za-z0-9]{64})"#', $corps, $trouve) === 1 ? $trouve[1] : '', $transport->corps);
+        $this->assertSame(64, strlen($jetons[0]));
+        $this->assertSame($jetons[0], $jetons[1]);
+        $this->assertStringNotContainsString($jetons[0], $file);
+        $this->assertSame(LienDuDevis::empreinte($jetons[0]), DB::table('liens_des_devis')->where('envoi_document_id', $envoi->id)->value('jeton_hache'));
+        app(TenantContext::class)->clear();
+        $this->get(route('devis.reponse.afficher', ['jeton' => $jetons[0]]))->assertOk()->assertSee("Devis {$devis->numero}");
+    }
+
+    /**
+     * Un envoi déjà en échec ne repart jamais, même par un rejeu de sa
+     * tâche (`php artisan queue:retry`) : rien ne part, et son statut et
+     * son erreur restent ceux que le magasin a lus.
+     */
+    public function test_un_envoi_en_echec_ne_repart_pas_quand_sa_tache_est_rejouee(): void
+    {
+        Mail::fake();
+        $magasin = $this->magasinAvecProprietaire('Ma Boutique');
+        $envoi = EnvoiDocument::factory()->for($this->emettreFacture(Client::factory()->create()), 'document')->create(['destinataire' => 'client@exemple.fr']);
+        $envoi->forceFill(['statut' => StatutEnvoi::Echec, 'erreur' => 'Le serveur d\'envoi ne répond pas.'])->save();
+
+        (new EnvoyerDocumentJob($magasin->id, $envoi->id))->handle();
+        (new EnvoyerDocumentJob($magasin->id, $envoi->id))->failed(new TransportException('Connection to "127.0.0.1:2525" timed out.'));
+
+        Mail::assertNothingSent();
+        $envoi->refresh();
+        $this->assertSame(StatutEnvoi::Echec, $envoi->statut);
+        $this->assertSame('Le serveur d\'envoi ne répond pas.', $envoi->erreur);
+        $this->assertSame(0, $this->proprietaireDe($magasin)->notifications()->count());
+    }
+
+    /**
+     * La durée maximale d'une tentative dépasse le délai d'envoi
+     * (MAIL_TIMEOUT), et reste sous les 60 secondes de `queue:listen` et le
+     * délai de reprise d'une tâche réservée.
+     */
+    public function test_une_tentative_dure_plus_que_le_delai_d_envoi_et_moins_que_la_file_d_attente(): void
+    {
+        $job = new EnvoyerDocumentJob(1, 1);
+
+        $this->assertGreaterThan(config('mail.mailers.smtp.timeout'), $job->timeout);
+        $this->assertLessThan(60, $job->timeout);
+        $this->assertLessThan(config('queue.connections.database.retry_after'), $job->timeout);
+    }
+
+    /**
+     * Une relance automatique n'a pas d'expéditeur : le propriétaire du
+     * magasin est prévenu de son échec.
+     */
+    public function test_l_echec_d_une_relance_automatique_previent_le_proprietaire(): void
+    {
+        $magasin = $this->magasinAvecProprietaire('Ma Boutique');
+        $facture = $this->emettreFacture(Client::factory()->create());
+        $envoi = EnvoiDocument::factory()->for($facture, 'document')->relance(2)->create(['destinataire' => 'client@exemple.fr']);
+
+        (new EnvoyerDocumentJob($magasin->id, $envoi->id))->failed(new MaxAttemptsExceededException(EnvoyerDocumentJob::class.' has been attempted too many times.'));
+
+        $notification = $this->proprietaireDe($magasin)->notifications()->sole();
+        $this->assertStringContainsString('La relance n°2 à client@exemple.fr n\'est pas partie.', $notification->data['body']);
+        $envoi->refresh();
+        $this->assertSame(StatutEnvoi::Echec, $envoi->statut);
+        $this->assertSame('L\'e-mail n\'est pas parti : l\'envoi a été interrompu avant d\'aboutir, à chaque tentative. Plus tard, relancez la facture (la relance n°2 repartira) ; si cela se répète, prévenez l\'éditeur.', $envoi->erreur);
+    }
+
+    /**
+     * Un expéditeur qui a quitté le magasin entre-temps ne reçoit plus rien
+     * de lui : c'est le propriétaire qui est prévenu.
+     */
+    public function test_un_expediteur_qui_a_quitte_le_magasin_n_est_pas_prevenu(): void
+    {
+        $magasin = $this->magasinAvecProprietaire('Ma Boutique');
+        $ancienMembre = User::factory()->create();
+        $envoi = EnvoiDocument::factory()->for($this->emettreFacture(Client::factory()->create()), 'document')->create(['envoye_par' => $ancienMembre->id]);
+
+        (new EnvoyerDocumentJob($magasin->id, $envoi->id))->failed(new TransportException('Connexion refusée'));
+
+        $this->assertSame(0, $ancienMembre->notifications()->count());
+        $this->assertSame(1, $this->proprietaireDe($magasin)->notifications()->count());
+    }
+
+    /**
+     * @return array<string, array{0: string}>
+     */
+    public static function droitsPerdusAvantLeDepart(): array
+    {
+        return array_combine($cas = [
+            'suspendu',
+            'retiré de la société',
+            'privé de l\'autorisation d\'envoyer',
+            'facture devenue invisible pour lui',
+        ], array_map(static fn (string $nom): array => [$nom], $cas));
+    }
+
+    /**
+     * Le vendeur a demandé l'envoi d'une facture qu'il voyait, puis perd
+     * son accès au magasin ou son droit d'envoyer cette facture avant que
+     * l'e-mail ne parte : relu au départ, il ne fait rien partir, sans
+     * nouvelle tentative, et le propriétaire est prévenu, pas lui.
+     */
+    #[DataProvider('droitsPerdusAvantLeDepart')]
+    public function test_un_envoi_demande_par_un_membre_retire_ou_suspendu_entre_temps_ne_part_pas_et_le_proprietaire_est_prevenu(string $cas): void
+    {
+        Mail::fake();
+        Queue::fake([EnvoyerDocumentJob::class]);
+        $magasin = $this->magasinAvecProprietaire('Ma Boutique');
+        $proprietaire = $this->proprietaireDe($magasin);
+        $cases = [...RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Commerce), PermissionRegistry::FACTURE_VIEW_TOUTES];
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, $cases);
+        $facture = $this->emettreFacture(Client::factory()->create());
+        $envoi = app(EnvoyerDocumentAction::class)->handle($vendeur, $facture, 'client@exemple.fr', null);
+
+        match ($cas) {
+            'suspendu' => app(ChangerStatutCompteAction::class)->suspendre($proprietaire, $vendeur),
+            'retiré de la société' => app(ChangerStatutCompteAction::class)->retirer($proprietaire, $vendeur),
+            'privé de l\'autorisation d\'envoyer' => app(ModifierMembreAction::class)->handle($proprietaire, $vendeur, RoleMagasin::Vendeur, array_values(array_diff($cases, [PermissionRegistry::FACTURE_ENVOYER]))),
+            'facture devenue invisible pour lui' => app(ModifierMembreAction::class)->handle($proprietaire, $vendeur, RoleMagasin::Vendeur, RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Commerce)),
+        };
+
+        (new EnvoyerDocumentJob($magasin->id, $envoi->id))->handle();
+
+        Mail::assertNothingSent();
+        $envoi->refresh();
+        $this->assertSame([StatutEnvoi::Echec, EnvoyerDocumentJob::MOTIF_EXPEDITEUR_SANS_DROIT], [$envoi->statut, $envoi->erreur]);
+        $this->assertSame(1, $proprietaire->notifications()->where('type', EnvoiDocumentEchoue::class)->count());
+        $this->assertSame(0, $vendeur->notifications()->where('type', EnvoiDocumentEchoue::class)->count());
+    }
+
+    /**
+     * Une relance demandée à la main se relit au départ comme tout envoi :
+     * son auteur, suspendu entre-temps, ne la fait pas partir, et le
+     * propriétaire est prévenu.
+     */
+    public function test_une_relance_manuelle_d_un_membre_suspendu_entre_temps_ne_part_pas(): void
+    {
+        $this->travelTo(self::aParis('2026-10-15 10:00:00'));
+        Mail::fake();
+        Queue::fake([EnvoyerDocumentJob::class]);
+        $magasin = $this->magasinAvecProprietaire('Ma Boutique');
+        $vendeur = $this->vendeurDeLaPremiereHeure($magasin, [...RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Commerce), PermissionRegistry::FACTURE_VIEW_TOUTES]);
+        $facture = $this->emettreFactureEchueLe(Client::factory()->create(), '2026-09-30');
+        $relance = app(EnvoyerDocumentAction::class)->relancer($vendeur, $facture, 'client@exemple.fr');
+        app(ChangerStatutCompteAction::class)->suspendre($this->proprietaireDe($magasin), $vendeur);
+
+        (new EnvoyerDocumentJob($magasin->id, $relance->id))->handle();
+
+        Mail::assertNothingSent();
+        $this->assertSame([StatutEnvoi::Echec, EnvoyerDocumentJob::MOTIF_EXPEDITEUR_SANS_DROIT], [$relance->refresh()->statut, $relance->erreur]);
+        $this->assertSame(1, $this->proprietaireDe($magasin)->notifications()->where('type', EnvoiDocumentEchoue::class)->count());
+    }
+
+    /**
+     * Une relance automatique n'a pas d'auteur : elle part même quand la
+     * personne qui avait émis la facture a quitté la société depuis.
+     */
+    public function test_une_relance_automatique_ne_depend_d_aucun_auteur(): void
+    {
+        $this->travelTo(self::aParis('2026-10-15 10:00:00'));
+        Mail::fake();
+        $magasin = $this->magasinAvecProprietaire('Ma Boutique');
+        $vendeur = $this->vendeurDeLaPremiereHeure($magasin);
+        $this->actingAs($vendeur);
+        $facture = $this->emettreFactureEchueLe(Client::factory()->create(), '2026-09-30');
+        auth()->logout();
+        app(ChangerStatutCompteAction::class)->retirer($this->proprietaireDe($magasin), $vendeur);
+        $envoi = EnvoiDocument::factory()->for($facture, 'document')->relance(1)->create(['destinataire' => 'client@exemple.fr', 'envoye_par' => null]);
+
+        (new EnvoyerDocumentJob($magasin->id, $envoi->id))->handle();
+
+        Mail::assertSent(DocumentMail::class, fn (DocumentMail $mail): bool => $mail->hasTo('client@exemple.fr'));
+        $this->assertSame(StatutEnvoi::Envoye, $envoi->refresh()->statut);
+    }
+
+    /**
+     * L'échec d'un envoi demandé par un administrateur, qui ouvre toujours
+     * le magasin, le prévient lui, pas le propriétaire, quand il tient au
+     * message lui-même (une adresse refusée).
+     */
+    public function test_l_echec_d_un_envoi_d_un_administrateur_le_previent_lui(): void
+    {
+        $magasin = $this->magasinAvecProprietaire('Ma Boutique');
+        $administrateur = $this->administrateur($magasin);
+        $facture = $this->emettreFacture(Client::factory()->create());
+        $envoi = EnvoiDocument::factory()->for($facture, 'document')->create(['destinataire' => 'client@exemple.fr', 'envoye_par' => $administrateur->id]);
+        Mail::shouldReceive('to')->andThrow(new UnexpectedResponseException('Expected response code "250/251/252" but got code "550", with message "550 5.1.1 User unknown".', 550));
+
+        (new EnvoyerDocumentJob($magasin->id, $envoi->id))->handle();
+
+        $this->assertSame(EnvoiDocumentEchoue::class, $administrateur->notifications()->sole()->type);
+        $this->assertSame(0, $this->proprietaireDe($magasin)->notifications()->count());
+    }
+
+    /**
+     * Un devis, numéroté dès son premier envoi, ne se supprime plus (voir
+     * Devis::estSupprimable()) : la suppression tentée avant le départ de
+     * son envoi est refusée, et l'e-mail part.
+     */
+    public function test_un_devis_qui_attend_le_depart_de_son_envoi_ne_se_supprime_pas_et_l_envoi_part(): void
+    {
+        Mail::fake();
+        $magasin = $this->magasinAvecProprietaire('Ma Boutique');
+        $devis = app(CreerDevisAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
+        $devis = app(EmettreDevisAction::class)->handle(self::auteur(), $devis);
+        $envoi = EnvoiDocument::factory()->for($devis, 'document')->create(['destinataire' => 'client@exemple.fr']);
+        $this->assertThrows(fn () => $devis->delete(), LogicException::class, 'Ce devis ne peut pas être supprimé : seul un brouillon jamais envoyé se supprime, un devis numéroté reste.');
+
+        EnvoyerDocumentJob::dispatchSync($magasin->id, $envoi->id);
+
+        Mail::assertSent(DocumentMail::class, fn (DocumentMail $mail): bool => $mail->hasTo('client@exemple.fr'));
+        $this->assertSame(StatutEnvoi::Envoye, $envoi->fresh()->statut);
+    }
+
+    /**
+     * L'envoi a été programmé, puis le devis modifié avant qu'il ne parte
+     * (file d'attente chargée, nouvelle tentative) : repassé en brouillon,
+     * cette version n'a pas été émise (K8), le client ne la reçoit pas, et
+     * le magasin sait pourquoi.
+     */
+    public function test_un_devis_modifie_avant_le_depart_de_son_envoi_ne_part_pas(): void
+    {
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
+        Mail::fake();
+        $magasin = $this->magasinAvecProprietaire('Ma Boutique');
+        $this->actingAs($this->proprietaireDe($magasin));
+        $produit = $this->produit();
+        $devis = app(CreerDevisAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]], ['date_validite' => '2026-10-31']);
+        Queue::fake([EnvoyerDocumentJob::class]);
+        $envoi = app(EnvoyerDocumentAction::class)->handle(self::auteur(), $devis, 'client@exemple.fr', null);
+        app(ModifierDevisAction::class)->handle(self::auteur(), $devis, $devis->client, [['produit_id' => $produit->id, 'quantite' => 5]]);
+
+        (new EnvoyerDocumentJob($magasin->id, $envoi->id))->handle();
+
+        Mail::assertNothingSent();
+        $envoi->refresh();
+        $this->assertSame([StatutEnvoi::Echec, 'Le devis a été modifié depuis cette demande d\'envoi : l\'e-mail n\'est pas parti, envoyez sa nouvelle version à votre client si ce n\'est pas déjà fait.'], [$envoi->statut, $envoi->erreur]);
+        $this->assertSame(1, $this->proprietaireDe($magasin)->notifications()->count());
+        $devis->refresh();
+        $this->assertSame([StatutDevis::Brouillon, '600.00'], [$devis->statut, $devis->total_ttc]);
+    }
+
+    /**
+     * Modifié puis renvoyé avant le départ de son premier envoi : le
+     * premier e-mail, écrit pour la version précédente, ne part pas ; le
+     * client ne reçoit que le second, avec la version de 600,00 € TTC.
+     */
+    public function test_un_devis_modifie_puis_renvoye_ne_part_qu_avec_son_dernier_envoi(): void
+    {
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
+        Mail::fake();
+        $magasin = $this->magasinAvecProprietaire('Ma Boutique');
+        $produit = $this->produit();
+        $devis = app(CreerDevisAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]], ['date_validite' => '2026-10-31']);
+        Queue::fake([EnvoyerDocumentJob::class]);
+        $premier = app(EnvoyerDocumentAction::class)->handle(self::auteur(), $devis, 'client@exemple.fr', 'Voici le devis pour un article.');
+        $this->travelTo(self::aParis('2026-10-09 10:20:00'));
+        $modifie = app(ModifierDevisAction::class)->handle(self::auteur(), $devis, $devis->client, [['produit_id' => $produit->id, 'quantite' => 5]]);
+        $second = app(EnvoyerDocumentAction::class)->handle(self::auteur(), $modifie, 'client@exemple.fr', 'Voici le devis pour cinq articles.');
+
+        (new EnvoyerDocumentJob($magasin->id, $premier->id))->handle();
+        (new EnvoyerDocumentJob($magasin->id, $second->id))->handle();
+
+        $this->assertSame([$second->id], Mail::sent(DocumentMail::class)->map(fn (DocumentMail $mail): int => $mail->envoi->id)->all());
+        $this->assertSame(
+            [StatutEnvoi::Echec, 'Le devis a été modifié depuis cette demande d\'envoi : l\'e-mail n\'est pas parti, envoyez sa nouvelle version à votre client si ce n\'est pas déjà fait.'],
+            [$premier->fresh()->statut, $premier->fresh()->erreur],
+        );
+        $this->assertSame(StatutEnvoi::Envoye, $second->fresh()->statut);
+        $this->assertStringContainsString("notre devis {$modifie->numero} d'un montant de 600,00 € TTC", (new DocumentMail($second->fresh(), '%PDF', 'devis.pdf'))->render());
+    }
+
+    public function test_le_job_envoie_dans_le_magasin_de_l_envoi_quel_que_soit_le_contexte(): void
+    {
+        Mail::fake();
+        $magasinB = $this->magasin(['nom' => 'Boutique B']);
+        $envoiDeB = EnvoiDocument::factory()->for($this->emettreFacture(Client::factory()->create()), 'document')->create();
+        $this->magasin(['nom' => 'Boutique A']);
+
+        (new EnvoyerDocumentJob($magasinB->id, $envoiDeB->id))->handle();
+
+        Mail::assertSent(DocumentMail::class, fn (DocumentMail $mail): bool => $mail->hasFrom(config('mail.from.address'), 'Boutique B'));
+        $this->assertSame($magasinB->id, app(TenantContext::class)->id());
+        $this->assertSame(StatutEnvoi::Envoye, $envoiDeB->fresh()->statut);
+    }
+
+    public function test_un_job_qui_designe_l_envoi_d_un_autre_magasin_ne_l_envoie_pas(): void
+    {
+        Mail::fake();
+        $magasinA = $this->magasin();
+        $this->magasin();
+        $envoiDeB = EnvoiDocument::factory()->for($this->emettreFacture(Client::factory()->create()), 'document')->create();
+
+        $this->assertThrows(fn () => (new EnvoyerDocumentJob($magasinA->id, $envoiDeB->id))->handle(), ModelNotFoundException::class);
+
+        Mail::assertNothingSent();
+        $this->assertSame(StatutEnvoi::EnAttente, $envoiDeB->fresh()->statut);
+    }
+
+    /**
+     * @param  array<string, mixed>  $attributs
+     */
+    private function magasin(array $attributs = []): Magasin
+    {
+        $magasin = Magasin::factory()->create($attributs);
+        app(TenantContext::class)->set($magasin);
+
+        return $magasin;
+    }
+
+    private function magasinAvecProprietaire(string $nom): Magasin
+    {
+        return $this->ouvrirUneSociete(['nom' => $nom]);
+    }
+
+    private function produit(): Produit
+    {
+        return Produit::factory()->create(['prix_vente_ttc' => 120, 'taux_tva' => 20, 'suivi_stock' => false]);
+    }
+
+    /**
+     * Une facture de 120,00 € TTC.
+     */
+    private function emettreFacture(Client $client): Facture
+    {
+        $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
+
+        return app(EmettreFactureAction::class)->handle(self::auteur(), $facture);
+    }
+
+    /**
+     * Une facture de 120,00 € TTC émise le jour de son échéance, à un client
+     * payable comptant (délai de 0 jour, B7) ; l'horloge revient ensuite
+     * telle qu'elle était, figée au même instant ou libre.
+     */
+    private function emettreFactureEchueLe(Client $client, string $echeance): Facture
+    {
+        $horloge = Carbon::getTestNow();
+        $client->update(['delai_paiement_jours' => 0]);
+        $this->travelTo(self::aParis("{$echeance} 10:00:00"));
+        $facture = $this->emettreFacture($client);
+        $horloge === null ? $this->travelBack() : $this->travelTo($horloge);
+
+        return $facture;
+    }
+
+    private function payer(Facture $facture, float $montant): void
+    {
+        app(EnregistrerPaiementAction::class)->handle(self::auteur(), $facture->client, [
+            'mode_paiement' => ModePaiement::Especes,
+            'montant' => $montant,
+            'recu_le' => Calendrier::deParis()->aujourdhui(),
+        ], [['facture_id' => $facture->id, 'montant' => $montant]]);
+    }
+
+    /**
+     * La troisième et dernière tentative de l'envoi.
+     */
+    private function derniereTentative(Magasin $magasin, EnvoiDocument $envoi): EnvoyerDocumentJob
+    {
+        $job = (new EnvoyerDocumentJob($magasin->id, $envoi->id))->withFakeQueueInteractions();
+        $job->job->attempts = 3;
+
+        return $job;
+    }
+
+    /**
+     * Le refus des identifiants tel que le lève le transport SMTP de
+     * Symfony, avec l'identifiant de la plateforme.
+     */
+    private static function identifiantsRefuses(): TransportException
+    {
+        return new TransportException('Failed to authenticate on SMTP server with username "smtp-user" using the following authenticators: "LOGIN", "PLAIN", "CRAM-MD5". Authenticator "LOGIN" returned "Expected response code "235" but got code "535", with message "535 5.7.8 Authentication failed".".', 535);
+    }
+
+    private function contenuDe(Attachment $pieceJointe): string
+    {
+        return $pieceJointe->attachWith(fn (): string => '', fn (\Closure $donnees): string => $donnees());
+    }
+}

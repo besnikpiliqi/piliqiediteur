@@ -1,0 +1,39 @@
+{
+    "analyse_statique": {
+        "niveau": 10,
+        "chemins": [
+            "app",
+            "bootstrap",
+            "config",
+            "database",
+            "routes",
+            "tests/Qualite"
+        ],
+        "exclusions": [
+            "bootstrap/cache",
+            "tests/Qualite/Psalm",
+            "tests/Qualite/Temoins"
+        ],
+        "stubs": [
+            "tests/Qualite/macros.stub"
+        ],
+        "options": {
+            "parseModelCastsMethod": true
+        }
+    },
+    "couverture": {
+        "achats_et_stock": 98.3,
+        "cabinets": 95.3,
+        "caisse_securisee": 98.3,
+        "calculs": 100,
+        "droits_et_isolation": 96.9,
+        "ecrans_et_socle": 97.6,
+        "facturation": 97.9,
+        "pages_publiques": 96.2,
+        "societe": 94.2
+    },
+    "mutation": {
+        "calculs": 99.5,
+        "droits_et_isolation": 99.9
+    }
+}

@@ -1,0 +1,20 @@
+{
+    "journee": "2026-10-09",
+    "transactions": [
+        {
+            "categorie": "TLB1",
+            "taux": 2000,
+            "ht": 1000,
+            "tva": 200,
+            "motif": null
+        },
+        {
+            "categorie": "TLB1",
+            "taux": 550,
+            "ht": 616,
+            "tva": 34,
+            "motif": null
+        }
+    ],
+    "encaissementsDeServices": []
+}

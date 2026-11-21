@@ -1,0 +1,670 @@
+<?php
+
+namespace Tests\Feature\Stock;
+
+use App\Domain\Achats\Actions\CreerFactureAchatAction;
+use App\Domain\Achats\Actions\ModifierFactureAchatAction;
+use App\Domain\Achats\Actions\ValiderFactureAchatAction;
+use App\Domain\Authorization\LecteurDesDroits;
+use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Cabinets\Actions\ReglerLesAutorisationsDuCabinetAction;
+use App\Domain\Cabinets\Enums\EtatDuLien;
+use App\Domain\Cabinets\Models\LienCabinet;
+use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Contacts\Models\Client;
+use App\Domain\Contacts\Models\Fournisseur;
+use App\Domain\Stock\Actions\CreerInventaireOuvertureAction;
+use App\Domain\Stock\Actions\ModifierInventaireOuvertureAction;
+use App\Domain\Stock\Actions\SupprimerInventaireOuvertureAction;
+use App\Domain\Stock\Actions\ValiderInventaireOuvertureAction;
+use App\Domain\Stock\Enums\StatutInventaireOuverture;
+use App\Domain\Stock\Models\InventaireOuverture;
+use App\Domain\Stock\Models\LigneInventaireOuverture;
+use App\Domain\Stock\Models\MouvementStock;
+use App\Domain\Stock\Services\ConstructeurLigneInventaire;
+use App\Domain\Tenancy\Enums\ActionAuditee;
+use App\Domain\Tenancy\Enums\CategorieAudit;
+use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Domain\Tenancy\Enums\TypeDActivite;
+use App\Domain\Tenancy\Services\TenantContext;
+use App\Models\User;
+use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
+use InvalidArgumentException;
+use LogicException;
+use PHPUnit\Framework\Attributes\DataProvider;
+use Tests\TestCase;
+
+/**
+ * L'inventaire d'ouverture : le stock existant au démarrage d'un magasin,
+ * avec son coût, dont la validation crée les produits et fait entrer leur
+ * stock au coût saisi, sans TVA ni fournisseur, jusqu'à la première vente
+ * du magasin, par une personne autorisée à valider les achats et à créer
+ * des produits (réponses de l'éditeur à Q11-a et Q11-b).
+ */
+class InventaireOuvertureTest extends TestCase
+{
+    use RefreshDatabase;
+
+    private const REFUS_APRES_LA_PREMIERE_VENTE = 'Ce magasin a déjà vendu : un inventaire d\'ouverture ne se saisit que jusqu\'à sa première vente. Un produit oublié entre par une facture d\'achat.';
+
+    private const REFUS_VALIDE = 'Cet inventaire d\'ouverture est validé : il ne se modifie ni ne se supprime plus.';
+
+    /**
+     * La ligne d'un nouveau carnet : 10 articles à 2,00 € HT.
+     *
+     * @return array<string, mixed>
+     */
+    private static function ligneDUnNouveauCarnet(): array
+    {
+        return ['produit' => ['nom' => 'Carnet A5', 'reference' => 'CARNET-A5', 'prix_vente_ttc' => '4.90', 'taux_tva' => '20'], 'quantite' => 10, 'cout_unitaire_ht' => '2.00'];
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $lignes
+     */
+    private function saisir(array $lignes, ?User $auteur = null): InventaireOuverture
+    {
+        return app(CreerInventaireOuvertureAction::class)->handle($auteur ?? self::auteur(), $lignes);
+    }
+
+    private function valider(InventaireOuverture $inventaire, ?User $auteur = null, ?string $jeton = null): InventaireOuverture
+    {
+        return app(ValiderInventaireOuvertureAction::class)->handle($auteur ?? self::auteur(), $inventaire, $jeton);
+    }
+
+    private function supprimer(InventaireOuverture $inventaire, ?User $auteur = null): void
+    {
+        app(SupprimerInventaireOuvertureAction::class)->handle($auteur ?? self::auteur(), $inventaire);
+    }
+
+    /**
+     * Le brouillon ne crée rien ; sa validation crée chaque nouveau
+     * produit, sa référence saisie ou générée, au coût saisi, sans
+     * fournisseur, avec son stock, et numérote l'inventaire. 12 x 1,50 € +
+     * 50 x 0,30 € = 18,00 € + 15,00 € = 33,00 € HT.
+     */
+    public function test_un_produit_nait_de_la_validation_d_un_inventaire_d_ouverture_avec_son_cout(): void
+    {
+        $this->travelTo(self::aParis('2026-10-18 10:00:00'));
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $brouillon = $this->saisir([
+            ['produit' => ['nom' => 'Carnet A5', 'reference' => 'CARNET-A5', 'prix_vente_ttc' => '4.90', 'taux_tva' => '20', 'seuil_alerte' => 3], 'quantite' => 12, 'cout_unitaire_ht' => '1.50'],
+            ['produit' => ['nom' => 'Stylo bleu', 'prix_vente_ttc' => '1.20'], 'quantite' => 50, 'cout_unitaire_ht' => '0.30'],
+        ]);
+
+        $this->assertSame(0, Produit::query()->count());
+        $this->assertSame([StatutInventaireOuverture::Brouillon, null, '33.00'], [$brouillon->statut, $brouillon->numero, $brouillon->valeur_ht]);
+
+        $inventaire = $this->valider($brouillon);
+
+        $this->assertSame(
+            [
+                ['CARNET-A5', 'Carnet A5', '4.90', '20.00', '1.5000', null, 12, 3, true],
+                ['PRD-000001', 'Stylo bleu', '1.20', '20.00', '0.3000', null, 50, 0, true],
+            ],
+            Produit::query()->orderBy('id')->get()->map(fn (Produit $produit): array => [
+                $produit->reference, $produit->nom, $produit->prix_vente_ttc, $produit->taux_tva, $produit->cmup_ht, $produit->fournisseur_id, $produit->stock_quantite, $produit->seuil_alerte, $produit->suivi_stock,
+            ])->all(),
+        );
+        $this->assertSame([StatutInventaireOuverture::Valide, "INV-{$magasin->code}-2026-000001", '33.00', self::auteur()->id], [$inventaire->statut, $inventaire->numero, $inventaire->valeur_ht, (int) $inventaire->valide_par]);
+        $this->assertSame(
+            [[Produit::query()->where('reference', 'CARNET-A5')->value('id'), 'CARNET-A5', null], [Produit::query()->where('reference', 'PRD-000001')->value('id'), 'PRD-000001', null]],
+            $inventaire->lignes()->get()->map(fn ($ligne): array => [$ligne->produit_id, $ligne->reference, $ligne->nouveau_produit])->all(),
+        );
+    }
+
+    /**
+     * Chaque ligne entre en stock à son coût saisi, gardé dans son
+     * mouvement, celle d'un nouveau produit comme celle d'un produit du
+     * catalogue jamais reçu, dont le coût moyen devient ce coût ; la
+     * validation s'inscrit au journal d'audit de la société, dans la
+     * chaîne du magasin. 10 x 2,00 € + 4 x 3,25 € = 33,00 € HT.
+     */
+    public function test_l_inventaire_d_ouverture_entre_le_stock_au_cout_saisi_et_s_inscrit_au_journal_d_audit(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $tasse = Produit::factory()->create(['reference' => 'TASSE', 'nom' => 'Tasse', 'cmup_ht' => 9, 'suivi_stock' => true, 'stock_quantite' => 0]);
+        $brouillon = $this->saisir([self::ligneDUnNouveauCarnet(), ['produit_id' => $tasse->id, 'quantite' => 4, 'cout_unitaire_ht' => '3.25']]);
+        $this->assertSame([], $this->entreesDAudit($magasin->societe, ActionAuditee::InventaireOuvertureValide));
+
+        $inventaire = $this->valider($brouillon);
+
+        $carnet = Produit::query()->where('reference', 'CARNET-A5')->sole();
+        $note = "Inventaire d'ouverture {$inventaire->numero}";
+        $this->assertSame(
+            [
+                [$carnet->id, 'inventaire_ouverture', 10, '2.0000', 'inventaire_ouverture', $inventaire->id, $note, self::auteur()->id],
+                [$tasse->id, 'inventaire_ouverture', 4, '3.2500', 'inventaire_ouverture', $inventaire->id, $note, self::auteur()->id],
+            ],
+            MouvementStock::query()->orderBy('id')->get()->map(fn (MouvementStock $mouvement): array => [
+                $mouvement->produit_id, $mouvement->type->value, $mouvement->quantite, $mouvement->cout_unitaire_ht, $mouvement->source_type, (int) $mouvement->source_id, $mouvement->note, (int) $mouvement->cree_par,
+            ])->all(),
+        );
+        $this->assertSame([['2.0000', 10], ['3.2500', 4]], [[$carnet->cmup_ht, $carnet->stock_quantite], [$tasse->fresh()->cmup_ht, $tasse->fresh()->stock_quantite]]);
+
+        $entrees = $this->entreesDAudit($magasin->societe, ActionAuditee::InventaireOuvertureValide);
+        $this->assertCount(1, $entrees);
+        $this->assertSame(
+            [(int) $magasin->id, self::auteur()->id, CategorieAudit::Operations, 'inventaire_ouverture', $inventaire->id, null],
+            [(int) $entrees[0]->magasin_id, (int) $entrees[0]->auteur_id, $entrees[0]->categorie, $entrees[0]->cible_type, (int) $entrees[0]->cible_id, $entrees[0]->anciennes_valeurs],
+        );
+        $this->assertSame([
+            'inventaire' => $inventaire->numero,
+            'lignes' => [
+                ['cout_unitaire_ht' => '2.00', 'produit_cree' => true, 'quantite' => 10, 'reference' => 'CARNET-A5', 'suivi_stock' => true],
+                ['cout_unitaire_ht' => '3.25', 'produit_cree' => false, 'quantite' => 4, 'reference' => 'TASSE', 'suivi_stock' => true],
+            ],
+            'valeur_ht' => '33.00',
+        ], $entrees[0]->nouvelles_valeurs);
+    }
+
+    /**
+     * Un produit qui ne suit pas son stock ne reçoit de l'inventaire
+     * d'ouverture que son coût de départ : rien n'entre en stock, sa ligne
+     * n'a aucune valeur de stock, et le journal d'audit dit qu'elle n'est
+     * pas entrée en stock. 10 carnets à 2,00 € qui ne suivent pas leur
+     * stock et 50 stylos à 0,30 € : valeur du stock 50 x 0,30 € = 15,00 €
+     * HT, et non 35,00 €.
+     */
+    public function test_un_produit_qui_ne_suit_pas_son_stock_ne_recoit_que_son_cout_sans_valeur_de_stock(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $brouillon = $this->saisir([
+            ['produit' => ['nom' => 'Carnet A5', 'reference' => 'CARNET-A5', 'prix_vente_ttc' => '4.90', 'taux_tva' => '20', 'suivi_stock' => false], 'quantite' => 10, 'cout_unitaire_ht' => '2.00'],
+            ['produit' => ['nom' => 'Stylo bleu', 'reference' => 'STYLO', 'prix_vente_ttc' => '1.20', 'taux_tva' => '20'], 'quantite' => 50, 'cout_unitaire_ht' => '0.30'],
+        ]);
+        $this->assertSame(['15.00', [[false, '0.00'], [true, '15.00']]], [$brouillon->valeur_ht, $this->suiviEtValeurDesLignes($brouillon)]);
+
+        $inventaire = $this->valider($brouillon);
+
+        $this->assertSame(
+            [['CARNET-A5', false, 0, '2.0000'], ['STYLO', true, 50, '0.3000']],
+            Produit::query()->orderBy('reference')->get()->map(fn (Produit $produit): array => [$produit->reference, $produit->suivi_stock, $produit->stock_quantite, $produit->cmup_ht])->all(),
+        );
+        $this->assertSame([Produit::query()->where('reference', 'STYLO')->value('id')], MouvementStock::query()->pluck('produit_id')->all());
+        $this->assertSame(['15.00', [[false, '0.00'], [true, '15.00']]], [$inventaire->fresh()->valeur_ht, $this->suiviEtValeurDesLignes($inventaire)]);
+        $this->assertSame([
+            'inventaire' => $inventaire->numero,
+            'lignes' => [
+                ['cout_unitaire_ht' => '2.00', 'produit_cree' => true, 'quantite' => 10, 'reference' => 'CARNET-A5', 'suivi_stock' => false],
+                ['cout_unitaire_ht' => '0.30', 'produit_cree' => true, 'quantite' => 50, 'reference' => 'STYLO', 'suivi_stock' => true],
+            ],
+            'valeur_ht' => '15.00',
+        ], $this->entreesDAudit($magasin->societe, ActionAuditee::InventaireOuvertureValide)[0]->nouvelles_valeurs);
+    }
+
+    /**
+     * La validation relit, sous son verrou, le suivi du stock de chaque
+     * produit : une tasse du catalogue qui suivait son stock à la saisie
+     * (4 x 3,25 € = 13,00 € HT), puis ne le suit plus, ne fait rien entrer
+     * en stock, et l'inventaire validé le dit, avec une valeur de stock de
+     * 0,00 €.
+     */
+    public function test_la_validation_relit_le_suivi_du_stock_de_chaque_produit(): void
+    {
+        $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $tasse = Produit::factory()->create(['reference' => 'TASSE', 'nom' => 'Tasse', 'suivi_stock' => true, 'stock_quantite' => 0]);
+        $brouillon = $this->saisir([['produit_id' => $tasse->id, 'quantite' => 4, 'cout_unitaire_ht' => '3.25']]);
+        $this->assertSame(['13.00', [[true, '13.00']]], [$brouillon->valeur_ht, $this->suiviEtValeurDesLignes($brouillon)]);
+        $tasse->update(['suivi_stock' => false]);
+
+        $inventaire = $this->valider($brouillon);
+
+        $this->assertSame(['0.00', [[false, '0.00']]], [$inventaire->fresh()->valeur_ht, $this->suiviEtValeurDesLignes($inventaire)]);
+        $this->assertSame([0, '3.2500', 0], [$tasse->fresh()->stock_quantite, $tasse->fresh()->cmup_ht, MouvementStock::query()->count()]);
+    }
+
+    /**
+     * Pour chaque ligne enregistrée, dans l'ordre : si son produit suit son
+     * stock, et la valeur du stock qu'elle fait entrer.
+     *
+     * @return list<array{0: bool, 1: string}>
+     */
+    private function suiviEtValeurDesLignes(InventaireOuverture $inventaire): array
+    {
+        return $inventaire->lignes()->get()->map(fn (LigneInventaireOuverture $ligne): array => [$ligne->suivi_stock, $ligne->valeur_ht])->all();
+    }
+
+    /**
+     * Réponse de l'éditeur à Q11-a : l'inventaire d'ouverture se saisit
+     * jusqu'à la première vente du magasin. Ensuite, un brouillon ne se
+     * valide ni ne se modifie plus, aucun inventaire ne se crée, et rien ne
+     * naît ; un produit oublié entre par une facture d'achat.
+     */
+    public function test_un_inventaire_d_ouverture_n_est_plus_possible_apres_la_premiere_vente(): void
+    {
+        $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $brouillon = $this->saisir([self::ligneDUnNouveauCarnet()]);
+        $vendu = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
+
+        self::vendreAuComptant(self::auteur(), Client::query()->where('est_comptoir', true)->sole(), [['produit_id' => $vendu->id, 'quantite' => 1]]);
+
+        $this->assertThrows(fn () => $this->valider($brouillon), LogicException::class, self::REFUS_APRES_LA_PREMIERE_VENTE);
+        $this->assertThrows(fn () => app(ModifierInventaireOuvertureAction::class)->handle(self::auteur(), $brouillon, [self::ligneDUnNouveauCarnet()]), LogicException::class, self::REFUS_APRES_LA_PREMIERE_VENTE);
+        $this->assertThrows(fn () => $this->saisir([self::ligneDUnNouveauCarnet()]), LogicException::class, self::REFUS_APRES_LA_PREMIERE_VENTE);
+        $this->assertSame([$vendu->id], Produit::query()->pluck('id')->all());
+        $this->assertSame([[StatutInventaireOuverture::Brouillon]], InventaireOuverture::query()->get()->map(fn (InventaireOuverture $inventaire): array => [$inventaire->statut])->all());
+        $this->assertFalse(self::auteur()->can('create', InventaireOuverture::class));
+    }
+
+    /**
+     * @return array<string, array{0: list<string>}>
+     */
+    public static function droitsInsuffisants(): array
+    {
+        return [
+            'sans le droit de valider les achats' => [[PermissionRegistry::FACTURE_ACHAT_VIEW, PermissionRegistry::PRODUIT_VIEW, PermissionRegistry::PRODUIT_CREATE]],
+            'sans le droit de créer des produits' => [[PermissionRegistry::FACTURE_ACHAT_VIEW, PermissionRegistry::PRODUIT_VIEW, PermissionRegistry::FACTURE_ACHAT_VALIDER]],
+        ];
+    }
+
+    /**
+     * Réponse de l'éditeur à Q11-b : l'inventaire d'ouverture se saisit et
+     * se valide par une personne autorisée à valider les achats et à créer
+     * des produits. À qui n'a pas les deux droits, il est refusé, sans rien
+     * créer.
+     *
+     * @param  list<string>  $autorisations
+     */
+    #[DataProvider('droitsInsuffisants')]
+    public function test_valider_un_inventaire_exige_les_droits_choisis(array $autorisations): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $brouillon = $this->saisir([self::ligneDUnNouveauCarnet()], $this->proprietaireDe($magasin));
+        $membre = $this->membre($magasin, RoleMagasin::Observateur, $autorisations);
+
+        $this->assertThrows(fn () => $this->valider($brouillon, $membre), AuthorizationException::class, LecteurDesDroits::REFUS);
+        $this->assertThrows(fn () => $this->saisir([self::ligneDUnNouveauCarnet()], $membre), AuthorizationException::class, LecteurDesDroits::REFUS);
+
+        $this->assertSame(0, Produit::query()->count());
+        $this->assertSame([StatutInventaireOuverture::Brouillon, 1], [$brouillon->fresh()->statut, InventaireOuverture::query()->count()]);
+    }
+
+    /**
+     * Avec les deux droits, un membre saisit et valide l'inventaire
+     * d'ouverture.
+     */
+    public function test_un_membre_autorise_a_valider_les_achats_et_a_creer_des_produits_saisit_et_valide_un_inventaire(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $membre = $this->membre($magasin, RoleMagasin::Observateur, [PermissionRegistry::FACTURE_ACHAT_VIEW, PermissionRegistry::FACTURE_ACHAT_VALIDER, PermissionRegistry::PRODUIT_VIEW, PermissionRegistry::PRODUIT_CREATE]);
+
+        $inventaire = $this->valider($this->saisir([self::ligneDUnNouveauCarnet()], $membre), $membre);
+
+        $this->assertSame([StatutInventaireOuverture::Valide, $membre->id], [$inventaire->statut, (int) $inventaire->valide_par]);
+        $this->assertSame(10, Produit::query()->sole()->stock_quantite);
+    }
+
+    /**
+     * Un compte du cabinet lié, avec les consultations accordées par
+     * défaut, voit l'inventaire d'ouverture sans le saisir ni le valider ;
+     * quand le client lui accorde les achats et la création des produits,
+     * il le saisit et le valide.
+     */
+    public function test_un_compte_de_cabinet_consulte_un_inventaire_et_ne_le_saisit_que_si_le_client_lui_accorde_achats_et_produits(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $brouillon = $this->saisir([self::ligneDUnNouveauCarnet()], $this->proprietaireDe($magasin));
+        $collaborateur = $this->collaborateurDuCabinetLie($magasin);
+
+        $this->assertSame([true, false, false, false], [
+            $collaborateur->can('view', $brouillon),
+            $collaborateur->can('create', InventaireOuverture::class),
+            $collaborateur->can('update', $brouillon),
+            $collaborateur->can('valider', $brouillon),
+        ]);
+        $this->assertThrows(fn () => $this->valider($brouillon, $collaborateur), AuthorizationException::class, LecteurDesDroits::REFUS);
+        $this->assertSame(0, Produit::query()->count());
+
+        $lien = LienCabinet::query()->withoutGlobalScopes()->where('societe_id', $magasin->societe_id)->where('etat', EtatDuLien::Actif->value)->sole();
+        app(ReglerLesAutorisationsDuCabinetAction::class)->handle($this->proprietaireDe($magasin), $lien, [...PermissionRegistry::parDefautDuCabinet(TypeDActivite::Commerce), PermissionRegistry::FACTURE_ACHAT_VALIDER, PermissionRegistry::PRODUIT_CREATE]);
+        app(TenantContext::class)->set($magasin);
+        $collaborateur = $collaborateur->fresh();
+
+        $this->assertSame([true, true, true], [
+            $collaborateur->can('create', InventaireOuverture::class),
+            $collaborateur->can('update', $brouillon),
+            $collaborateur->can('valider', $brouillon),
+        ]);
+        $inventaire = $this->valider($brouillon, $collaborateur);
+        $this->assertSame([StatutInventaireOuverture::Valide, $collaborateur->id], [$inventaire->statut, (int) $inventaire->valide_par]);
+        $this->assertSame(1, Produit::query()->count());
+    }
+
+    /**
+     * Un inventaire d'ouverture et ses produits restent dans leur magasin :
+     * depuis un autre magasin de la même société, l'inventaire est
+     * introuvable, même pour le propriétaire, et un produit d'un autre
+     * magasin ne s'y inventorie pas.
+     */
+    public function test_un_inventaire_d_un_autre_magasin_est_introuvable(): void
+    {
+        $magasinA = $this->ouvrirUneSociete(['nom' => 'Boutique A']);
+        $tasseDeA = Produit::factory()->create(['nom' => 'Tasse']);
+        $inventaireDeA = $this->saisir([self::ligneDUnNouveauCarnet()]);
+        $this->ouvrirUnAutreMagasin($magasinA, ['nom' => 'Boutique B']);
+
+        $this->assertFalse($this->proprietaireDe($magasinA)->can('view', $inventaireDeA));
+        $this->assertThrows(fn () => $this->valider($inventaireDeA), LogicException::class, InventaireOuverture::REFUS_INTROUVABLE);
+        $this->assertThrows(fn () => app(ModifierInventaireOuvertureAction::class)->handle(self::auteur(), $inventaireDeA, [self::ligneDUnNouveauCarnet()]), LogicException::class, InventaireOuverture::REFUS_INTROUVABLE);
+        $this->assertThrows(fn () => $this->saisir([['produit_id' => $tasseDeA->id, 'quantite' => 1, 'cout_unitaire_ht' => '1.00']]), InvalidArgumentException::class, 'Ce produit est introuvable dans le magasin.');
+        $this->assertSame([0, 0], [InventaireOuverture::query()->count(), Produit::query()->count()]);
+
+        app(TenantContext::class)->set($magasinA);
+        $this->assertSame(StatutInventaireOuverture::Brouillon, $inventaireDeA->fresh()->statut);
+        $this->assertSame([$tasseDeA->id], Produit::query()->pluck('id')->all());
+    }
+
+    /**
+     * Validé, un inventaire d'ouverture ne se modifie, ne se supprime ni ne
+     * se valide plus, ses lignes non plus : son stock n'entre qu'une fois.
+     */
+    public function test_un_inventaire_valide_ne_se_modifie_plus(): void
+    {
+        $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $inventaire = $this->valider($this->saisir([self::ligneDUnNouveauCarnet()]));
+
+        $this->assertThrows(fn () => app(ModifierInventaireOuvertureAction::class)->handle(self::auteur(), $inventaire, [self::ligneDUnNouveauCarnet()]), LogicException::class, self::REFUS_VALIDE);
+        $this->assertThrows(fn () => $this->valider($inventaire), LogicException::class, 'Cet inventaire d\'ouverture est déjà validé.');
+        $this->assertThrows(fn () => $inventaire->fresh()->delete(), LogicException::class, self::REFUS_VALIDE);
+        $this->assertThrows(fn () => $inventaire->lignes()->sole()->update(['quantite' => 99]), LogicException::class, self::REFUS_VALIDE);
+
+        $this->assertThrows(fn () => $this->supprimer($inventaire), LogicException::class, self::REFUS_VALIDE);
+
+        $this->assertSame([10, 1, 10], [Produit::query()->sole()->stock_quantite, MouvementStock::query()->count(), $inventaire->lignes()->sole()->quantite]);
+        $this->assertFalse(self::auteur()->can('update', $inventaire->fresh()));
+        $this->assertFalse(self::auteur()->can('delete', $inventaire->fresh()));
+    }
+
+    /**
+     * Un brouillon lu avant sa validation, comme par une page restée
+     * ouverte, ne se supprime plus une fois validé : la suppression relit
+     * l'inventaire sous son verrou, le modèle relit son statut en base, et
+     * l'inventaire validé reste, avec ses lignes, son numéro, son produit
+     * et son stock.
+     */
+    public function test_un_brouillon_lu_avant_sa_validation_ne_se_supprime_plus_une_fois_valide(): void
+    {
+        $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $brouillon = $this->saisir([self::ligneDUnNouveauCarnet()]);
+        $numero = $this->valider($brouillon)->numero;
+        $this->assertSame(StatutInventaireOuverture::Brouillon, $brouillon->statut);
+
+        $this->assertThrows(fn () => $this->supprimer($brouillon), LogicException::class, self::REFUS_VALIDE);
+        $this->assertThrows(fn () => $brouillon->delete(), LogicException::class, self::REFUS_VALIDE);
+
+        $this->assertSame([StatutInventaireOuverture::Valide, $numero, 1], [$brouillon->fresh()->statut, $brouillon->fresh()->numero, $brouillon->lignes()->count()]);
+        $this->assertSame([10, 1], [Produit::query()->sole()->stock_quantite, MouvementStock::query()->count()]);
+    }
+
+    /**
+     * Un brouillon se supprime, avec ses lignes, sans rien créer, même
+     * après la première vente du magasin, par qui peut saisir l'inventaire
+     * d'ouverture ; un membre qui ne peut pas créer de produits ne le
+     * supprime pas, ni personne dans un magasin suspendu, en lecture seule.
+     */
+    public function test_un_brouillon_se_supprime_sans_rien_creer_meme_apres_la_premiere_vente(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $brouillon = $this->saisir([self::ligneDUnNouveauCarnet()]);
+        $vendu = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
+        self::vendreAuComptant(self::auteur(), Client::query()->where('est_comptoir', true)->sole(), [['produit_id' => $vendu->id, 'quantite' => 1]]);
+        $membre = $this->membre($magasin, RoleMagasin::Observateur, [PermissionRegistry::FACTURE_ACHAT_VIEW, PermissionRegistry::FACTURE_ACHAT_VALIDER, PermissionRegistry::PRODUIT_VIEW]);
+
+        $this->assertThrows(fn () => $this->supprimer($brouillon, $membre), AuthorizationException::class, LecteurDesDroits::REFUS);
+        $magasin->forceFill(['suspendu_le' => now()])->save();
+        $this->assertThrows(fn () => $this->supprimer($brouillon), LogicException::class, 'Ce magasin est suspendu : seules la consultation et les téléchargements restent possibles.');
+        $this->assertSame(1, InventaireOuverture::query()->count());
+        $magasin->forceFill(['suspendu_le' => null])->save();
+
+        $this->supprimer($brouillon);
+
+        $this->assertSame([0, 0, [$vendu->id]], [InventaireOuverture::query()->count(), LigneInventaireOuverture::query()->count(), Produit::query()->pluck('id')->all()]);
+    }
+
+    /**
+     * Seul un produit jamais reçu entre dans un inventaire d'ouverture : un
+     * produit déjà reçu par un achat est refusé à la saisie, et un produit
+     * reçu entre la saisie et la validation fait refuser toute la
+     * validation, sans créer les nouveaux produits des autres lignes.
+     */
+    public function test_un_produit_deja_recu_n_est_pas_inventorie_de_nouveau(): void
+    {
+        $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $fournisseur = Fournisseur::factory()->create();
+        $cable = Produit::factory()->create(['nom' => 'Câble USB-C', 'taux_tva' => 20]);
+        $tasse = Produit::factory()->create(['nom' => 'Tasse', 'taux_tva' => 20]);
+        app(ValiderFactureAchatAction::class)->handle(self::auteur(), app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [['produit_id' => $cable->id, 'quantite' => 2, 'prix_unitaire_ht' => 1]], ['date_facture' => '2026-01-15']));
+
+        $this->assertThrows(
+            fn () => $this->saisir([['produit_id' => $cable->id, 'quantite' => 1, 'cout_unitaire_ht' => '1.00']]),
+            LogicException::class,
+            'Le produit « Câble USB-C » a déjà été reçu : seul un produit jamais reçu entre dans un inventaire d\'ouverture.',
+        );
+
+        $brouillon = $this->saisir([self::ligneDUnNouveauCarnet(), ['produit_id' => $tasse->id, 'quantite' => 3, 'cout_unitaire_ht' => '2.00']]);
+        app(ValiderFactureAchatAction::class)->handle(self::auteur(), app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [['produit_id' => $tasse->id, 'quantite' => 5, 'prix_unitaire_ht' => 2]], ['date_facture' => '2026-01-15']));
+
+        $this->assertThrows(
+            fn () => $this->valider($brouillon),
+            LogicException::class,
+            'Le produit « Tasse » a déjà été reçu : seul un produit jamais reçu entre dans un inventaire d\'ouverture.',
+        );
+        $this->assertSame([StatutInventaireOuverture::Brouillon, 0, 5], [$brouillon->fresh()->statut, Produit::query()->where('nom', 'Carnet A5')->count(), $tasse->fresh()->stock_quantite]);
+    }
+
+    /**
+     * Un produit archivé n'entre pas dans un inventaire d'ouverture : à la
+     * saisie, il est refusé ; archivé entre la saisie et la validation, il
+     * fait refuser toute la validation, sans créer les nouveaux produits des
+     * autres lignes.
+     */
+    public function test_un_produit_archive_n_entre_pas_dans_un_inventaire_d_ouverture(): void
+    {
+        $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $archive = Produit::factory()->create(['nom' => 'Lampe', 'taux_tva' => 20]);
+        $archive->delete();
+        $tasse = Produit::factory()->create(['nom' => 'Tasse', 'taux_tva' => 20]);
+        $message = fn (string $nom): string => "Le produit « {$nom} » a été archivé : restaurez-le depuis le catalogue, ou retirez-le de l'inventaire d'ouverture.";
+
+        $this->assertThrows(fn () => $this->saisir([['produit_id' => $archive->id, 'quantite' => 1, 'cout_unitaire_ht' => '1.00']]), LogicException::class, $message('Lampe'));
+
+        $brouillon = $this->saisir([self::ligneDUnNouveauCarnet(), ['produit_id' => $tasse->id, 'quantite' => 3, 'cout_unitaire_ht' => '2.00']]);
+        $tasse->delete();
+
+        $this->assertThrows(fn () => $this->valider($brouillon), LogicException::class, $message('Tasse'));
+        $this->assertSame([StatutInventaireOuverture::Brouillon, 0], [$brouillon->fresh()->statut, Produit::query()->where('nom', 'Carnet A5')->count()]);
+    }
+
+    /**
+     * @return array<string, array{0: list<array<string, mixed>>, 1: string}>
+     */
+    public static function lignesRefusees(): array
+    {
+        return [
+            'coût négatif' => [
+                [['produit' => ['nom' => 'Carnet A5', 'prix_vente_ttc' => '4.90'], 'quantite' => 1, 'cout_unitaire_ht' => '-0.01']],
+                'Le coût unitaire d\'un produit ne peut pas être négatif.',
+            ],
+            'nouveau produit sans prix de vente' => [
+                [['produit' => ['nom' => 'Carnet A5'], 'quantite' => 1, 'cout_unitaire_ht' => '1.00']],
+                'Indiquez le prix de vente TTC du nouveau produit « Carnet A5 ».',
+            ],
+            'deux nouveaux produits de même référence, sans tenir compte de la casse' => [
+                [
+                    ['produit' => ['nom' => 'Carnet A5', 'reference' => 'ABC', 'prix_vente_ttc' => '4.90'], 'quantite' => 1, 'cout_unitaire_ht' => '1.00'],
+                    ['produit' => ['nom' => 'Carnet A4', 'reference' => 'abc', 'prix_vente_ttc' => '5.90'], 'quantite' => 1, 'cout_unitaire_ht' => '1.00'],
+                ],
+                'Deux nouveaux produits de cet inventaire d\'ouverture ont la même référence « abc ».',
+            ],
+            'quantité nulle' => [
+                [['produit' => ['nom' => 'Carnet A5', 'prix_vente_ttc' => '4.90'], 'quantite' => 0, 'cout_unitaire_ht' => '1.00']],
+                'La quantité doit être un nombre entier d\'articles, au moins 1.',
+            ],
+            'aucune ligne' => [[], 'Un inventaire d\'ouverture doit contenir au moins une ligne.'],
+            'produit inconnu' => [
+                [['produit_id' => 'abc', 'quantite' => 1, 'cout_unitaire_ht' => '1.00']],
+                'Ce produit est introuvable dans le magasin.',
+            ],
+            'nouveau produit sans nom' => [
+                [['produit' => ['prix_vente_ttc' => '4.90'], 'quantite' => 1, 'cout_unitaire_ht' => '1.00']],
+                'Chaque nouveau produit d\'un inventaire d\'ouverture doit avoir un nom.',
+            ],
+            'prix de vente négatif' => [
+                [['produit' => ['nom' => 'Carnet A5', 'prix_vente_ttc' => '-4.90'], 'quantite' => 1, 'cout_unitaire_ht' => '1.00']],
+                'Le prix de vente d\'un produit ne peut pas être négatif.',
+            ],
+            'taux de TVA au-delà de 100 %' => [
+                [['produit' => ['nom' => 'Carnet A5', 'prix_vente_ttc' => '4.90', 'taux_tva' => '120'], 'quantite' => 1, 'cout_unitaire_ht' => '1.00']],
+                'Le taux de TVA doit être compris entre 0 et 100 %.',
+            ],
+            'coût manquant' => [
+                [['produit' => ['nom' => 'Carnet A5', 'prix_vente_ttc' => '4.90'], 'quantite' => 1, 'cout_unitaire_ht' => '']],
+                'Indiquez le coût unitaire HT de chaque ligne de l\'inventaire d\'ouverture.',
+            ],
+            'ligne au-delà de ce que le logiciel accepte' => [
+                [['produit' => ['nom' => 'Carnet A5', 'prix_vente_ttc' => '4.90'], 'quantite' => 2_000_000_000, 'cout_unitaire_ht' => '999999.00']],
+                'Cette ligne dépasse ce que le logiciel accepte : réduisez sa quantité ou son coût.',
+            ],
+            'inventaire au-delà de ce que le logiciel accepte' => [
+                [
+                    ['produit' => ['nom' => 'Carnet A5', 'prix_vente_ttc' => '4.90'], 'quantite' => 600_000_000, 'cout_unitaire_ht' => '1000.00'],
+                    ['produit' => ['nom' => 'Carnet A4', 'prix_vente_ttc' => '5.90'], 'quantite' => 600_000_000, 'cout_unitaire_ht' => '1000.00'],
+                ],
+                'Cet inventaire d\'ouverture dépasse ce que le logiciel accepte : répartissez son stock sur plusieurs inventaires.',
+            ],
+        ];
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $lignes
+     */
+    #[DataProvider('lignesRefusees')]
+    public function test_une_ligne_invalide_est_refusee_et_rien_n_est_enregistre(array $lignes, string $message): void
+    {
+        $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+
+        $this->assertThrows(fn () => $this->saisir($lignes), InvalidArgumentException::class, $message);
+
+        $this->assertSame(0, InventaireOuverture::query()->count());
+    }
+
+    /**
+     * @return array<string, array{array<string, mixed>, string}>
+     */
+    public static function lignesAuxBornes(): array
+    {
+        $carnet = ['nom' => 'Carnet A5', 'prix_vente_ttc' => '4.90'];
+
+        return [
+            'prix de vente, taux de TVA et coût nuls' => [['produit' => [...$carnet, 'prix_vente_ttc' => '0', 'taux_tva' => '0'], 'quantite' => 1, 'cout_unitaire_ht' => '0'], '0.00'],
+            'taux de TVA de 100 %' => [['produit' => [...$carnet, 'taux_tva' => '100'], 'quantite' => 1, 'cout_unitaire_ht' => '1.00'], '1.00'],
+            'un demi-centime' => [['produit' => $carnet, 'quantite' => 1, 'cout_unitaire_ht' => '0.005'], '0.01'],
+            'trois demi-centimes' => [['produit' => $carnet, 'quantite' => 3, 'cout_unitaire_ht' => '0.005'], '0.02'],
+            'sous le demi-centime' => [['produit' => $carnet, 'quantite' => 1, 'cout_unitaire_ht' => '0.004999'], '0.00'],
+            'la plus grande quantité' => [['produit' => $carnet, 'quantite' => ConstructeurLigneInventaire::QUANTITE_MAXIMUM, 'cout_unitaire_ht' => '0'], '0.00'],
+            'la plus grande valeur' => [['produit' => $carnet, 'quantite' => 1, 'cout_unitaire_ht' => '999999999999.99'], '999999999999.99'],
+        ];
+    }
+
+    /**
+     * Une ligne à ses bornes est acceptée : un prix de vente, un taux de TVA
+     * et un coût nuls, un taux de 100 %, la plus grande quantité et la plus
+     * grande valeur que le logiciel accepte. La valeur d'une ligne
+     * s'arrondit une seule fois au centime le plus proche, un demi-centime
+     * au centime supérieur.
+     *
+     * @param  array<string, mixed>  $ligne
+     */
+    #[DataProvider('lignesAuxBornes')]
+    public function test_une_ligne_a_ses_bornes_est_acceptee(array $ligne, string $valeur): void
+    {
+        $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+
+        $this->assertSame($valeur, $this->saisir([$ligne])->valeur_ht);
+    }
+
+    /**
+     * Les lignes se rangent dans l'ordre de la saisie, quelles que soient
+     * leurs clés (celles d'un formulaire), et un taux de TVA ou une
+     * référence laissés vides prennent leur valeur par défaut : le taux du
+     * magasin, une référence générée à la validation.
+     */
+    public function test_les_lignes_se_rangent_dans_leur_ordre_et_un_champ_vide_prend_sa_valeur_par_defaut(): void
+    {
+        $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+
+        $inventaire = $this->saisir([
+            'premiere-ligne' => ['produit' => ['nom' => 'Carnet A5', 'prix_vente_ttc' => '4.90', 'taux_tva' => '', 'reference' => ''], 'quantite' => 1, 'cout_unitaire_ht' => '2.00'],
+            'seconde-ligne' => ['produit' => ['nom' => 'Carnet A4', 'prix_vente_ttc' => '5.90'], 'quantite' => 1, 'cout_unitaire_ht' => '3.00'],
+        ]);
+
+        $this->assertSame([['Carnet A5', 0], ['Carnet A4', 1]], $inventaire->lignes()->get()->map(fn ($ligne): array => [$ligne->description, (int) $ligne->ordre])->all());
+        $this->assertSame([
+            ['nom' => 'Carnet A5', 'prix_vente_ttc' => '4.90', 'taux_tva' => '20.00', 'suivi_stock' => true, 'seuil_alerte' => 0],
+            ['nom' => 'Carnet A4', 'prix_vente_ttc' => '5.90', 'taux_tva' => '20.00', 'suivi_stock' => true, 'seuil_alerte' => 0],
+        ], $inventaire->lignes()->orderBy('ordre')->get()->map(fn ($ligne): array => $ligne->nouveau_produit)->all());
+    }
+
+    /**
+     * Un même produit ne figure que sur une ligne, et la référence d'un
+     * nouveau produit n'est jamais celle d'un produit du magasin.
+     */
+    public function test_un_produit_ou_une_reference_deja_pris_est_refuse(): void
+    {
+        $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $tasse = Produit::factory()->create(['nom' => 'Tasse', 'reference' => 'TASSE']);
+
+        $this->assertThrows(
+            fn () => $this->saisir([['produit_id' => $tasse->id, 'quantite' => 1, 'cout_unitaire_ht' => '1.00'], ['produit_id' => $tasse->id, 'quantite' => 2, 'cout_unitaire_ht' => '1.00']]),
+            LogicException::class,
+            'Le produit « Tasse » figure déjà sur une autre ligne de cet inventaire d\'ouverture.',
+        );
+        $this->assertThrows(
+            fn () => $this->saisir([['produit' => ['nom' => 'Autre tasse', 'reference' => 'tasse', 'prix_vente_ttc' => '9.90'], 'quantite' => 1, 'cout_unitaire_ht' => '1.00']]),
+            InvalidArgumentException::class,
+            'La référence « tasse » est déjà celle d\'un autre produit.',
+        );
+        $this->assertSame(0, InventaireOuverture::query()->count());
+    }
+
+    /**
+     * Répétée après une réponse perdue, avec le même jeton, la validation
+     * rend l'inventaire déjà validé : ses produits ne naissent et son stock
+     * n'entre qu'une fois.
+     */
+    public function test_une_validation_repetee_avec_le_meme_jeton_rend_l_inventaire_deja_valide(): void
+    {
+        $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $brouillon = $this->saisir([self::ligneDUnNouveauCarnet()]);
+        $jeton = (string) Str::uuid();
+
+        $premiere = $this->valider($brouillon, null, $jeton);
+        $seconde = $this->valider($brouillon, null, $jeton);
+
+        $this->assertSame([$premiere->id, $premiere->numero], [$seconde->id, $seconde->numero]);
+        $this->assertSame([1, 10, 1], [Produit::query()->count(), Produit::query()->sole()->stock_quantite, MouvementStock::query()->count()]);
+    }
+
+    /**
+     * Une réception corrigée rejoue le grand livre du produit : l'entrée de
+     * l'inventaire d'ouverture y entre à son coût saisi. 10 inventoriés à
+     * 2,00 €, puis 10 reçus à 4,00 € : coût moyen 3,00 € ; la réception
+     * corrigée à 6,00 € : (10 x 2,00 + 10 x 6,00) / 20 = 4,00 €.
+     */
+    public function test_une_reception_corrigee_rejoue_l_entree_de_l_inventaire_a_son_cout(): void
+    {
+        $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $this->valider($this->saisir([self::ligneDUnNouveauCarnet()]));
+        $carnet = Produit::query()->sole();
+        $fournisseur = Fournisseur::factory()->create();
+        $achat = app(ValiderFactureAchatAction::class)->handle(self::auteur(), app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [['produit_id' => $carnet->id, 'quantite' => 10, 'prix_unitaire_ht' => 4]], ['date_facture' => '2026-01-15']));
+        $this->assertSame('3.0000', $carnet->fresh()->cmup_ht);
+
+        app(ModifierFactureAchatAction::class)->handle(self::auteur(), $achat, $fournisseur, [['produit_id' => $carnet->id, 'quantite' => 10, 'prix_unitaire_ht' => 6]]);
+
+        $this->assertSame(['4.0000', 20], [$carnet->fresh()->cmup_ht, $carnet->fresh()->stock_quantite]);
+    }
+}

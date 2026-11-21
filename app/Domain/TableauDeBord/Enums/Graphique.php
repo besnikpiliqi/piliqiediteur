@@ -2,15 +2,21 @@
 
 namespace App\Domain\TableauDeBord\Enums;
 
+use App\Domain\TableauDeBord\Support\TextesDeLEcartDesPrixDAchat;
 use Filament\Support\Contracts\HasLabel;
 
 /**
  * Le catalogue des graphiques du tableau de bord (décision de l'éditeur du
- * 14/11/2026, modèle « G1 + chiffres de G2 », lot GRAPH) : dix-huit
+ * 14/11/2026, modèle « G1 + chiffres de G2 », lot GRAPH) : dix-neuf
  * graphiques, que le menu « Ajouter un graphique » propose à qui voit tous
  * les documents qu'ils comptent (voir sources() et Perimetre). Chacun dit
  * ce qu'il compte (voir ceQuIlCompte()), la ligne grise de sa carte, et
  * les types qu'il permet (voir types()), le premier par défaut.
+ *
+ * La dix-neuvième, « Écart des prix d'achat » (décision de l'éditeur du
+ * 21/11/2026, D76), compare les prix des achats d'un même produit et se lit
+ * sur les lignes des factures d'achat validées ; elle n'a que la forme
+ * « barres » et ne compare pas avec l'année précédente.
  *
  * Tous lisent les montants enregistrés sur les documents émis ou validés,
  * jamais un brouillon, additionnés en centimes, chaque opération dans le
@@ -36,6 +42,7 @@ enum Graphique: string implements HasLabel
     case AvoirsParMois = 'avoirs_par_mois';
     case VentesParJourDeLaSemaine = 'ventes_par_jour';
     case ArticlesEtServices = 'articles_et_services';
+    case EcartDesPrixDAchat = 'ecart_des_prix_d_achat';
 
     public function getLabel(): string
     {
@@ -58,6 +65,7 @@ enum Graphique: string implements HasLabel
             self::AvoirsParMois => 'Avoirs émis par mois',
             self::VentesParJourDeLaSemaine => 'Ventes par jour de la semaine',
             self::ArticlesEtServices => 'Articles et services',
+            self::EcartDesPrixDAchat => 'Écart des prix d\'achat',
         };
     }
 
@@ -85,6 +93,7 @@ enum Graphique: string implements HasLabel
             self::AvoirsParMois => 'Le montant HT des avoirs émis, mois par mois.',
             self::VentesParJourDeLaSemaine => 'Le chiffre d\'affaires HT net moyen de chaque jour, du lundi au dimanche, sur la période.',
             self::ArticlesEtServices => 'La part des articles et des services dans les ventes HT nettes.',
+            self::EcartDesPrixDAchat => TextesDeLEcartDesPrixDAchat::METHODE_PAR_MOIS,
         };
     }
 
@@ -102,6 +111,7 @@ enum Graphique: string implements HasLabel
         return match ($this) {
             self::ChiffreDAffairesParMois, self::VentesEtAchatsParMois, self::TvaAPayerParMois, self::MargeBruteParMois, self::ValeurDuStock, self::AvoirsParMois => $parMois,
             self::ChiffreDAffairesParAn, self::NombreDeVentesEtPanierMoyen => [TypeDeGraphique::Barres, TypeDeGraphique::Lignes],
+            self::EcartDesPrixDAchat => [TypeDeGraphique::Barres],
             self::ChiffreDAffairesParMagasin, self::MeilleursProduits, self::MeilleursClients, self::AchatsParFournisseur => $classement,
             self::VentesParTauxDeTva, self::ParticuliersEtProfessionnels, self::EncaissementsParMode, self::ArticlesEtServices => $repartition,
             self::FacturesParAnciennete => [TypeDeGraphique::Barres, TypeDeGraphique::Anneau, TypeDeGraphique::Camembert, TypeDeGraphique::BarresCouchees],
@@ -140,7 +150,7 @@ enum Graphique: string implements HasLabel
             self::MargeBruteParMois => [SourceDesGraphiques::Ventes, SourceDesGraphiques::Stock],
             self::EncaissementsParMode => [SourceDesGraphiques::Paiements],
             self::MeilleursClients => [SourceDesGraphiques::Ventes, SourceDesGraphiques::Clients],
-            self::AchatsParFournisseur => [SourceDesGraphiques::Achats],
+            self::AchatsParFournisseur, self::EcartDesPrixDAchat => [SourceDesGraphiques::Achats],
             self::FacturesParAnciennete => [SourceDesGraphiques::Factures],
             self::ValeurDuStock => [SourceDesGraphiques::Stock],
             self::AvoirsParMois => [SourceDesGraphiques::Avoirs],
@@ -153,7 +163,7 @@ enum Graphique: string implements HasLabel
      */
     public function exigeDesArticles(): bool
     {
-        return in_array($this, [self::VentesEtAchatsParMois, self::MargeBruteParMois, self::AchatsParFournisseur, self::ValeurDuStock, self::ArticlesEtServices], true);
+        return in_array($this, [self::VentesEtAchatsParMois, self::MargeBruteParMois, self::AchatsParFournisseur, self::ValeurDuStock, self::ArticlesEtServices, self::EcartDesPrixDAchat], true);
     }
 
     /**

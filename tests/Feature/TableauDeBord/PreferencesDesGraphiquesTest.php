@@ -128,7 +128,9 @@ class PreferencesDesGraphiquesTest extends TestCase
 
         $grille->call('ajouterUnGraphique', '')
             ->assertNotNotified()
-            ->assertSeeHtml($option(Graphique::VentesParTauxDeTva));
+            ->assertSeeHtml($option(Graphique::VentesParTauxDeTva))
+            ->assertSeeHtmlInOrder([$option(Graphique::ArticlesEtServices), $option(Graphique::EcartDesPrixDAchat)]);
+        $this->assertSame(Graphique::EcartDesPrixDAchat, Graphique::cases()[count(Graphique::cases()) - 1], 'La carte de l\'écart des prix d\'achat est la dernière du menu.');
         $this->assertSame(0, PreferencesDuTableauDeBord::query()->withoutGlobalScope(SocieteScope::class)->count(), 'La valeur vide n\'enregistre rien.');
 
         $grille->call('ajouterUnGraphique', Graphique::VentesParTauxDeTva->value)
@@ -150,7 +152,8 @@ class PreferencesDesGraphiquesTest extends TestCase
 
         $grille->assertSee('Tous les graphiques sont affichés')
             ->assertDontSee('— Choisir —')
-            ->assertSeeHtml('data-graphique="'.Graphique::ArticlesEtServices->value.'"');
+            ->assertSeeHtml('data-graphique="'.Graphique::ArticlesEtServices->value.'"')
+            ->assertSeeHtml('data-graphique="'.Graphique::EcartDesPrixDAchat->value.'"');
     }
 
     /**
@@ -234,6 +237,77 @@ class PreferencesDesGraphiquesTest extends TestCase
         $this->assertEquals(ReglagesDuTableauDeBord::parDefaut($perimetre)->versTableau(), $illisible->versTableau());
         $this->assertSame(ReglagesDuTableauDeBord::parDefaut($perimetre)->versTableau()['cartes'], $enDouble->versTableau()['cartes']);
         $this->assertSame(['annee_en_cours', true], [$enDouble->periode->value, $enDouble->comparer]);
+    }
+
+    /**
+     * L'affichage de la carte « Écart des prix d'achat » (décision de
+     * l'éditeur du 21/11/2026, D76, B6) se retient avec elle, par compte et
+     * par écran, et un changement de type de la carte le garde ; son défaut
+     * est la première option du menu, un total par mois.
+     */
+    public function test_l_affichage_de_la_carte_de_l_ecart_des_prix_d_achat_est_retenu_et_survit_au_changement_de_type(): void
+    {
+        [$lyon] = $this->deuxMagasins();
+        $proprietaire = $this->proprietaireDe($lyon);
+        $perimetre = app(PerimetreDesGraphiques::class)->deLaSociete($proprietaire, $lyon->societe);
+        $defaut = CarteDuTableauDeBord::parDefaut(Graphique::EcartDesPrixDAchat);
+
+        $this->assertSame(['avant', false, ['graphique' => 'ecart_des_prix_d_achat', 'type' => 'barres', 'affichage' => 'avant']], [$defaut->affichage, $defaut->surDouzeMois(), $defaut->versTableau()]);
+        $this->assertSame(['graphique' => 'meilleurs_produits', 'type' => 'barres_couchees', 'mesure' => 'ca'], CarteDuTableauDeBord::parDefaut(Graphique::MeilleursProduits)->versTableau(), 'L\'affichage ne s\'écrit que pour la carte de l\'écart des prix d\'achat.');
+        $this->assertSame(['graphique' => 'ca_par_mois', 'type' => 'barres'], CarteDuTableauDeBord::parDefaut(Graphique::ChiffreDAffairesParMois)->versTableau());
+        app(PreferencesDesGraphiques::class)->enregistrer($proprietaire, EcranDuTableauDeBord::Societe, new ReglagesDuTableauDeBord([
+            new CarteDuTableauDeBord(Graphique::EcartDesPrixDAchat, TypeDeGraphique::Barres, affichage: CarteDuTableauDeBord::AFFICHAGE_SUR_DOUZE_MOIS),
+            CarteDuTableauDeBord::parDefaut(Graphique::ChiffreDAffairesParMois),
+        ]));
+
+        $carte = app(PreferencesDesGraphiques::class)->lire($proprietaire, $perimetre)->carte(Graphique::EcartDesPrixDAchat);
+
+        $this->assertNotNull($carte);
+        $this->assertTrue($carte->surDouzeMois());
+        $this->assertSame('debut', $carte->affichage);
+        $this->dansLEspaceDeLaSociete($lyon->societe, $proprietaire);
+        Livewire::test(GrilleDesGraphiques::class, ['ecran' => EcranDuTableauDeBord::Societe->value])
+            ->call('changerLeType', Graphique::EcartDesPrixDAchat->value, TypeDeGraphique::Barres->value)
+            ->assertHasNoErrors()
+            ->assertNotNotified();
+
+        $apres = app(PreferencesDesGraphiques::class)->lire($proprietaire, $perimetre)->carte(Graphique::EcartDesPrixDAchat);
+
+        $this->assertSame('debut', $apres?->affichage, 'Changer le type de la carte ne remet pas son affichage au défaut.');
+    }
+
+    /**
+     * Une valeur forgée de l'affichage est refusée : une valeur inconnue,
+     * la clé sur un autre graphique, la mesure des meilleurs produits sur la
+     * carte, une clé inconnue ; stockée en base, elle remet les cartes du
+     * compte au défaut, comme une mesure illisible.
+     */
+    public function test_une_valeur_forgee_de_l_affichage_est_refusee_et_une_preference_illisible_reprend_le_defaut(): void
+    {
+        [$lyon] = $this->deuxMagasins();
+        $proprietaire = $this->proprietaireDe($lyon);
+        $perimetre = app(PerimetreDesGraphiques::class)->deLaSociete($proprietaire, $lyon->societe);
+        $ecart = ['graphique' => 'ecart_des_prix_d_achat', 'type' => 'barres'];
+
+        $this->assertNull(CarteDuTableauDeBord::lire([...$ecart, 'affichage' => 'annuel']));
+        $this->assertNull(CarteDuTableauDeBord::lire([...$ecart, 'affichage' => 12]));
+        $this->assertNull(CarteDuTableauDeBord::lire(['graphique' => 'ca_par_mois', 'type' => 'barres', 'affichage' => 'avant']));
+        $this->assertNull(CarteDuTableauDeBord::lire([...$ecart, 'mesure' => 'quantite']));
+        $this->assertNull(CarteDuTableauDeBord::lire([...$ecart, 'mode' => 'avant']));
+        $this->assertSame('debut', CarteDuTableauDeBord::lire([...$ecart, 'affichage' => 'debut'])?->affichage);
+        $this->assertSame('avant', CarteDuTableauDeBord::lire($ecart)?->affichage, 'Sans la clé, la carte prend le défaut.');
+
+        $ecrire = fn (array $cartes): int => PreferencesDuTableauDeBord::query()->withoutGlobalScope(SocieteScope::class)->upsert(
+            [['societe_id' => $proprietaire->societe_id, 'user_id' => $proprietaire->id, 'ecran' => EcranDuTableauDeBord::Societe->value, 'reglages' => json_encode(['cartes' => $cartes, 'periode' => 'douze_derniers_mois', 'magasin' => null, 'comparer' => false], JSON_THROW_ON_ERROR)]],
+            ['societe_id', 'user_id', 'ecran'],
+            ['reglages', 'updated_at'],
+        );
+
+        $ecrire([[...$ecart, 'affichage' => 'annuel'], ['graphique' => 'ca_par_mois', 'type' => 'barres']]);
+        $this->assertSame(ReglagesDuTableauDeBord::parDefaut($perimetre)->versTableau()['cartes'], app(PreferencesDesGraphiques::class)->lire($proprietaire, $perimetre)->versTableau()['cartes']);
+
+        $ecrire([[...$ecart, 'affichage' => 'debut'], ['graphique' => 'ca_par_mois', 'type' => 'barres']]);
+        $this->assertSame([[...$ecart, 'affichage' => 'debut'], ['graphique' => 'ca_par_mois', 'type' => 'barres']], app(PreferencesDesGraphiques::class)->lire($proprietaire, $perimetre)->versTableau()['cartes']);
     }
 
     /**

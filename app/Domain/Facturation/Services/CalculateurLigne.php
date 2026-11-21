@@ -639,6 +639,34 @@ class CalculateurLigne
     }
 
     /**
+     * Le coût d'un article dont la facture du fournisseur écrit le HT de la
+     * ligne, tel que le montre la carte « Écart des prix d'achat » du
+     * tableau de bord (décision de Claude, D76, B5) : ce HT ÷ la quantité,
+     * moins l'escompte de la facture, en centimes, calculé depuis l'exact
+     * avec un seul arrondi, au centime le plus proche, un demi-centime exact
+     * au centime supérieur, jamais depuis le coût au dix-millième de
+     * coutUnitaireDuHt(), qui est déjà arrondi (le stock et le CMUP gardent
+     * ce dix-millième) -- 8,01 € HT pour 2 articles font 4,005 €, soit
+     * 4,01 € l'article ; 80 099,99 € pour 20 000 articles, 4,0049995 €,
+     * soit 4,00 € (le dix-millième arrondi, 4,0050 €, en ferait 4,01 €).
+     *
+     * @param  int  $htCentimes  le HT de la ligne, en centimes
+     * @param  int  $escompteCentiemes  l'escompte de la facture, en centièmes de point
+     * @return int en centimes
+     *
+     * @throws InvalidArgumentException
+     */
+    public function coutUnitaireDuHtEnCentimes(int $htCentimes, int $quantite, int $escompteCentiemes = 0): int
+    {
+        $quantite = $this->quantite(['quantite' => $quantite]);
+        $ht = $this->entier(['montant_ht' => $htCentimes], 'montant_ht');
+
+        // HT x (100 % - escompte) en centièmes de point, soit au plus 10^18
+        // : en centimes, ÷ (10 000 x quantité).
+        return $this->diviserArrondi($this->multiplier($ht, 10000 - $this->remise(['remise_pourcentage' => $escompteCentiemes])), $this->multiplier(10000, $quantite));
+    }
+
+    /**
      * Le PU HT d'un article vendu, tel que PILIQI l'affiche partout
      * (décision de l'éditeur du 14/11/2026, lot DEMO-V) : son PU TTC moins
      * la TVA d'un article, cette TVA étant le PU TTC x taux ÷ (1 + taux),
@@ -847,6 +875,57 @@ class CalculateurLigne
 
         return $this->multiplier(intdiv($prixUnitaireHt, 10_000_000_000), $facteur)
             + $this->diviserArrondi($this->multiplier($prixUnitaireHt % 10_000_000_000, $facteur), 10_000_000_000);
+    }
+
+    /**
+     * Le coût réel d'un article acheté, tel que le montre la carte « Écart
+     * des prix d'achat » du tableau de bord (décision de Claude, D76, B5) :
+     * le même coût que coutUnitaireNet() (le PU HT du fournisseur moins la
+     * remise de la ligne, puis l'escompte de la facture), mais en centimes,
+     * calculé depuis l'exact avec un seul arrondi, au centime le plus
+     * proche, un demi-centime exact au centime supérieur, jamais depuis le
+     * dix-millième de coutUnitaireNet(), déjà arrondi (le stock et le CMUP
+     * gardent ce dix-millième) : un second arrondi changerait le résultat
+     * aux égalités -- 4,00495 € coûte 4,00 € (le dix-millième, 4,0050 €, en
+     * ferait 4,01 €) ; 4,005 € coûte 4,01 € ; 4,004999 € coûte 4,00 €.
+     *
+     * Les centimes valent PU x (10 000 - remise) x (10 000 - escompte) ÷
+     * 10^12, en nombres entiers sans dépassement : avec F le produit des
+     * deux facteurs (au plus 10^8) et le PU écrit u x 10 000 + v (v < 10
+     * 000), u x F s'écrit Q x 10^8 + R, et le résultat est Q + (R x 10 000
+     * + v x F) ÷ 10^12, arrondi une seule fois (les deux termes tiennent
+     * sous 2 x 10^12) ; u est lui-même découpé autour de 10^8 pour que u x F
+     * ne déborde jamais.
+     *
+     * @param  int  $prixUnitaireHt  en millionièmes d'euro (voir enMillioniemes() et SaisieDecimale::enMillioniemes())
+     * @param  int  $remise  la remise de la ligne, en centièmes de point
+     * @param  int  $escompte  l'escompte de la facture, en centièmes de point
+     * @return int en centimes
+     *
+     * @throws InvalidArgumentException
+     */
+    public function coutUnitaireNetEnCentimes(int $prixUnitaireHt, int $remise, int $escompte = 0): int
+    {
+        if ($prixUnitaireHt < 0) {
+            throw new InvalidArgumentException('Un prix unitaire ne peut pas être négatif.');
+        }
+
+        if ($prixUnitaireHt >= self::MILLIONIEMES_MAXIMUM) {
+            throw new InvalidArgumentException('Montant hors limites.');
+        }
+
+        $facteur = (10000 - $this->remise(['remise_pourcentage' => $remise])) * (10000 - $this->remise(['remise_pourcentage' => $escompte]));
+        $unites = intdiv($prixUnitaireHt, 10_000);
+        $reste = $prixUnitaireHt % 10_000;
+
+        // u x F = Q x 10^8 + R : u = s x 10^8 + t, donc Q = s x F + (t x F)
+        // div 10^8 et R = (t x F) mod 10^8.
+        $paquets = intdiv($unites, 100_000_000);
+        $tF = $this->multiplier($unites % 100_000_000, $facteur);
+        $quotient = $this->multiplier($paquets, $facteur) + intdiv($tF, 100_000_000);
+        $restant = $tF % 100_000_000;
+
+        return $quotient + $this->diviserArrondi($restant * 10_000 + $reste * $facteur, 1_000_000_000_000);
     }
 
     /**

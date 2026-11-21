@@ -13,6 +13,14 @@ namespace App\Domain\TableauDeBord\Support;
  * Perimetre::phraseDesMagasinsNonComptes()), et une TVA comptée sans les
  * charges de la société.
  *
+ * La carte « Écart des prix d'achat » (décision de l'éditeur du 21/11/2026,
+ * D76) n'a ni jeu ni valeur par mois : sa série porte, pour ses étiquettes
+ * (les douze mois de la période), le calcul de la carte (voir
+ * EcartDesPrixDAchat), que la phrase grise des magasins non comptés ne fait
+ * jamais disparaître.
+ *
+ * @phpstan-import-type Calcul from EcartDesPrixDAchat
+ *
  * @phpstan-type Jeu array{libelle: string, valeurs: list<int|null>, unite: 'euros'|'nombre', en_ligne: bool, axe_de_droite: bool, pointilles: bool}
  */
 final class SerieDuGraphique
@@ -25,12 +33,14 @@ final class SerieDuGraphique
      * @param  list<string>  $etiquettes
      * @param  list<Jeu>  $jeux
      * @param  array<int, string>  $infoBulles  par rang d'étiquette, une précision (le taux de marge)
+     * @param  Calcul|null  $ecartDesPrixDAchat  le calcul de la carte « Écart des prix d'achat », null pour toute autre
      */
     public function __construct(
         public readonly array $etiquettes,
         public readonly array $jeux,
         public readonly ?string $note = null,
         public readonly array $infoBulles = [],
+        public readonly ?array $ecartDesPrixDAchat = null,
     ) {}
 
     /**
@@ -63,6 +73,6 @@ final class SerieDuGraphique
 
     public function avecLaNote(?string $note): self
     {
-        return new self($this->etiquettes, $this->jeux, $note, $this->infoBulles);
+        return new self($this->etiquettes, $this->jeux, $note, $this->infoBulles, $this->ecartDesPrixDAchat);
     }
 }

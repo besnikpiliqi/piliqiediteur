@@ -167,7 +167,7 @@ class GrilleDesGraphiques extends Widget
                 throw new LogicException(self::REFUS_DE_LA_VALEUR);
             }
 
-            return $reglages->avecLaCarte(new CarteDuTableauDeBord($carte->graphique, $nouveau, $carte->mesure));
+            return $reglages->avecLaCarte(new CarteDuTableauDeBord($carte->graphique, $nouveau, $carte->mesure, $carte->affichage));
         });
     }
 
@@ -184,7 +184,7 @@ class GrilleDesGraphiques extends Widget
                 throw new LogicException(self::REFUS_DE_LA_VALEUR);
             }
 
-            return $reglages->avecLaCarte(new CarteDuTableauDeBord($carte->graphique, $carte->type, $mesure));
+            return $reglages->avecLaCarte(new CarteDuTableauDeBord($carte->graphique, $carte->type, $mesure, $carte->affichage));
         });
     }
 

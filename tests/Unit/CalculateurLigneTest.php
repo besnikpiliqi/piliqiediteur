@@ -4,6 +4,8 @@ namespace Tests\Unit;
 
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\SaisieDecimale;
+use Brick\Math\BigInteger;
+use Brick\Math\RoundingMode;
 use Closure;
 use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -1082,6 +1084,101 @@ class CalculateurLigneTest extends TestCase
         $this->assertSame(0, $this->calculateur()->coutUnitaireNet(90000000, 10000));
         $this->assertSame(99999999999900, $this->calculateur()->coutUnitaireNet(9999999999990000, 0));
         $this->assertSame(80749999999919, $this->calculateur()->coutUnitaireNet(9999999999990000, 1500, 500));
+    }
+
+    /**
+     * Le coût d'un article acheté que montre la carte « Écart des prix
+     * d'achat » (décision de Claude, D76, B5) est en centimes, calculé depuis
+     * l'exact avec un seul arrondi : jamais depuis le dix-millième du stock,
+     * déjà arrondi, qui changerait le résultat aux égalités. 4,004950 €
+     * coûte 4,00 € là où le dix-millième (4,0050 €) en ferait 4,01 €.
+     */
+    public function test_le_cout_net_en_centimes_ne_s_arrondit_qu_une_fois(): void
+    {
+        $c = $this->calculateur();
+
+        // PU HT en millionièmes d'euro, remise et escompte en centièmes de
+        // point, coût en centimes.
+        $this->assertSame(40050, $c->coutUnitaireNet(4004950, 0), 'Le dix-millième du stock : 400,5 centimes déjà arrondis.');
+        $this->assertSame(400, $c->coutUnitaireNetEnCentimes(4004950, 0));
+        $this->assertSame(401, $c->coutUnitaireNetEnCentimes(4005000, 0));
+        $this->assertSame(400, $c->coutUnitaireNetEnCentimes(4004999, 0));
+        $this->assertSame(401, $c->coutUnitaireNetEnCentimes(5000000, 1990), '5,00 € remisés de 19,90 % : 4,005 €.');
+        $this->assertSame(401, $c->coutUnitaireNetEnCentimes(5000000, 0, 1990), '5,00 € escomptés de 19,90 % : 4,005 €.');
+        $this->assertSame(735, $c->coutUnitaireNetEnCentimes(8330000, 1000, 200), '8,33 € remisés de 10 % puis escomptés de 2 % : 7,34706 €.');
+        $this->assertSame(0, $c->coutUnitaireNetEnCentimes(90000000, 10000));
+        $this->assertSame(0, $c->coutUnitaireNetEnCentimes(90000000, 0, 10000));
+        $this->assertSame(0, $c->coutUnitaireNetEnCentimes(0, 1500, 500));
+        $this->assertSame(1, $c->coutUnitaireNetEnCentimes(5000, 0), 'Un demi-centime exact va au centime supérieur.');
+        $this->assertSame(0, $c->coutUnitaireNetEnCentimes(4999, 0));
+    }
+
+    /**
+     * Le coût en centimes est celui d'un calcul exact en grands entiers, y
+     * compris au plus grand prix que les colonnes acceptent, sans jamais un
+     * nombre à virgule.
+     */
+    public function test_le_cout_net_en_centimes_est_exact_jusqu_au_plus_grand_prix(): void
+    {
+        $c = $this->calculateur();
+        $cas = [[1, 0, 0], [5000, 0, 0], [4004950, 1990, 1990], [9999999999990000, 1500, 500], [999999999999999999, 0, 0], [999999999999999999, 1500, 500], [123456789012345678, 3333, 777], [500000000000000000, 0, 5000]];
+
+        foreach ($cas as [$prix, $remise, $escompte]) {
+            $exact = BigInteger::of($prix)->multipliedBy(10000 - $remise)->multipliedBy(10000 - $escompte)->dividedBy(10 ** 12, RoundingMode::HalfUp)->toInt();
+
+            $this->assertSame($exact, $c->coutUnitaireNetEnCentimes($prix, $remise, $escompte), "PU {$prix}, remise {$remise}, escompte {$escompte}");
+        }
+
+        $this->assertSame(100000000000000, $c->coutUnitaireNetEnCentimes(999999999999999999, 0));
+    }
+
+    /**
+     * Les mêmes refus que le coût au dix-millième, et celui d'un prix
+     * négatif ou hors limites.
+     *
+     * @return array<string, array{0: Closure(CalculateurLigne): mixed, 1: string}>
+     */
+    public static function coutsEnCentimesRefuses(): array
+    {
+        return [
+            'remise au-delà de 100 %' => [fn (CalculateurLigne $c) => $c->coutUnitaireNetEnCentimes(5000000, 10001), 'La remise doit être comprise entre 0 et 100 %.'],
+            'remise négative' => [fn (CalculateurLigne $c) => $c->coutUnitaireNetEnCentimes(5000000, -1), 'La remise doit être comprise entre 0 et 100 %.'],
+            'escompte au-delà de 100 %' => [fn (CalculateurLigne $c) => $c->coutUnitaireNetEnCentimes(5000000, 0, 15000), 'La remise doit être comprise entre 0 et 100 %.'],
+            'prix négatif' => [fn (CalculateurLigne $c) => $c->coutUnitaireNetEnCentimes(-1, 0), 'Un prix unitaire ne peut pas être négatif.'],
+            'prix hors limites' => [fn (CalculateurLigne $c) => $c->coutUnitaireNetEnCentimes(1_000_000_000_000_000_000, 0), 'Montant hors limites.'],
+            'HT écrit : quantité nulle' => [fn (CalculateurLigne $c) => $c->coutUnitaireDuHtEnCentimes(801, 0), 'La quantité doit être un nombre entier d\'articles, au moins 1.'],
+            'HT écrit : quantité négative' => [fn (CalculateurLigne $c) => $c->coutUnitaireDuHtEnCentimes(801, -2), 'La quantité doit être un nombre entier d\'articles, au moins 1.'],
+            'HT écrit : escompte au-delà de 100 %' => [fn (CalculateurLigne $c) => $c->coutUnitaireDuHtEnCentimes(801, 2, 15000), 'La remise doit être comprise entre 0 et 100 %.'],
+            'HT écrit hors limites' => [fn (CalculateurLigne $c) => $c->coutUnitaireDuHtEnCentimes(100_000_000_000_000, 2), 'Montant hors limites.'],
+        ];
+    }
+
+    #[DataProvider('coutsEnCentimesRefuses')]
+    public function test_le_cout_net_en_centimes_refuse_ce_que_refuse_le_cout_au_dix_millieme(Closure $calcul, string $message): void
+    {
+        $this->assertRefuse(fn () => $calcul($this->calculateur()), $message);
+    }
+
+    /**
+     * Le coût d'un article dont la facture écrit le HT de la ligne, en
+     * centimes, depuis l'exact avec un seul arrondi : 8,01 € HT pour 2
+     * articles font 4,005 €, soit 4,01 € ; 80 099,99 € HT pour 20 000
+     * articles font 4,0049995 €, soit 4,00 €, là où le dix-millième (4,0050 €)
+     * en ferait 4,01 € ; avec l'escompte de la facture.
+     */
+    public function test_le_cout_du_ht_ecrit_en_centimes_ne_s_arrondit_qu_une_fois(): void
+    {
+        $c = $this->calculateur();
+
+        $this->assertSame(401, $c->coutUnitaireDuHtEnCentimes(801, 2));
+        $this->assertSame(40050, $c->coutUnitaireDuHt(8009999, 20000), 'Le dix-millième du stock : 400,49995 centimes arrondis à 400,5.');
+        $this->assertSame(400, $c->coutUnitaireDuHtEnCentimes(8009999, 20000));
+        $this->assertSame(333, $c->coutUnitaireDuHtEnCentimes(1000, 3));
+        $this->assertSame(325, $c->coutUnitaireDuHtEnCentimes(1000, 3, 250), '10,00 € HT pour 3 articles, 2,5 % d\'escompte : 3,25 €.');
+        $this->assertSame(0, $c->coutUnitaireDuHtEnCentimes(1000, 3, 10000));
+        $this->assertSame(0, $c->coutUnitaireDuHtEnCentimes(0, 5));
+        $this->assertSame(1, $c->coutUnitaireDuHtEnCentimes(1, 2), 'Un demi-centime exact va au centime supérieur.');
+        $this->assertSame(0, $c->coutUnitaireDuHtEnCentimes(1, 3));
     }
 
     /**

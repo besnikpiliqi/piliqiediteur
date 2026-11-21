@@ -99,7 +99,7 @@ final class ReglagesDuTableauDeBord
     }
 
     /**
-     * @return array{cartes: list<array{graphique: string, type: string, mesure?: string}>, periode: string, magasin: string|null, comparer: bool}
+     * @return array{cartes: list<array{graphique: string, type: string, mesure?: string, affichage?: string}>, periode: string, magasin: string|null, comparer: bool}
      */
     public function versTableau(): array
     {

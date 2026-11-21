@@ -62,6 +62,7 @@ class QuiVoitLesGraphiquesTest extends TestCase
 
         $this->assertSame([$lyon->id, $villeurbanne->id], $perimetre->magasins()->sortBy('id')->modelKeys());
         $this->assertSame(Graphique::cases(), $perimetre->graphiquesVisibles());
+        $this->assertSame(Graphique::EcartDesPrixDAchat, $perimetre->graphiquesVisibles()[count(Graphique::cases()) - 1], 'La carte de l\'écart des prix d\'achat est la dernière du catalogue.');
         $this->assertTrue(app(PerimetreDesGraphiques::class)->voitLesGraphiquesDuMagasin($proprietaire, $lyon));
         $this->assertTrue(app(PerimetreDesGraphiques::class)->voitLesGraphiquesDuMagasin($proprietaire, $villeurbanne));
     }
@@ -147,9 +148,10 @@ class QuiVoitLesGraphiquesTest extends TestCase
 
     /**
      * Un cabinet à qui le client retire les achats n'a aucun graphique
-     * qui les compte (ventes et achats, achats par fournisseur, TVA à
-     * payer, qui déduit celle des achats), ni le chiffre clé des achats ;
-     * il garde ceux des seules ventes.
+     * qui les compte (ventes et achats, achats par fournisseur, écart des
+     * prix d'achat, TVA à payer, qui déduit celle des achats), ni le chiffre
+     * clé des achats ; il garde ceux des seules ventes, et avec ses
+     * consultations par défaut il voit la carte de l'écart des prix d'achat.
      */
     public function test_un_cabinet_a_qui_le_client_retire_les_achats_n_a_aucun_graphique_d_achats(): void
     {
@@ -159,11 +161,25 @@ class QuiVoitLesGraphiquesTest extends TestCase
 
         $visibles = app(PerimetreDesGraphiques::class)->duClient($collaborateur, $this->lienActif($lyon->societe))->graphiquesVisibles();
 
-        foreach ([Graphique::VentesEtAchatsParMois, Graphique::AchatsParFournisseur, Graphique::TvaAPayerParMois] as $absent) {
+        foreach ([Graphique::VentesEtAchatsParMois, Graphique::AchatsParFournisseur, Graphique::TvaAPayerParMois, Graphique::EcartDesPrixDAchat] as $absent) {
             $this->assertNotContains($absent, $visibles, $absent->getLabel());
         }
 
         $this->assertContains(Graphique::ChiffreDAffairesParMois, $visibles);
+    }
+
+    /**
+     * Avec les consultations par défaut (les achats compris), le cabinet lié
+     * voit la carte de l'écart des prix d'achat.
+     */
+    public function test_un_cabinet_aux_consultations_par_defaut_voit_la_carte_de_l_ecart_des_prix_d_achat(): void
+    {
+        [$lyon] = $this->deuxMagasins();
+        $collaborateur = $this->collaborateurDuCabinetLie($lyon);
+
+        $visibles = app(PerimetreDesGraphiques::class)->duClient($collaborateur, $this->lienActif($lyon->societe))->graphiquesVisibles();
+
+        $this->assertContains(Graphique::EcartDesPrixDAchat, $visibles);
     }
 
     /**
@@ -181,6 +197,7 @@ class QuiVoitLesGraphiquesTest extends TestCase
         $graphiques = app(PerimetreDesGraphiques::class);
 
         $this->assertSame([$lyon->id], $graphiques->delExpertComptable($marc->refresh())->magasins()->modelKeys());
+        $this->assertContains(Graphique::EcartDesPrixDAchat, $graphiques->delExpertComptable($marc)->graphiquesVisibles());
         $this->assertTrue($graphiques->voitLesGraphiquesDuMagasin($marc, $lyon));
         $this->assertFalse($graphiques->voitLesGraphiquesDuMagasin($marc, $villeurbanne));
     }

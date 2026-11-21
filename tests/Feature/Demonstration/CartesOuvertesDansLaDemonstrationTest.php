@@ -45,6 +45,7 @@ class CartesOuvertesDansLaDemonstrationTest extends DemonstrationTestCase
                     $cartes = ReglagesDuTableauDeBord::parDefaut($perimetre)->cartes;
 
                     $this->assertGreaterThan(4, count($attendues));
+                    $this->assertSame($type === TypeDActivite::Commerce, in_array(Graphique::EcartDesPrixDAchat, $attendues, true), 'La carte de l\'écart des prix d\'achat n\'existe que dans une société qui a des articles.');
                     $this->assertSame(
                         array_map(fn (Graphique $graphique): string => $graphique->value, $attendues),
                         array_map(fn (CarteDuTableauDeBord $carte): string => $carte->graphique->value, $cartes),

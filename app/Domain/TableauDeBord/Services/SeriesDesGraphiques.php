@@ -10,8 +10,10 @@ use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\NatureLigne;
 use App\Domain\TableauDeBord\Enums\Graphique;
 use App\Domain\TableauDeBord\Enums\SourceDesGraphiques;
+use App\Domain\TableauDeBord\Support\AchatsParProduit;
 use App\Domain\TableauDeBord\Support\CalculDesSeries;
 use App\Domain\TableauDeBord\Support\CarteDuTableauDeBord;
+use App\Domain\TableauDeBord\Support\EcartDesPrixDAchat;
 use App\Domain\TableauDeBord\Support\Mois;
 use App\Domain\TableauDeBord\Support\Perimetre;
 use App\Domain\TableauDeBord\Support\SerieDuGraphique;
@@ -36,9 +38,17 @@ use Illuminate\Database\Eloquent\Collection;
  * de valeur (null). Une société en franchise en base n'a pas de TVA à
  * estimer (voir Perimetre::voit()).
  *
+ * La carte « Écart des prix d'achat » (décision de l'éditeur du 21/11/2026,
+ * D76) lit les lignes des factures d'achat validées, une fois pour la page
+ * (voir lignesDAchat()), sur les magasins où le compte voit les achats, et
+ * rend, pour les douze mois de la période, le calcul de la carte (voir
+ * EcartDesPrixDAchat) : elle n'a ni jeu ni valeur par mois, et ne tient
+ * aucun compte de la comparaison avec l'année précédente.
+ *
  * @phpstan-import-type DocumentDeVente from VentesDuTableauDeBord
  * @phpstan-import-type LigneDeVente from VentesDuTableauDeBord
  * @phpstan-import-type DocumentDAchat from AchatsDuTableauDeBord
+ * @phpstan-import-type LigneDAchatDuTableau from AchatsDuTableauDeBord
  * @phpstan-import-type ChargeDeLaTva from ChargesDuTableauDeBord
  */
 final class SeriesDesGraphiques
@@ -126,6 +136,7 @@ final class SeriesDesGraphiques
             Graphique::AvoirsParMois => $calcul->parMois('Avoirs HT', fn (array $mois): array => $calcul->sommeParMois($this->avoirs($calcul), $ids, $mois, fn (array $document): int => $document['ht'])),
             Graphique::VentesParJourDeLaSemaine => $this->ventesParJour($calcul, $ids),
             Graphique::ArticlesEtServices => $this->articlesEtServices($calcul, $ids),
+            Graphique::EcartDesPrixDAchat => $this->ecartDesPrixDAchat($calcul, $magasins),
         };
     }
 
@@ -376,6 +387,28 @@ final class SeriesDesGraphiques
     }
 
     /**
+     * Le calcul de la carte « Écart des prix d'achat » : les achats des
+     * douze mois de la période dans les magasins comptés, produit par
+     * produit (voir AchatsParProduit) ; le nom d'un produit dit son magasin
+     * quand la carte en compte plusieurs.
+     *
+     * @param  Collection<int, Magasin>  $magasins
+     */
+    private function ecartDesPrixDAchat(CalculDesSeries $calcul, Collection $magasins): SerieDuGraphique
+    {
+        $lignes = $calcul->dansLaPeriode($this->lignesDAchat($calcul), CleDuModele::desModeles($magasins));
+        $noms = [];
+
+        foreach ($magasins as $magasin) {
+            $noms[CleDuModele::de($magasin)] = (string) $magasin->nom;
+        }
+
+        $produits = AchatsParProduit::depuis($lignes, $calcul->mois, $magasins->count() > 1, $noms);
+
+        return new SerieDuGraphique(array_map(Mois::libelle(...), $calcul->mois), [], null, [], EcartDesPrixDAchat::calculer($produits, $calcul->mois));
+    }
+
+    /**
      * @param  Collection<int, Magasin>  $magasins
      */
     private function anciennete(CalculDesSeries $calcul, Collection $magasins): SerieDuGraphique
@@ -581,5 +614,17 @@ final class SeriesDesGraphiques
     public function documentsDAchat(CalculDesSeries $calcul): array
     {
         return $calcul->documentsDAchat ??= $this->achats->documents($calcul->perimetre, $calcul->perimetre->magasinsAvec(SourceDesGraphiques::Achats), $calcul->premierJour(), $calcul->dernierJour());
+    }
+
+    /**
+     * Les lignes des factures d'achat validées, sur les magasins où le
+     * compte voit les achats, lues une fois pour la page, en une seule
+     * requête.
+     *
+     * @return list<LigneDAchatDuTableau>
+     */
+    private function lignesDAchat(CalculDesSeries $calcul): array
+    {
+        return $calcul->lignesDAchat ??= $this->achats->lignes($calcul->perimetre, $calcul->perimetre->magasinsAvec(SourceDesGraphiques::Achats), $calcul->premierJour(), $calcul->dernierJour());
     }
 }

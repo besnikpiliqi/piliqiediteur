@@ -21,6 +21,7 @@ use App\Domain\Facturation\Models\Facture;
 use App\Domain\TableauDeBord\Enums\Graphique;
 use App\Domain\TableauDeBord\Enums\PeriodeDuTableauDeBord;
 use App\Domain\TableauDeBord\Enums\SourceDesGraphiques;
+use App\Domain\TableauDeBord\Services\AchatsDuTableauDeBord;
 use App\Domain\TableauDeBord\Services\ChiffresDuTableauDeBord;
 use App\Domain\TableauDeBord\Services\PerimetreDesGraphiques;
 use App\Domain\TableauDeBord\Services\SeriesDesGraphiques;
@@ -42,7 +43,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
- * Les dix-huit graphiques et les quatre chiffres clés du tableau de bord
+ * Les dix-neuf graphiques et les quatre chiffres clés du tableau de bord
  * (décision de l'éditeur du 14/11/2026, lot GRAPH), sur des montants
  * calculés à la main : les montants enregistrés sur les documents émis ou
  * validés, additionnés en centimes, chaque opération dans le mois de son
@@ -109,6 +110,8 @@ class SeriesDesGraphiquesTest extends TestCase
             // Du samedi 1er novembre 2025 au jeudi 15 octobre 2026 : 49 vendredis, 50 de chaque autre jour.
             'ventes par jour de la semaine' => [Graphique::VentesParJourDeLaSemaine, ['lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.', 'dim.'], ['Chiffre d\'affaires HT moyen' => [20, 60, 40, 120, 0, 0, 0]]],
             'articles et services' => [Graphique::ArticlesEtServices, ['Articles', 'Services'], ['Ventes HT' => [7000, 5000]]],
+            // Ni jeu ni valeur par mois : le calcul de la carte est lu à part (voir EcartDesPrixDAchatLectureTest) ; un seul achat ne se compare à aucun autre.
+            'écart des prix d\'achat' => [Graphique::EcartDesPrixDAchat, null, []],
         ];
     }
 
@@ -132,6 +135,7 @@ class SeriesDesGraphiquesTest extends TestCase
         $this->assertSame($etiquettes ?? self::douzeMois(), $serie->etiquettes);
         $this->assertSame($infoBulles, $serie->infoBulles);
         $this->assertNull($serie->note, 'Le propriétaire voit tout : aucun magasin n\'est écarté.');
+        $this->assertSame($graphique === Graphique::EcartDesPrixDAchat, $serie->ecartDesPrixDAchat !== null, 'Seule la carte de l\'écart des prix d\'achat porte son calcul.');
     }
 
     /**
@@ -315,10 +319,36 @@ class SeriesDesGraphiquesTest extends TestCase
             } catch (AuthorizationException $refus) {
                 $this->assertSame(PerimetreDesGraphiques::REFUS, $refus->getMessage());
             }
+
+            try {
+                app(AchatsDuTableauDeBord::class)->lignes($perimetre, new Collection([$horsDuPerimetre]), '2026-01-01', '2026-12-31');
+                $this->fail('Une lecture des lignes d\'achat hors du périmètre doit être refusée.');
+            } catch (AuthorizationException $refus) {
+                $this->assertSame(PerimetreDesGraphiques::REFUS, $refus->getMessage());
+            }
         }
 
         $this->expectException(AuthorizationException::class);
         $perimetre->exiger(new Collection([$lyon]), SourceDesGraphiques::Clients);
+    }
+
+    /**
+     * Les lignes d'achat de la carte « Écart des prix d'achat » ne se lisent
+     * que dans un magasin où le compte voit les achats : un administrateur
+     * à qui le propriétaire n'a pas coché « Factures d'achat : voir » est
+     * refusé sans rien lire, et la carte ne lui est pas proposée.
+     */
+    public function test_les_lignes_d_achat_ne_se_lisent_pas_sans_voir_les_achats(): void
+    {
+        $this->travelTo(self::aParis('2026-10-01 10:00:00'));
+        $lyon = $this->completerIdentiteLegale($this->ouvrirUneSociete(['nom' => 'Lyon Centre']));
+        $administrateur = $this->administrateur($lyon, [$lyon->id], autorisationsMagasin: array_values(array_diff($this->modeleAvecLesGraphiques($lyon), [PermissionRegistry::FACTURE_ACHAT_VIEW])));
+        app(TenantContext::class)->clear();
+        $perimetre = app(PerimetreDesGraphiques::class)->deLaSociete($administrateur, $lyon->societe);
+
+        $this->assertNotContains(Graphique::EcartDesPrixDAchat, $perimetre->graphiquesVisibles());
+        $this->assertThrows(fn () => app(AchatsDuTableauDeBord::class)->lignes($perimetre, new Collection([$lyon]), '2026-01-01', '2026-12-31'), AuthorizationException::class, PerimetreDesGraphiques::REFUS);
+        $this->assertThrows(fn () => $this->series($perimetre, [Graphique::EcartDesPrixDAchat]), AuthorizationException::class, PerimetreDesGraphiques::REFUS);
     }
 
     /**
@@ -427,7 +457,7 @@ class SeriesDesGraphiquesTest extends TestCase
         $chiffres = $this->chiffres($perimetre);
         $tva = $this->series($perimetre, [Graphique::TvaAPayerParMois])[Graphique::TvaAPayerParMois->value];
 
-        foreach ([Graphique::VentesEtAchatsParMois, Graphique::MargeBruteParMois, Graphique::AchatsParFournisseur, Graphique::ValeurDuStock, Graphique::ArticlesEtServices] as $absent) {
+        foreach ([Graphique::VentesEtAchatsParMois, Graphique::MargeBruteParMois, Graphique::AchatsParFournisseur, Graphique::ValeurDuStock, Graphique::ArticlesEtServices, Graphique::EcartDesPrixDAchat] as $absent) {
             $this->assertNotContains($absent, $visibles, $absent->getLabel());
         }
 

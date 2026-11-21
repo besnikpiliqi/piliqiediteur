@@ -28,6 +28,7 @@ use Illuminate\Database\Eloquent\Collection;
  * @phpstan-import-type DocumentDeVente from VentesDuTableauDeBord
  * @phpstan-import-type LigneDeVente from VentesDuTableauDeBord
  * @phpstan-import-type DocumentDAchat from AchatsDuTableauDeBord
+ * @phpstan-import-type LigneDAchatDuTableau from AchatsDuTableauDeBord
  * @phpstan-import-type Encaissement from PaiementsDuTableauDeBord
  * @phpstan-import-type CreditImpute from PaiementsDuTableauDeBord
  * @phpstan-import-type Historique from StockDuTableauDeBord
@@ -55,6 +56,9 @@ final class CalculDesSeries
 
     /** @var list<DocumentDAchat>|null */
     public ?array $documentsDAchat = null;
+
+    /** @var list<LigneDAchatDuTableau>|null les lignes des factures d'achat validées, que lit la carte « Écart des prix d'achat » */
+    public ?array $lignesDAchat = null;
 
     /** @var array{paiements: list<Encaissement>, credits: list<CreditImpute>}|null */
     public ?array $encaissements = null;

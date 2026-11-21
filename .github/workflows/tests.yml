@@ -15,9 +15,13 @@ on:
 permissions:
   contents: read
 
+# Image fixée à Ubuntu 24.04 : « ubuntu-latest » est passé à Ubuntu 26.04, que
+# Playwright 1.59.1 ne gère pas (« Playwright does not support chromium on
+# ubuntu26.04-x64 »), ce qui arrêtait tous les jobs qui installent le navigateur.
+# Une montée de version de l'image se décide avec une montée de Playwright.
 jobs:
   style:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     name: Pint
 
@@ -48,7 +52,7 @@ jobs:
   # seuils.json l'enregistre, sans rien relâcher ni cacher (paramètres lus
   # par phpstan dump-parameters, voir qualite.php seuils).
   analyse:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # Décision de l'éditeur du 13/11/2026 : Larastan et les seuils passent à
     # chaque envoi et à chaque demande de fusion. Pour un envoi, la base des
     # seuils est le commit précédent de la branche (github.event.before) ;
@@ -98,7 +102,7 @@ jobs:
   # redirection, un autre site ou un e-mail sans contrôle ; puis le témoin,
   # dont l'analyse doit voir exactement les chemins qu'il annonce.
   flux:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # Décision de l'éditeur du 13/11/2026 : l'analyse des flux de Psalm et
     # son témoin passent à chaque envoi et à chaque demande de fusion.
 
@@ -142,7 +146,7 @@ jobs:
   # Sécurité des dépendances : une faille connue d'un paquet du dépôt fait
   # échouer la CI ; elle se corrige par la mise à jour du paquet.
   audit:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     name: Audit des dépendances
 
@@ -185,7 +189,7 @@ jobs:
   # chaque processus d'Infection a sa base (TEST_TOKEN,
   # LARAVEL_PARALLEL_TESTING). Rapports gardés en artefact.
   couverture:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # Décision de l'éditeur du 11/11/2026 (D63, méthode rapide) : cette tâche
     # ne se lance plus à chaque envoi, seulement à la main (workflow_dispatch),
     # jusqu'à l'étape 15 de la feuille de route, où elle repasse sur tout le
@@ -313,7 +317,7 @@ jobs:
   # leurs tables et leurs fonctions, comme le propriétaire de la base de
   # production.
   tests:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     strategy:
       fail-fast: true
@@ -428,7 +432,7 @@ jobs:
   # minutes : le groupe « semis » est hors de la suite par défaut
   # (phpunit.xml) et tourne ici, à chaque envoi.
   semis:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     name: Semis complet (PHP 8.3, PostgreSQL 17)
 
@@ -509,7 +513,7 @@ jobs:
   # minutes : le groupe « copies » est hors de la suite par défaut
   # (phpunit.xml) et tourne ici, à chaque envoi.
   copies:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     name: Bases modèles de la démonstration (PHP 8.3, PostgreSQL 17)
 

@@ -625,3 +625,4 @@
 - 20/11 — Carte Écart des prix d'achat : deux calculs séparés (mois dans le mois, année depuis le premier achat de l'année) ; maquette v28 ; exemple des neuf achats = +14 € sur l'année.
 - 20/11 — Carte Écart des prix d'achat : explication de l'éditeur (produits sans écart dans le mois mais avec écart dans l'année) ; phrase ajoutée ; maquette v29.
 - 21/11 — Carte Écart des prix d'achat : total par produit dans le tableau de l'année ; maquette v30.
+- 21/11 — Carte Écart des prix d'achat : total des quantités par produit et pour les 12 mois dans le tableau de l'année ; maquette v31.

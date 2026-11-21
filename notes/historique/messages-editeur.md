@@ -6171,3 +6171,9 @@ car il peux y avoir un produit qui est acheté le premier mois mais est achete d
 
 c est bien mais juste tu affiche a la fin des produit le total ecart, donc par produit
 
+## 526. 2026-11-21 00:41 UTC
+
+[1 capture(s) d'écran jointe(s)]
+
+met  aussi le total des qte comme total des ecart
+

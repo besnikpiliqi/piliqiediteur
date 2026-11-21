@@ -6339,3 +6339,75 @@ donc  tu fais la maquette ce que je t ai donné et tu supprime ce que t as fait
 
 je comprend pas pourquoi autant de temps pour cette carte
 
+## 554. 2026-11-21 22:18 UTC
+
+<!-- attach -->
+
+> CARTE-36 4 : lot 4 semis (règle 6), inventaire des actions, matrice, CLAUDE.md, README
+
+
+
+pourquoi avoir des semis pour la carte alors que la carte se remplis à partir des des achats qui existe deja  en base de données  ?
+
+## 555. 2026-11-21 22:24 UTC
+
+si j ai bien compris. tu creer les semis uniquement pour remplir les données pour donner comment ressemble pour le démo et en production tous sont des vrais données à partir des données existant comme par ex: les carte se remplis par rapport aux données reel ??
+
+## 556. 2026-11-21 22:28 UTC
+
+donc la moi je teste et toi aussi tu teste  que dans le démo et non celui en reealite donc pas le démo. car le démo est identique du reel , c est ca ? donc pas besoin de voir comment se comporte le reel mais le démo ?
+
+## 557. 2026-11-21 22:33 UTC
+
+donc moi je teste le comportement sur le démo, donc c est la meme chose comme en reel prodution, donc les données qui sont dans le démo c est identique comme si c etait dans production
+
+## 558. 2026-11-21 22:35 UTC
+
+<!-- attach -->
+
+> parfois plus bizarres
+
+
+
+???? pourquoi plus bizarre
+
+## 559. 2026-11-21 22:46 UTC
+
+<!-- attach -->
+
+> Un achat à 0,00 €, quand le fournisseur offre des pièces.
+
+> Un produit acheté deux fois au même prix, ou une seule fois sur toute l’année.
+
+> Un mois sans aucun achat : la boutique est fermée en août, par exemple.
+
+> Un écart d’un seul centime entre deux achats.
+
+> Une facture d’achat corrigée après sa validation, donc un prix qui change.
+
+> Une très grosse quantité, ou un produit acheté deux fois le même jour.
+
+> Une date de facture d’un mois et une validation le mois suivant.
+
+
+
+si c est le prix est 0€ alors si le prochan achat change alors il affiche la difference ou "-" ou "+".  si un produit achete deux fois au meme pris alors il affiche rien donc il affiche pas car dans la carte on affiche que les produtis qui ont des ecart et pas tous les produits avec ou sans ecart. un moi sans achat alors il affiche rien dans le tableau du mois et dans les  mois il compte rien du tout.Une facture d’achat corrigée après sa validation = alors toujours se prend en compte le prix dernier donc le prix qui s affiche pour vendre dans la caisse, car les carte se remplis à chaque rechargement de la page donc il prend toujours les dernier prix meme corrigé car la on parle d une corriger dans la meme facture donc le produit de la meme date d achat. donc ca "Une date de facture d’un mois et une validation le mois suivant." la meme chose, toujours le dernier prix de produit da la meme date
+
+## 560. 2026-11-21 22:48 UTC
+
+montre moi tout ce que je t ai dit à ajouter ou à modifier depuis 17/11/2026. liste
+
+## 561. 2026-11-21 22:57 UTC
+
+montre moi l'avancement de la carte
+
+## 562. 2026-11-21 23:00 UTC
+
+<!-- attach -->
+
+> le rôle PostgreSQL demo_admin n’existe pas sur cette machine.
+
+
+
+ban tu la creer ou tu fait ce que tu veux pour que tu teste alors si c est besoin !!
+

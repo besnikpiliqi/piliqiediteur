@@ -1,12 +1,13 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 21/11/2026 à 22:07 UTC par pilotage-sync.sh : « Mise à jour des notes de reprise ».
+Mis à jour le 21/11/2026 à 23:01 UTC par pilotage-sync.sh : « Mise à jour des notes de reprise ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
 Tête poussée : `075b9f20`. Commits locaux pas encore poussés :
 
 ```
+8e9df41e Carte « Écart des prix d'achat » (lot 1) : calcul pur, textes, formats, dessin et fixtures figées
 ```
 
 Derniers commits poussés :
@@ -37,6 +38,25 @@ a9bb1a78 Charges : état téléchargeable en PDF et en Excel
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
+ M app/Domain/Facturation/Services/CalculateurLigne.php
+ M app/Domain/TableauDeBord/Enums/Graphique.php
+ M app/Domain/TableauDeBord/Services/AchatsDuTableauDeBord.php
+ M app/Domain/TableauDeBord/Services/SeriesDesGraphiques.php
+ M app/Domain/TableauDeBord/Support/CalculDesSeries.php
+ M app/Domain/TableauDeBord/Support/CarteDuTableauDeBord.php
+ M app/Domain/TableauDeBord/Support/ReglagesDuTableauDeBord.php
+ M app/Domain/TableauDeBord/Support/SerieDuGraphique.php
+ M app/Filament/GrilleDesGraphiques.php
+ M tests/Feature/Demonstration/CartesOuvertesDansLaDemonstrationTest.php
+ M tests/Feature/Qualite/PlafondsDeRequetesTest.php
+ M tests/Feature/TableauDeBord/PreferencesDesGraphiquesTest.php
+ M tests/Feature/TableauDeBord/QuiVoitLesGraphiquesTest.php
+ M tests/Feature/TableauDeBord/SeriesDesGraphiquesTest.php
+ M tests/Unit/CalculateurLigneTest.php
+?? app/Domain/TableauDeBord/Support/AchatsParProduit.php
+?? tests/Feature/TableauDeBord/EcartDesPrixDAchatLectureTest.php
+?? tests/Fixtures/EcartDesPrixDAchat/AchatsDeLaMaquette.php
+?? tests/Unit/AchatsParProduitTest.php
 ```
 
 ## Dernière course de la chaîne
@@ -45,4 +65,5 @@ Course `wf_bbdbefd3-771`, étapes commencées (de la plus ancienne à la plus r�
 
 ```
 lot-1:implementation
+lot-2:implementation
 ```

@@ -719,6 +719,35 @@ SQL
   ok "connexion de $ROLE_PG à $BASE_PG vérifiée"
 }
 
+# Les rôles de la démonstration, comme la CI (tests.yml, « Create test role and
+# database ») : demo_admin (LOGIN CREATEDB, pg_signal_backend) et demo_app (LOGIN),
+# avec le mot de passe de piliqi : les tests du site de démonstration s'y
+# connectent avec DB_PASSWORD. Sans eux, 17 tests en navigateur et 6 de la
+# concurrence échouent (« password authentication failed for user demo_admin »).
+installer_roles_de_demonstration() {
+  etape "Rôles demo_admin et demo_app de la démonstration"
+  local mdp mdp_sql
+  mdp=$(mdp_vu_par_bash_l)
+  [ -n "$mdp" ] || echec "mot de passe introuvable"
+  mdp_sql=${mdp//\'/\'\'}
+  en_postgres psql -X -q -v ON_ERROR_STOP=1 -p "$PORT_PG" -d postgres >/dev/null 2>&1 <<SQL || echec "création des rôles de la démonstration impossible"
+SET log_statement = 'none';
+SET log_min_error_statement = 'panic';
+DO \$\$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'demo_admin') THEN
+    CREATE ROLE demo_admin LOGIN CREATEDB;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'demo_app') THEN
+    CREATE ROLE demo_app LOGIN;
+  END IF;
+END \$\$;
+GRANT pg_signal_backend TO demo_admin;
+ALTER ROLE demo_admin LOGIN CREATEDB PASSWORD '$mdp_sql';
+ALTER ROLE demo_app LOGIN PASSWORD '$mdp_sql';
+SQL
+  ok "rôles demo_admin et demo_app prêts (mot de passe de $ROLE_PG)"
+}
+
 controler_faketime() {
   etape "Essai de faketime"
   local annee
@@ -802,6 +831,7 @@ installer() {
   installer_cluster
   installer_mot_de_passe
   installer_role_et_base
+  installer_roles_de_demonstration
   controler_faketime
   installer_exclusions
   installer_composer

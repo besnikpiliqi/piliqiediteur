@@ -6191,3 +6191,13 @@ pourqoui t as fait mnt comme ca
 
 "14 498,65 € d’achats au prix du premier achat de l’année," et "Total des 12 mois	départ compris	15 928,61 €	1 510		+281,36 €" , donc entre les deux totaux ils sont pas pareille alors que les deux sont pour les memes 12 mois
 
+## 530. 2026-11-21 01:38 UTC
+
+mais alors pourquoi t es trompé ??
+
+## 531. 2026-11-21 01:48 UTC
+
+[2 capture(s) d'écran jointe(s)]
+
+mais la les calcule se font que pour les produits qui ont des ecarts, donc l année peux avoir des produit qui ont jamais des ecart car on peut achete juste une fois et jamais plus mais toi tu te trompe toujours apparament avec ca. donc la tu dit "Total des achats sur les 12 mois : 15 928,61 € HT. 8 produits comparés." donc tu parle pour tout les achat des 12 mois mais tu dit en meme temps que t as calcule que les 8 produits qui sont comparer mais il y en pas que ces 8 produit car il peut y avoir des cantaines mais il y pas des ecarts. et la tu parle "Total des 12 mois	départ compris	15 928,61 €" que pour les produits que t as calculer avec des ecarts. donc ce que tu dit c est pas vrais et tu calcule vraiment tres mal ces.
+

@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 21/11/2026 à 10:45 UTC par pilotage-sync.sh : « Lot PLAYWRIGHT-165 décidé : après la carte Écart des prix d'achat ».
+Mis à jour le 21/11/2026 à 12:25 UTC par pilotage-sync.sh : « Carte Écart des prix d'achat : étape 1 finie (spec, plan, maquette 37), étape 2 lancée ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

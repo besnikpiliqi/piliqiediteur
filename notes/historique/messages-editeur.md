@@ -6221,3 +6221,27 @@ uniquement tout ce qui s agit de tva tu fait avec opus 5.5 effort MAX avec ultra
 
 non tu fini la carte des des ecart avec opus 5.5 effort max avec ultracode mais je redis encore pour apres cette carte  et apres uniquement tout ce qui s agit de tva tu fait avec opus 5.5 effort MAX avec ultracode et tout les reste tu fait avec sonnet 5.5 avec effort extra avec ultracode
 
+## 537. 2026-11-21 10:42 UTC
+
+<!-- attach -->
+
+> L’image « ubuntu-latest » est passée à Ubuntu 26.04, et Playwright ne sait pas y installer Chromium
+
+
+
+pourquoi ta s fait ca ? c est nouvveua ou c est mieux
+
+## 538. 2026-11-21 10:43 UTC
+
+<!-- attach -->
+
+> Cela demande de monter la version de Playwright, ce qui est votre décision.
+
+
+
+et pourquoi tu passer pas ?
+
+## 539. 2026-11-21 10:45 UTC
+
+fais le après la carte
+

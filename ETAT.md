@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 21/11/2026 à 09:59 UTC par pilotage-sync.sh : « Moteurs : la carte entière en Opus 5.5 max, ensuite TVA en Opus max et le reste en Sonnet extra ».
+Mis à jour le 21/11/2026 à 10:45 UTC par pilotage-sync.sh : « Lot PLAYWRIGHT-165 décidé : après la carte Écart des prix d'achat ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

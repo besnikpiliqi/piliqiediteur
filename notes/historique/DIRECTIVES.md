@@ -813,3 +813,5 @@ Elles sont appliquées dans le code depuis leur demande (sauf la règle (1) du p
 - 16/11/2026, vers 23 h 59 (Paris) — DÉCISION de l'éditeur (options des graphiques) : retenus par trimestre, par année sur 10 ans, cumul depuis le début de l'année, écart en % sur un an, ventes par vendeur, clic pour le détail ; démonstration : toutes les cartes ouvertes ; site réel : quelques cartes principales au départ. → lot GRAPH-AN (a-faire-apres-chaine.md) et cahier DEMO-COPIE (lot 3).
 - 17/11/2026, vers 0 h 05 (Paris) — Ajout de l'éditeur au lot GRAPH-AN : « aussi ca "Tendance lissée (moyenne sur 3 mois)" ».
 - 17/11/2026, vers 0 h 10 (Paris) — Accord de l'éditeur (« ok ») : « Factures à encaisser par ancienneté » ouverte au départ du tableau de bord sur le site réel, avec les cartes principales (lot GRAPH-AN).
+
+- 21/11/2026 (matin, Paris) — Moteurs des agents : « uniquement tout ce qui s'agit de TVA avec Opus 5.5 effort MAX avec ultracode, tout le reste avec Sonnet 5.5 avec effort extra avec ultracode » ; ordre de départ : la carte « Écart des prix d'achat » d'abord, puis le reste comme prévu avec les sauvegardes (DEVIS-RET, écrans, semis, TVA…).

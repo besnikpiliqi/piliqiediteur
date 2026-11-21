@@ -6213,3 +6213,7 @@ bon tu commence à 10h05 le travaille comme prevu avec les sauvegarde que tu as 
 
 bon tu commence le travaille comme prevu avec les sauvegarde que tu as fait, mais tu commence par celui la ce qu'on vient de construire  les écarts des prix d achat, donc regarde tres tres bien avec haute intention pour qu'il ai zero erreur cette carte, donc cette carte tu fais avec opus 5.5 max ultracode et le reste tu fait avec sonnet 5.5 extra ultracode, d accord, et tout ce qui s agit des tva tu fait comme tu a deja prevu.
 
+## 535. 2026-11-21 09:56 UTC
+
+uniquement tout ce qui s agit de tva tu fait avec opus 5.5 effort MAX avec ultracode et tout les reste tu fait avec sonnet 5.5 avec effort extra avec ultracode
+

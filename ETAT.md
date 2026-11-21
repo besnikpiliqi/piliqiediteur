@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 21/11/2026 à 09:51 UTC par pilotage-sync.sh : « Reprise du travail : carte Écart des prix d'achat en premier, CI réparée (Ubuntu 24.04) ».
+Mis à jour le 21/11/2026 à 09:57 UTC par pilotage-sync.sh : « Consigne de l'éditeur : TVA en Opus 5.5 max, le reste en Sonnet 5.5 extra ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

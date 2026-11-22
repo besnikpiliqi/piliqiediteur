@@ -17,6 +17,7 @@ use Livewire\Component;
 use Livewire\Livewire;
 use PHPUnit\Framework\Attributes\DataProvider;
 use RuntimeException;
+use Symfony\Component\Yaml\Yaml;
 use Tests\TestCase;
 
 /**
@@ -25,11 +26,11 @@ use Tests\TestCase;
  * Filament Shield et Sanctum, retirés, n'exposent plus ni route ni
  * commande, et rien de ce que lisent les agents ne renvoie à un outil
  * absent du projet. PostgreSQL est le seul moteur de base de données, et
- * la base trie les textes dans l'ordre binaire. Les aides des tests
- * lisent les PDF de dompdf sans
- * dépendre du hasard de leur contenu, aucun test ne dépend du hasard
- * de Faker ni de celui de Str::random(), et aucun commentaire n'empêche un
- * test de tourner.
+ * la base trie les textes dans l'ordre binaire. PHP 8.5 et PostgreSQL 18
+ * sont les seules versions visées, de composer.json à la CI. Les aides
+ * des tests lisent les PDF de dompdf sans dépendre du hasard de leur
+ * contenu, aucun test ne dépend du hasard de Faker ni de celui de
+ * Str::random(), et aucun commentaire n'empêche un test de tourner.
  */
 class OutillageTest extends TestCase
 {
@@ -248,6 +249,86 @@ class OutillageTest extends TestCase
     }
 
     /**
+     * Le contenu d'un fichier JSON du dépôt (composer.json, composer.lock,
+     * tools/psalm/composer.json).
+     *
+     * @return array<string, mixed>
+     */
+    private static function contenuJson(string $chemin): array
+    {
+        $contenu = json_decode((string) file_get_contents(base_path($chemin)), true, flags: JSON_THROW_ON_ERROR);
+
+        return is_array($contenu) ? $contenu : [];
+    }
+
+    /**
+     * Ce qui, dans les tâches de ce flux de la CI, prendrait une autre
+     * version de PHP ou de PostgreSQL que PHP 8.5 et PostgreSQL 18 : une
+     * étape setup-php qui n'installe pas PHP 8.5 (la matrice de la tâche,
+     * quand l'étape la nomme, est lue valeur par valeur), une tâche qui
+     * lance PHP, Composer ou un outil du projet sans installer PHP, un
+     * service ou un conteneur PostgreSQL qui n'est pas l'image postgres:18
+     * (de même par la matrice).
+     *
+     * @param  array{jobs: array<string, array{strategy?: array{matrix?: array<string, list<int|float|string>>}, services?: array<string, array{image?: string}>, container?: string|array{image?: string}, steps?: list<array{uses?: string, run?: string, with?: array<string, int|float|string>}>}>}  $flux  un flux de la CI lu par Yaml
+     * @return list<string>
+     */
+    private static function ecartsDeVersionDeLaCI(string $nom, array $flux): array
+    {
+        $ecarts = [];
+
+        foreach ($flux['jobs'] as $tache => $definition) {
+            $lieu = $nom.' › '.$tache;
+            $matrice = $definition['strategy']['matrix'] ?? [];
+            $etapes = $definition['steps'] ?? [];
+            $resoudre = static function (string $texte, string $cle) use ($matrice): array {
+                $marque = '${{ matrix.'.$cle.' }}';
+                $valeurs = $matrice[$cle] ?? [];
+
+                return str_contains($texte, $marque) && $valeurs !== []
+                    ? array_map(static fn (int|float|string $valeur): string => str_replace($marque, (string) $valeur, $texte), $valeurs)
+                    : [$texte];
+            };
+            $installations = array_filter($etapes, static fn (array $etape): bool => str_starts_with($etape['uses'] ?? '', 'shivammathur/setup-php@'));
+            $lancePhp = array_filter($etapes, static fn (array $etape): bool => preg_match('/\b(php|composer|artisan)\b|vendor\/bin/', $etape['run'] ?? '') === 1);
+
+            if ($lancePhp !== [] && $installations === []) {
+                $ecarts[] = $lieu.' : lance PHP ou Composer sans installer PHP 8.5';
+            }
+
+            foreach ($installations as $etape) {
+                foreach ($resoudre((string) ($etape['with']['php-version'] ?? ''), 'php') as $version) {
+                    if ($version !== '8.5') {
+                        $ecarts[] = $lieu.' : setup-php installe PHP « '.$version.' »';
+                    }
+                }
+            }
+
+            $conteneur = $definition['container'] ?? '';
+            $images = [
+                'service' => array_column($definition['services'] ?? [], 'image'),
+                'conteneur' => [is_array($conteneur) ? ($conteneur['image'] ?? '') : $conteneur],
+            ];
+
+            foreach ($images as $genre => $lesImages) {
+                foreach ($lesImages as $image) {
+                    if (preg_match('/postg(res|is)/i', $image) !== 1) {
+                        continue;
+                    }
+
+                    foreach ($resoudre($image, 'postgres') as $reelle) {
+                        if ($reelle !== 'postgres:18') {
+                            $ecarts[] = $lieu.' : le '.$genre.' PostgreSQL est « '.$reelle.' »';
+                        }
+                    }
+                }
+            }
+        }
+
+        return $ecarts;
+    }
+
+    /**
      * PostgreSQL, en collation déterministe C.UTF-8, trie les textes dans
      * l'ordre binaire : majuscules d'abord, lettres accentuées après « z »,
      * « . » avant « _ ». Un contenu signé trié en SQL (les autorisations du
@@ -445,6 +526,62 @@ class OutillageTest extends TestCase
         foreach (['ext-gd', 'ext-openssl', 'ext-zip', 'ext-pdo_pgsql', 'ext-sodium'] as $extension) {
             $this->assertArrayHasKey($extension, $composer['require'] ?? [], $extension.' n\'est pas déclarée dans composer.json.');
         }
+    }
+
+    /**
+     * Décision de l'éditeur du 12/11/2026 : PILIQI ne vise que les dernières
+     * versions, PHP 8.5 et PostgreSQL 18, en développement, en test, en CI
+     * et en production. composer.json, son verrou et celui de Psalm
+     * n'acceptent que PHP 8.5, la suite complète de la CI ne passe que sur
+     * une seule combinaison, PHP 8.5 et PostgreSQL 18, et chaque tâche de la
+     * CI, comme l'audit quotidien, installe PHP 8.5 et lance l'image
+     * postgres:18 : un retour à plusieurs versions, ou à une tâche qui
+     * prendrait la version par défaut du serveur d'intégration, fait échouer
+     * ce test.
+     */
+    public function test_piliqi_ne_vise_que_php_8_5_et_postgresql_18_dans_composer_et_dans_la_ci(): void
+    {
+        $ci = Yaml::parseFile(base_path('.github/workflows/tests.yml'));
+        $audit = Yaml::parseFile(base_path('.github/workflows/audit-quotidien.yml'));
+        $matrice = array_map(fn (array $valeurs): array => array_map('strval', $valeurs), $ci['jobs']['tests']['strategy']['matrix']);
+
+        $this->assertSame('^8.5', data_get(self::contenuJson('composer.json'), 'require.php'));
+        $this->assertSame('^8.5', data_get(self::contenuJson('composer.lock'), 'platform.php'));
+        $this->assertSame('8.5.0', data_get(self::contenuJson('tools/psalm/composer.json'), 'config.platform.php'));
+        $this->assertSame(['php' => ['8.5'], 'postgres' => ['18']], $matrice);
+        $this->assertSame([], self::ecartsDeVersionDeLaCI('tests.yml', $ci));
+        $this->assertSame([], self::ecartsDeVersionDeLaCI('audit-quotidien.yml', $audit));
+    }
+
+    /**
+     * Témoins du contrôle des versions de la CI : chaque écart est reconnu
+     * (une autre version de PHP, installée en clair ou par la matrice, une
+     * autre image de PostgreSQL, en service, par la matrice ou en conteneur,
+     * une tâche qui lance PHP ou Composer sans l'installer), et une tâche
+     * en PHP 8.5 et postgres:18, qu'elle les écrive ou les prenne dans sa
+     * matrice, n'en a aucun.
+     */
+    public function test_le_controle_des_versions_de_la_ci_reconnait_chaque_ecart(): void
+    {
+        $installer = fn (int|float|string $php): array => ['uses' => 'shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2', 'with' => ['php-version' => $php]];
+        $composer = ['run' => 'composer install --no-interaction'];
+        $postgres = fn (string $image): array => ['postgres' => ['image' => $image], 'redis' => ['image' => 'redis:7']];
+        $tache = fn (array $reste, array ...$etapes): array => ['jobs' => ['t' => [...$reste, 'steps' => $etapes]]];
+        $matrice = fn (array $php, array $postgres): array => ['strategy' => ['matrix' => ['php' => $php, 'postgres' => $postgres]]];
+
+        $this->assertSame([], self::ecartsDeVersionDeLaCI('ci', $tache(['services' => $postgres('postgres:18')], $installer(8.5), $composer)));
+        $this->assertSame([], self::ecartsDeVersionDeLaCI('ci', $tache([...$matrice([8.5], [18]), 'services' => $postgres('postgres:${{ matrix.postgres }}')], $installer('${{ matrix.php }}'), $composer)));
+        $this->assertSame([], self::ecartsDeVersionDeLaCI('ci', $tache([], ['run' => 'echo "rien de PHP ici"'])));
+        $this->assertSame(['ci › t : setup-php installe PHP « 8.3 »'], self::ecartsDeVersionDeLaCI('ci', $tache([], $installer(8.3), $composer)));
+        $this->assertSame(['ci › t : setup-php installe PHP « 8.4 »'], self::ecartsDeVersionDeLaCI('ci', $tache($matrice([8.4, 8.5], [18]), $installer('${{ matrix.php }}'), $composer)));
+        $this->assertSame(['ci › t : setup-php installe PHP « ${{ matrix.php }} »'], self::ecartsDeVersionDeLaCI('ci', $tache([], $installer('${{ matrix.php }}'), $composer)));
+        $this->assertSame(['ci › t : lance PHP ou Composer sans installer PHP 8.5'], self::ecartsDeVersionDeLaCI('ci', $tache([], $composer)));
+        $this->assertSame(['ci › t : lance PHP ou Composer sans installer PHP 8.5'], self::ecartsDeVersionDeLaCI('ci', $tache([], ['run' => 'vendor/bin/pint --test'])));
+        $this->assertSame(['ci › t : le service PostgreSQL est « postgres:17 »'], self::ecartsDeVersionDeLaCI('ci', $tache(['services' => $postgres('postgres:17')], $installer(8.5), $composer)));
+        $this->assertSame(['ci › t : le service PostgreSQL est « postgres:17 »'], self::ecartsDeVersionDeLaCI('ci', $tache([...$matrice([8.5], [17, 18]), 'services' => $postgres('postgres:${{ matrix.postgres }}')], $installer(8.5), $composer)));
+        $this->assertSame(['ci › t : le service PostgreSQL est « postgres:${{ matrix.postgres }} »'], self::ecartsDeVersionDeLaCI('ci', $tache(['services' => $postgres('postgres:${{ matrix.postgres }}')], $installer(8.5), $composer)));
+        $this->assertSame(['ci › t : le conteneur PostgreSQL est « postgres:16 »'], self::ecartsDeVersionDeLaCI('ci', $tache(['container' => 'postgres:16'], $installer(8.5), $composer)));
+        $this->assertSame(['ci › t : le conteneur PostgreSQL est « postgis/postgis:18-3.5 »'], self::ecartsDeVersionDeLaCI('ci', $tache(['container' => ['image' => 'postgis/postgis:18-3.5']], $installer(8.5), $composer)));
     }
 
     /**

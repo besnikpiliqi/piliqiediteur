@@ -318,10 +318,10 @@ jobs:
   # l'éditeur du 12/11/2026, en développement, en test, en CI et en
   # production) : base en UTF8 et collation déterministe C.UTF-8
   # (POSTGRES_INITDB_ARGS), comme en production. Les extensions SQLite de
-  # PHP sont désactivées : rien ne s'appuie sur elles. Le compte des tests n'est pas superutilisateur : il
-  # crée seulement les bases des processus parallèles (CREATEDB), puis
-  # leurs tables et leurs fonctions, comme le propriétaire de la base de
-  # production.
+  # PHP sont désactivées : rien ne s'appuie sur elles. Le compte des tests
+  # n'est pas superutilisateur : il crée seulement les bases des processus
+  # parallèles (CREATEDB), puis leurs tables et leurs fonctions, comme le
+  # propriétaire de la base de production.
   tests:
     runs-on: ubuntu-24.04
 

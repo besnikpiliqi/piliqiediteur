@@ -243,11 +243,20 @@ return [
         // Outillage.
         'outillage.postgresql-seul' => [
             'puce' => 'Outillage',
-            'regle' => 'PostgreSQL est le seul moteur, en production, en développement et pour les tests, en UTF8 avec la collation déterministe C.UTF-8.',
+            'regle' => 'PostgreSQL 18 est le seul moteur et la seule version, en production, en développement et pour les tests, en UTF8 avec la collation déterministe C.UTF-8.',
             'tests' => [
                 'tests/Feature/OutillageTest.php::test_postgresql_est_le_seul_moteur_de_la_base',
                 'tests/Feature/OutillageTest.php::test_une_ancienne_base_sqlite_ne_s_ouvre_ni_pour_les_migrations_ni_pour_le_diagnostic_ni_pour_l_application',
                 'tests/Feature/OutillageTest.php::test_la_base_trie_les_textes_dans_l_ordre_binaire',
+                'tests/Feature/OutillageTest.php::test_piliqi_ne_vise_que_php_8_5_et_postgresql_18_dans_composer_et_dans_la_ci',
+            ],
+        ],
+        'outillage.php-et-postgresql-dernieres-versions' => [
+            'puce' => 'Outillage',
+            'regle' => 'PILIQI ne vise que les dernières versions, PHP 8.5 et PostgreSQL 18, en développement, en test, en CI et en production : composer.json, son verrou et celui de Psalm n\'acceptent que PHP 8.5, la suite complète de la CI ne passe que sur une seule combinaison, PHP 8.5 et PostgreSQL 18, et chaque tâche de la CI, comme l\'audit quotidien, installe PHP 8.5 et lance l\'image postgres:18.',
+            'tests' => [
+                'tests/Feature/OutillageTest.php::test_piliqi_ne_vise_que_php_8_5_et_postgresql_18_dans_composer_et_dans_la_ci',
+                'tests/Feature/OutillageTest.php::test_le_controle_des_versions_de_la_ci_reconnait_chaque_ecart',
             ],
         ],
         'outillage.aucun-paquet-inutilise' => [
@@ -4881,7 +4890,7 @@ return [
             ],
             'VER-12-11' => [
                 'decision' => 'Le 12/11/2026 vers 14 h 30 UTC : seulement les dernières versions, PHP 8.5 et PostgreSQL 18, en développement, en test, en CI et en production.',
-                'a_venir' => 'Lot VER, après la chaîne en cours (CI, composer.json, CLAUDE.md, README, conteneur des agents).',
+                'regles' => ['outillage.php-et-postgresql-dernieres-versions'],
             ],
             'PASSAGE-12-11' => [
                 'decision' => 'Le 12/11/2026 vers 16 h 35 UTC : le passage à PHP 8.5 et PostgreSQL 18 attend la fin de toute la chaîne.',

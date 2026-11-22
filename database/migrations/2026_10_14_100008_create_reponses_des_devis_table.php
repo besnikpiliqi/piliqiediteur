@@ -29,18 +29,29 @@ return new class extends Migration
             $table->string('signataire', 150)->nullable();
             // Le motif facultatif d'un refus.
             $table->string('motif', 1000)->nullable();
+            // La référence d'une acceptation, numérotée dans le magasin
+            // comme un document (ACC-LYON1-2026-000001, voir
+            // TypeDocument::AcceptationDevis), qu'imprime le cadre « Bon
+            // pour accord » du devis accepté : vide pour un refus.
+            $table->string('reference', 40)->nullable();
+            // L'acceptation d'un particulier : a-t-il demandé que la
+            // prestation commence avant la fin de son délai de rétractation
+            // de quatorze jours (T86, art. L. 221-25 du code de la
+            // consommation) ? Vide pour un professionnel et pour un refus.
+            $table->boolean('debut_avant_la_fin_du_delai')->nullable();
             // L'empreinte SHA-256 de la version du devis à laquelle le
             // client a répondu (voir Devis::empreinteDeSaVersion()).
             $table->char('empreinte_du_devis', 64);
             $table->timestamp('created_at');
 
             $table->unique(['magasin_id', 'id']);
+            $table->unique(['magasin_id', 'reference']);
             $table->index(['magasin_id', 'devis_id']);
             $table->foreign(['magasin_id', 'devis_id'])->references(['magasin_id', 'id'])->on('devis')->restrictOnDelete();
             $table->foreign(['magasin_id', 'lien_du_devis_id'])->references(['magasin_id', 'id'])->on('liens_des_devis')->restrictOnDelete();
         });
 
-        DB::statement("ALTER TABLE reponses_des_devis ADD CONSTRAINT reponses_des_devis_reponse CHECK ((reponse = 'acceptation' AND signataire IS NOT NULL AND motif IS NULL) OR (reponse = 'refus' AND signataire IS NULL))");
+        DB::statement("ALTER TABLE reponses_des_devis ADD CONSTRAINT reponses_des_devis_reponse CHECK ((reponse = 'acceptation' AND signataire IS NOT NULL AND motif IS NULL AND reference IS NOT NULL) OR (reponse = 'refus' AND signataire IS NULL AND reference IS NULL AND debut_avant_la_fin_du_delai IS NULL))");
         DeclencheursDeProtection::ajoutSeul('reponses_des_devis');
     }
 

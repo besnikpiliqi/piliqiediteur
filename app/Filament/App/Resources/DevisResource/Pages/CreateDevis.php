@@ -35,6 +35,7 @@ class CreateDevis extends CreateRecord
             'conditions_paiement' => $data['conditions_paiement'] ?? null,
             'notes' => $data['notes'] ?? null,
             ...DevisResource::attributsDeLaNature($data),
+            ...DevisResource::attributsDuDepannage($data),
         ]));
     }
 }

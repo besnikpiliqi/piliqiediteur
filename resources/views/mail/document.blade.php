@@ -13,6 +13,11 @@
 
     $lienDeReponse : le lien secret d'un devis envoyé, par lequel le client
     l'accepte ou le refuse en ligne (voir LienDuDevis), null sinon.
+
+    $retractation : la confirmation de l'acceptation en ligne d'un devis
+    par un particulier (T86, voir DroitDeRetractation) : ce qu'il a demandé
+    du début de la prestation, l'information sur son droit de rétractation
+    de quatorze jours et le formulaire type ; vide sinon.
 --}}
 <x-mail::layout>
 <x-slot:header>
@@ -40,8 +45,22 @@
 Répondre au devis
 </x-mail::button>
 
-<p>Ce lien vous est personnel : ne le transmettez pas. Il vaut jusqu'à la fin de la validité du devis et cesse de valoir dès votre réponse.</p>
+<p>Ce lien vous est personnel : ne le transmettez pas. Il vaut jusqu'à la fin de la validité du devis et ne sert qu'à une seule réponse ; après votre acceptation, il vous montre sa confirmation et le devis signé en PDF.</p>
 
+@endif
+@if ($retractation !== [])
+<p><strong>{{ \App\Domain\Facturation\Services\DroitDeRetractation::TITRE }}</strong></p>
+
+@foreach ($retractation['paragraphes'] as $paragraphe)
+<p>{{ $paragraphe }}</p>
+
+@endforeach
+<p><strong>{{ \App\Domain\Facturation\Services\DroitDeRetractation::TITRE_DU_FORMULAIRE }}</strong></p>
+
+@foreach ($retractation['formulaire'] as $ligne)
+<p>{{ $ligne }}</p>
+
+@endforeach
 @endif
 <p>Cordialement,<br>
 {{ $nom }}</p>

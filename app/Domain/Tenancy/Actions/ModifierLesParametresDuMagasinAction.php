@@ -21,7 +21,8 @@ use LogicException;
  * Enregistre ce qu'une personne a corrigé des paramètres du magasin actif
  * depuis l'une de ses pages : ses coordonnées et ses références
  * d'acheteur (CoordonneesMagasin), l'échéance et les mentions de ses
- * factures (ParametresFactures), avec « Paramètres du magasin » ; son
+ * factures et le dépannage à domicile de ses devis (ParametresFactures),
+ * avec « Paramètres du magasin » ; son
  * barème de prix de vente (ParametresPrixDeVente), avec « Régler les prix
  * de vente » ; ses relances (ParametresRelances), avec « Régler les
  * relances ». Chaque autorisation ne règle que ses propres paramètres, et
@@ -54,7 +55,7 @@ class ModifierLesParametresDuMagasinAction
      * Les paramètres que règle chaque autorisation.
      */
     private const PARAMETRES = [
-        PermissionRegistry::PARAMETRES_GERER => ['email', 'telephone', 'references_acheteur', 'delai_paiement_jours', 'mention_penalites_retard', 'mention_indemnite_recouvrement', 'mention_escompte'],
+        PermissionRegistry::PARAMETRES_GERER => ['email', 'telephone', 'references_acheteur', 'delai_paiement_jours', 'mention_penalites_retard', 'mention_indemnite_recouvrement', 'mention_escompte', 'depannage_a_domicile', 'prix_du_devis_de_depannage'],
         PermissionRegistry::PRIX_VENTE_REGLER => ['prix_vente_automatique', 'bareme_prix_vente'],
         PermissionRegistry::RELANCES_REGLER => ['relances_automatiques', 'delais_relance', 'relancer_aussi_les_particuliers'],
     ];

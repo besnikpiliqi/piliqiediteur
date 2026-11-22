@@ -32,6 +32,10 @@ enum TypeDocument: string
     // La référence d'un reçu de paiement (R2, voir RecusDePaiement) : un
     // reçu n'est pas une facture, mais il a sa série dans chaque magasin.
     case RecuPaiement = 'recu_paiement';
+    // La référence de l'acceptation d'un devis en ligne par son client
+    // (voir RepondreAuDevisEnLigneAction), qu'imprime le cadre « Bon pour
+    // accord » du devis accepté : une série par magasin et par année.
+    case AcceptationDevis = 'acceptation_devis';
     case Produit = 'produit';
 
     /**
@@ -53,6 +57,7 @@ enum TypeDocument: string
             self::InventaireOuverture => 'INV',
             self::ClotureCaisse => 'Z',
             self::RecuPaiement => 'RP',
+            self::AcceptationDevis => 'ACC',
             self::Produit => 'PRD',
         };
     }

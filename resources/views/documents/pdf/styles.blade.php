@@ -107,7 +107,16 @@
     .remarque { margin-top: 20px; font-size: 9px; color: #52606d; }
     .reglement-du-recu { margin-bottom: 20px; }
     .mention-du-recu { margin-top: 8px; font-size: 11px; font-weight: bold; }
-    .accord { margin-top: 24px; width: 260px; margin-left: auto; height: 80px; border: 1px solid #d9e2ec; padding: 8px; font-size: 8px; color: #52606d; }
+    .accord { margin-top: 24px; width: 260px; margin-left: auto; min-height: 80px; border: 1px solid #d9e2ec; padding: 8px; font-size: 8px; color: #52606d; page-break-inside: avoid; }
+    .accord.accepte { width: 300px; color: #17283d; }
+    .accord.accepte div { margin-top: 4px; }
+    .accord .cachet-accepte { display: inline-block; border: 1px solid #1f6f4a; color: #1f6f4a; padding: 1px 6px; font-weight: bold; }
+    .accord .bon-pour-accord, .accord .signataire { font-weight: bold; font-size: 9px; }
+    .accord .trait-de-signature { border-top: 1px solid #d9e2ec; padding-top: 4px; color: #52606d; }
+    .accord .reference-d-acceptation { color: #52606d; font-size: 7px; }
+    .retractation { page-break-before: always; font-size: 8.5px; color: #17283d; }
+    .retractation p { margin: 0 0 6px 0; }
+    .formulaire-de-retractation { margin-top: 14px; border: 1px dashed #9aa5b1; padding: 8px; }
     .filigrane { position: fixed; top: 45%; left: -10%; width: 120%; text-align: center; font-size: 34px; font-weight: bold; color: #b91c1c; opacity: 0.15; transform: rotate(-30deg); }
     .bandeau { margin-bottom: 12px; padding: 6px 8px; border: 2px solid #b91c1c; color: #b91c1c; font-weight: bold; text-align: center; }
 </style>

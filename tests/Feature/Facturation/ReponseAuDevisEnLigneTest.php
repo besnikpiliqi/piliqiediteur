@@ -18,12 +18,16 @@ use App\Domain\Facturation\Actions\RetirerLeLienDuDevisAction;
 use App\Domain\Facturation\Enums\NatureEnvoi;
 use App\Domain\Facturation\Enums\ReponseAuDevis;
 use App\Domain\Facturation\Enums\StatutDevis;
+use App\Domain\Facturation\Enums\StatutEnvoi;
+use App\Domain\Facturation\Jobs\EnvoyerDocumentJob;
 use App\Domain\Facturation\Mail\DocumentMail;
 use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\EnvoiDocument;
 use App\Domain\Facturation\Models\LienDuDevis;
 use App\Domain\Facturation\Models\ReponseDuDevis;
 use App\Domain\Facturation\Notifications\ReponseDuClientAuDevis;
+use App\Domain\Facturation\Services\DevisPdfGenerator;
+use App\Domain\Facturation\Services\DroitDeRetractation;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\StatutSociete;
@@ -41,6 +45,7 @@ use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
 use Livewire\Livewire;
@@ -111,11 +116,13 @@ class ReponseAuDevisEnLigneTest extends TestCase
             ->assertDontSee(url('/app'), false)
             ->assertDontSee(url('/societe'), false)
             ->assertDontSee('href="/app', false)
-            ->assertDontSee('href="/societe', false);
-        // Le seul lien de la page est celui du PDF ; la feuille du pied de
-        // page (<link rel="stylesheet">) n'est pas un lien qu'on suit.
-        $this->assertSame(1, preg_match_all('/<a\b[^>]*\bhref="([^"]+)"/', (string) $reponse->getContent(), $liens));
-        $this->assertSame([route('devis.reponse.pdf', ['jeton' => $jeton])], $liens[1]);
+            ->assertDontSee('href="/societe', false)
+            ->assertDontSee(route('devis.reponse.pdf', ['jeton' => $jeton]), false)
+            ->assertDontSee('Télécharger le devis');
+        // La page n'a aucun lien qu'on suit : pas de PDF avant la réponse
+        // (SIGN-DEVIS) ; la feuille du pied de page (<link
+        // rel="stylesheet">) n'est pas un lien.
+        $this->assertSame(0, preg_match_all('/<a\b[^>]*\bhref="([^"]+)"/', (string) $reponse->getContent()));
     }
 
     /**
@@ -148,13 +155,21 @@ class ReponseAuDevisEnLigneTest extends TestCase
         $this->repondre('get', $jeton)->assertOk()->assertSee('12,5 %')->assertDontSee('12.5 %');
     }
 
-    public function test_le_pdf_du_lien_est_celui_du_devis_envoye_en_piece_jointe(): void
+    /**
+     * Avant sa réponse, le client lit le devis sur la page où il signe,
+     * sans PDF ; le PDF, signé, ne se télécharge qu'après son acceptation,
+     * par le même lien (demande de l'éditeur du 14/11/2026).
+     */
+    public function test_le_pdf_du_lien_n_existe_qu_apres_l_acceptation_et_porte_le_devis_signe(): void
     {
+        Notification::fake();
         $devis = $this->devisEnvoyable();
         $jeton = $this->envoyer($devis);
-        app(TenantContext::class)->clear();
 
-        $reponse = $this->get(route('devis.reponse.pdf', ['jeton' => $jeton]));
+        $this->repondre('pdf', $jeton)->assertStatus(410)->assertSee(LienDuDevis::PLUS_VALABLE);
+        $this->repondre('accepter', $jeton, ['signataire' => 'Claire Martin', 'bon_pour_accord' => '1'])->assertOk();
+
+        $reponse = $this->repondre('pdf', $jeton);
 
         $reponse->assertOk()->assertHeader('Content-Type', 'application/pdf')->assertHeader('Referrer-Policy', 'no-referrer');
         $this->assertStringContainsString('attachment', (string) $reponse->headers->get('Content-Disposition'));
@@ -215,17 +230,18 @@ class ReponseAuDevisEnLigneTest extends TestCase
 
         $this->repondre('accepter', $jeton, ['signataire' => '  Claire   Martin ', 'bon_pour_accord' => '1'], ['REMOTE_ADDR' => '203.0.113.9', 'HTTP_USER_AGENT' => 'Navigateur du client'])
             ->assertOk()
-            ->assertSee('Merci : votre acceptation est enregistrée')
+            ->assertSee('Devis accepté le 13/11/2026 à 14:05 par Claire Martin')
             ->assertSee('13/11/2026 à 14:05 (heure de Paris)')
+            ->assertSee(route('devis.reponse.pdf', ['jeton' => $jeton]), false)
             ->assertHeader('Referrer-Policy', 'no-referrer');
 
         $enregistree = ReponseDuDevis::query()->sole();
-        $this->assertSame([ReponseAuDevis::Acceptation, 'Claire Martin', null, $empreinte, self::aParis('2026-11-13 14:05:00')->getTimestamp()], [$enregistree->reponse, $enregistree->signataire, $enregistree->motif, $enregistree->empreinte_du_devis, $enregistree->created_at->getTimestamp()]);
+        $this->assertSame([ReponseAuDevis::Acceptation, 'Claire Martin', null, 'ACC-MABOUT-2026-000001', false, $empreinte, self::aParis('2026-11-13 14:05:00')->getTimestamp()], [$enregistree->reponse, $enregistree->signataire, $enregistree->motif, $enregistree->reference, $enregistree->debut_avant_la_fin_du_delai, $enregistree->empreinte_du_devis, $enregistree->created_at->getTimestamp()]);
         $devis->refresh();
         $this->assertSame([StatutDevis::Accepte, self::aParis('2026-11-13 14:05:00')->getTimestamp()], [$devis->statut, $devis->accepte_le?->getTimestamp()]);
 
         $entree = EntreeAudit::query()->where('action', ActionAuditee::DevisAccepteEnLigne)->sole();
-        $this->assertSame(['client', null, (int) $this->magasin->id, ['devis' => $devis->numero, 'empreinte_du_devis' => $empreinte, 'signataire' => 'Claire Martin']], [$entree->origine, $entree->auteur_id, (int) $entree->magasin_id, $entree->nouvelles_valeurs]);
+        $this->assertSame(['client', null, (int) $this->magasin->id, ['debut_avant_la_fin_du_delai_de_retractation' => 'non', 'devis' => $devis->numero, 'empreinte_du_devis' => $empreinte, 'reference' => 'ACC-MABOUT-2026-000001', 'signataire' => 'Claire Martin']], [$entree->origine, $entree->auteur_id, (int) $entree->magasin_id, $entree->nouvelles_valeurs]);
         $this->assertSame(['203.0.113.9', 'Navigateur du client'], [TraceAudit::query()->findOrFail($entree->id)->ip, TraceAudit::query()->findOrFail($entree->id)->agent_utilisateur]);
 
         $evenement = EnregistrementFiscal::query()->where('chaine', ChaineFiscale::Evenement)->where('type', (string) CodeEvenement::ReponseAUnDevis->value)->sole();
@@ -234,7 +250,7 @@ class ReponseAuDevisEnLigneTest extends TestCase
         $this->assertStringNotContainsString('203.0.113.9', $evenement->contenu);
         $this->assertStringNotContainsString('Claire', $evenement->contenu);
 
-        $this->repondre('get', $jeton)->assertStatus(410)->assertSee(LienDuDevis::PLUS_VALABLE);
+        $this->repondre('get', $jeton)->assertOk()->assertSee('Devis accepté le 13/11/2026 à 14:05 par Claire Martin')->assertDontSee('Accepter le devis');
         $this->repondre('accepter', $jeton, ['signataire' => 'Autre Personne', 'bon_pour_accord' => '1'])->assertStatus(410);
         $this->repondre('refuser', $jeton)->assertStatus(410);
         $this->assertSame(1, ReponseDuDevis::query()->count());
@@ -629,6 +645,244 @@ class ReponseAuDevisEnLigneTest extends TestCase
         $this->assertSame([(int) $this->magasin->id, $devisA->id], [(int) $reponse->magasin_id, $reponse->devis_id]);
         $this->assertSame((int) $this->magasin->id, (int) EntreeAudit::query()->withoutGlobalScopes()->where('action', ActionAuditee::DevisAccepteEnLigne)->sole()->magasin_id);
         $this->repondre('get', $jetonB)->assertOk()->assertSee('Autre Boutique')->assertDontSee('Client de la boutique A');
+    }
+
+    /**
+     * Un particulier qui reçoit un devis par e-mail conclut un contrat à
+     * distance (décision de Claude T86, art. L. 221-18 du code de la
+     * consommation) : la page de son lien lui donne son droit de
+     * rétractation de quatorze jours, avec le formulaire type, adressé au
+     * magasin qui envoie le devis, et la case qui demande que la prestation
+     * commence avant la fin du délai, décochée, qu'une saisie refusée rend
+     * cochée si le client l'avait cochée.
+     */
+    public function test_la_page_d_un_particulier_donne_son_droit_de_retractation_son_formulaire_et_la_case_du_debut_anticipe(): void
+    {
+        $devis = $this->devisEnvoyable();
+        $jeton = $this->envoyer($devis);
+
+        $reponse = $this->repondre('get', $jeton)->assertOk();
+
+        $reponse->assertSee(DroitDeRetractation::TITRE)
+            ->assertSee('dans un délai de quatorze jours')
+            ->assertSee('à : Ma Boutique', false)
+            ->assertSee(DroitDeRetractation::TITRE_DU_FORMULAIRE)
+            ->assertSee("(devis n° {$devis->numero})", false)
+            ->assertSee(DroitDeRetractation::CASE_DU_DEBUT_ANTICIPE)
+            ->assertSee(DroitDeRetractation::AIDE_DU_DEBUT_ANTICIPE)
+            ->assertSee('<input type="checkbox" name="debut_avant_la_fin_du_delai" value="1">', false);
+        $this->assertSame(0, preg_match_all('/<a\b[^>]*\bhref="([^"]+)"/', (string) $reponse->getContent()));
+        $this->repondre('accepter', $jeton, ['signataire' => '', 'bon_pour_accord' => '1', 'debut_avant_la_fin_du_delai' => '1'])
+            ->assertStatus(422)
+            ->assertSee('<input type="checkbox" name="debut_avant_la_fin_du_delai" value="1" checked>', false);
+        $this->assertSame(0, ReponseDuDevis::query()->count());
+    }
+
+    /**
+     * Le droit de rétractation est celui d'un consommateur : la page d'un
+     * professionnel n'en dit rien et n'a pas la case ; s'il l'envoie quand
+     * même, rien n'en est gardé.
+     */
+    public function test_la_page_d_un_professionnel_ne_parle_pas_de_retractation_et_n_en_garde_rien(): void
+    {
+        Notification::fake();
+        $jeton = $this->envoyer($this->devisEnvoyable(client: Client::factory()->professionnel()->create()));
+
+        $this->repondre('get', $jeton)->assertOk()
+            ->assertDontSee(DroitDeRetractation::TITRE)
+            ->assertDontSee(DroitDeRetractation::TITRE_DU_FORMULAIRE)
+            ->assertDontSee('debut_avant_la_fin_du_delai', false);
+        $this->repondre('accepter', $jeton, ['signataire' => 'Claire Martin', 'bon_pour_accord' => '1', 'debut_avant_la_fin_du_delai' => '1'])
+            ->assertOk()
+            ->assertSee('Devis accepté le 12/11/2026 à 10:00 par Claire Martin')
+            ->assertDontSee(DroitDeRetractation::TITRE);
+
+        $this->assertNull(ReponseDuDevis::query()->sole()->debut_avant_la_fin_du_delai);
+        $this->assertArrayNotHasKey('debut_avant_la_fin_du_delai_de_retractation', EntreeAudit::query()->where('action', ActionAuditee::DevisAccepteEnLigne)->sole()->nouvelles_valeurs);
+        $confirmation = EnvoiDocument::query()->where('nature', NatureEnvoi::Acceptation)->sole();
+        Mail::assertSent(DocumentMail::class, fn (DocumentMail $mail): bool => $mail->envoi->is($confirmation) && ! str_contains($mail->render(), DroitDeRetractation::TITRE) && count($mail->attachments()) === 1);
+    }
+
+    /**
+     * La demande du particulier que la prestation commence avant la fin de
+     * son délai se garde avec son acceptation et au journal d'audit
+     * (art. L. 221-25) ; sa confirmation la lui rappelle, et l'avis au
+     * magasin la dit.
+     */
+    public function test_la_demande_de_debut_anticipe_se_garde_avec_l_acceptation_et_au_journal_d_audit(): void
+    {
+        Notification::fake();
+        $devis = $this->devisEnvoyable();
+        $jeton = $this->envoyer($devis);
+
+        $this->repondre('accepter', $jeton, ['signataire' => 'Claire Martin', 'bon_pour_accord' => '1', 'debut_avant_la_fin_du_delai' => '1'])
+            ->assertOk()
+            ->assertSee(DroitDeRetractation::reponseALaDemande(true))
+            ->assertSee(DroitDeRetractation::TITRE)
+            ->assertSee(DroitDeRetractation::TITRE_DU_FORMULAIRE);
+
+        $this->assertTrue(ReponseDuDevis::query()->sole()->debut_avant_la_fin_du_delai);
+        $this->assertSame('oui', EntreeAudit::query()->where('action', ActionAuditee::DevisAccepteEnLigne)->sole()->nouvelles_valeurs['debut_avant_la_fin_du_delai_de_retractation']);
+        $this->repondre('get', $jeton)->assertOk()->assertSee(DroitDeRetractation::reponseALaDemande(true));
+        $proprietaire = $this->proprietaireDe($this->magasin);
+        Notification::assertSentTo($proprietaire, ReponseDuClientAuDevis::class, fn (ReponseDuClientAuDevis $avis): bool => str_contains(self::texteDuCourriel($avis->toMail($proprietaire)), 'Il demande que la prestation commence avant la fin de son délai de rétractation.'));
+        $this->dansLeMagasin($this->magasin, self::responsableDeTest($this->magasin));
+        Livewire::test(ViewDevis::class, ['record' => $devis->getRouteKey()])
+            ->assertSee('Référence de l\'acceptation : ACC-MABOUT-2026-000001.')
+            ->assertSee('Le client a demandé que la prestation commence avant la fin de son délai de rétractation de quatorze jours.');
+    }
+
+    /**
+     * L'e-mail qui confirme l'acceptation d'un particulier lui rappelle sa
+     * réponse à la demande de début anticipé, son droit de rétractation et
+     * le formulaire type, avec le devis signé en pièce jointe.
+     */
+    public function test_l_e_mail_qui_confirme_l_acceptation_d_un_particulier_donne_son_droit_de_retractation_et_le_devis_signe(): void
+    {
+        Notification::fake();
+        $devis = $this->devisEnvoyable();
+        $jeton = $this->envoyer($devis, 'paul@client.fr');
+
+        $this->repondre('accepter', $jeton, ['signataire' => 'Paul Durand', 'bon_pour_accord' => '1'])->assertOk();
+
+        $confirmation = EnvoiDocument::query()->where('nature', NatureEnvoi::Acceptation)->sole();
+        Mail::assertSent(DocumentMail::class, function (DocumentMail $mail) use ($devis, $confirmation): bool {
+            $html = $mail->render();
+
+            return $mail->envoi->is($confirmation)
+                && str_contains($html, 'Vous trouverez ci-joint le devis que vous avez accepté, signé.')
+                && str_contains($html, DroitDeRetractation::reponseALaDemande(false))
+                && str_contains($html, DroitDeRetractation::TITRE)
+                && str_contains($html, DroitDeRetractation::TITRE_DU_FORMULAIRE)
+                && str_contains($html, "(devis n° {$devis->numero})")
+                && $mail->attachments()[0]->as === "devis-{$devis->numero}.pdf";
+        });
+    }
+
+    /**
+     * Le cadre « Bon pour accord » du PDF (modèle D1 choisi par l'éditeur
+     * le 14/11/2026) reste vide avant la réponse ; une fois le devis
+     * accepté en ligne, il porte le cachet « Accepté en ligne », la date et
+     * l'heure de l'acceptation à l'heure du magasin, le nom tapé par le
+     * client, la façon dont il a signé, la référence de l'acceptation et le
+     * début de l'empreinte du devis accepté, jamais son adresse IP ni son
+     * navigateur.
+     */
+    public function test_le_cadre_bon_pour_accord_du_devis_accepte_en_ligne_porte_la_date_le_nom_la_reference_et_l_empreinte(): void
+    {
+        Notification::fake();
+        $devis = $this->devisEnvoyable();
+        $jeton = $this->envoyer($devis);
+        $this->assertStringNotContainsString('Accepté en ligne', app(DevisPdfGenerator::class)->html($devis->fresh()));
+        $this->travelTo(self::aParis('2026-11-13 14:05:00'));
+
+        $this->repondre('accepter', $jeton, ['signataire' => 'Claire Martin', 'bon_pour_accord' => '1'], ['REMOTE_ADDR' => '203.0.113.9', 'HTTP_USER_AGENT' => 'Navigateur du client'])->assertOk();
+
+        $empreinte = ReponseDuDevis::query()->sole()->empreinte_du_devis;
+        $html = app(DevisPdfGenerator::class)->html($devis->fresh());
+        $cadre = substr($html, (int) strpos($html, '<div class="accord accepte">'));
+        foreach ([
+            'Date et signature du client, précédées de la mention « Bon pour accord »',
+            '<div class="cachet-accepte">Accepté en ligne</div>',
+            '<div class="bon-pour-accord">Bon pour accord</div>',
+            'Le <strong>13/11/2026 à 14:05</strong> (heure de Paris)',
+            '<div class="signataire">Claire Martin</div>',
+            'Signature électronique : nom tapé et case « Bon pour accord » cochée par le client, sur le lien personnel reçu à son adresse e-mail',
+            'Référence de l\'acceptation : ACC-MABOUT-2026-000001 · Empreinte du devis accepté : '.implode(' ', str_split(substr($empreinte, 0, 16), 4)),
+        ] as $attendu) {
+            $this->assertStringContainsString($attendu, $cadre);
+        }
+        $this->assertStringNotContainsString('203.0.113.9', $html);
+        $this->assertStringNotContainsString('Navigateur du client', $html);
+    }
+
+    /**
+     * Un devis refusé, ou accepté puis modifié (repassé en brouillon, son
+     * acceptation effacée), garde un cadre vide.
+     */
+    public function test_le_cadre_bon_pour_accord_reste_vide_apres_un_refus_ou_une_modification(): void
+    {
+        Notification::fake();
+        $refuse = $this->devisEnvoyable();
+        $this->repondre('refuser', $this->envoyer($refuse))->assertOk();
+        $accepte = $this->devisEnvoyable();
+        $this->repondre('accepter', $this->envoyer($accepte), ['signataire' => 'Claire Martin', 'bon_pour_accord' => '1'])->assertOk();
+        $this->assertStringContainsString('Accepté en ligne', app(DevisPdfGenerator::class)->html($accepte->fresh()));
+
+        $modifie = app(ModifierDevisAction::class)->handle(self::auteur(), $accepte->fresh(), $accepte->client, [['produit_id' => $accepte->lignes->first()->produit_id, 'quantite' => 2]]);
+
+        foreach ([$refuse->fresh(), $modifie] as $devis) {
+            $html = app(DevisPdfGenerator::class)->html($devis);
+            $this->assertStringContainsString('<div class="accord">', $html);
+            $this->assertStringNotContainsString('Accepté en ligne', $html);
+            $this->assertStringNotContainsString('<div class="signataire">', $html);
+        }
+    }
+
+    /**
+     * Chaque acceptation en ligne prend la référence suivante de la série
+     * de son magasin et de son année : un autre magasin a la sienne.
+     */
+    public function test_chaque_acceptation_prend_la_reference_suivante_de_la_serie_de_son_magasin(): void
+    {
+        Notification::fake();
+        $this->repondre('accepter', $this->envoyer($this->devisEnvoyable()), ['signataire' => 'Claire Martin', 'bon_pour_accord' => '1'])->assertOk();
+        $this->repondre('accepter', $this->envoyer($this->devisEnvoyable()), ['signataire' => 'Paul Durand', 'bon_pour_accord' => '1'])->assertOk();
+        $autre = $this->completerIdentiteLegale($this->ouvrirUneSociete(['nom' => 'Autre Boutique', 'code' => 'AUTRE']));
+        app(TenantContext::class)->set($autre);
+        $this->repondre('accepter', $this->envoyer($this->devisEnvoyable()), ['signataire' => 'Jean Dupont', 'bon_pour_accord' => '1'])->assertOk();
+
+        $this->assertSame(
+            ['ACC-AUTRE-2026-000001', 'ACC-MABOUT-2026-000001', 'ACC-MABOUT-2026-000002'],
+            ReponseDuDevis::withoutGlobalScopes()->orderBy('reference')->pluck('reference')->all(),
+        );
+    }
+
+    /**
+     * Un devis refusé ou expiré ne peut plus être accepté, et son client ne
+     * reçoit le PDF d'un devis qu'une fois accepté : il ne s'envoie plus
+     * (demande de l'éditeur du 14/11/2026).
+     */
+    public function test_un_devis_refuse_ou_expire_ne_s_envoie_plus(): void
+    {
+        $refuse = $this->devisEnvoyable();
+        $this->repondre('refuser', $this->envoyer($refuse))->assertOk();
+        $expire = $this->devisEnvoyable(['date_validite' => '2026-11-20']);
+        $this->envoyer($expire);
+        $this->travelTo(self::aParis('2026-11-21 09:00:00'));
+        $envois = EnvoiDocument::query()->count();
+
+        foreach ([$refuse->fresh(), $expire->fresh()] as $devis) {
+            $this->assertThrows(
+                fn () => app(EnvoyerDocumentAction::class)->handle(self::auteur(), $devis, 'client@exemple.fr', null, (string) Str::uuid()),
+                LogicException::class,
+                Devis::REFUS_D_ENVOI_SANS_ACCEPTATION_POSSIBLE,
+            );
+        }
+
+        $this->assertSame($envois, EnvoiDocument::query()->count());
+        $this->dansLeMagasin($this->magasin, self::responsableDeTest($this->magasin));
+        Livewire::test(ViewDevis::class, ['record' => $refuse->getRouteKey()])->assertActionHidden('envoyer_par_email');
+        Livewire::test(ViewDevis::class, ['record' => $expire->getRouteKey()])->assertActionHidden('envoyer_par_email');
+    }
+
+    /**
+     * Le lien d'un envoi retiré avant que l'e-mail parte : sans lien ni
+     * PDF, l'e-mail n'apporterait rien au client ; il ne part pas, sans
+     * nouvelle tentative, et la cause se dit en clair.
+     */
+    public function test_un_devis_dont_le_lien_est_retire_avant_le_depart_de_l_e_mail_ne_part_pas(): void
+    {
+        Queue::fake([EnvoyerDocumentJob::class]);
+        $devis = $this->devisEnvoyable();
+        $envoi = app(EnvoyerDocumentAction::class)->handle(self::auteur(), $devis, 'client@exemple.fr', null, (string) Str::uuid());
+        $tache = Queue::pushed(EnvoyerDocumentJob::class)->sole();
+        app(RetirerLeLienDuDevisAction::class)->handle(self::responsableDeTest($this->magasin), $devis->fresh());
+
+        $tache->handle();
+
+        Mail::assertNothingSent();
+        $this->assertSame([StatutEnvoi::Echec, EnvoyerDocumentJob::MOTIF_DEVIS_SANS_LIEN], [$envoi->fresh()->statut, $envoi->fresh()->erreur]);
     }
 
     /**

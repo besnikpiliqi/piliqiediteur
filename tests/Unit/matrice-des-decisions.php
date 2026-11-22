@@ -1531,7 +1531,7 @@ return [
         ],
         'documents.reponse-du-client-au-devis' => [
             'puce' => 'Documents de vente',
-            'regle' => 'Le client répond à un devis envoyé par un lien secret propre à cet envoi, valable jusqu\'à la fin de la validité du devis et caduc dès sa réponse, sa modification ou un nouvel envoi : il l\'accepte en tapant son nom et en cochant « Bon pour accord », ou le refuse ; sa réponse est enregistrée une seule fois, avec ses traces, et le magasin en est prévenu.',
+            'regle' => 'Le client répond à un devis envoyé par un lien secret propre à cet envoi, valable jusqu\'à la fin de la validité du devis et caduc dès sa réponse, sa modification ou un nouvel envoi : il l\'accepte en tapant son nom et en cochant « Bon pour accord », ou le refuse ; sa réponse est enregistrée une seule fois, avec ses traces, et le magasin en est prévenu ; après une acceptation, le lien ne sert plus qu\'à montrer sa confirmation et le devis signé.',
             'tests' => [
                 'tests/Feature/Facturation/ReponseAuDevisEnLigneTest.php::test_l_envoi_d_un_devis_porte_un_lien_secret_dont_seule_l_empreinte_se_garde',
                 'tests/Feature/Facturation/ReponseAuDevisEnLigneTest.php::test_accepter_exige_le_nom_tape_et_bon_pour_accord',
@@ -1542,6 +1542,56 @@ return [
                 'tests/Feature/Facturation/ReponseAuDevisEnLigneTest.php::test_un_nouvel_envoi_donne_un_nouveau_lien_et_rend_l_ancien_caduc',
                 'tests/Feature/Facturation/ReponseAuDevisEnLigneTest.php::test_le_lien_d_un_magasin_ne_montre_ni_ne_touche_rien_d_un_autre',
                 'tests/Feature/Facturation/ReponseAuDevisConcurrenceTest.php::test_deux_reponses_simultanees_par_le_meme_lien_n_en_enregistrent_qu_une',
+            ],
+        ],
+        'documents.devis-accepte-en-ligne-signe' => [
+            'puce' => 'Documents de vente',
+            'regle' => 'Avant sa réponse, le client lit le devis sur la page de son lien, sans PDF, et l\'e-mail d\'envoi n\'en porte pas ; après son acceptation, le même lien ne montre plus que « Devis accepté le … par … » et le PDF du devis signé, tant que le devis garde cette acceptation, et l\'e-mail de confirmation porte ce PDF ; le cadre « Bon pour accord » du PDF porte alors le cachet « Accepté en ligne », la date et l\'heure, le nom tapé, la référence de l\'acceptation (une série par magasin et par année) et le début de l\'empreinte du devis accepté, jamais l\'adresse IP ni le navigateur, et reste vide pour tout autre devis ; un devis refusé ou expiré ne s\'envoie plus (modèle D1, demande de l\'éditeur du 14/11/2026).',
+            'tests' => [
+                'tests/Feature/Facturation/ReponseAuDevisEnLigneTest.php::test_la_page_du_lien_montre_le_seul_devis_envoye_sans_indexation_ni_referent',
+                'tests/Feature/Facturation/ReponseAuDevisEnLigneTest.php::test_le_pdf_du_lien_n_existe_qu_apres_l_acceptation_et_porte_le_devis_signe',
+                'tests/Feature/Facturation/ReponseAuDevisEnLigneTest.php::test_accepter_enregistre_le_nom_la_date_l_empreinte_et_les_traces_une_seule_fois',
+                'tests/Feature/Facturation/ReponseAuDevisEnLigneTest.php::test_le_cadre_bon_pour_accord_du_devis_accepte_en_ligne_porte_la_date_le_nom_la_reference_et_l_empreinte',
+                'tests/Feature/Facturation/ReponseAuDevisEnLigneTest.php::test_le_cadre_bon_pour_accord_reste_vide_apres_un_refus_ou_une_modification',
+                'tests/Feature/Facturation/ReponseAuDevisEnLigneTest.php::test_chaque_acceptation_prend_la_reference_suivante_de_la_serie_de_son_magasin',
+                'tests/Feature/Facturation/ReponseAuDevisEnLigneTest.php::test_un_devis_refuse_ou_expire_ne_s_envoie_plus',
+                'tests/Feature/Facturation/ReponseAuDevisEnLigneTest.php::test_un_devis_dont_le_lien_est_retire_avant_le_depart_de_l_e_mail_ne_part_pas',
+                'tests/Feature/Facturation/ReponseAuDevisEnLigneTest.php::test_l_acceptation_confirme_au_client_avec_le_devis_et_previent_le_demandeur_et_le_proprietaire',
+                'tests/Feature/Facturation/EnvoyerDocumentJobTest.php::test_le_devis_part_sans_pdf_et_dit_qu_il_attend_en_ligne',
+                'tests/Browser/Parcours/ReponseAuDevisEnLigneTest.php › le client ne trouve aucun PDF sur la page de son lien avant de répondre, puis télécharge le devis signé depuis la confirmation de son acceptation',
+                'tests/Browser/Parcours/ReponseAuDevisEnLigneTest.php › le client particulier lit son droit de rétractation, accepte son devis en ligne en tapant son nom, en cochant « Bon pour accord » et la demande de début anticipé, puis le lien ne montre que la confirmation',
+                'tests/Browser/Demonstration/DansLaCopieTest.php › la responsable envoie une facture par e-mail, la lit dans « E-mails qui seraient partis » avec sa pièce jointe, puis le client accepte le devis par le lien de son e-mail, sans PDF, et sa confirmation part avec le devis signé',
+            ],
+        ],
+        'documents.retractation-d-un-particulier' => [
+            'puce' => 'Documents de vente',
+            'regle' => 'À un particulier, la page du lien d\'un devis et l\'e-mail qui confirme son acceptation donnent son droit de rétractation de quatorze jours et le formulaire type, adressé au magasin qui envoie le devis ; la page recueille sa demande que la prestation commence avant la fin du délai, gardée avec son acceptation et au journal d\'audit et dite au magasin ; rien de tout cela pour un professionnel (décision de Claude T86).',
+            'tests' => [
+                'tests/Feature/Facturation/ReponseAuDevisEnLigneTest.php::test_la_page_d_un_particulier_donne_son_droit_de_retractation_son_formulaire_et_la_case_du_debut_anticipe',
+                'tests/Feature/Facturation/ReponseAuDevisEnLigneTest.php::test_la_page_d_un_professionnel_ne_parle_pas_de_retractation_et_n_en_garde_rien',
+                'tests/Feature/Facturation/ReponseAuDevisEnLigneTest.php::test_la_demande_de_debut_anticipe_se_garde_avec_l_acceptation_et_au_journal_d_audit',
+                'tests/Feature/Facturation/ReponseAuDevisEnLigneTest.php::test_l_e_mail_qui_confirme_l_acceptation_d_un_particulier_donne_son_droit_de_retractation_et_le_devis_signe',
+                'tests/Browser/Parcours/ReponseAuDevisEnLigneTest.php › le client particulier lit son droit de rétractation, accepte son devis en ligne en tapant son nom, en cochant « Bon pour accord » et la demande de début anticipé, puis le lien ne montre que la confirmation',
+                'tests/Browser/Parcours/ReponseAuDevisEnLigneTest.php › le client professionnel accepte son devis en ligne sans information sur la rétractation ni demande de début anticipé',
+            ],
+        ],
+        'documents.devis-de-depannage-a-domicile' => [
+            'puce' => 'Documents de vente',
+            'regle' => 'Un magasin peut cocher le réglage « Dépannage, réparation ou entretien à domicile », décoché par défaut, avec le prix d\'un devis payant, vide pour un devis gratuit : chaque devis à un particulier porte alors le lieu de l\'intervention, obligatoire et prérempli avec l\'adresse du client, « Devis gratuit » ou « Devis payant : X € TTC » et le droit de garder les pièces remplacées ; un devis signé chez le client imprime aussi le droit de rétractation et son formulaire ; le réglage et le prix se figent à l\'envoi ; rien pour un professionnel (décision de Claude T51.6).',
+            'tests' => [
+                'tests/Feature/Facturation/DevisDeDepannageADomicileTest.php::test_sans_le_reglage_le_devis_d_un_particulier_n_imprime_aucune_mention_de_depannage',
+                'tests/Feature/Facturation/DevisDeDepannageADomicileTest.php::test_le_devis_d_un_particulier_imprime_le_lieu_le_devis_gratuit_et_les_pieces_remplacees',
+                'tests/Feature/Facturation/DevisDeDepannageADomicileTest.php::test_un_devis_payant_imprime_son_prix_toutes_taxes_comprises',
+                'tests/Feature/Facturation/DevisDeDepannageADomicileTest.php::test_le_devis_d_un_professionnel_n_imprime_rien_meme_quand_le_magasin_a_coche_le_reglage',
+                'tests/Feature/Facturation/DevisDeDepannageADomicileTest.php::test_le_reglage_et_le_prix_du_devis_se_figent_a_l_envoi',
+                'tests/Feature/Facturation/DevisDeDepannageADomicileTest.php::test_un_devis_de_depannage_sans_lieu_d_intervention_est_refuse',
+                'tests/Feature/Facturation/DevisDeDepannageADomicileTest.php::test_un_brouillon_devenu_un_devis_de_depannage_ne_part_pas_sans_lieu',
+                'tests/Feature/Facturation/DevisDeDepannageADomicileTest.php::test_signe_chez_le_client_le_devis_imprime_le_droit_de_retractation_et_son_formulaire',
+                'tests/Feature/Facturation/DevisDeDepannageADomicileTest.php::test_la_base_refuse_un_depannage_sur_un_devis_de_professionnel_et_un_prix_de_devis_nul',
+                'tests/Feature/Facturation/DevisDeDepannageADomicileTest.php::test_le_formulaire_preremplit_le_lieu_avec_l_adresse_du_particulier_et_le_cache_pour_un_professionnel',
+                'tests/Feature/Filament/ParametresFacturesTest.php::test_le_proprietaire_coche_le_depannage_a_domicile_et_regle_le_prix_du_devis',
+                'tests/Browser/Parcours/DevisDeDepannageADomicileTest.php › chaque compte qui règle les paramètres du magasin coche le dépannage à domicile et le prix du devis dans « Factures et devis », et le réglage s’enregistre',
+                'tests/Browser/Parcours/DevisDeDepannageADomicileTest.php › chaque compte qui fait un devis à un particulier y trouve le lieu de l’intervention prérempli, coche « Devis signé chez le client », et la fiche puis le PDF numéroté les montrent',
             ],
         ],
         'documents.devis-transforme-en-facture' => [
@@ -4955,6 +5005,10 @@ return [
                 'decision' => 'Le 14/11/2026 vers 23 h 15 à Paris, « oui pour l\'archive » : à sa fermeture définitive, le magasin de démonstration reçoit une archive finale signée, que le propriétaire seul télécharge dans l\'espace de la société, chaque téléchargement inscrit au journal d\'audit, sans jamais rouvrir l\'entrée dans ce magasin.',
                 'remplacee' => 'Remplacée par la décision de l\'éditeur du 15/11/2026 en soirée, reprise le 16/11/2026 vers 10 h (Q2, cahier DEMO-COPIE) : le magasin de démonstration du compte réel est retiré ; l\'archive signée de chaque copie avant sa suppression la remplace (lot DEMO-COPIE-2).',
             ],
+            'SIGN-DEVIS-14-11' => [
+                'decision' => 'Le 14/11/2026 vers 00 h UTC : le devis accepté en ligne porte, dans son cadre « Bon pour accord », la date et l\'heure de l\'acceptation et le nom tapé par le client (modèle D1 choisi vers 00 h 20 UTC) ; vers 00 h 25 UTC : « le client voit le devis là où il signe et ne voit le devis en PDF que quand il accepte » : l\'e-mail d\'envoi n\'a plus de PDF, la page du lien non plus, puis le PDF signé se montre et part par e-mail après l\'acceptation (lot DEVIS-RET, ci-stat/cahier-SIGN-DEVIS-brouillon.md).',
+                'regles' => ['documents.devis-accepte-en-ligne-signe'],
+            ],
             'METHODE-14-11' => [
                 'decision' => 'Le 14/11/2026 vers 18 h 45 UTC : « tu mette que sur github et pas ici larastan car il prend du temps » ; vers 19 h 05 UTC : avant son commit, un lot ne lance plus la suite complète mais les tests liés à son travail, les tests en navigateur de ses écrans, l\'inventaire des actions et le groupe de concurrence, sauf un lot qui touche les calculs d\'argent, la caisse sécurisée ou l\'isolation ; la CI rouge se relit au début du lot et avant son commit, et se répare dans un commit à part.',
                 'hors_logiciel' => 'Méthode des lots (CLAUDE.md, protocole de rigueur, point 3).',
@@ -5785,7 +5839,7 @@ return [
             ],
             'T51.6' => [
                 'decision' => 'Mentions du devis de dépannage à domicile : Un réglage facultatif du magasin, décoché par défaut, ajoutera aux devis à un particulier les mentions du dépannage à domicile : lieu d\'intervention, devis gratuit ou payant, frais de déplacement, pièces remplacées à garder.',
-                'a_venir' => 'Étape 1, lot DEVIS-RET (devis de dépannage à domicile et rétractation), après le lot MAT-PRO.',
+                'regles' => ['documents.devis-de-depannage-a-domicile'],
             ],
             'T13.1' => [
                 'decision' => 'Escompte et TVA déductible d\'un achat : Un escompte se saisira selon trois cas ; seul l\'escompte conditionnel pris plus tard, sans mention « net de taxes », réduira la TVA déductible, le mois où il est obtenu.',
@@ -5866,7 +5920,7 @@ return [
             ],
             'T86' => [
                 'decision' => 'Valeur de l\'acceptation d\'un devis en ligne : L\'acceptation en ligne (nom tapé et « Bon pour accord ») reste une signature simple, pour tout montant, sans code par SMS ; un particulier recevra l\'information sur ses 14 jours de rétractation, avec le formulaire.',
-                'a_venir' => 'Étape 1, lot DEVIS-RET (acceptation en ligne et information sur la rétractation), après le lot MAT-PRO.',
+                'regles' => ['documents.reponse-du-client-au-devis', 'documents.retractation-d-un-particulier'],
             ],
             'T40.1' => [
                 'decision' => 'Articles du nouveau code (CIBS) dans les mentions : Les mentions garderont les articles du CGI pour les documents émis jusqu\'au 31/12/2027, puis citeront ceux du nouveau code (CIBS), relus un à un sur Légifrance, pour les documents émis dès le 01/01/2028.',

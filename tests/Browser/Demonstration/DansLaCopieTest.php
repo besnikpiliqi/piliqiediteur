@@ -121,7 +121,7 @@ test('le visiteur entre par le lien, choisit la vendeuse, vend à la caisse en s
         ->voir('1 caisse de l\'équipe est ouverte : Inès Garcia.');
 });
 
-test('la responsable envoie une facture par e-mail, la lit dans « E-mails qui seraient partis » avec sa pièce jointe, puis le client accepte le devis par le lien de son e-mail', function () {
+test('la responsable envoie une facture par e-mail, la lit dans « E-mails qui seraient partis » avec sa pièce jointe, puis le client accepte le devis par le lien de son e-mail, sans PDF, et sa confirmation part avec le devis signé', function () {
     ['copie' => $copie, 'secret' => $secret] = $this->copieDeTest(TypeDActivite::Commerce);
     $halles = lesHallesAvecUnProduit($this, $copie);
     [$facture, $devis] = $this->dansLaCopie($copie, function () use ($halles): array {
@@ -178,9 +178,14 @@ test('la responsable envoie une facture par e-mail, la lit dans « E-mails qui s
         ->remplir('Votre nom et votre prénom', 'Jean Dupont')
         ->cliquer('input[name="bon_pour_accord"]')
         ->cliquerSur('Accepter le devis')
-        ->voir('Merci : votre acceptation est enregistrée');
+        ->voir('par Jean Dupont')
+        ->voir('Télécharger le devis signé en PDF');
 
     expect($this->dansLaCopie($copie, fn (): StatutDevis => app(TenantContext::class)->runAs($halles, fn (): StatutDevis => Devis::query()->findOrFail($devis->getKey())->statut)))->toBe(StatutDevis::Accepte);
+    $confirmation = $this->dansLaCopie($copie, fn (): CourrielDeLaDemonstration => CourrielDeLaDemonstration::query()->withoutGlobalScopes()->where('objet', 'like', 'Acceptation enregistrée : %'.$devis->numero.'%')->sole());
+    expect($courrielDuDevis->pieces_jointes)->toBe([])
+        ->and(array_column($confirmation->pieces_jointes, 'type'))->toBe(['application/pdf'])
+        ->and((string) $confirmation->html)->toContain('Votre droit de rétractation');
 });
 
 test('« E-mails qui seraient partis » se lit par pages de cinquante', function () {

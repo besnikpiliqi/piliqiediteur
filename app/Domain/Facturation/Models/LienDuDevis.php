@@ -3,6 +3,7 @@
 namespace App\Domain\Facturation\Models;
 
 use App\Domain\Calendrier\Casts\Instant;
+use App\Domain\Facturation\Enums\ReponseAuDevis;
 use App\Domain\Facturation\Enums\StatutDevis;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Domain\Tenancy\Concerns\FigeLeNomDeSesAuteurs;
@@ -131,6 +132,29 @@ class LienDuDevis extends Model
     public function reponse(): HasOne
     {
         return $this->hasOne(ReponseDuDevis::class);
+    }
+
+    /**
+     * Le lien par lequel le client a accepté le devis montre encore sa
+     * confirmation et le PDF du devis signé (SIGN-DEVIS, demande de
+     * l'éditeur du 14/11/2026), tant qu'il l'aurait montré pour répondre :
+     * pas retiré, le dernier lien de son devis, dans la validité du devis ;
+     * et tant que le devis garde cette acceptation (accepté, ou transformé
+     * en facture après elle, voir Devis::reponseALaVersionEnvoyee()) : un
+     * devis modifié depuis, repassé en brouillon, ne la montre plus. Un
+     * refus ne montre rien de plus que son message.
+     */
+    public function confirmeLAcceptation(Devis $devis): bool
+    {
+        $reponse = $devis->reponseALaVersionEnvoyee();
+
+        return $this->retire_le === null
+            && $devis->getKey() === $this->devis_id
+            && $reponse !== null
+            && (int) $reponse->lien_du_devis_id === (int) $this->getKey()
+            && $reponse->reponse === ReponseAuDevis::Acceptation
+            && ! $devis->validiteDepassee()
+            && self::query()->where('devis_id', $this->devis_id)->where('id', '>', $this->getKey())->doesntExist();
     }
 
     /**

@@ -119,6 +119,14 @@ return new class extends Migration
             $table->string('mention_penalites_retard', 500);
             $table->string('mention_indemnite_recouvrement', 500);
             $table->string('mention_escompte', 500);
+            // Dépannage, réparation ou entretien à domicile (arrêté du 24
+            // janvier 2017, T51.6, voir ParametresFactures) : décoché au
+            // départ ; coché, chaque devis à un particulier imprime le lieu
+            // de l'intervention, « Devis gratuit » ou « Devis payant : X € »
+            // (le prix du devis, vide pour un devis gratuit) et le droit de
+            // garder les pièces remplacées (voir DepannageADomicile).
+            $table->boolean('depannage_a_domicile')->default(false);
+            $table->decimal('prix_du_devis_de_depannage', 10, 2)->nullable();
             $table->timestamps();
 
             // Un code n'appartient qu'à un magasin de la société (voir
@@ -133,6 +141,7 @@ return new class extends Migration
         });
 
         DeclencheursDeProtection::auMoins('magasins', 'delai_paiement_jours', 0);
+        DB::statement('ALTER TABLE magasins ADD CONSTRAINT magasins_prix_du_devis_de_depannage CHECK (prix_du_devis_de_depannage IS NULL OR prix_du_devis_de_depannage > 0)');
 
         // Un seul établissement principal par société.
         DB::statement('CREATE UNIQUE INDEX magasins_un_principal_par_societe ON magasins (societe_id) WHERE est_etablissement_principal');

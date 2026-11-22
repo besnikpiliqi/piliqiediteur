@@ -15,8 +15,10 @@ use App\Domain\Facturation\Contracts\DocumentEnvoyable;
 use App\Domain\Facturation\Enums\NatureOperation;
 use App\Domain\Facturation\Enums\StatutDevis;
 use App\Domain\Facturation\Enums\TransportPar;
+use App\Domain\Facturation\Services\DepannageADomicile;
 use App\Domain\Facturation\Services\Emetteur;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
+use App\Domain\Tenancy\Models\Magasin;
 use Database\Factories\DevisFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -36,6 +38,8 @@ class Devis extends Model implements DocumentEnvoyable
     public const REFUS_SUPPRESSION = 'Ce devis ne peut pas être supprimé : seul un brouillon jamais envoyé se supprime, un devis numéroté reste.';
 
     public const REFUS_INTROUVABLE = 'Ce devis n\'existe pas, ou plus, dans ce magasin.';
+
+    public const REFUS_D_ENVOI_SANS_ACCEPTATION_POSSIBLE = 'Ce devis ne s\'envoie plus : refusé ou expiré, il ne peut plus être accepté, et votre client ne reçoit le PDF d\'un devis qu\'une fois accepté. Établissez un nouveau devis.';
 
     protected $table = 'devis';
 
@@ -73,6 +77,9 @@ class Devis extends Model implements DocumentEnvoyable
         'date_emission' => Instant::class,
         'accepte_le' => Instant::class,
         'emetteur_fige' => 'array',
+        'signe_chez_le_client' => 'boolean',
+        'depannage_a_domicile' => 'boolean',
+        'prix_du_devis_de_depannage' => 'decimal:2',
         'date_validite' => JourCivil::class,
         'total_ht' => 'decimal:2',
         'total_tva' => 'decimal:2',
@@ -248,7 +255,8 @@ class Devis extends Model implements DocumentEnvoyable
      * L'empreinte SHA-256 de la version du devis telle que son client la
      * reçoit : son numéro, son envoi, sa validité, son client, son
      * émetteur figé, sa nature d'opération, sa livraison, la date prévue
-     * de l'opération, ses lignes et ses totaux, encodés en JSON une seule
+     * de l'opération, ses mentions de dépannage à domicile (voir
+     * DepannageADomicile), ses lignes et ses totaux, encodés en JSON une seule
      * fois. La réponse en ligne du client la garde (voir ReponseDuDevis) :
      * une version modifiée depuis a une autre empreinte.
      */
@@ -282,6 +290,12 @@ class Devis extends Model implements DocumentEnvoyable
             'nature_operation' => $this->getRawOriginal('nature_operation'),
             'livraison' => $this->only(['livraison_adresse', 'livraison_complement', 'livraison_code_postal', 'livraison_ville', 'livraison_pays', 'transport_par']),
             'date_operation' => [$this->getRawOriginal('date_operation_debut'), $this->getRawOriginal('date_operation_fin')],
+            'depannage' => [
+                'lieu_d_intervention' => $this->lieu_d_intervention,
+                'signe_chez_le_client' => (bool) $this->signe_chez_le_client,
+                'depannage_a_domicile' => $this->depannage_a_domicile,
+                'prix_du_devis' => $this->getRawOriginal('prix_du_devis_de_depannage'),
+            ],
             'conditions_paiement' => $this->conditions_paiement,
             'notes' => $this->notes,
             'lignes' => $lignes,
@@ -359,6 +373,44 @@ class Devis extends Model implements DocumentEnvoyable
     }
 
     /**
+     * Note le lieu de l'intervention et la case « Devis signé chez le
+     * client » d'un devis de dépannage à domicile, quand le magasin a coché
+     * le réglage et que le client est un particulier (voir
+     * DepannageADomicile) : le lieu, sans espaces autour, est obligatoire ;
+     * sinon, aucun des deux ne reste d'un enregistrement précédent. Ce qui
+     * n'est pas fourni reste tel quel. Écrits à chaque enregistrement du
+     * devis par ses actions, jamais par mass assignment.
+     *
+     * @param  array<string, mixed>  $attributs  lieu_d_intervention, signe_chez_le_client
+     *
+     * @throws LogicException un devis de dépannage sans lieu d'intervention, ou un lieu trop long
+     */
+    public function noterLeDepannageADomicile(array $attributs, Magasin $magasin, bool $clientProfessionnel): void
+    {
+        if (! DepannageADomicile::concerne($magasin, $clientProfessionnel)) {
+            $this->forceFill(['lieu_d_intervention' => null, 'signe_chez_le_client' => false]);
+
+            return;
+        }
+
+        $lieu = array_key_exists('lieu_d_intervention', $attributs) ? $attributs['lieu_d_intervention'] : $this->lieu_d_intervention;
+        $lieu = is_string($lieu) ? trim($lieu) : null;
+
+        if ($lieu === null || $lieu === '') {
+            throw new LogicException(DepannageADomicile::REFUS_SANS_LIEU);
+        }
+
+        if (mb_strlen($lieu) > DepannageADomicile::LIEU_MAXIMUM) {
+            throw new LogicException('Le lieu de l\'intervention ne doit pas dépasser '.DepannageADomicile::LIEU_MAXIMUM.' caractères.');
+        }
+
+        $this->forceFill([
+            'lieu_d_intervention' => $lieu,
+            'signe_chez_le_client' => array_key_exists('signe_chez_le_client', $attributs) ? (bool) $attributs['signe_chez_le_client'] : (bool) $this->signe_chez_le_client,
+        ]);
+    }
+
+    /**
      * Le type du client écrit au dernier enregistrement du devis : il
      * décide de la présentation du client et des natures d'opération
      * permises, jamais des montants, les mêmes pour tout client (voir
@@ -370,14 +422,16 @@ class Devis extends Model implements DocumentEnvoyable
     }
 
     /**
-     * Quel que soit son statut : un brouillon part au statut « Envoyé »
-     * (voir EnvoyerDocumentAction et EmettreDevisAction), un devis déjà
-     * envoyé, accepté, refusé ou expiré peut toujours être renvoyé à son
-     * client tel qu'il l'a reçu.
+     * Un brouillon part au statut « Envoyé » (voir EnvoyerDocumentAction et
+     * EmettreDevisAction) ; un devis envoyé repart avec un nouveau lien, un
+     * devis accepté ou transformé en facture avec son PDF, tel que son
+     * client l'a accepté. Un devis refusé ou expiré ne s'envoie plus : il
+     * ne peut plus être accepté, et son client ne reçoit le PDF d'un devis
+     * qu'une fois accepté (demande de l'éditeur du 14/11/2026).
      */
     public function peutEtreEnvoye(): bool
     {
-        return true;
+        return ! in_array($this->statut, [StatutDevis::Refuse, StatutDevis::Expire], true) && ! $this->estExpire();
     }
 
     /**

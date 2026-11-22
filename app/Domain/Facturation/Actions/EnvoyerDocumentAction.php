@@ -113,7 +113,11 @@ class EnvoyerDocumentAction
             }
 
             if (! $document->peutEtreEnvoye()) {
-                throw new LogicException($document instanceof RecuPaiement ? self::REFUS_INTROUVABLE : "Impossible d'envoyer ce document au statut « {$document->statut->getLabel()} ».");
+                throw new LogicException(match (true) {
+                    $document instanceof RecuPaiement => self::REFUS_INTROUVABLE,
+                    $document instanceof Devis => Devis::REFUS_D_ENVOI_SANS_ACCEPTATION_POSSIBLE,
+                    default => "Impossible d'envoyer ce document au statut « {$document->statut->getLabel()} ».",
+                });
             }
 
             if ($document instanceof Facture && $document->statut === StatutFacture::Emise) {
@@ -128,9 +132,9 @@ class EnvoyerDocumentAction
                 'envoye_par' => $expediteur->getKey(),
             ]);
 
-            // Un devis déjà accepté, refusé, expiré ou transformé repart tel
-            // que le client l'a reçu, sans lien : il n'attend plus de
-            // réponse. Le jeton du lien se tire ici, une fois pour l'envoi :
+            // Un devis déjà accepté ou transformé repart tel que le client
+            // l'a accepté, avec son PDF, sans lien : il n'attend plus de
+            // réponse (voir Devis::peutEtreEnvoye()). Le jeton du lien se tire ici, une fois pour l'envoi :
             // la base n'en garde que l'empreinte, la tâche d'envoi le porte,
             // chiffré, jusqu'au départ de l'e-mail, le même à chaque
             // tentative (voir EnvoyerDocumentJob).

@@ -6,12 +6,16 @@ use App\Domain\Achats\Actions\CreerAvoirFournisseurAction;
 use App\Domain\Achats\Actions\CreerFactureAchatAction;
 use App\Domain\Achats\Models\AvoirFournisseur;
 use App\Domain\Achats\Models\FactureAchat;
+use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Calendrier\Calendrier;
+use App\Domain\Catalogue\Models\Service;
 use App\Domain\Contacts\Actions\ArchiverUneFicheAction;
 use App\Domain\Contacts\Actions\VerifierNumeroTvaAction;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\ConsultationVies;
 use App\Domain\Contacts\Models\Fournisseur;
+use App\Domain\Facturation\Actions\AccepterDevisAction;
 use App\Domain\Facturation\Actions\AjouterPreuveOperationAction;
 use App\Domain\Facturation\Actions\CreerAvoirAction;
 use App\Domain\Facturation\Actions\CreerDevisAction;
@@ -37,8 +41,10 @@ use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\PreuveOperation;
 use App\Domain\Facturation\Models\VisaDetaxe;
 use App\Domain\Facturation\Services\PartDeReglement;
+use App\Domain\Tenancy\Actions\ModifierLesParametresDuMagasinAction;
 use App\Domain\Tenancy\Services\IdentifiantsInsee;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\FicheLue;
 use App\Domain\Tenancy\Support\ValeursLues;
 use App\Integrations\Pdp\Contracts\PdpGatewayInterface;
 use App\Integrations\Pdp\FakePdpGateway;
@@ -67,7 +73,9 @@ use LogicException;
  * prestation de plusieurs jours (période imprimée), une facture datée de
  * la veille de son émission, une livraison expédiée deux jours après la
  * facture, une livraison enlevée le jour de son émission (date notée sans
- * mention), et un devis qui prévoit sa livraison ; et les incidents : une facture rejetée par
+ * mention), et un devis qui prévoit sa livraison ; les devis de
+ * dépannage à domicile de trois magasins (T51.6, T86, voir DEPANNAGES et
+ * casDuDepannage()) ; et les incidents : une facture rejetée par
  * la plateforme agréée et une autre « non transmise : incident technique »
  * (voir transmettreAvecDesIncidents()), et un envoi en échec pendant une
  * panne du serveur d'envoi (voir ServeurDEnvoiEnPanne).
@@ -94,6 +102,76 @@ final class DocumentsDesCas
      */
     private const EXPORT_NON_PROUVE = 175;
 
+    /**
+     * Les magasins qui font le dépannage, la réparation ou l'entretien à
+     * domicile (T51.6, T86, voir casDuDepannage()) : l'Atelier Brun, en
+     * franchise en base, sur le poste seulement, et, pour que chaque base
+     * modèle du site de démonstration en montre un, le magasin de la
+     * République de Maison Ferrand (modèles « Commerce » et « Cabinet ») et
+     * le cabinet de conseil (modèle « Services »), dont les jours tombent
+     * dans les derniers de l'histoire, ceux dont les e-mails paraissent dans
+     * « E-mails qui seraient partis » de chaque copie neuve (voir
+     * DatabaseSeeder::JOURS_DES_E_MAILS_DES_MODELES) : l'envoi du devis,
+     * sans PDF, et la confirmation de son acceptation, avec le devis signé
+     * et le droit de rétractation. Pour chacun : sa société, son
+     * responsable, l'heure de ses gestes, ses quatre jours comptés depuis la
+     * fin de l'histoire (voir casDuDepannage()), le service de
+     * l'intervention et celui du déplacement (sans prix quand le magasin
+     * l'a déjà), le prix d'un devis payant, les trois clients particuliers,
+     * le message de l'envoi, le lieu du devis payant et le devis à un
+     * professionnel (client, adresse de l'envoi, article ou service,
+     * quantité).
+     *
+     * @var array<string, array{societe: string, responsable: string, heure: string, jours: array{0: int, 1: int, 2: int, 3: int}, intervention: array{0: string, 1: string}, deplacement: array{0: string, 1: string|null}, prix_payant: string, signe: array{nom: string, adresse: string, code_postal: string, ville: string, email: string}, avec_debut: array{nom: string, adresse: string, code_postal: string, ville: string, email: string}, payant: array{nom: string, adresse: string, code_postal: string, ville: string, email: string}, message: string, lieu_du_payant: string, professionnel: array{0: string, 1: string, 2: string, 3: int}}>
+     */
+    private const DEPANNAGES = [
+        'atelier' => [
+            'societe' => 'atelier',
+            'responsable' => 'Mathilde Brun (atelier)',
+            'heure' => '23:20',
+            'jours' => [16, 15, 13, 11],
+            'intervention' => ['Réparation de machine à coudre', '65.00'],
+            'deplacement' => ['Déplacement à domicile', '30.00'],
+            'prix_payant' => '35.00',
+            'signe' => ['nom' => 'Jeanne Roussel', 'adresse' => '18 rue des Martyrs', 'code_postal' => '75009', 'ville' => 'Paris', 'email' => 'jeanne.roussel@exemple.test'],
+            'avec_debut' => ['nom' => 'Bernard Petit', 'adresse' => '5 villa des Tilleuls', 'code_postal' => '75020', 'ville' => 'Paris', 'email' => 'bernard.petit@exemple.test'],
+            'payant' => ['nom' => 'Hélène Garnier', 'adresse' => '42 rue de Charonne', 'code_postal' => '75011', 'ville' => 'Paris', 'email' => 'helene.garnier@exemple.test'],
+            'message' => 'Bonjour, voici notre devis pour la réparation de votre machine à coudre.',
+            'lieu_du_payant' => "Chez Mme Odette Garnier\n9 rue Oberkampf\n75011 Paris",
+            'professionnel' => ['Agence Pixel', 'contact@agence-pixel.exemple.test', 'Retouche de vêtement', 6],
+        ],
+        'republique' => [
+            'societe' => 'commerce',
+            'responsable' => 'Hugo Lefebvre',
+            'heure' => '23:20',
+            'jours' => [7, 6, 5, 4],
+            'intervention' => ['Entretien de tapis à domicile', '60.00'],
+            'deplacement' => ['Déplacement à domicile', '25.00'],
+            'prix_payant' => '20.00',
+            'signe' => ['nom' => 'Sylvie Caron', 'adresse' => '14 rue de Malte', 'code_postal' => '75011', 'ville' => 'Paris', 'email' => 'sylvie.caron@exemple.test'],
+            'avec_debut' => ['nom' => 'Laurent Chevalier', 'adresse' => '22 rue de Lancry', 'code_postal' => '75010', 'ville' => 'Paris', 'email' => 'laurent.chevalier@exemple.test'],
+            'payant' => ['nom' => 'Françoise Blanc', 'adresse' => '6 rue Jean-Pierre Timbaud', 'code_postal' => '75011', 'ville' => 'Paris', 'email' => 'francoise.blanc@exemple.test'],
+            'message' => 'Bonjour, voici notre devis pour l\'entretien de vos tapis.',
+            'lieu_du_payant' => "Maison de Mme Françoise Blanc\n4 chemin des Prés\n77580 Crécy-la-Chapelle",
+            'professionnel' => ['Studio Nord', 'bonjour@studio-nord.exemple.test', 'COUSSIN-LIN', 4],
+        ],
+        'conseil' => [
+            'societe' => 'services',
+            'responsable' => 'Claire Dubois',
+            'heure' => '23:25',
+            'jours' => [7, 6, 5, 4],
+            'intervention' => ['Dépannage informatique à domicile', '80.00'],
+            'deplacement' => ['Forfait déplacement', null],
+            'prix_payant' => '25.00',
+            'signe' => ['nom' => 'Monique Faure', 'adresse' => '12 rue Caulaincourt', 'code_postal' => '75018', 'ville' => 'Paris', 'email' => 'monique.faure@exemple.test'],
+            'avec_debut' => ['nom' => 'Gérard Lambert', 'adresse' => '3 rue des Pyrénées', 'code_postal' => '75020', 'ville' => 'Paris', 'email' => 'gerard.lambert@exemple.test'],
+            'payant' => ['nom' => 'Nathalie Roy', 'adresse' => '27 avenue Parmentier', 'code_postal' => '75011', 'ville' => 'Paris', 'email' => 'nathalie.roy@exemple.test'],
+            'message' => 'Bonjour, voici notre devis pour la remise en route de votre ordinateur.',
+            'lieu_du_payant' => "Chez M. André Roy\n8 rue Saint-Maur\n75011 Paris",
+            'professionnel' => ['Cabinet dentaire Morel', 'accueil@dentaire-morel.exemple.test', 'Heure de conseil', 2],
+        ],
+    ];
+
     private ?Facture $exportARegulariser = null;
 
     private ?Facture $exportAvecMrn = null;
@@ -109,6 +187,14 @@ final class DocumentsDesCas
     private ?EnvoiDocument $devisARefuserEnLigne = null;
 
     private ?EnvoiDocument $devisAAccepterEnLigne = null;
+
+    /**
+     * Les devis de dépannage envoyés par e-mail, par magasin, que leur
+     * client accepte en ligne (voir casDuDepannage()).
+     *
+     * @var array<string, array<'avec_debut'|'payant', EnvoiDocument>>
+     */
+    private array $depannagesEnvoyes = [];
 
     private bool $fichesCreees = false;
 
@@ -137,6 +223,12 @@ final class DocumentsDesCas
 
         if ($this->semis->seme('services')) {
             $this->casDuConseil($rang, $avantLaFin);
+        }
+
+        foreach (self::DEPANNAGES as $magasin => $cas) {
+            if ($this->semis->seme($cas['societe'])) {
+                $this->casDuDepannage($magasin, $rang, $avantLaFin);
+            }
         }
 
         if ($this->semis->seme('commerce') && $rang % 10 === 0) {
@@ -312,6 +404,103 @@ final class DocumentsDesCas
         $conseil->fiche($claire, Client::class, ['nom' => 'Mairie de Montreuil', 'type_client' => TypeClient::Professionnel, 'siren' => IdentifiantsInsee::avecSaCle('00000029'), 'adresse' => 'Place Jean-Jaurès', 'code_postal' => '93100', 'ville' => 'Montreuil', 'pays' => 'FR', 'email' => 'finances@mairie-montreuil.exemple.test', 'delai_paiement_jours' => 30, 'mode_paiement_prefere' => ModePaiement::Virement->value]);
         $conseil->fiche($claire, Client::class, ['nom' => 'Salon Coiffure Élise', 'type_client' => TypeClient::Professionnel, 'siren' => IdentifiantsInsee::avecSaCle('00000028'), 'adresse' => '9 rue des Abbesses', 'code_postal' => '75018', 'ville' => 'Paris', 'pays' => 'FR', 'mode_paiement_prefere' => ModePaiement::Prelevement->value]);
         $conseil->fiche($claire, Client::class, ['nom' => 'Thomas Leroux', 'type_client' => TypeClient::Particulier, 'pays' => 'FR', 'mode_paiement_prefere' => ModePaiement::Especes->value]);
+    }
+
+    /**
+     * Le dépannage à domicile d'un magasin (T51.6, T86, voir DEPANNAGES),
+     * aux jours de son cas : le premier, son responsable coche le réglage
+     * du magasin (devis gratuit), crée le service de l'intervention et, au
+     * besoin, celui du déplacement, sur une ligne à part, et trois clients
+     * particuliers ; il fait signer chez le premier un devis, qui imprime le
+     * droit de rétractation et son formulaire, et qu'il enregistre comme
+     * accepté ; il envoie par e-mail au deuxième un devis qui n'est pas
+     * signé chez lui, et à un professionnel un devis qui ne porte aucune de
+     * ces mentions, dont la page du lien ne parle pas de rétractation. Le lendemain soir, le deuxième l'accepte en
+     * ligne en demandant que la prestation commence avant la fin de son
+     * délai de rétractation. Le troisième jour, le responsable rend ses
+     * devis de dépannage payants : les devis déjà envoyés gardent « Devis
+     * gratuit », figé à leur envoi ; il envoie au troisième client un devis
+     * payant pour un autre lieu que son adresse, et garde un brouillon pour
+     * le premier, qui suit le réglage d'aujourd'hui. Le quatrième, ce client
+     * accepte en ligne sans demander un début anticipé.
+     */
+    private function casDuDepannage(string $magasin, int $rang, int $avantLaFin): void
+    {
+        $cas = self::DEPANNAGES[$magasin];
+        [$premier, $lendemain, $payant, $acceptationDuPayant] = $cas['jours'];
+
+        match ($avantLaFin) {
+            $premier => $this->leSoir($rang, $cas['heure'], fn () => $this->semerLeDepannageADomicile($magasin)),
+            $lendemain => $this->leSoir($rang, $cas['heure'], fn (): mixed => app(RepondreAuDevisEnLigneAction::class)->accepter(self::jetonDuDevis($this->depannagesEnvoyes[$magasin]['avec_debut'] ?? null), $cas['avec_debut']['nom'], true, true)),
+            $payant => $this->leSoir($rang, $cas['heure'], fn () => $this->semerLeDepannagePayant($magasin)),
+            $acceptationDuPayant => $this->leSoir($rang, $cas['heure'], fn (): mixed => app(RepondreAuDevisEnLigneAction::class)->accepter(self::jetonDuDevis($this->depannagesEnvoyes[$magasin]['payant'] ?? null), $cas['payant']['nom'], true)),
+            default => null,
+        };
+    }
+
+    private function semerLeDepannageADomicile(string $magasin): void
+    {
+        $cas = self::DEPANNAGES[$magasin];
+        $gestes = $this->gestes($magasin);
+        $responsable = $this->semis->compte($cas['responsable']);
+        $gestes->dans(fn (): array => app(ModifierLesParametresDuMagasinAction::class)->handle($responsable, PermissionRegistry::PARAMETRES_GERER, FicheLue::de($gestes->magasin->refresh())->valeurs(), ['depannage_a_domicile' => true]));
+
+        foreach ([$cas['intervention'], $cas['deplacement']] as [$nom, $prix]) {
+            if ($prix !== null) {
+                $gestes->fiche($responsable, Service::class, ['nom' => $nom, 'prix_ttc' => $prix, 'taux_tva' => '20', 'actif' => true]);
+            }
+        }
+
+        $clients = [];
+
+        foreach (['signe', 'avec_debut', 'payant'] as $role) {
+            $client = $cas[$role];
+            $clients[$role] = $gestes->fiche($responsable, Client::class, ['nom' => $client['nom'], 'type_client' => TypeClient::Particulier, 'adresse' => $client['adresse'], 'code_postal' => $client['code_postal'], 'ville' => $client['ville'], 'pays' => 'FR', 'email' => $client['email']]);
+        }
+
+        $lignes = [$this->ligne($gestes, $cas['intervention'][0], 1), $this->ligne($gestes, $cas['deplacement'][0], 1)];
+        $validite = $this->validiteDesDevisDeDepannage();
+        $signe = $gestes->dans(fn (): Devis => app(EmettreDevisAction::class)->handle($responsable, app(CreerDevisAction::class)->handle($responsable, $clients['signe'], $lignes, ['date_validite' => $validite, 'lieu_d_intervention' => self::adresseDe($cas['signe']), 'signe_chez_le_client' => true]), GestesDuMagasin::jeton()));
+        $gestes->dans(fn (): Devis => app(AccepterDevisAction::class)->handle($responsable, $signe));
+        $enLigne = $gestes->dans(fn (): Devis => app(CreerDevisAction::class)->handle($responsable, $clients['avec_debut'], $lignes, ['date_validite' => $validite, 'lieu_d_intervention' => self::adresseDe($cas['avec_debut'])]));
+        $this->depannagesEnvoyes[$magasin]['avec_debut'] = $gestes->dans(fn (): EnvoiDocument => app(EnvoyerDocumentAction::class)->handle($responsable, $enLigne, $cas['avec_debut']['email'], $cas['message'], GestesDuMagasin::jeton()));
+        [$professionnel, $adresse, $article, $quantite] = $cas['professionnel'];
+        $devisDuProfessionnel = $gestes->dans(fn (): Devis => app(CreerDevisAction::class)->handle($responsable, $this->client($gestes, $professionnel), [$this->ligne($gestes, $article, $quantite)], ['date_validite' => $validite]));
+        $gestes->dans(fn (): EnvoiDocument => app(EnvoyerDocumentAction::class)->handle($responsable, $devisDuProfessionnel, $adresse, null, GestesDuMagasin::jeton()));
+    }
+
+    private function semerLeDepannagePayant(string $magasin): void
+    {
+        $cas = self::DEPANNAGES[$magasin];
+        $gestes = $this->gestes($magasin);
+        $responsable = $this->semis->compte($cas['responsable']);
+        $gestes->dans(fn (): array => app(ModifierLesParametresDuMagasinAction::class)->handle($responsable, PermissionRegistry::PARAMETRES_GERER, FicheLue::de($gestes->magasin->refresh())->valeurs(), ['prix_du_devis_de_depannage' => $cas['prix_payant']]));
+        $validite = $this->validiteDesDevisDeDepannage();
+        $payant = $gestes->dans(fn (): Devis => app(CreerDevisAction::class)->handle($responsable, $this->client($gestes, $cas['payant']['nom']), [$this->ligne($gestes, $cas['intervention'][0], 2), $this->ligne($gestes, $cas['deplacement'][0], 1)], ['date_validite' => $validite, 'lieu_d_intervention' => $cas['lieu_du_payant']]));
+        $this->depannagesEnvoyes[$magasin]['payant'] = $gestes->dans(fn (): EnvoiDocument => app(EnvoyerDocumentAction::class)->handle($responsable, $payant, $cas['payant']['email'], null, GestesDuMagasin::jeton()));
+        $gestes->dans(fn (): Devis => app(CreerDevisAction::class)->handle($responsable, $this->client($gestes, $cas['signe']['nom']), [$this->ligne($gestes, $cas['intervention'][0], 1)], ['date_validite' => $validite, 'lieu_d_intervention' => self::adresseDe($cas['signe'])]));
+    }
+
+    /**
+     * La validité des devis de dépannage : un mois après la veille du
+     * semis, pour que les liens de leurs e-mails mènent encore, quand
+     * l'éditeur ou le visiteur d'une copie les ouvre, à leur page ou à la
+     * confirmation de leur acceptation et au devis signé.
+     */
+    private function validiteDesDevisDeDepannage(): string
+    {
+        return Calendrier::ajouterJours($this->horloge->jour(SemisComplet::JOURS - 1), 30);
+    }
+
+    /**
+     * L'adresse d'un client particulier, telle que le formulaire du devis
+     * la préremplit pour le lieu de l'intervention.
+     *
+     * @param  array{adresse: string, code_postal: string, ville: string}  $client
+     */
+    private static function adresseDe(array $client): string
+    {
+        return "{$client['adresse']}\n{$client['code_postal']} {$client['ville']}";
     }
 
     /**

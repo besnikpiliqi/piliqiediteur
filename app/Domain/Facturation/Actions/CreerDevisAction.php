@@ -25,8 +25,9 @@ use LogicException;
  * dans le magasin actif avant toute écriture (voir
  * BelongsToMagasin::relueDansLeMagasin()), et note le type de ce client, si le magasin vend en franchise de TVA, la nature
  * de l'opération, que ce client et ce régime doivent permettre (voir
- * ContexteDeVente::pourEnregistrer()), et la livraison (voir
- * NoteSaNatureDOperation), que reprend la facture qui en est tirée (voir
+ * ContexteDeVente::pourEnregistrer()), la livraison (voir
+ * NoteSaNatureDOperation) et, pour un dépannage à domicile, le lieu de
+ * l'intervention (voir DepannageADomicile), que reprend la facture qui en est tirée (voir
  * CreerFactureDepuisDevisAction).
  *
  * Un magasin suspendu, fermé ou cédé, ou dont la société est en lecture
@@ -52,7 +53,7 @@ class CreerDevisAction
 
     /**
      * @param  array<array-key, array<string, mixed>>  $lignes
-     * @param  array<string, mixed>  $attributs  date_validite, conditions_paiement, notes, et la nature et la livraison (voir NoteSaNatureDOperation::noterSaNatureDOperation())
+     * @param  array<string, mixed>  $attributs  date_validite, conditions_paiement, notes, la nature et la livraison (voir NoteSaNatureDOperation::noterSaNatureDOperation()), et le lieu de l'intervention d'un dépannage à domicile (voir Devis::noterLeDepannageADomicile())
      *
      * @throws AuthorizationException
      * @throws InvalidArgumentException quand les conditions de paiement sont trop longues pour le pied du PDF (voir PiedDePage)
@@ -64,24 +65,31 @@ class CreerDevisAction
 
         return DB::transaction(function () use ($auteur, $client, $lignes, $attributs) {
             $magasin = app(TenantContext::class)->magasin();
-            Magasin::query()->whereKey($magasin->getKey())->sharedLock()->firstOrFail()->verifierQuIlEstOuvert();
+            $relu = Magasin::query()->whereKey($magasin->getKey())->sharedLock()->firstOrFail();
+            $relu->verifierQuIlEstOuvert();
             $compte = $this->lecteur->exigerSousVerrou($auteur, 'create', $magasin, Devis::class);
             $client = Client::relueDansLeMagasin($client, Client::REFUS_AUTRE_MAGASIN);
 
-            return $this->operateur->pendant($compte, fn (): Devis => $this->creer($compte, $magasin, $client, $lignes, $attributs));
+            return $this->operateur->pendant($compte, fn (): Devis => $this->creer($compte, $magasin, $relu, $client, $lignes, $attributs));
         });
     }
 
     /**
+     * Le dépannage à domicile se décide sur la ligne du magasin relue sous
+     * verrou ($relu), jamais sur le magasin du contexte, lu au début de la
+     * requête : un réglage changé entre-temps vaut déjà, comme à l'envoi
+     * du devis (voir EmettreDevisAction).
+     *
      * @param  array<array-key, array<string, mixed>>  $lignes
      * @param  array<string, mixed>  $attributs
      *
      * @throws AuthorizationException
      */
-    private function creer(User $compte, Magasin $magasin, Client $client, array $lignes, array $attributs): Devis
+    private function creer(User $compte, Magasin $magasin, Magasin $relu, Client $client, array $lignes, array $attributs): Devis
     {
         $devis = new Devis($attributs);
         $contexte = ContexteDeVente::pourEnregistrer($client, $magasin, $devis->noterSaNatureDOperation($attributs));
+        $devis->noterLeDepannageADomicile($attributs, $relu, $client->estProfessionnel());
         $document = $this->constructeurLigne->construireToutes($lignes, $contexte);
         $this->derogations->exiger($compte, [], $document->lignes, $contexte);
         $devis->forceFill(['client_id' => $client->getKey(), ...$contexte->colonnes()])->save();

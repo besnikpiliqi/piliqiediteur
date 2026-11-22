@@ -2,9 +2,13 @@
     La page du lien secret d'un devis envoyé (voir ReponseAuDevisController
     et LienDuDevis) : ce seul devis tel qu'il a été envoyé, le magasin qui
     l'envoie (son nom et son établissement, comme sur le PDF), son numéro,
-    sa validité, ses lignes et ses totaux, son PDF ; puis les deux réponses
-    possibles : accepter, en tapant son nom et en cochant « Bon pour
-    accord », ou refuser, avec un motif facultatif. Rien d'autre du
+    sa validité, ses mentions de dépannage à domicile, ses lignes et ses
+    totaux, sans PDF avant la réponse (demande de l'éditeur du 14/11/2026) ;
+    pour un particulier, son droit de rétractation de quatorze jours et le
+    formulaire type (T86) ; puis les deux réponses possibles : accepter, en
+    tapant son nom et en cochant « Bon pour accord », avec, pour un
+    particulier, la case qui demande que la prestation commence avant la
+    fin du délai, ou refuser, avec un motif facultatif. Rien d'autre du
     magasin, de la société ni d'un autre client, aucun lien vers le reste
     de PILIQI, aucun script.
 
@@ -23,7 +27,9 @@
     @param list<string> $erreurs
     @param string|null $signataire
     @param string|null $motif
-    @param string $adresseDuPdf
+    @param bool $debutAnticipe la demande de début anticipé cochée avant une saisie refusée
+    @param \App\Domain\Facturation\Services\DepannageADomicile|null $depannage
+    @param \App\Domain\Facturation\Services\DroitDeRetractation|null $retractation
     @param string $actionAccepter
     @param string $actionRefuser
     @param int $signataireMaximum
@@ -58,7 +64,10 @@
         button { background: #15803d; color: #fff; border: 0; border-radius: .5rem; padding: .75rem 1.25rem; font-size: 1rem; cursor: pointer; }
         button.refus { background: #fff; color: #b91c1c; border: 1px solid #b91c1c; }
         .rappel { color: #4b5563; font-size: .9rem; }
-        a.pdf { color: #1d4ed8; }
+        .depannage, .retractation { border: 1px solid #e5e7eb; border-radius: .5rem; padding: .75rem 1rem; margin: 1rem 0; }
+        .retractation summary { font-weight: 600; cursor: pointer; }
+        .formulaire { border: 1px dashed #9ca3af; border-radius: .375rem; padding: .5rem 1rem; margin-top: .75rem; }
+        .aide { color: #4b5563; font-size: .85rem; font-weight: 400; display: block; }
     </style>
 </head>
 <body>
@@ -75,7 +84,14 @@
     @if ($validite)
         <p>Valable jusqu'au <strong>{{ \App\Domain\Calendrier\Calendrier::afficherJour($validite, 'd/m/Y') }}</strong>.</p>
     @endif
-    <p><a class="pdf" href="{{ $adresseDuPdf }}" rel="noreferrer" download>Télécharger le devis en PDF</a></p>
+    @if ($depannage)
+        <div class="depannage">
+            <strong>Dépannage, réparation ou entretien à domicile</strong><br>
+            Lieu de l'intervention : {{ $depannage->lieu ?? '—' }}<br>
+            {{ $depannage->mentionDuPrixDuDevis() }}<br>
+            {{ \App\Domain\Facturation\Services\DepannageADomicile::PIECES_REMPLACEES }}
+        </div>
+    @endif
 
     <table>
         <thead>
@@ -111,6 +127,21 @@
         <tr><td class="nombre total">Total TTC</td><td class="nombre total">{{ $totalTtc }}</td></tr>
     </table>
 
+    @if ($retractation)
+        <details class="retractation">
+            <summary>{{ \App\Domain\Facturation\Services\DroitDeRetractation::TITRE }}</summary>
+            @foreach ($retractation->paragraphes() as $paragraphe)
+                <p>{{ $paragraphe }}</p>
+            @endforeach
+            <div class="formulaire">
+                <p><strong>{{ \App\Domain\Facturation\Services\DroitDeRetractation::TITRE_DU_FORMULAIRE }}</strong></p>
+                @foreach ($retractation->formulaire($devis->numero) as $ligne)
+                    <p>{{ $ligne }}</p>
+                @endforeach
+            </div>
+        </details>
+    @endif
+
     <h2>Votre réponse</h2>
 
     @if ($erreurs !== [])
@@ -131,7 +162,14 @@
                 <input type="checkbox" name="bon_pour_accord" value="1" required>
                 <span>Bon pour accord</span>
             </label>
-            <p class="rappel">En tapant votre nom et en cochant « Bon pour accord », vous acceptez ce devis tel qu'il est présenté ci-dessus. Votre réponse est enregistrée une seule fois, avec sa date et son heure, et une confirmation vous est envoyée par e-mail.</p>
+            @if ($retractation)
+                <label class="case">
+                    <input type="checkbox" name="debut_avant_la_fin_du_delai" value="1"{{ $debutAnticipe ? ' checked' : '' }}>
+                    <span>{{ \App\Domain\Facturation\Services\DroitDeRetractation::CASE_DU_DEBUT_ANTICIPE }}
+                        <span class="aide">{{ \App\Domain\Facturation\Services\DroitDeRetractation::AIDE_DU_DEBUT_ANTICIPE }}</span></span>
+                </label>
+            @endif
+            <p class="rappel">En tapant votre nom et en cochant « Bon pour accord », vous acceptez ce devis tel qu'il est présenté ci-dessus. Votre réponse est enregistrée une seule fois, avec sa date et son heure, et une confirmation vous est envoyée par e-mail avec le devis signé en PDF.</p>
             <button type="submit">Accepter le devis</button>
         </fieldset>
     </form>

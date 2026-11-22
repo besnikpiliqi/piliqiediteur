@@ -170,7 +170,12 @@ class EnvoyerDocumentJobTest extends TestCase
         $mail->assertDontSeeInText('<p>');
     }
 
-    public function test_le_devis_part_avec_son_pdf_et_sa_date_de_validite(): void
+    /**
+     * Avant sa réponse, le client lit le devis sur la page de son lien, où
+     * il signe : l'e-mail d'envoi ne porte plus le PDF et dit que le devis
+     * l'attend en ligne (demande de l'éditeur du 14/11/2026).
+     */
+    public function test_le_devis_part_sans_pdf_et_dit_qu_il_attend_en_ligne(): void
     {
         $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         Mail::fake();
@@ -180,9 +185,9 @@ class EnvoyerDocumentJobTest extends TestCase
         app(EnvoyerDocumentAction::class)->handle(self::auteur(), $devis, 'client@exemple.fr', null);
 
         $devis->refresh();
-        Mail::assertSent(DocumentMail::class, fn (DocumentMail $mail): bool => $mail->attachments()[0]->as === "devis-{$devis->numero}.pdf");
+        Mail::assertSent(DocumentMail::class, fn (DocumentMail $mail): bool => $mail->attachments() === [] && str_contains($mail->render(), 'Répondre au devis'));
         $this->assertStringContainsString(
-            "notre devis {$devis->numero} d'un montant de 120,00 € TTC, valable jusqu'au 31/12/2026.",
+            "Votre devis {$devis->numero} d'un montant de 120,00 € TTC vous attend en ligne : vous pouvez le lire, puis l'accepter ou le refuser.",
             (new DocumentMail($devis->envois()->firstOrFail(), '%PDF', 'devis.pdf'))->render(),
         );
     }
@@ -888,7 +893,7 @@ class EnvoyerDocumentJobTest extends TestCase
             [$premier->fresh()->statut, $premier->fresh()->erreur],
         );
         $this->assertSame(StatutEnvoi::Envoye, $second->fresh()->statut);
-        $this->assertStringContainsString("notre devis {$modifie->numero} d'un montant de 600,00 € TTC", (new DocumentMail($second->fresh(), '%PDF', 'devis.pdf'))->render());
+        $this->assertStringContainsString("Votre devis {$modifie->numero} d'un montant de 600,00 € TTC vous attend en ligne", (new DocumentMail($second->fresh(), '%PDF', 'devis.pdf'))->render());
     }
 
     public function test_le_job_envoie_dans_le_magasin_de_l_envoi_quel_que_soit_le_contexte(): void

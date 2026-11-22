@@ -3,7 +3,9 @@
 namespace Tests\Feature\Filament;
 
 use App\Domain\Tenancy\Actions\ModifierLesParametresDuMagasinAction;
+use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Domain\Tenancy\Models\EntreeAudit;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Filament\App\Pages\ParametresFactures;
 use App\Models\User;
@@ -42,7 +44,7 @@ class ParametresFacturesTest extends TestCase
             ])
             ->call('save')
             ->assertHasNoFormErrors()
-            ->assertNotified('Paramètres des factures enregistrés');
+            ->assertNotified('Paramètres des factures et des devis enregistrés');
 
         $this->assertSame(
             [45, 'Pénalités de retard : 10 % par an.', 'Indemnité forfaitaire de recouvrement : 40 €.', 'Escompte de 1 % pour paiement sous 8 jours.'],
@@ -107,13 +109,77 @@ class ParametresFacturesTest extends TestCase
         $this->assertSame('Pas d\'escompte pour paiement anticipé.', $magasin->fresh()->mention_escompte);
     }
 
+    /**
+     * Le dépannage, la réparation ou l'entretien à domicile (arrêté du 24
+     * janvier 2017, T51.6) se coche dans la page « Factures et devis »,
+     * décoché au départ, avec le prix d'un devis payant, qui ne se montre
+     * qu'une fois le réglage coché, vide pour un devis gratuit ; chaque
+     * changement s'inscrit au journal d'audit, avec l'ancienne et la
+     * nouvelle valeur.
+     */
+    public function test_le_proprietaire_coche_le_depannage_a_domicile_et_regle_le_prix_du_devis(): void
+    {
+        $magasin = $this->connecterLeProprietaire();
+
+        Livewire::test(ParametresFactures::class)
+            ->assertSee('Devis de dépannage à domicile')
+            ->assertFormSet(['depannage_a_domicile' => false])
+            ->assertFormFieldIsHidden('prix_du_devis_de_depannage')
+            ->fillForm(['depannage_a_domicile' => true])
+            ->assertFormFieldIsVisible('prix_du_devis_de_depannage')
+            ->fillForm(['prix_du_devis_de_depannage' => '35.50'])
+            ->call('save')
+            ->assertHasNoFormErrors()
+            ->assertNotified('Paramètres des factures et des devis enregistrés');
+
+        $this->assertSame([true, '35.50'], [$magasin->fresh()->depannage_a_domicile, $magasin->fresh()->prix_du_devis_de_depannage]);
+        $entree = EntreeAudit::query()->where('action', ActionAuditee::ParametresDuMagasinModifies)->sole();
+        $this->assertEquals(['depannage_a_domicile' => false, 'prix_du_devis_de_depannage' => null], $entree->anciennes_valeurs);
+        $this->assertEquals(['depannage_a_domicile' => true, 'prix_du_devis_de_depannage' => '35.50'], $entree->nouvelles_valeurs);
+
+        Livewire::test(ParametresFactures::class)
+            ->assertFormSet(['depannage_a_domicile' => true, 'prix_du_devis_de_depannage' => '35.50'])
+            ->fillForm(['prix_du_devis_de_depannage' => ''])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $this->assertSame([true, null], [$magasin->fresh()->depannage_a_domicile, $magasin->fresh()->prix_du_devis_de_depannage]);
+    }
+
+    /**
+     * @return array<string, array{string, string}> le prix saisi, et le message attendu
+     */
+    public static function prixDuDevisInvalides(): array
+    {
+        return [
+            'nul' => ['0', 'Le prix d\'un devis payant est d\'au moins 0,01 €.'],
+            'négatif' => ['-5', 'Le prix d\'un devis payant est d\'au moins 0,01 €.'],
+            'trois décimales' => ['35.555', 'Deux décimales au plus.'],
+            'trop grand' => ['100000', 'Au plus 99 999,99 €.'],
+        ];
+    }
+
+    #[DataProvider('prixDuDevisInvalides')]
+    public function test_un_prix_de_devis_invalide_est_refuse(string $prix, string $message): void
+    {
+        $magasin = $this->connecterLeProprietaire();
+
+        Livewire::test(ParametresFactures::class)
+            ->fillForm(['depannage_a_domicile' => true, 'prix_du_devis_de_depannage' => $prix])
+            ->call('save')
+            ->assertHasFormErrors(['prix_du_devis_de_depannage'])
+            ->assertSee($message);
+
+        $this->assertSame([false, null], [$magasin->fresh()->depannage_a_domicile, $magasin->fresh()->prix_du_devis_de_depannage]);
+    }
+
     public function test_le_proprietaire_ouvre_la_page_des_factures(): void
     {
         $magasin = $this->connecterLeProprietaire();
 
         $this->get(ParametresFactures::getUrl(tenant: $magasin))
             ->assertOk()
-            ->assertSee('Factures : échéance et mentions');
+            ->assertSee('Factures et devis : échéance et mentions');
     }
 
     /**

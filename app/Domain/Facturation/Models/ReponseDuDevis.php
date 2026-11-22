@@ -13,7 +13,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * La réponse du client à un devis par son lien secret (voir
  * RepondreAuDevisEnLigneAction), une seule par lien : l'acceptation, avec
  * le nom qu'il a tapé en cochant « Bon pour accord » (signature
- * électronique simple), ou le refus, avec son motif facultatif ; l'instant
+ * électronique simple), avec la référence de l'acceptation, numérotée dans
+ * le magasin (ACC-…, voir TypeDocument::AcceptationDevis), et, pour un
+ * particulier, sa demande que la prestation commence avant la fin de son
+ * délai de rétractation (T86, voir DroitDeRetractation), ou le refus, avec
+ * son motif facultatif ; l'instant
  * (UTC, affiché à l'heure du magasin) et l'empreinte de la version du
  * devis à laquelle il a répondu (voir Devis::empreinteDeSaVersion()). En
  * ajout seul : la base refuse de la modifier ou de l'effacer. L'adresse
@@ -25,6 +29,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property ReponseAuDevis $reponse
  * @property string|null $signataire
  * @property string|null $motif
+ * @property string|null $reference
+ * @property bool|null $debut_avant_la_fin_du_delai
  * @property string $empreinte_du_devis
  * @property CarbonImmutable $created_at
  */
@@ -45,6 +51,7 @@ class ReponseDuDevis extends Model
 
     protected $casts = [
         'reponse' => ReponseAuDevis::class,
+        'debut_avant_la_fin_du_delai' => 'boolean',
         'created_at' => Instant::class,
     ];
 

@@ -210,7 +210,11 @@ return [
         ]],
     ],
     'app/Filament/App/Pages/ParametresFactures.php' => [
+        'champ:depannage_a_domicile' => ['lot' => 'NAV-3', 'tests' => [
+            'tests/Browser/Parcours/DevisDeDepannageADomicileTest.php › chaque compte qui règle les paramètres du magasin coche le dépannage à domicile et le prix du devis dans « Factures et devis », et le réglage s’enregistre',
+        ]],
         'page' => ['lot' => 'NAV-3', 'tests' => [
+            'tests/Browser/Parcours/DevisDeDepannageADomicileTest.php › chaque compte qui règle les paramètres du magasin coche le dépannage à domicile et le prix du devis dans « Factures et devis », et le réglage s’enregistre',
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
         ]],
@@ -648,6 +652,7 @@ return [
         'action:envoyer_par_email' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le vendeur ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Parcours/EnvoiParEMailTest.php › chaque compte qui envoie un document lit, depuis sa liste comme depuis sa fiche, que l’envoi est demandé, puis son résultat dans « Envois », relu sans rechargement',
+            'tests/Browser/Parcours/ReponseAuDevisEnLigneTest.php › le propriétaire, le responsable et le vendeur ne trouvent plus « Envoyer par e-mail » sur un devis refusé ou expiré, et le trouvent sur un devis accepté',
         ]],
         'action:refuser' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action du magasin sans erreur',
@@ -674,6 +679,7 @@ return [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur sans la vente ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Parcours/PuHtAfficheTest.php › le propriétaire change le client d’un devis, et le PU HT des lignes reste celui d’un article',
+            'tests/Browser/Parcours/DevisDeDepannageADomicileTest.php › chaque compte qui fait un devis à un particulier y trouve le lieu de l’intervention prérempli, coche « Devis signé chez le client », et la fiche puis le PDF numéroté les montrent',
         ]],
         'filtre:statut' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action du magasin sans erreur',
@@ -707,6 +713,7 @@ return [
     ],
     'app/Filament/App/Resources/DevisResource/Pages/CreateDevis.php' => [
         'page' => ['lot' => 'NAV-2', 'tests' => [
+            'tests/Browser/Parcours/DevisDeDepannageADomicileTest.php › chaque compte qui fait un devis à un particulier y trouve le lieu de l’intervention prérempli, coche « Devis signé chez le client », et la fiche puis le PDF numéroté les montrent',
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur autorisé à vendre ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur sans la vente ouvre chaque page et chaque action du magasin sans erreur',
@@ -2473,12 +2480,17 @@ return [
             'tests/Browser/Parcours/InscriptionDUneSocieteTest.php › une société s’inscrit, confirme son lien, saisit le code de son courrier et crée son premier magasin',
         ]],
     ],
-    'resources/views/devis/reponse.blade.php' => [
-        'lien:Télécharger le devis en PDF' => ['lot' => 'NAV-4', 'tests' => [
-            'tests/Browser/Parcours/ReponseAuDevisEnLigneTest.php › le client télécharge le PDF de son devis depuis la page de son lien',
+    'resources/views/devis/reponse-enregistree.blade.php' => [
+        'lien:Télécharger le devis signé en PDF' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Parcours/ReponseAuDevisEnLigneTest.php › le client ne trouve aucun PDF sur la page de son lien avant de répondre, puis télécharge le devis signé depuis la confirmation de son acceptation',
         ]],
+    ],
+    'resources/views/devis/reponse.blade.php' => [
         'formulaire:{{ $actionAccepter }}' => ['lot' => 'NAV-4', 'tests' => [
-            'tests/Browser/Parcours/ReponseAuDevisEnLigneTest.php › le client accepte son devis en ligne en tapant son nom et en cochant « Bon pour accord », puis le lien ne vaut plus',
+            'tests/Browser/Parcours/ReponseAuDevisEnLigneTest.php › le client particulier lit son droit de rétractation, accepte son devis en ligne en tapant son nom, en cochant « Bon pour accord » et la demande de début anticipé, puis le lien ne montre que la confirmation',
+            'tests/Browser/Parcours/ReponseAuDevisEnLigneTest.php › le client professionnel accepte son devis en ligne sans information sur la rétractation ni demande de début anticipé',
+            'tests/Browser/Parcours/ReponseAuDevisEnLigneTest.php › le client ne trouve aucun PDF sur la page de son lien avant de répondre, puis télécharge le devis signé depuis la confirmation de son acceptation',
+            'tests/Browser/Demonstration/DansLaCopieTest.php › la responsable envoie une facture par e-mail, la lit dans « E-mails qui seraient partis » avec sa pièce jointe, puis le client accepte le devis par le lien de son e-mail, sans PDF, et sa confirmation part avec le devis signé',
         ]],
         'formulaire:{{ $actionRefuser }}' => ['lot' => 'NAV-4', 'tests' => [
             'tests/Browser/Parcours/ReponseAuDevisEnLigneTest.php › le client refuse son devis en ligne avec un motif, puis le lien ne vaut plus',
@@ -2734,18 +2746,21 @@ return [
         ]],
         'page publique:/rattachement-cabinet/{jeton}' => ['lot' => 'NAV-4', 'tests' => []],
         'formulaire:/devis/{jeton}/acceptation' => ['lot' => 'NAV-4', 'tests' => [
-            'tests/Browser/Parcours/ReponseAuDevisEnLigneTest.php › le client accepte son devis en ligne en tapant son nom et en cochant « Bon pour accord », puis le lien ne vaut plus',
+            'tests/Browser/Parcours/ReponseAuDevisEnLigneTest.php › le client particulier lit son droit de rétractation, accepte son devis en ligne en tapant son nom, en cochant « Bon pour accord » et la demande de début anticipé, puis le lien ne montre que la confirmation',
+            'tests/Browser/Parcours/ReponseAuDevisEnLigneTest.php › le client professionnel accepte son devis en ligne sans information sur la rétractation ni demande de début anticipé',
+            'tests/Browser/Parcours/ReponseAuDevisEnLigneTest.php › le client ne trouve aucun PDF sur la page de son lien avant de répondre, puis télécharge le devis signé depuis la confirmation de son acceptation',
         ]],
         'formulaire:/devis/{jeton}/refus' => ['lot' => 'NAV-4', 'tests' => [
             'tests/Browser/Parcours/ReponseAuDevisEnLigneTest.php › le client refuse son devis en ligne avec un motif, puis le lien ne vaut plus',
         ]],
         'page publique:/devis/{jeton}' => ['lot' => 'NAV-4', 'tests' => [
-            'tests/Browser/Parcours/ReponseAuDevisEnLigneTest.php › le client accepte son devis en ligne en tapant son nom et en cochant « Bon pour accord », puis le lien ne vaut plus',
+            'tests/Browser/Parcours/ReponseAuDevisEnLigneTest.php › le client particulier lit son droit de rétractation, accepte son devis en ligne en tapant son nom, en cochant « Bon pour accord » et la demande de début anticipé, puis le lien ne montre que la confirmation',
+            'tests/Browser/Parcours/ReponseAuDevisEnLigneTest.php › le client professionnel accepte son devis en ligne sans information sur la rétractation ni demande de début anticipé',
             'tests/Browser/Parcours/ReponseAuDevisEnLigneTest.php › le client refuse son devis en ligne avec un motif, puis le lien ne vaut plus',
             'tests/Browser/Parcours/ReponseAuDevisEnLigneTest.php › un lien faux, ou rendu caduc par un nouvel envoi, ne dit que « Ce lien n’est plus valable. »',
         ]],
         'page publique:/devis/{jeton}/pdf' => ['lot' => 'NAV-4', 'tests' => [
-            'tests/Browser/Parcours/ReponseAuDevisEnLigneTest.php › le client télécharge le PDF de son devis depuis la page de son lien',
+            'tests/Browser/Parcours/ReponseAuDevisEnLigneTest.php › le client ne trouve aucun PDF sur la page de son lien avant de répondre, puis télécharge le devis signé depuis la confirmation de son acceptation',
         ]],
     ],
     'app/Filament/App/Pages/AucunMagasin.php' => [
@@ -3068,24 +3083,24 @@ return [
             'tests/Browser/Demonstration/DansLaCopieTest.php › le propriétaire ferme un magasin avec le mot de passe de démonstration, l’expert-comptable déclaré valide une charge, puis « Quitter » retire le témoin',
         ]],
         'lien:E-mails qui seraient partis : {{ $bandeau->courriels }}' => ['lot' => 'NAV-4', 'tests' => [
-            'tests/Browser/Demonstration/DansLaCopieTest.php › la responsable envoie une facture par e-mail, la lit dans « E-mails qui seraient partis » avec sa pièce jointe, puis le client accepte le devis par le lien de son e-mail',
+            'tests/Browser/Demonstration/DansLaCopieTest.php › la responsable envoie une facture par e-mail, la lit dans « E-mails qui seraient partis » avec sa pièce jointe, puis le client accepte le devis par le lien de son e-mail, sans PDF, et sa confirmation part avec le devis signé',
             'tests/Browser/Demonstration/DansLaCopieTest.php › « E-mails qui seraient partis » se lit par pages de cinquante',
         ]],
     ],
     'resources/views/demonstration/choisir.blade.php' => [
         'formulaire:{{ route(\'demonstration.changer-de-compte\') }}' => ['lot' => 'NAV-4', 'tests' => [
             'tests/Browser/Demonstration/DansLaCopieTest.php › le visiteur entre par le lien, choisit la vendeuse, vend à la caisse en son nom, puis passe au propriétaire, qui voit sa caisse ouverte',
-            'tests/Browser/Demonstration/DansLaCopieTest.php › la responsable envoie une facture par e-mail, la lit dans « E-mails qui seraient partis » avec sa pièce jointe, puis le client accepte le devis par le lien de son e-mail',
+            'tests/Browser/Demonstration/DansLaCopieTest.php › la responsable envoie une facture par e-mail, la lit dans « E-mails qui seraient partis » avec sa pièce jointe, puis le client accepte le devis par le lien de son e-mail, sans PDF, et sa confirmation part avec le devis signé',
             'tests/Browser/Demonstration/DansLaCopieTest.php › « E-mails qui seraient partis » se lit par pages de cinquante',
             'tests/Browser/Demonstration/DansLaCopieTest.php › le propriétaire ferme un magasin avec le mot de passe de démonstration, l’expert-comptable déclaré valide une charge, puis « Quitter » retire le témoin',
         ]],
     ],
     'resources/views/demonstration/courriel.blade.php' => [
         'lien:Tous les e-mails qui seraient partis' => ['lot' => 'NAV-4', 'tests' => [
-            'tests/Browser/Demonstration/DansLaCopieTest.php › la responsable envoie une facture par e-mail, la lit dans « E-mails qui seraient partis » avec sa pièce jointe, puis le client accepte le devis par le lien de son e-mail',
+            'tests/Browser/Demonstration/DansLaCopieTest.php › la responsable envoie une facture par e-mail, la lit dans « E-mails qui seraient partis » avec sa pièce jointe, puis le client accepte le devis par le lien de son e-mail, sans PDF, et sa confirmation part avec le devis signé',
         ]],
         'lien:{{ $piece[\'nom\'] }}' => ['lot' => 'NAV-4', 'tests' => [
-            'tests/Browser/Demonstration/DansLaCopieTest.php › la responsable envoie une facture par e-mail, la lit dans « E-mails qui seraient partis » avec sa pièce jointe, puis le client accepte le devis par le lien de son e-mail',
+            'tests/Browser/Demonstration/DansLaCopieTest.php › la responsable envoie une facture par e-mail, la lit dans « E-mails qui seraient partis » avec sa pièce jointe, puis le client accepte le devis par le lien de son e-mail, sans PDF, et sa confirmation part avec le devis signé',
         ]],
     ],
     'resources/views/demonstration/courriels.blade.php' => [
@@ -3096,7 +3111,7 @@ return [
             'tests/Browser/Demonstration/DansLaCopieTest.php › « E-mails qui seraient partis » se lit par pages de cinquante',
         ]],
         'lien:{{ $courriel->objet }}' => ['lot' => 'NAV-4', 'tests' => [
-            'tests/Browser/Demonstration/DansLaCopieTest.php › la responsable envoie une facture par e-mail, la lit dans « E-mails qui seraient partis » avec sa pièce jointe, puis le client accepte le devis par le lien de son e-mail',
+            'tests/Browser/Demonstration/DansLaCopieTest.php › la responsable envoie une facture par e-mail, la lit dans « E-mails qui seraient partis » avec sa pièce jointe, puis le client accepte le devis par le lien de son e-mail, sans PDF, et sa confirmation part avec le devis signé',
         ]],
     ],
     'resources/views/demonstration/invitation-du-cabinet.blade.php' => [

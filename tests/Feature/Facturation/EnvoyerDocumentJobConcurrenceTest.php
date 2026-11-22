@@ -99,8 +99,9 @@ class EnvoyerDocumentJobConcurrenceTest extends TestCase
      * Le propriétaire a envoyé un devis de 120,00 € TTC ; le responsable
      * le modifie (cinq articles, 600,00 € TTC) pendant que son e-mail part.
      * Le départ d'abord : la modification attend que le départ ait lu le
-     * devis, et l'e-mail part avec la version demandée, son PDF compris,
-     * puis le devis repasse en brouillon. La modification d'abord : le
+     * devis, et l'e-mail part avec la version demandée (son montant, sans
+     * PDF : le client ne reçoit le PDF d'un devis qu'une fois accepté), puis
+     * le devis repasse en brouillon. La modification d'abord : le
      * départ voit le devis repassé en brouillon, et l'e-mail ne part pas.
      */
     #[DataProvider('premiersEntreLeDepartEtLaModification')]
@@ -140,10 +141,10 @@ class EnvoyerDocumentJobConcurrenceTest extends TestCase
 
         if ($leDepartDAbord) {
             $mail = Mail::sent(DocumentMail::class)->sole();
-            $this->assertStringContainsString("notre devis {$devis->fresh()->numero} d'un montant de 120,00 € TTC", $mail->render());
-            $textes = $this->textesDuPdf($mail);
-            $this->assertStringContainsString('120,00 €', $textes);
-            $this->assertStringNotContainsString('600,00', $textes);
+            $html = $mail->render();
+            $this->assertStringContainsString("Votre devis {$devis->fresh()->numero} d'un montant de 120,00 € TTC vous attend en ligne", $html);
+            $this->assertStringNotContainsString('600,00', $html);
+            $this->assertSame([], $mail->attachments());
             $this->assertSame(StatutEnvoi::Envoye, $envoi->statut);
         } else {
             $this->assertSame([StatutEnvoi::Echec, self::DEVIS_MODIFIE], [$envoi->statut, $envoi->erreur]);
@@ -408,16 +409,6 @@ class EnvoyerDocumentJobConcurrenceTest extends TestCase
                 $this->attendreQueLeProcessusAttendeUnVerrou($concurrente);
             }
         });
-    }
-
-    /**
-     * Le texte que le PDF joint à l'e-mail imprime, morceau par morceau.
-     */
-    private function textesDuPdf(DocumentMail $mail): string
-    {
-        $pdf = $mail->attachments()[0]->attachWith(fn (): string => '', fn (Closure $donnees): string => $donnees());
-
-        return implode(' | ', array_merge(...array_map(fn (array $page): array => array_column($page['textes'], 'texte'), $this->pagesDuPdf($pdf))));
     }
 
     private function produit(): Produit

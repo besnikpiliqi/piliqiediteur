@@ -110,6 +110,12 @@ use UnexpectedValueException;
  * journal, où une cause qui tient à la plateforme s'inscrit au niveau
  * critique. Une tentative dure au plus $timeout secondes.
  *
+ * Un devis envoyé part avec le lien secret de son envoi, sans PDF (voir
+ * DocumentMail) : le lien de l'envoi qui ne vaut plus au départ (retiré,
+ * devis refusé ou expiré entre-temps) fait échouer l'envoi sans nouvelle
+ * tentative ; un devis accepté ou transformé repart avec son PDF, sans
+ * lien.
+ *
  * Le PDF est généré à chaque tentative depuis le document tel
  * qu'il est enregistré : une facture ou un avoir figés à leur émission,
  * avec l'émetteur qu'ils ont signé, quoi que soit devenu le magasin (voir
@@ -123,6 +129,14 @@ use UnexpectedValueException;
 class EnvoyerDocumentJob implements ShouldBeUnique, ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, WithTenantContext;
+
+    /**
+     * Un devis envoyé dont le lien ne vaut plus au départ de l'e-mail
+     * (retiré par le magasin, devis refusé ou expiré entre-temps) : sans
+     * lien ni PDF, que son client ne reçoit qu'une fois le devis accepté,
+     * l'e-mail ne lui apporterait rien.
+     */
+    public const MOTIF_DEVIS_SANS_LIEN = 'Le devis ne peut plus être accepté par le lien de cet envoi (lien retiré, devis refusé ou expiré entre-temps) : l\'e-mail n\'est pas parti. Renvoyez-le à votre client s\'il peut encore l\'accepter.';
 
     public const MOTIF_EXPEDITEUR_SANS_DROIT = 'La personne qui a demandé cet envoi n\'a plus accès à ce magasin ou n\'a plus le droit d\'envoyer ce document : l\'e-mail n\'est pas parti.';
 
@@ -207,10 +221,20 @@ class EnvoyerDocumentJob implements ShouldBeUnique, ShouldQueue
             return;
         }
 
+        $lienDeLEnvoi = $document instanceof Devis && $envoi->nature === NatureEnvoi::Envoi ? $envoi->lienDuDevis()->first() : null;
+
+        if ($document instanceof Devis && $lienDeLEnvoi !== null && ! $lienDeLEnvoi->estValable($document)) {
+            $this->echouer($envoi, self::MOTIF_DEVIS_SANS_LIEN);
+
+            return;
+        }
+
+        $lienDeReponse = $this->lienDeReponse($envoi, $document);
+
         $envoi->forceFill(['objet' => EnvoiDocument::objetPour($document, $envoi->nature, $envoi->niveau_relance)])->save();
 
         try {
-            Mail::to($envoi->destinataire)->send(new DocumentMail($envoi, $pdf, $generateur->nomFichier($document), $this->lienDeReponse($envoi, $document)));
+            Mail::to($envoi->destinataire)->send(new DocumentMail($envoi, $pdf, $generateur->nomFichier($document), $lienDeReponse));
         } catch (RfcComplianceException) {
             // Une adresse que le composant d'envoi refuse : aucune nouvelle
             // tentative n'y changera rien.

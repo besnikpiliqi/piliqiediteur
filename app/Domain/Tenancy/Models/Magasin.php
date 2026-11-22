@@ -182,6 +182,8 @@ class Magasin extends Model implements HasName
         'mention_penalites_retard',
         'mention_indemnite_recouvrement',
         'mention_escompte',
+        'depannage_a_domicile',
+        'prix_du_devis_de_depannage',
     ];
 
     protected $casts = [
@@ -199,6 +201,8 @@ class Magasin extends Model implements HasName
         'relances_automatiques' => 'boolean',
         'relancer_aussi_les_particuliers' => 'boolean',
         'delai_paiement_jours' => 'integer',
+        'depannage_a_domicile' => 'boolean',
+        'prix_du_devis_de_depannage' => 'decimal:2',
     ];
 
     /**
@@ -234,6 +238,7 @@ class Magasin extends Model implements HasName
             $magasin->mention_penalites_retard ??= self::MENTION_PENALITES_PAR_DEFAUT;
             $magasin->mention_indemnite_recouvrement ??= self::MENTION_INDEMNITE_PAR_DEFAUT;
             $magasin->mention_escompte ??= self::MENTION_ESCOMPTE_PAR_DEFAUT;
+            $magasin->depannage_a_domicile ??= false;
         });
 
         static::saving(function (Magasin $magasin) {

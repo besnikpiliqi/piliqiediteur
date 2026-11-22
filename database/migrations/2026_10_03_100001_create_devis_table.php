@@ -39,6 +39,18 @@ return new class extends Migration
             // reprend et que son brouillon permet de corriger.
             $table->date('date_operation_debut')->nullable();
             $table->date('date_operation_fin')->nullable();
+            // Le dépannage, la réparation ou l'entretien à domicile d'un
+            // particulier (T51.6, voir DepannageADomicile), quand le magasin
+            // l'a coché : le lieu de l'intervention, prérempli avec
+            // l'adresse du client, et si le devis est signé chez le client,
+            // qui imprime alors le droit de rétractation et son formulaire.
+            // Le réglage du magasin et le prix du devis se figent au dernier
+            // envoi, comme l'émetteur : null pour un brouillon, qui suit le
+            // magasin d'aujourd'hui (voir EmettreDevisAction).
+            $table->string('lieu_d_intervention', 500)->nullable();
+            $table->boolean('signe_chez_le_client')->default(false);
+            $table->boolean('depannage_a_domicile')->nullable();
+            $table->decimal('prix_du_devis_de_depannage', 10, 2)->nullable();
             // nullable tant que le devis est en brouillon : la numérotation
             // n'intervient qu'à l'envoi (voir DocumentNumberingService).
             $table->string('numero', 40)->nullable();
@@ -78,6 +90,11 @@ return new class extends Migration
             $table->foreign(['magasin_id', 'client_id'])->references(['magasin_id', 'id'])->on('clients')->restrictOnDelete();
         });
 
+        // Seul le devis d'un particulier porte un lieu d'intervention ou se
+        // signe chez le client, et seul un devis de dépannage figé porte le
+        // prix de ce devis.
+        DB::statement("ALTER TABLE devis ADD CONSTRAINT devis_depannage_d_un_particulier CHECK ((lieu_d_intervention IS NULL AND NOT signe_chez_le_client) OR type_client = 'particulier')");
+        DB::statement('ALTER TABLE devis ADD CONSTRAINT devis_prix_du_devis_de_depannage CHECK (prix_du_devis_de_depannage IS NULL OR (depannage_a_domicile AND prix_du_devis_de_depannage > 0))');
         DB::statement('ALTER TABLE devis ADD CONSTRAINT devis_periode_de_l_operation CHECK (date_operation_debut IS NULL OR (date_operation_fin IS NOT NULL AND date_operation_debut < date_operation_fin))');
     }
 

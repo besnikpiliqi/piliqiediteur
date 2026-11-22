@@ -48,7 +48,10 @@ use LogicException;
  * demande d'inscription dont le lien n'a pas été suivi et les préférences
  * des graphiques de chaque écran (espace de la société, panneau d'un
  * magasin, espace du cabinet, page de l'expert-comptable déclaré), sur le
- * poste seulement, les notifications que certains comptes ont lues (les autres
+ * poste seulement (dont la carte « Écart des prix d'achat » : à l'affichage
+ * des douze mois pour la propriétaire de Maison Ferrand, par mois pour la
+ * responsable des Halles et le propriétaire du cabinet), les notifications
+ * que certains comptes ont lues (les autres
  * restent non lues dans leur cloche), et les téléchargements des
  * documents par période, en ZIP et en CSV, que la propriétaire de Maison
  * Ferrand a demandés, et l'état de ses charges, que cette propriétaire a
@@ -130,6 +133,7 @@ final class DerniersGestes
             $preferences->enregistrer($this->semis->proprietaire('cabinet'), EcranDuTableauDeBord::Cabinet, new ReglagesDuTableauDeBord([
                 CarteDuTableauDeBord::parDefaut(Graphique::TvaAPayerParMois),
                 CarteDuTableauDeBord::parDefaut(Graphique::FacturesParAnciennete),
+                CarteDuTableauDeBord::parDefaut(Graphique::EcartDesPrixDAchat),
             ], PeriodeDuTableauDeBord::AnneePrecedente));
         }
 
@@ -152,12 +156,14 @@ final class DerniersGestes
             CarteDuTableauDeBord::parDefaut(Graphique::ChiffreDAffairesParMagasin),
             CarteDuTableauDeBord::parDefaut(Graphique::EncaissementsParMode, TypeDeGraphique::Anneau),
             CarteDuTableauDeBord::parDefaut(Graphique::MargeBruteParMois),
+            new CarteDuTableauDeBord(Graphique::EcartDesPrixDAchat, TypeDeGraphique::Barres, affichage: CarteDuTableauDeBord::AFFICHAGE_SUR_DOUZE_MOIS),
         ], PeriodeDuTableauDeBord::AnneeEnCours, null, true));
         $preferences->enregistrer($this->semis->compte('Camille Laurent'), EcranDuTableauDeBord::Magasin, new ReglagesDuTableauDeBord([
             CarteDuTableauDeBord::parDefaut(Graphique::VentesEtAchatsParMois),
             CarteDuTableauDeBord::parDefaut(Graphique::MeilleursProduits, TypeDeGraphique::BarresCouchees),
             CarteDuTableauDeBord::parDefaut(Graphique::ValeurDuStock, TypeDeGraphique::Aires),
             CarteDuTableauDeBord::parDefaut(Graphique::VentesParJourDeLaSemaine, TypeDeGraphique::Radar),
+            CarteDuTableauDeBord::parDefaut(Graphique::EcartDesPrixDAchat),
         ]));
     }
 

@@ -175,6 +175,22 @@ class VerificationDeLIsolationTest extends TestCase
         $this->assertFalse($rapport->estJuste());
     }
 
+    public function test_un_client_ou_un_produit_archive_n_est_pas_du_a_un_compte_et_n_est_pas_un_probleme(): void
+    {
+        [$premier] = $this->deuxSocietes();
+        app(TenantContext::class)->runAs($premier, function (): void {
+            Client::factory()->create()->delete();
+            Produit::factory()->create()->delete();
+            Produit::factory()->create();
+        });
+        app(TenantContext::class)->clear();
+
+        $rapport = new RapportDIsolation([(new ControlesDeLApplication(DB::connection(), app(TenantContext::class)))->vueDeChaqueCompte()]);
+
+        $this->assertSame([], $this->problemesDe($rapport->problemes()), 'Un client ou un produit archivé ne se lit plus : la base ne le donne pas à voir.');
+        $this->assertTrue($rapport->estJuste());
+    }
+
     public function test_un_magasin_d_une_autre_societe_dans_une_ligne_d_une_societe_est_signale_par_la_base(): void
     {
         [$premier, $second] = $this->deuxSocietes();

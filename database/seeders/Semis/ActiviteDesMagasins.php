@@ -44,7 +44,10 @@ use LogicException;
  * prochaine commande, avoir fournisseur, contre-passation d'un paiement,
  * caisse personnelle fermée par son vendeur et journée clôturée par une
  * responsable ; les autres journées se clôturent et les autres caisses se
- * ferment d'office à minuit (voir ClotureAutomatiqueCaisse).
+ * ferment d'office à minuit (voir ClotureAutomatiqueCaisse). Les trois
+ * magasins de plus de Maison Ferrand n'ont aucune vente : leurs achats
+ * sont ceux de la carte « Écart des prix d'achat » (voir
+ * AchatsDeLEcartDesPrix).
  */
 final class ActiviteDesMagasins
 {
@@ -59,7 +62,7 @@ final class ActiviteDesMagasins
     {
         $gestes = [];
 
-        foreach (['halles', 'republique', 'martinique', 'conseil', 'epicerie'] as $magasin) {
+        foreach (['halles', 'republique', 'martinique', 'entrepot', 'ephemere', 'marche', 'conseil', 'epicerie'] as $magasin) {
             if ($this->semis->semeLeMagasin($magasin)) {
                 $gestes[$magasin] = new GestesDuMagasin($this->semis->magasin($magasin));
             }
@@ -339,7 +342,10 @@ final class ActiviteDesMagasins
      * réassortit son stock par une facture d'achat validée (un peu plus
      * que ce qui se vend en deux semaines), à un prix qui varie (le coût
      * moyen évolue) ; les charges des sociétés suivent leur calendrier du
-     * mois (voir ChargesDesSocietes) ; les clients professionnels
+     * mois (voir ChargesDesSocietes) ; les achats de la carte « Écart des
+     * prix d'achat » se posent avant elles, à 7 h ou, pour l'achat reçu sans
+     * date à Fort-de-France, à 4 h 30 (voir AchatsDeLEcartDesPrix) ; les
+     * clients professionnels
      * commandent, avant l'ouverture de la caisse (voir
      * CommandesDesProfessionnels). Les sociétés des cas et les
      * démonstrations des sociétés (site réel) ne vivent que sur le poste.
@@ -393,8 +399,11 @@ final class ActiviteDesMagasins
         $modes = [ModePaiement::CarteBancaire, ModePaiement::Especes, ModePaiement::CarteBancaire, ModePaiement::Cheque];
 
         $demonstrations = $this->semis->surLePoste() ? new DemonstrationsDesSocietes($this->horloge, $this->semis) : null;
+        $achatsDeLEcart = new AchatsDeLEcartDesPrix($this->horloge, $this->semis, $gestes);
+        $achatsDeLEcart->preparer();
 
         for ($jour = 17; $jour <= SemisComplet::JOURS - 2; $jour++) {
+            $achatsDeLEcart->auJour($jour);
             $charges->auJour($jour);
 
             if ($jour % 14 === 3) {

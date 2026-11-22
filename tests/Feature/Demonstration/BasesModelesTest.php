@@ -44,12 +44,16 @@ class BasesModelesTest extends DemonstrationTestCase
         [$modele, $lecture] = $this->construireEtLire(TypeDActivite::Commerce);
 
         $this->assertSame(['MAISON FERRAND'], $lecture['societes']);
-        $this->assertStringContainsString('plusieurs magasins,', CarteDeLaDemonstration::phraseACreer(TypeDActivite::Commerce), 'La carte « À créer » décrit ce modèle : trois magasins.');
+        $this->assertStringContainsString('plusieurs magasins,', CarteDeLaDemonstration::phraseACreer(TypeDActivite::Commerce), 'La carte « À créer » décrit ce modèle : six magasins.');
         $this->assertSame([
+            ['Maison Ferrand Entrepôt', 'metropole'],
             ['Maison Ferrand Fort-de-France', 'martinique'],
             ['Maison Ferrand Halles', 'metropole'],
+            ['Maison Ferrand Marché', 'metropole'],
             ['Maison Ferrand République', 'metropole'],
-        ], $lecture['magasins']);
+            ['Maison Ferrand Éphémère', 'metropole'],
+        ], $lecture['magasins'], 'Maison Ferrand compte six magasins (dans l\'ordre binaire de la base, où « É » vient après les lettres) : les trois premiers et trois magasins d\'achats.');
+        $this->assertCasDeLEcartDesPrixDAchat($lecture);
         $this->assertSame(['2.1', '8.5'], $lecture['taux_de_fort_de_france'], 'Les articles de Fort-de-France sont aux taux de la Martinique.');
         $this->assertGreaterThan(0, $lecture['produits']);
         $this->assertGreaterThan(0, $lecture['factures_achat']);
@@ -62,12 +66,32 @@ class BasesModelesTest extends DemonstrationTestCase
         $this->assertCommunAuxModeles($lecture);
     }
 
+    /**
+     * La carte « Écart des prix d'achat » paraît d'elle-même dans une base
+     * modèle qui contient Maison Ferrand (le compte du bandeau n'a aucune
+     * préférence : toutes ses cartes permises s'ouvrent) : l'Entrepôt porte
+     * ses cas (des dizaines de lignes d'achat validées), l'Éphémère n'a
+     * aucun achat validé et le Marché un seul.
+     *
+     * @param  array<string, mixed>  $lecture
+     */
+    private function assertCasDeLEcartDesPrixDAchat(array $lecture): void
+    {
+        $achats = $lecture['achats_valides_par_magasin'];
+
+        $this->assertGreaterThan(40, $achats['Maison Ferrand Entrepôt'] ?? 0, 'L\'Entrepôt porte les cas de la carte.');
+        $this->assertArrayNotHasKey('Maison Ferrand Éphémère', $achats, 'L\'Éphémère n\'a aucun achat validé.');
+        $this->assertSame(1, $achats['Maison Ferrand Marché'] ?? 0, 'Le Marché n\'a qu\'un produit, acheté une seule fois.');
+        $this->assertGreaterThan(0, $achats['Maison Ferrand Halles'] ?? 0);
+    }
+
     public function test_le_modele_services_ne_contient_que_conseil_vasseur_sans_article_avec_son_expert_comptable_declare(): void
     {
         [$modele, $lecture] = $this->construireEtLire(TypeDActivite::Services);
 
         $this->assertSame(['CONSEIL VASSEUR'], $lecture['societes']);
         $this->assertSame([['Conseil Vasseur Paris', 'metropole']], $lecture['magasins']);
+        $this->assertSame([], $lecture['achats_valides_par_magasin'], 'Une société de services n\'a aucun achat : elle n\'a pas la carte « Écart des prix d\'achat ».');
         $this->assertStringContainsString('un magasin,', CarteDeLaDemonstration::phraseACreer(TypeDActivite::Services), 'La carte « À créer » décrit ce modèle : un seul magasin.');
         $this->assertSame(0, $lecture['produits']);
         $this->assertSame(0, $lecture['factures_achat']);
@@ -87,6 +111,7 @@ class BasesModelesTest extends DemonstrationTestCase
         $this->assertSame(['MARTIN EXPERTISE COMPTABLE'], $lecture['cabinets']);
         $this->assertSame(0, $lecture['magasins_du_cabinet'], 'Un cabinet n\'a pas de magasin.');
         $this->assertSame(['actif', 'actif'], $lecture['liens_cabinet'], 'Le cabinet est lié à ses deux clients.');
+        $this->assertCasDeLEcartDesPrixDAchat($lecture);
         $this->assertSame(['acceptee', 'expiree', 'ouverte', 'refusee', 'retiree'], $lecture['invitations'], 'L\'invitation acceptée par l\'Épicerie Lemoine, et celles à des entreprises qui ne s\'inscrivent pas, dans chaque état qui ne demande pas une autre société.');
         $this->assertSame([], $lecture['experts_comptables_actifs']);
         $objetsDuCabinet = array_column(array_filter($lecture['courriels'], static fn (array $courriel): bool => $courriel['raison_sociale'] === 'MARTIN EXPERTISE COMPTABLE'), 'objet');
@@ -136,6 +161,14 @@ class BasesModelesTest extends DemonstrationTestCase
             'societes' => DB::table('societes')->orderBy('raison_sociale')->pluck('raison_sociale')->all(),
             'cabinets' => DB::table('societes')->where('type_activite', TypeDActivite::Cabinet->value)->pluck('raison_sociale')->all(),
             'magasins' => DB::table('magasins')->join('societes', 'societes.id', '=', 'magasins.societe_id')->where('societes.type_activite', '!=', TypeDActivite::Cabinet->value)->orderBy('magasins.nom')->get(['magasins.nom', 'magasins.territoire'])->map(fn (object $magasin): array => [(string) $magasin->nom, (string) $magasin->territoire])->all(),
+            'achats_valides_par_magasin' => DB::table('lignes_achat')
+                ->join('factures_achat', fn ($jointure) => $jointure->on('factures_achat.magasin_id', '=', 'lignes_achat.magasin_id')->on('factures_achat.id', '=', 'lignes_achat.facture_achat_id'))
+                ->join('magasins', 'magasins.id', '=', 'factures_achat.magasin_id')
+                ->where('factures_achat.statut', 'validee')
+                ->groupBy('magasins.nom')
+                ->orderBy('magasins.nom')
+                ->selectRaw('magasins.nom as nom, count(*) as achats')
+                ->get()->mapWithKeys(fn (object $ligne): array => [(string) $ligne->nom => (int) $ligne->achats])->all(),
             'magasins_du_cabinet' => DB::table('magasins')->join('societes', 'societes.id', '=', 'magasins.societe_id')->where('societes.type_activite', TypeDActivite::Cabinet->value)->count(),
             'taux_de_fort_de_france' => DB::table('produits')->join('magasins', 'magasins.id', '=', 'produits.magasin_id')->where('magasins.nom', 'Maison Ferrand Fort-de-France')->distinct()->orderBy('taux_tva')->pluck('taux_tva')->map(fn (mixed $taux): string => rtrim(rtrim((string) $taux, '0'), '.'))->all(),
             'produits' => DB::table('produits')->count(),

@@ -18,7 +18,8 @@ use Tests\SemeSansTransaction;
  * adresse de connexion, les autres avec leur identifiant ; et chacun
  * retrouve ses propres données sur ses pages principales : le tableau de
  * bord et ses graphiques, les factures et les tickets, les charges, les
- * caisses. La vendeuse qui garde son identifiant pour mot de passe ne se
+ * caisses (les trois magasins d'achats de Maison Ferrand, sans vente, n'ont
+ * aucun relevé). La vendeuse qui garde son identifiant pour mot de passe ne se
  * connecte qu'une fois le navigateur reconnu comme un poste de son
  * magasin, comme le README le dit. Le semis prend plusieurs minutes : un
  * seul semis, dans le groupe « semis », hors de la suite par défaut. Les
@@ -62,7 +63,7 @@ test('chaque rôle de la liste du semis se connecte et retrouve ses propres donn
         ->aller('/societe/'.$societe.'/caisses')
         ->remplir('Relevés du', Calendrier::ajouterJours(Calendrier::deParis()->jourDe(now()), -2))
         ->voir('Maison Ferrand Halles')
-        ->nePasVoir('Aucun relevé de caisse fermé')
+        ->attendreQue('document.body.innerText.split("Aucun relevé de caisse fermé").length - 1 === 3', 'seuls les trois magasins de Maison Ferrand sans aucune vente (l\'Entrepôt, l\'Éphémère et le Marché, qui n\'ont que des achats) disent n\'avoir aucun relevé : les Halles, la République et Fort-de-France en ont')
         ->seDeconnecter();
 
     $onglet = $this->seConnecter(compteSeme('Nadia Benali'), MOT_DE_PASSE_DU_SEMIS, onglet: $onglet)

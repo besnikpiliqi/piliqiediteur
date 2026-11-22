@@ -132,6 +132,20 @@ final class SemisComplet
     private const NIC_DE_FORT_DE_FRANCE = '0003';
 
     /**
+     * Les NIC, sans leur clé, des trois magasins de plus de Maison Ferrand,
+     * qui n'ont que des achats (voir AchatsDeLEcartDesPrix) : l'Entrepôt, qui
+     * porte tous les cas de la carte « Écart des prix d'achat », l'Éphémère,
+     * qui n'a aucun achat validé, et le Marché, dont l'unique produit n'est
+     * acheté qu'une fois ; le répertoire Sirene factice les connaît le temps
+     * du semis.
+     */
+    private const NIC_DE_L_ENTREPOT = '0004';
+
+    private const NIC_DE_L_EPHEMERE = '0005';
+
+    private const NIC_DU_MARCHE = '0006';
+
+    /**
      * Les sociétés qui s'inscrivent le premier jour de l'histoire, par
      * clé : leur SIREN, leur type d'activité et l'adresse de leur
      * propriétaire.
@@ -171,6 +185,9 @@ final class SemisComplet
         'halles' => 'commerce',
         'republique' => 'commerce',
         'martinique' => 'commerce',
+        'entrepot' => 'commerce',
+        'ephemere' => 'commerce',
+        'marche' => 'commerce',
         'conseil' => 'services',
         'epicerie' => 'client',
     ];
@@ -292,6 +309,9 @@ final class SemisComplet
             $this->ouvrirUnMagasin('commerce', 'halles', 'Maison Ferrand Halles', 'HALLES', 'siege');
             $this->ouvrirUnMagasin('commerce', 'republique', 'Maison Ferrand République', 'REPUB', 'boutique');
             $this->ouvrirUnMagasin('commerce', 'martinique', 'Maison Ferrand Fort-de-France', 'FDF', self::NIC_DE_FORT_DE_FRANCE);
+            $this->ouvrirUnMagasin('commerce', 'entrepot', 'Maison Ferrand Entrepôt', 'ENTREPOT', self::NIC_DE_L_ENTREPOT);
+            $this->ouvrirUnMagasin('commerce', 'ephemere', 'Maison Ferrand Éphémère', 'EPHEMERE', self::NIC_DE_L_EPHEMERE);
+            $this->ouvrirUnMagasin('commerce', 'marche', 'Maison Ferrand Marché', 'MARCHE', self::NIC_DU_MARCHE);
         }
 
         if ($this->seme('services')) {
@@ -450,15 +470,15 @@ final class SemisComplet
     private function direCeQuIlFautRegarder(): void
     {
         foreach ([
-            'propriétaire commerce' => 'Espace de la société : tableau de bord et graphiques des deux magasins, « Les caisses », charges, équipe, cabinet lié, téléchargements (prêts, et un en préparation) ; ne vend pas',
+            'propriétaire commerce' => 'Espace de la société : tableau de bord et graphiques de ses six magasins, dont la carte « Écart des prix d\'achat » à l\'affichage des 12 mois (choix « Tous mes magasins », l\'Entrepôt qui porte tous les cas mois par mois, l\'Éphémère sans aucun achat validé, le Marché dont l\'unique produit n\'est acheté qu\'une fois ; le menu « Période » dit « Année précédente » pour les achats d\'avant), « Les caisses », charges, équipe, cabinet lié, téléchargements (prêts, et un en préparation) ; ne vend pas ; saisit et valide les achats des trois magasins de plus',
             'propriétaire services' => 'Espace de la société : expert-comptable déclaré (deux comptes), charges validées par lui, magasin de services',
-            'propriétaire cabinet' => 'Espace du cabinet : clients liés, invitations et demandes dans chaque état, collaborateurs et clients confiés',
-            'Nadia Benali' => 'Administratrice sans vente : tableau de bord de la société avec graphiques, charges qu\'elle ajoute, magasins de sa portée',
-            'Thomas Girard' => 'Administrateur qui vend dans deux magasins : sa caisse aux Halles puis à la République, ses relevés',
-            'Camille Laurent' => 'Responsable des Halles : « À faire » (exports sans preuve, détaxe, devis), graphiques, charges du magasin, vente sans stock, facture rejetée par la plateforme agréée et facture non transmise (incident technique), envoi en échec et envoi en attente',
+            'propriétaire cabinet' => 'Espace du cabinet : clients liés, invitations et demandes dans chaque état, collaborateurs et clients confiés ; la page « Graphiques » de Maison Ferrand montre « Écart des prix d\'achat » de l\'année précédente sans geste',
+            'Nadia Benali' => 'Administratrice sans vente : tableau de bord de la société avec graphiques (dont « Écart des prix d\'achat », à ajouter par « Ajouter un graphique »), charges qu\'elle ajoute, magasins de sa portée',
+            'Thomas Girard' => 'Administrateur qui vend dans deux magasins : sa caisse aux Halles puis à la République, ses relevés ; sans la case des graphiques, il ne voit pas « Écart des prix d\'achat »',
+            'Camille Laurent' => 'Responsable des Halles : « À faire » (exports sans preuve, détaxe, devis), graphiques dont « Écart des prix d\'achat » par mois (set de table acheté de cinq façons, boule de Noël d\'un mois à venir, plateau renommé), charges du magasin, vente sans stock, facture rejetée par la plateforme agréée et facture non transmise (incident technique), envoi en échec et envoi en attente',
             'Lucas Moreau' => 'Vendeur des Halles : ses tickets, sa caisse fermée par sa responsable, ses factures d\'export et de détaxe',
             'Inès Garcia' => 'Vendeuse des Halles qui garde son identifiant : connexion seulement depuis le poste reconnu « Caisse des Halles »',
-            'Hugo Lefebvre' => 'Responsable de la République : inventaire d\'ouverture, réassorts, avoir du Studio Nord',
+            'Hugo Lefebvre' => 'Responsable de la République : inventaire d\'ouverture, réassorts, avoir du Studio Nord ; saisit la lampe qui perd 210 €, le cadre photo archivé et la théière ; sans la case des graphiques, il ne voit pas « Écart des prix d\'achat »',
             'Lucas Moreau (République)' => 'La même personne que le vendeur des Halles, avec un autre compte, promue responsable de la République',
             'Sarah Petit' => 'Vendeuse de la République qui voit les factures de toute l\'équipe',
             'Léa Fontaine' => 'Administratrice sans vente de la société de services',
@@ -466,15 +486,15 @@ final class SemisComplet
             'Claire Dubois' => 'Responsable du magasin de services : prestations à l\'étranger (autoliquidation, hors UE), mairie, prélèvement',
             'Maxime Henry' => 'Vendeur de services : ses tickets à la caisse',
             'Julie Mercier' => 'Vendeuse de services : ses tickets à la caisse',
-            'Paul Lefèvre' => 'Collaborateur du cabinet : Maison Ferrand confiée, charges à valider et validées, graphiques du client',
-            'Emma Rousseau' => 'Collaboratrice du cabinet : Épicerie Lemoine confiée (seul magasin ouvert au cabinet)',
+            'Paul Lefèvre' => 'Collaborateur du cabinet : Maison Ferrand confiée (ses six magasins), charges à valider et validées, graphiques du client dont « Écart des prix d\'achat »',
+            'Emma Rousseau' => 'Collaboratrice du cabinet : Épicerie Lemoine confiée (seul magasin ouvert au cabinet), qui voit « Écart des prix d\'achat » de ses réassorts',
             'propriétaire client' => 'Société née de l\'invitation du cabinet : cabinet lié, magasins ouverts au cabinet',
             'Romane Gauthier' => 'Administratrice devenue responsable de l\'Épicerie',
             'Bastien Leroy' => 'Administrateur qui vend à l\'Épicerie',
             'Nicolas Lemoine' => 'Responsable de l\'Épicerie : équipe (vendeuse suspendue puis réactivée, accès redonné)',
             'Chloé Bernard' => 'Vendeuse de l\'Épicerie : ses tickets et ses relevés',
             'Mehdi Brahimi' => 'Vendeur de l\'Épicerie : ses tickets et ses relevés',
-            'Marc Petit' => 'Expert-comptable déclaré : « Tableau de bord de la société » avec tous ses graphiques affichés (« Tous les graphiques sont affichés »), charges à valider, magasins en lecture',
+            'Marc Petit' => 'Expert-comptable déclaré : « Tableau de bord de la société » avec tous ses graphiques affichés (« Tous les graphiques sont affichés »), charges à valider, magasins en lecture ; société de services, sans achats : pas de « Écart des prix d\'achat »',
             'propriétaire inscription' => 'Inscription qui attend le code du courrier : aucune vente avant sa validation',
             'Élodie Fabre' => 'Observatrice des Halles : tout en lecture, aucune vente ; reçoit les alertes de stock (la propriétaire lui a coché « ajuster le stock »)',
             'Victor Blanchard' => 'Observateur du magasin de services',
@@ -485,7 +505,7 @@ final class SemisComplet
             'Léna Roussel' => 'Accès redonné en son absence : son mot de passe est redevenu son identifiant',
             'propriétaire comptoir' => 'Cinq magasins : Martinique (8,5 %), Lyon fermé temporairement, Bordeaux rouvert, Nantes cédé, Lille suspendu ; transmission en attente',
             'Gaëlle Hoarau' => 'Administratrice à qui la propriété est proposée (lien pas encore suivi)',
-            'Joëlle Marie-Sainte' => 'Responsable de Maison Ferrand Fort-de-France : heure des Antilles, TVA à 8,5 % et 2,1 %, réassorts, loyer à 8,5 % dans les charges',
+            'Joëlle Marie-Sainte' => 'Responsable de Maison Ferrand Fort-de-France : heure des Antilles, TVA à 8,5 % et 2,1 %, réassorts, loyer à 8,5 % dans les charges, un savon acheté deux fois dont l\'un reçu sans date le dernier soir d\'un mois (rangé au jour de sa validation en Martinique) ; sans la case des graphiques, elle ne voit pas « Écart des prix d\'achat »',
             'Kévin Louisy' => 'Vendeur de Maison Ferrand Fort-de-France : ses tickets à l\'heure de la Martinique',
             'Joël Sainte-Rose' => 'Responsable en Martinique : heure des Antilles, TVA à 8,5 % et 2,1 %',
             'Maëva Jean-Louis' => 'Vendeuse en Martinique : ses tickets à l\'heure locale',
@@ -595,6 +615,10 @@ final class SemisComplet
         $fortDeFrance = IdentifiantsInsee::avecSaCle(self::SIREN_COMMERCE.self::NIC_DE_FORT_DE_FRANCE);
         $sirene->ajouterUnEtablissement($fortDeFrance, null);
         $sirene->deplacer($fortDeFrance, '97200', 'FORT-DE-FRANCE', '97209');
+
+        foreach ([self::NIC_DE_L_ENTREPOT => 'ENTREPOT DE LOGISTIQUE', self::NIC_DE_L_EPHEMERE => 'BOUTIQUE EPHEMERE', self::NIC_DU_MARCHE => 'STAND DU MARCHE'] as $nic => $enseigne) {
+            $sirene->ajouterUnEtablissement(IdentifiantsInsee::avecSaCle(self::SIREN_COMMERCE.$nic), $enseigne);
+        }
 
         $sirene->nommer(self::SIREN_CABINET_DECLARE, 'PETIT ET ASSOCIES');
         $sirene->exercer(self::SIREN_CABINET_DECLARE, ControleSirene::CODE_ACTIVITES_COMPTABLES);

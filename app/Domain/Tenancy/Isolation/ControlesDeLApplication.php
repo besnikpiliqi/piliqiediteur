@@ -202,7 +202,8 @@ final class ControlesDeLApplication
     /**
      * Ce que le compte lit dans ce magasin, magasin actif, par table : la
      * lecture des modèles et des règles d'accès de PILIQI (scopes, droits),
-     * et les identifiants que la base dit qu'il doit voir. Les ventes, les
+     * et les identifiants que la base dit qu'il doit voir (une fiche
+     * archivée, client ou produit, ne se lit plus : elle n'est pas due). Les ventes, les
      * avoirs, les paiements, les clôtures du jour et les relevés de caisse
      * suivent le choix des écrans : tous avec « voir celles de toute
      * l'équipe », les siens sinon (voir FactureResource, AvoirResource,
@@ -221,11 +222,12 @@ final class ControlesDeLApplication
         $relevesDeLEquipe = $this->permis($compte, $magasin, PermissionRegistry::CLOTURE_CAISSE_VIEW_TOUTES);
         $sienOuTous = fn (bool $tous, string $table, string $colonne, bool $permis = true): array => ! $permis ? [] : $this->ids("select id from {$table} where magasin_id = ?".($tous ? '' : " and {$colonne} = ?").' order by id', $tous ? [$id] : [$id, $utilisateur]);
         $tousDuMagasin = fn (string $table): array => $this->ids("select id from {$table} where magasin_id = ? order by id", [$id]);
+        $nonArchivesDuMagasin = fn (string $table): array => $this->ids("select id from {$table} where magasin_id = ? and deleted_at is null order by id", [$id]);
         $ids = static fn (Builder $requete): iterable => $requete->orderBy($requete->qualifyColumn('id'))->pluck($requete->qualifyColumn('id'));
 
         return [
-            'clients' => [fn (): iterable => $ids(Client::query()), $tousDuMagasin('clients')],
-            'produits' => [fn (): iterable => $ids(Produit::query()), $tousDuMagasin('produits')],
+            'clients' => [fn (): iterable => $ids(Client::query()), $nonArchivesDuMagasin('clients')],
+            'produits' => [fn (): iterable => $ids(Produit::query()), $nonArchivesDuMagasin('produits')],
             'devis' => [fn (): iterable => $ids(Devis::query()), $tousDuMagasin('devis')],
             'factures_achat' => [fn (): iterable => $ids(FactureAchat::query()), $tousDuMagasin('factures_achat')],
             'factures' => [fn (): iterable => $ids(Facture::query()->visiblesPar($compte)), $sienOuTous($toutes, 'factures', 'cree_par', $toutes || $siennes)],

@@ -4,20 +4,42 @@ namespace Tests\Feature;
 
 use App\Console\SemisEnCours;
 use App\Domain\Achats\Services\PiecesDuFournisseur;
+use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Cabinets\Models\LienCabinet;
+use App\Domain\Cabinets\Services\AccesDesCabinets;
+use App\Domain\Calendrier\Calendrier;
+use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Demonstration\Enums\EtatDeLaDemonstration;
 use App\Domain\Demonstration\Jobs\EnvoyerLeLienDeLaDemonstration;
 use App\Domain\Demonstration\Models\Demonstration;
 use App\Domain\Facturation\Events\FactureEmise;
+use App\Domain\TableauDeBord\Enums\EcranDuTableauDeBord;
 use App\Domain\TableauDeBord\Enums\Graphique;
+use App\Domain\TableauDeBord\Enums\PeriodeDuTableauDeBord;
+use App\Domain\TableauDeBord\Services\PerimetreDesGraphiques;
+use App\Domain\TableauDeBord\Services\PreferencesDesGraphiques;
+use App\Domain\TableauDeBord\Services\SeriesDesGraphiques;
+use App\Domain\TableauDeBord\Support\CalculDesSeries;
+use App\Domain\TableauDeBord\Support\CarteDuTableauDeBord;
+use App\Domain\TableauDeBord\Support\Mois;
+use App\Domain\TableauDeBord\Support\Perimetre;
+use App\Domain\TableauDeBord\Support\ReglagesDuTableauDeBord;
+use App\Domain\TableauDeBord\Support\TextesDeLEcartDesPrixDAchat;
 use App\Domain\Tenancy\Enums\StatutCompte;
 use App\Domain\Tenancy\Isolation\ControlesDeLApplication;
+use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Notifications\AvisDeLEquipe;
+use App\Domain\Tenancy\Services\TenantContext;
+use App\Integrations\Sirene\FauxRepertoireSirene;
 use App\Models\User;
 use BackedEnum;
 use Carbon\Carbon;
 use Carbon\CarbonImmutable;
 use Database\Seeders\DatabaseSeeder;
 use Database\Seeders\Semis\ComptesSemes;
+use Database\Seeders\Semis\SemisComplet;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -90,7 +112,7 @@ class SemisCompletTest extends TestCase
      * @var array<string, int>
      */
     private const NOMBRES_DE_LIGNES = [
-        'actions_traitees' => 4677,
+        'actions_traitees' => 4741,
         'actions_traitees_de_la_societe' => 348,
         'affectations' => 40,
         'autorisations_affectations' => 533,
@@ -103,7 +125,7 @@ class SemisCompletTest extends TestCase
         'cabinets' => 4,
         'changements_fin_exercice' => 1,
         'charges' => 181,
-        'clients' => 43,
+        'clients' => 46,
         'clients_confies' => 2,
         'clotures_caisse' => 2621,
         'clotures_caisse_personnelles' => 3329,
@@ -116,19 +138,19 @@ class SemisCompletTest extends TestCase
         'demonstrations' => 15,
         'devis' => 225,
         'ecarts_sirene' => 2,
-        'enregistrements_fiscaux' => 10813,
+        'enregistrements_fiscaux' => 10829,
         'envois_documents' => 13,
         'evenements_transmission_pdp' => 61,
         'factures' => 4008,
-        'factures_achat' => 116,
-        'fournisseurs' => 6,
+        'factures_achat' => 181,
+        'fournisseurs' => 12,
         'identifiants' => 67,
         'inventaires_ouverture' => 11,
         'invitations_cabinet' => 6,
-        'journal_audit' => 1619,
+        'journal_audit' => 1801,
         'liens_cabinet' => 15,
         'liens_des_devis' => 6,
-        'lignes_achat' => 288,
+        'lignes_achat' => 353,
         'lignes_avoir' => 146,
         'lignes_avoir_fournisseur' => 2,
         'lignes_de_charge' => 180,
@@ -136,44 +158,44 @@ class SemisCompletTest extends TestCase
         'lignes_facture' => 5988,
         'lignes_inventaire_ouverture' => 23,
         'lignes_recu_paiement' => 160,
-        'magasins' => 19,
+        'magasins' => 22,
         'magasins_cabinet' => 1,
         'mandats_pdp' => 2,
         'messages_vers_la_demonstration' => 26,
-        'mouvements_stock' => 5042,
+        'mouvements_stock' => 5106,
         'notifications' => 190,
         'paiement_allocations' => 3918,
         'paiements' => 3918,
         'paniers_caisse' => 1,
-        'periodes_activite' => 20,
+        'periodes_activite' => 23,
         'pieces_de_charge' => 181,
         'pieces_fournisseur' => 1,
         'pieces_verification' => 4,
         'postes_reconnus' => 1,
         'preferences_tableau_de_bord' => 4,
         'preuves_operation' => 5,
-        'produits' => 28,
+        'produits' => 52,
         'recus_paiement' => 160,
         'referentiel_autorisations_magasin' => 51,
         'referentiel_autorisations_societe' => 5,
         'reponses_des_devis' => 3,
-        'sequences_documents' => 93,
+        'sequences_documents' => 98,
         'services' => 9,
-        'sirets_magasins' => 20,
+        'sirets_magasins' => 23,
         'site_de_la_base' => 1,
         'societes' => 21,
         'taux_avoirs_fournisseur' => 2,
-        'taux_factures_achat' => 173,
+        'taux_factures_achat' => 238,
         'telechargements_documents' => 5,
-        'tetes_journal_audit' => 99,
-        'tetes_registre_fiscal' => 19,
+        'tetes_journal_audit' => 105,
+        'tetes_registre_fiscal' => 22,
         'traces_audit' => 8,
         'traces_evenements' => 2,
         'transmissions_pdp' => 57,
         'transmissions_propriete' => 2,
         'types_de_charge_de_la_societe' => 2,
         'users' => 67,
-        'verifications_societe' => 518,
+        'verifications_societe' => 566,
         'visas_detaxe' => 1,
     ];
 
@@ -208,6 +230,7 @@ class SemisCompletTest extends TestCase
         $this->assertChaqueCompteQuiVendASesVentesEtSonReleve();
         $this->assertLesComptesEtLeursMagasins();
         $this->assertLesCasDesGraphiquesEtDesCaisses();
+        $this->assertLesCasDeLEcartDesPrixDAchat();
         $this->assertLesDatesDeLOperation();
         $this->assertLaListeDesComptesOuvreChaqueCompteActif();
         $this->assertLesRenouvellementsDesDemonstrations();
@@ -384,7 +407,7 @@ class SemisCompletTest extends TestCase
             'La même personne a un compte dans chacun de ses deux magasins, promu responsable à la République.',
         );
         $this->assertSame([['EPICERIE']], $this->lignes("select m.code from clients_confies cc join users u on u.id = cc.user_id join liens_cabinet l on l.id = cc.lien_id join magasins m on m.societe_id = l.societe_id where u.name = 'Emma Rousseau'"));
-        $this->assertSame(['FDF', 'HALLES', 'REPUB'], User::query()->where('name', 'Paul Lefèvre')->sole()->magasinsAccessibles()->pluck('code')->sort()->values()->all(), 'Le collaborateur du cabinet ouvre les trois magasins de Maison Ferrand, Fort-de-France compris (« tous les magasins, présents et futurs »).');
+        $this->assertSame(['ENTREPOT', 'EPHEMERE', 'FDF', 'HALLES', 'MARCHE', 'REPUB'], User::query()->where('name', 'Paul Lefèvre')->sole()->magasinsAccessibles()->pluck('code')->sort()->values()->all(), 'Le collaborateur du cabinet ouvre les six magasins de Maison Ferrand, Fort-de-France et les trois magasins d\'achats compris (« tous les magasins, présents et futurs »).');
         $this->assertSame([['EPICERIE']], $this->lignes('select m.code from magasins_cabinet mc join magasins m on m.id = mc.magasin_id'), 'L\'Épicerie n\'ouvre au cabinet que son magasin choisi.');
     }
 
@@ -421,6 +444,576 @@ class SemisCompletTest extends TestCase
             $this->lignes('select distinct (select count(*) from json_object_keys(encaissements)) > 1 from clotures_caisse_personnelles where json_typeof(encaissements) = \'object\' order by 1'),
             'Un relevé de caisse a un seul mode d\'encaissement, un autre en a plusieurs.',
         );
+    }
+
+    /**
+     * Les règles visibles de la carte « Écart des prix d'achat » (le
+     * dix-neuvième graphique ; décision de l'éditeur du 21/11/2026, D76,
+     * B10), chacune avec une donnée qui la déclenche et une qui ne la
+     * déclenche pas, de part et d'autre de sa limite : les six magasins de
+     * Maison Ferrand lus un par un et tous ensemble, pour les 12 derniers
+     * mois, l'Entrepôt pour l'année précédente et les Halles pour l'année en
+     * cours. Chaque état de l'Entrepôt, mois après mois, est écrit en
+     * centimes. Puis chaque règle de lecture (date, prix, ordre, statut,
+     * nom, magasins) et qui voit la carte.
+     */
+    private function assertLesCasDeLEcartDesPrixDAchat(): void
+    {
+        $societe = Societe::query()->where('siren', SemisComplet::SIREN_COMMERCE)->sole();
+        $proprietaire = $societe->proprietaire()->sole();
+        $vues = $this->lesVuesDeLaCarte($proprietaire, $societe);
+
+        $this->assertLesDeuxCotesDeChaqueRegleDeLaCarte($vues);
+        $this->assertLesMoisDeLEntrepot($vues['ENTREPOT']);
+        $this->assertLesDouzeMoisDeLEntrepot($vues['ENTREPOT'], $vues['ENTREPOT:annee-precedente']);
+        $this->assertLEphemereEtLeMarche($vues['EPHEMERE'], $vues['MARCHE']);
+        $this->assertLesRegleDeLectureDesAchats($vues);
+        $this->assertQuiVoitLaCarte($societe);
+        $this->assertLesPreferencesDeLaCarte($societe);
+    }
+
+    /**
+     * Le calcul de la carte pour la propriétaire de Maison Ferrand, qui
+     * choisit tour à tour « Tous mes magasins » et chacun de ses six
+     * magasins, pour les 12 derniers mois, puis l'Entrepôt pour l'année
+     * précédente et les Halles pour l'année en cours.
+     *
+     * @return array<string, array<string, mixed>>
+     */
+    private function lesVuesDeLaCarte(User $proprietaire, Societe $societe): array
+    {
+        app(TenantContext::class)->clear();
+        $perimetre = app(PerimetreDesGraphiques::class)->deLaSociete($proprietaire, $societe);
+        $uuid = fn (string $code): string => (string) $this->magasinDeMaisonFerrand($code)->uuid;
+        $vues = ['TOUS' => $this->calculDeLaCarte($perimetre)];
+
+        foreach (['ENTREPOT', 'EPHEMERE', 'MARCHE', 'HALLES', 'REPUB', 'FDF'] as $code) {
+            $vues[$code] = $this->calculDeLaCarte($perimetre->restreintA($uuid($code)));
+        }
+
+        $vues['ENTREPOT:annee-precedente'] = $this->calculDeLaCarte($perimetre->restreintA($uuid('ENTREPOT')), PeriodeDuTableauDeBord::AnneePrecedente);
+        $vues['HALLES:annee-en-cours'] = $this->calculDeLaCarte($perimetre->restreintA($uuid('HALLES')), PeriodeDuTableauDeBord::AnneeEnCours);
+
+        return $vues;
+    }
+
+    /**
+     * Le magasin de ce code de Maison Ferrand (le code d'un magasin est
+     * unique dans sa société, non dans la base).
+     */
+    private function magasinDeMaisonFerrand(string $code): Magasin
+    {
+        $societe = Societe::query()->where('siren', SemisComplet::SIREN_COMMERCE)->sole();
+
+        return Magasin::query()->withoutGlobalScopes()->where('societe_id', $societe->getKey())->where('code', $code)->sole();
+    }
+
+    /**
+     * Ce que la série de la carte porte pour ce périmètre et cette période.
+     *
+     * @return array<string, mixed>
+     */
+    private function calculDeLaCarte(Perimetre $perimetre, PeriodeDuTableauDeBord $periode = PeriodeDuTableauDeBord::DouzeDerniersMois): array
+    {
+        $cartes = [CarteDuTableauDeBord::parDefaut(Graphique::EcartDesPrixDAchat)];
+        $calcul = app(SeriesDesGraphiques::class)->pour(new CalculDesSeries($perimetre, new ReglagesDuTableauDeBord($cartes, $periode), $cartes))[Graphique::EcartDesPrixDAchat->value]->ecartDesPrixDAchat;
+        $this->assertNotNull($calcul, 'La série de la carte porte son calcul.');
+
+        return $calcul;
+    }
+
+    /**
+     * Chaque règle visible de la carte est déclenchée par une des lectures
+     * semées et ne l'est pas par une autre (une règle n'est jugée que là où
+     * elle a un sens : un mois sans achat n'a pas de produit masqué).
+     *
+     * @param  array<string, array<string, mixed>>  $vues
+     */
+    private function assertLesDeuxCotesDeChaqueRegleDeLaCarte(array $vues): void
+    {
+        /** @var array<string, list<bool>> $observees */
+        $observees = [];
+        $noter = static function (string $regle, ?bool $declenchee) use (&$observees): void {
+            if ($declenchee !== null) {
+                $observees[$regle][] = $declenchee;
+            }
+        };
+
+        foreach ($vues as $calcul) {
+            for ($mois = 0; $mois < 12; $mois++) {
+                $lecture = TextesDeLEcartDesPrixDAchat::lecture($calcul, TextesDeLEcartDesPrixDAchat::AFFICHAGE_PAR_MOIS, $mois);
+                $m = $calcul['calculs'][$mois];
+                $aDesAchats = $m['premiers'] !== [];
+                $compare = $m['n'] > 0;
+                $masques = count($m['premiers']) - count(array_unique(array_column(array_filter($m['pas'], static fn (array $pas): bool => $pas['ecart'] !== 0), 'i')));
+                $texte = implode(' ', array_map(static fn (array $ligne): string => implode(' ', array_column($ligne['cellules'], 't')), $lecture['calcul']['lignes']));
+                $quatreChiffres = array_filter([...array_column($m['premiers'], 'e'), ...array_column($m['pas'], 'e')], static fn (array $achat): bool => $achat['q'] >= 1000) !== [];
+
+                $noter('mois : aucun achat', $lecture['pastille']['texte'] === 'Aucun achat ce mois-ci');
+                $noter('mois : des achats mais aucun produit acheté deux fois', $lecture['pastille']['texte'] === 'Aucun achat comparable ce mois-ci');
+                $noter('mois : écart positif (payé plus cher)', $compare ? $lecture['pastille']['classe'] === 'pastille plus' : null);
+                $noter('mois : écart négatif (payé moins cher)', $compare ? $lecture['pastille']['classe'] === 'pastille moins' : null);
+                $noter('mois : écart nul (prix inchangés)', $compare ? $lecture['pastille']['texte'] === 'Prix inchangés' : null);
+                $noter('mois : écart nul avec hausses et baisses de même montant', $compare && $m['ecart'] === 0 ? $m['hausses'] > 0 : null);
+                $noter('mois : un seul achat comparé', $compare ? $m['n'] === 1 && str_contains($lecture['detail'], 'sur l’achat comparé') : null);
+                $noter('mois : plusieurs achats comparés', $compare ? $m['n'] > 1 && str_contains($lecture['detail'], 'sur les '.$m['n'].' achats comparés') : null);
+                $noter('mois : sans hausses', $compare ? $m['hausses'] === 0 : null);
+                $noter('mois : sans baisses', $compare ? $m['baisses'] === 0 : null);
+                $noter('mois : aucun produit masqué', $aDesAchats ? $masques === 0 : null);
+                $noter('mois : un produit masqué', $aDesAchats ? $masques === 1 && str_contains($lecture['calcul']['notes'][0], '(1 produit sans écart est masqué).') : null);
+                $noter('mois : plusieurs produits masqués', $aDesAchats ? $masques > 1 && str_contains($lecture['calcul']['notes'][0], '('.$masques.' produits sans écart sont masqués).') : null);
+                $noter('mois : « Aucun produit avec un écart ce mois-ci »', $aDesAchats ? str_contains($texte, 'Aucun produit avec un écart ce mois-ci.') : null);
+                $noter('mois : pourcentage « +0,0 % » (signe de l’écart, non de l’arrondi)', $compare ? str_contains($lecture['detail'], '+0,0 %') : null);
+                $noter('mois : pourcentage « −0,0 % »', $compare ? str_contains($lecture['detail'], '−0,0 %') : null);
+                $noter('mois : base nulle, pourcentage « — »', $compare ? str_contains($lecture['detail'], '. — sur') : null);
+                $noter('mois : quantité de quatre chiffres', $aDesAchats ? $quatreChiffres : null);
+            }
+
+            $lecture = TextesDeLEcartDesPrixDAchat::lecture($calcul, TextesDeLEcartDesPrixDAchat::AFFICHAGE_SUR_DOUZE_MOIS, 11);
+            $p = $calcul['calculDeLaPeriode'];
+            $sans = $p['uneFois'] + $p['memePrix'];
+            $avecEcart = $p['visibles'] > 0;
+            $phrases = implode(' ', [$lecture['detail'], ...$lecture['calcul']['notes']]);
+            $quatreChiffres = array_filter(array_merge([], ...array_map(static fn (array $ligne): array => [$ligne['ref'], ...array_column($ligne['pas'], 'e')], $p['lignes'])), static fn (array $achat): bool => $achat['q'] >= 1000) !== [];
+
+            $noter('12 mois : écart positif', $p['ecart'] > 0);
+            $noter('12 mois : écart négatif', $p['ecart'] < 0);
+            $noter('12 mois : au moins un produit avec écart', $avecEcart);
+            $noter('12 mois : un seul produit avec écart (« Total du produit avec écart »)', $avecEcart ? $p['visibles'] === 1 && str_contains($lecture['detail'], 'Total du produit avec écart') : null);
+            $noter('12 mois : plusieurs produits avec écart (« Total des N produits avec écart »)', $avecEcart ? $p['visibles'] > 1 && str_contains($lecture['detail'], 'Total des '.$p['visibles'].' produits avec écart') : null);
+            $noter('12 mois : des produits sans écart', $sans > 0);
+            $noter('12 mois : un seul produit sans écart (« ne est pas compté »)', $sans > 0 ? $sans === 1 && str_contains($phrases, 'n’a pas d’écart et ne est pas compté') : null);
+            $noter('12 mois : plusieurs produits sans écart (« ne sont pas comptés »)', $sans > 0 ? $sans > 1 && str_contains($phrases, 'n’ont pas d’écart et ne sont pas comptés') : null);
+            $noter('12 mois : produits achetés une seule fois', $sans > 0 ? $p['uneFois'] > 0 : null);
+            $noter('12 mois : produits toujours au même prix', $sans > 0 ? $p['memePrix'] > 0 : null);
+            $noter('12 mois : aucun achat à comparer', $lecture['detail'] === 'Aucun achat à comparer sur les 12 mois.');
+            $noter('12 mois : aucun achat au même prix que le départ caché', $avecEcart ? $p['egaux']['n'] === 0 : null);
+            $noter('12 mois : un achat d’une pièce au même prix que le départ caché', $avecEcart ? $p['egaux']['n'] === 1 && $p['egaux']['qte'] === 1 : null);
+            $noter('12 mois : plusieurs achats au même prix que le départ cachés', $avecEcart ? $p['egaux']['n'] > 1 : null);
+            $noter('12 mois : quantité de quatre chiffres', $avecEcart ? $quatreChiffres : null);
+            $noter('12 mois : « Payé en plus » non nul', $p['hausses'] > 0);
+            $noter('12 mois : « Payé en moins » non nul', $p['baisses'] > 0);
+            $noter('12 mois : base nulle, « soit — »', $p['base'] === 0);
+        }
+
+        $this->assertCount(36, $observees, 'Chaque règle de la carte est jugée au moins une fois : '.implode(' | ', array_keys($observees)));
+
+        $sansUnCote = [];
+
+        foreach ($observees as $regle => $valeurs) {
+            if (! in_array(true, $valeurs, true)) {
+                $sansUnCote[] = "Aucune donnée semée ne déclenche la règle « {$regle} ».";
+            }
+
+            if (! in_array(false, $valeurs, true)) {
+                $sansUnCote[] = "Aucune donnée semée ne laisse la règle « {$regle} » sans effet.";
+            }
+        }
+
+        $this->assertSame([], $sansUnCote);
+    }
+
+    /**
+     * Les douze mois de l'Entrepôt, un état par mois, en centimes : mois
+     * sans achat, achats sans produit acheté deux fois, prix inchangés
+     * (deux produits masqués), hausse seule sur un achat comparé, baisse
+     * seule sur trois achats, hausse et baisse de même montant, un centime
+     * par pièce sur 100 pièces dans un sens et dans l'autre, un produit
+     * offert puis payé (base nulle, trois produits masqués), un produit
+     * masqué et une facture corrigée, un mois ordinaire sans produit
+     * masqué, un mois ordinaire à écart négatif.
+     *
+     * @param  array<string, mixed>  $entrepot
+     */
+    private function assertLesMoisDeLEntrepot(array $entrepot): void
+    {
+        $this->assertSame(
+            ['déc. 2025', 'janv. 2026', 'févr. 2026', 'mars 2026', 'avr. 2026', 'mai 2026', 'juin 2026', 'juil. 2026', 'août 2026', 'sept. 2026', 'oct. 2026', 'nov. 2026'],
+            $entrepot['mois'],
+            'Les 12 derniers mois du 13/11/2026 sont ceux de la maquette.',
+        );
+
+        // Par mois : achats comparés, hausses, baisses, écart, base, produits achetés, produits masqués.
+        $attendus = [
+            [0, 0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 2, 2],
+            [2, 0, 0, 0, 60 * 540 + 36 * 310, 2, 2],
+            [1, 2400, 0, 2400, 80 * 520, 1, 0],
+            [2, 0, 3000, -3000, 2 * 20 * 1180, 1, 0],
+            [2, 1000, 1000, 0, 10 * 3200 + 20 * 800, 2, 0],
+            [1, 100, 0, 100, 100 * 4000, 1, 0],
+            [1, 0, 100, -100, 100 * 4002, 1, 0],
+            [1, 10000, 0, 10000, 0, 4, 3],
+            [1, 960, 0, 960, 48 * 390, 2, 1],
+            [3, 3800, 0, 3800, 80 * 525 + 40 * 625 + 1200 * 86, 3, 0],
+            [2, 0, 2140, -2140, 24 * 1120 + 10 * 3350, 2, 0],
+        ];
+
+        foreach ($attendus as $mois => $attendu) {
+            $m = $entrepot['calculs'][$mois];
+            $avecEcart = count(array_unique(array_column(array_filter($m['pas'], static fn (array $pas): bool => $pas['ecart'] !== 0), 'i')));
+
+            $this->assertSame($attendu, [$m['n'], $m['hausses'], $m['baisses'], $m['ecart'], $m['base'], count($m['premiers']), count($m['premiers']) - $avecEcart], "Entrepôt, {$m['m']} : achats comparés, hausses, baisses, écart, base, produits achetés et masqués.");
+        }
+
+        $lire = static fn (int $mois): array => TextesDeLEcartDesPrixDAchat::lecture($entrepot, TextesDeLEcartDesPrixDAchat::AFFICHAGE_PAR_MOIS, $mois);
+
+        $this->assertSame('Aucun achat ce mois-ci', $lire(0)['pastille']['texte']);
+        $this->assertSame('Aucun achat comparable ce mois-ci', $lire(1)['pastille']['texte']);
+        $this->assertSame('Aucun produit acheté deux fois dans le mois : pas d’écart à calculer.', $lire(1)['detail']);
+        $this->assertSame('Prix inchangés', $lire(2)['pastille']['texte']);
+        $this->assertStringContainsString('+0,0 %', $lire(6)['detail']);
+        $this->assertStringContainsString('−0,0 %', $lire(7)['detail']);
+        $this->assertStringContainsString(". — sur l’achat comparé, qui vaut 0,00\u{a0}€", $lire(8)['detail']);
+        $this->assertStringContainsString('(3 produits sans écart sont masqués).', $lire(8)['calcul']['notes'][0]);
+        $this->assertStringContainsString('(1 produit sans écart est masqué).', $lire(9)['calcul']['notes'][0]);
+        $this->assertStringEndsWith('Seuls les produits qui ont un écart dans le mois apparaissent.', $lire(10)['calcul']['notes'][0]);
+    }
+
+    /**
+     * Les douze mois de l'Entrepôt : les neuf produits avec écart, les trois
+     * achetés une seule fois, les deux toujours au même prix, aucun achat au
+     * même prix que son départ ; puis l'année précédente, où les
+     * achats d'avant la période (novembre 2025) sont ceux de la période.
+     *
+     * @param  array<string, mixed>  $entrepot
+     * @param  array<string, mixed>  $anneePrecedente
+     */
+    private function assertLesDouzeMoisDeLEntrepot(array $entrepot, array $anneePrecedente): void
+    {
+        $this->assertSame(
+            ['hausses' => 25060, 'baisses' => 5680, 'ecart' => 19380, 'visibles' => 9, 'uneFois' => 3, 'memePrix' => 2, 'egaux' => ['n' => 0, 'qte' => 0, 'montant' => 0]],
+            $this->resumeDeLaPeriode($entrepot),
+            'Entrepôt, 12 derniers mois.',
+        );
+
+        $this->assertSame([520, 550, 525, 535], array_column($this->achatsDuProduit($entrepot, 'Bougie parfumée ambre 180 g'), 'c'), 'Le premier achat de la période (5,20 €) est le départ : celui de novembre 2025 (7,20 €) ne compte jamais.');
+        $this->assertSame([0, 200], array_column(array_slice($this->achatsDuProduit($entrepot, 'Sachet de lavande'), 0, 2), 'c'), 'Un produit offert, puis payé 2,00 €.');
+        $this->assertSame(1200, $this->achatsDuProduit($entrepot, 'Boîte cadeau carrée')[0]['q'], 'Une quantité de quatre chiffres.');
+
+        $this->assertSame(
+            ['hausses' => 300, 'baisses' => 0, 'ecart' => 300, 'visibles' => 1, 'uneFois' => 0, 'memePrix' => 1, 'egaux' => ['n' => 1, 'qte' => 1, 'montant' => 4500]],
+            $this->resumeDeLaPeriode($anneePrecedente),
+            'Entrepôt, année précédente (2025) : un présentoir acheté trois fois dont un achat de 45 € au même prix caché, une bougie toujours au même prix.',
+        );
+        $this->assertSame(['Présentoir en chêne', 'Bougie parfumée ambre 180 g'], $anneePrecedente['produits']);
+    }
+
+    /**
+     * @param  array<string, mixed>  $calcul
+     * @return array<string, mixed>
+     */
+    private function resumeDeLaPeriode(array $calcul): array
+    {
+        $p = $calcul['calculDeLaPeriode'];
+
+        return ['hausses' => $p['hausses'], 'baisses' => $p['baisses'], 'ecart' => $p['ecart'], 'visibles' => $p['visibles'], 'uneFois' => $p['uneFois'], 'memePrix' => $p['memePrix'], 'egaux' => $p['egaux']];
+    }
+
+    /**
+     * L'Éphémère n'a aucun achat validé (un seul brouillon, qui ne compte
+     * pas) ; le Marché n'a qu'un produit, acheté une seule fois.
+     *
+     * @param  array<string, mixed>  $ephemere
+     * @param  array<string, mixed>  $marche
+     */
+    private function assertLEphemereEtLeMarche(array $ephemere, array $marche): void
+    {
+        $magasin = (int) $this->magasinDeMaisonFerrand('EPHEMERE')->getKey();
+        $this->assertSame(0, DB::table('factures_achat')->where('magasin_id', $magasin)->where('statut', 'validee')->count());
+        $this->assertSame(1, DB::table('factures_achat')->where('magasin_id', $magasin)->where('statut', 'brouillon')->count(), 'Un brouillon d\'achat, qui ne compte pas.');
+        $this->assertSame([], $ephemere['produits']);
+        $this->assertSame('Aucun achat à comparer sur les 12 mois.', TextesDeLEcartDesPrixDAchat::lecture($ephemere, TextesDeLEcartDesPrixDAchat::AFFICHAGE_SUR_DOUZE_MOIS, 11)['detail']);
+        $this->assertSame('Aucun achat ce mois-ci', TextesDeLEcartDesPrixDAchat::lecture($ephemere, TextesDeLEcartDesPrixDAchat::AFFICHAGE_PAR_MOIS, 11)['pastille']['texte']);
+
+        $this->assertSame(['Panier en osier'], $marche['produits']);
+        $this->assertSame(
+            '1 produit n’a pas d’écart et ne est pas compté (1 acheté une seule fois).',
+            TextesDeLEcartDesPrixDAchat::lecture($marche, TextesDeLEcartDesPrixDAchat::AFFICHAGE_SUR_DOUZE_MOIS, 11)['detail'],
+        );
+        $this->assertSame(0, $marche['calculDeLaPeriode']['ecart']);
+    }
+
+    /**
+     * Les achats d'un produit, dans l'ordre du temps.
+     *
+     * @param  array<string, mixed>  $calcul
+     * @return list<array{k: int, j: int, q: int, c: int}>
+     */
+    private function achatsDuProduit(array $calcul, string $nom): array
+    {
+        $rang = array_search($nom, $calcul['produits'], true);
+        $this->assertIsInt($rang, "Le produit « {$nom} » n'est pas dans la carte.");
+        $achats = [];
+
+        foreach ($calcul['calculs'] as $mois) {
+            foreach ($mois['premiers'] as $premier) {
+                if ($premier['i'] === $rang) {
+                    $achats[] = $premier['e'];
+                }
+            }
+
+            foreach ($mois['pas'] as $pas) {
+                if ($pas['i'] === $rang) {
+                    $achats[] = $pas['e'];
+                }
+            }
+        }
+
+        usort($achats, static fn (array $un, array $autre): int => [$un['k'], $un['j']] <=> [$autre['k'], $autre['j']]);
+
+        return $achats;
+    }
+
+    /**
+     * Les règles de lecture des achats (B3 à B5) sur les achats semés : ce
+     * qui ne compte pas (brouillon, avoir fournisseur, inventaire
+     * d'ouverture), la date de la facture contre celle de la validation, un
+     * achat reçu sans date rangé au jour de sa validation en Martinique, un
+     * achat d'un mois à venir, un prix net arrondi une seule fois, un
+     * produit renommé ou archivé, une facture corrigée, deux magasins qui
+     * achètent un produit de même nom, et un nom de magasin jamais écrit
+     * quand un seul magasin est compté.
+     *
+     * @param  array<string, array<string, mixed>>  $vues
+     */
+    private function assertLesRegleDeLectureDesAchats(array $vues): void
+    {
+        $moisDuSemis = Mois::duJour(Calendrier::deParis()->aujourdhui());
+        $this->assertSame('2026-11', $moisDuSemis);
+        $magasin = fn (string $code): int => (int) $this->magasinDeMaisonFerrand($code)->getKey();
+
+        // Ce qui compte : une ligne de facture d'achat validée, datée dans les 12 mois ;
+        // un brouillon, un avoir fournisseur et un inventaire d'ouverture ne comptent pas.
+        foreach (['HALLES', 'REPUB', 'ENTREPOT', 'FDF'] as $code) {
+            $lignes = DB::table('lignes_achat')
+                ->join('factures_achat', fn ($jointure) => $jointure->on('factures_achat.magasin_id', '=', 'lignes_achat.magasin_id')->on('factures_achat.id', '=', 'lignes_achat.facture_achat_id'))
+                ->where('factures_achat.magasin_id', $magasin($code))
+                ->where('factures_achat.statut', 'validee');
+            $dansLesDouzeMois = (clone $lignes)->whereBetween('factures_achat.date_facture', ['2025-12-01', '2026-11-30'])->count()
+                + ($code === 'FDF' ? (clone $lignes)->whereNull('factures_achat.date_facture')->count() : 0);
+            $p = $vues[$code]['calculDeLaPeriode'];
+            $lues = $p['uneFois'] + array_sum(array_map(static fn (array $ligne): int => 1 + count($ligne['pas']), $p['lignes']));
+
+            $this->assertSame($dansLesDouzeMois, $lues, "{$code} : la carte compte exactement les lignes de factures d'achat validées des 12 mois.");
+        }
+
+        $this->assertGreaterThan(0, DB::table('factures_achat')->where('magasin_id', $magasin('HALLES'))->where('statut', 'brouillon')->count(), 'Les Halles ont un brouillon d\'achat, que la carte ne compte pas.');
+        $this->assertGreaterThan(0, DB::table('avoirs_fournisseur')->where('magasin_id', $magasin('HALLES'))->count(), 'Les Halles ont un avoir fournisseur, qui ne change aucune quantité d\'achat.');
+        $this->assertGreaterThan(0, DB::table('inventaires_ouverture')->where('magasin_id', $magasin('REPUB'))->count(), 'La République a un inventaire d\'ouverture, que la carte ne compte pas.');
+
+        // La date de la facture contre celle de la validation : une facture du 31 janvier validée le 1er février compte en janvier.
+        $decalees = DB::select(<<<'SQL'
+            select f.date_facture, l.quantite, l.prix_unitaire_ht
+            from lignes_achat l
+            join factures_achat f on f.magasin_id = l.magasin_id and f.id = l.facture_achat_id
+            where f.magasin_id = ? and f.statut = 'validee' and f.date_facture between '2025-12-01' and '2026-11-30'
+              and to_char(f.date_validation at time zone 'UTC' at time zone 'Europe/Paris', 'YYYY-MM') <> to_char(f.date_facture, 'YYYY-MM')
+            SQL, [$magasin('HALLES')]);
+        $this->assertGreaterThanOrEqual(2, count($decalees), 'Des réassorts des Halles sont datés d\'un mois et validés le suivant.');
+
+        foreach ($decalees as $ligne) {
+            $rang = array_search(substr((string) $ligne->date_facture, 0, 7), array_map(static fn (int $k): string => Mois::decaler($moisDuSemis, $k - 11), range(0, 11)), true);
+            $this->assertIsInt($rang);
+            $achats = $vues['HALLES']['calculs'][$rang];
+            $trouves = array_filter([...array_column($achats['premiers'], 'e'), ...array_column($achats['pas'], 'e')], static fn (array $achat): bool => $achat['j'] === (int) substr((string) $ligne->date_facture, 8, 2) && $achat['q'] === (int) $ligne->quantite && $achat['c'] === (int) round((float) $ligne->prix_unitaire_ht * 100));
+            $this->assertNotEmpty($trouves, "L'achat du {$ligne->date_facture} compte dans le mois de sa facture, non dans celui de sa validation.");
+        }
+
+        // Un achat reçu sans date, comme l'API le crée : rangé au jour de sa validation dans le calendrier de son magasin.
+        $sansDate = DB::table('factures_achat')->where('magasin_id', $magasin('FDF'))->whereNull('date_facture')->sole();
+        $validee = CarbonImmutable::parse((string) $sansDate->date_validation, 'UTC');
+        $dernierJour = Calendrier::ajouterJours(Mois::decaler($moisDuSemis, -6).'-01', -1);
+        $this->assertSame($dernierJour, $this->magasinDeMaisonFerrand('FDF')->calendrier()->jourDe($validee), 'Validé à 23 h 30 en Martinique le dernier jour d\'un mois.');
+        $this->assertSame(Mois::decaler($moisDuSemis, -6).'-01', Calendrier::deParis()->jourDe($validee), 'Le premier du mois suivant à Paris.');
+        $savon = $this->achatsDuProduit($vues['FDF'], 'Savon de coco artisanal');
+        $this->assertSame([[4, 10, 60, 240], [4, (int) substr($dernierJour, 8, 2), 60, 260]], array_map(static fn (array $achat): array => [$achat['k'], $achat['j'], $achat['q'], $achat['c']], $savon), 'L\'achat sans date compte dans le mois de sa validation en Martinique (avril), non à Paris (mai).');
+
+        // Un achat d'un mois à venir compte dans « Année en cours », pas dans « 12 derniers mois ».
+        $boule = 'Boule de Noël en verre (boîte de 6)';
+        $this->assertCount(1, $this->achatsDuProduit($vues['HALLES'], $boule));
+        $this->assertSame([[10, 4, 30, 800], [11, 10, 30, 840]], array_map(static fn (array $achat): array => [$achat['k'], $achat['j'], $achat['q'], $achat['c']], $this->achatsDuProduit($vues['HALLES:annee-en-cours'], $boule)));
+
+        // Le coût net arrondi une seule fois : remise de ligne, escompte de facture, six décimales, HT de ligne écrit.
+        $set = $this->achatsDuProduit($vues['HALLES'], 'Set de table en coton (lot de 4)');
+        $this->assertSame([1200, 1200, 1200, 1200, 1201, 1240], array_column($set, 'c'), 'Un prix écrit à 15,00 € moins 20 %, à 12,50 € moins 4 %, à 12,004950 € coûtent 12,00 € ; 12,0040 € avec un HT écrit de 120,05 € coûte 12,01 €.');
+        $this->assertSame([10, 10, 10, 10, 10, 10], array_column($set, 'q'));
+        $this->assertSame([5, 9, 13, 17, 21, 25], array_column($set, 'j'));
+
+        // Un produit renommé entre deux achats porte son nom actuel ; un produit archivé reste nommé.
+        $this->assertContains('Plateau en bambou clair', $vues['HALLES']['produits']);
+        $this->assertNotContains('Plateau en bambou', $vues['HALLES']['produits']);
+        $this->assertSame([650, 680], array_column($this->achatsDuProduit($vues['HALLES'], 'Plateau en bambou clair'), 'c'));
+        $this->assertContains('Cadre photo 13 × 18', $vues['REPUB']['produits']);
+        $this->assertSame(1, DB::table('produits')->where('magasin_id', $magasin('REPUB'))->where('nom', 'Cadre photo 13 × 18')->whereNotNull('deleted_at')->count(), 'Le cadre photo est archivé.');
+
+        // Une facture validée corrigée après coup : la carte lit le prix corrigé.
+        $this->assertSame([390, 410], array_column($this->achatsDuProduit($vues['ENTREPOT'], 'Diffuseur rotin 100 ml'), 'c'));
+        $this->assertSame(1, DB::table('journal_audit')->where('magasin_id', $magasin('ENTREPOT'))->where('action', 'facture_achat_modifiee')->count(), 'La correction s\'est inscrite au journal d\'audit.');
+        $this->assertSame(0, DB::table('lignes_achat')->where('magasin_id', $magasin('ENTREPOT'))->where('prix_unitaire_ht', '4.010000')->count(), 'Plus aucune ligne au prix saisi par erreur.');
+
+        // Deux magasins qui achètent un produit de même nom le même mois à deux prix ne mélangent jamais leurs prix.
+        $this->assertSame([1800, 1850], array_column($this->achatsDuProduit($vues['HALLES'], 'Théière en fonte 1 l'), 'c'));
+        $this->assertSame([2100, 2000], array_column($this->achatsDuProduit($vues['REPUB'], 'Théière en fonte 1 l'), 'c'));
+        $this->assertSame([1800, 1850], array_column($this->achatsDuProduit($vues['TOUS'], 'Théière en fonte 1 l · Maison Ferrand Halles'), 'c'));
+        $this->assertSame([2100, 2000], array_column($this->achatsDuProduit($vues['TOUS'], 'Théière en fonte 1 l · Maison Ferrand République'), 'c'));
+        $this->assertSame([], array_filter($vues['HALLES']['produits'], static fn (string $nom): bool => str_contains($nom, ' · ')), 'Avec un seul magasin compté, un nom de produit ne dit jamais un magasin.');
+        $this->assertSame([], array_filter($vues['TOUS']['produits'], static fn (string $nom): bool => ! str_contains($nom, ' · ')), 'Avec plusieurs magasins comptés, chaque nom de produit dit le sien.');
+
+        // La lampe de la République perd 210 € sur les 12 mois : l'écart de ce magasin est négatif.
+        $this->assertSame([1000, 850, 800], array_column($this->achatsDuProduit($vues['REPUB'], 'Lampe de chevet en céramique'), 'c'));
+        $this->assertLessThan(0, $vues['REPUB']['calculDeLaPeriode']['ecart']);
+        $this->assertGreaterThan(0, $vues['ENTREPOT']['calculDeLaPeriode']['ecart']);
+    }
+
+    /**
+     * Qui voit la carte et qui ne la voit pas : la propriétaire de Maison
+     * Ferrand (espace de la société et panneau de chaque magasin), son
+     * administratrice cochée aux graphiques, la responsable des Halles
+     * cochée, le cabinet Martin (son propriétaire, Paul Lefèvre pour Maison
+     * Ferrand, Emma Rousseau pour l'Épicerie), le propriétaire de l'Épicerie ;
+     * pas les responsables sans la case, l'administrateur sans la case, les
+     * vendeurs, l'observatrice, l'expert-comptable d'une société de services,
+     * ni le cabinet pour la Boulangerie Duval, à qui sa propriétaire a retiré
+     * les consultations d'achats.
+     */
+    private function assertQuiVoitLaCarte(Societe $societe): void
+    {
+        $cabinet = Societe::query()->where('siren', FauxRepertoireSirene::SIREN_CABINET)->sole();
+        $epicerie = Societe::query()->where('siren', SemisComplet::SIREN_CLIENT_INVITE)->sole();
+        $services = Societe::query()->where('siren', SemisComplet::SIREN_SERVICES)->sole();
+
+        $voient = [
+            'la propriétaire de Maison Ferrand' => $societe->proprietaire()->sole(),
+            'Nadia Benali' => User::query()->where('name', 'Nadia Benali')->sole(),
+            'Camille Laurent' => User::query()->where('name', 'Camille Laurent')->sole(),
+            'le propriétaire du cabinet Martin' => $cabinet->proprietaire()->sole(),
+            'Paul Lefèvre' => User::query()->where('name', 'Paul Lefèvre')->sole(),
+            'Emma Rousseau' => User::query()->where('name', 'Emma Rousseau')->sole(),
+            'le propriétaire de l\'Épicerie Lemoine' => $epicerie->proprietaire()->sole(),
+        ];
+        $neVoientPas = [
+            'Hugo Lefebvre' => User::query()->where('name', 'Hugo Lefebvre')->sole(),
+            'Joëlle Marie-Sainte' => User::query()->where('name', 'Joëlle Marie-Sainte')->sole(),
+            'Thomas Girard' => User::query()->where('name', 'Thomas Girard')->sole(),
+            'Inès Garcia' => User::query()->where('name', 'Inès Garcia')->sole(),
+            'Sarah Petit' => User::query()->where('name', 'Sarah Petit')->sole(),
+            'Kévin Louisy' => User::query()->where('name', 'Kévin Louisy')->sole(),
+            'Élodie Fabre' => User::query()->where('name', 'Élodie Fabre')->sole(),
+            'Marc Petit (société de services)' => User::query()->where('name', 'Marc Petit')->sole(),
+            'la propriétaire de la société de services' => $services->proprietaire()->sole(),
+            'Claire Dubois (société de services)' => User::query()->where('name', 'Claire Dubois')->sole(),
+        ];
+
+        foreach ($voient as $qui => $compte) {
+            $this->assertTrue($this->voitLaCarte($compte), "{$qui} voit la carte « Écart des prix d'achat ».");
+        }
+
+        foreach ($neVoientPas as $qui => $compte) {
+            $this->assertFalse($this->voitLaCarte($compte), "{$qui} ne voit pas la carte « Écart des prix d'achat ».");
+        }
+
+        // Le cabinet la voit pour Maison Ferrand et l'Épicerie, pas pour la Boulangerie Duval.
+        $proprietaireDuCabinet = $cabinet->proprietaire()->sole();
+        app(TenantContext::class)->clear();
+        $clientsQuiLaMontrent = [];
+
+        foreach (app(AccesDesCabinets::class)->liensOuverts($proprietaireDuCabinet)->get() as $lien) {
+            if (app(PerimetreDesGraphiques::class)->voitLesGraphiquesDuClient($proprietaireDuCabinet, $lien) && app(PerimetreDesGraphiques::class)->duClient($proprietaireDuCabinet, $lien)->voit(Graphique::EcartDesPrixDAchat)) {
+                $clientsQuiLaMontrent[] = (string) Societe::query()->findOrFail($lien->societe_id)->raison_sociale;
+            }
+        }
+
+        sort($clientsQuiLaMontrent);
+        $this->assertSame(['EPICERIE LEMOINE', 'MAISON FERRAND'], $clientsQuiLaMontrent);
+
+        $boulangerie = Societe::query()->where('raison_sociale', 'BOULANGERIE DUVAL')->sole();
+        $retrait = DB::table('journal_audit')->where('societe_id', $boulangerie->getKey())->where('action', 'autorisations_du_cabinet_modifiees')->orderBy('id')->get();
+        $this->assertNotEmpty($retrait, 'La propriétaire de la Boulangerie a réglé les autorisations du cabinet.');
+        $autorisations = (array) (json_decode((string) $retrait->first()->nouvelles_valeurs, true)['autorisations'] ?? []);
+        $this->assertNotEmpty($autorisations);
+        $this->assertNotContains(PermissionRegistry::FACTURE_ACHAT_VIEW, $autorisations);
+        $this->assertNotContains(PermissionRegistry::AVOIR_FOURNISSEUR_VIEW, $autorisations);
+        $lienDeMaisonFerrand = LienCabinet::query()->withoutGlobalScopes()->where('cabinet_id', $cabinet->getKey())->where('societe_id', $societe->getKey())->where('etat', 'actif')->sole();
+        $this->assertContains(PermissionRegistry::FACTURE_ACHAT_VIEW, $lienDeMaisonFerrand->autorisations(), 'Maison Ferrand garde « Factures d\'achat : voir » au cabinet.');
+    }
+
+    /**
+     * Voit-il la carte, sur l'écran où son compte l'ouvre ?
+     */
+    private function voitLaCarte(User $compte): bool
+    {
+        app(TenantContext::class)->clear();
+        $perimetres = app(PerimetreDesGraphiques::class);
+        $compte = $compte->refresh();
+
+        try {
+            if ($compte->estExpertComptable()) {
+                return $perimetres->delExpertComptable($compte)->voit(Graphique::EcartDesPrixDAchat);
+            }
+
+            if ($compte->societe->estUnCabinet()) {
+                foreach (app(AccesDesCabinets::class)->liensOuverts($compte)->get() as $lien) {
+                    try {
+                        if ($perimetres->duClient($compte, $lien)->voit(Graphique::EcartDesPrixDAchat)) {
+                            return true;
+                        }
+                    } catch (AuthorizationException) {
+                        continue;
+                    }
+                }
+
+                return false;
+            }
+
+            if ($compte->peutAdministrer()) {
+                return $perimetres->deLaSociete($compte, $compte->societe)->voit(Graphique::EcartDesPrixDAchat);
+            }
+
+            return $perimetres->duMagasin($compte, $compte->magasinsAccessibles()->firstOrFail())->voit(Graphique::EcartDesPrixDAchat);
+        } catch (AuthorizationException) {
+            return false;
+        }
+    }
+
+    /**
+     * Les préférences semées sur le poste : la propriétaire de Maison
+     * Ferrand a la carte à l'affichage des 12 mois (espace de la société),
+     * Camille Laurent à l'affichage par mois (panneau des Halles) et le
+     * propriétaire du cabinet à l'affichage par mois (espace du cabinet),
+     * chacun avec des achats à lire ; les autres comptes gardent leurs
+     * cartes par défaut.
+     */
+    private function assertLesPreferencesDeLaCarte(Societe $societe): void
+    {
+        $perimetres = app(PerimetreDesGraphiques::class);
+        $preferences = app(PreferencesDesGraphiques::class);
+        $proprietaire = $societe->proprietaire()->sole();
+        $camille = User::query()->where('name', 'Camille Laurent')->sole();
+        $cabinet = Societe::query()->where('siren', FauxRepertoireSirene::SIREN_CABINET)->sole();
+        $proprietaireDuCabinet = $cabinet->proprietaire()->sole();
+        $lien = LienCabinet::query()->withoutGlobalScopes()->where('cabinet_id', $cabinet->getKey())->where('societe_id', $societe->getKey())->where('etat', 'actif')->sole();
+
+        app(TenantContext::class)->clear();
+        $parEcran = [
+            [EcranDuTableauDeBord::Societe, $proprietaire, $perimetres->deLaSociete($proprietaire, $societe), TextesDeLEcartDesPrixDAchat::AFFICHAGE_SUR_DOUZE_MOIS],
+            [EcranDuTableauDeBord::Magasin, $camille, $perimetres->duMagasin($camille, $this->magasinDeMaisonFerrand('HALLES')), TextesDeLEcartDesPrixDAchat::AFFICHAGE_PAR_MOIS],
+            [EcranDuTableauDeBord::Cabinet, $proprietaireDuCabinet, $perimetres->duClient($proprietaireDuCabinet, $lien), TextesDeLEcartDesPrixDAchat::AFFICHAGE_PAR_MOIS],
+        ];
+
+        foreach ($parEcran as [$ecran, $compte, $perimetre, $affichage]) {
+            $this->assertSame($ecran, $perimetre->ecran);
+            $reglages = $preferences->lire($compte, $perimetre);
+            $carte = $reglages->carte(Graphique::EcartDesPrixDAchat);
+
+            $this->assertNotNull($carte, "{$compte->name} a la carte sur l'écran « {$ecran->value} ».");
+            $this->assertSame($affichage, $carte->affichage);
+            $this->assertContains(Graphique::EcartDesPrixDAchat, array_map(static fn (CarteDuTableauDeBord $visible): Graphique => $visible->graphique, $reglages->cartesVisibles($perimetre)), 'Elle s\'affiche sans aucun geste.');
+            $this->assertNotSame([], $this->calculDeLaCarte($perimetre, $reglages->periode)['produits'], "{$compte->name} y lit de vrais achats.");
+        }
+
+        $nadia = User::query()->where('name', 'Nadia Benali')->sole();
+        $this->assertNull($preferences->lire($nadia, $perimetres->deLaSociete($nadia, $societe))->carte(Graphique::EcartDesPrixDAchat), 'Les autres comptes gardent leurs cartes par défaut et l\'ajoutent par « Ajouter un graphique ».');
     }
 
     /**

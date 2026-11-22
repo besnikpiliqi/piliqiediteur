@@ -2917,7 +2917,7 @@ return [
         ],
         'graphiques.chiffres-cles-et-catalogue' => [
             'puce' => 'Graphiques du tableau de bord',
-            'regle' => 'En haut du tableau de bord, quatre chiffres clés du mois en cours (CA HT net des avoirs et sa variation sur un an, achats HT nets, TVA à payer dite « estimation », restant dû et sa part en retard), puis dix-huit graphiques à composer, chacun calculé depuis les montants enregistrés des documents émis ou validés, additionnés en centimes, chaque opération dans le mois de son magasin, jamais un brouillon ; la comparaison ajoute la même période un an plus tôt ; un exercice décalé compte par exercice ; en franchise en base, pas de TVA à estimer ; une société de services n\'a ni achats, ni marge, ni stock (décision de l\'éditeur du 14/11/2026).',
+            'regle' => 'En haut du tableau de bord, quatre chiffres clés du mois en cours (CA HT net des avoirs et sa variation sur un an, achats HT nets, TVA à payer dite « estimation », restant dû et sa part en retard), puis dix-neuf graphiques à composer, le dernier étant l\'écart des prix d\'achat, chacun calculé depuis les montants enregistrés des documents émis ou validés, additionnés en centimes, chaque opération dans le mois de son magasin, jamais un brouillon ; la comparaison ajoute la même période un an plus tôt ; un exercice décalé compte par exercice ; en franchise en base, pas de TVA à estimer ; une société de services n\'a ni achats, ni marge, ni stock (décision de l\'éditeur du 14/11/2026).',
             'tests' => [
                 'tests/Feature/TableauDeBord/SeriesDesGraphiquesTest.php::test_chaque_graphique_compte_les_montants_enregistres_des_documents_emis',
                 'tests/Feature/TableauDeBord/SeriesDesGraphiquesTest.php::test_les_chiffres_cles_sont_ceux_du_mois_en_cours',
@@ -2928,6 +2928,7 @@ return [
                 'tests/Feature/TableauDeBord/SeriesDesGraphiquesTest.php::test_un_exercice_decale_a_juin_compte_par_exercice',
                 'tests/Feature/TableauDeBord/SeriesDesGraphiquesTest.php::test_la_franchise_en_base_n_a_pas_de_tva_a_estimer',
                 'tests/Feature/TableauDeBord/SeriesDesGraphiquesTest.php::test_une_societe_de_services_n_a_ni_achats_ni_marge_ni_stock',
+                'tests/Feature/TableauDeBord/EcartDesPrixDAchatLectureTest.php::test_une_societe_de_services_n_a_pas_la_carte',
                 'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › le propriétaire voit les quatre chiffres et les graphiques par défaut, ajoute la marge, passe un graphique en camembert, en retire un, et retrouve tout après le rechargement',
             ],
         ],
@@ -2940,6 +2941,7 @@ return [
                 'tests/Feature/TableauDeBord/QuiVoitLesGraphiquesTest.php::test_l_adresse_directe_ne_donne_aucun_graphique_a_un_vendeur',
                 'tests/Feature/TableauDeBord/QuiVoitLesGraphiquesTest.php::test_l_adresse_directe_ne_donne_aucun_graphique_a_un_administrateur_sans_la_case',
                 'tests/Feature/TableauDeBord/SeriesDesGraphiquesTest.php::test_un_magasin_ou_l_on_ne_voit_qu_une_partie_des_ventes_sort_du_graphique_sans_etre_nomme',
+                'tests/Feature/TableauDeBord/EcartDesPrixDAchatGrilleTest.php::test_la_carte_n_est_montree_ni_a_un_vendeur_ni_a_un_observateur_ni_a_une_societe_de_services_ni_a_un_responsable_sans_la_case',
                 'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › un responsable à qui le propriétaire coche les graphiques les voit dans le panneau de son magasin, sans filtre ni comparaison des magasins',
                 'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › un vendeur ne voit ni les chiffres clés ni les graphiques, ni la page de la société',
             ],
@@ -2952,7 +2954,100 @@ return [
                 'tests/Feature/TableauDeBord/PreferencesDesGraphiquesTest.php::test_une_valeur_forgee_est_refusee_et_rien_ne_change',
                 'tests/Feature/TableauDeBord/PreferencesDesGraphiquesTest.php::test_une_preference_illisible_en_base_reprend_le_defaut',
                 'tests/Feature/TableauDeBord/PreferencesDesGraphiquesTest.php::test_le_reglage_d_un_compte_ne_touche_jamais_celui_d_un_autre',
+                'tests/Feature/TableauDeBord/EcartDesPrixDAchatGrilleTest.php::test_l_affichage_choisi_est_retenu_en_base_le_mois_choisi_non_et_le_type_ne_le_remet_pas_au_defaut',
                 'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › le propriétaire choisit la période, un magasin et la comparaison, classe les meilleurs produits par quantité, déplace deux cartes, lit les chiffres d’une carte, et retrouve tout après le rechargement',
+            ],
+        ],
+        'graphiques.ecart-des-prix-d-achat-catalogue-et-droits' => [
+            'puce' => 'Graphiques du tableau de bord',
+            'regle' => 'Le dix-neuvième graphique, « Écart des prix d\'achat » (maquette validée par l\'éditeur le 21/11/2026), est le dernier du catalogue, n\'a qu\'un type (barres), ne compare pas les magasins, n\'existe que dans une société « Commerce ou atelier » et ne se montre qu\'à qui voit les achats ; un magasin où la personne ne voit pas les achats sort du calcul, et une phrase grise le dit sans le nommer (décisions de Claude D76, B1, B2 et B4).',
+            'tests' => [
+                'tests/Feature/TableauDeBord/EcartDesPrixDAchatLectureTest.php::test_un_magasin_ou_l_on_ne_voit_pas_les_achats_sort_du_calcul_sans_etre_nomme',
+                'tests/Feature/TableauDeBord/EcartDesPrixDAchatLectureTest.php::test_une_societe_de_services_n_a_pas_la_carte',
+                'tests/Feature/TableauDeBord/EcartDesPrixDAchatGrilleTest.php::test_la_phrase_grise_des_magasins_non_comptes_est_sous_le_paragraphe_de_methode_sans_nommer_le_magasin',
+                'tests/Feature/TableauDeBord/EcartDesPrixDAchatGrilleTest.php::test_la_carte_n_est_montree_ni_a_un_vendeur_ni_a_un_observateur_ni_a_une_societe_de_services_ni_a_un_responsable_sans_la_case',
+                'tests/Browser/Parcours/EcartDesPrixDAchatTest.php › un vendeur, une observatrice, un responsable sans la case et une société de services n’ont ni la carte ni son menu',
+            ],
+        ],
+        'graphiques.ecart-des-prix-d-achat-periode-et-mois' => [
+            'puce' => 'Graphiques du tableau de bord',
+            'regle' => 'Les douze mois de la carte sont ceux de la période du tableau de bord ; un mois à venir est un mois sans achat, sauf pour un achat qui y est daté ; le mois choisi au départ est le dernier mois de la période qui n\'est pas à venir, il se garde d\'un affichage à l\'autre et revient à ce défaut quand la période ou le magasin change, et il ne se retient jamais en base (décisions de Claude D76, B3 et B6).',
+            'tests' => [
+                'tests/Feature/TableauDeBord/EcartDesPrixDAchatGrilleTest.php::test_le_mois_choisi_est_garde_d_un_affichage_a_l_autre_et_la_page_n_ecrit_que_l_affichage_choisi',
+                'tests/Feature/TableauDeBord/EcartDesPrixDAchatGrilleTest.php::test_choisir_un_mois_n_ecrit_rien_en_base',
+                'tests/Feature/TableauDeBord/EcartDesPrixDAchatGrilleTest.php::test_le_mois_choisi_revient_au_defaut_quand_la_periode_ou_le_magasin_change',
+                'tests/Feature/TableauDeBord/EcartDesPrixDAchatGrilleTest.php::test_un_mois_a_venir_est_un_mois_sans_achat_sauf_pour_un_achat_qui_y_est_date',
+                'tests/Feature/TableauDeBord/EcartDesPrixDAchatLectureTest.php::test_un_achat_date_d_un_mois_a_venir_compte_dans_l_annee_en_cours_et_pas_dans_les_douze_derniers_mois',
+            ],
+        ],
+        'graphiques.ecart-des-prix-d-achat-calcul' => [
+            'puce' => 'Graphiques du tableau de bord',
+            'regle' => 'Pour chaque produit de chaque magasin, chaque achat est comparé au premier achat du mois, ou, sur les 12 mois, au premier achat de la période, en centimes entiers : écart = quantité de l\'achat × (prix − prix de départ), hausses, baisses, achats au même prix cachés, produits sans écart (achetés une seule fois ou toujours au même prix) ; le pourcentage porte le signe de l\'écart, et une base nulle s\'écrit « — » ; la carte rend, texte pour texte, ce que la maquette rend (décision de l\'éditeur du 21/11/2026).',
+            'tests' => [
+                'tests/Unit/EcartDesPrixDAchatContreLaMaquetteTest.php::test_l_etat_de_depart_est_le_dernier_mois_par_mois',
+                'tests/Unit/EcartDesPrixDAchatTest.php::test_le_premier_achat_est_le_premier_de_la_liste_meme_le_meme_jour',
+                'tests/Unit/EcartDesPrixDAchatTest.php::test_l_ecart_se_calcule_avec_la_quantite_de_l_achat_compare_jamais_celle_du_depart',
+                'tests/Unit/EcartDesPrixDAchatTest.php::test_les_produits_masques_d_un_mois_comptent_ceux_achetes_une_fois_comme_ceux_au_meme_prix',
+                'tests/Unit/EcartDesPrixDAchatTest.php::test_un_produit_achete_une_fois_par_mois_n_est_dans_aucun_mois_mais_dans_les_douze_mois',
+                'tests/Feature/TableauDeBord/EcartDesPrixDAchatLectureTest.php::test_les_achats_de_la_maquette_donnent_sa_lecture_pour_chacun_des_24_etats',
+            ],
+        ],
+        'graphiques.ecart-des-prix-d-achat-lecture-des-achats' => [
+            'puce' => 'Graphiques du tableau de bord',
+            'regle' => 'Seules comptent les lignes de factures d\'achat validées, jamais un brouillon, un avoir fournisseur ni un inventaire d\'ouverture ; un achat se range à la date de sa facture, à défaut au jour de sa validation dans le calendrier de son magasin, et un achat d\'avant la période n\'est jamais un prix de départ ; son prix est son coût net (remise de ligne, escompte de facture, HT de ligne écrit) arrondi une seule fois au centime ; ses achats se rangent par jour puis par rang de validation ; le nom du produit est son nom actuel, même archivé, et, avec plusieurs magasins, « nom · magasin » sans jamais mêler les prix de deux magasins (décisions de Claude D76, B3 à B5).',
+            'tests' => [
+                'tests/Unit/CalculateurLigneTest.php::test_le_cout_net_en_centimes_ne_s_arrondit_qu_une_fois',
+                'tests/Unit/CalculateurLigneTest.php::test_le_cout_du_ht_ecrit_en_centimes_ne_s_arrondit_qu_une_fois',
+                'tests/Unit/AchatsParProduitTest.php::test_les_achats_d_un_produit_se_rangent_par_jour_puis_par_rang_de_validation',
+                'tests/Unit/AchatsParProduitTest.php::test_les_produits_de_deux_magasins_ne_se_melangent_jamais_et_se_rangent_par_identifiant',
+                'tests/Feature/TableauDeBord/EcartDesPrixDAchatLectureTest.php::test_un_achat_date_du_31_janvier_et_valide_le_1er_fevrier_compte_en_janvier',
+                'tests/Feature/TableauDeBord/EcartDesPrixDAchatLectureTest.php::test_un_achat_sans_date_valide_a_23_h_30_en_martinique_le_31_janvier_compte_en_janvier',
+                'tests/Feature/TableauDeBord/EcartDesPrixDAchatLectureTest.php::test_un_achat_d_avant_la_periode_n_est_jamais_le_prix_de_depart',
+                'tests/Feature/TableauDeBord/EcartDesPrixDAchatLectureTest.php::test_le_prix_d_un_achat_se_calcule_en_centimes_avec_un_seul_arrondi',
+                'tests/Feature/TableauDeBord/EcartDesPrixDAchatLectureTest.php::test_deux_achats_du_meme_jour_se_depart_agent_par_le_rang_de_validation',
+                'tests/Feature/TableauDeBord/EcartDesPrixDAchatLectureTest.php::test_une_facture_validee_corrigee_apres_coup_donne_son_prix_corrige',
+                'tests/Feature/TableauDeBord/EcartDesPrixDAchatLectureTest.php::test_un_produit_renomme_porte_son_nom_actuel_et_un_produit_archive_reste_nomme',
+                'tests/Feature/TableauDeBord/EcartDesPrixDAchatLectureTest.php::test_deux_magasins_ne_melangent_jamais_leurs_prix_et_le_nom_dit_le_magasin',
+                'tests/Feature/TableauDeBord/EcartDesPrixDAchatLectureTest.php::test_un_magasin_sans_achat_valide_ne_rend_aucune_ligne',
+            ],
+        ],
+        'graphiques.ecart-des-prix-d-achat-reglage-et-gestes' => [
+            'puce' => 'Graphiques du tableau de bord',
+            'regle' => 'Le seul réglage retenu de la carte est son affichage, un total par mois ou un seul total pour les 12 mois, par compte et par écran ; une valeur forgée, un autre graphique ou un mois hors de 0 à 11 sont refusés, et changer le type ne remet pas l\'affichage au défaut ; la carte n\'écrit que l\'affichage choisi et le calcul du mois choisi (décisions de Claude D76, B6 et B8).',
+            'tests' => [
+                'tests/Feature/TableauDeBord/EcartDesPrixDAchatGrilleTest.php::test_l_affichage_choisi_est_retenu_en_base_le_mois_choisi_non_et_le_type_ne_le_remet_pas_au_defaut',
+                'tests/Feature/TableauDeBord/EcartDesPrixDAchatGrilleTest.php::test_choisir_un_mois_n_ecrit_rien_en_base',
+                'tests/Feature/TableauDeBord/EcartDesPrixDAchatVolumeDeLaPageTest.php::test_la_page_de_12_000_achats_lit_les_lignes_une_seule_fois_n_ecrit_que_l_affichage_et_le_mois_choisis_et_reste_bornee',
+                'tests/Unit/EcartDesPrixDAchatVolumeTest.php::test_le_calcul_de_12_000_achats_donne_des_lectures_de_taille_bornee',
+                'tests/Browser/Parcours/EcartDesPrixDAchatTest.php › le propriétaire ajoute la carte dans l’espace de la société, la lit comme la maquette, choisit un mois au clic, à Entrée et à Espace, ouvre les liens « Voir… », et retrouve l’affichage, pas le mois, après le rechargement',
+            ],
+        ],
+        'graphiques.ecart-des-prix-d-achat-ecran' => [
+            'puce' => 'Graphiques du tableau de bord',
+            'regle' => 'La carte s\'écrit comme la maquette : un dessin écrit par le serveur, dont un élément à la position « NaN » n\'est jamais écrit, des textes, classes et nombres identiques au relevé, la lecture de chaque rôle qui la voit, sans débordement et avec le contraste AA en clair comme en sombre (décisions de l\'éditeur du 21/11/2026 et de Claude D76, B7).',
+            'tests' => [
+                'tests/Feature/TableauDeBord/EcartDesPrixDAchatGrilleTest.php::test_la_page_rendue_avec_les_achats_de_la_maquette_est_le_releve_de_la_maquette_pour_chaque_affichage_et_chaque_mois',
+                'tests/Feature/TableauDeBord/EcartDesPrixDAchatGrilleTest.php::test_sans_aucun_achat_la_carte_dit_aucun_achat_et_le_dessin_n_a_aucun_nan',
+                'tests/Feature/TableauDeBord/SvgDeLEcartDesPrixDAchatTest.php::test_un_jeu_sans_aucun_ecart_n_ecrit_aucun_nan_et_garde_les_colonnes_et_les_etiquettes',
+                'tests/Unit/DessinDeLEcartDesPrixDAchatTest.php::test_l_arbre_est_celui_de_la_maquette_pour_chaque_mois_choisi',
+                'tests/Browser/Parcours/EcartDesPrixDAchatTest.php › la carte, ses tableaux ouverts, ne déborde pas à 1 280, 1 024 et 390 px de large : un tableau large défile dans son cadre, jamais la page',
+                'tests/Browser/Balayage/ContrasteDeLaCarteEcartDesPrixDAchatTest.php › la carte « Écart des prix d’achat » se lit en clair et en sombre dans ses deux affichages, ses tableaux ouverts',
+            ],
+        ],
+        'graphiques.ecart-des-prix-d-achat-isolation' => [
+            'puce' => 'Graphiques du tableau de bord',
+            'regle' => 'La lecture des lignes d\'achat ne se fait qu\'après le contrôle du périmètre du tableau de bord, sur les seuls magasins où la personne voit les achats, filtrée par ces magasins sur chaque table lue et jointe par (magasin, identifiant) ; un achat d\'une autre société ou d\'un magasin hors de la portée ne change aucun nombre (décision de Claude D76, B9).',
+            'tests' => [
+                'tests/Feature/TableauDeBord/EcartDesPrixDAchatLectureTest.php::test_un_achat_d_une_autre_societe_ne_change_rien_et_un_magasin_hors_du_perimetre_est_refuse',
+                'tests/Feature/TableauDeBord/EcartDesPrixDAchatGrilleTest.php::test_les_achats_d_une_autre_societe_ne_changent_aucun_nombre_de_la_page',
+                'tests/Feature/TableauDeBord/EcartDesPrixDAchatLectureTest.php::test_la_lecture_des_lignes_est_une_seule_requete_quel_que_soit_le_nombre_de_magasins',
+            ],
+        ],
+        'graphiques.ecart-des-prix-d-achat-semis' => [
+            'puce' => 'Protocole de rigueur',
+            'regle' => 'Le semis donne à la carte « Écart des prix d\'achat » chacun de ses états et son contraire : trois magasins de plus de Maison Ferrand (l\'Entrepôt, qui porte chaque état mois par mois, l\'Éphémère sans achat validé, le Marché dont l\'unique produit n\'est acheté qu\'une fois), des cas de lecture dans les trois autres, les préférences de la propriétaire, de Camille Laurent et du propriétaire du cabinet, et le cabinet sans consultations d\'achats pour la Boulangerie Duval (règle 6 du protocole de rigueur, décision de Claude D76, B10).',
+            'tests' => [
+                'tests/Feature/SemisCompletTest.php::test_le_semis_complet_remplit_toute_la_base_et_tous_les_cas',
             ],
         ],
         'comptes.case-des-graphiques' => [
@@ -2982,11 +3077,13 @@ return [
         ],
         'produit.lectures-des-graphiques' => [
             'puce' => 'Produit',
-            'regle' => 'Les chiffres clés et les graphiques se lisent hors du magasin courant par des requêtes filtrées par magasin, sur les seuls magasins que le périmètre du compte permet pour chaque source (un garde refuse tout autre magasin), jamais un magasin d\'une autre société, une source au plus une fois par page quel que soit le nombre de cartes ou de magasins (décision de l\'éditeur du 14/11/2026).',
+            'regle' => 'Les chiffres clés et les graphiques se lisent hors du magasin courant par des requêtes filtrées par magasin, sur les seuls magasins que le périmètre du compte permet pour chaque source (un garde refuse tout autre magasin), jamais un magasin d\'une autre société, une source au plus une fois par page quel que soit le nombre de cartes ou de magasins ; seule la carte « Écart des prix d\'achat » lit, dans les magasins où la personne voit les achats, les lignes des factures d\'achat validées (jour, quantité, coût unitaire net en centimes, nom actuel du produit), par une seule requête filtrée par ces magasins et limitée aux colonnes nommées (décisions de l\'éditeur du 14/11/2026 et du 21/11/2026, D76).',
             'tests' => [
                 'tests/Feature/TableauDeBord/SeriesDesGraphiquesTest.php::test_un_magasin_hors_de_la_portee_n_est_jamais_compte',
                 'tests/Feature/TableauDeBord/SeriesDesGraphiquesTest.php::test_une_autre_societe_n_est_jamais_comptee',
                 'tests/Feature/TableauDeBord/SeriesDesGraphiquesTest.php::test_le_garde_refuse_un_magasin_ou_une_source_hors_du_perimetre',
+                'tests/Feature/TableauDeBord/EcartDesPrixDAchatLectureTest.php::test_la_lecture_des_lignes_est_une_seule_requete_quel_que_soit_le_nombre_de_magasins',
+                'tests/Feature/TableauDeBord/EcartDesPrixDAchatLectureTest.php::test_un_achat_d_une_autre_societe_ne_change_rien_et_un_magasin_hors_du_perimetre_est_refuse',
                 'tests/Feature/Qualite/PlafondsDeRequetesTest.php::test_la_grille_des_graphiques_lit_la_base_autant_de_fois_avec_un_magasin_ou_trois',
                 'tests/Feature/Tenancy/IsolationDesSocietesTest.php::test_chaque_modele_de_societe_est_liste_ici',
             ],
@@ -4837,6 +4934,10 @@ return [
             'GRAPH-14-11' => [
                 'decision' => 'Le 14/11/2026 vers 09 h 40 UTC : « dans le tableau de bord, pour le propriétaire, des tableaux avec Chart.js […] pour tout : comparer les ventes et les achats, la TVA redevable, par mois, par an […] un menu déroulant pour tous les modèles de graphiques […] et pareil pour les comptables » ; vers 09 h 55 UTC : modèle G1 avec les chiffres clés de G2, une case pour les administrateurs et les responsables, une page pour l\'expert-comptable déclaré, le panneau de chaque magasin ; vers 10 h 05 UTC : « oui c\'est bon, fais le lot GRAPH » (lot GRAPH).',
                 'regles' => ['graphiques.chiffres-cles-et-catalogue', 'graphiques.qui-les-voit', 'graphiques.preferences', 'comptes.case-des-graphiques', 'cabinets.graphiques-du-client', 'produit.lectures-des-graphiques'],
+            ],
+            'ECART-PRIX-ACHAT-21-11' => [
+                'decision' => 'Le 21/11/2026 : l\'éditeur valide la maquette de la carte « Écart des prix d\'achat » (dix-neuvième graphique du tableau de bord : pour chaque produit, chaque achat comparé au premier achat du mois ou de la période, un total par mois ou un seul total pour les 12 mois), seule source de ce que la carte montre, calcule et écrit ; décisions de Claude D76 pour le reste (B1 à B13 : catalogue et droits, période et mois choisi, magasins, lecture des achats et prix net arrondi une seule fois, réglage et gestes, écran, volume, isolation, semis).',
+                'regles' => ['graphiques.chiffres-cles-et-catalogue', 'graphiques.ecart-des-prix-d-achat-catalogue-et-droits', 'graphiques.ecart-des-prix-d-achat-periode-et-mois', 'graphiques.ecart-des-prix-d-achat-calcul', 'graphiques.ecart-des-prix-d-achat-lecture-des-achats', 'graphiques.ecart-des-prix-d-achat-reglage-et-gestes', 'graphiques.ecart-des-prix-d-achat-ecran', 'graphiques.ecart-des-prix-d-achat-isolation', 'graphiques.ecart-des-prix-d-achat-semis', 'graphiques.preferences', 'produit.lectures-des-graphiques'],
             ],
             'CHARGES-14-11' => [
                 'decision' => 'Le 14/11/2026 vers 10 h 25 UTC : le comptable et le client ajoutent les documents des charges (loyer, électricité…), téléversés, avec leurs chiffres écrits à la main, pour une TVA réelle ; on montre d\'abord ce qui est déjà saisi ; le comptable voit, analyse, valide et ajoute ; même non validées, les charges donnent une estimation ; vers 10 h 40 UTC : « oui pour tout, fais le lot CHARGES » (modèle C1 et C2, « Charges : ajouter et valider » par défaut au cabinet et à l\'expert-comptable déclaré, le propriétaire sans comptable valide, administrateurs et responsables cochés déposent sans valider, liste de types de PILIQI que la société complète) (lot CHARGES).',

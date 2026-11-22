@@ -70,7 +70,7 @@ class QuiDemandeTest extends TestCase
 
     /**
      * La phrase de la carte « À créer » décrit la société modèle de son type
-     * (F.2) : trois magasins pour Maison Ferrand, un seul pour Conseil
+     * (F.2) : six magasins pour Maison Ferrand, un seul pour Conseil
      * Vasseur ; jamais un autre type d'activité.
      */
     public function test_la_carte_decrit_la_societe_modele_de_son_type(): void

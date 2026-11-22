@@ -528,6 +528,7 @@ final class SocietesDesCas
 
         $this->semis->horsDeToutContexte(fn () => app(AccepterLaDemandeDeLienAction::class)->handle($proprietaireDuCabinet, $this->demande('groupe')));
         $this->semis->horsDeToutContexte(fn () => app(AccepterLaDemandeDeLienAction::class)->handle($proprietaireDuCabinet, $this->demande('boulangerie')));
+        $this->retirerLesConsultationsDAchatsALaBoulangerie();
         $this->semis->horsDeToutContexte(fn () => app(AccepterLaDemandeDeLienAction::class)->handle($proprietaireDuCabinet, $this->demande('sans code')));
         $this->semis->horsDeToutContexte(fn () => app(RefuserLaDemandeDeLienAction::class)->handle($proprietaireDuCabinet, $this->demande('librairie')));
         $this->semis->horsDeToutContexte(fn () => app(RetirerLaDemandeDeLienAction::class)->handle($this->semis->proprietaire('atelier'), $this->demande('atelier')));
@@ -542,6 +543,30 @@ final class SocietesDesCas
             $lienDeLEpicerie,
             PermissionRegistry::casesDuCabinet(PermissionRegistry::parDefautDuCabinet(TypeDActivite::Commerce)),
             [$this->semis->magasin('epicerie')->id],
+        ));
+    }
+
+    /**
+     * La propriétaire de la Boulangerie Duval retire au cabinet « Factures
+     * d'achat : voir » et « Avoirs fournisseur : voir », tous magasins
+     * (voir ReglerLesAutorisationsDuCabinetAction) : le cabinet ne voit plus
+     * la carte « Écart des prix d'achat » de cette cliente, qui lit les
+     * achats, de part et d'autre de Maison Ferrand et de l'Épicerie Lemoine,
+     * dont il garde les consultations d'achats. Le cabinet met fin à ce lien
+     * plus tard (voir LIEN_TERMINE_PAR_LE_CABINET) : les autorisations
+     * retirées restent celles du lien terminé.
+     */
+    private function retirerLesConsultationsDAchatsALaBoulangerie(): void
+    {
+        $autorisations = array_values(array_diff(
+            PermissionRegistry::casesDuCabinet(PermissionRegistry::parDefautDuCabinet(TypeDActivite::Commerce)),
+            [PermissionRegistry::FACTURE_ACHAT_VIEW, PermissionRegistry::AVOIR_FOURNISSEUR_VIEW],
+        ));
+
+        $this->semis->horsDeToutContexte(fn () => app(ReglerLesAutorisationsDuCabinetAction::class)->handle(
+            $this->semis->proprietaire('boulangerie'),
+            $this->lien('boulangerie', EtatDuLien::Actif),
+            $autorisations,
         ));
     }
 

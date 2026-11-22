@@ -431,7 +431,7 @@ class Devis extends Model implements DocumentEnvoyable
      */
     public function peutEtreEnvoye(): bool
     {
-        return ! in_array($this->statut, [StatutDevis::Refuse, StatutDevis::Expire], true) && ! $this->estExpire();
+        return $this->statut !== StatutDevis::Refuse && ! $this->estExpire();
     }
 
     /**

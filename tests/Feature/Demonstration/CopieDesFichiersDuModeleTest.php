@@ -8,6 +8,7 @@ use Illuminate\Contracts\Process\ProcessResult;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Process;
 use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\RequiresOperatingSystemFamily;
 use RuntimeException;
 use Symfony\Component\Process\Exception\ProcessStartFailedException;
 use Symfony\Component\Process\Process as ProcessSymfony;
@@ -107,9 +108,12 @@ class CopieDesFichiersDuModeleTest extends TestCase
      * Un lien symbolique dans le modèle, à la racine comme plus bas, fait
      * refuser la copie avant d'en écrire une : une copie ne suit jamais un
      * lien hors de son dossier (ici, un fichier qu'aucune copie ne doit
-     * lire).
+     * lire). Ce test pose un vrai lien symbolique, que PHP ne crée sous
+     * Windows que d'un compte administrateur ou en mode développeur : il est
+     * donné à Linux, où le logiciel tourne en production et en CI.
      */
     #[DataProvider('placesDUnLien')]
+    #[RequiresOperatingSystemFamily('Linux')]
     public function test_un_lien_symbolique_dans_le_modele_est_refuse_avant_toute_copie(string $place): void
     {
         $this->poserLeModele();
@@ -131,8 +135,10 @@ class CopieDesFichiersDuModeleTest extends TestCase
 
     /**
      * Le dossier du modèle lui-même ne peut pas être un lien : il pointerait
-     * hors du dossier des modèles.
+     * hors du dossier des modèles. Comme le test précédent, il pose un vrai
+     * lien symbolique : Linux seulement.
      */
+    #[RequiresOperatingSystemFamily('Linux')]
     public function test_un_dossier_de_modele_qui_est_un_lien_symbolique_est_refuse(): void
     {
         $ailleurs = $this->racine.DIRECTORY_SEPARATOR.'ailleurs';

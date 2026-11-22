@@ -55,8 +55,12 @@ class LienDuDevis extends Model
     public const LONGUEUR_DU_JETON = 64;
 
     /**
-     * La seule réponse d'une adresse au jeton inconnu, expiré ou déjà
-     * servi : elle ne dit rien d'autre.
+     * La seule réponse d'une adresse au jeton inconnu, ou à un lien qui ne
+     * vaut plus et qui n'a pas enregistré l'acceptation du devis (retiré,
+     * remplacé par un nouvel envoi, devis refusé, expiré, modifié ou
+     * accepté autrement) : elle ne dit rien d'autre. Le lien qui a
+     * enregistré l'acceptation montre à la place sa confirmation, tant que
+     * le devis la garde (voir confirmeLAcceptation()).
      */
     public const PLUS_VALABLE = 'Ce lien n\'est plus valable.';
 

@@ -64,6 +64,8 @@ class DocumentMail extends Mailable
      * envoi dont le document a été supprimé depuis (un devis brouillon) ne
      * part pas : EnvoyerDocumentJob le constate avant, sans e-mail.
      *
+     * @param  string  $pdf  le PDF du document, vide quand il n'en porte pas (voir porteLePdf())
+     *
      * @throws DocumentSansEnregistrementSigneException
      * @throws LogicException
      */
@@ -115,21 +117,21 @@ class DocumentMail extends Mailable
      */
     public function attachments(): array
     {
-        return $this->porteLePdf()
+        return self::porteLePdf($this->document)
             ? [Attachment::fromData(fn (): string => $this->pdf, $this->nomFichier)->withMime('application/pdf')]
             : [];
     }
 
     /**
-     * Le devis part-il avec son PDF ? Seulement accepté (la confirmation de
-     * son acceptation en ligne, ou un devis accepté ou transformé en
-     * facture renvoyé tel que son client l'a accepté) ; tout autre document
-     * part toujours avec le sien.
+     * Le document part-il avec son PDF ? Un devis seulement accepté (la
+     * confirmation de son acceptation en ligne, ou un devis accepté ou
+     * transformé en facture renvoyé tel que son client l'a accepté) ; tout
+     * autre document part toujours avec le sien. EnvoyerDocumentJob ne
+     * fabrique le PDF que pour ce document, et passe une chaîne vide aux
+     * autres.
      */
-    public function porteLePdf(): bool
+    public static function porteLePdf(Facture|Devis|Avoir|RecuPaiement $document): bool
     {
-        $document = $this->document;
-
         return ! $document instanceof Devis || in_array($document->statut, [StatutDevis::Accepte, StatutDevis::Converti], true);
     }
 
@@ -186,7 +188,7 @@ class DocumentMail extends Mailable
             $document instanceof Facture && $document->montantRestantEnCentimes() <= 0 => "Veuillez trouver ci-joint notre facture {$document->numero} d'un montant de ".self::montant($document).', déjà réglée.',
             $document instanceof Facture => "Veuillez trouver ci-joint notre facture {$document->numero} d'un montant de ".self::montant($document)
                 .($document->date_echeance ? ', à régler au plus tard le '.Calendrier::afficherJour($document->date_echeance, 'd/m/Y').'.' : '.'),
-            $document instanceof Devis && $this->porteLePdf() => "Veuillez trouver ci-joint notre devis {$document->numero} d'un montant de ".self::montant($document).', que vous avez accepté.',
+            $document instanceof Devis && self::porteLePdf($document) => "Veuillez trouver ci-joint notre devis {$document->numero} d'un montant de ".self::montant($document).', que vous avez accepté.',
             $document instanceof Devis => "Votre devis {$document->numero} d'un montant de ".self::montant($document).' vous attend en ligne : vous pouvez le lire, puis l\'accepter ou le refuser.',
             $document instanceof Avoir => "Veuillez trouver ci-joint notre avoir {$document->numero} d'un montant de ".self::montant($document).'.',
         };

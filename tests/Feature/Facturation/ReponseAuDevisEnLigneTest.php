@@ -53,6 +53,7 @@ use Illuminate\Testing\TestResponse;
 use Livewire\Livewire;
 use LogicException;
 use PHPUnit\Framework\Attributes\DataProvider;
+use ReflectionMethod;
 use Tests\TestCase;
 
 /**
@@ -244,6 +245,67 @@ class ReponseAuDevisEnLigneTest extends TestCase
         $this->assertStringContainsString('attachment', (string) $reponse->headers->get('Content-Disposition'));
         $this->assertStringContainsString("devis-{$devis->numero}.pdf", (string) $reponse->headers->get('Content-Disposition'));
         $this->assertStringStartsWith('%PDF', $reponse->streamedContent());
+    }
+
+    /**
+     * Le lien qui a enregistré l'acceptation garde sa confirmation et le PDF
+     * signé quand le magasin transforme le devis en facture : le devis garde
+     * l'acceptation du client (voir LienDuDevis::confirmeLAcceptation()).
+     */
+    public function test_le_lien_qui_a_accepte_garde_sa_confirmation_et_son_pdf_apres_la_transformation_en_facture(): void
+    {
+        Notification::fake();
+        $devis = $this->devisEnvoyable();
+        $jeton = $this->envoyer($devis);
+        $this->repondre('accepter', $jeton, ['signataire' => 'Claire Martin', 'bon_pour_accord' => '1'])->assertOk();
+
+        app(CreerFactureDepuisDevisAction::class)->handle(self::auteur(), $devis->fresh());
+
+        $this->assertSame(StatutDevis::Converti, $devis->fresh()->statut);
+        $this->repondre('get', $jeton)->assertOk()->assertSee('par Claire Martin')->assertDontSee(LienDuDevis::PLUS_VALABLE);
+        $pdf = $this->repondre('pdf', $jeton);
+        $pdf->assertOk()->assertHeader('Content-Type', 'application/pdf');
+        $this->assertStringStartsWith('%PDF', $pdf->streamedContent());
+    }
+
+    /**
+     * Un devis accepté en ligne puis modifié n'a plus l'acceptation que le
+     * lien avait enregistrée : repassé en brouillon, ou renvoyé sans e-mail
+     * dans sa nouvelle version, il ne montre plus ni la confirmation ni le
+     * PDF signé, seulement la page neutre.
+     */
+    public function test_le_lien_qui_a_accepte_ne_montre_plus_rien_quand_le_devis_est_modifie(): void
+    {
+        Notification::fake();
+        $devis = $this->devisEnvoyable();
+        $jeton = $this->envoyer($devis);
+        $this->repondre('accepter', $jeton, ['signataire' => 'Claire Martin', 'bon_pour_accord' => '1'])->assertOk();
+        $this->repondre('get', $jeton)->assertOk()->assertSee('par Claire Martin');
+
+        $modifie = app(ModifierDevisAction::class)->handle(self::auteur(), $devis->fresh(), $devis->client, [['produit_id' => $devis->lignes->first()->produit_id, 'quantite' => 3]]);
+
+        $this->repondre('get', $jeton)->assertStatus(410)->assertSee(LienDuDevis::PLUS_VALABLE)->assertDontSee('par Claire Martin');
+        $this->repondre('pdf', $jeton)->assertStatus(410)->assertSee(LienDuDevis::PLUS_VALABLE);
+
+        $this->travelTo(self::aParis('2026-11-12 10:05:00'));
+        app(EmettreDevisAction::class)->handle(self::auteur(), $modifie);
+
+        $this->repondre('get', $jeton)->assertStatus(410)->assertDontSee('par Claire Martin');
+        $this->repondre('pdf', $jeton)->assertStatus(410);
+    }
+
+    /**
+     * Un refus ne montre rien de plus que son message : ni le PDF du devis,
+     * que le client n'a pas accepté, ni la page du lien.
+     */
+    public function test_le_pdf_du_lien_n_existe_pas_apres_un_refus(): void
+    {
+        Notification::fake();
+        $jeton = $this->envoyer($this->devisEnvoyable());
+        $this->repondre('refuser', $jeton, ['motif' => 'Trop cher'])->assertOk();
+
+        $this->repondre('pdf', $jeton)->assertStatus(410)->assertSee(LienDuDevis::PLUS_VALABLE);
+        $this->repondre('get', $jeton)->assertStatus(410)->assertSee(LienDuDevis::PLUS_VALABLE);
     }
 
     public function test_un_jeton_inconnu_ne_dit_que_ce_lien_n_est_plus_valable(): void
@@ -968,6 +1030,8 @@ class ReponseAuDevisEnLigneTest extends TestCase
             'refusé entre-temps' => ['refuse', EnvoyerDocumentJob::MOTIF_DEVIS_REFUSE_ENTRE_TEMPS],
             'validité dépassée entre-temps' => ['expire', EnvoyerDocumentJob::MOTIF_DEVIS_EXPIRE_ENTRE_TEMPS],
             'remplacé par un envoi plus récent' => ['renvoye', EnvoyerDocumentJob::MOTIF_LIEN_REMPLACE],
+            'remplacé par un envoi plus récent, puis devis accepté au magasin' => ['renvoye_puis_accepte', EnvoyerDocumentJob::MOTIF_DEVIS_ACCEPTE_ENTRE_TEMPS],
+            'remplacé par un envoi plus récent, puis devis refusé' => ['renvoye_puis_refuse', EnvoyerDocumentJob::MOTIF_DEVIS_REFUSE_ENTRE_TEMPS],
         ];
     }
 
@@ -987,12 +1051,66 @@ class ReponseAuDevisEnLigneTest extends TestCase
             'refuse' => $devis->fresh()->forceFill(['statut' => StatutDevis::Refuse])->save(),
             'expire' => $this->travelTo(self::aParis('2026-11-21 09:00:00')),
             'renvoye' => app(EnvoyerDocumentAction::class)->handle($responsable, $devis->fresh(), 'client@exemple.fr', null, (string) Str::uuid()),
+            'renvoye_puis_accepte' => $this->renvoyerPuis(fn () => app(AccepterDevisAction::class)->handle($responsable, $devis->fresh()), $responsable, $devis),
+            'renvoye_puis_refuse' => $this->renvoyerPuis(fn () => $devis->fresh()->forceFill(['statut' => StatutDevis::Refuse])->save(), $responsable, $devis),
         };
 
         $tache->handle();
 
         Mail::assertNothingSent();
         $this->assertSame([StatutEnvoi::Echec, $motif], [$envoi->fresh()->statut, $envoi->fresh()->erreur]);
+    }
+
+    /**
+     * Deux envois du même devis sont en file ; le magasin retire le lien du
+     * second, le plus récent. La tâche du premier ne dit pas que le lien du
+     * second « porte le lien valable » : il n'y en a plus, et la cause le
+     * dit ; celle du second dit son propre lien retiré.
+     */
+    public function test_le_premier_envoi_dont_le_lien_remplacant_est_retire_ne_promet_pas_un_lien_valable(): void
+    {
+        Notification::fake();
+        Queue::fake([EnvoyerDocumentJob::class]);
+        $devis = $this->devisEnvoyable();
+        $responsable = self::responsableDeTest($this->magasin);
+        $premier = app(EnvoyerDocumentAction::class)->handle($responsable, $devis, 'client@exemple.fr', null, (string) Str::uuid());
+        $second = app(EnvoyerDocumentAction::class)->handle($responsable, $devis->fresh(), 'client@exemple.fr', null, (string) Str::uuid());
+        [$tacheDuPremier, $tacheDuSecond] = Queue::pushed(EnvoyerDocumentJob::class)->all();
+        $lienRetire = app(RetirerLeLienDuDevisAction::class)->handle($responsable, $devis->fresh());
+        $this->assertSame($second->id, $lienRetire->envoi_document_id);
+
+        $tacheDuPremier->handle();
+        $tacheDuSecond->handle();
+
+        Mail::assertNothingSent();
+        $this->assertSame([StatutEnvoi::Echec, EnvoyerDocumentJob::MOTIF_LIEN_REMPLACE_PUIS_RETIRE], [$premier->fresh()->statut, $premier->fresh()->erreur]);
+        $this->assertSame([StatutEnvoi::Echec, EnvoyerDocumentJob::MOTIF_LIEN_RETIRE], [$second->fresh()->statut, $second->fresh()->erreur]);
+    }
+
+    /**
+     * Le lien d'un devis qui vaut encore n'a aucune cause à dire : le job ne
+     * l'interroge jamais, et le demander est une erreur de code, jamais un
+     * message au magasin.
+     */
+    public function test_un_lien_qui_vaut_encore_n_a_aucune_cause_a_dire(): void
+    {
+        $devis = $this->devisEnvoyable();
+        $this->envoyer($devis);
+        $lien = LienDuDevis::query()->sole();
+        $motif = new ReflectionMethod(EnvoyerDocumentJob::class, 'motifDuLienQuiNeVautPlus');
+
+        $this->assertTrue($lien->estValable($devis->fresh()));
+        $this->assertThrows(fn () => $motif->invoke(null, $lien, $devis->fresh()), LogicException::class);
+    }
+
+    /**
+     * Renvoie le devis par e-mail (un second envoi, dont le lien remplace
+     * celui du premier), puis fait ce que dit le geste.
+     */
+    private function renvoyerPuis(callable $geste, User $responsable, Devis $devis): void
+    {
+        app(EnvoyerDocumentAction::class)->handle($responsable, $devis->fresh(), 'client@exemple.fr', null, (string) Str::uuid());
+        $geste();
     }
 
     /**

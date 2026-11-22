@@ -201,6 +201,15 @@ final class DocumentsDesCas
      */
     private array $depannagesEnvoyes = [];
 
+    /**
+     * L'envoi, resté en file, du devis de dépannage de chaque magasin dont
+     * la validité s'achève le jour de son envoi : la tâche ne passe que le
+     * lendemain soir, le devis est alors expiré (voir casDuDepannage()).
+     *
+     * @var array<string, EnvoyerDocumentJob>
+     */
+    private array $envoisDeDepannageExpires = [];
+
     private bool $fichesCreees = false;
 
     public function __construct(
@@ -435,8 +444,8 @@ final class DocumentsDesCas
         [$premier, $lendemain, $payant, $acceptationDuPayant] = $cas['jours'];
 
         match ($avantLaFin) {
-            $premier => $this->leSoir($rang, $cas['heure'], fn () => $this->semerLeDepannageADomicile($magasin)),
-            $lendemain => $this->leSoir($rang, $cas['heure'], fn (): mixed => app(RepondreAuDevisEnLigneAction::class)->accepter(self::jetonDuDevis($this->depannagesEnvoyes[$magasin]['avec_debut'] ?? null), $cas['avec_debut']['nom'], true, true)),
+            $premier => $this->leSoir($rang, $cas['heure'], fn () => $this->semerLeDepannageADomicile($magasin, $rang)),
+            $lendemain => $this->leSoir($rang, $cas['heure'], fn () => $this->semerLeLendemainDuDepannage($magasin)),
             $payant => $this->leSoir($rang, $cas['heure'], fn () => $this->semerLeDepannagePayant($magasin)),
             $acceptationDuPayant => $this->leSoir($rang, $cas['heure'], fn (): mixed => app(RepondreAuDevisEnLigneAction::class)->accepter(self::jetonDuDevis($this->depannagesEnvoyes[$magasin]['payant'] ?? null), $cas['payant']['nom'], true)),
             default => null,
@@ -461,9 +470,14 @@ final class DocumentsDesCas
      * envoi, resté en file, perd son lien retiré par le responsable avant
      * son départ (il ne part pas non plus : « Le lien de réponse de cet
      * envoi a été retiré entre-temps »), un second envoi lui donnant un
-     * lien neuf.
+     * lien neuf ; enfin deux devis envoyés dont l'e-mail ne part pas
+     * davantage : celui que le responsable note refusé avant son départ
+     * (« Le devis a été refusé entre-temps »), et celui dont la validité
+     * s'achève le jour même, dont l'e-mail attend en file jusqu'au
+     * lendemain soir, quand le devis est expiré (« La validité du devis est
+     * dépassée », voir semerLeLendemainDuDepannage()).
      */
-    private function semerLeDepannageADomicile(string $magasin): void
+    private function semerLeDepannageADomicile(string $magasin, int $rang): void
     {
         $cas = self::DEPANNAGES[$magasin];
         $gestes = $this->gestes($magasin);
@@ -510,6 +524,33 @@ final class DocumentsDesCas
         $gestes->dans(fn (): LienDuDevis => app(RetirerLeLienDuDevisAction::class)->handle($responsable, $devisDuProfessionnel->refresh()));
         $gestes->dans(fn (): EnvoiDocument => app(EnvoyerDocumentAction::class)->handle($responsable, $devisDuProfessionnel->refresh(), $adresse, null, GestesDuMagasin::jeton()));
         $gestes->dans($envoiARetirer->handle(...));
+        // Le responsable note le refus du client pendant que l'e-mail du
+        // devis attend en file : il ne part pas (« Le devis a été refusé
+        // entre-temps », voir EnvoyerDocumentJob::MOTIF_DEVIS_REFUSE_ENTRE_TEMPS).
+        $aRefuser = $gestes->dans(fn (): Devis => app(CreerDevisAction::class)->handle($responsable, $clients['payant'], [$this->ligne($gestes, $cas['intervention'][0], 1)], ['date_validite' => $validite, 'lieu_d_intervention' => self::adresseDe($cas['payant'])]));
+        $envoiARefuser = $this->retenirLEnvoi(fn (): EnvoiDocument => $gestes->dans(fn (): EnvoiDocument => app(EnvoyerDocumentAction::class)->handle($responsable, $aRefuser, $cas['payant']['email'], null, GestesDuMagasin::jeton())));
+        $gestes->dans(fn (): Devis => app(RefuserDevisAction::class)->handle($responsable, $aRefuser->refresh()));
+        $gestes->dans($envoiARefuser->handle(...));
+        // Le devis, valable jusqu'à ce soir, est envoyé alors que le
+        // serveur des tâches est à l'arrêt : sa tâche ne passe que le
+        // lendemain soir, quand le devis est expiré (« La validité du devis
+        // est dépassée », voir EnvoyerDocumentJob::MOTIF_DEVIS_EXPIRE_ENTRE_TEMPS).
+        $expirant = $gestes->dans(fn (): Devis => app(CreerDevisAction::class)->handle($responsable, $clients['avec_debut'], [$this->ligne($gestes, $cas['intervention'][0], 1)], ['date_validite' => $this->horloge->jour($rang), 'lieu_d_intervention' => self::adresseDe($cas['avec_debut'])]));
+        $this->envoisDeDepannageExpires[$magasin] = $this->retenirLEnvoi(fn (): EnvoiDocument => $gestes->dans(fn (): EnvoiDocument => app(EnvoyerDocumentAction::class)->handle($responsable, $expirant, $cas['avec_debut']['email'], null, GestesDuMagasin::jeton())));
+    }
+
+    /**
+     * Le lendemain du dépannage, le soir : le client qui l'a demandé accepte
+     * en ligne en demandant que la prestation commence avant la fin de son
+     * délai de rétractation, et la tâche de l'envoi du devis qui n'était
+     * valable que la veille passe enfin, devis expiré (l'e-mail ne part pas).
+     */
+    private function semerLeLendemainDuDepannage(string $magasin): void
+    {
+        $cas = self::DEPANNAGES[$magasin];
+        app(RepondreAuDevisEnLigneAction::class)->accepter(self::jetonDuDevis($this->depannagesEnvoyes[$magasin]['avec_debut'] ?? null), $cas['avec_debut']['nom'], true, true);
+        $envoiExpire = $this->envoisDeDepannageExpires[$magasin] ?? throw new LogicException('L\'envoi du devis expiré n\'a pas été semé.');
+        $this->gestes($magasin)->dans($envoiExpire->handle(...));
     }
 
     /**

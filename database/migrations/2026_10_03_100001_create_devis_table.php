@@ -91,10 +91,13 @@ return new class extends Migration
         });
 
         // Seul le devis d'un particulier porte un lieu d'intervention ou se
-        // signe chez le client, et seul un devis de dépannage figé porte le
-        // prix de ce devis.
+        // signe chez le client ; seul un devis figé (envoyé au moins une
+        // fois) comme devis de dépannage porte le prix de ce devis, jamais un
+        // brouillon, dont le réglage reste null ; et un devis figé sans
+        // dépannage ne porte ni lieu ni signature chez le client.
         DB::statement("ALTER TABLE devis ADD CONSTRAINT devis_depannage_d_un_particulier CHECK ((lieu_d_intervention IS NULL AND NOT signe_chez_le_client) OR type_client = 'particulier')");
-        DB::statement('ALTER TABLE devis ADD CONSTRAINT devis_prix_du_devis_de_depannage CHECK (prix_du_devis_de_depannage IS NULL OR (depannage_a_domicile AND prix_du_devis_de_depannage > 0))');
+        DB::statement('ALTER TABLE devis ADD CONSTRAINT devis_prix_du_devis_de_depannage CHECK (prix_du_devis_de_depannage IS NULL OR (depannage_a_domicile IS TRUE AND prix_du_devis_de_depannage > 0))');
+        DB::statement('ALTER TABLE devis ADD CONSTRAINT devis_sans_depannage_sans_lieu CHECK (depannage_a_domicile IS DISTINCT FROM FALSE OR (lieu_d_intervention IS NULL AND NOT signe_chez_le_client))');
         DB::statement('ALTER TABLE devis ADD CONSTRAINT devis_periode_de_l_operation CHECK (date_operation_debut IS NULL OR (date_operation_fin IS NOT NULL AND date_operation_debut < date_operation_fin))');
     }
 

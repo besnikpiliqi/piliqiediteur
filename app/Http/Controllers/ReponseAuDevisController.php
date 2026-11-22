@@ -44,10 +44,13 @@ use Symfony\Component\HttpFoundation\Response as ReponseHttp;
  *   tant que le devis garde cette acceptation (voir
  *   LienDuDevis::confirmeLAcceptation()) ; après un refus, rien de plus.
  * Un jeton mal formé (une adresse tronquée ou altérée, lue sans aucune
- * recherche, voir LienDuDevis::parSonJeton()) ou inconnu, un lien retiré,
- * remplacé ou déjà servi, un devis expiré, modifié ou déjà répondu ne
- * donnent que « Ce lien n'est plus valable. » (410), sans rien dire de
- * plus. Chaque page est marquée noindex (balise et en-tête X-Robots-Tag),
+ * recherche, voir LienDuDevis::parSonJeton()) ou inconnu, un lien retiré
+ * ou remplacé par un nouvel envoi, un devis refusé, expiré, modifié ou
+ * accepté autrement que par ce lien ne donnent que « Ce lien n'est plus
+ * valable. » (410), sans rien dire de plus ; seul le lien qui a enregistré
+ * l'acceptation montre sa confirmation et le PDF signé, tant que le devis
+ * garde cette acceptation (accepté, ou transformé en facture après elle).
+ * Chaque page est marquée noindex (balise et en-tête X-Robots-Tag),
  * ne transmet pas son adresse (Referrer-Policy: no-referrer) et ne mène
  * nulle part ailleurs dans PILIQI ; les essais sont limités par adresse
  * IP, la page de l'attente étant la même page neutre (voir

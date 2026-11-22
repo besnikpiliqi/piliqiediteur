@@ -227,7 +227,7 @@ class DevisDeDepannageADomicileTest extends TestCase
         }
 
         Livewire::test(ViewDevis::class, ['record' => $devis->getRouteKey()])
-            ->assertSeeHtml('12 rue des Lilas<br>'.PHP_EOL.'Bâtiment B<br>'.PHP_EOL.'75012 Paris');
+            ->assertSeeHtml("12 rue des Lilas<br>\nBâtiment B<br>\n75012 Paris");
     }
 
     /**
@@ -318,8 +318,10 @@ class DevisDeDepannageADomicileTest extends TestCase
 
     /**
      * La base refuse un lieu d'intervention ou une signature chez le client
-     * sur le devis d'un professionnel, un prix de devis nul, et un prix figé
-     * sur un devis qui n'est pas un devis de dépannage.
+     * sur le devis d'un professionnel, un prix de devis nul, un prix de devis
+     * sur un brouillon (dont le réglage de dépannage reste null) ou sur un
+     * devis figé qui n'est pas un devis de dépannage, et un lieu ou une
+     * signature chez le client sur un devis figé sans dépannage.
      */
     public function test_la_base_refuse_un_depannage_sur_un_devis_de_professionnel_et_un_prix_de_devis_nul(): void
     {
@@ -329,7 +331,10 @@ class DevisDeDepannageADomicileTest extends TestCase
         foreach ([
             fn () => DB::table('devis')->where('id', $professionnel->id)->update(['lieu_d_intervention' => '12 rue des Lilas']),
             fn () => DB::table('devis')->where('id', $professionnel->id)->update(['signe_chez_le_client' => true]),
+            fn () => DB::table('devis')->where('id', $particulier->id)->update(['prix_du_devis_de_depannage' => '35.00']),
             fn () => DB::table('devis')->where('id', $particulier->id)->update(['depannage_a_domicile' => false, 'prix_du_devis_de_depannage' => '35.00']),
+            fn () => DB::table('devis')->where('id', $particulier->id)->update(['depannage_a_domicile' => false, 'lieu_d_intervention' => '12 rue des Lilas']),
+            fn () => DB::table('devis')->where('id', $particulier->id)->update(['depannage_a_domicile' => false, 'signe_chez_le_client' => true]),
             fn () => DB::table('devis')->where('id', $particulier->id)->update(['depannage_a_domicile' => true, 'prix_du_devis_de_depannage' => '0.00']),
             fn () => DB::table('magasins')->where('id', $this->magasin->id)->update(['prix_du_devis_de_depannage' => '0.00']),
         ] as $ecriture) {

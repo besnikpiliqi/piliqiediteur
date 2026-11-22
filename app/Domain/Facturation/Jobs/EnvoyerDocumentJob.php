@@ -116,11 +116,13 @@ use UnexpectedValueException;
  * motifDuLienQuiNeVautPlus()) ; un devis accepté ou transformé renvoyé à
  * la demande du magasin repart avec son PDF, sans lien.
  *
- * Le PDF est généré à chaque tentative depuis le document tel
- * qu'il est enregistré : une facture ou un avoir figés à leur émission,
- * avec l'émetteur qu'ils ont signé, quoi que soit devenu le magasin (voir
- * FacturePdfGenerator et FigeSonEmetteur), un devis dans la version émise
- * que cet e-mail annonce. Une facture ou un avoir numéroté sans
+ * Le PDF est généré à chaque tentative, seulement quand l'e-mail le
+ * porte (voir DocumentMail::porteLePdf(), et jamais avant la lecture du
+ * lien d'un devis envoyé), depuis le document tel qu'il est enregistré :
+ * une facture ou un avoir figés à leur émission, avec l'émetteur qu'ils
+ * ont signé, quoi que soit devenu le magasin (voir FacturePdfGenerator et
+ * FigeSonEmetteur), un devis dans la version émise que cet e-mail
+ * annonce. Une facture ou un avoir numéroté sans
  * enregistrement signé, déjà refusé à la demande (voir
  * EnvoyerDocumentAction), ne part pas davantage ici : l'envoi échoue
  * aussitôt, sans nouvelle tentative, et l'incident est signalé au journal
@@ -141,13 +143,13 @@ class EnvoyerDocumentJob implements ShouldBeUnique, ShouldQueue
 
     public const MOTIF_LIEN_REMPLACE = 'Un envoi plus récent de ce devis a remplacé le lien de cet envoi : cet e-mail n\'est pas parti, celui de l\'envoi le plus récent porte le lien valable. Rien d\'autre à faire.';
 
+    public const MOTIF_LIEN_REMPLACE_PUIS_RETIRE = 'Un envoi plus récent de ce devis a remplacé le lien de cet envoi, puis son lien a été retiré à son tour : cet e-mail n\'est pas parti, et plus aucun lien valable ne permet à votre client d\'accepter le devis en ligne. Renvoyez le devis à votre client s\'il doit encore pouvoir l\'accepter.';
+
     public const MOTIF_DEVIS_ACCEPTE_ENTRE_TEMPS = 'Le devis a été accepté entre-temps : l\'e-mail qui demandait sa réponse n\'est pas parti, il n\'y a plus rien à accepter. Envoyez le devis accepté à votre client si vous voulez qu\'il en ait le PDF.';
 
     public const MOTIF_DEVIS_REFUSE_ENTRE_TEMPS = 'Le devis a été refusé entre-temps : l\'e-mail n\'est pas parti. Établissez un nouveau devis si votre client le souhaite.';
 
     public const MOTIF_DEVIS_EXPIRE_ENTRE_TEMPS = 'La validité du devis est dépassée : l\'e-mail n\'est pas parti, son client ne pourrait plus l\'accepter. Établissez un nouveau devis si votre client le souhaite encore.';
-
-    public const MOTIF_DEVIS_SANS_LIEN = 'Le devis ne peut plus être accepté par le lien de cet envoi : l\'e-mail n\'est pas parti.';
 
     public const MOTIF_EXPEDITEUR_SANS_DROIT = 'La personne qui a demandé cet envoi n\'a plus accès à ce magasin ou n\'a plus le droit d\'envoyer ce document : l\'e-mail n\'est pas parti.';
 
@@ -214,24 +216,6 @@ class EnvoyerDocumentJob implements ShouldBeUnique, ShouldQueue
             return;
         }
 
-        $generateur = match (true) {
-            $document instanceof Facture => app(FacturePdfGenerator::class),
-            $document instanceof Devis => app(DevisPdfGenerator::class),
-            $document instanceof Avoir => app(AvoirPdfGenerator::class),
-            $document instanceof RecuPaiement => app(RecuPaiementPdfGenerator::class),
-        };
-
-        try {
-            $pdf = $generateur->generer($document)->output();
-        } catch (DocumentSansEnregistrementSigneException $exception) {
-            // Le document ne se reproduit pas tel qu'il a été émis : aucune
-            // nouvelle tentative n'y changera rien.
-            report($exception);
-            $this->echouer($envoi, "{$exception->getMessage()} L'e-mail n'est pas parti.");
-
-            return;
-        }
-
         $lienDeLEnvoi = $document instanceof Devis && $envoi->nature === NatureEnvoi::Envoi ? $envoi->lienDuDevis()->first() : null;
 
         if ($document instanceof Devis && $lienDeLEnvoi !== null && ! $lienDeLEnvoi->estValable($document)) {
@@ -240,7 +224,29 @@ class EnvoyerDocumentJob implements ShouldBeUnique, ShouldQueue
             return;
         }
 
-        $lienDeReponse = $this->lienDeReponse($envoi, $document);
+        $generateur = match (true) {
+            $document instanceof Facture => app(FacturePdfGenerator::class),
+            $document instanceof Devis => app(DevisPdfGenerator::class),
+            $document instanceof Avoir => app(AvoirPdfGenerator::class),
+            $document instanceof RecuPaiement => app(RecuPaiementPdfGenerator::class),
+        };
+
+        $pdf = '';
+
+        if (DocumentMail::porteLePdf($document)) {
+            try {
+                $pdf = $generateur->generer($document)->output();
+            } catch (DocumentSansEnregistrementSigneException $exception) {
+                // Le document ne se reproduit pas tel qu'il a été émis : aucune
+                // nouvelle tentative n'y changera rien.
+                report($exception);
+                $this->echouer($envoi, "{$exception->getMessage()} L'e-mail n'est pas parti.");
+
+                return;
+            }
+        }
+
+        $lienDeReponse = $this->lienDeReponse($lienDeLEnvoi);
 
         $envoi->forceFill(['objet' => EnvoiDocument::objetPour($document, $envoi->nature, $envoi->niveau_relance)])->save();
 
@@ -268,21 +274,33 @@ class EnvoyerDocumentJob implements ShouldBeUnique, ShouldQueue
 
     /**
      * Pourquoi le lien de l'envoi d'un devis ne vaut plus au départ de
-     * l'e-mail, d'après le lien et le devis relus : retiré par le magasin ;
-     * remplacé par un envoi plus récent, dont l'e-mail porte le lien
-     * valable ; devis accepté (au magasin, signé à la main) ou transformé
-     * en facture entre-temps ; refusé ; expiré ; sinon (le magasin ne peut
-     * plus vendre, par exemple), la cause générale.
+     * l'e-mail, d'après le lien et le devis relus, dans l'ordre : retiré
+     * par le magasin ; remplacé par un envoi plus récent dont le lien vaut
+     * (c'est lui que l'e-mail de cet envoi-là porte, rien d'autre à faire) ;
+     * devis accepté (au magasin, signé à la main) ou transformé en facture
+     * entre-temps ; refusé ; expiré ; remplacé par un envoi plus récent
+     * dont le lien a été retiré à son tour, et que plus aucun lien ne
+     * remplace. Aucune autre cause n'y mène : un magasin qui ne peut plus
+     * vendre, un devis modifié depuis la demande ou renvoyé dans une
+     * nouvelle version font échouer l'envoi avant la lecture du lien (voir
+     * relireAvantLeDepart()), et une réponse du client change le statut du
+     * devis, que disent les causes ci-dessus.
+     *
+     * @throws LogicException un lien qui vaut, que l'appelant n'aurait pas dû interroger
      */
     private static function motifDuLienQuiNeVautPlus(LienDuDevis $lien, Devis $devis): string
     {
+        $dernierLien = LienDuDevis::query()->where('devis_id', $lien->devis_id)->orderByDesc('id')->first();
+        $remplacant = $dernierLien !== null && ! $dernierLien->is($lien) ? $dernierLien : null;
+
         return match (true) {
             $lien->retire_le !== null => self::MOTIF_LIEN_RETIRE,
-            LienDuDevis::query()->where('devis_id', $lien->devis_id)->where('id', '>', $lien->getKey())->exists() => self::MOTIF_LIEN_REMPLACE,
+            $remplacant?->estValable($devis) === true => self::MOTIF_LIEN_REMPLACE,
             in_array($devis->statut, [StatutDevis::Accepte, StatutDevis::Converti], true) => self::MOTIF_DEVIS_ACCEPTE_ENTRE_TEMPS,
             $devis->statut === StatutDevis::Refuse => self::MOTIF_DEVIS_REFUSE_ENTRE_TEMPS,
             $devis->statut === StatutDevis::Expire || $devis->validiteDepassee() => self::MOTIF_DEVIS_EXPIRE_ENTRE_TEMPS,
-            default => self::MOTIF_DEVIS_SANS_LIEN,
+            $remplacant?->retire_le !== null => self::MOTIF_LIEN_REMPLACE_PUIS_RETIRE,
+            default => throw new LogicException("Le lien {$lien->getKey()} du devis {$devis->getKey()} ne vaut plus pour une cause que l'envoi ne connaît pas."),
         };
     }
 
@@ -323,18 +341,16 @@ class EnvoyerDocumentJob implements ShouldBeUnique, ShouldQueue
     }
 
     /**
-     * L'adresse du lien secret de l'envoi d'un devis (voir LienDuDevis),
-     * quand il vaut encore au départ de l'e-mail : celle du jeton tiré à la
-     * demande d'envoi, que la tâche porte chiffré, le même à chaque
+     * L'adresse du lien secret de l'envoi d'un devis (voir LienDuDevis), que
+     * handle() vient de lire et de trouver valable : celle du jeton tiré à
+     * la demande d'envoi, que la tâche porte chiffré, le même à chaque
      * tentative, et dont la base ne garde que l'empreinte ; null pour tout
-     * autre envoi, ou un devis déjà accepté, refusé, expiré ou transformé,
-     * renvoyé tel que le client l'a reçu, sans lien.
+     * autre envoi, y compris celui d'un devis accepté ou transformé en
+     * facture, renvoyé tel que le client l'a accepté, sans lien.
      */
-    private function lienDeReponse(EnvoiDocument $envoi, Facture|Devis|Avoir|RecuPaiement $document): ?string
+    private function lienDeReponse(?LienDuDevis $lien): ?string
     {
-        $lien = $document instanceof Devis && $envoi->nature === NatureEnvoi::Envoi && $this->jetonDuLienChiffre !== null ? $envoi->lienDuDevis()->first() : null;
-
-        if ($lien === null || ! $lien->estValable($document)) {
+        if ($lien === null || $this->jetonDuLienChiffre === null) {
             return null;
         }
 

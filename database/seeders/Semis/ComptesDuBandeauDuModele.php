@@ -46,7 +46,7 @@ final class ComptesDuBandeauDuModele
                 'Camille Laurent' => 'Responsable',
                 'Lucas Moreau' => 'Vendeur',
                 'Inès Garcia' => 'Vendeuse (son mot de passe est encore son identifiant)',
-                'Yanis Morel' => 'Vendeur (compte suspendu)',
+                'Yanis Morel' => 'Vendeur',
                 'Élodie Fabre' => 'Observatrice',
             ],
             'republique' => [

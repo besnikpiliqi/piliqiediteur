@@ -190,7 +190,8 @@ final class DerniersGestes
      * relevé des encaissements du dernier mois écoulé des Halles, en ZIP
      * puis en CSV, depuis l'espace de sa société : le travailleur de la
      * file prépare chacun (voir FileDAttenteDuSemis), puis les pièces des
-     * charges du même mois (voir telechargerLesPiecesDesCharges()). Elle
+     * charges du dernier mois déposé (voir dernierMoisDeChargesDeposees() et
+     * telechargerLesPiecesDesCharges()). Elle
      * demande ensuite les ventes de la dernière semaine en ZIP, que le
      * travailleur n'a pas encore prises : la demande reste « en
      * préparation ».
@@ -209,10 +210,27 @@ final class DerniersGestes
             FileDAttenteDuSemis::passer(FileDAttenteDuSemis::TELECHARGEMENTS);
         }
 
-        $this->telechargerLesPiecesDesCharges($proprietaire, $societe, [$halles, $this->semis->magasin('republique')], $du, $au);
+        $this->telechargerLesPiecesDesCharges($proprietaire, $societe, [$halles, $this->semis->magasin('republique')], ...$this->dernierMoisDeChargesDeposees($aujourdhui));
         FileDAttenteDuSemis::passer(FileDAttenteDuSemis::TELECHARGEMENTS);
 
         $this->demanderUnTelechargement($proprietaire, $societe, $halles, Calendrier::ajouterJours($aujourdhui, -7), Calendrier::ajouterJours($aujourdhui, -1), [TypeDeDocumentTelechargeable::Ventes], FormatDuTelechargement::Zip);
+    }
+
+    /**
+     * Le premier et le dernier jour du dernier mois dont les charges sont
+     * déposées à l'instant du semis : le propriétaire dépose celles du mois
+     * précédent le 5 de chaque mois (voir ChargesDesSocietes), et la boucle
+     * des jours s'arrête avant-hier. Un semis des 1er au 5 du mois n'a donc
+     * encore aucune charge du mois écoulé : il prend le mois d'avant.
+     *
+     * @return array{0: string, 1: string}
+     */
+    private function dernierMoisDeChargesDeposees(string $aujourdhui): array
+    {
+        $dernierJourDeLaBoucle = Calendrier::ajouterJours($aujourdhui, -2);
+        $au = Calendrier::ajouterJours(Calendrier::premierJourDuMois(Calendrier::ajouterJours($dernierJourDeLaBoucle, -4)), -1);
+
+        return [Calendrier::premierJourDuMois($au), $au];
     }
 
     /**

@@ -30,8 +30,10 @@ use LogicException;
  * mois », à M : jamais par une date écrite. Un achat du mois M se pose avant
  * le jour du semis (la boucle des jours s'arrête avant-hier) : un semis du
  * 1er du mois laisse le mois M vide, et la carte dit alors « Aucun achat
- * ce mois-ci ». Les produits des cas sont nouveaux : les réassorts des
- * Halles, de la République et de Fort-de-France ne changent pas.
+ * ce mois-ci » : un cas qui doit exister à toute date du semis se pose donc
+ * au plus tard au mois M-1, jamais au mois M. Les produits des cas sont
+ * nouveaux : les réassorts des Halles, de la République et de Fort-de-France
+ * ne changent pas.
  *
  * - « Maison Ferrand Entrepôt » est le laboratoire : tous ses achats sont
  *   ceux de la carte, un mois après l'autre (M-11 aucun achat, M-10 deux
@@ -56,11 +58,12 @@ use LogicException;
  * - Dans les magasins des Halles, de la République et de Fort-de-France : un
  *   produit de même nom acheté le même mois à deux prix dans deux magasins,
  *   un produit qui perd 210 € sur les douze mois à la République, une facture
- *   d'un mois à venir, une remise de ligne, un escompte de facture, un prix à
- *   six décimales et un HT de ligne écrit, un produit renommé entre deux
- *   achats, un produit archivé, et un achat reçu sans date, comme le fait
- *   l'API, validé à Fort-de-France le soir du dernier jour d'un mois, qui
- *   compte dans ce mois et non dans le suivant.
+ *   saisie le mois précédent et datée d'un mois à venir, une remise de
+ *   ligne, un escompte de facture, un prix à six décimales et un HT de ligne
+ *   écrit, un produit renommé entre deux achats, un produit archivé, et un
+ *   achat reçu sans date, comme le fait l'API, validé à Fort-de-France le
+ *   soir du dernier jour d'un mois, qui compte dans ce mois et non dans le
+ *   suivant.
  *
  * Les achats ne se posent que dans une base qui sème la société « Commerce ou
  * atelier » : le poste et les bases modèles du site de démonstration.
@@ -354,10 +357,14 @@ final class AchatsDeLEcartDesPrix
         $this->acheter('halles', -4, 21, $grossiste, [['SET-TABLE', 10, '12.0040', null, ['montant_ht' => '120.05']]]);
         $this->acheter('halles', -4, 25, $grossiste, [['SET-TABLE', 10, '12.40']]);
 
-        // La boule de Noël, commandée le 4 du mois en cours, est facturée
-        // d'avance : la seconde facture porte le 10 du mois suivant.
-        $this->acheter('halles', 0, 4, $grossiste, [['BOULE-NOEL', 30, '8.00', $this->nouveau('Boule de Noël en verre (boîte de 6)', '19.90')]]);
-        $this->acheter('halles', 0, 8, $grossiste, [['BOULE-NOEL', 30, '8.40']], dateDeLaFacture: Mois::decaler($this->moisDuSemis, 1).'-10');
+        // La boule de Noël, commandée le 10 du mois qui précède le semis, est
+        // facturée d'avance : la seconde facture, saisie le 14 de ce mois,
+        // porte le 10 du mois qui suit le semis. Les deux se posent dans un
+        // mois révolu, que la boucle des jours atteint quel que soit le jour
+        // du semis : le cas « achat daté d'un mois à venir » existe toujours,
+        // alors que le mois M reste vide un semis du 1er du mois.
+        $this->acheter('halles', -1, 10, $grossiste, [['BOULE-NOEL', 30, '8.00', $this->nouveau('Boule de Noël en verre (boîte de 6)', '19.90')]]);
+        $this->acheter('halles', -1, 14, $grossiste, [['BOULE-NOEL', 30, '8.40']], dateDeLaFacture: Mois::decaler($this->moisDuSemis, 1).'-10');
     }
 
     /**

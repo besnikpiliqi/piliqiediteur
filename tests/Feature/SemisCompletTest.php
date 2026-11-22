@@ -832,7 +832,7 @@ class SemisCompletTest extends TestCase
         // Un achat d'un mois à venir compte dans « Année en cours », pas dans « 12 derniers mois ».
         $boule = 'Boule de Noël en verre (boîte de 6)';
         $this->assertCount(1, $this->achatsDuProduit($vues['HALLES'], $boule));
-        $this->assertSame([[10, 4, 30, 800], [11, 10, 30, 840]], array_map(static fn (array $achat): array => [$achat['k'], $achat['j'], $achat['q'], $achat['c']], $this->achatsDuProduit($vues['HALLES:annee-en-cours'], $boule)));
+        $this->assertSame([[9, 10, 30, 800], [11, 10, 30, 840]], array_map(static fn (array $achat): array => [$achat['k'], $achat['j'], $achat['q'], $achat['c']], $this->achatsDuProduit($vues['HALLES:annee-en-cours'], $boule)));
 
         // Le coût net arrondi une seule fois : remise de ligne, escompte de facture, six décimales, HT de ligne écrit.
         $set = $this->achatsDuProduit($vues['HALLES'], 'Set de table en coton (lot de 4)');

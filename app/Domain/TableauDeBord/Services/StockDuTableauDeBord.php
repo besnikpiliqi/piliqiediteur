@@ -135,7 +135,7 @@ final class StockDuTableauDeBord
                 }
 
                 if ($retour) {
-                    $retours[$mouvement->source_id] = true;
+                    $retours[ValeurRequise::de($mouvement->source_id, 'la ligne d\'avoir qui justifie un retour du grand livre')] = true;
                 }
 
                 $leMois = Mois::duJour($calendrier->jourDe(ValeurRequise::de($mouvement->survenu_le, 'l\'instant d\'un mouvement du grand livre')));

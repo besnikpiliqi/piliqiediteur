@@ -299,6 +299,16 @@ class OutilDeQualiteTest extends TestCase
         $this->assertStringContainsString('php tests/Qualite/qualite.php seuils [<ancien seuils.json>]', $sortie);
     }
 
+    public function test_sans_commande_ou_avec_une_commande_inconnue_l_outil_ecrit_l_usage_et_sort_avec_le_code_2(): void
+    {
+        foreach ([[], ['inconnue']] as $arguments) {
+            [$code, $sortie] = $this->lancer(...$arguments);
+
+            $this->assertSame(2, $code, $sortie);
+            $this->assertStringContainsString('php tests/Qualite/qualite.php seuils [<ancien seuils.json>]', $sortie);
+        }
+    }
+
     /**
      * Sans ancien fichier, comme le protocole de CLAUDE.md le fait lancer
      * avant chaque commit, « seuils » se compare au seuils.json de la

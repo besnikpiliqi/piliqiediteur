@@ -516,7 +516,7 @@ trait AjouteDesLignesDAchat
                 $cle = self::ligneDuProduit($lignes, $ligne['produit_id']);
 
                 if ($cle === null) {
-                    $repeteur->state([...$lignes, $repeteur->generateUuid() => $ligne]);
+                    $repeteur->state([...$lignes, ValeurRequise::de($repeteur->generateUuid(), 'l\'identifiant de la nouvelle ligne de la facture') => $ligne]);
                     $repeteur->callAfterStateUpdated();
 
                     return;

@@ -1364,10 +1364,12 @@ class FactureResource extends Resource
 
         if ($action instanceof Tables\Actions\Action) {
             $liste = $livewire instanceof ListRecords ? $livewire : throw new LogicException('L\'émission d\'une facture depuis un tableau se fait dans la liste des factures.');
-            $liste->mountedTableActionsArguments[array_key_last(ValeurRequise::de($liste->mountedTableActionsArguments, 'les arguments des actions ouvertes du tableau'))] = $nouveaux;
+            $ouvertes = ValeurRequise::de($liste->mountedTableActionsArguments, 'les arguments des actions ouvertes du tableau');
+            $liste->mountedTableActionsArguments[ValeurRequise::de(array_key_last($ouvertes), 'l\'action ouverte du tableau')] = $nouveaux;
         } else {
             $page = $livewire instanceof BasePage ? $livewire : throw new LogicException('L\'émission d\'une facture se fait depuis une page.');
-            $page->mountedActionsArguments[array_key_last(ValeurRequise::de($page->mountedActionsArguments, 'les arguments des actions ouvertes de la page'))] = $nouveaux;
+            $ouvertes = ValeurRequise::de($page->mountedActionsArguments, 'les arguments des actions ouvertes de la page');
+            $page->mountedActionsArguments[ValeurRequise::de(array_key_last($ouvertes), 'l\'action ouverte de la page')] = $nouveaux;
         }
 
         $action->arguments($nouveaux);

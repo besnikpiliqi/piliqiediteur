@@ -1569,7 +1569,7 @@ trait AjouteDesLignesDeVente
     {
         $lignes = self::repeteurDesLignes($livewire);
 
-        $uuid = $lignes->generateUuid();
+        $uuid = ValeurRequise::de($lignes->generateUuid(), 'l\'identifiant de la nouvelle ligne du document');
 
         $lignes->state([...ValeursLues::tableau($lignes->getState() ?? []), $uuid => []]);
         $lignes->getChildComponentContainer($uuid)->fill();

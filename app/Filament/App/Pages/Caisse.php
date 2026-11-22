@@ -560,7 +560,8 @@ class Caisse extends Page implements HasForms
                 }
 
                 $nouveaux = static::argumentsDeLAvertissement($avertissement);
-                $this->mountedActionsArguments[array_key_last(ValeurRequise::de($this->mountedActionsArguments, 'les arguments des actions ouvertes de la page'))] = $nouveaux;
+                $ouvertes = ValeurRequise::de($this->mountedActionsArguments, 'les arguments des actions ouvertes de la page');
+                $this->mountedActionsArguments[ValeurRequise::de(array_key_last($ouvertes), 'l\'action ouverte de la page')] = $nouveaux;
                 $action->arguments($nouveaux);
                 $action->halt();
             });

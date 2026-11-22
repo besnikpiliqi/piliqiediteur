@@ -1435,9 +1435,9 @@ function usage(): int
  */
 function lancer(?string $commande, array $arguments): int
 {
-    $definition = COMMANDES[$commande] ?? null;
+    $definition = $commande === null ? null : (COMMANDES[$commande] ?? null);
 
-    if ($commande === null || $definition === null || count($arguments) < $definition[0] || count($arguments) > $definition[0] + $definition[1]) {
+    if ($definition === null || count($arguments) < $definition[0] || count($arguments) > $definition[0] + $definition[1]) {
         return usage();
     }
 
@@ -1456,7 +1456,9 @@ function lancer(?string $commande, array $arguments): int
 }
 
 try {
-    exit(lancer($argv[1] ?? null, array_slice($argv, 2)));
+    $lesArguments = $argv ?? [];
+
+    exit(lancer($lesArguments[1] ?? null, array_slice($lesArguments, 2)));
 } catch (RuntimeException|JsonException $erreur) {
     echo 'Échec : ', $erreur->getMessage(), "\n";
 

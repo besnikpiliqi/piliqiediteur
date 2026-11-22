@@ -487,7 +487,7 @@ final class SemisComplet
             'Maxime Henry' => 'Vendeur de services : ses tickets à la caisse',
             'Julie Mercier' => 'Vendeuse de services : ses tickets à la caisse',
             'Paul Lefèvre' => 'Collaborateur du cabinet : Maison Ferrand confiée (ses six magasins), charges à valider et validées, graphiques du client dont « Écart des prix d\'achat »',
-            'Emma Rousseau' => 'Collaboratrice du cabinet : Épicerie Lemoine confiée (seul magasin ouvert au cabinet), qui voit « Écart des prix d\'achat » de ses réassorts',
+            'Emma Rousseau' => 'Collaboratrice du cabinet : Épicerie Lemoine confiée (seul magasin ouvert au cabinet, sans les consultations d\'achats : elle ne voit pas « Écart des prix d\'achat » de ses réassorts)',
             'propriétaire client' => 'Société née de l\'invitation du cabinet : cabinet lié, magasins ouverts au cabinet',
             'Romane Gauthier' => 'Administratrice devenue responsable de l\'Épicerie',
             'Bastien Leroy' => 'Administrateur qui vend à l\'Épicerie',

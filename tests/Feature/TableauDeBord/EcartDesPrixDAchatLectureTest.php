@@ -73,7 +73,7 @@ class EcartDesPrixDAchatLectureTest extends TestCase
 
         foreach ([TextesDeLEcartDesPrixDAchat::AFFICHAGE_PAR_MOIS, TextesDeLEcartDesPrixDAchat::AFFICHAGE_SUR_DOUZE_MOIS] as $affichage) {
             for ($mois = 0; $mois < 12; $mois++) {
-                $obtenu = TextesDeLEcartDesPrixDAchat::lecture($calcul, $affichage, $mois);
+                $obtenu = LectureDesFixtures::avecLesBoutonsDeLaMaquette(TextesDeLEcartDesPrixDAchat::lecture($calcul, $affichage, $mois));
                 $ecart = LectureDesFixtures::premierEcart($obtenu, LectureDesFixtures::verite()['etats'][$affichage][$mois]);
 
                 $this->assertNull($ecart, "Affichage {$affichage}, mois {$mois} : premier écart avec la maquette : {$ecart}");

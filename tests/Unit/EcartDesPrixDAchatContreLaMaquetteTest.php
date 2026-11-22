@@ -8,6 +8,7 @@ use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Tests\Fixtures\EcartDesPrixDAchat\LectureDesFixtures;
+use Tests\Fixtures\EcartDesPrixDAchat\TextesDeLaPageDeLaMaquette;
 
 /**
  * La carte « Écart des prix d'achat » comparée à la maquette validée par
@@ -43,7 +44,7 @@ class EcartDesPrixDAchatContreLaMaquetteTest extends TestCase
         $verite = LectureDesFixtures::verite();
         $calcul = EcartDesPrixDAchat::calculer($verite['jeu']['produits'], LectureDesFixtures::moisDeLaMaquette());
 
-        $obtenu = TextesDeLEcartDesPrixDAchat::lecture($calcul, $affichage, $mois);
+        $obtenu = LectureDesFixtures::avecLesBoutonsDeLaMaquette(TextesDeLEcartDesPrixDAchat::lecture($calcul, $affichage, $mois));
         $attendu = $verite['etats'][$affichage][$mois];
 
         $ecart = LectureDesFixtures::premierEcart($obtenu, $attendu);
@@ -66,7 +67,7 @@ class EcartDesPrixDAchatContreLaMaquetteTest extends TestCase
     {
         $statique = LectureDesFixtures::verite()['statique'];
 
-        $exemple = TextesDeLEcartDesPrixDAchat::exemple(TextesDeLEcartDesPrixDAchat::ACHATS_DE_L_EXEMPLE);
+        $exemple = TextesDeLaPageDeLaMaquette::exemple(TextesDeLaPageDeLaMaquette::ACHATS_DE_L_EXEMPLE);
 
         $this->assertSame($statique['lignesExemple'], $exemple['lignes']);
         $this->assertSame($statique['noteExemple'], $exemple['note']);
@@ -77,14 +78,14 @@ class EcartDesPrixDAchatContreLaMaquetteTest extends TestCase
     {
         $statique = LectureDesFixtures::verite()['statique'];
 
-        $this->assertCount(9, TextesDeLEcartDesPrixDAchat::REGLES);
-        $this->assertSame($statique['regles'], TextesDeLEcartDesPrixDAchat::REGLES);
-        $this->assertSame($statique['titreRegles'], TextesDeLEcartDesPrixDAchat::TITRE_DES_REGLES);
-        $this->assertSame($statique['titrePage'], TextesDeLEcartDesPrixDAchat::TITRE_DE_LA_PAGE);
-        $this->assertSame($statique['introduction'], TextesDeLEcartDesPrixDAchat::INTRODUCTION_DE_LA_PAGE);
-        $this->assertSame($statique['titreExemple'], TextesDeLEcartDesPrixDAchat::TITRE_DE_L_EXEMPLE);
-        $this->assertSame($statique['introExemple'], TextesDeLEcartDesPrixDAchat::INTRODUCTION_DE_L_EXEMPLE);
-        $this->assertSame($statique['enteteExemple'], TextesDeLEcartDesPrixDAchat::ENTETE_DE_L_EXEMPLE);
+        $this->assertCount(9, TextesDeLaPageDeLaMaquette::REGLES);
+        $this->assertSame($statique['regles'], TextesDeLaPageDeLaMaquette::REGLES);
+        $this->assertSame($statique['titreRegles'], TextesDeLaPageDeLaMaquette::TITRE_DES_REGLES);
+        $this->assertSame($statique['titrePage'], TextesDeLaPageDeLaMaquette::TITRE_DE_LA_PAGE);
+        $this->assertSame($statique['introduction'], TextesDeLaPageDeLaMaquette::INTRODUCTION_DE_LA_PAGE);
+        $this->assertSame($statique['titreExemple'], TextesDeLaPageDeLaMaquette::TITRE_DE_L_EXEMPLE);
+        $this->assertSame($statique['introExemple'], TextesDeLaPageDeLaMaquette::INTRODUCTION_DE_L_EXEMPLE);
+        $this->assertSame($statique['enteteExemple'], TextesDeLaPageDeLaMaquette::ENTETE_DE_L_EXEMPLE);
     }
 
     public function test_l_etat_de_depart_est_le_dernier_mois_par_mois(): void

@@ -58,14 +58,14 @@ class EcartDesPrixDAchatAuHasardTest extends TestCase
         for ($mois = 0; $mois < 12; $mois++) {
             $this->assertSame(
                 $jeu['empreintes'][$mois],
-                LectureDesFixtures::empreinte(TextesDeLEcartDesPrixDAchat::lecture($calcul, TextesDeLEcartDesPrixDAchat::AFFICHAGE_PAR_MOIS, $mois)),
+                LectureDesFixtures::empreinte(LectureDesFixtures::avecLesBoutonsDeLaMaquette(TextesDeLEcartDesPrixDAchat::lecture($calcul, TextesDeLEcartDesPrixDAchat::AFFICHAGE_PAR_MOIS, $mois))),
                 "Jeu {$numero}, affichage par mois, mois {$mois} : la lecture diffère de la référence.",
             );
         }
 
         $this->assertSame(
             $jeu['empreintes'][12],
-            LectureDesFixtures::empreinte(TextesDeLEcartDesPrixDAchat::lecture($calcul, TextesDeLEcartDesPrixDAchat::AFFICHAGE_SUR_DOUZE_MOIS, 11)),
+            LectureDesFixtures::empreinte(LectureDesFixtures::avecLesBoutonsDeLaMaquette(TextesDeLEcartDesPrixDAchat::lecture($calcul, TextesDeLEcartDesPrixDAchat::AFFICHAGE_SUR_DOUZE_MOIS, 11))),
             "Jeu {$numero}, affichage des 12 mois : la lecture diffère de la référence.",
         );
     }

@@ -116,7 +116,7 @@ class SemisCompletTest extends TestCase
         'actions_traitees_de_la_societe' => 348,
         'affectations' => 40,
         'autorisations_affectations' => 533,
-        'autorisations_cabinet' => 43,
+        'autorisations_cabinet' => 41,
         'autorisations_societe' => 6,
         'avoir_allocations' => 121,
         'avoirs' => 118,
@@ -138,7 +138,7 @@ class SemisCompletTest extends TestCase
         'demonstrations' => 15,
         'devis' => 225,
         'ecarts_sirene' => 2,
-        'enregistrements_fiscaux' => 10829,
+        'enregistrements_fiscaux' => 10830,
         'envois_documents' => 13,
         'evenements_transmission_pdp' => 61,
         'factures' => 4008,
@@ -147,7 +147,7 @@ class SemisCompletTest extends TestCase
         'identifiants' => 67,
         'inventaires_ouverture' => 11,
         'invitations_cabinet' => 6,
-        'journal_audit' => 1801,
+        'journal_audit' => 1799,
         'liens_cabinet' => 15,
         'liens_des_devis' => 6,
         'lignes_achat' => 353,
@@ -870,12 +870,13 @@ class SemisCompletTest extends TestCase
      * Qui voit la carte et qui ne la voit pas : la propriétaire de Maison
      * Ferrand (espace de la société et panneau de chaque magasin), son
      * administratrice cochée aux graphiques, la responsable des Halles
-     * cochée, le cabinet Martin (son propriétaire, Paul Lefèvre pour Maison
-     * Ferrand, Emma Rousseau pour l'Épicerie), le propriétaire de l'Épicerie ;
+     * cochée, le cabinet Martin (son propriétaire et Paul Lefèvre pour Maison
+     * Ferrand), le propriétaire de l'Épicerie ;
      * pas les responsables sans la case, l'administrateur sans la case, les
      * vendeurs, l'observatrice, l'expert-comptable d'une société de services,
-     * ni le cabinet pour la Boulangerie Duval, à qui sa propriétaire a retiré
-     * les consultations d'achats.
+     * ni Emma Rousseau ni le cabinet pour l'Épicerie Lemoine, dont le lien
+     * reste actif mais dont le propriétaire a retiré au cabinet les
+     * consultations d'achats.
      */
     private function assertQuiVoitLaCarte(Societe $societe): void
     {
@@ -889,10 +890,10 @@ class SemisCompletTest extends TestCase
             'Camille Laurent' => User::query()->where('name', 'Camille Laurent')->sole(),
             'le propriétaire du cabinet Martin' => $cabinet->proprietaire()->sole(),
             'Paul Lefèvre' => User::query()->where('name', 'Paul Lefèvre')->sole(),
-            'Emma Rousseau' => User::query()->where('name', 'Emma Rousseau')->sole(),
             'le propriétaire de l\'Épicerie Lemoine' => $epicerie->proprietaire()->sole(),
         ];
         $neVoientPas = [
+            'Emma Rousseau (Épicerie, consultations d\'achats retirées au cabinet)' => User::query()->where('name', 'Emma Rousseau')->sole(),
             'Hugo Lefebvre' => User::query()->where('name', 'Hugo Lefebvre')->sole(),
             'Joëlle Marie-Sainte' => User::query()->where('name', 'Joëlle Marie-Sainte')->sole(),
             'Thomas Girard' => User::query()->where('name', 'Thomas Girard')->sole(),
@@ -913,27 +914,30 @@ class SemisCompletTest extends TestCase
             $this->assertFalse($this->voitLaCarte($compte), "{$qui} ne voit pas la carte « Écart des prix d'achat ».");
         }
 
-        // Le cabinet la voit pour Maison Ferrand et l'Épicerie, pas pour la Boulangerie Duval.
+        // Le cabinet la voit pour Maison Ferrand, pas pour l'Épicerie Lemoine : son lien reste actif,
+        // mais sa propriétaire en a retiré les consultations d'achats.
         $proprietaireDuCabinet = $cabinet->proprietaire()->sole();
         app(TenantContext::class)->clear();
+        $clientsParcourus = [];
         $clientsQuiLaMontrent = [];
 
         foreach (app(AccesDesCabinets::class)->liensOuverts($proprietaireDuCabinet)->get() as $lien) {
+            $client = (string) Societe::query()->findOrFail($lien->societe_id)->raison_sociale;
+            $clientsParcourus[] = $client;
+
             if (app(PerimetreDesGraphiques::class)->voitLesGraphiquesDuClient($proprietaireDuCabinet, $lien) && app(PerimetreDesGraphiques::class)->duClient($proprietaireDuCabinet, $lien)->voit(Graphique::EcartDesPrixDAchat)) {
-                $clientsQuiLaMontrent[] = (string) Societe::query()->findOrFail($lien->societe_id)->raison_sociale;
+                $clientsQuiLaMontrent[] = $client;
             }
         }
 
+        sort($clientsParcourus);
         sort($clientsQuiLaMontrent);
-        $this->assertSame(['EPICERIE LEMOINE', 'MAISON FERRAND'], $clientsQuiLaMontrent);
+        $this->assertSame(['EPICERIE LEMOINE', 'MAISON FERRAND'], $clientsParcourus, 'Le cabinet a deux liens actifs à la fin du semis.');
+        $this->assertSame(['MAISON FERRAND'], $clientsQuiLaMontrent);
 
-        $boulangerie = Societe::query()->where('raison_sociale', 'BOULANGERIE DUVAL')->sole();
-        $retrait = DB::table('journal_audit')->where('societe_id', $boulangerie->getKey())->where('action', 'autorisations_du_cabinet_modifiees')->orderBy('id')->get();
-        $this->assertNotEmpty($retrait, 'La propriétaire de la Boulangerie a réglé les autorisations du cabinet.');
-        $autorisations = (array) (json_decode((string) $retrait->first()->nouvelles_valeurs, true)['autorisations'] ?? []);
-        $this->assertNotEmpty($autorisations);
-        $this->assertNotContains(PermissionRegistry::FACTURE_ACHAT_VIEW, $autorisations);
-        $this->assertNotContains(PermissionRegistry::AVOIR_FOURNISSEUR_VIEW, $autorisations);
+        $lienDeLEpicerie = LienCabinet::query()->withoutGlobalScopes()->where('cabinet_id', $cabinet->getKey())->where('societe_id', $epicerie->getKey())->where('etat', 'actif')->sole();
+        $this->assertNotContains(PermissionRegistry::FACTURE_ACHAT_VIEW, $lienDeLEpicerie->autorisations(), 'L\'Épicerie a retiré « Factures d\'achat : voir » au cabinet.');
+        $this->assertNotContains(PermissionRegistry::AVOIR_FOURNISSEUR_VIEW, $lienDeLEpicerie->autorisations(), 'L\'Épicerie a retiré « Avoirs fournisseur : voir » au cabinet.');
         $lienDeMaisonFerrand = LienCabinet::query()->withoutGlobalScopes()->where('cabinet_id', $cabinet->getKey())->where('societe_id', $societe->getKey())->where('etat', 'actif')->sole();
         $this->assertContains(PermissionRegistry::FACTURE_ACHAT_VIEW, $lienDeMaisonFerrand->autorisations(), 'Maison Ferrand garde « Factures d\'achat : voir » au cabinet.');
     }

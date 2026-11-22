@@ -67,6 +67,30 @@ final class LectureDesFixtures
     }
 
     /**
+     * Une lecture de la carte avec les boutons de l'en-tête de la maquette
+     * (« Barres ▾ », « Monter », « Descendre »), que la lecture ne porte pas :
+     * ils sont ceux de l'en-tête commun de la grille. Elle se compare ainsi au
+     * relevé de la maquette et à ses empreintes, clés dans le même ordre.
+     *
+     * @param  array<string, mixed>  $lecture
+     * @return array<string, mixed>
+     */
+    public static function avecLesBoutonsDeLaMaquette(array $lecture): array
+    {
+        $complete = [];
+
+        foreach ($lecture as $cle => $valeur) {
+            $complete[$cle] = $valeur;
+
+            if ($cle === 'titreCarte') {
+                $complete['boutons'] = ['Barres ▾', 'Monter', 'Descendre'];
+            }
+        }
+
+        return $complete;
+    }
+
+    /**
      * Le JSON canonique d'une valeur.
      */
     public static function canonique(mixed $valeur): string

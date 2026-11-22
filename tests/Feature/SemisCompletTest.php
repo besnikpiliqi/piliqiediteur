@@ -808,8 +808,8 @@ class SemisCompletTest extends TestCase
             from lignes_achat l
             join factures_achat f on f.magasin_id = l.magasin_id and f.id = l.facture_achat_id
             where f.magasin_id = ? and f.statut = 'validee' and f.date_facture between '2025-12-01' and '2026-11-30'
-              and to_char(f.date_validation at time zone 'UTC' at time zone 'Europe/Paris', 'YYYY-MM') <> to_char(f.date_facture, 'YYYY-MM')
-            SQL, [$magasin('HALLES')]);
+              and to_char(f.date_validation at time zone 'UTC' at time zone ?, 'YYYY-MM') <> to_char(f.date_facture, 'YYYY-MM')
+            SQL, [$magasin('HALLES'), Calendrier::deParis()->fuseau()]);
         $this->assertGreaterThanOrEqual(2, count($decalees), 'Des réassorts des Halles sont datés d\'un mois et validés le suivant.');
 
         foreach ($decalees as $ligne) {

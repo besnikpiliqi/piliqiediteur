@@ -12,7 +12,6 @@ use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Tenancy\Services\ActionsUniques;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\CleDuModele;
-use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Domain\Tenancy\Support\ValeursLues;
 use App\Models\User;
 use Carbon\CarbonImmutable;
@@ -21,6 +20,7 @@ use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use LogicException;
 
 /**
  * Ferme la caisse personnelle d'un vendeur -- quiconque vend ou encaisse,
@@ -52,10 +52,17 @@ use Illuminate\Support\Facades\DB;
  * fermeture d'office, si bien qu'une vente faite après minuit n'entre pas
  * dans la fermeture de la veille.
  *
- * Aucune condition de blocage : contrairement à CloturerCaisseAction, un
- * vendeur peut fermer sa caisse aussi souvent qu'il le souhaite, y compris
- * sans aucune nouvelle vente ni aucun paiement depuis la précédente fois
- * (relevé à zéro). Une fermeture d'office, elle, ne note rien quand il n'y
+ * Une caisse n'est ouverte que par une vente émise, un encaissement ou une
+ * contre-passation qu'aucune fermeture n'a comptés (décision de l'éditeur
+ * du 18/11/2026) : PILIQI n'a pas de geste « ouvrir la caisse », et un
+ * relevé à zéro ne dit rien de plus qu'un autre. Contrairement à
+ * CloturerCaisseAction, un vendeur peut fermer sa caisse aussi souvent
+ * qu'il le souhaite dans la journée (une relève, un marché où l'on vend,
+ * ferme, revient et vend encore), mais jamais sans aucune nouvelle vente
+ * ni aucun nouveau paiement depuis la précédente fois, même la première
+ * du jour : la fermeture est alors refusée (MESSAGE_RIEN_A_FERMER), que la
+ * demande vienne de l'écran, où le bouton est grisé, ou d'une requête
+ * forgée. Une fermeture d'office, elle, ne note rien non plus quand il n'y
  * a rien à compter.
  *
  * Deux fermetures de la même caisse au même instant (double clic, deux
@@ -75,6 +82,12 @@ use Illuminate\Support\Facades\DB;
  */
 class FermerSaCaisseAction
 {
+    /**
+     * Ce que lit qui ferme une caisse qui n'a rien à compter, et
+     * l'info-bulle de son bouton grisé (texte de l'éditeur, 18/11/2026).
+     */
+    public const MESSAGE_RIEN_A_FERMER = 'Aucune vente ni encaissement à fermer.';
+
     public function __construct(
         private readonly CalculateurLigne $calculateur,
         private readonly LecteurDesDroits $lecteur,
@@ -92,6 +105,7 @@ class FermerSaCaisseAction
      * @param  string|null  $jeton  le jeton de la demande (R3)
      *
      * @throws AuthorizationException quand l'auteur n'est pas, ou plus, autorisé à fermer cette caisse
+     * @throws LogicException quand la caisse n'a ni vente ni encaissement à compter (MESSAGE_RIEN_A_FERMER)
      */
     public function handle(User $auteur, User $vendeur, ?string $jeton = null): ClotureCaissePersonnelle
     {
@@ -104,7 +118,7 @@ class FermerSaCaisseAction
                 ? $this->lecteur->exigerSousVerrou($auteur, 'fermer', $magasin, ClotureCaissePersonnelle::class)
                 : $this->lecteur->exigerSousVerrou($auteur, 'fermerLaCaisseDe', $magasin, [ClotureCaissePersonnelle::class, $vendeur]);
 
-            return ValeurRequise::de($this->fermer($vendeur, $saPropreCaisse ? ModeFermetureCaisse::Vendeur : ModeFermetureCaisse::Responsable, $compte, CarbonImmutable::now(), memeAZero: true), 'le relevé fermé, même à zéro');
+            return $this->fermer($vendeur, $saPropreCaisse ? ModeFermetureCaisse::Vendeur : ModeFermetureCaisse::Responsable, $compte, CarbonImmutable::now()) ?? throw new LogicException(self::MESSAGE_RIEN_A_FERMER);
         }));
     }
 
@@ -116,7 +130,7 @@ class FermerSaCaisseAction
      */
     public function fermerDOffice(User $vendeur, CarbonInterface $jusquAu): ?ClotureCaissePersonnelle
     {
-        return $this->fermer($vendeur, ModeFermetureCaisse::Automatique, null, CarbonImmutable::instance($jusquAu), memeAZero: false);
+        return $this->fermer($vendeur, ModeFermetureCaisse::Automatique, null, CarbonImmutable::instance($jusquAu));
     }
 
     /**
@@ -130,15 +144,19 @@ class FermerSaCaisseAction
         return $this->releve($vendeur, ModeFermetureCaisse::Vendeur, $vendeur, $maintenant, $this->ventesDuReleve($vendeur, $maintenant)->get(), $this->paiementsDuReleve($vendeur, $maintenant)->get());
     }
 
-    private function fermer(User $vendeur, ModeFermetureCaisse $mode, ?User $auteur, CarbonImmutable $jusquAu, bool $memeAZero): ?ClotureCaissePersonnelle
+    /**
+     * Le relevé fermé, ou null quand la caisse n'a, une fois relue sous le
+     * verrou de son vendeur, aucune vente ni aucun paiement à compter.
+     */
+    private function fermer(User $vendeur, ModeFermetureCaisse $mode, ?User $auteur, CarbonImmutable $jusquAu): ?ClotureCaissePersonnelle
     {
-        return DB::transaction(function () use ($vendeur, $mode, $auteur, $jusquAu, $memeAZero): ?ClotureCaissePersonnelle {
+        return DB::transaction(function () use ($vendeur, $mode, $auteur, $jusquAu): ?ClotureCaissePersonnelle {
             User::query()->whereKey($vendeur->getKey())->lock('for no key update')->first();
 
             $factures = $this->ventesDuReleve($vendeur, $jusquAu)->lockForUpdate()->get();
             $paiements = $this->paiementsDuReleve($vendeur, $jusquAu)->get();
 
-            if (! $memeAZero && $factures->isEmpty() && $paiements->isEmpty()) {
+            if ($factures->isEmpty() && $paiements->isEmpty()) {
                 return null;
             }
 

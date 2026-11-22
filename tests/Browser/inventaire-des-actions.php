@@ -532,12 +532,14 @@ return [
     ],
     'app/Filament/App/Resources/ClotureCaissePersonnelleResource/Pages/ListClotureCaissePersonnelles.php' => [
         'action:fermer_la_caisse_d_un_vendeur' => ['lot' => 'NAV-2', 'tests' => [
+            'tests/Browser/Parcours/FermetureDeCaisseGriseeTest.php › « Fermer la caisse d’un vendeur » est grisé avec son info-bulle tant qu’aucun vendeur n’a de caisse ouverte, puis normal quand l’un d’eux vend',
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur autorisé à vendre ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur sans la vente ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
         ]],
         'action:fermer_ma_caisse' => ['lot' => 'NAV-2', 'tests' => [
+            'tests/Browser/Parcours/FermetureDeCaisseGriseeTest.php › « Fermer ma caisse » est grisé avec son info-bulle tant que rien n’est à fermer, normal après une vente, et se grise de nouveau une fois la caisse fermée',
             'tests/Browser/Parcours/RelevesDeCaisseTest.php › la fenêtre « Fermer ma caisse » du vendeur, « Les caisses » du responsable et « Les caisses » de la société écrivent l’encaissé une ligne par mode abrégé, puis le total en gras, à 1 280 et à 1 024 px',
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur autorisé à vendre ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',

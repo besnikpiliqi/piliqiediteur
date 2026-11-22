@@ -53,6 +53,17 @@ class ListClotureCaissePersonnelles extends ListRecords
 
     protected static string $resource = ClotureCaissePersonnelleResource::class;
 
+    /**
+     * Ce que dit l'info-bulle de « Fermer la caisse d'un vendeur » quand
+     * aucun autre vendeur n'a de caisse ouverte (texte de l'éditeur,
+     * 18/11/2026).
+     */
+    private const AUCUNE_CAISSE_DE_VENDEUR = 'Aucune caisse de vendeur à fermer : aucune vente ni encaissement.';
+
+    private ?bool $caisseOuverte = null;
+
+    private ?bool $caissesDeVendeurs = null;
+
     public function getTitle(): string
     {
         return ClotureCaissePersonnelleResource::libelle();
@@ -65,52 +76,120 @@ class ListClotureCaissePersonnelles extends ListRecords
 
     protected function getHeaderActions(): array
     {
-        return [
-            Actions\Action::make('fermer_ma_caisse')
-                ->label('Fermer ma caisse')
-                ->icon('heroicon-o-lock-closed')
-                ->color('primary')
-                ->requiresConfirmation()
-                ->modalDescription(fn (): HtmlString => self::recapitulatif(app(FermerSaCaisseAction::class)->apercu(CompteConnecte::exiger()), 'votre'))
-                ->form([self::champDuJeton()])
-                ->visible(fn () => CompteConnecte::exiger()->can('fermer', ClotureCaissePersonnelle::class))
-                ->action(fn (array $data) => static::executerSansCasser(fn () => app(FermerSaCaisseAction::class)->handle(CompteConnecte::exiger(), CompteConnecte::exiger(), ValeurSimple::enTexteOuNul($data['jeton'])))),
-            Actions\Action::make('fermer_la_caisse_d_un_vendeur')
-                ->label('Fermer la caisse d\'un vendeur')
-                ->icon('heroicon-o-user-minus')
-                ->color('gray')
-                ->modalHeading('Fermer la caisse d\'un vendeur')
-                ->modalSubmitActionLabel('Fermer sa caisse')
-                ->form([
-                    self::champDuJeton(),
-                    Select::make('vendeur_id')
-                        ->label('Vendeur')
-                        ->options(fn (): array => self::vendeursAvecCaisseOuverte()->pluck('name', 'id')->all())
-                        ->required()
-                        ->live(),
-                    Placeholder::make('releve')
-                        ->hiddenLabel()
-                        ->visible(fn (Get $get): bool => self::vendeurChoisi($get('vendeur_id')) !== null)
-                        ->content(fn (Get $get): HtmlString|string => CompteConnecte::exiger()->can(PermissionRegistry::CLOTURE_CAISSE_VIEW_TOUTES)
-                            ? self::recapitulatif(app(FermerSaCaisseAction::class)->apercu(ValeurRequise::de(self::vendeurChoisi($get('vendeur_id')), 'le vendeur choisi, dont la caisse est ouverte')), 'sa')
-                            : 'Sa caisse sera fermée jusqu\'à maintenant. Son relevé ne vous sera pas montré : seuls le vendeur et qui voit les relevés de toute l\'équipe le consultent.'),
-                ])
-                ->visible(fn (): bool => CompteConnecte::exiger()->can(PermissionRegistry::CLOTURE_CAISSE_GERER))
-                ->action(function (array $data): void {
-                    $vendeur = self::vendeurChoisi($data['vendeur_id'] ?? null);
+        return [$this->fermerMaCaisseAction(), $this->fermerLaCaisseDUnVendeurAction()];
+    }
 
-                    if ($vendeur === null) {
-                        Notification::make()->title('La caisse de ce vendeur n\'est plus ouverte.')->warning()->send();
+    /**
+     * « Fermer ma caisse », grisé, avec son info-bulle, tant que la caisse
+     * n'a ni vente ni encaissement à compter (voir
+     * FermerSaCaisseAction::MESSAGE_RIEN_A_FERMER) : une caisse s'ouvre à la
+     * prochaine vente (décision de l'éditeur du 18/11/2026). Le bouton
+     * grisé reste cliquable pour l'oeil, sans fenêtre : sa demande, que le
+     * domaine refuserait de toute façon, ne fait que rappeler le refus,
+     * comme sur un téléphone, où l'info-bulle ne s'ouvre qu'au toucher.
+     */
+    private function fermerMaCaisseAction(): Actions\Action
+    {
+        return Actions\Action::make('fermer_ma_caisse')
+            ->label('Fermer ma caisse')
+            ->icon('heroicon-o-lock-closed')
+            ->color(fn (): string => $this->saCaisseEstOuverte() ? 'primary' : 'gray')
+            ->extraAttributes(fn (): array => self::attributsDUnBoutonGrise($this->saCaisseEstOuverte(), FermerSaCaisseAction::MESSAGE_RIEN_A_FERMER))
+            ->tooltip(fn (): ?string => $this->saCaisseEstOuverte() ? null : FermerSaCaisseAction::MESSAGE_RIEN_A_FERMER)
+            ->requiresConfirmation()
+            ->modalHidden(fn (): bool => ! $this->saCaisseEstOuverte())
+            ->modalDescription(fn (): HtmlString => self::recapitulatif(app(FermerSaCaisseAction::class)->apercu(CompteConnecte::exiger()), 'votre'))
+            ->form(fn (): array => $this->saCaisseEstOuverte() ? [self::champDuJeton()] : [])
+            ->visible(fn () => CompteConnecte::exiger()->can('fermer', ClotureCaissePersonnelle::class))
+            ->action(function (array $data): void {
+                static::executerSansCasser(fn () => app(FermerSaCaisseAction::class)->handle(CompteConnecte::exiger(), CompteConnecte::exiger(), ValeurSimple::enTexteOuNul($data['jeton'] ?? null)));
+                $this->caisseOuverte = null;
+            });
+    }
 
-                        return;
-                    }
+    /**
+     * « Fermer la caisse d'un vendeur », grisé de même, avec son info-bulle,
+     * quand aucun autre vendeur du magasin n'a de caisse ouverte.
+     */
+    private function fermerLaCaisseDUnVendeurAction(): Actions\Action
+    {
+        return Actions\Action::make('fermer_la_caisse_d_un_vendeur')
+            ->label('Fermer la caisse d\'un vendeur')
+            ->icon('heroicon-o-user-minus')
+            ->color('gray')
+            ->extraAttributes(fn (): array => self::attributsDUnBoutonGrise($this->uneCaisseDeVendeurEstOuverte(), self::AUCUNE_CAISSE_DE_VENDEUR))
+            ->tooltip(fn (): ?string => $this->uneCaisseDeVendeurEstOuverte() ? null : self::AUCUNE_CAISSE_DE_VENDEUR)
+            ->modalHidden(fn (): bool => ! $this->uneCaisseDeVendeurEstOuverte())
+            ->modalHeading('Fermer la caisse d\'un vendeur')
+            ->modalSubmitActionLabel('Fermer sa caisse')
+            ->form(fn (): array => $this->uneCaisseDeVendeurEstOuverte() ? [
+                self::champDuJeton(),
+                Select::make('vendeur_id')
+                    ->label('Vendeur')
+                    ->options(fn (): array => self::vendeursAvecCaisseOuverte()->pluck('name', 'id')->all())
+                    ->required()
+                    ->live(),
+                Placeholder::make('releve')
+                    ->hiddenLabel()
+                    ->visible(fn (Get $get): bool => self::vendeurChoisi($get('vendeur_id')) !== null)
+                    ->content(fn (Get $get): HtmlString|string => CompteConnecte::exiger()->can(PermissionRegistry::CLOTURE_CAISSE_VIEW_TOUTES)
+                        ? self::recapitulatif(app(FermerSaCaisseAction::class)->apercu(ValeurRequise::de(self::vendeurChoisi($get('vendeur_id')), 'le vendeur choisi, dont la caisse est ouverte')), 'sa')
+                        : 'Sa caisse sera fermée jusqu\'à maintenant. Son relevé ne vous sera pas montré : seuls le vendeur et qui voit les relevés de toute l\'équipe le consultent.'),
+            ] : [])
+            ->visible(fn (): bool => CompteConnecte::exiger()->can(PermissionRegistry::CLOTURE_CAISSE_GERER))
+            ->action(function (array $data): void {
+                $vendeur = self::vendeurChoisi($data['vendeur_id'] ?? null);
 
-                    static::executerSansCasser(function () use ($vendeur, $data): void {
-                        $releve = app(FermerSaCaisseAction::class)->handle(CompteConnecte::exiger(), $vendeur, ValeurSimple::enTexteOuNul($data['jeton']));
+                if ($vendeur === null) {
+                    Notification::make()->title($this->uneCaisseDeVendeurEstOuverte() ? 'La caisse de ce vendeur n\'est plus ouverte.' : self::AUCUNE_CAISSE_DE_VENDEUR)->warning()->send();
 
-                        Notification::make()->title("Caisse de {$releve->vendeur_nom} fermée")->success()->send();
-                    });
-                }),
+                    return;
+                }
+
+                static::executerSansCasser(function () use ($vendeur, $data): void {
+                    $releve = app(FermerSaCaisseAction::class)->handle(CompteConnecte::exiger(), $vendeur, ValeurSimple::enTexteOuNul($data['jeton'] ?? null));
+
+                    Notification::make()->title("Caisse de {$releve->vendeur_nom} fermée")->success()->send();
+                });
+                $this->caissesDeVendeurs = null;
+            });
+    }
+
+    /**
+     * La caisse personnelle de la personne connectée a-t-elle une vente
+     * émise, un encaissement ou une contre-passation qu'aucune fermeture n'a
+     * comptés (voir VerificateurCaissesPersonnelles::aSaCaisseOuverte()) ?
+     * Lu une fois par requête, relu après une fermeture.
+     */
+    private function saCaisseEstOuverte(): bool
+    {
+        return $this->caisseOuverte ??= app(VerificateurCaissesPersonnelles::class)->aSaCaisseOuverte(CompteConnecte::exiger());
+    }
+
+    /**
+     * Un autre vendeur du magasin a-t-il sa caisse ouverte ? Lu une fois par
+     * requête, relu après une fermeture.
+     */
+    private function uneCaisseDeVendeurEstOuverte(): bool
+    {
+        return $this->caissesDeVendeurs ??= self::vendeursAvecCaisseOuverte()->isNotEmpty();
+    }
+
+    /**
+     * Les attributs d'un bouton qui se montre grisé sans être désactivé :
+     * un bouton désactivé ne reçoit ni le survol ni le toucher, donc
+     * aucune info-bulle. Il reste annoncé comme indisponible aux lecteurs
+     * d'écran (aria-disabled), avec son texte pour nom et la raison pour
+     * description (aria-description).
+     *
+     * @return array<string, string>
+     */
+    private static function attributsDUnBoutonGrise(bool $disponible, string $raison): array
+    {
+        return $disponible ? [] : [
+            'aria-disabled' => 'true',
+            'aria-description' => $raison,
+            'class' => 'piliqi-action-grisee',
         ];
     }
 

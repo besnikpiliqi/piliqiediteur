@@ -2725,6 +2725,21 @@ return [
                 'tests/Browser/Parcours/RangeesChoisiesTest.php › chaque texte d’une rangée choisie se lit, stock épuisé et « À régulariser » compris ; le service coché aussi, pas les autorisations',
             ],
         ],
+        'hors.fermeture-de-caisse-sans-activite' => [
+            'puce' => 'Hors de CLAUDE.md',
+            'regle' => 'Une caisse personnelle n\'est ouverte que par une vente émise, un encaissement ou une contre-passation qu\'aucune fermeture n\'a comptés : « Fermer ma caisse » et « Fermer la caisse d\'un vendeur » se montrent grisés, avec l\'info-bulle « Aucune vente ni encaissement à fermer. » (« Aucune caisse de vendeur à fermer : aucune vente ni encaissement. » pour le second), tant que rien n\'est à fermer, même la première fois du jour ; une demande forgée est refusée par la même phrase, sans aucun relevé à zéro ; autant de fermetures par jour que de moments où l\'on a vendu ou encaissé, un double clic rend le relevé déjà fermé ; la fermeture d\'office ne change pas (décision de l\'éditeur du 18/11/2026, lot écrans).',
+            'tests' => [
+                'tests/Feature/Facturation/FermerSaCaisseActionTest.php::test_une_caisse_sans_vente_ni_encaissement_ne_se_ferme_pas_meme_la_premiere_fois_du_jour',
+                'tests/Feature/Facturation/FermerSaCaisseActionTest.php::test_une_seconde_fermeture_immediate_est_refusee_et_n_ecrit_aucun_releve_a_zero',
+                'tests/Feature/Facturation/FermerSaCaisseActionTest.php::test_plusieurs_fermetures_dans_la_journee_quand_on_a_vendu_entre_les_deux_et_un_double_clic_rend_le_meme_releve',
+                'tests/Feature/Facturation/FermerSaCaisseActionConcurrenceTest.php::test_deux_fermetures_simultanees_du_meme_vendeur_se_suivent_sans_compter_deux_fois_ses_ventes_ni_ses_paiements',
+                'tests/Feature/Filament/ClotureCaissePersonnelleResourceTest.php::test_fermer_ma_caisse_est_grise_avec_son_infobulle_tant_que_rien_n_est_a_fermer',
+                'tests/Feature/Filament/ClotureCaissePersonnelleResourceTest.php::test_fermer_la_caisse_d_un_vendeur_est_grise_avec_son_infobulle_quand_aucune_caisse_n_est_ouverte',
+                'tests/Feature/Filament/ClotureCaissePersonnelleResourceTest.php::test_une_fermeture_forgee_sans_rien_a_fermer_est_refusee_avec_la_meme_phrase',
+                'tests/Browser/Parcours/FermetureDeCaisseGriseeTest.php › « Fermer ma caisse » est grisé avec son info-bulle tant que rien n’est à fermer, normal après une vente, et se grise de nouveau une fois la caisse fermée',
+                'tests/Browser/Parcours/FermetureDeCaisseGriseeTest.php › « Fermer la caisse d’un vendeur » est grisé avec son info-bulle tant qu’aucun vendeur n’a de caisse ouverte, puis normal quand l’un d’eux vend',
+            ],
+        ],
         'hors.recu-le-passe-permis-futur-refuse' => [
             'puce' => 'Hors de CLAUDE.md',
             'regle' => 'Le champ « Reçu le » d\'un paiement (encaissement d\'une facture, page des paiements) accepte une date passée, comme un virement vu sur le relevé de la veille, et refuse une date future, au jour du calendrier du magasin (décision de Claude du 09/10/2026, constat X0 de son audit, appliquée sans attendre selon D76 et lue par l\'éditeur le 13/11/2026 sans la contester).',

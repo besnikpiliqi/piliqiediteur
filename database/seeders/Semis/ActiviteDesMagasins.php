@@ -315,6 +315,12 @@ final class ActiviteDesMagasins
             $halles->vendreALaCaisse($thomas, $halles->comptoir(), [$this->ligne($halles, 'CARNET-A5', 2)], ModePaiement::Especes);
             $this->horloge->aller(16, '12:00');
             $halles->dans(fn () => app(FermerSaCaisseAction::class)->handle($thomas, $thomas, GestesDuMagasin::jeton()));
+            // Une seconde fermeture le même jour : Thomas a revendu entre les
+            // deux (une caisse sans vente ni encaissement ne se ferme pas).
+            $this->horloge->aller(16, '13:30');
+            $halles->vendreALaCaisse($thomas, $halles->comptoir(), [$this->ligne($halles, 'CARNET-A5', 1)], ModePaiement::CarteBancaire);
+            $this->horloge->aller(16, '14:00');
+            $halles->dans(fn () => app(FermerSaCaisseAction::class)->handle($thomas, $thomas, GestesDuMagasin::jeton()));
             $this->horloge->aller(16, '15:00');
             $republique->vendreALaCaisse($thomas, $republique->comptoir(), [$this->ligne($republique, 'COUSSIN-LIN', 2)], ModePaiement::CarteBancaire);
         }

@@ -19,10 +19,12 @@ use Tests\TestCase;
 /**
  * Deux « Fermer ma caisse » du même vendeur au même instant (double clic,
  * deux onglets), chacune dans son processus, sur une vraie base
- * PostgreSQL : la seconde attend la première puis part de sa borne (voir
- * FermerSaCaisseAction::debutDuReleve()), sans compter une seconde fois
- * ses ventes ni ses paiements, ni échouer sur la clé primaire de
- * clotures_caisse_personnelles_factures ou de
+ * PostgreSQL : la seconde attend la première, relit tout derrière elle et,
+ * n'ayant plus ni vente ni paiement à compter, est refusée par la phrase de
+ * la caisse sans rien à fermer (voir
+ * FermerSaCaisseAction::MESSAGE_RIEN_A_FERMER), sans compter une seconde
+ * fois ses ventes ni ses paiements, ni écrire un relevé à zéro, ni échouer
+ * sur la clé primaire de clotures_caisse_personnelles_factures ou de
  * clotures_caisse_personnelles_paiements (erreur 500).
  *
  * DatabaseMigrations, pas RefreshDatabase : l'autre processus ne voit que
@@ -57,10 +59,11 @@ class FermerSaCaisseActionConcurrenceTest extends TestCase
 
         $this->assertInstanceOf(InvokedProcess::class, $concurrente);
         $resultat = $this->attendreLeProcessusConcurrent($concurrente);
-        $this->assertTrue($resultat->successful(), $resultat->errorOutput());
-        $seconde = ClotureCaissePersonnelle::query()->whereKeyNot($premiere->id)->sole();
-        $this->assertSame([1, 0], [$premiere->fresh()->nombre_ventes, $seconde->nombre_ventes]);
-        $this->assertMemeInstant($premiere->fresh()->jusqu_au, $seconde->periode_debut);
+        $this->assertFalse($resultat->successful(), 'La seconde fermeture ne trouve plus rien à compter derrière la première : elle est refusée.');
+        $this->assertStringContainsString(FermerSaCaisseAction::MESSAGE_RIEN_A_FERMER, $resultat->errorOutput().$resultat->output());
+        $this->assertStringNotContainsString('SQLSTATE', $resultat->errorOutput().$resultat->output(), 'Le refus vient du domaine, jamais d\'une violation de clé.');
+        $this->assertSame([$premiere->id], ClotureCaissePersonnelle::query()->pluck('id')->all());
+        $this->assertSame(1, $premiere->fresh()->nombre_ventes);
         $this->assertSame(1, DB::table('clotures_caisse_personnelles_factures')->count());
         $this->assertSame(1, DB::table('clotures_caisse_personnelles_paiements')->count());
     }

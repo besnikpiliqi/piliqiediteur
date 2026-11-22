@@ -30,3 +30,16 @@ abbr.piliqi-encaisse__mode {
 .piliqi-encaisse__total {
     font-weight: 600;
 }
+
+/*
+ * « Fermer ma caisse » et « Fermer la caisse d'un vendeur » quand rien
+ * n'est à fermer (aucune vente, aucun encaissement ni aucune
+ * contre-passation que la caisse n'ait déjà comptés) : le bouton se montre
+ * grisé sans être désactivé. Un bouton désactivé ne reçoit ni le survol ni
+ * le toucher, donc aucune info-bulle ; celui-ci garde son texte, sa couleur
+ * grise, et dit pourquoi au survol, au toucher et au lecteur d'écran.
+ */
+.piliqi-action-grisee {
+    cursor: not-allowed;
+    opacity: 0.7;
+}

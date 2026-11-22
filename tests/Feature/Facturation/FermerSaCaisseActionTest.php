@@ -28,15 +28,19 @@ use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
+use LogicException;
 use Tests\TestCase;
 
 /**
  * FermerSaCaisseAction (relevé personnel) est délibérément distincte de
  * CloturerCaisseAction (clôture officielle de la journée du magasin, voir
- * CloturerCaisseActionTest) : aucune condition de blocage, pas de FK sur
- * les factures, pas de restriction aux clients particuliers. Son relevé
- * sépare le TTC vendu, les encaissements par mode, le crédit d'avoir
- * utilisé et le reste dû (B18).
+ * CloturerCaisseActionTest) : autant de fermetures par jour que de moments
+ * où l'on a vendu ou encaissé, mais jamais une fermeture sans aucune
+ * vente ni aucun encaissement à compter (décision de l'éditeur du
+ * 18/11/2026), pas de FK sur les factures, pas de restriction aux clients
+ * particuliers. Son relevé sépare le TTC vendu, les encaissements par
+ * mode, le crédit d'avoir utilisé et le reste dû (B18).
  */
 class FermerSaCaisseActionTest extends TestCase
 {
@@ -169,21 +173,47 @@ class FermerSaCaisseActionTest extends TestCase
         $this->assertMemeInstant(self::aParis('2026-10-07 18:00:00'), $cloture->periode_debut);
     }
 
-    public function test_sans_vente_ni_fermeture_le_releve_part_du_debut_de_la_journee(): void
+    public function test_sans_fermeture_precedente_le_releve_part_du_debut_de_la_journee(): void
     {
         $vendeur = $this->vendeurDeLaPremiereHeure($this->magasin);
+        $this->travelTo(self::aParis('2026-10-08 09:30:00'));
+        $this->emettreFacturePour($vendeur, Client::factory()->create(), 120);
         $this->travelTo(self::aParis('2026-10-08 10:00:00'));
 
         $cloture = app(FermerSaCaisseAction::class)->handle($vendeur, $vendeur);
 
-        $this->assertSame(0, $cloture->nombre_ventes);
+        $this->assertSame(1, $cloture->nombre_ventes);
         $this->assertMemeInstant(self::aParis('2026-10-08 00:00:00'), $cloture->periode_debut);
+    }
+
+    /**
+     * Une caisse n'est ouverte que par une vente, un encaissement ou une
+     * contre-passation qu'aucune fermeture n'a comptés : sans eux, même la
+     * première fermeture du jour est refusée, sans aucun relevé (décision
+     * de l'éditeur du 18/11/2026).
+     */
+    public function test_une_caisse_sans_vente_ni_encaissement_ne_se_ferme_pas_meme_la_premiere_fois_du_jour(): void
+    {
+        $vendeur = $this->vendeurDeLaPremiereHeure($this->magasin);
+        $this->travelTo(self::aParis('2026-10-08 10:00:00'));
+
+        $this->assertSame('Aucune vente ni encaissement à fermer.', FermerSaCaisseAction::MESSAGE_RIEN_A_FERMER);
+        $this->expectException(LogicException::class);
+        $this->expectExceptionMessage('Aucune vente ni encaissement à fermer.');
+
+        try {
+            app(FermerSaCaisseAction::class)->handle($vendeur, $vendeur);
+        } finally {
+            $this->assertSame(0, ClotureCaissePersonnelle::query()->count());
+        }
     }
 
     public function test_le_releve_suivant_part_de_la_fermeture_precedente(): void
     {
         $vendeur = $this->vendeurDeLaPremiereHeure($this->magasin);
         $client = Client::factory()->create();
+        $this->travelTo(self::aParis('2026-10-08 08:30:00'));
+        $this->emettreFacturePour($vendeur, $client, 45);
         $this->travelTo(self::aParis('2026-10-08 09:00:00'));
         app(FermerSaCaisseAction::class)->handle($vendeur, $vendeur);
         $this->travelTo(self::aParis('2026-10-08 10:00:00'));
@@ -205,11 +235,16 @@ class FermerSaCaisseActionTest extends TestCase
         $premiere = app(FermerSaCaisseAction::class)->handle($vendeur, $vendeur);
         $this->assertSame(1, $premiere->nombre_ventes);
 
-        // Aucune nouvelle vente : la seconde fermeture doit être à zéro,
-        // pas reprendre la première vente une deuxième fois.
-        $seconde = app(FermerSaCaisseAction::class)->handle($vendeur, $vendeur);
-        $this->assertSame(0, $seconde->nombre_ventes);
-        $this->assertSame('0.00', $seconde->total_ttc);
+        // Aucune nouvelle vente : la seconde fermeture est refusée, elle ne
+        // reprend pas la première vente une deuxième fois ni n'écrit un
+        // relevé à zéro.
+        try {
+            app(FermerSaCaisseAction::class)->handle($vendeur, $vendeur);
+            $this->fail('Une seconde fermeture sans nouvelle vente doit être refusée.');
+        } catch (LogicException $refus) {
+            $this->assertSame(FermerSaCaisseAction::MESSAGE_RIEN_A_FERMER, $refus->getMessage());
+        }
+        $this->assertSame(1, ClotureCaissePersonnelle::query()->count());
 
         $this->emettreFacturePour($vendeur, $client, 60);
         $troisieme = app(FermerSaCaisseAction::class)->handle($vendeur, $vendeur);
@@ -270,8 +305,13 @@ class FermerSaCaisseActionTest extends TestCase
         $this->assertSame('60.00', $seconde->total_ttc);
         $this->assertSame([$brouillon->id], $seconde->factures()->pluck('factures.id')->all());
 
-        $troisieme = app(FermerSaCaisseAction::class)->handle($vendeur, $vendeur);
-        $this->assertSame(0, $troisieme->nombre_ventes, 'Une vente déjà comptée ne doit jamais l\'être une seconde fois.');
+        try {
+            app(FermerSaCaisseAction::class)->handle($vendeur, $vendeur);
+            $this->fail('Une vente déjà comptée ne doit jamais l\'être une seconde fois : plus rien à fermer.');
+        } catch (LogicException $refus) {
+            $this->assertSame(FermerSaCaisseAction::MESSAGE_RIEN_A_FERMER, $refus->getMessage());
+        }
+        $this->assertSame(2, ClotureCaissePersonnelle::query()->count());
     }
 
     /**
@@ -355,17 +395,55 @@ class FermerSaCaisseActionTest extends TestCase
         $this->assertSame([ModeFermetureCaisse::Automatique, 1, '30.00'], [$doffice?->mode_fermeture, $doffice?->nombre_ventes, $doffice?->total_ttc]);
     }
 
-    public function test_une_seconde_fermeture_immediate_est_a_zero_dans_chaque_rubrique(): void
+    public function test_une_seconde_fermeture_immediate_est_refusee_et_n_ecrit_aucun_releve_a_zero(): void
     {
         $vendeur = $this->vendeurDeLaPremiereHeure($this->magasin);
         $this->actingAs($vendeur);
         $ticket = $this->emettreUnDocument(Client::factory()->create(), 45);
         $this->encaisser($ticket, ModePaiement::Especes, 45);
-        app(FermerSaCaisseAction::class)->handle($vendeur, $vendeur);
+        $premiere = app(FermerSaCaisseAction::class)->handle($vendeur, $vendeur);
 
-        $seconde = app(FermerSaCaisseAction::class)->handle($vendeur, $vendeur);
+        try {
+            app(FermerSaCaisseAction::class)->handle($vendeur, $vendeur);
+            $this->fail('Une seconde fermeture immédiate, sans rien à compter, doit être refusée.');
+        } catch (LogicException $refus) {
+            $this->assertSame('Aucune vente ni encaissement à fermer.', $refus->getMessage());
+        }
 
-        $this->assertSame([0, '0.00', [], '0.00', '0.00'], [$seconde->nombre_ventes, $seconde->total_ttc, $seconde->fresh()->encaissements, $seconde->credit_avoir, $seconde->reste_du]);
+        $this->assertSame([$premiere->id], ClotureCaissePersonnelle::query()->pluck('id')->all());
+        $this->assertSame([1, '45.00', ['especes' => '45.00']], [$premiere->nombre_ventes, $premiere->total_ttc, $premiere->fresh()->encaissements]);
+    }
+
+    /**
+     * Le cas des marchés : on vend, on ferme, on revient, on vend encore,
+     * on ferme (autant de fermetures par jour que de moments avec des
+     * ventes) ; entre les deux, un caissier qui n'a rien vendu ne ferme
+     * rien, et un double clic rend le relevé déjà fermé au lieu d'en
+     * refuser un second (jeton de la demande, R3).
+     */
+    public function test_plusieurs_fermetures_dans_la_journee_quand_on_a_vendu_entre_les_deux_et_un_double_clic_rend_le_meme_releve(): void
+    {
+        $vendeur = $this->vendeurDeLaPremiereHeure($this->magasin);
+        $autre = $this->vendeurDeLaPremiereHeure($this->magasin);
+        $client = Client::factory()->create();
+        $this->travelTo(self::aParis('2026-10-08 09:00:00'));
+        $this->emettreFacturePour($vendeur, $client, 120);
+        $this->travelTo(self::aParis('2026-10-08 12:00:00'));
+        $jeton = (string) Str::uuid();
+        $matin = app(FermerSaCaisseAction::class)->handle($vendeur, $vendeur, $jeton);
+        $this->assertSame($matin->id, app(FermerSaCaisseAction::class)->handle($vendeur, $vendeur, $jeton)->id, 'Un double clic rend le relevé déjà fermé.');
+
+        $this->travelTo(self::aParis('2026-10-08 16:00:00'));
+        $this->emettreFacturePour($vendeur, $client, 60);
+        $this->travelTo(self::aParis('2026-10-08 18:00:00'));
+        $soir = app(FermerSaCaisseAction::class)->handle($vendeur, $vendeur, (string) Str::uuid());
+
+        $this->assertSame([[1, '120.00'], [1, '60.00'], 2], [[$matin->nombre_ventes, $matin->total_ttc], [$soir->nombre_ventes, $soir->total_ttc], ClotureCaissePersonnelle::query()->count()]);
+        $this->assertMemeInstant(self::aParis('2026-10-08 12:00:00'), $soir->periode_debut);
+
+        $this->expectException(LogicException::class);
+        $this->expectExceptionMessage(FermerSaCaisseAction::MESSAGE_RIEN_A_FERMER);
+        app(FermerSaCaisseAction::class)->handle($autre, $autre);
     }
 
     /**

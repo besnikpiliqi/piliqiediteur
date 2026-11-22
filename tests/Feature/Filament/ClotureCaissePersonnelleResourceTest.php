@@ -77,10 +77,12 @@ class ClotureCaissePersonnelleResourceTest extends TestCase
 
         $this->actingAs($vendeurA);
         Filament::setTenant($magasin);
+        $this->vendreAuComptoir(Client::factory()->create(), 12);
         Livewire::test(ListClotureCaissePersonnelles::class)->callAction('fermer_ma_caisse');
 
         $this->actingAs($vendeurB);
         Filament::setTenant($magasin);
+        $this->vendreAuComptoir(Client::factory()->create(), 18);
         Livewire::test(ListClotureCaissePersonnelles::class)->callAction('fermer_ma_caisse');
 
         $releveA = ClotureCaissePersonnelle::where('vendeur_id', $vendeurA->id)->firstOrFail();
@@ -274,6 +276,91 @@ class ClotureCaissePersonnelleResourceTest extends TestCase
         $this->get(ClotureCaisseResource::getUrl('index', tenant: $magasin))->assertOk()->assertDontSeeLivewire(CaissesPersonnellesOuvertesApercu::class);
         $this->dansLeMagasin($magasin, $vendeurQuiCloture);
         $this->get(ClotureCaisseResource::getUrl('index', tenant: $magasin))->assertOk()->assertSeeLivewire(CaissesPersonnellesOuvertesApercu::class);
+    }
+
+    /**
+     * Tant que la caisse n'a ni vente, ni encaissement, ni contre-passation
+     * à compter, « Fermer ma caisse » se montre grisé (aria-disabled et
+     * aria-description, sans l'attribut disabled, qui empêcherait
+     * l'info-bulle de s'ouvrir) avec
+     * l'info-bulle « Aucune vente ni encaissement à fermer. » ; un clic ne
+     * ferme rien, ouvre aucune fenêtre et rappelle le refus ; une vente
+     * rouvre la caisse (bouton normal, fenêtre de confirmation), sa
+     * fermeture la grise de nouveau (décision de l'éditeur du 18/11/2026).
+     */
+    public function test_fermer_ma_caisse_est_grise_avec_son_infobulle_tant_que_rien_n_est_a_fermer(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, null, ['name' => 'Paul']);
+        $this->dansLeMagasin($magasin, $vendeur);
+        $phrase = 'Aucune vente ni encaissement à fermer.';
+
+        Livewire::test(ListClotureCaissePersonnelles::class)
+            ->assertActionVisible('fermer_ma_caisse')
+            ->assertSeeHtml('aria-disabled="true"')
+            ->assertSeeHtml('aria-description="'.$phrase.'"')
+            ->assertSeeHtml('piliqi-action-grisee')
+            ->callAction('fermer_ma_caisse')
+            ->assertNotified($phrase);
+        $this->assertSame(0, ClotureCaissePersonnelle::query()->count());
+
+        $this->vendreAuComptoir(Client::factory()->create(), 12);
+        Livewire::test(ListClotureCaissePersonnelles::class)
+            ->assertDontSeeHtml('aria-disabled="true"')
+            ->assertDontSeeHtml('piliqi-action-grisee')
+            ->callAction('fermer_ma_caisse')
+            ->assertNotified();
+        $this->assertSame(1, ClotureCaissePersonnelle::query()->count());
+
+        Livewire::test(ListClotureCaissePersonnelles::class)
+            ->assertSeeHtml('aria-description="'.$phrase.'"');
+    }
+
+    /**
+     * « Fermer la caisse d'un vendeur » se grise de même, avec
+     * « Aucune caisse de vendeur à fermer : aucune vente ni encaissement. »,
+     * tant qu'aucun autre vendeur n'a de caisse ouverte ; un clic ne
+     * ferme rien.
+     */
+    public function test_fermer_la_caisse_d_un_vendeur_est_grise_avec_son_infobulle_quand_aucune_caisse_n_est_ouverte(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, null, ['name' => 'Paul']);
+        $phrase = 'Aucune caisse de vendeur à fermer : aucune vente ni encaissement.';
+        $proprietaire = $this->proprietaireDe($magasin);
+
+        $this->dansLeMagasin($magasin, $proprietaire);
+        Livewire::test(ListClotureCaissePersonnelles::class)
+            ->assertActionVisible('fermer_la_caisse_d_un_vendeur')
+            ->assertSeeHtml('aria-disabled="true"')
+            ->assertSeeHtml('aria-description="'.$phrase.'"')
+            ->callAction('fermer_la_caisse_d_un_vendeur')
+            ->assertNotified($phrase);
+        $this->assertSame(0, ClotureCaissePersonnelle::query()->count());
+
+        $this->dansLeMagasin($magasin, $vendeur);
+        $this->vendreAuComptoir(Client::factory()->create(), 12);
+        $this->dansLeMagasin($magasin, $proprietaire);
+        Livewire::test(ListClotureCaissePersonnelles::class)
+            ->assertDontSeeHtml('piliqi-action-grisee')
+            ->callAction('fermer_la_caisse_d_un_vendeur', ['vendeur_id' => $vendeur->id])
+            ->assertNotified('Caisse de Paul fermée');
+        $this->assertSame(1, ClotureCaissePersonnelle::query()->count());
+    }
+
+    /**
+     * Une demande forgée (fermeture d'une caisse sans activité) reçoit le
+     * même refus que le bouton grisé, de la part du domaine.
+     */
+    public function test_une_fermeture_forgee_sans_rien_a_fermer_est_refusee_avec_la_meme_phrase(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, null, ['name' => 'Paul']);
+        $this->dansLeMagasin($magasin, $vendeur);
+
+        $this->expectException(\LogicException::class);
+        $this->expectExceptionMessage('Aucune vente ni encaissement à fermer.');
+        app(FermerSaCaisseAction::class)->handle($vendeur, $vendeur);
     }
 
     private function vendreAuComptoir(Client $client, float $prixTtc): Facture

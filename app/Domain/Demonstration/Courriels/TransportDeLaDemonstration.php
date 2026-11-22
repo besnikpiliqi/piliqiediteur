@@ -29,7 +29,10 @@ use Symfony\Component\Mime\Email;
  * son expert-comptable, une invitation de son cabinet). Un e-mail sans
  * société n'est montré à personne et ne s'écrit pas. Le
  * compte qui a demandé l'envoi s'écrit quand il est de cette société. Une
- * pièce jointe de plus de 10 Mo est gardée sans son contenu.
+ * pièce jointe de plus de 10 Mo est gardée sans son contenu. L'adresse du
+ * site, dans son HTML et son texte, s'écrit comme un repère que la page
+ * remplace par celle du site qui sert la copie (voir
+ * AdresseDuSiteDansLesCourriels).
  */
 final class TransportDeLaDemonstration extends AbstractTransport
 {
@@ -70,8 +73,8 @@ final class TransportDeLaDemonstration extends AbstractTransport
             'destinataires' => self::adresses(array_values($email->getTo())),
             'copies' => self::copies($email),
             'objet' => (string) $email->getSubject(),
-            'html' => self::texte($email->getHtmlBody()),
-            'texte' => self::texte($email->getTextBody()),
+            'html' => AdresseDuSiteDansLesCourriels::capturer(self::texte($email->getHtmlBody())),
+            'texte' => AdresseDuSiteDansLesCourriels::capturer(self::texte($email->getTextBody())),
             'pieces_jointes' => self::pieces($email),
             'envoye_le' => CarbonImmutable::now(),
         ];

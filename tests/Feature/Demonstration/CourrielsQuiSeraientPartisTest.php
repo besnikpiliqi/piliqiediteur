@@ -20,6 +20,7 @@ use App\Models\User;
 use Illuminate\Mail\Mailable;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\URL;
 use LogicException;
 use Tests\DemonstrationTestCase;
 
@@ -79,6 +80,44 @@ class CourrielsQuiSeraientPartisTest extends DemonstrationTestCase
         $this->assertSame('application/octet-stream', $piece->headers->get('Content-Type'));
         $this->assertSame('%PDF-1.7 pièce de la démonstration', $piece->getContent());
         $this->withUnencryptedCookie(TemoinsDesVisites::nom(), $temoin)->get("/demonstration/courriels/{$id}/pieces/7")->assertNotFound();
+    }
+
+    /**
+     * Un e-mail fabrique ses liens avec l'adresse du site au moment de
+     * l'envoi (APP_URL pour un travail de la file, et pour le semis qui a
+     * construit la base modèle) : rangée telle quelle, elle ne mènerait nulle
+     * part sur le port d'un poste ou le domaine d'une copie (demande de
+     * l'éditeur du 20/11/2026). L'adresse du site s'écrit donc comme un
+     * repère, remplacé à l'affichage de la fiche et du texte par l'adresse
+     * de la requête en cours ; un lien vers un autre site, ou vers une
+     * autre adresse qui commence comme celle du site, reste entier.
+     */
+    public function test_les_liens_d_un_e_mail_capture_suivent_le_site_qui_sert_la_copie(): void
+    {
+        ['copie' => $copie, 'secret' => $secret] = $this->copieDeTest(TypeDActivite::Commerce);
+        $racine = rtrim(url('/'), '/');
+        $jeton = str_repeat('a', 64);
+        $this->envoyerDansLaCopie($copie, '000000109', 'Votre devis DEV-HAL-2026-000001', '<html><head></head><body><a href="'.$racine.'/devis/'.$jeton.'">Répondre</a> <a href="'.$racine.'0/autre">Autre</a> <a href="https://www.service-public.fr/">Service public</a></body></html>');
+
+        $range = $this->dansLaCopie($copie, fn (): array => CourrielDeLaDemonstration::query()->withoutGlobalScopes()->where('objet', 'Votre devis DEV-HAL-2026-000001')->get(['id', 'html'])->toArray());
+        $html = (string) $range[0]['html'];
+        $this->assertStringContainsString('href="{{SITE}}/devis/'.$jeton.'"', $html, 'L\'adresse du site se range comme un repère.');
+        $this->assertStringNotContainsString($racine.'/devis', $html);
+        $this->assertStringContainsString('href="'.$racine.'0/autre"', $html, 'Le début d\'une autre adresse n\'est pas l\'adresse du site.');
+        $this->assertStringContainsString('href="https://www.service-public.fr/"', $html);
+
+        $temoin = $this->entrerParLeLien($secret);
+        $this->changerPour($copie, $temoin, 'Camille Laurent');
+        URL::forceRootUrl('http://copie-de-l-editeur.exemple.test:8001');
+        $fiche = $this->withUnencryptedCookie(TemoinsDesVisites::nom(), $temoin)->get('/demonstration/courriels/'.$range[0]['id']);
+
+        $fiche->assertOk();
+        $this->assertSame(1, preg_match('/srcdoc="([^"]*)"/', (string) $fiche->getContent(), $cadre));
+        $affiche = html_entity_decode($cadre[1]);
+        $this->assertStringContainsString('href="http://copie-de-l-editeur.exemple.test:8001/devis/'.$jeton.'"', $affiche, 'Le lien ouvre la page sur le site qui sert la copie.');
+        $this->assertStringNotContainsString('{{SITE}}', $affiche);
+        $this->assertStringNotContainsString($racine.'/devis', $affiche);
+        $this->assertStringContainsString('href="'.$racine.'0/autre"', $affiche);
     }
 
     public function test_jamais_les_e_mails_d_une_autre_societe_de_la_meme_base_ni_d_une_autre_copie(): void

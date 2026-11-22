@@ -8,6 +8,7 @@
     @param \App\Domain\Demonstration\Models\CourrielDeLaDemonstration $courriel
     @param string $cadre les permissions du cadre isolé
     @param string|null $htmlDuCadre le HTML du message, avec <base target="_blank">
+    @param string|null $texteDuCourriel le texte du message
 --}}
 @php
     $paris = \App\Domain\Calendrier\Calendrier::deParis();
@@ -38,8 +39,8 @@
     </dl>
     @if ($htmlDuCadre !== null)
         <iframe class="piliqi-demonstration__cadre" title="Le message" sandbox="{{ $cadre }}" srcdoc="{{ $htmlDuCadre }}" data-cadre-du-courriel></iframe>
-    @elseif ($courriel->texte !== null)
-        <pre class="piliqi-demonstration__texte">{{ $courriel->texte }}</pre>
+    @elseif ($texteDuCourriel !== null)
+        <pre class="piliqi-demonstration__texte">{{ $texteDuCourriel }}</pre>
     @endif
     @if ($courriel->pieces_jointes !== [])
         <h2 class="piliqi-demonstration__groupe">Pièces jointes</h2>

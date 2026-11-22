@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Demonstration;
 
+use App\Domain\Demonstration\Courriels\AdresseDuSiteDansLesCourriels;
 use App\Domain\Demonstration\Models\CourrielDeLaDemonstration;
 use App\Domain\Demonstration\SiteDePiliqi;
 use App\Domain\Demonstration\Visites\BandeauDeLaDemonstration;
@@ -25,7 +26,9 @@ use Symfony\Component\HttpFoundation\Response;
  *
  * - la liste : envoyé le, par, à, objet, 50 par page, du plus récent au
  *   plus ancien ;
- * - la fiche : le HTML du message dans un cadre <iframe srcdoc> isolé
+ * - la fiche : le HTML du message, l'adresse du site qui sert la copie à
+ *   la place du repère de ses liens (voir AdresseDuSiteDansLesCourriels),
+ *   dans un cadre <iframe srcdoc> isolé
  *   (sandbox="allow-popups allow-popups-to-escape-sandbox", jamais
  *   allow-scripts ni allow-same-origin), avec <base target="_blank"> : un
  *   lien s'ouvre dans un nouvel onglet ; le texte, les pièces jointes ;
@@ -77,7 +80,8 @@ final class CourrielsDeLaDemonstrationController
             'bandeau' => self::bandeau(),
             'courriel' => $trouve,
             'cadre' => self::CADRE_ISOLE,
-            'htmlDuCadre' => self::htmlDuCadre($trouve->html),
+            'htmlDuCadre' => self::htmlDuCadre(AdresseDuSiteDansLesCourriels::afficher($trouve->html)),
+            'texteDuCourriel' => AdresseDuSiteDansLesCourriels::afficher($trouve->texte),
         ])->header('Cache-Control', 'no-store, private');
     }
 

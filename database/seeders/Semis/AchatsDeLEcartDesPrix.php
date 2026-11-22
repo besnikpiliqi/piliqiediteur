@@ -436,7 +436,7 @@ final class AchatsDeLEcartDesPrix
             'fournisseur' => $fournisseur,
             'lignes' => $lignes,
             'cle' => $cle,
-            'dateDeLaFacture' => $this->date($moisDeLaFacture, $jourDeLaFacture),
+            'dateDeLaFacture' => $this->jourDuMois($moisDeLaFacture, $jourDeLaFacture),
             'heure' => self::HEURE,
         ]);
     }
@@ -466,7 +466,7 @@ final class AchatsDeLEcartDesPrix
      */
     private function ajouter(int $mois, int $jour, array $geste): void
     {
-        $this->parJour[$this->date($mois, $jour)][] = [...$geste, 'ordre' => $this->ordre++];
+        $this->parJour[$this->jourDuMois($mois, $jour)][] = [...$geste, 'ordre' => $this->ordre++];
     }
 
     /**
@@ -476,7 +476,7 @@ final class AchatsDeLEcartDesPrix
      *
      * @throws LogicException quand ce jour est avant le début de la boucle des jours
      */
-    private function date(int $mois, int $jour): string
+    private function jourDuMois(int $mois, int $jour): string
     {
         $date = Mois::decaler($this->moisDuSemis, $mois).'-'.sprintf('%02d', $jour);
 

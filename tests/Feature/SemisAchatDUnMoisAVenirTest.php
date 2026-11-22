@@ -37,21 +37,21 @@ class SemisAchatDUnMoisAVenirTest extends TestCase
     private const PRODUIT = 'Boule de Noël en verre (boîte de 6)';
 
     /**
-     * @return array<string, array{0: string}>
+     * @return array<string, array{0: int}> le quantième de novembre 2026 où tourne le semis
      */
     public static function datesDuSemis(): array
     {
         return [
-            'le 2 du mois' => ['2026-11-02 10:00:00'],
-            'le 25 du mois' => ['2026-11-25 10:00:00'],
+            'le 2 du mois' => [2],
+            'le 25 du mois' => [25],
         ];
     }
 
     #[DataProvider('datesDuSemis')]
-    public function test_le_semis_pose_un_achat_date_d_un_mois_a_venir_a_toute_date(string $heureDuSemis): void
+    public function test_le_semis_pose_un_achat_date_d_un_mois_a_venir_a_toute_date(int $quantieme): void
     {
         config(['piliqi.semis_mot_de_passe' => null]);
-        $this->travelTo(self::aParis($heureDuSemis));
+        $this->travelTo(self::aParis(sprintf('2026-11-%02d 10:00:00', $quantieme)));
         $jourDuSemis = Calendrier::deParis()->aujourdhui();
         $moisDuSemis = Mois::duJour($jourDuSemis);
 

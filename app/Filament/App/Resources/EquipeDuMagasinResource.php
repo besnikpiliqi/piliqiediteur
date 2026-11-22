@@ -17,6 +17,7 @@ use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\App\Resources\EquipeDuMagasinResource\Pages;
 use App\Filament\Concerns\CocheLesAutorisationsDeMagasin;
 use App\Filament\Concerns\GereLesComptes;
+use App\Filament\PlusRecentEnPremier;
 use App\Models\User;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\CheckboxList;
@@ -204,6 +205,7 @@ class EquipeDuMagasinResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            ->defaultSort(fn (Builder $query): Builder => PlusRecentEnPremier::parCreation($query))
             ->columns([
                 Tables\Columns\TextColumn::make('utilisateur.name')->label('Nom')->rechercheSansAccents(),
                 Tables\Columns\TextColumn::make('identifiant')

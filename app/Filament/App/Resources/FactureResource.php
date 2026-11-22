@@ -61,6 +61,7 @@ use App\Filament\Concerns\PrendLeCalendrierDuMagasin;
 use App\Filament\Concerns\SaisitUneQuantiteRetournee;
 use App\Filament\Concerns\SaisitUnReglementEnParts;
 use App\Filament\Concerns\SupprimeEnMasseLigneParLigne;
+use App\Filament\PlusRecentEnPremier;
 use App\Filament\TableauEntry;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\MountableAction;
@@ -890,6 +891,7 @@ class FactureResource extends Resource
                     'lignes as lignes_creditables_exists' => fn (Builder $lignes): Builder => ValeursLues::instance($lignes->scopes('creditables'), Builder::class),
                     ...RegularisationDUneFacture::avecLExistenceDeLAvoirDeRegularisation(),
                 ]))
+            ->defaultSort(fn (Builder $query): Builder => PlusRecentEnPremier::parEmission($query))
             ->columns([
                 Tables\Columns\TextColumn::make('numero')->label('Numéro')->placeholder('Brouillon')->rechercheSansAccents(),
                 self::clientColumn(),

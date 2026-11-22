@@ -26,6 +26,7 @@ use App\Filament\App\Resources\PaiementResource\Pages;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use App\Filament\Concerns\PorteUnJeton;
 use App\Filament\Concerns\PrendLeCalendrierDuMagasin;
+use App\Filament\PlusRecentEnPremier;
 use Closure;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Placeholder;
@@ -327,6 +328,7 @@ class PaiementResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            ->defaultSort(fn (Builder $query): Builder => PlusRecentEnPremier::parJour($query, 'recu_le'))
             ->columns([
                 Tables\Columns\TextColumn::make('recu_le')->label('Reçu le')->jour()->sortable(),
                 Tables\Columns\TextColumn::make('client.nom')->label('Client')->rechercheSansAccents(),

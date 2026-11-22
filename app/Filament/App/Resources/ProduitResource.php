@@ -16,6 +16,7 @@ use App\Filament\App\Pages\Caisse;
 use App\Filament\App\Resources\ProduitResource\Pages;
 use App\Filament\Concerns\ArchiveLaFiche;
 use App\Filament\Concerns\SupprimeEnMasseLigneParLigne;
+use App\Filament\PlusRecentEnPremier;
 use Closure;
 use Filament\Forms\Components\Field;
 use Filament\Forms\Components\Placeholder;
@@ -314,6 +315,7 @@ class ProduitResource extends Resource
         $calculateur = app(CalculateurLigne::class);
 
         return $table
+            ->defaultSort(fn (Builder $query): Builder => PlusRecentEnPremier::parCreation($query))
             ->columns([
                 Tables\Columns\TextColumn::make('reference')->label('Référence')->rechercheSansAccents()->sortable(),
                 Tables\Columns\TextColumn::make('nom')->rechercheSansAccents()->sortable(),

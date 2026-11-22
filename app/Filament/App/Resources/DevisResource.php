@@ -28,6 +28,7 @@ use App\Filament\Concerns\ChoisitLaNatureDeLOperation;
 use App\Filament\Concerns\EnvoieLesDocuments;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use App\Filament\Concerns\SupprimeEnMasseLigneParLigne;
+use App\Filament\PlusRecentEnPremier;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\MountableAction;
 use Filament\Actions\StaticAction;
@@ -239,6 +240,7 @@ class DevisResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            ->defaultSort(fn (Builder $query): Builder => PlusRecentEnPremier::parEmission($query))
             ->columns([
                 Tables\Columns\TextColumn::make('numero')->label('Numéro')->placeholder('Brouillon')->rechercheSansAccents(),
                 Tables\Columns\TextColumn::make('client.nom')->label('Client')->rechercheSansAccents(),

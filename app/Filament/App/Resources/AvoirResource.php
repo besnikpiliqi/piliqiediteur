@@ -25,6 +25,7 @@ use App\Filament\Concerns\EnvoieLesDocuments;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use App\Filament\Concerns\PrendLeCalendrierDuMagasin;
 use App\Filament\Concerns\SaisitUneQuantiteRetournee;
+use App\Filament\PlusRecentEnPremier;
 use App\Filament\TableauEntry;
 use Filament\Forms\Components\Actions\Action as ActionDeChamp;
 use Filament\Forms\Components\Hidden;
@@ -582,6 +583,7 @@ class AvoirResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            ->defaultSort(fn (Builder $query): Builder => PlusRecentEnPremier::parEmission($query))
             ->columns([
                 Tables\Columns\TextColumn::make('numero')->label('Numéro')->rechercheSansAccents(),
                 FactureResource::clientColumn(),

@@ -2725,6 +2725,14 @@ return [
                 'tests/Browser/Parcours/RangeesChoisiesTest.php › chaque texte d’une rangée choisie se lit, stock épuisé et « À régulariser » compris ; le service coché aussi, pas les autorisations',
             ],
         ],
+        'hors.listes-du-plus-recent-au-plus-ancien' => [
+            'puce' => 'Hors de CLAUDE.md',
+            'regle' => 'Chaque liste de documents ou de fiches (factures, devis, avoirs, avoirs fournisseur, paiements, clients, fournisseurs, produits, équipe du magasin) s\'affiche par défaut du plus récent au plus ancien, par la date du document (celle de sa création tant qu\'il n\'est pas émis) ou de la fiche, puis l\'identifiant décroissant, jamais par le numéro en texte ; la personne change l\'ordre par le titre d\'une colonne ; les listes triées par nom (services, magasins, membres, collaborateurs) et celles déjà décroissantes gardent leur ordre, comme la liste des charges, triée par mois puis par type (décision de l\'éditeur du 17/11/2026, lot écrans).',
+            'tests' => [
+                'tests/Feature/Filament/ListesDuPlusRecentAuPlusAncienTest.php::test_chaque_liste_se_trie_par_defaut_du_plus_recent_au_plus_ancien',
+                'tests/Feature/Filament/ListesDuPlusRecentAuPlusAncienTest.php::test_les_fiches_et_les_brouillons_les_plus_recents_sont_en_tete_quel_que_soit_leur_identifiant',
+            ],
+        ],
         'hors.fermeture-de-caisse-sans-activite' => [
             'puce' => 'Hors de CLAUDE.md',
             'regle' => 'Une caisse personnelle n\'est ouverte que par une vente émise, un encaissement ou une contre-passation qu\'aucune fermeture n\'a comptés : « Fermer ma caisse » et « Fermer la caisse d\'un vendeur » se montrent grisés, avec l\'info-bulle « Aucune vente ni encaissement à fermer. » (« Aucune caisse de vendeur à fermer : aucune vente ni encaissement. » pour le second), tant que rien n\'est à fermer, même la première fois du jour ; une demande forgée est refusée par la même phrase, sans aucun relevé à zéro ; autant de fermetures par jour que de moments où l\'on a vendu ou encaissé, un double clic rend le relevé déjà fermé ; la fermeture d\'office ne change pas (décision de l\'éditeur du 18/11/2026, lot écrans).',

@@ -6,6 +6,7 @@ use App\Domain\Achats\Enums\SourceAvoirFournisseur;
 use App\Domain\Achats\Models\AvoirFournisseur;
 use App\Filament\App\FicheDUnDocument;
 use App\Filament\App\Resources\AvoirFournisseurResource\Pages;
+use App\Filament\PlusRecentEnPremier;
 use Filament\Infolists\Components\Section as InfolistSection;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Infolists\Infolist;
@@ -114,6 +115,7 @@ class AvoirFournisseurResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            ->defaultSort(fn (Builder $query): Builder => PlusRecentEnPremier::parEmission($query))
             ->columns([
                 Tables\Columns\TextColumn::make('numero')->label('Numéro')->rechercheSansAccents(),
                 Tables\Columns\TextColumn::make('factureAchat.numero')->label('Facture d\'achat créditée')->rechercheSansAccents(),

@@ -24,6 +24,7 @@ use App\Filament\Concerns\ArchiveLaFiche;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use App\Filament\Concerns\PrendLeCalendrierDuMagasin;
 use App\Filament\Concerns\SupprimeEnMasseLigneParLigne;
+use App\Filament\PlusRecentEnPremier;
 use Closure;
 use Filament\Actions\MountableAction;
 use Filament\Forms\Components\Actions\Action as FormAction;
@@ -413,6 +414,7 @@ class ClientResource extends Resource
             // modifier (voir ClientPolicy::view()) ; il reste le client par
             // défaut de la caisse.
             ->modifyQueryUsing(fn (Builder $query): Builder => RequeteDuModele::de($query, Client::class)->identifies())
+            ->defaultSort(fn (Builder $query): Builder => PlusRecentEnPremier::parCreation($query))
             ->columns([
                 Tables\Columns\TextColumn::make('nom')->rechercheSansAccents()->sortable(),
                 Tables\Columns\TextColumn::make('type_client')->label('Type')->badge()->sortable(),

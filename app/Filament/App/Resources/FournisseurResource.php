@@ -9,12 +9,14 @@ use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Resources\FournisseurResource\Pages;
 use App\Filament\Concerns\ArchiveLaFiche;
 use App\Filament\Concerns\SupprimeEnMasseLigneParLigne;
+use App\Filament\PlusRecentEnPremier;
 use Filament\Forms\Components\Section;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Validation\Rules\Unique;
 
 class FournisseurResource extends Resource
@@ -81,6 +83,7 @@ class FournisseurResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            ->defaultSort(fn (Builder $query): Builder => PlusRecentEnPremier::parCreation($query))
             ->columns([
                 Tables\Columns\TextColumn::make('nom')->rechercheSansAccents()->sortable(),
                 Tables\Columns\TextColumn::make('siret')->label('SIRET')->rechercheSansAccents(),

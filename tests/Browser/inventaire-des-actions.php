@@ -2495,7 +2495,7 @@ return [
             'tests/Browser/Demonstration/DansLaCopieTest.php › la responsable envoie une facture par e-mail, la lit dans « E-mails qui seraient partis » avec sa pièce jointe, puis le client accepte le devis par le lien de son e-mail, sans PDF, et sa confirmation part avec le devis signé',
         ]],
         'formulaire:{{ $actionRefuser }}' => ['lot' => 'NAV-4', 'tests' => [
-            'tests/Browser/Parcours/ReponseAuDevisEnLigneTest.php › le client refuse son devis en ligne avec un motif, puis le lien ne vaut plus',
+            'tests/Browser/Parcours/ReponseAuDevisEnLigneTest.php › le client refuse son devis en ligne avec un motif, un second envoi de son refus le redit, puis le lien ne vaut plus',
         ]],
     ],
     'resources/views/errors/404.blade.php' => [
@@ -2753,12 +2753,12 @@ return [
             'tests/Browser/Parcours/ReponseAuDevisEnLigneTest.php › le client ne trouve aucun PDF sur la page de son lien avant de répondre, puis télécharge le devis signé depuis la confirmation de son acceptation',
         ]],
         'formulaire:/devis/{jeton}/refus' => ['lot' => 'NAV-4', 'tests' => [
-            'tests/Browser/Parcours/ReponseAuDevisEnLigneTest.php › le client refuse son devis en ligne avec un motif, puis le lien ne vaut plus',
+            'tests/Browser/Parcours/ReponseAuDevisEnLigneTest.php › le client refuse son devis en ligne avec un motif, un second envoi de son refus le redit, puis le lien ne vaut plus',
         ]],
         'page publique:/devis/{jeton}' => ['lot' => 'NAV-4', 'tests' => [
             'tests/Browser/Parcours/ReponseAuDevisEnLigneTest.php › le client particulier lit son droit de rétractation, accepte son devis en ligne en tapant son nom, en cochant « Bon pour accord » et la demande de début anticipé, puis le lien ne montre que la confirmation',
             'tests/Browser/Parcours/ReponseAuDevisEnLigneTest.php › le client professionnel accepte son devis en ligne sans information sur la rétractation ni demande de début anticipé',
-            'tests/Browser/Parcours/ReponseAuDevisEnLigneTest.php › le client refuse son devis en ligne avec un motif, puis le lien ne vaut plus',
+            'tests/Browser/Parcours/ReponseAuDevisEnLigneTest.php › le client refuse son devis en ligne avec un motif, un second envoi de son refus le redit, puis le lien ne vaut plus',
             'tests/Browser/Parcours/ReponseAuDevisEnLigneTest.php › un lien faux, ou rendu caduc par un nouvel envoi, ne dit que « Ce lien n’est plus valable. »',
         ]],
         'page publique:/devis/{jeton}/pdf' => ['lot' => 'NAV-4', 'tests' => [

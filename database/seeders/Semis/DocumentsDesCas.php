@@ -475,7 +475,12 @@ final class DocumentsDesCas
      * (« Le devis a été refusé entre-temps »), et celui dont la validité
      * s'achève le jour même, dont l'e-mail attend en file jusqu'au
      * lendemain soir, quand le devis est expiré (« La validité du devis est
-     * dépassée », voir semerLeLendemainDuDepannage()).
+     * dépassée », voir semerLeLendemainDuDepannage()) ; enfin un devis
+     * envoyé deux fois, dont le responsable retire le lien du second envoi
+     * avant que la tâche du premier passe : l'e-mail du second part, celui
+     * du premier ne part pas, et plus aucun lien ne vaut (« Un envoi plus
+     * récent de ce devis a remplacé le lien de cet envoi, puis son lien a
+     * été retiré à son tour… »).
      */
     private function semerLeDepannageADomicile(string $magasin, int $rang): void
     {
@@ -537,6 +542,18 @@ final class DocumentsDesCas
         // est dépassée », voir EnvoyerDocumentJob::MOTIF_DEVIS_EXPIRE_ENTRE_TEMPS).
         $expirant = $gestes->dans(fn (): Devis => app(CreerDevisAction::class)->handle($responsable, $clients['avec_debut'], [$this->ligne($gestes, $cas['intervention'][0], 1)], ['date_validite' => $this->horloge->jour($rang), 'lieu_d_intervention' => self::adresseDe($cas['avec_debut'])]));
         $this->envoisDeDepannageExpires[$magasin] = $this->retenirLEnvoi(fn (): EnvoiDocument => $gestes->dans(fn (): EnvoiDocument => app(EnvoyerDocumentAction::class)->handle($responsable, $expirant, $cas['avec_debut']['email'], null, GestesDuMagasin::jeton())));
+        // Le premier envoi attend en file, un second le remplace et part,
+        // puis le responsable en retire le lien avant que la tâche du
+        // premier passe : l'e-mail du premier ne part pas, son lien n'est
+        // plus celui du devis et celui du devis ne vaut plus (« Un envoi
+        // plus récent de ce devis a remplacé le lien de cet envoi, puis son
+        // lien a été retiré à son tour… », voir
+        // EnvoyerDocumentJob::MOTIF_LIEN_REMPLACE_PUIS_RETIRE).
+        $aRenvoyerPuisRetirer = $gestes->dans(fn (): Devis => app(CreerDevisAction::class)->handle($responsable, $clients['signe'], [$this->ligne($gestes, $cas['intervention'][0], 1)], ['date_validite' => $validite, 'lieu_d_intervention' => self::adresseDe($cas['signe'])]));
+        $envoiRemplace = $this->retenirLEnvoi(fn (): EnvoiDocument => $gestes->dans(fn (): EnvoiDocument => app(EnvoyerDocumentAction::class)->handle($responsable, $aRenvoyerPuisRetirer, $cas['signe']['email'], null, GestesDuMagasin::jeton())));
+        $gestes->dans(fn (): EnvoiDocument => app(EnvoyerDocumentAction::class)->handle($responsable, $aRenvoyerPuisRetirer->refresh(), $cas['signe']['email'], null, GestesDuMagasin::jeton()));
+        $gestes->dans(fn (): LienDuDevis => app(RetirerLeLienDuDevisAction::class)->handle($responsable, $aRenvoyerPuisRetirer->refresh()));
+        $gestes->dans($envoiRemplace->handle(...));
     }
 
     /**

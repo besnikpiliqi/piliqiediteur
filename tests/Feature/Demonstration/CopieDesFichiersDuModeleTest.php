@@ -4,11 +4,11 @@ namespace Tests\Feature\Demonstration;
 
 use App\Domain\Demonstration\Construction\DossiersDeLaDemonstration;
 use Closure;
+use ErrorException;
 use Illuminate\Contracts\Process\ProcessResult;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Process;
 use PHPUnit\Framework\Attributes\DataProvider;
-use PHPUnit\Framework\Attributes\RequiresOperatingSystemFamily;
 use RuntimeException;
 use Symfony\Component\Process\Exception\ProcessStartFailedException;
 use Symfony\Component\Process\Process as ProcessSymfony;
@@ -109,11 +109,12 @@ class CopieDesFichiersDuModeleTest extends TestCase
      * refuser la copie avant d'en écrire une : une copie ne suit jamais un
      * lien hors de son dossier (ici, un fichier qu'aucune copie ne doit
      * lire). Ce test pose un vrai lien symbolique, que PHP ne crée sous
-     * Windows que d'un compte administrateur ou en mode développeur : il est
-     * donné à Linux, où le logiciel tourne en production et en CI.
+     * Windows que d'un compte administrateur ou en mode développeur : quand
+     * le poste ne le permet pas, il se saute pour une raison de la liste
+     * fermée de TestsSautesTest, jamais sous Linux, où le logiciel tourne en
+     * production et en CI.
      */
     #[DataProvider('placesDUnLien')]
-    #[RequiresOperatingSystemFamily('Linux')]
     public function test_un_lien_symbolique_dans_le_modele_est_refuse_avant_toute_copie(string $place): void
     {
         $this->poserLeModele();
@@ -121,7 +122,7 @@ class CopieDesFichiersDuModeleTest extends TestCase
         File::put($secret, 'hors du modèle');
         $lien = DossiersDeLaDemonstration::duModele(self::BASE).DIRECTORY_SEPARATOR.str_replace('/', DIRECTORY_SEPARATOR, $place);
         File::ensureDirectoryExists(dirname($lien));
-        symlink($secret, $lien);
+        $this->poserUnLienSymbolique($secret, $lien);
 
         try {
             DossiersDeLaDemonstration::copierLesFichiersDuModele(self::BASE, self::REFERENCE);
@@ -136,9 +137,8 @@ class CopieDesFichiersDuModeleTest extends TestCase
     /**
      * Le dossier du modèle lui-même ne peut pas être un lien : il pointerait
      * hors du dossier des modèles. Comme le test précédent, il pose un vrai
-     * lien symbolique : Linux seulement.
+     * lien symbolique, et se saute de même quand le poste ne le permet pas.
      */
-    #[RequiresOperatingSystemFamily('Linux')]
     public function test_un_dossier_de_modele_qui_est_un_lien_symbolique_est_refuse(): void
     {
         $ailleurs = $this->racine.DIRECTORY_SEPARATOR.'ailleurs';
@@ -146,7 +146,7 @@ class CopieDesFichiersDuModeleTest extends TestCase
         File::put($ailleurs.DIRECTORY_SEPARATOR.'secret.txt', 'hors du modèle');
         $modele = DossiersDeLaDemonstration::duModele(self::BASE);
         File::ensureDirectoryExists(dirname($modele));
-        symlink($ailleurs, $modele);
+        $this->poserUnLienSymbolique($ailleurs, $modele);
 
         try {
             DossiersDeLaDemonstration::copierLesFichiersDuModele(self::BASE, self::REFERENCE);
@@ -167,6 +167,25 @@ class CopieDesFichiersDuModeleTest extends TestCase
             'à la racine du modèle' => ['lien.txt'],
             'dans un sous-dossier' => ['local/pieces/lien.pdf'],
         ];
+    }
+
+    /**
+     * Un vrai lien symbolique vers cette cible. PHP ne le crée sous Windows
+     * que d'un compte administrateur ou en mode développeur : le test se
+     * saute alors pour la raison permise de TestsSautesTest, et seulement
+     * alors, jamais quand le lien se crée.
+     */
+    private function poserUnLienSymbolique(string $cible, string $lien): void
+    {
+        try {
+            $cree = symlink($cible, $lien);
+        } catch (ErrorException) {
+            $cree = false;
+        }
+
+        if (! $cree) {
+            $this->markTestSkipped('Les liens symboliques ne se créent pas sans droits d\'administrateur sous Windows : le test de leur refus ne se rejoue pas.');
+        }
     }
 
     private function poserLeModele(): void

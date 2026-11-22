@@ -392,6 +392,85 @@ class DevisDeDepannageADomicileTest extends TestCase
     }
 
     /**
+     * Le lieu de l'intervention suit le client choisi : un premier
+     * particulier choisi à tort, puis le bon, ou un professionnel entre les
+     * deux, ne laisse jamais l'adresse du premier sur le devis du second ;
+     * un client sans adresse vide le lieu qu'avait préinscrit le précédent ;
+     * un lieu retapé à la main reste tel quel (décision de Claude T51.6 : le
+     * lieu est prérempli avec l'adresse du client du devis).
+     */
+    public function test_le_lieu_suit_le_client_choisi_tant_que_la_personne_ne_l_a_pas_retape(): void
+    {
+        $this->actingAs($this->proprietaireDe($this->magasin));
+        Filament::setTenant($this->magasin);
+        $this->regler(true);
+        $paul = self::particulier();
+        $sylvie = Client::factory()->create(['nom' => 'Sylvie Caron', 'adresse' => '3 rue Lepic', 'complement_adresse' => null, 'code_postal' => '75018', 'ville' => 'Paris']);
+        $sansAdresse = Client::factory()->create(['nom' => 'Marc Petit']);
+        $professionnel = Client::factory()->professionnel()->create();
+        $adresseDePaul = "12 rue des Lilas\nBâtiment B\n75012 Paris";
+
+        Livewire::test(CreateDevis::class)
+            ->fillForm(['client_id' => $paul->id])
+            ->assertFormSet(['lieu_d_intervention' => $adresseDePaul])
+            ->fillForm(['client_id' => $sylvie->id])
+            ->assertFormSet(['lieu_d_intervention' => "3 rue Lepic\n75018 Paris"])
+            ->fillForm(['client_id' => $professionnel->id])
+            ->assertFormFieldIsHidden('lieu_d_intervention')
+            ->assertFormSet(['lieu_d_intervention' => null])
+            ->fillForm(['client_id' => $paul->id])
+            ->assertFormSet(['lieu_d_intervention' => $adresseDePaul])
+            ->fillForm(['client_id' => $sansAdresse->id])
+            ->assertFormSet(['lieu_d_intervention' => null])
+            ->fillForm(['client_id' => $sylvie->id])
+            ->assertFormSet(['lieu_d_intervention' => "3 rue Lepic\n75018 Paris"])
+            ->fillForm(['lieu_d_intervention' => '5 chemin du Mas, 13100 Aix-en-Provence'])
+            ->fillForm(['client_id' => $paul->id])
+            ->assertFormSet(['lieu_d_intervention' => '5 chemin du Mas, 13100 Aix-en-Provence'])
+            ->fillForm(['client_id' => $professionnel->id])
+            ->fillForm(['client_id' => $sylvie->id])
+            ->assertFormSet(['lieu_d_intervention' => '5 chemin du Mas, 13100 Aix-en-Provence'])
+            ->fillForm(['lieu_d_intervention' => '  '])
+            ->fillForm(['client_id' => $paul->id])
+            ->assertFormSet(['lieu_d_intervention' => $adresseDePaul])
+            ->call('recevoirLeClientChoisi', $sylvie->id)
+            ->assertFormSet(['client_id' => $sylvie->id, 'lieu_d_intervention' => "3 rue Lepic\n75018 Paris"]);
+    }
+
+    /**
+     * La page de modification d'un brouillon suit le même chemin : le lieu
+     * enregistré, qui est l'adresse de son client, change avec le client ;
+     * un lieu enregistré à part, qui n'est pas celle-là, reste tel quel ; le
+     * champ qui garde l'adresse préinscrite ne s'enregistre pas.
+     */
+    public function test_la_modification_d_un_brouillon_change_le_lieu_avec_le_client_sauf_un_lieu_retape(): void
+    {
+        $this->actingAs($this->proprietaireDe($this->magasin));
+        Filament::setTenant($this->magasin);
+        $this->regler(true);
+        $paul = self::particulier();
+        $sylvie = Client::factory()->create(['nom' => 'Sylvie Caron', 'adresse' => '3 rue Lepic', 'complement_adresse' => null, 'code_postal' => '75018', 'ville' => 'Paris']);
+        $deLAdresseDuClient = $this->creer($paul, ['lieu_d_intervention' => "12 rue des Lilas\nBâtiment B\n75012 Paris"]);
+        $aPart = $this->creer($paul, ['lieu_d_intervention' => '5 chemin du Mas, 13100 Aix-en-Provence']);
+
+        Livewire::test(EditDevis::class, ['record' => $deLAdresseDuClient->getRouteKey()])
+            ->assertFormSet(['lieu_d_intervention' => "12 rue des Lilas\nBâtiment B\n75012 Paris"])
+            ->fillForm(['client_id' => $sylvie->id])
+            ->assertFormSet(['lieu_d_intervention' => "3 rue Lepic\n75018 Paris"])
+            ->call('save')
+            ->assertHasNoFormErrors();
+        Livewire::test(EditDevis::class, ['record' => $aPart->getRouteKey()])
+            ->fillForm(['client_id' => $sylvie->id])
+            ->assertFormSet(['lieu_d_intervention' => '5 chemin du Mas, 13100 Aix-en-Provence'])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $this->assertSame(["3 rue Lepic\n75018 Paris", $sylvie->id], [$deLAdresseDuClient->fresh()->lieu_d_intervention, $deLAdresseDuClient->fresh()->client_id]);
+        $this->assertSame(['5 chemin du Mas, 13100 Aix-en-Provence', $sylvie->id], [$aPart->fresh()->lieu_d_intervention, $aPart->fresh()->client_id]);
+        $this->assertArrayNotHasKey('lieu_preremplit', $aPart->fresh()->getAttributes());
+    }
+
+    /**
      * Coche le réglage du magasin et règle le prix du devis (null pour un
      * devis gratuit), comme la page « Factures et devis ».
      */

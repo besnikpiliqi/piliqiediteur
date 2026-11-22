@@ -1548,7 +1548,7 @@ return [
         ],
         'documents.reponse-du-client-au-devis' => [
             'puce' => 'Documents de vente',
-            'regle' => 'Le client répond à un devis envoyé par un lien secret propre à cet envoi, valable jusqu\'à la fin de la validité du devis et caduc dès sa réponse, sa modification ou un nouvel envoi : il l\'accepte en tapant son nom et en cochant « Bon pour accord », ou le refuse ; sa réponse est enregistrée une seule fois, avec ses traces, et le magasin en est prévenu ; après une acceptation, le lien ne sert plus qu\'à montrer sa confirmation et le devis signé.',
+            'regle' => 'Le client répond à un devis envoyé par un lien secret propre à cet envoi, valable jusqu\'à la fin de la validité du devis et caduc dès sa réponse, sa modification ou un nouvel envoi : il l\'accepte en tapant son nom et en cochant « Bon pour accord », ou le refuse ; sa réponse est enregistrée une seule fois, avec ses traces, et le magasin en est prévenu ; un second envoi de son formulaire (double clic) redit la réponse enregistrée, jamais « Ce lien n\'est plus valable » ; après une acceptation, le lien ne sert plus qu\'à montrer sa confirmation et le devis signé.',
             'tests' => [
                 'tests/Feature/Facturation/ReponseAuDevisEnLigneTest.php::test_l_envoi_d_un_devis_porte_un_lien_secret_dont_seule_l_empreinte_se_garde',
                 'tests/Feature/Facturation/ReponseAuDevisEnLigneTest.php::test_accepter_exige_le_nom_tape_et_bon_pour_accord',
@@ -1559,6 +1559,7 @@ return [
                 'tests/Feature/Facturation/ReponseAuDevisEnLigneTest.php::test_un_nouvel_envoi_donne_un_nouveau_lien_et_rend_l_ancien_caduc',
                 'tests/Feature/Facturation/ReponseAuDevisEnLigneTest.php::test_le_lien_d_un_magasin_ne_montre_ni_ne_touche_rien_d_un_autre',
                 'tests/Feature/Facturation/ReponseAuDevisConcurrenceTest.php::test_deux_reponses_simultanees_par_le_meme_lien_n_en_enregistrent_qu_une',
+                'tests/Feature/Facturation/ReponseAuDevisEnLigneTest.php::test_un_second_envoi_du_refus_dit_encore_que_le_refus_est_enregistre',
             ],
         ],
         'documents.devis-accepte-en-ligne-signe' => [
@@ -1569,6 +1570,8 @@ return [
                 'tests/Feature/Facturation/ReponseAuDevisEnLigneTest.php::test_la_page_du_lien_montre_tout_ce_que_le_pdf_du_devis_imprime',
                 'tests/Feature/Facturation/ReponseAuDevisEnLigneTest.php::test_la_page_du_lien_montre_la_mention_de_franchise_et_la_note_du_pu_ht',
                 'tests/Feature/Facturation/ReponseAuDevisEnLigneTest.php::test_un_second_envoi_de_l_acceptation_montre_encore_sa_confirmation',
+                'tests/Feature/Facturation/ReponseAuDevisEnLigneTest.php::test_un_second_envoi_du_refus_dit_encore_que_le_refus_est_enregistre',
+                'tests/Feature/Facturation/ReponseAuDevisEnLigneTest.php::test_le_refus_n_est_redit_qu_a_son_propre_lien',
                 'tests/Feature/Facturation/ReponseAuDevisEnLigneTest.php::test_l_envoi_d_un_devis_dont_le_lien_ne_vaut_plus_au_depart_dit_sa_vraie_cause',
                 'tests/Feature/Facturation/ReponseAuDevisEnLigneTest.php::test_le_pdf_du_lien_n_existe_qu_apres_l_acceptation_et_porte_le_devis_signe',
                 'tests/Feature/Facturation/ReponseAuDevisEnLigneTest.php::test_accepter_enregistre_le_nom_la_date_l_empreinte_et_les_traces_une_seule_fois',
@@ -1599,7 +1602,7 @@ return [
         ],
         'documents.devis-de-depannage-a-domicile' => [
             'puce' => 'Documents de vente',
-            'regle' => 'Un magasin peut cocher le réglage « Dépannage, réparation ou entretien à domicile », décoché par défaut, avec le prix d\'un devis payant, vide pour un devis gratuit : chaque devis à un particulier porte alors le lieu de l\'intervention, obligatoire et prérempli avec l\'adresse du client, « Devis gratuit » ou « Devis payant : X € TTC » et le droit de garder les pièces remplacées ; un devis signé chez le client imprime aussi le droit de rétractation et son formulaire ; le réglage et le prix se figent à l\'envoi ; rien pour un professionnel (décision de Claude T51.6).',
+            'regle' => 'Un magasin peut cocher le réglage « Dépannage, réparation ou entretien à domicile », décoché par défaut, avec le prix d\'un devis payant, vide pour un devis gratuit : chaque devis à un particulier porte alors le lieu de l\'intervention, obligatoire et prérempli avec l\'adresse du client, que celle d\'un autre client choisi remplace tant que la personne n\'a pas retapé le lieu, « Devis gratuit » ou « Devis payant : X € TTC » et le droit de garder les pièces remplacées ; un devis signé chez le client imprime aussi le droit de rétractation et son formulaire ; le réglage et le prix se figent à l\'envoi ; rien pour un professionnel (décision de Claude T51.6).',
             'tests' => [
                 'tests/Feature/Facturation/DevisDeDepannageADomicileTest.php::test_sans_le_reglage_le_devis_d_un_particulier_n_imprime_aucune_mention_de_depannage',
                 'tests/Feature/Facturation/DevisDeDepannageADomicileTest.php::test_le_devis_d_un_particulier_imprime_le_lieu_le_devis_gratuit_et_les_pieces_remplacees',
@@ -1614,6 +1617,8 @@ return [
                 'tests/Feature/Facturation/DevisDeDepannageADomicileTest.php::test_un_devis_qui_part_apres_que_le_magasin_a_decoche_le_reglage_perd_son_lieu_et_sa_signature',
                 'tests/Feature/Facturation/DevisDeDepannageADomicileTest.php::test_le_lieu_de_l_intervention_s_imprime_une_ligne_par_ligne_saisie',
                 'tests/Feature/Facturation/DevisDeDepannageADomicileTest.php::test_la_modification_d_un_brouillon_fait_avant_le_reglage_preremplit_le_lieu',
+                'tests/Feature/Facturation/DevisDeDepannageADomicileTest.php::test_le_lieu_suit_le_client_choisi_tant_que_la_personne_ne_l_a_pas_retape',
+                'tests/Feature/Facturation/DevisDeDepannageADomicileTest.php::test_la_modification_d_un_brouillon_change_le_lieu_avec_le_client_sauf_un_lieu_retape',
                 'tests/Feature/Filament/ParametresFacturesTest.php::test_le_proprietaire_coche_le_depannage_a_domicile_et_regle_le_prix_du_devis',
                 'tests/Browser/Parcours/DevisDeDepannageADomicileTest.php › chaque compte qui règle les paramètres du magasin coche le dépannage à domicile et le prix du devis dans « Factures et devis », et le réglage s’enregistre',
                 'tests/Browser/Parcours/DevisDeDepannageADomicileTest.php › chaque compte qui fait un devis à un particulier y trouve le lieu de l’intervention prérempli, coche « Devis signé chez le client », et la fiche puis le PDF numéroté les montrent',

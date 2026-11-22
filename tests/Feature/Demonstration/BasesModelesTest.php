@@ -219,7 +219,7 @@ class BasesModelesTest extends DemonstrationTestCase
                 ->count(),
             'envois_en_echec_dont_le_lien_ne_valait_plus_au_depart' => DB::table('envois_documents')
                 ->where('statut', StatutEnvoi::Echec->value)
-                ->whereIn('erreur', [EnvoyerDocumentJob::MOTIF_DEVIS_ACCEPTE_ENTRE_TEMPS, EnvoyerDocumentJob::MOTIF_LIEN_REMPLACE, EnvoyerDocumentJob::MOTIF_LIEN_RETIRE, EnvoyerDocumentJob::MOTIF_DEVIS_REFUSE_ENTRE_TEMPS, EnvoyerDocumentJob::MOTIF_DEVIS_EXPIRE_ENTRE_TEMPS])
+                ->whereIn('erreur', [EnvoyerDocumentJob::MOTIF_DEVIS_ACCEPTE_ENTRE_TEMPS, EnvoyerDocumentJob::MOTIF_LIEN_REMPLACE, EnvoyerDocumentJob::MOTIF_LIEN_RETIRE, EnvoyerDocumentJob::MOTIF_DEVIS_REFUSE_ENTRE_TEMPS, EnvoyerDocumentJob::MOTIF_DEVIS_EXPIRE_ENTRE_TEMPS, EnvoyerDocumentJob::MOTIF_LIEN_REMPLACE_PUIS_RETIRE])
                 ->orderBy('id')
                 ->pluck('erreur')
                 ->all(),
@@ -292,7 +292,9 @@ class BasesModelesTest extends DemonstrationTestCase
      * « Services ») : un brouillon fait avant que le magasin coche le
      * réglage, sans lieu ; un devis signé chez le client et accepté par le
      * magasin avant le départ de son e-mail, qui ne part pas ; un devis gratuit et un devis payant, figés à leur envoi et
-     * acceptés en ligne, un brouillon qui suit le réglage d'aujourd'hui ;
+     * acceptés en ligne, un brouillon qui suit le réglage d'aujourd'hui ; un devis envoyé deux fois, dont le second
+     * lien est retiré avant le passage de la tâche du premier, qui ne part pas (six e-mails de devis en échec, chacun
+     * avec sa cause) ;
      * les acceptations en ligne d'un particulier, avec et sans la demande
      * d'un début avant la fin du délai de rétractation (T86), chacune avec
      * sa référence (ACC-…) ; dans « E-mails qui seraient partis », l'envoi
@@ -308,6 +310,7 @@ class BasesModelesTest extends DemonstrationTestCase
             'accepte, gratuit',
             'refuse, gratuit',
             'expire, gratuit',
+            'envoye, gratuit',
             'accepte, payant',
             'brouillon, réglage du magasin d\'aujourd\'hui',
         ], $lecture['devis_de_depannage']);
@@ -318,7 +321,8 @@ class BasesModelesTest extends DemonstrationTestCase
             EnvoyerDocumentJob::MOTIF_LIEN_RETIRE,
             EnvoyerDocumentJob::MOTIF_DEVIS_REFUSE_ENTRE_TEMPS,
             EnvoyerDocumentJob::MOTIF_DEVIS_EXPIRE_ENTRE_TEMPS,
-        ], $lecture['envois_en_echec_dont_le_lien_ne_valait_plus_au_depart'], 'Cinq e-mails de devis ne sont pas partis, chacun avec sa vraie cause : le devis signé chez le client accepté au magasin avant son départ, le premier envoi remplacé par un second, le premier envoi dont le lien est retiré, le devis noté refusé avant son départ, le devis expiré avant son départ.');
+            EnvoyerDocumentJob::MOTIF_LIEN_REMPLACE_PUIS_RETIRE,
+        ], $lecture['envois_en_echec_dont_le_lien_ne_valait_plus_au_depart'], 'Six e-mails de devis ne sont pas partis, chacun avec sa vraie cause : le devis signé chez le client accepté au magasin avant son départ, le premier envoi remplacé par un second, le premier envoi dont le lien est retiré, le devis noté refusé avant son départ, le devis expiré avant son départ, le premier envoi remplacé par un second dont le lien a été retiré à son tour.');
         $acceptations = $lecture['acceptations_en_ligne'];
         $this->assertIsArray($acceptations);
         $this->assertContains(true, array_column($acceptations, 'debut_avant_la_fin_du_delai'), 'Un particulier demande que la prestation commence avant la fin du délai.');

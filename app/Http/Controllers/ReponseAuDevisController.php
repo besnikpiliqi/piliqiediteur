@@ -42,14 +42,18 @@ use Symfony\Component\HttpFoundation\Response as ReponseHttp;
  * - après une acceptation, le lien montre encore sa confirmation (« Devis
  *   accepté le … par … ») et le PDF du devis signé (GET), en pièce jointe,
  *   tant que le devis garde cette acceptation (voir
- *   LienDuDevis::confirmeLAcceptation()) ; après un refus, rien de plus.
+ *   LienDuDevis::confirmeLAcceptation()) ; après un refus, le lien dit
+ *   encore « Votre refus est enregistré » au formulaire renvoyé (double
+ *   clic, voir LienDuDevis::confirmeLeRefus()), rien de plus : ni la page
+ *   du lien ni un PDF.
  * Un jeton mal formé (une adresse tronquée ou altérée, lue sans aucune
  * recherche, voir LienDuDevis::parSonJeton()) ou inconnu, un lien retiré
  * ou remplacé par un nouvel envoi, un devis refusé, expiré, modifié ou
  * accepté autrement que par ce lien ne donnent que « Ce lien n'est plus
  * valable. » (410), sans rien dire de plus ; seul le lien qui a enregistré
  * l'acceptation montre sa confirmation et le PDF signé, tant que le devis
- * garde cette acceptation (accepté, ou transformé en facture après elle).
+ * garde cette acceptation (accepté, ou transformé en facture après elle),
+ * et seul celui qui a enregistré le refus le redit au formulaire renvoyé.
  * Chaque page est marquée noindex (balise et en-tête X-Robots-Tag),
  * ne transmet pas son adresse (Referrer-Policy: no-referrer) et ne mène
  * nulle part ailleurs dans PILIQI ; les essais sont limités par adresse
@@ -107,10 +111,11 @@ class ReponseAuDevisController
      * revient au formulaire avec ce qui était tapé ou coché, la demande de
      * début anticipé comprise. Un lien qui ne vaut plus pour répondre
      * montre encore la confirmation de l'acceptation qu'il a enregistrée
-     * (voir LienDuDevis::confirmeLAcceptation()) : le second envoi d'un
-     * double clic sur « Accepter le devis », ou d'un formulaire renvoyé par
-     * le navigateur, ne fait pas croire au client que son acceptation a
-     * échoué ; sinon, la page neutre.
+     * (voir LienDuDevis::confirmeLAcceptation()) ou le message du refus
+     * qu'il a enregistré (voir LienDuDevis::confirmeLeRefus()) : le second
+     * envoi d'un double clic sur « Accepter le devis » ou sur « Refuser le
+     * devis », ou d'un formulaire renvoyé par le navigateur, ne fait pas
+     * croire au client que sa réponse a échoué ; sinon, la page neutre.
      *
      * @param  Closure(): ReponseDuDevis  $reponse
      */
@@ -119,38 +124,53 @@ class ReponseAuDevisController
         try {
             $enregistree = $reponse();
         } catch (LienDuDevisInvalideException) {
-            return $this->dansLeMagasinDuLien($jeton, fn (LienDuDevis $lien, Devis $devis): ReponseHttp => $this->confirmationOuInvalide($jeton, $lien, $devis));
+            return $this->dansLeMagasinDuLien($jeton, fn (LienDuDevis $lien, Devis $devis): ReponseHttp => $this->reponseDejaEnregistreeOuInvalide($jeton, $lien, $devis));
         } catch (ValidationException $refus) {
             return $this->dansLeMagasinDuLien($jeton, fn (LienDuDevis $lien, Devis $devis): ReponseHttp => $lien->estValable($devis)
                 ? $this->page($jeton, $devis, array_values($refus->validator->errors()->all()), $signataire, $motif, $debutAnticipe, 422)
-                : $this->confirmationOuInvalide($jeton, $lien, $devis));
+                : $this->reponseDejaEnregistreeOuInvalide($jeton, $lien, $devis));
         }
 
         if ($enregistree->reponse === ReponseAuDevis::Acceptation) {
-            return $this->dansLeMagasinDuLien($jeton, fn (LienDuDevis $lien, Devis $devis): ReponseHttp => $this->confirmationOuInvalide($jeton, $lien, $devis));
+            return $this->dansLeMagasinDuLien($jeton, fn (LienDuDevis $lien, Devis $devis): ReponseHttp => $this->reponseDejaEnregistreeOuInvalide($jeton, $lien, $devis));
         }
 
         $devis = Devis::query()->withoutGlobalScopes()->whereKey($enregistree->devis_id)->where('magasin_id', $enregistree->magasin_id)->firstOrFail(['id', 'magasin_id', 'numero']);
-        $magasin = Magasin::query()->findOrFail($devis->magasin_id);
+
+        return $this->refusEnregistre($devis, Magasin::query()->findOrFail($devis->magasin_id), $enregistree);
+    }
+
+    /**
+     * Ce que ce lien a enregistré, tant que le devis le garde : la
+     * confirmation de l'acceptation, ou le message du refus ; sinon la page
+     * neutre.
+     */
+    private function reponseDejaEnregistreeOuInvalide(string $jeton, LienDuDevis $lien, Devis $devis): ReponseHttp
+    {
+        return match (true) {
+            $lien->confirmeLAcceptation($devis) => $this->confirmation($jeton, $devis),
+            $lien->confirmeLeRefus($devis) => $this->refusEnregistre($devis, $devis->magasin, ValeurRequise::de($devis->reponseALaVersionEnvoyee(), 'le refus du devis')),
+            default => self::invalide(),
+        };
+    }
+
+    /**
+     * Le message du refus enregistré, à l'heure du magasin : sans PDF, sans
+     * rétractation, sans rien de la page du lien.
+     */
+    private function refusEnregistre(Devis $devis, Magasin $magasin, ReponseDuDevis $reponse): ReponseHttp
+    {
+        $calendrier = $magasin->calendrier();
 
         return self::protegee(response()->view('devis.reponse-enregistree', [
             'numero' => $devis->numero,
             'acceptation' => null,
-            'quand' => $magasin->calendrier()->afficher($enregistree->created_at, 'd/m/Y à H:i'),
-            'heure' => $magasin->calendrier()->libelleDeLHeure(),
+            'quand' => $calendrier->afficher($reponse->created_at, 'd/m/Y à H:i'),
+            'heure' => $calendrier->libelleDeLHeure(),
             'adresseDuPdf' => null,
             'retractation' => null,
             'debutAnticipe' => null,
         ]));
-    }
-
-    /**
-     * La confirmation de l'acceptation que ce lien a enregistrée, tant que
-     * le devis la garde, sinon la page neutre.
-     */
-    private function confirmationOuInvalide(string $jeton, LienDuDevis $lien, Devis $devis): ReponseHttp
-    {
-        return $lien->confirmeLAcceptation($devis) ? $this->confirmation($jeton, $devis) : self::invalide();
     }
 
     /**

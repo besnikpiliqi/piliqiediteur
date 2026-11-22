@@ -17,8 +17,10 @@ use Tests\Browser\Support\SocieteDeTest;
  * navigateur : le propriétaire et le responsable cochent le réglage dans
  * Paramètres > « Factures et devis » et règlent le prix d'un devis payant ;
  * chaque compte qui fait un devis à un particulier y trouve le lieu de
- * l'intervention prérempli avec l'adresse du client, coche « Devis signé
- * chez le client », lit les deux sur la fiche, et le PDF du devis numéroté
+ * l'intervention prérempli avec l'adresse du client, qui devient celle du
+ * client suivant quand il en change sans avoir retapé le lieu, coche
+ * « Devis signé chez le client », lit les deux sur la fiche, et le PDF du
+ * devis numéroté
  * imprime « Devis gratuit », les pièces remplacées et, sur sa dernière
  * page, le droit de rétractation et son formulaire, sous leurs titres en
  * capitales ; chaque compte qui modifie un brouillon fait avant que le
@@ -76,14 +78,19 @@ test('chaque compte qui fait un devis à un particulier y trouve le lieu de l’
     $auteur = $compte($societe);
     $magasin = '/app/'.$societe->magasin->uuid;
     Magasin::query()->whereKey($societe->magasin->id)->update(['depannage_a_domicile' => true]);
-    app(TenantContext::class)->runAs($societe->magasin, fn (): bool => Client::query()->where('nom', 'Jean Dupont')->sole()->forceFill(['adresse' => '7 rue du Port', 'complement_adresse' => null, 'code_postal' => '13002', 'ville' => 'Marseille'])->save());
+    app(TenantContext::class)->runAs($societe->magasin, function (): void {
+        Client::query()->where('nom', 'Jean Dupont')->sole()->forceFill(['adresse' => '7 rue du Port', 'complement_adresse' => null, 'code_postal' => '13002', 'ville' => 'Marseille'])->save();
+        Client::factory()->create(['nom' => 'Sylvie Caron', 'adresse' => '3 rue Lepic', 'complement_adresse' => null, 'code_postal' => '75018', 'ville' => 'Paris']);
+    });
     $onglet = $this->seConnecter($auteur)->aller($magasin.'/devis/create');
 
     $onglet->choisirLeClient('Hôtel des Pins')
         ->nePasVoir('Lieu de l\'intervention')
-        ->choisirLeClient('Jean Dupont')
+        ->choisirLeClient('Sylvie Caron')
         ->voir('Lieu de l\'intervention')
-        ->attendreQue('document.querySelector(\'textarea[id$="lieu_d_intervention"]\')?.value === '.json_encode("7 rue du Port\n13002 Marseille"), 'le lieu de l\'intervention n\'est pas prérempli avec l\'adresse du client');
+        ->attendreQue('document.querySelector(\'textarea[id$="lieu_d_intervention"]\')?.value === '.json_encode("3 rue Lepic\n75018 Paris"), 'le lieu de l\'intervention n\'est pas prérempli avec l\'adresse du premier client');
+    $onglet->choisirLeClient('Jean Dupont')
+        ->attendreQue('document.querySelector(\'textarea[id$="lieu_d_intervention"]\')?.value === '.json_encode("7 rue du Port\n13002 Marseille"), 'le lieu de l\'intervention garde l\'adresse du client précédent au lieu de prendre celle du nouveau client');
     $onglet->geste(fn () => $onglet->element('label:has-text("Devis signé chez le client") >> input[type=checkbox]')->check(), 'la case « Devis signé chez le client »')
         ->cliquerSur('Ajouter un produit')
         ->cliquer(Navigation::FENETRE.' >> .fi-ta-text-item-label:text-is('.Navigation::texte('Bougie parfumée').')')

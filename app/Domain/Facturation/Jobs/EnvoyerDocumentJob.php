@@ -51,11 +51,12 @@ use UnexpectedValueException;
 
 /**
  * Envoie l'e-mail d'un EnvoiDocument (un devis, une facture, un avoir ou
- * un reçu de paiement), son PDF en pièce jointe, puis
- * constate le résultat. Dispatché avec ->afterCommit() par
- * EnvoyerDocumentAction : il ne démarre qu'une fois l'envoi visible en
- * base, et un serveur d'envoi lent ou indisponible ne retarde jamais le
- * geste du magasin.
+ * un reçu de paiement), son PDF en pièce jointe, sauf un devis que son
+ * client n'a pas accepté, qui part avec le lien de sa réponse en ligne,
+ * sans PDF (voir DocumentMail::porteLePdf()), puis constate le résultat.
+ * Dispatché avec ->afterCommit() par EnvoyerDocumentAction : il ne démarre
+ * qu'une fois l'envoi visible en base, et un serveur d'envoi lent ou
+ * indisponible ne retarde jamais le geste du magasin.
  *
  * Le document est relu au moment de partir, sous verrou, dans une
  * transaction courte rendue avant le PDF et l'envoi (voir

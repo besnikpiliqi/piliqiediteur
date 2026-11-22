@@ -62,7 +62,9 @@ class EditDevis extends EditRecord
      * AjouteDesLignesDeVente::lignesAuxPrixPermis()) ; le lieu de
      * l'intervention d'un brouillon enregistré avant que le magasin coche
      * le dépannage à domicile, prérempli avec l'adresse du client comme à
-     * la création (voir DevisResource::lieuPreremplir()).
+     * la création, et l'adresse du client que le formulaire remplacera si la
+     * personne change de client sans avoir retapé le lieu (voir
+     * DevisResource::lieuDuFormulaire()).
      */
     protected function mutateFormDataBeforeFill(array $data): array
     {
@@ -71,7 +73,7 @@ class EditDevis extends EditRecord
         return [
             ...$donnees,
             'lignes' => DevisResource::lignesAuxPrixPermis(ValeursLues::tableau($donnees['lignes']), $donnees['client_id'] ?? null, $donnees['nature_operation'] ?? null, $this->record),
-            'lieu_d_intervention' => DevisResource::lieuPreremplir($donnees['client_id'] ?? null, $donnees['lieu_d_intervention'] ?? null) ?? $donnees['lieu_d_intervention'] ?? null,
+            ...DevisResource::lieuDuFormulaire($donnees['client_id'] ?? null, $donnees['lieu_d_intervention'] ?? null, null),
         ];
     }
 

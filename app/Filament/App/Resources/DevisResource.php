@@ -36,6 +36,7 @@ use Filament\Actions\StaticAction;
 use Filament\Forms\Components\Actions\Action;
 use Filament\Forms\Components\Checkbox;
 use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Section;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
@@ -128,9 +129,12 @@ class DevisResource extends Resource
      * d'un devis de dépannage à domicile (voir DepannageADomicile) :
      * seulement quand le magasin a coché le réglage et que le client choisi
      * est un particulier ; le lieu, obligatoire, se préremplit avec
-     * l'adresse du client (voir preremplirLeLieuDIntervention()).
+     * l'adresse du client (voir preremplirLeLieuDIntervention()) ; le champ
+     * caché « lieu_preremplit » garde ce que le formulaire y a mis, pour que
+     * le lieu suive un changement de client tant que la personne ne l'a pas
+     * retapé (voir lieuDuFormulaire()), sans jamais s'enregistrer.
      *
-     * @return list<Textarea|Checkbox>
+     * @return list<Textarea|Checkbox|Hidden>
      */
     private static function champsDuDepannage(): array
     {
@@ -146,6 +150,7 @@ class DevisResource extends Resource
                 ->validationMessages(['required' => DepannageADomicile::REFUS_SANS_LIEU])
                 ->visible($concerne)
                 ->columnSpanFull(),
+            Hidden::make('lieu_preremplit')->dehydrated(false),
             Checkbox::make('signe_chez_le_client')
                 ->label('Devis signé chez le client')
                 ->helperText('Le devis imprime alors le droit de rétractation de quatorze jours et son formulaire.')
@@ -169,46 +174,48 @@ class DevisResource extends Resource
     }
 
     /**
+     * Le client choisi (du magasin actif, archivé compris) quand le magasin
+     * actif a coché le dépannage à domicile et qu'il est un particulier ;
+     * null sinon.
+     */
+    private static function clientDuDepannage(mixed $clientId): ?Client
+    {
+        $identifiant = is_bool($clientId) ? false : filter_var($clientId, FILTER_VALIDATE_INT);
+        $client = $identifiant === false ? null : Client::withTrashed()->find($identifiant);
+
+        return $client !== null && DepannageADomicile::concerne(app(TenantContext::class)->magasin(), $client->estProfessionnel()) ? $client : null;
+    }
+
+    /**
      * Le magasin actif a-t-il coché le dépannage à domicile, et le client
      * choisi (du magasin actif, archivé compris) est-il un particulier ?
      */
     private static function depannageConcerne(mixed $clientId): bool
     {
-        $identifiant = is_bool($clientId) ? false : filter_var($clientId, FILTER_VALIDATE_INT);
-        $client = $identifiant === false ? null : Client::withTrashed()->find($identifiant);
-
-        return $client !== null && DepannageADomicile::concerne(app(TenantContext::class)->magasin(), $client->estProfessionnel());
+        return self::clientDuDepannage($clientId) !== null;
     }
 
     /**
-     * Un lieu de l'intervention encore vide prend l'adresse du client
-     * choisi (voir lieuPreremplir()).
+     * Le lieu de l'intervention suit le client choisi tant que la personne
+     * ne l'a pas retapé (voir lieuDuFormulaire()).
      */
     private static function preremplirLeLieuDIntervention(Get $get, Set $set): void
     {
-        $lieu = self::lieuPreremplir($get('client_id'), $get('lieu_d_intervention'));
+        $lieu = self::lieuDuFormulaire($get('client_id'), $get('lieu_d_intervention'), $get('lieu_preremplit'));
 
-        if ($lieu !== null) {
-            $set('lieu_d_intervention', $lieu);
-        }
+        $set('lieu_d_intervention', $lieu['lieu_d_intervention']);
+        $set('lieu_preremplit', $lieu['lieu_preremplit']);
     }
 
     /**
-     * Le lieu de l'intervention que le formulaire préremplit : l'adresse du
-     * client choisi, une ligne par partie renseignée, quand le magasin
-     * actif a coché le dépannage à domicile, que ce client est un
-     * particulier et que le lieu est encore vide ; null sinon. Au
-     * changement du client, et à l'ouverture d'un brouillon enregistré
-     * avant que le magasin coche le réglage (voir
-     * EditDevis::mutateFormDataBeforeFill()).
+     * Le lieu de l'intervention que le formulaire préremplit pour ce
+     * client : son adresse, une ligne par partie renseignée, quand le
+     * magasin actif a coché le dépannage à domicile et que ce client est un
+     * particulier ; null sinon.
      */
-    public static function lieuPreremplir(mixed $clientId, mixed $lieu): ?string
+    public static function lieuPreremplir(mixed $clientId): ?string
     {
-        if (filled($lieu) || ! self::depannageConcerne($clientId)) {
-            return null;
-        }
-
-        $client = Client::withTrashed()->find(ValeursLues::cle($clientId));
+        $client = self::clientDuDepannage($clientId);
 
         if ($client === null) {
             return null;
@@ -221,6 +228,25 @@ class DevisResource extends Resource
         ], filled(...))));
 
         return $adresse === '' ? null : $adresse;
+    }
+
+    /**
+     * Le lieu de l'intervention d'un formulaire dont le client vient de
+     * changer ou s'ouvre, avec ce qu'il y a préinscrit : l'adresse du client
+     * choisi (voir lieuPreremplir()) remplace le lieu quand il est vide ou
+     * quand il est encore celui que le formulaire avait préinscrit pour le
+     * client d'avant ; un lieu retapé à la main reste tel quel. Au changement
+     * du client, et à l'ouverture d'un brouillon enregistré avant que le
+     * magasin coche le réglage (voir EditDevis::mutateFormDataBeforeFill()).
+     *
+     * @return array{lieu_d_intervention: mixed, lieu_preremplit: ?string}
+     */
+    public static function lieuDuFormulaire(mixed $clientId, mixed $lieu, mixed $lieuPreremplit): array
+    {
+        $adresse = self::lieuPreremplir($clientId);
+        $retape = filled($lieu) && trim(ValeurSimple::enTexte($lieu)) !== trim(ValeurSimple::enTexte($lieuPreremplit));
+
+        return ['lieu_d_intervention' => $retape ? $lieu : $adresse, 'lieu_preremplit' => $adresse];
     }
 
     /**

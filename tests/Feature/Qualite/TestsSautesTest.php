@@ -18,8 +18,10 @@ class TestsSautesTest extends TestCase
 {
     /**
      * Les seules raisons permises de sauter un test, chacune absente en CI :
-     * Node.js y est installé, et le groupe courriels-reels, qui demande la
-     * boîte de test de Mailtrap, n'y est jamais lancé (phpunit.xml).
+     * Node.js y est installé, le groupe courriels-reels, qui demande la
+     * boîte de test de Mailtrap, n'y est jamais lancé (phpunit.xml), et
+     * Linux y laisse créer un lien symbolique, que le poste Windows de
+     * l'éditeur ne crée pas sans droits d'administrateur.
      *
      * @var list<string>
      */
@@ -28,6 +30,7 @@ class TestsSautesTest extends TestCase
         'Groupe courriels-reels : MAILTRAP_API_TOKEN et MAILTRAP_INBOX_ID manquent.',
         'Groupe courriels-reels : MAILTRAP_API_TOKEN manque.',
         'Groupe courriels-reels : MAILTRAP_INBOX_ID manque.',
+        'Les liens symboliques ne se créent pas sans droits d\'administrateur sous Windows : le test de leur refus ne se rejoue pas.',
     ];
 
     public function test_un_test_ne_se_saute_que_pour_une_raison_permise(): void
@@ -44,8 +47,10 @@ class TestsSautesTest extends TestCase
     }
 
     /**
-     * La règle refuse un saut « à revoir », un test laissé inachevé et un
-     * saut sans raison écrite, et laisse passer une raison permise.
+     * La règle refuse un saut « à revoir », un test laissé inachevé, un saut
+     * sans raison écrite et une condition qui saute le test sans raison
+     * écrite (un attribut Requires de PHPUnit, skipOn ou onlyOn de Pest), et
+     * laisse passer les raisons permises.
      */
     public function test_un_test_saute_a_revoir_fait_echouer_la_regle(): void
     {
@@ -54,12 +59,21 @@ class TestsSautesTest extends TestCase
             '$this->markTest'."Incomplete('Pas fini.');",
             "test('x', fn () => true)->skip".'($raison);',
             '$this->markTest'."Skipped('Node.js est absent : le script de l\\'avis ne se rejoue pas.');",
+            '$this->markTest'."Skipped('Les liens symboliques ne se créent pas sans droits d\\'administrateur sous Windows : le test de leur refus ne se rejoue pas.');",
+            '#[Requires'."OperatingSystemFamily('Linux')]",
+            '#[DataProvider(\'x\'), Requires'."Php('>= 8.5')]",
+            "test('y', fn () => true)->skipOn".'Windows();',
+            "test('z', fn () => true)->only".'OnLinux();',
         ]);
 
         $this->assertSame([
             'exemple.php : « À revoir : échoue sous Windows. »',
             'exemple.php : « Pas fini. »',
             'exemple.php : « sans raison écrite »',
+            'exemple.php : « RequiresOperatingSystemFamily » (un saut s\'écrit markTestSkipped, avec une raison de la liste fermée)',
+            'exemple.php : « RequiresPhp » (un saut s\'écrit markTestSkipped, avec une raison de la liste fermée)',
+            'exemple.php : « skipOnWindows » (un saut s\'écrit markTestSkipped, avec une raison de la liste fermée)',
+            'exemple.php : « onlyOnLinux » (un saut s\'écrit markTestSkipped, avec une raison de la liste fermée)',
         ], self::sautsNonPermis($code, 'exemple.php'));
     }
 
@@ -128,7 +142,9 @@ class TestsSautesTest extends TestCase
     /**
      * Chaque saut de ce code (markTestSkipped, markTestIncomplete, skip()
      * ou todo() de Pest) dont la raison n'est pas permise, ou n'est pas
-     * écrite en clair.
+     * écrite en clair, et chaque condition qui saute un test sans écrire
+     * sa raison (un attribut Requires de PHPUnit, skipOn ou onlyOn de
+     * Pest) : un test ne se saute que par un appel qui écrit sa raison.
      *
      * @return list<string>
      */
@@ -143,6 +159,12 @@ class TestsSautesTest extends TestCase
             if ($raison === null || ! in_array($raison, self::RAISONS_PERMISES, true)) {
                 $refus[] = "{$fichier} : « ".($raison ?? 'sans raison écrite').' »';
             }
+        }
+
+        preg_match_all('/#\\[[^\\]]*?\\b(Requires\\w+)|->(skipOn\\w+|onlyOn\\w+)\\(/u', $code, $conditions, PREG_SET_ORDER);
+
+        foreach ($conditions as $condition) {
+            $refus[] = "{$fichier} : « ".implode('', array_slice($condition, 1))." » (un saut s'écrit markTestSkipped, avec une raison de la liste fermée)";
         }
 
         return $refus;

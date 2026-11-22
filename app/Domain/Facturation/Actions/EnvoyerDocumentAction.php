@@ -33,10 +33,13 @@ use SensitiveParameter;
 
 /**
  * Envoie un devis, une facture, un avoir ou un reçu de paiement (voir
- * RecusDePaiement) par e-mail, PDF en pièce jointe, ou relance une facture
- * échue et impayée. Chaque envoi d'un devis porte son lien secret, par
- * lequel le client l'accepte ou le refuse en ligne (voir LienDuDevis) : le
- * nouveau lien rend caducs ceux des envois précédents. Le document est
+ * RecusDePaiement) par e-mail, PDF en pièce jointe, sauf un devis que son
+ * client n'a pas accepté, qui part avec le lien secret de son envoi, sans
+ * PDF (voir DocumentMail::porteLePdf()), ou relance une facture échue et
+ * impayée. Chaque envoi d'un devis envoyé porte son lien secret, par lequel
+ * le client l'accepte ou le refuse en ligne (voir LienDuDevis) : le nouveau
+ * lien rend caducs ceux des envois précédents ; un devis accepté ou
+ * transformé en facture repart avec son PDF, sans lien. Le document est
  * vérifié et l'envoi noté ici (voir EnvoiDocument) ; l'e-mail lui-même
  * part en file d'attente une fois la transaction validée (voir
  * EnvoyerDocumentJob), pour qu'un serveur d'envoi lent ou indisponible ne

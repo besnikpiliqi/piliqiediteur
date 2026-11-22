@@ -14,6 +14,7 @@ use App\Domain\Facturation\Actions\CreerFactureDepuisDevisAction;
 use App\Domain\Facturation\Actions\EmettreDevisAction;
 use App\Domain\Facturation\Actions\EnvoyerDocumentAction;
 use App\Domain\Facturation\Actions\ModifierDevisAction;
+use App\Domain\Facturation\Actions\RepondreAuDevisEnLigneAction;
 use App\Domain\Facturation\Actions\RetirerLeLienDuDevisAction;
 use App\Domain\Facturation\Enums\NatureEnvoi;
 use App\Domain\Facturation\Enums\ReponseAuDevis;
@@ -222,6 +223,58 @@ class ReponseAuDevisEnLigneTest extends TestCase
         $this->repondre('accepter', $jeton, $donnees)->assertOk()->assertSee('par Claire Martin')->assertDontSee(LienDuDevis::PLUS_VALABLE);
         $this->repondre('accepter', $jeton, ['signataire' => '', 'bon_pour_accord' => ''])->assertOk()->assertSee('par Claire Martin');
 
+        $this->assertSame(1, ReponseDuDevis::query()->count());
+    }
+
+    /**
+     * Un double clic sur « Refuser le devis », ou un formulaire renvoyé par
+     * le navigateur, envoie deux fois le refus : la seconde réponse dit
+     * encore « Votre refus est enregistré », jamais « Ce lien n'est plus
+     * valable », sans PDF ni rien de la page du lien, et rien n'est
+     * enregistré deux fois. Un client qui accepte après avoir refusé voit
+     * sa réponse enregistrée, le refus ; la page du lien et son PDF restent
+     * refusés.
+     */
+    public function test_un_second_envoi_du_refus_dit_encore_que_le_refus_est_enregistre(): void
+    {
+        Notification::fake();
+        $jeton = $this->envoyer($this->devisEnvoyable());
+
+        $this->repondre('refuser', $jeton, ['motif' => 'Trop cher'])->assertOk()->assertSee('Votre refus est enregistré');
+
+        foreach ([['motif' => 'Trop cher'], ['motif' => ''], ['motif' => str_repeat('a', RepondreAuDevisEnLigneAction::MOTIF_MAXIMUM + 1)]] as $donnees) {
+            $this->repondre('refuser', $jeton, $donnees)
+                ->assertOk()
+                ->assertSee('Votre refus est enregistré')
+                ->assertSee('Le magasin en est prévenu')
+                ->assertDontSee(LienDuDevis::PLUS_VALABLE)
+                ->assertDontSee('Télécharger le devis signé')
+                ->assertHeader('Referrer-Policy', 'no-referrer');
+        }
+
+        $this->repondre('accepter', $jeton, ['signataire' => 'Claire Martin', 'bon_pour_accord' => '1'])->assertOk()->assertSee('Votre refus est enregistré')->assertDontSee('par Claire Martin');
+        $this->repondre('accepter', $jeton, ['signataire' => '', 'bon_pour_accord' => ''])->assertOk()->assertSee('Votre refus est enregistré');
+        $this->repondre('get', $jeton)->assertStatus(410)->assertSee(LienDuDevis::PLUS_VALABLE);
+        $this->repondre('pdf', $jeton)->assertStatus(410)->assertSee(LienDuDevis::PLUS_VALABLE);
+
+        $this->assertSame([ReponseAuDevis::Refus], ReponseDuDevis::query()->pluck('reponse')->all());
+    }
+
+    /**
+     * Seul le lien qui a enregistré le refus le redit : un lien remplacé par
+     * un nouvel envoi, comme un jeton inconnu, ne dit que la page neutre.
+     */
+    public function test_le_refus_n_est_redit_qu_a_son_propre_lien(): void
+    {
+        Notification::fake();
+        $devis = $this->devisEnvoyable();
+        $premier = $this->envoyer($devis);
+        $second = $this->envoyer($devis->fresh());
+
+        $this->repondre('refuser', $second, ['motif' => 'Trop cher'])->assertOk()->assertSee('Votre refus est enregistré');
+
+        $this->repondre('refuser', $premier, ['motif' => 'Trop cher'])->assertStatus(410)->assertSee(LienDuDevis::PLUS_VALABLE)->assertDontSee('Votre refus est enregistré');
+        $this->repondre('refuser', Str::random(64), ['motif' => 'Trop cher'])->assertStatus(410)->assertSee(LienDuDevis::PLUS_VALABLE);
         $this->assertSame(1, ReponseDuDevis::query()->count());
     }
 

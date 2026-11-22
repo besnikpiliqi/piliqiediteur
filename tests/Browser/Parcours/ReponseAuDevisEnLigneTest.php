@@ -204,15 +204,25 @@ test('le client professionnel accepte son devis en ligne sans information sur la
     expect([ReponseDuDevis::query()->sole()->signataire, ReponseDuDevis::query()->sole()->debut_avant_la_fin_du_delai])->toBe(['Claire Martin', null]);
 });
 
-test('le client refuse son devis en ligne avec un motif, puis le lien ne vaut plus', function () {
+test('le client refuse son devis en ligne avec un motif, un second envoi de son refus le redit, puis le lien ne vaut plus', function () {
     $this->travelTo(self::aParis('2026-11-12 10:00:00'));
     $magasin = $this->completerIdentiteLegale($this->ouvrirUneSociete(['nom' => 'Ma Boutique', 'code' => 'MABOUT']));
     [$devis, $jeton] = devisEnvoyeParEMail($magasin, self::responsableDeTest($magasin));
+
+    // Un second onglet ouvert sur le même lien avant le refus garde son
+    // formulaire : son envoi est celui d'un double clic ou d'un formulaire
+    // renvoyé par le navigateur.
+    $second = $this->naviguer('/devis/'.$jeton)->voir('Refuser le devis');
 
     $onglet = $this->naviguer('/devis/'.$jeton)
         ->remplir('Motif (facultatif)', 'Trop cher pour nous.')
         ->cliquerSur('Refuser le devis')
         ->voir('Votre refus est enregistré');
+
+    $second->remplir('Motif (facultatif)', 'Trop cher pour nous.')
+        ->cliquerSur('Refuser le devis')
+        ->voir('Votre refus est enregistré')
+        ->nePasVoir(LienDuDevis::PLUS_VALABLE);
 
     app(TenantContext::class)->set($magasin);
     $reponse = ReponseDuDevis::query()->sole();

@@ -9,8 +9,10 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 /**
- * Un document qui part par e-mail, son PDF en pièce jointe (voir
- * EnvoyerDocumentAction) : devis, facture, avoir ou reçu de paiement.
+ * Un document qui part par e-mail, son PDF en pièce jointe, sauf un devis
+ * que son client n'a pas accepté, qui part avec le lien de sa réponse en
+ * ligne, sans PDF (voir EnvoyerDocumentAction et DocumentMail::porteLePdf()) :
+ * devis, facture, avoir ou reçu de paiement.
  */
 interface DocumentEnvoyable
 {

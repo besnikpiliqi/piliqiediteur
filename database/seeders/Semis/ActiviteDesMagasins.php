@@ -52,7 +52,7 @@ use LogicException;
 final class ActiviteDesMagasins
 {
     /**
-     * Des noms de plus de cent caractères, que les graphiques à noms (meilleurs
+     * Des noms d'environ cent caractères (99 à 106), que les graphiques à noms (meilleurs
      * produits, meilleurs clients, achats par fournisseur) écrivent par leur
      * début suivi de « … », avec une info-bulle du nom entier : de part et
      * d'autre de leur limite de coupure, avec les noms courts du semis.
@@ -134,8 +134,8 @@ final class ActiviteDesMagasins
         ], ['date_facture' => $this->horloge->jour(2), 'numero_fournisseur' => 'PC-5521']);
 
         // Des noms de part et d'autre de la limite de coupure des graphiques à noms
-        // (début visible, « … », info-bulle du nom entier) : un fournisseur et un
-        // produit de plus de cent caractères, un produit moyen, des noms courts
+        // (début visible, « … », info-bulle du nom entier) : un fournisseur, un
+        // produit et un client d'environ cent caractères, un produit moyen, des noms courts
         // ailleurs (demande de l'éditeur du 20/11/2026).
         $manufacture = $halles->fiche($camille, Fournisseur::class, ['nom' => self::NOM_DU_FOURNISSEUR_TRES_LONG, 'adresse' => '120 chemin des Moulins', 'code_postal' => '26000', 'ville' => 'Valence', 'pays' => 'FR']);
         $halles->acheter($camille, $manufacture, [

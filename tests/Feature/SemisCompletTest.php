@@ -112,7 +112,7 @@ class SemisCompletTest extends TestCase
      * @var array<string, int>
      */
     private const NOMBRES_DE_LIGNES = [
-        'actions_traitees' => 4741,
+        'actions_traitees' => 4746,
         'actions_traitees_de_la_societe' => 348,
         'affectations' => 40,
         'autorisations_affectations' => 533,
@@ -125,12 +125,12 @@ class SemisCompletTest extends TestCase
         'cabinets' => 4,
         'changements_fin_exercice' => 1,
         'charges' => 181,
-        'clients' => 46,
+        'clients' => 47,
         'clients_confies' => 2,
         'clotures_caisse' => 2621,
-        'clotures_caisse_personnelles' => 3329,
-        'clotures_caisse_personnelles_factures' => 4007,
-        'clotures_caisse_personnelles_paiements' => 3918,
+        'clotures_caisse_personnelles' => 3331,
+        'clotures_caisse_personnelles_factures' => 4010,
+        'clotures_caisse_personnelles_paiements' => 3920,
         'codes_confirmation' => 26,
         'comptes_expert_comptable' => 3,
         'consultations_vies' => 5,
@@ -138,34 +138,34 @@ class SemisCompletTest extends TestCase
         'demonstrations' => 15,
         'devis' => 225,
         'ecarts_sirene' => 2,
-        'enregistrements_fiscaux' => 10830,
+        'enregistrements_fiscaux' => 10835,
         'envois_documents' => 13,
-        'evenements_transmission_pdp' => 61,
-        'factures' => 4008,
-        'factures_achat' => 181,
-        'fournisseurs' => 12,
+        'evenements_transmission_pdp' => 62,
+        'factures' => 4011,
+        'factures_achat' => 182,
+        'fournisseurs' => 13,
         'identifiants' => 67,
         'inventaires_ouverture' => 11,
         'invitations_cabinet' => 6,
-        'journal_audit' => 1799,
+        'journal_audit' => 1801,
         'liens_cabinet' => 15,
         'liens_des_devis' => 6,
-        'lignes_achat' => 353,
+        'lignes_achat' => 355,
         'lignes_avoir' => 146,
         'lignes_avoir_fournisseur' => 2,
         'lignes_de_charge' => 180,
         'lignes_devis' => 393,
-        'lignes_facture' => 5988,
+        'lignes_facture' => 5992,
         'lignes_inventaire_ouverture' => 23,
         'lignes_recu_paiement' => 160,
         'magasins' => 22,
         'magasins_cabinet' => 1,
         'mandats_pdp' => 2,
         'messages_vers_la_demonstration' => 26,
-        'mouvements_stock' => 5106,
-        'notifications' => 190,
-        'paiement_allocations' => 3918,
-        'paiements' => 3918,
+        'mouvements_stock' => 5112,
+        'notifications' => 191,
+        'paiement_allocations' => 3920,
+        'paiements' => 3920,
         'paniers_caisse' => 1,
         'periodes_activite' => 23,
         'pieces_de_charge' => 181,
@@ -174,7 +174,7 @@ class SemisCompletTest extends TestCase
         'postes_reconnus' => 1,
         'preferences_tableau_de_bord' => 4,
         'preuves_operation' => 5,
-        'produits' => 52,
+        'produits' => 54,
         'recus_paiement' => 160,
         'referentiel_autorisations_magasin' => 51,
         'referentiel_autorisations_societe' => 5,
@@ -185,13 +185,13 @@ class SemisCompletTest extends TestCase
         'site_de_la_base' => 1,
         'societes' => 21,
         'taux_avoirs_fournisseur' => 2,
-        'taux_factures_achat' => 238,
+        'taux_factures_achat' => 239,
         'telechargements_documents' => 5,
         'tetes_journal_audit' => 105,
         'tetes_registre_fiscal' => 22,
         'traces_audit' => 8,
         'traces_evenements' => 2,
-        'transmissions_pdp' => 57,
+        'transmissions_pdp' => 58,
         'transmissions_propriete' => 2,
         'types_de_charge_de_la_societe' => 2,
         'users' => 67,
@@ -230,6 +230,7 @@ class SemisCompletTest extends TestCase
         $this->assertChaqueCompteQuiVendASesVentesEtSonReleve();
         $this->assertLesComptesEtLeursMagasins();
         $this->assertLesCasDesGraphiquesEtDesCaisses();
+        $this->assertLesNomsLongsEtLesFermeturesDeCaisse();
         $this->assertLesCasDeLEcartDesPrixDAchat();
         $this->assertLesDatesDeLOperation();
         $this->assertLaListeDesComptesOuvreChaqueCompteActif();
@@ -443,6 +444,44 @@ class SemisCompletTest extends TestCase
             [[false], [true]],
             $this->lignes('select distinct (select count(*) from json_object_keys(encaissements)) > 1 from clotures_caisse_personnelles where json_typeof(encaissements) = \'object\' order by 1'),
             'Un relevé de caisse a un seul mode d\'encaissement, un autre en a plusieurs.',
+        );
+    }
+
+    /**
+     * Les cas du lot écrans (demandes de l'éditeur des 18 et 20/11/2026),
+     * chacun avec une donnée qui le déclenche et une qui ne le déclenche
+     * pas : un produit, un client et un fournisseur aux noms d'environ cent
+     * caractères, que les graphiques à noms écrivent par leur début suivi
+     * de « … » avec une info-bulle du nom entier, parmi des noms courts ;
+     * et la caisse personnelle, qu'aucune fermeture ne compte à zéro (une
+     * caisse sans vente ni encaissement ne se ferme pas : aucun relevé
+     * n'est vide), fermée deux fois le même jour par le vendeur qui a
+     * revendu entre les deux (Thomas Girard, aux Halles) et une seule fois
+     * ailleurs.
+     */
+    private function assertLesNomsLongsEtLesFermeturesDeCaisse(): void
+    {
+        foreach (['produits', 'clients', 'fournisseurs'] as $table) {
+            $this->assertSame(
+                [[false], [true]],
+                $this->lignes("select distinct char_length(nom) > 90 from {$table} order by 1"),
+                "Un nom très long et des noms courts parmi les {$table}.",
+            );
+        }
+
+        $this->assertSame(
+            0,
+            (int) DB::scalar('select count(*) from clotures_caisse_personnelles c where not exists (select 1 from clotures_caisse_personnelles_factures f where f.cloture_caisse_personnelle_id = c.id) and not exists (select 1 from clotures_caisse_personnelles_paiements p where p.cloture_caisse_personnelle_id = c.id)'),
+            'Aucun relevé de caisse personnelle n\'est à zéro : sans vente ni encaissement à compter, la caisse ne se ferme pas.',
+        );
+        $this->assertSame(
+            [[true]],
+            $this->lignes('select count(*) = 1 from (select vendeur_id, magasin_id, date(cloturee_a) from clotures_caisse_personnelles group by 1, 2, 3 having count(*) > 1) t'),
+            'Un vendeur a fermé sa caisse deux fois dans la même journée, parce qu\'il a revendu entre les deux.',
+        );
+        $this->assertSame(
+            [['Thomas Girard']],
+            $this->lignes('select distinct vendeur_nom from clotures_caisse_personnelles c join (select vendeur_id, date(cloturee_a) j from clotures_caisse_personnelles group by 1, 2 having count(*) > 1) d on d.vendeur_id = c.vendeur_id and d.j = date(c.cloturee_a)'),
         );
     }
 

@@ -40,6 +40,9 @@ use ReflectionClass;
  * - « lien:nom » : chaque entrée de fiche ou colonne de tableau qui est un
  *   lien (url()) ;
  * - « menu:libellé » : chaque entrée ajoutée au menu du compte ;
+ * - dans le code PHP de app, « clic:méthode » : chaque bouton que le code
+ *   écrit lui-même dans une chaîne, avec wire:click (les colonnes du dessin
+ *   de la carte « Écart des prix d'achat », voir SvgDeLEcartDesPrixDAchat) ;
  * - dans les vues (hors resources/views/vendor) : « clic:méthode », chaque
  *   bouton qui appelle une méthode de son composant (wire:click, ou un clic
  *   qui appelle $wire) ; « envoi:méthode », chaque formulaire que son
@@ -201,6 +204,13 @@ final class ActionsDeLInterface
 
         if (preg_match('/function\s+table\s*\(/', $code) === 1 && preg_match('/->(?:searchable|rechercheSansAccents)\s*\(/', $code) === 1) {
             $elements[] = 'recherche';
+        }
+
+        foreach ($jetons as $jeton) {
+            if ($jeton->is(T_CONSTANT_ENCAPSED_STRING)) {
+                preg_match_all('/wire:click(?:\.[a-z]+)*="([A-Za-z_]\w*)/', $jeton->text, $clics);
+                array_push($elements, ...array_map(fn (string $nom): string => 'clic:'.$nom, $clics[1]));
+            }
         }
 
         foreach ($jetons as $indice => $jeton) {

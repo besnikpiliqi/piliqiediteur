@@ -139,3 +139,22 @@ test('la lecture d’une vue trouve chaque clic, envoi, saisie, changement, form
         'lien:Ouvrir le magasin',
     ]);
 });
+
+test('la lecture du code trouve un bouton que le code écrit lui-même dans une chaîne (wire:click), jamais une chaîne qui n’en écrit pas', function () {
+    $code = <<<'PHP'
+        <?php
+        namespace App\Exemple;
+
+        final class Dessin
+        {
+            public function colonne(): string
+            {
+                return '<g wire:click="choisirLeMois(1)" x-on:keydown.enter.prevent="$wire.choisirLeMois(1)"></g>'
+                    .'<a href="#" wire:click.prevent="telechargerUnePiece(2)">pièce</a>'
+                    .'<p>wire:click sans guillemet</p>';
+            }
+        }
+        PHP;
+
+    expect(ActionsDeLInterface::declarees($code))->toBe(['clic:choisirLeMois', 'clic:telechargerUnePiece']);
+});

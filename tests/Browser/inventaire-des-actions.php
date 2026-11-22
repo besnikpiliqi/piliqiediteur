@@ -57,6 +57,18 @@ return [
     'app/Domain/Stock/Notifications/StockSousLeSeuilDAlerte.php' => [
         'action:voir' => ['lot' => 'NAV-3', 'tests' => []],
     ],
+    'app/Domain/TableauDeBord/Support/SvgDeLEcartDesPrixDAchat.php' => [
+        'clic:choisirLeMois' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Parcours/EcartDesPrixDAchatTest.php › le propriétaire ajoute la carte dans l’espace de la société, la lit comme la maquette, choisit un mois au clic, à Entrée et à Espace, ouvre les liens « Voir… », et retrouve l’affichage, pas le mois, après le rechargement',
+            'tests/Browser/Parcours/EcartDesPrixDAchatTest.php › le propriétaire ajoute la carte dans le panneau d’un magasin, la lit comme la maquette, sans nom de magasin ni filtre',
+            'tests/Browser/Parcours/EcartDesPrixDAchatTest.php › un administrateur à qui le propriétaire coche les graphiques voit la carte de son magasin comme la maquette',
+            'tests/Browser/Parcours/EcartDesPrixDAchatTest.php › un responsable à qui le propriétaire coche les graphiques voit la carte dans le panneau de son magasin comme la maquette',
+            'tests/Browser/Parcours/EcartDesPrixDAchatTest.php › le propriétaire du cabinet et le collaborateur à qui le client est confié voient la carte sur la page des graphiques du client comme la maquette',
+            'tests/Browser/Parcours/EcartDesPrixDAchatTest.php › l’expert-comptable déclaré voit la carte sur « Tableau de bord de la société » comme la maquette',
+            'tests/Browser/Parcours/EcartDesPrixDAchatTest.php › la carte d’une société sans aucun achat dit « Aucun achat ce mois-ci », et les liens « Voir… » et le menu y fonctionnent sans erreur',
+            'tests/Browser/Parcours/EcartDesPrixDAchatTest.php › la carte, ses tableaux ouverts, ne déborde pas à 1 280, 1 024 et 390 px de large : un tableau large défile dans son cadre, jamais la page',
+        ]],
+    ],
     'app/Domain/Tenancy/Notifications/AvisDeLEquipe.php' => [
         'action:voir' => ['lot' => 'NAV-4', 'tests' => [
             'tests/Browser/Parcours/CartesDesNotificationsTest.php › le vendeur voit glisser la carte de chaque notification arrivée, la ferme, et ouvre la fiche par son bouton',
@@ -2059,6 +2071,10 @@ return [
         'action:retirer_une_piece' => ['lot' => 'NAV-3', 'tests' => [
             'tests/Browser/Parcours/PiecesDuFournisseurTest.php › sur un brouillon, le responsable remplace une pièce déposée par erreur puis la retire',
         ]],
+        'clic:telechargerUnePiece' => ['lot' => 'NAV-3', 'tests' => [
+            'tests/Browser/Parcours/PiecesDuFournisseurTest.php › le responsable dépose la facture du fournisseur à la saisie, avec sa date, et la télécharge depuis la fiche',
+            'tests/Browser/Parcours/PiecesDuFournisseurTest.php › chaque rôle qui voit les achats télécharge la pièce depuis la fiche sous son nom réécrit en .pdf, cabinet lié compris ; seul qui saisit les achats en ajoute',
+        ]],
         'filtre:piece_manquante' => ['lot' => 'NAV-3', 'tests' => [
             'tests/Browser/Parcours/PiecesDuFournisseurTest.php › une facture saisie sans sa pièce est marquée, se retrouve par le filtre et par « À faire », et « Ajouter des pièces » lève la marque pour chaque rôle qui saisit les achats',
         ]],
@@ -2797,6 +2813,18 @@ return [
             'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › le collaborateur à qui le client est confié compose la page des graphiques du client, la retrouve après le rechargement, puis compose celle du panneau d’un magasin du client',
             'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › l’expert-comptable déclaré compose « Tableau de bord de la société », la retrouve après le rechargement, puis compose la grille du panneau de son magasin',
             'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › une observatrice ne voit ni les chiffres clés ni les graphiques dans le panneau de son magasin',
+        ]],
+    ],
+    'resources/views/filament/ecart-des-prix-d-achat.blade.php' => [
+        'changement:changerLAffichage' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Parcours/EcartDesPrixDAchatTest.php › le propriétaire ajoute la carte dans l’espace de la société, la lit comme la maquette, choisit un mois au clic, à Entrée et à Espace, ouvre les liens « Voir… », et retrouve l’affichage, pas le mois, après le rechargement',
+            'tests/Browser/Parcours/EcartDesPrixDAchatTest.php › le propriétaire ajoute la carte dans le panneau d’un magasin, la lit comme la maquette, sans nom de magasin ni filtre',
+            'tests/Browser/Parcours/EcartDesPrixDAchatTest.php › un administrateur à qui le propriétaire coche les graphiques voit la carte de son magasin comme la maquette',
+            'tests/Browser/Parcours/EcartDesPrixDAchatTest.php › un responsable à qui le propriétaire coche les graphiques voit la carte dans le panneau de son magasin comme la maquette',
+            'tests/Browser/Parcours/EcartDesPrixDAchatTest.php › le propriétaire du cabinet et le collaborateur à qui le client est confié voient la carte sur la page des graphiques du client comme la maquette',
+            'tests/Browser/Parcours/EcartDesPrixDAchatTest.php › l’expert-comptable déclaré voit la carte sur « Tableau de bord de la société » comme la maquette',
+            'tests/Browser/Parcours/EcartDesPrixDAchatTest.php › la carte d’une société sans aucun achat dit « Aucun achat ce mois-ci », et les liens « Voir… » et le menu y fonctionnent sans erreur',
+            'tests/Browser/Parcours/EcartDesPrixDAchatTest.php › la carte, ses tableaux ouverts, ne déborde pas à 1 280, 1 024 et 390 px de large : un tableau large défile dans son cadre, jamais la page',
         ]],
     ],
     'resources/views/filament/grille-des-graphiques.blade.php' => [

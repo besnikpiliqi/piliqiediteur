@@ -6,7 +6,9 @@
     (filament/widgets) : les couleurs viennent du thème (les teintes de
     Filament, plus claires en sombre), lues à chaque dessin, les nombres et
     les info-bulles en français et en euros (« 18 420 € », « 1,2 k € »). Rien
-    ne vient d'un autre site.
+    ne vient d'un autre site. La carte « Écart des prix d'achat » (décision de
+    l'éditeur du 21/11/2026, D76) n'a pas de canevas : elle écrit son propre
+    `svg` (voir ecart-des-prix-d-achat.blade.php) et n'appelle pas ce script.
 --}}
 <script>
     window.piliqiGraphique = (config) => {

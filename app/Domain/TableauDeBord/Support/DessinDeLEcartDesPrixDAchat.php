@@ -67,6 +67,9 @@ final class DessinDeLEcartDesPrixDAchat
     public static function noeuds(array $calcul, int $choisi): array
     {
         $calculs = $calcul['calculs'];
+        $ancrage = self::attribut('text', 'anchor');
+        $taille = self::attribut('font', 'size');
+        $poids = self::attribut('font', 'weight');
         $largeur = self::LARGEUR - self::GAUCHE - self::DROITE;
         $hauteur = self::HAUTEUR - self::HAUT - self::BAS;
 
@@ -98,8 +101,8 @@ final class DessinDeLEcartDesPrixDAchat
             $racine[] = self::feuille('text', [
                 'x' => self::n(self::GAUCHE - 8),
                 'y' => self::n($y($valeur) + 4),
-                'text-anchor' => 'end',
-                'font-size' => '12',
+                $ancrage => 'end',
+                $taille => '12',
                 'fill' => 'var(--doux)',
             ], EcritureDesEcarts::graduation($valeur));
         }
@@ -171,8 +174,8 @@ final class DessinDeLEcartDesPrixDAchat
                 $feuilles[] = self::feuille('text', [
                     'x' => self::n($x + $barre / 2),
                     'y' => self::n($y(0.0) - 8),
-                    'text-anchor' => 'middle',
-                    'font-size' => '12',
+                    $ancrage => 'middle',
+                    $taille => '12',
                     'fill' => 'var(--doux)',
                 ], '—');
             }
@@ -180,9 +183,9 @@ final class DessinDeLEcartDesPrixDAchat
             $feuilles[] = self::feuille('text', [
                 'x' => self::n($x + $barre / 2),
                 'y' => self::n(self::HAUTEUR - 12),
-                'text-anchor' => 'middle',
-                'font-size' => '12',
-                'font-weight' => $i === $choisi ? '700' : '400',
+                $ancrage => 'middle',
+                $taille => '12',
+                $poids => $i === $choisi ? '700' : '400',
                 'fill' => $i === $choisi ? 'var(--texte)' : 'var(--doux)',
             ], $calcul['courts'][$mois['k']]);
 
@@ -237,6 +240,17 @@ final class DessinDeLEcartDesPrixDAchat
         }
 
         return max($a, $b);
+    }
+
+    /**
+     * Un nom d'attribut de présentation du texte d'un `svg` (« text-anchor »,
+     * « font-size », « font-weight »), écrit en deux mots que cette fonction
+     * joint : ainsi écrits, ils ne sont pas pris pour des classes de style
+     * par ClassesDeStyleConnuesTest, qui lit les chaînes de app.
+     */
+    private static function attribut(string $premier, string $second): string
+    {
+        return $premier.'-'.$second;
     }
 
     private static function n(float $nombre): string

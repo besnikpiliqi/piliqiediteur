@@ -29,10 +29,17 @@ use Tests\Browser\Support\Navigation;
 
 /**
  * La carte de ce graphique est-elle dessinée : son canevas a des pixels
- * peints par Chart.js ?
+ * peints par Chart.js ? La carte « Écart des prix d'achat », qui n'a pas de
+ * canevas, est dessinée quand son `svg` porte ses douze colonnes et, sous
+ * chacune, l'étiquette de son mois (décision de l'éditeur du 21/11/2026,
+ * D76, B7 : un dessin par carte, sans en affaiblir l'exigence).
  */
 function carteDessinee(string $graphique): string
 {
+    if ($graphique === Graphique::EcartDesPrixDAchat->value) {
+        return '(() => { const d = document.querySelector(\'[data-graphique="'.$graphique.'"] svg[role="group"]\'); return d !== null && d.querySelectorAll(\'g[role="button"]\').length === 12 && d.querySelectorAll(\'g[role="button"] > text[font-weight]\').length === 12 && d.getBoundingClientRect().height > 100; })()';
+    }
+
     return '(() => { const c = document.querySelector(\'[data-graphique="'.$graphique.'"] canvas\'); if (! c || c.width === 0) return false; const d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data; for (let i = 3; i < d.length; i += 4) { if (d[i] !== 0) return true; } return false; })()';
 }
 
@@ -328,13 +335,13 @@ function defautsDesEnTetes(Navigation $onglet): array
         JS);
 }
 
-test('l’en-tête de chacun des dix-huit graphiques garde le type, « Monter », « Descendre » et la croix sur sa première ligne, la croix à droite, à 1 280, 1 024 et 390 px de large', function () {
+test('l’en-tête de chacun des dix-neuf graphiques garde le type, « Monter », « Descendre » et la croix sur sa première ligne, la croix à droite, à 1 280, 1 024 et 390 px de large', function () {
     $societe = $this->societeComplete();
     app(PreferencesDesGraphiques::class)->enregistrer($societe->proprietaire, EcranDuTableauDeBord::Societe, new ReglagesDuTableauDeBord(
         array_map(fn (Graphique $graphique): CarteDuTableauDeBord => CarteDuTableauDeBord::parDefaut($graphique), Graphique::cases()),
     ));
     $onglet = $this->seConnecter($societe->proprietaire, panneau: 'societe')
-        ->attendreQue('document.querySelectorAll("[data-graphique]").length === '.count(Graphique::cases()), 'les dix-huit graphiques ne sont pas là');
+        ->attendreQue('document.querySelectorAll("[data-graphique]").length === '.count(Graphique::cases()), 'les dix-neuf graphiques ne sont pas là');
 
     foreach ([1280, 1024, 390] as $largeur) {
         $onglet->page()->setViewportSize($largeur, 900);
@@ -349,15 +356,18 @@ test('l’en-tête de chacun des dix-huit graphiques garde le type, « Monter »
  * l'image suivante : la grille, rétrécie et mesurée dans le même geste,
  * garde chaque canevas dans sa carte, sans aucun débordement passager
  * (CI rouge de d15af36, à 1 280 px : les dix-huit cartes débordaient
- * quand la mesure tombait avant le redimensionnement).
+ * quand la mesure tombait avant le redimensionnement). Un dessin par
+ * carte : un canevas pour chacune des dix-huit cartes de Chart.js, le
+ * `svg` de l'écart des prix d'achat pour la dix-neuvième, qui suit sa
+ * carte sans attendre.
  */
-test('aucune carte ne déborde pendant que Chart.js redimensionne son graphique, la grille rétrécie gardant chaque canevas dans sa carte', function () {
+test('aucune carte ne déborde pendant que Chart.js redimensionne son graphique, la grille rétrécie gardant chaque dessin dans sa carte', function () {
     $societe = $this->societeComplete();
     app(PreferencesDesGraphiques::class)->enregistrer($societe->proprietaire, EcranDuTableauDeBord::Societe, new ReglagesDuTableauDeBord(
         array_map(fn (Graphique $graphique): CarteDuTableauDeBord => CarteDuTableauDeBord::parDefaut($graphique), Graphique::cases()),
     ));
     $onglet = $this->seConnecter($societe->proprietaire, panneau: 'societe')
-        ->attendreQue('document.querySelectorAll("[data-graphique] canvas").length === '.count(Graphique::cases()), 'les dix-huit graphiques ne sont pas dessinés');
+        ->attendreQue('document.querySelectorAll("[data-graphique] canvas").length === '.(count(Graphique::cases()) - 1).' && '.carteDessinee(Graphique::EcartDesPrixDAchat->value), 'les dix-neuf graphiques ne sont pas dessinés (dix-huit canevas et le dessin de l’écart des prix d’achat)');
 
     $debordent = $onglet->page()->evaluate(<<<'JS'
         () => {

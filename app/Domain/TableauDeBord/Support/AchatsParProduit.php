@@ -15,8 +15,8 @@ use InvalidArgumentException;
  * Seules comptent les lignes dont le mois est l'un des douze mois de la
  * période : un achat d'avant la période n'est jamais le prix de départ d'un
  * produit. Les achats se groupent par (magasin, produit), jamais par le seul
- * produit : un produit appartient à un seul magasin, et les prix de deux
- * magasins ne se mélangent jamais. Ceux d'un groupe sont ordonnés par jour,
+ * produit : un produit appartient à un magasin, et à lui seul, et les prix de
+ * deux magasins ne se mélangent jamais. Ceux d'un groupe sont ordonnés par jour,
  * puis par rang de validation de leur facture, unique dans le magasin : cet
  * ordre est total, puisqu'une facture d'achat n'a jamais deux lignes du même
  * produit, et le « premier achat » du produit est le premier de la liste.

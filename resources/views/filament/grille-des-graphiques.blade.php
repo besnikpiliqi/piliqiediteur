@@ -122,18 +122,19 @@
     @endif
 
     <div class="piliqi-graphiques__grille">
-        @foreach ($cartes as $rang => ['carte' => $carte, 'serie' => $serie, 'config' => $config])
+        @foreach ($cartes as $rang => ['carte' => $carte, 'serie' => $serie, 'config' => $config, 'ecart' => $ecart])
             @php($graphique = $carte->graphique)
+            {{-- L'écart des prix d'achat est nommé par son titre, celui de l'affichage choisi ; les autres cartes par leur libellé. --}}
             <section
-                class="piliqi-graphiques__carte"
+                @class(['piliqi-graphiques__carte', 'piliqi-graphiques__carte--ecart' => $ecart !== null])
                 wire:key="carte-{{ $graphique->value }}"
                 data-graphique="{{ $graphique->value }}"
-                aria-label="{{ $graphique->getLabel() }}"
-                x-data="{ chiffres: false }"
+                @if ($ecart !== null) aria-labelledby="titre-{{ $graphique->value }}" @else aria-label="{{ $graphique->getLabel() }}" @endif
+                x-data="{ chiffres: false, calcul: false }"
             >
                 {{-- Le titre passe à la ligne dans sa colonne ; le type, « Monter », « Descendre » et la croix restent ensemble, à droite de la première ligne, quelle que soit sa longueur (constat de l'éditeur du 15/11/2026). --}}
                 <div class="piliqi-graphiques__tete" data-tete>
-                    <h3 class="piliqi-graphiques__titre" data-titre>{{ $graphique->getLabel() }}</h3>
+                    <h3 class="piliqi-graphiques__titre" id="titre-{{ $graphique->value }}" data-titre>{{ $ecart === null ? $graphique->getLabel() : $ecart['lecture']['titreCarte'] }}</h3>
 
                     <div class="piliqi-graphiques__commandes" data-commandes>
                         <x-filament::input.wrapper class="piliqi-graphiques__type">
@@ -161,61 +162,65 @@
                     </div>
                 @endif
 
-                <p class="piliqi-graphiques__gris">{{ $graphique->ceQuIlCompte() }}</p>
-
-                @if ($serie->note !== null)
-                    <p class="piliqi-graphiques__gris" data-note>{{ $serie->note }}</p>
-                @endif
-
-                @if ($serie->estVide())
-                    <p class="piliqi-graphiques__gris" data-vide>Aucune donnée sur la période.</p>
+                @if ($ecart !== null)
+                    @include('filament.ecart-des-prix-d-achat', ['lecture' => $ecart['lecture'], 'svg' => $ecart['svg'], 'note' => $serie->note, 'graphique' => $graphique])
                 @else
-                    {{-- Une carte déplacée, ou dont la série change, reçoit un nouveau canevas : Chart.js n'en redessine jamais un qui porte déjà un graphique. --}}
-                    <div class="piliqi-graphiques__zone" wire:key="dessin-{{ $graphique->value }}-{{ $rang }}-{{ md5(json_encode($config)) }}">
-                        <div
-                            x-load
-                            x-load-src="{{ \Filament\Support\Facades\FilamentAsset::getAlpineComponentSrc('chart', 'filament/widgets') }}"
-                            wire:ignore
-                            x-data="chart(piliqiGraphique(@js($config)))"
-                            style="height: 100%;"
-                        >
-                            <canvas x-ref="canvas" role="img" aria-label="{{ $graphique->getLabel() }}"></canvas>
-                            <span x-ref="backgroundColorElement" class="text-gray-100 dark:text-gray-800"></span>
-                            <span x-ref="borderColorElement" class="text-gray-400"></span>
-                            <span x-ref="gridColorElement" class="text-gray-200 dark:text-gray-800"></span>
-                            <span x-ref="textColorElement" class="text-gray-500 dark:text-gray-400"></span>
+                    <p class="piliqi-graphiques__gris">{{ $graphique->ceQuIlCompte() }}</p>
+
+                    @if ($serie->note !== null)
+                        <p class="piliqi-graphiques__gris" data-note>{{ $serie->note }}</p>
+                    @endif
+
+                    @if ($serie->estVide())
+                        <p class="piliqi-graphiques__gris" data-vide>Aucune donnée sur la période.</p>
+                    @else
+                        {{-- Une carte déplacée, ou dont la série change, reçoit un nouveau canevas : Chart.js n'en redessine jamais un qui porte déjà un graphique. --}}
+                        <div class="piliqi-graphiques__zone" wire:key="dessin-{{ $graphique->value }}-{{ $rang }}-{{ md5(json_encode($config)) }}">
+                            <div
+                                x-load
+                                x-load-src="{{ \Filament\Support\Facades\FilamentAsset::getAlpineComponentSrc('chart', 'filament/widgets') }}"
+                                wire:ignore
+                                x-data="chart(piliqiGraphique(@js($config)))"
+                                style="height: 100%;"
+                            >
+                                <canvas x-ref="canvas" role="img" aria-label="{{ $graphique->getLabel() }}"></canvas>
+                                <span x-ref="backgroundColorElement" class="text-gray-100 dark:text-gray-800"></span>
+                                <span x-ref="borderColorElement" class="text-gray-400"></span>
+                                <span x-ref="gridColorElement" class="text-gray-200 dark:text-gray-800"></span>
+                                <span x-ref="textColorElement" class="text-gray-500 dark:text-gray-400"></span>
+                            </div>
                         </div>
+                    @endif
+
+                    <div>
+                        <x-filament::link tag="button" type="button" x-on:click="chiffres = ! chiffres" x-bind:aria-expanded="chiffres" data-geste="chiffres">
+                            <span x-text="chiffres ? 'Masquer les chiffres' : 'Voir les chiffres'">Voir les chiffres</span>
+                        </x-filament::link>
                     </div>
-                @endif
 
-                <div>
-                    <x-filament::link tag="button" type="button" x-on:click="chiffres = ! chiffres" x-bind:aria-expanded="chiffres" data-geste="chiffres">
-                        <span x-text="chiffres ? 'Masquer les chiffres' : 'Voir les chiffres'">Voir les chiffres</span>
-                    </x-filament::link>
-                </div>
-
-                <div class="piliqi-graphiques__chiffres-de-la-carte" x-show="chiffres" x-cloak data-chiffres-de-la-carte>
-                    <table>
-                        <thead>
-                            <tr>
-                                <th scope="col"></th>
-                                @foreach ($serie->jeux as $jeu)
-                                    <th scope="col">{{ $jeu['libelle'] }}</th>
-                                @endforeach
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach ($serie->etiquettes as $position => $etiquette)
+                    <div class="piliqi-graphiques__chiffres-de-la-carte" x-show="chiffres" x-cloak data-chiffres-de-la-carte>
+                        <table>
+                            <thead>
                                 <tr>
-                                    <th scope="row">{{ $etiquette }}@if (isset($serie->infoBulles[$position])) <span class="piliqi-graphiques__gris">({{ $serie->infoBulles[$position] }})</span>@endif</th>
+                                    <th scope="col"></th>
                                     @foreach ($serie->jeux as $jeu)
-                                        <td class="piliqi-graphiques__montant">{{ $enTexte($jeu['valeurs'][$position] ?? null, $jeu['unite']) }}</td>
+                                        <th scope="col">{{ $jeu['libelle'] }}</th>
                                     @endforeach
                                 </tr>
-                            @endforeach
-                        </tbody>
-                    </table>
-                </div>
+                            </thead>
+                            <tbody>
+                                @foreach ($serie->etiquettes as $position => $etiquette)
+                                    <tr>
+                                        <th scope="row">{{ $etiquette }}@if (isset($serie->infoBulles[$position])) <span class="piliqi-graphiques__gris">({{ $serie->infoBulles[$position] }})</span>@endif</th>
+                                        @foreach ($serie->jeux as $jeu)
+                                            <td class="piliqi-graphiques__montant">{{ $enTexte($jeu['valeurs'][$position] ?? null, $jeu['unite']) }}</td>
+                                        @endforeach
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                @endif
             </section>
         @endforeach
     </div>

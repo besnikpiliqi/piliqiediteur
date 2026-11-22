@@ -15,9 +15,13 @@ use App\Domain\TableauDeBord\Services\PreferencesDesGraphiques;
 use App\Domain\TableauDeBord\Services\SeriesDesGraphiques;
 use App\Domain\TableauDeBord\Support\CalculDesSeries;
 use App\Domain\TableauDeBord\Support\CarteDuTableauDeBord;
+use App\Domain\TableauDeBord\Support\EcartDesPrixDAchat;
+use App\Domain\TableauDeBord\Support\Mois;
 use App\Domain\TableauDeBord\Support\Perimetre;
 use App\Domain\TableauDeBord\Support\ReglagesDuTableauDeBord;
 use App\Domain\TableauDeBord\Support\SerieDuGraphique;
+use App\Domain\TableauDeBord\Support\SvgDeLEcartDesPrixDAchat;
+use App\Domain\TableauDeBord\Support\TextesDeLEcartDesPrixDAchat;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Support\CompteConnecte;
@@ -62,6 +66,18 @@ use LogicException;
  * calculs, et un écran qui ne doit pas la montrer ne la monte pas (voir
  * PerimetreDesGraphiques::voitLesGraphiquesDeLaSociete() et
  * voitLesGraphiquesDuClient()).
+ *
+ * La carte « Écart des prix d'achat » (décision de l'éditeur du 21/11/2026,
+ * D76, B6 et B7) n'a pas de canevas : la vue écrit son contenu, avec un
+ * `svg` calculé en PHP (voir TextesDeLEcartDesPrixDAchat et
+ * SvgDeLEcartDesPrixDAchat). Son menu « Afficher : » (voir
+ * changerLAffichage()) se retient comme le type ; le mois qu'on y choisit
+ * (voir choisirLeMois()) vit dans l'écran, le temps de la page, sans rien
+ * écrire en base, et revient au dernier mois de la période qui n'est pas à
+ * venir quand la période ou le magasin change. Seuls le calcul de
+ * l'affichage choisi et celui du mois choisi sont écrits dans la page.
+ *
+ * @phpstan-import-type Lecture from TextesDeLEcartDesPrixDAchat
  */
 class GrilleDesGraphiques extends Widget
 {
@@ -86,6 +102,16 @@ class GrilleDesGraphiques extends Widget
     #[Locked]
     public ?string $lien = null;
 
+    /**
+     * Le mois (de 0 à 11) choisi dans la carte « Écart des prix d'achat »,
+     * par graphique ; vide tant que personne n'a cliqué sur un mois. Une
+     * valeur hors de 0 à 11, que le navigateur peut forger, est ignorée
+     * (voir moisDeLaCarte()).
+     *
+     * @var array<string, int>
+     */
+    public array $moisChoisis = [];
+
     public function mount(string $ecran = 'magasin', ?string $lien = null): void
     {
         $this->ecran = (EcranDuTableauDeBord::tryFrom($ecran) ?? throw new AuthorizationException(PerimetreDesGraphiques::REFUS))->value;
@@ -107,6 +133,8 @@ class GrilleDesGraphiques extends Widget
                 throw new LogicException(self::REFUS_DE_LA_VALEUR);
             }
 
+            $this->moisChoisis = [];
+
             return $reglages->avecLaPeriode($choisie);
         });
     }
@@ -126,6 +154,7 @@ class GrilleDesGraphiques extends Widget
             }
 
             $perimetre->restreintA($choisi);
+            $this->moisChoisis = [];
 
             return $reglages->avecLeMagasin($choisi);
         });
@@ -188,6 +217,46 @@ class GrilleDesGraphiques extends Widget
         });
     }
 
+    /**
+     * L'affichage de la carte « Écart des prix d'achat » : un total par
+     * mois ou un seul total pour les douze mois, retenu comme le type ; le
+     * mois choisi est gardé. Un autre graphique, ou une autre valeur, est
+     * refusé.
+     */
+    public function changerLAffichage(string $graphique, string $valeur): void
+    {
+        $this->modifier(function (ReglagesDuTableauDeBord $reglages, Perimetre $perimetre) use ($graphique, $valeur): ReglagesDuTableauDeBord {
+            $carte = $this->carteAffichee($reglages, $this->graphiqueVisible($graphique, $perimetre));
+
+            if ($carte->graphique !== Graphique::EcartDesPrixDAchat || ! in_array($valeur, [CarteDuTableauDeBord::AFFICHAGE_PAR_MOIS, CarteDuTableauDeBord::AFFICHAGE_SUR_DOUZE_MOIS], true)) {
+                throw new LogicException(self::REFUS_DE_LA_VALEUR);
+            }
+
+            return $reglages->avecLaCarte(new CarteDuTableauDeBord($carte->graphique, $carte->type, $carte->mesure, $valeur));
+        });
+    }
+
+    /**
+     * Le mois (de 0 à 11, 0 étant le premier de la période) que la carte
+     * « Écart des prix d'achat » montre, par un clic, Entrée ou Espace sur
+     * sa colonne : un geste de l'écran, jamais retenu en base. Un autre
+     * graphique, un graphique que le compte ne voit pas ou qui n'est pas
+     * affiché, un mois hors de 0 à 11 sont refusés, rien ne change.
+     */
+    public function choisirLeMois(string $graphique, int $mois): void
+    {
+        static::executerSansCasser(function () use ($graphique, $mois): void {
+            $perimetre = $this->perimetre();
+            $carte = $this->carteAffichee($this->reglages($perimetre), $this->graphiqueVisible($graphique, $perimetre));
+
+            if ($carte->graphique !== Graphique::EcartDesPrixDAchat || $mois < 0 || $mois >= EcartDesPrixDAchat::NOMBRE_DE_MOIS) {
+                throw new LogicException(self::REFUS_DE_LA_VALEUR);
+            }
+
+            $this->moisChoisis[$carte->graphique->value] = $mois;
+        });
+    }
+
     public function monter(string $graphique): void
     {
         $this->deplacer($graphique, -1);
@@ -203,7 +272,9 @@ class GrilleDesGraphiques extends Widget
      * et les préférences du compte : les chiffres clés, les filtres, le
      * menu des graphiques à ajouter et chaque carte avec sa série, prête
      * pour Chart.js (en euros) et pour le tableau « Voir les chiffres »
-     * (au centime).
+     * (au centime) ; la carte « Écart des prix d'achat », qui n'a pas de
+     * canevas, avec sa lecture, son `svg` par mois et son mois choisi
+     * (voir ecartDesPrixDAchat()).
      *
      * @return array<string, mixed>
      */
@@ -237,9 +308,60 @@ class GrilleDesGraphiques extends Widget
             'cartes' => array_map(fn (CarteDuTableauDeBord $carte): array => [
                 'carte' => $carte,
                 'serie' => $series[$carte->graphique->value],
-                'config' => self::configuration($carte, $series[$carte->graphique->value]),
+                'config' => $carte->graphique === Graphique::EcartDesPrixDAchat ? null : self::configuration($carte, $series[$carte->graphique->value]),
+                'ecart' => $carte->graphique === Graphique::EcartDesPrixDAchat ? $this->ecartDesPrixDAchat($carte, $series[$carte->graphique->value], $perimetre, $calcul->mois) : null,
             ], $cartes),
         ];
+    }
+
+    /**
+     * Ce que la carte « Écart des prix d'achat » écrit : sa lecture (voir
+     * TextesDeLEcartDesPrixDAchat::lecture()) pour l'affichage retenu et le
+     * mois choisi, et, par mois seulement, son `svg`. Le dessin de
+     * l'affichage caché n'est pas écrit dans la page.
+     *
+     * @param  list<string>  $moisDeLaPeriode  les douze mois « AAAA-MM » de la période
+     * @return array{lecture: Lecture, svg: string|null, mois: int}
+     */
+    private function ecartDesPrixDAchat(CarteDuTableauDeBord $carte, SerieDuGraphique $serie, Perimetre $perimetre, array $moisDeLaPeriode): array
+    {
+        $calcul = $serie->ecartDesPrixDAchat ?? throw new LogicException('La série de l\'écart des prix d\'achat porte son calcul.');
+        $mois = $this->moisDeLaCarte($carte->graphique, $moisDeLaPeriode, $perimetre);
+        $lecture = TextesDeLEcartDesPrixDAchat::lecture($calcul, $carte->affichage, $mois);
+
+        return [
+            'lecture' => $lecture,
+            'svg' => $carte->surDouzeMois() ? null : SvgDeLEcartDesPrixDAchat::ecrire($lecture['dessin']['enfants'], $lecture['dessin']['viewBox'], $lecture['dessin']['ariaLabel'], $carte->graphique->value),
+            'mois' => $mois,
+        ];
+    }
+
+    /**
+     * Le mois choisi de la carte : celui qu'on a cliqué s'il est de 0 à 11,
+     * sinon le dernier mois de la période qui n'est pas à venir (le dernier
+     * de la période quand elle est passée, le premier quand elle est tout
+     * entière à venir).
+     *
+     * @param  list<string>  $mois  les douze mois « AAAA-MM » de la période
+     */
+    private function moisDeLaCarte(Graphique $graphique, array $mois, Perimetre $perimetre): int
+    {
+        $choisi = $this->moisChoisis[$graphique->value] ?? null;
+
+        if (is_int($choisi) && $choisi >= 0 && $choisi < EcartDesPrixDAchat::NOMBRE_DE_MOIS) {
+            return $choisi;
+        }
+
+        $courant = Mois::duJour($perimetre->aujourdhui());
+        $dernier = 0;
+
+        foreach ($mois as $rang => $unMois) {
+            if ($unMois <= $courant) {
+                $dernier = $rang;
+            }
+        }
+
+        return $dernier;
     }
 
     /**

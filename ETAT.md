@@ -1,12 +1,13 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 21/11/2026 à 23:53 UTC par pilotage-sync.sh : « Mise à jour des notes de reprise ».
+Mis à jour le 22/11/2026 à 00:18 UTC par pilotage-sync.sh : « Mise à jour des notes de reprise ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
 Tête poussée : `075b9f20`. Commits locaux pas encore poussés :
 
 ```
+38b81d49 Facture d'achat : la quantité d'une ligne se recalcule en direct
 37fce91a Carte « Écart des prix d'achat » (lot 2) : catalogue, réglage, lecture des achats et série
 8e9df41e Carte « Écart des prix d'achat » (lot 1) : calcul pur, textes, formats, dessin et fixtures figées
 ```
@@ -45,6 +46,7 @@ a9bb1a78 Charges : état téléchargeable en PDF et en Excel
  M resources/css/graphiques.css
  M resources/views/filament/graphiques-du-panneau.blade.php
  M resources/views/filament/grille-des-graphiques.blade.php
+ M tests/Browser/InventaireDesActionsTest.php
  M tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php
  M tests/Browser/Support/ActionsDeLInterface.php
  M tests/Browser/inventaire-des-actions.php

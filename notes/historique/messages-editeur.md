@@ -6433,3 +6433,13 @@ donc je fait comment ici. donc le client a deja payé le 10/11/2026 mais il dema
 
 la pour les Prix de vente je veux que tu ajoute la case aussi pour mettre les prix pil poil donc  la il est la case pour arrondir les prix mais je veux aussi avoir la possibilité de pouvoir ramener les prix pil poil par ex: si le prix devient à 18.4€ alors remettre à 18€ ou si 18.5 ou  18.55 alors remettre à 19€ ou ajouter aussi un autre option en plus quand la case est coché, donc de donner la possibilité de choisir quelle formule donc: si le prix devient à 18.4€ alors remettre à 18€ ou si 18.5 ou  18.55 alors remettre à 19€. OU si le prix devient 11€ alors remettre à 10€ et si 12.5€ remettre à 15€ et si 17€ alors remettre à 15€ et si 17.5€ alors remmetre à 20€.  t as compris la formule ? montre la maquette comment tu va apliquer .
 
+## 566. 2026-11-22 00:10 UTC
+
+montre moi la maquette
+
+## 567. 2026-11-22 00:13 UTC
+
+[1 capture(s) d'écran jointe(s)]
+
+tu vois la quand on ajoute un produit dans la facture d achat alors quand tu augmente le qte ou baisse ou tappe sur alors ne changer pas les resultant en temps reel et quand je tappe ou augment ou basse sur les autre inputs la il change en temps reel mais celui de qte !!
+

@@ -42,7 +42,6 @@ final class AchatsParProduit
     public static function depuis(array $lignes, array $mois, bool $plusieursMagasins, array $nomsDesMagasins = []): array
     {
         $rangDuMois = array_flip($mois);
-        /** @var array<string, array{produit: int, nom: string, magasin: int, achats: list<array{jour: string, rang: int, k: int, j: int, q: int, c: int}>}> $groupes */
         $groupes = [];
 
         foreach ($lignes as $ligne) {

@@ -86,7 +86,6 @@ final class DessinDeLEcartDesPrixDAchat
         $mini = min(0.0, floor(min($valeurs) / $pas) * $pas);
         $y = fn (float $valeur): float => self::HAUT + fdiv($maxi - $valeur, $maxi - $mini) * $hauteur;
 
-        /** @var list<Feuille|Groupe> $racine */
         $racine = [];
 
         for ($valeur = $mini; $valeur <= $maxi; $valeur += $pas) {

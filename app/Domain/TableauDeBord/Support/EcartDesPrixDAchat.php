@@ -68,15 +68,10 @@ final class EcartDesPrixDAchat
 
         $libelles = array_map(Mois::libelle(...), $mois);
         $courts = array_map(Mois::nomCourt(...), $mois);
-        /** @var list<string> $noms */
         $noms = [];
-        /** @var array<int, list<PremierAchat>> $premiersParMois */
         $premiersParMois = array_fill(0, self::NOMBRE_DE_MOIS, []);
-        /** @var array<int, list<AchatCompare>> $pasParMois */
         $pasParMois = array_fill(0, self::NOMBRE_DE_MOIS, []);
-        /** @var list<AchatDeLAnnee> $achatsDeLAnnee */
         $achatsDeLAnnee = [];
-        /** @var list<ProduitDeLaPeriode> $lignesDeLaPeriode */
         $lignesDeLaPeriode = [];
         $hausses = 0;
         $baisses = 0;

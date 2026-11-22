@@ -261,7 +261,7 @@ class StockLedgerServiceTest extends TestCase
         $this->assertSame(StockSousLeSeuilDAlerte::class, $notification->type);
         $this->assertSame('Ma Boutique : Stock bas : Câble USB-C', $notification->data['title']);
         $this->assertSame('Plus que 5 article(s) en stock (référence CAB-USBC, seuil d\'alerte : 5).', $notification->data['body']);
-        $this->assertSame(ProduitResource::getUrl('edit', ['record' => $produit], panel: 'app', tenant: $magasin), $notification->data['actions'][0]['url']);
+        $this->assertSame(ProduitResource::getUrl('edit', ['record' => $produit], isAbsolute: false, panel: 'app', tenant: $magasin), $notification->data['actions'][0]['url']);
         $this->assertSame($magasin->id, $notification->data['magasin_id']);
         $this->assertSame(0, $vendeur->notifications()->count());
         $this->assertSame(0, $proprietaireAutreMagasin->notifications()->count());

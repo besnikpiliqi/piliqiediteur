@@ -193,7 +193,7 @@ class MarquerFacturesEnRetardTest extends TestCase
         $this->assertSame("Échéance dépassée sans règlement complet : {$factureA1->numero}, {$factureA2->numero}.", $notification->data['body']);
         $this->assertSame($magasinA->id, $notification->data['magasin_id']);
         $this->assertSame(
-            FactureResource::getUrl('index', ['tableFilters' => ['statut' => ['value' => 'en_retard']]], panel: 'app', tenant: $magasinA),
+            FactureResource::getUrl('index', ['tableFilters' => ['statut' => ['value' => 'en_retard']]], isAbsolute: false, panel: 'app', tenant: $magasinA),
             $notification->data['actions'][0]['url'],
         );
         $this->assertSame(0, $vendeurA->notifications()->count());

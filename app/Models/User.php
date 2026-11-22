@@ -18,6 +18,7 @@ use App\Domain\Tenancy\Enums\StatutCompte;
 use App\Domain\Tenancy\Models\Affectation;
 use App\Domain\Tenancy\Models\Identifiant;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Models\NotificationDePiliqi;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Support\CleDuModele;
 use App\Domain\Tenancy\Support\ValeurRequise;
@@ -36,6 +37,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Facades\DB;
@@ -1123,6 +1125,18 @@ class User extends Authenticatable implements FilamentUser, HasTenants
         }
 
         return $magasins->orderBy('nom')->orderBy('id')->get();
+    }
+
+    /**
+     * Les notifications de sa cloche, de la plus récente à la plus
+     * ancienne : celles de Laravel, rangées avec des liens relatifs, jamais
+     * une adresse absolue (voir NotificationDePiliqi).
+     *
+     * @return MorphMany<NotificationDePiliqi, $this>
+     */
+    public function notifications(): MorphMany
+    {
+        return $this->morphMany(NotificationDePiliqi::class, 'notifiable')->latest();
     }
 
     /**

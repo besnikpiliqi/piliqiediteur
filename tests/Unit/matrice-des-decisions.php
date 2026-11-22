@@ -2733,6 +2733,33 @@ return [
                 'tests/Feature/Filament/ListesDuPlusRecentAuPlusAncienTest.php::test_les_fiches_et_les_brouillons_les_plus_recents_sont_en_tete_quel_que_soit_leur_identifiant',
             ],
         ],
+        'hors.liens-relatifs-des-notifications' => [
+            'puce' => 'Hors de CLAUDE.md',
+            'regle' => 'Une notification de la cloche se range avec des liens relatifs (chemin seul, sans adresse ni port) qui suivent le site qui sert la page, quelle que soit la classe qui l\'écrit ; les e-mails, qui sortent du site, gardent une adresse absolue ; un lien vers un autre site reste entier (demande de l\'éditeur du 20/11/2026, lot écrans).',
+            'tests' => [
+                'tests/Feature/Notifications/LiensRelatifsDesNotificationsTest.php::test_un_lien_de_ce_site_perd_son_adresse_et_un_lien_d_ailleurs_reste_entier',
+                'tests/Feature/Notifications/LiensRelatifsDesNotificationsTest.php::test_aucune_notification_rangee_ne_porte_d_adresse_et_chaque_bouton_mene_a_une_page_du_site',
+                'tests/Feature/Notifications/LiensRelatifsDesNotificationsTest.php::test_les_liens_ranges_suivent_le_site_qui_sert_la_page',
+                'tests/Feature/Notifications/LiensRelatifsDesNotificationsTest.php::test_seul_le_compte_destinataire_range_et_lit_ses_notifications',
+            ],
+        ],
+        'hors.liens-des-e-mails-de-la-demonstration' => [
+            'puce' => 'Hors de CLAUDE.md',
+            'regle' => 'Dans une copie de démonstration, l\'adresse du site dans le HTML et le texte d\'un e-mail capturé s\'écrit comme un repère, remplacé à l\'affichage par l\'adresse de la requête en cours : les liens de « E-mails qui seraient partis » ouvrent la bonne page sur le site qui sert la copie ; le début d\'une autre adresse et un lien vers un autre site restent entiers (demande de l\'éditeur du 20/11/2026, lot écrans).',
+            'tests' => [
+                'tests/Feature/Demonstration/CourrielsQuiSeraientPartisTest.php::test_les_liens_d_un_e_mail_capture_suivent_le_site_qui_sert_la_copie',
+            ],
+        ],
+        'hors.bandeau-et-pastille-de-la-copie' => [
+            'puce' => 'Hors de CLAUDE.md',
+            'regle' => 'Le bandeau « Vous êtes : » d\'une copie n\'a aucun z-index et ne coupe pas le volet des notifications, son menu restant au-dessus de la barre du haut ; « compte suspendu » s\'écrit une seule fois par compte, d\'après l\'état réel, jamais dans le libellé semé ; la pastille de rôle d\'un expert-comptable déclaré ne dit que « Expert-comptable », le cabinet déclaré se lisant en gris dessous (constats de l\'éditeur du 17/11/2026, lot écrans).',
+            'tests' => [
+                'tests/Browser/Demonstration/BandeauSousLeVoletDesNotificationsTest.php › le volet des notifications passe au-dessus du bandeau « Vous êtes : » dans l’espace de la société et le panneau d’un magasin, à 1 280 px et sur un téléphone, en clair comme en sombre',
+                'tests/Feature/Demonstration/BandeauVousEtesTest.php::test_un_compte_forge_retire_ou_suspendu_est_refuse_en_francais',
+                'tests/Feature/Demonstration/BandeauVousEtesTest.php::test_aucun_libelle_seme_du_bandeau_ne_dit_deja_le_statut_du_compte',
+                'tests/Feature/Cabinets/LienDeLExpertComptableTest.php::test_la_liste_de_l_equipe_montre_l_expert_comptable_et_l_etat_de_son_lien_au_proprietaire_seul',
+            ],
+        ],
         'hors.fermeture-de-caisse-sans-activite' => [
             'puce' => 'Hors de CLAUDE.md',
             'regle' => 'Une caisse personnelle n\'est ouverte que par une vente émise, un encaissement ou une contre-passation qu\'aucune fermeture n\'a comptés : « Fermer ma caisse » et « Fermer la caisse d\'un vendeur » se montrent grisés, avec l\'info-bulle « Aucune vente ni encaissement à fermer. » (« Aucune caisse de vendeur à fermer : aucune vente ni encaissement. » pour le second), tant que rien n\'est à fermer, même la première fois du jour ; une demande forgée est refusée par la même phrase, sans aucun relevé à zéro ; autant de fermetures par jour que de moments où l\'on a vendu ou encaissé, un double clic rend le relevé déjà fermé ; la fermeture d\'office ne change pas (décision de l\'éditeur du 18/11/2026, lot écrans).',

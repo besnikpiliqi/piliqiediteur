@@ -138,10 +138,15 @@ class MembreResource extends RessourceDuPanneauSociete
                     ->state(fn (User $record): ?string => static::peut('voirLIdentifiant', $record) ? $record->identifiantDeConnexion() : null)
                     ->placeholder('—')
                     ->visible(fn (): bool => static::proprietaireConnecte()),
+                // La pastille ne dit que « Expert-comptable » (constat de l'éditeur du
+                // 17/11/2026 : « Expert-comptable déclaré · cabinet … » prenait
+                // toute la largeur) ; le cabinet que la société a déclaré se lit
+                // sous la pastille, en gris.
                 Tables\Columns\TextColumn::make('role_societe')->label('Rôle')->badge()
-                    ->formatStateUsing(fn (RoleSociete $state, User $record): string => $record->estExpertComptable()
-                        ? 'Expert-comptable déclaré · '.(app(ExpertsComptablesDeclares::class)->declarationDe($record)?->nomDuCabinetDeclare() ?? 'cabinet')
-                        : $state->getLabel()),
+                    ->formatStateUsing(fn (RoleSociete $state, User $record): string => $record->estExpertComptable() ? 'Expert-comptable' : $state->getLabel())
+                    ->description(fn (User $record): ?string => $record->estExpertComptable()
+                        ? 'Déclaré · '.(app(ExpertsComptablesDeclares::class)->declarationDe($record)?->nomDuCabinetDeclare() ?? 'cabinet')
+                        : null),
                 Tables\Columns\TextColumn::make('magasins')->label('Magasin')->state(fn (User $record): string => static::resumeDesMagasins($record))->wrap(),
                 Tables\Columns\TextColumn::make('statut')->label('Statut')->badge(),
                 Tables\Columns\TextColumn::make('signaux')

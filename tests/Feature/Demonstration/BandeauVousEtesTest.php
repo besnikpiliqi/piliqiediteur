@@ -34,6 +34,7 @@ use App\Filament\App\Pages\Caisse;
 use App\Integrations\Sirene\FauxRepertoireSirene;
 use App\Models\User;
 use Closure;
+use Database\Seeders\Semis\ComptesDuBandeauDuModele;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
@@ -145,6 +146,21 @@ class BandeauVousEtesTest extends DemonstrationTestCase
 
         $page = $this->withUnencryptedCookie(TemoinsDesVisites::nom(), $temoin)->get('/choisir');
         $page->assertSee('Élodie Fabre')->assertSee('(compte suspendu)')->assertDontSee('Sarah Petit');
+        $this->assertGreaterThan(0, preg_match_all('#<button[^>]*data-compte-du-choix[^>]*>((?:(?!</button>).)*)</button>#s', (string) $page->getContent(), $boutons));
+        foreach ($boutons[1] as $bouton) {
+            $this->assertLessThanOrEqual(1, substr_count($bouton, 'compte suspendu'), 'La mention « compte suspendu » s\'écrit une seule fois par compte : '.trim(strip_tags($bouton)));
+        }
+    }
+
+    public function test_aucun_libelle_seme_du_bandeau_ne_dit_deja_le_statut_du_compte(): void
+    {
+        foreach (ComptesDuBandeauDuModele::COMPTES as [, $groupes]) {
+            foreach ($groupes as $comptes) {
+                foreach ($comptes as $nom => $libelle) {
+                    $this->assertStringNotContainsString('compte suspendu', $libelle, "Le libellé de {$nom} dit son rôle : la page ajoute « compte suspendu » d'après l'état du compte.");
+                }
+            }
+        }
     }
 
     public function test_un_compte_cree_dans_la_copie_entre_au_bandeau_a_la_fin_de_son_groupe(): void

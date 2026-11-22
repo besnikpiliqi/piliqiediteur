@@ -14,7 +14,9 @@ use LogicException;
  * jamais un compte retiré, ni un expert-comptable qui n'a pas encore
  * choisi son mot de passe, ni, dans la copie « Cabinet », un compte d'un
  * client. Chacun avec le libellé de son rôle et son groupe, dans l'ordre
- * du menu.
+ * du menu. Le libellé dit le rôle seul : « compte suspendu » s'ajoute à
+ * l'affichage d'après l'état réel du compte (voir la page « Choisissez qui
+ * vous êtes » et le bandeau), jamais écrit ici, sous peine de le répéter.
  */
 final class ComptesDuBandeauDuModele
 {
@@ -46,7 +48,7 @@ final class ComptesDuBandeauDuModele
                 'Camille Laurent' => 'Responsable',
                 'Lucas Moreau' => 'Vendeur',
                 'Inès Garcia' => 'Vendeuse (son mot de passe est encore son identifiant)',
-                'Yanis Morel' => 'Vendeur (compte suspendu)',
+                'Yanis Morel' => 'Vendeur',
                 'Élodie Fabre' => 'Observatrice',
             ],
             'republique' => [

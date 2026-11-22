@@ -4,7 +4,11 @@
  * pages de la démonstration. Lisible en clair et en sombre (contraste AA) :
  * sombre par la classe .dark des panneaux, ou par la préférence du système
  * sur les pages de la démonstration ; sur un téléphone, ses éléments
- * passent à la ligne et le menu défile dans son cadre.
+ * passent à la ligne et le menu défile dans son cadre. Le bandeau n'a aucun
+ * z-index : il se range sous la barre du haut du panneau et sous son volet
+ * des notifications, que sinon il coupait (constat de l'éditeur du
+ * 17/11/2026) ; seul son menu déroulant, qui s'ouvre sur la page, passe
+ * au-dessus de la barre.
  */
 .piliqi-bandeau {
     align-items: center;
@@ -18,7 +22,6 @@
     gap: 0.5rem 1rem;
     padding: 0.5rem 1rem;
     position: relative;
-    z-index: 40;
 }
 
 .piliqi-bandeau__marque {

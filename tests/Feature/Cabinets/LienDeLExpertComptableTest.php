@@ -515,7 +515,9 @@ class LienDeLExpertComptableTest extends TestCase
 
         Livewire::test(ListMembres::class)
             ->assertCanSeeTableRecords([$marc])
-            ->assertSee('Expert-comptable déclaré · cabinet CABINET PETIT ET ASSOCIES')
+            ->assertSee('Expert-comptable')
+            ->assertSee('Déclaré · cabinet CABINET PETIT ET ASSOCIES')
+            ->assertDontSee('Expert-comptable déclaré · cabinet')
             ->assertSee('Lien valable jusqu\'au 12/11/2026')
             ->assertSee('Mot de passe pas encore choisi')
             ->assertSee('Tous les magasins (expert-comptable)');

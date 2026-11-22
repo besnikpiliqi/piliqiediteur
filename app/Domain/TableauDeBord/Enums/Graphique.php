@@ -7,15 +7,24 @@ use Filament\Support\Contracts\HasLabel;
 
 /**
  * Le catalogue des graphiques du tableau de bord (décision de l'éditeur du
- * 14/11/2026, modèle « G1 + chiffres de G2 », lot GRAPH) : dix-neuf
+ * 14/11/2026, modèle « G1 + chiffres de G2 », lot GRAPH) : NOMBRE
  * graphiques, que le menu « Ajouter un graphique » propose à qui voit tous
  * les documents qu'ils comptent (voir sources() et Perimetre). Chacun dit
  * ce qu'il compte (voir ceQuIlCompte()), la ligne grise de sa carte, et
  * les types qu'il permet (voir types()), le premier par défaut.
  *
- * La dix-neuvième, « Écart des prix d'achat » (décision de l'éditeur du
+ * Sept d'entre eux sont par période (voir estParPeriode()) : une barre par
+ * mois, par trimestre ou par année selon le menu « Découper par », que la
+ * personne compare, cumule, lit en écart sur un an ou lisse par une
+ * tendance (choix de l'éditeur du 16/11/2026, lot GRAPH-AN). « Chiffre
+ * d'affaires HT par an » n'existe plus : « Découper par : année » le
+ * remplace, sur dix ans (décision de Claude du 22/11/2026, D76). « Ventes
+ * par vendeur », qui l'a remplacé, compte le chiffre d'affaires HT net de
+ * chaque compte qui a vendu, avec le nom figé sur ses ventes.
+ *
+ * Le dernier, « Écart des prix d'achat » (décision de l'éditeur du
  * 21/11/2026, D76), compare les prix des achats d'un même produit et se lit
- * sur les lignes des factures d'achat validées ; elle n'a que la forme
+ * sur les lignes des factures d'achat validées ; il n'a que la forme
  * « barres » et ne compare pas avec l'année précédente.
  *
  * Tous lisent les montants enregistrés sur les documents émis ou validés,
@@ -24,10 +33,16 @@ use Filament\Support\Contracts\HasLabel;
  */
 enum Graphique: string implements HasLabel
 {
+    /**
+     * Le nombre de graphiques du catalogue : le seul endroit du code où il
+     * s'écrit (un test le rapproche des cas de l'enum) ; tout ce qui le dit
+     * le relit (voir count(self::cases())).
+     */
+    public const NOMBRE = 19;
+
     case ChiffreDAffairesParMois = 'ca_par_mois';
     case VentesEtAchatsParMois = 'ventes_et_achats_par_mois';
     case TvaAPayerParMois = 'tva_par_mois';
-    case ChiffreDAffairesParAn = 'ca_par_an';
     case MargeBruteParMois = 'marge_par_mois';
     case ChiffreDAffairesParMagasin = 'ca_par_magasin';
     case VentesParTauxDeTva = 'ventes_par_taux';
@@ -35,6 +50,7 @@ enum Graphique: string implements HasLabel
     case EncaissementsParMode = 'encaissements_par_mode';
     case MeilleursProduits = 'meilleurs_produits';
     case MeilleursClients = 'meilleurs_clients';
+    case VentesParVendeur = 'ventes_par_vendeur';
     case AchatsParFournisseur = 'achats_par_fournisseur';
     case FacturesParAnciennete = 'factures_par_anciennete';
     case ValeurDuStock = 'valeur_du_stock';
@@ -50,7 +66,6 @@ enum Graphique: string implements HasLabel
             self::ChiffreDAffairesParMois => 'Chiffre d\'affaires HT par mois',
             self::VentesEtAchatsParMois => 'Ventes et achats HT par mois',
             self::TvaAPayerParMois => 'TVA à payer par mois (estimation)',
-            self::ChiffreDAffairesParAn => 'Chiffre d\'affaires HT par an',
             self::MargeBruteParMois => 'Marge brute HT par mois',
             self::ChiffreDAffairesParMagasin => 'Chiffre d\'affaires par magasin',
             self::VentesParTauxDeTva => 'Ventes par taux de TVA',
@@ -58,6 +73,7 @@ enum Graphique: string implements HasLabel
             self::EncaissementsParMode => 'Encaissements par mode de paiement',
             self::MeilleursProduits => 'Meilleurs produits',
             self::MeilleursClients => 'Meilleurs clients',
+            self::VentesParVendeur => 'Ventes par vendeur',
             self::AchatsParFournisseur => 'Achats par fournisseur',
             self::FacturesParAnciennete => 'Factures à encaisser par ancienneté',
             self::ValeurDuStock => 'Valeur du stock au coût moyen',
@@ -70,15 +86,29 @@ enum Graphique: string implements HasLabel
     }
 
     /**
-     * La ligne grise de la carte : ce que le graphique compte.
+     * Le titre de la carte pour le niveau de ses barres : « par mois » dit
+     * « par trimestre », « par année », « par exercice » (quand la société
+     * ne clôt pas en décembre) ou « par jour » dans le détail d'un mois. Les
+     * graphiques dont le libellé ne dit pas « par mois » gardent le leur.
      */
-    public function ceQuIlCompte(): string
+    public function titre(NiveauDeLaBarre $niveau = NiveauDeLaBarre::Mois, bool $exercices = false): string
     {
+        return str_replace('par mois', $niveau->parTerme($exercices), $this->getLabel());
+    }
+
+    /**
+     * La ligne grise de la carte : ce que le graphique compte, au pas de
+     * ses barres (« mois par mois », « trimestre par trimestre », « année
+     * par année », « jour par jour »).
+     */
+    public function ceQuIlCompte(NiveauDeLaBarre $niveau = NiveauDeLaBarre::Mois, bool $exercices = false): string
+    {
+        $pas = $niveau->pas($exercices);
+
         return match ($this) {
-            self::ChiffreDAffairesParMois => 'Les ventes HT émises, moins les avoirs émis, mois par mois.',
-            self::VentesEtAchatsParMois => 'Les ventes HT nettes des avoirs et les achats de marchandises HT (factures d\'achat validées moins avoirs fournisseur), mois par mois.',
+            self::ChiffreDAffairesParMois => "Les ventes HT émises, moins les avoirs émis, {$pas}.",
+            self::VentesEtAchatsParMois => "Les ventes HT nettes des avoirs et les achats de marchandises HT (factures d'achat validées moins avoirs fournisseur), {$pas}.",
             self::TvaAPayerParMois => 'La TVA collectée des ventes (nette des avoirs), la TVA déductible des achats (nette des avoirs fournisseur) et leur différence. Estimation tirée de vos documents.',
-            self::ChiffreDAffairesParAn => 'Les ventes HT nettes des avoirs de chaque année civile, qui est aussi l\'exercice quand il finit en décembre, ou de chaque exercice quand la période choisie est un exercice.',
             self::MargeBruteParMois => 'Les ventes HT des articles moins leur coût moyen d\'achat au moment de la vente, rejoué depuis le grand livre du stock ; le taux de marge en info-bulle.',
             self::ChiffreDAffairesParMagasin => 'La part de chaque magasin dans les ventes HT nettes de la période.',
             self::VentesParTauxDeTva => 'Les ventes HT nettes des avoirs, taux par taux.',
@@ -86,11 +116,12 @@ enum Graphique: string implements HasLabel
             self::EncaissementsParMode => 'Les encaissements TTC par mode de paiement, contre-passations déduites ; le crédit d\'avoir utilisé à part.',
             self::MeilleursProduits => 'Les 10 produits ou services au plus fort chiffre d\'affaires HT net, ou les plus vendus en quantité.',
             self::MeilleursClients => 'Les 10 clients au plus fort chiffre d\'affaires HT net, sans le client comptoir.',
+            self::VentesParVendeur => 'Les 10 comptes qui ont vendu au plus fort chiffre d\'affaires HT net des avoirs, avec le nom que chaque vente a gardé ; seulement les magasins où vous voyez toutes les ventes de l\'équipe.',
             self::AchatsParFournisseur => 'Les 10 fournisseurs aux plus forts achats HT nets (factures d\'achat validées moins avoirs fournisseur).',
             self::FacturesParAnciennete => 'Ce qui reste dû à ce jour : à échoir, puis en retard de 1 à 30 jours, de 31 à 60 jours et de plus de 60 jours, en jours du calendrier du magasin.',
-            self::ValeurDuStock => 'La valeur HT du stock au coût moyen à la fin de chaque mois, rejouée depuis le grand livre du stock.',
+            self::ValeurDuStock => 'La valeur HT du stock au coût moyen à la fin de chaque '.$niveau->terme($exercices).', rejouée depuis le grand livre du stock.',
             self::NombreDeVentesEtPanierMoyen => 'Le nombre de tickets et de factures émis, et leur montant moyen TTC (axe de droite).',
-            self::AvoirsParMois => 'Le montant HT des avoirs émis, mois par mois.',
+            self::AvoirsParMois => "Le montant HT des avoirs émis, {$pas}.",
             self::VentesParJourDeLaSemaine => 'Le chiffre d\'affaires HT net moyen de chaque jour, du lundi au dimanche, sur la période.',
             self::ArticlesEtServices => 'La part des articles et des services dans les ventes HT nettes.',
             self::EcartDesPrixDAchat => TextesDeLEcartDesPrixDAchat::METHODE_PAR_MOIS,
@@ -110,9 +141,9 @@ enum Graphique: string implements HasLabel
 
         return match ($this) {
             self::ChiffreDAffairesParMois, self::VentesEtAchatsParMois, self::TvaAPayerParMois, self::MargeBruteParMois, self::ValeurDuStock, self::AvoirsParMois => $parMois,
-            self::ChiffreDAffairesParAn, self::NombreDeVentesEtPanierMoyen => [TypeDeGraphique::Barres, TypeDeGraphique::Lignes],
+            self::NombreDeVentesEtPanierMoyen => [TypeDeGraphique::Barres, TypeDeGraphique::Lignes],
             self::EcartDesPrixDAchat => [TypeDeGraphique::Barres],
-            self::ChiffreDAffairesParMagasin, self::MeilleursProduits, self::MeilleursClients, self::AchatsParFournisseur => $classement,
+            self::ChiffreDAffairesParMagasin, self::MeilleursProduits, self::MeilleursClients, self::VentesParVendeur, self::AchatsParFournisseur => $classement,
             self::VentesParTauxDeTva, self::ParticuliersEtProfessionnels, self::EncaissementsParMode, self::ArticlesEtServices => $repartition,
             self::FacturesParAnciennete => [TypeDeGraphique::Barres, TypeDeGraphique::Anneau, TypeDeGraphique::Camembert, TypeDeGraphique::BarresCouchees],
             self::VentesParJourDeLaSemaine => [TypeDeGraphique::Barres, TypeDeGraphique::Lignes, TypeDeGraphique::Radar],
@@ -125,12 +156,46 @@ enum Graphique: string implements HasLabel
     }
 
     /**
-     * Un graphique par mois, qui ajoute la même période un an plus tôt
-     * quand la case « Comparer avec l'année précédente » est cochée.
+     * Un graphique par période : une barre par mois, par trimestre ou par
+     * année selon le menu « Découper par », que la personne compare avec
+     * l'année précédente, cumule, lit en écart en % sur un an et lisse par
+     * une tendance. Les autres cartes répartissent la période choisie.
      */
-    public function estParMois(): bool
+    public function estParPeriode(): bool
     {
         return in_array($this, [self::ChiffreDAffairesParMois, self::VentesEtAchatsParMois, self::TvaAPayerParMois, self::MargeBruteParMois, self::ValeurDuStock, self::NombreDeVentesEtPanierMoyen, self::AvoirsParMois], true);
+    }
+
+    /**
+     * Le cumul depuis le début de l'année, ou de l'exercice, a un sens pour
+     * ce graphique : celui d'un flux (des ventes, des achats, une TVA), non
+     * celui d'un stock, dont chaque barre est une valeur de fin de période.
+     */
+    public function accepteLeCumul(): bool
+    {
+        return $this->estParPeriode() && $this !== self::ValeurDuStock;
+    }
+
+    /**
+     * Les listes de documents que le clic sur un jour de ce graphique
+     * ouvre, filtrées sur ce jour (voir ListesDesJours) ; aucune pour un
+     * graphique qui n'est pas par période, ni pour la valeur du stock, qui
+     * n'est la somme d'aucun document du jour.
+     *
+     * @return list<ListeDeDocuments>
+     */
+    public function listesDuJour(bool $societeADesArticles): array
+    {
+        $ventes = [ListeDeDocuments::Factures, ListeDeDocuments::Avoirs];
+        $achats = [ListeDeDocuments::FacturesAchat, ListeDeDocuments::AvoirsFournisseur];
+
+        return match ($this) {
+            self::ChiffreDAffairesParMois, self::MargeBruteParMois, self::NombreDeVentesEtPanierMoyen => $ventes,
+            self::VentesEtAchatsParMois => [...$ventes, ...$achats],
+            self::TvaAPayerParMois => $societeADesArticles ? [...$ventes, ...$achats] : $ventes,
+            self::AvoirsParMois => [ListeDeDocuments::Avoirs],
+            default => [],
+        };
     }
 
     /**
@@ -142,7 +207,7 @@ enum Graphique: string implements HasLabel
     public function sources(bool $societeADesArticles): array
     {
         return match ($this) {
-            self::ChiffreDAffairesParMois, self::ChiffreDAffairesParAn, self::ChiffreDAffairesParMagasin, self::VentesParTauxDeTva,
+            self::ChiffreDAffairesParMois, self::ChiffreDAffairesParMagasin, self::VentesParTauxDeTva, self::VentesParVendeur,
             self::ParticuliersEtProfessionnels, self::MeilleursProduits, self::NombreDeVentesEtPanierMoyen, self::VentesParJourDeLaSemaine,
             self::ArticlesEtServices => [SourceDesGraphiques::Ventes],
             self::VentesEtAchatsParMois => [SourceDesGraphiques::Ventes, SourceDesGraphiques::Achats],

@@ -13,6 +13,7 @@ use App\Domain\Demonstration\Enums\EtatDeLaDemonstration;
 use App\Domain\Demonstration\Jobs\EnvoyerLeLienDeLaDemonstration;
 use App\Domain\Demonstration\Models\Demonstration;
 use App\Domain\Facturation\Events\FactureEmise;
+use App\Domain\TableauDeBord\Enums\DecoupageDuTableauDeBord;
 use App\Domain\TableauDeBord\Enums\EcranDuTableauDeBord;
 use App\Domain\TableauDeBord\Enums\Graphique;
 use App\Domain\TableauDeBord\Enums\PeriodeDuTableauDeBord;
@@ -231,6 +232,7 @@ class SemisCompletTest extends TestCase
         $this->assertLesComptesEtLeursMagasins();
         $this->assertLesCasDesGraphiquesEtDesCaisses();
         $this->assertLesCasDeLEcartDesPrixDAchat();
+        $this->assertLaCarteDesVentesParVendeur();
         $this->assertLesDatesDeLOperation();
         $this->assertLaListeDesComptesOuvreChaqueCompteActif();
         $this->assertLesRenouvellementsDesDemonstrations();
@@ -444,6 +446,50 @@ class SemisCompletTest extends TestCase
             $this->lignes('select distinct (select count(*) from json_object_keys(encaissements)) > 1 from clotures_caisse_personnelles where json_typeof(encaissements) = \'object\' order by 1'),
             'Un relevé de caisse a un seul mode d\'encaissement, un autre en a plusieurs.',
         );
+    }
+
+    /**
+     * La carte « Ventes par vendeur » (lot GRAPH-AN) : la propriétaire de
+     * Maison Ferrand et Camille Laurent l'ont dans leurs graphiques ; aux
+     * Halles, plusieurs comptes ont vendu et leur somme est le chiffre
+     * d'affaires net du magasin, avoirs déduits ; Marc Petit la lit sur les
+     * dix dernières années de Conseil Vasseur, où Bruno Caron, retiré de la
+     * société, garde son nom sur ses ventes ; les autres comptes de Maison
+     * Ferrand l'ajoutent par « Ajouter un graphique ».
+     */
+    private function assertLaCarteDesVentesParVendeur(): void
+    {
+        $societe = Societe::query()->where('siren', SemisComplet::SIREN_COMMERCE)->sole();
+        $proprietaire = $societe->proprietaire()->sole();
+        $camille = User::query()->where('name', 'Camille Laurent')->sole();
+        $perimetres = app(PerimetreDesGraphiques::class);
+        $preferences = app(PreferencesDesGraphiques::class);
+        $carte = CarteDuTableauDeBord::parDefaut(Graphique::VentesParVendeur);
+        $chiffreDAffaires = CarteDuTableauDeBord::parDefaut(Graphique::ChiffreDAffairesParMois);
+        $series = fn (Perimetre $perimetre, DecoupageDuTableauDeBord $decoupage): array => app(SeriesDesGraphiques::class)->pour(new CalculDesSeries($perimetre, new ReglagesDuTableauDeBord([$carte, $chiffreDAffaires], PeriodeDuTableauDeBord::DouzeDerniersMois, null, false, $decoupage), [$carte, $chiffreDAffaires]));
+
+        app(TenantContext::class)->clear();
+        $halles = $perimetres->duMagasin($camille, $this->magasinDeMaisonFerrand('HALLES'));
+
+        foreach ([[EcranDuTableauDeBord::Societe, $proprietaire, $perimetres->deLaSociete($proprietaire, $societe)], [EcranDuTableauDeBord::Magasin, $camille, $halles]] as [$ecran, $compte, $perimetre]) {
+            $this->assertNotNull($preferences->lire($compte, $perimetre)->carte(Graphique::VentesParVendeur), "{$compte->name} a « Ventes par vendeur » sur l'écran « {$ecran->value} ».");
+        }
+
+        $nadia = User::query()->where('name', 'Nadia Benali')->sole();
+        $this->assertNull($preferences->lire($nadia, $perimetres->deLaSociete($nadia, $societe))->carte(Graphique::VentesParVendeur), 'Les autres comptes l\'ajoutent par « Ajouter un graphique ».');
+
+        $desHalles = $series($halles, DecoupageDuTableauDeBord::Mois);
+        $this->assertGreaterThan(1, count($desHalles[Graphique::VentesParVendeur->value]->etiquettes), 'Plusieurs comptes ont vendu aux Halles.');
+        $this->assertSame(
+            array_sum($desHalles[Graphique::ChiffreDAffairesParMois->value]->jeux[0]['valeurs']),
+            array_sum($desHalles[Graphique::VentesParVendeur->value]->jeux[0]['valeurs']),
+            'La somme des vendeurs est le chiffre d\'affaires net des Halles : un avoir se déduit du vendeur du ticket qu\'il corrige.',
+        );
+
+        $marc = User::query()->where('name', 'Marc Petit')->sole();
+        $deConseilVasseur = $series($perimetres->delExpertComptable($marc), DecoupageDuTableauDeBord::Annee)[Graphique::VentesParVendeur->value];
+        $this->assertContains('Bruno Caron', $deConseilVasseur->etiquettes, 'Un vendeur retiré de la société garde son nom sur ses ventes.');
+        $this->assertNotContains($marc->name, $deConseilVasseur->etiquettes, 'Un expert-comptable ne vend jamais.');
     }
 
     /**

@@ -12,7 +12,7 @@ use App\Domain\Stock\Enums\TypeMouvementStock;
 use App\Domain\Stock\Models\MouvementStock;
 use App\Domain\Stock\Services\StockLedgerService;
 use App\Domain\TableauDeBord\Enums\SourceDesGraphiques;
-use App\Domain\TableauDeBord\Support\Mois;
+use App\Domain\TableauDeBord\Support\HistoriqueDuStock;
 use App\Domain\TableauDeBord\Support\Perimetre;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Scopes\MagasinScope;
@@ -27,16 +27,17 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * Le stock du tableau de bord, dans une société qui a des articles : la
- * valeur HT du stock au coût moyen à la fin de chaque mois, et le coût des
- * articles vendus chaque mois, que la marge brute déduit de leurs ventes
- * (voir historique()).
+ * valeur HT du stock au coût moyen à la fin de chaque jour, et le coût des
+ * articles vendus chaque jour, que la marge brute déduit de leurs ventes
+ * (voir historique() et HistoriqueDuStock, que chaque barre d'un graphique
+ * par période, du jour à l'année, interroge).
  * Le grand livre de chaque produit se rejoue dans l'ordre, avec ses
  * réceptions, exactement comme la vérification de chaque nuit établit son
  * coût moyen (voir StockLedgerService::coutMoyenRejoue()) : après chaque
  * mouvement, son stock et son coût moyen ; une vente sort au coût moyen
  * du moment, un retour client rentre au même coût, un stock vide ou
  * négatif ne vaut rien (CLAUDE.md, « Achats et stock »). Chaque mouvement
- * appartient au mois de son magasin.
+ * appartient au jour de son magasin.
  *
  * Une lecture hors du magasin courant, limitée aux magasins que le
  * périmètre permet pour le stock (et pour les ventes, pour la marge ; voir
@@ -47,8 +48,6 @@ use Illuminate\Support\Facades\DB;
  * de stock de la facture qu'elle régularise.
  *
  * @phpstan-import-type LigneDeVente from VentesDuTableauDeBord
- *
- * @phpstan-type Historique array{valeurs: array<int, array<string, int>>, ventes: array<int, array<string, int>>, couts: array<int, array<string, int>>}
  */
 final class StockDuTableauDeBord
 {
@@ -58,47 +57,41 @@ final class StockDuTableauDeBord
     ) {}
 
     /**
-     * La valeur du stock à la fin de chacun de ces mois, et, de chacun, le
-     * chiffre d'affaires HT et le coût des articles suivis en stock vendus,
-     * retours déduits, en centimes, par magasin puis par mois « AAAA-MM ».
+     * La valeur du stock à la fin de chaque jour où elle change, et, de
+     * chaque jour, le chiffre d'affaires HT et le coût des articles suivis
+     * en stock vendus, retours déduits, en centimes, par magasin puis par
+     * jour « AAAA-MM-JJ » (voir HistoriqueDuStock).
      *
      * Le coût se lit sur le grand livre : une vente sort au coût moyen du
      * moment, un retour client rentre au même coût. Le chiffre d'affaires
      * est le HT de chacune de ces lignes de vente ($lignes, celles des
      * produits) dont la vente a fait sortir le produit du stock, dans le
-     * mois de son document : la ligne d'un ticket ou d'une facture qui a
+     * jour de son document : la ligne d'un ticket ou d'une facture qui a
      * son mouvement de vente, celle d'un avoir qui a son retour au stock,
      * et la ligne d'une facture rectificative ou d'un avoir de
      * régularisation, qui ne bougent pas le stock, quand la vente qu'ils
      * régularisent l'a fait (voir VentesDuTableauDeBord::lignes()) : un
      * export régularisé faute de preuve de sortie déduit de la marge du
-     * mois de sa régularisation le HT de son avoir et y ajoute celui de sa
+     * jour de sa régularisation le HT de son avoir et y ajoute celui de sa
      * rectificative, sans aucun coût de plus.
      *
      * @param  Collection<int, Magasin>  $magasins
-     * @param  list<string>  $mois
      * @param  list<LigneDeVente>  $lignes
-     * @return Historique
      *
      * @throws AuthorizationException un magasin que le périmètre ne permet pas
      */
-    public function historique(Perimetre $perimetre, Collection $magasins, array $mois, array $lignes = []): array
+    public function historique(Perimetre $perimetre, Collection $magasins, array $lignes = []): HistoriqueDuStock
     {
         $perimetre->exiger($magasins, SourceDesGraphiques::Stock);
-        $zero = array_fill_keys($mois, 0);
-        $historique = ['valeurs' => [], 'ventes' => [], 'couts' => []];
 
-        foreach ($magasins as $magasin) {
-            foreach (array_keys($historique) as $quoi) {
-                $historique[$quoi][CleDuModele::de($magasin)] = $zero;
-            }
-        }
-
-        if ($magasins->isEmpty() || $mois === []) {
-            return $historique;
+        if ($magasins->isEmpty()) {
+            return new HistoriqueDuStock([], [], []);
         }
 
         $ids = CleDuModele::desModeles($magasins);
+        $valeurs = array_fill_keys($ids, []);
+        $ventes = array_fill_keys($ids, []);
+        $couts = array_fill_keys($ids, []);
         $calendriers = [];
 
         foreach ($magasins as $magasin) {
@@ -110,7 +103,6 @@ final class StockDuTableauDeBord
             ->get(['id', 'magasin_id', 'produit_id', 'type', 'quantite', 'cout_unitaire_ht', 'source_type', 'source_id', 'survenu_le'])
             ->groupBy('produit_id');
         $receptions = $this->receptions($ids);
-        $dernier = $mois[array_key_last($mois)];
         $typeDeVente = (new Facture)->getMorphClass();
         $typeDeRetour = (new LigneAvoir)->getMorphClass();
         $sorties = [];
@@ -126,7 +118,7 @@ final class StockDuTableauDeBord
             $etats = [];
             $calendrier = $calendriers[$produit->magasin_id];
 
-            $this->stock->coutMoyenRejoue($produit, $grandLivre, $receptions[$produit->id] ?? [], function (MouvementStock $mouvement, int $stock, int $cmup) use (&$etats, &$historique, &$sorties, &$retours, $calendrier, $dernier, $typeDeVente, $typeDeRetour, $produit): void {
+            $this->stock->coutMoyenRejoue($produit, $grandLivre, $receptions[$produit->id] ?? [], function (MouvementStock $mouvement, int $stock, int $cmup) use (&$etats, &$couts, &$sorties, &$retours, $calendrier, $typeDeVente, $typeDeRetour, $produit): void {
                 $vente = $mouvement->type === TypeMouvementStock::Vente && $mouvement->source_type === $typeDeVente;
                 $retour = $mouvement->type === TypeMouvementStock::RetourClient && $mouvement->source_type === $typeDeRetour;
 
@@ -138,43 +130,31 @@ final class StockDuTableauDeBord
                     $retours[ValeurRequise::de($mouvement->source_id, 'la ligne d\'avoir qui justifie un retour du grand livre')] = true;
                 }
 
-                $leMois = Mois::duJour($calendrier->jourDe(ValeurRequise::de($mouvement->survenu_le, 'l\'instant d\'un mouvement du grand livre')));
+                $leJour = $calendrier->jourDe(ValeurRequise::de($mouvement->survenu_le, 'l\'instant d\'un mouvement du grand livre'));
+                $etats[$leJour] = ['stock' => $stock, 'cmup' => $cmup];
 
-                if ($leMois > $dernier) {
-                    return;
-                }
-
-                $etats[$leMois] = ['stock' => $stock, 'cmup' => $cmup];
-
-                if (! array_key_exists($leMois, $historique['couts'][$produit->magasin_id]) || (! $vente && ! $retour)) {
+                if (! $vente && ! $retour) {
                     return;
                 }
 
                 $cout = $this->calculateur->valeurAuCoutMoyen($mouvement->quantite, $cmup, 0)['montant_ht'];
-                $historique['couts'][$produit->magasin_id][$leMois] += $vente ? $cout : -$cout;
+                $couts[$produit->magasin_id][$leJour] = ($couts[$produit->magasin_id][$leJour] ?? 0) + ($vente ? $cout : -$cout);
             });
 
-            $courant = null;
+            ksort($etats);
+            $precedente = 0;
 
-            foreach ($mois as $unMois) {
-                foreach ($etats as $moisDeLEtat => $etat) {
-                    if ($moisDeLEtat <= $unMois) {
-                        $courant = $etat;
-                    }
-                }
-
-                if ($courant !== null) {
-                    $historique['valeurs'][$produit->magasin_id][$unMois] += $this->calculateur->valeurAuCoutMoyen(max($courant['stock'], 0), $courant['cmup'], 0)['montant_ht'];
-                }
+            foreach ($etats as $jour => $etat) {
+                $valeur = $this->calculateur->valeurAuCoutMoyen(max($etat['stock'], 0), $etat['cmup'], 0)['montant_ht'];
+                $valeurs[$produit->magasin_id][$jour] = ($valeurs[$produit->magasin_id][$jour] ?? 0) + $valeur - $precedente;
+                $precedente = $valeur;
             }
         }
 
         $rectifiees = null;
 
         foreach ($lignes as $ligne) {
-            $leMois = Mois::duJour($ligne['jour']);
-
-            if ($ligne['produit'] === null || ! array_key_exists($leMois, $historique['ventes'][$ligne['magasin']] ?? [])) {
+            if ($ligne['produit'] === null || ! isset($ventes[$ligne['magasin']])) {
                 continue;
             }
 
@@ -185,11 +165,36 @@ final class StockDuTableauDeBord
             };
 
             if ($sortie) {
-                $historique['ventes'][$ligne['magasin']][$leMois] += $ligne['document'] === 'facture' ? $ligne['ht'] : -$ligne['ht'];
+                $ventes[$ligne['magasin']][$ligne['jour']] = ($ventes[$ligne['magasin']][$ligne['jour']] ?? 0) + ($ligne['document'] === 'facture' ? $ligne['ht'] : -$ligne['ht']);
             }
         }
 
-        return $historique;
+        return new HistoriqueDuStock(self::cumulerLesValeurs($valeurs), $ventes, $couts);
+    }
+
+    /**
+     * La valeur du stock de chaque magasin à la fin de chaque jour où elle
+     * change : la somme des changements de ses produits jusqu'à ce jour.
+     *
+     * @param  array<int, array<string, int>>  $changements  par magasin, de combien la valeur change à la fin de chaque jour
+     * @return array<int, array<string, int>>
+     */
+    private static function cumulerLesValeurs(array $changements): array
+    {
+        $valeurs = [];
+
+        foreach ($changements as $magasin => $parJour) {
+            ksort($parJour);
+            $total = 0;
+            $valeurs[$magasin] = [];
+
+            foreach ($parJour as $jour => $changement) {
+                $total += $changement;
+                $valeurs[$magasin][$jour] = $total;
+            }
+        }
+
+        return $valeurs;
     }
 
     /**

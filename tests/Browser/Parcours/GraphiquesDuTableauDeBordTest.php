@@ -245,7 +245,7 @@ test('le collaborateur à qui le client est confié compose la page des graphiqu
 
     $onglet = $this->seConnecter($societe->collaborateur, panneau: 'cabinet')
         ->aller('/cabinet/'.$societe->cabinet->uuid.'/clients/'.$lien->uuid.'/graphiques')->attendre()->verifier();
-    composerLaGrille($onglet, 3, 'ca_par_an', 'lignes');
+    composerLaGrille($onglet, 3, 'ventes_et_panier_moyen', 'lignes');
 
     $onglet->aller('/app/'.$societe->magasin->uuid)->attendre()->verifier();
     composerLaGrille($onglet, 3, 'avoirs_par_mois', 'aires');
@@ -335,13 +335,13 @@ function defautsDesEnTetes(Navigation $onglet): array
         JS);
 }
 
-test('l’en-tête de chacun des dix-neuf graphiques garde le type, « Monter », « Descendre » et la croix sur sa première ligne, la croix à droite, à 1 280, 1 024 et 390 px de large', function () {
+test('l’en-tête de chacun des graphiques du catalogue garde le type, « Monter », « Descendre » et la croix sur sa première ligne, la croix à droite, à 1 280, 1 024 et 390 px de large', function () {
     $societe = $this->societeComplete();
     app(PreferencesDesGraphiques::class)->enregistrer($societe->proprietaire, EcranDuTableauDeBord::Societe, new ReglagesDuTableauDeBord(
         array_map(fn (Graphique $graphique): CarteDuTableauDeBord => CarteDuTableauDeBord::parDefaut($graphique), Graphique::cases()),
     ));
     $onglet = $this->seConnecter($societe->proprietaire, panneau: 'societe')
-        ->attendreQue('document.querySelectorAll("[data-graphique]").length === '.count(Graphique::cases()), 'les dix-neuf graphiques ne sont pas là');
+        ->attendreQue('document.querySelectorAll("[data-graphique]").length === '.count(Graphique::cases()), 'les graphiques du catalogue ne sont pas tous là');
 
     foreach ([1280, 1024, 390] as $largeur) {
         $onglet->page()->setViewportSize($largeur, 900);

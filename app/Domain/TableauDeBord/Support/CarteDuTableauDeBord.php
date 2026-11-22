@@ -8,10 +8,14 @@ use App\Domain\TableauDeBord\Enums\TypeDeGraphique;
 /**
  * Une carte de la grille du tableau de bord : son graphique, le type
  * choisi parmi ceux qu'il permet, pour les meilleurs produits ce qui les
- * classe (le chiffre d'affaires HT ou la quantité), et pour l'écart des
+ * classe (le chiffre d'affaires HT ou la quantité), pour l'écart des
  * prix d'achat son affichage, un total par mois ou un seul total pour les
- * douze mois (décision de l'éditeur du 21/11/2026, D76, B6) : un réglage de
- * la carte, retenu comme la mesure, que chaque changement de type garde.
+ * douze mois (décision de l'éditeur du 21/11/2026, D76, B6), et pour un
+ * graphique par période ce que la carte montre (choix de l'éditeur du
+ * 16/11/2026, lot GRAPH-AN) : les montants (le défaut) ou l'écart en % sur
+ * un an, et la tendance, la moyenne de la période et des deux précédentes.
+ * Ce sont des réglages de la carte, retenus comme la mesure, que chaque
+ * changement de type garde.
  */
 final class CarteDuTableauDeBord
 {
@@ -30,6 +34,8 @@ final class CarteDuTableauDeBord
         public readonly TypeDeGraphique $type,
         public readonly string $mesure = self::PAR_CHIFFRE_D_AFFAIRES,
         public readonly string $affichage = self::AFFICHAGE_PAR_MOIS,
+        public readonly bool $ecart = false,
+        public readonly bool $tendance = false,
     ) {}
 
     public static function parDefaut(Graphique $graphique, ?TypeDeGraphique $type = null): self
@@ -54,8 +60,37 @@ final class CarteDuTableauDeBord
         return $this->graphique === Graphique::EcartDesPrixDAchat && $this->affichage === self::AFFICHAGE_SUR_DOUZE_MOIS;
     }
 
+    public function avecLeType(TypeDeGraphique $type): self
+    {
+        return new self($this->graphique, $type, $this->mesure, $this->affichage, $this->ecart, $this->tendance);
+    }
+
+    public function avecLaMesure(string $mesure): self
+    {
+        return new self($this->graphique, $this->type, $mesure, $this->affichage, $this->ecart, $this->tendance);
+    }
+
+    public function avecLAffichage(string $affichage): self
+    {
+        return new self($this->graphique, $this->type, $this->mesure, $affichage, $this->ecart, $this->tendance);
+    }
+
     /**
-     * @return array{graphique: string, type: string, mesure?: string, affichage?: string}
+     * La carte d'un graphique par période en écart en % sur un an, ou en
+     * montants ; la tendance se garde, que l'écart met de côté.
+     */
+    public function avecLEcart(bool $ecart): self
+    {
+        return new self($this->graphique, $this->type, $this->mesure, $this->affichage, $ecart, $this->tendance);
+    }
+
+    public function avecLaTendance(bool $tendance): self
+    {
+        return new self($this->graphique, $this->type, $this->mesure, $this->affichage, $this->ecart, $tendance);
+    }
+
+    /**
+     * @return array{graphique: string, type: string, mesure?: string, affichage?: string, ecart?: bool, tendance?: bool}
      */
     public function versTableau(): array
     {
@@ -65,18 +100,24 @@ final class CarteDuTableauDeBord
             return [...$carte, 'mesure' => $this->mesure];
         }
 
-        return $this->graphique === Graphique::EcartDesPrixDAchat ? [...$carte, 'affichage' => $this->affichage] : $carte;
+        if ($this->graphique === Graphique::EcartDesPrixDAchat) {
+            return [...$carte, 'affichage' => $this->affichage];
+        }
+
+        return $this->graphique->estParPeriode() ? [...$carte, 'ecart' => $this->ecart, 'tendance' => $this->tendance] : $carte;
     }
 
     /**
      * La carte écrite dans des préférences, ou null quand une seule de ses
-     * valeurs est inconnue : un graphique hors du catalogue, un type qu'il
-     * ne permet pas, une mesure qui n'existe pas ou qu'il n'a pas, un
-     * affichage qui n'existe pas ou qu'il n'a pas, une clé inconnue.
+     * valeurs est inconnue : un graphique hors du catalogue (comme « Chiffre
+     * d'affaires HT par an », retiré), un type qu'il ne permet pas, une
+     * mesure qui n'existe pas ou qu'il n'a pas, un affichage qui n'existe
+     * pas ou qu'il n'a pas, un écart ou une tendance qui n'est pas un
+     * booléen ou qu'il n'a pas, une clé inconnue.
      */
     public static function lire(mixed $brute): ?self
     {
-        if (! is_array($brute) || array_diff(array_keys($brute), ['graphique', 'type', 'mesure', 'affichage']) !== []) {
+        if (! is_array($brute) || array_diff(array_keys($brute), ['graphique', 'type', 'mesure', 'affichage', 'ecart', 'tendance']) !== []) {
             return null;
         }
 
@@ -106,6 +147,18 @@ final class CarteDuTableauDeBord
             $affichage = $brute['affichage'];
         }
 
-        return new self($graphique, $type, $mesure, $affichage);
+        $reglages = ['ecart' => false, 'tendance' => false];
+
+        foreach (array_keys($reglages) as $cle) {
+            if (array_key_exists($cle, $brute)) {
+                if (! $graphique->estParPeriode() || ! is_bool($brute[$cle])) {
+                    return null;
+                }
+
+                $reglages[$cle] = $brute[$cle];
+            }
+        }
+
+        return new self($graphique, $type, $mesure, $affichage, $reglages['ecart'], $reglages['tendance']);
     }
 }

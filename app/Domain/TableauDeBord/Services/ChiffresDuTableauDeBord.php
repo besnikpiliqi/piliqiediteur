@@ -4,8 +4,10 @@ namespace App\Domain\TableauDeBord\Services;
 
 use App\Domain\Charges\Support\MontantsDeTva;
 use App\Domain\TableauDeBord\Enums\SourceDesGraphiques;
+use App\Domain\TableauDeBord\Enums\TonDUnChiffre;
 use App\Domain\TableauDeBord\Support\CalculDesSeries;
 use App\Domain\TableauDeBord\Support\Mois;
+use App\Domain\TableauDeBord\Support\SommesParJour;
 use App\Domain\Tenancy\Support\CleDuModele;
 
 /**
@@ -15,7 +17,9 @@ use App\Domain\Tenancy\Support\CleDuModele;
  * lus avec les cartes de la page (voir CalculDesSeries) :
  *
  * - le chiffre d'affaires HT du mois : ventes émises moins avoirs émis, et
- *   sa variation sur le même mois de l'année précédente ;
+ *   sa variation sur les mêmes jours de l'année précédente (le 1er au 22 du
+ *   mois en cours contre le 1er au 22 du même mois un an plus tôt, comme
+ *   l'écart en % sur un an des graphiques par période) ;
  * - les achats HT du mois, dans une société qui a des articles : factures
  *   d'achat validées moins avoirs fournisseur émis, et leur variation ;
  * - la TVA à payer, une estimation : TVA collectée des ventes du mois,
@@ -30,7 +34,15 @@ use App\Domain\Tenancy\Support\CleDuModele;
  * Un chiffre que le compte ne voit dans aucun magasin du filtre n'est pas
  * donné (null). Tout est en centimes.
  *
- * @phpstan-type Chiffres array{ca: array{valeur: int, variation: string|null}|null, achats: array{valeur: int, variation: string|null}|null, tva: array{franchise: bool, a_payer: int, collectee: int, deductible: int, estimation: int|null, avec_les_charges: bool, sans_celles_de_la_societe: bool}|null, restant_du: array{valeur: int, en_retard: int}|null}
+ * La ligne sous un chiffre a sa couleur, que l'écran donne selon son ton
+ * (voir TonDUnChiffre) : la variation sur un an est verte quand elle
+ * monte, rouge quand elle baisse (« positif », « negatif »), neutre à 0 ou
+ * sans année d'avant ; « dont … en retard » est rouge quand un retard
+ * existe ; « collectée − déductible » reste neutre (choix de l'éditeur du
+ * 16/11/2026 ; décision de Claude du 22/11/2026, D76 : la couleur suit le
+ * sens, jamais le mérite).
+ *
+ * @phpstan-type Chiffres array{ca: array{valeur: int, variation: string|null, ton: string}|null, achats: array{valeur: int, variation: string|null, ton: string}|null, tva: array{franchise: bool, a_payer: int, collectee: int, deductible: int, estimation: int|null, avec_les_charges: bool, sans_celles_de_la_societe: bool}|null, restant_du: array{valeur: int, en_retard: int, ton_du_retard: string}|null}
  */
 final class ChiffresDuTableauDeBord
 {
@@ -47,7 +59,8 @@ final class ChiffresDuTableauDeBord
         $perimetre = $calcul->perimetre;
         $societe = $perimetre->societe;
         $ceMois = $calcul->ceMois();
-        $ilYAUnAn = Mois::decaler($ceMois, -12);
+        $duMois = [Mois::premierJour($ceMois), Mois::dernierJour($ceMois)];
+        $ilYAUnAn = [Mois::premierJour(Mois::decaler($ceMois, -12)), Mois::memeJourUnAnPlusTot($calcul->aujourdhui())];
         $ventes = CleDuModele::desModeles($perimetre->magasinsAvec(SourceDesGraphiques::Ventes));
         $achats = $societe->aDesArticles() ? CleDuModele::desModeles($perimetre->magasinsAvec(SourceDesGraphiques::Achats)) : [];
         $factures = CleDuModele::desModeles($perimetre->magasinsAvec(SourceDesGraphiques::Factures));
@@ -58,11 +71,13 @@ final class ChiffresDuTableauDeBord
         $chiffres = ['ca' => null, 'achats' => null, 'tva' => null, 'restant_du' => null];
 
         if ($ventes !== []) {
-            $chiffres['ca'] = self::avecSaVariation(self::somme($calcul, $documentsDeVente, $ventes, $ceMois, 'ht'), self::somme($calcul, $documentsDeVente, $ventes, $ilYAUnAn, 'ht'));
+            $sommes = self::sommes($calcul, $documentsDeVente, $ventes);
+            $chiffres['ca'] = self::avecSaVariation($sommes->entre(...$duMois), $sommes->entre(...$ilYAUnAn));
         }
 
         if ($achats !== []) {
-            $chiffres['achats'] = self::avecSaVariation(self::somme($calcul, $documentsDAchat, $achats, $ceMois, 'ht'), self::somme($calcul, $documentsDAchat, $achats, $ilYAUnAn, 'ht'));
+            $sommes = self::sommes($calcul, $documentsDAchat, $achats);
+            $chiffres['achats'] = self::avecSaVariation($sommes->entre(...$duMois), $sommes->entre(...$ilYAUnAn));
         }
 
         if ($tva !== []) {
@@ -73,7 +88,7 @@ final class ChiffresDuTableauDeBord
 
         if ($factures !== []) {
             $totaux = $this->factures->totaux($calcul->facturesAEncaisser($this->factures));
-            $chiffres['restant_du'] = ['valeur' => $totaux['restant_du'], 'en_retard' => $totaux['restant_du_en_retard']];
+            $chiffres['restant_du'] = ['valeur' => $totaux['restant_du'], 'en_retard' => $totaux['restant_du_en_retard'], 'ton_du_retard' => ($totaux['restant_du_en_retard'] > 0 ? TonDUnChiffre::Negatif : TonDUnChiffre::Neutre)->value];
         }
 
         return $chiffres;
@@ -101,32 +116,31 @@ final class ChiffresDuTableauDeBord
     }
 
     /**
-     * La somme, sur ce mois, de ce montant de ces documents de ces
-     * magasins, un avoir se déduisant.
+     * Les montants HT de ces documents de ces magasins, un avoir se
+     * déduisant, rangés par jour.
      *
-     * @param  list<array{document: string, magasin: int, jour: string, ht: int, tva: int}>  $documents
+     * @param  list<array{document: string, magasin: int, jour: string, ht: int}>  $documents
      * @param  list<int>  $magasins
-     * @param  'ht'|'tva'  $champ
      */
-    private static function somme(CalculDesSeries $calcul, array $documents, array $magasins, string $mois, string $champ): int
+    private static function sommes(CalculDesSeries $calcul, array $documents, array $magasins): SommesParJour
     {
-        return $calcul->sommeParMois($documents, $magasins, [$mois], fn (array $document): int => $calcul->signe($document) * $document[$champ])[$mois];
+        return $calcul->sommesParJour($documents, $magasins, fn (array $document): int => $calcul->signe($document) * $document['ht']);
     }
 
     /**
-     * Ce montant, et sa variation sur celui d'il y a un an, « +6,2 % sur un
-     * an », ou rien quand il n'y avait rien il y a un an.
+     * Ce montant, et sa variation sur celui des mêmes jours d'il y a un an,
+     * « +6,2 % sur un an », ou rien quand il n'y avait rien il y a un an.
      *
-     * @return array{valeur: int, variation: string|null}
+     * @return array{valeur: int, variation: string|null, ton: string}
      */
     private static function avecSaVariation(int $valeur, int $ilYAUnAn): array
     {
-        if ($ilYAUnAn === 0) {
-            return ['valeur' => $valeur, 'variation' => null];
+        $centiemes = CalculDesSeries::ecartSurUnAn($valeur, $ilYAUnAn);
+
+        if ($centiemes === null) {
+            return ['valeur' => $valeur, 'variation' => null, 'ton' => TonDUnChiffre::Neutre->value];
         }
 
-        $centiemes = CalculDesSeries::diviserArrondi(($valeur - $ilYAUnAn) * 10000, abs($ilYAUnAn));
-
-        return ['valeur' => $valeur, 'variation' => ($centiemes > 0 ? '+' : '').CalculDesSeries::pourcentage($centiemes).' sur un an'];
+        return ['valeur' => $valeur, 'variation' => ($centiemes > 0 ? '+' : '').CalculDesSeries::pourcentage($centiemes).' sur un an', 'ton' => TonDUnChiffre::dUneVariation($centiemes)->value];
     }
 }

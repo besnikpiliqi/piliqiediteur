@@ -196,7 +196,7 @@ class GrilleDesGraphiques extends Widget
                 throw new LogicException(self::REFUS_DE_LA_VALEUR);
             }
 
-            return $reglages->avecLaCarte(new CarteDuTableauDeBord($carte->graphique, $nouveau, $carte->mesure, $carte->affichage));
+            return $reglages->avecLaCarte($carte->avecLeType($nouveau));
         });
     }
 
@@ -213,7 +213,7 @@ class GrilleDesGraphiques extends Widget
                 throw new LogicException(self::REFUS_DE_LA_VALEUR);
             }
 
-            return $reglages->avecLaCarte(new CarteDuTableauDeBord($carte->graphique, $carte->type, $mesure, $carte->affichage));
+            return $reglages->avecLaCarte($carte->avecLaMesure($mesure));
         });
     }
 
@@ -232,7 +232,7 @@ class GrilleDesGraphiques extends Widget
                 throw new LogicException(self::REFUS_DE_LA_VALEUR);
             }
 
-            return $reglages->avecLaCarte(new CarteDuTableauDeBord($carte->graphique, $carte->type, $carte->mesure, $valeur));
+            return $reglages->avecLaCarte($carte->avecLAffichage($valeur));
         });
     }
 
@@ -309,7 +309,7 @@ class GrilleDesGraphiques extends Widget
                 'carte' => $carte,
                 'serie' => $series[$carte->graphique->value],
                 'config' => $carte->graphique === Graphique::EcartDesPrixDAchat ? null : self::configuration($carte, $series[$carte->graphique->value]),
-                'ecart' => $carte->graphique === Graphique::EcartDesPrixDAchat ? $this->ecartDesPrixDAchat($carte, $series[$carte->graphique->value], $perimetre, $calcul->mois) : null,
+                'ecart' => $carte->graphique === Graphique::EcartDesPrixDAchat ? $this->ecartDesPrixDAchat($carte, $series[$carte->graphique->value], $perimetre, $calcul->moisDeLEcart) : null,
             ], $cartes),
         ];
     }

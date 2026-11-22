@@ -309,7 +309,7 @@ class PlafondsDeRequetesTest extends TestCase
     /**
      * Les chiffres clés et la grille de graphiques (décision de l'éditeur
      * du 14/11/2026, lot GRAPH, et du 21/11/2026 pour l'écart des prix d'achat),
-     * avec les dix-neuf graphiques affichés et
+     * avec tous les graphiques du catalogue affichés et
      * la comparaison cochée : chaque source se lit au plus une fois par
      * page, quel que soit le nombre de cartes, et la grille lit la base
      * autant de fois avec un magasin ou trois (dans le panneau d'un

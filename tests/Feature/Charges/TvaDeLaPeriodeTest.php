@@ -15,13 +15,17 @@ use App\Domain\Charges\Support\MontantsDeTva;
 use App\Domain\Charges\Support\SaisieDeCharge;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\Fournisseur;
+use App\Domain\TableauDeBord\Enums\DecoupageDuTableauDeBord;
 use App\Domain\TableauDeBord\Enums\Graphique;
+use App\Domain\TableauDeBord\Enums\PeriodeDuTableauDeBord;
 use App\Domain\TableauDeBord\Services\ChiffresDuTableauDeBord;
 use App\Domain\TableauDeBord\Services\PerimetreDesGraphiques;
 use App\Domain\TableauDeBord\Services\SeriesDesGraphiques;
+use App\Domain\TableauDeBord\Support\Barre;
 use App\Domain\TableauDeBord\Support\CalculDesSeries;
 use App\Domain\TableauDeBord\Support\CarteDuTableauDeBord;
 use App\Domain\TableauDeBord\Support\ReglagesDuTableauDeBord;
+use App\Domain\TableauDeBord\Support\SerieDuGraphique;
 use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
@@ -70,6 +74,47 @@ class TvaDeLaPeriodeTest extends TestCase
         $this->assertSame(-24600, $tva->reelle());
         $this->assertSame(-31960, $tva->estimee());
         $this->assertSame(0, $this->tvaDuProprietaire($magasin->societe()->firstOrFail(), '2026-04')?->estimee());
+    }
+
+    /**
+     * Le graphique de la TVA par trimestre, par année et par jour (lot
+     * GRAPH-AN) additionne les mêmes montants que celui des mois : le
+     * deuxième trimestre de 2026 porte les 24,00 € collectés de mai, les
+     * 10,00 € de l'achat et les 260,00 € de charges validées, soit −246,00 €
+     * à payer et −319,60 € avec les charges à valider ; l'année les reprend,
+     * les trimestres à venir n'ont pas de valeur ; le détail du 6 mai, par
+     * jour, compte la vente mais pas les charges, que leur mois de TVA
+     * rattache à un mois.
+     */
+    public function test_la_tva_par_trimestre_par_annee_et_par_jour_additionne_les_charges_de_leurs_mois(): void
+    {
+        $magasin = $this->preparer();
+        $societe = $magasin->societe()->firstOrFail();
+        $carte = CarteDuTableauDeBord::parDefaut(Graphique::TvaAPayerParMois);
+        $serieDe = function (DecoupageDuTableauDeBord $decoupage, array $details = []) use ($societe, $carte): SerieDuGraphique {
+            app(TenantContext::class)->clear();
+            $perimetre = app(PerimetreDesGraphiques::class)->deLaSociete($societe->proprietaire()->firstOrFail(), $societe);
+
+            return app(SeriesDesGraphiques::class)->pour(new CalculDesSeries($perimetre, new ReglagesDuTableauDeBord([$carte], PeriodeDuTableauDeBord::AnneeEnCours, null, false, $decoupage), [$carte], $details))[Graphique::TvaAPayerParMois->value];
+        };
+        $valeurs = fn (SerieDuGraphique $serie): array => array_combine(array_column($serie->jeux, 'libelle'), array_column($serie->jeux, 'valeurs'));
+
+        $parTrimestre = $valeurs($serieDe(DecoupageDuTableauDeBord::Trimestre));
+        $parAnnee = $valeurs($serieDe(DecoupageDuTableauDeBord::Annee));
+        $mai = $serieDe(DecoupageDuTableauDeBord::Mois);
+        $jeton = fn (SerieDuGraphique $serie, string $etiquette): string => array_values(array_filter($serie->barres, fn (Barre $barre): bool => $barre->etiquette === $etiquette))[0]->jeton();
+        $parJour = $valeurs($serieDe(DecoupageDuTableauDeBord::Mois, [Graphique::TvaAPayerParMois->value => [$jeton($mai, 'mai 2026')]]));
+
+        $this->assertSame([0, 2400, null, null], $parTrimestre['TVA collectée']);
+        $this->assertSame([0, 1000, null, null], $parTrimestre['TVA déductible des achats']);
+        $this->assertSame([0, 26000, null, null], $parTrimestre['TVA déductible des charges']);
+        $this->assertSame([0, -24600, null, null], $parTrimestre['TVA à payer']);
+        $this->assertSame([0, -31960, null, null], $parTrimestre['TVA à payer (estimation)']);
+        $this->assertSame([-24600], $parAnnee['TVA à payer']);
+        $this->assertSame([-31960], $parAnnee['TVA à payer (estimation)']);
+        $this->assertSame([400, 1000], [$parJour['TVA collectée'][5], $parJour['TVA déductible des achats'][4]]);
+        $this->assertSame(0, array_sum($parJour['TVA déductible des charges']), 'Une charge est d\'un mois de TVA : le détail par jour ne la compte pas.');
+        $this->assertSame([-1000, 400], [$parJour['TVA à payer'][4], $parJour['TVA à payer'][5]], 'Le 5 mai l\'achat, le 6 la vente.');
     }
 
     public function test_l_autoliquidation_d_un_fournisseur_hors_de_france_est_sans_effet_sur_la_tva_a_payer(): void

@@ -8,15 +8,22 @@ use App\Domain\Charges\Support\MontantsDeTva;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\NatureLigne;
+use App\Domain\TableauDeBord\Enums\DecoupageDuTableauDeBord;
 use App\Domain\TableauDeBord\Enums\Graphique;
+use App\Domain\TableauDeBord\Enums\NiveauDeLaBarre;
 use App\Domain\TableauDeBord\Enums\SourceDesGraphiques;
 use App\Domain\TableauDeBord\Support\AchatsParProduit;
 use App\Domain\TableauDeBord\Support\CalculDesSeries;
 use App\Domain\TableauDeBord\Support\CarteDuTableauDeBord;
+use App\Domain\TableauDeBord\Support\ConstructeurDeSeriesParPeriode;
+use App\Domain\TableauDeBord\Support\DefinitionDeSerie;
 use App\Domain\TableauDeBord\Support\EcartDesPrixDAchat;
+use App\Domain\TableauDeBord\Support\HistoriqueDuStock;
 use App\Domain\TableauDeBord\Support\Mois;
 use App\Domain\TableauDeBord\Support\Perimetre;
 use App\Domain\TableauDeBord\Support\SerieDuGraphique;
+use App\Domain\TableauDeBord\Support\SommesParJour;
+use App\Domain\TableauDeBord\Support\TextesDesPeriodes;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Support\CleDuModele;
 use Closure;
@@ -34,9 +41,13 @@ use Illuminate\Database\Eloquent\Collection;
  *
  * Tout se compte en centimes, depuis les montants enregistrés sur les
  * documents émis ou validés, additionnés ici, jamais recalculés ; chaque
- * opération dans le mois de son magasin. Un mois encore à venir n'a pas
- * de valeur (null). Une société en franchise en base n'a pas de TVA à
- * estimer (voir Perimetre::voit()).
+ * opération dans le jour, le mois et l'année de son magasin. Une barre
+ * encore à venir n'a pas de valeur (null). Une société en franchise en
+ * base n'a pas de TVA à estimer (voir Perimetre::voit()). Les cartes par
+ * période (voir Graphique::estParPeriode()) se construisent barre par barre
+ * (voir ConstructeurDeSeriesParPeriode), chacune avec les séries de sa
+ * définition (voir DefinitionDeSerie) ; « Ventes par vendeur » additionne le
+ * chiffre d'affaires HT net de chaque compte qui a vendu.
  *
  * La carte « Écart des prix d'achat » (décision de l'éditeur du 21/11/2026,
  * D76) lit les lignes des factures d'achat validées, une fois pour la page
@@ -47,6 +58,7 @@ use Illuminate\Database\Eloquent\Collection;
  *
  * @phpstan-import-type DocumentDeVente from VentesDuTableauDeBord
  * @phpstan-import-type LigneDeVente from VentesDuTableauDeBord
+ * @phpstan-import-type VenteDUnCompte from VentesDuTableauDeBord
  * @phpstan-import-type DocumentDAchat from AchatsDuTableauDeBord
  * @phpstan-import-type LigneDAchatDuTableau from AchatsDuTableauDeBord
  * @phpstan-import-type ChargeDeLaTva from ChargesDuTableauDeBord
@@ -115,25 +127,29 @@ final class SeriesDesGraphiques
         $ids = CleDuModele::desModeles($magasins);
 
         return match ($carte->graphique) {
-            Graphique::ChiffreDAffairesParMois => $calcul->parMois('Chiffre d\'affaires HT', fn (array $mois): array => $calcul->sommeParMois($this->documentsDeVente($calcul), $ids, $mois, fn (array $document): int => $calcul->signe($document) * $document['ht'])),
-            Graphique::VentesEtAchatsParMois => $calcul->parMoisMultiple([
-                ['Ventes HT', fn (array $mois): array => $calcul->sommeParMois($this->documentsDeVente($calcul), $ids, $mois, fn (array $document): int => $calcul->signe($document) * $document['ht'])],
-                ['Achats HT', fn (array $mois): array => $calcul->sommeParMois($this->documentsDAchat($calcul), $ids, $mois, fn (array $document): int => $calcul->signe($document) * $document['ht'])],
+            Graphique::ChiffreDAffairesParMois => ConstructeurDeSeriesParPeriode::construire($calcul, $carte, [
+                new DefinitionDeSerie('Chiffre d\'affaires HT', $this->sommeDesVentes($calcul, $ids), principale: true),
             ]),
-            Graphique::TvaAPayerParMois => $this->tvaParMois($calcul, $ids),
-            Graphique::ChiffreDAffairesParAn => $this->chiffreDAffairesParAn($calcul, $ids),
-            Graphique::MargeBruteParMois => $this->margeParMois($calcul, $magasins),
+            Graphique::VentesEtAchatsParMois => ConstructeurDeSeriesParPeriode::construire($calcul, $carte, [
+                new DefinitionDeSerie('Ventes HT', $this->sommeDesVentes($calcul, $ids), principale: true),
+                new DefinitionDeSerie('Achats HT', self::somme($calcul->sommesParJour($this->documentsDAchat($calcul), $ids, fn (array $document): int => $calcul->signe($document) * $document['ht']))),
+            ]),
+            Graphique::TvaAPayerParMois => $this->tvaParPeriode($calcul, $carte, $ids),
+            Graphique::MargeBruteParMois => $this->margeParPeriode($calcul, $carte, $magasins),
             Graphique::ChiffreDAffairesParMagasin => $this->chiffreDAffairesParMagasin($calcul, $magasins),
             Graphique::VentesParTauxDeTva => $this->ventesParTaux($calcul, $ids),
             Graphique::ParticuliersEtProfessionnels => $this->particuliersEtProfessionnels($calcul, $ids),
             Graphique::EncaissementsParMode => $this->encaissementsParMode($calcul, $ids),
             Graphique::MeilleursProduits => $this->meilleursProduits($calcul, $magasins, $carte->parQuantite()),
             Graphique::MeilleursClients => $this->meilleursClients($calcul, $magasins),
+            Graphique::VentesParVendeur => $this->ventesParVendeur($calcul, $magasins),
             Graphique::AchatsParFournisseur => $this->achatsParFournisseur($calcul, $magasins),
             Graphique::FacturesParAnciennete => $this->anciennete($calcul, $magasins),
-            Graphique::ValeurDuStock => $this->valeurDuStock($calcul, $magasins),
-            Graphique::NombreDeVentesEtPanierMoyen => $this->nombreDeVentesEtPanierMoyen($calcul, $ids),
-            Graphique::AvoirsParMois => $calcul->parMois('Avoirs HT', fn (array $mois): array => $calcul->sommeParMois($this->avoirs($calcul), $ids, $mois, fn (array $document): int => $document['ht'])),
+            Graphique::ValeurDuStock => $this->valeurDuStock($calcul, $carte, $magasins),
+            Graphique::NombreDeVentesEtPanierMoyen => $this->nombreDeVentesEtPanierMoyen($calcul, $carte, $ids),
+            Graphique::AvoirsParMois => ConstructeurDeSeriesParPeriode::construire($calcul, $carte, [
+                new DefinitionDeSerie('Avoirs HT', self::somme($calcul->sommesParJour($this->avoirs($calcul), $ids, fn (array $document): int => $document['ht'])), principale: true),
+            ]),
             Graphique::VentesParJourDeLaSemaine => $this->ventesParJour($calcul, $ids),
             Graphique::ArticlesEtServices => $this->articlesEtServices($calcul, $ids),
             Graphique::EcartDesPrixDAchat => $this->ecartDesPrixDAchat($calcul, $magasins),
@@ -141,33 +157,117 @@ final class SeriesDesGraphiques
     }
 
     /**
-     * La TVA à payer par mois (voir TvaDeLaPeriode) : la TVA collectée, la
-     * TVA déductible des achats et, pour qui voit les charges de la
+     * Ce que valent, sur un intervalle de jours, les ventes HT nettes des
+     * avoirs de ces magasins.
+     *
+     * @param  list<int>  $ids
+     * @return Closure(string, string, NiveauDeLaBarre): int
+     */
+    private function sommeDesVentes(CalculDesSeries $calcul, array $ids): Closure
+    {
+        return self::somme($calcul->sommesParJour($this->documentsDeVente($calcul), $ids, fn (array $document): int => $calcul->signe($document) * $document['ht']));
+    }
+
+    /**
+     * Ce que ces sommes valent sur un intervalle de jours, quel que soit le
+     * niveau de la barre.
+     *
+     * @return Closure(string, string, NiveauDeLaBarre): int
+     */
+    private static function somme(SommesParJour $sommes): Closure
+    {
+        return fn (string $du, string $au, NiveauDeLaBarre $niveau): int => $sommes->entre($du, $au);
+    }
+
+    /**
+     * La TVA à payer par période (voir TvaDeLaPeriode) : la TVA collectée,
+     * la TVA déductible des achats et, pour qui voit les charges de la
      * société, celle des charges validées, puis la TVA à payer réelle, en
-     * ligne, et, avec les charges, son estimation avec les charges à
-     * valider, en pointillés ; sans les charges, la note le dit.
+     * ligne, la série principale de la carte, et, avec les charges, son
+     * estimation avec les charges à valider, en pointillés ; sans les
+     * charges, la note le dit.
      *
      * @param  list<int>  $ids
      */
-    private function tvaParMois(CalculDesSeries $calcul, array $ids): SerieDuGraphique
+    private function tvaParPeriode(CalculDesSeries $calcul, CarteDuTableauDeBord $carte, array $ids): SerieDuGraphique
     {
+        $tva = $this->tvaDeLIntervalle($calcul, $ids);
+        $collectee = new DefinitionDeSerie('TVA collectée', self::deLaTva($tva, fn (MontantsDeTva $montants): int => $montants->collectee()));
+        $reelle = new DefinitionDeSerie('TVA à payer', self::deLaTva($tva, fn (MontantsDeTva $montants): int => $montants->reelle()), principale: true, enLigne: true);
+
         if ($this->chargesDeLaTva($calcul) === null) {
-            return $calcul->parMoisMultiple([
-                ['TVA collectée', fn (array $mois): array => array_map(fn (MontantsDeTva $tva): int => $tva->collectee(), $this->tvaDesMois($calcul, $ids, $mois))],
-                ['TVA déductible', fn (array $mois): array => array_map(fn (MontantsDeTva $tva): int => $tva->deductible(), $this->tvaDesMois($calcul, $ids, $mois))],
-                ['TVA à payer', fn (array $mois): array => array_map(fn (MontantsDeTva $tva): int => $tva->reelle(), $this->tvaDesMois($calcul, $ids, $mois)), true],
-            ])->avecLaNote(self::SANS_LES_CHARGES);
+            return ConstructeurDeSeriesParPeriode::construire($calcul, $carte, [
+                $collectee,
+                new DefinitionDeSerie('TVA déductible', self::deLaTva($tva, fn (MontantsDeTva $montants): int => $montants->deductible())),
+                $reelle,
+            ], noteDeLaCarte: self::SANS_LES_CHARGES);
         }
 
-        $serie = $calcul->parMoisMultiple([
-            ['TVA collectée', fn (array $mois): array => array_map(fn (MontantsDeTva $tva): int => $tva->collectee(), $this->tvaDesMois($calcul, $ids, $mois))],
-            ['TVA déductible des achats', fn (array $mois): array => array_map(fn (MontantsDeTva $tva): int => $tva->deductibleDesAchats, $this->tvaDesMois($calcul, $ids, $mois))],
-            ['TVA déductible des charges', fn (array $mois): array => array_map(fn (MontantsDeTva $tva): int => $tva->deductibleDesChargesValidees, $this->tvaDesMois($calcul, $ids, $mois))],
-            ['TVA à payer', fn (array $mois): array => array_map(fn (MontantsDeTva $tva): int => $tva->reelle(), $this->tvaDesMois($calcul, $ids, $mois)), true],
-            ['TVA à payer (estimation)', fn (array $mois): array => array_map(fn (MontantsDeTva $tva): int => $tva->estimee(), $this->tvaDesMois($calcul, $ids, $mois)), true, SerieDuGraphique::EUROS, false, true],
-        ]);
+        return ConstructeurDeSeriesParPeriode::construire($calcul, $carte, [
+            $collectee,
+            new DefinitionDeSerie('TVA déductible des achats', self::deLaTva($tva, fn (MontantsDeTva $montants): int => $montants->deductibleDesAchats)),
+            new DefinitionDeSerie('TVA déductible des charges', self::deLaTva($tva, fn (MontantsDeTva $montants): int => $montants->deductibleDesChargesValidees)),
+            $reelle,
+            new DefinitionDeSerie('TVA à payer (estimation)', self::deLaTva($tva, fn (MontantsDeTva $montants): int => $montants->estimee()), enLigne: true, pointilles: true),
+        ], noteDuJour: TextesDesPeriodes::TVA_DES_CHARGES_PAR_JOUR, noteDeLaCarte: $calcul->perimetre->laisseLesChargesDeLaSociete($ids) ? self::SANS_LES_CHARGES_DE_LA_SOCIETE : null);
+    }
 
-        return $calcul->perimetre->laisseLesChargesDeLaSociete($ids) ? $serie->avecLaNote(self::SANS_LES_CHARGES_DE_LA_SOCIETE) : $serie;
+    /**
+     * Ce que vaut, sur un intervalle de jours, un montant de la TVA de cet
+     * intervalle.
+     *
+     * @param  Closure(string, string, NiveauDeLaBarre): MontantsDeTva  $tva
+     * @param  Closure(MontantsDeTva): int  $montant
+     * @return Closure(string, string, NiveauDeLaBarre): int
+     */
+    private static function deLaTva(Closure $tva, Closure $montant): Closure
+    {
+        return fn (string $du, string $au, NiveauDeLaBarre $niveau): int => $montant($tva($du, $au, $niveau));
+    }
+
+    /**
+     * La TVA de ces magasins sur un intervalle de jours : la TVA des
+     * ventes (nette de celle des avoirs) et des achats (nette de celle des
+     * avoirs fournisseur) de ces jours, additionnée ici depuis les montants
+     * des documents, et, pour une barre d'un mois au moins, celle des
+     * charges des mois qu'elle touche (voir TvaDeLaPeriode::parMois()) :
+     * une charge est d'un mois de TVA, jamais d'un jour, et le détail d'un
+     * mois par jour ne la compte pas. Une société sans articles n'a pas
+     * d'achats.
+     *
+     * @param  list<int>  $ids
+     * @return Closure(string, string, NiveauDeLaBarre): MontantsDeTva
+     */
+    private function tvaDeLIntervalle(CalculDesSeries $calcul, array $ids): Closure
+    {
+        $ventes = $calcul->sommesParJour($this->documentsDeVente($calcul), $ids, fn (array $document): int => $calcul->signe($document) * $document['tva']);
+        $achats = $calcul->perimetre->societe->aDesArticles()
+            ? $calcul->sommesParJour($this->documentsDAchat($calcul), $ids, fn (array $document): int => $calcul->signe($document) * $document['tva'])
+            : SommesParJour::deJours([]);
+        $charges = $this->chargesDeLaTva($calcul);
+        $avecCellesDeLaSociete = $calcul->perimetre->compteLesChargesDeLaSociete($ids);
+        $memo = [];
+
+        return function (string $du, string $au, NiveauDeLaBarre $niveau) use ($ventes, $achats, $charges, $avecCellesDeLaSociete, $ids, &$memo): MontantsDeTva {
+            $cle = "{$du}|{$au}|{$niveau->value}";
+
+            if (isset($memo[$cle])) {
+                return $memo[$cle];
+            }
+
+            $autoliquideeValidee = $deductibleValidee = $autoliquideeAValider = $deductibleAValider = 0;
+
+            if ($charges !== null && $niveau !== NiveauDeLaBarre::Jour) {
+                foreach (TvaDeLaPeriode::parMois(Mois::du(Mois::duJour($du), Mois::duJour($au)), $ids, [], [], $charges, $avecCellesDeLaSociete) as $desCharges) {
+                    $autoliquideeValidee += $desCharges->autoliquideeValidee;
+                    $deductibleValidee += $desCharges->deductibleDesChargesValidees;
+                    $autoliquideeAValider += $desCharges->autoliquideeAValider;
+                    $deductibleAValider += $desCharges->deductibleDesChargesAValider;
+                }
+            }
+
+            return $memo[$cle] = new MontantsDeTva($ventes->entre($du, $au), $autoliquideeValidee, $achats->entre($du, $au), $deductibleValidee, $autoliquideeAValider, $deductibleAValider, $charges !== null);
+        };
     }
 
     /**
@@ -209,49 +309,27 @@ final class SeriesDesGraphiques
     }
 
     /**
-     * Les années civiles, ou les exercices quand la période en est un,
-     * jusqu'à celle de la période, cinq au plus, depuis la première qui a
-     * vendu.
-     *
-     * @param  list<int>  $ids
-     */
-    private function chiffreDAffairesParAn(CalculDesSeries $calcul, array $ids): SerieDuGraphique
-    {
-        $annees = [];
-
-        foreach ($calcul->annees() as [$libelle, $premier, $dernier]) {
-            $annees[] = [$libelle, array_sum($calcul->sommeParMois($this->documentsDeVente($calcul), $ids, Mois::du($premier, $dernier), fn (array $document): int => $calcul->signe($document) * $document['ht']))];
-        }
-
-        while (count($annees) > 1 && $annees[0][1] === 0) {
-            array_shift($annees);
-        }
-
-        return new SerieDuGraphique(array_column($annees, 0), [SerieDuGraphique::jeu('Chiffre d\'affaires HT'.($calcul->lesAnneesSontDesExercices() ? ' (exercice)' : ''), array_column($annees, 1))]);
-    }
-
-    /**
      * La marge brute des articles suivis en stock : leurs ventes HT moins
-     * leur coût, retours déduits, chaque mois ; le taux de marge en
+     * leur coût, retours déduits, de chaque barre ; le taux de marge en
      * info-bulle.
      *
      * @param  Collection<int, Magasin>  $magasins
      */
-    private function margeParMois(CalculDesSeries $calcul, Collection $magasins): SerieDuGraphique
+    private function margeParPeriode(CalculDesSeries $calcul, CarteDuTableauDeBord $carte, Collection $magasins): SerieDuGraphique
     {
         $historique = $this->historiqueDuStock($calcul);
-        $ventes = $calcul->sommerParMagasin($historique['ventes'], CleDuModele::desModeles($magasins), $calcul->tousLesMois());
-        $couts = $calcul->sommerParMagasin($historique['couts'], CleDuModele::desModeles($magasins), $calcul->tousLesMois());
-        $serie = $calcul->parMois('Marge brute HT', fn (array $mois): array => self::parMois($mois, fn (string $unMois): int => $ventes[$unMois] - $couts[$unMois]));
-        $infoBulles = [];
+        $ids = CleDuModele::desModeles($magasins);
 
-        foreach ($calcul->mois as $rang => $unMois) {
-            if ($ventes[$unMois] !== 0) {
-                $infoBulles[$rang] = 'Taux de marge : '.CalculDesSeries::pourcentage(CalculDesSeries::diviserArrondi(($ventes[$unMois] - $couts[$unMois]) * 10000, $ventes[$unMois]));
-            }
-        }
+        return ConstructeurDeSeriesParPeriode::construire(
+            $calcul,
+            $carte,
+            [new DefinitionDeSerie('Marge brute HT', fn (string $du, string $au, NiveauDeLaBarre $niveau): int => $historique->ventesEntre($ids, $du, $au) - $historique->coutsEntre($ids, $du, $au), principale: true)],
+            function (string $du, string $au) use ($historique, $ids): ?string {
+                $ventes = $historique->ventesEntre($ids, $du, $au);
 
-        return new SerieDuGraphique($serie->etiquettes, $serie->jeux, null, $infoBulles);
+                return $ventes === 0 ? null : 'Taux de marge : '.CalculDesSeries::pourcentage(CalculDesSeries::diviserArrondi(($ventes - $historique->coutsEntre($ids, $du, $au)) * 10000, $ventes));
+            },
+        );
     }
 
     /**
@@ -262,7 +340,7 @@ final class SeriesDesGraphiques
         $valeurs = [];
 
         foreach ($magasins as $magasin) {
-            $valeurs[] = array_sum($calcul->sommeParMois($this->documentsDeVente($calcul), [CleDuModele::de($magasin)], $calcul->mois, fn (array $document): int => $calcul->signe($document) * $document['ht']));
+            $valeurs[] = $calcul->sommesParJour($this->documentsDeVente($calcul), [CleDuModele::de($magasin)], fn (array $document): int => $calcul->signe($document) * $document['ht'])->entre($calcul->premierJourDeLaPeriode(), $calcul->dernierJourDeLaPeriode());
         }
 
         return new SerieDuGraphique(array_values($magasins->map(fn (Magasin $magasin): string => Perimetre::nomDuMagasin($magasin))->all()), [SerieDuGraphique::jeu('Chiffre d\'affaires HT', $valeurs)]);
@@ -388,24 +466,26 @@ final class SeriesDesGraphiques
 
     /**
      * Le calcul de la carte « Écart des prix d'achat » : les achats des
-     * douze mois de la période dans les magasins comptés, produit par
-     * produit (voir AchatsParProduit) ; le nom d'un produit dit son magasin
-     * quand la carte en compte plusieurs.
+     * douze mois de la période, ou des douze derniers mois quand le
+     * découpage est l'année (une phrase grise le dit), dans les magasins
+     * comptés, produit par produit (voir AchatsParProduit) ; le nom d'un
+     * produit dit son magasin quand la carte en compte plusieurs.
      *
      * @param  Collection<int, Magasin>  $magasins
      */
     private function ecartDesPrixDAchat(CalculDesSeries $calcul, Collection $magasins): SerieDuGraphique
     {
-        $lignes = $calcul->dansLaPeriode($this->lignesDAchat($calcul), CleDuModele::desModeles($magasins));
+        $lignes = $calcul->dansLesMoisDeLEcart($this->lignesDAchat($calcul), CleDuModele::desModeles($magasins));
         $noms = [];
 
         foreach ($magasins as $magasin) {
             $noms[CleDuModele::de($magasin)] = (string) $magasin->nom;
         }
 
-        $produits = AchatsParProduit::depuis($lignes, $calcul->mois, $magasins->count() > 1, $noms);
+        $produits = AchatsParProduit::depuis($lignes, $calcul->moisDeLEcart, $magasins->count() > 1, $noms);
+        $serie = new SerieDuGraphique(array_map(Mois::libelle(...), $calcul->moisDeLEcart), [], null, [], EcartDesPrixDAchat::calculer($produits, $calcul->moisDeLEcart));
 
-        return new SerieDuGraphique(array_map(Mois::libelle(...), $calcul->mois), [], null, [], EcartDesPrixDAchat::calculer($produits, $calcul->mois));
+        return $calcul->reglages->decoupage === DecoupageDuTableauDeBord::Annee ? $serie->avecLaNote(TextesDesPeriodes::ECART_DES_PRIX_D_ACHAT_PAR_ANNEE) : $serie;
     }
 
     /**
@@ -419,79 +499,42 @@ final class SeriesDesGraphiques
     }
 
     /**
+     * La valeur du stock au coût moyen à la fin de chaque barre, jamais
+     * cumulée.
+     *
      * @param  Collection<int, Magasin>  $magasins
      */
-    private function valeurDuStock(CalculDesSeries $calcul, Collection $magasins): SerieDuGraphique
+    private function valeurDuStock(CalculDesSeries $calcul, CarteDuTableauDeBord $carte, Collection $magasins): SerieDuGraphique
     {
-        $valeurs = $calcul->sommerParMagasin($this->historiqueDuStock($calcul)['valeurs'], CleDuModele::desModeles($magasins), $calcul->tousLesMois());
+        $historique = $this->historiqueDuStock($calcul);
+        $ids = CleDuModele::desModeles($magasins);
 
-        return $calcul->parMois('Valeur du stock HT', fn (array $mois): array => self::parMois($mois, fn (string $unMois): int => $valeurs[$unMois]));
-    }
-
-    /**
-     * @param  list<int>  $ids
-     */
-    private function nombreDeVentesEtPanierMoyen(CalculDesSeries $calcul, array $ids): SerieDuGraphique
-    {
-        return $calcul->parMoisMultiple([
-            ['Nombre de ventes', fn (array $mois): array => $this->nombreDeVentes($calcul, $ids, $mois), false, SerieDuGraphique::NOMBRE],
-            ['Panier moyen TTC', fn (array $mois): array => $this->panierMoyen($calcul, $ids, $mois), true, SerieDuGraphique::EUROS, true],
+        return ConstructeurDeSeriesParPeriode::construire($calcul, $carte, [
+            new DefinitionDeSerie('Valeur du stock HT', fn (string $du, string $au, NiveauDeLaBarre $niveau): int => $historique->valeurA($ids, $au), principale: true),
         ]);
     }
 
     /**
-     * Le nombre des ventes (factures et tickets, sans les avoirs) de ces
-     * mois.
+     * Le nombre des ventes (factures et tickets, sans les avoirs) et leur
+     * panier moyen TTC, le TTC des ventes divisé par leur nombre, zéro pour
+     * une barre sans vente ; la série principale est le nombre de ventes.
      *
      * @param  list<int>  $ids
-     * @param  list<string>  $mois
-     * @return array<string, int>
      */
-    private function nombreDeVentes(CalculDesSeries $calcul, array $ids, array $mois): array
+    private function nombreDeVentesEtPanierMoyen(CalculDesSeries $calcul, CarteDuTableauDeBord $carte, array $ids): SerieDuGraphique
     {
-        return $calcul->sommeParMois($this->ventesSansLesAvoirs($calcul), $ids, $mois, fn (array $document): int => 1);
-    }
+        $ventes = array_values(array_filter($this->documentsDeVente($calcul), fn (array $document): bool => $document['document'] === 'facture'));
+        $nombres = $calcul->sommesParJour($ventes, $ids, fn (array $document): int => 1);
+        $ttc = $calcul->sommesParJour($ventes, $ids, fn (array $document): int => $document['ttc']);
 
-    /**
-     * Le panier moyen TTC de ces mois : le TTC des ventes divisé par leur
-     * nombre, zéro pour un mois sans vente.
-     *
-     * @param  list<int>  $ids
-     * @param  list<string>  $mois
-     * @return array<string, int>
-     */
-    private function panierMoyen(CalculDesSeries $calcul, array $ids, array $mois): array
-    {
-        $ttc = $calcul->sommeParMois($this->ventesSansLesAvoirs($calcul), $ids, $mois, fn (array $document): int => $document['ttc']);
-        $nombres = $this->nombreDeVentes($calcul, $ids, $mois);
+        return ConstructeurDeSeriesParPeriode::construire($calcul, $carte, [
+            new DefinitionDeSerie('Nombre de ventes', self::somme($nombres), principale: true, unite: SerieDuGraphique::NOMBRE),
+            new DefinitionDeSerie('Panier moyen TTC', function (string $du, string $au, NiveauDeLaBarre $niveau) use ($nombres, $ttc): int {
+                $nombre = $nombres->entre($du, $au);
 
-        return self::parMois($mois, fn (string $unMois): int => $nombres[$unMois] === 0 ? 0 : CalculDesSeries::diviserArrondi($ttc[$unMois], $nombres[$unMois]));
-    }
-
-    /**
-     * @return list<DocumentDeVente>
-     */
-    private function ventesSansLesAvoirs(CalculDesSeries $calcul): array
-    {
-        return array_values(array_filter($this->documentsDeVente($calcul), fn (array $document): bool => $document['document'] === 'facture'));
-    }
-
-    /**
-     * La valeur de chacun de ces mois, par mois.
-     *
-     * @param  list<string>  $mois
-     * @param  Closure(string): int  $valeur
-     * @return array<string, int>
-     */
-    private static function parMois(array $mois, Closure $valeur): array
-    {
-        $valeurs = [];
-
-        foreach ($mois as $unMois) {
-            $valeurs[$unMois] = $valeur($unMois);
-        }
-
-        return $valeurs;
+                return $nombre === 0 ? 0 : CalculDesSeries::diviserArrondi($ttc->entre($du, $au), $nombre);
+            }, enLigne: true, axeDeDroite: true),
+        ]);
     }
 
     /**
@@ -535,6 +578,37 @@ final class SeriesDesGraphiques
     }
 
     /**
+     * Les dix comptes qui ont vendu au plus fort chiffre d'affaires HT net
+     * des avoirs, dans chaque magasin compté (le compte d'un vendeur ne vend
+     * que dans son magasin, celui d'un administrateur autorisé peut vendre
+     * dans plusieurs : une barre par magasin) : chaque vente garde le nom de la personne tel
+     * qu'il était à son émission, et un compte qui a changé de nom prend,
+     * pour sa barre, le nom de sa dernière vente de la période ; un avoir
+     * se déduit des ventes du compte qui a fait la vente qu'il corrige (voir
+     * VentesDuTableauDeBord::ventesParCompte()).
+     *
+     * @param  Collection<int, Magasin>  $magasins
+     */
+    private function ventesParVendeur(CalculDesSeries $calcul, Collection $magasins): SerieDuGraphique
+    {
+        $classes = [];
+        $dernierJour = [];
+
+        foreach ($calcul->dansLaPeriode($this->ventesParCompte($calcul), CleDuModele::desModeles($magasins)) as $vente) {
+            $cle = $vente['magasin'].':'.($vente['compte'] ?? 'sans');
+            $classes[$cle]['magasin'] = $vente['magasin'];
+            $classes[$cle]['valeur'] = ($classes[$cle]['valeur'] ?? 0) + $vente['ht'];
+
+            if ($vente['nom'] !== null && $vente['jour'] >= ($dernierJour[$cle] ?? '')) {
+                $dernierJour[$cle] = $vente['jour'];
+                $classes[$cle]['libelle'] = $vente['nom'];
+            }
+        }
+
+        return $this->classement(array_map(fn (array $classe): array => ['libelle' => $classe['libelle'] ?? 'Vendeur inconnu', 'magasin' => $classe['magasin'], 'valeur' => $classe['valeur']], $classes), $magasins, 'Chiffre d\'affaires HT');
+    }
+
+    /**
      * Les dix premiers de ce classement, par valeur décroissante puis par
      * nom ; le nom dit le magasin quand la carte en compte plusieurs.
      *
@@ -559,10 +633,8 @@ final class SeriesDesGraphiques
      * Le grand livre rejoué des magasins où le compte voit le stock, lu une
      * fois pour la marge et la valeur du stock ; le chiffre d'affaires des
      * articles vendus, seulement quand une carte de marge le demande.
-     *
-     * @return array{valeurs: array<int, array<string, int>>, ventes: array<int, array<string, int>>, couts: array<int, array<string, int>>}
      */
-    private function historiqueDuStock(CalculDesSeries $calcul): array
+    private function historiqueDuStock(CalculDesSeries $calcul): HistoriqueDuStock
     {
         if ($calcul->historiqueDuStock !== null) {
             return $calcul->historiqueDuStock;
@@ -575,7 +647,7 @@ final class SeriesDesGraphiques
             $lignesDeLaMarge = array_values(array_filter($this->lignesDeVente($calcul), fn (array $ligne): bool => $ligne['produit'] !== null && in_array($ligne['magasin'], $marge, true)));
         }
 
-        return $calcul->historiqueDuStock = $this->stock->historique($calcul->perimetre, $calcul->perimetre->magasinsAvec(SourceDesGraphiques::Stock), $calcul->tousLesMois(), $lignesDeLaMarge);
+        return $calcul->historiqueDuStock = $this->stock->historique($calcul->perimetre, $calcul->perimetre->magasinsAvec(SourceDesGraphiques::Stock), $lignesDeLaMarge);
     }
 
     /**
@@ -587,6 +659,18 @@ final class SeriesDesGraphiques
     public function documentsDeVente(CalculDesSeries $calcul): array
     {
         return $calcul->documentsDeVente ??= $this->ventes->documents($calcul->perimetre, $calcul->perimetre->magasinsAvec(SourceDesGraphiques::Ventes), $calcul->premierJour(), $calcul->dernierJour());
+    }
+
+    /**
+     * Les ventes de chaque compte, sur les magasins où le compte voit toutes
+     * les ventes, lues une fois pour la page ; seulement quand la carte
+     * « Ventes par vendeur » est affichée.
+     *
+     * @return list<VenteDUnCompte>
+     */
+    private function ventesParCompte(CalculDesSeries $calcul): array
+    {
+        return $calcul->ventesParCompte ??= $this->ventes->ventesParCompte($calcul->perimetre, $calcul->perimetre->magasinsAvec(SourceDesGraphiques::Ventes), $calcul->premierJourDeLaPeriode(), $calcul->dernierJourDeLaPeriode());
     }
 
     /**
@@ -617,14 +701,14 @@ final class SeriesDesGraphiques
     }
 
     /**
-     * Les lignes des factures d'achat validées, sur les magasins où le
-     * compte voit les achats, lues une fois pour la page, en une seule
-     * requête.
+     * Les lignes des factures d'achat validées des douze mois de la carte
+     * « Écart des prix d'achat », sur les magasins où le compte voit les
+     * achats, lues une fois pour la page, en une seule requête.
      *
      * @return list<LigneDAchatDuTableau>
      */
     private function lignesDAchat(CalculDesSeries $calcul): array
     {
-        return $calcul->lignesDAchat ??= $this->achats->lignes($calcul->perimetre, $calcul->perimetre->magasinsAvec(SourceDesGraphiques::Achats), $calcul->premierJour(), $calcul->dernierJour());
+        return $calcul->lignesDAchat ??= $this->achats->lignes($calcul->perimetre, $calcul->perimetre->magasinsAvec(SourceDesGraphiques::Achats), $calcul->premierJourDeLEcart(), $calcul->dernierJourDeLEcart());
     }
 }

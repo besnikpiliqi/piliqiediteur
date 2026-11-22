@@ -3,6 +3,7 @@
 namespace Tests\Feature\TableauDeBord;
 
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\TableauDeBord\Enums\DecoupageDuTableauDeBord;
 use App\Domain\TableauDeBord\Enums\EcranDuTableauDeBord;
 use App\Domain\TableauDeBord\Enums\Graphique;
 use App\Domain\TableauDeBord\Enums\PeriodeDuTableauDeBord;
@@ -63,14 +64,16 @@ class PreferencesDesGraphiquesTest extends TestCase
 
         $this->assertSame([
             'cartes' => [
-                ['graphique' => Graphique::VentesEtAchatsParMois->value, 'type' => 'barres'],
-                ['graphique' => Graphique::ChiffreDAffairesParMois->value, 'type' => 'barres'],
+                ['graphique' => Graphique::VentesEtAchatsParMois->value, 'type' => 'barres', 'ecart' => false, 'tendance' => false],
+                ['graphique' => Graphique::ChiffreDAffairesParMois->value, 'type' => 'barres', 'ecart' => false, 'tendance' => false],
                 ['graphique' => Graphique::VentesParTauxDeTva->value, 'type' => 'camembert'],
                 ['graphique' => Graphique::ChiffreDAffairesParMagasin->value, 'type' => 'anneau'],
             ],
             'periode' => 'annee_precedente',
             'magasin' => (string) $villeurbanne->uuid,
             'comparer' => true,
+            'decoupage' => 'mois',
+            'cumul' => false,
         ], $reglages->versTableau());
         Livewire::test(GrilleDesGraphiques::class, ['ecran' => EcranDuTableauDeBord::Societe->value])
             ->assertSeeInOrder(['Ventes et achats HT par mois', 'Chiffre d\'affaires HT par mois', 'Ventes par taux de TVA', 'Chiffre d\'affaires par magasin']);
@@ -200,7 +203,7 @@ class PreferencesDesGraphiquesTest extends TestCase
             'societe_id' => $proprietaire->societe_id,
             'user_id' => $proprietaire->id,
             'ecran' => EcranDuTableauDeBord::Societe->value,
-            'reglages' => json_encode(['cartes' => [['graphique' => Graphique::ChiffreDAffairesParAn->value, 'type' => 'barres']], 'periode' => 'exercice_precedent', 'magasin' => null, 'comparer' => false], JSON_THROW_ON_ERROR),
+            'reglages' => json_encode(['cartes' => [['graphique' => Graphique::ChiffreDAffairesParMois->value, 'type' => 'barres']], 'periode' => 'exercice_precedent', 'magasin' => null, 'comparer' => false], JSON_THROW_ON_ERROR),
         ]);
         $this->dansLEspaceDeLaSociete($lyon->societe, $proprietaire);
 
@@ -209,8 +212,7 @@ class PreferencesDesGraphiquesTest extends TestCase
         $this->assertSame(PeriodeDuTableauDeBord::AnneePrecedente, $reglages->periode);
         Livewire::test(GrilleDesGraphiques::class, ['ecran' => EcranDuTableauDeBord::Societe->value])
             ->assertNotNotified()
-            ->assertSeeHtml('<option value="annee_precedente" selected>Année 2025 (exercice précédent)</option>')
-            ->assertSee('Chiffre d\'affaires HT (exercice)');
+            ->assertSeeHtml('<option value="annee_precedente" selected>Année 2025 (exercice précédent)</option>');
     }
 
     /**
@@ -254,7 +256,7 @@ class PreferencesDesGraphiquesTest extends TestCase
 
         $this->assertSame(['avant', false, ['graphique' => 'ecart_des_prix_d_achat', 'type' => 'barres', 'affichage' => 'avant']], [$defaut->affichage, $defaut->surDouzeMois(), $defaut->versTableau()]);
         $this->assertSame(['graphique' => 'meilleurs_produits', 'type' => 'barres_couchees', 'mesure' => 'ca'], CarteDuTableauDeBord::parDefaut(Graphique::MeilleursProduits)->versTableau(), 'L\'affichage ne s\'écrit que pour la carte de l\'écart des prix d\'achat.');
-        $this->assertSame(['graphique' => 'ca_par_mois', 'type' => 'barres'], CarteDuTableauDeBord::parDefaut(Graphique::ChiffreDAffairesParMois)->versTableau());
+        $this->assertSame(['graphique' => 'ca_par_mois', 'type' => 'barres', 'ecart' => false, 'tendance' => false], CarteDuTableauDeBord::parDefaut(Graphique::ChiffreDAffairesParMois)->versTableau(), 'L\'écart et la tendance ne s\'écrivent que pour un graphique par période.');
         app(PreferencesDesGraphiques::class)->enregistrer($proprietaire, EcranDuTableauDeBord::Societe, new ReglagesDuTableauDeBord([
             new CarteDuTableauDeBord(Graphique::EcartDesPrixDAchat, TypeDeGraphique::Barres, affichage: CarteDuTableauDeBord::AFFICHAGE_SUR_DOUZE_MOIS),
             CarteDuTableauDeBord::parDefaut(Graphique::ChiffreDAffairesParMois),
@@ -307,7 +309,100 @@ class PreferencesDesGraphiquesTest extends TestCase
         $this->assertSame(ReglagesDuTableauDeBord::parDefaut($perimetre)->versTableau()['cartes'], app(PreferencesDesGraphiques::class)->lire($proprietaire, $perimetre)->versTableau()['cartes']);
 
         $ecrire([[...$ecart, 'affichage' => 'debut'], ['graphique' => 'ca_par_mois', 'type' => 'barres']]);
-        $this->assertSame([[...$ecart, 'affichage' => 'debut'], ['graphique' => 'ca_par_mois', 'type' => 'barres']], app(PreferencesDesGraphiques::class)->lire($proprietaire, $perimetre)->versTableau()['cartes']);
+        $this->assertSame([[...$ecart, 'affichage' => 'debut'], ['graphique' => 'ca_par_mois', 'type' => 'barres', 'ecart' => false, 'tendance' => false]], app(PreferencesDesGraphiques::class)->lire($proprietaire, $perimetre)->versTableau()['cartes']);
+    }
+
+    /**
+     * Le découpage (« Découper par »), le cumul depuis le début de l'année,
+     * et, pour chaque graphique par période, l'écart en % sur un an et la
+     * tendance (choix de l'éditeur du 16/11/2026, lot GRAPH-AN) se
+     * retiennent en base par compte et par écran : le même compte, sur un
+     * autre écran, et un autre compte gardent les leurs.
+     */
+    public function test_le_decoupage_le_cumul_l_ecart_et_la_tendance_sont_retenus_par_compte_et_par_ecran(): void
+    {
+        [$lyon] = $this->deuxMagasins();
+        $proprietaire = $this->proprietaireDe($lyon);
+        $administrateur = $this->administrateur($lyon, autorisationsMagasin: [...PermissionRegistry::modeleDeLAdministrateur(TypeDActivite::Commerce), PermissionRegistry::GRAPHIQUES_VOIR]);
+        $perimetre = app(PerimetreDesGraphiques::class)->deLaSociete($proprietaire, $lyon->societe);
+        $preferences = app(PreferencesDesGraphiques::class);
+        $choisis = ReglagesDuTableauDeBord::parDefaut($perimetre)
+            ->avecLeDecoupage(DecoupageDuTableauDeBord::Trimestre)
+            ->avecLeCumul(true)
+            ->avecLaCarte(CarteDuTableauDeBord::parDefaut(Graphique::ChiffreDAffairesParMois)->avecLEcart(true)->avecLaTendance(true));
+
+        $preferences->enregistrer($proprietaire, EcranDuTableauDeBord::Societe, $choisis);
+
+        $relus = $preferences->lire($proprietaire, $perimetre);
+        $this->assertSame(['trimestre', true], [$relus->decoupage->value, $relus->cumul]);
+        $this->assertSame(['graphique' => 'ca_par_mois', 'type' => 'barres', 'ecart' => true, 'tendance' => true], $relus->carte(Graphique::ChiffreDAffairesParMois)?->versTableau());
+        $this->assertSame(['graphique' => 'ventes_et_achats_par_mois', 'type' => 'barres', 'ecart' => false, 'tendance' => false], $relus->carte(Graphique::VentesEtAchatsParMois)?->versTableau(), 'L\'écart et la tendance sont ceux de chaque carte.');
+        $this->assertSame($choisis->versTableau(), $relus->versTableau());
+        $this->assertSame(['mois', false], [($autreEcran = $preferences->lire($proprietaire, app(PerimetreDesGraphiques::class)->duMagasin($proprietaire, $lyon)))->decoupage->value, $autreEcran->cumul], 'Le panneau du magasin garde son réglage.');
+        $this->assertSame(['mois', false], [($autreCompte = $preferences->lire($administrateur, app(PerimetreDesGraphiques::class)->deLaSociete($administrateur, $lyon->societe)))->decoupage->value, $autreCompte->cumul], 'Un autre compte garde le sien.');
+        $this->assertSame($relus->avecLeDecoupage(DecoupageDuTableauDeBord::Annee)->cumulPossible(), false);
+        $this->assertSame(['annee', false], [$relus->avecLeDecoupage(DecoupageDuTableauDeBord::Annee)->decoupage->value, $relus->avecLeDecoupage(DecoupageDuTableauDeBord::Annee)->comparaisonPossible()]);
+    }
+
+    /**
+     * Changer le type d'une carte garde son écart en % et sa tendance, comme
+     * son affichage et sa mesure : le geste ne remet rien au défaut.
+     */
+    public function test_changer_le_type_d_une_carte_garde_son_ecart_et_sa_tendance(): void
+    {
+        [$lyon] = $this->deuxMagasins();
+        $proprietaire = $this->proprietaireDe($lyon);
+        $perimetre = app(PerimetreDesGraphiques::class)->deLaSociete($proprietaire, $lyon->societe);
+        app(PreferencesDesGraphiques::class)->enregistrer($proprietaire, EcranDuTableauDeBord::Societe, ReglagesDuTableauDeBord::parDefaut($perimetre)
+            ->avecLaCarte(CarteDuTableauDeBord::parDefaut(Graphique::ChiffreDAffairesParMois)->avecLEcart(true)->avecLaTendance(true)));
+        $this->dansLEspaceDeLaSociete($lyon->societe, $proprietaire);
+
+        Livewire::test(GrilleDesGraphiques::class, ['ecran' => EcranDuTableauDeBord::Societe->value])
+            ->call('changerLeType', Graphique::ChiffreDAffairesParMois->value, TypeDeGraphique::Lignes->value)
+            ->assertNotNotified();
+
+        $this->assertSame(['graphique' => 'ca_par_mois', 'type' => 'lignes', 'ecart' => true, 'tendance' => true], app(PreferencesDesGraphiques::class)->lire($proprietaire, $perimetre)->carte(Graphique::ChiffreDAffairesParMois)?->versTableau());
+    }
+
+    /**
+     * Ce qui se lit en base est vérifié valeur par valeur : un découpage
+     * inconnu ou un cumul qui n'est pas un booléen reprennent le défaut sans
+     * toucher aux cartes, et une carte dont une valeur est inconnue (le
+     * graphique « Chiffre d'affaires HT par an », retiré ; un écart qui n'est
+     * pas un booléen ; un écart sur un graphique qui n'est pas par période)
+     * remet les cartes du compte au défaut, sans erreur.
+     */
+    public function test_un_decoupage_un_cumul_ou_une_carte_illisible_en_base_reprend_le_defaut_sans_erreur(): void
+    {
+        [$lyon] = $this->deuxMagasins();
+        $proprietaire = $this->proprietaireDe($lyon);
+        $perimetre = app(PerimetreDesGraphiques::class)->deLaSociete($proprietaire, $lyon->societe);
+        $defaut = ReglagesDuTableauDeBord::parDefaut($perimetre);
+        $ecrire = fn (array $reglages): int => PreferencesDuTableauDeBord::query()->withoutGlobalScope(SocieteScope::class)->upsert(
+            [['societe_id' => $proprietaire->societe_id, 'user_id' => $proprietaire->id, 'ecran' => EcranDuTableauDeBord::Societe->value, 'reglages' => json_encode($reglages, JSON_THROW_ON_ERROR)]],
+            ['societe_id', 'user_id', 'ecran'],
+            ['reglages', 'updated_at'],
+        );
+        $carte = ['graphique' => 'ca_par_mois', 'type' => 'lignes', 'ecart' => true, 'tendance' => false];
+
+        $ecrire(['cartes' => [$carte], 'periode' => 'annee_en_cours', 'magasin' => null, 'comparer' => true, 'decoupage' => 'semaine', 'cumul' => 'oui']);
+        $relus = app(PreferencesDesGraphiques::class)->lire($proprietaire, $perimetre);
+        $this->assertSame(['mois', false, [$carte], 'annee_en_cours', true], [$relus->decoupage->value, $relus->cumul, $relus->versTableau()['cartes'], $relus->periode->value, $relus->comparer], 'Le découpage et le cumul illisibles reprennent le défaut, le reste est lu.');
+
+        foreach ([
+            'le graphique retiré' => [['graphique' => 'ca_par_an', 'type' => 'barres'], $carte],
+            'un écart qui n\'est pas un booléen' => [[...$carte, 'ecart' => 'oui']],
+            'un écart sur un graphique qui n\'est pas par période' => [['graphique' => 'ca_par_magasin', 'type' => 'anneau', 'ecart' => true]],
+        ] as $cas => $cartes) {
+            $ecrire(['cartes' => $cartes, 'periode' => 'annee_en_cours', 'magasin' => null, 'comparer' => false, 'decoupage' => 'annee', 'cumul' => true]);
+            $relus = app(PreferencesDesGraphiques::class)->lire($proprietaire, $perimetre);
+
+            $this->assertSame($defaut->versTableau()['cartes'], $relus->versTableau()['cartes'], $cas);
+            $this->assertSame(['annee', true, 'annee_en_cours'], [$relus->decoupage->value, $relus->cumul, $relus->periode->value], $cas.' : le reste est lu.');
+        }
+
+        $this->dansLEspaceDeLaSociete($lyon->societe, $proprietaire);
+        Livewire::test(GrilleDesGraphiques::class, ['ecran' => EcranDuTableauDeBord::Societe->value])->assertNotNotified();
     }
 
     /**

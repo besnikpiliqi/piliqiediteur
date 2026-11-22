@@ -4,46 +4,58 @@ namespace App\Domain\TableauDeBord\Support;
 
 use App\Domain\Calendrier\Calendrier;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\TableauDeBord\Enums\DecoupageDuTableauDeBord;
 use App\Domain\TableauDeBord\Enums\Graphique;
 use App\Domain\TableauDeBord\Enums\SourceDesGraphiques;
 use App\Domain\TableauDeBord\Services\AchatsDuTableauDeBord;
 use App\Domain\TableauDeBord\Services\ChargesDuTableauDeBord;
 use App\Domain\TableauDeBord\Services\FacturesDuTableauDeBord;
 use App\Domain\TableauDeBord\Services\PaiementsDuTableauDeBord;
-use App\Domain\TableauDeBord\Services\StockDuTableauDeBord;
 use App\Domain\TableauDeBord\Services\VentesDuTableauDeBord;
 use Closure;
 use Illuminate\Database\Eloquent\Collection;
 
 /**
  * Le calcul d'une page du tableau de bord (voir SeriesDesGraphiques et
- * ChiffresDuTableauDeBord) : ses mois, ceux de la comparaison avec
- * l'année précédente, ceux des chiffres clés et du chiffre d'affaires par
- * an, et ce que chaque source a déjà lu, pour qu'elle ne se lise qu'une
- * fois quel que soit le nombre de cartes. Les sommes se font ici, en
- * centimes, sur les montants lus.
+ * ChiffresDuTableauDeBord) : sa fenêtre (les mois de la période, ou les dix
+ * dernières années quand le découpage est l'année), les barres de chaque
+ * carte par période (voir barresDe()), le détail qu'une carte ouvre (voir
+ * chemin()), et ce que chaque source a déjà lu, pour qu'elle ne se lise
+ * qu'une fois quel que soit le nombre de cartes. Les sommes se font ici, en
+ * centimes, sur les montants lus (voir SommesParJour).
+ *
+ * Les réglages de l'écran (voir ReglagesDuTableauDeBord) et ceux de chaque
+ * carte (voir CarteDuTableauDeBord) se composent ainsi, par carte :
+ * - en détail (une barre ouverte en mois ou en jours), les montants
+ *   seulement, sans cumul, comparaison, écart ni tendance ;
+ * - l'écart en % sur un an met de côté le cumul, la comparaison et la
+ *   tendance ;
+ * - le cumul ne s'applique ni par année ni à une valeur de stock ; avec lui,
+ *   pas de tendance ;
+ * - la comparaison ne s'applique pas par année, où chaque barre est déjà une
+ *   année.
+ * Le cumul, la comparaison, l'écart et la tendance portent sur la série
+ * principale d'une carte (voir DefinitionDeSerie), sauf le cumul, qui porte
+ * sur toutes ses séries.
  *
  * @phpstan-type Ligne array{magasin: int, jour: string}
  *
  * @phpstan-import-type DocumentDeVente from VentesDuTableauDeBord
  * @phpstan-import-type LigneDeVente from VentesDuTableauDeBord
+ * @phpstan-import-type VenteDUnCompte from VentesDuTableauDeBord
  * @phpstan-import-type DocumentDAchat from AchatsDuTableauDeBord
  * @phpstan-import-type LigneDAchatDuTableau from AchatsDuTableauDeBord
  * @phpstan-import-type Encaissement from PaiementsDuTableauDeBord
  * @phpstan-import-type CreditImpute from PaiementsDuTableauDeBord
- * @phpstan-import-type Historique from StockDuTableauDeBord
  * @phpstan-import-type ChargeDeLaTva from ChargesDuTableauDeBord
  */
 final class CalculDesSeries
 {
-    /** Le nombre d'années (ou d'exercices) du chiffre d'affaires par an. */
-    public const ANNEES = 5;
-
-    /** @var list<string> les mois de la période */
+    /** @var list<string> les mois de la fenêtre : la période, ou les dix dernières années */
     public readonly array $mois;
 
-    /** @var list<string>|null les mêmes mois un an plus tôt, quand la comparaison est cochée */
-    public readonly ?array $moisCompares;
+    /** @var list<string> les douze mois de la carte « Écart des prix d'achat » : ceux de la période, ou les douze derniers mois quand le découpage est l'année */
+    public readonly array $moisDeLEcart;
 
     /** @var list<DocumentDeVente>|null */
     public ?array $documentsDeVente = null;
@@ -54,6 +66,9 @@ final class CalculDesSeries
     /** @var list<DocumentDeVente>|null */
     public ?array $avoirs = null;
 
+    /** @var list<VenteDUnCompte>|null les ventes de chaque compte, que lit la carte « Ventes par vendeur » */
+    public ?array $ventesParCompte = null;
+
     /** @var list<DocumentDAchat>|null */
     public ?array $documentsDAchat = null;
 
@@ -63,8 +78,7 @@ final class CalculDesSeries
     /** @var array{paiements: list<Encaissement>, credits: list<CreditImpute>}|null */
     public ?array $encaissements = null;
 
-    /** @var Historique|null */
-    public ?array $historiqueDuStock = null;
+    public ?HistoriqueDuStock $historiqueDuStock = null;
 
     /** @var list<ChargeDeLaTva>|null les charges que compte la TVA, null sans les charges (voir chargesDeLaTvaLues) */
     public ?array $chargesDeLaTva = null;
@@ -74,31 +88,47 @@ final class CalculDesSeries
     /** @var Collection<int, Facture>|null */
     private ?Collection $facturesAEncaisser = null;
 
+    /** @var array<string, list<Barre>> le détail ouvert de chaque carte, validé : la barre de chaque niveau, de la plus large à la plus fine */
+    private array $chemins = [];
+
     private readonly string $ceMois;
+
+    private readonly string $aujourdhui;
+
+    private readonly int $moisDeFinDExercice;
 
     /**
      * @param  list<CarteDuTableauDeBord>  $cartes
+     * @param  array<string, list<string>>  $details  par graphique, les jetons des barres ouvertes (voir Barre::jeton()), de la plus large à la plus fine ; un détail qui n'est pas celui d'une barre de la carte est ignoré
      */
     public function __construct(
         public readonly Perimetre $perimetre,
         public readonly ReglagesDuTableauDeBord $reglages,
         public readonly array $cartes,
+        public readonly array $details = [],
     ) {
-        [$premier, $dernier] = $reglages->periode->bornes($perimetre->aujourdhui(), $perimetre->moisDeFinDExercice());
+        $this->aujourdhui = $perimetre->aujourdhui();
+        $this->moisDeFinDExercice = $perimetre->moisDeFinDExercice();
+        $this->ceMois = Mois::duJour($this->aujourdhui);
+        [$premier, $dernier] = DecoupageDesPeriodes::fenetre($reglages->decoupage, $reglages->periode, $this->aujourdhui, $this->moisDeFinDExercice);
         $this->mois = Mois::du($premier, $dernier);
-        $this->moisCompares = $reglages->comparer ? array_map(fn (string $mois): string => Mois::decaler($mois, -12), $this->mois) : null;
-        $this->ceMois = Mois::duJour($perimetre->aujourdhui());
+        $this->moisDeLEcart = $reglages->decoupage === DecoupageDuTableauDeBord::Annee ? Mois::du(Mois::decaler($this->ceMois, -11), $this->ceMois) : $this->mois;
     }
 
     public function montre(Graphique $graphique): bool
     {
+        return $this->carte($graphique) !== null;
+    }
+
+    public function carte(Graphique $graphique): ?CarteDuTableauDeBord
+    {
         foreach ($this->cartes as $carte) {
             if ($carte->graphique === $graphique) {
-                return true;
+                return $carte;
             }
         }
 
-        return false;
+        return null;
     }
 
     /**
@@ -110,189 +140,164 @@ final class CalculDesSeries
     }
 
     /**
-     * Les mois de la période et ceux de la comparaison, dans l'ordre.
-     *
-     * @return list<string>
+     * Le jour de l'écran, « AAAA-MM-JJ ».
      */
-    public function tousLesMois(): array
+    public function aujourdhui(): string
     {
-        $tous = array_values(array_unique([...$this->moisCompares ?? [], ...$this->mois]));
-        sort($tous);
+        return $this->aujourdhui;
+    }
 
-        return $tous;
+    /**
+     * Les années sont-elles celles d'un exercice décalé, que la société
+     * clôt un autre mois que décembre ?
+     */
+    public function exercicesDecales(): bool
+    {
+        return $this->moisDeFinDExercice !== 12;
+    }
+
+    /**
+     * Les barres de la carte d'un graphique par période : celles du
+     * découpage, ou, quand un détail est ouvert, les barres plus fines de la
+     * dernière barre ouverte.
+     *
+     * @return list<Barre>
+     */
+    public function barresDe(CarteDuTableauDeBord $carte): array
+    {
+        $chemin = $this->chemin($carte->graphique);
+
+        return $chemin === []
+            ? $this->barresDeBase($carte)
+            : DecoupageDesPeriodes::sousBarres($chemin[count($chemin) - 1], $this->aujourdhui, $this->moisDeFinDExercice);
+    }
+
+    /**
+     * Le détail ouvert de cette carte, validé : la barre de chaque niveau
+     * ouvert, de la plus large à la plus fine, chacune étant une barre à
+     * détailler, qui n'est pas à venir, de la carte à ce niveau. Vide quand
+     * rien n'est ouvert, ou quand un jeton ne désigne aucune barre de la
+     * carte : un détail forgé, ou resté ouvert après un autre réglage,
+     * n'ouvre rien.
+     *
+     * @return list<Barre>
+     */
+    public function chemin(Graphique $graphique): array
+    {
+        return $this->chemins[$graphique->value] ??= $this->lireLeChemin($graphique);
+    }
+
+    /**
+     * La dernière barre du détail ouvert de cette carte, celle dont la
+     * carte montre les barres plus fines ; null sans détail.
+     */
+    public function detailDe(Graphique $graphique): ?Barre
+    {
+        $chemin = $this->chemin($graphique);
+
+        return $chemin === [] ? null : $chemin[count($chemin) - 1];
+    }
+
+    /**
+     * Cette carte montre-t-elle le cumul depuis le début de l'année ou de
+     * l'exercice ? Pas par année, pas pour un stock, pas en écart en %, pas
+     * en détail.
+     */
+    public function cumulActif(CarteDuTableauDeBord $carte): bool
+    {
+        return $this->chemin($carte->graphique) === [] && $this->cumulDeBase($carte);
+    }
+
+    /**
+     * Cette carte montre-t-elle l'année précédente à côté de ses barres ?
+     * Pas par année, pas en écart en %, pas en détail.
+     */
+    public function comparaisonActive(CarteDuTableauDeBord $carte): bool
+    {
+        return $this->reglages->comparer && $this->reglages->comparaisonPossible() && ! $carte->ecart && $this->chemin($carte->graphique) === [];
+    }
+
+    /**
+     * Cette carte montre-t-elle l'écart en % sur un an à la place des
+     * montants ? Pas en détail.
+     */
+    public function ecartActif(CarteDuTableauDeBord $carte): bool
+    {
+        return $carte->ecart && $this->chemin($carte->graphique) === [];
+    }
+
+    /**
+     * Cette carte montre-t-elle sa tendance ? Pas en écart en %, pas avec le
+     * cumul, pas en détail.
+     */
+    public function tendanceActive(CarteDuTableauDeBord $carte): bool
+    {
+        return $carte->tendance && ! $carte->ecart && $this->chemin($carte->graphique) === [] && ! $this->cumulDeBase($carte);
     }
 
     /**
      * Le premier jour qu'une source lit : celui du premier mois de la
-     * période, de la comparaison, des chiffres clés (le même mois un an
-     * plus tôt) et du chiffre d'affaires par an.
+     * fenêtre, des chiffres clés (le même mois un an plus tôt) et, quand la
+     * comparaison est cochée ou qu'une carte est en écart en % sur un an,
+     * de la fenêtre un an plus tôt.
      */
     public function premierJour(): string
     {
-        $debuts = [$this->mois[0], Mois::decaler($this->ceMois, -12), ...($this->moisCompares === null ? [] : [$this->moisCompares[0]])];
+        $debuts = [Mois::premierJour($this->mois[0]), Mois::premierJour(Mois::decaler($this->ceMois, -12))];
 
-        if ($this->montre(Graphique::ChiffreDAffairesParAn)) {
-            $debuts[] = $this->annees()[0][1];
+        if ($this->reglages->comparer || $this->uneCarteEstEnEcart()) {
+            $debuts[] = Mois::premierJour(Mois::decaler($this->mois[0], -12));
         }
 
-        return min($debuts).'-01';
+        return min($debuts);
     }
 
     /**
      * Le dernier jour qu'une source lit : celui du dernier mois de la
-     * période ou du mois en cours.
+     * fenêtre ou du mois en cours.
      */
     public function dernierJour(): string
     {
-        return self::dernierJourDu(max($this->mois[count($this->mois) - 1], $this->ceMois));
+        return Mois::dernierJour(max($this->mois[count($this->mois) - 1], $this->ceMois));
     }
 
     public function premierJourDeLaPeriode(): string
     {
-        return $this->mois[0].'-01';
+        return Mois::premierJour($this->mois[0]);
     }
 
     public function dernierJourDeLaPeriode(): string
     {
-        return self::dernierJourDu($this->mois[count($this->mois) - 1]);
+        return Mois::dernierJour($this->mois[count($this->mois) - 1]);
     }
 
-    /**
-     * Les années civiles, ou les exercices quand la période en est un, du
-     * chiffre d'affaires par an : les cinq qui finissent avec la période,
-     * dans l'ordre, chacune avec son libellé, son premier et son dernier
-     * mois. Quand l'exercice finit en décembre, la période n'est jamais un
-     * exercice (voir PeriodeDuTableauDeBord::pourLaSociete()) : les années
-     * civiles sont alors les exercices (voir lesAnneesSontDesExercices()).
-     *
-     * @return non-empty-list<array{0: string, 1: string, 2: string}>
-     */
-    public function annees(): array
+    public function premierJourDeLEcart(): string
     {
-        $dernier = $this->mois[count($this->mois) - 1];
-        $parExercice = $this->reglages->periode->pourLaSociete($this->perimetre->moisDeFinDExercice())->estUnExercice();
-        $annees = [];
-
-        for ($rang = self::ANNEES - 1; $rang >= 0; $rang--) {
-            if ($parExercice) {
-                $fin = Mois::decaler($dernier, -12 * $rang);
-                $debut = Mois::decaler($fin, -11);
-                $libelle = Mois::annee($debut) === Mois::annee($fin) ? 'Exercice '.Mois::annee($fin) : 'Exercice '.Mois::annee($debut).'-'.Mois::annee($fin);
-                $annees[] = [$libelle, $debut, $fin];
-
-                continue;
-            }
-
-            $annee = Mois::annee($dernier) - $rang;
-            $annees[] = [(string) $annee, sprintf('%04d-01', $annee), sprintf('%04d-12', $annee)];
-        }
-
-        return $annees;
+        return Mois::premierJour($this->moisDeLEcart[0]);
     }
 
-    /**
-     * Les années civiles du chiffre d'affaires par an sont aussi les
-     * exercices de la société : son exercice finit en décembre (choix B de
-     * l'éditeur, le 15/11/2026 ; la légende le dit).
-     */
-    public function lesAnneesSontDesExercices(): bool
+    public function dernierJourDeLEcart(): string
     {
-        return $this->perimetre->moisDeFinDExercice() === 12;
+        return Mois::dernierJour($this->moisDeLEcart[count($this->moisDeLEcart) - 1]);
     }
 
     /**
-     * Une série par mois de la période, et, quand la comparaison est
-     * cochée, la même un an plus tôt ; un mois encore à venir n'a pas de
-     * valeur.
-     *
-     * @param  Closure(list<string>): array<string, int>  $valeurs
-     */
-    public function parMois(string $libelle, Closure $valeurs): SerieDuGraphique
-    {
-        return $this->parMoisMultiple([[$libelle, $valeurs]]);
-    }
-
-    /**
-     * Plusieurs séries par mois, chacune avec, au besoin, sa forme (une
-     * ligne), son unité, son axe et ses pointillés ; leurs comparaisons
-     * suivent, dans le même ordre.
-     *
-     * @param  list<array{0: string, 1: Closure(list<string>): array<string, int>, 2?: bool, 3?: 'euros'|'nombre', 4?: bool, 5?: bool}>  $series
-     */
-    public function parMoisMultiple(array $series): SerieDuGraphique
-    {
-        $jeux = [];
-        $comparaisons = [];
-
-        foreach ($series as $serie) {
-            [$libelle, $valeurs] = $serie;
-            $enLigne = $serie[2] ?? false;
-            $unite = $serie[3] ?? SerieDuGraphique::EUROS;
-            $axeDeDroite = $serie[4] ?? false;
-            $pointilles = $serie[5] ?? false;
-            $parMois = $valeurs($this->mois);
-            $jeux[] = SerieDuGraphique::jeu($libelle, array_map(fn (string $mois): ?int => $mois > $this->ceMois ? null : $parMois[$mois], $this->mois), $unite, $enLigne, $axeDeDroite, $pointilles);
-
-            if ($this->moisCompares !== null) {
-                $compares = $valeurs($this->moisCompares);
-                $comparaisons[] = SerieDuGraphique::jeu($libelle.' (un an plus tôt)', array_map(fn (string $mois): int => $compares[$mois], $this->moisCompares), $unite, $enLigne, $axeDeDroite, $pointilles);
-            }
-        }
-
-        return new SerieDuGraphique(array_map(fn (string $mois): string => Mois::libelle($mois), $this->mois), [...$jeux, ...$comparaisons]);
-    }
-
-    /**
-     * La somme, mois par mois, de ce que $montant donne de chacune de ces
-     * lignes de ces magasins ; zéro pour un mois sans ligne.
+     * Les montants de ces lignes de ces magasins, rangés par jour (voir
+     * SommesParJour).
      *
      * @template T of Ligne
      *
      * @param  list<T>  $lignes
      * @param  list<int>  $magasins
-     * @param  list<string>  $mois
      * @param  Closure(T): int  $montant
-     * @return array<string, int>
      */
-    public function sommeParMois(array $lignes, array $magasins, array $mois, Closure $montant): array
+    public function sommesParJour(array $lignes, array $magasins, Closure $montant): SommesParJour
     {
-        $sommes = array_fill_keys($mois, 0);
-        $permis = array_flip($magasins);
-
-        foreach ($lignes as $ligne) {
-            $leMois = substr($ligne['jour'], 0, 7);
-
-            if (isset($permis[$ligne['magasin']]) && array_key_exists($leMois, $sommes)) {
-                $sommes[$leMois] += $montant($ligne);
-            }
-        }
-
-        return $sommes;
+        return SommesParJour::depuis($lignes, $magasins, $montant);
     }
 
     /**
-     * La somme, mois par mois, de ces valeurs par magasin de ces magasins.
-     *
-     * @param  array<int, array<string, int>>  $parMagasin
-     * @param  list<int>  $magasins
-     * @param  list<string>  $mois
-     * @return array<string, int>
-     */
-    public function sommerParMagasin(array $parMagasin, array $magasins, array $mois): array
-    {
-        $sommes = array_fill_keys($mois, 0);
-
-        foreach ($magasins as $magasin) {
-            foreach ($mois as $unMois) {
-                $sommes[$unMois] += $parMagasin[$magasin][$unMois] ?? 0;
-            }
-        }
-
-        return $sommes;
-    }
-
-    /**
-     * Ces lignes de ces magasins dont le jour est de la période.
+     * Ces lignes de ces magasins dont le jour est de la fenêtre.
      *
      * @template T of Ligne
      *
@@ -302,11 +307,22 @@ final class CalculDesSeries
      */
     public function dansLaPeriode(array $lignes, array $magasins): array
     {
-        $permis = array_flip($magasins);
-        $du = $this->premierJourDeLaPeriode();
-        $au = $this->dernierJourDeLaPeriode();
+        return self::entre($lignes, $magasins, $this->premierJourDeLaPeriode(), $this->dernierJourDeLaPeriode());
+    }
 
-        return array_values(array_filter($lignes, fn (array $ligne): bool => isset($permis[$ligne['magasin']]) && $ligne['jour'] >= $du && $ligne['jour'] <= $au));
+    /**
+     * Ces lignes de ces magasins dont le jour est de l'un des douze mois de
+     * la carte « Écart des prix d'achat ».
+     *
+     * @template T of Ligne
+     *
+     * @param  list<T>  $lignes
+     * @param  list<int>  $magasins
+     * @return list<T>
+     */
+    public function dansLesMoisDeLEcart(array $lignes, array $magasins): array
+    {
+        return self::entre($lignes, $magasins, $this->premierJourDeLEcart(), $this->dernierJourDeLEcart());
     }
 
     /**
@@ -366,6 +382,17 @@ final class CalculDesSeries
     }
 
     /**
+     * L'écart de ce montant à celui d'il y a un an, en centièmes de point
+     * (« +12,5 % » pour 1 250), sur la valeur absolue de celui d'il y a un
+     * an ; null quand il n'y avait rien il y a un an : l'écart ne se dit
+     * pas.
+     */
+    public static function ecartSurUnAn(int $valeur, int $ilYAUnAn): ?int
+    {
+        return $ilYAUnAn === 0 ? null : self::diviserArrondi(($valeur - $ilYAUnAn) * 10000, abs($ilYAUnAn));
+    }
+
+    /**
      * Le jour de la semaine de ce jour « AAAA-MM-JJ », de 1 (lundi) à 7
      * (dimanche).
      */
@@ -374,8 +401,87 @@ final class CalculDesSeries
         return (int) Calendrier::afficherJour($jour, 'N');
     }
 
-    private static function dernierJourDu(string $mois): string
+    /**
+     * Ces lignes de ces magasins du $du au $au compris.
+     *
+     * @template T of Ligne
+     *
+     * @param  list<T>  $lignes
+     * @param  list<int>  $magasins
+     * @return list<T>
+     */
+    private static function entre(array $lignes, array $magasins, string $du, string $au): array
     {
-        return Calendrier::ajouterJours(Mois::decaler($mois, 1).'-01', -1);
+        $permis = array_flip($magasins);
+
+        return array_values(array_filter($lignes, fn (array $ligne): bool => isset($permis[$ligne['magasin']]) && $ligne['jour'] >= $du && $ligne['jour'] <= $au));
+    }
+
+    /**
+     * Le cumul est réglé pour cette carte et s'y applique, avant tout
+     * détail : l'écran le permet (pas par année), le graphique l'accepte
+     * (pas un stock), et la carte n'est pas en écart en %.
+     */
+    private function cumulDeBase(CarteDuTableauDeBord $carte): bool
+    {
+        return $this->reglages->cumul && $this->reglages->cumulPossible() && $carte->graphique->accepteLeCumul() && ! $carte->ecart;
+    }
+
+    /**
+     * Les barres de la carte avant tout détail.
+     *
+     * @return list<Barre>
+     */
+    private function barresDeBase(CarteDuTableauDeBord $carte): array
+    {
+        return DecoupageDesPeriodes::barres($this->reglages->decoupage, $this->reglages->periode, $this->cumulDeBase($carte), $this->aujourdhui, $this->moisDeFinDExercice);
+    }
+
+    /**
+     * @return list<Barre>
+     */
+    private function lireLeChemin(Graphique $graphique): array
+    {
+        $carte = $this->carte($graphique);
+        $jetons = $this->details[$graphique->value] ?? [];
+
+        if ($carte === null || ! $graphique->estParPeriode() || $jetons === []) {
+            return [];
+        }
+
+        $barres = $this->barresDeBase($carte);
+        $chemin = [];
+
+        foreach ($jetons as $jeton) {
+            $ouverte = null;
+
+            foreach ($barres as $barre) {
+                if ($barre->jeton() === $jeton && $barre->peutSeDetailler() && ! $barre->aVenir) {
+                    $ouverte = $barre;
+
+                    break;
+                }
+            }
+
+            if ($ouverte === null) {
+                return [];
+            }
+
+            $chemin[] = $ouverte;
+            $barres = DecoupageDesPeriodes::sousBarres($ouverte, $this->aujourdhui, $this->moisDeFinDExercice);
+        }
+
+        return $chemin;
+    }
+
+    private function uneCarteEstEnEcart(): bool
+    {
+        foreach ($this->cartes as $carte) {
+            if ($carte->ecart && $carte->graphique->estParPeriode()) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

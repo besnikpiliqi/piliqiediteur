@@ -3,6 +3,7 @@
 namespace App\Domain\TableauDeBord\Support;
 
 use App\Domain\Demonstration\SiteDePiliqi;
+use App\Domain\TableauDeBord\Enums\DecoupageDuTableauDeBord;
 use App\Domain\TableauDeBord\Enums\EcranDuTableauDeBord;
 use App\Domain\TableauDeBord\Enums\Graphique;
 use App\Domain\TableauDeBord\Enums\PeriodeDuTableauDeBord;
@@ -12,8 +13,12 @@ use Illuminate\Support\Str;
 /**
  * Les préférences d'un compte sur un écran du tableau de bord (décision de
  * l'éditeur du 14/11/2026) : ses cartes, dans leur ordre, chacune avec son
- * type ; la période ; le magasin choisi (null : tous ses magasins) ; la
- * comparaison avec l'année précédente. Immuable : chaque geste en rend une
+ * type et, pour un graphique par période, ce qu'elle montre (les montants
+ * ou l'écart en % sur un an, avec ou sans tendance) ; la période ; le
+ * magasin choisi (null : tous ses magasins) ; la comparaison avec l'année
+ * précédente ; le découpage (« Découper par » : mois, trimestre ou année) ;
+ * le cumul depuis le début de l'année ou de l'exercice (choix de l'éditeur
+ * du 16/11/2026, lot GRAPH-AN). Immuable : chaque geste en rend une
  * nouvelle, que PreferencesDesGraphiques enregistre.
  *
  * Ce qui se lit en base est vérifié valeur par valeur (voir lire()) :
@@ -35,6 +40,8 @@ final class ReglagesDuTableauDeBord
         public readonly PeriodeDuTableauDeBord $periode = PeriodeDuTableauDeBord::DouzeDerniersMois,
         public readonly ?string $magasin = null,
         public readonly bool $comparer = false,
+        public readonly DecoupageDuTableauDeBord $decoupage = DecoupageDuTableauDeBord::Mois,
+        public readonly bool $cumul = false,
     ) {}
 
     /**
@@ -43,7 +50,8 @@ final class ReglagesDuTableauDeBord
      * « Chiffre d'affaires HT par mois », en barres, puis, dans l'espace
      * de la société quand il y a plus d'un magasin, « Chiffre d'affaires
      * par magasin » en anneau ; un graphique que le compte ne voit pas est
-     * omis. Les 12 derniers mois, tous ses magasins, sans comparaison.
+     * omis. Les 12 derniers mois par mois, tous ses magasins, sans
+     * comparaison ni cumul.
      *
      * Sur le site de démonstration, toutes les cartes que le compte voit
      * sur cet écran, dans l'ordre du catalogue, chacune à son type par
@@ -88,6 +96,7 @@ final class ReglagesDuTableauDeBord
         }
 
         $periode = is_string($brut['periode'] ?? null) ? PeriodeDuTableauDeBord::tryFrom($brut['periode'])?->pourLaSociete($perimetre->moisDeFinDExercice()) : null;
+        $decoupage = is_string($brut['decoupage'] ?? null) ? DecoupageDuTableauDeBord::tryFrom($brut['decoupage']) : null;
         $magasin = $brut['magasin'] ?? null;
 
         return new self(
@@ -95,11 +104,13 @@ final class ReglagesDuTableauDeBord
             $periode ?? $defaut->periode,
             is_string($magasin) && Str::isUuid($magasin) ? $magasin : null,
             is_bool($brut['comparer'] ?? null) ? $brut['comparer'] : $defaut->comparer,
+            $decoupage ?? $defaut->decoupage,
+            is_bool($brut['cumul'] ?? null) ? $brut['cumul'] : $defaut->cumul,
         );
     }
 
     /**
-     * @return array{cartes: list<array{graphique: string, type: string, mesure?: string, affichage?: string}>, periode: string, magasin: string|null, comparer: bool}
+     * @return array{cartes: list<array{graphique: string, type: string, mesure?: string, affichage?: string, ecart?: bool, tendance?: bool}>, periode: string, magasin: string|null, comparer: bool, decoupage: string, cumul: bool}
      */
     public function versTableau(): array
     {
@@ -108,6 +119,8 @@ final class ReglagesDuTableauDeBord
             'periode' => $this->periode->value,
             'magasin' => $this->magasin,
             'comparer' => $this->comparer,
+            'decoupage' => $this->decoupage->value,
+            'cumul' => $this->cumul,
         ];
     }
 
@@ -185,17 +198,46 @@ final class ReglagesDuTableauDeBord
 
     public function avecLaPeriode(PeriodeDuTableauDeBord $periode): self
     {
-        return new self($this->cartes, $periode, $this->magasin, $this->comparer);
+        return new self($this->cartes, $periode, $this->magasin, $this->comparer, $this->decoupage, $this->cumul);
     }
 
     public function avecLeMagasin(?string $magasin): self
     {
-        return new self($this->cartes, $this->periode, $magasin, $this->comparer);
+        return new self($this->cartes, $this->periode, $magasin, $this->comparer, $this->decoupage, $this->cumul);
     }
 
     public function avecLaComparaison(bool $comparer): self
     {
-        return new self($this->cartes, $this->periode, $this->magasin, $comparer);
+        return new self($this->cartes, $this->periode, $this->magasin, $comparer, $this->decoupage, $this->cumul);
+    }
+
+    public function avecLeDecoupage(DecoupageDuTableauDeBord $decoupage): self
+    {
+        return new self($this->cartes, $this->periode, $this->magasin, $this->comparer, $decoupage, $this->cumul);
+    }
+
+    public function avecLeCumul(bool $cumul): self
+    {
+        return new self($this->cartes, $this->periode, $this->magasin, $this->comparer, $this->decoupage, $cumul);
+    }
+
+    /**
+     * Le cumul depuis le début de l'année, ou de l'exercice, se coche-t-il ?
+     * Pas quand le découpage est l'année : chaque barre est déjà une année
+     * entière, il n'y a rien à cumuler.
+     */
+    public function cumulPossible(): bool
+    {
+        return $this->decoupage !== DecoupageDuTableauDeBord::Annee;
+    }
+
+    /**
+     * La comparaison avec l'année précédente se coche-t-elle ? Pas quand le
+     * découpage est l'année : chaque barre est déjà une année.
+     */
+    public function comparaisonPossible(): bool
+    {
+        return $this->decoupage !== DecoupageDuTableauDeBord::Annee;
     }
 
     /**
@@ -206,7 +248,7 @@ final class ReglagesDuTableauDeBord
      */
     private function avecLesCartes(array $cartes): self
     {
-        return new self(array_values($cartes), $this->periode, $this->magasin, $this->comparer);
+        return new self(array_values($cartes), $this->periode, $this->magasin, $this->comparer, $this->decoupage, $this->cumul);
     }
 
     /**

@@ -2,6 +2,7 @@
 
 namespace App\Domain\TableauDeBord\Support;
 
+use App\Domain\Calendrier\Calendrier;
 use InvalidArgumentException;
 
 /**
@@ -78,6 +79,45 @@ final class Mois
     public static function nomCourt(string $mois): string
     {
         return self::NOMS_COURTS[self::lire($mois)[1]];
+    }
+
+    /**
+     * « Janvier 2026 », pour l'intitulé d'une barre et d'une ligne de
+     * tableau.
+     */
+    public static function intitule(string $mois): string
+    {
+        return Calendrier::nomDuMois(self::numero($mois)).' '.self::annee($mois);
+    }
+
+    /**
+     * Le premier jour de ce mois, « AAAA-MM-01 ».
+     */
+    public static function premierJour(string $mois): string
+    {
+        self::lire($mois);
+
+        return $mois.'-01';
+    }
+
+    /**
+     * Le dernier jour de ce mois, « AAAA-MM-28 » à « AAAA-MM-31 ».
+     */
+    public static function dernierJour(string $mois): string
+    {
+        return Calendrier::ajouterJours(self::premierJour(self::decaler($mois, 1)), -1);
+    }
+
+    /**
+     * Le même quantième un an plus tôt, ramené au dernier jour du mois quand
+     * il n'y existe pas : le 29 février d'une année bissextile est le 28
+     * février de l'année d'avant.
+     */
+    public static function memeJourUnAnPlusTot(string $jour): string
+    {
+        $mois = self::decaler(self::duJour($jour), -12);
+
+        return min($mois.'-'.substr($jour, 8, 2), self::dernierJour($mois));
     }
 
     /**

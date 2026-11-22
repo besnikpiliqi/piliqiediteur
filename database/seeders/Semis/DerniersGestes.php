@@ -155,12 +155,14 @@ final class DerniersGestes
             CarteDuTableauDeBord::parDefaut(Graphique::ChiffreDAffairesParMois, TypeDeGraphique::Lignes),
             CarteDuTableauDeBord::parDefaut(Graphique::ChiffreDAffairesParMagasin),
             CarteDuTableauDeBord::parDefaut(Graphique::EncaissementsParMode, TypeDeGraphique::Anneau),
+            CarteDuTableauDeBord::parDefaut(Graphique::VentesParVendeur),
             CarteDuTableauDeBord::parDefaut(Graphique::MargeBruteParMois),
             new CarteDuTableauDeBord(Graphique::EcartDesPrixDAchat, TypeDeGraphique::Barres, affichage: CarteDuTableauDeBord::AFFICHAGE_SUR_DOUZE_MOIS),
         ], PeriodeDuTableauDeBord::AnneeEnCours, null, true));
         $preferences->enregistrer($this->semis->compte('Camille Laurent'), EcranDuTableauDeBord::Magasin, new ReglagesDuTableauDeBord([
             CarteDuTableauDeBord::parDefaut(Graphique::VentesEtAchatsParMois),
             CarteDuTableauDeBord::parDefaut(Graphique::MeilleursProduits, TypeDeGraphique::BarresCouchees),
+            CarteDuTableauDeBord::parDefaut(Graphique::VentesParVendeur),
             CarteDuTableauDeBord::parDefaut(Graphique::ValeurDuStock, TypeDeGraphique::Aires),
             CarteDuTableauDeBord::parDefaut(Graphique::VentesParJourDeLaSemaine, TypeDeGraphique::Radar),
             CarteDuTableauDeBord::parDefaut(Graphique::EcartDesPrixDAchat),

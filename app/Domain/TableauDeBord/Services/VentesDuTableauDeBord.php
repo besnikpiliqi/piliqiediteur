@@ -31,6 +31,7 @@ use stdClass;
  *
  * @phpstan-type DocumentDeVente array{document: 'facture'|'avoir', id: int, magasin: int, jour: string, ht: int, tva: int, ttc: int, type_client: string, client: int, client_nom: string|null}
  * @phpstan-type LigneDeVente array{document: 'facture'|'avoir', document_id: int, ligne_id: int, magasin: int, jour: string, nature: string, produit: int|null, service: int|null, description: string, quantite: int, taux: int, ht: int, tva: int, ttc: int, sortie_par: int|null}
+ * @phpstan-type VenteDUnCompte array{magasin: int, jour: string, compte: int|null, nom: string|null, ht: int}
  */
 final class VentesDuTableauDeBord
 {
@@ -65,6 +66,76 @@ final class VentesDuTableauDeBord
         $perimetre->exiger($magasins, SourceDesGraphiques::Avoirs);
 
         return $this->lire(['avoir' => 'avoirs'], $magasins, $du, $au);
+    }
+
+    /**
+     * Le chiffre d'affaires HT de chaque compte qui a vendu, du $du au $au
+     * compris, en centimes : chaque ticket et chaque facture émis, au
+     * compte qui l'a fait (cree_par) et au nom que la vente en garde
+     * (cree_par_nom), et chaque avoir en moins, ligne à ligne, pour le
+     * compte de la vente que la ligne corrige. Un avoir ne se déduit donc
+     * jamais de la personne qui l'émet (le propriétaire, qui ne vend pas, en
+     * fait) mais de celle qui avait vendu ; un écart de centimes entre les
+     * lignes d'un avoir et son total va à la première ligne, pour que la
+     * somme des comptes soit le chiffre d'affaires net du magasin. Une ligne
+     * qui ne retrouve pas sa vente garde le compte de l'avoir.
+     *
+     * @param  Collection<int, Magasin>  $magasins
+     * @return list<VenteDUnCompte>
+     *
+     * @throws AuthorizationException un magasin que le périmètre ne permet pas
+     */
+    public function ventesParCompte(Perimetre $perimetre, Collection $magasins, string $du, string $au): array
+    {
+        $perimetre->exiger($magasins, SourceDesGraphiques::Ventes);
+
+        if ($magasins->isEmpty()) {
+            return [];
+        }
+
+        $jours = new JoursDesMagasins($magasins, $du, $au);
+        $ventes = [];
+
+        foreach ($this->emis('factures', $magasins, $jours)->get(['factures.magasin_id', 'factures.date_emission', 'factures.total_ht', 'factures.cree_par', 'factures.cree_par_nom']) as $facture) {
+            $jour = $jours->jourDe(ValeurSimple::enEntier($facture->magasin_id), ValeurSimple::enTexte($facture->date_emission));
+
+            if ($jour !== null) {
+                $ventes[] = ['magasin' => ValeurSimple::enEntier($facture->magasin_id), 'jour' => $jour, 'compte' => ValeurSimple::enEntierOuNul($facture->cree_par), 'nom' => ValeursLues::texteOuNul($facture->cree_par_nom), 'ht' => $this->calculateur->enCentiemes($facture->total_ht)];
+            }
+        }
+
+        $lignes = $this->emis('avoirs', $magasins, $jours)
+            ->join('lignes_avoir', fn (JoinClause $jointure): JoinClause => $jointure->on('lignes_avoir.avoir_id', '=', 'avoirs.id')->on('lignes_avoir.magasin_id', '=', 'avoirs.magasin_id'))
+            ->leftJoin('lignes_facture', fn (JoinClause $jointure): JoinClause => $jointure->on('lignes_facture.id', '=', 'lignes_avoir.ligne_facture_id')->on('lignes_facture.magasin_id', '=', 'lignes_avoir.magasin_id'))
+            ->leftJoin('factures as ventes', fn (JoinClause $jointure): JoinClause => $jointure->on('ventes.id', '=', 'lignes_facture.facture_id')->on('ventes.magasin_id', '=', 'lignes_facture.magasin_id'))
+            ->orderBy('lignes_avoir.id')
+            ->get(['avoirs.id as avoir_id', 'avoirs.magasin_id', 'avoirs.date_emission', 'avoirs.total_ht', 'avoirs.cree_par', 'avoirs.cree_par_nom', 'lignes_avoir.montant_ht as ligne_ht', 'ventes.cree_par as vente_cree_par', 'ventes.cree_par_nom as vente_cree_par_nom'])
+            ->groupBy('avoir_id');
+
+        foreach ($lignes as $deLAvoir) {
+            $premiere = $deLAvoir->first();
+            $jour = $premiere === null ? null : $jours->jourDe(ValeurSimple::enEntier($premiere->magasin_id), ValeurSimple::enTexte($premiere->date_emission));
+
+            if ($premiere === null || $jour === null) {
+                continue;
+            }
+
+            $hts = array_values($deLAvoir->map(fn (stdClass $ligne): int => $this->calculateur->enCentiemes($ligne->ligne_ht))->all());
+            $ecart = $this->calculateur->enCentiemes($premiere->total_ht) - array_sum($hts);
+
+            foreach ($deLAvoir->values() as $rang => $ligne) {
+                $vendue = $ligne->vente_cree_par !== null;
+                $ventes[] = [
+                    'magasin' => ValeurSimple::enEntier($ligne->magasin_id),
+                    'jour' => $jour,
+                    'compte' => ValeurSimple::enEntierOuNul($vendue ? $ligne->vente_cree_par : $ligne->cree_par),
+                    'nom' => ValeursLues::texteOuNul($vendue ? $ligne->vente_cree_par_nom : $ligne->cree_par_nom),
+                    'ht' => -(($hts[$rang] ?? 0) + ($rang === 0 ? $ecart : 0)),
+                ];
+            }
+        }
+
+        return $ventes;
     }
 
     /**

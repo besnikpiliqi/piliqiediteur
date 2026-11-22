@@ -43,8 +43,8 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
- * Les dix-neuf graphiques et les quatre chiffres clés du tableau de bord
- * (décision de l'éditeur du 14/11/2026, lot GRAPH), sur des montants
+ * Les graphiques du catalogue (Graphique::NOMBRE) et les quatre chiffres clés
+ * du tableau de bord (décision de l'éditeur du 14/11/2026, lot GRAPH), sur des montants
  * calculés à la main : les montants enregistrés sur les documents émis ou
  * validés, additionnés en centimes, chaque opération dans le mois de son
  * magasin, jamais un brouillon, un magasin hors
@@ -94,7 +94,6 @@ class SeriesDesGraphiquesTest extends TestCase
             'chiffre d\'affaires HT par mois' => [Graphique::ChiffreDAffairesParMois, null, ['Chiffre d\'affaires HT' => $parMois(2000, 3000, 7000)]],
             'ventes et achats HT par mois' => [Graphique::VentesEtAchatsParMois, null, ['Ventes HT' => $parMois(2000, 3000, 7000), 'Achats HT' => $parMois(0, 5000, 0)]],
             'TVA à payer par mois' => [Graphique::TvaAPayerParMois, null, ['TVA collectée' => $parMois(400, 600, 1400), 'TVA déductible des achats' => $parMois(0, 1000, 0), 'TVA déductible des charges' => $parMois(0, 0, 0), 'TVA à payer' => $parMois(400, -400, 1400), 'TVA à payer (estimation)' => $parMois(400, -400, 1400)]],
-            'chiffre d\'affaires HT par an' => [Graphique::ChiffreDAffairesParAn, ['2026'], ['Chiffre d\'affaires HT (exercice)' => [12000]]],
             'marge brute HT par mois' => [Graphique::MargeBruteParMois, null, ['Marge brute HT' => $parMois(0, 1500, 0)], [self::SEPTEMBRE => 'Taux de marge : 50,0 %']],
             'chiffre d\'affaires par magasin' => [Graphique::ChiffreDAffairesParMagasin, ['Ma Boutique'], ['Chiffre d\'affaires HT' => [12000]]],
             'ventes par taux de TVA' => [Graphique::VentesParTauxDeTva, ['20 %'], ['Ventes HT' => [12000]]],
@@ -102,6 +101,8 @@ class SeriesDesGraphiquesTest extends TestCase
             'encaissements par mode de paiement' => [Graphique::EncaissementsParMode, ['Virement', 'Chèque', 'Espèces', 'Carte bancaire', 'Prélèvement', 'Crédit d\'avoir utilisé'], ['Encaissements TTC' => [0, 0, 6000, 2000, 0, 0]]],
             'meilleurs produits' => [Graphique::MeilleursProduits, ['Réparation', 'Lampe', 'Câble'], ['Chiffre d\'affaires HT' => [5000, 4000, 3000]]],
             'meilleurs clients' => [Graphique::MeilleursClients, ['Atelier Martin', 'Julie Petit'], ['Chiffre d\'affaires HT' => [8000, 2000]]],
+            // Toutes les ventes du jeu de données sont celles du responsable de test : 120,00 € HT, avoir de 10,00 € déduit.
+            'ventes par vendeur' => [Graphique::VentesParVendeur, ['Responsable de test'], ['Chiffre d\'affaires HT' => [12000]]],
             'achats par fournisseur' => [Graphique::AchatsParFournisseur, ['Grossiste Est'], ['Achats HT' => [5000]]],
             'factures à encaisser par ancienneté' => [Graphique::FacturesParAnciennete, ['À échoir', '1 à 30 j de retard', '31 à 60 j de retard', 'Plus de 60 j de retard'], ['Restant dû' => [5200, 0, 2400, 0]]],
             'valeur du stock au coût moyen' => [Graphique::ValeurDuStock, null, ['Valeur du stock HT' => $parMois(0, 3500, 3500)]],
@@ -152,10 +153,10 @@ class SeriesDesGraphiquesTest extends TestCase
         $chiffres = $this->chiffres($this->perimetreDuProprietaire($magasin));
 
         $this->assertSame([
-            'ca' => ['valeur' => 7000, 'variation' => null],
-            'achats' => ['valeur' => 0, 'variation' => null],
+            'ca' => ['valeur' => 7000, 'variation' => null, 'ton' => 'neutre'],
+            'achats' => ['valeur' => 0, 'variation' => null, 'ton' => 'neutre'],
             'tva' => ['franchise' => false, 'a_payer' => 1400, 'collectee' => 1400, 'deductible' => 0, 'estimation' => null, 'avec_les_charges' => true, 'sans_celles_de_la_societe' => false],
-            'restant_du' => ['valeur' => 7600, 'en_retard' => 2400],
+            'restant_du' => ['valeur' => 7600, 'en_retard' => 2400, 'ton_du_retard' => 'negatif'],
         ], $chiffres);
     }
 
@@ -179,7 +180,7 @@ class SeriesDesGraphiquesTest extends TestCase
 
         $chiffres = $this->chiffres($this->perimetreDuProprietaire($magasin));
 
-        $this->assertSame(['valeur' => 3000, 'variation' => '+50,0 % sur un an'], $chiffres['ca']);
+        $this->assertSame(['valeur' => 3000, 'variation' => '+50,0 % sur un an', 'ton' => 'positif'], $chiffres['ca']);
     }
 
     /**
@@ -371,11 +372,11 @@ class SeriesDesGraphiquesTest extends TestCase
 
     /**
      * Un exercice décalé, clos fin juin : « Exercice en cours » va de
-     * juillet 2026 à juin 2027 au 15 octobre 2026, et le chiffre
-     * d'affaires par an compte par exercice, « Exercice
-     * 2025-2026 » et « Exercice 2026-2027 ».
+     * juillet 2026 à juin 2027 au 15 octobre 2026, et ses mois à venir n'ont
+     * pas de valeur ; le chiffre d'affaires par exercice se lit dans
+     * DecoupageDesGraphiquesTest.
      */
-    public function test_un_exercice_decale_a_juin_compte_par_exercice(): void
+    public function test_un_exercice_decale_a_juin_compte_de_juillet_a_juin(): void
     {
         $this->travelTo(self::aParis('2026-05-10 10:00:00'));
         $magasin = $this->completerIdentiteLegale($this->ouvrirUneSociete(['mois_fin_exercice' => 6]));
@@ -385,37 +386,11 @@ class SeriesDesGraphiquesTest extends TestCase
         $this->travelTo(self::aParis('2026-10-15 12:00:00'));
         $perimetre = $this->perimetreDuProprietaire($magasin);
 
-        $series = $this->series($perimetre, [Graphique::ChiffreDAffairesParMois, Graphique::ChiffreDAffairesParAn], PeriodeDuTableauDeBord::ExerciceEnCours);
+        $parMois = $this->series($perimetre, [Graphique::ChiffreDAffairesParMois], PeriodeDuTableauDeBord::ExerciceEnCours)[Graphique::ChiffreDAffairesParMois->value];
 
-        $parMois = $series[Graphique::ChiffreDAffairesParMois->value];
         $this->assertCount(12, $parMois->etiquettes);
         $this->assertSame(array_replace(array_fill(0, 12, null), [0 => 0, 1 => 4000, 2 => 0, 3 => 0]), $parMois->jeux[0]['valeurs'], 'De juillet 2026 à juin 2027 : les mois à venir n\'ont pas de valeur.');
-        $this->assertSame(['Exercice 2025-2026', 'Exercice 2026-2027'], $series[Graphique::ChiffreDAffairesParAn->value]->etiquettes);
-        $this->assertSame([2000, 4000], $series[Graphique::ChiffreDAffairesParAn->value]->jeux[0]['valeurs']);
-        $this->assertSame('Chiffre d\'affaires HT', $series[Graphique::ChiffreDAffairesParAn->value]->jeux[0]['libelle'], 'Un exercice décalé se dit dans les étiquettes, pas dans la légende.');
         $this->assertSame('Exercice en cours (juil. 2026 à juin 2027)', PeriodeDuTableauDeBord::ExerciceEnCours->libelle('2026-10-15', 6));
-    }
-
-    /**
-     * Un exercice qui finit en décembre est l'année civile (choix B de
-     * l'éditeur, le 15/11/2026) : même avec un « exercice en cours » retenu
-     * avant ce choix, le chiffre d'affaires par an compte par année, et sa
-     * légende dit « (exercice) ».
-     */
-    public function test_un_exercice_qui_finit_en_decembre_compte_par_annee_avec_exercice_dans_la_legende(): void
-    {
-        $this->travelTo(self::aParis('2025-11-10 10:00:00'));
-        $magasin = $this->completerIdentiteLegale($this->ouvrirUneSociete());
-        $this->vendreUneLampe($magasin, '24.00');
-        $this->travelTo(self::aParis('2026-08-10 10:00:00'));
-        $this->vendreUneLampe($magasin, '48.00');
-        $this->travelTo(self::aParis('2026-10-15 12:00:00'));
-        $perimetre = $this->perimetreDuProprietaire($magasin);
-
-        $serie = $this->series($perimetre, [Graphique::ChiffreDAffairesParAn], PeriodeDuTableauDeBord::ExerciceEnCours)[Graphique::ChiffreDAffairesParAn->value];
-
-        $this->assertSame(['2025', '2026'], $serie->etiquettes);
-        $this->assertSame([['Chiffre d\'affaires HT (exercice)', [2000, 4000]]], array_map(fn (array $jeu): array => [$jeu['libelle'], $jeu['valeurs']], $serie->jeux));
     }
 
     /**
@@ -435,7 +410,7 @@ class SeriesDesGraphiquesTest extends TestCase
 
         $this->assertFalse($perimetre->voit(Graphique::TvaAPayerParMois));
         $this->assertSame(['franchise' => true, 'a_payer' => 0, 'collectee' => 0, 'deductible' => 0, 'estimation' => null, 'avec_les_charges' => false, 'sans_celles_de_la_societe' => false], $chiffres['tva']);
-        $this->assertSame(['valeur' => 2400, 'variation' => null], $chiffres['ca'], 'À 0 %, la lampe se vend 24,00 € HT.');
+        $this->assertSame(['valeur' => 2400, 'variation' => null, 'ton' => 'neutre'], $chiffres['ca'], 'À 0 %, la lampe se vend 24,00 € HT.');
     }
 
     /**

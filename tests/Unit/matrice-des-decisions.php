@@ -2795,6 +2795,14 @@ return [
                 'tests/Browser/Parcours/FermetureDeCaisseGriseeTest.php › « Fermer la caisse d’un vendeur » est grisé avec son info-bulle tant qu’aucun vendeur n’a de caisse ouverte, puis normal quand l’un d’eux vend',
             ],
         ],
+        'hors.noms-longs-des-graphiques' => [
+            'puce' => 'Hors de CLAUDE.md',
+            'regle' => 'Dans les graphiques du tableau de bord (espace de la société, panneau d\'un magasin, espace du cabinet, page de l\'expert-comptable déclaré), un nom trop long pour son étiquette (produit, client, fournisseur, magasin, mode de paiement, légende d\'un anneau) s\'écrit par son début suivi de « … » et ne passe jamais sous la barre voisine ; son info-bulle dit le nom entier au survol, et à l\'appui sur un téléphone ; un nom court reste entier ; en clair comme en sombre (demande de l\'éditeur du 20/11/2026, lot écrans).',
+            'tests' => [
+                'tests/Browser/Parcours/NomsLongsDesGraphiquesTest.php › un nom trop long s’écrit par son début suivi de « … », l’info-bulle en dit le nom entier au survol et au clic, un nom court reste entier, à 1 280 px, sur un téléphone, en clair et en sombre',
+                'tests/Browser/Parcours/NomsLongsDesGraphiquesTest.php › la légende d’un anneau écrit un nom trop long par son début suivi de « … » et l’info-bulle en dit le nom entier au survol et au clic',
+            ],
+        ],
         'hors.recu-le-passe-permis-futur-refuse' => [
             'puce' => 'Hors de CLAUDE.md',
             'regle' => 'Le champ « Reçu le » d\'un paiement (encaissement d\'une facture, page des paiements) accepte une date passée, comme un virement vu sur le relevé de la veille, et refuse une date future, au jour du calendrier du magasin (décision de Claude du 09/10/2026, constat X0 de son audit, appliquée sans attendre selon D76 et lue par l\'éditeur le 13/11/2026 sans la contester).',

@@ -9,8 +9,151 @@
     ne vient d'un autre site. La carte « Écart des prix d'achat » (décision de
     l'éditeur du 21/11/2026, D76) n'a pas de canevas : elle écrit son propre
     `svg` (voir ecart-des-prix-d-achat.blade.php) et n'appelle pas ce script.
+
+    Les noms longs (demande de l'éditeur du 20/11/2026) : sur l'axe des noms
+    d'un graphique en barres, comme dans la légende d'un anneau ou d'un
+    camembert, un nom trop long pour la place s'écrit à partir de sa
+    gauche, son début visible, la fin cachée par « … » ; une info-bulle
+    (`.piliqi-graphiques__nom-complet`, voir graphiques.css) en montre le nom
+    entier quand la souris est au-dessus du nom, et au toucher ou au clic
+    sur un téléphone ou une tablette, où il n'y a pas de souris. Le plugin
+    `piliqiNomsLongs`, que le composant « chart » de Filament charge par
+    `window.filamentChartJsPlugins`, dessine l'info-bulle ; la largeur
+    disponible vient de la largeur du graphique, relue à chaque dessin.
 --}}
 <script>
+    (() => {
+        // La largeur moyenne d'un caractère des graduations (corps 12), en pixels.
+        const CARACTERE = 6.5
+        const DUREE_AU_TOUCHER = 5000
+
+        const tronquer = (texte, maximum) => texte.length <= maximum ? texte : `${texte.slice(0, Math.max(1, maximum - 1)).trimEnd()}…`
+
+        // Le nombre de caractères qu'un nom peut garder : 40 % de la largeur du
+        // graphique pour l'axe des noms d'un graphique en barres couchées, la
+        // largeur de sa rangée pour des barres debout, la moitié de la largeur
+        // pour la légende d'un anneau ou d'un camembert.
+        window.piliqiNombreDeCaracteres = (graphique, axe) => {
+            const nombre = Math.max(1, graphique.data.labels.length)
+            const largeur = axe === 'y'
+                ? graphique.width * 0.4
+                : (axe === 'x' ? (graphique.chartArea ? graphique.chartArea.width : graphique.width) / nombre : (graphique.width - 60) / 2)
+
+            return Math.max(6, Math.floor(largeur / CARACTERE))
+        }
+        window.piliqiNomTronque = tronquer
+
+        // La légende que Chart.js donne à ce type de graphique (celle d'un
+        // anneau lit ses parts, non ses jeux), que la nôtre complète.
+        window.piliqiLegendeParDefaut = (graphique) => graphique.constructor.overrides[graphique.config.type]?.plugins?.legend ?? graphique.constructor.defaults.plugins.legend
+
+        const bulle = (graphique) => {
+            if (! graphique.piliqiBulle) {
+                const hote = graphique.canvas.parentNode
+                const element = document.createElement('div')
+
+                if (getComputedStyle(hote).position === 'static') {
+                    hote.style.position = 'relative'
+                }
+
+                element.className = 'piliqi-graphiques__nom-complet'
+                element.setAttribute('role', 'tooltip')
+                element.setAttribute('data-nom-complet', '')
+                element.hidden = true
+                hote.appendChild(element)
+                graphique.piliqiBulle = element
+            }
+
+            return graphique.piliqiBulle
+        }
+
+        const cacher = (graphique) => {
+            if (graphique.piliqiBulle) {
+                graphique.piliqiBulle.hidden = true
+            }
+        }
+
+        const montrer = (graphique, nom, x, y, auToucher) => {
+            const element = bulle(graphique)
+
+            element.textContent = nom
+            element.hidden = false
+            element.style.left = `${Math.max(4, Math.min(x + 12, graphique.width - element.offsetWidth - 4))}px`
+            element.style.top = `${y + element.offsetHeight + 20 > graphique.height ? Math.max(4, y - element.offsetHeight - 10) : y + 16}px`
+            clearTimeout(graphique.piliqiMinuterie)
+
+            if (auToucher) {
+                graphique.piliqiMinuterie = setTimeout(() => cacher(graphique), DUREE_AU_TOUCHER)
+            }
+        }
+
+        // L'axe des noms d'un graphique en barres, ou null : le rang du nom sous
+        // ce point, quand ce point est dans la zone des noms, hors de la zone du
+        // dessin.
+        const nomSousLePoint = (graphique, x, y) => {
+            const axe = graphique.options.indexAxis === 'y' ? 'y' : 'x'
+            const echelle = graphique.scales[axe]
+
+            if (! echelle || echelle.type !== 'category' || echelle.options.display === false || ! graphique.chartArea) {
+                return null
+            }
+
+            const dansLaZone = axe === 'y'
+                ? x < graphique.chartArea.left && y >= graphique.chartArea.top && y <= graphique.chartArea.bottom
+                : y > graphique.chartArea.bottom && x >= graphique.chartArea.left && x <= graphique.chartArea.right
+
+            if (! dansLaZone) {
+                return null
+            }
+
+            const rang = Math.round(echelle.getValueForPixel(axe === 'y' ? y : x))
+
+            return graphique.piliqiTronques && graphique.piliqiTronques.has(rang) ? rang : null
+        }
+
+        const plugin = {
+            id: 'piliqiNomsLongs',
+            beforeUpdate: (graphique) => { graphique.piliqiTronques = new Set() },
+            afterEvent: (graphique, arguments_) => {
+                if (! graphique.options.plugins.piliqiNomsLongs || ! graphique.options.plugins.piliqiNomsLongs.actif) {
+                    return
+                }
+
+                const evenement = arguments_.event
+
+                if (evenement.type === 'mouseout') {
+                    return cacher(graphique)
+                }
+
+                if (! ['mousemove', 'click', 'touchstart'].includes(evenement.type) || evenement.x === null || evenement.y === null) {
+                    return
+                }
+
+                // Un anneau ou un camembert n'a pas d'axe des noms (ses axes sont
+                // masqués) : sa légende ouvre et ferme elle-même l'info-bulle (voir
+                // options.plugins.legend).
+                const echelle = graphique.scales[graphique.options.indexAxis === 'y' ? 'y' : 'x']
+
+                if (! echelle || echelle.type !== 'category' || echelle.options.display === false) {
+                    return
+                }
+
+                const rang = nomSousLePoint(graphique, evenement.x, evenement.y)
+
+                rang === null
+                    ? cacher(graphique)
+                    : montrer(graphique, graphique.data.labels[rang], evenement.x, evenement.y, evenement.type !== 'mousemove')
+            },
+        }
+
+        if (! (window.filamentChartJsPlugins ?? []).some((existant) => existant.id === plugin.id)) {
+            window.filamentChartJsPlugins = [...(window.filamentChartJsPlugins ?? []), plugin]
+        }
+
+        window.piliqiMontrerLeNomComplet = montrer
+        window.piliqiCacherLeNomComplet = cacher
+    })()
+
     window.piliqiGraphique = (config) => {
         const TEINTES = ['primary', 'warning', 'success', 'danger', 'info', 'gray']
         const FORMES = { barres: 'bar', barres_couchees: 'bar', lignes: 'line', aires: 'line', anneau: 'doughnut', camembert: 'pie', radar: 'radar' }
@@ -75,11 +218,39 @@
         })
 
         const unite = (config.jeux.find((jeu) => ! jeu.axe_de_droite) ?? { unite: 'euros' }).unite
+        // La légende d'un anneau ou d'un camembert : les noms trop longs
+        // s'écrivent par leur début, et l'info-bulle dit le nom entier au
+        // survol, au clic ou au toucher.
+        const legende = circulaire ? {
+            display: true,
+            labels: {
+                generateLabels: (graphique) => window.piliqiLegendeParDefaut(graphique).labels.generateLabels(graphique)
+                    .map((element) => ({ ...element, text: window.piliqiNomTronque(element.text, window.piliqiNombreDeCaracteres(graphique, null)) })),
+            },
+            onHover: (evenement, element, legend) => {
+                const complet = legend.chart.data.labels[element.index]
+
+                if (element.text !== complet) {
+                    window.piliqiMontrerLeNomComplet(legend.chart, complet, evenement.x, evenement.y, false)
+                }
+            },
+            onLeave: (evenement, element, legend) => window.piliqiCacherLeNomComplet(legend.chart),
+            onClick: function (evenement, element, legend) {
+                window.piliqiLegendeParDefaut(legend.chart).onClick.call(this, evenement, element, legend)
+                const complet = legend.chart.data.labels[element.index]
+
+                if (element.text !== complet) {
+                    window.piliqiMontrerLeNomComplet(legend.chart, complet, evenement.x, evenement.y, true)
+                }
+            },
+        } : { display: config.jeux.length > 1 }
+
         const options = {
             maintainAspectRatio: false,
             indexAxis: config.type === 'barres_couchees' ? 'y' : 'x',
             plugins: {
-                legend: { display: config.jeux.length > 1 || circulaire },
+                piliqiNomsLongs: { actif: true },
+                legend: legende,
                 tooltip: {
                     callbacks: {
                         label: (contexte) => ` ${contexte.dataset.label} : ${enTexte(contexte.raw, contexte.dataset.unite)}`,
@@ -94,7 +265,26 @@
         } else if (forme === 'radar') {
             options.scales = { x: { display: false }, y: { display: false }, r: { ticks: { callback: graduation(unite) } } }
         } else {
-            options.scales = { [config.type === 'barres_couchees' ? 'x' : 'y']: { ticks: { callback: graduation(unite) } } }
+            const axeDesNoms = config.type === 'barres_couchees' ? 'y' : 'x'
+
+            options.scales = {
+                [config.type === 'barres_couchees' ? 'x' : 'y']: { ticks: { callback: graduation(unite) } },
+                [axeDesNoms]: {
+                    ticks: {
+                        // Le nom commence à gauche : trop long, il perd sa fin, jamais son début.
+                        callback: function (valeur) {
+                            const complet = this.getLabelForValue(valeur)
+                            const tronque = window.piliqiNomTronque(complet, window.piliqiNombreDeCaracteres(this.chart, axeDesNoms))
+
+                            if (tronque !== complet && this.chart.piliqiTronques) {
+                                this.chart.piliqiTronques.add(Number(valeur))
+                            }
+
+                            return tronque
+                        },
+                    },
+                },
+            }
 
             if (datasets.some((serie) => serie.yAxisID === 'y2')) {
                 options.scales.y2 = { position: 'right', grid: { display: false }, ticks: { callback: graduation('euros') } }

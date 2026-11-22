@@ -51,6 +51,18 @@ use LogicException;
  */
 final class ActiviteDesMagasins
 {
+    /**
+     * Des noms de plus de cent caractères, que les graphiques à noms (meilleurs
+     * produits, meilleurs clients, achats par fournisseur) écrivent par leur
+     * début suivi de « … », avec une info-bulle du nom entier : de part et
+     * d'autre de leur limite de coupure, avec les noms courts du semis.
+     */
+    public const NOM_DU_PRODUIT_TRES_LONG = 'Bougie parfumée à la cire de soja, mèche en coton, senteur thé vert et gingembre, grand format 500 g';
+
+    public const NOM_DU_CLIENT_TRES_LONG = 'Association des Commerçants et Artisans du Vieux Port et de la Baie de Marseille et de ses Environs';
+
+    public const NOM_DU_FOURNISSEUR_TRES_LONG = 'Manufacture des Parfums d\'Intérieur et des Bougies Artisanales de la Vallée du Rhône et de la Drôme (SARL)';
+
     public function __construct(
         private readonly HorlogeDuSemis $horloge,
         private readonly SemisComplet $semis,
@@ -105,6 +117,7 @@ final class ActiviteDesMagasins
         $halles->fiche($camille, Client::class, ['nom' => 'Hôtel des Arts', 'type_client' => TypeClient::Professionnel, 'siren' => IdentifiantsInsee::avecSaCle('00000022'), 'adresse' => '14 rue de Rivoli', 'code_postal' => '75004', 'ville' => 'Paris', 'pays' => 'FR', 'email' => 'comptabilite@hotel-des-arts.exemple.test', 'mode_paiement_prefere' => ModePaiement::Virement->value]);
         $halles->fiche($camille, Client::class, ['nom' => 'Agence Horizon', 'type_client' => TypeClient::Professionnel, 'siren' => IdentifiantsInsee::avecSaCle('00000023'), 'adresse' => '27 boulevard Voltaire', 'code_postal' => '75011', 'ville' => 'Paris', 'pays' => 'FR', 'email' => 'contact@agence-horizon.exemple.test']);
         $halles->fiche($camille, Client::class, ['nom' => 'Marie Dupuis', 'type_client' => TypeClient::Particulier, 'pays' => 'FR', 'email' => 'marie.dupuis@exemple.test']);
+        $halles->fiche($camille, Client::class, ['nom' => self::NOM_DU_CLIENT_TRES_LONG, 'type_client' => TypeClient::Professionnel, 'siren' => IdentifiantsInsee::avecSaCle('00000031'), 'adresse' => '1 quai du Vieux Port', 'code_postal' => '13002', 'ville' => 'Marseille', 'pays' => 'FR', 'email' => 'tresorerie@commercants-du-vieux-port.exemple.test']);
         $halles->fiche($camille, Service::class, ['nom' => 'Emballage cadeau', 'prix_ttc' => '3.00', 'taux_tva' => '20', 'actif' => true]);
         $halles->fiche($camille, Service::class, ['nom' => 'Livraison à domicile', 'prix_ttc' => '9.90', 'taux_tva' => '20', 'actif' => true]);
 
@@ -119,6 +132,16 @@ final class ActiviteDesMagasins
             ['produit' => ['nom' => 'Carnet A5 ligné', 'reference' => 'CARNET-A5', 'prix_vente_ttc' => '4.90', 'taux_tva' => '20', 'suivi_stock' => true, 'seuil_alerte' => 10], 'quantite' => 50, 'prix_unitaire_ht' => '1.40'],
             ['produit' => ['nom' => 'Stylo plume laqué', 'reference' => 'STYLO-PLUME', 'prix_vente_ttc' => '24.00', 'taux_tva' => '20', 'suivi_stock' => true, 'seuil_alerte' => 2], 'quantite' => 10, 'prix_unitaire_ht' => '9.00'],
         ], ['date_facture' => $this->horloge->jour(2), 'numero_fournisseur' => 'PC-5521']);
+
+        // Des noms de part et d'autre de la limite de coupure des graphiques à noms
+        // (début visible, « … », info-bulle du nom entier) : un fournisseur et un
+        // produit de plus de cent caractères, un produit moyen, des noms courts
+        // ailleurs (demande de l'éditeur du 20/11/2026).
+        $manufacture = $halles->fiche($camille, Fournisseur::class, ['nom' => self::NOM_DU_FOURNISSEUR_TRES_LONG, 'adresse' => '120 chemin des Moulins', 'code_postal' => '26000', 'ville' => 'Valence', 'pays' => 'FR']);
+        $halles->acheter($camille, $manufacture, [
+            ['produit' => ['nom' => self::NOM_DU_PRODUIT_TRES_LONG, 'reference' => 'BOUGIE-SOJA-500', 'prix_vente_ttc' => '34.00', 'taux_tva' => '20', 'suivi_stock' => true, 'seuil_alerte' => 4], 'quantite' => 24, 'prix_unitaire_ht' => '13.50'],
+            ['produit' => ['nom' => 'Plateau en bois d\'olivier, 30 × 20 cm', 'reference' => 'PLATEAU-OLIVIER', 'prix_vente_ttc' => '27.00', 'taux_tva' => '20', 'suivi_stock' => true, 'seuil_alerte' => 3], 'quantite' => 12, 'prix_unitaire_ht' => '10.40'],
+        ], ['date_facture' => $this->horloge->jour(2), 'numero_fournisseur' => 'MPI-2026-044']);
     }
 
     /**
@@ -229,6 +252,8 @@ final class ActiviteDesMagasins
         if ($commerce) {
             $facturePayee = $halles->facturer($camille, $horizon, [$this->ligne($halles, 'TASSE-GRES', 6), $this->ligne($halles, 'STYLO-PLUME', 2)]);
             $halles->encaisser($camille, $facturePayee, [new PartDeReglement(ModePaiement::Virement, $facturePayee->resteDuEnCentimes())], $this->horloge->jour(5));
+            $halles->facturer($camille, $this->client($halles, self::NOM_DU_CLIENT_TRES_LONG), [$this->ligne($halles, 'BOUGIE-SOJA-500', 6), $this->ligne($halles, 'PLATEAU-OLIVIER', 2)]);
+            $halles->vendreALaCaisse($lucas, $halles->comptoir(), [$this->ligne($halles, 'BOUGIE-SOJA-500', 2)]);
         }
 
         if ($services) {

@@ -238,7 +238,7 @@ final class EcritureDesEcarts
             throw new InvalidArgumentException('Nombre illisible : '.$ecrit);
         }
 
-        $chiffres = rtrim($parties[1].($parties[2] ?? ''), '0');
+        $chiffres = rtrim($parties[1].$parties[2], '0');
 
         return [$chiffres === '' ? '0' : $chiffres, (int) $parties[3]];
     }

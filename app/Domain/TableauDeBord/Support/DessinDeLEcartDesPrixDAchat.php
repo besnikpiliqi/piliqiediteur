@@ -73,7 +73,7 @@ final class DessinDeLEcartDesPrixDAchat
         $largeur = self::LARGEUR - self::GAUCHE - self::DROITE;
         $hauteur = self::HAUTEUR - self::HAUT - self::BAS;
 
-        $valeurs = [];
+        $valeurs = [0.0];
 
         foreach ($calculs as $mois) {
             $valeurs[] = $mois['hausses'] / 100.0;

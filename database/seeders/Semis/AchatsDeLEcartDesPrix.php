@@ -67,6 +67,9 @@ use LogicException;
  *
  * Les achats ne se posent que dans une base qui sème la société « Commerce ou
  * atelier » : le poste et les bases modèles du site de démonstration.
+ *
+ * @phpstan-type LigneDAchat array{0: string, 1: int, 2: string, 3?: array<string, mixed>|null, 4?: array<string, string>}
+ * @phpstan-type Geste array{geste: string, magasin: string, fournisseur?: string, lignes?: list<LigneDAchat>, facture?: array<string, string>, sansDate?: bool, dateDeLaFacture?: string|null, heure: string, cle?: string|null, reference?: string, nom?: string}
  */
 final class AchatsDeLEcartDesPrix
 {
@@ -145,9 +148,10 @@ final class AchatsDeLEcartDesPrix
 
     /**
      * Les achats à poser, par jour de l'histoire « AAAA-MM-JJ », dans
-     * l'ordre où ils se font.
+     * l'ordre où ils se font : par heure, puis dans l'ordre où ils sont
+     * programmés (le tri de PHP est stable).
      *
-     * @var array<string, list<array<string, mixed>>>
+     * @var array<string, list<Geste>>
      */
     private array $parJour = [];
 
@@ -167,8 +171,6 @@ final class AchatsDeLEcartDesPrix
     private array $aCorriger = [];
 
     private string $moisDuSemis = '';
-
-    private int $ordre = 0;
 
     /**
      * @param  array<string, GestesDuMagasin>  $gestes  les gestes de chaque magasin que ce semis sème, par clé
@@ -204,7 +206,7 @@ final class AchatsDeLEcartDesPrix
         $this->programmerFortDeFrance();
 
         foreach ($this->parJour as &$achats) {
-            usort($achats, fn (array $un, array $autre): int => [$un['heure'], $un['ordre']] <=> [$autre['heure'], $autre['ordre']]);
+            usort($achats, fn (array $un, array $autre): int => $un['heure'] <=> $autre['heure']);
         }
     }
 
@@ -462,11 +464,11 @@ final class AchatsDeLEcartDesPrix
     }
 
     /**
-     * @param  array<string, mixed>  $geste
+     * @param  Geste  $geste
      */
     private function ajouter(int $mois, int $jour, array $geste): void
     {
-        $this->parJour[$this->date($mois, $jour)][] = [...$geste, 'ordre' => $this->ordre++];
+        $this->parJour[$this->date($mois, $jour)][] = $geste;
     }
 
     /**
@@ -488,7 +490,7 @@ final class AchatsDeLEcartDesPrix
     }
 
     /**
-     * @param  array<string, mixed>  $geste
+     * @param  Geste  $geste
      */
     private function poser(array $geste, string $jour): void
     {
@@ -510,7 +512,7 @@ final class AchatsDeLEcartDesPrix
     }
 
     /**
-     * @param  array<string, mixed>  $geste
+     * @param  Geste  $geste
      */
     private function poserUnAchat(GestesDuMagasin $gestes, User $auteur, array $geste, string $jour, bool $valider): void
     {
@@ -521,7 +523,7 @@ final class AchatsDeLEcartDesPrix
         $attributs = ($geste['sansDate'] ?? false) === true
             ? ['source' => SourceFactureAchat::Api, 'numero_fournisseur' => $numero]
             : ['date_facture' => $date, 'numero_fournisseur' => $numero];
-        $attributs = [...$attributs, ...(is_array($geste['facture'] ?? null) ? $geste['facture'] : [])];
+        $attributs = [...$attributs, ...($geste['facture'] ?? [])];
 
         if (! $valider) {
             $gestes->dans(fn (): FactureAchat => app(CreerFactureAchatAction::class)->handle($auteur, $fournisseur, $lignes, $attributs));
@@ -532,12 +534,12 @@ final class AchatsDeLEcartDesPrix
         $facture = $gestes->acheter($auteur, $fournisseur, $lignes, $attributs);
 
         if (is_string($geste['cle'] ?? null)) {
-            $this->aCorriger[$geste['cle']] = (int) $facture->getKey();
+            $this->aCorriger[$geste['cle']] = $facture->id;
         }
     }
 
     /**
-     * @param  array<string, mixed>  $geste
+     * @param  Geste  $geste
      */
     private function corrigerUnAchat(GestesDuMagasin $gestes, User $auteur, array $geste): void
     {
@@ -558,14 +560,14 @@ final class AchatsDeLEcartDesPrix
      * Les lignes d'un achat telles que l'action d'achat les reçoit : le
      * produit par sa fiche quand il naît, par son identifiant sinon.
      *
-     * @param  array<string, mixed>  $geste
+     * @param  Geste  $geste
      * @return list<array<string, mixed>>
      */
     private function lignes(GestesDuMagasin $gestes, array $geste): array
     {
         $lignes = [];
 
-        foreach (is_array($geste['lignes'] ?? null) ? $geste['lignes'] : [] as $ligne) {
+        foreach ($geste['lignes'] ?? [] as $ligne) {
             [$reference, $quantite, $prix] = $ligne;
             $fiche = $ligne[3] ?? null;
             $ajout = $ligne[4] ?? [];

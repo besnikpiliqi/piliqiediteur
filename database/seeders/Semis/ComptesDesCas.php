@@ -67,8 +67,6 @@ final class ComptesDesCas
 
     private const PREMIERE_CONNEXION_INACHEVEE = 24;
 
-    private const ACCES_REDONNE_LA_VEILLE = 1;
-
     private const ACCES_REDONNE_L_AVANT_VEILLE = 2;
 
     private const LIEN_DE_L_EXPERT_COMPTABLE = 20;
@@ -188,17 +186,20 @@ final class ComptesDesCas
                 $lena = $this->semis->compte('Léna Roussel');
                 $this->dans('epicerie', fn (): bool => app(MotsDePasseProvisoires::class)->consommer($lena));
             }],
-            self::ACCES_REDONNE_LA_VEILLE => ['halles', function (): void {
-                $this->redonnerLAccesEnAbsence('Inès Garcia', 'halles', 'Camille Laurent');
-            }],
-            self::ACCES_REDONNE_L_AVANT_VEILLE => ['epicerie', function (): void {
-                $this->redonnerLAccesEnAbsence('Margaux Perrin', 'epicerie', 'Nicolas Lemoine');
+            self::ACCES_REDONNE_L_AVANT_VEILLE => [null, function (): void {
+                if ($this->semis->semeLeMagasin('halles')) {
+                    $this->redonnerLAccesEnAbsence('Inès Garcia', 'halles', 'Camille Laurent');
+                }
+
+                if ($this->semis->semeLeMagasin('epicerie')) {
+                    $this->redonnerLAccesEnAbsence('Margaux Perrin', 'epicerie', 'Nicolas Lemoine');
+                }
             }],
             self::LIEN_DE_L_EXPERT_COMPTABLE => ['conseil', fn () => $this->semis->redonnerLAccesALExpertComptable()],
             default => null,
         };
 
-        if ($changement !== null && $this->semis->semeLeMagasin($changement[0])) {
+        if ($changement !== null && ($changement[0] === null || $this->semis->semeLeMagasin($changement[0]))) {
             $this->leSoir($rang, '22:30', $changement[1]);
         }
     }

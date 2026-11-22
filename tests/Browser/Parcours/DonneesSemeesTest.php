@@ -4,9 +4,12 @@ use App\Domain\Achats\Services\PiecesDuFournisseur;
 use App\Domain\Calendrier\Calendrier;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
+use App\Filament\App\Pages\Auth\Connexion;
 use App\Models\User;
+use Database\Seeders\DatabaseSeeder;
 use Database\Seeders\Semis\SemisComplet;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Tests\SemeSansTransaction;
 
 /*
@@ -32,6 +35,26 @@ use Tests\SemeSansTransaction;
 uses(SemeSansTransaction::class);
 
 const MOT_DE_PASSE_DU_SEMIS = 'Fraise-Ete-Semis';
+
+/**
+ * Le mot de passe que la liste des comptes du semis donne à ce compte, par son
+ * identifiant : son mot de passe provisoire quand il n'a pas encore choisi le
+ * sien.
+ */
+function motDePasseListeDe(string $identifiant): string
+{
+    foreach (explode(PHP_EOL, (string) Storage::disk('local')->get(DatabaseSeeder::FICHIER_DES_COMPTES)) as $ligne) {
+        if (str_starts_with($ligne, '| ')) {
+            $cellules = array_map(trim(...), explode(' | ', Str::between($ligne, '| ', ' |')));
+
+            if (($cellules[4] ?? null) === $identifiant) {
+                return $cellules[6];
+            }
+        }
+    }
+
+    throw new RuntimeException("La liste des comptes du semis ne donne pas le compte {$identifiant}.");
+}
 
 /**
  * Le seul compte actif semé sous ce nom.
@@ -113,14 +136,21 @@ test('chaque rôle de la liste du semis se connecte et retrouve ses propres donn
 
     $ines = compteSeme('Inès Garcia');
     $identifiant = (string) $ines->identifiantDeConnexion();
+    $provisoire = motDePasseListeDe($identifiant);
     $onglet->aller('/app/login')
         ->remplir('Identifiant ou adresse e-mail', $identifiant)
-        ->remplir('Mot de passe', $identifiant)
+        ->remplir('Mot de passe', $provisoire)
         ->cliquerSur('Connexion')
-        ->voir('poste reconnu');
+        ->voir(Connexion::MESSAGE_ECHEC);
 
     $this->reconnaitreCeNavigateur($onglet, $halles, $proprietaire, 'Poste de l\'éditeur', MOT_DE_PASSE_DU_SEMIS);
-    $this->seConnecter($ines, $identifiant, onglet: $onglet);
+    $this->seConnecter($ines, $provisoire, onglet: $onglet);
+
+    expect($onglet->chemin())->toBe('/app/mot-de-passe');
+    $onglet->remplir('Votre nouveau mot de passe', MOT_DE_PASSE_DU_SEMIS)
+        ->remplir('Confirmez-le', MOT_DE_PASSE_DU_SEMIS)
+        ->cliquerSur('Choisir mon mot de passe')
+        ->attendreQue('location.pathname !== "/app/mot-de-passe"', 'le choix du mot de passe n\'a mené nulle part');
 
     expect($onglet->chemin())->toBe('/app/'.$halles->uuid);
 })->group('semis');

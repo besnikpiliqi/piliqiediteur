@@ -106,6 +106,18 @@ class RessourcesServiesParPiliqiTest extends TestCase
     }
 
     /**
+     * La feuille écrite à la main de la page « Prix de vente » (l'essai du
+     * barème et le tableau d'exemples de la formule d'arrondi) se sert de
+     * même dans chaque panneau, publiée telle qu'elle est dans le dépôt.
+     */
+    #[DataProvider('pagesDeConnexion')]
+    public function test_chaque_panneau_sert_la_feuille_de_l_arrondi_du_prix_de_vente_publiee_telle_quelle(string $page): void
+    {
+        $this->get($page)->assertOk()->assertSee('css/app/arrondi-du-prix-de-vente.css', false);
+        $this->assertFileEquals(resource_path('css/arrondi-du-prix-de-vente.css'), public_path('css/app/arrondi-du-prix-de-vente.css'));
+    }
+
+    /**
      * La feuille écrite à la main qui rend lisibles, en clair comme en
      * sombre, les textes que Filament écrit trop pâles (lot DATEOP), se
      * sert de même dans chaque panneau, publiée telle qu'elle est dans le

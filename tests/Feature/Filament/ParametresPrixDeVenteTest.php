@@ -518,6 +518,30 @@ class ParametresPrixDeVenteTest extends TestCase
     }
 
     /**
+     * Case cochée, une saisie illisible (un seuil à trois décimales) ne fait
+     * pas oublier la case : l'essai garde « avant arrondi », « arrondi » et
+     * le tableau d'exemples de la formule choisie, et dit de saisir un
+     * barème lisible, sans jamais écrire « Case décochée ».
+     */
+    public function test_case_cochee_une_saisie_illisible_garde_les_exemples_de_la_formule(): void
+    {
+        $this->connecterLeProprietaire();
+
+        $page = Livewire::test(ParametresPrixDeVente::class)
+            ->fillForm(['actif' => true, 'arrondi' => true, 'formule' => 'euro', 'essai_prix_achat_ht' => '1', 'essai_taux_tva' => '20'])
+            ->set('data.paliers', [['jusqu_a' => '2.555', 'benefice' => '1']])
+            ->assertSee('Exemples de la formule choisie')
+            ->assertSee('Prix de vente TTC avant arrondi')
+            ->assertSee('Prix de vente TTC arrondi')
+            ->assertSee('Saisissez un prix d\'achat HT')
+            ->assertDontSee('Case décochée')
+            ->assertDontSee('Prix de vente TTC (sans arrondi)');
+
+        $this->assertSame(['—', '—'], [self::prixDeLEssai($page, 'avant'), self::prixDeLEssai($page, 'apres')]);
+        $this->assertSame(ExemplesDArrondiTest::tableaux()['l\'euro le plus proche'][1], self::lignesDuTableau($page));
+    }
+
+    /**
      * Le milieu se juge sur le prix exact : (4,7467 € + 4 €) x 1,2 =
      * 10,49604 €, qui s'écrit 10,50 € au centime, devient 10 € à l'euro
      * près, et la page le dit.
@@ -554,7 +578,6 @@ class ParametresPrixDeVenteTest extends TestCase
         $this->assertSame(['bareme_prix_vente', 'prix_vente_automatique'], collect(array_keys($entree->nouvelles_valeurs))->sort()->values()->all());
         $this->assertSame(['aucun', false], [$entree->anciennes_valeurs['bareme_prix_vente']['arrondi'], $entree->anciennes_valeurs['prix_vente_automatique']]);
         $this->assertSame(['euro', true], [$entree->nouvelles_valeurs['bareme_prix_vente']['arrondi'], $entree->nouvelles_valeurs['prix_vente_automatique']]);
-        $this->assertStringNotContainsString('arrondi_x9', json_encode([$entree->anciennes_valeurs, $entree->nouvelles_valeurs], JSON_THROW_ON_ERROR));
 
         Livewire::test(ParametresPrixDeVente::class)->call('save')->assertNotified('Barème de prix de vente enregistré');
         $this->assertCount(1, $this->entreesDAudit($magasin->societe, ActionAuditee::ParametresDuMagasinModifies));

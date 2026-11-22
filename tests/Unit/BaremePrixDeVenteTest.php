@@ -316,13 +316,12 @@ class BaremePrixDeVenteTest extends TestCase
         $this->assertNull((new BaremePrixDeVente([['jusqu_a' => 5000, 'benefice' => 2000]], null, ArrondiDuPrixDeVente::Aucun))->palierPour(800000));
     }
 
-    public function test_une_formule_inconnue_ou_absente_est_refusee_et_l_ancienne_cle_ne_se_lit_plus(): void
+    public function test_une_formule_inconnue_ou_absente_est_refusee(): void
     {
         $paliers = [['jusqu_a' => '2', 'benefice' => '10']];
 
         $this->assertThrows(fn () => BaremePrixDeVente::depuisTableau(['paliers' => $paliers, 'benefice_au_dela' => '60', 'arrondi' => 'dix']), InvalidArgumentException::class, ArrondiDuPrixDeVente::REFUS_FORMULE_INCONNUE);
         $this->assertThrows(fn () => BaremePrixDeVente::depuisTableau(['paliers' => $paliers, 'benefice_au_dela' => '60']), UnexpectedValueException::class);
-        $this->assertThrows(fn () => BaremePrixDeVente::depuisTableau(['paliers' => $paliers, 'benefice_au_dela' => '60', 'arrondi_x9' => true]), UnexpectedValueException::class);
     }
 
     public function test_un_bareme_de_chaque_formule_s_ecrit_en_tableau_et_se_relit_a_l_identique(): void

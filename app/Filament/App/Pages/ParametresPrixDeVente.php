@@ -222,13 +222,14 @@ class ParametresPrixDeVente extends Page implements HasForms
      * d'achat d'essai -- comme le fera une facture d'achat, qui ne propose
      * rien tant que la TVA est vide : ce que montre la vue de l'essai (voir
      * EssaiDuBareme), avec la formule dont elle écrit le tableau d'exemples,
-     * ou null case décochée.
+     * ou null case décochée, que la saisie soit lisible ou non.
      *
      * @return array{formule: ArrondiDuPrixDeVente|null, lecture: array{avant: string, apres: string, lignes: list<array{texte: string, grise: bool}>}}
      */
     private static function lectureDeLEssai(Get $get): array
     {
         $tauxTva = ProduitResource::tauxDeTvaSaisi($get('essai_taux_tva'));
+        $formule = null;
 
         try {
             $formule = (bool) $get('arrondi') ? ArrondiDuPrixDeVente::choisie(true, $get('formule')) : null;
@@ -238,7 +239,7 @@ class ParametresPrixDeVente extends Page implements HasForms
                 ? EssaiDuBareme::illisible()
                 : EssaiDuBareme::lire(self::baremeSaisi($get), SaisieDecimale::enDixMilliemes(ValeurSimple::simple($get('essai_prix_achat_ht'))), $tauxTva);
         } catch (InvalidArgumentException) {
-            return ['formule' => null, 'lecture' => EssaiDuBareme::illisible()];
+            return ['formule' => $formule, 'lecture' => EssaiDuBareme::illisible()];
         }
 
         return ['formule' => $formule, 'lecture' => $lecture];

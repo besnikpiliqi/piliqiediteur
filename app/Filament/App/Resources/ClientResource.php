@@ -325,7 +325,7 @@ class ClientResource extends Resource
             Section::make('Paiement et notes')->schema([
                 TextInput::make('delai_paiement_jours')
                     ->label('Délai de paiement (jours)')
-                    ->helperText('Vide : délai par défaut du magasin (Paramètres > Factures).')
+                    ->helperText('Vide : délai par défaut du magasin (Paramètres > Factures et devis).')
                     ->integer()
                     ->minValue(0)
                     ->maxValue(365),

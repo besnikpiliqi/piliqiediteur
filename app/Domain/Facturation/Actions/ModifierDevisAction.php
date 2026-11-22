@@ -28,7 +28,8 @@ use LogicException;
  * Un devis envoyé ou accepté repasse en brouillon : le client ne s'est
  * engagé que sur la version qu'il a reçue, son acceptation est effacée, et
  * la nouvelle version n'a pas encore été émise : il perd l'émetteur figé
- * à son envoi et imprime de nouveau la société et le magasin
+ * à son envoi, avec le réglage du dépannage à domicile et le prix du
+ * devis (voir DepannageADomicile), et imprime de nouveau la société et le magasin
  * d'aujourd'hui, jusqu'à son prochain envoi, qui fige le sien (voir
  * Devis::emetteur()). Il garde son numéro, que son prochain envoi
  * reprend, et la date de son dernier envoi, que ce prochain envoi
@@ -81,7 +82,8 @@ class ModifierDevisAction
 
         return DB::transaction(function () use ($auteur, $devis, $client, $lignes, $attributs) {
             $magasin = app(TenantContext::class)->magasin();
-            Magasin::query()->whereKey($magasin->getKey())->sharedLock()->firstOrFail()->verifierQuIlEstOuvert();
+            $relu = Magasin::query()->whereKey($magasin->getKey())->sharedLock()->firstOrFail();
+            $relu->verifierQuIlEstOuvert();
             $compte = $this->lecteur->exigerSousVerrou($auteur, PermissionRegistry::DEVIS_UPDATE, $magasin);
 
             $devis = Devis::query()->whereKey($devis->getKey())->lockForUpdate()->first()
@@ -98,20 +100,25 @@ class ModifierDevisAction
             $this->lecteur->exiger($compte, 'update', $magasin, $devis);
             $client = Client::relueDansLeMagasin($client, Client::REFUS_AUTRE_MAGASIN);
 
-            return $this->operateur->pendant($compte, fn (): Devis => $this->modifier($compte, $magasin, $devis, $client, $lignes, $attributs));
+            return $this->operateur->pendant($compte, fn (): Devis => $this->modifier($compte, $magasin, $relu, $devis, $client, $lignes, $attributs));
         });
     }
 
     /**
+     * Le dépannage à domicile se décide sur la ligne du magasin relue sous
+     * verrou ($relu), jamais sur le magasin du contexte, lu au début de la
+     * requête (voir CreerDevisAction).
+     *
      * @param  array<array-key, array<string, mixed>>  $lignes
      * @param  array<string, mixed>  $attributs
      *
      * @throws AuthorizationException
      * @throws LogicException
      */
-    private function modifier(User $compte, Magasin $magasin, Devis $devis, Client $client, array $lignes, array $attributs): Devis
+    private function modifier(User $compte, Magasin $magasin, Magasin $relu, Devis $devis, Client $client, array $lignes, array $attributs): Devis
     {
         $contexte = ContexteDeVente::pourEnregistrer($client, $magasin, $devis->fill($attributs)->noterSaNatureDOperation($attributs));
+        $devis->noterLeDepannageADomicile($attributs, $relu, $client->estProfessionnel());
         $document = $this->constructeurLigne->construireToutes($lignes, $contexte);
         $this->derogations->exiger($compte, $devis->lignes->map(fn (LigneDevis $ligne): array => $ligne->attributesToArray())->all(), $document->lignes, $contexte);
         $devis->forceFill([
@@ -120,6 +127,8 @@ class ModifierDevisAction
             'statut' => StatutDevis::Brouillon,
             'accepte_le' => null,
             'emetteur_fige' => null,
+            'depannage_a_domicile' => null,
+            'prix_du_devis_de_depannage' => null,
         ])->save();
         $devis->lignes()->delete();
 

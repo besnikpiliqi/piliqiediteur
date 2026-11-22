@@ -20,8 +20,10 @@ use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Support\Str;
 
 /**
- * Un e-mail parti (ou à partir) avec un devis, une facture ou un avoir en
- * pièce jointe : créé par EnvoyerDocumentAction, envoyé par
+ * Un e-mail parti (ou à partir) avec un devis, une facture, un avoir ou un
+ * reçu de paiement : en pièce jointe, sauf un devis que son client n'a pas
+ * accepté, qui part avec le lien de sa réponse en ligne, sans PDF (voir
+ * DocumentMail::porteLePdf()). Créé par EnvoyerDocumentAction, envoyé par
  * EnvoyerDocumentJob, qui en constate le résultat. Seule une relance en
  * échec en change ensuite : EnvoyerDocumentAction::relancer() la
  * reprogramme.

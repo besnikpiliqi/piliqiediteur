@@ -10,6 +10,7 @@ use App\Domain\Facturation\Enums\StatutDevis;
 use App\Domain\Facturation\Enums\TypeDocument;
 use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Services\ContexteDeVente;
+use App\Domain\Facturation\Services\DepannageADomicile;
 use App\Domain\Facturation\Services\DocumentNumberingService;
 use App\Domain\Facturation\Services\Emetteur;
 use App\Domain\Tenancy\Models\Magasin;
@@ -31,7 +32,14 @@ use LogicException;
  * modification. Il fige alors son émetteur, la société et le magasin tels
  * qu'ils sont à cet envoi, assurance professionnelle comprise, qu'il
  * imprime ensuite quoi qu'ils deviennent (voir Devis::emetteur()), jusqu'à
- * sa prochaine modification. Un magasin qui ne peut pas vendre (lecture seule, société
+ * sa prochaine modification, avec le réglage du dépannage à domicile du
+ * magasin et le prix de ce devis (voir DepannageADomicile) : un devis de
+ * dépannage à un particulier ne part pas sans le lieu de l'intervention,
+ * et un devis qui part sans dépannage (le magasin a décoché le réglage
+ * depuis son enregistrement) perd le lieu et la case « Devis signé chez le
+ * client » qu'il n'imprime pas : ni sa fiche ni son empreinte ne les
+ * gardent.
+ * Un magasin qui ne peut pas vendre (lecture seule, société
  * en cours de vérification, établissement pas encore confirmé) n'en envoie
  * pas (voir Magasin::verifierQuIlPeutVendre()). Un devis dont la date de validité est
  * déjà dépassée ne part pas : son client ne pourrait plus l'accepter (voir
@@ -102,6 +110,11 @@ class EmettreDevisAction
 
             ContexteDeVente::refuserSiLeTypeDeClientAChange($devis);
             ContexteDeVente::refuserSiLeRegimeAChange($devis);
+            $depannage = DepannageADomicile::concerne($devis->magasin, $devis->estPourUnProfessionnel());
+
+            if ($depannage && blank($devis->lieu_d_intervention)) {
+                throw new LogicException(DepannageADomicile::REFUS_D_ENVOI_SANS_LIEU);
+            }
 
             $maintenant = CarbonImmutable::now();
 
@@ -110,6 +123,9 @@ class EmettreDevisAction
                 'statut' => StatutDevis::Envoye,
                 'date_emission' => $maintenant,
                 'emetteur_fige' => Emetteur::duMagasin($devis->magasin)->enTableau(),
+                'depannage_a_domicile' => $depannage,
+                'prix_du_devis_de_depannage' => $depannage ? $devis->magasin->prix_du_devis_de_depannage : null,
+                ...($depannage ? [] : ['lieu_d_intervention' => null, 'signe_chez_le_client' => false]),
             ]))->save());
         }));
     }

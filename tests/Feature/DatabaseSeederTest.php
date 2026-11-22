@@ -77,6 +77,24 @@ class DatabaseSeederTest extends TestCase
         $this->assertDatabaseEmpty('users');
     }
 
+    /**
+     * Le semis dépose des pièces en PDF, que qpdf doit lire : un poste sans
+     * qpdf (Windows, où il n'est pas dans le PATH) le sait d'entrée, avec ce
+     * qu'il faut écrire dans QPDF_BINAIRE, et non à la première pièce par
+     * « réessayez dans quelques minutes ».
+     */
+    public function test_le_semis_est_refuse_sans_qpdf_en_disant_quoi_ecrire_sans_rien_ecrire(): void
+    {
+        config(['piliqi.qpdf' => '/chemin/qui/n/existe/pas/qpdf']);
+
+        $refus = $this->refusDuSemis();
+
+        $this->assertStringStartsWith(DatabaseSeeder::MESSAGE_SANS_QPDF.'qpdf ne se lance pas (/chemin/qui/n/existe/pas/qpdf)', $refus);
+        $this->assertStringContainsString('QPDF_BINAIRE', $refus);
+        $this->assertDatabaseEmpty('societes');
+        $this->assertDatabaseEmpty('users');
+    }
+
     public function test_le_semis_est_refuse_dans_une_base_qui_a_deja_des_societes(): void
     {
         $societe = $this->inscrireUneSociete();

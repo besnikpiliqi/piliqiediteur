@@ -34,6 +34,7 @@ use App\Filament\App\Pages\Caisse;
 use App\Integrations\Sirene\FauxRepertoireSirene;
 use App\Models\User;
 use Closure;
+use Database\Seeders\Semis\ComptesDuBandeauDuModele;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
@@ -145,6 +146,53 @@ class BandeauVousEtesTest extends DemonstrationTestCase
 
         $page = $this->withUnencryptedCookie(TemoinsDesVisites::nom(), $temoin)->get('/choisir');
         $page->assertSee('Élodie Fabre')->assertSee('(compte suspendu)')->assertDontSee('Sarah Petit');
+    }
+
+    /**
+     * La page « Choisissez qui vous êtes » et le menu du bandeau disent chacun
+     * une fois qu'un compte est suspendu : « (compte suspendu) » dans la
+     * page, « — compte suspendu » dans le menu, jamais deux fois la même
+     * mention pour le même compte.
+     */
+    public function test_un_compte_suspendu_ne_porte_qu_une_mention_dans_la_page_et_dans_le_menu(): void
+    {
+        ['copie' => $copie, 'secret' => $secret] = $this->copieDeTest(TypeDActivite::Commerce);
+        $temoin = $this->entrerParLeLien($secret);
+        $observatrice = $this->compte($copie, 'Élodie Fabre');
+        $this->dansLaCopie($copie, fn () => User::query()->whereKey($observatrice->getKey())->update(['statut' => StatutCompte::Suspendu->value]));
+
+        $contenu = $this->withUnencryptedCookie(TemoinsDesVisites::nom(), $temoin)->get('/choisir')->assertOk()->getContent();
+
+        $this->assertIsString($contenu);
+        $this->assertSame(1, substr_count($contenu, '(compte suspendu)'), 'La page dit une fois que le compte est suspendu.');
+        $this->assertSame(1, substr_count($contenu, '— compte suspendu'), 'Le menu du bandeau le dit une fois.');
+        $this->assertSame(2, substr_count($contenu, 'compte suspendu'), 'Aucune autre mention de la suspension : ni dans le libellé du rôle, ni ailleurs.');
+    }
+
+    /**
+     * Les libellés de rôle que le semis écrit au bandeau d'un modèle ne
+     * répètent pas la mention d'état que la page et le menu ajoutent d'eux-
+     * mêmes (« Yanis Morel — Vendeur (compte suspendu) (compte suspendu) »,
+     * constat de l'éditeur du 17/11/2026), ni celle d'un compte retiré.
+     */
+    public function test_aucun_libelle_de_role_du_semis_ne_repete_la_mention_d_etat_de_la_vue(): void
+    {
+        $libelles = [];
+
+        foreach (ComptesDuBandeauDuModele::COMPTES as [, $groupes]) {
+            foreach ($groupes as $comptes) {
+                foreach ($comptes as $nom => $libelle) {
+                    $libelles[$nom] = $libelle;
+                }
+            }
+        }
+
+        $this->assertSame('Vendeur', $libelles['Yanis Morel']);
+
+        foreach ($libelles as $nom => $libelle) {
+            $this->assertStringNotContainsStringIgnoringCase('compte suspendu', $libelle, "Le libellé de {$nom} dit déjà ce que la vue ajoute.");
+            $this->assertStringNotContainsStringIgnoringCase('compte retiré', $libelle, "Le libellé de {$nom} dit déjà ce que la vue ajoute.");
+        }
     }
 
     public function test_un_compte_cree_dans_la_copie_entre_au_bandeau_a_la_fin_de_son_groupe(): void

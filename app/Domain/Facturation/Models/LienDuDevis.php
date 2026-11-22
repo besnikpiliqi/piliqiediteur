@@ -3,6 +3,7 @@
 namespace App\Domain\Facturation\Models;
 
 use App\Domain\Calendrier\Casts\Instant;
+use App\Domain\Facturation\Enums\ReponseAuDevis;
 use App\Domain\Facturation\Enums\StatutDevis;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Domain\Tenancy\Concerns\FigeLeNomDeSesAuteurs;
@@ -54,8 +55,14 @@ class LienDuDevis extends Model
     public const LONGUEUR_DU_JETON = 64;
 
     /**
-     * La seule réponse d'une adresse au jeton inconnu, expiré ou déjà
-     * servi : elle ne dit rien d'autre.
+     * La seule réponse d'une adresse au jeton inconnu, ou à un lien qui ne
+     * vaut plus et qui n'a pas enregistré l'acceptation du devis (retiré,
+     * remplacé par un nouvel envoi, devis refusé, expiré, modifié ou
+     * accepté autrement) : elle ne dit rien d'autre. Le lien qui a
+     * enregistré l'acceptation montre à la place sa confirmation, tant que
+     * le devis la garde (voir confirmeLAcceptation()), et celui qui a
+     * enregistré le refus le dit au formulaire renvoyé (voir
+     * confirmeLeRefus()).
      */
     public const PLUS_VALABLE = 'Ce lien n\'est plus valable.';
 
@@ -131,6 +138,51 @@ class LienDuDevis extends Model
     public function reponse(): HasOne
     {
         return $this->hasOne(ReponseDuDevis::class);
+    }
+
+    /**
+     * Le lien par lequel le client a accepté le devis montre encore sa
+     * confirmation et le PDF du devis signé (SIGN-DEVIS, demande de
+     * l'éditeur du 14/11/2026), tant qu'il l'aurait montré pour répondre :
+     * pas retiré, le dernier lien de son devis, dans la validité du devis ;
+     * et tant que le devis garde cette acceptation (accepté, ou transformé
+     * en facture après elle, voir Devis::reponseALaVersionEnvoyee()) : un
+     * devis modifié depuis, repassé en brouillon, ne la montre plus.
+     */
+    public function confirmeLAcceptation(Devis $devis): bool
+    {
+        return $this->aEnregistre($devis, ReponseAuDevis::Acceptation);
+    }
+
+    /**
+     * Le lien par lequel le client a refusé le devis dit encore son refus
+     * (« Votre refus est enregistré ») à qui renvoie le formulaire : le
+     * second envoi d'un double clic sur « Refuser le devis » ne fait pas
+     * croire au client que son refus a échoué. Aux mêmes conditions que
+     * confirmeLAcceptation() ; jamais la page du lien ni un PDF : un refus
+     * ne montre rien de plus que son message.
+     */
+    public function confirmeLeRefus(Devis $devis): bool
+    {
+        return $this->aEnregistre($devis, ReponseAuDevis::Refus);
+    }
+
+    /**
+     * Ce lien a enregistré cette réponse du client, et son devis la garde
+     * (voir Devis::reponseALaVersionEnvoyee()) : le lien n'est pas retiré,
+     * c'est le dernier de son devis, dans la validité du devis.
+     */
+    private function aEnregistre(Devis $devis, ReponseAuDevis $enregistree): bool
+    {
+        $reponse = $devis->reponseALaVersionEnvoyee();
+
+        return $this->retire_le === null
+            && $devis->getKey() === $this->devis_id
+            && $reponse !== null
+            && (int) $reponse->lien_du_devis_id === $this->id
+            && $reponse->reponse === $enregistree
+            && ! $devis->validiteDepassee()
+            && self::query()->where('devis_id', $this->devis_id)->where('id', '>', $this->getKey())->doesntExist();
     }
 
     /**

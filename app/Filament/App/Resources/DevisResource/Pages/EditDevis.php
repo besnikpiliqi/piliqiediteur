@@ -59,13 +59,22 @@ class EditDevis extends EditRecord
      * ChoisitLaNatureDeLOperation::natureARouvrir()), et, pour qui n'est pas
      * autorisé à fixer les prix, au prix du catalogue quand l'enregistrement
      * ne les reprendrait plus telles quelles (voir
-     * AjouteDesLignesDeVente::lignesAuxPrixPermis()).
+     * AjouteDesLignesDeVente::lignesAuxPrixPermis()) ; le lieu de
+     * l'intervention d'un brouillon enregistré avant que le magasin coche
+     * le dépannage à domicile, prérempli avec l'adresse du client comme à
+     * la création, et l'adresse du client que le formulaire remplacera si la
+     * personne change de client sans avoir retapé le lieu (voir
+     * DevisResource::lieuDuFormulaire()).
      */
     protected function mutateFormDataBeforeFill(array $data): array
     {
         $donnees = DevisResource::natureARouvrir($this->record, [...$data, 'lignes' => DevisResource::lignesARouvrir($this->record)]);
 
-        return [...$donnees, 'lignes' => DevisResource::lignesAuxPrixPermis(ValeursLues::tableau($donnees['lignes']), $donnees['client_id'] ?? null, $donnees['nature_operation'] ?? null, $this->record)];
+        return [
+            ...$donnees,
+            'lignes' => DevisResource::lignesAuxPrixPermis(ValeursLues::tableau($donnees['lignes']), $donnees['client_id'] ?? null, $donnees['nature_operation'] ?? null, $this->record),
+            ...DevisResource::lieuDuFormulaire($donnees['client_id'] ?? null, $donnees['lieu_d_intervention'] ?? null, null),
+        ];
     }
 
     protected function handleRecordUpdate(Model $record, array $data): Model
@@ -80,6 +89,7 @@ class EditDevis extends EditRecord
             'conditions_paiement' => $data['conditions_paiement'] ?? null,
             'notes' => $data['notes'] ?? null,
             ...DevisResource::attributsDeLaNature($data),
+            ...DevisResource::attributsDuDepannage($data),
         ]));
     }
 }

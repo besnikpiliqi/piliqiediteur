@@ -156,6 +156,44 @@ final class AnalyseurDePdf
     }
 
     /**
+     * qpdf, qui lit en entier chaque PDF reçu, se lance-t-il, dans une
+     * version qui donne la description que cette analyse lit ? Rend sa
+     * ligne de version (« qpdf version 12.2.0 »). Contrôlé par
+     * caisse:diagnostiquer, et avant la construction d'un modèle du site de
+     * démonstration et avant le semis d'un poste, qui déposent des PDF :
+     * sans lui, chacun serait refusé avec « réessayez dans quelques
+     * minutes » (RaisonDuRefus::AnalyseIndisponible), au lieu de dire ce
+     * qui manque au serveur.
+     *
+     * @throws RuntimeException quand qpdf ne se lance pas ou n'est pas en version 11 ou plus, avec ce qu'il faut écrire dans QPDF_BINAIRE
+     */
+    public static function verifierQueQpdfSeLance(): string
+    {
+        $binaire = Reglage::texte('piliqi.qpdf');
+        $conseil = 'Installez qpdf ou indiquez son chemin dans QPDF_BINAIRE (sous Windows, par exemple QPDF_BINAIRE=C:/qpdf/bin/qpdf.exe) : sans lui, tout PDF reçu est refusé.';
+
+        try {
+            $processus = new Process([$binaire, '--version']);
+            $processus->setTimeout(10);
+            $processus->run();
+        } catch (ExceptionInterface $erreur) {
+            throw new RuntimeException("qpdf ne se lance pas ({$binaire}) : {$erreur->getMessage()}. {$conseil}");
+        }
+
+        if (! $processus->isSuccessful()) {
+            throw new RuntimeException("qpdf ne se lance pas ({$binaire}). {$conseil}");
+        }
+
+        $version = self::premiereLigne($processus->getOutput());
+
+        if (! self::versionAdmise($version)) {
+            throw new RuntimeException("qpdf {$binaire} répond « {$version} » : l'analyse des PDF demande qpdf ".self::VERSION_MINIMALE_DE_QPDF.' ou plus (sa description JSON version 2). Installez une version récente (README, point 4) : sans elle, tout PDF reçu est refusé.');
+        }
+
+        return $version;
+    }
+
+    /**
      * La première ligne de ce qu'écrit un programme, sans espaces autour
      * ni fin de ligne, quelle qu'elle soit (« \n », ou « \r\n » sous
      * Windows, dont le retour chariot, imprimé dans une cellule du

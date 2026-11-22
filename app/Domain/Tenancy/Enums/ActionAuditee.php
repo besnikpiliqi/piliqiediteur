@@ -534,7 +534,7 @@ enum ActionAuditee: string implements HasLabel
             // française, son TTC et sa TVA, en centimes (voir
             // RegularisationDUneExoneration).
             self::ExonerationNonProuveeRegularisee => ['facture', 'avoir', 'facture_rectificative', 'total_ttc', 'total_tva'],
-            self::DevisAccepteEnLigne => ['devis', 'signataire', 'empreinte_du_devis'],
+            self::DevisAccepteEnLigne => ['devis', 'signataire', 'reference', 'debut_avant_la_fin_du_delai_de_retractation', 'empreinte_du_devis'],
             self::DevisRefuseEnLigne => ['devis', 'motif', 'empreinte_du_devis'],
             self::LienDuDevisRetire => ['devis'],
             // Le visa d'un bordereau de détaxe : le numéro du ticket, celui du

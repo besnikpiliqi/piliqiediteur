@@ -5,22 +5,32 @@ namespace App\Domain\Demonstration\Construction;
 use App\Domain\Demonstration\Bases\BasesDeLaDemonstration;
 use App\Domain\Tenancy\Support\ValeurSimple;
 use Closure;
+use FilesystemIterator;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Facades\Storage;
 use InvalidArgumentException;
+use RecursiveDirectoryIterator;
+use RecursiveIteratorIterator;
 use RuntimeException;
+use SplFileInfo;
+use Throwable;
 
 /**
  * Les dossiers de fichiers du site de démonstration (lot DEMO-COPIE, C.2,
  * C.3 et C.18), sous storage/demonstration : ceux des modèles (par nom de
  * base), des copies (par référence) et des archives. Chaque nom passe par
- * son motif avant tout usage, et la copie d'un dossier passe par un
- * processus à tableau d'arguments, jamais par une chaîne de shell.
+ * son motif avant tout usage. Le dossier d'un modèle se recopie en PHP, sur
+ * tout système (le poste de l'éditeur est sous Windows, la production sous
+ * Linux), sans aucun programme extérieur : le clone de fichiers de Linux
+ * (cp --reflink) n'est qu'une optimisation, essayée seulement sous Linux
+ * quand cp existe et réussit, jamais nécessaire.
  */
 final class DossiersDeLaDemonstration
 {
     public const MOTIF_D_UNE_REFERENCE = '/^[0-9a-f]{32}$/';
+
+    public const MESSAGE_LIEN_DANS_LE_MODELE = 'Le dossier du modèle contient un lien symbolique (« %s ») : un modèle ne porte que des fichiers et des dossiers, rien n\'a été recopié.';
 
     public static function racine(): string
     {
@@ -47,8 +57,13 @@ final class DossiersDeLaDemonstration
     }
 
     /**
-     * Les fichiers du modèle recopiés pour une copie (cp -a, en clone quand
-     * le système de fichiers le permet).
+     * Les fichiers du modèle recopiés pour une copie : en clone quand le
+     * système de fichiers le permet (voir cloner()), sinon en PHP (voir
+     * recopierEnPhp()), avec leurs droits. Un lien symbolique dans le
+     * modèle le fait refuser avant toute copie : une copie ne suivrait
+     * jamais un lien hors de son dossier.
+     *
+     * @throws RuntimeException quand le modèle contient un lien symbolique ou qu'un fichier ne se recopie pas
      */
     public static function copierLesFichiersDuModele(string $base, string $reference): void
     {
@@ -63,11 +78,92 @@ final class DossiersDeLaDemonstration
             return;
         }
 
-        $resultat = Process::run(['cp', '-a', '--reflink=auto', $source, $cible]);
+        self::refuserUnLienDans($source);
 
-        if (! $resultat->successful()) {
-            throw new RuntimeException('Les fichiers du modèle n\'ont pas pu être recopiés : '.trim($resultat->errorOutput()));
+        if (! self::cloner($source, $cible)) {
+            File::deleteDirectory($cible);
+            self::recopierEnPhp($source, $cible);
         }
+    }
+
+    /**
+     * Le clone de fichiers de Linux (cp -a --reflink=auto : un clone quand
+     * le système de fichiers le permet, une copie sinon), seulement sous
+     * Linux et quand cp existe : vrai quand il a réussi, faux sinon (un
+     * système autre, cp introuvable, un échec), et la copie se fait alors en
+     * PHP. Un processus à tableau d'arguments, jamais une chaîne de shell.
+     */
+    private static function cloner(string $source, string $cible): bool
+    {
+        if (PHP_OS_FAMILY !== 'Linux') {
+            return false;
+        }
+
+        try {
+            return Process::run(['cp', '-a', '--reflink=auto', $source, $cible])->successful();
+        } catch (Throwable) {
+            return false;
+        }
+    }
+
+    /**
+     * Recopie le dossier en PHP : chaque dossier et chaque fichier garde ses
+     * droits (les bits de lecture, d'écriture et d'exécution) et sa date de
+     * modification, sous tout système.
+     *
+     * @throws RuntimeException quand un dossier ne se crée pas ou un fichier ne se recopie pas
+     */
+    private static function recopierEnPhp(string $source, string $cible): void
+    {
+        File::ensureDirectoryExists($cible, self::droitsDe($source));
+        $elements = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($source, FilesystemIterator::SKIP_DOTS), RecursiveIteratorIterator::SELF_FIRST);
+
+        foreach ($elements as $element) {
+            if (! $element instanceof SplFileInfo) {
+                continue;
+            }
+
+            $destination = $cible.DIRECTORY_SEPARATOR.substr($element->getPathname(), strlen($source) + 1);
+
+            if ($element->isDir()) {
+                File::ensureDirectoryExists($destination, self::droitsDe($element->getPathname()));
+
+                continue;
+            }
+
+            if (! copy($element->getPathname(), $destination)) {
+                throw new RuntimeException('Les fichiers du modèle n\'ont pas pu être recopiés : « '.$element->getFilename().' » ne se copie pas.');
+            }
+
+            @chmod($destination, self::droitsDe($element->getPathname()));
+            @touch($destination, (int) $element->getMTime());
+        }
+    }
+
+    /**
+     * @throws RuntimeException quand le dossier est un lien symbolique ou en contient un, à quelque profondeur que ce soit
+     */
+    private static function refuserUnLienDans(string $dossier): void
+    {
+        if (is_link($dossier)) {
+            throw new RuntimeException(sprintf(self::MESSAGE_LIEN_DANS_LE_MODELE, basename($dossier)));
+        }
+
+        $elements = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($dossier, FilesystemIterator::SKIP_DOTS), RecursiveIteratorIterator::SELF_FIRST);
+
+        foreach ($elements as $element) {
+            if ($element instanceof SplFileInfo && $element->isLink()) {
+                throw new RuntimeException(sprintf(self::MESSAGE_LIEN_DANS_LE_MODELE, substr($element->getPathname(), strlen($dossier) + 1)));
+            }
+        }
+    }
+
+    /**
+     * Les droits d'un fichier ou d'un dossier (ses neuf bits).
+     */
+    private static function droitsDe(string $chemin): int
+    {
+        return fileperms($chemin) & 0777;
     }
 
     /**

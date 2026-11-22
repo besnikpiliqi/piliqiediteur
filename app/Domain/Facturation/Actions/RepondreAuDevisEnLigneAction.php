@@ -6,6 +6,7 @@ use App\Domain\Authorization\OperateurCourant;
 use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Facturation\Enums\ReponseAuDevis;
+use App\Domain\Facturation\Enums\TypeDocument;
 use App\Domain\Facturation\Exceptions\LienDuDevisInvalideException;
 use App\Domain\Facturation\Jobs\EnvoyerDocumentJob;
 use App\Domain\Facturation\Models\Devis;
@@ -13,6 +14,7 @@ use App\Domain\Facturation\Models\EnvoiDocument;
 use App\Domain\Facturation\Models\LienDuDevis;
 use App\Domain\Facturation\Models\ReponseDuDevis;
 use App\Domain\Facturation\Notifications\ReponseDuClientAuDevis;
+use App\Domain\Facturation\Services\DocumentNumberingService;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\JournalAudit;
@@ -41,7 +43,11 @@ use Illuminate\Validation\ValidationException;
  * retrait du lien), passent l'une après l'autre, et la seconde trouve le
  * lien caduc. La réponse s'enregistre (voir ReponseDuDevis) avec le nom
  * tapé, l'instant et l'empreinte de la version du devis à laquelle le
- * client répond ; le devis passe « Accepté », avec l'instant de son
+ * client répond, une acceptation avec sa référence, numérotée dans le
+ * magasin (ACC-…), qu'imprime le cadre « Bon pour accord » du devis, et,
+ * pour un particulier, sa demande que la prestation commence avant la fin
+ * de son délai de rétractation (T86, voir DroitDeRetractation), que le
+ * journal d'audit garde aussi ; le devis passe « Accepté », avec l'instant de son
  * acceptation, ou « Refusé » ; la réponse s'inscrit au journal d'audit du
  * magasin (origine « client ») et à son journal des événements (JET 900),
  * l'adresse IP et le navigateur du client allant à part, dans leurs
@@ -49,7 +55,8 @@ use Illuminate\Validation\ValidationException;
  * s'inscrit au nom du système (voir OperateurCourant::pendantLeSysteme()),
  * jamais au nom d'un compte connecté dans le navigateur qui ouvre le lien,
  * d'un autre magasin, d'une autre société ou du magasin du devis lui-même.
- * L'e-mail qui confirme la réponse au client, devis joint, part en file
+ * L'e-mail qui confirme la réponse au client, avec le devis signé pour une
+ * acceptation (sans PDF pour un refus, voir DocumentMail), part en file
  * d'attente une fois la transaction validée, à l'adresse du lien (voir
  * EnvoyerDocumentJob).
  *
@@ -72,13 +79,14 @@ class RepondreAuDevisEnLigneAction
         private readonly RegistreFiscal $registre,
         private readonly JournalAudit $journal,
         private readonly OperateurCourant $operateur,
+        private readonly DocumentNumberingService $numerotation,
     ) {}
 
     /**
      * @throws LienDuDevisInvalideException
      * @throws ValidationException
      */
-    public function accepter(string $jeton, string $signataire, bool $bonPourAccord): ReponseDuDevis
+    public function accepter(string $jeton, string $signataire, bool $bonPourAccord, bool $debutAvantLaFinDuDelai = false): ReponseDuDevis
     {
         $signataire = trim((string) preg_replace('/\s+/u', ' ', $signataire));
 
@@ -92,7 +100,7 @@ class RepondreAuDevisEnLigneAction
             'bon_pour_accord.accepted' => 'Cochez « Bon pour accord » pour accepter le devis.',
         ])->validate();
 
-        return $this->repondre($jeton, ReponseAuDevis::Acceptation, $signataire, null);
+        return $this->repondre($jeton, ReponseAuDevis::Acceptation, $signataire, null, $debutAvantLaFinDuDelai);
     }
 
     /**
@@ -109,19 +117,19 @@ class RepondreAuDevisEnLigneAction
             'motif.max' => 'Le motif ne doit pas dépasser '.self::MOTIF_MAXIMUM.' caractères.',
         ])->validate();
 
-        return $this->repondre($jeton, ReponseAuDevis::Refus, null, $motif === '' ? null : $motif);
+        return $this->repondre($jeton, ReponseAuDevis::Refus, null, $motif === '' ? null : $motif, false);
     }
 
     /**
      * @throws LienDuDevisInvalideException
      */
-    private function repondre(string $jeton, ReponseAuDevis $reponse, ?string $signataire, ?string $motif): ReponseDuDevis
+    private function repondre(string $jeton, ReponseAuDevis $reponse, ?string $signataire, ?string $motif, bool $debutAvantLaFinDuDelai): ReponseDuDevis
     {
         $lien = LienDuDevis::parSonJeton($jeton) ?? throw new LienDuDevisInvalideException;
         $magasin = Magasin::query()->findOrFail($lien->magasin_id);
 
-        return app(TenantContext::class)->runAs($magasin, function () use ($lien, $magasin, $reponse, $signataire, $motif): ReponseDuDevis {
-            [$enregistree, $devis, $envoi] = $this->operateur->pendantLeSysteme(fn (): array => $this->registre->sousVerrou($magasin, function () use ($lien, $magasin, $reponse, $signataire, $motif): array {
+        return app(TenantContext::class)->runAs($magasin, function () use ($lien, $magasin, $reponse, $signataire, $motif, $debutAvantLaFinDuDelai): ReponseDuDevis {
+            [$enregistree, $devis, $envoi] = $this->operateur->pendantLeSysteme(fn (): array => $this->registre->sousVerrou($magasin, function () use ($lien, $magasin, $reponse, $signataire, $motif, $debutAvantLaFinDuDelai): array {
                 $magasinRelu = Magasin::query()->whereKey($magasin->getKey())->sharedLock()->firstOrFail();
                 $devis = Devis::query()->whereKey($lien->devis_id)->lockForUpdate()->first() ?? throw new LienDuDevisInvalideException;
                 $lien = LienDuDevis::query()->whereKey($lien->getKey())->with('envoi')->firstOrFail();
@@ -133,12 +141,16 @@ class RepondreAuDevisEnLigneAction
 
                 $maintenant = CarbonImmutable::now();
                 $empreinte = $devis->empreinteDeSaVersion();
+                $acceptation = $reponse === ReponseAuDevis::Acceptation;
+                $debut = $acceptation && ! $devis->estPourUnProfessionnel() ? $debutAvantLaFinDuDelai : null;
                 $enregistree = (new ReponseDuDevis)->forceFill([
                     'devis_id' => $devis->getKey(),
                     'lien_du_devis_id' => $lien->getKey(),
                     'reponse' => $reponse,
                     'signataire' => $signataire,
                     'motif' => $motif,
+                    'reference' => $acceptation ? $this->numerotation->suivant($magasinRelu, TypeDocument::AcceptationDevis, $magasinRelu->calendrier()->anneeDe($maintenant)) : null,
+                    'debut_avant_la_fin_du_delai' => $debut,
                     'empreinte_du_devis' => $empreinte,
                     'created_at' => $maintenant,
                 ]);
@@ -161,6 +173,8 @@ class RepondreAuDevisEnLigneAction
                     array_filter([
                         'devis' => $devis->numero,
                         'signataire' => $signataire,
+                        'reference' => $enregistree->reference,
+                        'debut_avant_la_fin_du_delai_de_retractation' => $debut === null ? null : ($debut ? 'oui' : 'non'),
                         'motif' => $motif,
                         'empreinte_du_devis' => $empreinte,
                     ], fn (?string $valeur): bool => $valeur !== null),

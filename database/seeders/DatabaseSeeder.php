@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use App\Console\SemisEnCours;
 use App\Domain\Demonstration\ConstructionDUnModele;
 use App\Domain\Demonstration\SiteDePiliqi;
+use App\Domain\Fichiers\AnalyseurDePdf;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\CodesDeConfirmation;
 use App\Domain\Tenancy\Services\TenantContext;
@@ -36,7 +37,9 @@ use Throwable;
  * local et des tests (sur le site de démonstration, hors d'une base modèle
  * en construction, voir ConstructionDUnModele), sans les fournisseurs
  * factices (voir FournisseursExternesServiceProvider::PILOTES_FACTICES),
- * et dans une base qui a déjà des sociétés, avant d'y rien écrire. Aucun e-mail ne part pendant le semis : les liens qu'il
+ * sans qpdf, qui lit les pièces en PDF qu'il dépose (voir
+ * AnalyseurDePdf::verifierQueQpdfSeLance()), et dans une base qui a déjà
+ * des sociétés, avant d'y rien écrire. Aucun e-mail ne part pendant le semis : les liens qu'il
  * suit (invitation du cabinet, mot de passe de l'expert-comptable,
  * réponse au devis) se lisent dans les e-mails retenus, aucune requête HTTP
  * ne sort (VIES est le faux, voir FauxVies), et ses tâches
@@ -76,6 +79,8 @@ class DatabaseSeeder extends Seeder
 
     public const MESSAGE_FOURNISSEURS_REELS = 'Le semis exige les fournisseurs factices, qui seuls connaissent les entreprises fictives semées et n\'envoient rien hors de PILIQI : réglez SIRENE_PILOTE=faux, RNE_PILOTE=faux, RECOMMANDE_PILOTE=faux, ORDRE_PILOTE=faux, PDP_PILOTE=faux, VIES_PILOTE=faux et ANTIVIRUS_PILOTE=factice dans le .env, comme dans .env.example, puis php artisan optimize:clear. Rien n\'a été écrit.';
 
+    public const MESSAGE_SANS_QPDF = 'Le semis dépose des pièces en PDF (achats, charges) que qpdf doit lire avant de les accepter : rien n\'a été écrit. ';
+
     public const MESSAGE_ISOLATION_EN_DEFAUT = 'Le semis n\'est pas accepté : la vérification de l\'isolation a trouvé des problèmes (tableau ci-dessus). Corrigez le semis ou le code qui a écrit ces lignes, puis relancez php artisan migrate:fresh --seed.';
 
     public const MESSAGE_BASE_DEJA_REMPLIE = 'La base contient déjà des sociétés : le semis se fait dans une base vide, par php artisan migrate:fresh --seed, qui efface toute la base. Rien n\'a été écrit.';
@@ -111,6 +116,12 @@ class DatabaseSeeder extends Seeder
             if (config($reglage) !== $pilote) {
                 throw new RuntimeException(self::MESSAGE_FOURNISSEURS_REELS);
             }
+        }
+
+        try {
+            AnalyseurDePdf::verifierQueQpdfSeLance();
+        } catch (RuntimeException $absent) {
+            throw new RuntimeException(self::MESSAGE_SANS_QPDF.$absent->getMessage(), 0, $absent);
         }
 
         if (Societe::query()->exists()) {

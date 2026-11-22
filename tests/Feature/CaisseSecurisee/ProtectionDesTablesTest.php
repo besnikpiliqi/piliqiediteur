@@ -184,7 +184,7 @@ class ProtectionDesTablesTest extends TestCase
             'clotures_caisse_personnelles_factures' => ['clotures_caisse_personnelles_factures', 'facture_id', (int) $facture->id],
             'clotures_caisse_personnelles_paiements' => ['clotures_caisse_personnelles_paiements', 'paiement_id', $premiere('paiements', 'magasin_id', $magasin->id)],
             'mouvements_stock' => ['mouvements_stock', 'id', $premiere('mouvements_stock', 'magasin_id', $magasin->id)],
-            'reponses_des_devis' => ['reponses_des_devis', 'id', DB::table('reponses_des_devis')->insertGetId(['magasin_id' => $magasin->id, 'devis_id' => $devis->id, 'lien_du_devis_id' => $lienDuDevis, 'reponse' => 'acceptation', 'signataire' => 'Claire Martin', 'empreinte_du_devis' => str_repeat('d', 64), 'created_at' => now()])],
+            'reponses_des_devis' => ['reponses_des_devis', 'id', DB::table('reponses_des_devis')->insertGetId(['magasin_id' => $magasin->id, 'devis_id' => $devis->id, 'lien_du_devis_id' => $lienDuDevis, 'reponse' => 'acceptation', 'signataire' => 'Claire Martin', 'reference' => 'ACC-ESSAI-2026-000001', 'empreinte_du_devis' => str_repeat('d', 64), 'created_at' => now()])],
             'societes' => ['societes', 'id', $societe],
             'magasins' => ['magasins', 'id', (int) $magasin->id],
             'sirets_magasins' => ['sirets_magasins', 'id', $premiere('sirets_magasins', 'magasin_id', $magasin->id)],

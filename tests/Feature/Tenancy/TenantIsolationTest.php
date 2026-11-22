@@ -886,6 +886,7 @@ class TenantIsolationTest extends TestCase
                 'lien_du_devis_id' => $lien->getKey(),
                 'reponse' => ReponseAuDevis::Acceptation,
                 'signataire' => 'Claire Martin',
+                'reference' => 'ACC-ESSAI-2026-000001',
                 'empreinte_du_devis' => str_repeat('b', 64),
                 'created_at' => self::enUtc('2026-10-09 08:00:00'),
             ],

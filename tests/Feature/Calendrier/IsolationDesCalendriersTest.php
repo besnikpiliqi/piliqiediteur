@@ -16,6 +16,7 @@ use App\Domain\Facturation\Mail\DocumentMail;
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\CaissesDeLaSociete;
+use App\Domain\Facturation\Services\DevisPdfGenerator;
 use App\Domain\Facturation\Services\FacturesAEncaisserDeLaSociete;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\Territoire;
@@ -23,7 +24,6 @@ use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Scopes\MagasinScope;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\Societe\Pages\LesCaisses;
-use Closure;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -110,7 +110,9 @@ class IsolationDesCalendriersTest extends TestCase
      * retard dans la lecture de la société, qui n'a pas de magasin ; un
      * devis de la Martinique valable jusqu'au 16 n'est pas expiré lu dans
      * le contexte du magasin de La Réunion ; son envoi, traité dans ce
-     * contexte, part avec un PDF daté du 16.
+     * contexte, part (sans PDF : le client ne reçoit le PDF d'un devis
+     * qu'une fois accepté, demande de l'éditeur du 14/11/2026), et son PDF,
+     * imprimé dans le contexte du magasin de La Réunion, est daté du 16.
      */
     public function test_le_calendrier_d_un_document_est_celui_de_son_magasin_et_jamais_celui_du_contexte(): void
     {
@@ -123,7 +125,7 @@ class IsolationDesCalendriersTest extends TestCase
         $facture = app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->professionnel()->create(['delai_paiement_jours' => 0]), [['produit_id' => $this->produit()->id, 'quantite' => 1]]));
         $devis = app(CreerDevisAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]], ['date_validite' => '2026-11-16']);
         $envoi = app(EnvoyerDocumentAction::class)->handle(self::auteur(), $devis, 'client@exemple.fr', null);
-        $devis = $devis->fresh();
+        $devis = $devis->fresh()?->load(['client', 'lignes', 'magasin', 'derniereReponse']) ?? $devis;
         $this->assertSame('2026-11-16', $facture->date_echeance);
 
         $this->dansLEspaceDeLaSociete($martinique->societe, $this->proprietaireDe($martinique));
@@ -134,7 +136,8 @@ class IsolationDesCalendriersTest extends TestCase
         (new EnvoyerDocumentJob($martinique->id, $envoi->id))->handle();
 
         $this->assertSame(StatutEnvoi::Envoye, app(TenantContext::class)->runAs($martinique, fn (): StatutEnvoi => $envoi->fresh()->statut));
-        $this->assertStringContainsString('Émis le 16/11/2026', $this->texteDuPdf(Mail::sent(DocumentMail::class)->sole()));
+        $this->assertSame([], Mail::sent(DocumentMail::class)->sole()->attachments());
+        $this->assertStringContainsString('Émis le 16/11/2026', app(TenantContext::class)->runAs($reunion, fn (): string => app(DevisPdfGenerator::class)->html($devis)));
     }
 
     /**
@@ -245,17 +248,5 @@ class IsolationDesCalendriersTest extends TestCase
     private function journeesCloturees(Magasin $magasin): array
     {
         return app(TenantContext::class)->runAs($magasin, fn (): array => ClotureCaisse::query()->orderBy('date_cloture')->pluck('date_cloture')->all());
-    }
-
-    /**
-     * Le texte du PDF joint à l'e-mail, ses morceaux de ligne réunis par
-     * des espaces simples.
-     */
-    private function texteDuPdf(DocumentMail $mail): string
-    {
-        $pdf = $mail->attachments()[0]->attachWith(static fn (): string => '', static fn (Closure $donnees): string => $donnees());
-        $textes = array_merge(...array_map(fn (array $page): array => array_column($page['textes'], 'texte'), $this->pagesDuPdf($pdf)));
-
-        return (string) preg_replace('/\s+/u', ' ', implode(' ', $textes));
     }
 }

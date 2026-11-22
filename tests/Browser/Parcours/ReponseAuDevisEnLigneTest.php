@@ -9,6 +9,7 @@ use App\Domain\Facturation\Actions\CreerFactureDepuisDevisAction;
 use App\Domain\Facturation\Actions\EmettreDevisAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\EnvoyerDocumentAction;
+use App\Domain\Facturation\Actions\RefuserDevisAction;
 use App\Domain\Facturation\Actions\RepondreAuDevisEnLigneAction;
 use App\Domain\Facturation\Enums\ReponseAuDevis;
 use App\Domain\Facturation\Enums\StatutDevis;
@@ -17,6 +18,7 @@ use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\LienDuDevis;
 use App\Domain\Facturation\Models\ReponseDuDevis;
+use App\Domain\Facturation\Services\DroitDeRetractation;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
@@ -32,7 +34,8 @@ use Tests\Browser\TestCaseDuNavigateur;
  * devis accepté en facture (lot DV, décisions de l'éditeur du
  * 02/11/2026), cliquées dans un vrai navigateur : le client, sans compte,
  * accepte par son nom tapé et « Bon pour accord », ou refuse, et le lien
- * ne vaut plus ensuite ; un lien faux ou caduc ne dit que « Ce lien n'est
+ * ne vaut plus ensuite pour répondre, une acceptation n'y montrant plus que
+ * sa confirmation ; un lien faux ou caduc ne dit que « Ce lien n'est
  * plus valable. » ; le responsable et le vendeur autorisé transforment le
  * devis accepté, la facture brouillon dit d'où elle vient et mène au devis
  * ; le propriétaire, l'observateur et un vendeur sans la création de
@@ -42,19 +45,27 @@ use Tests\Browser\TestCaseDuNavigateur;
  * le lien ; la ligne d'un devis montre le stock du produit, et
  * l'acceptation par la liste nomme le produit qui manque ; le PDF de la
  * facture transformée dit d'après quel devis elle est établie ; le client
- * télécharge le PDF de son devis depuis la page de son lien ; le
+ * ne trouve aucun PDF sur la page de son lien avant de répondre, puis
+ * télécharge le devis signé depuis la confirmation de son acceptation
+ * (demande de l'éditeur du 14/11/2026) ; le particulier lit son droit de
+ * rétractation et demande que la prestation commence avant la fin du
+ * délai, le professionnel ne voit ni l'un ni l'autre (T86) ; la page du
+ * lien montre tout ce que le PDF du devis imprime, et un second envoi de
+ * l'acceptation montre encore sa confirmation ; le
  * demandeur de l'envoi et le propriétaire lisent la réponse du client
  * dans la cloche, en texte, puis ouvrent la fiche du devis par « Voir le
  * devis ».
  */
 
 /**
- * Un devis envoyé par e-mail par le responsable, et le jeton du lien de
- * l'e-mail parti.
+ * Un devis envoyé par e-mail par le responsable, à un particulier ou à un
+ * professionnel, avec d'autres attributs s'il y a lieu (conditions de
+ * paiement, notes), et le jeton du lien de l'e-mail parti.
  *
+ * @param  array<string, string>  $attributs
  * @return array{0: Devis, 1: string}
  */
-function devisEnvoyeParEMail(Magasin $magasin, User $responsable): array
+function devisEnvoyeParEMail(Magasin $magasin, User $responsable, bool $professionnel = false, array $attributs = []): array
 {
     if (! Mail::getFacadeRoot() instanceof MailFake) {
         Mail::fake();
@@ -62,7 +73,8 @@ function devisEnvoyeParEMail(Magasin $magasin, User $responsable): array
 
     app(TenantContext::class)->set($magasin);
     $produit = Produit::factory()->create(['nom' => 'Câble tressé', 'prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => false]);
-    $devis = app(CreerDevisAction::class)->handle($responsable, Client::factory()->create(['nom' => 'Paul Durand']), [['produit_id' => $produit->id, 'quantite' => 2]], ['date_validite' => '2026-12-31']);
+    $client = $professionnel ? Client::factory()->professionnel()->create(['nom' => 'Atelier Martin']) : Client::factory()->create(['nom' => 'Paul Durand']);
+    $devis = app(CreerDevisAction::class)->handle($responsable, $client, [['produit_id' => $produit->id, 'quantite' => 2]], ['date_validite' => '2026-12-31', ...$attributs]);
     $envoi = app(EnvoyerDocumentAction::class)->handle($responsable, $devis, 'paul@client.fr', null, (string) Str::uuid());
     $jeton = null;
     Mail::assertSent(DocumentMail::class, function (DocumentMail $mail) use ($envoi, &$jeton): bool {
@@ -101,7 +113,7 @@ function vendeurSansLaCreationDeFacture(TestCaseDuNavigateur $test, Magasin $mag
     return $vendeur;
 }
 
-test('le client accepte son devis en ligne en tapant son nom et en cochant « Bon pour accord », puis le lien ne vaut plus', function () {
+test('le client particulier lit son droit de rétractation, accepte son devis en ligne en tapant son nom, en cochant « Bon pour accord » et la demande de début anticipé, puis le lien ne montre que la confirmation', function () {
     $this->travelTo(self::aParis('2026-11-12 10:00:00'));
     $magasin = $this->completerIdentiteLegale($this->ouvrirUneSociete(['nom' => 'Ma Boutique', 'code' => 'MABOUT']));
     [$devis, $jeton] = devisEnvoyeParEMail($magasin, self::responsableDeTest($magasin));
@@ -110,30 +122,107 @@ test('le client accepte son devis en ligne en tapant son nom et en cochant « Bo
         ->voir("Devis {$devis->numero}")
         ->voir('Ma Boutique')
         ->voir('120,00 €')
+        ->cliquer('details.retractation > summary')
+        ->voir('dans un délai de quatorze jours')
+        ->voir(DroitDeRetractation::TITRE_DU_FORMULAIRE)
+        ->remplir('Votre nom et votre prénom', 'Paul Durand')
+        ->cliquer('input[name="bon_pour_accord"]')
+        ->cliquer('input[name="debut_avant_la_fin_du_delai"]')
+        ->cliquerSur('Accepter le devis')
+        ->voir('Devis accepté le 12/11/2026 à 10:00 par Paul Durand')
+        ->voir("Votre acceptation du devis {$devis->numero} a été enregistrée le 12/11/2026")
+        ->voir(DroitDeRetractation::reponseALaDemande(true))
+        ->voir('Télécharger le devis signé en PDF');
+
+    app(TenantContext::class)->set($magasin);
+    $reponse = ReponseDuDevis::query()->sole();
+    expect($devis->fresh()->statut)->toBe(StatutDevis::Accepte)
+        ->and([$reponse->signataire, $reponse->debut_avant_la_fin_du_delai, $reponse->reference])->toBe(['Paul Durand', true, 'ACC-MABOUT-2026-000001']);
+    app(TenantContext::class)->clear();
+
+    $onglet->aller('/devis/'.$jeton)
+        ->voir('Devis accepté le 12/11/2026 à 10:00 par Paul Durand')
+        ->nePasVoir('Accepter le devis')
+        ->nePasVoir('Refuser le devis');
+});
+
+test('le client lit sur la page de son lien tout ce que le PDF du devis imprime, puis l’accepte, et un second envoi de son acceptation montre encore la confirmation', function () {
+    $this->travelTo(self::aParis('2026-11-12 10:00:00'));
+    $magasin = $this->completerIdentiteLegale($this->ouvrirUneSociete(['nom' => 'Ma Boutique', 'code' => 'MABOUT']));
+    [$devis, $jeton] = devisEnvoyeParEMail($magasin, self::responsableDeTest($magasin), attributs: ['conditions_paiement' => 'Acompte de 30 % à la commande', 'notes' => 'Intervention prévue le matin entre 8 h et 10 h']);
+
+    // Un second onglet ouvert sur le même lien avant l'acceptation garde
+    // son formulaire : son envoi est celui d'un double clic ou d'un
+    // formulaire renvoyé par le navigateur.
+    $second = $this->naviguer('/devis/'.$jeton)->voir('Accepter le devis');
+
+    $this->naviguer('/devis/'.$jeton)
+        ->voir("N° {$devis->numero}")
+        ->voir('Établi pour')
+        ->voir('Paul Durand')
+        ->voir('Détail des articles et prestations')
+        ->voir('20 %')
+        ->voir('Récapitulatif TVA')
+        ->voir('Montants calculés depuis les prix TTC')
+        ->voir('Intervention prévue le matin entre 8 h et 10 h')
+        ->voir('Acompte de 30 % à la commande')
+        ->voir('RCS Lyon')
+        ->nePasVoir('PU HT exact')
         ->remplir('Votre nom et votre prénom', 'Paul Durand')
         ->cliquer('input[name="bon_pour_accord"]')
         ->cliquerSur('Accepter le devis')
-        ->voir('Merci : votre acceptation est enregistrée')
-        ->voir("Votre acceptation du devis {$devis->numero} a été enregistrée le 12/11/2026");
+        ->voir('Devis accepté le 12/11/2026 à 10:00 par Paul Durand');
+
+    $second->remplir('Votre nom et votre prénom', 'Paul Durand')
+        ->cliquer('input[name="bon_pour_accord"]')
+        ->cliquerSur('Accepter le devis')
+        ->voir('Devis accepté le 12/11/2026 à 10:00 par Paul Durand')
+        ->nePasVoir(LienDuDevis::PLUS_VALABLE);
 
     app(TenantContext::class)->set($magasin);
-    expect($devis->fresh()->statut)->toBe(StatutDevis::Accepte)
-        ->and(ReponseDuDevis::query()->sole()->signataire)->toBe('Paul Durand');
+    expect(ReponseDuDevis::query()->count())->toBe(1);
     app(TenantContext::class)->clear();
-
-    $this->tolerer(410, '/devis/');
-    $onglet->aller('/devis/'.$jeton)->voir(LienDuDevis::PLUS_VALABLE)->nePasVoir('Accepter le devis');
 });
 
-test('le client refuse son devis en ligne avec un motif, puis le lien ne vaut plus', function () {
+test('le client professionnel accepte son devis en ligne sans information sur la rétractation ni demande de début anticipé', function () {
+    $this->travelTo(self::aParis('2026-11-12 10:00:00'));
+    $magasin = $this->completerIdentiteLegale($this->ouvrirUneSociete(['nom' => 'Ma Boutique', 'code' => 'MABOUT']));
+    [$devis, $jeton] = devisEnvoyeParEMail($magasin, self::responsableDeTest($magasin), professionnel: true);
+
+    $onglet = $this->naviguer('/devis/'.$jeton)
+        ->voir("Devis {$devis->numero}")
+        ->nePasVoir(DroitDeRetractation::TITRE);
+    expect($onglet->element('input[name="debut_avant_la_fin_du_delai"]')->count())->toBe(0);
+
+    $onglet->remplir('Votre nom et votre prénom', 'Claire Martin')
+        ->cliquer('input[name="bon_pour_accord"]')
+        ->cliquerSur('Accepter le devis')
+        ->voir('Devis accepté le 12/11/2026 à 10:00 par Claire Martin')
+        ->nePasVoir(DroitDeRetractation::TITRE);
+
+    app(TenantContext::class)->set($magasin);
+    expect([ReponseDuDevis::query()->sole()->signataire, ReponseDuDevis::query()->sole()->debut_avant_la_fin_du_delai])->toBe(['Claire Martin', null]);
+});
+
+test('le client refuse son devis en ligne avec un motif, un second envoi de son refus le redit, puis le lien ne vaut plus', function () {
     $this->travelTo(self::aParis('2026-11-12 10:00:00'));
     $magasin = $this->completerIdentiteLegale($this->ouvrirUneSociete(['nom' => 'Ma Boutique', 'code' => 'MABOUT']));
     [$devis, $jeton] = devisEnvoyeParEMail($magasin, self::responsableDeTest($magasin));
+
+    // Un second onglet ouvert sur le même lien avant le refus garde son
+    // formulaire : son envoi est celui d'un double clic ou d'un formulaire
+    // renvoyé par le navigateur.
+    $second = $this->naviguer('/devis/'.$jeton)->voir('Refuser le devis');
 
     $onglet = $this->naviguer('/devis/'.$jeton)
         ->remplir('Motif (facultatif)', 'Trop cher pour nous.')
         ->cliquerSur('Refuser le devis')
         ->voir('Votre refus est enregistré');
+
+    $second->remplir('Motif (facultatif)', 'Trop cher pour nous.')
+        ->cliquerSur('Refuser le devis')
+        ->voir('Votre refus est enregistré')
+        ->nePasVoir(LienDuDevis::PLUS_VALABLE);
 
     app(TenantContext::class)->set($magasin);
     $reponse = ReponseDuDevis::query()->sole();
@@ -321,21 +410,30 @@ test('le responsable lit sur le PDF de la facture transformée d’après quel d
     expect(preg_replace('/\s+/u', ' ', $textes))->toContain($mention);
 });
 
-test('le client télécharge le PDF de son devis depuis la page de son lien', function () {
+test('le client ne trouve aucun PDF sur la page de son lien avant de répondre, puis télécharge le devis signé depuis la confirmation de son acceptation', function () {
     $this->travelTo(self::aParis('2026-11-12 10:00:00'));
     $magasin = $this->completerIdentiteLegale($this->ouvrirUneSociete(['nom' => 'Ma Boutique', 'code' => 'MABOUT']));
     [$devis, $jeton] = devisEnvoyeParEMail($magasin, self::responsableDeTest($magasin));
 
-    $onglet = $this->naviguer('/devis/'.$jeton)->voir("Devis {$devis->numero}");
-    $onglet->geste(fn () => $onglet->page()->evaluate('() => document.querySelector("a.pdf").click()'), 'le lien « Télécharger le devis en PDF »');
+    $onglet = $this->naviguer('/devis/'.$jeton)->voir("Devis {$devis->numero}")->nePasVoir('Télécharger');
+    expect($onglet->element('a')->count())->toBe(0);
+
+    $onglet->remplir('Votre nom et votre prénom', 'Paul Durand')
+        ->cliquer('input[name="bon_pour_accord"]')
+        ->cliquerSur('Accepter le devis')
+        ->voir('Devis accepté le 12/11/2026 à 10:00 par Paul Durand');
+    $onglet->geste(fn () => $onglet->page()->evaluate('() => document.querySelector("a.pdf").click()'), 'le lien « Télécharger le devis signé en PDF »');
     $fichiers = $onglet->telechargements();
 
     expect($fichiers)->toHaveCount(1)
         ->and($fichiers[0]['type'])->toBe('application/pdf')
         ->and($fichiers[0]['debut'])->toStartWith('%PDF');
-    $textes = collect($this->pagesDuPdf(base64_decode($fichiers[0]['contenu'])))->flatMap(fn (array $page): array => array_column($page['textes'], 'texte'))->implode(' ');
-    expect($textes)->toContain($devis->numero);
-    $onglet->voir('Accepter le devis');
+    $textes = preg_replace('/\s+/u', ' ', collect($this->pagesDuPdf(base64_decode($fichiers[0]['contenu'])))->flatMap(fn (array $page): array => array_column($page['textes'], 'texte'))->implode(' '));
+    expect($textes)->toContain($devis->numero)
+        ->toContain('Accepté en ligne')
+        ->toContain('Le 12/11/2026 à 10:00 (heure de Paris)')
+        ->toContain('Paul Durand')
+        ->toContain('ACC-MABOUT-2026-000001');
 });
 
 test('le responsable qui a envoyé le devis et le propriétaire lisent dans la cloche le motif du client en texte, puis « Voir le devis » les mène à sa fiche', function () {
@@ -380,4 +478,36 @@ test('le responsable lit sur la fiche d’un devis envoyé le stock de chaque li
         ->aller('/app/'.$equipe->magasin->uuid.'/devis/'.$devis->getRouteKey())
         ->voir('Stock disponible : 10.')
         ->voir('Stock disponible : 3. La quantité dépasse le stock : le devis ne réserve rien, la facture le contrôlera.');
+});
+
+/*
+ * Un devis refusé ou expiré ne peut plus être accepté, et son client ne
+ * reçoit le PDF d'un devis qu'une fois accepté (demande de l'éditeur du
+ * 14/11/2026) : « Envoyer par e-mail » disparaît de sa fiche, et reste sur
+ * un devis accepté, qui repart avec son PDF.
+ */
+test('le propriétaire, le responsable et le vendeur ne trouvent plus « Envoyer par e-mail » sur un devis refusé ou expiré, et le trouvent sur un devis accepté', function () {
+    $equipe = $this->societeComplete();
+    app(TenantContext::class)->set($equipe->magasin);
+    $produit = Produit::factory()->create(['nom' => 'Lampe de bureau', 'prix_vente_ttc' => 30, 'taux_tva' => 20, 'suivi_stock' => false]);
+    $emettre = fn (array $attributs = []): Devis => app(EmettreDevisAction::class)->handle($equipe->responsable, app(CreerDevisAction::class)->handle($equipe->responsable, Client::factory()->create(['nom' => 'Paul Durand', 'email' => 'paul@client.fr']), [['produit_id' => $produit->id, 'quantite' => 1]], $attributs));
+    $refuse = app(RefuserDevisAction::class)->handle($equipe->responsable, $emettre());
+    $expire = $emettre(['date_validite' => '2026-03-10']);
+    $accepte = app(AccepterDevisAction::class)->handle($equipe->responsable, $emettre());
+    app(TenantContext::class)->clear();
+    $this->travelTo(self::aParis('2026-03-11 10:00:00'));
+
+    foreach ([$equipe->proprietaire, $equipe->responsable, $equipe->vendeur] as $compte) {
+        $onglet = $this->seConnecter($compte);
+
+        foreach ([$refuse, $expire] as $devis) {
+            $onglet->aller('/app/'.$equipe->magasin->uuid.'/devis/'.$devis->getRouteKey())
+                ->voir((string) $devis->numero)
+                ->nePasVoir('Envoyer par e-mail');
+        }
+
+        $onglet->aller('/app/'.$equipe->magasin->uuid.'/devis/'.$accepte->getRouteKey())
+            ->voir('Envoyer par e-mail');
+        $onglet->seDeconnecter();
+    }
 });

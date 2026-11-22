@@ -101,7 +101,7 @@ final class ReponseDuClientAuDevis extends NotificationDuMagasin
         $quand = $this->magasin->calendrier()->afficherHorsDuMagasin($this->reponse->created_at, 'd/m/Y à H:i');
 
         if ($this->reponse->reponse === ReponseAuDevis::Acceptation) {
-            return "Le client a accepté le devis {$this->devis->numero} le {$quand}, signé « {$this->reponse->signataire} » avec la mention « Bon pour accord ». Un compte autorisé à vendre peut maintenant le transformer en facture.";
+            return "Le client a accepté le devis {$this->devis->numero} le {$quand}, signé « {$this->reponse->signataire} » avec la mention « Bon pour accord ».".($this->reponse->debut_avant_la_fin_du_delai === true ? ' Il demande que la prestation commence avant la fin de son délai de rétractation.' : '').' Un compte autorisé à vendre peut maintenant le transformer en facture.';
         }
 
         return "Le client a refusé le devis {$this->devis->numero} le {$quand}".($this->reponse->motif === null ? '.' : ", avec ce motif : « {$this->reponse->motif} ».");

@@ -4,6 +4,7 @@ namespace App\Filament\App\Resources;
 
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Calendrier\Calendrier;
+use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\AccepterDevisAction;
 use App\Domain\Facturation\Actions\CreerFactureDepuisDevisAction;
 use App\Domain\Facturation\Actions\EmettreDevisAction;
@@ -14,6 +15,7 @@ use App\Domain\Facturation\Enums\ReponseAuDevis;
 use App\Domain\Facturation\Enums\StatutDevis;
 use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Services\DepannageADomicile;
 use App\Domain\Facturation\Services\PiedDePage;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\CompteConnecte;
@@ -32,7 +34,9 @@ use Filament\Actions\DeleteAction;
 use Filament\Actions\MountableAction;
 use Filament\Actions\StaticAction;
 use Filament\Forms\Components\Actions\Action;
+use Filament\Forms\Components\Checkbox;
 use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Section;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
@@ -48,6 +52,7 @@ use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\HtmlString;
 
 class DevisResource extends Resource
 {
@@ -89,7 +94,10 @@ class DevisResource extends Resource
                     ->preload()
                     ->required()
                     ->live()
-                    ->afterStateUpdated(fn (Get $get, Set $set) => self::ajusterLaNatureAuClient($get, $set))
+                    ->afterStateUpdated(function (Get $get, Set $set): void {
+                        self::ajusterLaNatureAuClient($get, $set);
+                        self::preremplirLeLieuDIntervention($get, $set);
+                    })
                     ->helperText(fn (Get $get) => ClientResource::soldeCrediteurHelperText($get('client_id')))
                     ->createOptionForm(ClientResource::creationRapideSchema())
                     ->createOptionModalHeading('Nouveau client')
@@ -99,6 +107,7 @@ class DevisResource extends Resource
                 DatePicker::make('date_validite')->label('Valide jusqu\'au'),
                 self::champNatureDeLOperation(),
                 ...self::champsDeLaDateDeLOperation(prevue: true),
+                ...self::champsDuDepannage(),
                 Textarea::make('conditions_paiement')->label('Conditions de paiement')->maxLength(PiedDePage::CARACTERES_DES_CONDITIONS_DE_PAIEMENT)->helperText(FactureResource::INFORMATION_ACOMPTE)->columnSpanFull(),
                 Textarea::make('notes')->columnSpanFull(),
             ])->columns(2),
@@ -113,6 +122,131 @@ class DevisResource extends Resource
                 self::totauxDuDocument(parTaux: true),
             ]),
         ]);
+    }
+
+    /**
+     * Le lieu de l'intervention et la case « Devis signé chez le client »
+     * d'un devis de dépannage à domicile (voir DepannageADomicile) :
+     * seulement quand le magasin a coché le réglage et que le client choisi
+     * est un particulier ; le lieu, obligatoire, se préremplit avec
+     * l'adresse du client (voir preremplirLeLieuDIntervention()) ; le champ
+     * caché « lieu_preremplit » garde ce que le formulaire y a mis, pour que
+     * le lieu suive un changement de client tant que la personne ne l'a pas
+     * retapé (voir lieuDuFormulaire()), sans jamais s'enregistrer.
+     *
+     * @return list<Textarea|Checkbox|Hidden>
+     */
+    private static function champsDuDepannage(): array
+    {
+        $concerne = fn (Get $get): bool => self::depannageConcerne($get('client_id'));
+
+        return [
+            Textarea::make('lieu_d_intervention')
+                ->label('Lieu de l\'intervention')
+                ->helperText('Dépannage, réparation ou entretien à domicile : l\'adresse où vous intervenez, préremplie avec celle du client. Ajoutez les frais de déplacement sur une ligne à part.')
+                ->rows(2)
+                ->maxLength(DepannageADomicile::LIEU_MAXIMUM)
+                ->required($concerne)
+                ->validationMessages(['required' => DepannageADomicile::REFUS_SANS_LIEU])
+                ->visible($concerne)
+                ->columnSpanFull(),
+            Hidden::make('lieu_preremplit')->dehydrated(false),
+            Checkbox::make('signe_chez_le_client')
+                ->label('Devis signé chez le client')
+                ->helperText('Le devis imprime alors le droit de rétractation de quatorze jours et son formulaire.')
+                ->visible($concerne)
+                ->columnSpanFull(),
+        ];
+    }
+
+    /**
+     * Le lieu de l'intervention et la case du devis signé chez le client,
+     * tels que les actions des devis les notent (voir
+     * Devis::noterLeDepannageADomicile()) : ceux du formulaire, des champs
+     * cachés n'en envoyant aucun.
+     *
+     * @param  array<string, mixed>  $donnees
+     * @return array<string, mixed>
+     */
+    public static function attributsDuDepannage(array $donnees): array
+    {
+        return array_intersect_key($donnees, array_flip(['lieu_d_intervention', 'signe_chez_le_client']));
+    }
+
+    /**
+     * Le client choisi (du magasin actif, archivé compris) quand le magasin
+     * actif a coché le dépannage à domicile et qu'il est un particulier ;
+     * null sinon.
+     */
+    private static function clientDuDepannage(mixed $clientId): ?Client
+    {
+        $identifiant = is_bool($clientId) ? false : filter_var($clientId, FILTER_VALIDATE_INT);
+        $client = $identifiant === false ? null : Client::withTrashed()->find($identifiant);
+
+        return $client !== null && DepannageADomicile::concerne(app(TenantContext::class)->magasin(), $client->estProfessionnel()) ? $client : null;
+    }
+
+    /**
+     * Le magasin actif a-t-il coché le dépannage à domicile, et le client
+     * choisi (du magasin actif, archivé compris) est-il un particulier ?
+     */
+    private static function depannageConcerne(mixed $clientId): bool
+    {
+        return self::clientDuDepannage($clientId) !== null;
+    }
+
+    /**
+     * Le lieu de l'intervention suit le client choisi tant que la personne
+     * ne l'a pas retapé (voir lieuDuFormulaire()).
+     */
+    private static function preremplirLeLieuDIntervention(Get $get, Set $set): void
+    {
+        $lieu = self::lieuDuFormulaire($get('client_id'), $get('lieu_d_intervention'), $get('lieu_preremplit'));
+
+        $set('lieu_d_intervention', $lieu['lieu_d_intervention']);
+        $set('lieu_preremplit', $lieu['lieu_preremplit']);
+    }
+
+    /**
+     * Le lieu de l'intervention que le formulaire préremplit pour ce
+     * client : son adresse, une ligne par partie renseignée, quand le
+     * magasin actif a coché le dépannage à domicile et que ce client est un
+     * particulier ; null sinon.
+     */
+    public static function lieuPreremplir(mixed $clientId): ?string
+    {
+        $client = self::clientDuDepannage($clientId);
+
+        if ($client === null) {
+            return null;
+        }
+
+        $adresse = implode("\n", array_values(array_filter([
+            $client->adresse,
+            $client->complement_adresse,
+            trim("{$client->code_postal} {$client->ville}"),
+        ], filled(...))));
+
+        return $adresse === '' ? null : $adresse;
+    }
+
+    /**
+     * Le lieu de l'intervention d'un formulaire dont le client vient de
+     * changer ou s'ouvre, avec ce qu'il y a préinscrit : l'adresse du client
+     * choisi (voir lieuPreremplir()) remplace le lieu quand il est vide ou
+     * quand il est encore celui que le formulaire avait préinscrit pour le
+     * client d'avant ; un lieu retapé à la main reste tel quel. Au changement
+     * du client, et à l'ouverture d'un brouillon enregistré avant que le
+     * magasin coche le réglage (voir EditDevis::mutateFormDataBeforeFill()).
+     *
+     * @return array{lieu_d_intervention: mixed, lieu_preremplit: ?string}
+     */
+    public static function lieuDuFormulaire(mixed $clientId, mixed $lieu, mixed $lieuPreremplit): array
+    {
+        $adresse = self::lieuPreremplir($clientId);
+        $retape = filled($lieu) && trim(ValeurSimple::enTexte($lieu)) !== trim(ValeurSimple::enTexte($lieuPreremplit));
+
+        return ['lieu_d_intervention' => $retape ? $lieu : $adresse, 'lieu_preremplit' => $adresse];
     }
 
     /**
@@ -134,6 +268,19 @@ class DevisResource extends Resource
                 TextEntry::make('date_validite')->label('Valide jusqu\'au')->jour()->placeholder('—'),
                 FactureResource::natureEntry(),
                 FactureResource::dateDeLOperationEntry(prevue: true),
+                // Ce que le PDF du devis imprime (voir DepannageADomicile::duDevis()) :
+                // rien quand le magasin a décoché le réglage depuis
+                // l'enregistrement d'un brouillon ; le lieu, une ligne par
+                // ligne saisie.
+                TextEntry::make('lieu_d_intervention')
+                    ->label('Lieu de l\'intervention')
+                    ->state(fn (Devis $record): ?string => DepannageADomicile::duDevis($record)?->lieu)
+                    ->formatStateUsing(fn (string $state): HtmlString => new HtmlString(nl2br(e($state), false)))
+                    ->visible(fn (Devis $record): bool => DepannageADomicile::duDevis($record)?->lieu !== null),
+                TextEntry::make('signe_chez_le_client')
+                    ->label('Devis signé chez le client')
+                    ->state(fn (Devis $record): string => DepannageADomicile::duDevis($record)?->signeChezLeClient === true ? 'Oui : le devis imprime le droit de rétractation et son formulaire' : 'Non')
+                    ->visible(fn (Devis $record): bool => DepannageADomicile::duDevis($record) !== null),
                 TextEntry::make('accepte_le')
                     ->label('Accepté le')
                     ->state(fn (Devis $record): ?string => $record->accepte_le === null ? null : $record->magasin->calendrier()->afficher($record->accepte_le, 'd/m/Y à H:i'))
@@ -470,8 +617,13 @@ class DevisResource extends Resource
                             $quand = $calendrier->afficher($reponse->created_at, 'd/m/Y à H:i');
 
                             return $reponse->reponse === ReponseAuDevis::Acceptation
-                                ? "Accepté en ligne le {$quand} par « {$reponse->signataire} », avec la mention « Bon pour accord ». Empreinte du devis accepté : {$reponse->empreinte_du_devis}."
-                                : "Refusé en ligne le {$quand}".($reponse->motif === null ? '.' : ", motif : « {$reponse->motif} ».");
+                                ? "Accepté en ligne le {$quand} par « {$reponse->signataire} », avec la mention « Bon pour accord ». Référence de l'acceptation : {$reponse->reference}. Empreinte du devis accepté : {$reponse->empreinte_du_devis}."
+                                    .match ($reponse->debut_avant_la_fin_du_delai) {
+                                        true => ' Le client a demandé que la prestation commence avant la fin de son délai de rétractation de quatorze jours.',
+                                        false => ' Le client n\'a pas demandé que la prestation commence avant la fin de son délai de rétractation de quatorze jours.',
+                                        null => '',
+                                    }
+                            : "Refusé en ligne le {$quand}".($reponse->motif === null ? '.' : ", motif : « {$reponse->motif} ».");
                         }
 
                         $lien = $record->lienValable();

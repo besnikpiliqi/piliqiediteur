@@ -6,6 +6,7 @@ use App\Domain\CaisseSecurisee\Exceptions\DocumentSansEnregistrementSigneExcepti
 use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
+use App\Domain\Facturation\Actions\AccepterDevisAction;
 use App\Domain\Facturation\Actions\CreerDevisAction;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreDevisAction;
@@ -385,9 +386,11 @@ class EmetteurFigeTest extends TestCase
     /**
      * Le devis fige son émetteur à son envoi : demandé avant le changement
      * d'identité et parti après lui (file d'attente chargée, nouvelle
-     * tentative), son e-mail, objet compris, et son PDF présentent le
-     * vendeur du jour de son envoi, comme ceux d'une facture émise. Seuls
-     * les moyens de joindre le magasin sont ceux d'aujourd'hui.
+     * tentative), son e-mail, objet compris, présente le vendeur du jour de
+     * son envoi, comme ceux d'une facture émise. Seuls les moyens de joindre
+     * le magasin sont ceux d'aujourd'hui. Le devis envoyé part sans PDF, que
+     * son client ne reçoit qu'une fois le devis accepté : aucun PDF n'est
+     * fabriqué pour cet e-mail.
      */
     public function test_l_e_mail_d_un_devis_presente_l_emetteur_fige_a_son_envoi_meme_parti_apres_un_changement(): void
     {
@@ -395,6 +398,42 @@ class EmetteurFigeTest extends TestCase
         Queue::fake([EnvoyerDocumentJob::class]);
         $magasin = $this->magasinDuPort();
         $devis = app(CreerDevisAction::class)->handle(self::auteur(), Client::factory()->professionnel()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
+        $envoi = app(EnvoyerDocumentAction::class)->handle(self::auteur(), $devis, 'achats@client.fr', null);
+        $this->changerLIdentiteDuMagasin($magasin, self::IDENTITE_DES_QUAIS);
+        $emetteursImprimes = $this->emetteursImprimesSur('devis.pdf');
+
+        (new EnvoyerDocumentJob($magasin->id, $envoi->id))->handle();
+
+        $numero = $devis->fresh()->numero;
+        $this->assertCount(0, $emetteursImprimes, 'Le devis envoyé part sans PDF : aucun n\'est fabriqué.');
+        $this->assertSame([
+            'expediteur' => 'Boutique du Port',
+            'reponse' => ['bonjour@boutique-des-quais.fr', 'Boutique du Port'],
+            'objet' => "Devis {$numero} — Boutique du Port",
+            'en_tete' => ['Boutique du Port'],
+            'signature' => ['Cordialement, Boutique du Port'],
+            'pied' => [
+                'Martin et Fils · 12 quai des Pêcheurs · 13002 Marseille',
+                'Tél. 04 72 00 00 00 · bonjour@boutique-des-quais.fr',
+                'SIRET 12121212000012',
+            ],
+        ], $this->donneesDe(Mail::sent(DocumentMail::class)->sole()));
+        $this->assertSame("Devis {$numero} — Boutique du Port", $envoi->fresh()->objet);
+    }
+
+    /**
+     * Le devis accepté, renvoyé avec son PDF, présente comme son e-mail le
+     * vendeur du jour de son envoi : demandé avant le changement d'identité
+     * et parti après lui, son PDF et son e-mail, objet compris, gardent
+     * l'émetteur figé.
+     */
+    public function test_le_pdf_et_l_e_mail_d_un_devis_accepte_gardent_l_emetteur_fige_a_son_envoi_meme_partis_apres_un_changement(): void
+    {
+        Mail::fake();
+        Queue::fake([EnvoyerDocumentJob::class]);
+        $magasin = $this->magasinDuPort();
+        $devis = app(CreerDevisAction::class)->handle(self::auteur(), Client::factory()->professionnel()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
+        $devis = app(AccepterDevisAction::class)->handle(self::auteur(), app(EmettreDevisAction::class)->handle(self::auteur(), $devis));
         $envoi = app(EnvoyerDocumentAction::class)->handle(self::auteur(), $devis, 'achats@client.fr', null);
         $this->changerLIdentiteDuMagasin($magasin, self::IDENTITE_DES_QUAIS);
         $emetteursImprimes = $this->emetteursImprimesSur('devis.pdf');

@@ -3,6 +3,7 @@
 namespace Tests\Feature\Demonstration;
 
 use App\Domain\Calendrier\Calendrier;
+use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Demonstration\Bases\BasesDeLaDemonstration;
 use App\Domain\Demonstration\Bases\BrancherUneBase;
 use App\Domain\Demonstration\Construction\ConstruireUnModele;
@@ -11,6 +12,9 @@ use App\Domain\Demonstration\Construction\SemisDuModeleParLeSemeur;
 use App\Domain\Demonstration\Contracts\SemisDUnModele;
 use App\Domain\Demonstration\Registre\Models\Modele;
 use App\Domain\Demonstration\Services\CarteDeLaDemonstration;
+use App\Domain\Facturation\Enums\StatutDevis;
+use App\Domain\Facturation\Enums\StatutEnvoi;
+use App\Domain\Facturation\Jobs\EnvoyerDocumentJob;
 use App\Domain\Tenancy\Enums\TypeDActivite;
 use Carbon\CarbonImmutable;
 use Database\Seeders\DatabaseSeeder;
@@ -34,7 +38,9 @@ use Tests\DemonstrationTestCase;
  * magasin a son JET 100 ; les tables techniques sont vides ; chaque compte
  * du bandeau est un compte non retiré de la société mise en avant, avec le
  * mot de passe de démonstration du modèle, sans préférence de tableau de
- * bord (toutes ses cartes permises s'ouvrent).
+ * bord (toutes ses cartes permises s'ouvrent) ; chaque modèle a ses devis
+ * de dépannage à domicile et ses acceptations en ligne signées (lot
+ * DEVIS-RET, voir assertDepannageEtAcceptationsSignees()).
  */
 #[Group('copies')]
 class BasesModelesTest extends DemonstrationTestCase
@@ -196,7 +202,35 @@ class BasesModelesTest extends DemonstrationTestCase
             'courriels' => DB::table('courriels_de_la_demonstration')
                 ->join('societes', 'societes.id', '=', 'courriels_de_la_demonstration.societe_id')
                 ->orderBy('courriels_de_la_demonstration.id')
-                ->get(['societes.raison_sociale', 'courriels_de_la_demonstration.objet', 'courriels_de_la_demonstration.envoye_le'])
+                ->get(['societes.raison_sociale', 'courriels_de_la_demonstration.objet', 'courriels_de_la_demonstration.envoye_le', 'courriels_de_la_demonstration.pieces_jointes'])
+                ->map(fn (object $ligne): array => ['pieces_jointes' => array_column((array) json_decode((string) $ligne->pieces_jointes, true), 'type')] + (array) $ligne)
+                ->all(),
+            'devis_de_depannage' => DB::table('devis')
+                ->whereNotNull('lieu_d_intervention')
+                ->orderBy('id')
+                ->get(['statut', 'signe_chez_le_client', 'depannage_a_domicile', 'prix_du_devis_de_depannage'])
+                ->map(fn (object $ligne): string => $ligne->statut.($ligne->signe_chez_le_client ? ', signé chez le client' : '').match ($ligne->depannage_a_domicile) {
+                    null => ', réglage du magasin d\'aujourd\'hui',
+                    default => $ligne->prix_du_devis_de_depannage === null ? ', gratuit' : ', payant',
+                })
+                ->all(),
+            'brouillons_de_depannage_sans_lieu' => DB::table('devis')
+                ->join('magasins', 'magasins.id', '=', 'devis.magasin_id')
+                ->where('magasins.depannage_a_domicile', true)
+                ->where('devis.statut', StatutDevis::Brouillon->value)
+                ->where('devis.type_client', TypeClient::Particulier->value)
+                ->whereNull('devis.lieu_d_intervention')
+                ->count(),
+            'envois_en_echec_dont_le_lien_ne_valait_plus_au_depart' => DB::table('envois_documents')
+                ->where('statut', StatutEnvoi::Echec->value)
+                ->whereIn('erreur', [EnvoyerDocumentJob::MOTIF_DEVIS_ACCEPTE_ENTRE_TEMPS, EnvoyerDocumentJob::MOTIF_LIEN_REMPLACE, EnvoyerDocumentJob::MOTIF_LIEN_RETIRE, EnvoyerDocumentJob::MOTIF_DEVIS_REFUSE_ENTRE_TEMPS, EnvoyerDocumentJob::MOTIF_DEVIS_EXPIRE_ENTRE_TEMPS, EnvoyerDocumentJob::MOTIF_LIEN_REMPLACE_PUIS_RETIRE])
+                ->orderBy('id')
+                ->pluck('erreur')
+                ->all(),
+            'acceptations_en_ligne' => DB::table('reponses_des_devis')
+                ->where('reponse', 'acceptation')
+                ->orderBy('id')
+                ->get(['reference', 'debut_avant_la_fin_du_delai'])
                 ->map(fn (object $ligne): array => (array) $ligne)
                 ->all(),
         ]);
@@ -251,5 +285,64 @@ class BasesModelesTest extends DemonstrationTestCase
         foreach ($lecture['courriels'] as $courriel) {
             $this->assertGreaterThanOrEqual($debut->getTimestamp(), CarbonImmutable::parse((string) $courriel['envoye_le'], 'UTC')->getTimestamp(), 'Seuls les e-mails des 7 derniers jours de l\'histoire semée sont écrits dans « E-mails qui seraient partis » (F.4).');
         }
+
+        $this->assertDepannageEtAcceptationsSignees($lecture);
+    }
+
+    /**
+     * Chaque modèle montre un magasin qui fait le dépannage à domicile
+     * (T51.6 : la République de Maison Ferrand, dans les modèles
+     * « Commerce » et « Cabinet », le cabinet de conseil dans le modèle
+     * « Services ») : un brouillon fait avant que le magasin coche le
+     * réglage, sans lieu ; un devis signé chez le client et accepté par le
+     * magasin avant le départ de son e-mail, qui ne part pas ; un devis gratuit et un devis payant, figés à leur envoi et
+     * acceptés en ligne, un brouillon qui suit le réglage d'aujourd'hui ; un devis envoyé deux fois, dont le second
+     * lien est retiré avant le passage de la tâche du premier, qui ne part pas (six e-mails de devis en échec, chacun
+     * avec sa cause) ;
+     * les acceptations en ligne d'un particulier, avec et sans la demande
+     * d'un début avant la fin du délai de rétractation (T86), chacune avec
+     * sa référence (ACC-…) ; dans « E-mails qui seraient partis », l'envoi
+     * d'un devis sans PDF et la confirmation de son acceptation avec le
+     * devis signé (demandes de l'éditeur du 14/11/2026).
+     *
+     * @param  array<string, mixed>  $lecture
+     */
+    private function assertDepannageEtAcceptationsSignees(array $lecture): void
+    {
+        $this->assertSame([
+            'accepte, signé chez le client, gratuit',
+            'accepte, gratuit',
+            'refuse, gratuit',
+            'expire, gratuit',
+            'envoye, gratuit',
+            'accepte, payant',
+            'brouillon, réglage du magasin d\'aujourd\'hui',
+        ], $lecture['devis_de_depannage']);
+        $this->assertSame(1, $lecture['brouillons_de_depannage_sans_lieu'], 'Un brouillon fait avant que le magasin coche le réglage n\'a pas de lieu : son envoi le refuse.');
+        $this->assertSame([
+            EnvoyerDocumentJob::MOTIF_DEVIS_ACCEPTE_ENTRE_TEMPS,
+            EnvoyerDocumentJob::MOTIF_LIEN_REMPLACE,
+            EnvoyerDocumentJob::MOTIF_LIEN_RETIRE,
+            EnvoyerDocumentJob::MOTIF_DEVIS_REFUSE_ENTRE_TEMPS,
+            EnvoyerDocumentJob::MOTIF_DEVIS_EXPIRE_ENTRE_TEMPS,
+            EnvoyerDocumentJob::MOTIF_LIEN_REMPLACE_PUIS_RETIRE,
+        ], $lecture['envois_en_echec_dont_le_lien_ne_valait_plus_au_depart'], 'Six e-mails de devis ne sont pas partis, chacun avec sa vraie cause : le devis signé chez le client accepté au magasin avant son départ, le premier envoi remplacé par un second, le premier envoi dont le lien est retiré, le devis noté refusé avant son départ, le devis expiré avant son départ, le premier envoi remplacé par un second dont le lien a été retiré à son tour.');
+        $acceptations = $lecture['acceptations_en_ligne'];
+        $this->assertIsArray($acceptations);
+        $this->assertContains(true, array_column($acceptations, 'debut_avant_la_fin_du_delai'), 'Un particulier demande que la prestation commence avant la fin du délai.');
+        $this->assertContains(false, array_column($acceptations, 'debut_avant_la_fin_du_delai'), 'Un particulier ne le demande pas.');
+
+        foreach (array_column($acceptations, 'reference') as $reference) {
+            $this->assertMatchesRegularExpression('/^ACC-[A-Z0-9]+-\d{4}-\d{6}$/', (string) $reference);
+        }
+
+        $courriels = $lecture['courriels'];
+        $this->assertIsArray($courriels);
+        $envois = array_filter($courriels, static fn (array $courriel): bool => str_starts_with((string) $courriel['objet'], 'Devis DEV-'));
+        $confirmations = array_filter($courriels, static fn (array $courriel): bool => str_starts_with((string) $courriel['objet'], 'Acceptation enregistrée : Devis DEV-'));
+        $this->assertNotSame([], $envois);
+        $this->assertNotSame([], $confirmations);
+        $this->assertSame([[]], array_values(array_unique(array_column($envois, 'pieces_jointes'), SORT_REGULAR)), 'L\'e-mail qui envoie un devis ne porte pas de PDF.');
+        $this->assertSame([['application/pdf']], array_values(array_unique(array_column($confirmations, 'pieces_jointes'), SORT_REGULAR)), 'La confirmation d\'une acceptation porte le devis signé.');
     }
 }

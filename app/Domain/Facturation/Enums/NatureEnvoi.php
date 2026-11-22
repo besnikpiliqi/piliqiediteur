@@ -9,8 +9,9 @@ use Filament\Support\Contracts\HasLabel;
  * Pourquoi un document part par e-mail (voir EnvoiDocument) : un envoi
  * demandé par le magasin, une relance d'une facture échue et impayée,
  * numérotée par son niveau, ou la confirmation au client de sa réponse en
- * ligne à un devis, l'acceptation ou le refus, devis joint (voir
- * RepondreAuDevisEnLigneAction).
+ * ligne à un devis : l'acceptation, avec le devis signé en PDF, ou le
+ * refus, sans PDF (voir RepondreAuDevisEnLigneAction et
+ * DocumentMail::porteLePdf()).
  */
 enum NatureEnvoi: string implements HasColor, HasLabel
 {

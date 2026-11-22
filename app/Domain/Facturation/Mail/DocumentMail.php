@@ -6,6 +6,7 @@ use App\Domain\CaisseSecurisee\Exceptions\DocumentSansEnregistrementSigneExcepti
 use App\Domain\Calendrier\Calendrier;
 use App\Domain\Facturation\Contracts\DocumentEnvoyable;
 use App\Domain\Facturation\Enums\NatureEnvoi;
+use App\Domain\Facturation\Enums\StatutDevis;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\EnvoiDocument;
@@ -13,6 +14,7 @@ use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\LigneRecuPaiement;
 use App\Domain\Facturation\Models\RecuPaiement;
 use App\Domain\Facturation\Services\CalculateurLigne;
+use App\Domain\Facturation\Services\DroitDeRetractation;
 use App\Domain\Facturation\Services\Emetteur;
 use App\Domain\Tenancy\Support\Reglage;
 use App\Domain\Tenancy\Support\ValeurRequise;
@@ -29,8 +31,10 @@ use LogicException;
  * paiement à son client, PDF en pièce jointe (voir EnvoyerDocumentJob). Il part de l'adresse du
  * logiciel, au nom du magasin, et les réponses vont au magasin. Celui
  * d'un devis envoyé porte le lien secret par lequel le client y répond en
- * ligne (voir LienDuDevis) ; la confirmation de sa réponse lui renvoie le
- * devis accepté ou refusé.
+ * ligne (voir LienDuDevis), sans PDF : le client lit le devis là où il
+ * signe, et ne reçoit le PDF, signé, qu'avec la confirmation de son
+ * acceptation, qui dit aussi à un particulier son droit de rétractation
+ * (voir attachments() et retractation()) ; celle d'un refus n'a pas de PDF.
  *
  * Il présente le vendeur que son PDF imprime (voir
  * DocumentEnvoyable::emetteur()) : celui qu'une facture ou un avoir a
@@ -59,6 +63,8 @@ class DocumentMail extends Mailable
      * ou un avoir, dans son enregistrement signé au registre fiscal. Un
      * envoi dont le document a été supprimé depuis (un devis brouillon) ne
      * part pas : EnvoyerDocumentJob le constate avant, sans e-mail.
+     *
+     * @param  string  $pdf  le PDF du document, vide quand il n'en porte pas (voir porteLePdf())
      *
      * @throws DocumentSansEnregistrementSigneException
      * @throws LogicException
@@ -94,18 +100,63 @@ class DocumentMail extends Mailable
                 'introduction' => $this->introduction(),
                 'paragraphes' => $this->paragraphesDuMessage(),
                 'lienDeReponse' => $this->lienDeReponse,
+                'retractation' => $this->retractation(),
                 'coordonnees' => $this->coordonnees(),
             ],
         );
     }
 
     /**
+     * Le PDF du document, sauf celui d'un devis que son client n'a pas
+     * accepté : avant sa réponse, il lit le devis sur la page de son lien,
+     * où il signe, et ne reçoit le PDF, signé, qu'après l'avoir accepté
+     * (demande de l'éditeur du 14/11/2026) ; la confirmation d'un refus
+     * n'en porte pas non plus.
+     *
      * @return array<int, Attachment>
      */
     public function attachments(): array
     {
+        return self::porteLePdf($this->document)
+            ? [Attachment::fromData(fn (): string => $this->pdf, $this->nomFichier)->withMime('application/pdf')]
+            : [];
+    }
+
+    /**
+     * Le document part-il avec son PDF ? Un devis seulement accepté (la
+     * confirmation de son acceptation en ligne, ou un devis accepté ou
+     * transformé en facture renvoyé tel que son client l'a accepté) ; tout
+     * autre document part toujours avec le sien. EnvoyerDocumentJob ne
+     * fabrique le PDF que pour ce document, et passe une chaîne vide aux
+     * autres.
+     */
+    public static function porteLePdf(Facture|Devis|Avoir|RecuPaiement $document): bool
+    {
+        return ! $document instanceof Devis || in_array($document->statut, [StatutDevis::Accepte, StatutDevis::Converti], true);
+    }
+
+    /**
+     * La confirmation de l'acceptation en ligne d'un devis par un
+     * particulier dit ce qu'il a demandé du début de la prestation, son
+     * droit de rétractation de quatorze jours et le formulaire type (T86) ;
+     * rien pour un professionnel ni pour tout autre e-mail.
+     *
+     * @return array{paragraphes: list<string>, formulaire: list<string>}|array{}
+     */
+    private function retractation(): array
+    {
+        $devis = $this->document;
+
+        if (! $devis instanceof Devis || $this->envoi->nature !== NatureEnvoi::Acceptation || $devis->estPourUnProfessionnel()) {
+            return [];
+        }
+
+        $reponse = $devis->reponseALaVersionEnvoyee();
+        $droit = new DroitDeRetractation($this->emetteur);
+
         return [
-            Attachment::fromData(fn (): string => $this->pdf, $this->nomFichier)->withMime('application/pdf'),
+            'paragraphes' => [DroitDeRetractation::reponseALaDemande((bool) $reponse?->debut_avant_la_fin_du_delai), ...$droit->paragraphes()],
+            'formulaire' => $droit->formulaire($devis->numero),
         ];
     }
 
@@ -130,15 +181,15 @@ class DocumentMail extends Mailable
         $document = $this->document;
 
         return match (true) {
-            $document instanceof Devis && $this->envoi->nature === NatureEnvoi::Acceptation => "Nous avons bien reçu votre acceptation de notre devis {$document->numero} d'un montant de ".self::montant($document).'. Vous trouverez ci-joint le devis que vous avez accepté. Merci de votre confiance.',
-            $document instanceof Devis && $this->envoi->nature === NatureEnvoi::Refus => "Nous avons bien reçu votre refus de notre devis {$document->numero}. Vous trouverez ci-joint le devis concerné, pour mémoire.",
+            $document instanceof Devis && $this->envoi->nature === NatureEnvoi::Acceptation => "Nous avons bien reçu votre acceptation de notre devis {$document->numero} d'un montant de ".self::montant($document).'. Vous trouverez ci-joint le devis que vous avez accepté, signé. Merci de votre confiance.',
+            $document instanceof Devis && $this->envoi->nature === NatureEnvoi::Refus => "Nous avons bien reçu votre refus de notre devis {$document->numero}.",
             $document instanceof RecuPaiement => $this->introductionDuRecu($document),
             $document instanceof Facture && ! $document->estPourUnProfessionnel() => "Veuillez trouver ci-joint votre ticket de caisse {$document->numero} d'un montant de ".self::montant($document).'.',
             $document instanceof Facture && $document->montantRestantEnCentimes() <= 0 => "Veuillez trouver ci-joint notre facture {$document->numero} d'un montant de ".self::montant($document).', déjà réglée.',
             $document instanceof Facture => "Veuillez trouver ci-joint notre facture {$document->numero} d'un montant de ".self::montant($document)
                 .($document->date_echeance ? ', à régler au plus tard le '.Calendrier::afficherJour($document->date_echeance, 'd/m/Y').'.' : '.'),
-            $document instanceof Devis => "Veuillez trouver ci-joint notre devis {$document->numero} d'un montant de ".self::montant($document)
-                .($document->date_validite ? ', valable jusqu\'au '.Calendrier::afficherJour($document->date_validite, 'd/m/Y').'.' : '.'),
+            $document instanceof Devis && self::porteLePdf($document) => "Veuillez trouver ci-joint notre devis {$document->numero} d'un montant de ".self::montant($document).', que vous avez accepté.',
+            $document instanceof Devis => "Votre devis {$document->numero} d'un montant de ".self::montant($document).' vous attend en ligne : vous pouvez le lire, puis l\'accepter ou le refuser.',
             $document instanceof Avoir => "Veuillez trouver ci-joint notre avoir {$document->numero} d'un montant de ".self::montant($document).'.',
         };
     }

@@ -6443,3 +6443,19 @@ montre moi la maquette
 
 tu vois la quand on ajoute un produit dans la facture d achat alors quand tu augmente le qte ou baisse ou tappe sur alors ne changer pas les resultant en temps reel et quand je tappe ou augment ou basse sur les autre inputs la il change en temps reel mais celui de qte !!
 
+## 568. 2026-11-22 00:22 UTC
+
+[1 capture(s) d'écran jointe(s)]
+
+mais la je comprend pas ou c est juste de me montre et ce n est de vrais car quand je mets 1€ alors tu ajoute 10€ ?
+
+## 569. 2026-11-22 00:32 UTC
+
+<!-- attach -->
+
+> Dites-moi si la maquette vous convient.
+
+
+
+c est bon la maquttet des arrondis des prix
+

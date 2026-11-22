@@ -147,6 +147,65 @@ function centimesAffiches(Navigation $onglet, string $selecteur): int
     return (int) round(((float) $nombre) * 100);
 }
 
+/**
+ * La mention « TVA autoliquidée » de ce conteneur (la fenêtre ouverte ou la
+ * page) : son texte, sa couleur et son contraste avec le fond qui la porte
+ * en clair puis en sombre (AA : 4,5 pour 1), et le libellé « TTC », que la
+ * case ne change pas.
+ *
+ * @return array{texte: string, clair: array{couleur: string, contraste: bool}, sombre: array{couleur: string, contraste: bool}, titreDuTtc: bool}
+ */
+function mentionAutoliquidee(Navigation $onglet, string $dans): array
+{
+    return $onglet->page()->evaluate(<<<'JS'
+        (dans) => {
+            const conteneur = document.querySelector(dans);
+            const mention = conteneur.querySelector('[data-tva-autoliquidee]');
+            const lireLaCouleur = (texte) => {
+                const [r, g, b, a] = texte.match(/\d+(\.\d+)?/g).map(Number);
+
+                return [r, g, b, a === undefined ? 1 : a];
+            };
+            const luminance = (rvb) => {
+                const [r, g, b] = rvb.slice(0, 3).map((c) => { const v = c / 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; });
+
+                return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+            };
+            // Le fond qui porte l'élément : les couches de fond des ancêtres, la plus proche d'abord, jusqu'à la première opaque, fondues ensemble.
+            const fond = (element) => {
+                const couches = [];
+
+                for (let noeud = element; noeud !== null; noeud = noeud.parentElement) {
+                    const couche = lireLaCouleur(getComputedStyle(noeud).backgroundColor);
+
+                    if (couche[3] > 0) { couches.push(couche); }
+                    if (couche[3] === 1) { break; }
+                }
+
+                return couches.reduceRight((dessous, dessus) => [0, 1, 2].map((rang) => dessus[rang] * dessus[3] + dessous[rang] * (1 - dessus[3])), [255, 255, 255]);
+            };
+            const lire = (sombre) => {
+                document.documentElement.classList.toggle('dark', sombre);
+                const premier = luminance(lireLaCouleur(getComputedStyle(mention).color));
+                const second = luminance(fond(mention));
+                const rapport = (Math.max(premier, second) + 0.05) / (Math.min(premier, second) + 0.05);
+
+                return { couleur: getComputedStyle(mention).color, contraste: rapport >= 4.5 };
+            };
+            const etatInitial = document.documentElement.classList.contains('dark');
+            // Sans transition : la couleur lue juste après le changement de mode est la couleur finale.
+            const sansTransition = document.createElement('style');
+            sansTransition.textContent = '* { transition: none !important; }';
+            document.head.appendChild(sansTransition);
+            const resultat = { texte: mention.textContent.trim(), clair: lire(false), sombre: lire(true), titreDuTtc: [...conteneur.querySelectorAll('label, th')].some((titre) => titre.textContent.trim() === 'TTC') };
+            document.documentElement.classList.toggle('dark', etatInitial);
+            sansTransition.remove();
+
+            return resultat;
+        }
+        JS, $dans);
+}
+
 test('le propriétaire dépose une quittance de loyer avec ses chiffres, voit la case orange, filtre la liste par la case et télécharge la pièce', function () {
     $societe = $this->societeComplete();
     $onglet = $this->seConnecter($societe->proprietaire, panneau: 'societe')
@@ -431,9 +490,21 @@ test('un administrateur à qui le propriétaire coche « Charges : ajouter » aj
     // fournisseur.
     expect(taperLeHt($onglet, 0, '100,00'))->toBe(['20,00', '100,00']);
 
+    // « TVA autoliquidée », en orange, sous le champ TVA de la ligne ; le
+    // libellé « TTC » ne change pas (décision de l'éditeur du 20/11/2026).
+    expect(mentionAutoliquidee($onglet, Navigation::FENETRE))->toBe(['texte' => 'TVA autoliquidée', 'clair' => ['couleur' => 'rgb(138, 74, 6)', 'contraste' => true], 'sombre' => ['couleur' => 'rgb(240, 184, 114)', 'contraste' => true], 'titreDuTtc' => true]);
+
+    $onglet->geste(fn () => $onglet->element(Navigation::FENETRE.' >> label:has-text("Fournisseur établi hors de France") >> input[type=checkbox]')->uncheck(), 'la case décochée');
+    expect($onglet->page()->evaluate('(fenetre) => document.querySelector(fenetre).querySelectorAll("[data-tva-autoliquidee]").length', Navigation::FENETRE))->toBe(0);
+    $onglet->geste(fn () => $onglet->element(Navigation::FENETRE.' >> label:has-text("Fournisseur établi hors de France") >> input[type=checkbox]')->check(), 'la case recochée');
+
     $onglet->soumettre('Enregistrer (à valider par le comptable)')
         ->voir('Charge enregistrée.')
         ->voir('IE-0310');
+
+    // Dans la liste, la même mention orange sous la TVA de cette charge, et elle seule.
+    expect(mentionAutoliquidee($onglet, 'body'))->toBe(['texte' => 'TVA autoliquidée', 'clair' => ['couleur' => 'rgb(138, 74, 6)', 'contraste' => true], 'sombre' => ['couleur' => 'rgb(240, 184, 114)', 'contraste' => true], 'titreDuTtc' => true])
+        ->and($onglet->page()->evaluate('() => document.querySelectorAll("[data-tva-autoliquidee]").length'))->toBe(1);
 
     $charge = Charge::query()->withoutGlobalScopes()->where('societe_id', $societe->societe->getKey())->sole();
     expect([$charge->magasin_id, $charge->fournisseur_hors_france, $charge->total_tva, $charge->total_ttc])->toBe([null, true, 2000, 10000]);

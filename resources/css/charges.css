@@ -150,3 +150,21 @@ button.piliqi-charges__case:focus-visible {
 .dark .piliqi-charges__tuile {
     border-color: rgba(255, 255, 255, 0.1);
 }
+
+/*
+ * « TVA autoliquidée », en orange, sous le montant de la TVA d'une charge
+ * dont le fournisseur est établi hors de France (décision de l'éditeur du
+ * 20/11/2026, maquette v5) : dans la fenêtre « Ajouter une charge », sous le
+ * champ TVA de la ligne, et dans la liste, sous la TVA. Le libellé « TTC »
+ * ne change pas ; l'explication grise reste sous la case du fournisseur.
+ * Orange lisible sur le fond clair comme sur le fond sombre (contraste AA).
+ */
+.piliqi-charges__autoliquidee {
+    color: #8a4a06;
+    font-size: 0.8125rem;
+    font-weight: 600;
+}
+
+.dark .piliqi-charges__autoliquidee {
+    color: #f0b872;
+}

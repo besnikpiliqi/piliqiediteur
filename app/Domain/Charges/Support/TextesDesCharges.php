@@ -13,6 +13,13 @@ final class TextesDesCharges
 {
     public const TOUTE_LA_SOCIETE = 'Toute la société';
 
+    /**
+     * La mention, en orange, sous la TVA d'une charge dont le fournisseur est
+     * établi hors de France : l'écran, la liste et l'état téléchargé (PDF et
+     * Excel) la disent de même (décision de l'éditeur du 20/11/2026).
+     */
+    public const TVA_AUTOLIQUIDEE = 'TVA autoliquidée';
+
     /** Les mois abrégés de l'en-tête du tableau des mois. */
     private const ABREVIATIONS_DES_MOIS = ['Janv.', 'Févr.', 'Mars', 'Avr.', 'Mai', 'Juin', 'Juil.', 'Août', 'Sept.', 'Oct.', 'Nov.', 'Déc.'];
 

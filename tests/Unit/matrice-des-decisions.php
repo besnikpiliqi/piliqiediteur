@@ -2733,6 +2733,16 @@ return [
                 'tests/Feature/Filament/ListesDuPlusRecentAuPlusAncienTest.php::test_les_fiches_et_les_brouillons_les_plus_recents_sont_en_tete_quel_que_soit_leur_identifiant',
             ],
         ],
+        'hors.tva-autoliquidee-en-orange' => [
+            'puce' => 'Hors de CLAUDE.md',
+            'regle' => 'Une charge dont le fournisseur est établi hors de France porte la mention « TVA autoliquidée », en orange, sous le montant de sa TVA : sous le champ TVA de la ligne dans la fenêtre « Ajouter une charge » (case cochée seulement), dans la liste des charges et dans l\'état téléchargé (PDF et Excel) ; le libellé « TTC » ne change pas et une charge d\'un fournisseur établi en France n\'a aucune mention (décision de l\'éditeur du 20/11/2026, maquette v5, lot écrans).',
+            'tests' => [
+                'tests/Feature/Charges/TvaAutoliquideeEnOrangeTest.php::test_la_fenetre_ecrit_la_mention_orange_sous_la_tva_quand_la_case_est_cochee_et_rien_sinon',
+                'tests/Feature/Charges/TvaAutoliquideeEnOrangeTest.php::test_la_liste_ecrit_la_mention_sous_la_tva_de_la_seule_charge_autoliquidee',
+                'tests/Feature/Charges/TvaAutoliquideeEnOrangeTest.php::test_le_pdf_et_l_excel_disent_la_meme_mention_orange_sous_la_tva_de_la_seule_charge_autoliquidee',
+                'tests/Browser/Parcours/ChargesTest.php › un administrateur à qui le propriétaire coche « Charges : ajouter » ajoute une charge de toute la société auprès d’un fournisseur établi hors de France, puis filtre par magasin',
+            ],
+        ],
         'hors.liens-relatifs-des-notifications' => [
             'puce' => 'Hors de CLAUDE.md',
             'regle' => 'Une notification de la cloche se range avec des liens relatifs (chemin seul, sans adresse ni port) qui suivent le site qui sert la page, quelle que soit la classe qui l\'écrit ; les e-mails, qui sortent du site, gardent une adresse absolue ; un lien vers un autre site reste entier (demande de l\'éditeur du 20/11/2026, lot écrans).',

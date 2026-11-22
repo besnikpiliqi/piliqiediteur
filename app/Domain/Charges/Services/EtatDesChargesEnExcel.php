@@ -189,7 +189,7 @@ final class EtatDesChargesEnExcel
             $montant($charge->total_tva),
             $montant($charge->total_ttc),
             $montant($charge->total_tva_deductible),
-            self::texte($charge->fournisseur_hors_france ? 'Oui' : 'Non'),
+            $charge->fournisseur_hors_france ? self::texte(TextesDesCharges::TVA_AUTOLIQUIDEE, (new Style)->setFontColor('8A4A06')->setFontBold()) : self::texte(''),
             self::texte($charge->origine->getLabel()),
             self::texte($charge->etat->getLabel(), self::styleDeLEtat($charge->etat)),
             self::texte($charge->validee_par?->getLabel() ?? ''),

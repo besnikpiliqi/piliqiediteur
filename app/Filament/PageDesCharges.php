@@ -415,6 +415,17 @@ final class PageDesCharges extends Component implements HasActions, HasForms, Ha
         return new HtmlString('<span class="piliqi-charges__etat" data-etat-de-la-charge="'.e($etat->value).'"><span class="piliqi-charges__case piliqi-charges__case--'.e($etat->value).'" aria-hidden="true">'.e($etat->symbole()).'</span>'.e($etat->getLabel()).'</span>');
     }
 
+    /**
+     * « TVA autoliquidée », en orange, sous la TVA d'une charge dont le
+     * fournisseur est établi hors de France : dans la fenêtre de saisie, sous
+     * le champ TVA de chaque ligne, et dans la liste (décision de l'éditeur
+     * du 20/11/2026). Le libellé « TTC » reste « TTC ».
+     */
+    public static function mentionAutoliquidee(): HtmlString
+    {
+        return new HtmlString('<span class="piliqi-charges__autoliquidee" data-tva-autoliquidee>'.e(TextesDesCharges::TVA_AUTOLIQUIDEE).'</span>');
+    }
+
     public static function enEuros(int $centimes): string
     {
         return app(CalculateurLigne::class)->enEuros($centimes);
@@ -431,7 +442,8 @@ final class PageDesCharges extends Component implements HasActions, HasForms, Ha
                 TextColumn::make('fournisseur')->label('Fournisseur')->placeholder('—'),
                 TextColumn::make('numero_piece')->label('N° de la pièce')->placeholder('—'),
                 TextColumn::make('total_ht')->label('HT')->alignEnd()->state(fn (Charge $record): string => self::enEuros($record->total_ht)),
-                TextColumn::make('total_tva')->label('TVA')->alignEnd()->state(fn (Charge $record): string => self::enEuros($record->total_tva)),
+                TextColumn::make('total_tva')->label('TVA')->alignEnd()->state(fn (Charge $record): string => self::enEuros($record->total_tva))
+                    ->description(fn (Charge $record): ?HtmlString => $record->fournisseur_hors_france ? self::mentionAutoliquidee() : null),
                 TextColumn::make('total_ttc')->label('TTC')->alignEnd()->state(fn (Charge $record): string => self::enEuros($record->total_ttc)),
                 TextColumn::make('total_tva_deductible')->label('TVA déductible')->alignEnd()->state(fn (Charge $record): string => self::enEuros($record->total_tva_deductible))
                     ->description(fn (Charge $record): ?string => $record->tva_a_verifier ? 'TVA à vérifier' : null),
@@ -850,6 +862,7 @@ final class PageDesCharges extends Component implements HasActions, HasForms, Ha
                     TextInput::make('ht')->label('HT')->inputMode('decimal')->live(onBlur: true)
                         ->afterStateUpdated(fn (Get $get, Set $set) => self::calculerDepuisLeHt($get, $set)),
                     TextInput::make('tva')->label('TVA')->inputMode('decimal')->live(onBlur: true)
+                        ->helperText(fn (Get $get): ?HtmlString => (bool) $get('../../fournisseur_hors_france') ? self::mentionAutoliquidee() : null)
                         ->afterStateUpdated(function (Get $get, Set $set, mixed $old): void {
                             $ht = self::centimes($get('ht'));
                             $tva = self::centimes($get('tva'));

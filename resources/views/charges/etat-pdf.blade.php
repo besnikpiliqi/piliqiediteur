@@ -47,6 +47,7 @@
         .legende { color: #4b5160; font-size: 7px; }
         .legende span.entree { margin-right: 12px; }
         .gris { color: #5f6672; font-size: 7px; }
+        .autoliquidee { color: #8a4a06; font-size: 7px; font-weight: bold; }
         .saut { page-break-before: always; }
         .sous-titre { display: block; font-size: 8px; font-weight: normal; color: #4b5160; }
     </style>
@@ -144,7 +145,7 @@
                     <td>{{ $charge->fournisseur ?? '—' }}</td>
                     <td>{{ $charge->numero_piece ?? '—' }}</td>
                     <td class="n">{{ $sansChiffres ? '—' : $euros($charge->total_ht) }}</td>
-                    <td class="n">{{ $sansChiffres ? '—' : $euros($charge->total_tva) }}</td>
+                    <td class="n">{{ $sansChiffres ? '—' : $euros($charge->total_tva) }}@if ($charge->fournisseur_hors_france)<br><span class="autoliquidee">{{ Textes::TVA_AUTOLIQUIDEE }}</span>@endif</td>
                     <td class="n">{{ $sansChiffres ? '—' : $euros($charge->total_ttc) }}</td>
                     <td class="n">{{ $sansChiffres ? '—' : $euros($charge->total_tva_deductible) }}@if ($charge->tva_a_verifier)<br><span class="gris">TVA à vérifier</span>@endif</td>
                     <td><span class="pc pc-{{ $charge->etat->value }}">{{ $charge->etat->symbole() }}</span> {{ $charge->etat->getLabel() }}</td>

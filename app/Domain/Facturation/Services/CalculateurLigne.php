@@ -801,11 +801,33 @@ class CalculateurLigne
     }
 
     /**
-     * Le prix de vente TTC d'un prix HT exact -- un coût d'achat au
-     * dix-millième plus un bénéfice (voir BaremePrixDeVente) : HT x (1 +
-     * TVA), arrondi une seule fois, au multiple de $pasCentimes le plus
-     * proche (au centime, ou à la dizaine d'euros pour un prix en X9).
-     * C'est le seul prix arrondi, lors de l'enregistrement du produit.
+     * Le prix de vente TTC exact d'un prix HT : HT x (1 + TVA), jamais
+     * arrondi, en cent-millionièmes d'euro (10^-8 €) -- un coût d'achat au
+     * dix-millième plus un bénéfice (voir BaremePrixDeVente) ; c'est sur ce
+     * prix exact que la formule d'arrondi du magasin juge le milieu (voir
+     * ArrondiDuPrixDeVente).
+     *
+     * @param  int  $prixHt  en dix-millièmes d'euro
+     * @param  int  $tauxTva  en centièmes de point
+     * @return int en cent-millionièmes d'euro
+     *
+     * @throws InvalidArgumentException
+     */
+    public function prixTtcExact(int $prixHt, int $tauxTva): int
+    {
+        $taux = $this->taux(['taux_tva' => $tauxTva], 'taux_tva');
+
+        // Dix-millièmes d'euro x (100 % + taux) en centièmes de point :
+        // 10^-8 €, soit 10^6 par centime.
+        return $this->multiplier($this->entier(['prix_ht' => $prixHt], 'prix_ht'), 10000 + $taux);
+    }
+
+    /**
+     * Le prix de vente TTC d'un prix HT exact (voir prixTtcExact()), arrondi
+     * une seule fois au multiple de $pasCentimes le plus proche : au
+     * centime, ou au pas de la formule d'arrondi du magasin (voir
+     * ArrondiDuPrixDeVente). C'est le seul prix arrondi, lors de
+     * l'enregistrement du produit.
      *
      * @param  int  $prixHt  en dix-millièmes d'euro
      * @param  int  $tauxTva  en centièmes de point
@@ -815,13 +837,7 @@ class CalculateurLigne
      */
     public function prixTtcArrondi(int $prixHt, int $tauxTva, int $pasCentimes = 1): int
     {
-        $taux = $this->taux(['taux_tva' => $tauxTva], 'taux_tva');
-
-        // Dix-millièmes d'euro x (100 % + taux) en centièmes de point :
-        // 10^-8 €, soit 10^6 par centime.
-        $prixExact = $this->multiplier($this->entier(['prix_ht' => $prixHt], 'prix_ht'), 10000 + $taux);
-
-        return $this->multiplier($this->diviserArrondi($prixExact, $this->multiplier(1_000_000, $pasCentimes)), $pasCentimes);
+        return $this->multiplier($this->diviserArrondi($this->prixTtcExact($prixHt, $tauxTva), $this->multiplier(1_000_000, $pasCentimes)), $pasCentimes);
     }
 
     /**

@@ -220,11 +220,27 @@ return [
             'tests/Browser/Parcours/BaremeAuCentimeTest.php › le propriétaire voit refusé un bénéfice du barème au millième, jamais arrondi, puis l’enregistre au centime',
             'tests/Browser/Parcours/BaremeAuCentimeTest.php › le responsable voit refusé un bénéfice du barème au millième, jamais arrondi, puis l’enregistre au centime',
             'tests/Browser/Parcours/BaremeAuCentimeTest.php › l’administrateur voit refusé un bénéfice du barème au millième, jamais arrondi, puis l’enregistre au centime',
+            'tests/Browser/Parcours/ArrondiDuPrixDeVenteTest.php › le propriétaire coche l’arrondi du prix de vente, choisit l’euro le plus proche, l’essaie et l’enregistre',
+            'tests/Browser/Parcours/ArrondiDuPrixDeVenteTest.php › le responsable coche l’arrondi du prix de vente, choisit l’euro le plus proche, l’essaie et l’enregistre',
+            'tests/Browser/Parcours/ArrondiDuPrixDeVenteTest.php › l’administrateur coche l’arrondi du prix de vente, choisit l’euro le plus proche, l’essaie et l’enregistre',
+        ]],
+        'champ:arrondi' => ['lot' => 'NAV-3', 'tests' => [
+            'tests/Browser/Parcours/ArrondiDuPrixDeVenteTest.php › le propriétaire coche l’arrondi du prix de vente, choisit l’euro le plus proche, l’essaie et l’enregistre',
+            'tests/Browser/Parcours/ArrondiDuPrixDeVenteTest.php › le responsable coche l’arrondi du prix de vente, choisit l’euro le plus proche, l’essaie et l’enregistre',
+            'tests/Browser/Parcours/ArrondiDuPrixDeVenteTest.php › l’administrateur coche l’arrondi du prix de vente, choisit l’euro le plus proche, l’essaie et l’enregistre',
+        ]],
+        'champ:formule' => ['lot' => 'NAV-3', 'tests' => [
+            'tests/Browser/Parcours/ArrondiDuPrixDeVenteTest.php › le propriétaire coche l’arrondi du prix de vente, choisit l’euro le plus proche, l’essaie et l’enregistre',
+            'tests/Browser/Parcours/ArrondiDuPrixDeVenteTest.php › le responsable coche l’arrondi du prix de vente, choisit l’euro le plus proche, l’essaie et l’enregistre',
+            'tests/Browser/Parcours/ArrondiDuPrixDeVenteTest.php › l’administrateur coche l’arrondi du prix de vente, choisit l’euro le plus proche, l’essaie et l’enregistre',
         ]],
         'champ:essai_prix_achat_ht' => ['lot' => 'NAV-3', 'tests' => [
             'tests/Browser/Parcours/BaremeAuCentimeTest.php › le propriétaire voit refusé un bénéfice du barème au millième, jamais arrondi, puis l’enregistre au centime',
             'tests/Browser/Parcours/BaremeAuCentimeTest.php › le responsable voit refusé un bénéfice du barème au millième, jamais arrondi, puis l’enregistre au centime',
             'tests/Browser/Parcours/BaremeAuCentimeTest.php › l’administrateur voit refusé un bénéfice du barème au millième, jamais arrondi, puis l’enregistre au centime',
+            'tests/Browser/Parcours/ArrondiDuPrixDeVenteTest.php › le propriétaire coche l’arrondi du prix de vente, choisit l’euro le plus proche, l’essaie et l’enregistre',
+            'tests/Browser/Parcours/ArrondiDuPrixDeVenteTest.php › le responsable coche l’arrondi du prix de vente, choisit l’euro le plus proche, l’essaie et l’enregistre',
+            'tests/Browser/Parcours/ArrondiDuPrixDeVenteTest.php › l’administrateur coche l’arrondi du prix de vente, choisit l’euro le plus proche, l’essaie et l’enregistre',
         ]],
         'champ:essai_taux_tva' => ['lot' => 'NAV-3', 'tests' => []],
         'page' => ['lot' => 'NAV-3', 'tests' => [
@@ -235,6 +251,9 @@ return [
             'tests/Browser/Parcours/BaremeAuCentimeTest.php › le propriétaire voit refusé un bénéfice du barème au millième, jamais arrondi, puis l’enregistre au centime',
             'tests/Browser/Parcours/BaremeAuCentimeTest.php › le responsable voit refusé un bénéfice du barème au millième, jamais arrondi, puis l’enregistre au centime',
             'tests/Browser/Parcours/BaremeAuCentimeTest.php › l’administrateur voit refusé un bénéfice du barème au millième, jamais arrondi, puis l’enregistre au centime',
+            'tests/Browser/Parcours/ArrondiDuPrixDeVenteTest.php › le propriétaire coche l’arrondi du prix de vente, choisit l’euro le plus proche, l’essaie et l’enregistre',
+            'tests/Browser/Parcours/ArrondiDuPrixDeVenteTest.php › le responsable coche l’arrondi du prix de vente, choisit l’euro le plus proche, l’essaie et l’enregistre',
+            'tests/Browser/Parcours/ArrondiDuPrixDeVenteTest.php › l’administrateur coche l’arrondi du prix de vente, choisit l’euro le plus proche, l’essaie et l’enregistre',
         ]],
         'repeteur:paliers' => ['lot' => 'NAV-3', 'tests' => [
             'tests/Browser/Parcours/BaremeAuCentimeTest.php › le propriétaire voit refusé un bénéfice du barème au millième, jamais arrondi, puis l’enregistre au centime',

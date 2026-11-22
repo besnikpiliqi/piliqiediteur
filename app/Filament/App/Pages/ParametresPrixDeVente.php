@@ -3,7 +3,10 @@
 namespace App\Filament\App\Pages;
 
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Catalogue\Enums\ArrondiDuPrixDeVente;
 use App\Domain\Catalogue\Services\BaremePrixDeVente;
+use App\Domain\Catalogue\Services\EssaiDuBareme;
+use App\Domain\Catalogue\Services\ExemplesDArrondi;
 use App\Domain\Facturation\Rules\MontantAuCentime;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\SaisieDecimale;
@@ -13,11 +16,12 @@ use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\App\Resources\ProduitResource;
 use App\Filament\Concerns\EnregistreLesParametresDuMagasin;
-use Filament\Forms\Components\Placeholder;
+use Filament\Forms\Components\Radio;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Section;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
+use Filament\Forms\Components\View;
 use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Forms\Contracts\HasForms;
 use Filament\Forms\Form;
@@ -30,8 +34,10 @@ use InvalidArgumentException;
 /**
  * Le barème avec lequel le magasin fixe ses prix de vente (voir
  * BaremePrixDeVente) : un bénéfice selon le prix d'achat de l'article,
- * appliqué aux produits de ses factures d'achat. Seul ce que la personne
- * y a corrigé s'enregistre (voir EnregistreLesParametresDuMagasin).
+ * appliqué aux produits de ses factures d'achat, puis, au choix, une
+ * formule d'arrondi du prix de vente (voir ArrondiDuPrixDeVente). Seul ce
+ * que la personne y a corrigé s'enregistre (voir
+ * EnregistreLesParametresDuMagasin).
  *
  * @property Form $form le formulaire de la page (voir InteractsWithForms)
  */
@@ -71,9 +77,29 @@ class ParametresPrixDeVente extends Page implements HasForms
     {
         $this->form->fill([
             'actif' => $magasin->prix_vente_automatique,
-            ...ValeurRequise::de($magasin->bareme_prix_vente, 'le barème des prix de vente du magasin')->versTableau(),
+            ...self::etatDuBareme(ValeurRequise::de($magasin->bareme_prix_vente, 'le barème des prix de vente du magasin')),
             'essai_taux_tva' => self::tauxDansLeChamp($magasin->tauxTvaParDefaut()),
         ]);
+    }
+
+    /**
+     * Le barème tel que le formulaire le tient : ses paliers, son bénéfice
+     * au-delà, la case « Arrondir le prix de vente » et la formule choisie
+     * derrière elle (« Un prix en 9 » d'office tant que la case est
+     * décochée, le magasin n'en gardant aucune sans arrondi).
+     *
+     * @return array{paliers: list<array{jusqu_a: string, benefice: string}>, benefice_au_dela: string|null, arrondi: bool, formule: string}
+     */
+    private static function etatDuBareme(BaremePrixDeVente $bareme): array
+    {
+        $tableau = $bareme->versTableau();
+
+        return [
+            'paliers' => $tableau['paliers'],
+            'benefice_au_dela' => $tableau['benefice_au_dela'],
+            'arrondi' => $bareme->arrondi !== ArrondiDuPrixDeVente::Aucun,
+            'formule' => ($bareme->arrondi === ArrondiDuPrixDeVente::Aucun ? ArrondiDuPrixDeVente::UnPrixEn9 : $bareme->arrondi)->value,
+        ];
     }
 
     /**
@@ -101,7 +127,7 @@ class ParametresPrixDeVente extends Page implements HasForms
                         return;
                     }
 
-                    foreach (ValeurRequise::de($this->parametresTelsQueLus()->bareme_prix_vente, 'le barème des prix de vente du magasin')->versTableau() as $champ => $valeur) {
+                    foreach (self::etatDuBareme(ValeurRequise::de($this->parametresTelsQueLus()->bareme_prix_vente, 'le barème des prix de vente du magasin')) as $champ => $valeur) {
                         $set($champ, $valeur);
                     }
 
@@ -151,10 +177,24 @@ class ParametresPrixDeVente extends Page implements HasForms
                         ->required(fn (Get $get): bool => $get('actif') && blank($get('paliers')))
                         ->validationMessages(['required' => 'Sans palier, indiquez au moins le bénéfice à appliquer.'])
                         ->disabled(fn (Get $get): bool => ! $get('actif')),
-                    Toggle::make('arrondi_x9')
-                        ->label('Arrondir le prix au X9 le plus proche')
-                        ->helperText('77,60 € devient 79 €, 74,00 € devient 69 €, 134,40 € devient 129 €. Un prix sous 5 € reste tel quel.')
+                    Toggle::make('arrondi')
+                        ->label('Arrondir le prix de vente')
+                        ->helperText('Cochez pour ramener le prix de vente calculé à un prix rond, puis choisissez la formule.')
+                        ->live()
                         ->disabled(fn (Get $get): bool => ! $get('actif')),
+                    // Un champ masqué n'est ni validé ni enregistré, et son
+                    // état reste en mémoire : décocher puis recocher retrouve
+                    // la formule choisie.
+                    Radio::make('formule')
+                        ->label('Formule d\'arrondi')
+                        ->options(ExemplesDArrondi::libelles())
+                        ->descriptions(ExemplesDArrondi::phrases())
+                        ->in(array_map(fn (ArrondiDuPrixDeVente $formule): string => $formule->value, ArrondiDuPrixDeVente::formules()))
+                        ->required(fn (Get $get): bool => (bool) $get('arrondi'))
+                        ->live()
+                        ->visible(fn (Get $get): bool => (bool) $get('arrondi'))
+                        ->disabled(fn (Get $get): bool => ! $get('actif'))
+                        ->extraAttributes(['class' => 'piliqi-arrondi__formules']),
                 ]),
             Section::make('Essayer le barème')
                 ->schema([
@@ -170,52 +210,38 @@ class ParametresPrixDeVente extends Page implements HasForms
                         ->suffix('%')
                         ->live(debounce: 400)
                         ->dehydrated(false),
-                    Placeholder::make('essai_prix_vente')
-                        ->label('Prix de vente TTC')
-                        ->content(fn (Get $get): string => self::essayer($get)),
-                ])->columns(3),
+                    View::make('filament.app.pages.essai-du-bareme')
+                        ->viewData(fn (Get $get): array => self::lectureDeLEssai($get))
+                        ->columnSpanFull(),
+                ])->columns(2),
         ])->statePath('data');
     }
 
     /**
      * Le barème tel qu'il est en train d'être saisi, appliqué au prix
      * d'achat d'essai -- comme le fera une facture d'achat, qui ne propose
-     * rien tant que la TVA est vide.
+     * rien tant que la TVA est vide : ce que montre la vue de l'essai (voir
+     * EssaiDuBareme), avec la formule dont elle écrit le tableau d'exemples,
+     * ou null case décochée.
+     *
+     * @return array{formule: ArrondiDuPrixDeVente|null, lecture: array{avant: string, apres: string, lignes: list<array{texte: string, grise: bool}>}}
      */
-    private static function essayer(Get $get): string
+    private static function lectureDeLEssai(Get $get): array
     {
         $tauxTva = ProduitResource::tauxDeTvaSaisi($get('essai_taux_tva'));
 
-        if (blank($get('essai_prix_achat_ht')) || $tauxTva === null) {
-            return '—';
-        }
-
         try {
-            $calculateur = app(CalculateurLigne::class);
+            $formule = (bool) $get('arrondi') ? ArrondiDuPrixDeVente::choisie(true, $get('formule')) : null;
             // Le prix d'achat d'essai se lit comme un coût, au dix-millième
             // d'euro (voir CalculateurLigne::coutUnitaireNet()).
-            $prixAchatHt = SaisieDecimale::enDixMilliemes(ValeurSimple::simple($get('essai_prix_achat_ht')));
-            $prix = self::baremeSaisi($get)->prixDeVente($prixAchatHt, $tauxTva);
-
-            if ($prix === null) {
-                return 'Aucun bénéfice prévu à ce prix d\'achat : le prix de vente se saisit à la main.';
-            }
-
-            $beneficeReel = $calculateur->beneficeUnitaire($calculateur->prixUnitaireHtAffiche($prix['prix_vente_ttc'], $tauxTva), $prixAchatHt);
-            // Les prix s'écrivent comme tout prix unitaire montré en lecture
-            // (voir CalculateurLigne::prixUnitaireAffiche()), les bénéfices
-            // comme des montants.
-            [$prixDeVente, $prixCible] = array_map(
-                fn (int $prixTtc): string => $calculateur->prixUnitaireAffiche($calculateur->enMillioniemes($calculateur->enDecimal($prixTtc))),
-                [$prix['prix_vente_ttc'], $prix['prix_cible_ttc']],
-            );
+            $lecture = blank($get('essai_prix_achat_ht')) || $tauxTva === null
+                ? EssaiDuBareme::illisible()
+                : EssaiDuBareme::lire(self::baremeSaisi($get), SaisieDecimale::enDixMilliemes(ValeurSimple::simple($get('essai_prix_achat_ht'))), $tauxTva);
         } catch (InvalidArgumentException) {
-            return '—';
+            return ['formule' => null, 'lecture' => EssaiDuBareme::illisible()];
         }
 
-        return $prixDeVente.' TTC'
-            .($prixDeVente !== $prixCible ? ' (prix cible '.$prixCible.')' : '')
-            .' · bénéfice réel '.$calculateur->enEuros($beneficeReel).' HT (visé '.$calculateur->enEuros($prix['benefice']).')';
+        return ['formule' => $formule, 'lecture' => $lecture];
     }
 
     private static function baremeSaisi(Get $get): BaremePrixDeVente
@@ -226,7 +252,7 @@ class ParametresPrixDeVente extends Page implements HasForms
                 fn (array $palier): bool => filled($palier['jusqu_a'] ?? null) && filled($palier['benefice'] ?? null),
             )),
             'benefice_au_dela' => $get('benefice_au_dela'),
-            'arrondi_x9' => (bool) $get('arrondi_x9'),
+            'arrondi' => ArrondiDuPrixDeVente::choisie((bool) $get('arrondi'), $get('formule'))->value,
         ]);
     }
 
@@ -257,7 +283,7 @@ class ParametresPrixDeVente extends Page implements HasForms
             $bareme = BaremePrixDeVente::depuisTableau([
                 'paliers' => array_values(ValeursLues::tableau($data['paliers'] ?? [])),
                 'benefice_au_dela' => $data['benefice_au_dela'],
-                'arrondi_x9' => $data['arrondi_x9'],
+                'arrondi' => ArrondiDuPrixDeVente::choisie($data['arrondi'] === true, $data['formule'] ?? null)->value,
             ]);
         } catch (InvalidArgumentException $exception) {
             Notification::make()->title($exception->getMessage())->danger()->send();

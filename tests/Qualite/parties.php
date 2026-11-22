@@ -30,7 +30,10 @@ return [
         'app/Domain/Achats/Services/MontantsDuFournisseur.php',
         'app/Domain/Achats/Services/TvaDuFournisseur.php',
         'app/Domain/Stock/Services/ConstructeurLigneInventaire.php',
+        'app/Domain/Catalogue/Enums/ArrondiDuPrixDeVente.php',
         'app/Domain/Catalogue/Services/BaremePrixDeVente.php',
+        'app/Domain/Catalogue/Services/EssaiDuBareme.php',
+        'app/Domain/Catalogue/Services/ExemplesDArrondi.php',
         'app/Domain/Catalogue/Services/MargeDuCatalogue.php',
     ],
     'caisse_securisee' => [

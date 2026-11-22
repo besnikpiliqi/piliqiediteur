@@ -5,7 +5,9 @@ namespace Database\Seeders\Semis;
 use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Calendrier\Calendrier;
+use App\Domain\Catalogue\Enums\ArrondiDuPrixDeVente;
 use App\Domain\Catalogue\Models\Service;
+use App\Domain\Catalogue\Services\BaremePrixDeVente;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\Fournisseur;
@@ -369,11 +371,13 @@ final class ActiviteDesMagasins
             $reassorts[] = [$gestes['halles'], 'Camille Laurent', $grossiste, 'GL', ['BOUGIE-FIGUE' => [20, 600], 'TASSE-GRES' => [24, 420], 'THE-SENCHA' => [24, 310], 'CARNET-A5' => [44, 140]]];
             $reassorts[] = [$gestes['republique'], 'Hugo Lefebvre', $atelier, 'ALL', ['COUSSIN-LIN' => [28, 850], 'BOUGIE-FIGUE' => [24, 600]]];
             $reassorts[] = [$gestes['martinique'], 'Joëlle Marie-Sainte', $artisans, 'ADC', ['BOUGIE-COCO' => [16, 700], 'THE-CITRONNELLE' => [40, 280]]];
+            $this->semerLesPrixDuBareme($gestes, $grossiste, $atelier, $artisans);
         }
 
         if ($this->semis->seme('client')) {
             $cooperative = $gestes['epicerie']->fiche($this->semis->compte('Nicolas Lemoine'), Fournisseur::class, ['nom' => 'Coopérative du Sud', 'adresse' => '4 chemin des Oliviers', 'code_postal' => '13100', 'ville' => 'Aix-en-Provence', 'pays' => 'FR']);
             $reassorts[] = [$gestes['epicerie'], 'Nicolas Lemoine', $cooperative, 'CDS', ['MIEL-LAVANDE' => [24, 410], 'HUILE-OLIVE' => [48, 620]]];
+            $this->semerLePrixDeLEpicerie($gestes, $cooperative);
         }
 
         // Le rang de chaque vendeur fixe l'heure de ses ventes (de 9 h à
@@ -442,6 +446,112 @@ final class ActiviteDesMagasins
             $documents->auJour($jour);
             $demonstrations?->auJour($jour);
         }
+    }
+
+    /**
+     * Le barème de prix de vente que chaque magasin du semis règle (voir
+     * ArrondiDuPrixDeVente) : des bénéfices bas pour que chaque limite d'une
+     * formule soit atteinte par un prix d'achat vraisemblable (un bénéfice
+     * de 0,05 € sous 0,30 €, de 0,40 € sous 1 €, de 4 € sous 10 €, de 8 €
+     * sous 50 €, puis de 20 €), en centimes.
+     */
+    private function baremeDuSemis(ArrondiDuPrixDeVente $formule): BaremePrixDeVente
+    {
+        return new BaremePrixDeVente([
+            ['jusqu_a' => 30, 'benefice' => 5],
+            ['jusqu_a' => 100, 'benefice' => 40],
+            ['jusqu_a' => 1000, 'benefice' => 400],
+            ['jusqu_a' => 5000, 'benefice' => 800],
+        ], 2000, $formule);
+    }
+
+    /**
+     * Ce responsable active le calcul du prix de vente de son magasin avec
+     * le barème du semis et cette formule d'arrondi, par la vraie action
+     * des paramètres (au journal d'audit, au nom de cette personne).
+     */
+    private function activerLeBareme(GestesDuMagasin $gestes, string $responsable, ArrondiDuPrixDeVente $formule): void
+    {
+        $gestes->dans(fn (): array => app(ModifierLesParametresDuMagasinAction::class)->handle(
+            $this->semis->compte($responsable),
+            PermissionRegistry::PRIX_VENTE_REGLER,
+            FicheLue::de($gestes->magasin->refresh())->valeurs(),
+            ['prix_vente_automatique' => true, 'bareme_prix_vente' => $this->baremeDuSemis($formule)],
+        ));
+        $gestes->magasin->refresh();
+    }
+
+    /**
+     * Une facture d'achat validée dont chaque produit naît sans prix de
+     * vente : le barème du magasin le fixe (voir
+     * ConstructeurLigneAchat::prixDuBareme()).
+     *
+     * @param  list<array{string, string, string}>  $articles  le nom, la référence et le prix d'achat HT de chaque produit
+     */
+    private function acheterAuBareme(GestesDuMagasin $gestes, string $responsable, Fournisseur $fournisseur, string $numero, string $taux, array $articles): void
+    {
+        $gestes->acheter($this->semis->compte($responsable), $fournisseur, array_map(
+            fn (array $article): array => ['produit' => ['nom' => $article[0], 'reference' => $article[1], 'taux_tva' => $taux, 'suivi_stock' => true, 'seuil_alerte' => 1], 'quantite' => 12, 'prix_unitaire_ht' => $article[2]],
+            $articles,
+        ), ['date_facture' => $this->horloge->jour(16), 'numero_fournisseur' => $numero]);
+    }
+
+    /**
+     * Les trois formules d'arrondi du prix de vente, une par magasin de la
+     * société de commerce, et pour chacune des produits nés d'une facture
+     * d'achat qui touchent chaque limite : un prix arrondi vers le haut,
+     * vers le bas, un prix pile au milieu (qui monte), un prix exact sous le
+     * milieu alors que son prix au centime l'atteint, et un prix que la
+     * formule laisse tel quel (règle 6 de CLAUDE.md). Les autres magasins
+     * gardent le calcul désactivé.
+     *
+     * @param  array<string, GestesDuMagasin>  $gestes
+     */
+    private function semerLesPrixDuBareme(array $gestes, Fournisseur $grossiste, Fournisseur $atelier, Fournisseur $artisans): void
+    {
+        $this->activerLeBareme($gestes['halles'], 'Camille Laurent', ArrondiDuPrixDeVente::UnPrixEn9);
+        $this->acheterAuBareme($gestes['halles'], 'Camille Laurent', $grossiste, 'GL-2026-131', '20', [
+            ['Savon d\'Alep 200 g', 'SAVON-ALEP', '1.85'],
+            ['Bougie chauffe-plat x6', 'CHAUFFE-PLAT', '0.20'],
+            ['Planche à découper en hêtre', 'PLANCHE-HETRE', '6.40'],
+            ['Coffret dégustation', 'COFFRET-DEGUST', '29.50'],
+            ['Carafe en verre soufflé', 'CARAFE-SOUFFLEE', '37.83'],
+        ]);
+
+        $this->activerLeBareme($gestes['republique'], 'Hugo Lefebvre', ArrondiDuPrixDeVente::MultipleDeCinq);
+        $this->acheterAuBareme($gestes['republique'], 'Hugo Lefebvre', $atelier, 'ALL-2026-064', '20', [
+            ['Cahier à spirales A5', 'CAHIER-SPIRALES', '2.25'],
+            ['Cahier de brouillon A4', 'CAHIER-BROUILLON', '2.246'],
+            ['Gomme blanche', 'GOMME-BLANCHE', '0.20'],
+            ['Lampe de bureau', 'LAMPE-BUREAU', '14.00'],
+            ['Porte-documents en cuir', 'PORTE-DOCS-CUIR', '62.00'],
+        ]);
+
+        $this->activerLeBareme($gestes['martinique'], 'Joëlle Marie-Sainte', ArrondiDuPrixDeVente::EuroLePlusProche);
+        $this->acheterAuBareme($gestes['martinique'], 'Joëlle Marie-Sainte', $artisans, 'ADC-2026-027', '8.5', [
+            ['Fontaine d\'intérieur', 'FONTAINE-INT', '80.00'],
+            ['Savon de Marseille', 'SAVON-MARSEILLE', '1.065'],
+            ['Sachet de vanille', 'VANILLE-SACHET', '0.20'],
+            ['Bougie de massage', 'BOUGIE-MASSAGE', '6.40'],
+            ['Paréo en coton', 'PAREO-COTON', '5.10'],
+        ]);
+    }
+
+    /**
+     * Le calcul du prix de vente sans arrondi : l'épicerie du client du
+     * cabinet l'active avec le barème du semis, et ses produits ont le prix
+     * au centime que donne le barème (règle 6 de CLAUDE.md).
+     *
+     * @param  array<string, GestesDuMagasin>  $gestes
+     */
+    private function semerLePrixDeLEpicerie(array $gestes, Fournisseur $cooperative): void
+    {
+        $this->activerLeBareme($gestes['epicerie'], 'Nicolas Lemoine', ArrondiDuPrixDeVente::Aucun);
+        $this->acheterAuBareme($gestes['epicerie'], 'Nicolas Lemoine', $cooperative, 'CDS-2026-045', '5.5', [
+            ['Tisane du soir 20 sachets', 'TISANE-SOIR', '2.35'],
+            ['Sachet de sel de Guérande', 'SEL-GUERANDE', '0.20'],
+            ['Confiture de figues 250 g', 'CONFITURE-FIGUE', '3.10'],
+        ]);
     }
 
     /**

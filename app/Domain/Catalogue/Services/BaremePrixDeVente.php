@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\Catalogue\Services;
 
+use App\Domain\Catalogue\Enums\ArrondiDuPrixDeVente;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\SaisieDecimale;
 use App\Domain\Tenancy\Support\ValeurSimple;
@@ -18,7 +19,8 @@ use UnexpectedValueException;
  * Le barème avec lequel un magasin fixe ses prix de vente (Paramètres >
  * Prix de vente) : un bénéfice en euros HT selon le prix d'achat HT de
  * l'article, ajouté à ce prix d'achat avant la TVA, puis, si le magasin le
- * veut, un arrondi commercial au X9. Appliqué au prix de vente des
+ * veut, un arrondi commercial selon la formule qu'il choisit (voir
+ * ArrondiDuPrixDeVente). Appliqué au prix de vente des
  * produits d'une facture d'achat (voir AjouteDesLignesDAchat et
  * ConstructeurLigneAchat).
  *
@@ -66,7 +68,7 @@ final readonly class BaremePrixDeVente implements Castable
     public function __construct(
         array $paliers,
         mixed $beneficeAuDela,
-        public bool $arrondiX9,
+        public ArrondiDuPrixDeVente $arrondi,
     ) {
         $this->paliers = array_map(static fn (array $palier): array => ['jusqu_a' => self::centimes($palier['jusqu_a']), 'benefice' => self::centimes($palier['benefice'])], $paliers);
         $this->beneficeAuDela = $beneficeAuDela === null ? null : self::centimes($beneficeAuDela);
@@ -115,7 +117,7 @@ final readonly class BaremePrixDeVente implements Castable
             ['jusqu_a' => 3000, 'benefice' => 4000],
             ['jusqu_a' => 7000, 'benefice' => 4500],
             ['jusqu_a' => 9900, 'benefice' => 5000],
-        ], 6000, false);
+        ], 6000, ArrondiDuPrixDeVente::Aucun);
     }
 
     /**
@@ -129,7 +131,7 @@ final readonly class BaremePrixDeVente implements Castable
      * @param  array<array-key, mixed>  $bareme
      *
      * @throws UnexpectedValueException un champ absent, un palier qui n'est pas un tableau, ou une valeur qui n'est pas une valeur simple
-     * @throws InvalidArgumentException un montant qui n'est pas un nombre, ou plus précis que le centime
+     * @throws InvalidArgumentException un montant qui n'est pas un nombre, ou plus précis que le centime, ou une formule d'arrondi inconnue
      */
     public static function depuisTableau(array $bareme): self
     {
@@ -144,7 +146,7 @@ final readonly class BaremePrixDeVente implements Castable
         usort($paliers, fn (array $a, array $b): int => $a['jusqu_a'] <=> $b['jusqu_a']);
         $beneficeAuDela = ValeurSimple::simple(ValeursLues::champ($bareme, 'benefice_au_dela'));
 
-        return new self($paliers, filled($beneficeAuDela) ? SaisieDecimale::montantAuCentime($beneficeAuDela) : null, (bool) ValeurSimple::simple(ValeursLues::champ($bareme, 'arrondi_x9')));
+        return new self($paliers, filled($beneficeAuDela) ? SaisieDecimale::montantAuCentime($beneficeAuDela) : null, ArrondiDuPrixDeVente::tryFrom(ValeursLues::texteDe($bareme, 'arrondi')) ?? throw new InvalidArgumentException(ArrondiDuPrixDeVente::REFUS_FORMULE_INCONNUE));
     }
 
     /**
@@ -153,7 +155,7 @@ final readonly class BaremePrixDeVente implements Castable
      * inutile (« 2 », « 10 », « 2.5 », voir
      * CalculateurLigne::centiemesDansUnChamp()).
      *
-     * @return array{paliers: list<array{jusqu_a: string, benefice: string}>, benefice_au_dela: string|null, arrondi_x9: bool}
+     * @return array{paliers: list<array{jusqu_a: string, benefice: string}>, benefice_au_dela: string|null, arrondi: string}
      */
     public function versTableau(): array
     {
@@ -163,7 +165,7 @@ final readonly class BaremePrixDeVente implements Castable
                 'benefice' => CalculateurLigne::centiemesDansUnChamp($palier['benefice']),
             ], $this->paliers),
             'benefice_au_dela' => $this->beneficeAuDela === null ? null : CalculateurLigne::centiemesDansUnChamp($this->beneficeAuDela),
-            'arrondi_x9' => $this->arrondiX9,
+            'arrondi' => $this->arrondi->value,
         ];
     }
 
@@ -176,29 +178,55 @@ final readonly class BaremePrixDeVente implements Castable
      */
     public function beneficePour(int $prixAchatHt): ?int
     {
+        return $this->palierDe($prixAchatHt)['benefice'] ?? null;
+    }
+
+    /**
+     * Le « jusqu_a » (en centimes) du palier qui s'applique à ce prix
+     * d'achat HT ; null au-delà du dernier palier (que le magasin y ait
+     * prévu un bénéfice ou non).
+     *
+     * @param  int  $prixAchatHt  en dix-millièmes d'euro
+     */
+    public function palierPour(int $prixAchatHt): ?int
+    {
+        return $this->palierDe($prixAchatHt)['jusqu_a'] ?? null;
+    }
+
+    /**
+     * Le palier qui s'applique à ce prix d'achat HT, ou le bénéfice
+     * au-delà du dernier palier (« jusqu_a » null) ; null quand le barème
+     * n'en prévoit aucun.
+     *
+     * @param  int  $prixAchatHt  en dix-millièmes d'euro
+     * @return array{jusqu_a: int|null, benefice: int}|null
+     */
+    private function palierDe(int $prixAchatHt): ?array
+    {
         foreach ($this->paliers as $palier) {
             if ($prixAchatHt < $palier['jusqu_a'] * 100) {
-                return $palier['benefice'];
+                return $palier;
             }
         }
 
-        return $this->beneficeAuDela;
+        return $this->beneficeAuDela === null ? null : ['jusqu_a' => null, 'benefice' => $this->beneficeAuDela];
     }
 
     /**
      * (prix d'achat HT + bénéfice) x (1 + TVA), depuis le prix d'achat
      * exact (au dix-millième, remise déduite) et arrondi une seule fois :
-     * au centime, le prix cible ; ou, si le magasin le veut, au prix
-     * finissant par 9 le plus proche du prix cible EXACT -- moins de la
-     * moitié de la dizaine, on descend, sinon on monte (77,60 € -> 79 € ;
-     * 74,00 € -> 69 € ; 54,996 € -> 49 €, là où 55,00 € arrondi donnerait
-     * 59 €). Sous 5 €, pas de X9 au-dessus de 0 : le prix cible reste tel
-     * quel. Null quand le barème ne prévoit aucun bénéfice pour ce prix
-     * d'achat.
+     * au centime, le prix cible ; ou, si le magasin le veut, selon sa
+     * formule, au multiple de son pas le plus proche du prix cible EXACT,
+     * un prix pile au milieu montant (54,996 € -> 49 € en prix en 9, là où
+     * 55,00 € arrondi donnerait 59 € ; 10,496 € -> 10 € à l'euro près, là où
+     * 10,50 € arrondi donnerait 11 €). Un prix que la formule ne peut pas
+     * arrondir (sous 5 € pour un prix en 9, un arrondi qui donnerait 0 €
+     * aux autres) reste le prix cible, ce que dit « laisse_tel_quel ».
+     * Null quand le barème ne prévoit aucun bénéfice pour ce prix d'achat.
      *
      * @param  int  $prixAchatHt  en dix-millièmes d'euro
      * @param  int  $tauxTva  en centièmes de point
-     * @return array{prix_vente_ttc: int, prix_cible_ttc: int, benefice: int}|null en centimes
+     * @return array{prix_vente_ttc: int, prix_cible_ttc: int, benefice: int, laisse_tel_quel: bool}|null en centimes ; « laisse_tel_quel » : la formule choisie n'arrondit pas ce prix
      *
      * @throws InvalidArgumentException
      */
@@ -211,13 +239,16 @@ final readonly class BaremePrixDeVente implements Castable
             return null;
         }
 
-        $prixCibleTtc = $calculateur->prixTtcArrondi($prixAchatHt + $benefice * 100, $tauxTva);
-        $dizaineLaPlusProche = $calculateur->prixTtcArrondi($prixAchatHt + $benefice * 100, $tauxTva, pasCentimes: 1000);
+        $prixHt = $prixAchatHt + $benefice * 100;
+        $prixCibleTtc = $calculateur->prixTtcArrondi($prixHt, $tauxTva);
+        $pas = $this->arrondi->pasEnCentimes();
+        $arrondi = $pas === null ? null : $this->arrondi->arrondir($calculateur->prixTtcArrondi($prixHt, $tauxTva, pasCentimes: $pas));
 
         return [
-            'prix_vente_ttc' => $this->arrondiX9 && $dizaineLaPlusProche >= 1000 ? $dizaineLaPlusProche - 100 : $prixCibleTtc,
+            'prix_vente_ttc' => $arrondi ?? $prixCibleTtc,
             'prix_cible_ttc' => $prixCibleTtc,
             'benefice' => $benefice,
+            'laisse_tel_quel' => $pas !== null && $arrondi === null,
         ];
     }
 

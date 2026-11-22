@@ -55,6 +55,7 @@ class BasesModelesTest extends DemonstrationTestCase
         ], $lecture['magasins'], 'Maison Ferrand compte six magasins (dans l\'ordre binaire de la base, où « É » vient après les lettres) : les trois premiers et trois magasins d\'achats.');
         $this->assertCasDeLEcartDesPrixDAchat($lecture);
         $this->assertSame(['2.1', '8.5'], $lecture['taux_de_fort_de_france'], 'Les articles de Fort-de-France sont aux taux de la Martinique.');
+        $this->assertSame(['FDF' => 'euro', 'HALLES' => 'x9', 'REPUB' => 'cinq'], $lecture['formules_du_bareme'], 'Chaque magasin de Maison Ferrand règle sa formule d\'arrondi du prix de vente.');
         $this->assertGreaterThan(0, $lecture['produits']);
         $this->assertGreaterThan(0, $lecture['factures_achat']);
         $this->assertSame(['Lina Martin', 'Paul Lefèvre'], $lecture['experts_comptables_actifs'], 'L\'expert-comptable déclaré par le SIREN du cabinet Martin, absent du modèle, a ses comptes actifs (Paul Lefèvre, qui a choisi son mot de passe, est au bandeau).');
@@ -92,6 +93,7 @@ class BasesModelesTest extends DemonstrationTestCase
         $this->assertSame(['CONSEIL VASSEUR'], $lecture['societes']);
         $this->assertSame([['Conseil Vasseur Paris', 'metropole']], $lecture['magasins']);
         $this->assertSame([], $lecture['achats_valides_par_magasin'], 'Une société de services n\'a aucun achat : elle n\'a pas la carte « Écart des prix d\'achat ».');
+        $this->assertSame([], $lecture['formules_du_bareme'], 'Une société de services n\'a aucun produit : elle n\'a pas de barème de prix de vente.');
         $this->assertStringContainsString('un magasin,', CarteDeLaDemonstration::phraseACreer(TypeDActivite::Services), 'La carte « À créer » décrit ce modèle : un seul magasin.');
         $this->assertSame(0, $lecture['produits']);
         $this->assertSame(0, $lecture['factures_achat']);
@@ -111,6 +113,7 @@ class BasesModelesTest extends DemonstrationTestCase
         $this->assertSame(['MARTIN EXPERTISE COMPTABLE'], $lecture['cabinets']);
         $this->assertSame(0, $lecture['magasins_du_cabinet'], 'Un cabinet n\'a pas de magasin.');
         $this->assertSame(['actif', 'actif'], $lecture['liens_cabinet'], 'Le cabinet est lié à ses deux clients.');
+        $this->assertSame(['EPICERIE' => 'aucun', 'FDF' => 'euro', 'HALLES' => 'x9', 'REPUB' => 'cinq'], $lecture['formules_du_bareme'], 'Les magasins de ses deux clients gardent leur barème : l\'Épicerie sans arrondi, Maison Ferrand ses trois formules.');
         $this->assertCasDeLEcartDesPrixDAchat($lecture);
         $this->assertSame(['acceptee', 'expiree', 'ouverte', 'refusee', 'retiree'], $lecture['invitations'], 'L\'invitation acceptée par l\'Épicerie Lemoine, et celles à des entreprises qui ne s\'inscrivent pas, dans chaque état qui ne demande pas une autre société.');
         $this->assertSame([], $lecture['experts_comptables_actifs']);
@@ -171,6 +174,7 @@ class BasesModelesTest extends DemonstrationTestCase
                 ->get()->mapWithKeys(fn (object $ligne): array => [(string) $ligne->nom => (int) $ligne->achats])->all(),
             'magasins_du_cabinet' => DB::table('magasins')->join('societes', 'societes.id', '=', 'magasins.societe_id')->where('societes.type_activite', TypeDActivite::Cabinet->value)->count(),
             'taux_de_fort_de_france' => DB::table('produits')->join('magasins', 'magasins.id', '=', 'produits.magasin_id')->where('magasins.nom', 'Maison Ferrand Fort-de-France')->distinct()->orderBy('taux_tva')->pluck('taux_tva')->map(fn (mixed $taux): string => rtrim(rtrim((string) $taux, '0'), '.'))->all(),
+            'formules_du_bareme' => DB::table('magasins')->where('prix_vente_automatique', true)->orderBy('code')->get(['code', DB::raw('bareme_prix_vente->>\'arrondi\' as formule')])->mapWithKeys(fn (object $magasin): array => [(string) $magasin->code => (string) $magasin->formule])->all(),
             'produits' => DB::table('produits')->count(),
             'factures_achat' => DB::table('factures_achat')->count(),
             'experts_comptables_actifs' => DB::table('users')->where('role_societe', 'expert_comptable')->where('statut', 'actif')->orderBy('name')->pluck('name')->all(),

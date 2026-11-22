@@ -1602,6 +1602,21 @@ return [
                 'tests/Feature/Filament/FactureAchatResourceTest.php::test_le_prix_de_vente_saisi_ne_change_jamais_le_prix_dachat',
             ],
         ],
+        'prix.arrondi-du-prix-de-vente' => [
+            'puce' => 'Prix et TVA des ventes',
+            'regle' => 'Le barème du magasin ramène son prix de vente TTC, si le magasin coche « Arrondir le prix de vente » (décochée au départ), à un prix en 9, à l\'euro le plus proche ou au multiple de 5 € le plus proche ; la formule se calcule sur le prix exact, jamais sur le prix déjà arrondi au centime, le milieu monte, un prix qui deviendrait 0 € (pour un prix en 9, un prix sous 5 €) reste tel quel ; le choix se lit et se règle dans Paramètres > Prix de vente, et chaque changement s\'inscrit au journal d\'audit.',
+            'tests' => [
+                'tests/Unit/ArrondiDuPrixDeVenteTest.php::test_chaque_exemple_de_l_editeur_dans_sa_formule',
+                'tests/Unit/ArrondiDuPrixDeVenteTest.php::test_le_milieu_monte',
+                'tests/Unit/ArrondiDuPrixDeVenteTest.php::test_un_prix_qui_deviendrait_zero_reste_tel_quel',
+                'tests/Unit/BaremePrixDeVenteTest.php::test_le_milieu_se_juge_sur_le_prix_exact_jamais_sur_le_prix_au_centime',
+                'tests/Unit/ArrondiDuPrixDeVenteAuHasardTest.php::test_chaque_formule_sur_300_prix_tires_au_hasard_contre_un_calcul_independant',
+                'tests/Feature/Filament/ParametresPrixDeVenteTest.php::test_le_choix_de_la_formule_ne_se_montre_que_la_case_cochee',
+                'tests/Feature/Filament/ParametresPrixDeVenteTest.php::test_changer_la_formule_s_inscrit_au_journal_d_audit',
+                'tests/Feature/Achats/FactureAchatActionsTest.php::test_chaque_formule_d_arrondi_donne_le_prix_de_vente_d_un_nouveau_produit',
+                'tests/Feature/SemisCompletTest.php::test_le_semis_complet_remplit_toute_la_base_et_tous_les_cas',
+            ],
+        ],
         'prix.remises-et-prix' => [
             'puce' => 'Prix et TVA des ventes',
             'regle' => 'Accorder une remise, fixer le prix d\'un service et vendre un produit à un autre prix que sa fiche exigent l\'autorisation « accorder des remises et fixer le prix d\'un service », que les responsables et le propriétaire ont toujours, précochée pour les administrateurs, jamais pour les vendeurs et les observateurs, et qu\'un cabinet n\'a jamais ; sans elle, une ligne prend le prix de sa fiche.',
@@ -6933,6 +6948,16 @@ return [
             'choix' => [
                 'decision' => 'Les autres choix du cahier (1 à 20, 22, 26 à 34), décisions de Claude (D76), en attendant les réponses de l\'éditeur à demo-copie/questions-editeur.md.',
                 'regles' => ['demonstration.copie-par-societe', 'demonstration.domaine-et-temoins', 'demonstration.bandeau-vous-etes', 'demonstration.courriels-captes', 'demonstration.taches-et-place-des-copies', 'demonstration.mises-a-jour'],
+            ],
+        ],
+        'Décision du 22/11/2026 : l\'arrondi du prix de vente a trois formules (arrondi-prix/maquette-arrondi-du-prix-de-vente.html)' => [
+            'A1' => [
+                'decision' => 'Arrondi du prix de vente : la case « Arrondir le prix de vente » reste un interrupteur, décoché par défaut ; cochée, elle propose « Un prix en 9 » (la formule actuelle), « L\'euro le plus proche » et « Le multiple de 5 € le plus proche » ; le milieu monte pour les deux nouvelles, se juge sur le prix exact (le prix d\'achat au dix-millième × (1 + TVA)), jamais sur le prix déjà arrondi au centime ; un prix qui deviendrait 0 € reste tel quel ; l\'arrondi porte sur le prix de vente TTC.',
+                'regles' => ['prix.arrondi-du-prix-de-vente', 'prix.prix-de-vente-arrondi-une-fois'],
+            ],
+            'A2' => [
+                'decision' => 'Page « Prix de vente » : « Essayer le barème » montre le prix avant et après l\'arrondi et le tableau d\'exemples de la formule choisie ; case décochée, une seule valeur, « Prix de vente TTC (sans arrondi) » ; une ligne grise dit quand le prix exact a plus de deux décimales.',
+                'regles' => ['prix.arrondi-du-prix-de-vente'],
             ],
         ],
     ],

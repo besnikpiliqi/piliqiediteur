@@ -15,6 +15,7 @@ use App\Domain\Achats\Models\LigneAchat;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
+use App\Domain\Catalogue\Enums\ArrondiDuPrixDeVente;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Services\BaremePrixDeVente;
 use App\Domain\Contacts\Models\Fournisseur;
@@ -37,6 +38,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class FactureAchatResourceTest extends TestCase
@@ -394,7 +396,7 @@ class FactureAchatResourceTest extends TestCase
         $magasin = $this->connecterLeProprietaire();
         $magasin->update([
             'prix_vente_automatique' => true,
-            'bareme_prix_vente' => new BaremePrixDeVente([['jusqu_a' => 9900, 'benefice' => 5000]], null, false),
+            'bareme_prix_vente' => new BaremePrixDeVente([['jusqu_a' => 9900, 'benefice' => 5000]], null, ArrondiDuPrixDeVente::Aucun),
         ]);
         $produit = Produit::factory()->create(['cmup_ht' => 100, 'prix_vente_ttc' => 200, 'taux_tva' => 20]);
         $component = Livewire::test(CreateFactureAchat::class)
@@ -419,6 +421,42 @@ class FactureAchatResourceTest extends TestCase
             ->assertFormComponentActionDataSet(['prix_vente_ttc' => '74.40'])
             ->setFormComponentActionData(['prix_unitaire_ht' => '120'])
             ->assertFormComponentActionDataSet(['prix_vente_ttc' => '200.00']);
+    }
+
+    /**
+     * @return array<string, array{ArrondiDuPrixDeVente, string}>
+     */
+    public static function formulesEtLeurPrixDeVente(): array
+    {
+        return [
+            'sans arrondi' => [ArrondiDuPrixDeVente::Aucun, '12.56'],
+            'un prix en 9' => [ArrondiDuPrixDeVente::UnPrixEn9, '9.00'],
+            'l\'euro le plus proche' => [ArrondiDuPrixDeVente::EuroLePlusProche, '13.00'],
+            'le multiple de 5 €' => [ArrondiDuPrixDeVente::MultipleDeCinq, '15.00'],
+        ];
+    }
+
+    /**
+     * La formule d'arrondi du magasin s'applique à la proposition de la
+     * fenêtre « Ajouter un produit » : « Câble USB-C » à 0,47 € d'achat,
+     * barème du logiciel, 20 % (exact 12,564 €) ; la personne garde la main
+     * sur le prix proposé.
+     */
+    #[DataProvider('formulesEtLeurPrixDeVente')]
+    public function test_la_formule_du_magasin_s_applique_a_la_proposition_de_la_fenetre_d_un_produit(ArrondiDuPrixDeVente $formule, string $prixDeVente): void
+    {
+        $this->connecterLeProprietaire()->update([
+            'prix_vente_automatique' => true,
+            'bareme_prix_vente' => new BaremePrixDeVente(BaremePrixDeVente::parDefaut()->paliers, 6000, $formule),
+        ]);
+
+        Livewire::test(CreateFactureAchat::class)
+            ->fillForm(['fournisseur_id' => Fournisseur::factory()->create()->id, 'date_facture' => '2026-01-15'])
+            ->mountFormComponentAction('ajouterUnProduitAction', 'ajouterUnProduit')
+            ->setFormComponentActionData(['origine' => 'nouveau', 'nom' => 'Câble USB-C', 'prix_unitaire_ht' => '0.47'])
+            ->assertFormComponentActionDataSet(['prix_vente_ttc' => $prixDeVente])
+            ->setFormComponentActionData(['prix_vente_ttc' => '15'])
+            ->assertFormComponentActionDataSet(['prix_vente_ttc' => '15']);
     }
 
     /**
@@ -449,7 +487,7 @@ class FactureAchatResourceTest extends TestCase
     {
         $this->connecterLeProprietaire()->update([
             'prix_vente_automatique' => true,
-            'bareme_prix_vente' => new BaremePrixDeVente([['jusqu_a' => 1000, 'benefice' => 500]], null, false),
+            'bareme_prix_vente' => new BaremePrixDeVente([['jusqu_a' => 1000, 'benefice' => 500]], null, ArrondiDuPrixDeVente::Aucun),
         ]);
         $component = Livewire::test(CreateFactureAchat::class)
             ->fillForm(['fournisseur_id' => Fournisseur::factory()->create()->id, 'date_facture' => '2026-01-15'])
@@ -1397,7 +1435,7 @@ class FactureAchatResourceTest extends TestCase
     {
         $this->connecterLeProprietaire()->update([
             'prix_vente_automatique' => true,
-            'bareme_prix_vente' => new BaremePrixDeVente([['jusqu_a' => 9900, 'benefice' => 500]], null, false),
+            'bareme_prix_vente' => new BaremePrixDeVente([['jusqu_a' => 9900, 'benefice' => 500]], null, ArrondiDuPrixDeVente::Aucun),
         ]);
         $cable = Produit::factory()->create(['nom' => 'Câble', 'prix_vente_ttc' => '15.00', 'taux_tva' => 20, 'suivi_stock' => true]);
 

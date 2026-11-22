@@ -233,6 +233,7 @@ class AppServiceProvider extends ServiceProvider
         $this->montrerLesCartesDesNotifications();
         $this->montrerLesGraphiquesDuTableauDeBord();
         $this->colorerLesCasesDesCharges();
+        $this->dessinerLArrondiDuPrixDeVente();
         $this->lireLesTextesDansLesDeuxModes();
         $this->alignerLesEncaissementsDesReleves();
         Livewire::component(PageDesCharges::NOM, PageDesCharges::class);
@@ -368,6 +369,18 @@ class AppServiceProvider extends ServiceProvider
     private function colorerLesCasesDesCharges(): void
     {
         FilamentAsset::register([Css::make('charges', resource_path('css/charges.css'))], 'app');
+    }
+
+    /**
+     * La feuille écrite à la main de la partie « Arrondir le prix de vente »
+     * de la page « Prix de vente » (cartes des formules, résultats de
+     * l'essai, tableau d'exemples ; voir
+     * resources/css/arrondi-du-prix-de-vente.css), dans les trois panneaux,
+     * servie de même depuis public/css/app.
+     */
+    private function dessinerLArrondiDuPrixDeVente(): void
+    {
+        FilamentAsset::register([Css::make('arrondi-du-prix-de-vente', resource_path('css/arrondi-du-prix-de-vente.css'))], 'app');
     }
 
     /**

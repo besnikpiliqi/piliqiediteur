@@ -50,6 +50,7 @@ test('chaque rôle de la liste du semis se connecte et retrouve ses propres donn
     $proprietaire = User::query()->where('email', SemisComplet::ADRESSE_COMMERCE)->sole();
     $societe = (string) $proprietaire->societe?->uuid;
     $halles = Magasin::query()->where('code', 'HALLES')->sole();
+    $republique = Magasin::query()->where('code', 'REPUB')->sole();
     $conseil = Magasin::query()->where('code', 'PARIS')->sole();
     $cabinet = Societe::query()->where('siren', '000000943')->sole();
 
@@ -80,7 +81,16 @@ test('chaque rôle de la liste du semis se connecte et retrouve ses propres donn
         ->voir('EDF')
         ->aller('/app/'.$halles->uuid.'/devis?tableSearch=Horizon')
         ->voir('Agence Horizon')
-        ->seDeconnecter();
+        ->aller('/app/'.$halles->uuid.'/parametres-prix-de-vente')
+        ->voir('Formule d\'arrondi');
+    expect($onglet->page()->evaluate('() => document.getElementById("data.formule-x9").checked'))->toBeTrue('Les Halles arrondissent leurs prix de vente en 9.');
+    $onglet->seDeconnecter();
+
+    $onglet = $this->seConnecter(compteSeme('Hugo Lefebvre'), MOT_DE_PASSE_DU_SEMIS, onglet: $onglet)
+        ->aller('/app/'.$republique->uuid.'/parametres-prix-de-vente')
+        ->voir('Formule d\'arrondi');
+    expect($onglet->page()->evaluate('() => document.getElementById("data.formule-cinq").checked'))->toBeTrue('La République arrondit ses prix de vente au multiple de 5 € le plus proche.');
+    $onglet->seDeconnecter();
 
     $onglet = $this->seConnecter(compteSeme('Lucas Moreau'), MOT_DE_PASSE_DU_SEMIS, onglet: $onglet)
         ->aller('/app/'.$halles->uuid.'/factures')

@@ -1229,6 +1229,20 @@ class CalculateurLigneTest extends TestCase
     }
 
     /**
+     * Le prix exact, jamais arrondi, en cent-millionièmes d'euro : c'est sur
+     * lui que la formule d'arrondi du magasin juge le milieu (voir
+     * ArrondiDuPrixDeVente).
+     */
+    public function test_le_prix_ttc_exact_n_est_jamais_arrondi(): void
+    {
+        $this->assertSame(56_400_000, $this->calculateur()->prixTtcExact(4700, 2000));
+        $this->assertSame(1_049_500_000, $this->calculateur()->prixTtcExact(104950, 0));
+        $this->assertSame(1_049_604_000, $this->calculateur()->prixTtcExact(87467, 2000), '8,7467 x 1,2 = 10,49604 €.');
+        $this->assertRefuse(fn () => $this->calculateur()->prixTtcExact(100000, 10100), 'Le taux de TVA doit être compris entre 0 et 100 %.');
+        $this->assertRefuse(fn () => $this->calculateur()->prixTtcExact(100_000_000_000_000, 2000), 'Montant hors limites.');
+    }
+
+    /**
      * Le coût moyen de lots se pondère par leurs quantités, au dix-millième :
      * 10 à 2 € et 20 à 3,5 € coûtent 3 € ; 3 à 1 € et 4 à 2 €, 1,5714 €. Des
      * lots offerts coûtent 0 €, et des lots sans aucun article n'ont pas de

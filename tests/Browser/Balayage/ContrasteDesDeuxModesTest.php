@@ -1,5 +1,7 @@
 <?php
 
+use App\Domain\Catalogue\Enums\ArrondiDuPrixDeVente;
+use App\Domain\Catalogue\Services\BaremePrixDeVente;
 use App\Domain\Charges\Services\PiecesDesCharges;
 use App\Models\User;
 use Illuminate\Support\Facades\Storage;
@@ -57,6 +59,26 @@ test('chaque page du magasin se lit en clair et en sombre, pour son responsable 
 
     expect($pages)->toContain($magasin.'/factures');
 })->with(['responsable' => 'responsable', 'propriétaire' => 'proprietaire']);
+
+test('la page « Prix de vente » se lit en clair et en sombre avec l’arrondi coché, ses exemples et son essai, puis décoché', function () {
+    $societe = $this->societeComplete();
+    $societe->magasin->update([
+        'prix_vente_automatique' => true,
+        'bareme_prix_vente' => new BaremePrixDeVente(BaremePrixDeVente::parDefaut()->paliers, 6000, ArrondiDuPrixDeVente::EuroLePlusProche),
+    ]);
+    $onglet = $this->seConnecter($societe->responsable)
+        ->aller('/app/'.$societe->magasin->uuid.'/parametres-prix-de-vente')
+        ->remplir('Prix d\'achat HT', '0.47')
+        ->voir('Le prix exact est 12,564 €')
+        ->voir('Exemples de la formule choisie');
+    $contraste = new ContrasteDesPages($onglet);
+
+    expect([$contraste->defautsDeLaPage('clair'), $contraste->defautsDeLaPage('sombre')])->toBe([[], []]);
+
+    $onglet->cliquer('[id="data.arrondi"]')->voir('Case décochée : aucun arrondi');
+
+    expect([$contraste->defautsDeLaPage('clair'), $contraste->defautsDeLaPage('sombre')])->toBe([[], []]);
+});
 
 test('chaque page de l’espace du cabinet se lit en clair et en sombre, pour son propriétaire', function () {
     $societe = $this->societeComplete();

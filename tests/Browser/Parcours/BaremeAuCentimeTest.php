@@ -29,12 +29,12 @@ function reglerLeBeneficeAuCentime(Navigation $onglet, Magasin $magasin): void
         ->remplir('Prix d\'achat HT', '1')
         ->soumettre('Enregistrer')
         ->voir(SaisieDecimale::REFUS_MONTANT_TROP_PRECIS)
-        ->nePasVoir('bénéfice réel');
+        ->nePasVoir('Bénéfice réel');
     expect($magasin->fresh()->prix_vente_automatique)->toBeFalse();
 
     $onglet->remplirLaLigne('paliers', 0, 'benefice', '0.13')
         ->remplir('Prix d\'achat HT', '1.00')
-        ->voir('1,36 € TTC')
+        ->voir('(1,00 € + 0,13 €) × (1 + 20 %) = 1,36 €')
         ->soumettre('Enregistrer')
         ->voir('Barème de prix de vente enregistré');
     $magasin->refresh();

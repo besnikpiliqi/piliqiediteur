@@ -3,17 +3,25 @@
 namespace Tests\Feature\Filament;
 
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Catalogue\Enums\ArrondiDuPrixDeVente;
 use App\Domain\Catalogue\Services\BaremePrixDeVente;
+use App\Domain\Catalogue\Services\ExemplesDArrondi;
 use App\Domain\Facturation\Services\SaisieDecimale;
 use App\Domain\Tenancy\Actions\ModifierLesParametresDuMagasinAction;
+use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Support\FicheLue;
 use App\Filament\App\Pages\ParametresPrixDeVente;
 use App\Models\User;
 use Filament\Facades\Filament;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
+use Tests\Unit\ExemplesDArrondiTest;
 
 class ParametresPrixDeVenteTest extends TestCase
 {
@@ -32,7 +40,7 @@ class ParametresPrixDeVenteTest extends TestCase
         $this->assertEquals(BaremePrixDeVente::parDefaut(), $magasin->fresh()->bareme_prix_vente);
 
         Livewire::test(ParametresPrixDeVente::class)
-            ->assertFormSet(['actif' => false, 'benefice_au_dela' => 60.0, 'arrondi_x9' => false])
+            ->assertFormSet(['actif' => false, 'benefice_au_dela' => 60.0, 'arrondi' => false, 'formule' => 'x9'])
             ->assertCount('data.paliers', 7)
             ->assertFormFieldIsDisabled('paliers')
             ->assertFormFieldIsDisabled('benefice_au_dela')
@@ -46,13 +54,13 @@ class ParametresPrixDeVenteTest extends TestCase
         $magasin = $this->connecterLeProprietaire();
 
         Livewire::test(ParametresPrixDeVente::class)
-            ->fillForm(['actif' => true, 'benefice_au_dela' => 80, 'arrondi_x9' => true])
+            ->fillForm(['actif' => true, 'benefice_au_dela' => 80, 'arrondi' => true, 'formule' => 'euro'])
             ->call('save')
             ->assertHasNoFormErrors();
 
         $bareme = $magasin->fresh()->baremePrixDeVenteActif();
         $this->assertSame(BaremePrixDeVente::parDefaut()->paliers, $bareme->paliers);
-        $this->assertSame([8000, true], [$bareme->beneficeAuDela, $bareme->arrondiX9]);
+        $this->assertSame([8000, ArrondiDuPrixDeVente::EuroLePlusProche], [$bareme->beneficeAuDela, $bareme->arrondi]);
     }
 
     /**
@@ -122,10 +130,13 @@ class ParametresPrixDeVenteTest extends TestCase
     {
         $this->connecterLeProprietaire();
 
-        Livewire::test(ParametresPrixDeVente::class)
-            ->fillForm(['actif' => true, 'arrondi_x9' => true, 'essai_prix_achat_ht' => '0.47', 'essai_taux_tva' => '20'])
-            ->assertSee('9,00 € TTC (prix cible 12,56 €)')
-            ->assertSee('bénéfice réel 7,03 € HT (visé 10,00 €)');
+        $page = Livewire::test(ParametresPrixDeVente::class)
+            ->fillForm(['actif' => true, 'arrondi' => true, 'formule' => 'x9', 'essai_prix_achat_ht' => '0.47', 'essai_taux_tva' => '20'])
+            ->assertSee(['Prix de vente TTC avant arrondi', 'Prix de vente TTC arrondi'])
+            ->assertSee('Bénéfice réel 7,03 € HT (visé 10,00 €).')
+            ->assertSee('(0,47 € + 10,00 €) × (1 + 20 %) = 12,56 €');
+
+        $this->assertSame(['12,56 €', '9,00 €'], [self::prixDeLEssai($page, 'avant'), self::prixDeLEssai($page, 'apres')]);
     }
 
     public function test_deux_paliers_au_meme_prix_dachat_sont_refuses(): void
@@ -156,7 +167,7 @@ class ParametresPrixDeVenteTest extends TestCase
             ->fillForm(['actif' => true, 'benefice_au_dela' => '60.001', 'essai_prix_achat_ht' => '1', 'essai_taux_tva' => '20'])
             ->set('data.paliers', [['jusqu_a' => '2.555', 'benefice' => '1'], ['jusqu_a' => '50', 'benefice' => '0.125']]);
 
-        $page->assertDontSee('bénéfice réel')
+        $page->assertDontSee('Bénéfice réel')
             ->call('save')
             ->assertHasFormErrors([
                 'paliers.0.jusqu_a' => SaisieDecimale::REFUS_MONTANT_TROP_PRECIS,
@@ -165,7 +176,7 @@ class ParametresPrixDeVenteTest extends TestCase
             ]);
         $page->set('data.paliers', [['jusqu_a' => '2.55', 'benefice' => '1'], ['jusqu_a' => '50', 'benefice' => '0.12']])
             ->set('data.benefice_au_dela', '60')
-            ->assertSee('2,40 € TTC');
+            ->assertSee('(1,00 € + 1,00 €) × (1 + 20 %) = 2,40 €');
 
         $magasin->refresh();
         $this->assertFalse($magasin->prix_vente_automatique);
@@ -260,22 +271,26 @@ class ParametresPrixDeVenteTest extends TestCase
     {
         $this->connecterLeProprietaire();
 
-        Livewire::test(ParametresPrixDeVente::class)
+        $page = Livewire::test(ParametresPrixDeVente::class)
             ->fillForm(['essai_prix_achat_ht' => '0.47', 'essai_taux_tva' => ''])
             ->assertDontSee('10,47 €')
-            ->assertDontSee('bénéfice réel')
-            ->fillForm(['essai_taux_tva' => '20'])
-            ->assertSee('12,56 € TTC');
+            ->assertDontSee('Bénéfice réel');
+        $this->assertSame('—', self::prixDeLEssai($page, 'apres'));
+
+        $page->fillForm(['essai_taux_tva' => '20'])->assertSee('Prix de vente TTC (sans arrondi)');
+        $this->assertSame('12,56 €', self::prixDeLEssai($page, 'apres'));
     }
 
     public function test_l_essai_du_bareme_part_d_une_tva_de_20_pourcent(): void
     {
         $this->connecterLeProprietaire();
 
-        Livewire::test(ParametresPrixDeVente::class)
+        $page = Livewire::test(ParametresPrixDeVente::class)
             ->assertFormSet(['essai_taux_tva' => 20])
             ->fillForm(['essai_prix_achat_ht' => '0.47'])
-            ->assertSee('12,56 € TTC');
+            ->assertSee('Prix de vente TTC (sans arrondi)');
+
+        $this->assertSame('12,56 €', self::prixDeLEssai($page, 'apres'));
     }
 
     public function test_un_vendeur_sans_la_permission_ne_peut_pas_acceder_a_la_page(): void
@@ -331,13 +346,282 @@ class ParametresPrixDeVenteTest extends TestCase
         $magasin = $this->connecterLeProprietaire();
         $page = Livewire::test(ParametresPrixDeVente::class);
         $autrePage = Livewire::test(ParametresPrixDeVente::class);
-        $bareme = new BaremePrixDeVente([['jusqu_a' => 1000, 'benefice' => 500]], 2000, false);
+        $bareme = new BaremePrixDeVente([['jusqu_a' => 1000, 'benefice' => 500]], 2000, ArrondiDuPrixDeVente::Aucun);
 
         Magasin::query()->findOrFail($magasin->id)->update(['bareme_prix_vente' => $bareme]);
         $page->fillForm(['actif' => true])->call('save')->assertNotified(ParametresPrixDeVente::AUTRES_PARAMETRES_CHANGES)->assertFormSet(['benefice_au_dela' => 20.0]);
         $autrePage->fillForm(['actif' => true, 'benefice_au_dela' => 80])->call('save')->assertNotified(ModifierLesParametresDuMagasinAction::REFUS_PERIMES);
 
         $this->assertTrue($magasin->fresh()->prix_vente_automatique);
+        $this->assertEquals($bareme, $magasin->fresh()->bareme_prix_vente);
+    }
+
+    /**
+     * Les lignes du tableau d'exemples que la page montre, en texte.
+     *
+     * @param  Testable<ParametresPrixDeVente>  $page
+     * @return list<array{string, string, string}>
+     */
+    private static function lignesDuTableau(Testable $page): array
+    {
+        preg_match_all('/<tr[^>]*data-arrondi="ligne"[^>]*>(.*?)<\/tr>/s', $page->html(), $lignes);
+
+        return array_map(function (string $ligne): array {
+            preg_match_all('/<td[^>]*>(.*?)<\/td>/s', $ligne, $cellules);
+
+            return array_map(trim(...), $cellules[1]);
+        }, $lignes[1]);
+    }
+
+    /**
+     * Le prix que l'essai montre sous cette étiquette (data-arrondi).
+     *
+     * @param  Testable<ParametresPrixDeVente>  $page
+     */
+    private static function prixDeLEssai(Testable $page, string $quel): ?string
+    {
+        return preg_match('/data-arrondi="'.$quel.'">([^<]*)</', $page->html(), $prix) === 1 ? trim($prix[1]) : null;
+    }
+
+    /**
+     * Le choix de la formule n'existe que case cochée ; décochée, la page ne
+     * montre ni formule ni exemples, et la formule choisie est gardée pour
+     * le jour où la case est recochée.
+     */
+    public function test_le_choix_de_la_formule_ne_se_montre_que_la_case_cochee(): void
+    {
+        $this->connecterLeProprietaire();
+
+        $page = Livewire::test(ParametresPrixDeVente::class)
+            ->assertFormSet(['arrondi' => false])
+            ->assertDontSee('Formule d\'arrondi')
+            ->assertDontSee('Exemples de la formule choisie')
+            ->assertSee('Case décochée : aucun arrondi')
+            ->fillForm(['actif' => true, 'arrondi' => true])
+            ->assertSee('Formule d\'arrondi')
+            ->assertSee(['Un prix en 9', 'L\'euro le plus proche', 'Le multiple de 5 € le plus proche'])
+            ->assertSee(array_values(ExemplesDArrondi::phrases()))
+            ->assertSee('Exemples de la formule choisie')
+            ->assertDontSee('Case décochée');
+
+        $page->fillForm(['formule' => 'cinq'])
+            ->fillForm(['arrondi' => false])
+            ->assertDontSee('Formule d\'arrondi')
+            ->assertSee('Case décochée : aucun arrondi')
+            ->assertFormSet(['formule' => 'cinq'])
+            ->fillForm(['arrondi' => true])
+            ->assertFormSet(['formule' => 'cinq']);
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function formules(): array
+    {
+        return ['un prix en 9' => ['x9'], 'l\'euro le plus proche' => ['euro'], 'le multiple de 5 €' => ['cinq']];
+    }
+
+    #[DataProvider('formules')]
+    public function test_chaque_formule_s_enregistre_et_se_relit(string $formule): void
+    {
+        $magasin = $this->connecterLeProprietaire();
+
+        Livewire::test(ParametresPrixDeVente::class)
+            ->fillForm(['actif' => true, 'arrondi' => true, 'formule' => $formule])
+            ->call('save')
+            ->assertHasNoFormErrors()
+            ->assertNotified('Barème de prix de vente enregistré');
+
+        $this->assertSame(ArrondiDuPrixDeVente::from($formule), $magasin->fresh()->baremePrixDeVenteActif()->arrondi);
+
+        Livewire::test(ParametresPrixDeVente::class)->assertFormSet(['actif' => true, 'arrondi' => true, 'formule' => $formule]);
+    }
+
+    public function test_la_case_decochee_enregistre_aucun_arrondi_et_garde_le_reste(): void
+    {
+        $magasin = $this->connecterLeProprietaire();
+
+        Livewire::test(ParametresPrixDeVente::class)
+            ->fillForm(['actif' => true, 'arrondi' => true, 'formule' => 'euro'])
+            ->call('save');
+        Livewire::test(ParametresPrixDeVente::class)
+            ->assertFormSet(['arrondi' => true, 'formule' => 'euro'])
+            ->fillForm(['arrondi' => false])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $bareme = $magasin->fresh()->baremePrixDeVenteActif();
+        $this->assertSame(ArrondiDuPrixDeVente::Aucun, $bareme->arrondi);
+        $this->assertSame(BaremePrixDeVente::parDefaut()->paliers, $bareme->paliers);
+        $this->assertSame(6000, $bareme->beneficeAuDela);
+
+        Livewire::test(ParametresPrixDeVente::class)->assertFormSet(['arrondi' => false, 'formule' => 'x9']);
+    }
+
+    /**
+     * Une formule qui n'existe pas, ou « aucun » avec la case cochée, est
+     * refusée sous le champ et rien ne s'écrit ; case décochée, le champ
+     * masqué n'est pas lu, même forgé.
+     */
+    public function test_une_formule_inconnue_est_refusee(): void
+    {
+        $magasin = $this->connecterLeProprietaire();
+        $page = Livewire::test(ParametresPrixDeVente::class)->fillForm(['actif' => true, 'arrondi' => true]);
+
+        foreach (['dix', 'aucun'] as $formule) {
+            $page->set('data.formule', $formule)->call('save')->assertHasFormErrors(['formule']);
+            $this->assertFalse($magasin->fresh()->prix_vente_automatique);
+            $this->assertEquals(BaremePrixDeVente::parDefaut(), $magasin->fresh()->bareme_prix_vente);
+        }
+
+        $page->set('data.formule', 'dix')->fillForm(['arrondi' => false])->call('save')->assertHasNoFormErrors();
+
+        $this->assertTrue($magasin->fresh()->prix_vente_automatique);
+        $this->assertSame(ArrondiDuPrixDeVente::Aucun, $magasin->fresh()->bareme_prix_vente->arrondi);
+    }
+
+    /**
+     * @return array<string, array{string, string, list<array{string, string, string}>}>
+     */
+    public static function formulesEtLeurEssai(): array
+    {
+        $tableaux = ExemplesDArrondiTest::tableaux();
+
+        return [
+            'un prix en 9' => ['x9', '9,00 €', $tableaux['un prix en 9'][1]],
+            'l\'euro le plus proche' => ['euro', '13,00 €', $tableaux['l\'euro le plus proche'][1]],
+            'le multiple de 5 €' => ['cinq', '15,00 €', $tableaux['le multiple de 5 €'][1]],
+        ];
+    }
+
+    /**
+     * @param  list<array{string, string, string}>  $tableau
+     */
+    #[DataProvider('formulesEtLeurEssai')]
+    public function test_l_essai_montre_le_prix_avant_et_apres_l_arrondi_et_le_tableau_d_exemples(string $formule, string $apres, array $tableau): void
+    {
+        $this->connecterLeProprietaire();
+
+        $page = Livewire::test(ParametresPrixDeVente::class)
+            ->fillForm(['actif' => true, 'arrondi' => true, 'formule' => $formule, 'essai_prix_achat_ht' => '0.47', 'essai_taux_tva' => '20'])
+            ->assertSee('Exemples de la formule choisie')
+            ->assertSee(ExemplesDArrondi::legende(ArrondiDuPrixDeVente::from($formule)))
+            ->assertDontSee('Prix de vente TTC (sans arrondi)');
+
+        $this->assertSame(['12,56 €', $apres], [self::prixDeLEssai($page, 'avant'), self::prixDeLEssai($page, 'apres')]);
+        $this->assertSame($tableau, self::lignesDuTableau($page));
+
+        $page->fillForm(['arrondi' => false])
+            ->assertSee('Prix de vente TTC (sans arrondi)')
+            ->assertDontSee('Prix de vente TTC avant arrondi');
+        $this->assertSame(['12,56 €', []], [self::prixDeLEssai($page, 'apres'), self::lignesDuTableau($page)]);
+    }
+
+    /**
+     * Le milieu se juge sur le prix exact : (4,7467 € + 4 €) x 1,2 =
+     * 10,49604 €, qui s'écrit 10,50 € au centime, devient 10 € à l'euro
+     * près, et la page le dit.
+     */
+    public function test_le_prix_exact_se_juge_avant_le_prix_au_centime_dans_l_essai(): void
+    {
+        $magasin = $this->connecterLeProprietaire();
+        $magasin->update(['prix_vente_automatique' => true, 'bareme_prix_vente' => new BaremePrixDeVente([['jusqu_a' => 1000, 'benefice' => 400]], null, ArrondiDuPrixDeVente::EuroLePlusProche)]);
+
+        $page = Livewire::test(ParametresPrixDeVente::class)
+            ->fillForm(['essai_prix_achat_ht' => '4.7467', 'essai_taux_tva' => '20'])
+            ->assertSee('Le prix exact est 10,49604 € ; l\'arrondi se fait sur ce prix exact, pas sur 10,50 €.');
+
+        $this->assertSame(['10,50 €', '10,00 €'], [self::prixDeLEssai($page, 'avant'), self::prixDeLEssai($page, 'apres')]);
+    }
+
+    /**
+     * Changer la formule passe par le journal d'audit de la société, dans la
+     * chaîne du magasin, avec les anciennes et les nouvelles valeurs des
+     * seuls paramètres corrigés ; enregistrer sans rien changer n'inscrit
+     * rien.
+     */
+    public function test_changer_la_formule_s_inscrit_au_journal_d_audit(): void
+    {
+        $magasin = $this->connecterLeProprietaire();
+
+        Livewire::test(ParametresPrixDeVente::class)
+            ->fillForm(['actif' => true, 'arrondi' => true, 'formule' => 'euro'])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        [$entree] = $this->entreesDAudit($magasin->societe, ActionAuditee::ParametresDuMagasinModifies);
+        $this->assertSame($magasin->id, $entree->magasin_id);
+        $this->assertSame(['bareme_prix_vente', 'prix_vente_automatique'], collect(array_keys($entree->nouvelles_valeurs))->sort()->values()->all());
+        $this->assertSame(['aucun', false], [$entree->anciennes_valeurs['bareme_prix_vente']['arrondi'], $entree->anciennes_valeurs['prix_vente_automatique']]);
+        $this->assertSame(['euro', true], [$entree->nouvelles_valeurs['bareme_prix_vente']['arrondi'], $entree->nouvelles_valeurs['prix_vente_automatique']]);
+        $this->assertStringNotContainsString('arrondi_x9', json_encode([$entree->anciennes_valeurs, $entree->nouvelles_valeurs], JSON_THROW_ON_ERROR));
+
+        Livewire::test(ParametresPrixDeVente::class)->call('save')->assertNotified('Barème de prix de vente enregistré');
+        $this->assertCount(1, $this->entreesDAudit($magasin->societe, ActionAuditee::ParametresDuMagasinModifies));
+
+        Livewire::test(ParametresPrixDeVente::class)->fillForm(['formule' => 'cinq'])->call('save');
+        [, $deuxieme] = $this->entreesDAudit($magasin->societe, ActionAuditee::ParametresDuMagasinModifies);
+        $this->assertSame(['bareme_prix_vente'], array_keys($deuxieme->nouvelles_valeurs));
+        $this->assertSame(['euro', 'cinq'], [$deuxieme->anciennes_valeurs['bareme_prix_vente']['arrondi'], $deuxieme->nouvelles_valeurs['bareme_prix_vente']['arrondi']]);
+    }
+
+    public function test_une_personne_sans_l_autorisation_ne_change_pas_la_formule(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW]);
+        $this->dansLeMagasin($magasin, $vendeur);
+
+        $this->assertThrows(
+            fn () => app(ModifierLesParametresDuMagasinAction::class)->handle($vendeur, PermissionRegistry::PRIX_VENTE_REGLER, FicheLue::de($magasin->fresh())->valeurs(), [
+                'prix_vente_automatique' => true,
+                'bareme_prix_vente' => new BaremePrixDeVente(BaremePrixDeVente::parDefaut()->paliers, 6000, ArrondiDuPrixDeVente::EuroLePlusProche),
+            ]),
+            AuthorizationException::class,
+        );
+
+        $this->assertFalse($magasin->fresh()->prix_vente_automatique);
+        $this->assertEquals(BaremePrixDeVente::parDefaut(), $magasin->fresh()->bareme_prix_vente);
+        $this->assertSame([], $this->entreesDAudit($magasin->societe, ActionAuditee::ParametresDuMagasinModifies));
+    }
+
+    /**
+     * Isolation : la formule est un réglage du magasin, jamais de la
+     * société ; celle d'un magasin ne change ni la page, ni le barème, ni le
+     * journal d'un autre.
+     */
+    public function test_la_formule_d_un_magasin_ne_change_pas_celle_d_un_autre(): void
+    {
+        $premier = $this->connecterLeProprietaire();
+
+        Livewire::test(ParametresPrixDeVente::class)
+            ->fillForm(['actif' => true, 'arrondi' => true, 'formule' => 'cinq'])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $second = $this->ouvrirUnAutreMagasin($premier);
+        $this->dansLeMagasin($second, $this->proprietaireDe($premier));
+
+        Livewire::test(ParametresPrixDeVente::class)->assertFormSet(['actif' => false, 'arrondi' => false, 'formule' => 'x9']);
+        $this->assertSame(ArrondiDuPrixDeVente::Aucun, $second->fresh()->bareme_prix_vente->arrondi);
+        $this->assertSame(ArrondiDuPrixDeVente::MultipleDeCinq, $premier->fresh()->bareme_prix_vente->arrondi);
+        $this->assertSame([$premier->id], array_map(fn ($entree): int => $entree->magasin_id, $this->entreesDAudit($premier->societe, ActionAuditee::ParametresDuMagasinModifies)));
+    }
+
+    /**
+     * La page, ouverte avant qu'une autre personne ne choisisse sa formule,
+     * ne l'efface pas en choisissant la sienne : refusé, et rien ne
+     * s'écrit.
+     */
+    public function test_une_page_ouverte_avant_la_formule_d_une_autre_personne_ne_l_efface_pas(): void
+    {
+        $magasin = $this->connecterLeProprietaire();
+        $page = Livewire::test(ParametresPrixDeVente::class);
+        $bareme = new BaremePrixDeVente(BaremePrixDeVente::parDefaut()->paliers, 6000, ArrondiDuPrixDeVente::EuroLePlusProche);
+
+        Magasin::query()->findOrFail($magasin->id)->update(['bareme_prix_vente' => $bareme]);
+        $page->fillForm(['actif' => true, 'arrondi' => true, 'formule' => 'cinq'])->call('save')->assertNotified(ModifierLesParametresDuMagasinAction::REFUS_PERIMES);
+
+        $this->assertFalse($magasin->fresh()->prix_vente_automatique);
         $this->assertEquals($bareme, $magasin->fresh()->bareme_prix_vente);
     }
 }

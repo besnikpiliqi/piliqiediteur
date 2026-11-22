@@ -112,7 +112,7 @@ class SemisCompletTest extends TestCase
      * @var array<string, int>
      */
     private const NOMBRES_DE_LIGNES = [
-        'actions_traitees' => 4741,
+        'actions_traitees' => 4745,
         'actions_traitees_de_la_societe' => 348,
         'affectations' => 40,
         'autorisations_affectations' => 533,
@@ -142,15 +142,15 @@ class SemisCompletTest extends TestCase
         'envois_documents' => 13,
         'evenements_transmission_pdp' => 61,
         'factures' => 4008,
-        'factures_achat' => 181,
+        'factures_achat' => 185,
         'fournisseurs' => 12,
         'identifiants' => 67,
         'inventaires_ouverture' => 11,
         'invitations_cabinet' => 6,
-        'journal_audit' => 1799,
+        'journal_audit' => 1811,
         'liens_cabinet' => 15,
         'liens_des_devis' => 6,
-        'lignes_achat' => 353,
+        'lignes_achat' => 371,
         'lignes_avoir' => 146,
         'lignes_avoir_fournisseur' => 2,
         'lignes_de_charge' => 180,
@@ -162,7 +162,7 @@ class SemisCompletTest extends TestCase
         'magasins_cabinet' => 1,
         'mandats_pdp' => 2,
         'messages_vers_la_demonstration' => 26,
-        'mouvements_stock' => 5106,
+        'mouvements_stock' => 5124,
         'notifications' => 190,
         'paiement_allocations' => 3918,
         'paiements' => 3918,
@@ -174,7 +174,7 @@ class SemisCompletTest extends TestCase
         'postes_reconnus' => 1,
         'preferences_tableau_de_bord' => 4,
         'preuves_operation' => 5,
-        'produits' => 52,
+        'produits' => 70,
         'recus_paiement' => 160,
         'referentiel_autorisations_magasin' => 51,
         'referentiel_autorisations_societe' => 5,
@@ -185,7 +185,7 @@ class SemisCompletTest extends TestCase
         'site_de_la_base' => 1,
         'societes' => 21,
         'taux_avoirs_fournisseur' => 2,
-        'taux_factures_achat' => 238,
+        'taux_factures_achat' => 242,
         'telechargements_documents' => 5,
         'tetes_journal_audit' => 105,
         'tetes_registre_fiscal' => 22,
@@ -231,6 +231,7 @@ class SemisCompletTest extends TestCase
         $this->assertLesComptesEtLeursMagasins();
         $this->assertLesCasDesGraphiquesEtDesCaisses();
         $this->assertLesCasDeLEcartDesPrixDAchat();
+        $this->assertLesFormulesDArrondiDuPrixDeVente();
         $this->assertLesDatesDeLOperation();
         $this->assertLaListeDesComptesOuvreChaqueCompteActif();
         $this->assertLesRenouvellementsDesDemonstrations();
@@ -444,6 +445,134 @@ class SemisCompletTest extends TestCase
             $this->lignes('select distinct (select count(*) from json_object_keys(encaissements)) > 1 from clotures_caisse_personnelles where json_typeof(encaissements) = \'object\' order by 1'),
             'Un relevé de caisse a un seul mode d\'encaissement, un autre en a plusieurs.',
         );
+    }
+
+    /**
+     * Les trois formules d'arrondi du prix de vente et le calcul sans
+     * arrondi (décision de l'éditeur du 22/11/2026), chacun dans un magasin
+     * qui a activé le barème par la vraie action des paramètres, et les
+     * produits nés d'une facture d'achat validée dont le prix de vente vient
+     * du barème : de part et d'autre de chaque limite de chaque formule, un
+     * prix arrondi vers le haut, vers le bas, pile au milieu, un prix exact
+     * sous le milieu alors que son prix au centime l'atteint, et un prix que
+     * la formule laisse tel quel. Chaque prix est recalculé ici, en centimes
+     * entiers, sans le code du barème.
+     */
+    private function assertLesFormulesDArrondiDuPrixDeVente(): void
+    {
+        $this->assertSame(
+            [['EPICERIE', 'aucun'], ['FDF', 'euro'], ['HALLES', 'x9'], ['REPUB', 'cinq']],
+            $this->lignes('select code, bareme_prix_vente->>\'arrondi\' from magasins where prix_vente_automatique order by code'),
+            'Chaque formule d\'arrondi, et le calcul sans arrondi, a son magasin.',
+        );
+        $this->assertGreaterThan(0, DB::table('magasins')->where('prix_vente_automatique', false)->count(), 'Les autres magasins gardent le calcul désactivé.');
+        $this->assertSame(4, DB::table('journal_audit')->where('action', 'parametres_du_magasin_modifies')->whereRaw('nouvelles_valeurs->\'bareme_prix_vente\'->>\'arrondi\' is not null')->count(), 'Chaque réglage du barème s\'est inscrit au journal d\'audit.');
+
+        $paliers = [[30, 5], [100, 40], [1000, 400], [5000, 800]];
+        $produits = [
+            'HALLES.SAVON-ALEP' => ['1.85', 2000, 'x9', '9.00'],
+            'HALLES.CHAUFFE-PLAT' => ['0.20', 2000, 'x9', '0.30'],
+            'HALLES.PLANCHE-HETRE' => ['6.40', 2000, 'x9', '9.00'],
+            'HALLES.COFFRET-DEGUST' => ['29.50', 2000, 'x9', '49.00'],
+            'HALLES.CARAFE-SOUFFLEE' => ['37.83', 2000, 'x9', '49.00'],
+            'REPUB.CAHIER-SPIRALES' => ['2.25', 2000, 'cinq', '10.00'],
+            'REPUB.CAHIER-BROUILLON' => ['2.246', 2000, 'cinq', '5.00'],
+            'REPUB.GOMME-BLANCHE' => ['0.20', 2000, 'cinq', '0.30'],
+            'REPUB.LAMPE-BUREAU' => ['14.00', 2000, 'cinq', '25.00'],
+            'REPUB.PORTE-DOCS-CUIR' => ['62.00', 2000, 'cinq', '100.00'],
+            'FDF.FONTAINE-INT' => ['80.00', 850, 'euro', '109.00'],
+            'FDF.SAVON-MARSEILLE' => ['1.065', 850, 'euro', '5.00'],
+            'FDF.VANILLE-SACHET' => ['0.20', 850, 'euro', '0.27'],
+            'FDF.BOUGIE-MASSAGE' => ['6.40', 850, 'euro', '11.00'],
+            'FDF.PAREO-COTON' => ['5.10', 850, 'euro', '10.00'],
+            'EPICERIE.TISANE-SOIR' => ['2.35', 550, 'aucun', '6.70'],
+            'EPICERIE.SEL-GUERANDE' => ['0.20', 550, 'aucun', '0.26'],
+            'EPICERIE.CONFITURE-FIGUE' => ['3.10', 550, 'aucun', '7.49'],
+        ];
+        $cles = array_keys($produits);
+        $lus = DB::table('produits')->join('magasins', 'magasins.id', '=', 'produits.magasin_id')
+            ->whereIn(DB::raw("magasins.code || '.' || produits.reference"), $cles)
+            ->selectRaw("magasins.code || '.' || produits.reference as cle, produits.prix_vente_ttc as prix")
+            ->pluck('prix', 'cle')->all();
+        $nes = DB::table('lignes_achat')->join('produits', fn ($jointure) => $jointure->on('produits.magasin_id', '=', 'lignes_achat.magasin_id')->on('produits.id', '=', 'lignes_achat.produit_id'))
+            ->join('factures_achat', fn ($jointure) => $jointure->on('factures_achat.magasin_id', '=', 'lignes_achat.magasin_id')->on('factures_achat.id', '=', 'lignes_achat.facture_achat_id'))
+            ->join('magasins', 'magasins.id', '=', 'produits.magasin_id')
+            ->where('factures_achat.statut', 'validee')
+            ->whereIn(DB::raw("magasins.code || '.' || produits.reference"), $cles)
+            ->selectRaw("magasins.code || '.' || produits.reference as cle")
+            ->pluck('cle')->all();
+        $cas = [];
+
+        foreach ($produits as $cle => [$achat, $taux, $formule, $prixAttendu]) {
+            [$prix, $genres] = $this->prixDuBaremeEnEntiers($achat, $taux, $formule, $paliers);
+            $this->assertSame($prixAttendu, number_format($prix / 100, 2, '.', ''), "{$cle} : le prix du semis écrit est celui du calcul en entiers.");
+            $this->assertEqualsWithDelta((float) $prixAttendu, (float) ($lus[$cle] ?? -1), 0.0001, "{$cle} : le produit a le prix que le barème donne.");
+            $this->assertContains($cle, $nes, "{$cle} est né d'une facture d'achat validée.");
+            $cas[$formule] = array_values(array_unique([...($cas[$formule] ?? []), ...$genres]));
+        }
+
+        foreach (['x9', 'euro', 'cinq'] as $formule) {
+            foreach (['haut', 'bas', 'milieu', 'sous_le_milieu', 'reste'] as $genre) {
+                $this->assertContains($genre, $cas[$formule], "La formule {$formule} a un produit « {$genre} ».");
+            }
+        }
+
+        $this->assertSame(['centime'], $cas['aucun'], 'Sans arrondi, chaque produit a son prix au centime.');
+    }
+
+    /**
+     * Le prix de vente d'un prix d'achat, en centimes entiers, sans le code
+     * du barème : (achat + bénéfice) x (1 + TVA) arrondi une seule fois au
+     * multiple le plus proche du pas de la formule, un prix pile au milieu
+     * montant, puis ce que chaque formule en garde ; et ce que le cas
+     * éprouve (haut, bas, milieu, sous_le_milieu, reste, ou centime).
+     *
+     * @param  list<array{int, int}>  $paliers  « jusqu'à » et bénéfice, en centimes
+     * @return array{int, list<string>}
+     */
+    private function prixDuBaremeEnEntiers(string $achat, int $taux, string $formule, array $paliers): array
+    {
+        [$euros, $decimales] = array_pad(explode('.', $achat), 2, '');
+        $dixMilliemes = (int) $euros * 10000 + (int) str_pad($decimales, 4, '0');
+        $benefice = 2000;
+
+        foreach ($paliers as [$jusquA, $beneficeDuPalier]) {
+            if ($dixMilliemes < $jusquA * 100) {
+                $benefice = $beneficeDuPalier;
+
+                break;
+            }
+        }
+
+        $exact = ($dixMilliemes + $benefice * 100) * (10000 + $taux);
+        $plusProche = static fn (int $unite): int => intdiv($exact, $unite) + (2 * ($exact % $unite) >= $unite ? 1 : 0);
+        $cible = $plusProche(1_000_000);
+
+        if ($formule === 'aucun') {
+            return [$cible, ['centime']];
+        }
+
+        $pas = ['x9' => 1000, 'euro' => 100, 'cinq' => 500][$formule];
+        $multiple = $plusProche($pas * 1_000_000) * $pas;
+        $reste = $formule === 'x9' ? $multiple < 1000 : $multiple <= 0;
+        $prix = $reste ? $cible : ($formule === 'x9' ? $multiple - 100 : $multiple);
+        $genres = [];
+
+        if ($reste) {
+            $genres[] = 'reste';
+        } else {
+            $genres[] = $prix > $cible ? 'haut' : 'bas';
+        }
+
+        if (! $reste && 2 * ($exact % ($pas * 1_000_000)) === $pas * 1_000_000) {
+            $genres[] = 'milieu';
+        }
+
+        if (! $reste && 2 * ($exact % ($pas * 1_000_000)) < $pas * 1_000_000 && 2 * ($cible % $pas) >= $pas) {
+            $genres[] = 'sous_le_milieu';
+        }
+
+        return [$prix, $genres];
     }
 
     /**

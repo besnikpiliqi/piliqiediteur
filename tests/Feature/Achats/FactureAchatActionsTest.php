@@ -18,7 +18,9 @@ use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Calendrier\Calendrier;
+use App\Domain\Catalogue\Enums\ArrondiDuPrixDeVente;
 use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Catalogue\Services\BaremePrixDeVente;
 use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Facturation\Models\SequenceDocument;
 use App\Domain\Stock\Enums\TypeMouvementStock;
@@ -296,6 +298,45 @@ class FactureAchatActionsTest extends TestCase
         app(ValiderFactureAchatAction::class)->handle(self::auteur(), $factureAchat);
 
         $this->assertSame('42.00', Produit::query()->sole()->prix_vente_ttc);
+    }
+
+    /**
+     * @return array<string, array{ArrondiDuPrixDeVente, string, string}>
+     */
+    public static function formulesEtLeursPrixDeVente(): array
+    {
+        return [
+            'sans arrondi' => [ArrondiDuPrixDeVente::Aucun, '42.00', '14.40'],
+            'un prix en 9' => [ArrondiDuPrixDeVente::UnPrixEn9, '39.00', '9.00'],
+            'l\'euro le plus proche' => [ArrondiDuPrixDeVente::EuroLePlusProche, '42.00', '14.00'],
+            'le multiple de 5 €' => [ArrondiDuPrixDeVente::MultipleDeCinq, '40.00', '15.00'],
+        ];
+    }
+
+    /**
+     * La formule d'arrondi du magasin donne le prix de vente d'un nouveau
+     * produit reçu sans prix, au brouillon comme au produit validé : « Coque »,
+     * 10 € remisé de 50 % + 30 € de bénéfice, 20 %, exact 42,00 € ; « Câble »,
+     * 2,35 € remisé de 15 % (coût 1,9975 €) + 10 €, exact 14,397 €.
+     */
+    #[DataProvider('formulesEtLeursPrixDeVente')]
+    public function test_chaque_formule_d_arrondi_donne_le_prix_de_vente_d_un_nouveau_produit(ArrondiDuPrixDeVente $formule, string $prixDeLaCoque, string $prixDuCable): void
+    {
+        app(TenantContext::class)->magasin()->update([
+            'prix_vente_automatique' => true,
+            'bareme_prix_vente' => new BaremePrixDeVente(BaremePrixDeVente::parDefaut()->paliers, 6000, $formule),
+        ]);
+
+        $factureAchat = app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [
+            ['produit' => ['nom' => 'Coque', 'taux_tva' => 20], 'quantite' => 1, 'prix_unitaire_ht' => 10, 'remise_pourcentage' => 50],
+            ['produit' => ['nom' => 'Câble', 'taux_tva' => 20], 'quantite' => 1, 'prix_unitaire_ht' => '2.35', 'remise_pourcentage' => 15],
+        ], ['date_facture' => '2026-01-15']);
+
+        $this->assertSame([$prixDeLaCoque, $prixDuCable], $factureAchat->lignes()->orderBy('ordre')->get()->map(fn (LigneAchat $ligne): mixed => $ligne->nouveau_produit['prix_vente_ttc'])->all());
+
+        app(ValiderFactureAchatAction::class)->handle(self::auteur(), $factureAchat);
+
+        $this->assertSame(['Coque' => $prixDeLaCoque, 'Câble' => $prixDuCable], Produit::query()->pluck('prix_vente_ttc', 'nom')->all());
     }
 
     /**

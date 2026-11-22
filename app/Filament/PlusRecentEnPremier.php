@@ -2,6 +2,7 @@
 
 namespace App\Filament;
 
+use App\Domain\Tenancy\Support\PremiereValeurRenseignee;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
@@ -44,11 +45,8 @@ final class PlusRecentEnPremier
     public static function parEmission(Builder $requete): Builder
     {
         $modele = $requete->getModel();
-        $grammaire = $requete->getQuery()->getGrammar();
-        $emission = $grammaire->wrap($modele->qualifyColumn('date_emission'));
-        $creation = $grammaire->wrap($modele->qualifyColumn('created_at'));
 
-        return $requete->orderByRaw("coalesce({$emission}, {$creation}) desc")->orderByDesc($modele->getQualifiedKeyName());
+        return $requete->orderByDesc(new PremiereValeurRenseignee([$modele->qualifyColumn('date_emission'), $modele->qualifyColumn('created_at')]))->orderByDesc($modele->getQualifiedKeyName());
     }
 
     /**

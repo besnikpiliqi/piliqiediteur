@@ -795,9 +795,13 @@ trait AjouteDesLignesDAchat
                         ->minValue(1)
                         ->required()
                         ->default(1)
-                        // Sur une ligne réunie, la quantité change le prix
-                        // moyen, donc la proposition du barème.
-                        ->live(onBlur: true, condition: $ajout)
+                        // Calculée en direct, comme les autres champs de la
+                        // ligne, dans « Ajouter un produit » comme dans
+                        // « Modifier » : le HT proposé de la ligne et son
+                        // détail suivent chaque frappe et chaque clic sur les
+                        // flèches. Sur une ligne réunie, la quantité change
+                        // aussi le prix moyen, donc la proposition du barème.
+                        ->saisieEnDirect()
                         ->afterStateUpdated(self::appliquerLeBareme($ficheNonModifiable, $ajout, seulementLePrixMoyen: true)),
                     TextInput::make('prix_unitaire_ht')
                         ->label('Prix d\'achat HT')

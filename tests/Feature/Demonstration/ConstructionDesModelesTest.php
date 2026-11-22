@@ -82,6 +82,45 @@ class ConstructionDesModelesTest extends DemonstrationTestCase
     }
 
     /**
+     * Sans qpdf (constat de l'éditeur du 17/11/2026, sur son poste Windows
+     * dont .env.demonstration n'avait pas QPDF_BINAIRE), la construction
+     * s'arrête avant toute base, en nommant QPDF_BINAIRE, au lieu de laisser
+     * le semis s'arrêter sur « réessayez dans quelques minutes » ; l'échec
+     * s'écrit au registre et l'ancien modèle reste en service.
+     */
+    public function test_une_construction_sans_qpdf_s_arrete_avant_toute_base_en_nommant_qpdf_binaire(): void
+    {
+        $ancien = $this->modeleDeTest(TypeDActivite::Services);
+        $semis = new class implements SemisDUnModele
+        {
+            public bool $aSeme = false;
+
+            public function semer(TypeDActivite $type, string $motDePasse): void
+            {
+                $this->aSeme = true;
+            }
+        };
+        $this->app->instance(SemisDUnModele::class, $semis);
+        config(['piliqi.qpdf' => 'qpdf-introuvable-sur-ce-poste']);
+        $this->travelTo(self::aParis('2026-11-17 01:10:00')->addMinutes(self::jeton()));
+
+        try {
+            app(ConstruireUnModele::class)->construire(TypeDActivite::Services);
+            $this->fail('La construction devait échouer.');
+        } catch (ConstructionEnEchec $echec) {
+            $this->assertStringContainsString('QPDF_BINAIRE', $echec->getMessage());
+            $this->assertStringContainsString('qpdf-introuvable-sur-ce-poste', $echec->getMessage());
+            $this->assertStringNotContainsString('réessayez', $echec->getMessage());
+        }
+
+        $this->assertFalse($semis->aSeme, 'Le semis ne commence pas sans qpdf.');
+        $rate = Modele::on('demo_admin')->where('etat', EtatDUnModele::EnEchec)->sole();
+        $this->assertStringContainsString('QPDF_BINAIRE', (string) $rate->cause_de_l_echec);
+        $this->assertFalse(app(BasesDeLaDemonstration::class)->existe($rate->nom_de_la_base), 'Aucune base de travail n\'est créée sans qpdf.');
+        $this->assertSame($ancien->nom_de_la_base, Modele::on('demo_admin')->where('type', 'services')->where('etat', EtatDUnModele::EnService)->sole()->nom_de_la_base);
+    }
+
+    /**
      * Une table sans règle d'isolation suffit à rendre la vérification non
      * nulle (REGLE_TABLES) : le modèle n'est jamais mis en service.
      */

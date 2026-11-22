@@ -139,6 +139,19 @@ final class SiteDePiliqiServiceProvider extends ServiceProvider
 
     public const COMMANDE_QUI_EPINGLE_LES_CLES_D_AUDIT = 'journal-audit:epingler-la-cle';
 
+    /**
+     * Les commandes qui préparent les clés d'un poste neuf du site de
+     * démonstration : elles démarrent avant que la clé du journal d'audit
+     * et celle de la caisse soient épinglées « démonstration », puisqu'elles
+     * servent à le faire (tirer APP_KEY, tirer la clé de caisse, épingler les
+     * empreintes) ; elles n'écrivent ni ne signent rien d'autre. Toute autre
+     * commande reste gardée (constat de l'éditeur du 17/11/2026 : sur son
+     * poste, `php artisan --env=demonstration key:generate` et
+     * `journal-audit:epingler-la-cle` étaient refusés par la garde qu'elles
+     * servent à satisfaire).
+     */
+    public const COMMANDES_QUI_PREPARENT_LES_CLES = [self::COMMANDE_QUI_EPINGLE_LES_CLES_D_AUDIT, 'key:generate', 'caisse:generer-cle'];
+
     public const MESSAGE_CLE_D_AUDIT_DE_LA_DEMONSTRATION = 'la clé du journal d\'audit %s n\'est pas épinglée « démonstration » dans resources/journal-audit/cles-demonstration.txt : tirez une clé propre à ce site, puis php artisan journal-audit:epingler-la-cle, jamais celle du site réel.';
 
     public const MESSAGE_CLE_PRIVEE_DES_MESSAGES = 'la clé privée des messages (DEMONSTRATION_MESSAGES_CLE_PRIVEE) n\'appartient qu\'au site réel : retirez-la du .env du site de démonstration, qui ne porte que les clés publiques (DEMONSTRATION_MESSAGES_CLES_PUBLIQUES).';
@@ -216,11 +229,50 @@ final class SiteDePiliqiServiceProvider extends ServiceProvider
     ];
 
     /**
+     * Le nom de la commande artisan que ce processus lance : le premier
+     * argument qui n'est pas une option. `runningConsoleCommand()` de Laravel
+     * ne lit que le deuxième argument du processus, qui vaut
+     * `--env=demonstration` dans `php artisan --env=demonstration
+     * journal-audit:epingler-la-cle`, la forme écrite au README : la commande
+     * était alors refusée par la garde qu'elle sert à satisfaire. La valeur
+     * de `--env` écrite en deux mots (`--env demonstration`) n'est pas un nom
+     * de commande.
+     *
+     * @param  list<string>|null  $arguments  les arguments du processus, le nom du script en tête ; ceux de ce processus par défaut
+     */
+    public static function nomDeLaCommande(?array $arguments = null): ?string
+    {
+        $arguments ??= array_map(ValeurSimple::enTexte(...), array_values(is_array($_SERVER['argv'] ?? null) ? $_SERVER['argv'] : []));
+
+        $valeurDeLEnvironnementAttendue = false;
+
+        foreach (array_slice($arguments, 1) as $argument) {
+            if ($valeurDeLEnvironnementAttendue) {
+                $valeurDeLEnvironnementAttendue = false;
+
+                continue;
+            }
+
+            if ($argument === '--env') {
+                $valeurDeLEnvironnementAttendue = true;
+
+                continue;
+            }
+
+            if (! str_starts_with($argument, '-')) {
+                return $argument;
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * @throws SiteMalConfigureException quand la configuration ne convient pas au site servi
      */
     public function boot(): void
     {
-        if ($this->app->runningConsoleCommand(self::COMMANDES_DE_LA_CONSTRUCTION_DU_PAQUET)) {
+        if (in_array(self::nomDeLaCommande(), self::COMMANDES_DE_LA_CONSTRUCTION_DU_PAQUET, true)) {
             return;
         }
 
@@ -354,15 +406,16 @@ final class SiteDePiliqiServiceProvider extends ServiceProvider
             }
         }
 
-        $cleDeCaisse = $this->empreinteDeLaCleDeCaisse();
+        // Seules les commandes qui préparent les clés démarrent avant qu'elles
+        // soient épinglées (voir COMMANDES_QUI_PREPARENT_LES_CLES).
+        $prepareLesCles = in_array(self::nomDeLaCommande(), self::COMMANDES_QUI_PREPARENT_LES_CLES, true);
+        $cleDeCaisse = $prepareLesCles ? null : $this->empreinteDeLaCleDeCaisse();
 
         if ($cleDeCaisse !== null && ! in_array($cleDeCaisse, $this->clesDeCaisseDeLaDemonstration(), true)) {
             $refus[] = self::MESSAGE_CLE_DE_CAISSE_DE_LA_DEMONSTRATION;
         }
 
-        // Seule la commande qui épingle ces clés démarre avant qu'elles le
-        // soient ; elle n'écrit rien d'autre que leurs empreintes.
-        foreach ($this->app->runningConsoleCommand(self::COMMANDE_QUI_EPINGLE_LES_CLES_D_AUDIT) ? [] : self::clesDAudit() as $nom => $cle) {
+        foreach ($prepareLesCles ? [] : self::clesDAudit() as $nom => $cle) {
             if (! in_array(self::empreinteDUneCleDAudit($cle), $this->empreintesDAuditDeLaDemonstration(), true)) {
                 $refus[] = sprintf(self::MESSAGE_CLE_D_AUDIT_DE_LA_DEMONSTRATION, $nom);
             }

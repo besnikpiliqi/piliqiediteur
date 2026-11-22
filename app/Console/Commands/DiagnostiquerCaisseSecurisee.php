@@ -27,8 +27,6 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use LogicException;
 use RuntimeException;
-use Symfony\Component\Process\Exception\ExceptionInterface as ProcessExceptionInterface;
-use Symfony\Component\Process\Process;
 use ZipArchive;
 
 /**
@@ -216,27 +214,7 @@ class DiagnostiquerCaisseSecurisee extends Command
      */
     private function controlerQpdf(): string
     {
-        $binaire = Reglage::texte('piliqi.qpdf');
-
-        try {
-            $processus = new Process([$binaire, '--version']);
-            $processus->setTimeout(10);
-            $processus->run();
-        } catch (ProcessExceptionInterface $erreur) {
-            throw new RuntimeException("qpdf ne se lance pas ({$binaire}) : {$erreur->getMessage()}. Installez qpdf ou indiquez son chemin dans QPDF_BINAIRE : sans lui, tout PDF reçu est refusé.");
-        }
-
-        if (! $processus->isSuccessful()) {
-            throw new RuntimeException("qpdf ne se lance pas ({$binaire}). Installez qpdf ou indiquez son chemin dans QPDF_BINAIRE : sans lui, tout PDF reçu est refusé.");
-        }
-
-        $version = AnalyseurDePdf::premiereLigne($processus->getOutput());
-
-        if (! AnalyseurDePdf::versionAdmise($version)) {
-            throw new RuntimeException("qpdf {$binaire} répond « {$version} » : l'analyse des PDF demande qpdf ".AnalyseurDePdf::VERSION_MINIMALE_DE_QPDF.' ou plus (sa description JSON version 2). Installez une version récente (README, point 4) : sans elle, tout PDF reçu est refusé.');
-        }
-
-        return $version;
+        return AnalyseurDePdf::verifierLeProgramme();
     }
 
     /**

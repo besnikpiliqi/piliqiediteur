@@ -147,6 +147,43 @@ final class AnalyseurDePdf
     ];
 
     /**
+     * Le programme qpdf du poste (QPDF_BINAIRE) se lance-t-il, dans une
+     * version qui donne la description que lit cet analyseur ? Rend la
+     * première ligne de « qpdf --version ». Sans lui, tout PDF reçu est
+     * refusé ; l'erreur nomme QPDF_BINAIRE, pour que la personne qui
+     * prépare un poste sache quoi régler au lieu de lire « réessayez dans
+     * quelques minutes » (constat de l'éditeur du 17/11/2026, sur son poste
+     * Windows). Le diagnostic de la caisse et la construction d'une base
+     * modèle de la démonstration l'appellent avant tout travail.
+     *
+     * @throws RuntimeException quand qpdf ne se lance pas ou est trop ancien
+     */
+    public static function verifierLeProgramme(): string
+    {
+        $binaire = Reglage::texte('piliqi.qpdf');
+
+        try {
+            $processus = new Process([$binaire, '--version']);
+            $processus->setTimeout(10);
+            $processus->run();
+        } catch (ExceptionInterface $erreur) {
+            throw new RuntimeException("qpdf ne se lance pas ({$binaire}) : {$erreur->getMessage()}. Installez qpdf ou indiquez son chemin dans QPDF_BINAIRE : sans lui, tout PDF reçu est refusé.");
+        }
+
+        if (! $processus->isSuccessful()) {
+            throw new RuntimeException("qpdf ne se lance pas ({$binaire}). Installez qpdf ou indiquez son chemin dans QPDF_BINAIRE : sans lui, tout PDF reçu est refusé.");
+        }
+
+        $version = self::premiereLigne($processus->getOutput());
+
+        if (! self::versionAdmise($version)) {
+            throw new RuntimeException("qpdf {$binaire} répond « {$version} » : l'analyse des PDF demande qpdf ".self::VERSION_MINIMALE_DE_QPDF.' ou plus (sa description JSON version 2). Installez une version récente (README, point 4) : sans elle, tout PDF reçu est refusé.');
+        }
+
+        return $version;
+    }
+
+    /**
      * La version que dit la première ligne de « qpdf --version »
      * (« qpdf version 11.9.0 ») est-elle VERSION_MINIMALE_DE_QPDF ou plus ?
      */

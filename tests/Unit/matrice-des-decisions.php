@@ -2803,6 +2803,31 @@ return [
                 'tests/Browser/Parcours/NomsLongsDesGraphiquesTest.php › la légende d’un anneau écrit un nom trop long par son début suivi de « … » et l’info-bulle en dit le nom entier au survol et au clic',
             ],
         ],
+        'hors.commandes-qui-preparent-les-cles-de-la-demonstration' => [
+            'puce' => 'Hors de CLAUDE.md',
+            'regle' => 'Sur un poste neuf du site de démonstration, `key:generate`, `caisse:generer-cle` et `journal-audit:epingler-la-cle` démarrent avant que les clés soient épinglées, que `--env=demonstration` soit écrit avant ou après le nom de la commande (ou en deux mots) : le nom de la commande est le premier argument qui n\'est pas une option, jamais le deuxième argument du processus ; toute autre commande reste refusée tant que les clés ne sont pas épinglées (constat de l\'éditeur du 17/11/2026, lot écrans).',
+            'tests' => [
+                'tests/Feature/Demonstration/SiteDePiliqiTest.php::test_le_nom_de_la_commande_est_le_premier_argument_qui_n_est_pas_une_option',
+                'tests/Feature/Demonstration/SiteDePiliqiTest.php::test_les_commandes_qui_preparent_les_cles_demarrent_sur_un_poste_neuf_dans_les_deux_ordres_des_arguments',
+            ],
+        ],
+        'hors.qpdf-nomme-a-la-construction-des-modeles' => [
+            'puce' => 'Hors de CLAUDE.md',
+            'regle' => 'La construction d\'une base modèle du site de démonstration contrôle qpdf avant toute base et tout semis : s\'il ne se lance pas ou est trop ancien, elle s\'arrête en nommant QPDF_BINAIRE (jamais « réessayez dans quelques minutes »), l\'échec s\'écrit au registre et l\'ancien modèle reste en service ; le diagnostic de la caisse fait le même contrôle ; .env.demonstration.example porte QPDF_BINAIRE (constat de l\'éditeur du 17/11/2026, lot écrans).',
+            'tests' => [
+                'tests/Feature/Demonstration/ConstructionDesModelesTest.php::test_une_construction_sans_qpdf_s_arrete_avant_toute_base_en_nommant_qpdf_binaire',
+            ],
+        ],
+        'hors.copie-portable-des-fichiers-d-un-modele' => [
+            'puce' => 'Hors de CLAUDE.md',
+            'regle' => 'Les fichiers d\'un modèle du site de démonstration se recopient pour chaque copie par PHP seul, qui tourne aussi sous Windows ; `cp --reflink=auto` ne sert que d\'accélération sous Linux et, absent ou en échec, laisse la copie à PHP sans reste d\'un clone interrompu ; un lien symbolique dans le modèle est refusé avant toute copie (constat de l\'éditeur du 17/11/2026, lot écrans).',
+            'tests' => [
+                'tests/Feature/Demonstration/CopieDesFichiersDUnModeleTest.php::test_les_fichiers_du_modele_se_recopient_avec_leur_contenu_leurs_droits_et_leurs_dossiers_vides',
+                'tests/Feature/Demonstration/CopieDesFichiersDUnModeleTest.php::test_la_copie_aboutit_quand_cp_est_introuvable',
+                'tests/Feature/Demonstration/CopieDesFichiersDUnModeleTest.php::test_un_cp_qui_echoue_laisse_la_copie_a_php_sans_reste_du_clone_interrompu',
+                'tests/Feature/Demonstration/CopieDesFichiersDUnModeleTest.php::test_un_lien_symbolique_dans_le_modele_est_refuse_avant_toute_copie',
+            ],
+        ],
         'hors.recu-le-passe-permis-futur-refuse' => [
             'puce' => 'Hors de CLAUDE.md',
             'regle' => 'Le champ « Reçu le » d\'un paiement (encaissement d\'une facture, page des paiements) accepte une date passée, comme un virement vu sur le relevé de la veille, et refuse une date future, au jour du calendrier du magasin (décision de Claude du 09/10/2026, constat X0 de son audit, appliquée sans attendre selon D76 et lue par l\'éditeur le 13/11/2026 sans la contester).',

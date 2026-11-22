@@ -406,6 +406,68 @@ class SiteDePiliqiTest extends TestCase
     }
 
     /**
+     * Le nom de la commande est le premier argument qui n'est pas une
+     * option, où que soit écrit `--env` (constat de l'éditeur du
+     * 17/11/2026 : Laravel ne lit que le deuxième argument du processus).
+     */
+    public function test_le_nom_de_la_commande_est_le_premier_argument_qui_n_est_pas_une_option(): void
+    {
+        $this->assertSame('journal-audit:epingler-la-cle', SiteDePiliqiServiceProvider::nomDeLaCommande(['artisan', '--env=demonstration', 'journal-audit:epingler-la-cle']));
+        $this->assertSame('journal-audit:epingler-la-cle', SiteDePiliqiServiceProvider::nomDeLaCommande(['artisan', 'journal-audit:epingler-la-cle', '--env=demonstration']));
+        $this->assertSame('journal-audit:epingler-la-cle', SiteDePiliqiServiceProvider::nomDeLaCommande(['artisan', '--env', 'demonstration', 'journal-audit:epingler-la-cle']));
+        $this->assertSame('key:generate', SiteDePiliqiServiceProvider::nomDeLaCommande(['artisan', '-q', '--no-interaction', '--env=demonstration', 'key:generate', '--show']));
+        $this->assertSame('about', SiteDePiliqiServiceProvider::nomDeLaCommande(['artisan', 'about']));
+        $this->assertNull(SiteDePiliqiServiceProvider::nomDeLaCommande(['artisan']));
+        $this->assertNull(SiteDePiliqiServiceProvider::nomDeLaCommande(['artisan', '--env=demonstration', '--version']));
+        $this->assertNull(SiteDePiliqiServiceProvider::nomDeLaCommande(['artisan', '--env']));
+    }
+
+    /**
+     * Les commandes qui tirent et épinglent les clés d'un poste neuf du site
+     * de démonstration démarrent avant que les clés soient épinglées, dans
+     * les deux ordres d'écriture (`php artisan --env=demonstration
+     * journal-audit:epingler-la-cle`, la forme du README, comme
+     * `php artisan journal-audit:epingler-la-cle --env=demonstration`) ;
+     * toute autre commande reste refusée tant qu'elles ne le sont pas.
+     */
+    public function test_les_commandes_qui_preparent_les_cles_demarrent_sur_un_poste_neuf_dans_les_deux_ordres_des_arguments(): void
+    {
+        $this->configurerLeSiteDeDemonstration();
+        $paire = SignataireFiscal::genererUnePaire();
+        config([
+            'caisse_securisee.cle_privee' => base64_encode($paire['cle_privee']),
+            'caisse_securisee.cles_publiques' => ['reel.pem' => $paire['cle_publique']],
+            'journal_audit.cle' => base64_encode(random_bytes(32)),
+            'journal_audit.empreintes_de_demonstration' => [],
+        ]);
+        $argumentsDuProcessus = $_SERVER['argv'];
+
+        try {
+            foreach (SiteDePiliqiServiceProvider::COMMANDES_QUI_PREPARENT_LES_CLES as $commande) {
+                foreach ([['artisan', '--env=demonstration', $commande], ['artisan', $commande, '--env=demonstration'], ['artisan', '--env', 'demonstration', $commande]] as $arguments) {
+                    $_SERVER['argv'] = $arguments;
+                    $this->demarrer();
+                }
+            }
+
+            foreach ([['artisan', '--env=demonstration', 'about'], ['artisan', 'about', '--env=demonstration'], ['artisan', '--env=demonstration', 'migrate']] as $arguments) {
+                $_SERVER['argv'] = $arguments;
+                $this->assertSame(
+                    sprintf(
+                        SiteDePiliqiServiceProvider::MESSAGE_REFUS,
+                        'site de démonstration',
+                        SiteDePiliqiServiceProvider::MESSAGE_CLE_DE_CAISSE_DE_LA_DEMONSTRATION.' '.sprintf(SiteDePiliqiServiceProvider::MESSAGE_CLE_D_AUDIT_DE_LA_DEMONSTRATION, 'courante (JOURNAL_AUDIT_CLE)'),
+                    ),
+                    $this->refusDuDemarrage(),
+                    'Une autre commande reste refusée tant que les clés ne sont pas épinglées : '.implode(' ', $arguments),
+                );
+            }
+        } finally {
+            $_SERVER['argv'] = $argumentsDuProcessus;
+        }
+    }
+
+    /**
      * Le script de Composer, tel que la CI et le déploiement le lancent :
      * en production, sans .env qui règle le témoin de session,
      * package:discover passe, une autre commande s'arrête sur la garde.

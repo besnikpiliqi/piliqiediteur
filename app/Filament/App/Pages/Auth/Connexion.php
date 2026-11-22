@@ -4,6 +4,7 @@ namespace App\Filament\App\Pages\Auth;
 
 use App\Domain\Tenancy\Services\FournisseurDesComptes;
 use App\Domain\Tenancy\Services\LimitationDesConnexions;
+use App\Domain\Tenancy\Services\MotsDePasseProvisoires;
 use App\Domain\Tenancy\Services\PostesConnus;
 use App\Domain\Tenancy\Services\SuiviDesConnexions;
 use App\Domain\Tenancy\Support\IdentifiantDeConnexion;
@@ -31,16 +32,21 @@ use LogicException;
  *   révéler ;
  * - la même réponse, au même délai, pour un identifiant inconnu, une
  *   adresse qui n'est pas celle d'un propriétaire, un mot de passe faux, un
- *   compte suspendu ou retiré, un mot de passe égal à l'identifiant tapé
- *   hors d'un poste reconnu, ou un compte qui n'entre pas dans ce panneau ;
- *   l'écran ne réaffiche pas l'identifiant après un échec ;
+ *   compte suspendu ou retiré, un mot de passe provisoire qui a servi, qui a
+ *   expiré ou que l'on tape hors d'un poste reconnu, ou un compte qui
+ *   n'entre pas dans ce panneau ; l'écran ne réaffiche pas l'identifiant
+ *   après un échec ;
  * - la limitation des essais, qui ne compte que les échecs et n'impose
  *   jamais d'attente sur un poste connu du compte (voir
  *   LimitationDesConnexions et PostesConnus) ;
  * - « Se souvenir de moi » pour le seul compte du propriétaire, sur un
  *   appareil personnel : sans effet pour tout autre compte.
- * Une connexion réussie régénère la session, y note si le compte doit
- * choisir son mot de passe (voir ExigerSonPropreMotDePasse), efface le
+ * Une connexion réussie avec un mot de passe provisoire (voir
+ * MotsDePasseProvisoires) le consomme d'abord, d'un seul geste atomique :
+ * de deux connexions simultanées, une seule le consomme, l'autre reçoit la
+ * réponse d'un mot de passe faux. Elle régénère ensuite la session, y note
+ * si le compte doit choisir son mot de passe (voir
+ * ExigerSonPropreMotDePasse), efface le
  * compteur de sa saisie, retient ce poste pour le compte, puis note la
  * première et la dernière connexion (voir SuiviDesConnexions) ; elle seule,
  * jamais une connexion refusée, aucun écouteur de connexion ne s'en
@@ -52,8 +58,6 @@ use LogicException;
 class Connexion extends Login
 {
     public const MESSAGE_ECHEC = 'Identifiant, adresse ou mot de passe incorrect.';
-
-    public const MESSAGE_POSTE = 'Si votre mot de passe est encore votre identifiant, connectez-vous depuis un poste reconnu de votre magasin, puis choisissez votre mot de passe dans votre profil.';
 
     public function mount(): void
     {
@@ -73,7 +77,7 @@ class Connexion extends Login
     {
         return TextInput::make('login')
             ->label('Identifiant ou adresse e-mail')
-            ->helperText('Votre identifiant de 8 chiffres ; le propriétaire peut aussi utiliser son adresse e-mail.')
+            ->helperText('Votre identifiant de 8 chiffres ; le propriétaire peut aussi utiliser son adresse e-mail. Un mot de passe provisoire ne sert qu\'une fois, depuis un poste reconnu de votre magasin, pendant '.MotsDePasseProvisoires::dureeEnHeures().' heures.')
             ->required()
             ->maxLength(255)
             ->autocomplete('username')
@@ -128,11 +132,20 @@ class Connexion extends Login
             $connecte = null;
         }
 
+        if ($connecte !== null && ! $connecte->aChoisiSonMotDePasse()) {
+            if (! app(MotsDePasseProvisoires::class)->consommer($connecte)) {
+                Filament::auth()->logout();
+                $connecte = null;
+            } else {
+                $connecte->refresh();
+            }
+        }
+
         if ($connecte === null) {
             $limitation->echec($normalisee, $adresseIp, $nonce, $compte, $motDePasse === $normalisee);
             $this->oublierLaSaisie();
 
-            throw ValidationException::withMessages(['data.login' => $motDePasse === $normalisee ? self::MESSAGE_ECHEC.' '.self::MESSAGE_POSTE : self::MESSAGE_ECHEC]);
+            throw ValidationException::withMessages(['data.login' => self::MESSAGE_ECHEC]);
         }
 
         session()->regenerate();

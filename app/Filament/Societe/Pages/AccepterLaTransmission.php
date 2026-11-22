@@ -3,6 +3,8 @@
 namespace App\Filament\Societe\Pages;
 
 use App\Domain\Tenancy\Actions\AccepterLaTransmissionDeLaProprieteAction;
+use App\Domain\Tenancy\Services\LimitationDesLiens;
+use App\Domain\Tenancy\Support\MotDePasseRedemande;
 use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Filament\EspaceDeLaSociete;
 use App\Models\User;
@@ -28,7 +30,10 @@ use LogicException;
  * en redonnant son mot de passe (voir
  * AccepterLaTransmissionDeLaProprieteAction). Un lien inconnu, expiré,
  * annulé, déjà suivi, remplacé ou ouvert par un autre compte ne propose
- * rien et le dit sans détail. Ouvrir la page ne change rien.
+ * rien et le dit sans détail. Ouvrir la page ne change rien. Un lien inconnu
+ * compte parmi les jetons inconnus ou expirés de l'adresse IP, et un mot de
+ * passe refusé compte sur ce lien, qui attend 15 minutes au cinquième et
+ * reste valable jusqu'à son échéance (voir LimitationDesLiens).
  *
  * @property Form $form
  */
@@ -57,6 +62,11 @@ class AccepterLaTransmission extends SimplePage
     public function mount(string $jeton): void
     {
         $this->jeton = $jeton;
+
+        if (! $this->estValable() && app(LimitationDesLiens::class)->attenteDeLAdresse((string) request()->ip()) === 0) {
+            app(LimitationDesLiens::class)->jetonInvalide((string) request()->ip());
+        }
+
         $this->form->fill();
     }
 
@@ -84,7 +94,17 @@ class AccepterLaTransmission extends SimplePage
 
     public function accepter(): void
     {
+        $limites = app(LimitationDesLiens::class);
+        $adresse = (string) request()->ip();
+
+        if (($attente = $limites->attenteDeLAdresse($adresse)) > 0 || ($attente = $limites->attenteDuLien($this->jeton)) > 0) {
+            Notification::make()->title(LimitationDesLiens::message($attente))->danger()->send();
+
+            return;
+        }
+
         if (! $this->estValable()) {
+            $limites->jetonInvalide($adresse);
             Notification::make()->title(AccepterLaTransmissionDeLaProprieteAction::MESSAGE_LIEN)->danger()->send();
 
             return;
@@ -95,11 +115,17 @@ class AccepterLaTransmission extends SimplePage
         try {
             app(AccepterLaTransmissionDeLaProprieteAction::class)->handle($this->compte(), $this->jeton, ValeurSimple::enTexte($donnees['mot_de_passe']));
         } catch (AuthorizationException|LogicException $refus) {
+            if ($refus->getMessage() === MotDePasseRedemande::MESSAGE) {
+                $limites->motDePasseRefuse($this->jeton);
+            }
+
             Notification::make()->title($refus->getMessage())->danger()->send();
             $this->data['mot_de_passe'] = null;
 
             return;
         }
+
+        $limites->motDePasseAccepte($this->jeton);
 
         $compte = $this->compte()->refresh();
 

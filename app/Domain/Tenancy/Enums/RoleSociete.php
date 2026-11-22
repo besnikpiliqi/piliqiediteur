@@ -28,7 +28,7 @@ use Filament\Support\Contracts\HasLabel;
  *   ni membre, sans affectation ni case ni autorisation de société, il
  *   ouvre les magasins de sa société que la déclaration lui ouvre,
  *   avec les autorisations qu'elle porte, comme un compte d'un cabinet
- *   lié ; il ne vend jamais, n'a jamais son identifiant pour mot de passe,
+ *   lié ; il ne vend jamais, n'a jamais de mot de passe provisoire,
  *   ne change jamais de rôle, et son compte se retire de lui-même quand le
  *   cabinet de son SIREN est vérifié (voir RattacherUneDeclarationAction) ;
  * - un membre, dont le compte ne vaut que pour le magasin de son identifiant, avec

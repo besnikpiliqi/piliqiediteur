@@ -45,7 +45,7 @@ final class ComptesDuBandeauDuModele
             'halles' => [
                 'Camille Laurent' => 'Responsable',
                 'Lucas Moreau' => 'Vendeur',
-                'Inès Garcia' => 'Vendeuse (son mot de passe est encore son identifiant)',
+                'Inès Garcia' => 'Vendeuse (son mot de passe provisoire vaut encore : une seule fois, depuis un poste reconnu)',
                 'Yanis Morel' => 'Vendeur (compte suspendu)',
                 'Élodie Fabre' => 'Observatrice',
             ],
@@ -84,6 +84,7 @@ final class ComptesDuBandeauDuModele
                 'propriétaire cabinet' => 'Propriétaire du cabinet',
                 'Paul Lefèvre' => 'Collaborateur (Maison Ferrand confiée)',
                 'Emma Rousseau' => 'Collaboratrice (Épicerie Lemoine confiée)',
+                'Gabriel Faure' => 'Collaborateur (n\'a pas encore choisi son mot de passe)',
             ],
         ]],
     ];

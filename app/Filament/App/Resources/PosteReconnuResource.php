@@ -18,8 +18,8 @@ use Filament\Tables\Table;
  * Les postes reconnus du magasin, dans ses paramètres (voir
  * PostesReconnus et PosteReconnuPolicy) : le propriétaire ou un responsable
  * reconnaît le navigateur qu'il utilise comme un poste du magasin, sous un
- * nom, et retire un poste à tout moment. Tant que le mot de passe d'un
- * compte est encore son identifiant, il n'ouvre ce compte que depuis un
+ * nom, et retire un poste à tout moment. Le mot de passe provisoire d'un
+ * compte (voir MotsDePasseProvisoires) n'ouvre ce compte que depuis un
  * poste reconnu de son magasin ; ailleurs, la personne doit avoir choisi le
  * sien. Un poste retiré reste listé, avec qui l'a reconnu et qui l'a
  * retiré. Fermée à la recherche globale.
@@ -69,7 +69,7 @@ class PosteReconnuResource extends Resource
                     ->icon('heroicon-o-no-symbol')
                     ->color('danger')
                     ->requiresConfirmation()
-                    ->modalDescription('Ce poste n\'ouvrira plus aucun compte dont le mot de passe est encore son identifiant.')
+                    ->modalDescription('Ce poste n\'ouvrira plus aucun compte par un mot de passe provisoire.')
                     ->authorize('update')
                     ->action(fn (PosteReconnu $record) => static::executerSansCasser(function () use ($record): void {
                         app(PostesReconnus::class)->retirer(self::auteur(), $record);

@@ -96,6 +96,7 @@ use App\Domain\Tenancy\Support\CleDuModele;
 use App\Domain\Tenancy\Support\GardesDesDroits;
 use App\Domain\Tenancy\Support\InterventionDeLEditeur;
 use App\Domain\Tenancy\Support\ValeurRequise;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Integrations\EnvoiRecommande\Contracts\ServiceEnvoiRecommande;
 use App\Integrations\Ordre\Contracts\AnnuaireDeLOrdre;
 use App\Integrations\Ordre\FauxAnnuaireDeLOrdre;
@@ -675,7 +676,7 @@ abstract class TestCase extends BaseTestCase
         app(TenantContext::class)->clear();
         $proprietaire = $this->proprietaireDuCabinet($cabinet);
         $compte = app(CreerCollaborateurAction::class)->handle($proprietaire, $cabinet, ['name' => $nom]);
-        app(RedonnerLAccesAction::class)->handle($proprietaire, $compte, true, self::MOT_DE_PASSE_CHOISI, (string) Str::uuid());
+        app(RedonnerLAccesAction::class)->enSaPresence($proprietaire, $compte, self::MOT_DE_PASSE_CHOISI, (string) Str::uuid());
         app(TenantContext::class)->clear();
 
         return $compte->refresh();
@@ -1205,12 +1206,15 @@ abstract class TestCase extends BaseTestCase
     }
 
     /**
-     * Un membre du magasin créé par le propriétaire, dont le mot de passe
-     * est encore son identifiant : le compte et son identifiant.
+     * Un membre du magasin créé par le propriétaire, qui n'a pas encore
+     * choisi son mot de passe : le compte et son mot de passe provisoire,
+     * tel que la fenêtre du compte créé le montre une seule fois (voir
+     * MotsDePasseProvisoires). Son identifiant est celui du compte
+     * (identifiantDeConnexion()), jamais son mot de passe.
      *
      * @return array{0: User, 1: string}
      */
-    protected function compteAuMotDePasseIdentifiant(Magasin $magasin, RoleMagasin $role): array
+    protected function compteAuMotDePasseProvisoire(Magasin $magasin, RoleMagasin $role): array
     {
         $compte = app(TenantContext::class)->runAs($magasin, fn (): User => app(CreerMembreAction::class)->handle(
             $this->proprietaireDe($magasin),
@@ -1219,12 +1223,30 @@ abstract class TestCase extends BaseTestCase
             $role,
         ));
 
-        return [$compte, (string) $compte->identifiantDeConnexion()];
+        return [$compte, ValeurRequise::de($compte->motDePasseProvisoire, 'le mot de passe provisoire du compte créé')->valeur()];
+    }
+
+    /**
+     * Le mot de passe provisoire que la dernière notification « Accès
+     * redonné » de la session montre, une seule fois, à qui le remet en main
+     * propre (voir GereLesComptes::phraseDuMotDePasseProvisoire()).
+     */
+    protected function motDePasseProvisoireNotifie(): string
+    {
+        foreach ((array) session()->get('filament.notifications') as $notification) {
+            $titre = is_array($notification) ? ValeursLues::texte($notification['title'] ?? '') : '';
+
+            if (preg_match('/mot de passe provisoire ([a-z2-9]{4}-[a-z2-9]{4}-[a-z2-9]{4}) : il ne s\'affiche qu\'une fois/', $titre, $trouve) === 1) {
+                return $trouve[1];
+            }
+        }
+
+        $this->fail('Aucune notification ne montre de mot de passe provisoire.');
     }
 
     /**
      * La personne choisit son mot de passe dans son profil, à la place de
-     * son identifiant ; le magasin actif reste le même.
+     * son mot de passe provisoire ; le magasin actif reste le même.
      */
     protected function choisirSonMotDePasse(User $compte): User
     {

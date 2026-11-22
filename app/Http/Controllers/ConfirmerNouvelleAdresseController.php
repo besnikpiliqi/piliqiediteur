@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Domain\Tenancy\Actions\ConfirmerNouvelleAdresseAction;
+use App\Domain\Tenancy\Services\LimitationDesLiens;
 use App\Domain\Tenancy\Support\ValeursLues;
 use Filament\Facades\Filament;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -25,7 +26,8 @@ use Illuminate\Validation\ValidationException;
  * ReponseDeConnexion). Le compte se cherche par l'empreinte du jeton,
  * jamais par le jeton ; les pages ne transmettent pas leur adresse aux
  * liens qui en partent (Referrer-Policy: no-referrer). Aucune session
- * n'est ouverte.
+ * n'est ouverte. Un lien inconnu, expiré, servi ou remplacé compte parmi les
+ * jetons inconnus ou expirés de l'adresse IP (voir LimitationDesLiens).
  */
 class ConfirmerNouvelleAdresseController
 {
@@ -39,6 +41,10 @@ class ConfirmerNouvelleAdresseController
 
         $expertComptable = $compte?->estExpertComptable() === true;
 
+        if ($compte === null) {
+            app(LimitationDesLiens::class)->jetonInvalide((string) $requete->ip());
+        }
+
         return $this->page($jeton, $compte?->nouvelle_adresse, null, premiereAdresse: $compte !== null && ! $expertComptable && ! $compte->aUneAdresseDeConnexion(), expertComptable: $expertComptable);
     }
 
@@ -48,6 +54,10 @@ class ConfirmerNouvelleAdresseController
             $compte = $confirmer->handle($jeton, Auth::user());
         } catch (AuthorizationException|ValidationException $refus) {
             $message = $refus instanceof ValidationException ? ValeursLues::texteOuNul(collect($refus->errors())->flatten()->first()) : $refus->getMessage();
+
+            if ($message === ConfirmerNouvelleAdresseAction::MESSAGE_LIEN_INVALIDE) {
+                app(LimitationDesLiens::class)->jetonInvalide((string) $requete->ip());
+            }
 
             return $message === ConfirmerNouvelleAdresseAction::MESSAGE_CONNEXION_REQUISE
                 ? $this->pageDeConnexion($requete, $jeton, erreur: true)

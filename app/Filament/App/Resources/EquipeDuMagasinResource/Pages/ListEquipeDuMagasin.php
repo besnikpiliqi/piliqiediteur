@@ -21,8 +21,8 @@ use Illuminate\Support\Str;
  * jeton à son ouverture (une demande répétée après une réponse perdue ne
  * crée jamais un second compte), ne demande aucune adresse e-mail, propose
  * de réintégrer l'ancien compte retiré du même nom, et elle est suivie de
- * la fenêtre qui montre l'identifiant du compte créé, aussi son premier mot
- * de passe (voir GereLesComptes::fenetreDuCompteCree()).
+ * la fenêtre qui montre l'identifiant du compte créé et son mot de passe
+ * provisoire, une seule fois (voir GereLesComptes::fenetreDuCompteCree()).
  */
 class ListEquipeDuMagasin extends ListRecords
 {
@@ -49,7 +49,7 @@ class ListEquipeDuMagasin extends ListRecords
                 EquipeDuMagasinResource::champRole(),
                 ...EquipeDuMagasinResource::champsAutorisations(),
             ])
-            ->modalDescription('Un compte ne vaut que pour ce magasin. Son identifiant, tiré au hasard, est aussi son premier mot de passe : vous le verrez juste après, pour le remettre en main propre.')
+            ->modalDescription('Un compte ne vaut que pour ce magasin. Vous verrez juste après son identifiant et son mot de passe provisoire, tiré au hasard, une seule fois, pour les remettre en main propre : la personne le remplace aussitôt par le sien, à sa première connexion.')
             ->action(function (array $data): void {
                 $cree = null;
 

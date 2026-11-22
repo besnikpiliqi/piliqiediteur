@@ -143,7 +143,7 @@ final class AffectationsDesMembres
     /**
      * Prévient le propriétaire du responsable qu'un administrateur vient de
      * nommer, ou dont il vient de créer le compte : il en connaît alors le
-     * premier mot de passe, l'identifiant.
+     * mot de passe provisoire, qu'il remet en main propre.
      */
     public function prevenirDUneNomination(User $compte, Affectation $affectation, bool $compteCree): void
     {

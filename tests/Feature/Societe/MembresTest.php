@@ -9,6 +9,7 @@ use App\Domain\Tenancy\Actions\CreerAdministrateurAction;
 use App\Domain\Tenancy\Actions\CreerMembreAction;
 use App\Domain\Tenancy\Actions\ModifierMembreAction;
 use App\Domain\Tenancy\Enums\ActionAuditee;
+use App\Domain\Tenancy\Enums\EtatDuMotDePasse;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\RoleSociete;
 use App\Domain\Tenancy\Enums\StatutCompte;
@@ -31,10 +32,12 @@ use Tests\TestCase;
 
 /**
  * La société crée directement les comptes de son équipe, un compte par
- * magasin : son identifiant de connexion, tiré au hasard, est aussi son
- * premier mot de passe, remis en main propre, sans expiration ni
- * changement obligatoire ; aucune adresse e-mail ne se saisit à la
- * création, et l'adresse du compte n'est jamais confirmée pour autant.
+ * magasin : son identifiant de connexion, tiré au hasard, n'est jamais son
+ * mot de passe ; son premier mot de passe est un mot de passe provisoire,
+ * tiré au hasard, remis en main propre, qui ne sert qu'une fois pendant
+ * 72 heures et que la personne remplace à sa première connexion ; aucune
+ * adresse e-mail ne se saisit à la création, et l'adresse du compte n'est
+ * jamais confirmée pour autant.
  */
 class MembresTest extends TestCase
 {
@@ -42,11 +45,12 @@ class MembresTest extends TestCase
 
     /**
      * Le propriétaire crée, depuis l'espace de la société, le compte d'un
-     * vendeur pour un magasin : son identifiant est son premier mot de
-     * passe, sans expiration ; le compte agit aussitôt, dans ce seul
-     * magasin.
+     * vendeur pour un magasin : son premier mot de passe est un mot de passe
+     * provisoire, que la fenêtre du compte créé montre une seule fois, pour
+     * 72 heures, jamais son identifiant ; le compte agit aussitôt, dans ce
+     * seul magasin, même quand son mot de passe provisoire a expiré.
      */
-    public function test_le_proprietaire_cree_un_vendeur_pour_un_magasin_avec_son_identifiant_pour_premier_mot_de_passe(): void
+    public function test_le_proprietaire_cree_un_vendeur_pour_un_magasin_avec_un_mot_de_passe_provisoire(): void
     {
         $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
@@ -54,7 +58,7 @@ class MembresTest extends TestCase
         $proprietaire = $this->proprietaireDe($magasin);
 
         $this->dansLEspaceDeLaSociete($magasin->societe, $proprietaire);
-        Livewire::test(ListMembres::class)
+        $page = Livewire::test(ListMembres::class)
             ->mountAction('creerUnMembre')
             ->setActionData(['magasin_id' => $autre->id, 'name' => 'Paul Vendeur', 'role' => RoleMagasin::Vendeur->value])
             ->set('mountedActionsData.0.autorisations', [])
@@ -65,8 +69,13 @@ class MembresTest extends TestCase
 
         $paul = User::query()->where('name', 'Paul Vendeur')->sole();
         $identifiant = (string) $paul->identifiantDeConnexion();
-        $this->assertSame([RoleSociete::Membre, StatutCompte::Actif, true, (int) $proprietaire->id, null], [$paul->role_societe, $paul->statut, $paul->mot_de_passe_est_l_identifiant, (int) $paul->cree_par, $paul->email]);
-        $this->assertTrue(Hash::check($identifiant, $paul->password));
+        $provisoire = (string) $page->get('motDePasseProvisoireMontre');
+        $this->assertSame([RoleSociete::Membre, StatutCompte::Actif, EtatDuMotDePasse::ProvisoireValable, (int) $proprietaire->id, null], [$paul->role_societe, $paul->statut, $paul->etatDuMotDePasse(), (int) $paul->cree_par, $paul->email]);
+        $this->assertMatchesRegularExpression('/^[a-z2-9]{4}-[a-z2-9]{4}-[a-z2-9]{4}$/D', $provisoire);
+        $this->assertTrue(Hash::check($provisoire, $paul->password));
+        $this->assertFalse(Hash::check($identifiant, $paul->password), 'L\'identifiant n\'est jamais un mot de passe.');
+        $this->assertSame(self::aParis('2026-10-12 10:00:00')->getTimestamp(), $paul->mot_de_passe_provisoire_expire_le?->getTimestamp());
+        $page->assertSee("Identifiant : {$identifiant}")->assertSee("Mot de passe provisoire : {$provisoire}");
         $this->assertNull($paul->email_verified_at);
         $this->assertTrue($paul->peutAgir());
         $this->assertSame([[(int) $autre->id, RoleMagasin::Vendeur]], Affectation::query()->where('user_id', $paul->id)->get()->map(fn (Affectation $affectation): array => [(int) $affectation->magasin_id, $affectation->role])->all());
@@ -74,7 +83,7 @@ class MembresTest extends TestCase
         $this->assertSame([(int) $autre->id, false], [(int) $paul->magasinDeSonIdentifiant()?->id, $paul->peutOuvrir($magasin)]);
 
         $this->travelTo(self::aParis('2026-11-08 10:00:00'));
-        $this->assertTrue(Hash::check($identifiant, $paul->refresh()->password));
+        $this->assertSame(EtatDuMotDePasse::ProvisoireExpire, $paul->refresh()->etatDuMotDePasse());
         $this->assertTrue($paul->peutAgir());
     }
 
@@ -308,10 +317,10 @@ class MembresTest extends TestCase
         $relu = User::query()->findOrFail($compte->id);
 
         $this->assertSame(
-            [$relu->mot_de_passe_est_l_identifiant, $relu->estActif(), $relu->estMembre(), $relu->peutAgir(), $relu->email_verified_at, $relu->identifiantDeConnexion()],
-            [$compte->mot_de_passe_est_l_identifiant, $compte->estActif(), $compte->estMembre(), $compte->peutAgir(), $compte->email_verified_at, $compte->identifiantDeConnexion()],
+            [$relu->etatDuMotDePasse(), $relu->estActif(), $relu->estMembre(), $relu->peutAgir(), $relu->email_verified_at, $relu->identifiantDeConnexion()],
+            [$compte->etatDuMotDePasse(), $compte->estActif(), $compte->estMembre(), $compte->peutAgir(), $compte->email_verified_at, $compte->identifiantDeConnexion()],
         );
-        $this->assertSame([true, true, true, true, null], [$compte->mot_de_passe_est_l_identifiant, $compte->estActif(), $compte->estMembre(), $compte->peutAgir(), $compte->email_verified_at]);
+        $this->assertSame([EtatDuMotDePasse::ProvisoireValable, true, true, true, null], [$compte->etatDuMotDePasse(), $compte->estActif(), $compte->estMembre(), $compte->peutAgir(), $compte->email_verified_at]);
     }
 
     /**
@@ -334,7 +343,7 @@ class MembresTest extends TestCase
         foreach ($comptes as $compte) {
             $compte->refresh();
             $this->assertSame([null, null], [$compte->email, $compte->email_verified_at], $compte->name);
-            $this->assertTrue($compte->mot_de_passe_est_l_identifiant, $compte->name);
+            $this->assertFalse($compte->aChoisiSonMotDePasse(), $compte->name);
         }
     }
 
@@ -348,7 +357,7 @@ class MembresTest extends TestCase
 
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
 
-        $this->assertSame([true, false, null], [$vendeur->peutAgir(), $vendeur->mot_de_passe_est_l_identifiant, $vendeur->email_verified_at]);
+        $this->assertSame([true, true, null], [$vendeur->peutAgir(), $vendeur->aChoisiSonMotDePasse(), $vendeur->email_verified_at]);
         $this->assertTrue($vendeur->peutOuvrir($magasin));
         $this->assertTrue(Hash::check(self::MOT_DE_PASSE_CHOISI, $vendeur->password));
         $this->assertSame($this->proprietaireDe($magasin)->id, (int) $vendeur->cree_par);
@@ -372,11 +381,11 @@ class MembresTest extends TestCase
             ->mountAction('redonnerLAcces')
             ->assertSee('En sa présence : elle tape elle-même son nouveau mot de passe')
             ->assertSee('Lui envoyer un nouveau lien, valable 7 jours, à marc.petit@petit-associes.test')
-            ->assertDontSee('son mot de passe redevient son identifiant');
+            ->assertDontSee('mot de passe provisoire');
 
         $this->forgerLAction(Livewire::test(FicheDuMembre::class, ['record' => $expert->getRouteKey()]), 'redonnerLAcces', ['mode' => 'absent']);
         $this->assertTrue(Hash::check(self::MOT_DE_PASSE_CHOISI, $expert->fresh()->password));
-        $this->assertFalse((bool) $expert->fresh()->mot_de_passe_est_l_identifiant);
+        $this->assertNull($expert->fresh()->mot_de_passe_provisoire_expire_le);
 
         Livewire::test(FicheDuMembre::class, ['record' => $expert->getRouteKey()])
             ->callAction('redonnerLAcces', ['mode' => 'present', 'mot_de_passe' => 'Nouveau-Mot-2026!', 'mot_de_passe_confirmation' => 'Nouveau-Mot-2026!'])

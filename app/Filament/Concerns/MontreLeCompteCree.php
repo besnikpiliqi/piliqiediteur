@@ -15,7 +15,9 @@ use Livewire\Attributes\Locked;
  * cette page vient de créer, dont l'identifiant est posé côté serveur par
  * la création elle-même, dans une propriété verrouillée que le navigateur
  * ne peut ni écrire ni remplacer. Une demande forgée, qui désignerait un
- * autre compte, ne monte aucune fenêtre et ne montre aucun identifiant.
+ * autre compte, ne monte aucune fenêtre et ne montre aucun identifiant. Le
+ * mot de passe provisoire du compte créé se tient de même, en clair, le
+ * temps que la fenêtre le montre, puis s'oublie.
  * Pour une page de ressource dont la ressource gère les comptes (voir
  * GereLesComptes).
  */
@@ -24,9 +26,26 @@ trait MontreLeCompteCree
     #[Locked]
     public ?int $compteCreeId = null;
 
+    /**
+     * Le mot de passe provisoire du compte que la page vient de créer, en
+     * clair, le temps de le montrer une seule fois à qui le remet en main
+     * propre (voir MotDePasseProvisoire) : posé côté serveur par la
+     * création elle-même, oublié dès que la fenêtre se ferme, jamais
+     * enregistré.
+     */
+    #[Locked]
+    public ?string $motDePasseProvisoireMontre = null;
+
     public function compteCreeAction(): Action
     {
-        return ValeursLues::instance(static::getResource()::fenetreDuCompteCree(Action::make('compteCree'), fn (): ?int => $this->compteCreeId), Action::class);
+        return ValeursLues::instance(static::getResource()::fenetreDuCompteCree(
+            Action::make('compteCree'),
+            fn (): ?int => $this->compteCreeId,
+            fn (): ?string => $this->motDePasseProvisoireMontre,
+            function (): void {
+                $this->motDePasseProvisoireMontre = null;
+            },
+        ), Action::class);
     }
 
     /**
@@ -38,6 +57,7 @@ trait MontreLeCompteCree
     protected function montrerLeCompteCree(User $cree): void
     {
         $this->compteCreeId = CleDuModele::de($cree);
+        $this->motDePasseProvisoireMontre = $cree->motDePasseProvisoire?->valeur();
         $this->replaceMountedAction('compteCree');
 
         if ($this->getMountedAction() === null) {

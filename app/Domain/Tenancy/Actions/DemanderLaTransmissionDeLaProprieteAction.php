@@ -43,8 +43,9 @@ use SensitiveParameter;
  * close (son propriétaire n'a plus d'adresse de connexion, et la clôture
  * annule les transmissions en attente, voir CloreLInscriptionAction) ;
  * l'administrateur est actif, sans aucune preuve de qualité de
- * représentant (décision de l'éditeur) ; son mot de passe n'est plus son
- * identifiant, que le propriétaire a connu à sa création ; il a renseigné
+ * représentant (décision de l'éditeur) ; il a choisi son propre mot de
+ * passe, que ni le propriétaire ni personne d'autre ne connaît (un mot de
+ * passe provisoire, remis par le propriétaire, ne suffit pas) ; il a renseigné
  * lui-même son adresse, jamais saisie par le propriétaire ; cette adresse
  * n'est pas celle du propriétaire, dont « Mot de passe oublié »
  * réinitialiserait ensuite le compte du nouveau propriétaire.
@@ -215,7 +216,7 @@ class DemanderLaTransmissionDeLaProprieteAction
             throw new AuthorizationException(self::MESSAGE_ADMINISTRATEUR);
         }
 
-        if ($administrateur->mot_de_passe_est_l_identifiant) {
+        if (! $administrateur->aChoisiSonMotDePasse()) {
             throw new LogicException(self::MESSAGE_MOT_DE_PASSE);
         }
 

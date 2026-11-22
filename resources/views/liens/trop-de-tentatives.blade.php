@@ -1,0 +1,32 @@
+{{--
+    Trop d'essais d'un lien depuis cette adresse IP (voir LimitationDesLiens
+    et LimiterLesEssaisDeLien) : l'attente, rien d'autre. Jamais un blocage
+    pour de bon : la fenêtre finie, les liens se rouvrent.
+
+    @param string $message
+--}}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="referrer" content="no-referrer">
+    <title>{{ config('app.name') }}</title>
+    <style>
+        body { font-family: system-ui, sans-serif; background: #f9fafb; color: #111827; margin: 0; }
+        main { max-width: 40rem; margin: 4rem auto; padding: 2rem; background: #fff; border-radius: .75rem; box-shadow: 0 1px 3px rgba(0, 0, 0, .1); }
+        h1 { font-size: 1.25rem; margin-top: 0; }
+        @media (prefers-color-scheme: dark) {
+            body { background: #111827; color: #f9fafb; }
+            main { background: #1f2937; box-shadow: none; }
+        }
+    </style>
+</head>
+<body>
+<main>
+    <h1>{{ config('app.name') }}</h1>
+    <p>{{ $message }}</p>
+</main>
+    @include('pied-de-page-du-site')
+</body>
+</html>

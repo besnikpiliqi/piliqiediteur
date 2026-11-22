@@ -186,7 +186,7 @@ class BasesModelesTest extends DemonstrationTestCase
                 ->join('users', 'users.id', '=', 'comptes_du_bandeau.user_id')
                 ->join('societes', 'societes.id', '=', 'comptes_du_bandeau.societe_id')
                 ->orderBy('comptes_du_bandeau.ordre')
-                ->get(['users.name', 'users.statut', 'users.password', 'users.societe_id as societe_du_compte', 'comptes_du_bandeau.societe_id', 'comptes_du_bandeau.groupe', 'societes.raison_sociale'])
+                ->get(['users.name', 'users.statut', 'users.password', 'users.mot_de_passe_choisi_le', 'users.societe_id as societe_du_compte', 'comptes_du_bandeau.societe_id', 'comptes_du_bandeau.groupe', 'societes.raison_sociale'])
                 ->map(fn (object $ligne): array => (array) $ligne)
                 ->all(),
             'preferences_du_bandeau' => DB::table('preferences_tableau_de_bord')
@@ -228,7 +228,10 @@ class BasesModelesTest extends DemonstrationTestCase
         foreach ($bandeau as $rang => $ligne) {
             $this->assertSame($ligne['societe_id'], $ligne['societe_du_compte']);
             $this->assertNotSame('retire', $ligne['statut']);
-            $this->assertTrue(Hash::check($modele->mot_de_passe, (string) $ligne['password']) || $ligne['name'] === 'Inès Garcia', "Le compte {$ligne['name']} a le mot de passe de démonstration du modèle.");
+            $this->assertTrue(
+                $ligne['mot_de_passe_choisi_le'] === null ? in_array($ligne['name'], ['Inès Garcia', 'Gabriel Faure'], true) : Hash::check($modele->mot_de_passe, (string) $ligne['password']),
+                "Le compte {$ligne['name']} a le mot de passe de démonstration du modèle, ou n'a pas encore choisi le sien (Inès Garcia, dont le mot de passe provisoire a expiré, et Gabriel Faure, sans mot de passe).",
+            );
 
             if ($attendus[$rang] !== null) {
                 $this->assertSame($attendus[$rang], $ligne['name']);

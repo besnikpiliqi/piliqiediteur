@@ -440,6 +440,7 @@ class SaisirCodeDeConfirmationAction
                 'societe_id' => $verrouillee->getKey(),
                 'role_societe' => RoleSociete::Proprietaire,
                 'statut' => StatutCompte::Actif,
+                'mot_de_passe_choisi_le' => now(),
             ]);
             $jeton = $this->adresseEnAttente->mettreEnAttente($nouveau, $nouveauCompte['email']);
             $nouveau->save();

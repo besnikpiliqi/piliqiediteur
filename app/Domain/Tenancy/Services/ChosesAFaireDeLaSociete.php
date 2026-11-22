@@ -154,8 +154,8 @@ final class ChosesAFaireDeLaSociete
      * le nouveau courrier qu'il peut demander, les pièces à déposer pour
      * l'éditeur, la transmission de la propriété qu'il a demandée, chaque
      * nomination d'un responsable par un administrateur (à garder ou à
-     * annuler) et les comptes dont le mot de passe est encore
-     * l'identifiant (la liste de l'équipe ne l'indique qu'à lui) ; pour qui
+     * annuler) et les comptes qui n'ont pas encore choisi leur mot de passe
+     * (la liste de l'équipe ne l'indique qu'à lui) ; pour qui
      * gère ce magasin (le propriétaire, ou un administrateur autorisé, dans
      * sa portée), chaque établissement pas encore confirmé et chaque
      * adresse de magasin qui manque pour facturer un professionnel ; pour
@@ -178,7 +178,7 @@ final class ChosesAFaireDeLaSociete
 
         if ($compte->estProprietaire()) {
             array_push($choses, ...$this->courrierDeVerification($societe, $paris), ...$this->nominations($societe, $paris));
-            $choses[] = $this->motsDePasseIdentifiants();
+            $choses[] = $this->motsDePasseAChoisir();
         }
 
         array_push($choses, ...$this->transmissions($compte, $societe, $paris), ...$this->magasinsAConfirmer($compte, $societe, $paris), ...$this->ecartsSirene($compte, $societe, $paris), ...$this->charges($compte, $societe));
@@ -294,21 +294,22 @@ final class ChosesAFaireDeLaSociete
     }
 
     /**
-     * Les comptes de la société dont le mot de passe est encore
-     * l'identifiant, que seul le propriétaire voit (voir
-     * MembreResource::urlDesMotsDePasseIdentifiants()).
+     * Les comptes de la société qui n'ont pas encore choisi leur mot de
+     * passe : leur mot de passe provisoire n'a pas servi, a expiré, ou leur
+     * première connexion n'a pas fini le choix ; que seul le propriétaire
+     * voit (voir MembreResource::urlDesMotsDePasseAChoisir()).
      */
-    private function motsDePasseIdentifiants(): ?ChoseAFaire
+    private function motsDePasseAChoisir(): ?ChoseAFaire
     {
-        $nombre = MembreResource::auMotDePasseIdentifiant(MembreResource::getEloquentQuery())->count();
+        $nombre = MembreResource::auMotDePasseAChoisir(MembreResource::getEloquentQuery())->count();
 
         return $nombre === 0 ? null : new ChoseAFaire(
-            cle: 'mots_de_passe_identifiants',
+            cle: 'mots_de_passe_a_choisir',
             groupe: 'Équipe',
             urgence: UrgenceAFaire::Gris,
             nombre: $nombre,
-            phrase: trans_choice('{1} 1 compte a encore son identifiant pour mot de passe|[2,*] :count comptes ont encore leur identifiant pour mot de passe', $nombre).' : il n\'ouvre son compte que depuis un poste reconnu du magasin.',
-            url: MembreResource::urlDesMotsDePasseIdentifiants(),
+            phrase: trans_choice('{1} 1 compte n\'a pas encore choisi son mot de passe|[2,*] :count comptes n\'ont pas encore choisi leur mot de passe', $nombre).' : la personne le choisit à sa première connexion, avec son mot de passe provisoire, depuis un poste reconnu du magasin ; un mot de passe provisoire expiré se redonne.',
+            url: MembreResource::urlDesMotsDePasseAChoisir(),
             bouton: 'Voir',
             aSurveiller: true,
         );

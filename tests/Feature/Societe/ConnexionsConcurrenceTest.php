@@ -3,9 +3,13 @@
 namespace Tests\Feature\Societe;
 
 use App\Domain\Tenancy\Actions\RedonnerLAccesAction;
+use App\Domain\Tenancy\Enums\EtatDuMotDePasse;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Services\LimitationDesConnexions;
+use App\Domain\Tenancy\Services\LimitationDesLiens;
+use App\Domain\Tenancy\Services\MotsDePasseProvisoires;
 use App\Filament\App\Resources\FactureResource;
+use App\Models\User;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\DatabaseMigrations;
 use Illuminate\Process\InvokedProcess;
@@ -21,9 +25,12 @@ use Tests\TestCase;
  * Des essais de connexion simultanés, chacun dans son processus, sur une
  * vraie base PostgreSQL et sur le cache de la base, que partagent les
  * processus comme en production (voir LimitationDesConnexions) : des
- * échecs simultanés sont tous comptés, des connexions réussies simultanées
- * ne font jamais attendre, et une connexion faite avec l'ancien mot de
- * passe pendant qu'un accès est redonné ne laisse aucune session valable.
+ * échecs simultanés sont tous comptés (ceux de la connexion comme les
+ * demandes de « Mot de passe oublié »), des connexions réussies
+ * simultanées ne font jamais attendre, un mot de passe provisoire ne sert
+ * qu'à une seule connexion simultanée, et une connexion faite avec
+ * l'ancien mot de passe pendant qu'un accès est redonné ne laisse aucune
+ * session valable.
  *
  * DatabaseMigrations, pas RefreshDatabase : l'autre processus ne voit que
  * ce que le test a validé.
@@ -76,6 +83,82 @@ class ConnexionsConcurrenceTest extends TestCase
         }
         $this->assertSame(self::PROCESSUS, $limitation->compteDe($cle));
         $this->assertGreaterThan(0, $limitation->attente($saisie, self::ADRESSE_DU_MAGASIN, false));
+    }
+
+    /**
+     * Six processus tentent au même instant de consommer le même mot de
+     * passe provisoire, retenus derrière le verrou de la ligne du compte :
+     * un seul y arrive (la mise à jour atomique ne vaut que tant qu'il n'a
+     * pas servi), les autres trouvent la ligne déjà prise.
+     */
+    #[Group('concurrence')]
+    public function test_six_consommations_simultanees_d_un_meme_mot_de_passe_provisoire_n_en_servent_qu_une(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        [$compte] = $this->compteAuMotDePasseProvisoire($magasin, RoleMagasin::Vendeur);
+        $this->assertSame(EtatDuMotDePasse::ProvisoireValable, $compte->refresh()->etatDuMotDePasse());
+        $identifiant = $compte->getKey();
+
+        $consommer = static function () use ($identifiant): void {
+            fwrite(STDOUT, app(MotsDePasseProvisoires::class)->consommer(User::query()->findOrFail($identifiant)) ? '1' : '0');
+        };
+
+        $processus = DB::transaction(function () use ($identifiant, $consommer): array {
+            User::query()->whereKey($identifiant)->lockForUpdate()->sole();
+            $processus = array_map(fn (): InvokedProcess => $this->demarrerUnProcessusConcurrent($consommer), range(1, self::PROCESSUS));
+            $this->attendreQueTantDeProcessusAttendentUnVerrou(self::PROCESSUS);
+
+            return $processus;
+        });
+
+        $reponses = [];
+        foreach ($processus as $unProcessus) {
+            $resultat = $this->attendreLeProcessusConcurrent($unProcessus);
+            $this->assertTrue($resultat->successful(), $resultat->errorOutput());
+            $reponses[] = $resultat->output();
+        }
+
+        sort($reponses);
+        $this->assertSame(['0', '0', '0', '0', '0', '1'], $reponses);
+        $this->assertSame(EtatDuMotDePasse::ProvisoireUtilise, $compte->refresh()->etatDuMotDePasse());
+        $this->assertFalse(app(MotsDePasseProvisoires::class)->consommer($compte));
+    }
+
+    /**
+     * Six demandes de « Mot de passe oublié » simultanées pour une même
+     * saisie, depuis des adresses différentes : toutes comptées, par heure
+     * et par jour, et la suivante attend (le plafond de trois par heure
+     * n'est jamais dépassé en silence).
+     */
+    #[Group('concurrence')]
+    public function test_des_demandes_simultanees_de_mot_de_passe_oublie_pour_une_meme_saisie_sont_toutes_comptees(): void
+    {
+        $saisie = 'proprietaire@exemple.fr';
+        $limitation = app(LimitationDesLiens::class);
+        $cle = $limitation->cle('demande-heure', $saisie);
+        Cache::store('database')->add($cle, 0, LimitationDesLiens::UNE_HEURE);
+
+        $demander = static function (): void {
+            self::partagerLeCacheDesEssais();
+            app(LimitationDesLiens::class)->demande('proprietaire@exemple.fr', '203.0.113.'.random_int(10, 250));
+        };
+
+        $processus = DB::transaction(function () use ($cle, $demander): array {
+            DB::table('cache')->where('key', config('cache.prefix').$cle)->lockForUpdate()->sole();
+            $processus = array_map(fn (): InvokedProcess => $this->demarrerUnProcessusConcurrent($demander), range(1, self::PROCESSUS));
+            $this->attendreQueTantDeProcessusAttendentUnVerrou(self::PROCESSUS);
+
+            return $processus;
+        });
+
+        foreach ($processus as $unProcessus) {
+            $resultat = $this->attendreLeProcessusConcurrent($unProcessus);
+            $this->assertTrue($resultat->successful(), $resultat->errorOutput());
+        }
+
+        $this->assertSame(self::PROCESSUS, $limitation->compteDe($cle));
+        $this->assertSame(self::PROCESSUS, $limitation->compteDe($limitation->cle('demande-jour', $saisie)));
+        $this->assertGreaterThan(0, $limitation->demande($saisie, '198.51.100.250'));
     }
 
     /**
@@ -148,7 +231,7 @@ class ConnexionsConcurrenceTest extends TestCase
             }
         });
 
-        app(RedonnerLAccesAction::class)->handle($responsable, $vendeur, true, 'un-mot-de-passe-solide', (string) Str::uuid());
+        app(RedonnerLAccesAction::class)->enSaPresence($responsable, $vendeur, 'un-mot-de-passe-solide', (string) Str::uuid());
 
         $this->assertInstanceOf(InvokedProcess::class, $concurrente);
         $resultat = $this->attendreLeProcessusConcurrent($concurrente);

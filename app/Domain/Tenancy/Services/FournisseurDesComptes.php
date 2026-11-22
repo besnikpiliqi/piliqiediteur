@@ -40,10 +40,14 @@ use SensitiveParameter;
  * seule requête (voir compteDeLIdentifiant()).
  *
  * Un mot de passe exact n'ouvre le compte (voir validateCredentials()) que
- * pour un compte actif et, tant que son mot de passe est encore son
- * identifiant, que depuis un poste reconnu d'un magasin que ce compte ouvre
- * (voir PostesReconnus) : un compte suspendu ou retiré, ou un tel essai
+ * pour un compte actif et, quand ce mot de passe est un mot de passe
+ * provisoire (voir MotsDePasseProvisoires), que tant qu'il n'a pas servi et
+ * que son délai n'est pas passé, et depuis un poste reconnu d'un magasin que
+ * ce compte ouvre (voir PostesReconnus) : un compte suspendu ou retiré, un
+ * mot de passe provisoire qui a servi ou qui a expiré, ou un tel essai
  * ailleurs, reçoit la même réponse, au même délai, qu'un mot de passe faux.
+ * Un compte sans mot de passe choisi ni provisoire n'a aucun mot de passe
+ * qui l'ouvre.
  */
 class FournisseurDesComptes extends EloquentUserProvider
 {
@@ -88,11 +92,16 @@ class FournisseurDesComptes extends EloquentUserProvider
      */
     public function validateCredentials(Authenticatable $user, #[SensitiveParameter] array $credentials): bool
     {
+        if ($user instanceof User && ! $user->aChoisiSonMotDePasse() && is_string($credentials['password'] ?? null)) {
+            $credentials['password'] = MotsDePasseProvisoires::normaliser($credentials['password']);
+        }
+
         if (! parent::validateCredentials($user, $credentials) || ! $user instanceof User || ! $user->estActif()) {
             return false;
         }
 
-        return ! $user->mot_de_passe_est_l_identifiant || app(PostesReconnus::class)->ouvreLeCompte($user, request());
+        return $user->aChoisiSonMotDePasse()
+            || ($user->aUnMotDePasseProvisoireValable() && app(PostesReconnus::class)->ouvreLeCompte($user, request()));
     }
 
     /**

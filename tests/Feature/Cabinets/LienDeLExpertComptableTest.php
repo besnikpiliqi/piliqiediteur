@@ -271,7 +271,8 @@ class LienDeLExpertComptableTest extends TestCase
 
         $compte->refresh();
         $this->assertFalse(Hash::check(self::MOT_DE_PASSE_CHOISI, $compte->password));
-        $this->assertFalse($compte->mot_de_passe_est_l_identifiant);
+        $this->assertNull($compte->mot_de_passe_provisoire_expire_le);
+        $this->assertFalse($compte->aChoisiSonMotDePasse());
         $this->assertSame(ModeDAccesRedonne::Lien, $compte->acces_redonne_mode);
         $this->assertSame(0, DB::table('sessions')->where('user_id', $compte->id)->count());
         $ligne = CompteExpertComptable::query()->withoutGlobalScopes()->where('user_id', $compte->id)->firstOrFail();
@@ -292,10 +293,10 @@ class LienDeLExpertComptableTest extends TestCase
         $compte = $this->declarerSonExpertComptable($magasin);
         $proprietaire = $this->proprietaireDe($magasin);
 
-        $this->assertThrows(fn () => app(RedonnerLAccesAction::class)->handle($proprietaire, $compte, false), LogicException::class, RedonnerLAccesAction::MESSAGE_EXPERT_COMPTABLE);
+        $this->assertThrows(fn () => app(RedonnerLAccesAction::class)->enSonAbsence($proprietaire, $compte), LogicException::class, RedonnerLAccesAction::MESSAGE_EXPERT_COMPTABLE);
         $this->assertNotNull(CompteExpertComptable::query()->withoutGlobalScopes()->where('user_id', $compte->id)->firstOrFail()->jeton_expire_le);
 
-        $this->assertTrue(app(RedonnerLAccesAction::class)->handle($proprietaire, $compte, true, self::MOT_DE_PASSE_CHOISI, (string) Str::uuid()));
+        $this->assertTrue(app(RedonnerLAccesAction::class)->enSaPresence($proprietaire, $compte, self::MOT_DE_PASSE_CHOISI, (string) Str::uuid()));
 
         $ligne = CompteExpertComptable::query()->withoutGlobalScopes()->where('user_id', $compte->id)->firstOrFail();
         $this->assertNull($ligne->jeton_expire_le);

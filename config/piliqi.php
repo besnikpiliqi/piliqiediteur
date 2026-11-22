@@ -95,17 +95,58 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Mots de passe provisoires
+    |--------------------------------------------------------------------------
+    |
+    | Le mot de passe provisoire d'un compte que la société crée, ou dont
+    | elle redonne l'accès en l'absence de la personne (voir
+    | MotsDePasseProvisoires) : tiré au hasard, il ne sert qu'une fois, à la
+    | première connexion, et ne vaut que cette durée en heures (décision de
+    | Claude D76, T36.1 à T36.4).
+    |
+    */
+
+    'mots_de_passe' => [
+        'provisoire_duree_en_heures' => 72,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Alertes de l'éditeur sur les essais de connexion manqués
+    |--------------------------------------------------------------------------
+    |
+    | Les seuils, par heure et sur toute la plateforme, au-delà desquels
+    | l'éditeur est prévenu (voir LimitationDesConnexions et
+    | AlerterDeLaMonteeDesEchecsJob), une seule fois par heure et par motif
+    | (décision de Claude D76) : un nombre absolu d'échecs ; le multiple de
+    | la moyenne horaire des 7 jours d'avant, avec son plancher ; le nombre
+    | d'identifiants différents qui échouent depuis une même adresse IP.
+    |
+    */
+
+    'connexions' => [
+        'alerte_echecs_par_heure' => 500,
+        'alerte_multiple_de_la_moyenne' => 3,
+        'alerte_plancher_par_heure' => 100,
+        'alerte_identifiants_par_adresse' => 50,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Mot de passe du semis
     |--------------------------------------------------------------------------
     |
     | Facultatif, en développement seulement : le mot de passe que reçoivent
     | tous les comptes semés par php artisan migrate:fresh --seed (voir
     | DatabaseSeeder), stable d'un semis à l'autre, dans
-    | PILIQI_SEMIS_MOT_DE_PASSE. Il suit la règle des mots de passe choisis :
-    | au moins 8 caractères, ni un seul caractère répété, ni une suite de
-    | chiffres, ni l'identifiant d'un compte. Vide : chaque compte reçoit un
-    | mot de passe tiré au hasard à chaque semis, que la liste des comptes
-    | affiche.
+    | PILIQI_SEMIS_MOT_DE_PASSE. Il suit la règle des mots de passe choisis
+    | (voir RegleDuMotDePasse) : au moins 12 caractères, ou au moins 8 de
+    | trois sortes parmi les majuscules, les minuscules, les chiffres et les
+    | signes ; jamais un mot de passe courant (liste de
+    | resources/mots-de-passe-courants), un seul caractère répété, une suite
+    | de chiffres ni l'identifiant d'un compte. Vide : chaque compte reçoit
+    | un mot de passe tiré au hasard à chaque semis, que la liste des
+    | comptes affiche.
     |
     */
 

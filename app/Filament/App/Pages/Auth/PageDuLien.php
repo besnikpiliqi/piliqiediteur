@@ -5,6 +5,7 @@ namespace App\Filament\App\Pages\Auth;
 use App\Domain\Tenancy\Actions\ChoisirSonMotDePasseParLeLienAction;
 use App\Domain\Tenancy\Services\FournisseurDesComptes;
 use App\Domain\Tenancy\Services\JetonsDuLien;
+use App\Domain\Tenancy\Services\LimitationDesLiens;
 use App\Domain\Tenancy\Support\Reglage;
 use App\Domain\Tenancy\Support\RegleDuMotDePasse;
 use App\Domain\Tenancy\Support\ValeurSimple;
@@ -19,6 +20,7 @@ use Filament\Pages\Concerns\InteractsWithFormActions;
 use Filament\Pages\SimplePage;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Contracts\Support\Htmlable;
+use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\Locked;
 
 /**
@@ -30,7 +32,11 @@ use Livewire\Attributes\Locked;
  * consomme le jeton, dans sa transaction (voir
  * ChoisirSonMotDePasseParLeLienAction). Un lien expiré, déjà servi,
  * forgé, ou celui d'un compte qui n'est plus propriétaire reçoit la même
- * réponse. La page n'ouvre aucune session.
+ * réponse. La page n'ouvre aucune session. Un lien inconnu ou expiré compte
+ * parmi les jetons inconnus ou expirés de l'adresse IP, qui attend, après
+ * dix dans l'heure, avant d'en essayer un autre ; un mot de passe refusé
+ * compte sur ce lien, qui attend 15 minutes au cinquième et reste valable
+ * jusqu'à son échéance (voir LimitationDesLiens).
  *
  * @property Form $form
  */
@@ -56,6 +62,10 @@ class PageDuLien extends SimplePage
         $this->email = User::normaliserEmail((string) ($email ?? request()->query('email')));
         $this->token = (string) ($token ?? request()->query('token'));
 
+        if (app(LimitationDesLiens::class)->attenteDeLAdresse((string) request()->ip()) === 0 && $this->compteDuLien() === null) {
+            app(LimitationDesLiens::class)->jetonInvalide((string) request()->ip());
+        }
+
         $this->form->fill();
     }
 
@@ -65,7 +75,11 @@ class PageDuLien extends SimplePage
             ->schema([
                 Placeholder::make('etat')
                     ->hiddenLabel()
-                    ->content(fn (): string => $this->compteDuLien() === null ? ChoisirSonMotDePasseParLeLienAction::MESSAGE_LIEN_INVALIDE : 'Choisissez votre nouveau mot de passe.'),
+                    ->content(fn (): string => match (true) {
+                        ($attente = app(LimitationDesLiens::class)->attenteDeLAdresse((string) request()->ip())) > 0 => LimitationDesLiens::message($attente),
+                        $this->compteDuLien() === null => ChoisirSonMotDePasseParLeLienAction::MESSAGE_LIEN_INVALIDE,
+                        default => 'Choisissez votre nouveau mot de passe.',
+                    }),
                 TextInput::make('password')
                     ->label('Votre mot de passe')
                     ->password()
@@ -87,23 +101,46 @@ class PageDuLien extends SimplePage
 
     public function choisir(): void
     {
+        $limites = app(LimitationDesLiens::class);
+        $adresse = (string) request()->ip();
+
+        if (($attente = $limites->attenteDeLAdresse($adresse)) > 0 || ($attente = $limites->attenteDuLien((string) $this->token)) > 0) {
+            Notification::make()->title(LimitationDesLiens::message($attente))->danger()->send();
+
+            return;
+        }
+
         $compte = $this->compteDuLien();
 
         if ($compte === null) {
+            $limites->jetonInvalide($adresse);
             Notification::make()->title(ChoisirSonMotDePasseParLeLienAction::MESSAGE_LIEN_INVALIDE)->danger()->send();
 
             return;
         }
 
-        $donnees = $this->form->getState();
+        try {
+            $donnees = $this->form->getState();
+        } catch (ValidationException $refus) {
+            $limites->motDePasseRefuse((string) $this->token);
+
+            throw $refus;
+        }
 
         try {
             app(ChoisirSonMotDePasseParLeLienAction::class)->handle($compte, (string) $this->token, ValeurSimple::enTexte($donnees['password']));
         } catch (AuthorizationException $refus) {
+            $limites->jetonInvalide($adresse);
             Notification::make()->title($refus->getMessage())->danger()->send();
 
             return;
+        } catch (ValidationException $refus) {
+            $limites->motDePasseRefuse((string) $this->token);
+
+            throw $refus;
         }
+
+        $limites->motDePasseAccepte((string) $this->token);
 
         Notification::make()->title('Votre mot de passe est enregistré : vous pouvez vous connecter.')->success()->send();
         $this->redirect(Filament::getLoginUrl());

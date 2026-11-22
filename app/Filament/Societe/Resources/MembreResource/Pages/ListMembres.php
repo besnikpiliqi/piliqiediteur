@@ -35,8 +35,9 @@ use Illuminate\Support\Str;
  * magasin de sa portée. Chaque fenêtre de création tire son jeton à
  * son ouverture (une demande répétée après une réponse perdue ne crée
  * jamais un second compte) et ne demande aucune adresse e-mail ; elle est
- * suivie de la fenêtre qui montre l'identifiant du compte créé, aussi son
- * premier mot de passe (voir GereLesComptes::fenetreDuCompteCree()).
+ * suivie de la fenêtre qui montre l'identifiant du compte créé et son mot
+ * de passe provisoire, une seule fois (voir
+ * GereLesComptes::fenetreDuCompteCree()).
  * Chaque action du domaine revérifie tout sur l'auteur relu sous ses
  * verrous.
  */
@@ -46,7 +47,7 @@ class ListMembres extends ListRecords
 
     protected static string $resource = MembreResource::class;
 
-    public const AVERTISSEMENT_IDENTIFIANT = 'Son mot de passe est encore son identifiant : toute personne qui le connaît pourra agir avec ses nouveaux droits.';
+    public const AVERTISSEMENT_PAS_ENCORE_CHOISI = 'Cette personne n\'a pas encore choisi son mot de passe : toute personne qui connaît son mot de passe provisoire pourra agir avec ses nouveaux droits.';
 
     protected function getHeaderActions(): array
     {
@@ -60,9 +61,9 @@ class ListMembres extends ListRecords
     /**
      * Nommer un responsable dans un magasin de sa portée : un nouveau
      * compte de ce magasin, ou un vendeur ou un observateur actif de ce
-     * magasin ; un compte dont le mot de passe est encore son identifiant
-     * est nommé avec un avertissement, et la personne présente peut choisir
-     * son mot de passe dans la même fenêtre.
+     * magasin ; un compte qui n'a pas encore choisi son mot de passe est
+     * nommé avec un avertissement, et la personne présente peut choisir son
+     * mot de passe dans la même fenêtre.
      */
     public function nommerUnResponsableAction(): Action
     {
@@ -92,15 +93,15 @@ class ListMembres extends ListRecords
                     ->live(),
                 Placeholder::make('avertissement')
                     ->hiddenLabel()
-                    ->content(self::AVERTISSEMENT_IDENTIFIANT)
-                    ->visible(fn (Get $get): bool => $this->candidatAuMotDePasseIdentifiant($get)),
+                    ->content(self::AVERTISSEMENT_PAS_ENCORE_CHOISI)
+                    ->visible(fn (Get $get): bool => $this->candidatSansMotDePasseChoisi($get)),
                 Hidden::make('jeton_acces'),
                 Radio::make('mode')
                     ->label('La personne est-elle là ?')
-                    ->options(['plus_tard' => 'Non : elle choisira son mot de passe à sa prochaine connexion', 'present' => 'Oui : elle choisit son mot de passe maintenant'])
+                    ->options(['plus_tard' => 'Non : elle choisira son mot de passe à sa première connexion', 'present' => 'Oui : elle choisit son mot de passe maintenant'])
                     ->live()
-                    ->visible(fn (Get $get): bool => $this->candidatAuMotDePasseIdentifiant($get)),
-                ...MembreResource::champsDuMotDePasseChoisi(fn (Get $get): bool => $this->candidatAuMotDePasseIdentifiant($get) && $get('mode') === 'present'),
+                    ->visible(fn (Get $get): bool => $this->candidatSansMotDePasseChoisi($get)),
+                ...MembreResource::champsDuMotDePasseChoisi(fn (Get $get): bool => $this->candidatSansMotDePasseChoisi($get) && $get('mode') === 'present'),
                 Group::make(MembreResource::champsDuNouveauMembre(fn (Get $get): ?Magasin => $this->magasinChoisi($get)))
                     ->visible(fn (Get $get): bool => $get('compte') === 'nouveau'),
             ])
@@ -110,7 +111,7 @@ class ListMembres extends ListRecords
 
                 if ($data['compte'] === 'existant') {
                     $candidat = User::query()->where('societe_id', MembreResource::societe()->getKey())->whereKey(ValeursLues::cle($data['candidat']))->first();
-                    $enPresence = $candidat?->mot_de_passe_est_l_identifiant && ($data['mode'] ?? null) === 'present';
+                    $enPresence = $candidat?->aChoisiSonMotDePasse() === false && ($data['mode'] ?? null) === 'present';
 
                     if ($enPresence) {
                         MembreResource::exigerLeMotDePasseChoisi(ValeurSimple::enTexte($data['mot_de_passe'] ?? ''), $candidat, $form);
@@ -120,7 +121,7 @@ class ListMembres extends ListRecords
                         app(ModifierMembreAction::class)->handle($this->auteur(), $candidat ?? throw new AuthorizationException(PorteeDesDroits::REFUS), RoleMagasin::Responsable);
 
                         if ($enPresence) {
-                            app(RedonnerLAccesAction::class)->handle($this->auteur(), $candidat, true, ValeurSimple::enTexte($data['mot_de_passe']), ValeurSimple::enTexte($data['jeton_acces']));
+                            app(RedonnerLAccesAction::class)->enSaPresence($this->auteur(), $candidat, ValeurSimple::enTexte($data['mot_de_passe']), ValeurSimple::enTexte($data['jeton_acces']));
                         }
 
                         Notification::make()->title('Le responsable est nommé.')->success()->send();
@@ -191,7 +192,7 @@ class ListMembres extends ListRecords
                 TextInput::make('name')->label('Nom complet')->required()->maxLength(255),
                 ...MembreResource::champsDeLAdministrateur(),
             ])
-            ->modalDescription('Il choisira son propre mot de passe à sa première connexion, depuis un poste reconnu d\'un magasin de sa portée, ou tout de suite, dans la fenêtre suivante, s\'il est là.')
+            ->modalDescription('Vous verrez juste après son identifiant et son mot de passe provisoire, tiré au hasard, une seule fois : il le remplacera par le sien à sa première connexion, depuis un poste reconnu d\'un magasin de sa portée, ou tout de suite, dans la fenêtre suivante, s\'il est là.')
             ->action(function (array $data): void {
                 $cree = null;
 
@@ -228,16 +229,16 @@ class ListMembres extends ListRecords
     }
 
     /**
-     * Le vendeur ou l'observateur choisi pour être nommé responsable a-t-il
-     * encore son identifiant pour mot de passe ?
+     * Le vendeur ou l'observateur choisi pour être nommé responsable n'a-t-il
+     * pas encore choisi son mot de passe ?
      */
-    private function candidatAuMotDePasseIdentifiant(Get $get): bool
+    private function candidatSansMotDePasseChoisi(Get $get): bool
     {
         if ($get('compte') !== 'existant' || blank($get('candidat'))) {
             return false;
         }
 
-        return (bool) User::query()->where('societe_id', MembreResource::societe()->getKey())->whereKey($get('candidat'))->value('mot_de_passe_est_l_identifiant');
+        return User::query()->where('societe_id', MembreResource::societe()->getKey())->whereKey($get('candidat'))->whereNull('mot_de_passe_choisi_le')->exists();
     }
 
     /**

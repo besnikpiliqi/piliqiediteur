@@ -20,6 +20,7 @@ use App\Domain\Tenancy\Actions\CreerAdministrateurAction;
 use App\Domain\Tenancy\Actions\CreerEtablissementAction;
 use App\Domain\Tenancy\Actions\ModifierAdministrateurAction;
 use App\Domain\Tenancy\Actions\RedonnerLAccesAction;
+use App\Domain\Tenancy\Enums\EtatDuMotDePasse;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\RoleSociete;
 use App\Domain\Tenancy\Enums\StatutCompte;
@@ -31,6 +32,7 @@ use App\Domain\Tenancy\Scopes\MagasinScope;
 use App\Domain\Tenancy\Services\PorteeDesAdministrateurs;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\GardesDesDroits;
+use App\Domain\Tenancy\Support\MotDePasseProvisoire;
 use App\Filament\App\Pages\Caisse;
 use App\Filament\App\Resources\FactureResource\Pages\CreateFacture;
 use App\Filament\App\Resources\FactureResource\Pages\ListFactures;
@@ -78,7 +80,7 @@ class AdministrateursTest extends TestCase
             ->assertActionMounted('compteCree');
 
         $alix = User::query()->where('name', 'Alix')->sole();
-        $this->assertSame([RoleSociete::Administrateur, true, null], [$alix->role_societe, $alix->mot_de_passe_est_l_identifiant, $alix->email]);
+        $this->assertSame([RoleSociete::Administrateur, EtatDuMotDePasse::ProvisoireValable, null], [$alix->role_societe, $alix->etatDuMotDePasse(), $alix->email]);
         $this->assertSame([AutorisationsSociete::MAGASINS_GERER, AutorisationsSociete::RESPONSABLES_NOMMER], $alix->autorisationsDeSociete());
         $affectation = Affectation::query()->where('user_id', $alix->id)->sole();
         $this->assertSame([(int) $autre->id, null], [(int) $affectation->magasin_id, $affectation->role]);
@@ -86,12 +88,12 @@ class AdministrateursTest extends TestCase
     }
 
     /**
-     * L'identifiant d'un administrateur n'ouvre son compte que depuis un
-     * poste reconnu d'un magasin de sa portée : la
-     * fenêtre « Compte créé » le dit, et propose d'abord que la personne
-     * présente choisisse son mot de passe, avec lequel elle se connecte de
-     * partout ; pour un vendeur, elle propose de lui remettre son
-     * identifiant.
+     * Le mot de passe provisoire d'un administrateur n'ouvre son compte que
+     * depuis un poste reconnu d'un magasin de sa portée : la fenêtre
+     * « Compte créé » le dit, le montre une seule fois, et propose d'abord
+     * que la personne présente choisisse son mot de passe, avec lequel elle
+     * se connecte de partout ; pour un vendeur, elle propose de lui remettre
+     * l'identifiant et son mot de passe provisoire.
      */
     public function test_la_fenetre_du_compte_cree_propose_a_un_administrateur_de_choisir_son_mot_de_passe_tout_de_suite(): void
     {
@@ -105,14 +107,15 @@ class AdministrateursTest extends TestCase
             ->assertHasNoActionErrors()
             ->assertActionMounted('compteCree')
             ->assertActionDataSet(['mode' => 'present'])
-            ->assertSee('poste reconnu d\'un magasin de sa portée, où la personne choisira son propre mot de passe à sa première connexion')
-            ->assertSee('À distance, ou si aucun magasin de sa portée n\'a de poste reconnu, elle ne pourra pas se connecter avec son identifiant')
+            ->assertSee('depuis un poste reconnu d\'un magasin de sa portée, et la personne le remplace aussitôt, à sa première connexion, par un mot de passe à elle')
+            ->assertSee('À distance, ou si aucun magasin de sa portée n\'a de poste reconnu, elle ne pourra pas se connecter avec : si elle est là, qu\'elle choisisse son mot de passe maintenant')
             ->setActionData(['mot_de_passe' => self::MOT_DE_PASSE_CHOISI, 'mot_de_passe_confirmation' => self::MOT_DE_PASSE_CHOISI])
             ->callMountedAction()
             ->assertHasNoActionErrors();
 
         $compte = User::query()->where('name', 'Alix')->sole();
-        $this->assertFalse($compte->mot_de_passe_est_l_identifiant);
+        $this->assertTrue($compte->aChoisiSonMotDePasse());
+        $this->assertNull($compte->mot_de_passe_provisoire_expire_le);
         $this->assertTrue(Hash::check(self::MOT_DE_PASSE_CHOISI, $compte->password));
 
         Livewire::test(ListMembres::class)
@@ -122,7 +125,8 @@ class AdministrateursTest extends TestCase
             ->assertHasNoActionErrors()
             ->assertActionMounted('compteCree')
             ->assertActionDataSet(['mode' => 'remettre'])
-            ->assertSee('Il n\'ouvre le compte que depuis un poste reconnu du magasin. Remettez-les en main propre');
+            ->assertSee('depuis un poste reconnu du magasin, et la personne le remplace aussitôt, à sa première connexion, par un mot de passe à elle')
+            ->assertSee('Remettez-les en main propre');
     }
 
     /**
@@ -646,13 +650,13 @@ class AdministrateursTest extends TestCase
 
         $this->assertTrue($administrateur->can(AutorisationsSociete::ACCES_REDONNER));
         $this->assertFalse($administrateur->can(AutorisationsSociete::MAGASINS_GERER));
-        $this->assertTrue(app(RedonnerLAccesAction::class)->handle($administrateur, $vendeur, false));
-        $this->assertTrue($vendeur->refresh()->mot_de_passe_est_l_identifiant);
+        $this->assertInstanceOf(MotDePasseProvisoire::class, app(RedonnerLAccesAction::class)->enSonAbsence($administrateur, $vendeur));
+        $this->assertSame(EtatDuMotDePasse::ProvisoireValable, $vendeur->refresh()->etatDuMotDePasse());
 
         $magasin->societe->forceFill(['statut' => StatutSociete::Revoquee])->save();
         $this->assertFalse($administrateur->can(AutorisationsSociete::ACCES_REDONNER));
         $this->choisirSonMotDePasse($vendeur);
-        $this->assertThrows(fn () => app(RedonnerLAccesAction::class)->handle($administrateur, $vendeur->refresh(), false), AuthorizationException::class);
+        $this->assertThrows(fn () => app(RedonnerLAccesAction::class)->enSonAbsence($administrateur, $vendeur->refresh()), AuthorizationException::class);
     }
 
     /**

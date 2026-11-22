@@ -23,7 +23,7 @@ use Illuminate\Database\Eloquent\Builder;
  * Les collaborateurs d'un cabinet d'expertise comptable, dans l'espace du
  * cabinet, pour son propriétaire seul (voir MembrePolicy et
  * PorteeDesDroits) : leur identifiant de connexion, leur statut, leur
- * mot de passe encore égal à l'identifiant, leur première connexion, les
+ * mot de passe pas encore choisi, leur première connexion, les
  * clients qui leur sont confiés ; et ses gestes : créer un collaborateur,
  * leur confier des clients, suspendre, réactiver, retirer,
  * réintégrer, redonner l'accès en sa présence, transmettre la propriété
@@ -84,7 +84,7 @@ class CollaborateurResource extends RessourceDuPanneauCabinet
                     ->badge()
                     ->color('warning')
                     ->state(fn (User $record): array => array_values(array_filter([
-                        $record->mot_de_passe_est_l_identifiant ? 'Mot de passe : l\'identifiant' : null,
+                        $record->aChoisiSonMotDePasse() ? null : $record->etatDuMotDePasse()->libelle(),
                         $record->premiere_connexion_le === null ? 'Jamais connecté' : null,
                     ])))
                     ->placeholder('—'),
@@ -109,7 +109,7 @@ class CollaborateurResource extends RessourceDuPanneauCabinet
                 TextEntry::make('statut')->label('Statut')->badge(),
                 TextEntry::make('mot_de_passe')
                     ->label('Mot de passe')
-                    ->state(fn (User $record): string => $record->mot_de_passe_est_l_identifiant ? 'Encore l\'identifiant : la personne ne peut pas se connecter avant de choisir le sien' : 'Choisi par la personne'),
+                    ->state(fn (User $record): string => $record->aChoisiSonMotDePasse() ? 'Choisi par la personne' : 'Pas encore choisi : la personne ne peut pas se connecter avant de le choisir, en votre présence'),
                 TextEntry::make('clients_confies')
                     ->label('Clients confiés')
                     ->state(fn (User $record): array => self::clientsConfies($record))

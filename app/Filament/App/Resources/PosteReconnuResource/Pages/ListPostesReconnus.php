@@ -35,7 +35,7 @@ class ListPostesReconnus extends ListRecords
                 ->label('Reconnaître ce navigateur')
                 ->icon('heroicon-o-computer-desktop')
                 ->authorize('create', PosteReconnu::class)
-                ->modalDescription('Ce navigateur deviendra un poste du magasin : un compte dont le mot de passe est encore son identifiant pourra s\'y connecter. Ne reconnaissez qu\'un poste du magasin, jamais un appareil personnel.')
+                ->modalDescription('Ce navigateur deviendra un poste du magasin : un compte qui n\'a pas encore choisi son mot de passe pourra s\'y connecter avec son mot de passe provisoire. Ne reconnaissez qu\'un poste du magasin, jamais un appareil personnel.')
                 ->form([
                     TextInput::make('nom')->label('Nom du poste')->placeholder('Caisse 1')->required()->maxLength(100),
                 ])

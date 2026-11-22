@@ -120,7 +120,7 @@ class PorteeDesDroitsTest extends TestCase
         $this->assertTrue($instanceDeLaRequete->estActif());
         $this->assertThrows(fn () => app(ChangerStatutCompteAction::class)->suspendre($instanceDeLaRequete, $vendeur), AuthorizationException::class);
         $this->assertThrows(fn () => app(ChangerStatutCompteAction::class)->retirer($instanceDeLaRequete, $vendeur), AuthorizationException::class);
-        $this->assertThrows(fn () => app(RedonnerLAccesAction::class)->handle($instanceDeLaRequete, $vendeur, false), AuthorizationException::class);
+        $this->assertThrows(fn () => app(RedonnerLAccesAction::class)->enSonAbsence($instanceDeLaRequete, $vendeur), AuthorizationException::class);
 
         $this->assertSame(StatutCompte::Actif, $vendeur->refresh()->statut);
         $this->assertSame(1, Affectation::query()->where('user_id', $vendeur->id)->count());
@@ -491,7 +491,7 @@ class PorteeDesDroitsTest extends TestCase
             'suspendre' => app(ChangerStatutCompteAction::class)->suspendre($auteur, $compte),
             'réactiver' => app(ChangerStatutCompteAction::class)->reactiver($auteur, $compte),
             'retirer de la société' => app(ChangerStatutCompteAction::class)->retirer($auteur, $compte),
-            'redonner l\'accès' => app(RedonnerLAccesAction::class)->handle($auteur, $compte, true, 'un-mot-de-passe-solide'),
+            'redonner l\'accès' => app(RedonnerLAccesAction::class)->enSaPresence($auteur, $compte, 'un-mot-de-passe-solide'),
             'afficher l\'identifiant' => app(AfficherLIdentifiantAction::class)->handle($auteur, $compte),
             'demander la transmission de la propriété' => app(DemanderLaTransmissionDeLaProprieteAction::class)->handle($auteur, $compte, $auteur->estDUnCabinet() ? self::MOT_DE_PASSE_CHOISI : 'password'),
             'créer un responsable de M' => app(CreerMembreAction::class)->handle($auteur, $this->m, $nouveau, RoleMagasin::Responsable),

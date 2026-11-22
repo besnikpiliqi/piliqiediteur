@@ -19,9 +19,9 @@ use Tests\SemeSansTransaction;
  * retrouve ses propres données sur ses pages principales : le tableau de
  * bord et ses graphiques, les factures et les tickets, les charges, les
  * caisses (les trois magasins d'achats de Maison Ferrand, sans vente, n'ont
- * aucun relevé). La vendeuse qui garde son identifiant pour mot de passe ne se
- * connecte qu'une fois le navigateur reconnu comme un poste de son
- * magasin, comme le README le dit. Le semis prend plusieurs minutes : un
+ * aucun relevé). La vendeuse qui n'a pas encore choisi son mot de passe
+ * (provisoire) ne se connecte qu'une fois le navigateur reconnu comme un
+ * poste de son magasin, comme le README le dit. Le semis prend plusieurs minutes : un
  * seul semis, dans le groupe « semis », hors de la suite par défaut. Les
  * relevés de caisse se lisent à l'avant-veille de l'instant du test, le
  * dernier jour de ventes de l'histoire semée (la veille, les magasins de

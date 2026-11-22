@@ -11,6 +11,7 @@ use App\Domain\Cabinets\Support\IdentiteDansLeJournal;
 use App\Domain\Calendrier\Calendrier;
 use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Tenancy\Concerns\RefuseUneCleIllisible;
+use App\Domain\Tenancy\Enums\EtatDuMotDePasse;
 use App\Domain\Tenancy\Enums\ModeDAccesRedonne;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\RoleSociete;
@@ -20,6 +21,7 @@ use App\Domain\Tenancy\Models\Identifiant;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Support\CleDuModele;
+use App\Domain\Tenancy\Support\MotDePasseProvisoire;
 use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Domain\Tenancy\Support\ValeursLues;
 use Database\Factories\UserFactory;
@@ -74,13 +76,14 @@ use Illuminate\Support\Str;
  *
  * Chaque compte, propriétaire compris, a un identifiant de connexion de 8
  * chiffres, tiré au hasard, qui ne change jamais, même quand le compte
- * change de rôle (voir Identifiant). Un compte créé par la société a pour
- * premier mot de passe son identifiant (mot_de_passe_est_l_identifiant),
- * que la personne change quand elle le veut ; un responsable ou un
- * administrateur le change à sa première connexion (voir
- * doitChoisirSonMotDePasse()), un collaborateur d'un cabinet le choisit
- * à la création de son compte (voir CreerCollaborateurAction). Seul un
- * compte actif agit (voir peutAgir()).
+ * change de rôle (voir Identifiant). Jamais son identifiant pour mot de
+ * passe : un compte créé par la société reçoit un mot de passe provisoire
+ * tiré au hasard, qui ne sert qu'une fois et que la personne remplace à
+ * sa première connexion (voir MotsDePasseProvisoires et
+ * doitChoisirSonMotDePasse()), ou la personne présente choisit tout de
+ * suite le sien ; un collaborateur d'un cabinet le choisit à la création de
+ * son compte (voir CreerCollaborateurAction). Seul un compte actif agit
+ * (voir peutAgir()).
  *
  * Un compte ne s'efface pas : retiré, il garde son rôle, son identifiant
  * et son historique. Son adresse e-mail est l'adresse de connexion du
@@ -126,10 +129,18 @@ class User extends Authenticatable implements FilamentUser, HasTenants
     protected $attributes = [
         'role_societe' => 'membre',
         'statut' => 'actif',
-        'mot_de_passe_est_l_identifiant' => false,
         'signaler_le_prochain_mot_de_passe' => false,
         'statut_decide_par_le_proprietaire' => false,
     ];
+
+    /**
+     * Le mot de passe provisoire que la création de ce compte vient de tirer,
+     * en clair : la seule instance que rend l'action de création le porte,
+     * pour que la fenêtre du compte créé le montre une seule fois à qui le
+     * remet en main propre (voir CreationDesComptes::creer()). Jamais
+     * enregistré, jamais relu : un compte relu en base ne le porte plus.
+     */
+    public ?MotDePasseProvisoire $motDePasseProvisoire = null;
 
     /**
      * Les autorisations du compte dans chaque magasin, lues une fois par
@@ -215,7 +226,9 @@ class User extends Authenticatable implements FilamentUser, HasTenants
             'role_societe' => RoleSociete::class,
             'statut' => StatutCompte::class,
             'statut_decide_par_le_proprietaire' => 'boolean',
-            'mot_de_passe_est_l_identifiant' => 'boolean',
+            'mot_de_passe_choisi_le' => Instant::class,
+            'mot_de_passe_provisoire_expire_le' => Instant::class,
+            'mot_de_passe_provisoire_utilise_le' => Instant::class,
             'signaler_le_prochain_mot_de_passe' => 'boolean',
             'premiere_connexion_le' => Instant::class,
             'derniere_connexion_le' => Instant::class,
@@ -578,17 +591,49 @@ class User extends Authenticatable implements FilamentUser, HasTenants
     }
 
     /**
+     * La personne a-t-elle choisi elle-même son mot de passe ? Pas tant que
+     * son mot de passe est provisoire, perdu ou à choisir en présence de qui
+     * crée son compte.
+     */
+    public function aChoisiSonMotDePasse(): bool
+    {
+        return $this->mot_de_passe_choisi_le !== null;
+    }
+
+    /**
+     * Où en est le mot de passe de ce compte (voir EtatDuMotDePasse), sans
+     * rien lire de plus que ses colonnes.
+     */
+    public function etatDuMotDePasse(): EtatDuMotDePasse
+    {
+        return match (true) {
+            $this->aChoisiSonMotDePasse() => EtatDuMotDePasse::Choisi,
+            $this->mot_de_passe_provisoire_expire_le === null => EtatDuMotDePasse::Aucun,
+            $this->mot_de_passe_provisoire_utilise_le !== null => EtatDuMotDePasse::ProvisoireUtilise,
+            $this->mot_de_passe_provisoire_expire_le->isFuture() => EtatDuMotDePasse::ProvisoireValable,
+            default => EtatDuMotDePasse::ProvisoireExpire,
+        };
+    }
+
+    /**
+     * Son mot de passe provisoire vaut-il encore pour une première
+     * connexion : il n'a pas servi et son délai n'est pas passé ?
+     */
+    public function aUnMotDePasseProvisoireValable(): bool
+    {
+        return $this->etatDuMotDePasse() === EtatDuMotDePasse::ProvisoireValable;
+    }
+
+    /**
      * Doit-il choisir son mot de passe à sa connexion, avant toute autre
-     * page (voir ExigerSonPropreMotDePasse) ? Un responsable ou un
-     * administrateur dont le mot de passe est encore son identifiant : à
-     * sa première connexion, et à sa connexion suivante quand il vient
-     * d'être promu à l'un de ces rôles. Un vendeur ou un observateur le
-     * garde tant qu'il le veut.
+     * page (voir ExigerSonPropreMotDePasse) ? Un compte dont le mot de
+     * passe provisoire vient de servir à ouvrir cette session : il choisit
+     * le sien tout de suite, à sa première connexion comme après un accès
+     * redonné en son absence, quel que soit son rôle.
      */
     public function doitChoisirSonMotDePasse(): bool
     {
-        return $this->mot_de_passe_est_l_identifiant
-            && ($this->estAdministrateur() || $this->estResponsable());
+        return $this->mot_de_passe_provisoire_utilise_le !== null && ! $this->aChoisiSonMotDePasse();
     }
 
     /**

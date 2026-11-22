@@ -9,14 +9,23 @@ use Illuminate\Validation\ValidationException;
 use SensitiveParameter;
 
 /**
- * La règle d'un mot de passe que la personne choisit une fois son compte
- * créé : dans son profil, sur l'écran de qui lui redonne l'accès en sa
- * présence, à sa première connexion pour un responsable ou un
- * administrateur, à la création de son compte pour un collaborateur d'un
- * cabinet, et sur la page du lien « Mot de passe oublié » du
- * propriétaire. Au moins 8 caractères ; jamais l'identifiant du compte,
- * ni une chaîne qui le contient ; ni un seul caractère répété, ni une suite
- * de chiffres croissante ou décroissante.
+ * La règle d'un mot de passe que la personne choisit : dans son profil, à
+ * sa première connexion avec son mot de passe provisoire, sur l'écran de
+ * qui lui redonne l'accès ou crée son compte en sa présence, et sur la page
+ * du lien « Mot de passe oublié » du propriétaire ; à l'inscription et à
+ * l'acceptation d'une invitation, pour le propriétaire (décision de Claude
+ * D76, T36.1 à T36.4, d'après la recommandation de la CNIL sur les mots de
+ * passe) :
+ * - au moins 12 caractères, ou au moins 8 caractères de trois sortes
+ *   parmi les majuscules, les minuscules, les chiffres et les signes (tout
+ *   caractère qui n'est ni une lettre ni un chiffre, l'espace compris) ;
+ * - jamais un mot de passe courant (voir MotsDePasseCourants) ;
+ * - jamais l'identifiant du compte, ni une chaîne qui le contient, ni un
+ *   seul caractère répété, ni une suite de chiffres croissante ou
+ *   décroissante.
+ * Un mot de passe provisoire (voir MotsDePasseProvisoires) n'est pas
+ * choisi : il est tiré au hasard, ne sert qu'une fois, et la personne le
+ * remplace aussitôt par un mot de passe qui suit cette règle.
  *
  * À l'inscription, le mot de passe du propriétaire se choisit avant que son
  * identifiant existe : la demande d'inscription applique la règle sans
@@ -25,9 +34,17 @@ use SensitiveParameter;
  */
 final class RegleDuMotDePasse implements ValidationRule
 {
-    public const LONGUEUR_MINIMALE = 8;
+    public const LONGUEUR_SANS_COMPOSITION = 12;
 
-    public const MESSAGE_TROP_COURT = 'Le mot de passe doit compter au moins 8 caractères.';
+    public const LONGUEUR_AVEC_COMPOSITION = 8;
+
+    public const SORTES_EXIGEES = 3;
+
+    public const AIDE = 'Au moins 12 caractères, ou 8 caractères de trois sortes parmi les majuscules, les minuscules, les chiffres et les signes ; jamais un mot de passe courant, ni votre identifiant, ni un seul caractère répété, ni une suite de chiffres.';
+
+    public const MESSAGE_TROP_FAIBLE = 'Le mot de passe doit compter au moins 12 caractères, ou au moins 8 caractères de trois sortes parmi les majuscules, les minuscules, les chiffres et les signes.';
+
+    public const MESSAGE_COURANT = 'Ce mot de passe est trop courant : choisissez-en un autre.';
 
     public const MESSAGE_IDENTIFIANT = 'Le mot de passe ne doit être ni votre identifiant, ni le contenir.';
 
@@ -57,8 +74,12 @@ final class RegleDuMotDePasse implements ValidationRule
     {
         $reproches = [];
 
-        if (mb_strlen($motDePasse) < self::LONGUEUR_MINIMALE) {
-            $reproches[] = self::MESSAGE_TROP_COURT;
+        if (! self::estAssezFort($motDePasse)) {
+            $reproches[] = self::MESSAGE_TROP_FAIBLE;
+        }
+
+        if ($motDePasse !== '' && MotsDePasseCourants::contient($motDePasse)) {
+            $reproches[] = self::MESSAGE_COURANT;
         }
 
         if ($identifiant !== null && $identifiant !== '' && str_contains($motDePasse, $identifiant)) {
@@ -97,6 +118,31 @@ final class RegleDuMotDePasse implements ValidationRule
         if ($validateur->fails()) {
             throw ValidationException::withMessages([$champ => $validateur->errors()->get('mot_de_passe')]);
         }
+    }
+
+    /**
+     * Combien de sortes de caractères ce mot de passe compte : les
+     * majuscules, les minuscules, les chiffres, les signes (tout le reste).
+     */
+    public static function sortes(#[SensitiveParameter] string $motDePasse): int
+    {
+        return array_sum([
+            preg_match('/\p{Lu}/u', $motDePasse) === 1 ? 1 : 0,
+            preg_match('/\p{Ll}/u', $motDePasse) === 1 ? 1 : 0,
+            preg_match('/\p{Nd}/u', $motDePasse) === 1 ? 1 : 0,
+            preg_match('/[^\p{L}\p{Nd}]|\p{Lo}|\p{Lt}|\p{Lm}/u', $motDePasse) === 1 ? 1 : 0,
+        ]);
+    }
+
+    /**
+     * Au moins 12 caractères, ou au moins 8 de trois sortes.
+     */
+    private static function estAssezFort(#[SensitiveParameter] string $motDePasse): bool
+    {
+        $longueur = mb_strlen($motDePasse);
+
+        return $longueur >= self::LONGUEUR_SANS_COMPOSITION
+            || ($longueur >= self::LONGUEUR_AVEC_COMPOSITION && self::sortes($motDePasse) >= self::SORTES_EXIGEES);
     }
 
     /**

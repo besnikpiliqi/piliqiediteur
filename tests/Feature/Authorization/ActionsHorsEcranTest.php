@@ -350,7 +350,7 @@ class ActionsHorsEcranTest extends TestCase
 
                 return fn (User $auteur) => app(ChangerStatutCompteAction::class)->reintegrer($auteur, $vendeur, RoleMagasin::Vendeur);
             }),
-            'redonner l\'accès' => $this->avec($this->membre($magasin, RoleMagasin::Vendeur), fn (User $vendeur, User $auteur) => app(RedonnerLAccesAction::class)->handle($auteur, $vendeur, false)),
+            'redonner l\'accès' => $this->avec($this->membre($magasin, RoleMagasin::Vendeur), fn (User $vendeur, User $auteur) => app(RedonnerLAccesAction::class)->enSonAbsence($auteur, $vendeur)),
             'créer un administrateur' => fn (User $auteur) => app(CreerAdministrateurAction::class)->handle($auteur, $societe, ['name' => 'Alice'], null, PermissionRegistry::modeleDeLAdministrateur(TypeDActivite::Commerce), []),
             'changer le rôle de société' => $this->avec($this->membre($magasin, RoleMagasin::Vendeur), fn (User $vendeur, User $auteur) => app(ChangerLeRoleDeSocieteAction::class)->versAdministrateur($auteur, $vendeur, null, PermissionRegistry::modeleDeLAdministrateur(TypeDActivite::Commerce), [])),
             'modifier un administrateur' => $this->avec($this->administrateur($magasin), fn (User $administrateur, User $auteur) => app(ModifierAdministrateurAction::class)->modifier($auteur, $administrateur, null, PermissionRegistry::modeleDeLAdministrateur(TypeDActivite::Commerce), AutorisationsSociete::toutes())),

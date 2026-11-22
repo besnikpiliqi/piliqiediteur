@@ -12,6 +12,7 @@ use App\Domain\Tenancy\Actions\CreerSocieteAction;
 use App\Domain\Tenancy\Actions\FermerMagasinAction;
 use App\Domain\Tenancy\Actions\RedonnerLAccesAction;
 use App\Domain\Tenancy\Contracts\SourceDeHasard;
+use App\Domain\Tenancy\Enums\EtatDuMotDePasse;
 use App\Domain\Tenancy\Enums\MotifFermeture;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\RoleSociete;
@@ -24,6 +25,8 @@ use App\Domain\Tenancy\Services\CreationDesComptes;
 use App\Domain\Tenancy\Services\GenerateurDIdentifiants;
 use App\Domain\Tenancy\Services\SourceDeHasardCryptographique;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\MotsDePasseCourants;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Filament\App\Pages\Auth\Connexion;
 use App\Filament\App\Resources\EquipeDuMagasinResource\Pages\ListEquipeDuMagasin;
 use App\Filament\Societe\Resources\MembreResource\Pages\ListMembres;
@@ -89,7 +92,7 @@ class IdentifiantsTest extends TestCase
         $proprietaire = $societe->proprietaire()->firstOrFail();
         $this->assertSame('59321048', $proprietaire->identifiantDeConnexion());
         $this->assertTrue(Hash::check('48210937', $proprietaire->password));
-        $this->assertFalse($proprietaire->mot_de_passe_est_l_identifiant);
+        $this->assertTrue($proprietaire->aChoisiSonMotDePasse());
         $this->assertCount(2, $source->appels);
     }
 
@@ -160,6 +163,30 @@ class IdentifiantsTest extends TestCase
             $this->assertTrue(GenerateurDIdentifiants::estTrivial($trivial), $trivial);
         }
         $this->assertFalse(GenerateurDIdentifiants::estTrivial('48210937'));
+    }
+
+    /**
+     * Un identifiant tiré n'est jamais un mot de passe courant (voir
+     * MotsDePasseCourants) : celui qui figure dans la liste est tiré de
+     * nouveau, comme un identifiant trivial.
+     */
+    public function test_aucun_identifiant_ne_figure_dans_la_liste_des_mots_de_passe_courants(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $courants = ['69696969', '12344321', '11223344', '12341234'];
+
+        foreach ($courants as $courant) {
+            $this->assertTrue(MotsDePasseCourants::contient($courant), $courant);
+            $this->assertFalse(GenerateurDIdentifiants::estTrivial($courant), $courant);
+        }
+
+        $source = $this->sourceQuiRend([...array_map(intval(...), $courants), 48210937]);
+
+        $compte = $this->membre($magasin, RoleMagasin::Vendeur);
+
+        $this->assertSame('48210937', $compte->identifiantDeConnexion());
+        $this->assertCount(5, $source->appels);
+        $this->assertFalse(MotsDePasseCourants::contient('48210937'));
     }
 
     /**
@@ -312,23 +339,41 @@ class IdentifiantsTest extends TestCase
     }
 
     /**
-     * La base refuse un propriétaire dont le mot de passe est encore son
-     * identifiant : au passage au rôle de propriétaire comme au passage du
-     * drapeau à vrai.
+     * La base refuse un propriétaire qui a un mot de passe provisoire : au
+     * passage au rôle de propriétaire comme à l'écriture d'un mot de passe
+     * provisoire sur lui.
      */
-    public function test_la_base_refuse_un_proprietaire_dont_le_mot_de_passe_est_l_identifiant(): void
+    public function test_la_base_refuse_un_proprietaire_qui_a_un_mot_de_passe_provisoire(): void
     {
         $proprietaire = $this->proprietaireDe($this->ouvrirUneSociete(['nom' => 'A']));
         $societe = Societe::factory()->create();
-        $compte = DB::table('users')->insertGetId([...$this->ligneDeCompte($societe, RoleSociete::Membre->value, 'futur@example.test'), 'email_verified_at' => now(), 'mot_de_passe_est_l_identifiant' => true]);
+        $compte = DB::table('users')->insertGetId([...$this->ligneDeCompte($societe, RoleSociete::Membre->value, 'futur@example.test'), 'email_verified_at' => now(), 'mot_de_passe_provisoire_expire_le' => now()->addHours(72)]);
 
         $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('users')->where('id', $compte)->update(['role_societe' => RoleSociete::Proprietaire->value])), QueryException::class);
-        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('users')->where('id', $proprietaire->id)->update(['mot_de_passe_est_l_identifiant' => true])), QueryException::class);
-        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('users')->insert([...$this->ligneDeCompte(Societe::factory()->create(), RoleSociete::Proprietaire->value, 'autre@example.test'), 'email_verified_at' => now(), 'mot_de_passe_est_l_identifiant' => true])), QueryException::class);
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('users')->where('id', $proprietaire->id)->update(['mot_de_passe_choisi_le' => null, 'mot_de_passe_provisoire_expire_le' => now()->addHours(72)])), QueryException::class);
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('users')->insert([...$this->ligneDeCompte(Societe::factory()->create(), RoleSociete::Proprietaire->value, 'autre@example.test'), 'email_verified_at' => now(), 'mot_de_passe_provisoire_expire_le' => now()->addHours(72)])), QueryException::class);
 
-        DB::table('users')->where('id', $compte)->update(['mot_de_passe_est_l_identifiant' => false]);
+        DB::table('users')->where('id', $compte)->update(['mot_de_passe_provisoire_expire_le' => null]);
         DB::table('users')->where('id', $compte)->update(['role_societe' => RoleSociete::Proprietaire->value]);
-        $this->assertFalse($proprietaire->refresh()->mot_de_passe_est_l_identifiant);
+        $this->assertNull($proprietaire->refresh()->mot_de_passe_provisoire_expire_le);
+    }
+
+    /**
+     * Les trois colonnes du mot de passe d'un compte se tiennent entre elles,
+     * en base : un mot de passe choisi n'est plus provisoire, et un mot de
+     * passe provisoire n'a servi que s'il a une date d'expiration.
+     */
+    public function test_les_colonnes_du_mot_de_passe_se_tiennent_en_base(): void
+    {
+        $compte = $this->membre($this->ouvrirUneSociete(['nom' => 'A']), RoleMagasin::Vendeur);
+        $this->assertTrue($compte->aChoisiSonMotDePasse());
+
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('users')->where('id', $compte->id)->update(['mot_de_passe_provisoire_expire_le' => now()->addHours(72)])), QueryException::class, 'users_mot_de_passe_provisoire_coherent');
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('users')->where('id', $compte->id)->update(['mot_de_passe_choisi_le' => null, 'mot_de_passe_provisoire_utilise_le' => now()])), QueryException::class, 'users_mot_de_passe_provisoire_coherent');
+
+        DB::table('users')->where('id', $compte->id)->update(['mot_de_passe_choisi_le' => null, 'mot_de_passe_provisoire_expire_le' => now()->addHours(72), 'mot_de_passe_provisoire_utilise_le' => now()]);
+        $this->assertSame(EtatDuMotDePasse::ProvisoireUtilise, $compte->refresh()->etatDuMotDePasse());
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('users')->where('id', $compte->id)->update(['mot_de_passe_choisi_le' => now()])), QueryException::class, 'users_mot_de_passe_provisoire_coherent');
     }
 
     /**
@@ -503,10 +548,11 @@ class IdentifiantsTest extends TestCase
     }
 
     /**
-     * L'identifiant ne s'écrit jamais au journal d'audit, dans ses traces,
-     * au journal des événements, dans une notification, dans un e-mail ni
-     * dans les journaux techniques, en clair, à travers une création, un
-     * accès redonné, un identifiant affiché par un administrateur, des
+     * L'identifiant et les mots de passe provisoires ne s'écrivent jamais au
+     * journal d'audit, dans ses traces, au journal des événements, dans une
+     * notification, dans un e-mail ni dans les journaux techniques, en
+     * clair, à travers une création, un accès redonné en l'absence de la
+     * personne, un identifiant affiché par un administrateur, des
      * connexions manquées et une connexion réussie.
      */
     public function test_l_identifiant_n_entre_ni_au_journal_d_audit_ni_dans_un_e_mail_ni_dans_les_journaux_techniques(): void
@@ -518,10 +564,11 @@ class IdentifiantsTest extends TestCase
         });
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $administrateur = $this->administrateur($magasin, null, [AutorisationsSociete::ACCES_REDONNER]);
-        [$compte, $identifiant] = $this->compteAuMotDePasseIdentifiant($magasin, RoleMagasin::Vendeur);
+        [$compte, $premierProvisoire] = $this->compteAuMotDePasseProvisoire($magasin, RoleMagasin::Vendeur);
+        $identifiant = (string) $compte->identifiantDeConnexion();
         app(AfficherLIdentifiantAction::class)->handle($administrateur, $compte);
         $this->choisirSonMotDePasse($compte);
-        app(RedonnerLAccesAction::class)->handle($this->proprietaireDe($magasin), $compte->refresh(), false);
+        $secondProvisoire = ValeurRequise::de(app(RedonnerLAccesAction::class)->enSonAbsence($this->proprietaireDe($magasin), $compte->refresh()), 'le mot de passe provisoire de l\'accès redonné')->valeur();
         Filament::setCurrentPanel(Filament::getPanel('app'));
         foreach (range(1, 3) as $essai) {
             Livewire::test(Connexion::class)->fillForm(['login' => $identifiant, 'password' => 'pas-le-bon'])->call('authenticate');
@@ -529,23 +576,25 @@ class IdentifiantsTest extends TestCase
         $this->choisirSonMotDePasse($compte->refresh());
         Livewire::test(Connexion::class)->fillForm(['login' => $identifiant, 'password' => self::MOT_DE_PASSE_CHOISI])->call('authenticate')->assertHasNoErrors();
 
-        foreach ([
-            'journal_audit' => ['anciennes_valeurs', 'nouvelles_valeurs'],
-            'traces_audit' => ['ip', 'agent_utilisateur'],
-            'enregistrements_fiscaux' => ['contenu'],
-            'notifications' => ['data'],
-        ] as $table => $colonnes) {
-            foreach ($colonnes as $colonne) {
-                $this->assertSame(0, DB::table($table)->where($colonne, 'like', "%{$identifiant}%")->count(), "{$table}.{$colonne}");
+        foreach ([$identifiant, $premierProvisoire, $secondProvisoire] as $secret) {
+            foreach ([
+                'journal_audit' => ['anciennes_valeurs', 'nouvelles_valeurs'],
+                'traces_audit' => ['ip', 'agent_utilisateur'],
+                'enregistrements_fiscaux' => ['contenu'],
+                'notifications' => ['data'],
+            ] as $table => $colonnes) {
+                foreach ($colonnes as $colonne) {
+                    $this->assertSame(0, DB::table($table)->where($colonne, 'like', "%{$secret}%")->count(), "{$table}.{$colonne}");
+                }
+            }
+            foreach (Mail::sent(Mailable::class) as $courriel) {
+                $this->assertStringNotContainsString($secret, $courriel->render());
+            }
+            foreach ($journaux as $journal) {
+                $this->assertStringNotContainsString($secret, $journal);
             }
         }
         $this->assertNotEmpty(DB::table('journal_audit')->count());
-        foreach (Mail::sent(Mailable::class) as $courriel) {
-            $this->assertStringNotContainsString($identifiant, $courriel->render());
-        }
-        foreach ($journaux as $journal) {
-            $this->assertStringNotContainsString($identifiant, $journal);
-        }
     }
 
     /**

@@ -13,9 +13,11 @@ use SensitiveParameter;
  * la variable PILIQI_SEMIS_MOT_DE_PASSE du .env le donne (config
  * piliqi.semis_mot_de_passe) ; sinon un mot de passe tiré au hasard pour
  * chaque compte, à chaque semis. Chacun suit la règle des mots de passe
- * choisis (voir RegleDuMotDePasse) : au moins 8 caractères, ni un seul
- * caractère répété, ni une suite de chiffres, ni l'identifiant du compte
- * ni une chaîne qui le contient. Aucun ne s'écrit dans le dépôt.
+ * choisis (voir RegleDuMotDePasse) : au moins 12 caractères, ou au moins 8
+ * de trois sortes (majuscules, minuscules, chiffres, signes), jamais un
+ * mot de passe courant, un seul caractère répété, une suite de chiffres,
+ * ni l'identifiant du compte ni une chaîne qui le contient. Aucun ne
+ * s'écrit dans le dépôt.
  */
 final class MotsDePasseDuSemis
 {

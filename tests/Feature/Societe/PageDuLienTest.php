@@ -130,8 +130,8 @@ class PageDuLienTest extends TestCase
 
     /**
      * Le mot de passe choisi sur la page du lien suit la règle : ni
-     * l'identifiant du propriétaire, ni trop court ; rien ne s'enregistre
-     * et le lien reste valable.
+     * l'identifiant du propriétaire, ni trop faible, ni courant ; rien ne
+     * s'enregistre et le lien reste valable.
      */
     public function test_le_mot_de_passe_choisi_sur_la_page_de_lien_suit_la_regle(): void
     {
@@ -139,7 +139,7 @@ class PageDuLienTest extends TestCase
         $identifiant = (string) $proprietaire->identifiantDeConnexion();
         $jeton = Password::broker()->createToken($proprietaire);
 
-        foreach ([$identifiant => RegleDuMotDePasse::MESSAGE_IDENTIFIANT, 'court' => RegleDuMotDePasse::MESSAGE_TROP_COURT] as $motDePasse => $message) {
+        foreach ([$identifiant => RegleDuMotDePasse::MESSAGE_IDENTIFIANT, 'court' => RegleDuMotDePasse::MESSAGE_TROP_FAIBLE, 'azertyuiop123' => RegleDuMotDePasse::MESSAGE_COURANT] as $motDePasse => $message) {
             $page = Livewire::test(PageDuLien::class, ['email' => $proprietaire->email, 'token' => $jeton])
                 ->fillForm(['password' => (string) $motDePasse, 'passwordConfirmation' => (string) $motDePasse])
                 ->call('choisir')

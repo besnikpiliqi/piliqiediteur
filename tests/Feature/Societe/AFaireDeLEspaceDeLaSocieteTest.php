@@ -168,11 +168,11 @@ class AFaireDeLEspaceDeLaSocieteTest extends TestCase
     /**
      * Le code du courrier recommandé, avec sa date limite, n'est que dans
      * l'« À faire » du propriétaire : un administrateur n'en voit rien, pas
-     * plus que des comptes dont le mot de passe est encore l'identifiant,
+     * plus que des comptes qui n'ont pas encore choisi leur mot de passe,
      * que seul le propriétaire voit, et dont le nombre est exactement celui
      * de la liste filtrée où il mène.
      */
-    public function test_le_code_du_courrier_et_les_mots_de_passe_identifiants_ne_sont_que_pour_le_proprietaire(): void
+    public function test_le_code_du_courrier_et_les_mots_de_passe_a_choisir_ne_sont_que_pour_le_proprietaire(): void
     {
         $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique', 'a_verifier' => true]);
@@ -186,15 +186,15 @@ class AFaireDeLEspaceDeLaSocieteTest extends TestCase
         $code = $this->chose($proprietaire, $societe, 'code_du_courrier');
         $this->assertSame([UrgenceAFaire::Rouge, 'Saisir le code'], [$code?->urgence, $code?->bouton]);
         $this->assertStringContainsString('avant le 04/11/2026', (string) $code?->phrase);
-        $motsDePasse = $this->chose($proprietaire, $societe, 'mots_de_passe_identifiants');
-        $this->assertSame([2, MembreResource::urlDesMotsDePasseIdentifiants(), true], [$motsDePasse?->nombre, $motsDePasse?->url, $motsDePasse?->aSurveiller]);
+        $motsDePasse = $this->chose($proprietaire, $societe, 'mots_de_passe_a_choisir');
+        $this->assertSame([2, MembreResource::urlDesMotsDePasseAChoisir(), true], [$motsDePasse?->nombre, $motsDePasse?->url, $motsDePasse?->aSurveiller]);
         Livewire::test(ListMembres::class)
-            ->filterTable(MembreResource::FILTRE_MOT_DE_PASSE_IDENTIFIANT)
+            ->filterTable(MembreResource::FILTRE_MOT_DE_PASSE_A_CHOISIR)
             ->assertCountTableRecords(2)
             ->assertCanSeeTableRecords([$vendeur]);
 
         $this->assertNull($this->chose($administrateur, $societe, 'code_du_courrier'));
-        $this->assertNull($this->chose($administrateur, $societe, 'mots_de_passe_identifiants'));
+        $this->assertNull($this->chose($administrateur, $societe, 'mots_de_passe_a_choisir'));
     }
 
     /**

@@ -12,6 +12,7 @@ use App\Domain\Tenancy\Enums\StatutCompte;
 use App\Domain\Tenancy\Models\Affectation;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
+use App\Domain\Tenancy\Services\MotsDePasseProvisoires;
 use App\Domain\Tenancy\Services\PorteeDesDroits;
 use App\Domain\Tenancy\Support\CleDuModele;
 use App\Domain\Tenancy\Support\ValeurRequise;
@@ -59,7 +60,7 @@ use UnexpectedValueException;
  *   l'accès » et « Afficher l'identifiant » seulement ;
  * - fermée à tout autre compte.
  * Le propriétaire voit les identifiants, et, dans la liste, les comptes
- * dont le mot de passe est encore l'identifiant et ceux qui ne se sont
+ * qui n'ont pas encore choisi leur mot de passe et ceux qui ne se sont
  * jamais connectés ; un administrateur ne voit un identifiant que par
  * « Afficher l'identifiant », geste tracé. Les magasins proposés se lisent
  * par la portée de la personne connectée, dans sa société. Personne ne
@@ -102,30 +103,32 @@ class MembreResource extends RessourceDuPanneauSociete
             : User::query()->whereRaw('1 = 0');
     }
 
-    public const FILTRE_MOT_DE_PASSE_IDENTIFIANT = 'mot_de_passe_identifiant';
+    public const FILTRE_MOT_DE_PASSE_A_CHOISIR = 'mot_de_passe_a_choisir';
 
     /**
-     * Les comptes actifs qui ont encore leur identifiant pour mot de passe
-     * (un compte suspendu ou retiré ne se connecte pas), que seul le
-     * propriétaire voit : le filtre de la liste les montre, et l'« À
+     * Les comptes actifs qui n'ont pas encore choisi leur mot de passe (un
+     * compte suspendu ou retiré ne se connecte pas ; un expert-comptable de
+     * la société le choisit par son lien) : mot de passe provisoire pas
+     * encore utilisé, expiré, ou dont le choix n'a pas été fini, que seul
+     * le propriétaire voit : le filtre de la liste les montre, et l'« À
      * faire » de la société les compte (voir
      * ChosesAFaireDeLaSociete::delaSociete()), par la même requête.
      *
      * @param  Builder<User>  $comptes
      * @return Builder<User>
      */
-    public static function auMotDePasseIdentifiant(Builder $comptes): Builder
+    public static function auMotDePasseAChoisir(Builder $comptes): Builder
     {
-        return $comptes->where('users.mot_de_passe_est_l_identifiant', true)->where('users.statut', StatutCompte::Actif->value);
+        return MotsDePasseProvisoires::pasEncoreChoisis($comptes);
     }
 
     /**
-     * La liste des comptes, filtrée sur ceux qui ont encore leur
-     * identifiant pour mot de passe.
+     * La liste des comptes, filtrée sur ceux qui n'ont pas encore choisi
+     * leur mot de passe.
      */
-    public static function urlDesMotsDePasseIdentifiants(): string
+    public static function urlDesMotsDePasseAChoisir(): string
     {
-        return static::getUrl('index', ['tableFilters' => [self::FILTRE_MOT_DE_PASSE_IDENTIFIANT => ['isActive' => true]]]);
+        return static::getUrl('index', ['tableFilters' => [self::FILTRE_MOT_DE_PASSE_A_CHOISIR => ['isActive' => true]]]);
     }
 
     public static function table(Table $table): Table
@@ -155,9 +158,9 @@ class MembreResource extends RessourceDuPanneauSociete
             ->filters([
                 Tables\Filters\SelectFilter::make('role_societe')->label('Rôle')->options(RoleSociete::class),
                 Tables\Filters\SelectFilter::make('statut')->label('Statut')->options(StatutCompte::class),
-                Tables\Filters\Filter::make(self::FILTRE_MOT_DE_PASSE_IDENTIFIANT)
-                    ->label('Mot de passe encore l\'identifiant')
-                    ->query(fn (Builder $query): Builder => self::auMotDePasseIdentifiant($query))
+                Tables\Filters\Filter::make(self::FILTRE_MOT_DE_PASSE_A_CHOISIR)
+                    ->label('Mot de passe pas encore choisi')
+                    ->query(fn (Builder $query): Builder => self::auMotDePasseAChoisir($query))
                     ->visible(fn (): bool => static::proprietaireConnecte()),
             ])
             ->actions([
@@ -188,9 +191,9 @@ class MembreResource extends RessourceDuPanneauSociete
                 TextEntry::make('mot_de_passe')
                     ->label('Mot de passe')
                     ->state(fn (User $record): string => match (true) {
-                        $record->mot_de_passe_est_l_identifiant => 'Encore l\'identifiant',
                         $record->estExpertComptable() && app(ExpertsComptablesDeclares::class)->attachementDe($record)?->aChoisiSonMotDePasse() !== true => 'Pas encore choisi',
-                        default => 'Choisi par la personne',
+                        $record->estExpertComptable() => 'Choisi par la personne',
+                        default => $record->etatDuMotDePasse()->libelle(),
                     })
                     ->visible(fn (User $record): bool => static::peut('voirLIdentifiant', $record)),
                 TextEntry::make('derniere_connexion_le')
@@ -232,8 +235,9 @@ class MembreResource extends RessourceDuPanneauSociete
     }
 
     /**
-     * Les badges de la liste, pour le propriétaire : un mot de passe encore
-     * égal à l'identifiant, un compte jamais connecté.
+     * Les badges de la liste, pour le propriétaire : un mot de passe pas
+     * encore choisi (provisoire à utiliser, expiré, ou choix inachevé), un
+     * compte jamais connecté.
      *
      * @return list<string>
      */
@@ -254,7 +258,7 @@ class MembreResource extends RessourceDuPanneauSociete
         }
 
         return array_values(array_filter([
-            $compte->mot_de_passe_est_l_identifiant ? 'Mot de passe : l\'identifiant' : null,
+            $compte->aChoisiSonMotDePasse() ? null : $compte->etatDuMotDePasse()->libelle(),
             $compte->premiere_connexion_le === null ? 'Jamais connecté' : null,
         ]));
     }

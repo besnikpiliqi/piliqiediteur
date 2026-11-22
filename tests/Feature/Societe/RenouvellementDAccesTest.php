@@ -9,14 +9,18 @@ use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
 use App\Domain\Tenancy\Actions\ModifierMembreAction;
 use App\Domain\Tenancy\Actions\RedonnerLAccesAction;
 use App\Domain\Tenancy\Enums\ActionAuditee;
+use App\Domain\Tenancy\Enums\EtatDuMotDePasse;
 use App\Domain\Tenancy\Enums\ModeDAccesRedonne;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Affectation;
 use App\Domain\Tenancy\Notifications\AvisDeLEquipe;
+use App\Domain\Tenancy\Services\MotsDePasseProvisoires;
 use App\Domain\Tenancy\Services\PorteeDesDroits;
 use App\Domain\Tenancy\Services\PostesConnus;
 use App\Domain\Tenancy\Services\PostesReconnus;
+use App\Domain\Tenancy\Support\MotDePasseProvisoire;
 use App\Domain\Tenancy\Support\RegleDuMotDePasse;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Filament\App\Pages\Auth\Connexion;
 use App\Filament\App\Resources\EquipeDuMagasinResource\Pages\ListEquipeDuMagasin;
 use App\Filament\Societe\Resources\MembreResource\Pages\FicheDuMembre;
@@ -44,8 +48,9 @@ use Tests\TestCase;
  * pour un responsable d'un magasin de sa portée ; par un administrateur
  * autorisé à redonner l'accès pour un vendeur ou un observateur d'un magasin
  * de sa portée ; personne ne redonne celui du propriétaire. La
- * personne présente tape elle-même son nouveau mot de passe ; absente, il
- * redevient son identifiant. Chaque renouvellement ferme les sessions,
+ * personne présente tape elle-même son nouveau mot de passe ; absente, elle
+ * reçoit un mot de passe provisoire tiré au hasard, qui ne sert qu'une fois
+ * et qu'elle remplace aussitôt par le sien. Chaque renouvellement ferme les sessions,
  * s'inscrit au journal d'audit, s'affiche à la personne et, fait par un
  * autre, est signalé au propriétaire.
  */
@@ -65,12 +70,13 @@ class RenouvellementDAccesTest extends TestCase
         $this->dansLeMagasin($magasin, $responsable);
         Livewire::test(ListEquipeDuMagasin::class)
             ->callTableAction('redonner_l_acces', $saLigne, ['mode' => 'absent'])
-            ->assertHasNoTableActionErrors()
-            ->assertNotified("Accès redonné. Son identifiant, qui est de nouveau son mot de passe : {$vendeur->identifiantDeConnexion()}. Remettez-le-lui en main propre.");
+            ->assertHasNoTableActionErrors();
 
+        $provisoire = $this->motDePasseProvisoireNotifie();
         $vendeur->refresh();
-        $this->assertTrue(Hash::check((string) $vendeur->identifiantDeConnexion(), $vendeur->password));
-        $this->assertSame([true, ModeDAccesRedonne::Absence, (int) $responsable->id], [$vendeur->mot_de_passe_est_l_identifiant, $vendeur->acces_redonne_mode, (int) $vendeur->acces_redonne_par]);
+        $this->assertTrue(Hash::check($provisoire, $vendeur->password));
+        $this->assertFalse(Hash::check((string) $vendeur->identifiantDeConnexion(), $vendeur->password), 'L\'identifiant n\'est jamais un mot de passe.');
+        $this->assertSame([EtatDuMotDePasse::ProvisoireValable, ModeDAccesRedonne::Absence, (int) $responsable->id], [$vendeur->etatDuMotDePasse(), $vendeur->acces_redonne_mode, (int) $vendeur->acces_redonne_par]);
     }
 
     public function test_un_responsable_ne_redonne_l_acces_ni_d_un_autre_responsable_ni_d_un_compte_d_un_autre_magasin(): void
@@ -83,7 +89,7 @@ class RenouvellementDAccesTest extends TestCase
 
         foreach ([$collegue, $vendeurDAilleurs] as $cible) {
             $this->assertFalse($responsable->can('redonnerLAcces', $cible), $cible->name);
-            $this->assertThrows(fn () => app(RedonnerLAccesAction::class)->handle($responsable, $cible, false), AuthorizationException::class);
+            $this->assertThrows(fn () => app(RedonnerLAccesAction::class)->enSonAbsence($responsable, $cible), AuthorizationException::class);
             $this->assertNull($cible->refresh()->acces_redonne_le);
         }
     }
@@ -96,10 +102,10 @@ class RenouvellementDAccesTest extends TestCase
         $responsable = $this->responsable($magasin);
         $responsableHorsPortee = $this->responsable($horsPortee);
 
-        $this->assertTrue(app(RedonnerLAccesAction::class)->handle($administrateur, $responsable, true, self::NOUVEAU_MOT_DE_PASSE, (string) Str::uuid()));
+        $this->assertTrue(app(RedonnerLAccesAction::class)->enSaPresence($administrateur, $responsable, self::NOUVEAU_MOT_DE_PASSE, (string) Str::uuid()));
 
         $this->assertTrue(Hash::check(self::NOUVEAU_MOT_DE_PASSE, $responsable->refresh()->password));
-        $this->assertThrows(fn () => app(RedonnerLAccesAction::class)->handle($administrateur, $responsableHorsPortee, false), AuthorizationException::class);
+        $this->assertThrows(fn () => app(RedonnerLAccesAction::class)->enSonAbsence($administrateur, $responsableHorsPortee), AuthorizationException::class);
         $this->assertNull($responsableHorsPortee->refresh()->acces_redonne_le);
     }
 
@@ -117,8 +123,8 @@ class RenouvellementDAccesTest extends TestCase
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
         $vendeurHorsPortee = $this->membre($horsPortee, RoleMagasin::Vendeur);
 
-        $this->assertTrue(app(RedonnerLAccesAction::class)->handle($administrateur, $vendeur, false));
-        $this->assertTrue($vendeur->refresh()->mot_de_passe_est_l_identifiant);
+        $this->assertInstanceOf(MotDePasseProvisoire::class, app(RedonnerLAccesAction::class)->enSonAbsence($administrateur, $vendeur));
+        $this->assertFalse($vendeur->refresh()->aChoisiSonMotDePasse());
 
         foreach (['update', 'suspendreOuReactiver', 'retirerDeLaSociete', 'changerLeRoleDeSociete'] as $geste) {
             $this->assertFalse($administrateur->can($geste, $vendeur), $geste);
@@ -127,7 +133,7 @@ class RenouvellementDAccesTest extends TestCase
         $this->assertThrows(fn () => app(ChangerStatutCompteAction::class)->suspendre($administrateur, $vendeur), AuthorizationException::class);
         $this->assertThrows(fn () => app(ChangerStatutCompteAction::class)->retirer($administrateur, $vendeur), AuthorizationException::class);
         $this->assertSame([RoleMagasin::Vendeur, true], [Affectation::query()->where('user_id', $vendeur->id)->sole()->role, $vendeur->refresh()->estActif()]);
-        $this->assertThrows(fn () => app(RedonnerLAccesAction::class)->handle($administrateur, $vendeurHorsPortee, false), AuthorizationException::class);
+        $this->assertThrows(fn () => app(RedonnerLAccesAction::class)->enSonAbsence($administrateur, $vendeurHorsPortee), AuthorizationException::class);
     }
 
     /**
@@ -197,17 +203,18 @@ class RenouvellementDAccesTest extends TestCase
     /**
      * Un administrateur ne voit l'identifiant d'un vendeur que par
      * « Afficher l'identifiant » : le geste s'inscrit au journal d'audit, le
-     * compte sans sa valeur, et le propriétaire en est prévenu, dans sa
-     * cloche et par e-mail, quand le mot de passe est encore l'identifiant ;
-     * il ne l'est pas pour un compte dont la personne a choisi le sien.
+     * compte sans sa valeur. L'identifiant n'est jamais un mot de passe : le
+     * voir n'ouvre aucun compte, et le propriétaire n'en reçoit aucun avis,
+     * que le compte ait ou non choisi son mot de passe.
      */
-    public function test_un_administrateur_ne_voit_l_identifiant_que_par_une_action_tracee_et_le_proprietaire_en_est_prevenu(): void
+    public function test_un_administrateur_ne_voit_l_identifiant_que_par_une_action_tracee_sans_prevenir_le_proprietaire(): void
     {
         Notification::fake();
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $proprietaire = $this->proprietaireDe($magasin);
         $administrateur = $this->administrateur($magasin, [$magasin->id], [AutorisationsSociete::ACCES_REDONNER]);
-        [$vendeur, $identifiant] = $this->compteAuMotDePasseIdentifiant($magasin, RoleMagasin::Vendeur);
+        [$vendeur] = $this->compteAuMotDePasseProvisoire($magasin, RoleMagasin::Vendeur);
+        $identifiant = (string) $vendeur->identifiantDeConnexion();
         $prudent = $this->membre($magasin, RoleMagasin::Vendeur);
 
         $this->dansLEspaceDeLaSociete($magasin->societe, $administrateur);
@@ -220,10 +227,10 @@ class RenouvellementDAccesTest extends TestCase
         $this->assertCount(1, $entrees);
         $this->assertSame((int) $vendeur->id, (int) $entrees[0]->nouvelles_valeurs['compte']['id']);
         $this->assertStringNotContainsString($identifiant, json_encode($entrees[0]->toArray(), JSON_THROW_ON_ERROR));
-        Notification::assertSentTo($proprietaire, AvisDeLEquipe::class, fn (AvisDeLEquipe $avis): bool => $avis->titre === 'Identifiant affiché à un administrateur' && $avis->via($proprietaire) === ['database', 'mail'] && ! str_contains($avis->texte, $identifiant));
+        Notification::assertNothingSentTo($proprietaire);
 
         Livewire::test(FicheDuMembre::class, ['record' => $prudent->getRouteKey()])->callAction('afficherLIdentifiant');
-        Notification::assertSentToTimes($proprietaire, AvisDeLEquipe::class, 1);
+        Notification::assertNothingSentTo($proprietaire);
         $this->assertCount(2, $this->entreesDAudit($magasin->societe, ActionAuditee::IdentifiantConsulte));
     }
 
@@ -240,8 +247,10 @@ class RenouvellementDAccesTest extends TestCase
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $administrateur = $this->administrateur($magasin, [$magasin->id], [AutorisationsSociete::ACCES_REDONNER, AutorisationsSociete::RESPONSABLES_NOMMER]);
-        [$vendeur, $identifiantDuVendeur] = $this->compteAuMotDePasseIdentifiant($magasin, RoleMagasin::Vendeur);
-        [$responsable, $identifiantDuResponsable] = $this->compteAuMotDePasseIdentifiant($magasin, RoleMagasin::Responsable);
+        [$vendeur, $provisoireDuVendeur] = $this->compteAuMotDePasseProvisoire($magasin, RoleMagasin::Vendeur);
+        [$responsable, $provisoireDuResponsable] = $this->compteAuMotDePasseProvisoire($magasin, RoleMagasin::Responsable);
+        $identifiantDuVendeur = (string) $vendeur->identifiantDeConnexion();
+        $identifiantDuResponsable = (string) $responsable->identifiantDeConnexion();
         Notification::fake();
 
         $this->dansLEspaceDeLaSociete($magasin->societe, $administrateur);
@@ -250,7 +259,9 @@ class RenouvellementDAccesTest extends TestCase
                 ->call('mountAction', 'compteCree', ['compte' => $compte->id])
                 ->assertActionNotMounted('compteCree')
                 ->assertDontSee($identifiantDuVendeur)
-                ->assertDontSee($identifiantDuResponsable);
+                ->assertDontSee($identifiantDuResponsable)
+                ->assertDontSee($provisoireDuVendeur)
+                ->assertDontSee($provisoireDuResponsable);
         }
         $this->assertThrows(fn () => Livewire::test(ListMembres::class)->set('compteCreeId', $vendeur->id), CannotUpdateLockedPropertyException::class);
         $this->assertCount(0, $this->entreesDAudit($magasin->societe, ActionAuditee::IdentifiantConsulte));
@@ -265,8 +276,10 @@ class RenouvellementDAccesTest extends TestCase
             ->assertActionMounted('compteCree');
         $chef = User::query()->where('name', 'Chef Nouveau')->sole();
         $page->assertSee("Identifiant : {$chef->identifiantDeConnexion()}")
-            ->assertSee('poste reconnu du magasin, où la personne choisira son propre mot de passe à sa première connexion')
-            ->assertDontSee($identifiantDuVendeur);
+            ->assertSee('Mot de passe provisoire : '.$page->get('motDePasseProvisoireMontre'))
+            ->assertSee('depuis un poste reconnu du magasin, et la personne le remplace aussitôt, à sa première connexion, par un mot de passe à elle')
+            ->assertDontSee($identifiantDuVendeur)
+            ->assertDontSee($provisoireDuVendeur);
     }
 
     public function test_un_administrateur_sans_autorisation_ne_redonne_aucun_acces(): void
@@ -276,7 +289,7 @@ class RenouvellementDAccesTest extends TestCase
 
         foreach ([$this->membre($magasin, RoleMagasin::Vendeur), $this->membre($magasin, RoleMagasin::Observateur), $this->responsable($magasin)] as $cible) {
             $this->assertFalse($administrateur->can('redonnerLAcces', $cible), $cible->name);
-            $this->assertThrows(fn () => app(RedonnerLAccesAction::class)->handle($administrateur, $cible, false), AuthorizationException::class);
+            $this->assertThrows(fn () => app(RedonnerLAccesAction::class)->enSonAbsence($administrateur, $cible), AuthorizationException::class);
         }
     }
 
@@ -288,10 +301,10 @@ class RenouvellementDAccesTest extends TestCase
         $cible = $this->administrateur($magasin);
 
         foreach ([$autreAdministrateur, $responsable] as $auteur) {
-            $this->assertThrows(fn () => app(RedonnerLAccesAction::class)->handle($auteur, $cible, false), AuthorizationException::class);
+            $this->assertThrows(fn () => app(RedonnerLAccesAction::class)->enSonAbsence($auteur, $cible), AuthorizationException::class);
         }
-        $this->assertTrue(app(RedonnerLAccesAction::class)->handle($this->proprietaireDe($magasin), $cible, false));
-        $this->assertTrue($cible->refresh()->mot_de_passe_est_l_identifiant);
+        $this->assertInstanceOf(MotDePasseProvisoire::class, app(RedonnerLAccesAction::class)->enSonAbsence($this->proprietaireDe($magasin), $cible));
+        $this->assertFalse($cible->refresh()->aChoisiSonMotDePasse());
     }
 
     public function test_personne_ne_redonne_l_acces_du_proprietaire(): void
@@ -302,7 +315,7 @@ class RenouvellementDAccesTest extends TestCase
 
         foreach ([$proprietaire, $this->administrateur($magasin, null, AutorisationsSociete::toutes(), self::toutesCellesDUnCompteDeLaSociete()), $this->responsable($magasin)] as $auteur) {
             $this->assertFalse($auteur->can('redonnerLAcces', $proprietaire), $auteur->name);
-            $this->assertThrows(fn () => app(RedonnerLAccesAction::class)->handle($auteur, $proprietaire, true, self::NOUVEAU_MOT_DE_PASSE, (string) Str::uuid()), AuthorizationException::class);
+            $this->assertThrows(fn () => app(RedonnerLAccesAction::class)->enSaPresence($auteur, $proprietaire, self::NOUVEAU_MOT_DE_PASSE, (string) Str::uuid()), AuthorizationException::class);
         }
 
         $this->assertSame([$motDePasse, null], [$proprietaire->refresh()->password, $proprietaire->acces_redonne_le]);
@@ -310,9 +323,10 @@ class RenouvellementDAccesTest extends TestCase
 
     /**
      * La personne présente tape son nouveau mot de passe, qui suit la règle
-     * du mot de passe choisi : ni trop court, ni son identifiant, ni une
-     * chaîne qui le contient, ni un seul caractère répété, ni une suite de
-     * chiffres.
+     * du mot de passe choisi : ni trop faible (au moins 12 caractères, ou 8
+     * de trois sortes), ni un mot de passe courant, ni son identifiant, ni
+     * une chaîne qui le contient, ni un seul caractère répété, ni une suite
+     * de chiffres.
      */
     public function test_en_presence_la_personne_choisit_son_mot_de_passe_et_il_suit_la_regle(): void
     {
@@ -320,7 +334,8 @@ class RenouvellementDAccesTest extends TestCase
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
         $identifiant = (string) $vendeur->identifiantDeConnexion();
         $refuses = [
-            'court7c' => RegleDuMotDePasse::MESSAGE_TROP_COURT,
+            'court7c' => RegleDuMotDePasse::MESSAGE_TROP_FAIBLE,
+            'motdepasse2026' => RegleDuMotDePasse::MESSAGE_COURANT,
             $identifiant => RegleDuMotDePasse::MESSAGE_IDENTIFIANT,
             "mon-{$identifiant}!" => RegleDuMotDePasse::MESSAGE_IDENTIFIANT,
             'aaaaaaaaaa' => RegleDuMotDePasse::MESSAGE_REPETE,
@@ -329,7 +344,7 @@ class RenouvellementDAccesTest extends TestCase
 
         foreach ($refuses as $motDePasse => $message) {
             try {
-                app(RedonnerLAccesAction::class)->handle($this->proprietaireDe($magasin), $vendeur, true, (string) $motDePasse, (string) Str::uuid());
+                app(RedonnerLAccesAction::class)->enSaPresence($this->proprietaireDe($magasin), $vendeur, (string) $motDePasse, (string) Str::uuid());
                 $this->fail("Le mot de passe « {$motDePasse} » est accepté.");
             } catch (ValidationException $refus) {
                 $this->assertContains($message, $refus->errors()['mot_de_passe'], (string) $motDePasse);
@@ -337,11 +352,11 @@ class RenouvellementDAccesTest extends TestCase
         }
         $this->assertNull($vendeur->refresh()->acces_redonne_le);
 
-        app(RedonnerLAccesAction::class)->handle($this->proprietaireDe($magasin), $vendeur, true, self::NOUVEAU_MOT_DE_PASSE, (string) Str::uuid());
+        app(RedonnerLAccesAction::class)->enSaPresence($this->proprietaireDe($magasin), $vendeur, self::NOUVEAU_MOT_DE_PASSE, (string) Str::uuid());
 
         $vendeur->refresh();
         $this->assertTrue(Hash::check(self::NOUVEAU_MOT_DE_PASSE, $vendeur->password));
-        $this->assertSame([false, ModeDAccesRedonne::Presence], [$vendeur->mot_de_passe_est_l_identifiant, $vendeur->acces_redonne_mode]);
+        $this->assertSame([true, ModeDAccesRedonne::Presence], [$vendeur->aChoisiSonMotDePasse(), $vendeur->acces_redonne_mode]);
     }
 
     /**
@@ -357,41 +372,66 @@ class RenouvellementDAccesTest extends TestCase
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
         $jeton = (string) Str::uuid();
 
-        $this->assertTrue(app(RedonnerLAccesAction::class)->handle($administrateur, $vendeur, true, self::NOUVEAU_MOT_DE_PASSE, $jeton));
+        $this->assertTrue(app(RedonnerLAccesAction::class)->enSaPresence($administrateur, $vendeur, self::NOUVEAU_MOT_DE_PASSE, $jeton));
         $session = $this->ouvrirUneSessionAilleurs($vendeur->refresh());
-        $this->assertFalse(app(RedonnerLAccesAction::class)->handle($administrateur, $vendeur, true, self::NOUVEAU_MOT_DE_PASSE, $jeton));
+        $this->assertFalse(app(RedonnerLAccesAction::class)->enSaPresence($administrateur, $vendeur, self::NOUVEAU_MOT_DE_PASSE, $jeton));
 
         $this->assertCount(1, $this->entreesDAudit($magasin->societe, ActionAuditee::AccesRedonne));
         Notification::assertSentToTimes($this->proprietaireDe($magasin), AvisDeLEquipe::class, 1);
         $this->assertTrue(DB::table('sessions')->where('id', $session)->exists());
-        $this->assertTrue(app(RedonnerLAccesAction::class)->handle($administrateur, $vendeur->refresh(), true, 'un-autre-mot-de-passe', (string) Str::uuid()));
+        $this->assertTrue(app(RedonnerLAccesAction::class)->enSaPresence($administrateur, $vendeur->refresh(), 'un-autre-mot-de-passe', (string) Str::uuid()));
         $this->assertSessionsFermees($vendeur);
     }
 
-    public function test_en_absence_le_mot_de_passe_redevient_l_identifiant(): void
+    public function test_en_absence_la_personne_recoit_un_mot_de_passe_provisoire_tire_au_hasard_jamais_son_identifiant(): void
     {
+        $this->travelTo(self::aParis('2026-11-10 10:00:00'));
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
 
-        $this->assertTrue(app(RedonnerLAccesAction::class)->handle($this->proprietaireDe($magasin), $vendeur, false));
+        $provisoire = app(RedonnerLAccesAction::class)->enSonAbsence($this->proprietaireDe($magasin), $vendeur);
 
+        $this->assertInstanceOf(MotDePasseProvisoire::class, $provisoire);
         $vendeur->refresh();
-        $this->assertTrue(Hash::check((string) $vendeur->identifiantDeConnexion(), $vendeur->password));
+        $this->assertTrue(Hash::check($provisoire->valeur(), $vendeur->password));
+        $this->assertFalse(Hash::check((string) $vendeur->identifiantDeConnexion(), $vendeur->password));
         $this->assertFalse(Hash::check(self::MOT_DE_PASSE_CHOISI, $vendeur->password));
-        $this->assertSame([true, ModeDAccesRedonne::Absence, null], [$vendeur->mot_de_passe_est_l_identifiant, $vendeur->acces_redonne_mode, $vendeur->jeton_acces_redonne]);
+        $this->assertSame([EtatDuMotDePasse::ProvisoireValable, ModeDAccesRedonne::Absence, null], [$vendeur->etatDuMotDePasse(), $vendeur->acces_redonne_mode, $vendeur->jeton_acces_redonne]);
+        $this->assertSame(self::aParis('2026-11-13 10:00:00')->getTimestamp(), $vendeur->mot_de_passe_provisoire_expire_le?->getTimestamp());
+        $this->assertSame(self::aParis('2026-11-13 10:00:00')->getTimestamp(), $provisoire->expireLe->getTimestamp());
     }
 
-    public function test_en_absence_un_mot_de_passe_deja_egal_a_l_identifiant_est_refuse(): void
+    /**
+     * Un mot de passe provisoire déjà remis et pas encore utilisé est
+     * remplacé par le nouveau (l'ancien ne sert plus), et la même demande,
+     * au même jeton, répétée après une réponse perdue, ne tire pas un
+     * second mot de passe ; la personne présente ne peut pas garder le mot
+     * de passe provisoire remis comme mot de passe choisi.
+     */
+    public function test_un_mot_de_passe_provisoire_deja_remis_est_remplace_et_ne_se_garde_pas_comme_mot_de_passe_choisi(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        [$vendeur] = $this->compteAuMotDePasseIdentifiant($magasin, RoleMagasin::Vendeur);
+        [$vendeur, $premier] = $this->compteAuMotDePasseProvisoire($magasin, RoleMagasin::Vendeur);
         $proprietaire = $this->proprietaireDe($magasin);
+        $jeton = (string) Str::uuid();
 
-        $this->assertThrows(fn () => app(RedonnerLAccesAction::class)->handle($proprietaire, $vendeur, false), LogicException::class, RedonnerLAccesAction::MESSAGE_DEJA_L_IDENTIFIANT);
-        $this->assertNull($vendeur->refresh()->acces_redonne_le);
+        $second = ValeurRequise::de(app(RedonnerLAccesAction::class)->enSonAbsence($proprietaire, $vendeur, $jeton), 'le second mot de passe provisoire');
+        $this->assertNull(app(RedonnerLAccesAction::class)->enSonAbsence($proprietaire, $vendeur->refresh(), $jeton));
 
-        $this->assertTrue(app(RedonnerLAccesAction::class)->handle($proprietaire, $vendeur, true, self::NOUVEAU_MOT_DE_PASSE, (string) Str::uuid()));
-        $this->assertFalse($vendeur->refresh()->mot_de_passe_est_l_identifiant);
+        $vendeur->refresh();
+        $this->assertTrue(Hash::check($second->valeur(), $vendeur->password));
+        $this->assertFalse(Hash::check($premier, $vendeur->password));
+        $this->assertCount(1, $this->entreesDAudit($magasin->societe, ActionAuditee::AccesRedonne));
+
+        try {
+            app(RedonnerLAccesAction::class)->enSaPresence($proprietaire, $vendeur, $second->valeur(), (string) Str::uuid());
+            $this->fail('Le mot de passe provisoire remis est gardé comme mot de passe choisi.');
+        } catch (ValidationException $refus) {
+            $this->assertSame([MotsDePasseProvisoires::MESSAGE_CELUI_QUI_A_ETE_REMIS], $refus->errors()['mot_de_passe']);
+        }
+
+        $this->assertTrue(app(RedonnerLAccesAction::class)->enSaPresence($proprietaire, $vendeur->refresh(), self::NOUVEAU_MOT_DE_PASSE, (string) Str::uuid()));
+        $this->assertTrue($vendeur->refresh()->aChoisiSonMotDePasse());
     }
 
     public function test_l_acces_d_un_compte_suspendu_ne_se_redonne_pas(): void
@@ -405,7 +445,7 @@ class RenouvellementDAccesTest extends TestCase
 
         foreach ([$suspendu, $retire] as $cible) {
             $this->assertFalse($proprietaire->can('redonnerLAcces', $cible->refresh()), $cible->name);
-            $this->assertThrows(fn () => app(RedonnerLAccesAction::class)->handle($proprietaire, $cible, false), LogicException::class, RedonnerLAccesAction::MESSAGE_INACTIF);
+            $this->assertThrows(fn () => app(RedonnerLAccesAction::class)->enSonAbsence($proprietaire, $cible), LogicException::class, RedonnerLAccesAction::MESSAGE_INACTIF);
             $this->assertNull($cible->refresh()->acces_redonne_le);
         }
     }
@@ -417,7 +457,7 @@ class RenouvellementDAccesTest extends TestCase
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, null, ['name' => 'Paul Martin']);
         $this->ouvrirUneSessionAilleurs($vendeur);
 
-        app(RedonnerLAccesAction::class)->handle($responsable, $vendeur, false);
+        app(RedonnerLAccesAction::class)->enSonAbsence($responsable, $vendeur);
 
         $this->assertSessionsFermees($vendeur);
         $entrees = $this->entreesDAudit($magasin->societe, ActionAuditee::AccesRedonne);
@@ -441,7 +481,7 @@ class RenouvellementDAccesTest extends TestCase
         $responsable = $this->responsable($magasin);
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, null, ['name' => 'Paul Martin']);
 
-        app(RedonnerLAccesAction::class)->handle($responsable, $vendeur, false);
+        app(RedonnerLAccesAction::class)->enSonAbsence($responsable, $vendeur);
 
         Notification::assertSentTo($proprietaire, AvisDeLEquipe::class, fn (AvisDeLEquipe $avis): bool => $avis->titre === 'Accès redonné'
             && str_contains($avis->texte, "{$responsable->name} a redonné l'accès de Paul Martin, en son absence")
@@ -455,7 +495,7 @@ class RenouvellementDAccesTest extends TestCase
         Notification::assertSentTo($proprietaire, AvisDeLEquipe::class, fn (AvisDeLEquipe $avis): bool => $avis->titre === 'Mot de passe choisi' && str_contains($avis->texte, 'Paul Martin'));
         $this->assertFalse($vendeur->refresh()->signaler_le_prochain_mot_de_passe);
 
-        app(RedonnerLAccesAction::class)->handle($proprietaire, $vendeur, false);
+        app(RedonnerLAccesAction::class)->enSonAbsence($proprietaire, $vendeur);
         app(ChangerSonMotDePasseAction::class)->handle($vendeur->refresh(), self::NOUVEAU_MOT_DE_PASSE);
         Notification::assertSentToTimes($proprietaire, AvisDeLEquipe::class, 2);
     }
@@ -475,7 +515,7 @@ class RenouvellementDAccesTest extends TestCase
         $this->seConnecter($identifiant, self::MOT_DE_PASSE_CHOISI)->assertHasNoErrors();
 
         $this->travelTo(self::aParis('2026-10-13 18:20:00'));
-        app(RedonnerLAccesAction::class)->handle($responsable, $vendeur->refresh(), true, self::NOUVEAU_MOT_DE_PASSE, (string) Str::uuid());
+        app(RedonnerLAccesAction::class)->enSaPresence($responsable, $vendeur->refresh(), self::NOUVEAU_MOT_DE_PASSE, (string) Str::uuid());
         $this->travelTo(self::aParis('2026-10-14 08:05:00'));
 
         $this->seConnecter($identifiant, self::NOUVEAU_MOT_DE_PASSE)->assertHasNoErrors();

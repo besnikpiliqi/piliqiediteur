@@ -6,7 +6,8 @@ namespace App\Domain\Tenancy\Enums;
  * Comment l'accès d'un compte a été redonné (voir RedonnerLAccesAction et
  * users.acces_redonne_mode) : en présence de la personne, qui a tapé
  * elle-même son nouveau mot de passe sur l'écran de qui le redonne ; en
- * son absence, son mot de passe redevenant son identifiant ; ou, pour un
+ * son absence, un mot de passe provisoire tiré au hasard, qu'elle remplace
+ * à sa première connexion (voir MotsDePasseProvisoires) ; ou, pour un
  * expert-comptable de la société seulement, par un nouveau lien envoyé à
  * son adresse, où il choisit son mot de passe (son identifiant n'ouvre
  * jamais son compte).

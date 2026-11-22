@@ -32,8 +32,8 @@ use InvalidArgumentException;
  *   (voir PorteeDesDroits) ;
  * - redonner l'accès aux vendeurs et aux observateurs des magasins
  *   de sa portée, la personne présente choisissant son mot de passe sur
- *   son écran, absente retrouvant son identifiant pour mot de passe (voir
- *   RedonnerLAccesAction) ; jamais précochée, et rien d'autre sur ces
+ *   son écran, absente recevant un mot de passe provisoire tiré au hasard
+ *   (voir RedonnerLAccesAction) ; jamais précochée, et rien d'autre sur ces
  *   comptes : il ne les crée, ne les modifie, ne les suspend ni ne les
  *   retire ;
  * - gérer les paramètres de la société (identité légale hors SIREN, siège,
@@ -155,7 +155,7 @@ final class AutorisationsSociete
             self::MAGASINS_GERER => 'Magasins : créer (avec tous les magasins), modifier, fermer et rouvrir',
             self::RESPONSABLES_NOMMER => 'Responsables : nommer et retirer les responsables de ses magasins, créer leur compte et leur redonner l\'accès (un responsable a tous les droits de son magasin)',
             self::PARAMETRES_GERER => 'Paramètres de la société : identité légale, siège, TVA et fin d\'exercice (avec tous les magasins)',
-            self::ACCES_REDONNER => 'Accès : redonner l\'accès aux vendeurs et aux observateurs de ses magasins (la personne présente choisit son mot de passe ; absente, il redevient son identifiant)',
+            self::ACCES_REDONNER => 'Accès : redonner l\'accès aux vendeurs et aux observateurs de ses magasins (la personne présente choisit son mot de passe ; absente, elle reçoit un mot de passe provisoire)',
             self::PLATEFORME_SUIVRE => 'Plateforme agréée : être prévenu d\'une facture de ses magasins que la plateforme n\'a pas reçue après toutes les tentatives automatiques, et la relancer',
         ];
     }

@@ -50,9 +50,9 @@ use Illuminate\Support\Facades\DB;
  *   administrateur ou une autorisation de société ; un propriétaire dont
  *   l'adresse de connexion n'est pas confirmée par un lien (sans date de
  *   confirmation ; un propriétaire sans adresse de connexion passe, voir
- *   SaisirCodeDeConfirmationAction et CloreLInscriptionAction), ou dont le
- *   mot de passe est encore son identifiant ; un expert-comptable de la
- *   société dont le mot de passe est son identifiant ; un collaborateur
+ *   SaisirCodeDeConfirmationAction et CloreLInscriptionAction), ou qui a
+ *   un mot de passe provisoire ; un expert-comptable de la société qui a un
+ *   mot de passe provisoire ; un collaborateur
  *   hors d'un cabinet d'expertise comptable, un
  *   administrateur, un membre ou un expert-comptable de la société dans
  *   un cabinet (le type d'une société ne change jamais : lu sans verrou).
@@ -63,7 +63,7 @@ use Illuminate\Support\Facades\DB;
  * Chaque garde est une fonction plpgsql et son déclencheur BEFORE INSERT
  * OR UPDATE ; celui de users ne se déclenche qu'à l'insertion et à la
  * modification de role_societe, email, email_verified_at ou
- * mot_de_passe_est_l_identifiant. Chaque fonction verrouille d'abord la
+ * mot_de_passe_provisoire_expire_le. Chaque fonction verrouille d'abord la
  * ligne parente qu'elle lit : la ligne du compte (FOR NO KEY UPDATE) pour
  * une affectation, si bien que deux écritures d'affectations du même
  * compte, ou une affectation et un changement de rôle, se suivent toujours
@@ -93,7 +93,7 @@ final class GardesDesDroits
      * Les colonnes de users dont la modification déclenche la garde des
      * rôles.
      */
-    private const COLONNES_DES_ROLES = 'role_societe, email, email_verified_at, mot_de_passe_est_l_identifiant';
+    private const COLONNES_DES_ROLES = 'role_societe, email, email_verified_at, mot_de_passe_provisoire_expire_le';
 
     /**
      * La table que protège chaque garde.
@@ -194,8 +194,8 @@ final class GardesDesDroits
                 ["NEW.role_societe = {$administrateur} AND EXISTS (SELECT 1 FROM affectations WHERE user_id = NEW.id AND role IS NOT NULL)", 'un administrateur n\'a aucune affectation de membre'],
                 ["NEW.role_societe = {$membre} AND (EXISTS (SELECT 1 FROM affectations WHERE user_id = NEW.id AND role IS NULL) OR EXISTS (SELECT 1 FROM autorisations_societe WHERE user_id = NEW.id))", 'un membre n\'a ni affectation d\'administrateur ni autorisation de société'],
                 ["NEW.role_societe = {$proprietaire} AND NEW.email IS NOT NULL AND NEW.email_verified_at IS NULL", 'l\'adresse de connexion d\'un propriétaire est confirmée par un lien'],
-                ["NEW.role_societe = {$proprietaire} AND NEW.mot_de_passe_est_l_identifiant = TRUE", 'un propriétaire n\'a jamais pour mot de passe son identifiant'],
-                ["NEW.role_societe = {$expertComptable} AND NEW.mot_de_passe_est_l_identifiant = TRUE", 'un expert-comptable de la société n\'a jamais pour mot de passe son identifiant'],
+                ["NEW.role_societe = {$proprietaire} AND NEW.mot_de_passe_provisoire_expire_le IS NOT NULL", 'un propriétaire n\'a jamais de mot de passe provisoire'],
+                ["NEW.role_societe = {$expertComptable} AND NEW.mot_de_passe_provisoire_expire_le IS NOT NULL", 'un expert-comptable de la société n\'a jamais de mot de passe provisoire'],
             ],
         ];
     }

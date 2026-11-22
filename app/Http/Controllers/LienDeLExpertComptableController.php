@@ -6,6 +6,7 @@ use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Cabinets\Actions\ChoisirLeMotDePasseDeLExpertComptableAction;
 use App\Domain\Cabinets\Exceptions\LienDeLExpertComptableInvalideException;
 use App\Domain\Cabinets\Services\ExpertsComptablesDeclares;
+use App\Domain\Tenancy\Services\LimitationDesLiens;
 use App\Domain\Tenancy\Services\SuiviDesConnexions;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\ValeurSimple;
@@ -30,7 +31,10 @@ use SensitiveParameter;
  * passe consomme le lien, ferme d'abord la session d'un autre compte
  * ouverte dans ce navigateur (sa fin s'inscrit au journal des événements),
  * connecte la personne et lui montre son identifiant. Un lien qui ne vaut
- * plus rend une page neutre (410). Chaque réponse porte
+ * plus rend une page neutre (410), que la limitation des liens compte parmi
+ * les jetons inconnus ou expirés de l'adresse IP (voir LimitationDesLiens) ;
+ * un mot de passe refusé compte sur ce lien, qui attend 15 minutes au
+ * cinquième et reste valable jusqu'à son échéance. Chaque réponse porte
  * Referrer-Policy: no-referrer : l'adresse du lien ne part vers aucun
  * site.
  */
@@ -41,20 +45,39 @@ class LienDeLExpertComptableController
         private readonly ExpertsComptablesDeclares $experts,
     ) {}
 
-    public function afficher(#[SensitiveParameter] string $jeton): Response
+    public function afficher(Request $requete, #[SensitiveParameter] string $jeton): Response
     {
-        return $this->page($jeton, []);
+        $reponse = $this->page($jeton, []);
+
+        if ($reponse->getStatusCode() === 410) {
+            app(LimitationDesLiens::class)->jetonInvalide((string) $requete->ip());
+        }
+
+        return $reponse;
     }
 
     public function choisir(Request $requete, #[SensitiveParameter] string $jeton): Response|RedirectResponse
     {
+        $limites = app(LimitationDesLiens::class);
+        $attente = $limites->attenteDuLien($jeton);
+
+        if ($attente > 0) {
+            return $this->page($jeton, [LimitationDesLiens::message($attente)], 429);
+        }
+
         try {
             $compte = $this->choisir->handle($jeton, ValeurSimple::enTexte($requete->input('password')), ValeurSimple::enTexte($requete->input('password_confirmation')));
         } catch (LienDeLExpertComptableInvalideException) {
+            $limites->jetonInvalide((string) $requete->ip());
+
             return self::pageNeutre();
         } catch (ValidationException $refus) {
+            $limites->motDePasseRefuse($jeton);
+
             return $this->page($jeton, ValeursLues::textes($refus->validator->errors()->all()));
         }
+
+        $limites->motDePasseAccepte($jeton);
 
         if (Auth::check() && Auth::id() !== $compte->getKey()) {
             Auth::logout();
@@ -78,7 +101,7 @@ class LienDeLExpertComptableController
     /**
      * @param  list<string>  $erreurs
      */
-    private function page(#[SensitiveParameter] string $jeton, array $erreurs): Response
+    private function page(#[SensitiveParameter] string $jeton, array $erreurs, int $statut = 200): Response
     {
         try {
             [, $compte, $societe] = $this->choisir->lienValable($jeton);
@@ -97,7 +120,7 @@ class LienDeLExpertComptableController
             'autorisations' => PermissionRegistry::libellesDe(app(TenantContext::class)->runAsSociete($societe, fn (): array => $declaration?->autorisations() ?? [])),
             'erreurs' => $erreurs,
             'action' => route('experts-comptables.lien.choisir', ['jeton' => $jeton]),
-        ])->header('Referrer-Policy', 'no-referrer');
+        ], $statut)->header('Referrer-Policy', 'no-referrer');
     }
 
     private static function pageNeutre(): Response

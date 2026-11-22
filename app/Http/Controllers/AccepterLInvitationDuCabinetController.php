@@ -12,6 +12,7 @@ use App\Domain\Tenancy\Enums\ResultatVerification;
 use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\ControleSirene;
+use App\Domain\Tenancy\Services\LimitationDesLiens;
 use App\Domain\Tenancy\Services\SuiviDesConnexions;
 use App\Domain\Tenancy\Support\AvertissementsDuCodeDActivite;
 use App\Domain\Tenancy\Support\ValeurSimple;
@@ -48,7 +49,10 @@ use LogicException;
  * répond pas, une page sans formulaire. Les pages ne transmettent pas leur
  * adresse aux liens qui en partent (Referrer-Policy: no-referrer). Sur le
  * site de démonstration, le lien ne fait que dire ce que l'entreprise
- * invitée en ferait (voir dansLaDemonstration()).
+ * invitée en ferait (voir dansLaDemonstration()). Une invitation absente, close
+ * ou périmée compte parmi les jetons inconnus ou expirés de l'adresse IP, et
+ * un mot de passe refusé compte sur ce lien, qui attend 15 minutes au
+ * cinquième et reste valable jusqu'à son échéance (voir LimitationDesLiens).
  */
 class AccepterLInvitationDuCabinetController
 {
@@ -74,6 +78,12 @@ class AccepterLInvitationDuCabinetController
         }
 
         $type = TypeDActivite::tryFrom(ValeurSimple::enTexte($requete->input('type_activite')));
+        $limites = app(LimitationDesLiens::class);
+        $attente = $limites->attenteDuLien($jeton);
+
+        if ($attente > 0) {
+            return $this->page($jeton, InvitationCabinet::parSonJeton($jeton), null, [LimitationDesLiens::message($attente)], $type);
+        }
 
         try {
             $proprietaire = $accepter->handle($jeton, [
@@ -85,10 +95,14 @@ class AccepterLInvitationDuCabinetController
         } catch (InvitationInvalideException) {
             return $this->invalide();
         } catch (ValidationException $refus) {
+            $limites->motDePasseRefuse($jeton);
+
             return $this->page($jeton, InvitationCabinet::parSonJeton($jeton), null, array_values($refus->validator->errors()->all()), $type);
         } catch (LogicException $refus) {
             return $this->page($jeton, InvitationCabinet::parSonJeton($jeton), null, [$refus->getMessage()], $type);
         }
+
+        $limites->motDePasseAccepte($jeton);
 
         Auth::login($proprietaire);
         $requete->session()->regenerate();
@@ -182,6 +196,8 @@ class AccepterLInvitationDuCabinetController
 
     private function invalide(): Response
     {
+        app(LimitationDesLiens::class)->jetonInvalide((string) request()->ip());
+
         return response()->view('cabinets.invitation-invalide', ['message' => InvitationInvalideException::MESSAGE], 410)->header('Referrer-Policy', 'no-referrer');
     }
 }

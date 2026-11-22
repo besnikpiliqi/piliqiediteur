@@ -4,6 +4,7 @@ namespace App\Domain\Tenancy\Services;
 
 use App\Domain\Tenancy\Contracts\SourceDeHasard;
 use App\Domain\Tenancy\Models\Identifiant;
+use App\Domain\Tenancy\Support\MotsDePasseCourants;
 use App\Models\User;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
@@ -19,7 +20,9 @@ use SensitiveParameter;
  *   compteur, rien qui dise la société, le magasin, le rôle ni l'ordre de
  *   création ;
  * - jamais une valeur triviale (un seul chiffre répété, 12345678,
- *   23456789, 98765432, 87654321, 76543210), ni, pour le propriétaire
+ *   23456789, 98765432, 87654321, 76543210), ni un mot de passe courant
+ *   (voir MotsDePasseCourants : un identifiant qui est un mot de passe que
+ *   tout le monde essaie ne s'attribue jamais), ni, pour le propriétaire
  *   inscrit par son lien, la valeur égale au mot de passe qu'il a déjà
  *   choisi, connu seulement haché ;
  * - l'identifiant s'insère dans un point de sauvegarde : un doublon, refusé
@@ -61,7 +64,7 @@ final class GenerateurDIdentifiants
         for ($essai = 1; $essai <= self::ESSAIS; $essai++) {
             $valeur = (string) $this->hasard->entier(self::PLUS_PETIT, self::PLUS_GRAND);
 
-            if (self::estTrivial($valeur) || ($motDePasseHache !== null && Hash::check($valeur, $motDePasseHache))) {
+            if (self::estTrivial($valeur) || MotsDePasseCourants::contient($valeur) || ($motDePasseHache !== null && Hash::check($valeur, $motDePasseHache))) {
                 continue;
             }
 

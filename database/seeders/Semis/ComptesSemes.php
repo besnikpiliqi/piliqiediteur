@@ -18,17 +18,22 @@ use SensitiveParameter;
  * qu'il faut regarder avec ce compte, dans l'ordre où le semis les crée.
  * Elle s'affiche à la fin du semis et s'écrit dans un fichier local, non
  * suivi par git (voir DatabaseSeeder) ; le mot de passe commun ne s'écrit
- * nulle part ailleurs.
+ * nulle part ailleurs. Un compte qui n'a pas encore choisi le sien y montre
+ * son mot de passe provisoire, qui ne sert qu'une fois, depuis un poste
+ * reconnu, tant que son délai n'est pas passé ; la colonne « À regarder »
+ * dit où il en est.
  */
 final class ComptesSemes
 {
     public const ENTETES = ['Société', 'Magasin', 'Rôle', 'Nom', 'Identifiant', 'Adresse de connexion', 'Mot de passe', 'Clients confiés', 'À regarder avec ce compte'];
 
     /**
-     * Le texte de la colonne « Mot de passe » d'un compte dont le mot de
-     * passe est encore son identifiant.
+     * Le texte de la colonne « Mot de passe » d'un compte qui n'a aucun mot
+     * de passe utilisable : un collaborateur d'un cabinet que son
+     * propriétaire n'a pas encore fait choisir son mot de passe, en sa
+     * présence.
      */
-    public const SON_IDENTIFIANT = 'son identifiant (poste reconnu exigé)';
+    public const SANS_MOT_DE_PASSE = 'pas encore choisi (à choisir en présence du propriétaire du cabinet)';
 
     /**
      * Chaque compte noté, par son identifiant en base, avec sa ligne du
@@ -39,10 +44,10 @@ final class ComptesSemes
     private array $comptes = [];
 
     /**
-     * Note un compte et le mot de passe qu'il a choisi, ou null quand son
-     * mot de passe est encore son identifiant (ou qu'il ne l'a pas encore
-     * choisi, avec $sansMotDePasse pour le dire), et ce qu'il faut regarder
-     * avec lui.
+     * Note un compte et son mot de passe : celui qu'il a choisi, ou son mot
+     * de passe provisoire, non encore choisi (avec ce qu'il faut regarder
+     * pour le dire) ; null quand il n'a aucun mot de passe utilisable
+     * ($sansMotDePasse le dit), et ce qu'il faut regarder avec lui.
      */
     public function noter(User $compte, string $societe, string $magasin, string $role, #[SensitiveParameter] ?string $motDePasse, string $aRegarder = '', ?string $sansMotDePasse = null): void
     {
@@ -55,7 +60,7 @@ final class ComptesSemes
                 (string) $compte->name,
                 (string) $compte->identifiantDeConnexion(),
                 $compte->estProprietaire() ? (string) $compte->email : '',
-                $motDePasse ?? $sansMotDePasse ?? self::SON_IDENTIFIANT,
+                $motDePasse ?? $sansMotDePasse ?? self::SANS_MOT_DE_PASSE,
                 '',
                 $aRegarder,
             ],
@@ -101,13 +106,14 @@ final class ComptesSemes
     }
 
     /**
-     * Ce compte n'a plus le mot de passe noté : il est redevenu son
-     * identifiant (accès redonné en son absence).
+     * Ce compte n'a plus le mot de passe noté : il a reçu ce mot de passe
+     * provisoire (accès redonné en son absence), qu'il remplace à sa
+     * première connexion.
      */
-    public function oublierSonMotDePasse(User $compte): void
+    public function donnerUnMotDePasseProvisoire(User $compte, #[SensitiveParameter] string $motDePasse): void
     {
-        $this->modifier($compte, function (array $ligne): array {
-            $ligne[6] = self::SON_IDENTIFIANT;
+        $this->modifier($compte, function (array $ligne) use ($motDePasse): array {
+            $ligne[6] = $motDePasse;
 
             return $ligne;
         });

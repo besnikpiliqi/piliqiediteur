@@ -19,11 +19,11 @@ use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Support\Facades\Route;
 
 /**
- * La page où un responsable ou un administrateur dont le mot de passe
- * est encore son identifiant choisit le sien, avant toute autre page des
- * deux panneaux (voir ExigerSonPropreMotDePasse) : à sa première
- * connexion, ou à sa connexion suivante après avoir été promu à l'un de
- * ces rôles. Le mot de passe suit la règle du mot de passe choisi
+ * La page où une personne qui vient de se connecter avec son mot de passe
+ * provisoire (voir MotsDePasseProvisoires) choisit le sien, avant toute
+ * autre page des deux panneaux (voir ExigerSonPropreMotDePasse) : à sa
+ * première connexion, et après chaque accès redonné en son absence, quel
+ * que soit son rôle. Le mot de passe suit la règle du mot de passe choisi
  * (voir RegleDuMotDePasse) ; ses autres sessions se ferment, celle-ci reste
  * (voir ChangerSonMotDePasseAction), et n'exige plus rien.
  *
@@ -66,7 +66,7 @@ class ChoisirSonMotDePasse extends SimplePage
                     ->revealable(filament()->arePasswordsRevealable())
                     ->required()
                     ->rules(RegleDuMotDePasse::regles($this->compte()->identifiantDeConnexion()))
-                    ->helperText('Au moins 8 caractères ; ni votre identifiant, ni un seul caractère répété, ni une suite de chiffres.')
+                    ->helperText(RegleDuMotDePasse::AIDE)
                     ->same('passwordConfirmation'),
                 TextInput::make('passwordConfirmation')
                     ->label('Confirmez-le')
@@ -114,7 +114,7 @@ class ChoisirSonMotDePasse extends SimplePage
 
     public function getSubheading(): string|Htmlable|null
     {
-        return 'Votre mot de passe est encore votre identifiant : avec les droits de votre compte, choisissez-en un à vous, que vous seul connaîtrez.';
+        return 'Vous vous êtes connecté avec un mot de passe provisoire, qui ne sert qu\'une fois : choisissez-en un à vous, que vous seul connaîtrez.';
     }
 
     private function compte(): User

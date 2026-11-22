@@ -8,6 +8,7 @@ use App\Domain\Cabinets\Services\ExpertsComptablesDeclares;
 use App\Domain\Tenancy\Enums\RoleSociete;
 use App\Domain\Tenancy\Enums\StatutSociete;
 use App\Domain\Tenancy\Models\Societe;
+use App\Domain\Tenancy\Services\MotsDePasseProvisoires;
 use App\Domain\Tenancy\Services\SessionsDesComptes;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\RegleDuMotDePasse;
@@ -58,7 +59,7 @@ class ChoisirLeMotDePasseDeLExpertComptableAction
                 throw new LienDeLExpertComptableInvalideException;
             }
 
-            $compteRelu->forceFill(['password' => $motDePasse, 'mot_de_passe_est_l_identifiant' => false]);
+            $compteRelu->forceFill(MotsDePasseProvisoires::colonnesDuMotDePasseChoisi($motDePasse));
             $this->sessions->fermerAvantDEnregistrer($compteRelu);
             $compteRelu->save();
             $ligne->forceFill([

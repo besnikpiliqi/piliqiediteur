@@ -26,14 +26,15 @@ use Illuminate\Support\Facades\Schema;
  * la société, que le propriétaire saisit en créant son compte et qui reçoit
  * les liens de son mot de passe (voir DeclarerSonExpertComptableAction).
  * Un compte créé par la société (voir CreerMembreAction et
- * CreerAdministrateurAction) a pour premier mot de passe son identifiant ;
- * la personne choisit le sien quand elle le veut, ou à sa première
- * connexion pour un responsable ou un administrateur (voir
+ * CreerAdministrateurAction) n'a jamais son identifiant pour mot de passe :
+ * la personne présente choisit le sien tout de suite, sur l'écran de qui
+ * crée son compte, ou elle reçoit un mot de passe provisoire tiré au hasard,
+ * valable 72 heures et une seule fois, qu'elle remplace aussitôt par le
+ * sien à sa première connexion (voir MotsDePasseProvisoires et
  * ExigerSonPropreMotDePasse) ; un collaborateur d'un cabinet choisit le
  * sien à la création de son compte (voir CreerCollaborateurAction) ; un
- * expert-comptable de la société n'a jamais son identifiant pour mot de
- * passe : il choisit le sien par un lien de 7 jours (voir
- * ChoisirLeMotDePasseDeLExpertComptableAction).
+ * expert-comptable de la société choisit le sien par un lien de 7 jours
+ * (voir ChoisirLeMotDePasseDeLExpertComptableAction).
  *
  * Les gardes de la base qui lient le rôle de société aux affectations, aux
  * autorisations de société et aux identifiants se posent avec la table des
@@ -97,13 +98,24 @@ return new class extends Migration
             // à la saisie du code).
             $table->timestamp('email_verified_at')->nullable();
             $table->string('password');
-            // Le mot de passe est-il encore l'identifiant du compte ? Vrai à
-            // la création par la société et après un accès redonné en
-            // l'absence de la personne, faux dès qu'elle choisit le sien :
-            // le rappel du profil et de la liste de l'équipe le lisent sans
-            // recalculer un hachage, et la base refuse un propriétaire ou un
-            // expert-comptable de la société dont il est vrai.
-            $table->boolean('mot_de_passe_est_l_identifiant')->default(false);
+            // Le jour où la personne a choisi elle-même son mot de passe (sur
+            // l'écran de qui crée son compte ou lui redonne l'accès, par la
+            // page du premier mot de passe, dans son profil ou par un lien) :
+            // nul tant qu'elle n'en a pas choisi, quand son mot de passe est
+            // provisoire, perdu ou à choisir en sa présence ; renseigné pour
+            // tout propriétaire (voir User::aChoisiSonMotDePasse()).
+            $table->timestamp('mot_de_passe_choisi_le')->nullable();
+            // Le mot de passe provisoire d'un compte créé par la société, ou
+            // dont l'accès a été redonné en l'absence de la personne (voir
+            // MotsDePasseProvisoires) : tiré au hasard, jusqu'à quand il
+            // vaut, et quand il a servi. Il ne sert qu'une fois, à la
+            // première connexion, que la personne finit en choisissant son
+            // mot de passe ; nuls dès qu'elle l'a choisi (users_mot_de_passe_
+            // provisoire_coherent). La base refuse un propriétaire ou un
+            // expert-comptable de la société qui en a un (voir
+            // GardesDesDroits).
+            $table->timestamp('mot_de_passe_provisoire_expire_le')->nullable();
+            $table->timestamp('mot_de_passe_provisoire_utilise_le')->nullable();
             // Le jour où cette personne a validé sa société en saisissant le
             // code du courrier recommandé envoyé au nom du représentant légal
             // (voir ValiderLaSocieteAction) : propriétaire, elle signe les
@@ -171,6 +183,9 @@ return new class extends Migration
             $table->index(['cree_par', 'created_at']);
         });
 
+        // Un mot de passe choisi n'est plus provisoire ; un mot de passe
+        // provisoire n'a servi que s'il a une date d'expiration.
+        DB::statement('ALTER TABLE users ADD CONSTRAINT users_mot_de_passe_provisoire_coherent CHECK ((mot_de_passe_choisi_le IS NULL OR (mot_de_passe_provisoire_expire_le IS NULL AND mot_de_passe_provisoire_utilise_le IS NULL)) AND (mot_de_passe_provisoire_utilise_le IS NULL OR mot_de_passe_provisoire_expire_le IS NOT NULL))');
         // Un seul propriétaire par société.
         DB::statement("CREATE UNIQUE INDEX users_un_proprietaire_par_societe ON users (societe_id) WHERE role_societe = 'proprietaire'");
         // L'adresse de connexion d'un propriétaire n'est celle d'aucun autre

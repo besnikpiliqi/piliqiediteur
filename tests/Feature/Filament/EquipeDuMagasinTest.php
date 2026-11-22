@@ -8,6 +8,7 @@ use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
 use App\Domain\Tenancy\Actions\CreerMembreAction;
 use App\Domain\Tenancy\Actions\ModifierMembreAction;
 use App\Domain\Tenancy\Actions\RedonnerLAccesAction;
+use App\Domain\Tenancy\Enums\EtatDuMotDePasse;
 use App\Domain\Tenancy\Enums\ModeDAccesRedonne;
 use App\Domain\Tenancy\Enums\MotifCloture;
 use App\Domain\Tenancy\Enums\RoleMagasin;
@@ -62,7 +63,7 @@ class EquipeDuMagasinTest extends TestCase
             $affectation = Affectation::query()->where('user_id', $compte->id)->sole();
             $this->assertSame([(int) $magasin->id, $role, (int) $responsable->id, null], [(int) $affectation->magasin_id, $affectation->role, (int) $compte->cree_par, $compte->email]);
             $this->assertEqualsCanonicalizing($autorisations, $affectation->autorisations());
-            $this->assertSame([true, (int) $magasin->id], [$compte->mot_de_passe_est_l_identifiant, (int) $compte->magasinDeSonIdentifiant()?->id]);
+            $this->assertSame([EtatDuMotDePasse::ProvisoireValable, (int) $magasin->id], [$compte->etatDuMotDePasse(), (int) $compte->magasinDeSonIdentifiant()?->id]);
         }
     }
 
@@ -121,7 +122,7 @@ class EquipeDuMagasinTest extends TestCase
         foreach ([$coResponsable, $administrateur, $proprietaire] as $cible) {
             $this->assertThrows(fn () => app(ChangerStatutCompteAction::class)->suspendre($responsable, $cible), AuthorizationException::class);
             $this->assertThrows(fn () => app(ChangerStatutCompteAction::class)->retirer($responsable, $cible), AuthorizationException::class);
-            $this->assertThrows(fn () => app(RedonnerLAccesAction::class)->handle($responsable, $cible, true, 'un-mot-de-passe-solide'), AuthorizationException::class);
+            $this->assertThrows(fn () => app(RedonnerLAccesAction::class)->enSaPresence($responsable, $cible, 'un-mot-de-passe-solide'), AuthorizationException::class);
             $this->assertSame(StatutCompte::Actif, $cible->refresh()->statut, $cible->name);
         }
 
@@ -151,7 +152,7 @@ class EquipeDuMagasinTest extends TestCase
         $this->assertThrows(fn () => app(ChangerStatutCompteAction::class)->suspendre($responsable, $collaborateur), AuthorizationException::class);
         $this->assertThrows(fn () => app(ChangerStatutCompteAction::class)->retirer($responsable, $collaborateur), AuthorizationException::class);
         $this->assertThrows(fn () => app(ModifierMembreAction::class)->handle($responsable, $collaborateur, RoleMagasin::Vendeur), AuthorizationException::class);
-        $this->assertThrows(fn () => app(RedonnerLAccesAction::class)->handle($responsable, $collaborateur, false), AuthorizationException::class);
+        $this->assertThrows(fn () => app(RedonnerLAccesAction::class)->enSonAbsence($responsable, $collaborateur), AuthorizationException::class);
 
         $this->assertSame([StatutCompte::Actif, true], [$collaborateur->refresh()->statut, $collaborateur->estCollaborateur()]);
         $this->assertSame(0, Affectation::query()->where('user_id', $collaborateur->id)->count());
@@ -179,9 +180,9 @@ class EquipeDuMagasinTest extends TestCase
         $this->forgerLActionDeLigne($liste, 'redonner_l_acces', $affectationDeB, ['mode' => 'absent']);
         $this->assertThrows(fn () => app(ChangerStatutCompteAction::class)->retirer($responsable, $vendeurDeB), AuthorizationException::class);
         $this->assertThrows(fn () => app(ChangerStatutCompteAction::class)->suspendre($responsable, $vendeurDeB), AuthorizationException::class);
-        $this->assertThrows(fn () => app(RedonnerLAccesAction::class)->handle($responsable, $vendeurDeB, false), AuthorizationException::class);
+        $this->assertThrows(fn () => app(RedonnerLAccesAction::class)->enSonAbsence($responsable, $vendeurDeB), AuthorizationException::class);
 
-        $this->assertSame([StatutCompte::Actif, RoleMagasin::Vendeur, false], [$vendeurDeB->refresh()->statut, $affectationDeB->fresh()->role, $vendeurDeB->mot_de_passe_est_l_identifiant]);
+        $this->assertSame([StatutCompte::Actif, RoleMagasin::Vendeur, true], [$vendeurDeB->refresh()->statut, $affectationDeB->fresh()->role, $vendeurDeB->aChoisiSonMotDePasse()]);
     }
 
     public function test_deux_responsables_du_meme_magasin_ne_se_touchent_pas(): void
@@ -194,7 +195,7 @@ class EquipeDuMagasinTest extends TestCase
             $this->assertFalse(app(PorteeDesDroits::class)->gereLeCompte($auteur, $cible));
             $this->assertThrows(fn () => app(ChangerStatutCompteAction::class)->retirer($auteur, $cible), AuthorizationException::class);
             $this->assertThrows(fn () => app(ChangerStatutCompteAction::class)->suspendre($auteur, $cible), AuthorizationException::class);
-            $this->assertThrows(fn () => app(RedonnerLAccesAction::class)->handle($auteur, $cible, false), AuthorizationException::class);
+            $this->assertThrows(fn () => app(RedonnerLAccesAction::class)->enSonAbsence($auteur, $cible), AuthorizationException::class);
             $this->assertSame(RoleMagasin::Responsable, Affectation::query()->where('user_id', $cible->id)->sole()->role);
         }
     }
@@ -202,8 +203,8 @@ class EquipeDuMagasinTest extends TestCase
     /**
      * Le responsable de son magasin gère tout le compte d'un vendeur :
      * suspendre, réactiver, lui redonner l'accès, en sa présence (la
-     * personne tape son mot de passe) et en son absence (il redevient son
-     * identifiant), le retirer.
+     * personne tape son mot de passe) et en son absence (un mot de passe
+     * provisoire tiré au hasard, montré une seule fois), le retirer.
      */
     public function test_le_responsable_de_son_magasin_suspend_reactive_redonne_l_acces_et_retire_un_vendeur(): void
     {
@@ -222,12 +223,14 @@ class EquipeDuMagasinTest extends TestCase
             ->callTableAction('redonner_l_acces', $saLigne->fresh(), ['mode' => 'present', 'mot_de_passe' => 'nouveau-mot-de-passe-de-paul', 'mot_de_passe_confirmation' => 'nouveau-mot-de-passe-de-paul'])
             ->assertHasNoTableActionErrors();
         $this->assertTrue(Hash::check('nouveau-mot-de-passe-de-paul', $vendeur->refresh()->password));
-        $this->assertSame([false, ModeDAccesRedonne::Presence, (int) $responsable->id], [$vendeur->mot_de_passe_est_l_identifiant, $vendeur->acces_redonne_mode, (int) $vendeur->acces_redonne_par]);
+        $this->assertSame([true, ModeDAccesRedonne::Presence, (int) $responsable->id], [$vendeur->aChoisiSonMotDePasse(), $vendeur->acces_redonne_mode, (int) $vendeur->acces_redonne_par]);
         Livewire::test(ListEquipeDuMagasin::class)
             ->callTableAction('redonner_l_acces', $saLigne->fresh(), ['mode' => 'absent'])
-            ->assertNotified("Accès redonné. Son identifiant, qui est de nouveau son mot de passe : {$vendeur->identifiantDeConnexion()}. Remettez-le-lui en main propre.");
-        $this->assertTrue(Hash::check((string) $vendeur->identifiantDeConnexion(), $vendeur->refresh()->password));
-        $this->assertSame([true, ModeDAccesRedonne::Absence], [$vendeur->mot_de_passe_est_l_identifiant, $vendeur->acces_redonne_mode]);
+            ->assertHasNoTableActionErrors();
+        $provisoire = $this->motDePasseProvisoireNotifie();
+        $this->assertTrue(Hash::check($provisoire, $vendeur->refresh()->password));
+        $this->assertFalse(Hash::check((string) $vendeur->identifiantDeConnexion(), $vendeur->password));
+        $this->assertSame([false, ModeDAccesRedonne::Absence], [$vendeur->aChoisiSonMotDePasse(), $vendeur->acces_redonne_mode]);
         Livewire::test(ListEquipeDuMagasin::class)->callTableAction('retirer_du_magasin', $saLigne->fresh());
 
         $this->assertSame(StatutCompte::Retire, $vendeur->refresh()->statut);
@@ -236,15 +239,15 @@ class EquipeDuMagasinTest extends TestCase
 
     /**
      * Depuis l'équipe du magasin, le propriétaire nomme responsable un
-     * vendeur dont le mot de passe est encore son identifiant ; présent,
-     * il choisit le sien dans la même fenêtre.
+     * vendeur qui n'a pas encore choisi son mot de passe ; présent, il
+     * choisit le sien dans la même fenêtre.
      */
     public function test_le_proprietaire_nomme_responsable_un_vendeur_present_qui_choisit_son_mot_de_passe(): void
     {
         Notification::fake();
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $proprietaire = $this->proprietaireDe($magasin);
-        [$vendeur] = $this->compteAuMotDePasseIdentifiant($magasin, RoleMagasin::Vendeur);
+        [$vendeur] = $this->compteAuMotDePasseProvisoire($magasin, RoleMagasin::Vendeur);
         $saLigne = Affectation::query()->where('user_id', $vendeur->id)->sole();
 
         $this->dansLeMagasin($magasin, $proprietaire);
@@ -254,7 +257,7 @@ class EquipeDuMagasinTest extends TestCase
 
         $this->assertSame(RoleMagasin::Responsable, $saLigne->refresh()->role);
         $this->assertTrue(Hash::check('mot-de-passe-de-paul', $vendeur->refresh()->password));
-        $this->assertFalse($vendeur->mot_de_passe_est_l_identifiant);
+        $this->assertTrue($vendeur->aChoisiSonMotDePasse());
     }
 
     /**
@@ -276,7 +279,7 @@ class EquipeDuMagasinTest extends TestCase
         $this->get(EquipeDuMagasinResource::getUrl('edit', ['record' => $saLigne, 'tenant' => $magasin]))->assertForbidden();
         $this->assertThrows(fn () => app(ChangerStatutCompteAction::class)->retirer($responsable, $responsable), AuthorizationException::class);
         $this->assertThrows(fn () => app(ChangerStatutCompteAction::class)->suspendre($responsable, $responsable), AuthorizationException::class);
-        $this->assertThrows(fn () => app(RedonnerLAccesAction::class)->handle($responsable, $responsable, false), AuthorizationException::class);
+        $this->assertThrows(fn () => app(RedonnerLAccesAction::class)->enSonAbsence($responsable, $responsable), AuthorizationException::class);
 
         $this->assertSame([StatutCompte::Actif, RoleMagasin::Responsable], [$responsable->refresh()->statut, $saLigne->fresh()->role]);
     }
@@ -296,7 +299,7 @@ class EquipeDuMagasinTest extends TestCase
         Livewire::test(ListEquipeDuMagasin::class)->assertForbidden();
         $this->assertThrows(fn () => app(ChangerStatutCompteAction::class)->suspendre($vendeur, $collegue), AuthorizationException::class);
         $this->assertThrows(fn () => app(ChangerStatutCompteAction::class)->retirer($vendeur, $collegue), AuthorizationException::class);
-        $this->assertThrows(fn () => app(RedonnerLAccesAction::class)->handle($vendeur, $collegue, false), AuthorizationException::class);
+        $this->assertThrows(fn () => app(RedonnerLAccesAction::class)->enSonAbsence($vendeur, $collegue), AuthorizationException::class);
         $this->assertThrows(fn () => app(CreerMembreAction::class)->handle($vendeur, $magasin, ['name' => 'Paul'], RoleMagasin::Observateur), AuthorizationException::class);
 
         $this->assertSame(StatutCompte::Actif, $collegue->refresh()->statut);
@@ -327,15 +330,16 @@ class EquipeDuMagasinTest extends TestCase
     /**
      * La liste de l'équipe montre au responsable, pour les vendeurs et les
      * observateurs de son magasin, leur identifiant, les badges « Mot de
-     * passe : l'identifiant » et « Jamais connecté », et filtre les mots de
-     * passe encore égaux à l'identifiant.
+     * passe provisoire à utiliser » et « Jamais connecté », et filtre les
+     * mots de passe pas encore choisis.
      */
-    public function test_la_liste_de_l_equipe_signale_au_responsable_un_mot_de_passe_encore_egal_a_l_identifiant_et_un_compte_jamais_connecte(): void
+    public function test_la_liste_de_l_equipe_signale_au_responsable_un_mot_de_passe_pas_encore_choisi_et_un_compte_jamais_connecte(): void
     {
         $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $responsable = $this->responsable($magasin);
-        [$nouveau, $identifiant] = $this->compteAuMotDePasseIdentifiant($magasin, RoleMagasin::Vendeur);
+        [$nouveau] = $this->compteAuMotDePasseProvisoire($magasin, RoleMagasin::Vendeur);
+        $identifiant = (string) $nouveau->identifiantDeConnexion();
         $ancien = $this->membre($magasin, RoleMagasin::Observateur);
         $ancien->forceFill(['premiere_connexion_le' => self::aParis('2026-10-08 10:00:00'), 'derniere_connexion_le' => self::aParis('2026-10-08 10:00:00')])->save();
         $ligneDuNouveau = Affectation::query()->where('user_id', $nouveau->id)->sole();
@@ -344,9 +348,9 @@ class EquipeDuMagasinTest extends TestCase
         $this->dansLeMagasin($magasin, $responsable);
         Livewire::test(ListEquipeDuMagasin::class)
             ->assertTableColumnStateSet('identifiant', $identifiant, $ligneDuNouveau)
-            ->assertTableColumnStateSet('signaux', ['Mot de passe : l\'identifiant', 'Jamais connecté'], $ligneDuNouveau)
+            ->assertTableColumnStateSet('signaux', ['Mot de passe provisoire à utiliser', 'Jamais connecté'], $ligneDuNouveau)
             ->assertTableColumnStateSet('signaux', null, $ligneDeLAncien)
-            ->filterTable('mot_de_passe_identifiant')
+            ->filterTable('mot_de_passe_a_choisir')
             ->assertCanSeeTableRecords([$ligneDuNouveau])
             ->assertCanNotSeeTableRecords([$ligneDeLAncien]);
     }
@@ -360,7 +364,7 @@ class EquipeDuMagasinTest extends TestCase
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $responsable = $this->responsable($magasin);
-        [$coResponsable] = $this->compteAuMotDePasseIdentifiant($magasin, RoleMagasin::Responsable);
+        [$coResponsable] = $this->compteAuMotDePasseProvisoire($magasin, RoleMagasin::Responsable);
         $ligne = Affectation::query()->where('user_id', $coResponsable->id)->sole();
 
         $this->dansLeMagasin($magasin, $responsable);
@@ -368,7 +372,7 @@ class EquipeDuMagasinTest extends TestCase
             ->assertTableColumnStateNotSet('identifiant', (string) $coResponsable->identifiantDeConnexion(), $ligne)
             ->assertTableColumnStateSet('signaux', null, $ligne)
             ->assertDontSee((string) $coResponsable->identifiantDeConnexion())
-            ->filterTable('mot_de_passe_identifiant')
+            ->filterTable('mot_de_passe_a_choisir')
             ->assertCanNotSeeTableRecords([$ligne]);
         $this->dansLeMagasin($magasin, $this->proprietaireDe($magasin));
         Livewire::test(ListEquipeDuMagasin::class)->assertTableColumnStateSet('identifiant', (string) $coResponsable->identifiantDeConnexion(), $ligne);

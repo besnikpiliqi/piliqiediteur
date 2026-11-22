@@ -7,6 +7,7 @@ use App\Domain\Tenancy\Actions\AccepterLaTransmissionDeLaProprieteAction;
 use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
 use App\Domain\Tenancy\Actions\RedonnerLAccesAction;
 use App\Domain\Tenancy\Enums\ActionAuditee;
+use App\Domain\Tenancy\Enums\EtatDuMotDePasse;
 use App\Domain\Tenancy\Enums\RoleSociete;
 use App\Domain\Tenancy\Enums\StatutCompte;
 use App\Domain\Tenancy\Enums\TypeDActivite;
@@ -35,6 +36,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cookie;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Str;
@@ -114,15 +116,16 @@ class CollaborateursTest extends TestCase
         $this->assertSame(['actif', 'suspendu', 'actif', 'retire', 'actif'], $statuts);
     }
 
-    public function test_un_collaborateur_recoit_un_identifiant_de_huit_chiffres_pour_premier_mot_de_passe_sans_adresse(): void
+    public function test_un_collaborateur_recoit_un_identifiant_de_huit_chiffres_sans_aucun_mot_de_passe_utilisable_ni_adresse(): void
     {
         $cabinet = $this->ouvrirUnCabinet();
 
         $compte = app(CreerCollaborateurAction::class)->handle($this->proprietaireDuCabinet($cabinet), $cabinet, ['name' => 'Paul Lefèvre', 'email' => 'paul@cabinet.test']);
 
         $this->assertMatchesRegularExpression('/^\d{8}$/', (string) $compte->identifiantDeConnexion());
-        $this->assertSame([RoleSociete::Collaborateur, true, null, (int) $cabinet->id], [$compte->role_societe, $compte->mot_de_passe_est_l_identifiant, $compte->email, (int) $compte->societe_id]);
-        $this->assertTrue(password_verify((string) $compte->identifiantDeConnexion(), $compte->password));
+        $this->assertSame([RoleSociete::Collaborateur, EtatDuMotDePasse::Aucun, null, (int) $cabinet->id], [$compte->role_societe, $compte->etatDuMotDePasse(), $compte->email, (int) $compte->societe_id]);
+        $this->assertNull($compte->motDePasseProvisoire);
+        $this->assertFalse(password_verify((string) $compte->identifiantDeConnexion(), $compte->password), 'L\'identifiant n\'est jamais un mot de passe.');
         $this->assertSame([], $compte->autorisationsDeSociete());
         $this->assertSame(0, DB::table('affectations')->where('user_id', $compte->id)->count());
         $this->assertSame('Collaborateur du cabinet '.$cabinet->raison_sociale, $compte->libelleDuRoleDeSociete());
@@ -132,8 +135,8 @@ class CollaborateursTest extends TestCase
     /**
      * Après la création d'un collaborateur, la fenêtre « Compte créé »
      * montre son identifiant et propose d'office que la personne présente
-     * choisisse son mot de passe, sans offrir de lui remettre son
-     * identifiant, qui n'ouvre pas son compte.
+     * choisisse son mot de passe, sans offrir de lui remettre un mot de
+     * passe provisoire, que son compte n'a pas.
      */
     public function test_la_fenetre_du_compte_cree_propose_d_office_au_collaborateur_de_choisir_son_mot_de_passe(): void
     {
@@ -147,39 +150,40 @@ class CollaborateursTest extends TestCase
             ->assertActionDataSet(['mode' => 'present'])
             ->assertSee((string) $compte->identifiantDeConnexion())
             ->assertSeeText('Un cabinet n\'a pas de poste reconnu')
-            ->assertDontSeeText('Je remets l\'identifiant à la personne')
+            ->assertDontSeeText('Je remets l\'identifiant et le mot de passe provisoire à la personne')
+            ->assertDontSeeText('Mot de passe provisoire :')
             ->setActionData(['mode' => 'present', 'mot_de_passe' => self::MOT_DE_PASSE_CHOISI, 'mot_de_passe_confirmation' => self::MOT_DE_PASSE_CHOISI])
             ->callMountedAction()
             ->assertHasNoActionErrors();
 
-        $this->assertFalse($compte->fresh()->mot_de_passe_est_l_identifiant);
+        $this->assertTrue($compte->fresh()->aChoisiSonMotDePasse());
         $this->assertTrue(password_verify(self::MOT_DE_PASSE_CHOISI, $compte->fresh()->password));
     }
 
-    public function test_un_collaborateur_ne_peut_pas_se_connecter_avec_son_identifiant_faute_de_poste_reconnu(): void
+    public function test_un_collaborateur_ne_peut_pas_se_connecter_avant_d_avoir_choisi_son_mot_de_passe_faute_de_poste_reconnu(): void
     {
         $cabinet = $this->ouvrirUnCabinet();
         $compte = app(CreerCollaborateurAction::class)->handle($this->proprietaireDuCabinet($cabinet), $cabinet, ['name' => 'Paul Lefèvre']);
         $identifiant = (string) $compte->identifiantDeConnexion();
         app(TenantContext::class)->clear();
 
-        $this->assertSame([Connexion::MESSAGE_ECHEC.' '.Connexion::MESSAGE_POSTE], $this->seConnecter($identifiant, $identifiant)->errors()->get('data.login'));
+        $this->assertSame([Connexion::MESSAGE_ECHEC], $this->seConnecter($identifiant, $identifiant)->errors()->get('data.login'));
         $this->assertGuest();
         $this->assertFalse(app(PostesReconnus::class)->ouvreLeCompte($compte, request()));
 
-        app(RedonnerLAccesAction::class)->handle($this->proprietaireDuCabinet($cabinet), $compte, true, self::MOT_DE_PASSE_CHOISI, (string) Str::uuid());
+        app(RedonnerLAccesAction::class)->enSaPresence($this->proprietaireDuCabinet($cabinet), $compte, self::MOT_DE_PASSE_CHOISI, (string) Str::uuid());
         $this->seConnecter($identifiant, self::MOT_DE_PASSE_CHOISI)->assertHasNoErrors();
         $this->assertAuthenticatedAs($compte);
     }
 
     /**
      * Un collaborateur à qui un client est confié avant qu'il ait choisi
-     * son mot de passe n'ouvre pas son compte avec son identifiant depuis
-     * un poste reconnu d'un magasin de ce client, qu'il ouvre pourtant :
-     * ni lui ni son cabinet n'a reconnu ce poste. La réponse est celle de
-     * tout mot de passe égal à l'identifiant refusé.
+     * son mot de passe n'ouvre pas son compte, depuis un poste reconnu d'un
+     * magasin de ce client, qu'il ouvre pourtant : ni lui ni son cabinet n'a
+     * reconnu ce poste, et il n'a aucun mot de passe provisoire. La réponse
+     * est celle de tout mot de passe refusé.
      */
-    public function test_un_collaborateur_dont_le_mot_de_passe_est_l_identifiant_est_refuse_sur_le_poste_reconnu_d_un_client(): void
+    public function test_un_collaborateur_sans_mot_de_passe_choisi_est_refuse_sur_le_poste_reconnu_d_un_client(): void
     {
         $cabinet = $this->ouvrirUnCabinet();
         $magasin = $this->ouvrirUneSociete(['nom' => 'Boutique cliente']);
@@ -190,10 +194,12 @@ class CollaborateursTest extends TestCase
         app(PostesReconnus::class)->reconnaitre($this->proprietaireDe($magasin), $magasin, 'Caisse 1', request());
         $poste = [PostesReconnus::TEMOIN => (string) Cookie::queued(PostesReconnus::TEMOIN)?->getValue()];
         app(TenantContext::class)->clear();
-        $this->assertTrue($compte->fresh()->mot_de_passe_est_l_identifiant);
+        $this->assertFalse($compte->fresh()->aChoisiSonMotDePasse());
         $this->assertSame([(int) $magasin->id], array_map(intval(...), $compte->fresh()->magasinsAccessibles()->modelKeys()));
 
-        $this->assertSame([Connexion::MESSAGE_ECHEC.' '.Connexion::MESSAGE_POSTE], $this->seConnecter($identifiant, $identifiant, postes: $poste)->errors()->get('data.login'));
+        foreach ([$identifiant, 'k7qp-2mzr-xa4d'] as $motDePasse) {
+            $this->assertSame([Connexion::MESSAGE_ECHEC], $this->seConnecter($identifiant, $motDePasse, postes: $poste)->errors()->get('data.login'));
+        }
 
         $this->assertGuest();
         $this->assertFalse(app(PostesReconnus::class)->ouvreLeCompte($compte->fresh(), Request::create('/', cookies: $poste)));
@@ -214,9 +220,9 @@ class CollaborateursTest extends TestCase
         $cible = $this->collaborateur($cabinet, 'Bruno Petit');
         $session = $this->ouvrirUneSessionAilleurs($cible);
 
-        $this->assertThrows(fn () => app(RedonnerLAccesAction::class)->handle($autre, $cible, true, 'un-autre-mot-de-passe', (string) Str::uuid()), AuthorizationException::class);
-        $this->assertThrows(fn () => app(RedonnerLAccesAction::class)->handle($proprietaire, $cible, false), LogicException::class, RedonnerLAccesAction::MESSAGE_COLLABORATEUR_PRESENT);
-        $this->assertFalse($cible->fresh()->mot_de_passe_est_l_identifiant);
+        $this->assertThrows(fn () => app(RedonnerLAccesAction::class)->enSaPresence($autre, $cible, 'un-autre-mot-de-passe', (string) Str::uuid()), AuthorizationException::class);
+        $this->assertThrows(fn () => app(RedonnerLAccesAction::class)->enSonAbsence($proprietaire, $cible), LogicException::class, RedonnerLAccesAction::MESSAGE_COLLABORATEUR_PRESENT);
+        $this->assertTrue(Hash::check(self::MOT_DE_PASSE_CHOISI, (string) $cible->fresh()->password), 'Les refus n\'ont pas touché au mot de passe.');
         $this->assertTrue(DB::table('sessions')->where('id', $session)->exists());
 
         $this->dansLEspaceDuCabinet($cabinet, $proprietaire);

@@ -9,8 +9,6 @@ use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Domain\Tenancy\Support\ValeursLues;
 use App\Models\User;
 use Carbon\CarbonInterface;
-use Filament\Facades\Filament;
-use Filament\Notifications\Actions\Action;
 use Filament\Notifications\Notification;
 use Illuminate\Support\Facades\DB;
 
@@ -20,8 +18,6 @@ use Illuminate\Support\Facades\DB;
  * jamais une connexion refusée :
  * - à la première : premiere_connexion_le, l'entrée d'audit
  *   PremiereConnexion et un avis au propriétaire (pas pour lui-même) ;
- *   tant que le mot de passe est encore l'identifiant, une alerte qui
- *   conseille à la personne de le changer ;
  * - à chaque connexion : la date et l'heure de sa connexion précédente
  *   (rien à la première), et, si son accès a été redonné depuis, quand,
  *   par qui et en sa présence ou non ; puis derniere_connexion_le. La
@@ -29,8 +25,6 @@ use Illuminate\Support\Facades\DB;
  */
 final class SuiviDesConnexions
 {
-    public const ALERTE_IDENTIFIANT = 'Votre mot de passe est encore votre identifiant : toute personne qui connaît votre identifiant peut se connecter à votre place. Nous vous conseillons de le changer dans votre profil.';
-
     public function __construct(private readonly JournalAudit $journalAudit) {}
 
     public function noterLaConnexion(User $compte): void
@@ -56,16 +50,6 @@ final class SuiviDesConnexions
 
         if ($premiere && ! $compte->estProprietaire()) {
             $societe->proprietaire?->notify(new AvisDeLEquipe($societe, 'Première connexion', "{$compte->name} s'est connecté à son compte pour la première fois."));
-        }
-
-        if ($premiere && $compte->mot_de_passe_est_l_identifiant && ! $compte->doitChoisirSonMotDePasse()) {
-            Notification::make()
-                ->title('Changez votre mot de passe')
-                ->body(self::ALERTE_IDENTIFIANT)
-                ->warning()
-                ->persistent()
-                ->actions([Action::make('changer')->label('Changer mon mot de passe')->url(Filament::getProfileUrl())->button()])
-                ->send();
         }
 
         if ($precedente !== null) {

@@ -391,8 +391,8 @@ class GardesDesDroitsEnBaseTest extends TestCase
             $this->refusee(fn () => DB::table('users')->where('id', $collaborateur->id)->update(['role_societe' => $role->value]), self::refus(GardesDesDroits::ROLES, 'un cabinet d\'expertise comptable n\'a ni administrateur, ni membre, ni expert-comptable de société'), $role->value);
         }
         $this->refusee(fn () => DB::table('users')->where('id', $vendeur->id)->update(['role_societe' => RoleSociete::Administrateur->value]), self::refus(GardesDesDroits::ROLES, 'un administrateur n\'a aucune affectation de membre'));
-        $this->refusee(fn () => DB::table('users')->where('id', $sansDroits->id)->update(['role_societe' => RoleSociete::Proprietaire->value, 'email' => 'futur-proprietaire@example.test', 'email_verified_at' => null, 'mot_de_passe_est_l_identifiant' => false]), self::refus(GardesDesDroits::ROLES, 'l\'adresse de connexion d\'un propriétaire est confirmée par un lien'));
-        $this->refusee(fn () => DB::table('users')->where('id', $sansDroits->id)->update(['role_societe' => RoleSociete::Proprietaire->value, 'email' => null, 'mot_de_passe_est_l_identifiant' => true]), self::refus(GardesDesDroits::ROLES, 'un propriétaire n\'a jamais pour mot de passe son identifiant'));
+        $this->refusee(fn () => DB::table('users')->where('id', $sansDroits->id)->update(['role_societe' => RoleSociete::Proprietaire->value, 'email' => 'futur-proprietaire@example.test', 'email_verified_at' => null]), self::refus(GardesDesDroits::ROLES, 'l\'adresse de connexion d\'un propriétaire est confirmée par un lien'));
+        $this->refusee(fn () => DB::table('users')->where('id', $sansDroits->id)->update(['role_societe' => RoleSociete::Proprietaire->value, 'email' => null, 'mot_de_passe_choisi_le' => null, 'mot_de_passe_provisoire_expire_le' => now()->addHours(72)]), self::refus(GardesDesDroits::ROLES, 'un propriétaire n\'a jamais de mot de passe provisoire'));
 
         $this->assertSame([RoleSociete::Membre, RoleSociete::Administrateur, RoleSociete::Collaborateur], [$vendeur->refresh()->role_societe, $sansDroits->refresh()->role_societe, $collaborateur->refresh()->role_societe]);
     }
@@ -455,21 +455,21 @@ class GardesDesDroitsEnBaseTest extends TestCase
 
     /**
      * Un expert-comptable de la société (décision de l'éditeur du
-     * 01/11/2026) n'a ni affectation, ni autorisation de société, ni son
-     * identifiant pour mot de passe, et n'existe jamais dans un cabinet
+     * 01/11/2026) n'a ni affectation, ni autorisation de société, ni mot
+     * de passe provisoire, et n'existe jamais dans un cabinet
      * d'expertise comptable. La garde du rôle de l'expert-comptable (voir
      * GardesDesCabinets::EXPERT_COMPTABLE_DE_SA_DECLARATION), qui refuse
      * d'abord qu'un compte prenne ce rôle, est retirée pour le cas du
      * cabinet : c'est la garde des rôles qui est éprouvée ici.
      */
-    public function test_la_base_refuse_un_expert_comptable_dans_un_cabinet_avec_une_affectation_une_autorisation_de_societe_ou_son_identifiant_pour_mot_de_passe(): void
+    public function test_la_base_refuse_un_expert_comptable_dans_un_cabinet_avec_une_affectation_une_autorisation_de_societe_ou_un_mot_de_passe_provisoire(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $expert = $this->declarerSonExpertComptable($magasin);
 
         $this->refusee(fn () => DB::table('affectations')->insert($this->ligne($magasin, $expert, $magasin->id, RoleMagasin::Vendeur->value)), self::refus(GardesDesDroits::AFFECTATIONS, 'le propriétaire, un collaborateur d\'un cabinet et un expert-comptable de la société n\'ont aucune affectation'));
         $this->refusee(fn () => DB::table('autorisations_societe')->insert(['societe_id' => $magasin->societe_id, 'user_id' => $expert->id, 'autorisation' => AutorisationsSociete::MAGASINS_GERER]), self::refus(GardesDesDroits::AUTORISATIONS_SOCIETE, 'seul un administrateur a des autorisations de société'));
-        $this->refusee(fn () => DB::table('users')->where('id', $expert->id)->update(['mot_de_passe_est_l_identifiant' => true]), self::refus(GardesDesDroits::ROLES, 'un expert-comptable de la société n\'a jamais pour mot de passe son identifiant'));
+        $this->refusee(fn () => DB::table('users')->where('id', $expert->id)->update(['mot_de_passe_choisi_le' => null, 'mot_de_passe_provisoire_expire_le' => now()->addHours(72)]), self::refus(GardesDesDroits::ROLES, 'un expert-comptable de la société n\'a jamais de mot de passe provisoire'));
 
         $cabinet = $this->ouvrirUnCabinet();
         $collaborateur = $this->collaborateur($cabinet);
@@ -477,7 +477,7 @@ class GardesDesDroitsEnBaseTest extends TestCase
         $this->refusee(fn () => DB::table('users')->where('id', $collaborateur->id)->update(['role_societe' => RoleSociete::ExpertComptable->value, 'email' => 'paul.lefevre@cabinet.test']), self::refus(GardesDesDroits::ROLES, 'un cabinet d\'expertise comptable n\'a ni administrateur, ni membre, ni expert-comptable de société'));
 
         $this->assertSame(0, DB::table('affectations')->where('user_id', $expert->id)->count());
-        $this->assertSame([RoleSociete::ExpertComptable, false], [$expert->refresh()->role_societe, (bool) $expert->mot_de_passe_est_l_identifiant]);
+        $this->assertSame([RoleSociete::ExpertComptable, null], [$expert->refresh()->role_societe, $expert->mot_de_passe_provisoire_expire_le]);
         $this->assertSame(RoleSociete::Collaborateur, $collaborateur->refresh()->role_societe);
     }
 

@@ -277,7 +277,7 @@ class AutorisationsDesMembresTest extends TestCase
         $affectation = Affectation::query()->where('user_id', $vendeur->id)->sole();
 
         foreach ([
-            [$vendeur, ['role_societe' => 'proprietaire', 'statut' => 'retire', 'societe_id' => 999, 'cree_par' => null, 'mot_de_passe_est_l_identifiant' => true, 'email_verified_at' => now(), 'acces_redonne_le' => now()]],
+            [$vendeur, ['role_societe' => 'proprietaire', 'statut' => 'retire', 'societe_id' => 999, 'cree_par' => null, 'mot_de_passe_choisi_le' => now(), 'mot_de_passe_provisoire_expire_le' => now(), 'mot_de_passe_provisoire_utilise_le' => now(), 'email_verified_at' => now(), 'acces_redonne_le' => now()]],
             [$affectation, ['role' => 'responsable', 'magasin_id' => null, 'societe_id' => 999, 'nomme_par' => $vendeur->id]],
         ] as [$modele, $attributs]) {
             try {
@@ -288,7 +288,7 @@ class AutorisationsDesMembresTest extends TestCase
             $this->assertSame([], array_keys($modele->getDirty()), $modele::class);
         }
 
-        $this->assertSame([], array_intersect(['role_societe', 'statut', 'societe_id', 'cree_par', 'mot_de_passe_est_l_identifiant', 'statut_change_par', 'acces_redonne_le', 'acces_redonne_par'], $vendeur->getFillable()));
+        $this->assertSame([], array_intersect(['role_societe', 'statut', 'societe_id', 'cree_par', 'mot_de_passe_choisi_le', 'mot_de_passe_provisoire_expire_le', 'mot_de_passe_provisoire_utilise_le', 'statut_change_par', 'acces_redonne_le', 'acces_redonne_par'], $vendeur->getFillable()));
     }
 
     /**

@@ -201,54 +201,55 @@ class ResponsablesTest extends TestCase
     }
 
     /**
-     * Un compte dont le mot de passe est encore son identifiant se nomme
+     * Un compte qui n'a pas encore choisi son mot de passe se nomme
      * responsable, sans blocage (C10) : la fenêtre avertit que toute
-     * personne qui connaît son identifiant pourra agir avec ses nouveaux
-     * droits, et propose à la personne présente de choisir son mot de passe.
+     * personne qui connaît son mot de passe provisoire pourra agir avec ses
+     * nouveaux droits, et propose à la personne présente de choisir son mot
+     * de passe.
      */
-    public function test_un_administrateur_autorise_nomme_un_compte_dont_le_mot_de_passe_est_l_identifiant_avec_un_avertissement(): void
+    public function test_un_administrateur_autorise_nomme_un_compte_qui_n_a_pas_choisi_son_mot_de_passe_avec_un_avertissement(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $administrateur = $this->administrateur($magasin, null, [AutorisationsSociete::RESPONSABLES_NOMMER]);
-        [$auMotDePasseIdentifiant] = $this->compteAuMotDePasseIdentifiant($magasin, RoleMagasin::Vendeur);
+        [$sansMotDePasseChoisi] = $this->compteAuMotDePasseProvisoire($magasin, RoleMagasin::Vendeur);
         $definitif = $this->membre($magasin, RoleMagasin::Vendeur);
 
-        $this->assertContains((int) $auMotDePasseIdentifiant->id, app(PorteeDesDroits::class)->candidatsResponsables($administrateur, $magasin)->pluck('users.id')->map(fn ($id): int => (int) $id)->all());
+        $this->assertContains((int) $sansMotDePasseChoisi->id, app(PorteeDesDroits::class)->candidatsResponsables($administrateur, $magasin)->pluck('users.id')->map(fn ($id): int => (int) $id)->all());
         $this->dansLEspaceDeLaSociete($magasin->societe, $administrateur);
         Livewire::test(ListMembres::class)
             ->mountAction('nommerUnResponsable')
-            ->setActionData(['magasin_id' => $magasin->id, 'compte' => 'existant', 'candidat' => $auMotDePasseIdentifiant->id])
-            ->assertSee(ListMembres::AVERTISSEMENT_IDENTIFIANT)
+            ->setActionData(['magasin_id' => $magasin->id, 'compte' => 'existant', 'candidat' => $sansMotDePasseChoisi->id])
+            ->assertSee(ListMembres::AVERTISSEMENT_PAS_ENCORE_CHOISI)
             ->callMountedAction()
             ->assertHasNoActionErrors();
         app(ModifierMembreAction::class)->handle($administrateur, $definitif, RoleMagasin::Responsable);
 
-        $this->assertSame(RoleMagasin::Responsable, Affectation::query()->where('user_id', $auMotDePasseIdentifiant->id)->sole()->role);
-        $this->assertTrue($auMotDePasseIdentifiant->refresh()->mot_de_passe_est_l_identifiant);
+        $this->assertSame(RoleMagasin::Responsable, Affectation::query()->where('user_id', $sansMotDePasseChoisi->id)->sole()->role);
+        $this->assertFalse($sansMotDePasseChoisi->refresh()->aChoisiSonMotDePasse());
         $this->assertSame(RoleMagasin::Responsable, Affectation::query()->where('user_id', $definitif->id)->sole()->role);
     }
 
     /**
-     * Présente, la personne dont le mot de passe est encore son
-     * identifiant choisit le sien dans la fenêtre qui la nomme
-     * responsable : elle l'est, avec le mot de passe qu'elle a tapé.
+     * Présente, la personne qui n'a pas encore choisi son mot de passe
+     * choisit le sien dans la fenêtre qui la nomme responsable : elle l'est,
+     * avec le mot de passe qu'elle a tapé.
      */
     public function test_la_personne_presente_nommee_responsable_choisit_son_mot_de_passe_dans_la_meme_fenetre(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $administrateur = $this->administrateur($magasin, null, [AutorisationsSociete::RESPONSABLES_NOMMER]);
-        [$auMotDePasseIdentifiant] = $this->compteAuMotDePasseIdentifiant($magasin, RoleMagasin::Vendeur);
+        [$sansMotDePasseChoisi] = $this->compteAuMotDePasseProvisoire($magasin, RoleMagasin::Vendeur);
 
         $this->dansLEspaceDeLaSociete($magasin->societe, $administrateur);
         Livewire::test(ListMembres::class)
             ->mountAction('nommerUnResponsable')
-            ->setActionData(['magasin_id' => $magasin->id, 'compte' => 'existant', 'candidat' => $auMotDePasseIdentifiant->id, 'mode' => 'present', 'mot_de_passe' => 'mot-de-passe-de-paul', 'mot_de_passe_confirmation' => 'mot-de-passe-de-paul'])
+            ->setActionData(['magasin_id' => $magasin->id, 'compte' => 'existant', 'candidat' => $sansMotDePasseChoisi->id, 'mode' => 'present', 'mot_de_passe' => 'mot-de-passe-de-paul', 'mot_de_passe_confirmation' => 'mot-de-passe-de-paul'])
             ->callMountedAction()
             ->assertHasNoActionErrors();
 
-        $this->assertSame(RoleMagasin::Responsable, Affectation::query()->where('user_id', $auMotDePasseIdentifiant->id)->sole()->role);
-        $this->assertTrue(Hash::check('mot-de-passe-de-paul', $auMotDePasseIdentifiant->refresh()->password));
-        $this->assertFalse($auMotDePasseIdentifiant->mot_de_passe_est_l_identifiant);
+        $this->assertSame(RoleMagasin::Responsable, Affectation::query()->where('user_id', $sansMotDePasseChoisi->id)->sole()->role);
+        $this->assertTrue(Hash::check('mot-de-passe-de-paul', $sansMotDePasseChoisi->refresh()->password));
+        $this->assertTrue($sansMotDePasseChoisi->aChoisiSonMotDePasse());
     }
 
     /**

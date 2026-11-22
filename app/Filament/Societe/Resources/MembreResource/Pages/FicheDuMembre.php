@@ -158,9 +158,9 @@ class FicheDuMembre extends ViewRecord
      * administrateur), qui garde son identifiant et son
      * historique (voir ChangerLeRoleDeSocieteAction) ; un compte qui n'a pas
      * encore de magasin et devient membre reçoit, une fois pour toutes, le
-     * magasin ouvert choisi ici. Quand son mot de passe est encore son
-     * identifiant, la fenêtre l'avertit et la personne présente peut
-     * choisir le sien maintenant.
+     * magasin ouvert choisi ici. Quand elle n'a pas encore choisi son mot de
+     * passe, la fenêtre l'avertit et la personne présente peut choisir le
+     * sien maintenant.
      */
     public function changerLeRoleDeSocieteAction(): Action
     {
@@ -196,20 +196,20 @@ class FicheDuMembre extends ViewRecord
                     ->visible(fn (Get $get): bool => $get('role_societe') === RoleSociete::Administrateur->value),
                 Placeholder::make('avertissement')
                     ->hiddenLabel()
-                    ->content(ListMembres::AVERTISSEMENT_IDENTIFIANT)
-                    ->visible(fn (): bool => $this->compte()->mot_de_passe_est_l_identifiant),
+                    ->content(ListMembres::AVERTISSEMENT_PAS_ENCORE_CHOISI)
+                    ->visible(fn (): bool => ! $this->compte()->aChoisiSonMotDePasse()),
                 Hidden::make('jeton_acces'),
                 Radio::make('mode')
                     ->label('La personne est-elle là ?')
-                    ->options(['plus_tard' => 'Non : elle choisira son mot de passe à sa prochaine connexion, si son nouveau rôle l\'exige', 'present' => 'Oui : elle choisit son mot de passe maintenant'])
+                    ->options(['plus_tard' => 'Non : elle choisira son mot de passe à sa première connexion', 'present' => 'Oui : elle choisit son mot de passe maintenant'])
                     ->live()
-                    ->visible(fn (): bool => $this->compte()->mot_de_passe_est_l_identifiant),
-                ...MembreResource::champsDuMotDePasseChoisi(fn (Get $get): bool => $this->compte()->mot_de_passe_est_l_identifiant && $get('mode') === 'present'),
+                    ->visible(fn (): bool => ! $this->compte()->aChoisiSonMotDePasse()),
+                ...MembreResource::champsDuMotDePasseChoisi(fn (Get $get): bool => ! $this->compte()->aChoisiSonMotDePasse() && $get('mode') === 'present'),
             ])
             ->modalDescription('Le compte garde son identifiant et son historique ; seuls son rôle et ses autorisations changent. Un administrateur ne garde aucune affectation de membre ; ses ventes passées restent à son nom.')
             ->action(function (array $data, Form $form): void {
                 $compte = $this->compte();
-                $enPresence = $compte->mot_de_passe_est_l_identifiant && ($data['mode'] ?? null) === 'present';
+                $enPresence = ! $compte->aChoisiSonMotDePasse() && ($data['mode'] ?? null) === 'present';
 
                 if ($enPresence) {
                     MembreResource::exigerLeMotDePasseChoisi(ValeurSimple::enTexte($data['mot_de_passe'] ?? ''), $compte, $form);
@@ -226,7 +226,7 @@ class FicheDuMembre extends ViewRecord
                     };
 
                     if ($enPresence) {
-                        app(RedonnerLAccesAction::class)->handle($this->auteur(), $compte->refresh(), true, ValeurSimple::enTexte($data['mot_de_passe']), ValeurSimple::enTexte($data['jeton_acces']));
+                        app(RedonnerLAccesAction::class)->enSaPresence($this->auteur(), $compte->refresh(), ValeurSimple::enTexte($data['mot_de_passe']), ValeurSimple::enTexte($data['jeton_acces']));
                     }
 
                     Notification::make()->title('Son rôle est changé.')->success()->send();

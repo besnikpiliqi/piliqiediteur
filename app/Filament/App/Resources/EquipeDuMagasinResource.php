@@ -6,9 +6,9 @@ use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
 use App\Domain\Tenancy\Actions\ModifierMembreAction;
 use App\Domain\Tenancy\Actions\RedonnerLAccesAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
-use App\Domain\Tenancy\Enums\StatutCompte;
 use App\Domain\Tenancy\Models\Affectation;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Services\MotsDePasseProvisoires;
 use App\Domain\Tenancy\Services\PorteeDesDroits;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\ValeurRequise;
@@ -50,8 +50,9 @@ use UnexpectedValueException;
  *   qui en a le droit sur ce compte (voir GereLesComptes).
  * Le propriétaire voit l'identifiant de chaque compte ; un responsable,
  * celui des vendeurs et des observateurs de son magasin, avec les badges
- * « Mot de passe : l'identifiant » et « Jamais connecté » et le filtre des
- * mots de passe encore égaux à l'identifiant. Ni les administrateurs ni
+ * « Mot de passe provisoire à utiliser » (ou expiré, ou choix inachevé) et
+ * « Jamais connecté » et le filtre des mots de passe pas encore choisis. Ni
+ * les administrateurs ni
  * les comptes du cabinet lié n'y figurent.
  *
  * Le modèle Affectation n'a pas de MagasinScope (les droits se lisent avant
@@ -161,14 +162,14 @@ class EquipeDuMagasinResource extends Resource
     }
 
     /**
-     * Le filtre « Mot de passe encore l'identifiant » de la liste (voir
+     * Le filtre « Mot de passe pas encore choisi » de la liste (voir
      * table()).
      */
-    public const FILTRE_MOT_DE_PASSE_IDENTIFIANT = 'mot_de_passe_identifiant';
+    public const FILTRE_MOT_DE_PASSE_A_CHOISIR = 'mot_de_passe_a_choisir';
 
     /**
-     * Les affectations de l'équipe dont le compte actif a encore son
-     * identifiant pour mot de passe (un compte suspendu ou retiré ne se
+     * Les affectations de l'équipe dont le compte actif n'a pas encore
+     * choisi son mot de passe (un compte suspendu ou retiré ne se
      * connecte pas) : pour le propriétaire, tous les rôles ; pour un
      * responsable, ses vendeurs et ses observateurs, dont il gère les
      * comptes. Le filtre de la liste les montre, et l'« À faire » du
@@ -178,20 +179,20 @@ class EquipeDuMagasinResource extends Resource
      * @param  Builder<Affectation>  $affectations
      * @return Builder<Affectation>
      */
-    public static function auMotDePasseIdentifiant(Builder $affectations, bool $proprietaire): Builder
+    public static function auMotDePasseAChoisir(Builder $affectations, bool $proprietaire): Builder
     {
         return $affectations
-            ->whereHas('utilisateur', fn (Builder $comptes): Builder => $comptes->where('mot_de_passe_est_l_identifiant', true)->where('statut', StatutCompte::Actif->value))
+            ->whereHas('utilisateur', fn (Builder $comptes): Builder => MotsDePasseProvisoires::pasEncoreChoisis($comptes))
             ->when(! $proprietaire, fn (Builder $deSonEquipe): Builder => $deSonEquipe->whereIn('affectations.role', [RoleMagasin::Vendeur->value, RoleMagasin::Observateur->value]));
     }
 
     /**
      * La liste de l'équipe du magasin actif, filtrée sur les comptes qui
-     * ont encore leur identifiant pour mot de passe.
+     * n'ont pas encore choisi leur mot de passe.
      */
-    public static function urlDesMotsDePasseIdentifiants(): string
+    public static function urlDesMotsDePasseAChoisir(): string
     {
-        return static::getUrl('index', ['tableFilters' => [self::FILTRE_MOT_DE_PASSE_IDENTIFIANT => ['isActive' => true]]]);
+        return static::getUrl('index', ['tableFilters' => [self::FILTRE_MOT_DE_PASSE_A_CHOISIR => ['isActive' => true]]]);
     }
 
     public static function proprietaireConnecte(): bool
@@ -221,27 +222,27 @@ class EquipeDuMagasinResource extends Resource
             ])
             ->filters([
                 Tables\Filters\SelectFilter::make('role')->label('Rôle')->options(RoleMagasin::class),
-                Tables\Filters\Filter::make(self::FILTRE_MOT_DE_PASSE_IDENTIFIANT)
-                    ->label('Mot de passe encore l\'identifiant')
-                    ->query(fn (Builder $query): Builder => self::auMotDePasseIdentifiant($query, static::proprietaireConnecte())),
+                Tables\Filters\Filter::make(self::FILTRE_MOT_DE_PASSE_A_CHOISIR)
+                    ->label('Mot de passe pas encore choisi')
+                    ->query(fn (Builder $query): Builder => self::auMotDePasseAChoisir($query, static::proprietaireConnecte())),
             ])
             ->actions([
                 Tables\Actions\EditAction::make()->label('Rôle et autorisations'),
                 Tables\Actions\Action::make('nommer_responsable')
                     ->label('Nommer responsable')
                     ->icon('heroicon-o-star')
-                    ->modalDescription(fn (Affectation $record): string => "{$record->utilisateur->name} aura tous les droits dans ce magasin, sans case.".($record->utilisateur->mot_de_passe_est_l_identifiant ? ' Son mot de passe est encore son identifiant : toute personne qui le connaît pourra agir avec ses nouveaux droits.' : ''))
+                    ->modalDescription(fn (Affectation $record): string => "{$record->utilisateur->name} aura tous les droits dans ce magasin, sans case.".($record->utilisateur->aChoisiSonMotDePasse() ? '' : ' Elle n\'a pas encore choisi son mot de passe : toute personne qui connaît son mot de passe provisoire pourra agir avec ses nouveaux droits tant qu\'elle ne s\'est pas connectée.'))
                     ->fillForm(fn (): array => ['jeton' => (string) Str::uuid(), 'mode' => 'plus_tard'])
-                    ->form(fn (Affectation $record): array => $record->utilisateur->mot_de_passe_est_l_identifiant ? [
+                    ->form(fn (Affectation $record): array => ! $record->utilisateur->aChoisiSonMotDePasse() ? [
                         Hidden::make('jeton'),
                         Radio::make('mode')
                             ->label('La personne est-elle là ?')
-                            ->options(['plus_tard' => 'Non : elle choisira son mot de passe à sa prochaine connexion', 'present' => 'Oui : elle choisit son mot de passe maintenant'])
+                            ->options(['plus_tard' => 'Non : elle choisira son mot de passe à sa première connexion', 'present' => 'Oui : elle choisit son mot de passe maintenant'])
                             ->required()
                             ->live(),
                         ...static::champsDuMotDePasseChoisi(fn (Get $get): bool => $get('mode') === 'present'),
                     ] : [])
-                    ->requiresConfirmation(fn (Affectation $record): bool => ! $record->utilisateur->mot_de_passe_est_l_identifiant)
+                    ->requiresConfirmation(fn (Affectation $record): bool => $record->utilisateur->aChoisiSonMotDePasse())
                     ->visible(fn (Affectation $record): bool => ! $record->estDeResponsable() && app(PorteeDesDroits::class)->peutDonnerLeRole(static::auteur(), $record->utilisateur, ValeurRequise::de($record->magasin, 'le magasin du membre'), RoleMagasin::Responsable))
                     ->action(function (Affectation $record, array $data, Form $form): void {
                         $compte = $record->utilisateur;
@@ -255,7 +256,7 @@ class EquipeDuMagasinResource extends Resource
                             app(ModifierMembreAction::class)->handle(static::auteur(), $compte, RoleMagasin::Responsable);
 
                             if ($enPresence) {
-                                app(RedonnerLAccesAction::class)->handle(static::auteur(), $compte->refresh(), true, ValeurSimple::enTexte($data['mot_de_passe']), ValeurSimple::enTexte($data['jeton'] ?? ''));
+                                app(RedonnerLAccesAction::class)->enSaPresence(static::auteur(), $compte->refresh(), ValeurSimple::enTexte($data['mot_de_passe']), ValeurSimple::enTexte($data['jeton'] ?? ''));
                             }
                         });
                     }),
@@ -275,15 +276,15 @@ class EquipeDuMagasinResource extends Resource
     }
 
     /**
-     * Les badges de la liste : un mot de passe encore égal à l'identifiant,
-     * un compte jamais connecté.
+     * Les badges de la liste : un mot de passe pas encore choisi (provisoire
+     * à utiliser, expiré, ou choix inachevé), un compte jamais connecté.
      *
      * @return list<string>
      */
     public static function signaux(User $compte): array
     {
         return array_values(array_filter([
-            $compte->mot_de_passe_est_l_identifiant ? 'Mot de passe : l\'identifiant' : null,
+            $compte->aChoisiSonMotDePasse() ? null : $compte->etatDuMotDePasse()->libelle(),
             $compte->premiere_connexion_le === null ? 'Jamais connecté' : null,
         ]));
     }

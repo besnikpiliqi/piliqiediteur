@@ -18,14 +18,14 @@ use Tests\Browser\Support\Navigation;
  * chiffrée par le site : PHP les lit en tableau à la place du témoin
  * ordinaire de ce nom, et le site les compte comme des témoins absents (au
  * lieu d'une erreur 500). Sur la page de connexion de chaque panneau, un
- * compte dont le mot de passe est encore son identifiant reçoit le refus
+ * compte qui n'a pas encore choisi son mot de passe reçoit le refus
  * ordinaire hors d'un poste reconnu, et un compte qui a choisi le sien se
  * connecte, ce qui efface du navigateur le témoin des postes connus envoyé
  * en tableau ; dans les paramètres du magasin, le propriétaire et le
  * responsable ouvrent « Postes reconnus » et reconnaissent ce navigateur,
  * ce qui efface le témoin des postes reconnus envoyé en tableau : la liste
- * dit ensuite « Ce navigateur », et un vendeur dont le mot de passe est son
- * identifiant s'y connecte.
+ * dit ensuite « Ce navigateur », et un vendeur qui n'a pas encore choisi son
+ * mot de passe s'y connecte avec son mot de passe provisoire.
  */
 
 /**
@@ -59,18 +59,17 @@ function temoinsLisiblesParLaPage(Navigation $onglet): array
 
 /**
  * Ce compte essaie, dans cet onglet, de se connecter sur la page de
- * connexion de ce panneau avec son identifiant pour mot de passe, hors d'un
+ * connexion de ce panneau avec ce mot de passe provisoire (ou, pour un
+ * collaborateur, qui n'en a pas, un mot de passe quelconque), hors d'un
  * poste reconnu : il reçoit le refus ordinaire et reste sur la page.
  */
-function etreRefuseAvecSonIdentifiant(Navigation $onglet, User $compte, string $panneau): void
+function etreRefuseAvecUnMotDePasseProvisoire(Navigation $onglet, User $compte, string $motDePasse, string $panneau): void
 {
-    $identifiant = (string) $compte->identifiantDeConnexion();
-
     $onglet->aller('/'.$panneau.'/login')
-        ->remplir('Identifiant ou adresse e-mail', $identifiant)
-        ->remplir('Mot de passe', $identifiant)
+        ->remplir('Identifiant ou adresse e-mail', (string) $compte->identifiantDeConnexion())
+        ->remplir('Mot de passe', $motDePasse)
         ->cliquerSur('Connexion')
-        ->voir(Connexion::MESSAGE_ECHEC.' '.Connexion::MESSAGE_POSTE);
+        ->voir(Connexion::MESSAGE_ECHEC);
 
     expect($onglet->chemin())->toBe('/'.$panneau.'/login');
 }
@@ -86,15 +85,15 @@ function badgesDuPoste(Navigation $onglet, string $poste): array
     return $onglet->page()->evaluate('() => Array.from(document.querySelectorAll(".fi-ta-row")).filter((ligne) => ligne.textContent.includes('.Navigation::texte($poste).')).flatMap((ligne) => Array.from(ligne.querySelectorAll(".fi-badge")).map((badge) => badge.textContent.trim()))');
 }
 
-test('dans le magasin, avec des témoins de poste envoyés en tableau, le vendeur au mot de passe égal à son identifiant reçoit le refus ordinaire, et le responsable puis le propriétaire, par son adresse et par son identifiant, se connectent', function () {
+test('dans le magasin, avec des témoins de poste envoyés en tableau, le vendeur au mot de passe provisoire reçoit le refus ordinaire, et le responsable puis le propriétaire, par son adresse et par son identifiant, se connectent', function () {
     $magasin = $this->ouvrirUneSociete(['nom' => 'Boutique du Port']);
     $proprietaire = $this->choisirSonMotDePasse($this->proprietaireDe($magasin));
-    [$vendeur] = $this->compteAuMotDePasseIdentifiant($magasin, RoleMagasin::Vendeur);
+    [$vendeur, $provisoire] = $this->compteAuMotDePasseProvisoire($magasin, RoleMagasin::Vendeur);
     $responsable = $this->membre($magasin, RoleMagasin::Responsable, identite: ['name' => 'Rose Martin']);
     $onglet = $this->naviguer('/app/login');
 
     poserLesTemoinsEnTableau($onglet, PostesConnus::TEMOIN, PostesReconnus::TEMOIN);
-    etreRefuseAvecSonIdentifiant($onglet, $vendeur, 'app');
+    etreRefuseAvecUnMotDePasseProvisoire($onglet, $vendeur, $provisoire, 'app');
 
     foreach ([[$responsable, null], [$proprietaire, (string) $proprietaire->email], [$proprietaire, null]] as [$compte, $saisie]) {
         poserLesTemoinsEnTableau($onglet, PostesConnus::TEMOIN, PostesReconnus::TEMOIN);
@@ -106,7 +105,7 @@ test('dans le magasin, avec des témoins de poste envoyés en tableau, le vendeu
     }
 });
 
-test('dans l’espace de la société, avec des témoins de poste envoyés en tableau, l’administrateur au mot de passe égal à son identifiant reçoit le refus ordinaire, et l’administrateur qui a choisi le sien et le propriétaire se connectent', function () {
+test('dans l’espace de la société, avec des témoins de poste envoyés en tableau, l’administrateur au mot de passe provisoire reçoit le refus ordinaire, et l’administrateur qui a choisi le sien et le propriétaire se connectent', function () {
     $magasin = $this->ouvrirUneSociete();
     $societe = $magasin->societe()->firstOrFail();
     $proprietaire = $this->choisirSonMotDePasse($this->proprietaireDe($magasin));
@@ -116,7 +115,7 @@ test('dans l’espace de la société, avec des témoins de poste envoyés en ta
     $onglet = $this->naviguer('/societe/login');
 
     poserLesTemoinsEnTableau($onglet, PostesConnus::TEMOIN, PostesReconnus::TEMOIN);
-    etreRefuseAvecSonIdentifiant($onglet, $nouveau, 'societe');
+    etreRefuseAvecUnMotDePasseProvisoire($onglet, $nouveau, $nouveau->motDePasseProvisoire?->valeur() ?? '', 'societe');
 
     foreach ([$administrateur, $proprietaire] as $compte) {
         poserLesTemoinsEnTableau($onglet, PostesConnus::TEMOIN, PostesReconnus::TEMOIN);
@@ -128,7 +127,7 @@ test('dans l’espace de la société, avec des témoins de poste envoyés en ta
     }
 });
 
-test('dans l’espace du cabinet, avec des témoins de poste envoyés en tableau, le collaborateur au mot de passe égal à son identifiant reçoit le refus ordinaire, et le collaborateur qui a choisi le sien et le propriétaire du cabinet se connectent', function () {
+test('dans l’espace du cabinet, avec des témoins de poste envoyés en tableau, le collaborateur sans mot de passe reçoit le refus ordinaire, et le collaborateur qui a choisi le sien et le propriétaire du cabinet se connectent', function () {
     $magasin = $this->ouvrirUneSociete();
     $collaborateur = $this->collaborateurDuCabinetLie($magasin, nom: 'Paul Lefèvre');
     $cabinet = $collaborateur->societe()->firstOrFail();
@@ -139,7 +138,7 @@ test('dans l’espace du cabinet, avec des témoins de poste envoyés en tableau
     $onglet = $this->naviguer('/cabinet/login');
 
     poserLesTemoinsEnTableau($onglet, PostesConnus::TEMOIN, PostesReconnus::TEMOIN);
-    etreRefuseAvecSonIdentifiant($onglet, $nouveau, 'cabinet');
+    etreRefuseAvecUnMotDePasseProvisoire($onglet, $nouveau, (string) $nouveau->identifiantDeConnexion(), 'cabinet');
 
     foreach ([$collaborateur, $proprietaireDuCabinet] as $compte) {
         poserLesTemoinsEnTableau($onglet, PostesConnus::TEMOIN, PostesReconnus::TEMOIN);
@@ -151,9 +150,8 @@ test('dans l’espace du cabinet, avec des témoins de poste envoyés en tableau
     }
 });
 
-test('avec un témoin des postes reconnus envoyé en tableau, le propriétaire et le responsable ouvrent « Postes reconnus » et reconnaissent ce navigateur, que la liste dit ensuite « Ce navigateur » et où le vendeur se connecte avec son identifiant', function () {
+test('avec un témoin des postes reconnus envoyé en tableau, le propriétaire et le responsable ouvrent « Postes reconnus » et reconnaissent ce navigateur, que la liste dit ensuite « Ce navigateur » et où le vendeur se connecte avec son mot de passe provisoire', function () {
     $magasin = $this->ouvrirUneSociete(['nom' => 'Boutique du Port']);
-    [$vendeur, $identifiant] = $this->compteAuMotDePasseIdentifiant($magasin, RoleMagasin::Vendeur);
     $postes = '/app/'.$magasin->uuid.'/postes-reconnus';
 
     foreach (['Caisse du propriétaire' => $this->choisirSonMotDePasse($this->proprietaireDe($magasin)), 'Caisse du responsable' => $this->responsable($magasin)] as $poste => $compte) {
@@ -171,7 +169,8 @@ test('avec un témoin des postes reconnus envoyé en tableau, le propriétaire e
         expect(badgesDuPoste($onglet, $poste))->toBe(['Ce navigateur'])
             ->and(temoinsLisiblesParLaPage($onglet))->not->toContain('postes_reconnus[0]');
 
-        $this->seConnecter($vendeur, $identifiant, onglet: $onglet->seDeconnecter());
-        expect($onglet->chemin())->toBe('/app/'.$magasin->uuid);
+        [$vendeur, $provisoire] = $this->compteAuMotDePasseProvisoire($magasin, RoleMagasin::Vendeur);
+        $this->seConnecter($vendeur, $provisoire, onglet: $onglet->seDeconnecter());
+        expect($onglet->chemin())->toBe('/app/mot-de-passe');
     }
 });

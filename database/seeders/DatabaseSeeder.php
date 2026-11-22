@@ -7,6 +7,7 @@ use App\Domain\Demonstration\ConstructionDUnModele;
 use App\Domain\Demonstration\SiteDePiliqi;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\CodesDeConfirmation;
+use App\Domain\Tenancy\Services\MotsDePasseProvisoires;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Providers\FournisseursExternesServiceProvider;
 use Database\Seeders\Semis\CodesLusDansLesCourriers;
@@ -172,7 +173,7 @@ class DatabaseSeeder extends Seeder
             $motsDePasse->sontCommuns()
                 ? 'Mots de passe : celui de PILIQI_SEMIS_MOT_DE_PASSE, pour tous les comptes qui ont choisi le leur.'
                 : 'Mots de passe : tirés au hasard à ce semis (PILIQI_SEMIS_MOT_DE_PASSE, dans le .env, en donne un seul, stable).',
-            'Un compte dont le mot de passe est encore son identifiant ne s\'ouvre que depuis un poste reconnu du magasin (reconnu par le propriétaire ou un responsable).',
+            'Un compte qui n\'a pas encore choisi son mot de passe montre ici son mot de passe provisoire : il ne sert qu\'une fois, pendant '.MotsDePasseProvisoires::dureeEnHeures().' heures, depuis un poste reconnu du magasin (reconnu par le propriétaire ou un responsable), et la personne le remplace aussitôt ; l\'état de chacun est dit dans la dernière colonne.',
             '',
             $comptes->enTexte(),
         ]);

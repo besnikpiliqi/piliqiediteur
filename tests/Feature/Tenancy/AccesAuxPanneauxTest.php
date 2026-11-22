@@ -188,7 +188,7 @@ class AccesAuxPanneauxTest extends TestCase
             ->assertHasFormErrors(['login']);
         $this->assertGuest();
 
-        app(RedonnerLAccesAction::class)->handle($proprietaire, $administrateur, true, self::MOT_DE_PASSE_CHOISI, (string) Str::uuid());
+        app(RedonnerLAccesAction::class)->enSaPresence($proprietaire, $administrateur, self::MOT_DE_PASSE_CHOISI, (string) Str::uuid());
         Livewire::test(Connexion::class)
             ->fillForm(['login' => $identifiant, 'password' => self::MOT_DE_PASSE_CHOISI])
             ->call('authenticate')

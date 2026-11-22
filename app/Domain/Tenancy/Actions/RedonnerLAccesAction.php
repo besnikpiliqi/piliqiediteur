@@ -12,15 +12,16 @@ use App\Domain\Tenancy\Notifications\AvisDeLEquipe;
 use App\Domain\Tenancy\Services\DebitDesEmails;
 use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\JournalDesDroits;
+use App\Domain\Tenancy\Services\MotsDePasseProvisoires;
 use App\Domain\Tenancy\Services\PorteeDesDroits;
 use App\Domain\Tenancy\Services\SessionsDesComptes;
 use App\Domain\Tenancy\Support\CleDuModele;
+use App\Domain\Tenancy\Support\MotDePasseProvisoire;
 use App\Domain\Tenancy\Support\RegleDuMotDePasse;
 use App\Filament\Societe\Resources\MembreResource;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\RateLimiter;
-use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use LogicException;
 use SensitiveParameter;
@@ -34,17 +35,21 @@ use SensitiveParameter;
  * l'accès pour un vendeur ou un observateur d'un magasin de sa portée.
  * Personne ne redonne l'accès du propriétaire, qui passe par « Mot de passe
  * oublié ».
- * - La personne est là : elle tape elle-même deux fois son nouveau mot de
- *   passe sur l'écran de qui le redonne, jamais affiché, suivant la règle
- *   du mot de passe choisi (voir RegleDuMotDePasse) ; la fenêtre porte un
- *   jeton d'écran, et la même demande répétée après une réponse perdue
- *   reste sans effet.
- * - Elle est absente : son mot de passe redevient son identifiant ; refusé
- *   quand il l'est déjà (rien à remettre), et toujours pour un
- *   collaborateur d'un cabinet, que son identifiant n'ouvre jamais, faute
- *   de poste reconnu (voir PostesReconnus::ouvreLeCompte()), et pour un
- *   expert-comptable de la société, qui n'a jamais son identifiant pour
- *   mot de passe.
+ * - La personne est là (enSaPresence()) : elle tape elle-même deux fois son
+ *   nouveau mot de passe sur l'écran de qui le redonne, jamais affiché,
+ *   suivant la règle du mot de passe choisi (voir RegleDuMotDePasse) ; la
+ *   fenêtre porte un jeton d'écran, et la même demande répétée après une
+ *   réponse perdue reste sans effet.
+ * - Elle est absente (enSonAbsence()) : le compte reçoit un mot de passe
+ *   provisoire tiré au hasard (voir MotsDePasseProvisoires), que l'action
+ *   rend en clair, une seule fois, à qui le remet en main propre ; il ne sert
+ *   qu'une fois, pendant 72 heures, depuis un poste reconnu, et la personne
+ *   le remplace aussitôt par le sien. Un mot de passe provisoire déjà remis
+ *   et pas encore utilisé est remplacé par le nouveau : l'ancien ne sert
+ *   plus. Toujours refusé pour un collaborateur d'un cabinet, qu'aucun mot
+ *   de passe provisoire n'ouvre, faute de poste reconnu (voir
+ *   PostesReconnus::ouvreLeCompte()), et pour un expert-comptable de la
+ *   société, qui n'a jamais de mot de passe provisoire.
  * - Pour un expert-comptable de la société seulement, par un nouveau lien
  *   de 7 jours envoyé à son adresse (voir parUnNouveauLien()) : son mot de
  *   passe d'avant ne sert plus dès l'envoi, remplacé par un mot de passe
@@ -53,17 +58,17 @@ use SensitiveParameter;
  *   lien en cours s'efface et la date de son premier mot de passe choisi
  *   s'écrit, ce qui ferme la correction de son adresse par le
  *   propriétaire.
- * Dans les deux cas, sous le verrou des lignes de l'auteur et du compte
+ * Dans tous les cas, sous le verrou des lignes de l'auteur et du compte
  * relues : toutes les sessions du compte se ferment et son « se souvenir
  * de moi » est coupé ; la date, l'auteur et le mode s'écrivent sur le
  * compte, montrés à la personne à sa connexion suivante (voir
  * SuiviDesConnexions) ; l'entrée d'audit AccesRedonne s'inscrit, sans
- * identifiant ni mot de passe ; le propriétaire est prévenu, dans sa cloche
- * et par e-mail, de chaque accès redonné par un autre, puis du premier mot
- * de passe que la personne choisit ensuite (voir
+ * identifiant ni mot de passe, provisoire compris ; le propriétaire est
+ * prévenu, dans sa cloche et par e-mail, de chaque accès redonné par un
+ * autre, puis du premier mot de passe que la personne choisit ensuite (voir
  * ChangerSonMotDePasseAction). Un accès redonné en l'absence d'un
- * administrateur, son mot de passe redevenu son identifiant, lui interdit
- * de recevoir la propriété tant qu'il n'a pas choisi le sien (voir
+ * administrateur, son mot de passe provisoire encore à utiliser, lui
+ * interdit de recevoir la propriété tant qu'il n'a pas choisi le sien (voir
  * DemanderLaTransmissionDeLaProprieteAction::exigerLesConditions()).
  */
 class RedonnerLAccesAction
@@ -72,13 +77,11 @@ class RedonnerLAccesAction
 
     public const MESSAGE_INACTIF = 'L\'accès d\'un compte suspendu ou retiré ne se redonne pas : réactivez-le d\'abord.';
 
-    public const MESSAGE_DEJA_L_IDENTIFIANT = 'Son mot de passe est déjà son identifiant.';
-
     public const MESSAGE_DEJA_REDONNE = 'L\'accès a déjà été redonné.';
 
-    public const MESSAGE_COLLABORATEUR_PRESENT = 'Un collaborateur choisit son mot de passe en votre présence : son identifiant n\'ouvre pas son compte.';
+    public const MESSAGE_COLLABORATEUR_PRESENT = 'Un collaborateur choisit son mot de passe en votre présence : un mot de passe provisoire n\'ouvre pas son compte, faute de poste reconnu.';
 
-    public const MESSAGE_EXPERT_COMPTABLE = 'Un expert-comptable de la société reçoit un nouveau lien à son adresse, ou choisit son mot de passe en votre présence : son identifiant n\'ouvre jamais son compte.';
+    public const MESSAGE_EXPERT_COMPTABLE = 'Un expert-comptable de la société reçoit un nouveau lien à son adresse, ou choisit son mot de passe en votre présence : il n\'a jamais de mot de passe provisoire.';
 
     public const MESSAGE_LIEN_POUR_L_EXPERT_COMPTABLE_SEUL = 'Seul un expert-comptable de la société reçoit un nouveau lien à son adresse.';
 
@@ -87,6 +90,7 @@ class RedonnerLAccesAction
     public const LIENS_PAR_JOUR = 5;
 
     public function __construct(
+        private readonly MotsDePasseProvisoires $provisoires,
         private readonly JournalDesDroits $journalDesDroits,
         private readonly PorteeDesDroits $portee,
         private readonly SessionsDesComptes $sessions,
@@ -96,25 +100,51 @@ class RedonnerLAccesAction
     ) {}
 
     /**
-     * @param  string|null  $motDePasse  le mot de passe que la personne présente tape elle-même ; null en son absence
-     * @param  string|null  $jeton  le jeton de la fenêtre, tiré à son ouverture, en présence de la personne
+     * Redonne l'accès en présence de la personne, qui tape elle-même son
+     * nouveau mot de passe.
+     *
+     * @param  string|null  $jeton  le jeton de la fenêtre, tiré à son ouverture
      * @return bool faux quand la même demande, au même jeton, a déjà redonné l'accès
      *
      * @throws AuthorizationException
      * @throws ValidationException quand le mot de passe tapé ne suit pas la règle
      * @throws LogicException
      */
-    public function handle(User $auteur, User $compte, bool $enPresence, #[SensitiveParameter] ?string $motDePasse = null, ?string $jeton = null): bool
+    public function enSaPresence(User $auteur, User $compte, #[SensitiveParameter] string $motDePasse, ?string $jeton = null): bool
     {
-        if ($enPresence) {
-            RegleDuMotDePasse::exiger((string) $motDePasse, $compte->identifiantDeConnexion(), 'mot_de_passe');
-        }
+        RegleDuMotDePasse::exiger($motDePasse, $compte->identifiantDeConnexion(), 'mot_de_passe');
 
+        return $this->redonner($auteur, $compte, $motDePasse, $jeton)['redonne'];
+    }
+
+    /**
+     * Redonne l'accès en l'absence de la personne : un mot de passe
+     * provisoire tiré au hasard, rendu en clair à qui le remet en main
+     * propre.
+     *
+     * @param  string|null  $jeton  le jeton de la fenêtre, tiré à son ouverture
+     * @return MotDePasseProvisoire|null le mot de passe provisoire, montré une seule fois ; null quand la même demande, au même jeton, a déjà redonné l'accès
+     *
+     * @throws AuthorizationException
+     * @throws LogicException
+     */
+    public function enSonAbsence(User $auteur, User $compte, ?string $jeton = null): ?MotDePasseProvisoire
+    {
+        return $this->redonner($auteur, $compte, null, $jeton)['provisoire'];
+    }
+
+    /**
+     * @return array{redonne: bool, provisoire: MotDePasseProvisoire|null}
+     */
+    private function redonner(User $auteur, User $compte, #[SensitiveParameter] ?string $motDePasse, ?string $jeton): array
+    {
+        $enPresence = $motDePasse !== null;
         $societe = $compte->societe()->firstOrFail();
 
         $parLeProprietaire = false;
-        $redonne = $this->dansLaSociete($societe, PorteeDesDroits::REFUS, function () use ($auteur, $compte, $enPresence, $motDePasse, $jeton, &$parLeProprietaire): bool {
-            return $this->journalDesDroits->sousVerrouDesComptes($auteur, [$compte], function (User $auteurRelu, array $relus) use ($enPresence, $motDePasse, $jeton, &$parLeProprietaire): bool {
+        $provisoire = null;
+        $redonne = $this->dansLaSociete($societe, PorteeDesDroits::REFUS, function () use ($auteur, $compte, $enPresence, $motDePasse, $jeton, &$parLeProprietaire, &$provisoire): bool {
+            return $this->journalDesDroits->sousVerrouDesComptes($auteur, [$compte], function (User $auteurRelu, array $relus) use ($enPresence, $motDePasse, $jeton, &$parLeProprietaire, &$provisoire): bool {
                 [$compteRelu] = $relus;
 
                 if ($this->portee->gereSonEquipe($auteurRelu) && (int) $compteRelu->societe_id === (int) $auteurRelu->societe_id && ! $compteRelu->estActif()) {
@@ -125,8 +155,12 @@ class RedonnerLAccesAction
                     throw new AuthorizationException(PorteeDesDroits::REFUS);
                 }
 
-                if ($enPresence && $jeton !== null && $compteRelu->jeton_acces_redonne === $jeton) {
+                if ($jeton !== null && $compteRelu->jeton_acces_redonne === $jeton) {
                     return false;
+                }
+
+                if ($enPresence) {
+                    MotsDePasseProvisoires::exigerUnAutreQueCeluiQuiAEteRemis($compteRelu, (string) $motDePasse, 'mot_de_passe');
                 }
 
                 if (! $enPresence && $compteRelu->estCollaborateur()) {
@@ -137,18 +171,15 @@ class RedonnerLAccesAction
                     throw new LogicException(self::MESSAGE_EXPERT_COMPTABLE);
                 }
 
-                if (! $enPresence && $compteRelu->mot_de_passe_est_l_identifiant) {
-                    throw new LogicException(self::MESSAGE_DEJA_L_IDENTIFIANT);
-                }
+                $provisoire = $enPresence ? null : $this->provisoires->tirer();
 
                 $compteRelu->forceFill([
-                    'password' => $enPresence ? (string) $motDePasse : (string) $compteRelu->identifiantDeConnexion(),
-                    'mot_de_passe_est_l_identifiant' => ! $enPresence,
+                    ...($provisoire === null ? MotsDePasseProvisoires::colonnesDuMotDePasseChoisi((string) $motDePasse) : MotsDePasseProvisoires::colonnesDuProvisoire($provisoire)),
                     'acces_redonne_le' => now(),
                     'acces_redonne_par' => $auteurRelu->getKey(),
                     'acces_redonne_mode' => $enPresence ? ModeDAccesRedonne::Presence : ModeDAccesRedonne::Absence,
                     'signaler_le_prochain_mot_de_passe' => ! $auteurRelu->estProprietaire(),
-                    'jeton_acces_redonne' => $enPresence ? $jeton : null,
+                    'jeton_acces_redonne' => $jeton,
                 ])->save();
 
                 if ($compteRelu->estExpertComptable()) {
@@ -172,13 +203,13 @@ class RedonnerLAccesAction
         });
 
         if (! $redonne) {
-            return false;
+            return ['redonne' => false, 'provisoire' => null];
         }
 
         $compte->refresh();
         $this->prevenirLeProprietaire($societe, $auteur, $compte, $parLeProprietaire, $enPresence ? ModeDAccesRedonne::Presence : ModeDAccesRedonne::Absence);
 
-        return true;
+        return ['redonne' => true, 'provisoire' => $provisoire];
     }
 
     /**
@@ -228,8 +259,7 @@ class RedonnerLAccesAction
 
                 $this->debit->verifier($auteurRelu);
                 $compteRelu->forceFill([
-                    'password' => Str::password(64),
-                    'mot_de_passe_est_l_identifiant' => false,
+                    ...MotsDePasseProvisoires::colonnesSansMotDePasse(),
                     'acces_redonne_le' => now(),
                     'acces_redonne_par' => $auteurRelu->getKey(),
                     'acces_redonne_mode' => ModeDAccesRedonne::Lien,
@@ -285,7 +315,7 @@ class RedonnerLAccesAction
                 'Accès redonné',
                 "{$auteur->name} a redonné l'accès de {$compte->name}, ".$mode->phraseAuProprietaire().match ($mode) {
                     ModeDAccesRedonne::Presence => ' : la personne a tapé elle-même son nouveau mot de passe.',
-                    ModeDAccesRedonne::Absence => ' : son mot de passe est redevenu son identifiant.',
+                    ModeDAccesRedonne::Absence => ' : un mot de passe provisoire lui a été remis, qu\'il remplacera à sa première connexion.',
                     ModeDAccesRedonne::Lien => ' : elle choisira son mot de passe par ce lien.',
                 }.' Vous serez prévenu du premier mot de passe que cette personne choisira ensuite.',
                 MembreResource::getUrl('view', ['record' => $compte], panel: 'societe', tenant: $societe),

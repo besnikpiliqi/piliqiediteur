@@ -195,7 +195,7 @@ class HeureRepeteeTest extends TestCase
         $this->seConnecter($identifiant, self::MOT_DE_PASSE_CHOISI)->assertHasNoErrors();
 
         $this->travelTo(self::enUtc('2026-10-25 01:10:00'));
-        app(RedonnerLAccesAction::class)->handle($responsable, $vendeur->refresh(), true, 'nouveau-mot-de-passe-1', (string) Str::uuid());
+        app(RedonnerLAccesAction::class)->enSaPresence($responsable, $vendeur->refresh(), 'nouveau-mot-de-passe-1', (string) Str::uuid());
         $this->travelTo(self::enUtc('2026-10-25 01:20:00'));
         $this->seConnecter($identifiant, 'nouveau-mot-de-passe-1')->assertHasNoErrors();
 

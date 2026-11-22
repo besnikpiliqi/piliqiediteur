@@ -342,7 +342,7 @@ class PanneauSocieteTest extends TestCase
             fn () => app(ModifierMembreAction::class)->handle($proprietaire, $vendeur, RoleMagasin::Responsable),
             fn () => app(ChangerStatutCompteAction::class)->reintegrer($proprietaire, $vendeurRetire, RoleMagasin::Vendeur),
             fn () => app(ChangerLeRoleDeSocieteAction::class)->versAdministrateur($proprietaire, $vendeur, null, [], []),
-            fn () => app(RedonnerLAccesAction::class)->handle($proprietaire, $vendeur, false),
+            fn () => app(RedonnerLAccesAction::class)->enSonAbsence($proprietaire, $vendeur),
             fn () => app(CreerAdministrateurAction::class)->handle($proprietaire, $societe, ['name' => 'Alice'], null, [], []),
             fn () => app(DemanderLaTransmissionDeLaProprieteAction::class)->handle($proprietaire, $administrateur, 'password'),
             fn () => app(DesignerUnCabinetAction::class)->handle($proprietaire, $societe, $cabinet),

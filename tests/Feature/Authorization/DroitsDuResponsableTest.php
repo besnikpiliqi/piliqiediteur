@@ -100,7 +100,7 @@ class DroitsDuResponsableTest extends TestCase
             'désigner un cabinet' => fn () => app(DesignerUnCabinetAction::class)->handle($responsable, $societe, $autreCabinet),
             'mettre fin au lien' => fn () => app(MettreFinAuLienAction::class)->handle($responsable, $lien),
             'suspendre un compte du cabinet' => fn () => app(ChangerStatutCompteAction::class)->suspendre($responsable, $collaborateur),
-            'redonner l\'accès à un compte du cabinet' => fn () => app(RedonnerLAccesAction::class)->handle($responsable, $collaborateur, false),
+            'redonner l\'accès à un compte du cabinet' => fn () => app(RedonnerLAccesAction::class)->enSonAbsence($responsable, $collaborateur),
         ];
 
         foreach ($gestes as $geste => $appel) {

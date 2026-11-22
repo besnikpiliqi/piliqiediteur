@@ -300,9 +300,8 @@ final class PorteeDesDroits
 
     /**
      * Peut-il faire « Afficher l'identifiant », geste inscrit au journal
-     * d'audit et signalé au propriétaire quand le mot de passe du compte
-     * est encore son identifiant (voir AfficherLIdentifiantAction) ? Un
-     * administrateur qui peut redonner l'accès à ce compte.
+     * d'audit (voir AfficherLIdentifiantAction) ? Un administrateur qui
+     * peut redonner l'accès à ce compte.
      */
     public function peutAfficherLIdentifiant(User $auteur, User $compte): bool
     {
@@ -544,8 +543,8 @@ final class PorteeDesDroits
      * Les comptes qu'il peut nommer responsables de ce magasin : les
      * vendeurs et les observateurs actifs de ce magasin, jamais un autre
      * compte que le sien, ni rien quand il ne peut pas y nommer un
-     * responsable. Un compte dont le mot de passe est encore son identifiant
-     * se propose, la fenêtre l'avertissant.
+     * responsable. Un compte qui n'a pas encore choisi son mot de passe se
+     * propose, la fenêtre le disant.
      *
      * @return Builder<User>
      */

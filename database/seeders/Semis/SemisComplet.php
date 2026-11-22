@@ -325,7 +325,7 @@ final class SemisComplet
             $this->administrateur('commerce', 'Thomas Girard', ['halles', 'republique'], PermissionRegistry::deVente());
             $this->membre('halles', 'Camille Laurent', RoleMagasin::Responsable);
             $this->membre('halles', 'Lucas Moreau', RoleMagasin::Vendeur);
-            $this->membre('halles', 'Inès Garcia', RoleMagasin::Vendeur, gardeSonIdentifiant: true);
+            $this->membre('halles', 'Inès Garcia', RoleMagasin::Vendeur);
             $this->reconnaitreUnPoste('halles', 'Camille Laurent', 'Caisse des Halles');
             $this->membre('republique', 'Hugo Lefebvre', RoleMagasin::Responsable);
             $this->membre('republique', 'Lucas Moreau', RoleMagasin::Vendeur, cle: 'Lucas Moreau (République)');
@@ -347,6 +347,7 @@ final class SemisComplet
         if ($this->seme('cabinet')) {
             $this->collaborateur('Paul Lefèvre');
             $this->collaborateur('Emma Rousseau');
+            $this->collaborateur('Gabriel Faure', choisitSonMotDePasse: false);
             $this->lierLeCabinetA('commerce');
             $this->confier('Paul Lefèvre', 'commerce');
         } elseif ($this->seme('commerce')) {
@@ -370,7 +371,7 @@ final class SemisComplet
             $this->administrateur('client', 'Bastien Leroy', ['epicerie'], PermissionRegistry::deVente());
             $this->membre('epicerie', 'Nicolas Lemoine', RoleMagasin::Responsable);
             $this->membre('epicerie', 'Chloé Bernard', RoleMagasin::Vendeur);
-            $this->membre('epicerie', 'Mehdi Brahimi', RoleMagasin::Vendeur);
+            $this->membre('epicerie', 'Mehdi Brahimi', RoleMagasin::Vendeur, gardeSonMotDePasseProvisoire: true);
         }
 
         $this->horloge->aller(2, '10:00');
@@ -477,7 +478,7 @@ final class SemisComplet
             'Thomas Girard' => 'Administrateur qui vend dans deux magasins : sa caisse aux Halles puis à la République, ses relevés ; sans la case des graphiques, il ne voit pas « Écart des prix d\'achat »',
             'Camille Laurent' => 'Responsable des Halles : « À faire » (exports sans preuve, détaxe, devis), graphiques dont « Écart des prix d\'achat » par mois (set de table acheté de cinq façons, boule de Noël d\'un mois à venir, plateau renommé), charges du magasin, vente sans stock, facture rejetée par la plateforme agréée et facture non transmise (incident technique), envoi en échec et envoi en attente',
             'Lucas Moreau' => 'Vendeur des Halles : ses tickets, sa caisse fermée par sa responsable, ses factures d\'export et de détaxe',
-            'Inès Garcia' => 'Vendeuse des Halles qui garde son identifiant : connexion seulement depuis le poste reconnu « Caisse des Halles »',
+            'Inès Garcia' => 'Vendeuse des Halles : sa responsable lui a redonné l\'accès la veille, en son absence ; son mot de passe provisoire vaut encore (72 heures), une seule fois, depuis le poste reconnu « Caisse des Halles » : votre navigateur n\'est pas ce poste',
             'Hugo Lefebvre' => 'Responsable de la République : inventaire d\'ouverture, réassorts, avoir du Studio Nord ; saisit la lampe qui perd 210 €, le cadre photo archivé et la théière ; sans la case des graphiques, il ne voit pas « Écart des prix d\'achat »',
             'Lucas Moreau (République)' => 'La même personne que le vendeur des Halles, avec un autre compte, promue responsable de la République',
             'Sarah Petit' => 'Vendeuse de la République qui voit les factures de toute l\'équipe',
@@ -486,6 +487,7 @@ final class SemisComplet
             'Claire Dubois' => 'Responsable du magasin de services : prestations à l\'étranger (autoliquidation, hors UE), mairie, prélèvement',
             'Maxime Henry' => 'Vendeur de services : ses tickets à la caisse',
             'Julie Mercier' => 'Vendeuse de services : ses tickets à la caisse',
+            'Gabriel Faure' => 'Collaborateur du cabinet créé, qui n\'a pas encore choisi son mot de passe : aucun mot de passe provisoire n\'ouvre un compte de cabinet, le propriétaire du cabinet le lui fait choisir en sa présence (« Redonner l\'accès ») ; aucun client ne lui est confié',
             'Paul Lefèvre' => 'Collaborateur du cabinet : Maison Ferrand confiée (ses six magasins), charges à valider et validées, graphiques du client dont « Écart des prix d\'achat »',
             'Emma Rousseau' => 'Collaboratrice du cabinet : Épicerie Lemoine confiée (seul magasin ouvert au cabinet, sans les consultations d\'achats : elle ne voit pas « Écart des prix d\'achat » de ses réassorts)',
             'propriétaire client' => 'Société née de l\'invitation du cabinet : cabinet lié, magasins ouverts au cabinet',
@@ -493,16 +495,16 @@ final class SemisComplet
             'Bastien Leroy' => 'Administrateur qui vend à l\'Épicerie',
             'Nicolas Lemoine' => 'Responsable de l\'Épicerie : équipe (vendeuse suspendue puis réactivée, accès redonné)',
             'Chloé Bernard' => 'Vendeuse de l\'Épicerie : ses tickets et ses relevés',
-            'Mehdi Brahimi' => 'Vendeur de l\'Épicerie : ses tickets et ses relevés',
+            'Mehdi Brahimi' => 'Vendeur de l\'Épicerie qui n\'a jamais utilisé son mot de passe provisoire : il a expiré (72 heures après la création de son compte, il y a plus d\'un an), ses tickets et ses relevés restent ; « Redonner l\'accès » en tire un nouveau',
             'Marc Petit' => 'Expert-comptable déclaré : « Tableau de bord de la société » avec tous ses graphiques affichés (« Tous les graphiques sont affichés »), charges à valider, magasins en lecture ; société de services, sans achats : pas de « Écart des prix d\'achat »',
             'propriétaire inscription' => 'Inscription qui attend le code du courrier : aucune vente avant sa validation',
             'Élodie Fabre' => 'Observatrice des Halles : tout en lecture, aucune vente ; reçoit les alertes de stock (la propriétaire lui a coché « ajuster le stock »)',
             'Victor Blanchard' => 'Observateur du magasin de services',
-            'Margaux Perrin' => 'Observatrice de l\'Épicerie',
+            'Margaux Perrin' => 'Observatrice de l\'Épicerie : son responsable lui a redonné l\'accès l\'avant-veille, en son absence ; son mot de passe provisoire vaut encore (72 heures), mais l\'Épicerie n\'a aucun poste reconnu : la connexion est refusée tant que ce responsable ou le propriétaire n\'a pas reconnu un navigateur',
             'Yanis Morel' => 'Compte suspendu : la connexion est refusée ; ses anciens tickets restent',
             'Bruno Caron' => 'Compte retiré de la société : la connexion est refusée',
             'Anaïs Lambert' => 'Vendeuse retirée puis réintégrée : ses tickets d\'avant et d\'après, le ZIP de ses ventes demandé juste avant son retrait, en échec',
-            'Léna Roussel' => 'Accès redonné en son absence : son mot de passe est redevenu son identifiant',
+            'Léna Roussel' => 'Accès redonné en son absence : son mot de passe provisoire a servi à une première connexion qui n\'a pas fini le choix de son mot de passe ; « Redonner l\'accès » en tire un nouveau',
             'propriétaire comptoir' => 'Cinq magasins : Martinique (8,5 %), Lyon fermé temporairement, Bordeaux rouvert, Nantes cédé, Lille suspendu ; transmission en attente',
             'Gaëlle Hoarau' => 'Administratrice à qui la propriété est proposée (lien pas encore suivi)',
             'Joëlle Marie-Sainte' => 'Responsable de Maison Ferrand Fort-de-France : heure des Antilles, TVA à 8,5 % et 2,1 %, réassorts, loyer à 8,5 % dans les charges, un savon acheté deux fois dont l\'un reçu sans date le dernier soir d\'un mois (rangé au jour de sa validation en Martinique) ; sans la case des graphiques, elle ne voit pas « Écart des prix d\'achat »',
@@ -786,19 +788,20 @@ final class SemisComplet
     /**
      * Un membre d'un magasin, créé par le propriétaire pour ce seul magasin
      * (voir CreerMembreAction), avec les cases du modèle de son rôle ; il
-     * choisit ensuite son mot de passe, sauf celui qui garde son
-     * identifiant, qui n'ouvre alors son compte que depuis un poste
-     * reconnu du magasin.
+     * choisit ensuite son mot de passe, sauf celui qui garde son mot de passe
+     * provisoire, tiré au hasard à la création du compte, que la liste des
+     * comptes donne : il ne sert qu'une fois, depuis un poste reconnu du
+     * magasin, tant que son délai n'est pas passé.
      */
-    public function membre(string $magasin, string $nom, RoleMagasin $role, bool $gardeSonIdentifiant = false, ?string $cle = null): User
+    public function membre(string $magasin, string $nom, RoleMagasin $role, bool $gardeSonMotDePasseProvisoire = false, ?string $cle = null): User
     {
         $leMagasin = $this->magasin($magasin);
         $proprietaire = $this->compte('propriétaire '.$this->cleDeLaSocieteDe($leMagasin));
         $compte = app(TenantContext::class)->runAs($leMagasin, fn (): User => app(CreerMembreAction::class)->handle($proprietaire, $leMagasin, ['name' => $nom], $role, null, GestesDuMagasin::jeton()));
         $libelle = $role->getLabel();
 
-        if ($gardeSonIdentifiant) {
-            $this->liste->noter($compte, $this->nomsDesSocietes[$magasin], (string) $leMagasin->nom, $libelle, null);
+        if ($gardeSonMotDePasseProvisoire) {
+            $this->liste->noter($compte, $this->nomsDesSocietes[$magasin], (string) $leMagasin->nom, $libelle, $compte->motDePasseProvisoire?->valeur());
 
             return $this->comptes[$cle ?? $nom] = $compte->refresh();
         }
@@ -809,8 +812,8 @@ final class SemisComplet
     /**
      * Ce responsable reconnaît le poste de caisse de son magasin, sous ce
      * nom, depuis son navigateur (voir PostesReconnus::reconnaitre()) : un
-     * compte dont le mot de passe est encore son identifiant peut s'y
-     * connecter. Le témoin du poste reste à ce poste du magasin, qu'aucun
+     * compte qui n'a pas encore choisi son mot de passe peut s'y connecter
+     * avec son mot de passe provisoire. Le témoin du poste reste à ce poste du magasin, qu'aucun
      * navigateur de l'éditeur ne reçoit.
      */
     private function reconnaitreUnPoste(string $magasin, string $responsable, string $nom): void
@@ -848,14 +851,24 @@ final class SemisComplet
     /**
      * Un collaborateur du cabinet, créé par son propriétaire (voir
      * CreerCollaborateurAction), qui choisit son mot de passe en sa
-     * présence, sur l'écran du propriétaire (voir RedonnerLAccesAction).
+     * présence, sur l'écran du propriétaire (voir RedonnerLAccesAction) ;
+     * celui qui ne l'a pas encore choisi n'a aucun mot de passe utilisable,
+     * et la liste des comptes le dit.
      */
-    private function collaborateur(string $nom): void
+    private function collaborateur(string $nom, bool $choisitSonMotDePasse = true): void
     {
         $proprietaire = $this->proprietaire('cabinet');
         $compte = $this->horsDeToutContexte(fn (): User => app(CreerCollaborateurAction::class)->handle($proprietaire, $this->societe('cabinet'), ['name' => $nom], GestesDuMagasin::jeton()));
+
+        if (! $choisitSonMotDePasse) {
+            $this->comptes[$nom] = $compte->refresh();
+            $this->liste->noter($compte, $this->nomDeLaSociete('cabinet'), '', 'Collaborateur du cabinet', null);
+
+            return;
+        }
+
         $motDePasse = $this->motsDePasse->pour((string) $compte->identifiantDeConnexion());
-        $this->horsDeToutContexte(fn (): bool => app(RedonnerLAccesAction::class)->handle($proprietaire, $compte, true, $motDePasse, GestesDuMagasin::jeton()));
+        $this->horsDeToutContexte(fn (): bool => app(RedonnerLAccesAction::class)->enSaPresence($proprietaire, $compte, $motDePasse, GestesDuMagasin::jeton()));
         $this->comptes[$nom] = $compte->refresh();
         $this->liste->noter($compte, $this->nomDeLaSociete('cabinet'), '', 'Collaborateur du cabinet', $motDePasse);
     }

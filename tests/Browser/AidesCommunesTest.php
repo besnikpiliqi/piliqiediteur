@@ -74,16 +74,23 @@ test('un geste sur un élément absent échoue au bout de son délai : le serveu
         ->toThrow(AssertionFailedError::class, 'Timeout 500ms exceeded');
 });
 
-test('un vendeur dont le mot de passe est encore son identifiant se connecte depuis un poste reconnu', function () {
+test('un vendeur au mot de passe provisoire se connecte depuis un poste reconnu et choisit aussitôt le sien', function () {
     $magasin = $this->ouvrirUneSociete();
-    [$vendeur, $identifiant] = $this->compteAuMotDePasseIdentifiant($magasin, RoleMagasin::Vendeur);
+    [$vendeur, $provisoire] = $this->compteAuMotDePasseProvisoire($magasin, RoleMagasin::Vendeur);
     $responsable = $this->responsable($magasin);
     $onglet = $this->naviguer('/app/login');
 
     $this->reconnaitreCeNavigateur($onglet, $magasin, $responsable, 'Caisse du comptoir');
-    $this->seConnecter($vendeur, $identifiant, onglet: $onglet);
+    $this->seConnecter($vendeur, $provisoire, onglet: $onglet);
 
-    expect($onglet->chemin())->toBe('/app/'.$magasin->uuid);
+    expect($onglet->chemin())->toBe('/app/mot-de-passe');
+    $onglet->voir('Vous vous êtes connecté avec un mot de passe provisoire, qui ne sert qu\'une fois')
+        ->remplir('Votre nouveau mot de passe', self::MOT_DE_PASSE_CHOISI)
+        ->remplir('Confirmez-le', self::MOT_DE_PASSE_CHOISI)
+        ->cliquerSur('Choisir mon mot de passe')
+        ->attendreQue('location.pathname === '.Navigation::texte('/app/'.$magasin->uuid), 'le choix du mot de passe n\'a pas mené au magasin')
+        ->attendre()
+        ->verifier();
 });
 
 test('une erreur du serveur fait échouer la vérification', function () {

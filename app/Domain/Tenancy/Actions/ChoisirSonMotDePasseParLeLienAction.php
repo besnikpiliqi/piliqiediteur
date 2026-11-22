@@ -3,6 +3,7 @@
 namespace App\Domain\Tenancy\Actions;
 
 use App\Domain\Tenancy\Services\JetonsDuLien;
+use App\Domain\Tenancy\Services\MotsDePasseProvisoires;
 use App\Domain\Tenancy\Services\SessionsDesComptes;
 use App\Domain\Tenancy\Support\RegleDuMotDePasse;
 use App\Models\User;
@@ -48,8 +49,7 @@ class ChoisirSonMotDePasseParLeLienAction
             }
 
             $relu->forceFill([
-                'password' => $nouveauMotDePasse,
-                'mot_de_passe_est_l_identifiant' => false,
+                ...MotsDePasseProvisoires::colonnesDuMotDePasseChoisi($nouveauMotDePasse),
                 'email_verified_at' => now(),
             ])->save();
             $this->sessions->fermer($relu);

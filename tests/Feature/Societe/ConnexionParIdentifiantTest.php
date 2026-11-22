@@ -8,9 +8,9 @@ use App\Domain\Cabinets\Actions\CreerCollaborateurAction;
 use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
 use App\Domain\Tenancy\Actions\CloreLInscriptionAction;
 use App\Domain\Tenancy\Actions\CreerAdministrateurAction;
-use App\Domain\Tenancy\Actions\ModifierMembreAction;
 use App\Domain\Tenancy\Actions\RedonnerLAccesAction;
 use App\Domain\Tenancy\Enums\ActionAuditee;
+use App\Domain\Tenancy\Enums\EtatDuMotDePasse;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Identifiant;
@@ -18,10 +18,12 @@ use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\PosteReconnu;
 use App\Domain\Tenancy\Notifications\AvisDeLEquipe;
 use App\Domain\Tenancy\Services\LimitationDesConnexions;
+use App\Domain\Tenancy\Services\MotsDePasseProvisoires;
 use App\Domain\Tenancy\Services\PostesConnus;
 use App\Domain\Tenancy\Services\PostesReconnus;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\IdentifiantDeConnexion;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Filament\App\Pages\Auth\ChoisirSonMotDePasse;
 use App\Filament\App\Pages\Auth\Connexion;
 use App\Filament\App\Resources\FactureResource;
@@ -227,23 +229,77 @@ class ConnexionParIdentifiantTest extends TestCase
     }
 
     /**
-     * Un compte dont le mot de passe est encore l'identifiant se connecte
-     * depuis un poste reconnu de son magasin, et reçoit à sa première
-     * connexion l'alerte qui lui conseille d'en choisir un.
+     * Un compte au mot de passe provisoire se connecte depuis un poste
+     * reconnu de son magasin, une seule fois : cette première connexion le
+     * mène aussitôt au choix de son mot de passe (pour un vendeur comme pour
+     * tout autre rôle), et le mot de passe provisoire ne sert plus ensuite,
+     * avec la même réponse qu'un mot de passe faux. L'identifiant, lui,
+     * n'est jamais un mot de passe.
      */
-    public function test_un_compte_dont_le_mot_de_passe_est_l_identifiant_se_connecte_et_recoit_l_alerte_a_sa_premiere_connexion(): void
+    public function test_un_compte_au_mot_de_passe_provisoire_se_connecte_une_seule_fois_depuis_un_poste_reconnu(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        [$compte, $identifiant] = $this->compteAuMotDePasseIdentifiant($magasin, RoleMagasin::Vendeur);
+        [$compte, $provisoire] = $this->compteAuMotDePasseProvisoire($magasin, RoleMagasin::Vendeur);
+        $identifiant = (string) $compte->identifiantDeConnexion();
         $poste = $this->reconnaitreUnPoste($magasin);
 
-        $this->seConnecter($identifiant, $identifiant, postes: $poste)
+        $this->assertSame([Connexion::MESSAGE_ECHEC], $this->seConnecter($identifiant, $identifiant, postes: $poste)->errors()->get('data.login'));
+        $this->assertGuest();
+
+        $this->seConnecter($identifiant, $provisoire, postes: $poste)
             ->assertHasNoErrors()
-            ->assertNotified('Changez votre mot de passe');
+            ->assertNotNotified('Changez votre mot de passe');
 
         $this->assertAuthenticatedAs($compte);
-        $this->assertNotNull($compte->refresh()->premiere_connexion_le);
-        $this->seConnecter($identifiant, $identifiant, postes: $poste)->assertHasNoErrors()->assertNotNotified('Changez votre mot de passe');
+        $compte->refresh();
+        $this->assertNotNull($compte->premiere_connexion_le);
+        $this->assertNotNull($compte->mot_de_passe_provisoire_utilise_le);
+        $this->assertTrue($compte->doitChoisirSonMotDePasse());
+        $this->assertTrue(session()->get(ExigerSonPropreMotDePasse::A_LA_CONNEXION));
+
+        $this->assertSame([Connexion::MESSAGE_ECHEC], $this->seConnecter($identifiant, $provisoire, postes: $poste)->errors()->get('data.login'));
+        $this->assertGuest();
+    }
+
+    /**
+     * Le mot de passe provisoire se tape comme la personne le lit sur son
+     * papier : en majuscules ou avec des espaces autour, il ouvre le compte ;
+     * passé son délai, il n'ouvre plus rien, avec la même réponse qu'un mot
+     * de passe faux, et « Redonner l'accès » en tire un nouveau.
+     */
+    public function test_le_mot_de_passe_provisoire_se_tape_sans_tenir_compte_de_la_casse_et_expire_apres_soixante_douze_heures(): void
+    {
+        $this->travelTo(self::aParis('2026-11-10 10:00:00'));
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        [$compte, $provisoire] = $this->compteAuMotDePasseProvisoire($magasin, RoleMagasin::Vendeur);
+        $identifiant = (string) $compte->identifiantDeConnexion();
+        $poste = $this->reconnaitreUnPoste($magasin);
+
+        $this->travelTo(self::aParis('2026-11-13 10:00:01'));
+        $this->assertSame([Connexion::MESSAGE_ECHEC], $this->seConnecter($identifiant, $provisoire, postes: $poste)->errors()->get('data.login'));
+        $this->assertGuest();
+        $this->assertSame(EtatDuMotDePasse::ProvisoireExpire, $compte->refresh()->etatDuMotDePasse());
+
+        $this->travelTo(self::aParis('2026-11-13 09:59:59'));
+        $this->assertSame(EtatDuMotDePasse::ProvisoireValable, $compte->refresh()->etatDuMotDePasse());
+        $this->seConnecter($identifiant, ' '.strtoupper($provisoire).' ', postes: $poste)->assertHasNoErrors();
+        $this->assertAuthenticatedAs($compte);
+    }
+
+    /**
+     * Deux connexions simultanées avec le même mot de passe provisoire n'en
+     * ouvrent qu'une : la consommation est un seul geste atomique.
+     */
+    public function test_le_mot_de_passe_provisoire_ne_se_consomme_qu_une_fois(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        [$compte] = $this->compteAuMotDePasseProvisoire($magasin, RoleMagasin::Vendeur);
+        $consommation = app(MotsDePasseProvisoires::class);
+
+        $this->assertTrue($consommation->consommer($compte));
+        $this->assertFalse($consommation->consommer($compte));
+        $this->assertFalse($consommation->consommer($compte->refresh()));
+        $this->assertSame(EtatDuMotDePasse::ProvisoireUtilise, $compte->refresh()->etatDuMotDePasse());
     }
 
     /**
@@ -420,7 +476,8 @@ class ConnexionParIdentifiantTest extends TestCase
     public function test_un_temoin_de_poste_envoye_en_tableau_compte_comme_un_temoin_absent(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        [, $identifiant] = $this->compteAuMotDePasseIdentifiant($magasin, RoleMagasin::Vendeur);
+        [$sansChoix, $provisoire] = $this->compteAuMotDePasseProvisoire($magasin, RoleMagasin::Vendeur);
+        $identifiant = (string) $sansChoix->identifiantDeConnexion();
         $prudent = $this->membre($magasin, RoleMagasin::Vendeur);
         $this->flushSession();
         auth()->logout();
@@ -430,8 +487,8 @@ class ConnexionParIdentifiantTest extends TestCase
         $this->assertNotNull($temoinDeSession);
         $this->withCredentials()->withUnencryptedCookies([PostesConnus::TEMOIN => [$temoinDeSession->getValue()], PostesReconnus::TEMOIN => [$temoinDeSession->getValue()]]);
 
-        $refus = $this->requeteLivewire($instantane, ['data.login' => $identifiant, 'data.password' => $identifiant], 'authenticate')->assertOk();
-        $this->assertSame(Connexion::MESSAGE_ECHEC.' '.Connexion::MESSAGE_POSTE, $this->erreurDeConnexion($refus));
+        $refus = $this->requeteLivewire($instantane, ['data.login' => $identifiant, 'data.password' => $provisoire], 'authenticate')->assertOk();
+        $this->assertSame(Connexion::MESSAGE_ECHEC, $this->erreurDeConnexion($refus));
         $this->assertGuest();
 
         $this->requeteLivewire($instantane, ['data.login' => (string) $prudent->identifiantDeConnexion(), 'data.password' => self::MOT_DE_PASSE_CHOISI], 'authenticate')->assertOk();
@@ -538,18 +595,19 @@ class ConnexionParIdentifiantTest extends TestCase
     }
 
     /**
-     * Tant que le mot de passe d'un compte est son identifiant, il n'ouvre
-     * ce compte que depuis un poste reconnu, non retiré, de son magasin,
-     * avec la même réponse qu'un mot de passe faux ailleurs (un poste d'un
-     * autre magasin, un poste retiré, aucun poste) ; un mot de passe choisi
-     * ouvre le compte de partout. Seuls le propriétaire et un responsable du
-     * magasin reconnaissent un poste, depuis les paramètres du magasin.
+     * Un mot de passe provisoire n'ouvre le compte que depuis un poste
+     * reconnu, non retiré, de son magasin, avec la même réponse qu'un mot de
+     * passe faux ailleurs (un poste d'un autre magasin, un poste retiré,
+     * aucun poste) ; un mot de passe choisi ouvre le compte de partout. Seuls
+     * le propriétaire et un responsable du magasin reconnaissent un poste,
+     * depuis les paramètres du magasin.
      */
-    public function test_le_mot_de_passe_egal_a_l_identifiant_n_ouvre_le_compte_que_depuis_un_poste_reconnu_du_magasin(): void
+    public function test_le_mot_de_passe_provisoire_n_ouvre_le_compte_que_depuis_un_poste_reconnu_du_magasin(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $autre = $this->ouvrirUnAutreMagasin($magasin, ['nom' => 'Autre Boutique']);
-        [$vendeur, $identifiant] = $this->compteAuMotDePasseIdentifiant($magasin, RoleMagasin::Vendeur);
+        [$vendeur, $provisoire] = $this->compteAuMotDePasseProvisoire($magasin, RoleMagasin::Vendeur);
+        $identifiant = (string) $vendeur->identifiantDeConnexion();
         $prudent = $this->membre($magasin, RoleMagasin::Vendeur);
         $posteDAilleurs = $this->reconnaitreUnPoste($autre);
         $responsable = $this->responsable($magasin);
@@ -561,16 +619,18 @@ class ConnexionParIdentifiantTest extends TestCase
         $this->assertSame(['Caisse 1', (int) $responsable->id], [$reconnu->nom, (int) $reconnu->reconnu_par]);
 
         foreach ([[], $posteDAilleurs] as $temoin) {
-            $this->assertSame([Connexion::MESSAGE_ECHEC.' '.Connexion::MESSAGE_POSTE], $this->seConnecter($identifiant, $identifiant, postes: $temoin)->errors()->get('data.login'));
+            $this->assertSame([Connexion::MESSAGE_ECHEC], $this->seConnecter($identifiant, $provisoire, postes: $temoin)->errors()->get('data.login'));
             $this->assertGuest();
         }
-        $this->seConnecter($identifiant, $identifiant, postes: $poste)->assertHasNoErrors();
+        $this->assertNull($vendeur->refresh()->mot_de_passe_provisoire_utilise_le, 'Un essai refusé ne consomme pas le mot de passe provisoire.');
+        $this->seConnecter($identifiant, $provisoire, postes: $poste)->assertHasNoErrors();
         $this->assertAuthenticatedAs($vendeur);
         $this->seConnecter((string) $prudent->identifiantDeConnexion(), self::MOT_DE_PASSE_CHOISI)->assertHasNoErrors();
         $this->assertAuthenticatedAs($prudent);
 
+        [$retire, $provisoireDuRetire] = $this->compteAuMotDePasseProvisoire($magasin, RoleMagasin::Vendeur);
         app(PostesReconnus::class)->retirer($this->proprietaireDe($magasin), $reconnu);
-        $this->seConnecter($identifiant, $identifiant, postes: $poste)->assertHasErrors('data.login');
+        $this->seConnecter((string) $retire->identifiantDeConnexion(), $provisoireDuRetire, postes: $poste)->assertHasErrors('data.login');
         $this->assertGuest();
 
         $this->dansLeMagasin($magasin, $prudent);
@@ -605,41 +665,48 @@ class ConnexionParIdentifiantTest extends TestCase
     }
 
     /**
-     * Un responsable ou un administrateur dont le mot de passe est encore
-     * son identifiant choisit le sien à sa première connexion, avant toute
-     * autre page, et aucune requête Livewire d'un autre écran ne passe ; un
-     * collaborateur d'un cabinet lié n'ouvre jamais son compte avec son
-     * identifiant, même depuis un poste reconnu du client, et choisit le
-     * sien en sa présence sur l'écran du propriétaire du cabinet ; un
-     * vendeur garde son identifiant pour mot de passe tant qu'il le veut.
+     * Tout compte qui se connecte avec son mot de passe provisoire (un
+     * responsable, un administrateur, un vendeur) choisit le sien à sa
+     * première connexion, avant toute autre page, et aucune requête Livewire
+     * d'un autre écran ne passe ; un mot de passe courant ou égal à
+     * l'identifiant est refusé ; un collaborateur d'un cabinet lié n'a aucun
+     * mot de passe provisoire, qu'aucun poste reconnu du client n'ouvrirait,
+     * et choisit le sien en présence du propriétaire du cabinet.
      */
-    public function test_un_responsable_un_administrateur_ou_un_collaborateur_choisit_son_mot_de_passe_avant_d_agir(): void
+    public function test_tout_compte_qui_se_connecte_avec_son_mot_de_passe_provisoire_choisit_le_sien_avant_d_agir(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $proprietaire = $this->proprietaireDe($magasin);
         $poste = $this->reconnaitreUnPoste($magasin);
-        $comptes = [
-            $this->compteAuMotDePasseIdentifiant($magasin, RoleMagasin::Responsable)[0],
-            app(CreerAdministrateurAction::class)->handle($proprietaire, $magasin->societe, ['name' => 'Alice Admin'], null, PermissionRegistry::modeleDeLAdministrateur(TypeDActivite::Commerce), []),
-        ];
+        $administrateur = app(CreerAdministrateurAction::class)->handle($proprietaire, $magasin->societe, ['name' => 'Alice Admin'], null, PermissionRegistry::modeleDeLAdministrateur(TypeDActivite::Commerce), []);
+        $vendeur = $this->compteAuMotDePasseProvisoire($magasin, RoleMagasin::Vendeur);
+        $responsable = $this->compteAuMotDePasseProvisoire($magasin, RoleMagasin::Responsable);
 
-        foreach ($comptes as $compte) {
+        foreach ([[$administrateur, ValeurRequise::de($administrateur->motDePasseProvisoire, 'le mot de passe provisoire de l\'administrateur')->valeur()], $responsable, $vendeur] as [$compte, $provisoire]) {
             $identifiant = (string) $compte->identifiantDeConnexion();
-            $this->seConnecter($identifiant, $identifiant, postes: $poste)->assertHasNoErrors();
+            $this->seConnecter($identifiant, $provisoire, postes: $poste)->assertHasNoErrors();
             $this->assertAuthenticatedAs($compte);
             $this->assertTrue($compte->refresh()->doitChoisirSonMotDePasse(), $compte->name);
 
             $this->get(FactureResource::getUrl('index', tenant: $magasin))->assertRedirect(route('filament.app.choisir-son-mot-de-passe'));
-            Livewire::test(ChoisirSonMotDePasse::class)
-                ->fillForm(['password' => $identifiant, 'passwordConfirmation' => $identifiant])
-                ->call('choisir')
-                ->assertHasErrors(['data.password']);
+
+            foreach ([$identifiant, $provisoire, 'motdepasse2026'] as $refuse) {
+                Livewire::test(ChoisirSonMotDePasse::class)
+                    ->fillForm(['password' => $refuse, 'passwordConfirmation' => $refuse])
+                    ->call('choisir')
+                    ->assertHasErrors(['data.password']);
+            }
+
             Livewire::test(ChoisirSonMotDePasse::class)
                 ->fillForm(['password' => self::MOT_DE_PASSE_CHOISI, 'passwordConfirmation' => self::MOT_DE_PASSE_CHOISI])
                 ->call('choisir')
                 ->assertHasNoErrors();
 
-            $this->assertFalse($compte->refresh()->mot_de_passe_est_l_identifiant, $compte->name);
+            $compte->refresh();
+            $this->assertTrue($compte->aChoisiSonMotDePasse(), $compte->name);
+            $this->assertSame(EtatDuMotDePasse::Choisi, $compte->etatDuMotDePasse());
+            $this->assertNull($compte->mot_de_passe_provisoire_expire_le);
+            $this->assertFalse($compte->doitChoisirSonMotDePasse());
             $this->get(FactureResource::getUrl('index', tenant: $magasin))->assertOk();
         }
 
@@ -648,26 +715,24 @@ class ConnexionParIdentifiantTest extends TestCase
         $collaborateur = app(CreerCollaborateurAction::class)->handle($this->proprietaireDuCabinet($cabinet), $cabinet, ['name' => 'Paul Lefèvre']);
         $this->confier($collaborateur, [$magasin]);
         $identifiant = (string) $collaborateur->identifiantDeConnexion();
+        $this->assertNull($collaborateur->motDePasseProvisoire);
+        $this->assertSame(EtatDuMotDePasse::Aucun, $collaborateur->refresh()->etatDuMotDePasse());
         auth()->logout();
-        $this->assertSame([Connexion::MESSAGE_ECHEC.' '.Connexion::MESSAGE_POSTE], $this->seConnecter($identifiant, $identifiant, postes: $poste)->errors()->get('data.login'));
+        $this->assertSame([Connexion::MESSAGE_ECHEC], $this->seConnecter($identifiant, $identifiant, postes: $poste)->errors()->get('data.login'));
         $this->assertGuest();
-        app(RedonnerLAccesAction::class)->handle($this->proprietaireDuCabinet($cabinet), $collaborateur, true, self::MOT_DE_PASSE_CHOISI, (string) Str::uuid());
+        app(RedonnerLAccesAction::class)->enSaPresence($this->proprietaireDuCabinet($cabinet), $collaborateur, self::MOT_DE_PASSE_CHOISI, (string) Str::uuid());
         $this->seConnecter($identifiant, self::MOT_DE_PASSE_CHOISI)->assertHasNoErrors();
         $this->assertAuthenticatedAs($collaborateur);
         $this->assertFalse($collaborateur->refresh()->doitChoisirSonMotDePasse());
-        $this->get(FactureResource::getUrl('index', tenant: $magasin))->assertOk();
-
-        [$vendeur, $identifiant] = $this->compteAuMotDePasseIdentifiant($magasin, RoleMagasin::Vendeur);
-        $this->seConnecter($identifiant, $identifiant, postes: $poste)->assertHasNoErrors();
-        $this->assertFalse($vendeur->refresh()->doitChoisirSonMotDePasse());
         $this->get(FactureResource::getUrl('index', tenant: $magasin))->assertOk();
     }
 
     /**
      * Dans l'espace de la société comme dans celui des magasins, un
-     * administrateur dont le mot de passe est encore son identifiant va,
-     * de toute page, au choix de son mot de passe, que cet espace ouvre ;
-     * son mot de passe choisi, il revient à l'accueil de cet espace.
+     * administrateur qui vient de se connecter avec son mot de passe
+     * provisoire va, de toute page, au choix de son mot de passe, que cet
+     * espace ouvre ; son mot de passe choisi, il revient à l'accueil de cet
+     * espace.
      */
     public function test_dans_l_espace_de_la_societe_toute_page_mene_au_choix_du_mot_de_passe_qui_s_y_ouvre(): void
     {
@@ -675,7 +740,7 @@ class ConnexionParIdentifiantTest extends TestCase
         $poste = $this->reconnaitreUnPoste($magasin);
         $administrateur = app(CreerAdministrateurAction::class)->handle($this->proprietaireDe($magasin), $magasin->societe, ['name' => 'Alice Admin'], null, PermissionRegistry::modeleDeLAdministrateur(TypeDActivite::Commerce), []);
         $identifiant = (string) $administrateur->identifiantDeConnexion();
-        $this->seConnecter($identifiant, $identifiant, postes: $poste)->assertHasNoErrors();
+        $this->seConnecter($identifiant, ValeurRequise::de($administrateur->motDePasseProvisoire, 'le mot de passe provisoire de l\'administrateur')->valeur(), postes: $poste)->assertHasNoErrors();
 
         $this->get(TableauDeBord::getUrl(panel: 'societe', tenant: $magasin->societe))->assertRedirect(route('filament.societe.choisir-son-mot-de-passe'));
         $this->get(route('filament.societe.choisir-son-mot-de-passe'))->assertOk();
@@ -698,8 +763,8 @@ class ConnexionParIdentifiantTest extends TestCase
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $poste = $this->reconnaitreUnPoste($magasin);
-        [, $identifiant] = $this->compteAuMotDePasseIdentifiant($magasin, RoleMagasin::Responsable);
-        $this->seConnecter($identifiant, $identifiant, postes: $poste)->assertHasNoErrors();
+        [$responsable, $provisoire] = $this->compteAuMotDePasseProvisoire($magasin, RoleMagasin::Responsable);
+        $this->seConnecter((string) $responsable->identifiantDeConnexion(), $provisoire, postes: $poste)->assertHasNoErrors();
 
         $page = Livewire::test(ChoisirSonMotDePasse::class);
 
@@ -716,8 +781,8 @@ class ConnexionParIdentifiantTest extends TestCase
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $poste = $this->reconnaitreUnPoste($magasin);
-        [$responsable, $identifiant] = $this->compteAuMotDePasseIdentifiant($magasin, RoleMagasin::Responsable);
-        $this->seConnecter($identifiant, $identifiant, postes: $poste)->assertHasNoErrors();
+        [$responsable, $provisoire] = $this->compteAuMotDePasseProvisoire($magasin, RoleMagasin::Responsable);
+        $this->seConnecter((string) $responsable->identifiantDeConnexion(), $provisoire, postes: $poste)->assertHasNoErrors();
 
         $this->get(route('filament.app.choisir-son-mot-de-passe'))->assertOk();
         $this->get(FactureResource::getUrl('index', tenant: $magasin))->assertRedirect(route('filament.app.choisir-son-mot-de-passe'));
@@ -734,39 +799,45 @@ class ConnexionParIdentifiantTest extends TestCase
     }
 
     /**
-     * Un vendeur promu responsable de son magasin alors que son mot de
-     * passe est encore son identifiant choisit le sien à sa connexion
-     * suivante : sa session déjà ouverte continue sans interruption, pages
-     * et requêtes Livewire comprises ; à sa connexion suivante, il n'atteint
-     * plus aucune page avant d'avoir choisi son mot de passe, et une
-     * requête Livewire d'un écran resté ouvert est refusée.
+     * Tant qu'un compte doit choisir son mot de passe (son mot de passe
+     * provisoire vient de servir à ouvrir une session), aucune page ne
+     * s'ouvre avant ce choix, et une requête Livewire d'un écran resté
+     * ouvert, ou forgée, est refusée ; une fois le choix fait, tout
+     * s'ouvre de nouveau.
      */
-    public function test_un_compte_promu_choisit_son_mot_de_passe_a_sa_connexion_suivante(): void
+    public function test_une_requete_livewire_d_un_autre_ecran_est_refusee_tant_que_le_compte_doit_choisir_son_mot_de_passe(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        $poste = $this->reconnaitreUnPoste($magasin);
-        [$vendeur, $identifiant] = $this->compteAuMotDePasseIdentifiant($magasin, RoleMagasin::Vendeur);
-        $this->seConnecter($identifiant, $identifiant, postes: $poste)->assertHasNoErrors();
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
+        $identifiant = (string) $vendeur->identifiantDeConnexion();
+        $this->seConnecter($identifiant, self::MOT_DE_PASSE_CHOISI)->assertHasNoErrors();
         $instantane = $this->instantaneLivewire($this->get(FactureResource::getUrl('index', tenant: $magasin))->assertOk()->getContent(), 'list-factures');
-
-        app(ModifierMembreAction::class)->handle($this->proprietaireDe($magasin), $vendeur, RoleMagasin::Responsable);
-
-        $this->assertTrue($vendeur->refresh()->doitChoisirSonMotDePasse());
-        $this->get(FactureResource::getUrl('index', tenant: $magasin))->assertOk();
         $this->requeteLivewire($instantane, [], 'resetTableSearch')->assertOk();
         $this->flushHeaders();
 
-        $this->seConnecter($identifiant, $identifiant, postes: $poste)->assertHasNoErrors();
-        $this->assertAuthenticatedAs($vendeur);
+        $vendeur->forceFill([
+            'mot_de_passe_choisi_le' => null,
+            'mot_de_passe_provisoire_expire_le' => now()->addHours(72),
+            'mot_de_passe_provisoire_utilise_le' => now(),
+        ])->save();
+        session()->put(ExigerSonPropreMotDePasse::A_LA_CONNEXION, true);
+        auth()->setUser($vendeur->refresh());
+
+        $this->assertTrue($vendeur->doitChoisirSonMotDePasse());
         $this->get(FactureResource::getUrl('index', tenant: $magasin))->assertRedirect(route('filament.app.choisir-son-mot-de-passe'));
         $this->requeteLivewire($instantane, [], 'resetTableSearch')->assertForbidden();
         $this->flushHeaders();
         Livewire::test(ChoisirSonMotDePasse::class)
             ->fillForm(['password' => self::MOT_DE_PASSE_CHOISI, 'passwordConfirmation' => self::MOT_DE_PASSE_CHOISI])
             ->call('choisir')
+            ->assertHasErrors(['data.password']);
+        Livewire::test(ChoisirSonMotDePasse::class)
+            ->fillForm(['password' => 'un-autre-mot-de-passe-solide', 'passwordConfirmation' => 'un-autre-mot-de-passe-solide'])
+            ->call('choisir')
             ->assertHasNoErrors()
             ->assertRedirect();
         $this->get(FactureResource::getUrl('index', tenant: $magasin))->assertOk();
+        $this->requeteLivewire($instantane, [], 'resetTableSearch')->assertOk();
     }
 
     /**

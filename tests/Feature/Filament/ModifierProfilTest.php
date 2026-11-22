@@ -401,52 +401,60 @@ class ModifierProfilTest extends TestCase
     }
 
     /**
-     * Le mot de passe choisi dans le profil suit la règle : ni
-     * l'identifiant, ni une chaîne qui le contient, ni moins de 8
-     * caractères, ni un seul caractère répété, ni une suite de chiffres.
+     * Le mot de passe choisi dans le profil suit la règle : au moins 12
+     * caractères, ou 8 de trois sortes, jamais un mot de passe courant, ni
+     * l'identifiant, ni une chaîne qui le contient, ni un seul caractère
+     * répété, ni une suite de chiffres.
      */
-    public function test_un_mot_de_passe_egal_a_l_identifiant_qui_le_contient_trop_court_ou_trivial_est_refuse(): void
+    public function test_un_mot_de_passe_egal_a_l_identifiant_qui_le_contient_faible_courant_ou_trivial_est_refuse(): void
     {
-        [$compte, $identifiant] = $this->compteAuMotDePasseIdentifiant($this->ouvrirUneSociete(['nom' => 'Ma Boutique']), RoleMagasin::Vendeur);
+        $compte = $this->membre($this->ouvrirUneSociete(['nom' => 'Ma Boutique']), RoleMagasin::Vendeur);
+        $identifiant = (string) $compte->identifiantDeConnexion();
         $this->actingAs($compte);
 
         foreach ([
             $identifiant => RegleDuMotDePasse::MESSAGE_IDENTIFIANT,
             "mon-{$identifiant}-a-moi" => RegleDuMotDePasse::MESSAGE_IDENTIFIANT,
-            'court' => RegleDuMotDePasse::MESSAGE_TROP_COURT,
-            'aaaaaaaaaa' => RegleDuMotDePasse::MESSAGE_REPETE,
+            'court' => RegleDuMotDePasse::MESSAGE_TROP_FAIBLE,
+            'quillepotea' => RegleDuMotDePasse::MESSAGE_TROP_FAIBLE,
+            'abcdef12' => RegleDuMotDePasse::MESSAGE_TROP_FAIBLE,
+            'motdepasse2026' => RegleDuMotDePasse::MESSAGE_COURANT,
+            'azertyuiop123' => RegleDuMotDePasse::MESSAGE_COURANT,
+            'Password1' => RegleDuMotDePasse::MESSAGE_COURANT,
+            'aaaaaaaaaaaa' => RegleDuMotDePasse::MESSAGE_REPETE,
             '23456789' => RegleDuMotDePasse::MESSAGE_SUITE,
             '98765432' => RegleDuMotDePasse::MESSAGE_SUITE,
         ] as $motDePasse => $message) {
             $page = Livewire::test(ModifierProfil::class)
-                ->fillForm(['password' => (string) $motDePasse, 'passwordConfirmation' => (string) $motDePasse, 'mot_de_passe_actuel' => $identifiant])
+                ->fillForm(['password' => (string) $motDePasse, 'passwordConfirmation' => (string) $motDePasse, 'mot_de_passe_actuel' => self::MOT_DE_PASSE_CHOISI])
                 ->call('save')
                 ->assertHasFormErrors(['password']);
 
             $this->assertContains($message, $page->errors()->get('data.password'), (string) $motDePasse);
         }
 
-        $this->assertTrue($compte->refresh()->mot_de_passe_est_l_identifiant);
-        $this->assertTrue(Hash::check($identifiant, $compte->password));
+        $this->assertTrue(Hash::check(self::MOT_DE_PASSE_CHOISI, $compte->refresh()->password));
     }
 
     /**
-     * Tant que le mot de passe est encore l'identifiant, le profil le
-     * rappelle ; le mot de passe choisi, le rappel disparaît.
+     * Le mot de passe choisi dans le profil remplace l'ancien, avec la date
+     * de ce choix ; le profil ne parle plus d'un identifiant qui serait un
+     * mot de passe, ce qu'il n'est jamais, et l'aide dit la règle complète.
      */
-    public function test_le_profil_rappelle_que_le_mot_de_passe_est_encore_l_identifiant(): void
+    public function test_le_mot_de_passe_choisi_dans_le_profil_remplace_l_ancien_et_l_aide_dit_la_regle(): void
     {
-        [$compte, $identifiant] = $this->compteAuMotDePasseIdentifiant($this->ouvrirUneSociete(['nom' => 'Ma Boutique']), RoleMagasin::Vendeur);
+        $compte = $this->membre($this->ouvrirUneSociete(['nom' => 'Ma Boutique']), RoleMagasin::Vendeur);
         $this->actingAs($compte);
 
         Livewire::test(ModifierProfil::class)
-            ->assertSee(ModifierProfil::RAPPEL_IDENTIFIANT)
-            ->fillForm(['password' => 'mon-propre-mot', 'passwordConfirmation' => 'mon-propre-mot', 'mot_de_passe_actuel' => $identifiant])
+            ->assertDontSee('encore votre identifiant')
+            ->assertSee(RegleDuMotDePasse::AIDE)
+            ->fillForm(['password' => 'mon-propre-mot-solide', 'passwordConfirmation' => 'mon-propre-mot-solide', 'mot_de_passe_actuel' => self::MOT_DE_PASSE_CHOISI])
             ->call('save')
             ->assertHasNoFormErrors();
 
-        $this->assertFalse($compte->refresh()->mot_de_passe_est_l_identifiant);
-        Livewire::test(ModifierProfil::class)->assertDontSee(ModifierProfil::RAPPEL_IDENTIFIANT);
+        $this->assertTrue(Hash::check('mon-propre-mot-solide', $compte->refresh()->password));
+        $this->assertTrue($compte->aChoisiSonMotDePasse());
     }
 
     public function test_un_nom_vide_est_refuse(): void

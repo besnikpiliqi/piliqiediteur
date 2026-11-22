@@ -26,12 +26,11 @@ use Throwable;
  * Chacun change ici son nom, son adresse e-mail et son mot de passe, en
  * donnant toujours son mot de passe actuel : une caisse restée ouverte ne
  * suffit pas à s'approprier le compte. Personne ne les change pour un
- * autre. Son identifiant de connexion s'y lit et ne se modifie pas ; tant
- * que son mot de passe est encore son identifiant, la page le lui rappelle.
+ * autre. Son identifiant de connexion s'y lit et ne se modifie pas.
  *
  * Le nom change tout de suite. Le nouveau mot de passe est facultatif :
  * laissé vide, l'ancien reste ; changé, il suit la règle du mot de passe
- * choisi (voir RegleDuMotDePasse), n'est plus l'identifiant, et ferme
+ * choisi (voir RegleDuMotDePasse), et ferme
  * toutes les autres sessions du compte, partout, celle-ci restant (voir
  * ChangerSonMotDePasseAction).
  *
@@ -65,8 +64,6 @@ class ModifierProfil extends EditProfile
 {
     public const AIDE_ADRESSE_EXPERT_COMPTABLE = 'Le propriétaire de la société vous envoie à cette adresse un nouveau lien quand il vous redonne l\'accès ; elle ne sert pas à vous connecter. Une nouvelle adresse vaut une fois confirmée par le lien qui lui est envoyé.';
 
-    public const RAPPEL_IDENTIFIANT = 'Votre mot de passe est encore votre identifiant : toute personne qui le connaît peut se connecter à votre place. Choisissez-en un à vous ci-dessous.';
-
     /**
      * La nouvelle adresse de connexion que l'enregistrement vient de
      * demander, en attente de confirmation.
@@ -83,7 +80,6 @@ class ModifierProfil extends EditProfile
                 $this->makeForm()
                     ->schema([
                         $this->getIdentifiantFormComponent(),
-                        $this->getRappelFormComponent(),
                         $this->getNameFormComponent(),
                         $this->getEmailFormComponent(),
                         $this->getPasswordFormComponent(),
@@ -103,14 +99,6 @@ class ModifierProfil extends EditProfile
         return Placeholder::make('identifiant')
             ->label('Votre identifiant de connexion')
             ->content(fn (): string => $this->compte()->identifiantDeConnexion() ?? '—');
-    }
-
-    protected function getRappelFormComponent(): Component
-    {
-        return Placeholder::make('rappel')
-            ->hiddenLabel()
-            ->content(self::RAPPEL_IDENTIFIANT)
-            ->visible(fn (): bool => $this->compte()->mot_de_passe_est_l_identifiant);
     }
 
     protected function getEmailFormComponent(): Component
@@ -188,7 +176,7 @@ class ModifierProfil extends EditProfile
             ->password()
             ->revealable(filament()->arePasswordsRevealable())
             ->autocomplete('new-password')
-            ->helperText('Au moins 8 caractères ; ni votre identifiant, ni un seul caractère répété, ni une suite de chiffres.')
+            ->helperText(RegleDuMotDePasse::AIDE)
             ->rules(fn (): array => ['nullable', 'string', new RegleDuMotDePasse($this->compte()->identifiantDeConnexion())])
             ->dehydrated(fn ($state): bool => filled($state))
             ->live(debounce: 500)

@@ -149,6 +149,7 @@ class CreerSocieteAction
                         'role_societe' => RoleSociete::Proprietaire,
                         'statut' => StatutCompte::Actif,
                         'email_verified_at' => now(),
+                        'mot_de_passe_choisi_le' => now(),
                     ]))->save();
                     $this->generateur->attribuer($proprietaire, motDePasseHache: $motDePasseHache);
 

@@ -461,23 +461,28 @@ class AFaireDuMagasinTest extends TestCase
     }
 
     /**
-     * Le mot de passe d'un vendeur encore égal à son identifiant : à faire
-     * pour lui, dans son profil ; à surveiller pour son responsable ; et,
-     * sans aucun poste reconnu, en rouge pour le responsable, qui reconnaît
-     * le poste, puisque ce compte ne peut pas se connecter.
+     * Un vendeur qui n'a pas encore choisi son mot de passe : à surveiller
+     * pour son responsable, avec la phrase de son mot de passe provisoire ;
+     * rien pour lui, qui n'est pas connecté tant qu'il ne l'a pas choisi ;
+     * et, sans aucun poste reconnu, en rouge pour le responsable, qui
+     * reconnaît le poste, puisque ce compte ne peut pas se connecter avec
+     * son mot de passe provisoire.
      */
-    public function test_le_mot_de_passe_encore_identifiant_et_aucun_poste_reconnu(): void
+    public function test_le_mot_de_passe_pas_encore_choisi_et_aucun_poste_reconnu(): void
     {
         $magasin = $this->magasin();
         $responsable = $this->responsable($magasin);
         $autre = $this->ouvrirUnAutreMagasin($magasin, ['nom' => 'Paris']);
-        $this->compteAuMotDePasseIdentifiant($autre, RoleMagasin::Vendeur);
+        $this->compteAuMotDePasseProvisoire($autre, RoleMagasin::Vendeur);
         $this->assertNull($this->chose($this->proprietaireDe($magasin), $magasin, 'aucun_poste_reconnu'), 'Le vendeur d\'un autre magasin ne compte pas ici.');
 
-        [$vendeur] = $this->compteAuMotDePasseIdentifiant($magasin, RoleMagasin::Vendeur);
+        [$vendeur] = $this->compteAuMotDePasseProvisoire($magasin, RoleMagasin::Vendeur);
 
-        $this->assertSame(['Choisir mon mot de passe', Filament::getProfileUrl()], [$this->chose($vendeur, $magasin, 'mon_mot_de_passe')?->bouton, $this->chose($vendeur, $magasin, 'mon_mot_de_passe')?->url]);
-        $this->assertTrue($this->chose($responsable, $magasin, 'mots_de_passe_de_l_equipe')?->aSurveiller);
+        $this->assertNull($this->chose($vendeur, $magasin, 'mon_mot_de_passe'), 'Une personne connectée a toujours choisi son mot de passe : aucune ligne ne le lui demande.');
+        $equipe = $this->chose($responsable, $magasin, 'mots_de_passe_de_l_equipe');
+        $this->assertTrue($equipe?->aSurveiller);
+        $this->assertSame(1, $equipe?->nombre);
+        $this->assertStringContainsString('n\'a pas encore choisi son mot de passe', (string) $equipe?->phrase);
         $this->assertSame([UrgenceAFaire::Rouge, false], [$this->chose($responsable, $magasin, 'aucun_poste_reconnu')?->urgence, $this->chose($responsable, $magasin, 'aucun_poste_reconnu')?->aSurveiller]);
         $this->assertNull($this->chose($vendeur, $magasin, 'aucun_poste_reconnu'));
     }

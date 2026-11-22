@@ -23,12 +23,12 @@ use LogicException;
  * dont la base ne garde que l'empreinte SHA-256), listé dans les
  * paramètres du magasin, retirable à tout moment.
  *
- * Tant que le mot de passe d'un compte est encore son identifiant, il
- * n'ouvre ce compte que depuis un poste reconnu, non retiré, d'un magasin
- * que ce compte ouvre (voir ouvreLeCompte(), que lit
- * FournisseurDesComptes::validateCredentials()) : un inconnu qui essaie, sur
- * internet, des nombres de 8 chiffres avec ce même nombre pour mot de passe
- * n'ouvre rien. Ailleurs, la personne doit avoir choisi son mot de passe.
+ * Le mot de passe provisoire d'un compte (voir MotsDePasseProvisoires),
+ * tiré au hasard, ne sert qu'une fois, et n'ouvre ce compte que depuis un
+ * poste reconnu, non retiré, d'un magasin que ce compte ouvre (voir
+ * ouvreLeCompte(), que lit FournisseurDesComptes::validateCredentials()) :
+ * un inconnu qui en essaie sur internet n'ouvre rien, même s'il en devine un.
+ * Ailleurs, la personne doit avoir choisi son mot de passe.
  */
 final class PostesReconnus
 {
@@ -75,8 +75,8 @@ final class PostesReconnus
     }
 
     /**
-     * Retire ce poste : son témoin n'ouvre plus aucun compte dont le mot de
-     * passe est encore l'identifiant.
+     * Retire ce poste : son témoin n'ouvre plus aucun compte par un mot de
+     * passe provisoire.
      *
      * @throws AuthorizationException
      * @throws LogicException quand le poste est déjà retiré
@@ -104,8 +104,8 @@ final class PostesReconnus
      * navigateur, filtrés par les magasins de ce compte. Jamais pour un
      * compte d'un cabinet d'expertise comptable, que ni lui ni son cabinet
      * n'a reconnu : le poste d'un magasin d'un client ne lui ouvre pas son
-     * compte avec son identifiant ; ni pour un expert-comptable de la
-     * société, dont l'identifiant n'est jamais le mot de passe.
+     * compte avec un mot de passe provisoire (il n'en a jamais) ; ni pour un
+     * expert-comptable de la société, qui n'en a jamais non plus.
      */
     public function ouvreLeCompte(User $compte, Request $requete): bool
     {

@@ -42,7 +42,7 @@ class ListCollaborateurs extends ListRecords
             ->label('Créer un collaborateur')
             ->icon('heroicon-o-user-plus')
             ->visible(fn (): bool => auth()->user()?->can('creerUnCollaborateur', User::class) ?? false)
-            ->modalDescription('Un compte par collaborateur du cabinet, qui ne voit que les clients que vous lui confiez. Faute de poste reconnu, il ne se connecte pas avec son identifiant : s\'il est là, il choisit son mot de passe tout de suite, dans la fenêtre suivante.')
+            ->modalDescription('Un compte par collaborateur du cabinet, qui ne voit que les clients que vous lui confiez. Faute de poste reconnu, il n\'a aucun mot de passe provisoire : s\'il est là, il choisit son mot de passe tout de suite, dans la fenêtre suivante.')
             ->fillForm(fn (): array => ['jeton' => (string) Str::uuid()])
             ->form([
                 Hidden::make('jeton'),

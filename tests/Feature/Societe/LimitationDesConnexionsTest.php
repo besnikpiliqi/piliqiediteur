@@ -4,7 +4,9 @@ namespace Tests\Feature\Societe;
 
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\StatutCompte;
+use App\Domain\Tenancy\Jobs\AlerterDeLaMonteeDesEchecsJob;
 use App\Domain\Tenancy\Jobs\AlerterDuSeuilDEchecsJob;
+use App\Domain\Tenancy\Mail\AlerteEditeurMail;
 use App\Domain\Tenancy\Models\Identifiant;
 use App\Domain\Tenancy\Notifications\AvisDeLEquipe;
 use App\Domain\Tenancy\Services\LimitationDesConnexions;
@@ -18,6 +20,7 @@ use Illuminate\Log\Events\MessageLogged;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Cookie;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Testing\TestResponse;
@@ -107,6 +110,37 @@ class LimitationDesConnexionsTest extends TestCase
     }
 
     /**
+     * L'attaque d'un même compte depuis beaucoup d'adresses : deux cents
+     * essais manqués sur un même identifiant depuis deux cents adresses IP
+     * différentes, aucune n'en faisant plus d'un. Le compteur de
+     * l'identifiant, toutes adresses confondues, retient l'attaque au
+     * vingt et unième essai de l'heure ; la bonne réponse donnée ensuite
+     * depuis une adresse neuve attend aussi ; la vraie personne, elle, se
+     * connecte toujours depuis son poste connu.
+     */
+    public function test_deux_cents_essais_depuis_deux_cents_adresses_sont_retenus_au_vingt_et_unieme_et_le_titulaire_se_connecte_depuis_son_poste(): void
+    {
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
+        $vendeur = $this->membre($this->ouvrirUneSociete(['nom' => 'Ma Boutique']), RoleMagasin::Vendeur);
+        $identifiant = (string) $vendeur->identifiantDeConnexion();
+        $poste = $this->posteConnuDe($identifiant);
+        $adresses = [];
+
+        foreach (range(1, 200) as $rang) {
+            $adresse = '198.18.'.intdiv($rang, 250).'.'.($rang % 250 + 1);
+            $adresses[$adresse] = true;
+            $attendu = $rang <= LimitationDesConnexions::ECHECS_PAR_SAISIE ? Connexion::MESSAGE_ECHEC : LimitationDesConnexions::message(LimitationDesConnexions::ATTENTE);
+            $this->assertSame($attendu, $this->erreurHttp($this->essayerDepuis($adresse, $identifiant, 'pas-le-bon')), "essai {$rang}");
+        }
+
+        $this->assertCount(200, $adresses);
+        $this->assertSame(LimitationDesConnexions::message(LimitationDesConnexions::ATTENTE), $this->erreurHttp($this->essayerDepuis('192.0.2.99', $identifiant, self::MOT_DE_PASSE_CHOISI)));
+        $this->assertGuest();
+        $this->seConnecter($identifiant, self::MOT_DE_PASSE_CHOISI, $poste)->assertHasNoErrors();
+        $this->assertAuthenticatedAs($vendeur);
+    }
+
+    /**
      * Trente échecs en une heure depuis une même adresse IP, sur des
      * identifiants tous différents, font attendre cette adresse quel que
      * soit l'identifiant.
@@ -182,10 +216,11 @@ class LimitationDesConnexionsTest extends TestCase
         $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $vendeur = $this->membre($this->ouvrirUneSociete(['nom' => 'Ma Boutique']), RoleMagasin::Vendeur);
         $identifiant = (string) $vendeur->identifiantDeConnexion();
-        foreach (range(1, LimitationDesConnexions::ECHECS_PAR_SAISIE + 5) as $rang) {
+        foreach (range(1, LimitationDesConnexions::ECHECS_PAR_SAISIE + 1) as $rang) {
             $this->travel(1)->second();
             app(LimitationDesConnexions::class)->echec($identifiant, '127.0.0.1', null, $vendeur, false);
         }
+        $this->assertLessThan(LimitationDesConnexions::ECHECS_PAR_SAISIE_ET_PAR_JOUR, LimitationDesConnexions::ECHECS_PAR_SAISIE + 1);
         $this->assertSame(LimitationDesConnexions::message(LimitationDesConnexions::ATTENTE), $this->erreur($this->seConnecter($identifiant, self::MOT_DE_PASSE_CHOISI)));
 
         $this->travel(LimitationDesConnexions::ATTENTE + 1)->seconds();
@@ -369,6 +404,7 @@ class LimitationDesConnexionsTest extends TestCase
     public function test_les_essais_ou_le_mot_de_passe_egale_l_identifiant_alertent_l_editeur_sans_identifiant_dans_le_journal(): void
     {
         $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        config(['piliqi.connexions.alerte_echecs_par_heure' => 100000, 'piliqi.connexions.alerte_plancher_par_heure' => 100000, 'piliqi.connexions.alerte_identifiants_par_adresse' => 100000]);
         $journaux = [];
         Event::listen(MessageLogged::class, function (MessageLogged $message) use (&$journaux): void {
             $journaux[] = [$message->level, $message->message, json_encode($message->context)];
@@ -381,13 +417,208 @@ class LimitationDesConnexionsTest extends TestCase
         $this->assertSame([], $journaux);
         $dernier = $this->identifiantInconnu();
 
-        $this->assertSame(Connexion::MESSAGE_ECHEC.' '.Connexion::MESSAGE_POSTE, $this->erreur($this->seConnecter($dernier, $dernier)));
+        $this->assertSame(Connexion::MESSAGE_ECHEC, $this->erreur($this->seConnecter($dernier, $dernier)));
         $this->erreur($this->seConnecter($this->identifiantInconnu(), 'pas-la-saisie'));
 
         $this->assertCount(1, $journaux);
         $this->assertSame(['warning', LimitationDesConnexions::MESSAGE_ALERTE_EDITEUR], array_slice($journaux[0], 0, 2));
         $this->assertStringNotContainsString($dernier, implode(' ', $journaux[0]));
         $this->assertDoesNotMatchRegularExpression('/\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/', implode(' ', $journaux[0]));
+    }
+
+    /**
+     * Vingt-cinq échecs en une journée pour un même saisie, hors d'un poste
+     * connu, font attendre jusqu'à la fin de la journée qui a commencé au
+     * premier échec : jamais plus de vingt-cinq essais par saisie et par
+     * jour, jamais un blocage pour de bon. Les échecs, étalés sur des heures
+     * différentes depuis des adresses différentes, n'atteignent aucun autre
+     * seuil. Un identifiant inconnu est traité de même.
+     */
+    public function test_vingt_cinq_echecs_par_jour_font_attendre_jusqu_a_la_fin_de_la_journee_sans_bloquer_pour_de_bon(): void
+    {
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
+        $vendeur = $this->membre($this->ouvrirUneSociete(['nom' => 'Ma Boutique']), RoleMagasin::Vendeur);
+        $limitation = app(LimitationDesConnexions::class);
+
+        foreach ([(string) $vendeur->identifiantDeConnexion(), $this->identifiantInconnu()] as $saisie) {
+            $debut = now();
+
+            foreach (range(0, 4) as $heure) {
+                $this->travelTo($debut->copy()->addHours($heure));
+
+                foreach (range(1, 5) as $rang) {
+                    $this->assertSame(0, $limitation->attente($saisie, "198.51.100.{$rang}", false), "heure {$heure}, essai {$rang}");
+                    $limitation->echec($saisie, "198.51.100.{$rang}", null, null, false);
+                }
+            }
+
+            $this->assertSame(20 * 3600, $limitation->attente($saisie, '203.0.113.250', false), 'vingt-cinq échecs, à quatre heures du premier : vingt heures d\'attente');
+            $this->assertSame('Trop de tentatives. Réessayez dans 20 heures.', LimitationDesConnexions::message($limitation->attente($saisie, '203.0.113.250', false)));
+            $this->assertSame(0, $limitation->attente($saisie, '203.0.113.250', true), 'Un poste connu n\'attend jamais.');
+
+            $this->travelTo($debut->copy()->addHours(23)->addMinutes(59));
+            $this->assertGreaterThan(0, $limitation->attente($saisie, '203.0.113.251', false));
+
+            $this->travelTo($debut->copy()->addHours(24)->addSecond());
+            $this->assertSame(0, $limitation->attente($saisie, '203.0.113.250', false), 'La journée finie, l\'accès revient.');
+        }
+
+        $this->seConnecter((string) $vendeur->identifiantDeConnexion(), self::MOT_DE_PASSE_CHOISI)->assertHasNoErrors();
+        $this->assertAuthenticatedAs($vendeur);
+    }
+
+    /**
+     * Le même plafond du jour, par de vraies requêtes : le vingt-sixième
+     * essai de la journée reçoit l'attente, même avec le bon mot de passe,
+     * depuis une adresse neuve ; sur un poste connu, jamais.
+     */
+    public function test_le_plafond_du_jour_s_applique_aux_requetes_et_pas_au_poste_connu(): void
+    {
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
+        $vendeur = $this->membre($this->ouvrirUneSociete(['nom' => 'Ma Boutique']), RoleMagasin::Vendeur);
+        $identifiant = (string) $vendeur->identifiantDeConnexion();
+        $poste = $this->posteConnuDe($identifiant);
+        $debut = now();
+
+        foreach (range(0, 4) as $heure) {
+            $this->travelTo($debut->copy()->addHours($heure));
+            foreach (range(1, 5) as $rang) {
+                $this->assertSame(Connexion::MESSAGE_ECHEC, $this->erreurHttp($this->essayerDepuis("198.51.100.{$rang}", $identifiant, 'pas-le-bon')));
+            }
+        }
+
+        $this->assertSame('Trop de tentatives. Réessayez dans 20 heures.', $this->erreurHttp($this->essayerDepuis('192.0.2.77', $identifiant, self::MOT_DE_PASSE_CHOISI)));
+        $this->assertGuest();
+        $this->seConnecter($identifiant, self::MOT_DE_PASSE_CHOISI, $poste)->assertHasNoErrors();
+        $this->assertAuthenticatedAs($vendeur);
+    }
+
+    public function test_une_attente_de_plus_de_deux_heures_se_dit_en_heures(): void
+    {
+        $this->assertSame('Trop de tentatives. Réessayez dans 1 minute.', LimitationDesConnexions::message(1));
+        $this->assertSame('Trop de tentatives. Réessayez dans 2 minutes.', LimitationDesConnexions::message(61));
+        $this->assertSame('Trop de tentatives. Réessayez dans 120 minutes.', LimitationDesConnexions::message(7200));
+        $this->assertSame('Trop de tentatives. Réessayez dans 3 heures.', LimitationDesConnexions::message(7201));
+        $this->assertSame('Trop de tentatives. Réessayez dans 24 heures.', LimitationDesConnexions::message(86400));
+    }
+
+    /**
+     * L'éditeur est prévenu, une seule fois par heure et par motif, quand
+     * les échecs de toute la plateforme dans l'heure dépassent un seuil
+     * absolu ; en dessous, rien. Le seuil se règle (config/piliqi.php).
+     */
+    public function test_l_editeur_est_prevenu_quand_les_echecs_de_la_plateforme_dans_l_heure_depassent_le_seuil_absolu(): void
+    {
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
+        Queue::fake();
+        config(['piliqi.connexions.alerte_echecs_par_heure' => 5, 'piliqi.connexions.alerte_plancher_par_heure' => 100000, 'piliqi.connexions.alerte_identifiants_par_adresse' => 100000]);
+        $limitation = app(LimitationDesConnexions::class);
+
+        foreach (range(1, 5) as $rang) {
+            $limitation->echec((string) (50000000 + $rang), "198.51.100.{$rang}", null, null, false);
+        }
+        Queue::assertNothingPushed();
+
+        foreach (range(6, 9) as $rang) {
+            $limitation->echec((string) (50000000 + $rang), "198.51.100.{$rang}", null, null, false);
+        }
+        Queue::assertPushed(AlerterDeLaMonteeDesEchecsJob::class, 1);
+        Queue::assertPushed(AlerterDeLaMonteeDesEchecsJob::class, fn (AlerterDeLaMonteeDesEchecsJob $alerte): bool => [$alerte->motif, $alerte->nombre, $alerte->seuil] === [AlerterDeLaMonteeDesEchecsJob::MOTIF_ABSOLU, 6, 5]);
+
+        $this->travelTo(self::aParis('2026-10-09 11:00:00'));
+        foreach (range(1, 6) as $rang) {
+            $limitation->echec((string) (50000100 + $rang), "198.51.100.{$rang}", null, null, false);
+        }
+        Queue::assertPushed(AlerterDeLaMonteeDesEchecsJob::class, 2);
+    }
+
+    /**
+     * Trois fois la moyenne horaire des 7 jours d'avant, avec un plancher de
+     * 100 : sans historique, le seuil est le plancher ; avec une moyenne de
+     * 40 par heure, il est de 120.
+     */
+    public function test_l_editeur_est_prevenu_quand_les_echecs_depassent_trois_fois_la_moyenne_des_sept_jours_d_avant_avec_un_plancher(): void
+    {
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
+        Queue::fake();
+        config(['piliqi.connexions.alerte_echecs_par_heure' => 100000, 'piliqi.connexions.alerte_identifiants_par_adresse' => 100000]);
+        $limitation = app(LimitationDesConnexions::class);
+
+        foreach (range(1, 100) as $rang) {
+            $limitation->echec((string) (50000000 + $rang), '198.51.100.'.($rang % 200), null, null, false);
+        }
+        Queue::assertNothingPushed();
+        $limitation->echec('50000999', '198.51.100.201', null, null, false);
+        Queue::assertPushed(AlerterDeLaMonteeDesEchecsJob::class, fn (AlerterDeLaMonteeDesEchecsJob $alerte): bool => [$alerte->motif, $alerte->nombre, $alerte->seuil] === [AlerterDeLaMonteeDesEchecsJob::MOTIF_RELATIF, 101, 100]);
+        $limitation->echec('50001000', '198.51.100.202', null, null, false);
+        Queue::assertPushed(AlerterDeLaMonteeDesEchecsJob::class, 1);
+
+        $this->travelTo(self::aParis('2026-10-20 10:00:00'));
+        $debut = (int) (floor(now()->getTimestamp() / 3600) * 3600);
+        foreach (range(1, LimitationDesConnexions::HEURES_DE_LA_MOYENNE) as $rang) {
+            Cache::put($limitation->cle('plateforme-heure', (string) ($debut - $rang * 3600)), 40, 8 * 86400);
+        }
+        Cache::put($limitation->cle('plateforme-heure', (string) $debut), 119, 86400);
+
+        $limitation->echec('50002001', '198.51.100.1', null, null, false);
+        Queue::assertPushed(AlerterDeLaMonteeDesEchecsJob::class, 1);
+        $limitation->echec('50002002', '198.51.100.2', null, null, false);
+        Queue::assertPushed(AlerterDeLaMonteeDesEchecsJob::class, 2);
+        Queue::assertPushed(AlerterDeLaMonteeDesEchecsJob::class, fn (AlerterDeLaMonteeDesEchecsJob $alerte): bool => [$alerte->motif, $alerte->nombre, $alerte->seuil] === [AlerterDeLaMonteeDesEchecsJob::MOTIF_RELATIF, 121, 120]);
+    }
+
+    /**
+     * Plus de 50 identifiants différents qui échouent depuis une même
+     * adresse IP dans l'heure (un même mot de passe essayé sur beaucoup de
+     * comptes) préviennent l'éditeur : le même identifiant répété, ou une
+     * autre adresse, ne compte pas pour cette adresse.
+     */
+    public function test_l_editeur_est_prevenu_quand_beaucoup_d_identifiants_differents_echouent_depuis_une_meme_adresse(): void
+    {
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
+        Queue::fake();
+        config(['piliqi.connexions.alerte_echecs_par_heure' => 100000, 'piliqi.connexions.alerte_plancher_par_heure' => 100000]);
+        $limitation = app(LimitationDesConnexions::class);
+
+        foreach (range(1, 40) as $rang) {
+            $limitation->echec((string) (60000000 + $rang), '198.51.100.9', null, null, false);
+            $limitation->echec('60000001', '198.51.100.9', null, null, false);
+            $limitation->echec((string) (61000000 + $rang), '198.51.100.10', null, null, false);
+        }
+        Queue::assertNothingPushed();
+
+        foreach (range(41, 51) as $rang) {
+            $limitation->echec((string) (60000000 + $rang), '198.51.100.9', null, null, false);
+        }
+        Queue::assertPushed(AlerterDeLaMonteeDesEchecsJob::class, 1);
+        Queue::assertPushed(AlerterDeLaMonteeDesEchecsJob::class, fn (AlerterDeLaMonteeDesEchecsJob $alerte): bool => [$alerte->motif, $alerte->nombre, $alerte->seuil, strlen((string) $alerte->empreinte)] === [AlerterDeLaMonteeDesEchecsJob::MOTIF_ADRESSE, 51, 50, 8]);
+    }
+
+    /**
+     * L'e-mail de l'éditeur ne porte que des nombres et l'heure : jamais un
+     * identifiant, un mot de passe, une adresse e-mail ni une adresse IP en
+     * clair.
+     */
+    public function test_l_alerte_de_l_editeur_ne_porte_ni_identifiant_ni_adresse(): void
+    {
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
+        Mail::fake();
+        config(['editeur.email' => 'editeur@piliqi.test', 'piliqi.connexions.alerte_echecs_par_heure' => 100000, 'piliqi.connexions.alerte_plancher_par_heure' => 100000, 'piliqi.connexions.alerte_identifiants_par_adresse' => 2]);
+        $limitation = app(LimitationDesConnexions::class);
+
+        foreach ([70000001, 70000002, 70000003] as $identifiant) {
+            $limitation->echec((string) $identifiant, '203.0.113.45', null, null, true);
+        }
+
+        Mail::assertSent(AlerteEditeurMail::class, function (AlerteEditeurMail $courriel): bool {
+            $texte = $courriel->render();
+
+            return str_contains($texte, '3 au moment de l\'alerte')
+                && str_contains($texte, '09/10/2026 à 10 h (heure de Paris)')
+                && preg_match('/7000000\d|203\.0\.113\.45/', strip_tags($texte)) !== 1
+                && preg_match('/Empreinte de l\'adresse : [0-9a-f]{8}\./', $texte) === 1;
+        });
+        Mail::assertSent(AlerteEditeurMail::class, 1);
     }
 
     /**

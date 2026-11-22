@@ -65,8 +65,8 @@ use Illuminate\View\Middleware\ShareErrorsFromSession;
  * JournaliserOuvertureDeSession le suit : une fois le magasin actif
  * positionné, il inscrit l'ouverture de session (JET 80) au journal des
  * événements de ce magasin. Avant tout cela, ExigerSonPropreMotDePasse
- * mène un responsable ou un administrateur dont le mot de passe est
- * encore son identifiant au choix du sien, puis MenerUnCompteSansMagasin
+ * mène une personne qui vient de se connecter avec son mot de passe
+ * provisoire au choix du sien, puis MenerUnCompteSansMagasin
  * mène un compte qui n'a encore aucun magasin à l'espace de sa société,
  * un compte d'un cabinet à l'espace de son cabinet, et un expert-comptable
  * de la société à la page qui le lui dit (voir AucunMagasin).

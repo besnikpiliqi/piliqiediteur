@@ -2,16 +2,15 @@
 
 namespace App\Domain\Tenancy\Services;
 
+use App\Domain\Tenancy\Concerns\CompteursAtomiques;
+use App\Domain\Tenancy\Jobs\AlerterDeLaMonteeDesEchecsJob;
 use App\Domain\Tenancy\Jobs\AlerterDuSeuilDEchecsJob;
 use App\Domain\Tenancy\Support\CleDuModele;
 use App\Domain\Tenancy\Support\Reglage;
 use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Models\User;
 use Illuminate\Contracts\Cache\Factory;
-use Illuminate\Contracts\Cache\Repository;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str;
-use RuntimeException;
 use SensitiveParameter;
 
 /**
@@ -43,6 +42,11 @@ use SensitiveParameter;
  *   et ne s'oublie que 15 minutes après la fin de la dernière attente sans
  *   nouvel échec, ou à une connexion réussie ;
  * - par saisie, toutes adresses : 20 échecs par heure, puis 15 minutes ;
+ * - par saisie, toutes adresses, sur la journée : 25 échecs (décision de
+ *   Claude D76, T36.1 à T36.4), puis l'attente de ce qui reste de la
+ *   journée qui a commencé au premier d'entre eux ; jamais plus de 25 essais
+ *   par saisie et par jour hors d'un poste connu, jamais un blocage pour de
+ *   bon : la fenêtre finie, l'accès revient ;
  * - par adresse IP, toutes saisies : 30 échecs par heure, puis 15
  *   minutes ; une rafale d'erreurs depuis l'adresse commune d'un magasin ne
  *   fait pas attendre ses postes connus.
@@ -56,10 +60,19 @@ use SensitiveParameter;
  * AlerterDuSeuilDEchecsJob) ; à l'éditeur, dans le journal de
  * l'application, sans identifiant ni adresse IP, au-delà de 200 échecs par
  * heure, sur toute la plateforme, dont le mot de passe tapé est la saisie
- * elle-même.
+ * elle-même ; et à l'éditeur encore, par e-mail et par une tâche en file
+ * (voir AlerterDeLaMonteeDesEchecsJob), une fois par heure et par motif, quand
+ * les échecs de toute la plateforme dans l'heure dépassent un seuil absolu
+ * (500) ou trois fois la moyenne horaire des 7 jours d'avant (avec un
+ * plancher de 100), et quand plus de 50 identifiants différents échouent
+ * depuis une même adresse IP dans l'heure (voir surveillerLaPlateforme()) :
+ * seuils réglables (config/piliqi.php), compteurs en HMAC, aucun identifiant
+ * ni adresse en clair. Tous les échecs comptent, poste connu compris.
  */
 final class LimitationDesConnexions
 {
+    use CompteursAtomiques;
+
     public const ECHECS_PAR_SAISIE_ET_ADRESSE = 5;
 
     public const FENETRE_PAR_SAISIE_ET_ADRESSE = 900;
@@ -74,6 +87,15 @@ final class LimitationDesConnexions
 
     public const ECHECS_PAR_ADRESSE = 30;
 
+    public const ECHECS_PAR_SAISIE_ET_PAR_JOUR = 25;
+
+    public const UN_JOUR = 86400;
+
+    /**
+     * Combien d'heures d'avant la moyenne horaire compte : 7 jours.
+     */
+    public const HEURES_DE_LA_MOYENNE = 168;
+
     public const ATTENTE = 900;
 
     public const UNE_HEURE = 3600;
@@ -86,12 +108,24 @@ final class LimitationDesConnexions
 
     public function __construct(private readonly Factory $caches) {}
 
+    protected function prefixeDesCles(): string
+    {
+        return 'connexion-';
+    }
+
     /**
-     * Le message d'une attente, en minutes entières.
+     * Le message d'une attente, en minutes entières, et en heures entières
+     * au-delà de deux heures (l'attente du plafond d'une journée).
      */
     public static function message(int $secondes): string
     {
         $minutes = max(1, (int) ceil($secondes / 60));
+
+        if ($minutes > 120) {
+            $heures = (int) ceil($minutes / 60);
+
+            return 'Trop de tentatives. Réessayez dans '.$heures.' heures.';
+        }
 
         return 'Trop de tentatives. Réessayez dans '.$minutes.' minute'.($minutes > 1 ? 's' : '').'.';
     }
@@ -110,6 +144,7 @@ final class LimitationDesConnexions
         return max(array_map($this->secondesRestantes(...), [
             $this->cleDAttente('paire', $saisie, $adresse),
             $this->cleDAttente('saisie', $saisie),
+            $this->cleDAttente('jour', $saisie),
             $this->cleDAttente('adresse', $adresse),
         ]));
     }
@@ -121,14 +156,6 @@ final class LimitationDesConnexions
     public function posteIgnore(string $nonce): bool
     {
         return $this->compteDe($this->cle('poste-ignore', $nonce)) > 0;
-    }
-
-    /**
-     * Le nombre d'échecs que compte, en ce moment, le compteur de cette clé.
-     */
-    public function compteDe(string $cle): int
-    {
-        return ValeurSimple::enEntier($this->cache()->get($cle, 0));
     }
 
     /**
@@ -147,6 +174,8 @@ final class LimitationDesConnexions
             Log::warning(self::MESSAGE_ALERTE_EDITEUR);
         }
 
+        $this->surveillerLaPlateforme($saisie, $adresse);
+
         if ($nonceDuPoste !== null) {
             if ($this->compter($this->cle('poste', $nonceDuPoste), self::UNE_HEURE) >= self::ECHECS_DE_SUITE_PAR_POSTE) {
                 $this->attendre($this->cle('poste-ignore', $nonceDuPoste), self::UNE_HEURE);
@@ -163,6 +192,10 @@ final class LimitationDesConnexions
 
         if ($this->compter($this->cle('saisie', $saisie), self::UNE_HEURE) >= self::ECHECS_PAR_SAISIE) {
             $this->attendre($this->cleDAttente('saisie', $saisie), self::ATTENTE);
+        }
+
+        if ($this->compter($this->cle('jour', $saisie), self::UN_JOUR) >= self::ECHECS_PAR_SAISIE_ET_PAR_JOUR) {
+            $this->attendre($this->cleDAttente('jour', $saisie), max(1, $this->secondesRestantes($this->cle('jour', $saisie))));
         }
 
         if ($this->compter($this->cle('adresse', $adresse), self::UNE_HEURE) >= self::ECHECS_PAR_ADRESSE) {
@@ -187,16 +220,58 @@ final class LimitationDesConnexions
     }
 
     /**
-     * La clé d'un compteur : son nom, puis le HMAC de chaque valeur.
+     * Compte cet échec parmi ceux de toute la plateforme dans l'heure, et
+     * prévient l'éditeur, une fois par heure et par motif, quand ils
+     * dépassent un seuil absolu ou trois fois la moyenne horaire des 7 jours
+     * d'avant (avec son plancher), ou quand trop d'identifiants différents
+     * échouent depuis une même adresse IP. Les compteurs sont ceux, en HMAC,
+     * de cette limitation : l'alerte ne porte aucun identifiant ni aucune
+     * adresse en clair.
      */
-    public function cle(string $compteur, string ...$valeurs): string
+    private function surveillerLaPlateforme(#[SensitiveParameter] string $saisie, string $adresse): void
     {
-        return 'connexion-'.$compteur.':'.implode(':', array_map($this->hmac(...), $valeurs));
+        $debut = (int) (floor(now()->getTimestamp() / self::UNE_HEURE) * self::UNE_HEURE);
+        $heure = (string) $debut;
+        $total = $this->compter($this->cle('plateforme-heure', $heure), 8 * self::UN_JOUR);
+        $seuilAbsolu = Reglage::entier('piliqi.connexions.alerte_echecs_par_heure');
+        $plancher = Reglage::entier('piliqi.connexions.alerte_plancher_par_heure');
+
+        if ($total > $seuilAbsolu && $this->cache()->add($this->cle('alerte-plateforme-absolu', $heure), true, 2 * self::UNE_HEURE)) {
+            AlerterDeLaMonteeDesEchecsJob::dispatch(AlerterDeLaMonteeDesEchecsJob::MOTIF_ABSOLU, $total, $seuilAbsolu, $debut);
+        }
+
+        if ($total > $plancher) {
+            $seuilRelatif = max($plancher, (int) ceil(Reglage::entier('piliqi.connexions.alerte_multiple_de_la_moyenne') * $this->moyenneHoraire($debut)));
+
+            if ($total > $seuilRelatif && $this->cache()->add($this->cle('alerte-plateforme-relatif', $heure), true, 2 * self::UNE_HEURE)) {
+                AlerterDeLaMonteeDesEchecsJob::dispatch(AlerterDeLaMonteeDesEchecsJob::MOTIF_RELATIF, $total, $seuilRelatif, $debut);
+            }
+        }
+
+        if ($this->cache()->add($this->cle('adresse-saisie-heure', $heure, $adresse, $saisie), true, 2 * self::UNE_HEURE)) {
+            $differentes = $this->compter($this->cle('adresse-identifiants-heure', $heure, $adresse), 2 * self::UNE_HEURE);
+            $seuilDeLAdresse = Reglage::entier('piliqi.connexions.alerte_identifiants_par_adresse');
+
+            if ($differentes > $seuilDeLAdresse && $this->cache()->add($this->cle('alerte-plateforme-adresse', $heure, $adresse), true, 2 * self::UNE_HEURE)) {
+                AlerterDeLaMonteeDesEchecsJob::dispatch(AlerterDeLaMonteeDesEchecsJob::MOTIF_ADRESSE, $differentes, $seuilDeLAdresse, $debut, substr($this->hmac($adresse), 0, 8));
+            }
+        }
     }
 
-    private function cleDAttente(string $compteur, string ...$valeurs): string
+    /**
+     * La moyenne horaire des échecs de toute la plateforme sur les 7 jours
+     * qui précèdent cette heure (168 heures, une heure sans échec compte
+     * pour zéro).
+     */
+    private function moyenneHoraire(int $debutDeLHeure): float
     {
-        return $this->cle('attente-'.$compteur, ...$valeurs);
+        $cles = [];
+
+        foreach (range(1, self::HEURES_DE_LA_MOYENNE) as $rang) {
+            $cles[] = $this->cle('plateforme-heure', (string) ($debutDeLHeure - $rang * self::UNE_HEURE));
+        }
+
+        return array_sum(array_map(ValeurSimple::enEntier(...), $this->cache()->many($cles))) / self::HEURES_DE_LA_MOYENNE;
     }
 
     /**
@@ -221,95 +296,5 @@ final class LimitationDesConnexions
         $this->prolonger($progression, $attente + self::FENETRE_PAR_SAISIE_ET_ADRESSE);
 
         return $attente;
-    }
-
-    /**
-     * Ajoute un à ce compteur, créé à zéro s'il manque, pour cette fenêtre
-     * en secondes, à partir de son premier échec ; rend le nouveau compte.
-     * L'ajout ne remplace jamais un compteur qui existe, et l'incrément est
-     * atomique : des échecs simultanés sont tous comptés. Un compteur
-     * expiré entre l'ajout et l'incrément se recrée, une fois.
-     *
-     * @throws RuntimeException quand le compteur ne s'incrémente pas
-     */
-    private function compter(string $cle, int $fenetre): int
-    {
-        foreach ([1, 2] as $essai) {
-            $this->cache()->add($cle.':fin', now()->addSeconds($fenetre)->getTimestamp(), $fenetre);
-            $this->cache()->add($cle, 0, $fenetre);
-            $compte = $this->cache()->increment($cle);
-
-            if ($compte !== false) {
-                return (int) $compte;
-            }
-        }
-
-        throw new RuntimeException('Le compteur des essais de connexion ne s\'incrémente pas.');
-    }
-
-    /**
-     * Les secondes qui restent avant la fin de la fenêtre de ce compteur,
-     * s'il compte au moins un échec ; 0 sinon.
-     */
-    private function secondesRestantes(string $cle): int
-    {
-        return $this->compteDe($cle) > 0 ? max(0, ValeurSimple::enEntier($this->cache()->get($cle.':fin', 0)) - now()->getTimestamp()) : 0;
-    }
-
-    /**
-     * Fait vivre ce compteur encore ce nombre de secondes, à partir de
-     * maintenant, sans toucher à son compte.
-     */
-    private function prolonger(string $cle, int $secondes): void
-    {
-        $this->cache()->touch($cle, $secondes);
-        $this->cache()->put($cle.':fin', now()->addSeconds($secondes)->getTimestamp(), $secondes);
-    }
-
-    private function effacer(string $cle): void
-    {
-        $this->cache()->forget($cle);
-        $this->cache()->forget($cle.':fin');
-    }
-
-    /**
-     * Fait attendre cette clé ce nombre de secondes, à partir de maintenant.
-     */
-    private function attendre(string $cle, int $secondes): void
-    {
-        $this->effacer($cle);
-        $this->compter($cle, $secondes);
-    }
-
-    /**
-     * Le cache des compteurs : celui des limitations de l'application
-     * (cache.limiter), sinon le cache par défaut, partagé entre les
-     * processus.
-     */
-    private function cache(): Repository
-    {
-        return $this->caches->store(Reglage::texteOuNul('cache.limiter'));
-    }
-
-    /**
-     * Le HMAC-SHA256 d'une valeur, avec une clé dérivée d'APP_KEY propre à
-     * la limitation des connexions.
-     */
-    private function hmac(#[SensitiveParameter] string $valeur): string
-    {
-        return hash_hmac('sha256', $valeur, self::cleSecrete());
-    }
-
-    private static function cleSecrete(): string
-    {
-        $cle = Reglage::texteOuNul('app.key');
-
-        if ($cle === null || $cle === '') {
-            throw new RuntimeException('APP_KEY manque : les compteurs des essais de connexion ne peuvent pas être protégés.');
-        }
-
-        $brute = Str::startsWith($cle, 'base64:') ? base64_decode(substr($cle, 7), true) : $cle;
-
-        return hash_hkdf('sha256', (string) $brute, 32, 'limitation-des-connexions');
     }
 }

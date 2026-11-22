@@ -11,20 +11,18 @@ use Livewire\Livewire;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
- * Un responsable ou un administrateur dont le mot de passe est encore son
- * identifiant (voir User::doitChoisirSonMotDePasse()) choisit le sien à
- * sa connexion, avant toute autre page des deux panneaux : à sa première
- * connexion, et, quand il vient d'être promu à l'un de ces rôles, à sa
- * connexion suivante. La connexion le note dans la session (voir
- * Connexion::authenticate()) ; une session déjà ouverte au moment de la
- * promotion continue sans interruption jusqu'à sa fin. Dans une session
- * ainsi notée, toute page mène à ce choix (voir ChoisirSonMotDePasse),
- * sauf cette page elle-même et la déconnexion ; une requête Livewire d'un
- * autre écran, restée ouverte ou forgée, est refusée.
+ * Une personne qui vient de se connecter avec son mot de passe provisoire
+ * (voir User::doitChoisirSonMotDePasse() et MotsDePasseProvisoires) choisit
+ * le sien à sa connexion, avant toute autre page des deux panneaux : à sa
+ * première connexion, et après chaque accès redonné en son absence, quel
+ * que soit son rôle, vendeur et observateur compris. La connexion le note
+ * dans la session (voir Connexion::authenticate()). Dans une session ainsi
+ * notée, toute page mène à ce choix (voir ChoisirSonMotDePasse), sauf cette
+ * page elle-même et la déconnexion ; une requête Livewire d'un autre
+ * écran, restée ouverte ou forgée, est refusée.
  * Persistant (voir les panneaux) : il se rejoue sur chaque requête
  * Livewire, toujours après SetUpPanel, qui a déjà choisi le panneau
- * courant. Un vendeur ou un observateur garde son identifiant pour mot de
- * passe tant qu'il le veut.
+ * courant.
  */
 class ExigerSonPropreMotDePasse
 {

@@ -29,8 +29,8 @@ use Filament\Resources\Pages\ViewRecord;
  * La fiche d'un collaborateur du cabinet, avec les gestes de son
  * propriétaire (voir CollaborateurResource et PorteeDesDroits) : lui
  * confier des clients liés (voir ConfierDesClientsAction), redonner
- * l'accès, en sa présence seulement (son identifiant n'ouvre aucun compte
- * de cabinet), suspendre, réactiver, retirer du cabinet, réintégrer, et
+ * l'accès, en sa présence seulement (aucun mot de passe provisoire n'ouvre
+ * un compte de cabinet), suspendre, réactiver, retirer du cabinet, réintégrer, et
  * transmettre la propriété du cabinet à un collaborateur actif. Chaque
  * bouton n'apparaît qu'à qui peut faire ce geste, et l'action du domaine
  * le revérifie sous ses verrous sur des comptes relus.

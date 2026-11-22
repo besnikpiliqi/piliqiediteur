@@ -65,7 +65,7 @@ use Throwable;
  * société validée le déclare, en redonnant son mot de passe ; le SIREN est
  * contrôlé au répertoire Sirene (actif, 69.20Z), la dénomination lue, jamais
  * saisie ; chaque personne reçoit un compte de la société, qui n'a jamais
- * son identifiant pour mot de passe, et le lien de 7 jours de son mot de
+ * de mot de passe provisoire, et le lien de 7 jours de son mot de
  * passe à l'adresse que le propriétaire a saisie deux fois ; un seul
  * cabinet à la fois, remplacé sur confirmation.
  */
@@ -212,7 +212,8 @@ class ExpertComptableDeclareTest extends TestCase
 
         $compte = $this->declarer($this->proprietaireDe($magasin), $magasin->societe)->fresh();
 
-        $this->assertFalse($compte->mot_de_passe_est_l_identifiant);
+        $this->assertNull($compte->mot_de_passe_provisoire_expire_le);
+        $this->assertFalse($compte->aChoisiSonMotDePasse());
         $this->assertFalse(Hash::check((string) $compte->identifiantDeConnexion(), $compte->password));
         $this->assertNull($compte->magasinDeSonIdentifiant());
         $this->assertSame(0, $compte->affectations()->count());
@@ -668,7 +669,7 @@ class ExpertComptableDeclareTest extends TestCase
             $this->assertThrows(fn () => $statuts->suspendre($autre, $marc), AuthorizationException::class);
             $this->assertThrows(fn () => $statuts->retirer($autre, $marc), AuthorizationException::class);
             $this->assertThrows(fn () => app(RedonnerLAccesAction::class)->parUnNouveauLien($autre, $marc, (string) Str::uuid()), AuthorizationException::class);
-            $this->assertThrows(fn () => app(RedonnerLAccesAction::class)->handle($autre, $marc, true, 'Nouveau-Mot-2026!', (string) Str::uuid()), AuthorizationException::class);
+            $this->assertThrows(fn () => app(RedonnerLAccesAction::class)->enSaPresence($autre, $marc, 'Nouveau-Mot-2026!', (string) Str::uuid()), AuthorizationException::class);
         }
 
         $this->assertFalse(app(PorteeDesDroits::class)->voit($administrateur, $marc));

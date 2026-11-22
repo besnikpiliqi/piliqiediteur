@@ -321,10 +321,10 @@ class TransfererProprieteTest extends TestCase
     }
 
     /**
-     * Un administrateur dont le mot de passe est encore son identifiant,
-     * que le propriétaire a connu à sa création, ne reçoit pas la propriété
-     * : ni à la demande, ni à l'acceptation, la base refusant de toute façon
-     * un propriétaire dans ce cas.
+     * Un administrateur qui n'a pas encore choisi son mot de passe (le
+     * propriétaire a connu son mot de passe provisoire à sa création) ne
+     * reçoit pas la propriété : ni à la demande, ni à l'acceptation, la base
+     * refusant de toute façon un propriétaire dans ce cas.
      */
     public function test_la_transmission_exige_un_administrateur_qui_a_choisi_son_mot_de_passe(): void
     {
@@ -339,10 +339,10 @@ class TransfererProprieteTest extends TestCase
 
         $administrateur = $this->administrateurPretAReprendre($magasin);
         $jeton = $this->demanderLaTransmission($proprietaire, $administrateur);
-        $identifiant = (string) $administrateur->identifiantDeConnexion();
-        $administrateur->forceFill(['password' => $identifiant, 'mot_de_passe_est_l_identifiant' => true])->save();
+        $provisoire = 'k7qp-2mzr-xa4d';
+        $administrateur->forceFill(['password' => $provisoire, 'mot_de_passe_choisi_le' => null, 'mot_de_passe_provisoire_expire_le' => now()->addHours(72)])->save();
 
-        $this->assertThrows(fn () => app(AccepterLaTransmissionDeLaProprieteAction::class)->handle($administrateur->refresh(), $jeton, $identifiant), LogicException::class, DemanderLaTransmissionDeLaProprieteAction::MESSAGE_MOT_DE_PASSE);
+        $this->assertThrows(fn () => app(AccepterLaTransmissionDeLaProprieteAction::class)->handle($administrateur->refresh(), $jeton, $provisoire), LogicException::class, DemanderLaTransmissionDeLaProprieteAction::MESSAGE_MOT_DE_PASSE);
         $this->assertTrue($this->proprietaireDe($magasin)->is($proprietaire));
         $this->assertSame(RoleSociete::Administrateur, $administrateur->refresh()->role_societe);
     }

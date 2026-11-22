@@ -17,7 +17,10 @@ use App\Domain\Tenancy\Actions\ModifierMembreAction;
 use App\Domain\Tenancy\Actions\RedonnerLAccesAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\TypeDActivite;
+use App\Domain\Tenancy\Services\MotsDePasseProvisoires;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\MotDePasseProvisoire;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Models\User;
 
 /**
@@ -29,8 +32,8 @@ use App\Models\User;
  * propriétaire coche les graphiques et l'ajout des charges, une vendeuse
  * qui voit les factures de toute l'équipe, et, avec leurs ventes d'avant,
  * un vendeur suspendu, une vendeuse suspendue puis réactivée, dont l'accès
- * est ensuite redonné en son absence (son mot de passe redevient son
- * identifiant), un vendeur retiré de la société, une vendeuse retirée puis
+ * est ensuite redonné en son absence (un mot de passe provisoire tiré au
+ * hasard, dont la première connexion n'achève pas le choix), un vendeur retiré de la société, une vendeuse retirée puis
  * réintégrée (le ZIP de ses ventes qu'elle avait demandé juste avant son
  * retrait échoue quand la file le prend : son compte n'avait plus accès à
  * ses documents), un vendeur promu responsable de son magasin, une
@@ -61,6 +64,12 @@ final class ComptesDesCas
     private const REACTIVATION = 30;
 
     private const ACCES_REDONNE_EN_ABSENCE = 25;
+
+    private const PREMIERE_CONNEXION_INACHEVEE = 24;
+
+    private const ACCES_REDONNE_LA_VEILLE = 1;
+
+    private const ACCES_REDONNE_L_AVANT_VEILLE = 2;
 
     private const LIEN_DE_L_EXPERT_COMPTABLE = 20;
 
@@ -173,9 +182,17 @@ final class ComptesDesCas
             self::SUSPENSION_PUIS_REACTIVATION => ['epicerie', fn () => $this->dans('epicerie', fn () => app(ChangerStatutCompteAction::class)->suspendre($this->semis->compte('Nicolas Lemoine'), $this->semis->compte('Léna Roussel')))],
             self::REACTIVATION => ['epicerie', fn () => $this->dans('epicerie', fn () => app(ChangerStatutCompteAction::class)->reactiver($this->semis->compte('Nicolas Lemoine'), $this->semis->compte('Léna Roussel')))],
             self::ACCES_REDONNE_EN_ABSENCE => ['epicerie', function (): void {
+                $this->redonnerLAccesEnAbsence('Léna Roussel', 'epicerie', 'Nicolas Lemoine');
+            }],
+            self::PREMIERE_CONNEXION_INACHEVEE => ['epicerie', function (): void {
                 $lena = $this->semis->compte('Léna Roussel');
-                $this->dans('epicerie', fn (): bool => app(RedonnerLAccesAction::class)->handle($this->semis->compte('Nicolas Lemoine'), $lena, false, null, GestesDuMagasin::jeton()));
-                $this->liste->oublierSonMotDePasse($lena);
+                $this->dans('epicerie', fn (): bool => app(MotsDePasseProvisoires::class)->consommer($lena));
+            }],
+            self::ACCES_REDONNE_LA_VEILLE => ['halles', function (): void {
+                $this->redonnerLAccesEnAbsence('Inès Garcia', 'halles', 'Camille Laurent');
+            }],
+            self::ACCES_REDONNE_L_AVANT_VEILLE => ['epicerie', function (): void {
+                $this->redonnerLAccesEnAbsence('Margaux Perrin', 'epicerie', 'Nicolas Lemoine');
             }],
             self::LIEN_DE_L_EXPERT_COMPTABLE => ['conseil', fn () => $this->semis->redonnerLAccesALExpertComptable()],
             default => null,
@@ -184,6 +201,19 @@ final class ComptesDesCas
         if ($changement !== null && $this->semis->semeLeMagasin($changement[0])) {
             $this->leSoir($rang, '22:30', $changement[1]);
         }
+    }
+
+    /**
+     * Le responsable de ce magasin redonne l'accès à ce compte, absent (voir
+     * RedonnerLAccesAction::enSonAbsence()) : un mot de passe provisoire
+     * tiré au hasard, que la liste des comptes garde pour se connecter une
+     * fois depuis un poste reconnu du magasin, tant qu'il vaut.
+     */
+    private function redonnerLAccesEnAbsence(string $nom, string $magasin, string $responsable): void
+    {
+        $compte = $this->semis->compte($nom);
+        $provisoire = $this->dans($magasin, fn (): ?MotDePasseProvisoire => app(RedonnerLAccesAction::class)->enSonAbsence($this->semis->compte($responsable), $compte, GestesDuMagasin::jeton()));
+        $this->liste->donnerUnMotDePasseProvisoire($compte, ValeurRequise::de($provisoire, 'le mot de passe provisoire d\'un accès redonné en l\'absence de la personne')->valeur());
     }
 
     /**

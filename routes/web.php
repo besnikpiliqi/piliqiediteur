@@ -10,6 +10,7 @@ use App\Http\Controllers\OuvrirMaDemonstrationController;
 use App\Http\Controllers\RappelsDesPrestatairesController;
 use App\Http\Controllers\RattachementAuCabinetController;
 use App\Http\Controllers\ReponseAuDevisController;
+use App\Http\Middleware\LimiterLesEssaisDeLien;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', fn () => to_route('filament.app.tenant'));
@@ -58,10 +59,12 @@ Route::post('/rappels/recommande', [RappelsDesPrestatairesController::class, 're
 // rien, le bouton confirme.
 Route::get('/profil/adresse/{jeton}', [ConfirmerNouvelleAdresseController::class, 'afficher'])
     ->where('jeton', '[A-Za-z0-9]{64}')
+    ->middleware(LimiterLesEssaisDeLien::class)
     ->name('profil.adresse.afficher');
 Route::post('/profil/adresse/{jeton}', [ConfirmerNouvelleAdresseController::class, 'confirmer'])
     ->where('jeton', '[A-Za-z0-9]{64}')
     ->middleware('throttle:10,1')
+    ->middleware(LimiterLesEssaisDeLien::class)
     ->name('profil.adresse.confirmer');
 
 // L'invitation d'un cabinet d'expertise comptable à une entreprise pas
@@ -71,14 +74,17 @@ Route::post('/profil/adresse/{jeton}', [ConfirmerNouvelleAdresseController::clas
 Route::get('/invitation-cabinet/{jeton}', [AccepterLInvitationDuCabinetController::class, 'afficher'])
     ->where('jeton', '[A-Za-z0-9]{64}')
     ->middleware('throttle:30,1')
+    ->middleware(LimiterLesEssaisDeLien::class)
     ->name('cabinets.invitation.afficher');
 Route::post('/invitation-cabinet/{jeton}', [AccepterLInvitationDuCabinetController::class, 'accepter'])
     ->where('jeton', '[A-Za-z0-9]{64}')
     ->middleware('throttle:10,1')
+    ->middleware(LimiterLesEssaisDeLien::class)
     ->name('cabinets.invitation.accepter');
 Route::post('/invitation-cabinet/{jeton}/refus', [AccepterLInvitationDuCabinetController::class, 'refuser'])
     ->where('jeton', '[A-Za-z0-9]{64}')
     ->middleware('throttle:10,1')
+    ->middleware(LimiterLesEssaisDeLien::class)
     ->name('cabinets.invitation.refuser');
 
 // Le lien de 7 jours où un expert-comptable de la société choisit son mot
@@ -87,10 +93,12 @@ Route::post('/invitation-cabinet/{jeton}/refus', [AccepterLInvitationDuCabinetCo
 Route::get('/expert-comptable/{jeton}', [LienDeLExpertComptableController::class, 'afficher'])
     ->where('jeton', '[A-Za-z0-9]{64}')
     ->middleware('throttle:30,1')
+    ->middleware(LimiterLesEssaisDeLien::class)
     ->name('experts-comptables.lien.afficher');
 Route::post('/expert-comptable/{jeton}', [LienDeLExpertComptableController::class, 'choisir'])
     ->where('jeton', '[A-Za-z0-9]{64}')
     ->middleware('throttle:10,1')
+    ->middleware(LimiterLesEssaisDeLien::class)
     ->name('experts-comptables.lien.choisir');
 
 // La demande de rattachement d'un cabinet à une entreprise déjà inscrite

@@ -7,8 +7,8 @@ use Illuminate\Support\Facades\Schema;
 /**
  * Les postes du magasin que le propriétaire ou un responsable a reconnus
  * (voir PosteReconnu et PostesReconnus) : un navigateur du magasin, qui
- * porte un témoin propre à ce poste. Tant que le mot de passe d'un compte
- * est encore son identifiant, il n'ouvre ce compte que depuis un poste
+ * porte un témoin propre à ce poste. Le mot de passe provisoire d'un compte
+ * (voir MotsDePasseProvisoires) n'ouvre ce compte que depuis un poste
  * reconnu d'un magasin que ce compte ouvre (voir
  * FournisseurDesComptes::validateCredentials()) ; ailleurs, la personne
  * doit avoir choisi son mot de passe.

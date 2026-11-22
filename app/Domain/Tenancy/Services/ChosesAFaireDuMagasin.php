@@ -33,7 +33,6 @@ use App\Domain\Facturation\Services\VerificateurCaissesPersonnelles;
 use App\Domain\Stock\Enums\StatutInventaireOuverture;
 use App\Domain\Stock\Models\InventaireOuverture;
 use App\Domain\Tenancy\Enums\RoleMagasin;
-use App\Domain\Tenancy\Enums\StatutCompte;
 use App\Domain\Tenancy\Enums\UrgenceAFaire;
 use App\Domain\Tenancy\Models\Affectation;
 use App\Domain\Tenancy\Models\Magasin;
@@ -61,7 +60,6 @@ use App\Filament\Societe\Pages\VerificationSociete;
 use App\Filament\Societe\Resources\MagasinResource;
 use App\Models\User;
 use DateTimeInterface;
-use Filament\Facades\Filament;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
@@ -207,7 +205,6 @@ final class ChosesAFaireDuMagasin
             $this->membreDUnAssujettiUnique(),
             $this->etablissementAConfirmer(),
             $this->identiteIncomplete(),
-            $this->monMotDePasse(),
             $this->motsDePasseDeLEquipe(),
             $this->aucunPosteReconnu(),
             ...$this->avoirsNonUtilises(),
@@ -1193,30 +1190,14 @@ final class ChosesAFaireDuMagasin
     }
 
     /**
-     * Son mot de passe est encore son identifiant (un vendeur ou un
-     * observateur, les autres rôles le choisissent à la connexion) : il le
-     * choisit dans son profil.
-     */
-    private function monMotDePasse(): ?ChoseAFaire
-    {
-        return ! $this->compte->mot_de_passe_est_l_identifiant ? null : new ChoseAFaire(
-            cle: 'mon_mot_de_passe',
-            groupe: 'Mon compte',
-            urgence: UrgenceAFaire::Orange,
-            nombre: 1,
-            phrase: 'Votre mot de passe est encore votre identifiant : choisissez le vôtre dans votre profil.',
-            url: Filament::getProfileUrl(),
-            bouton: 'Choisir mon mot de passe',
-            aSurveiller: false,
-        );
-    }
-
-    /**
-     * Les comptes de l'équipe de ce magasin dont le mot de passe est
-     * encore l'identifiant (voir EquipeDuMagasinResource::auMotDePasseIdentifiant()),
-     * qui n'ont donc jamais choisi le leur : pour le propriétaire, tous ;
-     * pour un responsable du magasin, ses vendeurs et ses observateurs. À
-     * surveiller : seule la personne choisit son mot de passe.
+     * Les comptes de l'équipe de ce magasin qui n'ont pas encore choisi leur
+     * mot de passe (voir EquipeDuMagasinResource::auMotDePasseAChoisir()) :
+     * leur mot de passe provisoire n'a pas encore servi, ou a expiré, ou
+     * leur première connexion n'a pas fini le choix ; pour le propriétaire,
+     * tous ; pour un responsable du magasin, ses vendeurs et ses
+     * observateurs. À surveiller : seule la personne choisit son mot de
+     * passe, à sa première connexion ; un mot de passe provisoire qui ne
+     * sert plus se redonne.
      */
     private function motsDePasseDeLEquipe(): ?ChoseAFaire
     {
@@ -1224,15 +1205,15 @@ final class ChosesAFaireDuMagasin
             return null;
         }
 
-        $nombre = EquipeDuMagasinResource::auMotDePasseIdentifiant(EquipeDuMagasinResource::getEloquentQuery(), $this->compte->estProprietaire())->count();
+        $nombre = EquipeDuMagasinResource::auMotDePasseAChoisir(EquipeDuMagasinResource::getEloquentQuery(), $this->compte->estProprietaire())->count();
 
         return $nombre === 0 ? null : new ChoseAFaire(
             cle: 'mots_de_passe_de_l_equipe',
             groupe: 'Équipe',
             urgence: UrgenceAFaire::Orange,
             nombre: $nombre,
-            phrase: trans_choice('{1} 1 compte de l\'équipe a encore son identifiant pour mot de passe|[2,*] :count comptes de l\'équipe ont encore leur identifiant pour mot de passe', $nombre).' : la personne choisit le sien dans son profil.',
-            url: EquipeDuMagasinResource::urlDesMotsDePasseIdentifiants(),
+            phrase: trans_choice('{1} 1 compte de l\'équipe n\'a pas encore choisi son mot de passe|[2,*] :count comptes de l\'équipe n\'ont pas encore choisi leur mot de passe', $nombre).' : la personne le choisit à sa première connexion, avec son mot de passe provisoire ; un mot de passe provisoire expiré se redonne.',
+            url: EquipeDuMagasinResource::urlDesMotsDePasseAChoisir(),
             bouton: 'Voir',
             aSurveiller: true,
         );
@@ -1240,7 +1221,7 @@ final class ChosesAFaireDuMagasin
 
     /**
      * Aucun poste du magasin n'est reconnu alors qu'un vendeur ou un
-     * observateur actif a encore son identifiant pour mot de passe : ce
+     * observateur actif a encore un mot de passe provisoire qui vaut : ce
      * compte ne s'ouvre que depuis un poste reconnu (voir PostesReconnus).
      * À faire pour le propriétaire et les responsables du magasin, qui
      * reconnaissent les postes.
@@ -1256,7 +1237,7 @@ final class ChosesAFaireDuMagasin
         $bloques = Affectation::query()
             ->where('affectations.magasin_id', $this->magasin->getKey())
             ->whereIn('role', [RoleMagasin::Vendeur->value, RoleMagasin::Observateur->value])
-            ->whereHas('utilisateur', fn (Builder $comptes): Builder => $comptes->where('mot_de_passe_est_l_identifiant', true)->where('statut', StatutCompte::Actif->value))
+            ->whereHas('utilisateur', fn (Builder $comptes): Builder => MotsDePasseProvisoires::provisoiresValables($comptes))
             ->count();
 
         return $bloques === 0 ? null : new ChoseAFaire(
@@ -1264,7 +1245,7 @@ final class ChosesAFaireDuMagasin
             groupe: 'Équipe',
             urgence: UrgenceAFaire::Rouge,
             nombre: $bloques,
-            phrase: 'Aucun poste n\'est reconnu : '.trans_choice('{1} 1 compte qui a encore son identifiant pour mot de passe ne peut pas se connecter|[2,*] :count comptes qui ont encore leur identifiant pour mot de passe ne peuvent pas se connecter', $bloques).'.',
+            phrase: 'Aucun poste n\'est reconnu : '.trans_choice('{1} 1 compte dont le mot de passe provisoire n\'a pas servi ne peut pas se connecter|[2,*] :count comptes dont le mot de passe provisoire n\'a pas servi ne peuvent pas se connecter', $bloques).'.',
             url: PosteReconnuResource::getUrl('index'),
             bouton: 'Reconnaître ce poste',
             aSurveiller: false,

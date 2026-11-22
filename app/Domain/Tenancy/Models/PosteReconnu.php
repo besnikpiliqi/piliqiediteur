@@ -10,9 +10,10 @@ use Illuminate\Database\Eloquent\Model;
 /**
  * Un poste du magasin reconnu par le propriétaire ou un responsable (voir
  * PostesReconnus) : un navigateur qui porte le témoin de ce poste, dont
- * seule l'empreinte SHA-256 du jeton est gardée. Tant que le mot de passe
- * d'un compte est encore son identifiant, il n'ouvre ce compte que depuis
- * un poste reconnu, non retiré, d'un magasin que ce compte ouvre. Un poste
+ * seule l'empreinte SHA-256 du jeton est gardée. Le mot de passe
+ * provisoire d'un compte (voir MotsDePasseProvisoires) n'ouvre ce compte
+ * que depuis un poste reconnu, non retiré, d'un magasin que ce compte
+ * ouvre. Un poste
  * retiré ne sert plus ; il reste listé, avec qui l'a reconnu et qui l'a
  * retiré, leur nom figé.
  *

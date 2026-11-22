@@ -377,7 +377,7 @@ return [
             'regle' => 'L\'identifiant ne se montre qu\'à la personne, au propriétaire, au responsable de son magasin pour un vendeur ou un observateur, et à un administrateur seulement par un geste inscrit au journal d\'audit ; jamais dans un document, un e-mail, le journal d\'audit ni un journal technique.',
             'tests' => [
                 'tests/Feature/Filament/EquipeDuMagasinTest.php::test_un_responsable_ne_voit_jamais_l_identifiant_d_un_compte_auquel_il_ne_peut_pas_redonner_l_acces',
-                'tests/Feature/Societe/RenouvellementDAccesTest.php::test_un_administrateur_ne_voit_l_identifiant_que_par_une_action_tracee_et_le_proprietaire_en_est_prevenu',
+                'tests/Feature/Societe/RenouvellementDAccesTest.php::test_un_administrateur_ne_voit_l_identifiant_que_par_une_action_tracee_sans_prevenir_le_proprietaire',
                 'tests/Feature/Authorization/LimitesDesDroitsTest.php::test_le_proprietaire_ne_voit_jamais_l_identifiant_d_un_compte_d_une_autre_societe',
                 'tests/Feature/Societe/LimitationDesConnexionsTest.php::test_les_essais_ou_le_mot_de_passe_egale_l_identifiant_alertent_l_editeur_sans_identifiant_dans_le_journal',
                 'tests/Feature/Courriels/EssayerUnCourrielTest.php::test_des_identifiants_refuses_ne_montrent_jamais_l_identifiant',
@@ -435,11 +435,30 @@ return [
         ],
         'comptes.regle-du-mot-de-passe' => [
             'puce' => 'Comptes et équipe',
-            'regle' => 'Un mot de passe choisi compte au moins 8 caractères, n\'est jamais l\'identifiant ni ne le contient, et n\'est ni un seul caractère répété ni une suite de chiffres.',
+            'regle' => 'Un mot de passe choisi compte au moins 12 caractères, ou au moins 8 de trois sortes parmi les majuscules, les minuscules, les chiffres et les signes ; il n\'est jamais un mot de passe courant, l\'identifiant ni une chaîne qui le contient, un seul caractère répété ou une suite de chiffres ; le mot de passe provisoire remis ne se garde pas comme mot de passe choisi.',
             'tests' => [
-                'tests/Feature/Filament/ModifierProfilTest.php::test_un_mot_de_passe_egal_a_l_identifiant_qui_le_contient_trop_court_ou_trivial_est_refuse',
+                'tests/Unit/RegleDuMotDePasseTest.php::test_au_moins_douze_caracteres_ou_huit_de_trois_sortes',
+                'tests/Unit/RegleDuMotDePasseTest.php::test_les_sortes_comptent_les_majuscules_les_minuscules_les_chiffres_et_les_signes',
+                'tests/Unit/RegleDuMotDePasseTest.php::test_ni_l_identifiant_ni_une_chaine_qui_le_contient',
+                'tests/Unit/RegleDuMotDePasseTest.php::test_un_seul_caractere_repete_est_refuse',
                 'tests/Unit/RegleDuMotDePasseTest.php::test_seule_une_suite_de_chiffres_de_bout_en_bout_est_refusee',
+                'tests/Unit/RegleDuMotDePasseTest.php::test_les_messages_et_l_aide_disent_la_meme_regle',
+                'tests/Feature/Filament/ModifierProfilTest.php::test_un_mot_de_passe_egal_a_l_identifiant_qui_le_contient_faible_courant_ou_trivial_est_refuse',
+                'tests/Feature/Filament/ModifierProfilTest.php::test_le_mot_de_passe_choisi_dans_le_profil_remplace_l_ancien_et_l_aide_dit_la_regle',
                 'tests/Feature/Cabinets/LienDeLExpertComptableTest.php::test_le_mot_de_passe_choisi_suit_la_regle_et_ne_contient_pas_l_identifiant',
+                'tests/Feature/Societe/RenouvellementDAccesTest.php::test_en_presence_la_personne_choisit_son_mot_de_passe_et_il_suit_la_regle',
+                'tests/Feature/Societe/MotsDePasseProvisoiresTest.php::test_le_mot_de_passe_remis_ne_se_garde_jamais_comme_mot_de_passe_choisi',
+            ],
+        ],
+        'comptes.mots-de-passe-courants' => [
+            'puce' => 'Comptes et équipe',
+            'regle' => 'Un mot de passe courant (liste de plus de 10 000 mots de passe rangée dans le dépôt, sans service extérieur, passé en minuscules et sans les espaces qui l\'entourent) est refusé partout où la règle des mots de passe s\'applique, et l\'identifiant de connexion tiré pour un compte n\'est jamais dans la liste.',
+            'tests' => [
+                'tests/Unit/RegleDuMotDePasseTest.php::test_un_mot_de_passe_courant_est_toujours_refuse',
+                'tests/Unit/RegleDuMotDePasseTest.php::test_un_mot_de_passe_qui_n_est_pas_dans_la_liste_n_est_pas_courant',
+                'tests/Unit/RegleDuMotDePasseTest.php::test_la_liste_des_mots_de_passe_courants_n_a_que_des_mots_de_passe_d_au_moins_huit_caracteres_en_minuscules',
+                'tests/Feature/Societe/IdentifiantsTest.php::test_aucun_identifiant_ne_figure_dans_la_liste_des_mots_de_passe_courants',
+                'tests/Feature/Societe/MotsDePasseProvisoiresTest.php::test_deux_tirages_different_et_ne_sont_ni_un_identifiant_ni_un_mot_de_passe_courant',
             ],
         ],
         'comptes.inscription-par-lien' => [
@@ -541,7 +560,7 @@ return [
             'regle' => 'Un compte de responsable, de vendeur ou d\'observateur ne vaut que pour un magasin, qu\'il ne quitte jamais ; seuls le propriétaire et un responsable du magasin créent ses vendeurs et ses observateurs et leur cochent des autorisations, un responsable jamais au-delà des siennes ; retirer un compte de son magasin le retire de la société.',
             'tests' => [
                 'tests/Feature/Societe/ConnexionParIdentifiantTest.php::test_un_compte_de_membre_n_ouvre_que_son_magasin',
-                'tests/Feature/Societe/MembresTest.php::test_le_proprietaire_cree_un_vendeur_pour_un_magasin_avec_son_identifiant_pour_premier_mot_de_passe',
+                'tests/Feature/Societe/MembresTest.php::test_le_proprietaire_cree_un_vendeur_pour_un_magasin_avec_un_mot_de_passe_provisoire',
                 'tests/Feature/Societe/AutorisationsDesMembresTest.php::test_retirer_un_compte_de_son_magasin_le_retire_de_la_societe',
                 'tests/Feature/Filament/EquipeDuMagasinTest.php::test_retirer_un_vendeur_de_son_magasin_le_retire_de_la_societe_apres_confirmation',
                 'tests/Feature/Societe/ResponsablesTest.php::test_retirer_un_responsable_de_son_magasin_le_retire_de_la_societe',
@@ -569,24 +588,37 @@ return [
         ],
         'comptes.premier-mot-de-passe' => [
             'puce' => 'Comptes et équipe',
-            'regle' => 'Un compte créé par la société a pour premier mot de passe son identifiant, remis en main propre, jamais envoyé par e-mail (sauf l\'expert-comptable de la société, qui choisit le sien par un lien de 7 jours) ; une alerte le conseille à la première connexion, le profil le rappelle, la liste de l\'équipe l\'indique ; un responsable ou un administrateur choisit le sien à sa première connexion.',
+            'regle' => 'Un compte créé par la société reçoit un mot de passe provisoire tiré au hasard (12 caractères, jamais l\'identifiant), montré une seule fois à qui le remet en main propre, jamais envoyé par e-mail ni écrit au journal d\'audit, valable 72 heures et à usage unique ; la première connexion, pour tout compte (vendeurs et observateurs compris), mène droit au choix du mot de passe, avant toute autre page ; un mot de passe provisoire expiré ou utilisé sans que le choix soit fini se redonne ; la liste de l\'équipe dit où en est chaque compte. L\'expert-comptable de la société choisit le sien par un lien de 7 jours, et un collaborateur d\'un cabinet en présence du propriétaire du cabinet.',
             'tests' => [
+                'tests/Feature/Societe/MotsDePasseProvisoiresTest.php::test_un_mot_de_passe_provisoire_a_douze_caracteres_en_trois_groupes_sans_caractere_ambigu',
+                'tests/Feature/Societe/MotsDePasseProvisoiresTest.php::test_un_mot_de_passe_provisoire_vaut_soixante_douze_heures',
+                'tests/Feature/Societe/MotsDePasseProvisoiresTest.php::test_un_mot_de_passe_provisoire_ne_se_serialise_ni_ne_se_deverse_en_clair',
+                'tests/Feature/Societe/MotsDePasseProvisoiresTest.php::test_la_base_n_en_garde_que_l_empreinte_et_le_compte_cree_en_porte_la_valeur_une_fois',
+                'tests/Feature/Societe/MotsDePasseProvisoiresTest.php::test_on_ne_consomme_le_mot_de_passe_provisoire_qu_une_fois',
+                'tests/Feature/Societe/MotsDePasseProvisoiresTest.php::test_un_mot_de_passe_provisoire_expire_ne_se_consomme_pas',
+                'tests/Feature/Societe/MotsDePasseProvisoiresTest.php::test_l_etat_du_mot_de_passe_se_lit_de_ses_trois_colonnes',
+                'tests/Feature/Societe/MembresTest.php::test_le_proprietaire_cree_un_vendeur_pour_un_magasin_avec_un_mot_de_passe_provisoire',
                 'tests/Feature/Societe/MembresTest.php::test_le_premier_mot_de_passe_n_est_jamais_journalise_ni_envoye_par_e_mail',
-                'tests/Feature/Societe/ConnexionParIdentifiantTest.php::test_un_compte_dont_le_mot_de_passe_est_l_identifiant_se_connecte_et_recoit_l_alerte_a_sa_premiere_connexion',
-                'tests/Feature/Societe/ConnexionParIdentifiantTest.php::test_un_responsable_un_administrateur_ou_un_collaborateur_choisit_son_mot_de_passe_avant_d_agir',
-                'tests/Feature/Societe/ConnexionParIdentifiantTest.php::test_un_compte_promu_choisit_son_mot_de_passe_a_sa_connexion_suivante',
-                'tests/Feature/Filament/ModifierProfilTest.php::test_le_profil_rappelle_que_le_mot_de_passe_est_encore_l_identifiant',
-                'tests/Feature/Filament/EquipeDuMagasinTest.php::test_la_liste_de_l_equipe_signale_au_responsable_un_mot_de_passe_encore_egal_a_l_identifiant_et_un_compte_jamais_connecte',
+                'tests/Feature/Societe/ConnexionParIdentifiantTest.php::test_un_compte_au_mot_de_passe_provisoire_se_connecte_une_seule_fois_depuis_un_poste_reconnu',
+                'tests/Feature/Societe/ConnexionParIdentifiantTest.php::test_le_mot_de_passe_provisoire_se_tape_sans_tenir_compte_de_la_casse_et_expire_apres_soixante_douze_heures',
+                'tests/Feature/Societe/ConnexionParIdentifiantTest.php::test_le_mot_de_passe_provisoire_ne_se_consomme_qu_une_fois',
+                'tests/Feature/Societe/ConnexionParIdentifiantTest.php::test_tout_compte_qui_se_connecte_avec_son_mot_de_passe_provisoire_choisit_le_sien_avant_d_agir',
+                'tests/Feature/Societe/ConnexionParIdentifiantTest.php::test_dans_l_espace_de_la_societe_toute_page_mene_au_choix_du_mot_de_passe_qui_s_y_ouvre',
+                'tests/Feature/Societe/ConnexionParIdentifiantTest.php::test_une_requete_livewire_d_un_autre_ecran_est_refusee_tant_que_le_compte_doit_choisir_son_mot_de_passe',
+                'tests/Feature/Filament/EquipeDuMagasinTest.php::test_la_liste_de_l_equipe_signale_au_responsable_un_mot_de_passe_pas_encore_choisi_et_un_compte_jamais_connecte',
                 'tests/Feature/Cabinets/ExpertComptableDeclareTest.php::test_la_declaration_cree_un_compte_de_la_societe_dont_le_mot_de_passe_n_est_jamais_l_identifiant',
+                'tests/Feature/Cabinets/CollaborateursTest.php::test_un_collaborateur_recoit_un_identifiant_de_huit_chiffres_sans_aucun_mot_de_passe_utilisable_ni_adresse',
+                'tests/Feature/Societe/ConnexionsConcurrenceTest.php::test_six_consommations_simultanees_d_un_meme_mot_de_passe_provisoire_n_en_servent_qu_une',
             ],
         ],
         'comptes.poste-reconnu' => [
             'puce' => 'Comptes et équipe',
-            'regle' => 'Tant que le mot de passe d\'un compte est son identifiant, il n\'ouvre ce compte que depuis un poste du magasin reconnu par le propriétaire ou un responsable ; un collaborateur d\'un cabinet choisit son mot de passe en présence du propriétaire du cabinet.',
+            'regle' => 'Le mot de passe provisoire d\'un compte n\'ouvre ce compte que depuis un poste du magasin reconnu par le propriétaire ou un responsable ; un collaborateur d\'un cabinet, qui n\'a aucun poste reconnu, choisit son mot de passe en présence du propriétaire du cabinet.',
             'tests' => [
-                'tests/Feature/Societe/ConnexionParIdentifiantTest.php::test_le_mot_de_passe_egal_a_l_identifiant_n_ouvre_le_compte_que_depuis_un_poste_reconnu_du_magasin',
+                'tests/Feature/Societe/ConnexionParIdentifiantTest.php::test_le_mot_de_passe_provisoire_n_ouvre_le_compte_que_depuis_un_poste_reconnu_du_magasin',
                 'tests/Feature/Societe/ConnexionParIdentifiantTest.php::test_un_poste_se_retire_depuis_la_liste_des_postes_du_magasin',
-                'tests/Feature/Cabinets/CollaborateursTest.php::test_un_collaborateur_ne_peut_pas_se_connecter_avec_son_identifiant_faute_de_poste_reconnu',
+                'tests/Feature/Cabinets/CollaborateursTest.php::test_un_collaborateur_ne_peut_pas_se_connecter_avant_d_avoir_choisi_son_mot_de_passe_faute_de_poste_reconnu',
+                'tests/Feature/Cabinets/CollaborateursTest.php::test_un_collaborateur_sans_mot_de_passe_choisi_est_refuse_sur_le_poste_reconnu_d_un_client',
                 'tests/Feature/Cabinets/CollaborateursTest.php::test_la_fenetre_du_compte_cree_propose_d_office_au_collaborateur_de_choisir_son_mot_de_passe',
             ],
         ],
@@ -610,25 +642,73 @@ return [
         ],
         'comptes.acces-redonne' => [
             'puce' => 'Comptes et équipe',
-            'regle' => 'Un accès perdu se redonne par le propriétaire pour tout compte, par un responsable pour un vendeur ou un observateur de son magasin, par un administrateur autorisé dans sa portée ; chaque renouvellement ferme toutes les sessions du compte, s\'inscrit au journal d\'audit, et le propriétaire est prévenu de chaque renouvellement qu\'il n\'a pas fait ; personne ne redonne l\'accès du propriétaire, qui le retrouve par « Mot de passe oublié ».',
+            'regle' => 'Un accès perdu se redonne par le propriétaire pour tout compte, par un responsable pour un vendeur ou un observateur de son magasin, par un administrateur autorisé dans sa portée : la personne présente tape elle-même son nouveau mot de passe ; absente, elle reçoit un nouveau mot de passe provisoire tiré au hasard (jamais son identifiant), montré une seule fois, et un expert-comptable de la société un nouveau lien de 7 jours ; chaque renouvellement ferme toutes les sessions du compte, s\'inscrit au journal d\'audit, et le propriétaire est prévenu de chaque renouvellement qu\'il n\'a pas fait ; personne ne redonne l\'accès du propriétaire, qui le retrouve par « Mot de passe oublié ».',
             'tests' => [
+                'tests/Feature/Societe/RenouvellementDAccesTest.php::test_en_absence_la_personne_recoit_un_mot_de_passe_provisoire_tire_au_hasard_jamais_son_identifiant',
+                'tests/Feature/Societe/RenouvellementDAccesTest.php::test_un_mot_de_passe_provisoire_deja_remis_est_remplace_et_ne_se_garde_pas_comme_mot_de_passe_choisi',
                 'tests/Feature/Societe/RenouvellementDAccesTest.php::test_redonner_l_acces_ferme_les_sessions_coupe_le_rappel_et_s_inscrit_au_journal_d_audit',
                 'tests/Feature/Societe/RenouvellementDAccesTest.php::test_seul_le_proprietaire_redonne_l_acces_d_un_administrateur',
                 'tests/Feature/Societe/RenouvellementDAccesTest.php::test_un_administrateur_autorise_a_nommer_les_responsables_redonne_l_acces_d_un_responsable_de_sa_portee',
                 'tests/Feature/Societe/RenouvellementDAccesTest.php::test_personne_ne_redonne_l_acces_du_proprietaire',
                 'tests/Feature/Societe/RenouvellementDAccesTest.php::test_le_proprietaire_est_prevenu_d_un_acces_redonne_par_un_autre_puis_du_premier_mot_de_passe_choisi_ensuite',
+                'tests/Feature/Societe/RenouvellementDAccesTest.php::test_la_personne_voit_l_acces_redonne_et_sa_derniere_connexion_a_sa_connexion_suivante',
                 'tests/Feature/Filament/MotDePasseOublieTest.php::test_la_demande_envoie_un_lien_de_reinitialisation_au_proprietaire',
             ],
         ],
         'comptes.essais-de-connexion' => [
             'puce' => 'Comptes et équipe',
-            'regle' => 'Les essais de connexion manqués font attendre, jamais bloquer pour de bon, jamais sur un poste où le compte s\'est déjà connecté, et reçoivent la même réponse, au même délai, pour un identifiant qui n\'existe pas.',
+            'regle' => 'Les essais de connexion manqués font attendre, jamais bloquer pour de bon, jamais sur un poste où le compte s\'est déjà connecté (sauf après dix échecs de suite avec son témoin), et reçoivent la même réponse, au même délai, avec les mêmes compteurs, pour un identifiant qui n\'existe pas : 5 échecs par identifiant et adresse IP en 15 minutes (puis 1, 2, 4, 8 et 15 minutes d\'attente), 20 par heure par identifiant toutes adresses confondues, 30 par heure par adresse IP et 25 par jour par identifiant ; les compteurs sont atomiques, leurs clés des HMAC.',
             'tests' => [
                 'tests/Feature/Societe/LimitationDesConnexionsTest.php::test_trop_d_echecs_pour_un_identifiant_et_une_adresse_ip_font_attendre_de_plus_en_plus',
+                'tests/Feature/Societe/LimitationDesConnexionsTest.php::test_l_attente_croissante_se_garde_tant_que_les_echecs_se_suivent_jusqu_a_quinze_minutes',
+                'tests/Feature/Societe/LimitationDesConnexionsTest.php::test_trop_d_echecs_pour_un_identifiant_le_font_attendre_depuis_toute_adresse_ip',
+                'tests/Feature/Societe/LimitationDesConnexionsTest.php::test_deux_cents_essais_depuis_deux_cents_adresses_sont_retenus_au_vingt_et_unieme_et_le_titulaire_se_connecte_depuis_son_poste',
+                'tests/Feature/Societe/LimitationDesConnexionsTest.php::test_trop_d_echecs_depuis_une_adresse_ip_la_font_attendre_quel_que_soit_l_identifiant',
+                'tests/Feature/Societe/LimitationDesConnexionsTest.php::test_vingt_cinq_echecs_par_jour_font_attendre_jusqu_a_la_fin_de_la_journee_sans_bloquer_pour_de_bon',
+                'tests/Feature/Societe/LimitationDesConnexionsTest.php::test_le_plafond_du_jour_s_applique_aux_requetes_et_pas_au_poste_connu',
                 'tests/Feature/Societe/LimitationDesConnexionsTest.php::test_aucun_compte_n_est_jamais_bloque_definitivement',
                 'tests/Feature/Societe/LimitationDesConnexionsTest.php::test_les_connexions_reussies_d_un_meme_poste_ne_bloquent_pas_les_vendeurs_suivants',
+                'tests/Feature/Societe/LimitationDesConnexionsTest.php::test_des_echecs_depuis_ailleurs_ne_bloquent_pas_le_titulaire_sur_son_poste',
+                'tests/Feature/Societe/LimitationDesConnexionsTest.php::test_dix_echecs_de_suite_avec_un_temoin_de_poste_le_font_ignorer_une_heure',
+                'tests/Feature/Societe/LimitationDesConnexionsTest.php::test_les_compteurs_s_appliquent_aussi_a_un_identifiant_inexistant',
+                'tests/Feature/Societe/LimitationDesConnexionsTest.php::test_la_cle_d_une_saisie_n_est_pas_son_empreinte_sans_cle',
                 'tests/Feature/Societe/ConnexionParIdentifiantTest.php::test_un_identifiant_inconnu_un_mot_de_passe_faux_un_compte_suspendu_ou_retire_recoivent_la_meme_reponse',
                 'tests/Feature/Societe/ConnexionParIdentifiantTest.php::test_un_identifiant_inconnu_fait_la_meme_verification_de_hachage',
+                'tests/Feature/Societe/ConnexionsConcurrenceTest.php::test_des_echecs_simultanes_sur_un_meme_identifiant_sont_tous_comptes',
+                'tests/Feature/Societe/ConnexionsConcurrenceTest.php::test_des_connexions_reussies_simultanees_depuis_une_meme_adresse_ne_font_jamais_attendre',
+            ],
+        ],
+        'comptes.alertes-des-echecs-de-connexion' => [
+            'puce' => 'Comptes et équipe',
+            'regle' => 'Le propriétaire est prévenu quand un identifiant de sa société dépasse 20 échecs dans l\'heure ; l\'éditeur est prévenu, une seule fois par heure et par motif, quand les échecs de toute la plateforme dépassent 500 dans l\'heure ou trois fois la moyenne horaire des sept jours d\'avant (plancher de 100), ou quand plus de 50 identifiants différents échouent depuis une même adresse IP, et des essais où le mot de passe tapé est l\'identifiant tapé : l\'alerte porte les nombres et l\'heure, jamais un identifiant, un mot de passe, une adresse e-mail ni une adresse IP.',
+            'tests' => [
+                'tests/Feature/Societe/LimitationDesConnexionsTest.php::test_le_proprietaire_est_prevenu_quand_un_identifiant_de_sa_societe_depasse_le_seuil_d_echecs',
+                'tests/Feature/Societe/LimitationDesConnexionsTest.php::test_l_alerte_du_seuil_part_en_file',
+                'tests/Feature/Societe/LimitationDesConnexionsTest.php::test_les_essais_ou_le_mot_de_passe_egale_l_identifiant_alertent_l_editeur_sans_identifiant_dans_le_journal',
+                'tests/Feature/Societe/LimitationDesConnexionsTest.php::test_l_editeur_est_prevenu_quand_les_echecs_de_la_plateforme_dans_l_heure_depassent_le_seuil_absolu',
+                'tests/Feature/Societe/LimitationDesConnexionsTest.php::test_l_editeur_est_prevenu_quand_les_echecs_depassent_trois_fois_la_moyenne_des_sept_jours_d_avant_avec_un_plancher',
+                'tests/Feature/Societe/LimitationDesConnexionsTest.php::test_l_editeur_est_prevenu_quand_beaucoup_d_identifiants_differents_echouent_depuis_une_meme_adresse',
+                'tests/Feature/Societe/LimitationDesConnexionsTest.php::test_l_alerte_de_l_editeur_ne_porte_ni_identifiant_ni_adresse',
+            ],
+        ],
+        'comptes.limites-des-liens' => [
+            'puce' => 'Comptes et équipe',
+            'regle' => '« Mot de passe oublié » (adresse de connexion ou identifiant du propriétaire) accepte 3 demandes par heure et 10 par jour pour une même saisie et 10 par heure par adresse IP, avec la même réponse et le même délai que la saisie désigne un propriétaire ou non, et un seul lien valable à la fois ; la page d\'un lien (mot de passe oublié, premier mot de passe d\'un expert-comptable de la société, confirmation d\'une adresse, transmission de la propriété, invitation d\'un cabinet) accepte 10 jetons inconnus ou expirés par heure par adresse IP et 5 mots de passe refusés sur un même lien avant 15 minutes d\'attente, le lien restant valable ; jamais un blocage pour de bon.',
+            'tests' => [
+                'tests/Feature/Societe/LimitationDesLiensTest.php::test_trois_demandes_par_heure_pour_une_meme_saisie_la_quatrieme_attend_la_fin_de_l_heure',
+                'tests/Feature/Societe/LimitationDesLiensTest.php::test_l_attente_finit_avec_la_fenetre_de_l_heure',
+                'tests/Feature/Societe/LimitationDesLiensTest.php::test_dix_demandes_par_jour_pour_une_meme_saisie_la_onzieme_attend_la_fin_du_jour',
+                'tests/Feature/Societe/LimitationDesLiensTest.php::test_dix_demandes_par_heure_depuis_une_meme_adresse_la_onzieme_attend',
+                'tests/Feature/Societe/LimitationDesLiensTest.php::test_dix_jetons_inconnus_par_heure_font_attendre_l_adresse_jusqu_a_la_fin_de_l_heure',
+                'tests/Feature/Societe/LimitationDesLiensTest.php::test_cinq_mots_de_passe_refuses_sur_un_lien_le_font_attendre_quinze_minutes_sans_toucher_aux_autres_liens',
+                'tests/Feature/Societe/LimitationDesLiensTest.php::test_la_meme_reponse_et_la_meme_attente_que_la_saisie_designe_un_proprietaire_ou_non',
+                'tests/Feature/Societe/LimitationDesLiensTest.php::test_un_nouveau_lien_de_mot_de_passe_oublie_rend_caduc_le_precedent',
+                'tests/Feature/Societe/LimitationDesLiensTest.php::test_dix_liens_inconnus_en_une_heure_font_attendre_l_adresse_sur_toutes_les_pages_de_lien',
+                'tests/Feature/Societe/LimitationDesLiensTest.php::test_cinq_mots_de_passe_refuses_sur_le_lien_d_un_expert_comptable_le_font_attendre_quinze_minutes',
+                'tests/Feature/Societe/LimitationDesLiensTest.php::test_cinq_mots_de_passe_refuses_sur_une_invitation_de_cabinet_la_font_attendre_quinze_minutes',
+                'tests/Feature/Societe/LimitationDesLiensTest.php::test_cinq_mots_de_passe_refuses_sur_le_lien_de_transmission_le_font_attendre_quinze_minutes',
+                'tests/Feature/Societe/LimitationDesLiensTest.php::test_cinq_mots_de_passe_refuses_sur_le_lien_de_mot_de_passe_oublie_le_font_attendre_quinze_minutes_sans_l_annuler',
+                'tests/Feature/Societe/ConnexionsConcurrenceTest.php::test_des_demandes_simultanees_de_mot_de_passe_oublie_pour_une_meme_saisie_sont_toutes_comptees',
             ],
         ],
         'comptes.magasin-cede-ou-ferme' => [
@@ -1137,7 +1217,7 @@ return [
             'regle' => 'Un cabinet n\'a ni magasin, ni administrateur, ni membre : son propriétaire, qui voit tous ses clients, et ses collaborateurs, dont il crée, suspend, réactive, retire et réintègre seul les comptes et redonne l\'accès, en présence du collaborateur, et à qui il confie chaque client lié ; sa propriété se transmet à un collaborateur actif.',
             'tests' => [
                 'tests/Feature/Cabinets/CollaborateursTest.php::test_seul_le_proprietaire_du_cabinet_cree_suspend_reactive_retire_et_reintegre_un_collaborateur',
-                'tests/Feature/Cabinets/CollaborateursTest.php::test_un_collaborateur_ne_peut_pas_se_connecter_avec_son_identifiant_faute_de_poste_reconnu',
+                'tests/Feature/Cabinets/CollaborateursTest.php::test_un_collaborateur_ne_peut_pas_se_connecter_avant_d_avoir_choisi_son_mot_de_passe_faute_de_poste_reconnu',
                 'tests/Feature/Cabinets/CollaborateursTest.php::test_seul_le_proprietaire_du_cabinet_redonne_l_acces_a_un_collaborateur_et_seulement_en_sa_presence',
                 'tests/Feature/Cabinets/CollaborateursTest.php::test_la_base_refuse_un_collaborateur_hors_d_un_cabinet_et_un_administrateur_ou_un_membre_dans_un_cabinet',
                 'tests/Feature/Cabinets/CollaborateursTest.php::test_la_propriete_d_un_cabinet_se_transmet_a_un_collaborateur_qui_suit_le_lien',
@@ -1282,7 +1362,7 @@ return [
         ],
         'cabinets.comptes-de-l-expert-comptable-declare' => [
             'puce' => 'Cabinets d\'expertise comptable',
-            'regle' => 'Pour chaque personne déclarée, le propriétaire crée un compte de la société au rôle d\'expert-comptable de la société, qui n\'a jamais son identifiant pour mot de passe et le choisit par un lien de 7 jours, ne vend jamais, n\'envoie aucun e-mail aux clients, ne reçoit aucune alerte de stock, n\'ouvre jamais l\'espace de la société, ne voit ni le journal d\'audit ni les traces, lit l\'identité et les réglages fiscaux, et ouvre chaque magasin avec les autorisations de la déclaration.',
+            'regle' => 'Pour chaque personne déclarée, le propriétaire crée un compte de la société au rôle d\'expert-comptable de la société, qui n\'a jamais de mot de passe provisoire et le choisit par un lien de 7 jours, ne vend jamais, n\'envoie aucun e-mail aux clients, ne reçoit aucune alerte de stock, n\'ouvre jamais l\'espace de la société, ne voit ni le journal d\'audit ni les traces, lit l\'identité et les réglages fiscaux, et ouvre chaque magasin avec les autorisations de la déclaration.',
             'tests' => [
                 'tests/Feature/Cabinets/ExpertComptableDeclareTest.php::test_la_declaration_cree_un_compte_de_la_societe_dont_le_mot_de_passe_n_est_jamais_l_identifiant',
                 'tests/Feature/Cabinets/LienDeLExpertComptableTest.php::test_le_lien_vaut_sept_jours_a_la_meme_heure_de_paris_meme_au_changement_d_heure',
@@ -4129,6 +4209,7 @@ return [
             'Q4-i' => [
                 'decision' => 'Le premier mot de passe est l\'identifiant ; l\'utilisateur le change ensuite depuis son profil (note de l\'éditeur).',
                 'regles' => ['comptes.premier-mot-de-passe'],
+                'remplacee' => 'Remplacée en partie par la décision de Claude T36.1 (D76) : le premier mot de passe est un mot de passe provisoire tiré au hasard, jamais l\'identifiant ; la personne choisit le sien à sa première connexion.',
             ],
             'Q4-j' => [
                 'decision' => 'Un administrateur autorisé crée un compte de responsable et en connaît le mot de passe provisoire ; le propriétaire est prévenu de chaque compte créé et de sa première connexion.',
@@ -4206,6 +4287,7 @@ return [
             'precision-3' => [
                 'decision' => 'Le mot de passe donné à la création est égal à l\'identifiant.',
                 'regles' => ['comptes.premier-mot-de-passe'],
+                'remplacee' => 'Remplacée en partie par la décision de Claude T36.1 (D76) : le mot de passe donné à la création est un mot de passe provisoire tiré au hasard, jamais l\'identifiant.',
             ],
             'precision-4' => [
                 'decision' => 'L\'accès d\'un vendeur ou d\'un observateur se redonne aussi par un administrateur que le propriétaire y autorise, dans les magasins réels de sa portée.',
@@ -4214,6 +4296,7 @@ return [
             'precision-5' => [
                 'decision' => 'Le changement du premier mot de passe est facultatif pour un vendeur ou un observateur ; une alerte le conseille à la première connexion (précision du 18/10/2026).',
                 'regles' => ['comptes.premier-mot-de-passe'],
+                'remplacee' => 'Remplacée en partie par la décision de Claude T36.1 (D76) : tout compte, vendeurs et observateurs compris, choisit son mot de passe à sa première connexion.',
             ],
             'Q-V1' => [
                 'decision' => 'L\'avoir et le devis ne sont pas des ventes : le propriétaire fait les retours et les devis, précochés pour un administrateur.',
@@ -4226,6 +4309,7 @@ return [
             'Q-A' => [
                 'decision' => 'Le mot de passe égal à l\'identifiant n\'ouvre le compte que depuis un poste du magasin reconnu, et les essais manqués font attendre.',
                 'regles' => ['comptes.poste-reconnu', 'comptes.essais-de-connexion'],
+                'remplacee' => 'Remplacée en partie par la décision de Claude T36.1 (D76) : c\'est le mot de passe provisoire tiré au hasard, et non plus l\'identifiant, qui n\'ouvre le compte que depuis un poste reconnu.',
             ],
         ],
         'Décision du 19/10/2026 : vérification des sociétés par courrier recommandé (serie8/decision-verification-courrier.md)' => [
@@ -5961,7 +6045,7 @@ return [
             ],
             'T36.4' => [
                 'decision' => 'Refus des mots de passe courants : PILIQI refusera les mots de passe courants, d\'après une liste locale d\'au moins 10 000, sans service extérieur ; un compte qui en a un devra le changer à sa connexion.',
-                'a_venir' => 'Étape 1, lot des mots de passe (T36.1 à T36.4), après le lot MAT-PRO : aujourd\'hui aucun mot de passe courant n\'est refusé.',
+                'regles' => ['comptes.mots-de-passe-courants', 'comptes.regle-du-mot-de-passe'],
             ],
             'T29.1' => [
                 'decision' => 'Rappel d\'une preuve de sortie manquante à l\'export : Un export hors de l\'Union sans preuve de sortie sera rappelé dans « À faire », en orange, puis en rouge dès le 31e jour après la facture, sans rien bloquer.',
@@ -6873,15 +6957,15 @@ return [
             ],
             'T36.1' => [
                 'decision' => 'Premier mot de passe égal à l\'identifiant : Chaque compte, vendeurs et observateurs compris, devra choisir son mot de passe à la première connexion, ou recevra un mot de passe provisoire tiré au hasard, à usage unique et de courte durée.',
-                'a_venir' => 'Étape 1, lot des mots de passe (T36.1 à T36.4), après le lot MAT-PRO, qui réécrit la règle de CLAUDE.md (« Comptes et équipe ») : aujourd\'hui le premier mot de passe est l\'identifiant, 8 caractères suffisent et les plafonds d\'essais sont plus larges.',
+                'regles' => ['comptes.premier-mot-de-passe', 'comptes.poste-reconnu', 'comptes.acces-redonne'],
             ],
             'T36.2' => [
                 'decision' => 'Longueur et composition des mots de passe : Un mot de passe choisi devra compter au moins 12 caractères, ou 8 de trois sortes parmi majuscules, minuscules, chiffres et signes, et ne pas être courant, avec la nouvelle limite des essais.',
-                'a_venir' => 'Étape 1, lot des mots de passe (T36.1 à T36.4), après le lot MAT-PRO, qui réécrit la règle de CLAUDE.md (« Comptes et équipe ») : aujourd\'hui le premier mot de passe est l\'identifiant, 8 caractères suffisent et les plafonds d\'essais sont plus larges.',
+                'regles' => ['comptes.regle-du-mot-de-passe', 'comptes.mots-de-passe-courants'],
             ],
             'T36.3' => [
                 'decision' => 'Limitation des essais de connexion manqués : Les essais manqués feront toujours attendre sans blocage définitif, mais plus d\'une minute au 5e échec, avec au plus environ 10 essais par heure et 25 par jour par identifiant hors poste connu.',
-                'a_venir' => 'Étape 1, lot des mots de passe (T36.1 à T36.4), après le lot MAT-PRO, qui réécrit la règle de CLAUDE.md (« Comptes et équipe ») : aujourd\'hui le premier mot de passe est l\'identifiant, 8 caractères suffisent et les plafonds d\'essais sont plus larges.',
+                'regles' => ['comptes.essais-de-connexion', 'comptes.alertes-des-echecs-de-connexion', 'comptes.limites-des-liens'],
             ],
             'T34.1' => [
                 'decision' => 'Conservation dix ans des documents et registres : Documents et registres restent gardés dix ans, même après la résiliation, puis seront effacés ou anonymisés, avec un export proposé avant ; le contrat de sous-traitance réglera cette garde et la restitution.',

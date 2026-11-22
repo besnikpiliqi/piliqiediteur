@@ -43,9 +43,9 @@ use Illuminate\View\Middleware\ShareErrorsFromSession;
  * et leur portée, jamais à un membre ni à un compte d'un cabinet (voir
  * User::canAccessPanel(), SocietePolicy, MagasinDeLaSocietePolicy et
  * MembrePolicy) : l'adresse de son propre cabinet mène celui-ci à l'espace
- * de son cabinet (voir MenerUnCabinetASonEspace). Un administrateur dont
- * le mot de passe est encore son identifiant y choisit d'abord le sien
- * (voir ExigerSonPropreMotDePasse).
+ * de son cabinet (voir MenerUnCabinetASonEspace). Un administrateur qui
+ * vient de se connecter avec son mot de passe provisoire y choisit d'abord
+ * le sien (voir ExigerSonPropreMotDePasse).
  * Un administrateur y accepte la transmission de la propriété par le lien
  * reçu à son adresse (voir AccepterLaTransmission), hors de toute
  * société. La tenancy Filament y est branchée sur Societe, sans menu de

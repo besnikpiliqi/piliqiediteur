@@ -220,21 +220,21 @@ class ChangementDeRoleTest extends TestCase
     }
 
     /**
-     * Promouvoir un compte dont le mot de passe est encore son identifiant
+     * Promouvoir un compte qui n'a pas encore choisi son mot de passe
      * avertit le propriétaire, sans bloquer : le compte change de rôle, et
      * la personne présente peut choisir son mot de passe dans la même
      * fenêtre.
      */
-    public function test_promouvoir_un_compte_dont_le_mot_de_passe_est_l_identifiant_avertit_sans_bloquer(): void
+    public function test_promouvoir_un_compte_qui_n_a_pas_choisi_son_mot_de_passe_avertit_sans_bloquer(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        [$absent] = $this->compteAuMotDePasseIdentifiant($magasin, RoleMagasin::Vendeur);
-        [$present] = $this->compteAuMotDePasseIdentifiant($magasin, RoleMagasin::Vendeur);
+        [$absent] = $this->compteAuMotDePasseProvisoire($magasin, RoleMagasin::Vendeur);
+        [$present] = $this->compteAuMotDePasseProvisoire($magasin, RoleMagasin::Vendeur);
         $this->dansLEspaceDeLaSociete($magasin->societe, $this->proprietaireDe($magasin));
 
         Livewire::test(FicheDuMembre::class, ['record' => $absent->getRouteKey()])
             ->mountAction('changerLeRoleDeSociete')
-            ->assertSee(ListMembres::AVERTISSEMENT_IDENTIFIANT)
+            ->assertSee(ListMembres::AVERTISSEMENT_PAS_ENCORE_CHOISI)
             ->setActionData(['role_societe' => RoleSociete::Administrateur->value, 'portee' => 'tous'])
             ->callMountedAction()
             ->assertHasNoActionErrors();
@@ -244,8 +244,8 @@ class ChangementDeRoleTest extends TestCase
             ->callMountedAction()
             ->assertHasNoActionErrors();
 
-        $this->assertSame([RoleSociete::Administrateur, true], [$absent->refresh()->role_societe, $absent->mot_de_passe_est_l_identifiant]);
-        $this->assertSame([RoleSociete::Administrateur, false], [$present->refresh()->role_societe, $present->mot_de_passe_est_l_identifiant]);
+        $this->assertSame([RoleSociete::Administrateur, false], [$absent->refresh()->role_societe, $absent->aChoisiSonMotDePasse()]);
+        $this->assertSame([RoleSociete::Administrateur, true], [$present->refresh()->role_societe, $present->aChoisiSonMotDePasse()]);
     }
 
     /**

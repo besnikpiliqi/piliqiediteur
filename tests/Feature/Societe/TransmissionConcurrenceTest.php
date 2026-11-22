@@ -106,10 +106,10 @@ class TransmissionConcurrenceTest extends TestCase
 
     /**
      * Le propriétaire redonne l'accès de l'administrateur, absent, pendant
-     * que celui-ci accepte la transmission : son mot de passe redevient son
-     * identifiant ; l'acceptation attend sur le verrou des comptes, relit
-     * ce mot de passe et ne transmet rien (personne ne devient propriétaire
-     * avec un mot de passe égal à son identifiant).
+     * que celui-ci accepte la transmission : son accès est redonné en son
+     * absence (mot de passe provisoire) ; l'acceptation attend sur le verrou
+     * des comptes, relit ce mot de passe et ne transmet rien (personne ne
+     * devient propriétaire avec un mot de passe provisoire).
      */
     #[Group('concurrence')]
     public function test_un_acces_redonne_pendant_l_acceptation_d_une_transmission_la_fait_refuser(): void
@@ -126,7 +126,7 @@ class TransmissionConcurrenceTest extends TestCase
             }
         });
 
-        app(RedonnerLAccesAction::class)->handle(User::query()->findOrFail($proprietaireId), User::query()->findOrFail($administrateurId), false, null, (string) Str::uuid());
+        app(RedonnerLAccesAction::class)->enSonAbsence(User::query()->findOrFail($proprietaireId), User::query()->findOrFail($administrateurId), (string) Str::uuid());
 
         $this->assertStringContainsString(DemanderLaTransmissionDeLaProprieteAction::MESSAGE_MOT_DE_PASSE, $this->attendreLEchec($acceptation));
         $this->assertSame([RoleSociete::Administrateur, RoleSociete::Proprietaire], [User::query()->findOrFail($administrateurId)->role_societe, User::query()->findOrFail($proprietaireId)->role_societe]);

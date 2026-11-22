@@ -25,6 +25,7 @@ use App\Domain\TableauDeBord\Support\Mois;
 use App\Domain\TableauDeBord\Support\Perimetre;
 use App\Domain\TableauDeBord\Support\ReglagesDuTableauDeBord;
 use App\Domain\TableauDeBord\Support\TextesDeLEcartDesPrixDAchat;
+use App\Domain\Tenancy\Enums\EtatDuMotDePasse;
 use App\Domain\Tenancy\Enums\StatutCompte;
 use App\Domain\Tenancy\Isolation\ControlesDeLApplication;
 use App\Domain\Tenancy\Models\Magasin;
@@ -37,7 +38,6 @@ use BackedEnum;
 use Carbon\Carbon;
 use Carbon\CarbonImmutable;
 use Database\Seeders\DatabaseSeeder;
-use Database\Seeders\Semis\ComptesSemes;
 use Database\Seeders\Semis\SemisComplet;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Console\Scheduling\Schedule;
@@ -234,6 +234,7 @@ class SemisCompletTest extends TestCase
         $this->assertLesFormulesDArrondiDuPrixDeVente();
         $this->assertLesDatesDeLOperation();
         $this->assertLaListeDesComptesOuvreChaqueCompteActif();
+        $this->assertChaqueEtatDuMotDePasseAUnCompteSeme();
         $this->assertLesRenouvellementsDesDemonstrations();
 
         $this->assertSame(0, Artisan::call('caisse:verifier', ['--complet' => true]), Artisan::output());
@@ -1182,10 +1183,10 @@ class SemisCompletTest extends TestCase
 
     /**
      * La liste des comptes donne, pour chaque compte actif, son identifiant
-     * et un mot de passe qui l'ouvre, et ce qu'il faut regarder avec lui ;
-     * la seconde experte-comptable déclarée, qui n'a pas encore choisi son
-     * mot de passe, y est marquée, comme les vendeurs qui gardent leur
-     * identifiant.
+     * et un mot de passe qui l'ouvre (celui qu'il a choisi, ou son mot de
+     * passe provisoire), et ce qu'il faut regarder avec lui ; la seconde
+     * experte-comptable déclarée et le collaborateur du cabinet qui n'ont
+     * pas encore choisi leur mot de passe, et n'en ont aucun, y sont marqués.
      */
     private function assertLaListeDesComptesOuvreChaqueCompteActif(): void
     {
@@ -1208,13 +1209,54 @@ class SemisCompletTest extends TestCase
             $this->assertNotSame('', end($cellules), "La liste ne dit pas quoi regarder avec {$compte->name}.");
 
             if (str_starts_with($cellules[6], 'pas encore choisi')) {
-                $this->assertSame('Sophie Petit', $compte->name);
+                $this->assertContains($compte->name, ['Sophie Petit', 'Gabriel Faure']);
+                $this->assertSame(EtatDuMotDePasse::Aucun, $compte->etatDuMotDePasse(), $compte->name);
 
                 continue;
             }
 
-            $motDePasse = $cellules[6] === ComptesSemes::SON_IDENTIFIANT ? $identifiant : $cellules[6];
-            $this->assertTrue(Hash::check($motDePasse, (string) $compte->password), "Le mot de passe listé n'ouvre pas le compte de {$compte->name}.");
+            $this->assertTrue(Hash::check($cellules[6], (string) $compte->password), "Le mot de passe listé n'ouvre pas le compte de {$compte->name}.");
+            $this->assertNotSame($identifiant, $cellules[6], "Le mot de passe listé de {$compte->name} est son identifiant.");
+        }
+    }
+
+    /**
+     * Chaque état du mot de passe d'un compte a un compte semé, de part et
+     * d'autre de chaque limite : un mot de passe provisoire qui vaut encore
+     * (depuis un magasin qui a un poste reconnu, et depuis un magasin qui n'en
+     * a aucun), un provisoire expiré sans avoir servi, un provisoire utilisé
+     * par une première connexion inachevée, aucun mot de passe, et le mot de
+     * passe choisi ; aucun compte n'a pour mot de passe son identifiant, ni
+     * un mot de passe courant.
+     */
+    private function assertChaqueEtatDuMotDePasseAUnCompteSeme(): void
+    {
+        $etats = [];
+
+        foreach (User::query()->where('statut', StatutCompte::Actif)->get() as $compte) {
+            $etats[$compte->etatDuMotDePasse()->value][] = $compte->name;
+        }
+
+        foreach (EtatDuMotDePasse::cases() as $etat) {
+            $this->assertNotEmpty($etats[$etat->value] ?? [], "Aucun compte semé n'est dans l'état « {$etat->libelle()} ».");
+        }
+
+        $this->assertContains('Inès Garcia', $etats[EtatDuMotDePasse::ProvisoireValable->value], 'Inès Garcia a un mot de passe provisoire valable, dans un magasin qui a un poste reconnu.');
+        $this->assertContains('Margaux Perrin', $etats[EtatDuMotDePasse::ProvisoireValable->value], 'Margaux Perrin a un mot de passe provisoire valable, dans un magasin sans poste reconnu.');
+        $this->assertContains('Mehdi Brahimi', $etats[EtatDuMotDePasse::ProvisoireExpire->value]);
+        $this->assertContains('Léna Roussel', $etats[EtatDuMotDePasse::ProvisoireUtilise->value]);
+        $this->assertContains('Gabriel Faure', $etats[EtatDuMotDePasse::Aucun->value]);
+
+        $postes = DB::table('postes_reconnus')->join('magasins', 'magasins.id', '=', 'postes_reconnus.magasin_id')->where('magasins.nom', 'Maison Ferrand Halles')->count();
+        $this->assertSame(1, $postes, 'Les Halles ont un poste reconnu.');
+        $this->assertSame(0, DB::table('postes_reconnus')->join('magasins', 'magasins.id', '=', 'postes_reconnus.magasin_id')->where('magasins.nom', 'Épicerie Lemoine')->count(), 'L\'Épicerie n\'a aucun poste reconnu.');
+
+        foreach (User::query()->get() as $compte) {
+            $identifiant = (string) $compte->identifiantDeConnexion();
+
+            if ($identifiant !== '') {
+                $this->assertFalse(Hash::check($identifiant, (string) $compte->password), "Le mot de passe de {$compte->name} est son identifiant.");
+            }
         }
     }
 

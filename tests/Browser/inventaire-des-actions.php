@@ -87,9 +87,6 @@ return [
     'app/Domain/Tenancy/Notifications/ResponsableNommeParUnAdministrateur.php' => [
         'action:voir' => ['lot' => 'NAV-4', 'tests' => []],
     ],
-    'app/Domain/Tenancy/Services/SuiviDesConnexions.php' => [
-        'action:changer' => ['lot' => 'NAV-3', 'tests' => []],
-    ],
     'app/Filament/App/Livewire/SelecteurDeClients.php' => [
         'action:nouveauClient' => ['lot' => 'NAV-2', 'tests' => []],
         'composant' => ['lot' => 'NAV-2', 'tests' => [
@@ -141,11 +138,11 @@ return [
         'page' => ['lot' => 'NAV-4', 'tests' => [
             'tests/Browser/AidesCommunesTest.php › le propriétaire se connecte par son adresse de connexion',
             'tests/Browser/AidesCommunesTest.php › le responsable se connecte par son identifiant et arrive au tableau de bord de son magasin',
-            'tests/Browser/AidesCommunesTest.php › un vendeur dont le mot de passe est encore son identifiant se connecte depuis un poste reconnu',
+            'tests/Browser/AidesCommunesTest.php › un vendeur au mot de passe provisoire se connecte depuis un poste reconnu et choisit aussitôt le sien',
             'tests/Browser/Parcours/InscriptionDUneSocieteTest.php › une société s’inscrit, confirme son lien, saisit le code de son courrier et crée son premier magasin',
-            'tests/Browser/Parcours/TemoinsDePosteEnTableauTest.php › dans le magasin, avec des témoins de poste envoyés en tableau, le vendeur au mot de passe égal à son identifiant reçoit le refus ordinaire, et le responsable puis le propriétaire, par son adresse et par son identifiant, se connectent',
-            'tests/Browser/Parcours/TemoinsDePosteEnTableauTest.php › dans l’espace de la société, avec des témoins de poste envoyés en tableau, l’administrateur au mot de passe égal à son identifiant reçoit le refus ordinaire, et l’administrateur qui a choisi le sien et le propriétaire se connectent',
-            'tests/Browser/Parcours/TemoinsDePosteEnTableauTest.php › dans l’espace du cabinet, avec des témoins de poste envoyés en tableau, le collaborateur au mot de passe égal à son identifiant reçoit le refus ordinaire, et le collaborateur qui a choisi le sien et le propriétaire du cabinet se connectent',
+            'tests/Browser/Parcours/TemoinsDePosteEnTableauTest.php › dans le magasin, avec des témoins de poste envoyés en tableau, le vendeur au mot de passe provisoire reçoit le refus ordinaire, et le responsable puis le propriétaire, par son adresse et par son identifiant, se connectent',
+            'tests/Browser/Parcours/TemoinsDePosteEnTableauTest.php › dans l’espace de la société, avec des témoins de poste envoyés en tableau, l’administrateur au mot de passe provisoire reçoit le refus ordinaire, et l’administrateur qui a choisi le sien et le propriétaire se connectent',
+            'tests/Browser/Parcours/TemoinsDePosteEnTableauTest.php › dans l’espace du cabinet, avec des témoins de poste envoyés en tableau, le collaborateur sans mot de passe reçoit le refus ordinaire, et le collaborateur qui a choisi le sien et le propriétaire du cabinet se connectent',
         ]],
     ],
     'app/Filament/App/Pages/Auth/DemandeDeLien.php' => [
@@ -923,6 +920,7 @@ return [
         'action:redonner_l_acces' => ['lot' => 'NAV-3', 'tests' => [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
+            'tests/Browser/Parcours/MotsDePasseProvisoiresTest.php › le responsable redonne l’accès d’un vendeur absent : le mot de passe provisoire ne s’affiche qu’une fois, ne sert qu’une fois depuis le poste reconnu et mène au choix du mot de passe',
         ]],
         'action:retirer_du_magasin' => ['lot' => 'NAV-3', 'tests' => [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action du magasin sans erreur',
@@ -934,7 +932,7 @@ return [
         ]],
         'champ:mode' => ['lot' => 'NAV-3', 'tests' => []],
         'champ:role' => ['lot' => 'NAV-3', 'tests' => []],
-        'filtre:mot_de_passe_identifiant' => ['lot' => 'NAV-3', 'tests' => [
+        'filtre:mot_de_passe_a_choisir' => ['lot' => 'NAV-3', 'tests' => [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
         ]],
@@ -1591,18 +1589,18 @@ return [
     ],
     'app/Filament/App/Resources/PosteReconnuResource/Pages/ListPostesReconnus.php' => [
         'action:reconnaitre' => ['lot' => 'NAV-3', 'tests' => [
-            'tests/Browser/AidesCommunesTest.php › un vendeur dont le mot de passe est encore son identifiant se connecte depuis un poste reconnu',
+            'tests/Browser/AidesCommunesTest.php › un vendeur au mot de passe provisoire se connecte depuis un poste reconnu et choisit aussitôt le sien',
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Parcours/DonneesSemeesTest.php › chaque rôle de la liste du semis se connecte et retrouve ses propres données',
-            'tests/Browser/Parcours/TemoinsDePosteEnTableauTest.php › avec un témoin des postes reconnus envoyé en tableau, le propriétaire et le responsable ouvrent « Postes reconnus » et reconnaissent ce navigateur, que la liste dit ensuite « Ce navigateur » et où le vendeur se connecte avec son identifiant',
+            'tests/Browser/Parcours/TemoinsDePosteEnTableauTest.php › avec un témoin des postes reconnus envoyé en tableau, le propriétaire et le responsable ouvrent « Postes reconnus » et reconnaissent ce navigateur, que la liste dit ensuite « Ce navigateur » et où le vendeur se connecte avec son mot de passe provisoire',
         ]],
         'page' => ['lot' => 'NAV-3', 'tests' => [
-            'tests/Browser/AidesCommunesTest.php › un vendeur dont le mot de passe est encore son identifiant se connecte depuis un poste reconnu',
+            'tests/Browser/AidesCommunesTest.php › un vendeur au mot de passe provisoire se connecte depuis un poste reconnu et choisit aussitôt le sien',
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Parcours/DonneesSemeesTest.php › chaque rôle de la liste du semis se connecte et retrouve ses propres données',
-            'tests/Browser/Parcours/TemoinsDePosteEnTableauTest.php › avec un témoin des postes reconnus envoyé en tableau, le propriétaire et le responsable ouvrent « Postes reconnus » et reconnaissent ce navigateur, que la liste dit ensuite « Ce navigateur » et où le vendeur se connecte avec son identifiant',
+            'tests/Browser/Parcours/TemoinsDePosteEnTableauTest.php › avec un témoin des postes reconnus envoyé en tableau, le propriétaire et le responsable ouvrent « Postes reconnus » et reconnaissent ce navigateur, que la liste dit ensuite « Ce navigateur » et où le vendeur se connecte avec son mot de passe provisoire',
         ]],
     ],
     'app/Filament/App/Resources/ProduitResource.php' => [
@@ -2338,7 +2336,7 @@ return [
         ]],
         'champ:portee' => ['lot' => 'NAV-4', 'tests' => []],
         'champ:role' => ['lot' => 'NAV-4', 'tests' => []],
-        'filtre:mot_de_passe_identifiant' => ['lot' => 'NAV-4', 'tests' => [
+        'filtre:mot_de_passe_a_choisir' => ['lot' => 'NAV-4', 'tests' => [
             'tests/Browser/Balayage/BalayageDeLEspaceDeLaSocieteTest.php › le propriétaire d’une société qui attend son code ouvre chaque page et chaque action de l’espace de sa société sans erreur',
             'tests/Browser/Balayage/BalayageDeLEspaceDeLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action de l’espace de sa société sans erreur',
         ]],

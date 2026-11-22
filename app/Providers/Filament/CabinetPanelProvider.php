@@ -47,8 +47,9 @@ use Illuminate\View\Middleware\ShareErrorsFromSession;
  * Filament y est branchée sur Societe, sans menu de changement ; le
  * TenantContext n'y pose que la société du cabinet (voir
  * BindTenantContextFromFilamentTenant) : tout modèle d'un magasin y échoue
- * fermé. Aucun compte d'un cabinet ne s'y connecte avec son identifiant
- * pour mot de passe : le propriétaire a choisi le sien à l'inscription.
+ * fermé. Aucun compte d'un cabinet n'a de mot de passe provisoire : le
+ * propriétaire a choisi le sien à l'inscription, un collaborateur le choisit
+ * en présence du propriétaire du cabinet.
  * Les ressources du panneau héritent de RessourceDuPanneauCabinet, en mode
  * d'autorisation strict.
  */

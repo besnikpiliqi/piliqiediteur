@@ -17,7 +17,6 @@ use App\Models\User;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\Validator;
-use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use LogicException;
 
@@ -34,12 +33,17 @@ use LogicException;
  * - son identifiant de connexion, tiré au hasard (voir
  *   GenerateurDIdentifiants), avec, pour un compte de membre, son magasin de
  *   rattachement, le seul qu'il ouvrira jamais ;
- * - son premier mot de passe, son identifiant lui-même, remis en main
- *   propre par qui l'a créé, jamais envoyé par e-mail ni journalisé :
- *   mot_de_passe_est_l_identifiant le dit, jusqu'à ce que la personne
- *   choisisse le sien ; sauf pour un expert-comptable de la société, qui
- *   naît avec un mot de passe tiré au hasard que personne ne connaît, et
- *   choisit le sien par un lien envoyé à son adresse ;
+ * - son premier mot de passe, jamais son identifiant (décision de Claude
+ *   D76, T36.1 à T36.4) : pour un compte de société, un mot de passe
+ *   provisoire tiré au hasard (voir MotsDePasseProvisoires), que la
+ *   fenêtre du compte créé montre une seule fois à qui l'a créé pour qu'il
+ *   le remette en main propre, jamais envoyé par e-mail ni journalisé, et
+ *   que la personne remplace à sa première connexion, ou tout de suite si
+ *   elle est là et choisit le sien ; pour un collaborateur d'un cabinet,
+ *   aucun mot de passe utilisable : il choisit le sien en présence du
+ *   propriétaire du cabinet ; pour un expert-comptable de la société, un
+ *   mot de passe tiré au hasard que personne ne connaît : il choisit le
+ *   sien par un lien envoyé à son adresse ;
  * - le jeton de l'écran de création, tiré à son ouverture : une demande
  *   répétée après une réponse perdue rend le compte déjà créé par le même
  *   auteur pour la même demande, jamais un second compte ; le même jeton
@@ -61,7 +65,10 @@ final class CreationDesComptes
 
     public const MESSAGE_DEMANDE_DEJA_SERVIE = 'Cette demande a déjà servi.';
 
-    public function __construct(private readonly GenerateurDIdentifiants $generateur) {}
+    public function __construct(
+        private readonly GenerateurDIdentifiants $generateur,
+        private readonly MotsDePasseProvisoires $provisoires,
+    ) {}
 
     /**
      * Le nom validé ; tout autre champ (une adresse, un rôle) est ignoré.
@@ -178,11 +185,14 @@ final class CreationDesComptes
 
     /**
      * Crée le compte et son identifiant, dans la transaction de l'appelant
-     * et dans la société active : actif, son identifiant pour mot de passe,
-     * créé par l'auteur, sans adresse. Pour un expert-comptable de la
-     * société, et pour lui seul, l'adresse du lien de son mot de passe
-     * s'écrit dès l'insertion, et il garde un mot de passe tiré au hasard
-     * que personne ne connaît, jamais son identifiant.
+     * et dans la société active : actif, créé par l'auteur, sans adresse.
+     * Un compte de société (administrateur, membre) reçoit un mot de passe
+     * provisoire tiré au hasard, que l'instance rendue porte en clair
+     * (User::$motDePasseProvisoire) pour que l'écran le montre une seule
+     * fois ; un collaborateur d'un cabinet n'a aucun mot de passe utilisable
+     * ; un expert-comptable de la société, et lui seul, reçoit en plus
+     * l'adresse du lien de son mot de passe dès l'insertion, et garde un mot
+     * de passe tiré au hasard que personne ne connaît.
      *
      * @param  array{name: string}  $identite
      *
@@ -195,7 +205,10 @@ final class CreationDesComptes
             throw new LogicException('Seul un expert-comptable de la société naît avec une adresse, celle du lien de son mot de passe.');
         }
 
-        $compte = tap((new User(['name' => $identite['name'], 'password' => Str::random(40)]))->forceFill([
+        $provisoire = in_array($role, [RoleSociete::Administrateur, RoleSociete::Membre], true) ? $this->provisoires->tirer() : null;
+
+        $compte = tap((new User(['name' => $identite['name']]))->forceFill([
+            ...($provisoire === null ? MotsDePasseProvisoires::colonnesSansMotDePasse() : MotsDePasseProvisoires::colonnesDuProvisoire($provisoire)),
             'societe_id' => $societe->getKey(),
             'role_societe' => $role,
             'statut' => StatutCompte::Actif,
@@ -203,11 +216,8 @@ final class CreationDesComptes
             ...($adresseDuLien === null ? [] : ['email' => $adresseDuLien]),
         ]))->save();
 
-        $identifiant = $this->generateur->attribuer($compte, $magasin === null ? null : CleDuModele::de($magasin), $jeton, $empreinte);
-
-        if ($adresseDuLien === null) {
-            $compte->forceFill(['password' => $identifiant, 'mot_de_passe_est_l_identifiant' => true])->save();
-        }
+        $this->generateur->attribuer($compte, $magasin === null ? null : CleDuModele::de($magasin), $jeton, $empreinte);
+        $compte->motDePasseProvisoire = $provisoire;
 
         CompteCree::dispatch($compte, $magasin);
 

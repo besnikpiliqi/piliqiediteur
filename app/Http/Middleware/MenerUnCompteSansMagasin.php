@@ -22,8 +22,8 @@ use Symfony\Component\HttpFoundation\Response;
  * et un compte que les données laisseraient sans magasin va de même à
  * l'espace de sa société, qui le refuse s'il ne l'ouvre pas (voir
  * User::canAccessPanel()). Après
- * ExigerSonPropreMotDePasse : un responsable ou un administrateur dont le
- * mot de passe est encore son identifiant choisit d'abord le sien.
+ * ExigerSonPropreMotDePasse : une personne qui vient de se connecter avec
+ * son mot de passe provisoire choisit d'abord le sien.
  */
 class MenerUnCompteSansMagasin
 {

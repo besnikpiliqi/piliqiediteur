@@ -86,23 +86,28 @@ class DatabaseSeederTest extends TestCase
     }
 
     /**
-     * @return array<string, array{0: string, 1: string}>
+     * @return array<string, array{0: string, 1: list<string>}>
      */
     public static function motsDePasseHorsDeLaRegle(): array
     {
         return [
-            'trop court' => ['Fraise7', RegleDuMotDePasse::MESSAGE_TROP_COURT],
-            'un seul caractère répété' => ['aaaaaaaa', RegleDuMotDePasse::MESSAGE_REPETE],
-            'une suite de chiffres' => ['12345678', RegleDuMotDePasse::MESSAGE_SUITE],
+            'trop court' => ['Fraise7', [RegleDuMotDePasse::MESSAGE_TROP_FAIBLE]],
+            'de deux sortes seulement' => ['cigale2704', [RegleDuMotDePasse::MESSAGE_TROP_FAIBLE]],
+            'un mot de passe courant' => ['azertyuiop123', [RegleDuMotDePasse::MESSAGE_COURANT]],
+            'un seul caractère répété' => ['aaaaaaaaaaaaaaaa', [RegleDuMotDePasse::MESSAGE_REPETE]],
+            'une suite de chiffres' => ['12345678', [RegleDuMotDePasse::MESSAGE_TROP_FAIBLE, RegleDuMotDePasse::MESSAGE_COURANT, RegleDuMotDePasse::MESSAGE_SUITE]],
         ];
     }
 
+    /**
+     * @param  list<string>  $reproches
+     */
     #[DataProvider('motsDePasseHorsDeLaRegle')]
-    public function test_un_mot_de_passe_commun_hors_de_la_regle_est_refuse_sans_rien_ecrire(string $motDePasse, string $reproche): void
+    public function test_un_mot_de_passe_commun_hors_de_la_regle_est_refuse_sans_rien_ecrire(string $motDePasse, array $reproches): void
     {
         config(['piliqi.semis_mot_de_passe' => $motDePasse]);
 
-        $this->assertSame(sprintf(MotsDePasseDuSemis::MESSAGE_REFUSE, $reproche), $this->refusDuSemis());
+        $this->assertSame(sprintf(MotsDePasseDuSemis::MESSAGE_REFUSE, implode(' ', $reproches)), $this->refusDuSemis());
         $this->assertDatabaseEmpty('societes');
         $this->assertDatabaseEmpty('users');
     }

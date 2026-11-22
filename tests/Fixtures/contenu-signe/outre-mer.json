@@ -127,7 +127,7 @@
                     },
                     "email": "contact@fdf1.example",
                     "telephone": "05 96 00 00 00",
-                    "regime_tva": null,
+                    "regime_tva": "reel_normal_mensuel",
                     "option_debits_tva": false,
                     "mentions": {
                         "penalites_retard": "Pénalités de retard : trois fois le taux d'intérêt légal, exigibles dès le lendemain de la date d'échéance.",
@@ -475,7 +475,7 @@
                     },
                     "email": "contact@run1.example",
                     "telephone": "05 96 00 00 00",
-                    "regime_tva": null,
+                    "regime_tva": "reel_normal_mensuel",
                     "option_debits_tva": false,
                     "mentions": {
                         "penalites_retard": "Pénalités de retard : trois fois le taux d'intérêt légal, exigibles dès le lendemain de la date d'échéance.",
@@ -622,7 +622,7 @@
                     },
                     "email": "contact@run1.example",
                     "telephone": "05 96 00 00 00",
-                    "regime_tva": null,
+                    "regime_tva": "reel_normal_mensuel",
                     "option_debits_tva": false,
                     "mentions": {
                         "penalites_retard": "Pénalités de retard : trois fois le taux d'intérêt légal, exigibles dès le lendemain de la date d'échéance.",

@@ -24,7 +24,12 @@
                             @endif
                         </div>
 
-                        @if ($chose->cible !== null)
+                        @if ($chose->cle === 'seuil_du_trimestriel')
+                            <div class="flex flex-wrap items-center gap-2">
+                                <x-filament::button tag="a" :href="$chose->url" size="sm" color="gray">{{ $chose->bouton }}</x-filament::button>
+                                {{ $this->verifierLeSeuilAction }}
+                            </div>
+                        @elseif ($chose->cible !== null)
                             {{ ($this->verifierLEcartAction)(['ecart' => $chose->cible]) }}
                         @elseif ($chose->url !== null)
                             <x-filament::button tag="a" :href="$chose->url" size="sm" :color="$chose->aSurveiller ? 'gray' : 'primary'">{{ $chose->bouton }}</x-filament::button>
@@ -67,6 +72,10 @@
     <div id="ma-demonstration">
         @livewire(\App\Filament\MaDemonstration::NOM, ['societe' => $this->societe()], key('ma-demonstration'))
     </div>
+
+    @if (($messageDeLaTva = $this->messageDeLaTva()) !== null)
+        @include('filament.tva.message-du-credit', ['message' => $messageDeLaTva])
+    @endif
 
     @if ($this->voitLesGraphiques())
         @livewire(\App\Filament\GrilleDesGraphiques::NOM, ['ecran' => \App\Domain\TableauDeBord\Enums\EcranDuTableauDeBord::Societe->value, 'lazy' => 'on-load'], key('graphiques-de-la-societe'))

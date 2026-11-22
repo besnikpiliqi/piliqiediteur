@@ -295,8 +295,12 @@ final class SocietesDesCas
 
     private const REGULARISATION_DU_STUDIO = 3;
 
-    /** Le SIREN de l'entité que l'examen du SIREN du Studio Lumière désigne comme la bonne. */
-    private const SIREN_DE_L_EXAMEN = '000000422';
+    /**
+     * Le SIREN de l'entité que l'examen du SIREN du Studio Lumière désigne
+     * comme la bonne, que sa correction lui donne ensuite (le test du semis
+     * relit le Studio Lumière par lui).
+     */
+    public const SIREN_DE_L_EXAMEN = '000000422';
 
     /**
      * La justification des procédures de l'éditeur semées.
@@ -431,9 +435,9 @@ final class SocietesDesCas
 
         $this->semis->reglerLaFiscalite('atelier', ['regime_tva' => RegimeTva::FranchiseEnBase->value]);
         $this->semis->reglerLaFiscalite('studio', ['option_debits_tva' => true, 'regime_tva' => RegimeTva::ReelNormalTrimestriel->value]);
-        $this->semis->reglerLaFiscalite('groupe', ['membre_assujetti_unique' => true, 'regime_tva' => RegimeTva::ReelSimplifie->value]);
+        $this->semis->reglerLaFiscalite('groupe', ['membre_assujetti_unique' => true, 'regime_tva' => RegimeTva::ReelNormalMensuel->value]);
         $this->semis->reglerLaFiscalite('comptoir', ['regime_tva' => RegimeTva::ReelNormalMensuel->value]);
-        $this->semis->reglerLaFiscalite('boulangerie', ['regime_tva' => RegimeTva::ReelSimplifie->value]);
+        $this->semis->reglerLaFiscalite('boulangerie', ['regime_tva' => RegimeTva::ReelNormalMensuel->value]);
         $this->semis->reglerLaFiscalite('librairie', ['regime_tva' => RegimeTva::ReelNormalTrimestriel->value]);
 
         $this->semis->horsDeToutContexte(fn () => app(VerifierLOrdreAction::class)->handle($this->semis->proprietaire('cabinet suspendu'), $this->semis->societe('cabinet suspendu'), [

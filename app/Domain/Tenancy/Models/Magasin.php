@@ -27,6 +27,7 @@ use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\CleDuModele;
 use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Domain\Tenancy\Support\ValeursLues;
+use App\Models\User;
 use Database\Factories\MagasinFactory;
 use Filament\Models\Contracts\HasName;
 use Illuminate\Database\Eloquent\Builder;
@@ -139,6 +140,21 @@ class Magasin extends Model implements HasName
     private const REFUS_SOCIETE_A_VERIFIER = 'Votre société est en cours de vérification : la vente, les e-mails aux clients, les PDF et les transmissions sont désactivés jusqu\'à sa validation.';
 
     public const REFUS_ASSUJETTI_UNIQUE = 'PILIQI ne gère pas encore les sociétés membres d\'un assujetti unique (groupe TVA) : aucune vente, facture, avoir, encaissement ni devis numéroté réel n\'est possible.';
+
+    /**
+     * Le refus d'une opération commerciale réelle tant que le régime de TVA
+     * de la société n'est pas choisi (constat de l'éditeur du 15/11/2026,
+     * décision de Claude, D76), pour qui règle ses paramètres fiscaux (le
+     * propriétaire, un administrateur autorisé) : il mène à la page qui le
+     * choisit (voir ChosesAFaireDuMagasin).
+     */
+    public const REFUS_REGIME_A_CHOISIR = 'Choisissez d\'abord le régime de TVA de la société dans ses paramètres fiscaux.';
+
+    /**
+     * Le même refus pour tout autre compte, qui ne règle pas ces
+     * paramètres.
+     */
+    public const REFUS_REGIME_A_DEMANDER = 'Le régime de TVA de la société n\'est pas encore choisi : demandez-le au propriétaire.';
 
     /**
      * Le refus de numéroter un document dans un magasin sans territoire
@@ -544,10 +560,11 @@ class Magasin extends Model implements HasName
     /**
      * Le magasin peut-il vendre ? Hors lecture seule, une fois sa société
      * validée (voir Societe::estValidee()), tant qu'elle n'est pas membre
-     * d'un assujetti unique (décision P3.1), et son établissement confirmé
-     * par le répertoire Sirene (etablissement_verifie_le) : ticket,
-     * facture, avoir, paiement, devis numéroté, e-mail à un client,
-     * relance et transmission à la plateforme en dépendent (voir
+     * d'un assujetti unique (décision P3.1), une fois son régime de TVA
+     * choisi (décision de Claude, D76, lot TVA27), et son établissement
+     * confirmé par le répertoire Sirene (etablissement_verifie_le) :
+     * ticket, facture, avoir, paiement, devis numéroté, e-mail à un
+     * client, relance et transmission à la plateforme en dépendent (voir
      * verifierQuIlPeutVendre()). Une revérification négative après la
      * validation n'y change rien.
      */
@@ -557,10 +574,14 @@ class Magasin extends Model implements HasName
     }
 
     /**
-     * Pourquoi il ne peut pas vendre, tel que l'écran le dit ; null quand
-     * il le peut.
+     * Pourquoi il ne peut pas vendre, tel que l'écran le dit à ce compte ;
+     * null quand il le peut. Seul le refus du régime de TVA dépend du
+     * compte (voir refusDuRegime()) ; sans compte, il dit de le demander
+     * au propriétaire, sans rien demander aux droits : peutVendre(), que
+     * les droits eux-mêmes posent (voir ControleDesDroits), ne s'appelle
+     * ainsi jamais en boucle.
      */
-    public function refusDeVente(): ?string
+    public function refusDeVente(?User $compte = null): ?string
     {
         $refusEnLectureSeule = $this->refusEnLectureSeule();
 
@@ -568,9 +589,30 @@ class Magasin extends Model implements HasName
             $refusEnLectureSeule !== null => $refusEnLectureSeule,
             ! $this->societe->estValidee() => self::REFUS_SOCIETE_A_VERIFIER,
             $this->societe->membre_assujetti_unique => self::REFUS_ASSUJETTI_UNIQUE,
+            $this->attendLeRegimeDeTva() => $this->refusDuRegime($compte),
             $this->etablissement_verifie_le === null => "L'établissement de ce magasin (SIRET {$this->siret}) n'est pas encore confirmé par le répertoire Sirene de l'INSEE : aucune vente avant sa confirmation.",
             default => null,
         };
+    }
+
+    /**
+     * Le refus du régime de TVA à choisir, tel que ce compte le lit : pour
+     * qui ouvre les paramètres fiscaux de la société (voir
+     * SocietePolicy::voirLesParametresFiscaux()), de le choisir ; pour tout
+     * autre, ou sans compte, de le demander au propriétaire.
+     */
+    public function refusDuRegime(?User $compte): string
+    {
+        return $compte !== null && $compte->can('voirLesParametresFiscaux', $this->societe) ? self::REFUS_REGIME_A_CHOISIR : self::REFUS_REGIME_A_DEMANDER;
+    }
+
+    /**
+     * Son régime de TVA attend-il d'être choisi, ce qui arrête toute
+     * opération commerciale réelle (voir refusDeVente()) ?
+     */
+    public function attendLeRegimeDeTva(): bool
+    {
+        return $this->societe->regime_tva === null;
     }
 
     /**
@@ -578,13 +620,15 @@ class Magasin extends Model implements HasName
      * vente et tout encaissement, juste après son verrou par l'émission
      * d'une facture, et par l'envoi d'un devis ou d'un document, un job
      * d'envoi, une relance et la transmission à la plateforme (voir
-     * peutVendre()).
+     * peutVendre()). La base refuse elle aussi une vente, un encaissement
+     * ou un devis numéroté d'une société sans régime de TVA (voir
+     * GardesDuRegimeDeTva).
      *
      * @throws VenteNonAutoriseeException
      */
-    public function verifierQuIlPeutVendre(): void
+    public function verifierQuIlPeutVendre(?User $compte = null): void
     {
-        $refus = $this->refusDeVente();
+        $refus = $this->refusDeVente($compte);
 
         if ($refus !== null) {
             throw new VenteNonAutoriseeException($refus);
@@ -594,16 +638,18 @@ class Magasin extends Model implements HasName
     /**
      * La garde des gestes qu'une autorisation refuse déjà quand le magasin
      * ne peut pas vendre (voir ControleDesDroits), comme l'avoir : pour une
-     * société membre d'un assujetti unique, le refus dit pourquoi (décision
-     * P3.1) plutôt qu'un refus d'autorisation. Un autre motif garde son
-     * refus.
+     * société membre d'un assujetti unique (décision P3.1), ou dont le
+     * régime de TVA n'est pas encore choisi, le refus dit pourquoi plutôt
+     * qu'un refus d'autorisation. Un autre motif garde son refus.
      *
      * @throws VenteNonAutoriseeException
      */
-    public function verifierQuIlNEstPasDansUnAssujettiUnique(): void
+    public function verifierQueSaSocietePeutVendre(?User $compte = null): void
     {
-        if ($this->refusDeVente() === self::REFUS_ASSUJETTI_UNIQUE) {
-            throw new VenteNonAutoriseeException(self::REFUS_ASSUJETTI_UNIQUE);
+        $refus = $this->refusDeVente($compte);
+
+        if (in_array($refus, [self::REFUS_ASSUJETTI_UNIQUE, self::REFUS_REGIME_A_CHOISIR, self::REFUS_REGIME_A_DEMANDER], true)) {
+            throw new VenteNonAutoriseeException((string) $refus);
         }
     }
 

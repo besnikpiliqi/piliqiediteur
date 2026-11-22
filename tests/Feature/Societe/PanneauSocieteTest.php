@@ -7,6 +7,8 @@ use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Cabinets\Actions\DesignerUnCabinetAction;
 use App\Domain\Cabinets\Models\LienCabinet;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
+use App\Domain\Charges\Actions\DeclarerUnCreditDeTvaAction;
+use App\Domain\Charges\Support\TextesDuCreditDeTva;
 use App\Domain\Demonstration\Actions\DemanderUneDemonstrationAction;
 use App\Domain\Demonstration\Services\CarteDeLaDemonstration;
 use App\Domain\Tenancy\Actions\ChangerLeRoleDeSocieteAction;
@@ -420,13 +422,17 @@ class PanneauSocieteTest extends TestCase
     /**
      * Le tableau de bord du propriétaire coche chaque première étape
      * faite : le premier magasin créé, un compte ajouté à l'équipe, la
-     * société validée ; chacune mène à son écran
-     * (la création d'un magasin, avant comme après le premier, sous le
-     * titre « Ajouter un magasin » dès qu'il existe), et la liste disparaît
-     * quand tout est fait. Un administrateur n'a pas de premières étapes.
+     * société validée, le régime de TVA choisi puis, au réel normal, le
+     * crédit de TVA d'une déclaration indiqué (lot TVA27) ; chacune mène à
+     * son écran (la création d'un magasin, avant comme après le premier,
+     * sous le titre « Ajouter un magasin » dès qu'il existe), et la liste
+     * disparaît quand tout est fait. Un administrateur n'a pas de premières
+     * étapes. La société s'inscrit le 3 novembre 2026 ; le crédit de sa
+     * déclaration de novembre s'indique le 2 décembre.
      */
     public function test_le_tableau_de_bord_coche_chaque_premiere_etape_faite(): void
     {
+        $this->travelTo(self::aParis('2026-11-03 10:00:00'));
         $societe = $this->inscrireUneSociete();
         $proprietaire = $societe->proprietaire()->firstOrFail();
         $administrateur = $this->choisirSonMotDePasse(app(CreerAdministrateurAction::class)->handle($proprietaire, $societe, ['name' => 'Alice Martin'], null, PermissionRegistry::modeleDeLAdministrateur(TypeDActivite::Commerce), []));
@@ -438,6 +444,7 @@ class PanneauSocieteTest extends TestCase
 
         $this->assertSame([
             TableauDeBord::ETAPE_CODE_DU_COURRIER => [false, VerificationSociete::getUrl(panel: 'societe', tenant: $societe)],
+            TableauDeBord::ETAPE_REGIME_DE_TVA => [false, ParametresFiscauxSociete::getUrl(panel: 'societe', tenant: $societe)],
             TableauDeBord::ETAPE_PREMIER_MAGASIN => [false, MagasinResource::getUrl('create', panel: 'societe', tenant: $societe)],
             TableauDeBord::ETAPE_EQUIPE => [true, MembreResource::getUrl('index', panel: 'societe', tenant: $societe)],
             CarteDeLaDemonstration::ETAPE => [false, TableauDeBord::getUrl(panel: 'societe', tenant: $societe).'#ma-demonstration'],
@@ -453,13 +460,23 @@ class PanneauSocieteTest extends TestCase
         $this->get(TableauDeBord::getUrl(panel: 'societe', tenant: $societe))->assertSeeText('Vos premières étapes');
 
         $this->saisirLeCodeDuCourrier($societe->fresh());
-        $this->assertSame([TableauDeBord::ETAPE_CODE_DU_COURRIER => true, TableauDeBord::ETAPE_AJOUTER_UN_MAGASIN => true, TableauDeBord::ETAPE_EQUIPE => true, CarteDeLaDemonstration::ETAPE => false], array_map(fn (array $etape): bool => $etape[0], $etapes($proprietaire)));
+        $this->assertSame([TableauDeBord::ETAPE_CODE_DU_COURRIER => true, TableauDeBord::ETAPE_REGIME_DE_TVA => false, TableauDeBord::ETAPE_AJOUTER_UN_MAGASIN => true, TableauDeBord::ETAPE_EQUIPE => true, CarteDeLaDemonstration::ETAPE => false], array_map(fn (array $etape): bool => $etape[0], $etapes($proprietaire)));
 
         $this->reglerLeSiteDeDemonstration();
         app(TenantContext::class)->clear();
         app(DemanderUneDemonstrationAction::class)->handle($proprietaire->fresh() ?? $proprietaire, null, null);
 
-        $this->assertSame([TableauDeBord::ETAPE_CODE_DU_COURRIER => true, TableauDeBord::ETAPE_AJOUTER_UN_MAGASIN => true, TableauDeBord::ETAPE_EQUIPE => true, CarteDeLaDemonstration::ETAPE => true], array_map(fn (array $etape): bool => $etape[0], $etapes($proprietaire)));
+        $this->assertSame([TableauDeBord::ETAPE_CODE_DU_COURRIER => true, TableauDeBord::ETAPE_REGIME_DE_TVA => false, TableauDeBord::ETAPE_AJOUTER_UN_MAGASIN => true, TableauDeBord::ETAPE_EQUIPE => true, CarteDeLaDemonstration::ETAPE => true], array_map(fn (array $etape): bool => $etape[0], $etapes($proprietaire)));
+
+        $this->choisirLeRegimeDeTva($societe);
+        $this->assertSame([TableauDeBord::ETAPE_CODE_DU_COURRIER => true, TableauDeBord::ETAPE_REGIME_DE_TVA => true, TextesDuCreditDeTva::TITRE_DE_L_ETAPE => false, TableauDeBord::ETAPE_AJOUTER_UN_MAGASIN => true, TableauDeBord::ETAPE_EQUIPE => true, CarteDeLaDemonstration::ETAPE => true], array_map(fn (array $etape): bool => $etape[0], $etapes($proprietaire)));
+        $this->get(TableauDeBord::getUrl(panel: 'societe', tenant: $societe))->assertOk()->assertSeeText('Vos premières étapes');
+
+        $this->travelTo(self::aParis('2026-12-02 10:00:00'));
+        app(DeclarerUnCreditDeTvaAction::class)->handle($proprietaire->fresh() ?? $proprietaire, $societe->fresh() ?? $societe, '2026-11', 0);
+        app(TenantContext::class)->clear();
+
+        $this->assertSame([TableauDeBord::ETAPE_CODE_DU_COURRIER => true, TableauDeBord::ETAPE_REGIME_DE_TVA => true, TextesDuCreditDeTva::TITRE_DE_L_ETAPE => true, TableauDeBord::ETAPE_AJOUTER_UN_MAGASIN => true, TableauDeBord::ETAPE_EQUIPE => true, CarteDeLaDemonstration::ETAPE => true], array_map(fn (array $etape): bool => $etape[0], $etapes($proprietaire)));
         $this->get(TableauDeBord::getUrl(panel: 'societe', tenant: $societe))->assertOk()->assertDontSeeText('Vos premières étapes')->assertSeeText($magasin->nom);
     }
 
@@ -478,7 +495,7 @@ class PanneauSocieteTest extends TestCase
         $etapeDesMagasins = function () use ($societe, $proprietaire): array {
             $this->dansLEspaceDeLaSociete($societe->fresh(), $proprietaire);
 
-            return collect(Livewire::test(TableauDeBord::class)->instance()->etapes())->firstWhere('titre', '!=', TableauDeBord::ETAPE_CODE_DU_COURRIER);
+            return collect(Livewire::test(TableauDeBord::class)->instance()->etapes())->first(fn (array $etape): bool => in_array($etape['titre'], [TableauDeBord::ETAPE_PREMIER_MAGASIN, TableauDeBord::ETAPE_AJOUTER_UN_MAGASIN], true));
         };
 
         $this->assertSame(['titre' => TableauDeBord::ETAPE_PREMIER_MAGASIN, 'faite' => false, 'etat' => 'Choisissez son établissement dans la liste de ceux de votre SIREN.', 'url' => $creation], $etapeDesMagasins());
@@ -518,12 +535,12 @@ class PanneauSocieteTest extends TestCase
     /**
      * Une société validée par l'invitation acceptée de son cabinet n'a
      * jamais reçu de courrier : ses premières étapes sont seulement celles
-     * des magasins et de l'équipe, et son tableau de bord comme sa page
-     * « Vérification » disent seulement qu'elle est validée par l'invitation
-     * de son cabinet, sans courrier ni code, ni lien qui y mène (décision
-     * de l'éditeur du 01/11/2026). Une société qui s'inscrit elle-même a
-     * ses trois étapes, celle du courrier comprise, avant comme après sa
-     * validation.
+     * du régime de TVA (lot TVA27), des magasins, de l'équipe et de sa
+     * démonstration, et son tableau de bord comme sa page « Vérification »
+     * disent seulement qu'elle est validée par l'invitation de son cabinet,
+     * sans courrier ni code, ni lien qui y mène (décision de l'éditeur du
+     * 01/11/2026). Une société qui s'inscrit elle-même a les mêmes, et celle
+     * du courrier en tête, avant comme après sa validation.
      */
     public function test_une_societe_validee_par_l_invitation_de_son_cabinet_ne_voit_pas_l_etape_du_courrier(): void
     {
@@ -535,7 +552,7 @@ class PanneauSocieteTest extends TestCase
 
         $this->dansLEspaceDeLaSociete($invitee, $proprietaire);
         $page = Livewire::test(TableauDeBord::class);
-        $this->assertSame([TableauDeBord::ETAPE_PREMIER_MAGASIN, TableauDeBord::ETAPE_EQUIPE, CarteDeLaDemonstration::ETAPE], array_column($page->instance()->etapes(), 'titre'));
+        $this->assertSame([TableauDeBord::ETAPE_REGIME_DE_TVA, TableauDeBord::ETAPE_PREMIER_MAGASIN, TableauDeBord::ETAPE_EQUIPE, CarteDeLaDemonstration::ETAPE], array_column($page->instance()->etapes(), 'titre'));
         $this->actingAs($proprietaire)->get(TableauDeBord::getUrl(panel: 'societe', tenant: $invitee))
             ->assertOk()
             ->assertSeeText(['Vos premières étapes', TableauDeBord::ETAPE_PREMIER_MAGASIN, TableauDeBord::ETAPE_EQUIPE, $phrase])
@@ -550,10 +567,10 @@ class PanneauSocieteTest extends TestCase
         $inscrite = $this->inscrireUneSociete();
         $sonProprietaire = $inscrite->proprietaire()->firstOrFail();
         $this->dansLEspaceDeLaSociete($inscrite->fresh(), $sonProprietaire);
-        $this->assertSame([TableauDeBord::ETAPE_CODE_DU_COURRIER, TableauDeBord::ETAPE_PREMIER_MAGASIN, TableauDeBord::ETAPE_EQUIPE, CarteDeLaDemonstration::ETAPE], array_column(Livewire::test(TableauDeBord::class)->instance()->etapes(), 'titre'));
+        $this->assertSame([TableauDeBord::ETAPE_CODE_DU_COURRIER, TableauDeBord::ETAPE_REGIME_DE_TVA, TableauDeBord::ETAPE_PREMIER_MAGASIN, TableauDeBord::ETAPE_EQUIPE, CarteDeLaDemonstration::ETAPE], array_column(Livewire::test(TableauDeBord::class)->instance()->etapes(), 'titre'));
         $this->saisirLeCodeDuCourrier($inscrite->fresh());
         $this->dansLEspaceDeLaSociete($inscrite->fresh(), $sonProprietaire);
-        $this->assertSame([TableauDeBord::ETAPE_CODE_DU_COURRIER, TableauDeBord::ETAPE_PREMIER_MAGASIN, TableauDeBord::ETAPE_EQUIPE, CarteDeLaDemonstration::ETAPE], array_column(Livewire::test(TableauDeBord::class)->instance()->etapes(), 'titre'));
+        $this->assertSame([TableauDeBord::ETAPE_CODE_DU_COURRIER, TableauDeBord::ETAPE_REGIME_DE_TVA, TableauDeBord::ETAPE_PREMIER_MAGASIN, TableauDeBord::ETAPE_EQUIPE, CarteDeLaDemonstration::ETAPE], array_column(Livewire::test(TableauDeBord::class)->instance()->etapes(), 'titre'));
         $this->flushSession();
         $this->actingAs($sonProprietaire)->get(VerificationSociete::getUrl(panel: 'societe', tenant: $inscrite))
             ->assertOk()

@@ -296,7 +296,7 @@ final class SemisComplet
                 'assurance_contrat' => 'RCP-2026-4471',
                 'assurance_couverture' => 'France métropolitaine',
             ]);
-            $this->reglerLaFiscalite('services', ['regime_tva' => $this->modele === TypeDActivite::Services ? RegimeTva::ReelNormalMensuel->value : RegimeTva::ReelSimplifie->value]);
+            $this->reglerLaFiscalite('services', ['regime_tva' => $this->modele === TypeDActivite::Services ? RegimeTva::ReelNormalMensuel->value : RegimeTva::ReelNormalTrimestriel->value]);
         }
 
         if ($this->seme('cabinet')) {
@@ -334,9 +334,12 @@ final class SemisComplet
             $this->membre('martinique', 'Kévin Louisy', RoleMagasin::Vendeur);
         }
 
+        $tva = new TvaDesSocietes($this->horloge, $this);
+
         if ($this->seme('services')) {
             $this->administrateur('services', 'Léa Fontaine', null, []);
             $this->administrateur('services', 'Antoine Roux', ['conseil'], PermissionRegistry::deVente());
+            $tva->nommerLAdministratriceDeLaFiscalite();
             $this->membre('conseil', 'Claire Dubois', RoleMagasin::Responsable);
             $this->membre('conseil', 'Maxime Henry', RoleMagasin::Vendeur);
             $this->membre('conseil', 'Julie Mercier', RoleMagasin::Vendeur);
@@ -401,6 +404,8 @@ final class SemisComplet
         } elseif ($this->seme('cabinet')) {
             $societesDesCas->inviterDesEntreprisesQuiNeSInscriventPas();
         }
+
+        $tva->dernierJour();
 
         $this->horloge->aller(self::JOURS - 1, '11:00');
         (new DerniersGestes($this, $this->motsDePasse))->semer();
@@ -470,8 +475,8 @@ final class SemisComplet
     private function direCeQuIlFautRegarder(): void
     {
         foreach ([
-            'propriétaire commerce' => 'Espace de la société : tableau de bord et graphiques de ses six magasins, dont la carte « Écart des prix d\'achat » à l\'affichage des 12 mois (choix « Tous mes magasins », l\'Entrepôt qui porte tous les cas mois par mois, l\'Éphémère sans aucun achat validé, le Marché dont l\'unique produit n\'est acheté qu\'une fois ; le menu « Période » dit « Année précédente » pour les achats d\'avant), « Les caisses », charges, équipe, cabinet lié, téléchargements (prêts, et un en préparation) ; ne vend pas ; saisit et valide les achats des trois magasins de plus',
-            'propriétaire services' => 'Espace de la société : expert-comptable déclaré (deux comptes), charges validées par lui, magasin de services',
+            'propriétaire commerce' => 'Espace de la société : tableau de bord et graphiques de ses six magasins, dont la carte « Écart des prix d\'achat » à l\'affichage des 12 mois (choix « Tous mes magasins », l\'Entrepôt qui porte tous les cas mois par mois, l\'Éphémère sans aucun achat validé, le Marché dont l\'unique produit n\'est acheté qu\'une fois ; le menu « Période » dit « Année précédente » pour les achats d\'avant), « Les caisses », charges, équipe, cabinet lié, téléchargements (prêts, et un en préparation) ; ne vend pas ; saisit et valide les achats des trois magasins de plus ; TVA : son crédit de départ de −1 250,00 €, à vérifier par le cabinet (message bleu du tableau de bord, bloc du crédit de la page des charges), et le report du crédit de juillet à octobre (carte de la TVA, graphique, « Voir les chiffres »)',
+            'propriétaire services' => 'Espace de la société : expert-comptable déclaré (deux comptes), charges validées par lui, magasin de services ; TVA au trimestriel : crédit de départ corrigé par Marc Petit, avec son motif, puis une déclaration plus récente saisie par lui ; le chiffre d\'affaires de l\'année dépasse 1 100 000 € (ligne de l\'« À faire », « C\'est vérifié »)',
             'propriétaire cabinet' => 'Espace du cabinet : clients liés, invitations et demandes dans chaque état, collaborateurs et clients confiés ; la page « Graphiques » de Maison Ferrand montre « Écart des prix d\'achat » de l\'année précédente sans geste',
             'Nadia Benali' => 'Administratrice sans vente : tableau de bord de la société avec graphiques (dont « Écart des prix d\'achat », à ajouter par « Ajouter un graphique »), charges qu\'elle ajoute, magasins de sa portée',
             'Thomas Girard' => 'Administrateur qui vend dans deux magasins : sa caisse aux Halles puis à la République, ses relevés ; sans la case des graphiques, il ne voit pas « Écart des prix d\'achat »',
@@ -481,21 +486,22 @@ final class SemisComplet
             'Hugo Lefebvre' => 'Responsable de la République : inventaire d\'ouverture, réassorts, avoir du Studio Nord ; saisit la lampe qui perd 210 €, le cadre photo archivé et la théière ; sans la case des graphiques, il ne voit pas « Écart des prix d\'achat »',
             'Lucas Moreau (République)' => 'La même personne que le vendeur des Halles, avec un autre compte, promue responsable de la République',
             'Sarah Petit' => 'Vendeuse de la République qui voit les factures de toute l\'équipe',
-            'Léa Fontaine' => 'Administratrice sans vente de la société de services',
+            'Léa Fontaine' => 'Administratrice sans vente de la société de services ; ne règle pas la fiscalité : pas de ligne du seuil du trimestriel',
+            'Mathilde Garnier' => 'Administratrice de la société de services qui gère ses paramètres : la ligne du seuil du réel normal trimestriel dans l\'« À faire » (« Ouvrir les réglages fiscaux », « C\'est vérifié »)',
             'Antoine Roux' => 'Administrateur qui vend au magasin de services',
             'Claire Dubois' => 'Responsable du magasin de services : prestations à l\'étranger (autoliquidation, hors UE), mairie, prélèvement',
             'Maxime Henry' => 'Vendeur de services : ses tickets à la caisse',
             'Julie Mercier' => 'Vendeuse de services : ses tickets à la caisse',
-            'Paul Lefèvre' => 'Collaborateur du cabinet : Maison Ferrand confiée (ses six magasins), charges à valider et validées, graphiques du client dont « Écart des prix d\'achat »',
-            'Emma Rousseau' => 'Collaboratrice du cabinet : Épicerie Lemoine confiée (seul magasin ouvert au cabinet, sans les consultations d\'achats : elle ne voit pas « Écart des prix d\'achat » de ses réassorts)',
-            'propriétaire client' => 'Société née de l\'invitation du cabinet : cabinet lié, magasins ouverts au cabinet',
+            'Paul Lefèvre' => 'Collaborateur du cabinet : Maison Ferrand confiée (ses six magasins), charges à valider et validées, graphiques du client dont « Écart des prix d\'achat » ; « Crédit de TVA de départ à vérifier » au tableau de bord du cabinet (le confirmer ou le corriger sur la page des charges du client), et les charges qu\'il a ajoutées pour la chaîne du report',
+            'Emma Rousseau' => 'Collaboratrice du cabinet : Épicerie Lemoine confiée (seul magasin ouvert au cabinet, sans les consultations d\'achats : elle ne voit pas « Écart des prix d\'achat » de ses réassorts) ; le crédit de TVA de départ qu\'elle a confirmé, et le trimestre en crédit reporté sur le suivant',
+            'propriétaire client' => 'Société née de l\'invitation du cabinet : cabinet lié, magasins ouverts au cabinet ; TVA au trimestriel : crédit de départ vérifié par le cabinet (message vert), le seuil de 1 100 000 € dépassé et dit vérifié (journal d\'audit, plus dans l\'« À faire »)',
             'Romane Gauthier' => 'Administratrice devenue responsable de l\'Épicerie',
             'Bastien Leroy' => 'Administrateur qui vend à l\'Épicerie',
             'Nicolas Lemoine' => 'Responsable de l\'Épicerie : équipe (vendeuse suspendue puis réactivée, accès redonné)',
             'Chloé Bernard' => 'Vendeuse de l\'Épicerie : ses tickets et ses relevés',
             'Mehdi Brahimi' => 'Vendeur de l\'Épicerie : ses tickets et ses relevés',
-            'Marc Petit' => 'Expert-comptable déclaré : « Tableau de bord de la société » avec tous ses graphiques affichés (« Tous les graphiques sont affichés »), charges à valider, magasins en lecture ; société de services, sans achats : pas de « Écart des prix d\'achat »',
-            'propriétaire inscription' => 'Inscription qui attend le code du courrier : aucune vente avant sa validation',
+            'Marc Petit' => 'Expert-comptable déclaré : « Tableau de bord de la société » avec tous ses graphiques affichés (« Tous les graphiques sont affichés »), charges à valider, magasins en lecture ; société de services, sans achats : pas de « Écart des prix d\'achat » ; le crédit de TVA qu\'il a corrigé avec un motif et la déclaration plus récente qu\'il a saisie lui-même, née vérifiée (« Charges de la société »)',
+            'propriétaire inscription' => 'Inscription qui attend le code du courrier : aucune vente avant sa validation ; régime trimestriel choisi la veille : son crédit de TVA attend la fin de son premier trimestre (bouton grisé avec sa date)',
             'Élodie Fabre' => 'Observatrice des Halles : tout en lecture, aucune vente ; reçoit les alertes de stock (la propriétaire lui a coché « ajuster le stock »)',
             'Victor Blanchard' => 'Observateur du magasin de services',
             'Margaux Perrin' => 'Observatrice de l\'Épicerie',
@@ -503,7 +509,7 @@ final class SemisComplet
             'Bruno Caron' => 'Compte retiré de la société : la connexion est refusée',
             'Anaïs Lambert' => 'Vendeuse retirée puis réintégrée : ses tickets d\'avant et d\'après, le ZIP de ses ventes demandé juste avant son retrait, en échec',
             'Léna Roussel' => 'Accès redonné en son absence : son mot de passe est redevenu son identifiant',
-            'propriétaire comptoir' => 'Cinq magasins : Martinique (8,5 %), Lyon fermé temporairement, Bordeaux rouvert, Nantes cédé, Lille suspendu ; transmission en attente',
+            'propriétaire comptoir' => 'Cinq magasins : Martinique (8,5 %), Lyon fermé temporairement, Bordeaux rouvert, Nantes cédé, Lille suspendu ; transmission en attente ; sans comptable : son crédit de TVA de −1 250,00 € « non vérifié par un comptable » (message orange) ; au mensuel, au-delà de 1 100 000 € de chiffre d\'affaires, sans ligne du seuil',
             'Gaëlle Hoarau' => 'Administratrice à qui la propriété est proposée (lien pas encore suivi)',
             'Joëlle Marie-Sainte' => 'Responsable de Maison Ferrand Fort-de-France : heure des Antilles, TVA à 8,5 % et 2,1 %, réassorts, loyer à 8,5 % dans les charges, un savon acheté deux fois dont l\'un reçu sans date le dernier soir d\'un mois (rangé au jour de sa validation en Martinique) ; sans la case des graphiques, elle ne voit pas « Écart des prix d\'achat »',
             'Kévin Louisy' => 'Vendeur de Maison Ferrand Fort-de-France : ses tickets à l\'heure de la Martinique',
@@ -525,14 +531,14 @@ final class SemisComplet
             'propriétaire cabinet non vérifié' => 'Cabinet inscrit, pas encore vérifié à l\'Ordre : aucun client',
             'propriétaire cabinet suspendu' => 'Cabinet vérifié puis suspendu',
             'propriétaire cabinet radié' => 'Cabinet radié du tableau de l\'Ordre (constat de l\'éditeur) : plus vérifié, son lien avec la Boulangerie Duval a pris fin',
-            'propriétaire atelier' => 'Franchise en base ; sa demande de lien au cabinet attend la réponse',
-            'propriétaire studio' => 'Option pour les débits ; sa demande de lien a expiré ; SIREN corrigé par l\'éditeur : une facture régularisée par son avoir de régularisation, les autres à régulariser ; exercice qui ne finit plus en décembre : le menu « Période » des graphiques propose l\'exercice en cours et le précédent',
-            'propriétaire groupe' => 'Assujetti unique ; son lien avec le cabinet a pris fin',
+            'propriétaire atelier' => 'Franchise en base : aucune TVA à l\'écran, pas même zéro, ni crédit de départ ; sa demande de lien au cabinet attend la réponse',
+            'propriétaire studio' => 'Option pour les débits ; sa demande de lien a expiré ; SIREN corrigé par l\'éditeur : une facture régularisée par son avoir de régularisation, les autres à régulariser ; exercice qui ne finit plus en décembre : le menu « Période » des graphiques propose l\'exercice en cours et le précédent ; TVA : « aucun crédit » déclaré, non vérifié (sans comptable) ; au trimestriel, un chiffre d\'affaires de 1 100 000,00 € tout juste, sans ligne du seuil ; un loyer validé et un abonnement à valider (la TVA réelle et son estimation diffèrent)',
+            'propriétaire groupe' => 'Assujetti unique ; son lien avec le cabinet a pris fin ; n\'a pas encore indiqué son crédit de TVA (étape « Votre TVA avant PILIQI » et ligne de l\'« À faire »)',
             'propriétaire boulangerie' => 'Société suspendue ; lien terminé par le cabinet Martin, puis par la radiation du cabinet Faure',
             'propriétaire refusée' => 'Inscription close par l\'éditeur (refus) : se connecte seulement avec son identifiant',
             'propriétaire révoquée' => 'Société révoquée par l\'éditeur (SIREN pris à tort) : lecture seule, son magasin fermé',
             'propriétaire caduque' => 'Inscrite d\'elle-même pendant que le cabinet Martin l\'invitait (son invitation est devenue caduque) : attend le code de son courrier',
-            'propriétaire pièces' => 'Inscription dont les courriers ne sont pas parvenus : nouveau courrier demandé, pièces déposées, en attente de l\'éditeur',
+            'propriétaire pièces' => 'Inscription dont les courriers ne sont pas parvenus : nouveau courrier demandé, pièces déposées, en attente de l\'éditeur ; régime de TVA pas encore choisi (message rouge du tableau de bord, étape « Choisir le régime de TVA »)',
         ] as $cle => $aRegarder) {
             $this->liste->regarder($this->compte($cle), $aRegarder);
         }
@@ -701,8 +707,9 @@ final class SemisComplet
      * (voir ModifierParametresFiscauxSocieteAction) : chaque société qui a
      * un magasin choisit son régime de TVA, les sociétés semées se
      * répartissant entre le réel normal mensuel, le réel normal
-     * trimestriel, le réel simplifié et la franchise en base (constat de
-     * l'éditeur du 15/11/2026 : aucune société qui vend sans régime).
+     * trimestriel et la franchise en base (constat de l'éditeur du
+     * 15/11/2026 : aucune société qui vend sans régime ; le régime
+     * simplifié n'existe plus, lot TVA27).
      *
      * @param  array<string, mixed>  $reglages
      */

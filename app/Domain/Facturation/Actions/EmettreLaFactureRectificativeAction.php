@@ -93,7 +93,7 @@ class EmettreLaFactureRectificativeAction
 
         return $this->actionsUniques->executer($jeton, ActionsUniques::EMETTRE_LA_FACTURE_RECTIFICATIVE, Facture::class, $auteur, ['facture_id' => $facture->getKey()], fn () => $this->registre->verrouiller($magasin), fn (): Facture => DB::transaction(function () use ($auteur, $facture, $magasin): Facture {
             $this->registre->verrouiller($magasin);
-            Magasin::query()->whereKey($magasin->getKey())->sharedLock()->firstOrFail()->verifierQuIlPeutVendre();
+            Magasin::query()->whereKey($magasin->getKey())->sharedLock()->firstOrFail()->verifierQuIlPeutVendre($auteur);
             $compte = $this->lecteur->exigerSousVerrou($auteur, 'create', $magasin, Facture::class);
             $origine = Facture::query()->whereKey($facture->getKey())->first() ?? throw new LogicException(Facture::REFUS_INTROUVABLE);
             $this->lecteur->exiger($compte, 'view', $magasin, $origine);

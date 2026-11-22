@@ -1,5 +1,9 @@
-{{-- Voir GraphiquesDuClient et GrilleDesGraphiques. --}}
+{{-- Voir GraphiquesDuClient, GrilleDesGraphiques et MessagesDuCreditDeTva. --}}
 <x-filament-panels::page>
+    @if (($messageDeLaTva = $this->messageDeLaTva()) !== null)
+        @include('filament.tva.message-du-credit', ['message' => $messageDeLaTva])
+    @endif
+
     @if ($this->voitLesGraphiques())
         @livewire(\App\Filament\GrilleDesGraphiques::NOM, ['ecran' => \App\Domain\TableauDeBord\Enums\EcranDuTableauDeBord::Cabinet->value, 'lien' => (string) $this->lien()->uuid, 'lazy' => 'on-load'], key('graphiques-du-client-'.$this->lien()->uuid))
     @else

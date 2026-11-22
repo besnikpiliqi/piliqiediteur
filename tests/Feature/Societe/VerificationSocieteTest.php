@@ -625,10 +625,12 @@ class VerificationSocieteTest extends TestCase
      * magasin dont l'établissement attend encore la confirmation du
      * répertoire Sirene ne retient pas la validation : il est mis en
      * activité, mais ne vend qu'après la confirmation de son établissement.
+     * Le régime de TVA est choisi dès l'inscription, sans quoi aucun
+     * magasin ne vendrait (lot TVA27).
      */
     public function test_la_validation_met_en_activite_les_magasins_actifs_et_un_etablissement_a_confirmer_ne_vend_qu_apres(): void
     {
-        $societe = $this->inscrireUneSociete();
+        $societe = $this->choisirLeRegimeDeTva($this->inscrireUneSociete());
         $premier = $this->creerLeMagasinDuSiege($societe);
         $this->repertoire()->rendreInjoignable();
         $aConfirmer = app(CreerEtablissementAction::class)->handle($societe->proprietaire, $societe, ['nom' => 'Second magasin', 'nic' => MagasinFactory::nicLibre($societe)]);
@@ -659,7 +661,8 @@ class VerificationSocieteTest extends TestCase
      * Une société se valide sans aucun magasin : aucun SIRET ne se
      * réserve, et aucune période d'activité ne s'ouvre : aucun magasin ne
      * peut alors vendre. Son premier magasin, créé ensuite, se met aussitôt
-     * en activité.
+     * en activité, et vend une fois le régime de TVA de la société choisi
+     * (lot TVA27).
      */
     public function test_la_societe_se_valide_sans_aucun_magasin_et_ne_vend_rien_avant_son_premier_magasin(): void
     {
@@ -676,6 +679,11 @@ class VerificationSocieteTest extends TestCase
 
         $this->assertSame([$premier->id], SiretMagasin::query()->pluck('magasin_id')->all());
         $this->assertNull(PeriodeActivite::query()->where('magasin_id', $premier->id)->sole()->fin);
+        $this->assertSame(Magasin::REFUS_REGIME_A_DEMANDER, $premier->fresh()->refusDeVente());
+        $this->assertSame(Magasin::REFUS_REGIME_A_CHOISIR, $premier->fresh()->refusDeVente($proprietaire));
+
+        $this->choisirLeRegimeDeTva($societe);
+
         $this->assertTrue($premier->fresh()->peutVendre());
     }
 

@@ -11,6 +11,8 @@ use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Charges\Services\ChargesAFaire;
 use App\Domain\Charges\Services\DroitsSurLesCharges;
+use App\Domain\Charges\Services\MessagesDuCreditDeTva;
+use App\Domain\Charges\Services\SeuilDuTrimestriel;
 use App\Domain\Facturation\Enums\StatutAvoir;
 use App\Domain\Facturation\Enums\StatutDevis;
 use App\Domain\Facturation\Enums\StatutFacture;
@@ -21,6 +23,7 @@ use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Stock\Enums\StatutInventaireOuverture;
 use App\Domain\Stock\Models\InventaireOuverture;
+use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Enums\StatutMagasin;
 use App\Domain\Tenancy\Enums\UrgenceAFaire;
 use App\Domain\Tenancy\Models\Affectation;
@@ -33,6 +36,7 @@ use App\Domain\Tenancy\Scopes\MagasinScope;
 use App\Domain\Tenancy\Support\ChoseAFaire;
 use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\Societe\Pages\Charges;
+use App\Filament\Societe\Pages\ParametresFiscauxSociete;
 use App\Filament\Societe\Pages\VerificationSociete as VerificationSocietePage;
 use App\Filament\Societe\Resources\MagasinResource;
 use App\Filament\Societe\Resources\MembreResource;
@@ -161,7 +165,8 @@ final class ChosesAFaireDeLaSociete
      * adresse de magasin qui manque pour facturer un professionnel ; pour
      * qui peut le dire vérifié, chaque écart relevé au répertoire Sirene
      * (voir PorteeDesDroits::peutVerifierLEcart()) ; pour l'administrateur
-     * à qui la propriété est transmise, le lien à suivre. Dans l'ordre de
+     * à qui la propriété est transmise, le lien à suivre ; les charges et
+     * la TVA de la société (voir charges() et tva()). Dans l'ordre de
      * l'« À faire » (voir ChoseAFaire::comparer()), aux jours de Paris,
      * ceux de la société. Ne lit que cette société.
      *
@@ -181,7 +186,7 @@ final class ChosesAFaireDeLaSociete
             $choses[] = $this->motsDePasseIdentifiants();
         }
 
-        array_push($choses, ...$this->transmissions($compte, $societe, $paris), ...$this->magasinsAConfirmer($compte, $societe, $paris), ...$this->ecartsSirene($compte, $societe, $paris), ...$this->charges($compte, $societe));
+        array_push($choses, ...$this->transmissions($compte, $societe, $paris), ...$this->magasinsAConfirmer($compte, $societe, $paris), ...$this->ecartsSirene($compte, $societe, $paris), ...$this->charges($compte, $societe), ...$this->tva($compte, $societe));
         $choses = array_values(array_filter($choses));
         usort($choses, ChoseAFaire::comparer(...));
 
@@ -201,6 +206,63 @@ final class ChosesAFaireDeLaSociete
         $acces = app(DroitsSurLesCharges::class)->pour($compte, $societe);
 
         return $acces === null ? [] : app(ChargesAFaire::class)->choses($acces, fn (string $vue): string => Charges::getUrl(['vue' => $vue], panel: 'societe', tenant: $societe));
+    }
+
+    /**
+     * La TVA de la société (lot TVA27) : son régime à choisir, tant qu'il
+     * ne l'est pas, à faire pour qui ouvre ses paramètres fiscaux (le
+     * propriétaire, un administrateur autorisé), à surveiller pour un autre
+     * administrateur, qui le demande au propriétaire ; pour le propriétaire,
+     * le crédit de TVA d'une déclaration, à indiquer ou à faire vérifier
+     * (voir MessagesDuCreditDeTva::chosesAFaire()) ; et, pour qui peut
+     * modifier ses réglages fiscaux, le dépassement du seuil du réel normal
+     * trimestriel de l'année (voir SeuilDuTrimestriel), jusqu'à son « C'est
+     * vérifié ».
+     *
+     * @return list<ChoseAFaire>
+     */
+    private function tva(User $compte, Societe $societe): array
+    {
+        if ($societe->estUnCabinet()) {
+            return [];
+        }
+
+        $choses = [];
+
+        if ($societe->regime_tva === null) {
+            $regle = $compte->can('voirLesParametresFiscaux', $societe);
+            $choses[] = new ChoseAFaire(
+                cle: 'regime_de_tva',
+                groupe: 'TVA',
+                urgence: UrgenceAFaire::Rouge,
+                nombre: 1,
+                phrase: $regle ? 'Choisissez le régime de TVA de la société.' : Magasin::REFUS_REGIME_A_DEMANDER,
+                url: $regle ? ParametresFiscauxSociete::getUrl(panel: 'societe', tenant: $societe) : null,
+                bouton: $regle ? 'Choisir le régime' : 'Voir',
+                aSurveiller: ! $regle,
+                precision: 'Sans lui, PILIQI ne sait pas comment calculer votre TVA : aucune vente, facture, avoir, encaissement ni devis numéroté n\'est possible.',
+            );
+        }
+
+        array_push($choses, ...app(MessagesDuCreditDeTva::class)->chosesAFaire($compte, $societe, Charges::getUrl(panel: 'societe', tenant: $societe).'#credit-de-tva'));
+        $annee = $societe->regime_tva === RegimeTva::ReelNormalTrimestriel && $compte->can('modifierLesParametresFiscaux', $societe) ? app(SeuilDuTrimestriel::class)->anneeASignaler($societe) : null;
+
+        if ($annee !== null) {
+            $choses[] = new ChoseAFaire(
+                cle: 'seuil_du_trimestriel',
+                groupe: 'TVA',
+                urgence: UrgenceAFaire::Orange,
+                nombre: 1,
+                phrase: SeuilDuTrimestriel::PHRASE,
+                url: ParametresFiscauxSociete::getUrl(panel: 'societe', tenant: $societe),
+                bouton: 'Ouvrir les réglages fiscaux',
+                aSurveiller: false,
+                date: sprintf('%04d-01-01', $annee),
+                precision: SeuilDuTrimestriel::PRECISION,
+            );
+        }
+
+        return $choses;
     }
 
     /**

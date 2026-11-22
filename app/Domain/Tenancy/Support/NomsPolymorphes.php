@@ -10,6 +10,7 @@ use App\Domain\Cabinets\Models\InvitationCabinet;
 use App\Domain\Cabinets\Models\LienCabinet;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Charges\Models\Charge;
+use App\Domain\Charges\Models\CreditDeTva;
 use App\Domain\Charges\Models\TypeDeChargeDeLaSociete;
 use App\Domain\Demonstration\Models\Demonstration;
 use App\Domain\Facturation\Models\Avoir;
@@ -62,6 +63,7 @@ final class NomsPolymorphes
         'ligne_avoir' => LigneAvoir::class,
         'lien_cabinet' => LienCabinet::class,
         'compte_expert_comptable' => CompteExpertComptable::class,
+        'credit_de_tva' => CreditDeTva::class,
         'magasin' => Magasin::class,
         'paiement' => Paiement::class,
         'produit' => Produit::class,

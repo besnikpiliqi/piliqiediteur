@@ -3,6 +3,7 @@
 namespace Database\Factories;
 
 use App\Domain\Tenancy\Enums\FormeJuridique;
+use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\IdentifiantsInsee;
@@ -14,6 +15,8 @@ use Illuminate\Database\Eloquent\Factories\Factory;
  * @extends Factory<Societe>
  *
  * Une société « Commerce ou atelier » à l'identité légale complète,
+ * au réel normal mensuel (une société qui vend a choisi son régime de
+ * TVA, voir Magasin::refusDeVente() ; sansRegimeDeTva() le laisse vide),
  * active et en cours de vérification : services() et cabinet() lui donnent
  * un autre type d'activité, à sa création (il ne change jamais ensuite),
  * validee() la valide, commeApresLInscription() lui donne
@@ -44,7 +47,18 @@ class SocieteFactory extends Factory
             // Toujours en métropole, comme les magasins de MagasinFactory.
             'siege_code_postal' => fake()->numerify('75###'),
             'siege_ville' => fake()->city(),
+            'regime_tva' => RegimeTva::ReelNormalMensuel,
         ];
+    }
+
+    /**
+     * Une société dont le régime de TVA n'est pas encore choisi, comme
+     * après son inscription : aucune opération commerciale réelle avant
+     * lui (voir Magasin::refusDeVente()).
+     */
+    public function sansRegimeDeTva(): static
+    {
+        return $this->state(fn (): array => ['regime_tva' => null]);
     }
 
     /**
@@ -66,11 +80,12 @@ class SocieteFactory extends Factory
     }
 
     /**
-     * Un cabinet d'expertise comptable, qui n'a aucun magasin.
+     * Un cabinet d'expertise comptable, qui n'a aucun magasin ni réglage
+     * fiscal dans PILIQI.
      */
     public function cabinet(): static
     {
-        return $this->state(fn (): array => ['type_activite' => TypeDActivite::Cabinet]);
+        return $this->state(fn (): array => ['type_activite' => TypeDActivite::Cabinet, 'regime_tva' => null]);
     }
 
     public function validee(): static

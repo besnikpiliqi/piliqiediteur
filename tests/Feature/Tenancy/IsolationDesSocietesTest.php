@@ -11,6 +11,7 @@ use App\Domain\Cabinets\Models\LienCabinet;
 use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Charges\Models\Charge;
+use App\Domain\Charges\Models\CreditDeTva;
 use App\Domain\Charges\Models\LigneDeCharge;
 use App\Domain\Charges\Models\PieceDeCharge;
 use App\Domain\Charges\Models\TypeDeChargeDeLaSociete;
@@ -104,6 +105,7 @@ class IsolationDesSocietesTest extends TestCase
         ActionTraiteeDeLaSociete::class,
         Cabinet::class,
         Charge::class,
+        CreditDeTva::class,
         CompteDuBandeau::class,
         CourrielDeLaDemonstration::class,
         ChangementFinExercice::class,

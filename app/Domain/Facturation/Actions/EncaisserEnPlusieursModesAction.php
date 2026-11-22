@@ -105,7 +105,7 @@ class EncaisserEnPlusieursModesAction
             'recu_le' => $recuLe,
         ], fn () => $this->registre->verrouiller($magasin), fn (): Facture => DB::transaction(function () use ($auteur, $facture, $parts, $bonsDAvoir, $recuLe, $magasin): Facture {
             $this->registre->verrouiller($magasin);
-            Magasin::query()->whereKey($magasin->getKey())->firstOrFail()->verifierQuIlPeutVendre();
+            Magasin::query()->whereKey($magasin->getKey())->firstOrFail()->verifierQuIlPeutVendre($auteur);
             $compte = $this->lecteur->exigerSousVerrou($auteur, 'create', $magasin, Paiement::class);
             $facture = Facture::query()->whereKey($facture->getKey())->lockForUpdate()->firstOrFail();
             $this->lecteur->exiger($compte, 'encaisser', $magasin, $facture);

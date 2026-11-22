@@ -609,13 +609,15 @@ class FermerEtRouvrirMagasinTest extends TestCase
     /**
      * Le magasin rouvert avant la validation compte parmi les magasins
      * actifs de la société : la validation le met en activité avec les
-     * autres (SIRET réservé, première période, MagasinOuvert), et il vend.
+     * autres (SIRET réservé, première période, MagasinOuvert), et il vend,
+     * le régime de TVA de la société choisi dès son inscription (lot
+     * TVA27).
      */
     public function test_un_magasin_rouvert_avant_la_validation_entre_en_activite_a_la_validation(): void
     {
         $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         Event::fake([MagasinOuvert::class]);
-        $societe = $this->inscrireUneSociete();
+        $societe = $this->choisirLeRegimeDeTva($this->inscrireUneSociete());
         $siege = $this->creerLeMagasinDuSiege($societe);
         $proprietaire = $societe->proprietaire;
         $this->fermer($siege, MotifFermeture::Temporaire, $proprietaire, self::MOT_DE_PASSE_CHOISI);

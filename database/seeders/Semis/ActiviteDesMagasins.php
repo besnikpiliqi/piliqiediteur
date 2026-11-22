@@ -401,8 +401,10 @@ final class ActiviteDesMagasins
         $demonstrations = $this->semis->surLePoste() ? new DemonstrationsDesSocietes($this->horloge, $this->semis) : null;
         $achatsDeLEcart = new AchatsDeLEcartDesPrix($this->horloge, $this->semis, $gestes);
         $achatsDeLEcart->preparer();
+        $tva = new TvaDesSocietes($this->horloge, $this->semis);
 
         for ($jour = 17; $jour <= SemisComplet::JOURS - 2; $jour++) {
+            $tva->auJour($jour);
             $achatsDeLEcart->auJour($jour);
             $charges->auJour($jour);
 

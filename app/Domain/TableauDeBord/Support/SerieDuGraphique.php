@@ -21,13 +21,22 @@ namespace App\Domain\TableauDeBord\Support;
  *
  * @phpstan-import-type Calcul from EcartDesPrixDAchat
  *
- * @phpstan-type Jeu array{libelle: string, valeurs: list<int|null>, unite: 'euros'|'nombre', en_ligne: bool, axe_de_droite: bool, pointilles: bool}
+ * Une série peut ne se montrer que dans le graphique (le crédit de TVA à
+ * reporter dessiné sous le zéro) ou que dans le tableau « Voir les
+ * chiffres » (le crédit reporté de la période d'avant) : « seulement »
+ * le dit ; null pour les deux.
+ *
+ * @phpstan-type Jeu array{libelle: string, valeurs: list<int|null>, unite: 'euros'|'nombre', en_ligne: bool, axe_de_droite: bool, pointilles: bool, seulement: 'dessin'|'tableau'|null}
  */
 final class SerieDuGraphique
 {
     public const EUROS = 'euros';
 
     public const NOMBRE = 'nombre';
+
+    public const DESSIN = 'dessin';
+
+    public const TABLEAU = 'tableau';
 
     /**
      * @param  list<string>  $etiquettes
@@ -48,11 +57,32 @@ final class SerieDuGraphique
      *
      * @param  list<int|null>  $valeurs
      * @param  'euros'|'nombre'  $unite
+     * @param  'dessin'|'tableau'|null  $seulement  où seulement elle se montre, null pour le graphique et le tableau
      * @return Jeu
      */
-    public static function jeu(string $libelle, array $valeurs, string $unite = self::EUROS, bool $enLigne = false, bool $axeDeDroite = false, bool $pointilles = false): array
+    public static function jeu(string $libelle, array $valeurs, string $unite = self::EUROS, bool $enLigne = false, bool $axeDeDroite = false, bool $pointilles = false, ?string $seulement = null): array
     {
-        return ['libelle' => $libelle, 'valeurs' => $valeurs, 'unite' => $unite, 'en_ligne' => $enLigne, 'axe_de_droite' => $axeDeDroite, 'pointilles' => $pointilles];
+        return ['libelle' => $libelle, 'valeurs' => $valeurs, 'unite' => $unite, 'en_ligne' => $enLigne, 'axe_de_droite' => $axeDeDroite, 'pointilles' => $pointilles, 'seulement' => $seulement];
+    }
+
+    /**
+     * Les séries que dessine le graphique.
+     *
+     * @return list<Jeu>
+     */
+    public function jeuxDuDessin(): array
+    {
+        return array_values(array_filter($this->jeux, fn (array $jeu): bool => $jeu['seulement'] !== self::TABLEAU));
+    }
+
+    /**
+     * Les séries du tableau « Voir les chiffres ».
+     *
+     * @return list<Jeu>
+     */
+    public function jeuxDuTableau(): array
+    {
+        return array_values(array_filter($this->jeux, fn (array $jeu): bool => $jeu['seulement'] !== self::DESSIN));
     }
 
     /**

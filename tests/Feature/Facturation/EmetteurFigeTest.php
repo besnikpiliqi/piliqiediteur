@@ -145,7 +145,7 @@ class EmetteurFigeTest extends TestCase
         'ville' => 'Paris',
         'telephone' => '01 40 00 00 00',
         'email' => 'contact@boutique-du-canal.fr',
-        'regime_tva' => RegimeTva::ReelSimplifie,
+        'regime_tva' => RegimeTva::ReelNormalTrimestriel,
         'option_debits_tva' => true,
         'assurance_assureur' => 'Garantie Parisienne',
         'assurance_adresse' => '2 rue de la Paix, 75002 Paris',

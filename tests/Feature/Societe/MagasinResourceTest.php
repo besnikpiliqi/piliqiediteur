@@ -653,7 +653,7 @@ class MagasinResourceTest extends TestCase
     public function test_un_magasin_sans_vente_garde_son_code_modifiable_apres_les_commandes_de_la_nuit(): void
     {
         $this->travelTo(self::aParis('2026-10-09 10:00:00'));
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique', 'regime_tva' => RegimeTva::ReelSimplifie]);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique', 'regime_tva' => RegimeTva::ReelNormalTrimestriel]);
         $this->travelTo(self::aParis('2026-10-10 01:00:00'));
         $this->artisan('app:cloturer-caisses-automatiquement')->assertSuccessful();
 

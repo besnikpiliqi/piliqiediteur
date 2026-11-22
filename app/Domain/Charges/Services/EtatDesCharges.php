@@ -8,7 +8,6 @@ use App\Domain\Charges\Models\Charge;
 use App\Domain\Charges\Support\AccesAuxCharges;
 use App\Domain\Charges\Support\ContenuDeLEtat;
 use App\Domain\Charges\Support\FiltresDeLEtat;
-use App\Domain\Charges\Support\MontantsDeTva;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
@@ -41,6 +40,8 @@ use Illuminate\Support\Facades\DB;
  * journal du magasin quand l'état n'en couvre qu'un, sinon à celui de la
  * société ; un compte d'un cabinet lié l'y inscrit depuis l'espace de son
  * cabinet, la société du client posée comme société active.
+ *
+ * @phpstan-import-type TvaDeLaPage from TvaDeLaPeriode
  */
 final class EtatDesCharges
 {
@@ -55,9 +56,11 @@ final class EtatDesCharges
     /**
      * Ce que montre l'état de ces filtres pour cet accès, édité par cette
      * personne ($edition : « Édité le … par … »), avec cette TVA de chaque
-     * mois (null en franchise en base).
+     * mois, et son report du crédit quand la page le montre (null hors du
+     * réel normal : en franchise en base, aucune TVA ne s'affiche, et avant
+     * le choix du régime, l'état le dit).
      *
-     * @param  array{montants: array<string, MontantsDeTva>, avec_les_ventes: bool, sans_celles_de_la_societe: bool, magasins_non_comptes: string|null}|null  $tva
+     * @param  TvaDeLaPage|null  $tva
      */
     public function contenu(AccesAuxCharges $acces, FiltresDeLEtat $filtres, ?array $tva, string $edition): ContenuDeLEtat
     {
@@ -110,6 +113,11 @@ final class EtatDesCharges
             total: array_sum($totauxDuMois),
             charges: $liste,
             tva: $tva,
+            sansTva: match (true) {
+                $acces->societe->regime_tva === null => 'Le régime de TVA de la société n\'est pas encore choisi : aucune TVA à afficher.',
+                $acces->societe->estEnFranchiseDeTva() => 'Aucune TVA à afficher : la société est en franchise en base.',
+                default => null,
+            },
         );
     }
 
@@ -117,7 +125,7 @@ final class EtatDesCharges
      * Le fichier de l'état dans ce format, inscrit au journal d'audit de la
      * société des charges.
      *
-     * @param  array{montants: array<string, MontantsDeTva>, avec_les_ventes: bool, sans_celles_de_la_societe: bool, magasins_non_comptes: string|null}|null  $tva
+     * @param  TvaDeLaPage|null  $tva
      * @return array{nom: string, type: string, contenu: string}
      */
     public function telecharger(AccesAuxCharges $acces, FiltresDeLEtat $filtres, ?array $tva, string $edition, FormatDeLEtat $format): array

@@ -66,7 +66,7 @@ class AssujettiUniqueTest extends TestCase
      */
     public function test_la_case_s_inscrit_au_journal_d_audit_et_au_journal_des_evenements_de_chaque_magasin(): void
     {
-        $lyon = $this->ouvrirUneSociete(['nom' => 'Lyon', 'regime_tva' => RegimeTva::ReelSimplifie]);
+        $lyon = $this->ouvrirUneSociete(['nom' => 'Lyon', 'regime_tva' => RegimeTva::ReelNormalTrimestriel]);
         $villeurbanne = $this->ouvrirUnAutreMagasin($lyon, ['nom' => 'Villeurbanne']);
         $this->ouvrirLAdministration($lyon->societe);
 

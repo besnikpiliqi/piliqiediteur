@@ -76,11 +76,13 @@ class ValiderLaSocieteConcurrenceTest extends TestCase
      * attend le verrou de la société que tient la création, voit la
      * nouvelle liste de ses magasins et reprend avec elle. Les deux
      * magasins ont leur SIRET réservé et leur période d'activité ouverte :
-     * le nouveau vend, et produira ses tickets Z.
+     * le nouveau vend, et produira ses tickets Z. Le régime de TVA de la
+     * société est choisi dès son inscription, sans quoi aucun magasin ne
+     * vendrait (lot TVA27).
      */
     public function test_un_magasin_cree_pendant_la_validation_de_la_societe_est_mis_en_activite(): void
     {
-        $societe = $this->inscrireUneSociete();
+        $societe = $this->choisirLeRegimeDeTva($this->inscrireUneSociete());
         $this->creerLeMagasinDuSiege($societe);
         $siren = (string) $societe->siren;
         $code = $this->codeDuCourrier($societe);

@@ -13,6 +13,7 @@ use App\Domain\Charges\Services\PropositionsDeTva;
 use App\Domain\Charges\Services\TvaDeLaPeriode;
 use App\Domain\Charges\Support\MontantsDeTva;
 use App\Domain\Charges\Support\SaisieDeCharge;
+use App\Domain\Charges\Support\TextesDuCreditDeTva;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\TableauDeBord\Enums\Graphique;
@@ -144,12 +145,28 @@ class TvaDeLaPeriodeTest extends TestCase
         $duProprietaire = $this->chiffres($this->proprietaireDe($magasin), $societe);
         $delAdministrateur = $this->chiffres($administrateur, $societe);
 
-        $this->assertSame(['franchise' => false, 'a_payer' => -24600, 'collectee' => 2400, 'deductible' => 27000, 'estimation' => -31960, 'avec_les_charges' => true, 'sans_celles_de_la_societe' => false], $duProprietaire['tva']);
-        $this->assertSame(['franchise' => false, 'a_payer' => -600, 'collectee' => 400, 'deductible' => 1000, 'estimation' => null, 'avec_les_charges' => false, 'sans_celles_de_la_societe' => false], $delAdministrateur['tva']);
+        // Le propriétaire voit toute la société, ses charges comprises : la
+        // TVA du mois, −246,00 €, devient un crédit à reporter (lot TVA27),
+        // sans crédit déclaré ; l'estimation garde son signe, à reporter.
+        $this->assertSame([
+            'report' => true,
+            'periode' => 'mai 2026',
+            'a_payer' => 0,
+            'credit_a_reporter' => 24600,
+            'calcul' => 'TVA du mois -246,00 € − crédit reporté 0,00 € (non déclaré) = 246,00 € de crédit à reporter.',
+            'collectee' => 2400,
+            'deductible' => 27000,
+            'estimation' => -31960,
+            'avec_les_charges' => true,
+            'sans_celles_de_la_societe' => false,
+            'pastille' => ['texte' => 'estimation : crédit de TVA non déclaré', 'couleur' => 'warning'],
+        ], $duProprietaire['tva']);
+        // L'administrateur ne voit pas les charges : ni elles, ni le report.
+        $this->assertSame(['report' => false, 'periode' => null, 'a_payer' => -600, 'credit_a_reporter' => 0, 'calcul' => null, 'collectee' => 400, 'deductible' => 1000, 'estimation' => null, 'avec_les_charges' => false, 'sans_celles_de_la_societe' => false, 'pastille' => null], $delAdministrateur['tva']);
 
         $carte = CarteDuTableauDeBord::parDefaut(Graphique::TvaAPayerParMois);
         $serie = app(SeriesDesGraphiques::class)->pour(new CalculDesSeries(app(PerimetreDesGraphiques::class)->deLaSociete($administrateur, $societe), new ReglagesDuTableauDeBord([$carte]), [$carte]))[Graphique::TvaAPayerParMois->value];
-        $this->assertSame(SeriesDesGraphiques::SANS_LES_CHARGES, $serie->note);
+        $this->assertSame(SeriesDesGraphiques::SANS_LES_CHARGES.' '.TextesDuCreditDeTva::SANS_LE_REPORT, $serie->note);
         $this->assertSame(['TVA collectée', 'TVA déductible', 'TVA à payer'], array_column($serie->jeux, 'libelle'));
     }
 

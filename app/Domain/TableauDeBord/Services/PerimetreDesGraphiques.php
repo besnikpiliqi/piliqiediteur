@@ -14,6 +14,7 @@ use App\Domain\TableauDeBord\Support\Perimetre;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Support\CleDuModele;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Collection;
@@ -170,6 +171,40 @@ final class PerimetreDesGraphiques
     }
 
     /**
+     * Ce compte voit-il, dans l'espace de la société, sa TVA avec le report
+     * de son crédit (lot TVA27) : des graphiques qui comptent tous ses
+     * magasins et ses charges de « Toute la société » (voir
+     * Perimetre::reporteLeCreditDeTva()) ? Le message du crédit de TVA ne
+     * dit son montant qu'à lui, au propriétaire et au comptable (voir
+     * MessagesDuCreditDeTva::message()).
+     */
+    public function voitLaTvaReporteeDeLaSociete(User $compte, Societe $societe): bool
+    {
+        return $this->voitLesGraphiquesDeLaSociete($compte, $societe) && $this->deLaSociete($compte, $societe)->reporteLeCreditDeTva();
+    }
+
+    /**
+     * De même, sur la page d'un client lié dans l'espace du cabinet.
+     */
+    public function voitLaTvaReporteeDuClient(User $compte, LienCabinet $lien): bool
+    {
+        return $this->voitLesGraphiquesDuClient($compte, $lien) && $this->duClient($compte, $lien)->reporteLeCreditDeTva();
+    }
+
+    /**
+     * De même, sur la page « Tableau de bord de la société » de
+     * l'expert-comptable déclaré.
+     */
+    public function voitLaTvaReporteeDeLExpertComptable(User $compte): bool
+    {
+        try {
+            return $this->delExpertComptable($compte)->reporteLeCreditDeTva();
+        } catch (AuthorizationException) {
+            return false;
+        }
+    }
+
+    /**
      * Le périmètre de la page « Tableau de bord de la société » de
      * l'expert-comptable déclaré : les magasins de sa déclaration.
      *
@@ -223,6 +258,12 @@ final class PerimetreDesGraphiques
             throw new AuthorizationException(self::REFUS);
         }
 
-        return new Perimetre($ecran, $societe, $magasins, $sources, $calendrier, $this->charges->pourLesGraphiques($compte, $societe, $magasins));
+        // Tous les magasins de la société, ouverts, fermés ou cédés, en
+        // identifiants seulement, lus pour savoir si la TVA du périmètre
+        // compte toute la société (voir Perimetre::reporteLeCreditDeTva()),
+        // jamais montrés.
+        $deLaSociete = ValeursLues::entiers(Magasin::query()->where('societe_id', $societe->getKey())->orderBy('id')->pluck('id'));
+
+        return new Perimetre($ecran, $societe, $magasins, $sources, $calendrier, $this->charges->pourLesGraphiques($compte, $societe, $magasins), false, $deLaSociete);
     }
 }

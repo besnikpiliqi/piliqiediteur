@@ -5,9 +5,13 @@ namespace App\Filament;
 use App\Domain\Cabinets\Models\LienCabinet;
 use App\Domain\Cabinets\Services\AccesDesCabinets;
 use App\Domain\Calendrier\Calendrier;
+use App\Domain\Charges\Actions\ConfirmerUnCreditDeTvaAction;
+use App\Domain\Charges\Actions\CorrigerUnCreditDeTvaAction;
 use App\Domain\Charges\Actions\CorrigerUneChargeAction;
+use App\Domain\Charges\Actions\DeclarerUnCreditDeTvaAction;
 use App\Domain\Charges\Actions\DeposerUneChargeAction;
 use App\Domain\Charges\Actions\GererLesTypesDeChargeAction;
+use App\Domain\Charges\Actions\ModifierUnCreditDeTvaAction;
 use App\Domain\Charges\Actions\RenvoyerUneChargeAction;
 use App\Domain\Charges\Actions\SaisirUneChargeAction;
 use App\Domain\Charges\Actions\SupprimerUneChargeAction;
@@ -19,14 +23,17 @@ use App\Domain\Charges\Enums\TauxDeCharge;
 use App\Domain\Charges\Enums\TypeDeCharge;
 use App\Domain\Charges\Exceptions\ConfirmationRequiseException;
 use App\Domain\Charges\Models\Charge;
+use App\Domain\Charges\Models\CreditDeTva;
 use App\Domain\Charges\Models\LigneDeCharge;
 use App\Domain\Charges\Models\PieceDeCharge;
 use App\Domain\Charges\Models\TypeDeChargeDeLaSociete;
 use App\Domain\Charges\Services\ChargesDeLaSociete;
 use App\Domain\Charges\Services\ChiffrageDUneCharge;
+use App\Domain\Charges\Services\CreditsDeTva;
 use App\Domain\Charges\Services\DroitsSurLesCharges;
 use App\Domain\Charges\Services\EtatDesCharges;
 use App\Domain\Charges\Services\GestesSurLesCharges;
+use App\Domain\Charges\Services\MessagesDuCreditDeTva;
 use App\Domain\Charges\Services\PiecesDesCharges;
 use App\Domain\Charges\Services\PropositionsDeTva;
 use App\Domain\Charges\Services\TvaDeLaPeriode;
@@ -36,6 +43,8 @@ use App\Domain\Charges\Support\FiltresDeLEtat;
 use App\Domain\Charges\Support\MontantsDeTva;
 use App\Domain\Charges\Support\SaisieDeCharge;
 use App\Domain\Charges\Support\TextesDesCharges;
+use App\Domain\Charges\Support\TextesDuCreditDeTva;
+use App\Domain\Charges\Support\TvaReportee;
 use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\SaisieDecimale;
@@ -46,6 +55,7 @@ use App\Domain\Fichiers\NomDeFichier;
 use App\Domain\Fichiers\PieceDeposee;
 use App\Domain\TableauDeBord\Services\PerimetreDesGraphiques;
 use App\Domain\TableauDeBord\Support\Perimetre;
+use App\Domain\Tenancy\Enums\CadenceDeLaTva;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Scopes\MagasinScope;
@@ -58,6 +68,7 @@ use App\Filament\Concerns\PorteUnJeton;
 use App\Http\Controllers\TelechargerUnePieceDuFournisseurController;
 use App\Integrations\Antivirus\AntivirusInjoignableException;
 use Carbon\CarbonImmutable;
+use Filament\Actions\Action as ActionDeLaPage;
 use Filament\Actions\Concerns\InteractsWithActions;
 use Filament\Actions\Contracts\HasActions;
 use Filament\Facades\Filament;
@@ -92,6 +103,7 @@ use InvalidArgumentException;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\Url;
 use Livewire\Component;
+use LogicException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
@@ -129,6 +141,17 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  * TvaDeLaPeriode::duPerimetre()), ou, pour qui ne voit pas les graphiques,
  * celle des seules charges.
  *
+ * Au réel normal, cette TVA est celle de sa période (le mois, ou le
+ * trimestre au trimestriel) après le report du crédit de la période
+ * d'avant, quand elle compte toute la société (lot TVA27, voir
+ * TvaDeLaPeriode::avecLeReport()), avec le message de la TVA dessous (voir
+ * MessagesDuCreditDeTva::message()) ; en franchise en base, aucune TVA ne
+ * s'affiche, et avant le choix du régime, la page demande de le choisir.
+ * Plus bas, hors du panneau d'un magasin, le bloc du crédit de TVA (voir
+ * creditDeTva()) : les déclarations de la société et leurs gestes
+ * (« Indiquer mon crédit de TVA », « Modifier » pour le propriétaire,
+ * « Confirmer » et « Corriger » avec un motif pour le comptable).
+ *
  * Chaque geste passe par l'action du domaine, avec son jeton de demande
  * répétée. Les charges se lisent hors du scope de la société courante,
  * filtrées par la société de l'accès et ses magasins, limitées aux
@@ -136,6 +159,12 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  * ChargesDeLaSociete) ; les gestes s'exécutent dans le contexte de la
  * société de la charge, qu'ils relisent sous son verrou (voir
  * GestesSurLesCharges).
+ *
+ * @phpstan-import-type MessageDeLaTva from MessagesDuCreditDeTva
+ * @phpstan-import-type TvaDeLaPage from TvaDeLaPeriode
+ *
+ * @phpstan-type DeclarationAffichee array{uuid: string, periode: string, solde: string, etat: string, couleur: string, point_de_depart: bool, de_la_cadence: bool, verifiee: bool, gestes: list<string>}
+ * @phpstan-type BlocDuCredit array{pour_le_comptable: bool, cadence: CadenceDeLaTva, declarations: list<DeclarationAffichee>, peut_declarer: bool, peut_verifier: bool, est_proprietaire: bool, disponible_le: string|null, intro: string}
  */
 final class PageDesCharges extends Component implements HasActions, HasForms, HasTable
 {
@@ -246,10 +275,16 @@ final class PageDesCharges extends Component implements HasActions, HasForms, Ha
 
     public function render(): View
     {
+        $tva = $this->tvaDuMois();
+        $voitLaTvaReportee = $tva !== null && $tva['report'] !== null;
+
         return view('filament.page-des-charges', [
             'tableau' => app(ChargesDeLaSociete::class)->tableauDesMois($this->acces(), $this->mois(), $this->magasinDuFiltre(), $this->magasinFiltre === 'societe'),
             'mois' => $this->mois(),
-            'tva' => $this->tvaDuMois(),
+            'tva' => $tva,
+            'sansTva' => $this->sansTva(),
+            'messageDeLaTva' => $this->messageDeLaTva($voitLaTvaReportee),
+            'credit' => $this->creditDeTva($voitLaTvaReportee),
         ]);
     }
 
@@ -286,34 +321,52 @@ final class PageDesCharges extends Component implements HasActions, HasForms, Ha
 
     /**
      * La TVA du mois choisi, sur le magasin du filtre, telle que la page la
-     * montre (voir tvaDesMois()) ; null dans une société en franchise en
-     * base (TVA non applicable).
+     * montre (voir tvaDesMois()), avec le report du crédit quand elle
+     * compte toute la société ; null hors du réel normal (voir sansTva()).
      *
-     * @return array{mois: string, montants: MontantsDeTva, avec_les_ventes: bool, sans_celles_de_la_societe: bool}|null
+     * @return array{mois: string, montants: MontantsDeTva, avec_les_ventes: bool, sans_celles_de_la_societe: bool, report: TvaReportee|null}|null
      */
     public function tvaDuMois(): ?array
     {
         $mois = in_array($this->moisDeLaTva, $this->mois(), true) ? $this->moisDeLaTva : $this->moisDeLaTvaParDefaut();
         $tva = $this->tvaDesMois([$mois]);
 
-        return $tva === null ? null : ['mois' => $mois, 'montants' => $tva['montants'][$mois], 'avec_les_ventes' => $tva['avec_les_ventes'], 'sans_celles_de_la_societe' => $tva['sans_celles_de_la_societe']];
+        return $tva === null ? null : ['mois' => $mois, 'montants' => $tva['montants'][$mois], 'avec_les_ventes' => $tva['avec_les_ventes'], 'sans_celles_de_la_societe' => $tva['sans_celles_de_la_societe'], 'report' => $tva['report']];
+    }
+
+    /**
+     * Pourquoi la page ne montre aucune TVA : la société est en franchise
+     * en base (aucune TVA ne s'affiche, pas même zéro, décision de
+     * l'éditeur du 18/11/2026), ou son régime n'est pas encore choisi ;
+     * null au réel normal.
+     */
+    public function sansTva(): ?string
+    {
+        $societe = $this->acces()->societe;
+
+        return match (true) {
+            $societe->regime_tva === null => 'Choisissez le régime de TVA pour voir la TVA du mois.',
+            $societe->estEnFranchiseDeTva() => $this->ecran === self::SOCIETE ? 'Aucune TVA à afficher : votre société est en franchise en base.' : 'Aucune TVA à afficher : la société est en franchise en base.',
+            default => null,
+        };
     }
 
     /**
      * La TVA de ces mois, sur le magasin du filtre : telle que le tableau
-     * de bord de la personne la montre, ventes et achats compris ; pour qui
-     * ne voit pas les graphiques de cet écran, celle des seules charges
-     * qu'il voit (voir TvaDeLaPeriode::pourLaPageDesCharges()) ; null dans
-     * une société en franchise en base.
+     * de bord de la personne la montre, ventes et achats compris, avec le
+     * report du crédit quand elle compte toute la société ; pour qui ne
+     * voit pas les graphiques de cet écran, celle des seules charges qu'il
+     * voit (voir TvaDeLaPeriode::pourLaPageDesCharges()) ; null hors du
+     * réel normal.
      *
      * @param  list<string>  $mois
-     * @return array{montants: array<string, MontantsDeTva>, avec_les_ventes: bool, sans_celles_de_la_societe: bool, magasins_non_comptes: string|null}|null
+     * @return TvaDeLaPage|null
      */
     private function tvaDesMois(array $mois): ?array
     {
         $acces = $this->acces();
 
-        return $acces->societe->estEnFranchiseDeTva() ? null : app(TvaDeLaPeriode::class)->pourLaPageDesCharges(
+        return $acces->societe->regime_tva?->cadence() === null ? null : app(TvaDeLaPeriode::class)->pourLaPageDesCharges(
             $acces,
             $this->perimetreDeLaTva(),
             $mois,
@@ -517,6 +570,286 @@ final class PageDesCharges extends Component implements HasActions, HasForms, Ha
         return response()->streamDownload(function () use ($contenu): void {
             echo $contenu;
         }, null, EnTetesDesFichiers::fichierRecu($piece->nom, $piece->type_mime));
+    }
+
+    /**
+     * Le message de la TVA sous sa section (lot TVA27, voir
+     * MessagesDuCreditDeTva::message()), au réel normal, hors du panneau
+     * d'un magasin : où en est le crédit de TVA, pour qui peut l'indiquer
+     * ou voit la TVA de toute la société avec son report ; son bouton mène
+     * au bloc du crédit, plus bas dans la page.
+     *
+     * @return MessageDeLaTva|null
+     */
+    private function messageDeLaTva(bool $voitLaTvaReportee): ?array
+    {
+        $societe = $this->acces()->societe;
+
+        if ($this->ecran === self::MAGASIN || $societe->regime_tva?->cadence() === null) {
+            return null;
+        }
+
+        return app(MessagesDuCreditDeTva::class)->message($societe, CompteConnecte::exiger(), $this->ecran !== self::SOCIETE, '#credit-de-tva', fn (): bool => $voitLaTvaReportee);
+    }
+
+    /**
+     * Le bloc du crédit de TVA (lot TVA27, maquette « Message TVA avant
+     * PILIQI » approuvée par l'éditeur le 18/11/2026) : dans l'espace de la
+     * société, sur la page d'un client du cabinet et sur celle de
+     * l'expert-comptable déclaré, jamais dans un magasin ; au réel normal ;
+     * pour qui peut indiquer le crédit (voir CreditsDeTva::peutDeclarer())
+     * et, en lecture, pour qui voit la TVA de toute la société avec son
+     * report. Les déclarations de la société, la plus récente période
+     * d'abord, chacune avec son solde, son état, qui l'a saisie, vérifiée
+     * ou corrigée et quand ; celle qui sert de point de départ au report
+     * est marquée, celles d'une autre cadence restent en historique.
+     *
+     * @return BlocDuCredit|null
+     */
+    private function creditDeTva(bool $voitLaTvaReportee): ?array
+    {
+        $societe = $this->acces()->societe;
+        $cadence = $societe->regime_tva?->cadence();
+
+        if ($this->ecran === self::MAGASIN || $cadence === null || ! CreditsDeTva::aLieuDansLa($societe)) {
+            return null;
+        }
+
+        $compte = CompteConnecte::exiger();
+        $credits = app(CreditsDeTva::class);
+        $peutDeclarer = $credits->peutDeclarer($compte, $societe);
+
+        if (! $peutDeclarer && ! $voitLaTvaReportee) {
+            return null;
+        }
+
+        $pourLeComptable = $this->ecran !== self::SOCIETE;
+        $ancre = $credits->ancre($societe);
+        $nom = $cadence->nomDeLaPeriode();
+        $declarables = CreditsDeTva::periodesDeclarables($societe, $cadence, Calendrier::deParis()->aujourdhui());
+
+        return [
+            'pour_le_comptable' => $pourLeComptable,
+            'cadence' => $cadence,
+            'declarations' => array_values($credits->declarations($societe)->map(function (CreditDeTva $credit) use ($societe, $credits, $ancre, $cadence, $pourLeComptable): array {
+                $etat = $credits->etat($societe, $credit);
+
+                return [
+                    'uuid' => (string) $credit->uuid,
+                    'periode' => Str::ucfirst($credit->libelleDeLaPeriode()),
+                    'solde' => $credit->solde === 0 ? 'Aucun crédit (0,00 €)' : TextesDuCreditDeTva::euros($credit->solde),
+                    'etat' => TextesDuCreditDeTva::etat($etat, $pourLeComptable),
+                    'couleur' => $etat->getColor(),
+                    'point_de_depart' => $ancre !== null && $ancre->is($credit),
+                    'de_la_cadence' => $credit->cadence === $cadence,
+                    'verifiee' => $credit->estVerifie(),
+                    'gestes' => TextesDuCreditDeTva::gestes($credit),
+                ];
+            })->all()),
+            'peut_declarer' => $peutDeclarer && ! GestesSurLesCharges::touchePlusASesCharges($societe),
+            'peut_verifier' => $credits->peutVerifier($compte, $societe) && ! GestesSurLesCharges::touchePlusASesCharges($societe),
+            'est_proprietaire' => $credits->estLeProprietaire($compte, $societe) && ! GestesSurLesCharges::touchePlusASesCharges($societe),
+            'disponible_le' => $declarables === [] ? Calendrier::afficherJour(CreditsDeTva::premiereDeclarationLe($societe, $cadence), 'd/m/Y') : null,
+            'intro' => ($pourLeComptable ? 'Le crédit de TVA de l\'une des déclarations déposées par la société, ' : 'Indiquez le crédit de TVA de l\'une de vos déclarations déposées, ')
+                .'du '.$nom.' d\'arrivée ('.$cadence->libelle(CreditsDeTva::premierePeriode($societe, $cadence)).') ou d\'un '.$nom.' suivant. PILIQI calcule '.($pourLeComptable ? 'sa' : 'votre').' TVA à partir du '.$nom.' qui suit celui de la déclaration ; la déclaration la plus récente sert de point de départ.',
+        ];
+    }
+
+    /**
+     * « Indiquer mon crédit de TVA » : la période d'une déclaration déposée
+     * (une de celles que la société peut déclarer, hors celles déjà
+     * indiquées) et son solde, négatif pour un crédit, 0 € sans crédit,
+     * avec le conseil de le faire vérifier ; saisi par le comptable, il
+     * naît vérifié (voir DeclarerUnCreditDeTvaAction).
+     */
+    public function declarerLeCreditAction(): ActionDeLaPage
+    {
+        return ActionDeLaPage::make('declarerLeCredit')
+            ->label(fn (): string => $this->ecran === self::SOCIETE ? 'Indiquer mon crédit de TVA' : 'Indiquer le crédit de TVA')
+            ->icon('heroicon-o-plus')
+            ->modalHeading(fn (): string => $this->ecran === self::SOCIETE ? TextesDuCreditDeTva::TITRE_DE_LA_SAISIE : 'Le crédit de TVA de la société')
+            ->modalDescription(fn (): string => $this->creditDeTva(true)['intro'] ?? '')
+            ->form(fn (): array => [
+                self::champDuJeton(),
+                Select::make('periode')
+                    ->label(fn (): string => $this->cadenceDuCredit() === CadenceDeLaTva::Mensuelle ? 'Mois de cette déclaration' : 'Trimestre de cette déclaration')
+                    ->options(fn (): array => $this->periodesADeclarer())
+                    ->required(),
+                TextInput::make('solde')
+                    ->label('Solde de cette déclaration (négatif pour un crédit, 0 € si aucun)')
+                    ->placeholder('-1 250,00')
+                    ->required()
+                    ->maxLength(30),
+                Placeholder::make('conseil')->hiddenLabel()->content(CreditsDeTva::CONSEIL),
+            ])
+            ->modalSubmitActionLabel('Enregistrer')
+            ->visible(fn (): bool => $this->creditDeTva(true)['peut_declarer'] ?? false)
+            ->disabled(fn (): bool => $this->periodesADeclarer() === [])
+            ->action(function (array $data): void {
+                static::executerLeGeste(function () use ($data): void {
+                    app(DeclarerUnCreditDeTvaAction::class)->handle(CompteConnecte::exiger(), $this->acces()->societe, ValeursLues::texte($data['periode'] ?? ''), self::soldeSaisi($data['solde'] ?? null), ValeursLues::texteOuNul($data['jeton'] ?? null));
+                    Notification::make()->title('Crédit de TVA enregistré.')->success()->send();
+                });
+            });
+    }
+
+    /**
+     * « Modifier », pour le propriétaire : le nouveau solde d'une
+     * déclaration ; vérifiée, elle repasse à vérifier (voir
+     * ModifierUnCreditDeTvaAction).
+     */
+    public function modifierLeCreditAction(): ActionDeLaPage
+    {
+        return ActionDeLaPage::make('modifierLeCredit')
+            ->label('Modifier')
+            ->icon('heroicon-o-pencil-square')
+            ->color('gray')
+            ->size('sm')
+            ->modalHeading('Modifier le crédit de TVA')
+            ->modalDescription('Un crédit vérifié par votre comptable repasse « à vérifier ». '.CreditsDeTva::CONSEIL)
+            ->form([
+                self::champDuJeton(),
+                TextInput::make('solde')->label('Solde de cette déclaration (négatif pour un crédit, 0 € si aucun)')->placeholder('-1 250,00')->required()->maxLength(30),
+            ])
+            ->fillForm(fn (array $arguments): array => ['solde' => self::soldeEnSaisie($this->declarationVue(ValeursLues::texte($arguments['credit'] ?? '')))])
+            ->modalSubmitActionLabel('Enregistrer')
+            ->visible(fn (): bool => $this->creditDeTva(true)['est_proprietaire'] ?? false)
+            ->action(function (array $data, array $arguments): void {
+                static::executerLeGeste(function () use ($data, $arguments): void {
+                    app(ModifierUnCreditDeTvaAction::class)->handle(CompteConnecte::exiger(), $this->acces()->societe, ValeursLues::texte($arguments['credit'] ?? ''), self::soldeSaisi($data['solde'] ?? null), ValeursLues::texteOuNul($data['jeton'] ?? null));
+                    Notification::make()->title('Crédit de TVA modifié.')->success()->send();
+                });
+            });
+    }
+
+    /**
+     * « Confirmer », pour le comptable : le crédit indiqué est le bon (voir
+     * ConfirmerUnCreditDeTvaAction).
+     */
+    public function confirmerLeCreditAction(): ActionDeLaPage
+    {
+        return ActionDeLaPage::make('confirmerLeCredit')
+            ->label('Confirmer')
+            ->icon('heroicon-o-check-circle')
+            ->color('success')
+            ->size('sm')
+            ->requiresConfirmation()
+            ->modalHeading('Confirmer le crédit de TVA')
+            ->modalDescription('Vous confirmez ce montant, lu à la ligne « Crédit de TVA à reporter » de la déclaration : il devient « vérifié par le comptable », avec votre nom et la date.')
+            ->form([self::champDuJeton()])
+            ->modalSubmitActionLabel('Confirmer')
+            ->visible(fn (): bool => $this->creditDeTva(true)['peut_verifier'] ?? false)
+            ->action(function (array $data, array $arguments): void {
+                static::executerLeGeste(function () use ($data, $arguments): void {
+                    app(ConfirmerUnCreditDeTvaAction::class)->handle(CompteConnecte::exiger(), $this->acces()->societe, ValeursLues::texte($arguments['credit'] ?? ''), ValeursLues::texteOuNul($data['jeton'] ?? null));
+                    Notification::make()->title('Crédit de TVA vérifié.')->success()->send();
+                });
+            });
+    }
+
+    /**
+     * « Corriger », pour le comptable : le bon solde, avec un motif
+     * obligatoire ; la correction vaut vérification (voir
+     * CorrigerUnCreditDeTvaAction).
+     */
+    public function corrigerLeCreditAction(): ActionDeLaPage
+    {
+        return ActionDeLaPage::make('corrigerLeCredit')
+            ->label('Corriger')
+            ->icon('heroicon-o-wrench')
+            ->color('gray')
+            ->size('sm')
+            ->modalHeading('Corriger le crédit de TVA')
+            ->modalDescription('La correction et son motif s\'inscrivent au journal d\'audit de la société, avec l\'ancien et le nouveau montant.')
+            ->form([
+                self::champDuJeton(),
+                TextInput::make('solde')->label('Solde corrigé (négatif pour un crédit, 0 € si aucun)')->placeholder('-1 250,00')->required()->maxLength(30),
+                Textarea::make('motif')->label('Motif de la correction')->required()->maxLength(500),
+            ])
+            ->fillForm(fn (array $arguments): array => ['solde' => self::soldeEnSaisie($this->declarationVue(ValeursLues::texte($arguments['credit'] ?? '')))])
+            ->modalSubmitActionLabel('Corriger')
+            ->visible(fn (): bool => $this->creditDeTva(true)['peut_verifier'] ?? false)
+            ->action(function (array $data, array $arguments): void {
+                static::executerLeGeste(function () use ($data, $arguments): void {
+                    app(CorrigerUnCreditDeTvaAction::class)->handle(CompteConnecte::exiger(), $this->acces()->societe, ValeursLues::texte($arguments['credit'] ?? ''), self::soldeSaisi($data['solde'] ?? null), ValeursLues::texte($data['motif'] ?? ''), ValeursLues::texteOuNul($data['jeton'] ?? null));
+                    Notification::make()->title('Crédit de TVA corrigé.')->success()->send();
+                });
+            });
+    }
+
+    /**
+     * La cadence du régime de la société de l'accès, ou null hors du réel
+     * normal.
+     */
+    private function cadenceDuCredit(): ?CadenceDeLaTva
+    {
+        return $this->acces()->societe->regime_tva?->cadence();
+    }
+
+    /**
+     * Les périodes que la fenêtre propose : celles que la société peut
+     * déclarer ce jour, hors celles qu'elle a déjà indiquées dans cette
+     * cadence, la plus récente d'abord.
+     *
+     * @return array<string, string>
+     */
+    private function periodesADeclarer(): array
+    {
+        $societe = $this->acces()->societe;
+        $cadence = $this->cadenceDuCredit();
+
+        if ($cadence === null) {
+            return [];
+        }
+
+        $dejaIndiquees = app(CreditsDeTva::class)->declarations($societe)
+            ->filter(fn (CreditDeTva $credit): bool => $credit->cadence === $cadence)
+            ->map(fn (CreditDeTva $credit): string => $credit->periode)
+            ->all();
+        $periodes = [];
+
+        foreach (CreditsDeTva::periodesDeclarables($societe, $cadence, Calendrier::deParis()->aujourdhui()) as $periode) {
+            if (! in_array($periode, $dejaIndiquees, true)) {
+                $periodes[$periode] = Str::ucfirst($cadence->libelle($periode));
+            }
+        }
+
+        return $periodes;
+    }
+
+    /**
+     * La déclaration de cet identifiant, lu dans les arguments d'un geste,
+     * parmi celles de la société de l'accès ; null quand elle n'en est pas.
+     */
+    private function declarationVue(string $uuid): ?CreditDeTva
+    {
+        return Str::isUuid($uuid) ? app(CreditsDeTva::class)->declarations($this->acces()->societe)->first(fn (CreditDeTva $credit): bool => (string) $credit->uuid === $uuid) : null;
+    }
+
+    /**
+     * Un solde saisi, en centimes : « -1 250,00 », « −1250,00 € » ou « 0 » ;
+     * refusé avec un message clair quand il ne se lit pas.
+     *
+     * @throws LogicException
+     */
+    private static function soldeSaisi(mixed $saisie): int
+    {
+        $texte = is_string($saisie) ? str_replace(["\u{2212}", '€', ' ', "\u{00A0}", "\u{202F}", ','], ['-', '', '', '', '', '.'], trim($saisie)) : '';
+
+        try {
+            return SaisieDecimale::montantAuCentime($texte);
+        } catch (InvalidArgumentException) {
+            throw new LogicException('Écrivez le solde de la déclaration en euros, au centime : -1 250,00 pour un crédit, 0 si vous n\'en avez pas.');
+        }
+    }
+
+    /**
+     * Le solde d'une déclaration, comme la fenêtre le montre à la saisie
+     * (« -1250,00 ») ; vide sans déclaration.
+     */
+    private static function soldeEnSaisie(?CreditDeTva $credit): string
+    {
+        return $credit === null ? '' : ($credit->solde < 0 ? '-' : '').self::enSaisie(abs($credit->solde));
     }
 
     /**
@@ -920,7 +1253,7 @@ final class PageDesCharges extends Component implements HasActions, HasForms, Ha
             Notification::make()->title($demande->getMessage())->warning()->send();
 
             throw new Halt;
-        } catch (InvalidArgumentException|AuthorizationException|\LogicException $refus) {
+        } catch (InvalidArgumentException|AuthorizationException|LogicException $refus) {
             self::notifierLeRefus($refus);
 
             throw new Halt;

@@ -545,11 +545,12 @@ class CreerEtablissementActionTest extends TestCase
      * La société est validée après que la requête de création l'a chargée
      * (pendant le contrôle Sirene, par exemple) : le magasin se met en
      * activité d'après la société relue sous son verrou, et non d'après
-     * l'instance chargée avant.
+     * l'instance chargée avant. Son régime de TVA est choisi dès son
+     * inscription, sans quoi aucun magasin ne vendrait (lot TVA27).
      */
     public function test_un_magasin_cree_avec_la_societe_chargee_avant_sa_validation_se_met_en_activite(): void
     {
-        $societe = $this->inscrireUneSociete();
+        $societe = $this->choisirLeRegimeDeTva($this->inscrireUneSociete());
         $chargeeAvant = Societe::query()->findOrFail($societe->id);
         $this->saisirLeCodeDuCourrier($societe);
         $this->assertTrue($societe->fresh()->estValidee());

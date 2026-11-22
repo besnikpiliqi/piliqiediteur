@@ -35,12 +35,20 @@ use Illuminate\Database\Eloquent\Collection;
  * un écran qui montre tous ses magasins, jamais quand le filtre en choisit
  * un, ni dans le panneau d'un magasin (voir chargesComptees()) ; sans
  * elles, la TVA garde le calcul des ventes et des achats, et le dit.
+ *
+ * Le report du crédit de TVA (lot TVA27, voir ReportDuCreditDeTva) porte
+ * sur la déclaration de toute la société : il ne se calcule que sur un
+ * périmètre dont la TVA compte tous les magasins de la société et ses
+ * charges de « Toute la société », au réel normal (voir
+ * reporteLeCreditDeTva()) ; ailleurs, la TVA reste celle de chaque mois,
+ * et le dit.
  */
 final class Perimetre
 {
     /**
      * @param  Collection<int, Magasin>  $magasins  par identifiant
      * @param  array<int, list<SourceDesGraphiques>>  $sourcesParMagasin  par identifiant de magasin
+     * @param  list<int>  $magasinsDeLaSociete  tous les magasins de la société, ouverts, fermés ou cédés, que le compte les voie ou non
      */
     public function __construct(
         public readonly EcranDuTableauDeBord $ecran,
@@ -50,7 +58,49 @@ final class Perimetre
         public readonly Calendrier $calendrier,
         public readonly ?AccesAuxCharges $charges = null,
         private readonly bool $unSeulMagasinChoisi = false,
+        private readonly array $magasinsDeLaSociete = [],
     ) {}
+
+    /**
+     * Les documents que compte la TVA à payer : les ventes, et les achats
+     * dans une société qui a des articles.
+     *
+     * @return list<SourceDesGraphiques>
+     */
+    public function sourcesDeLaTva(): array
+    {
+        return [SourceDesGraphiques::Ventes, ...($this->societe->aDesArticles() ? [SourceDesGraphiques::Achats] : [])];
+    }
+
+    /**
+     * Les magasins que compte la TVA à payer : ceux où le compte voit tous
+     * les documents qu'elle compte.
+     *
+     * @return list<int>
+     */
+    public function magasinsDeLaTva(): array
+    {
+        return CleDuModele::desModeles($this->magasinsAvec(...$this->sourcesDeLaTva()));
+    }
+
+    /**
+     * Le crédit de TVA se reporte-t-il sur la TVA de ce périmètre (lot
+     * TVA27) ? Seulement au réel normal, quand elle compte tous les
+     * magasins de la société et, avec les charges que le compte voit,
+     * celles de « Toute la société » (voir compteLesChargesDeLaSociete()) :
+     * le crédit d'une déclaration est celui de toute la société, qui ne se
+     * partage pas entre ses magasins. Jamais dans le panneau d'un magasin,
+     * ni quand le filtre en choisit un.
+     */
+    public function reporteLeCreditDeTva(): bool
+    {
+        $comptes = $this->magasinsDeLaTva();
+
+        return $this->societe->regime_tva?->cadence() !== null
+            && $this->magasinsDeLaSociete !== []
+            && array_diff($this->magasinsDeLaSociete, $comptes) === []
+            && $this->compteLesChargesDeLaSociete($comptes);
+    }
 
     /**
      * Les charges que la TVA de ce périmètre compte : celles de ces
@@ -139,7 +189,7 @@ final class Perimetre
         $magasin = $this->magasins->first(fn (Magasin $candidat): bool => (string) $candidat->uuid === $uuid)
             ?? throw new AuthorizationException(PerimetreDesGraphiques::REFUS);
 
-        return new self($this->ecran, $this->societe, new Collection([CleDuModele::de($magasin) => $magasin]), [CleDuModele::de($magasin) => $this->sourcesParMagasin[CleDuModele::de($magasin)] ?? []], $this->calendrier, $this->charges, true);
+        return new self($this->ecran, $this->societe, new Collection([CleDuModele::de($magasin) => $magasin]), [CleDuModele::de($magasin) => $this->sourcesParMagasin[CleDuModele::de($magasin)] ?? []], $this->calendrier, $this->charges, true, $this->magasinsDeLaSociete);
     }
 
     /**
@@ -166,12 +216,24 @@ final class Perimetre
         }
 
         // En franchise en base, la société ne collecte ni ne déduit aucune
-        // TVA : il n'y a rien à estimer (voir ChiffresDuTableauDeBord).
-        if ($graphique === Graphique::TvaAPayerParMois && $this->societe->estEnFranchiseDeTva()) {
+        // TVA, et aucune TVA ne s'affiche (décision de l'éditeur du
+        // 18/11/2026) ; avant le choix du régime, PILIQI ne sait pas la
+        // calculer (voir ChiffresDuTableauDeBord).
+        if ($graphique === Graphique::TvaAPayerParMois && ! $this->montreLaTva()) {
             return false;
         }
 
         return $this->magasinsDe($graphique)->isNotEmpty();
+    }
+
+    /**
+     * La TVA à payer se montre-t-elle : seulement au réel normal, jamais en
+     * franchise en base (pas même « zéro », décision de l'éditeur du
+     * 18/11/2026) ni avant le choix du régime ?
+     */
+    public function montreLaTva(): bool
+    {
+        return $this->societe->regime_tva?->cadence() !== null;
     }
 
     /**

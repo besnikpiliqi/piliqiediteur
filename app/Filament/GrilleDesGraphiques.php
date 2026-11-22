@@ -4,6 +4,7 @@ namespace App\Filament;
 
 use App\Domain\Cabinets\Models\LienCabinet;
 use App\Domain\Cabinets\Services\AccesDesCabinets;
+use App\Domain\Charges\Services\CreditsDeTva;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\TableauDeBord\Enums\EcranDuTableauDeBord;
 use App\Domain\TableauDeBord\Enums\Graphique;
@@ -25,7 +26,10 @@ use App\Domain\TableauDeBord\Support\TextesDeLEcartDesPrixDAchat;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Support\CompteConnecte;
+use App\Filament\App\Pages\ChargesDeLaSociete;
+use App\Filament\Cabinet\Resources\ClientDuCabinetResource;
 use App\Filament\Concerns\GereLesExceptionsMetier;
+use App\Filament\Societe\Pages\Charges;
 use Closure;
 use Filament\Facades\Filament;
 use Filament\Widgets\Widget;
@@ -294,6 +298,7 @@ class GrilleDesGraphiques extends Widget
 
         return [
             'chiffres' => app(ChiffresDuTableauDeBord::class)->pour($calcul),
+            'lienDuCredit' => $this->lienDuCredit($filtre),
             'euros' => $euros,
             'reglages' => $reglages,
             'magasinChoisi' => $this->magasinDuFiltre($reglages, $perimetre),
@@ -367,8 +372,9 @@ class GrilleDesGraphiques extends Widget
     /**
      * Ce que le script des graphiques reçoit pour une carte (voir
      * graphiques-du-tableau-de-bord.blade.php) : le type, les étiquettes,
-     * les séries en euros (un nombre reste un nombre) et les précisions des
-     * info-bulles.
+     * les séries que le graphique dessine (voir
+     * SerieDuGraphique::jeuxDuDessin()), en euros (un nombre reste un
+     * nombre), et les précisions des info-bulles.
      *
      * @return array{type: string, titre: string, etiquettes: list<string>, jeux: list<array{libelle: string, valeurs: list<float|int|null>, unite: string, en_ligne: bool, axe_de_droite: bool, pointilles: bool}>, info_bulles: array<int, string>}
      */
@@ -379,11 +385,41 @@ class GrilleDesGraphiques extends Widget
             'titre' => $carte->graphique->getLabel(),
             'etiquettes' => $serie->etiquettes,
             'jeux' => array_map(fn (array $jeu): array => [
-                ...$jeu,
+                'libelle' => $jeu['libelle'],
                 'valeurs' => array_map(fn (?int $valeur): float|int|null => $valeur === null || $jeu['unite'] === SerieDuGraphique::NOMBRE ? $valeur : $valeur / 100, $jeu['valeurs']),
-            ], $serie->jeux),
+                'unite' => $jeu['unite'],
+                'en_ligne' => $jeu['en_ligne'],
+                'axe_de_droite' => $jeu['axe_de_droite'],
+                'pointilles' => $jeu['pointilles'],
+            ], $serie->jeuxDuDessin()),
             'info_bulles' => $serie->infoBulles,
         ];
+    }
+
+    /**
+     * Sous le graphique de la TVA reportée, le lien vers le bloc du crédit
+     * de TVA de la page des charges (lot TVA27), pour qui peut l'indiquer
+     * (voir CreditsDeTva::peutDeclarer()) : le propriétaire dans l'espace
+     * de la société, son comptable sur la page du client dans l'espace du
+     * cabinet ou sur la page de l'expert-comptable déclaré ; jamais dans le
+     * panneau d'un magasin, ni quand la TVA ne reporte pas le crédit.
+     */
+    private function lienDuCredit(Perimetre $perimetre): ?string
+    {
+        // Le périmètre qui reporte le crédit compte les charges : son accès
+        // aux charges dit déjà si le compte est le comptable de la société.
+        $peutDeclarer = app(CreditsDeTva::class)->estLeProprietaire(CompteConnecte::exiger(), $perimetre->societe) || ($perimetre->charges?->estComptable() ?? false);
+
+        if (! $perimetre->reporteLeCreditDeTva() || ! $peutDeclarer) {
+            return null;
+        }
+
+        return match ($perimetre->ecran) {
+            EcranDuTableauDeBord::Societe => Charges::getUrl(panel: 'societe', tenant: $perimetre->societe).'#credit-de-tva',
+            EcranDuTableauDeBord::Cabinet => ClientDuCabinetResource::getUrl('charges', ['record' => (string) $this->lien]).'#credit-de-tva',
+            EcranDuTableauDeBord::ExpertComptable => ChargesDeLaSociete::getUrl().'#credit-de-tva',
+            EcranDuTableauDeBord::Magasin => null,
+        };
     }
 
     /**

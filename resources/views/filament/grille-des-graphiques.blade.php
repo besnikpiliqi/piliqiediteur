@@ -30,25 +30,40 @@
                 </div>
             @endif
 
+            {{-- La TVA à payer (lot TVA27, maquette « Message TVA avant PILIQI ») : sur toute la société, celle de la période en cours après le report du crédit, la pastille du crédit à reporter, celle de la déclaration qui sert de point de départ, et le calcul ; ailleurs, celle du mois, sans le report. Rien en franchise en base ni avant le choix du régime. --}}
             @if ($chiffres['tva'] !== null)
+                @php($tva = $chiffres['tva'])
                 <div class="piliqi-graphiques__chiffre" data-chiffre="tva">
                     <div class="piliqi-graphiques__libelle">
-                        TVA à payer (estimation)
+                        {{ $tva['report'] ? 'TVA à payer (estimation) · '.\Illuminate\Support\Str::ucfirst((string) $tva['periode']) : 'TVA à payer (estimation)' }}
                         <x-filament::icon
                             icon="heroicon-m-information-circle"
                             class="h-4 w-4"
-                            title="Calculée depuis vos documents et vos charges validées. L'état de TVA officiel, avec l'exigibilité des services et les règles de la déclaration, viendra avec la comptabilité."
-                            label="Calculée depuis vos documents et vos charges validées. L'état de TVA officiel, avec l'exigibilité des services et les règles de la déclaration, viendra avec la comptabilité."
+                            title="Calculée depuis vos documents et vos charges validées, avec le crédit de TVA reporté de la période d'avant. L'état de TVA officiel, avec l'exigibilité des services et les règles de la déclaration, viendra avec la comptabilité."
+                            label="Calculée depuis vos documents et vos charges validées, avec le crédit de TVA reporté de la période d'avant. L'état de TVA officiel, avec l'exigibilité des services et les règles de la déclaration, viendra avec la comptabilité."
                         />
                     </div>
-                    @if ($chiffres['tva']['franchise'])
-                        <div class="piliqi-graphiques__valeur">TVA non applicable (franchise en base)</div>
-                    @else
-                        <div class="piliqi-graphiques__valeur" data-tva="reelle">{{ $euros($chiffres['tva']['a_payer']) }}</div>
-                        <div class="piliqi-graphiques__precision">collectée {{ $euros($chiffres['tva']['collectee']) }} − déductible {{ $euros($chiffres['tva']['deductible']) }}{{ $chiffres['tva']['avec_les_charges'] ? ($chiffres['tva']['sans_celles_de_la_societe'] ? ' (sans les charges de « Toute la société »)' : '') : ' (sans les charges)' }}</div>
-                        @if ($chiffres['tva']['estimation'] !== null)
-                            <div class="piliqi-graphiques__precision" data-tva="estimation">estimation avec les charges à valider : {{ $euros($chiffres['tva']['estimation']) }}</div>
+                    <div class="piliqi-graphiques__valeur" data-tva="reelle">{{ $euros($tva['a_payer']) }}</div>
+                    @if ($tva['report'])
+                        <div class="piliqi-graphiques__pastilles">
+                            @if ($tva['credit_a_reporter'] > 0)
+                                <x-filament::badge color="info" data-tva="credit-a-reporter">Crédit de TVA à reporter : {{ $euros($tva['credit_a_reporter']) }}</x-filament::badge>
+                            @endif
+                            @if ($tva['pastille'] !== null)
+                                <x-filament::badge :color="$tva['pastille']['couleur']" data-tva="credit-de-depart">{{ $tva['pastille']['texte'] }}</x-filament::badge>
+                            @endif
+                        </div>
+                        <div class="piliqi-graphiques__precision" data-tva="calcul">{{ $tva['calcul'] }}</div>
+                        <div class="piliqi-graphiques__precision">collectée {{ $euros($tva['collectee']) }} − déductible {{ $euros($tva['deductible']) }}</div>
+                        @if ($tva['estimation'] !== null)
+                            <div class="piliqi-graphiques__precision" data-tva="estimation">estimation avec les charges à valider : {{ $tva['estimation'] >= 0 ? $euros($tva['estimation']).' à payer' : $euros(-$tva['estimation']).' de crédit à reporter' }}</div>
                         @endif
+                    @else
+                        <div class="piliqi-graphiques__precision">collectée {{ $euros($tva['collectee']) }} − déductible {{ $euros($tva['deductible']) }}{{ $tva['avec_les_charges'] ? ($tva['sans_celles_de_la_societe'] ? ' (sans les charges de « Toute la société »)' : '') : ' (sans les charges)' }}</div>
+                        @if ($tva['estimation'] !== null)
+                            <div class="piliqi-graphiques__precision" data-tva="estimation">estimation avec les charges à valider : {{ $euros($tva['estimation']) }}</div>
+                        @endif
+                        <div class="piliqi-graphiques__precision" data-tva="sans-le-report">sans le report du crédit de TVA, qui se calcule sur toute la société</div>
                     @endif
                 </div>
             @endif
@@ -171,6 +186,10 @@
                         <p class="piliqi-graphiques__gris" data-note>{{ $serie->note }}</p>
                     @endif
 
+                    @if ($graphique === Graphique::TvaAPayerParMois && $lienDuCredit !== null)
+                        <p class="piliqi-graphiques__gris" data-lien-du-credit><x-filament::link :href="$lienDuCredit">Indiquer ou voir le crédit de TVA</x-filament::link></p>
+                    @endif
+
                     @if ($serie->estVide())
                         <p class="piliqi-graphiques__gris" data-vide>Aucune donnée sur la période.</p>
                     @else
@@ -203,7 +222,7 @@
                             <thead>
                                 <tr>
                                     <th scope="col"></th>
-                                    @foreach ($serie->jeux as $jeu)
+                                    @foreach ($serie->jeuxDuTableau() as $jeu)
                                         <th scope="col">{{ $jeu['libelle'] }}</th>
                                     @endforeach
                                 </tr>
@@ -212,7 +231,7 @@
                                 @foreach ($serie->etiquettes as $position => $etiquette)
                                     <tr>
                                         <th scope="row">{{ $etiquette }}@if (isset($serie->infoBulles[$position])) <span class="piliqi-graphiques__gris">({{ $serie->infoBulles[$position] }})</span>@endif</th>
-                                        @foreach ($serie->jeux as $jeu)
+                                        @foreach ($serie->jeuxDuTableau() as $jeu)
                                             <td class="piliqi-graphiques__montant">{{ $enTexte($jeu['valeurs'][$position] ?? null, $jeu['unite']) }}</td>
                                         @endforeach
                                     </tr>

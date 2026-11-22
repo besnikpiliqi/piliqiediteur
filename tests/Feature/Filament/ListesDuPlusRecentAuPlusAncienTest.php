@@ -79,14 +79,14 @@ class ListesDuPlusRecentAuPlusAncienTest extends TestCase
         $this->dansLeMagasin($magasin, $this->proprietaireDe($magasin));
 
         $recents = [
-            ListClients::class => [Client::factory()->create(['nom' => 'Récent', 'created_at' => '2026-11-10 10:00:00']), Client::factory()->create(['nom' => 'Ancien', 'created_at' => '2026-01-10 10:00:00'])],
-            ListFournisseurs::class => [Fournisseur::factory()->create(['nom' => 'Récent', 'created_at' => '2026-11-10 10:00:00']), Fournisseur::factory()->create(['nom' => 'Ancien', 'created_at' => '2026-01-10 10:00:00'])],
-            ListProduits::class => [Produit::factory()->create(['nom' => 'Récent', 'created_at' => '2026-11-10 10:00:00']), Produit::factory()->create(['nom' => 'Ancien', 'created_at' => '2026-01-10 10:00:00'])],
+            ListClients::class => [Client::factory()->create(['nom' => 'Récent', 'created_at' => self::aParis('2026-11-10 10:00:00')]), Client::factory()->create(['nom' => 'Ancien', 'created_at' => self::aParis('2026-01-10 10:00:00')])],
+            ListFournisseurs::class => [Fournisseur::factory()->create(['nom' => 'Récent', 'created_at' => self::aParis('2026-11-10 10:00:00')]), Fournisseur::factory()->create(['nom' => 'Ancien', 'created_at' => self::aParis('2026-01-10 10:00:00')])],
+            ListProduits::class => [Produit::factory()->create(['nom' => 'Récent', 'created_at' => self::aParis('2026-11-10 10:00:00')]), Produit::factory()->create(['nom' => 'Ancien', 'created_at' => self::aParis('2026-01-10 10:00:00')])],
         ];
 
-        $client = Client::factory()->create(['created_at' => '2026-01-01 10:00:00']);
-        $recents[ListFactures::class] = [Facture::factory()->create(['client_id' => $client->id, 'created_at' => '2026-11-10 10:00:00']), Facture::factory()->create(['client_id' => $client->id, 'created_at' => '2026-01-10 10:00:00'])];
-        $recents[ListDevis::class] = [Devis::factory()->create(['client_id' => $client->id, 'created_at' => '2026-11-10 10:00:00']), Devis::factory()->create(['client_id' => $client->id, 'created_at' => '2026-01-10 10:00:00'])];
+        $client = Client::factory()->create(['created_at' => self::aParis('2026-01-01 10:00:00')]);
+        $recents[ListFactures::class] = [Facture::factory()->create(['client_id' => $client->id, 'created_at' => self::aParis('2026-11-10 10:00:00')]), Facture::factory()->create(['client_id' => $client->id, 'created_at' => self::aParis('2026-01-10 10:00:00')])];
+        $recents[ListDevis::class] = [Devis::factory()->create(['client_id' => $client->id, 'created_at' => self::aParis('2026-11-10 10:00:00')]), Devis::factory()->create(['client_id' => $client->id, 'created_at' => self::aParis('2026-01-10 10:00:00')])];
 
         foreach ($recents as $page => $enregistrements) {
             Livewire::test($page)->assertCanSeeTableRecords($enregistrements, inOrder: true);

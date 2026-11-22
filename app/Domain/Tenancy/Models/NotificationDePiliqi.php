@@ -2,6 +2,7 @@
 
 namespace App\Domain\Tenancy\Models;
 
+use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Tenancy\Casts\DonneesDUneNotification;
 use Illuminate\Notifications\DatabaseNotification;
 
@@ -22,7 +23,7 @@ class NotificationDePiliqi extends DatabaseNotification
     {
         return [
             'data' => DonneesDUneNotification::class,
-            'read_at' => 'datetime',
+            'read_at' => Instant::class,
         ];
     }
 }

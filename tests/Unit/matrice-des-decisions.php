@@ -2733,6 +2733,16 @@ return [
                 'tests/Feature/Filament/ListesDuPlusRecentAuPlusAncienTest.php::test_les_fiches_et_les_brouillons_les_plus_recents_sont_en_tete_quel_que_soit_leur_identifiant',
             ],
         ],
+        'hors.impression-des-pdf-de-facture' => [
+            'puce' => 'Hors de CLAUDE.md',
+            'regle' => 'Sur les PDF des documents : « Page x sur y » s\'écrit en corps 8 et en gris presque noir ; l\'adresse du magasin ne se ferme par le pays que hors de France, jamais par « FR » seul sur une ligne ; le nom du fichier téléchargé est « facture-{numéro}.pdf » (ou « ticket- »), sans chiffre de plus ; le filigrane « DÉMONSTRATION — SANS VALEUR » est plus léger (corps 28, opacité 7 %) et la bande du haut le dit déjà (relecture de l\'éditeur du 19/11/2026, lot écrans).',
+            'tests' => [
+                'tests/Feature/Facturation/FacturePdfGeneratorTest.php::test_le_numero_de_page_est_lisible_et_le_nom_du_fichier_est_celui_du_numero',
+                'tests/Feature/Facturation/FacturePdfGeneratorTest.php::test_l_adresse_du_magasin_n_imprime_le_pays_que_hors_de_france',
+                'tests/Feature/Facturation/FacturePdfGeneratorTest.php::test_la_facture_imprime_l_identite_legale_du_magasin',
+                'tests/Feature/CaisseSecurisee/EmpreinteDeLaCaisseEtDesPdfTest.php::test_la_caisse_et_les_pdf_rendent_au_caractere_pres_leur_empreinte_d_avant_l_analyse_statique',
+            ],
+        ],
         'hors.tva-autoliquidee-en-orange' => [
             'puce' => 'Hors de CLAUDE.md',
             'regle' => 'Une charge dont le fournisseur est établi hors de France porte la mention « TVA autoliquidée », en orange, sous le montant de sa TVA : sous le champ TVA de la ligne dans la fenêtre « Ajouter une charge » (case cochée seulement), dans la liste des charges et dans l\'état téléchargé (PDF et Excel) ; le libellé « TTC » ne change pas et une charge d\'un fournisseur établi en France n\'a aucune mention (décision de l\'éditeur du 20/11/2026, maquette v5, lot écrans).',

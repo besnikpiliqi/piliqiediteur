@@ -22,6 +22,7 @@ use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Services\AvoirPdfGenerator;
 use App\Domain\Facturation\Services\DevisPdfGenerator;
+use App\Domain\Facturation\Services\Emetteur;
 use App\Domain\Facturation\Services\FacturePdfGenerator;
 use App\Domain\Facturation\Services\PartDeReglement;
 use App\Domain\Facturation\Services\ReglementComptant;
@@ -98,6 +99,55 @@ class FacturePdfGeneratorTest extends TestCase
         $this->assertStringContainsString((string) $facture->numero, $textes);
         $this->assertStringContainsString('Câble électrique tressé', $textes);
         $this->assertStringContainsString('Page 1 sur 1', $textes);
+    }
+
+    /**
+     * Les quatre détails d'impression relevés par l'éditeur le 19/11/2026
+     * sur une facture lue :
+     * - « Page x sur y » en corps 8 et en gris presque noir, lisible
+     *   (en corps 7 et gris clair, il était presque invisible) ;
+     * - jamais « FR » seul sur une ligne de l'adresse d'un magasin en
+     *   France, le pays ne s'imprimant que hors de France ;
+     * - le nom du fichier est celui du numéro, sans chiffre de plus
+     *   (« facture-FAC-LYON1-2026-000036.pdf » : le « 6 » en trop venait
+     *   d'une copie « (6) » du navigateur) ;
+     * - un filigrane de démonstration plus léger (voir styles.blade.php),
+     *   la bande du haut le disant déjà.
+     */
+    public function test_le_numero_de_page_est_lisible_et_le_nom_du_fichier_est_celui_du_numero(): void
+    {
+        app(TenantContext::class)->set(Magasin::factory()->create());
+        $facture = $this->factureEmise();
+
+        $pdf = app(FacturePdfGenerator::class)->generer($facture)->output();
+
+        $flux = $this->fluxDeLaPremierePage($pdf);
+        $this->assertSame(1, preg_match('/([\d.]+) ([\d.]+) ([\d.]+) rg\nBT [\d.]+ [\d.]+ Td \/F\d+ ([\d.]+) Tf\s+\[\(\x00P\x00a\x00g\x00e\x00 \x001\x00 \x00s\x00u\x00r\x00 \x001\)\] TJ ET/', $flux, $numero), 'Le numéro de page est écrit avec sa couleur et son corps.');
+        $this->assertGreaterThanOrEqual(8.0, (float) $numero[4], 'Corps 8 au moins.');
+        $this->assertLessThanOrEqual(0.25, max((float) $numero[1], (float) $numero[2], (float) $numero[3]), 'Un gris presque noir : plus de 12 pour 1 sur le blanc.');
+
+        $generateur = app(FacturePdfGenerator::class);
+        $this->assertSame("facture-{$facture->numero}.pdf", $generateur->nomFichier($facture));
+        $this->assertMatchesRegularExpression('/^facture-[A-Z0-9]+-[A-Z0-9]+-\d{4}-\d{6}\.pdf$/', $generateur->nomFichier($facture), 'Le nom du fichier ne porte que le numéro : six chiffres, jamais un de plus.');
+        $ticket = $this->ticketEmis();
+        $this->assertSame("ticket-{$ticket->numero}.pdf", $generateur->nomFichier($ticket));
+    }
+
+    public function test_l_adresse_du_magasin_n_imprime_le_pays_que_hors_de_france(): void
+    {
+        $enFrance = Magasin::factory()->create(['nom' => 'Boutique du Port', 'adresse' => '12 quai des Chartrons', 'code_postal' => '33000', 'ville' => 'Bordeaux', 'pays' => 'FR']);
+        $enBelgique = Magasin::factory()->create(['nom' => 'Boutique de Bruxelles', 'adresse' => '3 rue Neuve', 'code_postal' => '1000', 'ville' => 'Bruxelles', 'pays' => 'BE']);
+        $sansAdresse = Magasin::factory()->create(['nom' => 'Boutique sans adresse', 'adresse' => null, 'code_postal' => null, 'ville' => null, 'pays' => 'BE']);
+
+        $lignesEnFrance = Emetteur::duMagasin($enFrance)->lignesDeLEtablissement();
+        $lignesEnBelgique = Emetteur::duMagasin($enBelgique)->lignesDeLEtablissement();
+
+        $this->assertNotContains('FR', $lignesEnFrance, 'Un magasin en France n\'imprime jamais « FR » seul sur une ligne.');
+        $this->assertContains('12 quai des Chartrons', $lignesEnFrance);
+        $this->assertContains('33000 Bordeaux', $lignesEnFrance);
+        $this->assertContains('BE', $lignesEnBelgique, 'Hors de France, le pays ferme l\'adresse.');
+        $this->assertNotContains('BE', Emetteur::duMagasin($sansAdresse)->lignesDeLEtablissement(), 'Sans adresse, aucun pays seul.');
+        $this->assertSame(array_search('33000 Bordeaux', $lignesEnFrance, true) + 1, array_search('SIRET : '.$enFrance->siret, $lignesEnFrance, true));
     }
 
     /**
@@ -307,7 +357,7 @@ class FacturePdfGeneratorTest extends TestCase
         $html = $this->compacte($this->rendu($facture));
 
         $this->assertStringContainsString(
-            '<div class="magasin-nom">Boutique du Port</div>12 quai des Pêcheurs<br>Bâtiment B<br>13002 Marseille<br>FR<br>'
+            '<div class="magasin-nom">Boutique du Port</div>12 quai des Pêcheurs<br>Bâtiment B<br>13002 Marseille<br>'
             .'SIRET : 12121212000012<br>Tél. 04 91 00 00 00 · contact@boutique-du-port.fr</td>',
             $html,
         );
@@ -1433,6 +1483,19 @@ class FacturePdfGeneratorTest extends TestCase
         $this->assertNotEmpty($pied, $numero);
         $this->assertGreaterThan(max($pied) + 3 * 72 / 25.4, min($corps), $numero);
         $this->assertLessThan(min($pied), $this->texte($page, fn (string $texte): bool => $texte === $numero)['y'], $numero);
+    }
+
+    /**
+     * Les opérateurs de la première page du PDF, décompressés.
+     */
+    private function fluxDeLaPremierePage(string $pdf): string
+    {
+        preg_match('/\/Contents (\d+) 0 R/', $pdf, $contenu);
+        preg_match('/\n'.$contenu[1].' 0 obj\s*<<(.*?)>>\s*stream\r?\n/s', $pdf, $flux, PREG_OFFSET_CAPTURE);
+        preg_match('/\/Length (\d+)/', $flux[1][0], $longueur);
+        $donnees = substr($pdf, $flux[0][1] + strlen($flux[0][0]), (int) $longueur[1]);
+
+        return str_contains($flux[1][0], '/FlateDecode') ? (string) gzuncompress($donnees) : $donnees;
     }
 
     /**

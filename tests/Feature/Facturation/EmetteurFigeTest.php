@@ -159,7 +159,7 @@ class EmetteurFigeTest extends TestCase
      * qui vend.
      */
     private const EN_TETE_DU_PORT = '<div class="magasin-nom">Boutique du Port</div>'
-        .'12 quai des Pêcheurs<br>13002 Marseille<br>FR<br>SIRET : 12121212000012<br>'
+        .'12 quai des Pêcheurs<br>13002 Marseille<br>SIRET : 12121212000012<br>'
         .'Tél. 04 91 00 00 00 · contact@boutique-du-port.fr';
 
     /**
@@ -173,7 +173,7 @@ class EmetteurFigeTest extends TestCase
      * L'en-tête de la Boutique des Quais (voir IDENTITE_DES_QUAIS).
      */
     private const EN_TETE_DES_QUAIS = '<div class="magasin-nom">Boutique des Quais</div>'
-        .'8 rue Neuve<br>Bâtiment B<br>69002 Lyon<br>FR<br>SIRET : 12121212000012<br>'
+        .'8 rue Neuve<br>Bâtiment B<br>69002 Lyon<br>SIRET : 12121212000012<br>'
         .'Tél. 04 72 00 00 00 · bonjour@boutique-des-quais.fr';
 
     /**
@@ -457,7 +457,7 @@ class EmetteurFigeTest extends TestCase
 
         $html = app(FacturePdfGenerator::class)->html($ticket->fresh());
 
-        $this->assertStringContainsString('</div>12 quai des Pêcheurs<br>13002 Marseille<br>FR<br>SIRET : 12121212000012<br>', $this->enTete($html));
+        $this->assertStringContainsString('</div>12 quai des Pêcheurs<br>13002 Marseille<br>SIRET : 12121212000012<br>', $this->enTete($html));
         $this->assertSame('Martin et Fils SARL au capital de 10 000,00 € · Siège social et établissement · SIREN : 121212120 · RCS Marseille · TVA intracommunautaire : FR56121212120', $this->societe($html));
     }
 

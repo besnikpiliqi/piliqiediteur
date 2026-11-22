@@ -4,7 +4,6 @@ Saisie PILIQI — l'original est la facture du fournisseur
 Ma Boutique
 12 rue Mercière
 69002 Lyon
-FR
 SIRET : 10000000900017
 Tél. 04 72 00 00 00 · contact@ma-boutique.example
 Facture d'achat

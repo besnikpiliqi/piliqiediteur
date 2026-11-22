@@ -51,7 +51,18 @@ final class MiseEnPageA4
      */
     private const NUMERO_AU_DESSUS_DU_BAS = 10;
 
-    private const CORPS_DU_NUMERO = 7;
+    /**
+     * Le corps et la couleur de « Page x sur y » : un corps 8 et un gris
+     * presque noir, lisibles sur la page imprimée comme à l'écran (constat de
+     * l'éditeur du 19/11/2026 : en corps 7 et gris clair, le numéro de page
+     * était presque invisible).
+     */
+    private const CORPS_DU_NUMERO = 8;
+
+    /**
+     * @var list<float>
+     */
+    private const COULEUR_DU_NUMERO = [0.12, 0.16, 0.2];
 
     /**
      * Le document mis en pages, numéros de page compris : sa sortie
@@ -90,7 +101,7 @@ final class MiseEnPageA4
             'Page {PAGE_NUM} sur {PAGE_COUNT}',
             $police,
             self::CORPS_DU_NUMERO,
-            [0.32, 0.38, 0.43],
+            self::COULEUR_DU_NUMERO,
         );
 
         return $pdf;

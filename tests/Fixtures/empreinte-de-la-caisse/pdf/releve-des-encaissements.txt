@@ -3,7 +3,6 @@ fichier : encaissements-LYON1-2026-10.pdf
 Ma Boutique
 12 rue Mercière
 69002 Lyon
-FR
 SIRET : 10000000900017
 Tél. 04 72 00 00 00 · contact@ma-boutique.example
 Relevé des encaissements

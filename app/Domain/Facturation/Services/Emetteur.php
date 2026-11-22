@@ -268,7 +268,9 @@ final readonly class Emetteur
     /**
      * L'établissement qui vend, imprimé en tête de chaque document sous le
      * nom du magasin, sans ce qui n'est pas renseigné : son adresse, fermée
-     * par le pays, son SIRET, puis son téléphone et son adresse e-mail.
+     * par le pays quand il n'est pas la France (jamais « FR » seul sur une
+     * ligne pour un magasin en France, constat de l'éditeur du 19/11/2026),
+     * son SIRET, puis son téléphone et son adresse e-mail.
      *
      * @return list<string>
      */
@@ -278,7 +280,7 @@ final readonly class Emetteur
 
         return array_values(array_filter([
             ...$adresse,
-            $adresse !== [] ? $this->pays : null,
+            $adresse !== [] && ! in_array(mb_strtoupper(trim($this->pays)), TerritoireFiscal::PAYS_FRANCE, true) ? $this->pays : null,
             filled($this->siret) ? "SIRET : {$this->siret}" : null,
             implode(' · ', array_filter([filled($this->telephone) ? "Tél. {$this->telephone}" : null, $this->email], filled(...))),
         ], filled(...)));

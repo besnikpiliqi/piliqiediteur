@@ -86,7 +86,10 @@ use Tests\TestCase;
  *   nom.
  *
  * Ce test et ses fichiers ne changent pas pendant les lots de l'analyse
- * statique (TY1 à PS2).
+ * statique (TY1 à PS2). Seule une décision de l'éditeur sur ce que les
+ * documents impriment les change, dans le même commit : le 19/11/2026, le
+ * pays de l'adresse du magasin ne s'imprime plus pour un magasin en France
+ * (la ligne « FR » seule a quitté le texte de chaque PDF).
  */
 class EmpreinteDeLaCaisseEtDesPdfTest extends TestCase
 {

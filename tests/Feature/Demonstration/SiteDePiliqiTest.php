@@ -276,6 +276,44 @@ class SiteDePiliqiTest extends TestCase
         }
     }
 
+    /**
+     * Sur un poste neuf, la base sentinelle n'existe pas encore quand on
+     * tire les clés du .env : les commandes qui n'en lisent aucune
+     * démarrent sans le contrôle de la base sentinelle, que toute autre
+     * commande passe (« key:generate » échouait sur « connection refused »).
+     *
+     * @return array<string, array{string, array<string, mixed>}>
+     */
+    public static function commandesQuiNeLisentAucuneBase(): array
+    {
+        return [
+            'key:generate' => ['key:generate', ['--show' => true]],
+            'demonstration:generer-cle' => ['demonstration:generer-cle', []],
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $options
+     */
+    #[DataProvider('commandesQuiNeLisentAucuneBase')]
+    public function test_les_commandes_qui_preparent_le_env_demarrent_avant_la_base_sentinelle(string $commande, array $options): void
+    {
+        $this->assertSame(['key:generate', 'caisse:generer-cle', 'journal-audit:epingler-la-cle', 'demonstration:generer-cle'], SiteDePiliqiServiceProvider::COMMANDES_QUI_NE_LISENT_AUCUNE_BASE);
+        $this->configurerLeSiteDeDemonstration();
+        $this->demarrer();
+        $sentinelle = Mockery::mock(Connection::class);
+        $sentinelle->shouldReceive('getDatabaseName')->andReturn(SiteDePiliqiServiceProvider::BASE_SENTINELLE);
+        $sentinelle->shouldReceive('scalar')->never();
+        $bases = DB::getFacadeRoot();
+        DB::shouldReceive('connection')->andReturn($sentinelle);
+
+        try {
+            $this->assertSame(0, Artisan::call($commande, $options), Artisan::output());
+        } finally {
+            DB::swap($bases);
+        }
+    }
+
     public function test_en_production_le_site_de_demonstration_exige_le_temoin_host_securise(): void
     {
         $this->configurerLeSiteDeDemonstration();
@@ -403,6 +441,99 @@ class SiteDePiliqiTest extends TestCase
 
         $this->assertNotSame([], $lancees);
         $this->assertSame([], array_values(array_diff($lancees, SiteDePiliqiServiceProvider::COMMANDES_DE_LA_CONSTRUCTION_DU_PAQUET)), 'Chaque commande que Composer lance en construisant le paquet démarre sans .env.');
+    }
+
+    /**
+     * Le nom de la commande se lit comme Laravel et Symfony le lisent : le
+     * premier mot qui n'est pas une option, où que soient les options.
+     * « php artisan --env=demonstration journal-audit:epingler-la-cle », la
+     * forme écrite dans le README, avait pour commande « --env=… » (seule la
+     * place fixe 1 de argv se lisait), et la garde refusait la commande qui
+     * épingle la clé qu'elle exige épinglée.
+     *
+     * @return array<string, array{list<string>, string|null}>
+     */
+    public static function lignesDeCommande(): array
+    {
+        return [
+            'la commande seule' => [['artisan', 'journal-audit:epingler-la-cle'], 'journal-audit:epingler-la-cle'],
+            '--env=… avant la commande' => [['artisan', '--env=demonstration', 'journal-audit:epingler-la-cle'], 'journal-audit:epingler-la-cle'],
+            '--env=… après la commande' => [['artisan', 'journal-audit:epingler-la-cle', '--env=demonstration'], 'journal-audit:epingler-la-cle'],
+            '--env et sa valeur séparées avant la commande' => [['artisan', '--env', 'demonstration', 'migrate'], 'migrate'],
+            'plusieurs options avant la commande' => [['artisan', '--ansi', '-v', '--env=demonstration', 'package:discover'], 'package:discover'],
+            'une option sans commande' => [['artisan', '--version'], null],
+            'aucun argument' => [['artisan'], null],
+        ];
+    }
+
+    /**
+     * @param  list<string>  $ligne
+     */
+    #[DataProvider('lignesDeCommande')]
+    public function test_le_nom_de_la_commande_est_le_premier_mot_qui_n_est_pas_une_option(array $ligne, ?string $attendu): void
+    {
+        $this->assertSame($attendu, SiteDePiliqiServiceProvider::nomDeLaCommande($ligne));
+    }
+
+    /**
+     * La commande qui épingle la clé du journal d'audit démarre avant que la
+     * clé le soit, que l'option --env la précède ou la suive ; toute autre
+     * commande reste refusée par la garde, qui n'a pas la clé épinglée.
+     *
+     * @param  list<string>  $ligne
+     */
+    #[DataProvider('lignesDeLaCommandeQuiEpingle')]
+    public function test_la_commande_qui_epingle_la_cle_d_audit_demarre_avant_qu_elle_le_soit_quelle_que_soit_la_place_de_env(array $ligne): void
+    {
+        $this->configurerLeSiteDeDemonstration();
+        config(['journal_audit.cle' => base64_encode(random_bytes(32)), 'journal_audit.cle_id' => 'demonstration', 'journal_audit.empreintes_de_demonstration' => []]);
+        $argumentsDuProcessus = $_SERVER['argv'];
+
+        try {
+            $_SERVER['argv'] = $ligne;
+            $this->assertNull($this->refusEventuelDuDemarrage(), 'La commande qui épingle la clé démarre avant qu\'elle le soit.');
+
+            $_SERVER['argv'] = ['artisan', '--env=demonstration', 'about'];
+            $this->assertSame(
+                sprintf(SiteDePiliqiServiceProvider::MESSAGE_REFUS, 'site de démonstration', sprintf(SiteDePiliqiServiceProvider::MESSAGE_CLE_D_AUDIT_DE_LA_DEMONSTRATION, 'courante (JOURNAL_AUDIT_CLE)')),
+                $this->refusDuDemarrage(),
+            );
+        } finally {
+            $_SERVER['argv'] = $argumentsDuProcessus;
+        }
+    }
+
+    /**
+     * @return array<string, array{list<string>}>
+     */
+    public static function lignesDeLaCommandeQuiEpingle(): array
+    {
+        return [
+            '--env=… avant la commande' => [['artisan', '--env=demonstration', 'journal-audit:epingler-la-cle']],
+            '--env et sa valeur séparées avant la commande' => [['artisan', '--env', 'demonstration', 'journal-audit:epingler-la-cle']],
+            '--env=… après la commande' => [['artisan', 'journal-audit:epingler-la-cle', '--env=demonstration']],
+        ];
+    }
+
+    /**
+     * Composer construit le paquet avec --ansi avant la commande : une
+     * option devant le nom de la commande ne la rend pas inconnue de la
+     * garde.
+     */
+    public function test_les_commandes_de_la_construction_du_paquet_demarrent_sans_la_garde_avec_des_options_avant_leur_nom(): void
+    {
+        $this->app->detectEnvironment(fn (): string => 'production');
+        config(['session.cookie' => 'piliqi-session']);
+        $argumentsDuProcessus = $_SERVER['argv'];
+
+        try {
+            foreach (SiteDePiliqiServiceProvider::COMMANDES_DE_LA_CONSTRUCTION_DU_PAQUET as $commande) {
+                $_SERVER['argv'] = ['artisan', '--ansi', '--env=production', $commande];
+                $this->assertNull($this->refusEventuelDuDemarrage(), "« {$commande} » démarre sans la garde, même avec des options avant son nom.");
+            }
+        } finally {
+            $_SERVER['argv'] = $argumentsDuProcessus;
+        }
     }
 
     /**
@@ -665,6 +796,17 @@ class SiteDePiliqiTest extends TestCase
     private function demarrer(): void
     {
         (new SiteDePiliqiServiceProvider($this->app))->boot();
+    }
+
+    private function refusEventuelDuDemarrage(): ?string
+    {
+        try {
+            $this->demarrer();
+        } catch (SiteMalConfigureException $refus) {
+            return $refus->getMessage();
+        }
+
+        return null;
     }
 
     private function refusDuDemarrage(): string

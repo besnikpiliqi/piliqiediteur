@@ -15,6 +15,7 @@ use App\Domain\Demonstration\Registre\Models\Modele;
 use App\Domain\Demonstration\SiteDePiliqi;
 use App\Domain\Demonstration\Taches\TachesDesSites;
 use App\Domain\Demonstration\VersionServie;
+use App\Domain\Fichiers\AnalyseurDePdf;
 use App\Domain\Tenancy\Enums\TypeDActivite;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Artisan;
@@ -24,7 +25,11 @@ use Throwable;
 
 /**
  * La construction d'une base modèle du site de démonstration (lot
- * DEMO-COPIE, C.2), par demo_admin, pour un type :
+ * DEMO-COPIE, C.2), par demo_admin, pour un type, après avoir contrôlé que
+ * qpdf se lance (voir AnalyseurDePdf::verifierQueQpdfSeLance()), car le
+ * semis dépose des pièces en PDF que chacune passe par lui : sans lui, la
+ * construction s'arrête là, avec ce qu'il faut écrire dans QPDF_BINAIRE,
+ * et non à la première pièce, sur « réessayez dans quelques minutes » :
  *
  * 1. une base de travail vide demo_travail_<type>_<AAAAMMJJHHMM>, depuis
  *    template0, en UTF8 et collation C.UTF-8 ;
@@ -106,6 +111,7 @@ final class ConstruireUnModele
         ]);
 
         try {
+            AnalyseurDePdf::verifierQueQpdfSeLance();
             $this->bases->creerUneBaseVide($nom);
             BrancherUneBase::pendant(BrancherUneBase::parLAdministration($nom), function () use ($type, $motDePasse, $nom): void {
                 $this->migrer($nom);

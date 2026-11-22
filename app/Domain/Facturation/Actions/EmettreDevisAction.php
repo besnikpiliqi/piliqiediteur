@@ -34,7 +34,11 @@ use LogicException;
  * imprime ensuite quoi qu'ils deviennent (voir Devis::emetteur()), jusqu'à
  * sa prochaine modification, avec le réglage du dépannage à domicile du
  * magasin et le prix de ce devis (voir DepannageADomicile) : un devis de
- * dépannage à un particulier ne part pas sans le lieu de l'intervention.
+ * dépannage à un particulier ne part pas sans le lieu de l'intervention,
+ * et un devis qui part sans dépannage (le magasin a décoché le réglage
+ * depuis son enregistrement) perd le lieu et la case « Devis signé chez le
+ * client » qu'il n'imprime pas : ni sa fiche ni son empreinte ne les
+ * gardent.
  * Un magasin qui ne peut pas vendre (lecture seule, société
  * en cours de vérification, établissement pas encore confirmé) n'en envoie
  * pas (voir Magasin::verifierQuIlPeutVendre()). Un devis dont la date de validité est
@@ -121,6 +125,7 @@ class EmettreDevisAction
                 'emetteur_fige' => Emetteur::duMagasin($devis->magasin)->enTableau(),
                 'depannage_a_domicile' => $depannage,
                 'prix_du_devis_de_depannage' => $depannage ? $devis->magasin->prix_du_devis_de_depannage : null,
+                ...($depannage ? [] : ['lieu_d_intervention' => null, 'signe_chez_le_client' => false]),
             ]))->save());
         }));
     }

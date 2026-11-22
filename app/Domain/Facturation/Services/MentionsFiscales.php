@@ -232,11 +232,14 @@ class MentionsFiscales
      * particulier, qui ne montre que des prix TTC (modèle P1), n'imprime que
      * l'explication du calcul. Rien en franchise en base, où le HT est le
      * prix TTC, sans TVA. Une explication, pas une mention : elle ne se
-     * signe pas avec le document (voir ContenuFiscal).
+     * signe pas avec le document (voir ContenuFiscal). La page du lien d'un
+     * devis, qui montre ses lignes comme son PDF sans le PU HT exact (seul
+     * le PDF l'écrit), en a la note sans la phrase du PU HT exact.
      *
-     * @param  bool  $surLePdf  la note du PDF du document, et non celle de sa fiche
+     * @param  bool  $surLePdf  la note du PDF du document, ou de la page du lien d'un devis, et non celle de sa fiche
+     * @param  bool  $avecLePuHtExact  avec $surLePdf, le document écrit le PU HT exact sous chaque article : faux sur la page du lien d'un devis
      */
-    public function calcul(Facture|Avoir|Devis $document, bool $surLePdf = false): ?string
+    public function calcul(Facture|Avoir|Devis $document, bool $surLePdf = false, bool $avecLePuHtExact = true): ?string
     {
         if ($document->franchise_en_base) {
             return null;
@@ -250,6 +253,6 @@ class MentionsFiscales
             return $calcul;
         }
 
-        return implode(' ', [$calcul, self::PU_HT_D_UN_ARTICLE, ...($surLePdf ? [self::PU_HT_EXACT] : [])]);
+        return implode(' ', [$calcul, self::PU_HT_D_UN_ARTICLE, ...($surLePdf && $avecLePuHtExact ? [self::PU_HT_EXACT] : [])]);
     }
 }

@@ -16,6 +16,7 @@ use App\Domain\Facturation\Services\DroitDeRetractation;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Resources\DevisResource\Pages\CreateDevis;
+use App\Filament\App\Resources\DevisResource\Pages\EditDevis;
 use App\Filament\App\Resources\DevisResource\Pages\ViewDevis;
 use Filament\Facades\Filament;
 use Illuminate\Database\QueryException;
@@ -164,6 +165,96 @@ class DevisDeDepannageADomicileTest extends TestCase
         $this->assertSame([StatutDevis::Brouillon, null, null], [$devis->fresh()->statut, $devis->fresh()->numero, $devis->fresh()->depannage_a_domicile]);
         $modifie = app(ModifierDevisAction::class)->handle(self::auteur(), $devis->fresh(), $devis->client, self::lignes(), ['lieu_d_intervention' => '12 rue des Lilas']);
         $this->assertSame(StatutDevis::Envoye, $this->emettre($modifie)->statut);
+    }
+
+    /**
+     * Un brouillon de dépannage enregistré avec un lieu et « Devis signé
+     * chez le client », puis le magasin décoche le réglage : la fiche ne
+     * dit plus rien que le PDF n'imprime pas, et le devis qui part perd le
+     * lieu et la case, ni imprimés, ni gardés dans son empreinte. Le
+     * magasin ne croit jamais avoir remis au client l'information sur la
+     * rétractation qu'il n'a pas reçue.
+     */
+    public function test_un_devis_qui_part_apres_que_le_magasin_a_decoche_le_reglage_perd_son_lieu_et_sa_signature(): void
+    {
+        $this->actingAs($this->proprietaireDe($this->magasin));
+        Filament::setTenant($this->magasin);
+        $this->regler(true);
+        $devis = $this->creer(self::particulier(), ['lieu_d_intervention' => '12 rue des Lilas', 'signe_chez_le_client' => true]);
+        $this->regler(false);
+
+        Livewire::test(ViewDevis::class, ['record' => $devis->getRouteKey()])
+            ->assertDontSeeText('Lieu de l\'intervention')
+            ->assertDontSeeText('Oui : le devis imprime le droit de rétractation et son formulaire');
+
+        $envoye = $this->emettre($devis->fresh());
+
+        $this->assertSame([null, false, false], [$envoye->fresh()->lieu_d_intervention, $envoye->fresh()->signe_chez_le_client, $envoye->fresh()->depannage_a_domicile]);
+        $this->assertSame($envoye->fresh()->empreinteDeSaVersion(), (clone $envoye->fresh())->forceFill(['lieu_d_intervention' => null, 'signe_chez_le_client' => false])->empreinteDeSaVersion());
+        $html = $this->html($envoye);
+        foreach (['Lieu de l\'intervention', 'Devis signé chez le client', DroitDeRetractation::TITRE] as $absent) {
+            $this->assertStringNotContainsString($absent, $html);
+        }
+        Livewire::test(ViewDevis::class, ['record' => $devis->getRouteKey()])
+            ->assertDontSeeText('Lieu de l\'intervention')
+            ->assertDontSeeText('Devis signé chez le client');
+    }
+
+    /**
+     * Le lieu de l'intervention saisi sur plusieurs lignes, comme le
+     * formulaire le préremplit, s'imprime une ligne par ligne saisie dans
+     * le PDF, et se lit de même sur la fiche.
+     */
+    public function test_le_lieu_de_l_intervention_s_imprime_une_ligne_par_ligne_saisie(): void
+    {
+        $this->actingAs($this->proprietaireDe($this->magasin));
+        Filament::setTenant($this->magasin);
+        $this->regler(true);
+        $devis = $this->emettre($this->creer(self::particulier(), ['lieu_d_intervention' => "12 rue des Lilas\nBâtiment B\n75012 Paris"]));
+
+        $textes = array_merge(...array_map(fn (array $page): array => $page['textes'], $this->pagesDuPdf(app(DevisPdfGenerator::class)->generer($devis->fresh())->output())));
+        // Chaque ligne saisie s'imprime juste sous la précédente (la hauteur
+        // se compte depuis le bas de la page), à la même marge ; le client,
+        // plus haut, imprime aussi son adresse.
+        $premiere = collect($textes)->first(fn (array $morceau): bool => trim($morceau['texte']) === 'Lieu de l\'intervention : 12 rue des Lilas') ?? $this->fail('Le PDF n\'imprime pas la première ligne du lieu.');
+        $precedente = $premiere;
+
+        foreach (['Bâtiment B', '75012 Paris'] as $texte) {
+            $suivante = collect($textes)->first(fn (array $morceau): bool => trim($morceau['texte']) === $texte && $morceau['y'] < $precedente['y'] && $precedente['y'] - $morceau['y'] < 15)
+                ?? $this->fail("Le PDF n'imprime pas « {$texte} » sur la ligne qui suit la précédente du lieu.");
+            $this->assertEqualsWithDelta($premiere['x'], $suivante['x'], 0.01);
+            $precedente = $suivante;
+        }
+
+        Livewire::test(ViewDevis::class, ['record' => $devis->getRouteKey()])
+            ->assertSeeHtml('12 rue des Lilas<br>'.PHP_EOL.'Bâtiment B<br>'.PHP_EOL.'75012 Paris');
+    }
+
+    /**
+     * Un brouillon pour un particulier fait avant que le magasin coche le
+     * réglage n'a pas de lieu, et son envoi le refuse en demandant de le
+     * modifier : sa modification préremplit le lieu avec l'adresse du
+     * client, comme à la création, et l'enregistre.
+     */
+    public function test_la_modification_d_un_brouillon_fait_avant_le_reglage_preremplit_le_lieu(): void
+    {
+        $this->actingAs($this->proprietaireDe($this->magasin));
+        Filament::setTenant($this->magasin);
+        $devis = $this->creer(self::particulier());
+        $this->regler(true);
+
+        Livewire::test(EditDevis::class, ['record' => $devis->getRouteKey()])
+            ->assertFormFieldIsVisible('lieu_d_intervention')
+            ->assertFormSet(['lieu_d_intervention' => "12 rue des Lilas\nBâtiment B\n75012 Paris"])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $this->assertSame("12 rue des Lilas\nBâtiment B\n75012 Paris", $devis->fresh()->lieu_d_intervention);
+
+        $devisDuProfessionnel = $this->creer(Client::factory()->professionnel()->create());
+        Livewire::test(EditDevis::class, ['record' => $devisDuProfessionnel->getRouteKey()])
+            ->assertFormFieldIsHidden('lieu_d_intervention')
+            ->assertFormSet(['lieu_d_intervention' => null]);
     }
 
     /**

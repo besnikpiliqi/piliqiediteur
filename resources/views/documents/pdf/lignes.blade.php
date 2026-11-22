@@ -10,13 +10,17 @@
     sarcelle, et le corps réduit d'une référence trop longue pour sa
     colonne. Les largeurs des colonnes sont dans la règle de la page (voir
     documents/pdf/styles). Un titre est échappé comme le texte d'un
-    élément, son apostrophe gardée (« Facture d'origine »).
+    élément, son apostrophe gardée (« Facture d'origine »). La page du lien
+    d'un devis montre ces mêmes lignes sans le PU HT exact, que seul le PDF
+    écrit (voir devis/document).
 
     @param \App\Domain\Facturation\Models\Facture|\App\Domain\Facturation\Models\Avoir|\App\Domain\Facturation\Models\Devis $document
     @param \App\Domain\Facturation\Services\TableauDesLignes $tableau
+    @param bool $avecLePuHtExact faux sur la page du lien d'un devis, vrai par défaut
 --}}
 @php
-    $noteDeCalcul = app(\App\Domain\Facturation\Services\MentionsFiscales::class)->calcul($document, surLePdf: true);
+    $avecLePuHtExact ??= true;
+    $noteDeCalcul = app(\App\Domain\Facturation\Services\MentionsFiscales::class)->calcul($document, surLePdf: true, avecLePuHtExact: $avecLePuHtExact);
 @endphp
 
 <div class="titre-section">Détail des articles et prestations</div>
@@ -44,7 +48,7 @@
                 @else
                     <td @class(['reference', 'service' => $ligne['service']]) style="font-size: {{ number_format($ligne['corpsDeLaReference'], 1, '.', '') }}pt">{{ $ligne['reference'] }}</td>
                 @endif
-                <td>{{ $ligne['designation'] }}@if($ligne['puHtExact'] !== null)<span class="sous">{{ $ligne['puHtExact'] }}</span>@endif</td>
+                <td>{{ $ligne['designation'] }}@if($avecLePuHtExact && $ligne['puHtExact'] !== null)<span class="sous">{{ $ligne['puHtExact'] }}</span>@endif</td>
                 @if($ligne['factureDOrigine'] !== null)
                     <td class="numero">{{ $ligne['factureDOrigine'] }}</td>
                 @endif

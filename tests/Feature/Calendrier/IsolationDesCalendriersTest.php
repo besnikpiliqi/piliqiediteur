@@ -112,7 +112,7 @@ class IsolationDesCalendriersTest extends TestCase
      * le contexte du magasin de La Réunion ; son envoi, traité dans ce
      * contexte, part (sans PDF : le client ne reçoit le PDF d'un devis
      * qu'une fois accepté, demande de l'éditeur du 14/11/2026), et son PDF,
-     * imprimé dans ce contexte, est daté du 16.
+     * imprimé dans le contexte du magasin de La Réunion, est daté du 16.
      */
     public function test_le_calendrier_d_un_document_est_celui_de_son_magasin_et_jamais_celui_du_contexte(): void
     {
@@ -137,7 +137,7 @@ class IsolationDesCalendriersTest extends TestCase
 
         $this->assertSame(StatutEnvoi::Envoye, app(TenantContext::class)->runAs($martinique, fn (): StatutEnvoi => $envoi->fresh()->statut));
         $this->assertSame([], Mail::sent(DocumentMail::class)->sole()->attachments());
-        $this->assertStringContainsString('Émis le 16/11/2026', app(DevisPdfGenerator::class)->html($devis));
+        $this->assertStringContainsString('Émis le 16/11/2026', app(TenantContext::class)->runAs($reunion, fn (): string => app(DevisPdfGenerator::class)->html($devis)));
     }
 
     /**

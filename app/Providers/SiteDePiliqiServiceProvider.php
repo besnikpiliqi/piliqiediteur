@@ -105,6 +105,14 @@ final class SiteDePiliqiServiceProvider extends ServiceProvider
     public const COMMANDES_DE_LA_CONSTRUCTION_DU_PAQUET = ['package:discover', 'filament:upgrade', 'vendor:publish'];
 
     /**
+     * Les commandes qui préparent le .env d'un poste neuf (une clé à tirer ou
+     * à épingler) et ne lisent aucune base : elles démarrent avant que le
+     * serveur PostgreSQL ait la base sentinelle, que le contrôle de la base
+     * sentinelle, au départ de toute autre commande, exige déjà créée.
+     */
+    public const COMMANDES_QUI_NE_LISENT_AUCUNE_BASE = ['key:generate', 'caisse:generer-cle', 'journal-audit:epingler-la-cle', 'demonstration:generer-cle'];
+
+    /**
      * Les commandes qui écrivent ou effacent le schéma d'une base.
      */
     public const COMMANDES_DU_SCHEMA = ['migrate', 'migrate:fresh', 'migrate:refresh', 'migrate:reset', 'migrate:rollback', 'migrate:install', 'db:wipe'];
@@ -220,7 +228,7 @@ final class SiteDePiliqiServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        if ($this->app->runningConsoleCommand(self::COMMANDES_DE_LA_CONSTRUCTION_DU_PAQUET)) {
+        if ($this->lanceUneDe(self::COMMANDES_DE_LA_CONSTRUCTION_DU_PAQUET)) {
             return;
         }
 
@@ -241,7 +249,7 @@ final class SiteDePiliqiServiceProvider extends ServiceProvider
                 }
 
                 $connexion = DB::connection();
-                $refus = $connexion->getDatabaseName() === self::BASE_SENTINELLE ? self::refusDeLaBaseSentinelle($connexion) : null;
+                $refus = ! in_array($commande->command, self::COMMANDES_QUI_NE_LISENT_AUCUNE_BASE, true) && $connexion->getDatabaseName() === self::BASE_SENTINELLE ? self::refusDeLaBaseSentinelle($connexion) : null;
 
                 if ($refus !== null) {
                     throw new SiteMalConfigureException(sprintf(self::MESSAGE_REFUS, SiteDePiliqi::Demonstration->libelle(), $refus));
@@ -252,6 +260,68 @@ final class SiteDePiliqiServiceProvider extends ServiceProvider
         }
 
         FilamentView::registerRenderHook(PanelsRenderHook::FOOTER, static fn (): View => view('pied-de-page-du-site'));
+    }
+
+    /**
+     * Ce processus est-il la console qui lance l'une de ces commandes ? Le
+     * nom de la commande est lu comme Laravel et Symfony le lisent (voir
+     * nomDeLaCommande()), et non à la place fixe qu'ignore
+     * Application::runningConsoleCommand() : « php artisan --env=demonstration
+     * journal-audit:epingler-la-cle », la forme écrite dans le README et
+     * dans .env.demonstration.example, y est la commande « --env=… », que la
+     * garde refusait avant que la clé qu'elle sert à épingler le soit.
+     *
+     * @param  list<string>  $commandes
+     */
+    private function lanceUneDe(array $commandes): bool
+    {
+        if (! $this->app->runningInConsole()) {
+            return false;
+        }
+
+        $arguments = $_SERVER['argv'] ?? [];
+
+        return in_array(self::nomDeLaCommande(is_array($arguments) ? array_values($arguments) : []), $commandes, true);
+    }
+
+    /**
+     * Le nom de la commande d'une ligne de commande « php artisan … » : son
+     * premier mot qui n'est pas une option, quelle que soit la place des
+     * options (« --env=demonstration migrate » comme « migrate
+     * --env=demonstration »). Seule l'option « --env » suivie d'un espace
+     * prend le mot suivant pour valeur (« --env demonstration migrate »),
+     * comme Laravel la lit (voir EnvironmentDetector) ; null quand la ligne
+     * n'a aucune commande (« php artisan », « php artisan --version »).
+     *
+     * @param  list<mixed>  $arguments  la ligne entière, le script en premier ($_SERVER['argv'])
+     */
+    public static function nomDeLaCommande(array $arguments): ?string
+    {
+        $valeurDeLEnvironnement = false;
+
+        foreach (array_slice($arguments, 1) as $argument) {
+            if (! is_string($argument)) {
+                continue;
+            }
+
+            if ($valeurDeLEnvironnement) {
+                $valeurDeLEnvironnement = false;
+
+                continue;
+            }
+
+            if ($argument === '--env') {
+                $valeurDeLEnvironnement = true;
+
+                continue;
+            }
+
+            if (! str_starts_with($argument, '-')) {
+                return $argument;
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -362,7 +432,7 @@ final class SiteDePiliqiServiceProvider extends ServiceProvider
 
         // Seule la commande qui épingle ces clés démarre avant qu'elles le
         // soient ; elle n'écrit rien d'autre que leurs empreintes.
-        foreach ($this->app->runningConsoleCommand(self::COMMANDE_QUI_EPINGLE_LES_CLES_D_AUDIT) ? [] : self::clesDAudit() as $nom => $cle) {
+        foreach ($this->lanceUneDe([self::COMMANDE_QUI_EPINGLE_LES_CLES_D_AUDIT]) ? [] : self::clesDAudit() as $nom => $cle) {
             if (! in_array(self::empreinteDUneCleDAudit($cle), $this->empreintesDAuditDeLaDemonstration(), true)) {
                 $refus[] = sprintf(self::MESSAGE_CLE_D_AUDIT_DE_LA_DEMONSTRATION, $nom);
             }

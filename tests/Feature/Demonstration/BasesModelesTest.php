@@ -3,6 +3,7 @@
 namespace Tests\Feature\Demonstration;
 
 use App\Domain\Calendrier\Calendrier;
+use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Demonstration\Bases\BasesDeLaDemonstration;
 use App\Domain\Demonstration\Bases\BrancherUneBase;
 use App\Domain\Demonstration\Construction\ConstruireUnModele;
@@ -11,6 +12,9 @@ use App\Domain\Demonstration\Construction\SemisDuModeleParLeSemeur;
 use App\Domain\Demonstration\Contracts\SemisDUnModele;
 use App\Domain\Demonstration\Registre\Models\Modele;
 use App\Domain\Demonstration\Services\CarteDeLaDemonstration;
+use App\Domain\Facturation\Enums\StatutDevis;
+use App\Domain\Facturation\Enums\StatutEnvoi;
+use App\Domain\Facturation\Jobs\EnvoyerDocumentJob;
 use App\Domain\Tenancy\Enums\TypeDActivite;
 use Carbon\CarbonImmutable;
 use Database\Seeders\DatabaseSeeder;
@@ -206,6 +210,19 @@ class BasesModelesTest extends DemonstrationTestCase
                     default => $ligne->prix_du_devis_de_depannage === null ? ', gratuit' : ', payant',
                 })
                 ->all(),
+            'brouillons_de_depannage_sans_lieu' => DB::table('devis')
+                ->join('magasins', 'magasins.id', '=', 'devis.magasin_id')
+                ->where('magasins.depannage_a_domicile', true)
+                ->where('devis.statut', StatutDevis::Brouillon->value)
+                ->where('devis.type_client', TypeClient::Particulier->value)
+                ->whereNull('devis.lieu_d_intervention')
+                ->count(),
+            'envois_en_echec_dont_le_lien_ne_valait_plus_au_depart' => DB::table('envois_documents')
+                ->where('statut', StatutEnvoi::Echec->value)
+                ->whereIn('erreur', [EnvoyerDocumentJob::MOTIF_DEVIS_ACCEPTE_ENTRE_TEMPS, EnvoyerDocumentJob::MOTIF_LIEN_REMPLACE, EnvoyerDocumentJob::MOTIF_LIEN_RETIRE])
+                ->orderBy('id')
+                ->pluck('erreur')
+                ->all(),
             'acceptations_en_ligne' => DB::table('reponses_des_devis')
                 ->where('reponse', 'acceptation')
                 ->orderBy('id')
@@ -272,8 +289,9 @@ class BasesModelesTest extends DemonstrationTestCase
      * Chaque modèle montre un magasin qui fait le dépannage à domicile
      * (T51.6 : la République de Maison Ferrand, dans les modèles
      * « Commerce » et « Cabinet », le cabinet de conseil dans le modèle
-     * « Services ») : un devis signé chez le client et accepté par le
-     * magasin, un devis gratuit et un devis payant, figés à leur envoi et
+     * « Services ») : un brouillon fait avant que le magasin coche le
+     * réglage, sans lieu ; un devis signé chez le client et accepté par le
+     * magasin avant le départ de son e-mail, qui ne part pas ; un devis gratuit et un devis payant, figés à leur envoi et
      * acceptés en ligne, un brouillon qui suit le réglage d'aujourd'hui ;
      * les acceptations en ligne d'un particulier, avec et sans la demande
      * d'un début avant la fin du délai de rétractation (T86), chacune avec
@@ -291,6 +309,12 @@ class BasesModelesTest extends DemonstrationTestCase
             'accepte, payant',
             'brouillon, réglage du magasin d\'aujourd\'hui',
         ], $lecture['devis_de_depannage']);
+        $this->assertSame(1, $lecture['brouillons_de_depannage_sans_lieu'], 'Un brouillon fait avant que le magasin coche le réglage n\'a pas de lieu : son envoi le refuse.');
+        $this->assertSame([
+            EnvoyerDocumentJob::MOTIF_DEVIS_ACCEPTE_ENTRE_TEMPS,
+            EnvoyerDocumentJob::MOTIF_LIEN_REMPLACE,
+            EnvoyerDocumentJob::MOTIF_LIEN_RETIRE,
+        ], $lecture['envois_en_echec_dont_le_lien_ne_valait_plus_au_depart'], 'Trois e-mails de devis ne sont pas partis, chacun avec sa vraie cause : le devis signé chez le client accepté au magasin avant son départ, le premier envoi remplacé par un second, le premier envoi dont le lien est retiré.');
         $acceptations = $lecture['acceptations_en_ligne'];
         $this->assertIsArray($acceptations);
         $this->assertContains(true, array_column($acceptations, 'debut_avant_la_fin_du_delai'), 'Un particulier demande que la prestation commence avant la fin du délai.');

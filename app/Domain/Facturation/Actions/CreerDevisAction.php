@@ -25,10 +25,12 @@ use LogicException;
  * dans le magasin actif avant toute écriture (voir
  * BelongsToMagasin::relueDansLeMagasin()), et note le type de ce client, si le magasin vend en franchise de TVA, la nature
  * de l'opération, que ce client et ce régime doivent permettre (voir
- * ContexteDeVente::pourEnregistrer()), la livraison (voir
- * NoteSaNatureDOperation) et, pour un dépannage à domicile, le lieu de
- * l'intervention (voir DepannageADomicile), que reprend la facture qui en est tirée (voir
- * CreerFactureDepuisDevisAction).
+ * ContexteDeVente::pourEnregistrer()) et la livraison (voir
+ * NoteSaNatureDOperation), que reprend la facture qui en est tirée (voir
+ * CreerFactureDepuisDevisAction) ; pour un dépannage à domicile, il note
+ * aussi le lieu de l'intervention et la case « Devis signé chez le
+ * client » (voir DepannageADomicile), qui restent sur le devis : la
+ * facture ne les reprend pas.
  *
  * Un magasin suspendu, fermé ou cédé, ou dont la société est en lecture
  * seule, n'en crée plus (voir Magasin::verifierQuIlEstOuvert()) : sa ligne

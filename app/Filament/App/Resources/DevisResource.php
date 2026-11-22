@@ -51,6 +51,7 @@ use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\HtmlString;
 
 class DevisResource extends Resource
 {
@@ -181,23 +182,45 @@ class DevisResource extends Resource
 
     /**
      * Un lieu de l'intervention encore vide prend l'adresse du client
-     * choisi, une ligne par partie renseignée.
+     * choisi (voir lieuPreremplir()).
      */
     private static function preremplirLeLieuDIntervention(Get $get, Set $set): void
     {
-        if (filled($get('lieu_d_intervention')) || ! self::depannageConcerne($get('client_id'))) {
-            return;
+        $lieu = self::lieuPreremplir($get('client_id'), $get('lieu_d_intervention'));
+
+        if ($lieu !== null) {
+            $set('lieu_d_intervention', $lieu);
+        }
+    }
+
+    /**
+     * Le lieu de l'intervention que le formulaire préremplit : l'adresse du
+     * client choisi, une ligne par partie renseignée, quand le magasin
+     * actif a coché le dépannage à domicile, que ce client est un
+     * particulier et que le lieu est encore vide ; null sinon. Au
+     * changement du client, et à l'ouverture d'un brouillon enregistré
+     * avant que le magasin coche le réglage (voir
+     * EditDevis::mutateFormDataBeforeFill()).
+     */
+    public static function lieuPreremplir(mixed $clientId, mixed $lieu): ?string
+    {
+        if (filled($lieu) || ! self::depannageConcerne($clientId)) {
+            return null;
         }
 
-        $client = Client::withTrashed()->find(ValeursLues::cle($get('client_id')));
+        $client = Client::withTrashed()->find(ValeursLues::cle($clientId));
 
-        if ($client !== null) {
-            $set('lieu_d_intervention', implode("\n", array_values(array_filter([
-                $client->adresse,
-                $client->complement_adresse,
-                trim("{$client->code_postal} {$client->ville}"),
-            ], filled(...)))));
+        if ($client === null) {
+            return null;
         }
+
+        $adresse = implode("\n", array_values(array_filter([
+            $client->adresse,
+            $client->complement_adresse,
+            trim("{$client->code_postal} {$client->ville}"),
+        ], filled(...))));
+
+        return $adresse === '' ? null : $adresse;
     }
 
     /**
@@ -219,13 +242,19 @@ class DevisResource extends Resource
                 TextEntry::make('date_validite')->label('Valide jusqu\'au')->jour()->placeholder('—'),
                 FactureResource::natureEntry(),
                 FactureResource::dateDeLOperationEntry(prevue: true),
+                // Ce que le PDF du devis imprime (voir DepannageADomicile::duDevis()) :
+                // rien quand le magasin a décoché le réglage depuis
+                // l'enregistrement d'un brouillon ; le lieu, une ligne par
+                // ligne saisie.
                 TextEntry::make('lieu_d_intervention')
                     ->label('Lieu de l\'intervention')
-                    ->visible(fn (Devis $record): bool => $record->lieu_d_intervention !== null),
+                    ->state(fn (Devis $record): ?string => DepannageADomicile::duDevis($record)?->lieu)
+                    ->formatStateUsing(fn (string $state): HtmlString => new HtmlString(nl2br(e($state), false)))
+                    ->visible(fn (Devis $record): bool => DepannageADomicile::duDevis($record)?->lieu !== null),
                 TextEntry::make('signe_chez_le_client')
                     ->label('Devis signé chez le client')
-                    ->state(fn (Devis $record): string => $record->signe_chez_le_client ? 'Oui : le devis imprime le droit de rétractation et son formulaire' : 'Non')
-                    ->visible(fn (Devis $record): bool => $record->lieu_d_intervention !== null),
+                    ->state(fn (Devis $record): string => DepannageADomicile::duDevis($record)?->signeChezLeClient === true ? 'Oui : le devis imprime le droit de rétractation et son formulaire' : 'Non')
+                    ->visible(fn (Devis $record): bool => DepannageADomicile::duDevis($record) !== null),
                 TextEntry::make('accepte_le')
                     ->label('Accepté le')
                     ->state(fn (Devis $record): ?string => $record->accepte_le === null ? null : $record->magasin->calendrier()->afficher($record->accepte_le, 'd/m/Y à H:i'))

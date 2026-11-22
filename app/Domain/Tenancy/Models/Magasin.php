@@ -121,7 +121,7 @@ class Magasin extends Model implements HasName
     /**
      * Les mentions des factures entre professionnels (art. L441-9 du Code
      * de commerce, B9) que chaque magasin reçoit à sa création et règle
-     * ensuite (Paramètres > Factures) : pénalités de trois fois le taux
+     * ensuite (Paramètres > Factures et devis) : pénalités de trois fois le taux
      * d'intérêt légal, indemnité forfaitaire de 40 €, pas d'escompte.
      */
     public const MENTION_PENALITES_PAR_DEFAUT = 'Pénalités de retard : trois fois le taux d\'intérêt légal, exigibles dès le lendemain de la date d\'échéance.';

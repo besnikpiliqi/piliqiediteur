@@ -735,6 +735,7 @@ return [
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le vendeur ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Parcours/PuHtAfficheTest.php › le propriétaire change le client d’un devis, et le PU HT des lignes reste celui d’un article',
             'tests/Browser/Parcours/DateDeLOperationTest.php › chaque compte qui fait un devis change la date prévue de son brouillon et la retrouve sur la fiche',
+            'tests/Browser/Parcours/DevisDeDepannageADomicileTest.php › chaque compte qui modifie un brouillon fait avant le réglage y trouve le lieu de l’intervention prérempli, l’enregistre, et la fiche le montre ligne par ligne',
         ]],
     ],
     'app/Filament/App/Resources/DevisResource/Pages/ListDevis.php' => [
@@ -2489,6 +2490,7 @@ return [
         'formulaire:{{ $actionAccepter }}' => ['lot' => 'NAV-4', 'tests' => [
             'tests/Browser/Parcours/ReponseAuDevisEnLigneTest.php › le client particulier lit son droit de rétractation, accepte son devis en ligne en tapant son nom, en cochant « Bon pour accord » et la demande de début anticipé, puis le lien ne montre que la confirmation',
             'tests/Browser/Parcours/ReponseAuDevisEnLigneTest.php › le client professionnel accepte son devis en ligne sans information sur la rétractation ni demande de début anticipé',
+            'tests/Browser/Parcours/ReponseAuDevisEnLigneTest.php › le client lit sur la page de son lien tout ce que le PDF du devis imprime, puis l’accepte, et un second envoi de son acceptation montre encore la confirmation',
             'tests/Browser/Parcours/ReponseAuDevisEnLigneTest.php › le client ne trouve aucun PDF sur la page de son lien avant de répondre, puis télécharge le devis signé depuis la confirmation de son acceptation',
             'tests/Browser/Demonstration/DansLaCopieTest.php › la responsable envoie une facture par e-mail, la lit dans « E-mails qui seraient partis » avec sa pièce jointe, puis le client accepte le devis par le lien de son e-mail, sans PDF, et sa confirmation part avec le devis signé',
         ]],

@@ -28,16 +28,19 @@ use App\Domain\Facturation\Actions\NoterLeVisaDuBordereauAction;
 use App\Domain\Facturation\Actions\RefuserDevisAction;
 use App\Domain\Facturation\Actions\RegulariserUneExonerationNonProuveeAction;
 use App\Domain\Facturation\Actions\RepondreAuDevisEnLigneAction;
+use App\Domain\Facturation\Actions\RetirerLeLienDuDevisAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\NatureOperation;
 use App\Domain\Facturation\Enums\TransportPar;
 use App\Domain\Facturation\Enums\TypePreuve;
+use App\Domain\Facturation\Jobs\EnvoyerDocumentJob;
 use App\Domain\Facturation\Mail\DocumentMail;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\BordereauDetaxe;
 use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\EnvoiDocument;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Models\LienDuDevis;
 use App\Domain\Facturation\Models\PreuveOperation;
 use App\Domain\Facturation\Models\VisaDetaxe;
 use App\Domain\Facturation\Services\PartDeReglement;
@@ -49,7 +52,9 @@ use App\Domain\Tenancy\Support\ValeursLues;
 use App\Integrations\Pdp\Contracts\PdpGatewayInterface;
 use App\Integrations\Pdp\FakePdpGateway;
 use App\Models\User;
+use Closure;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Queue;
 use LogicException;
 
 /**
@@ -438,12 +443,31 @@ final class DocumentsDesCas
         };
     }
 
+    /**
+     * Le premier jour du dépannage : les services et les clients, puis un
+     * brouillon pour un particulier enregistré avant que le responsable
+     * coche le réglage, sans lieu de l'intervention (son PDF imprime
+     * « Lieu de l'intervention : — », « Envoyer par e-mail » le refuse, et
+     * sa modification préremplit le lieu avec l'adresse du client) ; le
+     * réglage coché, le devis signé chez le client, dont l'e-mail attend
+     * en file pendant que le responsable enregistre l'acceptation signée à
+     * la main sur place, si bien qu'il ne part pas (« Le devis a été
+     * accepté entre-temps », voir EnvoyerDocumentJob) ; le devis envoyé que
+     * le client acceptera en ligne en demandant que la prestation commence
+     * avant la fin du délai, dont un premier envoi, resté en file, est
+     * remplacé par un second avant son départ (il ne part pas : « Un envoi
+     * plus récent de ce devis a remplacé le lien de cet envoi »), et un
+     * devis à un professionnel, sans rien de tout cela, dont un premier
+     * envoi, resté en file, perd son lien retiré par le responsable avant
+     * son départ (il ne part pas non plus : « Le lien de réponse de cet
+     * envoi a été retiré entre-temps »), un second envoi lui donnant un
+     * lien neuf.
+     */
     private function semerLeDepannageADomicile(string $magasin): void
     {
         $cas = self::DEPANNAGES[$magasin];
         $gestes = $this->gestes($magasin);
         $responsable = $this->semis->compte($cas['responsable']);
-        $gestes->dans(fn (): array => app(ModifierLesParametresDuMagasinAction::class)->handle($responsable, PermissionRegistry::PARAMETRES_GERER, FicheLue::de($gestes->magasin->refresh())->valeurs(), ['depannage_a_domicile' => true]));
 
         foreach ([$cas['intervention'], $cas['deplacement']] as [$nom, $prix]) {
             if ($prix !== null) {
@@ -460,13 +484,62 @@ final class DocumentsDesCas
 
         $lignes = [$this->ligne($gestes, $cas['intervention'][0], 1), $this->ligne($gestes, $cas['deplacement'][0], 1)];
         $validite = $this->validiteDesDevisDeDepannage();
-        $signe = $gestes->dans(fn (): Devis => app(EmettreDevisAction::class)->handle($responsable, app(CreerDevisAction::class)->handle($responsable, $clients['signe'], $lignes, ['date_validite' => $validite, 'lieu_d_intervention' => self::adresseDe($cas['signe']), 'signe_chez_le_client' => true]), GestesDuMagasin::jeton()));
-        $gestes->dans(fn (): Devis => app(AccepterDevisAction::class)->handle($responsable, $signe));
+        $gestes->dans(fn (): Devis => app(CreerDevisAction::class)->handle($responsable, $clients['payant'], [$this->ligne($gestes, $cas['intervention'][0], 1)], ['date_validite' => $validite]));
+        $gestes->dans(fn (): array => app(ModifierLesParametresDuMagasinAction::class)->handle($responsable, PermissionRegistry::PARAMETRES_GERER, FicheLue::de($gestes->magasin->refresh())->valeurs(), ['depannage_a_domicile' => true]));
+
+        $signe = $gestes->dans(fn (): Devis => app(CreerDevisAction::class)->handle($responsable, $clients['signe'], $lignes, ['date_validite' => $validite, 'lieu_d_intervention' => self::adresseDe($cas['signe']), 'signe_chez_le_client' => true]));
+        $envoiDuSigne = $this->retenirLEnvoi(fn (): EnvoiDocument => $gestes->dans(fn (): EnvoiDocument => app(EnvoyerDocumentAction::class)->handle($responsable, $signe, $cas['signe']['email'], null, GestesDuMagasin::jeton())));
+        $gestes->dans(fn (): Devis => app(AccepterDevisAction::class)->handle($responsable, $signe->refresh()));
+        $gestes->dans($envoiDuSigne->handle(...));
         $enLigne = $gestes->dans(fn (): Devis => app(CreerDevisAction::class)->handle($responsable, $clients['avec_debut'], $lignes, ['date_validite' => $validite, 'lieu_d_intervention' => self::adresseDe($cas['avec_debut'])]));
-        $this->depannagesEnvoyes[$magasin]['avec_debut'] = $gestes->dans(fn (): EnvoiDocument => app(EnvoyerDocumentAction::class)->handle($responsable, $enLigne, $cas['avec_debut']['email'], $cas['message'], GestesDuMagasin::jeton()));
+        // Un premier envoi attend en file, un second le remplace avant son
+        // départ : l'e-mail du premier ne part pas, son lien n'étant plus
+        // celui du devis (« Un envoi plus récent de ce devis a remplacé le
+        // lien de cet envoi », voir EnvoyerDocumentJob::MOTIF_LIEN_REMPLACE).
+        $premierEnvoi = $this->retenirLEnvoi(fn (): EnvoiDocument => $gestes->dans(fn (): EnvoiDocument => app(EnvoyerDocumentAction::class)->handle($responsable, $enLigne, $cas['avec_debut']['email'], $cas['message'], GestesDuMagasin::jeton())));
+        $this->depannagesEnvoyes[$magasin]['avec_debut'] = $gestes->dans(fn (): EnvoiDocument => app(EnvoyerDocumentAction::class)->handle($responsable, $enLigne->refresh(), $cas['avec_debut']['email'], $cas['message'], GestesDuMagasin::jeton()));
+        $gestes->dans($premierEnvoi->handle(...));
         [$professionnel, $adresse, $article, $quantite] = $cas['professionnel'];
         $devisDuProfessionnel = $gestes->dans(fn (): Devis => app(CreerDevisAction::class)->handle($responsable, $this->client($gestes, $professionnel), [$this->ligne($gestes, $article, $quantite)], ['date_validite' => $validite]));
-        $gestes->dans(fn (): EnvoiDocument => app(EnvoyerDocumentAction::class)->handle($responsable, $devisDuProfessionnel, $adresse, null, GestesDuMagasin::jeton()));
+        // Le premier envoi à ce professionnel attend en file pendant que le
+        // responsable en retire le lien, et part de nouveau avec un lien
+        // neuf : seul le second e-mail part (« Le lien de réponse de cet
+        // envoi a été retiré entre-temps », voir
+        // EnvoyerDocumentJob::MOTIF_LIEN_RETIRE).
+        $envoiARetirer = $this->retenirLEnvoi(fn (): EnvoiDocument => $gestes->dans(fn (): EnvoiDocument => app(EnvoyerDocumentAction::class)->handle($responsable, $devisDuProfessionnel, $adresse, null, GestesDuMagasin::jeton())));
+        $gestes->dans(fn (): LienDuDevis => app(RetirerLeLienDuDevisAction::class)->handle($responsable, $devisDuProfessionnel->refresh()));
+        $gestes->dans(fn (): EnvoiDocument => app(EnvoyerDocumentAction::class)->handle($responsable, $devisDuProfessionnel->refresh(), $adresse, null, GestesDuMagasin::jeton()));
+        $gestes->dans($envoiARetirer->handle(...));
+    }
+
+    /**
+     * La tâche d'un envoi d'e-mail demandé par ce geste, que la file garde
+     * au lieu de la faire tourner : l'e-mail ne part qu'au passage de
+     * cette tâche (sa méthode handle(), comme le travailleur la ferait), et
+     * rien de ce qui se passe entre-temps (une acceptation au magasin, un
+     * second envoi, le retrait du lien) ne l'attend. Aucune table de file
+     * n'est lue : la tâche reste en mémoire, dans la base de la construction
+     * d'un modèle du site de démonstration comme sur le poste (dont la file
+     * est celle du registre, voir config/queue.php).
+     *
+     * @param  Closure(): EnvoiDocument  $envoi
+     */
+    private function retenirLEnvoi(Closure $envoi): EnvoyerDocumentJob
+    {
+        $file = app('queue');
+        Queue::fake([EnvoyerDocumentJob::class]);
+
+        try {
+            $envoi();
+            $retenus = Queue::pushed(EnvoyerDocumentJob::class);
+        } finally {
+            Queue::swap($file);
+        }
+
+        $tache = $retenus->sole();
+        assert($tache instanceof EnvoyerDocumentJob);
+
+        return $tache;
     }
 
     private function semerLeDepannagePayant(string $magasin): void

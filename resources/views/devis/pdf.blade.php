@@ -6,75 +6,22 @@
     @include('documents.pdf.styles', ['pied' => $pied, 'tableau' => $tableau])
 </head>
 <body>
-    {{-- Un devis modifié depuis son envoi est un brouillon qui garde son
-         numéro et la date de son dernier envoi (voir ModifierDevisAction) :
-         cette version n'a pas encore été émise, elle ne porte aucune date
-         d'émission. $emetteur : celui que le devis a figé à son dernier
-         envoi, la société et le magasin d'aujourd'hui pour un brouillon
-         (voir Devis::emetteur()) ;
-         $pied : l'identité de la société, les conditions de paiement, la
-         nature de l'opération et la franchise de TVA, s'il y a lieu (voir
-         PiedDePage) ; $tableau : ses lignes, mesurées pour tenir dans la
-         largeur de la page (voir TableauDesLignes) ; $depannage : ses
-         mentions de dépannage à domicile, null sans elles ; $acceptation :
-         son acceptation en ligne, null sans elle ; $retractation : le droit
-         de rétractation d'un devis de dépannage signé chez le client, null
-         sinon (voir DevisPdfGenerator). --}}
-    @php($brouillon = $devis->statut === \App\Domain\Facturation\Enums\StatutDevis::Brouillon)
-
+    {{-- $emetteur : celui que le devis a figé à son dernier envoi, la
+         société et le magasin d'aujourd'hui pour un brouillon (voir
+         Devis::emetteur()) ; $pied : l'identité de la société, les
+         conditions de paiement, la nature de l'opération et la franchise de
+         TVA, s'il y a lieu (voir PiedDePage), placé avant le contenu pour
+         que chaque page le reprenne ; $tableau : ses lignes, mesurées pour
+         tenir dans la largeur de la page (voir TableauDesLignes) ;
+         $depannage : ses mentions de dépannage à domicile, null sans elles ;
+         $acceptation : son acceptation en ligne, null sans elle ;
+         $retractation : le droit de rétractation d'un devis de dépannage
+         signé chez le client, null sinon (voir DevisPdfGenerator). Le devis
+         lui-même est celui que montre la page du lien (voir
+         devis/document). --}}
     @include('documents.pdf.pied', ['pied' => $pied])
 
-    @include('documents.pdf.en-tete', [
-        'emetteur' => $emetteur,
-        'titre' => 'Devis',
-        'classeTitre' => 'majuscules',
-        'details' => array_filter([
-            match (true) {
-                $devis->numero === null => 'Brouillon (non envoyé)',
-                $brouillon => "N° {$devis->numero} (brouillon, modifié depuis son envoi)",
-                default => 'N° '.$devis->numero,
-            },
-            $brouillon ? null : 'Émis le '.$devis->magasin->calendrier()->afficher($devis->date_emission, 'd/m/Y'),
-            $devis->date_validite ? 'Valable jusqu\'au '.\App\Domain\Calendrier\Calendrier::afficherJour($devis->date_validite, 'd/m/Y') : null,
-        ]),
-    ])
-
-    {{-- La fiche du client d'aujourd'hui, présentée selon le type avec
-         lequel le devis a été calculé, comme ses lignes (voir
-         Devis::client()). --}}
-    @include('documents.pdf.blocs', [
-        'client' => \App\Domain\Facturation\Services\CopieClient::depuisClient($devis->client),
-        'professionnel' => $devis->estPourUnProfessionnel(),
-        'titre' => 'Établi pour',
-        'titreDesConditions' => 'Conditions',
-        'conditions' => [$devis->date_validite ? 'Valable jusqu\'au '.\App\Domain\Calendrier\Calendrier::afficherJour($devis->date_validite, 'd/m/Y') : 'Sans date de validité'],
-    ])
-
-    {{-- Le dépannage, la réparation ou l'entretien à domicile d'un
-         particulier, quand le magasin l'a coché (voir DepannageADomicile) :
-         le lieu de l'intervention, le prix du devis et les pièces
-         remplacées. --}}
-    @if($depannage !== null)
-        <div class="bloc-client">
-            <div class="titre">Dépannage, réparation ou entretien à domicile</div>
-            Lieu de l'intervention : {{ $depannage->lieu ?? '—' }}<br>
-            {{ $depannage->mentionDuPrixDuDevis() }}<br>
-            {{ \App\Domain\Facturation\Services\DepannageADomicile::PIECES_REMPLACEES }}
-            @if($depannage->signeChezLeClient)
-                <br>Devis signé chez le client : votre droit de rétractation et son formulaire figurent à la fin de ce devis.
-            @endif
-        </div>
-    @endif
-
-    @include('documents.pdf.livraison', ['lignes' => $devis->lignesDeLivraison()])
-
-    @include('documents.pdf.lignes', ['document' => $devis, 'tableau' => $tableau])
-
-    @include('documents.pdf.totaux', ['document' => $devis, 'titreDuMontant' => 'Montant du devis', 'libelleDuTotal' => 'Total TTC'])
-
-    @if($devis->notes)
-        <div class="remarque">{{ $devis->notes }}</div>
-    @endif
+    @include('devis.document', ['devis' => $devis, 'emetteur' => $emetteur, 'tableau' => $tableau, 'depannage' => $depannage, 'avecLePuHtExact' => true])
 
     {{-- Le cadre « Bon pour accord » (modèle D1 choisi par l'éditeur le
          14/11/2026) : vide pour une signature à la main ; rempli quand le

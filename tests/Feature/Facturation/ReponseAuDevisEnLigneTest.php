@@ -29,11 +29,13 @@ use App\Domain\Facturation\Notifications\ReponseDuClientAuDevis;
 use App\Domain\Facturation\Services\DevisPdfGenerator;
 use App\Domain\Facturation\Services\DroitDeRetractation;
 use App\Domain\Tenancy\Enums\ActionAuditee;
+use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\StatutSociete;
 use App\Domain\Tenancy\Enums\Territoire;
 use App\Domain\Tenancy\Models\EntreeAudit;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Models\TraceAudit;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Resources\DevisResource\Pages\ViewDevis;
@@ -50,6 +52,7 @@ use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
 use Livewire\Livewire;
 use LogicException;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
@@ -156,6 +159,72 @@ class ReponseAuDevisEnLigneTest extends TestCase
     }
 
     /**
+     * Avant sa réponse, la page du lien est la seule façon de lire le devis
+     * (pas de PDF, demande de l'éditeur du 14/11/2026) : elle montre tout
+     * ce que son PDF imprime, depuis les mêmes données -- l'identité de la
+     * société dans le pied, le client et son adresse, le taux de chaque
+     * ligne, le récapitulatif par taux, la note de calcul, les conditions
+     * de paiement et les notes --, sans le PU HT exact, que seul le PDF
+     * écrit.
+     */
+    public function test_la_page_du_lien_montre_tout_ce_que_le_pdf_du_devis_imprime(): void
+    {
+        $client = Client::factory()->create(['nom' => 'Paul Durand', 'adresse' => '12 rue des Lilas', 'code_postal' => '75012', 'ville' => 'Paris']);
+        $devis = $this->devisEnvoyable(['conditions_paiement' => 'Acompte de 30 % à la commande', 'notes' => "Intervention prévue le matin\nentre 8 h et 10 h", 'date_operation_debut' => '2026-12-02', 'date_operation_fin' => '2026-12-04'], client: $client);
+        $jeton = $this->envoyer($devis);
+        $pdf = app(DevisPdfGenerator::class)->html($devis->fresh());
+
+        $reponse = $this->repondre('get', $jeton)->assertOk();
+
+        foreach (['Acompte de 30 % à la commande', 'Intervention prévue le matin', 'entre 8 h et 10 h', '20 %', 'Récapitulatif TVA', 'Base HT', 'Ma Boutique', 'SAS', 'RCS Lyon', '1 place Bellecour', 'Paul Durand', '12 rue des Lilas', '75012 Paris', 'Détail des articles et prestations', 'Montants calculés depuis les prix TTC', 'Date prévue de la livraison ou de la prestation : du 02/12/2026 au 04/12/2026'] as $attendu) {
+            $this->assertStringContainsString(e($attendu), $pdf, "Le PDF devrait imprimer : {$attendu}");
+            $reponse->assertSee($attendu);
+        }
+        $reponse->assertDontSee('PU HT exact')->assertDontSee('Le PU HT exact');
+    }
+
+    /**
+     * En franchise en base, la page du lien dit, comme le PDF, que la TVA
+     * n'est pas applicable ; pour un professionnel, elle montre le PU HT
+     * d'un article et l'explique, sans la phrase du PU HT exact.
+     */
+    public function test_la_page_du_lien_montre_la_mention_de_franchise_et_la_note_du_pu_ht(): void
+    {
+        $regimeDeDepart = Societe::query()->whereKey($this->magasin->societe_id)->value('regime_tva');
+        Societe::query()->whereKey($this->magasin->societe_id)->update(['regime_tva' => RegimeTva::FranchiseEnBase]);
+        $this->magasin->refresh();
+        app(TenantContext::class)->set($this->magasin);
+
+        $this->repondre('get', $this->envoyer($this->devisEnvoyable()))->assertOk()->assertSee('TVA non applicable, art. 293 B du CGI');
+
+        Societe::query()->whereKey($this->magasin->societe_id)->update(['regime_tva' => $regimeDeDepart]);
+        $this->magasin->refresh();
+        app(TenantContext::class)->set($this->magasin);
+        $reponse = $this->repondre('get', $this->envoyer($this->devisEnvoyable(client: Client::factory()->professionnel()->create())))->assertOk();
+
+        $reponse->assertSee('PU HT')->assertSee('Le PU HT affiché est celui d\'un article')->assertDontSee('PU HT exact');
+    }
+
+    /**
+     * Un double clic sur « Accepter le devis », ou un formulaire renvoyé
+     * par le navigateur, envoie deux fois l'acceptation : la seconde
+     * réponse montre la même confirmation, jamais « Ce lien n'est plus
+     * valable », et rien n'est enregistré deux fois.
+     */
+    public function test_un_second_envoi_de_l_acceptation_montre_encore_sa_confirmation(): void
+    {
+        Notification::fake();
+        $jeton = $this->envoyer($this->devisEnvoyable());
+        $donnees = ['signataire' => 'Claire Martin', 'bon_pour_accord' => '1'];
+
+        $this->repondre('accepter', $jeton, $donnees)->assertOk()->assertSee('par Claire Martin');
+        $this->repondre('accepter', $jeton, $donnees)->assertOk()->assertSee('par Claire Martin')->assertDontSee(LienDuDevis::PLUS_VALABLE);
+        $this->repondre('accepter', $jeton, ['signataire' => '', 'bon_pour_accord' => ''])->assertOk()->assertSee('par Claire Martin');
+
+        $this->assertSame(1, ReponseDuDevis::query()->count());
+    }
+
+    /**
      * Avant sa réponse, le client lit le devis sur la page où il signe,
      * sans PDF ; le PDF, signé, ne se télécharge qu'après son acceptation,
      * par le même lien (demande de l'éditeur du 14/11/2026).
@@ -251,8 +320,8 @@ class ReponseAuDevisEnLigneTest extends TestCase
         $this->assertStringNotContainsString('Claire', $evenement->contenu);
 
         $this->repondre('get', $jeton)->assertOk()->assertSee('Devis accepté le 13/11/2026 à 14:05 par Claire Martin')->assertDontSee('Accepter le devis');
-        $this->repondre('accepter', $jeton, ['signataire' => 'Autre Personne', 'bon_pour_accord' => '1'])->assertStatus(410);
-        $this->repondre('refuser', $jeton)->assertStatus(410);
+        $this->repondre('accepter', $jeton, ['signataire' => 'Autre Personne', 'bon_pour_accord' => '1'])->assertOk()->assertSee('Devis accepté le 13/11/2026 à 14:05 par Claire Martin')->assertDontSee('Autre Personne');
+        $this->repondre('refuser', $jeton)->assertOk()->assertSee('Devis accepté le 13/11/2026 à 14:05 par Claire Martin')->assertDontSee('Refuser le devis');
         $this->assertSame(1, ReponseDuDevis::query()->count());
         $this->assertSame(StatutDevis::Accepte, $devis->fresh()->statut);
     }
@@ -882,7 +951,48 @@ class ReponseAuDevisEnLigneTest extends TestCase
         $tache->handle();
 
         Mail::assertNothingSent();
-        $this->assertSame([StatutEnvoi::Echec, EnvoyerDocumentJob::MOTIF_DEVIS_SANS_LIEN], [$envoi->fresh()->statut, $envoi->fresh()->erreur]);
+        $this->assertSame([StatutEnvoi::Echec, EnvoyerDocumentJob::MOTIF_LIEN_RETIRE], [$envoi->fresh()->statut, $envoi->fresh()->erreur]);
+    }
+
+    /**
+     * Le lien d'un envoi qui ne vaut plus au départ de son e-mail : la
+     * cause dite à l'expéditeur est la vraie, d'après le devis relu.
+     *
+     * @return array<string, array{string, string}>
+     */
+    public static function causesDUnLienQuiNeVautPlusAuDepart(): array
+    {
+        return [
+            'accepté au magasin entre-temps' => ['accepte', EnvoyerDocumentJob::MOTIF_DEVIS_ACCEPTE_ENTRE_TEMPS],
+            'transformé en facture entre-temps' => ['transforme', EnvoyerDocumentJob::MOTIF_DEVIS_ACCEPTE_ENTRE_TEMPS],
+            'refusé entre-temps' => ['refuse', EnvoyerDocumentJob::MOTIF_DEVIS_REFUSE_ENTRE_TEMPS],
+            'validité dépassée entre-temps' => ['expire', EnvoyerDocumentJob::MOTIF_DEVIS_EXPIRE_ENTRE_TEMPS],
+            'remplacé par un envoi plus récent' => ['renvoye', EnvoyerDocumentJob::MOTIF_LIEN_REMPLACE],
+        ];
+    }
+
+    #[DataProvider('causesDUnLienQuiNeVautPlusAuDepart')]
+    public function test_l_envoi_d_un_devis_dont_le_lien_ne_vaut_plus_au_depart_dit_sa_vraie_cause(string $entreTemps, string $motif): void
+    {
+        Notification::fake();
+        Queue::fake([EnvoyerDocumentJob::class]);
+        $devis = $this->devisEnvoyable(['date_validite' => '2026-11-20']);
+        $responsable = self::responsableDeTest($this->magasin);
+        $envoi = app(EnvoyerDocumentAction::class)->handle($responsable, $devis, 'client@exemple.fr', null, (string) Str::uuid());
+        $tache = Queue::pushed(EnvoyerDocumentJob::class)->sole();
+
+        match ($entreTemps) {
+            'accepte' => app(AccepterDevisAction::class)->handle($responsable, $devis->fresh()),
+            'transforme' => app(CreerFactureDepuisDevisAction::class)->handle($responsable, app(AccepterDevisAction::class)->handle($responsable, $devis->fresh())),
+            'refuse' => $devis->fresh()->forceFill(['statut' => StatutDevis::Refuse])->save(),
+            'expire' => $this->travelTo(self::aParis('2026-11-21 09:00:00')),
+            'renvoye' => app(EnvoyerDocumentAction::class)->handle($responsable, $devis->fresh(), 'client@exemple.fr', null, (string) Str::uuid()),
+        };
+
+        $tache->handle();
+
+        Mail::assertNothingSent();
+        $this->assertSame([StatutEnvoi::Echec, $motif], [$envoi->fresh()->statut, $envoi->fresh()->erreur]);
     }
 
     /**

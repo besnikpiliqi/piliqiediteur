@@ -82,6 +82,43 @@ class ConstructionDesModelesTest extends DemonstrationTestCase
     }
 
     /**
+     * Sans qpdf (sur Windows, où il n'est pas dans le PATH), la
+     * construction s'arrête avant d'avoir créé une base ou semé quoi que ce
+     * soit, avec ce qu'il faut écrire dans QPDF_BINAIRE, et non, à la
+     * première pièce du semis, sur « réessayez dans quelques minutes » : le
+     * semis n'est même pas lancé, l'ancien modèle reste en service et la
+     * cause se lit au registre.
+     */
+    public function test_une_construction_sans_qpdf_s_arrete_d_entree_en_disant_quoi_ecrire(): void
+    {
+        $ancien = $this->modeleDeTest(TypeDActivite::Services);
+        $this->app->instance(SemisDUnModele::class, new class implements SemisDUnModele
+        {
+            public function semer(TypeDActivite $type, string $motDePasse): void
+            {
+                throw new RuntimeException('Le semis ne devait pas démarrer sans qpdf.');
+            }
+        });
+        config(['piliqi.qpdf' => '/chemin/qui/n/existe/pas/qpdf']);
+        $this->travelTo(self::aParis('2026-11-17 01:10:00')->addMinutes(self::jeton()));
+
+        try {
+            app(ConstruireUnModele::class)->construire(TypeDActivite::Services);
+            $this->fail('La construction devait échouer.');
+        } catch (ConstructionEnEchec $echec) {
+            $this->assertStringContainsString('qpdf ne se lance pas (/chemin/qui/n/existe/pas/qpdf)', $echec->getMessage());
+            $this->assertStringContainsString('QPDF_BINAIRE', $echec->getMessage());
+            $this->assertStringNotContainsString('réessayez dans quelques minutes', $echec->getMessage());
+            $this->assertStringNotContainsString('Le semis ne devait pas démarrer', $echec->getMessage());
+        }
+
+        $rate = Modele::on('demo_admin')->where('etat', EtatDUnModele::EnEchec)->sole();
+        $this->assertStringContainsString('QPDF_BINAIRE', (string) $rate->cause_de_l_echec);
+        $this->assertFalse(app(BasesDeLaDemonstration::class)->existe($rate->nom_de_la_base), 'Aucune base de travail n\'a été créée.');
+        $this->assertSame($ancien->nom_de_la_base, Modele::on('demo_admin')->where('type', 'services')->where('etat', EtatDUnModele::EnService)->sole()->nom_de_la_base);
+    }
+
+    /**
      * Une table sans règle d'isolation suffit à rendre la vérification non
      * nulle (REGLE_TABLES) : le modèle n'est jamais mis en service.
      */

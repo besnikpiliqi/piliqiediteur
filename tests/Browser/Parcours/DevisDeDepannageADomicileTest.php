@@ -1,6 +1,8 @@
 <?php
 
+use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
+use App\Domain\Facturation\Actions\CreerDevisAction;
 use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Services\DepannageADomicile;
 use App\Domain\Facturation\Services\DroitDeRetractation;
@@ -19,7 +21,9 @@ use Tests\Browser\Support\SocieteDeTest;
  * chez le client », lit les deux sur la fiche, et le PDF du devis numéroté
  * imprime « Devis gratuit », les pièces remplacées et, sur sa dernière
  * page, le droit de rétractation et son formulaire, sous leurs titres en
- * capitales. Le test commence le 10
+ * capitales ; chaque compte qui modifie un brouillon fait avant que le
+ * magasin coche le réglage y trouve le lieu prérempli, et la fiche le
+ * montre une ligne par ligne saisie. Le test commence le 10
  * mars 2026 à 10 h à Paris (voir TestCaseDuNavigateur).
  */
 
@@ -106,4 +110,30 @@ test('chaque compte qui fait un devis à un particulier y trouve le lieu de l’
         ->and(end($pages))->toContain(mb_strtoupper(DroitDeRetractation::TITRE))
         ->toContain(mb_strtoupper(DroitDeRetractation::TITRE_DU_FORMULAIRE))
         ->toContain('dans un délai de quatorze jours');
+})->with('comptes qui font un devis de dépannage');
+
+test('chaque compte qui modifie un brouillon fait avant le réglage y trouve le lieu de l’intervention prérempli, l’enregistre, et la fiche le montre ligne par ligne', function (Closure $compte) {
+    $societe = $this->societeComplete();
+    $auteur = $compte($societe);
+    $magasin = '/app/'.$societe->magasin->uuid;
+    $brouillon = app(TenantContext::class)->runAs($societe->magasin, function () use ($auteur): Devis {
+        $client = Client::query()->where('nom', 'Jean Dupont')->sole();
+        $client->forceFill(['adresse' => '7 rue du Port', 'complement_adresse' => 'Escalier C', 'code_postal' => '13002', 'ville' => 'Marseille'])->save();
+
+        return app(CreerDevisAction::class)->handle($auteur, $client, [['produit_id' => Produit::query()->where('reference', 'BOUGIE')->sole()->id, 'quantite' => 1]], ['date_validite' => '2026-04-10']);
+    });
+    app(TenantContext::class)->clear();
+    Magasin::query()->whereKey($societe->magasin->id)->update(['depannage_a_domicile' => true]);
+
+    $onglet = $this->seConnecter($auteur)->aller($magasin.'/devis/'.$brouillon->getRouteKey().'/edit')
+        ->voir('Lieu de l\'intervention')
+        ->attendreQue('document.querySelector(\'textarea[id$="lieu_d_intervention"]\')?.value === '.json_encode("7 rue du Port\nEscalier C\n13002 Marseille"), 'le lieu de l\'intervention n\'est pas prérempli avec l\'adresse du client');
+    $onglet->soumettre('Sauvegarder')
+        ->attendreLaPage('/devis$')
+        ->aller($magasin.'/devis/'.$brouillon->getRouteKey())
+        ->voir('Lieu de l\'intervention');
+    expect($onglet->element('.fi-in-entry-wrp:has-text("Lieu de l\'intervention") br')->count())->toBe(2);
+
+    $relu = app(TenantContext::class)->runAs($societe->magasin, fn (): Devis => $brouillon->fresh());
+    expect($relu->lieu_d_intervention)->toBe("7 rue du Port\nEscalier C\n13002 Marseille");
 })->with('comptes qui font un devis de dépannage');

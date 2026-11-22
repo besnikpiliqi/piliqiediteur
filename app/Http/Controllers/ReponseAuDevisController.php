@@ -8,11 +8,11 @@ use App\Domain\Facturation\Exceptions\LienDuDevisInvalideException;
 use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\LienDuDevis;
 use App\Domain\Facturation\Models\ReponseDuDevis;
-use App\Domain\Facturation\Services\CalculateurLigne;
-use App\Domain\Facturation\Services\ContexteDeVente;
 use App\Domain\Facturation\Services\DepannageADomicile;
 use App\Domain\Facturation\Services\DevisPdfGenerator;
 use App\Domain\Facturation\Services\DroitDeRetractation;
+use App\Domain\Facturation\Services\PiedDePage;
+use App\Domain\Facturation\Services\TableauDesLignes;
 use App\Domain\Fichiers\EnTetesDesFichiers;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
@@ -28,10 +28,10 @@ use Symfony\Component\HttpFoundation\Response as ReponseHttp;
  * La page du lien secret par lequel le client répond à un devis envoyé
  * par e-mail, sans compte (voir LienDuDevis) :
  * - ouvrir le lien (GET) n'écrit rien : la page montre ce seul devis, tel
- *   qu'il a été envoyé (le magasin qui l'envoie, son numéro, sa validité,
- *   ses mentions de dépannage à domicile, ses lignes, ses totaux), sans
- *   PDF (demande de l'éditeur du 14/11/2026), rien d'autre du magasin, de
- *   la société ni d'un autre client, et les deux réponses possibles ; pour
+ *   qu'il a été envoyé, avec tout ce que son PDF imprime (voir
+ *   devis/document), sans PDF (demande de l'éditeur du 14/11/2026), rien
+ *   d'autre du magasin, de la société ni d'un autre client, et les deux
+ *   réponses possibles ; pour
  *   un particulier, son droit de rétractation de quatorze jours, avec le
  *   formulaire type, et la case qui demande que la prestation commence
  *   avant la fin du délai (T86, voir DroitDeRetractation) ;
@@ -102,8 +102,12 @@ class ReponseAuDevisController
     /**
      * La réponse enregistrée, la page qui la dit ; une saisie refusée
      * revient au formulaire avec ce qui était tapé ou coché, la demande de
-     * début anticipé comprise ; un lien qui ne vaut plus donne la page
-     * neutre.
+     * début anticipé comprise. Un lien qui ne vaut plus pour répondre
+     * montre encore la confirmation de l'acceptation qu'il a enregistrée
+     * (voir LienDuDevis::confirmeLAcceptation()) : le second envoi d'un
+     * double clic sur « Accepter le devis », ou d'un formulaire renvoyé par
+     * le navigateur, ne fait pas croire au client que son acceptation a
+     * échoué ; sinon, la page neutre.
      *
      * @param  Closure(): ReponseDuDevis  $reponse
      */
@@ -112,15 +116,15 @@ class ReponseAuDevisController
         try {
             $enregistree = $reponse();
         } catch (LienDuDevisInvalideException) {
-            return self::invalide();
+            return $this->dansLeMagasinDuLien($jeton, fn (LienDuDevis $lien, Devis $devis): ReponseHttp => $this->confirmationOuInvalide($jeton, $lien, $devis));
         } catch (ValidationException $refus) {
             return $this->dansLeMagasinDuLien($jeton, fn (LienDuDevis $lien, Devis $devis): ReponseHttp => $lien->estValable($devis)
                 ? $this->page($jeton, $devis, array_values($refus->validator->errors()->all()), $signataire, $motif, $debutAnticipe, 422)
-                : self::invalide());
+                : $this->confirmationOuInvalide($jeton, $lien, $devis));
         }
 
         if ($enregistree->reponse === ReponseAuDevis::Acceptation) {
-            return $this->dansLeMagasinDuLien($jeton, fn (LienDuDevis $lien, Devis $devis): ReponseHttp => $lien->confirmeLAcceptation($devis) ? $this->confirmation($jeton, $devis) : self::invalide());
+            return $this->dansLeMagasinDuLien($jeton, fn (LienDuDevis $lien, Devis $devis): ReponseHttp => $this->confirmationOuInvalide($jeton, $lien, $devis));
         }
 
         $devis = Devis::query()->withoutGlobalScopes()->whereKey($enregistree->devis_id)->where('magasin_id', $enregistree->magasin_id)->firstOrFail(['id', 'magasin_id', 'numero']);
@@ -135,6 +139,15 @@ class ReponseAuDevisController
             'retractation' => null,
             'debutAnticipe' => null,
         ]));
+    }
+
+    /**
+     * La confirmation de l'acceptation que ce lien a enregistrée, tant que
+     * le devis la garde, sinon la page neutre.
+     */
+    private function confirmationOuInvalide(string $jeton, LienDuDevis $lien, Devis $devis): ReponseHttp
+    {
+        return $lien->confirmeLAcceptation($devis) ? $this->confirmation($jeton, $devis) : self::invalide();
     }
 
     /**
@@ -193,39 +206,27 @@ class ReponseAuDevisController
     }
 
     /**
+     * La page du devis valable : tout ce que son PDF imprime, depuis les
+     * mêmes données (voir devis/document), sans le PU HT exact, que seul le
+     * PDF écrit ; puis les deux réponses.
+     *
      * @param  list<string>  $erreurs
      */
     private function page(string $jeton, Devis $devis, array $erreurs, ?string $signataire, ?string $motif, bool $debutAnticipe = false, int $statut = 200): ReponseHttp
     {
-        $calculateur = app(CalculateurLigne::class);
-        $horsTaxe = $devis->estPourUnProfessionnel() || ContexteDeVente::documentRetireLaTvaDuPrix($devis);
-        $lignes = $devis->lignes->map(fn ($ligne): array => [
-            'reference' => $ligne->reference,
-            'description' => $ligne->description,
-            'quantite' => $ligne->quantite,
-            'prix_unitaire' => $horsTaxe
-                ? $calculateur->prixUnitaireHtAfficheEnEuros($calculateur->enCentiemes($ligne->prix_unitaire_ttc), $calculateur->enCentiemes($ligne->taux_tva_du_prix))
-                : $calculateur->prixUnitaireAffiche($calculateur->enMillioniemes($ligne->prix_unitaire_ttc)),
-            'remise' => $calculateur->enCentiemes($ligne->remise_pourcentage) === 0 ? null : CalculateurLigne::tauxEnTexte($calculateur->enCentiemes($ligne->remise_pourcentage)),
-            'total' => $calculateur->enEuros($calculateur->enCentiemes($horsTaxe ? $ligne->montant_ht : $ligne->montant_ttc)),
-        ])->all();
+        $emetteur = $devis->emetteur();
 
         return self::protegee(response()->view('devis.reponse', [
-            'emetteur' => $devis->emetteur(),
+            'emetteur' => $emetteur,
             'devis' => $devis,
-            'client' => $devis->client?->nom,
-            'lignes' => $lignes,
-            'horsTaxe' => $horsTaxe,
-            'totalHt' => $calculateur->enEuros($calculateur->enCentiemes($devis->total_ht)),
-            'totalTva' => $calculateur->enEuros($calculateur->enCentiemes($devis->total_tva)),
-            'totalTtc' => $calculateur->enEuros($calculateur->enCentiemes($devis->total_ttc)),
-            'validite' => $devis->date_validite,
+            'pied' => PiedDePage::pour($devis, $emetteur),
+            'tableau' => TableauDesLignes::pour($devis),
             'erreurs' => $erreurs,
             'signataire' => $signataire,
             'motif' => $motif,
             'debutAnticipe' => $debutAnticipe,
             'depannage' => DepannageADomicile::duDevis($devis),
-            'retractation' => $devis->estPourUnProfessionnel() ? null : new DroitDeRetractation($devis->emetteur()),
+            'retractation' => $devis->estPourUnProfessionnel() ? null : new DroitDeRetractation($emetteur),
             'actionAccepter' => route('devis.reponse.accepter', ['jeton' => $jeton]),
             'actionRefuser' => route('devis.reponse.refuser', ['jeton' => $jeton]),
             'signataireMaximum' => RepondreAuDevisEnLigneAction::SIGNATAIRE_MAXIMUM,

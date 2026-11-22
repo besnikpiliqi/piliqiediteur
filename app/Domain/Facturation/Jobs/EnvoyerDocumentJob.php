@@ -111,10 +111,10 @@ use UnexpectedValueException;
  * critique. Une tentative dure au plus $timeout secondes.
  *
  * Un devis envoyé part avec le lien secret de son envoi, sans PDF (voir
- * DocumentMail) : le lien de l'envoi qui ne vaut plus au départ (retiré,
- * devis refusé ou expiré entre-temps) fait échouer l'envoi sans nouvelle
- * tentative ; un devis accepté ou transformé repart avec son PDF, sans
- * lien.
+ * DocumentMail) : le lien de l'envoi qui ne vaut plus au départ fait
+ * échouer l'envoi sans nouvelle tentative, avec sa vraie cause (voir
+ * motifDuLienQuiNeVautPlus()) ; un devis accepté ou transformé renvoyé à
+ * la demande du magasin repart avec son PDF, sans lien.
  *
  * Le PDF est généré à chaque tentative depuis le document tel
  * qu'il est enregistré : une facture ou un avoir figés à leur émission,
@@ -131,12 +131,23 @@ class EnvoyerDocumentJob implements ShouldBeUnique, ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, WithTenantContext;
 
     /**
-     * Un devis envoyé dont le lien ne vaut plus au départ de l'e-mail
-     * (retiré par le magasin, devis refusé ou expiré entre-temps) : sans
+     * Les causes qui font échouer l'envoi d'un devis dont le lien ne vaut
+     * plus au départ de l'e-mail (voir motifDuLienQuiNeVautPlus()) : sans
      * lien ni PDF, que son client ne reçoit qu'une fois le devis accepté,
-     * l'e-mail ne lui apporterait rien.
+     * l'e-mail ne lui apporterait rien. Chacune dit ce qui s'est passé et
+     * ce qui reste à faire.
      */
-    public const MOTIF_DEVIS_SANS_LIEN = 'Le devis ne peut plus être accepté par le lien de cet envoi (lien retiré, devis refusé ou expiré entre-temps) : l\'e-mail n\'est pas parti. Renvoyez-le à votre client s\'il peut encore l\'accepter.';
+    public const MOTIF_LIEN_RETIRE = 'Le lien de réponse de cet envoi a été retiré entre-temps : l\'e-mail n\'est pas parti. Renvoyez le devis à votre client s\'il doit encore pouvoir l\'accepter en ligne.';
+
+    public const MOTIF_LIEN_REMPLACE = 'Un envoi plus récent de ce devis a remplacé le lien de cet envoi : cet e-mail n\'est pas parti, celui de l\'envoi le plus récent porte le lien valable. Rien d\'autre à faire.';
+
+    public const MOTIF_DEVIS_ACCEPTE_ENTRE_TEMPS = 'Le devis a été accepté entre-temps : l\'e-mail qui demandait sa réponse n\'est pas parti, il n\'y a plus rien à accepter. Envoyez le devis accepté à votre client si vous voulez qu\'il en ait le PDF.';
+
+    public const MOTIF_DEVIS_REFUSE_ENTRE_TEMPS = 'Le devis a été refusé entre-temps : l\'e-mail n\'est pas parti. Établissez un nouveau devis si votre client le souhaite.';
+
+    public const MOTIF_DEVIS_EXPIRE_ENTRE_TEMPS = 'La validité du devis est dépassée : l\'e-mail n\'est pas parti, son client ne pourrait plus l\'accepter. Établissez un nouveau devis si votre client le souhaite encore.';
+
+    public const MOTIF_DEVIS_SANS_LIEN = 'Le devis ne peut plus être accepté par le lien de cet envoi : l\'e-mail n\'est pas parti.';
 
     public const MOTIF_EXPEDITEUR_SANS_DROIT = 'La personne qui a demandé cet envoi n\'a plus accès à ce magasin ou n\'a plus le droit d\'envoyer ce document : l\'e-mail n\'est pas parti.';
 
@@ -224,7 +235,7 @@ class EnvoyerDocumentJob implements ShouldBeUnique, ShouldQueue
         $lienDeLEnvoi = $document instanceof Devis && $envoi->nature === NatureEnvoi::Envoi ? $envoi->lienDuDevis()->first() : null;
 
         if ($document instanceof Devis && $lienDeLEnvoi !== null && ! $lienDeLEnvoi->estValable($document)) {
-            $this->echouer($envoi, self::MOTIF_DEVIS_SANS_LIEN);
+            $this->echouer($envoi, self::motifDuLienQuiNeVautPlus($lienDeLEnvoi, $document));
 
             return;
         }
@@ -253,6 +264,26 @@ class EnvoyerDocumentJob implements ShouldBeUnique, ShouldQueue
             'erreur' => null,
             'derniere_erreur' => null,
         ])->save();
+    }
+
+    /**
+     * Pourquoi le lien de l'envoi d'un devis ne vaut plus au départ de
+     * l'e-mail, d'après le lien et le devis relus : retiré par le magasin ;
+     * remplacé par un envoi plus récent, dont l'e-mail porte le lien
+     * valable ; devis accepté (au magasin, signé à la main) ou transformé
+     * en facture entre-temps ; refusé ; expiré ; sinon (le magasin ne peut
+     * plus vendre, par exemple), la cause générale.
+     */
+    private static function motifDuLienQuiNeVautPlus(LienDuDevis $lien, Devis $devis): string
+    {
+        return match (true) {
+            $lien->retire_le !== null => self::MOTIF_LIEN_RETIRE,
+            LienDuDevis::query()->where('devis_id', $lien->devis_id)->where('id', '>', $lien->getKey())->exists() => self::MOTIF_LIEN_REMPLACE,
+            in_array($devis->statut, [StatutDevis::Accepte, StatutDevis::Converti], true) => self::MOTIF_DEVIS_ACCEPTE_ENTRE_TEMPS,
+            $devis->statut === StatutDevis::Refuse => self::MOTIF_DEVIS_REFUSE_ENTRE_TEMPS,
+            $devis->statut === StatutDevis::Expire || $devis->validiteDepassee() => self::MOTIF_DEVIS_EXPIRE_ENTRE_TEMPS,
+            default => self::MOTIF_DEVIS_SANS_LIEN,
+        };
     }
 
     /**

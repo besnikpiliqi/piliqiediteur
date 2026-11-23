@@ -232,11 +232,3 @@ button.piliqi-charges__case:focus-visible {
     text-align: end;
     white-space: nowrap;
 }
-
-.piliqi-credit__gris {
-    color: rgb(var(--gray-600));
-}
-
-.dark .piliqi-credit__gris {
-    color: rgb(var(--gray-400));
-}

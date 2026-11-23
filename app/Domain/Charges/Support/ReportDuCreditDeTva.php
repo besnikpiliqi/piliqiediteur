@@ -89,7 +89,7 @@ final class ReportDuCreditDeTva
             $moisQuiFerment[$periode] = $sesMois[count($sesMois) - 1];
         }
 
-        return new TvaReportee($cadence, $premierePeriode, $parMois, $parPeriode, $moisQuiFerment);
+        return new TvaReportee($cadence, $parPeriode, $moisQuiFerment);
     }
 
     /**

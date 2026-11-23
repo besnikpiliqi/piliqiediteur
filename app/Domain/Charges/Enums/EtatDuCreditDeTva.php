@@ -3,7 +3,6 @@
 namespace App\Domain\Charges\Enums;
 
 use Filament\Support\Contracts\HasColor;
-use Filament\Support\Contracts\HasLabel;
 
 /**
  * Où en est la vérification du crédit de TVA qu'une société a déclaré
@@ -17,20 +16,11 @@ use Filament\Support\Contracts\HasLabel;
  * - non vérifié par un comptable : la société n'a pas de comptable ; dès
  *   qu'il en arrive un, il passe « à vérifier ».
  */
-enum EtatDuCreditDeTva: string implements HasColor, HasLabel
+enum EtatDuCreditDeTva: string implements HasColor
 {
     case Verifie = 'verifie';
     case AVerifier = 'a_verifier';
     case NonVerifie = 'non_verifie';
-
-    public function getLabel(): string
-    {
-        return match ($this) {
-            self::Verifie => 'Vérifié par le comptable',
-            self::AVerifier => 'À vérifier par votre comptable',
-            self::NonVerifie => 'Non vérifié par un comptable',
-        };
-    }
 
     public function getColor(): string
     {

@@ -14,10 +14,11 @@ use Illuminate\Support\Facades\DB;
  * déclaré d'une société (lot TVA27, voir CreditDeTva), même écrit par
  * DB::table(), une requête brute ou une action défectueuse :
  * - credits_de_tva_d_une_societe_au_reel : une déclaration ne s'ajoute que
- *   dans une société qui n'est pas un cabinet d'expertise comptable, au
- *   réel normal de la cadence de la déclaration (mensuel ou
- *   trimestriel) : jamais en franchise en base, ni avant le choix du
- *   régime ;
+ *   dans une société qui n'est pas un cabinet d'expertise comptable, ni
+ *   membre d'un assujetti unique (le groupe déclare pour elle, voir
+ *   CreditsDeTva::aLieuDansLa()), au réel normal de la cadence de la
+ *   déclaration (mensuel ou trimestriel) : jamais en franchise en base, ni
+ *   avant le choix du régime ;
  * - credits_de_tva_figee : sa société, sa cadence, sa période, son uuid et
  *   l'instant de sa création ne changent jamais ;
  * et, posée par la migration (voir DeclencheursDeProtection::sansSuppression()),
@@ -30,7 +31,7 @@ final class GardesDesCreditsDeTva
 
     private const FIGEE = 'credits_de_tva_figee';
 
-    public const REFUS_SOCIETE = 'un crédit de TVA ne se déclare que dans une société au réel normal de sa cadence, jamais dans un cabinet d\'expertise comptable, en franchise en base ni avant le choix du régime';
+    public const REFUS_SOCIETE = 'un crédit de TVA ne se déclare que dans une société au réel normal de sa cadence, jamais dans un cabinet d\'expertise comptable, dans une société membre d\'un assujetti unique, en franchise en base ni avant le choix du régime';
 
     public const REFUS_FIGEE = 'la société, la cadence et la période d\'un crédit de TVA déclaré ne changent jamais';
 
@@ -44,9 +45,9 @@ final class GardesDesCreditsDeTva
 
         // Une société qui n'existe pas : sa clé étrangère refuse la ligne.
         self::fonction(self::SOCIETE, 'DECLARE la_societe RECORD; BEGIN '
-            .'SELECT type_activite, regime_tva INTO la_societe FROM societes WHERE id = NEW.societe_id; '
+            .'SELECT type_activite, regime_tva, membre_assujetti_unique INTO la_societe FROM societes WHERE id = NEW.societe_id; '
             .'IF NOT FOUND THEN RETURN NEW; END IF; '
-            ."IF la_societe.type_activite = {$cabinet} OR la_societe.regime_tva IS DISTINCT FROM (CASE WHEN NEW.cadence = {$mensuelle} THEN {$regimeMensuel} ELSE {$regimeTrimestriel} END) "
+            ."IF la_societe.type_activite = {$cabinet} OR la_societe.membre_assujetti_unique OR la_societe.regime_tva IS DISTINCT FROM (CASE WHEN NEW.cadence = {$mensuelle} THEN {$regimeMensuel} ELSE {$regimeTrimestriel} END) "
             ."THEN RAISE EXCEPTION '%', ".LitteralSql::de(self::SOCIETE.' : '.self::REFUS_SOCIETE).'; END IF; '
             .'RETURN NEW; END');
         $connexion->unprepared('CREATE TRIGGER '.self::SOCIETE.' BEFORE INSERT ON credits_de_tva FOR EACH ROW EXECUTE FUNCTION garde_'.self::SOCIETE.'()');

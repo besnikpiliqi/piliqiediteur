@@ -8,6 +8,7 @@ use App\Domain\Charges\Actions\ConfirmerUnCreditDeTvaAction;
 use App\Domain\Charges\Actions\CorrigerUnCreditDeTvaAction;
 use App\Domain\Charges\Actions\DeclarerUnCreditDeTvaAction;
 use App\Domain\Charges\Actions\DeposerUneChargeAction;
+use App\Domain\Charges\Actions\ModifierUnCreditDeTvaAction;
 use App\Domain\Charges\Actions\ValiderUneChargeAction;
 use App\Domain\Charges\Actions\VerifierLeSeuilDuTrimestrielAction;
 use App\Domain\Charges\Enums\TauxDeCharge;
@@ -20,6 +21,7 @@ use App\Domain\Charges\Support\ReportDeLaPeriode;
 use App\Domain\Charges\Support\SaisieDeCharge;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
+use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Services\PartDeReglement;
 use App\Domain\Fichiers\PieceDeposee;
@@ -38,20 +40,24 @@ use LogicException;
  * qui le fait :
  *
  * - le crédit de TVA de départ (choix K2 de l'éditeur) dans chacun de ses
- *   états : Maison Ferrand, −1 250,00 € saisis par son propriétaire, « à
- *   vérifier » par son comptable (l'« À faire » du cabinet Martin sur le
- *   poste et dans le modèle du cabinet, celui de son expert-comptable
- *   déclaré dans le modèle du commerce) ; l'Épicerie Lemoine, −480,00 €
- *   saisis par sa propriétaire et confirmés par Emma Rousseau ; Conseil
- *   Vasseur, −320,00 € saisis par son propriétaire, corrigés à −350,00 €
- *   par Marc Petit, son expert-comptable déclaré, avec un motif, puis une
- *   déclaration plus récente que Marc Petit saisit lui-même, née vérifiée ;
- *   le Comptoir des Îles, sans comptable, −1 250,00 € « non vérifiés par un
- *   comptable » ; le Studio Lumière, « Non, aucun crédit » ; le Groupe Nord
- *   Distribution n'a pas encore répondu (son étape et son « À faire ») ;
- *   l'inscription qui attend son code a choisi son régime trimestriel le
- *   jour de son arrivée : sa déclaration est encore à venir (« en
- *   attente ») ;
+ *   états : Maison Ferrand, −1 200,00 € saisis par son propriétaire,
+ *   confirmés par Paul Lefèvre, puis portés à −1 250,00 € par le
+ *   propriétaire, ce qui les repasse « à vérifier » par son comptable
+ *   (l'« À faire » du cabinet Martin sur le poste et dans le modèle du
+ *   cabinet, celui de son expert-comptable déclaré dans le modèle du
+ *   commerce ; les deux soldes au journal d'audit) ; l'Épicerie Lemoine,
+ *   −480,00 € saisis par sa propriétaire et confirmés par Emma Rousseau ;
+ *   Conseil Vasseur, −320,00 € saisis par son propriétaire, corrigés à
+ *   −350,00 € par Marc Petit, son expert-comptable déclaré, avec un motif,
+ *   puis une déclaration plus récente que Marc Petit saisit lui-même, née
+ *   vérifiée ; le Comptoir des Îles, sans comptable, −1 250,00 € « non
+ *   vérifiés par un comptable » ; le Studio Lumière, « Non, aucun
+ *   crédit » ; la Boulangerie Duval, suspendue, qui déclare encore, n'a pas
+ *   encore répondu (son étape et son « À faire ») ; le Groupe Nord
+ *   Distribution, membre d'un assujetti unique, n'a aucun crédit à
+ *   indiquer, le groupe déclarant pour lui ; l'inscription qui attend son
+ *   code a choisi son régime trimestriel le jour de son arrivée : sa
+ *   déclaration est encore à venir (« en attente ») ;
  * - le report du crédit : chez Maison Ferrand, au mensuel, deux mois en
  *   crédit qui s'enchaînent, un mois qui l'épuise en partie, puis un qui
  *   l'épuise tout à fait ; chez l'Épicerie Lemoine, au trimestriel, un
@@ -61,14 +67,16 @@ use LogicException;
  *   ou des vitrines réfrigérées, dont il déduit la TVA, ou la location
  *   d'une voiture de direction à un loueur établi en Belgique,
  *   autoliquidée, dont la TVA ne se déduit pas) ;
- * - le seuil du réel normal trimestriel, le dernier jour de l'histoire :
- *   Conseil Vasseur, au trimestriel, dépasse 1 100 000 € de chiffre
- *   d'affaires de l'année (sa ligne de l'« À faire » pour son propriétaire
- *   et Mathilde Garnier, son administratrice qui gère les paramètres de la
- *   société) ; le Studio Lumière, au trimestriel, à 1 100 000,00 € tout
- *   juste (aucune ligne) ; le Comptoir des Îles, au mensuel, au-delà (aucune
- *   ligne) ; l'Épicerie Lemoine, au-delà, dont la propriétaire dit « C'est
- *   vérifié » (au journal d'audit, plus dans l'« À faire ») ;
+ * - le seuil du réel normal trimestriel, le dernier jour de l'histoire,
+ *   par des ventes de la nature de ce qui se vend (voir
+ *   vendreAuDelaDuSeuil()) : Conseil Vasseur, au trimestriel, dépasse
+ *   1 100 000 € de chiffre d'affaires de l'année (sa ligne de l'« À
+ *   faire » pour son propriétaire et Mathilde Garnier, son administratrice
+ *   qui gère les paramètres de la société) ; le Studio Lumière, au
+ *   trimestriel, à 1 100 000,00 € tout juste (aucune ligne) ; le Comptoir
+ *   des Îles, au mensuel, au-delà (aucune ligne) ; l'Épicerie Lemoine,
+ *   au-delà, dont la propriétaire dit « C'est vérifié » (au journal
+ *   d'audit, plus dans l'« À faire ») ;
  * - les charges du Studio Lumière, l'une validée, l'autre à valider, pour
  *   que sa TVA réelle et son estimation diffèrent, comme chez les sociétés
  *   qui déposent leurs charges chaque mois (voir ChargesDesSocietes).
@@ -81,6 +89,13 @@ final class TvaDesSocietes
 {
     /** Le crédit de départ de Maison Ferrand et du Comptoir des Îles, en centimes (un solde de −1 250,00 €). */
     public const CREDIT_DE_DEPART = -125000;
+
+    /**
+     * Le crédit que le propriétaire de Maison Ferrand indique d'abord, que
+     * son comptable confirme, avant que l'avis de sa déclaration ne le
+     * porte à CREDIT_DE_DEPART, qui le repasse « à vérifier ».
+     */
+    public const CREDIT_D_ABORD_INDIQUE_PAR_FERRAND = -120000;
 
     /** Le crédit de départ de l'Épicerie Lemoine, confirmé par le cabinet. */
     public const CREDIT_DE_L_EPICERIE = -48000;
@@ -113,12 +128,18 @@ final class TvaDesSocietes
     /** Le crédit à reporter visé à la fin du trimestre −2 de l'Épicerie Lemoine. */
     public const CREDIT_DU_TRIMESTRE_DE_L_EPICERIE = 80000;
 
-    /** Le chiffre d'affaires HT de chaque grosse vente du dernier jour : 1 150 journées ou coffrets à 1 200,00 € TTC. */
-    private const QUANTITE_DE_LA_GROSSE_VENTE = 1150;
+    /** La journée de mission de Conseil Vasseur : 1 200,00 € TTC, 1 000,00 € HT à 20 %. */
+    private const PRIX_TTC_DE_LA_JOURNEE = 120000;
 
-    private const PRIX_TTC_DE_LA_GROSSE_VENTE = '1200.00';
+    /** Le coffret gourmand de l'Épicerie Lemoine : 150,00 € TTC à 5,5 %, acheté 95,00 € HT. */
+    private const PRIX_TTC_DU_COFFRET = 15000;
 
-    private const PRIX_TTC_DE_LA_GROSSE_VENTE_EN_CENTIMES = 120000;
+    private const COFFRETS_ACHETES = 8200;
+
+    private const COFFRETS_PAR_COMMANDE = 2000;
+
+    /** L'aménagement décoratif d'une chambre d'hôtel du Comptoir des Îles de Bordeaux : 6 000,00 € TTC, 5 000,00 € HT à 20 %. */
+    private const PRIX_TTC_DE_LA_CHAMBRE = 600000;
 
     public function __construct(
         private readonly HorlogeDuSemis $horloge,
@@ -147,11 +168,23 @@ final class TvaDesSocietes
     {
         if ($rang === 40) {
             $this->horloge->aller($rang, '06:40');
-            $this->declarerLeDepart('commerce', self::CREDIT_DE_DEPART);
+            $this->declarerLeDepart('commerce', self::CREDIT_D_ABORD_INDIQUE_PAR_FERRAND);
 
             if ($this->semis->surLePoste()) {
                 $this->declarerLeDepart('comptoir', self::CREDIT_DE_DEPART);
             }
+        }
+
+        if ($rang === 41 && $this->semis->seme('commerce')) {
+            $this->horloge->aller($rang, '06:40');
+            $credit = $this->declaration('commerce');
+            $this->semis->horsDeToutContexte(fn (): CreditDeTva => app(ConfirmerUnCreditDeTvaAction::class)->handle($this->semis->compte('Paul Lefèvre'), $this->semis->societe('commerce'), (string) $credit->uuid, GestesDuMagasin::jeton()));
+        }
+
+        if ($rang === 42 && $this->semis->seme('commerce')) {
+            $this->horloge->aller($rang, '06:40');
+            $credit = $this->declaration('commerce');
+            $this->semis->horsDeToutContexte(fn (): CreditDeTva => app(ModifierUnCreditDeTvaAction::class)->handle($this->semis->proprietaire('commerce'), $this->semis->societe('commerce'), (string) $credit->uuid, self::CREDIT_DE_DEPART, GestesDuMagasin::jeton()));
         }
 
         if ($rang === 100) {
@@ -217,9 +250,7 @@ final class TvaDesSocietes
         }
 
         $this->horloge->aller($rang, '10:20');
-        $this->vendreEnGros('conseil', 'Claire Dubois', 'Journée de mission de transformation', ['nom' => 'Groupe Hôtelier Atlantique', 'siren' => IdentifiantsInsee::avecSaCle('00000061'), 'adresse' => '2 quai de la Fosse', 'code_postal' => '44000', 'ville' => 'Nantes', 'email' => 'achats@hotelier-atlantique.exemple.test']);
-        $this->vendreEnGros('epicerie', 'Nicolas Lemoine', 'Coffret gourmand d\'entreprise', ['nom' => 'Comité d\'entreprise Aéro Sud', 'siren' => IdentifiantsInsee::avecSaCle('00000062'), 'adresse' => '18 avenue Jean Monnet', 'code_postal' => '13700', 'ville' => 'Marignane', 'email' => 'cse@aero-sud.exemple.test']);
-        $this->vendreEnGros('bordeaux', 'Inès Lafitte', 'Aménagement complet d\'une chambre d\'hôtel', ['nom' => 'Hôtel des Chartrons', 'siren' => IdentifiantsInsee::avecSaCle('00000063'), 'adresse' => '81 cours de Verdun', 'code_postal' => '33000', 'ville' => 'Bordeaux', 'email' => 'direction@hotel-chartrons.exemple.test']);
+        $this->vendreAuDelaDuSeuil($rang);
         $this->amenerLeStudioAuSeuil($rang);
 
         $this->horloge->aller($rang, '10:30');
@@ -320,19 +351,95 @@ final class TvaDesSocietes
     }
 
     /**
-     * Une grosse vente d'un professionnel, réglée par virement à son
-     * émission : 1 150 journées, coffrets ou aménagements à 1 200,00 € TTC à
-     * 20 %, soit 1 150 000,00 € HT, au-delà du seuil du trimestriel.
-     *
-     * @param  array<string, string>  $client
+     * Les ventes du dernier jour qui portent le chiffre d'affaires HT de
+     * l'année au-delà du seuil du trimestriel, chacune de la nature de ce
+     * qui se vend, à des professionnels, réglées par virement à leur
+     * émission (point 6 de CLAUDE.md : des données vraisemblables) :
+     * - Conseil Vasseur facture à trois clients les journées de leur
+     *   mission de conseil, 1 150 journées à 1 000,00 € HT ;
+     * - l'Épicerie Lemoine achète 8 200 coffrets gourmands à son
+     *   fournisseur, une marchandise que sa facture d'achat fait naître,
+     *   et en vend 8 000 à quatre employeurs de la région, par commandes de
+     *   2 000, à 150,00 € TTC à 5,5 % ;
+     * - le Comptoir des Îles de Bordeaux facture au Groupe Hôtelier des
+     *   Chartrons l'aménagement décoratif des 230 chambres de ses quatre
+     *   hôtels, une prestation, à 5 000,00 € HT la chambre.
      */
-    private function vendreEnGros(string $magasin, string $vendeur, string $service, array $client): void
+    private function vendreAuDelaDuSeuil(int $rang): void
+    {
+        $this->facturerDesJournees('conseil', 'Claire Dubois', [
+            [420, ['nom' => 'Groupe Hôtelier Atlantique', 'siren' => IdentifiantsInsee::avecSaCle('00000061'), 'adresse' => '2 quai de la Fosse', 'code_postal' => '44000', 'ville' => 'Nantes', 'email' => 'achats@hotelier-atlantique.exemple.test']],
+            [380, ['nom' => 'Transports Ligériens', 'siren' => IdentifiantsInsee::avecSaCle('00000064'), 'adresse' => '7 rue de la Gare', 'code_postal' => '49000', 'ville' => 'Angers', 'email' => 'achats@transports-ligeriens.exemple.test']],
+            [350, ['nom' => 'Coopérative Agricole des Mauges', 'siren' => IdentifiantsInsee::avecSaCle('00000065'), 'adresse' => '12 route de Cholet', 'code_postal' => '49600', 'ville' => 'Beaupréau-en-Mauges', 'email' => 'direction@coop-mauges.exemple.test']],
+        ]);
+        $this->vendreDesCoffrets($rang, [
+            ['nom' => 'Comité social et économique Aéro Sud', 'siren' => IdentifiantsInsee::avecSaCle('00000062'), 'adresse' => '18 avenue Jean Monnet', 'code_postal' => '13700', 'ville' => 'Marignane', 'email' => 'cse@aero-sud.exemple.test'],
+            ['nom' => 'Mutuelle des Calanques', 'siren' => IdentifiantsInsee::avecSaCle('00000066'), 'adresse' => '25 boulevard Michelet', 'code_postal' => '13008', 'ville' => 'Marseille', 'email' => 'rh@mutuelle-calanques.exemple.test'],
+            ['nom' => 'Groupe Hospitalier de Provence', 'siren' => IdentifiantsInsee::avecSaCle('00000067'), 'adresse' => '3 avenue des Tamaris', 'code_postal' => '13090', 'ville' => 'Aix-en-Provence', 'email' => 'achats@gh-provence.exemple.test'],
+            ['nom' => 'Logistique Méditerranée', 'siren' => IdentifiantsInsee::avecSaCle('00000068'), 'adresse' => '4 quai de la Darse', 'code_postal' => '13270', 'ville' => 'Fos-sur-Mer', 'email' => 'cse@logistique-mediterranee.exemple.test'],
+        ]);
+        $this->amenagerLesChambres([62, 58, 56, 54]);
+    }
+
+    /**
+     * Les journées de mission de conseil de Conseil Vasseur, une facture
+     * par client, au prix de la journée.
+     *
+     * @param  list<array{0: int, 1: array<string, string>}>  $missions  le nombre de journées et le client
+     */
+    private function facturerDesJournees(string $magasin, string $vendeur, array $missions): void
     {
         $gestes = new GestesDuMagasin($this->semis->magasin($magasin));
         $compte = $this->semis->compte($vendeur);
-        $acheteur = $gestes->fiche($compte, Client::class, [...$client, 'type_client' => TypeClient::Professionnel, 'pays' => 'FR', 'mode_paiement_prefere' => ModePaiement::Virement->value]);
-        $gestes->fiche($compte, Service::class, ['nom' => $service, 'prix_ttc' => self::PRIX_TTC_DE_LA_GROSSE_VENTE, 'taux_tva' => '20', 'actif' => true]);
-        $gestes->facturer($compte, $acheteur, [$gestes->ligne($service, self::QUANTITE_DE_LA_GROSSE_VENTE)], [new PartDeReglement(ModePaiement::Virement, self::QUANTITE_DE_LA_GROSSE_VENTE * self::PRIX_TTC_DE_LA_GROSSE_VENTE_EN_CENTIMES)]);
+        $gestes->fiche($compte, Service::class, ['nom' => 'Journée de mission de conseil', 'prix_ttc' => number_format(self::PRIX_TTC_DE_LA_JOURNEE / 100, 2, '.', ''), 'taux_tva' => '20', 'actif' => true]);
+
+        foreach ($missions as [$journees, $client]) {
+            $acheteur = $gestes->fiche($compte, Client::class, [...$client, 'type_client' => TypeClient::Professionnel, 'pays' => 'FR', 'mode_paiement_prefere' => ModePaiement::Virement->value]);
+            $gestes->facturer($compte, $acheteur, [$gestes->ligne('Journée de mission de conseil', $journees)], [new PartDeReglement(ModePaiement::Virement, $journees * self::PRIX_TTC_DE_LA_JOURNEE)]);
+        }
+    }
+
+    /**
+     * L'Épicerie Lemoine achète ses coffrets gourmands à son fournisseur
+     * (sa facture d'achat, avec sa pièce, les fait naître et entrer en
+     * stock), puis en vend une commande à chacun de ces employeurs ; il en
+     * reste 200 en stock, au-dessus de leur seuil d'alerte.
+     *
+     * @param  list<array<string, string>>  $clients
+     */
+    private function vendreDesCoffrets(int $rang, array $clients): void
+    {
+        $gestes = new GestesDuMagasin($this->semis->magasin('epicerie'));
+        $nicolas = $this->semis->compte('Nicolas Lemoine');
+        $fournisseur = $gestes->fiche($nicolas, Fournisseur::class, ['nom' => 'Les Coffrets du Terroir', 'siret' => IdentifiantsInsee::avecSaCle('0000002180001'), 'adresse' => '6 rue des Vergers', 'code_postal' => '84000', 'ville' => 'Avignon', 'pays' => 'FR', 'email' => 'commandes@coffrets-terroir.exemple.test']);
+        $numero = 'CT-'.str_replace('-', '', $this->horloge->jour($rang));
+        $gestes->acheter($nicolas, $fournisseur, [
+            ['produit' => ['nom' => 'Coffret gourmand de Provence', 'reference' => 'COFFRET-PROVENCE', 'prix_vente_ttc' => number_format(self::PRIX_TTC_DU_COFFRET / 100, 2, '.', ''), 'taux_tva' => '5.5', 'suivi_stock' => true, 'seuil_alerte' => 50], 'quantite' => self::COFFRETS_ACHETES, 'prix_unitaire_ht' => '95.00'],
+        ], ['date_facture' => $this->horloge->jour($rang), 'numero_fournisseur' => $numero], [new PieceDeposee('Facture '.$numero.'.pdf', PieceDuSemis::pdf('Les Coffrets du Terroir', 'Facture n° '.$numero))]);
+
+        foreach ($clients as $client) {
+            $acheteur = $gestes->fiche($nicolas, Client::class, [...$client, 'type_client' => TypeClient::Professionnel, 'pays' => 'FR', 'mode_paiement_prefere' => ModePaiement::Virement->value]);
+            $gestes->facturer($nicolas, $acheteur, [$gestes->ligne('COFFRET-PROVENCE', self::COFFRETS_PAR_COMMANDE)], [new PartDeReglement(ModePaiement::Virement, self::COFFRETS_PAR_COMMANDE * self::PRIX_TTC_DU_COFFRET)]);
+        }
+    }
+
+    /**
+     * Le Comptoir des Îles de Bordeaux facture au Groupe Hôtelier des
+     * Chartrons l'aménagement décoratif des chambres de chacun de ses
+     * hôtels, une facture par hôtel.
+     *
+     * @param  list<int>  $chambresParHotel
+     */
+    private function amenagerLesChambres(array $chambresParHotel): void
+    {
+        $gestes = new GestesDuMagasin($this->semis->magasin('bordeaux'));
+        $ines = $this->semis->compte('Inès Lafitte');
+        $hotelier = $gestes->fiche($ines, Client::class, ['nom' => 'Groupe Hôtelier des Chartrons', 'siren' => IdentifiantsInsee::avecSaCle('00000063'), 'adresse' => '81 cours de Verdun', 'code_postal' => '33000', 'ville' => 'Bordeaux', 'email' => 'direction@hotels-chartrons.exemple.test', 'type_client' => TypeClient::Professionnel, 'pays' => 'FR', 'mode_paiement_prefere' => ModePaiement::Virement->value]);
+        $gestes->fiche($ines, Service::class, ['nom' => 'Aménagement décoratif d\'une chambre d\'hôtel', 'prix_ttc' => number_format(self::PRIX_TTC_DE_LA_CHAMBRE / 100, 2, '.', ''), 'taux_tva' => '20', 'actif' => true]);
+
+        foreach ($chambresParHotel as $chambres) {
+            $gestes->facturer($ines, $hotelier, [$gestes->ligne('Aménagement décoratif d\'une chambre d\'hôtel', $chambres)], [new PartDeReglement(ModePaiement::Virement, $chambres * self::PRIX_TTC_DE_LA_CHAMBRE)]);
+        }
     }
 
     /**

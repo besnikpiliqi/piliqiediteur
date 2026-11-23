@@ -236,9 +236,10 @@
                 <x-slot name="heading">{{ $credit['pour_le_comptable'] ? 'Le crédit de TVA de la société' : \App\Domain\Charges\Support\TextesDuCreditDeTva::TITRE_DE_LA_SAISIE }}</x-slot>
                 <x-slot name="description">{{ $credit['intro'] }}</x-slot>
 
+                @php($conseil = \App\Domain\Charges\Support\TextesDuCreditDeTva::conseilDuBloc($credit['pour_le_comptable']))
                 <div class="piliqi-credit__message piliqi-credit__message--info" data-conseil-du-credit>
-                    <p class="piliqi-credit__titre">Faites vérifier ce montant par {{ $credit['pour_le_comptable'] ? 'le comptable' : 'votre expert-comptable' }}.</p>
-                    <p>{{ \App\Domain\Charges\Services\CreditsDeTva::CONSEIL }}</p>
+                    <p class="piliqi-credit__titre">{{ $conseil['titre'] }}</p>
+                    <p>{{ $conseil['texte'] }}</p>
                 </div>
 
                 @if ($credit['declarations'] === [])

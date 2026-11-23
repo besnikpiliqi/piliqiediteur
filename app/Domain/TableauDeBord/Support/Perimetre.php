@@ -237,6 +237,16 @@ final class Perimetre
     }
 
     /**
+     * Le chiffre clé de la TVA à payer se montre-t-il (voir
+     * ChiffresDuTableauDeBord) : au réel normal, sur au moins un magasin où
+     * le compte voit tous les documents qu'elle compte ?
+     */
+    public function montreLaCarteDeLaTva(): bool
+    {
+        return $this->montreLaTva() && $this->magasinsDeLaTva() !== [];
+    }
+
+    /**
      * Les magasins que ce graphique compte : ceux où le compte voit toutes
      * ses sources.
      *

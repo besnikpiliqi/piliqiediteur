@@ -18,11 +18,15 @@ use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Scopes\SocieteScope;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Pages\TableauDeBordDeLaSociete;
+use App\Filament\Cabinet\Pages\TableauDeBordDuCabinet;
+use App\Filament\Cabinet\Resources\ClientDuCabinetResource;
 use App\Filament\GrilleDesGraphiques;
 use App\Filament\PageDesCharges;
 use App\Filament\Societe\Pages\TableauDeBord;
 use App\Models\User;
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -72,7 +76,8 @@ class EcransDuCreditDeTvaTest extends TestCase
 
         $page = Livewire::test(PageDesCharges::class, ['ecran' => PageDesCharges::SOCIETE])
             ->assertSee(TextesDuCreditDeTva::TITRE_DE_LA_SAISIE)
-            ->assertSee(CreditsDeTva::CONSEIL)
+            ->assertSee(TextesDuCreditDeTva::conseilDuBloc(false)['titre'])
+            ->assertSee(TextesDuCreditDeTva::conseilDuBloc(false)['texte'])
             ->assertSee('Aucun crédit de TVA indiqué pour le moment')
             ->assertActionVisible('declarerLeCredit')
             ->assertActionEnabled('declarerLeCredit')
@@ -246,6 +251,162 @@ class EcransDuCreditDeTvaTest extends TestCase
             ->assertDontSeeHtml('data-credit-de-tva')
             ->assertDontSeeHtml('data-message-de-la-tva')
             ->assertDontSeeHtml('data-report-du-credit="avec_credit_declare"');
+    }
+
+    /**
+     * Sous le graphique de la TVA reportée, le comptable a lui aussi le
+     * lien « Indiquer ou voir le crédit de TVA » (voir
+     * CreditsDeTva::peutDeclarer()) : le collaborateur confié sur la page
+     * « Graphiques » du client, vers la page des charges du client, et
+     * l'expert-comptable déclaré sur « Tableau de bord de la société », vers
+     * « Charges de la société ».
+     */
+    public function test_le_comptable_a_le_lien_du_credit_sous_le_graphique_de_la_tva(): void
+    {
+        $collaborateur = $this->collaborateurDuCabinetLie($this->lyon);
+        $lien = LienCabinet::query()->withoutGlobalScopes()->where('societe_id', $this->societe->getKey())->sole();
+        $cabinet = $collaborateur->societe()->firstOrFail();
+
+        $this->dansLEspaceDuCabinet($cabinet, $collaborateur);
+        Livewire::test(GrilleDesGraphiques::class, ['ecran' => 'cabinet', 'lien' => (string) $lien->uuid])
+            ->assertSee('Indiquer ou voir le crédit de TVA')
+            ->assertSeeHtml(e(ClientDuCabinetResource::getUrl('charges', ['record' => (string) $lien->uuid], panel: 'cabinet', tenant: $cabinet).'#credit-de-tva'));
+
+        $autreClient = $this->ouvrirUneSociete(['nom' => 'Annecy']);
+        $expert = $this->expertComptable($autreClient);
+        app(TenantContext::class)->clear();
+        $this->dansLeMagasin($autreClient->fresh(), $expert);
+        Livewire::test(GrilleDesGraphiques::class, ['ecran' => 'expert_comptable'])
+            ->assertSee('Indiquer ou voir le crédit de TVA')
+            ->assertSeeHtml('#credit-de-tva');
+    }
+
+    /**
+     * Un administrateur qui voit la carte de la TVA sans voir les charges
+     * lit, au tableau de bord de la société, où en est le crédit de TVA,
+     * sans son montant ni bouton ; un administrateur qui ne voit pas les
+     * graphiques ne lit rien du crédit.
+     */
+    public function test_l_administrateur_qui_voit_la_carte_de_la_tva_lit_le_message_sans_montant(): void
+    {
+        app(TenantContext::class)->clear();
+        app(DeclarerUnCreditDeTvaAction::class)->handle($this->proprietaire, $this->societe, '2026-11', -125000);
+        app(TenantContext::class)->clear();
+        $avecLesGraphiques = $this->administrateur($this->lyon, autorisationsMagasin: [...PermissionRegistry::modeleDeLAdministrateur($this->societe->type_activite), PermissionRegistry::GRAPHIQUES_VOIR], nom: 'Admin des graphiques');
+        $sansLesGraphiques = $this->administrateur($this->lyon, nom: 'Admin sans graphiques');
+
+        $this->dansLEspaceDeLaSociete($this->societe, $avecLesGraphiques);
+        Livewire::test(TableauDeBord::class)
+            ->assertSeeHtml('data-message-de-la-tva="non_verifie"')
+            ->assertSee('Crédit de TVA saisi, non vérifié par un comptable')
+            ->assertSee('Indiqué avec la déclaration de novembre 2026, il compte déjà dans votre TVA : le propriétaire le fait vérifier par votre expert-comptable.')
+            ->assertDontSee('1 250,00 €')
+            ->assertDontSeeHtml('data-geste-du-message');
+
+        $this->dansLEspaceDeLaSociete($this->societe, $sansLesGraphiques);
+        Livewire::test(TableauDeBord::class)->assertDontSeeHtml('data-message-de-la-tva');
+    }
+
+    /**
+     * Avant toute déclaration, le comptable lit des phrases qui lui sont
+     * adressées (« la société », « son arrivée ») et le bouton « Indiquer
+     * le crédit de TVA », jamais celles de la société : en attente le 20
+     * novembre, à indiquer le 15 décembre, sur la page « Graphiques » du
+     * client dans l'espace du cabinet.
+     */
+    public function test_le_comptable_lit_les_phrases_qui_lui_sont_adressees_avant_toute_declaration(): void
+    {
+        $collaborateur = $this->collaborateurDuCabinetLie($this->lyon);
+        $lien = LienCabinet::query()->withoutGlobalScopes()->where('societe_id', $this->societe->getKey())->sole();
+        $cabinet = $collaborateur->societe()->firstOrFail();
+        $page = ClientDuCabinetResource::getUrl('graphiques', ['record' => $lien], panel: 'cabinet', tenant: $cabinet);
+        app(TenantContext::class)->clear();
+
+        $this->travelTo(self::aParis('2026-11-20 10:00:00'));
+        $this->actingAs($collaborateur)->get($page)->assertOk()
+            ->assertSee('data-message-de-la-tva="attente"', false)
+            ->assertSee('En attente de la déclaration du crédit de TVA de la société')
+            ->assertSee('PILIQI calcule déjà sa TVA depuis son arrivée, le 12/11/2026.')
+            ->assertSee('Indiquer le crédit de TVA')
+            ->assertDontSee('Indiquer mon crédit de TVA')
+            ->assertDontSee('de vos déclarations');
+
+        $this->travelTo(self::aParis('2026-12-15 10:00:00'));
+        $this->flushSession();
+        $this->actingAs($collaborateur)->get($page)->assertOk()
+            ->assertSee('data-message-de-la-tva="a_saisir"', false)
+            ->assertSee('Crédit de TVA de la déclaration de novembre 2026, ou d\'une plus récente, à indiquer')
+            ->assertSee('Il se déclare pour n\'importe quel mois depuis son arrivée (novembre 2026).')
+            ->assertSee('Indiquer le crédit de TVA')
+            ->assertDontSee('Indiquer mon crédit de TVA')
+            ->assertDontSee('votre déclaration');
+    }
+
+    /**
+     * Dans l'espace du cabinet, une lecture hors de sa société : la page
+     * des charges du client, sa page « Graphiques » (le message et la
+     * grille) et le tableau de bord du cabinet ne lisent les déclarations
+     * du crédit de TVA du client que par leurs colonnes nommées, jamais par
+     * « select * », ni l'identifiant des comptes qui les ont saisies ou
+     * vérifiées.
+     */
+    public function test_les_pages_d_un_client_du_cabinet_ne_lisent_le_credit_que_par_ses_colonnes_nommees(): void
+    {
+        $collaborateur = $this->collaborateurDuCabinetLie($this->lyon);
+        $lien = LienCabinet::query()->withoutGlobalScopes()->where('societe_id', $this->societe->getKey())->sole();
+        $cabinet = $collaborateur->societe()->firstOrFail();
+        app(TenantContext::class)->clear();
+        app(DeclarerUnCreditDeTvaAction::class)->handle($this->proprietaire, $this->societe, '2026-11', -125000);
+        app(TenantContext::class)->clear();
+        $requetes = [];
+        DB::listen(function (QueryExecuted $requete) use (&$requetes): void {
+            $requetes[] = $requete->sql;
+        });
+
+        $this->dansLEspaceDuCabinet($cabinet, $collaborateur);
+        Livewire::test(PageDesCharges::class, ['ecran' => PageDesCharges::CABINET, 'lien' => (string) $lien->uuid])->assertSeeHtml('data-credit-de-tva');
+        Livewire::test(GrilleDesGraphiques::class, ['ecran' => 'cabinet', 'lien' => (string) $lien->uuid])->assertSee('Indiquer ou voir le crédit de TVA');
+        Livewire::test(TableauDeBordDuCabinet::class)->assertSee('Crédit de TVA de départ à vérifier');
+        app(TenantContext::class)->clear();
+        $this->flushSession();
+        $this->actingAs($collaborateur)->get(ClientDuCabinetResource::getUrl('graphiques', ['record' => $lien], panel: 'cabinet', tenant: $cabinet))
+            ->assertOk()
+            ->assertSee('data-message-de-la-tva="a_verifier"', false);
+
+        $lectures = array_values(array_filter($requetes, fn (string $sql): bool => str_contains($sql, 'from "credits_de_tva"')));
+        $permises = [
+            'select "id", "uuid", "societe_id", "cadence", "periode", "solde", "saisi_par_nom", "saisi_comme", "saisi_le", "verifie_par_nom", "verifie_comme", "verifie_le", "motif" from "credits_de_tva"',
+            'select "id", "societe_id", "cadence", "periode", "verifie_le" from "credits_de_tva"',
+        ];
+
+        $this->assertNotEmpty($lectures);
+        foreach ($lectures as $sql) {
+            $this->assertTrue(str_starts_with($sql, $permises[0]) || str_starts_with($sql, $permises[1]), "Une lecture du crédit de TVA nomme ses colonnes : {$sql}");
+        }
+    }
+
+    /**
+     * Le bloc du crédit de la page des charges dit son conseil une seule
+     * fois, en un titre et sa phrase : à la société, de faire vérifier le
+     * montant par son expert-comptable ; au comptable, de le vérifier sur
+     * la déclaration de la société.
+     */
+    public function test_le_conseil_du_bloc_ne_se_repete_pas_et_s_adresse_a_qui_le_lit(): void
+    {
+        $this->dansLEspaceDeLaSociete($this->societe, $this->proprietaire);
+        $societe = Livewire::test(PageDesCharges::class, ['ecran' => PageDesCharges::SOCIETE])->html();
+
+        $this->assertSame(1, substr_count($societe, 'Faites vérifier ce montant par votre expert-comptable'));
+        $this->assertStringContainsString('Il figure à la ligne « Crédit de TVA à reporter » de votre déclaration. Une erreur fausse toute la TVA à payer qui suit.', html_entity_decode($societe, ENT_QUOTES));
+
+        $collaborateur = $this->collaborateurDuCabinetLie($this->lyon);
+        $lien = LienCabinet::query()->withoutGlobalScopes()->where('societe_id', $this->societe->getKey())->sole();
+        $this->dansLEspaceDuCabinet($collaborateur->societe()->firstOrFail(), $collaborateur);
+        $duComptable = html_entity_decode(Livewire::test(PageDesCharges::class, ['ecran' => PageDesCharges::CABINET, 'lien' => (string) $lien->uuid])->html(), ENT_QUOTES);
+
+        $this->assertStringContainsString('Vérifiez ce montant sur la déclaration de la société.', $duComptable);
+        $this->assertStringContainsString('Il figure à la ligne « Crédit de TVA à reporter » de sa déclaration.', $duComptable);
+        $this->assertStringNotContainsString('votre expert-comptable', $duComptable);
     }
 
     /**

@@ -94,8 +94,10 @@ final readonly class ContenuDeLEtat
     /**
      * Les phrases grises du report du crédit sous la TVA par mois, comme
      * sous son graphique : au trimestriel, où se lit le résultat de chaque
-     * trimestre ; les remboursements qui n'y sont pas ; sans le report, ce
-     * qui le retire de l'état.
+     * trimestre, et, quand la période de l'état s'arrête au milieu d'un
+     * trimestre (un exercice qui ne finit pas avec un trimestre), que ce
+     * trimestre se lit dans la période suivante ; les remboursements qui
+     * n'y sont pas ; sans le report, ce qui le retire de l'état.
      *
      * @return list<string>
      */
@@ -111,8 +113,14 @@ final readonly class ContenuDeLEtat
             return [TextesDuCreditDeTva::SANS_LE_REPORT];
         }
 
+        $trimestriel = $report->cadence === CadenceDeLaTva::Trimestrielle;
+        $dernier = $this->mois === [] ? null : $this->mois[count($this->mois) - 1];
+        $coupe = $trimestriel && $dernier !== null && $report->deLaPeriodeDu($dernier) !== null && ! $report->fermeSaPeriode($dernier)
+            && $report->cadence->dernierMois($report->cadence->periodeDu($dernier)) > $dernier;
+
         return array_values(array_filter([
-            $report->cadence === CadenceDeLaTva::Trimestrielle ? 'Au trimestriel, la TVA à payer et le crédit à reporter de chaque trimestre se lisent sur son dernier mois, ou sur le mois en cours pour le trimestre en cours.' : null,
+            $trimestriel ? 'Au trimestriel, la TVA à payer et le crédit à reporter de chaque trimestre se lisent sur son dernier mois, ou sur le mois en cours pour le trimestre en cours.' : null,
+            $coupe ? 'Le '.$report->cadence->libelle($report->cadence->periodeDu($dernier)).' se termine après cette période : sa TVA à payer et son crédit à reporter se lisent dans la période suivante.' : null,
             TextesDuCreditDeTva::SANS_LES_REMBOURSEMENTS,
         ]));
     }

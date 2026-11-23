@@ -7,6 +7,7 @@ use App\Domain\Achats\Actions\ValiderFactureAchatAction;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
+use App\Domain\Charges\Actions\DeclarerUnCreditDeTvaAction;
 use App\Domain\Charges\Support\TextesDuCreditDeTva;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
@@ -448,6 +449,38 @@ class SeriesDesGraphiquesTest extends TestCase
 
         $this->assertSame(['2025', '2026'], $serie->etiquettes);
         $this->assertSame([['Chiffre d\'affaires HT (exercice)', [2000, 4000]]], array_map(fn (array $jeu): array => [$jeu['libelle'], $jeu['valeurs']], $serie->jeux));
+    }
+
+    /**
+     * La période de la déclaration qui sert de point de départ (lot
+     * TVA27) : le 15 novembre 2026, le propriétaire indique 50,00 € de
+     * crédit à la déclaration d'octobre. « Voir les chiffres » ne donne pour
+     * octobre ni crédit reporté ni TVA à payer, ceux de sa déclaration, que
+     * PILIQI ne connaît pas, comme la page des charges et son état, et non
+     * les 4,00 € que la chaîne apportait de septembre ; son crédit à
+     * reporter est celui déclaré, que novembre reprend.
+     */
+    public function test_la_periode_declaree_n_a_ni_credit_reporte_ni_tva_a_payer_connus(): void
+    {
+        $magasin = $this->preparer();
+        $this->travelTo(self::aParis('2026-11-15 12:00:00'));
+        app(DeclarerUnCreditDeTvaAction::class)->handle($this->proprietaireDe($magasin), $magasin->societe()->firstOrFail(), '2026-10', -5000);
+        app(TenantContext::class)->clear();
+
+        $serie = $this->series($this->perimetreDuProprietaire($magasin), [Graphique::TvaAPayerParMois])[Graphique::TvaAPayerParMois->value];
+        $valeurs = $this->valeurs($serie);
+        // De décembre 2025 à novembre 2026 : septembre au rang 9, octobre au 10, novembre au 11.
+        $duMois = fn (int $rang): array => [
+            $valeurs['TVA du mois'][$rang],
+            $valeurs['Crédit reporté de la période d\'avant'][$rang],
+            $valeurs['TVA à payer'][$rang],
+            $valeurs['Crédit de TVA à reporter'][$rang],
+        ];
+
+        $this->assertSame([-400, 0, 0, 400], $duMois(9), 'Septembre laisse 4,00 € de crédit à reporter.');
+        $this->assertSame([1400, null, null, 5000], $duMois(10), 'Octobre, déclaré : ni crédit reporté ni TVA à payer connus, 50,00 € de crédit déclaré.');
+        $this->assertSame([0, 5000, 0, 5000], $duMois(11), 'Novembre part du crédit déclaré.');
+        $this->assertSame('octobre 2026, crédit déclaré : '.TextesDuCreditDeTva::euros(5000), $serie->infoBulles[10] ?? null);
     }
 
     /**

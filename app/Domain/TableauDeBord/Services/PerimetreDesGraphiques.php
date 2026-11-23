@@ -7,6 +7,7 @@ use App\Domain\Cabinets\Models\LienCabinet;
 use App\Domain\Cabinets\Services\AccesDesCabinets;
 use App\Domain\Cabinets\Services\ExpertsComptablesDeclares;
 use App\Domain\Calendrier\Calendrier;
+use App\Domain\Charges\Enums\LectureDeLaTva;
 use App\Domain\Charges\Services\DroitsSurLesCharges;
 use App\Domain\TableauDeBord\Enums\EcranDuTableauDeBord;
 use App\Domain\TableauDeBord\Enums\SourceDesGraphiques;
@@ -171,36 +172,41 @@ final class PerimetreDesGraphiques
     }
 
     /**
-     * Ce compte voit-il, dans l'espace de la société, sa TVA avec le report
-     * de son crédit (lot TVA27) : des graphiques qui comptent tous ses
-     * magasins et ses charges de « Toute la société » (voir
-     * Perimetre::reporteLeCreditDeTva()) ? Le message du crédit de TVA ne
-     * dit son montant qu'à lui, au propriétaire et au comptable (voir
-     * MessagesDuCreditDeTva::message()).
+     * Ce que ce compte voit, dans l'espace de la société, de sa TVA (lot
+     * TVA27, voir LectureDeLaTva) : rien sans graphiques, la carte de la
+     * TVA sans le report du crédit, ou sa TVA avec le report, sur des
+     * graphiques qui comptent tous ses magasins et ses charges de « Toute
+     * la société » (voir Perimetre::reporteLeCreditDeTva()). Le message du
+     * crédit de TVA ne dit son montant qu'avec le report, au propriétaire
+     * et au comptable (voir MessagesDuCreditDeTva::message()).
      */
-    public function voitLaTvaReporteeDeLaSociete(User $compte, Societe $societe): bool
+    public function lectureDeLaTvaDeLaSociete(User $compte, Societe $societe): LectureDeLaTva
     {
-        return $this->voitLesGraphiquesDeLaSociete($compte, $societe) && $this->deLaSociete($compte, $societe)->reporteLeCreditDeTva();
+        return LectureDeLaTva::du($this->voitLesGraphiquesDeLaSociete($compte, $societe) ? $this->deLaSociete($compte, $societe) : null);
     }
 
     /**
      * De même, sur la page d'un client lié dans l'espace du cabinet.
      */
-    public function voitLaTvaReporteeDuClient(User $compte, LienCabinet $lien): bool
+    public function lectureDeLaTvaDuClient(User $compte, LienCabinet $lien): LectureDeLaTva
     {
-        return $this->voitLesGraphiquesDuClient($compte, $lien) && $this->duClient($compte, $lien)->reporteLeCreditDeTva();
+        try {
+            return LectureDeLaTva::du($this->duClient($compte, $lien));
+        } catch (AuthorizationException) {
+            return LectureDeLaTva::Aucune;
+        }
     }
 
     /**
      * De même, sur la page « Tableau de bord de la société » de
      * l'expert-comptable déclaré.
      */
-    public function voitLaTvaReporteeDeLExpertComptable(User $compte): bool
+    public function lectureDeLaTvaDeLExpertComptable(User $compte): LectureDeLaTva
     {
         try {
-            return $this->delExpertComptable($compte)->reporteLeCreditDeTva();
+            return LectureDeLaTva::du($this->delExpertComptable($compte));
         } catch (AuthorizationException) {
-            return false;
+            return LectureDeLaTva::Aucune;
         }
     }
 

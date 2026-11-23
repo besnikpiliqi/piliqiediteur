@@ -199,10 +199,15 @@ final class TvaDeLaPeriode
     /**
      * La TVA de ces mois telle que ce périmètre la montre, et, quand il
      * reporte le crédit (voir Perimetre::reporteLeCreditDeTva()), le report
-     * depuis le début de la chaîne jusqu'au plus récent de ces mois qui
-     * n'est pas à venir : les documents lus une seule fois, du premier mois
-     * de la chaîne (ou du premier de ces mois) au dernier de ces mois ; un
-     * mois à venir n'a pas de report. Null pour une société dont la TVA ne
+     * depuis le début de la chaîne jusqu'à la fin de la période qui
+     * contient le plus récent de ces mois, sans les mois à venir : les
+     * documents lus une seule fois, du premier mois de la chaîne (ou du
+     * premier de ces mois) au dernier mois de cette période. Au
+     * trimestriel, le trimestre d'un mois compte ainsi toujours ses trois
+     * mois, ou ceux déjà commencés pour le trimestre en cours, quel que
+     * soit le mois choisi ou la fin de la période affichée : le chiffre d'un
+     * mois ne dépend jamais du filtre (cahier du lot TVA27). Un mois à
+     * venir n'a pas de report. Null pour une société dont la TVA ne
      * s'affiche pas.
      *
      * @param  list<string>  $mois
@@ -220,7 +225,7 @@ final class TvaDeLaPeriode
 
         $cadence = $perimetre->societe->regime_tva?->cadence() ?? throw new LogicException('Le report du crédit se calcule au réel normal.');
         $ceMois = Mois::duJour($perimetre->aujourdhui());
-        $lus = Mois::du(min(CreditsDeTva::premierePeriode($perimetre->societe, $cadence), min($mois)), max($mois));
+        $lus = Mois::du(min(CreditsDeTva::premierePeriode($perimetre->societe, $cadence), min($mois)), $cadence->dernierMois($cadence->periodeDu(max($mois))));
         $montants = $this->desMoisDuPerimetre($perimetre, $lus) ?? [];
         $chaine = array_filter($montants, static fn (string $unMois): bool => $unMois <= $ceMois, ARRAY_FILTER_USE_KEY);
 

@@ -597,13 +597,13 @@ class Magasin extends Model implements HasName
 
     /**
      * Le refus du régime de TVA à choisir, tel que ce compte le lit : pour
-     * qui ouvre les paramètres fiscaux de la société (voir
-     * SocietePolicy::voirLesParametresFiscaux()), de le choisir ; pour tout
-     * autre, ou sans compte, de le demander au propriétaire.
+     * qui modifie les paramètres fiscaux de la société (voir
+     * SocietePolicy::modifierLesParametresFiscaux()), de le choisir ; pour
+     * tout autre, ou sans compte, de le demander au propriétaire.
      */
     public function refusDuRegime(?User $compte): string
     {
-        return $compte !== null && $compte->can('voirLesParametresFiscaux', $this->societe) ? self::REFUS_REGIME_A_CHOISIR : self::REFUS_REGIME_A_DEMANDER;
+        return $compte !== null && $compte->can('modifierLesParametresFiscaux', $this->societe) ? self::REFUS_REGIME_A_CHOISIR : self::REFUS_REGIME_A_DEMANDER;
     }
 
     /**

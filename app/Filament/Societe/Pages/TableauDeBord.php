@@ -8,6 +8,7 @@ use App\Domain\Cabinets\Models\LienCabinet;
 use App\Domain\Cabinets\Services\ExpertsComptablesDeclares;
 use App\Domain\Calendrier\Calendrier;
 use App\Domain\Charges\Actions\VerifierLeSeuilDuTrimestrielAction;
+use App\Domain\Charges\Enums\LectureDeLaTva;
 use App\Domain\Charges\Services\MessagesDuCreditDeTva;
 use App\Domain\Demonstration\Services\CarteDeLaDemonstration;
 use App\Domain\Facturation\Services\FacturesAEncaisserDeLaSociete;
@@ -123,7 +124,8 @@ class TableauDeBord extends Dashboard
      * Les premières étapes de la société, celles de son propriétaire, dans
      * l'ordre : saisir le code du courrier recommandé, qui valide la
      * société ; choisir son régime de TVA, obligatoire avant toute
-     * opération commerciale réelle, puis, au réel normal, dire le crédit
+     * opération commerciale réelle (dans une société en lecture seule,
+     * l'étape le dit sans y mener), puis, au réel normal, dire le crédit
      * de TVA d'une de ses déclarations (voir MessagesDuCreditDeTva, lot
      * TVA27) ; créer son premier magasin, puis, dès le premier magasin,
      * quel que soit son statut, en ajouter un autre (l'étape reste cochée,
@@ -156,14 +158,17 @@ class TableauDeBord extends Dashboard
         $parSonCabinet = $societe->aEteValideeParLInvitationDUnCabinet();
         $magasins = $compte->magasinsDeSaPortee()->count();
         $comptes = MembreResource::getEloquentQuery()->whereKeyNot($compte->getKey())->where('statut', '!=', StatutCompte::Retire->value)->where('role_societe', '<>', RoleSociete::ExpertComptable->value)->count();
+        $choisitLeRegime = $compte->can('modifierLesParametresFiscaux', $societe);
         $magasinsEtEquipe = [
             [
                 'titre' => self::ETAPE_REGIME_DE_TVA,
                 'faite' => $societe->regime_tva !== null,
-                'etat' => $societe->regime_tva === null
-                    ? 'Obligatoire avant la première vente : il dit comment PILIQI calcule votre TVA et à quel rythme vous la déclarez.'
-                    : 'Régime choisi : '.$societe->regime_tva->getLabel().'.',
-                'url' => ParametresFiscauxSociete::canAccess() ? ParametresFiscauxSociete::getUrl() : null,
+                'etat' => match (true) {
+                    $societe->regime_tva !== null => 'Régime choisi : '.$societe->regime_tva->getLabel().'.',
+                    $choisitLeRegime => 'Obligatoire avant la première vente : il dit comment PILIQI calcule votre TVA et à quel rythme vous la déclarez.',
+                    default => 'Pas encore choisi : il ne se choisit pas tant que votre société est en lecture seule.',
+                },
+                'url' => ($societe->regime_tva !== null || $choisitLeRegime) && ParametresFiscauxSociete::canAccess() ? ParametresFiscauxSociete::getUrl() : null,
             ],
             ...app(MessagesDuCreditDeTva::class)->etape($compte, $societe, Charges::canAccess() ? Charges::getUrl().'#credit-de-tva' : null),
             [
@@ -307,9 +312,12 @@ class TableauDeBord extends Dashboard
     /**
      * Le message de la TVA au-dessus des graphiques (lot TVA27, voir
      * MessagesDuCreditDeTva::message()) : le régime à choisir, pour tout
-     * compte ; où en est le crédit de TVA, pour le propriétaire et qui voit
-     * la TVA de toute la société avec son report, le bouton menant au bloc
-     * du crédit de la page des charges.
+     * compte d'une société qui peut encore le choisir ; où en est le
+     * crédit de TVA, avec son montant pour le propriétaire et qui voit la
+     * TVA de toute la société avec son report, sans lui pour
+     * l'administrateur qui ne voit que la carte de la TVA (voir
+     * PerimetreDesGraphiques::lectureDeLaTvaDeLaSociete()), le bouton menant
+     * au bloc du crédit de la page des charges.
      *
      * @return MessageDeLaTva|null
      */
@@ -323,7 +331,7 @@ class TableauDeBord extends Dashboard
             $compte,
             false,
             Charges::canAccess() ? Charges::getUrl().'#credit-de-tva' : null,
-            fn (): bool => app(PerimetreDesGraphiques::class)->voitLaTvaReporteeDeLaSociete($compte, $societe),
+            fn (): LectureDeLaTva => app(PerimetreDesGraphiques::class)->lectureDeLaTvaDeLaSociete($compte, $societe),
         );
     }
 

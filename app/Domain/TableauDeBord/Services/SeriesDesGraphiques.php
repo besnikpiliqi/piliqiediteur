@@ -198,7 +198,11 @@ final class SeriesDesGraphiques
      * reporter et l'estimation. Au trimestriel, le résultat d'un trimestre
      * se lit au dernier de ses mois, ou au mois en cours pour le trimestre
      * en cours (voir TvaReportee::fermeSaPeriode()), que son info-bulle
-     * nomme ; un mois d'avant la chaîne n'a que sa TVA du mois. Les notes
+     * nomme ; un mois d'avant la chaîne n'a que sa TVA du mois. La période
+     * de la déclaration qui sert de point de départ n'a ni crédit reporté
+     * ni TVA à payer connus, celle de sa déclaration, comme sur la page des
+     * charges et dans son état : son crédit à reporter est celui déclaré.
+     * Les notes
      * disent que les remboursements demandés n'y sont pas, et où en est le
      * crédit de la déclaration qui sert d'ancre.
      *
@@ -211,7 +215,7 @@ final class SeriesDesGraphiques
             ['TVA déductible des achats', fn (array $mois): array => array_map(fn (MontantsDeTva $tva): int => $tva->deductibleDesAchats, $this->tvaDesMois($calcul, $ids, $mois)), false, SerieDuGraphique::EUROS, false, false, SerieDuGraphique::TABLEAU],
             ['TVA déductible des charges', fn (array $mois): array => array_map(fn (MontantsDeTva $tva): int => $tva->deductibleDesChargesValidees, $this->tvaDesMois($calcul, $ids, $mois)), false, SerieDuGraphique::EUROS, false, false, SerieDuGraphique::TABLEAU],
             ['TVA du mois', fn (array $mois): array => array_map(fn (MontantsDeTva $tva): int => $tva->reelle(), $this->tvaDesMois($calcul, $ids, $mois)), true, SerieDuGraphique::EUROS, false, true],
-            ['Crédit reporté de la période d\'avant', fn (array $mois): array => $this->parPeriode($reportee, $mois, fn (ReportDeLaPeriode $periode): int => $periode->reelle->creditReporte), false, SerieDuGraphique::EUROS, false, false, SerieDuGraphique::TABLEAU],
+            ['Crédit reporté de la période d\'avant', fn (array $mois): array => $this->parPeriode($reportee, $mois, fn (ReportDeLaPeriode $periode): ?int => $periode->statut === StatutDuReport::Declaree ? null : $periode->reelle->creditReporte), false, SerieDuGraphique::EUROS, false, false, SerieDuGraphique::TABLEAU],
             ['TVA à payer', fn (array $mois): array => $this->parPeriode($reportee, $mois, fn (ReportDeLaPeriode $periode): ?int => $periode->reelle->aPayer)],
             ['Crédit de TVA à reporter', fn (array $mois): array => $this->parPeriode($reportee, $mois, fn (ReportDeLaPeriode $periode): int => $periode->reelle->creditAReporter), false, SerieDuGraphique::EUROS, false, false, SerieDuGraphique::TABLEAU],
             ['Crédit de TVA à reporter (sous le zéro)', fn (array $mois): array => $this->parPeriode($reportee, $mois, fn (ReportDeLaPeriode $periode): int => -$periode->reelle->creditAReporter), false, SerieDuGraphique::EUROS, false, false, SerieDuGraphique::DESSIN],

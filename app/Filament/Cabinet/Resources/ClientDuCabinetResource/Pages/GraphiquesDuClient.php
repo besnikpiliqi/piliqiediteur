@@ -3,6 +3,7 @@
 namespace App\Filament\Cabinet\Resources\ClientDuCabinetResource\Pages;
 
 use App\Domain\Cabinets\Models\LienCabinet;
+use App\Domain\Charges\Enums\LectureDeLaTva;
 use App\Domain\Charges\Services\DroitsSurLesCharges;
 use App\Domain\Charges\Services\MessagesDuCreditDeTva;
 use App\Domain\TableauDeBord\Services\PerimetreDesGraphiques;
@@ -63,9 +64,10 @@ class GraphiquesDuClient extends Page
     /**
      * Le message de la TVA du client, du côté du comptable (lot TVA27, voir
      * MessagesDuCreditDeTva::message()) : son régime à choisir, ou où en
-     * est son crédit de TVA, pour le compte du cabinet qui peut le vérifier
-     * ou voit la TVA de tout le client avec son report ; le bouton mène au
-     * bloc du crédit de la page des charges du client.
+     * est son crédit de TVA, avec son montant pour le compte du cabinet qui
+     * peut le vérifier ou voit la TVA de tout le client avec son report,
+     * sans lui pour celui qui n'en voit que la carte de la TVA ; le bouton
+     * mène au bloc du crédit de la page des charges du client.
      *
      * @return MessageDeLaTva|null
      */
@@ -80,7 +82,7 @@ class GraphiquesDuClient extends Page
             $compte,
             true,
             app(DroitsSurLesCharges::class)->pour($compte, $client) === null ? null : ClientDuCabinetResource::getUrl('charges', ['record' => $lien]).'#credit-de-tva',
-            fn (): bool => app(PerimetreDesGraphiques::class)->voitLaTvaReporteeDuClient($compte, $lien),
+            fn (): LectureDeLaTva => app(PerimetreDesGraphiques::class)->lectureDeLaTvaDuClient($compte, $lien),
         );
     }
 }

@@ -2836,6 +2836,8 @@ return [
     'resources/views/filament/grille-des-graphiques.blade.php' => [
         'lien:Indiquer ou voir le crédit de TVA' => ['lot' => 'NAV-4', 'tests' => [
             'tests/Browser/Parcours/CreditDeTvaTest.php › sous le graphique de la TVA, le propriétaire suit « Indiquer ou voir le crédit de TVA » et modifie son crédit vérifié, qui repasse « à vérifier » par son comptable',
+            'tests/Browser/Parcours/CreditDeTvaTest.php › sous le graphique de la TVA de son client, le collaborateur confié suit « Indiquer ou voir le crédit de TVA » jusqu’au bloc du crédit de la page des charges du client',
+            'tests/Browser/Parcours/CreditDeTvaTest.php › sur « Tableau de bord de la société », l’expert-comptable déclaré suit « Indiquer ou voir le crédit de TVA » jusqu’au bloc du crédit de « Charges de la société »',
         ]],
         'changement:ajouterUnGraphique' => ['lot' => 'NAV-4', 'tests' => [
             'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › après l’ajout d’un graphique, le menu « Ajouter un graphique » revient sur « — Choisir — » sans proposer ce graphique, et rechoisir « — Choisir — » ne fait rien, sans message',

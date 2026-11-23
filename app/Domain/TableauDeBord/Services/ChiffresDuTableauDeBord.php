@@ -74,7 +74,7 @@ final class ChiffresDuTableauDeBord
             $chiffres['achats'] = self::avecSaVariation(self::somme($calcul, $documentsDAchat, $achats, $ceMois, 'ht'), self::somme($calcul, $documentsDAchat, $achats, $ilYAUnAn, 'ht'));
         }
 
-        if ($tva !== [] && $perimetre->montreLaTva()) {
+        if ($perimetre->montreLaCarteDeLaTva()) {
             $chiffres['tva'] = $this->tvaReportee($calcul) ?? self::tva($this->series->tvaDesMois($calcul, $tva, [$ceMois])[$ceMois], $perimetre->laisseLesChargesDeLaSociete($tva));
         }
 

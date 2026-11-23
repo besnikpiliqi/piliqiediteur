@@ -10,6 +10,9 @@ use App\Domain\Cabinets\Models\InvitationCabinet;
 use App\Domain\Cabinets\Models\LienCabinet;
 use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Charges\Models\Charge;
+use App\Domain\Charges\Models\CreditDeTva;
+use App\Domain\Charges\Models\TypeDeChargeDeLaSociete;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
@@ -86,10 +89,12 @@ trait AfficheLeJournalDAudit
         Avoir::class => 'Avoir',
         AvoirFournisseur::class => 'Avoir fournisseur',
         Cabinet::class => 'Vérification du cabinet',
+        Charge::class => 'Charge',
         ChangementFinExercice::class => 'Changement de la date de clôture de l\'exercice',
         ClotureCaisse::class => 'Clôture de caisse',
         ClotureCaissePersonnelle::class => 'Relevé de caisse',
         CodeConfirmation::class => 'Courrier recommandé',
+        CreditDeTva::class => 'Crédit de TVA d\'une déclaration',
         Devis::class => 'Devis',
         EnvoiDocument::class => 'Envoi d\'un document',
         Facture::class => 'Facture ou ticket',
@@ -105,6 +110,7 @@ trait AfficheLeJournalDAudit
         Produit::class => 'Produit',
         Societe::class => 'Société',
         TransmissionPropriete::class => 'Transmission de la propriété',
+        TypeDeChargeDeLaSociete::class => 'Type de charge',
         User::class => 'Compte',
         VerificationSociete::class => 'Vérification de la société',
     ];

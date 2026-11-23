@@ -11,11 +11,13 @@ use App\Domain\Cabinets\Services\TableauDeBordDesClients;
 use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Charges\Enums\EtatDuCreditDeTva;
+use App\Domain\Charges\Enums\LectureDeLaTva;
 use App\Domain\Charges\Enums\ValideePar;
 use App\Domain\Charges\Services\CreditsDeTva;
 use App\Domain\Charges\Services\MessagesDuCreditDeTva;
 use App\Domain\Charges\Services\SeuilDuTrimestriel;
 use App\Domain\Charges\Services\TvaDeLaPeriode;
+use App\Domain\Charges\Support\TextesDuCreditDeTva;
 use App\Domain\Demonstration\Enums\EtatDeLaDemonstration;
 use App\Domain\Demonstration\Jobs\EnvoyerLeLienDeLaDemonstration;
 use App\Domain\Demonstration\Models\Demonstration;
@@ -40,6 +42,7 @@ use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Notifications\AvisDeLEquipe;
 use App\Domain\Tenancy\Services\ChosesAFaireDeLaSociete;
+use App\Domain\Tenancy\Services\ChosesAFaireDuMagasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\ChoseAFaire;
 use App\Integrations\Sirene\FauxRepertoireSirene;
@@ -125,10 +128,10 @@ class SemisCompletTest extends TestCase
      * @var array<string, int>
      */
     private const NOMBRES_DE_LIGNES = [
-        'actions_traitees' => 4745,
-        'actions_traitees_de_la_societe' => 364,
-        'affectations' => 41,
-        'autorisations_affectations' => 558,
+        'actions_traitees' => 4755,
+        'actions_traitees_de_la_societe' => 366,
+        'affectations' => 43,
+        'autorisations_affectations' => 616,
         'autorisations_cabinet' => 41,
         'autorisations_societe' => 7,
         'avoir_allocations' => 121,
@@ -138,13 +141,13 @@ class SemisCompletTest extends TestCase
         'cabinets' => 4,
         'changements_fin_exercice' => 1,
         'charges' => 188,
-        'clients' => 49,
+        'clients' => 55,
         'clients_confies' => 2,
         'clotures_caisse' => 2621,
         'clotures_caisse_personnelles' => 3333,
-        'clotures_caisse_personnelles_factures' => 4011,
-        'clotures_caisse_personnelles_paiements' => 3922,
-        'codes_confirmation' => 26,
+        'clotures_caisse_personnelles_factures' => 4019,
+        'clotures_caisse_personnelles_paiements' => 3930,
+        'codes_confirmation' => 27,
         'comptes_expert_comptable' => 3,
         'consultations_vies' => 5,
         'credits_de_tva' => 6,
@@ -152,64 +155,64 @@ class SemisCompletTest extends TestCase
         'demonstrations' => 15,
         'devis' => 225,
         'ecarts_sirene' => 2,
-        'enregistrements_fiscaux' => 10839,
+        'enregistrements_fiscaux' => 10859,
         'envois_documents' => 13,
         'evenements_transmission_pdp' => 61,
-        'factures' => 4012,
-        'factures_achat' => 181,
-        'fournisseurs' => 12,
-        'identifiants' => 68,
-        'inventaires_ouverture' => 11,
+        'factures' => 4020,
+        'factures_achat' => 182,
+        'fournisseurs' => 13,
+        'identifiants' => 71,
+        'inventaires_ouverture' => 12,
         'invitations_cabinet' => 6,
-        'journal_audit' => 1825,
+        'journal_audit' => 1871,
         'liens_cabinet' => 15,
         'liens_des_devis' => 6,
-        'lignes_achat' => 353,
+        'lignes_achat' => 354,
         'lignes_avoir' => 146,
         'lignes_avoir_fournisseur' => 2,
         'lignes_de_charge' => 187,
         'lignes_devis' => 393,
-        'lignes_facture' => 5992,
-        'lignes_inventaire_ouverture' => 23,
+        'lignes_facture' => 6000,
+        'lignes_inventaire_ouverture' => 25,
         'lignes_recu_paiement' => 160,
-        'magasins' => 22,
+        'magasins' => 23,
         'magasins_cabinet' => 1,
         'mandats_pdp' => 2,
         'messages_vers_la_demonstration' => 26,
-        'mouvements_stock' => 5106,
-        'notifications' => 190,
-        'paiement_allocations' => 3922,
-        'paiements' => 3922,
+        'mouvements_stock' => 5113,
+        'notifications' => 191,
+        'paiement_allocations' => 3930,
+        'paiements' => 3930,
         'paniers_caisse' => 1,
-        'periodes_activite' => 23,
+        'periodes_activite' => 24,
         'pieces_de_charge' => 188,
-        'pieces_fournisseur' => 1,
+        'pieces_fournisseur' => 2,
         'pieces_verification' => 4,
         'postes_reconnus' => 1,
         'preferences_tableau_de_bord' => 4,
         'preuves_operation' => 5,
-        'produits' => 52,
+        'produits' => 55,
         'recus_paiement' => 160,
         'referentiel_autorisations_magasin' => 51,
         'referentiel_autorisations_societe' => 5,
         'reponses_des_devis' => 3,
-        'sequences_documents' => 99,
-        'services' => 13,
-        'sirets_magasins' => 23,
+        'sequences_documents' => 100,
+        'services' => 12,
+        'sirets_magasins' => 24,
         'site_de_la_base' => 1,
-        'societes' => 21,
+        'societes' => 22,
         'taux_avoirs_fournisseur' => 2,
-        'taux_factures_achat' => 238,
+        'taux_factures_achat' => 239,
         'telechargements_documents' => 5,
-        'tetes_journal_audit' => 105,
-        'tetes_registre_fiscal' => 22,
+        'tetes_journal_audit' => 110,
+        'tetes_registre_fiscal' => 23,
         'traces_audit' => 8,
         'traces_evenements' => 2,
         'transmissions_pdp' => 57,
         'transmissions_propriete' => 2,
         'types_de_charge_de_la_societe' => 2,
-        'users' => 68,
-        'verifications_societe' => 566,
+        'users' => 71,
+        'verifications_societe' => 599,
         'visas_detaxe' => 1,
     ];
 
@@ -246,6 +249,7 @@ class SemisCompletTest extends TestCase
         $this->assertLesCasDesGraphiquesEtDesCaisses();
         $this->assertLesCasDeLEcartDesPrixDAchat();
         $this->assertLesCasDuCreditDeTva();
+        $this->assertLesCasDuRegimeDeTva();
         $this->assertLesCasDuReportEtDuSeuil();
         $this->assertLesDatesDeLOperation();
         $this->assertLaListeDesComptesOuvreChaqueCompteActif();
@@ -298,13 +302,16 @@ class SemisCompletTest extends TestCase
      * Le crédit de TVA de départ dans chacun de ses états (lot TVA27, choix
      * K2 ; voir TvaDesSocietes) : Maison Ferrand, −1 250,00 € à vérifier par
      * le cabinet Martin, dont Paul Lefèvre a la ligne au tableau de bord du
-     * cabinet ; l'Épicerie Lemoine, vérifié par le cabinet ; Conseil
-     * Vasseur, saisi par son expert-comptable déclaré, né vérifié, après une
-     * déclaration corrigée avec un motif (les deux valeurs au journal
-     * d'audit) ; le Comptoir des Îles, non vérifié, sans comptable ; le
-     * Studio Lumière, « aucun crédit » ; le Groupe Nord Distribution, sans
-     * réponse (son étape et son « À faire ») ; Fleurs de Saison, arrivée le
-     * dernier jour, en attente de sa première déclaration possible.
+     * cabinet, après −1 200,00 € confirmés par lui puis modifiés par le
+     * propriétaire (les deux soldes au journal d'audit) ; l'Épicerie
+     * Lemoine, vérifié par le cabinet ; Conseil Vasseur, saisi par son
+     * expert-comptable déclaré, né vérifié, après une déclaration corrigée
+     * avec un motif (les deux valeurs au journal d'audit) ; le Comptoir des
+     * Îles, non vérifié, sans comptable ; le Studio Lumière, « aucun
+     * crédit » ; la Boulangerie Duval, suspendue, sans réponse (son étape et
+     * son « À faire ») ; le Groupe Nord Distribution, membre d'un assujetti
+     * unique, sans crédit à indiquer ; Fleurs de Saison, arrivée le dernier
+     * jour, en attente de sa première déclaration possible.
      */
     private function assertLesCasDuCreditDeTva(): void
     {
@@ -321,6 +328,14 @@ class SemisCompletTest extends TestCase
         $etat = fn (Societe $societe): array => [$credits->ancre($societe)?->solde, $credits->ancre($societe) === null ? null : $credits->etat($societe, $credits->ancre($societe))];
 
         $this->assertSame([TvaDesSocietes::CREDIT_DE_DEPART, EtatDuCreditDeTva::AVerifier], $etat($commerce));
+        $this->assertCount(1, $this->entreesDAudit($commerce, ActionAuditee::CreditDeTvaConfirme), 'Paul Lefèvre a confirmé le premier crédit de Maison Ferrand.');
+        $modification = $this->entreesDAudit($commerce, ActionAuditee::CreditDeTvaModifie);
+        $this->assertCount(1, $modification);
+        $this->assertSame(
+            [TvaDesSocietes::CREDIT_D_ABORD_INDIQUE_PAR_FERRAND, true, TvaDesSocietes::CREDIT_DE_DEPART, false],
+            [$modification[0]->anciennes_valeurs['solde'] ?? null, $modification[0]->anciennes_valeurs['verifie'] ?? null, $modification[0]->nouvelles_valeurs['solde'] ?? null, $modification[0]->nouvelles_valeurs['verifie'] ?? null],
+            'Le propriétaire de Maison Ferrand a modifié le crédit que son comptable avait vérifié : il repasse à vérifier.',
+        );
         $this->assertSame([TvaDesSocietes::CREDIT_DE_L_EPICERIE, EtatDuCreditDeTva::Verifie], $etat($client));
         $this->assertSame(ValideePar::Cabinet, $credits->ancre($client)?->verifie_comme);
         $this->assertSame([TvaDesSocietes::CREDIT_SAISI_PAR_L_EXPERT, EtatDuCreditDeTva::Verifie], $etat($services));
@@ -340,19 +355,86 @@ class SemisCompletTest extends TestCase
 
         $proprietaireDuGroupe = $groupe->proprietaire()->firstOrFail();
         $this->dansLEspaceDeLaSociete($groupe, $proprietaireDuGroupe);
-        $this->assertContains('credit_de_tva_a_indiquer', array_map(fn (ChoseAFaire $chose): string => $chose->cle, app(ChosesAFaireDeLaSociete::class)->delaSociete($proprietaireDuGroupe, $groupe)));
+        $this->assertSame([], array_values(array_filter(array_map(fn (ChoseAFaire $chose): string => $chose->cle, app(ChosesAFaireDeLaSociete::class)->delaSociete($proprietaireDuGroupe, $groupe)), fn (string $cle): bool => str_starts_with($cle, 'credit_de_tva'))), 'Le Groupe Nord Distribution, membre d\'un assujetti unique, n\'a aucun crédit de TVA à indiquer.');
+        $this->assertNull(app(MessagesDuCreditDeTva::class)->message($groupe, $proprietaireDuGroupe, false, null, fn (): LectureDeLaTva => LectureDeLaTva::AvecLeReport));
+        app(TenantContext::class)->clear();
+
+        $boulangerie = $parSiren(SocietesDesCas::SIREN_BOULANGERIE);
+        $proprietaireDeLaBoulangerie = $boulangerie->proprietaire()->firstOrFail();
+        $this->assertSame([], $credits->declarations($boulangerie)->all());
+        $this->dansLEspaceDeLaSociete($boulangerie, $proprietaireDeLaBoulangerie);
+        $this->assertContains('credit_de_tva_a_indiquer', array_map(fn (ChoseAFaire $chose): string => $chose->cle, app(ChosesAFaireDeLaSociete::class)->delaSociete($proprietaireDeLaBoulangerie, $boulangerie)), 'La Boulangerie Duval, suspendue, déclare encore : son crédit de TVA attend sa réponse.');
+        $this->assertSame([TextesDuCreditDeTva::TITRE_DE_L_ETAPE], array_column(app(MessagesDuCreditDeTva::class)->etape($proprietaireDeLaBoulangerie, $boulangerie, null), 'titre'));
         app(TenantContext::class)->clear();
 
         $atelier = $parSiren(SocietesDesCas::SIREN_ATELIER);
         $proprietaireDeLAtelier = $atelier->proprietaire()->firstOrFail();
         $this->assertSame(RegimeTva::FranchiseEnBase, $atelier->regime_tva);
         $this->assertNull(app(TvaDeLaPeriode::class)->avecLeReport(app(PerimetreDesGraphiques::class)->deLaSociete($proprietaireDeLAtelier, $atelier), ['2026-10']), 'L\'Atelier Brun, en franchise en base, ne montre aucune TVA, ni son report.');
-        $this->assertNull(app(MessagesDuCreditDeTva::class)->message($atelier, $proprietaireDeLAtelier, false, null, fn (): bool => true), 'En franchise en base, ni message ni crédit de TVA de départ.');
+        $this->assertNull(app(MessagesDuCreditDeTva::class)->message($atelier, $proprietaireDeLAtelier, false, null, fn (): LectureDeLaTva => LectureDeLaTva::AvecLeReport), 'En franchise en base, ni message ni crédit de TVA de départ.');
         $this->assertSame([], $credits->declarations($atelier)->all());
 
         $this->assertSame(RegimeTva::ReelNormalTrimestriel, $fleurs->regime_tva);
-        $this->assertSame('attente', app(MessagesDuCreditDeTva::class)->message($fleurs, $fleurs->proprietaire()->firstOrFail(), false, null, fn (): bool => false)['etat'] ?? null);
-        $this->assertSame('regime_a_choisir', app(MessagesDuCreditDeTva::class)->message($parSiren(SocietesDesCas::SIREN_PIECES), $parSiren(SocietesDesCas::SIREN_PIECES)->proprietaire()->firstOrFail(), false, null, fn (): bool => false)['etat'] ?? null, 'La Fromagerie Morin, qui attend son code, n\'a pas encore choisi son régime de TVA.');
+        $this->assertSame('attente', app(MessagesDuCreditDeTva::class)->message($fleurs, $fleurs->proprietaire()->firstOrFail(), false, null, fn (): LectureDeLaTva => LectureDeLaTva::Aucune)['etat'] ?? null);
+        $this->assertSame('regime_a_choisir', app(MessagesDuCreditDeTva::class)->message($parSiren(SocietesDesCas::SIREN_PIECES), $parSiren(SocietesDesCas::SIREN_PIECES)->proprietaire()->firstOrFail(), false, null, fn (): LectureDeLaTva => LectureDeLaTva::Aucune)['etat'] ?? null, 'La Fromagerie Morin, qui attend son code, n\'a pas encore choisi son régime de TVA.');
+    }
+
+    /**
+     * Le régime de TVA à choisir (lot TVA27, voir TvaDesSocietes et
+     * SocietesDesCas) : la Cave des Deux Rives, validée, active, son
+     * magasin confirmé et son catalogue ouvert, sans régime : chaque vente
+     * est refusée, avec le refus de chaque rôle (au propriétaire de le
+     * choisir, à l'administratrice qui ne règle pas la fiscalité et au
+     * vendeur de le demander) ; l'« À faire » de la société et celui du
+     * magasin le disent, à faire pour le propriétaire, à surveiller pour
+     * les autres. La Maroquinerie Delmas, révoquée sans avoir choisi son
+     * régime, en lecture seule, ne le demande plus : ni ligne de l'« À
+     * faire », ni message.
+     */
+    private function assertLesCasDuRegimeDeTva(): void
+    {
+        app(TenantContext::class)->clear();
+        $cave = Societe::query()->where('siren', SocietesDesCas::SIREN_SANS_REGIME)->sole();
+        $magasin = Magasin::query()->where('societe_id', $cave->getKey())->sole();
+        $comptes = $cave->membres()->get()->keyBy('name');
+        $proprietaire = $cave->proprietaire()->firstOrFail();
+        $lucie = $comptes['Lucie Marchand'];
+        $pierre = $comptes['Pierre Lemaire'];
+
+        $this->assertSame([null, true, false], [$cave->regime_tva, $cave->estValidee(), $cave->estEnLectureSeule()]);
+        $this->assertNotNull($magasin->etablissement_verifie_le, 'Le magasin de la Cave des Deux Rives est confirmé par le répertoire Sirene.');
+        $this->assertSame(0, DB::table('factures')->where('magasin_id', $magasin->getKey())->count());
+        $this->assertSame(2, DB::table('produits')->where('magasin_id', $magasin->getKey())->count(), 'Son catalogue est ouvert : l\'inventaire d\'ouverture est validé.');
+        $this->assertSame(
+            [Magasin::REFUS_REGIME_A_CHOISIR, Magasin::REFUS_REGIME_A_DEMANDER, Magasin::REFUS_REGIME_A_DEMANDER],
+            [$magasin->refusDeVente($proprietaire), $magasin->refusDeVente($lucie), $magasin->refusDeVente($pierre)],
+        );
+
+        $regimeDeLaSociete = function (User $compte) use ($cave): ?ChoseAFaire {
+            $this->dansLEspaceDeLaSociete($cave, $compte);
+            $chose = collect(app(ChosesAFaireDeLaSociete::class)->delaSociete($compte, $cave))->firstWhere('cle', 'regime_de_tva');
+            app(TenantContext::class)->clear();
+
+            return $chose;
+        };
+        $regimeDuMagasin = function (User $compte) use ($magasin): ?ChoseAFaire {
+            $this->dansLeMagasin($magasin->fresh(), $compte);
+            $choses = ChosesAFaireDuMagasin::pour($compte, $magasin->fresh());
+            app(TenantContext::class)->clear();
+
+            return collect([...$choses['a_faire'], ...$choses['a_surveiller']])->firstWhere('cle', 'regime_de_tva');
+        };
+
+        $this->assertSame(['Choisissez le régime de TVA de la société.', false], [$regimeDeLaSociete($proprietaire)?->phrase, $regimeDeLaSociete($proprietaire)?->aSurveiller]);
+        $this->assertSame([Magasin::REFUS_REGIME_A_DEMANDER, true], [$regimeDeLaSociete($lucie)?->phrase, $regimeDeLaSociete($lucie)?->aSurveiller]);
+        $this->assertSame([Magasin::REFUS_REGIME_A_CHOISIR, false], [$regimeDuMagasin($proprietaire)?->phrase, $regimeDuMagasin($proprietaire)?->aSurveiller]);
+        $this->assertSame([Magasin::REFUS_REGIME_A_DEMANDER, true], [$regimeDuMagasin($pierre)?->phrase, $regimeDuMagasin($pierre)?->aSurveiller]);
+
+        $maroquinerie = Societe::query()->where('siren', SocietesDesCas::SIREN_REVOQUEE)->sole();
+        $proprietaireDeLaMaroquinerie = $maroquinerie->proprietaire()->firstOrFail();
+        $this->assertSame([null, true], [$maroquinerie->regime_tva, $maroquinerie->estEnLectureSeule()]);
+        $this->assertNull($regimeDeLaSociete($proprietaireDeLaMaroquinerie), 'La Maroquinerie Delmas, révoquée, ne demande plus son régime de TVA.');
+        $this->assertNull(app(MessagesDuCreditDeTva::class)->message($maroquinerie, $proprietaireDeLaMaroquinerie, false, null, fn (): LectureDeLaTva => LectureDeLaTva::AvecLeReport));
     }
 
     /**
@@ -387,6 +469,17 @@ class SemisCompletTest extends TestCase
         $epicerie = $report($client, ['2026-04', '2026-07']);
         $this->assertSame(80000, $epicerie?->deLaPeriodeDu('2026-04')?->reelle->creditAReporter);
         $this->assertSame(80000, $epicerie?->deLaPeriodeDu('2026-07')?->reelle->creditReporte);
+        $resultat = fn (string $mois): array => [
+            $report($client, [$mois])?->deLaPeriodeDu($mois)?->reelle->tva,
+            $report($client, [$mois])?->deLaPeriodeDu($mois)?->reelle->creditReporte,
+            $report($client, [$mois])?->deLaPeriodeDu($mois)?->reelle->aPayer,
+            $report($client, [$mois])?->deLaPeriodeDu($mois)?->reelle->creditAReporter,
+        ];
+        foreach (['2026-04' => ['2026-05', '2026-06'], '2026-07' => ['2026-08', '2026-09']] as $premierMois => $autresMois) {
+            foreach ($autresMois as $mois) {
+                $this->assertSame($resultat($premierMois), $resultat($mois), "Le trimestre de l'Épicerie Lemoine vu depuis {$mois} est celui vu depuis {$premierMois}.");
+            }
+        }
 
         $seuil = app(SeuilDuTrimestriel::class);
         $services = $parSiren(SemisComplet::SIREN_SERVICES);

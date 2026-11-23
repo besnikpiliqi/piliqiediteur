@@ -6,6 +6,7 @@ use App\Domain\Authorization\AutorisationsSociete;
 use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Charges\Support\TextesDuCreditDeTva;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CreerDevisAction;
 use App\Domain\Facturation\Actions\CreerFactureAction;
@@ -175,6 +176,46 @@ class RegimeDeTvaObligatoireTest extends TestCase
         DB::table('societes')->where('id', $magasin->societe_id)->update(['regime_tva' => RegimeTva::ReelNormalMensuel->value]);
         $this->assertNull($this->choseDeLaSociete($proprietaire, $magasin));
         $this->assertNull($this->choseDuMagasin($vendeur, $magasin));
+    }
+
+    /**
+     * Une société en lecture seule ne choisit plus son régime : sans régime,
+     * révoquée, son propriétaire ne lit ni la ligne rouge de son « À
+     * faire », ni celle du magasin, ni le message du tableau de bord, ni un
+     * lien vers les paramètres fiscaux dans l'étape, qui dit seulement que
+     * le régime ne se choisit pas en lecture seule ; la vente reste refusée
+     * pour la lecture seule. De même, une société révoquée au réel normal
+     * ne demande plus son crédit de TVA : ni message, ni étape, ni ligne
+     * de l'« À faire ».
+     */
+    public function test_une_societe_en_lecture_seule_ne_demande_ni_le_regime_ni_le_credit(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Lyon', 'regime_tva' => null]);
+        $proprietaire = $this->proprietaireDe($magasin);
+        $this->revoquerLaSociete($magasin->societe()->firstOrFail());
+        $societe = $magasin->societe()->firstOrFail();
+
+        $this->assertTrue($societe->estEnLectureSeule());
+        $this->assertNull($this->choseDeLaSociete($proprietaire, $magasin));
+        $this->assertNull($this->choseDuMagasin($proprietaire, $magasin));
+        $this->assertSame($magasin->fresh()->refusEnLectureSeule(), $magasin->fresh()->refusDeVente($proprietaire));
+
+        $this->dansLEspaceDeLaSociete($societe, $proprietaire);
+        $tableau = Livewire::test(TableauDeBord::class)->assertDontSeeHtml('data-message-de-la-tva');
+        $etapes = $tableau->instance()->etapes();
+        $regime = $etapes[array_search(TableauDeBord::ETAPE_REGIME_DE_TVA, array_column($etapes, 'titre'), true)];
+        $this->assertSame([false, 'Pas encore choisi : il ne se choisit pas tant que votre société est en lecture seule.', null], [$regime['faite'], $regime['etat'], $regime['url']]);
+
+        $auReel = $this->ouvrirUneSociete(['nom' => 'Annecy']);
+        $proprietaireAuReel = $this->proprietaireDe($auReel);
+        $this->travelTo(self::aParis('2026-12-15 10:00:00'));
+        $this->revoquerLaSociete($auReel->societe()->firstOrFail());
+        $revoquee = $auReel->societe()->firstOrFail();
+        $this->dansLEspaceDeLaSociete($revoquee, $proprietaireAuReel);
+        $etapes = Livewire::test(TableauDeBord::class)->assertDontSeeHtml('data-message-de-la-tva')->instance()->etapes();
+
+        $this->assertNotContains(TextesDuCreditDeTva::TITRE_DE_L_ETAPE, array_column($etapes, 'titre'));
+        $this->assertSame([], array_values(array_filter(app(ChosesAFaireDeLaSociete::class)->delaSociete($proprietaireAuReel, $revoquee), fn (ChoseAFaire $chose): bool => str_starts_with($chose->cle, 'credit_de_tva'))));
     }
 
     /**

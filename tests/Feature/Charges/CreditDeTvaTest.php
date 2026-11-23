@@ -7,10 +7,12 @@ use App\Domain\Charges\Actions\CorrigerUnCreditDeTvaAction;
 use App\Domain\Charges\Actions\DeclarerUnCreditDeTvaAction;
 use App\Domain\Charges\Actions\ModifierUnCreditDeTvaAction;
 use App\Domain\Charges\Enums\EtatDuCreditDeTva;
+use App\Domain\Charges\Enums\LectureDeLaTva;
 use App\Domain\Charges\Enums\ValideePar;
 use App\Domain\Charges\Models\CreditDeTva;
 use App\Domain\Charges\Services\CreditsDeTva;
 use App\Domain\Charges\Services\GestesSurLeCreditDeTva;
+use App\Domain\Charges\Services\MessagesDuCreditDeTva;
 use App\Domain\Charges\Support\GardesDesCreditsDeTva;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\CadenceDeLaTva;
@@ -267,6 +269,36 @@ class CreditDeTvaTest extends TestCase
         $this->revoquerLaSociete($this->societe->fresh());
         $this->assertThrows(fn () => $this->declarer($this->proprietaire, '2026-11', -1000), LogicException::class, GestesSurLeCreditDeTva::REFUS_SOCIETE);
         $this->assertSame(0, CreditDeTva::query()->withoutGlobalScope(SocieteScope::class)->count());
+    }
+
+    /**
+     * Une société membre d'un assujetti unique (art. 256 C du CGI) ne
+     * dépose pas sa propre déclaration de TVA : le représentant du groupe
+     * déclare pour elle, avec le crédit du groupe (décision de Claude,
+     * D76). PILIQI ne lui demande donc aucun crédit de départ (ni message,
+     * ni étape, ni ligne de l'« À faire »), refuse de le déclarer avec un
+     * message qui le dit, et la base le refuse aussi.
+     */
+    public function test_une_societe_membre_d_un_assujetti_unique_n_a_pas_de_credit_de_tva(): void
+    {
+        DB::table('societes')->where('id', $this->societe->id)->update(['membre_assujetti_unique' => true]);
+        $membre = $this->societe->fresh();
+        $messages = app(MessagesDuCreditDeTva::class);
+
+        $this->assertFalse(CreditsDeTva::aLieuDansLa($membre));
+        $this->assertNull($messages->message($membre, $this->proprietaire, false, '#credit-de-tva', fn (): LectureDeLaTva => LectureDeLaTva::AvecLeReport));
+        $this->assertSame([], $messages->etape($this->proprietaire, $membre, '#credit-de-tva'));
+        $this->assertSame([], $messages->chosesAFaire($this->proprietaire, $membre, '#credit-de-tva'));
+        $this->assertThrows(fn () => $this->declarer($this->proprietaire, '2026-11', -125000), LogicException::class, GestesSurLeCreditDeTva::REFUS_ASSUJETTI_UNIQUE);
+
+        DB::table('societes')->where('id', $this->societe->id)->update(['membre_assujetti_unique' => false]);
+        $credit = $this->declarer($this->proprietaire, '2026-11', -125000);
+        $ligne = (array) DB::table('credits_de_tva')->where('id', $credit->id)->first();
+        unset($ligne['id']);
+        DB::table('societes')->where('id', $this->societe->id)->update(['membre_assujetti_unique' => true]);
+
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('credits_de_tva')->insert([...$ligne, 'uuid' => (string) Str::uuid(), 'periode' => '2026-12'])), QueryException::class, GardesDesCreditsDeTva::REFUS_SOCIETE);
+        $this->assertSame(1, CreditDeTva::query()->withoutGlobalScope(SocieteScope::class)->count());
     }
 
     /**

@@ -402,12 +402,13 @@ class GrilleDesGraphiques extends Widget
      * (voir CreditsDeTva::peutDeclarer()) : le propriétaire dans l'espace
      * de la société, son comptable sur la page du client dans l'espace du
      * cabinet ou sur la page de l'expert-comptable déclaré ; jamais dans le
-     * panneau d'un magasin, ni quand la TVA ne reporte pas le crédit.
+     * panneau d'un magasin, ni quand la TVA ne reporte pas le crédit. Le
+     * périmètre qui reporte le crédit compte les charges : son accès aux
+     * charges dit déjà, sans relire la base, si le compte est le comptable
+     * de la société (voir DroitsSurLesCharges::pourLesGraphiques()).
      */
     private function lienDuCredit(Perimetre $perimetre): ?string
     {
-        // Le périmètre qui reporte le crédit compte les charges : son accès
-        // aux charges dit déjà si le compte est le comptable de la société.
         $peutDeclarer = app(CreditsDeTva::class)->estLeProprietaire(CompteConnecte::exiger(), $perimetre->societe) || ($perimetre->charges?->estComptable() ?? false);
 
         if (! $perimetre->reporteLeCreditDeTva() || ! $peutDeclarer) {

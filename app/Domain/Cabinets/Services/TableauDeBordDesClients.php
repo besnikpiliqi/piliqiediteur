@@ -31,7 +31,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * ses charges à valider ; et si le crédit de TVA de départ qu'il a
  * indiqué attend la vérification du cabinet (lot TVA27, voir
  * CreditsDeTva::aVerifierParClient(), qui lit son type d'activité, son
- * régime de TVA et sa date d'arrivée dans PILIQI) ; aucun nom de client
+ * régime de TVA, s'il est membre d'un assujetti unique et sa date
+ * d'arrivée dans PILIQI) ; aucun nom de client
  * final, aucun numéro de document. Chaque requête
  * filtre explicitement par les clients, les magasins ou les liens, et ne
  * lit que les colonnes nommées ; les restants dus se calculent en
@@ -54,7 +55,7 @@ final class TableauDeBordDesClients
         }
 
         $clients = Societe::query()->whereKey($liens->pluck('societe_id')->all())
-            ->get(['id', 'uuid', 'siren', 'raison_sociale', 'siege_ville', 'mois_fin_exercice', 'statut', 'validee_le', 'close_le', 'type_activite', 'regime_tva', 'created_at'])
+            ->get(['id', 'uuid', 'siren', 'raison_sociale', 'siege_ville', 'mois_fin_exercice', 'statut', 'validee_le', 'close_le', 'type_activite', 'regime_tva', 'membre_assujetti_unique', 'created_at'])
             ->keyBy('id');
         $magasins = Magasin::query()->whereIn('societe_id', $clients->keys()->all())->whereKey($this->acces->idsDesMagasinsOuverts($compte))->orderBy('id')
             ->get(['id', 'societe_id', 'statut', 'territoire']);

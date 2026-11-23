@@ -389,19 +389,22 @@ final class ChosesAFaireDuMagasin
      * Le régime de TVA de la société n'est pas encore choisi (lot TVA27,
      * voir Magasin::refusDeVente()) : aucun magasin ne vend, et chaque
      * compte du magasin le lit ici, en rouge, avec la raison, puisque les
-     * gestes de vente ne s'y montrent plus. À faire pour qui règle les
+     * gestes de vente ne s'y montrent plus. À faire pour qui modifie les
      * paramètres fiscaux de la société (le propriétaire, un administrateur
      * autorisé), qui y mène ; à surveiller pour les autres, qui le
-     * demandent au propriétaire (voir Magasin::refusDuRegime()).
+     * demandent au propriétaire (voir Magasin::refusDuRegime()). Rien dans
+     * un magasin en lecture seule (fermé, suspendu, ou d'une société en
+     * lecture seule) : il ne vend plus, pour une autre raison, que son
+     * refus dit déjà, et le régime ne s'y demande pas.
      */
     private function regimeDeTvaAChoisir(): ?ChoseAFaire
     {
-        if (! $this->magasin->attendLeRegimeDeTva()) {
+        if (! $this->magasin->attendLeRegimeDeTva() || $this->magasin->refusEnLectureSeule() !== null) {
             return null;
         }
 
         $societe = $this->magasin->societe;
-        $regle = $this->compte->can('voirLesParametresFiscaux', $societe);
+        $regle = $this->compte->can('modifierLesParametresFiscaux', $societe);
 
         return new ChoseAFaire(
             cle: 'regime_de_tva',

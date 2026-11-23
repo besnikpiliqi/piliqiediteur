@@ -39,8 +39,9 @@ use LogicException;
  * - une société révoquée ou close ne fait plus que consulter son crédit ;
  *   suspendue ou résiliée, elle le déclare encore, ses déclarations de TVA
  *   continuant jusqu'au bout (comme ses charges, décision de Claude, D76) ;
- *   hors du réel normal (régime à choisir, franchise en base), rien ne se
- *   déclare ni ne se change ;
+ *   hors du réel normal (régime à choisir, franchise en base), ou membre
+ *   d'un assujetti unique, dont le groupe déclare la TVA (voir
+ *   CreditsDeTva::aLieuDansLa()), rien ne se déclare ni ne se change ;
  * - chaque geste porte son jeton de demande répétée (voir
  *   ActionsUniques::executerDansLaSociete()) et s'inscrit au journal
  *   d'audit de la société, catégorie « opérations », avec les anciennes et
@@ -55,6 +56,8 @@ final class GestesSurLeCreditDeTva
     public const CREDIT_INTROUVABLE = 'Ce crédit de TVA n\'existe pas, ou plus.';
 
     public const REFUS_REGIME = 'Le crédit de TVA ne se déclare qu\'au réel normal : choisissez d\'abord le régime de TVA de la société. En franchise en base, il n\'y a ni TVA à payer ni crédit.';
+
+    public const REFUS_ASSUJETTI_UNIQUE = 'Une société membre d\'un assujetti unique ne déclare pas elle-même sa TVA : le représentant du groupe la déclare, avec le crédit de TVA du groupe.';
 
     public function __construct(
         private readonly ActionsUniques $actionsUniques,
@@ -94,6 +97,10 @@ final class GestesSurLeCreditDeTva
 
                 if (GestesSurLesCharges::touchePlusASesCharges($relue)) {
                     throw new LogicException(self::REFUS_SOCIETE);
+                }
+
+                if ($relue->membre_assujetti_unique) {
+                    throw new LogicException(self::REFUS_ASSUJETTI_UNIQUE);
                 }
 
                 if (! CreditsDeTva::aLieuDansLa($relue)) {

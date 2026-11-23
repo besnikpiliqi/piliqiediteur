@@ -52,6 +52,22 @@ final class TextesDuCreditDeTva
     }
 
     /**
+     * Le conseil du bloc du crédit de la page des charges (décision de
+     * l'éditeur du 15/11/2026, maquette « Message TVA avant PILIQI »), en
+     * un titre et sa phrase, sans rien répéter : à la société, de faire
+     * vérifier le montant par son expert-comptable ; à son comptable, de le
+     * vérifier sur la déclaration de la société.
+     *
+     * @return array{titre: string, texte: string}
+     */
+    public static function conseilDuBloc(bool $pourLeComptable): array
+    {
+        return $pourLeComptable
+            ? ['titre' => 'Vérifiez ce montant sur la déclaration de la société.', 'texte' => 'Il figure à la ligne « Crédit de TVA à reporter » de sa déclaration. Une erreur fausse toute la TVA à payer qui suit.']
+            : ['titre' => 'Faites vérifier ce montant par votre expert-comptable.', 'texte' => 'Il figure à la ligne « Crédit de TVA à reporter » de votre déclaration. Une erreur fausse toute la TVA à payer qui suit.'];
+    }
+
+    /**
      * L'état d'une déclaration, comme le lit la société ou son comptable.
      */
     public static function etat(EtatDuCreditDeTva $etat, bool $pourLeComptable): string

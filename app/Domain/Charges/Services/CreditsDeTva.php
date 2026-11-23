@@ -56,6 +56,15 @@ final class CreditsDeTva
      */
     public const CONSEIL = 'Faites vérifier ce montant par votre expert-comptable : il figure à la ligne « Crédit de TVA à reporter » de votre déclaration. Une erreur fausse toute la TVA à payer qui suit.';
 
+    /**
+     * Les colonnes qu'une déclaration montre et que ses gestes demandent
+     * (voir declarations() et ancre()), lues même hors de la société
+     * courante : jamais l'identifiant des comptes qui l'ont saisie ou
+     * vérifiée, dont seul le nom figé se montre, ni ses horodatages
+     * techniques.
+     */
+    private const COLONNES = ['id', 'uuid', 'societe_id', 'cadence', 'periode', 'solde', 'saisi_par_nom', 'saisi_comme', 'saisi_le', 'verifie_par_nom', 'verifie_comme', 'verifie_le', 'motif'];
+
     public function __construct(
         private readonly DroitsSurLesCharges $droits,
         private readonly AccesDesCabinets $cabinets,
@@ -118,7 +127,8 @@ final class CreditsDeTva
 
     /**
      * Les déclarations de cette société, la plus récente période d'abord,
-     * toutes cadences confondues.
+     * toutes cadences confondues, limitées aux colonnes nommées (voir
+     * COLONNES).
      *
      * @return Collection<int, CreditDeTva>
      */
@@ -128,14 +138,15 @@ final class CreditsDeTva
             ->where('societe_id', $societe->getKey())
             ->orderByDesc('periode')
             ->orderByDesc('id')
-            ->get();
+            ->get(self::COLONNES);
     }
 
     /**
      * La déclaration qui sert d'ancre au report du crédit : celle de la
      * cadence du régime actuel de la société dont la période est la plus
-     * récente, parmi celles de sa première période ou d'une suivante ;
-     * null sans déclaration, ou hors du réel normal.
+     * récente, parmi celles de sa première période ou d'une suivante,
+     * limitée aux colonnes nommées (voir COLONNES) ; null sans
+     * déclaration, ou hors du réel normal.
      */
     public function ancre(Societe $societe): ?CreditDeTva
     {
@@ -150,7 +161,7 @@ final class CreditsDeTva
             ->where('cadence', $cadence->value)
             ->where('periode', '>=', self::premierePeriode($societe, $cadence))
             ->orderByDesc('periode')
-            ->first();
+            ->first(self::COLONNES);
     }
 
     /**
@@ -170,11 +181,17 @@ final class CreditsDeTva
     /**
      * Le crédit de TVA a-t-il lieu d'être dans cette société : une société
      * qui a des magasins (jamais un cabinet), au réel normal, mensuel ou
-     * trimestriel ?
+     * trimestriel, qui dépose elle-même ses déclarations de TVA ? Une
+     * société membre d'un assujetti unique (art. 256 C du CGI) n'en dépose
+     * pas : le représentant de l'assujetti unique déclare pour tout le
+     * groupe, et le crédit de TVA est celui du groupe, jamais d'un membre ;
+     * PILIQI ne lui demande donc aucun crédit de départ (décision de
+     * Claude, D76, écrite dans l'onglet « À faire vérifier par un
+     * professionnel »), comme il lui refuse déjà toute opération réelle.
      */
     public static function aLieuDansLa(Societe $societe): bool
     {
-        return ! $societe->estUnCabinet() && $societe->type_activite->aDesMagasins() && $societe->regime_tva?->cadence() !== null;
+        return ! $societe->estUnCabinet() && $societe->type_activite->aDesMagasins() && ! $societe->membre_assujetti_unique && $societe->regime_tva?->cadence() !== null;
     }
 
     /**
@@ -212,9 +229,10 @@ final class CreditsDeTva
     /**
      * Les clients de ce compte d'un cabinet dont l'ancre attend sa
      * vérification, qu'il peut vérifier : ceux qui lui accordent « Charges
-     * : voir, ajouter, saisir et valider », au réel normal, dont la
-     * déclaration la plus récente n'est pas vérifiée. Une lecture hors de
-     * la société courante, filtrée par ces clients.
+     * : voir, ajouter, saisir et valider », au réel normal, qui touchent
+     * encore à leurs charges (ni révoqués ni clos), dont la déclaration la
+     * plus récente n'est pas vérifiée. Une lecture hors de la société
+     * courante, filtrée par ces clients, limitée aux colonnes nommées.
      *
      * @param  Collection<int, Societe>  $clients  les clients que le cabinet ouvre au compte
      * @return list<int> leurs identifiants
@@ -222,7 +240,7 @@ final class CreditsDeTva
     public function aVerifierParClient(User $compte, Collection $clients): array
     {
         $parClient = $this->cabinets->autorisationsParClient($compte);
-        $accordes = $clients->filter(fn (Societe $client): bool => self::aLieuDansLa($client) && in_array(PermissionRegistry::CHARGES_VALIDER, $parClient[CleDuModele::de($client)] ?? [], true));
+        $accordes = $clients->filter(fn (Societe $client): bool => self::aLieuDansLa($client) && ! GestesSurLesCharges::touchePlusASesCharges($client) && in_array(PermissionRegistry::CHARGES_VALIDER, $parClient[CleDuModele::de($client)] ?? [], true));
 
         if ($accordes->isEmpty()) {
             return [];

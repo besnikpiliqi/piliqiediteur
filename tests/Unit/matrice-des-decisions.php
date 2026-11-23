@@ -3212,13 +3212,15 @@ return [
         ],
         'tva.regime-obligatoire' => [
             'puce' => 'Société et établissements',
-            'regle' => 'Tant que le régime de TVA n\'est pas choisi, PILIQI refuse toute opération commerciale réelle (ticket, facture, avoir, encaissement, devis numéroté), la base aussi, avec un message selon le rôle ; l\'« À faire » de la société et de chaque magasin et la liste d\'étapes du propriétaire le demandent ; une fois choisi, il ne redevient jamais vide (décision de Claude, D76).',
+            'regle' => 'Tant que le régime de TVA n\'est pas choisi, PILIQI refuse toute opération commerciale réelle (ticket, facture, avoir, encaissement, devis numéroté), la base aussi, avec un message selon le rôle ; l\'« À faire » de la société et de chaque magasin et la liste d\'étapes du propriétaire le demandent, jamais dans une société en lecture seule ; une fois choisi, il ne redevient jamais vide (décision de Claude, D76).',
             'tests' => [
                 'tests/Feature/Societe/RegimeDeTvaObligatoireTest.php::test_sans_regime_chaque_operation_commerciale_reelle_est_refusee',
                 'tests/Feature/Societe/RegimeDeTvaObligatoireTest.php::test_le_refus_dit_de_choisir_le_regime_a_qui_le_regle_et_de_le_demander_aux_autres',
                 'tests/Feature/Societe/RegimeDeTvaObligatoireTest.php::test_la_base_refuse_une_vente_un_encaissement_ou_un_devis_numerote_sans_regime',
                 'tests/Feature/Societe/RegimeDeTvaObligatoireTest.php::test_l_a_faire_de_la_societe_et_du_magasin_demandent_le_regime',
                 'tests/Feature/Societe/RegimeDeTvaObligatoireTest.php::test_la_liste_d_etapes_demande_le_regime_avant_le_premier_magasin',
+                'tests/Feature/Societe/RegimeDeTvaObligatoireTest.php::test_une_societe_en_lecture_seule_ne_demande_ni_le_regime_ni_le_credit',
+                'tests/Feature/SemisCompletTest.php::test_le_semis_complet_remplit_toute_la_base_et_tous_les_cas',
             ],
         ],
         'tva.seuil-du-trimestriel' => [
@@ -3235,7 +3237,7 @@ return [
         ],
         'charges.report-du-credit-de-tva' => [
             'puce' => 'Charges et TVA',
-            'regle' => 'Au réel normal, pour chaque période (le mois, ou le trimestre civil, ses trois mois additionnés), la TVA de la période moins le crédit reporté de la période d\'avant est la TVA à payer, ou le crédit à reporter ; la réelle et l\'estimation ont chacune leur chaîne, en centimes ; la chaîne part de la période de l\'arrivée de la société, quelle que soit la période affichée, et ne se montre que sur une TVA qui compte toute la société ; les remboursements demandés n\'y sont pas.',
+            'regle' => 'Au réel normal, pour chaque période (le mois, ou le trimestre civil, ses trois mois additionnés), la TVA de la période moins le crédit reporté de la période d\'avant est la TVA à payer, ou le crédit à reporter ; la réelle et l\'estimation ont chacune leur chaîne, en centimes ; la chaîne part de la période de l\'arrivée de la société, quelle que soit la période affichée, et ne se montre que sur une TVA qui compte toute la société ; au trimestriel, le trimestre d\'un mois compte toujours ses trois mois, quel que soit le mois choisi ou la fin de la période affichée ; la période déclarée qui sert de point de départ n\'a ni crédit reporté ni TVA à payer connus ; les remboursements demandés n\'y sont pas.',
             'tests' => [
                 'tests/Unit/ReportDuCreditDeTvaTest.php::test_la_chaine_mensuelle_de_la_maquette',
                 'tests/Unit/ReportDuCreditDeTvaTest.php::test_un_credit_de_depart_de_1_250_euros_entre_dans_la_chaine_a_la_periode_qui_suit_sa_declaration',
@@ -3244,17 +3246,21 @@ return [
                 'tests/Unit/ReportDuCreditDeTvaTest.php::test_l_estimation_a_sa_propre_chaine',
                 'tests/Unit/ReportDuCreditDeTvaTest.php::test_les_charges_a_valider_de_la_periode_declaree_ne_changent_pas_son_resultat',
                 'tests/Feature/Charges/EtatDesChargesTest.php::test_l_etat_porte_le_report_du_credit_de_tva_comme_la_page',
+                'tests/Feature/Charges/EtatDesChargesTest.php::test_au_trimestriel_le_trimestre_est_le_meme_quel_que_soit_le_mois_choisi',
+                'tests/Feature/Charges/EtatDesChargesTest.php::test_l_etat_d_un_exercice_qui_finit_en_aout_ne_coupe_pas_le_trimestre',
+                'tests/Feature/TableauDeBord/SeriesDesGraphiquesTest.php::test_la_periode_declaree_n_a_ni_credit_reporte_ni_tva_a_payer_connus',
                 'tests/Unit/ReportDuCreditDeTvaTest.php::test_une_declaration_d_avant_l_arrivee_ne_sert_pas_de_point_de_depart',
                 'tests/Feature/TableauDeBord/SeriesDesGraphiquesTest.php::test_chaque_graphique_compte_les_montants_enregistres_des_documents_emis',
                 'tests/Feature/TableauDeBord/SeriesDesGraphiquesTest.php::test_les_chiffres_cles_sont_ceux_du_mois_en_cours',
                 'tests/Feature/Charges/TvaDeLaPeriodeTest.php::test_le_tableau_de_bord_montre_la_tva_reelle_et_son_estimation_pour_qui_voit_les_charges',
                 'tests/Feature/Charges/EcransDuCreditDeTvaTest.php::test_le_tableau_de_bord_de_la_societe_montre_le_message_et_la_carte_de_la_tva_reportee',
+                'tests/Browser/Parcours/CreditDeTvaTest.php › « Voir les chiffres » du graphique de la TVA donne le crédit reporté et le crédit à reporter de chaque mois, sans crédit reporté pour le mois déclaré ; le crédit se dessine sous le zéro et la TVA du mois en pointillés',
                 'tests/Feature/SemisCompletTest.php::test_le_semis_complet_remplit_toute_la_base_et_tous_les_cas',
             ],
         ],
         'charges.credit-de-tva-de-depart' => [
             'puce' => 'Charges et TVA',
-            'regle' => 'La société indique le crédit de TVA d\'une de ses déclarations déposées, d\'une période de son choix depuis celle de son arrivée, une fois terminée, négatif pour un crédit, 0 € sans crédit, jamais positif ; la plus récente sert de point de départ ; le propriétaire et le comptable qui a « Charges : voir, ajouter, saisir et valider » l\'indiquent, jamais un autre compte ; le comptable le confirme ou le corrige avec un motif, ce qu\'il saisit naît vérifié ; « à vérifier par votre comptable » ou « non vérifié par un comptable » sinon ; chaque geste porte son jeton et s\'inscrit au journal d\'audit, une déclaration ne s\'efface jamais ; le message, le bloc de la page des charges, l\'étape et les « À faire » le disent ; rien ne se bloque.',
+            'regle' => 'La société indique le crédit de TVA d\'une de ses déclarations déposées, d\'une période de son choix depuis celle de son arrivée, une fois terminée, négatif pour un crédit, 0 € sans crédit, jamais positif ; la plus récente sert de point de départ ; le propriétaire et le comptable qui a « Charges : voir, ajouter, saisir et valider » l\'indiquent, jamais un autre compte ; le comptable le confirme ou le corrige avec un motif, ce qu\'il saisit naît vérifié ; « à vérifier par votre comptable » ou « non vérifié par un comptable » sinon ; chaque geste porte son jeton et s\'inscrit au journal d\'audit, une déclaration ne s\'efface jamais ; le message, le bloc de la page des charges, l\'étape et les « À faire » le disent, le montant seulement à qui peut l\'indiquer ou voit la TVA de toute la société, le comptable lisant des phrases qui lui sont adressées ; rien ne se bloque ; rien ne se demande à une société révoquée ou close, ni à une société membre d\'un assujetti unique, qui n\'a pas de crédit (le groupe déclare pour elle).',
             'tests' => [
                 'tests/Feature/Charges/CreditDeTvaTest.php::test_le_proprietaire_sans_comptable_indique_un_credit_non_verifie_qui_passe_a_verifier_quand_un_comptable_arrive',
                 'tests/Feature/Charges/CreditDeTvaTest.php::test_un_solde_positif_est_refuse_avec_son_message',
@@ -3272,11 +3278,21 @@ return [
                 'tests/Feature/Charges/EcransDuCreditDeTvaTest.php::test_le_cabinet_lit_le_credit_a_verifier_le_confirme_puis_le_corrige_depuis_la_page_du_client',
                 'tests/Feature/Charges/EcransDuCreditDeTvaTest.php::test_l_expert_comptable_declare_lit_le_credit_de_depart_a_verifier_sur_sa_page',
                 'tests/Feature/Charges/EcransDuCreditDeTvaTest.php::test_seuls_le_proprietaire_et_le_comptable_changent_le_credit_et_le_magasin_n_a_ni_bloc_ni_report',
+                'tests/Feature/Charges/EcransDuCreditDeTvaTest.php::test_le_comptable_a_le_lien_du_credit_sous_le_graphique_de_la_tva',
+                'tests/Feature/Charges/EcransDuCreditDeTvaTest.php::test_l_administrateur_qui_voit_la_carte_de_la_tva_lit_le_message_sans_montant',
+                'tests/Feature/Charges/EcransDuCreditDeTvaTest.php::test_le_comptable_lit_les_phrases_qui_lui_sont_adressees_avant_toute_declaration',
+                'tests/Feature/Charges/EcransDuCreditDeTvaTest.php::test_le_conseil_du_bloc_ne_se_repete_pas_et_s_adresse_a_qui_le_lit',
+                'tests/Feature/Charges/CreditDeTvaTest.php::test_une_societe_membre_d_un_assujetti_unique_n_a_pas_de_credit_de_tva',
+                'tests/Feature/Societe/RegimeDeTvaObligatoireTest.php::test_une_societe_en_lecture_seule_ne_demande_ni_le_regime_ni_le_credit',
+                'tests/Feature/Societe/JournalAuditResourceTest.php::test_les_entrees_du_credit_de_tva_et_des_charges_nomment_leur_objet',
                 'tests/Browser/Parcours/CreditDeTvaTest.php › le propriétaire suit le message du tableau de bord, indique son crédit de TVA de mars et le lit à vérifier par son comptable',
                 'tests/Browser/Parcours/CreditDeTvaTest.php › le collaborateur du cabinet lit le crédit de départ à vérifier sur son tableau de bord, le confirme depuis la page des charges du client, puis le corrige avec un motif',
                 'tests/Browser/Parcours/CreditDeTvaTest.php › avant la fin de son premier mois, le propriétaire lit la TVA déjà calculée, en attente de sa déclaration, et le bouton grisé avec sa date',
                 'tests/Browser/Parcours/CreditDeTvaTest.php › sous le graphique de la TVA, le propriétaire suit « Indiquer ou voir le crédit de TVA » et modifie son crédit vérifié, qui repasse « à vérifier » par son comptable',
                 'tests/Browser/Parcours/CreditDeTvaTest.php › l’expert-comptable déclaré lit « Crédit de TVA de départ à vérifier » sur « Tableau de bord de la société » et le confirme depuis « Charges de la société »',
+                'tests/Browser/Parcours/CreditDeTvaTest.php › sous le graphique de la TVA de son client, le collaborateur confié suit « Indiquer ou voir le crédit de TVA » jusqu’au bloc du crédit de la page des charges du client',
+                'tests/Browser/Parcours/CreditDeTvaTest.php › sur « Tableau de bord de la société », l’expert-comptable déclaré suit « Indiquer ou voir le crédit de TVA » jusqu’au bloc du crédit de « Charges de la société »',
+                'tests/Browser/Parcours/CreditDeTvaTest.php › le message de la TVA se lit en clair et en sombre quand le crédit est à vérifier, vérifié, ou que le régime reste à choisir',
                 'tests/Feature/SemisCompletTest.php::test_le_semis_complet_remplit_toute_la_base_et_tous_les_cas',
             ],
         ],
@@ -3292,10 +3308,11 @@ return [
         ],
         'produit.lectures-du-credit-de-tva' => [
             'puce' => 'Produit',
-            'regle' => 'Les déclarations du crédit de TVA se lisent par leur société, limitées aux colonnes nommées : pour le cabinet, celles d\'un client lié qui lui accorde les charges, et, au tableau de bord du cabinet, avec le type d\'activité, le régime et la date d\'arrivée du client, le seul fait que la plus récente attend sa vérification ; jamais celles d\'une autre société.',
+            'regle' => 'Les déclarations du crédit de TVA se lisent par leur société, limitées aux colonnes nommées : pour le cabinet, celles d\'un client lié qui lui accorde les charges, sur la page des charges et la page « Graphiques » du client, et, au tableau de bord du cabinet, avec le type d\'activité, le régime, l\'appartenance à un assujetti unique et la date d\'arrivée du client, le seul fait que la plus récente attend sa vérification ; jamais celles d\'une autre société.',
             'tests' => [
                 'tests/Feature/Cabinets/TableauDeBordDuCabinetTest.php::test_la_lecture_ne_rend_que_les_colonnes_permises',
                 'tests/Feature/Charges/CreditDeTvaTest.php::test_le_credit_d_une_autre_societe_ne_se_lit_ni_ne_se_change',
+                'tests/Feature/Charges/EcransDuCreditDeTvaTest.php::test_les_pages_d_un_client_du_cabinet_ne_lisent_le_credit_que_par_ses_colonnes_nommees',
             ],
         ],
         // Copie de démonstration (lot DEMO-COPIE-2, décision de l'éditeur du 15/11/2026 et choix A du 16/11/2026).
@@ -7050,7 +7067,7 @@ return [
                 'regles' => ['tva.regime-obligatoire', 'charges.report-du-credit-de-tva', 'charges.credit-de-tva-de-depart', 'charges.franchise-sans-tva'],
             ],
             'TVA27-D76' => [
-                'decision' => 'Décisions de Claude (D76) du lot TVA27 : le régime simplifié retiré sans transition ; le régime obligatoire refusé aussi par la base, avec un message selon le rôle ; l\'arrivée est le jour de la création de la société ; le report ne se montre que sur une TVA qui compte toute la société ; l\'estimation d\'une période se montre dès qu\'elle change son résultat, même par le crédit estimé d\'une période d\'avant, jamais pour la période déclarée ; plusieurs déclarations, aucune effacée, « Modifier » pour le propriétaire, « Confirmer » et « Corriger » pour le comptable ; le seuil vérifié au journal d\'audit, sans aucun montant à l\'écran.',
+                'decision' => 'Décisions de Claude (D76) du lot TVA27 : le régime simplifié retiré sans transition ; le régime obligatoire refusé aussi par la base, avec un message selon le rôle ; l\'arrivée est le jour de la création de la société ; le report ne se montre que sur une TVA qui compte toute la société ; l\'estimation d\'une période se montre dès qu\'elle change son résultat, même par le crédit estimé d\'une période d\'avant, jamais pour la période déclarée ; plusieurs déclarations, aucune effacée, « Modifier » pour le propriétaire, « Confirmer » et « Corriger » pour le comptable ; le seuil vérifié au journal d\'audit, sans aucun montant à l\'écran ; une société membre d\'un assujetti unique n\'a pas de crédit de TVA de départ, le groupe déclarant pour elle (la base le refuse aussi) ; le message du crédit se lit sans son montant pour qui ne voit que la carte de la TVA ; rien de la TVA ne se demande à une société en lecture seule (le régime) ou révoquée ou close (le crédit).',
                 'regles' => ['tva.regimes-sans-le-simplifie', 'tva.regime-obligatoire', 'tva.seuil-du-trimestriel', 'charges.report-du-credit-de-tva', 'charges.credit-de-tva-de-depart'],
             ],
             'TVA27-PERIODE-COMMENCEE-AVANT-PILIQI' => [

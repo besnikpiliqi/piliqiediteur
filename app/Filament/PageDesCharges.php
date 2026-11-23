@@ -18,6 +18,7 @@ use App\Domain\Charges\Actions\SupprimerUneChargeAction;
 use App\Domain\Charges\Actions\ValiderUneChargeAction;
 use App\Domain\Charges\Enums\EtatDeLaCharge;
 use App\Domain\Charges\Enums\FormatDeLEtat;
+use App\Domain\Charges\Enums\LectureDeLaTva;
 use App\Domain\Charges\Enums\NatureDeCharge;
 use App\Domain\Charges\Enums\TauxDeCharge;
 use App\Domain\Charges\Enums\TypeDeCharge;
@@ -163,6 +164,7 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  * @phpstan-import-type MessageDeLaTva from MessagesDuCreditDeTva
  * @phpstan-import-type TvaDeLaPage from TvaDeLaPeriode
  *
+ * @phpstan-type TvaDuMois array{mois: string, montants: MontantsDeTva, avec_les_ventes: bool, sans_celles_de_la_societe: bool, report: TvaReportee|null}
  * @phpstan-type DeclarationAffichee array{uuid: string, periode: string, solde: string, etat: string, couleur: string, point_de_depart: bool, de_la_cadence: bool, verifiee: bool, gestes: list<string>}
  * @phpstan-type BlocDuCredit array{pour_le_comptable: bool, cadence: CadenceDeLaTva, declarations: list<DeclarationAffichee>, peut_declarer: bool, peut_verifier: bool, est_proprietaire: bool, disponible_le: string|null, intro: string}
  */
@@ -276,15 +278,14 @@ final class PageDesCharges extends Component implements HasActions, HasForms, Ha
     public function render(): View
     {
         $tva = $this->tvaDuMois();
-        $voitLaTvaReportee = $tva !== null && $tva['report'] !== null;
 
         return view('filament.page-des-charges', [
             'tableau' => app(ChargesDeLaSociete::class)->tableauDesMois($this->acces(), $this->mois(), $this->magasinDuFiltre(), $this->magasinFiltre === 'societe'),
             'mois' => $this->mois(),
             'tva' => $tva,
             'sansTva' => $this->sansTva(),
-            'messageDeLaTva' => $this->messageDeLaTva($voitLaTvaReportee),
-            'credit' => $this->creditDeTva($voitLaTvaReportee),
+            'messageDeLaTva' => $this->messageDeLaTva($tva),
+            'credit' => $this->creditDeTva($tva !== null && $tva['report'] !== null),
         ]);
     }
 
@@ -324,7 +325,7 @@ final class PageDesCharges extends Component implements HasActions, HasForms, Ha
      * montre (voir tvaDesMois()), avec le report du crédit quand elle
      * compte toute la société ; null hors du réel normal (voir sansTva()).
      *
-     * @return array{mois: string, montants: MontantsDeTva, avec_les_ventes: bool, sans_celles_de_la_societe: bool, report: TvaReportee|null}|null
+     * @return TvaDuMois|null
      */
     public function tvaDuMois(): ?array
     {
@@ -575,13 +576,17 @@ final class PageDesCharges extends Component implements HasActions, HasForms, Ha
     /**
      * Le message de la TVA sous sa section (lot TVA27, voir
      * MessagesDuCreditDeTva::message()), au réel normal, hors du panneau
-     * d'un magasin : où en est le crédit de TVA, pour qui peut l'indiquer
-     * ou voit la TVA de toute la société avec son report ; son bouton mène
-     * au bloc du crédit, plus bas dans la page.
+     * d'un magasin : où en est le crédit de TVA, avec son montant pour qui
+     * peut l'indiquer ou voit ici la TVA de toute la société avec son
+     * report, sans lui pour qui voit celle de son tableau de bord sans le
+     * report (un magasin choisi, ou des magasins qu'il ne voit pas), rien
+     * pour qui ne voit que la TVA des charges ; son bouton mène au bloc du
+     * crédit, plus bas dans la page.
      *
+     * @param  TvaDuMois|null  $tva  la TVA que la page montre
      * @return MessageDeLaTva|null
      */
-    private function messageDeLaTva(bool $voitLaTvaReportee): ?array
+    private function messageDeLaTva(?array $tva): ?array
     {
         $societe = $this->acces()->societe;
 
@@ -589,7 +594,14 @@ final class PageDesCharges extends Component implements HasActions, HasForms, Ha
             return null;
         }
 
-        return app(MessagesDuCreditDeTva::class)->message($societe, CompteConnecte::exiger(), $this->ecran !== self::SOCIETE, '#credit-de-tva', fn (): bool => $voitLaTvaReportee);
+        $lecture = match (true) {
+            $tva === null => LectureDeLaTva::Aucune,
+            $tva['report'] !== null => LectureDeLaTva::AvecLeReport,
+            $tva['avec_les_ventes'] => LectureDeLaTva::SansLeReport,
+            default => LectureDeLaTva::Aucune,
+        };
+
+        return app(MessagesDuCreditDeTva::class)->message($societe, CompteConnecte::exiger(), $this->ecran !== self::SOCIETE, '#credit-de-tva', fn (): LectureDeLaTva => $lecture);
     }
 
     /**

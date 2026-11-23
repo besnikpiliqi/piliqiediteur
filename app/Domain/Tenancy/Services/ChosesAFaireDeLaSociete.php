@@ -210,12 +210,14 @@ final class ChosesAFaireDeLaSociete
 
     /**
      * La TVA de la société (lot TVA27) : son régime à choisir, tant qu'il
-     * ne l'est pas, à faire pour qui ouvre ses paramètres fiscaux (le
+     * ne l'est pas, à faire pour qui modifie ses paramètres fiscaux (le
      * propriétaire, un administrateur autorisé), à surveiller pour un autre
-     * administrateur, qui le demande au propriétaire ; pour le propriétaire,
-     * le crédit de TVA d'une déclaration, à indiquer ou à faire vérifier
-     * (voir MessagesDuCreditDeTva::chosesAFaire()) ; et, pour qui peut
-     * modifier ses réglages fiscaux, le dépassement du seuil du réel normal
+     * administrateur, qui le demande au propriétaire, et rien dans une
+     * société en lecture seule, qui ne le choisit plus ; pour le
+     * propriétaire, le crédit de TVA d'une déclaration, à indiquer ou à
+     * faire vérifier, tant que la société le déclare encore (voir
+     * MessagesDuCreditDeTva::chosesAFaire()) ; et, pour qui peut modifier
+     * ses réglages fiscaux, le dépassement du seuil du réel normal
      * trimestriel de l'année (voir SeuilDuTrimestriel), jusqu'à son « C'est
      * vérifié ».
      *
@@ -229,8 +231,8 @@ final class ChosesAFaireDeLaSociete
 
         $choses = [];
 
-        if ($societe->regime_tva === null) {
-            $regle = $compte->can('voirLesParametresFiscaux', $societe);
+        if ($societe->regime_tva === null && ! $societe->estEnLectureSeule()) {
+            $regle = $compte->can('modifierLesParametresFiscaux', $societe);
             $choses[] = new ChoseAFaire(
                 cle: 'regime_de_tva',
                 groupe: 'TVA',

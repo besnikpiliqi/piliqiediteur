@@ -2,6 +2,7 @@
 
 namespace App\Filament\App\Pages;
 
+use App\Domain\Charges\Enums\LectureDeLaTva;
 use App\Domain\Charges\Services\ChargesAFaire;
 use App\Domain\Charges\Services\DroitsSurLesCharges;
 use App\Domain\Charges\Services\MessagesDuCreditDeTva;
@@ -55,9 +56,10 @@ class TableauDeBordDeLaSociete extends Page
     /**
      * Le message de la TVA de la société, du côté de son comptable (lot
      * TVA27, voir MessagesDuCreditDeTva::message()) : son régime à
-     * choisir, ou où en est son crédit de TVA, quand sa déclaration lui
-     * accorde les charges ou qu'il voit la TVA de toute la société avec son
-     * report ; le bouton mène au bloc du crédit de « Charges de la
+     * choisir, ou où en est son crédit de TVA, avec son montant quand sa
+     * déclaration lui accorde les charges ou qu'il voit la TVA de toute la
+     * société avec son report, sans lui quand il n'en voit que la carte de
+     * la TVA ; le bouton mène au bloc du crédit de « Charges de la
      * société ».
      *
      * @return MessageDeLaTva|null
@@ -76,7 +78,7 @@ class TableauDeBordDeLaSociete extends Page
             $compte,
             true,
             ChargesDeLaSociete::canAccess() ? ChargesDeLaSociete::getUrl().'#credit-de-tva' : null,
-            fn (): bool => app(PerimetreDesGraphiques::class)->voitLaTvaReporteeDeLExpertComptable($compte),
+            fn (): LectureDeLaTva => app(PerimetreDesGraphiques::class)->lectureDeLaTvaDeLExpertComptable($compte),
         );
     }
 

@@ -101,6 +101,10 @@ use LogicException;
  * - l'Atelier Brun, « Services, sans vente d'articles » en franchise en
  *   base ; le Studio Lumière, « Services » qui a opté pour les débits ;
  * - le Groupe Nord Distribution, membre d'un assujetti unique ;
+ * - la Cave des Deux Rives, validée et active, dont le magasin est
+ *   confirmé et l'équipe créée (une administratrice qui ne règle pas la
+ *   fiscalité, un vendeur), qui n'a pas encore choisi son régime de TVA :
+ *   rien ne s'y vend (lot TVA27) ;
  * - la Boulangerie Duval, suspendue, et la Librairie des Quais, résiliée
  *   après la transmission de sa propriété à son administrateur ;
  * - une inscription close faute de code (son lien avec le cabinet Martin
@@ -155,6 +159,15 @@ final class SocietesDesCas
 
     /** Le cabinet vérifié dont l'éditeur constate la radiation du tableau de l'Ordre. */
     public const SIREN_CABINET_RADIE = '000000448';
+
+    /**
+     * La Cave des Deux Rives, validée, active, avec son magasin confirmé au
+     * répertoire Sirene, son administratrice qui ne règle pas la fiscalité
+     * et son vendeur, qui n'a pas encore choisi son régime de TVA (lot
+     * TVA27) : aucune de ses ventes ne passe, chaque compte lit le refus
+     * qui lui est adressé.
+     */
+    public const SIREN_SANS_REGIME = '000000463';
 
     /**
      * Les SIREN des entreprises que le cabinet Martin invite : l'invitation
@@ -350,6 +363,7 @@ final class SocietesDesCas
             self::SIREN_DE_L_EXAMEN => ['STUDIO LUMIERE PHOTOGRAPHIE', 'LACROIX', ['Olivier'], 'Président'],
             self::SIREN_REMPLACEE => ['VERGER DES COTEAUX', 'CHAMPION', ['Hélène'], 'Présidente'],
             self::SIREN_CABINET_RADIE => ['CABINET FAURE ET ASSOCIES', 'FAURE', ['Bernard'], 'Président'],
+            self::SIREN_SANS_REGIME => ['CAVE DES DEUX RIVES', 'ROLLAND', ['Thierry'], 'Gérant'],
         ] as $siren => [$denomination, $nom, $prenoms, $role]) {
             $siege = new AdressePostale($denomination, '1 RUE DE LA REPUBLIQUE', null, '75001', 'PARIS', AdressePostale::SOURCE_RNE);
             $sirene->nommer($siren, $denomination);
@@ -398,6 +412,7 @@ final class SocietesDesCas
             'cabinet non vérifié' => [self::SIREN_CABINET_NON_VERIFIE, TypeDActivite::Cabinet],
             'cabinet suspendu' => [self::SIREN_CABINET_SUSPENDU, TypeDActivite::Cabinet],
             'cabinet radié' => [self::SIREN_CABINET_RADIE, TypeDActivite::Cabinet],
+            'sans régime' => [self::SIREN_SANS_REGIME, TypeDActivite::Commerce],
         ] as $cle => [$siren, $type]) {
             $this->semis->inscrire($cle, $siren, $type, 'proprietaire@'.Str::slug($cle).'.exemple.test');
         }
@@ -413,7 +428,7 @@ final class SocietesDesCas
      */
     public function valider(): void
     {
-        foreach (['comptoir', 'atelier', 'studio', 'groupe', 'boulangerie', 'librairie', 'cabinet non vérifié', 'cabinet suspendu', 'cabinet radié'] as $cle) {
+        foreach (['comptoir', 'atelier', 'studio', 'groupe', 'boulangerie', 'librairie', 'cabinet non vérifié', 'cabinet suspendu', 'cabinet radié', 'sans régime'] as $cle) {
             $this->semis->saisirLeCode($cle);
         }
 
@@ -429,7 +444,7 @@ final class SocietesDesCas
             MotifCloture::Refus,
         ));
 
-        foreach (['comptoir', 'atelier', 'studio', 'groupe', 'boulangerie', 'librairie'] as $cle) {
+        foreach (['comptoir', 'atelier', 'studio', 'groupe', 'boulangerie', 'librairie', 'sans régime'] as $cle) {
             $this->semis->completerLIdentite($cle, ['capital_social' => '15000.00', 'immatriculation' => 'RCS Paris '.chunk_split(substr((string) $this->semis->societe($cle)->siren, 0, 9), 3, ' ')]);
         }
 
@@ -465,6 +480,7 @@ final class SocietesDesCas
         $this->semis->ouvrirUnMagasin('groupe', 'groupe', 'Groupe Nord Roubaix', 'ROUBAIX', 'siege');
         $this->semis->ouvrirUnMagasin('boulangerie', 'boulangerie', 'Boulangerie Duval', 'DUVAL', 'siege');
         $this->semis->ouvrirUnMagasin('librairie', 'librairie', 'Librairie des Quais', 'QUAIS', 'siege');
+        $this->semis->ouvrirUnMagasin('sans régime', 'cave', 'Cave des Deux Rives', 'CAVE', 'siege');
 
         $this->semis->administrateur('comptoir', 'Gaëlle Hoarau', null, []);
         $this->semis->membre('fort-de-france', 'Joël Sainte-Rose', RoleMagasin::Responsable);
@@ -479,12 +495,16 @@ final class SocietesDesCas
         $this->semis->membre('boulangerie', 'Sophie Duval', RoleMagasin::Responsable);
         $this->semis->membre('librairie', 'Hervé Noël', RoleMagasin::Responsable);
         $this->semis->administrateur('librairie', 'Étienne Vidal', null, []);
+        $this->semis->administrateur('sans régime', 'Lucie Marchand', null, []);
+        $this->semis->membre('cave', 'Pierre Lemaire', RoleMagasin::Vendeur);
     }
 
     /**
-     * Les premières fiches des sociétés des cas qui vendent : l'inventaire
-     * d'ouverture de chaque magasin d'articles (celui de Lyon reste en
-     * brouillon), les services des sociétés de services et leurs clients.
+     * Les premières fiches des sociétés des cas : l'inventaire d'ouverture
+     * de chaque magasin d'articles (celui de Lyon reste en brouillon ;
+     * celui de la Cave des Deux Rives, validé par son propriétaire, son
+     * catalogue qu'elle ne peut pas encore vendre sans régime de TVA), les
+     * services des sociétés de services et leurs clients.
      */
     public function remplir(): void
     {
@@ -500,6 +520,11 @@ final class SocietesDesCas
                 ['produit' => ['nom' => 'Confiture artisanale', 'reference' => 'CONFITURE', 'prix_vente_ttc' => '5.80', 'taux_tva' => '5.5', 'seuil_alerte' => 10], 'quantite' => 200, 'cout_unitaire_ht' => '2.40'],
             ]);
         }
+
+        (new GestesDuMagasin($this->semis->magasin('cave')))->ouvrirLeStock($this->semis->proprietaire('sans régime'), [
+            ['produit' => ['nom' => 'Bordeaux supérieur 2022', 'reference' => 'BORDEAUX-SUP-22', 'prix_vente_ttc' => '12.90', 'taux_tva' => '20', 'seuil_alerte' => 12], 'quantite' => 180, 'cout_unitaire_ht' => '5.40'],
+            ['produit' => ['nom' => 'Crémant de Loire brut', 'reference' => 'CREMANT-LOIRE', 'prix_vente_ttc' => '14.50', 'taux_tva' => '20', 'seuil_alerte' => 12], 'quantite' => 120, 'cout_unitaire_ht' => '6.20'],
+        ]);
 
         $lyon = new GestesDuMagasin($this->semis->magasin('lyon'));
         $lyon->dans(fn (): InventaireOuverture => app(CreerInventaireOuvertureAction::class)->handle($this->semis->compte('Bastien Royer'), [

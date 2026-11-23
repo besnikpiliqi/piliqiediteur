@@ -78,6 +78,7 @@ class HistoriqueAuNomFigeTest extends TestCase
         'charges' => ['deposee_par' => 'deposee_par_nom', 'validee_par_compte' => 'validee_par_nom', 'renvoyee_par' => 'renvoyee_par_nom'],
         'pieces_de_charge' => ['ajoutee_par' => 'ajoutee_par_nom'],
         'types_de_charge_de_la_societe' => ['cree_par' => 'cree_par_nom'],
+        'credits_de_tva' => ['saisi_par' => 'saisi_par_nom', 'verifie_par' => 'verifie_par_nom'],
         'fournisseurs' => ['cree_par' => 'cree_par_nom', 'modifie_par' => 'modifie_par_nom'],
         'telechargements_documents' => ['demande_par' => 'demande_par_nom'],
         'inventaires_ouverture' => ['cree_par' => 'cree_par_nom', 'valide_par' => 'valide_par_nom'],

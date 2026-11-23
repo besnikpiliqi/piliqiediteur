@@ -107,7 +107,7 @@ class CreerAvoirAction
 
         return DB::transaction(function () use ($auteur, $client, $lignesSelectionnees, $motif, $regularisation) {
             $magasin = app(TenantContext::class)->magasin();
-            $magasin->verifierQuIlNEstPasDansUnAssujettiUnique();
+            $magasin->verifierQueSaSocietePeutVendre($auteur);
             $compte = $this->lecteur->exiger($auteur, 'create', $magasin, Avoir::class);
             $client = Client::relueDansLeMagasin($client, Client::REFUS_AUTRE_MAGASIN);
             $lignesDeLAvoir = [];

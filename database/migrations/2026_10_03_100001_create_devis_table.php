@@ -1,10 +1,15 @@
 <?php
 
+use App\Domain\Tenancy\Support\GardesDuRegimeDeTva;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
+/**
+ * Les devis de chaque magasin ; la base refuse le numéro d'un devis d'une
+ * société dont le régime de TVA n'est pas choisi (voir GardesDuRegimeDeTva).
+ */
 return new class extends Migration
 {
     public function up(): void
@@ -99,10 +104,12 @@ return new class extends Migration
         DB::statement('ALTER TABLE devis ADD CONSTRAINT devis_prix_du_devis_de_depannage CHECK (prix_du_devis_de_depannage IS NULL OR (depannage_a_domicile IS TRUE AND prix_du_devis_de_depannage > 0))');
         DB::statement('ALTER TABLE devis ADD CONSTRAINT devis_sans_depannage_sans_lieu CHECK (depannage_a_domicile IS DISTINCT FROM FALSE OR (lieu_d_intervention IS NULL AND NOT signe_chez_le_client))');
         DB::statement('ALTER TABLE devis ADD CONSTRAINT devis_periode_de_l_operation CHECK (date_operation_debut IS NULL OR (date_operation_fin IS NOT NULL AND date_operation_debut < date_operation_fin))');
+        GardesDuRegimeDeTva::poser('devis');
     }
 
     public function down(): void
     {
         Schema::dropIfExists('devis');
+        GardesDuRegimeDeTva::retirer('devis');
     }
 };

@@ -7,6 +7,9 @@ use App\Domain\Cabinets\Enums\EtatDuLien;
 use App\Domain\Cabinets\Models\LienCabinet;
 use App\Domain\Cabinets\Services\ExpertsComptablesDeclares;
 use App\Domain\Calendrier\Calendrier;
+use App\Domain\Charges\Actions\VerifierLeSeuilDuTrimestrielAction;
+use App\Domain\Charges\Enums\LectureDeLaTva;
+use App\Domain\Charges\Services\MessagesDuCreditDeTva;
 use App\Domain\Demonstration\Services\CarteDeLaDemonstration;
 use App\Domain\Facturation\Services\FacturesAEncaisserDeLaSociete;
 use App\Domain\TableauDeBord\Services\PerimetreDesGraphiques;
@@ -56,14 +59,19 @@ use Illuminate\Database\Eloquent\Collection;
  * administrateur autorisé à nommer les responsables, où le faire (voir
  * peutNommerUnResponsable()) ; pour le propriétaire, son cabinet
  * comptable et les demandes de rattachement en cours (voir
- * cabinetComptable()). Les magasins et les comptes se lisent dans
+ * cabinetComptable()) ; au-dessus des graphiques, le message de la TVA
+ * (voir messageDeLaTva()). Les magasins et les comptes se lisent dans
  * la société affichée : ceux d'aucune autre société.
+ *
+ * @phpstan-import-type MessageDeLaTva from MessagesDuCreditDeTva
  */
 class TableauDeBord extends Dashboard
 {
     use GereLesExceptionsMetier;
 
     public const ETAPE_CODE_DU_COURRIER = 'Saisir le code du courrier recommandé';
+
+    public const ETAPE_REGIME_DE_TVA = 'Choisir le régime de TVA';
 
     public const ETAPE_PREMIER_MAGASIN = 'Créer votre premier magasin';
 
@@ -115,13 +123,17 @@ class TableauDeBord extends Dashboard
     /**
      * Les premières étapes de la société, celles de son propriétaire, dans
      * l'ordre : saisir le code du courrier recommandé, qui valide la
-     * société ; créer son premier magasin, puis, dès le premier magasin,
+     * société ; choisir son régime de TVA, obligatoire avant toute
+     * opération commerciale réelle (dans une société en lecture seule,
+     * l'étape le dit sans y mener), puis, au réel normal, dire le crédit
+     * de TVA d'une de ses déclarations (voir MessagesDuCreditDeTva, lot
+     * TVA27) ; créer son premier magasin, puis, dès le premier magasin,
      * quel que soit son statut, en ajouter un autre (l'étape reste cochée,
      * avec le nombre de magasins, sans ordinal, qui deviendrait faux avec
      * les magasins fermés ou cédés) ; ajouter son équipe. Une société
      * validée par l'invitation de son cabinet d'expertise comptable n'a
-     * jamais reçu de courrier : ses étapes sont seulement celles des
-     * magasins et de l'équipe (décision de l'éditeur du 01/11/2026).
+     * jamais reçu de courrier : ses étapes sont seulement celles de la TVA,
+     * des magasins et de l'équipe (décision de l'éditeur du 01/11/2026).
      * Chacune dit si elle est faite, où elle en est, et mène à l'écran qui
      * la fait quand il peut l'ouvrir : l'étape des magasins à la création
      * d'un magasin quand le compte peut en créer un, sinon à leur liste.
@@ -146,7 +158,19 @@ class TableauDeBord extends Dashboard
         $parSonCabinet = $societe->aEteValideeParLInvitationDUnCabinet();
         $magasins = $compte->magasinsDeSaPortee()->count();
         $comptes = MembreResource::getEloquentQuery()->whereKeyNot($compte->getKey())->where('statut', '!=', StatutCompte::Retire->value)->where('role_societe', '<>', RoleSociete::ExpertComptable->value)->count();
+        $choisitLeRegime = $compte->can('modifierLesParametresFiscaux', $societe);
         $magasinsEtEquipe = [
+            [
+                'titre' => self::ETAPE_REGIME_DE_TVA,
+                'faite' => $societe->regime_tva !== null,
+                'etat' => match (true) {
+                    $societe->regime_tva !== null => 'Régime choisi : '.$societe->regime_tva->getLabel().'.',
+                    $choisitLeRegime => 'Obligatoire avant la première vente : il dit comment PILIQI calcule votre TVA et à quel rythme vous la déclarez.',
+                    default => 'Pas encore choisi : il ne se choisit pas tant que votre société est en lecture seule.',
+                },
+                'url' => ($societe->regime_tva !== null || $choisitLeRegime) && ParametresFiscauxSociete::canAccess() ? ParametresFiscauxSociete::getUrl() : null,
+            ],
+            ...app(MessagesDuCreditDeTva::class)->etape($compte, $societe, Charges::canAccess() ? Charges::getUrl().'#credit-de-tva' : null),
             [
                 'titre' => $magasins === 0 ? self::ETAPE_PREMIER_MAGASIN : self::ETAPE_AJOUTER_UN_MAGASIN,
                 'faite' => $magasins > 0,
@@ -283,6 +307,57 @@ class TableauDeBord extends Dashboard
     public function voitLesGraphiques(): bool
     {
         return app(PerimetreDesGraphiques::class)->voitLesGraphiquesDeLaSociete(CompteConnecte::exiger(), $this->societe());
+    }
+
+    /**
+     * Le message de la TVA au-dessus des graphiques (lot TVA27, voir
+     * MessagesDuCreditDeTva::message()) : le régime à choisir, pour tout
+     * compte d'une société qui peut encore le choisir ; où en est le
+     * crédit de TVA, avec son montant pour le propriétaire et qui voit la
+     * TVA de toute la société avec son report, sans lui pour
+     * l'administrateur qui ne voit que la carte de la TVA (voir
+     * PerimetreDesGraphiques::lectureDeLaTvaDeLaSociete()), le bouton menant
+     * au bloc du crédit de la page des charges.
+     *
+     * @return MessageDeLaTva|null
+     */
+    public function messageDeLaTva(): ?array
+    {
+        $compte = CompteConnecte::exiger();
+        $societe = $this->societe();
+
+        return app(MessagesDuCreditDeTva::class)->message(
+            $societe,
+            $compte,
+            false,
+            Charges::canAccess() ? Charges::getUrl().'#credit-de-tva' : null,
+            fn (): LectureDeLaTva => app(PerimetreDesGraphiques::class)->lectureDeLaTvaDeLaSociete($compte, $societe),
+        );
+    }
+
+    /**
+     * « C'est vérifié », sur la ligne qui dit que le chiffre d'affaires de
+     * l'année d'une société au réel normal trimestriel dépasse
+     * 1 100 000 € (voir VerifierLeSeuilDuTrimestrielAction) : la ligne sort
+     * de l'« À faire » jusqu'à l'année suivante. Le droit se relit dans
+     * l'action, sous les verrous.
+     */
+    public function verifierLeSeuilAction(): Action
+    {
+        return Action::make('verifierLeSeuil')
+            ->label('C\'est vérifié')
+            ->icon('heroicon-o-check')
+            ->color('success')
+            ->size('sm')
+            ->requiresConfirmation()
+            ->modalHeading('Régime de TVA vérifié')
+            ->modalDescription('La ligne sort de votre « À faire » jusqu\'à l\'année prochaine. Votre régime de TVA ne change pas : modifiez-le dans les réglages fiscaux s\'il doit devenir mensuel.')
+            ->action(function (): void {
+                static::executerSansCasser(function (): void {
+                    app(VerifierLeSeuilDuTrimestrielAction::class)->handle(CompteConnecte::exiger(), $this->societe());
+                    Notification::make()->title('Régime de TVA vérifié pour cette année.')->success()->send();
+                });
+            });
     }
 
     /**

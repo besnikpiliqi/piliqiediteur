@@ -94,8 +94,12 @@ final class DroitsSurLesCharges
      * les charges de « Toute la société » et de ceux de ces magasins où il
      * a « Charges : voir, ajouter, saisir et valider », lue dans ses
      * autorisations de chaque magasin, que le périmètre a déjà lues, sans
-     * relire ses liens ; tout autre compte, ce que pour() lui donne, sans
-     * lui demander s'il les valide. Null quand il n'en voit aucune.
+     * relire ses liens ; cette autorisation fait de lui le comptable de la
+     * société, que l'accès dit (voir AccesAuxCharges::estComptable()),
+     * comme pour() le dirait, ce que le lien du crédit de TVA sous le
+     * graphique de la TVA lit (voir GrilleDesGraphiques). Tout autre
+     * compte, ce que pour() lui donne, sans lui demander s'il les valide :
+     * il n'est jamais le comptable. Null quand il n'en voit aucune.
      *
      * @param  iterable<Magasin>  $magasins
      */
@@ -117,7 +121,7 @@ final class DroitsSurLesCharges
             }
         }
 
-        return $ouverts === [] ? null : new AccesAuxCharges($compte, $societe, true, $ouverts, null, false);
+        return $ouverts === [] ? null : new AccesAuxCharges($compte, $societe, true, $ouverts, $compte->estExpertComptable() ? ValideePar::ExpertComptable : ValideePar::Cabinet, false);
     }
 
     /**

@@ -2219,6 +2219,9 @@ return [
         ]],
     ],
     'app/Filament/Societe/Pages/TableauDeBord.php' => [
+        'action:verifierLeSeuil' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Parcours/CreditDeTvaTest.php › le propriétaire d’une société au trimestriel dont le chiffre d’affaires de l’année dépasse 1 100 000 € lit la ligne de son « À faire » et dit « C’est vérifié »',
+        ]],
         'action:verifierLEcart' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Parcours/AFaireTest.php › le propriétaire dit vérifié, depuis l’« À faire » de la société, l’écart relevé au répertoire Sirene',
             'tests/Browser/Parcours/AFaireTest.php › l’administrateur qui gère les magasins dit vérifié, depuis l’« À faire » de la société, l’écart relevé au répertoire Sirene',
@@ -2568,6 +2571,9 @@ return [
         'formulaire:{{ filament()->getLogoutUrl() }}' => ['lot' => 'NAV-4', 'tests' => []],
     ],
     'resources/views/filament/cabinet/pages/tableau-de-bord-du-cabinet.blade.php' => [
+        'lien:Crédit de TVA de départ à vérifier' => ['lot' => 'NAV-5', 'tests' => [
+            'tests/Browser/Parcours/CreditDeTvaTest.php › le collaborateur du cabinet lit le crédit de départ à vérifier sur son tableau de bord, le confirme depuis la page des charges du client, puis le corrige avec un motif',
+        ]],
         'lien:{{ trans_choice(\'{1} 1 charge à valider|[2,*] :count charges à valider\', $ligne[\'charges_a_valider\']) }}' => ['lot' => 'NAV-5', 'tests' => [
             'tests/Browser/Parcours/ChargesTest.php › le propriétaire du cabinet voit sur son tableau de bord la charge à valider de son client et ouvre ses charges par ce lien',
         ]],
@@ -2852,6 +2858,11 @@ return [
         ]],
     ],
     'resources/views/filament/grille-des-graphiques.blade.php' => [
+        'lien:Indiquer ou voir le crédit de TVA' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Parcours/CreditDeTvaTest.php › sous le graphique de la TVA, le propriétaire suit « Indiquer ou voir le crédit de TVA » et modifie son crédit vérifié, qui repasse « à vérifier » par son comptable',
+            'tests/Browser/Parcours/CreditDeTvaTest.php › sous le graphique de la TVA de son client, le collaborateur confié suit « Indiquer ou voir le crédit de TVA » jusqu’au bloc du crédit de la page des charges du client',
+            'tests/Browser/Parcours/CreditDeTvaTest.php › sur « Tableau de bord de la société », l’expert-comptable déclaré suit « Indiquer ou voir le crédit de TVA » jusqu’au bloc du crédit de « Charges de la société »',
+        ]],
         'changement:ajouterUnGraphique' => ['lot' => 'NAV-4', 'tests' => [
             'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › après l’ajout d’un graphique, le menu « Ajouter un graphique » revient sur « — Choisir — » sans proposer ce graphique, et rechoisir « — Choisir — » ne fait rien, sans message',
             'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › le propriétaire voit les quatre chiffres et les graphiques par défaut, ajoute la marge, passe un graphique en camembert, en retire un, et retrouve tout après le rechargement',
@@ -2932,6 +2943,20 @@ return [
         ]],
     ],
     'app/Filament/PageDesCharges.php' => [
+        'action:declarerLeCredit' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Parcours/CreditDeTvaTest.php › le propriétaire suit le message du tableau de bord, indique son crédit de TVA de mars et le lit à vérifier par son comptable',
+            'tests/Browser/Parcours/CreditDeTvaTest.php › avant la fin de son premier mois, le propriétaire lit la TVA déjà calculée, en attente de sa déclaration, et le bouton grisé avec sa date',
+        ]],
+        'action:modifierLeCredit' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Parcours/CreditDeTvaTest.php › sous le graphique de la TVA, le propriétaire suit « Indiquer ou voir le crédit de TVA » et modifie son crédit vérifié, qui repasse « à vérifier » par son comptable',
+        ]],
+        'action:confirmerLeCredit' => ['lot' => 'NAV-5', 'tests' => [
+            'tests/Browser/Parcours/CreditDeTvaTest.php › le collaborateur du cabinet lit le crédit de départ à vérifier sur son tableau de bord, le confirme depuis la page des charges du client, puis le corrige avec un motif',
+            'tests/Browser/Parcours/CreditDeTvaTest.php › l’expert-comptable déclaré lit « Crédit de TVA de départ à vérifier » sur « Tableau de bord de la société » et le confirme depuis « Charges de la société »',
+        ]],
+        'action:corrigerLeCredit' => ['lot' => 'NAV-5', 'tests' => [
+            'tests/Browser/Parcours/CreditDeTvaTest.php › le collaborateur du cabinet lit le crédit de départ à vérifier sur son tableau de bord, le confirme depuis la page des charges du client, puis le corrige avec un motif',
+        ]],
         'composant' => ['lot' => 'NAV-4', 'tests' => [
             'tests/Browser/Parcours/ChargesTest.php › le propriétaire dépose une quittance de loyer avec ses chiffres, voit la case orange, filtre la liste par la case et télécharge la pièce',
             'tests/Browser/Parcours/ChargesTest.php › le collaborateur à qui le client est confié ouvre ses charges depuis la liste des clients, voit la case orange, valide, et la case devient verte',
@@ -3034,8 +3059,16 @@ return [
         ]],
     ],
     'resources/views/filament/app/pages/tableau-de-bord-de-la-societe.blade.php' => [
+        'lien:Vérifier' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Parcours/CreditDeTvaTest.php › l’expert-comptable déclaré lit « Crédit de TVA de départ à vérifier » sur « Tableau de bord de la société » et le confirme depuis « Charges de la société »',
+        ]],
         'lien:Valider' => ['lot' => 'NAV-4', 'tests' => [
             'tests/Browser/Parcours/ChargesTest.php › l’expert-comptable déclaré voit « 1 charge à valider » sur « Tableau de bord de la société », ouvre « Charges de la société » et valide',
+        ]],
+    ],
+    'resources/views/filament/tva/message-du-credit.blade.php' => [
+        'lien:{{ $message[\'bouton\'] }}' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Parcours/CreditDeTvaTest.php › le propriétaire suit le message du tableau de bord, indique son crédit de TVA de mars et le lit à vérifier par son comptable',
         ]],
     ],
     'resources/views/filament/page-des-charges.blade.php' => [

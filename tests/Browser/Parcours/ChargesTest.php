@@ -356,17 +356,18 @@ test('le tableau de bord de la société montre la TVA à payer réelle, avec le
     $onglet = $this->seConnecter($societe->proprietaire, panneau: 'societe')
         ->attendreQue('document.querySelector(\'[data-tva="reelle"]\') !== null', 'la TVA à payer n’est pas affichée')
         ->attendreQue('document.querySelector(\'[data-tva="estimation"]\') === null', 'une estimation paraît sans charge à valider');
-    $sansLesCharges = centimesAffiches($onglet, '[data-tva="reelle"]');
+    expect(centimesAffiches($onglet, '[data-tva="reelle"]'))->toBe(1400, 'Sans charge, la TVA de mars de la société, son premier mois dans PILIQI, est de 14,00 € à payer.');
 
     chargeDeposee($societe->collaborateur, $societe->societe, ['type' => 'piliqi:electricite', 'numero_piece' => 'EDF-03', 'fournisseur' => 'EDF', 'lignes' => [['taux' => '2000', 'ht' => '100,00']]]);
     chargeDeposee($societe->proprietaire, $societe->societe);
 
     $onglet->aller($tableau)->attendre()->verifier()
         ->attendreQue('document.querySelector(\'[data-tva="estimation"]\') !== null', 'l’estimation avec les charges à valider n’est pas affichée')
-        ->voir('estimation avec les charges à valider');
+        ->voir('estimation avec les charges à valider')
+        ->voir('de crédit à reporter');
 
-    expect([centimesAffiches($onglet, '[data-tva="reelle"]'), centimesAffiches($onglet, '[data-tva="estimation"]')])
-        ->toBe([$sansLesCharges - 2000, $sansLesCharges - 2000 - 24000]);
+    expect([centimesAffiches($onglet, '[data-tva="reelle"]'), centimesAffiches($onglet, '[data-tva="credit-a-reporter"]'), centimesAffiches($onglet, '[data-tva="estimation"]')])
+        ->toBe([0, 600, 24600], 'Les 20,00 € de TVA déductible de l’électricité validée passent la TVA de mars sous zéro, qui se reporte (lot TVA27) : rien à payer, 6,00 € de crédit à reporter ; avec les 240,00 € du loyer à valider, 246,00 € de crédit estimé.');
 });
 
 test('sans comptable, le propriétaire valide lui-même, supprime une charge, choisit les types habituels, ajoute un type et filtre la liste', function () {

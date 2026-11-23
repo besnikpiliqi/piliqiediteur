@@ -3,15 +3,18 @@
 namespace App\Domain\Charges\Services;
 
 use App\Domain\Calendrier\Calendrier;
+use App\Domain\Charges\Models\CreditDeTva;
 use App\Domain\Charges\Support\AccesAuxCharges;
 use App\Domain\Charges\Support\MontantsDeTva;
-use App\Domain\TableauDeBord\Enums\SourceDesGraphiques;
+use App\Domain\Charges\Support\ReportDuCreditDeTva;
+use App\Domain\Charges\Support\TvaReportee;
 use App\Domain\TableauDeBord\Services\AchatsDuTableauDeBord;
 use App\Domain\TableauDeBord\Services\ChargesDuTableauDeBord;
 use App\Domain\TableauDeBord\Services\VentesDuTableauDeBord;
 use App\Domain\TableauDeBord\Support\Mois;
 use App\Domain\TableauDeBord\Support\Perimetre;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Support\CleDuModele;
 use Illuminate\Database\Eloquent\Collection;
 use LogicException;
@@ -25,17 +28,29 @@ use LogicException;
  *   des charges validées d'un fournisseur établi hors de France ;
  * - la TVA déductible des achats de marchandises (factures d'achat validées
  *   moins avoirs fournisseur), et celle des charges validées ;
- * - la TVA à payer réelle : la collectée moins ces déductibles ;
- * - la TVA à payer estimée : la réelle, avec aussi les charges à valider.
+ * - la TVA du mois réelle : la collectée moins ces déductibles ;
+ * - la TVA du mois estimée : la réelle, avec aussi les charges à valider.
+ * Puis le report du crédit (lot TVA27, voir ReportDuCreditDeTva) : de la
+ * TVA de chaque période (le mois, ou le trimestre civil au trimestriel),
+ * on retire le crédit reporté de la période d'avant ; positive, c'est la
+ * TVA à payer, négative, le crédit à reporter, la réelle et l'estimation
+ * chacune dans sa chaîne, depuis le début de la chaîne quelle que soit la
+ * période affichée, avec le crédit de la déclaration que la société a
+ * indiquée (voir CreditsDeTva::ancre()). Le report ne se calcule que sur
+ * toute la société (voir Perimetre::reporteLeCreditDeTva()).
  * Les montants sont ceux des documents et des charges, en centimes,
  * additionnés ici, jamais par une somme de la base sur une colonne
- * décimale. Une société en franchise en base n'a pas de TVA : « TVA non
- * applicable ». L'état de TVA officiel (CA3, exigibilité exacte) viendra
- * avec la comptabilité (étape 5), qui reprendra les charges validées.
+ * décimale. Une société en franchise en base, ou dont le régime n'est pas
+ * encore choisi, n'a pas de TVA qui s'affiche (décision de l'éditeur du
+ * 18/11/2026). L'état de TVA officiel (CA3, exigibilité exacte) viendra
+ * avec la comptabilité (étape 5), qui reprendra les charges validées et le
+ * crédit reporté.
  *
  * @phpstan-import-type DocumentDeVente from VentesDuTableauDeBord
  * @phpstan-import-type DocumentDAchat from AchatsDuTableauDeBord
  * @phpstan-import-type ChargeDeLaTva from ChargesDuTableauDeBord
+ *
+ * @phpstan-type TvaDeLaPage array{montants: array<string, MontantsDeTva>, report: TvaReportee|null, avec_les_ventes: bool, sans_celles_de_la_societe: bool, magasins_non_comptes: string|null}
  */
 final class TvaDeLaPeriode
 {
@@ -43,6 +58,7 @@ final class TvaDeLaPeriode
         private readonly VentesDuTableauDeBord $ventes,
         private readonly AchatsDuTableauDeBord $achats,
         private readonly ChargesDuTableauDeBord $charges,
+        private readonly CreditsDeTva $credits,
     ) {}
 
     /**
@@ -94,9 +110,36 @@ final class TvaDeLaPeriode
     }
 
     /**
+     * Le report du crédit sur la TVA de ces mois de cette société (voir
+     * ReportDuCreditDeTva) : la TVA de chaque mois, du premier mois de la
+     * chaîne (ou d'avant) au dernier compté, sans trou ; avec, pour ancre,
+     * la déclaration la plus récente de la société, que l'appelant a lue
+     * une fois pour sa page (voir CreditsDeTva::ancre()). Null hors du
+     * réel normal.
+     *
+     * @param  array<string, MontantsDeTva>  $parMois
+     */
+    public function reporter(Societe $societe, array $parMois, bool $avecLesCharges, ?CreditDeTva $ancre): ?TvaReportee
+    {
+        $cadence = $societe->regime_tva?->cadence();
+
+        if ($cadence === null) {
+            return null;
+        }
+
+        return ReportDuCreditDeTva::calculer(
+            $cadence,
+            CreditsDeTva::premierePeriode($societe, $cadence),
+            $ancre === null ? null : ['periode' => $ancre->periode, 'credit' => $ancre->credit()],
+            $parMois,
+            $avecLesCharges,
+        );
+    }
+
+    /**
      * La TVA de ce mois « AAAA-MM » telle que ce périmètre la montre (voir
-     * desMoisDuPerimetre()) ; null pour une société en franchise en base
-     * (TVA non applicable).
+     * desMoisDuPerimetre()) ; null pour une société dont la TVA ne s'affiche
+     * pas (franchise en base, régime à choisir).
      *
      * @throws LogicException un mois illisible
      */
@@ -112,9 +155,10 @@ final class TvaDeLaPeriode
      * (voir Perimetre::chargesComptees()) de ces magasins, et de « Toute la
      * société » quand tous ses magasins sont comptés ; les documents lus
      * une seule fois, du premier jour du premier mois au dernier jour du
-     * dernier ; null pour une société en franchise en base (TVA non
-     * applicable). La page des charges la montre pour le mois choisi, et
-     * son état téléchargeable pour chaque mois de la période.
+     * dernier ; null pour une société dont la TVA ne s'affiche pas
+     * (franchise en base, régime à choisir). La page des charges la montre
+     * pour le mois choisi, et son état téléchargeable pour chaque mois de
+     * la période.
      *
      * @param  list<string>  $mois
      * @return array<string, MontantsDeTva>|null
@@ -129,7 +173,7 @@ final class TvaDeLaPeriode
             }
         }
 
-        if ($perimetre->societe->estEnFranchiseDeTva()) {
+        if (! $perimetre->montreLaTva()) {
             return null;
         }
 
@@ -153,38 +197,79 @@ final class TvaDeLaPeriode
     }
 
     /**
+     * La TVA de ces mois telle que ce périmètre la montre, et, quand il
+     * reporte le crédit (voir Perimetre::reporteLeCreditDeTva()), le report
+     * depuis le début de la chaîne jusqu'à la fin de la période qui
+     * contient le plus récent de ces mois, sans les mois à venir : les
+     * documents lus une seule fois, du premier mois de la chaîne (ou du
+     * premier de ces mois) au dernier mois de cette période. Au
+     * trimestriel, le trimestre d'un mois compte ainsi toujours ses trois
+     * mois, ou ceux déjà commencés pour le trimestre en cours, quel que
+     * soit le mois choisi ou la fin de la période affichée : le chiffre d'un
+     * mois ne dépend jamais du filtre (cahier du lot TVA27). Un mois à
+     * venir n'a pas de report. Null pour une société dont la TVA ne
+     * s'affiche pas.
+     *
+     * @param  list<string>  $mois
+     * @return array{montants: array<string, MontantsDeTva>, report: TvaReportee|null}|null
+     *
+     * @throws LogicException un mois illisible
+     */
+    public function avecLeReport(Perimetre $perimetre, array $mois): ?array
+    {
+        if (! $perimetre->reporteLeCreditDeTva() || $mois === []) {
+            $montants = $this->desMoisDuPerimetre($perimetre, $mois);
+
+            return $montants === null ? null : ['montants' => $montants, 'report' => null];
+        }
+
+        $cadence = $perimetre->societe->regime_tva?->cadence() ?? throw new LogicException('Le report du crédit se calcule au réel normal.');
+        $ceMois = Mois::duJour($perimetre->aujourdhui());
+        $lus = Mois::du(min(CreditsDeTva::premierePeriode($perimetre->societe, $cadence), min($mois)), $cadence->dernierMois($cadence->periodeDu(max($mois))));
+        $montants = $this->desMoisDuPerimetre($perimetre, $lus) ?? [];
+        $chaine = array_filter($montants, static fn (string $unMois): bool => $unMois <= $ceMois, ARRAY_FILTER_USE_KEY);
+
+        return [
+            'montants' => array_intersect_key($montants, array_flip($mois)),
+            'report' => $this->reporter($perimetre->societe, $chaine, $perimetre->charges !== null, $this->credits->ancre($perimetre->societe)),
+        ];
+    }
+
+    /**
      * La TVA de ces mois telle que la page des charges la montre, sur le
      * magasin de son filtre ($magasin, ou « Toute la société » seulement
      * avec $sansMagasin) : pour qui voit les graphiques de son écran
      * ($perimetre, déjà restreint au magasin du filtre), celle de son
-     * tableau de bord, ventes et achats compris (voir
-     * desMoisDuPerimetre()) ; pour les autres, celle des seules charges que
-     * l'accès voit, sans les ventes ni les achats, qu'ils ne voient pas ;
-     * null dans une société en franchise en base (TVA non applicable).
-     * Avec elle : si elle compte les ventes, si elle laisse de côté les
-     * charges de « Toute la société » parce qu'un magasin n'est pas compté,
-     * et la phrase grise des magasins qu'elle ne compte pas.
+     * tableau de bord, ventes et achats compris, avec le report du crédit
+     * quand elle compte toute la société (voir avecLeReport()) ; pour les
+     * autres, celle des seules charges que l'accès voit, sans les ventes ni
+     * les achats, qu'ils ne voient pas, ni le report ; null dans une
+     * société dont la TVA ne s'affiche pas (franchise en base, régime à
+     * choisir). Avec elle : si elle compte les ventes, si elle laisse de
+     * côté les charges de « Toute la société » parce qu'un magasin n'est
+     * pas compté, et la phrase grise des magasins qu'elle ne compte pas.
      *
      * @param  list<string>  $mois  « AAAA-MM »
      * @param  list<int>  $magasinsVus  les magasins que l'accès voit
-     * @return array{montants: array<string, MontantsDeTva>, avec_les_ventes: bool, sans_celles_de_la_societe: bool, magasins_non_comptes: string|null}|null
+     * @return TvaDeLaPage|null
      *
      * @throws LogicException un mois illisible
      */
     public function pourLaPageDesCharges(AccesAuxCharges $acces, ?Perimetre $perimetre, array $mois, ?int $magasin, bool $sansMagasin, array $magasinsVus): ?array
     {
-        if ($acces->societe->estEnFranchiseDeTva()) {
+        if ($acces->societe->regime_tva?->cadence() === null) {
             return null;
         }
 
         if ($perimetre !== null) {
-            $montants = $this->desMoisDuPerimetre($perimetre, $mois);
+            $tva = $this->avecLeReport($perimetre, $mois);
 
-            return $montants === null ? null : [
-                'montants' => $montants,
+            return $tva === null ? null : [
+                'montants' => $tva['montants'],
+                'report' => $tva['report'],
                 'avec_les_ventes' => true,
-                'sans_celles_de_la_societe' => $perimetre->laisseLesChargesDeLaSociete(self::magasinsComptes($perimetre)),
-                'magasins_non_comptes' => $perimetre->phraseDesMagasinsNonComptes(...self::sourcesDeLaTva($perimetre)),
+                'sans_celles_de_la_societe' => $perimetre->laisseLesChargesDeLaSociete($perimetre->magasinsDeLaTva()),
+                'magasins_non_comptes' => $perimetre->phraseDesMagasinsNonComptes(...$perimetre->sourcesDeLaTva()),
             ];
         }
 
@@ -196,19 +281,7 @@ final class TvaDeLaPeriode
         $deLaSociete = $acces->chargesDeLaSociete && $magasin === null;
         $charges = ChargesDuTableauDeBord::lire($acces->societe, $mois, $magasins, $deLaSociete);
 
-        return ['montants' => self::parMois($mois, $magasins, [], [], $charges, $deLaSociete), 'avec_les_ventes' => false, 'sans_celles_de_la_societe' => false, 'magasins_non_comptes' => null];
-    }
-
-    /**
-     * Les magasins que compte la TVA de ce périmètre : ceux où il voit
-     * toutes les ventes et, dans une société qui a des articles, tous les
-     * achats.
-     *
-     * @return list<int>
-     */
-    public static function magasinsComptes(Perimetre $perimetre): array
-    {
-        return CleDuModele::desModeles(self::magasinsDeLaTva($perimetre));
+        return ['montants' => self::parMois($mois, $magasins, [], [], $charges, $deLaSociete), 'report' => null, 'avec_les_ventes' => false, 'sans_celles_de_la_societe' => false, 'magasins_non_comptes' => null];
     }
 
     /**
@@ -216,17 +289,6 @@ final class TvaDeLaPeriode
      */
     private static function magasinsDeLaTva(Perimetre $perimetre): Collection
     {
-        return $perimetre->magasinsAvec(...self::sourcesDeLaTva($perimetre));
-    }
-
-    /**
-     * Les documents que compte la TVA : les ventes, et les achats dans une
-     * société qui a des articles.
-     *
-     * @return list<SourceDesGraphiques>
-     */
-    private static function sourcesDeLaTva(Perimetre $perimetre): array
-    {
-        return [SourceDesGraphiques::Ventes, ...($perimetre->societe->aDesArticles() ? [SourceDesGraphiques::Achats] : [])];
+        return $perimetre->magasinsAvec(...$perimetre->sourcesDeLaTva());
     }
 }

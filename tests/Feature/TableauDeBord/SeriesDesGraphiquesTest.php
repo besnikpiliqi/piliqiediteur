@@ -7,6 +7,8 @@ use App\Domain\Achats\Actions\ValiderFactureAchatAction;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
+use App\Domain\Charges\Actions\DeclarerUnCreditDeTvaAction;
+use App\Domain\Charges\Support\TextesDuCreditDeTva;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\Fournisseur;
@@ -84,16 +86,32 @@ class SeriesDesGraphiquesTest extends TestCase
      * Chaque graphique du catalogue, ses étiquettes et ses jeux attendus
      * sur les douze derniers mois du jeu de données.
      *
-     * @return array<string, array{0: Graphique, 1: list<string>|null, 2: array<string, list<int|null>>, 3?: array<int, string>}>
+     * @return array<string, array{0: Graphique, 1: list<string>|null, 2: array<string, list<int|null>>, 3?: array<int, string>, 4?: string|null}>
      */
     public static function graphiques(): array
     {
         $parMois = fn (int $aout, int $septembre, int $octobre): array => array_replace(array_fill(0, 12, 0), [self::AOUT => $aout, self::SEPTEMBRE => $septembre, self::OCTOBRE => $octobre]);
+        // Le report du crédit (lot TVA27) part de juillet 2026, le mois de
+        // l'arrivée de la société : rien avant ; août 4,00 € à payer,
+        // septembre −4,00 € à reporter, octobre 14,00 € − 4,00 € = 10,00 €.
+        $dePeriode = fn (int $juillet, int $aout, int $septembre, int $octobre): array => array_replace(array_fill(0, 12, null), [self::AOUT - 1 => $juillet, self::AOUT => $aout, self::SEPTEMBRE => $septembre, self::OCTOBRE => $octobre]);
 
         return [
             'chiffre d\'affaires HT par mois' => [Graphique::ChiffreDAffairesParMois, null, ['Chiffre d\'affaires HT' => $parMois(2000, 3000, 7000)]],
             'ventes et achats HT par mois' => [Graphique::VentesEtAchatsParMois, null, ['Ventes HT' => $parMois(2000, 3000, 7000), 'Achats HT' => $parMois(0, 5000, 0)]],
-            'TVA à payer par mois' => [Graphique::TvaAPayerParMois, null, ['TVA collectée' => $parMois(400, 600, 1400), 'TVA déductible des achats' => $parMois(0, 1000, 0), 'TVA déductible des charges' => $parMois(0, 0, 0), 'TVA à payer' => $parMois(400, -400, 1400), 'TVA à payer (estimation)' => $parMois(400, -400, 1400)]],
+            'TVA à payer par mois' => [Graphique::TvaAPayerParMois, null, [
+                'TVA collectée' => $parMois(400, 600, 1400),
+                'TVA déductible des achats' => $parMois(0, 1000, 0),
+                'TVA déductible des charges' => $parMois(0, 0, 0),
+                'TVA du mois' => $parMois(400, -400, 1400),
+                'Crédit reporté de la période d\'avant' => $dePeriode(0, 0, 0, 400),
+                'TVA à payer' => $dePeriode(0, 400, 0, 1000),
+                'Crédit de TVA à reporter' => $dePeriode(0, 0, 400, 0),
+                'Crédit de TVA à reporter (sous le zéro)' => $dePeriode(0, 0, -400, 0),
+                'TVA à payer (estimation)' => $dePeriode(0, 400, 0, 1000),
+                'Crédit de TVA à reporter (estimation)' => $dePeriode(0, 0, 400, 0),
+                'Estimation avec les charges à valider' => $dePeriode(0, 400, -400, 1000),
+            ], [], TextesDuCreditDeTva::SANS_LES_REMBOURSEMENTS.' Crédit de TVA de votre dernière déclaration : non déclaré.'],
             'chiffre d\'affaires HT par an' => [Graphique::ChiffreDAffairesParAn, ['2026'], ['Chiffre d\'affaires HT (exercice)' => [12000]]],
             'marge brute HT par mois' => [Graphique::MargeBruteParMois, null, ['Marge brute HT' => $parMois(0, 1500, 0)], [self::SEPTEMBRE => 'Taux de marge : 50,0 %']],
             'chiffre d\'affaires par magasin' => [Graphique::ChiffreDAffairesParMagasin, ['Ma Boutique'], ['Chiffre d\'affaires HT' => [12000]]],
@@ -123,9 +141,10 @@ class SeriesDesGraphiquesTest extends TestCase
      * @param  list<string>|null  $etiquettes  null pour les douze mois
      * @param  array<string, list<int|null>>  $jeux
      * @param  array<int, string>  $infoBulles
+     * @param  string|null  $note  la phrase grise : aucune, le propriétaire voyant tout, hors celle du report du crédit de TVA
      */
     #[DataProvider('graphiques')]
-    public function test_chaque_graphique_compte_les_montants_enregistres_des_documents_emis(Graphique $graphique, ?array $etiquettes, array $jeux, array $infoBulles = []): void
+    public function test_chaque_graphique_compte_les_montants_enregistres_des_documents_emis(Graphique $graphique, ?array $etiquettes, array $jeux, array $infoBulles = [], ?string $note = null): void
     {
         $magasin = $this->preparer();
 
@@ -134,7 +153,7 @@ class SeriesDesGraphiquesTest extends TestCase
         $this->assertSame($jeux, $this->valeurs($serie));
         $this->assertSame($etiquettes ?? self::douzeMois(), $serie->etiquettes);
         $this->assertSame($infoBulles, $serie->infoBulles);
-        $this->assertNull($serie->note, 'Le propriétaire voit tout : aucun magasin n\'est écarté.');
+        $this->assertSame($note, $serie->note, 'Le propriétaire voit tout : aucun magasin n\'est écarté.');
         $this->assertSame($graphique === Graphique::EcartDesPrixDAchat, $serie->ecartDesPrixDAchat !== null, 'Seule la carte de l\'écart des prix d\'achat porte son calcul.');
     }
 
@@ -142,8 +161,10 @@ class SeriesDesGraphiquesTest extends TestCase
      * Les quatre chiffres clés d'octobre 2026 : 70,00 € de chiffre
      * d'affaires (60,00 € de la facture, 20,00 € du ticket comptoir, moins
      * 10,00 € d'avoir), aucun achat, 14,00 € de TVA collectée et rien de
-     * déductible, et 76,00 € restant dus, dont les 24,00 € de la facture
-     * d'août en retard ; aucune variation sans rien en octobre 2025.
+     * déductible, moins les 4,00 € de crédit de septembre reportés (lot
+     * TVA27) : 10,00 € à payer, sans crédit déclaré ; et 76,00 € restant
+     * dus, dont les 24,00 € de la facture d'août en retard ; aucune
+     * variation sans rien en octobre 2025.
      */
     public function test_les_chiffres_cles_sont_ceux_du_mois_en_cours(): void
     {
@@ -154,7 +175,19 @@ class SeriesDesGraphiquesTest extends TestCase
         $this->assertSame([
             'ca' => ['valeur' => 7000, 'variation' => null],
             'achats' => ['valeur' => 0, 'variation' => null],
-            'tva' => ['franchise' => false, 'a_payer' => 1400, 'collectee' => 1400, 'deductible' => 0, 'estimation' => null, 'avec_les_charges' => true, 'sans_celles_de_la_societe' => false],
+            'tva' => [
+                'report' => true,
+                'periode' => 'octobre 2026',
+                'a_payer' => 1000,
+                'credit_a_reporter' => 0,
+                'calcul' => 'TVA du mois 14,00 € − crédit reporté 4,00 € = 10,00 € à payer.',
+                'collectee' => 1400,
+                'deductible' => 0,
+                'estimation' => null,
+                'avec_les_charges' => true,
+                'sans_celles_de_la_societe' => false,
+                'pastille' => ['texte' => 'estimation : crédit de TVA non déclaré', 'couleur' => 'warning'],
+            ],
             'restant_du' => ['valeur' => 7600, 'en_retard' => 2400],
         ], $chiffres);
     }
@@ -419,9 +452,42 @@ class SeriesDesGraphiquesTest extends TestCase
     }
 
     /**
+     * La période de la déclaration qui sert de point de départ (lot
+     * TVA27) : le 15 novembre 2026, le propriétaire indique 50,00 € de
+     * crédit à la déclaration d'octobre. « Voir les chiffres » ne donne pour
+     * octobre ni crédit reporté ni TVA à payer, ceux de sa déclaration, que
+     * PILIQI ne connaît pas, comme la page des charges et son état, et non
+     * les 4,00 € que la chaîne apportait de septembre ; son crédit à
+     * reporter est celui déclaré, que novembre reprend.
+     */
+    public function test_la_periode_declaree_n_a_ni_credit_reporte_ni_tva_a_payer_connus(): void
+    {
+        $magasin = $this->preparer();
+        $this->travelTo(self::aParis('2026-11-15 12:00:00'));
+        app(DeclarerUnCreditDeTvaAction::class)->handle($this->proprietaireDe($magasin), $magasin->societe()->firstOrFail(), '2026-10', -5000);
+        app(TenantContext::class)->clear();
+
+        $serie = $this->series($this->perimetreDuProprietaire($magasin), [Graphique::TvaAPayerParMois])[Graphique::TvaAPayerParMois->value];
+        $valeurs = $this->valeurs($serie);
+        // De décembre 2025 à novembre 2026 : septembre au rang 9, octobre au 10, novembre au 11.
+        $duMois = fn (int $rang): array => [
+            $valeurs['TVA du mois'][$rang],
+            $valeurs['Crédit reporté de la période d\'avant'][$rang],
+            $valeurs['TVA à payer'][$rang],
+            $valeurs['Crédit de TVA à reporter'][$rang],
+        ];
+
+        $this->assertSame([-400, 0, 0, 400], $duMois(9), 'Septembre laisse 4,00 € de crédit à reporter.');
+        $this->assertSame([1400, null, null, 5000], $duMois(10), 'Octobre, déclaré : ni crédit reporté ni TVA à payer connus, 50,00 € de crédit déclaré.');
+        $this->assertSame([0, 5000, 0, 5000], $duMois(11), 'Novembre part du crédit déclaré.');
+        $this->assertSame('octobre 2026, crédit déclaré : '.TextesDuCreditDeTva::euros(5000), $serie->infoBulles[10] ?? null);
+    }
+
+    /**
      * Une société en franchise en base ne collecte ni ne déduit aucune
-     * TVA : le graphique de la TVA à payer n'est pas proposé, et le chiffre
-     * clé dit « TVA non applicable (franchise en base) ».
+     * TVA : le graphique de la TVA à payer n'est pas proposé, et aucun
+     * chiffre clé de la TVA ne s'affiche, pas même zéro (décision de
+     * l'éditeur du 18/11/2026).
      */
     public function test_la_franchise_en_base_n_a_pas_de_tva_a_estimer(): void
     {
@@ -434,7 +500,7 @@ class SeriesDesGraphiquesTest extends TestCase
         $chiffres = $this->chiffres($perimetre);
 
         $this->assertFalse($perimetre->voit(Graphique::TvaAPayerParMois));
-        $this->assertSame(['franchise' => true, 'a_payer' => 0, 'collectee' => 0, 'deductible' => 0, 'estimation' => null, 'avec_les_charges' => false, 'sans_celles_de_la_societe' => false], $chiffres['tva']);
+        $this->assertNull($chiffres['tva']);
         $this->assertSame(['valeur' => 2400, 'variation' => null], $chiffres['ca'], 'À 0 %, la lampe se vend 24,00 € HT.');
     }
 
@@ -462,8 +528,8 @@ class SeriesDesGraphiquesTest extends TestCase
         }
 
         $this->assertNull($chiffres['achats']);
-        $this->assertSame(['franchise' => false, 'a_payer' => 1000, 'collectee' => 1000, 'deductible' => 0, 'estimation' => null, 'avec_les_charges' => true, 'sans_celles_de_la_societe' => false], $chiffres['tva']);
-        $this->assertSame(['TVA à payer', 1000], [$tva->jeux[3]['libelle'], $tva->jeux[3]['valeurs'][self::OCTOBRE]]);
+        $this->assertSame(['report' => true, 'periode' => 'octobre 2026', 'a_payer' => 1000, 'credit_a_reporter' => 0, 'calcul' => 'TVA du mois 10,00 € − crédit reporté 0,00 € (non déclaré).', 'collectee' => 1000, 'deductible' => 0, 'estimation' => null, 'avec_les_charges' => true, 'sans_celles_de_la_societe' => false, 'pastille' => ['texte' => 'estimation : crédit de TVA non déclaré', 'couleur' => 'warning']], $chiffres['tva']);
+        $this->assertSame(['TVA à payer', 1000], [$tva->jeux[5]['libelle'], $tva->jeux[5]['valeurs'][self::OCTOBRE]]);
     }
 
     /**

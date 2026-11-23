@@ -293,7 +293,7 @@ class EnvoyerDocumentAction
     private function expediteur(User $auteur, DocumentEnvoyable $document): User
     {
         $magasin = app(TenantContext::class)->magasin();
-        Magasin::query()->whereKey($magasin->getKey())->sharedLock()->firstOrFail()->verifierQuIlPeutVendre();
+        Magasin::query()->whereKey($magasin->getKey())->sharedLock()->firstOrFail()->verifierQuIlPeutVendre($auteur);
 
         return $this->lecteur->exigerSousVerrou($auteur, 'envoyer', $magasin, $this->relire($document, false));
     }

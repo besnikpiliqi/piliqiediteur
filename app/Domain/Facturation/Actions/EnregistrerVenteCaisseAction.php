@@ -119,7 +119,7 @@ class EnregistrerVenteCaisseAction
     {
         return DB::transaction(function () use ($auteur, $magasin, $client, $lignes, $reglement, $confirmation) {
             $this->registre->verrouiller($magasin);
-            Magasin::query()->whereKey($magasin->getKey())->sharedLock()->firstOrFail()->verifierQuIlPeutVendre();
+            Magasin::query()->whereKey($magasin->getKey())->sharedLock()->firstOrFail()->verifierQuIlPeutVendre($auteur);
             $vendeur = $this->lecteur->exigerSousVerrou($auteur, PermissionRegistry::FACTURE_CREATE, $magasin);
 
             foreach ([PermissionRegistry::FACTURE_EMETTRE, PermissionRegistry::PAIEMENT_CREER] as $autorisation) {

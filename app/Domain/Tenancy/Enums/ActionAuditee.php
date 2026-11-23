@@ -135,6 +135,11 @@ enum ActionAuditee: string implements HasLabel
     case TypeDeChargeSupprime = 'type_de_charge_supprime';
     case TypesDeChargeHabituelsChoisis = 'types_de_charge_habituels_choisis';
     case EtatDesChargesTelecharge = 'etat_des_charges_telecharge';
+    case SeuilDuTrimestrielVerifie = 'seuil_du_trimestriel_verifie';
+    case CreditDeTvaDeclare = 'credit_de_tva_declare';
+    case CreditDeTvaModifie = 'credit_de_tva_modifie';
+    case CreditDeTvaConfirme = 'credit_de_tva_confirme';
+    case CreditDeTvaCorrige = 'credit_de_tva_corrige';
 
     /**
      * Les mots qui, dans un nom de champ (entre ses traits de soulignement,
@@ -267,6 +272,11 @@ enum ActionAuditee: string implements HasLabel
             self::TypeDeChargeSupprime => 'Type de charge supprimé',
             self::TypesDeChargeHabituelsChoisis => 'Types de charge habituels choisis',
             self::EtatDesChargesTelecharge => 'État des charges téléchargé',
+            self::SeuilDuTrimestrielVerifie => 'Régime de TVA vérifié après le dépassement du seuil du trimestriel',
+            self::CreditDeTvaDeclare => 'Crédit de TVA d\'une déclaration indiqué',
+            self::CreditDeTvaModifie => 'Crédit de TVA d\'une déclaration modifié par le propriétaire',
+            self::CreditDeTvaConfirme => 'Crédit de TVA d\'une déclaration vérifié par le comptable',
+            self::CreditDeTvaCorrige => 'Crédit de TVA d\'une déclaration corrigé par le comptable',
         };
     }
 
@@ -571,6 +581,16 @@ enum ActionAuditee: string implements HasLabel
             // L'état des charges téléchargé (voir EtatDesCharges) : ce qu'il
             // couvre, ses filtres et son format, jamais son contenu.
             self::EtatDesChargesTelecharge => ['periode', 'vue', 'magasin', 'format', 'nombre_charges'],
+            // « C'est vérifié » sur le dépassement du seuil du réel normal
+            // trimestriel (voir SeuilDuTrimestriel) : l'année, le régime
+            // de la société et le chiffre d'affaires HT de l'année lu dans
+            // PILIQI, en centimes.
+            self::SeuilDuTrimestrielVerifie => ['annee', 'regime_tva', 'chiffre_d_affaires_ht'],
+            // Le crédit de TVA d'une déclaration faite hors de PILIQI (lot
+            // TVA27, voir CreditDeTva) : sa période, sa cadence, son solde
+            // en centimes (négatif pour un crédit, 0 sans crédit), son état
+            // de vérification, qui l'a vérifié et le motif d'une correction.
+            self::CreditDeTvaDeclare, self::CreditDeTvaModifie, self::CreditDeTvaConfirme, self::CreditDeTvaCorrige => ['credit', 'periode', 'cadence', 'solde', 'verifie', 'verifie_par', 'motif'],
         };
     }
 }

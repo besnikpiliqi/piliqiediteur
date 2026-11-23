@@ -52,7 +52,7 @@ class ParametresFiscauxSocieteTest extends TestCase
      */
     public function test_le_regime_de_la_societe_s_applique_a_tous_ses_magasins(): void
     {
-        $lyon = $this->ouvrirUneSociete(['nom' => 'Lyon', 'regime_tva' => RegimeTva::ReelSimplifie]);
+        $lyon = $this->ouvrirUneSociete(['nom' => 'Lyon', 'regime_tva' => RegimeTva::ReelNormalTrimestriel]);
         $villeurbanne = $this->ouvrirUnAutreMagasin($lyon, ['nom' => 'Villeurbanne']);
         $this->ouvrirLAdministration($lyon->societe);
 
@@ -77,7 +77,7 @@ class ParametresFiscauxSocieteTest extends TestCase
      */
     public function test_un_changement_de_regime_s_inscrit_au_journal_de_chaque_magasin_avec_l_ancienne_et_la_nouvelle_valeur(): void
     {
-        $lyon = $this->ouvrirUneSociete(['nom' => 'Lyon', 'regime_tva' => RegimeTva::ReelSimplifie]);
+        $lyon = $this->ouvrirUneSociete(['nom' => 'Lyon', 'regime_tva' => RegimeTva::ReelNormalTrimestriel]);
         $villeurbanne = $this->ouvrirUnAutreMagasin($lyon, ['nom' => 'Villeurbanne']);
         $ferme = $this->ouvrirUnAutreMagasin($lyon, ['nom' => 'Bron']);
         $ferme->forceFill(['statut' => StatutMagasin::Ferme])->save();
@@ -90,7 +90,7 @@ class ParametresFiscauxSocieteTest extends TestCase
 
         foreach ([$lyon, $villeurbanne, $ferme] as $magasin) {
             $this->assertSame([
-                ['parametre' => 'regime_tva', 'ancienne_valeur' => 'reel_simplifie', 'nouvelle_valeur' => 'reel_normal_mensuel'],
+                ['parametre' => 'regime_tva', 'ancienne_valeur' => 'reel_normal_trimestriel', 'nouvelle_valeur' => 'reel_normal_mensuel'],
                 ['parametre' => 'option_debits_tva', 'ancienne_valeur' => false, 'nouvelle_valeur' => true],
             ], $this->parametresJournalises($magasin));
         }
@@ -102,7 +102,7 @@ class ParametresFiscauxSocieteTest extends TestCase
      */
     public function test_un_refus_de_l_action_s_affiche_sous_son_champ(): void
     {
-        $lyon = $this->ouvrirUneSociete(['nom' => 'Lyon', 'regime_tva' => RegimeTva::ReelSimplifie]);
+        $lyon = $this->ouvrirUneSociete(['nom' => 'Lyon', 'regime_tva' => RegimeTva::ReelNormalTrimestriel]);
         $this->ouvrirLAdministration($lyon->societe);
         $this->mock(ModifierParametresFiscauxSocieteAction::class, fn (MockInterface $action) => $action->shouldReceive('handle')->once()->andThrow(ValidationException::withMessages(['regime_tva' => 'Ce régime de TVA est refusé.'])));
 
@@ -112,16 +112,46 @@ class ParametresFiscauxSocieteTest extends TestCase
             ->assertHasFormErrors(['regime_tva'])
             ->assertSee('Ce régime de TVA est refusé.');
 
-        $this->assertSame(RegimeTva::ReelSimplifie, $lyon->societe->fresh()->regime_tva);
+        $this->assertSame(RegimeTva::ReelNormalTrimestriel, $lyon->societe->fresh()->regime_tva);
+    }
+
+    /**
+     * Le régime simplifié n'existe plus depuis le 1er janvier 2027 (loi
+     * n° 2025-127 du 14/02/2025, art. 38 ; lot TVA27) : la valeur
+     * « reel_simplifie » est refusée sous son champ, comme un régime vide,
+     * qui ne se remet jamais une fois choisi ; le menu ne propose que les
+     * trois régimes, et son aide dit le choix entre le mensuel et le
+     * trimestriel.
+     */
+    public function test_le_regime_simplifie_n_existe_plus_et_le_regime_ne_redevient_jamais_vide(): void
+    {
+        $lyon = $this->ouvrirUneSociete(['nom' => 'Lyon', 'regime_tva' => RegimeTva::ReelNormalTrimestriel]);
+        $this->ouvrirLAdministration($lyon->societe);
+
+        Livewire::test(ParametresFiscauxSociete::class)
+            ->assertSee(ParametresFiscauxSociete::AIDE_DU_REGIME)
+            ->fillForm(['regime_tva' => 'reel_simplifie', 'option_debits_tva' => false, 'mois_fin_exercice' => 12])
+            ->call('save')
+            ->assertHasFormErrors(['regime_tva'])
+            ->fillForm(['regime_tva' => null, 'option_debits_tva' => false, 'mois_fin_exercice' => 12])
+            ->call('save')
+            ->assertHasFormErrors(['regime_tva' => 'required']);
+
+        $this->assertSame(RegimeTva::ReelNormalTrimestriel, $lyon->societe->fresh()->regime_tva);
+        $this->assertSame(['reel_normal_mensuel', 'reel_normal_trimestriel', 'franchise_en_base'], array_map(fn (RegimeTva $regime): string => $regime->value, RegimeTva::cases()));
+        $this->assertSame(['Réel normal, déclaration mensuelle (CA3)', 'Réel normal, déclaration trimestrielle (CA3)', 'Franchise en base de TVA'], array_map(fn (RegimeTva $regime): string => $regime->getLabel(), RegimeTva::cases()));
+        $this->assertNull(RegimeTva::tryFrom('reel_simplifie'));
+        $this->assertStringContainsString('Le régime simplifié n\'existe plus depuis le 1er janvier 2027 (loi n° 2025-127, art. 38).', ParametresFiscauxSociete::AIDE_DU_REGIME);
+        $this->assertStringContainsString('ne dépasse pas 1 000 000 € l\'année précédente et 1 100 000 € l\'année en cours ; mensuelle au-delà, ou sur option.', ParametresFiscauxSociete::AIDE_DU_REGIME);
     }
 
     public function test_un_parametre_inchange_n_est_pas_journalise(): void
     {
-        $lyon = $this->ouvrirUneSociete(['nom' => 'Lyon', 'regime_tva' => RegimeTva::ReelSimplifie]);
+        $lyon = $this->ouvrirUneSociete(['nom' => 'Lyon', 'regime_tva' => RegimeTva::ReelNormalTrimestriel]);
         $this->ouvrirLAdministration($lyon->societe);
 
         Livewire::test(ParametresFiscauxSociete::class)
-            ->fillForm(['regime_tva' => RegimeTva::ReelSimplifie->value, 'option_debits_tva' => true, 'mois_fin_exercice' => 12])
+            ->fillForm(['regime_tva' => RegimeTva::ReelNormalTrimestriel->value, 'option_debits_tva' => true, 'mois_fin_exercice' => 12])
             ->call('save');
 
         $this->assertSame([
@@ -136,7 +166,7 @@ class ParametresFiscauxSocieteTest extends TestCase
      */
     public function test_sans_cle_de_signature_rien_n_est_enregistre_dans_aucun_magasin(): void
     {
-        $lyon = $this->ouvrirUneSociete(['nom' => 'Lyon', 'regime_tva' => RegimeTva::ReelSimplifie]);
+        $lyon = $this->ouvrirUneSociete(['nom' => 'Lyon', 'regime_tva' => RegimeTva::ReelNormalTrimestriel]);
         $villeurbanne = $this->ouvrirUnAutreMagasin($lyon, ['nom' => 'Villeurbanne']);
         $this->ouvrirLAdministration($lyon->societe);
         config(['caisse_securisee.cle_privee' => null]);
@@ -147,7 +177,7 @@ class ParametresFiscauxSocieteTest extends TestCase
             ->call('save')
             ->assertNotified('Caisse sécurisée non configurée : la clé privée de signature (CAISSE_SECURISEE_CLE_PRIVEE) est absente.');
 
-        $this->assertSame(RegimeTva::ReelSimplifie, $lyon->societe->fresh()->regime_tva);
+        $this->assertSame(RegimeTva::ReelNormalTrimestriel, $lyon->societe->fresh()->regime_tva);
         $this->assertSame([[], []], [$this->parametresJournalises($lyon), $this->parametresJournalises($villeurbanne)]);
     }
 
@@ -187,7 +217,7 @@ class ParametresFiscauxSocieteTest extends TestCase
      */
     public function test_une_emission_lit_le_regime_de_la_societe_apres_son_verrou(): void
     {
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Lyon', 'regime_tva' => RegimeTva::ReelSimplifie]);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Lyon', 'regime_tva' => RegimeTva::ReelNormalTrimestriel]);
         $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]]);
         $regimeChange = false;
         DB::listen(function (QueryExecuted $requete) use (&$regimeChange, $magasin): void {

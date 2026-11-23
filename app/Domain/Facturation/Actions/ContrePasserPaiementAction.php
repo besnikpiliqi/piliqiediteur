@@ -135,7 +135,7 @@ class ContrePasserPaiementAction
             }
 
             $this->refuserSiLaJourneeEstCloturee($journee, $this->registre->derniereJourneeCloturee($magasin));
-            Magasin::query()->whereKey($magasin->getKey())->firstOrFail()->verifierQuIlPeutVendre();
+            Magasin::query()->whereKey($magasin->getKey())->firstOrFail()->verifierQuIlPeutVendre($auteur);
             $compte = $this->lecteur->exigerSousVerrou($auteur, 'contrePasser', $magasin, $original);
             $this->caissesPersonnelles->refuserSiSaCaisseEstOuverteAilleurs($compte, $magasin);
 

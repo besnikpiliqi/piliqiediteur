@@ -5,6 +5,7 @@ namespace Tests\Feature\Charges;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Cabinets\Actions\ReglerLesAutorisationsDuCabinetAction;
 use App\Domain\Cabinets\Models\LienCabinet;
+use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Charges\Actions\RenvoyerUneChargeAction;
 use App\Domain\Charges\Actions\ValiderUneChargeAction;
 use App\Domain\Charges\Enums\EtatDeLaCharge;
@@ -16,9 +17,13 @@ use App\Domain\Charges\Services\EtatDesChargesEnPdf;
 use App\Domain\Charges\Services\TvaDeLaPeriode;
 use App\Domain\Charges\Support\AccesAuxCharges;
 use App\Domain\Charges\Support\FiltresDeLEtat;
+use App\Domain\Charges\Support\TextesDuCreditDeTva;
+use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Fichiers\EnTetesDesFichiers;
+use App\Domain\TableauDeBord\Services\PerimetreDesGraphiques;
 use App\Domain\Tenancy\Enums\ActionAuditee;
+use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\EntreeAudit;
 use App\Domain\Tenancy\Models\Magasin;
@@ -28,6 +33,7 @@ use App\Filament\PageDesCharges;
 use App\Models\User;
 use DateTimeInterface;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 use OpenSpout\Reader\XLSX\Reader;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -160,15 +166,29 @@ class EtatDesChargesTest extends TestCase
         $this->assertMatchesRegularExpression('#/MediaBox \[0(\.0+)? 0(\.0+)? 841\.8\d* 595\.2\d*\]#', $pdf, 'Une page A4 à l\'horizontale.');
     }
 
+    /**
+     * En franchise en base, l'état ne montre aucune TVA, pas même zéro
+     * (décision de l'éditeur du 18/11/2026, lot TVA27), et le dit ; avant
+     * le choix du régime, il le dit aussi.
+     */
     public function test_sans_tva_en_franchise_en_base_le_pdf_dit_non_applicable(): void
     {
+        $this->changerLeRegime(RegimeTva::FranchiseEnBase);
+        $contenu = app(EtatDesCharges::class)->contenu($this->accesDu($this->proprietaire), $this->filtres(), null, '');
+        $html = app(EtatDesChargesEnPdf::class)->html($contenu);
+
+        $this->assertStringContainsString('Aucune TVA à afficher : la société est en franchise en base.', $html);
+        $this->assertStringNotContainsString('TVA à payer', $html);
+
+        $this->changerLeRegime(null);
         $contenu = app(EtatDesCharges::class)->contenu($this->accesDu($this->proprietaire), $this->filtres(), null, '');
 
-        $this->assertStringContainsString('TVA non applicable (franchise en base).', app(EtatDesChargesEnPdf::class)->html($contenu));
+        $this->assertStringContainsString('Le régime de TVA de la société n&#039;est pas encore choisi : aucune TVA à afficher.', app(EtatDesChargesEnPdf::class)->html($contenu));
     }
 
     public function test_l_excel_ecrit_des_nombres_des_dates_des_couleurs_et_desamorce_les_formules(): void
     {
+        $this->changerLeRegime(RegimeTva::FranchiseEnBase);
         $this->dansLEspaceDeLaSociete($this->societe, $this->proprietaire);
         $fichier = app(EtatDesCharges::class)->telecharger($this->accesDu($this->proprietaire), $this->filtres(), null, '', FormatDeLEtat::Excel);
         $feuilles = self::lireLeClasseur($fichier['contenu']);
@@ -197,7 +217,7 @@ class EtatDesChargesTest extends TestCase
         $renvoyee = collect($liste)->first(fn (array $ligne): bool => ($ligne[3] ?? null) === 'Papeterie du centre') ?? [];
         $this->assertSame('Pièce illisible', $renvoyee[16] ?? null);
 
-        $this->assertSame([['TVA non applicable (franchise en base).']], $feuilles['TVA par mois']);
+        $this->assertSame([['Aucune TVA à afficher : la société est en franchise en base.']], $feuilles['TVA par mois']);
 
         $zip = self::fichiersDuClasseur($fichier['contenu']);
         foreach (EtatDeLaCharge::cases() as $etat) {
@@ -228,6 +248,146 @@ class EtatDesChargesTest extends TestCase
             'Une ligne par mois de la période, sous les titres.',
         );
         $this->assertContains(['Document de travail, n\'est pas une déclaration de TVA.'], $feuilles['TVA par mois']);
+    }
+
+    /**
+     * Sur une TVA qui compte toute la société, au réel normal, l'état porte
+     * le report du crédit de TVA tel que la page le compte (lot TVA27) : la
+     * société, arrivée le 20 mai 2026, n'a encore déclaré aucun crédit ;
+     * mai, 200,00 € de TVA déductible du loyer validé de Lyon, laisse
+     * 200,00 € de crédit à reporter, 440,00 € avec le loyer de « Toute la
+     * société » à valider ; juin, sans TVA, reprend l'un et l'autre ; un
+     * mois d'avant l'arrivée ou à venir n'a pas de report. Filtrée sur un
+     * magasin, la TVA ne compte plus toute la société : ni colonnes du
+     * report, ni crédit, et la phrase le dit.
+     */
+    public function test_l_etat_porte_le_report_du_credit_de_tva_comme_la_page(): void
+    {
+        $this->travelTo(self::aParis('2026-06-10 10:00:00'));
+        $this->dansLEspaceDeLaSociete($this->societe, $this->proprietaire);
+        $page = Livewire::test(PageDesCharges::class, ['ecran' => PageDesCharges::SOCIETE]);
+        $reponse = $page->instance()->telechargerLEtat('xlsx');
+        $this->assertInstanceOf(StreamedResponse::class, $reponse);
+        $tva = self::lireLeClasseur(self::contenuDe($reponse))['TVA par mois'];
+        $ligne = fn (string $mois): array => collect($tva)->first(fn (array $valeurs): bool => ($valeurs[0] ?? null) === $mois) ?? [];
+        $sansVide = fn (array $valeurs): array => array_values(array_filter($valeurs, fn (mixed $valeur): bool => $valeur !== null && $valeur !== ''));
+
+        $this->assertSame(['Mois', 'TVA collectée', 'Déductible des achats', 'Déductible des charges validées', 'TVA du mois (réelle)', 'TVA des charges à valider', 'TVA du mois (estimation)', 'Crédit reporté de la période d\'avant', 'TVA à payer', 'Crédit de TVA à reporter', 'Estimation après le report (négative : crédit à reporter)'], $tva[0]);
+        $this->assertEquals(['Mai 2026', 0, 0, 200, -200, 240, -440, 0, 0, 200, -440], $ligne('Mai 2026'), 'Mai : sans crédit déclaré, la chaîne part de zéro ; 200,00 € de crédit réel, 440,00 € estimés.');
+        $this->assertEquals(['Juin 2026', 0, 0, 0, 0, 0, 0, 200, 0, 200, -440], $ligne('Juin 2026'), 'Juin reprend le crédit de mai, dans la réelle comme dans l\'estimation.');
+        $this->assertSame([], $sansVide(array_slice($ligne('Avril 2026'), 7)), 'Avril vient avant l\'arrivée de la société : pas de report.');
+        $this->assertSame([], $sansVide(array_slice($ligne('Juillet 2026'), 7)), 'Juillet est à venir : pas de report.');
+        $this->assertContains([TextesDuCreditDeTva::SANS_LES_REMBOURSEMENTS], $tva);
+
+        $euros = fn (int $centimes): string => app(CalculateurLigne::class)->enEuros($centimes);
+        $perimetre = app(PerimetreDesGraphiques::class)->deLaSociete($this->proprietaire, $this->societe);
+        $tvaDeLaPage = app(TvaDeLaPeriode::class)->pourLaPageDesCharges($this->accesDu($this->proprietaire), $perimetre, $this->filtres()->mois, null, false, [$this->lyon->getKey(), $this->paris->getKey()]);
+        $html = html_entity_decode(app(EtatDesChargesEnPdf::class)->html(app(EtatDesCharges::class)->contenu($this->accesDu($this->proprietaire), $this->filtres(), $tvaDeLaPage, '')), ENT_QUOTES | ENT_HTML5);
+
+        foreach (['data-report="oui"', 'TVA du mois (réelle)', 'Crédit reporté de la période d\'avant', 'Crédit de TVA à reporter', 'Estimation après le report', $euros(44000).' à reporter', TextesDuCreditDeTva::SANS_LES_REMBOURSEMENTS] as $attendu) {
+            $this->assertStringContainsString($attendu, $html, "Le PDF montre « {$attendu} ».");
+        }
+
+        $page->set('magasinFiltre', (string) $this->lyon->uuid);
+        $reponse = $page->instance()->telechargerLEtat('xlsx');
+        $this->assertInstanceOf(StreamedResponse::class, $reponse);
+        $tvaDeLyon = self::lireLeClasseur(self::contenuDe($reponse))['TVA par mois'];
+
+        $this->assertSame(['Mois', 'TVA collectée', 'Déductible des achats', 'Déductible des charges validées', 'TVA à payer (réelle)', 'TVA des charges à valider', 'TVA à payer (estimation)'], $tvaDeLyon[0]);
+        $this->assertContains([TextesDuCreditDeTva::SANS_LE_REPORT], $tvaDeLyon);
+        $this->assertNotContains([TextesDuCreditDeTva::SANS_LES_REMBOURSEMENTS], $tvaDeLyon);
+    }
+
+    /**
+     * Au trimestriel, le résultat d'un trimestre ne dépend jamais du mois
+     * que la page affiche (cahier du lot TVA27 : « le chiffre d'un mois ne
+     * dépend jamais du filtre ») : le 3e trimestre 2026 (voir
+     * troisiemeTrimestre()) fait −700,00 € de TVA, moins les 200,00 € de
+     * crédit du 2e trimestre, soit 900,00 € de crédit à reporter, que l'on
+     * choisisse juillet, août ou septembre ; l'estimation, avec les 440,00 €
+     * à valider du 2e trimestre, 1 140,00 €. Lire le trimestre jusqu'au
+     * seul mois choisi donnait 600,00 € à payer en juillet et 100,00 € en
+     * août.
+     */
+    public function test_au_trimestriel_le_trimestre_est_le_meme_quel_que_soit_le_mois_choisi(): void
+    {
+        $this->troisiemeTrimestre();
+        $this->dansLEspaceDeLaSociete($this->societe, $this->proprietaire);
+        $page = Livewire::test(PageDesCharges::class, ['ecran' => PageDesCharges::SOCIETE]);
+
+        foreach (['2026-07', '2026-08', '2026-09'] as $mois) {
+            $page->set('moisDeLaTva', $mois);
+            $tva = $page->instance()->tvaDuMois();
+            $this->assertNotNull($tva);
+            $periode = $tva['report']?->deLaPeriodeDu($mois);
+
+            $this->assertNotNull($periode, "Le report se lit pour {$mois}.");
+            $this->assertSame(
+                ['2026-07', -70000, 20000, 0, 90000, -114000],
+                [$periode->periode, $periode->reelle->tva, $periode->reelle->creditReporte, $periode->reelle->aPayer, $periode->reelle->creditAReporter, $periode->estimee->signe()],
+                "Le 3e trimestre vu depuis {$mois} : sa TVA, le crédit du 2e trimestre, rien à payer, 900,00 € à reporter.",
+            );
+            $page->assertSee('TVA du trimestre après le report du crédit : 3e trimestre 2026')
+                ->assertSee('TVA du trimestre '.TextesDuCreditDeTva::euros(-70000).' − crédit reporté '.TextesDuCreditDeTva::euros(20000).' = '.TextesDuCreditDeTva::euros(90000).' de crédit à reporter.');
+        }
+    }
+
+    /**
+     * L'état d'un exercice qui finit en août (de septembre 2025 à août
+     * 2026), au trimestriel : le 2e trimestre se lit sur juin (200,00 € de
+     * crédit à reporter, 440,00 € estimés) ; le 3e, qui se termine en
+     * septembre, après la période, ne se lit sur aucun de ses mois, ni coupé
+     * à août, et une phrase dit qu'il se lit dans la période suivante ; la
+     * page, sur août, montre le trimestre entier, septembre compris.
+     */
+    public function test_l_etat_d_un_exercice_qui_finit_en_aout_ne_coupe_pas_le_trimestre(): void
+    {
+        DB::table('societes')->where('id', $this->societe->id)->update(['mois_fin_exercice' => 8]);
+        $this->societe->refresh();
+        $this->troisiemeTrimestre();
+        $this->dansLEspaceDeLaSociete($this->societe, $this->proprietaire);
+        $page = Livewire::test(PageDesCharges::class, ['ecran' => PageDesCharges::SOCIETE])->set('periode', 'exercice:2026');
+        $reponse = $page->instance()->telechargerLEtat('xlsx');
+        $this->assertInstanceOf(StreamedResponse::class, $reponse);
+        $tva = self::lireLeClasseur(self::contenuDe($reponse))['TVA par mois'];
+        $ligne = fn (string $mois): array => collect($tva)->first(fn (array $valeurs): bool => ($valeurs[0] ?? null) === $mois) ?? [];
+        $sansVide = fn (array $valeurs): array => array_values(array_filter($valeurs, fn (mixed $valeur): bool => $valeur !== null && $valeur !== ''));
+
+        $this->assertSame(['Septembre 2025', 'Août 2026'], [$tva[1][0] ?? null, $tva[12][0] ?? null], 'Les douze mois de l\'exercice.');
+        $this->assertEquals(['Juin 2026', 0, 0, 0, 0, 0, 0, 0, 0, 200, -440], $ligne('Juin 2026'), 'Juin ferme le 2e trimestre : 200,00 € de crédit à reporter, 440,00 € estimés.');
+        $this->assertEquals(['Juillet 2026', 600, 0, 0, 600, 0, 600], $sansVide($ligne('Juillet 2026')), 'Juillet n\'a que sa TVA du mois.');
+        $this->assertEquals(['Août 2026', 0, 0, 300, -300, 0, -300], $sansVide($ligne('Août 2026')), 'Août ne ferme pas le 3e trimestre : ni crédit reporté, ni TVA à payer, ni crédit à reporter.');
+        $this->assertContains(['Le 3e trimestre 2026 se termine après cette période : sa TVA à payer et son crédit à reporter se lisent dans la période suivante.'], $tva);
+
+        $page->set('moisDeLaTva', '2026-08');
+        $tvaDAout = $page->instance()->tvaDuMois();
+        $this->assertNotNull($tvaDAout);
+        $periode = $tvaDAout['report']?->deLaPeriodeDu('2026-08');
+        $this->assertSame([-70000, 90000], [$periode?->reelle->tva, $periode?->reelle->creditAReporter], 'La page, sur août, compte tout le 3e trimestre, septembre compris.');
+    }
+
+    /**
+     * Le 3e trimestre 2026 de la société, passée au réel normal
+     * trimestriel : en juillet, un ticket de trois lustres à 1 200,00 € TTC
+     * à 20 % (600,00 € de TVA collectée) ; en août, des fournitures de Lyon,
+     * 1 500,00 € HT (300,00 € déductibles) ; en septembre, des honoraires,
+     * 5 000,00 € HT (1 000,00 € déductibles), chacune ajoutée par le
+     * cabinet lié avec ses chiffres et sa pièce, donc validée. Le temps est
+     * figé ensuite au 22 novembre 2026 à 10 h, à Paris.
+     */
+    private function troisiemeTrimestre(): void
+    {
+        $this->changerLeRegime(RegimeTva::ReelNormalTrimestriel);
+        $this->travelTo(self::aParis('2026-07-15 10:00:00'));
+        app(TenantContext::class)->runAs($this->lyon, function (): void {
+            $lustre = Produit::factory()->create(['nom' => 'Lustre en cristal', 'prix_vente_ttc' => '1200.00', 'taux_tva' => 20, 'suivi_stock' => false]);
+            self::vendreAuComptant(self::responsableDeTest($this->lyon), Client::query()->where('est_comptoir', true)->sole(), [['produit_id' => $lustre->id, 'quantite' => 3]]);
+        });
+        app(TenantContext::class)->clear();
+        $this->travelTo(self::aParis('2026-11-22 10:00:00'));
+        $this->deposer($this->collaborateur, $this->societe, $this->saisie('piliqi:fournitures', '1500.00', champs: ['fournisseur' => 'Papeterie du centre', 'numero_piece' => 'F-08', 'date_piece' => '2026-08-10', 'magasin' => (string) $this->lyon->uuid]));
+        $this->deposer($this->collaborateur, $this->societe, $this->saisie('piliqi:honoraires', '5000.00', champs: ['fournisseur' => 'Avocats associés', 'numero_piece' => 'H-09', 'date_piece' => '2026-09-10', 'date_paiement' => '2026-09-25', 'magasin' => '']));
+        $this->societe->refresh();
     }
 
     public function test_le_fichier_se_telecharge_en_piece_jointe_et_s_inscrit_au_journal_d_audit_sans_son_contenu(): void
@@ -337,6 +497,16 @@ class EtatDesChargesTest extends TestCase
             sansMagasin: false,
             libelleDuMagasin: 'Toute la société et tous les magasins',
         );
+    }
+
+    /**
+     * Le régime de TVA de la société, changé en base pour l'essai, puis
+     * relu.
+     */
+    private function changerLeRegime(?RegimeTva $regime): void
+    {
+        DB::table('societes')->where('id', $this->societe->id)->update(['regime_tva' => $regime?->value]);
+        $this->societe->refresh();
     }
 
     private function accesDu(User $compte): AccesAuxCharges

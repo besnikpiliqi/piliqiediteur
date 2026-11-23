@@ -43,6 +43,13 @@ class ParametresFiscauxSociete extends Page implements HasForms
 {
     use GereLesExceptionsMetier, InteractsWithForms;
 
+    /**
+     * L'aide du régime de TVA : le choix entre le mensuel et le
+     * trimestriel (voir RegimeTva), ce qu'il commande, et ce qu'il fait en
+     * franchise en base.
+     */
+    public const AIDE_DU_REGIME = 'Obligatoire avant toute vente, facture, avoir, encaissement ou devis numéroté : il dit comment PILIQI calcule votre TVA et à quel rythme vous la déclarez. Déclaration trimestrielle tant que votre chiffre d\'affaires, majoré des acquisitions taxables, ne dépasse pas 1 000 000 € l\'année précédente et 1 100 000 € l\'année en cours ; mensuelle au-delà, ou sur option. Le régime simplifié n\'existe plus depuis le 1er janvier 2027 (loi n° 2025-127, art. 38). Le régime donne aussi la cadence de l\'e-reporting de tous vos magasins. En franchise, vos ventes sont à 0 % avec la mention « '.RegimeTva::MENTION_FRANCHISE.' » ; le prix TTC de vos produits ne change pas.';
+
     protected static ?string $navigationIcon = 'heroicon-o-scale';
 
     protected static ?string $navigationLabel = 'Paramètres fiscaux';
@@ -79,7 +86,7 @@ class ParametresFiscauxSociete extends Page implements HasForms
             Select::make('regime_tva')
                 ->label('Régime de TVA')
                 ->options(RegimeTva::class)
-                ->helperText('Détermine la cadence de transmission de l\'e-reporting de tous vos magasins : ce n\'est pas une obligation journalière, la fréquence dépend de ce régime. En franchise, vos ventes sont à 0 % avec la mention « '.RegimeTva::MENTION_FRANCHISE.' » ; le prix TTC de vos produits ne change pas.')
+                ->helperText(self::AIDE_DU_REGIME)
                 ->required(),
             Toggle::make('option_debits_tva')
                 ->label('Option pour les débits')

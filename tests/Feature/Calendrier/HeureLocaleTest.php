@@ -401,7 +401,7 @@ class HeureLocaleTest extends TestCase
     {
         $this->travelTo(self::enUtc('2026-10-25 06:30:00'));
         $martinique = $this->magasin(Territoire::Martinique, 'FDF1');
-        $evenement = DB::transaction(fn (): EnregistrementFiscal => app(RegistreFiscal::class)->journaliser(CodeEvenement::ParametreDeConformite, ['parametre' => 'regime_tva', 'ancienne_valeur' => null, 'nouvelle_valeur' => 'reel_simplifie']));
+        $evenement = DB::transaction(fn (): EnregistrementFiscal => app(RegistreFiscal::class)->journaliser(CodeEvenement::ParametreDeConformite, ['parametre' => 'regime_tva', 'ancienne_valeur' => null, 'nouvelle_valeur' => 'reel_normal_trimestriel']));
         $this->travelTo(self::enUtc('2026-10-26 12:00:00'));
         $this->dansLeMagasin($martinique, $this->proprietaireDe($martinique));
 

@@ -98,7 +98,7 @@ class RegulariserUneExonerationNonProuveeAction
 
         return $this->actionsUniques->executer($jeton, ActionsUniques::REGULARISER_UNE_EXONERATION, Facture::class, $auteur, ['facture_id' => $facture->getKey()], fn () => $this->registre->verrouiller($magasin), fn (): Facture => DB::transaction(function () use ($auteur, $facture, $magasin): Facture {
             $this->registre->verrouiller($magasin);
-            Magasin::query()->whereKey($magasin->getKey())->sharedLock()->firstOrFail()->verifierQuIlPeutVendre();
+            Magasin::query()->whereKey($magasin->getKey())->sharedLock()->firstOrFail()->verifierQuIlPeutVendre($auteur);
             $compte = $this->lecteur->exigerSousVerrou($auteur, 'create', $magasin, Facture::class);
             $this->lecteur->exiger($compte, 'create', $magasin, Avoir::class);
             $origine = Facture::query()->whereKey($facture->getKey())->lockForUpdate()->first() ?? throw new LogicException(Facture::REFUS_INTROUVABLE);

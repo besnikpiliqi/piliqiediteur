@@ -3,9 +3,12 @@
 namespace App\Domain\TableauDeBord\Services;
 
 use App\Domain\Charges\Support\MontantsDeTva;
+use App\Domain\Charges\Support\TextesDuCreditDeTva;
+use App\Domain\TableauDeBord\Enums\EcranDuTableauDeBord;
 use App\Domain\TableauDeBord\Enums\SourceDesGraphiques;
 use App\Domain\TableauDeBord\Support\CalculDesSeries;
 use App\Domain\TableauDeBord\Support\Mois;
+use App\Domain\Tenancy\Enums\CadenceDeLaTva;
 use App\Domain\Tenancy\Support\CleDuModele;
 
 /**
@@ -20,17 +23,23 @@ use App\Domain\Tenancy\Support\CleDuModele;
  *   d'achat validées moins avoirs fournisseur émis, et leur variation ;
  * - la TVA à payer, une estimation : TVA collectée des ventes du mois,
  *   nette de celle des avoirs, moins la TVA déductible des achats du mois,
- *   nette de celle des avoirs fournisseur ; « TVA non applicable » en
- *   franchise en base. L'état de TVA officiel, avec l'exigibilité des
- *   services et les règles de la déclaration, viendra avec la comptabilité
- *   (étape 5) ;
+ *   nette de celle des avoirs fournisseur, et des charges pour qui les
+ *   voit ; sur toute la société, au réel normal, celle de la période en
+ *   cours (le mois, ou le trimestre au trimestriel) après le report du
+ *   crédit de la période d'avant, avec le crédit à reporter et où en est
+ *   le crédit de la déclaration qui sert d'ancre (lot TVA27, voir
+ *   ReportDuCreditDeTva) ; rien en franchise en base, ni avant le choix du
+ *   régime (décision de l'éditeur du 18/11/2026). L'état de TVA officiel,
+ *   avec l'exigibilité des services et les règles de la déclaration,
+ *   viendra avec la comptabilité (étape 5) ;
  * - le restant dû des clients, à ce jour, et sa part en retard (voir
  *   Facture::estEnRetard()).
  *
  * Un chiffre que le compte ne voit dans aucun magasin du filtre n'est pas
  * donné (null). Tout est en centimes.
  *
- * @phpstan-type Chiffres array{ca: array{valeur: int, variation: string|null}|null, achats: array{valeur: int, variation: string|null}|null, tva: array{franchise: bool, a_payer: int, collectee: int, deductible: int, estimation: int|null, avec_les_charges: bool, sans_celles_de_la_societe: bool}|null, restant_du: array{valeur: int, en_retard: int}|null}
+ * @phpstan-type ChiffreDeLaTva array{report: bool, periode: string|null, a_payer: int, credit_a_reporter: int, calcul: string|null, collectee: int, deductible: int, estimation: int|null, avec_les_charges: bool, sans_celles_de_la_societe: bool, pastille: array{texte: string, couleur: string}|null}
+ * @phpstan-type Chiffres array{ca: array{valeur: int, variation: string|null}|null, achats: array{valeur: int, variation: string|null}|null, tva: ChiffreDeLaTva|null, restant_du: array{valeur: int, en_retard: int}|null}
  */
 final class ChiffresDuTableauDeBord
 {
@@ -65,10 +74,8 @@ final class ChiffresDuTableauDeBord
             $chiffres['achats'] = self::avecSaVariation(self::somme($calcul, $documentsDAchat, $achats, $ceMois, 'ht'), self::somme($calcul, $documentsDAchat, $achats, $ilYAUnAn, 'ht'));
         }
 
-        if ($tva !== []) {
-            $chiffres['tva'] = $societe->estEnFranchiseDeTva()
-                ? ['franchise' => true, 'a_payer' => 0, 'collectee' => 0, 'deductible' => 0, 'estimation' => null, 'avec_les_charges' => false, 'sans_celles_de_la_societe' => false]
-                : self::tva($this->series->tvaDesMois($calcul, $tva, [$ceMois])[$ceMois], $perimetre->laisseLesChargesDeLaSociete($tva));
+        if ($perimetre->montreLaCarteDeLaTva()) {
+            $chiffres['tva'] = $this->tvaReportee($calcul) ?? self::tva($this->series->tvaDesMois($calcul, $tva, [$ceMois])[$ceMois], $perimetre->laisseLesChargesDeLaSociete($tva));
         }
 
         if ($factures !== []) {
@@ -80,23 +87,64 @@ final class ChiffresDuTableauDeBord
     }
 
     /**
-     * Le chiffre clé de la TVA à payer du mois (voir TvaDeLaPeriode) : la
-     * réelle, avec les seules charges validées, et, quand des charges à
-     * valider la changent, son estimation avec elles ; sans les charges de
-     * « Toute la société » quand un magasin n'est pas compté.
+     * Le chiffre clé de la TVA à payer du mois (voir TvaDeLaPeriode), sans
+     * le report du crédit : la réelle, avec les seules charges validées,
+     * et, quand des charges à valider la changent, son estimation avec
+     * elles ; sans les charges de « Toute la société » quand un magasin
+     * n'est pas compté.
      *
-     * @return array{franchise: bool, a_payer: int, collectee: int, deductible: int, estimation: int|null, avec_les_charges: bool, sans_celles_de_la_societe: bool}
+     * @return ChiffreDeLaTva
      */
     private static function tva(MontantsDeTva $tva, bool $sansCellesDeLaSociete): array
     {
         return [
-            'franchise' => false,
+            'report' => false,
+            'periode' => null,
             'a_payer' => $tva->reelle(),
+            'credit_a_reporter' => 0,
+            'calcul' => null,
             'collectee' => $tva->collectee(),
             'deductible' => $tva->deductible(),
             'estimation' => $tva->aDesChargesAValider() ? $tva->estimee() : null,
             'avec_les_charges' => $tva->avecLesCharges,
             'sans_celles_de_la_societe' => $tva->avecLesCharges && $sansCellesDeLaSociete,
+            'pastille' => null,
+        ];
+    }
+
+    /**
+     * Le chiffre clé de la TVA à payer de la période en cours avec le
+     * report du crédit (voir SeriesDesGraphiques::tvaReportee()) : la TVA à
+     * payer réelle, après le crédit reporté de la période d'avant, ou le
+     * crédit à reporter ; le calcul qui y mène ; son estimation avec les
+     * charges à valider, positive à payer, négative à reporter, quand elles
+     * la changent ; la pastille qui dit où en est le crédit de la
+     * déclaration qui sert d'ancre. Null quand le périmètre ne reporte pas
+     * le crédit.
+     *
+     * @return ChiffreDeLaTva|null
+     */
+    private function tvaReportee(CalculDesSeries $calcul): ?array
+    {
+        $reportee = $this->series->tvaReportee($calcul);
+        $periode = $reportee?->deLaPeriodeDu($calcul->ceMois());
+
+        if ($reportee === null || $periode === null) {
+            return null;
+        }
+
+        return [
+            'report' => true,
+            'periode' => $reportee->cadence->libelle($periode->periode).($reportee->cadence === CadenceDeLaTva::Trimestrielle ? ' (en cours)' : ''),
+            'a_payer' => $periode->reelle->aPayer ?? 0,
+            'credit_a_reporter' => $periode->reelle->creditAReporter,
+            'calcul' => TextesDuCreditDeTva::calculDeLaPeriode($reportee->cadence, $periode->periode, $periode->reelle, $periode->statut),
+            'collectee' => $periode->montants->collectee(),
+            'deductible' => $periode->montants->deductible(),
+            'estimation' => $periode->estimationDifferente() ? $periode->estimee->signe() : null,
+            'avec_les_charges' => true,
+            'sans_celles_de_la_societe' => false,
+            'pastille' => TextesDuCreditDeTva::pastilleDeLAncre($calcul->etatDuCredit, ! in_array($calcul->perimetre->ecran, [EcranDuTableauDeBord::Societe, EcranDuTableauDeBord::Magasin], true)),
         ];
     }
 

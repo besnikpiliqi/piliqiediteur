@@ -141,23 +141,30 @@ final class EtatDesChargesEnExcel
         $feuille = $classeur->addNewSheetAndMakeItCurrent();
         $feuille->setName('TVA par mois');
         $feuille->setColumnWidth(20, 1);
-        $feuille->setColumnWidthForRange(22, 2, 7);
+        $feuille->setColumnWidthForRange(22, 2, 11);
         $gras = (new Style)->setFontBold();
 
         if ($contenu->tva === null) {
-            $classeur->addRow(new Row([self::texte('TVA non applicable (franchise en base).')]));
+            $classeur->addRow(new Row([self::texte($contenu->sansTva ?? 'Aucune TVA à afficher.')]));
 
             return;
         }
 
         $complete = $contenu->tva['avec_les_ventes'];
-        $colonnes = $complete
-            ? ['Mois', 'TVA collectée', 'Déductible des achats', 'Déductible des charges validées', 'TVA à payer (réelle)', 'TVA des charges à valider', 'TVA à payer (estimation)']
-            : ['Mois', 'Déductible des charges validées', 'TVA des charges à valider'];
+        $avecLeReport = $contenu->montreLeReport();
+        $colonnes = match (true) {
+            $avecLeReport => ['Mois', 'TVA collectée', 'Déductible des achats', 'Déductible des charges validées', 'TVA du mois (réelle)', 'TVA des charges à valider', 'TVA du mois (estimation)', 'Crédit reporté de la période d\'avant', 'TVA à payer', 'Crédit de TVA à reporter', 'Estimation après le report (négative : crédit à reporter)'],
+            $complete => ['Mois', 'TVA collectée', 'Déductible des achats', 'Déductible des charges validées', 'TVA à payer (réelle)', 'TVA des charges à valider', 'TVA à payer (estimation)'],
+            default => ['Mois', 'Déductible des charges validées', 'TVA des charges à valider'],
+        };
         $classeur->addRow(new Row(array_map(fn (string $colonne): Cell => self::texte($colonne, $gras), $colonnes)));
 
         foreach ($contenu->tva['montants'] as $mois => $montants) {
-            $classeur->addRow(new Row([self::texte(ucfirst(TextesDesCharges::nomDuMois($mois))), ...self::montantsDuMois($montants, $complete)]));
+            $classeur->addRow(new Row([
+                self::texte(ucfirst(TextesDesCharges::nomDuMois($mois))),
+                ...self::montantsDuMois($montants, $complete, $avecLeReport),
+                ...($avecLeReport ? self::reportDuMois($contenu->reportDuMois($mois)) : []),
+            ]));
         }
 
         $classeur->addRow(new Row([]));
@@ -199,13 +206,41 @@ final class EtatDesChargesEnExcel
     }
 
     /**
+     * La TVA d'un mois : en gras, la TVA à payer réelle, ou, avec le report
+     * du crédit, la TVA à payer qu'il laisse (voir reportDuMois()).
+     *
      * @return list<Cell>
      */
-    private static function montantsDuMois(MontantsDeTva $montants, bool $complete): array
+    private static function montantsDuMois(MontantsDeTva $montants, bool $complete, bool $avecLeReport): array
     {
         return $complete
-            ? [self::montant($montants->collectee()), self::montant($montants->deductibleDesAchats), self::montant($montants->deductibleDesChargesValidees), self::montant($montants->reelle(), (new Style)->setFontBold()), self::montant($montants->deductibleDesChargesAValider), self::montant($montants->estimee())]
+            ? [self::montant($montants->collectee()), self::montant($montants->deductibleDesAchats), self::montant($montants->deductibleDesChargesValidees), self::montant($montants->reelle(), $avecLeReport ? null : (new Style)->setFontBold()), self::montant($montants->deductibleDesChargesAValider), self::montant($montants->estimee())]
             : [self::montant($montants->deductibleDesChargesValidees), self::montant($montants->deductibleDesChargesAValider)];
+    }
+
+    /**
+     * Le report du crédit de TVA que montre un mois (voir
+     * ContenuDeLEtat::reportDuMois()) : le crédit reporté de la période
+     * d'avant, la TVA à payer, en gras, le crédit à reporter et
+     * l'estimation après le report, en vrais nombres ; des cases vides sur
+     * un mois qui ne montre pas de résultat, « déclarée » pour la période
+     * de la déclaration qui sert de point de départ.
+     *
+     * @param  array{credit_reporte: int|null, a_payer: int|null, credit_a_reporter: int, estimation: int|null, declaree: bool}|null  $report
+     * @return list<Cell>
+     */
+    private static function reportDuMois(?array $report): array
+    {
+        if ($report === null) {
+            return [new EmptyCell(null, null), new EmptyCell(null, null), new EmptyCell(null, null), new EmptyCell(null, null)];
+        }
+
+        return [
+            $report['credit_reporte'] === null ? new EmptyCell(null, null) : self::montant($report['credit_reporte']),
+            $report['declaree'] ? self::texte('déclarée') : self::montant($report['a_payer'] ?? 0, (new Style)->setFontBold()),
+            self::montant($report['credit_a_reporter']),
+            $report['estimation'] === null ? new EmptyCell(null, null) : self::montant($report['estimation']),
+        ];
     }
 
     /**
@@ -223,6 +258,7 @@ final class EtatDesChargesEnExcel
 
         return array_values(array_filter([
             $tva['avec_les_ventes'] ? 'Telle que le tableau de bord la compte. Estimation : la TVA à payer si les charges à valider l\'étaient telles qu\'elles sont saisies.' : 'Les seules charges que vous voyez, sans les ventes ni les achats, que vous ne voyez pas.',
+            ...$contenu->phrasesDuReport(),
             $tva['sans_celles_de_la_societe'] ? SeriesDesGraphiques::SANS_LES_CHARGES_DE_LA_SOCIETE : null,
             $tva['magasins_non_comptes'],
             'Document de travail, n\'est pas une déclaration de TVA.',

@@ -307,7 +307,7 @@ class EnregistrementFiscalResourceTest extends TestCase
     {
         $this->travelTo(self::aParis('2026-10-20 10:00:00'));
         $this->connecterProprietaire();
-        $this->journaliser(CodeEvenement::ParametreDeConformite, ['parametre' => 'regime_tva', 'ancienne_valeur' => null, 'nouvelle_valeur' => 'reel_simplifie']);
+        $this->journaliser(CodeEvenement::ParametreDeConformite, ['parametre' => 'regime_tva', 'ancienne_valeur' => null, 'nouvelle_valeur' => 'reel_normal_trimestriel']);
         $this->vendre();
         $this->travelTo(self::aParis('2026-10-22 09:30:00'));
 
@@ -430,7 +430,7 @@ class EnregistrementFiscalResourceTest extends TestCase
         $this->travelTo(self::aParis('2026-10-20 10:00:00'));
         $lyon = $this->connecterProprietaire();
         $villeurbanne = $this->ouvrirUnAutreMagasin($lyon, ['nom' => 'Villeurbanne']);
-        app(TenantContext::class)->runAs($villeurbanne, fn () => $this->journaliser(CodeEvenement::ParametreDeConformite, ['parametre' => 'regime_tva', 'ancienne_valeur' => null, 'nouvelle_valeur' => 'reel_simplifie']));
+        app(TenantContext::class)->runAs($villeurbanne, fn () => $this->journaliser(CodeEvenement::ParametreDeConformite, ['parametre' => 'regime_tva', 'ancienne_valeur' => null, 'nouvelle_valeur' => 'reel_normal_trimestriel']));
         app(TenantContext::class)->set($lyon);
         Filament::setTenant($lyon);
         $this->journaliser(CodeEvenement::ExportDeDonnees);
@@ -452,7 +452,7 @@ class EnregistrementFiscalResourceTest extends TestCase
         $this->connecterProprietaire();
         $this->journaliser(CodeEvenement::ExportDeDonnees);
         $this->travelTo(self::aParis('2026-10-21 10:00:00'));
-        $this->journaliser(CodeEvenement::ParametreDeConformite, ['parametre' => 'regime_tva', 'ancienne_valeur' => null, 'nouvelle_valeur' => 'reel_simplifie']);
+        $this->journaliser(CodeEvenement::ParametreDeConformite, ['parametre' => 'regime_tva', 'ancienne_valeur' => null, 'nouvelle_valeur' => 'reel_normal_trimestriel']);
         $this->travelTo(self::aParis('2026-10-22 10:00:00'));
 
         $composant = Livewire::test(ListEnregistrementsFiscaux::class)

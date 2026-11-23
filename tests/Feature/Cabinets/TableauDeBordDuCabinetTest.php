@@ -101,7 +101,7 @@ class TableauDeBordDuCabinetTest extends TestCase
 
         $lectures = collect($requetes)->filter(fn (string $sql): bool => str_starts_with($sql, 'select'));
         $this->assertTrue($lectures->contains(fn (string $sql): bool => str_starts_with($sql, 'select "liens_cabinet"."id", "liens_cabinet"."uuid", "liens_cabinet"."societe_id", "liens_cabinet"."actif_depuis" from "liens_cabinet"')));
-        $this->assertTrue($lectures->contains(fn (string $sql): bool => str_starts_with($sql, 'select "id", "uuid", "siren", "raison_sociale", "siege_ville", "mois_fin_exercice", "statut", "validee_le", "close_le" from "societes"')));
+        $this->assertTrue($lectures->contains(fn (string $sql): bool => str_starts_with($sql, 'select "id", "uuid", "siren", "raison_sociale", "siege_ville", "mois_fin_exercice", "statut", "validee_le", "close_le", "type_activite", "regime_tva", "membre_assujetti_unique", "created_at" from "societes"')));
         $this->assertTrue($lectures->contains(fn (string $sql): bool => str_starts_with($sql, 'select "id", "societe_id", "statut", "territoire" from "magasins"')));
         $this->assertTrue($lectures->contains(fn (string $sql): bool => str_starts_with($sql, 'select "id", "magasin_id", "total_ttc", "date_echeance" from "factures"')));
         $this->assertFalse($lectures->contains(fn (string $sql): bool => str_contains($sql, 'from "clients"')));

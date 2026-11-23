@@ -224,7 +224,7 @@ class EmettreFactureAction
             'reglement' => $reglement?->enTableau(),
         ], fn () => $this->registre->verrouiller($magasin), fn (): Facture => DB::transaction(function () use ($auteur, $facture, $reglement, $confirmation, $magasin) {
             $instant = $this->registre->verrouiller($magasin);
-            Magasin::query()->whereKey($magasin->getKey())->sharedLock()->firstOrFail()->verifierQuIlPeutVendre();
+            Magasin::query()->whereKey($magasin->getKey())->sharedLock()->firstOrFail()->verifierQuIlPeutVendre($auteur);
             $compte = $this->lecteur->exigerSousVerrou($auteur, 'emettre', $magasin, $facture);
 
             if ($reglement !== null) {

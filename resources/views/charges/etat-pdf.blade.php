@@ -5,7 +5,8 @@
         L'état des charges en PDF (voir EtatDesChargesEnPdf, modèle E1) : une
         page A4 à l'horizontale ; le tableau « type de charge × mois » avec la
         pastille et le TTC de chaque case, puis la liste des charges de la vue,
-        puis la TVA de chaque mois. Le pied de chaque page dit que c'est un
+        puis la TVA de chaque mois, avec le report du crédit de TVA quand la
+        page le montre (lot TVA27). Le pied de chaque page dit que c'est un
         document de travail ; MiseEnPageA4 écrit « Page x sur y » à sa droite.
 
         @param \App\Domain\Charges\Support\ContenuDeLEtat $contenu
@@ -163,49 +164,74 @@
         </tr>
     </table>
     @if ($contenu->tva === null)
-        <p data-tva="franchise">TVA non applicable (franchise en base).</p>
+        <p data-tva="sans-tva">{{ $contenu->sansTva ?? 'Aucune TVA à afficher.' }}</p>
     @else
-        <table class="donnees" data-tva="{{ $contenu->tva['avec_les_ventes'] ? 'complete' : 'charges' }}">
+        @php($complete = $contenu->tva['avec_les_ventes'])
+        @php($avecLeReport = $contenu->montreLeReport())
+        <table class="donnees" data-tva="{{ $complete ? 'complete' : 'charges' }}" data-report="{{ $avecLeReport ? 'oui' : 'non' }}">
             <thead>
                 <tr>
                     <th>Mois</th>
-                    @if ($contenu->tva['avec_les_ventes'])
+                    @if ($complete)
                         <th class="n">TVA collectée</th>
                         <th class="n">Déductible des achats</th>
                     @endif
                     <th class="n">Déductible des charges validées</th>
-                    @if ($contenu->tva['avec_les_ventes'])
-                        <th class="n">TVA à payer (réelle)</th>
+                    @if ($complete)
+                        <th class="n">{{ $avecLeReport ? 'TVA du mois (réelle)' : 'TVA à payer (réelle)' }}</th>
                     @endif
                     <th class="n">TVA des charges à valider</th>
-                    @if ($contenu->tva['avec_les_ventes'])
-                        <th class="n">TVA à payer (estimation)</th>
+                    @if ($complete)
+                        <th class="n">{{ $avecLeReport ? 'TVA du mois (estimation)' : 'TVA à payer (estimation)' }}</th>
+                    @endif
+                    @if ($avecLeReport)
+                        <th class="n">Crédit reporté de la période d'avant</th>
+                        <th class="n">TVA à payer</th>
+                        <th class="n">Crédit de TVA à reporter</th>
+                        <th class="n">Estimation après le report</th>
                     @endif
                 </tr>
             </thead>
             <tbody>
                 @foreach ($contenu->tva['montants'] as $mois => $montants)
+                    @php($report = $avecLeReport ? $contenu->reportDuMois($mois) : null)
                     <tr>
                         <td>{{ ucfirst(Textes::nomDuMois($mois)) }}</td>
-                        @if ($contenu->tva['avec_les_ventes'])
+                        @if ($complete)
                             <td class="n">{{ $euros($montants->collectee()) }}</td>
                             <td class="n">{{ $euros($montants->deductibleDesAchats) }}</td>
                         @endif
                         <td class="n">{{ $euros($montants->deductibleDesChargesValidees) }}</td>
-                        @if ($contenu->tva['avec_les_ventes'])
-                            <td class="n"><strong>{{ $euros($montants->reelle()) }}</strong></td>
+                        @if ($complete)
+                            <td class="n">@if ($avecLeReport){{ $euros($montants->reelle()) }}@else<strong>{{ $euros($montants->reelle()) }}</strong>@endif</td>
                         @endif
                         <td class="n">{{ $euros($montants->deductibleDesChargesAValider) }}</td>
-                        @if ($contenu->tva['avec_les_ventes'])
+                        @if ($complete)
                             <td class="n">{{ $euros($montants->estimee()) }}</td>
+                        @endif
+                        @if ($avecLeReport)
+                            @if ($report === null)
+                                <td class="n">—</td>
+                                <td class="n">—</td>
+                                <td class="n">—</td>
+                                <td class="n">—</td>
+                            @else
+                                <td class="n">{{ $report['credit_reporte'] === null ? '—' : $euros($report['credit_reporte']) }}</td>
+                                <td class="n"><strong>{{ $report['declaree'] ? 'déclarée' : $euros($report['a_payer'] ?? 0) }}</strong></td>
+                                <td class="n">{{ $euros($report['credit_a_reporter']) }}</td>
+                                <td class="n">{{ $report['estimation'] === null ? '—' : ($report['estimation'] >= 0 ? $euros($report['estimation']).' à payer' : $euros(-$report['estimation']).' à reporter') }}</td>
+                            @endif
                         @endif
                     </tr>
                 @endforeach
             </tbody>
         </table>
-        @if ($contenu->tva['avec_les_ventes'])
+        @if ($complete)
             <p class="gris">Estimation : la TVA à payer si les charges à valider l'étaient telles qu'elles sont saisies.</p>
         @endif
+        @foreach ($contenu->phrasesDuReport() as $phrase)
+            <p class="gris">{{ $phrase }}</p>
+        @endforeach
         @if ($contenu->tva['sans_celles_de_la_societe'])
             <p class="gris">{{ SeriesDesGraphiques::SANS_LES_CHARGES_DE_LA_SOCIETE }}</p>
         @endif

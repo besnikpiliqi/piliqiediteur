@@ -532,12 +532,12 @@ class JournalEvenementsTest extends TestCase
         $autreMagasin = $this->magasinDe(User::factory()->create(), 'Boutique B');
 
         $this->assertThrows(
-            fn () => $magasin->societe->update(['regime_tva' => RegimeTva::ReelNormalMensuel]),
+            fn () => $magasin->societe->update(['regime_tva' => RegimeTva::ReelNormalTrimestriel]),
             LogicException::class,
             'Les réglages d\'une société ne se modifient que dans son propre contexte.',
         );
 
-        $this->assertNull($magasin->societe->fresh()->regime_tva);
+        $this->assertSame(RegimeTva::ReelNormalMensuel, $magasin->societe->fresh()->regime_tva);
         $this->assertSame([], $this->codes($magasin));
         $this->assertSame([], $this->codes($autreMagasin));
     }

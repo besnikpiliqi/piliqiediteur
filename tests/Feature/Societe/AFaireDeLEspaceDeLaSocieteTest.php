@@ -214,7 +214,9 @@ class AFaireDeLEspaceDeLaSocieteTest extends TestCase
         $proprietaireIci = $this->proprietaireDe($ici);
         $collaborateur = $this->collaborateurDuCabinetLie($ailleurs);
 
-        $this->assertSame([], $this->cles($proprietaireIci, $ici->societe));
+        // Sa seule ligne est la sienne : le crédit de TVA de sa première
+        // déclaration, à venir (lot TVA27), rien d'« Ailleurs ».
+        $this->assertSame(['credit_de_tva_a_venir'], $this->cles($proprietaireIci, $ici->societe));
         $this->assertSame([], app(ChosesAFaireDeLaSociete::class)->delaSociete($proprietaireIci, $ailleurs->societe));
         $this->assertSame([], app(ChosesAFaireDeLaSociete::class)->delaSociete($collaborateur, $ailleurs->societe));
         $this->assertContains('nomination', $this->cles($this->proprietaireDe($ailleurs), $ailleurs->societe));

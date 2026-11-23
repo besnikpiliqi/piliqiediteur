@@ -3,6 +3,10 @@
 namespace App\Domain\TableauDeBord\Support;
 
 use App\Domain\Calendrier\Calendrier;
+use App\Domain\Charges\Enums\EtatDuCreditDeTva;
+use App\Domain\Charges\Models\CreditDeTva;
+use App\Domain\Charges\Services\CreditsDeTva;
+use App\Domain\Charges\Support\TvaReportee;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\TableauDeBord\Enums\Graphique;
 use App\Domain\TableauDeBord\Enums\SourceDesGraphiques;
@@ -70,6 +74,16 @@ final class CalculDesSeries
     public ?array $chargesDeLaTva = null;
 
     public bool $chargesDeLaTvaLues = false;
+
+    /** La TVA avec le report du crédit, lue une fois (voir SeriesDesGraphiques::tvaReportee()), null quand le périmètre ne le calcule pas. */
+    public ?TvaReportee $tvaReportee = null;
+
+    public bool $tvaReporteeLue = false;
+
+    /** La déclaration du crédit de TVA qui sert d'ancre au report, lue avec lui, et l'état de sa vérification (voir CreditsDeTva::ancre() et etat()). */
+    public ?CreditDeTva $ancreDuCredit = null;
+
+    public ?EtatDuCreditDeTva $etatDuCredit = null;
 
     /** @var Collection<int, Facture>|null */
     private ?Collection $facturesAEncaisser = null;
@@ -139,6 +153,31 @@ final class CalculDesSeries
     }
 
     /**
+     * Le premier jour que lisent les ventes, les achats et les charges, que
+     * compte la TVA : quand le périmètre reporte le crédit (voir
+     * Perimetre::reporteLeCreditDeTva()), le premier jour de la chaîne du
+     * report, si elle commence avant premierJour(), pour que le chiffre
+     * d'un mois ne dépende jamais de la période affichée.
+     */
+    public function premierJourDeLaTva(): string
+    {
+        $premierMois = $this->premierMoisDuReport();
+
+        return $premierMois === null ? $this->premierJour() : min($this->premierJour(), $premierMois.'-01');
+    }
+
+    /**
+     * Le premier mois de la chaîne du report du crédit de TVA, null quand
+     * le périmètre ne le calcule pas.
+     */
+    public function premierMoisDuReport(): ?string
+    {
+        $cadence = $this->perimetre->societe->regime_tva?->cadence();
+
+        return $cadence === null || ! $this->perimetre->reporteLeCreditDeTva() ? null : CreditsDeTva::premierePeriode($this->perimetre->societe, $cadence);
+    }
+
+    /**
      * Le dernier jour qu'une source lit : celui du dernier mois de la
      * période ou du mois en cours.
      */
@@ -205,7 +244,7 @@ final class CalculDesSeries
      * cochée, la même un an plus tôt ; un mois encore à venir n'a pas de
      * valeur.
      *
-     * @param  Closure(list<string>): array<string, int>  $valeurs
+     * @param  Closure(list<string>): array<string, int|null>  $valeurs
      */
     public function parMois(string $libelle, Closure $valeurs): SerieDuGraphique
     {
@@ -214,10 +253,14 @@ final class CalculDesSeries
 
     /**
      * Plusieurs séries par mois, chacune avec, au besoin, sa forme (une
-     * ligne), son unité, son axe et ses pointillés ; leurs comparaisons
-     * suivent, dans le même ordre.
+     * ligne), son unité, son axe, ses pointillés et, pour une série qui ne
+     * se montre que dans le graphique ou que dans le tableau « Voir les
+     * chiffres », où elle se montre (voir SerieDuGraphique::jeu()) ; leurs
+     * comparaisons suivent, dans le même ordre. Un mois sans valeur (un
+     * trimestre qui ne finit pas ce mois-là, au report du crédit de TVA)
+     * reste sans valeur.
      *
-     * @param  list<array{0: string, 1: Closure(list<string>): array<string, int>, 2?: bool, 3?: 'euros'|'nombre', 4?: bool, 5?: bool}>  $series
+     * @param  list<array{0: string, 1: Closure(list<string>): array<string, int|null>, 2?: bool, 3?: 'euros'|'nombre', 4?: bool, 5?: bool, 6?: 'dessin'|'tableau'|null}>  $series
      */
     public function parMoisMultiple(array $series): SerieDuGraphique
     {
@@ -230,12 +273,13 @@ final class CalculDesSeries
             $unite = $serie[3] ?? SerieDuGraphique::EUROS;
             $axeDeDroite = $serie[4] ?? false;
             $pointilles = $serie[5] ?? false;
+            $seulement = $serie[6] ?? null;
             $parMois = $valeurs($this->mois);
-            $jeux[] = SerieDuGraphique::jeu($libelle, array_map(fn (string $mois): ?int => $mois > $this->ceMois ? null : $parMois[$mois], $this->mois), $unite, $enLigne, $axeDeDroite, $pointilles);
+            $jeux[] = SerieDuGraphique::jeu($libelle, array_map(fn (string $mois): ?int => $mois > $this->ceMois ? null : $parMois[$mois], $this->mois), $unite, $enLigne, $axeDeDroite, $pointilles, $seulement);
 
             if ($this->moisCompares !== null) {
                 $compares = $valeurs($this->moisCompares);
-                $comparaisons[] = SerieDuGraphique::jeu($libelle.' (un an plus tôt)', array_map(fn (string $mois): int => $compares[$mois], $this->moisCompares), $unite, $enLigne, $axeDeDroite, $pointilles);
+                $comparaisons[] = SerieDuGraphique::jeu($libelle.' (un an plus tôt)', array_map(fn (string $mois): ?int => $compares[$mois], $this->moisCompares), $unite, $enLigne, $axeDeDroite, $pointilles, $seulement);
             }
         }
 

@@ -316,7 +316,7 @@ class ClientDuCabinetResource extends RessourceDuPanneauCabinet
      */
     public static function client(LienCabinet $lien): Societe
     {
-        return Societe::query()->whereKey($lien->societe_id)->firstOrFail([...Societe::CHAMPS_DE_L_IDENTITE, 'id', 'uuid', 'siren', 'type_activite', 'regime_tva', 'option_debits_tva', 'mois_fin_exercice', 'statut', 'validee_le', 'close_le']);
+        return Societe::query()->whereKey($lien->societe_id)->firstOrFail([...Societe::CHAMPS_DE_L_IDENTITE, 'id', 'uuid', 'siren', 'type_activite', 'regime_tva', 'option_debits_tva', 'mois_fin_exercice', 'membre_assujetti_unique', 'statut', 'validee_le', 'close_le', 'created_at']);
     }
 
     public static function getPages(): array

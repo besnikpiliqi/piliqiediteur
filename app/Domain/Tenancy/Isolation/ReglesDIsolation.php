@@ -64,7 +64,7 @@ final class ReglesDIsolation
 
     public const REGLE_CHAINES = 'Caisse et clôtures, Journal d\'audit : chaque chaîne du registre, du journal des événements et du journal d\'audit ne contient que des maillons de son magasin ou de sa société.';
 
-    public const REGLE_PROTECTIONS = 'Protocole de rigueur, point 2, et Outillage : la base porte ses gardes (ajout seul, documents émis, stock, registre, journaux, charges validées, affectations, autorisations d\'un cabinet et d\'un expert-comptable, ventes au nom d\'un compte autorisé), actives, chaque fonction avec son search_path fixé.';
+    public const REGLE_PROTECTIONS = 'Protocole de rigueur, point 2, et Outillage : la base porte ses gardes (ajout seul, documents émis, stock, registre, journaux, charges validées, affectations, autorisations d\'un cabinet et d\'un expert-comptable, ventes au nom d\'un compte autorisé, ventes et devis numérotés après le choix du régime de TVA, crédits de TVA déclarés), actives, chaque fonction avec son search_path fixé.';
 
     public const REGLE_TABLES = 'Protocole de rigueur, point 6 : chaque table a sa règle d\'isolation, vérifiée chaque nuit.';
 
@@ -104,6 +104,7 @@ final class ReglesDIsolation
         'codes_confirmation' => self::SOCIETE,
         'comptes_expert_comptable' => self::SOCIETE,
         'consultations_vies' => self::MAGASIN,
+        'credits_de_tva' => self::SOCIETE,
         'demandes_inscription' => self::GLOBALE,
         'demonstrations' => self::SOCIETE,
         'devis' => self::MAGASIN,
@@ -259,7 +260,9 @@ final class ReglesDIsolation
         'codes_confirmation' => ['codes_confirmation_suppression_apres_conservation_delete', 'codes_confirmation_suppression_apres_conservation_truncate'],
         'comptes_expert_comptable' => ['comptes_expert_comptable_coherents', 'comptes_expert_comptable_sans_suppression_delete', 'comptes_expert_comptable_sans_suppression_truncate'],
         'consultations_vies' => ['consultations_vies_ajout_seul_delete', 'consultations_vies_ajout_seul_truncate', 'consultations_vies_ajout_seul_update'],
-        'enregistrements_fiscaux' => ['enregistrements_fiscaux_ajout_seul_delete', 'enregistrements_fiscaux_ajout_seul_truncate', 'enregistrements_fiscaux_ajout_seul_update', 'garde_vente_enregistrements_fiscaux'],
+        'credits_de_tva' => ['credits_de_tva_d_une_societe_au_reel', 'credits_de_tva_figee', 'credits_de_tva_sans_suppression_delete', 'credits_de_tva_sans_suppression_truncate'],
+        'devis' => ['garde_regime_tva_devis'],
+        'enregistrements_fiscaux' => ['enregistrements_fiscaux_ajout_seul_delete', 'enregistrements_fiscaux_ajout_seul_truncate', 'enregistrements_fiscaux_ajout_seul_update', 'garde_regime_tva_enregistrements_fiscaux', 'garde_vente_enregistrements_fiscaux'],
         'factures' => ['factures_cloture_caisse_id_figee', 'garde_documents_emis_factures', 'garde_vente_factures'],
         'factures_achat' => ['factures_achat_repere_grand_livre_figee', 'factures_achat_seulement_avec_des_articles', 'magasins_ouverts_a_l_expert_comptable'],
         'fournisseurs' => ['magasins_ouverts_a_l_expert_comptable'],

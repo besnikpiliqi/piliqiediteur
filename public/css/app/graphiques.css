@@ -49,6 +49,13 @@
     font-weight: 700;
 }
 
+.piliqi-graphiques__pastilles {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    margin-block: 0.25rem;
+}
+
 .piliqi-graphiques__precision,
 .piliqi-graphiques__gris {
     color: rgb(var(--gray-600));

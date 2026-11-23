@@ -21,8 +21,9 @@ use LogicException;
  * une émission de devis, un paiement, un encaissement en plusieurs modes,
  * une contre-passation, un avoir, l'avoir de régularisation et la facture
  * rectificative d'une facture après la correction du SIREN de la société,
- * un envoi, une fermeture de caisse, une clôture du jour et une validation
- * d'achat, d'avoir fournisseur ou d'inventaire d'ouverture portent chacune
+ * un envoi, une fermeture de caisse, une clôture du jour, une validation
+ * d'achat, d'avoir fournisseur ou d'inventaire d'ouverture, chaque geste
+ * sur les charges et sur le crédit de TVA déclaré de la société portent chacune
  * un jeton, que l'écran crée à l'ouverture du formulaire ou de la
  * fenêtre (le panier de la caisse a le sien, voir PanierDeCaisse) et garde
  * jusqu'à son succès.
@@ -103,6 +104,14 @@ class ActionsUniques
     public const CORRIGER_UNE_CHARGE = 'charge.corriger';
 
     public const SUPPRIMER_UNE_CHARGE = 'charge.supprimer';
+
+    public const DECLARER_UN_CREDIT_DE_TVA = 'credit_tva.declarer';
+
+    public const MODIFIER_UN_CREDIT_DE_TVA = 'credit_tva.modifier';
+
+    public const CONFIRMER_UN_CREDIT_DE_TVA = 'credit_tva.confirmer';
+
+    public const CORRIGER_UN_CREDIT_DE_TVA = 'credit_tva.corriger';
 
     /**
      * Exécute l'opération une seule fois pour ce jeton dans le magasin

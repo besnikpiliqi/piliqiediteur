@@ -73,7 +73,7 @@ class EnregistrerAvoirAction
 
         return $this->actionsUniques->executer($jeton, ActionsUniques::ENREGISTRER_AVOIR, Avoir::class, $auteur, $parametres, fn () => $this->registre->verrouiller($magasin), fn (): Avoir => DB::transaction(function () use ($auteur, $client, $lignesSelectionnees, $motif, $magasin): Avoir {
             $this->registre->verrouiller($magasin);
-            Magasin::query()->whereKey($magasin->getKey())->firstOrFail()->verifierQuIlNEstPasDansUnAssujettiUnique();
+            Magasin::query()->whereKey($magasin->getKey())->firstOrFail()->verifierQueSaSocietePeutVendre($auteur);
             $compte = $this->lecteur->exigerSousVerrou($auteur, 'create', $magasin, Avoir::class);
 
             return $this->emettreAvoir->handle($compte, $this->creerAvoir->handle($compte, $client, $lignesSelectionnees, $motif));

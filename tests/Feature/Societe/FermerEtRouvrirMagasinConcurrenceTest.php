@@ -175,12 +175,13 @@ class FermerEtRouvrirMagasinConcurrenceTest extends TestCase
      * validation met en activité (SIRET réservé, première période). Sans ce
      * verrou, la validation passerait sans la voir, et la boutique
      * rouvrirait sans période d'activité dans une société validée, où elle
-     * vendrait sans ticket Z.
+     * vendrait sans ticket Z. Le régime de TVA de la société est choisi
+     * dès son inscription, sans quoi aucun magasin ne vendrait (lot TVA27).
      */
     #[Group('concurrence')]
     public function test_une_reouverture_avant_la_validation_simultanee_a_la_saisie_du_code_met_le_magasin_en_activite(): void
     {
-        $societe = $this->inscrireUneSociete();
+        $societe = $this->choisirLeRegimeDeTva($this->inscrireUneSociete());
         $this->creerLeMagasinDuSiege($societe);
         $boutique = $this->creerLeMagasinDuSiege($societe, 'Boutique', substr(FauxRepertoireSirene::siretDeLaBoutique($societe->siren), 9));
         $proprietaire = $societe->proprietaire;

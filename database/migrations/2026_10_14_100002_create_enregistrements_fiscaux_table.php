@@ -4,6 +4,7 @@ use App\Domain\CaisseSecurisee\Support\DeclencheursDeProtection;
 use App\Domain\Facturation\Support\GardesDeLaVente;
 use App\Domain\Facturation\Support\GardesDesClotures;
 use App\Domain\Stock\Support\GardesDuStock;
+use App\Domain\Tenancy\Support\GardesDuRegimeDeTva;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -15,7 +16,9 @@ use Illuminate\Support\Facades\Schema;
  * toute modification, toute suppression et tout vidage (voir
  * DeclencheursDeProtection), et l'enregistrement d'un ticket, d'une
  * facture ou d'un paiement au nom du propriétaire dans un magasin, où
- * il ne vend jamais (voir GardesDeLaVente).
+ * il ne vend jamais (voir GardesDeLaVente), et toute vente ou tout
+ * encaissement d'une société dont le régime de TVA n'est pas choisi (voir
+ * GardesDuRegimeDeTva).
  */
 return new class extends Migration
 {
@@ -68,6 +71,7 @@ return new class extends Migration
 
         DeclencheursDeProtection::ajoutSeul('enregistrements_fiscaux');
         GardesDeLaVente::poser('enregistrements_fiscaux');
+        GardesDuRegimeDeTva::poser('enregistrements_fiscaux');
         GardesDesClotures::poser();
         GardesDuStock::poserLAuteurDesMouvements();
     }
@@ -77,6 +81,7 @@ return new class extends Migration
         Schema::dropIfExists('enregistrements_fiscaux');
         DeclencheursDeProtection::retirer('enregistrements_fiscaux');
         GardesDeLaVente::retirer('enregistrements_fiscaux');
+        GardesDuRegimeDeTva::retirer('enregistrements_fiscaux');
         GardesDesClotures::retirer();
         GardesDuStock::retirerLAuteurDesMouvements();
     }

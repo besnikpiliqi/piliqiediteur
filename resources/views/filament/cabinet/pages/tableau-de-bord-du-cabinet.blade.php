@@ -83,8 +83,12 @@
                                 </td>
                                 <td class="py-2 pe-4" data-charges-a-valider="{{ $ligne['charges_a_valider'] }}">
                                     @if ($ligne['charges_a_valider'] > 0)
-                                        <x-filament::link :href="$ligne['url_des_charges']">{{ trans_choice('{1} 1 charge à valider|[2,*] :count charges à valider', $ligne['charges_a_valider']) }}</x-filament::link>
-                                    @else
+                                        <div><x-filament::link :href="$ligne['url_des_charges']">{{ trans_choice('{1} 1 charge à valider|[2,*] :count charges à valider', $ligne['charges_a_valider']) }}</x-filament::link></div>
+                                    @endif
+                                    @if ($ligne['credit_a_verifier'])
+                                        <div data-credit-de-tva-a-verifier><x-filament::link :href="$ligne['url_du_credit']">Crédit de TVA de départ à vérifier</x-filament::link></div>
+                                    @endif
+                                    @if ($ligne['charges_a_valider'] === 0 && ! $ligne['credit_a_verifier'])
                                         —
                                     @endif
                                 </td>

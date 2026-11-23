@@ -7,6 +7,7 @@ use App\Domain\Cabinets\Models\LienCabinet;
 use App\Domain\Cabinets\Services\AccesDesCabinets;
 use App\Domain\Cabinets\Services\ExpertsComptablesDeclares;
 use App\Domain\Calendrier\Calendrier;
+use App\Domain\Charges\Enums\LectureDeLaTva;
 use App\Domain\Charges\Services\DroitsSurLesCharges;
 use App\Domain\TableauDeBord\Enums\EcranDuTableauDeBord;
 use App\Domain\TableauDeBord\Enums\SourceDesGraphiques;
@@ -14,6 +15,7 @@ use App\Domain\TableauDeBord\Support\Perimetre;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Support\CleDuModele;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Collection;
@@ -170,6 +172,45 @@ final class PerimetreDesGraphiques
     }
 
     /**
+     * Ce que ce compte voit, dans l'espace de la société, de sa TVA (lot
+     * TVA27, voir LectureDeLaTva) : rien sans graphiques, la carte de la
+     * TVA sans le report du crédit, ou sa TVA avec le report, sur des
+     * graphiques qui comptent tous ses magasins et ses charges de « Toute
+     * la société » (voir Perimetre::reporteLeCreditDeTva()). Le message du
+     * crédit de TVA ne dit son montant qu'avec le report, au propriétaire
+     * et au comptable (voir MessagesDuCreditDeTva::message()).
+     */
+    public function lectureDeLaTvaDeLaSociete(User $compte, Societe $societe): LectureDeLaTva
+    {
+        return LectureDeLaTva::du($this->voitLesGraphiquesDeLaSociete($compte, $societe) ? $this->deLaSociete($compte, $societe) : null);
+    }
+
+    /**
+     * De même, sur la page d'un client lié dans l'espace du cabinet.
+     */
+    public function lectureDeLaTvaDuClient(User $compte, LienCabinet $lien): LectureDeLaTva
+    {
+        try {
+            return LectureDeLaTva::du($this->duClient($compte, $lien));
+        } catch (AuthorizationException) {
+            return LectureDeLaTva::Aucune;
+        }
+    }
+
+    /**
+     * De même, sur la page « Tableau de bord de la société » de
+     * l'expert-comptable déclaré.
+     */
+    public function lectureDeLaTvaDeLExpertComptable(User $compte): LectureDeLaTva
+    {
+        try {
+            return LectureDeLaTva::du($this->delExpertComptable($compte));
+        } catch (AuthorizationException) {
+            return LectureDeLaTva::Aucune;
+        }
+    }
+
+    /**
      * Le périmètre de la page « Tableau de bord de la société » de
      * l'expert-comptable déclaré : les magasins de sa déclaration.
      *
@@ -223,6 +264,12 @@ final class PerimetreDesGraphiques
             throw new AuthorizationException(self::REFUS);
         }
 
-        return new Perimetre($ecran, $societe, $magasins, $sources, $calendrier, $this->charges->pourLesGraphiques($compte, $societe, $magasins));
+        // Tous les magasins de la société, ouverts, fermés ou cédés, en
+        // identifiants seulement, lus pour savoir si la TVA du périmètre
+        // compte toute la société (voir Perimetre::reporteLeCreditDeTva()),
+        // jamais montrés.
+        $deLaSociete = ValeursLues::entiers(Magasin::query()->where('societe_id', $societe->getKey())->orderBy('id')->pluck('id'));
+
+        return new Perimetre($ecran, $societe, $magasins, $sources, $calendrier, $this->charges->pourLesGraphiques($compte, $societe, $magasins), false, $deLaSociete);
     }
 }

@@ -6,6 +6,9 @@ use App\Domain\Authorization\AutorisationsSociete;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Cabinets\Actions\RefuserLaDemandeDeLienAction;
 use App\Domain\Cabinets\Models\LienCabinet;
+use App\Domain\Charges\Actions\DeclarerUnCreditDeTvaAction;
+use App\Domain\Charges\Actions\GererLesTypesDeChargeAction;
+use App\Domain\Charges\Enums\NatureDeCharge;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Models\EntreeAudit;
 use App\Domain\Tenancy\Models\Magasin;
@@ -22,6 +25,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Route;
 use Livewire\Livewire;
+use Tests\Feature\Charges\PrepareDesCharges;
 use Tests\TestCase;
 
 /**
@@ -36,6 +40,7 @@ use Tests\TestCase;
  */
 class JournalAuditResourceTest extends TestCase
 {
+    use PrepareDesCharges;
     use RefreshDatabase;
 
     /**
@@ -354,6 +359,39 @@ class JournalAuditResourceTest extends TestCase
             $page = html_entity_decode((string) $this->actingAs($this->proprietaireDe($magasin))->get(JournalAuditResource::getUrl('view', ['record' => $entree], panel: 'societe', tenant: $societe))->assertOk()->getContent(), ENT_QUOTES);
             $this->assertStringNotContainsString('Fiche (identifiant', $page);
             $this->assertStringContainsString("(identifiant {$entree->cible_id})", $page);
+        }
+    }
+
+    /**
+     * Les entrées du crédit de TVA d'une déclaration, d'une charge et d'un
+     * type de charge (lots CHARGES et TVA27) nomment leur objet (voir
+     * AfficheLeJournalDAudit::OBJETS), jamais une « Fiche » sans nature.
+     */
+    public function test_les_entrees_du_credit_de_tva_et_des_charges_nomment_leur_objet(): void
+    {
+        $this->disqueDesCharges();
+        $this->travelTo(self::aParis('2026-11-12 10:00:00'));
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Lyon Centre']);
+        $societe = $magasin->societe()->firstOrFail();
+        $proprietaire = $this->proprietaireDe($magasin);
+        $this->travelTo(self::aParis('2026-12-15 10:00:00'));
+        app(TenantContext::class)->clear();
+        $credit = app(DeclarerUnCreditDeTvaAction::class)->handle($proprietaire, $societe, '2026-11', -125000);
+        app(TenantContext::class)->clear();
+        $charge = $this->deposer($proprietaire, $societe, $this->saisie(champs: ['numero_piece' => 'Q-12', 'date_piece' => '2026-12-02']));
+        $type = app(GererLesTypesDeChargeAction::class)->ajouter($proprietaire, $societe, 'Ménage', NatureDeCharge::Services);
+        app(TenantContext::class)->clear();
+
+        foreach ([
+            [ActionAuditee::CreditDeTvaDeclare, $credit->getKey(), 'Crédit de TVA d\'une déclaration'],
+            [ActionAuditee::ChargeDeposee, $charge->getKey(), 'Charge'],
+            [ActionAuditee::TypeDeChargeAjoute, $type->getKey(), 'Type de charge'],
+        ] as [$action, $cible, $objet]) {
+            $entree = app(TenantContext::class)->runAsSociete($societe, fn (): EntreeAudit => EntreeAudit::query()->where('action', $action->value)->where('cible_id', $cible)->sole());
+            $page = html_entity_decode((string) $this->actingAs($proprietaire)->get(JournalAuditResource::getUrl('view', ['record' => $entree], panel: 'societe', tenant: $societe))->assertOk()->getContent(), ENT_QUOTES);
+
+            $this->assertStringContainsString("{$objet} (identifiant {$cible})", $page);
+            $this->assertStringNotContainsString('Fiche (identifiant', $page);
         }
     }
 }

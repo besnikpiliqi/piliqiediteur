@@ -69,6 +69,7 @@ use App\Domain\Tenancy\Actions\CreerSocieteAction;
 use App\Domain\Tenancy\Actions\DemanderLaTransmissionDeLaProprieteAction;
 use App\Domain\Tenancy\Actions\EnvoyerCodeDeConfirmationAction;
 use App\Domain\Tenancy\Actions\ExaminerSirenAction;
+use App\Domain\Tenancy\Actions\ModifierParametresFiscauxSocieteAction;
 use App\Domain\Tenancy\Actions\RedonnerLAccesAction;
 use App\Domain\Tenancy\Actions\RevoquerSocieteAction;
 use App\Domain\Tenancy\Actions\SaisirCodeDeConfirmationAction;
@@ -76,6 +77,7 @@ use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\DecisionExamenSiren;
 use App\Domain\Tenancy\Enums\FormeJuridique;
 use App\Domain\Tenancy\Enums\MotifCode;
+use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\RoleSociete;
 use App\Domain\Tenancy\Enums\StatutCompte;
@@ -533,7 +535,8 @@ abstract class TestCase extends BaseTestCase
      * « Commerce ou atelier » sans elle) sont celles de la société, qu'elle a
      * dès sa création (ils ne changent jamais) ; toute autre, sauf
      * a_verifier, se règle sur la société avant la création du magasin
-     * (regime_tva...). Avec $proprietaire, le propriétaire d'une société sans
+     * (regime_tva, réel normal mensuel sans elle, comme toute société de
+     * SocieteFactory ; null le laisse à choisir...). Avec $proprietaire, le propriétaire d'une société sans
      * magasin (voir UserFactory), le magasin s'ouvre dans la société de ce
      * compte, sans option siren ni type.
      *
@@ -615,6 +618,23 @@ abstract class TestCase extends BaseTestCase
         $this->assertInstanceOf(FauxRepertoireSirene::class, $repertoire);
 
         return $repertoire;
+    }
+
+    /**
+     * Le régime de TVA que le propriétaire choisit dans les réglages fiscaux
+     * de sa société (voir ModifierParametresFiscauxSocieteAction) : une
+     * société qui vient de s'inscrire n'en a pas encore, et aucun de ses
+     * magasins ne vend avant lui (lot TVA27, voir Magasin::refusDeVente()).
+     * Aucun contexte n'est actif ensuite.
+     */
+    protected function choisirLeRegimeDeTva(Societe $societe, RegimeTva $regime = RegimeTva::ReelNormalMensuel): Societe
+    {
+        app(TenantContext::class)->clear();
+        $relue = Societe::query()->findOrFail($societe->getKey());
+        $reglee = app(TenantContext::class)->runAsSociete($relue, fn (): Societe => app(ModifierParametresFiscauxSocieteAction::class)->handle($relue->proprietaire()->firstOrFail(), $relue, ['regime_tva' => $regime->value]));
+        app(TenantContext::class)->clear();
+
+        return $reglee;
     }
 
     /**

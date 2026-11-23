@@ -4,6 +4,7 @@ namespace App\Domain\Cabinets\Services;
 
 use App\Domain\Cabinets\Models\LienCabinet;
 use App\Domain\Charges\Services\ChargesAFaire;
+use App\Domain\Charges\Services\CreditsDeTva;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
@@ -27,7 +28,12 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * compte suit les factures à encaisser (voir
  * User::suitToutesLesFacturesAEncaisserDe() : le client accorde au cabinet les
  * factures et celles de toute l'équipe), null quand il n'en suit aucun ;
- * aucun nom de client final, aucun numéro de document. Chaque requête
+ * ses charges à valider ; et si le crédit de TVA de départ qu'il a
+ * indiqué attend la vérification du cabinet (lot TVA27, voir
+ * CreditsDeTva::aVerifierParClient(), qui lit son type d'activité, son
+ * régime de TVA, s'il est membre d'un assujetti unique et sa date
+ * d'arrivée dans PILIQI) ; aucun nom de client
+ * final, aucun numéro de document. Chaque requête
  * filtre explicitement par les clients, les magasins ou les liens, et ne
  * lit que les colonnes nommées ; les restants dus se calculent en
  * centimes, jamais par une somme de la base (voir
@@ -38,7 +44,7 @@ final class TableauDeBordDesClients
     public function __construct(private readonly AccesDesCabinets $acces) {}
 
     /**
-     * @return list<array{lien: string, client: Societe, actif_depuis: mixed, magasins: int, factures: array{nombre: int, restant_du: int, nombre_en_retard: int, restant_du_en_retard: int}|null, charges_a_valider: int}>
+     * @return list<array{lien: string, client: Societe, actif_depuis: mixed, magasins: int, factures: array{nombre: int, restant_du: int, nombre_en_retard: int, restant_du_en_retard: int}|null, charges_a_valider: int, credit_a_verifier: bool}>
      */
     public function pour(User $compte): array
     {
@@ -49,7 +55,7 @@ final class TableauDeBordDesClients
         }
 
         $clients = Societe::query()->whereKey($liens->pluck('societe_id')->all())
-            ->get(['id', 'uuid', 'siren', 'raison_sociale', 'siege_ville', 'mois_fin_exercice', 'statut', 'validee_le', 'close_le'])
+            ->get(['id', 'uuid', 'siren', 'raison_sociale', 'siege_ville', 'mois_fin_exercice', 'statut', 'validee_le', 'close_le', 'type_activite', 'regime_tva', 'membre_assujetti_unique', 'created_at'])
             ->keyBy('id');
         $magasins = Magasin::query()->whereIn('societe_id', $clients->keys()->all())->whereKey($this->acces->idsDesMagasinsOuverts($compte))->orderBy('id')
             ->get(['id', 'societe_id', 'statut', 'territoire']);
@@ -58,11 +64,12 @@ final class TableauDeBordDesClients
             ->each(fn (Facture $facture): Facture => $facture->setRelation('magasin', $suivis[$facture->magasin_id]));
 
         $chargesAValider = app(ChargesAFaire::class)->aValiderParClient($compte, ValeursLues::entiers($clients->keys()));
+        $creditsAVerifier = app(CreditsDeTva::class)->aVerifierParClient($compte, $clients);
         $client = fn (LienCabinet $lien): Societe => ValeurRequise::de($clients->get($lien->societe_id), 'le client d\'un lien ouvert');
 
         return array_values($liens
             ->sortBy(fn (LienCabinet $lien): string => mb_strtolower((string) $client($lien)->raison_sociale))
-            ->map(function (LienCabinet $lien) use ($client, $magasins, $suivis, $factures, $chargesAValider): array {
+            ->map(function (LienCabinet $lien) use ($client, $magasins, $suivis, $factures, $chargesAValider, $creditsAVerifier): array {
                 $siens = $suivis->where('societe_id', $lien->societe_id)->keys()->all();
 
                 return [
@@ -72,6 +79,7 @@ final class TableauDeBordDesClients
                     'magasins' => $magasins->where('societe_id', $lien->societe_id)->count(),
                     'factures' => $siens === [] ? null : Facture::totauxAEncaisser($factures->whereIn('magasin_id', $siens)),
                     'charges_a_valider' => $chargesAValider[$lien->societe_id] ?? 0,
+                    'credit_a_verifier' => in_array($lien->societe_id, $creditsAVerifier, true),
                 ];
             })
             ->all());

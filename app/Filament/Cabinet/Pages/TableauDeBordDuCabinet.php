@@ -172,7 +172,7 @@ class TableauDeBordDuCabinet extends Dashboard
      * vérifié ou plus actif, ses liens actifs, pour y mettre fin (voir
      * AccesDesCabinets::liensActifsDuCabinet()).
      *
-     * @return array{clients: list<array{lien: string, url: string, client: Societe, actif_depuis: mixed, magasins: int, factures: array{nombre: int, restant_du: int, nombre_en_retard: int, restant_du_en_retard: int}|null, charges_a_valider: int, url_des_charges: string}>, liensActifs: Collection<int, LienCabinet>}
+     * @return array{clients: list<array{lien: string, url: string, client: Societe, actif_depuis: mixed, magasins: int, factures: array{nombre: int, restant_du: int, nombre_en_retard: int, restant_du_en_retard: int}|null, charges_a_valider: int, credit_a_verifier: bool, url_des_charges: string, url_du_credit: string}>, liensActifs: Collection<int, LienCabinet>}
      */
     protected function getViewData(): array
     {
@@ -181,7 +181,7 @@ class TableauDeBordDuCabinet extends Dashboard
 
         return [
             'clients' => array_map(
-                fn (array $ligne): array => [...$ligne, 'url' => ClientDuCabinetResource::getUrl('view', ['record' => $ligne['lien']]), 'url_des_charges' => ClientDuCabinetResource::getUrl('charges', ['record' => $ligne['lien'], 'vue' => 'a_valider'])],
+                fn (array $ligne): array => [...$ligne, 'url' => ClientDuCabinetResource::getUrl('view', ['record' => $ligne['lien']]), 'url_des_charges' => ClientDuCabinetResource::getUrl('charges', ['record' => $ligne['lien'], 'vue' => 'a_valider']), 'url_du_credit' => ClientDuCabinetResource::getUrl('charges', ['record' => $ligne['lien']]).'#credit-de-tva'],
                 app(TableauDeBordDesClients::class)->pour($compte),
             ),
             'liensActifs' => $compte->estProprietaire() && ! $cabinet->estUnCabinetVerifie()

@@ -3,11 +3,17 @@
 namespace App\Domain\TableauDeBord\Services;
 
 use App\Domain\Calendrier\Calendrier;
+use App\Domain\Charges\Enums\StatutDuReport;
+use App\Domain\Charges\Services\CreditsDeTva;
 use App\Domain\Charges\Services\TvaDeLaPeriode;
 use App\Domain\Charges\Support\MontantsDeTva;
+use App\Domain\Charges\Support\ReportDeLaPeriode;
+use App\Domain\Charges\Support\TextesDuCreditDeTva;
+use App\Domain\Charges\Support\TvaReportee;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\NatureLigne;
+use App\Domain\TableauDeBord\Enums\EcranDuTableauDeBord;
 use App\Domain\TableauDeBord\Enums\Graphique;
 use App\Domain\TableauDeBord\Enums\SourceDesGraphiques;
 use App\Domain\TableauDeBord\Support\AchatsParProduit;
@@ -17,6 +23,7 @@ use App\Domain\TableauDeBord\Support\EcartDesPrixDAchat;
 use App\Domain\TableauDeBord\Support\Mois;
 use App\Domain\TableauDeBord\Support\Perimetre;
 use App\Domain\TableauDeBord\Support\SerieDuGraphique;
+use App\Domain\Tenancy\Enums\CadenceDeLaTva;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Support\CleDuModele;
 use Closure;
@@ -79,6 +86,8 @@ final class SeriesDesGraphiques
         private readonly FacturesDuTableauDeBord $factures,
         private readonly StockDuTableauDeBord $stock,
         private readonly ChargesDuTableauDeBord $charges,
+        private readonly TvaDeLaPeriode $tva,
+        private readonly CreditsDeTva $credits,
     ) {}
 
     /**
@@ -145,18 +154,26 @@ final class SeriesDesGraphiques
      * TVA déductible des achats et, pour qui voit les charges de la
      * société, celle des charges validées, puis la TVA à payer réelle, en
      * ligne, et, avec les charges, son estimation avec les charges à
-     * valider, en pointillés ; sans les charges, la note le dit.
+     * valider, en pointillés ; sans les charges, la note le dit. Sur toute
+     * la société, au réel normal, le report du crédit (voir
+     * tvaAvecLeReport()) ; ailleurs, la note dit qu'il manque.
      *
      * @param  list<int>  $ids
      */
     private function tvaParMois(CalculDesSeries $calcul, array $ids): SerieDuGraphique
     {
+        $reportee = $this->tvaReportee($calcul);
+
+        if ($reportee !== null) {
+            return $this->tvaAvecLeReport($calcul, $ids, $reportee);
+        }
+
         if ($this->chargesDeLaTva($calcul) === null) {
             return $calcul->parMoisMultiple([
                 ['TVA collectée', fn (array $mois): array => array_map(fn (MontantsDeTva $tva): int => $tva->collectee(), $this->tvaDesMois($calcul, $ids, $mois))],
                 ['TVA déductible', fn (array $mois): array => array_map(fn (MontantsDeTva $tva): int => $tva->deductible(), $this->tvaDesMois($calcul, $ids, $mois))],
                 ['TVA à payer', fn (array $mois): array => array_map(fn (MontantsDeTva $tva): int => $tva->reelle(), $this->tvaDesMois($calcul, $ids, $mois)), true],
-            ])->avecLaNote(self::SANS_LES_CHARGES);
+            ])->avecLaNote(self::SANS_LES_CHARGES.' '.TextesDuCreditDeTva::SANS_LE_REPORT);
         }
 
         $serie = $calcul->parMoisMultiple([
@@ -167,7 +184,111 @@ final class SeriesDesGraphiques
             ['TVA à payer (estimation)', fn (array $mois): array => array_map(fn (MontantsDeTva $tva): int => $tva->estimee(), $this->tvaDesMois($calcul, $ids, $mois)), true, SerieDuGraphique::EUROS, false, true],
         ]);
 
-        return $calcul->perimetre->laisseLesChargesDeLaSociete($ids) ? $serie->avecLaNote(self::SANS_LES_CHARGES_DE_LA_SOCIETE) : $serie;
+        return $serie->avecLaNote(($calcul->perimetre->laisseLesChargesDeLaSociete($ids) ? self::SANS_LES_CHARGES_DE_LA_SOCIETE.' ' : '').TextesDuCreditDeTva::SANS_LE_REPORT);
+    }
+
+    /**
+     * La TVA par mois avec le report du crédit (lot TVA27, voir
+     * ReportDuCreditDeTva) : le graphique dessine la TVA à payer au-dessus
+     * du zéro, le crédit à reporter en dessous, la TVA du mois avant le
+     * report en pointillés et l'estimation avec les charges à valider, à
+     * payer ou à reporter ; le tableau « Voir les chiffres » donne, mois
+     * par mois, la TVA collectée, les TVA déductibles, la TVA du mois, le
+     * crédit reporté de la période d'avant, la TVA à payer, le crédit à
+     * reporter et l'estimation. Au trimestriel, le résultat d'un trimestre
+     * se lit au dernier de ses mois, ou au mois en cours pour le trimestre
+     * en cours (voir TvaReportee::fermeSaPeriode()), que son info-bulle
+     * nomme ; un mois d'avant la chaîne n'a que sa TVA du mois. La période
+     * de la déclaration qui sert de point de départ n'a ni crédit reporté
+     * ni TVA à payer connus, celle de sa déclaration, comme sur la page des
+     * charges et dans son état : son crédit à reporter est celui déclaré.
+     * Les notes
+     * disent que les remboursements demandés n'y sont pas, et où en est le
+     * crédit de la déclaration qui sert d'ancre.
+     *
+     * @param  list<int>  $ids
+     */
+    private function tvaAvecLeReport(CalculDesSeries $calcul, array $ids, TvaReportee $reportee): SerieDuGraphique
+    {
+        $serie = $calcul->parMoisMultiple([
+            ['TVA collectée', fn (array $mois): array => array_map(fn (MontantsDeTva $tva): int => $tva->collectee(), $this->tvaDesMois($calcul, $ids, $mois)), false, SerieDuGraphique::EUROS, false, false, SerieDuGraphique::TABLEAU],
+            ['TVA déductible des achats', fn (array $mois): array => array_map(fn (MontantsDeTva $tva): int => $tva->deductibleDesAchats, $this->tvaDesMois($calcul, $ids, $mois)), false, SerieDuGraphique::EUROS, false, false, SerieDuGraphique::TABLEAU],
+            ['TVA déductible des charges', fn (array $mois): array => array_map(fn (MontantsDeTva $tva): int => $tva->deductibleDesChargesValidees, $this->tvaDesMois($calcul, $ids, $mois)), false, SerieDuGraphique::EUROS, false, false, SerieDuGraphique::TABLEAU],
+            ['TVA du mois', fn (array $mois): array => array_map(fn (MontantsDeTva $tva): int => $tva->reelle(), $this->tvaDesMois($calcul, $ids, $mois)), true, SerieDuGraphique::EUROS, false, true],
+            ['Crédit reporté de la période d\'avant', fn (array $mois): array => $this->parPeriode($reportee, $mois, fn (ReportDeLaPeriode $periode): ?int => $periode->statut === StatutDuReport::Declaree ? null : $periode->reelle->creditReporte), false, SerieDuGraphique::EUROS, false, false, SerieDuGraphique::TABLEAU],
+            ['TVA à payer', fn (array $mois): array => $this->parPeriode($reportee, $mois, fn (ReportDeLaPeriode $periode): ?int => $periode->reelle->aPayer)],
+            ['Crédit de TVA à reporter', fn (array $mois): array => $this->parPeriode($reportee, $mois, fn (ReportDeLaPeriode $periode): int => $periode->reelle->creditAReporter), false, SerieDuGraphique::EUROS, false, false, SerieDuGraphique::TABLEAU],
+            ['Crédit de TVA à reporter (sous le zéro)', fn (array $mois): array => $this->parPeriode($reportee, $mois, fn (ReportDeLaPeriode $periode): int => -$periode->reelle->creditAReporter), false, SerieDuGraphique::EUROS, false, false, SerieDuGraphique::DESSIN],
+            ['TVA à payer (estimation)', fn (array $mois): array => $this->parPeriode($reportee, $mois, fn (ReportDeLaPeriode $periode): ?int => $periode->estimee->aPayer), false, SerieDuGraphique::EUROS, false, false, SerieDuGraphique::TABLEAU],
+            ['Crédit de TVA à reporter (estimation)', fn (array $mois): array => $this->parPeriode($reportee, $mois, fn (ReportDeLaPeriode $periode): int => $periode->estimee->creditAReporter), false, SerieDuGraphique::EUROS, false, false, SerieDuGraphique::TABLEAU],
+            ['Estimation avec les charges à valider', fn (array $mois): array => $this->parPeriode($reportee, $mois, fn (ReportDeLaPeriode $periode): int => $periode->estimee->signe()), true, SerieDuGraphique::EUROS, false, true, SerieDuGraphique::DESSIN],
+        ]);
+        $infoBulles = [];
+
+        foreach ($calcul->mois as $rang => $unMois) {
+            $periode = $reportee->montrePar($unMois);
+
+            if ($periode !== null && ($periode->statut === StatutDuReport::Declaree || $reportee->cadence === CadenceDeLaTva::Trimestrielle)) {
+                $infoBulles[$rang] = $reportee->cadence->libelle($periode->periode).($periode->statut === StatutDuReport::Declaree ? ', crédit déclaré : '.TextesDuCreditDeTva::euros($periode->reelle->creditAReporter) : '');
+            }
+        }
+
+        $pourLeComptable = ! in_array($calcul->perimetre->ecran, [EcranDuTableauDeBord::Societe, EcranDuTableauDeBord::Magasin], true);
+        $note = TextesDuCreditDeTva::SANS_LES_REMBOURSEMENTS.' '.TextesDuCreditDeTva::noteDeLAncre($calcul->ancreDuCredit, $calcul->etatDuCredit, $pourLeComptable);
+
+        return new SerieDuGraphique($serie->etiquettes, $serie->jeux, $note, $infoBulles);
+    }
+
+    /**
+     * Ce que $valeur donne, pour chacun de ces mois, de la période dont il
+     * montre le résultat (voir TvaReportee::montrePar()) ; null pour un
+     * mois qui n'en montre aucun : un mois d'avant la chaîne ou, au
+     * trimestriel, un mois qui ne ferme pas son trimestre.
+     *
+     * @param  list<string>  $mois
+     * @param  Closure(ReportDeLaPeriode): ?int  $valeur
+     * @return array<string, int|null>
+     */
+    private function parPeriode(TvaReportee $reportee, array $mois, Closure $valeur): array
+    {
+        $valeurs = [];
+
+        foreach ($mois as $unMois) {
+            $periode = $reportee->montrePar($unMois);
+            $valeurs[$unMois] = $periode === null ? null : $valeur($periode);
+        }
+
+        return $valeurs;
+    }
+
+    /**
+     * La TVA de la société avec le report du crédit, depuis le début de sa
+     * chaîne jusqu'au mois en cours, lue une fois pour la page sur les
+     * documents et les charges déjà lus (voir CalculDesSeries::premierJourDeLaTva()) ;
+     * null quand le périmètre ne la calcule pas (voir
+     * Perimetre::reporteLeCreditDeTva()).
+     */
+    public function tvaReportee(CalculDesSeries $calcul): ?TvaReportee
+    {
+        if (! $calcul->tvaReporteeLue) {
+            $premierMois = $calcul->premierMoisDuReport();
+            $societe = $calcul->perimetre->societe;
+
+            if ($premierMois !== null) {
+                $calcul->ancreDuCredit = $this->credits->ancre($societe);
+                $calcul->etatDuCredit = $calcul->ancreDuCredit === null ? null : $this->credits->etat($societe, $calcul->ancreDuCredit);
+            }
+
+            $calcul->tvaReportee = $premierMois === null ? null : $this->tva->reporter(
+                $societe,
+                $this->tvaDesMois($calcul, $calcul->perimetre->magasinsDeLaTva(), Mois::du(min($premierMois, $calcul->ceMois()), $calcul->ceMois())),
+                $this->chargesDeLaTva($calcul) !== null,
+                $calcul->ancreDuCredit,
+            );
+            $calcul->tvaReporteeLue = true;
+        }
+
+        return $calcul->tvaReportee;
     }
 
     /**
@@ -201,7 +322,7 @@ final class SeriesDesGraphiques
     public function chargesDeLaTva(CalculDesSeries $calcul): ?array
     {
         if (! $calcul->chargesDeLaTvaLues) {
-            $calcul->chargesDeLaTva = $this->charges->pourLaTva($calcul->perimetre, Mois::du(substr($calcul->premierJour(), 0, 7), substr($calcul->dernierJour(), 0, 7)));
+            $calcul->chargesDeLaTva = $this->charges->pourLaTva($calcul->perimetre, Mois::du(substr($calcul->premierJourDeLaTva(), 0, 7), substr($calcul->dernierJour(), 0, 7)));
             $calcul->chargesDeLaTvaLues = true;
         }
 
@@ -594,7 +715,7 @@ final class SeriesDesGraphiques
      */
     public function documentsDeVente(CalculDesSeries $calcul): array
     {
-        return $calcul->documentsDeVente ??= $this->ventes->documents($calcul->perimetre, $calcul->perimetre->magasinsAvec(SourceDesGraphiques::Ventes), $calcul->premierJour(), $calcul->dernierJour());
+        return $calcul->documentsDeVente ??= $this->ventes->documents($calcul->perimetre, $calcul->perimetre->magasinsAvec(SourceDesGraphiques::Ventes), $calcul->premierJourDeLaTva(), $calcul->dernierJour());
     }
 
     /**
@@ -621,7 +742,7 @@ final class SeriesDesGraphiques
      */
     public function documentsDAchat(CalculDesSeries $calcul): array
     {
-        return $calcul->documentsDAchat ??= $this->achats->documents($calcul->perimetre, $calcul->perimetre->magasinsAvec(SourceDesGraphiques::Achats), $calcul->premierJour(), $calcul->dernierJour());
+        return $calcul->documentsDAchat ??= $this->achats->documents($calcul->perimetre, $calcul->perimetre->magasinsAvec(SourceDesGraphiques::Achats), $calcul->premierJourDeLaTva(), $calcul->dernierJour());
     }
 
     /**

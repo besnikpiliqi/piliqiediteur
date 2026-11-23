@@ -146,7 +146,7 @@ class EnregistrerPaiementAction
 
         return $this->actionsUniques->executer($jeton, ActionsUniques::ENREGISTRER_PAIEMENT, Paiement::class, $auteur, $parametres, fn () => $this->registre->verrouiller($magasin), fn (): Paiement => DB::transaction(function () use ($auteur, $client, $donneesPaiement, $montant, $imputations, $bonsDAvoir, $magasin, $recu, $aLEmission, $recuLe) {
             $this->registre->verrouiller($magasin);
-            Magasin::query()->whereKey($magasin->getKey())->firstOrFail()->verifierQuIlPeutVendre();
+            Magasin::query()->whereKey($magasin->getKey())->firstOrFail()->verifierQuIlPeutVendre($auteur);
             $compte = $this->lecteur->exigerSousVerrou($auteur, 'create', $magasin, Paiement::class);
             $this->caissesPersonnelles->refuserSiSaCaisseEstOuverteAilleurs($compte, $magasin);
 

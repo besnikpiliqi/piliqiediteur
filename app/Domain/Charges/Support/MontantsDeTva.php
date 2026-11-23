@@ -59,4 +59,30 @@ final readonly class MontantsDeTva
     {
         return $this->autoliquideeAValider !== 0 || $this->deductibleDesChargesAValider !== 0;
     }
+
+    /**
+     * La somme de ces montants, ceux des mois d'un trimestre (voir
+     * ReportDuCreditDeTva), additionnés en centimes, chaque part avec la
+     * sienne ; avec les charges quand chacun les compte.
+     *
+     * @param  list<self>  $montants
+     */
+    public static function additionner(array $montants, bool $avecLesCharges): self
+    {
+        $somme = new self(0, 0, 0, 0, 0, 0, $avecLesCharges);
+
+        foreach ($montants as $unMontant) {
+            $somme = new self(
+                $somme->collecteeDesVentes + $unMontant->collecteeDesVentes,
+                $somme->autoliquideeValidee + $unMontant->autoliquideeValidee,
+                $somme->deductibleDesAchats + $unMontant->deductibleDesAchats,
+                $somme->deductibleDesChargesValidees + $unMontant->deductibleDesChargesValidees,
+                $somme->autoliquideeAValider + $unMontant->autoliquideeAValider,
+                $somme->deductibleDesChargesAValider + $unMontant->deductibleDesChargesAValider,
+                $avecLesCharges && $unMontant->avecLesCharges,
+            );
+        }
+
+        return $somme;
+    }
 }

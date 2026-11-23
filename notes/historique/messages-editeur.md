@@ -6843,3 +6843,17 @@ il ce genre de tva il faut laisser les options dans la facture d achat quand on 
 
 ben la tu va calculer apres le tva sur benefe, non? si oui alors normalement il faut toujours le dernier prix! mais si je choisi A alors comment tu va calcule la tva exacte pour declarer et compter ?
 
+## 621. 2026-11-23 23:07 UTC
+
+<!-- attach -->
+
+> coût moyen
+
+
+
+tu fait comme ca pour les produit aujourd hui! alors la tva se calculera reel ou quoi ? et le benef ?j ai l impression que non !!
+
+## 622. 2026-11-23 23:11 UTC
+
+B mais est ce qu il faut enregister les produit tva sur marge en unique meme s il ont le meme nom et reference, pour calculer le benefice de chaqu un  et la tva sur le benef ?
+

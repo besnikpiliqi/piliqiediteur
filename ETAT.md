@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 23/11/2026 à 23:00 UTC par pilotage-sync.sh : « Cahier de la marge : B conseillé, A écarté (exemple chiffré) [skip ci] ».
+Mis à jour le 23/11/2026 à 23:11 UTC par pilotage-sync.sh : « Cahier de la marge : B décidé, un produit = une fiche + des lots [skip ci] ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

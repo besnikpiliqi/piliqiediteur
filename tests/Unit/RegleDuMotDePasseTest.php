@@ -2,6 +2,7 @@
 
 namespace Tests\Unit;
 
+use App\Domain\Demonstration\Construction\ConstruireUnModele;
 use App\Domain\Tenancy\Support\MotsDePasseCourants;
 use App\Domain\Tenancy\Support\RegleDuMotDePasse;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -159,5 +160,20 @@ class RegleDuMotDePasseTest extends TestCase
         $this->assertStringContainsString('courant', RegleDuMotDePasse::AIDE);
         $this->assertStringContainsString('12 caractères', RegleDuMotDePasse::MESSAGE_TROP_FAIBLE);
         $this->assertStringContainsString('8 caractères de trois sortes', RegleDuMotDePasse::MESSAGE_TROP_FAIBLE);
+    }
+
+    /**
+     * Le mot de passe de démonstration d'un modèle, tiré par sa
+     * construction, suit la règle des mots de passe choisis : par sa forme
+     * (14 caractères), il ne dépend d'aucun tirage particulier.
+     */
+    public function test_le_mot_de_passe_de_demonstration_d_un_modele_suit_la_regle(): void
+    {
+        for ($tirage = 0; $tirage < 20; $tirage++) {
+            $motDePasse = ConstruireUnModele::tirerUnMotDePasse();
+
+            $this->assertSame(14, mb_strlen($motDePasse));
+            $this->assertSame([], RegleDuMotDePasse::reproches($motDePasse, self::IDENTIFIANT), $motDePasse);
+        }
     }
 }

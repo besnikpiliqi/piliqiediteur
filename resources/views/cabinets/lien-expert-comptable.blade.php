@@ -53,7 +53,7 @@
 
         <label class="champ" for="password">Votre mot de passe<x-obligatoire /></label>
         <input id="password" type="password" name="password" autocomplete="new-password" required>
-        <p class="rappel">Au moins 8 caractères ; ni votre identifiant, ni un seul caractère répété, ni une suite de chiffres.</p>
+        <p class="rappel">{{ \App\Domain\Tenancy\Support\RegleDuMotDePasse::AIDE }}</p>
         <label class="champ" for="password_confirmation">Confirmez votre mot de passe<x-obligatoire /></label>
         <input id="password_confirmation" type="password" name="password_confirmation" autocomplete="new-password" required>
 

@@ -224,9 +224,13 @@ final class LimitationDesConnexions
      * prévient l'éditeur, une fois par heure et par motif, quand ils
      * dépassent un seuil absolu ou trois fois la moyenne horaire des 7 jours
      * d'avant (avec son plancher), ou quand trop d'identifiants différents
-     * échouent depuis une même adresse IP. Les compteurs sont ceux, en HMAC,
-     * de cette limitation : l'alerte ne porte aucun identifiant ni aucune
-     * adresse en clair.
+     * échouent depuis une même adresse IP : pour ce dernier motif, une seule
+     * alerte part dans l'heure, celle de la première adresse qui franchit le
+     * seuil, même si d'autres le franchissent ensuite (une attaque répartie
+     * sur beaucoup d'adresses ne remplit jamais la boîte de l'éditeur ; le
+     * message le dit). Les compteurs sont ceux, en HMAC, de cette
+     * limitation : l'alerte ne porte aucun identifiant ni aucune adresse en
+     * clair.
      */
     private function surveillerLaPlateforme(#[SensitiveParameter] string $saisie, string $adresse): void
     {
@@ -252,7 +256,7 @@ final class LimitationDesConnexions
             $differentes = $this->compter($this->cle('adresse-identifiants-heure', $heure, $adresse), 2 * self::UNE_HEURE);
             $seuilDeLAdresse = Reglage::entier('piliqi.connexions.alerte_identifiants_par_adresse');
 
-            if ($differentes > $seuilDeLAdresse && $this->cache()->add($this->cle('alerte-plateforme-adresse', $heure, $adresse), true, 2 * self::UNE_HEURE)) {
+            if ($differentes > $seuilDeLAdresse && $this->cache()->add($this->cle('alerte-plateforme-adresse', $heure), true, 2 * self::UNE_HEURE)) {
                 AlerterDeLaMonteeDesEchecsJob::dispatch(AlerterDeLaMonteeDesEchecsJob::MOTIF_ADRESSE, $differentes, $seuilDeLAdresse, $debut, substr($this->hmac($adresse), 0, 8));
             }
         }

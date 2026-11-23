@@ -143,9 +143,11 @@ final class ConstruireUnModele
     }
 
     /**
-     * Un mot de passe de démonstration : lisible, jamais un identifiant
-     * (huit chiffres), jamais un seul caractère répété ni une suite de
-     * chiffres.
+     * Un mot de passe de démonstration : lisible, tiré au hasard, de 14
+     * caractères (« Demo-k7qp2m-48 »), donc au moins les 12 caractères que
+     * la règle des mots de passe choisis exige sans composition (voir
+     * RegleDuMotDePasse), sans être un mot de passe courant, un identifiant
+     * (huit chiffres), un seul caractère répété ni une suite de chiffres.
      */
     public static function tirerUnMotDePasse(): string
     {

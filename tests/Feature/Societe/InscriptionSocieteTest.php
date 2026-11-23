@@ -31,6 +31,7 @@ use App\Domain\Tenancy\Services\ControleSirene;
 use App\Domain\Tenancy\Services\DestinataireOfficiel;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\InterventionDeLEditeur;
+use App\Domain\Tenancy\Support\RegleDuMotDePasse;
 use App\Filament\App\Pages\Auth\InscriptionSociete;
 use App\Filament\Societe\Pages\TableauDeBord;
 use App\Filament\Societe\Pages\VerificationSociete as PageDeVerification;
@@ -183,6 +184,19 @@ class InscriptionSocieteTest extends TestCase
         $page = Livewire::test(InscriptionSociete::class);
 
         $this->assertAsterisquesDesChamps($page->html(), ['Votre mot de passe', 'Confirmer le mot de passe']);
+    }
+
+    /**
+     * La consigne sous le champ est celle de la règle que le champ applique
+     * (RegleDuMotDePasse::regles(null)), la même que celle du profil : elle
+     * ne peut autoriser ce que la règle refuse (décision de Claude D76,
+     * T36.1 à T36.4).
+     */
+    public function test_l_aide_du_mot_de_passe_de_l_inscription_est_celle_de_la_regle(): void
+    {
+        Livewire::test(InscriptionSociete::class)
+            ->assertSeeText(RegleDuMotDePasse::AIDE)
+            ->assertDontSeeText('Au moins 8 caractères ;');
     }
 
     /**

@@ -3378,7 +3378,7 @@ return [
         ],
         'demonstration.un-seul-type' => [
             'puce' => 'Copie de démonstration',
-            'regle' => 'Chaque base modèle ne contient que les sociétés de son type (Maison Ferrand seule, Conseil Vasseur seule, le cabinet Martin et ses clients), jamais une société qu\'aucun compte de la copie n\'ouvre, avec les comptes de son bandeau et le mot de passe de démonstration du modèle ; la nuit, seuls les modèles sont refaits, à zéro problème d\'isolation.',
+            'regle' => 'Chaque base modèle ne contient que les sociétés de son type (Maison Ferrand seule, Conseil Vasseur seule, le cabinet Martin et ses clients), jamais une société qu\'aucun compte de la copie n\'ouvre, avec les comptes de son bandeau et le mot de passe de démonstration du modèle (14 caractères qui suivent la règle des mots de passe choisis) que tous ces comptes ont, sauf deux, semés pour montrer l\'état d\'un mot de passe : la vendeuse au mot de passe provisoire valable (Commerce) et le collaborateur qui n\'a pas encore choisi le sien (Cabinet) ; la nuit, seuls les modèles sont refaits, à zéro problème d\'isolation.',
             'tests' => [
                 'tests/Feature/Demonstration/BasesModelesTest.php::test_le_modele_commerce_ne_contient_que_maison_ferrand_avec_fort_de_france_et_son_expert_comptable_declare',
                 'tests/Feature/Demonstration/BasesModelesTest.php::test_le_modele_services_ne_contient_que_conseil_vasseur_sans_article_avec_son_expert_comptable_declare',
@@ -3386,6 +3386,7 @@ return [
                 'tests/Feature/Demonstration/ConstructionDesModelesTest.php::test_une_construction_reussie_met_un_modele_ferme_en_service_avec_son_empreinte_et_son_mot_de_passe',
                 'tests/Feature/Demonstration/ConstructionDesModelesTest.php::test_un_modele_dont_l_isolation_n_est_pas_a_zero_n_est_jamais_mis_en_service',
                 'tests/Feature/Demonstration/QuiDemandeTest.php::test_la_carte_decrit_la_societe_modele_de_son_type',
+                'tests/Unit/RegleDuMotDePasseTest.php::test_le_mot_de_passe_de_demonstration_d_un_modele_suit_la_regle',
             ],
         ],
         'demonstration.domaine-et-temoins' => [

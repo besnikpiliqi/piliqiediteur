@@ -33,8 +33,9 @@ use Tests\DemonstrationTestCase;
  * n'existe ; Maison Ferrand a son magasin de Fort-de-France ; chaque
  * magasin a son JET 100 ; les tables techniques sont vides ; chaque compte
  * du bandeau est un compte non retiré de la société mise en avant, avec le
- * mot de passe de démonstration du modèle, sans préférence de tableau de
- * bord (toutes ses cartes permises s'ouvrent).
+ * mot de passe de démonstration du modèle (hors les deux comptes semés pour
+ * montrer l'état de leur mot de passe, voir assertBandeauDuModele), sans
+ * préférence de tableau de bord (toutes ses cartes permises s'ouvrent).
  */
 #[Group('copies')]
 class BasesModelesTest extends DemonstrationTestCase
@@ -205,7 +206,14 @@ class BasesModelesTest extends DemonstrationTestCase
     /**
      * Chaque compte du bandeau est un compte non retiré de la société mise
      * en avant du modèle, avec le mot de passe de démonstration du modèle,
-     * dans les groupes et l'ordre du semis (voir ComptesDuBandeauDuModele).
+     * dans les groupes et l'ordre du semis (voir ComptesDuBandeauDuModele),
+     * sauf les seuls comptes semés pour montrer l'état de leur mot de passe
+     * (décision de Claude D76, T36.1) : le modèle « Commerce ou atelier »
+     * garde la vendeuse dont la responsable a redonné l'accès en son absence,
+     * avec son mot de passe provisoire encore valable, et le modèle
+     * « Cabinet d'expertise comptable » le collaborateur qui n'a pas encore
+     * choisi le sien ; le mot de passe de démonstration n'ouvre ni l'un ni
+     * l'autre.
      *
      * @param  array<string, mixed>  $lecture
      */
@@ -225,16 +233,32 @@ class BasesModelesTest extends DemonstrationTestCase
         $societes = array_unique(array_column($bandeau, 'raison_sociale'));
         $this->assertSame([$type === TypeDActivite::Cabinet ? 'MARTIN EXPERTISE COMPTABLE' : ($type === TypeDActivite::Commerce ? 'MAISON FERRAND' : 'CONSEIL VASSEUR')], array_values($societes), 'Seuls les comptes de la société mise en avant entrent au bandeau.');
 
+        $sansMotDePasseChoisi = [];
+
         foreach ($bandeau as $rang => $ligne) {
             $this->assertSame($ligne['societe_id'], $ligne['societe_du_compte']);
             $this->assertNotSame('retire', $ligne['statut']);
-            $this->assertTrue(
-                $ligne['mot_de_passe_choisi_le'] === null ? in_array($ligne['name'], ['Inès Garcia', 'Gabriel Faure'], true) : Hash::check($modele->mot_de_passe, (string) $ligne['password']),
-                "Le compte {$ligne['name']} a le mot de passe de démonstration du modèle, ou n'a pas encore choisi le sien (Inès Garcia, dont le mot de passe provisoire a expiré, et Gabriel Faure, sans mot de passe).",
-            );
+
+            if ($ligne['mot_de_passe_choisi_le'] === null) {
+                $sansMotDePasseChoisi[] = $ligne['name'];
+            } else {
+                $this->assertTrue(Hash::check($modele->mot_de_passe, (string) $ligne['password']), "Le compte {$ligne['name']} a le mot de passe de démonstration du modèle.");
+            }
 
             if ($attendus[$rang] !== null) {
                 $this->assertSame($attendus[$rang], $ligne['name']);
+            }
+        }
+
+        $this->assertSame(
+            [TypeDActivite::Commerce->value => ['Inès Garcia'], TypeDActivite::Services->value => [], TypeDActivite::Cabinet->value => ['Gabriel Faure']][$type->value],
+            $sansMotDePasseChoisi,
+            'Seuls ces comptes du bandeau n\'ont pas le mot de passe de démonstration : la vendeuse au mot de passe provisoire valable (Commerce), le collaborateur sans mot de passe (Cabinet).',
+        );
+
+        foreach ($bandeau as $ligne) {
+            if ($ligne['mot_de_passe_choisi_le'] === null) {
+                $this->assertFalse(Hash::check($modele->mot_de_passe, (string) $ligne['password']), "Le mot de passe de démonstration n'ouvre pas le compte {$ligne['name']}.");
             }
         }
     }

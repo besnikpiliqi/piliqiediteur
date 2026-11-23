@@ -35,6 +35,7 @@ use App\Domain\Tenancy\Services\SuiviDesConnexions;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\CleDuModele;
 use App\Domain\Tenancy\Support\MotDePasseRedemande;
+use App\Domain\Tenancy\Support\RegleDuMotDePasse;
 use App\Filament\App\Pages\Auth\Connexion;
 use App\Filament\App\Pages\Auth\DemandeDeLien;
 use App\Filament\App\Pages\Auth\ModifierProfil;
@@ -209,6 +210,22 @@ class LienDeLExpertComptableTest extends TestCase
         $html = $this->get(route('experts-comptables.lien.afficher', ['jeton' => $this->jetonDuDernierLienDExpertComptable()]))->getContent();
 
         $this->assertAsterisquesDesChamps((string) $html, ['Votre mot de passe', 'Confirmez votre mot de passe']);
+    }
+
+    /**
+     * La consigne de la page est celle de la règle que l'action applique
+     * (RegleDuMotDePasse::exiger), jamais une règle plus ancienne (décision
+     * de Claude D76, T36.2 et T36.4).
+     */
+    public function test_la_page_du_lien_rappelle_la_regle_du_mot_de_passe_choisi(): void
+    {
+        $magasin = $this->ouvrirUneSociete();
+        $this->declarerSonExpertComptable($magasin);
+
+        $this->get(route('experts-comptables.lien.afficher', ['jeton' => $this->jetonDuDernierLienDExpertComptable()]))
+            ->assertOk()
+            ->assertSeeText(RegleDuMotDePasse::AIDE)
+            ->assertDontSeeText('Au moins 8 caractères ;');
     }
 
     public function test_l_expert_comptable_ne_se_connecte_jamais_avec_son_adresse_ni_avec_son_identifiant_pour_mot_de_passe(): void

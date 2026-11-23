@@ -20,7 +20,9 @@ use InvalidArgumentException;
  * - MOTIF_RELATIF : plus de trois fois la moyenne horaire des 7 jours d'avant
  *   (avec un plancher) ;
  * - MOTIF_ADRESSE : trop d'identifiants différents qui échouent depuis une
- *   même adresse IP (un même mot de passe essayé sur beaucoup de comptes).
+ *   même adresse IP (un même mot de passe essayé sur beaucoup de comptes) ;
+ *   la seule alerte de l'heure est celle de la première adresse qui franchit
+ *   le seuil.
  * Le message ne porte que des nombres et l'heure : jamais un identifiant, un
  * mot de passe, une adresse e-mail ni une adresse IP en clair, au plus les
  * huit premiers caractères de l'empreinte HMAC de l'adresse, qui permettent
@@ -62,7 +64,7 @@ class AlerterDeLaMonteeDesEchecsJob implements ShouldQueue
                 "{$this->nombre} essais de connexion manqués dans l'heure qui commence le {$quand} (heure de Paris), sur toute la plateforme, plus que le seuil de {$this->seuil} (trois fois la moyenne horaire des 7 jours d'avant, au moins le plancher de l'application).",
             ]],
             self::MOTIF_ADRESSE => ['Connexions : un même mot de passe essayé sur beaucoup de comptes', [
-                "Plus de {$this->seuil} identifiants différents ont échoué depuis une même adresse IP dans l'heure qui commence le {$quand} (heure de Paris) : {$this->nombre} au moment de l'alerte. Empreinte de l'adresse : {$this->empreinte}.",
+                "Plus de {$this->seuil} identifiants différents ont échoué depuis une même adresse IP dans l'heure qui commence le {$quand} (heure de Paris) : {$this->nombre} au moment de l'alerte. Empreinte de l'adresse : {$this->empreinte}. Une seule alerte de ce motif part par heure : d'autres adresses ont pu dépasser le seuil dans la même heure.",
             ]],
             default => throw new InvalidArgumentException("Motif d'alerte inconnu : {$this->motif}."),
         };

@@ -236,13 +236,14 @@ final class SiteDePiliqiServiceProvider extends ServiceProvider
      * journal-audit:epingler-la-cle`, la forme écrite au README : la commande
      * était alors refusée par la garde qu'elle sert à satisfaire. La valeur
      * de `--env` écrite en deux mots (`--env demonstration`) n'est pas un nom
-     * de commande.
+     * de commande. Comme `runningConsoleCommand()` de Laravel, une requête
+     * web n'a jamais de nom de commande (voir argumentsDuProcessus).
      *
      * @param  list<string>|null  $arguments  les arguments du processus, le nom du script en tête ; ceux de ce processus par défaut
      */
     public static function nomDeLaCommande(?array $arguments = null): ?string
     {
-        $arguments ??= array_map(ValeurSimple::enTexte(...), array_values(is_array($_SERVER['argv'] ?? null) ? $_SERVER['argv'] : []));
+        $arguments ??= self::argumentsDuProcessus();
 
         $valeurDeLEnvironnementAttendue = false;
 
@@ -265,6 +266,28 @@ final class SiteDePiliqiServiceProvider extends ServiceProvider
         }
 
         return null;
+    }
+
+    /**
+     * Les arguments de ce processus quand il est une commande, et rien quand
+     * il sert une requête web : avec `register_argc_argv=On`, valeur par
+     * défaut de PHP que bien des images sans php.ini de production gardent,
+     * `$_SERVER['argv']` est rempli depuis la chaîne de requête (`GET
+     * /?x+package:discover` donne `['x', 'package:discover']`) ; la lire sans
+     * ce contrôle laisserait n'importe quel visiteur sauter toutes les
+     * gardes de ce fournisseur (relecture du lot écrans).
+     *
+     * @return list<string>
+     */
+    private static function argumentsDuProcessus(): array
+    {
+        if (! app()->runningInConsole()) {
+            return [];
+        }
+
+        $arguments = $_SERVER['argv'] ?? null;
+
+        return is_array($arguments) ? array_map(ValeurSimple::enTexte(...), array_values($arguments)) : [];
     }
 
     /**

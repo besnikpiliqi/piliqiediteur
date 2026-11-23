@@ -377,7 +377,12 @@ final class Balayeur
 
     /**
      * Clique sur l'élément de cet appel, en ouvrant d'abord son menu
-     * d'actions s'il y est rangé.
+     * d'actions s'il y est rangé. Une action grisée par aria-disabled sans
+     * l'attribut disabled (« Fermer ma caisse » quand rien n'est à fermer,
+     * pour garder son info-bulle) se clique comme le fait une souris ou un
+     * doigt, de force : Playwright tient un élément aria-disabled pour non
+     * actionnable et attendrait en vain ; l'action se monte sans fenêtre et
+     * rappelle son refus, sans rien écrire.
      */
     private function ouvrir(string $clic): void
     {
@@ -408,7 +413,8 @@ final class Balayeur
             $this->onglet->cliquer('[data-balayage="menu"]');
         }
 
-        $this->onglet->gesteQuiAppelleLeServeur(fn () => $this->onglet->element('[data-balayage="action"]')->click(), 'le clic sur l\'action '.$clic);
+        $grisee = $this->onglet->element('[data-balayage="action"]')->getAttribute('aria-disabled') === 'true';
+        $this->onglet->gesteQuiAppelleLeServeur(fn () => $this->onglet->element('[data-balayage="action"]')->click($grisee ? ['force' => true] : []), 'le clic sur l\'action '.$clic);
     }
 
     /**

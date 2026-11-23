@@ -231,6 +231,7 @@ class SemisCompletTest extends TestCase
         $this->assertLesComptesEtLeursMagasins();
         $this->assertLesCasDesGraphiquesEtDesCaisses();
         $this->assertLesNomsLongsEtLesFermeturesDeCaisse();
+        $this->assertLesLiensDesNotificationsRangesParLeSemisSontRelatifs();
         $this->assertLesCasDeLEcartDesPrixDAchat();
         $this->assertLesDatesDeLOperation();
         $this->assertLaListeDesComptesOuvreChaqueCompteActif();
@@ -483,6 +484,48 @@ class SemisCompletTest extends TestCase
             [['Thomas Girard']],
             $this->lignes('select distinct vendeur_nom from clotures_caisse_personnelles c join (select vendeur_id, date(cloturee_a) j from clotures_caisse_personnelles group by 1, 2 having count(*) > 1) d on d.vendeur_id = c.vendeur_id and d.j = date(c.cloturee_a)'),
         );
+    }
+
+    /**
+     * Aucune notification que le semis range ne porte d'adresse absolue
+     * (demande de l'éditeur du 20/11/2026, relecture du lot écrans) : une
+     * adresse construite avec APP_URL au moment du semis garderait pour
+     * toujours l'hôte et le port du site qui a semé, et « Voir le document »
+     * mènerait à « La connexion a échoué » sur un poste ou dans une copie de
+     * démonstration. Chaque bouton d'une notification est un chemin du site, et
+     * au moins une notification en porte un, pour que ce contrôle ne passe pas
+     * sur une base sans lien. Il ne lit que la base : un semeur qui écrirait
+     * directement dans « notifications » sans passer par le modèle repasserait
+     * des adresses absolues, que ce test fait rougir.
+     */
+    private function assertLesLiensDesNotificationsRangesParLeSemisSontRelatifs(): void
+    {
+        $this->assertSame(
+            0,
+            (int) DB::scalar("select count(*) from notifications where data::text like '%http%'"),
+            'Une notification semée ne porte ni adresse absolue ni hôte ni port de site.',
+        );
+
+        $avecUnBouton = 0;
+        $boutonsAbsolus = [];
+
+        foreach (DB::table('notifications')->orderBy('id')->pluck('data', 'id') as $id => $donnees) {
+            $contenu = json_decode((string) $donnees, true, flags: JSON_THROW_ON_ERROR);
+            $this->assertIsArray($contenu);
+            $actions = is_array($contenu['actions'] ?? null) ? $contenu['actions'] : [];
+            $avecUnBouton += $actions === [] ? 0 : 1;
+
+            foreach ($actions as $action) {
+                $adresse = is_array($action) ? ($action['url'] ?? null) : null;
+
+                if (is_string($adresse) && $adresse !== '' && ! str_starts_with($adresse, '/')) {
+                    $boutonsAbsolus[] = "{$id} : {$adresse}";
+                }
+            }
+        }
+
+        $this->assertSame([], $boutonsAbsolus, 'Le bouton d\'une notification semée est un chemin du site, jamais une adresse entière.');
+        $this->assertGreaterThan(0, $avecUnBouton, 'Au moins une notification semée a un bouton, donc un lien à contrôler.');
     }
 
     /**

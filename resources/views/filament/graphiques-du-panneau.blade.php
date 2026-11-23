@@ -13,7 +13,12 @@
     Les noms longs (demande de l'éditeur du 20/11/2026) : sur l'axe des noms
     d'un graphique en barres, comme dans la légende d'un anneau ou d'un
     camembert, un nom trop long pour la place s'écrit à partir de sa
-    gauche, son début visible, la fin cachée par « … » ; une info-bulle
+    gauche, son début visible, la fin cachée par « … » ; seules les cartes
+    dont les étiquettes sont des noms saisis par la société (produits,
+    clients, fournisseurs, magasins : `config.noms_longs`, voir
+    Graphique::etiquettesSontDesNoms()) y sont soumises, les mois, les taux
+    et les jours gardant l'axe de Chart.js, qui les penche ou les saute
+    quand la place manque, sans jamais les couper ; une info-bulle
     (`.piliqi-graphiques__nom-complet`, voir graphiques.css) en montre le nom
     entier quand la souris est au-dessus du nom, et au toucher ou au clic
     sur un téléphone ou une tablette, où il n'y a pas de souris. Le plugin
@@ -218,10 +223,11 @@
         })
 
         const unite = (config.jeux.find((jeu) => ! jeu.axe_de_droite) ?? { unite: 'euros' }).unite
-        // La légende d'un anneau ou d'un camembert : les noms trop longs
+        const nomsLongs = config.noms_longs === true
+        // La légende d'un anneau ou d'un camembert de noms : les noms trop longs
         // s'écrivent par leur début, et l'info-bulle dit le nom entier au
-        // survol, au clic ou au toucher.
-        const legende = circulaire ? {
+        // survol, au clic ou au toucher. Toute autre légende reste celle de Chart.js.
+        const legendeDesNoms = {
             display: true,
             labels: {
                 generateLabels: (graphique) => window.piliqiLegendeParDefaut(graphique).labels.generateLabels(graphique)
@@ -243,13 +249,14 @@
                     window.piliqiMontrerLeNomComplet(legend.chart, complet, evenement.x, evenement.y, true)
                 }
             },
-        } : { display: config.jeux.length > 1 }
+        }
+        const legende = circulaire ? (nomsLongs ? legendeDesNoms : { display: true }) : { display: config.jeux.length > 1 }
 
         const options = {
             maintainAspectRatio: false,
             indexAxis: config.type === 'barres_couchees' ? 'y' : 'x',
             plugins: {
-                piliqiNomsLongs: { actif: true },
+                piliqiNomsLongs: { actif: nomsLongs },
                 legend: legende,
                 tooltip: {
                     callbacks: {
@@ -269,7 +276,10 @@
 
             options.scales = {
                 [config.type === 'barres_couchees' ? 'x' : 'y']: { ticks: { callback: graduation(unite) } },
-                [axeDesNoms]: {
+            }
+
+            if (nomsLongs) {
+                options.scales[axeDesNoms] = {
                     ticks: {
                         // Le nom commence à gauche : trop long, il perd sa fin, jamais son début.
                         callback: function (valeur) {
@@ -283,7 +293,7 @@
                             return tronque
                         },
                     },
-                },
+                }
             }
 
             if (datasets.some((serie) => serie.yAxisID === 'y2')) {

@@ -178,3 +178,32 @@ test('la légende d’un anneau écrit un nom trop long par son début suivi de 
         ->attendreQue('document.querySelector(\''.$carte.' [data-nom-complet]\') !== null && ! document.querySelector(\''.$carte.' [data-nom-complet]\').hidden', 'l’info-bulle de la légende ne s’ouvre pas au survol');
     expect(nomComplet($onglet, 'meilleurs_produits')['texte'])->toBe($legende['noms'][$rang]);
 });
+
+test('les étiquettes d’un graphique par mois restent entières, sans « … », à 1 280 px et sur un téléphone, en clair et en sombre', function () {
+    $societe = $this->societeComplete();
+    $onglet = $this->seConnecter($societe->proprietaire, panneau: 'societe');
+    $carte = '[data-graphique="ca_par_mois"]';
+    $graphique = 'window.Alpine.$data(document.querySelector(\''.$carte.' canvas\').closest(\'[x-data]\')).getChart()';
+
+    $onglet->attendreQue('document.querySelectorAll("[data-graphique]").length === 4', 'les graphiques par défaut ne sont pas là');
+
+    foreach ([['largeur' => 1280, 'hauteur' => 1000], ['largeur' => 390, 'hauteur' => 900]] as $fenetre) {
+        foreach (['light', 'dark'] as $mode) {
+            $onglet->page()->setViewportSize($fenetre['largeur'], $fenetre['hauteur']);
+            $onglet->page()->evaluate('(mode) => localStorage.setItem("theme", mode)', $mode);
+            $onglet->aller($onglet->chemin())->attendre()->verifier()
+                ->attendreQue('document.querySelector(\''.$carte.' canvas\') !== null && '.$graphique.' !== null', 'le graphique par mois n’est pas prêt');
+            $onglet->page()->evaluate('(largeur) => { if (largeur < 1024) { window.Alpine.store("sidebar").close(); } }', $fenetre['largeur']);
+            $qui = "{$fenetre['largeur']} px, {$mode}";
+
+            $axe = $onglet->page()->evaluate('() => { const g = '.$graphique.'; return { noms: g.data.labels, ticks: g.scales.x.ticks.map((graduation) => ({ rang: graduation.value, ecrit: graduation.label })) }; }');
+            expect($axe['noms'])->toHaveCount(12)
+                ->and($axe['ticks'])->not->toBeEmpty("L’axe des mois écrit au moins un mois ({$qui}).");
+
+            foreach ($axe['ticks'] as $graduation) {
+                expect($graduation['ecrit'])->toBe($axe['noms'][$graduation['rang']], "Un mois écrit sur l’axe est entier, année comprise ({$qui}).")
+                    ->and($graduation['ecrit'])->not->toContain('…');
+            }
+        }
+    }
+});

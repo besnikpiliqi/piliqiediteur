@@ -14,6 +14,7 @@ use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\DebitDesEmails;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Http\Controllers\Demonstration\CourrielsDeLaDemonstrationController;
 use App\Integrations\Sirene\FauxRepertoireSirene;
 use App\Models\User;
@@ -118,6 +119,30 @@ class CourrielsQuiSeraientPartisTest extends DemonstrationTestCase
         $this->assertStringNotContainsString('{{SITE}}', $affiche);
         $this->assertStringNotContainsString($racine.'/devis', $affiche);
         $this->assertStringContainsString('href="'.$racine.'0/autre"', $affiche);
+    }
+
+    /**
+     * Le lien du titre du gabarit des e-mails est lu dans APP_URL, les autres
+     * liens sont construits depuis l'adresse de la requête : quand elles
+     * diffèrent (le semis d'un modèle, une copie servie sur son domaine), les
+     * deux se rangent comme un repère, et le début d'une autre adresse reste
+     * entier (relecture du lot écrans : le titre d'un « Devis accepté en
+     * ligne » d'une base modèle gardait l'adresse du site de construction).
+     */
+    public function test_le_lien_du_titre_qui_porte_l_adresse_d_app_url_se_range_aussi_comme_un_repere(): void
+    {
+        ['copie' => $copie] = $this->copieDeTest(TypeDActivite::Commerce);
+        $appUrl = rtrim(ValeurSimple::enTexte(config('app.url')), '/');
+        URL::forceRootUrl('http://requete.exemple.test:8003');
+        $this->assertNotSame($appUrl, rtrim(url('/'), '/'), 'L\'adresse de la requête diffère d\'APP_URL.');
+        $this->envoyerDansLaCopie($copie, '000000109', 'Devis accepté en ligne', '<html><body><a href="'.$appUrl.'" style="x">Titre</a> <a href="http://requete.exemple.test:8003/app/devis/1">Voir</a> <a href="'.$appUrl.'0/autre">Autre</a></body></html>');
+
+        $html = (string) $this->dansLaCopie($copie, fn (): mixed => CourrielDeLaDemonstration::query()->withoutGlobalScopes()->where('objet', 'Devis accepté en ligne')->value('html'));
+
+        $this->assertStringContainsString('<a href="{{SITE}}" style="x">', $html, 'Le lien du titre, lu dans APP_URL, se range comme un repère.');
+        $this->assertStringContainsString('<a href="{{SITE}}/app/devis/1">', $html, 'Un lien construit depuis la requête aussi.');
+        $this->assertStringContainsString('href="'.$appUrl.'0/autre"', $html, 'Le début d\'une autre adresse n\'est pas l\'adresse du site.');
+        $this->assertStringNotContainsString('requete.exemple.test', $html);
     }
 
     public function test_jamais_les_e_mails_d_une_autre_societe_de_la_meme_base_ni_d_une_autre_copie(): void

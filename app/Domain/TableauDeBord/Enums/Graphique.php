@@ -134,6 +134,21 @@ enum Graphique: string implements HasLabel
     }
 
     /**
+     * Les étiquettes de la carte sont des noms que la société a saisis
+     * (produit, client, fournisseur, magasin), parfois très longs : seuls
+     * ceux-là s'écrivent par leur début suivi de « … », avec une info-bulle
+     * du nom entier (demande de l'éditeur du 20/11/2026). Les étiquettes
+     * d'une carte par mois, par jour, par taux ou par mode de paiement sont
+     * des mots que PILIQI écrit : Chart.js les garde entières, ou les
+     * penche ou les saute quand la place manque, jamais coupées (relecture
+     * du lot écrans).
+     */
+    public function etiquettesSontDesNoms(): bool
+    {
+        return in_array($this, [self::ChiffreDAffairesParMagasin, self::MeilleursProduits, self::MeilleursClients, self::AchatsParFournisseur], true);
+    }
+
+    /**
      * Les documents qu'il compte, dans une société qui a des articles ou
      * non : la TVA à payer ne compte les achats que là où ils existent.
      *

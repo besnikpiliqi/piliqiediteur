@@ -2,6 +2,8 @@
 
 namespace App\Domain\Demonstration\Courriels;
 
+use App\Domain\Tenancy\Support\ValeurSimple;
+
 /**
  * L'adresse du site dans le HTML et le texte d'un e-mail capturé par la
  * démonstration (voir TransportDeLaDemonstration), pour que ses liens
@@ -13,6 +15,14 @@ namespace App\Domain\Demonstration\Courriels;
  * repère ; à l'affichage, par l'adresse de la requête en cours. Un lien ne
  * peut pas être relatif : le cadre isolé (srcdoc) n'a pas d'adresse de base.
  * Les e-mails du site réel, eux, gardent une adresse absolue.
+ *
+ * Un e-mail écrit l'adresse du site de deux façons, qui diffèrent quand il
+ * part d'une requête sur un autre hôte ou un autre port que celui d'APP_URL
+ * (le semis d'un modèle, une copie servie sur son domaine) : les liens des
+ * pages et des boutons, construits par url() depuis la requête, et le lien du
+ * titre du gabarit des e-mails, lu dans APP_URL. Les deux se remplacent par le
+ * repère (relecture du lot écrans, « Devis accepté en ligne » d'une base
+ * modèle, dont le titre gardait l'adresse du site de construction).
  */
 final class AdresseDuSiteDansLesCourriels
 {
@@ -32,9 +42,11 @@ final class AdresseDuSiteDansLesCourriels
             return null;
         }
 
-        $racine = self::racine();
+        foreach (self::racinesEcrites() as $racine) {
+            $contenu = (string) preg_replace('~'.preg_quote($racine, '~').'(?=[/?#"\'\s<>)\]]|$)~', self::REPERE, $contenu);
+        }
 
-        return $racine === '' ? $contenu : (string) preg_replace('~'.preg_quote($racine, '~').'(?=[/?#"\'\s<>)\]]|$)~', self::REPERE, $contenu);
+        return $contenu;
     }
 
     /**
@@ -52,5 +64,20 @@ final class AdresseDuSiteDansLesCourriels
     private static function racine(): string
     {
         return rtrim(url('/'), '/');
+    }
+
+    /**
+     * Les adresses que le logiciel écrit pour ce site dans un e-mail : celle
+     * de la requête en cours (voir racine()) et celle d'APP_URL, sans « / »
+     * final, chacune une fois, la plus longue d'abord.
+     *
+     * @return list<string>
+     */
+    private static function racinesEcrites(): array
+    {
+        $adresses = array_values(array_unique(array_filter([self::racine(), rtrim(ValeurSimple::enTexte(config('app.url')), '/')], static fn (string $adresse): bool => $adresse !== '')));
+        usort($adresses, static fn (string $premiere, string $seconde): int => strlen($seconde) <=> strlen($premiere));
+
+        return $adresses;
     }
 }

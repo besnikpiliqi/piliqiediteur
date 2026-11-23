@@ -12,6 +12,7 @@ use App\Providers\FournisseursExternesServiceProvider;
 use App\Providers\SiteDePiliqiServiceProvider;
 use Illuminate\Database\Connection;
 use Illuminate\Database\QueryException;
+use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Foundation\Testing\WithConsoleEvents;
 use Illuminate\Http\Middleware\TrustHosts;
@@ -21,6 +22,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use Mockery;
 use PHPUnit\Framework\Attributes\DataProvider;
+use ReflectionProperty;
 use Symfony\Component\Console\Input\ArrayInput;
 use Symfony\Component\HttpFoundation\Exception\SuspiciousOperationException;
 use Symfony\Component\Process\Process;
@@ -423,6 +425,59 @@ class SiteDePiliqiTest extends TestCase
     }
 
     /**
+     * Une requête web n'a jamais de nom de commande (relecture du lot
+     * écrans) : avec `register_argc_argv=On`, `GET /?x+package:discover`
+     * remplit `$_SERVER['argv']` de `['x', 'package:discover']`, et la garde
+     * du site réel comme celle du site de démonstration doivent s'appliquer
+     * quand même, comme le faisait `runningConsoleCommand()` de Laravel. Les
+     * mêmes arguments, dans une commande, sautent la garde.
+     */
+    public function test_une_requete_web_ne_saute_aucune_garde_avec_les_arguments_que_sa_chaine_de_requete_met_dans_argv(): void
+    {
+        $this->app->detectEnvironment(fn (): string => 'production');
+        config(['session.cookie' => 'piliqi-session']);
+        $argumentsDuProcessus = $_SERVER['argv'];
+
+        try {
+            foreach (SiteDePiliqiServiceProvider::COMMANDES_DE_LA_CONSTRUCTION_DU_PAQUET as $commande) {
+                $_SERVER['argv'] = ['x', $commande];
+
+                $this->demarrer();
+                $this->assertSame($commande, SiteDePiliqiServiceProvider::nomDeLaCommande());
+
+                $this->horsDeLaConsole(function () use ($commande): void {
+                    $this->assertNull(SiteDePiliqiServiceProvider::nomDeLaCommande());
+                    $this->assertStringContainsString(SiteDePiliqiServiceProvider::MESSAGE_TEMOIN_DE_PRODUCTION, $this->refusDuDemarrage(), "GET /?x+{$commande} saute la garde du site réel.");
+                });
+            }
+
+            $this->app->detectEnvironment(fn (): string => 'testing');
+            $this->configurerLeSiteDeDemonstration();
+            $paire = SignataireFiscal::genererUnePaire();
+            config([
+                'caisse_securisee.cle_privee' => base64_encode($paire['cle_privee']),
+                'caisse_securisee.cles_publiques' => ['reel.pem' => $paire['cle_publique']],
+                'journal_audit.cle' => base64_encode(random_bytes(32)),
+                'journal_audit.empreintes_de_demonstration' => [],
+            ]);
+
+            foreach (SiteDePiliqiServiceProvider::COMMANDES_QUI_PREPARENT_LES_CLES as $commande) {
+                $_SERVER['argv'] = ['x', $commande];
+
+                $this->demarrer();
+
+                $this->horsDeLaConsole(function () use ($commande): void {
+                    $refus = $this->refusDuDemarrage();
+                    $this->assertStringContainsString(SiteDePiliqiServiceProvider::MESSAGE_CLE_DE_CAISSE_DE_LA_DEMONSTRATION, $refus, "GET /?x+{$commande} saute la garde des clés du site de démonstration.");
+                    $this->assertStringContainsString(sprintf(SiteDePiliqiServiceProvider::MESSAGE_CLE_D_AUDIT_DE_LA_DEMONSTRATION, 'courante (JOURNAL_AUDIT_CLE)'), $refus, "GET /?x+{$commande} saute la garde de la clé d'audit.");
+                });
+            }
+        } finally {
+            $_SERVER['argv'] = $argumentsDuProcessus;
+        }
+    }
+
+    /**
      * Les commandes qui tirent et épinglent les clés d'un poste neuf du site
      * de démonstration démarrent avant que les clés soient épinglées, dans
      * les deux ordres d'écriture (`php artisan --env=demonstration
@@ -727,6 +782,25 @@ class SiteDePiliqiTest extends TestCase
     private function demarrer(): void
     {
         (new SiteDePiliqiServiceProvider($this->app))->boot();
+    }
+
+    /**
+     * Fait tourner l'essai comme si le processus servait une requête web :
+     * l'application ne se croit plus dans la console, puis le redevient.
+     *
+     * @param  callable(): void  $essai
+     */
+    private function horsDeLaConsole(callable $essai): void
+    {
+        $drapeau = new ReflectionProperty(Application::class, 'isRunningInConsole');
+        $avant = $drapeau->getValue($this->app);
+        $drapeau->setValue($this->app, false);
+
+        try {
+            $essai();
+        } finally {
+            $drapeau->setValue($this->app, $avant);
+        }
     }
 
     private function refusDuDemarrage(): string

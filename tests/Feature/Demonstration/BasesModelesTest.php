@@ -9,9 +9,11 @@ use App\Domain\Demonstration\Construction\ConstruireUnModele;
 use App\Domain\Demonstration\Construction\DossiersDeLaDemonstration;
 use App\Domain\Demonstration\Construction\SemisDuModeleParLeSemeur;
 use App\Domain\Demonstration\Contracts\SemisDUnModele;
+use App\Domain\Demonstration\Courriels\AdresseDuSiteDansLesCourriels;
 use App\Domain\Demonstration\Registre\Models\Modele;
 use App\Domain\Demonstration\Services\CarteDeLaDemonstration;
 use App\Domain\Tenancy\Enums\TypeDActivite;
+use App\Domain\Tenancy\Support\ValeurSimple;
 use Carbon\CarbonImmutable;
 use Database\Seeders\DatabaseSeeder;
 use Database\Seeders\Semis\ComptesDuBandeauDuModele;
@@ -63,6 +65,7 @@ class BasesModelesTest extends DemonstrationTestCase
         $this->assertNotSame([], $lecture['courriels'], 'La page « E-mails qui seraient partis » d\'une copie neuve montre de vrais exemples de sa société (F.4).');
         $this->assertSame(['MAISON FERRAND'], array_values(array_unique(array_column($lecture['courriels'], 'raison_sociale'))));
         $this->assertBandeauDuModele($modele, $lecture, TypeDActivite::Commerce);
+        $this->assertUnCourrielAuRepereDuSite($lecture);
         $this->assertCommunAuxModeles($lecture);
     }
 
@@ -121,6 +124,7 @@ class BasesModelesTest extends DemonstrationTestCase
             'Les invitations du cabinet, envoyées hors de tout contexte après leur transaction, s\'écrivent dans les e-mails du cabinet (F.4).',
         );
         $this->assertBandeauDuModele($modele, $lecture, TypeDActivite::Cabinet);
+        $this->assertUnCourrielAuRepereDuSite($lecture);
         $this->assertCommunAuxModeles($lecture);
     }
 
@@ -157,6 +161,8 @@ class BasesModelesTest extends DemonstrationTestCase
      */
     private function lireLaCopie(string $copie): array
     {
+        $racine = rtrim(url('/'), '/');
+
         return BrancherUneBase::pendant(BrancherUneBase::parLAdministration($copie), fn (): array => [
             'societes' => DB::table('societes')->orderBy('raison_sociale')->pluck('raison_sociale')->all(),
             'cabinets' => DB::table('societes')->where('type_activite', TypeDActivite::Cabinet->value)->pluck('raison_sociale')->all(),
@@ -189,6 +195,15 @@ class BasesModelesTest extends DemonstrationTestCase
                 ->whereIn('user_id', DB::table('comptes_du_bandeau')->select('user_id'))
                 ->count(),
             'regimes_manquants' => DB::table('societes')->where('type_activite', '!=', TypeDActivite::Cabinet->value)->whereNull('regime_tva')->pluck('raison_sociale')->all(),
+            'courriels_a_l_adresse_du_site' => DB::table('courriels_de_la_demonstration')->orderBy('id')->get(['objet', 'html', 'texte'])
+                ->map(fn (object $courriel): ?string => self::extraitDeLAdresseDuSite($courriel, $racine))
+                ->filter()->values()->all(),
+            'objets_sans_le_repere_du_site' => DB::table('courriels_de_la_demonstration')
+                ->whereRaw("position(? in coalesce(html, '') || ' ' || coalesce(texte, '')) = 0", [AdresseDuSiteDansLesCourriels::REPERE])
+                ->orderBy('id')->pluck('objet')->all(),
+            'courriels_au_repere_du_site' => DB::table('courriels_de_la_demonstration')
+                ->whereRaw("position(? in coalesce(html, '') || ' ' || coalesce(texte, '')) > 0", [AdresseDuSiteDansLesCourriels::REPERE])
+                ->count(),
             'courriels' => DB::table('courriels_de_la_demonstration')
                 ->join('societes', 'societes.id', '=', 'courriels_de_la_demonstration.societe_id')
                 ->orderBy('courriels_de_la_demonstration.id')
@@ -196,6 +211,31 @@ class BasesModelesTest extends DemonstrationTestCase
                 ->map(fn (object $ligne): array => (array) $ligne)
                 ->all(),
         ]);
+    }
+
+    /**
+     * Où l'e-mail porte l'adresse du site qui a construit le modèle (celle de
+     * la requête ou d'APP_URL, ou « http://localhost »), avec ce qui
+     * l'entoure : son objet et une quarantaine de caractères autour, dans le
+     * HTML ou le texte ; null quand il n'en porte aucune.
+     */
+    private static function extraitDeLAdresseDuSite(object $courriel, string $racine): ?string
+    {
+        foreach (['html' => $courriel->html, 'texte' => $courriel->texte] as $partie => $contenu) {
+            if (! is_string($contenu)) {
+                continue;
+            }
+
+            foreach (array_filter([$racine, 'http://localhost']) as $adresse) {
+                $place = strpos($contenu, $adresse);
+
+                if ($place !== false) {
+                    return sprintf('« %s » (%s) : …%s…', (string) $courriel->objet, $partie, str_replace(["\r", "\n"], ' ', substr($contenu, max(0, $place - 40), strlen($adresse) + 80)));
+                }
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -233,6 +273,22 @@ class BasesModelesTest extends DemonstrationTestCase
     }
 
     /**
+     * Au moins un e-mail du modèle porte le repère de l'adresse du site, donc
+     * un lien que la page « E-mails qui seraient partis » mène à la copie :
+     * sans lui, l'absence d'adresse du site ailleurs ne prouverait rien. Le
+     * modèle de services n'en a pas, son seul e-mail (une facture envoyée à un
+     * client) n'ayant ni titre ni lien vers le site.
+     *
+     * @param  array<string, mixed>  $lecture
+     */
+    private function assertUnCourrielAuRepereDuSite(array $lecture): void
+    {
+        $sansRepere = $lecture['objets_sans_le_repere_du_site'];
+        $this->assertIsArray($sansRepere);
+        $this->assertGreaterThan(0, $lecture['courriels_au_repere_du_site'], 'Au moins un e-mail du modèle porte le repère de l\'adresse du site. E-mails sans repère : '.implode(' | ', array_map(ValeurSimple::enTexte(...), $sansRepere)));
+    }
+
+    /**
      * @param  array<string, mixed>  $lecture
      */
     private function assertCommunAuxModeles(array $lecture): void
@@ -241,6 +297,7 @@ class BasesModelesTest extends DemonstrationTestCase
         $this->assertSame(array_fill_keys(ConstruireUnModele::TABLES_TECHNIQUES, 0), $lecture['tables_techniques']);
         $this->assertSame([], $lecture['regimes_manquants'], 'Chaque société qui vend a son régime de TVA.');
         $this->assertSame(0, $lecture['preferences_du_bandeau'], 'Aucun compte du bandeau n\'a de préférence de tableau de bord : chacun ouvre toutes les cartes que son écran permet (précision du 16/11/2026 vers 23 h 59).');
+        $this->assertSame([], $lecture['courriels_a_l_adresse_du_site'], 'Aucun e-mail rangé dans un modèle ne porte l\'adresse du site qui l\'a construit : elle est remplacée par un repère, que la page « E-mails qui seraient partis » remplace par l\'adresse de la copie (relecture du lot écrans).');
         $this->assertIsArray($lecture['courriels']);
         $debut = Calendrier::deParis()->debutDuJour(Calendrier::ajouterJours(Calendrier::deParis()->jourDe(CarbonImmutable::now()), -DatabaseSeeder::JOURS_DES_E_MAILS_DES_MODELES));
 

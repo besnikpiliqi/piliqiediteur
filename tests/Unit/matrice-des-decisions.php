@@ -2761,13 +2761,18 @@ return [
                 'tests/Feature/Notifications/LiensRelatifsDesNotificationsTest.php::test_aucune_notification_rangee_ne_porte_d_adresse_et_chaque_bouton_mene_a_une_page_du_site',
                 'tests/Feature/Notifications/LiensRelatifsDesNotificationsTest.php::test_les_liens_ranges_suivent_le_site_qui_sert_la_page',
                 'tests/Feature/Notifications/LiensRelatifsDesNotificationsTest.php::test_seul_le_compte_destinataire_range_et_lit_ses_notifications',
+                'tests/Feature/SemisCompletTest.php::test_le_semis_complet_remplit_toute_la_base_et_tous_les_cas',
             ],
         ],
         'hors.liens-des-e-mails-de-la-demonstration' => [
             'puce' => 'Hors de CLAUDE.md',
-            'regle' => 'Dans une copie de démonstration, l\'adresse du site dans le HTML et le texte d\'un e-mail capturé s\'écrit comme un repère, remplacé à l\'affichage par l\'adresse de la requête en cours : les liens de « E-mails qui seraient partis » ouvrent la bonne page sur le site qui sert la copie ; le début d\'une autre adresse et un lien vers un autre site restent entiers (demande de l\'éditeur du 20/11/2026, lot écrans).',
+            'regle' => 'Dans une copie de démonstration, l\'adresse du site dans le HTML et le texte d\'un e-mail capturé s\'écrit comme un repère, remplacé à l\'affichage par l\'adresse de la requête en cours : les liens de « E-mails qui seraient partis » ouvrent la bonne page sur le site qui sert la copie ; l\'adresse de la requête et celle d\'APP_URL, que le gabarit des e-mails écrit pour le lien de son titre, se rangent toutes deux comme le repère, et aucun e-mail d\'une base modèle ne garde l\'adresse du site qui l\'a construite ; le début d\'une autre adresse et un lien vers un autre site restent entiers (demande de l\'éditeur du 20/11/2026, lot écrans, relecture).',
             'tests' => [
                 'tests/Feature/Demonstration/CourrielsQuiSeraientPartisTest.php::test_les_liens_d_un_e_mail_capture_suivent_le_site_qui_sert_la_copie',
+                'tests/Feature/Demonstration/CourrielsQuiSeraientPartisTest.php::test_le_lien_du_titre_qui_porte_l_adresse_d_app_url_se_range_aussi_comme_un_repere',
+                'tests/Feature/Demonstration/BasesModelesTest.php::test_le_modele_commerce_ne_contient_que_maison_ferrand_avec_fort_de_france_et_son_expert_comptable_declare',
+                'tests/Feature/Demonstration/BasesModelesTest.php::test_le_modele_services_ne_contient_que_conseil_vasseur_sans_article_avec_son_expert_comptable_declare',
+                'tests/Feature/Demonstration/BasesModelesTest.php::test_le_modele_cabinet_contient_le_cabinet_martin_et_ses_clients_sans_compte_d_un_client_au_bandeau',
             ],
         ],
         'hors.bandeau-et-pastille-de-la-copie' => [
@@ -2797,16 +2802,19 @@ return [
         ],
         'hors.noms-longs-des-graphiques' => [
             'puce' => 'Hors de CLAUDE.md',
-            'regle' => 'Dans les graphiques du tableau de bord (espace de la société, panneau d\'un magasin, espace du cabinet, page de l\'expert-comptable déclaré), un nom trop long pour son étiquette (produit, client, fournisseur, magasin, mode de paiement, légende d\'un anneau) s\'écrit par son début suivi de « … » et ne passe jamais sous la barre voisine ; son info-bulle dit le nom entier au survol, et à l\'appui sur un téléphone ; un nom court reste entier ; en clair comme en sombre (demande de l\'éditeur du 20/11/2026, lot écrans).',
+            'regle' => 'Dans les graphiques du tableau de bord (espace de la société, panneau d\'un magasin, espace du cabinet, page de l\'expert-comptable déclaré), un nom trop long pour son étiquette (produit, client, fournisseur, magasin, légende d\'un anneau de ces cartes) s\'écrit par son début suivi de « … » et ne passe jamais sous la barre voisine ; son info-bulle dit le nom entier au survol, et à l\'appui sur un téléphone ; un nom court reste entier ; en clair comme en sombre ; seules les cartes dont les étiquettes sont des noms saisis par la société sont soumises à cette coupure : les étiquettes d\'un graphique par mois, par jour, par taux ou par mode de paiement restent entières (« janv. 2026 » jamais « janv.… ») et suivent l\'axe de Chart.js (demande de l\'éditeur du 20/11/2026, lot écrans, relecture).',
             'tests' => [
                 'tests/Browser/Parcours/NomsLongsDesGraphiquesTest.php › un nom trop long s’écrit par son début suivi de « … », l’info-bulle en dit le nom entier au survol et au clic, un nom court reste entier, à 1 280 px, sur un téléphone, en clair et en sombre',
                 'tests/Browser/Parcours/NomsLongsDesGraphiquesTest.php › la légende d’un anneau écrit un nom trop long par son début suivi de « … » et l’info-bulle en dit le nom entier au survol et au clic',
+                'tests/Browser/Parcours/NomsLongsDesGraphiquesTest.php › les étiquettes d’un graphique par mois restent entières, sans « … », à 1 280 px et sur un téléphone, en clair et en sombre',
+                'tests/Unit/NomsLongsDesGraphiquesTest.php::test_seules_les_cartes_de_noms_saisis_par_la_societe_coupent_leurs_noms_longs',
             ],
         ],
         'hors.commandes-qui-preparent-les-cles-de-la-demonstration' => [
             'puce' => 'Hors de CLAUDE.md',
-            'regle' => 'Sur un poste neuf du site de démonstration, `key:generate`, `caisse:generer-cle` et `journal-audit:epingler-la-cle` démarrent avant que les clés soient épinglées, que `--env=demonstration` soit écrit avant ou après le nom de la commande (ou en deux mots) : le nom de la commande est le premier argument qui n\'est pas une option, jamais le deuxième argument du processus ; toute autre commande reste refusée tant que les clés ne sont pas épinglées (constat de l\'éditeur du 17/11/2026, lot écrans).',
+            'regle' => 'Sur un poste neuf du site de démonstration, `key:generate`, `caisse:generer-cle` et `journal-audit:epingler-la-cle` démarrent avant que les clés soient épinglées, que `--env=demonstration` soit écrit avant ou après le nom de la commande (ou en deux mots) : le nom de la commande est le premier argument qui n\'est pas une option, jamais le deuxième argument du processus ; toute autre commande reste refusée tant que les clés ne sont pas épinglées ; une requête web n\'a jamais de nom de commande, même quand PHP remplit `$_SERVER[\'argv\']` depuis sa chaîne de requête (`register_argc_argv`) : aucune garde ne se saute par `GET /?x+package:discover` (constat de l\'éditeur du 17/11/2026, lot écrans, relecture).',
             'tests' => [
+                'tests/Feature/Demonstration/SiteDePiliqiTest.php::test_une_requete_web_ne_saute_aucune_garde_avec_les_arguments_que_sa_chaine_de_requete_met_dans_argv',
                 'tests/Feature/Demonstration/SiteDePiliqiTest.php::test_le_nom_de_la_commande_est_le_premier_argument_qui_n_est_pas_une_option',
                 'tests/Feature/Demonstration/SiteDePiliqiTest.php::test_les_commandes_qui_preparent_les_cles_demarrent_sur_un_poste_neuf_dans_les_deux_ordres_des_arguments',
             ],

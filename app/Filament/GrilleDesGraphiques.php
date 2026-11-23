@@ -367,16 +367,18 @@ class GrilleDesGraphiques extends Widget
     /**
      * Ce que le script des graphiques reçoit pour une carte (voir
      * graphiques-du-tableau-de-bord.blade.php) : le type, les étiquettes,
-     * les séries en euros (un nombre reste un nombre) et les précisions des
-     * info-bulles.
+     * les séries en euros (un nombre reste un nombre), les précisions des
+     * info-bulles et si les étiquettes sont des noms que le script coupe
+     * quand ils sont trop longs (voir Graphique::etiquettesSontDesNoms()).
      *
-     * @return array{type: string, titre: string, etiquettes: list<string>, jeux: list<array{libelle: string, valeurs: list<float|int|null>, unite: string, en_ligne: bool, axe_de_droite: bool, pointilles: bool}>, info_bulles: array<int, string>}
+     * @return array{type: string, titre: string, noms_longs: bool, etiquettes: list<string>, jeux: list<array{libelle: string, valeurs: list<float|int|null>, unite: string, en_ligne: bool, axe_de_droite: bool, pointilles: bool}>, info_bulles: array<int, string>}
      */
     public static function configuration(CarteDuTableauDeBord $carte, SerieDuGraphique $serie): array
     {
         return [
             'type' => $carte->type->value,
             'titre' => $carte->graphique->getLabel(),
+            'noms_longs' => $carte->graphique->etiquettesSontDesNoms(),
             'etiquettes' => $serie->etiquettes,
             'jeux' => array_map(fn (array $jeu): array => [
                 ...$jeu,

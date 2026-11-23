@@ -186,7 +186,10 @@ abstract class TestCaseDuNavigateur extends TestCase
      * service, deux produits, un inventaire d'ouverture en brouillon, une
      * facture d'achat validée avec un avoir fournisseur et une en
      * brouillon ; la veille, un ticket du vendeur et la clôture de la
-     * journée ; ce jour, un devis en brouillon et un envoyé, une facture en
+     * journée ; ce jour, un devis envoyé puis un devis en brouillon (le plus
+     * récent, donc le premier d'une liste qui montre les derniers
+     * documents d'abord, dont la fiche et la page de modification sont les
+     * premières que le balayage ouvre), une facture en
      * brouillon et une émise, réglée en partie, un ticket et son avoir,
      * fait par le responsable, puis la caisse du vendeur fermée.
      */
@@ -214,8 +217,8 @@ abstract class TestCaseDuNavigateur extends TestCase
             $this->travelTo(self::instantDuTest());
             app(CloturerCaisseAction::class)->handle($responsable, $magasin, '2026-03-09');
             $lignes = [['produit_id' => $savon->id, 'quantite' => 2]];
-            app(CreerDevisAction::class)->handle($vendeur, $particulier, $lignes);
             app(EmettreDevisAction::class)->handle($vendeur, app(CreerDevisAction::class)->handle($vendeur, $entreprise, $lignes));
+            app(CreerDevisAction::class)->handle($vendeur, $particulier, $lignes);
             app(CreerFactureAction::class)->handle($vendeur, $entreprise, $lignes);
             $facture = app(EmettreFactureAction::class)->handle($vendeur, app(CreerFactureAction::class)->handle($vendeur, $entreprise, [['produit_id' => $bougie->id, 'quantite' => 3]]));
             app(EnregistrerPaiementAction::class)->handle($vendeur, $entreprise, ['mode_paiement' => ModePaiement::Virement->value, 'montant' => '20.00', 'recu_le' => '2026-03-10'], [['facture_id' => $facture->id, 'montant' => '20.00']]);

@@ -9,9 +9,10 @@
         <dl class="grid grid-cols-1 gap-2 md:grid-cols-2">
             <div><dt class="text-sm text-gray-500 dark:text-gray-400">Dénomination</dt><dd>{{ $client->raison_sociale ?? 'Non renseignée' }}</dd></div>
             <div><dt class="text-sm text-gray-500 dark:text-gray-400">SIREN</dt><dd>{{ $client->siren }}</dd></div>
-            <div><dt class="text-sm text-gray-500 dark:text-gray-400">Forme juridique</dt><dd>{{ $client->formeImprimee() ?? 'Non renseignée' }}</dd></div>
+            <div><dt class="text-sm text-gray-500 dark:text-gray-400">Forme juridique</dt><dd>{{ $client->formeAffichee() ?? 'Non renseignée' }}</dd></div>
             <div><dt class="text-sm text-gray-500 dark:text-gray-400">Type d'activité</dt><dd>{{ $client->type_activite->getLabel() }}</dd></div>
             <div><dt class="text-sm text-gray-500 dark:text-gray-400">Immatriculation</dt><dd>{{ $client->immatriculation ?? 'Non renseignée' }}</dd></div>
+            <div><dt class="text-sm text-gray-500 dark:text-gray-400">Mentions facultatives</dt><dd>{{ $client->mentionsFacultativesEnTexte() }}</dd></div>
             <div><dt class="text-sm text-gray-500 dark:text-gray-400">N° de TVA</dt><dd>{{ $client->numero_tva ?? 'Non renseigné' }}</dd></div>
             <div><dt class="text-sm text-gray-500 dark:text-gray-400">Siège</dt><dd>{{ collect([$client->siege_adresse, $client->siege_complement_adresse, trim(($client->siege_code_postal ?? '').' '.($client->siege_ville ?? ''))])->filter()->implode(', ') ?: 'Non renseigné' }}</dd></div>
             <div><dt class="text-sm text-gray-500 dark:text-gray-400">Régime de TVA</dt><dd>{{ $client->regime_tva?->getLabel() ?? 'Non choisi' }}{{ $client->option_debits_tva ? ' · option pour les débits' : '' }}</dd></div>

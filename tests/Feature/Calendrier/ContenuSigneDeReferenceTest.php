@@ -61,6 +61,8 @@ class ContenuSigneDeReferenceTest extends TestCase
      * gagne date_operation (début et fin), son bloc « livraison » perd sa
      * date. La 3.0 (lot DEMO-COPIE) garde la structure signée du site réel :
      * seul le vérificateur et les copies du site de démonstration changent.
+     * La 3.1 (lot IDENT) la garde aussi pour tout document dont la société
+     * ne déclare aucune mention facultative.
      */
     /**
      * Les versions qui changent le module fiscal sans changer la structure
@@ -68,14 +70,19 @@ class ContenuSigneDeReferenceTest extends TestCase
      * structure : la 3.0 (lot DEMO-COPIE, D.7) change le vérificateur et
      * n'ajoute la clé « demonstration » qu'aux en-têtes et aux émetteurs
      * des copies du site de démonstration, jamais à ceux du site réel, que
-     * fixent les fichiers de référence.
+     * fixent les fichiers de référence ; la 3.1 (lot IDENT, décision P14.7)
+     * n'ajoute le bloc « mentions_facultatives » à l'émetteur d'un document
+     * que si sa société déclare une liquidation, une location-gérance, un
+     * EIRL ou un assujetti unique : les sociétés des fichiers de référence
+     * n'en déclarent aucune.
      */
-    private const MEME_STRUCTURE_QUE = ['3.0' => '2.1'];
+    private const MEME_STRUCTURE_QUE = ['3.0' => '2.1', '3.1' => '2.1'];
 
     private const STRUCTURES_SIGNEES = [
         '2.0' => '8d3cf5148390ac0c2b822501bfa82522df919f3ec6a59ab74f84ccc6ee14b3a8',
         '2.1' => '5e7c5deb1b8ad9421220957cfac7f0609c36aaea4258c415157f086c976d70bd',
         '3.0' => '5e7c5deb1b8ad9421220957cfac7f0609c36aaea4258c415157f086c976d70bd',
+        '3.1' => '5e7c5deb1b8ad9421220957cfac7f0609c36aaea4258c415157f086c976d70bd',
     ];
 
     /**

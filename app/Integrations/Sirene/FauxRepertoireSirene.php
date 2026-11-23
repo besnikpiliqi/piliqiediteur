@@ -27,7 +27,8 @@ use App\Integrations\Sirene\Contracts\RepertoireSirene;
  * - SIREN_DIFFUSION_PARTIELLE, une entreprise en diffusion partielle :
  *   ses établissements n'ont ni adresse ni code postal, seulement leur
  *   commune ;
- * - SIREN_ENTREPRENEUR_INDIVIDUEL, un entrepreneur individuel ;
+ * - SIREN_ENTREPRENEUR_INDIVIDUEL, un entrepreneur individuel, Jeanne
+ *   DUPONT (nommerUnEntrepreneur() en nomme d'autres) ;
  * - SIREN_CABINET, un cabinet d'expertise comptable, d'activité 69.20Z en
  *   NAFRev2 (activités comptables) ;
  * - tout établissement dont le NIC commence par 9, fermé.
@@ -96,6 +97,12 @@ class FauxRepertoireSirene implements RepertoireSirene
     /** @var array<string, string> */
     private array $denominations = [];
 
+    /** @var array<string, array{0: string, 1: string|null}> le nom et le nom d'usage de chaque entrepreneur individuel nommé, par SIREN */
+    private array $entrepreneurs = [];
+
+    /** @var array<string, string> la catégorie juridique de chaque entreprise rangée à part, par SIREN */
+    private array $categories = [];
+
     /** @var array<string, string|null> l'enseigne de chaque établissement ajouté, par SIRET */
     private array $ajoutes = [];
 
@@ -114,7 +121,7 @@ class FauxRepertoireSirene implements RepertoireSirene
         }
 
         $diffusionPartielle = $siren === self::SIREN_DIFFUSION_PARTIELLE;
-        $entrepreneurIndividuel = $siren === self::SIREN_ENTREPRENEUR_INDIVIDUEL;
+        $entrepreneurIndividuel = $this->estUnEntrepreneur($siren);
         $activite = $this->activites[$siren] ?? [$siren === self::SIREN_CABINET ? ControleSirene::CODE_ACTIVITES_COMPTABLES : self::ACTIVITE_PAR_DEFAUT, AvertissementsDuCodeDActivite::NOMENCLATURE];
 
         return new UniteSirene(
@@ -126,11 +133,13 @@ class FauxRepertoireSirene implements RepertoireSirene
                 $entrepreneurIndividuel => 'JEANNE DUPONT',
                 default => "SOCIETE FICTIVE {$siren}",
             },
-            categorieJuridique: $entrepreneurIndividuel ? '1000' : '5710',
+            categorieJuridique: $this->categories[$siren] ?? ($entrepreneurIndividuel ? '1000' : '5710'),
             nicDuSiege: substr(self::siretDuSiege($siren), 9),
             diffusionPartielle: $diffusionPartielle,
             activitePrincipale: $activite[0],
             nomenclatureActivite: $activite[1],
+            nom: $entrepreneurIndividuel && ! $diffusionPartielle ? ($this->entrepreneurs[$siren][0] ?? 'DUPONT') : null,
+            nomDUsage: $entrepreneurIndividuel && ! $diffusionPartielle ? ($this->entrepreneurs[$siren][1] ?? null) : null,
         );
     }
 
@@ -175,7 +184,7 @@ class FauxRepertoireSirene implements RepertoireSirene
 
         $sirets = [
             self::siretDuSiege($siren),
-            ...($siren === self::SIREN_ENTREPRENEUR_INDIVIDUEL ? [] : [self::siretDeLaBoutique($siren)]),
+            ...($this->estUnEntrepreneur($siren) ? [] : [self::siretDeLaBoutique($siren)]),
             ...array_filter(array_keys($this->ajoutes), static fn (string $siret): bool => str_starts_with($siret, $siren)),
         ];
         $actifs = array_values(array_filter(
@@ -247,6 +256,43 @@ class FauxRepertoireSirene implements RepertoireSirene
     public function nommer(string $siren, string $denomination): void
     {
         $this->denominations[$siren] = $denomination;
+    }
+
+    /**
+     * Un entrepreneur individuel que le répertoire nomme ainsi : sa
+     * dénomination est son prénom et son nom en majuscules, comme le fait
+     * le répertoire, et il donne son nom et, quand il en a un, son nom
+     * d'usage (voir entrepreneur()).
+     */
+    public function nommerUnEntrepreneur(string $siren, string $prenom, string $nom, ?string $nomDUsage = null): void
+    {
+        $this->nommer($siren, mb_strtoupper("{$prenom} {$nom}"));
+        $this->entrepreneur($siren, $nom, $nomDUsage);
+    }
+
+    /**
+     * Une entreprise que le répertoire dit être un entrepreneur individuel
+     * (catégorie juridique 1000 : sa dénomination reste celle qu'il lui
+     * donne, voir nommer()), avec ce nom et, quand il en a un, ce nom
+     * d'usage (voir UniteSirene::$nom).
+     */
+    public function entrepreneur(string $siren, string $nom, ?string $nomDUsage = null): void
+    {
+        $this->entrepreneurs[$siren] = [$nom, $nomDUsage];
+    }
+
+    /**
+     * Une entreprise que le répertoire range dans cette catégorie juridique
+     * (par exemple 5202, une société en nom collectif).
+     */
+    public function categoriser(string $siren, string $categorie): void
+    {
+        $this->categories[$siren] = $categorie;
+    }
+
+    private function estUnEntrepreneur(string $siren): bool
+    {
+        return $siren === self::SIREN_ENTREPRENEUR_INDIVIDUEL || isset($this->entrepreneurs[$siren]);
     }
 
     /**

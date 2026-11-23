@@ -87,6 +87,22 @@ return new class extends Migration
             $table->string('assurance_adresse', 300)->nullable();
             $table->string('assurance_contrat', 100)->nullable();
             $table->string('assurance_couverture', 200)->nullable();
+            // Les mentions facultatives de l'identité (décision P14.7, art.
+            // R123-237 du Code de commerce), imprimées dans le pied des
+            // documents de vente quand elles sont remplies et figées dans
+            // l'émetteur signé (voir Emetteur::mentionsFacultatives()) :
+            // la société en liquidation ; sa qualité de locataire-gérant ou
+            // de gérant-mandataire (voir ExploitationEnGerance) ; un
+            // entrepreneur individuel à responsabilité limitée (EIRL),
+            // seulement pour un entrepreneur individuel, et l'objet de
+            // l'activité à laquelle son patrimoine est affecté, que la base
+            // exige avec lui et refuse sans lui. Le membre d'un assujetti
+            // unique, qui s'imprime aussi, est un réglage fiscal (voir
+            // membre_assujetti_unique).
+            $table->boolean('en_liquidation')->default(false);
+            $table->string('exploitation_en_gerance', 20)->nullable();
+            $table->boolean('eirl')->default(false);
+            $table->string('eirl_objet', 200)->nullable();
             // Nullable : tant qu'il n'est pas choisi dans les paramètres
             // fiscaux de la société, elle ne vend pas en franchise en base
             // (voir Societe::estEnFranchiseDeTva()).
@@ -145,6 +161,11 @@ return new class extends Migration
         // révoquée.
         DB::statement("CREATE UNIQUE INDEX societes_siren_unique ON societes (siren) WHERE close_le IS NULL AND statut <> 'revoquee'");
         DB::statement("ALTER TABLE societes ADD CONSTRAINT societes_types_de_charge_habituels_liste CHECK (jsonb_typeof(types_de_charge_habituels) = 'array')");
+        // La qualité d'exploitant est l'une de celles que connaît le code ;
+        // un EIRL est un entrepreneur individuel et dit l'objet de son
+        // activité, qu'aucune autre société ne porte.
+        DB::statement("ALTER TABLE societes ADD CONSTRAINT societes_exploitation_en_gerance_connue CHECK (exploitation_en_gerance IS NULL OR exploitation_en_gerance IN ('locataire_gerant', 'gerant_mandataire'))");
+        DB::statement("ALTER TABLE societes ADD CONSTRAINT societes_eirl_coherent CHECK ((eirl AND COALESCE(forme_juridique, '') = 'entrepreneur_individuel' AND eirl_objet IS NOT NULL AND btrim(eirl_objet) <> '') OR (NOT eirl AND eirl_objet IS NULL))");
 
         DeclencheursDeProtection::sansSuppression('societes');
 

@@ -2179,7 +2179,13 @@ return [
         ]],
     ],
     'app/Filament/Societe/Pages/IdentiteSociete.php' => [
-        'champ:forme_juridique' => ['lot' => 'NAV-4', 'tests' => []],
+        'champ:eirl' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Parcours/MentionsDIdentiteTest.php › le propriétaire d’un entrepreneur individuel coche EIRL, l’écran lui demande l’objet de son activité, puis le pied imprime « EIRL » et cet objet',
+        ]],
+        'champ:forme_juridique' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Parcours/MentionsDIdentiteTest.php › le propriétaire d’une SNC enregistre son identité sans capital, que l’écran n’exige jamais',
+            'tests/Browser/Parcours/MentionsDIdentiteTest.php › le propriétaire d’un entrepreneur individuel coche EIRL, l’écran lui demande l’objet de son activité, puis le pied imprime « EIRL » et cet objet',
+        ]],
         'page' => ['lot' => 'NAV-4', 'tests' => [
             'tests/Browser/Balayage/BalayageDeLEspaceDeLaSocieteTest.php › le propriétaire d’une société qui attend son code ouvre chaque page et chaque action de l’espace de sa société sans erreur',
             'tests/Browser/Balayage/BalayageDeLEspaceDeLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action de l’espace de sa société sans erreur',

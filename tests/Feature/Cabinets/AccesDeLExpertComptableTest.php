@@ -26,6 +26,8 @@ use App\Domain\Facturation\Support\GardesDesDocumentsEmis;
 use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
 use App\Domain\Tenancy\Actions\CreerEtablissementAction;
 use App\Domain\Tenancy\Actions\FermerMagasinAction;
+use App\Domain\Tenancy\Enums\ExploitationEnGerance;
+use App\Domain\Tenancy\Enums\FormeJuridique;
 use App\Domain\Tenancy\Enums\MotifFermeture;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\RoleSociete;
@@ -234,6 +236,28 @@ class AccesDeLExpertComptableTest extends TestCase
 
         $this->dansLeMagasin($magasin, $marc->fresh());
         $this->assertTrue(LaSociete::canAccess());
+    }
+
+    /**
+     * L'expert-comptable de la société lit, dans « La société », les
+     * mentions facultatives de l'identité (décision P14.7) : aucune, puis la
+     * liquidation et la location-gérance quand la société les déclare ; la
+     * forme d'un entrepreneur individuel, dont la dénomination porte « EI »,
+     * se dit en toutes lettres.
+     */
+    public function test_l_expert_comptable_lit_les_mentions_facultatives_et_la_forme_d_un_entrepreneur_individuel(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Lyon 1']);
+        $marc = $this->expertComptable($magasin);
+        $this->actingAs($marc);
+
+        $this->get(LaSociete::getUrl(tenant: $magasin))->assertOk()->assertSeeText(['Mentions facultatives', 'Aucune']);
+
+        $this->reglerLaSociete($magasin, ['en_liquidation' => true, 'exploitation_en_gerance' => ExploitationEnGerance::LocataireGerant, 'forme_juridique' => FormeJuridique::EntrepreneurIndividuel]);
+
+        $this->get(LaSociete::getUrl(tenant: $magasin))->assertOk()
+            ->assertSeeText('Société en liquidation · Locataire-gérant')
+            ->assertSeeText('Entrepreneur individuel (micro-entrepreneur compris)');
     }
 
     /**

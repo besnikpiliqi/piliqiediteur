@@ -11,6 +11,7 @@ use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Facturation\Casts\NumeroTvaNormalise;
 use App\Domain\Tenancy\Concerns\RefuseUneCleIllisible;
 use App\Domain\Tenancy\Enums\ActionAuditee;
+use App\Domain\Tenancy\Enums\ExploitationEnGerance;
 use App\Domain\Tenancy\Enums\FormeJuridique;
 use App\Domain\Tenancy\Enums\MotifCloture;
 use App\Domain\Tenancy\Enums\PreuveDeValidation;
@@ -114,6 +115,10 @@ class Societe extends Model implements HasName
         'assurance_adresse',
         'assurance_contrat',
         'assurance_couverture',
+        'en_liquidation',
+        'exploitation_en_gerance',
+        'eirl',
+        'eirl_objet',
     ];
 
     /**
@@ -148,6 +153,10 @@ class Societe extends Model implements HasName
         'assurance_adresse',
         'assurance_contrat',
         'assurance_couverture',
+        'en_liquidation',
+        'exploitation_en_gerance',
+        'eirl',
+        'eirl_objet',
         'regime_tva',
         'option_debits_tva',
         'mois_fin_exercice',
@@ -159,6 +168,9 @@ class Societe extends Model implements HasName
         'societe_commerciale' => 'boolean',
         'capital_social' => 'decimal:2',
         'capital_variable' => 'boolean',
+        'en_liquidation' => 'boolean',
+        'exploitation_en_gerance' => ExploitationEnGerance::class,
+        'eirl' => 'boolean',
         'numero_tva' => NumeroTvaNormalise::class,
         'regime_tva' => RegimeTva::class,
         'option_debits_tva' => 'boolean',
@@ -554,9 +566,11 @@ class Societe extends Model implements HasName
      * Retire ce que sa forme juridique exclut : la réponse « société
      * commerciale ? », qui n'a de sens que pour une autre forme ; le
      * capital, le capital variable et le libellé de forme d'un entrepreneur
-     * individuel, qui n'en a pas. Appelé à chaque enregistrement : une
-     * forme changée par le propriétaire ou par le répertoire Sirene ne
-     * laisse rien de la précédente.
+     * individuel, qui n'en a pas ; la mention d'un EIRL, que seul un
+     * entrepreneur individuel porte, et l'objet de son activité, que seul
+     * un EIRL dit. Appelé à chaque enregistrement : une forme changée par
+     * le propriétaire ou par le répertoire Sirene ne laisse rien de la
+     * précédente.
      */
     public function retirerCeQueSaFormeExclut(): void
     {
@@ -566,6 +580,12 @@ class Societe extends Model implements HasName
 
         if ($this->estEntrepreneurIndividuel()) {
             $this->forceFill(['capital_social' => null, 'capital_variable' => false, 'forme_juridique_autre' => null]);
+        } else {
+            $this->eirl = false;
+        }
+
+        if (! $this->eirl) {
+            $this->eirl_objet = null;
         }
     }
 
@@ -589,6 +609,70 @@ class Societe extends Model implements HasName
      */
     public function denominationSirene(): ?string
     {
+        return ValeursLues::texteOuNul($this->detailsDuControleSirene()['denomination'] ?? null);
+    }
+
+    /**
+     * Le nom que le répertoire Sirene donne à l'entrepreneur individuel
+     * de cette société, et son nom d'usage quand il en a un, à son dernier
+     * contrôle concluant (voir ControleSirene::noterUnite()) : la
+     * dénomination de ses documents contient l'un ou l'autre (décision
+     * P14.4, art. R526-27 du Code de commerce). Aucun pour une société, et
+     * quand le répertoire ne les donne pas (diffusion partielle) : la
+     * dénomination ne se contrôle alors pas.
+     *
+     * @return list<string>
+     */
+    public function nomsDeLEntrepreneur(): array
+    {
+        $details = $this->detailsDuControleSirene();
+
+        return array_values(array_filter([
+            ValeursLues::texteOuNul($details['nom'] ?? null),
+            ValeursLues::texteOuNul($details['nom_d_usage'] ?? null),
+        ], filled(...)));
+    }
+
+    /**
+     * Cette dénomination nomme-t-elle l'entrepreneur individuel, c'est-à-dire
+     * contient-elle, en mots entiers, sans tenir compte de la casse, des
+     * accents ni de la ponctuation, l'un de ses noms ? Vrai quand aucun
+     * nom n'est connu ou que la dénomination manque : il n'y a alors rien
+     * à contrôler. Le prénom n'est pas exigé : l'art. R526-27 demande « son
+     * nom ou son nom d'usage ».
+     *
+     * @param  list<string>  $noms  voir nomsDeLEntrepreneur()
+     */
+    public static function denominationNommeLEntrepreneur(?string $raisonSociale, array $noms): bool
+    {
+        if ($noms === [] || blank($raisonSociale)) {
+            return true;
+        }
+
+        $denomination = ' '.self::motsDuTexte($raisonSociale).' ';
+
+        return array_any($noms, fn (string $nom): bool => self::motsDuTexte($nom) !== '' && str_contains($denomination, ' '.self::motsDuTexte($nom).' '));
+    }
+
+    /**
+     * Un texte réduit à ses mots, en minuscules sans accent, séparés par
+     * une espace : « Jeanne Dupont-Martin (EI) » donne « jeanne dupont
+     * martin ei ».
+     */
+    private static function motsDuTexte(string $texte): string
+    {
+        return trim((string) preg_replace('/[^a-z0-9]+/', ' ', Str::lower(Str::ascii($texte))));
+    }
+
+    /**
+     * Les détails du dernier contrôle concluant de son entreprise au
+     * répertoire Sirene, lus dans le registre des vérifications de la
+     * société active, et de cette société seulement.
+     *
+     * @return array<array-key, mixed>
+     */
+    private function detailsDuControleSirene(): array
+    {
         $details = VerificationSociete::query()
             ->where('societe_id', $this->getKey())
             ->where('type', TypeVerification::SireneUnite->value)
@@ -598,7 +682,7 @@ class Societe extends Model implements HasName
             ->first()
             ?->details;
 
-        return ValeursLues::texteOuNul($details['denomination'] ?? null);
+        return is_array($details) ? $details : [];
     }
 
     /**
@@ -617,28 +701,63 @@ class Societe extends Model implements HasName
     }
 
     /**
+     * La forme que les écrans en lecture seule disent : celle qu'imprime une
+     * facture (voir formeImprimee()) ou, pour un entrepreneur individuel,
+     * dont la dénomination porte déjà « EI », le nom de sa forme ; null tant
+     * qu'elle n'est pas choisie.
+     */
+    public function formeAffichee(): ?string
+    {
+        return $this->formeImprimee() ?? $this->forme_juridique?->getLabel();
+    }
+
+    /**
+     * Ses mentions facultatives d'identité (liquidation, location-gérance,
+     * EIRL avec l'objet de son activité, assujetti unique), telles que les
+     * écrans en lecture seule de l'expert-comptable et du cabinet les
+     * disent ; « Aucune » quand elle n'en déclare pas.
+     */
+    public function mentionsFacultativesEnTexte(): string
+    {
+        $mentions = array_filter([
+            $this->en_liquidation ? 'Société en liquidation' : null,
+            $this->exploitation_en_gerance?->getLabel(),
+            $this->eirl ? 'EIRL'.(filled($this->eirl_objet) ? " (objet : {$this->eirl_objet})" : '') : null,
+            $this->membre_assujetti_unique ? 'Membre d\'un assujetti unique' : null,
+        ], filled(...));
+
+        return $mentions === [] ? 'Aucune' : implode(' · ', $mentions);
+    }
+
+    /**
      * Les mentions de son identité légale qui manquent encore pour émettre
-     * une facture à un professionnel (S3, S4, S5, B11, K7), dans l'ordre de
-     * l'identité : raison sociale, forme juridique (et, pour une autre
-     * forme, si la société est commerciale), capital social pour toute
-     * société commerciale, SIREN, immatriculation (registre, ou mention de
-     * la dispense), siège ou adresse de l'entreprise, et n° de TVA
-     * intracommunautaire, sauf en franchise en base (« le cas échéant »,
-     * art. 242 nonies A de l'annexe II au CGI). Celles de l'établissement
-     * s'y ajoutent (voir Magasin::mentionsLegalesManquantes()).
+     * une facture à un professionnel (S3, S4, S5, B11, K7, P14.1, P14.3,
+     * P14.4), dans l'ordre de l'identité : raison sociale (qui nomme
+     * l'entrepreneur individuel quand le répertoire Sirene en donne le nom),
+     * forme juridique (et, pour une autre forme, si la société est
+     * commerciale), capital social pour la SARL, l'EURL, la SA, la SAS, la
+     * SASU, la SCA et la SE à capital fixe (voir
+     * FormeJuridique::exigeUnCapital()), objet de l'activité d'un EIRL,
+     * SIREN, immatriculation (registre, ou mention de la dispense), siège ou
+     * adresse de l'entreprise, et n° de TVA intracommunautaire, sauf en
+     * franchise en base (« le cas échéant », art. 242 nonies A de l'annexe II
+     * au CGI). Celles de l'établissement s'y ajoutent (voir
+     * Magasin::mentionsLegalesManquantes()).
      *
      * @return list<string>
      */
     public function mentionsLegalesManquantes(): array
     {
-        $capitalExige = $this->forme_juridique?->exigeUnCapital($this->societe_commerciale);
+        $capitalExige = $this->forme_juridique?->exigeUnCapital($this->societe_commerciale, (bool) $this->capital_variable);
         $siege = $this->estEntrepreneurIndividuel() ? 'adresse de l\'entreprise' : 'adresse du siège';
 
         $mentions = [
             'raison sociale' => filled($this->raison_sociale),
+            'nom de l\'entrepreneur dans la raison sociale' => ! $this->estEntrepreneurIndividuel() || self::denominationNommeLEntrepreneur($this->raison_sociale, $this->nomsDeLEntrepreneur()),
             'forme juridique' => $this->forme_juridique !== null,
             'société commerciale ou non' => $this->forme_juridique === null || $capitalExige !== null,
             'capital social' => $capitalExige !== true || $this->capital_social !== null,
+            'objet de l\'activité de l\'EIRL' => ! $this->eirl || filled($this->eirl_objet),
             'SIREN' => filled($this->siren),
             'immatriculation' => filled($this->immatriculation),
             $siege => filled($this->siege_adresse) && filled($this->siege_code_postal) && filled($this->siege_ville),
@@ -706,14 +825,25 @@ class Societe extends Model implements HasName
 
     /**
      * Une raison sociale porte-t-elle la mention de l'entrepreneur
-     * individuel, en mot entier (« EI » ou « Entrepreneur individuel »),
-     * quel que soit le signe qui l'entoure : « Jeanne Dupont EI »,
-     * « Jeanne Dupont (EI) » ou « Jeanne Dupont EI. » la portent ;
-     * « SEIGNEUR » ou « Peinture » non.
+     * individuel, en mot entier (« EI », « EIRL » ou « Entrepreneur
+     * individuel », celle de l'entrepreneur individuel à responsabilité
+     * limitée comprise), quel que soit le signe qui l'entoure : « Jeanne
+     * Dupont EI », « Jeanne Dupont (EI) », « Garage Martin EIRL » ou
+     * « Jeanne Dupont EI. » la portent ; « SEIGNEUR » ou « Peinture » non.
      */
     public static function porteLaMentionEi(?string $raisonSociale): bool
     {
-        return $raisonSociale !== null && preg_match('/(?<![\p{L}\p{N}])(EI|Entrepreneur individuel)(?![\p{L}\p{N}])/iu', $raisonSociale) === 1;
+        return $raisonSociale !== null && preg_match('/(?<![\p{L}\p{N}])(EIRL|EI|Entrepreneur individuel)(?![\p{L}\p{N}])/iu', $raisonSociale) === 1;
+    }
+
+    /**
+     * Une raison sociale porte-t-elle la mention de l'EIRL, « EIRL » ou
+     * « Entrepreneur individuel à responsabilité limitée », en mots
+     * entiers ? « Jeanne Dupont EI » ne la porte pas.
+     */
+    public static function porteLaMentionEirl(?string $raisonSociale): bool
+    {
+        return $raisonSociale !== null && preg_match('/(?<![\p{L}\p{N}])(EIRL|Entrepreneur individuel à responsabilité limitée)(?![\p{L}\p{N}])/iu', $raisonSociale) === 1;
     }
 
     public function getFilamentName(): string

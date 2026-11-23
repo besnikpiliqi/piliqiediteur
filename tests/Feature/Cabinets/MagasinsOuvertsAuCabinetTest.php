@@ -23,6 +23,7 @@ use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Enums\ActionAuditee;
+use App\Domain\Tenancy\Enums\ExploitationEnGerance;
 use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
@@ -110,6 +111,25 @@ class MagasinsOuvertsAuCabinetTest extends TestCase
 
         $this->dansLEspaceDuCabinet($cabinet, $proprietaire);
         $this->assertSame(['Lyon 1'], array_column(Livewire::test(FicheDuClient::class, ['record' => $lien->uuid])->instance()->magasins(), 'nom'));
+    }
+
+    /**
+     * La fiche d'un client, dans l'espace du cabinet, dit ses mentions
+     * facultatives d'identité (décision P14.7), en lecture seule, comme le
+     * reste de son identité.
+     */
+    public function test_la_fiche_du_client_dit_ses_mentions_facultatives_d_identite(): void
+    {
+        $cabinet = $this->ouvrirUnCabinet();
+        $lyon1 = $this->ouvrirUneSociete(['nom' => 'Lyon 1']);
+        $lien = $this->lierLeCabinet($cabinet, $lyon1);
+        $this->dansLEspaceDuCabinet($cabinet, $this->proprietaireDuCabinet($cabinet));
+
+        Livewire::test(FicheDuClient::class, ['record' => $lien->uuid])->assertSeeText(['Mentions facultatives', 'Aucune']);
+
+        $this->reglerLaSociete($lyon1, ['en_liquidation' => true, 'exploitation_en_gerance' => ExploitationEnGerance::GerantMandataire]);
+
+        Livewire::test(FicheDuClient::class, ['record' => $lien->uuid])->assertSeeText('Société en liquidation · Gérant-mandataire');
     }
 
     /**

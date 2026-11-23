@@ -51,6 +51,7 @@ use App\Domain\Tenancy\Actions\RouvrirMagasinAction;
 use App\Domain\Tenancy\Actions\SaisirCodeDeConfirmationAction;
 use App\Domain\Tenancy\Actions\VerifierUnEcartSireneAction;
 use App\Domain\Tenancy\Enums\DecisionExamenSiren;
+use App\Domain\Tenancy\Enums\ExploitationEnGerance;
 use App\Domain\Tenancy\Enums\MotifCloture;
 use App\Domain\Tenancy\Enums\MotifCode;
 use App\Domain\Tenancy\Enums\MotifFermeture;
@@ -99,9 +100,14 @@ use LogicException;
  *   transmettre la propriété à son administratrice, qui n'a pas encore
  *   suivi le lien ;
  * - l'Atelier Brun, « Services, sans vente d'articles » en franchise en
- *   base ; le Studio Lumière, « Services » qui a opté pour les débits ;
- * - le Groupe Nord Distribution, membre d'un assujetti unique ;
- * - la Boulangerie Duval, suspendue, et la Librairie des Quais, résiliée
+ *   base, entrepreneur individuel à responsabilité limitée ; le Studio
+ *   Lumière, « Services » qui a opté pour les débits, à capital variable
+ *   sans capital saisi ;
+ * - le Groupe Nord Distribution, membre d'un assujetti unique et
+ *   gérant-mandataire ;
+ * - la Boulangerie Duval, entrepreneur individuel en location-gérance,
+ *   suspendue, et la Librairie des Quais, société en nom collectif sans
+ *   capital saisi, en liquidation trente-deux jours avant la fin, résiliée
  *   après la transmission de sa propriété à son administrateur ;
  * - une inscription close faute de code (son lien avec le cabinet Martin
  *   prend fin à la clôture), deux autres closes par l'éditeur
@@ -197,6 +203,12 @@ final class SocietesDesCas
     private const TRANSMISSION_DE_LA_LIBRAIRIE = 15;
 
     private const RESILIATION_DE_LA_LIBRAIRIE = 10;
+
+    /**
+     * La Librairie des Quais se déclare en liquidation : ses tickets d'avant
+     * n'impriment pas la mention, ceux d'après l'impriment (décision P14.7).
+     */
+    private const LIQUIDATION_DE_LA_LIBRAIRIE = 32;
 
     private const INVITATIONS_ET_DEMANDES = 6;
 
@@ -330,11 +342,11 @@ final class SocietesDesCas
 
         foreach ([
             self::SIREN_COMPTOIR => ['COMPTOIR DES ILES', 'HOARAU', ['Patrick'], 'Président'],
-            self::SIREN_ATELIER => ['ATELIER BRUN', 'BRUN', ['Mathilde'], 'Gérante'],
+            self::SIREN_ATELIER => ['ATELIER BRUN', 'BRUN', ['Mathilde'], 'Entrepreneur individuel'],
             self::SIREN_STUDIO => ['STUDIO LUMIERE', 'LACROIX', ['Olivier'], 'Président'],
             self::SIREN_GROUPE => ['GROUPE NORD DISTRIBUTION', 'DELATTRE', ['François'], 'Président'],
-            self::SIREN_BOULANGERIE => ['BOULANGERIE DUVAL', 'DUVAL', ['Marc'], 'Gérant'],
-            self::SIREN_LIBRAIRIE => ['LIBRAIRIE DES QUAIS', 'NOEL', ['Agnès'], 'Présidente'],
+            self::SIREN_BOULANGERIE => ['BOULANGERIE DUVAL', 'DUVAL', ['Marc'], 'Entrepreneur individuel'],
+            self::SIREN_LIBRAIRIE => ['LIBRAIRIE DES QUAIS', 'NOEL', ['Agnès'], 'Gérante'],
             self::SIREN_SANS_CODE => ['MENUISERIE PICARD', 'PICARD', ['Denis'], 'Gérant'],
             self::SIREN_TYPE_ERRONE => ['TRAITEUR GIRAUD', 'GIRAUD', ['Sandrine'], 'Présidente'],
             self::SIREN_REFUSEE => ['GARAGE MOREL', 'MOREL', ['Alain'], 'Gérant'],
@@ -353,6 +365,14 @@ final class SocietesDesCas
             $rne->domicilier($siren, $siege);
             $rne->identifier($siren, new IdentiteRne($denomination, '5710', '15000.00', 'EUR', false, 'RCS Paris', $siege));
         }
+
+        // Le répertoire dit de l'Atelier Brun et de la Boulangerie Duval qu'ils
+        // sont des entrepreneurs individuels, dont le nom est contenu dans leur
+        // dénomination (décision P14.4), et de la Librairie des Quais une
+        // société en nom collectif.
+        $sirene->entrepreneur(self::SIREN_ATELIER, 'BRUN');
+        $sirene->entrepreneur(self::SIREN_BOULANGERIE, 'DUVAL');
+        $sirene->categoriser(self::SIREN_LIBRAIRIE, '5202');
 
         foreach (['0003', '0004', '0005', '0006', '0007', '0008'] as $nic) {
             $sirene->ajouterUnEtablissement(IdentifiantsInsee::avecSaCle(self::SIREN_COMPTOIR.$nic), null);
@@ -425,8 +445,8 @@ final class SocietesDesCas
             MotifCloture::Refus,
         ));
 
-        foreach (['comptoir', 'atelier', 'studio', 'groupe', 'boulangerie', 'librairie'] as $cle) {
-            $this->semis->completerLIdentite($cle, ['capital_social' => '15000.00', 'immatriculation' => 'RCS Paris '.chunk_split(substr((string) $this->semis->societe($cle)->siren, 0, 9), 3, ' ')]);
+        foreach ($this->identitesDesCas() as $cle => $identite) {
+            $this->semis->completerLIdentite($cle, $identite);
         }
 
         $this->semis->reglerLaFiscalite('atelier', ['regime_tva' => RegimeTva::FranchiseEnBase->value]);
@@ -475,6 +495,40 @@ final class SocietesDesCas
         $this->semis->membre('boulangerie', 'Sophie Duval', RoleMagasin::Responsable);
         $this->semis->membre('librairie', 'Hervé Noël', RoleMagasin::Responsable);
         $this->semis->administrateur('librairie', 'Étienne Vidal', null, []);
+    }
+
+    /**
+     * Ce que le propriétaire de chaque société des cas complète de son
+     * identité légale, que le répertoire Sirene ne donne pas, par les
+     * mentions de l'identité (décisions P14.1, P14.3, P14.4 et P14.7) :
+     * - le Comptoir des Îles, à capital variable, dit son capital ;
+     * - le Studio Lumière, à capital variable, n'en dit aucun ;
+     * - la Librairie des Quais, société en nom collectif, n'en saisit pas ;
+     * - le Groupe Nord Distribution, société par actions simplifiée à
+     *   capital fixe, dit le sien et exploite ses supermarchés en
+     *   gérance-mandat ;
+     * - l'Atelier Brun est un entrepreneur individuel à responsabilité
+     *   limitée, qui dit l'objet de son activité ;
+     * - la Boulangerie Duval est un entrepreneur individuel
+     *   locataire-gérant de son fonds.
+     * Les artisans s'immatriculent au répertoire des métiers.
+     *
+     * @return array<string, array<string, string|bool>>
+     */
+    private function identitesDesCas(): array
+    {
+        $siren = fn (string $cle): string => trim(chunk_split(substr((string) $this->semis->societe($cle)->siren, 0, 9), 3, ' '));
+        $registre = fn (string $cle): string => 'RCS Paris '.$siren($cle);
+        $metiers = fn (string $cle): string => 'RM 75 '.$siren($cle);
+
+        return [
+            'comptoir' => ['capital_social' => '15000.00', 'capital_variable' => true, 'immatriculation' => $registre('comptoir')],
+            'atelier' => ['immatriculation' => $metiers('atelier'), 'eirl' => true, 'eirl_objet' => 'Retouche et confection de vêtements sur mesure'],
+            'studio' => ['capital_variable' => true, 'immatriculation' => $registre('studio')],
+            'groupe' => ['capital_social' => '15000.00', 'immatriculation' => $registre('groupe'), 'exploitation_en_gerance' => ExploitationEnGerance::GerantMandataire->value],
+            'boulangerie' => ['immatriculation' => $metiers('boulangerie'), 'exploitation_en_gerance' => ExploitationEnGerance::LocataireGerant->value],
+            'librairie' => ['immatriculation' => $registre('librairie')],
+        ];
     }
 
     /**
@@ -583,6 +637,7 @@ final class SocietesDesCas
             self::SUSPENSION_DE_LA_BOULANGERIE => $this->leSoir($rang, '21:30', fn () => $this->semis->societe('boulangerie')->forceFill(['statut' => StatutSociete::Suspendue])->save()),
             self::TRANSMISSION_DE_LA_LIBRAIRIE => $this->leSoir($rang, '21:30', fn () => $this->transmettreLaLibrairie()),
             self::RESILIATION_DE_LA_LIBRAIRIE => $this->leSoir($rang, '21:30', fn () => $this->semis->societe('librairie')->forceFill(['statut' => StatutSociete::Resiliee])->save()),
+            self::LIQUIDATION_DE_LA_LIBRAIRIE => $this->leSoir($rang, '21:30', fn () => $this->semis->completerLIdentite('librairie', ['en_liquidation' => true])),
             self::INVITATIONS_ET_DEMANDES => $this->leSoir($rang, '21:30', fn () => $this->inviter()),
             self::ECARTS_SIRENE => $this->leSoir($rang, '21:30', fn () => $this->fermerDesEtablissementsAuRepertoire()),
             self::ECART_VERIFIE => $this->leSoir($rang, '21:30', function (): void {

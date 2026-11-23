@@ -85,7 +85,7 @@ class ClesDeLaDemonstrationTest extends DemonstrationTestCase
 
     public function test_le_module_fiscal_est_en_version_3_0(): void
     {
-        $this->assertSame('3.0', ModuleFiscal::VERSION);
+        $this->assertSame('3.1', ModuleFiscal::VERSION);
     }
 
     public function test_journal_audit_epingler_la_cle_epingle_l_empreinte_des_cles_une_seule_fois_et_jamais_la_cle(): void

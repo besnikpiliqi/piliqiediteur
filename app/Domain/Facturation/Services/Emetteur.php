@@ -16,14 +16,17 @@ use UnexpectedValueException;
  * l'imprime : l'identité légale de la société (raison sociale, forme
  * juridique, capital social, SIREN, immatriculation, n° de TVA, siège ou,
  * pour un entrepreneur individuel, adresse de l'entreprise), ses réglages
- * fiscaux (régime de TVA, option pour les débits) et son assurance
- * professionnelle quand elle est renseignée, et l'établissement qui vend :
+ * fiscaux (régime de TVA, option pour les débits), son assurance
+ * professionnelle et ses mentions facultatives (liquidation, location-gérance,
+ * EIRL, assujetti unique, voir MentionsFacultativesDeLIdentite) quand elles
+ * sont renseignées, et l'établissement qui vend :
  * le nom du magasin, son SIRET, son adresse, ses coordonnées et les
  * mentions de ses factures entre professionnels (voir IdentiteSociete,
  * ParametresFiscauxSociete et ParametresFactures). L'établissement
  * s'imprime en tête du document (voir lignesDeLEtablissement()),
- * l'identité de la société et son assurance dans le pied de chaque page
- * (voir lignesDeLaSociete(), ligneDeLAssurance() et PiedDePage).
+ * l'identité de la société, ses mentions facultatives et son assurance dans
+ * le pied de chaque page (voir lignesDeLaSociete(), ligneDeLAssurance() et
+ * PiedDePage).
  *
  * Un ticket, une facture ou un avoir signe son émetteur au registre
  * fiscal à son émission (voir ContenuFiscal) et l'imprime ensuite tel
@@ -74,6 +77,7 @@ final readonly class Emetteur
         public ?string $assuranceAdresse,
         public ?string $assuranceContrat,
         public ?string $assuranceCouverture,
+        public MentionsFacultativesDeLIdentite $mentionsFacultatives,
         public bool $estDemonstration = false,
     ) {}
 
@@ -115,6 +119,7 @@ final readonly class Emetteur
             assuranceAdresse: $societe->assurance_adresse,
             assuranceContrat: $societe->assurance_contrat,
             assuranceCouverture: $societe->assurance_couverture,
+            mentionsFacultatives: MentionsFacultativesDeLIdentite::deLaSociete($societe),
             estDemonstration: SiteDePiliqi::estLaDemonstration(),
         );
     }
@@ -173,6 +178,7 @@ final readonly class Emetteur
             assuranceAdresse: ValeursLues::texteOuNulDe($assurance, 'adresse'),
             assuranceContrat: ValeursLues::texteOuNulDe($assurance, 'contrat'),
             assuranceCouverture: ValeursLues::texteOuNulDe($assurance, 'couverture'),
+            mentionsFacultatives: MentionsFacultativesDeLIdentite::duContenuSigne($emetteur),
             estDemonstration: array_key_exists('demonstration', $emetteur) && ValeursLues::booleenDe($emetteur, 'demonstration'),
         );
     }
@@ -221,6 +227,7 @@ final readonly class Emetteur
                 'contrat' => $this->assuranceContrat,
                 'couverture' => $this->assuranceCouverture,
             ],
+            ...($this->mentionsFacultatives->estVide() ? [] : [MentionsFacultativesDeLIdentite::CLE_DU_CONTENU_SIGNE => $this->mentionsFacultatives->enTableau()]),
             ...($this->estDemonstration ? ['demonstration' => true] : []),
         ];
     }
@@ -250,11 +257,13 @@ final readonly class Emetteur
 
     /**
      * La dénomination imprimée : la raison sociale, suivie de la mention
-     * « EI » pour un entrepreneur individuel quand elle ne la porte pas
-     * déjà en mot entier, entre parenthèses ou suivie d'un point compris
-     * (S5, art. R526-27 du Code de commerce : le nom précédé ou suivi
-     * immédiatement de la mention, voir Societe::porteLaMentionEi()) ;
-     * l'entrepreneur n'a rien à taper.
+     * « EI » pour un entrepreneur individuel, ou « EIRL » pour un
+     * entrepreneur individuel à responsabilité limitée, quand elle ne porte
+     * pas déjà une mention d'entrepreneur en mot entier, entre parenthèses
+     * ou suivie d'un point compris (S5 et P14.4, art. R526-27 du Code de
+     * commerce : le nom précédé ou suivi immédiatement de la mention, voir
+     * Societe::porteLaMentionEi()) : « EI » n'est jamais ajouté à un nom
+     * qui porte « EIRL ». L'entrepreneur n'a rien à taper.
      */
     public function denominationImprimee(): ?string
     {
@@ -262,7 +271,7 @@ final readonly class Emetteur
             return $this->raisonSociale;
         }
 
-        return "{$this->raisonSociale} EI";
+        return $this->raisonSociale.($this->mentionsFacultatives->eirl ? ' EIRL' : ' EI');
     }
 
     /**
@@ -287,8 +296,12 @@ final readonly class Emetteur
     /**
      * L'identité légale de la société, imprimée dans le pied de chaque page
      * de chaque document, sans ce qui n'est pas renseigné : la dénomination
-     * et la forme juridique, « à capital variable » le cas échéant, suivies
-     * du capital social quand il est renseigné (H2) ; le siège social
+     * et la forme juridique, suivies de « société en liquidation » (« en
+     * liquidation » pour un entrepreneur individuel), de « à capital
+     * variable », dès que la case est cochée, même sans capital, et du
+     * capital social quand il est renseigné (H2, P14.1, P14.7) ; les
+     * mentions facultatives de l'identité (voir
+     * MentionsFacultativesDeLIdentite::lignes()) ; le siège social
      * (l'adresse de l'entreprise d'un entrepreneur individuel), sauf s'il
      * est à l'adresse du magasin, ce qui est alors dit sans la répéter
      * (S3) ; le SIREN, puis l'immatriculation (K7) ; le n° de TVA.
@@ -301,12 +314,10 @@ final readonly class Emetteur
         $siege = self::lignesDAdresse($this->siegeAdresse, $this->siegeComplementAdresse, $this->siegeCodePostal, $this->siegeVille);
         $libelleDuSiege = $this->estEntrepreneurIndividuel ? 'Adresse de l\'entreprise' : 'Siège social';
         $siegeAuMagasin = $siege !== [] && self::normaliser($siege) === self::normaliser($adresse);
-        $capital = $this->capitalSocial === null || $this->estEntrepreneurIndividuel
-            ? null
-            : ($this->capitalVariable ? 'à capital variable, ' : '').'au capital de '.app(CalculateurLigne::class)->enEuros($this->capitalSocial);
 
         return array_values(array_filter([
-            implode(' ', array_filter([$this->denominationImprimee(), $this->formeJuridique, $capital], filled(...))),
+            $this->ligneDeLIdentite(),
+            ...$this->mentionsFacultatives->lignes(),
             match (true) {
                 $siegeAuMagasin => "{$libelleDuSiege} et établissement",
                 $siege !== [] => "{$libelleDuSiege} : ".implode(', ', $siege),
@@ -315,6 +326,27 @@ final readonly class Emetteur
             filled($this->siren) ? "SIREN : {$this->siren}" : null,
             $this->immatriculation,
             filled($this->numeroTva) ? "TVA intracommunautaire : {$this->numeroTva}" : null,
+        ], filled(...)));
+    }
+
+    /**
+     * La première ligne du pied : la dénomination, la forme juridique, puis
+     * ce que la loi veut à côté d'elles, séparé par des virgules : la
+     * liquidation (art. L237-2 et R123-237, 4°), le capital variable (art.
+     * L231-2 et L238-3), dit même sans montant, et le capital social. Un
+     * entrepreneur individuel n'a ni capital ni capital variable.
+     */
+    private function ligneDeLIdentite(): string
+    {
+        $suite = array_filter([
+            $this->mentionsFacultatives->enLiquidation ? ($this->estEntrepreneurIndividuel ? 'en liquidation' : 'société en liquidation') : null,
+            $this->capitalVariable && ! $this->estEntrepreneurIndividuel ? 'à capital variable' : null,
+            $this->capitalSocial === null || $this->estEntrepreneurIndividuel ? null : 'au capital de '.app(CalculateurLigne::class)->enEuros($this->capitalSocial),
+        ], filled(...));
+
+        return implode(' ', array_filter([
+            implode(' ', array_filter([$this->denominationImprimee(), $this->formeJuridique], filled(...))),
+            implode(', ', $suite),
         ], filled(...)));
     }
 

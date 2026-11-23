@@ -480,7 +480,7 @@ class VerificateurIntegriteTest extends TestCase
         $vente = $this->enregistrementDe($facture, ChaineFiscale::Vente);
         $contenu = json_decode($vente->contenu, true, flags: JSON_THROW_ON_ERROR);
 
-        $this->assertSame('3.0', $contenu['version_module']);
+        $this->assertSame('3.1', $contenu['version_module']);
         $this->assertSame(['assureur' => 'Mutuelle du Littoral', 'adresse' => '4 rue Paradis, 13001 Marseille', 'contrat' => 'RC-2026-118', 'couverture' => 'France métropolitaine'], $contenu['donnees']['contexte']['emetteur']['assurance']);
         $this->assertSame([], $this->anomalies($this->verifier()));
 

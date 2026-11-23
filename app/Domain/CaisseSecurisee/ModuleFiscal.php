@@ -21,13 +21,20 @@ namespace App\Domain\CaisseSecurisee;
  * figé, un JET 100 ou un JET 105 de démonstration dans une base réelle.
  * Le format du contenu signé du site réel ne change pas.
  *
+ * La 3.1 (lot IDENT, décision P14.7) : l'émetteur figé d'un document
+ * (ticket, facture, avoir, devis, reçu de paiement) porte, quand la société
+ * en déclare au moins une, le bloc « mentions_facultatives » (liquidation,
+ * location-gérance, EIRL et son objet, assujetti unique). Version mineure :
+ * le bloc s'ajoute à l'émetteur sans toucher à l'inaltérabilité, et celui
+ * d'une société qui n'en déclare aucune garde sa forme.
+ *
  * La référence légale qu'affiche l'écran de la caisse sécurisée est elle
  * aussi une constante du code : sa mise à jour (renumérotation du code
  * général des impôts) passe par une nouvelle version mineure.
  */
 final class ModuleFiscal
 {
-    public const VERSION = '3.0';
+    public const VERSION = '3.1';
 
     public const REFERENCE_LEGALE = 'Article 286, I, 3° bis du code général des impôts';
 }

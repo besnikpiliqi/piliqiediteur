@@ -14,6 +14,7 @@ use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
 use App\Domain\Facturation\Actions\EnvoyerDocumentAction;
 use App\Domain\Facturation\Actions\ModifierDevisAction;
 use App\Domain\Facturation\Enums\StatutDevis;
+use App\Domain\Facturation\Exceptions\IdentiteDeLaSocieteIncompleteException;
 use App\Domain\Facturation\Jobs\EnvoyerDocumentJob;
 use App\Domain\Facturation\Mail\DocumentMail;
 use App\Domain\Facturation\Models\Facture;
@@ -21,6 +22,8 @@ use App\Domain\Facturation\Services\AvoirPdfGenerator;
 use App\Domain\Facturation\Services\DevisPdfGenerator;
 use App\Domain\Facturation\Services\Emetteur;
 use App\Domain\Facturation\Services\FacturePdfGenerator;
+use App\Domain\Facturation\Services\MentionsFacultativesDeLIdentite;
+use App\Domain\Tenancy\Enums\ExploitationEnGerance;
 use App\Domain\Tenancy\Enums\FormeJuridique;
 use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Models\Magasin;
@@ -93,6 +96,7 @@ class EmetteurFigeTest extends TestCase
         'siren', 'raison_sociale', 'forme_juridique', 'forme_juridique_autre', 'capital_social', 'capital_variable', 'immatriculation', 'numero_tva',
         'siege_adresse', 'siege_complement_adresse', 'siege_code_postal', 'siege_ville', 'regime_tva', 'option_debits_tva',
         'assurance_assureur', 'assurance_adresse', 'assurance_contrat', 'assurance_couverture',
+        'en_liquidation', 'exploitation_en_gerance', 'eirl', 'eirl_objet', 'membre_assujetti_unique',
     ];
 
     /**
@@ -496,6 +500,11 @@ class EmetteurFigeTest extends TestCase
             'la mention entre parenthèses' => ['Jean Martin (EI)', 'Jean Martin (EI)'],
             'la mention suivie d\'un point' => ['Jean Martin EI.', 'Jean Martin EI.'],
             'la mention après une virgule' => ['Jean Martin,EI', 'Jean Martin,EI'],
+            'la mention EIRL en fin (P14.4)' => ['Garage Martin EIRL', 'Garage Martin EIRL'],
+            'la mention EIRL en tête' => ['EIRL Garage Martin', 'EIRL Garage Martin'],
+            'la mention EIRL entre parenthèses' => ['Garage Martin (EIRL)', 'Garage Martin (EIRL)'],
+            'la mention EIRL en minuscules' => ['Garage Martin eirl', 'Garage Martin eirl'],
+            'la mention EIRL en toutes lettres' => ['Garage Martin Entrepreneur individuel à responsabilité limitée', 'Garage Martin Entrepreneur individuel à responsabilité limitée'],
         ];
     }
 
@@ -528,6 +537,189 @@ class EmetteurFigeTest extends TestCase
             ['SEIGNEUR EI', 'Peinture Dupont EI', 'SEIGNEUR'],
             [Emetteur::duMagasin($seigneur)->denominationImprimee(), Emetteur::duMagasin($peinture)->denominationImprimee(), Emetteur::duMagasin($societe)->denominationImprimee()],
         );
+    }
+
+    /**
+     * Un EIRL (décision P14.4) porte « EIRL » à la place de « EI » dans sa
+     * dénomination, que la case soit cochée ou que sa raison sociale la
+     * porte déjà, et « EI » n'est jamais ajouté à un nom qui porte « EIRL ».
+     */
+    public function test_un_eirl_imprime_eirl_a_la_place_de_ei(): void
+    {
+        $eirl = $this->magasinDuPort(['raison_sociale' => 'Jean Martin', 'forme_juridique' => FormeJuridique::EntrepreneurIndividuel, 'capital_social' => null, 'eirl' => true, 'eirl_objet' => 'Vente de plantes et de fleurs']);
+        $dejaEirl = $this->magasinDuPort(['code' => 'PORT2', 'raison_sociale' => 'Garage Martin EIRL', 'siren' => '100000009', 'siret' => '10000000900017', 'forme_juridique' => FormeJuridique::EntrepreneurIndividuel, 'capital_social' => null, 'eirl' => true, 'eirl_objet' => 'Réparation automobile']);
+        $sansCase = $this->magasinDuPort(['code' => 'PORT3', 'raison_sociale' => 'Jean Martin', 'siren' => '200000008', 'siret' => '20000000800017', 'forme_juridique' => FormeJuridique::EntrepreneurIndividuel, 'capital_social' => null]);
+
+        $this->assertSame(
+            ['Jean Martin EIRL', 'Garage Martin EIRL', 'Jean Martin EI'],
+            [Emetteur::duMagasin($eirl)->denominationImprimee(), Emetteur::duMagasin($dejaEirl)->denominationImprimee(), Emetteur::duMagasin($sansCase)->denominationImprimee()],
+        );
+    }
+
+    /**
+     * Le capital variable s'imprime dès que la case est cochée, même sans
+     * capital saisi (décision P14.1, art. L231-2 et L238-3), puis avec lui
+     * quand il l'est ; sans la case, rien ne le dit. Une SNC n'imprime son
+     * capital que s'il est saisi (décision P14.3).
+     *
+     * @return array<string, array{0: array<string, mixed>, 1: string}>
+     */
+    public static function capitauxImprimes(): array
+    {
+        return [
+            'capital variable sans capital' => [['capital_variable' => true, 'capital_social' => null], 'Martin et Fils SARL à capital variable'],
+            'capital variable avec capital' => [['capital_variable' => true, 'capital_social' => '8000.00'], 'Martin et Fils SARL à capital variable, au capital de 8 000,00 €'],
+            'capital fixe' => [['capital_variable' => false, 'capital_social' => '8000.00'], 'Martin et Fils SARL au capital de 8 000,00 €'],
+            'SNC sans capital' => [['forme_juridique' => FormeJuridique::Snc, 'capital_social' => null], 'Martin et Fils SNC'],
+            'SNC avec capital' => [['forme_juridique' => FormeJuridique::Snc, 'capital_social' => '3000.00'], 'Martin et Fils SNC au capital de 3 000,00 €'],
+            'société en liquidation à capital variable' => [['en_liquidation' => true, 'capital_variable' => true, 'capital_social' => '8000.00'], 'Martin et Fils SARL société en liquidation, à capital variable, au capital de 8 000,00 €'],
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $societe
+     */
+    #[DataProvider('capitauxImprimes')]
+    public function test_la_premiere_ligne_du_pied_dit_la_forme_les_mentions_et_le_capital_que_la_societe_declare(array $societe, string $premiereLigne): void
+    {
+        $magasin = $this->magasinDuPort($societe);
+
+        $this->assertSame($premiereLigne, Emetteur::duMagasin($magasin)->lignesDeLaSociete()[0]);
+    }
+
+    /**
+     * Un document émis par une société à capital variable sans capital
+     * imprime « à capital variable » sans montant, et le garde quand la
+     * société change : le capital variable se fige avec l'émetteur.
+     */
+    public function test_le_capital_variable_sans_montant_s_imprime_et_se_fige_avec_l_emetteur(): void
+    {
+        $magasin = $this->magasinDuPort(['capital_variable' => true, 'capital_social' => null]);
+        $facture = $this->emettre(Client::factory()->professionnel()->create());
+        $this->reglerLaSociete($magasin, ['capital_variable' => false, 'capital_social' => '25000.00']);
+
+        $html = app(FacturePdfGenerator::class)->html($facture->fresh());
+        $htmlDUnBrouillon = app(FacturePdfGenerator::class)->html(app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->professionnel()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]]));
+
+        $this->assertSame('Martin et Fils SARL à capital variable · Siège social : 1 rue de la République, 13001 Marseille · SIREN : 121212120 · RCS Marseille · TVA intracommunautaire : FR56121212120', $this->societe($html));
+        $this->assertStringStartsWith('Martin et Fils SARL au capital de 25 000,00 € · ', $this->societe($htmlDUnBrouillon));
+    }
+
+    /**
+     * La facture à un professionnel d'une SNC s'émet sans capital, que sa
+     * forme n'exige pas (décision P14.3), et le pied n'en imprime aucun ;
+     * celle d'une SARL à capital fixe sans capital attend toujours qu'il soit
+     * saisi.
+     */
+    public function test_une_snc_emet_sa_facture_a_un_professionnel_sans_capital_et_une_sarl_a_capital_fixe_l_attend(): void
+    {
+        $snc = $this->magasinDuPort(['forme_juridique' => FormeJuridique::Snc, 'capital_social' => null]);
+        $facture = $this->emettre(Client::factory()->professionnel()->create());
+
+        $this->assertNotNull($facture->numero);
+        $this->assertStringStartsWith('Martin et Fils SNC · Siège social : ', $this->societe(app(FacturePdfGenerator::class)->html($facture->fresh())));
+
+        $this->reglerLaSociete($snc, ['forme_juridique' => FormeJuridique::Sarl]);
+
+        $this->assertThrows(
+            fn () => $this->emettre(Client::factory()->professionnel()->create()),
+            IdentiteDeLaSocieteIncompleteException::class,
+            'Pour émettre une facture à un professionnel, complétez d\'abord l\'identité de la société (Administration de la société > Identité) : capital social.',
+        );
+    }
+
+    /**
+     * Les mentions facultatives de l'identité (décision P14.7) : la
+     * liquidation à côté de la dénomination, puis une ligne pour la qualité
+     * d'exploitant, pour l'objet de l'activité d'un EIRL et pour
+     * l'appartenance à un assujetti unique, sous l'identité et avant le
+     * siège ; elles se figent à l'émission, et un devis les fige à son
+     * envoi : la société qui les retire ou les change n'y change rien.
+     */
+    public function test_les_mentions_facultatives_s_impriment_dans_le_pied_et_se_figent_a_l_emission(): void
+    {
+        $magasin = $this->magasinDuPort(['en_liquidation' => true, 'exploitation_en_gerance' => ExploitationEnGerance::LocataireGerant]);
+        $client = Client::factory()->professionnel()->create();
+        $facture = $this->emettre($client);
+        $ticket = $this->emettre(Client::factory()->create());
+        $devis = app(EmettreDevisAction::class)->handle(self::auteur(), app(CreerDevisAction::class)->handle(self::auteur(), $client, [['produit_id' => $this->produit()->id, 'quantite' => 1]]));
+        $this->reglerLaSociete($magasin, ['en_liquidation' => false, 'exploitation_en_gerance' => ExploitationEnGerance::GerantMandataire]);
+        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), $client, [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
+
+        $avant = 'Martin et Fils SARL société en liquidation, au capital de 10 000,00 € · Locataire-gérant · Siège social : 1 rue de la République, 13001 Marseille · SIREN : 121212120 · RCS Marseille · TVA intracommunautaire : FR56121212120';
+        $apres = 'Martin et Fils SARL au capital de 10 000,00 € · Gérant-mandataire · Siège social : 1 rue de la République, 13001 Marseille · SIREN : 121212120 · RCS Marseille · TVA intracommunautaire : FR56121212120';
+
+        $this->assertSame($avant, $this->societe(app(FacturePdfGenerator::class)->html($facture->fresh())));
+        $this->assertSame($avant, $this->societe(app(FacturePdfGenerator::class)->html($ticket->fresh())));
+        $this->assertSame($avant, $this->societe(app(DevisPdfGenerator::class)->html($devis->fresh())));
+        $this->assertSame($apres, $this->societe(app(FacturePdfGenerator::class)->html($brouillon->fresh())));
+        $this->assertSame(
+            ['en_liquidation' => true, 'exploitation_en_gerance' => 'locataire_gerant', 'eirl' => false, 'objet_de_l_eirl' => null, 'membre_assujetti_unique' => false],
+            $facture->fresh()->emetteur()->enTableau()['mentions_facultatives'],
+        );
+        $this->assertSame(['en_liquidation' => true, 'exploitation_en_gerance' => 'locataire_gerant'], array_intersect_key($devis->fresh()->emetteur_fige['mentions_facultatives'], array_flip(['en_liquidation', 'exploitation_en_gerance'])));
+    }
+
+    /**
+     * Un EIRL imprime « EIRL » et l'objet de son activité (art. R123-237,
+     * 8°), sur la ligne de son identité et sous elle, avant l'adresse de
+     * son entreprise ; son ticket les garde quand l'entrepreneur renonce à
+     * la case.
+     */
+    public function test_un_eirl_imprime_l_objet_de_son_activite_et_le_garde_apres_son_ticket(): void
+    {
+        $magasin = $this->magasinDuPort([
+            'raison_sociale' => 'Jean Martin',
+            'forme_juridique' => FormeJuridique::EntrepreneurIndividuel,
+            'capital_social' => null,
+            'immatriculation' => 'RM 13',
+            'eirl' => true,
+            'eirl_objet' => 'Vente de plantes et de fleurs',
+        ]);
+        $ticket = $this->emettre(Client::factory()->create());
+        $this->reglerLaSociete($magasin, ['eirl' => false]);
+
+        $html = app(FacturePdfGenerator::class)->html($ticket->fresh());
+
+        $this->assertSame('Jean Martin EIRL · Objet de l\'activité à laquelle le patrimoine est affecté : Vente de plantes et de fleurs · Adresse de l\'entreprise : 1 rue de la République, 13001 Marseille · SIREN : 121212120 · RM 13 · TVA intracommunautaire : FR56121212120', $this->societe($html));
+        $this->assertNull($magasin->societe->fresh()->eirl_objet);
+    }
+
+    /**
+     * L'appartenance à un assujetti unique (groupe TVA) s'imprime sous
+     * l'identité d'un brouillon : la société ne peut pas encore émettre (voir
+     * Magasin::REFUS_ASSUJETTI_UNIQUE), mais son pied dit déjà ce que la loi
+     * veut (art. 242 nonies A, I-5° bis de l'annexe II au CGI), et son
+     * émetteur le signerait.
+     */
+    public function test_l_appartenance_a_un_assujetti_unique_s_imprime_et_se_signe(): void
+    {
+        $magasin = $this->magasinDuPort(['membre_assujetti_unique' => true]);
+        $emetteur = Emetteur::duMagasin($magasin);
+
+        $this->assertSame('Martin et Fils SARL au capital de 10 000,00 € · Membre d\'un assujetti unique · Siège social : 1 rue de la République, 13001 Marseille · SIREN : 121212120 · RCS Marseille · TVA intracommunautaire : FR56121212120', implode(' · ', $emetteur->lignesDeLaSociete()));
+        $this->assertTrue($emetteur->mentionsFacultatives->membreAssujettiUnique);
+        $this->assertEquals($emetteur, Emetteur::duContenuSigne($emetteur->enTableau()));
+    }
+
+    /**
+     * Le bloc « mentions_facultatives » du contenu signé n'existe que pour
+     * une société qui en déclare au moins une : l'émetteur de toute autre
+     * garde la forme qu'il avait, et se relit sans le bloc. Celui qui
+     * l'écrit se relit à l'identique.
+     */
+    public function test_le_contenu_signe_ne_porte_le_bloc_des_mentions_facultatives_que_si_la_societe_en_declare(): void
+    {
+        $sans = Emetteur::duMagasin($this->magasinDuPort());
+        $avec = Emetteur::duMagasin($this->magasinDuPort(['code' => 'PORT2', 'siren' => '100000009', 'siret' => '10000000900017', 'en_liquidation' => true]));
+
+        $this->assertArrayNotHasKey('mentions_facultatives', $sans->enTableau());
+        $this->assertTrue($sans->mentionsFacultatives->estVide());
+        $this->assertEquals($sans, Emetteur::duContenuSigne($sans->enTableau()));
+        $this->assertFalse($avec->mentionsFacultatives->estVide());
+        $this->assertSame(['en_liquidation' => true, 'exploitation_en_gerance' => null, 'eirl' => false, 'objet_de_l_eirl' => null, 'membre_assujetti_unique' => false], $avec->enTableau()['mentions_facultatives']);
+        $this->assertEquals($avec, Emetteur::duContenuSigne($avec->enTableau()));
+        $this->assertEquals(MentionsFacultativesDeLIdentite::aucune(), Emetteur::duContenuSigne($sans->enTableau())->mentionsFacultatives);
     }
 
     /**

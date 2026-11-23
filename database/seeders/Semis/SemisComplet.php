@@ -291,6 +291,7 @@ final class SemisComplet
         if ($this->seme('services')) {
             $this->completerLIdentite('services', [
                 'capital_social' => '5000.00',
+                'capital_variable' => true,
                 'immatriculation' => 'RCS Paris 000 000 117',
                 'assurance_assureur' => 'Mutuelle des Professions Libérales, 12 rue de la Paix, 75002 Paris',
                 'assurance_contrat' => 'RCP-2026-4471',
@@ -614,6 +615,13 @@ final class SemisComplet
             $rne->identifier($siren, new IdentiteRne($denomination, self::CATEGORIE_SAS, '10000.00', 'EUR', false, 'RCS Paris', $siege));
         }
 
+        // L'Épicerie Lemoine, que le cabinet invite, est un entrepreneur
+        // individuel : le répertoire et le registre disent son nom, contenu
+        // dans sa dénomination (décision P14.4), et son immatriculation
+        // au répertoire des métiers.
+        $sirene->entrepreneur(self::SIREN_CLIENT_INVITE, 'LEMOINE');
+        $rne->identifier(self::SIREN_CLIENT_INVITE, new IdentiteRne(null, '1000', null, null, null, 'RM 75', new AdressePostale('EPICERIE LEMOINE', '1 RUE DE LA REPUBLIQUE', null, '75001', 'PARIS', AdressePostale::SOURCE_RNE)));
+
         $fortDeFrance = IdentifiantsInsee::avecSaCle(self::SIREN_COMMERCE.self::NIC_DE_FORT_DE_FRANCE);
         $sirene->ajouterUnEtablissement($fortDeFrance, null);
         $sirene->deplacer($fortDeFrance, '97200', 'FORT-DE-FRANCE', '97209');
@@ -691,7 +699,7 @@ final class SemisComplet
      * pas, le capital et l'immatriculation, que les factures aux
      * professionnels exigent.
      *
-     * @param  array<string, string>  $donnees
+     * @param  array<string, string|bool>  $donnees
      */
     public function completerLIdentite(string $cle, array $donnees): void
     {

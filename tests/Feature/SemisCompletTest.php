@@ -13,6 +13,7 @@ use App\Domain\Demonstration\Enums\EtatDeLaDemonstration;
 use App\Domain\Demonstration\Jobs\EnvoyerLeLienDeLaDemonstration;
 use App\Domain\Demonstration\Models\Demonstration;
 use App\Domain\Facturation\Events\FactureEmise;
+use App\Domain\Facturation\Services\Emetteur;
 use App\Domain\TableauDeBord\Enums\EcranDuTableauDeBord;
 use App\Domain\TableauDeBord\Enums\Graphique;
 use App\Domain\TableauDeBord\Enums\PeriodeDuTableauDeBord;
@@ -147,7 +148,7 @@ class SemisCompletTest extends TestCase
         'identifiants' => 68,
         'inventaires_ouverture' => 11,
         'invitations_cabinet' => 6,
-        'journal_audit' => 1814,
+        'journal_audit' => 1815,
         'liens_cabinet' => 15,
         'liens_des_devis' => 6,
         'lignes_achat' => 371,
@@ -233,6 +234,7 @@ class SemisCompletTest extends TestCase
         $this->assertLesCasDeLEcartDesPrixDAchat();
         $this->assertLesFormulesDArrondiDuPrixDeVente();
         $this->assertLesDatesDeLOperation();
+        $this->assertLesMentionsDIdentite();
         $this->assertLaListeDesComptesOuvreChaqueCompteActif();
         $this->assertChaqueEtatDuMotDePasseAUnCompteSeme();
         $this->assertLesRenouvellementsDesDemonstrations();
@@ -1179,6 +1181,68 @@ class SemisCompletTest extends TestCase
             $this->lignes('select count(*) > 0 from devis where date_operation_fin is not null'),
             'Un devis prévoit la date de sa livraison.',
         );
+    }
+
+    /**
+     * Les mentions d'identité (décisions P14.1, P14.3, P14.4 et P14.7), de
+     * part et d'autre de chaque règle : le capital variable avec montant
+     * (le Comptoir des Îles, Conseil Vasseur) et sans (le Studio Lumière),
+     * fixe (Maison Ferrand) ; une SNC sans capital saisi (la Librairie des
+     * Quais) ; des entrepreneurs individuels dont la raison sociale contient
+     * le nom que le répertoire donne, « EI » pour la Boulangerie Duval et
+     * l'Épicerie Lemoine, « EIRL » et l'objet de son activité pour l'Atelier
+     * Brun ; la location-gérance (la Boulangerie Duval), la gérance-mandat
+     * et l'assujetti unique (le Groupe Nord Distribution) ; la liquidation
+     * que la Librairie des Quais se déclare en cours d'histoire : ses
+     * tickets d'avant n'en disent rien, ceux d'après l'impriment. Chaque
+     * société qui n'a aucune de ces mentions (Maison Ferrand) n'en imprime
+     * aucune, et le contenu signé de ses documents n'a pas de bloc
+     * « mentions_facultatives ».
+     */
+    private function assertLesMentionsDIdentite(): void
+    {
+        $lignes = [];
+
+        foreach (['MAISON FERRAND', 'CONSEIL VASSEUR', 'COMPTOIR DES ILES', 'STUDIO LUMIERE', 'LIBRAIRIE DES QUAIS', 'ATELIER BRUN', 'BOULANGERIE DUVAL', 'GROUPE NORD DISTRIBUTION', 'EPICERIE LEMOINE'] as $nom) {
+            $societe = Societe::query()->where('raison_sociale', $nom)->sole();
+            $magasin = Magasin::query()->withoutGlobalScopes()->where('societe_id', $societe->getKey())->orderBy('id')->firstOrFail();
+            $emetteur = Emetteur::duMagasin($magasin);
+            $lignes[$nom] = [$emetteur->lignesDeLaSociete()[0], ...$emetteur->mentionsFacultatives->lignes()];
+        }
+
+        $this->assertSame([
+            'MAISON FERRAND' => ['MAISON FERRAND SAS au capital de 20 000,00 €'],
+            'CONSEIL VASSEUR' => ['CONSEIL VASSEUR SAS à capital variable, au capital de 5 000,00 €'],
+            'COMPTOIR DES ILES' => ['COMPTOIR DES ILES SAS à capital variable, au capital de 15 000,00 €'],
+            'STUDIO LUMIERE' => ['STUDIO LUMIERE SAS à capital variable'],
+            'LIBRAIRIE DES QUAIS' => ['LIBRAIRIE DES QUAIS SNC société en liquidation'],
+            'ATELIER BRUN' => ['ATELIER BRUN EIRL', 'Objet de l\'activité à laquelle le patrimoine est affecté : Retouche et confection de vêtements sur mesure'],
+            'BOULANGERIE DUVAL' => ['BOULANGERIE DUVAL EI', 'Locataire-gérant'],
+            'GROUPE NORD DISTRIBUTION' => ['GROUPE NORD DISTRIBUTION SAS au capital de 15 000,00 €', 'Gérant-mandataire', 'Membre d\'un assujetti unique'],
+            'EPICERIE LEMOINE' => ['EPICERIE LEMOINE EI'],
+        ], $lignes);
+
+        $this->assertSame(
+            [['ATELIER BRUN', 'BRUN'], ['BOULANGERIE DUVAL', 'DUVAL'], ['EPICERIE LEMOINE', 'LEMOINE']],
+            $this->lignes("select societes.raison_sociale, verifications_societe.details->>'nom' from verifications_societe join societes on societes.id = verifications_societe.societe_id where verifications_societe.type = 'sirene_unite' and verifications_societe.resultat = 'concluante' and verifications_societe.details->>'nom' is not null group by 1, 2 order by 1"),
+            'Le répertoire donne son nom à chaque entrepreneur individuel : la raison sociale qui ne le contient pas est refusée.',
+        );
+
+        $tickets = fn (string $societe, string $motif): int => DB::table('enregistrements_fiscaux')
+            ->join('magasins', 'magasins.id', '=', 'enregistrements_fiscaux.magasin_id')
+            ->join('societes', 'societes.id', '=', 'magasins.societe_id')
+            ->where('societes.raison_sociale', $societe)
+            ->where('enregistrements_fiscaux.chaine', 'vente')
+            ->where('enregistrements_fiscaux.type', 'ticket')
+            ->where('enregistrements_fiscaux.contenu', 'like', $motif)
+            ->count();
+
+        $apresLaLiquidation = $tickets('LIBRAIRIE DES QUAIS', '%"en_liquidation":true%');
+        $this->assertGreaterThan(0, $apresLaLiquidation, 'Les tickets de la Librairie des Quais d\'après sa liquidation l\'impriment.');
+        $this->assertGreaterThan($apresLaLiquidation, $tickets('LIBRAIRIE DES QUAIS', '%'), 'Ceux d\'avant n\'ont aucun bloc de mentions : le contenu signé d\'un document émis ne change jamais.');
+        $this->assertSame(0, $tickets('MAISON FERRAND', '%"mentions_facultatives"%'), 'Maison Ferrand, sans mention facultative, garde le contenu signé sans bloc.');
+        $this->assertGreaterThan(0, $tickets('BOULANGERIE DUVAL', '%"exploitation_en_gerance":"locataire_gerant"%'), 'La Boulangerie Duval signe sa location-gérance.');
+        $this->assertSame($tickets('BOULANGERIE DUVAL', '%'), $tickets('BOULANGERIE DUVAL', '%"exploitation_en_gerance":"locataire_gerant"%'), 'Chaque ticket de la Boulangerie Duval la porte.');
     }
 
     /**

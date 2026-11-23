@@ -3,6 +3,7 @@
 namespace App\Filament\Societe\Pages;
 
 use App\Domain\Tenancy\Actions\ModifierIdentiteSocieteAction;
+use App\Domain\Tenancy\Enums\ExploitationEnGerance;
 use App\Domain\Tenancy\Enums\FormeJuridique;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Support\CompteConnecte;
@@ -28,8 +29,10 @@ use Illuminate\Validation\ValidationException;
  * L'identité légale de la société, celle que tous ses magasins impriment :
  * raison sociale, forme juridique, capital, immatriculation, n° de TVA,
  * siège et, dans les types qui ont un magasin, l'assurance professionnelle
- * facultative (voir ModifierIdentiteSocieteAction, qui la valide et
- * l'enregistre, et Emetteur::ligneDeLAssurance()). Le SIREN s'y lit sans
+ * facultative et, tout aussi facultatives, ses mentions de liquidation, de
+ * location-gérance et d'EIRL (voir ModifierIdentiteSocieteAction, qui les
+ * valide et les enregistre, Emetteur::ligneDeLAssurance() et
+ * Emetteur::lignesDeLaSociete()). Le SIREN s'y lit sans
  * se saisir : c'est celui de l'inscription, que vérifie le courrier
  * recommandé, et il ne change pas ; le type d'activité aussi, choisi à
  * l'inscription et définitif (voir TypeDActivite). Un encadré dit les
@@ -105,7 +108,7 @@ class IdentiteSociete extends Page implements HasForms
                         ->content(fn (): string => $this->societe()->type_activite->getLabel()),
                     TextInput::make('raison_sociale')
                         ->label('Raison sociale')
-                        ->helperText(fn (): ?string => $this->ecartAvecSirene())
+                        ->helperText(fn (Get $get): ?string => $this->aideDeLaRaisonSociale($get('forme_juridique') === FormeJuridique::EntrepreneurIndividuel->value))
                         ->maxLength(200),
                     Select::make('forme_juridique')
                         ->label('Forme juridique')
@@ -122,12 +125,13 @@ class IdentiteSociete extends Page implements HasForms
                         ->visible(fn (Get $get): bool => $get('forme_juridique') === FormeJuridique::Autre->value),
                     TextInput::make('capital_social')
                         ->label('Capital social')
-                        ->helperText('Obligatoire pour toute société commerciale ; imprimé sur vos documents quand il est renseigné.')
+                        ->helperText('Obligatoire pour une SARL, une EURL, une SA, une SAS, une SASU, une SCA et une SE (sauf capital variable) ; facultatif pour une SNC et une SCS. Imprimé sur vos documents quand il est renseigné.')
                         ->numeric()
                         ->suffix('€')
                         ->hidden(fn (Get $get): bool => $get('forme_juridique') === FormeJuridique::EntrepreneurIndividuel->value),
                     Toggle::make('capital_variable')
                         ->label('Capital variable')
+                        ->helperText('Si vos statuts le prévoient, « à capital variable » s\'imprime sur vos documents, avec ou sans montant, et le capital n\'est plus exigé.')
                         ->hidden(fn (Get $get): bool => $get('forme_juridique') === FormeJuridique::EntrepreneurIndividuel->value),
                     TextInput::make('immatriculation')
                         ->label('Immatriculation')
@@ -150,6 +154,33 @@ class IdentiteSociete extends Page implements HasForms
                     TextInput::make('siege_ville')->label('Ville')->maxLength(100),
                 ])
                 ->columns(2),
+            Section::make('Mentions facultatives')
+                ->description('Facultatives. Remplies, elles s\'impriment dans le pied des devis, factures, tickets et avoirs de tous vos magasins (art. R123-237 du Code de commerce).')
+                ->schema([
+                    Toggle::make('en_liquidation')
+                        ->label('La société est en liquidation')
+                        ->helperText('« société en liquidation » s\'imprime à côté de la dénomination.'),
+                    Select::make('exploitation_en_gerance')
+                        ->label('Qualité d\'exploitant')
+                        ->options(ExploitationEnGerance::class)
+                        ->placeholder('Aucune')
+                        ->helperText('À choisir si vous exploitez le fonds de commerce d\'un autre, en location-gérance ou en gérance-mandat.'),
+                    Toggle::make('eirl')
+                        ->label('Entrepreneur individuel à responsabilité limitée (EIRL)')
+                        ->helperText('Pour un EIRL créé avant le 15 mai 2022 : « EIRL » remplace « EI » dans la dénomination.')
+                        ->live()
+                        ->visible(fn (Get $get): bool => $get('forme_juridique') === FormeJuridique::EntrepreneurIndividuel->value),
+                    TextInput::make('eirl_objet')
+                        ->label('Objet de l\'activité de l\'EIRL')
+                        ->helperText('L\'activité à laquelle le patrimoine de l\'entrepreneur est affecté : obligatoire pour un EIRL.')
+                        ->maxLength(200)
+                        ->visible(fn (Get $get): bool => $get('forme_juridique') === FormeJuridique::EntrepreneurIndividuel->value && (bool) $get('eirl')),
+                    Placeholder::make('assujetti_unique')
+                        ->label('Membre d\'un assujetti unique (groupe TVA)')
+                        ->content(fn (): string => ($this->societe()->membre_assujetti_unique ? 'Oui' : 'Non').'. Cela se déclare dans les paramètres fiscaux de la société ; « Membre d\'un assujetti unique » s\'imprime alors aussi dans le pied.'),
+                ])
+                ->columns(2)
+                ->hidden(fn (): bool => ! $this->societe()->type_activite->aDesMagasins()),
             Section::make('Assurance professionnelle')
                 ->description('Facultative. Renseignée, elle s\'imprime dans le pied des devis, factures, tickets et avoirs de tous vos magasins. La loi impose cette mention, sur chaque devis et chaque facture, aux artisans dont l\'activité exige une assurance professionnelle, notamment la garantie décennale des travaux du bâtiment.')
                 ->schema([
@@ -203,18 +234,24 @@ class IdentiteSociete extends Page implements HasForms
     }
 
     /**
-     * La dénomination que donne le répertoire Sirene (voir
-     * Societe::denominationSirene()), quand elle diffère de la raison
-     * sociale enregistrée.
+     * L'aide de la raison sociale : la dénomination que donne le répertoire
+     * Sirene (voir Societe::denominationSirene()), quand elle diffère de la
+     * raison sociale enregistrée, et, pour un entrepreneur individuel, le
+     * nom que sa raison sociale contient (décision P14.4, voir
+     * Societe::nomsDeLEntrepreneur()).
      */
-    private function ecartAvecSirene(): ?string
+    private function aideDeLaRaisonSociale(bool $entrepreneurIndividuel): ?string
     {
         $societe = $this->societe();
         $denomination = $societe->denominationSirene();
+        $noms = $entrepreneurIndividuel ? $societe->nomsDeLEntrepreneur() : [];
 
-        return filled($denomination) && $denomination !== $societe->raison_sociale
-            ? "Le répertoire Sirene de l'INSEE indique « {$denomination} »."
-            : null;
+        $aide = array_filter([
+            filled($denomination) && $denomination !== $societe->raison_sociale ? "Le répertoire Sirene de l'INSEE indique « {$denomination} »." : null,
+            $noms === [] ? null : 'Celle d\'un entrepreneur individuel contient son nom ou son nom d\'usage : « '.implode(' » ou « ', $noms).' ».',
+        ], filled(...));
+
+        return $aide === [] ? null : implode(' ', $aide);
     }
 
     /**
@@ -229,6 +266,7 @@ class IdentiteSociete extends Page implements HasForms
         $this->form->fill([
             ...$societe->only(ModifierIdentiteSocieteAction::CHAMPS),
             'forme_juridique' => $societe->forme_juridique?->value,
+            'exploitation_en_gerance' => $societe->exploitation_en_gerance?->value,
         ]);
     }
 

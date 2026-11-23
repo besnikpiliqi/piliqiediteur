@@ -76,6 +76,8 @@ class InseeSirene implements RepertoireSirene
             diffusionPartielle: ($unite['statutDiffusionUniteLegale'] ?? null) === 'P',
             activitePrincipale: $this->texte($periode, 'activitePrincipaleUniteLegale'),
             nomenclatureActivite: $this->texte($periode, 'nomenclatureActivitePrincipaleUniteLegale'),
+            nom: $this->texte($periode, 'nomUniteLegale'),
+            nomDUsage: $this->texte($periode, 'nomUsageUniteLegale'),
         );
     }
 

@@ -32,7 +32,11 @@ enum TypeVerification: string implements HasLabel
 
     /**
      * Les détails que la ligne retient, et seulement eux : jamais l'image
-     * ni le numéro d'une pièce d'identité, ni l'adresse d'une personne.
+     * ni le numéro d'une pièce d'identité, ni l'adresse d'une personne. Le
+     * contrôle d'une entreprise retient, avec sa dénomination, le nom et le
+     * nom d'usage que le répertoire donne à un entrepreneur individuel :
+     * ils disent si la dénomination de ses documents le nomme (voir
+     * Societe::nomsDeLEntrepreneur()).
      * Le code d'un courrier et la décision de l'éditeur retiennent le
      * SIREN qu'ils prouvent.
      *
@@ -41,7 +45,7 @@ enum TypeVerification: string implements HasLabel
     public function detailsRetenus(): array
     {
         return match ($this) {
-            self::SireneUnite => ['siren', 'etat_administratif', 'categorie_juridique', 'denomination', 'diffusion_partielle'],
+            self::SireneUnite => ['siren', 'etat_administratif', 'categorie_juridique', 'denomination', 'nom', 'nom_d_usage', 'diffusion_partielle'],
             self::SireneEtablissement => ['siret', 'etat_administratif', 'rattache', 'adresse', 'motif'],
             self::Courrier => ['siren', 'envoi_id', 'motif', 'source_adresse', 'reference_envoi'],
             self::Manuelle => ['siren', 'pieces', 'decision', 'justification'],

@@ -248,6 +248,8 @@ class ControleSirene
             'etat_administratif' => $unite->active ? 'active' : 'cessee',
             'categorie_juridique' => $unite->categorieJuridique,
             'denomination' => $unite->denomination,
+            'nom' => $unite->nom,
+            'nom_d_usage' => $unite->nomDUsage,
             'diffusion_partielle' => $unite->diffusionPartielle,
         ], $auteur, $editeur);
     }

@@ -48,6 +48,6 @@ class LaSociete extends Page
     {
         $magasin = ValeursLues::instance(Filament::getTenant(), Magasin::class);
 
-        return Societe::query()->whereKey($magasin->societe_id)->firstOrFail([...Societe::CHAMPS_DE_L_IDENTITE, 'id', 'siren', 'type_activite', 'regime_tva', 'option_debits_tva', 'mois_fin_exercice']);
+        return Societe::query()->whereKey($magasin->societe_id)->firstOrFail([...Societe::CHAMPS_DE_L_IDENTITE, 'id', 'siren', 'type_activite', 'regime_tva', 'option_debits_tva', 'mois_fin_exercice', 'membre_assujetti_unique']);
     }
 }

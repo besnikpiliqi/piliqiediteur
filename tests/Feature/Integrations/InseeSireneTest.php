@@ -81,8 +81,9 @@ class InseeSireneTest extends TestCase
     }
 
     /**
-     * Un entrepreneur individuel se nomme par son prénom usuel et son nom ;
-     * une entreprise en diffusion partielle ne livre ni son nom ni son
+     * Un entrepreneur individuel se nomme par son prénom usuel et son nom,
+     * et le répertoire donne aussi son nom et son nom d'usage quand il en a
+     * un (décision P14.4) ; une entreprise en diffusion partielle ne livre ni son nom ni son
      * adresse ([ND]), code postal compris, seulement sa commune, dont le
      * code donne le territoire du magasin (Fort-de-France : 97209).
      */
@@ -91,7 +92,7 @@ class InseeSireneTest extends TestCase
         Http::fake([
             self::URL.'/siren/000000026' => Http::response(['uniteLegale' => [
                 'prenomUsuelUniteLegale' => 'JEANNE',
-                'periodesUniteLegale' => [['etatAdministratifUniteLegale' => 'A', 'nomUniteLegale' => 'DUPONT', 'categorieJuridiqueUniteLegale' => '1000', 'nicSiegeUniteLegale' => '00015']],
+                'periodesUniteLegale' => [['etatAdministratifUniteLegale' => 'A', 'nomUniteLegale' => 'DUPONT', 'nomUsageUniteLegale' => 'DURAND', 'categorieJuridiqueUniteLegale' => '1000', 'nicSiegeUniteLegale' => '00015']],
             ]]),
             self::URL.'/siren/000000034' => Http::response(['uniteLegale' => [
                 'statutDiffusionUniteLegale' => 'P',
@@ -105,7 +106,7 @@ class InseeSireneTest extends TestCase
         ]);
         $repertoire = new InseeSirene;
 
-        $this->assertEquals(new UniteSirene('000000026', true, 'JEANNE DUPONT', '1000', '00015', false, null, null), $repertoire->unite('000000026'));
+        $this->assertEquals(new UniteSirene('000000026', true, 'JEANNE DUPONT', '1000', '00015', false, null, null, 'DUPONT', 'DURAND'), $repertoire->unite('000000026'));
         $this->assertEquals(new UniteSirene('000000034', true, null, '5710', '00010', true, null, null), $repertoire->unite('000000034'));
         $this->assertEquals(new EtablissementSirene('00000003400010', '000000034', true, null, null, null, '97209', 'FORT-DE-FRANCE', true, null, false), $repertoire->etablissement('00000003400010'));
     }

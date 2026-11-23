@@ -138,20 +138,21 @@ class IdentiteSocieteTest extends TestCase
     /**
      * @return array<string, array{0: FormeJuridique}>
      */
-    public static function societesCommerciales(): array
+    public static function societesQuiExigentLeCapital(): array
     {
-        return collect([FormeJuridique::Sarl, FormeJuridique::Eurl, FormeJuridique::Sas, FormeJuridique::Sasu, FormeJuridique::Sa, FormeJuridique::Sca, FormeJuridique::Se, FormeJuridique::Snc, FormeJuridique::Scs])
+        return collect([FormeJuridique::Sarl, FormeJuridique::Eurl, FormeJuridique::Sas, FormeJuridique::Sasu, FormeJuridique::Sa, FormeJuridique::Sca, FormeJuridique::Se])
             ->mapWithKeys(fn (FormeJuridique $forme): array => [$forme->getLabel() => [$forme]])
             ->all();
     }
 
     /**
-     * Toute société commerciale indique son capital sur ses factures (art.
-     * R123-238 du Code de commerce) : sans lui, l'identité ne s'enregistre
-     * pas, et la facture à un professionnel l'attend.
+     * La SARL, l'EURL, la SA, la SAS, la SASU, la SCA et la SE indiquent leur
+     * capital sur leurs factures (art. R123-238 du Code de commerce,
+     * décision P14.3) : sans lui, l'identité ne s'enregistre pas, et la
+     * facture à un professionnel l'attend.
      */
-    #[DataProvider('societesCommerciales')]
-    public function test_le_capital_est_exige_pour_toute_societe_commerciale(FormeJuridique $forme): void
+    #[DataProvider('societesQuiExigentLeCapital')]
+    public function test_le_capital_est_exige_de_la_sarl_de_l_eurl_de_la_sa_de_la_sas_de_la_sasu_de_la_sca_et_de_la_se(FormeJuridique $forme): void
     {
         $societe = $this->ouvrirLAdministration();
 
@@ -163,6 +164,68 @@ class IdentiteSocieteTest extends TestCase
 
         $this->assertNotSame('Martin et Fils', $societe->fresh()->raison_sociale);
         $this->assertContains('capital social', $societe->fresh()->forceFill(['forme_juridique' => $forme, 'capital_social' => null])->mentionsLegalesManquantes());
+    }
+
+    /**
+     * Le capital d'une société à capital variable n'est pas exigé (art.
+     * L238-3 du Code de commerce, décision P14.1) : elle dit « à capital
+     * variable » et l'identité s'enregistre sans montant, pour chacune des
+     * formes qui l'exigent à capital fixe ; décocher la case le redemande.
+     */
+    #[DataProvider('societesQuiExigentLeCapital')]
+    public function test_le_capital_n_est_plus_exige_d_une_societe_a_capital_variable(FormeJuridique $forme): void
+    {
+        $societe = $this->ouvrirLAdministration();
+        $variable = [...self::identiteComplete(), 'forme_juridique' => $forme->value, 'capital_social' => '', 'capital_variable' => true];
+
+        Livewire::test(IdentiteSociete::class)
+            ->fillForm($variable)
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $this->assertSame([$forme, null, true, []], [$societe->fresh()->forme_juridique, $societe->fresh()->capital_social, $societe->fresh()->capital_variable, $societe->fresh()->mentionsLegalesManquantes()]);
+
+        Livewire::test(IdentiteSociete::class)
+            ->fillForm([...$variable, 'capital_variable' => false])
+            ->call('save')
+            ->assertHasFormErrors(['capital_social']);
+    }
+
+    /**
+     * @return array<string, array{0: FormeJuridique}>
+     */
+    public static function societesSansCapitalExige(): array
+    {
+        return collect([FormeJuridique::Snc, FormeJuridique::Scs])
+            ->mapWithKeys(fn (FormeJuridique $forme): array => [$forme->getLabel() => [$forme]])
+            ->all();
+    }
+
+    /**
+     * Les associés d'une SNC et d'une SCS répondent des dettes sur leurs
+     * biens : l'art. R123-238 n'exige que leur forme, jamais leur capital
+     * (décision P14.3). Il s'enregistre quand il est saisi, et s'imprime
+     * alors ; sans lui, la facture à un professionnel n'attend rien.
+     */
+    #[DataProvider('societesSansCapitalExige')]
+    public function test_le_capital_d_une_snc_et_d_une_scs_n_est_jamais_exige_mais_s_enregistre_quand_il_est_saisi(FormeJuridique $forme): void
+    {
+        $societe = $this->ouvrirLAdministration();
+
+        Livewire::test(IdentiteSociete::class)
+            ->fillForm([...self::identiteComplete(), 'forme_juridique' => $forme->value, 'capital_social' => ''])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $this->assertSame([$forme, null, []], [$societe->fresh()->forme_juridique, $societe->fresh()->capital_social, $societe->fresh()->mentionsLegalesManquantes()]);
+
+        Livewire::test(IdentiteSociete::class)
+            ->fillForm(['capital_social' => '3000'])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $this->assertSame('3000.00', $societe->fresh()->capital_social);
+        $this->assertStringContainsString($forme->getLabel().' au capital de 3 000,00 €', implode(' · ', Emetteur::duMagasin($societe->magasins()->firstOrFail())->lignesDeLaSociete()));
     }
 
     /**
@@ -195,7 +258,9 @@ class IdentiteSocieteTest extends TestCase
 
     /**
      * Une autre forme dit si elle est une société commerciale : son capital
-     * n'est exigé qu'alors.
+     * n'est exigé qu'alors (sauf s'il est variable), comme celui de la
+     * famille de la SARL et des sociétés par actions, la plus large
+     * (décision P14.3).
      */
     public function test_une_forme_autre_exige_de_dire_si_la_societe_est_commerciale(): void
     {

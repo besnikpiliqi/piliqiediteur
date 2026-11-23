@@ -57,18 +57,6 @@ return [
     'app/Domain/Stock/Notifications/StockSousLeSeuilDAlerte.php' => [
         'action:voir' => ['lot' => 'NAV-3', 'tests' => []],
     ],
-    'app/Domain/TableauDeBord/Support/SvgDeLEcartDesPrixDAchat.php' => [
-        'clic:choisirLeMois' => ['lot' => 'NAV-4', 'tests' => [
-            'tests/Browser/Parcours/EcartDesPrixDAchatTest.php › le propriétaire ajoute la carte dans l’espace de la société, la lit comme la maquette, choisit un mois au clic, à Entrée et à Espace, ouvre les liens « Voir… », et retrouve l’affichage, pas le mois, après le rechargement',
-            'tests/Browser/Parcours/EcartDesPrixDAchatTest.php › le propriétaire ajoute la carte dans le panneau d’un magasin, la lit comme la maquette, sans nom de magasin ni filtre',
-            'tests/Browser/Parcours/EcartDesPrixDAchatTest.php › un administrateur à qui le propriétaire coche les graphiques voit la carte de son magasin comme la maquette',
-            'tests/Browser/Parcours/EcartDesPrixDAchatTest.php › un responsable à qui le propriétaire coche les graphiques voit la carte dans le panneau de son magasin comme la maquette',
-            'tests/Browser/Parcours/EcartDesPrixDAchatTest.php › le propriétaire du cabinet et le collaborateur à qui le client est confié voient la carte sur la page des graphiques du client comme la maquette',
-            'tests/Browser/Parcours/EcartDesPrixDAchatTest.php › l’expert-comptable déclaré voit la carte sur « Tableau de bord de la société » comme la maquette',
-            'tests/Browser/Parcours/EcartDesPrixDAchatTest.php › la carte d’une société sans aucun achat dit « Aucun achat ce mois-ci », et les liens « Voir… » et le menu y fonctionnent sans erreur',
-            'tests/Browser/Parcours/EcartDesPrixDAchatTest.php › la carte, ses tableaux ouverts, ne déborde pas à 1 280, 1 024 et 390 px de large : un tableau large défile dans son cadre, jamais la page',
-        ]],
-    ],
     'app/Domain/Tenancy/Notifications/AvisDeLEquipe.php' => [
         'action:voir' => ['lot' => 'NAV-4', 'tests' => [
             'tests/Browser/Parcours/CartesDesNotificationsTest.php › le vendeur voit glisser la carte de chaque notification arrivée, la ferme, et ouvre la fiche par son bouton',

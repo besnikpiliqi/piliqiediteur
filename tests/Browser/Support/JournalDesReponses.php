@@ -63,6 +63,26 @@ final class JournalDesReponses
     }
 
     /**
+     * Le nombre de réponses que le serveur a données depuis le début du
+     * test (voir Navigation::activiteDuGeste()).
+     */
+    public function nombre(): int
+    {
+        return count($this->reponses);
+    }
+
+    /**
+     * Les requêtes que le serveur a traitées depuis ce rang (un nombre de
+     * réponses déjà données), chacune avec son statut.
+     *
+     * @return list<string>
+     */
+    public function depuis(int $rang): array
+    {
+        return array_map(fn (array $reponse): string => $reponse['statut'].' '.$reponse['requete'], array_slice($this->reponses, $rang));
+    }
+
+    /**
      * Le prochain refus de ce statut sur une requête dont le chemin contient
      * ce morceau est attendu par le test.
      */

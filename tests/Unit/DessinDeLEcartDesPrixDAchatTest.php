@@ -71,6 +71,79 @@ class DessinDeLEcartDesPrixDAchatTest extends TestCase
         $this->assertSame($attendu, $obtenu);
     }
 
+    /**
+     * Ce que le choix d'un mois change dans une colonne est ce qui diffère,
+     * dans le relevé de la maquette, entre l'état où ce mois est choisi et
+     * celui où un autre l'est, avec la valeur de chacun : c'est ce que la
+     * page lie au mois choisi (voir SvgDeLEcartDesPrixDAchat), sans appeler le
+     * serveur.
+     */
+    public function test_ce_que_le_choix_d_un_mois_change_est_ce_qui_differe_d_un_etat_a_l_autre_de_la_maquette(): void
+    {
+        $variations = DessinDeLEcartDesPrixDAchat::ceQueLeChoixChange(self::calculDeLaMaquette());
+        $etats = LectureDesFixtures::verite()['etats']['avant'];
+
+        $this->assertCount(12, $variations);
+
+        foreach ($variations as $rang => $colonne) {
+            $choisie = array_values(array_filter($etats[$rang]['dessin']['enfants'], fn (array $noeud): bool => $noeud['t'] === 'g'))[$rang];
+            $autre = array_values(array_filter($etats[($rang + 1) % 12]['dessin']['enfants'], fn (array $noeud): bool => $noeud['t'] === 'g'))[$rang];
+            $attendu = ['a' => [], 'f' => []];
+
+            foreach ($choisie['a'] as $nom => $valeur) {
+                if ($autre['a'][$nom] !== $valeur) {
+                    $attendu['a'][$nom] = ['choisi' => $valeur, 'autre' => $autre['a'][$nom]];
+                }
+            }
+
+            foreach ($choisie['f'] as $position => $element) {
+                foreach ($element['a'] as $nom => $valeur) {
+                    if ($autre['f'][$position]['a'][$nom] !== $valeur) {
+                        $attendu['f'][$position][$nom] = ['choisi' => $valeur, 'autre' => $autre['f'][$position]['a'][$nom]];
+                    }
+                }
+            }
+
+            $this->assertSame($attendu, $colonne, "Colonne {$rang}.");
+        }
+    }
+
+    public function test_ce_que_le_choix_change_dans_une_colonne_est_aria_pressed_le_cadre_et_l_etiquette_du_mois(): void
+    {
+        $colonne = DessinDeLEcartDesPrixDAchat::ceQueLeChoixChange(self::calculDeLaMaquette())[0];
+
+        $this->assertSame(['aria-pressed' => ['choisi' => 'true', 'autre' => 'false']], $colonne['a']);
+        $this->assertSame([
+            3 => ['stroke' => ['choisi' => 'var(--texte)', 'autre' => 'transparent']],
+            5 => ['font-weight' => ['choisi' => '700', 'autre' => '400'], 'fill' => ['choisi' => 'var(--texte)', 'autre' => 'var(--doux)']],
+        ], $colonne['f'], 'Le cadre (quatrième élément) et l\'étiquette (sixième) sont les deux seuls éléments qui changent.');
+    }
+
+    /**
+     * Écrire une seule colonne (ce que ceQueLeChoixChange() fait, douze fois,
+     * au lieu de tout le dessin) rend exactement la colonne du dessin entier,
+     * sans les graduations.
+     */
+    public function test_ecrire_une_seule_colonne_rend_celle_du_dessin_entier_sans_les_graduations(): void
+    {
+        $calcul = self::calculDeLaMaquette();
+
+        foreach ([0, 3, 8, 11] as $rang) {
+            $entier = DessinDeLEcartDesPrixDAchat::noeuds($calcul, $rang);
+            $colonnes = array_values(array_filter($entier, fn (array $noeud): bool => $noeud['t'] === 'g'));
+
+            $this->assertSame([$colonnes[$rang]], DessinDeLEcartDesPrixDAchat::noeuds($calcul, $rang, $rang), "Colonne {$rang}.");
+        }
+    }
+
+    public function test_aucun_mois_choisi_ne_met_aucune_colonne_en_valeur(): void
+    {
+        $noeuds = DessinDeLEcartDesPrixDAchat::noeuds(self::calculDeLaMaquette(), null);
+        $colonnes = array_values(array_filter($noeuds, fn (array $noeud): bool => $noeud['t'] === 'g'));
+
+        $this->assertSame(array_fill(0, 12, 'false'), array_map(fn (array $colonne): string => $colonne['a']['aria-pressed'], $colonnes));
+    }
+
     public function test_les_graduations_de_la_maquette(): void
     {
         $noeuds = DessinDeLEcartDesPrixDAchat::noeuds(self::calculDeLaMaquette(), 11);

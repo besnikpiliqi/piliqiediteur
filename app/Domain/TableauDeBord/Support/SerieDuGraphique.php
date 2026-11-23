@@ -19,6 +19,11 @@ namespace App\Domain\TableauDeBord\Support;
  * EcartDesPrixDAchat), que la phrase grise des magasins non comptés ne fait
  * jamais disparaître.
  *
+ * Les meilleurs produits portent aussi leur autre classement (voir
+ * $autreClassement) : la carte montre l'un ou l'autre selon ce qui les classe,
+ * et choisir « Classer par » ne rappelle pas le serveur (décision de
+ * l'éditeur du 23/11/2026) : les deux classements sont dans la page.
+ *
  * @phpstan-import-type Calcul from EcartDesPrixDAchat
  *
  * @phpstan-type Jeu array{libelle: string, valeurs: list<int|null>, unite: 'euros'|'nombre', en_ligne: bool, axe_de_droite: bool, pointilles: bool}
@@ -34,6 +39,7 @@ final class SerieDuGraphique
      * @param  list<Jeu>  $jeux
      * @param  array<int, string>  $infoBulles  par rang d'étiquette, une précision (le taux de marge)
      * @param  Calcul|null  $ecartDesPrixDAchat  le calcul de la carte « Écart des prix d'achat », null pour toute autre
+     * @param  self|null  $autreClassement  pour les meilleurs produits, le classement que la mesure choisie n'est pas
      */
     public function __construct(
         public readonly array $etiquettes,
@@ -41,6 +47,7 @@ final class SerieDuGraphique
         public readonly ?string $note = null,
         public readonly array $infoBulles = [],
         public readonly ?array $ecartDesPrixDAchat = null,
+        public readonly ?self $autreClassement = null,
     ) {}
 
     /**
@@ -71,8 +78,19 @@ final class SerieDuGraphique
         return true;
     }
 
+    /**
+     * La même série avec cette note, comme son autre classement.
+     */
     public function avecLaNote(?string $note): self
     {
-        return new self($this->etiquettes, $this->jeux, $note, $this->infoBulles, $this->ecartDesPrixDAchat);
+        return new self($this->etiquettes, $this->jeux, $note, $this->infoBulles, $this->ecartDesPrixDAchat, $this->autreClassement?->avecLaNote($note));
+    }
+
+    /**
+     * La même série avec cet autre classement.
+     */
+    public function avecLAutreClassement(self $autre): self
+    {
+        return new self($this->etiquettes, $this->jeux, $this->note, $this->infoBulles, $this->ecartDesPrixDAchat, $autre);
     }
 }

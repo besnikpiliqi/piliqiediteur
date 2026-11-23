@@ -28,9 +28,12 @@ use Tests\TestCase;
  * de 300 lignes, une ligne par produit ; la première facture fait naître les
  * produits). La grille est rendue avec la carte : la lecture des lignes
  * d'achat est une seule requête, la taille du HTML rendu est bornée par un
- * nombre écrit ici d'après la mesure du lot (marge de 50 %), et le calcul de
- * l'affichage caché et ceux des mois non choisis ne sont pas écrits dans la
- * page. Aucune limite de temps : aucun test ne dépend du temps réel.
+ * nombre écrit ici d'après la mesure du lot (marge de 50 %), et la page écrit
+ * les deux affichages et les douze mois, puisque choisir un mois et le menu
+ * « Afficher : » n'appellent ni le serveur ni la base (décision de l'éditeur
+ * du 23/11/2026) ; les lignes de leur calcul achat par achat, qui comptent
+ * des milliers d'achats, y sont en JSON compact et non en HTML. Aucune limite
+ * de temps : aucun test ne dépend du temps réel.
  *
  * Les 12 000 lignes se valident une facture après l'autre, chacune dans sa
  * transaction, comme le fait l'application (voir SemeSansTransaction) : une
@@ -47,20 +50,16 @@ class EcartDesPrixDAchatVolumeDeLaPageTest extends TestCase
     private const FACTURES = 40;
 
     /**
-     * La taille mesurée au lot du HTML de la grille avec la carte par mois
-     * au mois de départ et 12 000 achats (689 955 octets), plus 50 %.
+     * La taille mesurée au lot du HTML de la grille avec la carte et 12 000
+     * achats, les deux affichages et les douze mois écrits (4 598 310 octets,
+     * dont 4 489 922 de lignes de calcul en JSON compact, 24 313 lignes), plus
+     * 50 %. Avant le lot CLIC-MOIS, le mois de départ seul était écrit en HTML
+     * (689 955 octets par mois, 8 760 606 octets pour les douze mois, une
+     * ligne de six cellules par achat affiché).
      */
-    private const TAILLE_MAXIMALE_DU_HTML_PAR_MOIS = 1_035_000;
+    private const TAILLE_MAXIMALE_DU_HTML = 6_900_000;
 
-    /**
-     * La taille mesurée au lot du HTML de la grille avec la carte des
-     * douze mois et 12 000 achats (8 760 606 octets : une ligne de six
-     * cellules par achat affiché, la carte ne limite pas ses tableaux),
-     * plus 50 %.
-     */
-    private const TAILLE_MAXIMALE_DU_HTML_SUR_DOUZE_MOIS = 13_141_000;
-
-    public function test_la_page_de_12_000_achats_lit_les_lignes_une_seule_fois_n_ecrit_que_l_affichage_et_le_mois_choisis_et_reste_bornee(): void
+    public function test_la_page_de_12_000_achats_lit_les_lignes_une_seule_fois_ecrit_les_deux_affichages_et_reste_bornee(): void
     {
         $this->travelTo(self::aParis('2026-11-13 10:00:00'));
         $magasin = $this->completerIdentiteLegale($this->ouvrirUneSociete());
@@ -79,23 +78,25 @@ class EcartDesPrixDAchatVolumeDeLaPageTest extends TestCase
         DB::disableQueryLog();
 
         $this->assertSame(1, $lectures, 'La lecture des lignes d\'achat est une seule requête.');
-        $parMois = $grille->html();
+        $page = $grille->html();
 
-        $this->assertStringContainsString('Écart total du mois : nov. 2026', $parMois);
-        $this->assertStringContainsString('Comment nov. 2026 est calculé, achat par achat', $parMois);
-        $this->assertStringNotContainsString('Comment mars 2026 est calculé', $parMois, 'Le calcul d\'un mois non choisi n\'est pas écrit.');
-        $this->assertStringNotContainsString('Comment les 12 mois', $parMois, 'Le calcul de l\'affichage caché n\'est pas écrit.');
-        $this->assertStringNotContainsString('Prix de départ de l’année', $parMois);
-        $this->assertSame(1, substr_count($parMois, 'Comment '));
-        $this->assertLessThanOrEqual(self::TAILLE_MAXIMALE_DU_HTML_PAR_MOIS, strlen($parMois));
+        $this->assertStringContainsString('Écart total du mois : nov. 2026', $page);
+        $this->assertStringContainsString('Comment nov. 2026 est calculé, achat par achat', $page);
+        $this->assertStringContainsString('Comment mars 2026 est calculé, achat par achat', $page, 'Le calcul de chaque mois est écrit : choisir un mois n\'appelle pas le serveur.');
+        $this->assertStringContainsString('Comment les 12 mois (déc. 2025 à nov. 2026) sont calculés, achat par achat', $page, 'Le calcul des douze mois est écrit : le menu « Afficher : » n\'appelle pas le serveur.');
+        $this->assertSame(13, substr_count($page, 'Comment '));
+        $this->assertSame(1, substr_count($page, 'data-ecart="graphique"'), 'Le dessin, le même d\'un mois à l\'autre, est écrit une fois.');
+        $this->assertSame(0, substr_count($page, '<tr><td'), 'Les lignes du calcul ne sont pas écrites en HTML.');
 
-        $grille->call('changerLAffichage', 'ecart_des_prix_d_achat', 'debut');
-        $surDouzeMois = $grille->html();
+        $debutDuJson = strpos($page, '<script type="application/json" data-ecart="calculs">');
+        $this->assertIsInt($debutDuJson, 'La page porte les lignes du calcul en JSON.');
+        $debutDuJson += strlen('<script type="application/json" data-ecart="calculs">');
+        $json = substr($page, $debutDuJson, (int) strpos($page, '</script>', $debutDuJson) - $debutDuJson);
+        $calculs = json_decode($json, true, 512, JSON_THROW_ON_ERROR);
+        $lignes = array_sum(array_map('count', $calculs['avant'])) + count($calculs['debut'][0]);
+        $this->assertGreaterThan(12000, $lignes, 'Les lignes de chaque mois et des douze mois, une par achat affiché, sont dans le JSON.');
 
-        $this->assertStringContainsString('Comment les 12 mois (déc. 2025 à nov. 2026) sont calculés, achat par achat', $surDouzeMois);
-        $this->assertStringNotContainsString('Prix de départ du mois', $surDouzeMois, 'Le calcul de l\'affichage caché n\'est pas écrit.');
-        $this->assertStringNotContainsString('data-ecart="graphique"', $surDouzeMois);
-        $this->assertLessThanOrEqual(self::TAILLE_MAXIMALE_DU_HTML_SUR_DOUZE_MOIS, strlen($surDouzeMois));
+        $this->assertLessThanOrEqual(self::TAILLE_MAXIMALE_DU_HTML, strlen($page));
     }
 
     /**

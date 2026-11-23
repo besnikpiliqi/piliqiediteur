@@ -1979,6 +1979,33 @@ return [
                 'tests/Browser/Balayage/ContrasteDesDeuxModesTest.php › le contrôle relève le menu déroulant nu d’avant, illisible en sombre, et un texte gris trop pâle, et rien sur la page corrigée',
             ],
         ],
+        'ecrans.geste-d-affichage-sans-serveur' => [
+            'puce' => 'Écrans',
+            'regle' => 'Un geste d\'écran qui ne change que l\'affichage de données déjà présentes dans la page (choisir un mois de la carte « Écart des prix d\'achat », déplier, replier, ouvrir « Voir les chiffres ») n\'appelle jamais le serveur ni la base : la page contient déjà ce qu\'il montre (décision de l\'éditeur du 23/11/2026).',
+            'tests' => [
+                'tests/Browser/Parcours/EcartDesPrixDAchatTest.php › cliquer sur chacun des douze mois, puis Entrée et Espace, change le mois affiché sans aucune requête : ni la page, ni le serveur, ni la base ne sont appelés, le mois garde le focus et reste annoncé, et la période ou le magasin le remettent au départ',
+                'tests/Browser/Parcours/EcartDesPrixDAchatTest.php › le propriétaire ajoute la carte dans l’espace de la société, la lit comme la maquette, choisit un mois au clic, à Entrée et à Espace, ouvre les liens « Voir… », et retrouve l’affichage, pas le mois, après le rechargement',
+                'tests/Feature/TableauDeBord/EcartDesPrixDAchatGrilleTest.php::test_la_page_ecrit_les_deux_affichages_et_les_douze_mois_une_seule_fois_ce_qui_ne_change_pas_et_aucun_appel_du_serveur_pour_un_mois',
+                'tests/Feature/TableauDeBord/SvgDeLEcartDesPrixDAchatTest.php::test_chaque_colonne_porte_le_clic_entree_et_espace_qui_placent_son_rang_sans_appeler_le_serveur',
+                'tests/Feature/TableauDeBord/SvgDeLEcartDesPrixDAchatTest.php::test_chaque_attribut_que_le_choix_du_mois_change_est_lie_au_rang_de_sa_colonne',
+                'tests/Browser/Balayage/ContrasteDeLaCarteEcartDesPrixDAchatTest.php › la carte « Écart des prix d’achat » se lit en clair et en sombre dans ses deux affichages, ses tableaux ouverts',
+            ],
+        ],
+        'ecrans.geste-de-preference-sans-attente' => [
+            'puce' => 'Écrans',
+            'regle' => 'Un geste qui change une préférence retenue en base sans changer ce que la page contient (le type d\'un graphique, « Monter », « Descendre », la croix, « Classer par », le menu « Afficher : » de la carte « Écart des prix d\'achat ») change l\'écran aussitôt, sans attendre le serveur, qui le retient ensuite en arrière-plan sans redessiner ni recalculer la grille, dans l\'ordre où les gestes sont faits ; un redessin demandé par un autre geste ne défait pas le dernier ; si l\'enregistrement échoue, l\'écran revient à ce qui était enregistré avec une alerte claire en français ; seuls les gestes qui changent ce que la page contient (période, magasin, comparaison, graphique ajouté) attendent le serveur (décision de l\'éditeur du 23/11/2026).',
+            'tests' => [
+                'tests/Browser/Parcours/GestesSansAttenteTest.php › le type, « Monter », « Descendre », la croix, « Classer par » et « Afficher : » changent l’écran avant la réponse du serveur, retenue trois secondes ; le serveur les retient ensuite sans redessiner la grille, et un rechargement les redonne',
+                'tests/Browser/Parcours/GestesSansAttenteTest.php › plusieurs gestes rapides s’enregistrent dans l’ordre, et le redessin d’un autre geste (la période) ne défait pas le dernier',
+                'tests/Browser/Parcours/GestesSansAttenteTest.php › si l’enregistrement échoue (réseau coupé, erreur du serveur, refus), l’écran revient à ce qui est enregistré et une alerte en français le dit',
+                'tests/Feature/TableauDeBord/GestesDePreferenceDeLaGrilleTest.php::test_chaque_geste_de_preference_retient_son_choix_sans_redessiner_la_grille_et_rend_ce_que_le_serveur_a_retenu',
+                'tests/Feature/TableauDeBord/GestesDePreferenceDeLaGrilleTest.php::test_un_geste_de_preference_refuse_rend_null_dit_pourquoi_et_n_ecrit_rien',
+                'tests/Feature/TableauDeBord/GestesDePreferenceDeLaGrilleTest.php::test_un_geste_de_preference_et_un_geste_qui_redessine_dans_la_meme_requete_redessinent_la_grille_dans_les_deux_ordres',
+                'tests/Feature/TableauDeBord/GestesDePreferenceDeLaGrilleTest.php::test_la_page_ecrit_les_deux_classements_des_meilleurs_produits_et_cache_celui_qui_n_est_pas_retenu',
+                'tests/Feature/TableauDeBord/GestesDePreferenceDeLaGrilleTest.php::test_la_page_ecrit_ce_que_le_serveur_a_retenu_pour_que_la_page_le_relise_apres_un_redessin',
+                'tests/Feature/TableauDeBord/SeriesDesGraphiquesTest.php::test_les_meilleurs_produits_portent_leurs_deux_classements_et_aucun_autre_graphique',
+            ],
+        ],
         'ecrans.tableaux-des-fiches-modele-d' => [
             'puce' => 'Écrans',
             'regle' => 'Une liste d\'une fiche s\'affiche en un seul tableau, au modèle D (13/11/2026) : titres une fois en haut, une ligne par élément dans l\'ordre fixe, « – » en gris pour une valeur nulle et la ligne en gris quand toutes ses valeurs le sont, total en dernière ligne, en gras, informations dessous, en gris ; le tableau défile de côté sur un téléphone.',
@@ -3076,13 +3103,13 @@ return [
         ],
         'graphiques.ecart-des-prix-d-achat-periode-et-mois' => [
             'puce' => 'Graphiques du tableau de bord',
-            'regle' => 'Les douze mois de la carte sont ceux de la période du tableau de bord ; un mois à venir est un mois sans achat, sauf pour un achat qui y est daté ; le mois choisi au départ est le dernier mois de la période qui n\'est pas à venir, il se garde d\'un affichage à l\'autre et revient à ce défaut quand la période ou le magasin change, et il ne se retient jamais en base (décisions de Claude D76, B3 et B6).',
+            'regle' => 'Les douze mois de la carte sont ceux de la période du tableau de bord ; un mois à venir est un mois sans achat, sauf pour un achat qui y est daté ; le mois choisi au départ est le dernier mois de la période qui n\'est pas à venir, il se choisit dans la page sans appeler le serveur (décision de l\'éditeur du 23/11/2026), se garde d\'un affichage à l\'autre et revient à ce défaut quand la période ou le magasin change, et il ne se retient jamais en base (décisions de Claude D76, B3 et B6).',
             'tests' => [
-                'tests/Feature/TableauDeBord/EcartDesPrixDAchatGrilleTest.php::test_le_mois_choisi_est_garde_d_un_affichage_a_l_autre_et_la_page_n_ecrit_que_l_affichage_choisi',
-                'tests/Feature/TableauDeBord/EcartDesPrixDAchatGrilleTest.php::test_choisir_un_mois_n_ecrit_rien_en_base',
-                'tests/Feature/TableauDeBord/EcartDesPrixDAchatGrilleTest.php::test_le_mois_choisi_revient_au_defaut_quand_la_periode_ou_le_magasin_change',
+                'tests/Feature/TableauDeBord/EcartDesPrixDAchatGrilleTest.php::test_la_page_ecrit_les_deux_affichages_et_les_douze_mois_une_seule_fois_ce_qui_ne_change_pas_et_aucun_appel_du_serveur_pour_un_mois',
+                'tests/Feature/TableauDeBord/EcartDesPrixDAchatGrilleTest.php::test_le_mois_de_depart_et_la_cle_de_la_vue_changent_avec_la_periode_et_le_magasin',
                 'tests/Feature/TableauDeBord/EcartDesPrixDAchatGrilleTest.php::test_un_mois_a_venir_est_un_mois_sans_achat_sauf_pour_un_achat_qui_y_est_date',
                 'tests/Feature/TableauDeBord/EcartDesPrixDAchatLectureTest.php::test_un_achat_date_d_un_mois_a_venir_compte_dans_l_annee_en_cours_et_pas_dans_les_douze_derniers_mois',
+                'tests/Browser/Parcours/EcartDesPrixDAchatTest.php › cliquer sur chacun des douze mois, puis Entrée et Espace, change le mois affiché sans aucune requête : ni la page, ni le serveur, ni la base ne sont appelés, le mois garde le focus et reste annoncé, et la période ou le magasin le remettent au départ',
             ],
         ],
         'graphiques.ecart-des-prix-d-achat-calcul' => [
@@ -3118,11 +3145,11 @@ return [
         ],
         'graphiques.ecart-des-prix-d-achat-reglage-et-gestes' => [
             'puce' => 'Graphiques du tableau de bord',
-            'regle' => 'Le seul réglage retenu de la carte est son affichage, un total par mois ou un seul total pour les 12 mois, par compte et par écran ; une valeur forgée, un autre graphique ou un mois hors de 0 à 11 sont refusés, et changer le type ne remet pas l\'affichage au défaut ; la carte n\'écrit que l\'affichage choisi et le calcul du mois choisi (décisions de Claude D76, B6 et B8).',
+            'regle' => 'Le seul réglage retenu de la carte est son affichage, un total par mois ou un seul total pour les 12 mois, par compte et par écran ; une valeur forgée ou un autre graphique sont refusés, et changer le type ne remet pas l\'affichage au défaut ; la carte n\'écrit que l\'affichage choisi : par mois, les douze lectures du mois, que la page montre l\'une après l\'autre sans appeler le serveur (décisions de Claude D76, B6 et B8, et de l\'éditeur du 23/11/2026).',
             'tests' => [
                 'tests/Feature/TableauDeBord/EcartDesPrixDAchatGrilleTest.php::test_l_affichage_choisi_est_retenu_en_base_le_mois_choisi_non_et_le_type_ne_le_remet_pas_au_defaut',
-                'tests/Feature/TableauDeBord/EcartDesPrixDAchatGrilleTest.php::test_choisir_un_mois_n_ecrit_rien_en_base',
-                'tests/Feature/TableauDeBord/EcartDesPrixDAchatVolumeDeLaPageTest.php::test_la_page_de_12_000_achats_lit_les_lignes_une_seule_fois_n_ecrit_que_l_affichage_et_le_mois_choisis_et_reste_bornee',
+                'tests/Feature/TableauDeBord/EcartDesPrixDAchatGrilleTest.php::test_un_geste_forge_est_refuse_et_rien_n_est_ecrit',
+                'tests/Feature/TableauDeBord/EcartDesPrixDAchatVolumeDeLaPageTest.php::test_la_page_de_12_000_achats_lit_les_lignes_une_seule_fois_ecrit_les_deux_affichages_et_reste_bornee',
                 'tests/Unit/EcartDesPrixDAchatVolumeTest.php::test_le_calcul_de_12_000_achats_donne_des_lectures_de_taille_bornee',
                 'tests/Browser/Parcours/EcartDesPrixDAchatTest.php › le propriétaire ajoute la carte dans l’espace de la société, la lit comme la maquette, choisit un mois au clic, à Entrée et à Espace, ouvre les liens « Voir… », et retrouve l’affichage, pas le mois, après le rechargement',
             ],
@@ -3135,6 +3162,8 @@ return [
                 'tests/Feature/TableauDeBord/EcartDesPrixDAchatGrilleTest.php::test_sans_aucun_achat_la_carte_dit_aucun_achat_et_le_dessin_n_a_aucun_nan',
                 'tests/Feature/TableauDeBord/SvgDeLEcartDesPrixDAchatTest.php::test_un_jeu_sans_aucun_ecart_n_ecrit_aucun_nan_et_garde_les_colonnes_et_les_etiquettes',
                 'tests/Unit/DessinDeLEcartDesPrixDAchatTest.php::test_l_arbre_est_celui_de_la_maquette_pour_chaque_mois_choisi',
+                'tests/Unit/DessinDeLEcartDesPrixDAchatTest.php::test_ce_que_le_choix_d_un_mois_change_est_ce_qui_differe_d_un_etat_a_l_autre_de_la_maquette',
+                'tests/Unit/DessinDeLEcartDesPrixDAchatTest.php::test_ecrire_une_seule_colonne_rend_celle_du_dessin_entier_sans_les_graduations',
                 'tests/Browser/Parcours/EcartDesPrixDAchatTest.php › la carte, ses tableaux ouverts, ne déborde pas à 1 280, 1 024 et 390 px de large : un tableau large défile dans son cadre, jamais la page',
                 'tests/Browser/Balayage/ContrasteDeLaCarteEcartDesPrixDAchatTest.php › la carte « Écart des prix d’achat » se lit en clair et en sombre dans ses deux affichages, ses tableaux ouverts',
             ],
@@ -5052,6 +5081,10 @@ return [
             'ECART-PRIX-ACHAT-21-11' => [
                 'decision' => 'Le 21/11/2026 : l\'éditeur valide la maquette de la carte « Écart des prix d\'achat » (dix-neuvième graphique du tableau de bord : pour chaque produit, chaque achat comparé au premier achat du mois ou de la période, un total par mois ou un seul total pour les 12 mois), seule source de ce que la carte montre, calcule et écrit ; décisions de Claude D76 pour le reste (B1 à B13 : catalogue et droits, période et mois choisi, magasins, lecture des achats et prix net arrondi une seule fois, réglage et gestes, écran, volume, isolation, semis).',
                 'regles' => ['graphiques.chiffres-cles-et-catalogue', 'graphiques.ecart-des-prix-d-achat-catalogue-et-droits', 'graphiques.ecart-des-prix-d-achat-periode-et-mois', 'graphiques.ecart-des-prix-d-achat-calcul', 'graphiques.ecart-des-prix-d-achat-lecture-des-achats', 'graphiques.ecart-des-prix-d-achat-reglage-et-gestes', 'graphiques.ecart-des-prix-d-achat-ecran', 'graphiques.ecart-des-prix-d-achat-isolation', 'graphiques.ecart-des-prix-d-achat-semis', 'graphiques.preferences', 'produit.lectures-des-graphiques'],
+            ],
+            'CLIC-MOIS-23-11' => [
+                'decision' => 'Le 23/11/2026, constat de l\'éditeur sur la carte « Écart des prix d\'achat » de la démonstration de Maison Ferrand : « quand je clique sur les mois, ça prend du temps pour afficher le mois cliqué. Apparemment à chaque clic dans les mois il récupère les données dans la base, mais ce n\'est pas normal du tout : les données doivent déjà être présentes dans la carte et ne pas aller chercher dans la base à chaque clic ! », puis, pour toutes les cartes : « quand je change de Barres à Ligne, ça prend beaucoup de temps » ; règle générale : un geste d\'écran qui ne change que l\'affichage de données déjà présentes dans la page n\'appelle jamais le serveur ni la base ; un geste de préférence (type, ordre, croix, classement, affichage) change l\'écran aussitôt et s\'enregistre en arrière-plan sans redessiner la grille ; seuls les gestes qui changent ce que la page contient attendent le serveur (lot CLIC-MOIS).',
+                'regles' => ['ecrans.geste-d-affichage-sans-serveur', 'ecrans.geste-de-preference-sans-attente', 'graphiques.ecart-des-prix-d-achat-periode-et-mois', 'graphiques.ecart-des-prix-d-achat-reglage-et-gestes'],
             ],
             'CHARGES-14-11' => [
                 'decision' => 'Le 14/11/2026 vers 10 h 25 UTC : le comptable et le client ajoutent les documents des charges (loyer, électricité…), téléversés, avec leurs chiffres écrits à la main, pour une TVA réelle ; on montre d\'abord ce qui est déjà saisi ; le comptable voit, analyse, valide et ajoute ; même non validées, les charges donnent une estimation ; vers 10 h 40 UTC : « oui pour tout, fais le lot CHARGES » (modèle C1 et C2, « Charges : ajouter et valider » par défaut au cabinet et à l\'expert-comptable déclaré, le propriétaire sans comptable valide, administrateurs et responsables cochés déposent sans valider, liste de types de PILIQI que la société complète) (lot CHARGES).',

@@ -3,6 +3,7 @@
 namespace Tests\Browser\Support;
 
 use App\Domain\Contacts\Models\Fournisseur;
+use App\Domain\TableauDeBord\Support\TextesDeLEcartDesPrixDAchat;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
@@ -19,7 +20,9 @@ use function expect;
  * maquette semés dans un magasin au 13/11/2026, la carte lue dans la page
  * comme la maquette est lue (voir LectureDeLaPage) et comparée à son
  * relevé, la colonne d'un mois, l'ajout de la carte par le menu « Ajouter
- * un graphique ».
+ * un graphique ». Choisir un mois ne passe jamais par le serveur (décision
+ * de l'éditeur du 23/11/2026) : les gestes sur une colonne se font par
+ * Navigation::gesteSansServeur().
  */
 final class CarteDeLEcartDesPrixDAchat
 {
@@ -65,11 +68,34 @@ final class CarteDeLEcartDesPrixDAchat
     }
 
     /**
+     * Ce que la page montre pour ce mois (le titre du mois, le grand chiffre,
+     * la pastille, le détail et le calcul achat par achat) est le relevé de
+     * la maquette pour ce mois, que « Voir le calcul… » soit ouvert ou non.
+     */
+    public static function verifierLeMois(Navigation $onglet, int $mois, string $contexte): void
+    {
+        $ecart = LectureDeLaPage::premierEcartDuMois(self::lire($onglet), $mois);
+
+        expect($ecart)->toBeNull("{$contexte} (mois {$mois}) : premier écart avec la maquette : {$ecart}");
+    }
+
+    /**
      * Le sélecteur de la colonne de ce mois, dans le dessin de la carte.
      */
     public static function colonne(int $mois): string
     {
         return '[data-graphique="'.self::CARTE.'"] svg > g:nth-of-type('.($mois + 1).')';
+    }
+
+    /**
+     * L'expression JavaScript du premier élément de la carte qui porte ce
+     * `data-ecart` et que la page montre (undefined quand aucun ne l'est) : la
+     * page écrit les deux affichages et les douze mois, et celui qu'elle montre
+     * se lit sans le confondre avec les autres.
+     */
+    public static function visible(string $nom): string
+    {
+        return 'Array.from(document.querySelectorAll(\'[data-graphique="'.self::CARTE.'"] [data-ecart="'.$nom.'"]\')).find((element) => element.checkVisibility())';
     }
 
     /**
@@ -107,19 +133,81 @@ final class CarteDeLEcartDesPrixDAchat
     }
 
     /**
+     * Ce que la carte montre du mois choisi, lu dans le texte affiché (les
+     * blocs d'un autre mois sont cachés) : le titre du mois, le grand chiffre,
+     * la pastille, le détail et le titre du calcul, qui doivent être là en un
+     * seul exemplaire visible chacun.
+     *
+     * @return array{moisChoisi: list<string>, grand: list<string>, pastille: list<string>, detail: list<string>, calculTitre: list<string>}
+     */
+    public static function textesAffiches(Navigation $onglet): array
+    {
+        $textes = $onglet->page()->evaluate(<<<'JS'
+            () => {
+                const carte = document.querySelector('[data-graphique="ecart_des_prix_d_achat"]');
+                const visibles = (nom) => Array.from(carte.querySelectorAll('[data-ecart="' + nom + '"]'))
+                    .filter((element) => element.checkVisibility())
+                    .map((element) => element.textContent.replace(/\s+/g, ' ').trim());
+
+                return {
+                    moisChoisi: visibles('mois-choisi'),
+                    grand: visibles('grand'),
+                    pastille: visibles('pastille'),
+                    detail: visibles('detail'),
+                    calculTitre: visibles('calcul-titre'),
+                };
+            }
+            JS);
+
+        return is_array($textes) ? $textes : [];
+    }
+
+    /**
+     * Le mois choisi montre ce que la lecture de ce mois dit, texte pour
+     * texte ; le calcul du mois est visible quand « Voir le calcul… » est
+     * ouvert (sinon son titre n'est pas visible : $calcul vaut false).
+     *
+     * @param  array<string, mixed>  $calcul  le calcul du jeu semé (voir EcartDesPrixDAchat::calculer())
+     */
+    public static function verifierLesTextes(Navigation $onglet, array $calcul, int $mois, bool $avecLeCalcul, string $contexte): void
+    {
+        $lecture = TextesDeLEcartDesPrixDAchat::lecture($calcul, 'avant', $mois);
+        $affiches = self::textesAffiches($onglet);
+        $attendu = [
+            'moisChoisi' => [self::normaliser($lecture['moisChoisi'])],
+            'grand' => [self::normaliser($lecture['grand']['texte'])],
+            'pastille' => [self::normaliser($lecture['pastille']['texte'])],
+            'detail' => [self::normaliser($lecture['detail'])],
+            'calculTitre' => $avecLeCalcul ? [self::normaliser($lecture['calcul']['titre'])] : [],
+        ];
+
+        expect($affiches)->toBe($attendu, "{$contexte} : le texte affiché pour le mois {$mois} n'est pas sa lecture");
+    }
+
+    private static function normaliser(string $texte): string
+    {
+        return trim((string) preg_replace('/\s+/u', ' ', $texte));
+    }
+
+    /**
      * La carte, lue comme la maquette pour les mois 0, 2, 3, 8 et 11 par un
-     * clic sur leur colonne, puis pour les douze mois ; le mois de départ
-     * est le dernier ; le mois choisi est gardé d'un affichage à l'autre.
+     * clic sur leur colonne (sans appeler le serveur), puis pour les douze
+     * mois ; le mois de départ est le dernier ; un autre mois choisi (le 4) est
+     * gardé d'un affichage à l'autre, que le serveur redessine.
      */
     public static function verifier(Navigation $onglet, string $contexte): void
     {
         self::verifierLaMaquette($onglet, 'avant', 11, $contexte.', au départ');
 
         foreach ([0, 2, 3, 8, 11] as $mois) {
-            $onglet->gesteQuiAppelleLeServeur(fn () => $onglet->element(self::colonne($mois))->click(), "le clic sur la colonne du mois {$mois}");
+            $onglet->gesteSansServeur(fn () => $onglet->element(self::colonne($mois))->click(), "le clic sur la colonne du mois {$mois}");
             self::attendreLeMoisChoisi($onglet, $mois);
             self::verifierLaMaquette($onglet, 'avant', $mois, $contexte.', par un clic');
         }
+
+        // Un mois qui n'est pas celui de départ, pour prouver que la page, que le serveur redessine, le garde.
+        $onglet->gesteSansServeur(fn () => $onglet->element(self::colonne(4))->click(), 'le clic sur la colonne du mois 4');
+        self::attendreLeMoisChoisi($onglet, 4);
 
         $menu = '[data-graphique="'.self::CARTE.'"] select[data-geste="affichage"]';
         $onglet->gesteQuiAppelleLeServeur(fn () => $onglet->element($menu)->selectOption('debut'), 'le passage aux douze mois')
@@ -127,7 +215,7 @@ final class CarteDeLEcartDesPrixDAchat
         self::verifierLaMaquette($onglet, 'debut', 11, $contexte.', douze mois');
 
         $onglet->gesteQuiAppelleLeServeur(fn () => $onglet->element($menu)->selectOption('avant'), 'le retour à l’affichage par mois');
-        self::attendreLeMoisChoisi($onglet, 11);
-        self::verifierLaMaquette($onglet, 'avant', 11, $contexte.', retour par mois (le mois choisi est gardé)');
+        self::attendreLeMoisChoisi($onglet, 4);
+        self::verifierLaMaquette($onglet, 'avant', 4, $contexte.', retour par mois (le mois choisi est gardé)');
     }
 }

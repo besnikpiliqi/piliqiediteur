@@ -28,10 +28,17 @@ namespace App\Domain\TableauDeBord\Support;
  * telles quelles ; la vue n'écrit pas l'élément dont une position vaut
  * « NaN ».
  *
+ * Le mois choisi s'écrit dans trois endroits de chaque colonne : l'attribut
+ * `aria-pressed` du groupe, le trait du cadre et le poids et la couleur de
+ * l'étiquette du mois. Choisir un autre mois ne redessine rien : la page les
+ * change sans appeler le serveur, avec ce que ceQueLeChoixChange() rend.
+ *
  * @phpstan-import-type Calcul from EcartDesPrixDAchat
  *
  * @phpstan-type Feuille array{t: string, a: array<string, string>, x: string, f: array{}}
  * @phpstan-type Groupe array{t: string, a: array<string, string>, x: null, f: list<Feuille>}
+ * @phpstan-type Variation array{choisi: string, autre: string}
+ * @phpstan-type VariationsDUneColonne array{a: array<string, Variation>, f: array<int, array<string, Variation>>}
  */
 final class DessinDeLEcartDesPrixDAchat
 {
@@ -61,10 +68,11 @@ final class DessinDeLEcartDesPrixDAchat
      * colonne par mois.
      *
      * @param  Calcul  $calcul
-     * @param  int  $choisi  le mois choisi, de 0 à 11
+     * @param  int|null  $choisi  le mois choisi, de 0 à 11 ; null quand aucun mois n'est choisi
+     * @param  int|null  $seulementLaColonne  le rang de la seule colonne à écrire, sans les graduations (voir ceQueLeChoixChange()) ; null : tout le dessin
      * @return list<Feuille|Groupe>
      */
-    public static function noeuds(array $calcul, int $choisi): array
+    public static function noeuds(array $calcul, ?int $choisi, ?int $seulementLaColonne = null): array
     {
         $calculs = $calcul['calculs'];
         $ancrage = self::attribut('text', 'anchor');
@@ -88,7 +96,7 @@ final class DessinDeLEcartDesPrixDAchat
 
         $racine = [];
 
-        for ($valeur = $mini; $valeur <= $maxi; $valeur += $pas) {
+        for ($valeur = $mini; $seulementLaColonne === null && $valeur <= $maxi; $valeur += $pas) {
             $racine[] = self::feuille('line', [
                 'x1' => self::n(self::GAUCHE),
                 'x2' => self::n(self::LARGEUR - self::DROITE),
@@ -110,6 +118,10 @@ final class DessinDeLEcartDesPrixDAchat
         $barre = $colonne * self::PART_DE_LA_BARRE;
 
         foreach ($calculs as $i => $mois) {
+            if ($seulementLaColonne !== null && $i !== $seulementLaColonne) {
+                continue;
+            }
+
             $x = self::GAUCHE + $i * $colonne + ($colonne - $barre) / 2;
             $aucun = $mois['premiers'] === [];
             $libelle = $mois['m'].' : '.($aucun
@@ -203,6 +215,81 @@ final class DessinDeLEcartDesPrixDAchat
         }
 
         return $racine;
+    }
+
+    /**
+     * Ce que le choix d'un mois change dans le dessin, pour chaque colonne
+     * (dans l'ordre des mois) : les attributs du groupe (`a`) et ceux de
+     * chacun de ses éléments (`f`, par son rang dans le groupe) qui valent
+     * une chose quand le mois de la colonne est choisi et une autre quand il
+     * ne l'est pas, avec ces deux valeurs. Elle se lit en comparant le
+     * dessin de chaque colonne choisie à celui où aucun mois ne l'est, sans
+     * rien connaître des attributs : un autre attribut que le choix change
+     * s'ajoute de lui-même.
+     *
+     * @param  Calcul  $calcul
+     * @return list<VariationsDUneColonne>
+     */
+    public static function ceQueLeChoixChange(array $calcul): array
+    {
+        $variations = [];
+
+        foreach (self::colonnes(self::noeuds($calcul, null)) as $rang => $sansChoix) {
+            $choisie = self::colonnes(self::noeuds($calcul, $rang, $rang))[0];
+            $elements = [];
+
+            foreach ($sansChoix['f'] as $position => $element) {
+                $changes = self::attributsQuiChangent($element['a'], $choisie['f'][$position]['a']);
+
+                if ($changes !== []) {
+                    $elements[$position] = $changes;
+                }
+            }
+
+            $variations[] = ['a' => self::attributsQuiChangent($sansChoix['a'], $choisie['a']), 'f' => $elements];
+        }
+
+        return $variations;
+    }
+
+    /**
+     * Les colonnes (les groupes) d'un arbre, dans l'ordre des mois.
+     *
+     * @param  list<Feuille|Groupe>  $noeuds
+     * @return list<Groupe>
+     */
+    private static function colonnes(array $noeuds): array
+    {
+        $colonnes = [];
+
+        foreach ($noeuds as $noeud) {
+            if ($noeud['t'] === 'g' && $noeud['x'] === null) {
+                $colonnes[] = $noeud;
+            }
+        }
+
+        return $colonnes;
+    }
+
+    /**
+     * Les attributs qui n'ont pas la même valeur dans ces deux états d'un
+     * élément, avec leur valeur quand le mois est choisi et sinon.
+     *
+     * @param  array<string, string>  $autre  les attributs de l'élément quand son mois n'est pas choisi
+     * @param  array<string, string>  $choisi  les attributs du même élément quand son mois est choisi
+     * @return array<string, Variation>
+     */
+    private static function attributsQuiChangent(array $autre, array $choisi): array
+    {
+        $changes = [];
+
+        foreach ($choisi as $nom => $valeur) {
+            if ($autre[$nom] !== $valeur) {
+                $changes[$nom] = ['choisi' => $valeur, 'autre' => $autre[$nom]];
+            }
+        }
+
+        return $changes;
     }
 
     /**

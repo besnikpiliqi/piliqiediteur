@@ -114,46 +114,56 @@ class PreferencesDesGraphiquesTest extends TestCase
     /**
      * Le menu « Ajouter un graphique » (constat de l'éditeur du 15/11/2026)
      * : après l'ajout, il revient sur « — Choisir — » et ne propose plus le
-     * graphique affiché, qui y revient quand sa croix le retire ; la
-     * valeur vide ne fait rien, sans message ni enregistrement ; une valeur
-     * inconnue reste refusée ; quand tout est affiché, il le dit.
+     * graphique affiché (son option est cachée et inactive, que la page
+     * lève sans le serveur quand la croix retire la carte : voir le test en
+     * navigateur) ; la valeur vide ne fait rien, sans message ni
+     * enregistrement ; une valeur inconnue reste refusée ; quand tout est
+     * affiché, il le dit.
      */
     public function test_le_menu_ajouter_revient_sur_choisir_ignore_la_valeur_vide_et_ne_propose_que_les_graphiques_non_affiches(): void
     {
         [$lyon] = $this->deuxMagasins();
         $proprietaire = $this->proprietaireDe($lyon);
         $this->dansLEspaceDeLaSociete($lyon->societe, $proprietaire);
-        $option = fn (Graphique $graphique): string => '<option value="'.$graphique->value.'">';
+        $option = fn (Graphique $graphique): string => '<option value="'.$graphique->value.'"';
+        $proposes = function (string $html): array {
+            preg_match_all('/<option value="([^"]+)"([^>]*)>/', $html, $options, PREG_SET_ORDER);
+
+            return array_values(array_map(fn (array $option): string => $option[1], array_filter($options, fn (array $option): bool => preg_match('/\shidden\s+disabled\b/', $option[2]) !== 1 && str_contains($option[2], 'x-bind:hidden'))));
+        };
         $grille = Livewire::test(GrilleDesGraphiques::class, ['ecran' => EcranDuTableauDeBord::Societe->value]);
 
         $grille->call('ajouterUnGraphique', '')
             ->assertNotNotified()
             ->assertSeeHtml($option(Graphique::VentesParTauxDeTva))
             ->assertSeeHtmlInOrder([$option(Graphique::ArticlesEtServices), $option(Graphique::EcartDesPrixDAchat)]);
+        $this->assertContains(Graphique::VentesParTauxDeTva->value, $proposes($grille->html()));
         $this->assertSame(Graphique::EcartDesPrixDAchat, Graphique::cases()[count(Graphique::cases()) - 1], 'La carte de l\'écart des prix d\'achat est la dernière du menu.');
         $this->assertSame(0, PreferencesDuTableauDeBord::query()->withoutGlobalScope(SocieteScope::class)->count(), 'La valeur vide n\'enregistre rien.');
 
         $grille->call('ajouterUnGraphique', Graphique::VentesParTauxDeTva->value)
             ->assertNotNotified()
-            ->assertSeeHtml('<option value="" selected>— Choisir —</option>')
-            ->assertDontSeeHtml($option(Graphique::VentesParTauxDeTva))
-            ->assertSeeHtml($option(Graphique::MeilleursProduits));
+            ->assertSeeHtml('selected x-text="aAjouter.length === 0 ? \'Tous les graphiques sont affichés\' : \'— Choisir —\'">— Choisir —</option>', false);
+        $this->assertNotContains(Graphique::VentesParTauxDeTva->value, $proposes($grille->html()), 'Le graphique affiché n\'est plus proposé.');
+        $this->assertContains(Graphique::MeilleursProduits->value, $proposes($grille->html()));
         $reglages = PreferencesDuTableauDeBord::query()->withoutGlobalScope(SocieteScope::class)->sole()->reglages;
 
         $grille->call('ajouterUnGraphique', '')->assertNotNotified();
         $grille->call('ajouterUnGraphique', 'inconnu')->assertNotified(GrilleDesGraphiques::REFUS_DE_LA_VALEUR);
         $this->assertSame($reglages, PreferencesDuTableauDeBord::query()->withoutGlobalScope(SocieteScope::class)->sole()->reglages);
 
-        $grille->call('retirerLeGraphique', Graphique::VentesParTauxDeTva->value)->assertSeeHtml($option(Graphique::VentesParTauxDeTva));
+        $grille->call('retirerLeGraphique', Graphique::VentesParTauxDeTva->value);
+        $this->assertContains(Graphique::VentesParTauxDeTva->value, $proposes(Livewire::test(GrilleDesGraphiques::class, ['ecran' => EcranDuTableauDeBord::Societe->value])->html()), 'Le graphique retiré est de nouveau proposé à la page suivante.');
 
         foreach (Graphique::cases() as $graphique) {
             $grille->call('ajouterUnGraphique', $graphique->value);
         }
 
-        $grille->assertSee('Tous les graphiques sont affichés')
-            ->assertDontSee('— Choisir —')
+        $grille->assertSeeHtml('>Tous les graphiques sont affichés</option>')
+            ->assertDontSeeHtml('>— Choisir —</option>')
             ->assertSeeHtml('data-graphique="'.Graphique::ArticlesEtServices->value.'"')
             ->assertSeeHtml('data-graphique="'.Graphique::EcartDesPrixDAchat->value.'"');
+        $this->assertSame([], $proposes($grille->html()));
     }
 
     /**
@@ -358,15 +368,21 @@ class PreferencesDesGraphiquesTest extends TestCase
         $grille = Livewire::test(GrilleDesGraphiques::class, ['ecran' => EcranDuTableauDeBord::Societe->value]);
         $grille->assertViewHas('cartes', fn (array $cartes): bool => array_column(array_column($cartes, 'carte'), 'graphique') === [Graphique::ChiffreDAffairesParMois, Graphique::AvoirsParMois]);
 
-        $grille->call('monter', Graphique::AvoirsParMois->value)->assertHasNoErrors();
+        $grille->call('monter', Graphique::AvoirsParMois->value)->assertHasNoErrors()
+            ->assertReturned(['ordre' => [Graphique::AvoirsParMois->value, Graphique::ChiffreDAffairesParMois->value], 'cartes' => [
+                Graphique::AvoirsParMois->value => ['type' => 'barres'],
+                Graphique::ChiffreDAffairesParMois->value => ['type' => 'barres'],
+            ]]);
 
-        $grille->assertViewHas('cartes', fn (array $cartes): bool => array_column(array_column($cartes, 'carte'), 'graphique') === [Graphique::AvoirsParMois, Graphique::ChiffreDAffairesParMois]);
         $this->assertSame([Graphique::AvoirsParMois, Graphique::VentesEtAchatsParMois, Graphique::ChiffreDAffairesParMois], $this->graphiquesDe($administrateur, $lyon));
 
         $this->dansLEspaceDeLaSociete($lyon->societe, $administrateur);
-        $grille->call('descendre', Graphique::AvoirsParMois->value)->assertHasNoErrors();
+        $grille->call('descendre', Graphique::AvoirsParMois->value)->assertHasNoErrors()
+            ->assertReturned(['ordre' => [Graphique::ChiffreDAffairesParMois->value, Graphique::AvoirsParMois->value], 'cartes' => [
+                Graphique::ChiffreDAffairesParMois->value => ['type' => 'barres'],
+                Graphique::AvoirsParMois->value => ['type' => 'barres'],
+            ]]);
 
-        $grille->assertViewHas('cartes', fn (array $cartes): bool => array_column(array_column($cartes, 'carte'), 'graphique') === [Graphique::ChiffreDAffairesParMois, Graphique::AvoirsParMois]);
         $this->assertSame([Graphique::ChiffreDAffairesParMois, Graphique::VentesEtAchatsParMois, Graphique::AvoirsParMois], $this->graphiquesDe($administrateur, $lyon));
     }
 

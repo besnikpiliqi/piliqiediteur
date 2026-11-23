@@ -415,7 +415,7 @@ test('après l’ajout d’un graphique, le menu « Ajouter un graphique » revi
     $onglet->gesteQuiAppelleLeServeur(fn () => $onglet->element('select[data-filtre="ajouter"]')->selectOption('marge_par_mois'), 'l’ajout de la marge')
         ->attendreQue('document.querySelector(\'[data-graphique="marge_par_mois"]\') !== null', 'la marge n’est pas ajoutée')
         ->attendreQue($menu.'.value === "" && '.$menu.'.selectedOptions[0].textContent.trim() === "— Choisir —"', 'le menu ne revient pas sur « — Choisir — »')
-        ->attendreQue($menu.'.querySelector(\'option[value="marge_par_mois"]\') === null', 'le menu propose encore la marge, déjà affichée');
+        ->attendreQue($menu.'.querySelector(\'option[value="marge_par_mois"]\').hidden && '.$menu.'.querySelector(\'option[value="marge_par_mois"]\').disabled', 'le menu propose encore la marge, déjà affichée');
     $reglages = PreferencesDuTableauDeBord::query()->withoutGlobalScopes()->where('user_id', $societe->proprietaire->id)->sole()->reglages;
 
     $onglet->geste(fn () => $onglet->element('select[data-filtre="ajouter"]')->selectOption(''), 'le choix de « — Choisir — »')

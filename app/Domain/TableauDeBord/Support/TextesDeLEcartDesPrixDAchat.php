@@ -33,6 +33,7 @@ use InvalidArgumentException;
  * @phpstan-type LigneDeTableau array{classe: string, cellules: list<Cellule>}
  * @phpstan-type Lien array{cache: bool, texte: string, texteOuvert: string|null}
  * @phpstan-type Chiffre array{moisChoisi: string, grand: array{texte: string, classe: string}, pastille: array{texte: string, classe: string}, detail: string, stats?: array{nomBase: string, base: string, nomCout: string, cout: string}}
+ * @phpstan-type DuMois array{moisChoisi: string, grand: array{texte: string, classe: string}, pastille: array{texte: string, classe: string}, detail: string, calcul: array{titre: string, lignes: list<LigneDeTableau>, notes: list<string>}}
  * @phpstan-type Lecture array{mode: string, mois: int, titreCarte: string, croix: array{texte: string, ariaLabel: string}, etiquette: string, options: list<array{value: string, texte: string}>, valeurMenu: string, moisChoisi: string, grand: array{texte: string, classe: string}, pastille: array{texte: string, classe: string}, detail: string, vues: array{moisCachee: bool, periodeCachee: bool}, legendes: array{plus: string, moins: string, net: string}, methode: string, dessin: array{ariaLabel: string, viewBox: string, enfants: list<Feuille|Groupe>}, calcul: array{lien: Lien, titre: string, classeDefiler: string, tete: list<string>, lignes: list<LigneDeTableau>, notes: list<string>}, stats: array{nomBase: string, base: string, nomCout: string, cout: string}|null, chiffres: array{lien: Lien, tete: list<string>|null, lignes: list<LigneDeTableau>|null, note: string|null}}
  */
 final class TextesDeLEcartDesPrixDAchat
@@ -164,6 +165,34 @@ final class TextesDeLEcartDesPrixDAchat
             'chiffres' => $surDouzeMois
                 ? ['lien' => ['cache' => true, 'texte' => self::LIEN_DES_CHIFFRES, 'texteOuvert' => null], 'tete' => null, 'lignes' => null, 'note' => null]
                 : ['lien' => ['cache' => false, 'texte' => self::LIEN_DES_CHIFFRES, 'texteOuvert' => self::LIEN_DES_CHIFFRES_OUVERT]] + self::tableauDesMois($calcul),
+        ];
+    }
+
+    /**
+     * Ce que la carte écrit de propre à un mois de l'affichage par mois : le
+     * titre du mois, le grand chiffre, la pastille, le détail et le calcul
+     * achat par achat de ce mois, sans le dessin ni le tableau des douze
+     * mois, que la page n'écrit qu'une fois. Ce sont les mêmes textes que
+     * lecture() pour ce mois : la page écrit les douze (voir
+     * GrilleDesGraphiques), et choisir un mois n'appelle jamais le serveur.
+     *
+     * @param  Calcul  $calcul
+     * @return DuMois
+     */
+    public static function duMois(array $calcul, int $mois): array
+    {
+        if ($mois < 0 || $mois >= EcartDesPrixDAchat::NOMBRE_DE_MOIS) {
+            throw new InvalidArgumentException('Le mois choisi est un numéro de 0 à 11 : '.$mois);
+        }
+
+        $chiffre = self::chiffreDuMois($calcul, $mois);
+
+        return [
+            'moisChoisi' => $chiffre['moisChoisi'],
+            'grand' => $chiffre['grand'],
+            'pastille' => $chiffre['pastille'],
+            'detail' => $chiffre['detail'],
+            'calcul' => self::calculDuMois($calcul, $mois),
         ];
     }
 

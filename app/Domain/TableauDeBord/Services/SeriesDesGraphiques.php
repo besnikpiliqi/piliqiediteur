@@ -324,22 +324,30 @@ final class SeriesDesGraphiques
      * Les dix produits ou services au plus fort chiffre d'affaires HT net,
      * ou aux plus fortes quantités nettes ; un produit d'un magasin n'est
      * jamais celui d'un autre, et son nom dit son magasin quand la carte en
-     * compte plusieurs.
+     * compte plusieurs. Les lignes se lisent une seule fois pour les deux
+     * classements : la série rendue est celle de la mesure choisie, et
+     * l'autre classement l'accompagne (voir SerieDuGraphique), pour que
+     * « Classer par » change dans la page sans rappeler le serveur.
      *
      * @param  Collection<int, Magasin>  $magasins
      */
     private function meilleursProduits(CalculDesSeries $calcul, Collection $magasins, bool $parQuantite): SerieDuGraphique
     {
-        $classes = [];
+        $parChiffreDAffaires = [];
+        $parLaQuantite = [];
 
         foreach ($calcul->dansLaPeriode($this->lignesDeVente($calcul), CleDuModele::desModeles($magasins)) as $ligne) {
             $cle = $ligne['produit'] !== null ? "p:{$ligne['magasin']}:{$ligne['produit']}" : 's:'.$ligne['magasin'].':'.($ligne['service'] ?? mb_strtolower($ligne['description']));
-            $classes[$cle]['libelle'] = $ligne['description'];
-            $classes[$cle]['magasin'] = $ligne['magasin'];
-            $classes[$cle]['valeur'] = ($classes[$cle]['valeur'] ?? 0) + $calcul->signe($ligne) * ($parQuantite ? $ligne['quantite'] : $ligne['ht']);
+            $parChiffreDAffaires[$cle]['libelle'] = $parLaQuantite[$cle]['libelle'] = $ligne['description'];
+            $parChiffreDAffaires[$cle]['magasin'] = $parLaQuantite[$cle]['magasin'] = $ligne['magasin'];
+            $parChiffreDAffaires[$cle]['valeur'] = ($parChiffreDAffaires[$cle]['valeur'] ?? 0) + $calcul->signe($ligne) * $ligne['ht'];
+            $parLaQuantite[$cle]['valeur'] = ($parLaQuantite[$cle]['valeur'] ?? 0) + $calcul->signe($ligne) * $ligne['quantite'];
         }
 
-        return $this->classement($classes, $magasins, $parQuantite ? 'Quantité vendue' : 'Chiffre d\'affaires HT', $parQuantite ? SerieDuGraphique::NOMBRE : SerieDuGraphique::EUROS);
+        $chiffreDAffaires = $this->classement($parChiffreDAffaires, $magasins, 'Chiffre d\'affaires HT');
+        $quantite = $this->classement($parLaQuantite, $magasins, 'Quantité vendue', SerieDuGraphique::NOMBRE);
+
+        return $parQuantite ? $quantite->avecLAutreClassement($chiffreDAffaires) : $chiffreDAffaires->avecLAutreClassement($quantite);
     }
 
     /**

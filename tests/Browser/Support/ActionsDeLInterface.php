@@ -41,8 +41,8 @@ use ReflectionClass;
  *   lien (url()) ;
  * - « menu:libellé » : chaque entrée ajoutée au menu du compte ;
  * - dans le code PHP de app, « clic:méthode » : chaque bouton que le code
- *   écrit lui-même dans une chaîne, avec wire:click (les colonnes du dessin
- *   de la carte « Écart des prix d'achat », voir SvgDeLEcartDesPrixDAchat) ;
+ *   écrit lui-même dans une chaîne, avec wire:click (le lien d'une pièce du
+ *   fournisseur, voir JointLesPiecesDuFournisseur) ;
  * - dans les vues (hors resources/views/vendor) : « clic:méthode », chaque
  *   bouton qui appelle une méthode de son composant (wire:click, ou un clic
  *   qui appelle $wire) ; « envoi:méthode », chaque formulaire que son
